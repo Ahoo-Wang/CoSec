@@ -1,0 +1,57 @@
+{
+  "rules": [
+    "DOC-14"
+  ],
+  "polarity": "positive",
+  "level": "engine",
+  "description": "R1A-1: a DENY on /admin/** written with decodeAndParseSegments false matches the path as received and would miss /%61dmin/users, which a backend serves as /admin/users. A hole its author believes closed: the document does not compile, and the error names the statement.",
+  "documents": {
+    "platform": {
+      "policies": [
+        {
+          "id": "members",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "*"
+            }
+          ]
+        },
+        {
+          "id": "no-admin",
+          "statements": [
+            {
+              "name": "admin",
+              "effect": "deny",
+              "action": "http:*",
+              "resource": {
+                "pattern": "http:path:/admin/**",
+                "decodeAndParseSegments": false
+              }
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "members",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "members"
+        },
+        {
+          "id": "no-admin",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "no-admin"
+        }
+      ]
+    }
+  },
+  "expect": {
+    "decision": "NotCompiled",
+    "error": "decodeAndParseSegments: false matches the path as received"
+  }
+}

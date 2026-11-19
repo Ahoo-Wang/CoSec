@@ -89,6 +89,19 @@ class ConditionCheckerTest {
         checker.unresolved("ext.geo.country").assert().contains("not declared")
     }
 
+    /** `DOC-13`: a path that holds a control character or an unpaired surrogate names no attribute, built in or declared. */
+    @Test
+    fun `no attribute reference resolves a path that would forge a line`() {
+        val declared = Attribute.external("ext.geo.c\u0001", AttributeType.STRING)
+        val checker = ConditionChecker(catalog = AttributeCatalog.of(listOf(declared)))
+        listOf("subject.attributes.a\nb", "http.query.\uD800", "ext.geo.c\u0001").forEach { path ->
+            checker.attribute(path).assert().isNull()
+            checker.unresolved(path).assert().contains("holds a control character or an unpaired surrogate")
+                .doesNotContain("\n").doesNotContain("\u0001")
+        }
+        checker.attribute("subject.attributes.\uD83D\uDE00").assert().isNotNull()
+    }
+
     /** RC1-21: a host that reads API keys from another header names it, and it is refused as `x-api-key` is. */
     @Test
     fun `a renamed api key header is a credential header`() {

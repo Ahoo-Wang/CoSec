@@ -339,6 +339,28 @@ class ConverterTest {
         rejection.location.assert().isEqualTo("policy:p#$.statements[1]")
     }
 
+    /**
+     * `DOC-14` (R1A-1): a 7.x DENY whose path matcher turns decodeAndParseSegments off would convert into a DENY that
+     * misses every percent-encoded spelling. It is rejected at its statement with the compiler's reason, and no
+     * document holds it; an ALLOW with the option converts as written.
+     */
+    @Test
+    fun `a 7x deny matching the path undecoded is rejected at its statement, an allow converts`() {
+        val raw = """{"path":{"pattern":"/admin/**","options":{"decodeAndParseSegments":false}}}"""
+        val denied = convert(
+            source(listOf("p" to policy("p", statements = listOf(statement(), statement(raw, effect = "deny")))))
+        )
+        val rejection = denied.report.rejections.single()
+        rejection.kind.assert().isEqualTo(RejectionKind.DOES_NOT_COMPILE)
+        rejection.location.assert().isEqualTo("policy:p#$.statements[1]")
+        rejection.message.assert().contains("decodeAndParseSegments: false").contains("DOC-14")
+        denied.documents.values.flatMap { it.policies }.assert().isEmpty()
+        val allowed = convert(source(listOf("p" to policy("p", statements = listOf(statement(raw))))))
+        allowed.report.rejections.assert().isEmpty()
+        allowed.documents.values.flatMap { it.policies }.single().statements.single().resources.single()
+            .decodeAndParseSegments.assert().isFalse()
+    }
+
     /** RC1-27: cosec-migrate writes no break-glass binding, so a 7.x root is not converted. */
     @Test
     fun `no break-glass binding is converted`() {

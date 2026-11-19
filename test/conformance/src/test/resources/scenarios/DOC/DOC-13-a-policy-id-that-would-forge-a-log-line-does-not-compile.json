@@ -1,0 +1,46 @@
+{
+  "rules": [
+    "DOC-13"
+  ],
+  "polarity": "positive",
+  "level": "engine",
+  "description": "R1B-3: a policy id holding a line break would forge a line on every host that logs it (a route escape review, a compile failure). No id a document writes holds a control character or an unpaired surrogate: the document does not compile, and the error shows the id escaped.",
+  "documents": {
+    "platform": {
+      "policies": [
+        {
+          "id": "members",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "*"
+            }
+          ]
+        },
+        {
+          "id": "x\n2026-11-19 ERROR forged",
+          "statements": [
+            {
+              "effect": "deny",
+              "action": "http:*",
+              "resource": "http:path:/admin/**"
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "members",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "members"
+        }
+      ]
+    }
+  },
+  "expect": {
+    "decision": "NotCompiled",
+    "error": "[x\\u000A2026-11-19 ERROR forged] holds a control character"
+  }
+}

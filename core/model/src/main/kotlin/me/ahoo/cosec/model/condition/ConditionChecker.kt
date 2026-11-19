@@ -16,6 +16,7 @@
 package me.ahoo.cosec.model.condition
 
 import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.model.Identifiers
 
 /**
  * Type-checks a [Condition] and bounds its cost (RFC 0005 §3.2, §3.5). Errors name the JSON path; a condition with
@@ -43,9 +44,14 @@ class ConditionChecker(
     /**
      * The attribute [path] names, a declared external one included; null when there is none. Every attribute reference
      * of a document resolves here (conditions, rate limit keys), so this is where a credential header is refused: it
-     * is null for one, whoever asks (`CND-5`, [isCredential]). So is `resource.attributes.*`, which nothing sets (`DOC-10`).
+     * is null for one, whoever asks (`CND-5`, [isCredential]). So is `resource.attributes.*`, which nothing sets (`DOC-10`),
+     * and a path holding a control character or an unpaired surrogate, which names no attribute and would be printed
+     * wherever the condition is explained (`DOC-13`).
      */
     fun attribute(path: String): Attribute? {
+        if (!Identifiers.isPrintable(path)) {
+            return null
+        }
         val attribute = Attribute.parse(path)
             ?: return if (Attribute.isExternalPath(path)) catalog.external(path) else null
         return attribute.takeUnless { isCredential(it) || it.kind == Attribute.Kind.RESOURCE_ATTRIBUTE }
@@ -60,6 +66,8 @@ class ConditionChecker(
         val parsed = Attribute.parse(path)
         val header = Attribute.Kind.HTTP_HEADER.path
         return when {
+            !Identifiers.isPrintable(path) ->
+                "`${Identifiers.printable(path)}` holds a control character or an unpaired surrogate (DOC-13)"
             parsed == null && path.startsWith(header) && path.length > header.length ->
                 "`$path` is not a header name: a header name is an ASCII token (RFC 9110)"
             parsed != null && isCredential(parsed) ->

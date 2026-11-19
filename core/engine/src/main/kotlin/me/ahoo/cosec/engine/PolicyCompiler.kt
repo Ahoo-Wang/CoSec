@@ -204,6 +204,7 @@ class PolicyCompiler(
         }.ifEmpty { listOf(ResourcePattern.AnyResource) }
         if (source.effect === Effect.DENY) {
             checkBare(resources, path, errors)
+            checkDecoded(source.resources, path, errors)
         }
         val condition = source.condition?.let { written ->
             check(written, "$path.condition", errors)?.takeIf {
@@ -286,6 +287,26 @@ class PolicyCompiler(
                     "a DENY on the bare type [$resource] covers only the ${resource.type} with an empty id; write " +
                         "[$resource/**] for every ${resource.type}, and add an eq on resource.id with the empty " +
                         "string for the empty id alone",
+                )
+            }
+        }
+    }
+
+    /**
+     * `DOC-14` (R1A-1): a path pattern with `decodeAndParseSegments: false` matches the path as received, percent-encoded,
+     * so a DENY written with it misses every encoded spelling of what it names: a DENY on the paths under `/admin/` does
+     * not stop `/%61dmin/users`, which a backend serves as `/admin/users`. A hole its author believes closed, so it does
+     * not compile; an ALLOW keeps the option, since one that matches less fails closed. A rate limit rule compiles as a DENY: one with the option
+     * would let encoded spellings escape their limit.
+     */
+    private fun checkDecoded(resources: List<ResourceSource>, path: String, errors: MutableList<CompileError>) {
+        for ((i, resource) in resources.withIndex()) {
+            if (!resource.decodeAndParseSegments) {
+                errors += CompileError(
+                    "$path.resource[$i]",
+                    "a DENY with decodeAndParseSegments: false matches the path as received and misses every " +
+                        "percent-encoded spelling of it ([http:path:/admin/**] does not stop /%61dmin/users); remove " +
+                        "the option: a DENY matches the decoded path (DOC-14)",
                 )
             }
         }

@@ -31,6 +31,7 @@ import me.ahoo.cosec.model.decision.RateLimitSpec
 import me.ahoo.test.asserts.assert
 import me.ahoo.test.asserts.assertThrownBy
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.assertThrows
 
 /** Fail closed (RFC 0005 §9.1): what does not compile is an error with its path, never a statement that matches more. */
 class PolicyCompilerTest {
@@ -139,6 +140,29 @@ class PolicyCompilerTest {
         // An ALLOW on it covers less than it reads, which only narrows access.
         compiler.statement(id, 0, StatementSource("a", Effect.ALLOW, listOf("*"), listOf(ResourceSource("order"))))
         compiler.statement(id, 0, StatementSource("d", Effect.DENY, listOf("*"), listOf(ResourceSource("order/{id}"))))
+    }
+
+    /** `DOC-14` (R1A-1): a DENY matching the path as received would miss `/%61dmin/users` for `/admin/users`. */
+    @Test
+    fun `a deny that matches the path undecoded does not compile, an allow does`() {
+        val raw = ResourceSource("http:path:/admin/**", decodeAndParseSegments = false)
+        val deny = StatementSource("d", Effect.DENY, listOf("http:*"), listOf(ResourceSource("http:path:/a/**"), raw))
+        errors(null, deny).single().let {
+            it.path.assert().isEqualTo("$.statements[0].resource[1]")
+            it.message.assert().contains("decodeAndParseSegments: false").contains("/%61dmin/users")
+                .contains("remove the option").contains("DOC-14")
+        }
+        // An ALLOW that matches less only narrows access; the case option stays on a DENY.
+        compiler.statement(id, 0, StatementSource("a", Effect.ALLOW, listOf("http:*"), listOf(raw)))
+        compiler.statement(
+            id,
+            0,
+            StatementSource("d", Effect.DENY, listOf("http:*"), listOf(ResourceSource("http:path:/a/**", caseSensitive = false))),
+        )
+        // A rate limit rule compiles as a DENY: encoded spellings would escape its limit.
+        val rule = RateLimitSource("r", StatementSource("", Effect.ALLOW, listOf("http:*"), listOf(raw)), null, RateLimitSpec(1.0))
+        assertThrows<CompileException> { compiler.rateLimit(DocumentKind.PLATFORM, "", rule) }
+            .errors.single().path.assert().isEqualTo("$.resource[0]")
     }
 
     @Test
