@@ -305,6 +305,10 @@ CoSec 决定请求能否到达你的处理器。它不会：
 - 路径上的平台 DENY 或限流，既要针对 `http` 形式写，也要针对路由映射赋予该路径的每个动作写：[已映射的路由不是 `http` 请求](#trust-boundaries)。
 - 用于防滥用的限流规则，如果 Redis 故障时也不能失效，请设置 `"strictFailure": true`。
 - 只从用户无法影响的来源签发 `(platform)` 令牌。
-- 让每个 gateway 模式的服务只能从网关访问。
+- 让每个 gateway 模式的服务只能从网关访问：它所信任的头没有签名，所以没有 `NetworkPolicy` 的命名空间（Kubernetes 的默认状态）会让任何 Pod 都能冒充平台管理员（[选择部署方式](../operations/topologies.md#a-gateway-with-services-behind-it)）。
+- 只把 `cosec.jwt.secret` 交给你愿意让它签发令牌的进程：持有它的校验方可以为任意租户和主体签名，轮换它会终止所有会话（[选择部署方式](../operations/topologies.md#what-every-topology-shares)）。
+- 开启 Redis 持久化、带故障转移的副本和经过演练的备份：Redis 保存着文档和吊销记录的唯一一份（[Redis 要求](../operations/storage.md#redis-requirements)）。
+- 不要留下 `RevocationReader.NONE`：有了它，服务会接受签发方已吊销的每个令牌，直到它过期。校验另一个服务令牌的服务，要在签发方的 `cosec.key-prefix` 下读取签发方的 Redis（[校验另一个服务所签发令牌的服务](../scenarios/resource-server.md)）。
+- 移除快速开始留下的东西：演示用的 `/token` 端点及其语句，以及打印 `(platform)` 令牌的运行器（[上线前](./quick-start.md#before-you-deploy)）。
 
 **下一步：** 代码如何兑现这些保证，见[架构概览](../architecture/overview.md)；要开始使用 CoSec，见[快速开始](./quick-start.md)。

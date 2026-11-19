@@ -8,6 +8,19 @@ description: "What changed from each 8.0 preview (alpha and beta) to the next, n
 Only for a deployment that already runs an 8.0.0 preview: what changed from each preview to the next, newest first. A 7.x
 deployment needs none of it: [Upgrading](./upgrading.md) is the whole upgrade. These notes are removed when 8.0 is released.
 
+## Start here {#start-here}
+
+Each section below is what changes when you leave that preview. Read the section of the version you run and every
+section above it:
+
+| You run | Read |
+|---|---|
+| `8.0.0-beta.3` | [From beta.3](#from-8-0-0-beta-3) |
+| `8.0.0-beta.2` | [From beta.2](#from-8-0-0-beta-2), then the one above |
+| `8.0.0-beta.1` | [From beta.1](#from-8-0-0-beta-1), then the two above |
+| `8.0.0-alpha.4` | [From alpha.4](#from-8-0-0-alpha-4), then the three above |
+| `8.0.0-alpha.3`, `alpha.2`, `alpha.1` | [From alpha.3](#from-8-0-0-alpha-3), [alpha.2](#from-8-0-0-alpha-2) or [alpha.1](#from-8-0-0-alpha-1), then every section above it |
+
 ## From 8.0.0-beta.3 {#from-8-0-0-beta-3}
 
 - **Security: a check of a request that has ended is denied** (`PIP-26`). Through beta.3, a `SecurityContext` kept
@@ -95,6 +108,12 @@ deployment needs none of it: [Upgrading](./upgrading.md) is the whole upgrade. T
   Redis key. Now a value shaped like a token (a JOSE compact serialization, with or without `Bearer `) throws
   `IllegalArgumentException`, which names `TokenRevoker`; no token id CoSec or another issuer gives is refused.
   Affected: a logout written against `TokenStore`, which never worked. Call `TokenRevoker.revoke(accessToken)`.
+
+- **What the host logs at startup.** Nothing breaks, but the log an operator reads changes. A `cosec.*` property CoSec
+  does not read fails startup before any bean is created, so a configuration with removed keys hears of every one
+  first. When tokens are verified against `RevocationReader.NONE`, the host logs a `WARN` that says a revoked token is
+  accepted until it expires. When the token stores are missing, one startup message names every store that is
+  missing, not the first.
 
 ## From 8.0.0-beta.2 {#from-8-0-0-beta-2}
 
@@ -1062,6 +1081,7 @@ analysis read the author's rights as enforcement does, so some changes that publ
 the edge of tenant isolation (RC1-5, RC1-6, RC1-15 to RC1-18, RC1-48, RC1-49), from **Identity forwarding** on, change
 what a gateway forwards and to which routes: read them before upgrading a gateway.
 
+- **A store upgraded from 8.0.0-alpha.2 runs [`cosec-migrate repair-references`](./upgrading.md#repair-the-back-reference-index) once**, so that the list of app documents (`<s>:control:list:documents`) is complete ([Storage](./storage.md#publishing-through-the-control-plane)).
 - **Token attributes of every type** (RC1-2, `GRT-5`). The analysis reads `subject.attributes.*` as the engine does,
   a boolean or a number as its text. An author whose ALLOW is conditioned on not being `suspended` no longer counts
   as holding it when the token says `"suspended": true`. In code, `Operator.attributes` and `Grantor.attributes` are
@@ -1392,6 +1412,7 @@ produce 32-byte SHA-256 digests, or every read fails closed ([Extending](../arch
 [RC security review](https://github.com/Ahoo-Wang/CoSec/blob/main/docs/security/8.0-rc-review.md), break decisions,
 code or configuration written against it. A 7.x deployment reads them in the sections below.
 
+- **The `cosec.gateway.*` variables Kubernetes sets from a Service** (`COSEC_GATEWAY_SERVICE_HOST` and the like) were refused at startup by 8.0.0-alpha.1 as `cosec.*` keys CoSec does not read. Since alpha.2 the check skips exactly these variables; `enableServiceLinks: false` in the manifests keeps them out anyway ([Deployment](./deployment.md#what-the-manifests-set)).
 - **A role cap removes ALLOWs only** (RC1-1, `BND-9`, `IDN-2`). A capped credential (an API key with `roles`) still
   gets no grant from its principal's attached policies and principal bindings, but their DENYs now apply to it: a
   request its principal is denied is denied to every key of the principal, capped or not. In alpha.1 a cap dropped

@@ -38,10 +38,16 @@ suspend fun check(security: SecurityContext, action: String, resource: String): 
 | `cosec-webflux` | `AuthorizationChecker.checkMono(security, action, resource)`：`Mono<Boolean>` | WebFlux 和网关代码。它在调用方线程上开始，并且不会在客户端库的 I/O 线程上继续。 |
 | `cosec-webmvc` | `AuthorizationChecker.checkBlocking(security, action, resource)`：`Boolean` | Servlet 请求线程。在非阻塞线程（例如 Netty 事件循环）上调用会抛出异常：那里请用 `checkMono`。 |
 
+每种技术栈一个示例，各带导入。每个示例都在问：调用方可以对某个订单执行哪些操作？
+
 ```kotlin
+// WebFlux，返回 Mono
+import me.ahoo.cosec.runtime.AuthorizationChecker
+import me.ahoo.cosec.webflux.ServerWebExchanges.getSecurityContext
+import me.ahoo.cosec.webflux.checkMono
+
 @RestController
 class OrderActionsController(private val checker: AuthorizationChecker) {
-    // WebFlux：调用方可以对这个订单执行哪些操作？
     @GetMapping("/orders/{id}/actions")
     fun actions(@PathVariable id: String, exchange: ServerWebExchange): Mono<Map<String, Boolean>> {
         val security = exchange.getSecurityContext()!!
@@ -50,6 +56,40 @@ class OrderActionsController(private val checker: AuthorizationChecker) {
             checker.checkMono(security, "order:delete", "order/$id"),
         ).map { mapOf("cancel" to it.t1, "delete" to it.t2) }
     }
+}
+```
+
+```kotlin
+// WebFlux，suspend 处理器：exchange 参数给出上下文，check 是挂起函数
+import me.ahoo.cosec.runtime.AuthorizationChecker
+import me.ahoo.cosec.webflux.ServerWebExchanges.getSecurityContext
+
+@RestController
+class OrderActionsController(private val checker: AuthorizationChecker) {
+    @GetMapping("/orders/{id}/actions")
+    suspend fun actions(@PathVariable id: String, exchange: ServerWebExchange): Map<String, Boolean> {
+        val security = exchange.getSecurityContext()!!
+        return mapOf(
+            "cancel" to checker.check(security, "order:cancel", "order/$id"),
+            "delete" to checker.check(security, "order:delete", "order/$id"),
+        )
+    }
+}
+```
+
+```kotlin
+// Spring MVC：SecurityContext 参数，在请求线程上用 checkBlocking
+import me.ahoo.cosec.api.context.SecurityContext
+import me.ahoo.cosec.runtime.AuthorizationChecker
+import me.ahoo.cosec.webmvc.checkBlocking
+
+@RestController
+class OrderActionsController(private val checker: AuthorizationChecker) {
+    @GetMapping("/orders/{id}/actions")
+    fun actions(@PathVariable id: String, security: SecurityContext): Map<String, Boolean> = mapOf(
+        "cancel" to checker.checkBlocking(security, "order:cancel", "order/$id"),
+        "delete" to checker.checkBlocking(security, "order:delete", "order/$id"),
+    )
 }
 ```
 
@@ -120,9 +160,19 @@ suspend fun decide(security: SecurityContext, action: String, resource: String):
 <<< @/examples/checks/documents/platform.json [documents/platform.json]
 
 ```kotlin
-val order = orderRepository.findById(id)
-val allowed = checker.checkBlocking(security, "order:cancel", "order-of/${order.ownerId}/${order.status}/$id")
-if (!allowed) throw AccessDeniedException()
+// Spring MVC；orderRepository 和 Order 是你自己的。WebFlux 里用 checkMono，或用 suspend 处理器和 check。
+import me.ahoo.cosec.api.context.SecurityContext
+import me.ahoo.cosec.webmvc.checkBlocking
+import org.springframework.http.HttpStatus
+import org.springframework.web.server.ResponseStatusException
+
+@PostMapping("/orders/{id}/cancel")
+fun cancel(@PathVariable id: String, security: SecurityContext) {
+    val order = orderRepository.findById(id)
+    val allowed = checker.checkBlocking(security, "order:cancel", "order-of/${order.ownerId}/${order.status}/$id")
+    if (!allowed) throw ResponseStatusException(HttpStatus.FORBIDDEN)
+    // ... cancel the order
+}
 ```
 
 [`wiki/examples/checks`](https://github.com/Ahoo-Wang/CoSec/tree/main/wiki/examples/checks/scenarios) 中的场景在每次构建时用[测试套件](../policies/testing.md#testing-decisions)针对这份文档运行：

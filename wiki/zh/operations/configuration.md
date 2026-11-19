@@ -192,7 +192,7 @@ CoSec 没有哪个配置项叫这些名字，而已知的 key 无论来源都不
 
 | 配置项 | 类型 | 默认值 | 作用 |
 |---|---|---|---|
-| `cosec.jwt.secret` | string | 无 | 启用 JWT 时 **必填**；为空或短于算法所需长度时启动失败：`hmac256` 需要 32 字节（按 UTF-8 计），`hmac384` 需要 48 字节，`hmac512` 需要 64 字节（RFC 7518 §3.2）。使用来自密钥存储的长随机值。 |
+| `cosec.jwt.secret` | string | 无 | 启用 JWT 时 **必填**；为空或短于算法所需长度时启动失败：`hmac256` 需要 32 字节（按 UTF-8 计），`hmac384` 需要 48 字节，`hmac512` 需要 64 字节（RFC 7518 §3.2）。使用来自密钥存储的长随机值。HMAC 是对称的：**每个持有该密钥的进程都能为任意租户、主体和角色签发令牌**，包括 `(platform)` 管理员，所以只把它交给你愿意让它签发令牌的进程。轮换会让用旧密钥签发的每个令牌失效：滚动重启结束之前，仍用旧密钥的实例和已用新密钥的实例对彼此的令牌各自返回 `401` `token-invalid`，所有会话都要重新登录（[选择部署方式](./topologies.md#what-every-topology-shares)）。 |
 | `cosec.jwt.algorithm` | `hmac256`、`hmac384`、`hmac512` | `hmac256` | 签名算法。签发方和校验方必须一致。 |
 | `cosec.jwt.token-validity.access` | duration | `10m` | 访问令牌有效期。 |
 | `cosec.jwt.token-validity.refresh` | duration | `7d` | 刷新令牌有效期；吊销记录在 Redis 中保留这么久再加一秒。 |

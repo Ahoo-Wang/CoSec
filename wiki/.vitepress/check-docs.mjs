@@ -5,7 +5,8 @@
 // - the en and zh sidebars in config/{en,zh}.ts list the same pages in the same order, every link
 //   points to an existing page, and every page except the home pages is in the sidebar.
 // - every https://cosec.ahoo.me/... link of llms.txt, the skills and the READMEs names a page and an anchor that exist,
-//   and the site build publishes llms.txt (config/index.ts copies it from the repository root).
+//   and the site build publishes llms.txt (config/index.ts copies it from the repository root);
+// - every page of the sidebar has a link in llms.txt.
 // - a JSON block that README*.md or a skill copies from an example carries the marker
 //   `<!-- sample: wiki/examples/<dir>/documents/<file>.json -->` on the line before its fence, and must equal that file
 //   (the example is compiled and run by DocumentationExamplesTest, so the copy cannot drift from what CoSec accepts).
@@ -156,6 +157,11 @@ if (enLinks.map((l) => `/zh${l}`).join() !== zhLinks.join()) {
 }
 for (const link of [...enLinks, ...zhLinks]) {
   if (!existsSync(resolveTarget(wikiDir, link.split('#')[0]))) problems.push(`config: link ${link} has no page`)
+}
+const llms = readFileSync(join(repoRoot, 'llms.txt'), 'utf-8')
+for (const link of enLinks) {
+  if (link === '/' || link.endsWith('/')) continue
+  if (!llms.includes(`https://cosec.ahoo.me${link.split('#')[0]})`)) problems.push(`llms.txt: no link to the page ${link} of the sidebar`)
 }
 const listed = new Set([...enLinks, ...zhLinks].map((l) => l.split('#')[0]))
 for (const page of pages) {
