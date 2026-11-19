@@ -1,0 +1,109 @@
+{
+  "rules": [
+    "CTL-36"
+  ],
+  "polarity": "positive",
+  "level": "control",
+  "description": "A colleague publishes revision 2 (policy theirs). A REPLACE of a file read at revision 1, which holds only shared and mine, would remove theirs: it is refused with 409, and the head stays at revision 2.",
+  "documents": {
+    "tenants": {
+      "acme": {
+        "policies": [
+          {
+            "id": "shared",
+            "statements": [
+              {
+                "effect": "allow",
+                "action": "order:read"
+              }
+            ]
+          }
+        ],
+        "bindings": []
+      }
+    }
+  },
+  "steps": [
+    {
+      "apply": {
+        "change": "c1",
+        "document": "tenant:acme",
+        "mode": "MERGE",
+        "desired": {
+          "policies": [
+            {
+              "id": "shared",
+              "statements": [
+                {
+                  "effect": "allow",
+                  "action": "order:read"
+                }
+              ]
+            },
+            {
+              "id": "theirs",
+              "statements": [
+                {
+                  "effect": "allow",
+                  "action": "order:read"
+                }
+              ]
+            }
+          ],
+          "bindings": []
+        }
+      }
+    },
+    {
+      "skipShadow": "c1"
+    },
+    {
+      "publish": "c1"
+    },
+    {
+      "apply": {
+        "change": "c2",
+        "document": "tenant:acme",
+        "mode": "REPLACE",
+        "revision": 1,
+        "desired": {
+          "policies": [
+            {
+              "id": "shared",
+              "statements": [
+                {
+                  "effect": "allow",
+                  "action": "order:read"
+                }
+              ]
+            },
+            {
+              "id": "mine",
+              "statements": [
+                {
+                  "effect": "allow",
+                  "action": "order:read"
+                }
+              ]
+            }
+          ],
+          "bindings": []
+        }
+      }
+    }
+  ],
+  "expect": {
+    "steps": [
+      "CHECKED",
+      "READY",
+      "PUBLISHED",
+      "refused 409"
+    ],
+    "errors": {
+      "c1": []
+    },
+    "heads": {
+      "tenant:acme": 2
+    }
+  }
+}
