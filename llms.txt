@@ -47,6 +47,7 @@ Key facts: any matching DENY overrides every ALLOW; a request nothing allows is 
 - [System and custom roles](https://cosec.ahoo.me/scenarios/roles): system roles in the app document, custom roles in tenant documents, and the control-plane calls behind a role console
 - [Apps with spaces](https://cosec.ahoo.me/scenarios/spaces): one app with many warehouses or teams, and one space shared by several apps: roles, tokens and `CoSec-Space-Id`
 - [A service account in one space](https://cosec.ahoo.me/scenarios/service-account): an API key for a machine client that can act only in one space of one app, capped to a single role
+- [Several tenants](https://cosec.ahoo.me/scenarios/several-tenants): what one tenant's document does to another: a platform policy reaches every tenant, a tenant's binding stays in its tenant, a boundary caps one tenant
 - [A tenant owner](https://cosec.ahoo.me/scenarios/tenant-owner): a tenant's owner as an attached policy in their token, so no document changes when ownership moves
 - [Roles from an external source](https://cosec.ahoo.me/scenarios/external-source): keeping roles and permissions in step with an identity system that owns them: the sync service, the calls each change becomes, conflicts and replays
 - [Authorizing business actions](https://cosec.ahoo.me/scenarios/route-maps): when to name routes with a route map, and what a mapped route changes: the `http` statements and rate limit rules that stop applying to it

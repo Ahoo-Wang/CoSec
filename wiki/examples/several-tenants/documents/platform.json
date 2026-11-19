@@ -1,0 +1,55 @@
+{
+  "schema": 2,
+  "revision": 1,
+  "publishedAt": "2026-11-01T08:00:00Z",
+  "boundaries": {
+    "default": "boundary-standard"
+  },
+  "policies": [
+    {
+      "id": "read-orders",
+      "statements": [
+        {
+          "name": "read-orders",
+          "effect": "allow",
+          "action": "http:GET",
+          "resource": "http:path:/api/orders"
+        }
+      ]
+    },
+    {
+      "id": "boundary-standard",
+      "boundary": true,
+      "statements": [
+        {
+          "effect": "allow",
+          "action": [
+            "http:GET",
+            "http:POST"
+          ],
+          "resource": "http:path:/api/**"
+        }
+      ]
+    },
+    {
+      "id": "boundary-read-only",
+      "boundary": true,
+      "statements": [
+        {
+          "effect": "allow",
+          "action": "http:GET",
+          "resource": "http:path:/api/**"
+        }
+      ]
+    }
+  ],
+  "bindings": [
+    {
+      "id": "read-orders",
+      "subject": "*",
+      "app": "*",
+      "space": "*",
+      "policy": "read-orders"
+    }
+  ]
+}

@@ -223,6 +223,10 @@ class LoginController(private val authentication: TokenCompositeAuthentication) 
 }
 ```
 
+Write every argument of `TokenSubject` after `id` by name, as the samples do. `app` comes before `tenant`, so
+`TokenSubject("alice", "acme")` compiles and issues a token for the app `acme` in the default tenant; the order is kept
+so that no existing call changes meaning.
+
 `authenticate` refuses a login by throwing: it has no empty answer, and no token is issued for a login that failed or
 whose caller has gone. It runs on the caller's thread, an event loop in WebFlux, so an implementation over a blocking
 client (a JDBC user table, say) moves that call to a bounded dispatcher of its own with

@@ -1,0 +1,27 @@
+{
+  "schema": 2,
+  "revision": 1,
+  "publishedAt": "2026-11-01T08:00:00Z",
+  "policies": [
+    {
+      "id": "acme-export",
+      "statements": [
+        {
+          "name": "export",
+          "effect": "allow",
+          "action": "http:POST",
+          "resource": "http:path:/api/export"
+        }
+      ]
+    }
+  ],
+  "bindings": [
+    {
+      "id": "acme-export",
+      "subject": "*",
+      "app": "*",
+      "space": "*",
+      "policy": "acme-export"
+    }
+  ]
+}

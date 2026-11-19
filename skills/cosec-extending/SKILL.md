@@ -1,5 +1,5 @@
 ---
-name: cosec-custom-matcher
+name: cosec-extending
 description: Extend CoSec 8.0 with Spring beans - AttributeProvider (external ext.* attributes fetched per request), MembershipProvider (roles and attached policies kept outside tokens), DecisionListener (audit, metrics, alerts), RateLimiter (where permits are counted) and Authenticator (how tokens or API keys are verified). Use when the policy language and built-in features cannot express a requirement. Do not use for writing policy documents.
 ---
 

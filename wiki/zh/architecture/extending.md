@@ -385,7 +385,7 @@ starter 注册 `MdcContextContributor`（SLF4J MDC），使用 `cosec-openteleme
 - `acquireLease(name, holder, duration)` 和 `releaseLease(name, holder)`：每项任务同一时间只有一个实例。只有 `holder` 仍持有租约时，释放才会删除它，检查与删除是一步原子操作（CoCache 的 `deleteIfMatch`）：期间过期并被另一个实例取得的租约仍归对方。
 - `withdrawCandidate(key, window)`：只在文档的候选仍是 `window` 的候选时删除它，一步原子操作（`CTL-26`）。变更在结束之后撤回候选，此时另一个变更可能已暂存了自己的候选。
 - `stagedCandidate(key)` 和 `putCandidate(key, expected, candidate)`：带摘要的候选，以及只在候选仍是读到的那份时才落地的写入（`null`：仅当没有候选时），变了就返回 `false`。暂存先读候选，确认自己仍占着文档的暂存槽，再在读到的候选之上写入；期间被抢占的变更，它迟到的写入会被拒绝，因此不会替换拿到槽的变更的候选（`CTL-6`）。结果未知的写入通过回读解决，绝不重复写。
-- `referrers` 和 `putReferrers`：每个引用方文档带上它最后一次登记该引用的修订，所以一个修订迟到的删除不会撤销更晚的修订重新登记的引用（`CTL-25`）。
+- `referrers` 和 `putReferrers`：每个引用方文档带上它最后一次登记该引用的修订，所以一个修订迟到的删除不会推翻更晚的修订重新登记的引用（`CTL-25`）。
 - `RevisionIndex.reclaiming`：回收已从索引中移出、尚未确认删除的记录；存储与索引的其余部分一起保存它。
 
 与数据面的存储一样，失败的读取会抛出异常：从不回答“不存在”。
