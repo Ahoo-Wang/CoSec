@@ -24,6 +24,10 @@ package me.ahoo.cosec.conformance
 object GuardAllowlist {
     val GUARDS: Map<String, Set<String>> = mapOf(
         "build" to setOf(
+            // OBS-6: one vocabulary for what decided.
+            "runtime:AuditVocabularyTest#every reason has the audit decision of its own name",
+            "micrometer:ResultVocabularyTest#every reason has the result of its own name",
+            "runtime:SubjectMethodTest#the event names the credential as the identity header does",
             // IDN-29: an issuer's clock ahead by the skew, never an expiry.
             "jwt:IssuerSkewTest#an issue time within the skew ahead is accepted, beyond it refused as not valid yet",
             "jwt:IssuerSkewTest#a not-before time within the skew ahead is accepted, beyond it refused as not valid yet",

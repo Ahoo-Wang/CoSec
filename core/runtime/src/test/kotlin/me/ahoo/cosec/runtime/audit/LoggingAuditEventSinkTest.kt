@@ -98,9 +98,9 @@ class LoggingAuditEventSinkTest {
 
     @Test
     fun allowLogsAtDebug() {
-        val recording = publish(AuditDecision.ALLOW)
+        val recording = publish(AuditDecision.PERMIT)
         recording.levels.toString().assert().isEqualTo("debug")
-        recording.json.toString().assert().contains("\"decision\":\"ALLOW\"")
+        recording.json.toString().assert().contains("\"decision\":\"PERMIT\"")
     }
 
     @Test

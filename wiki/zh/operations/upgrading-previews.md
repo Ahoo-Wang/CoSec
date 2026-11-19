@@ -23,6 +23,19 @@ description: "每个 8.0 预览版（alpha 与 beta）到下一个之间的变�
 
 - **CoSec 无法读取值的 `cosec.*` 开关使启动失败**（`UB-1`）。直到 beta.3，`cosec.enabled=1`、`on`、空字符串或 ` true ` 这样的值对 Spring 的绑定器是 true，对装配 bean 的条件却是"关闭"，于是 CoSec 或该功能被悄悄关闭；空的 `cosec.pipeline.mode` 不装配任何管道，Spring Cloud Gateway 宿主会成为开放代理。`cosec.authorization.shadow.enabled=off`（或 `0`）还会让影子评估保持开启。现在 starter 在创建任何 bean 之前拒绝每个不是 `true` 或 `false` 的开关（不区分大小写，两侧不能有空格；`cosec.pipeline.mode` 接受 `enforce` 或 `gateway`，`cosec.api-key.store` 接受 `memory` 或 `redis`），信息指明 key、读到的值和可接受的值（[开关无法读取导致启动失败](./troubleshooting.md#startup-fails-on-an-unreadable-switch)）。受影响的是用其他写法写开关的配置、环境变量或 Helm 值。写成 `true` 或 `false`，或删掉这个 key 取默认值。写成 `false` 的开关仍会关闭它的功能。
 - **`cosec.authorization` 计时器新增 `problem` 标签，所有序列的标签 key 相同**（`UB-8`）。新标签是客户端被告知的问题的 slug（`unauthorized`、`token-expired`、`forbidden` 等）或 `none`，因此可以区分 `401` 与 `403`，以及不同的令牌问题（[指标](./observability.md#metrics)）。原先只有 `indeterminate` 序列才有的 `cause` 标签现在出现在每个序列上，`indeterminate` 之外为 `none`：Prometheus 注册表拒绝同名但标签 key 不同的计量器。受影响的是按"没有 `cause`"选取序列的查询（`cause=""`），它现在应选 `cause="none"`；对新标签求和得到原来的序列。
+- **“什么做出了决定”只有一套词：指标、审计和决策事件的认证方式**（UD-7、UD-11）。直到 beta.3，每个输出各自命名决定，对显式拒绝的告警还会计入并非被 DENY 语句拒绝的请求。现在每个输出都使用决策事件的词（[每个输出中的“什么做出了决定”](./observability.md#what-decided-in-every-output)）：
+
+  | 输出 | 之前（beta.3） | 现在 |
+  |---|---|---|
+  | `cosec.authorization` 的 `result` | `allow` | `permit` |
+  | | DENY 语句、作用域拒绝和边界拒绝都是 `explicit_deny` | `explicit_deny`（仅 DENY 语句）、`scope_rejected`、`boundary` |
+  | | `bad_request` | `invalid_request` |
+  | 审计 `authorization.decision` | `ALLOW` | `PERMIT` |
+  | | DENY 语句、作用域拒绝、边界拒绝和 `400` 都是 `EXPLICIT_DENY` | `EXPLICIT_DENY`、`SCOPE_REJECTED`、`BOUNDARY`、`INVALID_REQUEST` |
+  | 审计 `authorization.reasonCode` | `ALLOW`；`400` 为 `EXPLICIT_DENY`；尚未生效的令牌为 `TOKEN_INVALID` | `PERMIT`；`INVALID_REQUEST`；`TOKEN_NOT_YET_VALID` |
+  | 决策事件 `subject.method` | 每个令牌都是 `token`，API key 为 `apikey` | `jwt`（CoSec 自己的令牌）、`api-key`、其他校验器的名字（默认 `token`）：与 `CoSec-Identity` 一致 |
+
+  计时器的这项变化与上一条的 `problem` 标签和每个序列上的 `cause` 一起发生：仪表盘只需为两者迁移一次。受影响的是：基于 `result="allow"`、`explicit_deny` 计数（现在计入的请求更少：加上 `scope_rejected` 和 `boundary` 才是原来的总数）或 `bad_request` 的仪表盘和告警；匹配 `ALLOW`、或期望其他三种拒绝为 `EXPLICIT_DENY` 的审计消费者（日志、Kafka 记录）；对 CoSec 的令牌匹配 `subject.method` 为 `token`、或匹配 `apikey` 的决策监听器。`ApiKeyAuthenticator.METHOD` 为 `api-key`。`AuditDecision` 和 `AuditReasonCode`（`cosec-api`）去掉了 `ALLOW`：请针对这个版本重新编译。
 - **新的日志行**（无需改动）：一行 INFO 摘要说明 CoSec 被配置成什么样，`cosec.enabled=false` 时一条 WARN（[启动摘要](./observability.md#startup-summary)）；平台文档缺失期间每隔 `lag-warn` 重复的一条 WARN，指明读取的 key、key 前缀和 Redis（[实例未就绪](./troubleshooting.md#instance-is-not-ready)）；Spring Cloud Gateway 宿主上有自己控制器或函数式路由、而 CoSec 不决策它们时的一条 WARN（[网关自己的处理器](../integration/web.md#the-gateways-own-handlers)）；以及客户端地址那一行现在会说明默认 `max-trusted-index` 的风险。
 - **安全：对已结束请求的检查被拒绝**（`PIP-26`）。直到 beta.3，在请求之后保留的 `SecurityContext`（存在字段、缓存或发给消费者的消息里）仍能通过 `AuthorizationChecker` 放行，依据的是创建它时的成员关系，即使已经登出、令牌已被吊销或角色已被移除。现在绑定请求的适配器在请求完成时结束它，之后对它的每次检查都为 `false`（`decide` 返回 `Deny(null)`）。进行中的请求照旧作答，无论持续多久：流式或服务器发送事件（SSE）响应体、异步 Servlet 请求。受影响的是保留上下文并在响应写出之后用它检查的代码。改为在请求内检查；之后运行的工作（消费者、定时作业）自己携带授权（[代码中的权限检查](../integration/checks.md#how-a-check-relates-to-the-request-pipeline)）。你自己的传输交给 `Pipeline.evaluate` 的请求以及测试工具包的请求，其上下文永远不会结束：这些不受影响。
 - **安全：安全上下文的读取入口只返回管道构造的上下文**（`PIP-27`）。`exchange.getSecurityContext()`、`ContextView.getSecurityContextOrEmpty()` / `getSecurityContext()`、`request.getSecurityContext()`、`SecurityContext` 处理器参数和 `SecurityContextHolder` 以前返回 `SecurityContext.KEY` 下的任何对象，所以应用的过滤器或某个库自己写入的上下文会被当作已认证的调用者。现在其他任何东西都读作没有上下文：`null`，或未绑定上下文时的那种失败。受影响的是在这个 key 下绑定自己构造的 `SecurityContext`（mock、该接口的实现）的代码，尤其是测试代码。改为绑定管道放行的请求的上下文：测试中用 `cosec-testkit` 的 `PipelineFixture.securityContext(fixture.request(...))` 或 `PermittedRequest`（[测试策略](../policies/testing.md)）；自己运行管道的过滤器绑定 `outcome.security!!.securityContext`。

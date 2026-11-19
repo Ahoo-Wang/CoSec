@@ -62,6 +62,18 @@
         "runtime:SnapshotReviewFixesTest#loadMetricThrowingAnErrorStillCompletesTheRequest",
         "spring-boot:SnapshotMetricsWiringTest#with a registry the source counts into it and its gauges are bound"
       ]
+    },
+    {
+      "id": "OBS-6",
+      "source": "RFC 0006 §9.5; usability review UD-7, UD-11 (maintainer's decisions, 2026-11-19)",
+      "statement": "Every output names what decided in the decision event's words (`outcome.reason`): the span as they are, the metrics' `result` in lower case, audit's `decision` in upper case, each through one exhaustive mapping. An explicit deny (`explicit_deny`, `EXPLICIT_DENY`) is only a request a DENY statement refused; a scope rejection, a boundary refusal and a `400` each have their own value, and a permit is `permit`/`PERMIT`. The event's `subject.method` is the credential's method as `CoSec-Identity` names it (`jwt`, `api-key`, or another verifier's name).",
+      "level": "build",
+      "pending": null,
+      "guards": [
+        "runtime:AuditVocabularyTest#every reason has the audit decision of its own name",
+        "micrometer:ResultVocabularyTest#every reason has the result of its own name",
+        "runtime:SubjectMethodTest#the event names the credential as the identity header does"
+      ]
     }
   ]
 }

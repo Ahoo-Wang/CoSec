@@ -63,7 +63,7 @@ reads a refresh token: [refreshing](#refreshing-tokens), and [logging out](#logo
 **Delegation tokens are refused.** A token with an `act` claim (an [RFC 8693](https://www.rfc-editor.org/rfc/rfc8693)
 delegation token: `sub` is the party acted for, `act` the one acting) is rejected as `token-invalid`, even when its
 signature and expiry are valid (`IDN-4`). A deny is audited with the reason code `DELEGATION_UNSUPPORTED`; on a permit,
-such as a path anonymous callers may use, the audit records `ALLOW`, and the reason appears only in the decision
+such as a path anonymous callers may use, the audit records `PERMIT`, and the reason appears only in the decision
 event's `subject.rejected`. Read as its `sub`,
 such a token would give the actor everything the subject may do, and 8.0 does not evaluate delegation. CoSec never
 issues one. A `may_act` claim only says who may act for the subject, so it is ignored.

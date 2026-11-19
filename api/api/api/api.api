@@ -7,11 +7,14 @@ public abstract interface class me/ahoo/cosec/api/audit/AuditAuthorization {
 }
 
 public final class me/ahoo/cosec/api/audit/AuditDecision : java/lang/Enum {
-	public static final field ALLOW Lme/ahoo/cosec/api/audit/AuditDecision;
+	public static final field BOUNDARY Lme/ahoo/cosec/api/audit/AuditDecision;
 	public static final field ERROR Lme/ahoo/cosec/api/audit/AuditDecision;
 	public static final field EXPLICIT_DENY Lme/ahoo/cosec/api/audit/AuditDecision;
 	public static final field IMPLICIT_DENY Lme/ahoo/cosec/api/audit/AuditDecision;
 	public static final field INDETERMINATE Lme/ahoo/cosec/api/audit/AuditDecision;
+	public static final field INVALID_REQUEST Lme/ahoo/cosec/api/audit/AuditDecision;
+	public static final field PERMIT Lme/ahoo/cosec/api/audit/AuditDecision;
+	public static final field SCOPE_REJECTED Lme/ahoo/cosec/api/audit/AuditDecision;
 	public static final field TOO_MANY_REQUESTS Lme/ahoo/cosec/api/audit/AuditDecision;
 	public static fun getEntries ()Lkotlin/enums/EnumEntries;
 	public static fun valueOf (Ljava/lang/String;)Lme/ahoo/cosec/api/audit/AuditDecision;
@@ -59,17 +62,19 @@ public abstract interface class me/ahoo/cosec/api/audit/AuditPrincipal {
 }
 
 public final class me/ahoo/cosec/api/audit/AuditReasonCode : java/lang/Enum {
-	public static final field ALLOW Lme/ahoo/cosec/api/audit/AuditReasonCode;
 	public static final field BOUNDARY Lme/ahoo/cosec/api/audit/AuditReasonCode;
 	public static final field DELEGATION_UNSUPPORTED Lme/ahoo/cosec/api/audit/AuditReasonCode;
 	public static final field ERROR Lme/ahoo/cosec/api/audit/AuditReasonCode;
 	public static final field EXPLICIT_DENY Lme/ahoo/cosec/api/audit/AuditReasonCode;
 	public static final field IMPLICIT_DENY Lme/ahoo/cosec/api/audit/AuditReasonCode;
 	public static final field INDETERMINATE Lme/ahoo/cosec/api/audit/AuditReasonCode;
+	public static final field INVALID_REQUEST Lme/ahoo/cosec/api/audit/AuditReasonCode;
+	public static final field PERMIT Lme/ahoo/cosec/api/audit/AuditReasonCode;
 	public static final field RATE_LIMITER_UNAVAILABLE Lme/ahoo/cosec/api/audit/AuditReasonCode;
 	public static final field SCOPE_REJECTED Lme/ahoo/cosec/api/audit/AuditReasonCode;
 	public static final field TOKEN_EXPIRED Lme/ahoo/cosec/api/audit/AuditReasonCode;
 	public static final field TOKEN_INVALID Lme/ahoo/cosec/api/audit/AuditReasonCode;
+	public static final field TOKEN_NOT_YET_VALID Lme/ahoo/cosec/api/audit/AuditReasonCode;
 	public static final field TOKEN_REVOKED Lme/ahoo/cosec/api/audit/AuditReasonCode;
 	public static final field TOO_MANY_REQUESTS Lme/ahoo/cosec/api/audit/AuditReasonCode;
 	public static fun getEntries ()Lkotlin/enums/EnumEntries;

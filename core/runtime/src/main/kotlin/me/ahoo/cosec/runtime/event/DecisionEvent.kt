@@ -155,7 +155,11 @@ class SubjectSummary internal constructor(
     val tenant: String,
     val id: String,
     val authenticated: Boolean,
-    /** How it authenticated (`token`, `api-key`, ...); null when anonymous. */
+    /**
+     * How it authenticated, in the words `CoSec-Identity` uses for the same credential: `jwt` for CoSec's own token,
+     * `api-key`, or the name another verifier's tokens are given (`token` by default); the authenticator's own name for
+     * a principal with no credential. Null when anonymous.
+     */
     val method: String?,
     /** Why the credentials were rejected; null when they were not. */
     val rejected: AuthnResult.RejectReason?,
