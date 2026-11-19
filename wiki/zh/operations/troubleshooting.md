@@ -260,6 +260,8 @@ CoSec 自己的拒绝很容易区分：它们总是 `application/problem+json`�
 | `401` `token-invalid` | 本服务不读取的版本、没有 `auth.exp`，或签发时间晚于当前时间加 [`cosec.authentication.revocation.skew`](./configuration.md#authentication)。 | 让服务与网关一起升级；同步时钟。 |
 | `401` `token-expired` | 凭证已过期，或身份的签发时间早于 [`cosec.pipeline.identity.max-age`](./configuration.md#pipeline) 加偏差。 | 同步时钟；在网关与服务之间等待很久的请求需要更大的 `max-age`。在没有网关的测试中，头只生成一次并被重复使用：每个请求生成一个（[`IdentityHeader`](../integration/web.md#services-behind-the-gateway)）。 |
 
+在任何环境中，响应都只说明问题，从不说明原因。原因在服务的日志里，来自 logger `me.ahoo.cosec.runtime.identity.IdentityGate`：`Request [<id>]: the forwarded identity is refused (<status> <problem>), <reason>.`，级别为 `WARN`，每种问题类型最多每分钟一次，所以大量错误的头不会刷屏；每一次都记录在 `DEBUG`。`<reason>` 是出错的字段，例如 `The identity header is malformed: $.rid is empty.`，或超出范围的时间。网关模式的服务不记录决策事件，所以这些拒绝不会出现在它自己的指标或审计中：日志就是它们所在的地方。
+
 只有网关可以访问到这样的服务：它相信收到的任何该头。启动时以 `WARN` 记录这一点。
 
 **每个请求都是匿名的。** 网关只把身份转发给接收身份的路由：指向已注册服务的路由（`uri: lb://...`），或元数据为 `cosec-identity: true` 的路由。指向 `http://` 或 `https://` 又没有该元数据的路由，或元数据为 `cosec-identity: false` 的路由，不发送身份，所以其后的服务看到的是匿名请求。路由指向你自己的服务时，给它标上 `cosec-identity: true`（[转发身份](../integration/web.md#forwarding-the-identity)）。自己校验令牌、而不再收到令牌的服务，需要 `cosec.gateway.identity.forward-authorization=true` 以及这样的路由。

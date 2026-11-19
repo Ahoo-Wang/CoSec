@@ -86,6 +86,9 @@ class IdentityGate(
     /** [idGenerator], falling back to a random id when it throws (round 2 M6). */
     private val ids = FallbackIds(idGenerator)
 
+    /** Where a refusal's reason is told, bounded (#1690): the response never carries it. */
+    internal val refusals = IdentityRefusals()
+
     init {
         require(maxBytes > 0) { "The identity size limit must be positive, not $maxBytes." }
         require(maxAge > Duration.ZERO) { "The identity maximum age must be positive, not $maxAge." }
@@ -160,7 +163,7 @@ class IdentityGate(
     }
 
     private fun reject(requestId: String, type: ProblemType, reason: String, traceId: String?): Outcome {
-        log.debug { "Request [$requestId]: the forwarded identity is refused, $reason." }
+        refusals.record(requestId, type, reason)
         return StatusMapping.identityRejected(requestId, type, reason, traceId)
     }
 

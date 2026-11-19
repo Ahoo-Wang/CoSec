@@ -385,7 +385,10 @@ https://cosec.ahoo.me/operations/troubleshooting#a-permitted-request-answers-500
 ### Service behind a gateway (`cosec.pipeline.mode=gateway`)
 
 The service reads the caller from `CoSec-Identity`, which only the CoSec gateway sets (it strips the client's own). No
-header: anonymous. Otherwise never anonymous:
+header: anonymous. Otherwise never anonymous. A bare 400/401 says no more by design; the reason is the service's log
+line `the forwarded identity is refused (<status> <problem>), <reason>` (logger `...identity.IdentityGate`, WARN at
+most once a minute per problem type, DEBUG every time). Gateway mode records no decision events, so no metric or audit
+of the service shows these refusals:
 
 - 400 `invalid-request`: not base64url JSON of format v1, unknown or missing members, an id with an unpaired
   surrogate (IDN-10), over

@@ -72,7 +72,8 @@ object IdentityCodec {
     const val MAX_CLAIM_LENGTH = 1024
 
     /** 9999-12-31T23:59:59Z: later seconds are refused, so no time arithmetic on a decoded identity can overflow. */
-    private const val MAX_SECONDS = 253_402_300_799L
+    /** The last second of year 9999: the bound of every time the header holds. */
+    internal const val MAX_SECONDS = 253_402_300_799L
 
     private val FIELDS = arrayOf("v", "tenant", "sub", "scope", "roles", "auth", "iat", "rid", "claims")
     private val SCOPE_FIELDS = arrayOf("app", "space")
@@ -84,8 +85,12 @@ object IdentityCodec {
     private val encoder = Base64.getUrlEncoder().withoutPadding()
     private val decoder = Base64.getUrlDecoder()
 
-    /** The header value of [identity]; [IdentityOverflowException] when it is longer than [maxBytes] or a claim is. */
+    /**
+     * The header value of [identity]; [IdentityOverflowException] when it is longer than [maxBytes] or a claim is, or
+     * when [decode] would refuse what it wrote, with [decode]'s message (#1690): a header written is a header read.
+     */
     fun encode(identity: Identity, maxBytes: Int = DEFAULT_MAX_BYTES): String {
+        WrittenIdentity.check(identity)
         val header = encoder.encodeToString(CoSecJson.mapper.writeValueAsBytes(tree(identity)))
         if (header.length > maxBytes) {
             throw IdentityOverflowException(

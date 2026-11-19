@@ -194,6 +194,9 @@ class IdentityFormatException(
     }
 }
 
-/** An identity a gateway cannot encode within its limits (too many roles or claims): the request fails closed. */
+/**
+ * An identity a gateway cannot encode: over its limits (too many roles or claims), or with what no service would read
+ * back (an empty id, an unpaired surrogate, a time past year 9999): the request fails closed.
+ */
 @InternalCoSecApi
 class IdentityOverflowException(message: String) : IllegalStateException(message)
