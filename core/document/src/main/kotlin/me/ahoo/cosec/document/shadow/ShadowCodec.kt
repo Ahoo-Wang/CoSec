@@ -178,7 +178,8 @@ object ShadowCodec {
     private inline fun <T> guarded(block: () -> T): T = try {
         block()
     } catch (error: SnapshotFormatException) {
-        throw error
+        // The document format's codecs, which read a candidate's document, quote what they read as they found it.
+        throw SnapshotFormatException(SnapshotKeyText.message(error.message.orEmpty()))
     } catch (error: JacksonException) {
         throw SnapshotFormatException("A shadow value is malformed${error.at}.")
     } catch (error: IllegalArgumentException) {

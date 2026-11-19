@@ -39,11 +39,22 @@ object SnapshotKeyText {
      * inside a surrogate pair, saying how long it was. A value that does not decode is a log line's, which it neither
      * forges nor makes long (#1691's rule for the identity header, here for stored values).
      */
-    fun quoted(text: String): String {
-        if (text.length <= MAX_QUOTED) {
+    fun quoted(text: String): String = bounded(text, MAX_QUOTED)
+
+    /** The most characters of a whole message a codec passes on from a nested one. */
+    const val MAX_MESSAGE = 512
+
+    /**
+     * [message], another codec's message passed on where a stored value's error is logged: [printable] and at most
+     * [MAX_MESSAGE] characters, as [quoted] does for one value. That codec may quote what it read as it found it.
+     */
+    fun message(message: String): String = bounded(message, MAX_MESSAGE)
+
+    private fun bounded(text: String, max: Int): String {
+        if (text.length <= max) {
             return printable(text)
         }
-        val end = if (text[MAX_QUOTED - 1].isHighSurrogate()) MAX_QUOTED - 1 else MAX_QUOTED
+        val end = if (text[max - 1].isHighSurrogate()) max - 1 else max
         return "${printable(text.substring(0, end))}… (${text.length} characters)"
     }
 

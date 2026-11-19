@@ -32,6 +32,7 @@ import me.ahoo.cosec.model.PolicyId
 import me.ahoo.cosec.spi.snapshot.SnapshotDigest
 import me.ahoo.cosec.spi.snapshot.SnapshotFormatException
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
+import me.ahoo.cosec.spi.snapshot.SnapshotKeyText
 import tools.jackson.core.JacksonException
 import tools.jackson.core.StreamReadFeature
 import tools.jackson.databind.JsonNode
@@ -227,10 +228,14 @@ object ChangeRequestCodec {
     private inline fun <T> guarded(block: () -> T): T = try {
         block()
     } catch (error: SnapshotFormatException) {
-        throw error
+        // The document format's codecs, which read a change's entries, quote what they read as they found it.
+        throw SnapshotFormatException(SnapshotKeyText.message(error.message.orEmpty()))
     } catch (error: JacksonException) {
         throw SnapshotFormatException("A change request is malformed${error.at}.")
     } catch (error: IllegalArgumentException) {
+        throw SnapshotFormatException("A change request is malformed: ${quoted(error.message)}.")
+    } catch (error: java.time.format.DateTimeParseException) {
+        // A stored time that does not parse is a format error like any other, never an unexpected failure.
         throw SnapshotFormatException("A change request is malformed: ${quoted(error.message)}.")
     }
 
