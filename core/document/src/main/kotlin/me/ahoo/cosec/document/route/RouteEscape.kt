@@ -30,6 +30,8 @@ data class RouteEscape(val statement: String, val route: Route, val location: St
         "${shown(statement)} escapes ${shown(route.method)} ${shown(route.path)} " +
             "(${shown(route.action)} on ${shown(route.resource)}, ${shown(location)})"
 
+    // The class's marker does not reach its companion in the ABI dump.
+    @InternalCoSecApi
     companion object {
         /** The most characters of one part a line shows: an id is as long as its document wrote it. */
         const val MAX_PART = 128

@@ -118,7 +118,8 @@ class RouteEscapesTest {
             """[{"id":"$long","statements":[{"effect":"deny","action":"http:*","resource":"http:path:/admin/**"}]}]"""
         ).single().toString()
         // The part is the statement's label, `DENY <id>#<index>`: it is cut, not the id alone.
-        cut.assert().startsWith("DENY " + "p".repeat(RouteEscape.MAX_PART - "DENY ".length) + "… (263 characters) escapes")
+        val shown = "DENY " + "p".repeat(RouteEscape.MAX_PART - "DENY ".length)
+        cut.assert().startsWith("$shown… (263 characters) escapes")
         cut.assert().doesNotContain("p".repeat(RouteEscape.MAX_PART + 1))
         // A cut never leaves half of a surrogate pair, which a UTF-8 log would write as `?`.
         val pairs = "a" + "\uD83D\uDE00".repeat(RouteEscape.MAX_PART)
