@@ -285,7 +285,7 @@ Every fact has one home; update it in the same PR. Every English page in `wiki/`
 | A module the starter wires (a new one, or a feature that needs one) | `CoSecModuleCheckAutoConfiguration` (STA-1), `wiki/guide/introduction.md#modules` |
 | Integration steps | `wiki/guide/quick-start.md`, `skills/cosec-integration` |
 | A normative rule (an RFC "must / must not / always", RFC 0008 §3.2) | `test/conformance/src/test/resources/rules/<FAMILY>.json` and its scenarios: a positive and a negative one for each rule that is not `pending` (`verifyRuleCoverage`) |
-| Breaking change (public API, `cosec.*` property, authorization semantics) | `wiki/operations/upgrading.md`: what breaks and how to migrate |
+| Breaking change (public API, `cosec.*` property, authorization semantics) | `wiki/operations/upgrading.md`: what breaks and how to migrate from 7.x; a change between two 8.0 previews goes in `wiki/operations/upgrading-previews.md`, under the preview it comes after |
 
 Docs: link to files, never line numbers; verify claims against code, not other docs. Mermaid labels use
 `<br>` (not `<br/>`); sequence diagrams use `autonumber`. The full writing rules (page types, where each fact
