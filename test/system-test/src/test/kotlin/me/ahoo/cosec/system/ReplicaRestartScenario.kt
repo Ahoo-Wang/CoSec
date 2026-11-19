@@ -79,7 +79,7 @@ class ReplicaRestartScenario {
     }
 
     private fun readiness(): Int = try {
-        Http.get(SystemTopology.gateway2.resolve("/actuator/health/readiness")).status
+        Http.get(SystemTopology.gateway2.resolve("/readyz")).status
     } catch (_: IOException) {
         0
     }

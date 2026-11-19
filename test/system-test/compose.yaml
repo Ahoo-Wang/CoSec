@@ -34,13 +34,13 @@ x-gateway: &gateway
     <<: *cosec
     # After the image's own options (-Xmx2048M, ZGC, ...), so these win; a runner has room for this.
     JAVA_OPTS: -Xms256m -Xmx512m -XX:MaxDirectMemorySize=128m -Djava.net.preferIPv4Stack=true
-  # The configuration the image reads, ./config/, replaced as the Kubernetes base replaces it.
+  # ./config/application.yaml, read in addition to the image's own defaults (the routes and the secret; nothing the image keeps itself).
   volumes:
     - ./gateway:/opt/cosec-gateway-server/config:ro
     - ./profile:/opt/system:ro
-  # The liveness group, as the image's own HEALTHCHECK, more often: readiness is what the cold start asserts.
+  # The liveness group on the gateway's port, as the image's own HEALTHCHECK, more often: readiness is what the cold start asserts.
   healthcheck:
-    test: [ CMD, curl, -fs, -o, /dev/null, http://localhost:8080/actuator/health/liveness ]
+    test: [ CMD, curl, -fs, -o, /dev/null, http://localhost:8080/livez ]
     interval: 2s
     timeout: 3s
     retries: 90
