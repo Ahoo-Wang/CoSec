@@ -16,6 +16,7 @@
 package me.ahoo.cosec.document.route
 
 import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.engine.HttpStatement
 import me.ahoo.cosec.engine.pattern.ActionPattern
 import me.ahoo.cosec.engine.pattern.Captures
 import me.ahoo.cosec.engine.pattern.HttpPath
@@ -42,6 +43,7 @@ private const val GET = "GET"
 class RouteMap private constructor(private val routes: Map<String, List<Compiled>>) {
     private class Compiled(
         val route: Route,
+        val location: String,
         val pattern: HttpPathPattern,
         val action: Action,
         val type: String,
@@ -61,6 +63,37 @@ class RouteMap private constructor(private val routes: Map<String, List<Compiled
     val isEmpty: Boolean get() = routes.isEmpty()
 
     val size: Int get() = routes.values.sumOf { it.size }
+
+    /**
+     * The [statements] each route escapes (UC-1): a statement that would apply to the route's requests unmapped,
+     * `http:<METHOD>` on their path, and does not apply to them mapped, the route's action on its resource. Containment
+     * is [PatternContainment]'s; a pair it cannot prove disjoint counts as one that may match, so a statement that may
+     * still apply to the mapped request is not reported, and one that may apply unmapped is compared.
+     */
+    @InternalCoSecApi
+    fun escapes(statements: List<HttpStatement>): List<RouteEscape> {
+        if (statements.isEmpty()) {
+            return emptyList()
+        }
+        return routes.values.flatten().flatMap { compiled ->
+            val unmapped = Action(ResourcePattern.HTTP_TYPE, compiled.route.method)
+            val path = ResourcePattern.parse(HTTP + compiled.route.path)
+            val typed = ResourcePattern.parse(template(compiled))
+            statements.filter { statement ->
+                applies(statement, unmapped, path) && !applies(statement, compiled.action, typed)
+            }.map { RouteEscape(it.label, compiled.route, compiled.location) }
+        }
+    }
+
+    private fun applies(statement: HttpStatement, action: Action, resource: ResourcePattern): Boolean =
+        statement.actions.any { it.matches(action) } &&
+            statement.resources.any { !PatternContainment.disjoint(it, resource) }
+
+    /** The route's resource as a pattern: its literal segments, and `*` for each captured variable. */
+    private fun template(compiled: Compiled): String =
+        (listOf(compiled.type) + compiled.segments.map { if (it is Segment.Literal) it.text else "*" }).joinToString(
+            "/"
+        )
 
     /**
      * The route of a request with [method] on [path], already normalized (`PathNormalizer`). A HEAD request takes a HEAD
@@ -207,6 +240,7 @@ class RouteMap private constructor(private val routes: Map<String, List<Compiled
             }
             return Compiled(
                 route,
+                located.location,
                 pattern,
                 Action(service, verb),
                 resourceType(route, ::fail),
