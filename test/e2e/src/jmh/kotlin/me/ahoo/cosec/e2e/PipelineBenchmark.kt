@@ -265,10 +265,11 @@ open class PipelineBenchmark {
 
 /**
  * The slice's tokens with the credential a verified token carries (its id and expiry), which a gateway needs to write
- * the identity it forwards: [TokenAuthenticator]'s principals have none.
+ * the identity it forwards: [TokenAuthenticator]'s principals have none. Named as another verifier's token: only
+ * CoSec's own may name its credential `jwt` (RFC 0010 C3).
  */
 private object CredentialedTokens : Authenticator {
-    private val credential = Identity.Credential(Identity.Method.JWT, "t1", Instant.now().plus(Duration.ofDays(1)))
+    private val credential = Identity.Credential(Identity.Method("test"), "t1", Instant.now().plus(Duration.ofDays(1)))
 
     override suspend fun authenticate(credentials: Credentials): AuthnResult {
         val answer = TokenAuthenticator.authenticate(credentials) as? AuthnResult.Authenticated
