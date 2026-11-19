@@ -22,7 +22,22 @@ import java.nio.file.Path
  */
 object SystemTopology {
     /** The first gateway replica, the image under test. */
-    val gateway: URI get() = URI.create(env("COSEC_SYSTEM_GATEWAY_URL").trimEnd('/'))
+    val gateway: URI get() = url("COSEC_SYSTEM_GATEWAY_URL")
+
+    /** The second replica of the same image, on the same Redis. */
+    val gateway2: URI get() = url("COSEC_SYSTEM_GATEWAY2_URL")
+
+    /** Both replicas. */
+    val gateways: List<URI> get() = listOf(gateway, gateway2)
+
+    /** The login and control-plane host (`test/system-auth`), reached directly: the control API is an operator's. */
+    val auth: URI get() = url("COSEC_SYSTEM_AUTH_URL")
+
+    /** The enforcing servlet service (`test/system-enforcer`), the host of the app `orders`. */
+    val enforcer: URI get() = url("COSEC_SYSTEM_ENFORCER_URL")
+
+    /** The enforcer's management port, outside CoSec on Spring MVC: its probes. */
+    val enforcerManagement: URI get() = url("COSEC_SYSTEM_ENFORCER_MANAGEMENT_URL")
 
     /** The Redis every process shares, as `cosec-migrate` reaches it from the runner. */
     val redis: String get() = env("COSEC_SYSTEM_REDIS_URL")
@@ -38,6 +53,8 @@ object SystemTopology {
     val documents: Path get() = Path.of(property("cosec.system.documents"))
 
     val transcripts: Path get() = Path.of(property("cosec.system.transcripts"))
+
+    private fun url(name: String): URI = URI.create(env(name).trimEnd('/'))
 
     private fun env(name: String): String = System.getenv(name)?.takeIf { it.isNotBlank() }
         ?: error("$name is not set: the scenarios run against the stack of test/system-test/compose.yaml (test/system-test/README.md)")

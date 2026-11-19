@@ -107,7 +107,8 @@ class TokenAuthenticatorTest {
     @Test
     fun withoutATokenTheRequestIsAnonymous() = runTest {
         val verifier = Verifier(emptyMap())
-        TokenAuthenticator(verifier).authenticate(Credentials(null, "api-key")).assert().isSameAs(AuthnResult.Anonymous)
+        TokenAuthenticator(verifier, RevocationReader.NONE).authenticate(Credentials(null, "api-key"))
+            .assert().isSameAs(AuthnResult.Anonymous)
         verifier.seen.assert().isEmpty()
     }
 
@@ -202,7 +203,8 @@ class TokenAuthenticatorTest {
      */
     @Test
     fun onlyCoSecsOwnVerifierMayUseBreakGlass() = runTest {
-        val own = TokenAuthenticator(OwnVerifier(mapOf("t" to { token() }))).authenticate(Credentials("t", null))
+        val own = TokenAuthenticator(OwnVerifier(mapOf("t" to { token() })), RevocationReader.NONE)
+            .authenticate(Credentials("t", null))
         own.principal().breakGlass.assert().isTrue()
         own.principal().credential!!.method.assert().isEqualTo(Identity.Method.JWT)
         own.principal().apiKey.assert().isFalse()
@@ -238,7 +240,9 @@ class TokenAuthenticatorTest {
                 credential = Identity.Credential(Identity.Method.JWT, "s1", null),
             )
         }
-        assertThrownBy<IllegalArgumentException> { TokenAuthenticator(Verifier(emptyMap()), method = "jwt") }
+        assertThrownBy<IllegalArgumentException> {
+            TokenAuthenticator(Verifier(emptyMap()), RevocationReader.NONE, method = "jwt")
+        }
     }
 
     /** RC1-25: a token cannot pass for an API key by carrying the attribute CoSec sets for one. */
@@ -333,7 +337,11 @@ class TokenAuthenticatorTest {
         authenticate(ahead, revoked, skew = java.time.Duration.ZERO)
             .assert().isInstanceOf(AuthnResult.Authenticated::class.java)
         org.junit.jupiter.api.assertThrows<IllegalArgumentException> {
-            TokenAuthenticator(Verifier(emptyMap()), revocationSkew = java.time.Duration.ofSeconds(-1))
+            TokenAuthenticator(
+                Verifier(emptyMap()),
+                RevocationReader.NONE,
+                revocationSkew = java.time.Duration.ofSeconds(-1),
+            )
         }
     }
 

@@ -62,7 +62,7 @@
       - any-glob-to-any-file: 'test/client-host/**'
 'module: system':
   - changed-files:
-      - any-glob-to-any-file: ['test/system-test/**', 'test/system-behind/**']
+      - any-glob-to-any-file: ['test/system-test/**', 'test/system-behind/**', 'test/system-auth/**', 'test/system-enforcer/**']
 'module: kafka':
   - changed-files:
       - any-glob-to-any-file: 'extensions/kafka/**'

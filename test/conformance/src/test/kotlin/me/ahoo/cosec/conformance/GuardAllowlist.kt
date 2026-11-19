@@ -24,6 +24,9 @@ package me.ahoo.cosec.conformance
 object GuardAllowlist {
     val GUARDS: Map<String, Set<String>> = mapOf(
         "build" to setOf(
+            // IDN-27: no public default reads revocations or memberships.
+            "architecture:SafeDefaultsTest#no public parameter that reads revocations or memberships has a default",
+            "architecture:SafeDefaultsTest#the scan reads the token API",
             // PIP-25: the client contract, contract/.
             "runtime:ClientContractTest#every problem type answers its contract file",
             "runtime:ClientContractTest#a trace id is the one optional member of a problem body",
@@ -196,6 +199,9 @@ object GuardAllowlist {
             "social:RedisAuthStateCacheTest#aStateIsTakenOnce",
         ),
         "startup" to setOf(
+            // IDN-28: CoSec's tokens are signed.
+            "jwt:UnsignedAlgorithmTest#the verifier refuses Algorithm none",
+            "jwt:UnsignedAlgorithmTest#the converter refuses Algorithm none",
             "spring-boot:OneVerifierTest#an application verifier that refuses a token refuses it on a request, a refresh and a logout alike",
             "spring-boot:OneVerifierTest#with CoSec's own verifier the same token is the principal on the request",
             "spring-boot:OneVerifierTest#the served refresh route refreshes with the application's own refresh authentication, its hook included",

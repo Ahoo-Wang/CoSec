@@ -1,6 +1,6 @@
 # The system test
 
-A deployed CoSec, driven over the network only: the gateway image built from the commit under test
+A deployed CoSec, driven over the network only: two replicas of the gateway image built from the commit under test
 (`platform/gateway-server/Dockerfile`, its AOT cache trained), the services of `test/system-*`, and Redis with
 `maxmemory-policy noeviction`, started by [`compose.yaml`](compose.yaml). It proves the wiring between processes, which no
 lower test can see; what a unit, slice or embedded-server test already proves is not proved again here.
@@ -9,11 +9,14 @@ lower test can see; what a unit, slice or embedded-server test already proves is
 |---|---|
 | `compose.yaml` | The topology. |
 | `gateway/application.yaml` | The gateways' configuration, mounted over the image's `config/`. |
-| `documents/` | The documents the scenarios publish with `cosec-migrate`. |
+| `documents/` | The documents the scenarios publish: the platform's with `cosec-migrate`, the tenants' through the control plane. |
+| `profile/shortened-bounds.yaml` | Test configuration only: the bounds the suite shortens (shadow windows), each with the default it replaces. |
 | `docker/app.Dockerfile` | The image of each `test/system-*` service, from its `installDist`. |
 | `src/test/kotlin/` | The harness and the scenarios (`@Tag("system")`), Kotlin over the JDK's HTTP client. |
 | `scripts/summary.py` | The run summary: each failed scenario, the bound it waited for, the evidence artifact. |
 | `../system-behind/` | A service behind the gateway in `cosec.pipeline.mode=gateway`: it echoes what reached it. |
+| `../system-auth/` | The login and control-plane host (WebFlux, `enforce`): a test login, the starter's refresh and logout routes, the control API. |
+| `../system-enforcer/` | A service that enforces on its own, on Spring MVC and Tomcat, for the app `orders`. |
 
 ## Running it
 

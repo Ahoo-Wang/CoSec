@@ -59,6 +59,15 @@ object Http {
 
     fun get(uri: URI, vararg headers: Pair<String, String>): Exchange = send("GET", uri, headers.toList(), null)
 
+    /** A POST of [body] as JSON. */
+    fun post(uri: URI, body: Any, vararg headers: Pair<String, String>): Exchange =
+        send(
+            "POST",
+            uri,
+            headers.toList() + ("Content-Type" to "application/json"),
+            Json.mapper.writeValueAsString(body)
+        )
+
     fun send(method: String, uri: URI, headers: List<Pair<String, String>>, body: String?): Exchange {
         val builder = HttpRequest.newBuilder(uri)
             .timeout(Duration.ofSeconds(10))

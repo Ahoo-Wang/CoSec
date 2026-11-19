@@ -36,6 +36,11 @@ object Migrate {
         )
     }
 
+    /** Names the first platform administrator: [principal] of the tenant `(platform)` holds `cosec:platform-admin`. */
+    fun bootstrap(principal: String) {
+        run("bootstrap", "--to-redis", SystemTopology.redis, "--platform-admin", principal)
+    }
+
     private fun run(vararg arguments: String) {
         val command = listOf(SystemTopology.migrate.toString()) + arguments
         Transcript.note("$ ${command.joinToString(" ")}")
