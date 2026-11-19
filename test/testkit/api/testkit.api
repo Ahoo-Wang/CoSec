@@ -65,12 +65,17 @@ public final class me/ahoo/cosec/testkit/IdentityHeader {
 public final class me/ahoo/cosec/testkit/PermittedRequest {
 	public static final field INSTANCE Lme/ahoo/cosec/testkit/PermittedRequest;
 	public final fun end (Lme/ahoo/cosec/api/context/SecurityContext;)V
+	public final fun forSubject (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/util/Set;Ljava/util/Map;)Lme/ahoo/cosec/api/context/SecurityContext;
+	public static synthetic fun forSubject$default (Lme/ahoo/cosec/testkit/PermittedRequest;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/util/Set;Ljava/util/Map;ILjava/lang/Object;)Lme/ahoo/cosec/api/context/SecurityContext;
+	public final fun withIdentity (Ljava/lang/String;Ljava/util/Map;)Lme/ahoo/cosec/api/context/SecurityContext;
+	public static synthetic fun withIdentity$default (Lme/ahoo/cosec/testkit/PermittedRequest;Ljava/lang/String;Ljava/util/Map;ILjava/lang/Object;)Lme/ahoo/cosec/api/context/SecurityContext;
 	public final fun withToken (Ljava/lang/String;Lme/ahoo/cosec/spi/token/TokenVerifier;Lme/ahoo/cosec/spi/token/RevocationReader;Ljava/util/Map;)Lme/ahoo/cosec/api/context/SecurityContext;
 	public static synthetic fun withToken$default (Lme/ahoo/cosec/testkit/PermittedRequest;Ljava/lang/String;Lme/ahoo/cosec/spi/token/TokenVerifier;Lme/ahoo/cosec/spi/token/RevocationReader;Ljava/util/Map;ILjava/lang/Object;)Lme/ahoo/cosec/api/context/SecurityContext;
 }
 
 public final class me/ahoo/cosec/testkit/PipelineFixture : java/lang/AutoCloseable {
 	public static final field Companion Lme/ahoo/cosec/testkit/PipelineFixture$Companion;
+	public final fun authorization (Lme/ahoo/cosec/testkit/PipelineFixture$Principal;)Ljava/lang/String;
 	public fun close ()V
 	public final fun end (Lme/ahoo/cosec/api/context/SecurityContext;)V
 	public final fun evaluate (Lme/ahoo/cosec/runtime/http/HttpFacts;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;

@@ -133,6 +133,17 @@ class PipelineFixture private constructor(
         )
     }
 
+    /**
+     * The `Authorization` header value of a request by [principal], for a request a test builds itself: one sent with
+     * `WebTestClient` or `MockMvc` through CoSec's filter over [pipeline] (`CoSecTestBindings.filter`), as [request]
+     * builds one for [evaluate].
+     */
+    fun authorization(principal: Principal): String {
+        val token = "fixture-${tokens.incrementAndGet()}"
+        principals[token] = principal
+        return BEARER + token
+    }
+
     /** What the pipeline answers for [facts]. */
     suspend fun evaluate(facts: HttpFacts): Outcome = pipeline.evaluate(facts)
 
@@ -258,7 +269,8 @@ class PipelineFixture private constructor(
         }
 
         /** Answers the token a [request] wrote; a request with any other token is anonymous, never authenticated. */
-        private fun fixtureAuthenticator(principals: Map<String, Principal>) = Authenticator { credentials ->
+        /** How the fixture authenticates: a token it issued names a [Principal]; with no credential of its own. */
+        internal fun fixtureAuthenticator(principals: Map<String, Principal>) = Authenticator { credentials ->
             val principal = credentials.token?.removePrefix(BEARER)?.let(principals::get)
             if (principal == null) {
                 AuthnResult.Anonymous

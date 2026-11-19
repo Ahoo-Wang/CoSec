@@ -20,7 +20,7 @@ description: "在自己的代码中向 CoSec 请求决策，落实对象级规�
 
 ## 检查一个权限 {#checking-a-permission}
 
-starter 会注册一个 `AuthorizationChecker` Bean（`me.ahoo.cosec.runtime`）。它针对管道已放行的请求的主体和作用域做决策，因此需要该请求的 `SecurityContext`（[访问安全上下文](./web.md#accessing-the-security-context)）：
+starter 会注册一个 `AuthorizationChecker` Bean（`me.ahoo.cosec.runtime`）。它针对管道已放行的请求的主体和作用域做决策，因此需要该请求的 `SecurityContext`（[访问安全上下文](./web.md#accessing-the-security-context)；测试中用工具包构造的上下文：[测试你的应用](../policies/testing.md#testing-your-application)）：
 
 ```kotlin
 suspend fun check(security: SecurityContext, action: String, resource: String): Boolean

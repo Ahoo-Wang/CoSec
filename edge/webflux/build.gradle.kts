@@ -20,4 +20,6 @@ dependencies {
     api("org.springframework:spring-webflux")
     testImplementation("org.springframework:spring-test")
     testImplementation("io.projectreactor:reactor-test")
+    // The documented way to test an application (PIP-29): the kit's contexts and pipeline behind this module's filter.
+    testImplementation(project(":testkit"))
 }

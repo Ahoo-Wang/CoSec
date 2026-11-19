@@ -19,8 +19,12 @@ import kotlinx.coroutines.runBlocking
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.api.context.SecurityContext
+import me.ahoo.cosec.model.AppId
+import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.model.scope.HostScope
+import me.ahoo.cosec.runtime.Pipeline
 import me.ahoo.cosec.runtime.authn.TokenAuthenticator
+import me.ahoo.cosec.runtime.http.CoSecParameters
 import me.ahoo.cosec.runtime.http.Cookies
 import me.ahoo.cosec.runtime.http.Headers
 import me.ahoo.cosec.runtime.http.HttpFacts
@@ -84,6 +88,93 @@ object PermittedRequest {
         require(context.principal.authenticated) { "The verifier refused the token: invalid, expired or revoked." }
         return context
     }
+
+    /**
+     * The [SecurityContext] of a request [subject] of [tenant] makes on a host that decides with policies
+     * (`cosec.pipeline.mode=enforce`), in [space] of [app] (the default space when [space] is empty), with [roles]
+     * effective there; with no token and no documents. For testing what an application does with a signed-in caller's
+     * context (a handler, a function that reads it).
+     *
+     * It is the context [PipelineFixture.securityContext] answers for the same principal: made by the pipeline, through
+     * the kit's authenticator, on a host whose rule permits the request. It carries no credential: the decision event's
+     * `subject.method` is `testkit`, there is no session (so no tenant switch issues from it; use [withToken] with a token
+     * CoSec issued for that), and [SecurityContext.forwardedIdentity] is null, as on an enforce-mode host. [headers] are the
+     * request's other headers, as for [withToken]; credential headers are refused.
+     *
+     * @throws IllegalArgumentException when [headers] names a credential header, or the pipeline refuses the request: an
+     * id it does not accept, or a [space] in which [roles] holds none
+     */
+    fun forSubject(
+        subject: String,
+        tenant: String = TenantId.DEFAULT.value,
+        app: String = "",
+        space: String = "",
+        roles: Set<String> = emptySet(),
+        headers: Map<String, List<String>> = emptyMap(),
+    ): SecurityContext {
+        refuseCredentials(headers)
+        val principal = PipelineFixture.Principal(
+            id = subject,
+            tenant = tenant,
+            roles = if (space.isEmpty()) roles else roles.mapTo(LinkedHashSet()) { "$it@$space" },
+            app = app.ifEmpty { null },
+        )
+        val pipeline = PermittingHost.pipeline(PipelineFixture.fixtureAuthenticator(mapOf(SUBJECT_TOKEN to principal)))
+        val scoped = if (space.isEmpty()) headers else headers + (CoSecParameters.SPACE_ID to listOf(space))
+        val outcome = runBlocking {
+            pipeline.evaluate(facts(scoped + ("Authorization" to listOf("Bearer $SUBJECT_TOKEN")), app))
+        }
+        val security = requireNotNull(outcome.security) {
+            "The pipeline refused the request of [$subject] (${outcome.status} ${outcome.problem?.type?.name}): " +
+                "a space needs a role there, and every id must be one CoSec accepts."
+        }
+        return security.securityContext
+    }
+
+    /**
+     * The [SecurityContext] a service behind a CoSec gateway (`cosec.pipeline.mode=gateway`) reads for a request
+     * carrying the `CoSec-Identity` [header], made by the identity gate ([Pipeline.behindGateway]): what [IdentityHeader]
+     * writes, with any of its forms ([IdentityHeader.forSubject], [IdentityHeader.withToken], [IdentityHeader.of]).
+     *
+     * [SecurityContext.forwardedIdentity] is the forwarded identity there, non-null, as on such a service; the principal, scope
+     * and credential are what the header says. [headers] are the request's other headers; credential headers are
+     * refused, the identity being the request's credential.
+     *
+     * @throws IllegalArgumentException when [headers] names a credential header, or the gate refuses the header (expired,
+     * too old, malformed), naming the status and the problem
+     */
+    fun withIdentity(header: String, headers: Map<String, List<String>> = emptyMap()): SecurityContext {
+        refuseCredentials(headers)
+        val outcome = runBlocking {
+            Pipeline.behindGateway().evaluate(facts(headers + (IdentityHeader.NAME to listOf(header)), null))
+        }
+        val security = requireNotNull(outcome.security) {
+            "The gate refused the identity header (${outcome.status} ${outcome.problem?.type?.name}): make it per request."
+        }
+        return security.securityContext
+    }
+
+    private fun refuseCredentials(headers: Map<String, List<String>>) {
+        headers.keys.firstOrNull { name -> CREDENTIAL_HEADERS.any { it.equals(name, ignoreCase = true) } }?.let {
+            throw IllegalArgumentException(
+                "The header [$it] carries a credential, and this request's credential is the kit's: " +
+                    "pass the subject or the identity as such, not through [headers]."
+            )
+        }
+    }
+
+    private fun facts(headers: Map<String, List<String>>, app: String?) = HttpFacts(
+        method = "POST",
+        rawPath = "/",
+        rawQuery = null,
+        headers = Headers.of(headers),
+        cookies = Cookies.of(emptyMap()),
+        remoteAddress = "127.0.0.1",
+        host = HostScope(app?.ifEmpty { null }?.let(::AppId)),
+    )
+
+    /** The token the kit's authenticator knows the [forSubject] principal by, within that one request. */
+    private const val SUBJECT_TOKEN = "testkit-subject"
 
     /**
      * Ends the request of [context], as a host does when its response is complete (`PIP-26`): from then on every check

@@ -34,3 +34,10 @@ public final class me/ahoo/cosec/webflux/ServerWebExchanges {
 	public static final fun getSecurityContext (Lorg/springframework/web/server/ServerWebExchange;)Lme/ahoo/cosec/api/context/SecurityContext;
 }
 
+public final class me/ahoo/cosec/webflux/testing/CoSecTestBindings {
+	public static final field INSTANCE Lme/ahoo/cosec/webflux/testing/CoSecTestBindings;
+	public static final fun bind (Lorg/springframework/web/server/ServerWebExchange;Lme/ahoo/cosec/api/context/SecurityContext;)V
+	public static final fun filter (Lme/ahoo/cosec/runtime/http/RequestGate;)Lorg/springframework/web/server/WebFilter;
+	public static final fun withSecurityContext (Lreactor/core/publisher/Mono;Lme/ahoo/cosec/api/context/SecurityContext;)Lreactor/core/publisher/Mono;
+}
+

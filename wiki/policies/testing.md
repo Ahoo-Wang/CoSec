@@ -749,3 +749,60 @@ forwards for a real token. A header is refused a minute after it was made, so ma
 ([Services behind the gateway](../integration/web.md#services-behind-the-gateway)).
 
 **Next:** publish tested policies to the store, in [Storage](../operations/storage.md).
+
+### Testing your application {#testing-your-application}
+
+A test of a handler, or of a function that reads the caller, needs a `SecurityContext` that CoSec's pipeline made: since
+`PIP-27` the readers answer nothing else, so a context built by hand reads as no context at all. The kit makes three, all
+`@ExperimentalCoSecApi`:
+
+| Form | Use it for | What the context carries |
+|---|---|---|
+| `PermittedRequest.forSubject(subject, tenant, app, space, roles)` | a signed-in caller of a host that decides with policies (`enforce`) | the same context `PipelineFixture.securityContext` answers for that principal: no credential (`subject.method` is `testkit`), no session, `forwardedIdentity` null |
+| `PermittedRequest.withIdentity(header)` | a service behind a gateway (`gateway` mode), with a header from `IdentityHeader` | what the identity gate makes of the header: `forwardedIdentity` is the forwarded identity |
+| `PermittedRequest.withToken(token, verifier, revocations)` | code that needs a real token's session (a tenant switch) | what `TokenAuthenticator` makes of the token |
+
+The adapters put the context where your code reads it with `CoSecTestBindings`, `cosec-webflux`'s
+(`me.ahoo.cosec.webflux.testing`) and `cosec-webmvc`'s (`me.ahoo.cosec.webmvc.testing`). They are for tests only: in
+production the adapter binds every context and nothing else does. Every binder refuses a context the pipeline did not
+make, so a test never runs as anonymous without saying so, and a context whose request has ended is denied there too
+(`PIP-29`).
+
+**A handler, behind CoSec's own filter.** `filter(gate)` is the filter the starter registers, over a test pipeline. A
+slice does not need CoSec's auto-configurations: it needs the filter. Declare it as a bean in a `@WebFluxTest` or
+`@WebMvcTest` test configuration (on Spring MVC with `SecurityContextArgumentResolver` for a `SecurityContext`
+parameter), or pass it to `WebTestClient` and `MockMvc` as below. The samples are the tests `TestingYourApplicationTest`
+of `cosec-webflux` and `cosec-webmvc`:
+
+```kotlin
+// WebFlux: the kit's documents and principals behind the real filter
+PipelineFixture.of(tenants = mapOf("acme" to documents)).use { fixture ->
+    val client = WebTestClient.bindToRouterFunction(routes)
+        .webFilter<WebTestClient.RouterFunctionSpec>(CoSecTestBindings.filter(fixture.pipeline))
+        .build()
+    val alice = PipelineFixture.Principal("alice", tenant = "acme", roles = setOf("reader"))
+    client.get().uri("/orders/1").header("Authorization", fixture.authorization(alice)).exchange()
+        .expectStatus().isOk
+    client.get().uri("/orders/1").exchange().expectStatus().isUnauthorized
+}
+
+// Spring MVC, a service behind a gateway: the identity gate and the header a gateway forwards
+val mvc = MockMvcBuilders.standaloneSetup(Orders())
+    .addFilters<StandaloneMockMvcBuilder>(CoSecTestBindings.filter(Pipeline.behindGateway()))
+    .setCustomArgumentResolvers(SecurityContextArgumentResolver())
+    .build()
+mvc.get("/orders/1") { header(IdentityHeader.NAME, IdentityHeader.forSubject("alice", "acme")) }
+    .andExpect { status { isOk() } }
+```
+
+**A function that reads the caller**, bound by hand:
+
+```kotlin
+val alice = PermittedRequest.forSubject("alice", tenant = "acme", roles = setOf("reader"))
+// WebFlux: the Reactor context, or the exchange
+StepVerifier.create(CoSecTestBindings.withSecurityContext(currentUser(), alice)).expectNext("alice").verifyComplete()
+CoSecTestBindings.bind(exchange, alice)
+// Spring MVC: SecurityContextHolder, put back as it was afterwards, or the request
+CoSecTestBindings.withSecurityContext(alice) { currentUser() }
+CoSecTestBindings.bind(request, alice)
+```
