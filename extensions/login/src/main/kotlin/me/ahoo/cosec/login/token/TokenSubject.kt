@@ -25,7 +25,7 @@ import java.time.Instant
  * Pass every argument after [id] by name: [app] comes before [tenant], so `TokenSubject("alice", "acme")` is the app
  * `acme` in the default tenant, not the tenant `acme`.
  */
-class TokenSubject(
+class TokenSubject @JvmOverloads constructor(
     /** The principal's id: the token's subject. Not empty, and not beginning with `(`, which is CoSec's (`IDN-12`). */
     val id: String,
     /**
@@ -71,6 +71,8 @@ class TokenSubject(
          * What the token [token] said, so that refreshing it says the same, its app and tenant included; in [issue]'s
          * session when one is given.
          */
+        @JvmStatic
+        @JvmOverloads
         fun of(token: VerifiedToken, issue: TokenFamilies.Issue? = null): TokenSubject = TokenSubject(
             id = token.principal,
             app = token.app,

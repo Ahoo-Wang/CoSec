@@ -71,6 +71,7 @@ object IdentityHeader {
      * tenant or subject, a role with an unpaired surrogate, a credential issued after it expires), or when it cannot be
      * written at all (a credential that never expires, a claim that is not a string, number or boolean, more than 8 KB)
      */
+    @JvmStatic
     fun of(identity: Identity): String {
         val header = try {
             IdentityCodec.encode(identity)
@@ -99,6 +100,8 @@ object IdentityHeader {
      *
      * @throws IllegalArgumentException as [of], or when [validFor] is not positive
      */
+    @JvmStatic
+    @JvmOverloads
     fun forSubject(
         subject: String,
         tenant: String = TenantId.DEFAULT.value,
@@ -145,6 +148,8 @@ object IdentityHeader {
      * @throws IllegalStateException when the gateway would forward nothing: a principal whose authenticator names no
      * credential, or an identity too large to forward
      */
+    @JvmStatic
+    @JvmOverloads
     fun withToken(
         token: String,
         verifier: TokenVerifier,

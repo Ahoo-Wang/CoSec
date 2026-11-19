@@ -21,6 +21,7 @@ import me.ahoo.cosec.document.route.RouteMap
 import me.ahoo.cosec.engine.CoSecEngine
 import me.ahoo.cosec.engine.Engine
 import me.ahoo.cosec.runtime.attribute.AttributeProviders
+import me.ahoo.cosec.runtime.authn.answersApiKeys
 import me.ahoo.cosec.runtime.event.DecisionListener
 import me.ahoo.cosec.runtime.event.DecisionListeners
 import me.ahoo.cosec.runtime.identity.IdentityIssuer
@@ -162,6 +163,7 @@ class PipelineBuilder internal constructor(
         check(
             identity == null || forwarding == null
         ) { "Forward the identity either with forwardIdentity { } or an issuer." }
+        check(membershipProvider != null || !authenticator.answersApiKeys()) { API_KEYS_WITHOUT_MEMBERSHIPS }
         val options = options ?: settings.toOptions()
         val attributes = attributeProviders ?: AttributeProviders(providers.toList())
         // Refused here, before anything is acquired: an option out of range, a prewarmed id that names no document.
@@ -230,6 +232,15 @@ class PipelineBuilder internal constructor(
         readiness,
     )
 }
+
+/**
+ * UA-12: why a pipeline that answers API keys needs a membership provider. The starter's own check (`IDN-6`, at startup)
+ * says the same for its beans.
+ */
+private const val API_KEYS_WITHOUT_MEMBERSHIPS =
+    "This pipeline answers API keys and has no membership provider: an API key's memberships are its principal's, " +
+        "from a MembershipProvider (RFC 0009 §4.2, IDN-6), so every key would be answered 503. Add one with " +
+        "memberships(provider)."
 
 /** Releases [owned], last acquired first; a failure to release is suppressed in [cause], which the caller sees. */
 @Suppress("TooGenericExceptionCaught")

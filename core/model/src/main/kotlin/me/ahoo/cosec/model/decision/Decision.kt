@@ -91,6 +91,12 @@ sealed interface Cause {
      */
     data class AttributeUnavailable(val attributes: Set<String>, val at: StatementRef.Policy?) : Cause
 
+    /**
+     * A check in code (`AuthorizationChecker.decide`) threw: [error] is what failed. Never a request's cause: only a
+     * check answers it, and a check reaches no decision listener, audit, metric or span (UA-16).
+     */
+    data class CheckFailed(val error: Throwable) : Cause
+
     /** The principal's memberships could not be resolved (RFC 0004 §4.5.2). */
     data class MembershipUnavailable(val error: Throwable) : Cause
 

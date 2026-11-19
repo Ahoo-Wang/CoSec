@@ -21,7 +21,7 @@ import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.login.route.LoginRouteAnswer
 import me.ahoo.cosec.runtime.http.RequestSecurity
-import me.ahoo.cosec.webflux.ServerWebExchanges.getSecurityContext
+import me.ahoo.cosec.webflux.ServerWebExchanges.securityContextOrNull
 import org.springframework.core.io.buffer.DataBufferLimitException
 import org.springframework.core.io.buffer.DataBufferUtils
 import org.springframework.http.HttpHeaders
@@ -43,7 +43,7 @@ internal object ReactiveLoginRoutes {
         .reduce(RouterFunction<ServerResponse>::and)
 
     private fun answer(request: ServerRequest, handler: LoginRouteHandler): Mono<ServerResponse> {
-        val security = RequestSecurity.of(request.exchange().getSecurityContext())
+        val security = RequestSecurity.of(request.exchange().securityContextOrNull())
             ?: return write(LoginRouteAnswer.NOT_UNDER_COSEC)
         val contentType = request.headers().firstHeader(HttpHeaders.CONTENT_TYPE)
         return DataBufferUtils.join(request.exchange().request.body, LoginRouteAnswer.MAX_BODY_BYTES)

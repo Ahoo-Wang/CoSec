@@ -39,7 +39,7 @@ class SuspendingHandlerHolderInterceptorTest {
         val method = Handlers::class.java.methods.first { it.name == name }
         interceptor.preHandle(MockHttpServletRequest(), MockHttpServletResponse(), HandlerMethod(Handlers(), method))
             .assert().isTrue()
-        return SecurityContextHolder.context
+        return SecurityContextHolder.securityContextOrNull()
     }
 
     @AfterEach
@@ -58,7 +58,7 @@ class SuspendingHandlerHolderInterceptorTest {
         handle("blocking").assert().isNotNull()
         SecurityContextHolder.setContext(PermittingPipeline.context())
         interceptor.preHandle(MockHttpServletRequest(), MockHttpServletResponse(), Any()).assert().isTrue()
-        SecurityContextHolder.context.assert().isNotNull()
+        SecurityContextHolder.securityContextOrNull().assert().isNotNull()
     }
 
     @Test

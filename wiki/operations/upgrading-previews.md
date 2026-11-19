@@ -40,6 +40,44 @@ Which preview of the library may run behind which preview of the gateway image: 
     a time past year 9999, an empty claim name): the request fails with `500` and no header is forwarded, where through
     beta.4 the service behind answered `400`. CoSec's own gateway builds no such identity; a custom `Authenticator`
     could. `IdentityHeader.of` throws `IllegalArgumentException` for such an identity, as it did for one too large.
+- **The security context's readers are named for what they do** (UA-7). Affected: code that reads the
+  `SecurityContext` from a Reactor context, an exchange, a servlet request or `SecurityContextHolder`. Every reader now
+  comes as `requireSecurityContext()`, which throws an `IllegalStateException` saying what to do where CoSec did not
+  handle the request, and `securityContextOrNull()`, which answers `null`. All are `@JvmStatic`. The old names are gone,
+  with no aliases:
+
+  | Through beta.4 | From beta.5 |
+  |---|---|
+  | `ContextView.getSecurityContext()` (threw `IllegalStateException("SecurityContext is null.")`) | `ContextView.requireSecurityContext()` |
+  | `ContextView.getSecurityContextOrEmpty()` (answered `null`) | `ContextView.securityContextOrNull()` |
+  | `ServerWebExchange.getSecurityContext()` (answered `null`) | `ServerWebExchange.securityContextOrNull()`, or `requireSecurityContext()` |
+  | `HttpServletRequest.getSecurityContext()` (answered `null`) | `HttpServletRequest.securityContextOrNull()`, or `requireSecurityContext()` |
+  | `SecurityContextHolder.context` (Java: `getContext()`) | `SecurityContextHolder.securityContextOrNull()` |
+  | `SecurityContextHolder.requiredContext` (Java: `getRequiredContext()`), which threw `IllegalArgumentException` | `SecurityContextHolder.requireSecurityContext()`, which throws `IllegalStateException`: code that caught the other type no longer catches it |
+
+  A handler's `SecurityContext` parameter is unchanged, and its message is now the request reader's
+  ([Web](../integration/web.md)).
+
+  A context bound that CoSec's pipeline did not make (one built by hand, or a mock) is still ignored (`PIP-27`), but
+  no longer silently: `requireSecurityContext()` says so ("A SecurityContext is bound … that CoSec's pipeline did not
+  make, and it is ignored"), and `securityContextOrNull()` logs that sentence at `WARN`, at most once a minute for each
+  reader. A test that binds such a context sees a missing or anonymous caller, or a permit where its code lets an absent
+  context through. Grep the tests for `SecurityContext.KEY`, `mockk<SecurityContext>` and your own implementations of
+  `SecurityContext`, and bind a context the pipeline made instead ([Testing your application](../policies/testing.md#testing-your-application)).
+- **A check that throws reports its own cause** (UA-16). Affected: code that reads the cause of a check's
+  `Indeterminate` decision (`AuthorizationChecker.decide`). It is `Cause.CheckFailed(error)`, where through beta.4 it
+  was `Cause.SourceUnavailable(PLATFORM, error)` whatever failed. A document the check could not read is still
+  `SourceUnavailable`. A check reaches no decision listener, so no event, audit, metric or span changes
+  ([Checks in code](../integration/checks.md)).
+- **A pipeline that answers API keys needs a membership provider when it is built** (UA-12). Affected: applications
+  that build a pipeline with `ApiKeyAuthenticator`, alone or in a `CompositeAuthenticator`, and no `memberships(...)`.
+  `build()` fails with an `IllegalStateException` that says to add one. Through beta.4 it built, then answered `503` to
+  every key. The starter already refused such a host at startup (`IDN-6`).
+- **The test kit's entries are static for Java** (UA-13). Affected: code compiled against beta.4 that calls
+  `PermittedRequest` or `IdentityHeader`. Their functions are now `@JvmStatic`, so the methods on `INSTANCE` are gone:
+  recompile. Kotlin sources stay the same; Java drops `INSTANCE` (`PermittedRequest.withToken(...)`). `@JvmOverloads`
+  and `@JvmStatic` are added to `PipelineFixture`'s companion (`load`, `of`, `unreadable`), `PipelineFixture.request`,
+  the constructors of `PipelineFixture.Principal` and `TokenSubject`, and `TokenSubject.of`, which only adds.
 - **The skill `cosec-custom-matcher` is `cosec-extending`** (UE-21). 8.0 has no matchers, and the skill is about
   extending CoSec with beans (`AttributeProvider`, `MembershipProvider`, `DecisionListener`, `RateLimiter`,
   `Authenticator`). The directory is `skills/cosec-extending`, its `name` is `cosec-extending`, and an agent invokes it as

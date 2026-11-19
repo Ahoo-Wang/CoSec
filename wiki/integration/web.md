@@ -310,19 +310,22 @@ container's would be another user's. Ask CoSec about roles through the `Security
 dispatch too; the error page, which the container renders after the request has ended, carries none of CoSec's.
 
 ```kotlin
-import me.ahoo.cosec.webflux.ReactiveSecurityContexts.getSecurityContext
-import me.ahoo.cosec.webflux.ServerWebExchanges.getSecurityContext
+import me.ahoo.cosec.webflux.ReactiveSecurityContexts.requireSecurityContext
+import me.ahoo.cosec.webflux.ServerWebExchanges.securityContextOrNull
 
 fun currentUser(): Mono<String> =
-    Mono.deferContextual { context -> Mono.just(context.getSecurityContext().principal.id) }
+    Mono.deferContextual { context -> Mono.just(context.requireSecurityContext().principal.id) }
 
 // with an exchange at hand; null if CoSec did not handle the request
-val securityContext = exchange.getSecurityContext()
+val securityContext = exchange.securityContextOrNull()
 ```
 
-Where CoSec did not handle the request, the three accessors answer differently: `ContextView.getSecurityContext()` throws an
-`IllegalStateException`, while `ContextView.getSecurityContextOrEmpty()` and `exchange.getSecurityContext()` return `null`,
-which a caller must treat as "no context", never as "no restriction".
+Every reader, on both stacks, comes in two forms, and the name says which (UA-7):
+`requireSecurityContext()` throws an `IllegalStateException` where CoSec did not handle the request, saying what to
+do (register the filter) and where else to read the context; `securityContextOrNull()` answers `null`, which a caller
+must treat as "no context", never as "no restriction". The readers are `ReactiveSecurityContexts` (a Reactor
+`ContextView`), `ServerWebExchanges` (an exchange), `ServletRequests` (a servlet request) and `SecurityContextHolder`
+(the request thread), each `@JvmStatic` for Java: `ServletRequests.requireSecurityContext(request)`.
 
 **Spring MVC**: in a handler, declare a `SecurityContext` parameter. The starter registers its resolver
 (`SecurityContextArgumentResolver`), which reads the context from the request, so the parameter is the context of the
@@ -339,11 +342,11 @@ Elsewhere, read it from the servlet request, or, in blocking code on the request
 
 ```kotlin
 import me.ahoo.cosec.webmvc.SecurityContextHolder
-import me.ahoo.cosec.webmvc.ServletRequests.getSecurityContext
+import me.ahoo.cosec.webmvc.ServletRequests.securityContextOrNull
 
-val securityContext = httpServletRequest.getSecurityContext()
+val securityContext = httpServletRequest.securityContextOrNull()
 // blocking code on the request thread only
-val securityContext = SecurityContextHolder.requiredContext
+val securityContext = SecurityContextHolder.requireSecurityContext()
 ```
 
 The holder is a thread-local, which the filter binds for the request's thread and clears when the request completes.
@@ -353,8 +356,8 @@ single-flight cache load). So the holder is:
 
 - **restored**, with Micrometer's `io.micrometer:context-propagation` on the classpath and
   `spring.reactor.context-propagation=auto`: Spring restores it with its other thread-locals on every resumption;
-- **unbound** otherwise, before the handler runs (`PIP-22`): `requiredContext` fails at once, before or after any
-  suspension, and its message names the parameter; `context` is `null`, which a caller must treat as "no context", never
+- **unbound** otherwise, before the handler runs (`PIP-22`): `requireSecurityContext()` fails at once, before or after
+  any suspension, and its message names the parameter; `securityContextOrNull()` is `null`, which a caller must treat as "no context", never
   as "no restriction". It stays unbound for whatever runs after the handler on that request's threads:
   other interceptors' `postHandle` and `afterCompletion`, and filters once the chain returns. One case is left: a `suspend` handler resumed on the thread of a request whose
   handler is blocking finds **that request's** context there, so code that reads the holder only after such a

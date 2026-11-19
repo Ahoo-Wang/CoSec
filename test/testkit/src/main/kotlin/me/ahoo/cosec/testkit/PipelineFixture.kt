@@ -84,7 +84,7 @@ class PipelineFixture private constructor(
      * `role@space`, the [policies] attached to it, the [app] its credential declares, and signed [attributes].
      * Equivalent to what a token would carry; not an API key, so a break-glass or API key cap does not apply.
      */
-    class Principal(
+    class Principal @JvmOverloads constructor(
         val id: String,
         val tenant: String? = null,
         val roles: Set<String> = emptySet(),
@@ -108,6 +108,7 @@ class PipelineFixture private constructor(
      * A request as an adapter would hand it to the pipeline. With a [principal] it carries a credential for it, without
      * one it is anonymous; [hostApp] is the app of the host (`cosec.authorization.scope.app-id`), none by default.
      */
+    @JvmOverloads
     fun request(
         method: String,
         path: String,
@@ -183,6 +184,8 @@ class PipelineFixture private constructor(
          * their permits in [rateLimiter], a [LocalRateLimiter] of the fixture's own as the starter's default is, so a
          * request over a rule's limit answers `429`; pass one with a clock of the test's to cross a window.
          */
+        @JvmStatic
+        @JvmOverloads
         fun load(
             directory: Path,
             routes: RouteMap = RouteMap.EMPTY,
@@ -195,6 +198,8 @@ class PipelineFixture private constructor(
          * [listeners]. Throws [DocumentException] when one does not compile. Rate limits count in [rateLimiter], as
          * [load]'s do.
          */
+        @JvmStatic
+        @JvmOverloads
         fun of(
             platform: String? = null,
             apps: Map<String, String> = emptyMap(),
@@ -219,6 +224,8 @@ class PipelineFixture private constructor(
          * a permit, whoever the principal. For a test that proves an application's routes fail closed. With the route
          * map [routes] and the decision [listeners], as [of].
          */
+        @JvmStatic
+        @JvmOverloads
         fun unreadable(
             routes: RouteMap = RouteMap.EMPTY,
             listeners: List<DecisionListener> = emptyList(),
