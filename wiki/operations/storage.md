@@ -475,7 +475,7 @@ the app list, `<s>:control:apps:all`, and the head of every app it names. The li
   platform head that was lost and is published again may find app documents a rebuilt list does not name. A first
   revision that conflicts marks nothing;
 - [`cosec-migrate repair-references`](./upgrading.md#repair-the-back-reference-index) lists every app document
-  `<s>:control:list:documents` names and marks the list complete. A store upgraded from 8.0.0-alpha.2 needs it once;
+  `<s>:control:list:documents` names and marks the list complete;
 - each control-plane instance at startup, and every reclamation pass before anything else, marks a complete list
   incomplete again when an app document `<s>:control:list:documents` lists, and that has a head, is missing from it,
   and logs a WARN: an instance or a `cosec-migrate` that does not keep the list published it, during a rolling

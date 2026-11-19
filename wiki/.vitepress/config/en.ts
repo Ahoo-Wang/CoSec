@@ -89,6 +89,7 @@ export const en: DefaultTheme.Config & { label: string, lang: string, title: str
   title: 'CoSec',
   description: 'Multi-tenant reactive security for Spring: IAM-style policies and role-based permissions, evaluated deny-first.',
   themeConfig: {
+    outline: [2, 3],
     nav: [
       { text: 'Guide', link: '/guide/introduction' },
       { text: 'Integration', link: '/integration/web' },

@@ -216,9 +216,8 @@ and an overlay for each kind of cluster. Deploy an overlay, never the base on it
 
 - **No service links** (`enableServiceLinks: false`). Kubernetes would otherwise put variables such as
   `COSEC_GATEWAY_SERVICE_HOST` and `COSEC_GATEWAY_PORT_80_TCP_ADDR`, derived from the Service `cosec-gateway`, into the
-  gateway's environment. Spring reads them as `cosec.gateway.*` properties, which 8.0.0-alpha.1 refused at startup as
-  `cosec.*` keys CoSec does not read; since alpha.2 the check skips exactly these variables
-  ([Unknown properties](./configuration.md#unknown-properties)). The gateway finds services by DNS, so nothing needs
+  gateway's environment. Spring reads them as `cosec.gateway.*` properties; the check for `cosec.*` keys CoSec does not read skips exactly
+  these variables ([Unknown properties](./configuration.md#unknown-properties)). The gateway finds services by DNS, so nothing needs
   them in its environment.
 - **Pod security.** The gateway runs as the image's `appuser` (uid 999; the image names its user rather than its uid,
   so the manifests give the uid for `runAsNonRoot` to check), with a read-only root filesystem, no privilege
@@ -272,7 +271,7 @@ overlay size them for their limits:
 - **CPU.** The JVM sizes its GC, JIT and Netty threads from the CPU limit, and the autoscaler measures against the
   request.
 
-The native part was measured in the image (`8.0.0-alpha.1`, `linux/arm64`, Docker with these limits and a read-only
+The native part was measured in the image (an 8.0 preview build, `linux/arm64`, Docker with these limits and a read-only
 root filesystem), after about 45,000 requests to a route and to the health endpoint with no platform document
 published, so that each answered `503`: the container held 471 MiB (dev) and 1,277 MiB (production), and nothing was
 killed for memory.

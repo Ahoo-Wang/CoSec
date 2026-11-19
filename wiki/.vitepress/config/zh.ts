@@ -89,6 +89,7 @@ export const zh: DefaultTheme.Config & { label: string, lang: string, link: stri
   title: 'CoSec',
   description: '面向 Spring 的多租户响应式安全框架：IAM 风格的策略与基于角色的权限，按“拒绝优先”求值。',
   themeConfig: {
+    outline: [2, 3],
     nav: [
       { text: '指南', link: '/zh/guide/introduction' },
       { text: '集成', link: '/zh/integration/web' },

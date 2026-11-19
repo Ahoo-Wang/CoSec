@@ -181,7 +181,7 @@ management:
 
 - **不注入 Service 链接**（`enableServiceLinks: false`）。否则 Kubernetes 会把 `COSEC_GATEWAY_SERVICE_HOST`、
   `COSEC_GATEWAY_PORT_80_TCP_ADDR` 这类由 Service `cosec-gateway` 派生的变量放进网关的环境。Spring 把它们读作
-  `cosec.gateway.*` 配置项，8.0.0-alpha.1 会把它们当作 CoSec 不读取的 `cosec.*` key 而拒绝启动；从 alpha.2 起，检查会跳过这些确切的变量
+  `cosec.gateway.*` 配置项；检查 CoSec 不读取的 `cosec.*` key 时，会跳过这些确切的变量
   （[未知配置项](./configuration.md#unknown-properties)）。网关通过 DNS 找到服务，环境里并不需要它们。
 - **Pod 安全。** 网关以镜像中的 `appuser` 运行（uid 999；镜像只给出用户名、没有给出 uid，所以清单写明 uid，让
   `runAsNonRoot` 能够检查），根文件系统只读，不允许提权，丢弃所有 capability，使用运行时默认的 seccomp 配置，不挂载
@@ -224,7 +224,7 @@ management:
   overlay 替换这个变量；修改时同时修改内存请求和限制。
 - **CPU。** JVM 按 CPU 限制确定 GC、JIT 和 Netty 的线程数，自动伸缩器按 CPU 请求计算。
 
-原生部分在镜像中测得（`8.0.0-alpha.1`，`linux/arm64`，Docker，使用上述限制和只读根文件系统）：在没有发布平台文档、每个请求都回答
+原生部分在镜像中测得（8.0 预览版构建，`linux/arm64`，Docker，使用上述限制和只读根文件系统）：在没有发布平台文档、每个请求都回答
 `503` 的情况下，向一条路由和健康端点发送约 45,000 个请求后，容器占用 471 MiB（dev）和 1,277 MiB（production），没有进程因内存被杀。
 
 ## CI 如何检查镜像 {#how-ci-checks-the-image}
