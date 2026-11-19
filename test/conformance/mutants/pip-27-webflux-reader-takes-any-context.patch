@@ -3,13 +3,15 @@
 # Tests: :webflux:test --tests me.ahoo.cosec.webflux.RequestEndTest
 
 diff --git a/edge/webflux/src/main/kotlin/me/ahoo/cosec/webflux/ServerWebExchanges.kt b/edge/webflux/src/main/kotlin/me/ahoo/cosec/webflux/ServerWebExchanges.kt
-index 5a35ceba..6a03b543 100644
+index e2a2199c7..b5bb8652e 100644
 --- a/edge/webflux/src/main/kotlin/me/ahoo/cosec/webflux/ServerWebExchanges.kt
 +++ b/edge/webflux/src/main/kotlin/me/ahoo/cosec/webflux/ServerWebExchanges.kt
-@@ -38,5 +38,5 @@ object ServerWebExchanges {
+@@ -41,7 +41,7 @@ object ServerWebExchanges {
       */
      @JvmStatic
-     fun ServerWebExchange.getSecurityContext(): SecurityContext? =
+     fun ServerWebExchange.securityContextOrNull(): SecurityContext? =
 -        (attributes[SecurityContext.KEY] as? SecurityContext)?.takeIf { RequestSecurity.of(it) != null }
 +        attributes[SecurityContext.KEY] as? SecurityContext
- }
+ 
+     /**
+      * The security context the adapter bound to this exchange; [IllegalStateException] where there is none, saying what
