@@ -1,0 +1,50 @@
+{
+  "rules": [
+    "DOC-9"
+  ],
+  "polarity": "positive",
+  "level": "engine",
+  "description": "A rate limit rule's condition matches as a DENY's does: with ignoreCase on Ärzte, requests of ärzte would escape the limit. The document does not compile.",
+  "documents": {
+    "platform": {
+      "policies": [
+        {
+          "id": "members",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "*"
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "members",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "members"
+        }
+      ],
+      "rateLimits": [
+        {
+          "id": "doctors",
+          "action": "*",
+          "condition": {
+            "eq": [
+              "subject.attributes.dept",
+              "Ärzte"
+            ],
+            "ignoreCase": true
+          },
+          "permitsPerSecond": 1
+        }
+      ]
+    }
+  },
+  "expect": {
+    "decision": "NotCompiled",
+    "error": "does not match [ärzte]"
+  }
+}
