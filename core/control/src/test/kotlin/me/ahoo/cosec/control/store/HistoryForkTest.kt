@@ -24,6 +24,8 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.runBlocking
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.control.captured
+import me.ahoo.cosec.control.forget
 import me.ahoo.cosec.control.store.StoreFixtures.ACME
 import me.ahoo.cosec.control.store.StoreFixtures.candidate
 import me.ahoo.cosec.control.store.StoreFixtures.policy
@@ -132,7 +134,7 @@ class HistoryForkTest {
         return old
     }
 
-    private fun warnings() = appender.list.filter { it.level == Level.WARN }.map { it.formattedMessage }
+    private fun warnings() = appender.captured().filter { it.level == Level.WARN }.map { it.formattedMessage }
 
     @Test
     fun `history repairs the reused revision after the index write failed`() = runBlocking<Unit> {
@@ -164,7 +166,7 @@ class HistoryForkTest {
         val old = headMovedBack()
         store.failNextSettle = true
         val new = publish("new-branch")
-        appender.list.clear()
+        appender.forget()
 
         revisions.history(ACME)
         revisions.history(ACME)
@@ -236,7 +238,7 @@ class HistoryForkTest {
             ),
         )
         memory.removeRecord(ACME, digests[1])
-        appender.list.clear()
+        appender.forget()
 
         revisions.history(ACME).map { it.revision }.assert().containsExactly(3L)
         revisions.history(ACME)

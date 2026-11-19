@@ -24,6 +24,8 @@ import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.document.identity.IdentityCodec
 import me.ahoo.cosec.model.scope.HostScope
+import me.ahoo.cosec.runtime.captured
+import me.ahoo.cosec.runtime.forget
 import me.ahoo.cosec.runtime.http.Cookies
 import me.ahoo.cosec.runtime.http.Headers
 import me.ahoo.cosec.runtime.http.HttpFacts
@@ -61,7 +63,7 @@ class IdentityRefusalsTest {
         logger.level = level
     }
 
-    private fun warnings() = lines.list.filter { it.level == Level.WARN }.map { it.formattedMessage }
+    private fun warnings() = lines.captured().filter { it.level == Level.WARN }.map { it.formattedMessage }
 
     private fun refused(gate: IdentityGate, header: String) = runBlocking {
         gate.evaluate(
@@ -88,7 +90,7 @@ class IdentityRefusalsTest {
         warned.assert().hasSize(1)
         val warning = warned.single()
         warning.assert().contains("400 invalid-request").contains("not base64url").contains(IdentityRefusals.PAGE)
-        lines.list.filter { it.level == Level.DEBUG }.assert().hasSize(2)
+        lines.captured().filter { it.level == Level.DEBUG }.assert().hasSize(2)
     }
 
     @Test
@@ -121,7 +123,7 @@ class IdentityRefusalsTest {
             "{\"v\":${"a".repeat(5_000)}\nERROR forged}",
         ).map { Base64.getUrlEncoder().withoutPadding().encodeToString(it.encodeToByteArray()) }
         headers.forEach { header ->
-            lines.list.clear()
+            lines.forget()
             refused(IdentityGate(maxBytes = 64 * 1024), header).status.assert().isEqualTo(400)
             val warning = warnings().single()
             warning.any { it.isISOControl() }.assert().isFalse()
