@@ -50,10 +50,10 @@ import me.ahoo.cosec.model.SpaceId
 import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.spi.snapshot.SnapshotDigest
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
+import me.ahoo.cosec.spi.token.RevocationReader
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import java.time.Instant
-import me.ahoo.cosec.spi.token.RevocationReader
 
 /** Roles on the control plane (RFC 0012 §7): operations, authorization, checks and what they read. */
 class RolesTest {
@@ -376,7 +376,11 @@ class RolesTest {
             document.policies.map { it.id.value }.assert().containsExactly("perm:wms/read", "perm:wms/ship")
             document.bindings.map { it.id.value }.assert().containsExactly("role:clerk@wms:read")
         }
-        val plane = DefaultControlPlane(changes, harness.revisions, ChangeAuthority(PERMIT_ALL, revocations = RevocationReader.NONE))
+        val plane = DefaultControlPlane(
+            changes,
+            harness.revisions,
+            ChangeAuthority(PERMIT_ALL, revocations = RevocationReader.NONE)
+        )
         val report = plane.analyze(
             PLATO,
             AccessQuery(TenantId("acme"), "wms", "wh-01", Action("wms", "ship"), Resource("wms", "x", emptyMap())),

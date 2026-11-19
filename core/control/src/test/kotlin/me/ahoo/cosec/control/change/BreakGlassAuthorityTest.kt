@@ -48,12 +48,12 @@ import me.ahoo.cosec.model.SubjectRef
 import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.runtime.event.Delivery
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
+import me.ahoo.cosec.spi.token.RevocationReader
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Test
 import java.time.Duration
 import java.util.concurrent.atomic.AtomicInteger
-import me.ahoo.cosec.spi.token.RevocationReader
 
 /**
  * RFC 0007 §8: `cosec:breakglass` is what requesting break-glass, publishing it once approved and revoking it take, and

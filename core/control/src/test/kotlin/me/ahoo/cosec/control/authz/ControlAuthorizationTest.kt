@@ -53,11 +53,11 @@ import me.ahoo.cosec.model.SpaceId
 import me.ahoo.cosec.model.SubjectRef
 import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
+import me.ahoo.cosec.spi.token.RevocationReader
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import java.time.Duration
 import java.util.concurrent.atomic.AtomicInteger
-import me.ahoo.cosec.spi.token.RevocationReader
 
 /**
  * RFC 0007 §7.1–§7.5 through the real pipeline and engine: the built-in control-plane policies, the hard rule, the
@@ -81,7 +81,15 @@ class ControlAuthorizationTest {
     private fun changes(
         options: ChangeOptions = ChangeOptions(shadow = IMMEDIATE_WINDOW),
         authorizer: ControlAuthorizer = engine.authorizer
-    ) = Changes(store, revisions, { ChangeId("c${ids.incrementAndGet()}") }, authorizer, clock, options, revocations = RevocationReader.NONE)
+    ) = Changes(
+        store,
+        revisions,
+        { ChangeId("c${ids.incrementAndGet()}") },
+        authorizer,
+        clock,
+        options,
+        revocations = RevocationReader.NONE
+    )
 
     private val changes = changes()
 

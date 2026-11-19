@@ -57,10 +57,10 @@ import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.spi.snapshot.SnapshotDigest
 import me.ahoo.cosec.spi.snapshot.SnapshotDocument
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
+import me.ahoo.cosec.spi.token.RevocationReader
 import me.ahoo.test.asserts.assert
 import me.ahoo.test.asserts.assertThrownBy
 import org.junit.jupiter.api.Test
-import me.ahoo.cosec.spi.token.RevocationReader
 
 /** The change flow of RFC 0007 §6.1, §6.2 and §6.7 case by case. */
 /**
@@ -103,11 +103,10 @@ class ChangesB1Test {
             ),
         )
         // Four-eyes, so that the platform's own change is analyzed as far as an app document is.
-        val ids = java.util.concurrent.atomic.AtomicInteger()
         val fourEyes = Changes(
             harness.memory,
             harness.revisions,
-            { ChangeId("four-eyes-${ids.incrementAndGet()}") },
+            { ChangeId("four-eyes-${java.util.UUID.randomUUID()}") },
             PERMIT_ALL,
             harness.clock,
             ChangeOptions(fourEyes = true, shadow = IMMEDIATE_WINDOW),

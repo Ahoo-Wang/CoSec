@@ -35,8 +35,8 @@ import me.ahoo.cosec.model.condition.AttributeCatalog
 import me.ahoo.cosec.spi.shadow.InMemoryShadowReports
 import me.ahoo.cosec.spi.shadow.ShadowReportReader
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
-import java.time.Clock
 import me.ahoo.cosec.spi.token.RevocationReader
+import java.time.Clock
 
 /**
  * Change requests and their state machine (RFC 0007 §6.1): propose, check, stage, rebase, publish, abandon, `apply`

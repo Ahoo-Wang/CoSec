@@ -42,12 +42,12 @@ import me.ahoo.cosec.model.RoleId
 import me.ahoo.cosec.model.SubjectRef
 import me.ahoo.cosec.model.decision.DocumentKind
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
+import me.ahoo.cosec.spi.token.RevocationReader
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
 import java.time.Instant
 import java.util.concurrent.atomic.AtomicInteger
-import me.ahoo.cosec.spi.token.RevocationReader
 
 /**
  * Removing a DENY of the platform or of an app needs a second person (RFC 0007 §7.4.4 as amended on 2026-11-09,

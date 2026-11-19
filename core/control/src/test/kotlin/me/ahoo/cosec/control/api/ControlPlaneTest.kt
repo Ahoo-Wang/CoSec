@@ -68,10 +68,10 @@ import me.ahoo.cosec.model.condition.Literal
 import me.ahoo.cosec.spi.snapshot.SnapshotDigest
 import me.ahoo.cosec.spi.snapshot.SnapshotFormatException
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
+import me.ahoo.cosec.spi.token.RevocationReader
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import java.util.concurrent.atomic.AtomicInteger
-import me.ahoo.cosec.spi.token.RevocationReader
 
 /**
  * RFC 0007 §10.1, §10.3 through the real engine: the control plane's reads are authorized like its writes, and
@@ -120,7 +120,12 @@ class ControlPlaneTest {
         revocations = RevocationReader.NONE,
     )
     val simulator = Simulator()
-    val plane = DefaultControlPlane(changes, revisions, ChangeAuthority(engine.authorizer, options, revocations = RevocationReader.NONE), simulator)
+    val plane = DefaultControlPlane(
+        changes,
+        revisions,
+        ChangeAuthority(engine.authorizer, options, revocations = RevocationReader.NONE),
+        simulator
+    )
 
     val plato = engine.operator(TenantId.PLATFORM, "plato")
     val alice = engine.operator(ACME, "alice", roles = listOf("admin", "ops@team-a"))

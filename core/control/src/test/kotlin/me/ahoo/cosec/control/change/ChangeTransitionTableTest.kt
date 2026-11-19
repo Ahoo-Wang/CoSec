@@ -34,10 +34,10 @@ import me.ahoo.cosec.control.lifecycle.ChangeOptions
 import me.ahoo.cosec.control.lifecycle.ChangeStep
 import me.ahoo.cosec.control.lifecycle.StagingSlots
 import me.ahoo.cosec.model.TenantId
+import me.ahoo.cosec.spi.token.RevocationReader
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import java.time.Duration
-import me.ahoo.cosec.spi.token.RevocationReader
 
 /**
  * The change flow as it is today (RFC 0013 B4, PR 7): for each command, the states it moves a change from and the states

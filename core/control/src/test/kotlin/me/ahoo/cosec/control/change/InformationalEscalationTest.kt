@@ -24,9 +24,9 @@ import me.ahoo.cosec.document.Actor
 import me.ahoo.cosec.document.ProvenanceKind
 import me.ahoo.cosec.model.PrincipalId
 import me.ahoo.cosec.model.TenantId
+import me.ahoo.cosec.spi.token.RevocationReader
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
-import me.ahoo.cosec.spi.token.RevocationReader
 
 /**
  * RC1-34 review: the tenant bindings an app change widens are shown to the approver, but what is approved is widening

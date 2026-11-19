@@ -44,9 +44,9 @@ import me.ahoo.cosec.model.SpaceId
 import me.ahoo.cosec.model.SubjectRef
 import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
+import me.ahoo.cosec.spi.token.RevocationReader
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
-import me.ahoo.cosec.spi.token.RevocationReader
 
 /**
  * `SCP-13` (#1403): a tenant id is one path segment of the resources the control plane authorizes on. A platform
@@ -60,8 +60,17 @@ class OneSegmentTenantIdTest {
     private val store = InMemoryControlStore(clock)
     private val revisions = Revisions(store, clock)
     private val engine = EngineAuthority(revisions)
-    private val changes = Changes(store, revisions, { ChangeId("c") }, engine.authorizer, clock, ChangeOptions(), revocations = RevocationReader.NONE)
-    private val http = ControlHttp(DefaultControlPlane(changes, revisions, ChangeAuthority(engine.authorizer, revocations = RevocationReader.NONE)))
+    private val changes = Changes(store, revisions, {
+        ChangeId("c")
+    }, engine.authorizer, clock, ChangeOptions(), revocations = RevocationReader.NONE)
+    private val http =
+        ControlHttp(
+            DefaultControlPlane(
+                changes,
+                revisions,
+                ChangeAuthority(engine.authorizer, revocations = RevocationReader.NONE)
+            )
+        )
     private val plato = engine.operator(TenantId.PLATFORM, "plato")
     private val tia = engine.security(TenantId.PLATFORM, "tia")
 

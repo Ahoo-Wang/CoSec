@@ -41,9 +41,9 @@ import me.ahoo.cosec.model.SpaceId
 import me.ahoo.cosec.model.SubjectRef
 import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
+import me.ahoo.cosec.spi.token.RevocationReader
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
-import me.ahoo.cosec.spi.token.RevocationReader
 
 /**
  * #1401: an access review resolves the built-in control-plane policies (RFC 0007 §7.3) from the engine's own

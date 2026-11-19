@@ -44,10 +44,10 @@ import me.ahoo.cosec.model.PolicyId
 import me.ahoo.cosec.model.SubjectRef
 import me.ahoo.cosec.spi.snapshot.SnapshotDigest
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
+import me.ahoo.cosec.spi.token.RevocationReader
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import java.util.concurrent.atomic.AtomicInteger
-import me.ahoo.cosec.spi.token.RevocationReader
 
 /**
  * RC review batch B2 through the change flow: a narrowing change takes a busy staging slot (RC1-12), a change an earlier

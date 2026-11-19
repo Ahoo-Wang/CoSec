@@ -54,6 +54,7 @@ import me.ahoo.cosec.runtime.event.Delivery
 import me.ahoo.cosec.spi.snapshot.SnapshotDigest
 import me.ahoo.cosec.spi.snapshot.SnapshotDocument
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
+import me.ahoo.cosec.spi.token.RevocationReader
 import me.ahoo.test.asserts.assert
 import me.ahoo.test.asserts.assertThrownBy
 import org.junit.jupiter.api.AfterEach
@@ -61,7 +62,6 @@ import org.junit.jupiter.api.Test
 import java.time.Duration
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.atomic.AtomicInteger
-import me.ahoo.cosec.spi.token.RevocationReader
 
 /**
  * RFC 0007 §8 (BRK-3) through the real engine: break-glass is created only through the control plane, by a platform
@@ -130,9 +130,7 @@ class BreakGlassControlTest {
     private val audit = Audit()
 
     private fun changes(
-        listeners: List<ChangeListener> = listOf(
-            audit
-        ),
+        listeners: List<ChangeListener> = listOf(audit),
         options: ChangeOptions = ChangeOptions(shadow = IMMEDIATE_WINDOW)
     ): Changes {
         val registered = ChangeListeners(listeners).also { opened += it }

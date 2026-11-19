@@ -28,10 +28,10 @@ import me.ahoo.cosec.engine.StatementSource
 import me.ahoo.cosec.model.Effect
 import me.ahoo.cosec.model.decision.RateLimitSpec
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
+import me.ahoo.cosec.spi.token.RevocationReader
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import java.util.concurrent.atomic.AtomicInteger
-import me.ahoo.cosec.spi.token.RevocationReader
 
 /**
  * A tenant's own rate limits (RFC 0006 §8.1, OBL-2): they count in its own buckets, so a tenant administrator tightens or
