@@ -1,0 +1,17 @@
+# Rule: SNP-19
+# Mutant: an installed document is reviewed on the thread that installs it, not on housekeeping: a slow review holds the load and every request waiting on it (UC-1)
+# Tests: :runtime:test --tests me.ahoo.cosec.runtime.snapshot.InstallReviewTest
+
+diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/KeyEffects.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/KeyEffects.kt
+index 0c4e73d8..c082496b 100644
+--- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/KeyEffects.kt
++++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/KeyEffects.kt
+@@ -240,7 +240,7 @@ internal class KeyEffects<T : Any>(
+                 }
+             }
+         }
+-        val offered = context.threads.offHousekeeping(HousekeepingTask.INSTALL_REVIEW, key, task)
++        val offered = true.also { task() }
+         // Only a refused offer waits for a read that confirms it; an offer taken, this one's or a newer install's, is the
+         // review of what is installed.
+         unreviewed = entry.takeUnless { offered }

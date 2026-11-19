@@ -82,6 +82,32 @@ object PatternContainment {
         else -> true
     }
 
+    /**
+     * A resource pattern with what [disjoint] reads of it read once: for comparing one pattern with many (UC-1 compares
+     * every `http:` statement with every route), where reading both shapes for each pair costs most of the comparison.
+     */
+    @InternalCoSecApi
+    class Prepared internal constructor(val pattern: ResourcePattern) {
+        internal val typed: TypedShape? = (pattern as? ResourcePattern.Typed)?.let(TypedShape::of)
+        internal val http: HttpShape? = (pattern as? ResourcePattern.Http)?.let { HttpShape.of(it.path) }
+    }
+
+    fun prepare(pattern: ResourcePattern): Prepared = Prepared(pattern)
+
+    /** [disjoint] of two prepared patterns: the same answer, without reading their shapes again. */
+    fun disjoint(a: Prepared, b: Prepared): Boolean {
+        val x = a.pattern
+        val y = b.pattern
+        return when {
+            x is ResourcePattern.AnyResource || y is ResourcePattern.AnyResource -> false
+            x is ResourcePattern.Typed && y is ResourcePattern.Typed -> typedDisjoint(a.typed!!, b.typed!!)
+            x is ResourcePattern.Http && y is ResourcePattern.Http ->
+                comparable(x.path, y.path) && shapesDisjoint(a.http, b.http)
+
+            else -> true
+        }
+    }
+
     private fun unknown(reason: String) = ResourceContainment.Unknown(reason)
 
     private fun typed(outer: TypedShape, inner: TypedShape): ResourceContainment {
@@ -204,12 +230,16 @@ object PatternContainment {
         is Part.Rest -> false
     }
 
-    private fun httpDisjoint(a: HttpPathPattern, b: HttpPathPattern): Boolean {
-        if (!a.caseSensitive || !b.caseSensitive || a.decodeAndParseSegments != b.decodeAndParseSegments) {
+    private fun httpDisjoint(a: HttpPathPattern, b: HttpPathPattern): Boolean =
+        comparable(a, b) && shapesDisjoint(HttpShape.of(a), HttpShape.of(b))
+
+    private fun comparable(a: HttpPathPattern, b: HttpPathPattern): Boolean =
+        a.caseSensitive && b.caseSensitive && a.decodeAndParseSegments == b.decodeAndParseSegments
+
+    private fun shapesDisjoint(x: HttpShape?, y: HttpShape?): Boolean {
+        if (x == null || y == null) {
             return false
         }
-        val x = HttpShape.of(a) ?: return false
-        val y = HttpShape.of(b) ?: return false
         if (x.leadingRest || y.leadingRest) {
             return false
         }
@@ -229,7 +259,7 @@ object PatternContainment {
     }
 
     /** One element of a pattern as this analysis sees it. */
-    private sealed class Part {
+    internal sealed class Part {
         object Separator : Part()
 
         object Wildcard : Part()
@@ -246,7 +276,7 @@ object PatternContainment {
     }
 
     /** A typed pattern, re-read from its text: the text parsed, so it is well formed. */
-    private class TypedShape(val type: String, val segments: List<Part>, val rest: Boolean, val text: String) {
+    internal class TypedShape(val type: String, val segments: List<Part>, val rest: Boolean, val text: String) {
         override fun toString(): String = text
 
         companion object {
@@ -274,7 +304,7 @@ object PatternContainment {
      * pattern's text and then checked against what [HttpPathPatternParser] built, element by element: if the two ever
      * disagree (the parser changed), the pattern is not analyzed rather than analyzed wrongly.
      */
-    private class HttpShape(val parts: List<Part>) {
+    internal class HttpShape(val parts: List<Part>) {
         val leadingRest: Boolean = parts.size > 1 && parts[0] is Part.Rest
 
         companion object {

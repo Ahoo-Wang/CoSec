@@ -75,19 +75,25 @@ class RouteMap private constructor(private val routes: Map<String, List<Compiled
         if (statements.isEmpty()) {
             return emptyList()
         }
+        // Each pattern is read once: reading both for each (statement, route) pair costs most of the comparison.
+        val prepared = statements.map { statement -> statement to statement.resources.map(PatternContainment::prepare) }
         return routes.values.flatten().flatMap { compiled ->
             val unmapped = Action(ResourcePattern.HTTP_TYPE, compiled.route.method)
-            val path = ResourcePattern.parse(HTTP + compiled.route.path)
-            val typed = ResourcePattern.parse(template(compiled))
-            statements.filter { statement ->
-                applies(statement, unmapped, path) && !applies(statement, compiled.action, typed)
-            }.map { RouteEscape(it.label, compiled.route, compiled.location) }
+            val path = PatternContainment.prepare(ResourcePattern.parse(HTTP + compiled.route.path))
+            val typed = PatternContainment.prepare(ResourcePattern.parse(template(compiled)))
+            prepared.filter { (statement, resources) ->
+                applies(statement, resources, unmapped, path) && !applies(statement, resources, compiled.action, typed)
+            }.map { (statement, _) -> RouteEscape(statement.label, compiled.route, compiled.location) }
         }
     }
 
-    private fun applies(statement: HttpStatement, action: Action, resource: ResourcePattern): Boolean =
-        statement.actions.any { it.matches(action) } &&
-            statement.resources.any { !PatternContainment.disjoint(it, resource) }
+    private fun applies(
+        statement: HttpStatement,
+        resources: List<PatternContainment.Prepared>,
+        action: Action,
+        resource: PatternContainment.Prepared,
+    ): Boolean = statement.actions.any { it.matches(action) } &&
+        resources.any { !PatternContainment.disjoint(it, resource) }
 
     /** The route's resource as a pattern: its literal segments, and `*` for each captured variable. */
     private fun template(compiled: Compiled): String =

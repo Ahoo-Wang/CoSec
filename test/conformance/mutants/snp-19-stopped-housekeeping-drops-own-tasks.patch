@@ -3,11 +3,11 @@
 # Tests: :runtime:test --tests me.ahoo.cosec.runtime.snapshot.HousekeepingRefusalTest
 
 diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/SnapshotThreads.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/SnapshotThreads.kt
-index fe495e66..0d90d5e9 100644
+index 3f91f420..e5da7054 100644
 --- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/SnapshotThreads.kt
 +++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/SnapshotThreads.kt
-@@ -167,7 +167,7 @@ internal class SnapshotThreads(
-     }
+@@ -172,7 +172,7 @@ internal class SnapshotThreads(
+         }
  
      private fun notOffered(kind: HousekeepingTask, line: () -> String, task: () -> Unit) {
 -        if (housekeeping.isShutdown && onOwnThread.get() == true) {

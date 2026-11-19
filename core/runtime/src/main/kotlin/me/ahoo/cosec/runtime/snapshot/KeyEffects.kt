@@ -49,6 +49,9 @@ internal class KeyEffects<T : Any>(
     @Volatile
     private var report: CompileReport? = null
 
+    /** The installed entry whose review housekeeping refused (UC-1); set and read inside the drain only. */
+    private var unreviewed: SnapshotEntry<T>? = null
+
     /** The store-read timeout of each load whose read is out, made at the first read; touched inside the drain only. */
     private var readTimeouts: HashMap<Long, ScheduledFuture<*>>? = null
 
@@ -71,7 +74,11 @@ internal class KeyEffects<T : Any>(
             is KeyEffect.CancelReadTimeout -> readTimeouts?.remove(effect.loadId)?.cancel(false)
             is KeyEffect.Compile -> compile(effect.loadId, effect.read)
             is KeyEffect.RecordSeen -> recordSeen(effect)
-            is KeyEffect.Confirm -> effect.entry.confirm(effect.at)
+            is KeyEffect.Confirm -> {
+                effect.entry.confirm(effect.at)
+                // A review housekeeping refused is offered again once a read finds its revision still installed (UC-1).
+                unreviewed?.takeIf { it === effect.entry }?.let(::review)
+            }
             is KeyEffect.Install -> installed(effect)
             is KeyEffect.Report -> report(effect.metric)
             is KeyEffect.Log ->
@@ -202,9 +209,41 @@ internal class KeyEffects<T : Any>(
             // Without a report, no failure was logged: only a failed compilation needs one made.
             val made = report ?: if (effect.entry.origin == EntryOrigin.UNCOMPILABLE) report() else null
             made?.installed(effect.entry)
+            if (effect.entry.origin == EntryOrigin.DOCUMENT && context.reviews.isNotEmpty()) {
+                review(effect.entry)
+            } else {
+                // Every other origin installs a failed or absent entry: none keeps the reviewed compilation in force, so
+                // a review still owed to it would warn of statements that no longer apply to anything.
+                unreviewed = null
+            }
         } finally {
             owner.published(effect.previous, effect.entry)
         }
+    }
+
+    /**
+     * UC-1: [entry] to the [InstallReview]s, off housekeeping. A refused offer makes it this key's [unreviewed] entry,
+     * offered again when a read confirms it is still installed; any later install replaces or drops it, since only the
+     * installed revision is worth a review.
+     */
+    private fun review(entry: SnapshotEntry<T>) {
+        val compiled = (entry.state as? DocumentState.Present)?.compiled ?: return
+        val task = {
+            for (review in context.reviews) {
+                @Suppress("TooGenericExceptionCaught")
+                try {
+                    review.installed(key, entry.revision, compiled)
+                } catch (error: Exception) {
+                    log.warn(
+                        error
+                    ) { "The review of [$key] revision ${entry.revision} failed; the document stays installed." }
+                }
+            }
+        }
+        val offered = context.threads.offHousekeeping(HousekeepingTask.INSTALL_REVIEW, key, task)
+        // Only a refused offer waits for a read that confirms it; an offer taken, this one's or a newer install's, is the
+        // review of what is installed.
+        unreviewed = entry.takeUnless { offered }
     }
 
     private fun report(metric: KeyEffect.Metric) {

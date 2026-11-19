@@ -15,6 +15,7 @@
 
 package me.ahoo.cosec.runtime.snapshot
 
+import io.github.oshai.kotlinlogging.KotlinLogging
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.spi.snapshot.SnapshotDocumentStore
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
@@ -42,7 +43,15 @@ internal class KeyContext(
     val families: SnapshotFamilies<*>,
     /** How each key's runner is made (RFC 0013 B2b): [KeyRunner.Settings]' defaults in production. */
     val runners: KeyRunner.Settings,
+    reviews: List<InstallReview<*>> = emptyList(),
 ) {
+    /**
+     * Who is told of each installed document (UC-1, [InstallReview]); none but the starter's. Each takes what this
+     * source's compilers make, as [DocumentSnapshots.source]'s types hold; the cast only drops that type here.
+     */
+    @Suppress("UNCHECKED_CAST")
+    val reviews: List<InstallReview<Any>> = reviews as List<InstallReview<Any>>
+
     /**
      * Monotonic nanoseconds, the time the scheduler's timeouts keep: whether a periodic pass stalled is measured in it,
      * so a step of the wall clock does not look like time passing. Replaced only in tests, through
@@ -92,4 +101,29 @@ internal class KeyContext(
      * reads is set later than this context's construction, and no slot exists before that.
      */
     fun current(key: SnapshotKey): KeyRunner<*> = families.slotFor(key, this)
+
+    /**
+     * [key] left its family: each review is told so on the housekeeping thread, after any review of it still queued there
+     * (one thread, in order). A refused offer leaves the reviewer's entry, which its own bound covers.
+     */
+    fun reviewRemoved(key: SnapshotKey) {
+        if (reviews.isEmpty()) {
+            return
+        }
+        threads.offHousekeeping(HousekeepingTask.INSTALL_REVIEW, key) {
+            for (review in reviews) {
+                @Suppress("TooGenericExceptionCaught")
+                try {
+                    review.removed(key)
+                } catch (error: Exception) {
+                    log.warn(error) { "A review failed to forget [$key]." }
+                }
+            }
+        }
+    }
+
+    private companion object {
+        // The source's logger, as KeyEffects': operators configure the one name.
+        private val log = KotlinLogging.logger(SnapshotSource::class.java.name)
+    }
 }
