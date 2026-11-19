@@ -26,6 +26,7 @@ import me.ahoo.cosec.control.change.allow
 import me.ahoo.cosec.control.lifecycle.ChangeAuthority
 import me.ahoo.cosec.control.lifecycle.ChangeOptions
 import me.ahoo.cosec.control.lifecycle.Changes
+import me.ahoo.cosec.control.lifecycle.LockoutCheck
 import me.ahoo.cosec.control.store.InMemoryControlStore
 import me.ahoo.cosec.control.store.MutableClock
 import me.ahoo.cosec.control.store.Publication
@@ -44,6 +45,7 @@ import me.ahoo.cosec.model.SpaceId
 import me.ahoo.cosec.model.SubjectRef
 import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
+import me.ahoo.cosec.spi.token.RevocationReader
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 
@@ -59,8 +61,26 @@ class OneSegmentTenantIdTest {
     private val store = InMemoryControlStore(clock)
     private val revisions = Revisions(store, clock)
     private val engine = EngineAuthority(revisions)
-    private val changes = Changes(store, revisions, { ChangeId("c") }, engine.authorizer, clock, ChangeOptions())
-    private val http = ControlHttp(DefaultControlPlane(changes, revisions, ChangeAuthority(engine.authorizer)))
+    private val changes = Changes(
+        store,
+        revisions,
+        {
+            ChangeId("c")
+        },
+        engine.authorizer,
+        clock,
+        ChangeOptions(),
+        revocations = RevocationReader.NONE,
+        lockout = LockoutCheck.UNCHECKED,
+    )
+    private val http =
+        ControlHttp(
+            DefaultControlPlane(
+                changes,
+                revisions,
+                ChangeAuthority(engine.authorizer, revocations = RevocationReader.NONE)
+            )
+        )
     private val plato = engine.operator(TenantId.PLATFORM, "plato")
     private val tia = engine.security(TenantId.PLATFORM, "tia")
 

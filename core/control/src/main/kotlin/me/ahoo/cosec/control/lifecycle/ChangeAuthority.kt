@@ -77,8 +77,11 @@ class ChangeAuthority(
     private val options: ChangeOptions = ChangeOptions(),
     private val analyzer: GrantAnalyzer = GrantAnalyzer(),
     private val controlApp: AppId = PipelineControlAuthorizer.CONTROL_APP,
-    /** The host's token revocations: an approver's revoked token no longer approves (RC1-11). */
-    private val revocations: RevocationReader = RevocationReader.NONE,
+    /**
+     * The host's token revocations: an approver's revoked token no longer approves (RC1-11). No default: a host that
+     * forgot it would accept a revoked approver (`IDN-27`'s pattern); `RevocationReader.NONE` is a choice to write.
+     */
+    private val revocations: RevocationReader,
     /** `cosec.authentication.revocation.skew`, as the host's token authenticator reads revocations with. */
     private val revocationSkew: java.time.Duration = SubjectRevocation.DEFAULT_SKEW,
 ) {

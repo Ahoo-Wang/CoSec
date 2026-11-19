@@ -1,0 +1,65 @@
+{
+  "rules": [
+    "CTL-37"
+  ],
+  "polarity": "positive",
+  "level": "control",
+  "description": "A MERGE of a file that no longer holds shared (a grant its author means to revoke) keeps it: the change carries a WARNING at $.policies that names it and REPLACE.",
+  "documents": {
+    "tenants": {
+      "acme": {
+        "policies": [
+          {
+            "id": "shared",
+            "statements": [
+              {
+                "effect": "allow",
+                "action": "order:read"
+              }
+            ]
+          }
+        ],
+        "bindings": []
+      }
+    }
+  },
+  "steps": [
+    {
+      "apply": {
+        "change": "c1",
+        "document": "tenant:acme",
+        "mode": "MERGE",
+        "desired": {
+          "policies": [
+            {
+              "id": "mine",
+              "statements": [
+                {
+                  "effect": "allow",
+                  "action": "order:read"
+                }
+              ]
+            }
+          ],
+          "bindings": []
+        }
+      }
+    }
+  ],
+  "expect": {
+    "steps": [
+      "CHECKED"
+    ],
+    "errors": {
+      "c1": []
+    },
+    "heads": {
+      "tenant:acme": 1
+    },
+    "warnings": {
+      "c1": [
+        "OPERATION $.policies"
+      ]
+    }
+  }
+}

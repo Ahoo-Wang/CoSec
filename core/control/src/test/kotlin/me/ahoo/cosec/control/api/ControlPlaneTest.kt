@@ -30,6 +30,7 @@ import me.ahoo.cosec.control.change.allow
 import me.ahoo.cosec.control.lifecycle.ChangeAuthority
 import me.ahoo.cosec.control.lifecycle.ChangeOptions
 import me.ahoo.cosec.control.lifecycle.Changes
+import me.ahoo.cosec.control.lifecycle.LockoutCheck
 import me.ahoo.cosec.control.store.ControlStore
 import me.ahoo.cosec.control.store.InMemoryControlStore
 import me.ahoo.cosec.control.store.MutableClock
@@ -68,6 +69,7 @@ import me.ahoo.cosec.model.condition.Literal
 import me.ahoo.cosec.spi.snapshot.SnapshotDigest
 import me.ahoo.cosec.spi.snapshot.SnapshotFormatException
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
+import me.ahoo.cosec.spi.token.RevocationReader
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import java.util.concurrent.atomic.AtomicInteger
@@ -115,10 +117,17 @@ class ControlPlaneTest {
         { ChangeId("c${ids.incrementAndGet()}") },
         engine.authorizer,
         clock,
-        options
+        options,
+        revocations = RevocationReader.NONE,
+        lockout = LockoutCheck.UNCHECKED,
     )
     val simulator = Simulator()
-    val plane = DefaultControlPlane(changes, revisions, ChangeAuthority(engine.authorizer, options), simulator)
+    val plane = DefaultControlPlane(
+        changes,
+        revisions,
+        ChangeAuthority(engine.authorizer, options, revocations = RevocationReader.NONE),
+        simulator
+    )
 
     val plato = engine.operator(TenantId.PLATFORM, "plato")
     val alice = engine.operator(ACME, "alice", roles = listOf("admin", "ops@team-a"))

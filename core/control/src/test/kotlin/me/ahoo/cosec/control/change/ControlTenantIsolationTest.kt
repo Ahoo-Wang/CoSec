@@ -22,6 +22,7 @@ import me.ahoo.cosec.control.authz.Operator
 import me.ahoo.cosec.control.authz.PipelineControlAuthorizer
 import me.ahoo.cosec.control.lifecycle.ChangeOptions
 import me.ahoo.cosec.control.lifecycle.Changes
+import me.ahoo.cosec.control.lifecycle.LockoutCheck
 import me.ahoo.cosec.control.store.InMemoryControlStore
 import me.ahoo.cosec.control.store.MutableClock
 import me.ahoo.cosec.control.store.Publication
@@ -59,6 +60,7 @@ import me.ahoo.cosec.spi.authn.Authenticator
 import me.ahoo.cosec.spi.authn.AuthnResult
 import me.ahoo.cosec.spi.membership.MembershipClaims
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
+import me.ahoo.cosec.spi.token.RevocationReader
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import java.util.concurrent.CompletableFuture
@@ -75,9 +77,18 @@ class ControlTenantIsolationTest {
     private val store = InMemoryControlStore(clock)
     private val revisions = Revisions(store, clock)
     private val ids = AtomicInteger()
-    private val changes = Changes(store, revisions, {
-        ChangeId("c${ids.incrementAndGet()}")
-    }, PERMIT_ALL, clock, ChangeOptions(shadow = IMMEDIATE_WINDOW))
+    private val changes = Changes(
+        store,
+        revisions,
+        {
+            ChangeId("c${ids.incrementAndGet()}")
+        },
+        PERMIT_ALL,
+        clock,
+        ChangeOptions(shadow = IMMEDIATE_WINDOW),
+        revocations = RevocationReader.NONE,
+        lockout = LockoutCheck.UNCHECKED,
+    )
 
     private val acme = SnapshotKey.Tenant("acme")
     private val globex = SnapshotKey.Tenant("globex")

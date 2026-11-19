@@ -1,0 +1,17 @@
+# Rule: CTL-36
+# Mutant: an apply with REPLACE is proposed on the current head again, so a file read before the head moved removes what was published since
+# Tests: :control:test --tests me.ahoo.cosec.control.change.ChangesTest :conformance:test --tests me.ahoo.cosec.conformance.ConformanceTest
+
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Proposals.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Proposals.kt
+index b8e29bcd..533c34e8 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Proposals.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Proposals.kt
+@@ -181,7 +181,7 @@ internal class Proposals(
+         return proposeAs(
+             author,
+             key,
+-            desired.revision,
++            head.revision,
+             operations,
+             note,
+             ProvenanceKind.PUBLISH,

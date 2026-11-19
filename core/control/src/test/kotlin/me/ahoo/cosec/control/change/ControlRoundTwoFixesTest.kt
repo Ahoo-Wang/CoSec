@@ -24,6 +24,7 @@ import me.ahoo.cosec.control.api.DefaultControlPlane
 import me.ahoo.cosec.control.audit.ChangeEvent
 import me.ahoo.cosec.control.audit.ChangeListener
 import me.ahoo.cosec.control.audit.ChangeListeners
+import me.ahoo.cosec.control.authz.ControlAuthorizer
 import me.ahoo.cosec.control.authz.DocumentConfirmation
 import me.ahoo.cosec.control.authz.EngineAuthority
 import me.ahoo.cosec.control.authz.Operator
@@ -31,6 +32,7 @@ import me.ahoo.cosec.control.authz.PipelineControlAuthorizer
 import me.ahoo.cosec.control.lifecycle.ChangeAuthority
 import me.ahoo.cosec.control.lifecycle.ChangeOptions
 import me.ahoo.cosec.control.lifecycle.Changes
+import me.ahoo.cosec.control.lifecycle.LockoutCheck
 import me.ahoo.cosec.control.lifecycle.ShadowOptions
 import me.ahoo.cosec.control.lifecycle.ShadowWindows
 import me.ahoo.cosec.control.store.ControlStore
@@ -67,6 +69,7 @@ import me.ahoo.cosec.spi.shadow.ShadowReport
 import me.ahoo.cosec.spi.shadow.ShadowReportReader
 import me.ahoo.cosec.spi.snapshot.SnapshotFormatException
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
+import me.ahoo.cosec.spi.token.RevocationReader
 import me.ahoo.test.asserts.assert
 import me.ahoo.test.asserts.assertThrownBy
 import org.junit.jupiter.api.AfterEach
@@ -81,6 +84,12 @@ import java.util.concurrent.atomic.AtomicInteger
  * for the policy a break-glass binding grants and for rollbacks (R4, R5).
  */
 class ControlRoundTwoFixesTest {
+    /** A change authority that reads no revocations: these tests are not about revoked approvers. */
+    private fun authorityOf(authorizer: ControlAuthorizer) = ChangeAuthority(
+        authorizer,
+        revocations = RevocationReader.NONE
+    )
+
     private val clock = MutableClock()
     private val memory = InMemoryControlStore(clock)
     private var storeDown = false
@@ -119,6 +128,8 @@ class ControlRoundTwoFixesTest {
             ChangeOptions(shadow = shadow),
             reports = reports,
             listeners = registered,
+            revocations = RevocationReader.NONE,
+            lockout = LockoutCheck.UNCHECKED,
         )
     }
 
@@ -365,10 +376,10 @@ class ControlRoundTwoFixesTest {
                 credentialId = "token-pia",
             )
         )
-        ChangeAuthority(engine.authorizer).approverProblem(approved, needed, walt).assert().isNull()
+        authorityOf(engine.authorizer).approverProblem(approved, needed, walt).assert().isNull()
         val noLonger = "the approver no longer holds cosec:approve on the document"
         // An authorizer that cannot check a recorded principal, or fails to, does not count it.
-        ChangeAuthority(PERMIT_ALL).approverProblem(approved, needed, walt).assert().isEqualTo(noLonger)
+        authorityOf(PERMIT_ALL).approverProblem(approved, needed, walt).assert().isEqualTo(noLonger)
         val failing = object : me.ahoo.cosec.control.authz.ControlAuthorizer {
             override suspend fun decide(
                 operator: Operator,
@@ -385,12 +396,12 @@ class ControlRoundTwoFixesTest {
                 resource: me.ahoo.cosec.model.Resource,
             ): me.ahoo.cosec.control.authz.ControlDecision = error("down")
         }
-        ChangeAuthority(failing).approverProblem(approved, needed, walt).assert().isEqualTo(noLonger)
+        authorityOf(failing).approverProblem(approved, needed, walt).assert().isEqualTo(noLonger)
         // An approver the hard rule keeps from the document never counts, whatever its policies say.
         val elsewhere = approved.copy(
             approval = approved.approval!!.copy(approver = alice.actor, memberships = alice.memberships)
         )
-        ChangeAuthority(PERMIT_ALL).approverProblem(elsewhere, needed, walt).assert().isEqualTo(noLonger)
+        authorityOf(PERMIT_ALL).approverProblem(elsewhere, needed, walt).assert().isEqualTo(noLonger)
         // The pipeline's authorizer: no request, no decision; documents it cannot confirm, no decision either.
         val principal = me.ahoo.cosec.spi.authn.AuthenticatedPrincipal(
             pia.actor.principal,
@@ -420,7 +431,8 @@ class ControlRoundTwoFixesTest {
     @Test
     fun `a deactivated or unknown approver does not count`() = runBlocking<Unit> {
         val directory = InMemoryMembershipProvider()
-        val authority = ChangeAuthority(EngineAuthority(revisions, directory).authorizer)
+        val authority =
+            ChangeAuthority(EngineAuthority(revisions, directory).authorizer, revocations = RevocationReader.NONE)
         val change = changes.propose(
             walt,
             SnapshotKey.Platform,
@@ -486,7 +498,7 @@ class ControlRoundTwoFixesTest {
             pia.memberships,
             credentialId = "token-pia",
         )
-        val authority = ChangeAuthority(engine.authorizer)
+        val authority = ChangeAuthority(engine.authorizer, revocations = RevocationReader.NONE)
         authority.approverProblem(change.copy(approval = approval), needed, walt).assert().isNull()
         val capped = approval.copy(principalBindings = false)
         authority.approverProblem(change.copy(approval = capped), needed, walt)
@@ -574,7 +586,14 @@ class ControlRoundTwoFixesTest {
         changes.visible(walt, change.id).id.assert().isEqualTo(change.id)
 
         // Over HTTP, the problem is `unavailable`, with no detail.
-        val http = ControlHttp(DefaultControlPlane(changes, revisions, ChangeAuthority(engine.authorizer)))
+        val http =
+            ControlHttp(
+                DefaultControlPlane(
+                    changes,
+                    revisions,
+                    ChangeAuthority(engine.authorizer, revocations = RevocationReader.NONE)
+                )
+            )
         val security = engine.security(TenantId.PLATFORM, "walt")
         engine.confirmation = DocumentConfirmation { error("the snapshot source is down") }
         http.handle(ControlHttpRequest("GET", "/changes/${change.id.value}"), security).status.assert().isEqualTo(503)

@@ -30,6 +30,7 @@ import me.ahoo.cosec.control.lifecycle.BreakGlass
 import me.ahoo.cosec.control.lifecycle.ChangeAuthority
 import me.ahoo.cosec.control.lifecycle.ChangeOptions
 import me.ahoo.cosec.control.lifecycle.Changes
+import me.ahoo.cosec.control.lifecycle.LockoutCheck
 import me.ahoo.cosec.control.store.ControlStore
 import me.ahoo.cosec.control.store.InMemoryControlStore
 import me.ahoo.cosec.control.store.MutableClock
@@ -54,6 +55,7 @@ import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.runtime.event.Delivery
 import me.ahoo.cosec.spi.snapshot.SnapshotDigest
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
+import me.ahoo.cosec.spi.token.RevocationReader
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Test
@@ -91,6 +93,8 @@ class PreemptionRaceTest {
         PERMIT_ALL,
         clock,
         ChangeOptions(shadow = IMMEDIATE_WINDOW, fourEyes = true),
+        revocations = RevocationReader.NONE,
+        lockout = LockoutCheck.UNCHECKED,
     )
 
     private val ids = java.util.concurrent.atomic.AtomicInteger()
@@ -217,6 +221,8 @@ class PreemptionRaceTest {
                 }
             )
         ).also { opened += it },
+        revocations = RevocationReader.NONE,
+        lockout = LockoutCheck.UNCHECKED,
     )
 
     private val opened = ArrayList<ChangeListeners>()
@@ -510,7 +516,13 @@ class PreemptionRaceTest {
 
     /** The control API over [harness], and a request of plato's the host pipeline permitted. */
     private fun http(harness: ChangeHarness) =
-        ControlHttp(DefaultControlPlane(harness.changes, harness.revisions, ChangeAuthority(PERMIT_ALL)))
+        ControlHttp(
+            DefaultControlPlane(
+                harness.changes,
+                harness.revisions,
+                ChangeAuthority(PERMIT_ALL, revocations = RevocationReader.NONE)
+            )
+        )
 
     private val plato = EngineAuthority(Revisions(memory, clock)).security(TenantId.PLATFORM, "plato")
 

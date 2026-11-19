@@ -31,6 +31,7 @@ import me.ahoo.cosec.control.api.ControlRequestJson.documentKey
 import me.ahoo.cosec.control.api.JsonFields.array
 import me.ahoo.cosec.control.api.JsonFields.decoded
 import me.ahoo.cosec.control.api.JsonFields.long
+import me.ahoo.cosec.control.api.JsonFields.optBool
 import me.ahoo.cosec.control.api.JsonFields.optText
 import me.ahoo.cosec.control.api.JsonFields.text
 import me.ahoo.cosec.control.authz.Operator
@@ -81,7 +82,7 @@ internal class ChangeRoutes(private val plane: ControlPlane) : RouteHandler {
                 "approve" -> plane.approve(operator, id, it.text("candidate"))
                 "reject" -> plane.reject(operator, id, it.text("reason"))
                 "abandon" -> plane.abandon(operator, id)
-                "publish" -> plane.publish(operator, id, it.get("ack")?.let(::ack))
+                "publish" -> plane.publish(operator, id, it.get("ack")?.let(::ack), it.optBool("lockout") ?: false)
                 else -> return@post notFound()
             }
             changeResponse(change, OK)

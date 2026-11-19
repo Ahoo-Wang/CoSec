@@ -119,6 +119,31 @@ class RequestSecurity internal constructor(
         return RequestSecurity(requestId, principal, scope, memberships, request, attributes)
     }
 
+    /**
+     * What the engine reads to decide this request at [time]; with [app], [action] on [resource] asked by the same
+     * principal in the default space of [app] ([inApp]), or null when that scope does not resolve. For the control
+     * plane's lock-out check (UC-6), which decides the publisher's own way back against a candidate document with the
+     * facts of this request: it hands out an engine request, never a [RequestSecurity], so nothing outside the pipeline
+     * mints a permitted request. External attributes are not fetched: a statement that reads one decides as its
+     * `onMissing` says.
+     */
+    @InternalCoSecApi
+    fun engineRequest(
+        time: Long,
+        app: AppId? = null,
+        action: me.ahoo.cosec.model.Action? = null,
+        resource: me.ahoo.cosec.model.Resource? = null,
+    ): me.ahoo.cosec.engine.EngineRequest? {
+        if (app == null) {
+            return me.ahoo.cosec.engine.EngineRequest(request, scope, memberships, time, attributes)
+        }
+        val asked = inApp(app) ?: return null
+        val subject = asked.request
+        val authz =
+            AuthzRequest(subject.subject, action ?: subject.action, resource ?: subject.resource, subject.environment)
+        return me.ahoo.cosec.engine.EngineRequest(authz, asked.scope, memberships, time, attributes)
+    }
+
     override fun toString(): String =
         "RequestSecurity(request=$requestId, principal=${principal?.id?.value}, tenant=${scope.tenant.value})"
 

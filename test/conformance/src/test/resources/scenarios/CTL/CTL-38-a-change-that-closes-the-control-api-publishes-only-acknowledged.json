@@ -1,0 +1,133 @@
+{
+  "rules": [
+    "CTL-38"
+  ],
+  "polarity": "positive",
+  "level": "control",
+  "description": "walt replaces the platform document with one that no longer opens the control API's path: after it, walt's own request to the control plane would be denied. The change carries the V4 warning; publishing it without the acknowledgement is refused with 422, and with \"lockout\": true it publishes.",
+  "documents": {
+    "platform": {
+      "policies": [
+        {
+          "id": "control-api",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "http:*",
+              "resource": "http:path:/cosec/control/v1/**"
+            }
+          ]
+        },
+        {
+          "id": "admin",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "cosec:*"
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "control-api",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "control-api"
+        },
+        {
+          "id": "walt",
+          "subject": {
+            "principal": "walt",
+            "tenant": "(platform)"
+          },
+          "app": "*",
+          "space": "*",
+          "policy": "admin"
+        }
+      ]
+    }
+  },
+  "operators": {
+    "walt": {
+      "tenant": "(platform)"
+    }
+  },
+  "options": {
+    "lockout": true
+  },
+  "steps": [
+    {
+      "apply": {
+        "change": "c1",
+        "by": "walt",
+        "document": "platform",
+        "mode": "REPLACE",
+        "desired": {
+          "policies": [
+            {
+              "id": "admin",
+              "statements": [
+                {
+                  "effect": "allow",
+                  "action": "cosec:*"
+                }
+              ]
+            }
+          ],
+          "bindings": [
+            {
+              "id": "walt",
+              "subject": {
+                "principal": "walt",
+                "tenant": "(platform)"
+              },
+              "app": "*",
+              "space": "*",
+              "policy": "admin"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "skipShadow": {
+        "change": "c1",
+        "by": "walt"
+      }
+    },
+    {
+      "publish": {
+        "change": "c1",
+        "by": "walt"
+      }
+    },
+    {
+      "publish": {
+        "change": "c1",
+        "by": "walt",
+        "lockout": true
+      }
+    }
+  ],
+  "expect": {
+    "steps": [
+      "CHECKED",
+      "READY",
+      "refused 422",
+      "PUBLISHED"
+    ],
+    "errors": {
+      "c1": []
+    },
+    "heads": {
+      "platform": 2
+    },
+    "warnings": {
+      "c1": [
+        "V4 $"
+      ]
+    }
+  }
+}
