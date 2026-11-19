@@ -172,6 +172,7 @@ PR-2 落地的例外（都以数据形式登记在 `test/architecture`，新增�
 | `social` → `login` | 社交登录是 `login` 的一个认证提供者 |
 | `cocache` 内部使用 Reactor | 非阻塞的 Redis 读取用 Spring Data Redis 的响应式 API；公共签名中不得出现 Reactor 类型 |
 | `backends`、`extensions` 使用各自技术的 Spring 部分（`cocache`：`data.redis`、`aot.hint`；`kafka`：`spring-kafka`；`social`：`data.redis`） | 只限它所适配的技术 |
+| `testkit` 的 `me.ahoo.cosec.testkit.webflux` 与 `.webmvc` 两个包使用 Reactor、Spring 与 Servlet API（以 `compileOnly` 依赖 `webflux`、`webmvc`，`ApiVariantTest` 为这两个包登记了评审过的例外），工具包其余部分不用（2026-11-19，#1705） | 测试绑定（`PIP-29`）属于测试工具，不随适配器的生产 jar 发布；应用只加一个测试依赖。由 `SourceRulesTest` 的正面规则约束 |
 
 `EnginePurityTest`、`RuntimeBoundaryTest`、`ControlBoundaryTest` 与 `verifyPureClasspath` 的规则并入这里，原测试删除；`RuntimeBoundaryTest` 中
 不属于依赖方向的规则（`runBlocking`、`GlobalScope`、`Dispatchers.IO`、`runCatching`）作为源码规则一并迁入。
