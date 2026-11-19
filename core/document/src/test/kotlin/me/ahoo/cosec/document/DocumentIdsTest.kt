@@ -122,7 +122,10 @@ class DocumentIdsTest {
     @Test
     fun `the message of a document that does not compile forges no line, whatever it quotes`() {
         // Not an id: an action pattern quoted in another check's message.
-        val error = refused(SnapshotKey.Platform, ""","policies":[{"id":"p\n","statements":[{"effect":"deny","action":"http:head"}]}],"bindings":[]""")
+        val error = refused(
+            SnapshotKey.Platform,
+            ""","policies":[{"id":"p\n","statements":[{"effect":"deny","action":"http:head"}]}],"bindings":[]"""
+        )
         error.errors.map { it.path }.assert().contains("$.policies[0].id", "$.policies[0].statements[0].action[0]")
         error.message.orEmpty().assert().contains("[p\\u000A]").doesNotContain("\n")
     }

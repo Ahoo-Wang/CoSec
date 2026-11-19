@@ -237,7 +237,16 @@ A resource may be a pattern object with options, for `http:path:` patterns only:
 | Option | Default | Meaning |
 |---|---|---|
 | `caseSensitive` | `true` | `false` compares literals ignoring ASCII case. |
-| `decodeAndParseSegments` | `true` | `true` matches each segment by its percent-decoded value without `;` parameters; `false` by its text as received, except that `%2F` reads as `/`. |
+| `decodeAndParseSegments` | `true` | `true` matches each segment by its percent-decoded value without `;` parameters; `false` by its text as received, except that `%2F` reads as `/`. Only an ALLOW may set it `false` (`DOC-14`). |
+
+A DENY statement or a rate limit rule whose pattern sets `decodeAndParseSegments` to `false` does not compile (`DOC-14`).
+Such a pattern matches the path still percent-encoded, so it misses every encoded spelling of the path it names: a DENY
+on `http:path:/admin/**` written that way does not stop `GET /%61dmin/users`, which the backend serves as
+`/admin/users`. Remove the option: a DENY matches the decoded path. An ALLOW keeps it, since one that matches less only
+narrows access.
+
+`caseSensitive` stays valid on a DENY, and is `true` by default: a DENY on `/admin/**` does not stop `/ADMIN/users`. If a
+backend behind the gateway routes paths ignoring case, write the DENY with `"caseSensitive": false`.
 
 ### Path pattern bounds
 
@@ -485,6 +494,15 @@ Every condition is bounded when it compiles. The platform document sets the boun
 
 What an id may be, by kind, and the values CoSec gives a meaning. Every id is text without an unpaired UTF-16 surrogate
 (`IDN-10`): a Redis key could not tell it from another id.
+
+No id a document writes holds a control character (U+0000 to U+001F, U+007F to U+009F) or an unpaired surrogate
+(`DOC-13`). An id reaches plain-text log lines, metric tags, audit events and problem bodies, and one holding a line
+break would forge a line on every host that prints it. That covers policy ids and statement names, binding ids, a
+binding's subject, app, space and policy, the boundary a document names, role ids with their app, space and listed
+permissions, catalog permission ids, the external attributes the platform declares, the attribute paths a condition or
+a rate limit key reads, and path variable names. Such a document does not compile, and the error shows the id escaped
+(`\u000A`). Display text is not an id: a role's or a catalog entry's `name` and `description`, and a catalog group's
+`name`, may hold any text. A surrogate pair, such as an emoji, is a character like any other.
 
 | Kind | May be | Refused |
 |---|---|---|

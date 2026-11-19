@@ -43,7 +43,11 @@ import me.ahoo.cosec.model.decision.DocumentKind
 @InternalCoSecApi
 object DocumentIds {
     /** The errors of the ids of [document] that hold such a character, at their paths, as the compiler reports them. */
-    fun unprintable(document: PolicyDocument): List<CompileError> = ArrayList<CompileError>(0).also { check(document, it) }
+    fun unprintable(document: PolicyDocument): List<CompileError> {
+        val errors = ArrayList<CompileError>(0)
+        check(document, errors)
+        return errors
+    }
 
     internal fun check(document: PolicyDocument, errors: MutableList<CompileError>) {
         val check = Checker(errors)

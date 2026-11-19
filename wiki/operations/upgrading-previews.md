@@ -106,6 +106,24 @@ Which preview of the library may run behind which preview of the gateway image: 
   `PipelineFixture.of` and `load` take an `authenticator` of the application's own
   ([Testing your application](../policies/testing.md#testing-your-application)). The kit brings neither adapter; the
   bindings need the one of your web stack on the test's classpath, which a test of such a handler has.
+- **A document whose ids hold a control character, or whose DENY matches a path undecoded, no longer compiles**
+  (R1B-3, R1A-1; `DOC-13`, `DOC-14`). Affected: documents that hold either.
+  - **Control characters in ids.** No id a document writes may hold a control character or an unpaired surrogate:
+    policy ids and statement names, binding ids and subjects, roles, catalog permission ids, declared attributes,
+    attribute paths and path variable names ([Ids and special values](../policies/language.md#ids-and-special-values)).
+    Through beta.4 a policy id could hold a line break, which forged a log line on every host with a route map.
+  - **DENYs that match the path as received.** A DENY statement or a rate limit rule may no longer set
+    `decodeAndParseSegments` to `false`: it missed every percent-encoded spelling of its path (`/%61dmin/users` for
+    `/admin/users`). Remove the option; an ALLOW keeps it ([HTTP paths](../policies/language.md#http-paths)).
+    `cosec-migrate convert` rejects a 7.x DENY written so (`DOES_NOT_COMPILE`, at its statement) and writes no document.
+  - **What happens to a stored document.** A host fails closed on it, as on any document it cannot compile: every
+    request that needs the document answers `503`, the host logs `Snapshot document [<doc>] revision <n> does not
+    compile` at `ERROR` with each error's JSON path and the id escaped, and the `cosecSnapshot` health indicator counts
+    it in `invalid` ([Troubleshooting](./troubleshooting.md)). The control plane refuses a change that would publish one:
+    a `COMPILE` finding at the id's or the statement's path, and the change stays a draft.
+  - **Before upgrading the hosts**, check every published document with beta.5's compiler, as in
+    [Policies in CI](../policies/testing.md#policies-in-ci) (`PolicyDocumentCompiler.validate`), and publish a revision
+    that fixes each one it refuses: ids renamed, the option removed. A document that holds neither is unaffected.
 
 ## From 8.0.0-beta.3 {#from-8-0-0-beta-3}
 

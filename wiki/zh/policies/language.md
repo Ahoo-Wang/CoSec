@@ -192,7 +192,11 @@ id 按 `/` 切分并按原样比较：从不解码，从不去除空白。类型
 | 选项 | 默认值 | 含义 |
 |---|---|---|
 | `caseSensitive` | `true` | 为 `false` 时比较字面量忽略 ASCII 大小写。 |
-| `decodeAndParseSegments` | `true` | 为 `true` 时按百分号解码、去掉 `;` 参数后的值匹配每个片段；为 `false` 时按收到的原文匹配，但 `%2F` 仍读作 `/`。 |
+| `decodeAndParseSegments` | `true` | 为 `true` 时按百分号解码、去掉 `;` 参数后的值匹配每个片段；为 `false` 时按收到的原文匹配，但 `%2F` 仍读作 `/`。只有 ALLOW 可以设为 `false`（`DOC-14`）。 |
+
+模式把 `decodeAndParseSegments` 设为 `false` 的 DENY 语句或限流规则无法编译（`DOC-14`）。这样的模式匹配仍是百分号编码的路径，于是漏掉它所写路径的每一种编码写法：这样写的 `http:path:/admin/**` 上的 DENY 拦不住 `GET /%61dmin/users`，而后端把它当作 `/admin/users` 处理。去掉这个选项：DENY 匹配解码后的路径。ALLOW 可以保留它，因为匹配得更少只会收窄访问。
+
+`caseSensitive` 在 DENY 上仍然有效，默认为 `true`：`/admin/**` 上的 DENY 拦不住 `/ADMIN/users`。如果网关后面的后端在路由时忽略大小写，就给 DENY 写上 `"caseSensitive": false`。
 
 ### 路径模式的上界 {#path-pattern-bounds}
 
@@ -383,6 +387,8 @@ id 按 `/` 切分并按原样比较：从不解码，从不去除空白。类型
 ## id 与特殊值 {#ids-and-special-values}
 
 各类 id 可以是什么，以及 CoSec 赋予特殊含义的值。每个 id 都是不含未配对 UTF-16 代理项的文本（`IDN-10`）：Redis 键分不清它和另一个 id。
+
+文档写下的任何 id 都不能含控制字符（U+0000 到 U+001F、U+007F 到 U+009F）或未配对的代理项（`DOC-13`）。id 会进入纯文本日志行、指标标签、审计事件和 problem 响应体，含换行的 id 会在每个打印它的宿主上伪造一行日志。这包括策略 id 和语句名、绑定 id、绑定的主体、应用、空间和策略、文档指定的边界、角色 id 及其应用、空间和列出的权限、目录权限 id、平台声明的外部属性、条件或限流 key 读取的属性路径，以及路径变量名。这样的文档无法编译，错误中的 id 以转义形式显示（`\u000A`）。展示文本不是 id：角色或目录条目的 `name` 和 `description`、目录分组的 `name` 可以是任意文本。代理对（例如 emoji）与其他字符一样。
 
 | 类别 | 可以是 | 被拒绝 |
 |---|---|---|

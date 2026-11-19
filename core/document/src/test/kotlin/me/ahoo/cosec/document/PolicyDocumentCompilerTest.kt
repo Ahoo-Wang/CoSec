@@ -416,13 +416,15 @@ class PolicyDocumentCompilerTest {
     @Test
     fun `a deny matching the path as received does not compile, and the error names the statement`() {
         val raw = """{"pattern":"http:path:/admin/**","decodeAndParseSegments":false}"""
-        errors(
+        val errors = errors(
             SnapshotKey.Tenant("acme"),
             ""","policies":[{"id":"ok","statements":[]},{"id":"d","statements":[{"effect":"allow","action":"http:GET",""" +
                 """"resource":$raw},{"name":"admin","effect":"deny","action":"http:*","resource":["http:path:/x/**",$raw]}]}],""" +
                 """"bindings":[],"rateLimits":[{"id":"r","action":"http:*","resource":$raw,"permitsPerSecond":1}]""",
-        ).assert().hasSize(2).allMatch { "DOC-14" in it }.anyMatch { it.startsWith("$.policies[1].statements[1].resource[1]: ") }
-            .anyMatch { it.startsWith("$.rateLimits[0].resource[0]: ") }
+        )
+        errors.assert().hasSize(2).allMatch { "DOC-14" in it }
+        errors.map { it.substringBefore(": ") }.assert()
+            .containsExactlyInAnyOrder("$.policies[1].statements[1].resource[1]", "$.rateLimits[0].resource[0]")
     }
 
     /** DOC-11: no principal with a reserved id ever signs in, and the anonymous one matches no principal binding. */

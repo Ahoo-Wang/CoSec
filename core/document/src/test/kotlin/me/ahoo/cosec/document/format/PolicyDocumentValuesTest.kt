@@ -42,6 +42,8 @@ class PolicyDocumentValuesTest {
         val header: (String) -> String = { "" },
         /** The roles of a tenant document, where a value is a role's: such a value is compiled there instead. */
         val roles: ((String) -> String)? = null,
+        /** A whole document, where the value is neither a statement's nor a header's: `DOC-13`'s ids. */
+        val document: ((String) -> Pair<SnapshotKey, String>)? = null,
         val statement: (String) -> String = { """{"effect":"allow","action":"*"}""" },
     )
 
@@ -81,7 +83,129 @@ class PolicyDocumentValuesTest {
         Placement("role.space", tenantRole.string("space"), roles = {
             """[{"id":"r","app":"wms","space":${json(it)},"permissions":[]}]"""
         }),
-    )
+        Placement("role.app", tenantRole.string("app"), roles = { """[{"id":"r","app":${json(it)},"permissions":[]}]""" }),
+        Placement("role.permissions", tenantRole.items("permissions"), roles = {
+            """[{"id":"r","app":"wms","permissions":[${json(it)}]}]"""
+        }),
+    ) + idPlacements() + bindingPlacements()
+
+    /** `DOC-13`: every id a document writes outside its bindings, each in a document where its examples compile. */
+    private fun idPlacements(): List<Placement> {
+        val policy = definitions.getValue("policy") as ObjectType
+        val statement = definitions.getValue("statement") as ObjectType
+        val permission = PolicyDocumentFormats.catalogSchema.definitions.getValue("permission") as ObjectType
+        val boundaries = requireNotNull(platformDocument.field("boundaries")).type as ObjectType
+        val tenantDocument = definitions.getValue("tenantDocument") as ObjectType
+        return listOf(
+            Placement("policy.id", policy.string("id"), document = {
+                val policies = """[{"id":${json(it)},"statements":[$ALLOW]}]"""
+                if (it.startsWith(PERMISSION)) app(policies = policies) else platform(policies = policies)
+            }),
+            Placement("statement.name", statement.string("name"), document = {
+                platform(
+                    policies = """[{"id":"p","statements":[{"name":${json(it)},"effect":"allow","action":"*"}]}]"""
+                )
+            }),
+            Placement("catalog.permission.id", permission.string("id"), document = {
+                app(catalog = """"catalog":{"groups":[{"name":"g","permissions":[{"id":${json(it)}}]}]},""")
+            }),
+            Placement("boundaries.default", boundaries.string("default"), document = {
+                platform(
+                    policies = """[{"id":${json(it)},"boundary":true,"statements":[$ALLOW]}]""",
+                    header = """"boundaries":{"default":${json(it)}},""",
+                )
+            }),
+            Placement("tenant.boundary", tenantDocument.string("boundary"), document = {
+                SnapshotKey.Tenant("acme") to document(""""boundary":${json(it)},"policies":[],"bindings":[]""")
+            }),
+            Placement("rateLimits.key", rateLimit.string("key"), header = {
+                """"rateLimits":[{"id":"r","action":"order:read","resource":"order/{orderId}","key":${json(it)},""" +
+                    """"permitsPerSecond":1}],"""
+            }),
+        )
+    }
+
+    /** `DOC-13`: every id a binding writes, in the binding schema and in the platform document's variant of it. */
+    private fun bindingPlacements(): List<Placement> {
+        val binding = PolicyDocumentFormats.bindingSchema.root as ObjectType
+        val subjects = PolicyDocumentFormats.bindingSchema.definitions
+        val principal = subjects.getValue("principalSubject") as ObjectType
+        val role = subjects.getValue("roleSubject") as ObjectType
+        val platformSubject = requireNotNull((definitions.getValue("platformBinding") as ObjectType).field("subject"))
+        val platformPrincipal = (platformSubject.type as AnyOf).variants.filterIsInstance<ObjectType>().single()
+        fun placed(name: String, type: StringType, written: (String) -> String) =
+            Placement(name, type, document = { platform(bindings = listOf(written(it))) })
+        fun subject(name: String, type: StringType, subject: (String) -> String) =
+            placed(name, type) { binding(subject = subject(it)) }
+
+        // A role is granted in an app document.
+        fun roleBinding(
+            name: String,
+            type: StringType,
+            subject: (String) -> String
+        ) = Placement(name, type, document = {
+            app(bindings = "[${binding(subject = subject(it), app = "order-service", policy = "shared")}]")
+        })
+        return listOf(
+            placed("binding.id", binding.string("id")) { binding(id = it) },
+            placed("binding.app", binding.string("app")) { binding(app = it) },
+            placed("binding.space", binding.string("space")) { binding(space = it) },
+            Placement("binding.policy", binding.string("policy"), document = ::boundTo),
+            subject("principalSubject.principal", principal.string("principal")) { principal(it, "(platform)") },
+            subject("principalSubject.tenant", principal.string("tenant")) { principal("u", it) },
+            subject("platformBinding.principal", platformPrincipal.string("principal")) { principal(it, "(platform)") },
+            subject("platformBinding.tenant", platformPrincipal.string("tenant")) { principal("u", it) },
+            roleBinding("roleSubject.role", role.string("role")) { """{"role":${json(it)}}""" },
+            roleBinding("roleSubject.tenant", role.string("tenant")) { """{"role":"r","tenant":${json(it)}}""" },
+        )
+    }
+
+    /** A binding to [policy], in the document that may bind it: an app's permission, the break-glass root, or one defined here. */
+    private fun boundTo(policy: String): Pair<SnapshotKey, String> = when {
+        policy.startsWith(PERMISSION) -> app(
+            policies = """[{"id":${json(policy)},"statements":[$ALLOW]}]""",
+            bindings = """[${binding(subject = """{"role":"clerk"}""", app = "order-service", policy = policy)}]""",
+        )
+        policy == "cosec:root" -> platform(
+            bindings = listOf(
+                binding(subject = principal("cosec", "(platform)"), policy = policy).dropLast(1) +
+                    ""","breakGlass":true,"expiresAt":"2999-12-31T00:00:00Z"}""",
+            ),
+        )
+        else -> platform(
+            policies = """[{"id":${json(policy)},"statements":[$ALLOW]}]""",
+            bindings = listOf(binding(policy = policy)),
+        )
+    }
+
+    private fun principal(id: String, tenant: String) = """{"principal":${json(id)},"tenant":${json(tenant)}}"""
+
+    private fun binding(
+        id: String = "g",
+        subject: String = "\"*\"",
+        app: String = "*",
+        space: String = "*",
+        policy: String = "p",
+    ) = """{"id":${json(id)},"subject":$subject,"app":${json(app)},"space":${json(space)},"policy":${json(policy)}}"""
+
+    private fun document(fields: String) = """{"schema":2,"revision":1,"publishedAt":"2026-10-26T00:00:00Z",$fields}"""
+
+    private fun platform(
+        policies: String = """[{"id":"p","statements":[$ALLOW]}]""",
+        bindings: List<String> = emptyList(),
+        header: String = "",
+    ): Pair<SnapshotKey, String> {
+        val written = bindings.joinToString(",", "[", "]")
+        return SnapshotKey.Platform to document("""$header"policies":$policies,"bindings":$written""")
+    }
+
+    private fun app(policies: String = "[]", bindings: String = "[]", catalog: String = "") =
+        SnapshotKey.App("order-service") to document("""$catalog"policies":$policies,"bindings":$bindings""")
+
+    private fun ObjectType.items(name: String): StringType {
+        val array = requireNotNull(field(name)).type as ArrayType
+        return array.items as StringType
+    }
 
     private fun ObjectType.string(name: String): StringType = requireNotNull(field(name)).type as StringType
 
@@ -96,6 +220,7 @@ class PolicyDocumentValuesTest {
         ).joinToString(",", "{", "}")
 
     private fun compileError(placement: Placement, value: String): Exception? {
+        placement.document?.let { document -> return document(value).let { (key, body) -> compiling(key, body) } }
         val roles = placement.roles ?: return compileError(placement.statement(value), placement.header(value))
         val body = """{"schema":2,"revision":1,"publishedAt":"2026-10-26T00:00:00Z","roles":${roles(value)}}"""
         return compiling(SnapshotKey.Tenant("acme"), body)
@@ -119,6 +244,11 @@ class PolicyDocumentValuesTest {
         } catch (error: DocumentCompileException) {
             error
         }
+    }
+
+    private companion object {
+        const val ALLOW = """{"effect":"allow","action":"*"}"""
+        const val PERMISSION = "perm:"
     }
 
     @Test
