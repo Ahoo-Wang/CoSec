@@ -13,9 +13,12 @@
 
 @file:OptIn(ExperimentalCoSecApi::class)
 
-package me.ahoo.cosec.webflux.testing
+package me.ahoo.cosec.testkit.webflux
 
 import io.mockk.mockk
+import kotlinx.coroutines.reactive.awaitSingle
+import kotlinx.coroutines.reactor.mono
+import kotlinx.coroutines.runBlocking
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.api.context.SecurityContext
 import me.ahoo.cosec.runtime.Pipeline
@@ -83,6 +86,18 @@ class TestingYourApplicationTest {
         val exchange = MockServerWebExchange.from(MockServerHttpRequest.get("/orders/1"))
         CoSecTestBindings.bind(exchange, alice)
         exchange.securityContextOrNull().assert().isSameAs(alice)
+    }
+
+    /** Coroutine code under test reads the context through the Mono it awaits, with no `mono { }.block()` of its own. */
+    @Test
+    fun `a suspending function that awaits a Mono, with a context the kit made`() = runBlocking<Unit> {
+        val alice = PermittedRequest.forSubject("alice", tenant = "acme", roles = setOf("reader"))
+        CoSecTestBindings.withSecurityContext(alice) { currentUser().awaitSingle() }.assert().isEqualTo("alice")
+        CoSecTestBindings.withSecurityContext(alice) { mono { currentUser().awaitSingle() }.awaitSingle() }
+            .assert().isEqualTo("alice")
+        assertThrownBy<IllegalArgumentException> {
+            runBlocking { CoSecTestBindings.withSecurityContext(mockk<SecurityContext>()) { "never" } }
+        }.hasMessageContaining("PIP-27")
     }
 
     @Test

@@ -13,7 +13,7 @@
 
 @file:OptIn(InternalCoSecApi::class)
 
-package me.ahoo.cosec.webmvc.testing
+package me.ahoo.cosec.testkit.webmvc
 
 import jakarta.servlet.Filter
 import jakarta.servlet.http.HttpServletRequest
@@ -28,7 +28,8 @@ import me.ahoo.cosec.webmvc.ServletRequests.setSecurityContext
 
 /**
  * For tests only: how a test of a Spring MVC application puts CoSec in front of the code under test (`PIP-29`). In
- * production the adapter binds every context, and nothing else does (round 2 L5): an application never imports this.
+ * production the adapter binds every context, and nothing else does (round 2 L5): this is the test kit's, and needs
+ * `cosec-webmvc` on the test's classpath, which a test of a Spring MVC handler has.
  *
  * - [filter] is CoSec's own filter over a test pipeline (`PipelineFixture.pipeline`, or [me.ahoo.cosec.runtime.Pipeline.behindGateway]
  *   for a service behind a gateway): the faithful form for a handler test with `MockMvc`, or a `@WebMvcTest` slice

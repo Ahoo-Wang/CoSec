@@ -13,7 +13,7 @@
 
 @file:OptIn(ExperimentalCoSecApi::class)
 
-package me.ahoo.cosec.webmvc.testing
+package me.ahoo.cosec.testkit.webmvc
 
 import io.mockk.mockk
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi

@@ -571,10 +571,10 @@ class WebAdapterParityTest {
             PipelineWebFilter(gate).filter(exchange, WebFilterChain { record(it) })
         }
         val reactiveTest = reactive(scenario) { exchange, record ->
-            me.ahoo.cosec.webflux.testing.CoSecTestBindings.filter(gate).filter(exchange, WebFilterChain { record(it) })
+            me.ahoo.cosec.testkit.webflux.CoSecTestBindings.filter(gate).filter(exchange, WebFilterChain { record(it) })
         }
         reactiveTest.assert().isEqualTo(reactive)
-        servlet(scenario, me.ahoo.cosec.webmvc.testing.CoSecTestBindings.filter(gate))
+        servlet(scenario, me.ahoo.cosec.testkit.webmvc.CoSecTestBindings.filter(gate))
             .assert().isEqualTo(servlet(scenario, PipelineServletFilter(gate)))
     }
 
