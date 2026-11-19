@@ -24,6 +24,13 @@ package me.ahoo.cosec.conformance
 object GuardAllowlist {
     val GUARDS: Map<String, Set<String>> = mapOf(
         "build" to setOf(
+            // PIP-29: the kit's contexts are the pipeline's, and test binders bind only those.
+            "webmvc:TestingYourApplicationTest#a context made by hand is refused, never bound as anonymous",
+            "webmvc:TestingYourApplicationTest#a function that reads the holder, with a context the kit made",
+            "webflux:TestingYourApplicationTest#a context made by hand is refused, never bound as anonymous",
+            "testkit:TokenlessContextTest#forSubject is the fixture's context for the same principal, with no identity",
+            "testkit:TokenlessContextTest#withIdentity is what a service behind a gateway reads, the forwarded identity included",
+            "spring-boot:WebAdapterParityTest#the test entries answer as the adapters do",
             // OBS-6: one vocabulary for what decided.
             "runtime:AuditVocabularyTest#every reason has the audit decision of its own name",
             "micrometer:ResultVocabularyTest#every reason has the result of its own name",
