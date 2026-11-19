@@ -33,6 +33,7 @@ class Token(val value: String, val jti: String, val issuedAt: Instant, val expir
             subject: String,
             tenant: String,
             roles: List<String> = emptyList(),
+            app: String? = null,
             issuedAt: Instant = Instant.now(),
             validity: Duration = Duration.ofMinutes(10),
             secret: String = SystemTopology.jwtSecret,
@@ -49,6 +50,9 @@ class Token(val value: String, val jti: String, val issuedAt: Instant, val expir
             )
             if (roles.isNotEmpty()) {
                 claims["roles"] = roles
+            }
+            if (app != null) {
+                claims["aud"] = app
             }
             val signing = part(mapOf("alg" to "HS256", "typ" to "JWT")) + "." + part(claims)
             val mac = Mac.getInstance("HmacSHA256").apply { init(SecretKeySpec(secret.toByteArray(), "HmacSHA256")) }

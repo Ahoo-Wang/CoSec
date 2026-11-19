@@ -50,15 +50,39 @@ class IdentityScenario {
         auth["method"].assert().isEqualTo("jwt")
         auth["jti"].assert().isEqualTo(token.jti)
         (auth["exp"] as Number).toLong().assert().isEqualTo(token.expiresAt.epochSecond)
-        // A service relies on auth.iat for the login time of the credential; auth.session (a CoSec token's session)
-        // is asserted once the system's own login service issues session tokens (batch 2): this token has none.
         (auth["iat"] as Number?)?.toLong().assert().isEqualTo(token.issuedAt.epochSecond)
+        // A token without a session (the format's session is optional) still decodes at the service: it has none.
+        auth.keys.assert().doesNotContain("session")
         val security = received.member("security")
         security["principal"].assert().isEqualTo("alice")
         security["tenant"].assert().isEqualTo("identity-tenant")
         security["authenticated"].assert().isEqualTo(true)
         security["credentialId"].assert().isEqualTo(token.jti)
         security["gatewayRequestId"].assert().isEqualTo(echo.header("CoSec-Request-Id"))
+    }
+
+    @Test
+    fun `a token CoSec's login issued reaches the service with its session, which a service relies on`() {
+        val signedIn = SignIn.of("bella", "identity-tenant")
+        val claims = signedIn.claims
+        for (gateway in SystemTopology.gateways) {
+            val echo = Http.get(gateway.resolve("/behind/orders/42"), signedIn.bearer)
+            echo.status.assert().isEqualTo(200)
+            val identity = ForwardedIdentity.decode(echo.json().headers().getValue("cosec-identity").single())
+            Transcript.note("decoded CoSec-Identity of a session token: $identity")
+            identity["sub"].assert().isEqualTo("bella")
+            val auth = identity.member("auth")
+            auth["jti"].assert().isEqualTo(claims["jti"])
+            (auth["iat"] as Number).toLong().assert().isEqualTo((claims.getValue("iat") as Number).toLong())
+            val session = auth.member("session")
+            session["sid"].assert().isEqualTo(claims.getValue("sid"))
+            (session["auth_time"] as Number).toLong().assert().isEqualTo(
+                (claims.getValue("auth_time") as Number).toLong()
+            )
+            (session["generation"] as Number).toLong().assert().isEqualTo(
+                (claims.getValue("cosec.generation") as Number).toLong()
+            )
+        }
     }
 
     @Test

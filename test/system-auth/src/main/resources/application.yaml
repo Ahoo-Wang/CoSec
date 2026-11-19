@@ -1,0 +1,26 @@
+# The system test's login and control-plane host (test/system-test's topology). Redis and the JWT secret come from the
+# environment (compose.yaml); the shortened bounds of the control plane from test/system-test/profile/shortened-bounds.yaml.
+server:
+  port: 8080
+spring:
+  application:
+    name: system-auth
+cosec:
+  jwt:
+    algorithm: hmac256
+    secret: ${COSEC_JWT_SECRET}
+  authentication:
+    login:
+      refresh:
+        path: /auth/refresh
+      logout:
+        path: /auth/logout
+management:
+  endpoint:
+    health:
+      probes:
+        enabled: true
+  endpoints:
+    web:
+      exposure:
+        include: health
