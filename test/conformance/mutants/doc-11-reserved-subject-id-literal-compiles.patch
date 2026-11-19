@@ -1,0 +1,17 @@
+# Rule: DOC-11
+# Mutant: a subject.id literal (0) compiles, so not eq subject.id (0) admits every anonymous request
+# Tests: :model:test --tests me.ahoo.cosec.model.condition.ConditionLintsTest :engine:test --tests me.ahoo.cosec.engine.PolicyCompilerTest :conformance:test --tests me.ahoo.cosec.conformance.ConformanceTest
+
+diff --git a/core/model/src/main/kotlin/me/ahoo/cosec/model/condition/ConditionLints.kt b/core/model/src/main/kotlin/me/ahoo/cosec/model/condition/ConditionLints.kt
+index 6bacbfa7..9a689a29 100644
+--- a/core/model/src/main/kotlin/me/ahoo/cosec/model/condition/ConditionLints.kt
++++ b/core/model/src/main/kotlin/me/ahoo/cosec/model/condition/ConditionLints.kt
+@@ -104,7 +104,7 @@ object ConditionLints {
+     }
+ 
+     private fun reservedSubject(attribute: String, value: String, path: String, operator: String): Finding? {
+-        if (attribute != Attribute.Kind.SUBJECT_ID.path || !Identifiers.isReserved(value)) {
++        if (true || attribute != Attribute.Kind.SUBJECT_ID.path || !Identifiers.isReserved(value)) {
+             return null
+         }
+         val message = "subject.id is absent for the anonymous principal, and no signed-in principal has an id beginning " +

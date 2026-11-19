@@ -518,6 +518,17 @@ Before production:
   [a mapped route is not an `http` request](#trust-boundaries).
 - Give rate limit rules that protect against abuse `"strictFailure": true` if a Redis outage must not lift them.
 - Issue `(platform)` tokens only from a source users cannot influence.
-- Make every service in gateway mode reachable from the gateway only.
+- Make every service in gateway mode reachable from the gateway only: the header it trusts carries no signature, so a
+  namespace without a `NetworkPolicy` (the Kubernetes default) lets any pod be the platform administrator
+  ([Choosing a deployment](../operations/topologies.md#a-gateway-with-services-behind-it)).
+- Give `cosec.jwt.secret` only to processes you would trust to issue tokens: a verifier that holds it can sign for any
+  tenant and principal, and rotating it ends every session ([Choosing a deployment](../operations/topologies.md#what-every-topology-shares)).
+- Turn on Redis persistence, a replica with failover and a tested backup: Redis holds the only copy of the documents
+  and the revocations ([Redis requirements](../operations/storage.md#redis-requirements)).
+- Do not leave `RevocationReader.NONE` in place: with it a service accepts every token its issuer revoked until it
+  expires. A service that verifies another's tokens reads the issuer's Redis under the issuer's `cosec.key-prefix`
+  ([A service that verifies tokens another service issues](../scenarios/resource-server.md)).
+- Remove what the Quick Start left: the demo `/token` endpoint and its statement, and the runner that prints a
+  `(platform)` token ([Before you deploy](./quick-start.md#before-you-deploy)).
 
 **Next:** how the code keeps these guarantees, in [Architecture overview](../architecture/overview.md); or, to start using CoSec, [Quick start](./quick-start.md).

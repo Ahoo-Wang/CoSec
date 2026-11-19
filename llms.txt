@@ -8,13 +8,15 @@ Key facts: any matching DENY overrides every ALLOW; a request nothing allows is 
 
 - [Introduction](https://cosec.ahoo.me/guide/introduction): what CoSec is, what it decides, the modules and what each needs next to the starter
 - [Quick Start](https://cosec.ahoo.me/guide/quick-start): dependency, configuration, the first platform document, issuing a token, the first denied request
+- [Model](https://cosec.ahoo.me/guide/model): how tenants, members, apps, spaces, roles, permissions, policies, bindings and boundaries relate, what each document holds, and what stays outside CoSec
 - [Concepts](https://cosec.ahoo.me/guide/concepts): principals, tenants, apps and spaces, documents, policies and statements, bindings, memberships, the snapshot, decisions
+- [Roadmap](https://cosec.ahoo.me/guide/roadmap): what 8.0 changes, where it stands, the release policy and what 7.x users do now
 - [Security Model](https://cosec.ahoo.me/guide/security-model): the decision algorithm (candidates, deny-first, default deny, Indeterminate, boundaries, break-glass), fail closed and its exceptions, trust boundaries
 
 ## Integration
 
 - [Web Integration](https://cosec.ahoo.me/integration/web): choosing an adapter (WebFlux, MVC, Gateway), outcomes and HTTP statuses, problem+json bodies, `CoSec-*` parameters, the security context, client IP behind proxies, CORS
-- [Building a client](https://cosec.ahoo.me/integration/clients): what a client of a CoSec application can rely on: the endpoints that are the application's, what to do on each problem type, refresh under rotation, readable claims, the CoSec-* headers and CORS
+- [Building a client](https://cosec.ahoo.me/integration/clients): what a client of a CoSec application can rely on: the endpoints that are the application's, what to do on each problem type, refresh under rotation, readable claims, the CoSec-* headers and CORS; the TypeScript packages `@ahoo-wang/cosec-fetcher` and `@ahoo-wang/cosec-react` (on npm, released with CoSec) implement it
 - [Authentication](https://cosec.ahoo.me/integration/authentication): JWT tokens and their membership claims, membership providers, login, refresh, logout and revocation (accepted while the store is unreadable unless `fail-closed`), verifying a token outside the pipeline, API keys, authenticators, social login
 - [Checks in Code](https://cosec.ahoo.me/integration/checks): checking permissions from code for the request in progress (AuthorizationChecker) and what to do instead for work after the request, explaining a decision through the control plane
 
@@ -27,6 +29,8 @@ Key facts: any matching DENY overrides every ALLOW; a request nothing allows is 
 
 ## Operations
 
+- [Choosing a Deployment](https://cosec.ahoo.me/operations/topologies): the topologies (one service that enforces, a gateway with services behind it, a service that verifies another's tokens, a login service, the control plane): what each runs, needs, reaches and rests on
+- [Deployment](https://cosec.ahoo.me/operations/deployment): running the `cosec-gateway-server` image: what it authorizes, services behind it, readiness, Kubernetes manifests, memory, the JDK AOT cache
 - [Configuration](https://cosec.ahoo.me/operations/configuration): every `cosec.*` property with its default
 - [Storage and Caching](https://cosec.ahoo.me/operations/storage): snapshot documents in Redis, the `noeviction` requirement, publishing (control plane, `cosec-migrate`), revisions and rollback, behavior when Redis is unavailable
 - [Upgrading](https://cosec.ahoo.me/operations/upgrading): breaking changes and migration steps per version, including 7.x to 8.0 with `cosec-migrate`
@@ -37,7 +41,16 @@ Key facts: any matching DENY overrides every ALLOW; a request nothing allows is 
 ## Scenarios
 
 - [A Resource Server](https://cosec.ahoo.me/scenarios/resource-server): a service that verifies the tokens another service issues and decides in its own code: the document it publishes, and why it reads the issuer's revocations
-- [Simple Mode](https://cosec.ahoo.me/scenarios/simple-mode): one service, one tenant, no apps; the other worked examples are listed in the [Introduction](https://cosec.ahoo.me/guide/introduction#where-to-go-next)
+- [Simple Mode](https://cosec.ahoo.me/scenarios/simple-mode): one service, one tenant, no apps
+
+- [An app without spaces](https://cosec.ahoo.me/scenarios/app): A service that is one app, with a permission catalog, system roles, a route map and tokens bound to the app, end to end and without spaces
+- [System and custom roles](https://cosec.ahoo.me/scenarios/roles): system roles in the app document, custom roles in tenant documents, and the control-plane calls behind a role console
+- [Apps with spaces](https://cosec.ahoo.me/scenarios/spaces): one app with many warehouses or teams, and one space shared by several apps: roles, tokens and `CoSec-Space-Id`
+- [A service account in one space](https://cosec.ahoo.me/scenarios/service-account): an API key for a machine client that can act only in one space of one app, capped to a single role
+- [A tenant owner](https://cosec.ahoo.me/scenarios/tenant-owner): a tenant's owner as an attached policy in their token, so no document changes when ownership moves
+- [Roles from an external source](https://cosec.ahoo.me/scenarios/external-source): keeping roles and permissions in step with an identity system that owns them: the sync service, the calls each change becomes, conflicts and replays
+- [Authorizing business actions](https://cosec.ahoo.me/scenarios/route-maps): when to name routes with a route map, and what a mapped route changes: the `http` statements and rate limit rules that stop applying to it
+- [Gateway Topologies](https://cosec.ahoo.me/scenarios/gateway): decide at a Spring Cloud Gateway and trust the services behind it, or decide again in each service
 
 ## Architecture
 

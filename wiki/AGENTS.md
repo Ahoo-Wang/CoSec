@@ -32,7 +32,7 @@ Organized by the task the reader is doing, not by module.
 | `scenarios/` | Building a whole use case end to end | `simple-mode`, `resource-server`, `app`, `roles`, `spaces`, `service-account`, `tenant-owner`, `external-source`, `route-maps`, `gateway` |
 | `integration/` | Developer wiring CoSec into an application, or building a client of one | `web`, `authentication`, `clients`, `checks` |
 | `policies/` | Writing and reviewing the rules | `language`, `role-permissions`, `rate-limiting`, `testing` |
-| `operations/` | Running CoSec in production | `configuration`, `storage`, `deployment`, `upgrading`, `upgrading-previews`, `observability`, `troubleshooting` |
+| `operations/` | Running CoSec in production | `topologies`, `configuration`, `storage`, `deployment`, `upgrading`, `upgrading-previews`, `observability`, `troubleshooting` |
 | `architecture/` | Contributor, or integrator who wants the internals | `overview`, `extending` |
 | `zh/` | One-to-one Chinese mirror of everything above | |
 
@@ -47,7 +47,7 @@ option, is harder to use for both jobs.
 
 | Type | Answers | Shape | Pages |
 |---|---|---|---|
-| **Guide** | "How do I …?" | Steps or recipes toward one goal; links to references for every option | `quick-start`, `scenarios/*`, `integration/*`, `role-permissions`, `rate-limiting`, `testing`, `storage`, `deployment`, `upgrading`, `upgrading-previews`, `observability`, `troubleshooting`, `extending` |
+| **Guide** | "How do I …?" | Steps or recipes toward one goal; links to references for every option | `quick-start`, `scenarios/*`, `integration/*`, `role-permissions`, `rate-limiting`, `testing`, `storage`, `topologies`, `deployment`, `upgrading`, `upgrading-previews`, `observability`, `troubleshooting`, `extending` |
 | **Reference** | "What exactly does X mean?" | Complete, terse, ordered for lookup (tables); no narrative | `policies/language`, `operations/configuration` |
 | **Explanation** | "Why does it behave this way?" | Concepts, guarantees, trade-offs, diagrams | `introduction`, `concepts`, `model`, `security-model`, `roadmap`, `architecture/overview` |
 
@@ -64,6 +64,7 @@ time one copy is updated. The homes that are easiest to duplicate by accident:
 | How the entities relate, which document holds what, what stays outside CoSec | `guide/model.md` |
 | Which action a mapped and an unmapped request is decided as, and what that changes | `scenarios/route-maps.md` |
 | Module list, what each module needs, and the starter's module check (STA-1) | `guide/introduction.md#modules` |
+| The deployment topologies: what each process runs, needs, reaches and rests on | `operations/topologies.md` |
 | Reader paths (which page follows which) | `guide/introduction.md#where-to-go-next` |
 | Outcome to HTTP status mapping; problem+json bodies; `CoSec-*` parameters | `integration/web.md` |
 | Credentials, membership claims, revocation, API keys | `integration/authentication.md` |
@@ -109,8 +110,8 @@ Outside the wiki: contribution workflow and releases in `CONTRIBUTING.md`, agent
   (for example "7.x matchers have no 8.0 equivalent") is a file-and-term entry with a reason in the script's
   `ALLOWED` list; there is no inline escape, and an entry that matches nothing fails, so delete it with the text.
 
-- **Reader paths.** [Where to go next](guide/introduction.md#where-to-go-next) defines six reading paths
-  (evaluator, developer, policy author, worked example, operator, contributor). Every page on a path ends with one
+- **Reader paths.** [Where to go next](guide/introduction.md#where-to-go-next) defines seven reading paths
+  (evaluator, developer, policy author, worked example, operator, client builder, contributor). Every page on a path ends with one
   `**Next:**` line (`**下一步：**` in `zh/`) linking to the following page. Adding, removing or reordering a page
   on a path means updating that table and the `**Next:**` lines around it, in both languages.
 
@@ -136,6 +137,8 @@ they are in the code.
 | policy; statement; action; resource; condition | 策略；语句；动作；资源；条件 | |
 | binding; attachment (attached policy) | 绑定；附加策略 | |
 | role; role binding | 角色；角色绑定 | |
+| subject (of a binding) | 授予对象 | Who a binding grants to: anyone, a principal or a role. |
+| subject (`subject.*`, the requesting principal) | 主体 | The principal making the request; never 授予对象. |
 | catalog; permission | 目录；权限 | Permission catalog: 权限目录. |
 | boundary | 边界 | The platform boundary of a tenant. |
 | break-glass | break-glass | Keep the English term. |

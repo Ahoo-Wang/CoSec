@@ -43,12 +43,12 @@ class ConditionChecker(
     /**
      * The attribute [path] names, a declared external one included; null when there is none. Every attribute reference
      * of a document resolves here (conditions, rate limit keys), so this is where a credential header is refused: it
-     * is null for one, whoever asks (`CND-5`, [isCredential]).
+     * is null for one, whoever asks (`CND-5`, [isCredential]). So is `resource.attributes.*`, which nothing sets (`DOC-10`).
      */
     fun attribute(path: String): Attribute? {
         val attribute = Attribute.parse(path)
             ?: return if (Attribute.isExternalPath(path)) catalog.external(path) else null
-        return attribute.takeUnless { isCredential(it) }
+        return attribute.takeUnless { isCredential(it) || it.kind == Attribute.Kind.RESOURCE_ATTRIBUTE }
     }
 
     /** Whether [attribute] is a credential header of this host: [CREDENTIAL_HEADERS] or one it was given (`CND-5`). */
@@ -66,7 +66,7 @@ class ConditionChecker(
                 "`$path` is a credential header, which no attribute reference may read"
             parsed == null && Attribute.isExternalPath(path) ->
                 "external attribute `$path` is not declared by any registered AttributeProvider"
-            else -> "unknown attribute `$path`"
+            else -> ConditionLints.unsetResourceAttribute(parsed, path) ?: "unknown attribute `$path`"
         }
     }
 

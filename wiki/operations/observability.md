@@ -91,7 +91,7 @@ and implicit denies apart, why a credential was rejected, and why a request was 
 | scope rejected | `EXPLICIT_DENY` | `SCOPE_REJECTED` |
 | a permit outside the tenant's boundary | `EXPLICIT_DENY` | `BOUNDARY` |
 | nothing allowed | `IMPLICIT_DENY` | `IMPLICIT_DENY` |
-| any deny of a request whose credential was rejected | as above | `TOKEN_EXPIRED`, `TOKEN_REVOKED` or `TOKEN_INVALID` (also for an API key); `DELEGATION_UNSUPPORTED` for a token with an `act` claim, which the response reports as `token-invalid`. The principal stays anonymous; `authorization.reason` names whose credential was refused when that is known (a key that does not work, a principal the membership provider does not know or knows as deactivated), as the decision event's `subject.refused` does |
+| any deny of a request whose credential was rejected | as above | `TOKEN_EXPIRED`, `TOKEN_REVOKED` or `TOKEN_INVALID` (also for an API key); `DELEGATION_UNSUPPORTED` for a token with an `act` claim, which the response reports as `token-invalid`. A token not valid yet (its `iat` or `nbf` later than this instance's clock beyond the skew, `IDN-29`) is `TOKEN_INVALID` here; the decision event's `subject.rejected` names it `TOKEN_NOT_YET_VALID`. The principal stays anonymous; `authorization.reason` names whose credential was refused when that is known (a key that does not work, a principal the membership provider does not know or knows as deactivated), as the decision event's `subject.refused` does |
 | `400` | `EXPLICIT_DENY` | `EXPLICIT_DENY` (with `kind` `BAD_REQUEST`) |
 | `503`, a strict rate-limit rule that could not be counted | `INDETERMINATE` | `RATE_LIMITER_UNAVAILABLE` |
 | any other `503`, and a cancelled request | `INDETERMINATE` | `INDETERMINATE` |

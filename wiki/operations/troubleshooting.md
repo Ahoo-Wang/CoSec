@@ -95,6 +95,13 @@ tenant, and
   preview issuer could sign (`SCP-13`). A tenant or app id is one path segment, so the token names neither tenant
   `acme/west` nor `acme`. Rename the tenant or app where its id is kept, then have the principal sign in again
   ([Upgrading](./upgrading.md#tenant-and-app-ids-hold-no-slash)).
+- **Intermittent, at second boundaries:** a few requests fail with `token-invalid`, each in the last milliseconds of a
+  second, and the log says `Token refused as not valid yet: The token's iat is later than this instance's clock`. The
+  issuer's clock is ahead of this instance's by more than
+  [`cosec.authentication.revocation.skew`](./configuration.md#authentication) (5 seconds; through beta.3 there was
+  no room at all, `IDN-29`), and a token stamped with the issuer's next second reaches a host still in the previous
+  one. The decision event's `subject.rejected` is `TOKEN_NOT_YET_VALID`. Synchronize the clocks (NTP); raise the skew
+  only for a known, bounded drift, since it also widens what a subject revocation covers.
 - **Delegation token:** the token carries an `act` claim, which CoSec refuses whatever else about it is valid; the
   audit event's `reasonCode` is `DELEGATION_UNSUPPORTED` (`IDN-4`). Have the caller use a token of its own instead
   of one that acts for someone else ([Authentication](../integration/authentication.md#tokens)).

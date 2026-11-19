@@ -1,15 +1,41 @@
 ---
 title: "升级"
-description: "如何把 CoSec 7.x 部署升级到 8.0：有哪些变化，以及如何迁移数据、代码、配置和客户端。"
+description: "如何升级正在运行的 8.0 部署、按什么顺序、哪些没有承诺，以及如何把 CoSec 7.x 部署升级到 8.0：有哪些变化，以及如何迁移数据、代码、配置和客户端。"
 ---
 
 # 升级 {#upgrading}
 
-面向把 CoSec 7.x 部署升级到 8.0 的团队。本页先给出一份检查清单，再按领域给出细节：数据迁移、8.0 在哪些地方决策不同、响应、认证、
+面向升级正在运行的 8.0 部署（[升级正在运行的部署](#upgrading-a-running-deployment)）的团队，以及把 CoSec 7.x 部署升级到 8.0 的团队。7.x 部分先给出一份检查清单，再按领域给出细节：数据迁移、8.0 在哪些地方决策不同、响应、认证、
 存储、API、属性和可观测性。本页是迁移步骤的唯一出处。每个版本的发布说明见
 [GitHub Releases](https://github.com/Ahoo-Wang/CoSec/releases)。
 
 已在运行 8.0 预览版（`8.0.0-alpha` 或 `8.0.0-beta`）的部署，读[8.0 预览版之间的升级](./upgrading-previews.md)，而不是本页。
+
+## 升级正在运行的部署 {#upgrading-a-running-deployment}
+
+面向把正在运行的 8.0 部署（网关、其后的服务、控制面和 Redis）升级到另一个版本的运维人员。本节说明两个版本相遇时代码会怎么做，由此得出升级和回滚的顺序。它的承诺仅限于此：没有承诺的内容列在最后。从 7.x 升级见下一节。
+
+有四样东西会跨越进程边界，每一样都被严格读取：
+
+| 跨越边界的内容 | 谁写，谁读 | 不认识其内容的实例会怎么做 |
+|---|---|---|
+| `CoSec-Identity` 头，格式 `v: 1` | 网关写，每个 `gateway` 模式的服务读 | 拒绝它，状态码说明原因：不认识的成员、类型错误、重复的成员、重复的角色、越界的值、超过大小限制或重复发送的头，返回 `400` `invalid-request`；不读取的格式版本、没有过期时间的凭证、签发时间在未来，返回 `401` `token-invalid`；凭证或身份太旧，返回 `401` `token-expired`。成员先于版本检查，所以既提高 `v` 又增加成员的身份是 `400`，只提高 `v` 的是 `401`（[网关后面的服务](../integration/web.md#services-behind-the-gateway)） |
+| 策略文档，`schema: 2` | 控制面和 `cosec-migrate` 写，每个实例读 | 读取时拒绝 `schema` 不同的文档，也不安装它无法编译的文档（不认识的成员、重复的键、类型错误）：需要它的请求失败即拒绝（`503`，决策事件里是 `DocumentInvalid` 或 `SourceUnavailable`，除非有 DENY 先命中，[故障排查](./troubleshooting.md)） |
+| Redis 中的值（吊销记录、会话、API key、成员关系、控制面记录） | 写入它的实例，以及读取它的每个实例 | 无法解码的值让读取失败，并留在 Redis 里：从不删除。无法解码的吊销记录让请求返回 `503`，绝不当作“未吊销”；无法解码的文档记录绝不当作“没有文档”，需要它的请求返回 `503`，除非有 DENY 先命中；控制 API 读取时无法解码的已存文档或记录是 `500`，无法解码的变更记录是 `503`（[Redis 是权威存储](./storage.md#redis-is-the-store-of-record)） |
+| 令牌 | 签发方签名，每个校验方读取 | 读取它认识的声明（[客户端可以读取的声明](../integration/clients.md#the-claims-a-client-may-read)），忽略其余；拒绝带 `act` 声明的令牌、本该是访问令牌的位置上的刷新令牌，以及会话声明不完整的令牌 |
+
+**升级顺序。**
+
+1. **在每个实例都运行新版本之前，不要发布使用新内容的文档。** 不认识新成员的实例不安装这份文档，需要它的请求失败即拒绝。含有这种实例的影子窗口会报告 `CANDIDATE_ERROR`，永远不会干净地关闭，所以这份变更无法通过它发布（[策略测试](../policies/testing.md#trying-changes-in-shadow-mode)）。
+2. **先升级网关后面的服务，再升级网关。** 服务严格读取身份，所以比网关旧的服务会以 `400` `invalid-request` 拒绝网关新增的成员；网关提高身份的格式版本 `v` 时，它返回 `401` `token-invalid`，同时还增加成员则是 `400`。
+3. **然后是控制面和 `cosec-migrate`**；当写入这个 Redis 的每个控制面实例和每个 `cosec-migrate` 都运行新版本后，运行一次 `cosec-migrate repair-references`（[修复反向引用索引](#repair-the-back-reference-index)）和 `verify-chain`（[检查修订链](#verify-the-revision-chains)）。
+4. **Redis 按 Redis 自己的方式升级**，不由 CoSec 负责：CoSec 的键在 `cosec.key-prefix` 之下，重启或故障转移见 [Redis 要求](./storage.md#redis-requirements)。
+
+**回滚顺序**相反：先网关，再其后的服务。回滚文档不需要任何实例变化：`POST /documents/<doc>:rollback` 把文档恢复成较早的修订，它是一次与其他变更一样要经过检查的变更（[修订、历史与回滚](./storage.md#revisions-history-and-rollback)）。降级控制面或 `cosec-migrate` 之后，再次运行 `repair-references` 和 `verify-chain`。
+
+**混合版本的表现**：需要某份旧实例无法编译的文档的请求返回 `503`（`DocumentInvalid`）；拒绝新网关新增成员的服务返回 `400` `invalid-request`，只遇到更高身份格式版本的服务返回 `401` `token-invalid`；持有另一个签名密钥的实例返回 `401` `token-invalid`。最后一个实例运行同一版本时，这些就结束了。
+
+**没有承诺的内容。** 上述四种格式在两个版本之间能否互通：8.0 预发布版是最新版本期间，版本之间完全没有承诺（[8.0 预览版之间的升级](./upgrading-previews.md)），之后由每个版本的发布说明写明它改了什么。新的服务读得懂每个旧网关的身份，或旧的服务读得懂新网关的身份。新版本写入 Redis 的值能被旧版本读取。新签发方签名的、带有旧校验方不读取的声明的令牌，对旧校验方意味着同样的东西。请缩短混合版本的时间，并在升级承载流量之前，用新版本的 `simulate` 和 `explain` 在文档副本上测试。
 
 ## 7.x 到 8.0 {#_7-x-to-8-0}
 
@@ -890,3 +916,5 @@ Reactor `ContextView` 和 `HttpServletRequest` 上的 `getSecurityContext()`、`
 | RFC 0007 X6（生成的 JSON schema） | `schema/` 文件描述 8.0 的格式（[策略语言](../policies/language.md)）。 |
 | RFC 0007 X7（控制面审计、`BOUNDARY`） | [可观测性的变化](#observability-changes)。 |
 | RFC 0007 X8（Redis 命名空间） | [Redis key](#redis-keys)。 |
+
+**下一步：**部署承载流量之前，逐项完成[加固清单](../guide/security-model.md#hardening-checklist)。

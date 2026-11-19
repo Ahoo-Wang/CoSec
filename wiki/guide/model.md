@@ -50,7 +50,6 @@ membership does not come from the token's own claims ([Apps](../integration/auth
 ```mermaid
 classDiagram
     class PolicyDocument {
-        kind
         revision
         publishedAt
     }
@@ -58,6 +57,7 @@ classDiagram
         id
         attachable
         condition
+        boundary
     }
     class Statement {
         effect
@@ -86,11 +86,21 @@ classDiagram
     class Catalog {
         groups
     }
+    class Group {
+        name
+        spaced
+    }
     class Permission {
         id
         action
         resource
-        spaced
+    }
+    class Boundary {
+        default
+        per tenant
+    }
+    class Obligation {
+        rate limit
     }
     class RateLimitRule {
         action
@@ -123,7 +133,11 @@ classDiagram
     PolicyDocument "1" *-- "0..1" Catalog : app document
     PolicyDocument "1" *-- "*" RateLimitRule
     Policy "1" *-- "1..*" Statement
-    Catalog "1" *-- "*" Permission
+    Catalog "1" *-- "*" Group
+    Group "1" *-- "*" Permission
+    PolicyDocument "1" *-- "0..1" Boundary : platform and tenant documents
+    Boundary --> Policy : names one with boundary true
+    Decision ..> Obligation : a Permit carries
     Permission ..> Policy : defines the perm policy
     Role "1" --> "*" Permission : holds
     Role ..> Binding : expands into one per permission

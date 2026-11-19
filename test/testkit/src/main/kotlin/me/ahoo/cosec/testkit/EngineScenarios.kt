@@ -82,7 +82,7 @@ import java.time.Instant
  *                 "principalBindings": true, "breakGlass": true },
  * "membershipProvider": { "roles": { "<space>": [...] }, "attachments": [...] } | { "fails": "message" },
  * "request":    { "space": "", "hostApp": null, "action": "order:read",
- *                 "resource": { "type": "order", "id": "1", "attributes": {} }, "time": "...", "ip": "...",
+ *                 "resource": { "type": "order", "id": "1" }, "time": "...", "ip": "...",
  *                 "device": "...", "blocked": false, "headers": {}, "attributes": {} }
  * ```
  */
@@ -255,14 +255,23 @@ class EngineScenarios(
     private fun headers(request: JsonNode): Headers =
         Headers.of(request.get("headers")?.fields().orEmpty().mapValues { listOf(it.value.text()) })
 
+    /**
+     * A resource is a type and an id. Nothing on the request path, in a check, or in the control plane's simulate and
+     * explain gives a resource attributes, and a document cannot read them (`DOC-10`): a scenario that sets them would
+     * test a request no host makes, so it is refused, saying where facts about a resource go.
+     */
     private fun resource(node: JsonNode?): Resource {
         if (node == null) return Resource("order", "1", emptyMap())
-        node.only("type", "id", "attributes")
-        return Resource(
-            node.required("type").text(),
-            node.get("id")?.text().orEmpty(),
-            node.get("attributes")?.fields().orEmpty().mapValues { it.value.text() },
-        )
+        if (node.has("attributes")) {
+            throw ScenarioFormatException(
+                "request.resource.attributes: no request, check, simulate or explain gives a resource attributes, so " +
+                    "a scenario that sets them tests a request no host makes. Put facts about a resource in its id and " +
+                    "read them in the document with a pattern variable, resource.var.<name> (Object-level rules, " +
+                    "integration/checks.md) (DOC-10)",
+            )
+        }
+        node.only("type", "id")
+        return Resource(node.required("type").text(), node.get("id")?.text().orEmpty(), emptyMap())
     }
 
     private fun view(snapshot: CompiledSnapshot, scope: Scope, documents: JsonNode): SnapshotView {

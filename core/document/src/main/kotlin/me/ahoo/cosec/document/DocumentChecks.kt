@@ -22,6 +22,7 @@ import me.ahoo.cosec.engine.BuiltinPolicies
 import me.ahoo.cosec.engine.CompileError
 import me.ahoo.cosec.engine.CompiledDocument
 import me.ahoo.cosec.model.Effect
+import me.ahoo.cosec.model.Identifiers
 import me.ahoo.cosec.model.Match
 import me.ahoo.cosec.model.SubjectRef
 import me.ahoo.cosec.model.TenantId
@@ -105,8 +106,10 @@ internal class DocumentChecks(
         val defined = effective.policies.mapTo(HashSet()) { it.id.value }
         var principals = 0
         for ((i, binding) in document.bindings.withIndex()) {
-            if (binding.subject is SubjectRef.Principal) {
+            val subject = binding.subject
+            if (subject is SubjectRef.Principal) {
                 principals++
+                reservedPrincipal(subject, "$.bindings[$i].subject.principal")?.let { errors += it }
             }
             permissionError(document, binding, defined, "$.bindings[$i].policy")?.let { errors += it }
             (binding.scope.space as? Match.Exactly)?.value?.value?.takeIf(ScopeResolver::isReservedSpaceId)?.let {
@@ -132,6 +135,23 @@ internal class DocumentChecks(
                     "membership provider",
             )
         }
+    }
+
+    /**
+     * `DOC-11`: a principal binding to a reserved id never applies. The anonymous principal `(0)` has no principal
+     * bindings (`BND-4`), and no signed-in principal has an id beginning with `(` (`IDN-12`), so a DENY bound so is lost.
+     */
+    private fun reservedPrincipal(subject: SubjectRef.Principal, path: String): CompileError? {
+        val id = subject.id.value
+        if (!Identifiers.isReserved(id)) {
+            return null
+        }
+        return CompileError(
+            path,
+            "[$id] is reserved: no principal with an id beginning with [${Identifiers.RESERVED_PREFIX}] is ever " +
+                "signed in (IDN-12), and the anonymous principal matches no principal binding (BND-4), so this binding " +
+                "never applies. Bind \"*\" with a condition on subject.authenticated to reach anonymous requests (DOC-11)",
+        )
     }
 
     /** Whether [document] is the platform's or the platform tenant's own, whose subjects are the platform's. */

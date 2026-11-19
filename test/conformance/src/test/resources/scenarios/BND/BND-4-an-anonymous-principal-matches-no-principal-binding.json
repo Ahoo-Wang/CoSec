@@ -4,7 +4,7 @@
   ],
   "polarity": "positive",
   "level": "engine",
-  "description": "A principal binding names the anonymous principal's id in its tenant; an anonymous principal still matches only Anyone bindings.",
+  "description": "A principal binding names a principal of the default tenant; an anonymous principal, in that tenant too, still matches only Anyone bindings. (A binding to the reserved id (0) does not compile: DOC-11.)",
   "documents": {
     "tenants": {
       "(0)": {
@@ -21,9 +21,9 @@
         ],
         "bindings": [
           {
-            "id": "p:(0):allow-all",
+            "id": "p:alice:allow-all",
             "subject": {
-              "principal": "(0)",
+              "principal": "alice",
               "tenant": "(0)"
             },
             "app": "*",

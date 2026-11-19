@@ -108,7 +108,7 @@ Redis 必须使用 `maxmemory-policy noeviction`。发布一份平台文档（�
 ## 模块
 
 `cosec-spring-boot` 自带请求处理流程、登录、JWT 支持和自动配置；各项集成（WebFlux、MVC、Gateway、Redis、控制面、OAuth、
-OpenTelemetry、Micrometer、OpenAPI、ip2region、Kafka）都是在它旁边按需添加的模块，starter 装配它在类路径上找到的模块。`cosec-migrate` 用于转换 7.x 数据并发布文档。
+OpenTelemetry、Micrometer、OpenAPI、ip2region、Kafka）都是在它旁边按需添加的模块，starter 装配它在类路径上找到的模块。`cosec-migrate` 用于转换 7.x 数据并发布文档。浏览器或 Node 客户端是 npm 上的 `@ahoo-wang/cosec-fetcher` 和 `@ahoo-wang/cosec-react`，随 CoSec 一起发布（[构建客户端](https://cosec.ahoo.me/zh/integration/clients)）。
 完整列表见[模块](https://cosec.ahoo.me/zh/guide/introduction#modules)。开箱即用的网关以容器镜像 `ahoowang/cosec-gateway` 发布。
 
 ## 文档

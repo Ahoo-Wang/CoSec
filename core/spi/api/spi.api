@@ -127,6 +127,7 @@ public final class me/ahoo/cosec/spi/authn/AuthnResult$RejectReason : java/lang/
 	public static final field DELEGATION_UNSUPPORTED Lme/ahoo/cosec/spi/authn/AuthnResult$RejectReason;
 	public static final field TOKEN_EXPIRED Lme/ahoo/cosec/spi/authn/AuthnResult$RejectReason;
 	public static final field TOKEN_INVALID Lme/ahoo/cosec/spi/authn/AuthnResult$RejectReason;
+	public static final field TOKEN_NOT_YET_VALID Lme/ahoo/cosec/spi/authn/AuthnResult$RejectReason;
 	public static final field TOKEN_REVOKED Lme/ahoo/cosec/spi/authn/AuthnResult$RejectReason;
 	public static fun getEntries ()Lkotlin/enums/EnumEntries;
 	public static fun valueOf (Ljava/lang/String;)Lme/ahoo/cosec/spi/authn/AuthnResult$RejectReason;
@@ -653,6 +654,11 @@ public final class me/ahoo/cosec/spi/token/TokenFamilyStore$Read {
 	public fun <init> (Lme/ahoo/cosec/spi/token/TokenFamily;Ljava/lang/String;)V
 	public final fun getFamily ()Lme/ahoo/cosec/spi/token/TokenFamily;
 	public final fun getVersion ()Ljava/lang/String;
+}
+
+public final class me/ahoo/cosec/spi/token/TokenNotYetValidException : me/ahoo/cosec/spi/token/TokenVerificationException {
+	public fun <init> (Ljava/lang/String;)V
+	public fun <init> (Ljava/lang/String;Ljava/lang/Throwable;)V
 }
 
 public final class me/ahoo/cosec/spi/token/TokenRevokedException : me/ahoo/cosec/spi/token/TokenVerificationException {

@@ -23,6 +23,14 @@ CoSec 8.0 发布之前，这两个包的 `latest` 标签指向一个标为已弃
 
 ## 示例
 
+```ts
+// tokenStorage.ts：下面的示例导入的模块。
+import { cosec } from './cosec'; // 创建并应用 CoSecConfigurer 的模块（见 fetcher 包的 README）
+
+export const tokenStorage = cosec.tokenStorage;
+export const tokenManager = cosec.tokenManager;
+```
+
 ```tsx
 import {
   RouteGuard,

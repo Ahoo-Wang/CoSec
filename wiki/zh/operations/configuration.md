@@ -185,7 +185,7 @@ CoSec 没有哪个配置项叫这些名字，而已知的 key 无论来源都不
 
 | 配置项 | 类型 | 默认值 | 作用 |
 |---|---|---|---|
-| `cosec.authentication.revocation.skew` | duration | `5s` | 签发时间比主体吊销晚多少的令牌仍被该吊销覆盖：为时钟偏快的签发方留出余量。 |
+| `cosec.authentication.revocation.skew` | duration | `5s` | 签发方的时钟可以比本实例快多少。签发时间比主体吊销晚不超过这个时长的令牌仍被该吊销覆盖；令牌的签发时间（`iat`）和生效时间（`nbf`）可以比本实例的时钟晚这么多（`IDN-29`）；令牌的过期时间没有这样的余量。 |
 | `cosec.authentication.revocation.fail-closed` | boolean | `false` | 吊销无法读取时，是否拒绝请求的令牌（`503`）而不是接受它（[已写明的例外](../guide/security-model.md#the-two-documented-exceptions)）。无论如何，此时刷新都会失败。 |
 | `cosec.authentication.login.refresh.path` | string | 未设置 | starter 提供刷新路由的位置：`POST` 令牌对（`IDN-23`，[构建客户端](../integration/clients.md#what-your-application-serves)）。未设置时不提供。文档必须允许匿名 `POST` 它。在网关上、在不提供 HTTP 的宿主上、登录或 JWT 关闭时设置，或设置为一个普通绝对路径以外的值，启动失败。 |
 | `cosec.authentication.login.logout.path` | string | 未设置 | starter 提供登出路由的位置：`POST` 令牌对，应答 `204`（`IDN-24`）；其余同 `refresh.path`，且不能是同一路径。 |
@@ -194,7 +194,7 @@ CoSec 没有哪个配置项叫这些名字，而已知的 key 无论来源都不
 
 | 配置项 | 类型 | 默认值 | 作用 |
 |---|---|---|---|
-| `cosec.jwt.secret` | string | 无 | 启用 JWT 时 **必填**；为空或短于算法所需长度时启动失败：`hmac256` 需要 32 字节（按 UTF-8 计），`hmac384` 需要 48 字节，`hmac512` 需要 64 字节（RFC 7518 §3.2）。使用来自密钥存储的长随机值。 |
+| `cosec.jwt.secret` | string | 无 | 启用 JWT 时 **必填**；为空或短于算法所需长度时启动失败：`hmac256` 需要 32 字节（按 UTF-8 计），`hmac384` 需要 48 字节，`hmac512` 需要 64 字节（RFC 7518 §3.2）。使用来自密钥存储的长随机值。HMAC 是对称的：**每个持有该密钥的进程都能为任意租户、主体和角色签发令牌**，包括 `(platform)` 管理员，所以只把它交给你愿意让它签发令牌的进程。轮换会让用旧密钥签发的每个令牌失效：滚动重启结束之前，仍用旧密钥的实例和已用新密钥的实例对彼此的令牌各自返回 `401` `token-invalid`，所有会话都要重新登录（[选择部署方式](./topologies.md#what-every-topology-shares)）。 |
 | `cosec.jwt.algorithm` | `hmac256`、`hmac384`、`hmac512` | `hmac256` | 签名算法。签发方和校验方必须一致。 |
 | `cosec.jwt.token-validity.access` | duration | `10m` | 访问令牌有效期。 |
 | `cosec.jwt.token-validity.refresh` | duration | `7d` | 刷新令牌有效期；吊销记录在 Redis 中保留这么久再加一秒。 |
