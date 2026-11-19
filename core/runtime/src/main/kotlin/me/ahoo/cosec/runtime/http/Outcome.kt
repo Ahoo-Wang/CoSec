@@ -14,6 +14,7 @@
 package me.ahoo.cosec.runtime.http
 
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.model.decision.Cause
 import me.ahoo.cosec.model.decision.Decision
 import me.ahoo.cosec.spi.identity.Identity
@@ -22,7 +23,15 @@ import me.ahoo.cosec.spi.identity.Identity
  * What an adapter does with a request (RFC 0006 §6.3): proceed to the handler, or write [status], [headers] and the
  * encoded [problem]. Only [StatusMapping] constructs one, so status codes and bodies have one definition, and adapters
  * never see a [Decision] or a [Cause] (`OneDecisionPathTest`).
+ *
+ * [close] ends the request it permitted (`PIP-26`): from then on no check permits as its [security]. Who closes it:
+ * a transport of the application's own that called `Pipeline.evaluate`, when its response is complete, or from its
+ * completion callback when the response outlives the handler (a streamed body, a WebSocket session). Closing it when
+ * the handler returns ends the request while such a stream is still being written, and the checks it makes are denied.
+ * CoSec's adapters (WebFlux, Spring MVC, the gateway) end the requests they bind themselves: an application that uses
+ * them never closes anything.
  */
+@OptIn(InternalCoSecApi::class)
 @ExperimentalCoSecApi
 class Outcome internal constructor(
     /** The status to write; 200 when [proceed]. */
@@ -45,7 +54,15 @@ class Outcome internal constructor(
      * nothing, and its handler keeps the identity the gateway sent.
      */
     val forward: Map<String, String?>,
-) {
+) : AutoCloseable {
+    /**
+     * Ends the request this outcome permitted: every later check of its [security] is denied (`PIP-26`). Nothing for a
+     * refused request. Idempotent, and the same end as an adapter's, in either order.
+     */
+    override fun close() {
+        security?.end()
+    }
+
     override fun toString(): String = "Outcome(status=$status, proceed=$proceed, requestId=$requestId, basis=$basis)"
 }
 

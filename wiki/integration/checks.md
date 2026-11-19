@@ -119,7 +119,8 @@ A check does not authenticate again. It decides with the principal, the membersh
 when the request was permitted, and it reads the documents again. It checks no age and no revocation of the token, and
 it sees no change of roles since. So during the request, a check keeps permitting after the user logs out, after
 `revokeSubject` or after a role is removed, for as long as the documents permit; the request has been decided already.
-When the request ends the check stops (`PIP-26`, below), and a context no adapter bound is never ended. Do not store a
+When the request ends the check stops (`PIP-26`, below); a transport of your own ends it by closing the `Outcome`.
+Do not store a
 context: authorize where the request arrives and carry the decision with the work.
 
 ### A check and a mapped route
@@ -167,9 +168,15 @@ A check belongs to its request, and the adapter that bound the request ends it w
   `ResponseBodyAdvice`, interceptors) is still within the request. The error page is not: Spring MVC renders it on an
   ERROR dispatch, after the request has ended, so an error page or error controller reads the context but every check
   of it there is `false`.
-- **A request no adapter bound** is never ended: one your own transport handed to `Pipeline.evaluate`, and the test
-  kit's (`PipelineFixture`, `PermittedRequest`). Checks of it behave as they always did, so do not keep its context
-  after the request either.
+- **A request your own transport handed to `Pipeline.evaluate`** ends when the transport closes its `Outcome`
+  (`AutoCloseable`): `evaluate(facts).use { … }` around a response that is complete when the block returns, or
+  `outcome.close()` from the response's completion callback when it outlives the handler (a streamed body, a WebSocket
+  session). Closing it when the handler returns ends the request while such a stream is still being written, and the
+  checks it makes are `false`. A transport that never closes it leaves the request in progress for as long as its
+  context is held ([A transport of your own](../architecture/extending.md#pipeline-outside-the-adapters)).
+- **The test kit's contexts** are in progress until the test ends them, as a host would when its response is complete:
+  `PipelineFixture.end(context)`, `PermittedRequest.end(context)`, or closing the `Outcome` of `PipelineFixture.evaluate`.
+  A test of code that checks after its response ends the context, then asserts the check is `false`.
 
 ## Object-level rules
 

@@ -1,0 +1,50 @@
+{
+  "rules": [
+    "PIP-26"
+  ],
+  "polarity": "positive",
+  "level": "pipeline",
+  "description": "A transport of the application's own that closes the outcome Pipeline.evaluate answered ends the request: a check of its context is then an implicit deny, though a document permits the action.",
+  "documents": {
+    "platform": {
+      "policies": [
+        {
+          "id": "orders",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "http:*",
+              "resource": "http:path:/orders/{*rest}"
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "orders",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "orders"
+        }
+      ]
+    }
+  },
+  "http": {
+    "method": "GET",
+    "path": "/orders/1"
+  },
+  "authentication": {
+    "result": "anonymous"
+  },
+  "check": {
+    "action": "http:DELETE",
+    "resource": "/orders/2",
+    "closed": true
+  },
+  "expect": {
+    "status": 200,
+    "proceed": true,
+    "check": "Deny"
+  }
+}

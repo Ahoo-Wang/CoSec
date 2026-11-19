@@ -271,6 +271,19 @@ would be permitted. A check is refused before any document is read when:
 - **The action has no `:`**, or names what enforcement refuses (an `http` verb with a lower-case letter, a path a
   request would get `400` for: `PIP-15`).
 
+Three of these are mistakes in the calling code, and the log names them. The logger is
+`me.ahoo.cosec.runtime.AuthorizationChecker`. Each kind is logged at `WARN` at most once a minute, so a loop of checks
+does not flood the log, and every occurrence at `DEBUG`. The message names the request id, the action and the
+resource:
+
+| Message starts with | What to change |
+|---|---|
+| `Check denied before any policy was read: the SecurityContext is not one the pipeline made` | Pass the context the adapter bound, or in a test one from `PipelineFixture` or `PermittedRequest`. |
+| `Check denied before any policy was read: its request has ended` | Check within the request; a transport of your own closes its `Outcome` only when the response is complete. |
+| `Check denied before any policy was read: the action is not` | Write the action as `service:verb`, or `http:` with the method in upper case. |
+
+A path that enforcement refuses is not logged: it can come from a client.
+
 ## Decisions use an old revision
 
 The audit event's `snapshotVersion`, or the span's `cosec.snapshot.version`, is older than the revision the control

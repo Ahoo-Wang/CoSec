@@ -18,8 +18,8 @@ deployment needs none of it: [Upgrading](./upgrading.md) is the whole upgrade. T
   server-sent-events body, an async servlet request. Affected: code that keeps a context and checks with it after the
   response was written. Check within the request instead; work that runs afterwards (a consumer, a scheduled job)
   carries its own authorization ([Checks in code](../integration/checks.md#how-a-check-relates-to-the-request-pipeline)).
-  A context of a request your own transport handed to `Pipeline.evaluate`, and the test kit's, is never ended: no
-  change there.
+  A context of a request your own transport handed to `Pipeline.evaluate`, and the test kit's, is ended only when you
+  end it: close the `Outcome`, or call `PipelineFixture.end` / `PermittedRequest.end` (below).
 - **Security: the readers of the security context answer only a context the pipeline made** (`PIP-27`).
   `exchange.getSecurityContext()`, `ContextView.getSecurityContextOrEmpty()` / `getSecurityContext()`,
   `request.getSecurityContext()`, the `SecurityContext` handler parameter and `SecurityContextHolder` returned whatever
@@ -72,6 +72,23 @@ deployment needs none of it: [Upgrading](./upgrading.md) is the whole upgrade. T
   Redis key. Now a value shaped like a token (a JOSE compact serialization, with or without `Bearer `) throws
   `IllegalArgumentException`, which names `TokenRevoker`; no token id CoSec or another issuer gives is refused.
   Affected: a logout written against `TokenStore`, which never worked. Call `TokenRevoker.revoke(accessToken)`.
+- **A pipeline built with `Pipeline.builder` counts rate limits** (UA-10). Through beta.3 a pipeline built without
+  `rateLimiter(...)` had none: a rule with `strictFailure` answered every request it covered `503`, and every other
+  rule was skipped. It now counts in a `LocalRateLimiter` of its own, as the starter's default does, and a request
+  over a rule's limit is `429`. `PipelineFixture.of` and `load` count the same way and take a `rateLimiter`, so a test
+  sees the `429` (pass a `LocalRateLimiter` with a clock of the test's to cross a window). Affected: a pipeline outside
+  Spring, and tests, whose documents have rate limit rules: they are limited now. Give `rateLimiter(...)` a limiter
+  shared across instances to limit a service as a whole. The starter is unchanged. `PipelineFixture.of` and `load`
+  gained a parameter: recompile tests against this version.
+- **A transport of your own can end its requests** (`PIP-26`). `Outcome` is `AutoCloseable`: close it when the
+  response is complete (`pipeline.evaluate(facts).use { … }`), or from the response's completion callback when it
+  outlives the handler, and every later check of its context is `false`
+  ([Pipeline outside the adapters](../architecture/extending.md#pipeline-outside-the-adapters)). In tests,
+  `PipelineFixture.end(context)` and `PermittedRequest.end(context)`. Nothing breaks: a transport that does not close
+  it behaves as before.
+- **A check refused for how it was called is logged** (UA-5). A context the pipeline did not make, a check after its
+  request ended and a malformed action string still answer `false` (`Deny(null)`), and now log a `WARN` once a minute
+  per kind, naming the request ([Troubleshooting](./troubleshooting.md#a-check-answers-false)). Nothing to change.
 
 ## From 8.0.0-beta.2 {#from-8-0-0-beta-2}
 

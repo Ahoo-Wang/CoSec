@@ -63,16 +63,16 @@ class RequestSecurity internal constructor(
     val securityContext: SecurityContext by lazy(LazyThreadSafetyMode.PUBLICATION) { PipelineSecurityContext(this) }
 
     /**
-     * Whether the request is still in progress: true until the adapter that bound it ends it ([end]). A request no
-     * adapter bound (a transport that calls `Pipeline.evaluate` itself, the test kit) is never ended. A check of an
-     * ended request is refused (`PIP-26`).
+     * Whether the request is still in progress: true until it is ended ([end]), by the adapter that bound it, or by the
+     * transport of the application's own that closes its [Outcome]. A check of an ended request is refused (`PIP-26`).
      */
     internal val inProgress: Boolean get() = !ended
 
     /**
-     * Ends the request: from now on no check permits as it (`PIP-26`). Only the adapters call it, when the request
+     * Ends the request: from now on no check permits as it (`PIP-26`). The adapters call it, when the request
      * completes: WebFlux and the gateway when the chain's `Mono` terminates, the servlet filter when the dispatch returns
-     * or, for an async request, when it completes, fails or times out. Idempotent.
+     * or, for an async request, when it completes, fails or times out. A transport of the application's own ends it
+     * through [Outcome.close], the one public way. Idempotent.
      */
     @InternalCoSecApi
     fun end() {
