@@ -1,0 +1,17 @@
+# Rule: PIP-30
+# Mutant: an encoded semicolon or control character is decided as text of its segment
+# Tests: :runtime:test --tests me.ahoo.cosec.runtime.http.PathNormalizerTest --tests me.ahoo.cosec.runtime.EncodedPathTest :conformance:test
+
+diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/http/PathNormalizer.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/http/PathNormalizer.kt
+index d9b5c1ef9..387c1ae15 100644
+--- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/http/PathNormalizer.kt
++++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/http/PathNormalizer.kt
+@@ -64,7 +64,7 @@ object PathNormalizer {
+ 
+     /** The path to authorize, still encoded; null when [rawPath] cannot be interpreted without ambiguity. */
+     fun normalize(rawPath: String): String? {
+-        if (rawPath.length > MAX_PATH_LENGTH || encodedHazard(rawPath) >= 0) {
++        if (rawPath.length > MAX_PATH_LENGTH) {
+             return null
+         }
+         val path = withoutPathParameters(rawPath)

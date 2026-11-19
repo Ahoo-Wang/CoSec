@@ -27,6 +27,15 @@ Which preview of the library may run behind which preview of the gateway image: 
 
 ## From 8.0.0-beta.4 {#from-8-0-0-beta-4}
 
+- **A path holding an encoded `;` or control character is a `400`** (R1A-3, `PIP-30`). Affected: clients that send
+  `%3B` or `%00` to `%1F` or `%7F`, in either case, anywhere in a path. Through beta.4 they were decided as text of a
+  segment, which Spring reads alike, while a backend behind a gateway that decodes before it strips path parameters
+  serves `/admin%3Bx/users` as `/admin/users`, past a `DENY` on `/admin/**`. They are now refused before
+  authentication, mapped route or not, with the `400` `invalid-request` of any path the pipeline will not interpret,
+  and the gateway refuses them before anything is forwarded. A value that holds such a character goes in the query
+  or the body, or has its `%` encoded again (`%253B`), which the pipeline decodes once, to the text `%3B`. `%25`, a
+  trailing `.` and a trailing space are unchanged. To check: search access logs for `%3B`, `%00` to `%1F` and `%7F` in
+  request paths ([Troubleshooting](./troubleshooting.md#invalid-request)). There is no switch to accept them.
 - **A refused forwarded identity is counted and says why, and the gateway no longer writes one a service would refuse**
   (#1690). Affected: services in `cosec.pipeline.mode=gateway`, their dashboards and log alerts, and code that calls
   `IdentityHeader.of` in tests.

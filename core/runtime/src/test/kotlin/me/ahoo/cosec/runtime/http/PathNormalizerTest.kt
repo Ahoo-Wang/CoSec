@@ -156,12 +156,10 @@ class PathNormalizerTest {
     fun encodedSemicolonsAndControlCharactersAreRejected() {
         val refused = (0x00..0x1F) + 0x3B + 0x7F
         refused.size.assert().isEqualTo(34)
-        for (value in refused) {
-            for (escape in setOf("%%%02X".format(value), "%%%02x".format(value))) {
-                for (path in listOf("/admin${escape}x/users", "/$escape", "/a/b$escape", "$escape/a", "/a;x=$escape/b")) {
-                    PathNormalizer.normalize(path).assert().describedAs(path).isNull()
-                }
-            }
+        val escapes = refused.flatMap { listOf("%%%02X".format(it), "%%%02x".format(it)) }.toSet()
+        val paths = escapes.flatMap { listOf("/admin${it}x/users", "/$it", "/a/b$it", "$it/a", "/a;x=$it/b") }
+        for (path in paths) {
+            PathNormalizer.normalize(path).assert().describedAs(path).isNull()
         }
     }
 

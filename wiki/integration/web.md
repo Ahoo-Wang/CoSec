@@ -127,6 +127,13 @@ Before anything else, `PathNormalizer` checks it. On every adapter the path is:
   `%5c`). A pattern reads these as segments of their own or as part of one, so a `DENY` under `/admin` would not match
   them, while a backend that merges slashes, decodes separators or reads `\` as `/` serves them as `/admin/...`. A
   separator encoded twice (`%252F`, `%255C`) decodes once, to text, and is decided;
+- **rejected the same way** when it holds an encoded `;` (`%3B`) or an encoded control character (`%00` to `%1F`,
+  `%7F`), in either case of the hex digits and anywhere in the path, path parameters included (`PIP-30`). CoSec reads
+  them as text of a segment, but a backend behind a gateway that decodes before it strips path parameters serves
+  `/admin%3Bx/users` as `/admin/users`, and one that stops at NUL or drops what follows a control character serves
+  another path again. `%25` is data of a segment: `%253B` decodes once, to the text `%3B`, and is decided, as is a
+  trailing `.` or space. Some servers refuse a few of these spellings themselves, before any filter runs: Jetty every
+  encoded control character (and `%25`), Tomcat `%00`;
 - **kept with a trailing `/`**: `/admin/` is its own path, as in Spring's routing. A pattern written `/admin` does not
   match it, and `/admin/**` does.
 
