@@ -55,10 +55,16 @@ Two adapter modules add non-suspending forms:
 | `cosec-webflux` | `AuthorizationChecker.checkMono(security, action, resource)`: `Mono<Boolean>` | In WebFlux and gateway code. It starts on the caller's thread and continues off any client library's I/O thread. |
 | `cosec-webmvc` | `AuthorizationChecker.checkBlocking(security, action, resource)`: `Boolean` | On a servlet request thread. It throws on a non-blocking thread, such as a Netty event loop: use `checkMono` there. |
 
+One sample per stack, each with its imports. Each asks which actions the caller may take on an order:
+
 ```kotlin
+// WebFlux, returning a Mono
+import me.ahoo.cosec.runtime.AuthorizationChecker
+import me.ahoo.cosec.webflux.ServerWebExchanges.getSecurityContext
+import me.ahoo.cosec.webflux.checkMono
+
 @RestController
 class OrderActionsController(private val checker: AuthorizationChecker) {
-    // WebFlux: which actions may the caller take on this order?
     @GetMapping("/orders/{id}/actions")
     fun actions(@PathVariable id: String, exchange: ServerWebExchange): Mono<Map<String, Boolean>> {
         val security = exchange.getSecurityContext()!!
@@ -67,6 +73,40 @@ class OrderActionsController(private val checker: AuthorizationChecker) {
             checker.checkMono(security, "order:delete", "order/$id"),
         ).map { mapOf("cancel" to it.t1, "delete" to it.t2) }
     }
+}
+```
+
+```kotlin
+// WebFlux, a suspend handler: the exchange parameter gives the context, and check suspends
+import me.ahoo.cosec.runtime.AuthorizationChecker
+import me.ahoo.cosec.webflux.ServerWebExchanges.getSecurityContext
+
+@RestController
+class OrderActionsController(private val checker: AuthorizationChecker) {
+    @GetMapping("/orders/{id}/actions")
+    suspend fun actions(@PathVariable id: String, exchange: ServerWebExchange): Map<String, Boolean> {
+        val security = exchange.getSecurityContext()!!
+        return mapOf(
+            "cancel" to checker.check(security, "order:cancel", "order/$id"),
+            "delete" to checker.check(security, "order:delete", "order/$id"),
+        )
+    }
+}
+```
+
+```kotlin
+// Spring MVC: the SecurityContext parameter, and checkBlocking on the request thread
+import me.ahoo.cosec.api.context.SecurityContext
+import me.ahoo.cosec.runtime.AuthorizationChecker
+import me.ahoo.cosec.webmvc.checkBlocking
+
+@RestController
+class OrderActionsController(private val checker: AuthorizationChecker) {
+    @GetMapping("/orders/{id}/actions")
+    fun actions(@PathVariable id: String, security: SecurityContext): Map<String, Boolean> = mapOf(
+        "cancel" to checker.checkBlocking(security, "order:cancel", "order/$id"),
+        "delete" to checker.checkBlocking(security, "order:delete", "order/$id"),
+    )
 }
 ```
 
@@ -187,9 +227,19 @@ of the order, and the policy below is bound to anyone (`"subject": "*"`):
 <<< @/examples/checks/documents/platform.json [documents/platform.json]
 
 ```kotlin
-val order = orderRepository.findById(id)
-val allowed = checker.checkBlocking(security, "order:cancel", "order-of/${order.ownerId}/${order.status}/$id")
-if (!allowed) throw AccessDeniedException()
+// Spring MVC; orderRepository and Order are yours. In WebFlux, use checkMono, or a suspend handler and check.
+import me.ahoo.cosec.api.context.SecurityContext
+import me.ahoo.cosec.webmvc.checkBlocking
+import org.springframework.http.HttpStatus
+import org.springframework.web.server.ResponseStatusException
+
+@PostMapping("/orders/{id}/cancel")
+fun cancel(@PathVariable id: String, security: SecurityContext) {
+    val order = orderRepository.findById(id)
+    val allowed = checker.checkBlocking(security, "order:cancel", "order-of/${order.ownerId}/${order.status}/$id")
+    if (!allowed) throw ResponseStatusException(HttpStatus.FORBIDDEN)
+    // ... cancel the order
+}
 ```
 
 The scenarios in [`wiki/examples/checks`](https://github.com/Ahoo-Wang/CoSec/tree/main/wiki/examples/checks/scenarios)

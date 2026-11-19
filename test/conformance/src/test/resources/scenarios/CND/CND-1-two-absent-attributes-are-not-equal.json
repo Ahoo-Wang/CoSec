@@ -18,7 +18,7 @@
                 "eq": [
                   "subject.attributes.team",
                   {
-                    "attr": "resource.attributes.team"
+                    "attr": "request.attributes.team"
                   }
                 ]
               }

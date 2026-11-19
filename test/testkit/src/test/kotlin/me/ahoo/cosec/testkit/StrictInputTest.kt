@@ -40,6 +40,17 @@ class StrictInputTest {
         PolicyTestKit.of(platform)
     }
 
+    /** DOC-10: no host gives a resource attributes, so a scenario that sets them tests a request no host makes. */
+    @Test
+    fun `a scenario that sets resource attributes is refused`() {
+        val kit = PolicyTestKit.of(platform)
+        val scenario = """{"request":{"action":"order:read","resource":{"type":"order","id":"1",""" +
+            """"attributes":{"classification":"secret"}}},"expect":{"decision":"Deny"}}"""
+        assertThrows<ScenarioFormatException> { kit.evaluate(scenario) }.message.assert()
+            .contains("request.resource.attributes").contains("resource.var.<name>").contains("DOC-10")
+        kit.evaluate("""{"request":{"action":"order:read","resource":{"type":"order","id":"1"}}}""")
+    }
+
     @Test
     fun `a field twice in an app or tenant document is refused too`() {
         assertThrows<ScenarioFormatException> { PolicyTestKit.of(platform, apps = mapOf("wms" to duplicated)) }

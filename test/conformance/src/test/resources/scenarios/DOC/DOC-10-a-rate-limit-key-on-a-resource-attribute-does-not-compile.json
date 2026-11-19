@@ -1,0 +1,44 @@
+{
+  "rules": [
+    "DOC-10"
+  ],
+  "polarity": "positive",
+  "level": "engine",
+  "description": "A rate limit key reads attributes as a condition does: keyed by a resource attribute, every request would share one absent key. The document does not compile.",
+  "documents": {
+    "platform": {
+      "policies": [
+        {
+          "id": "members",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "*"
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "members",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "members"
+        }
+      ],
+      "rateLimits": [
+        {
+          "id": "per-owner",
+          "action": "*",
+          "key": "resource.attributes.owner",
+          "permitsPerSecond": 1
+        }
+      ]
+    }
+  },
+  "expect": {
+    "decision": "NotCompiled",
+    "error": "is never set"
+  }
+}

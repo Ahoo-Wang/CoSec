@@ -46,6 +46,18 @@ a JWT access token or an API key, so the client cannot change it. A request with
 **anonymous** principal, id `(0)`, in the default tenant, with no roles and no attachments. Policies can allow the
 anonymous principal too; that is how public endpoints work.
 
+### Credential
+
+What a request presents to prove who it is: a JWT access token or an API key. CoSec verifies it into a principal; a
+credential that is invalid, expired or revoked is treated as no credential, and the request is anonymous
+([Authentication](../integration/authentication.md)).
+
+### Subject
+
+Two different things carry this word. In a **binding**, the subject is who the binding grants to: anyone (`"*"`), a
+principal of a tenant, or a role. In a **condition**, `subject.*` is the principal making the request. Where it matters,
+this documentation says "the binding's subject" or "the requesting principal".
+
 ### Tenant
 
 The customer boundary the principal belongs to, taken from the credential's tenant:
@@ -75,9 +87,11 @@ in the app its credential names, and a credential without one reads no app docum
 
 ### Space
 
-A partition inside an app, such as a team or a project, in which a principal can hold different roles. A request that
+An optional partition of an app's roles, such as a team or a project, in which a principal can hold different roles. CoSec keeps no registry of spaces: a space is an opaque id, and several apps may use the same id. A request that
 names no space is in the **default space**. A role claimed as `clerk` applies in the default space; `clerk@team-a`
 applies in `team-a` only. A request can name a space other than the default only when the principal has a role there.
+
+**The default space has two spellings.** In documents, claims, `scope.space` and the audit record it is the empty string `""`. In the control plane's resource names it is `(default)`, as in `scope/<tenant>/<app>/(default)`. `(default)` is not a space a request can select, so a claim `admin@(default)` is read but applies nowhere. An empty app is likewise "no app": it is absent in conditions, but `""` in the audit record and the forwarded identity.
 
 ### Scope
 
@@ -117,7 +131,7 @@ attached to a principal directly. A policy has no effect until a binding or an a
 
 One rule in a policy:
 
-- an **effect**: `allow` or `deny`;
+- an **effect**: `allow` (grants what matches) or `deny` (refuses it, and wins over every ALLOW);
 - one or more **actions**, such as `http:GET`, `order:read`, `order:*` or `*`;
 - **resources**, such as `http:path:/orders/{id}` or `order/**` (none means any resource);
 - an optional **condition**.
@@ -151,6 +165,19 @@ What a principal is a member of: its roles in each space and its attachments. Me
 or, when the token carries the provider marker, from a `MembershipProvider`. They are never part of a document. When they
 cannot be read, the request fails closed; it is never treated as having no roles.
 
+### Role
+
+A named set of permissions, held by a member in a space. A **system role** is defined in an app's document and applies in
+every tenant; a **custom role** is defined in a tenant's document and applies in that tenant. A role grants through
+bindings, which CoSec expands from the role's permissions ([Role permissions](../policies/role-permissions.md#roles)).
+The token's `roles` claim lists every role the member holds as `role` or `role@space`; the `roles` of the forwarded
+identity, of the audit record and of `scope.roles` are only the roles in the request's space.
+
+### Permission
+
+An entry of an app's catalog that writes an `action` (and optionally a `resource`). It is the policy
+`perm:<app>/<id>`, and a role holds it by id ([Role permissions](../policies/role-permissions.md#short-form-permissions)).
+
 ### Catalog
 
 An app's permission catalog: groups of permissions with ids, names and descriptions, for user interfaces, generators
@@ -170,6 +197,12 @@ The engine answers every request it evaluates with one of three decisions:
 The rules behind them are in the [security model](./security-model.md). How each becomes an HTTP response (`401` for an
 anonymous caller and `403` for a signed-in one when denied, `503` when indeterminate, and so on) is in
 [Web integration](../integration/web.md).
+
+### Platform boundary
+
+The ceiling of what a tenant can be permitted, set by the platform: a policy with `boundary: true` that a Permit must
+also match. The platform document names the default one; a tenant document may name another
+([Platform boundary](./security-model.md#platform-boundary)).
 
 ### Obligation
 

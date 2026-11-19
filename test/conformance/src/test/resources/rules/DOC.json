@@ -82,6 +82,42 @@
         "engine:PolicyCompilerTest#an http action no request can have does not compile"
       ],
       "pending": null
+    },
+    {
+      "id": "DOC-9",
+      "source": "RFC 0005 §3.2 (usability review before RC1, UC-3)",
+      "statement": "An eq or prefix with ignoreCase whose literal holds a character beyond ASCII that has another case does not compile where a miss lets a request through: in a DENY statement's condition under an even number of nots, in an ALLOW statement's condition under an odd number, in a rate limit rule's condition as in a DENY, and in a policy condition in both directions its statements give it (under an even number of nots when the policy has a DENY, under an odd number when it has an ALLOW). The fold is ASCII only, so such an atom matches fewer spellings than it reads. The message names a spelling the fold misses and says to list every spelling in an in (eq) or an or of prefixes (prefix), without ignoreCase. In the other direction the atom only narrows: it compiles, and the control plane's validation reports a WARNING. cosec-migrate refuses the same shape with the same message.",
+      "level": "engine",
+      "guards": [
+        "model:ConditionLintsTest#ignoreCase on a letter beyond ASCII refuses where a miss lets a request through",
+        "model:ConditionLintsTest#the direction flips under each not and is kept by and and or",
+        "engine:PolicyCompilerTest#ignoreCase beyond ASCII does not compile in the DENY direction"
+      ],
+      "pending": null
+    },
+    {
+      "id": "DOC-10",
+      "source": "RFC 0005 §3.2 (usability review before RC1, UD-2)",
+      "statement": "No attribute reference of a document resolves resource.attributes.<name> (a condition operand on either side, a rate limit key): nothing on the request path, in a check, or in the control plane's simulate and explain gives a resource attributes, so a DENY on one would deny nothing. The message says to put facts about a resource in its id and read them with a pattern variable. The policy test kit refuses a scenario that sets request.resource.attributes, for the same reason.",
+      "level": "engine",
+      "guards": [
+        "model:ConditionCheckerTest#resource attributes are refused wherever they are referred to",
+        "engine:PolicyCompilerTest#resource attributes do not compile",
+        "testkit:StrictInputTest#a scenario that sets resource attributes is refused"
+      ],
+      "pending": null
+    },
+    {
+      "id": "DOC-11",
+      "source": "RFC 0004 §4.2, RFC 0009 (IDN-12) (usability review before RC1, UD-3)",
+      "statement": "A subject.id literal beginning with ( (in eq, in or prefix, in any direction) and a principal binding whose principal id begins with ( do not compile. The anonymous principal has no subject.id in a document and matches no principal binding (BND-4), and no signed-in principal has a reserved id (IDN-12), so such a comparison never holds (and under a not holds for every anonymous request), and such a binding never applies. The message names subject.authenticated. Tenant ids beginning with ( stay valid.",
+      "level": "engine",
+      "guards": [
+        "model:ConditionLintsTest#a subject id literal beginning with a parenthesis refuses in every direction",
+        "engine:PolicyCompilerTest#a reserved subject id literal does not compile",
+        "document:PolicyDocumentCompilerTest#no principal binding names a reserved id"
+      ],
+      "pending": null
     }
   ]
 }

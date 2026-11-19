@@ -209,7 +209,11 @@ data class Facts(
         )
 
         /** Adversarial ids too: pattern and template syntax must stay data. */
-        val PRINCIPAL_IDS = listOf("alice", "owner-1", "(0)x", "a", "*", "#{principal.id}", "/orders/**")
+        /**
+         * No signed-in principal of 8.0 has an id beginning with `(`: a token with one is refused before any decision
+         * (`IDN-12`), so an id that only looks like the anonymous one is the nearest that reaches a decision (DOC-11).
+         */
+        val PRINCIPAL_IDS = listOf("alice", "owner-1", "x(0)", "0)", "a", "*", "#{principal.id}", "/orders/**")
         private val ROLES = listOf("admin", "viewer", "admin@team", "viewer@team", "admin@other", "Key")
 
         /** Times around the boundaries the time corpus uses, and a few anywhere. */

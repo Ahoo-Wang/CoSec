@@ -445,7 +445,7 @@ spring:
 | `v` | `1`。 |
 | `tenant`、`sub` | 网关校验的租户和主体。 |
 | `scope` | `{app, space}`，即网关解析出的应用和空间。 |
-| `roles` | 主体在该空间中的角色：决策所用的角色。 |
+| `roles` | 主体在该空间中的角色，用裸名：决策所用的角色。这是作用域的角色，而不是令牌的全部角色（令牌的 `roles` 声明以 `role@space` 列出所有空间的角色）。 |
 | `auth` | `{method, jti, exp, iat, capped, session}`：主体的认证方式（`jwt` 和 `api-key` 是 CoSec 自带的；其他任何非空名称都按原样读取，因此使用其他认证器的网关也能工作）、令牌的 `jti` 或 key 的 id、凭证的过期时间，以及凭证的签发时间（`iat`，凭证不说明时没有，且绝不晚于 `exp`）；`session` 只出现在 CoSec 自己的令牌（`jwt`）上：它的 `sid`、`auth_time`（用户登录的时间）和 `generation`，使网关之后的服务知道登录时间，并让那里的[租户切换](./authentication.md#switching-tenant-and-app)可以从它签发；`capped: true` 只出现在带角色上限的凭证上，此时在网关之后，主体绑定和附加策略同样不授予它任何东西（它们的 DENY 照样生效）。只有 `jwt` 能得到 break-glass，网关只为 CoSec 自己的令牌转发它。绝不包含凭证本身。 |
 | `iat` | 网关生成该请求头的时间，单位为 epoch 秒。 |
 | `rid` | 网关的请求 id。 |
