@@ -145,6 +145,7 @@
         "document:DocumentIdsTest#an app document's catalog entries and roles, and the platform's boundary and attributes, are checked",
         "document:DocumentIdsTest#an unpaired surrogate is refused, a pair is a character like any other",
         "document:DocumentIdsTest#the message of a document that does not compile forges no line, whatever it quotes",
+        "document:DocumentIdFieldsTest#every id field of the format is refused at its path when it holds a control character",
         "control:DocumentRefusalHttpTest#a change with a deny matching the path undecoded or an id that would forge a line stays a draft naming it"
       ],
       "pending": null

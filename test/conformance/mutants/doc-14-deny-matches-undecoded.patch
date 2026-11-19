@@ -3,15 +3,15 @@
 # Tests: :engine:test --tests me.ahoo.cosec.engine.PolicyCompilerTest
 
 diff --git a/core/engine/src/main/kotlin/me/ahoo/cosec/engine/PolicyCompiler.kt b/core/engine/src/main/kotlin/me/ahoo/cosec/engine/PolicyCompiler.kt
-index d8466c2e4..d896c4c7a 100644
+index 4943a024f..7cdd9307a 100644
 --- a/core/engine/src/main/kotlin/me/ahoo/cosec/engine/PolicyCompiler.kt
 +++ b/core/engine/src/main/kotlin/me/ahoo/cosec/engine/PolicyCompiler.kt
-@@ -204,7 +204,7 @@ class PolicyCompiler(
+@@ -212,7 +212,7 @@ class PolicyCompiler(
          }.ifEmpty { listOf(ResourcePattern.AnyResource) }
          if (source.effect === Effect.DENY) {
              checkBare(resources, path, errors)
--            checkDecoded(source.resources, path, errors)
-+            checkDecoded(emptyList(), path, errors)
+-            checkDecoded(source.resources, path, rateLimit, errors)
++            checkDecoded(emptyList(), path, rateLimit, errors)
          }
          val condition = source.condition?.let { written ->
              check(written, "$path.condition", errors)?.takeIf {

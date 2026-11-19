@@ -33,7 +33,7 @@ import me.ahoo.cosec.model.decision.DocumentKind
  * - a binding's subject (principal, role, tenant), its space and the policy it binds;
  * - role ids, their app and space, the permissions they list;
  * - catalog permission ids (each names the policy `perm:<app>/<id>`);
- * - the external attributes the platform declares.
+ * - the external attributes the platform declares, and the attribute each rate limit rule keys its buckets by.
  *
  * Rate limit rule ids are held to a narrower rule already (`[A-Za-z0-9_.-]+`, `CompiledRateLimit.isValidId`), pattern
  * variable names by the pattern parser, attribute names a condition reads by its checker. Display text (a role's or a
@@ -92,6 +92,9 @@ object DocumentIds {
         }
         document.attributes?.forEachIndexed { a, attribute ->
             check("$.attributes[$a].path", "attribute", attribute.path)
+        }
+        document.rateLimits.forEachIndexed { r, rule ->
+            rule.key?.let { check("$.rateLimits[$r].key", "rate limit key", it) }
         }
     }
 

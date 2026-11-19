@@ -66,6 +66,7 @@ description: "每个 8.0 预览版（alpha 与 beta）到下一个之间的变�
   - **按收到的原文匹配路径的 DENY。** DENY 语句或限流规则不能再把 `decodeAndParseSegments` 设为 `false`：它会漏掉路径的每一种百分号编码写法（`/%61dmin/users` 对应 `/admin/users`）。去掉这个选项；ALLOW 可以保留它（[HTTP 路径](../policies/language.md#http-paths)）。`cosec-migrate convert` 拒绝这样写的 7.x DENY（`DOES_NOT_COMPILE`，定位到它的语句），不写出任何文档。
   - **已存储的文档会怎样。** 宿主对它失败即关闭，与对待任何无法编译的文档一样：每个需要该文档的请求回答 `503`，宿主以 `ERROR` 记录 `Snapshot document [<doc>] revision <n> does not compile`，附每个错误的 JSON 路径，id 以转义形式显示，`cosecSnapshot` 健康指示器把它计入 `invalid`（[故障排查](./troubleshooting.md)）。控制面拒绝会发布这种文档的变更：在 id 或语句的路径上给出 `COMPILE` 发现，变更停留在草稿。
   - **升级宿主之前**，用 beta.5 的编译器检查每个已发布的文档，做法见 [CI 中的策略](../policies/testing.md#policies-in-ci)（`PolicyDocumentCompiler.validate`），并为它拒绝的每个文档发布一个修正后的修订：重命名 id、去掉该选项。两者都不含的文档不受影响。
+  - **然后先升级一台宿主**（或控制面的宿主），在升级其余宿主之前，查看它的 `cosecSnapshot` 健康指示器的 `invalid` 计数，以及它为每个文档记录的 `ERROR` 日志行。没有修正的文档在每台已升级的宿主上失败即关闭：那里每个需要它的请求都回答 `503`。
 
 ## 从 8.0.0-beta.3 升级 {#from-8-0-0-beta-3}
 

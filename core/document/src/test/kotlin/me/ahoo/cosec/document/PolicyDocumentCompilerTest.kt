@@ -412,7 +412,10 @@ class PolicyDocumentCompilerTest {
             )
     }
 
-    /** DOC-14 (R1A-1): the refusal names the statement by its path in the document, in a written and a derived policy. */
+    /**
+     * DOC-14 (R1A-1): the refusal names the statement by its path in the document, in a statement and in a rate limit
+     * rule, each in its own words.
+     */
     @Test
     fun `a deny matching the path as received does not compile, and the error names the statement`() {
         val raw = """{"pattern":"http:path:/admin/**","decodeAndParseSegments":false}"""
@@ -423,8 +426,15 @@ class PolicyDocumentCompilerTest {
                 """"bindings":[],"rateLimits":[{"id":"r","action":"http:*","resource":$raw,"permitsPerSecond":1}]""",
         )
         errors.assert().hasSize(2).allMatch { "DOC-14" in it }
-        errors.map { it.substringBefore(": ") }.assert()
+        val byPath = errors.associate { it.substringBefore(": ") to it.substringAfter(": ") }
+        byPath.keys.assert()
             .containsExactlyInAnyOrder("$.policies[1].statements[1].resource[1]", "$.rateLimits[0].resource[0]")
+        // One wording per kind: a statement misses what it denies, a rate limit rule lets encoded spellings escape.
+        byPath.getValue(
+            "$.policies[1].statements[1].resource[1]"
+        ).assert().startsWith("a DENY with decodeAndParseSegments")
+        byPath.getValue("$.rateLimits[0].resource[0]").assert()
+            .startsWith("a rate limit rule with decodeAndParseSegments: false").contains("escapes the limit")
     }
 
     /** DOC-11: no principal with a reserved id ever signs in, and the anonymous one matches no principal binding. */

@@ -114,7 +114,14 @@ class PolicyCompiler(
             StatementSource(name, Effect.DENY, actions, resources, condition, onMissing)
         }
         // A rate limit rule has no confirmation flow, so only the platform may let one lapse (ATR-7).
-        val statement = statement(0, strict, "$", errors, unconfirmedLapse = kind == DocumentKind.PLATFORM)
+        val statement = statement(
+            0,
+            strict,
+            "$",
+            errors,
+            unconfirmedLapse = kind == DocumentKind.PLATFORM,
+            rateLimit = true
+        )
         val key = source.key?.let { path -> key(path, statement, errors) }
         if (errors.isNotEmpty()) {
             throw CompileException(source.id, errors)
@@ -188,6 +195,7 @@ class PolicyCompiler(
         path: String,
         errors: MutableList<CompileError>,
         unconfirmedLapse: Boolean = false,
+        rateLimit: Boolean = false,
     ): CompiledStatement? {
         val before = errors.size
         if (source.actions.isEmpty()) {
@@ -204,7 +212,7 @@ class PolicyCompiler(
         }.ifEmpty { listOf(ResourcePattern.AnyResource) }
         if (source.effect === Effect.DENY) {
             checkBare(resources, path, errors)
-            checkDecoded(source.resources, path, errors)
+            checkDecoded(source.resources, path, rateLimit, errors)
         }
         val condition = source.condition?.let { written ->
             check(written, "$path.condition", errors)?.takeIf {
@@ -299,15 +307,15 @@ class PolicyCompiler(
      * not compile; an ALLOW keeps the option, since one that matches less fails closed. A rate limit rule compiles as a DENY: one with the option
      * would let encoded spellings escape their limit.
      */
-    private fun checkDecoded(resources: List<ResourceSource>, path: String, errors: MutableList<CompileError>) {
+    private fun checkDecoded(
+        resources: List<ResourceSource>,
+        path: String,
+        rateLimit: Boolean,
+        errors: MutableList<CompileError>,
+    ) {
         for ((i, resource) in resources.withIndex()) {
             if (!resource.decodeAndParseSegments) {
-                errors += CompileError(
-                    "$path.resource[$i]",
-                    "a DENY with decodeAndParseSegments: false matches the path as received and misses every " +
-                        "percent-encoded spelling of it ([http:path:/admin/**] does not stop /%61dmin/users); remove " +
-                        "the option: a DENY matches the decoded path (DOC-14)",
-                )
+                errors += CompileError("$path.resource[$i]", if (rateLimit) UNDECODED_RATE_LIMIT else UNDECODED_DENY)
             }
         }
     }
@@ -375,3 +383,15 @@ class PolicyCompiler(
 
 /** The namespace and method of `DOC-8`. */
 private const val HEAD = "HEAD"
+
+/** DOC-14, for a DENY statement. */
+private const val UNDECODED_DENY =
+    "a DENY with decodeAndParseSegments: false matches the path as received and misses every percent-encoded " +
+        "spelling of it ([http:path:/admin/**] does not stop /%61dmin/users); remove the option: a DENY matches the " +
+        "decoded path (DOC-14)"
+
+/** DOC-14, for a rate limit rule, which compiles as a DENY. */
+private const val UNDECODED_RATE_LIMIT =
+    "a rate limit rule with decodeAndParseSegments: false matches the path as received, so every percent-encoded " +
+        "spelling of it escapes the limit (/%61dmin/users is not counted by [http:path:/admin/**]); remove the " +
+        "option: a rate limit rule matches the decoded path (DOC-14)"

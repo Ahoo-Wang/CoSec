@@ -194,7 +194,7 @@ id 按 `/` 切分并按原样比较：从不解码，从不去除空白。类型
 | `caseSensitive` | `true` | 为 `false` 时比较字面量忽略 ASCII 大小写。 |
 | `decodeAndParseSegments` | `true` | 为 `true` 时按百分号解码、去掉 `;` 参数后的值匹配每个片段；为 `false` 时按收到的原文匹配，但 `%2F` 仍读作 `/`。只有 ALLOW 可以设为 `false`（`DOC-14`）。 |
 
-模式把 `decodeAndParseSegments` 设为 `false` 的 DENY 语句或限流规则无法编译（`DOC-14`）。这样的模式匹配仍是百分号编码的路径，于是漏掉它所写路径的每一种编码写法：这样写的 `http:path:/admin/**` 上的 DENY 拦不住 `GET /%61dmin/users`，而后端把它当作 `/admin/users` 处理。去掉这个选项：DENY 匹配解码后的路径。ALLOW 可以保留它，因为匹配得更少只会收窄访问。
+模式把 `decodeAndParseSegments` 设为 `false` 的 DENY 语句或限流规则无法编译（`DOC-14`）。这样的模式匹配仍是百分号编码的路径，于是漏掉它所写路径的每一种编码写法：这样写的 `http:path:/admin/**` 上的 DENY 拦不住 `GET /%61dmin/users`，而后端把它当作 `/admin/users` 处理。这样写的限流规则让每一种编码写法都逃过它的限额。去掉这个选项：DENY 或限流规则匹配解码后的路径。ALLOW 可以保留它，因为匹配得更少只会收窄访问。
 
 `caseSensitive` 在 DENY 上仍然有效，默认为 `true`：`/admin/**` 上的 DENY 拦不住 `/ADMIN/users`。如果网关后面的后端在路由时忽略大小写，就给 DENY 写上 `"caseSensitive": false`。
 

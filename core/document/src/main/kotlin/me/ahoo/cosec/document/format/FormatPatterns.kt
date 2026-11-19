@@ -44,8 +44,15 @@ internal object FormatPatterns {
     /** [pattern], which starts with `^`, and [PRINTABLE] too. */
     fun printable(pattern: String): String {
         require(pattern.startsWith("^")) { "A pattern starts with ^: $pattern" }
-        return "^(?![\\s\\S]*[$CONTROL])" + pattern.substring(1)
+        return PRINTABLE_PREFIX + pattern.substring(1)
     }
+
+    /** Whether [type] is an id a document writes: [id], or a pattern built with [printable] (`DocumentIdFieldsTest`). */
+    fun isId(
+        type: StringType
+    ): Boolean = type.pattern == PRINTABLE || type.pattern?.startsWith(PRINTABLE_PREFIX) == true
+
+    private const val PRINTABLE_PREFIX = "^(?![\\s\\S]*[$CONTROL])"
 
     /** An id a document writes (`DOC-13`). */
     fun id(examples: List<String>, minLength: Int? = null, description: String? = null): StringType = StringType(

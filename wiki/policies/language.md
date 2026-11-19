@@ -242,8 +242,8 @@ A resource may be a pattern object with options, for `http:path:` patterns only:
 A DENY statement or a rate limit rule whose pattern sets `decodeAndParseSegments` to `false` does not compile (`DOC-14`).
 Such a pattern matches the path still percent-encoded, so it misses every encoded spelling of the path it names: a DENY
 on `http:path:/admin/**` written that way does not stop `GET /%61dmin/users`, which the backend serves as
-`/admin/users`. Remove the option: a DENY matches the decoded path. An ALLOW keeps it, since one that matches less only
-narrows access.
+`/admin/users`. A rate limit rule written that way lets every encoded spelling escape its limit. Remove the option: a
+DENY or a rule matches the decoded path. An ALLOW keeps it, since one that matches less only narrows access.
 
 `caseSensitive` stays valid on a DENY, and is `true` by default: a DENY on `/admin/**` does not stop `/ADMIN/users`. If a
 backend behind the gateway routes paths ignoring case, write the DENY with `"caseSensitive": false`.

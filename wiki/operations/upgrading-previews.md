@@ -130,6 +130,9 @@ Which preview of the library may run behind which preview of the gateway image: 
   - **Before upgrading the hosts**, check every published document with beta.5's compiler, as in
     [Policies in CI](../policies/testing.md#policies-in-ci) (`PolicyDocumentCompiler.validate`), and publish a revision
     that fixes each one it refuses: ids renamed, the option removed. A document that holds neither is unaffected.
+  - **Then upgrade one host first** (or the control plane's host), and read its `cosecSnapshot` health indicator's
+    `invalid` count and the `ERROR` line it logs per document before you upgrade the rest of the fleet. A document
+    nobody fixed fails closed on every upgraded host: each request that needs it answers `503` there.
 
 ## From 8.0.0-beta.3 {#from-8-0-0-beta-3}
 
