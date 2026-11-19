@@ -225,6 +225,7 @@ curl -i -H "Authorization: Bearer not-a-token" localhost:8080/orders/1
 
 - 看看哪些可以省掉，再逐步扩展：[简单模式](../scenarios/simple-mode.md)，以及从[不使用空间的应用](../scenarios/app.md)到[网关拓扑](../scenarios/gateway.md)的各个场景。
 - 按角色、按应用和空间授权：[角色权限](../policies/role-permissions.md)。
+- 用单元测试证明文档会做出什么决策，场景文件放在文档旁边：[用测试证明](../policies/testing.md#prove-it-with-a-test)。
 - 通过控制面安全地变更文档，使用模拟和影子窗口：[策略测试](../policies/testing.md)。
 - 用真正的登录替换演示用的 `/token` 端点，登录会开始一个会话（[认证](../integration/authentication.md)）。然后让 starter 提供刷新和登出：设置 `cosec.authentication.login.refresh.path: /auth/refresh` 和 `logout.path: /auth/logout`，并允许任何人对这两个路径 `http:POST`，[`clients` 示例](../integration/clients.md#what-your-application-serves)就是这样做的。演示签发的令牌对不属于任何会话，因此永远不能刷新。
 - 在处理器中读取主体和作用域：[Web 集成](../integration/web.md)。

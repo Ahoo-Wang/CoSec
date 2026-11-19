@@ -7,6 +7,12 @@ packages:
 allowBuilds:
   esbuild: true
 
+# GHSA-g3hv-75wg-m249 (minimatch below 11.0.1): @microsoft/api-extractor 7.60.1, the latest release, pins minimatch
+# 10.2.3 exactly. It uses minimatch only to match file globs in the build. Remove this override once api-extractor
+# depends on minimatch 11.0.1 or later.
+overrides:
+  '@microsoft/api-extractor>minimatch': ^11.0.1
+
 # A version npm published less than a day ago is not installed: a malicious release is usually pulled in that time.
 minimumReleaseAge: 1440
 
@@ -37,7 +43,6 @@ catalog:
   '@vitest/ui': ^4.1.11
   babel-plugin-react-compiler: ^1.0.0
   eslint: ^10.15.0
-  eslint-plugin-react-compiler: ^19.1.0-rc.2
   eslint-plugin-react-hooks: ^7.1.1
   globals: ^17.13.0
   jsdom: ^30.1.2
@@ -48,7 +53,7 @@ catalog:
   react-compiler-runtime: ^1.0.0
   react-dom: ^19.3.0
   typescript: ^6.0.3
-  typescript-eslint: ^8.71.1
+  typescript-eslint: ^8.73.0
   unplugin-dts: 1.1.2
   vite: ^8.3.8
   vite-bundle-analyzer: ^1.3.9

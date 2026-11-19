@@ -123,7 +123,7 @@ jobs:
       - name: Setup pnpm
         uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
         with:
-          version: 11.28.11
+          version: 11.28.13
 
       # Trusted publishing needs npm 11.5.1 or later (Node 22.14 or later): Node 24 brings it, the next step asserts it.
       - name: Setup Node

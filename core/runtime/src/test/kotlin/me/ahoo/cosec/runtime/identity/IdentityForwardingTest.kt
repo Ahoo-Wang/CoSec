@@ -249,7 +249,7 @@ class IdentityForwardingTest {
         for (attributes in listOf(emptyMap(), mapOf(IdentityIssuer.FORWARD_ATTRIBUTE to "TRUE"))) {
             val outcome = evaluate(alice, attributes = attributes)
             outcome.proceed.assert().isTrue()
-            outcome.forward.assert().isEqualTo(mapOf(IdentityCodec.HEADER to null))
+            outcome.forward[IdentityCodec.HEADER].assert().isNull()
         }
     }
 
@@ -259,6 +259,30 @@ class IdentityForwardingTest {
         val outcome = evaluate(alice, issuer = tiny)
         outcome.status.assert().isEqualTo(500)
         outcome.proceed.assert().isFalse()
+    }
+
+    /** #1690: an identity no service would read back (here a credential without an id) is never written: a 500. */
+    @Test
+    fun `an identity the codec refuses to write fails the request closed`() {
+        val unnamed = AuthnResult.Authenticated(
+            AuthenticatedPrincipal(
+                PipelineFixtures.PRINCIPAL,
+                PipelineFixtures.TENANT,
+                MembershipSource.Claims(PipelineFixtures.claims("" to "clerk")),
+                emptyMap(),
+                credential.copy(id = ""),
+                breakGlass = true,
+                issuedAt = null,
+                apiKeyCredential = false,
+                app = null,
+                session = null,
+            ),
+            "token",
+        )
+        val outcome = evaluate(unnamed)
+        outcome.status.assert().isEqualTo(500)
+        outcome.proceed.assert().isFalse()
+        outcome.forward[IdentityCodec.HEADER].assert().isNull()
     }
 
     /**
@@ -350,7 +374,7 @@ class IdentityForwardingTest {
             PipelineFixtures.pipeline(PipelineFixtures.authenticator(alice)).evaluate(facts(routed))
         }
         outcome.proceed.assert().isTrue()
-        outcome.forward.assert().isEqualTo(mapOf(IdentityCodec.HEADER to null))
+        outcome.forward[IdentityCodec.HEADER].assert().isNull()
         val denied = runBlocking {
             PipelineFixtures.pipeline(
                 PipelineFixtures.authenticator(alice),
