@@ -1,0 +1,16 @@
+# Rule: CTL-39
+# Mutant: the diff no longer compares the limits: a revision that changes only them diffs as nothing, and a reviewer approves what the diff did not show
+# Tests: :control:test --tests me.ahoo.cosec.control.api.DiffMembersTest
+
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/api/DocumentReads.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/api/DocumentReads.kt
+index 4186aad5c..71ac68b4c 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/api/DocumentReads.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/api/DocumentReads.kt
+@@ -112,7 +112,6 @@ internal class DocumentReads(
+         val SECTIONS: List<Section> = listOf(
+             Section("catalog", { it.copy(catalog = null) }) { bare, of -> bare.copy(catalog = of.catalog) },
+             Section("boundary", { it.copy(boundary = null) }) { bare, of -> bare.copy(boundary = of.boundary) },
+-            Section("limits", { it.copy(limits = null) }) { bare, of -> bare.copy(limits = of.limits) },
+             Section("attributes", { it.copy(attributes = null) }) { bare, of -> bare.copy(attributes = of.attributes) },
+             Section(
+                 "rateLimits",

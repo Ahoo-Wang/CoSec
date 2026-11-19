@@ -31,10 +31,11 @@ data class DocumentDiff(
     val bindings: EntryChanges,
     val roles: EntryChanges,
     /**
-     * Whether anything besides the policies, bindings and roles differs: the catalog, the limits, the attributes, the boundary
-     * or the rate limits, compared by their whole content (#1205).
+     * The sections besides the policies, bindings and roles that differ, by their names in the document format and in its
+     * order: `catalog`, `boundary`, `limits`, `attributes`, `rateLimits`. Each is compared by its whole content (#1205),
+     * so the list says which section changed, not what in it.
      */
-    val sections: Boolean,
+    val sections: List<String>,
 )
 
 @InternalCoSecApi

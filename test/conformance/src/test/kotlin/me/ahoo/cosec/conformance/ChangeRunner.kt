@@ -144,7 +144,7 @@ import java.time.Instant
  *  operations also take { "putRateLimit": { ...a rule... } }, { "removeRateLimit": "id" }, { "setBoundary": "id" | null },
  *  { "putRole": { ...a role... } }, { "removeRole": "id" } and { "putCatalog": { ...a catalog... } | null }
  *  { "diff": { "document": "tenant:acme", "from": 1, "to": 2 } } is the diff of two revisions, as a line of what it lists:
- *  `diff policies=[+p] bindings=[+b,-c] roles=[~r] sections=false`
+ *  `diff policies=[+p] bindings=[+b,-c] roles=[~r] sections=[catalog]`
  * "expect": { "steps": ["CHECKED", "READY", "PUBLISHED"], "errors": { "c1": [] }, "heads": { "tenant:acme": 1 },
  *             "escalations": { "c1": ["NOT_COVERED"] }, "warnings": { "c1": ["OPERATION $.bindings"] } }
  * ```
@@ -426,7 +426,7 @@ object ChangeRunner : ScenarioRunner {
                 entries.added.map { "+$it" } + entries.removed.map { "-$it" } + entries.changed.map { "~$it" }
                 ).joinToString(",", "[", "]")
             return "diff policies=${line(found.policies)} bindings=${line(found.bindings)} " +
-                "roles=${line(found.roles)} sections=${found.sections}"
+                "roles=${line(found.roles)} sections=${found.sections.joinToString(",", "[", "]")}"
         }
 
         /** What happens around the control plane between steps: time passes, an instance vanishes, an outage. */

@@ -82,7 +82,7 @@ internal class DocumentReads(
                 before.roles.associate { it.id.value to EntryDigest.of(it) },
                 after.roles.associate { it.id.value to EntryDigest.of(it) },
             ),
-            sections(before) != sections(after),
+            SECTIONS.filter { CandidateDigest.of(it.alone(before)) != CandidateDigest.of(it.alone(after)) }.map { it.name },
         )
     }
 
@@ -97,15 +97,49 @@ internal class DocumentReads(
         after.keys.filter { it in before && before[it] != after[it] }.sorted(),
     )
 
-    /** The digest of [document]'s sections: the document encoded with its header fixed and no policies, bindings or roles. */
-    private fun sections(document: PolicyDocument): String = CandidateDigest.of(
-        document.copy(
-            revision = 1,
-            publishedAt = Instant.EPOCH,
-            policies = emptyList(),
-            bindings = emptyList(),
-            provenance = null,
-            roles = emptyList(),
+    internal companion object {
+        /** The members that say which document and revision it is, and how it came to be: never compared. */
+        val HEADER: Set<String> = setOf("kind", "owner", "revision", "publishedAt", "provenance")
+
+        /** The members the diff lists entry by entry. */
+        val ENTRIES: Set<String> = setOf("policies", "bindings", "roles")
+
+        /**
+         * Every other member of [PolicyDocument], each a section the diff names when it differs, in the document
+         * format's order, each compared by its whole content encoded alone (#1205). A member of a document is in
+         * exactly one of [HEADER], [ENTRIES] and these (`DiffMembersTest`), so one added later is never left uncompared.
+         */
+        val SECTIONS: List<Section> = listOf(
+            Section("catalog", { it.copy(catalog = null) }) { bare, of -> bare.copy(catalog = of.catalog) },
+            Section("boundary", { it.copy(boundary = null) }) { bare, of -> bare.copy(boundary = of.boundary) },
+            Section("limits", { it.copy(limits = null) }) { bare, of -> bare.copy(limits = of.limits) },
+            Section("attributes", { it.copy(attributes = null) }) { bare, of -> bare.copy(attributes = of.attributes) },
+            Section(
+                "rateLimits",
+                { it.copy(rateLimits = emptyList()) }
+            ) { bare, of -> bare.copy(rateLimits = of.rateLimits) },
         )
-    )
+
+        /** [document] with its header fixed and nothing in it: no entries, and every section cleared. */
+        private fun bare(document: PolicyDocument): PolicyDocument = SECTIONS.fold(
+            document.copy(
+                revision = 1,
+                publishedAt = Instant.EPOCH,
+                policies = emptyList(),
+                bindings = emptyList(),
+                provenance = null,
+                roles = emptyList(),
+            )
+        ) { bare, section -> section.clear(bare) }
+    }
+
+    /** A section of a document: [clear] takes it out of one, [take] puts [name]'s content of another into a bare one. */
+    internal class Section(
+        val name: String,
+        val clear: (PolicyDocument) -> PolicyDocument,
+        private val take: (PolicyDocument, PolicyDocument) -> PolicyDocument,
+    ) {
+        /** [document] with this section alone. */
+        fun alone(document: PolicyDocument): PolicyDocument = take(bare(document), document)
+    }
 }
