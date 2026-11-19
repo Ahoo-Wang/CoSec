@@ -82,6 +82,7 @@ class IdentityCodecSymmetryTest {
             valid.copy(tenant = surrogate) to json(tenant = "beta\\uD800"),
             valid.copy(app = surrogate) to json(app = "beta\\uD800"),
             valid.copy(issuedAt = Instant.parse("+10000-01-01T00:00:00Z")) to json(iat = 253_402_300_800L),
+            valid.copy(issuedAt = Instant.parse("1969-12-31T23:59:59Z")) to json(iat = -1L),
         )
         cases.forEach { (identity, written) ->
             encodeSays(identity).assert().isEqualTo(decodeSays(written))
@@ -127,6 +128,6 @@ class IdentityCodecSymmetryTest {
             accepted++
             IdentityCodec.decode(header).assert().isEqualTo(identity)
         }
-        (accepted > 0).assert().isTrue()
+        accepted.assert().isPositive()
     }
 }

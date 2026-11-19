@@ -346,9 +346,14 @@ read as anonymous:
 | `401` `token-expired` | The credential expired, or the identity was issued longer ago than [`cosec.pipeline.identity.max-age`](./configuration.md#pipeline) plus the skew. | Synchronize the clocks; a request that waits long between the gateway and the service needs a larger `max-age`. In a test without a gateway, a header made once and reused: make one per request ([`IdentityHeader`](../integration/web.md#services-behind-the-gateway)). |
 
 The response says only the problem, never why, in every environment. The reason is in the service's log, from the
-logger `me.ahoo.cosec.runtime.identity.IdentityGate`: `Request [<id>]: the forwarded identity is refused (<status>
-<problem>), <reason>.` at `WARN`, at most once a minute for each problem type so a flood of bad headers does not flood
-the log, and every one at `DEBUG`. `<reason>` is the field that failed, such as `The identity header is malformed:
+logger `me.ahoo.cosec.runtime.identity.IdentityGate`:
+
+```text
+Request [<id>]: the forwarded identity is refused (<status> <problem>), <reason>.
+```
+
+at `WARN`, at most once a minute for each problem type so a flood of bad headers does not flood the log, and every one
+at `DEBUG`. `<reason>` is the field that failed, such as `The identity header is malformed:
 $.rid is empty.`, or the time that is out of bounds. A service in gateway mode records no decision events and no
 audit, but it counts every refusal, also those the log does not print, in
 [`cosec.identity.refused{problem}`](./observability.md#metrics): a rise names the problem, and the log says why.
