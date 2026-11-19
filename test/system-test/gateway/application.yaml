@@ -1,0 +1,65 @@
+# The gateways' configuration in the system test, mounted over the image's config/ (compose.yaml). The image's own
+# src/dist/config/application.yaml, with the routes and probes of k8s/base/application.yaml, and the routes the scenarios
+# call. Nothing here shortens a documented bound.
+server:
+  port: 8080
+spring:
+  application:
+    name: cosec-gateway
+  web:
+    error:
+      whitelabel:
+        enabled: false
+  cloud:
+    # No discovery client in the image: lb://behind resolves through this list, as lb://cosec-auth does in k8s/base.
+    discovery:
+      client:
+        simple:
+          instances:
+            behind:
+              - uri: http://behind:8080
+            auth:
+              - uri: http://auth:8080
+    gateway:
+      server:
+        webflux:
+          routes:
+            # A registered service: it receives the verified identity (IDN-7). The path goes on as the client sent it,
+            # so the service echoes the path the gateway decided on.
+            - id: behind
+              uri: lb://behind
+              predicates:
+                - Path=/behind/**
+            # The login host's sign-in, refresh and logout. The pair travels in the body; the host decides for itself.
+            - id: auth
+              uri: lb://auth
+              predicates:
+                - Path=/auth/**
+            # The same service by its address, with no cosec-identity metadata: it receives no identity (IDN-7).
+            - id: plain
+              uri: http://behind:8080
+              predicates:
+                - Path=/plain/**
+cosec:
+  audit:
+    kafka:
+      enabled: false
+  authentication:
+    login:
+      enabled: false
+  jwt:
+    algorithm: hmac256
+    secret: ${COSEC_JWT_SECRET}
+  ip2region:
+    enabled: false
+management:
+  endpoint:
+    health:
+      probes:
+        enabled: true
+    gateway:
+      access: none
+  endpoints:
+    web:
+      exposure:
+        include: health
