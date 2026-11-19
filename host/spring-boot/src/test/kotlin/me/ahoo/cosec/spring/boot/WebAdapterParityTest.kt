@@ -368,7 +368,10 @@ class WebAdapterParityTest {
         ).also { it.requestPrincipal = requestPrincipal }
     }
 
-    private fun servlet(scenario: Scenario): Written {
+    private fun servlet(
+        scenario: Scenario,
+        filter: jakarta.servlet.Filter = PipelineServletFilter(gates.getValue(scenario.pipeline), contributors),
+    ): Written {
         val request = MockHttpServletRequest(scenario.method, scenario.path.substringBefore('?'))
         request.queryString = scenario.path.substringAfter('?', "").ifEmpty { null }
         request.remoteAddr = "127.0.0.1"
@@ -378,7 +381,6 @@ class WebAdapterParityTest {
         var proceeded: SecurityContext? = null
         var identity: List<String> = emptyList()
         var requestPrincipal: String? = null
-        val filter = PipelineServletFilter(gates.getValue(scenario.pipeline), contributors)
         filter.doFilter(request, response) { req, _ ->
             val handed = req as HttpServletRequest
             proceeded = handed.getSecurityContext()
@@ -554,6 +556,26 @@ class WebAdapterParityTest {
                 type = "too-many-requests"
             ),
         )
+    }
+
+    /**
+     * `PIP-29`: the filters a test puts in front of an application (`CoSecTestBindings.filter`) are the adapters
+     * themselves, so they answer every scenario as the adapters built with no contributors do: a test cannot drift from
+     * production in order, problem writing or request end.
+     */
+    @ParameterizedTest
+    @MethodSource("scenarios")
+    fun `the test entries answer as the adapters do`(scenario: Scenario) {
+        val gate = gates.getValue(scenario.pipeline)
+        val reactive = reactive(scenario) { exchange, record ->
+            PipelineWebFilter(gate).filter(exchange, WebFilterChain { record(it) })
+        }
+        val reactiveTest = reactive(scenario) { exchange, record ->
+            me.ahoo.cosec.webflux.testing.CoSecTestBindings.filter(gate).filter(exchange, WebFilterChain { record(it) })
+        }
+        reactiveTest.assert().isEqualTo(reactive)
+        servlet(scenario, me.ahoo.cosec.webmvc.testing.CoSecTestBindings.filter(gate))
+            .assert().isEqualTo(servlet(scenario, PipelineServletFilter(gate)))
     }
 
     @ParameterizedTest

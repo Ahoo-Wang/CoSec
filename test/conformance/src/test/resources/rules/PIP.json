@@ -373,6 +373,21 @@
         "webmvc:RequestPrincipalTest#an anonymous request carries none of CoSec's, and keeps another layer's as it was",
         "spring-boot:RealServerParityTest#an anonymous request has no request principal, on every server"
       ]
+    },
+    {
+      "id": "PIP-29",
+      "source": "RFC 0006 §7.6; issue #1679 (2026-11-19)",
+      "statement": "The kit's contexts are made by the pipeline: `PermittedRequest.forSubject` as the fixture's (an enforce-mode host's context, no credential, no forwarded identity), `withIdentity` by the identity gate from a `CoSec-Identity` header. A test binder (`CoSecTestBindings` of `cosec-webflux` and `cosec-webmvc`) binds only a context CoSec's pipeline made and refuses any other with an error naming what to use instead, so a test never runs as anonymous without saying so; its `filter` is the adapter itself and answers as the adapter does. A bound context whose request has ended is denied (`PIP-26`).",
+      "level": "build",
+      "pending": null,
+      "guards": [
+        "webmvc:TestingYourApplicationTest#a context made by hand is refused, never bound as anonymous",
+        "webmvc:TestingYourApplicationTest#a function that reads the holder, with a context the kit made",
+        "webflux:TestingYourApplicationTest#a context made by hand is refused, never bound as anonymous",
+        "testkit:TokenlessContextTest#forSubject is the fixture's context for the same principal, with no identity",
+        "testkit:TokenlessContextTest#withIdentity is what a service behind a gateway reads, the forwarded identity included",
+        "spring-boot:WebAdapterParityTest#the test entries answer as the adapters do"
+      ]
     }
   ]
 }

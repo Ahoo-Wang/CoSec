@@ -109,9 +109,11 @@ section above it:
   object sat under `SecurityContext.KEY`, so an application filter or a library that wrote its own was taken for an
   authenticated caller. Now anything else reads as no context: `null`, or the failure an unbound context is. Affected:
   code, test code above all, that binds a `SecurityContext` it made itself (a mock, an implementation of the
-  interface) under that key. Bind the context of a request the pipeline permitted instead: in a test,
-  `PipelineFixture.securityContext(fixture.request(...))` or `PermittedRequest` from `cosec-testkit`
-  ([Testing policies](../policies/testing.md)); a filter of your own that runs the pipeline binds
+  interface) under that key. In a test, use a context the pipeline made and let the adapter's test entry put it in
+  place ([Testing your application](../policies/testing.md#testing-your-application)): a handler test runs behind
+  CoSec's own filter, `CoSecTestBindings.filter(fixture.pipeline)` (`cosec-webflux`, `cosec-webmvc`), with a fixture
+  principal's `Authorization`; a unit test binds `PermittedRequest.forSubject(...)` (or `withIdentity`, `withToken`)
+  with `CoSecTestBindings.withSecurityContext` or `bind`. A filter of your own that runs the pipeline binds
   `outcome.security!!.securityContext`.
 - **Breaking: three shapes of a document that never did what they read no longer compile** (`DOC-9`, `DOC-10`,
   `DOC-11`). Each refuses a document whose statement already did not apply as written:
@@ -239,6 +241,13 @@ section above it:
   first. When tokens are verified against `RevocationReader.NONE`, the host logs a `WARN` that says a revoked token is
   accepted until it expires. When the token stores are missing, one startup message names every store that is
   missing, not the first.
+- **Testing an application** (#1679, `PIP-29`, nothing to change). `PermittedRequest.forSubject(subject, tenant, app,
+  space, roles)` makes a signed-in caller's context with no token and no documents, the same `PipelineFixture` makes;
+  `PermittedRequest.withIdentity(header)` makes the one a service behind a gateway reads. `CoSecTestBindings`
+  (`cosec-webflux`, `cosec-webmvc`, package `testing`) runs CoSec's own filter over a test pipeline, or binds a kit
+  context in the Reactor context, the exchange, the request or `SecurityContextHolder`, refusing a context made by
+  hand. `PipelineFixture.authorization(principal)` is a fixture principal's `Authorization` for a request a test builds
+  ([Testing your application](../policies/testing.md#testing-your-application)).
 
 ## From 8.0.0-beta.2 {#from-8-0-0-beta-2}
 

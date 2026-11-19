@@ -271,7 +271,8 @@ declared.
 
 For a request that proceeds, the adapter binds a `SecurityContext` (`me.ahoo.cosec.api.context`) built from the
 pipeline's outcome. A refused request never reaches your handler. Its `principal` is a `CoSecPrincipal`
-(`me.ahoo.cosec.api.principal`) and its `scope` a `SecurityScope` (`me.ahoo.cosec.api.context`).
+(`me.ahoo.cosec.api.principal`) and its `scope` a `SecurityScope` (`me.ahoo.cosec.api.context`). To give a handler
+under test such a context, see [Testing your application](../policies/testing.md#testing-your-application).
 
 | Member | Content |
 |---|---|
