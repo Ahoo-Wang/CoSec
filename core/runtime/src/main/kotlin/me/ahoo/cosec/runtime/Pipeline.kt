@@ -154,6 +154,10 @@ class Pipeline internal constructor(
     /**
      * The only entry point of the adapters. An external cancellation propagates unchanged and makes no outcome;
      * everything else, a defect included, becomes one. An [Error] propagates too: the host answers it (§7.4).
+     *
+     * A transport of the application's own that calls it closes the [Outcome] when the request completes
+     * (`evaluate(facts).use { … }`, or `close()` from the response's completion callback), which ends the request
+     * (`PIP-26`). CoSec's adapters end the requests they bind themselves.
      */
     @ExperimentalCoSecApi
     override suspend fun evaluate(facts: HttpFacts): Outcome {

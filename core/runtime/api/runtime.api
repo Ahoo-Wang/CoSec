@@ -385,7 +385,8 @@ public final class me/ahoo/cosec/runtime/http/HttpFacts {
 	public final fun getRouteApp ()Ljava/lang/Object;
 }
 
-public final class me/ahoo/cosec/runtime/http/Outcome {
+public final class me/ahoo/cosec/runtime/http/Outcome : java/lang/AutoCloseable {
+	public fun close ()V
 	public final fun getForward ()Ljava/util/Map;
 	public final fun getHeaders ()Ljava/util/Map;
 	public final fun getProblem ()Lme/ahoo/cosec/runtime/http/Problem;

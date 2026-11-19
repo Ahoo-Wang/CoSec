@@ -1,0 +1,17 @@
+# Rule: PIP-28
+# Mutant: isUserInRole delegates although CoSec set the principal, so it answers the roles of the user a filter in front signed in, for a request that is another principal's
+# Tests: :webmvc:test --tests me.ahoo.cosec.webmvc.RequestPrincipalTest
+
+diff --git a/edge/webmvc/src/main/kotlin/me/ahoo/cosec/webmvc/PermittedServletRequest.kt b/edge/webmvc/src/main/kotlin/me/ahoo/cosec/webmvc/PermittedServletRequest.kt
+index 7844b572..4eac1fe1 100644
+--- a/edge/webmvc/src/main/kotlin/me/ahoo/cosec/webmvc/PermittedServletRequest.kt
++++ b/edge/webmvc/src/main/kotlin/me/ahoo/cosec/webmvc/PermittedServletRequest.kt
+@@ -46,7 +46,7 @@ internal class PermittedServletRequest private constructor(
+ 
+     override fun getRemoteUser(): String? = if (principal != null) principal.id else super.getRemoteUser()
+ 
+-    override fun isUserInRole(role: String?): Boolean = principal == null && super.isUserInRole(role)
++    override fun isUserInRole(role: String?): Boolean = super.isUserInRole(role)
+ 
+     override fun getAuthType(): String? = if (principal != null) null else super.getAuthType()
+ 

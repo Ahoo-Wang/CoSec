@@ -729,7 +729,11 @@ the fixture is built. `Principal` says who a request is, as a token would: `tena
 `policies`, `app` and `attributes`; without one, a request is anonymous. It replaces the credential check only: the
 status codes, `SecurityContext` and decisions are the pipeline's. Close the fixture, usually one per test class.
 
-`of` and `load` also take `routes` and `listeners`. With a route map (`RouteMapCodec.load`), a request has your
+`of` and `load` also take `routes`, `listeners` and `rateLimiter`. Rate limit rules count in a `LocalRateLimiter` of
+the fixture's own by default, as on the starter, so a request over a limit is `429`; pass
+`LocalRateLimiter(clock = { now })` to cross a window in a test. A context from `securityContext` is in progress until
+`end(context)` ends it, as a host ends it when its response is complete; a test of code that checks after its response
+ends it first ([Checks in code](../integration/checks.md#how-a-check-relates-to-the-request-pipeline)). With a route map (`RouteMapCodec.load`), a request has your
 service's actions and resources, as on a host with `cosec.authorization.routes.location`; without one, its action is
 `http:<METHOD>` on its path. Listeners receive the events the pipeline makes: a `REQUIRED` one before `evaluate`
 returns, a `BEST_EFFORT` one by the time the fixture is closed. That is how a `DecisionListener` of your own is tested

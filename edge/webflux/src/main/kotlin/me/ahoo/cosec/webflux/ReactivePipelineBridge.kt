@@ -86,7 +86,12 @@ abstract class ReactivePipelineBridge(
         val security = checkNotNull(outcome.security) { "A proceeding outcome carries its security." }
         val securityContext = security.securityContext
         exchange.setSecurityContext(securityContext)
-        val authorized = exchange.mutate().principal(securityContext.principal.toMono()).build()
+        // The request's Principal is set for an authenticated caller only, as the servlet containers set theirs: Spring's
+        // idiom "a principal is present, so someone signed in" must not count every anonymous caller as one user (UA-8).
+        // The anonymous principal stays in the security context.
+        val principal = securityContext.principal
+        val authorized =
+            if (principal.authenticated) exchange.mutate().principal(principal.toMono()).build() else exchange
         // The request ends when the chain's Mono terminates: after a streamed body's last element is written, on an
         // error, or when the client goes away. From then on no check permits as it (PIP-26). Ended before the signal
         // goes on, so whoever sees the chain complete sees the request ended: `doOnTerminate` runs before passing on
