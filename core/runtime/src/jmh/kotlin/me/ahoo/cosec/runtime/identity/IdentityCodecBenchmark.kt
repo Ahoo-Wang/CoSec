@@ -10,7 +10,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-@file:OptIn(ExperimentalCoSecApi::class)
+
 @file:OptIn(InternalCoSecApi::class)
 
 package me.ahoo.cosec.runtime.identity
