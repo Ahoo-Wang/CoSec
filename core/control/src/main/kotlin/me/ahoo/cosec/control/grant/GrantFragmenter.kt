@@ -48,9 +48,20 @@ internal class GrantFragmenter(private val narrowing: GrantNarrowing, private va
             }
             policy.statements.indices.forEach { split(change.tenant, policy, it, Grantee.Bound(binding), fragments) }
         }
-        reresolved(snapshot, change, changed, fragments)
+        // Looked up once per binding, not once per policy and binding: a document of n of each is n, not n².
+        val changedSet = changed.toHashSet()
+        val bound = after.bindings.groupBy { it.policy }
+        reresolved(snapshot, change, changedSet, fragments)
         for (policy in after.policies) {
-            changedPolicy(snapshot, change, before.policy(policy.id), policy, changed, fragments)
+            changedPolicy(
+                snapshot,
+                change,
+                before.policy(policy.id),
+                policy,
+                bound[policy.id].orEmpty(),
+                changedSet,
+                fragments
+            )
         }
         return fragments
     }
@@ -63,7 +74,7 @@ internal class GrantFragmenter(private val narrowing: GrantNarrowing, private va
     private fun reresolved(
         snapshot: GrantSnapshot,
         change: GrantChange,
-        changed: List<Binding>,
+        changed: Set<Binding>,
         into: MutableList<GrantFragment>,
     ) {
         val after = change.candidate
@@ -114,12 +125,14 @@ internal class GrantFragmenter(private val narrowing: GrantNarrowing, private va
         change: GrantChange,
         previous: GrantPolicy?,
         policy: GrantPolicy,
-        changed: List<Binding>,
+        /** The candidate's bindings to [policy], in the candidate's order. */
+        boundTo: List<Binding>,
+        changed: Set<Binding>,
         into: MutableList<GrantFragment>,
     ) {
         val granted = granted(previous, policy)
-        val bound = change.candidate.bindings.filter { binding ->
-            binding.policy == policy.id && binding !in changed && binding.expiresAt.let { it == null || snapshot.now < it }
+        val bound = boundTo.filter { binding ->
+            binding !in changed && binding.expiresAt.let { it == null || snapshot.now < it }
         }
         for (binding in bound) {
             granted.forEach { split(change.tenant, policy, it, Grantee.Bound(binding), into) }

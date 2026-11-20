@@ -481,15 +481,27 @@ memory, on one machine (`DocumentBudgetMeasurement` in `core/control`, run by ha
 
 | Policies, statements, bindings | Stored | Compile | Propose (trust root) | Propose (tenant administrator) | Rebase | Publish |
 |---|---|---|---|---|---|---|
-| 1k, 2k, 1k | 275 KB | 3 ms | 68 ms | 76 ms | 68 ms | 62 ms |
-| 10k, 20k, 10k | 2.7 MB | 24 ms | 361 ms | 765 ms | 412 ms | 342 ms |
-| 30k, 60k, 30k | 8.3 MB | 51 ms | 1,005 ms | 4,484 ms | 1,286 ms | 922 ms |
-| 100k, 200k, 100k | 27.9 MB | 158 ms | 3,199 ms | 63,702 ms | 4,772 ms | 3,458 ms |
+| 1k, 2k, 1k | 275 KB | 8 ms | 99 ms | 89 ms | 97 ms | 96 ms |
+| 10k, 20k, 10k | 2.7 MB | 41 ms | 591 ms | 495 ms | 502 ms | 478 ms |
+| 30k, 60k, 30k | 8.3 MB | 59 ms | 1,124 ms | 1,403 ms | 1,480 ms | 1,166 ms |
+| 100k, 200k, 100k | 27.9 MB | 181 ms | 3,800 ms | 4,682 ms | 5,323 ms | 4,025 ms |
 
-Compiling, and what the trust root's change costs, grow with the document. A tenant administrator's change is also
-analysed for what it grants, and that grows with the square of the document: the 100k row took over a minute and did
-not fit a 512 MB heap. The default budgets sit at the 10k row. The 30k row is already over the 8 MB document cap, which
-the measurement raised.
+Every column grows with the document. A tenant administrator's change is also analysed for what it grants; until the
+analysis looked a candidate's bindings up by policy, that grew with the square of the document (3.5 s at 30k, 45 s at
+100k in the same run), and before the budgets a change of 100k did not fit a 512 MB heap. The default budgets sit at
+the 10k row. The 30k row is already over the 8 MB document cap, and the measurement raises it and lifts the budgets.
+
+What the budgets do not count grows with the document too, so the 8 MB document cap and the 50,000 bindings roles may
+derive bound it:
+
+| Document | Stored | Compile | Propose (trust root) | Propose (tenant administrator) | Rebase | Publish |
+|---|---|---|---|---|---|---|
+| Tenant: 50,000 roles, no permissions | 2.2 MB | 5 ms | 751 ms | 880 ms | 954 ms | 748 ms |
+| Tenant: 150,000 roles, no permissions | 6.8 MB | 11 ms | 2,186 ms | 2,689 ms | 3,129 ms | 2,239 ms |
+| Tenant: 500 roles × 100 permissions (50,000 derived) | 309 KB | 14 ms | 72 ms | 126 ms | 37 ms | 84 ms |
+| Tenant: 1 role × 50,000 permissions | 428 KB | 16 ms | 100 ms | 197 ms | 24 ms | 135 ms |
+| App: a catalog of 150,000 permissions | 5.8 MB | 148 ms | 317 ms | | 504 ms | 383 ms |
+| App: a catalog of 50,000 and a system role `*` | 1.9 MB | 73 ms | 198 ms | | 81 ms | 150 ms |
 
 ### Measuring
 
