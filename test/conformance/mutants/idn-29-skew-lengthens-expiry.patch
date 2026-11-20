@@ -3,16 +3,16 @@
 # Tests: :jwt:test --tests me.ahoo.cosec.jwt.IssuerSkewTest
 
 diff --git a/extensions/jwt/src/main/kotlin/me/ahoo/cosec/jwt/JwtTokenVerifier.kt b/extensions/jwt/src/main/kotlin/me/ahoo/cosec/jwt/JwtTokenVerifier.kt
-index 7d2cbe39..5b777268 100644
+index 76173296f..f73d0bc3a 100644
 --- a/extensions/jwt/src/main/kotlin/me/ahoo/cosec/jwt/JwtTokenVerifier.kt
 +++ b/extensions/jwt/src/main/kotlin/me/ahoo/cosec/jwt/JwtTokenVerifier.kt
-@@ -70,8 +70,7 @@ class JwtTokenVerifier(
-     // acceptIssuedAt and acceptNotBefore loosen only `iat` and `nbf`; acceptLeeway would loosen `exp` too.
-     private val jwtVerifier: JWTVerifier = JWT.require(algorithm)
-         .withClaimPresence("exp")
--        .acceptIssuedAt(skewSeconds)
--        .acceptNotBefore(skewSeconds)
-+        .acceptLeeway(skewSeconds)
-         .build()
+@@ -79,8 +79,7 @@ class JwtTokenVerifier @InternalCoSecApi constructor(
+     private val jwtVerifier: JWTVerifier = (
+         JWT.require(algorithm)
+             .withClaimPresence("exp")
+-            .acceptIssuedAt(skewSeconds)
+-            .acceptNotBefore(skewSeconds) as com.auth0.jwt.JWTVerifier.BaseVerification
++            .acceptLeeway(skewSeconds) as com.auth0.jwt.JWTVerifier.BaseVerification
+         ).build(clock)
  
-     @Suppress("TooGenericExceptionCaught")
+     /**
