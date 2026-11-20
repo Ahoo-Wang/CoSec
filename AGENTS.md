@@ -147,7 +147,8 @@ the adapters, snapshots or the control plane. The parts that take several files 
   never reads what a document grants; `kafka` reaches into `control` only through the change listener port;
   opt-ins to `InternalCoSecApi` only in CoSec's own Kotlin sources, so never in a doc sample),
   `JacksonSignatureTest` (no Jackson type in a public signature of `api/` or `core/`, no Reactor type in one of
-  `cosec-cocache`), `SpiMarkerTest` (`@CoSecSpi` on every implementable public interface of `cosec-spi` and every
+  `cosec-cocache`, no JWT-library type in one of `cosec-jwt`, which names its key with `JwtSigning`),
+  `SpiMarkerTest` (`@CoSecSpi` on every implementable public interface of `cosec-spi` and every
   extension point `wiki/architecture/extending.md` lists, and on nothing else), `ApiVariantTest` (a library's Gradle API
   variant, usage `java-api`, carries the CoSec module whose type a public class extends or implements, and Jackson
   where a public signature names it: a consumer cannot compile against the class otherwise), `PublishedMetadataTest`
@@ -171,7 +172,9 @@ the adapters, snapshots or the control plane. The parts that take several files 
   - `cosec-model` (`core/model/`) and `cosec-engine` (`core/engine/`) depend on the Kotlin standard library and
     the `cosec-annotations` markers only: `EnginePurityTest` and `DependencyRulesTest` fail otherwise, and the root
     build leaves out the SLF4J default. The model holds ids, bindings, memberships, the condition AST, `ScopeResolver` and `Decision`; the
-    engine holds the compiler, the indexes and the evaluator (`Evaluator`, behind `CoSecEngine`).
+    engine holds the compiler, the indexes and the evaluator (`Evaluator`, behind `CoSecEngine`). One rule says
+    which id can own a stored document, a tenant's or an app's: `Identifiers.isDocumentOwner`;
+    `ScopeResolver.isValidAppId` and `SnapshotKey.{App,Tenant}`'s checks delegate to it.
   - `cosec-spi` (`core/spi/`, `me.ahoo.cosec.spi.*`) holds the ports whose signatures need only the model and the
     contracts, with their values and in-memory implementations: `snapshot` (`SnapshotDocumentStore`, `SnapshotRead`,
     `SnapshotKey`, `InMemorySnapshotDocumentStore`), `membership`, `token` (`TokenVerifier`, `RevocationReader`,
@@ -322,6 +325,10 @@ lives) are in [`wiki/AGENTS.md`](wiki/AGENTS.md).
 - Kotlin with `-Xjsr305=strict`. Data-plane SPIs are `suspend` functions; `Mono<T>` appears only at the WebFlux and
   Gateway bridges and in their convenience extensions.
 - Comments explain *why*, only where it isn't obvious.
+- A value an application reads and never makes (`Decision` with its `Cause` and `Obligation` cases, `ViewVersion`,
+  `RateLimitResult`, `VerifiedToken`, `ApiKey`) is a plain final class with `equals`, `hashCode` and `toString`
+  written out: no `copy`, no `componentN`, so a field can be added without breaking a caller (RFC 0010 C4). A public
+  data class is one that will not grow, listed with its reason in `PublicApiStabilityTest.REVIEWED_VALUES`.
 - Structure (RFC 0013 §8.1): a main source file has at most 400 lines and one non-private top-level type, or one
   family (a record and the parts only it is made of; a port and the values its own signature carries; a type and the
   exception or enum only it uses; a sealed type and its subtypes). detekt reports at its threshold: a class, object or
@@ -347,4 +354,6 @@ lives) are in [`wiki/AGENTS.md`](wiki/AGENTS.md).
 - ⚠️ Ask first before changing SPI interfaces (`Authenticator`, `MembershipProvider`, `AttributeProvider`,
   `DecisionListener`, `RateLimiter`, `SnapshotDocumentStore`, `TokenStore`, …), public `cosec-api` contracts, the
   document format, or dependency versions. Downstream applications implement or produce them.
+  `SnapshotDocumentStore` is `@ExperimentalCoSecApi` in 8.0 (its shape follows its one backend, and 8.1 may add a
+  whole-store version and a batched conditional read): changing it still needs the word.
 - 🚫 Never publish `cosec-gateway-server`; it is an application, not a library.
