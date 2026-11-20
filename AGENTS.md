@@ -51,10 +51,14 @@ gh workflow run system-test.yml --ref main -f ref=<sha>   # the system test on a
   runner as same-job head/base ratios (see `scripts/jmh-ab/README.md`). Use it as a first signal for routine changes.
   `gh workflow run jmh-v7-v8.yml` compares 7.x (`SimpleAuthorizationBenchmark`, `SecurityPipelineBenchmark`) with
   8.0 (`EngineAuthorizationBenchmark`, `PipelineBenchmark`) on one runner.
-- `schema/*.schema.json` is generated from the document format descriptors (`DocumentFormats` in `cosec-document`,
-  `document/format/`): `./gradlew :document:generateSchemas` writes it, `verifySchemas` (part of `check`)
-  fails when it is stale, and `SchemaConformanceTest` fails when a descriptor and its codec disagree. Every PR that
-  changes a document format changes the descriptor.
+- `schema/<line>/*.schema.json` is generated from the document format descriptors (`DocumentFormats` in
+  `cosec-document`, `document/format/`), `<line>` being `DocumentFormats.SCHEMA_LINE`, the release line (`8.0`):
+  `./gradlew :document:generateSchemas` writes it, `verifySchemas` (part of `check`) fails when it is stale,
+  `SchemaConformanceTest` fails when a descriptor and its codec disagree, and `SchemaLineTest` holds the line to the
+  project's version. Every PR that changes a document format changes the descriptor. The site serves `schema/` at
+  `https://cosec.ahoo.me/schema/<line>/`, which is each file's `$id`; a released line's directory is never rewritten.
+  Moving `main` to the next line: set `SCHEMA_LINE`, run `generateSchemas`, commit the new directory, leave the old
+  one.
 - Every published library module (the root build's `abiProjects`: `libraryProjects` without `cosec-migrate`, whose
   contract is the command line) keeps its public ABI in `api/<project>.api`, and its `check` runs `checkKotlinAbi`
   (RFC 0011 D4). **A failing ABI check means a public signature changed.** If that was
@@ -89,7 +93,7 @@ gh workflow run system-test.yml --ref main -f ref=<sha>   # the system test on a
 - Codecov requires ≥ 80 % coverage on changed lines.
 - The samples of the wiki's `scenarios/` pages are files under `wiki/examples/<scenario>/`, included by both languages.
   `:conformance:test` (`DocumentationExamplesTest`) compiles their documents, runs their scenarios, decodes their change
-  bodies and loads their route maps, and `SchemaConformanceTest` checks the documents against `schema/`: change a
+  bodies and loads their route maps, and `SchemaConformanceTest` checks the documents against `schema/<line>/`: change a
   sample and its page together, and write a claim about a decision as a scenario file.
 - Docs (`wiki/`, VitePress, en + zh), run from `wiki/`: `pnpm install`, then `pnpm check:mermaid`
   (needs Chrome), `pnpm check:docs` (also fails when `wiki/`, `skills/`, the READMEs, `llms.txt`, `SECURITY.md` or
@@ -177,7 +181,7 @@ the adapters, snapshots or the control plane. The parts that take several files 
     (`DecisionListener`, `RequestGate`, `CandidateSource` in `runtime`; `ControlStore`, `ChangeListener` in `control`).
   - `cosec-document` (`core/document/`, `me.ahoo.cosec.document`) holds the formats CoSec stores and exchanges: the
     policy documents with their codec, compiler and `RoleExpansion` (`document/`), the format descriptors that generate
-    `schema/` (`document/format/`), route maps (`document/route/`), the `CoSec-Identity` codec (`document/identity/`), the shadow window's codec
+    `schema/<line>/` (`document/format/`), route maps (`document/route/`), the `CoSec-Identity` codec (`document/identity/`), the shadow window's codec
     (`document/shadow/`),
     and `CoSecJson.mapper` (`document/json/`, `@InternalCoSecApi`), the one Jackson mapper (`JacksonSignatureTest`
     keeps Jackson out of public signatures). It depends on `engine`, `spi` and Jackson only (`DependencyRulesTest`),
