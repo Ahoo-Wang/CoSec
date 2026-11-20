@@ -591,6 +591,12 @@ back-references of 8.0.0-beta.4 or earlier, one value per policy, which this ver
 them into sets, never replaces a set, and removes the old document list last (`MIG-4`). Data-plane instances are not
 affected.
 
+When `GET /changes` answers `503` and the reclaim pass logs `The open-change sets are not kept` at `WARN`, revisions
+are not reclaimed: the store still holds the open-change list of 8.0.0-beta.4 or earlier, or an older control plane
+wrote it again, and the open-change sets are not trusted until `cosec-migrate repair-references` lists every change of
+it and removes it (`CTL-54`). Stop every older control plane and run the command; a `FAILED change [<id>] does not read`
+line names a change record to remove or fix before the next run.
+
 A shadow window that stays blocked has a `CANDIDATE_ERROR`: one instance cannot compile the candidate, usually because
 it reads an `ext.*` attribute whose provider runs on the control host but not on that instance. Providers and their
 declared types must match on every instance and the control host; the change is never published while blocked.

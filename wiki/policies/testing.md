@@ -67,6 +67,7 @@ Three built-in policies can be bound to operators: `cosec:platform-admin` (every
 | `GET /documents/{key}/revisions/{revision}/propagation` | How many recently reporting instances have installed that revision. |
 | `POST /documents/{key}:apply`, `POST /documents/{key}:rollback` | Propose a change from a whole document, or back to an old revision. |
 | `POST /changes`, `GET /changes/{id}` | Propose a change; read one. |
+| `GET /changes?document=&state=&after=&limit=` | The open changes of a document, of a state, or of both ([Finding open changes](#finding-open-changes)). |
 | `POST /changes/{id}:rebase`, `:shadow`, `:skip-shadow`, `:approve`, `:reject`, `:abandon`, `:publish` | Move a change on. |
 | `POST /break-glass`, `POST /break-glass/{change}:approve`, `DELETE /break-glass/{bindingId}?reason=` | Request break-glass, approve a request, revoke a binding ([Security model](../guide/security-model.md#break-glass)). A revoke answers `200` only once the binding no longer grants, `404` when the platform document has no binding of that id, and `409` otherwise, an ordinary binding of that id included ([Taking a busy slot](#taking-a-busy-slot)). |
 | `POST /simulate`, `POST /explain`, `POST /analyze` | Decide or analyze without changing anything. |
@@ -277,13 +278,47 @@ crash between the two writes, or a candidate lost since): the maintenance pass f
 change event, and its author stages it again. The window is not continued, since the instances sampled nothing while
 the candidate was gone. A change that is not finished expires
 `cosec.control.changes.expire-after` (default 7 days) after it was proposed: it is `EXPIRED` from the first time it is
-read after that, and the control plane's maintenance pass reads every open change each
-`cosec.control.shadow.check-interval` (default 1 minute). Its author can `:rebase` a `CONFLICTED`,
+read after that: the control plane reads each document's open changes every `cosec.control.revisions.reclaim-interval`
+(default 1 hour), and the `SHADOWING` ones every `cosec.control.shadow.check-interval` (default 1 minute). Its author can `:rebase` a `CONFLICTED`,
 `DRAFT` or `CHECKED` change onto the current revision, which runs every check again and drops earlier approvals and
 shadow evidence. The author, or anyone with `cosec:publish`, can `:abandon` it; a change that sets a tenant's boundary
 only a platform principal rejects or abandons, and a revoke of a break-glass binding that still grants only its author
 abandons (`BRK-10`). Every abandon is recorded as an `ABANDONED` change event whose note names the change's author;
 abandoning a break-glass change needs a REQUIRED change listener, which records it first (`503` without one).
+
+### Finding open changes {#finding-open-changes}
+
+`GET /changes` lists the changes that are not finished: `document=<key>` those of one document, `state=<STATE>` those in
+one state that is not final (`DRAFT`, `CHECKED`, `SHADOWING`, `AWAITING_APPROVAL`, `READY`, `CONFLICTED`), or both. It
+needs one of the two; `limit` is 1 to 200 (default 50), and `after` is the `next` of the page before, absent after the
+last page.
+
+```json
+{
+  "changes": [
+    {
+      "id": "0SVoMJp7Q4G00",
+      "document": "tenant:acme",
+      "state": "CHECKED",
+      "kind": "PUBLISH",
+      "author": { "tenant": "acme", "principal": "alice" },
+      "note": "Let auditors read orders",
+      "createdAt": "2026-11-20T09:00:00Z",
+      "updatedAt": "2026-11-20T09:00:02Z"
+    }
+  ],
+  "next": null
+}
+```
+
+Each entry is a summary: read the change itself with `GET /changes/{id}`. A change whose stored record does not read is
+listed with its `id`, its `document` and the state `UNREADABLE`, never left out. A listing shows a change only if
+`GET /changes/{id}` would show it to you: changes of your own tenant's documents (any of them for a platform
+principal) that you wrote or whose document you may read (`cosec:read`). What it leaves out it does not tell: a page
+holds what you may see, and `next` is there only when more of it follows (`CTL-55`).
+
+The open changes are kept in sets of their own ([Storage](../operations/storage.md#redis-keys)). On a store an earlier
+preview wrote, the listing answers `503` until `cosec-migrate repair-references` has converted it (`CTL-54`).
 
 ## Trying changes in shadow mode
 

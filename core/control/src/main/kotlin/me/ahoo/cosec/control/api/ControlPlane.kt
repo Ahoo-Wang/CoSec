@@ -21,6 +21,7 @@ import me.ahoo.cosec.control.authz.Operator
 import me.ahoo.cosec.control.change.ApplyMode
 import me.ahoo.cosec.control.change.ChangeId
 import me.ahoo.cosec.control.change.ChangeRequest
+import me.ahoo.cosec.control.change.ChangeState
 import me.ahoo.cosec.control.change.Confirmation
 import me.ahoo.cosec.control.change.Operation
 import me.ahoo.cosec.control.change.Propagation
@@ -91,6 +92,15 @@ interface ControlPlane {
     ): ChangeRequest
 
     suspend fun get(operator: Operator, change: ChangeId): ChangeRequest
+
+    /** `GET /changes` (R2C-4, `CTL-55`): the open changes of [document], or in [state], that [operator] may see. */
+    suspend fun changes(
+        operator: Operator,
+        document: SnapshotKey?,
+        state: ChangeState?,
+        after: String?,
+        limit: Int,
+    ): me.ahoo.cosec.control.store.ChangePage
 
     val breakGlass: BreakGlass
 

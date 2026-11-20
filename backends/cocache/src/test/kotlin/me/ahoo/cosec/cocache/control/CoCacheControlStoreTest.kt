@@ -99,6 +99,7 @@ class CoCacheControlStoreTest {
             node.runtime.create(ControlCacheSpecs.referenceIndex(node.keyPrefix)),
             node.runtime.create(ControlCacheSpecs.documentSet(node.keyPrefix)),
             node.runtime.create(ControlCacheSpecs.stagedSet(node.keyPrefix)),
+            node.runtime.create(ControlCacheSpecs.changeSet(node.keyPrefix)),
         ),
         leases = node.runtime.create(ControlCacheSpecs.lease(node.keyPrefix)),
         changes = changes,
@@ -267,60 +268,78 @@ class CoCacheControlStoreTest {
                     )
                 ).put(ChangeId("c1"), written.encodeToByteArray())
             }
-            formatError { store.openChanges() }
+            formatError { store.allOpenChanges() }
             formatError { store.change(ChangeId("c1")) }
         }
     }
 
     /**
-     * R2C-2: a terminal change whose removal from the open list fails is still written; the next read of the open changes,
-     * the maintenance pass's, drops it from the list.
+     * R2C-2, CTL-54: members a write left behind (a removal that failed after a terminal write) are dropped by the next
+     * read of the sets, the maintenance pass's: the sets stay a superset, and what they hold too much is made up.
      */
     @Test
-    fun `a failed removal from the open list does not fail the terminal write, and the next read makes it up`() =
-        runBlocking<Unit> {
-            SnapshotNode(InMemoryBackend(), newKeyPrefix()).use { node ->
-                val real = node.runtime.create(ControlCacheSpecs.list(node.keyPrefix))
-                var failing = false
-                val lists = object : Store<String, Map<String, Instant>> by real {
-                    override fun async(): AsyncStore<String, Map<String, Instant>> =
-                        object : AsyncStore<String, Map<String, Instant>> by real.async() {
-                            override fun putIfMatch(
-                                key: String,
-                                expected: Digest?,
-                                value: Map<String, Instant>,
-                            ): CompletableFuture<ConditionalPut> = if (failing) {
-                                CompletableFuture.failedFuture(
-                                    CacheWriteException(
-                                        name,
-                                        "putIfMatch",
-                                        IllegalStateException("down"),
-                                        outcomeUnknown = false
-                                    )
-                                )
-                            } else {
-                                real.async().putIfMatch(key, expected, value)
-                            }
-                        }
-                }
-                val store = store(node, lists = lists)
+    fun `members a write left behind are dropped by the next read`() = runBlocking<Unit> {
+        val backend = InMemoryBackend()
+        val keyPrefix = newKeyPrefix()
+        SnapshotNode(backend, keyPrefix).use { node ->
+            SnapshotNode(backend, keyPrefix).use { other ->
+                val store = store(node)
+                val raw = other.runtime.create(ControlCacheSpecs.changeSet(other.keyPrefix))
                 val open = change("c1", ChangeState.DRAFT)
                 store.putChange(null, open).assert().isTrue()
                 val digest = store.change(ChangeId("c1"))!!.digest
-                failing = true
-                store.putChange(digest, open.copy(state = ChangeState.ABANDONED)).assert().isTrue()
-                real.get("open-changes")!!.keys.assert().containsExactly("c1")
-                failing = false
-                store.openChanges().assert().isEmpty()
-                real.get("open-changes")!!.keys.assert().isEmpty()
+                store.putChange(digest, open.copy(state = ChangeState.ABANDONED), ChangeState.DRAFT).assert().isTrue()
+                // As a removal that failed after the terminal write would leave them.
+                raw.suspending().add("doc:$key", listOf("c1"))
+                raw.suspending().add("state:DRAFT", listOf("$key#c1"))
+                store.allOpenChanges().assert().isEmpty()
+                store.openChanges(key).assert().isEmpty()
+                raw.suspending().get("state:DRAFT").assert().isEmpty()
+                raw.suspending().get("doc:$key").assert().isEmpty()
             }
         }
+    }
+
+    /**
+     * CTL-54: the open-change sets are trusted only once kept and while no list of the format before 8.0.0-beta.5 is
+     * there, whatever members they hold: a control plane keeps them only where there is no old list, and an older one
+     * that writes the old list again puts the store back to not kept.
+     */
+    @Test
+    fun `the open-change sets are not kept while the old list is there, whatever they hold`() = runBlocking<Unit> {
+        SnapshotNode(InMemoryBackend(), newKeyPrefix()).use { node ->
+            val lists = node.runtime.create(ControlCacheSpecs.list(node.keyPrefix))
+            val store = store(node, lists = lists)
+            lists.put("open-changes", mapOf("c0" to Instant.EPOCH))
+            store.putChange(null, change("c1", ChangeState.DRAFT)).assert().isTrue()
+            store.keepOpenChanges()
+            store.openChangesKept().assert().isFalse()
+            // The conversion lists what the old list names, keeps the sets and removes the old list.
+            store.legacyOpenChanges().assert().containsExactly("c0")
+            store.keepConvertedOpenChanges()
+            store.openChangesKept().assert().isTrue()
+            store.legacyOpenChanges().assert().isNull()
+            // An older control plane writes the old list again: not kept, though the marker is there.
+            lists.put("open-changes", mapOf("c2" to Instant.EPOCH))
+            store.openChangesKept().assert().isFalse()
+        }
+    }
+
+    /** CTL-54: a new store, with no old list, is kept from the control plane's first keep. */
+    @Test
+    fun `a new store is kept from the first keep`() = runBlocking<Unit> {
+        SnapshotNode(InMemoryBackend(), newKeyPrefix()).use { node ->
+            val store = store(node)
+            store.openChangesKept().assert().isFalse()
+            store.keepOpenChanges()
+            store.openChangesKept().assert().isTrue()
+        }
+    }
 
     @Test
     fun `indexed documents and open changes are listed, terminal ones are not`() = runBlocking<Unit> {
         SnapshotNode(InMemoryBackend(), newKeyPrefix()).use { node ->
-            val lists = node.runtime.create(ControlCacheSpecs.list(node.keyPrefix))
-            val store = store(node, lists = lists)
+            val store = store(node)
             store.documents().assert().isEmpty()
             store.putIndex(key, null, RevisionIndex()).assert().isTrue()
             store.documents().assert().containsExactly(key)
@@ -328,16 +347,12 @@ class CoCacheControlStoreTest {
             val open = change("c1", ChangeState.DRAFT)
             store.putChange(null, open).assert().isTrue()
             store.putChange(null, change("c2", ChangeState.DRAFT)).assert().isTrue()
-            store.openChanges().map { it.id }.assert().containsExactlyInAnyOrder(ChangeId("c1"), ChangeId("c2"))
+            store.allOpenChanges().map { it.id }.assert().containsExactlyInAnyOrder(ChangeId("c1"), ChangeId("c2"))
             val digest = store.change(ChangeId("c1"))!!.digest
-            store.putChange(digest, open.copy(state = ChangeState.ABANDONED)).assert().isTrue()
-            store.openChanges().map { it.id }.assert().containsExactly(ChangeId("c2"))
+            store.putChange(digest, open.copy(state = ChangeState.ABANDONED), ChangeState.DRAFT).assert().isTrue()
+            store.allOpenChanges().map { it.id }.assert().containsExactly(ChangeId("c2"))
 
-            // A removal lost after the terminal write: the id is dropped the next time the list is read.
-            val listed = lists.get("open-changes")!!
-            lists.put("open-changes", listed + ("c1" to Instant.EPOCH))
-            store.openChanges().map { it.id }.assert().containsExactly(ChangeId("c2"))
-            lists.get("open-changes")!!.keys.assert().containsExactly("c2")
+            store.openChanges(key).map { it.id }.assert().containsExactly(ChangeId("c2"))
         }
     }
 
@@ -371,9 +386,11 @@ class CoCacheControlStoreTest {
                 lockout = LockoutCheck.UNCHECKED,
             )
             val maintenance = ControlMaintenance(store, revisions, changes, Duration.ofMinutes(1))
+            store.putIndex(key, null, RevisionIndex()).assert().isTrue()
             reads.clear()
 
-            maintenance.closeShadowWindows().assert().isEmpty()
+            // Reclamation lists each document's open changes once (R2C-2), and reads each of them once.
+            maintenance.reclaim()
 
             reads.keys.assert().hasSize(OPEN_CHANGES)
             reads.values.assert().allMatch { it == 1 }
@@ -466,17 +483,18 @@ class CoCacheControlStoreTest {
                 assertThrownBy<ControlStoreException> {
                     runBlocking { writer.putChange(null, change("c1", ChangeState.DRAFT)) }
                 }
-                val lists = reading.runtime.create(ControlCacheSpecs.list(reading.keyPrefix))
-                val reader = store(reading, lists = lists, clock = clock)
+                val reader = store(reading, clock = clock)
+                val raw = CacheRuntime.builder().backend(backend).build()
+                    .create(ControlCacheSpecs.changeSet(keyPrefix))
                 // c1 is listed and missing: it may be being written, so it is not dropped yet (and there is no change).
-                reader.openChanges().assert().isEmpty()
-                lists.get("open-changes")!!.keys.assert().containsExactly("c1")
+                reader.openChanges(key).assert().isEmpty()
+                raw.suspending().get("doc:$key").assert().containsExactly("c1")
                 clock.now = clock.now.plus(Duration.ofMinutes(59))
-                reader.openChanges().assert().isEmpty()
-                lists.get("open-changes")!!.keys.assert().containsExactly("c1")
+                reader.openChanges(key).assert().isEmpty()
+                raw.suspending().get("doc:$key").assert().containsExactly("c1")
                 clock.now = clock.now.plus(Duration.ofMinutes(2))
-                reader.openChanges().assert().isEmpty()
-                lists.get("open-changes")!!.assert().isEmpty()
+                reader.openChanges(key).assert().isEmpty()
+                raw.suspending().get("doc:$key").assert().isEmpty()
             }
         }
     }
@@ -538,6 +556,7 @@ class CoCacheControlStoreTest {
                     node.runtime.create(ControlCacheSpecs.referenceIndex(node.keyPrefix)),
                     node.runtime.create(ControlCacheSpecs.documentSet(node.keyPrefix)),
                     node.runtime.create(ControlCacheSpecs.stagedSet(node.keyPrefix)),
+                    node.runtime.create(ControlCacheSpecs.changeSet(node.keyPrefix)),
                 ),
                 node.runtime.create(ControlCacheSpecs.lease(node.keyPrefix)),
                 node.runtime.create(ControlCacheSpecs.changeRequest(node.keyPrefix)),
@@ -587,6 +606,7 @@ class CoCacheControlStoreTest {
                     node.runtime.create(ControlCacheSpecs.referenceIndex(node.keyPrefix)),
                     node.runtime.create(ControlCacheSpecs.documentSet(node.keyPrefix)),
                     node.runtime.create(ControlCacheSpecs.stagedSet(node.keyPrefix)),
+                    node.runtime.create(ControlCacheSpecs.changeSet(node.keyPrefix)),
                 ),
                 node.runtime.create(ControlCacheSpecs.lease(node.keyPrefix)),
                 node.runtime.create(ControlCacheSpecs.changeRequest(node.keyPrefix)),
