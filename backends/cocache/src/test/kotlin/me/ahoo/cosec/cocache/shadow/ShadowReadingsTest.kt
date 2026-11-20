@@ -96,8 +96,13 @@ class ShadowReadingsTest {
             // The window's reporters read; each report read fails as a store that does not answer does.
             val down = object : Store<String, ShadowReport> by reports {
                 override fun async(): AsyncStore<String, ShadowReport> = object : AsyncStore<String, ShadowReport> by reports.async() {
-                    override fun getIfChanged(key: String, known: Digest?): CompletableFuture<ConditionalGet<ShadowReport>> =
-                        CompletableFuture.failedFuture(CacheReadException(name, "getIfChanged", IllegalStateException("timeout")))
+                    override fun getIfChanged(
+                        key: String,
+                        known: Digest?
+                    ): CompletableFuture<ConditionalGet<ShadowReport>> =
+                        CompletableFuture.failedFuture(
+                            CacheReadException(name, "getIfChanged", IllegalStateException("timeout"))
+                        )
                 }
             }
             val sink = CoCacheShadowReports(

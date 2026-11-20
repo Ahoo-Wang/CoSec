@@ -148,6 +148,10 @@ Which preview of the library may run behind which preview of the gateway image: 
     once an hour. The pass looks first at the windows it looked at longest ago, and a pass its interval cuts short logs
     `looked at <k> of <n> windows`.
   - `ControlMaintenance` takes a `Clock` (last parameter, default the system clock).
+  - `ShadowReportReader` has `readings(window)`, answering `ShadowReadings`: the reports that read and the instances
+    whose listed report cannot be read, which the window treats as vanished. `CoCacheShadowReports` overrides it. A
+    reader of your own may too ([Extending](../architecture/extending.md#control-store)); without it, `readings` reads
+    `reports` and throws where it throws, as before.
 - **Gateway mode states the network boundary it trusts, and the gateway forwards the method it decided** (`STA-7`,
   `STA-6`, `PIP-31`). Affected: every service in `cosec.pipeline.mode=gateway`, and every gateway.
   - A service in `gateway` mode believes any `CoSec-Identity` header, which carries no signature, so the network is its
