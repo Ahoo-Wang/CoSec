@@ -28,10 +28,12 @@ import me.ahoo.cosec.document.json.CoSecJson
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 
 /**
- * The referrers of one policy as a JSON object of their encodings, sorted, each with the revision of it that last
- * indexed the reference (#1207): `{"tenant:acme": 3}`. Equal referrers have equal bytes and digests.
+ * The back-references of one policy as stores before 8.0.0-beta.5 kept them: one value, a JSON object of the referrers'
+ * encodings, sorted, each with the revision of it that last indexed the reference (#1207): `{"tenant:acme": 3}`. Only
+ * `cosec-migrate repair-references` reads it, to convert each such value into a set ([ReferrerMemberCodec]).
  */
-internal object ReferrersCodec : Codec<Map<SnapshotKey, Long>> {
+@InternalCoSecApi
+object LegacyReferrersCodec : Codec<Map<SnapshotKey, Long>> {
     private const val WHAT = "back-reference set"
 
     override fun encode(value: Map<SnapshotKey, Long>): ByteArray {

@@ -16,11 +16,13 @@
 package me.ahoo.cosec.cocache.control
 
 import me.ahoo.cocache.core.KeyEncoder
+import me.ahoo.cocache.core.SetStoreSpec
 import me.ahoo.cocache.core.StoreSpec
 import me.ahoo.cocache.core.codec.StringCodec
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.cocache.CoSecCacheSpecs
+import me.ahoo.cosec.cocache.CoSecCacheSpecs.setOfRecord
 import me.ahoo.cosec.cocache.CoSecCacheSpecs.storeOfRecord
 import me.ahoo.cosec.cocache.DEFAULT_KEY_PREFIX
 import me.ahoo.cosec.cocache.snapshot.SnapshotDocumentCodec
@@ -29,6 +31,7 @@ import me.ahoo.cosec.control.change.ChangeId
 import me.ahoo.cosec.control.change.ChangeRequest
 import me.ahoo.cosec.control.change.StageSlot
 import me.ahoo.cosec.control.store.AppList
+import me.ahoo.cosec.control.store.ReferrerEntry
 import me.ahoo.cosec.control.store.RevisionIndex
 import me.ahoo.cosec.spi.snapshot.SnapshotDigest
 import me.ahoo.cosec.spi.snapshot.SnapshotDocument
@@ -42,16 +45,18 @@ import java.time.Instant
  * |---|---|
  * | revision records | `<p>:control:revision:<docKey>:SHA-256:<hex>` |
  * | revision index | `<p>:control:revisions:<docKey>` |
- * | back-references | `<p>:control:refs:<docKey>:<policyId>` |
+ * | back-references (sets) | `<p>:control:refs:<docKey>:<policyId>` |
+ * | documents (a set) | `<p>:control:documents:all` |
  * | leases | `<p>:control:lease:<name>` |
- * | lists | `<p>:control:list:documents`, `<p>:control:list:open-changes` |
+ * | lists | `<p>:control:list:open-changes`; `<p>:control:list:documents` only before the repair of 8.0.0-beta.5 |
  * | app list | `<p>:control:apps:all` |
  * | change requests | `<p>:control:change:<changeId>` |
  * | staging slots | `<p>:control:stage:<docKey>` |
  *
  * Digests in keys and values are [SnapshotDigest]'s text form, `SHA-256:<hex>`.
  *
- * All of them are [storeOfRecord] `Store`s, locked by [CoSecCacheSpecs.locks] (`ttl` forever, failed reads throw):
+ * All of them are [storeOfRecord] `Store`s, or sets of record ([CoSecCacheSpecs.setOfRecord]) for the back-references
+ * and the documents, whose members a writer adds and removes one by one,, locked by [CoSecCacheSpecs.locks] (`ttl` forever, failed reads throw):
  * records and indexes are not data-plane policy data, but reading a failure as "absent" would let the control plane
  * publish on a wrong base (RFC 0007 §5.2). Leases expire through the lifetime of each write instead. Keys and values are
  * encoded explicitly, without reflection.
@@ -73,13 +78,13 @@ internal object ControlCacheSpecs {
             RevisionIndexCodec
         ).build()
 
-    fun referenceIndex(keyPrefix: String = DEFAULT_KEY_PREFIX): StoreSpec<ReferenceKey, Map<SnapshotKey, Long>> =
-        storeOfRecord(
-            CoSecCacheSpecs.REFERENCE_INDEX_CACHE_NAME,
-            keyPrefix,
-            ReferenceKeyEncoder,
-            ReferrersCodec,
-        ).build()
+    /** One set per policy, each member a referrer at one revision ([ReferrerMemberCodec]). */
+    fun referenceIndex(keyPrefix: String = DEFAULT_KEY_PREFIX): SetStoreSpec<ReferenceKey, ReferrerEntry> =
+        setOfRecord(CoSecCacheSpecs.REFERENCE_INDEX_CACHE_NAME, keyPrefix, ReferenceKeyEncoder, ReferrerMemberCodec)
+
+    /** What [CoCacheControlStore.documents] reads: one set, each member a document key. */
+    fun documentSet(keyPrefix: String = DEFAULT_KEY_PREFIX): SetStoreSpec<String, String> =
+        setOfRecord(CoSecCacheSpecs.CONTROL_DOCUMENT_SET_CACHE_NAME, keyPrefix, KeyEncoder<String> { it }, StringCodec)
 
     fun changeRequest(keyPrefix: String = DEFAULT_KEY_PREFIX): StoreSpec<ChangeId, ChangeRequest> =
         storeOfRecord(
@@ -92,7 +97,7 @@ internal object ControlCacheSpecs {
     fun stage(keyPrefix: String = DEFAULT_KEY_PREFIX): StoreSpec<SnapshotKey, StageSlot> =
         storeOfRecord(CoSecCacheSpecs.STAGE_CACHE_NAME, keyPrefix, SnapshotKeyEncoder, StageSlotCodec).build()
 
-    /** What [CoCacheControlStore.documents] and [CoCacheControlStore.openChanges] read: each entry with when it was listed. */
+    /** What [CoCacheControlStore.openChanges] reads: each entry with when it was listed. */
     fun list(keyPrefix: String = DEFAULT_KEY_PREFIX): StoreSpec<String, Map<String, Instant>> =
         storeOfRecord(
             CoSecCacheSpecs.CONTROL_LIST_CACHE_NAME,

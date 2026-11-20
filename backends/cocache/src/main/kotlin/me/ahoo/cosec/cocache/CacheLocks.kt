@@ -18,6 +18,7 @@ package me.ahoo.cosec.cocache
 import me.ahoo.cocache.core.CacheSpec
 import me.ahoo.cocache.core.LayoutField
 import me.ahoo.cocache.core.Locks
+import me.ahoo.cocache.core.SetStoreSpec
 import me.ahoo.cocache.core.Spec
 import me.ahoo.cocache.core.StoreSpec
 import me.ahoo.cocache.core.policy.PolicyField
@@ -32,6 +33,8 @@ import me.ahoo.cosec.cocache.CoSecCacheSpecs.MEMBERSHIP_CACHE_NAME
 import me.ahoo.cosec.cocache.CoSecCacheSpecs.POLICY_SNAPSHOT_CACHE_NAME
 import me.ahoo.cosec.cocache.CoSecCacheSpecs.REVOKED_SUBJECT_CACHE_NAME
 import me.ahoo.cosec.cocache.CoSecCacheSpecs.REVOKED_TOKEN_CACHE_NAME
+import me.ahoo.cosec.cocache.CoSecCacheSpecs.SET_LOCAL_MAX_AGE
+import me.ahoo.cosec.cocache.CoSecCacheSpecs.SET_OF_RECORD_CACHE_NAMES
 import me.ahoo.cosec.cocache.CoSecCacheSpecs.SHADOW_CACHE_NAMES
 import me.ahoo.cosec.cocache.CoSecCacheSpecs.STORE_OF_RECORD_CACHE_NAMES
 import me.ahoo.cosec.cocache.CoSecCacheSpecs.TOKEN_FAMILY_CACHE_NAME
@@ -56,6 +59,15 @@ internal object CacheLocks {
         // read-only user must be enough; a property or customizer that changes it either way is refused here.
         verify { readOnlyAsDeclared(it, readOnly) }
         when (cacheName) {
+            in SET_OF_RECORD_CACHE_NAMES -> {
+                verify { require(it is SetStoreSpec<*, *>) { "CoSec's ${it.name} is the store of record: a SetStore." } }
+                lock(PolicyField.TTL, PolicyField.UNKNOWN_READ, PolicyField.LOCAL_MAX_AGE, PolicyField.DEGRADED_LOCAL_MAX_AGE)
+                constrain(PolicyField.TTL) { Ttl.Forever }
+                constrain(PolicyField.UNKNOWN_READ) { UnknownReadMode.THROW }
+                // Every read asks Redis (CTL-42): no local copy a lost invalidation would leave a removal check reading.
+                constrain(PolicyField.LOCAL_MAX_AGE) { SET_LOCAL_MAX_AGE }
+            }
+
             in STORE_OF_RECORD_CACHE_NAMES -> {
                 verify { require(it is StoreSpec<*, *>) { "CoSec's ${it.name} is the store of record: a Store." } }
                 lock(PolicyField.TTL, PolicyField.UNKNOWN_READ)
@@ -117,7 +129,11 @@ internal object CacheLocks {
     }.build()
 
     private fun readOnlyAsDeclared(spec: Spec<*, *>, declared: Boolean) {
-        val effective = (spec as? StoreSpec<*, *>)?.readOnly ?: false
+        val effective = when (spec) {
+            is StoreSpec<*, *> -> spec.readOnly
+            is SetStoreSpec<*, *> -> spec.readOnly
+            else -> false
+        }
         check(effective == declared) {
             if (declared) {
                 "CoSec reads ${spec.name} read-only in this process, which does not run the control plane: a " +

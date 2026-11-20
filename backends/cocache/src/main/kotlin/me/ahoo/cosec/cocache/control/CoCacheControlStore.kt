@@ -22,6 +22,7 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.future.await
 import me.ahoo.cocache.api.Codec
 import me.ahoo.cocache.api.ConditionalPut
+import me.ahoo.cocache.api.SetStore
 import me.ahoo.cocache.api.Store
 import me.ahoo.cocache.api.spi.Digest
 import me.ahoo.cocache.core.CoCacheFactory
@@ -48,6 +49,7 @@ import me.ahoo.cosec.control.change.StageSlot
 import me.ahoo.cosec.control.store.AppList
 import me.ahoo.cosec.control.store.ControlStore
 import me.ahoo.cosec.control.store.HeadWrite
+import me.ahoo.cosec.control.store.ReferrerEntry
 import me.ahoo.cosec.control.store.RevisionIndex
 import me.ahoo.cosec.control.store.StoredDocument
 import me.ahoo.cosec.control.store.Versioned
@@ -60,6 +62,7 @@ import me.ahoo.cosec.spi.snapshot.SnapshotKeyText
 import java.time.Clock
 import java.time.Duration
 import java.time.Instant
+import kotlin.coroutines.cancellation.CancellationException
 
 private val log = KotlinLogging.logger {}
 
@@ -83,14 +86,17 @@ class CoCacheControlStore internal constructor(
     private val heads: Store<SnapshotKey, SnapshotDocument>,
     private val records: Store<RevisionRecordKey, SnapshotDocument>,
     private val indexes: Store<SnapshotKey, RevisionIndex>,
-    private val references: Store<ReferenceKey, Map<SnapshotKey, Long>>,
+    /** The back-reference sets, one member per referrer and revision ([ReferrerMemberCodec]). */
+    private val references: SetStore<ReferenceKey, ReferrerEntry>,
     private val leases: Store<String, String>,
     private val changes: Store<ChangeId, ChangeRequest>,
     private val stages: Store<SnapshotKey, StageSlot>,
     /** The staged candidates the data plane's shadow listeners read (RFC 0007 §6.4). */
     private val candidates: Store<SnapshotKey, StoredCandidate>,
-    /** The document keys and the ids of changes that may be open ([documents], [openChanges]). */
+    /** The ids of changes that may be open ([openChanges]), and the document list before 8.0.0-beta.5. */
     private val lists: Store<String, Map<String, Instant>>,
+    /** The document keys ([documents]): one member each, so listing a document writes one member. */
+    private val documentSet: SetStore<String, String>,
     /** The app documents there are ([apps], RC1-4). */
     private val appLists: Store<String, AppList>,
     /** Told after a head write, typically `RedisSnapshotDocumentStore.notifyChanged`, so this instance reloads at once. */
@@ -142,11 +148,14 @@ class CoCacheControlStore internal constructor(
     override suspend fun index(key: SnapshotKey): Versioned<RevisionIndex>? =
         read(indexes, key)?.let { (value, digest) -> Versioned(value, digest) }
 
-    /** A first index write lists [key] before it is written, so [documents] never misses a document. */
+    /**
+     * A first index write lists [key] before it is written, so [documents] never misses a document: one member added,
+     * whatever the number of documents (`CTL-44`).
+     */
     override suspend fun putIndex(key: SnapshotKey, expected: SnapshotDigest?, index: RevisionIndex): Boolean {
         if (expected == null) {
             val entry = SnapshotKeyEncoder.encode(key)
-            updateList(DOCUMENTS) { if (entry in it) it else it + (entry to clock.instant()) }
+            sets(DOCUMENT_SET_WHAT) { documentSet.suspending().add(DOCUMENT_SET, listOf(entry)) }
         }
         return put(indexes, key, expected, index, digest(RevisionIndexCodec, index)) is Put.Written
     }
@@ -156,7 +165,7 @@ class CoCacheControlStore internal constructor(
      * left out and named in a warning: the others are listed.
      */
     override suspend fun documents(): Set<SnapshotKey> =
-        read(lists, DOCUMENTS)?.first.orEmpty().keys.mapNotNullTo(LinkedHashSet()) { entry ->
+        sets(DOCUMENT_SET_WHAT) { documentSet.suspending().get(DOCUMENT_SET) }.mapNotNullTo(LinkedHashSet()) { entry ->
             SnapshotKeyEncoder.decode(entry).also {
                 if (it == null) {
                     log.warn {
@@ -174,26 +183,56 @@ class CoCacheControlStore internal constructor(
     override suspend fun putApps(expected: SnapshotDigest?, apps: AppList): Boolean =
         put(appLists, APP_LIST, expected, apps, digest(AppListCodec, apps)) is Put.Written
 
-    override suspend fun referrers(target: SnapshotKey, policy: PolicyId): Versioned<Map<SnapshotKey, Long>>? =
-        read(references, ReferenceKey(target, policy), "The back-reference set of [$target] policy [${policy.value}]")
-            ?.let { (value, digest) -> Versioned(value, digest) }
+    /**
+     * The members of the set, read from Redis (`CTL-42`, [CoSecCacheSpecs.SET_LOCAL_MAX_AGE]). A value CoCache cannot
+     * read as a set, such as one a version before 8.0.0-beta.5 wrote, throws naming `cosec-migrate repair-references`.
+     */
+    override suspend fun referrers(target: SnapshotKey, policy: PolicyId): Set<ReferrerEntry> =
+        sets(referencesOf(target, policy)) { references.suspending().get(ReferenceKey(target, policy)) }
+
+    /** One member added (CoCache's add-if-readable): what was there stays; a value in the old format is refused. */
+    override suspend fun addReferrer(target: SnapshotKey, policy: PolicyId, entry: ReferrerEntry) {
+        sets(referencesOf(target, policy)) { references.suspending().add(ReferenceKey(target, policy), listOf(entry)) }
+    }
+
+    /** Exactly [entries] removed; any other member stays, whoever added it and whenever. */
+    override suspend fun removeReferrers(target: SnapshotKey, policy: PolicyId, entries: Set<ReferrerEntry>) {
+        if (entries.isEmpty()) {
+            return
+        }
+        sets(referencesOf(target, policy)) { references.suspending().remove(ReferenceKey(target, policy), entries) }
+    }
 
     /**
-     * Emptied referrers are written as empty, not deleted: the next writer always has a digest to name, and absent means
-     * never written.
+     * Writes [entries] as the set of [target]'s [policy], replacing what is there: only for
+     * `cosec-migrate repair-references`, over a value it has just read in the old format, which no other writer can
+     * change (CoCache refuses to add to or remove from it), under the repair's lease. Never over a set (`MIG-4`).
      */
-    override suspend fun putReferrers(
-        target: SnapshotKey,
-        policy: PolicyId,
-        expected: SnapshotDigest?,
-        referrers: Map<SnapshotKey, Long>,
-    ): Boolean = put(
-        references,
-        ReferenceKey(target, policy),
-        expected,
-        referrers,
-        digest(ReferrersCodec, referrers)
-    ) is Put.Written
+    @InternalCoSecApi
+    suspend fun convertReferrers(target: SnapshotKey, policy: PolicyId, entries: Set<ReferrerEntry>) {
+        sets(referencesOf(target, policy)) { references.suspending().put(ReferenceKey(target, policy), entries) }
+    }
+
+    /**
+     * The document list a version before 8.0.0-beta.5 wrote, or null when there is none: while it is there, the store
+     * is not repaired (`cosec-migrate repair-references` removes it last).
+     */
+    @InternalCoSecApi
+    suspend fun legacyDocuments(): Set<String>? = read(lists, DOCUMENTS)?.first?.keys
+
+    /** Adds [entries] to the document set: what the repair copies from the old list before it removes it. */
+    @InternalCoSecApi
+    suspend fun listDocuments(entries: Set<String>) {
+        if (entries.isNotEmpty()) {
+            sets(DOCUMENT_SET_WHAT) { documentSet.suspending().add(DOCUMENT_SET, entries) }
+        }
+    }
+
+    /** Removes the old document list, the repair's last write: the store is repaired from then on. */
+    @InternalCoSecApi
+    suspend fun removeLegacyDocuments() {
+        lists.async().delete(DOCUMENTS).await()
+    }
 
     override suspend fun change(id: ChangeId): Versioned<ChangeRequest>? =
         read(changes, id, "Change [${id.value}]")?.let { (value, digest) -> Versioned(value, digest) }
@@ -292,6 +331,26 @@ class CoCacheControlStore internal constructor(
         deleteIf(leases, name) { it == holder }
     }
 
+    private fun referencesOf(target: SnapshotKey, policy: PolicyId): String =
+        "The back-reference set of [$target] policy [${SnapshotKeyText.printable(policy.value)}]"
+
+    /**
+     * [block] over a set, failing closed: any failure names [what] and, since the likeliest cause after an upgrade is a
+     * value in the format before 8.0.0-beta.5, the command that converts it (`CTL-42`).
+     */
+    @Suppress("TooGenericExceptionCaught")
+    private suspend fun <T> sets(what: String, block: suspend () -> T): T = try {
+        block()
+    } catch (error: CancellationException) {
+        throw error
+    } catch (error: Exception) {
+        throw IllegalStateException(
+            "$what could not be read or written (${error.message}). A store written before 8.0.0-beta.5 must be " +
+                "converted first: run `cosec-migrate repair-references`.",
+            error,
+        )
+    }
+
     /** Read, change, `putIfMatch`: retried while another writer changed the list in between. */
     private suspend fun updateList(name: String, next: (Map<String, Instant>) -> Map<String, Instant>) {
         repeat(MAX_LIST_ATTEMPTS) {
@@ -310,7 +369,12 @@ class CoCacheControlStore internal constructor(
     }
 
     companion object {
+        /** The document list's key before 8.0.0-beta.5, under the lists. */
         private const val DOCUMENTS = "documents"
+
+        /** The document set's one key. */
+        private const val DOCUMENT_SET = "all"
+        private const val DOCUMENT_SET_WHAT = "The document set"
         private const val OPEN_CHANGES = "open-changes"
         private const val APP_LIST = "all"
 
@@ -342,6 +406,7 @@ class CoCacheControlStore internal constructor(
             records = factory.createLocked(ControlCacheSpecs.revisionRecord(keyPrefix)),
             indexes = factory.createLocked(ControlCacheSpecs.revisionIndex(keyPrefix)),
             references = factory.createLocked(ControlCacheSpecs.referenceIndex(keyPrefix)),
+            documentSet = factory.createLocked(ControlCacheSpecs.documentSet(keyPrefix)),
             leases = factory.createLocked(ControlCacheSpecs.lease(keyPrefix)),
             changes = factory.createLocked(ControlCacheSpecs.changeRequest(keyPrefix)),
             stages = factory.createLocked(ControlCacheSpecs.stage(keyPrefix)),
