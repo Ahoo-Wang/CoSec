@@ -18,6 +18,7 @@ package me.ahoo.cosec.control.lifecycle
 import kotlinx.coroutines.runBlocking
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.control.store.ControlStore
 import me.ahoo.cosec.control.store.InMemoryControlStore
 import me.ahoo.cosec.control.store.MutableClock
 import me.ahoo.cosec.control.store.StoreFixtures
@@ -55,6 +56,26 @@ class StagedListReconciliationTest {
             store.candidate(key).assert().isNull()
             store.staged()?.windows.assert().isEqualTo(emptyMap<SnapshotKey, Set<String>>())
         }
+
+    @Test
+    fun `a settle that fails is tried again by the next pass`() = runBlocking<Unit> {
+        var failing = true
+        val flaky = object : ControlStore by store {
+            override suspend fun withdrawCandidate(key: SnapshotKey, window: String): Boolean {
+                check(!failing) { "Redis refused the withdrawal" }
+                return store.withdrawCandidate(key, window)
+            }
+        }
+        val passes = StagedListReconciliation(flaky)
+        val key = SnapshotKey.Tenant("acme")
+        store.keepStagedList()
+        store.listStaged(key, WINDOW)
+        repeat(2) { passes.reconcile(emptyList(), complete = true) }
+        store.staged()?.windows.assert().isEqualTo(mapOf(key to setOf(WINDOW)))
+        failing = false
+        repeat(2) { passes.reconcile(emptyList(), complete = true) }
+        store.staged()?.windows.assert().isEqualTo(emptyMap<SnapshotKey, Set<String>>())
+    }
 
     private companion object {
         const val WINDOW = "c1@1"

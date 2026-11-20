@@ -56,6 +56,9 @@ class StagedListTest {
         @Volatile
         var failWithdrawal = false
 
+        @Volatile
+        var failUnlisting = false
+
         override suspend fun listStaged(key: SnapshotKey, window: String) {
             if (failListing) error("Redis refused the listing")
             writes += "list"
@@ -63,6 +66,7 @@ class StagedListTest {
         }
 
         override suspend fun unlistStaged(key: SnapshotKey, window: String) {
+            if (failUnlisting) error("Redis refused the unlisting")
             writes += "unlist"
             memory.unlistStaged(key, window)
         }
@@ -173,6 +177,46 @@ class StagedListTest {
             // Its author stages it again.
             changes.stage(PLATO, staged.id).state.assert().isEqualTo(ChangeState.SHADOWING)
         }
+
+    @Test
+    fun `an unlisting that fails leaves the window listed with its candidate gone, and the shadow pass unlists it`() =
+        runBlocking<Unit> {
+            memory.keepStagedList()
+            val staged = changes.stage(PLATO, proposed(ACME, "first").id)
+            store.failUnlisting = true
+            changes.abandon(PLATO, staged.id)
+            memory.candidate(ACME).assert().isNull()
+            listed().assert().isEqualTo(mapOf(ACME to setOf(staged.shadow!!.window)))
+            store.failUnlisting = false
+            maintenance.closeShadowWindows()
+            maintenance.closeShadowWindows()
+            listed().assert().isEqualTo(emptyMap<SnapshotKey, Set<String>>())
+        }
+
+    /** A store that keeps no staged list: the port's defaults. */
+    private class Unlisted(memory: InMemoryControlStore) : ControlStore by memory {
+        override suspend fun staged() = super<ControlStore>.staged()
+        override suspend fun listStaged(key: SnapshotKey, window: String) = super<ControlStore>.listStaged(key, window)
+        override suspend fun unlistStaged(key: SnapshotKey, window: String) =
+            super<ControlStore>.unlistStaged(key, window)
+
+        override suspend fun keepStagedList() = super<ControlStore>.keepStagedList()
+    }
+
+    @Test
+    fun `a store that keeps no list stages and withdraws as before, and lists nothing`() = runBlocking<Unit> {
+        val unlisted = Unlisted(memory)
+        val plain = ChangeHarness(clock, memory, unlisted, ChangeOptions(shadow = OPEN))
+        plain.revisions.publish(ACME, null, StoreFixtures.candidate(ACME), StoreFixtures.publication())
+        val change = plain.changes.propose(PLATO, ACME, 1, listOf(Operation.PutPolicy(allow("first"))), "first")
+        val staged = plain.changes.stage(PLATO, change.id)
+        memory.candidate(ACME)?.window.assert().isEqualTo(staged.shadow!!.window)
+        ControlMaintenance(unlisted, plain.revisions, plain.changes, Duration.ofMinutes(1)).closeShadowWindows()
+        unlisted.staged().assert().isNull()
+        plain.changes.abandon(PLATO, staged.id)
+        memory.candidate(ACME).assert().isNull()
+        memory.staged().assert().isNull()
+    }
 
     @Test
     fun `fifty tenants staging at once are all staged and all listed`() = runBlocking<Unit> {
