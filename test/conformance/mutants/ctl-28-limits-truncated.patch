@@ -3,15 +3,16 @@
 # Tests: :control:test --tests me.ahoo.cosec.control.api.SectionFieldsHttpTest :conformance:test
 
 diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/change/OperationCodec.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/change/OperationCodec.kt
-index f554226d..d964a8ad 100644
+index 45b81e374..4f5ed56e0 100644
 --- a/core/control/src/main/kotlin/me/ahoo/cosec/control/change/OperationCodec.kt
 +++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/change/OperationCodec.kt
-@@ -147,7 +147,12 @@ internal object OperationCodec {
-     }
- 
-     /** Limits as the document format reads them, with none left to its default: an operation states all six. */
--    private fun limits(node: JsonNode): ConditionLimits = PolicyDocumentCodec.decodeLimits(node, "\$.limits").also {
+@@ -169,8 +169,12 @@ internal object OperationCodec {
+      * The condition limits as the document format reads them, with none left to its default: an operation states all
+      * six. The budgets beside them may be left out, each then its default (`CTL-40`).
+      */
+-    private fun limits(node: JsonNode): ConditionLimits {
 -        LIMIT_FIELDS.forEach { field -> node.need(field) }
+-        return checkNotNull(PolicyDocumentCodec.decodeLimits(node, "\$.limits"))
 -    }
 +    private fun limits(node: JsonNode): ConditionLimits = ConditionLimits(
 +        node.need("maxNodes").asInt(),

@@ -113,6 +113,23 @@ Which preview of the library may run behind which preview of the gateway image: 
   ([Testing your application](../policies/testing.md#testing-your-application)). The kit brings neither adapter; the
   bindings need the one of your web stack on the test's classpath, which a test of such a handler has.
 
+- **The control plane holds every change to entry budgets, and caps a change's operations and body** (R1B-4,
+  `CTL-40`, `CTL-41`). Affected: control planes with documents over a default budget or proposing very large changes,
+  and WebFlux hosts that raised `spring.codec.max-in-memory-size` for the control API. Before these budgets, a change of
+  100,000 entries exhausted a 512 MB heap in the control plane.
+  - **Entry budgets.** The platform's `limits` take `maxPolicies` (10,000), `maxStatements` (20,000),
+    `maxRoleBindings` (10,000) and `maxAnyoneBindings` (1,000) per document
+    ([Entry budgets](../policies/language.md#entry-budgets)). A change that would raise a count over its budget is a
+    `V2` finding (`422`) naming the budget, the count and the limit, and stays a draft. A document already over a budget
+    keeps being served by every host, may change, and may shrink; only a change that adds to an over-budget count is
+    refused, and a check warns of each count still over. To keep a large document growing, raise the budget in the
+    platform document first. `cosec-migrate convert` warns of a converted document over a default budget and writes it.
+  - **Operations.** A change a client proposes carries at most `maxChangeOperations` (20,000) operations, also in the
+    platform's `limits`; a larger one is a `400`. Propose it as several changes. `apply` and rollback are not held to it.
+  - **Body.** `cosec.control.http.max-body-size` defaults to `10MB` instead of `16MB`, and now bounds the control API
+    on WebFlux too, in place of `spring.codec.max-in-memory-size` (256 KB by default, which kept larger changes out of
+    a WebFlux control plane). A larger body is a `400` `invalid-request`.
+
 ## From 8.0.0-beta.3 {#from-8-0-0-beta-3}
 
 - **The policy test kit refuses a run that could pass for the wrong reason** (`PolicyTestKit`, experimental; UC-7).

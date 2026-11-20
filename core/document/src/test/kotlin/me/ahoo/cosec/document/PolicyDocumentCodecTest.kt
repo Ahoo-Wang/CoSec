@@ -202,6 +202,35 @@ class PolicyDocumentCodecTest {
         error(""","attributes":[]""", DocumentKind.APP, "order").assert().contains("unknown field attributes")
     }
 
+    /**
+     * CTL-40, CTL-41: the entry budgets are members of the platform's `limits`. Absent ones are the defaults; a `limits`
+     * that sets only budgets reads back without condition limits, so it writes back the same.
+     */
+    @Test
+    fun `the platform's entry budgets read and write back the same, beside the condition limits or alone`() {
+        val both = decode(""","limits":{"maxNodes":32,"maxPolicies":50,"maxChangeOperations":7}""")
+        both.limits!!.maxNodes.assert().isEqualTo(32)
+        both.budgets.assert().isEqualTo(
+            DocumentBudgets(maxPolicies = 50, maxChangeOperations = 7)
+        )
+        val alone = decode(""","limits":{"maxAnyoneBindings":3}""")
+        alone.limits.assert().isNull()
+        alone.budgets!!.maxAnyoneBindings.assert().isEqualTo(3)
+        alone.budgets!!.maxStatements.assert().isEqualTo(DocumentBudgets.DEFAULT_MAX_STATEMENTS)
+        decode(""","limits":{"maxNodes":32}""").budgets.assert().isNull()
+        for (document in listOf(both, alone)) {
+            val written = PolicyDocumentCodec.encode(document)
+            PolicyDocumentCodec.encode(PolicyDocumentCodec.decode(DocumentKind.PLATFORM, "", written)).assert()
+                .isEqualTo(written)
+        }
+        PolicyDocumentCodec.encode(alone).decodeToString().assert().contains(
+            """"limits":{"maxPolicies":10000,"maxStatements":20000,"maxRoleBindings":10000,"maxAnyoneBindings":3,""" +
+                """"maxChangeOperations":20000}"""
+        )
+        error(""","limits":{"maxPolicies":0}""").assert().contains("$.limits.maxPolicies: a limit is a positive int")
+        error(""","limits":{"maxRoleBindings":"many"}""").assert().contains("$.limits.maxRoleBindings")
+    }
+
     /** DOC-2: `*` is Match.Any and only that; nothing can hold Match.Exactly("*"). */
     @Test
     fun `the wildcard is only ever Any`() {

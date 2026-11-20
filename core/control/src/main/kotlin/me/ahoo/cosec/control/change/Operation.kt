@@ -18,6 +18,7 @@ package me.ahoo.cosec.control.change
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.document.Catalog
+import me.ahoo.cosec.document.DocumentBudgets
 import me.ahoo.cosec.document.PolicyDefinition
 import me.ahoo.cosec.document.RoleDefinition
 import me.ahoo.cosec.engine.RateLimitSource
@@ -63,9 +64,12 @@ sealed interface Operation {
     @InternalCoSecApi
     class PutCatalog(val catalog: Catalog?) : Operation
 
-    /** The platform document's condition limits (RFC 0007 §3.1 N3); `null` returns to the defaults. */
+    /**
+     * The platform document's `limits` (RFC 0007 §3.1 N3): its condition limits, `null` for the defaults, and its entry
+     * budgets (`CTL-40`, `CTL-41`), `null` for theirs. The section is replaced as a whole.
+     */
     @InternalCoSecApi
-    class SetLimits(val limits: ConditionLimits?) : Operation
+    class SetLimits(val limits: ConditionLimits?, val budgets: DocumentBudgets? = null) : Operation
 
     /** The external attributes the platform document declares (RFC 0007 §3.1 N3); `null` removes the section. */
     @InternalCoSecApi

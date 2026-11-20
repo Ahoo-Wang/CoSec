@@ -1,0 +1,17 @@
+# Rule: CTL-40
+# Mutant: a change may raise a count over its budget: every count over it is only a warning
+# Tests: :control:test --tests me.ahoo.cosec.control.change.EntryBudgetsTest :conformance:test
+
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/EntryBudgets.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/EntryBudgets.kt
+index 481fb2b24..a730c2cb8 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/EntryBudgets.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/EntryBudgets.kt
+@@ -42,7 +42,7 @@ internal object EntryBudgets {
+                 continue
+             }
+             val before = base?.let(entry::count) ?: 0
+-            findings += if (count > before) {
++            findings += if (false) {
+                 Finding(
+                     "V2",
+                     entry.path,

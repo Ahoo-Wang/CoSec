@@ -21,6 +21,7 @@ import me.ahoo.cosec.control.change.ChangeJson.format
 import me.ahoo.cosec.control.change.ChangeJson.need
 import me.ahoo.cosec.control.change.ChangeJson.quoted
 import me.ahoo.cosec.control.change.ChangeJson.text
+import me.ahoo.cosec.document.DocumentBudgets
 import me.ahoo.cosec.document.PolicyDocumentCodec
 import me.ahoo.cosec.model.BindingId
 import me.ahoo.cosec.model.PolicyId
@@ -73,10 +74,8 @@ internal object OperationCodec {
             is Operation.PutCatalog -> item.put("op", "putCatalog")
                 .also { operation.catalog?.let { item.set("catalog", PolicyDocumentCodec.catalogTree(it)) } }
 
-            is Operation.SetLimits -> item.put(
-                "op",
-                "setLimits"
-            ).also { operation.limits?.let { item.set("limits", limitsTree(it)) } }
+            is Operation.SetLimits -> item.put("op", "setLimits")
+                .also { limitsTree(operation.limits, operation.budgets)?.let { item.set("limits", it) } }
             is Operation.SetAttributes -> item.put("op", "setAttributes")
                 .also { operation.attributes?.let { item.set("attributes", attributesTree(it)) } }
 
@@ -99,10 +98,24 @@ internal object OperationCodec {
         else -> null
     }
 
-    private fun limitsTree(limits: ConditionLimits): ObjectNode = factory.objectNode()
-        .put("maxNodes", limits.maxNodes).put("maxDepth", limits.maxDepth)
-        .put("maxInValues", limits.maxInValues).put("maxCidrBlocks", limits.maxCidrBlocks)
-        .put("maxLiteralBytes", limits.maxLiteralBytes).put("maxCost", limits.maxCost)
+    /** The `limits` of a `setLimits`: null when it sets neither, back to the defaults. */
+    private fun limitsTree(limits: ConditionLimits?, budgets: DocumentBudgets?): ObjectNode? {
+        if (limits == null && budgets == null) {
+            return null
+        }
+        val node = factory.objectNode()
+        limits?.let {
+            node.put("maxNodes", it.maxNodes).put("maxDepth", it.maxDepth)
+                .put("maxInValues", it.maxInValues).put("maxCidrBlocks", it.maxCidrBlocks)
+                .put("maxLiteralBytes", it.maxLiteralBytes).put("maxCost", it.maxCost)
+        }
+        budgets?.let {
+            node.put("maxPolicies", it.maxPolicies).put("maxStatements", it.maxStatements)
+                .put("maxRoleBindings", it.maxRoleBindings).put("maxAnyoneBindings", it.maxAnyoneBindings)
+                .put("maxChangeOperations", it.maxChangeOperations)
+        }
+        return node
+    }
 
     private fun attributesTree(attributes: List<Attribute>): ArrayNode = factory.arrayNode().apply {
         attributes.forEach { attribute ->
@@ -136,7 +149,12 @@ internal object OperationCodec {
     private fun section(node: JsonNode, op: String): Operation {
         return when (op) {
             "putCatalog" -> Operation.PutCatalog(node.get("catalog")?.let { PolicyDocumentCodec.decodeCatalog(it) })
-            "setLimits" -> Operation.SetLimits(node.get("limits")?.let(::limits))
+            "setLimits" -> node.get("limits").let { limits ->
+                Operation.SetLimits(
+                    limits?.let(::limits),
+                    limits?.let { PolicyDocumentCodec.decodeBudgets(it, "\$.limits") }
+                )
+            }
             "setBoundary" -> Operation.SetBoundary(node.get("boundary")?.let { PolicyId(it.text()) })
             // The document format's rules, so a section never reads a value its document would refuse (#1275).
             "setAttributes" -> Operation.SetAttributes(
@@ -147,8 +165,12 @@ internal object OperationCodec {
         }
     }
 
-    /** Limits as the document format reads them, with none left to its default: an operation states all six. */
-    private fun limits(node: JsonNode): ConditionLimits = PolicyDocumentCodec.decodeLimits(node, "\$.limits").also {
+    /**
+     * The condition limits as the document format reads them, with none left to its default: an operation states all
+     * six. The budgets beside them may be left out, each then its default (`CTL-40`).
+     */
+    private fun limits(node: JsonNode): ConditionLimits {
         LIMIT_FIELDS.forEach { field -> node.need(field) }
+        return checkNotNull(PolicyDocumentCodec.decodeLimits(node, "\$.limits"))
     }
 }

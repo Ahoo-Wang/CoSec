@@ -15,10 +15,6 @@
 
 package me.ahoo.cosec.control.lifecycle
 
-import java.util.concurrent.CompletableFuture
-import java.util.concurrent.ConcurrentHashMap
-import java.util.concurrent.atomic.AtomicInteger
-import kotlin.time.measureTimedValue
 import kotlinx.coroutines.runBlocking
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
@@ -39,6 +35,7 @@ import me.ahoo.cosec.document.ProvenanceKind
 import me.ahoo.cosec.engine.BuiltinPolicies
 import me.ahoo.cosec.engine.CompiledDocument
 import me.ahoo.cosec.engine.ResourceSource
+import me.ahoo.cosec.engine.SnapshotView
 import me.ahoo.cosec.engine.StatementSource
 import me.ahoo.cosec.model.Binding
 import me.ahoo.cosec.model.BindingId
@@ -51,13 +48,16 @@ import me.ahoo.cosec.model.RoleId
 import me.ahoo.cosec.model.SpaceId
 import me.ahoo.cosec.model.SubjectRef
 import me.ahoo.cosec.model.TenantId
-import me.ahoo.cosec.engine.SnapshotView
 import me.ahoo.cosec.runtime.snapshot.SnapshotViews
 import me.ahoo.cosec.runtime.snapshot.ViewKey
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.cosec.spi.token.RevocationReader
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable
+import java.util.concurrent.CompletableFuture
+import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.atomic.AtomicInteger
+import kotlin.time.measureTimedValue
 
 /**
  * R1B-4: what a tenant document of n policies (2n statements, n bindings, a tenth of them to `Anyone`) costs the
@@ -78,7 +78,12 @@ class DocumentBudgetMeasurement {
             null,
             listOf(
                 StatementSource("read", Effect.ALLOW, listOf("order:read"), listOf(ResourceSource("order/$i/**"))),
-                StatementSource("no-cancel", Effect.DENY, listOf("order:cancel"), listOf(ResourceSource("order/$i/**"))),
+                StatementSource(
+                    "no-cancel",
+                    Effect.DENY,
+                    listOf("order:cancel"),
+                    listOf(ResourceSource("order/$i/**"))
+                ),
             ),
         )
     }
@@ -176,7 +181,13 @@ class DocumentBudgetMeasurement {
                 )
                 bootstrap(
                     SnapshotKey.Tenant("acme"),
-                    listOf(control("admins", SubjectRef.Role(TenantId("acme"), RoleId("admin")), BuiltinPolicies.TENANT_ADMIN)),
+                    listOf(
+                        control(
+                            "admins",
+                            SubjectRef.Role(TenantId("acme"), RoleId("admin")),
+                            BuiltinPolicies.TENANT_ADMIN
+                        )
+                    ),
                 )
             }
         }
@@ -193,7 +204,15 @@ class DocumentBudgetMeasurement {
         // The trust root proposes, skips the window and publishes alone: authorization of every target, checks, compile.
         val plane = Plane()
         val base = plane.revisions.head(acme)!!.revision
-        val (proposed, propose) = measureTimedValue { plane.changes.propose(plane.plato, acme, base, operations(n), "n=$n") }
+        val (proposed, propose) = measureTimedValue {
+            plane.changes.propose(
+                plane.plato,
+                acme,
+                base,
+                operations(n),
+                "n=$n"
+            )
+        }
         plane.changes.skipShadow(plane.plato, proposed.id, "measure")
         val publish = ms { plane.changes.publish(plane.plato, proposed.id) }
 
@@ -221,17 +240,10 @@ class DocumentBudgetMeasurement {
             "| policies | statements | bindings | stored | compile ms | propose (root) ms | propose (tenant admin) ms | " +
                 "rebase ms | publish ms | state |\n|---|---|---|---|---|---|---|---|---|---|",
         )
-        // Each row as soon as it is measured: the largest may not fit the test heap (2 GB), which is itself the answer.
+        // Each row as soon as it is measured. The 100k row needs a test heap above Gradle's default 512 MB, in which it
+        // runs out and hangs: run it with a larger one (4 GB was enough).
         for (n in listOf(1_000, 10_000, 30_000, 100_000)) {
-            val line = try {
-                row(n)
-            } catch (error: Throwable) {
-                // runBlocking reports an OutOfMemoryError as the cause of a CoroutinesInternalError.
-                val oom = generateSequence(error) { it.cause }.firstOrNull { it is OutOfMemoryError } ?: throw error
-                "| $n | ${2 * n} | $n | out of memory with a ${Runtime.getRuntime().maxMemory() shr 20} MB heap: $oom |"
-            }
-            System.gc()
-            println(line)
+            println(row(n))
             System.out.flush()
         }
     }

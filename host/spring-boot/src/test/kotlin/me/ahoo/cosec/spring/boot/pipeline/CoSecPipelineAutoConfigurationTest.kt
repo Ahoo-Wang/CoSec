@@ -480,7 +480,7 @@ class CoSecPipelineAutoConfigurationTest {
         )!!.size.assert().isEqualTo(16)
         CoSecControlRoutesAutoConfiguration.readBody(ByteArrayInputStream(ByteArray(17)), 16).assert().isNull()
         CoSecControlRoutesAutoConfiguration.tooLarge(16).statusCode().value().assert().isEqualTo(400)
-        ControlProperties().http.maxBodySize.toMegabytes().assert().isEqualTo(16)
+        ControlProperties().http.maxBodySize.toMegabytes().assert().isEqualTo(10)
     }
 
     @Test

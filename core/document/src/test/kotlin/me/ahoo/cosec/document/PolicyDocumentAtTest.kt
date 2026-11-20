@@ -42,7 +42,7 @@ class PolicyDocumentAtTest {
     private val platform = decode(
         DocumentKind.PLATFORM,
         "",
-        """"boundaries":{"default":"b"},"limits":{"maxNodes":32,"maxCost":100},""" +
+        """"boundaries":{"default":"b"},"limits":{"maxNodes":32,"maxCost":100,"maxPolicies":50},""" +
             """"attributes":[{"path":"ext.geo.region","type":"string"}],""" +
             """"policies":[{"id":"b","boundary":true,"statements":[]},""" +
             """{"id":"g","statements":[{"effect":"deny","action":"http:*"}]}],""" +
@@ -87,6 +87,7 @@ class PolicyDocumentAtTest {
         platform.boundary.assert().isNotNull()
         platform.limits.assert().isNotNull()
         platform.attributes.assert().isNotNull()
+        platform.budgets.assert().isNotNull()
     }
 
     @Test
@@ -148,11 +149,14 @@ class PolicyDocumentAtTest {
         }.onEach { it.isAccessible = true }
 
     private companion object {
-        /** kind, owner, revision, publishedAt, policies, bindings, catalog, boundary, provenance, limits, attributes, rateLimits, roles. */
-        const val PARAMETERS = 13
+        /**
+         * kind, owner, revision, publishedAt, policies, bindings, catalog, boundary, provenance, limits, attributes,
+         * rateLimits, roles, budgets.
+         */
+        const val PARAMETERS = 14
         val FIELDS = arrayOf(
             "kind", "owner", "revision", "publishedAt", "policies", "bindings", "catalog", "boundary", "provenance",
-            "limits", "attributes", "rateLimits", "roles",
+            "limits", "attributes", "rateLimits", "roles", "budgets",
         )
         val AT: Instant = Instant.parse("2026-10-26T00:00:00Z")
         const val DIGEST = "SHA-256:9f2c0b1e6a6d1f2c3b4a5d6e7f8091a2b3c4d5e6f708192a3b4c5d6e7f809102"

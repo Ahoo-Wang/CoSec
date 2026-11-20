@@ -30,13 +30,15 @@ class DiffMembersTest {
         .filterNot { Modifier.isStatic(it.modifiers) || it.isSynthetic }
         .map { it.name }
 
-    private val sections = DocumentReads.SECTIONS.map { it.name }
+    /** The members the sections hold, a member once for each section that holds it. */
+    private val sections = DocumentReads.SECTIONS.flatMap { it.members }
 
     @Test
     fun `every member of a document is a header, an entry list or a section of the diff`() {
         members.assert().isNotEmpty()
         for (member in members) {
-            val homes = listOf(member in DocumentReads.HEADER, member in DocumentReads.ENTRIES, member in sections)
+            val homes = listOf(member in DocumentReads.HEADER, member in DocumentReads.ENTRIES) +
+                List(sections.count { it == member }) { true }
             homes.count { it }.assert().describedAs(
                 "PolicyDocument.$member is in ${homes.count { it }} of DocumentReads' HEADER, ENTRIES and SECTIONS, " +
                     "not exactly one: a member the diff does not place is never compared, so a revision that changes " +

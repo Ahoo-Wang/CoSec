@@ -112,7 +112,10 @@ internal class DocumentReads(
         val SECTIONS: List<Section> = listOf(
             Section("catalog", { it.copy(catalog = null) }) { bare, of -> bare.copy(catalog = of.catalog) },
             Section("boundary", { it.copy(boundary = null) }) { bare, of -> bare.copy(boundary = of.boundary) },
-            Section("limits", { it.copy(limits = null) }) { bare, of -> bare.copy(limits = of.limits) },
+            // The format's `limits` holds two members: the condition limits and the entry budgets (CTL-40).
+            Section("limits", { it.copy(limits = null, budgets = null) }, setOf("limits", "budgets")) { bare, of ->
+                bare.copy(limits = of.limits, budgets = of.budgets)
+            },
             Section("attributes", { it.copy(attributes = null) }) { bare, of -> bare.copy(attributes = of.attributes) },
             Section(
                 "rateLimits",
@@ -133,10 +136,15 @@ internal class DocumentReads(
         ) { bare, section -> section.clear(bare) }
     }
 
-    /** A section of a document: [clear] takes it out of one, [take] puts [name]'s content of another into a bare one. */
+    /**
+     * A section of a document, [name] as the format writes it: [clear] takes it out of one, [take] puts its content of
+     * another into a bare one. [members] are the members of [PolicyDocument] it holds: its name alone, unless the
+     * format writes more than one member under it.
+     */
     internal class Section(
         val name: String,
         val clear: (PolicyDocument) -> PolicyDocument,
+        val members: Set<String> = setOf(name),
         private val take: (PolicyDocument, PolicyDocument) -> PolicyDocument,
     ) {
         /** [document] with this section alone. */

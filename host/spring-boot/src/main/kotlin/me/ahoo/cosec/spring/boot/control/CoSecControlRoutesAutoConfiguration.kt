@@ -43,13 +43,17 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplicat
 import org.springframework.context.ApplicationContext
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
+import org.springframework.core.io.buffer.DataBufferLimitException
+import org.springframework.core.io.buffer.DataBufferUtils
 import org.springframework.http.MediaType
+import org.springframework.web.reactive.function.BodyExtractors
 import reactor.core.publisher.Mono
 import java.io.InputStream
 import java.net.URLDecoder
 import org.springframework.web.reactive.function.server.RequestPredicates as ReactivePredicates
 import org.springframework.web.reactive.function.server.RouterFunction as ReactiveRouterFunction
 import org.springframework.web.reactive.function.server.RouterFunctions as ReactiveRouterFunctions
+import org.springframework.web.reactive.function.server.ServerRequest as ReactiveServerRequest
 import org.springframework.web.reactive.function.server.ServerResponse as ReactiveServerResponse
 import org.springframework.web.servlet.function.RequestPredicates as ServletPredicates
 import org.springframework.web.servlet.function.RouterFunction as ServletRouterFunction
@@ -76,14 +80,15 @@ internal class CoSecControlRoutesAutoConfiguration {
             properties: ControlProperties
         ): ReactiveRouterFunction<ReactiveServerResponse> {
             val base = apiRootOf(properties)
+            val maxBodySize = properties.http.maxBodySize.toBytes()
             return ReactiveRouterFunctions.route(ReactivePredicates.path("$base/**")) { request ->
                 val security = RequestSecurity.of(request.exchange().securityContextOrNull())
                 // Nothing is read for a request no permitted principal stands behind, an anonymous permit included:
-                // ControlHttp answers it 401 (RC1-41, review L1 of #1240).
+                // ControlHttp answers it 401 (RC1-41, review L1 of #1240). Never more than max-body-size (CTL-41).
                 val body = if (security?.principal == null) {
                     Mono.just(EMPTY)
                 } else {
-                    request.bodyToMono(ByteArray::class.java).defaultIfEmpty(EMPTY)
+                    readBody(request, maxBodySize)
                 }
                 body.flatMap { bytes ->
                     mono(Dispatchers.Default) {
@@ -101,6 +106,10 @@ internal class CoSecControlRoutesAutoConfiguration {
                     ReactiveServerResponse.status(response.status)
                         .contentType(MediaType.parseMediaType(response.contentType))
                         .bodyValue(response.body)
+                }.onErrorResume(DataBufferLimitException::class.java) {
+                    ReactiveServerResponse.status(ProblemType.INVALID_REQUEST.status)
+                        .contentType(MediaType.parseMediaType(ControlHttp.PROBLEM_JSON))
+                        .bodyValue(tooLargeProblem(maxBodySize))
                 }
             }
         }
@@ -176,6 +185,21 @@ internal class CoSecControlRoutesAutoConfiguration {
     internal companion object {
         private val EMPTY = ByteArray(0)
 
+        /** At most [max] bytes of [request]'s body, or a [DataBufferLimitException] when it holds more. */
+        fun readBody(request: ReactiveServerRequest, max: Long): Mono<ByteArray> =
+            DataBufferUtils.join(
+                request.body(BodyExtractors.toDataBuffers()),
+                max.coerceAtMost(Int.MAX_VALUE - 1L).toInt()
+            )
+                .map { buffer ->
+                    try {
+                        ByteArray(buffer.readableByteCount()).also(buffer::read)
+                    } finally {
+                        DataBufferUtils.release(buffer)
+                    }
+                }
+                .defaultIfEmpty(EMPTY)
+
         /** At most [max] bytes of [input], or null when it holds more. */
         fun readBody(input: InputStream, max: Long): ByteArray? = input.use {
             val limit = max.coerceAtMost(Int.MAX_VALUE - 1L).toInt()
@@ -187,15 +211,16 @@ internal class CoSecControlRoutesAutoConfiguration {
             ProblemType.INVALID_REQUEST.status
         )
             .contentType(MediaType.parseMediaType(ControlHttp.PROBLEM_JSON))
-            .body(
-                mapOf(
-                    "type" to ProblemType.INVALID_REQUEST.uri,
-                    "title" to ProblemType.INVALID_REQUEST.title,
-                    "status" to ProblemType.INVALID_REQUEST.status,
-                    "code" to ProblemType.INVALID_REQUEST.code,
-                    "detail" to "The request body is larger than ${ControlProperties.PREFIX}.http.max-body-size ($max bytes).",
-                ),
-            )
+            .body(tooLargeProblem(max))
+
+        /** The problem of a body larger than [max] bytes (CTL-41), on either stack. */
+        fun tooLargeProblem(max: Long): Map<String, Any> = mapOf(
+            "type" to ProblemType.INVALID_REQUEST.uri,
+            "title" to ProblemType.INVALID_REQUEST.title,
+            "status" to ProblemType.INVALID_REQUEST.status,
+            "code" to ProblemType.INVALID_REQUEST.code,
+            "detail" to "The request body is larger than ${ControlProperties.PREFIX}.http.max-body-size ($max bytes) (CTL-41).",
+        )
 
         fun basePathOf(properties: ControlProperties): String = "/" + properties.http.basePath.trim('/')
 

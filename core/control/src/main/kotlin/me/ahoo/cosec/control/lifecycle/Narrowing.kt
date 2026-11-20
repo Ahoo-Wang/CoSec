@@ -161,6 +161,7 @@ internal object Narrowing {
             attributes = null,
             rateLimits = emptyList(),
             roles = emptyList(),
+            budgets = null,
         )
     ).decodeToString()
 }
