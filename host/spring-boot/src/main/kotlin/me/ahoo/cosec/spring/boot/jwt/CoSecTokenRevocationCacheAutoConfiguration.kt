@@ -28,6 +28,7 @@ import me.ahoo.cosec.spi.token.TokenStore
 import me.ahoo.cosec.spring.boot.CoSecProperties
 import me.ahoo.cosec.spring.boot.ConditionalOnCoSecEnabled
 import me.ahoo.cosec.spring.boot.authorization.cache.createCoSecCache
+import me.ahoo.cosec.spring.boot.pipeline.CoSecPipelineAutoConfiguration
 import me.ahoo.cosec.spring.boot.pipeline.RevocationProperties
 import org.springframework.boot.autoconfigure.AutoConfiguration
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean
@@ -74,7 +75,8 @@ internal class CoSecTokenRevocationCacheAutoConfiguration(
         revokedTokenCache: RevokedTokenCache,
         revokedSubjectCache: RevokedSubjectCache
     ): TokenStore {
-        return CoCacheTokenStore(revokedTokenCache, revokedSubjectCache)
+        CoSecPipelineAutoConfiguration.checkRevocationReadTimeout(revocationProperties.readTimeout)
+        return CoCacheTokenStore(revokedTokenCache, revokedSubjectCache, revocationProperties.readTimeout)
     }
 
     /**

@@ -1,0 +1,17 @@
+# Rule: PIP-7
+# Mutant: CoSec's revocation reader waits for Redis for its whole command timeout, so a Redis that hangs runs into the authenticator timeout and every authenticated request is 503
+# Tests: :cocache:test --tests me.ahoo.cosec.cocache.CoCacheRevocationReaderBudgetTest :spring-boot:test --tests me.ahoo.cosec.spring.boot.jwt.RevocationReadBudgetTest
+
+diff --git a/backends/cocache/src/main/kotlin/me/ahoo/cosec/cocache/CoCacheRevocationReader.kt b/backends/cocache/src/main/kotlin/me/ahoo/cosec/cocache/CoCacheRevocationReader.kt
+index a9a3fd278..b412f7f93 100644
+--- a/backends/cocache/src/main/kotlin/me/ahoo/cosec/cocache/CoCacheRevocationReader.kt
++++ b/backends/cocache/src/main/kotlin/me/ahoo/cosec/cocache/CoCacheRevocationReader.kt
+@@ -68,7 +68,7 @@ internal class CoCacheRevocationReader @JvmOverloads constructor(
+     private suspend fun <V : Any> read(store: Store<String, V>, key: String): V? {
+         val future = store.async().lookup(key)
+         // A copy, timed: CoCache may hand the same future to concurrent readers of a key, whom a timeout must not fail.
+-        val answer = if (future.isDone) future else future.copy().orTimeout(timeoutNanos, TimeUnit.NANOSECONDS)
++        val answer = future
+         val lookup = try {
+             answer.await()
+         } catch (timeout: TimeoutException) {
