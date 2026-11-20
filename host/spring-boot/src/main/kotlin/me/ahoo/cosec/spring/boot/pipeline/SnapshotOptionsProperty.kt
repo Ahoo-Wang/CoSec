@@ -31,9 +31,17 @@ internal fun RuntimeAuthorizationProperties.Snapshot.toOptions(): SnapshotOption
     return options()
 }
 
-/** The documents loaded before the instance takes traffic: the platform's, then the configured apps and tenants. */
-internal fun RuntimeAuthorizationProperties.Snapshot.prewarmKeys(): List<SnapshotKey> =
-    listOf(SnapshotKey.Platform) + prewarmApps.map { SnapshotKey.App(it) } + prewarmTenants.map { SnapshotKey.Tenant(it) }
+/**
+ * The documents loaded before the instance takes traffic: the platform's, the configured apps, the host's own app
+ * (`cosec.authorization.scope.app-id`, `SNP-20`) unless `prewarm-host-apps` is off, then the configured tenants. A
+ * gateway adds the apps its routes name once its routes exist ([GatewayRouteApps]).
+ */
+internal fun RuntimeAuthorizationProperties.prewarmKeys(): List<SnapshotKey> {
+    val hostApp = scope.appId?.takeIf { snapshot.prewarmHostApps && SnapshotKey.App.isValidAppId(it) }
+    val apps = (snapshot.prewarmApps + listOfNotNull(hostApp)).distinct()
+    return listOf(SnapshotKey.Platform) + apps.map { SnapshotKey.App(it) } +
+        snapshot.prewarmTenants.map { SnapshotKey.Tenant(it) }
+}
 
 internal const val REVALIDATE_INTERVAL_PROPERTY = "cosec.authorization.snapshot.revalidate-interval"
 

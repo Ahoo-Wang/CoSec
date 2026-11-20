@@ -15,11 +15,13 @@ spec:
       containers:
         - name: cosec-gateway
           env:
-            # A 1.5 GB heap for a 2560Mi limit: room for the default snapshot bounds full, 16,384 tenant documents and
-            # 65,536 tenants without one, about 520 MB at 30 KB a document ("Sizing a SaaS gateway" in the deployment
-            # docs, which also has the memory model). Change both together, and with max-tenants.
+            # A 2 GiB heap for a 3200Mi limit: room for every default at its bound, 16,384 tenant documents (about
+            # 490 MB at 30 KB each), 65,536 tenants without one (about 30 MB) and the two revocation copies of 500,000
+            # entries (about 260 MB): about 780 MB live, twice that for ZGC plus 256 MiB for the rest of the gateway
+            # ("Sizing a SaaS gateway" in the deployment docs, which also has the memory model). Change heap and limit
+            # together, and with max-tenants or the revocation cache's maximum-size.
             - name: JVM_MEMORY_OPTS
-              value: -Xms1536m -Xmx1536m -XX:MaxDirectMemorySize=256m -XX:MaxMetaspaceSize=256m
+              value: -Xms2g -Xmx2g -XX:MaxDirectMemorySize=256m -XX:MaxMetaspaceSize=256m
             # From the Secret cosec-redis-secret, which you create: password is required, username is for a Redis
             # ACL user and may be left out.
             - name: SPRING_DATA_REDIS_USERNAME
@@ -36,7 +38,7 @@ spec:
           resources:
             requests:
               cpu: "1"
-              memory: 2560Mi
+              memory: 3200Mi
             limits:
               cpu: "2"
-              memory: 2560Mi
+              memory: 3200Mi

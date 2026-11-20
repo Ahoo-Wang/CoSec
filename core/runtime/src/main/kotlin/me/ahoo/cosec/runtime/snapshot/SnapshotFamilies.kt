@@ -254,8 +254,9 @@ internal class SnapshotFamilies<A : Any>(
         /**
          * The most entries of a kind an install evicts on its own thread when it finds the family over its cap
          * (`SNP-14`): enough to take the family back within the cap, since at most one entry per install in flight is
-         * over it, and few enough that the thread pays one scan and a few dozen removals, never a whole pass back to the
-         * bound (15 to 20 ms at a bound of 50,000). Housekeeping evicts the rest.
+         * over it, and few enough that the thread pays one scan and a few dozen removals (about 2 to 3.6 ms warm at the
+         * default bounds), never a whole pass back to the bound (4 to 9 ms warm, 21 to 33 ms cold, at bounds of 16,384
+         * to 65,536: measured, beta.5). Housekeeping evicts the rest.
          */
         const val INSTALL_EVICTIONS = 64
 

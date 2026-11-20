@@ -489,6 +489,12 @@
       "type": "java.util.List<java.lang.String>"
     },
     {
+      "description": "Whether the apps this host names are loaded at startup, as `prewarm-apps` are, and held (`SNP-20`): its `cosec.authorization.scope.app-id`, and on a gateway every `cosec-app-id` its routes name, then every app a refreshed route names. Off, they load on their first request, as before.",
+      "name": "cosec.authorization.snapshot.prewarm-host-apps",
+      "sourceType": "me.ahoo.cosec.spring.boot.pipeline.RuntimeAuthorizationProperties$Snapshot",
+      "type": "java.lang.Boolean"
+    },
+    {
       "description": "Tenant documents loaded at startup, after the platform document; readiness waits for them.",
       "name": "cosec.authorization.snapshot.prewarm-tenants",
       "sourceType": "me.ahoo.cosec.spring.boot.pipeline.RuntimeAuthorizationProperties$Snapshot",
