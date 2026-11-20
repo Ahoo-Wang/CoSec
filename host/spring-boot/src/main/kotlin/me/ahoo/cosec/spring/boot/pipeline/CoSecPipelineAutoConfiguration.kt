@@ -162,7 +162,9 @@ class CoSecPipelineAutoConfiguration {
         environment: Environment,
         unchecked: ObjectProvider<UncheckedRevocations>,
         beans: ListableBeanFactory,
+        pipelineProperties: PipelineProperties,
     ): Authenticator {
+        checkRevocationReadTimeout(revocationProperties.readTimeout, pipelineProperties.authenticationTimeout)
         val token = signing.ifAvailable?.let {
             val reader = revocationReader(revocationReader, tokenStore, beans)
             if (reader === RevocationReader.NONE) {
@@ -264,6 +266,29 @@ class CoSecPipelineAutoConfiguration {
 
     @InternalCoSecApi
     companion object {
+        /**
+         * R2D-8: the CoCache revocation reader's two reads, each within `read-timeout`, end within the authenticator's
+         * own budget, or a Redis that hangs makes every authenticated request 503 before `fail-closed` can say
+         * otherwise. Fails startup naming both properties.
+         */
+        internal fun checkRevocationReadTimeout(
+            readTimeout: java.time.Duration,
+            authenticationTimeout: java.time.Duration
+        ) {
+            checkRevocationReadTimeout(readTimeout)
+            check(readTimeout.multipliedBy(2) < authenticationTimeout) {
+                "Twice cosec.authentication.revocation.read-timeout ($readTimeout), a token's two revocation reads, " +
+                    "must be less than cosec.pipeline.authentication-timeout ($authenticationTimeout)."
+            }
+        }
+
+        /** `cosec.authentication.revocation.read-timeout` is positive, or startup fails naming it. */
+        internal fun checkRevocationReadTimeout(readTimeout: java.time.Duration) {
+            check(!readTimeout.isNegative && !readTimeout.isZero) {
+                "cosec.authentication.revocation.read-timeout must be positive, not $readTimeout."
+            }
+        }
+
         /** `KafkaAuditListener.NAME`, as a literal: `cosec-kafka` is optional. */
         private const val KAFKA_AUDIT_LISTENER = "kafka-audit"
 

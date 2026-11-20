@@ -25,7 +25,10 @@ import me.ahoo.cosec.model.PrincipalId
 import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.spi.token.RevocationReader
 import me.ahoo.cosec.spi.token.RevocationUnavailableException
+import java.time.Duration
 import java.time.Instant
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.TimeoutException
 
 /**
  * The [RevocationReader] over the caches [CoCacheTokenStore] writes: the non-blocking reads the coroutine pipeline makes
@@ -37,11 +40,23 @@ import java.time.Instant
  * [RevocationUnavailableException], never "not revoked": the tables read a failure as unknown ([CoSecCacheSpecs.locks]),
  * and the caller decides what it means. Content the tables cannot decode is an error of its own, never an unavailable
  * store. An id that names no key (an unpaired surrogate, [RevokedTokenCache.key], RC1-52) throws before Redis is asked.
+ *
+ * Each read that goes to Redis has [readTimeout] (R2D-8): a Redis that hangs is unavailable once it is spent, as one that
+ * refuses the connection is at once, so the pipeline's verification answers within the authenticator's own budget, and
+ * a refresh fails rather than waits. The command itself stays pending until the store's command timeout. A local hit,
+ * a future already complete, is not timed: no timer, no allocation.
  */
 internal class CoCacheRevocationReader @JvmOverloads constructor(
     private val cache: RevokedTokenCache,
     private val subjectCache: RevokedSubjectCache? = null,
+    private val readTimeout: Duration = DEFAULT_READ_TIMEOUT,
 ) : RevocationReader {
+    init {
+        require(!readTimeout.isNegative && !readTimeout.isZero) { "readTimeout must be positive, not $readTimeout." }
+    }
+
+    private val timeoutNanos = readTimeout.toNanos()
+
     override suspend fun isRevoked(tokenId: String): Boolean = read(cache, RevokedTokenCache.key(tokenId)) == true
 
     /** Null without [subjectCache]: then no principal's tokens can have been revoked through this store. */
@@ -50,12 +65,21 @@ internal class CoCacheRevocationReader @JvmOverloads constructor(
         return read(subjectCache, RevokedSubjectCache.key(tenant, principal))?.let(Instant::ofEpochMilli)
     }
 
-    private suspend fun <V : Any> read(store: Store<String, V>, key: String): V? =
-        when (val lookup = store.async().lookup(key).await()) {
+    private suspend fun <V : Any> read(store: Store<String, V>, key: String): V? {
+        val future = store.async().lookup(key)
+        // A copy, timed: CoCache may hand the same future to concurrent readers of a key, whom a timeout must not fail.
+        val answer = if (future.isDone) future else future.copy().orTimeout(timeoutNanos, TimeUnit.NANOSECONDS)
+        val lookup = try {
+            answer.await()
+        } catch (timeout: TimeoutException) {
+            throw RevocationUnavailableException("The revocation store did not answer within $readTimeout.", timeout)
+        }
+        return when (lookup) {
             is Lookup.Present -> lookup.value
             is Lookup.Absent -> null
             is Lookup.Unknown -> throw unanswered(lookup.error)
         }
+    }
 
     private fun unanswered(error: CacheReadException): Exception =
         if (generateSequence<Throwable>(error) { it.cause }.any { it is ForeignFormatException }) {
@@ -63,4 +87,13 @@ internal class CoCacheRevocationReader @JvmOverloads constructor(
         } else {
             RevocationUnavailableException("The revocation store could not be read: ${error.message}", error)
         }
+
+    companion object {
+        /**
+         * Each read's budget: two of them, one after the other, end well within the pipeline's authentication timeout
+         * (1 s), so a hanging Redis is answered as an unavailable one before the authenticator's budget runs out; far
+         * above a Redis read's tail, a few milliseconds.
+         */
+        val DEFAULT_READ_TIMEOUT: Duration = Duration.ofMillis(300)
+    }
 }
