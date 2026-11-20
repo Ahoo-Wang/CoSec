@@ -211,6 +211,13 @@ So are the tokens the pipeline accepted without a revocation check, the revocati
 |---|---|---|
 | `cosec.revocation.unchecked` | none | tokens accepted while their revocations could not be read; each such stretch also logs `Token revocations cannot be read: tokens are accepted without a revocation check (<n> so far).` at `WARN`, at most every 10 seconds |
 
+With the local rate limiter (no Redis rate limiting, [Rate limiting](../policies/rate-limiting.md#the-local-limiter-is-bounded)),
+so are the new buckets it could not admit:
+
+| Meter | Tag | Counts |
+|---|---|---|
+| `cosec.ratelimit.local.refused` | `document`: `platform`, `app`, `tenant`, `other` | new buckets refused because the rule's, its document's or the whole bound was full: each is a request a strict rule answered `503` or a lenient one did not limit; the log line is written at most every 10 seconds |
+
 Alert on the rate of `result=indeterminate` by `cause`, on `explicit_deny` (requests a DENY statement refused), on `cosec.listener.dropped`, and on any
 rise of `cosec.revocation.unchecked`: while it rises, a revoked token is accepted. A rise of
 `indeterminate` with `cause=source_unavailable` means documents cannot be read, and with `cause=document_invalid` that a
