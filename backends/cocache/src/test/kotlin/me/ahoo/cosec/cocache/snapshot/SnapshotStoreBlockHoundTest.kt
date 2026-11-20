@@ -173,7 +173,8 @@ class SnapshotStoreBlockHoundTest {
     fun theSocialStateStoreNeverBlocksTheCaller() {
         val factory = ReactiveRedisRateLimiterTest.connectionFactory("localhost", 6379)
         try {
-            val store = RedisSocialStateStore(ReactiveStringRedisTemplate(factory), "cosec:test:oauth:${newKeyPrefix()}:")
+            val store =
+                RedisSocialStateStore(ReactiveStringRedisTemplate(factory), "cosec:test:oauth:${newKeyPrefix()}:")
             // Warm the connection, so the watched calls measure the requests alone.
             runBlocking { store.put("warm", "h", java.time.Duration.ofMinutes(1)) }
             violations.clear()

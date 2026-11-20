@@ -23,9 +23,9 @@ import me.ahoo.cosec.social.SocialAuthenticationException
 import me.ahoo.cosec.social.SocialAuthenticationProvider
 import me.ahoo.cosec.social.SocialAuthorization
 import me.ahoo.cosec.social.SocialCredentials
-import me.ahoo.cosec.spi.social.SocialStateStore
 import me.ahoo.cosec.social.SocialUser
 import me.ahoo.cosec.social.justauth.SocialUserConverter.toSocialUser
+import me.ahoo.cosec.spi.social.SocialStateStore
 import me.zhyd.oauth.model.AuthResponse
 import me.zhyd.oauth.model.AuthUser
 import me.zhyd.oauth.request.AuthRequest
@@ -86,7 +86,9 @@ class JustAuthProvider @InternalCoSecApi constructor(
 
     override suspend fun authorize(): SocialAuthorization {
         if (!startSlots.tryAcquire()) {
-            throw SocialAuthenticationException("The [$name] provider has too many sign-ins starting: try again shortly.")
+            throw SocialAuthenticationException(
+                "The [$name] provider has too many sign-ins starting: try again shortly."
+            )
         }
         try {
             val state = fresh()

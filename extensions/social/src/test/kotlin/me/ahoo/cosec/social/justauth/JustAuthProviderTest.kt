@@ -30,10 +30,10 @@ import kotlinx.coroutines.runInterruptible
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.withTimeout
 import me.ahoo.cosec.annotations.InternalCoSecApi
-import me.ahoo.cosec.spi.social.InMemorySocialStateStore
 import me.ahoo.cosec.social.SocialAuthenticationException
-import me.ahoo.cosec.spi.social.SocialStateStore
 import me.ahoo.cosec.social.SocialUser
+import me.ahoo.cosec.spi.social.InMemorySocialStateStore
+import me.ahoo.cosec.spi.social.SocialStateStore
 import me.ahoo.test.asserts.assert
 import me.zhyd.oauth.enums.AuthResponseStatus
 import me.zhyd.oauth.enums.AuthUserGender

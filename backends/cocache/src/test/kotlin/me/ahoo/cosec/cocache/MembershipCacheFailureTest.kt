@@ -184,7 +184,10 @@ class MembershipCacheFailureTest {
     @Test
     fun anUnknownPrincipalIsUnknownAndNotCached() = runBlocking<Unit> {
         val asked = AtomicInteger()
-        val unknown = CoCacheMembershipProvider(instanceA.membershipCache, unknownLife = java.time.Duration.ZERO) { _, _ ->
+        val unknown = CoCacheMembershipProvider(
+            instanceA.membershipCache,
+            unknownLife = java.time.Duration.ZERO
+        ) { _, _ ->
             asked.incrementAndGet()
             MembershipAnswer.Unknown
         }
