@@ -59,21 +59,18 @@ object ShadowCodec {
      * `schema`, `revision` or `publishedAt` beside the document is refused, though other members a later format adds are
      * ignored, and its window is not compared, as for any unreadable candidate.
      */
-    fun encode(candidate: StoredCandidate): ByteArray = write(
-        StoredFormat.write(
-            factory.objectNode()
-        ).put("window", candidate.window).put("baseRevision", candidate.baseRevision)
-            .set("document", read(candidate.document.bodyBytes())),
-    )
+    fun encode(candidate: StoredCandidate): ByteArray {
+        val node = StoredFormat.write(factory.objectNode())
+        node.put("window", candidate.window).put("baseRevision", candidate.baseRevision)
+        node.set("document", read(candidate.document.bodyBytes()))
+        return write(node)
+    }
 
     fun decodeCandidate(bytes: ByteArray): StoredCandidate = guarded {
         val node = read(bytes)
         StoredFormat.of(node, "staged candidate")
-        HEADER.firstOrNull {
-            node.has(
-                it
-            )
-        }?.let { throw malformed("a candidate's header is its document's: [$it] beside it") }
+        val header = HEADER.firstOrNull(node::has)
+        if (header != null) throw malformed("a candidate's header is its document's: [$header] beside it")
         StoredCandidate(
             node.need("window").text(),
             node.need("baseRevision").long(),

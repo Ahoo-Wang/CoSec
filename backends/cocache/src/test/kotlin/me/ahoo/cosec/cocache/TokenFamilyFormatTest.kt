@@ -71,9 +71,11 @@ class TokenFamilyFormatTest {
     fun `a later format, or a session that lacks what it needs, is refused as a format error`() {
         assertThrownBy<SnapshotFormatException> { read(written.replace(""""format":1""", """"format":2""")) }
         assertThrownBy<SnapshotFormatException> { read(written.replace(""""tenant":"acme",""", "")) }
-        assertThrownBy<SnapshotFormatException> { read(
-            written.replace(""""generation":1""", """"generation":"one"""")
-        ) }
+        assertThrownBy<SnapshotFormatException> {
+            read(
+                written.replace(""""generation":1""", """"generation":"one"""")
+            )
+        }
         assertThrownBy<SnapshotFormatException> { read("not json") }
     }
 }

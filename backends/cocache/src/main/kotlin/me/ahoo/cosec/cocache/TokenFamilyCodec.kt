@@ -58,11 +58,8 @@ internal object TokenFamilyCodec : Codec<TokenFamily> {
         }
         StoredFormat.of(node, WHAT)
         val generation = node.need("generation")
-        if (!generation.isIntegralNumber || !generation.canConvertToLong()) {
-            malformed(
-                "its generation is not an integer"
-            )
-        }
+        val counted = generation.isIntegralNumber && generation.canConvertToLong()
+        if (!counted) malformed("its generation is not an integer")
         val revoked = node.need("revoked")
         if (!revoked.isBoolean) malformed("its revoked is not a boolean")
         return TokenFamily(
@@ -79,9 +76,10 @@ internal object TokenFamilyCodec : Codec<TokenFamily> {
 
     private fun JsonNode.need(field: String): JsonNode = get(field) ?: malformed("its $field is missing")
 
-    private fun JsonNode.text(field: String): String = need(
-        field
-    ).let { if (it.isString) it.asString() else malformed("its $field is not a string") }
+    private fun JsonNode.text(field: String): String {
+        val value = need(field)
+        return if (value.isString) value.asString() else malformed("its $field is not a string")
+    }
 
     private fun JsonNode.instant(field: String): Instant = try {
         Instant.parse(text(field))

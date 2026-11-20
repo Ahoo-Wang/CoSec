@@ -48,7 +48,7 @@ internal object InstanceIndexCodec : Codec<Map<String, Instant>> {
             throw SnapshotFormatException("The $WHAT is not JSON")
         }
         // The map before formats holds times, strings: a number at `format`, or an object at `instances`, is the record.
-        val formatted = node.isObject && (node.get(StoredFormat.FIELD)?.isNumber == true || node.get("instances")?.isObject == true)
+        val formatted = node.get(StoredFormat.FIELD)?.isNumber == true || node.get("instances")?.isObject == true
         val instances = if (formatted) node.also { StoredFormat.of(it, WHAT) }.get("instances") else node
         val valid = instances != null && instances.isObject && instances.values().all { it.isString }
         if (!valid) throw SnapshotFormatException("The $WHAT is not an object of instance id to time")
