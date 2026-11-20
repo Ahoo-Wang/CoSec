@@ -104,6 +104,18 @@ class SpecializationTest {
         residual(Condition.Time(notAfter = "2030-01-01T00:00:00Z")).assert().contains("time")
     }
 
+    /** GRT-8 (R2C-31): every variable is renamed from the original atom, once, never from one already renamed. */
+    @Test
+    fun `variables are renamed all at once - a shift and a swap stay two variables`() {
+        fun renamed(renames: Map<String, String>): String {
+            val folded = Specialization(ConditionChecker(), { null }, renames = renames)
+                .fold(Condition.Eq("resource.var.a", Operand.Attr("resource.var.b")))
+            return specialization.check((folded as Folded.Residual).condition).toString()
+        }
+        renamed(mapOf("a" to "b", "b" to "c")).assert().isEqualTo("""{"eq":["resource.var.b",{"attr":"resource.var.c"}]}""")
+        renamed(mapOf("a" to "b", "b" to "a")).assert().isEqualTo("""{"eq":["resource.var.b",{"attr":"resource.var.a"}]}""")
+    }
+
     @Test
     fun `what cannot be compared says so`() {
         fold(Condition.Eq("resource.var.other", str("1"))).assert().isInstanceOf(Folded.Incomparable::class.java)
