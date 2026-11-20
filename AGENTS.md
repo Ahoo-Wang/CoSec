@@ -330,8 +330,11 @@ lives) are in [`wiki/AGENTS.md`](wiki/AGENTS.md).
 - Tests: JUnit 5, MockK, FluentAssert (`me.ahoo.test.asserts.assert`), Reactor Test. For caching and
   concurrency, use real implementations (CoCache's in-memory backend, real Redis) rather than mocks; mocks hide the
   races these tests exist to catch.
-- Dependency versions live only in `gradle/libs.versions.toml`. The build resolves from Maven Central only;
-  `-Pcosec.mavenLocal` adds `mavenLocal()` first, to test against a locally published library (`MavenLocalGuardTest`).
+- Dependency versions live only in `gradle/libs.versions.toml`. The build resolves dependencies from Maven Central
+  only, and plugins from Maven Central first, then the Gradle Plugin Portal (the Nexus publish plugin and the JMH
+  plugin are only there); `-Pcosec.mavenLocal` adds `mavenLocal()` first, to test against a locally published library
+  (`MavenLocalGuardTest`). A change of where something is resolved from invalidates what restored CI caches say
+  about it: try it against the workflows that restore a Gradle cache (`ci.yml`), not only against cold ones.
 - PR titles follow Conventional Commits (CI-enforced; they drive labels, release notes and the version).
   Mark breaking changes with `!`. Breaking = public API, `cosec.*` properties, or authorization semantics.
 

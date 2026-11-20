@@ -27,6 +27,8 @@
 > - §5.3.1（`PIP-30`）：路径中编码的 `;` 与控制字符（编码的或未编码的）答 400 `invalid-request`。
 > - 网关（`PIP-31`）：网关转发的请求就是被决定的那个，三个方法覆盖请求头（`X-HTTP-Method-Override`、`X-HTTP-Method`、`X-Method-Override`）在每条路由上都被移除，不可配置。
 > - `gateway` 模式的服务（`STA-6`、`STA-7`）：开着隐藏方法过滤器（两个 Spring 属性之一，或应用自己注册的过滤器）时启动失败；没有写明 `cosec.pipeline.identity.only-gateway-can-reach=true` 时启动失败。这个属性是运维对网络边界的声明：这类服务相信任何未签名的 `CoSec-Identity`，只有网关能到达它时才安全。给身份头签名留在 8.1。CoSec 只在它看得见的地方拒绝启动：不是 CoSec 服务的后端若从请求体或查询串取方法，必须自己关掉。
+>
+> **2026-11-19 修订（#1728，`STA-8`，维护者：“要求显式声明”）**：§7.3 增加一条：宿主提供刷新路由、用的是 starter 自己构建的刷新、又没有 `MembershipRefresh` bean 时，必须写明 `cosec.jwt.session.memberships-on-refresh=from-token`，否则启动失败。成员关系指令牌携带的角色与附带的策略。不写明的后果是刷新照抄旧令牌的成员关系：被移除的角色或附带策略在该成员下次登录前一直有效，最长到 `cosec.jwt.session.lifetime`（默认 30 天）；有 `MembershipRefresh` 时是访问令牌的寿命；`TokenRevoker.revokeSubject` 在两种情况下都立即生效。这是 `IDN-27`（被移除的角色是否仍然算数绝不是默认参数）落到 starter 自己的装配上。
 
 > **2026-11-08 修订**：`required` 监听器的超时属性是 `cosec.observability.listener.required-timeout`（#1283）；`decideAs` 与 `decide(security, app, …)` 是内部 API（#1283）。限流计数器 id 统一为 `platform/<id>`、`app:<app>/<id>`、`tenant:<tenant>/<id>`，键控桶前缀是 `k:`（#1284）。
 
