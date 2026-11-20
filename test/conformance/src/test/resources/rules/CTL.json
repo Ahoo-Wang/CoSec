@@ -627,7 +627,7 @@
         "control:ComparisonBudgetTest#a statement still being compared when the budget runs out is granted",
         "control:ComparisonBudgetTest#the same change stops at the same comparison"
       ],
-      "pending": "No scenario reaches the budget: it takes millions of comparisons, and the runner analyses with the default one. ComparisonBudgetTest guards it with a small budget; a scenario option for the budget is to come."
+      "pending": null
     },
     {
       "id": "CTL-50",

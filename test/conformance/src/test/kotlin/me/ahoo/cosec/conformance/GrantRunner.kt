@@ -61,6 +61,7 @@ import java.time.Instant
  * "grantor": { "tenant": "acme", "id": "gina", "roles": ["ops@team-a"], "policies": [], "attributes": {"suspended": true} },
  * "candidate": { "tenant": "acme", "document": {...} },                             // replaces that tenant's document
  * "trustRoot": false,
+ * "maxComparisons": 4,                                                              // the analysis's budget (CTL-49); the default when absent
  * "expect": { "fragments": [ { "policy": "p", "statement": 0, "action": "order:read", "resource": "order/{id}",
  *                              "verdict": "YES" | "UNKNOWN", "reason": "NOT_COVERED", "shortfall": "SCOPE" } ],
  *             "unprotect": ["policy:p", "binding:b"] }
@@ -78,7 +79,19 @@ object GrantRunner : ScenarioRunner {
 
     override fun run(scenario: Scenario): Outcome {
         val node = scenario.node
-        node.only("\$comment", "rules", "polarity", "level", "description", "documents", "grantor", "candidate", "trustRoot", "expect")
+        node.only(
+            "\$comment",
+            "rules",
+            "polarity",
+            "level",
+            "description",
+            "documents",
+            "grantor",
+            "candidate",
+            "trustRoot",
+            "maxComparisons",
+            "expect",
+        )
         val documents = node.get("documents")
         documents?.only("platform", "apps", "tenants")
         val snapshot = GrantSnapshot(
@@ -96,7 +109,11 @@ object GrantRunner : ScenarioRunner {
         candidate.only("tenant", "document")
         val tenant = TenantId(candidate.required("tenant").text())
         val change = GrantChange(tenant, document(candidate.required("document"), tenant))
-        val analysis = analyzer.analyze(
+        val budget = node.get("maxComparisons")?.let {
+            require(it.isIntegralNumber && it.longValue() >= 0) { "maxComparisons is a number of comparisons: $it" }
+            GrantAnalyzer(maxComparisons = it.longValue())
+        }
+        val analysis = (budget ?: analyzer).analyze(
             grantor(node.required("grantor")),
             snapshot,
             change,

@@ -3,12 +3,16 @@
 # Tests: :control:test --tests me.ahoo.cosec.control.grant.ComparisonBudgetTest
 
 diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/grant/GrantNarrowing.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/grant/GrantNarrowing.kt
-index efdc66864..984eb82da 100644
+index ac8ab04a9..5eab4181f 100644
 --- a/core/control/src/main/kotlin/me/ahoo/cosec/control/grant/GrantNarrowing.kt
 +++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/grant/GrantNarrowing.kt
-@@ -79,7 +79,7 @@ internal class GrantNarrowing(private val checker: ConditionChecker, private val
+@@ -79,10 +79,10 @@ internal class GrantNarrowing(private val checker: ConditionChecker, private val
          }
-         // Past the budget it is not known to narrow anything, so it is granted (CTL-49).
+         // Past the budget it is not known to narrow anything, so it is granted (CTL-49), without walking the rest.
+         if (budget?.exhausted == true) {
+-            return false
++            return true
+         }
          return previous.statements.any {
 -            budget?.spend() != false &&
 +            budget?.spend() == false ||
