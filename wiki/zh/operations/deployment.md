@@ -332,8 +332,9 @@ cosec:
 从成员身上移除的角色还能用多久：
 
 - **刷新令牌的服务有 `MembershipRefresh` 时：** 直到成员当前的访问令牌过期，最多 `cosec.jwt.token-validity.access`（10 分钟）。
-- **没有时（默认）：** 刷新会沿用旧的 claim，所以直到成员下次登录：最多 `cosec.jwt.session.lifetime`（30 天），只要成员在
-  `cosec.jwt.token-validity.refresh`（7 天）内刷新（[会话](../integration/authentication.md#sessions)）。
+- **设置了 `cosec.jwt.session.memberships-on-refresh: from-token` 时**（提供刷新路由、又没有 `MembershipRefresh` 的主机要写明的选择，`STA-8`）：
+  刷新会沿用旧的 claim，所以直到成员下次登录：最多 `cosec.jwt.session.lifetime`（30 天），只要成员在
+  `cosec.jwt.token-validity.refresh`（7 天）内刷新（[被移除的角色还能用多久](../integration/authentication.md#how-long-a-removed-role-lives)）。
 - **立即：** `TokenRevoker.revokeSubject(tenant, principal)` 在每个副本上拒绝该成员在此之前签发的每个令牌；丢失失效消息的副本最多再多 30 秒，
   刚好在之后签发的令牌还有 `cosec.authentication.revocation.skew`（5 秒）（[撤销一个主体的所有令牌](../integration/authentication.md#revoking-every-token-of-a-principal)）。
 

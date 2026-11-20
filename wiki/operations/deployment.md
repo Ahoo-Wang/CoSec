@@ -477,9 +477,10 @@ How long a role removed from a member keeps working:
 
 - **With a `MembershipRefresh` on the service that refreshes tokens:** until the member's current access token
   expires, at most `cosec.jwt.token-validity.access` (10 minutes).
-- **Without one (the default):** a refresh copies the old claims, so until the member next signs in: at most
-  `cosec.jwt.session.lifetime` (30 days), as long as the member refreshes within `cosec.jwt.token-validity.refresh`
-  (7 days) ([Sessions](../integration/authentication.md#sessions)).
+- **With `cosec.jwt.session.memberships-on-refresh: from-token`** (the choice a host serving the refresh route states
+  when it has no `MembershipRefresh`, `STA-8`): a refresh copies the old claims, so until the member next signs in: at
+  most `cosec.jwt.session.lifetime` (30 days), as long as the member refreshes within `cosec.jwt.token-validity.refresh`
+  (7 days) ([How long a removed role lives](../integration/authentication.md#how-long-a-removed-role-lives)).
 - **At once:** `TokenRevoker.revokeSubject(tenant, principal)` refuses every token of the member issued before it, on
   every replica; allow up to 30 seconds more on a replica that lost the invalidation message, and
   `cosec.authentication.revocation.skew` (5 seconds) for a token issued just after
