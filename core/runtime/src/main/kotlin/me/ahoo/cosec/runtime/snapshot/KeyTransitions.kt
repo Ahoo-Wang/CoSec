@@ -41,6 +41,7 @@ import java.util.concurrent.TimeoutException
 internal class KeyTransitions<T : Any>(private val config: KeyConfig) {
     private val loads = KeyLoads<T>(config)
     private val refused = RefusedCompiles(config, loads)
+    private val deadlines = CompileDeadlines(config, loads)
 
     private val initial = KeyState<T>(retryDelay = config.rejectedReloadRetry)
 
@@ -63,7 +64,8 @@ internal class KeyTransitions<T : Any>(private val config: KeyConfig) {
             is KeyEvent.Evict -> evict(step, event)
             KeyEvent.Close -> close(step)
             is KeyEvent.ReadDone, is KeyEvent.ReadFailed, is KeyEvent.ReadTimedOut, is KeyEvent.Compiled,
-            is KeyEvent.CompileCrashed, is KeyEvent.CompileRejected, is KeyEvent.CompileRetryDue, is KeyEvent.EffectFailed ->
+            is KeyEvent.CompileCrashed, is KeyEvent.CompileRejected, is KeyEvent.CompileRetryDue, is KeyEvent.CompileTimedOut,
+            is KeyEvent.EffectFailed ->
                 ofLoad(step, event)
         }
     }
@@ -277,6 +279,7 @@ internal class KeyTransitions<T : Any>(private val config: KeyConfig) {
             }
 
             is KeyEvent.CompileRetryDue -> refused.onRetryDue(step, load, read)
+            is KeyEvent.CompileTimedOut -> deadlines.onTimedOut(step, load, read)
             is KeyEvent.EffectFailed -> loads.onTransientFailure(step, load, event.cause)
             else -> Unit
         }

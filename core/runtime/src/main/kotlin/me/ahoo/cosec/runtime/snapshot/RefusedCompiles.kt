@@ -64,10 +64,13 @@ internal class RefusedCompiles<T : Any>(private val config: KeyConfig, private v
     /** [load]'s retry came due: [read] compiles again, unless its deadline came. */
     fun onRetryDue(step: KeyStepBuilder<T>, load: LoadState<T>, read: SnapshotRead.Present) {
         if (left(step, load) > 0) {
-            step.emit(KeyEffect.Compile(load.id, read))
+            step.emit(KeyEffect.Compile(load.id, read, CompileDeadlines.of(config, load)))
             return
         }
-        val cause = SnapshotUnavailableException(step.key, "the compile queue stayed full for ${config.coldLoadTimeout}")
+        val cause = SnapshotUnavailableException(
+            step.key,
+            "the compile queue stayed full for ${config.coldLoadTimeout}"
+        )
         loads.onTransientFailure(step, load, cause)
     }
 

@@ -270,6 +270,8 @@ sequenceDiagram
   与 `prewarm-apps` 一起在实例报告就绪之前加载，所以每个应用的第一个请求都会找到已装入的文档（[`prewarm-host-apps`](./configuration.md#snapshot)）。
   被持有的应用文档在发布后几秒内被替换（失效消息或下一轮重新确认），与平台文档相同。
 - **冷加载最多等待** [`cold-load-timeout`](./configuration.md#snapshot)（2 秒）；之后对该请求而言文档算作失败。
+- **编译有其加载的截止时间**（R2D-11）：冷加载为 `cold-load-timeout`，重新加载为存储读取超时（30 秒），从加载开始时算起。到时仍未返回的编译会在下一次重新验证时使其加载以失败结束：冷加载失败，重新加载保留已安装的内容，重新编译失败关闭。此时仍在编译队列中等待的编译永远不会开始。正在运行的编译无法被中断，因此任其结束，而它运行期间该修订不会再次编译：每个这样的修订最多占用一个编译线程。日志以 `ERROR` 记录 `Compiling snapshot document [<doc>] revision <n> did not end within <budget>`（[故障排查](./troubleshooting.md#a-compilation-does-not-end)）。
+- **被编译队列拒绝的重新编译会等待**（R2D-12）。平台文档的限制或声明的属性变化时，每个持有的应用和租户文档都会重新编译。遇到已满编译队列的重新编译会保留它的读取结果，并在从开始起 `cold-load-timeout` 之内再次编译；在此期间它的请求按照针对上一个平台文档做出的编译来决策，就像它的读取进行时那样。只有之后它才失败关闭，与无法再次编译的文档相同（`SNP-4`）。
 - **持有的文档有上限。** 每个族最多持有 [`max-apps`/`max-tenants`](./configuration.md#snapshot) 个文档和
   `max-absent-apps`/`max-absent-tenants` 个"不存在"条目，在一个后台整理线程上丢弃最久未用的。冷加载突发时，它可能短暂地持有
   最多上限的两倍，且绝不超出上限 4,096 个以上，另加正在加载的文档；超过这个数时，加载该文档的线程在回答请求之前最多驱逐该类

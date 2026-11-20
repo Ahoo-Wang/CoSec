@@ -174,7 +174,8 @@ internal class Passes(
      */
     fun periodic(): CompletableFuture<Void> {
         lagReports.queue()
-        return tick()
+        // After the tick, which abandons a pass held only by compilations (SNP-6), the loads of those compilations end.
+        return tick().also { CompileDeadlines.sweep(context, context.nanoTime.get().asLong) }
     }
 
     /** Schedules [periodic] every [SnapshotOptions.revalidateInterval]; the source does, once, while it is built. */

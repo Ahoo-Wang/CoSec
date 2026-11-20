@@ -351,6 +351,37 @@ class KeyTransitionsTest {
         due.effects.filterIsInstance<KeyEffect.ScheduleRetry>().single()
     }
 
+    /**
+     * R2D-11: a compilation that has not answered by its load's deadline ends the load: abandoned, and for a recompile
+     * failed closed, as any failure to compile again; the compilation's late answer is dropped.
+     */
+    @Test
+    fun aRecompileWhoseCompilationTimesOutFailsClosedAndAbandonsIt() {
+        installDocument()
+        key.recompile().assert().isTrue()
+        key.request(Ask.Reload(force = false))
+        val load = key.state.load!!.id
+        key.offer(KeyEvent.ReadDone(load, present(1))).effects.filterIsInstance<KeyEffect.Compile>().single()
+            .deadline.assert().isEqualTo(KeyHarness.STORE_READ_TIMEOUT.toNanos())
+        val timedOut = key.offer(KeyEvent.CompileTimedOut(load))
+        timedOut.effects.filterIsInstance<KeyEffect.AbandonCompile>().single().loadId.assert().isEqualTo(load)
+        key.state.load.assert().isNull()
+        key.state.installed!!.origin.assert().isEqualTo(EntryOrigin.RECOMPILE_PENDING)
+        key.offer(KeyEvent.Compiled(load, DocumentState.Present("late"))).effects.assert().isEmpty()
+    }
+
+    /** R2D-11: a cold load's compilation is due by `coldLoadTimeout`; past it the load answers failed. */
+    @Test
+    fun aColdLoadWhoseCompilationTimesOutAnswersFailed() {
+        val request = key.request(Ask.Request)
+        val load = key.state.load!!.id
+        key.offer(KeyEvent.ReadDone(load, present(1))).effects.filterIsInstance<KeyEffect.Compile>().single()
+            .deadline.assert().isEqualTo(KeyHarness.COLD_LOAD_TIMEOUT.toNanos())
+        key.offer(KeyEvent.CompileTimedOut(load))
+        key.answered[key.hung[request]]!!.state.assert().isInstanceOf(DocumentState.Failed::class.java)
+        key.state.installed.assert().isNull()
+    }
+
     /** A reload that does not recompile still keeps what is installed at once when refused, and retries later (F6). */
     @Test
     fun aRefusedPlainReloadStillKeepsWhatIsInstalledAtOnce() {
