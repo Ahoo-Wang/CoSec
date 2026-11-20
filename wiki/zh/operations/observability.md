@@ -295,9 +295,9 @@ CoCache 会在同一个 registry 中为 CoSec 的缓存记录它自己的指标�
   `REVIEW_NEEDED` 表示分析发现了发布时未经审批的升级项、分析无法运行，或比较没有按时完成（这时 `moved` 为空，唯一的升级项原因为 `DETECTION_TIMED_OUT`）：应当有人复核
   这次发布，控制面还会以 `WARN` 记录 `Change <changeId> published on [<doc>]: <note>; moved [...].`。发布的客户端断开连接时
   它们也会被记录。它们和所有不受控的事件一样尽力投递：发布已经发生。
-- **事件中的升级项**是 `subject`、`reason` 与 `detail`（[测试变更](../policies/testing.md)）。`TENANT_BINDING` 项只写出绑定和
-  它所在的租户文档（`binding <id> of [tenant:<t>]`），策略与语句在 `detail` 中；绑定绑定了谁、在哪个空间，属于该租户，不写出。
-  它仅供参考，从不算作需要审批的内容。
+- **事件中的升级项**是 `subject`、`reason` 与 `detail`（[测试变更](../policies/testing.md)）。`TENANT_BINDINGS` 项代表一条被放宽的
+  权限策略触及的所有租户：每条策略一项（`tenants binding [<policy>] in app <app>`），语句、数量和前 20 个租户文档在 `detail` 中，
+  因此无论有多少租户，事件都很小。它仅供参考，从不算作需要审批的内容（`CTL-48`）。`reason` 是 `Escalation.Reason` 的名称之一。
 
 有 `cosec-kafka` 和 `KafkaOperations` bean 时，starter 还会注册一个 `KafkaChangeListener`，除非
 [`cosec.control.audit.kafka.enabled`](./configuration.md#control-plane) 为 `false`。它把每个事件写到

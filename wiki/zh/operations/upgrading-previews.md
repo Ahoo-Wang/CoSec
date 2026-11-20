@@ -24,6 +24,17 @@ description: "每个 8.0 预览版（alpha 与 beta）到下一个之间的变�
 
 ## 从 8.0.0-beta.4 升级 {#from-8-0-0-beta-4}
 
+- **应用变更按每条策略一项列出它触及的租户；升级项的原因是枚举**（第二轮评审，`R2C-14`、`R2C-5`、`CTL-48`）。受影响的是读取变更
+  `escalations` 的一方（控制 API 的 `GET /changes/{id}`、`ChangeListener`、Kafka 上的审计 JSON），以及构造或读取 `Escalation` 的代码。
+  - 每条租户绑定一项的 `TENANT_BINDING` 已移除。放宽权限策略的应用变更，每条策略带一项 `TENANT_BINDINGS`：
+    `tenants binding [<policy>] in app <app>`，写出语句、绑定它的租户文档数（来自反向引用索引的上限）及其中前 20 个。以
+    `TENANT_BINDING` 条数判断变更触及多少租户的使用方，改读 `detail` 中的数量。在 50,000 个租户时，变更记录从约 50 MB 降到几 KB，
+    每个审计事件同样如此，检查变更也不再读取任何租户文档。
+  - `Escalation.reason` 是 `Escalation.Reason` 枚举，名称就是 JSON 一直携带的名称；`Escalation.TENANT_BINDING` 与
+    `Escalation.DETECTION_TIMED_OUT` 变为 `Escalation.Reason.TENANT_BINDINGS` 与 `Escalation.Reason.DETECTION_TIMED_OUT`。已存储的
+    变更中本版本不认识的名称读作 `UNKNOWN`，它从不是仅供参考的。
+  - `ChangeEvent`、`Escalation`、`RevisionRef` 与 `MovedHead` 标为 `@ExperimentalCoSecApi`：你的 `ChangeListener` 需要 opt in，在某个
+    版本用过它们之前，它们可能在小版本中变化。
 - **核心模块的公共形状在 RC 之前定下**（第二轮评审，`R2A-1` 至 `R2A-7`）。受影响的是针对 `cosec-model`、`cosec-spi`、`cosec-api` 或引擎编译的代码；
   文档、属性、已存储的值和线上格式都不变。
   - 决策值是写明 `equals`、`hashCode` 和 `toString` 的普通 final 类，不再是 data class：`Decision.Permit`、`Deny`、`Indeterminate`、
