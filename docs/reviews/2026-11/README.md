@@ -43,6 +43,7 @@ performance.
 | `saas-scale-raw-output.txt` | The harnesses' raw output |
 | `saas-referrers-pr-b-evidence.md` | The measurements behind #1729 |
 | `saas-app-change-cost.md` | What an app change that widens a permission every tenant's roles list costs the control plane, and the grant analysis on a very large policy or grantor (R2C-14, R2C-25, R2C-26), with the proposals the coordinator decided on 2026-11-20 (roadmap §9) |
+| `f4-step1-edge-measurement.md` | What CoSec's own code costs a request at the gateway and at a host, part by part (15.7 µs and 34 KB at the gateway, of which the decision is 4.9 µs), what verifying a token costs, and the proposal for a cache of verified tokens |
 | `core/runtime/src/test/kotlin/me/ahoo/cosec/runtime/snapshot/SaasScaleMeasurement.kt`, `.../runtime/shadow/SaasScaleCandidateMeasurement.kt`, `.../runtime/SaasShadowCostMeasurement.kt`, `backends/cocache/src/test/kotlin/me/ahoo/cosec/cocache/SaasScaleRevocationMeasurement.kt` | The harnesses the numbers came from: a `main` each, compiled with the test sources and never run by `check` (the KDoc of each says how to run it) |
 
 The harnesses are test sources of the modules their packages name, so CI compiles them and they follow the code; they are not re-run, and the numbers stay those of the commit each report names. In-memory stores stand in for
@@ -54,5 +55,6 @@ Redis in all of them; the reports say which figures are measured and which are c
 |---|---|---|
 | `saas-referrers-design.md` | Back-references and the document list as members, with the five conditions of its review (section 9) and the staged list's member structure (section 8) | Being implemented in #1729 (`CTL-42` to `CTL-44`, `MIG-4`) |
 | `saas-shadow-staged-design.md` | The staged list, the acknowledgement, and sampling only what can give a sample (Design D2) | Approved with four conditions, not started (`CTL-46`, `CTL-47`, `OBS-8`) |
+| `saas-open-changes-design.md` | G2: the open changes as sets of record, store failures as 503, a tolerant shadow pass, a format number on every stored record with one reader's rule | Approved on 2026-11-20 with one correction (the sets are not kept while the old list exists); being built as #1764, #1766, #1769 and two more |
 | `system-e2e-design.md` | The system test before RC1 | Built (`test/system-*`) |
 | `issue-1679-testing-design.md` | Testing an application's code against CoSec (issue #1679) | Built (`PIP-29`, `cosec-testkit`) |

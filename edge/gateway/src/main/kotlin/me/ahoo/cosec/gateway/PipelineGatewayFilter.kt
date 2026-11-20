@@ -34,15 +34,11 @@ import org.springframework.cloud.gateway.filter.GlobalFilter
 import org.springframework.cloud.gateway.route.Route
 import org.springframework.cloud.gateway.support.ServerWebExchangeUtils.GATEWAY_ROUTE_ATTR
 import org.springframework.core.Ordered
-import org.springframework.http.HttpCookie
 import org.springframework.http.HttpHeaders
-import org.springframework.http.server.reactive.ServerHttpRequest
-import org.springframework.http.server.reactive.ServerHttpRequestDecorator
-import org.springframework.util.LinkedMultiValueMap
-import org.springframework.util.MultiValueMap
 import org.springframework.web.server.ServerWebExchange
 import reactor.core.publisher.Mono
-import java.net.URI
+import java.util.Locale
+import java.util.concurrent.ConcurrentHashMap
 
 /**
  * The gateway filter over the coroutine pipeline (RFC 0006 §7.3): the same bridge as the WebFlux filter, so the two
@@ -76,41 +72,55 @@ class PipelineGatewayFilter @InternalCoSecApi constructor(
 ) : ReactivePipelineBridge(pipeline, contributors, remoteIpResolver, host),
     GlobalFilter,
     Ordered {
-    private val credentialHeaders: Set<String> = pipeline.credentialHeaders
-    private val withoutQueryToken: (String?) -> String? = pipeline::withoutQueryToken
-    private val withoutCookieToken: (String) -> String? = pipeline::withoutCookieToken
-    private val namesCookieToken: (String) -> Boolean = pipeline::namesCookieToken
+    private val credentials = CredentialStripping(pipeline)
+
+    /**
+     * What a route decides about its requests, by route id: computed once per [Route] instance, not per request (R2B-9).
+     * A refreshed route is a new instance under its id and replaces the entry; one entry per route id.
+     */
+    private class RouteFacts(val route: Route) {
+        val receivesIdentity = receivesIdentity(route)
+        val attributes = mapOf(
+            AuditRequest.ROUTE_ID_ATTRIBUTE_KEY to route.id,
+            IdentityIssuer.FORWARD_ATTRIBUTE to receivesIdentity.toString(),
+        )
+
+        /** The route's app as configured, of whatever type: the pipeline checks it, and makes it the host app (RC1-6). */
+        val app: Any? = route.metadata[APP_METADATA]
+    }
+
+    private val routeFacts = ConcurrentHashMap<String, RouteFacts>()
+
+    private fun factsOf(route: Route): RouteFacts {
+        val known = routeFacts[route.id]
+        if (known != null && known.route === route) return known
+        return RouteFacts(route).also { routeFacts[route.id] = it }
+    }
 
     override fun read(exchange: ServerWebExchange): HttpFacts {
         val route = exchange.getAttribute<Route>(GATEWAY_ROUTE_ATTR)
             ?: return HttpFactsReader.read(exchange, remoteIpResolver, host)
-        val attributes = mapOf(
-            AuditRequest.ROUTE_ID_ATTRIBUTE_KEY to route.id,
-            IdentityIssuer.FORWARD_ATTRIBUTE to receivesIdentity(route).toString(),
-        )
-        // The route's app as configured, of whatever type: the pipeline checks it, and makes it the host app (RC1-6).
-        val app = route.metadata[APP_METADATA]
-        return HttpFactsReader.read(exchange, remoteIpResolver, host, attributes, app)
+        val facts = factsOf(route)
+        return HttpFactsReader.read(exchange, remoteIpResolver, host, facts.attributes, facts.app)
     }
 
     override fun filter(exchange: ServerWebExchange, chain: GatewayFilterChain): Mono<Void> {
-        // Whatever identity the client claims is gone before anything reads the request.
-        val stripped = exchange.mutate().request {
-            it.headers { headers ->
-                headers.remove(
-                    IdentityCodec.HEADER
-                )
-            }
-        }.build()
+        // Whatever identity the client claims is gone before anything reads the request. IdentityStripFilter, first of
+        // all filters, has removed it where it runs: a request without it is not copied again (R2B-9).
+        val stripped = if (exchange.request.headers.containsHeader(IDENTITY_HEADER)) {
+            exchange.mutate().request { it.headers { headers -> headers.remove(IDENTITY_HEADER) } }.build()
+        } else {
+            exchange
+        }
         return filterInternal(stripped) { authorized, outcome ->
             val request = authorized.request
             val route = authorized.getAttribute<Route>(GATEWAY_ROUTE_ATTR)
             // The caller's credentials go only where its identity may go, only when asked for (RC1-5, RC1-49), and only
             // when the pipeline accepted them: a refused one, on a route anyone may use, stays here (R1A-7).
-            val credentials = forwardAuthorization && outcome.security?.principal != null &&
-                route != null && receivesIdentity(route)
+            val keepsCredentials = forwardAuthorization && outcome.security?.principal != null &&
+                route != null && factsOf(route).receivesIdentity
             // Read before the builder's lambda: one it writes would be boxed, an allocation on every request.
-            val cookies = if (credentials) null else withoutCookieTokens(request.headers)
+            val cookies = if (keepsCredentials) null else credentials.cookies(request.headers)
             val downstream = request.mutate()
                 .headers { headers ->
                     // Set, not added: the backend sees exactly the id the pipeline used, never the client's alongside it.
@@ -120,25 +130,12 @@ class PipelineGatewayFilter @InternalCoSecApi constructor(
                     outcome.forward.forEach { (name, value) ->
                         if (value == null) headers.remove(name) else headers.set(name, value)
                     }
-                    if (!credentials) {
-                        credentialHeaders.forEach(headers::remove)
-                        when {
-                            cookies == null -> Unit
-                            cookies.kept.isEmpty() -> headers.remove(HttpHeaders.COOKIE)
-                            else -> headers.put(HttpHeaders.COOKIE, cookies.kept)
-                        }
-                    }
+                    if (!keepsCredentials) credentials.strip(headers, cookies)
                 }
-            if (!credentials) {
-                val query = request.uri.rawQuery
-                val kept = withoutQueryToken(query)
-                if (kept != query) {
-                    downstream.uri(withQuery(request.uri, kept))
-                }
-            }
+            if (!keepsCredentials) credentials.withoutQueryToken(request.uri)?.let(downstream::uri)
             // The last hop ([IdentityHeadersFilter]) forwards this value, and only this, whatever later filters do.
             outcome.forward[IdentityCodec.HEADER]?.let { authorized.attributes[IdentityHeadersFilter.FORWARDED_ATTRIBUTE] = it }
-            chain.filter(authorized.mutate().request(handedOn(downstream.build(), cookies)).build())
+            chain.filter(authorized.mutate().request(credentials.handedOn(downstream.build(), cookies)).build())
         }
     }
 
@@ -149,79 +146,6 @@ class PipelineGatewayFilter @InternalCoSecApi constructor(
     private fun removeMethodOverrides(headers: HttpHeaders) {
         for (name in METHOD_OVERRIDE_HEADERS) {
             headers.remove(name)
-        }
-    }
-
-    /** [request], whose cookies agree with its `Cookie` headers when [cookies] rewrote them ([WithoutTokenCookies]). */
-    private fun handedOn(request: ServerHttpRequest, cookies: CookieRewrite?): ServerHttpRequest =
-        if (cookies == null) request else WithoutTokenCookies(request, withoutCookieToken, cookies.dropped)
-
-    /** The `Cookie` headers that go on ([kept], none: no `Cookie` header), and those dropped whole ([dropped]). */
-    private class CookieRewrite(val kept: List<String>, val dropped: List<String>)
-
-    /**
-     * The `Cookie` headers of [headers] without the `authorization` cookie, a header left with no cookie dropped; null
-     * when none names it, so nothing changes and nothing is allocated beyond the check. Only a request it rewrites needs
-     * its cookies to agree ([WithoutTokenCookies]).
-     */
-    private fun withoutCookieTokens(headers: HttpHeaders): CookieRewrite? {
-        val cookies = headers[HttpHeaders.COOKIE] ?: return null
-        if (cookies.none(namesCookieToken)) return null
-        val kept = ArrayList<String>(cookies.size)
-        val dropped = ArrayList<String>(0)
-        for (cookie in cookies) {
-            val rewritten = if (namesCookieToken(cookie)) withoutCookieToken(cookie) else cookie
-            if (rewritten == null) dropped += cookie else kept += rewritten
-        }
-        return CookieRewrite(kept, dropped)
-    }
-
-    /**
-     * [request] whose parsed cookies agree with its rewritten `Cookie` headers (R2-3 of #1194's review): Spring keeps
-     * the cookies the server parsed from the headers as received, so a later filter, or a `forward:` route's local
-     * handler, would still read the token from them. A cookie goes when its pair, as the rule rewriting the headers reads
-     * it ([withoutCookieToken]), would go, and when a header that went whole ([dropped]) holds it, by name and value
-     * as Netty reads its pairs (R3-5): a `$Version` header that hid the token goes with every cookie in it. Built only
-     * for a request whose headers were rewritten.
-     *
-     * Accepted: matching by name and value also removes an identical cookie that a kept header carries too. Only
-     * non-token cookies are affected, and only in that exotic case; removing too much is the safe direction.
-     */
-    private class WithoutTokenCookies(
-        request: ServerHttpRequest,
-        withoutCookieToken: (String) -> String?,
-        dropped: List<String>,
-    ) : ServerHttpRequestDecorator(request) {
-        private val cookies: MultiValueMap<String, HttpCookie> = LinkedMultiValueMap<String, HttpCookie>().apply {
-            val inDropped = if (dropped.isEmpty()) emptySet() else dropped.flatMapTo(HashSet(), ::pairsOf)
-            request.cookies.forEach { (name, values) ->
-                val kept = values.filter { withoutCookieToken("$name=${it.value}") != null && (name to it.value) !in inDropped }
-                if (kept.isNotEmpty()) put(name, kept)
-            }
-        }
-
-        override fun getCookies(): MultiValueMap<String, HttpCookie> = cookies
-
-        private companion object {
-            private const val SKIPPED = "\t\n\u000B\u000C\r ,"
-
-            /**
-             * The name and value of each pair of [header] as Netty's `ServerCookieDecoder` reads them: the name after
-             * what it skips (whitespace and `,`), up to `=`, exactly (Netty's `substring(nameBegin, nameEnd)`, R4-2);
-             * the value up to the next `;`, a double-quoted one unwrapped. Every pair, `$`-named ones too: a pair Netty
-             * skipped matches no cookie.
-             */
-            fun pairsOf(header: String): List<Pair<String, String>> = header.split(';').mapNotNull { pair ->
-                val text = pair.trimStart { it in SKIPPED }
-                if ('=' !in text) return@mapNotNull null
-                val value = text.substringAfter('=')
-                val unwrapped = if (value.length >= 2 && value.startsWith('"') && value.endsWith('"')) {
-                    value.substring(1, value.length - 1)
-                } else {
-                    value
-                }
-                text.substringBefore('=') to unwrapped
-            }
         }
     }
 
@@ -236,6 +160,9 @@ class PipelineGatewayFilter @InternalCoSecApi constructor(
          * the lower-case copy of the name, an allocation on every request.
          */
         private val METHOD_OVERRIDE_HEADERS = arrayOf("x-http-method-override", "x-http-method", "x-method-override")
+
+        /** `CoSec-Identity` in lower case, the form the headers map looks names up by: no copy of it per request. */
+        private val IDENTITY_HEADER = IdentityCodec.HEADER.lowercase(Locale.ROOT)
 
         /**
          * Filter order for gateway authorization.
@@ -257,18 +184,6 @@ class PipelineGatewayFilter @InternalCoSecApi constructor(
 
         /** The scheme of a route to a registered service, as Spring Cloud Gateway's load balancer reads it. */
         private const val LOAD_BALANCED = "lb"
-
-        /**
-         * [uri] with its raw query replaced by [query], none when null: the rest of the text as received, so nothing is
-         * encoded or checked again (a query of the original URI less some pairs is as valid as the original).
-         */
-        private fun withQuery(uri: URI, query: String?): URI {
-            val text = uri.toString()
-            val end = uri.rawFragment?.let { text.length - it.length - 1 } ?: text.length
-            return URI.create(
-                text.substring(0, text.indexOf('?')) + query?.let { "?$it" }.orEmpty() + text.substring(end)
-            )
-        }
 
         /**
          * Whether [route]'s backend receives what the gateway forwards about the caller: its metadata

@@ -3,15 +3,15 @@
 # Tests: :gateway:test --tests me.ahoo.cosec.gateway.PipelineGatewayFilterTest --tests me.ahoo.cosec.gateway.CookieTokenPropertyTest :conformance:test
 
 diff --git a/edge/gateway/src/main/kotlin/me/ahoo/cosec/gateway/PipelineGatewayFilter.kt b/edge/gateway/src/main/kotlin/me/ahoo/cosec/gateway/PipelineGatewayFilter.kt
-index 2864560f4..079c7021b 100644
+index 234444981..52632477d 100644
 --- a/edge/gateway/src/main/kotlin/me/ahoo/cosec/gateway/PipelineGatewayFilter.kt
 +++ b/edge/gateway/src/main/kotlin/me/ahoo/cosec/gateway/PipelineGatewayFilter.kt
-@@ -110,7 +110,7 @@ class PipelineGatewayFilter @InternalCoSecApi constructor(
-             val credentials = forwardAuthorization && outcome.security?.principal != null &&
-                 route != null && receivesIdentity(route)
+@@ -120,7 +120,7 @@ class PipelineGatewayFilter @InternalCoSecApi constructor(
+             val keepsCredentials = forwardAuthorization && outcome.security?.principal != null &&
+                 route != null && factsOf(route).receivesIdentity
              // Read before the builder's lambda: one it writes would be boxed, an allocation on every request.
--            val cookies = if (credentials) null else withoutCookieTokens(request.headers)
-+            val cookies: CookieRewrite? = null
+-            val cookies = if (keepsCredentials) null else credentials.cookies(request.headers)
++            val cookies: CredentialStripping.CookieRewrite? = null
              val downstream = request.mutate()
                  .headers { headers ->
                      // Set, not added: the backend sees exactly the id the pipeline used, never the client's alongside it.
