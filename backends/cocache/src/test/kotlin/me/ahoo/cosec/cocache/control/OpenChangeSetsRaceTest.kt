@@ -88,7 +88,10 @@ class OpenChangeSetsRaceTest {
         )
 
         /** A write held apart: [list] before the record, [store] the record, [unlist] after. */
-        inner class Write(val change: ChangeRequest, private val replaced: Versioned<ChangeRequest>? = records[change.id]) {
+        inner class Write(
+            val change: ChangeRequest,
+            private val replaced: Versioned<ChangeRequest>? = records[change.id]
+        ) {
             val digest: SnapshotDigest = CoCacheControlStore.digest(ChangeRequestCacheCodec, change)
 
             suspend fun list() = sets.listBefore(change, digest)
