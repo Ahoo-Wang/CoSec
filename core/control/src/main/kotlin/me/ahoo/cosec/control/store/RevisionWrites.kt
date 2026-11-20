@@ -21,8 +21,8 @@ import me.ahoo.cosec.model.PolicyId
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 
 /**
- * The conditional replaces [Revisions] and its parts make: of a document's revision index, of the app list and of a
- * policy's back-references. Each reads, changes and writes with the digest it read, again while that changed, at most
+ * The conditional replaces [Revisions] and its parts make: of a document's revision index and of the app list. The
+ * back-references are entries of their own, added and removed one by one ([ControlStore.addReferrer]), with no replace. Each reads, changes and writes with the digest it read, again while that changed, at most
  * [maxAttempts] times; `false` when it kept changing.
  */
 internal class RevisionWrites(private val store: ControlStore, private val maxAttempts: Int) {
@@ -52,24 +52,6 @@ internal class RevisionWrites(private val store: ControlStore, private val maxAt
                 return true
             }
             if (store.putApps(current?.digest, next)) {
-                return true
-            }
-        }
-        return false
-    }
-
-    suspend fun updateReferrers(
-        target: SnapshotKey,
-        policy: PolicyId,
-        change: (Map<SnapshotKey, Long>) -> Map<SnapshotKey, Long>,
-    ): Boolean {
-        repeat(maxAttempts) {
-            val current = store.referrers(target, policy)
-            val next = change(current?.value.orEmpty())
-            if (next == (current?.value ?: emptyMap<SnapshotKey, Long>())) {
-                return true
-            }
-            if (store.putReferrers(target, policy, current?.digest, next)) {
                 return true
             }
         }

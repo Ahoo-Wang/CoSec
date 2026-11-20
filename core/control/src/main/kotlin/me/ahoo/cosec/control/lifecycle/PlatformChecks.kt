@@ -50,19 +50,32 @@ internal object PlatformChecks {
                 changedWithCopies(existing.getValue(policy.id), policy, i, context, findings)
                 continue
             }
-            val tenants = context.referrers(SnapshotKey.Platform, policy.id).filterIsInstance<SnapshotKey.Tenant>()
-            val uses = tenants.associateWith { uses(context, it, policy.id) }
-            val using = uses.filterValues { it != false }.keys
-            if (using.isEmpty()) continue
-            val status = if (uses.values.any { it == null }) UNAVAILABLE else UNPROCESSABLE
+            // RC1-9, CTL-43: a tenant whose entry says it defines the id itself blocks, read from the entries, not heads.
+            val defining = definingTenants(context, policy.id)
+            if (defining?.isEmpty() == true) continue
             findings += Finding(
                 "V2",
                 "$.policies[$i].id",
-                "[${policy.id.value}] is a policy id ${using.map { it.toString() }.sorted()} already use" +
-                    if (status == UNAVAILABLE) ", or whose document could not be read" else "",
-                status,
+                if (defining == null) {
+                    "[${policy.id.value}] may be a policy id a tenant already uses: its back-references could not be read"
+                } else {
+                    "[${policy.id.value}] is a policy id ${defining.map { it.toString() }.sorted()} already use"
+                },
+                if (defining == null) UNAVAILABLE else UNPROCESSABLE,
             )
         }
+    }
+
+    /** The tenants whose entries say they define [policy] themselves; `null` when its references cannot be read. */
+    @Suppress("TooGenericExceptionCaught")
+    private suspend fun definingTenants(context: CurrentDocuments, policy: PolicyId): Set<SnapshotKey.Tenant>? = try {
+        context.referrers(SnapshotKey.Platform, policy).filter { it.definesItself }
+            .mapNotNullTo(LinkedHashSet()) { it.referrer as? SnapshotKey.Tenant }
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: Exception) {
+        log.warn(e) { "The back-references of [${policy.value}] could not be read; it is refused as an id a tenant may use." }
+        null
     }
 
     /**
@@ -78,7 +91,17 @@ internal object PlatformChecks {
         findings: MutableList<Finding>,
     ) {
         if (EntryDigest.of(before) == EntryDigest.of(after)) return
-        val tenants = context.referrers(SnapshotKey.Platform, after.id).filterIsInstance<SnapshotKey.Tenant>()
+        // Only a tenant whose entry says it defines the id can hold a copy; its content is compared on its head. One
+        // whose references cannot be read is refused as copied (CTL-42), never let through.
+        val tenants = definingTenants(context, after.id) ?: run {
+            findings += Finding(
+                "V2",
+                "$.policies[$index].id",
+                "[${after.id.value}] may be copied by a tenant: its back-references could not be read",
+                UNAVAILABLE,
+            )
+            return
+        }
         val holding = tenants.associateWith { definesCopy(context, it, after.id) }.filterValues { it != false }
         if (holding.isEmpty()) return
         val status = if (holding.values.any { it == null }) UNAVAILABLE else UNPROCESSABLE
@@ -103,25 +126,6 @@ internal object PlatformChecks {
         throw e
     } catch (e: Exception) {
         log.warn(e) { "The document of [$tenant] could not be read; [${policy.value}] is refused as one it may copy." }
-        null
-    }
-
-    /** Whether the head of [tenant] defines or binds [policy]; `null` when it cannot be read. */
-    @Suppress("TooGenericExceptionCaught")
-    private suspend fun uses(
-        context: CurrentDocuments,
-        tenant: SnapshotKey.Tenant,
-        policy: PolicyId
-    ): Boolean? = try {
-        context.head(tenant)?.document.let { document ->
-            document != null && RoleExpansion.effective(document).let { effective ->
-                effective.policies.any { it.id == policy } || effective.bindings.any { it.policy == policy }
-            }
-        }
-    } catch (e: CancellationException) {
-        throw e
-    } catch (e: Exception) {
-        log.warn(e) { "The document of [$tenant] could not be read; [${policy.value}] is refused as one it may use." }
         null
     }
 }

@@ -41,7 +41,7 @@ internal object RemovedReferences {
         findings: MutableList<Finding>,
     ) {
         val referenced = try {
-            ReferencedPolicies.of(key, base, candidate, context::referrers, context::head)
+            ReferencedPolicies.of(key, base, candidate, context::referrers)
         } catch (_: DocumentCompileException) {
             return
         }

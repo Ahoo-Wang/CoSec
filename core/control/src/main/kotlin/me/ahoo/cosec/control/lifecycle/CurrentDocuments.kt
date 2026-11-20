@@ -18,6 +18,7 @@ package me.ahoo.cosec.control.lifecycle
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.control.store.AppList
 import me.ahoo.cosec.control.store.Head
+import me.ahoo.cosec.control.store.ReferrerEntry
 import me.ahoo.cosec.control.store.Versioned
 import me.ahoo.cosec.model.PolicyId
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
@@ -31,7 +32,8 @@ import me.ahoo.cosec.spi.snapshot.SnapshotKey
 interface CurrentDocuments {
     suspend fun head(key: SnapshotKey): Head?
 
-    suspend fun referrers(target: SnapshotKey, policy: PolicyId): Set<SnapshotKey>
+    /** The entries of the references to [policy] of [target]; a value that cannot be read throws (`CTL-42`). */
+    suspend fun referrers(target: SnapshotKey, policy: PolicyId): Set<ReferrerEntry>
 
     suspend fun apps(): Versioned<AppList>?
 }

@@ -109,17 +109,18 @@ class Revisions(
         val publishedAt = document.publishedAt
         val stored = SnapshotDocuments.of(document)
         val digest = store.digestOf(stored)
-        writes.updateIndex(key) { it.copy(pending = it.pending + PendingRecord(digest, publishedAt)) } ||
-            warn("[$key] revision $revision: its record could not be registered as pending; an orphan would stay")
-        check(store.putRecord(key, stored) == digest) { "The store addressed the record of [$key] by another digest." }
-        // As older versions indexed the base too: what it had under the platform for app permissions is dropped below.
-        val before = base?.let { referrerIndex.indexedByOlderVersions(it.document) }.orEmpty()
+        val before = base?.let { referrerIndex.references(it.document) }.orEmpty()
         val after = referrerIndex.references(document)
-        for ((target, policy) in after - before) {
-            check(writes.updateReferrers(target, policy) { referrerIndex.indexed(it, key, revision) }) {
-                "[$key]: the reference to [$policy] of [$target] could not be indexed; the head was not moved."
-            }
-        }
+        val added = after - before
+        // One write: the record pending, and what the revision indexes (its forward record, CTL-44), before either.
+        writes.updateIndex(key) { index ->
+            index.copy(
+                pending = index.pending + PendingRecord(digest, publishedAt),
+                indexed = index.indexed + added.map { it.at(revision) },
+            )
+        } || warn("[$key] revision $revision: its record could not be registered as pending; an orphan would stay")
+        check(store.putRecord(key, stored) == digest) { "The store addressed the record of [$key] by another digest." }
+        referrerIndex.addEntries(key, revision, added)
         if (key is SnapshotKey.App) {
             // Before the head moves, whether this is its first revision or the list was lost: no app has a head the
             // app list does not name (RC1-4).
@@ -144,7 +145,7 @@ class Revisions(
             }
             val published = PublishOutcome.Published(revision, digest)
             try {
-                settle(key, entryOf(document, digest), before - after)
+                settle(key, entryOf(document, digest), after)
                 if (key == SnapshotKey.Platform && base == null) {
                     listing.completeOnNewStore()
                 }
@@ -162,9 +163,9 @@ class Revisions(
      * store's own timeout (#1263); the caller's stays pending and takes effect when [publish] returns.
      */
     @Suppress("TooGenericExceptionCaught")
-    private suspend fun settle(key: SnapshotKey, entry: RevisionEntry, dropped: Set<Pair<SnapshotKey, PolicyId>>) {
+    private suspend fun settle(key: SnapshotKey, entry: RevisionEntry, kept: Set<ReferrerIndex.Reference>) {
         try {
-            published(key, entry, dropped)
+            published(key, entry, kept)
         } catch (e: Exception) {
             log.warn(e) {
                 "[$key] revision ${entry.revision} is published; its index or the references it dropped could not be " +
@@ -195,15 +196,15 @@ class Revisions(
         ),
     )
 
-    /** After the head moved to [entry] (§5.4 steps 5 and 6): index it, drop the [dropped] references. Failures only warn. */
-    private suspend fun published(key: SnapshotKey, entry: RevisionEntry, dropped: Set<Pair<SnapshotKey, PolicyId>>) {
+    /**
+     * After the head moved to [entry] (§5.4 steps 5 and 6): index it, then drop the references its record holds that the
+     * published revision no longer has ([kept] is what it has). Failures only warn.
+     */
+    private suspend fun published(key: SnapshotKey, entry: RevisionEntry, kept: Set<ReferrerIndex.Reference>) {
         if (!index(key, entry)) {
             warn("[$key] revision ${entry.revision} is published but not indexed; history() rebuilds it from the chain")
         }
-        for ((target, policy) in dropped) {
-            writes.updateReferrers(target, policy) { referrerIndex.dropped(it, key, entry.revision) } ||
-                warn("[$key] no longer refers to [$policy] of [$target], which stays indexed")
-        }
+        referrerIndex.dropGone(key, entry.revision, kept)
     }
 
     /**
@@ -329,6 +330,10 @@ class Revisions(
     internal suspend fun record(key: SnapshotKey, digest: SnapshotDigest): SnapshotDocument? = store.record(key, digest)
 
     /** [ReferrerIndex.referrers]: the documents indexed as referring to [policy] of [target] (RFC 0007 §5.8). */
+    /** The entries of the references to [policy] of [target] (RFC 0007 §5.8): who refers, at which revision, how. */
+    suspend fun referrerEntries(target: SnapshotKey, policy: PolicyId): Set<ReferrerEntry> =
+        referrerIndex.entries(target, policy)
+
     suspend fun referrers(target: SnapshotKey, policy: PolicyId): Set<SnapshotKey> = referrerIndex.referrers(
         target,
         policy
