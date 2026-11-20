@@ -316,8 +316,9 @@ sequenceDiagram
 - **Tenants that fail closed on lag.** For the tenants listed in
   [`fail-closed.tenants`](./configuration.md#snapshot), a request is unresolved when the oldest document it reads
   (the platform, the tenant's and the app's) has not been confirmed for longer than `fail-closed.max-lag`
-  (30 minutes): it answers `503` unless a DENY matches. Other tenants are decided on the installed revisions however
-  old they are, and are never checked.
+  (30 minutes): it answers `503` unless a DENY matches. `*` in the list names every tenant. Other tenants are decided
+  on the installed revisions however old they are, and are never checked: by default, none is listed, and an instance
+  that cannot read Redis keeps deciding on what it installed until Redis answers again.
 - **Local copies** serve only cold loads. The first time an instance needs a document, it may take CoCache's local
   copy, at most [`local-max-age`](./configuration.md#snapshot) (30 seconds) old; it counts that copy as that old and
   confirms it with Redis at once. A local "no such document" is never trusted: only Redis can answer that a document

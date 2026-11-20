@@ -234,7 +234,8 @@ sequenceDiagram
   `lag-escalate`（5 分钟）时以 `ERROR` 记录 `... is stale: not confirmed for <lag>.`，每个文档每分钟最多一次。
 - **按滞后失败即拒绝的租户。** 对 [`fail-closed.tenants`](./configuration.md#snapshot) 中列出的租户，当请求读取的
   最旧文档（平台文档、该租户的文档和应用的文档）超过 `fail-closed.max-lag`（30 分钟）未被确认时，请求无法解析：它得到
-  `503`，除非有 DENY 匹配。其他租户无论已装入的修订多旧都照常决策，从不检查。
+  `503`，除非有 DENY 匹配。列表中的 `*` 表示所有租户。其他租户无论已装入的修订多旧都照常决策，从不检查：默认不列出任何
+  租户，无法读取 Redis 的实例会一直基于已装入的文档决策，直到 Redis 重新应答。
 - **本地副本**只服务冷加载。实例第一次需要某个文档时，可能采用 CoCache 的本地副本，它最多
   [`local-max-age`](./configuration.md#snapshot)（30 秒）旧；实例按这个最旧的时间计算它，并立即向 Redis 确认。本地的
   "没有这个文档"从不被信任：只有 Redis 能回答某个文档不存在。

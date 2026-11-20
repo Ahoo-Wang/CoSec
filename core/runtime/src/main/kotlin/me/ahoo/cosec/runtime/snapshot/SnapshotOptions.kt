@@ -38,7 +38,10 @@ class SnapshotOptions(
     val lagWarn: Duration = Duration.ofSeconds(60),
     /** Lag above which a document is logged at ERROR and reported as stale. */
     val lagEscalate: Duration = Duration.ofMinutes(5),
-    /** Tenants whose requests fail when the snapshot they use lags more than [failClosedMaxLag] (RFC 0001 §7.1). */
+    /**
+     * Tenants whose requests fail when the snapshot they use lags more than [failClosedMaxLag] (RFC 0001 §7.1);
+     * [ALL_TENANTS] names every tenant (R2D-5). Empty by default: an installed document keeps deciding however old.
+     */
     val failClosedTenants: Set<String> = emptySet(),
     val failClosedMaxLag: Duration = Duration.ofMinutes(30),
     /** How long [SnapshotSource.load] waits for a cold document before it answers with a failed one. */
@@ -139,6 +142,9 @@ class SnapshotOptions(
          * pass is the only bound on a lost invalidation, so it cannot be turned off, and a lag report must mean a
          * missed pass, not the schedule. The host names its own property in the error.
          */
+        /** In [failClosedTenants]: every tenant fails closed past [failClosedMaxLag] (R2D-5). */
+        const val ALL_TENANTS = "*"
+
         @InternalCoSecApi
         fun revalidateIntervalProblem(
             revalidateInterval: Duration,
