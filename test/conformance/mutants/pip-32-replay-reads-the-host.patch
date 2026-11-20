@@ -1,0 +1,16 @@
+# Rule: PIP-32
+# Mutant: the shadow replay keeps the view over the server's headers, so it reads them after the response
+# Tests: :runtime:test --tests me.ahoo.cosec.runtime.event.BreakGlassAndShadowTest
+
+diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/stage/PublishBestEffort.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/stage/PublishBestEffort.kt
+index 624e5f412..7feb33a47 100644
+--- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/stage/PublishBestEffort.kt
++++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/stage/PublishBestEffort.kt
+@@ -54,7 +54,6 @@ internal class PublishBestEffort(private val listeners: DecisionListeners, priva
+         return sampled?.let {
+             // The replay reads the request's headers after the response, when the host may have recycled its request:
+             // a view over them is copied now, while they are still the request's (R2B-8).
+-            Headers.freeze(state.facts.headers)
+             ReplayHandle(state.request, state.view, it)
+         }
+     }
