@@ -1,0 +1,16 @@
+# Rule: BLK-1
+# Mutant: what a view could not read is looked at before the DENY that matched: a blocked request whose tenant document is unreadable is Indeterminate (503), not denied by the blacklist rule
+# Tests: :engine:test --tests me.ahoo.cosec.engine.EngineTest --tests me.ahoo.cosec.engine.EnginePropertyTest :conformance:test --tests me.ahoo.cosec.conformance.ConformanceTest
+
+diff --git a/core/engine/src/main/kotlin/me/ahoo/cosec/engine/Evaluator.kt b/core/engine/src/main/kotlin/me/ahoo/cosec/engine/Evaluator.kt
+index f26f2f3f..209097a4 100644
+--- a/core/engine/src/main/kotlin/me/ahoo/cosec/engine/Evaluator.kt
++++ b/core/engine/src/main/kotlin/me/ahoo/cosec/engine/Evaluator.kt
+@@ -220,6 +220,7 @@ internal open class Evaluator(
+     internal fun denyPass(): Decision? {
+         pass = Effect.DENY
+         enumerate()
++        unresolved()?.let { return Decision.Indeterminate(it) }
+         matched?.let { return it }
+         errorAt?.let { at ->
+             val error = error!!

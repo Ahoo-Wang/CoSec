@@ -1,0 +1,17 @@
+# Rule: BLK-1
+# Mutant: the blacklist rule is no longer a candidate of the DENY pass: a blocked principal is decided as if it were not blocked
+# Tests: :engine:test --tests me.ahoo.cosec.engine.EngineTest --tests me.ahoo.cosec.engine.EnginePropertyTest :conformance:test --tests me.ahoo.cosec.conformance.ConformanceTest
+
+diff --git a/core/engine/src/main/kotlin/me/ahoo/cosec/engine/CandidateOrder.kt b/core/engine/src/main/kotlin/me/ahoo/cosec/engine/CandidateOrder.kt
+index 8229a502..6f8064de 100644
+--- a/core/engine/src/main/kotlin/me/ahoo/cosec/engine/CandidateOrder.kt
++++ b/core/engine/src/main/kotlin/me/ahoo/cosec/engine/CandidateOrder.kt
+@@ -48,7 +48,7 @@ internal object CandidateOrder {
+     private const val PAIRWISE = 16
+ 
+     fun forEach(request: EngineRequest, view: SnapshotView, effect: Effect, visitor: CandidateVisitor): Boolean {
+-        if (visitor.candidate(BuiltinPolicies.blacklist, BindingRef.Builtin)) {
++        if (effect == Effect.ALLOW && visitor.candidate(BuiltinPolicies.blacklist, BindingRef.Builtin)) {
+             return true
+         }
+         val platform = view.platform
