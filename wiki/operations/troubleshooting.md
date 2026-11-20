@@ -390,6 +390,9 @@ instance that never becomes ready:
   Redis database are the usual causes. One INFO line says when the document is installed.
 - **A prewarmed document cannot be loaded or compiled.** The logs name it (`Loading snapshot document [<doc>]
   failed.`). Fix or publish the document, or remove it from the prewarm list.
+- **Redis could not be read.** The platform document and the prewarmed ones are read again every 1 to 30 seconds
+  (`Snapshot prewarm failed for [...]; retrying in ...` at `WARN`), without a request: the instance becomes ready once
+  Redis answers (`SNP-21`). If it does not, the cause is one of the two above, or Redis still refuses the instance.
 
 The `cosecSnapshot` health indicator shows the state: `platform` (`installed`, `invalid`, `failed`, `absent` or
 `loading`; `invalid` is a stored document that does not compile) and `prewarmed`. Add it to the readiness group to see it in the probe:

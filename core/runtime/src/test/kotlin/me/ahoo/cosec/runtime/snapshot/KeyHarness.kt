@@ -45,6 +45,9 @@ internal class KeyHarness private constructor(override val config: KeyConfig) : 
     val compiles = sortedSetOf<Long>()
     var retries = 0
 
+    /** The cold loads whose compilation the queue refused, waiting for their `CompileRetryDue` (R2D-4). */
+    val compileRetries = sortedSetOf<Long>()
+
     /** The handle each waiter hangs on, and what was answered to whom directly. */
     val hung = linkedMapOf<HarnessWaiter, KeyHandle<String>>()
     val direct = linkedMapOf<HarnessWaiter, KeyEffect<String>>()
@@ -77,6 +80,7 @@ internal class KeyHarness private constructor(override val config: KeyConfig) : 
         if (event is KeyEvent.ReadDone || event is KeyEvent.ReadFailed || event is KeyEvent.ReadTimedOut) reads -= event.loadId!!
         if (event is KeyEvent.Compiled || event is KeyEvent.CompileCrashed || event is KeyEvent.CompileRejected) compiles -= event.loadId!!
         if (event is KeyEvent.RetryDue) retries--
+        if (event is KeyEvent.CompileRetryDue) compileRetries -= event.loadId
         val before = state
         val step = transitions.next(before, event, moment())
         val again = transitions.next(before, event, moment())
@@ -106,6 +110,7 @@ internal class KeyHarness private constructor(override val config: KeyConfig) : 
                     KeyEvent.Compiled(load.id, DocumentState.Present("compiled"))
                 )
                 reads.isNotEmpty() -> offer(KeyEvent.ReadDone(reads.first(), answer))
+                compileRetries.isNotEmpty() -> offer(KeyEvent.CompileRetryDue(compileRetries.first()))
                 retries > 0 && !closed -> offer(KeyEvent.RetryDue())
                 else -> return
             }
@@ -131,6 +136,7 @@ internal class KeyHarness private constructor(override val config: KeyConfig) : 
         it.reads += reads
         it.compiles += compiles
         it.retries = retries
+        it.compileRetries += compileRetries
         it.hung += hung
         it.direct += direct
         it.answered += answered
@@ -148,6 +154,7 @@ internal class KeyHarness private constructor(override val config: KeyConfig) : 
             is KeyEffect.RecordSeen -> seen = if (effect.ifAbsent) seen ?: effect.seen else effect.seen
             is KeyEffect.Install -> installs += effect.entry
             is KeyEffect.ScheduleRetry -> retries++
+            is KeyEffect.ScheduleCompileRetry -> compileRetries += effect.loadId
             is KeyEffect.Reply -> effect.reply.complete(effect.value)
             else -> answer(effect)
         }
@@ -198,6 +205,8 @@ internal class KeyHarness private constructor(override val config: KeyConfig) : 
     companion object {
         val KEY: SnapshotKey = SnapshotKey.App("app")
         val STORE_READ_TIMEOUT: Duration = Duration.ofSeconds(3)
+        val COLD_LOAD_TIMEOUT: Duration = Duration.ofSeconds(2)
+        val COLD_COMPILE_RETRY: Duration = Duration.ofMillis(10)
         private const val SETTLE_LIMIT = 64
 
         /** [ask] for a log line, with its pass named rather than printed. */
@@ -214,6 +223,8 @@ internal class KeyHarness private constructor(override val config: KeyConfig) : 
                 shared = shared,
                 storeReadTimeout = STORE_READ_TIMEOUT,
                 rejectedReloadRetry = Duration.ofMillis(100),
+                coldLoadTimeout = COLD_LOAD_TIMEOUT,
+                coldCompileRetry = COLD_COMPILE_RETRY,
                 revalidateInterval = Duration.ofSeconds(1),
                 localCopyMaxAge = localCopyMaxAge,
             )

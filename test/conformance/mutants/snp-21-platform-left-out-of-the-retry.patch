@@ -1,0 +1,17 @@
+# Rule: SNP-21
+# Mutant: readiness prewarms only the configured documents, so a failed first read of the platform document is never read again and the instance never becomes ready
+# Tests: :runtime:test --tests me.ahoo.cosec.runtime.snapshot.DocumentReadinessRetryTest
+
+diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/DocumentReadiness.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/DocumentReadiness.kt
+index 003b62990..b6d9637b4 100644
+--- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/DocumentReadiness.kt
++++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/DocumentReadiness.kt
+@@ -48,7 +48,7 @@ class DocumentReadiness(private val source: SnapshotSource<*, *>, prewarm: Colle
+      * answers (`SNP-21`).
+      */
+     fun start() {
+-        source.load().whenComplete { _, _ -> first = source.prewarm(listOf(SnapshotKey.Platform) + prewarm) }
++        source.load().whenComplete { _, _ -> first = source.prewarm(prewarm) }
+     }
+ 
+     /**
