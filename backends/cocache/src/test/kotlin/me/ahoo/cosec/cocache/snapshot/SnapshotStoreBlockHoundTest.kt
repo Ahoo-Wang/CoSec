@@ -165,7 +165,7 @@ class SnapshotStoreBlockHoundTest {
                 val options = SnapshotOptions(
                     compileThreads = 1,
                     compileQueueCapacity = 1,
-                    rejectedReloadRetry = java.time.Duration.ofMillis(20),
+                    coldCompileRetry = java.time.Duration.ofMillis(20),
                     coldLoadTimeout = java.time.Duration.ofSeconds(TIMEOUT_SECONDS),
                 )
                 DocumentSnapshots.source(node.store, slowCompiler, options).use { source ->

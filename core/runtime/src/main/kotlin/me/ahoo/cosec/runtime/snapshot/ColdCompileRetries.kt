@@ -22,10 +22,11 @@ import java.time.Duration
 
 /**
  * A cold load the compile queue refused (R2D-4): nothing is installed to keep, so it keeps its read and its waiters and
- * compiles again after `rejectedReloadRetry`, as long as more than that is left of `coldLoadTimeout` since the load
- * began; then it fails at its deadline, as a cold load that cannot finish does. A burst of distinct cold documents on a new replica queues instead of
- * failing. Not doubled, as a reload's retry is: the deadline bounds how often a cold load tries, and the documents of a
- * burst retry together, so a doubling delay would leave the pool idle between fewer and fewer waves (the executor
+ * compiles again after `coldCompileRetry`, as long as more than that is left of `coldLoadTimeout` since the load
+ * began; then it fails at its deadline, as a cold load that cannot finish does. A burst of distinct cold documents on a
+ * new replica queues instead of failing. Not the reload's retry, which starts at 200 ms and doubles: a document compiles
+ * in a fraction of a millisecond, so the pool works through its queue in milliseconds, and the documents of a burst
+ * retry together, so a long or doubling delay would leave the pool idle between fewer and fewer waves (the executor
  * spreads them, [KeyEffects]). Each request is answered by its own timer by its deadline in any case (`SNP-17`): never
  * later, and a failure never permits.
  */
@@ -37,7 +38,7 @@ internal class ColdCompileRetries<T : Any>(private val config: KeyConfig, privat
             loads.onTransientFailure(step, load, cause)
             return
         }
-        val retry = config.rejectedReloadRetry
+        val retry = config.coldCompileRetry
         // Within the last retry's window, the load wakes once more, at its deadline, and fails: a retry that close to it
         // would only end later, and tries never shrink toward nothing.
         val effect = if (left > retry.toNanos()) {

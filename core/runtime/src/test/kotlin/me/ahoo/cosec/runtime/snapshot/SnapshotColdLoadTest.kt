@@ -168,7 +168,7 @@ class SnapshotColdLoadTest {
             revalidateInterval = QUIET_PASS,
             compileThreads = 1,
             compileQueueCapacity = 1,
-            rejectedReloadRetry = Duration.ofMillis(20),
+            coldCompileRetry = Duration.ofMillis(20),
         )
         testSource(store, compiler = compiler, options = options, compileExecutor = null).use { source ->
             source.load().get(10, TimeUnit.SECONDS)
@@ -201,7 +201,7 @@ class SnapshotColdLoadTest {
             revalidateInterval = QUIET_PASS,
             compileThreads = 1,
             compileQueueCapacity = 1,
-            rejectedReloadRetry = Duration.ofMillis(20),
+            coldCompileRetry = Duration.ofMillis(20),
             coldLoadTimeout = timeout,
         )
         testSource(store, compiler = compiler, options = options, compileExecutor = null).use { source ->
@@ -237,7 +237,7 @@ class SnapshotColdLoadTest {
             revalidateInterval = QUIET_PASS,
             compileThreads = 1,
             compileQueueCapacity = 2,
-            rejectedReloadRetry = Duration.ofMillis(20),
+            coldCompileRetry = Duration.ofMillis(20),
             coldLoadTimeout = Duration.ofSeconds(5),
         )
         testSource(store, compiler = compiler, options = options, compileExecutor = null).use { source ->
@@ -267,7 +267,7 @@ class SnapshotColdLoadTest {
             revalidateInterval = QUIET_PASS,
             compileThreads = 1,
             compileQueueCapacity = 2,
-            rejectedReloadRetry = Duration.ofMillis(20),
+            coldCompileRetry = Duration.ofMillis(20),
             coldLoadTimeout = timeout,
         )
         testSource(store, compiler = compiler, options = options, compileExecutor = null).use { source ->

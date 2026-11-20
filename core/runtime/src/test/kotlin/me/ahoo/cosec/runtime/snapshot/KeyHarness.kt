@@ -206,6 +206,7 @@ internal class KeyHarness private constructor(override val config: KeyConfig) : 
         val KEY: SnapshotKey = SnapshotKey.App("app")
         val STORE_READ_TIMEOUT: Duration = Duration.ofSeconds(3)
         val COLD_LOAD_TIMEOUT: Duration = Duration.ofSeconds(2)
+        val COLD_COMPILE_RETRY: Duration = Duration.ofMillis(10)
         private const val SETTLE_LIMIT = 64
 
         /** [ask] for a log line, with its pass named rather than printed. */
@@ -223,6 +224,7 @@ internal class KeyHarness private constructor(override val config: KeyConfig) : 
                 storeReadTimeout = STORE_READ_TIMEOUT,
                 rejectedReloadRetry = Duration.ofMillis(100),
                 coldLoadTimeout = COLD_LOAD_TIMEOUT,
+                coldCompileRetry = COLD_COMPILE_RETRY,
                 revalidateInterval = Duration.ofSeconds(1),
                 localCopyMaxAge = localCopyMaxAge,
             )

@@ -78,6 +78,12 @@ class SnapshotOptions(
     val storeReadTimeout: Duration = Duration.ofSeconds(30),
     /** How long a reload waits before it retries after the compile queue was full. */
     val rejectedReloadRetry: Duration = Duration.ofMillis(200),
+    /**
+     * How long a cold load waits, at most, before it compiles again after the compile queue refused it (R2D-4): about
+     * what the pool takes to work through its queue, so a burst's documents compile as the pool frees up. Within
+     * [coldLoadTimeout].
+     */
+    val coldCompileRetry: Duration = Duration.ofMillis(10),
 ) {
 
     init {
@@ -98,6 +104,7 @@ class SnapshotOptions(
         require(
             !rejectedReloadRetry.isNegative && !rejectedReloadRetry.isZero
         ) { "rejectedReloadRetry must be positive." }
+        require(!coldCompileRetry.isNegative && !coldCompileRetry.isZero) { "coldCompileRetry must be positive." }
         require(
             !prewarmInitialBackoff.isNegative && !prewarmInitialBackoff.isZero && prewarmInitialBackoff <= prewarmMaxBackoff
         ) {

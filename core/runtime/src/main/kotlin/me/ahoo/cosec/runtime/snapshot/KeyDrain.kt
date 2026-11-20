@@ -385,7 +385,7 @@ internal class KeyDrain<T : Any>(
          * result, a retry), and one `EffectFailed` for each of its 5 steps (the one that started it, and those 4's): an
          * `EffectFailed` raises none. The retry is a `RetryDue`, or, for a cold load the compile queue refused, a
          * `CompileRetryDue`, which starts that load's next attempt (a compilation and its result) a scheduler delay of
-         * at least `rejectedReloadRetry` later, within `coldLoadTimeout` (R2D-4). A new lane event fails
+         * at least half of `coldCompileRetry` later, within `coldLoadTimeout` (R2D-4). A new lane event fails
          * `KeyDrainLaneTest`; a second per step, `KeyEffectFailureTest`.
          */
         const val LANE_EVENTS_PER_LOAD = 9

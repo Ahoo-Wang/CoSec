@@ -261,11 +261,11 @@ class KeyTransitionsTest {
         key.offer(KeyEvent.ReadDone(load, present(1)))
         val refused = key.offer(KeyEvent.CompileRejected(load, RejectedExecutionException()))
         refused.effects.filterIsInstance<KeyEffect.ScheduleCompileRetry>().single()
-            .assert().isEqualTo(KeyEffect.ScheduleCompileRetry(load, Duration.ofMillis(100), spread = true))
+            .assert().isEqualTo(KeyEffect.ScheduleCompileRetry(load, KeyHarness.COLD_COMPILE_RETRY, spread = true))
         refused.effects.none { it is KeyEffect.Answer || it is KeyEffect.Install }.assert().isTrue()
         key.state.load!!.id.assert().isEqualTo(load)
 
-        key.nanos = Duration.ofMillis(100).toNanos()
+        key.nanos = KeyHarness.COLD_COMPILE_RETRY.toNanos()
         val due = key.offer(KeyEvent.CompileRetryDue(load))
         due.effects.filterIsInstance<KeyEffect.Compile>().single().loadId.assert().isEqualTo(load)
         key.offer(KeyEvent.Compiled(load, DocumentState.Present("c1")))
@@ -279,10 +279,10 @@ class KeyTransitionsTest {
         val request = key.request(Ask.Request)
         val load = key.state.load!!.id
         key.offer(KeyEvent.ReadDone(load, present(1)))
-        key.nanos = KeyHarness.COLD_LOAD_TIMEOUT.minusMillis(30).toNanos()
+        key.nanos = KeyHarness.COLD_LOAD_TIMEOUT.minusMillis(3).toNanos()
         key.offer(KeyEvent.CompileRejected(load, RejectedExecutionException())).effects
             .filterIsInstance<KeyEffect.ScheduleCompileRetry>().single()
-            .assert().isEqualTo(KeyEffect.ScheduleCompileRetry(load, Duration.ofMillis(30), spread = false))
+            .assert().isEqualTo(KeyEffect.ScheduleCompileRetry(load, Duration.ofMillis(3), spread = false))
 
         key.nanos = KeyHarness.COLD_LOAD_TIMEOUT.toNanos()
         val due = key.offer(KeyEvent.CompileRetryDue(load))
