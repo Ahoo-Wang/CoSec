@@ -40,12 +40,9 @@ performance.
 | `saas-scale-control-plane.md` | The control plane and the store of record at that scale: the back-reference index, publishes, memory, maintenance, onboarding |
 | `saas-scale-raw-output.txt` | The harnesses' raw output |
 | `saas-referrers-pr-b-evidence.md` | The measurements behind #1729 |
-| `saas-scale-harness.kt.txt`, `saas-scale-candidate-harness.kt.txt`, `saas-scale-revocation-harness.kt.txt`, `saas-shadow-cost-harness.kt.txt` | The harnesses the numbers came from |
+| `core/runtime/src/test/kotlin/me/ahoo/cosec/runtime/snapshot/SaasScaleMeasurement.kt`, `.../runtime/shadow/SaasScaleCandidateMeasurement.kt`, `.../runtime/SaasShadowCostMeasurement.kt`, `backends/cocache/src/test/kotlin/me/ahoo/cosec/cocache/SaasScaleRevocationMeasurement.kt` | The harnesses the numbers came from: a `main` each, compiled with the test sources and never run by `check` (the KDoc of each says how to run it) |
 
-The harnesses are copies of Kotlin files that were run from a module's test sources and never committed there. They
-are not compiled here. To run one again, put it under the test sources of the module its package names, restore the
-file-level opt-in to CoSec's internal API where a comment marks it (the repository allows that opt-in only in CoSec's
-compiled sources, which `SourceRulesTest` holds), and run its `main` as its header says. In-memory stores stand in for
+The harnesses are test sources of the modules their packages name, so CI compiles them and they follow the code; they are not re-run, and the numbers stay those of the commit each report names. In-memory stores stand in for
 Redis in all of them; the reports say which figures are measured and which are computed from counted operations.
 
 ## Designs

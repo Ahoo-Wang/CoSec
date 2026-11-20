@@ -11,7 +11,8 @@
  * limitations under the License.
  */
 
-// (the file-level opt-in to CoSec's internal API stood here; see README.md in this folder)
+@file:OptIn(InternalCoSecApi::class, ExperimentalCoSecApi::class)
+
 package me.ahoo.cosec.runtime
 
 import kotlinx.coroutines.runBlocking
@@ -36,7 +37,20 @@ import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import java.io.File
 import java.lang.management.ManagementFactory
 
-// Not committed: what a shadow listener costs per request when no window is open (design D2, 2026-11-20).
+/**
+ * A measurement, not a check: what a shadow listener costs per request when no window is open: caller nanoseconds
+ * and bytes per decision, and process CPU, with no listener, a no-op listener, and the shadow listener at 10 % and
+ * 0 %. It is a `main` and nothing JUnit discovers, so `check` compiles it and never runs it; it runs for minutes
+ * and takes gigabytes of heap, so run it by hand, niced, and never on a shared machine's full load. In-memory
+ * stores stand in for Redis: it needs no Redis.
+ *
+ * Run: `nice -n 15 ./gradlew :runtime:testClasses`, then `java -Xmx4g -cp <the runtime module's test runtime
+ * classpath> me.ahoo.cosec.runtime.SaasShadowCostMeasurementKt` (the optional argument is the file the report is
+ * written to (default `shadow-cost.txt`)). There is no Gradle task for it: the classpath is what an IDE's run
+ * configuration for this file's `main` uses. Its numbers are in `docs/reviews/2026-11/`:
+ * `saas-shadow-staged-design.md` (Design D2), with the raw output at the end of `saas-scale-raw-output.txt`. They
+ * are of the commit that report names; this file is kept compiling against `main`, not re-measured.
+ */
 
 private object NoOp : DecisionListener {
     override val name = "no-op"
@@ -77,7 +91,12 @@ private fun measure(label: String, listeners: List<DecisionListener>) {
             // Let the listeners' consumers drain what was offered before reading the process's CPU.
             Thread.sleep(DRAIN_MILLIS)
             val cpu = (os.processCpuTime - cpu0).toDouble() / N
-            val line = "%-34s caller %.0f ns/op, %.0f B/op on the caller; process CPU %.0f ns/op".format(label, wall, bytes, cpu)
+            val line = "%-34s caller %.0f ns/op, %.0f B/op on the caller; process CPU %.0f ns/op".format(
+                label,
+                wall,
+                bytes,
+                cpu
+            )
             println(line)
             out.appendLine(line)
         }
