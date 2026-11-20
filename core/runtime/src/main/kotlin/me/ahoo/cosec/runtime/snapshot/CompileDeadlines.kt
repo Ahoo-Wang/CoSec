@@ -31,8 +31,13 @@ import java.util.concurrent.atomic.AtomicInteger
  * since it began (`coldLoadTimeout` for a cold load, `storeReadTimeout` for a reload), and the periodic tick sweeps those
  * past it ([sweep]): a load whose compilation has not answered by then ends as a failure, within one
  * `revalidateInterval` of the deadline. A cold load answers failed, a reload keeps what is installed (F6), and a
- * recompile fails closed (`RECOMPILE_PENDING`), as for any failure to compile again. No timer per load: the sweep reads a
- * map that holds only the compilations in flight.
+ * recompile fails closed (`RECOMPILE_PENDING`), as for any failure to compile again (`SNP-22`). No timer per load: the
+ * sweep reads a map that holds only the compilations in flight.
+ *
+ * A recompile treated two ways, on purpose. Refused by the full queue ([RefusedCompiles], `SNP-4`), it is a matter of
+ * capacity: what is installed stays in service and the read compiles again, for at most `coldLoadTimeout` since the
+ * load began, the lag a recompile's read already has, then it fails closed. Not answering within its deadline, it
+ * leaves the document's validity under the new platform document unknown: it fails closed at once.
  *
  * A compilation still queued is abandoned and never starts. One that runs is not interrupted: the compiler makes no
  * blocking call that an interrupt would end, so it runs on. Its revision is marked stuck while it runs

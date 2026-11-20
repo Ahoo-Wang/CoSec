@@ -370,6 +370,32 @@ class KeyTransitionsTest {
         key.offer(KeyEvent.Compiled(load, DocumentState.Present("late"))).effects.assert().isEmpty()
     }
 
+    /**
+     * `SNP-4` against `SNP-22`, the same recompile at the same instant: refused by the queue it is a matter of capacity,
+     * so the installed entry stays in service and the read compiles again; not answering within its deadline it leaves
+     * the document's validity under the new inputs unknown, so it fails closed.
+     */
+    @Test
+    fun aRefusedRecompileKeepsWhatIsInstalledWhereOneThatTimesOutFailsClosed() {
+        installDocument()
+        key.recompile().assert().isTrue()
+        key.request(Ask.Reload(force = false))
+        val load = key.state.load!!.id
+        key.offer(KeyEvent.ReadDone(load, present(1)))
+        key.nanos = KeyHarness.COLD_COMPILE_RETRY.toNanos()
+        val timedOut = key.copy()
+
+        key.offer(KeyEvent.CompileRejected(load, RejectedExecutionException()))
+        key.state.load!!.id.assert().isEqualTo(load)
+        key.state.installed!!.origin.assert().isEqualTo(EntryOrigin.DOCUMENT)
+        (key.state.installed!!.state as DocumentState.Present).compiled.assert().isEqualTo("c1")
+
+        timedOut.offer(KeyEvent.CompileTimedOut(load))
+        timedOut.state.load.assert().isNull()
+        timedOut.state.installed!!.origin.assert().isEqualTo(EntryOrigin.RECOMPILE_PENDING)
+        timedOut.state.installed!!.state.assert().isInstanceOf(DocumentState.Failed::class.java)
+    }
+
     /** R2D-11: a cold load's compilation is due by `coldLoadTimeout`; past it the load answers failed. */
     @Test
     fun aColdLoadWhoseCompilationTimesOutAnswersFailed() {

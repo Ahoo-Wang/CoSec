@@ -1,4 +1,4 @@
-# Rule: SNP-XX
+# Rule: SNP-22
 # Mutant: a compilation still queued when its load timed out starts anyway, taking a thread for a load that has ended
 # Tests: :runtime:test --tests me.ahoo.cosec.runtime.snapshot.SnapshotCompileDeadlineTest
 

@@ -1,4 +1,4 @@
-# Rule: SNP-XX
+# Rule: SNP-22
 # Mutant: a revision whose compilation timed out and still runs is compiled again, holding another compile thread
 # Tests: :runtime:test --tests me.ahoo.cosec.runtime.snapshot.SnapshotCompileDeadlineTest
 

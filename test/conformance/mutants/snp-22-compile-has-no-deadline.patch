@@ -1,4 +1,4 @@
-# Rule: SNP-XX
+# Rule: SNP-22
 # Mutant: no tick sweeps the compilations in flight, so a compilation that never returns keeps its load in flight for good
 # Tests: :runtime:test --tests me.ahoo.cosec.runtime.snapshot.SnapshotCompileDeadlineTest
 
