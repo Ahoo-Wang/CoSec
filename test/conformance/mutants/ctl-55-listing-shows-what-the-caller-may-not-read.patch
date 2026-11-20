@@ -1,0 +1,17 @@
+# Rule: CTL-55
+# Mutant: a listing shows a change of a document the caller's tenant may not reach
+# Tests: :control:test --tests me.ahoo.cosec.control.api.OpenChangeListingTest :conformance:test
+
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ChangeListings.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ChangeListings.kt
+index 1683502d7..b2b6da614 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ChangeListings.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ChangeListings.kt
+@@ -68,7 +68,7 @@ internal class ChangeListings(private val store: ControlStore, private val autho
+         decisions: MutableMap<SnapshotKey, ControlDecision>,
+     ): Boolean {
+         val key = listed.document
+-        if (!TenantIsolation.allows(operator, key)) return false
++        if (!TenantIsolation.allows(operator, key)) return true
+         if ((listed as? ListedChange.Readable)?.change?.author == operator.actor) return true
+         return when (decisions.getOrPut(key) { authority.decide(operator, key, ControlActions.READ) }) {
+             ControlDecision.PERMIT -> true

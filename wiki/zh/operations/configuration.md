@@ -286,8 +286,8 @@ CoSec 没有哪个配置项叫这些名字，而已知的 key 无论来源都不
 | `cosec.control.http.max-body-size` | data size | `10MB` | 控制 API 读取的最大请求体，WebMvc 与 WebFlux 相同（`CTL-41`）：文档的 8 MB 上限，再加上操作外层 JSON 的余量。更大的请求体得到 `400` `invalid-request`。WebFlux 上它代替 `spring.codec.max-in-memory-size` 约束控制路由。没有已放行主体的请求根本不读请求体（`401`）。 |
 | `cosec.control.revisions.max-count` | int | `50` | 每个文档总是保留的修订数；更早的修订在同时超过 `min-age` 后被回收。未关闭变更所依赖的修订会被保留。 |
 | `cosec.control.revisions.min-age` | duration | `7d` | 比这年轻的修订总是保留。 |
-| `cosec.control.revisions.orphan-age` | duration | `1h` | 冲突发布留下的记录到这个年龄后删除。 |
-| `cosec.control.revisions.reclaim-interval` | duration | `1h` | 每个控制面实例多久回收一次修订；租约保证同一时间只有一个实例处理某个文档。必须为正。 |
+| `cosec.control.revisions.orphan-age` | duration | `1h` | 冲突发布留下的记录到这个年龄后删除；未完成变更集合中没有记录的变更成员（变更先登记再写入）也一样，从本实例第一次发现它缺失时算起。 |
+| `cosec.control.revisions.reclaim-interval` | duration | `1h` | 每个控制面实例多久回收一次修订、让每个文档到期的未完成变更过期；租约保证同一时间只有一个实例处理某个文档。必须为正。 |
 | `cosec.control.changes.expire-after` | duration | `7d` | 未关闭的变更请求在提出后这么久过期，并离开未关闭变更列表。 |
 | `cosec.control.approval.expire-after` | duration | `72h` | 一次审批的有效期。长于令牌吊销的保留时长 `cosec.jwt.token-validity.refresh` 时启动失败：审批会比其令牌的吊销记录活得更久。 |
 | `cosec.control.approval.four-eyes` | boolean | `false` | 是否也分析在该文档上持有 `cosec:approve` 的平台主体（信任根）的变更：分析无法证明受限的部分随之需要另一位平台主体审批。升级权限的变更无论如何都需要。 |
@@ -377,7 +377,7 @@ CoSec 声明的值无论取何值都优先于 `cocache.defaults.*`，与 CoCache
 | 缓存 | 锁定 | 约束 | 原因 |
 |---|---|---|---|
 | `PolicySnapshotCache` 以及控制面与影子窗口的权威存储（`RevisionRecordCache`、`RevisionIndexCache`、`ControlLeaseCache`、`ControlListCache`、`ControlAppListCache`、`ChangeRequestCache`、`StageCache`、`CandidateCache`） | `ttl`、`unknown-read`；快照存储还有 `local-max-age` | `ttl` 永不过期，`unknown-read: throw` | Redis 是权威存储（[存储](./storage.md#redis-is-the-store-of-record)）：过期、或把读取失败当作“不存在”，都会悄悄丢掉一个文档，连同它的 DENY 语句。作为 CoCache 的 `Store`，它们从不回收读不懂的内容，失败的删除直接抛出，而不是稍后重试、删掉更新的写入。 |
-| `ReferenceIndexCache`、`ControlDocumentSetCache`、`CandidateStagedCache`（控制面的集合型权威存储：反向引用、文档列表和暂存列表） | `ttl`、`local-max-age`、`degraded-local-max-age` | `ttl` 永不过期；两个本地最长保留时间都是 1 ns | Redis 也是它们的权威存储；删除检查若读到失效消息丢失后留下的本地副本，就可能放过某个引用者本应阻止的删除（`CTL-42`）。CoCache 8.1 没有为 `SetStore` 提供跳过本地副本的读取，也不接受为零的本地最长保留时间；它以毫秒保存本地过期时间，只在该时间仍晚于其时钟时才使用副本，所以只保留 1 ns 的副本从不被使用，即使在它被填入的那一毫秒之内也不会。`SetStore` 的读取失败总是抛出。 |
+| `ReferenceIndexCache`、`ControlDocumentSetCache`、`ControlChangeSetCache`、`CandidateStagedCache`（控制面的集合型权威存储：反向引用、文档列表、未完成的变更和暂存列表） | `ttl`、`local-max-age`、`degraded-local-max-age` | `ttl` 永不过期；两个本地最长保留时间都是 1 ns | Redis 也是它们的权威存储；删除检查若读到失效消息丢失后留下的本地副本，就可能放过某个引用者本应阻止的删除（`CTL-42`）。CoCache 8.1 没有为 `SetStore` 提供跳过本地副本的读取，也不接受为零的本地最长保留时间；它以毫秒保存本地过期时间，只在该时间仍晚于其时钟时才使用副本，所以只保留 1 ns 的副本从不被使用，即使在它被填入的那一毫秒之内也不会。`SetStore` 的读取失败总是抛出。 |
 | `ShadowReportCache`、`ShadowReporterCache`、`InstanceStatusCache`、`InstanceIndexCache` | `unknown-read`、`ttl` | `unknown-read: throw`；`ttl` 为声明的 8 天（报告、报告者）或 2 分钟（状态；实例列表仍是 8 天） | 故障不能读成“没有样本”或“没有实例”，实例的样本也不能从它报告过的窗口中过期。 |
 | `MembershipCache` | `read-failure`、`unknown-read` | `ttl` 有限（`forever` 时为一分钟），`ttl-jitter: 0s`，`read-failure` 与 `unknown-read: throw` | 读取失败绝不能变成“没有成员关系”，丢失的失效必须到期。 |
 | `TokenFamilyCache` | `unknown-read` | `unknown-read: throw` | 无法读取的会话会拒绝刷新（`503`），绝不读成不存在。每个条目都带着它所属会话的剩余寿命写入。 |

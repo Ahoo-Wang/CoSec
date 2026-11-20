@@ -1,0 +1,19 @@
+# Rule: CTL-54
+# Mutant: a write unlists the change from every other state on its own view: one that finishes late takes out the member a later write added
+# Tests: :cocache:test --tests me.ahoo.cosec.cocache.control.OpenChangeSetsRaceTest
+
+diff --git a/backends/cocache/src/main/kotlin/me/ahoo/cosec/cocache/control/OpenChangeSets.kt b/backends/cocache/src/main/kotlin/me/ahoo/cosec/cocache/control/OpenChangeSets.kt
+index 5ad8e4806..f894b4707 100644
+--- a/backends/cocache/src/main/kotlin/me/ahoo/cosec/cocache/control/OpenChangeSets.kt
++++ b/backends/cocache/src/main/kotlin/me/ahoo/cosec/cocache/control/OpenChangeSets.kt
+@@ -87,8 +87,8 @@ internal class OpenChangeSets(
+     @Suppress("TooGenericExceptionCaught")
+     suspend fun unlistAfter(change: ChangeRequest, previous: ChangeState?) {
+         try {
+-            if (previous != null && previous != change.state && !previous.terminal) {
+-                sets.removeChangeMembers(stateKey(previous), setOf(member(change.key, change.id)))
++            ChangeState.entries.filter { !it.terminal && it != change.state }.forEach {
++                sets.removeChangeMembers(stateKey(it), setOf(member(change.key, change.id)))
+             }
+             if (change.state.terminal) sets.removeChangeMembers(documentKey(change.key), setOf(change.id.value))
+         } catch (e: CancellationException) {

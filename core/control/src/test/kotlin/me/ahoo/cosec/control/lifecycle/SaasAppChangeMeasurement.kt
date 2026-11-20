@@ -153,18 +153,15 @@ class SaasAppChangeMeasurement {
                 id
             ).also { count("GET change", it?.value?.let(ChangeRequestCodec::encode)?.size?.toLong() ?: 0) }
 
-        override suspend fun putChange(expected: SnapshotDigest?, change: ChangeRequest): Boolean =
+        override suspend fun putChange(expected: SnapshotDigest?, change: ChangeRequest, previous: ChangeState?): Boolean =
             inner.putChange(
                 expected,
-                change
+                change,
+                previous,
             ).also { count("PUT change", ChangeRequestCodec.encode(change).size.toLong()) }
 
-        override suspend fun openChanges(): List<ChangeRequest> = inner.openChanges().also {
-            count(
-                "GET open-changes",
-                0
-            )
-        }
+        override suspend fun openChanges(document: SnapshotKey): List<me.ahoo.cosec.control.store.ListedChange> =
+            inner.openChanges(document).also { count("SMEMBERS open changes", 0) }
     }
 
     private companion object {

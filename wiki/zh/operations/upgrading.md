@@ -231,7 +231,7 @@ cosec-migrate partition plan (--from-redis redis://localhost:6379 [--key-prefix 
 cosec-migrate repair-references --to-redis redis://localhost:6379 [--cluster] [--key-prefix cosec]
 ```
 
-控制面维护一个"哪些文档引用了哪条策略"的索引，使平台变更不能删除文档仍在使用的策略，也不能新增与租户文档所用 id 相同的策略（[存储](./storage.md#redis-keys)）。对 8.0.0-beta.5 之前写入的存储，它先在两次运行共用的租约之下把这个索引转换为集合：头触及的每个旧格式值都变成集合，集合从不被替换；旧的文档列表（`<s>:control:list:documents`）被复制进 `<s>:control:documents:all`，在没有任何失败时最后删除。它输出转换了多少，以及 `The store is in the format of 8.0.0-beta.5.`（`MIG-4`）。先停掉所有更早版本的控制面：它们写的是旧格式。
+控制面维护一个"哪些文档引用了哪条策略"的索引，使平台变更不能删除文档仍在使用的策略，也不能新增与租户文档所用 id 相同的策略（[存储](./storage.md#redis-keys)）。对 8.0.0-beta.5 之前写入的存储，它先在两次运行共用的租约之下把这个索引转换为集合：头触及的每个旧格式值都变成集合，集合从不被替换；旧的文档列表（`<s>:control:list:documents`）被复制进 `<s>:control:documents:all`，在没有任何失败时最后删除。它输出转换了多少，以及 `The store is in the format of 8.0.0-beta.5.`（`MIG-4`）。同一次运行中，它把旧的未完成变更列表（`<s>:control:list:open-changes`）中仍未完成的每个变更加入未完成变更集合，只有在每个变更都读取成功之后，才把集合标记为 kept 并删除旧列表（`CTL-54`）；它输出登记了多少，以及每个记录无法读取的 id，只要还剩一个就失败。先停掉所有更早版本的控制面：它们写的是旧格式。
 
 它读每份文档的头和它自己的修订索引，从不为找一个成员而读整个反向引用集合（R2C-8）：索引已经记录了其引用的文档只花这两次读取，没有记录的文档（转换来的文档就是如此）把它的每个引用各添加一次。它每 1,000 份文档输出一行进度，失败一出现就输出。一次一条命令，每条都是到 Redis 的一次往返；在内存中测得（`SaasScaleMeasurement`），每个租户有 20 条绑定到同一应用权限的角色绑定和一条绑定到平台策略：
 

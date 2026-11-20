@@ -50,9 +50,9 @@ class ControlFailClosedTest {
             return memory.putHead(key, expected, document)
         }
 
-        override suspend fun putChange(expected: SnapshotDigest?, change: ChangeRequest): Boolean {
+        override suspend fun putChange(expected: SnapshotDigest?, change: ChangeRequest, previous: ChangeState?): Boolean {
             check(!failChanges) { "the store is down" }
-            return memory.putChange(expected, change)
+            return memory.putChange(expected, change, previous)
         }
     }
     private val harness = ChangeHarness(clock, memory, store)

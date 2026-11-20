@@ -71,6 +71,13 @@ description: "每个 8.0 预览版（alpha 与 beta）到下一个之间的变�
   - 在它运行之前，控制面照常启动，记录一条写明该命令的 `ERROR`，其 `cosecControlStoreFormat` 健康指示器为 `DOWN`（[可观测性](./observability.md#snapshot-health)）。触及旧格式反向引用的变更会被拒绝（`503`，写明该命令），从不放过。
   - 没有任何头触及的值保持旧格式：它什么也不阻止；以后触及它的变更失败关闭，写明该命令，直到再运行一次。
   - 这两个集合从不在本地保留：`ReferenceIndexCache` 和 `ControlDocumentSetCache` 的 `local-max-age` 与 `degraded-local-max-age` 锁定为 1 ns，设置其中之一的 `cocache.caches.*` 条目会让启动失败（[配置](./configuration.md#cocache-properties-that-affect-cosec)）。
+- **未完成的变更是集合，`GET /changes` 列出它们：停掉控制面，运行 `cosec-migrate repair-references`**（第二轮评审，`R2C-2`、`R2C-4`、`CTL-54`、`CTL-55`）。受影响的是 8.0.0-beta.4 或更早版本的控制面写过的每个存储，以及你自己的 `ControlStore`。
+  - 未完成的变更原来是一个值 `<s>:control:list:open-changes`，每个变更都重写它；现在它们是权威集合，每个文档一个、每个状态一个，外加一个标记 `<s>:control:changes:kept`（[存储](./storage.md#redis-keys)）。两个变更不再争用同一个值，维护任务只读取一个文档或一个状态的变更，而不是所有未完成的变更。
+  - 停掉所有控制面，升级它，运行 `cosec-migrate repair-references`（与上面反向引用的是同一次运行）：它把旧列表中仍未完成的每个变更登记到集合中，只有在每个变更都读取成功之后，才把集合标记为 kept 并删除旧列表。它输出 `Listed N open change(s) in the open-change sets.`，每个记录无法读取的变更输出一行 `FAILED`，只要还剩一个就失败：删除或修复该记录后再运行一次。本版本的控制面创建的存储没有旧列表，从一开始就是 kept。
+  - 在集合被标记为 kept 之前，以及每当旧列表再次出现时（更早的控制面在该存储上启动过），控制面不回收任何修订，记录一条点名该命令的 `WARN`，`GET /changes` 返回 `503`：集合不被信任为包含每个未完成的变更，而未完成变更所依赖的修订不能被回收。不在影子中的变更现在由回收任务（`cosec.control.revisions.reclaim-interval`，每小时）或在被读取时过期，不再每隔 `cosec.control.shadow.check-interval` 过期。
+  - `GET /changes?document=&state=&after=&limit=` 以摘要列出调用者可以读取的未完成变更（[查找未完成的变更](../policies/testing.md#finding-open-changes)）。
+  - `ControlStore.openChanges()` 没有了。`ControlStore` 有 `openChangesKept()`、`keepOpenChanges()`、`openChanges(document)` 和 `changes(state, after, limit, documents)`，它们返回 `ListedChange`（`Readable` 或 `Unreadable`）和 `ChangePage`，都是 `@ExperimentalCoSecApi`。
+  - `ControlChangeSetCache` 是权威集合：它的 `local-max-age` 和 `degraded-local-max-age` 锁定为 1 ns，与其他集合相同（[配置](./configuration.md#cocache-properties-that-affect-cosec)）。
 - **gateway 模式声明它所信任的网络边界，网关转发它所决策的方法**（`STA-7`、`STA-6`、`PIP-31`）。受影响的是每个 `cosec.pipeline.mode=gateway` 的服务和每个网关。
   - `gateway` 模式的服务相信任何 `CoSec-Identity` 头，而这个头没有签名，所以网络就是它的边界。现在除非你写下 `cosec.pipeline.identity.only-gateway-can-reach: true`（`COSEC_PIPELINE_IDENTITY_ONLY_GATEWAY_CAN_REACH=true`），声明只有网关能访问它，否则它**启动失败**。未设置、空、`false`、`1` 和 `on` 同样失败，信息会说明该写什么。先让它成真（只放行网关 pod 的 `NetworkPolicy`、双向 TLS、私有网络；[`k8s/examples/gateway-mode-service-networkpolicy.yaml`](https://github.com/Ahoo-Wang/CoSec/blob/main/k8s/examples/gateway-mode-service-networkpolicy.yaml)）。设置之后，beta.4 之前的 `WARN` 变为一行 `INFO`。
   - `gateway` 模式的服务只要有 hidden-method 过滤器就会**启动失败**：`spring.mvc.hiddenmethod.filter.enabled=true`、`spring.webflux.hiddenmethod.filter.enabled=true`，或它自己的 `HiddenHttpMethodFilter` bean。网关决策的是请求行的方法，而 `_method` 表单字段会让服务执行另一个方法。移除它。自己决策的宿主（`enforce`）不受影响。

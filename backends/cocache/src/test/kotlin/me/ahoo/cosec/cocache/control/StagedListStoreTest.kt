@@ -102,6 +102,7 @@ class StagedListStoreTest {
                 node.factory.createLocked(ControlCacheSpecs.referenceIndex(node.keyPrefix)),
                 node.factory.createLocked(ControlCacheSpecs.documentSet(node.keyPrefix)),
                 raw,
+                node.factory.createLocked(ControlCacheSpecs.changeSet(node.keyPrefix)),
             )
             sets.keepStagedList()
             sets.listStaged(SnapshotKey.Tenant("acme"), "c1@1")

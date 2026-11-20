@@ -472,9 +472,9 @@ class ChangesB1Test {
                 document: SnapshotDocument
             ): HeadWrite = harness.memory.putHead(key, expected, document).also { written = key == ACME }
 
-            override suspend fun putChange(expected: SnapshotDigest?, change: ChangeRequest): Boolean {
+            override suspend fun putChange(expected: SnapshotDigest?, change: ChangeRequest, previous: ChangeState?): Boolean {
                 check(!written) { "Redis is down" }
-                return harness.memory.putChange(expected, change)
+                return harness.memory.putChange(expected, change, previous)
             }
 
             override suspend fun head(key: SnapshotKey): StoredDocument? =
@@ -527,9 +527,9 @@ class ChangesB1Test {
                 return harness.memory.putIndex(key, expected, index)
             }
 
-            override suspend fun putChange(expected: SnapshotDigest?, change: ChangeRequest): Boolean {
+            override suspend fun putChange(expected: SnapshotDigest?, change: ChangeRequest, previous: ChangeState?): Boolean {
                 yield()
-                return harness.memory.putChange(expected, change)
+                return harness.memory.putChange(expected, change, previous)
             }
         }
         val events = java.util.concurrent.CopyOnWriteArrayList<ChangeEvent.Kind>()

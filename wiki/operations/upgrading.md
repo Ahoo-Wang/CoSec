@@ -340,8 +340,11 @@ policy a document still uses, nor add one whose id a tenant document uses ([Stor
 On a store written before 8.0.0-beta.5 it first converts that index into sets, under a lease two runs share: each value
 of the old format a head touches becomes a set, a set is never replaced, and the old document list
 (`<s>:control:list:documents`) is copied into `<s>:control:documents:all` and removed last, once nothing failed; it
-prints how many it converted and `The store is in the format of 8.0.0-beta.5.` (`MIG-4`). Stop every control plane of
-an earlier version first: it writes the old format.
+prints how many it converted and `The store is in the format of 8.0.0-beta.5.` (`MIG-4`). In the same run it adds
+each change the old open-change list (`<s>:control:list:open-changes`) names and that is still open to the open-change
+sets, and only once every one of them was read marks the sets kept and removes the old list (`CTL-54`); it prints how
+many it listed and each id whose record does not read, and fails while one is left. Stop every control plane of an
+earlier version first: it writes the old format.
 
 It reads each document's head and its own revision index, and never a whole back-reference set to look for one member
 (R2C-8): a document whose index already records its references costs those two reads, and one with no record, as a
