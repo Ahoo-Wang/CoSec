@@ -15,6 +15,17 @@ package me.ahoo.cosec.engine
 
 /**
  * The revisions of the documents one view composes (RFC 0004 §7.2, RFC 0003 Q20): [app] and [tenant] are null when
- * the view has no such document, 0 for one that is not stored.
+ * the view has no such document, 0 for one that is not stored. A plain class, like the other values an application
+ * reads and never makes (RFC 0010 C4): a document added to the view later adds a field, not a `copy`.
  */
-data class ViewVersion(val platform: Long, val app: Long?, val tenant: Long?)
+class ViewVersion(val platform: Long, val app: Long?, val tenant: Long?) {
+    override fun equals(other: Any?): Boolean =
+        this === other || other is ViewVersion &&
+        platform == other.platform &&
+        app == other.app &&
+        tenant == other.tenant
+
+    override fun hashCode(): Int = 31 * (31 * platform.hashCode() + (app?.hashCode() ?: 0)) + (tenant?.hashCode() ?: 0)
+
+    override fun toString(): String = "ViewVersion(platform=$platform, app=$app, tenant=$tenant)"
+}

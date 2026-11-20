@@ -19,7 +19,7 @@ import me.ahoo.cosec.migrate.v7.limiter.RateLimitRule
 import me.ahoo.cosec.migrate.v7.policy.action.RejectedTemplateValue
 import me.ahoo.cosec.migrate.v7.policy.action.onRejectedTemplateValue
 import me.ahoo.cosec.migrate.v7.policy.condition.AllConditionMatcher
-import me.ahoo.cosec.spi.ratelimit.RateLimit
+import me.ahoo.cosec.model.decision.RateLimitSpec
 import tools.jackson.core.JsonGenerator
 import tools.jackson.core.JsonParser
 import tools.jackson.databind.DeserializationContext
@@ -70,7 +70,7 @@ internal object JsonRateLimitRuleDeserializer : StdDeserializer<RateLimitRule>(R
             action = action,
             condition = condition,
             key = jsonNode.get(RATE_LIMIT_RULE_KEY_KEY)?.asString(),
-            rateLimit = RateLimit(
+            rateLimit = RateLimitSpec(
                 permitsPerSecond = permitsPerSecond,
                 windowSeconds = jsonNode.get(RATE_LIMIT_RULE_WINDOW_SECONDS_KEY)?.asLong() ?: 1,
             ),
