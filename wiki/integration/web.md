@@ -113,9 +113,16 @@ request over differently in a few places; the adapters read it the same way on a
   drop them. A token in the `authorization` cookie reads the same either way.
 - A `?` with nothing after it is no query, as no `?` is.
 
-Headers and cookies are read from the server's own request when the pipeline asks, not copied first. What reads them
-after the response (a shadow listener's replay) reads a copy made while the request was decided: a servlet container
-may reuse its request object once the response is written.
+Headers and cookies are read from the server's own request when the pipeline asks, not copied first. Nothing reads the
+server's request after the response (`PIP-32`): a servlet container may reuse its request object once the response is
+written, and Tomcat refuses to read a recycled one. What outlives a request carries what it was decided on:
+
+- A decision event, and so what a listener keeps of it and the audit record made from it, holds the method, the
+  path, the client address and the device id as values, not as views.
+- A shadow listener's replay reads a copy of the headers made while the request was decided.
+- A security context your application keeps answers its principal, scope, request id and device id from values. A
+  check made with it during the request copies the headers it may read before the request ends, even on a thread of
+  your own; after the end every check is refused (`PIP-26`).
 
 ## The request path
 

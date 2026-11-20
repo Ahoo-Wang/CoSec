@@ -19,8 +19,10 @@ import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.model.condition.HttpNames
 
 /**
- * [Headers.view]: the host's headers, read on each lookup until [freeze] copies them. The copy is written once, by the
- * request's own thread before it hands anything on, and read after: [copy] is volatile all the same.
+ * [Headers.view]: the host's headers, read on each lookup until [freeze] copies them. The copy is made while the request
+ * is in progress, by its own thread before it hands a shadow replay on, or by a check under the lock the request's end
+ * takes (`RequestSecurity.admit`, `PIP-32`); [copy] is volatile, since a check may run on another thread. Two copies made
+ * at once hold the same values.
  */
 internal class HostHeaders(
     private val lookup: (String) -> List<String>?,

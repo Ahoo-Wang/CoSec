@@ -24,9 +24,11 @@ import me.ahoo.cosec.webflux.ReactiveXForwardedRemoteIpResolver
 import me.ahoo.cosec.webmvc.ServletXForwardedRemoteIpResolver
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.AfterAll
+import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.TestInstance
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.MethodSource
+import java.util.concurrent.TimeUnit
 
 /**
  * The two request readers hand the pipeline the same facts (round 2, R2B-25): `HttpFactsReader` on Reactor Netty,
@@ -139,6 +141,24 @@ class RealServerFactsParityTest {
         }
     }
 
+    /**
+     * Why [Capture] reads while the request is decided, and why what outlives a request copies (`PIP-32`): once the
+     * response is written, Tomcat recycles its request, and a view over it refuses to be read.
+     */
+    @Test
+    fun `Tomcat refuses its request after the response`() {
+        val capture = captures.getValue(Stack.TOMCAT)
+        capture.scenario = scenarios().first()
+        servers.getValue(Stack.TOMCAT).send(capture.scenario!!.request)
+        val facts = checkNotNull(capture.facts)
+        val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(RECYCLE_BOUND_SECONDS)
+        var refused: Throwable? = null
+        while (refused == null && System.nanoTime() < deadline) {
+            refused = runCatching { facts.headers.values("host") }.exceptionOrNull()
+        }
+        refused.assert().isInstanceOf(IllegalStateException::class.java)
+    }
+
     private fun comparable(facts: HttpFacts, scenario: Scenario): Map<String, Any?> = buildMap {
         put("method", facts.method)
         put("rawPath", facts.rawPath)
@@ -159,7 +179,12 @@ class RealServerFactsParityTest {
         @Volatile
         var last: Map<String, Any?>? = null
 
+        /** The facts of the last request, kept to show that they cannot be read after it. */
+        @Volatile
+        var facts: HttpFacts? = null
+
         override suspend fun evaluate(facts: HttpFacts): Outcome {
+            this.facts = facts
             last = comparable(facts, checkNotNull(scenario))
             return pipeline.evaluate(facts)
         }
@@ -167,6 +192,9 @@ class RealServerFactsParityTest {
 
     private companion object {
         val STACKS = Stack.entries - Stack.GATEWAY
+
+        /** How long Tomcat may take to recycle a request whose response the client holds. */
+        const val RECYCLE_BOUND_SECONDS = 5L
 
         fun get(path: String, vararg headers: String) = raw("GET", path, *headers)
 
