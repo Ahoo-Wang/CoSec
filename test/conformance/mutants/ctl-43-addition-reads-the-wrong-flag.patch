@@ -1,0 +1,16 @@
+# Rule: CTL-43
+# Mutant: the addition check takes the entries that only refer for the ones that define the id: a tenant that defines it no longer blocks the platform adding it
+# Tests: :control:test --tests me.ahoo.cosec.control.change.ReferenceFlagsTest :conformance:test
+
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/PlatformChecks.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/PlatformChecks.kt
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/PlatformChecks.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/PlatformChecks.kt
+@@ -69,7 +69,7 @@ internal object PlatformChecks {
+     /** The tenants whose entries say they define [policy] themselves; `null` when its references cannot be read. */
+     @Suppress("TooGenericExceptionCaught")
+     private suspend fun definingTenants(context: CurrentDocuments, policy: PolicyId): Set<SnapshotKey.Tenant>? = try {
+-        context.referrers(SnapshotKey.Platform, policy).filter { it.definesItself }
++        context.referrers(SnapshotKey.Platform, policy).filter { !it.definesItself }
+             .mapNotNullTo(LinkedHashSet()) { it.referrer as? SnapshotKey.Tenant }
+     } catch (e: CancellationException) {
+         throw e

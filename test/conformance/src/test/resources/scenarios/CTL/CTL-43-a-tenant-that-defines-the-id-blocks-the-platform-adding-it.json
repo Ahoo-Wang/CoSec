@@ -1,0 +1,72 @@
+{
+  "rules": [
+    "CTL-43"
+  ],
+  "polarity": "positive",
+  "level": "control",
+  "description": "Tenant acme defines its own policy editor; its back-reference entry says so. The platform's change that adds a policy editor is refused (422) on that entry, without reading acme's head.",
+  "steps": [
+    {
+      "propose": {
+        "change": "c1",
+        "document": "tenant:acme",
+        "operations": [
+          {
+            "putPolicy": {
+              "id": "editor",
+              "statements": [
+                {
+                  "effect": "allow",
+                  "action": "order:read"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "skipShadow": "c1"
+    },
+    {
+      "publish": "c1"
+    },
+    {
+      "propose": {
+        "change": "c2",
+        "document": "platform",
+        "operations": [
+          {
+            "putPolicy": {
+              "id": "editor",
+              "statements": [
+                {
+                  "effect": "allow",
+                  "action": "order:*"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    }
+  ],
+  "expect": {
+    "steps": [
+      "CHECKED",
+      "READY",
+      "PUBLISHED",
+      "DRAFT"
+    ],
+    "errors": {
+      "c1": [],
+      "c2": [
+        "V2"
+      ]
+    },
+    "heads": {
+      "platform": 0,
+      "tenant:acme": 1
+    }
+  }
+}

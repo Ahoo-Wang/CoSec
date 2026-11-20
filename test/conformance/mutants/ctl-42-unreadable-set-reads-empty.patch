@@ -1,0 +1,16 @@
+# Rule: CTL-42
+# Mutant: a back-reference set CoCache cannot read, one of the format before 8.0.0-beta.5 included, reads as empty: a removal it could block goes through
+# Tests: :cocache:test --tests me.ahoo.cosec.cocache.control.CoCacheControlStoreTest
+
+diff --git a/backends/cocache/src/main/kotlin/me/ahoo/cosec/cocache/control/CoCacheControlStore.kt b/backends/cocache/src/main/kotlin/me/ahoo/cosec/cocache/control/CoCacheControlStore.kt
+--- a/backends/cocache/src/main/kotlin/me/ahoo/cosec/cocache/control/CoCacheControlStore.kt
++++ b/backends/cocache/src/main/kotlin/me/ahoo/cosec/cocache/control/CoCacheControlStore.kt
+@@ -188,7 +188,7 @@ class CoCacheControlStore internal constructor(
+      * read as a set, such as one a version before 8.0.0-beta.5 wrote, throws naming `cosec-migrate repair-references`.
+      */
+     override suspend fun referrers(target: SnapshotKey, policy: PolicyId): Set<ReferrerEntry> =
+-        sets(referencesOf(target, policy)) { references.suspending().get(ReferenceKey(target, policy)) }
++        runCatching { references.suspending().get(ReferenceKey(target, policy)) }.getOrDefault(emptySet())
+ 
+     /** One member added (CoCache's add-if-readable): what was there stays; a value in the old format is refused. */
+     override suspend fun addReferrer(target: SnapshotKey, policy: PolicyId, entry: ReferrerEntry) {

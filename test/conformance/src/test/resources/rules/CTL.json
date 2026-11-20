@@ -42,14 +42,14 @@
         "runtime:ShadowAppDocumentTest#a tenant candidate that grants an app permission reads the app document and widens",
         "runtime:ShadowAppDocumentTest#a tenant candidate that revokes it reads no app document and narrows",
         "runtime:ShadowAppDocumentTest#withoutViewsSuchACandidateIsAnError",
-      "runtime:ShadowDocumentFailureTest#a candidate that drops a failed app dependency predicts the availability it restores",
-      "runtime:ShadowDocumentFailureTest#a candidate that still reads the failed app document is indeterminate as the live view is",
-      "runtime:ShadowDocumentFailureTest#a candidate that starts reading a failed app document carries its failure",
-      "runtime:ShadowDocumentFailureTest#the failure of a document the candidate still reads is kept",
-      "runtime:ShadowDocumentFailureTest#a platform candidate that compiles replaces the failure of the platform that does not",
-      "runtime:ShadowDocumentFailureTest#an app candidate replaces an app document that does not compile, and is not compared on one that cannot be read",
-      "runtime:ShadowDocumentFailureTest#a tenant candidate replaces a tenant document that does not compile, and is not compared on one that cannot be read",
-      "runtime:FailedDocumentTest#a document that cannot be read or does not compile is named, any other cause names none",
+        "runtime:ShadowDocumentFailureTest#a candidate that drops a failed app dependency predicts the availability it restores",
+        "runtime:ShadowDocumentFailureTest#a candidate that still reads the failed app document is indeterminate as the live view is",
+        "runtime:ShadowDocumentFailureTest#a candidate that starts reading a failed app document carries its failure",
+        "runtime:ShadowDocumentFailureTest#the failure of a document the candidate still reads is kept",
+        "runtime:ShadowDocumentFailureTest#a platform candidate that compiles replaces the failure of the platform that does not",
+        "runtime:ShadowDocumentFailureTest#an app candidate replaces an app document that does not compile, and is not compared on one that cannot be read",
+        "runtime:ShadowDocumentFailureTest#a tenant candidate replaces a tenant document that does not compile, and is not compared on one that cannot be read",
+        "runtime:FailedDocumentTest#a document that cannot be read or does not compile is named, any other cause names none",
         "spring-boot:PipelineStarterRedisTest#a tenant candidate that makes a roleless request read an app document widens its window",
         "control:ControlPlaneTest#a header the view reads sent with different values is refused as enforcement refuses it",
         "control:SimulatorTest#a repeated header a document reads is refused",
@@ -80,8 +80,9 @@
       "level": "control",
       "guards": [
         "control:RevisionsTest",
-        "control:AppPermissionReferencesTest#the platform entries an older version wrote go at the tenant's next publish, and the app still cannot remove the permission",
-        "control:AppPermissionReferencesTest#a tenant's reference to an app permission is indexed under the app only, every other one as before"
+        "control:AppPermissionReferencesTest#a tenant's reference to an app permission is indexed under the app only, every other one as before",
+        "control:AppPermissionReferencesTest#the app cannot remove a permission a tenant refers to, and the platform holds no member for it",
+        "control:AppPermissionReferencesTest#a tenant that comes to define an app's policy id itself stops blocking its removal at its next publish"
       ],
       "pending": null
     },
@@ -320,11 +321,12 @@
     {
       "id": "CTL-25",
       "source": "RFC 0007 §5.8; #1207 (audit E2a)",
-      "statement": "The back-reference index stays a superset of what every head refers to: each referrer is indexed with the revision of it that last indexed the reference, and a revision removes only what it or an earlier revision of its document indexed, so a removal that runs after a later revision indexed the reference again leaves it, and the referenced policy cannot be removed.",
+      "statement": "The back-reference index stays a superset of what every head refers to: each revision of a referrer that indexes a reference is a member of its own (referrer, revision, flag), and a revision removes only the members its document's forward record holds at or below the revision it published, so a removal that runs after a later revision indexed the reference again leaves it, and the referenced policy cannot be removed.",
       "level": "control",
       "guards": [
         "control:ReferrerCleanupRaceTest#a revision's late removal never drops a reference a later revision indexed again - #1207",
         "control:ReferrerCleanupRaceTest#a revision's removal that waits still removes the reference when nothing indexed it again",
+        "control:ReferrerCleanupRaceTest#a drop removes only the members it added, and a stray one blocks until a repair prunes it",
         "control:RevisionsTest#repairing keeps what a head refers to, and what a publish still in flight indexed",
         "control:RevisionsTest#repairing leaves a reference a later revision indexed meanwhile"
       ],
@@ -545,6 +547,45 @@
         "control:EntryBudgetsTest#a client's change carries at most maxChangeOperations operations, an apply is not held to it",
         "spring-boot:ControlBodyLimitTest#a body within the limit reaches the control plane on both stacks, a larger one is a 400 that never does",
         "spring-boot:ControlBodyLimitTest#the limit is 10 MB by default"
+      ],
+      "pending": null
+    },
+    {
+      "id": "CTL-42",
+      "source": "RFC 0007 §5.8; design B of the back-references, beta.5 (#1729)",
+      "statement": "A back-reference set that cannot be read, a value in the format before 8.0.0-beta.5 included, fails closed: a read throws naming cosec-migrate repair-references, a check that needs it refuses the change (503), a head write that needs it is not made, and no member is added to or removed from it. Every read of a set asks Redis: the sets of record keep no local copy a read could answer from (local-max-age and degraded-local-max-age locked to 1 ns).",
+      "level": "control",
+      "guards": [
+        "control:ChangesB1Test#back-references that cannot be read refuse a platform id and block a removal - CTL-42",
+        "control:RevisionsTest#a back-reference set that cannot be read blocks the platform removing its policy - CTL-42",
+        "cocache:CoCacheControlStoreTest#a back-reference value in the format before beta 5 fails closed, naming the repair",
+        "cocache:CacheTtlPolicyTest#setOfRecordCachesNeverExpireAndKeepNoLocalCopy",
+        "cocache:SetOfRecordReadTest#every read of a back-reference set asks Redis, even in the millisecond its copy was filled in",
+        "cocache:SetOfRecordReadTest#the same loop over a set kept locally misses the member, so the test above can fail"
+      ],
+      "pending": null
+    },
+    {
+      "id": "CTL-43",
+      "source": "RFC 0007 §5.8; design B of the back-references, beta.5 (#1729)",
+      "statement": "The platform's checks read the flag each back-reference entry carries, never a tenant's head: a removal of a platform policy is blocked by a referrer unless every entry of it says it defines the id itself, an addition of a platform policy is blocked by any entry that says so, and every referrer of an app's policy blocks its removal. An entry a later revision or a lost race left behind errs towards blocking in both checks, until the referrer's next publish or repair-references removes it.",
+      "level": "control",
+      "guards": [
+        "control:ReferenceFlagsTest#an addition is blocked by any entry that defines the id, and not by one that only refers to it",
+        "control:ReferenceFlagsTest#a stale entry that defines the id still blocks an addition",
+        "control:ReferenceFlagsTest#a removal is blocked unless every entry of a referrer defines the id",
+        "control:AppPermissionReferencesTest#an app's removal check reads no tenant's head"
+      ],
+      "pending": null
+    },
+    {
+      "id": "CTL-44",
+      "source": "RFC 0007 §5.8; design B of the back-references, beta.5 (#1729)",
+      "statement": "What a tenant's publish reads and writes does not depend on how many other documents refer to the same policies, for a reference it adds and for one it drops alike: it records what it adds in its own revision index before adding one member per reference, and drops exactly the members that record holds, without reading the sets.",
+      "level": "control",
+      "guards": [
+        "control:PublishCostTest#a tenant's publish that adds a reference costs the same at 10 and at 400 referrers",
+        "control:PublishCostTest#a tenant's publish that drops a reference costs the same at 10 and at 400 referrers"
       ],
       "pending": null
     }

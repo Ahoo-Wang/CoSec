@@ -1,17 +1,16 @@
 # Rule: CTL-21
-# Mutant: the control plane lets the platform add a policy id a tenant document already defines or binds
+# Mutant: the control plane lets the platform add a policy id a tenant document defines itself, whenever its back-references read
 # Tests: :control:test --tests me.ahoo.cosec.control.change.ChangesB1Test
 
 diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/PlatformChecks.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/PlatformChecks.kt
-index 8b7ad47c..42d81814 100644
 --- a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/PlatformChecks.kt
 +++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/PlatformChecks.kt
-@@ -78,7 +78,7 @@ internal object PlatformChecks {
+@@ -52,7 +52,7 @@ internal object PlatformChecks {
              }
-             val tenants = context.referrers(SnapshotKey.Platform, policy.id).filterIsInstance<SnapshotKey.Tenant>()
-             val uses = tenants.associateWith { uses(context, it, policy.id) }
--            val using = uses.filterValues { it != false }.keys
-+            val using = emptySet<SnapshotKey.Tenant>()
-             if (using.isEmpty()) continue
-             val status = if (uses.values.any { it == null }) UNAVAILABLE else UNPROCESSABLE
+             // RC1-9, CTL-43: a tenant whose entry says it defines the id itself blocks, read from the entries, not heads.
+             val defining = definingTenants(context, policy.id)
+-            if (defining?.isEmpty() == true) continue
++            if (defining?.isEmpty() != null) continue
              findings += Finding(
+                 "V2",
+                 "$.policies[$i].id",

@@ -1,0 +1,53 @@
+{
+  "rules": [
+    "CTL-44"
+  ],
+  "polarity": "negative",
+  "level": "control",
+  "cost": true,
+  "description": "What a tenant's publish no longer reads, the check of a platform removal still does: the platform's publish without shared reads its back-reference set, finds tenant acme, and is refused.",
+  "publishes": [
+    {
+      "document": "platform",
+      "policies": [
+        "shared",
+        "other"
+      ]
+    },
+    {
+      "bindings": [
+        "shared"
+      ]
+    },
+    {
+      "document": "platform",
+      "policies": [
+        "other"
+      ]
+    }
+  ],
+  "expect": {
+    "outcomes": [
+      "Published",
+      "Published",
+      "Referenced"
+    ],
+    "head": {
+      "revision": 1,
+      "parent": null,
+      "parentRecord": null
+    },
+    "records": 1,
+    "writes": [
+      "record",
+      "head",
+      "record",
+      "head"
+    ],
+    "lastPublish": {
+      "setReads": 1,
+      "membersAdded": 0,
+      "membersRemoved": 0
+    }
+  }
+}

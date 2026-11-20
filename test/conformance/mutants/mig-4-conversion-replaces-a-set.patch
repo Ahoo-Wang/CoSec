@@ -1,0 +1,15 @@
+# Rule: MIG-4
+# Mutant: repair-references writes over a set that is not in the old format: a member a publish added is lost
+# Tests: :cocache:test --tests me.ahoo.cosec.cocache.control.LegacyConversionTest
+
+diff --git a/backends/cocache/src/main/kotlin/me/ahoo/cosec/cocache/control/LegacyConversion.kt b/backends/cocache/src/main/kotlin/me/ahoo/cosec/cocache/control/LegacyConversion.kt
+--- a/backends/cocache/src/main/kotlin/me/ahoo/cosec/cocache/control/LegacyConversion.kt
++++ b/backends/cocache/src/main/kotlin/me/ahoo/cosec/cocache/control/LegacyConversion.kt
+@@ -71,6 +71,7 @@ class LegacyConversion internal constructor(
+     /** Converts the value of [target]'s [policy] if it is in the format before 8.0.0-beta.5; whether it did. */
+     suspend fun convert(target: SnapshotKey, policy: PolicyId): Boolean {
+         if (!isLegacy(target, policy)) {
++            store.convertReferrers(target, policy, emptySet())
+             return false
+         }
+         val what = "The back-reference value of [$target] policy [${SnapshotKeyText.printable(policy.value)}]"
