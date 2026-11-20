@@ -2,16 +2,16 @@
 # Mutant: the id rule lets '/' in, so SnapshotKey.Tenant("acme/west") is a key again; ControlResources still refuses it as a second line
 # Tests: :model:test --tests me.ahoo.cosec.model.scope.ScopeResolverTest
 
-diff --git a/core/model/src/main/kotlin/me/ahoo/cosec/model/scope/ScopeResolver.kt b/core/model/src/main/kotlin/me/ahoo/cosec/model/scope/ScopeResolver.kt
-index 4ad373e82..b1b6f53a4 100644
---- a/core/model/src/main/kotlin/me/ahoo/cosec/model/scope/ScopeResolver.kt
-+++ b/core/model/src/main/kotlin/me/ahoo/cosec/model/scope/ScopeResolver.kt
-@@ -80,7 +80,7 @@ object ScopeResolver {
-         for (index in app.indices) {
-             val c = app[index]
+diff --git a/core/model/src/main/kotlin/me/ahoo/cosec/model/Ids.kt b/core/model/src/main/kotlin/me/ahoo/cosec/model/Ids.kt
+index 8a205c881..4c7e7ce3d 100644
+--- a/core/model/src/main/kotlin/me/ahoo/cosec/model/Ids.kt
++++ b/core/model/src/main/kotlin/me/ahoo/cosec/model/Ids.kt
+@@ -108,7 +108,7 @@ object Identifiers {
+         for (index in id.indices) {
+             val c = id[index]
              val refused = when (c) {
 -                ':', '/' -> true
 +                ':' -> true
-                 else -> Identifiers.isUnprintableAt(app, index)
+                 else -> isUnprintableAt(id, index)
              }
              if (refused) {
