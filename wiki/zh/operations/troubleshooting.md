@@ -280,6 +280,7 @@ Request [<id>]: the forwarded identity is refused (<status> <problem>), <reason>
 
 - **没有发布平台文档。** 用 `cosec-migrate publish` 发布一个。实例会在启动时记录这一点，之后在持续期间每隔 `lag-warn` 记录一次：`No platform document under [cosec:snapshot:platform] in Redis <host:port/db>: this instance is not ready ...`。这一行指明读取的 key、key 前缀和所读的 Redis，从不包含凭证：常见原因是首次部署还没有发布任何文档、`cosec.key-prefix` 写错（发布方的必须相同）或 Redis 数据库错了。文档装入时会有一行 INFO。
 - **某个预热文档无法加载或编译。** 日志会指明它（`Loading snapshot document [<doc>] failed.`）。修正或发布该文档，或把它从预热列表中去掉。
+- **无法读取 Redis。** 平台文档和预热文档每隔 1 到 30 秒会被重新读取（`WARN` 级别的 `Snapshot prewarm failed for [...]; retrying in ...`），无需请求：Redis 一应答，实例就会就绪（`SNP-21`）。如果没有，原因是上面两条之一，或者 Redis 仍然拒绝该实例。
 
 `cosecSnapshot` 健康指示器显示状态：`platform`（`installed`、`invalid`、`failed`、`absent` 或 `loading`；`invalid` 是已存储但无法编译的文档）和 `prewarmed`。把它加入 readiness 组即可在
 探针中看到：`management.endpoint.health.group.readiness.include=readinessState,cosecSnapshot`。

@@ -37,9 +37,18 @@ class DocumentReadiness(private val source: SnapshotSource<*, *>, prewarm: Colle
 
     private val later = CopyOnWriteArrayList<Later>()
 
-    /** Loads the platform document, then the [prewarm] ones, retrying those until each is installed. Never blocks. */
+    /** The prewarm [start] runs, once its first read of the platform document has ended; null before. */
+    @Volatile
+    private var first: CompletableFuture<Void>? = null
+
+    /**
+     * Loads the platform document, then prewarms it with the [prewarm] ones: each is read again, with backoff, until it
+     * is installed and not failed. Never blocks. So a first read that failed (the store down, restarting or loading) is
+     * read again without a request, which a host that is not ready never receives: it becomes ready once the store
+     * answers (`SNP-21`).
+     */
     fun start() {
-        source.load().whenComplete { _, _ -> source.prewarm(prewarm) }
+        source.load().whenComplete { _, _ -> first = source.prewarm(listOf(SnapshotKey.Platform) + prewarm) }
     }
 
     /**
@@ -63,7 +72,8 @@ class DocumentReadiness(private val source: SnapshotSource<*, *>, prewarm: Colle
         if (source.peek()?.policies !is DocumentState.Present<*>) {
             add(SnapshotKey.Platform)
         }
-        val waiting = (if (source.isPrewarmed) emptyList() else prewarm) +
+        // Its own prewarm's, not the source's flag, which any prewarm completing sets (a gateway's route apps).
+        val waiting = (if (first?.isDone == true) emptyList() else prewarm) +
             later.filterNot { it.loaded.isDone }.flatMap { it.keys }
         if (waiting.isNotEmpty()) {
             val installed = source.entries().associateBy { it.key }

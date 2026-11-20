@@ -96,6 +96,7 @@ internal class KeyEffects<T : Any>(
             is KeyEffect.Skip -> (effect.waiter as KeyWaiter<T, *>).skip()
             is KeyEffect.Redispatch -> owner.redispatched(effect.event)
             is KeyEffect.ScheduleRetry -> scheduleRetry(effect.delay)
+            is KeyEffect.ScheduleCompileRetry -> scheduleCompileRetry(effect.loadId, effect.delay, effect.spread)
             KeyEffect.DropIfEmpty ->
                 context.threads.offHousekeeping(HousekeepingTask.DROP, key) { owner.dropIfEmpty() }
             KeyEffect.EvictOverCap -> evictOverCap()
@@ -270,6 +271,25 @@ internal class KeyEffects<T : Any>(
             )
         } catch (rejected: RejectedExecutionException) {
             log.debug { "No reload retry: $rejected" }
+        }
+    }
+
+    /**
+     * [spread]: after between half of [delay] and all of it, at random, so the cold loads of a burst, refused together,
+     * come back spread over that window and the pool takes them as it frees up rather than in waves (R2D-4). Never later
+     * than [delay]. A scheduler that refuses (closing) ends the load as an effect that failed: never a retry at once,
+     * which could spin.
+     */
+    private fun scheduleCompileRetry(loadId: Long, delay: Duration, spread: Boolean) {
+        val due = if (spread) context.threads.spread(delay.toNanos()) else delay.toNanos()
+        try {
+            context.threads.scheduler.schedule(
+                { owner.offer(KeyEvent.CompileRetryDue(loadId)) },
+                due,
+                TimeUnit.NANOSECONDS
+            )
+        } catch (rejected: RejectedExecutionException) {
+            owner.offer(KeyEvent.EffectFailed(loadId, rejected))
         }
     }
 

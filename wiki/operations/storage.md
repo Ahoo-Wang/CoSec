@@ -326,8 +326,9 @@ sequenceDiagram
 - **Tenants that fail closed on lag.** For the tenants listed in
   [`fail-closed.tenants`](./configuration.md#snapshot), a request is unresolved when the oldest document it reads
   (the platform, the tenant's and the app's) has not been confirmed for longer than `fail-closed.max-lag`
-  (30 minutes): it answers `503` unless a DENY matches. Other tenants are decided on the installed revisions however
-  old they are, and are never checked.
+  (30 minutes): it answers `503` unless a DENY matches. `*` in the list names every tenant. Other tenants are decided
+  on the installed revisions however old they are, and are never checked: by default, none is listed, and an instance
+  that cannot read Redis keeps deciding on what it installed until Redis answers again.
 - **Local copies** serve only cold loads. The first time an instance needs a document, it may take CoCache's local
   copy, at most [`local-max-age`](./configuration.md#snapshot) (30 seconds) old; it counts that copy as that old and
   confirms it with Redis at once. A local "no such document" is never trusted: only Redis can answer that a document
@@ -370,7 +371,7 @@ revalidating 10 documents every 10 seconds take about 0.1 % of it.
 | What | Behavior |
 |---|---|
 | A document already installed | Kept. Decisions go on with the installed revision; its lag grows and is logged ([How instances read documents](#how-instances-read-documents)). |
-| A document not installed yet | The cold load fails or times out: the document is unresolved for that request, which is **`503`**, unless a DENY matches first. Nothing is installed; the next request tries again. |
+| A document not installed yet | The cold load fails or times out: the document is unresolved for that request, which is **`503`**, unless a DENY matches first. Nothing is installed; the next request tries again. A document readiness waits for (the platform's, the prewarmed ones) is also read again on its own, every 1 to 30 seconds, so an instance that started during the outage becomes ready once Redis answers (`SNP-21`). |
 | A document that cannot be decoded or compiled | Installed as failed: every request that needs it is **`503`**, unless a DENY matches first, until a readable revision is published. |
 | A document that disappeared from Redis after it was seen | Failed until a document returns (`Snapshot document [<doc>] disappeared from the store; failing closed.` at `ERROR`). Requests that need it are **`503`**, unless a DENY matches first. |
 | A tenant listed in `fail-closed.tenants`, once its documents lag past `fail-closed.max-lag` | **`503`**, unless a DENY matches first ([How instances read documents](#how-instances-read-documents)). |

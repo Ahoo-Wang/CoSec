@@ -18,6 +18,7 @@ package me.ahoo.cosec.spring.boot.pipeline
 import io.micrometer.core.instrument.MeterRegistry
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry
 import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.micrometer.CoSecMeters
 import me.ahoo.cosec.micrometer.MetricsListener
 import me.ahoo.cosec.spring.boot.lazily
 import me.ahoo.test.asserts.assert
@@ -71,6 +72,18 @@ class MetricsRegistryOrderTest {
             context.startupFailure.assert().isNull()
             context.getBeansOfType(MeterRegistry::class.java).assert().hasSize(1)
             context.getBeansOfType(MetricsListener::class.java).assert().isEmpty()
+        }
+    }
+
+    /** R2D-3: without Redis, the local rate limiter's refused buckets are counted by kind of document. */
+    @Test
+    fun `the local rate limiter's refusals are metered`() {
+        runner.withConfiguration(boot).run { context ->
+            context.startupFailure.assert().isNull()
+            val registry = context.getBean(MeterRegistry::class.java)
+            registry.find(CoSecMeters.LOCAL_RATE_LIMIT_REFUSED).functionCounters()
+                .map { it.id.getTag(CoSecMeters.DOCUMENT_TAG) }
+                .assert().containsExactlyInAnyOrder("platform", "app", "tenant", "other")
         }
     }
 

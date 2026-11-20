@@ -100,6 +100,12 @@ internal sealed interface KeyEffect<out T : Any> {
     /** `retryLater`: a [KeyEvent.RetryDue] after [delay], on the scheduler. */
     data class ScheduleRetry(val delay: Duration) : KeyEffect<Nothing>
 
+    /**
+     * A [KeyEvent.CompileRetryDue] for cold load [loadId] after [delay], on the scheduler (R2D-4): [spread], at random
+     * between half of it and all of it; otherwise exactly then.
+     */
+    data class ScheduleCompileRetry(val loadId: Long, val delay: Duration, val spread: Boolean) : KeyEffect<Nothing>
+
     /** `housekeep` of an empty key: drop it, on housekeeping, if it is still empty then. */
     data object DropIfEmpty : KeyEffect<Nothing>
 

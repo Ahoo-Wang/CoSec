@@ -3,14 +3,15 @@
 # Tests: :runtime:test --tests me.ahoo.cosec.runtime.ratelimit.LocalRateLimiterBoundsTest
 
 diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/ratelimit/RateLimiter.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/ratelimit/RateLimiter.kt
+index d6a19b33d..68354e6ea 100644
 --- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/ratelimit/RateLimiter.kt
 +++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/ratelimit/RateLimiter.kt
-@@ -113,7 +113,7 @@
+@@ -186,7 +186,7 @@ class LocalRateLimiter(
  
-     /** A slot of the rule's bound and of the total, or neither. */
-     private fun reserve(rule: AtomicLong): Boolean {
--        if (rule.incrementAndGet() > maximumBucketsPerRule) {
-+        if (rule.incrementAndGet() > Long.MAX_VALUE - 1) {
-             rule.decrementAndGet()
+     /** A slot of the rule's bound, of its document's and of the total, or none. */
+     private fun reserve(slots: Slots): Boolean {
+-        if (slots.rule.incrementAndGet() > maximumBucketsPerRule) {
++        if (slots.rule.incrementAndGet() > Long.MAX_VALUE - 1) {
+             slots.rule.decrementAndGet()
              return false
          }

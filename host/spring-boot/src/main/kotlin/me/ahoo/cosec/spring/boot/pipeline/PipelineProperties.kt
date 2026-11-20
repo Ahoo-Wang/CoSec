@@ -297,7 +297,7 @@ class RuntimeAuthorizationProperties {
         class FailClosed {
             /**
              * Tenants that must not be decided on old documents: a request of one is 503 unless a DENY matches, when the
-             * oldest document it reads was confirmed longer ago than `max-lag`.
+             * oldest document it reads was confirmed longer ago than `max-lag`. `*` names every tenant.
              */
             var tenants: Set<String> = emptySet()
 

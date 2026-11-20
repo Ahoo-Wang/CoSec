@@ -30,6 +30,10 @@ internal data class KeyConfig(
     val shared: Boolean,
     val storeReadTimeout: Duration,
     val rejectedReloadRetry: Duration,
+    /** How long a cold load the compile queue refuses keeps trying to compile, from its start (R2D-4). */
+    val coldLoadTimeout: Duration,
+    /** How long such a cold load waits, at most, before it compiles again. */
+    val coldCompileRetry: Duration,
     val revalidateInterval: Duration,
     /** How old the store's local copy may be: a read from it is confirmed only as of that long before it started. */
     val localCopyMaxAge: Duration,

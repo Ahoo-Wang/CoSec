@@ -93,6 +93,8 @@ internal class KeyContext(
         shared = shared,
         storeReadTimeout = options.storeReadTimeout,
         rejectedReloadRetry = options.rejectedReloadRetry,
+        coldLoadTimeout = options.coldLoadTimeout,
+        coldCompileRetry = options.coldCompileRetry,
         revalidateInterval = options.revalidateInterval,
         localCopyMaxAge = store.localCopyMaxAge,
     )

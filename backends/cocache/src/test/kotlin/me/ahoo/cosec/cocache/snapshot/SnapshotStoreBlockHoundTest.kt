@@ -145,6 +145,43 @@ class SnapshotStoreBlockHoundTest {
         violations.assert().isEmpty()
     }
 
+    /**
+     * R2D-4: a burst of distinct cold documents against a compile pool of one thread and a queue of one. The loads the
+     * queue refuses wait and compile again on the source's scheduler; the caller's thread, and the store's threads that
+     * hand each read to the pool, never wait for it.
+     */
+    @Test
+    fun aBurstOfColdLoadsTheCompileQueueRefusesNeverBlocksTheCaller() {
+        RedisTarget.REDIS.backend().use { backend ->
+            SnapshotNode(backend, newKeyPrefix()).use { node ->
+                node.writer.publish(SnapshotKey.Platform).block()
+                val apps = (1..COLD_BURST).map { "burst-$it" }
+                apps.forEach { node.writer.publish(SnapshotKey.App(it)).block() }
+                val slowCompiler = SnapshotCompiler { _, document ->
+                    // On the compile pool, which is not watched: slow enough that the burst overflows the queue.
+                    Thread.sleep(SLOW_COMPILE_MILLIS)
+                    document.revision
+                }
+                val options = SnapshotOptions(
+                    compileThreads = 1,
+                    compileQueueCapacity = 1,
+                    coldCompileRetry = java.time.Duration.ofMillis(20),
+                    coldLoadTimeout = java.time.Duration.ofSeconds(TIMEOUT_SECONDS),
+                )
+                DocumentSnapshots.source(node.store, slowCompiler, options).use { source ->
+                    source.load().get(TIMEOUT_SECONDS, TimeUnit.SECONDS)
+                    violations.clear()
+                    val loads = onNonBlockingThread { apps.map { source.load(it) } }
+                    for (load in loads) {
+                        val snapshot = load.get(TIMEOUT_SECONDS, TimeUnit.SECONDS)
+                        snapshot.appEntry!!.revision.assert().isEqualTo(1L)
+                    }
+                }
+            }
+        }
+        violations.assert().isEmpty()
+    }
+
     /** RFC 0006 §8.4: the suspending Redis rate limiter awaits Redis; the caller's thread never waits for it. */
     @Test
     fun theSuspendingRedisRateLimiterNeverBlocksTheCaller() {
@@ -197,6 +234,8 @@ class SnapshotStoreBlockHoundTest {
     companion object {
         private const val THREAD_PREFIX = "cosec-non-blocking-test"
         private const val TIMEOUT_SECONDS = 30L
+        private const val COLD_BURST = 20
+        private const val SLOW_COMPILE_MILLIS = 5L
         private val threads = AtomicInteger()
         private val violations = CopyOnWriteArrayList<String>()
 

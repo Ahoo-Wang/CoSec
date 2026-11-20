@@ -11,9 +11,12 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.runtime.ratelimit
 
 import kotlinx.coroutines.runBlocking
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.model.decision.RateLimitSpec
 import me.ahoo.test.asserts.assert
 import me.ahoo.test.asserts.assertThrownBy
@@ -132,6 +135,46 @@ class LocalRateLimiterBoundsTest {
         limiter.acquire("a", "alice", once).allowed.assert().describedAs("alice's live count").isFalse()
         limiter.acquire("a", "bob", once).allowed.assert().describedAs("a new bucket of rule a").isTrue()
         limiter.held().third.assert().containsEntry("b", 40L).containsEntry("a", 2L)
+    }
+
+    /**
+     * R2D-3: the two keyed rules of one tenant, flooded with distinct keys, fill only that tenant's quarter: another
+     * tenant's rules and the platform's keep admitting new buckets, and each refusal is counted by its kind of document.
+     */
+    @Test
+    fun `two flooded rules of one tenant fill only its document's share`() {
+        val limiter = limiter(maximum = 100)
+        var refused = 0
+        for (rule in listOf("tenant:acme/by-ip", "tenant:acme/by-header")) {
+            repeat(1_000) {
+                try {
+                    limiter.acquire(rule, "flood-$it")
+                } catch (_: LocalRateLimiter.LimiterFullException) {
+                    refused++
+                }
+            }
+        }
+        refused.assert().isEqualTo(2_000 - 25)
+        limiter.heldByOwner().assert().containsEntry("tenant:acme", 25L)
+        limiter.refused(LocalRateLimiter.Refused.TENANT).assert().isEqualTo(refused.toLong())
+        limiter.acquire("tenant:globex/by-ip", "alice").allowed.assert().describedAs("another tenant's rule").isTrue()
+        limiter.acquire("platform/by-ip", "alice").allowed.assert().describedAs("a platform rule").isTrue()
+        limiter.acquire("app:wms/by-ip", "alice").allowed.assert().describedAs("an app's rule").isTrue()
+        limiter.refused(LocalRateLimiter.Refused.PLATFORM).assert().isZero()
+    }
+
+    /** R2D-3: the owner share is configured, and checked: within the total, positive. */
+    @Test
+    fun `the owner share is its own bound`() {
+        val limiter = LocalRateLimiter(maximumBuckets = 10, maximumBucketsPerOwner = 2, clock = { now.get() })
+        limiter.acquire("tenant:acme/a", "1")
+        limiter.acquire("tenant:acme/b", "2")
+        runCatching { limiter.acquire("tenant:acme/a", "3") }.exceptionOrNull()
+            .assert().isInstanceOf(LocalRateLimiter.LimiterFullException::class.java)
+        limiter.acquire("other", "3").allowed.assert().describedAs("an id of no document has no owner share").isTrue()
+        runCatching { LocalRateLimiter(maximumBuckets = 10, maximumBucketsPerOwner = 11) }.exceptionOrNull()
+            .assert().isInstanceOf(IllegalArgumentException::class.java)
+        LocalRateLimiter.ownerOf("/x").assert().isNull()
     }
 
     /** (c) The total bound holds too: once all rules together are full, a new bucket of any rule cannot be counted. */

@@ -36,6 +36,7 @@ import org.springframework.boot.health.contributor.Status
 import org.springframework.context.ApplicationEvent
 import org.springframework.context.ApplicationEventPublisher
 import java.time.Duration
+import java.util.concurrent.CompletableFuture
 
 /** The states of [SnapshotHealthIndicator] and [SnapshotReadiness] the starter test does not reach. */
 class SnapshotHealthIndicatorTest {
@@ -75,14 +76,17 @@ class SnapshotHealthIndicatorTest {
             every { peek(any()) } returns snapshot
             every { isPrewarmed } returns prewarmed
             every { entries() } returns entries
+            // Readiness waits for its own prewarm (SNP-21): complete when the test says the source is prewarmed.
+            every { load(any()) } returns CompletableFuture.completedFuture(snapshot)
+            every { prewarm(any()) } returns if (prewarmed) CompletableFuture.completedFuture(null) else CompletableFuture()
         }
     }
 
-    /** Readiness over [source], with one prewarmed tenant that has no entry until the prewarm completes. */
+    /** Readiness over [source], started, with one prewarmed tenant that has no entry until the prewarm completes. */
     private fun readiness(source: SnapshotSource<Any, Any>) = DocumentReadiness(
         source,
         listOf(SnapshotKey.Tenant(TENANT))
-    )
+    ).apply { start() }
 
     private fun readiness(state: DocumentState<Any>?, prewarmed: Boolean) = readiness(source(state, prewarmed))
 

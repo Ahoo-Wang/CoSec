@@ -21,6 +21,7 @@ import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.runtime.authn.UncheckedRevocations
 import me.ahoo.cosec.runtime.event.DecisionListeners
 import me.ahoo.cosec.runtime.identity.IdentityRefusals
+import me.ahoo.cosec.runtime.ratelimit.LocalRateLimiter
 
 /**
  * The counters the starter registers beside the decision timer ([MetricsListener]): what the decision listeners did with
@@ -36,6 +37,8 @@ object CoSecMeters {
     const val AUDIT_REQUIRED_FAILURES = "cosec.audit.required.failures"
     const val UNCHECKED_REVOCATIONS = "cosec.revocation.unchecked"
     const val IDENTITY_REFUSED = "cosec.identity.refused"
+    const val LOCAL_RATE_LIMIT_REFUSED = "cosec.ratelimit.local.refused"
+    const val DOCUMENT_TAG = "document"
 
     /**
      * Registers what [listeners] count (§9.5.2): `cosec.listener.dropped` and `cosec.listener.failures` by listener,
@@ -67,6 +70,21 @@ object CoSecMeters {
         FunctionCounter.builder(UNCHECKED_REVOCATIONS, unchecked) { it.count.toDouble() }
             .description("Tokens accepted without a revocation check, the revocation store unreadable")
             .register(registry)
+    }
+
+    /**
+     * Registers `cosec.ratelimit.local.refused`, by the kind of document whose rule asked (R2D-3): the new buckets the
+     * local limiter could not admit, because the rule's, its document's or the whole bound was full. Each one is a
+     * request a strict rule answered `503` or a lenient one did not limit; any non-zero rate is a rule whose key clients
+     * vary, or bounds too small for the keys in use.
+     */
+    fun bind(registry: MeterRegistry, limiter: LocalRateLimiter) {
+        LocalRateLimiter.Refused.entries.forEach { kind ->
+            FunctionCounter.builder(LOCAL_RATE_LIMIT_REFUSED, limiter) { it.refused(kind).toDouble() }
+                .description("New rate limit buckets the local limiter could not admit")
+                .tag(DOCUMENT_TAG, kind.tag)
+                .register(registry)
+        }
     }
 
     /**

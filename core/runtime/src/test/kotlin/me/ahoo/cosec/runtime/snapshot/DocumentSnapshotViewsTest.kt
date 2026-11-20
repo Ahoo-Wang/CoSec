@@ -341,6 +341,40 @@ class DocumentSnapshotViewsTest {
         }
     }
 
+    /** R2D-5 (`SNP-5`): `*` configures every tenant to fail closed, including one no setting names. */
+    @Test
+    fun `with a star every tenant past its lag bound is unresolved`() {
+        publish(
+            SnapshotKey.Platform,
+            allowRead + ""","bindings":[{"id":"read","subject":"*","app":"*","space":"*","policy":"read"}]"""
+        )
+        val clock = MovingClock(Instant.parse("2026-10-26T00:00:00Z"))
+        val options = SnapshotOptions(
+            revalidateInterval = QUIET_PASS,
+            failClosedTenants = setOf(SnapshotOptions.ALL_TENANTS),
+            failClosedMaxLag = Duration.ofMinutes(5),
+        )
+        DocumentSnapshots.source(store, PolicyDocumentCompiler(), options, clock).use { source ->
+            val views = DocumentSnapshotViews(source)
+            val tenants = listOf("acme", "beta")
+            tenants.forEach { views.load(ViewKey.of(scope(it), blocked = false)).join() }
+
+            clock.now = clock.now.plus(Duration.ofMinutes(5))
+            for (tenant in tenants) {
+                decide(views.peek(ViewKey.of(scope(tenant), blocked = false))!!, scope(tenant))
+                    .assert().isInstanceOf(Decision.Permit::class.java)
+            }
+
+            clock.now = clock.now.plusSeconds(1)
+            for (tenant in tenants) {
+                val stale = views.peek(ViewKey.of(scope(tenant), blocked = false))!!
+                val cause = stale.unresolved.single() as Cause.SourceUnavailable
+                (cause.error as SnapshotStaleException).tenantId.assert().isEqualTo(tenant)
+                decide(stale, scope(tenant)).assert().isInstanceOf(Decision.Indeterminate::class.java)
+            }
+        }
+    }
+
     private fun awaitCompiled(views: DocumentSnapshotViews, key: ViewKey) {
         val deadline = System.nanoTime() + Duration.ofSeconds(5).toNanos()
         while (views.load(key).join().tenant == null) {

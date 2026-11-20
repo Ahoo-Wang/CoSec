@@ -48,6 +48,8 @@ internal class KeyModelRun(private val script: KeyModelScript) : KeyModelRunner.
         false,
         storeReadTimeout,
         Duration.ofMillis(100),
+        Duration.ofSeconds(5),
+        Duration.ofMillis(10),
         Duration.ofSeconds(1),
         Duration.ZERO
     )

@@ -288,7 +288,7 @@ class KeyDrainLaneTest {
             is KeyEvent.ReadDone, is KeyEvent.ReadFailed -> "read answered"
             is KeyEvent.ReadTimedOut -> "read timed out"
             is KeyEvent.Compiled, is KeyEvent.CompileCrashed, is KeyEvent.CompileRejected -> "compilation ended"
-            is KeyEvent.RetryDue -> "retried"
+            is KeyEvent.RetryDue, is KeyEvent.CompileRetryDue -> "retried"
             is KeyEvent.EffectFailed -> "effect failed"
         }
         val failure = IllegalStateException("thrown by the test")
@@ -300,6 +300,7 @@ class KeyDrainLaneTest {
             KeyEvent.CompileCrashed(1, SnapshotUnavailableException(APP_A, "thrown by the test", failure)),
             KeyEvent.CompileRejected(1, RejectedExecutionException("thrown by the test")),
             KeyEvent.RetryDue(),
+            KeyEvent.CompileRetryDue(1),
             KeyEvent.EffectFailed(1, failure),
         ).groupBy(::group).keys
         val once = kinds - "effect failed"

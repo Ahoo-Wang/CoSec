@@ -1,0 +1,17 @@
+# Rule: SNP-5
+# Mutant: `*` in fail-closed.tenants names no tenant, so with it every tenant is decided on a snapshot of any age
+# Tests: :conformance:test, :runtime:test
+
+diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/SnapshotSource.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/SnapshotSource.kt
+index 036a74537..49ef10e8c 100644
+--- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/SnapshotSource.kt
++++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/SnapshotSource.kt
+@@ -288,7 +288,7 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
+     }
+ 
+     private inline fun checkFresh(tenantId: String, lagAt: (Instant) -> Duration) {
+-        if (tenantId !in options.failClosedTenants && SnapshotOptions.ALL_TENANTS !in options.failClosedTenants) {
++        if (tenantId !in options.failClosedTenants) {
+             return
+         }
+         val lag = lagAt(clock.instant())
