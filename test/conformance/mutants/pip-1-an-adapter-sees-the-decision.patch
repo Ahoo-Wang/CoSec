@@ -1,0 +1,14 @@
+# Rule: PIP-1
+# Mutant: the WebFlux adapter depends on the decision types, which an adapter never sees: it could decide what to write
+# Tests: :architecture:test --tests me.ahoo.cosec.architecture.OneDecisionPathTest
+
+diff --git a/edge/webflux/src/main/kotlin/me/ahoo/cosec/webflux/PipelineWebFilter.kt b/edge/webflux/src/main/kotlin/me/ahoo/cosec/webflux/PipelineWebFilter.kt
+index 38651fe5d..32a76bf20 100644
+--- a/edge/webflux/src/main/kotlin/me/ahoo/cosec/webflux/PipelineWebFilter.kt
++++ b/edge/webflux/src/main/kotlin/me/ahoo/cosec/webflux/PipelineWebFilter.kt
+@@ -77,3 +77,5 @@ class PipelineWebFilter @InternalCoSecApi constructor(
+         const val REACTIVE_AUTHORIZATION_FILTER_ORDER = 1000
+     }
+ }
++
++private val SEEN: Class<*> = me.ahoo.cosec.model.decision.Decision::class.java

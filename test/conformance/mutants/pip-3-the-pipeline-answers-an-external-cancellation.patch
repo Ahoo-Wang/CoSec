@@ -1,0 +1,18 @@
+# Rule: PIP-3
+# Mutant: an external cancellation of the request is answered with an Outcome (500) instead of propagating, so the adapter has an outcome to proceed on
+# Tests: :runtime:test --tests me.ahoo.cosec.runtime.PipelineCancellationTest :conformance:test --tests me.ahoo.cosec.conformance.ConformanceTest
+
+diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/Pipeline.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/Pipeline.kt
+index 674853187..aa39b1631 100644
+--- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/Pipeline.kt
++++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/Pipeline.kt
+@@ -186,9 +186,6 @@ class Pipeline internal constructor(
+         val forwarded = forwardIdentity?.run(state, decided) ?: decided
+         deliverRequired.run(state, forwarded)
+     } catch (e: CancellationException) {
+-        if (!currentCoroutineContext().isActive) {
+-            throw e
+-        }
+         // Nobody cancelled this request: something threw a CancellationException of its own.
+         requestPathLog.error(e) { "Request [${state.requestId}] failed with a stray cancellation." }
+         StatusMapping.error(state.requestId, e, state.traceId)

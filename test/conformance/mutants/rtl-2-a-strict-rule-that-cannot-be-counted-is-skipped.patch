@@ -1,0 +1,17 @@
+# Rule: RTL-2
+# Mutant: a strictFailure rule whose limiter failed is skipped like any other: the request goes on uncounted
+# Tests: :runtime:test --tests me.ahoo.cosec.runtime.RateLimitObligationTest :conformance:test --tests me.ahoo.cosec.conformance.ConformanceTest
+
+diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/stage/RunObligations.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/stage/RunObligations.kt
+index be74a3e28..1958dc1d5 100644
+--- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/stage/RunObligations.kt
++++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/stage/RunObligations.kt
+@@ -49,8 +49,6 @@ internal class RunObligations(private val rateLimiter: RateLimiter?, private val
+             }
+             val result = acquire(obligation)
+             when {
+-                result == null && obligation.strictFailure ->
+-                    return state.unavailable(Cause.RateLimiterUnavailable(obligation.ruleId))
+                 result == null -> continue
+                 !result.allowed -> return StatusMapping.tooManyRequests(
+                     state.requestId,

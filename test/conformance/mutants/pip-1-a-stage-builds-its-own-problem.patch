@@ -1,0 +1,16 @@
+# Rule: PIP-1
+# Mutant: the last stage builds a Problem itself instead of leaving every status and body to StatusMapping
+# Tests: :architecture:test --tests me.ahoo.cosec.architecture.OneDecisionPathTest
+
+diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/stage/Respond.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/stage/Respond.kt
+index f9f8fee82..227c6d46c 100644
+--- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/stage/Respond.kt
++++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/stage/Respond.kt
+@@ -29,6 +29,7 @@ import me.ahoo.cosec.runtime.http.StatusMapping
+ internal object Respond : Stage {
+     override suspend fun run(state: RequestState): Outcome {
+         val decision = state.decision
++        state.requestId.let { me.ahoo.cosec.runtime.http.Problem(me.ahoo.cosec.runtime.http.ProblemType.FORBIDDEN, it, null) }
+         if (decision is Decision.Permit) {
+             val request = state.request
+             state.security = RequestSecurity(

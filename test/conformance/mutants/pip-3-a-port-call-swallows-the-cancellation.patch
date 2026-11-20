@@ -1,0 +1,18 @@
+# Rule: PIP-3
+# Mutant: a call to a port answers a failure to an external cancellation instead of letting it propagate: the request goes on with no one waiting for it
+# Tests: :runtime:test --tests me.ahoo.cosec.runtime.PipelineCancellationTest :conformance:test --tests me.ahoo.cosec.conformance.ConformanceTest
+
+diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/call/PortCall.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/call/PortCall.kt
+index e7590e956..679f720f6 100644
+--- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/call/PortCall.kt
++++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/call/PortCall.kt
+@@ -42,9 +42,6 @@ internal suspend fun <T : Any> callPort(timeout: Duration?, port: suspend () ->
+     val value = if (timeout == null) resumeOffIo(port) else withLazyTimeoutOrNull(timeout) { resumeOffIo(port) }
+     if (value == null) Answer.Failed(TimeoutException("No answer within $timeout.")) else Answer.Value(value)
+ } catch (e: CancellationException) {
+-    if (!currentCoroutineContext().isActive) {
+-        throw e
+-    }
+     Answer.Failed(e)
+ } catch (e: Exception) {
+     Answer.Failed(e)

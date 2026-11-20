@@ -1,0 +1,17 @@
+# Rule: BRK-5
+# Mutant: a change is break-glass when its kind says so, not when its operations create or alter a break-glass binding: a PUBLISH change that does needs no REQUIRED audit
+# Tests: :control:test --tests me.ahoo.cosec.control.ControlReviewFixesTest :conformance:test --tests me.ahoo.cosec.conformance.ConformanceTest
+
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Proposals.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Proposals.kt
+index 467bc9756..2ce268593 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Proposals.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Proposals.kt
+@@ -114,7 +114,7 @@ internal class Proposals(
+     ): ChangeRequest {
+         val head = revisions.head(key)
+         // Keyed on what the change does, not on its kind (review K1).
+-        val breakGlass = BreakGlassRules.touches(operations, head?.document, clock.instant())
++        val breakGlass = kind == ProvenanceKind.BREAK_GLASS
+         val glass = breakGlass || kind == ProvenanceKind.BREAK_GLASS
+         authority.authorize(author, key, operations, kind, glass, head?.document)
+         PublishRules.requireAudit(breakGlass, listeners.hasRequired)

@@ -1,0 +1,18 @@
+# Rule: RTL-1
+# Mutant: a 429 carries no Retry-After header
+# Tests: :runtime:test --tests me.ahoo.cosec.runtime.RateLimitObligationTest --tests me.ahoo.cosec.runtime.ClientContractTest :conformance:test --tests me.ahoo.cosec.conformance.ConformanceTest
+
+diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/http/StatusMapping.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/http/StatusMapping.kt
+index 3449a6d1d..edc381ecd 100644
+--- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/http/StatusMapping.kt
++++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/http/StatusMapping.kt
+@@ -183,9 +183,6 @@ internal object StatusMapping {
+         headers[RATE_LIMIT_LIMIT] = result.limit.toString()
+         headers[RATE_LIMIT_REMAINING] = result.remaining.toString()
+         headers[RATE_LIMIT_RESET] = reset
+-        if (!result.allowed) {
+-            headers[RETRY_AFTER] = reset
+-        }
+         return headers
+     }
+ 

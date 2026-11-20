@@ -1,0 +1,23 @@
+# Rule: RTL-1
+# Mutant: a rule whose bucket is exhausted does not refuse the permit: the request goes on as if it had permits left
+# Tests: :runtime:test --tests me.ahoo.cosec.runtime.RateLimitObligationTest :conformance:test --tests me.ahoo.cosec.conformance.ConformanceTest
+
+diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/stage/RunObligations.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/stage/RunObligations.kt
+index be74a3e28..2d0a35971 100644
+--- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/stage/RunObligations.kt
++++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/stage/RunObligations.kt
+@@ -52,13 +52,7 @@ internal class RunObligations(private val rateLimiter: RateLimiter?, private val
+                 result == null && obligation.strictFailure ->
+                     return state.unavailable(Cause.RateLimiterUnavailable(obligation.ruleId))
+                 result == null -> continue
+-                !result.allowed -> return StatusMapping.tooManyRequests(
+-                    state.requestId,
+-                    permit,
+-                    obligation.ruleId,
+-                    result,
+-                    state.traceId,
+-                )
++                !result.allowed -> continue
+                 tightest == null || result.remaining < tightest.remaining -> tightest = result
+             }
+         }
