@@ -1,0 +1,17 @@
+# Rule: CTL-47
+# Mutant: a staged list that cannot be read is taken for an empty one, so every window loses its samples while the store is unreadable
+# Tests: :runtime:test --tests me.ahoo.cosec.runtime.shadow.StagedDocumentsTest :conformance:test
+
+diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/shadow/StagedDocuments.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/shadow/StagedDocuments.kt
+index a2ed8f5a4..efa0373cf 100644
+--- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/shadow/StagedDocuments.kt
++++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/shadow/StagedDocuments.kt
+@@ -105,7 +105,7 @@ class StagedDocuments(private val store: CandidateStore, private val clock: Cloc
+ 
+     private fun unreadable(error: Exception) {
+         val was = readAt
+-        listed = null
++        listed = Listed(false, emptySet(), emptySet())
+         readAt = null
+         // Once per outage: the line says the list was readable and is not, then the debug log has each failure.
+         if (was != null) {
