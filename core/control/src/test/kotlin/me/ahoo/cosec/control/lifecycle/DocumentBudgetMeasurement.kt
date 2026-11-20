@@ -159,10 +159,12 @@ class DocumentBudgetMeasurement {
         )
 
         suspend fun bootstrap(key: SnapshotKey, bindings: List<Binding>) {
+            val document = StoreFixtures.candidate(key, emptyList(), bindings)
             revisions.publish(
                 key,
                 revisions.head(key),
-                StoreFixtures.candidate(key, emptyList(), bindings),
+                // The cost past the entry budgets (CTL-40, CTL-41) is the question, so the platform lifts them.
+                if (key == SnapshotKey.Platform) document.copy(budgets = UNBOUNDED) else document,
                 Publication("bootstrap", ProvenanceKind.BOOTSTRAP, plato.actor),
             )
         }
@@ -191,6 +193,16 @@ class DocumentBudgetMeasurement {
                 )
             }
         }
+    }
+
+    private companion object {
+        val UNBOUNDED = me.ahoo.cosec.document.DocumentBudgets(
+            maxPolicies = Int.MAX_VALUE,
+            maxStatements = Int.MAX_VALUE,
+            maxRoleBindings = Int.MAX_VALUE,
+            maxAnyoneBindings = Int.MAX_VALUE,
+            maxChangeOperations = Int.MAX_VALUE,
+        )
     }
 
     private inline fun ms(block: () -> Any?): Long = measureTimedValue(block).duration.inWholeMilliseconds
