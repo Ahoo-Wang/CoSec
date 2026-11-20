@@ -1,0 +1,18 @@
+# Rule: IDN-30
+# Mutant: a verified token whose attributes hold apiKeyId is accepted: it passes for the API key an ALLOW is written for
+# Tests: :runtime:test --tests me.ahoo.cosec.runtime.authn.TokenAuthenticatorTest :conformance:test --tests me.ahoo.cosec.conformance.ConformanceTest
+
+diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/authn/TokenAuthenticator.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/authn/TokenAuthenticator.kt
+index 5b31675c..72a6df45 100644
+--- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/authn/TokenAuthenticator.kt
++++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/authn/TokenAuthenticator.kt
+@@ -116,9 +116,6 @@ class TokenAuthenticator(
+         } catch (_: TokenVerificationException) {
+             return INVALID
+         }
+-        if (token.attributes.keys.any { it in RESERVED_ATTRIBUTES }) {
+-            return INVALID
+-        }
+         try {
+             revocation.check(token)
+         } catch (_: TokenRevokedException) {

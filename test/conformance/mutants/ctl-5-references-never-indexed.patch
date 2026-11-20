@@ -1,0 +1,20 @@
+# Rule: CTL-5
+# Mutant: a published binding's reference to another document's policy is never indexed: that document may then remove the policy the binding refers to
+# Tests: :control:test --tests me.ahoo.cosec.control.store.RevisionsTest :conformance:test --tests me.ahoo.cosec.conformance.ConformanceTest
+
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/store/Revisions.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/store/Revisions.kt
+index 31727d21..a85f4cbf 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/store/Revisions.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/store/Revisions.kt
+@@ -114,11 +114,6 @@ class Revisions(
+         check(store.putRecord(key, stored) == digest) { "The store addressed the record of [$key] by another digest." }
+         val before = base?.let { referrerIndex.references(it.document) }.orEmpty()
+         val after = referrerIndex.references(document)
+-        for ((target, policy) in after - before) {
+-            check(writes.updateReferrers(target, policy) { referrerIndex.indexed(it, key, revision) }) {
+-                "[$key]: the reference to [$policy] of [$target] could not be indexed; the head was not moved."
+-            }
+-        }
+         if (key is SnapshotKey.App) {
+             // Before the head moves, whether this is its first revision or the list was lost: no app has a head the
+             // app list does not name (RC1-4).

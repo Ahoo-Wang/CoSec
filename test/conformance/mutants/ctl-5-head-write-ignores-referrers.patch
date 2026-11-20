@@ -1,0 +1,16 @@
+# Rule: CTL-5
+# Mutant: the head write no longer refuses a candidate that removes a policy another document's binding refers to
+# Tests: :control:test --tests me.ahoo.cosec.control.store.RevisionsTest :conformance:test --tests me.ahoo.cosec.conformance.ConformanceTest
+
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/store/Revisions.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/store/Revisions.kt
+index 31727d21..0e0612cc 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/store/Revisions.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/store/Revisions.kt
+@@ -103,7 +103,6 @@ class Revisions(
+         require(base == null || base.key == key) { "The base of [$key] is a head of [$key], not of [${base?.key}]." }
+         val (kind, owner) = ownerOf(key)
+         require(candidate.kind == kind && candidate.owner == owner) { "The candidate is not a document of [$key]." }
+-        referrerIndex.referenced(key, base, candidate)?.let { return it }
+         val document = next(base, candidate, publication)
+         val revision = document.revision
+         val publishedAt = document.publishedAt
