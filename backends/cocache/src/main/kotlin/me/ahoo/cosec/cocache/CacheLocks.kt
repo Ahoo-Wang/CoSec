@@ -61,14 +61,9 @@ internal object CacheLocks {
         when (cacheName) {
             in SET_OF_RECORD_CACHE_NAMES -> {
                 verify { require(it is SetStoreSpec<*, *>) { "CoSec's ${it.name} is the store of record: a SetStore." } }
-                lock(
-                    PolicyField.TTL,
-                    PolicyField.UNKNOWN_READ,
-                    PolicyField.LOCAL_MAX_AGE,
-                    PolicyField.DEGRADED_LOCAL_MAX_AGE,
-                )
+                // A SetStore has no unknown-read: CoCache's SetEngine always throws on a read it cannot answer.
+                lock(PolicyField.TTL, PolicyField.LOCAL_MAX_AGE, PolicyField.DEGRADED_LOCAL_MAX_AGE)
                 constrain(PolicyField.TTL) { Ttl.Forever }
-                constrain(PolicyField.UNKNOWN_READ) { UnknownReadMode.THROW }
                 // Every read asks Redis (CTL-42): no local copy a lost invalidation would leave a removal check reading,
                 // degraded or not (CoSecCacheSpecs.SET_LOCAL_MAX_AGE says why 1 ns does that).
                 constrain(PolicyField.LOCAL_MAX_AGE) { SET_LOCAL_MAX_AGE }

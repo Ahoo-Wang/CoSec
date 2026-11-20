@@ -16,6 +16,7 @@
 package me.ahoo.cosec.cocache
 
 import me.ahoo.cocache.api.Codec
+import me.ahoo.cocache.api.SetStore
 import me.ahoo.cocache.api.Store
 import me.ahoo.cocache.core.CacheLayers
 import me.ahoo.cocache.core.CacheRuntime
@@ -25,6 +26,7 @@ import me.ahoo.cocache.core.Layered
 import me.ahoo.cocache.core.LayoutField
 import me.ahoo.cocache.core.Locks
 import me.ahoo.cocache.core.Spec
+import me.ahoo.cocache.core.SetStoreSpec
 import me.ahoo.cocache.core.StoreSpec
 import me.ahoo.cocache.core.memory.InMemoryBackend
 import me.ahoo.cocache.core.policy.InvalidateFailureMode
@@ -55,7 +57,6 @@ class CacheTtlPolicyTest {
         // RFC 0007 §5.2: the control plane's records, indexes, back-references and leases.
         CoSecCacheSpecs.REVISION_RECORD_CACHE_NAME to ControlCacheSpecs.revisionRecord(),
         CoSecCacheSpecs.REVISION_INDEX_CACHE_NAME to ControlCacheSpecs.revisionIndex(),
-        CoSecCacheSpecs.REFERENCE_INDEX_CACHE_NAME to ControlCacheSpecs.referenceIndex(),
         CoSecCacheSpecs.CONTROL_LEASE_CACHE_NAME to ControlCacheSpecs.lease(),
         CoSecCacheSpecs.CONTROL_LIST_CACHE_NAME to ControlCacheSpecs.list(),
         // RC1-4: an app list read as absent would leave the grant analysis trusting nothing, never more; it still throws.
@@ -64,6 +65,12 @@ class CacheTtlPolicyTest {
         CoSecCacheSpecs.STAGE_CACHE_NAME to ControlCacheSpecs.stage(),
         // RFC 0007 §6.4: a staged candidate is the control plane's only copy while its change stages.
         CoSecCacheSpecs.CANDIDATE_CACHE_NAME to ShadowCacheSpecs.candidate(),
+    )
+
+    /** The sets of record: the back-references and the documents (`CTL-42`, `CTL-44`). */
+    private val setOfRecordSpecs: Map<String, SetStoreSpec<*, *>> = mapOf(
+        CoSecCacheSpecs.REFERENCE_INDEX_CACHE_NAME to ControlCacheSpecs.referenceIndex(),
+        CoSecCacheSpecs.CONTROL_DOCUMENT_SET_CACHE_NAME to ControlCacheSpecs.documentSet(),
     )
 
     /**
@@ -77,6 +84,16 @@ class CacheTtlPolicyTest {
                 spec.toBuilder().unknownRead(UnknownReadMode.ABSENT).policy {
                     ttl = Duration.ofMinutes(1)
                     readTimeout = Duration.ofMillis(50)
+                }.build(),
+                locks,
+            )
+
+        override fun <K : Any, E : Any> apply(spec: SetStoreSpec<K, E>, locks: Locks): Layered<SetStoreSpec<K, E>> =
+            CacheLayers.NONE.apply(
+                spec.toBuilder().policy {
+                    ttl = Duration.ofMinutes(1)
+                    localMaxAge = Duration.ofHours(1)
+                    degradedLocalMaxAge = Duration.ofHours(1)
                 }.build(),
                 locks,
             )
@@ -98,9 +115,34 @@ class CacheTtlPolicyTest {
     private fun CoCacheFactory.effective(name: String, field: PolicyField<*>): String =
         checkNotNull(runtime.admin(name)?.policyReport).entries.single { it.field == field.key }.value
 
+    /**
+     * `CTL-42`: a set of record never expires and keeps no local copy a read could answer from, degraded or not, whatever
+     * a property or customizer says. A failed read always throws: a `SetStore` has no unknown-read to configure.
+     */
+    @Test
+    fun setOfRecordCachesNeverExpireAndKeepNoLocalCopy() {
+        setOfRecordSpecs.keys.assert().isEqualTo(CoSecCacheSpecs.SET_OF_RECORD_CACHE_NAMES)
+        weakened { factory ->
+            setOfRecordSpecs.forEach { (name, spec) ->
+                factory.create(spec, CoSecCacheSpecs.locks(name)).assert().isInstanceOf(SetStore::class.java)
+                val policy = factory.runtime.policy(name)!!
+                policy.ttl.assert().describedAs(name).isNull()
+                policy.localMaxAge.assert().describedAs(name).isEqualTo(CoSecCacheSpecs.SET_LOCAL_MAX_AGE)
+                policy.degradedLocalMaxAge.assert().describedAs(name).isEqualTo(CoSecCacheSpecs.SET_LOCAL_MAX_AGE)
+                CoSecCacheSpecs.locks(name).let { locks ->
+                    listOf(
+                        PolicyField.TTL,
+                        PolicyField.LOCAL_MAX_AGE,
+                        PolicyField.DEGRADED_LOCAL_MAX_AGE,
+                    ).forEach { locks.isLocked(it).assert().describedAs("$name $it").isTrue() }
+                }
+            }
+        }
+    }
+
     @Test
     fun storeOfRecordCachesNeverExpireAndFailClosed() {
-        storeOfRecordSpecs.keys.assert().isEqualTo(CoSecCacheSpecs.STORE_OF_RECORD_CACHE_NAMES)
+        (storeOfRecordSpecs.keys + setOfRecordSpecs.keys).assert().isEqualTo(CoSecCacheSpecs.STORE_OF_RECORD_CACHE_NAMES)
         weakened { factory ->
             storeOfRecordSpecs.forEach { (name, spec) ->
                 factory.create(spec, CoSecCacheSpecs.locks(name)).assert().isInstanceOf(Store::class.java)
@@ -204,6 +246,16 @@ class CacheTtlPolicyTest {
                 spec.toBuilder().policy {
                     absentTtl = Duration.ofHours(1)
                     localMaxAge = Duration.ofHours(1)
+                }.build(),
+                locks,
+            )
+
+        override fun <K : Any, E : Any> apply(spec: SetStoreSpec<K, E>, locks: Locks): Layered<SetStoreSpec<K, E>> =
+            CacheLayers.NONE.apply(
+                spec.toBuilder().policy {
+                    ttl = Duration.ofMinutes(1)
+                    localMaxAge = Duration.ofHours(1)
+                    degradedLocalMaxAge = Duration.ofHours(1)
                 }.build(),
                 locks,
             )

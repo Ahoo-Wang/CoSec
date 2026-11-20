@@ -75,6 +75,7 @@ class ControlLeaseTest {
         stages = node.runtime.create(ControlCacheSpecs.stage(node.keyPrefix)),
         candidates = node.runtime.create(me.ahoo.cosec.cocache.shadow.ShadowCacheSpecs.candidate(node.keyPrefix)),
         lists = node.runtime.create(ControlCacheSpecs.list(node.keyPrefix)),
+        documentSet = node.runtime.create(ControlCacheSpecs.documentSet(node.keyPrefix)),
         appLists = node.runtime.create(ControlCacheSpecs.appList(node.keyPrefix)),
         clock = time.clock,
     )

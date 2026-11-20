@@ -102,6 +102,7 @@ class ConditionalRemovalTest {
         stages = node.runtime.create(ControlCacheSpecs.stage(node.keyPrefix)),
         candidates = candidates,
         lists = node.runtime.create(ControlCacheSpecs.list(node.keyPrefix)),
+        documentSet = node.runtime.create(ControlCacheSpecs.documentSet(node.keyPrefix)),
         appLists = node.runtime.create(ControlCacheSpecs.appList(node.keyPrefix)),
     )
 
