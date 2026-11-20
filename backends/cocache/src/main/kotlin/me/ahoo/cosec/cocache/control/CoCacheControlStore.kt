@@ -204,10 +204,7 @@ class CoCacheControlStore internal constructor(
     suspend fun convertReferrers(target: SnapshotKey, policy: PolicyId, entries: Set<ReferrerEntry>) =
         sets.replace(target, policy, entries)
 
-    /**
-     * The document list a version before 8.0.0-beta.5 wrote, or null when there is none: while it is there, the store
-     * is not repaired (`cosec-migrate repair-references` removes it last).
-     */
+    /** The document list of a version before 8.0.0-beta.5, or null: while it is there, the store is not repaired. */
     @InternalCoSecApi
     suspend fun legacyDocuments(): Set<String>? = read(lists, DOCUMENTS)?.first?.keys
 
@@ -215,7 +212,7 @@ class CoCacheControlStore internal constructor(
     @InternalCoSecApi
     suspend fun listDocuments(entries: Set<String>) = sets.listDocuments(entries)
 
-    /** Who holds the lease [name], or null when nobody does: what `cosec-migrate` names when its lease is taken. */
+    /** Who holds the lease [name], or null: what `cosec-migrate` names when its lease is taken. */
     @InternalCoSecApi
     suspend fun leaseHolder(name: String): String? = read(leases, name)?.first
 
@@ -245,11 +242,7 @@ class CoCacheControlStore internal constructor(
         return written
     }
 
-    /**
-     * Removes a terminal change from the open list. Its terminal state is stored already, so a failure here does not
-     * fail that write (R2C-2): it is logged, and the next pass that reads the open changes (the maintenance pass's
-     * shadow windows and reclamation) drops a listed change it finds terminal.
-     */
+    /** Unlists a terminal change; a failure only warns (R2C-2): the next read of the open changes drops it. */
     @Suppress("TooGenericExceptionCaught")
     private suspend fun unlist(id: ChangeId) {
         try {
