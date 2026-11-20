@@ -21,7 +21,6 @@ import me.ahoo.cocache.core.policy.UnknownReadMode
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.cocache.CoSecCacheSpecs
-import me.ahoo.cosec.cocache.snapshot.SnapshotKeyEncoder
 import me.ahoo.cosec.model.PolicyId
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 
@@ -33,32 +32,6 @@ import me.ahoo.cosec.spi.snapshot.SnapshotKey
 object LegacyReferences {
     /** The cache name of [spec]: not one of CoSec's, created without CoSec's locks, in a runtime of its own. */
     const val CACHE_NAME = "LegacyReferenceIndexCache"
-
-    /** The Redis key pattern of every back-reference under [keyPrefix], for a `SCAN`. */
-    fun pattern(keyPrefix: String): String =
-        CoSecCacheSpecs.storagePath(keyPrefix, CoSecCacheSpecs.REFERENCE_INDEX_CACHE_NAME) + ":*"
-
-    /** The target and policy the Redis key [storageKey] under [keyPrefix] names, or null when it names none. */
-    fun keyOf(keyPrefix: String, storageKey: String): Pair<SnapshotKey, PolicyId>? {
-        val path = CoSecCacheSpecs.storagePath(keyPrefix, CoSecCacheSpecs.REFERENCE_INDEX_CACHE_NAME) + ":"
-        if (!storageKey.startsWith(path)) {
-            return null
-        }
-        val encoded = storageKey.substring(path.length)
-        val split = when {
-            encoded.startsWith(SnapshotKeyEncoder.PLATFORM + ":") -> SnapshotKeyEncoder.PLATFORM.length
-            encoded.startsWith(SnapshotKeyEncoder.APP_PREFIX) ->
-                encoded.indexOf(':', SnapshotKeyEncoder.APP_PREFIX.length)
-            encoded.startsWith(SnapshotKeyEncoder.TENANT_PREFIX) ->
-                encoded.indexOf(':', SnapshotKeyEncoder.TENANT_PREFIX.length)
-            else -> -1
-        }
-        if (split < 0 || split + 1 >= encoded.length) {
-            return null
-        }
-        val target = SnapshotKeyEncoder.decode(encoded.substring(0, split)) ?: return null
-        return target to PolicyId(encoded.substring(split + 1))
-    }
 
     /** A `Store` over the keys of the back-references under [keyPrefix], reading the old format; a failed read throws. */
     fun spec(keyPrefix: String): StoreSpec<Pair<SnapshotKey, PolicyId>, Map<SnapshotKey, Long>> {
