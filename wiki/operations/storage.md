@@ -570,7 +570,10 @@ Every control-plane instance runs two maintenance passes while it runs, each fir
   (1 hour). For each document it removes the revision records beyond the `max-count` (50) most recent that are also
   older than `min-age` (7 days), and the records of publishes that never became the head once older than `orphan-age`
   (1 hour). It never removes the head, nor a revision an open change rests on; when an open change cannot be read, it
-  reclaims nothing that pass. A lease per document (`reclaim:<doc>`) lets one instance at a time do each document.
+  reclaims nothing that pass. A document whose index agrees with its head and lists no more than `max-count` revisions,
+  no pending record and none left to delete has nothing to reclaim: the pass reads its index and its head, and moves
+  on. Any other is reclaimed under a lease per document (`reclaim:<doc>`), one instance at a time, released when the
+  document is done; the index is written only when the pass changes it.
   The revision index no longer lists a record before it is deleted, and keeps it among those left to delete until
   the deletion succeeds: a deletion that fails is tried again by the next pass. A history repair running at the same
   time leaves out what falls below the index's floor, so what was reclaimed does not come back.
