@@ -19,7 +19,7 @@ import me.ahoo.cosec.annotations.InternalCoSecApi
 
 /**
  * A condition as written (RFC 0005 §3.1), before it is checked: attribute paths and literals are as the document
- * has them. The document parser in the host builds it; [ConditionChecker] turns it into a [CheckedCondition] or a
+ * has them. `ConditionJson` in `cosec-document` builds it; [ConditionChecker] turns it into a [CheckedCondition] or a
  * list of errors.
  *
  * ```jsonc

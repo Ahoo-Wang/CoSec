@@ -87,6 +87,38 @@ object Identifiers {
     /** Whether [id] is reserved for CoSec ([RESERVED_PREFIX]). */
     fun isReserved(id: String): Boolean = id.startsWith(RESERVED_PREFIX)
 
+    /** Longer ids of a document's owner are rejected rather than carried into document keys. */
+    const val MAX_DOCUMENT_OWNER_LENGTH = 128
+
+    /**
+     * Whether [id] can own a stored document and be a segment of its key: an app id or a tenant id. Not blank, not `*`, no
+     * `:` (it separates document key parts, as in `SnapshotKey.App`), no `/` (an id is one path segment of the resources
+     * the control plane authorizes on, such as `doc/tenant/<id>/…`: with `/` in it, a pattern over everything under
+     * `doc/tenant/acme/`, held by a platform principal, whom the hard rule lets act on any tenant, would match another
+     * tenant's resources, `SCP-13`), no control character (an id reaches plain-text log lines, which it must not forge,
+     * RC1-15), no unpaired UTF-16 surrogate (a Redis key holds `?` in its place, so the id would name another id's
+     * documents, RC1-52) and at most [MAX_DOCUMENT_OWNER_LENGTH] characters. One pass over the characters: every request
+     * checks its app here, and the keys of its tenant's documents through the same rule.
+     */
+    fun isDocumentOwner(id: String): Boolean {
+        if (id.isEmpty() || id.length > MAX_DOCUMENT_OWNER_LENGTH || id == "*") {
+            return false
+        }
+        var blank = true
+        for (index in id.indices) {
+            val c = id[index]
+            val refused = when (c) {
+                ':', '/' -> true
+                else -> isUnprintableAt(id, index)
+            }
+            if (refused) {
+                return false
+            }
+            blank = blank && c.isWhitespace()
+        }
+        return !blank
+    }
+
     /** Whether [text] holds no unpaired UTF-16 surrogate: every high surrogate is followed by a low one, and only so. */
     fun isWellFormed(text: CharSequence): Boolean {
         var index = 0

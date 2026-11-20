@@ -112,7 +112,7 @@ class PipelineStarterRedisTest {
 
     private fun token(context: ApplicationContext, tenant: String, id: String, app: String = "order"): String =
         context.getBean(TokenConverter::class.java)
-            .toToken(TokenSubject(id, app, tenant = tenant))
+            .toToken(TokenSubject(id, app = app, tenant = tenant))
             .accessToken
 
     private fun publish(context: ApplicationContext, key: SnapshotKey, kind: DocumentKind, owner: String, body: String) {

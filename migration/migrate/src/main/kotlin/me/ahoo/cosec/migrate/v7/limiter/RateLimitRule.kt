@@ -22,7 +22,7 @@ import me.ahoo.cosec.migrate.v7.policy.clearPathVariablesBeforeMatch
 import me.ahoo.cosec.migrate.v7.policy.condition.AllConditionMatcher
 import me.ahoo.cosec.migrate.v7.policy.condition.part.DefaultPartExtractor
 import me.ahoo.cosec.migrate.v7.policy.condition.part.PartExtractor
-import me.ahoo.cosec.spi.ratelimit.RateLimit
+import me.ahoo.cosec.model.decision.RateLimitSpec
 
 /**
  * Limits the requests matching [action] and [condition] to [rateLimit].
@@ -37,7 +37,7 @@ import me.ahoo.cosec.spi.ratelimit.RateLimit
 internal data class RateLimitRule(
     val id: String,
     val action: ActionMatcher,
-    val rateLimit: RateLimit,
+    val rateLimit: RateLimitSpec,
     val condition: ConditionMatcher = AllConditionMatcher.INSTANCE,
     val key: String? = null,
     val strictFailure: Boolean = false

@@ -68,28 +68,20 @@ class PublicApiStabilityTest {
          * here only with a reason it cannot grow: a new fact belongs in a new value, as `Cause` and `StatementRef` are.
          */
         val REVIEWED_VALUES: Map<String, String> = run {
-            val decision = "A case of a sealed decision result: a new fact is a new case, not a new field (RFC 0010 Q6)."
+            val decision = "A case of a sealed result that is complete: a new fact is a new case, not a new field (RFC 0010 Q6)."
             val value = "An id-like value that is complete: it has nothing more to say."
             listOf(
                 "model.decision.RateLimitSpec" to "A rate limit rule read from a document, complete as RFC 0006 §8 states it.",
-                "model.decision.Obligation\$RateLimit" to decision,
                 "model.decision.BindingRef\$Attached" to decision,
                 "model.decision.BindingRef\$Bound" to decision,
                 "model.decision.BindingRef\$Boundary" to decision,
                 "model.decision.StatementRef\$Boundary" to decision,
                 "model.decision.StatementRef\$Policy" to decision,
                 "model.decision.StatementRef\$ScopeRejected" to decision,
-                "model.decision.Decision\$Permit" to decision,
-                "model.decision.Decision\$Deny" to decision,
-                "model.decision.Decision\$Indeterminate" to decision,
             ) + listOf(
-                "AmbiguousPolicy", "AttributeUnavailable", "BoundaryUnavailable", "CheckFailed", "MatcherFailed",
-                "MembershipUnavailable",
-                "MissingPolicies", "NotLoaded", "RateLimiterUnavailable", "RequiredListenerFailed", "SourceUnavailable",
-                "DocumentInvalid",
+                // The one cause that is a leaf: a document kind, nothing more to say. The others are plain classes (R2A-1).
+                "NotLoaded",
             ).map { "model.decision.Cause\$$it" to decision } + listOf(
-                "engine.ViewVersion" to value,
-                "spi.ratelimit.RateLimit" to value,
                 "spi.snapshot.SnapshotKey\$App" to value,
                 "spi.snapshot.SnapshotKey\$Tenant" to value,
             ) + listOf(

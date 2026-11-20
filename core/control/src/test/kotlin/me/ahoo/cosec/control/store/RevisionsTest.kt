@@ -394,7 +394,10 @@ class RevisionsTest {
         @Test
         fun `repairing adds what a head refers to`() = runBlocking<Unit> {
             published(document = candidate(ACME, bindings = listOf(binding("a", "shared"))))
+            // As a store converted from the format before 8.0.0-beta.5 holds it: no member, and no forward record.
             memory.removeReferrers(SnapshotKey.Platform, shared, memory.referrers(SnapshotKey.Platform, shared))
+            val index = memory.index(ACME)!!
+            memory.putIndex(ACME, index.digest, index.value.copy(indexed = emptyList())).assert().isTrue()
             revisions.referrers(SnapshotKey.Platform, shared).assert().isEmpty()
             revisions.repairReferences(ACME).assert().isEqualTo(1)
             revisions.referrers(SnapshotKey.Platform, shared).assert().containsExactly(ACME)

@@ -25,13 +25,13 @@ import org.junit.jupiter.api.Test
 internal class SecurityContextHolderTest {
     @Test
     fun test() {
-        SecurityContextHolder.securityContextOrNull().assert().isNull()
+        CoSecSecurityContextHolder.securityContextOrNull().assert().isNull()
         val context = PermittingPipeline.context()
-        SecurityContextHolder.setContext(context)
-        SecurityContextHolder.securityContextOrNull().assert().isSameAs(context)
-        SecurityContextHolder.remove()
+        CoSecSecurityContextHolder.setContext(context)
+        CoSecSecurityContextHolder.securityContextOrNull().assert().isSameAs(context)
+        CoSecSecurityContextHolder.remove()
         assertThrownBy<IllegalStateException> {
-            SecurityContextHolder.requireSecurityContext()
+            CoSecSecurityContextHolder.requireSecurityContext()
         }
     }
 
@@ -39,11 +39,11 @@ internal class SecurityContextHolderTest {
     @Test
     fun `a context the pipeline did not make reads as none`() {
         try {
-            SecurityContextHolder.setContext(mockk<SecurityContext>())
-            SecurityContextHolder.securityContextOrNull().assert().isNull()
-            assertThrownBy<IllegalStateException> { SecurityContextHolder.requireSecurityContext() }
+            CoSecSecurityContextHolder.setContext(mockk<SecurityContext>())
+            CoSecSecurityContextHolder.securityContextOrNull().assert().isNull()
+            assertThrownBy<IllegalStateException> { CoSecSecurityContextHolder.requireSecurityContext() }
         } finally {
-            SecurityContextHolder.remove()
+            CoSecSecurityContextHolder.remove()
         }
     }
 }

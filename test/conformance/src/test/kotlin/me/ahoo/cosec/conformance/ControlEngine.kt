@@ -136,7 +136,7 @@ class ControlEngine(
             session = null,
         )
         val host = Pipeline.builder(
-            Authenticator { AuthnResult.Authenticated(principal, "test") },
+            Authenticator { AuthnResult.Authenticated(principal, Identity.Method("test")) },
             SuspendingSnapshotSource(HOST_VIEWS),
         )
             .apply { provider?.let(::memberships) }

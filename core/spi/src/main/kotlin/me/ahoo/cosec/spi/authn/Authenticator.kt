@@ -58,8 +58,13 @@ class Credentials(val token: String?, val apiKey: String?) {
 }
 
 sealed interface AuthnResult {
-    /** [method] names how, such as `jwt` or `apikey`; it goes to audit. */
-    class Authenticated(val principal: AuthenticatedPrincipal, val method: String) : AuthnResult
+    /**
+     * [method] names how the principal authenticated, as [Identity.Method] does everywhere else: [Identity.Method.JWT]
+     * and [Identity.Method.API_KEY] are CoSec's own (`jwt`, `api-key` in an audit record and in `CoSec-Identity`), and an
+     * authenticator for another kind of credential names its own, any non-empty name. The audit record carries the
+     * method of the principal's credential when it has one, and this one when it has none.
+     */
+    class Authenticated(val principal: AuthenticatedPrincipal, val method: Identity.Method) : AuthnResult
 
     /** The request carries no credentials. */
     data object Anonymous : AuthnResult

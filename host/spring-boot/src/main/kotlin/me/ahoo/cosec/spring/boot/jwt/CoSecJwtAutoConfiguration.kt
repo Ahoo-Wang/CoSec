@@ -14,8 +14,8 @@
 
 package me.ahoo.cosec.spring.boot.jwt
 
-import com.auth0.jwt.algorithms.Algorithm
 import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.jwt.JwtSigning
 import me.ahoo.cosec.jwt.JwtTokenConverter
 import me.ahoo.cosec.jwt.JwtTokenVerifier
 import me.ahoo.cosec.login.CompositeAuthentication
@@ -63,7 +63,7 @@ internal class CoSecJwtAutoConfiguration {
     /** Startup fails on a blank secret, or one shorter than [JwtProperties.Algorithm.minSecretBytes] (RC1-24). */
     @Bean
     @ConditionalOnMissingBean
-    fun cosecTokenAlgorithm(jwtProperties: JwtProperties): Algorithm {
+    fun cosecJwtSigning(jwtProperties: JwtProperties): JwtSigning {
         require(jwtProperties.secret.isNotBlank()) {
             "Property [${JwtProperties.PREFIX}.secret] must not be blank when JWT is enabled. " +
                 "Set cosec.jwt.secret to a strong random value, or disable JWT via cosec.jwt.enabled=false."
@@ -75,17 +75,9 @@ internal class CoSecJwtAutoConfiguration {
                 "$required (RFC 7518 §3.2). Set cosec.jwt.secret to a random value of at least $required bytes."
         }
         return when (jwtProperties.algorithm) {
-            JwtProperties.Algorithm.HMAC256 -> Algorithm.HMAC256(
-                jwtProperties.secret,
-            )
-
-            JwtProperties.Algorithm.HMAC384 -> Algorithm.HMAC384(
-                jwtProperties.secret,
-            )
-
-            JwtProperties.Algorithm.HMAC512 -> Algorithm.HMAC512(
-                jwtProperties.secret,
-            )
+            JwtProperties.Algorithm.HMAC256 -> JwtSigning.hmac256(jwtProperties.secret)
+            JwtProperties.Algorithm.HMAC384 -> JwtSigning.hmac384(jwtProperties.secret)
+            JwtProperties.Algorithm.HMAC512 -> JwtSigning.hmac512(jwtProperties.secret)
         }
     }
 
@@ -94,13 +86,13 @@ internal class CoSecJwtAutoConfiguration {
     @ConditionalOnMissingBean
     fun cosecTokenConverter(
         idGeneratorProvider: ObjectProvider<IdGenerator>,
-        algorithm: Algorithm,
+        signing: JwtSigning,
         jwtProperties: JwtProperties
     ): TokenConverter {
         val idGenerator = idGeneratorProvider.getIfAvailable { RandomIdGenerator }
         return JwtTokenConverter(
             idGenerator = idGenerator,
-            algorithm = algorithm,
+            signing = signing,
             accessTokenValidity = jwtProperties.tokenValidity.access,
             refreshTokenValidity = jwtProperties.tokenValidity.refresh,
         )
@@ -141,8 +133,8 @@ internal class CoSecJwtAutoConfiguration {
      */
     @Bean
     @ConditionalOnMissingBean
-    fun cosecJwtTokenVerifier(algorithm: Algorithm, revocation: RevocationProperties): TokenVerifier =
-        JwtTokenVerifier(algorithm, revocation.skew)
+    fun cosecJwtTokenVerifier(signing: JwtSigning, revocation: RevocationProperties): TokenVerifier =
+        JwtTokenVerifier(signing, revocation.skew)
 
     /**
      * The one revocation judgement outside the pipeline: refresh and [TokenRevoker] read revocations through it, with the

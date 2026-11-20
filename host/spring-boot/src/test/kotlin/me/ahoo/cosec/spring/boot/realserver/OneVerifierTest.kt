@@ -15,10 +15,10 @@
 
 package me.ahoo.cosec.spring.boot.realserver
 
-import com.auth0.jwt.algorithms.Algorithm
 import kotlinx.coroutines.runBlocking
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.api.token.CompositeToken
+import me.ahoo.cosec.jwt.JwtSigning
 import me.ahoo.cosec.jwt.JwtTokenVerifier
 import me.ahoo.cosec.login.token.RefreshTokenAuthentication
 import me.ahoo.cosec.login.token.RefreshTokenCredentials
@@ -78,8 +78,8 @@ class OneVerifierTest {
     @Configuration(proxyBeanMethods = false)
     class Wrapping {
         @Bean
-        fun tokenVerifier(algorithm: Algorithm): TokenVerifier {
-            val own = JwtTokenVerifier(algorithm)
+        fun tokenVerifier(signing: JwtSigning): TokenVerifier {
+            val own = JwtTokenVerifier(signing)
             return object : TokenVerifier {
                 override fun verify(accessToken: String): VerifiedToken = own.verify(accessToken).also {
                     if (it.principal == "stranger") throw TokenVerificationException("not for this service")

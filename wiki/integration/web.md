@@ -332,7 +332,7 @@ Every reader, on both stacks, comes in two forms, and the name says which (UA-7)
 `requireSecurityContext()` throws an `IllegalStateException` where CoSec did not handle the request, saying what to
 do (register the filter) and where else to read the context; `securityContextOrNull()` answers `null`, which a caller
 must treat as "no context", never as "no restriction". The readers are `ReactiveSecurityContexts` (a Reactor
-`ContextView`), `ServerWebExchanges` (an exchange), `ServletRequests` (a servlet request) and `SecurityContextHolder`
+`ContextView`), `ServerWebExchanges` (an exchange), `ServletRequests` (a servlet request) and `CoSecSecurityContextHolder`
 (the request thread), each `@JvmStatic` for Java: `ServletRequests.requireSecurityContext(request)`.
 
 **Spring MVC**: in a handler, declare a `SecurityContext` parameter. The starter registers its resolver
@@ -349,12 +349,12 @@ suspend fun order(@PathVariable id: String, security: SecurityContext): Order = 
 Elsewhere, read it from the servlet request, or, in blocking code on the request thread, from the thread-bound holder:
 
 ```kotlin
-import me.ahoo.cosec.webmvc.SecurityContextHolder
+import me.ahoo.cosec.webmvc.CoSecSecurityContextHolder
 import me.ahoo.cosec.webmvc.ServletRequests.securityContextOrNull
 
 val securityContext = httpServletRequest.securityContextOrNull()
 // blocking code on the request thread only
-val securityContext = SecurityContextHolder.requireSecurityContext()
+val securityContext = CoSecSecurityContextHolder.requireSecurityContext()
 ```
 
 The holder is a thread-local, which the filter binds for the request's thread and clears when the request completes.
@@ -371,7 +371,7 @@ single-flight cache load). So the holder is:
   handler is blocking finds **that request's** context there, so code that reads the holder only after such a
   resumption, and never before a suspension, reads another request's principal.
 
-The startup log says which a host has, in a line that starts `SecurityContextHolder in suspend handlers`. An async
+The startup log says which a host has, in a line that starts `CoSecSecurityContextHolder in suspend handlers`. An async
 handler (`Callable`, `DeferredResult`) and a thread of your own find no holder, with the same message. In all of these,
 use the parameter or the request.
 

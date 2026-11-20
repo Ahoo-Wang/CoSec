@@ -140,7 +140,7 @@ internal class RequestState(
             authn.principal.tenant.value,
             authn.principal.id.value,
             true,
-            authn.principal.credential?.method?.value ?: authn.method,
+            (authn.principal.credential?.method ?: authn.method).value,
             null,
         )
         is AuthnResult.Rejected -> anonymous(authn.reason, authn.refused)

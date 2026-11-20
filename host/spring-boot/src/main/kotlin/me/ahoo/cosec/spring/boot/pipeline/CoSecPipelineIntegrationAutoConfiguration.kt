@@ -24,6 +24,7 @@ import me.ahoo.cosec.cocache.limiter.ReactiveRedisRateLimiter
 import me.ahoo.cosec.engine.CompiledDocument
 import me.ahoo.cosec.ip2region.Ip2RegionAttributeProvider
 import me.ahoo.cosec.kafka.KafkaAuditListener
+import me.ahoo.cosec.micrometer.CoSecMeters
 import me.ahoo.cosec.micrometer.MetricsListener
 import me.ahoo.cosec.micrometer.MicrometerSnapshotMetrics
 import me.ahoo.cosec.opentelemetry.OpenTelemetryContextContributor
@@ -190,8 +191,8 @@ class CoSecPipelineIntegrationAutoConfiguration {
             listeners: ObjectProvider<DecisionListeners>,
             unchecked: ObjectProvider<UncheckedRevocations>,
         ): StartupTask = StartupTask.AfterSingletons {
-            listeners.ifAvailable?.let { MetricsListener.bind(registry, it) }
-            unchecked.ifAvailable?.let { MetricsListener.bind(registry, it) }
+            listeners.ifAvailable?.let { CoSecMeters.bind(registry, it) }
+            unchecked.ifAvailable?.let { CoSecMeters.bind(registry, it) }
         }
 
         /** The snapshot source's gauges, over the summary of its last lag pass: bound once every singleton exists. */

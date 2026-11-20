@@ -45,6 +45,7 @@ import me.ahoo.cosec.spi.authn.AuthenticatedPrincipal
 import me.ahoo.cosec.spi.authn.Authenticator
 import me.ahoo.cosec.spi.authn.AuthnResult
 import me.ahoo.cosec.spi.authn.MembershipSource
+import me.ahoo.cosec.spi.identity.Identity
 import me.ahoo.cosec.webflux.ReactiveSecurityContexts.securityContextOrNull
 import me.ahoo.cosec.webflux.ServerWebExchanges.securityContextOrNull
 import me.ahoo.test.asserts.assert
@@ -120,7 +121,11 @@ class PipelineWebFilterTest {
             TenantId("acme"),
             MembershipSource.Claims(Memberships(Memberships.Source.CLAIMS, emptyMap(), emptyList())),
         )
-        principalOf(Authenticator { AuthnResult.Authenticated(alice, "test") }).assert().isEqualTo("alice" to "alice")
+        principalOf(
+            Authenticator {
+                AuthnResult.Authenticated(alice, Identity.Method("test"))
+            }
+        ).assert().isEqualTo("alice" to "alice")
     }
 
     /**
@@ -145,7 +150,9 @@ class PipelineWebFilterTest {
             TenantId("acme"),
             MembershipSource.Claims(Memberships(Memberships.Source.CLAIMS, emptyMap(), emptyList())),
         )
-        principalOf(Authenticator { AuthnResult.Authenticated(alice, "test") }).assert().isEqualTo("alice")
+        principalOf(
+            Authenticator { AuthnResult.Authenticated(alice, Identity.Method("test")) }
+        ).assert().isEqualTo("alice")
     }
 
     /** IDN-9, RC1-18: the handler of an enforcing host never sees a `CoSec-Identity` a client sent. */

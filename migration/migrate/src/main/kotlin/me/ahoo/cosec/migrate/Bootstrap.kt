@@ -54,22 +54,30 @@ class Bootstrap(
 ) {
     private val revisions = Revisions(store, clock)
 
-    /** The revision written. */
+    /**
+     * The revision at which [KEY] already binds [principal] to `cosec:platform-admin` as this command writes it, or null
+     * (R2C-21): a run again for that principal, a deployment job on every start or a retry after a lost reply, answers
+     * that it is bound instead of refusing.
+     */
+    fun bound(principal: PrincipalId): Long? = runBlocking {
+        val head = revisions.head(KEY) ?: return@runBlocking null
+        head.revision.takeIf { head.document.bindings.any { it.sameAs(bindingOf(principal)) } }
+    }
+
+    /** The revision written, or the current one when [principal] is already bound as this command binds it. */
     fun run(principal: PrincipalId, force: Boolean = false): Long = runBlocking {
         val head = revisions.head(KEY)
+        val binding = bindingOf(principal)
         val admins = head?.document?.bindings.orEmpty().filter { it.policy == BuiltinPolicies.PLATFORM_ADMIN }
         if (admins.isNotEmpty() && !force) {
+            if (admins.any { it.sameAs(binding) }) {
+                return@runBlocking head!!.revision
+            }
             throw BootstrapRefusedException(
-                "$KEY already binds cosec:platform-admin (${admins.map { it.id.value }}): bootstrap runs once; " +
-                    "--force recovers when every administrator is lost.",
+                "$KEY already binds cosec:platform-admin for another principal (${admins.map { it.id.value }}): " +
+                    "bootstrap binds one; --force recovers when every administrator is lost.",
             )
         }
-        val binding = Binding(
-            BindingId("platform-admin-${principal.value}"),
-            SubjectRef.Principal(TenantId.PLATFORM, principal),
-            BindingScope(Match.Any, Match.Any),
-            BuiltinPolicies.PLATFORM_ADMIN,
-        )
         val current = head?.document
         val revision = (current?.revision ?: 0) + 1
         val bindings = current?.bindings.orEmpty().filterNot { it.id == binding.id } + binding
@@ -97,6 +105,18 @@ class Bootstrap(
             else -> throw BootstrapRefusedException("$KEY changed while bootstrap ran ($outcome): run it again.")
         }
     }
+
+    /** The same grant as [other]: its id, subject, scope and policy, whatever else a stored binding carries. */
+    private fun Binding.sameAs(other: Binding): Boolean =
+        id == other.id && subject == other.subject && policy == other.policy &&
+            scope.app == other.scope.app && scope.space == other.scope.space
+
+    private fun bindingOf(principal: PrincipalId) = Binding(
+        BindingId("platform-admin-${principal.value}"),
+        SubjectRef.Principal(TenantId.PLATFORM, principal),
+        BindingScope(Match.Any, Match.Any),
+        BuiltinPolicies.PLATFORM_ADMIN,
+    )
 
     companion object {
         /** The platform tenant's own document, where its principals' bindings are. */

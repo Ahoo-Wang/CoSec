@@ -52,4 +52,16 @@ class JacksonSignatureTest {
         checked.map { it.name }.assert().contains("me.ahoo.cosec.cocache.limiter.ReactiveRedisRateLimiter")
         PublicSignatures.violations(checked, Regex("""(?<![\w.])reactor\.""")).assert().isEmpty()
     }
+
+    /**
+     * `cosec-jwt` names its signing key with a type of CoSec's own (`JwtSigning`): the JWT library it uses stays inside,
+     * so replacing or upgrading it is never a breaking change (R2B-2). The constructors and members that take the
+     * library's `Algorithm` are `@InternalCoSecApi`.
+     */
+    @Test
+    fun `jwt carries no JWT library type in a public signature`() {
+        val checked = PublicSignatures.classes { it == "jwt" }
+        checked.map { it.name }.assert().contains("me.ahoo.cosec.jwt.JwtSigning", "me.ahoo.cosec.jwt.JwtTokenVerifier")
+        PublicSignatures.violations(checked, Regex("""com\.auth0\.""")).assert().isEmpty()
+    }
 }

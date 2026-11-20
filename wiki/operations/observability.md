@@ -101,7 +101,7 @@ and implicit denies apart, why a credential was rejected, and why a request was 
 | `authorization.reason` | the outcome, and for a `503` its cause, such as `INDETERMINATE: SourceUnavailable` |
 | `authorization.elapsedNanos` | the whole pipeline, from the start of the request to its outcome |
 | `authorization.source` | what decided: `via`, `document`, `policy` (its id) and `statement` (`index`, `name`); see the second table below |
-| `binding` | how the deciding statement applied: a binding id (a role's derived binding is `role:<roleId>@<app>:<permission>`), `attached:<policyId>`, `builtin` (the blacklist) or `boundary:<tenantId>` |
+| `binding` | a label for people, and not to be parsed: how the deciding statement applied, as a binding id (a role's derived binding is `role:<roleId>@<app>:<permission>`), `attached:<policyId>`, `builtin` (the blacklist) or `boundary:<tenantId>` |
 | `snapshotVersion` | the revisions the decision read: `platform`, and `app` and `tenant` when it read them |
 | `breakGlass` | whether the permit came through a break-glass binding |
 | `trace` | `traceId` and `spanId` of the request's span, when tracing is active |
@@ -141,7 +141,7 @@ The Kafka audit listener writes the same JSON to [`cosec.audit.kafka.topic`](./c
 it; set `cosec.audit.enabled=false` and register only what you want to change that. It sends from a thread of its own
 with at most 1,024 sends waiting:
 
-- `best-effort`: a failed send is logged as `Failed to publish audit event to Kafka topic [<topic>].`
+- `best-effort`: failed sends are logged at most once every 10 seconds, with how many failed since the last line: `Failed to publish audit event to Kafka topic [<topic>]: <n> failed since the last report.` (a broker outage is one line per interval, not one per decision)
 - `required`: the request waits for the broker's acknowledgement. A failed or late send, or a full send queue
   (`The Kafka audit queue of [<topic>] is full.`), makes a permit `503`. Configure the producer with `acks=all`.
 
