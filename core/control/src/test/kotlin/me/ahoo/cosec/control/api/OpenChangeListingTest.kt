@@ -111,6 +111,34 @@ class OpenChangeListingTest {
     }
 
     @Test
+    fun `a listing by document pages by id and narrows by state`() {
+        val acme = proposed().sorted()
+        val (_, first) = list(mapOf("document" to "tenant:acme", "limit" to "1"), alice)
+        ids(first).assert().containsExactly(acme[0])
+        first.get("next").asString().assert().isEqualTo(acme[0])
+        val (_, second) = list(mapOf("document" to "tenant:acme", "limit" to "1", "after" to acme[0]), alice)
+        ids(second).assert().containsExactly(acme[1])
+        second.get("next").isNull.assert().isTrue()
+        ids(list(mapOf("document" to "tenant:acme", "state" to "SHADOWING"), alice).second).assert().isEmpty()
+        ids(list(mapOf("document" to "tenant:acme", "state" to "CHECKED"), alice).second).assert()
+            .containsExactlyElementsOf(acme)
+    }
+
+    @Test
+    fun `a member of the tenant who may not read its changes sees none, a viewer sees them - CTL-55`() {
+        val acme = proposed()
+        val carol = fixture.engine.security(ControlPlaneTest.ACME, "carol", roles = emptyList())
+        val vera = fixture.engine.security(ControlPlaneTest.ACME, "vera", roles = listOf("viewer"))
+        for (query in listOf(mapOf("document" to "tenant:acme"), mapOf("state" to "CHECKED"))) {
+            val (status, body) = list(query, carol)
+            status.assert().isEqualTo(200)
+            ids(body).assert().isEmpty()
+            body.get("next").isNull.assert().isTrue()
+            ids(list(query, vera).second).assert().containsExactlyInAnyOrderElementsOf(acme)
+        }
+    }
+
+    @Test
     fun `a listing that names neither a document nor a state is refused`() {
         list(emptyMap(), alice).first.assert().isEqualTo(400)
         list(mapOf("state" to "PUBLISHED"), alice).first.assert().isEqualTo(400)

@@ -717,7 +717,8 @@
         "control:OpenChangeListingTest#another tenant's changes are left out, and the page says nothing of them - CTL-55",
         "control:OpenChangeListingTest#a listing by document or by state shows the caller's tenant only, a summary of each change",
         "control:OpenChangeListingTest#a page is cut after what the caller may see, and the next one goes on from it",
-        "control:OpenChangeListingTest#a cursor names only a change the caller sees, and only when one follows it - CTL-55"
+        "control:OpenChangeListingTest#a cursor names only a change the caller sees, and only when one follows it - CTL-55",
+        "control:OpenChangeListingTest#a member of the tenant who may not read its changes sees none, a viewer sees them - CTL-55"
       ],
       "pending": null
     }
