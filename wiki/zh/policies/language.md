@@ -602,7 +602,7 @@ id 按 `/` 切分并按原样比较：从不解码，从不去除空白。类型
 
 ## JSON Schema {#json-schema}
 
-[`schema/`](https://github.com/Ahoo-Wang/CoSec/tree/main/schema) 中的 JSON Schema 可用于编辑器补全和 CI 检查：
+[`schema/8.0/`](https://github.com/Ahoo-Wang/CoSec/tree/main/schema/8.0) 中是 8.0 版本线的 JSON Schema，可用于编辑器补全和 CI 检查。站点在 `https://cosec.ahoo.me/schema/8.0/<文件>` 提供它们，这个地址也是每个文件的 `$id`，以及文件之间引用的基准；`8.0` 是发布线的名字，不是文档的 `schema: 2`：
 
 | 文件 | 校验 |
 |---|---|
@@ -612,7 +612,7 @@ id 按 `/` 切分并按原样比较：从不解码，从不去除空白。类型
 | `definitions.schema.json` | 共享定义 |
 | `problem.schema.json` | 错误响应体（[Web 集成](../integration/web.md)） |
 
-文档是封闭的，所以不要在文档中加 `$schema` 字段：在编辑器中把 schema 映射到你的文件，例如在 VS Code 的 `settings.json` 中。URL 要指向你所运行的 CoSec 版本的标签，如下（`v8.0.0-beta.4`）：`main` 描述的是下一个版本，你的版本读不了的文档在编辑器里也会通过：
+文档是封闭的，所以不要在文档中加 `$schema` 字段：在编辑器中把 schema 映射到你的文件，例如在 VS Code 的 `settings.json` 中。8.0.0 发布之前，`/schema/8.0/` 下的文件就是 `main` 上的，并且在预览版之间会变：你的预览版读不了的文档在编辑器里也可能通过。要一个不会变的文件，就读你所运行版本的标签，如下（`v8.0.0-beta.4`，其文件在 `schema/<文件>`；之后的标签在 `schema/8.0/<文件>`）。标签中的文件保留写入时的 `$id`，所以按 `$id` 解析引用的校验器会从站点而不是从标签取同级文件：这时请把它指向该目录的本地副本。从 8.0.0 起，`/schema/8.0/` 属于 8.0 版本线，之后的版本线不会替换它。
 
 ```json
 {

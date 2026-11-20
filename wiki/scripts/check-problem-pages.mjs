@@ -1,7 +1,7 @@
 // Holds the pages under public/problems/ to the problem types CoSec writes (UE-12). A problem document's `type` is
 // `https://cosec.ahoo.me/problems/<slug>`, a wire contract that never changes; the URI has to open something, and the
 // something is the section of operations/troubleshooting.md with the slug's anchor. Each slug of contract/problems/
-// (one file per problem type, written by the server's tests) and of ProblemType.kt needs
+// (one file per problem type, written by the server's tests) and of ProblemTypes.kt (the rows ProblemType is built over) needs
 // public/problems/<slug>/index.html, a redirect to that section, and the section has to exist in English and Chinese.
 // A new problem type without its page fails here, naming the file to write.
 //
@@ -18,11 +18,11 @@ const problems = []
 const fromContract = readdirSync(join(repoDir, 'contract/problems'))
   .filter((name) => name.endsWith('.json'))
   .map((name) => name.replace(/\.json$/, ''))
-const kotlin = readFileSync(join(repoDir, 'core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/http/ProblemType.kt'), 'utf-8')
-const fromEnum = [...kotlin.matchAll(/^\s+[A-Z_]+\("([a-z-]+)",/gm)].map((match) => match[1])
+const kotlin = readFileSync(join(repoDir, 'core/document/src/main/kotlin/me/ahoo/cosec/document/format/ProblemTypes.kt'), 'utf-8')
+const fromEnum = [...kotlin.matchAll(/^\s+Row\("([a-z-]+)",/gm)].map((match) => match[1])
 const slugs = [...new Set([...fromContract, ...fromEnum])].sort()
 for (const slug of fromEnum) if (!fromContract.includes(slug)) problems.push(`contract/problems/${slug}.json: missing for the problem type ${slug}`)
-for (const slug of fromContract) if (!fromEnum.includes(slug)) problems.push(`ProblemType.kt: no problem type ${slug}, which contract/problems/ has`)
+for (const slug of fromContract) if (!fromEnum.includes(slug)) problems.push(`ProblemTypes.kt: no problem type ${slug}, which contract/problems/ has`)
 
 const page = (slug) => {
   const target = `/operations/troubleshooting#${slug}`

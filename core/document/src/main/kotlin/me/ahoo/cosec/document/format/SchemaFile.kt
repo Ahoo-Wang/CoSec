@@ -17,7 +17,7 @@ package me.ahoo.cosec.document.format
 
 import me.ahoo.cosec.annotations.InternalCoSecApi
 
-/** One generated `schema/<name>.schema.json`. */
+/** One generated `schema/<line>/<name>.schema.json` (`DocumentFormats.SCHEMA_LINE`). */
 @InternalCoSecApi
 class SchemaFile(
     val name: String,
