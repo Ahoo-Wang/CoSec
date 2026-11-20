@@ -17,10 +17,10 @@ package me.ahoo.cosec.control.grant
 
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.control.grant.GrantFixtures.ACME
-import me.ahoo.cosec.model.condition.ZoneResolver
 import me.ahoo.cosec.model.condition.Condition
 import me.ahoo.cosec.model.condition.ConditionChecker
 import me.ahoo.cosec.model.condition.ConditionLimits
+import me.ahoo.cosec.model.condition.ZoneResolver
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import kotlin.random.Random

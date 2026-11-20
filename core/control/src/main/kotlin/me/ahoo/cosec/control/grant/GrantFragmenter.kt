@@ -53,7 +53,15 @@ internal class GrantFragmenter(private val narrowing: GrantNarrowing, private va
         val bound = after.bindings.groupBy { it.policy }
         reresolved(snapshot, change, changedSet, fragments)
         for (policy in after.policies) {
-            changedPolicy(snapshot, change, before.policy(policy.id), policy, bound[policy.id].orEmpty(), changedSet, fragments)
+            changedPolicy(
+                snapshot,
+                change,
+                before.policy(policy.id),
+                policy,
+                bound[policy.id].orEmpty(),
+                changedSet,
+                fragments
+            )
         }
         return fragments
     }
@@ -166,6 +174,7 @@ internal class GrantFragmenter(private val narrowing: GrantNarrowing, private va
         val app = binding.scope.app
         return if (app is Match.Exactly) snapshot.apps[app.value]?.policy(binding.policy) else null
     }
+
     // TEMPORARY (removed in the next commit): the path before the index, for GrantFragmenterEquivalenceTest.
     internal fun fragmentsBefore(snapshot: GrantSnapshot, change: GrantChange): List<GrantFragment> {
         val before = snapshot.tenant(change.tenant)
@@ -243,5 +252,4 @@ internal class GrantFragmenter(private val narrowing: GrantNarrowing, private va
             attached.forEach { split(change.tenant, policy, it, Grantee.Attaching, into) }
         }
     }
-
 }
