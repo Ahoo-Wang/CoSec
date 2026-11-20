@@ -18,13 +18,13 @@ package me.ahoo.cosec.spring.boot.authentication.social
 import kotlinx.coroutines.runBlocking
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.login.AuthenticationProvider
-import me.ahoo.cosec.social.InMemorySocialStateStore
 import me.ahoo.cosec.social.SocialAuthentication
 import me.ahoo.cosec.social.SocialCredentials
 import me.ahoo.cosec.social.SocialProviderManager
-import me.ahoo.cosec.social.SocialStateStore
 import me.ahoo.cosec.social.SocialUserPrincipalConverter
 import me.ahoo.cosec.spi.id.IdGenerator
+import me.ahoo.cosec.spi.social.InMemorySocialStateStore
+import me.ahoo.cosec.spi.social.SocialStateStore
 import me.ahoo.cosec.spring.boot.authentication.CoSecAuthenticationAutoConfiguration
 import me.ahoo.cosec.spring.boot.authentication.ConditionalOnLoginEnabled
 import me.ahoo.test.asserts.assert
@@ -33,6 +33,7 @@ import me.zhyd.oauth.cache.AuthStateCache
 import org.assertj.core.api.AssertionsForInterfaceTypes.assertThat
 import org.junit.jupiter.api.Test
 import org.springframework.boot.data.redis.autoconfigure.DataRedisAutoConfiguration
+import org.springframework.boot.data.redis.autoconfigure.DataRedisReactiveAutoConfiguration
 import org.springframework.boot.test.context.assertj.AssertableApplicationContext
 import org.springframework.boot.test.context.runner.ApplicationContextRunner
 import org.springframework.web.util.UriComponentsBuilder
@@ -55,6 +56,7 @@ internal class CoSecSocialAuthenticationProviderAuthenticationAutoConfigurationT
             )
             .withUserConfiguration(
                 DataRedisAutoConfiguration::class.java,
+                DataRedisReactiveAutoConfiguration::class.java,
                 CoSecAuthenticationAutoConfiguration::class.java,
                 CoSecSocialAuthenticationAutoConfiguration::class.java,
             )
@@ -123,6 +125,7 @@ internal class CoSecSocialAuthenticationProviderAuthenticationAutoConfigurationT
             )
             .withUserConfiguration(
                 DataRedisAutoConfiguration::class.java,
+                DataRedisReactiveAutoConfiguration::class.java,
                 CoSecAuthenticationAutoConfiguration::class.java,
                 CoSecSocialAuthenticationAutoConfiguration::class.java,
             )
@@ -192,6 +195,7 @@ internal class CoSecSocialAuthenticationProviderAuthenticationAutoConfigurationT
             )
             .withUserConfiguration(
                 DataRedisAutoConfiguration::class.java,
+                DataRedisReactiveAutoConfiguration::class.java,
                 CoSecAuthenticationAutoConfiguration::class.java,
                 CoSecSocialAuthenticationAutoConfiguration::class.java,
             )

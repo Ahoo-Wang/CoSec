@@ -18,10 +18,13 @@ package me.ahoo.cosec.spring.boot
 import io.github.oshai.kotlinlogging.KotlinLogging
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.runtime.event.Delivery
+import me.ahoo.cosec.spi.social.SocialStateStore
 import me.ahoo.cosec.spring.boot.apikey.ApiKeyProperties
 import me.ahoo.cosec.spring.boot.audit.kafka.KafkaAuditProperties
 import me.ahoo.cosec.spring.boot.audit.kafka.kafkaAuditDelivery
+import me.ahoo.cosec.spring.boot.authentication.ConditionalOnLoginEnabled
 import me.ahoo.cosec.spring.boot.authentication.route.LoginRoutesCheck
+import me.ahoo.cosec.spring.boot.authentication.social.ConditionalOnSocialAuthenticationEnabled
 import me.ahoo.cosec.spring.boot.control.ControlPlaneCondition
 import me.ahoo.cosec.spring.boot.cosid.CosIdGeneratorProperties
 import me.ahoo.cosec.spring.boot.jwt.ConditionalOnJwtEnabled
@@ -32,6 +35,7 @@ import org.springframework.boot.autoconfigure.AutoConfiguration
 import org.springframework.boot.autoconfigure.AutoConfigureOrder
 import org.springframework.boot.autoconfigure.condition.AnyNestedCondition
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass
+import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingClass
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication
@@ -113,6 +117,29 @@ internal class CoSecModuleCheckAutoConfiguration {
                 "me.ahoo.cosec.cocache.RedisApiKeyStore",
                 "cosec-cocache",
                 "${ApiKeyProperties.STORE_KEY}=redis",
+            )
+    }
+
+    /**
+     * Social sign-in keeps the OAuth states it issues in Redis through `cosec-cocache`, unless the application declares
+     * a [SocialStateStore] of its own: without either, no callback could be checked, so startup fails here and names the
+     * artifact (R2B-3).
+     */
+    @Configuration(proxyBeanMethods = false)
+    @ConditionalOnCoSecEnabled
+    @ConditionalOnLoginEnabled
+    @ConditionalOnSocialAuthenticationEnabled
+    @ConditionalOnClass(name = ["me.ahoo.cosec.social.SocialUser"])
+    @ConditionalOnMissingBean(SocialStateStore::class)
+    class SocialStates {
+        @Bean
+        fun cosecSocialStatesModuleCheck(context: ApplicationContext): StartupTask =
+            requireModule(
+                context,
+                "me.ahoo.cosec.cocache.RedisSocialStateStore",
+                "cosec-cocache",
+                "Social sign-in, whose states are kept in Redis (or declare a SocialStateStore bean of your own, " +
+                    "or turn it off with ${ConditionalOnSocialAuthenticationEnabled.ENABLED_KEY}=false),",
             )
     }
 

@@ -601,6 +601,7 @@ It refuses to start instead, naming the artifact, when a feature that is on need
 | `cosec.cosid.generator is set, but CoSec's ids do not come from CosId` | A `CosIdRuntime` (`cosid-spring-boot-starter` and its `cosid.*` settings), or remove the key: with an `IdGenerator` bean of your own, that bean gives CoSec its ids |
 | `cosec.metrics.enabled=true needs cosec-micrometer` | `cosec-micrometer`, or remove the key: unset, metrics are optional |
 | `cosec.control.enabled=true needs cosec-control` (or `cosec-cocache`) | the artifact it names, or remove the key: unset, an instance without the modules is a data-plane instance |
+| `Social sign-in, whose states are kept in Redis ..., needs cosec-cocache` | add `cosec-cocache` (it keeps the OAuth states of a sign-in in Redis, once each), declare a `SocialStateStore` bean of your own, or turn social login off with `cosec.authentication.login.social.enabled=false` |
 | `cosec-cocache needs a ReactiveStringRedisTemplate bean` | `spring-boot-data-redis` and a Redis connection (`spring.data.redis.*`): without it no snapshot is read and rate limits would count per instance |
 
 The web checks run only while CoSec is on (`cosec.enabled`, default `true`); a gateway host is exempt from the WebFlux

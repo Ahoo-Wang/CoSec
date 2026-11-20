@@ -11,18 +11,18 @@
  * limitations under the License.
  */
 
-package me.ahoo.cosec.social
+package me.ahoo.cosec.spi.social
 
 import me.ahoo.cosec.annotations.CoSecSpi
 import java.time.Duration
 
 /**
  * The OAuth states CoSec issued, each with the SHA-256 of the binding of the browser it was issued to
- * ([SocialAuthorization]). A state is single use: [take] removes it atomically, so of two callbacks holding it at most
- * one finds it. A store that cannot be read throws, so a sign-in fails rather than proceed unchecked.
+ * (`SocialAuthorization`, in `cosec-social`). A state is single use: [take] removes it atomically, so of two callbacks
+ * holding it at most one finds it. A store that cannot be read throws, so a sign-in fails rather than proceed unchecked.
  *
  * Both calls suspend and never block the caller's thread, which may be an event loop: an implementation over a blocking
- * client moves its calls to a dispatcher of its own, as `RedisSocialStateStore` does.
+ * client moves its calls to a dispatcher of its own. `cosec-cocache` implements it over Redis.
  */
 @CoSecSpi
 interface SocialStateStore {

@@ -122,6 +122,8 @@ Full model: https://cosec.ahoo.me/guide/security-model.
   Tomcat with `native`: remove `max-trusted-index`; Reactor Netty or Jetty with `native` and index `0`: set the number of
   proxies, or `none`.
   https://cosec.ahoo.me/operations/troubleshooting#startup-fails-on-the-client-address
+- **`Social sign-in, whose states are kept in Redis ..., needs cosec-cocache`** (STA-1): add `cosec-cocache`, declare
+  your own `SocialStateStore` bean, or set `cosec.authentication.login.social.enabled=false`.
 - **`cosec-cocache needs a ReactiveStringRedisTemplate bean`** (STA-1): add `spring-boot-data-redis` and configure
   Redis; without it no snapshot is read and rate limits would count per instance.
 - **`cosec.pipeline.mode=gateway: this service believes any CoSec-Identity header it receives ... State it once it is

@@ -17,14 +17,15 @@ package me.ahoo.cosec.social.justauth
 
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runInterruptible
+import kotlinx.coroutines.sync.Semaphore
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.social.SocialAuthenticationException
 import me.ahoo.cosec.social.SocialAuthenticationProvider
 import me.ahoo.cosec.social.SocialAuthorization
 import me.ahoo.cosec.social.SocialCredentials
-import me.ahoo.cosec.social.SocialStateStore
 import me.ahoo.cosec.social.SocialUser
 import me.ahoo.cosec.social.justauth.SocialUserConverter.toSocialUser
+import me.ahoo.cosec.spi.social.SocialStateStore
 import me.zhyd.oauth.model.AuthResponse
 import me.zhyd.oauth.model.AuthUser
 import me.zhyd.oauth.request.AuthRequest
@@ -44,9 +45,12 @@ import java.util.Base64
  * the state then still runs.
  *
  * JustAuth blocks: the authorize step writes JustAuth's own state cache, and a login calls the provider over blocking HTTP.
- * Both run on this provider's own dispatcher, of at most [parallelism] threads, so they never hold an event loop and a
- * provider that hangs delays only its own logins. [SocialStateStore] suspends, so it is called outside that section: the
- * callback's state is taken first, and only then does the login block.
+ * Each runs on a dispatcher of this provider's own, of at most [parallelism] threads, so they never hold an event loop,
+ * a provider that hangs delays only its own logins, and a flood of sign-in starts, which anyone can send, never lines up
+ * ahead of a real login. At most [pendingStarts] starts are in flight (running or queued) at once: one more is refused
+ * at once with a [SocialAuthenticationException], where it would otherwise queue without bound (R2B-23).
+ * [SocialStateStore] suspends, so it is called outside the blocking section: the callback's state is taken first, and
+ * only then does the login block.
  *
  * @author ahoo wang
  */
@@ -55,11 +59,15 @@ class JustAuthProvider @InternalCoSecApi constructor(
     private val authRequest: AuthRequest,
     private val states: SocialStateStore,
     parallelism: Int = DEFAULT_PARALLELISM,
+    pendingStarts: Int = DEFAULT_PENDING_STARTS,
 ) : SocialAuthenticationProvider {
-    private val blocking = Dispatchers.IO.limitedParallelism(parallelism)
+    private val starting = Dispatchers.IO.limitedParallelism(parallelism)
+    private val loggingIn = Dispatchers.IO.limitedParallelism(parallelism)
+    private val startSlots = Semaphore(pendingStarts)
 
     private companion object {
         const val DEFAULT_PARALLELISM = 16
+        const val DEFAULT_PENDING_STARTS = 64
         const val RANDOM_BYTES = 16
         val STATE = Regex("[A-Za-z0-9_-]{22}")
         val lifetime: Duration = Duration.ofSeconds(SocialAuthorization.STATE_LIFETIME_SECONDS)
@@ -77,17 +85,26 @@ class JustAuthProvider @InternalCoSecApi constructor(
     }
 
     override suspend fun authorize(): SocialAuthorization {
-        val state = fresh()
-        val binding = fresh()
-        states.put(state, hash(binding), lifetime)
-        return SocialAuthorization(runInterruptible(blocking) { authRequest.authorize(state) }, binding)
+        if (!startSlots.tryAcquire()) {
+            throw SocialAuthenticationException(
+                "The [$name] provider has too many sign-ins starting: try again shortly."
+            )
+        }
+        try {
+            val state = fresh()
+            val binding = fresh()
+            states.put(state, hash(binding), lifetime)
+            return SocialAuthorization(runInterruptible(starting) { authRequest.authorize(state) }, binding)
+        } finally {
+            startSlots.release()
+        }
     }
 
     override suspend fun authenticate(credentials: SocialCredentials): SocialUser {
         require(credentials is JustAuthCredentials)
         // Taken before the blocking section: the login runs only for a state that holds.
         checkState(credentials)
-        return runInterruptible(blocking) { login(credentials) }.toSocialUser(name)
+        return runInterruptible(loggingIn) { login(credentials) }.toSocialUser(name)
     }
 
     /** The callback's state is one [authorize] issued to the browser that sends [SocialCredentials.binding]. */
