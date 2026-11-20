@@ -71,9 +71,6 @@ internal object StoredJson {
         )
     }
 
-    fun JsonNode.only(what: String, vararg names: String) {
-        if (!isObject) malformed(what, "$this is not an object")
-        val unknown = properties().map { it.key }.toSet() - names.toSet()
-        if (unknown.isNotEmpty()) malformed(what, "unknown fields $unknown")
-    }
+    /** An object of a stored [what], whose members this version does not know are ignored (`CTL-53`). */
+    fun JsonNode.member(what: String): JsonNode = if (isObject) this else malformed(what, "$this is not an object")
 }

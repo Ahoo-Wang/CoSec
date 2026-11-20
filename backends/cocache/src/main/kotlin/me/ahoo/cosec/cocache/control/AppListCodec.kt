@@ -22,11 +22,11 @@ import me.ahoo.cosec.cocache.control.StoredJson.factory
 import me.ahoo.cosec.cocache.control.StoredJson.field
 import me.ahoo.cosec.cocache.control.StoredJson.items
 import me.ahoo.cosec.cocache.control.StoredJson.malformed
-import me.ahoo.cosec.cocache.control.StoredJson.only
 import me.ahoo.cosec.cocache.control.StoredJson.read
 import me.ahoo.cosec.cocache.control.StoredJson.text
 import me.ahoo.cosec.control.store.AppList
 import me.ahoo.cosec.document.json.CoSecJson
+import me.ahoo.cosec.document.json.StoredFormat
 
 /**
  * The app list as `{"apps": [...sorted], "complete": true}`, so equal lists have equal digests. Entries are kept as
@@ -36,7 +36,7 @@ internal object AppListCodec : Codec<AppList> {
     private const val WHAT = "app list"
 
     override fun encode(value: AppList): ByteArray {
-        val root = factory.objectNode()
+        val root = StoredFormat.write(factory.objectNode())
         root.putArray("apps").apply { value.entries.sorted().forEach(::add) }
         root.put("complete", value.complete)
         return CoSecJson.mapper.writeValueAsBytes(root)
@@ -44,7 +44,7 @@ internal object AppListCodec : Codec<AppList> {
 
     override fun decode(bytes: ByteArray): AppList {
         val root = read(bytes, WHAT)
-        root.only(WHAT, "apps", "complete")
+        StoredFormat.of(root, WHAT)
         val complete = root.field("complete", WHAT)
         if (!complete.isBoolean) malformed(WHAT, "$complete is not a boolean")
         return AppList(

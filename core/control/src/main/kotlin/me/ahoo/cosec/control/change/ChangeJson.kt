@@ -33,7 +33,6 @@ internal object ChangeJson {
         factory.objectNode().put("tenant", actor.tenant.value).put("principal", actor.principal.value)
 
     internal fun actor(node: JsonNode): Actor {
-        node.only("tenant", "principal")
         return Actor(TenantId(node.need("tenant").text()), PrincipalId(node.need("principal").text()))
     }
 

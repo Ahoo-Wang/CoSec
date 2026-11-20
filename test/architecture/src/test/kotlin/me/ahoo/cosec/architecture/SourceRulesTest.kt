@@ -102,6 +102,8 @@ class SourceRulesTest {
          */
         val BACKEND_DOCUMENT_REACH: List<String> = listOf(
             "me.ahoo.cosec.document.json.CoSecJson",
+            // The reader's rule for every stored record (CTL-53): how a format member is written and read.
+            "me.ahoo.cosec.document.json.StoredFormat",
             "me.ahoo.cosec.document.shadow.ShadowCodec",
             "me.ahoo.cosec.document.SnapshotDocuments",
         )

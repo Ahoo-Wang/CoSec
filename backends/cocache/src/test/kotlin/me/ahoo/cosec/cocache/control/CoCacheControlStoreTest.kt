@@ -424,13 +424,16 @@ class CoCacheControlStoreTest {
                 backend.failAll = false
             }
         }
-        // Entries are kept as written, whatever they are; anything but the two members is refused.
+        // Entries are kept as written, whatever they are; a member of a known format this version does not know is
+        // ignored, a later format refused (CTL-53).
         val odd = AppList(setOf("not:an app", "order"), complete = true)
         val encoded = AppListCodec.encode(odd)
         AppListCodec.decode(encoded).assert().isEqualTo(odd)
-        encoded.decodeToString().assert().isEqualTo("""{"apps":["not:an app","order"],"complete":true}""")
+        encoded.decodeToString().assert().isEqualTo("""{"format":1,"apps":["not:an app","order"],"complete":true}""")
+        AppListCodec.decode("""{"apps":[],"complete":true,"x":1}""".encodeToByteArray())
+            .assert().isEqualTo(AppList(emptySet(), complete = true))
         for (refused in listOf(
-            """{"apps":[],"complete":true,"x":1}""",
+            """{"format":2,"apps":[],"complete":true}""",
             """{"apps":[1],"complete":true}""",
             """{"apps":[],"complete":"yes"}""",
         )) {
@@ -702,6 +705,9 @@ class CoCacheControlStoreTest {
             floor = 2,
         )
         RevisionIndexCodec.decode(RevisionIndexCodec.encode(index)).assert().isEqualTo(index)
+        // CTL-53: a member of a known format this version does not know is ignored.
+        RevisionIndexCodec.decode("""{"entries":[],"pending":[],"floor":1,"x":1}""".encodeToByteArray())
+            .assert().isEqualTo(RevisionIndex(floor = 1))
         // #1226: records left to delete are written only when there are some, so an index without is as before.
         RevisionIndexCodec.encode(index).decodeToString().assert().doesNotContain("reclaiming")
         val reclaiming = index.copy(reclaiming = listOf(digest))
@@ -723,7 +729,7 @@ class CoCacheControlStoreTest {
             """{"entries":[{"revision":1,"digest":"${"0".repeat(
                 64
             )}","publishedAt":"2026-11-01T00:00:00Z"}],"pending":[],"floor":1}""",
-            """{"entries":[],"pending":[],"floor":1,"x":1}""",
+            """{"format":2,"entries":[],"pending":[],"floor":1}""",
             """{"entries":[],"pending":[],"floor":1,"reclaiming":"x"}""",
             """{"entries":[],"pending":[],"floor":1,"reclaiming":["zz"]}""",
         ).forEach { text ->

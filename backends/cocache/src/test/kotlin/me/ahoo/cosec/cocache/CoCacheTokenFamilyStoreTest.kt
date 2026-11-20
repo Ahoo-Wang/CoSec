@@ -25,6 +25,7 @@ import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.login.token.TokenFamilies
 import me.ahoo.cosec.model.PrincipalId
 import me.ahoo.cosec.model.TenantId
+import me.ahoo.cosec.spi.snapshot.SnapshotFormatException
 import me.ahoo.cosec.spi.token.TokenFamily
 import me.ahoo.cosec.spi.token.TokenRevokedException
 import me.ahoo.cosec.spi.token.TokenSession
@@ -134,7 +135,7 @@ class CoCacheTokenFamilyStoreTest {
     }
 
     @Test
-    fun `a stored family is strict`() {
+    fun `a stored family is read by the reader's rule - IDN-31`() {
         val family =
             TokenFamily(
                 "f",
@@ -148,7 +149,10 @@ class CoCacheTokenFamilyStoreTest {
             )
         TokenFamilyCodec.decode(TokenFamilyCodec.encode(family)).assert().isEqualTo(family)
         assertThrows<Exception> { TokenFamilyCodec.decode("""{"id":"f"}""".toByteArray()) }
+        // A member a later version adds is ignored; a later format is refused.
         val extra = String(TokenFamilyCodec.encode(family)).replace("}", ""","more":1}""")
-        assertThrows<Exception> { TokenFamilyCodec.decode(extra.toByteArray()) }
+        TokenFamilyCodec.decode(extra.toByteArray()).assert().isEqualTo(family)
+        val later = String(TokenFamilyCodec.encode(family)).replace(""""format":1""", """"format":2""")
+        assertThrows<SnapshotFormatException> { TokenFamilyCodec.decode(later.toByteArray()) }
     }
 }
