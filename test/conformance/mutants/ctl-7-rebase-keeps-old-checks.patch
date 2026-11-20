@@ -1,0 +1,21 @@
+# Rule: CTL-7
+# Mutant: a rebase moves the change onto the new head without running its checks there: what was checked on the old base stands as CHECKED
+# Tests: :control:test --tests me.ahoo.cosec.control.change.ControlFailClosedTest :conformance:test --tests me.ahoo.cosec.conformance.ConformanceTest
+
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Proposals.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Proposals.kt
+index b8e29bcd..4fc040a5 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Proposals.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Proposals.kt
+@@ -229,11 +229,7 @@ internal class Proposals(
+         return flow.transition(id, ChangeStep.REBASE) { current ->
+             val head = revisions.head(current.key)
+             val base = head?.let { Base(it.revision, it.digest) } ?: Base.NONE
+-            candidates.checked(
+-                current.copy(base = base, skipShadow = null, approval = null, shadow = null),
+-                head,
+-                author
+-            )
++            current.copy(base = base, skipShadow = null, approval = null, shadow = null, state = ChangeState.CHECKED)
+         }
+     }
+ 

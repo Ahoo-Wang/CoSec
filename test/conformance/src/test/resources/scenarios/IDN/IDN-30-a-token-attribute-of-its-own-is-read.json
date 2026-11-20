@@ -1,0 +1,67 @@
+{
+  "rules": [
+    "IDN-30"
+  ],
+  "polarity": "negative",
+  "level": "pipeline",
+  "description": "The same token whose attributes claim holds another attribute is alice's, attribute and all: the ALLOW written on that attribute permits her.",
+  "documents": {
+    "tenants": {
+      "(0)": {
+        "policies": [
+          {
+            "id": "orders-of-one-key",
+            "statements": [
+              {
+                "effect": "allow",
+                "action": "http:GET",
+                "resource": "http:path:/orders/**",
+                "condition": {
+                  "eq": [
+                    "subject.attributes.department",
+                    "sales"
+                  ]
+                }
+              }
+            ]
+          }
+        ],
+        "bindings": [
+          {
+            "id": "orders-of-one-key",
+            "subject": {
+              "principal": "alice",
+              "tenant": "(0)"
+            },
+            "app": "*",
+            "space": "*",
+            "policy": "orders-of-one-key"
+          }
+        ]
+      }
+    }
+  },
+  "http": {
+    "method": "GET",
+    "path": "/orders/1",
+    "headers": {
+      "Authorization": "Bearer t1"
+    }
+  },
+  "authentication": {
+    "result": "jwt",
+    "jwt": {
+      "jti": "t1",
+      "sub": "alice",
+      "claims": {
+        "attributes": {
+          "department": "sales"
+        }
+      }
+    }
+  },
+  "expect": {
+    "status": 200,
+    "proceed": true
+  }
+}

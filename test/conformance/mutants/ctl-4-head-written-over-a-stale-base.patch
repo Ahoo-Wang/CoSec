@@ -1,0 +1,17 @@
+# Rule: CTL-4
+# Mutant: the in-memory control store writes a head whatever digest it holds: a publish over a stale base overwrites the head
+# Tests: :control:test --tests me.ahoo.cosec.control.store.RevisionsTest :conformance:test --tests me.ahoo.cosec.conformance.ConformanceTest
+
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/store/InMemoryControlStore.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/store/InMemoryControlStore.kt
+index 16ac678e..16657f32 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/store/InMemoryControlStore.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/store/InMemoryControlStore.kt
+@@ -60,7 +60,7 @@ class InMemoryControlStore(private val clock: Clock = Clock.systemUTC()) : Contr
+     override suspend fun putHead(key: SnapshotKey, expected: SnapshotDigest?, document: SnapshotDocument): HeadWrite =
+         synchronized(lock) {
+             val current = heads[key]?.let(::digestOf)
+-            if (current != expected) {
++            if (current != expected && expected == current) {
+                 return HeadWrite.Conflict(current)
+             }
+             heads[key] = document

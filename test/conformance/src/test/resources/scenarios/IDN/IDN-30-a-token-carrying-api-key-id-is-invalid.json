@@ -1,0 +1,67 @@
+{
+  "rules": [
+    "IDN-30"
+  ],
+  "polarity": "positive",
+  "level": "pipeline",
+  "description": "A signed, unexpired token for alice whose attributes claim holds apiKeyId, the attribute CoSec sets for an API key, does not pass for the key k1 that an ALLOW is written for: the token is rejected, and the request, evaluated as anonymous, is denied 401 token-invalid.",
+  "documents": {
+    "tenants": {
+      "(0)": {
+        "policies": [
+          {
+            "id": "orders-of-one-key",
+            "statements": [
+              {
+                "effect": "allow",
+                "action": "http:GET",
+                "resource": "http:path:/orders/**",
+                "condition": {
+                  "eq": [
+                    "subject.attributes.apiKeyId",
+                    "k1"
+                  ]
+                }
+              }
+            ]
+          }
+        ],
+        "bindings": [
+          {
+            "id": "orders-of-one-key",
+            "subject": {
+              "principal": "alice",
+              "tenant": "(0)"
+            },
+            "app": "*",
+            "space": "*",
+            "policy": "orders-of-one-key"
+          }
+        ]
+      }
+    }
+  },
+  "http": {
+    "method": "GET",
+    "path": "/orders/1",
+    "headers": {
+      "Authorization": "Bearer t1"
+    }
+  },
+  "authentication": {
+    "result": "jwt",
+    "jwt": {
+      "jti": "t1",
+      "sub": "alice",
+      "claims": {
+        "attributes": {
+          "apiKeyId": "k1"
+        }
+      }
+    }
+  },
+  "expect": {
+    "status": 401,
+    "type": "token-invalid"
+  }
+}
