@@ -342,7 +342,10 @@ private class Run(val source: Source7x, val options: ConvertOptions, val compile
         return tree
     }
 
-    /** Whether the policy applies to everyone, as 7.x reads the index and the type; null when that is unclear. */
+    /**
+     * Whether the policy applies to everyone, as 7.x reads the index and the type; null when that is unclear. 7.x (`RedisPolicyRepository.getGlobalPolicy`,
+     * v7.0.0 on) keeps `it.type == PolicyType.GLOBAL` of the indexed policies and removes a non-global one from the index.
+     */
     private fun isGlobal(id: String, type: PolicyType?, location: String): Boolean? {
         val inIndex = id in source.globalIndex
         if (type == PolicyType.GLOBAL && !inIndex) {
@@ -354,11 +357,8 @@ private class Run(val source: Source7x, val options: ConvertOptions, val compile
             return null
         }
         if (inIndex && type != null && type != PolicyType.GLOBAL) {
-            warnings += Warning(
-                location,
-                "policy [$id] is in the global policy index but of type $type: 7.x does not apply it to everyone, " +
-                    "so it is converted as an attachable policy",
-            )
+            val note = "policy [$id] is in the global policy index but of type $type: 7.x does not apply it to everyone"
+            warnings += Warning(location, "$note, so it is converted as an attachable policy")
         }
         return inIndex && type == PolicyType.GLOBAL
     }
