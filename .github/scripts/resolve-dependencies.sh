@@ -27,17 +27,23 @@
 # A "configuration cache state could not be cached" error in a build can be a failed download underneath: read the cause
 # below it (`Could not find` or `Could not GET`, with the repository), and look at this step's earlier attempts.
 #
-# Attempt 1 is a plain resolution. Later attempts wait first (20 s, 40 s, 60 s: a rate limit is not helped by asking at once).
-# Attempt 2 adds `--refresh-dependencies`, which asks the repositories again about what the Gradle home remembers. From
-# attempt 3 the dependency cache of the Gradle home (`caches/modules-2`: the jars and the index that names them) is removed
-# first, because a restored cache can hold an index that names jars it lacks, and Gradle then answers "Could not find" for
-# them without asking any repository, however often it is asked (jmh-ab.yml, #1490); the retry resolves from the repositories
-# alone. Gradle's own patience with a repository is raised for this step (more tentatives per download, a longer first pause).
-# RESOLVE_ATTEMPTS and RESOLVE_PAUSE (seconds, per attempt number) override the bounds; a test sets them to 0.
+# Attempt 1 is a plain resolution. Later attempts wait first, 30, 60, 120, 180 and 240 s (630 s, so about 10 minutes of
+# waiting and, with the attempts themselves, 15 at the worst): a repository that throttles a runner keeps doing so for
+# minutes, not seconds. Two failed runs measured it: Maven Central answered 429 for one POM for at least 4 min 50 s, on
+# every attempt (jmh-ab run 44642549624), and the plugin portal answered a 404 for three POMs for 2 min 30 s (CodeQL run
+# 44624319099), where four attempts over 2 to 4 minutes had not been enough, and a re-run passed minutes later.
+# Attempt 2 adds `--refresh-dependencies`, which asks the repositories again about what the Gradle home remembers. Before
+# attempt 3, once, the dependency cache of the Gradle home (`caches/modules-2`: the jars and the index that names them) is
+# removed, because a restored cache can hold an index that names jars it lacks, and Gradle then answers "Could not find" for
+# them without asking any repository, however often it is asked (jmh-ab.yml, #1490); the retries resolve from the repositories
+# alone. Once, because what attempt 3 onwards downloads is sound, and removing it again would only fetch it again from a repository
+# that is throttling. Gradle's own patience with a repository is raised for this step (more tentatives per download, a longer
+# first pause). RESOLVE_ATTEMPTS (default 6) and RESOLVE_PAUSES (seconds, one per wait, the last repeating; default
+# "30 60 120 180 240") override the bounds; a test sets the pauses to 0.
 set -uo pipefail
 
-ATTEMPTS=${RESOLVE_ATTEMPTS:-4}
-PAUSE=${RESOLVE_PAUSE:-20}
+ATTEMPTS=${RESOLVE_ATTEMPTS:-6}
+read -r -a PAUSES <<< "${RESOLVE_PAUSES:-30 60 120 180 240}"
 INIT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../gradle" && pwd)/resolve-dependencies.init.gradle.kts"
 cd "${1:-.}" || exit 2
 shift || true
@@ -45,7 +51,7 @@ shift || true
 for attempt in $(seq 1 "$ATTEMPTS"); do
   refresh=()
   [ "$attempt" -gt 1 ] && refresh=(--refresh-dependencies)
-  if [ "$attempt" -gt 2 ]; then
+  if [ "$attempt" -eq 3 ]; then
     modules="${GRADLE_USER_HOME:-$HOME/.gradle}/caches/modules-2"
     echo "Removing $modules: the retry resolves from the repositories alone."
     rm -rf "$modules"
@@ -61,8 +67,9 @@ for attempt in $(seq 1 "$ATTEMPTS"); do
     exit 0
   fi
   if [ "$attempt" -lt "$ATTEMPTS" ]; then
-    echo "::warning::Resolving dependencies failed (attempt $attempt of $ATTEMPTS, exit $status); asking again in $((attempt * PAUSE)) s."
-    sleep $((attempt * PAUSE))
+    pause=${PAUSES[$((attempt - 1))]:-${PAUSES[${#PAUSES[@]} - 1]}}
+    echo "::warning::Resolving dependencies failed (attempt $attempt of $ATTEMPTS, exit $status); asking again in $pause s."
+    sleep "$pause"
   fi
 done
 echo "::error::Dependencies did not resolve in $ATTEMPTS attempts: see the 'Could not' lines above for the repository and the answer."
