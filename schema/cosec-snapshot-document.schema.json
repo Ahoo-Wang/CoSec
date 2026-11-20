@@ -103,7 +103,7 @@
             "wms.clerk",
             "night-shift"
           ],
-          "pattern": "^(?!\\*$)[^@]+$",
+          "pattern": "^(?![\\s\\S]*[\\x00-\\x1F\\x7F-\\x9F])(?!\\*$)[^@]+$",
           "type": "string"
         },
         "name": {
@@ -128,6 +128,7 @@
                   "warehouse.read",
                   "inbound.ship"
                 ],
+                "pattern": "^[^\\x00-\\x1F\\x7F-\\x9F]*$",
                 "type": "string"
               },
               "type": "array"
@@ -483,6 +484,7 @@
             "order-service"
           ],
           "minLength": 1,
+          "pattern": "^[^\\x00-\\x1F\\x7F-\\x9F]*$",
           "type": "string"
         },
         "breakGlass": {
@@ -503,6 +505,7 @@
             "deny-ip",
             "editor-read"
           ],
+          "pattern": "^[^\\x00-\\x1F\\x7F-\\x9F]*$",
           "type": "string"
         },
         "policy": {
@@ -511,6 +514,7 @@
             "perm:order-service/read",
             "cosec:root"
           ],
+          "pattern": "^[^\\x00-\\x1F\\x7F-\\x9F]*$",
           "type": "string"
         },
         "space": {
@@ -520,6 +524,7 @@
             "",
             "team-a"
           ],
+          "pattern": "^[^\\x00-\\x1F\\x7F-\\x9F]*$",
           "type": "string"
         },
         "subject": {
@@ -540,6 +545,7 @@
                     "cosec",
                     "svc-batch"
                   ],
+                  "pattern": "^[^\\x00-\\x1F\\x7F-\\x9F]*$",
                   "type": "string"
                 },
                 "tenant": {
@@ -547,6 +553,7 @@
                     "(platform)",
                     "acme"
                   ],
+                  "pattern": "^[^\\x00-\\x1F\\x7F-\\x9F]*$",
                   "type": "string"
                 }
               },
@@ -585,7 +592,7 @@
                   "ext.geo.region",
                   "ext.risk.score"
                 ],
-                "pattern": "^ext\\.[^.]+\\..+$",
+                "pattern": "^(?![\\s\\S]*[\\x00-\\x1F\\x7F-\\x9F])ext\\.[^.]+\\..+$",
                 "type": "string"
               },
               "type": {
@@ -621,6 +628,7 @@
                 "boundary-standard"
               ],
               "minLength": 1,
+              "pattern": "^[^\\x00-\\x1F\\x7F-\\x9F]*$",
               "type": "string"
             }
           },
@@ -733,6 +741,7 @@
             "deny-ip",
             "perm:order-service/read"
           ],
+          "pattern": "^[^\\x00-\\x1F\\x7F-\\x9F]*$",
           "type": "string"
         },
         "statements": {
@@ -914,6 +923,7 @@
             "subject.id",
             "resource.var.orderId"
           ],
+          "pattern": "^[^\\x00-\\x1F\\x7F-\\x9F]*$",
           "type": "string"
         },
         "onMissing": {
@@ -978,6 +988,7 @@
             },
             "decodeAndParseSegments": {
               "default": true,
+              "description": "`false` matches the path as received. Only an ALLOW may set it: a DENY or a rate limit rule with it does not compile, since it would miss every percent-encoded spelling (DOC-14).",
               "type": "boolean"
             },
             "pattern": {
@@ -1030,6 +1041,7 @@
           "examples": [
             "read-orders"
           ],
+          "pattern": "^[^\\x00-\\x1F\\x7F-\\x9F]*$",
           "type": "string"
         },
         "onMissing": {
@@ -1123,6 +1135,7 @@
             "boundary-restricted"
           ],
           "minLength": 1,
+          "pattern": "^[^\\x00-\\x1F\\x7F-\\x9F]*$",
           "type": "string"
         },
         "policies": {
@@ -1184,6 +1197,7 @@
             "order-service"
           ],
           "minLength": 1,
+          "pattern": "^[^\\x00-\\x1F\\x7F-\\x9F]*$",
           "type": "string"
         },
         "description": {
@@ -1199,7 +1213,7 @@
             "wms.clerk",
             "night-shift"
           ],
-          "pattern": "^(?!\\*$)[^@]+$",
+          "pattern": "^(?![\\s\\S]*[\\x00-\\x1F\\x7F-\\x9F])(?!\\*$)[^@]+$",
           "type": "string"
         },
         "name": {
@@ -1216,6 +1230,7 @@
               "warehouse.read",
               "inbound.ship"
             ],
+            "pattern": "^[^\\x00-\\x1F\\x7F-\\x9F]*$",
             "type": "string"
           },
           "type": "array"
@@ -1226,7 +1241,7 @@
             "",
             "wh-01"
           ],
-          "pattern": "^(?!\\*$)(?!\\().*$",
+          "pattern": "^(?![\\s\\S]*[\\x00-\\x1F\\x7F-\\x9F])(?!\\*$)(?!\\().*$",
           "type": "string"
         }
       },

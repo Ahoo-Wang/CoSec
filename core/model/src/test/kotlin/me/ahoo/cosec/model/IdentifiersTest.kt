@@ -80,6 +80,19 @@ class IdentifiersTest {
         Identifiers.printable("beta\uD800").assert().isNotEqualTo(Identifiers.printable("beta?"))
     }
 
+    /** `DOC-13`: the one definition of what an id must not hold; [Identifiers.printable] escapes exactly that. */
+    @Test
+    fun `printable text is what printable gives back unchanged`() {
+        listOf("beta", "perm:app/x", "(platform)", "\uD83D\uDE00", "a b", "é").forEach {
+            Identifiers.isPrintable(it).assert().describedAs(it).isTrue()
+            Identifiers.printable(it).assert().isEqualTo(it)
+        }
+        listOf("a\nb", "\u0000", "x\u007F", "\u009F", "\uD800", "\uDC00a", "a\uD83D").forEach {
+            Identifiers.isPrintable(it).assert().describedAs(it).isFalse()
+            Identifiers.printable(it).assert().isNotEqualTo(it)
+        }
+    }
+
     private companion object {
         const val ITERATIONS = 5_000
     }

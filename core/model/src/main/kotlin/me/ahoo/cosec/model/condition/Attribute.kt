@@ -16,6 +16,7 @@
 package me.ahoo.cosec.model.condition
 
 import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.model.Identifiers
 
 /** The static type of an attribute (RFC 0005 §3.2). Values are never converted from one type to another. */
 enum class AttributeType {
@@ -166,14 +167,15 @@ class Attribute private constructor(
 
         /**
          * The built-in catalog attribute at [path], or null if there is none. External attributes are never built in,
-         * and a header whose name is not an ASCII token ([HttpNames.isToken]) is none: it could fold onto another.
+         * and a header whose name is not an ASCII token ([HttpNames.isToken]) is none: it could fold onto another. Nor
+         * is a name that holds a control character or an unpaired surrogate, which a message would print (`DOC-13`).
          */
         fun parse(path: String): Attribute? {
             FIXED[path]?.let { return it }
             for (kind in PARAMETERIZED) {
                 if (path.length > kind.path.length && path.startsWith(kind.path)) {
                     val name = path.substring(kind.path.length)
-                    if (kind == Kind.HTTP_HEADER && !HttpNames.isToken(name)) {
+                    if (!Identifiers.isPrintable(name) || (kind == Kind.HTTP_HEADER && !HttpNames.isToken(name))) {
                         return null
                     }
                     return of(kind, name)

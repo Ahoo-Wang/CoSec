@@ -23,6 +23,12 @@ import me.ahoo.cosec.document.PolicyDocumentCompiler
 import me.ahoo.cosec.document.SnapshotDocuments
 import me.ahoo.cosec.document.route.Route
 import me.ahoo.cosec.document.route.RouteMap
+import me.ahoo.cosec.engine.CompiledDocument
+import me.ahoo.cosec.engine.PolicyCompiler
+import me.ahoo.cosec.engine.ResourceSource
+import me.ahoo.cosec.engine.StatementSource
+import me.ahoo.cosec.model.Effect
+import me.ahoo.cosec.model.PolicyId
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
@@ -47,6 +53,24 @@ class RouteFindingsTest {
         },
     )
 
+    /**
+     * A platform document with one `http:` DENY under [policyId], built by the engine alone: the document compiler refuses
+     * an id that holds a control character (`DOC-13`), and the escape at the print site stays for whatever reaches it
+     * another way (`DOC-12`, defence in depth).
+     */
+    private fun engineOnly(policyId: String) = CompiledDocument.platform(
+        listOf(
+            PolicyCompiler().compile(
+                PolicyId(policyId),
+                null,
+                listOf(
+                    StatementSource("", Effect.DENY, listOf("http:*"), listOf(ResourceSource("http:path:/admin/**")))
+                ),
+            ),
+        ),
+        emptyList(),
+    )
+
     private fun findings(policies: String, routes: RouteMap?) =
         ArrayList<Finding>().also { RouteFindings.check(compiled(policies), routes, it) }
 
@@ -65,9 +89,14 @@ class RouteFindingsTest {
     /** `DOC-12` (R1B-3): the finding shows a policy id escaped, as the host's line does. */
     @Test
     fun `an id that would forge a line is shown escaped`() {
-        val forged = """[{"id":"x\n2026-11-19 ERROR forged","statements":[{"effect":"deny","action":"http:*",""" +
-            """"resource":"http:path:/admin/**"}]}]"""
-        val message = findings(forged, routes(1)).single().message
+        val found = ArrayList<Finding>().also {
+            RouteFindings.check(
+                engineOnly("x\n2026-11-19 ERROR forged"),
+                routes(1),
+                it
+            )
+        }
+        val message = found.single().message
         message.none { it.isISOControl() }.assert().describedAs(message).isTrue()
         message.assert().contains("DENY x\\u000A2026-11-19 ERROR forged#0 escapes DELETE")
     }

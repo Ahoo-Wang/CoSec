@@ -22,7 +22,7 @@ import me.ahoo.cosec.document.format.FormatParts.ref
 /** A binding, with the platform document's variant of it. */
 internal object BindingFormats {
     private val wildcardOrId = { examples: List<String>, minLength: Int? ->
-        StringType(minLength = minLength, examples = listOf("*") + examples, description = "An id, or `*` for any.")
+        FormatPatterns.id(listOf("*") + examples, minLength, "An id, or `*` for any.")
     }
 
     val bindingSchema: SchemaFile = SchemaFile(
@@ -31,7 +31,7 @@ internal object BindingFormats {
         description = "\"[subject] is subject to [policy] in [app] and [space]\" (RFC 0004 §4.2). `*` means any, and only that.",
         root = ObjectType(
             listOf(
-                Field("id", StringType(examples = listOf("deny-ip", "editor-read")), required = true),
+                Field("id", FormatPatterns.id(listOf("deny-ip", "editor-read")), required = true),
                 Field(
                     "subject",
                     AnyOf(
@@ -47,7 +47,7 @@ internal object BindingFormats {
                 Field("space", wildcardOrId(listOf("", "team-a"), null), required = true),
                 Field(
                     "policy",
-                    StringType(examples = listOf("deny-ip", "perm:order-service/read", "cosec:root")),
+                    FormatPatterns.id(listOf("deny-ip", "perm:order-service/read", "cosec:root")),
                     required = true
                 ),
                 Field(
@@ -66,20 +66,20 @@ internal object BindingFormats {
         definitions = mapOf(
             "principalSubject" to ObjectType(
                 listOf(
-                    Field("principal", StringType(examples = listOf("cosec", "svc-batch"), description = RESERVED_PRINCIPAL), required = true),
+                    Field("principal", FormatPatterns.id(listOf("cosec", "svc-batch"), description = RESERVED_PRINCIPAL), required = true),
                     Field(
                         "tenant",
-                        StringType(examples = listOf("(platform)", "acme")),
+                        FormatPatterns.id(listOf("(platform)", "acme")),
                         description = "Required in the platform document; a tenant document's own tenant otherwise.",
                     ),
                 ),
             ),
             "roleSubject" to ObjectType(
                 listOf(
-                    Field("role", StringType(examples = listOf("editor", "viewer")), required = true),
+                    Field("role", FormatPatterns.id(listOf("editor", "viewer")), required = true),
                     Field(
                         "tenant",
-                        StringType(examples = listOf("acme")),
+                        FormatPatterns.id(listOf("acme")),
                         description = "Absent: any tenant in an app document, the document's own in a tenant document.",
                     ),
                 ),
@@ -98,10 +98,10 @@ internal object BindingFormats {
             listOf(
                 Field(
                     "principal",
-                    StringType(examples = listOf("cosec", "svc-batch"), description = RESERVED_PRINCIPAL),
+                    FormatPatterns.id(listOf("cosec", "svc-batch"), description = RESERVED_PRINCIPAL),
                     required = true
                 ),
-                Field("tenant", StringType(examples = listOf("(platform)", "acme")), required = true),
+                Field("tenant", FormatPatterns.id(listOf("(platform)", "acme")), required = true),
             ),
         )
         return ObjectType(

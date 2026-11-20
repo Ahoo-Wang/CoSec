@@ -3,7 +3,7 @@
 # Tests: :control:test --tests me.ahoo.cosec.control.authz.OneSegmentTenantIdTest :model:test --tests me.ahoo.cosec.model.scope.ScopeResolverTest
 
 diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/authz/ControlResources.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/authz/ControlResources.kt
-index f68efc07..f2eaf6e3 100644
+index f68efc07e..f2eaf6e3b 100644
 --- a/core/control/src/main/kotlin/me/ahoo/cosec/control/authz/ControlResources.kt
 +++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/authz/ControlResources.kt
 @@ -73,7 +73,7 @@ object ControlResources {
@@ -16,7 +16,7 @@ index f68efc07..f2eaf6e3 100644
      }
  }
 diff --git a/core/model/src/main/kotlin/me/ahoo/cosec/model/scope/ScopeResolver.kt b/core/model/src/main/kotlin/me/ahoo/cosec/model/scope/ScopeResolver.kt
-index 18414cd1..6bce5ea1 100644
+index 4ad373e82..b1b6f53a4 100644
 --- a/core/model/src/main/kotlin/me/ahoo/cosec/model/scope/ScopeResolver.kt
 +++ b/core/model/src/main/kotlin/me/ahoo/cosec/model/scope/ScopeResolver.kt
 @@ -80,7 +80,7 @@ object ScopeResolver {
@@ -25,6 +25,6 @@ index 18414cd1..6bce5ea1 100644
              val refused = when (c) {
 -                ':', '/' -> true
 +                ':' -> true
-                 else -> c.isISOControl() || Identifiers.isUnpairedSurrogateAt(app, index)
+                 else -> Identifiers.isUnprintableAt(app, index)
              }
              if (refused) {
