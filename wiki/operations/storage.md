@@ -361,7 +361,7 @@ revalidating 10 documents every 10 seconds take about 0.1 % of it.
 | What | Behavior |
 |---|---|
 | A document already installed | Kept. Decisions go on with the installed revision; its lag grows and is logged ([How instances read documents](#how-instances-read-documents)). |
-| A document not installed yet | The cold load fails or times out: the document is unresolved for that request, which is **`503`**, unless a DENY matches first. Nothing is installed; the next request tries again. |
+| A document not installed yet | The cold load fails or times out: the document is unresolved for that request, which is **`503`**, unless a DENY matches first. Nothing is installed; the next request tries again. A document readiness waits for (the platform's, the prewarmed ones) is also read again on its own, every 1 to 30 seconds, so an instance that started during the outage becomes ready once Redis answers (`SNP-21`). |
 | A document that cannot be decoded or compiled | Installed as failed: every request that needs it is **`503`**, unless a DENY matches first, until a readable revision is published. |
 | A document that disappeared from Redis after it was seen | Failed until a document returns (`Snapshot document [<doc>] disappeared from the store; failing closed.` at `ERROR`). Requests that need it are **`503`**, unless a DENY matches first. |
 | A tenant listed in `fail-closed.tenants`, once its documents lag past `fail-closed.max-lag` | **`503`**, unless a DENY matches first ([How instances read documents](#how-instances-read-documents)). |
