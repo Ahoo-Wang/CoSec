@@ -53,6 +53,13 @@ open class ColdBurstBenchmark {
     @Param("100", "500", "2000")
     var burst: Int = 0
 
+    /**
+     * The compile queue's capacity (`SnapshotOptions.compileQueueCapacity`): 64 by default. Each queued compilation holds
+     * its read, the decoded document; setup prints what one weighs, and so what a full queue holds.
+     */
+    @Param("64")
+    var queue: Int = 0
+
     private val store = InMemorySnapshotDocumentStore()
     private lateinit var keys: List<SnapshotKey>
     private lateinit var source: SnapshotSource<*, *>
@@ -98,12 +105,31 @@ open class ColdBurstBenchmark {
         repeat(TIMED_COMPILES) { compiler.compile(keys[0], document) }
         val micros = (System.nanoTime() - started) / 1_000 / TIMED_COMPILES
         println("ColdBurstBenchmark: one tenant document compiles in $micros µs; burst $burst")
+        val bytes = decodedBytes()
+        println(
+            "ColdBurstBenchmark: a decoded tenant document holds about $bytes B; a full queue of $queue about " +
+                "${bytes * queue / KIB} KiB"
+        )
+    }
+
+    /** The heap a decoded tenant document retains, measured over [WEIGHED] of them held at once. */
+    private fun decodedBytes(): Long {
+        val runtime = Runtime.getRuntime()
+        fun used(): Long {
+            repeat(GC_PASSES) { System.gc() }
+            return runtime.totalMemory() - runtime.freeMemory()
+        }
+        val before = used()
+        val held = List(WEIGHED) { SnapshotDocuments.read(tenantDocument(it).encodeToByteArray()) }
+        val after = used()
+        check(held.size == WEIGHED)
+        return (after - before) / WEIGHED
     }
 
     /** A replica just started: nothing but the platform document is installed. */
     @Setup(Level.Invocation)
     fun replica() {
-        source = DocumentSnapshots.source(store, PolicyDocumentCompiler(), SnapshotOptions())
+        source = DocumentSnapshots.source(store, PolicyDocumentCompiler(), SnapshotOptions(compileQueueCapacity = queue))
         source.load().join()
     }
 
@@ -132,6 +158,9 @@ open class ColdBurstBenchmark {
         const val BINDINGS = 60
         const val WARM_COMPILES = 2_000
         const val TIMED_COMPILES = 2_000
+        const val WEIGHED = 2_000
+        const val GC_PASSES = 3
+        const val KIB = 1_024
         const val MINIMAL = """{"schema":2,"revision":1,"publishedAt":"2026-11-20T00:00:00Z"}"""
 
         fun tenantDocument(tenant: Int): String {
