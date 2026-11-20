@@ -525,6 +525,11 @@ What it covers, each as an observable over the network:
   forged identity, the client's credentials), the problem types of [`contract/`](https://github.com/Ahoo-Wang/CoSec/tree/main/contract),
   and the paths a pattern could misread;
 - **documents across processes**: deny-first, tenant isolation, apps, spaces;
+- **one gateway in front of several apps**: two routes name the apps `shop` and `ledger`, which define the same role ids with
+  different grants; a credential of one app is refused at the route of the other, an app document's update reaches both gateways
+  within the bound and each decides with its revision, and a tenant's customisation stays inside its app. Roles come from the
+  token there; where memberships come from a provider, a role held once applies in every app that defines its id, which the
+  stack does not exercise (it has no provider);
 - a **policy change** through the control plane, from its refusals and its shadow window on live traffic to approval, publish
   and rollback, taking effect at every process without a restart;
 - **revocation** (logout, a subject), refresh rotation and reuse, a **rate limit** one bucket of which both gateways count,

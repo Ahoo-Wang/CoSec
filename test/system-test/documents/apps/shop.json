@@ -1,0 +1,21 @@
+{
+  "schema": 2,
+  "revision": 1,
+  "publishedAt": "2026-11-20T00:00:00Z",
+  "catalog": {
+    "groups": [
+      {
+        "name": "Items",
+        "permissions": [
+          { "id": "items.read", "name": "Read items", "action": "http:GET", "resource": "http:path:/shop/items/**" },
+          { "id": "items.write", "name": "Write items", "action": "http:POST", "resource": "http:path:/shop/items/**" },
+          { "id": "items.ship", "name": "Ship an order", "action": "http:POST", "resource": "http:path:/shop/shipments/**" }
+        ]
+      }
+    ]
+  },
+  "roles": [
+    { "id": "manager", "name": "Manager", "permissions": ["items.read", "items.write"] },
+    { "id": "clerk", "name": "Clerk", "permissions": ["items.read"] }
+  ]
+}
