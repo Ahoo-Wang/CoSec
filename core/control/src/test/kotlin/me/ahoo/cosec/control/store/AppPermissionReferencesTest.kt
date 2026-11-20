@@ -31,9 +31,8 @@ import java.util.concurrent.atomic.AtomicInteger
 
 /**
  * `CTL-5`, RFC 0007 §5.8: a tenant's reference to an app's permission policy (`perm:<app>/<id>`) is indexed under the
- * app only, since only the app's document can define that prefix (`TNT-2`). The app can still not remove it; what an
- * older version indexed under the platform goes at the tenant's next publish; and an app's removal check reads no
- * tenant's head, since none can define the id itself.
+ * app only, since only the app's document can define that prefix (`TNT-2`). The app can still not remove it, and an
+ * app's removal check reads no tenant's head, since none can define the id itself.
  */
 class AppPermissionReferencesTest {
     private val clock = MutableClock()
@@ -60,34 +59,22 @@ class AppPermissionReferencesTest {
     @Test
     fun `a tenant's reference to an app permission is indexed under the app only, every other one as before`() {
         index.references(tenant).assert().containsExactlyInAnyOrder(
-            SnapshotKey.Platform to PolicyId("own"),
-            order to read,
-            SnapshotKey.Platform to PolicyId("shared"),
-            order to PolicyId("shared"),
+            ReferrerIndex.Reference(SnapshotKey.Platform, PolicyId("own"), definesItself = true),
+            ReferrerIndex.Reference(order, read),
+            ReferrerIndex.Reference(SnapshotKey.Platform, PolicyId("shared")),
+            ReferrerIndex.Reference(order, PolicyId("shared")),
         )
-        index.indexedByOlderVersions(tenant).assert().contains(SnapshotKey.Platform to read)
     }
 
     @Test
-    fun `the platform entries an older version wrote go at the tenant's next publish, and the app still cannot remove the permission`() =
+    fun `the app cannot remove a permission a tenant refers to, and the platform holds no member for it`() =
         runBlocking<Unit> {
             published(SnapshotKey.Platform, candidate(SnapshotKey.Platform, listOf(policy("shared"))))
             published(order, candidate(order, listOf(policy(read.value))))
             published(ACME, tenant).assert().isInstanceOf(PublishOutcome.Published::class.java)
-            // What a version before this one also wrote, at the same revision.
-            memory.putReferrers(
-                SnapshotKey.Platform,
-                read,
-                memory.referrers(SnapshotKey.Platform, read)?.digest,
-                mapOf(ACME to 1L)
-            )
-                .assert().isTrue()
 
-            published(ACME, tenant).assert().isInstanceOf(PublishOutcome.Published::class.java)
-
-            // Written empty, or removed: no referrer either way.
-            memory.referrers(SnapshotKey.Platform, read)?.value.orEmpty().assert().isEmpty()
-            memory.referrers(order, read)!!.value.keys.assert().containsExactly(ACME)
+            memory.referrers(SnapshotKey.Platform, read).assert().isEmpty()
+            memory.referrers(order, read).assert().containsExactly(ReferrerEntry(ACME, 1))
             val removed = published(order, candidate(order, emptyList()))
             removed.assert().isInstanceOf(PublishOutcome.Referenced::class.java)
             (removed as PublishOutcome.Referenced).referrers.getValue(read).assert().containsExactly(ACME)

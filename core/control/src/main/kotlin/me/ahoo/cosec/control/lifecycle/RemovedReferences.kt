@@ -15,7 +15,9 @@
 
 package me.ahoo.cosec.control.lifecycle
 
+import io.github.oshai.kotlinlogging.KotlinLogging
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
+import me.ahoo.cosec.control.change.ControlStatus.UNAVAILABLE
 import me.ahoo.cosec.control.change.ControlStatus.UNPROCESSABLE
 import me.ahoo.cosec.control.change.Finding
 import me.ahoo.cosec.control.store.ReferencedPolicies
@@ -23,9 +25,12 @@ import me.ahoo.cosec.document.DocumentCompileException
 import me.ahoo.cosec.document.PolicyDocument
 import me.ahoo.cosec.document.RoleExpansion
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
+import kotlin.coroutines.cancellation.CancellationException
 
 /** What a platform or app candidate does to the documents that refer to its policies (RFC 0007 §5.8, `CTL-30`). */
 internal object RemovedReferences {
+    private val log = KotlinLogging.logger {}
+
     /**
      * The policies a platform or app candidate removes, or turns from a policy into a boundary or back (`CTL-30`), that
      * other documents still refer to (RFC 0007 §5.8): a binding reaches only a policy and a tenant's `boundary` only a
@@ -33,6 +38,7 @@ internal object RemovedReferences {
      * ([ReferencedPolicies.of]): a change refused there is refused here, with the same documents. Over the limit of
      * what the roles derive the compile step has said so, and there is nothing expanded to compare.
      */
+    @Suppress("TooGenericExceptionCaught")
     suspend fun check(
         key: SnapshotKey,
         base: PolicyDocument?,
@@ -43,6 +49,13 @@ internal object RemovedReferences {
         val referenced = try {
             ReferencedPolicies.of(key, base, candidate, context::referrers)
         } catch (_: DocumentCompileException) {
+            return
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            // A back-reference set that cannot be read may name a referrer: the removal is refused (CTL-42).
+            log.warn(e) { "[$key]: the back-references of its policies could not be read; the change is refused." }
+            findings += Finding("REFERENCES", "$.policies", "The back-references could not be read: ${e.message}", UNAVAILABLE)
             return
         }
         if (referenced.isEmpty()) return

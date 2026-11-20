@@ -27,7 +27,6 @@ import me.ahoo.cosec.control.store.StoreFixtures.policy
 import me.ahoo.cosec.control.store.StoreFixtures.publication
 import me.ahoo.cosec.document.PolicyDocument
 import me.ahoo.cosec.model.PolicyId
-import me.ahoo.cosec.spi.snapshot.SnapshotDigest
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
@@ -49,18 +48,13 @@ class ReferrerCleanupRaceTest {
         val paused = CompletableDeferred<Unit>()
         val resume = CompletableDeferred<Unit>()
 
-        override suspend fun putReferrers(
-            target: SnapshotKey,
-            policy: PolicyId,
-            expected: SnapshotDigest?,
-            referrers: Map<SnapshotKey, Long>,
-        ): Boolean {
+        override suspend fun removeReferrers(target: SnapshotKey, policy: PolicyId, entries: Set<ReferrerEntry>) {
             if (armed && target == SnapshotKey.Platform && policy == shared) {
                 armed = false
                 paused.complete(Unit)
                 resume.await()
             }
-            return memory.putReferrers(target, policy, expected, referrers)
+            memory.removeReferrers(target, policy, entries)
         }
     }
     private val revisions = Revisions(store, clock)
@@ -115,8 +109,12 @@ class ReferrerCleanupRaceTest {
                 .assert().isInstanceOf(PublishOutcome.Published::class.java)
         }
 
+    /**
+     * `CTL-44`: a drop removes exactly the members its own forward record holds. A member it did not add, such as one a
+     * lost race or a repair left, stays, and errs towards blocking a removal (`CTL-43`) until a repair prunes it.
+     */
     @Test
-    fun `a reference indexed without a revision is removed by a later drop and raised by a later reference`() =
+    fun `a drop removes only the members it added, and a stray one blocks until a repair prunes it`() =
         runBlocking<Unit> {
             publish(
                 SnapshotKey.Platform,
@@ -124,14 +122,16 @@ class ReferrerCleanupRaceTest {
                 "p1"
             )
             publish(ACME, candidate(ACME, bindings = listOf(binding("b", "shared"))), "t1")
-            // As 8.0.0-alpha.3 indexed it: a set of keys, read at revision 0.
-            val indexed = memory.referrers(SnapshotKey.Platform, shared)!!
-            memory.putReferrers(SnapshotKey.Platform, shared, indexed.digest, mapOf(ACME to 0L)).assert().isTrue()
-            publish(ACME, candidate(ACME, bindings = listOf(binding("b", "shared"), binding("c", "other"))), "t2")
-            memory.referrers(SnapshotKey.Platform, shared)!!.value.assert().isEqualTo(mapOf(ACME to 0L))
-            publish(ACME, candidate(ACME, bindings = listOf(binding("c", "other"))), "t3")
-            revisions.referrers(SnapshotKey.Platform, shared).assert().isEmpty()
-            publish(ACME, candidate(ACME, bindings = listOf(binding("b", "shared"))), "t4")
-            memory.referrers(SnapshotKey.Platform, shared)!!.value.assert().isEqualTo(mapOf(ACME to 4L))
+            val stray = ReferrerEntry(ACME, 2)
+            memory.addReferrer(SnapshotKey.Platform, shared, stray)
+
+            publish(ACME, candidate(ACME), "t2").assert().isInstanceOf(PublishOutcome.Published::class.java)
+
+            memory.referrers(SnapshotKey.Platform, shared).assert().containsExactly(stray)
+            publish(SnapshotKey.Platform, candidate(SnapshotKey.Platform, listOf(policy("other"))), "p2")
+                .assert().isInstanceOf(PublishOutcome.Referenced::class.java)
+            revisions.pruneReferences(SnapshotKey.Platform).assert().isEqualTo(1)
+            publish(SnapshotKey.Platform, candidate(SnapshotKey.Platform, listOf(policy("other"))), "p2")
+                .assert().isInstanceOf(PublishOutcome.Published::class.java)
         }
 }

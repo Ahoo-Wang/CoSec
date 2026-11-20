@@ -329,11 +329,11 @@ class Revisions(
     /** The record of [key] with [digest], if retained. */
     internal suspend fun record(key: SnapshotKey, digest: SnapshotDigest): SnapshotDocument? = store.record(key, digest)
 
-    /** [ReferrerIndex.referrers]: the documents indexed as referring to [policy] of [target] (RFC 0007 §5.8). */
     /** The entries of the references to [policy] of [target] (RFC 0007 §5.8): who refers, at which revision, how. */
     suspend fun referrerEntries(target: SnapshotKey, policy: PolicyId): Set<ReferrerEntry> =
         referrerIndex.entries(target, policy)
 
+    /** [ReferrerIndex.referrers]: the documents indexed as referring to [policy] of [target] (RFC 0007 §5.8). */
     suspend fun referrers(target: SnapshotKey, policy: PolicyId): Set<SnapshotKey> = referrerIndex.referrers(
         target,
         policy
