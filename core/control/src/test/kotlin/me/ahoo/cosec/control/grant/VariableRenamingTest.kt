@@ -48,7 +48,11 @@ class VariableRenamingTest {
             published.policies + policy("grant", granted),
             published.bindings + bind("readers", role("reader"), "grant", space = space),
         )
-        return analyzer.analyze(gina, snapshot(tenant = published), GrantChange(ACME, candidate)).verdicts.map { it.second }
+        return analyzer.analyze(
+            gina,
+            snapshot(tenant = published),
+            GrantChange(ACME, candidate)
+        ).verdicts.map { it.second }
     }
 
     @Test
@@ -71,7 +75,10 @@ class VariableRenamingTest {
 
     @Test
     fun `a statement rewritten to the shifted tautology widens, and is analysed`() {
-        val before = GrantDocument(listOf(policy("p", diagonal)), listOf(bind("readers", role("reader"), "p", space = space)))
+        val before = GrantDocument(
+            listOf(policy("p", diagonal)),
+            listOf(bind("readers", role("reader"), "p", space = space))
+        )
         val shifted = allow("res:read", "res/{b}/{c}", eqAttr("resource.var.c", "resource.var.c"))
         val after = GrantDocument(listOf(policy("p", shifted)), before.bindings)
         analyzer.fragments(snapshot(tenant = before), GrantChange(ACME, after)).assert().isNotEmpty()

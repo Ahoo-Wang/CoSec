@@ -112,8 +112,12 @@ class SpecializationTest {
                 .fold(Condition.Eq("resource.var.a", Operand.Attr("resource.var.b")))
             return specialization.check((folded as Folded.Residual).condition).toString()
         }
-        renamed(mapOf("a" to "b", "b" to "c")).assert().isEqualTo("""{"eq":["resource.var.b",{"attr":"resource.var.c"}]}""")
-        renamed(mapOf("a" to "b", "b" to "a")).assert().isEqualTo("""{"eq":["resource.var.b",{"attr":"resource.var.a"}]}""")
+        renamed(
+            mapOf("a" to "b", "b" to "c")
+        ).assert().isEqualTo("""{"eq":["resource.var.b",{"attr":"resource.var.c"}]}""")
+        renamed(
+            mapOf("a" to "b", "b" to "a")
+        ).assert().isEqualTo("""{"eq":["resource.var.b",{"attr":"resource.var.a"}]}""")
     }
 
     @Test
