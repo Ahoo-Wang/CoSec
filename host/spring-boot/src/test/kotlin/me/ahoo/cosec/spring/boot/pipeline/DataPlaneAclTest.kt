@@ -38,6 +38,9 @@ import me.ahoo.cosec.model.PrincipalId
 import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.model.decision.DocumentKind
 import me.ahoo.cosec.runtime.shadow.ShadowRecorder
+import me.ahoo.cosec.runtime.shadow.CachingCandidateSource
+import me.ahoo.cosec.runtime.shadow.CandidateSource
+import me.ahoo.cosec.spi.shadow.StagedCandidates
 import me.ahoo.cosec.runtime.snapshot.SnapshotSource
 import me.ahoo.cosec.spi.shadow.ShadowReport
 import me.ahoo.cosec.spi.shadow.ShadowReportSink
@@ -240,6 +243,11 @@ class DataPlaneAclTest {
                         .write(ShadowReport("w-$id", started, emptyMap(), emptyMap(), emptySet(), null, null))
                 }
                 admin.exists("$prefix:shadow:report:w-$id:$started").assert().isEqualTo(1L)
+                // It reads the staged list the control plane keeps (CTL-47): a read the page's lines allow.
+                val candidates = node.getBean(CandidateSource::class.java) as CachingCandidateSource
+                // Kept (empty) once the control plane's first shadow pass ran, absent before it: either is a read.
+                val list = runBlocking { candidates.store.staged() }
+                (list == null || list == StagedCandidates.NONE).assert().describedAs("staged list $list").isTrue()
                 aclLog().assert().describedAs("ACL LOG of $user").isEmpty()
             }
         }

@@ -40,7 +40,8 @@ private val log = KotlinLogging.logger {}
  * documents: at most [maxEntries] documents (least recently used first out), each read again once it is [refreshAfter]
  * old, compiled with [compile], the instance's own compiler. It takes no part in readiness, and a read that fails only
  * counts ([failures]) and answers no candidate: the shadow window misses samples, the enforced decision never notices.
- * Requests that miss on one key at once share one read of the store.
+ * Requests that miss on one key at once share one read of the store. With a staged list ([staged], `CTL-47`) a document
+ * it does not list answers no candidate without a read.
  */
 @InternalCoSecApi
 class CachingCandidateSource(
@@ -61,6 +62,9 @@ class CachingCandidateSource(
 
     private val failed = AtomicLong()
 
+    /** The staged list as last read from [store], refreshed by the shadow reporter: what may be read and sampled. */
+    val staged: StagedDocuments = StagedDocuments(store, clock)
+
     /** The read of each key in flight, which a request that misses on that key waits for instead of reading again. */
     private val reading = ConcurrentHashMap<SnapshotKey, CompletableDeferred<Candidate?>>()
 
@@ -72,6 +76,7 @@ class CachingCandidateSource(
     }
 
     override suspend fun candidate(key: SnapshotKey): Candidate? {
+        if (!staged.mayStage(key)) return null
         val now = clock.instant()
         synchronized(
             entries

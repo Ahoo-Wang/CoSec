@@ -15,6 +15,12 @@
 
 package me.ahoo.cosec.e2e
 
+import me.ahoo.cosec.spi.shadow.StoredCandidate
+import me.ahoo.cosec.spi.shadow.StagedCandidates
+import me.ahoo.cosec.spi.shadow.CandidateStore
+import me.ahoo.cosec.runtime.shadow.ShadowRecorder
+import me.ahoo.cosec.runtime.shadow.ShadowListener
+import me.ahoo.cosec.runtime.shadow.CachingCandidateSource
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry
 import kotlinx.coroutines.runBlocking
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
@@ -105,6 +111,9 @@ open class PipelineBenchmark {
         "short-form",
         "routed",
         "forwarded",
+        "shadow-none",
+        "shadow-open",
+        "shadow-unkept",
     )
     lateinit var scenario: String
 
@@ -124,7 +133,11 @@ open class PipelineBenchmark {
         } else {
             AttributeProviders.NONE
         }
-        val listeners = if (scenario == "listener") DecisionListeners(listOf(NoOpListener)) else DecisionListeners.NONE
+        val listeners = when {
+            scenario == "listener" -> DecisionListeners(listOf(NoOpListener))
+            scenario.startsWith("shadow") -> DecisionListeners(listOf(NoOpListener, shadow(scenario)))
+            else -> DecisionListeners.NONE
+        }
         val key = ApiKeys.generate()
         slice = if (scenario == "apikey") {
             val keys = mapOf(ApiKeys.hash(key) to ApiKey("k1", "user", "acme", "app", setOf("viewer", "admin")))
@@ -173,7 +186,8 @@ open class PipelineBenchmark {
         slice.publish(SnapshotKey.Tenant("acme"), "")
         val token = "user@acme:viewer,admin|principal-a,principal-b".takeUnless { scenario == "anonymous" }
         val path = when (scenario) {
-            "global", "anonymous", "blacklist", "blocked", "listener" -> "/public/resource3/page"
+            "global", "anonymous", "blacklist", "blocked", "listener", "shadow-none", "shadow-open", "shadow-unkept" ->
+                "/public/resource3/page"
             "role", "apikey", "short-form", "forwarded" -> "/orders/op49/detail"
             "none" -> "/unknown/path"
             "routed" -> "/shop/s7/orders/o49"
@@ -220,6 +234,28 @@ open class PipelineBenchmark {
     }
 
     /** Takes every event and does nothing with it: what remains is the pipeline's own cost of events. */
+    /**
+     * The shadow listener at the default 10 %, beside a no-op listener as in the image with Micrometer (`CTL-47`): with a
+     * kept list that names nothing (`shadow-none`, no window open), one that names the request's tenant (`shadow-open`;
+     * its candidate is absent, so a sampled request reads and finds none), or no list kept (`shadow-unkept`, every
+     * request sampled at 10 % and its documents' candidates read by key, as before the list).
+     */
+    private fun shadow(scenario: String): ShadowListener {
+        val list = when (scenario) {
+            "shadow-none" -> StagedCandidates.NONE
+            "shadow-open" -> StagedCandidates(mapOf(SnapshotKey.Tenant("acme") to setOf("w-1")))
+            else -> null
+        }
+        val store = object : CandidateStore {
+            override suspend fun candidate(key: SnapshotKey): StoredCandidate? = null
+
+            override suspend fun staged(): StagedCandidates? = list
+        }
+        val source = CachingCandidateSource(store, { _, _ -> error("no candidate is staged") })
+        runBlocking { source.staged.refresh() }
+        return ShadowListener("shadow", SHADOW_SAMPLE_RATE, source, ShadowRecorder("benchmark"))
+    }
+
     private object NoOpListener : DecisionListener {
         override val name = "no-op"
 
@@ -227,6 +263,9 @@ open class PipelineBenchmark {
     }
 
     private companion object {
+        /** The shadow listener's default sample rate (`cosec.authorization.shadow.sample-rate`). */
+        const val SHADOW_SAMPLE_RATE = 0.1
+
         const val ROUTES = """{"service":"app","routes":[{"method":"GET","path":"/shop/{store}/orders/{order}","action":"app:order.read","resource":"order/{store}/{order}"}]}"""
     }
 }

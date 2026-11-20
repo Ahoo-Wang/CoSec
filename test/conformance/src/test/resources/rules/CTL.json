@@ -729,6 +729,20 @@
         "control:OpenChangeListingTest#a member of the tenant who may not read its changes sees none, a viewer sees them - CTL-55"
       ],
       "pending": null
+    },
+    {
+      "id": "CTL-47",
+      "source": "Design D2 (saas-shadow-staged-design.md §4, §9 condition 4)",
+      "statement": "An instance reads the staged list off the request path and, with a list, reads a candidate only for a document it lists and samples only a request whose view reads a listed document; with nothing listed it samples nothing and reads no candidate. Without a list kept (no list, or a control plane that does not keep one) it reads every candidate by its key and samples as before; a list it cannot read counts as no list, never as nothing staged. The list only gates: a candidate is still read by its key and checked by its window, so a list read late, or kept by no one any more, costs samples and never yields a sample of the wrong candidate, nor a pass.",
+      "level": "control",
+      "pending": null,
+      "guards": [
+        "runtime:StagedDocumentsTest#with no list kept, every document may stage a candidate, read by its key",
+        "runtime:StagedDocumentsTest#a list read gates the reads and the samples, and with nothing listed nothing is sampled",
+        "runtime:StagedDocumentsTest#a list that cannot be read counts as no list, never as nothing staged",
+        "runtime:StagedDocumentsTest#an unlisted document's candidate is not read, and its requests are not sampled",
+        "runtime:StagedDocumentsTest#a candidate staged where the list is kept by no one any more gives no sample"
+      ]
     }
   ]
 }
