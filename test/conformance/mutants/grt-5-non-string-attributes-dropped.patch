@@ -3,11 +3,11 @@
 # Tests: :control:test --tests me.ahoo.cosec.control.grant.* :conformance:test
 
 diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/grant/GrantVerdicts.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/grant/GrantVerdicts.kt
-index cc21d980..d7d46a5f 100644
+index 52753612f..a4b89bc33 100644
 --- a/core/control/src/main/kotlin/me/ahoo/cosec/control/grant/GrantVerdicts.kt
 +++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/grant/GrantVerdicts.kt
-@@ -240,7 +240,7 @@ internal class GrantVerdicts(private val checker: ConditionChecker, private val
-                     )
+@@ -274,7 +274,7 @@ internal class GrantVerdicts(private val checker: ConditionChecker, private val
+                     Kind.SUBJECT_SCOPED_ROLES -> scopedRoles
  
                      // Exactly as the engine reads it: a value of any type is its toString() (RC1-2).
 -                    Kind.SUBJECT_ATTRIBUTE -> Constant.Str(SubjectAttributes.string(grantor.attributes, attribute.name))

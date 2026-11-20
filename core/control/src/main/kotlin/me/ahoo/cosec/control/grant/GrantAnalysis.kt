@@ -19,7 +19,12 @@ import me.ahoo.cosec.annotations.InternalCoSecApi
 
 /** The analysis of one change: a verdict for each fragment, and the protected entries it changes or removes. */
 @InternalCoSecApi
-class GrantAnalysis(val verdicts: List<Pair<GrantFragment, GrantVerdict>>, val unprotect: List<ProtectedEntry>) {
+class GrantAnalysis(
+    val verdicts: List<Pair<GrantFragment, GrantVerdict>>,
+    val unprotect: List<ProtectedEntry>,
+    /** The comparisons the analysis made ([ComparisonBudget]): what sizing the budget measures. */
+    val comparisons: Long = 0,
+) {
     /** Whether a platform administrator must approve the change (RFC 0007 §7.5). */
     val needsApproval: Boolean get() = verdicts.any { it.second is GrantVerdict.Unknown }
 }

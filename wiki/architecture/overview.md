@@ -504,6 +504,19 @@ derive bound it:
 | App: a catalog of 150,000 permissions | 5.8 MB | 148 ms | 317 ms | | 504 ms | 383 ms |
 | App: a catalog of 50,000 and a system role `*` | 1.9 MB | 73 ms | 198 ms | | 81 ms | 150 ms |
 
+The grant analysis costs what a change changes. A policy identical to its previous version is skipped, an unchanged
+statement is found by its twin (`CTL-50`), and the grantor's ALLOWs are looked up by the action's service. Every
+comparison counts against one budget per analysis, four million, past which what is left is `TOO_LARGE` and needs an
+approval (`CTL-49`). For a tenant document with one policy of 20,000 statements of one action and a grantor of 1,200
+to 20,000 ALLOWs (`SaasAppChangeMeasurement`, run by hand, CPU of one check):
+
+| Change | Before | After |
+|---|---|---|
+| Any change that leaves the 20,000-statement policy as it was | 33.4 s | 1 ms |
+| The last of its statements widened | 33.4 s | 9 ms |
+| 12 roles × 100 permissions granted by a holder of the same (the largest legitimate change measured) | | 15 ms, 60,600 comparisons |
+| 2,000 fragments against 20,000 held ALLOWs of one action (spends the budget) | about 15 s (7.5 ms a fragment) | 1.4 s, then `TOO_LARGE` |
+
 #### The store at many tenants
 
 What a tenant's publish reads and writes in the store of record does not grow with the number of tenants: a policy's
