@@ -49,7 +49,7 @@ private val log = KotlinLogging.logger {}
  * - [reconcileApps], also once at startup, marks a complete app list incomplete again when it misses an app document
  *   (RC1-4);
  * - [closeShadowWindows] looks at every shadowing change ([Changes.shadowed], RFC 0007 §6.4) under the
- *   [SHADOW_LEASE], so one instance does it per period. The pass is bounded by [shadowInterval] and the lease lasts
+ *   [SHADOW_LEASE], so one instance does it per period, then reconciles the staged list (`CTL-46`). The pass is bounded by [shadowInterval] and the lease lasts
  *   twice that, so it never outlives the lease; it is released when the pass ends.
  *
  * The open changes are read once, by [ControlStore.openChanges], and a pass goes by that read (#1219). One past
@@ -70,6 +70,8 @@ class ControlMaintenance(
     }
 
     private val holder: String = UUID.randomUUID().toString()
+
+    private val stagedList = StagedListReconciliation(store)
 
     /** One reclamation pass; what was removed, by document. Nothing when an open change cannot be read. */
     @Suppress("TooGenericExceptionCaught")
@@ -110,7 +112,16 @@ class ControlMaintenance(
     private suspend fun reconcileApps(documents: Set<SnapshotKey>): Set<String> =
         revisions.reconcileApps(documents).also { changes.appListReconciled() }
 
-    /** One pass over the shadowing changes; the changes whose window closed or conflicted. Nothing without the lease. */
+    /**
+     * Makes the staged list kept (`CTL-46`, [ControlStore.keepStagedList]): the host runs it at startup, so that a store
+     * no control plane kept a list in gets one before the first shadow pass, which keeps it too.
+     */
+    suspend fun keepStagedList() = store.keepStagedList()
+
+    /**
+     * One pass over the shadowing changes; the changes whose window closed or conflicted. Nothing without the lease.
+     * Each pass then reconciles the staged list with what is staged ([StagedListReconciliation]).
+     */
     suspend fun closeShadowWindows(): List<ChangeRequest> {
         if (!store.acquireLease(SHADOW_LEASE, holder, shadowInterval.multipliedBy(2))) {
             return emptyList()
@@ -121,10 +132,12 @@ class ControlMaintenance(
                     attempt("read change [${change.id.value}]") { current(change) }
                         ?.takeIf { it.state == ChangeState.SHADOWING }
                 }
-                shadowing.mapNotNull { change ->
+                val closed = shadowing.mapNotNull { change ->
                     attempt("look at the shadow window of change [${change.id.value}]") { changes.shadowed(change.id) }
                         ?.takeIf { it.state != ChangeState.SHADOWING }
                 }
+                attempt("reconcile the staged list") { stagedList.reconcile(shadowing) }
+                closed
             }
         } finally {
             withContext(NonCancellable) {

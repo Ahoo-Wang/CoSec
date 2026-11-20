@@ -43,6 +43,7 @@ private val log = KotlinLogging.logger {}
  * first. Leases keep two instances from doing the same work; a failed pass is logged and the next one tries again.
  * [ControlMaintenance.reconcileApps] runs at start, without waiting for the first reclamation pass, and again with a
  * backoff until it succeeds once (RC1-4); until then the grant analysis reconciles before it trusts the app list.
+ * [ControlMaintenance.keepStagedList] runs at start the same way (`CTL-46`).
  */
 internal class ControlMaintenanceScheduler(
     private val maintenance: ControlMaintenance,
@@ -60,6 +61,7 @@ internal class ControlMaintenanceScheduler(
     override fun start() {
         val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default + CoroutineName("cosec-control-maintenance"))
         scope.launch { untilReconciled() }
+        scope.launch { untilDone("keep the staged candidate list at startup") { maintenance.keepStagedList() } }
         scope.every(reclaimInterval) { maintenance.reclaim() }
         scope.every(shadowInterval) { maintenance.closeShadowWindows() }
         this.scope = scope
@@ -77,9 +79,13 @@ internal class ControlMaintenanceScheduler(
     }
 
     /** [ControlMaintenance.reconcileApps] until it succeeds, waiting twice as long after each failure, up to a minute. */
-    private suspend fun CoroutineScope.untilReconciled() {
+    private suspend fun CoroutineScope.untilReconciled() =
+        untilDone("reconcile the app list at startup") { maintenance.reconcileApps() }
+
+    /** [block] until it succeeds, waiting twice as long after each failure, up to a minute. */
+    private suspend fun CoroutineScope.untilDone(what: String, block: suspend () -> Unit) {
         var wait = FIRST_RETRY
-        while (isActive && !pass("reconcile the app list at startup") { maintenance.reconcileApps() }) {
+        while (isActive && !pass(what, block)) {
             delay(wait)
             wait = minOf(wait * 2, LAST_RETRY)
         }

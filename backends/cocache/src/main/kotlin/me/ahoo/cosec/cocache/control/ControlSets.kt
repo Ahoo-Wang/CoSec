@@ -22,6 +22,7 @@ import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.cocache.createLocked
 import me.ahoo.cosec.control.store.ReferrerEntry
 import me.ahoo.cosec.model.PolicyId
+import me.ahoo.cosec.spi.shadow.StagedCandidates
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.cosec.spi.snapshot.SnapshotKeyText
 import kotlin.coroutines.cancellation.CancellationException
@@ -35,6 +36,7 @@ import kotlin.coroutines.cancellation.CancellationException
 internal class ControlSets(
     private val references: SetStore<ReferenceKey, ReferrerEntry>,
     private val documents: SetStore<String, String>,
+    private val staged: SetStore<String, String>,
 ) {
     suspend fun referrers(target: SnapshotKey, policy: PolicyId): Set<ReferrerEntry> =
         failClosed(referencesOf(target, policy)) { references.suspending().get(ReferenceKey(target, policy)) }
@@ -64,6 +66,31 @@ internal class ControlSets(
         }
     }
 
+    /** The staged list (`CTL-46`), or null when it holds no [StagedMember.KEPT] marker: a list nobody keeps. */
+    suspend fun staged(): StagedCandidates? {
+        val members = staged.suspending().get(STAGED_SET)
+        if (StagedMember.KEPT !in members) {
+            return null
+        }
+        val windows = HashMap<SnapshotKey, MutableSet<String>>()
+        for (member in members) {
+            StagedMember.decode(member)?.let { (key, window) -> windows.getOrPut(key) { HashSet() } += window }
+        }
+        return StagedCandidates(windows)
+    }
+
+    suspend fun listStaged(key: SnapshotKey, window: String) {
+        staged.suspending().add(STAGED_SET, listOf(StagedMember.encode(key, window)))
+    }
+
+    suspend fun unlistStaged(key: SnapshotKey, window: String) {
+        staged.suspending().remove(STAGED_SET, setOf(StagedMember.encode(key, window)))
+    }
+
+    suspend fun keepStagedList() {
+        staged.suspending().add(STAGED_SET, listOf(StagedMember.KEPT))
+    }
+
     private fun referencesOf(target: SnapshotKey, policy: PolicyId): String =
         "The back-reference set of [$target] policy [${SnapshotKeyText.printable(policy.value)}]"
 
@@ -85,10 +112,14 @@ internal class ControlSets(
         private const val DOCUMENT_SET = "all"
         private const val DOCUMENTS_WHAT = "The document set"
 
-        /** Both sets under [keyPrefix], with CoSec's locks. */
+        /** The staged list's one key: `<p>:candidate-staged:all`. */
+        const val STAGED_SET = "all"
+
+        /** The three sets under [keyPrefix], with CoSec's locks. */
         fun create(factory: CoCacheFactory, keyPrefix: String): ControlSets = ControlSets(
             factory.createLocked(ControlCacheSpecs.referenceIndex(keyPrefix)),
             factory.createLocked(ControlCacheSpecs.documentSet(keyPrefix)),
+            factory.createLocked(ControlCacheSpecs.stagedSet(keyPrefix)),
         )
     }
 }

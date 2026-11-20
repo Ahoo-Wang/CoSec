@@ -97,6 +97,7 @@ class CoCacheControlStoreTest {
         sets = ControlSets(
             node.runtime.create(ControlCacheSpecs.referenceIndex(node.keyPrefix)),
             node.runtime.create(ControlCacheSpecs.documentSet(node.keyPrefix)),
+            node.runtime.create(ControlCacheSpecs.stagedSet(node.keyPrefix)),
         ),
         leases = node.runtime.create(ControlCacheSpecs.lease(node.keyPrefix)),
         changes = changes,
@@ -473,6 +474,7 @@ class CoCacheControlStoreTest {
                 ControlSets(
                     node.runtime.create(ControlCacheSpecs.referenceIndex(node.keyPrefix)),
                     node.runtime.create(ControlCacheSpecs.documentSet(node.keyPrefix)),
+                    node.runtime.create(ControlCacheSpecs.stagedSet(node.keyPrefix)),
                 ),
                 node.runtime.create(ControlCacheSpecs.lease(node.keyPrefix)),
                 node.runtime.create(ControlCacheSpecs.changeRequest(node.keyPrefix)),
@@ -521,6 +523,7 @@ class CoCacheControlStoreTest {
                 ControlSets(
                     node.runtime.create(ControlCacheSpecs.referenceIndex(node.keyPrefix)),
                     node.runtime.create(ControlCacheSpecs.documentSet(node.keyPrefix)),
+                    node.runtime.create(ControlCacheSpecs.stagedSet(node.keyPrefix)),
                 ),
                 node.runtime.create(ControlCacheSpecs.lease(node.keyPrefix)),
                 node.runtime.create(ControlCacheSpecs.changeRequest(node.keyPrefix)),

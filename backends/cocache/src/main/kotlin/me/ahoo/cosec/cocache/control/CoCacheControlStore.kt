@@ -54,6 +54,7 @@ import me.ahoo.cosec.control.store.RevisionIndex
 import me.ahoo.cosec.control.store.StoredDocument
 import me.ahoo.cosec.control.store.Versioned
 import me.ahoo.cosec.model.PolicyId
+import me.ahoo.cosec.spi.shadow.StagedCandidates
 import me.ahoo.cosec.spi.shadow.StoredCandidate
 import me.ahoo.cosec.spi.snapshot.SnapshotDigest
 import me.ahoo.cosec.spi.snapshot.SnapshotDocument
@@ -282,6 +283,17 @@ class CoCacheControlStore internal constructor(
     /** `deleteIfMatch` over the digest of the candidate of [window] as read, so another window's is never removed. */
     override suspend fun withdrawCandidate(key: SnapshotKey, window: String): Boolean =
         deleteIf(candidates, key) { it.window == window }
+
+    /** The staged list, read from Redis (`CTL-46`); null while it holds no marker: nobody keeps it. */
+    override suspend fun staged(): StagedCandidates? = sets.staged()
+
+    /** One member added (an `SADD`): stages of other documents at the same moment never conflict with it. */
+    override suspend fun listStaged(key: SnapshotKey, window: String) = sets.listStaged(key, window)
+
+    /** Exactly that member removed; every other stays. */
+    override suspend fun unlistStaged(key: SnapshotKey, window: String) = sets.unlistStaged(key, window)
+
+    override suspend fun keepStagedList() = sets.keepStagedList()
 
     /**
      * Writes the lease where there is none (`putIfMatch` over nothing). [holder] taking its own lease again renews it for

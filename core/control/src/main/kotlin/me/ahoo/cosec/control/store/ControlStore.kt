@@ -135,6 +135,28 @@ interface ControlStore : CandidateStore {
     suspend fun withdrawCandidate(key: SnapshotKey, window: String): Boolean
 
     /**
+     * Lists [key]'s candidate of [window] in the staged list (`CTL-46`), before that candidate is written: one member,
+     * added unconditionally, so stages of other documents at the same moment never make it fail. Adding a member that
+     * is there changes nothing. Throws when it cannot be written: the stage fails then, and nothing is staged. A store
+     * that keeps no list does nothing ([staged] is null).
+     */
+    suspend fun listStaged(key: SnapshotKey, window: String) = Unit
+
+    /**
+     * Removes the member of [key]'s candidate of [window] from the staged list, after that candidate was withdrawn
+     * (`CTL-46`); any other member stays. Throws when it cannot be written; the shadow pass removes it later.
+     */
+    suspend fun unlistStaged(key: SnapshotKey, window: String) = Unit
+
+    /**
+     * Makes the staged list kept, when it is not: from then on [staged] answers a list, empty when nothing is staged,
+     * and never null. The control plane does it at startup and in every shadow pass; an absent list means one nobody
+     * keeps, and readers fall back to reading candidates by key (`CTL-47`). A downgrade to a control plane that keeps
+     * none must delete it.
+     */
+    suspend fun keepStagedList() = Unit
+
+    /**
      * Every document this store has indexed revisions for, so reclamation can visit each (RFC 0007 §5.7). It may name
      * more than exist, never fewer: a key is added before its first index write and never removed.
      */

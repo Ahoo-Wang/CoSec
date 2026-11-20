@@ -87,8 +87,12 @@ internal class StagingSlots(
      * the late write of a change that lost the slot fails instead of replacing it (the window #1235 left open). A
      * write over a candidate that changed is made again from the read. `false` when the slot is no longer
      * [shadowing]'s; nothing was written then.
+     *
+     * The candidate is listed first (`CTL-46`): a candidate is never written unlisted, so the staged list stays a superset
+     * of what is staged. A listing that fails throws, and the stage fails with nothing written.
      */
     private suspend fun place(shadowing: ChangeRequest, candidate: StoredCandidate): Boolean {
+        store.listStaged(shadowing.key, candidate.window)
         repeat(MAX_ATTEMPTS) {
             val staged = store.stagedCandidate(shadowing.key)
             if (!stillHolds(shadowing)) {
@@ -162,7 +166,9 @@ internal class StagingSlots(
 
     /**
      * Withdraws the candidate of [change]'s window, if it is still the staged one: one conditional removal, since another
-     * change may have taken the slot and staged its own meanwhile (#1227). A failure only leaves it to compare.
+     * change may have taken the slot and staged its own meanwhile (#1227). A failure only leaves it to compare. Then, and
+     * only once the candidate is gone, unlists that window (`CTL-46`): a listed window whose candidate is gone costs a
+     * read, an unlisted candidate would go unseen. A withdrawal that failed keeps it listed; the shadow pass unlists it.
      */
     @Suppress("TooGenericExceptionCaught")
     suspend fun withdraw(change: ChangeRequest) {
@@ -175,6 +181,14 @@ internal class StagingSlots(
             log.warn(
                 e
             ) { "Withdrawing the candidate of window $window failed; instances count it as a base mismatch once it is stale." }
+            return
+        }
+        try {
+            store.unlistStaged(change.key, window)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            log.warn(e) { "Unlisting window $window failed; the next shadow pass unlists it." }
         }
     }
 
