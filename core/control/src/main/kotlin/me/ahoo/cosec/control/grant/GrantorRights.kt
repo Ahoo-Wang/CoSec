@@ -17,6 +17,7 @@ package me.ahoo.cosec.control.grant
 
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.engine.pattern.ActionPattern
+import me.ahoo.cosec.engine.pattern.PatternContainment
 import me.ahoo.cosec.model.AppId
 import me.ahoo.cosec.model.Binding
 import me.ahoo.cosec.model.Effect
@@ -75,6 +76,63 @@ class GrantorRights(
     private val unreadApps: Dimension<AppId>,
     private val readApps: Set<AppId>,
 ) {
+    /** False for [linear]'s copy, which walks every held statement: what the index must answer the same as. */
+    private var indexed = true
+    private val allowIndex by lazy(LazyThreadSafetyMode.NONE) { ServiceIndex(allows) }
+    private val denyIndex by lazy(LazyThreadSafetyMode.NONE) { ServiceIndex(denies) }
+
+    /**
+     * The held ALLOWs that may contain [action], in their order in [allows] (R2C-26): those with an action of any
+     * service, and those with an action of its service. No other one contains it: a service is a name or `*`, never a
+     * pattern ([PatternContainment.contains]).
+     */
+    internal fun allowsFor(action: ActionPattern): List<HeldStatement> =
+        if (!indexed) allows else action.service?.let(allowIndex::of) ?: allowIndex.wild
+
+    /** The held DENYs that may overlap [action], in their order in [denies]: every one when it is of any service. */
+    internal fun deniesFor(action: ActionPattern): List<HeldStatement> =
+        if (!indexed) denies else action.service?.let(denyIndex::of) ?: denies
+
+    /** The same rights, read without the index: for the test that holds the index to the linear walk. */
+    internal fun linear(): GrantorRights = GrantorRights(allows, denies, unreadApps, readApps).also { it.indexed = false }
+
+    /** Held statements by the services of their actions, each list in the statements' order. */
+    private class ServiceIndex(held: List<HeldStatement>) {
+        /** Those with an action of any service (`*`). */
+        val wild: List<HeldStatement>
+        private val positions = HashMap<String, MutableList<Int>>()
+        private val wildPositions = ArrayList<Int>()
+        private val held = held
+
+        init {
+            held.forEachIndexed { index, statement ->
+                val services = statement.statement.actions.map { it.service }
+                if (null in services) wildPositions += index
+                services.filterNotNull().distinct().forEach { positions.getOrPut(it) { ArrayList() } += index }
+            }
+            wild = wildPositions.map(held::get)
+        }
+
+        /** Those with an action of any service or of [service], in their order. */
+        fun of(service: String): List<HeldStatement> {
+            val named = positions[service] ?: return wild
+            val merged = ArrayList<HeldStatement>(named.size + wildPositions.size)
+            var i = 0
+            var j = 0
+            while (i < named.size || j < wildPositions.size) {
+                val next = when {
+                    j == wildPositions.size -> named[i++]
+                    i == named.size -> wildPositions[j++]
+                    named[i] < wildPositions[j] -> named[i++]
+                    named[i] > wildPositions[j] -> wildPositions[j++]
+                    else -> named[i++].also { j++ }
+                }
+                merged += held[next]
+            }
+            return merged
+        }
+    }
+
     /** Whether [scope] reaches an app whose document could not be read, where the grantor's rights are not known. */
     fun unread(scope: ScopeSet): Boolean {
         val apps = scope.apps

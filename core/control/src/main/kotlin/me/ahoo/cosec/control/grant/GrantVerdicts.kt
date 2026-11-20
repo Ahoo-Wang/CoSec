@@ -60,7 +60,9 @@ internal class GrantVerdicts(private val checker: ConditionChecker, private val 
             )
             is Search.Found -> found.held
         }
-        val deny = rights.denies.firstOrNull { it.applicability.intersects(scope) && !disjoint(it.statement, fragment) }
+        // A DENY the index leaves out is disjoint from the fragment by its actions, as `disjoint` would find.
+        val deny = rights.deniesFor(fragment.action)
+            .firstOrNull { it.applicability.intersects(scope) && !disjoint(it.statement, fragment) }
         if (deny != null) {
             return unknown(UnknownReason.DENY_OVERLAP, null, "may overlap ${describe(deny.ref)}", deny.ref)
         }
@@ -114,8 +116,25 @@ internal class GrantVerdicts(private val checker: ConditionChecker, private val 
         scope: ScopeSet,
         granted: CheckedCondition?,
     ): Search? {
+        val indexed = search(grantor, rights.allowsFor(fragment.action), fragment, scope, granted)
+        // An ALLOW the index leaves out stops at SCOPE or ACTION: only when nothing it gave got further can the
+        // closest be one of those, and then every ALLOW is walked as before, so the answer is the same (R2C-26).
+        if (indexed is Search.Found || (indexed is Search.Missed && indexed.shortfall > Shortfall.ACTION)) {
+            return indexed
+        }
+        return search(grantor, rights.allows, fragment, scope, granted)
+    }
+
+    /** The first of [allows] that contains [fragment] in [scope], else the one that got furthest. */
+    private fun search(
+        grantor: Grantor,
+        allows: List<HeldStatement>,
+        fragment: GrantFragment,
+        scope: ScopeSet,
+        granted: CheckedCondition?,
+    ): Search? {
         var closest: Search.Missed? = null
-        for (held in rights.allows) {
+        for (held in allows) {
             val shortfall = when {
                 !scope.coveredBy(held.applicability) -> Shortfall.SCOPE
                 held.statement.actions.none { PatternContainment.contains(it, fragment.action) == Containment.YES } ->
