@@ -1,0 +1,16 @@
+# Rule: IDX-1
+# Mutant: the index never yields a statement whose action is service:*: a DENY on every verb of a service is not a candidate
+# Tests: :engine:test --tests me.ahoo.cosec.engine.IndexPropertyTest --tests me.ahoo.cosec.engine.EnginePropertyTest :conformance:test --tests me.ahoo.cosec.conformance.ConformanceTest
+
+diff --git a/core/engine/src/main/kotlin/me/ahoo/cosec/engine/StatementIndex.kt b/core/engine/src/main/kotlin/me/ahoo/cosec/engine/StatementIndex.kt
+index 69b4564b..2df2a750 100644
+--- a/core/engine/src/main/kotlin/me/ahoo/cosec/engine/StatementIndex.kt
++++ b/core/engine/src/main/kotlin/me/ahoo/cosec/engine/StatementIndex.kt
+@@ -51,7 +51,6 @@ internal class StatementIndex(statements: Array<CompiledStatement>, options: Ind
+     fun lookup(lookup: IndexLookup) {
+         anyAction?.lookup(lookup)
+         val service = services[lookup.action.namespace] ?: return
+-        service.anyVerb?.lookup(lookup)
+         service.verbs[lookup.action.verb]?.lookup(lookup)
+     }
+ 

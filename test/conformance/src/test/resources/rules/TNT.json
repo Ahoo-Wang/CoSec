@@ -8,6 +8,9 @@
       "properties": [
         "engine:EnginePropertyTest#P12 another tenant's document never changes a decision"
       ],
+      "guards": [
+        "runtime:DocumentSnapshotViewsTest#tenants whose ids differ only in case each have their own document"
+      ],
       "pending": null
     },
     {

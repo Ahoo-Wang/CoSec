@@ -1,0 +1,16 @@
+# Rule: BND-5
+# Mutant: a role binding applies in every space, not only the one it names: a role granted in one space grants in all
+# Tests: :engine:test --tests me.ahoo.cosec.engine.EnginePropertyTest --tests me.ahoo.cosec.engine.EngineTest :conformance:test --tests me.ahoo.cosec.conformance.ConformanceTest
+
+diff --git a/core/engine/src/main/kotlin/me/ahoo/cosec/engine/CandidateOrder.kt b/core/engine/src/main/kotlin/me/ahoo/cosec/engine/CandidateOrder.kt
+index 8229a502..40dc6e24 100644
+--- a/core/engine/src/main/kotlin/me/ahoo/cosec/engine/CandidateOrder.kt
++++ b/core/engine/src/main/kotlin/me/ahoo/cosec/engine/CandidateOrder.kt
+@@ -241,6 +241,6 @@ internal object CandidateOrder {
+ 
+     private fun inScope(entry: BoundEntry, tenant: String, app: String, space: String): Boolean =
+         (entry.app == null || entry.app == app) &&
+-            (entry.space == null || entry.space == space) &&
++            (entry.space == null || entry.space == space || space.isNotEmpty()) &&
+             (entry.roleTenant == null || entry.roleTenant == tenant)
+ }

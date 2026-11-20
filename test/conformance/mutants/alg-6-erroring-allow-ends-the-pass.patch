@@ -1,0 +1,20 @@
+# Rule: ALG-6
+# Mutant: an ALLOW that errs ends the ALLOW pass: an ALLOW that matches later in the candidate order no longer permits, so the order decides between Permit and Deny
+# Tests: :engine:test --tests me.ahoo.cosec.engine.EnginePropertyTest :conformance:test --tests me.ahoo.cosec.conformance.ConformanceTest
+
+diff --git a/core/engine/src/main/kotlin/me/ahoo/cosec/engine/Evaluator.kt b/core/engine/src/main/kotlin/me/ahoo/cosec/engine/Evaluator.kt
+index f26f2f3f..7e33b19c 100644
+--- a/core/engine/src/main/kotlin/me/ahoo/cosec/engine/Evaluator.kt
++++ b/core/engine/src/main/kotlin/me/ahoo/cosec/engine/Evaluator.kt
+@@ -310,7 +310,10 @@ internal open class Evaluator(
+                 return DECIDED
+             }
+ 
+-            ERROR -> erred(policy, statement, via, stepError!!, guard = false)
++            ERROR -> {
++                erred(policy, statement, via, stepError!!, guard = false)
++                if (pass === Effect.ALLOW) return DECIDED
++            }
+             GUARD_FAILED -> {
+                 val error = stepError!!
+                 erred(policy, statement, via, error, guard = true)

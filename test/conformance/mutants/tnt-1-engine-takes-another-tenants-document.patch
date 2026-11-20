@@ -1,0 +1,17 @@
+# Rule: TNT-1
+# Mutant: the engine decides with whatever tenant document the view holds, not only the request's tenant's
+# Tests: :engine:test --tests me.ahoo.cosec.engine.EnginePropertyTest --tests me.ahoo.cosec.engine.EngineTest :conformance:test --tests me.ahoo.cosec.conformance.ConformanceTest
+
+diff --git a/core/engine/src/main/kotlin/me/ahoo/cosec/engine/SnapshotView.kt b/core/engine/src/main/kotlin/me/ahoo/cosec/engine/SnapshotView.kt
+index 1f6ceb2f..0d076383 100644
+--- a/core/engine/src/main/kotlin/me/ahoo/cosec/engine/SnapshotView.kt
++++ b/core/engine/src/main/kotlin/me/ahoo/cosec/engine/SnapshotView.kt
+@@ -67,7 +67,7 @@ class SnapshotView(
+      * reads none: its role bindings would otherwise depend on whether the caller happened to load one.
+      */
+     internal fun checkScope(scope: Scope) {
+-        require(tenant == null || tenant.owner == scope.tenant.value) {
++        require(tenant == null || tenant.owner == scope.tenant.value || tenant.owner.isNotEmpty()) {
+             "The tenant document of ${tenant?.owner} cannot decide for tenant ${scope.tenant.value}"
+         }
+         require(app == null || (scope.app.value.isNotEmpty() && app.owner == scope.app.value)) {

@@ -40,7 +40,8 @@
       "statement": "A new or changed break-glass binding always needs a second person's approval, whoever proposes it.",
       "level": "control",
       "guards": [
-        "control:BreakGlassControlTest#two people create it, each step recorded first"
+        "control:BreakGlassControlTest#two people create it, each step recorded first",
+        "control:LiveBreakGlassChangeTest#changing a live binding needs a second person too"
       ],
       "pending": null
     },

@@ -1,0 +1,17 @@
+# Rule: CND-1
+# Mutant: exists is false for a present empty string, as if it were absent
+# Tests: :model:test --tests me.ahoo.cosec.model.condition.ConditionEvaluationTest :conformance:test --tests me.ahoo.cosec.conformance.ConformanceTest
+
+diff --git a/core/model/src/main/kotlin/me/ahoo/cosec/model/condition/CheckedCondition.kt b/core/model/src/main/kotlin/me/ahoo/cosec/model/condition/CheckedCondition.kt
+index c6f32884..6370ad96 100644
+--- a/core/model/src/main/kotlin/me/ahoo/cosec/model/condition/CheckedCondition.kt
++++ b/core/model/src/main/kotlin/me/ahoo/cosec/model/condition/CheckedCondition.kt
+@@ -280,7 +280,7 @@ sealed class CheckedCondition(
+         override fun test(input: ConditionInput, visits: IntArray?): Boolean {
+             visit(visits)
+             return when (read.type) {
+-                AttributeType.STRING -> input.string(read) != null
++                AttributeType.STRING -> input.string(read)?.isNotEmpty() == true
+                 AttributeType.BOOL -> input.bool(read) != null
+                 AttributeType.STRING_SET -> input.stringSet(read) != null
+                 AttributeType.IP -> input.ip(read) != null

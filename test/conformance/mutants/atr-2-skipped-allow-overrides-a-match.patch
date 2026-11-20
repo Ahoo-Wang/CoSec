@@ -1,0 +1,17 @@
+# Rule: ATR-2
+# Mutant: an ALLOW skipped for an attribute that cannot be fetched makes the decision Indeterminate even when another ALLOW matched after it
+# Tests: :engine:test --tests me.ahoo.cosec.engine.ExternalAttributesTest :runtime:test --tests me.ahoo.cosec.runtime.attribute.ExternalAttributesPipelineTest :conformance:test --tests me.ahoo.cosec.conformance.ConformanceTest
+
+diff --git a/core/engine/src/main/kotlin/me/ahoo/cosec/engine/Evaluator.kt b/core/engine/src/main/kotlin/me/ahoo/cosec/engine/Evaluator.kt
+index f26f2f3f..e2c8f49b 100644
+--- a/core/engine/src/main/kotlin/me/ahoo/cosec/engine/Evaluator.kt
++++ b/core/engine/src/main/kotlin/me/ahoo/cosec/engine/Evaluator.kt
+@@ -214,7 +214,7 @@ internal open class Evaluator(
+      * attribute (it might have permitted: a 503 to retry, not a 403), else the implicit deny.
+      */
+     internal fun allowDecision(): Decision =
+-        matched ?: skipped?.let { Decision.Indeterminate(it) } ?: CoSecEngine.IMPLICIT_DENY
++        skipped?.let { Decision.Indeterminate(it) } ?: matched ?: CoSecEngine.IMPLICIT_DENY
+ 
+     /** Runs the DENY pass and returns its decision, or null when the ALLOW pass decides. */
+     internal fun denyPass(): Decision? {

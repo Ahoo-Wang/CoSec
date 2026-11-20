@@ -1,0 +1,19 @@
+# Rule: MEM-1
+# Mutant: a token that carries the membership marker together with role or policy claims asks the provider and ignores the claims, instead of failing closed
+# Tests: :runtime:test --tests me.ahoo.cosec.runtime.stage.MembershipResolverTest --tests me.ahoo.cosec.runtime.authn.TokenAuthenticatorTest :conformance:test --tests me.ahoo.cosec.conformance.ConformanceTest
+
+diff --git a/core/spi/src/main/kotlin/me/ahoo/cosec/spi/authn/Authenticator.kt b/core/spi/src/main/kotlin/me/ahoo/cosec/spi/authn/Authenticator.kt
+index 74c7ad3e..e3fe2c29 100644
+--- a/core/spi/src/main/kotlin/me/ahoo/cosec/spi/authn/Authenticator.kt
++++ b/core/spi/src/main/kotlin/me/ahoo/cosec/spi/authn/Authenticator.kt
+@@ -320,9 +320,7 @@ sealed interface MembershipSource {
+                 marker != MembershipClaims.PROVIDER ->
+                     Unusable("The token of principal [$principal] has an unknown membership marker [$marker].")
+ 
+-                roles.isNotEmpty() || policies.isNotEmpty() -> Unusable(
+-                    "The token of principal [$principal] asks for a membership provider but also claims roles or policies."
+-                )
++                roles.isNotEmpty() || policies.isNotEmpty() -> Provider.UNCAPPED
+ 
+                 else -> Provider.UNCAPPED
+             }

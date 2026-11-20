@@ -1,0 +1,17 @@
+# Rule: CND-3
+# Mutant: not over an eq of an absent attribute is false, as in three-valued logic, instead of true
+# Tests: :model:test --tests me.ahoo.cosec.model.condition.ConditionEvaluationTest --tests me.ahoo.cosec.model.condition.ConditionPropertyTest :conformance:test --tests me.ahoo.cosec.conformance.ConformanceTest
+
+diff --git a/core/model/src/main/kotlin/me/ahoo/cosec/model/condition/CheckedCondition.kt b/core/model/src/main/kotlin/me/ahoo/cosec/model/condition/CheckedCondition.kt
+index c6f32884..7283d0a4 100644
+--- a/core/model/src/main/kotlin/me/ahoo/cosec/model/condition/CheckedCondition.kt
++++ b/core/model/src/main/kotlin/me/ahoo/cosec/model/condition/CheckedCondition.kt
+@@ -342,6 +342,8 @@ sealed class CheckedCondition(
+         ) {
+         override fun test(input: ConditionInput, visits: IntArray?): Boolean {
+             visit(visits)
++            val inner = condition
++            if (inner is Eq && input.string(inner.attribute) == null) return false
+             return !condition.test(input, visits)
+         }
+     }

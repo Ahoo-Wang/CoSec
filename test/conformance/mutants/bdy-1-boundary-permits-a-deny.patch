@@ -1,0 +1,26 @@
+# Rule: BDY-1
+# Mutant: a request nothing permits is held to the boundary too, and a boundary statement that matches it permits it: a boundary turns a Deny into a Permit
+# Tests: :engine:test --tests me.ahoo.cosec.engine.BoundaryTest --tests me.ahoo.cosec.engine.EnginePropertyTest :conformance:test --tests me.ahoo.cosec.conformance.ConformanceTest
+
+diff --git a/core/engine/src/main/kotlin/me/ahoo/cosec/engine/Evaluator.kt b/core/engine/src/main/kotlin/me/ahoo/cosec/engine/Evaluator.kt
+index f26f2f3f..f45b39ea 100644
+--- a/core/engine/src/main/kotlin/me/ahoo/cosec/engine/Evaluator.kt
++++ b/core/engine/src/main/kotlin/me/ahoo/cosec/engine/Evaluator.kt
+@@ -182,7 +182,7 @@ internal open class Evaluator(
+      * missing policy: the request fails closed.
+      */
+     internal fun withinBoundary(decision: Decision): Decision {
+-        if (decision !is Decision.Permit) {
++        if (decision is Decision.Indeterminate) {
+             return decision
+         }
+         val id = view.boundaryOf(request.scope) ?: return decision
+@@ -191,7 +191,7 @@ internal open class Evaluator(
+         var failure: Throwable? = null
+         for (statement in boundary.allows) {
+             when (boundaryStep(boundary, statement)) {
+-                MATCHED -> return decision
++                MATCHED -> return if (decision is Decision.Permit) decision else Decision.Permit(ref(boundary, statement, BindingRef.Builtin))
+                 ERROR, GUARD_FAILED -> if (!lapses(statement, stepError)) failure = failure ?: stepError
+                 GUARD_MISS -> break
+             }

@@ -1,0 +1,17 @@
+# Rule: SCP-6
+# Mutant: an unauthenticated subject is in the tenant it is given, not the default tenant: an anonymous request is decided by that tenant's Anyone bindings
+# Tests: :model:test --tests me.ahoo.cosec.model.scope.ScopeResolverTest :conformance:test --tests me.ahoo.cosec.conformance.ConformanceTest
+
+diff --git a/core/model/src/main/kotlin/me/ahoo/cosec/model/scope/ScopeResolver.kt b/core/model/src/main/kotlin/me/ahoo/cosec/model/scope/ScopeResolver.kt
+index 18414cd1..2244d1c7 100644
+--- a/core/model/src/main/kotlin/me/ahoo/cosec/model/scope/ScopeResolver.kt
++++ b/core/model/src/main/kotlin/me/ahoo/cosec/model/scope/ScopeResolver.kt
+@@ -111,7 +111,7 @@ object ScopeResolver {
+         if (selected != SpaceId.DEFAULT && roles.isEmpty()) {
+             return SPACE_NOT_MEMBER
+         }
+-        val tenant = if (subject.authenticated) subject.tenant else TenantId.DEFAULT
++        val tenant = subject.tenant
+         return ScopeResolution.Resolved(Scope(tenant, app, selected, roles.toList()))
+     }
+ }

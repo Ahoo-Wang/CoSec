@@ -1,0 +1,17 @@
+# Rule: CND-1
+# Mutant: an absent attribute equals the empty string: eq of an absent attribute and "" is true
+# Tests: :model:test --tests me.ahoo.cosec.model.condition.ConditionEvaluationTest :conformance:test --tests me.ahoo.cosec.conformance.ConformanceTest
+
+diff --git a/core/model/src/main/kotlin/me/ahoo/cosec/model/condition/CheckedCondition.kt b/core/model/src/main/kotlin/me/ahoo/cosec/model/condition/CheckedCondition.kt
+index c6f32884..a3860f50 100644
+--- a/core/model/src/main/kotlin/me/ahoo/cosec/model/condition/CheckedCondition.kt
++++ b/core/model/src/main/kotlin/me/ahoo/cosec/model/condition/CheckedCondition.kt
+@@ -56,7 +56,7 @@ sealed class CheckedCondition(
+         CheckedCondition(binary("eq", attribute, quote(value), ignoreCase), 1, 1, Weights.EQ) {
+         override fun test(input: ConditionInput, visits: IntArray?): Boolean {
+             visit(visits)
+-            val actual = input.string(attribute) ?: return false
++            val actual = input.string(attribute) ?: ""
+             return if (ignoreCase) Ascii.equalsFolded(actual, value) else actual == value
+         }
+     }

@@ -1,0 +1,17 @@
+# Rule: OBS-2
+# Mutant: a permit through break-glass proceeds with no REQUIRED listener registered: nothing records the use of break-glass
+# Tests: :runtime:test --tests me.ahoo.cosec.runtime.event.BreakGlassAndShadowTest :conformance:test --tests me.ahoo.cosec.conformance.ConformanceTest
+
+diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/stage/Evaluate.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/stage/Evaluate.kt
+index 79d815c7..dd1dfea4 100644
+--- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/stage/Evaluate.kt
++++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/stage/Evaluate.kt
+@@ -41,7 +41,7 @@ internal class Evaluate(
+         if (decision !is Decision.Permit || !state.view.platform.isBreakGlass(decision.by.via)) {
+             return null
+         }
+-        if (listeners.required.isEmpty()) {
++        if (listeners.required.isEmpty() && state.breakGlass) {
+             requestPathLog.error {
+                 "Request [${state.requestId}] permitted through break-glass, but no REQUIRED listener is registered."
+             }
