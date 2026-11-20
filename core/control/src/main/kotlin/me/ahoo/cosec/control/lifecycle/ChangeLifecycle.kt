@@ -38,6 +38,7 @@ import me.ahoo.cosec.control.store.ControlStore
 import me.ahoo.cosec.document.Actor
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import java.time.Clock
+import java.time.Instant
 import kotlin.coroutines.cancellation.CancellationException
 
 /**
@@ -153,7 +154,7 @@ internal class ChangeLifecycle(
             if (!due(current.value)) {
                 return current.value
             }
-            val expired = current.value.copy(state = ChangeState.EXPIRED, updatedAt = clock.instant())
+            val expired = current.value.copy(state = ChangeState.EXPIRED, updatedAt = laterThan(current.value))
             // The table says where an expiry may end; anything else is a fault and nothing is written.
             check(expired.state in ChangeStep.EXPIRE.to)
             if (store.putChange(current.digest, expired, current.value.state)) {
@@ -182,7 +183,7 @@ internal class ChangeLifecycle(
         repeat(MAX_ATTEMPTS) {
             val current = read(id)
             PublishRules.requireState(current.value, from)
-            val updated = next(current.value).copy(updatedAt = clock.instant())
+            val updated = next(current.value).copy(updatedAt = laterThan(current.value))
             // The table decides where a step may take a change: anything else is a fault, and nothing is written.
             check(updated.state in step.to) { "$step leaves a change in ${step.to}, not in ${updated.state}" }
             if (store.putChange(current.digest, updated, current.value.state)) {
@@ -191,6 +192,14 @@ internal class ChangeLifecycle(
         }
         throw ChangeRejectedException(CONFLICT, "change ${id.value} kept changing")
     }
+
+    /**
+     * Now, or just after [replaced] was written when the clock has not moved past it: each write of a change is later
+     * than the record it replaces, so no write repeats an earlier record of the change, whose digest a state's
+     * listing names it by (`CTL-54`).
+     */
+    private fun laterThan(replaced: ChangeRequest): Instant =
+        clock.instant().let { now -> if (now.isAfter(replaced.updatedAt)) now else replaced.updatedAt.plusNanos(1) }
 
     internal companion object {
         const val BREAK_GLASS_EXEMPT = "break-glass has no shadow window (RFC 0007 Q12)"
