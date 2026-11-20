@@ -210,7 +210,7 @@ class ControlAuthorizationTest {
     @Test
     fun `a tenant admin who skips the window still waits for approval of what the analysis cannot prove`() = runBlocking<Unit> {
         val change = changes.propose(alice, TENANT, 1, grant(null), "viewers everywhere")
-        change.escalations.map { it.reason }.assert().containsExactly("NOT_COVERED")
+        change.escalations.map { it.reason.name }.assert().containsExactly("NOT_COVERED")
         changes.skipShadow(alice, change.id, "hurry").state.assert().isEqualTo(ChangeState.AWAITING_APPROVAL)
         refused { changes.publish(alice, change.id) }.assert().isEqualTo(409)
         head().assert().isEqualTo(1L)
@@ -240,7 +240,7 @@ class ControlAuthorizationTest {
     fun `what the analysis cannot prove waits for another person's approval of its digest`() = runBlocking<Unit> {
         val change = changes.propose(alice, TENANT, 1, grant(null), "viewers everywhere")
         change.state.assert().isEqualTo(ChangeState.CHECKED)
-        change.escalations.map { it.reason }.assert().containsExactly("NOT_COVERED")
+        change.escalations.map { it.reason.name }.assert().containsExactly("NOT_COVERED")
         windowClosed(change).state.assert().isEqualTo(ChangeState.AWAITING_APPROVAL)
         refused { changes.publish(alice, change.id) }.assert().isEqualTo(409)
         // The author, and an admin without cosec:approve, cannot approve; the right person approves what they saw.
@@ -482,7 +482,7 @@ class ControlAuthorizationTest {
         val opal = engine.operator(TenantId.PLATFORM, "opal")
         val order = SnapshotKey.App("order")
         val change = changes.propose(opal, order, 0, listOf(Operation.PutPolicy(allow("perm:order/read"))), "app")
-        change.escalations.map { it.reason }.assert().containsExactly("NOT_ANALYZED")
+        change.escalations.map { it.reason.name }.assert().containsExactly("NOT_ANALYZED")
         windowClosed(change, opal).state.assert().isEqualTo(ChangeState.AWAITING_APPROVAL)
         changes.approve(plato, change.id, change.candidate!!)
         changes.publish(opal, change.id).state.assert().isEqualTo(ChangeState.PUBLISHED)
@@ -525,7 +525,7 @@ class ControlAuthorizationTest {
         // A tenant admin cannot loosen or tighten its own tenant's boundary.
         refused { changes.propose(alice, TENANT, head(), set, "mine") }.assert().isEqualTo(403)
         val bea = engine.operator(TenantId.PLATFORM, "bea")
-        changes.propose(bea, TENANT, head(), set, "fence acme").escalations.map { it.reason }.assert()
+        changes.propose(bea, TENANT, head(), set, "fence acme").escalations.map { it.reason.name }.assert()
             .containsExactly("NOT_ANALYZED")
         changes.propose(plato, TENANT, head(), set, "trust root").escalations.assert().isEmpty()
     }

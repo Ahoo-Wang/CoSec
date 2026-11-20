@@ -14,6 +14,7 @@
 package me.ahoo.cosec.control.audit
 
 import me.ahoo.cosec.annotations.CoSecSpi
+import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.runtime.event.Delivery
 
 /** The control plane's audit SPI (RFC 0007 §10.5); delivery as in RFC 0006 §9.4. */
@@ -23,5 +24,7 @@ interface ChangeListener {
 
     val delivery: Delivery get() = Delivery.BEST_EFFORT
 
+    /** [event] is experimental until a release has used it (R2C-5): an implementation opts in to read it. */
+    @ExperimentalCoSecApi
     suspend fun onChange(event: ChangeEvent)
 }

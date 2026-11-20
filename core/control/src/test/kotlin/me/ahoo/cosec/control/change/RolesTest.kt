@@ -308,7 +308,7 @@ class RolesTest {
             documents,
             now
         )
-            .map { it.reason }.assert().containsExactly("NOT_ANALYZED")
+            .map { it.reason.name }.assert().containsExactly("NOT_ANALYZED")
     }
 
     @Test

@@ -63,6 +63,7 @@ class KafkaChangeListener(
         drainTimeout.toKotlinDuration()
     )
 
+    @ExperimentalCoSecApi
     override suspend fun onChange(event: ChangeEvent) {
         val key = event.document.toString()
         val value = ChangeEventJson.write(event)

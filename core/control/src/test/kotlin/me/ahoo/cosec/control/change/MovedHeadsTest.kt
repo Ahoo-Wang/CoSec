@@ -124,7 +124,7 @@ class MovedHeadsTest {
         found!!.note.assert().contains("could not be compared within")
         // Told apart from a head that moved: nothing is named as moved, and the reason says why.
         found!!.moved.assert().isEmpty()
-        found!!.escalations.map { it.reason }.assert().containsExactly(Escalation.DETECTION_TIMED_OUT)
+        found!!.escalations.map { it.reason }.assert().containsExactly(Escalation.Reason.DETECTION_TIMED_OUT)
     }
 
     @Test

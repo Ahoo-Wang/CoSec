@@ -365,7 +365,7 @@ class ControlRoundTwoFixesTest {
             listOf(Operation.PutPolicy(writer.copyAs("x"))),
             "x"
         )
-        val needed = listOf(Escalation("document platform", "NOT_ANALYZED"))
+        val needed = listOf(Escalation("document platform", Escalation.Reason.NOT_ANALYZED))
         val approved = change.copy(
             approval = Approval(
                 pia.actor,
@@ -440,7 +440,7 @@ class ControlRoundTwoFixesTest {
             listOf(Operation.PutPolicy(writer.copyAs("y"))),
             "y"
         )
-        val needed = listOf(Escalation("document platform", "NOT_ANALYZED"))
+        val needed = listOf(Escalation("document platform", Escalation.Reason.NOT_ANALYZED))
         val provided = Memberships(Memberships.Source.PROVIDER, pia.memberships.roles, pia.memberships.attachments)
         val approved = change.copy(
             approval = Approval(
@@ -489,7 +489,7 @@ class ControlRoundTwoFixesTest {
             listOf(Operation.PutPolicy(writer.copyAs("z"))),
             "z"
         )
-        val needed = listOf(Escalation("document platform", "NOT_ANALYZED"))
+        val needed = listOf(Escalation("document platform", Escalation.Reason.NOT_ANALYZED))
         val approval = Approval(
             pia.actor,
             clock.now,

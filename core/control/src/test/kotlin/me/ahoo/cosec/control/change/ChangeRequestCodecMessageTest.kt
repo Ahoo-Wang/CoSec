@@ -85,7 +85,7 @@ class ChangeRequestCodecMessageTest {
             Operation.SetBoundary(PolicyId("fence")),
         )
         val change = changes.propose(PLATO, ACME, 0, operations, "all of them").copy(
-            escalations = listOf(Escalation("a[0] order:read", "NOT_COVERED", "why")),
+            escalations = listOf(Escalation("a[0] order:read", Escalation.Reason.NOT_COVERED, "why")),
             approval = Approval(PLATO.actor, StoreFixtures.START, "c".repeat(64), listOf("a[0]")),
             confirmations = listOf(Confirmation(PolicyId("p"), 2, "d".repeat(64))),
         )

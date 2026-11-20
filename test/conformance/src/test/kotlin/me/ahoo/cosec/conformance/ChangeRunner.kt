@@ -371,7 +371,11 @@ object ChangeRunner : ScenarioRunner {
 
         private suspend fun outcome(results: List<String>): Outcome {
             val errors = named.keys.associateWith { id -> changes.get(ChangeId(id)).errors.map { it.check } }
-            val escalations = named.keys.associateWith { id -> changes.get(ChangeId(id)).escalations.map { it.reason } }
+            val escalations = named.keys.associateWith { id ->
+                changes.get(
+                    ChangeId(id)
+                ).escalations.map { it.reason.name }
+            }
                 .filterValues { it.isNotEmpty() }
             val warnings = named.keys.associateWith { id ->
                 changes.get(
