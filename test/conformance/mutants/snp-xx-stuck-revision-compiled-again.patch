@@ -1,0 +1,17 @@
+# Rule: SNP-XX
+# Mutant: a revision whose compilation timed out and still runs is compiled again, holding another compile thread
+# Tests: :runtime:test --tests me.ahoo.cosec.runtime.snapshot.SnapshotCompileDeadlineTest
+
+diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/KeyEffects.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/KeyEffects.kt
+index 8e66c11c1..2b41d7877 100644
+--- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/KeyEffects.kt
++++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/KeyEffects.kt
+@@ -154,7 +154,7 @@ internal class KeyEffects<T : Any>(
+     private fun compile(effect: KeyEffect.Compile) {
+         val id = effect.loadId
+         val read = effect.read
+-        if (CompileDeadlines.stuck(context, key, read.digest)) {
++        if (false && CompileDeadlines.stuck(context, key, read.digest)) {
+             owner.offer(KeyEvent.CompileTimedOut(id))
+             return
+         }
