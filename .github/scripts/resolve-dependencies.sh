@@ -92,10 +92,18 @@ diagnose() {
   done
 }
 
+# A repository that answers 429 is throttling this runner, and what helps is to ask it less: `--refresh-dependencies` asks again
+# for every module the Gradle home holds, and removing `caches/modules-2` asks for every file, so while the answer is 429
+# neither is done. A `Retry-After` the repository sends is waited for, up to RESOLVE_MAX_RETRY_AFTER seconds (default 300), in
+# place of the fixed pause. (The 429 of Maven Central, for a file it does not have, failed three jobs on 2026-11-20; it sent no
+# `Retry-After`.)
+MAX_RETRY_AFTER=${RESOLVE_MAX_RETRY_AFTER:-300}
+throttled=0
+
 for attempt in $(seq 1 "$ATTEMPTS"); do
   refresh=()
-  [ "$attempt" -gt 1 ] && refresh=(--refresh-dependencies)
-  if [ "$attempt" -ge 3 ] && [ "$removed" -eq 0 ]; then
+  [ "$attempt" -gt 1 ] && [ "$throttled" -eq 0 ] && refresh=(--refresh-dependencies)
+  if [ "$attempt" -ge 3 ] && [ "$removed" -eq 0 ] && [ "$throttled" -eq 0 ]; then
     echo "Removing $modules: the retry resolves from the repositories alone."
     rm -rf "$modules"
     removed=1
@@ -116,8 +124,19 @@ for attempt in $(seq 1 "$ATTEMPTS"); do
     removed=1
   elif [ "$attempt" -lt "$ATTEMPTS" ]; then
     echo "What the repositories answer the files this attempt searched for, from this runner:"
-    diagnose
+    answers=$(diagnose)
+    echo "$answers"
+    throttled=0
+    if grep -Eq '^  429 ' <<< "$answers"; then
+      throttled=1
+      echo "::warning::A repository answers 429: it is throttling this runner. The retries ask it for no more than before."
+    fi
     pause=${PAUSES[$((attempt - 1))]:-${PAUSES[${#PAUSES[@]} - 1]}}
+    retry_after=$(grep -iEo '^ +retry-after: *[0-9]+' <<< "$answers" | grep -Eo '[0-9]+$' | sort -rn | head -1 || true)
+    if [ -n "$retry_after" ]; then
+      pause=$(( retry_after > MAX_RETRY_AFTER ? MAX_RETRY_AFTER : retry_after ))
+      echo "A repository sent Retry-After: $retry_after s; waiting $pause s."
+    fi
     echo "::warning::Resolving dependencies failed (attempt $attempt of $ATTEMPTS, exit $status); asking again in $pause s."
     sleep "$pause"
   fi

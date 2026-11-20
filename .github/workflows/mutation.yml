@@ -86,6 +86,13 @@ jobs:
       - name: Set up Java and Gradle
         uses: ./.github/actions/setup-java-gradle
 
+      # The dependency files dependency-cache.yml wrote on main for these versions, read-only, over what the Gradle cache above
+      # restored: that cache is the one the last run of this workflow on main wrote, up to a week old, so a version bumped since
+      # was downloaded by every shard at once. The index of the newer cache is the one that stays (.github/scripts/README.md,
+      # "The dependency cache").
+      - name: Restore the dependency cache
+        uses: ./.github/actions/dependency-cache
+
       # Downloads only, retried (.github/scripts/resolve-dependencies.sh): 36 shards ask Maven Central at once. Nothing is
       # compiled or run here; the steps below run once.
       - name: Resolve the dependencies
