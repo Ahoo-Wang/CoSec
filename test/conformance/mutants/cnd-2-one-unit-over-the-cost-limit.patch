@@ -1,0 +1,17 @@
+# Rule: CND-2
+# Mutant: a condition may cost one unit more than the limit
+# Tests: :model:test --tests me.ahoo.cosec.model.condition.ConditionCheckerTest :conformance:test --tests me.ahoo.cosec.conformance.ConformanceTest
+
+diff --git a/core/model/src/main/kotlin/me/ahoo/cosec/model/condition/ConditionChecker.kt b/core/model/src/main/kotlin/me/ahoo/cosec/model/condition/ConditionChecker.kt
+index b02ae2e1a..9a78fccfc 100644
+--- a/core/model/src/main/kotlin/me/ahoo/cosec/model/condition/ConditionChecker.kt
++++ b/core/model/src/main/kotlin/me/ahoo/cosec/model/condition/ConditionChecker.kt
+@@ -73,7 +73,7 @@ class ConditionChecker(
+     fun check(condition: Condition): CheckResult {
+         val run = Run()
+         val checked = run.check(condition, ROOT, 1)
+-        if (checked != null && checked.cost > limits.maxCost) {
++        if (checked != null && checked.cost > limits.maxCost + 1) {
+             run.error(ROOT, "costs ${checked.cost}, more than ${limits.maxCost}")
+         }
+         return if (checked == null || run.errors.isNotEmpty()) {

@@ -1,0 +1,17 @@
+# Rule: CND-4
+# Mutant: the value-first in compiles against a String attribute, not only a Set<String>
+# Tests: :model:test --tests me.ahoo.cosec.model.condition.ConditionCheckerTest :conformance:test --tests me.ahoo.cosec.conformance.ConformanceTest
+
+diff --git a/core/model/src/main/kotlin/me/ahoo/cosec/model/condition/ConditionChecker.kt b/core/model/src/main/kotlin/me/ahoo/cosec/model/condition/ConditionChecker.kt
+index b02ae2e1a..250c029ed 100644
+--- a/core/model/src/main/kotlin/me/ahoo/cosec/model/condition/ConditionChecker.kt
++++ b/core/model/src/main/kotlin/me/ahoo/cosec/model/condition/ConditionChecker.kt
+@@ -246,7 +246,7 @@ class ConditionChecker(
+         private fun contains(condition: Condition.Contains, path: String): CheckedCondition? {
+             val attributePath = "$path.in[1]"
+             val attribute = attribute(condition.attribute, attributePath) ?: return null
+-            if (attribute.type != AttributeType.STRING_SET) {
++            if (attribute.type != AttributeType.STRING_SET && attribute.type != AttributeType.STRING) {
+                 val type = name(attribute.type)
+                 val message = "${attribute.path} is $type; `in` with the value first needs a Set<String> attribute"
+                 error(attributePath, message)

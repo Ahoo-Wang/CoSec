@@ -1,0 +1,19 @@
+# Rule: DOC-1
+# Mutant: an app document binds one of its own permission policies that it does not define: the binding dangles
+# Tests: :document:test --tests me.ahoo.cosec.document.PolicyDocumentCompilerTest :conformance:test --tests me.ahoo.cosec.conformance.ConformanceTest
+
+diff --git a/core/document/src/main/kotlin/me/ahoo/cosec/document/DocumentChecks.kt b/core/document/src/main/kotlin/me/ahoo/cosec/document/DocumentChecks.kt
+index d2dede49c..e1332bd0c 100644
+--- a/core/document/src/main/kotlin/me/ahoo/cosec/document/DocumentChecks.kt
++++ b/core/document/src/main/kotlin/me/ahoo/cosec/document/DocumentChecks.kt
+@@ -89,10 +89,6 @@ internal class DocumentChecks(
+                 path,
+                 "[$id] is another app's permission policy; only that app's document binds it"
+             )
+-            ownsIt && id !in defined -> CompileError(
+-                path,
+-                "[$id] is not defined in this document"
+-            )
+             else -> null
+         }
+     }

@@ -1,0 +1,17 @@
+# Rule: SCP-5
+# Mutant: a second class of the model constructs a Scope, so the resolver is no longer the only way to one
+# Tests: :architecture:test --tests me.ahoo.cosec.architecture.ScopeConstructionTest
+
+diff --git a/core/model/src/main/kotlin/me/ahoo/cosec/model/scope/HostScope.kt b/core/model/src/main/kotlin/me/ahoo/cosec/model/scope/HostScope.kt
+index 6aa9ec7ea..6baa044ad 100644
+--- a/core/model/src/main/kotlin/me/ahoo/cosec/model/scope/HostScope.kt
++++ b/core/model/src/main/kotlin/me/ahoo/cosec/model/scope/HostScope.kt
+@@ -30,4 +30,8 @@ class HostScope(val app: AppId?) {
+             "Host app id [${Identifiers.printable(app?.value.orEmpty())}] is not valid."
+         }
+     }
++
++    /** A scope of this host's app for [tenant], built without the resolver. */
++    fun scopeFor(tenant: me.ahoo.cosec.model.TenantId): Scope =
++        Scope(tenant, app ?: AppId(""), me.ahoo.cosec.model.SpaceId.DEFAULT, emptyList())
+ }

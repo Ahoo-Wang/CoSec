@@ -1,0 +1,17 @@
+# Rule: DOC-1
+# Mutant: a tenant document binds an app's permission policy without scoping the binding to that app, so the tenant's view cannot resolve it
+# Tests: :document:test --tests me.ahoo.cosec.document.PolicyDocumentCompilerTest :conformance:test --tests me.ahoo.cosec.conformance.ConformanceTest
+
+diff --git a/core/document/src/main/kotlin/me/ahoo/cosec/document/DocumentChecks.kt b/core/document/src/main/kotlin/me/ahoo/cosec/document/DocumentChecks.kt
+index d2dede49c..8bf5d5266 100644
+--- a/core/document/src/main/kotlin/me/ahoo/cosec/document/DocumentChecks.kt
++++ b/core/document/src/main/kotlin/me/ahoo/cosec/document/DocumentChecks.kt
+@@ -83,8 +83,6 @@ internal class DocumentChecks(
+         val app = (binding.scope.app as? Match.Exactly)?.value?.value
+         val tenantGrant = document.kind == DocumentKind.TENANT && app != null && id.startsWith(permissionPrefix(app))
+         return when {
+-            document.kind == DocumentKind.TENANT && !tenantGrant ->
+-                CompileError(path, "[$id] is an app's permission policy: a tenant binds it only scoped to that app")
+             !ownsIt && !tenantGrant -> CompileError(
+                 path,
+                 "[$id] is another app's permission policy; only that app's document binds it"

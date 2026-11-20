@@ -1,0 +1,18 @@
+# Rule: DOC-2
+# Mutant: the codec decodes * as a value, not as Match.Any
+# Tests: :document:test --tests me.ahoo.cosec.document.PolicyDocumentCodecTest :conformance:test --tests me.ahoo.cosec.conformance.ConformanceTest
+
+diff --git a/core/document/src/main/kotlin/me/ahoo/cosec/document/BindingCodec.kt b/core/document/src/main/kotlin/me/ahoo/cosec/document/BindingCodec.kt
+index 6602efdba..113a4847a 100644
+--- a/core/document/src/main/kotlin/me/ahoo/cosec/document/BindingCodec.kt
++++ b/core/document/src/main/kotlin/me/ahoo/cosec/document/BindingCodec.kt
+@@ -81,9 +81,6 @@ internal object BindingCodec {
+ 
+     private fun <T> match(node: DocumentNode, of: (String) -> T): Match<T> {
+         val text = node.text()
+-        if (text == WILDCARD) {
+-            return Match.Any
+-        }
+         if (text.isEmpty() && node.path.endsWith(".app")) {
+             node.fail("an app is an app id or $WILDCARD, not empty")
+         }

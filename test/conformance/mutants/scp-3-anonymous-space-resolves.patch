@@ -1,0 +1,17 @@
+# Rule: SCP-3
+# Mutant: an anonymous request that declares a space is resolved in that space with no roles, not rejected
+# Tests: :model:test --tests me.ahoo.cosec.model.scope.ScopeResolverTest :runtime:test --tests me.ahoo.cosec.runtime.PipelineTest :conformance:test --tests me.ahoo.cosec.conformance.ConformanceTest
+
+diff --git a/core/model/src/main/kotlin/me/ahoo/cosec/model/scope/ScopeResolver.kt b/core/model/src/main/kotlin/me/ahoo/cosec/model/scope/ScopeResolver.kt
+index 772967381..cebc3bf77 100644
+--- a/core/model/src/main/kotlin/me/ahoo/cosec/model/scope/ScopeResolver.kt
++++ b/core/model/src/main/kotlin/me/ahoo/cosec/model/scope/ScopeResolver.kt
+@@ -85,7 +85,7 @@ object ScopeResolver {
+         val app = hostApp ?: credentialApp?.takeIf { subject.authenticated }?.let(::AppId) ?: NO_APP
+         val selected = SpaceId(space)
+         val roles = if (subject.authenticated) subject.memberships.roles[selected].orEmpty() else emptySet()
+-        if (selected != SpaceId.DEFAULT && roles.isEmpty()) {
++        if (subject.authenticated && selected != SpaceId.DEFAULT && roles.isEmpty()) {
+             return SPACE_NOT_MEMBER
+         }
+         val tenant = if (subject.authenticated) subject.tenant else TenantId.DEFAULT

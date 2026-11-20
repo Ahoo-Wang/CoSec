@@ -1,0 +1,16 @@
+# Rule: SCP-7
+# Mutant: a verified token may declare an app that cannot be an app id: only the scope resolver still refuses it
+# Tests: :spi:test :runtime:test --tests me.ahoo.cosec.runtime.PipelineTest :conformance:test --tests me.ahoo.cosec.conformance.ConformanceTest
+
+diff --git a/core/spi/src/main/kotlin/me/ahoo/cosec/spi/token/VerifiedToken.kt b/core/spi/src/main/kotlin/me/ahoo/cosec/spi/token/VerifiedToken.kt
+index 3b20e0867..1d6c5fee0 100644
+--- a/core/spi/src/main/kotlin/me/ahoo/cosec/spi/token/VerifiedToken.kt
++++ b/core/spi/src/main/kotlin/me/ahoo/cosec/spi/token/VerifiedToken.kt
+@@ -85,7 +85,6 @@ class VerifiedToken(
+             tenant != null && !SnapshotKey.Tenant.isValidTenantId(tenant) -> invalid(
+                 "names a tenant that cannot be a tenant id"
+             )
+-            app != null && !ScopeResolver.isValidAppId(app) -> invalid("declares an app that cannot be an app id")
+             !wellFormed() -> invalid("claims an id with an unpaired UTF-16 surrogate")
+         }
+     }

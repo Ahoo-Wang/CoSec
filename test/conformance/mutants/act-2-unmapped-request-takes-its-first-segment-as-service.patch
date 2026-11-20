@@ -1,0 +1,17 @@
+# Rule: ACT-2
+# Mutant: an unmapped request is decided as <first path segment>:<METHOD> instead of http:<METHOD>, so an ALLOW on service:verb covers routes nobody mapped
+# Tests: :document:test --tests me.ahoo.cosec.document.route.RouteMapTest :runtime:test --tests me.ahoo.cosec.runtime.PipelineRoutesTest :conformance:test --tests me.ahoo.cosec.conformance.ConformanceTest
+
+diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/stage/ReadRequest.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/stage/ReadRequest.kt
+index e0215a672..169dee337 100644
+--- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/stage/ReadRequest.kt
++++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/stage/ReadRequest.kt
+@@ -53,7 +53,7 @@ internal class ReadRequest(private val routes: RouteMap) : Stage {
+         }
+         when (val route = routes.resolve(facts.method, path)) {
+             RouteResolution.Unmapped -> {
+-                state.action = Action(HTTP, HttpMethods.decidedAs(facts.method))
++                state.action = Action(path.trim('/').substringBefore('/').ifEmpty { HTTP }, HttpMethods.decidedAs(facts.method))
+                 state.resource = Resource(HTTP, path, emptyMap())
+             }
+             is RouteResolution.Mapped -> {
