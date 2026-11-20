@@ -19,7 +19,7 @@
 // else (a configuration that cannot be resolved by itself, such as the coverage aggregation, whose dependencies have no version
 // until it is used) is not a download, and is left to the build that uses it.
 val downloadFailure = Regex(
-    "Could not (GET|HEAD|get resource)|Could not find \\S+:\\S+:[0-9A-Za-z]|status code|Read timed out|Connect|reset|Premature end|UnknownHost|Remote host|handshake",
+    "Could not (GET|HEAD|get resource)|Could not find \\S+:\\S+:[0-9A-Za-z]|Could not find [^ ()]+\\.(jar|aar|klib|zip) \\(|status code|Read timed out|Connect|reset|Premature end|UnknownHost|Remote host|handshake",
     RegexOption.IGNORE_CASE,
 )
 
