@@ -27,6 +27,13 @@ Which preview of the library may run behind which preview of the gateway image: 
 
 ## From 8.0.0-beta.4 {#from-8-0-0-beta-4}
 
+- **The control API answers `503` whenever the control store cannot answer** (review round 2, `R2C-6`, `CTL-52`).
+  Affected: clients and alerts of the control API, and a `ControlStore` of your own.
+  - A Redis outage or timeout during a publish, a document read or a revision read used to answer `500`
+    `internal-error`. It now answers `503` `unavailable`, which a client may retry, and is logged at `WARN`, not
+    `ERROR`. A stored value that does not decode stays a `500`.
+  - `ControlStore` names `me.ahoo.cosec.control.store.ControlStoreException` for "the store could not answer". A
+    `ControlStore` of your own throws it for an outage; anything else it throws is a `500`.
 - **An app change lists the tenants it reaches as one entry per policy; an escalation's reason is an enum** (review
   round 2, `R2C-14`, `R2C-5`, `CTL-48`). Affected: whoever reads a change's `escalations` (the control API's
   `GET /changes/{id}`, a `ChangeListener`, the audit JSON on Kafka), and code that builds or reads an `Escalation`.

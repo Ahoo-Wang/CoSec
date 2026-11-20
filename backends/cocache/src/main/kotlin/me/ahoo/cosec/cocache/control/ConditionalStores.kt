@@ -26,8 +26,11 @@ import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.cocache.readRecord
 import me.ahoo.cosec.cocache.snapshot.RedisSnapshotDocumentStore.Companion.cocacheDigest
 import me.ahoo.cosec.cocache.snapshot.RedisSnapshotDocumentStore.Companion.snapshotDigest
+import me.ahoo.cosec.control.store.ControlStoreException
 import me.ahoo.cosec.spi.snapshot.SnapshotDigest
+import me.ahoo.cosec.spi.snapshot.SnapshotFormatException
 import java.time.Instant
+import kotlin.coroutines.cancellation.CancellationException
 
 /**
  * The conditional reads and writes the control store makes of its caches (`putIfMatch`, `deleteIfMatch`,
@@ -37,17 +40,34 @@ import java.time.Instant
 internal object ConditionalStores {
     const val MAX_LIST_ATTEMPTS = 16
 
+    /**
+     * [block], a command to the store, with what fails it said as the port says it (R2C-6, `CTL-52`): a value that does
+     * not decode stays a [SnapshotFormatException]; everything else, a connection, a timeout, a refused command, a
+     * conditional write that kept losing, is a [ControlStoreException], what the control API answers 503 for.
+     */
+    @Suppress("TooGenericExceptionCaught")
+    suspend fun <T> answering(what: String, block: suspend () -> T): T = try {
+        block()
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: ControlStoreException) {
+        throw e
+    } catch (e: RuntimeException) {
+        if (generateSequence<Throwable>(e) { it.cause }.any { it is SnapshotFormatException }) throw e
+        throw ControlStoreException("$what: the store did not answer (${e.message})", e)
+    }
+
     /** Read, change, `putIfMatch` of the list [name]: retried while another writer changed it in between. */
     suspend fun updateList(
         lists: Store<String, Map<String, Instant>>,
         name: String,
         next: (Map<String, Instant>) -> Map<String, Instant>,
-    ) {
+    ): Unit = answering("The control list [$name]") {
         repeat(MAX_LIST_ATTEMPTS) {
             val current = read(lists, name)
             val value = next(current?.first.orEmpty())
             if (value == current?.first) {
-                return
+                return@answering
             }
             if (put(
                     lists,
@@ -57,7 +77,7 @@ internal object ConditionalStores {
                     CoCacheControlStore.digest(ListedCodec, value)
                 ) is Put.Written
             ) {
-                return
+                return@answering
             }
         }
         throw IllegalStateException(
@@ -70,7 +90,10 @@ internal object ConditionalStores {
      * read again: the value that replaced it may be wanted too. A removal whose outcome is unknown is read back: gone, or
      * another value, means it is not this caller's to remove any more.
      */
-    suspend fun <K : Any, V : Any> deleteIf(store: Store<K, V>, key: K, wanted: (V) -> Boolean): Boolean {
+    suspend fun <K : Any, V : Any> deleteIf(store: Store<K, V>, key: K, wanted: (V) -> Boolean): Boolean =
+        answering("[$key]") { deleteIfMatching(store, key, wanted) }
+
+    private suspend fun <K : Any, V : Any> deleteIfMatching(store: Store<K, V>, key: K, wanted: (V) -> Boolean): Boolean {
         repeat(MAX_LIST_ATTEMPTS) {
             val (value, digest) = read(store, key) ?: return false
             if (!wanted(value)) {
@@ -123,6 +146,14 @@ internal object ConditionalStores {
         expected: SnapshotDigest?,
         value: V,
         mine: SnapshotDigest
+    ): Put = answering("[$key]") { putIfMatching(cache, key, expected, value, mine) }
+
+    private suspend fun <K : Any, V : Any> putIfMatching(
+        cache: Store<K, V>,
+        key: K,
+        expected: SnapshotDigest?,
+        value: V,
+        mine: SnapshotDigest
     ): Put {
         val async = cache.async()
         val result = try {
@@ -157,5 +188,5 @@ internal object ConditionalStores {
 
     /** [key]'s value and digest; a value that does not decode fails naming the record, [name] ([readRecord]). */
     suspend fun <K : Any, V : Any> read(cache: Store<K, V>, key: K, name: String = "[$key]"): Pair<V, SnapshotDigest>? =
-        cache.readRecord(key, name)?.let { (value, digest) -> value to snapshotDigest(digest) }
+        answering(name) { cache.readRecord(key, name)?.let { (value, digest) -> value to snapshotDigest(digest) } }
 }

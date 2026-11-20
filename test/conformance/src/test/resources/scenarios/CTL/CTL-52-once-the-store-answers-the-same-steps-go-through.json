@@ -1,0 +1,56 @@
+{
+  "rules": [
+    "CTL-52"
+  ],
+  "polarity": "negative",
+  "level": "control",
+  "description": "R2C-6: once the store answers again, the same steps go through: c1 is skipped and published.",
+  "steps": [
+    {
+      "propose": {
+        "change": "c1",
+        "document": "tenant:acme",
+        "operations": [
+          {
+            "putPolicy": {
+              "id": "read-c1",
+              "statements": [
+                {
+                  "effect": "allow",
+                  "action": "order:read"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "storeDown": true
+    },
+    {
+      "storeDown": false
+    },
+    {
+      "skipShadow": "c1"
+    },
+    {
+      "publish": "c1"
+    }
+  ],
+  "expect": {
+    "steps": [
+      "CHECKED",
+      "store down",
+      "store up",
+      "READY",
+      "PUBLISHED"
+    ],
+    "errors": {
+      "c1": []
+    },
+    "heads": {
+      "tenant:acme": 1
+    }
+  }
+}

@@ -1,0 +1,17 @@
+# Rule: CTL-52
+# Mutant: the control API answers a store that could not answer as an internal error, 500, which a client does not retry and an alert reads as a bug
+# Tests: :control:test --tests me.ahoo.cosec.control.api.StoreOutageTest :conformance:test
+
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/api/ControlHttp.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/api/ControlHttp.kt
+index 1fcff9ac6..c5f14bd51 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/api/ControlHttp.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/api/ControlHttp.kt
+@@ -97,7 +97,7 @@ class ControlHttp(plane: ControlPlane) {
+                 "Control API ${request.method} ${request.path} (request $requestId) is 503: " +
+                     SnapshotKeyText.printable(e.message.orEmpty())
+             }
+-            problem(Problem.UNAVAILABLE, requestId, null)
++            problem(Problem.INTERNAL_ERROR, requestId, null)
+         } catch (e: InvalidControlRequestException) {
+             problem(Problem.INVALID_REQUEST, requestId, e.message)
+         } catch (e: SnapshotFormatException) {

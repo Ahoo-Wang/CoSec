@@ -24,6 +24,11 @@ description: "每个 8.0 预览版（alpha 与 beta）到下一个之间的变�
 
 ## 从 8.0.0-beta.4 升级 {#from-8-0-0-beta-4}
 
+- **控制存储无法应答时，控制 API 返回 `503`**（第二轮评审，`R2C-6`、`CTL-52`）。受影响的是控制 API 的客户端与告警，以及你自己的 `ControlStore`。
+  - 发布、读取文档或修订期间的 Redis 故障或超时，以前返回 `500` `internal-error`，现在返回客户端可以重试的 `503` `unavailable`，
+    并以 `WARN` 而非 `ERROR` 记录。已存储的值无法解码时仍是 `500`。
+  - `ControlStore` 以 `me.ahoo.cosec.control.store.ControlStoreException` 表示"存储无法应答"。你自己的 `ControlStore` 遇到故障时抛出它；
+    它抛出的其他异常都是 `500`。
 - **应用变更按每条策略一项列出它触及的租户；升级项的原因是枚举**（第二轮评审，`R2C-14`、`R2C-5`、`CTL-48`）。受影响的是读取变更
   `escalations` 的一方（控制 API 的 `GET /changes/{id}`、`ChangeListener`、Kafka 上的审计 JSON），以及构造或读取 `Escalation` 的代码。
   - 每条租户绑定一项的 `TENANT_BINDING` 已移除。放宽权限策略的应用变更，每条策略带一项 `TENANT_BINDINGS`：

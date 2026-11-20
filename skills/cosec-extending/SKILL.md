@@ -204,7 +204,9 @@ writes, implement `documents()` (every document with indexed revisions; may name
 (release only while the holder still has it, checked and removed in one atomic step), `withdrawCandidate(key, window)`
 (remove the candidate only while it is still that window's, in one atomic step), `stagedCandidate` and `putCandidate`
 with the digest it read (write only over the candidate read), referrers with the revision that
-indexed each, and `RevisionIndex.reclaiming` kept with the index. A failed read throws; never answer "absent". Start from
+indexed each, and `RevisionIndex.reclaiming` kept with the index. A failed read throws; never answer "absent":
+`ControlStoreException` when the store cannot answer (the control API answers 503), `SnapshotFormatException` when a
+value does not decode (500). Start from
 `InMemoryControlStore` and the KDoc of `core/control/src/main/kotlin/me/ahoo/cosec/control/store/ControlStore.kt`.
 
 ## IdGenerator: CoSec's ids
