@@ -105,9 +105,12 @@ interface ControlStore : CandidateStore {
 
     /**
      * Writes the change request if the store still holds [expected] (`null`: only if there is none): every state
-     * transition is one such write (RFC 0007 §6.1). `false` when it changed in between.
+     * transition is one such write (RFC 0007 §6.1). `false` when it changed in between. [previous] is the state of the
+     * record [expected] names (`null` with no record): a store that lists changes by state takes the change out of
+     * that state's listing alone (`CTL-54`), so a caller that leaves it out costs that store a stale member, which it
+     * reads and drops later, never a wrong listing.
      */
-    suspend fun putChange(expected: SnapshotDigest?, change: ChangeRequest): Boolean
+    suspend fun putChange(expected: SnapshotDigest?, change: ChangeRequest, previous: ChangeState? = null): Boolean
 
     /** The staging slot of [key] (RFC 0007 §5.5), with the digest a [putStage] must name; `null` when never taken. */
     suspend fun stage(key: SnapshotKey): Versioned<StageSlot>?

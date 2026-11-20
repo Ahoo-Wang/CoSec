@@ -107,9 +107,10 @@ class CommittedRevisionTest {
         override suspend fun putChange(
             expected: SnapshotDigest?,
             change: me.ahoo.cosec.control.change.ChangeRequest,
+            previous: ChangeState?,
         ): Boolean {
             if (headWritten && changesTimeOut) timeOut()
-            return memory.putChange(expected, change)
+            return memory.putChange(expected, change, previous)
         }
     }
 

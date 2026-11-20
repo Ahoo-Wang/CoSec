@@ -438,7 +438,8 @@ public abstract interface class me/ahoo/cosec/control/store/ControlStore : me/ah
 	public abstract fun openChangesKept (Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public abstract fun putApps (Lme/ahoo/cosec/spi/snapshot/SnapshotDigest;Lme/ahoo/cosec/control/store/AppList;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public abstract fun putCandidate (Lme/ahoo/cosec/spi/snapshot/SnapshotKey;Lme/ahoo/cosec/spi/snapshot/SnapshotDigest;Lme/ahoo/cosec/spi/shadow/StoredCandidate;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
-	public abstract fun putChange (Lme/ahoo/cosec/spi/snapshot/SnapshotDigest;Lme/ahoo/cosec/control/change/ChangeRequest;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public abstract fun putChange (Lme/ahoo/cosec/spi/snapshot/SnapshotDigest;Lme/ahoo/cosec/control/change/ChangeRequest;Lme/ahoo/cosec/control/change/ChangeState;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public static synthetic fun putChange$default (Lme/ahoo/cosec/control/store/ControlStore;Lme/ahoo/cosec/spi/snapshot/SnapshotDigest;Lme/ahoo/cosec/control/change/ChangeRequest;Lme/ahoo/cosec/control/change/ChangeState;Lkotlin/coroutines/Continuation;ILjava/lang/Object;)Ljava/lang/Object;
 	public abstract fun putHead (Lme/ahoo/cosec/spi/snapshot/SnapshotKey;Lme/ahoo/cosec/spi/snapshot/SnapshotDigest;Lme/ahoo/cosec/spi/snapshot/SnapshotDocument;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public abstract fun putIndex (Lme/ahoo/cosec/spi/snapshot/SnapshotKey;Lme/ahoo/cosec/spi/snapshot/SnapshotDigest;Lme/ahoo/cosec/control/store/RevisionIndex;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public abstract fun putRecord (Lme/ahoo/cosec/spi/snapshot/SnapshotKey;Lme/ahoo/cosec/spi/snapshot/SnapshotDocument;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
@@ -458,6 +459,7 @@ public final class me/ahoo/cosec/control/store/ControlStore$DefaultImpls {
 	public static synthetic fun changes$default (Lme/ahoo/cosec/control/store/ControlStore;Lme/ahoo/cosec/control/change/ChangeState;Ljava/lang/String;ILkotlin/jvm/functions/Function1;Lkotlin/coroutines/Continuation;ILjava/lang/Object;)Ljava/lang/Object;
 	public static fun keepStagedList (Lme/ahoo/cosec/control/store/ControlStore;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public static fun listStaged (Lme/ahoo/cosec/control/store/ControlStore;Lme/ahoo/cosec/spi/snapshot/SnapshotKey;Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public static synthetic fun putChange$default (Lme/ahoo/cosec/control/store/ControlStore;Lme/ahoo/cosec/spi/snapshot/SnapshotDigest;Lme/ahoo/cosec/control/change/ChangeRequest;Lme/ahoo/cosec/control/change/ChangeState;Lkotlin/coroutines/Continuation;ILjava/lang/Object;)Ljava/lang/Object;
 	public static fun staged (Lme/ahoo/cosec/control/store/ControlStore;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public static fun unlistStaged (Lme/ahoo/cosec/control/store/ControlStore;Lme/ahoo/cosec/spi/snapshot/SnapshotKey;Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 }
@@ -504,7 +506,7 @@ public final class me/ahoo/cosec/control/store/InMemoryControlStore : me/ahoo/co
 	public fun openChangesKept (Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun putApps (Lme/ahoo/cosec/spi/snapshot/SnapshotDigest;Lme/ahoo/cosec/control/store/AppList;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun putCandidate (Lme/ahoo/cosec/spi/snapshot/SnapshotKey;Lme/ahoo/cosec/spi/snapshot/SnapshotDigest;Lme/ahoo/cosec/spi/shadow/StoredCandidate;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
-	public fun putChange (Lme/ahoo/cosec/spi/snapshot/SnapshotDigest;Lme/ahoo/cosec/control/change/ChangeRequest;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun putChange (Lme/ahoo/cosec/spi/snapshot/SnapshotDigest;Lme/ahoo/cosec/control/change/ChangeRequest;Lme/ahoo/cosec/control/change/ChangeState;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun putHead (Lme/ahoo/cosec/spi/snapshot/SnapshotKey;Lme/ahoo/cosec/spi/snapshot/SnapshotDigest;Lme/ahoo/cosec/spi/snapshot/SnapshotDocument;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun putIndex (Lme/ahoo/cosec/spi/snapshot/SnapshotKey;Lme/ahoo/cosec/spi/snapshot/SnapshotDigest;Lme/ahoo/cosec/control/store/RevisionIndex;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun putRecord (Lme/ahoo/cosec/spi/snapshot/SnapshotKey;Lme/ahoo/cosec/spi/snapshot/SnapshotDocument;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;

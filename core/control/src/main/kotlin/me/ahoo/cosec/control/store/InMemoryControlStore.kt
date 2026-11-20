@@ -164,7 +164,11 @@ class InMemoryControlStore(private val clock: Clock = Clock.systemUTC()) : Contr
     override suspend fun change(id: ChangeId): Versioned<ChangeRequest>? =
         synchronized(lock) { changes[id]?.let { (change, version) -> Versioned(change, version(version)) } }
 
-    override suspend fun putChange(expected: SnapshotDigest?, change: ChangeRequest): Boolean = synchronized(lock) {
+    override suspend fun putChange(
+        expected: SnapshotDigest?,
+        change: ChangeRequest,
+        previous: ChangeState?,
+    ): Boolean = synchronized(lock) {
         if (changes[change.id]?.let { version(it.second) } != expected) {
             return false
         }

@@ -288,7 +288,7 @@ class CoCacheControlStoreTest {
                 val open = change("c1", ChangeState.DRAFT)
                 store.putChange(null, open).assert().isTrue()
                 val digest = store.change(ChangeId("c1"))!!.digest
-                store.putChange(digest, open.copy(state = ChangeState.ABANDONED)).assert().isTrue()
+                store.putChange(digest, open.copy(state = ChangeState.ABANDONED), ChangeState.DRAFT).assert().isTrue()
                 // As a removal that failed after the terminal write would leave them.
                 raw.suspending().add("doc:$key", listOf("c1"))
                 raw.suspending().add("state:DRAFT", listOf("$key#c1"))
@@ -349,7 +349,7 @@ class CoCacheControlStoreTest {
             store.putChange(null, change("c2", ChangeState.DRAFT)).assert().isTrue()
             store.allOpenChanges().map { it.id }.assert().containsExactlyInAnyOrder(ChangeId("c1"), ChangeId("c2"))
             val digest = store.change(ChangeId("c1"))!!.digest
-            store.putChange(digest, open.copy(state = ChangeState.ABANDONED)).assert().isTrue()
+            store.putChange(digest, open.copy(state = ChangeState.ABANDONED), ChangeState.DRAFT).assert().isTrue()
             store.allOpenChanges().map { it.id }.assert().containsExactly(ChangeId("c2"))
 
             store.openChanges(key).map { it.id }.assert().containsExactly(ChangeId("c2"))

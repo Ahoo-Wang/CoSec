@@ -38,9 +38,13 @@ import kotlin.coroutines.cancellation.CancellationException
  * `SADD` or `SREM`, so changes never contend on one value.
  *
  * They are a superset of the open changes: before a change's record is written, it is added to its document's set and
- * to its state's; after, it is removed from what no longer applies (every other state, and its document once it is
- * terminal). A crash between the two leaves an extra member, never a missing one: a reader skips a member whose change
- * is terminal, in another state or missing, and removes it. One whose record does not read is listed as unreadable.
+ * to its state's; after, it is removed from exactly what no longer applies: the state the write moved it from, and its
+ * document once it is terminal. A crash between the two, a removal that failed or a conditional write that lost leaves
+ * an extra member, never a missing one. A reader skips a member whose change is not listed there; it removes one whose
+ * change is terminal at once (terminal is final), and one whose change is missing, in another state or of another
+ * document only once this instance has seen it so for [missingGrace]: a write in flight lists its new state before its
+ * record says so, and a reader that dropped that member at once would lose the change from its state's set (`CTL-54`).
+ * One whose record does not read is listed as unreadable.
  *
  * They are trusted only once kept and while no list of the format before 8.0.0-beta.5 exists ([kept]): the conversion
  * writes the marker after it listed every change of the old list, and the control plane writes it only where there is
@@ -56,8 +60,8 @@ internal class OpenChangeSets(
     /** How long a member whose record is missing stays: a first write in flight is missing for a moment. */
     private val missingGrace: Duration,
 ) {
-    /** When this instance first found a member's record missing, by member. */
-    private val missingSince = ConcurrentHashMap<String, Instant>()
+    /** When this instance first found a member's change missing or not listed there, by set and member. */
+    private val staleSince = ConcurrentHashMap<String, Instant>()
 
     suspend fun kept(): Boolean = KEPT in sets.changeMembers(KEPT) && !legacyListed()
 
@@ -75,12 +79,16 @@ internal class OpenChangeSets(
         if (!change.state.terminal) sets.addChangeMembers(stateKey(change.state), listOf(member(change.key, change.id)))
     }
 
-    /** After [change] was written: out of every other state, and out of its document once it is terminal. A failure warns. */
+    /**
+     * After [change] was written over a record in [previous] (`null`: none): out of [previous]'s set only, and out of
+     * its document once it is terminal. Never out of any other state: a later write may have listed the change there
+     * meanwhile, and this write's view of where it is is already stale. A failure warns.
+     */
     @Suppress("TooGenericExceptionCaught")
-    suspend fun unlistAfter(change: ChangeRequest) {
+    suspend fun unlistAfter(change: ChangeRequest, previous: ChangeState?) {
         try {
-            OPEN_STATES.filter { it != change.state }.forEach {
-                sets.removeChangeMembers(stateKey(it), setOf(member(change.key, change.id)))
+            if (previous != null && previous != change.state && !previous.terminal) {
+                sets.removeChangeMembers(stateKey(previous), setOf(member(change.key, change.id)))
             }
             if (change.state.terminal) sets.removeChangeMembers(documentKey(change.key), setOf(change.id.value))
         } catch (e: CancellationException) {
@@ -120,26 +128,31 @@ internal class OpenChangeSets(
         } catch (_: SnapshotFormatException) {
             return ListedChange.Unreadable(id, document)
         }
-        if (change == null) {
-            val since = missingSince.getOrPut("$key|$member") { clock.instant() }
-            if (since.plus(missingGrace).isBefore(clock.instant())) {
-                sets.removeChangeMembers(key, setOf(member))
-                missingSince -= "$key|$member"
-            }
-            return null
-        }
-        missingSince -= "$key|$member"
-        if (!listed(change) || change.key != document) {
+        if (change != null && change.state.terminal) {
+            staleSince -= "$key|$member"
             sets.removeChangeMembers(key, setOf(member))
             return null
         }
+        if (change == null || !listed(change) || change.key != document) {
+            stale(key, member)
+            return null
+        }
+        staleSince -= "$key|$member"
         return ListedChange.Readable(change)
+    }
+
+    /** A member whose change is missing or not listed there: removed once this instance has seen it so for the grace. */
+    private suspend fun stale(key: String, member: String) {
+        val since = staleSince.getOrPut("$key|$member") { clock.instant() }
+        if (since.plus(missingGrace).isBefore(clock.instant())) {
+            sets.removeChangeMembers(key, setOf(member))
+            staleSince -= "$key|$member"
+        }
     }
 
     internal companion object {
         private val log = KotlinLogging.logger {}
         const val KEPT = "kept"
-        private val OPEN_STATES = ChangeState.entries.filterNot { it.terminal }
 
         fun documentKey(document: SnapshotKey) = "doc:$document"
 

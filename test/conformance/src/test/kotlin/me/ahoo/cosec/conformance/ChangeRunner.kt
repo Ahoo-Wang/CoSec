@@ -752,7 +752,7 @@ object ChangeRunner : ScenarioRunner {
                 op.attributes,
             )
             val approved = change.copy(state = ChangeState.READY, approval = approval)
-            check(store.putChange(current.digest, approved)) { "Change ${id.value} moved meanwhile." }
+            check(store.putChange(current.digest, approved, change.state)) { "Change ${id.value} moved meanwhile." }
             return approved
         }
 

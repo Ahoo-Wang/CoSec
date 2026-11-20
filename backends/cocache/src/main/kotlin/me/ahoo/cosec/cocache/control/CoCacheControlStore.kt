@@ -235,10 +235,10 @@ class CoCacheControlStore internal constructor(
     )
 
     /** Listed before the write, in its document's set and its state's, and unlisted after from what no longer applies. */
-    override suspend fun putChange(expected: SnapshotDigest?, change: ChangeRequest): Boolean {
+    override suspend fun putChange(expected: SnapshotDigest?, change: ChangeRequest, previous: ChangeState?): Boolean {
         openChanges.listBefore(change)
         val written = put(changes, change.id, expected, change, digest(ChangeRequestCacheCodec, change)) is Put.Written
-        if (written) openChanges.unlistAfter(change)
+        if (written) openChanges.unlistAfter(change, previous)
         return written
     }
 
