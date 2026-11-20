@@ -611,6 +611,7 @@
         "control:StagedListTest#a listing that fails fails the stage, with nothing staged",
         "control:StagedListTest#the shadow pass keeps the list, lists a staged candidate a lost write left out, and unlists a stale window after a pass of grace",
         "control:StagedListTest#fifty tenants staging at once are all staged and all listed",
+        "control:StagedListReconciliationTest#a pass that could not read every change leaves an unnamed candidate staged, and complete passes withdraw it",
         "cocache:StagedListStoreTest#the list is absent until kept, then lists exactly what is added and not removed",
         "cocache:StagedListStoreTest#fifty documents listed and staged at once all land"
       ],

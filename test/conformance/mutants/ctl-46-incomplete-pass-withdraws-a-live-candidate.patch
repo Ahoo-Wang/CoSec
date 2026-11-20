@@ -1,0 +1,17 @@
+# Rule: CTL-46
+# Mutant: a shadow pass that could not read every open change still withdraws a staged candidate no change it read names (R2C-15), so a live window whose change went unread loses its candidate (StagedListReconciliation.reconcile)
+# Tests: :control:test --tests me.ahoo.cosec.control.lifecycle.StagedListReconciliationTest
+
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/StagedListReconciliation.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/StagedListReconciliation.kt
+index 139fe1b77..23c60cd9c 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/StagedListReconciliation.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/StagedListReconciliation.kt
+@@ -53,7 +53,7 @@ internal class StagedListReconciliation(private val store: ControlStore) {
+         val found = buildSet {
+             for ((key, windows) in listed) {
+                 val staged = stagedWindow(key)
+-                windows.filter { it != staged || (complete && (key to it) !in live) }.forEach { add(key to it) }
++                windows.filter { it != staged || (key to it) !in live }.forEach { add(key to it) }
+             }
+         }
+         val due = found.intersect(suspects)
