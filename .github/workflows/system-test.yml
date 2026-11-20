@@ -113,7 +113,7 @@ jobs:
           persist-credentials: false
 
       - name: Resolve the dependencies
-        run: ./.ci-actions/.github/scripts/resolve-dependencies.sh
+        run: RESOLVE_CENTRAL_FALLBACK=on ./.ci-actions/.github/scripts/resolve-dependencies.sh
 
       - name: Build the distributions
         run: ./gradlew :gateway-server:installDist :system-behind:installDist :system-auth:installDist :system-enforcer:installDist :migrate:installDist :system-test:testClasses
@@ -257,7 +257,7 @@ jobs:
           persist-credentials: false
 
       - name: Resolve the dependencies
-        run: ./.ci-actions/.github/scripts/resolve-dependencies.sh
+        run: RESOLVE_CENTRAL_FALLBACK=on ./.ci-actions/.github/scripts/resolve-dependencies.sh
 
       - name: Build the distributions
         run: ./gradlew :gateway-server:installDist :migrate:installDist

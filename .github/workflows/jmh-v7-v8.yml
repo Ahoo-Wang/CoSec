@@ -142,8 +142,8 @@ jobs:
       # and Maven Central answer 429 or a 404 for an artifact that exists now and then. The builds below run once.
       - name: Resolve the dependencies of both lines
         run: |
-          "$GITHUB_WORKSPACE/.github/scripts/resolve-dependencies.sh" "$RUNNER_TEMP/v7" -Porg.gradle.java.installations.fromEnv=JAVA_HOME_17_X64
-          "$GITHUB_WORKSPACE/.github/scripts/resolve-dependencies.sh" "$RUNNER_TEMP/v8" -Porg.gradle.java.installations.fromEnv=JAVA_HOME_21_X64
+          RESOLVE_CENTRAL_FALLBACK=on "$GITHUB_WORKSPACE/.github/scripts/resolve-dependencies.sh" "$RUNNER_TEMP/v7" -Porg.gradle.java.installations.fromEnv=JAVA_HOME_17_X64
+          RESOLVE_CENTRAL_FALLBACK=on "$GITHUB_WORKSPACE/.github/scripts/resolve-dependencies.sh" "$RUNNER_TEMP/v8" -Porg.gradle.java.installations.fromEnv=JAVA_HOME_21_X64
 
       - name: Build the 7.x benchmark jar
         working-directory: ${{ runner.temp }}/v7

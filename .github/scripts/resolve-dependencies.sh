@@ -14,9 +14,12 @@
 
 # Resolves a checkout's dependencies, retried, before the job builds or tests anything.
 #
-# Usage: [RESOLVE_TASKS="<tasks>"] resolve-dependencies.sh [project-dir [gradle arguments...]]     (default: the current directory)
+# Usage: [RESOLVE_CENTRAL_FALLBACK=on] [RESOLVE_TASKS="<tasks>"] resolve-dependencies.sh [project-dir [gradle arguments...]]     (default: the current directory)
 #   RESOLVE_TASKS names what to resolve: `resolveDependencies` (every project) unless a job needs only some, such as
 #   `:runtime:resolveDependencies :control:resolveDependencies`.
+#   RESOLVE_CENTRAL_FALLBACK=on installs `.github/gradle/central-fallback.init.gradle.kts` into the Gradle home for the rest of the job:
+#   a second host for what Maven Central and the plugin portal both answer "not found" for (below). Off unless asked, and never asked
+#   by a job that publishes: what it ships is built from what the repositories of the build serve.
 #   The arguments are those the job's own build passes to Gradle that decide what it configures (a -P property, say).
 #
 # CI downloads fail now and then for a reason that is not the build's: the plugin portal or Maven Central answers 429 or a 404
@@ -37,6 +40,13 @@
 # check's `Test host` job, whose restored cache held the old answers, failed on every run from then on until its cache was
 # removed. A change of which repository an artifact is read from comes with the removal of the caches that remember the old
 # answer, or with this step (.github/scripts/README.md).
+#
+# A "Could not find" for a file that exists is a 404 from the repository, not a throttle, and no pause and no cache removal helped
+# it. On 2026-11-20 it failed six attempts over 12 minutes four times (CodeQL on #1745 and #1765, two mutation shards of run
+# 44750934771), for POMs Central serves (the Kotlin plugin's BOM, `jmh-core`), from Central and from the plugin portal alike,
+# while other runners of the same run passed; after a failed attempt this step now asks each URL Gradle searched itself and
+# prints the answer (diagnose below), so the next failure says whether it was a 404 or something else. Where a job asks for
+# it, the fallback repository answers for those files.
 #
 # Attempt 1 is a plain resolution. Later attempts wait first, 30, 60, 120, 180 and 240 s (630 s, so about 10 minutes of
 # waiting and, with the attempts themselves, 15 at the worst): a repository that throttles a runner keeps doing so for
@@ -62,9 +72,25 @@ removed=0
 log=$(mktemp)
 trap 'rm -f "$log"' EXIT
 read -r -a PAUSES <<< "${RESOLVE_PAUSES:-30 60 120 180 240}"
-INIT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../gradle" && pwd)/resolve-dependencies.init.gradle.kts"
+GRADLE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../gradle" && pwd)"
+INIT="$GRADLE_DIR/resolve-dependencies.init.gradle.kts"
 cd "${1:-.}" || exit 2
 shift || true
+
+if [ "${RESOLVE_CENTRAL_FALLBACK:-off}" = on ]; then
+  mkdir -p "${GRADLE_USER_HOME:-$HOME/.gradle}/init.d"
+  cp "$GRADLE_DIR/central-fallback.init.gradle.kts" "${GRADLE_USER_HOME:-$HOME/.gradle}/init.d/"
+  echo "Installed the Maven Central fallback repository for this job's Gradle runs."
+fi
+
+# What each URL Gradle searched answers now, from this runner: the log of a failed resolution says "Could not find", never the
+# status, and a 404 for a file that exists, a 429 and a block are different failures with different remedies.
+diagnose() {
+  grep -Eo 'https://[^ ]+\.(pom|module|jar)' "$log" | sort -u | head -8 | while read -r url; do
+    echo "  $(curl -sS -o /dev/null -I --max-time 20 -w '%{http_code}' "$url" 2>&1) $url"
+    curl -sSI --max-time 20 "$url" 2>/dev/null | grep -iE '^(server|via|x-served-by|x-cache|x-cache-hits|retry-after|age):' | sed 's/^/      /' | tr -d '\r'
+  done
+}
 
 for attempt in $(seq 1 "$ATTEMPTS"); do
   refresh=()
@@ -89,10 +115,13 @@ for attempt in $(seq 1 "$ATTEMPTS"); do
     rm -rf "$modules"
     removed=1
   elif [ "$attempt" -lt "$ATTEMPTS" ]; then
+    echo "What the repositories answer the files this attempt searched for, from this runner:"
+    diagnose
     pause=${PAUSES[$((attempt - 1))]:-${PAUSES[${#PAUSES[@]} - 1]}}
     echo "::warning::Resolving dependencies failed (attempt $attempt of $ATTEMPTS, exit $status); asking again in $pause s."
     sleep "$pause"
   fi
 done
+diagnose
 echo "::error::Dependencies did not resolve in $ATTEMPTS attempts: see the 'Could not' lines above for the repository and the answer."
 exit 1

@@ -149,7 +149,7 @@ jobs:
       - name: Resolve the dependencies of both refs
         run: |
           for side in base head; do
-            "$GITHUB_WORKSPACE/.github/scripts/resolve-dependencies.sh" "$RUNNER_TEMP/$side" \
+            RESOLVE_CENTRAL_FALLBACK=on "$GITHUB_WORKSPACE/.github/scripts/resolve-dependencies.sh" "$RUNNER_TEMP/$side" \
               "-Porg.gradle.java.installations.fromEnv=JAVA_HOME_17_X64,JAVA_HOME_21_X64"
           done
 
