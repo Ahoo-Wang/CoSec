@@ -224,6 +224,7 @@ internal class CoSecPipelineWebAutoConfiguration {
         @ConditionalOnProperty(
             prefix = RuntimeAuthorizationProperties.PREFIX + ".snapshot",
             name = ["prewarm-host-apps"],
+            havingValue = "true",
             matchIfMissing = true,
         )
         fun cosecGatewayRouteApps(

@@ -53,6 +53,7 @@ internal object CoSecSwitches {
         "cosec.metrics.enabled",
         "cosec.ip2region.enabled",
         "cosec.authorization.shadow.enabled",
+        "cosec.authorization.snapshot.prewarm-host-apps",
         "cosec.gateway.identity.enabled",
         "cosec.control.audit.kafka.enabled",
         "cosec.api-key.enabled",

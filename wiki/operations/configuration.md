@@ -78,6 +78,7 @@ of them as true while the condition that wires the feature reads them as off
 | `cosec.openapi.enabled` | boolean | `true` | the bearer-auth customizer of the OpenAPI document (`cosec-openapi`) |
 | `cosec.control.enabled` | boolean | `true` | the control plane, when `cosec-control` and `cosec-cocache` are on the classpath; its routes need a WebFlux or WebMvc application. Off, the instance runs none of it and reads the policy documents and candidates read-only ([Control plane](#control-plane)) |
 | `cosec.authorization.shadow.enabled` | boolean | `true` | this instance's part in shadow windows (`cosec-cocache`); see [Shadow windows](#shadow-windows) |
+| `cosec.authorization.snapshot.prewarm-host-apps` | boolean | `true` | loading the apps this host names at startup, and holding them (`SNP-20`); see [Snapshot](#snapshot) |
 | `cosec.gateway.identity.enabled` | boolean | `true` | on a Spring Cloud Gateway host, forwarding the verified identity to the services behind it; see [Gateway identity](#gateway-identity) |
 
 These have no switch:

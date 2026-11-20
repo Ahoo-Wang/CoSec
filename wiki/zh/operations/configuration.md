@@ -60,6 +60,7 @@ CoSec 没有哪个配置项叫这些名字，而已知的 key 无论来源都不
 | `cosec.openapi.enabled` | boolean | `true` | OpenAPI 文档的 bearer 认证定制器（`cosec-openapi`） |
 | `cosec.control.enabled` | boolean | `true` | 控制面，当 `cosec-control` 和 `cosec-cocache` 在 classpath 上时；它的路由需要 WebFlux 或 WebMvc 应用。关闭时，实例不运行它的任何部分，并以只读方式读取策略文档和候选（[控制面](#control-plane)） |
 | `cosec.authorization.shadow.enabled` | boolean | `true` | 本实例参与影子窗口（`cosec-cocache`）；见[影子窗口](#shadow-windows) |
+| `cosec.authorization.snapshot.prewarm-host-apps` | boolean | `true` | 启动时加载本主机指定的应用并持有它们（`SNP-20`）；见[快照](#snapshot) |
 | `cosec.gateway.identity.enabled` | boolean | `true` | 在 Spring Cloud Gateway 宿主上，把已验证的身份转发给其后的服务；见[网关身份](#gateway-identity) |
 
 以下功能没有开关：
