@@ -37,4 +37,8 @@ class RepairResult(
     val busy: Boolean = false,
     /** Who holds the lease when [busy]: the other run's id and when it started, if the store can say. */
     val holder: String? = null,
+    /** The open changes the old list named that were listed in the sets (`CTL-54`). */
+    val openChanges: Int = 0,
+    /** The ids of listed changes whose record could not be read: until none is left, the sets are not kept. */
+    val unreadOpenChanges: List<String> = emptyList(),
 )

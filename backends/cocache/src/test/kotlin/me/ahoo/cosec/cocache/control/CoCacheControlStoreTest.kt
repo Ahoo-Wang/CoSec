@@ -298,6 +298,42 @@ class CoCacheControlStoreTest {
         } }
     }
 
+    /**
+     * CTL-54: the open-change sets are trusted only once kept and while no list of the format before 8.0.0-beta.5 is
+     * there, whatever members they hold: a control plane keeps them only where there is no old list, and an older one
+     * that writes the old list again puts the store back to not kept.
+     */
+    @Test
+    fun `the open-change sets are not kept while the old list is there, whatever they hold`() = runBlocking<Unit> {
+        SnapshotNode(InMemoryBackend(), newKeyPrefix()).use { node ->
+            val lists = node.runtime.create(ControlCacheSpecs.list(node.keyPrefix))
+            val store = store(node, lists = lists)
+            lists.put("open-changes", mapOf("c0" to Instant.EPOCH))
+            store.putChange(null, change("c1", ChangeState.DRAFT)).assert().isTrue()
+            store.keepOpenChanges()
+            store.openChangesKept().assert().isFalse()
+            // The conversion lists what the old list names, keeps the sets and removes the old list.
+            store.legacyOpenChanges().assert().containsExactly("c0")
+            store.keepConvertedOpenChanges()
+            store.openChangesKept().assert().isTrue()
+            store.legacyOpenChanges().assert().isNull()
+            // An older control plane writes the old list again: not kept, though the marker is there.
+            lists.put("open-changes", mapOf("c2" to Instant.EPOCH))
+            store.openChangesKept().assert().isFalse()
+        }
+    }
+
+    /** CTL-54: a new store, with no old list, is kept from the control plane's first keep. */
+    @Test
+    fun `a new store is kept from the first keep`() = runBlocking<Unit> {
+        SnapshotNode(InMemoryBackend(), newKeyPrefix()).use { node ->
+            val store = store(node)
+            store.openChangesKept().assert().isFalse()
+            store.keepOpenChanges()
+            store.openChangesKept().assert().isTrue()
+        }
+    }
+
     @Test
     fun `indexed documents and open changes are listed, terminal ones are not`() = runBlocking<Unit> {
         SnapshotNode(InMemoryBackend(), newKeyPrefix()).use { node ->

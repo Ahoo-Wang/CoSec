@@ -19,6 +19,8 @@ import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
+import me.ahoo.cosec.spi.snapshot.SnapshotKeyText
+import me.ahoo.cosec.control.change.ChangeId
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.control.store.ControlStore
 import me.ahoo.cosec.control.store.ReferrerHeads
@@ -114,10 +116,13 @@ class ReferenceRepair(
         }
         val apps = listed.filterIsInstance<SnapshotKey.App>().mapTo(HashSet()) { it.appId }
         val completed = revisions.completeApps(apps)
-        val converting = legacyDocuments != null
-        val formatDone = converting && failed.isEmpty() && completed
+        val legacyOpen = conversion?.legacyOpenChanges()
+        val (openListed, unread) = legacyOpen?.let { convertOpenChanges(it) } ?: (0 to emptyList())
+        val converting = legacyDocuments != null || legacyOpen != null
+        val formatDone = converting && failed.isEmpty() && completed && unread.isEmpty()
         if (formatDone) {
-            conversion?.removeLegacyDocuments()
+            legacyDocuments?.let { conversion?.removeLegacyDocuments() }
+            legacyOpen?.let { conversion?.keepConvertedOpenChanges() }
         }
         return RepairResult(
             listed.size,
@@ -128,7 +133,35 @@ class ReferenceRepair(
             converted = converted,
             converting = converting,
             formatDone = formatDone,
+            openChanges = openListed,
+            unreadOpenChanges = unread,
         )
+    }
+
+    /**
+     * Lists in the open-change sets every change the old list names that is still open (`CTL-54`); how many, and the
+     * ids whose record does not read: while one is left, the sets are not kept and the old list stays.
+     */
+    @Suppress("TooGenericExceptionCaught")
+    private suspend fun convertOpenChanges(ids: Set<String>): Pair<Int, List<String>> {
+        var listed = 0
+        val unread = ArrayList<String>()
+        for (id in ids.sorted()) {
+            val change = try {
+                store.change(ChangeId(id))?.value
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                progress("open changes: [${SnapshotKeyText.printable(id)}] does not read: ${e.message}")
+                unread += id
+                continue
+            }
+            if (change != null && !change.state.terminal) {
+                checkNotNull(conversion).listOpenChange(change)
+                listed++
+            }
+        }
+        return listed to unread
     }
 
     /** Step 2 for one value: converted once, if the heads touch it and it is in the old format. */
