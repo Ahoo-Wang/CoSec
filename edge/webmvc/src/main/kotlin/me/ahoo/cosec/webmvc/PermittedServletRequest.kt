@@ -50,41 +50,47 @@ internal class PermittedServletRequest private constructor(
 
     override fun getAuthType(): String? = if (principal != null) null else super.getAuthType()
 
-    /** Whether [name] is one of [forward]'s, and its value there: null when the gate removes it. */
-    private fun forwarded(name: String): Pair<Boolean, String?> {
-        for ((forwardedName, value) in forward) {
-            if (forwardedName.equals(name, ignoreCase = true)) {
-                return true to value
-            }
+    /**
+     * [forward]'s names and values, in two arrays read by index: a header read of the application (frameworks make
+     * dozens per request) allocates nothing, and one of a request whose wrapper exists only for its principal loops
+     * over nothing (R2B-15).
+     */
+    private val forwardedNames: Array<String> = forward.keys.toTypedArray()
+    private val forwardedValues: Array<String?> = forward.values.toTypedArray()
+
+    /** The index of [name] in [forwardedNames], ignoring case; -1 when the gate leaves it alone. */
+    private fun forwarded(name: String): Int {
+        for (i in forwardedNames.indices) {
+            if (forwardedNames[i].equals(name, ignoreCase = true)) return i
         }
-        return false to null
+        return -1
     }
 
     override fun getHeader(name: String): String? {
-        val (named, value) = forwarded(name)
-        return if (named) value else super.getHeader(name)
+        val i = forwarded(name)
+        return if (i >= 0) forwardedValues[i] else super.getHeader(name)
     }
 
     override fun getHeaders(name: String): Enumeration<String> {
-        val (named, value) = forwarded(name)
-        return if (named) Collections.enumeration(listOfNotNull(value)) else super.getHeaders(name)
+        val i = forwarded(name)
+        return if (i >= 0) Collections.enumeration(listOfNotNull(forwardedValues[i])) else super.getHeaders(name)
     }
 
     override fun getHeaderNames(): Enumeration<String> {
-        val names = Collections.list(super.getHeaderNames()).filterNot { forwarded(it).first }
+        val names = Collections.list(super.getHeaderNames()).filter { forwarded(it) < 0 }
         return Collections.enumeration(names + forward.filterValues { it != null }.keys)
     }
 
     override fun getIntHeader(name: String): Int {
-        val (named, value) = forwarded(name)
-        return if (named) value?.toInt() ?: -1 else super.getIntHeader(name)
+        val i = forwarded(name)
+        return if (i >= 0) forwardedValues[i]?.toInt() ?: -1 else super.getIntHeader(name)
     }
 
     override fun getDateHeader(name: String): Long {
-        val (named, value) = forwarded(name)
+        val i = forwarded(name)
         return when {
-            !named -> super.getDateHeader(name)
-            value == null -> -1
+            i < 0 -> super.getDateHeader(name)
+            forwardedValues[i] == null -> -1
             else -> throw IllegalArgumentException("Header [$name] is not a date.")
         }
     }

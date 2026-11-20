@@ -136,7 +136,7 @@ class AuthorizationChecker internal constructor(private val pipeline: Pipeline, 
 
     @Suppress("TooGenericExceptionCaught")
     private suspend fun decided(security: RequestSecurity, action: Action, resource: Resource): Decision = try {
-        if (security.inProgress) pipeline.check(security, action, resource) else ended(security, action, resource)
+        if (security.admit()) pipeline.check(security, action, resource) else ended(security, action, resource)
     } catch (e: CancellationException) {
         if (!currentCoroutineContext().isActive) {
             throw e
@@ -161,7 +161,7 @@ class AuthorizationChecker internal constructor(private val pipeline: Pipeline, 
      */
     @InternalCoSecApi
     suspend fun decide(security: RequestSecurity, app: AppId, action: Action, resource: Resource): Decision {
-        if (!security.inProgress) {
+        if (!security.admit()) {
             return ended(security, action, resource)
         }
         val scoped = security.inApp(app) ?: return Decision.Deny(null)
@@ -202,7 +202,7 @@ class AuthorizationChecker internal constructor(private val pipeline: Pipeline, 
         if (!memberships.active) {
             return Decision.Deny(null)
         }
-        if (!security.inProgress) {
+        if (!security.admit()) {
             return ended(security, action, resource)
         }
         if (principal.membershipSource !is MembershipSource.Provider) {

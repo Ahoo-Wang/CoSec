@@ -70,6 +70,14 @@ object GuardAllowlist {
             "jwt:VerifiedTokenCachePropertyTest#the cache keeps within its bound and counts what it does",
             "spring-boot:OneVerifierTest#CoSec's own verifier answers a request's token from the cache, and a logout still refuses it next",
             "spring-boot:OneVerifierTest#an application's own verifier is never given the cache",
+            // PIP-32: nothing reads the server's request after the response.
+            "runtime:BreakGlassAndShadowTest#aReplayReadsTheHeadersTheRequestCarriedNotTheHostsLater",
+            "runtime:CheckAfterResponseTest#a check admitted before the end reads the copy after the server recycles the request",
+            "runtime:CheckAfterResponseTest#an ended request admits no check and never goes back to the server",
+            "runtime:CheckAfterResponseTest#the end waits for a check that is copying the headers",
+            "spring-boot:RealServerAfterResponseTest#a listener and the audit record read after the response what the request carried",
+            "spring-boot:RealServerAfterResponseTest#a security context kept after the response answers what the request carried, and admits no check",
+            "spring-boot:RealServerFactsParityTest#Tomcat refuses its request after the response",
             // IDN-29: an issuer's clock ahead by the skew, never an expiry.
             "jwt:IssuerSkewTest#an issue time within the skew ahead is accepted, beyond it refused as not valid yet",
             "jwt:IssuerSkewTest#a not-before time within the skew ahead is accepted, beyond it refused as not valid yet",
