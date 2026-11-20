@@ -95,11 +95,12 @@ internal class OpenChangeSets(
             read(document, ChangeId(id), documentKey(document), id) { !it.state.terminal }
         }
 
-    suspend fun changes(state: ChangeState, after: String?, limit: Int): ChangePage {
+    suspend fun changes(state: ChangeState, after: String?, limit: Int, documents: (SnapshotKey) -> Boolean): ChangePage {
         val members = sets.changeMembers(stateKey(state)).sorted().filter { after == null || it > after }
         val found = ArrayList<ListedChange>()
         members.forEachIndexed { index, member ->
             val (document, id) = parse(member) ?: return@forEachIndexed
+            if (!documents(document)) return@forEachIndexed
             read(document, id, stateKey(state), member) { it.state == state }?.let(found::add)
             if (found.size == limit) return ChangePage(found, member.takeIf { index < members.lastIndex })
         }

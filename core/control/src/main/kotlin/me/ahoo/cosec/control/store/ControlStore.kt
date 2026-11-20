@@ -197,11 +197,17 @@ interface ControlStore : CandidateStore {
     suspend fun openChanges(document: SnapshotKey): List<ListedChange>
 
     /**
-     * The changes listed in [state], ordered by document and id, after the cursor [after] (`null`: from the first), at
-     * most [limit] of them, each read now and still in [state] (a member a later write moved on is skipped). [ChangePage.next]
-     * is the cursor of the next page, `null` after the last.
+     * The changes listed in [state] of the documents [documents] accepts, ordered by document and id, after the cursor
+     * [after] (`null`: from the first), at most [limit] of them, each read now and still in [state] (a member a later
+     * write moved on is skipped). A member of a document [documents] refuses is neither read nor counted. [ChangePage.next]
+     * is the cursor of the next page, the last change of this one; `null` after the last.
      */
-    suspend fun changes(state: ChangeState, after: String?, limit: Int): ChangePage
+    suspend fun changes(
+        state: ChangeState,
+        after: String?,
+        limit: Int,
+        documents: (SnapshotKey) -> Boolean = { true },
+    ): ChangePage
 
     /**
      * Takes the lease [name] for [holder] for [duration] if nobody holds it, so that one control-plane instance runs a

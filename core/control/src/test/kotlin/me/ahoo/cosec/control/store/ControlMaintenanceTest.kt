@@ -341,9 +341,14 @@ class ControlMaintenanceTest {
             return store.openChanges(document)
         }
 
-        override suspend fun changes(state: ChangeState, after: String?, limit: Int): ChangePage {
+        override suspend fun changes(
+            state: ChangeState,
+            after: String?,
+            limit: Int,
+            documents: (SnapshotKey) -> Boolean,
+        ): ChangePage {
             listings++
-            return store.changes(state, after, limit)
+            return store.changes(state, after, limit, documents)
         }
     }
 

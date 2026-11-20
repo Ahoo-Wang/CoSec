@@ -248,8 +248,12 @@ class CoCacheControlStore internal constructor(
 
     override suspend fun openChanges(document: SnapshotKey): List<ListedChange> = openChanges.openChanges(document)
 
-    override suspend fun changes(state: ChangeState, after: String?, limit: Int): ChangePage =
-        openChanges.changes(state, after, limit)
+    override suspend fun changes(
+        state: ChangeState,
+        after: String?,
+        limit: Int,
+        documents: (SnapshotKey) -> Boolean,
+    ): ChangePage = openChanges.changes(state, after, limit, documents)
 
     /** The open-change list of the format before 8.0.0-beta.5, ids to when listed; null once converted. */
     @InternalCoSecApi

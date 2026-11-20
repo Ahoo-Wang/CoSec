@@ -91,6 +91,25 @@ class OpenChangeListingTest {
         second.get("next").isNull.assert().isTrue()
     }
 
+    /**
+     * A page cut before the filter would name in its cursor the last change it read, acme's here, and a cursor followed
+     * by an empty page would tell of changes after it (`CTL-55`).
+     */
+    @Test
+    fun `a cursor names only a change the caller sees, and only when one follows it - CTL-55`() {
+        val acme = proposed()
+        val globex = runBlocking {
+            fixture.changes.propose(fixture.mallory, SnapshotKey.Tenant("globex"), 1, emptyList(), "three").id.value
+        }
+        val (_, own) = list(mapOf("state" to "CHECKED", "limit" to "1"), mallory)
+        ids(own).assert().containsExactly(globex)
+        own.get("next").isNull.assert().isTrue()
+        own.toString().assert().doesNotContain("acme")
+        val (_, last) = list(mapOf("state" to "CHECKED", "limit" to "1", "after" to "tenant:acme#${acme[0]}"), alice)
+        ids(last).assert().containsExactly(acme[1])
+        last.get("next").isNull.assert().describedAs("globex's change follows, unseen").isTrue()
+    }
+
     @Test
     fun `a listing that names neither a document nor a state is refused`() {
         list(emptyMap(), alice).first.assert().isEqualTo(400)

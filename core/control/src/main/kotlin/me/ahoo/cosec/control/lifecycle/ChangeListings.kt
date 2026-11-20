@@ -52,10 +52,7 @@ internal class ChangeListings(private val store: ControlStore, private val autho
         }
         val decisions = HashMap<SnapshotKey, ControlDecision>()
         val visible: suspend (ListedChange) -> Boolean = { listed -> visible(operator, listed, decisions) }
-        if (document == null) {
-            val page = store.changes(checkNotNull(state), after, limit)
-            return ChangePage(page.changes.filter { visible(it) }, page.next)
-        }
+        if (document == null) return byState(operator, checkNotNull(state), after, limit, visible)
         if (!TenantIsolation.allows(operator, document)) {
             return ChangePage(emptyList(), null)
         }
@@ -66,6 +63,29 @@ internal class ChangeListings(private val store: ControlStore, private val autho
             .filter { visible(it) }
         val page = listed.take(limit)
         return ChangePage(page, if (listed.size > limit) page.last().id.value else null)
+    }
+
+    /**
+     * The page is cut after the filter, never before (`CTL-55`): the store skips, unread, the documents the caller's
+     * tenant does not reach, and the rest are read page by page until [limit] visible ones and one more are found, so
+     * [ChangePage.next] is the cursor of a change the caller sees, and there only when a visible one follows it.
+     */
+    private suspend fun byState(
+        operator: Operator,
+        state: ChangeState,
+        after: String?,
+        limit: Int,
+        visible: suspend (ListedChange) -> Boolean,
+    ): ChangePage {
+        val found = ArrayList<ListedChange>()
+        var cursor = after
+        while (found.size <= limit) {
+            val page = store.changes(state, cursor, limit) { TenantIsolation.allows(operator, it) }
+            page.changes.filterTo(found) { visible(it) }
+            cursor = page.next ?: break
+        }
+        val shown = found.take(limit)
+        return ChangePage(shown, if (found.size > limit) cursorOf(shown.last()) else null)
     }
 
     private suspend fun visible(
@@ -85,5 +105,10 @@ internal class ChangeListings(private val store: ControlStore, private val autho
                     "whether the changes of [$key] may be read could not be decided"
                 )
         }
+    }
+
+    private companion object {
+        /** As the stores order a state's members: `<docKey>#<id>`. */
+        fun cursorOf(listed: ListedChange): String = "${listed.document}#${listed.id.value}"
     }
 }

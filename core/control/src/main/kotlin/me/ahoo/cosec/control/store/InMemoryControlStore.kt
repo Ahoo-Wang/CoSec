@@ -129,8 +129,13 @@ class InMemoryControlStore(private val clock: Clock = Clock.systemUTC()) : Contr
         open().filter { it.key == document }.map(ListedChange::Readable)
     }
 
-    override suspend fun changes(state: ChangeState, after: String?, limit: Int): ChangePage = synchronized(lock) {
-        val listed = open().filter { it.state == state }.sortedBy(
+    override suspend fun changes(
+        state: ChangeState,
+        after: String?,
+        limit: Int,
+        documents: (SnapshotKey) -> Boolean,
+    ): ChangePage = synchronized(lock) {
+        val listed = open().filter { it.state == state && documents(it.key) }.sortedBy(
             ::cursorOf
         ).filter { after == null || cursorOf(it) > after }
         val page = listed.take(limit)
