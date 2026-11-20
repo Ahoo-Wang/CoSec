@@ -19,6 +19,9 @@ import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.control.change.ShadowSummary
 
-/** Every instance that has reported on a window so far, and its [summary] once it may close. */
+/**
+ * Every instance that has reported on a window so far, its [summary] once it may close, and the instances it is
+ * [waiting] for: they reported before and have no report now.
+ */
 @InternalCoSecApi
-class ShadowLook(val reporters: Set<String>, val summary: ShadowSummary?)
+class ShadowLook(val reporters: Set<String>, val summary: ShadowSummary?, val waiting: Set<String> = emptySet())

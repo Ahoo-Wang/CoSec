@@ -44,9 +44,14 @@ class ShadowWindows(private val reports: ShadowReportReader, private val options
      *
      * The total is the sum of one report per instance, each that instance's cumulative report (review R1). Anything
      * else is an error that keeps the window open, never a sample: a report of another window, a second report of one
-     * instance, a negative count, or no report from an instance [ShadowState.reporters] says reported before, since the
-     * instance that vanishes is as likely as any to be the one that saw errors. An instance blocks the window by
-     * itself: one with a `CANDIDATE_ERROR` blocks it whatever the others report.
+     * instance, or a negative count. An instance blocks the window by itself: one with a `CANDIDATE_ERROR` blocks it
+     * whatever the others report.
+     *
+     * An instance [ShadowState.reporters] says reported before and that has no report now has vanished: its evidence
+     * is missing, never zero, since the instance that vanishes is as likely as any to be the one that saw the narrowed
+     * requests (`CTL-56`). The window waits for it; an instance rewrites its cumulative report every few seconds, so a
+     * report lost in a failover comes back while the instance serves. At the longest window it closes insufficient,
+     * naming the vanished instances, and never passes.
      */
     suspend fun look(state: ShadowState, now: Instant): ShadowLook {
         val window = state.window
@@ -59,7 +64,6 @@ class ShadowWindows(private val reports: ShadowReportReader, private val options
         check(!negative) { "A report of window $window has a negative count" }
         val reporters = read.map { it.instance }.toSet()
         val vanished = state.reporters - reporters
-        check(vanished.isEmpty()) { "Instances ${vanished.sorted()} reported on window $window and have no report now" }
         val counts = ShadowOutcome.entries.associate { it.name to 0L }.toMutableMap()
         for (report in read) {
             report.counts.forEach { (outcome, count) -> counts.merge(outcome.name, count, Long::plus) }
@@ -68,13 +72,14 @@ class ShadowWindows(private val reports: ShadowReportReader, private val options
         val effective = ShadowOutcome.entries.filter { it.effective }.sumOf { counts.getValue(it.name) }
         val elapsed = java.time.Duration.between(state.startedAt, now)
         val summary = when {
-            blocked -> ShadowSummary(counts, now, insufficient = false, blocked = true)
-            elapsed >= options.minDuration && effective >= options.minSamples ->
+            blocked -> ShadowSummary(counts, now, insufficient = false, blocked = true, vanished = vanished)
+            vanished.isNotEmpty() && elapsed < options.maxDuration -> null
+            vanished.isEmpty() && elapsed >= options.minDuration && effective >= options.minSamples ->
                 ShadowSummary(counts, now, insufficient = false, blocked = false)
-            elapsed >= options.maxDuration -> ShadowSummary(counts, now, insufficient = true, blocked = false)
+            elapsed >= options.maxDuration -> ShadowSummary(counts, now, insufficient = true, blocked = false, vanished)
             else -> null
         }
-        return ShadowLook(state.reporters + reporters, summary)
+        return ShadowLook(state.reporters + reporters, summary, vanished)
     }
 
     /**

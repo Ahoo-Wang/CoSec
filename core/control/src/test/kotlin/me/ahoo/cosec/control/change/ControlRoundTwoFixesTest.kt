@@ -292,16 +292,57 @@ class ControlRoundTwoFixesTest {
         written.write(report("pod-b", 0, window))
         // Not enough samples yet: the window stays open, and the control plane keeps who has reported.
         changes.shadowed(change.id).shadow!!.reporters.assert().isEqualTo(setOf("pod-a", "pod-b"))
-        // pod-b vanishes from the window's reporters: enough samples or not, the window does not close without it.
+        // pod-b vanishes from the window's reporters: enough samples or not, the window waits for it (CTL-56).
         written.write(report("pod-a", 20, window))
         vanished += "pod-b"
-        refused { changes.shadowed(change.id) }.status.assert().isEqualTo(503)
+        changes.shadowed(change.id).shadow!!.closed.assert().isNull()
         changes.get(change.id).state.assert().isEqualTo(ChangeState.SHADOWING)
         // Back, with the error it saw: the window closes blocked.
         vanished.clear()
         written.write(report("pod-b", 0, window, errors = 1))
         changes.shadowed(change.id).shadow!!.closed!!.blocked.assert().isTrue()
     }
+
+    /**
+     * `CTL-56`: an instance that reported on a window and has no report at the longest window is missing evidence,
+     * never zero: the window closes insufficient, naming it, and does not pass however many samples the others have.
+     */
+    @Test
+    fun `a window whose reporter vanished closes insufficient at the longest window, naming it - CTL-56`() =
+        runBlocking<Unit> {
+            val written = InMemoryShadowReports(clock)
+            val vanished = HashSet<String>()
+            val reader = object : ShadowReportReader {
+                override suspend fun reports(
+                    window: String
+                ) = written.reports(window).filter { it.instance !in vanished }
+
+                override suspend fun statuses(): List<InstanceStatus> = emptyList()
+            }
+            val changes = changes(reports = reader, shadow = ShadowOptions(Duration.ZERO, 10, Duration.ofHours(1)))
+            val change = changes.propose(
+                pia,
+                SnapshotKey.Platform,
+                1,
+                listOf(Operation.PutPolicy(writer.copyAs("more"))),
+                "x"
+            )
+            val window = changes.stage(pia, change.id).shadow!!.window
+            written.write(report("pod-a", 0, window))
+            written.write(report("pod-b", 0, window))
+            changes.shadowed(change.id).shadow!!.closed.assert().isNull()
+            written.write(report("pod-a", 50, window))
+            vanished += "pod-b"
+            clock.now = clock.now.plus(Duration.ofMinutes(59))
+            changes.shadowed(change.id).shadow!!.closed.assert().describedAs("before the longest window").isNull()
+            clock.now = clock.now.plus(Duration.ofMinutes(2))
+            val closed = changes.shadowed(change.id).shadow!!.closed!!
+            closed.insufficient.assert().isTrue()
+            closed.blocked.assert().isFalse()
+            closed.vanished.assert().containsExactly("pod-b")
+            closed.needsAck.assert().isTrue()
+            changes.get(change.id).shadow!!.closed!!.vanished.assert().describedAs("as stored").containsExactly("pod-b")
+        }
 
     @Test
     fun `an approval keeps every attribute of its approver, so that publishing checks what it was decided on`() = runBlocking<Unit> {

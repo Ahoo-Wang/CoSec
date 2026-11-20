@@ -87,8 +87,9 @@ class PublicApiStabilityTest {
             ) + listOf(
                 // The control store's records are experimental with the store (R9, D3); MovedHead and RevisionRef are
                 // experimental with the ChangeEvent that carries them (R2C-5).
-                "change.ShadowSummary" to "A closed shadow window's counts by outcome, when it closed, and its two " +
-                    "verdicts: a new outcome is a new key of the counts, not a new field.",
+                "change.ShadowSummary" to "A closed shadow window's counts by outcome, when it closed, its two " +
+                    "verdicts and the instances whose evidence was missing (CTL-56): a new outcome is a new key of " +
+                    "the counts, not a new field.",
             ).map { (name, reason) -> "control.$name" to reason } + listOf(
                 "document.Actor" to "Who acted on a control-plane change: an id and a tenant. Delegation is a value " +
                     "of its own beside it (RFC 0009 §7), not a field.",
