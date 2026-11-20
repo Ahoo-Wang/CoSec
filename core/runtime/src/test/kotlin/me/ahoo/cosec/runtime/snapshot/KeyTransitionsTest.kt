@@ -253,6 +253,57 @@ class KeyTransitionsTest {
         delays.map { it.toMillis() }.assert().containsExactly(100L, 200L, 400L, 800L, 1000L)
     }
 
+    /** R2D-4: a cold load the queue refuses keeps its read and its waiter, and compiles that read again when due. */
+    @Test
+    fun aRefusedColdLoadCompilesItsReadAgainWhenItsRetryIsDue() {
+        val request = key.request(Ask.Request)
+        val load = key.state.load!!.id
+        key.offer(KeyEvent.ReadDone(load, present(1)))
+        val refused = key.offer(KeyEvent.CompileRejected(load, RejectedExecutionException()))
+        refused.effects.filterIsInstance<KeyEffect.ScheduleCompileRetry>().single()
+            .assert().isEqualTo(KeyEffect.ScheduleCompileRetry(load, KeyHarness.COLD_COMPILE_RETRY, spread = true))
+        refused.effects.none { it is KeyEffect.Answer || it is KeyEffect.Install }.assert().isTrue()
+        key.state.load!!.id.assert().isEqualTo(load)
+
+        key.nanos = KeyHarness.COLD_COMPILE_RETRY.toNanos()
+        val due = key.offer(KeyEvent.CompileRetryDue(load))
+        due.effects.filterIsInstance<KeyEffect.Compile>().single().loadId.assert().isEqualTo(load)
+        key.offer(KeyEvent.Compiled(load, DocumentState.Present("c1")))
+        key.answered[key.hung[request]]!!.revision.assert().isEqualTo(1L)
+        key.state.installed!!.origin.assert().isEqualTo(EntryOrigin.DOCUMENT)
+    }
+
+    /** R2D-4: the retry's delay never runs past the load's cold load timeout, and a retry due after it fails the load. */
+    @Test
+    fun aRefusedColdLoadFailsOnceItsColdLoadTimeoutIsSpent() {
+        val request = key.request(Ask.Request)
+        val load = key.state.load!!.id
+        key.offer(KeyEvent.ReadDone(load, present(1)))
+        key.nanos = KeyHarness.COLD_LOAD_TIMEOUT.minusMillis(3).toNanos()
+        key.offer(KeyEvent.CompileRejected(load, RejectedExecutionException())).effects
+            .filterIsInstance<KeyEffect.ScheduleCompileRetry>().single()
+            .assert().isEqualTo(KeyEffect.ScheduleCompileRetry(load, Duration.ofMillis(3), spread = false))
+
+        key.nanos = KeyHarness.COLD_LOAD_TIMEOUT.toNanos()
+        val due = key.offer(KeyEvent.CompileRetryDue(load))
+        due.effects.none { it is KeyEffect.Compile || it is KeyEffect.Install }.assert().isTrue()
+        key.state.load.assert().isNull()
+        key.answered[key.hung[request]]!!.state.assert().isInstanceOf(DocumentState.Failed::class.java)
+    }
+
+    /** R2D-4: refused when its cold load timeout is already spent, a cold load fails at once, scheduling nothing. */
+    @Test
+    fun aColdLoadRefusedPastItsColdLoadTimeoutFailsAtOnce() {
+        val request = key.request(Ask.Request)
+        val load = key.state.load!!.id
+        key.offer(KeyEvent.ReadDone(load, present(1)))
+        key.nanos = KeyHarness.COLD_LOAD_TIMEOUT.toNanos()
+        val refused = key.offer(KeyEvent.CompileRejected(load, RejectedExecutionException()))
+        refused.effects.none { it is KeyEffect.ScheduleCompileRetry || it is KeyEffect.Install }.assert().isTrue()
+        key.answered[key.hung[request]]!!.state.assert().isInstanceOf(DocumentState.Failed::class.java)
+        key.offer(KeyEvent.CompileRetryDue(load)).effects.assert().isEmpty()
+    }
+
     @Test
     fun aDocumentGoneAfterOneWasSeenIsInstalledAsLostAndReportedAfterTheAnswer() {
         val request = key.request(Ask.Request)

@@ -344,6 +344,12 @@
       "type": "java.lang.Boolean"
     },
     {
+      "description": "How long each read of the CoCache revocation reader (the token's, then its principal's) may take: past it Redis is unavailable, so a request's token is accepted (or refused, with `fail-closed`) and a refresh fails. Positive, and twice it less than `cosec.pipeline.authentication-timeout`, or a hanging Redis would make every authenticated request 503. An application's own `RevocationReader` bounds its reads itself.",
+      "name": "cosec.authentication.revocation.read-timeout",
+      "sourceType": "me.ahoo.cosec.spring.boot.pipeline.RevocationProperties",
+      "type": "java.time.Duration"
+    },
+    {
       "description": "How much later than a subject revocation a token may have been issued and still be revoked by it: room for an issuer whose clock runs ahead of the revoking one.",
       "name": "cosec.authentication.revocation.skew",
       "sourceType": "me.ahoo.cosec.spring.boot.pipeline.RevocationProperties",
@@ -440,7 +446,7 @@
       "type": "java.time.Duration"
     },
     {
-      "description": "Tenants that must not be decided on old documents: a request of one is 503 unless a DENY matches, when the oldest document it reads was confirmed longer ago than `max-lag`.",
+      "description": "Tenants that must not be decided on old documents: a request of one is 503 unless a DENY matches, when the oldest document it reads was confirmed longer ago than `max-lag`. `*` names every tenant.",
       "name": "cosec.authorization.snapshot.fail-closed.tenants",
       "sourceType": "me.ahoo.cosec.spring.boot.pipeline.RuntimeAuthorizationProperties$Snapshot$FailClosed",
       "type": "java.util.Set<java.lang.String>"

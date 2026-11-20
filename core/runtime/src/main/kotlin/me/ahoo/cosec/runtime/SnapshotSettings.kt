@@ -39,7 +39,10 @@ class SnapshotSettings internal constructor() {
     /** Lag above which a document is logged at ERROR and reported as stale. */
     var lagEscalate: Duration = DEFAULTS.lagEscalate
 
-    /** Tenants whose requests fail when the documents they use lag more than [failClosedMaxLag] (RFC 0001 §7.1). */
+    /**
+     * Tenants whose requests fail when the documents they use lag more than [failClosedMaxLag] (RFC 0001 §7.1); `*`
+     * names every tenant. Empty by default: an installed document keeps deciding however long Redis cannot confirm it.
+     */
     var failClosedTenants: Set<String> = DEFAULTS.failClosedTenants
 
     var failClosedMaxLag: Duration = DEFAULTS.failClosedMaxLag

@@ -125,6 +125,11 @@ internal class KeyModelRunner(
                 effect.delay.toNanos(),
                 TimeUnit.NANOSECONDS
             )
+            is KeyEffect.ScheduleCompileRetry -> world.threads.scheduler.schedule(
+                Runnable { offer(KeyEvent.CompileRetryDue(effect.loadId)) },
+                effect.delay.toNanos(),
+                TimeUnit.NANOSECONDS
+            )
             KeyEffect.DropIfEmpty -> world.threads.housekeeping.execute { world.dropIfEmpty(this) }
             // The model's family has no cap: its evictions are housekeeping's.
             KeyEffect.EvictOverCap -> Unit

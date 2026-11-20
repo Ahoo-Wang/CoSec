@@ -275,8 +275,8 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
     fun prewarm(keys: Collection<SnapshotKey>): CompletableFuture<Void> = prewarms.start(keys)
 
     /**
-     * Throws [SnapshotStaleException] when [tenantId] is configured to fail closed and [snapshot] lags more than
-     * [SnapshotOptions.failClosedMaxLag]. Other tenants are never affected (RFC 0003 §4.5).
+     * Throws [SnapshotStaleException] when [tenantId] fails closed (named, or [SnapshotOptions.ALL_TENANTS]) and [snapshot]
+     * lags more than [SnapshotOptions.failClosedMaxLag]. Other tenants are never affected (RFC 0003 §4.5).
      */
     fun checkFresh(snapshot: Snapshot<*, *>, tenantId: String) {
         checkFresh(tenantId) { snapshot.lagAt(it) }
@@ -288,7 +288,7 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
     }
 
     private inline fun checkFresh(tenantId: String, lagAt: (Instant) -> Duration) {
-        if (options.failClosedTenants.isEmpty() || tenantId !in options.failClosedTenants) {
+        if (tenantId !in options.failClosedTenants && SnapshotOptions.ALL_TENANTS !in options.failClosedTenants) {
             return
         }
         val lag = lagAt(clock.instant())

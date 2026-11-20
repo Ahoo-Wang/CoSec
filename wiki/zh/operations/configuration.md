@@ -162,7 +162,7 @@ CoSec 没有哪个配置项叫这些名字，而已知的 key 无论来源都不
 | `cosec.authorization.snapshot.revalidate-interval` | duration | `10s` | 多久开始一轮，用条件读向 Redis 确认每个已装入的文档；上一轮还在进行时，下一轮在它结束后立即开始，两轮从不重叠。失效消息丢失的变化，由它可读之后第一个到达该文档的一轮装上（`SNP-6`）。至少为 `1s`、不超过 `5m`、小于 `lag-warn`，配置了 `fail-closed.tenants` 时还要小于 `fail-closed.max-lag`；否则启动失败。每一轮在 Redis 上每份文档只花几微秒，与文档大小无关（[存储](./storage.md#what-revalidation-costs-redis)）。 |
 | `cosec.authorization.snapshot.lag-warn` | duration | `60s` | 文档超过这个时长未被确认时，以 `WARN` 记录。不得超过 `lag-escalate`。 |
 | `cosec.authorization.snapshot.lag-escalate` | duration | `5m` | 文档超过这个时长未被确认时，以 `ERROR` 记录为陈旧。 |
-| `cosec.authorization.snapshot.fail-closed.tenants` | 租户 id 集合 | 空 | 不得基于旧文档决策的租户：这类租户的请求读取的最旧文档，若上次确认距今超过 `max-lag`，请求得到 `503`（`SourceUnavailable`），除非有 DENY 匹配。其他租户继续基于已装入的文档决策。 |
+| `cosec.authorization.snapshot.fail-closed.tenants` | 租户 id 集合 | 空 | 不得基于旧文档决策的租户：这类租户的请求读取的最旧文档，若上次确认距今超过 `max-lag`，请求得到 `503`（`SourceUnavailable`），除非有 DENY 匹配。`*` 表示所有租户：租户多到无法一一列出的宿主，可以借此为所有租户选择新鲜度而非可用性。其他租户继续基于已装入的文档决策。 |
 | `cosec.authorization.snapshot.fail-closed.max-lag` | duration | `30m` | 上述租户超过这个滞后即失败即拒绝。不能为负。 |
 | `cosec.authorization.snapshot.cold-load-timeout` | duration | `2s` | 请求等待一个未装入的文档多久。超过后，对这个请求而言该文档算作失败。必须为正。 |
 | `cosec.authorization.snapshot.max-apps` | int | `1024` | 内存中最多持有的应用文档数（为正）；超过后丢弃最久未用的一个，需要时再加载。冷加载突发时，一个族可能短暂地持有更多：最多为该上限的两倍，且绝不超出上限 4,096 个以上，另加此刻正在加载的文档；超过这个数时，加载该文档的线程在回答之前最多驱逐其中 64 个，其余由后勤线程驱逐（[存储](./storage.md#how-instances-read-documents)）。 |
@@ -194,6 +194,7 @@ CoSec 没有哪个配置项叫这些名字，而已知的 key 无论来源都不
 |---|---|---|---|
 | `cosec.authentication.revocation.skew` | duration | `5s` | 签发方的时钟可以比本实例快多少。签发时间比主体吊销晚不超过这个时长的令牌仍被该吊销覆盖；令牌的签发时间（`iat`）和生效时间（`nbf`）可以比本实例的时钟晚这么多（`IDN-29`）；令牌的过期时间没有这样的余量。 |
 | `cosec.authentication.revocation.fail-closed` | boolean | `false` | 吊销无法读取时，是否拒绝请求的令牌（`503`）而不是接受它（[已写明的例外](../guide/security-model.md#the-two-documented-exceptions)）。无论如何，此时刷新都会失败。 |
+| `cosec.authentication.revocation.read-timeout` | duration | `300ms` | CoSec 自己的吊销读取器（基于已吊销令牌与已吊销主体缓存的 CoCache 读取器）每次读取可用的时间。超过后 Redis 算作无法读取：请求的令牌被接受（设置 `fail-closed` 时被拒绝），刷新失败。必须为正，且它的两倍（一个令牌的两次读取）小于 `cosec.pipeline.authentication-timeout`，否则启动失败并点名两者：不然挂起的 Redis 会让每个已认证请求都返回 `503`。应用自己的 `RevocationReader` 自行限制它的读取时间（[扩展](../architecture/extending.md)）。 |
 | `cosec.authentication.login.refresh.path` | string | 未设置 | starter 提供刷新路由的位置：`POST` 令牌对（`IDN-23`，[构建客户端](../integration/clients.md#what-your-application-serves)）。未设置时不提供。文档必须允许匿名 `POST` 它。在网关上、在不提供 HTTP 的宿主上、登录或 JWT 关闭时设置，或设置为一个普通绝对路径以外的值，启动失败。 |
 | `cosec.authentication.login.logout.path` | string | 未设置 | starter 提供登出路由的位置：`POST` 令牌对，应答 `204`（`IDN-24`）；其余同 `refresh.path`，且不能是同一路径。 |
 

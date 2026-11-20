@@ -166,6 +166,10 @@ description: "每个 8.0 预览版（alpha 与 beta）到下一个之间的变�
   - **`simulate` 与 `explain` 只对能读取*定义*其策略的文档的调用方点名语句。** 租户绑定了平台策略或应用的权限策略时，租户管理员不再看到该策略的语句，决策里是 `"redacted": true`，追踪里只计数。之前由绑定所在的文档决定，而租户管理员能读它。能读取定义文档的调用方（平台运维）看到的与之前相同。
   - **带 `ifMatch` 的区段操作是 `400`。** `putCatalog`、`setLimits`、`setAttributes` 与 `setBoundary` 替换的是没有自己摘要的区段，之前接受 `ifMatch` 却忽略它。变更的 `base`（提议时文档的摘要）保护整份文档。去掉该成员即可。每个操作现在也只接受自己的成员：比如带 `policy` 的 `removePolicy` 是未知成员。
   - **变更在数据面读取的那份文档上检查、分析与批准**：候选写出再读回，而不是操作构造出的那份。预期结果不变：除非格式编解码器没有往返某个成员，两者相同。
+- **冷加载会等待已满的编译池；`fail-closed.tenants` 接受 `*`；本地限流器为每份文档的规则设上限**（R2D-3、R2D-4、R2D-5）。文档、属性默认值、存储的值和线上格式都不变。
+  - 被已满的编译队列拒绝的冷加载不再立即回答 `503`。它每隔几毫秒重新编译，直到 `cold-load-timeout`（2 秒），然后照旧失败即拒绝。新副本收到的一批租户会排队，而不是被拒绝（[新副本的代价](./deployment.md#what-a-new-replica-costs)）。
+  - `cosec.authorization.snapshot.fail-closed.tenants: "*"` 让所有租户在超过 `fail-closed.max-lag` 后失败即拒绝。默认仍为空。
+  - `LocalRateLimiter` 最多把四分之一的桶留给一份文档的规则，并在 `cosec.ratelimit.local.refused` 中为它拒绝的每个桶计数。它的构造函数在 `maximumBucketsPerRule` 之后接受 `maximumBucketsPerOwner`：用具名参数调用它的代码无需改动即可编译；针对 beta.4 编译、构造它的代码需要重新编译。
 
 ## 从 8.0.0-beta.3 升级 {#from-8-0-0-beta-3}
 

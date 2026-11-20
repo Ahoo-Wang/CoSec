@@ -11,8 +11,11 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.runtime.ratelimit
 
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.model.decision.RateLimitSpec
 import me.ahoo.cosec.spi.ratelimit.RateLimitResult
 import me.ahoo.cosec.spi.ratelimit.RateLimiter
@@ -21,6 +24,7 @@ import java.time.Duration
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicLong
+import java.util.concurrent.atomic.AtomicLongArray
 
 /**
  * An in-memory [RateLimiter], counting per JVM with the sliding window of the Redis one, without suspending.
@@ -29,10 +33,15 @@ import java.util.concurrent.atomic.AtomicLong
  * [expireAfterAccess], and for two of its rule's windows, when both of its counters are stale and the estimate would read
  * zero anyway. So no pause of a client, however long within its window, resets what it has used (`OBL-5`).
  *
- * At most [maximumBuckets] buckets exist, and at most [maximumBucketsPerRule] of one rule, so a rule whose key a client
- * can vary fills only its own share. An existing bucket is never evicted to make room: its count is the state the rule
- * exists to keep, and dropping it would hand its key fresh permits. A bucket that cannot be admitted cannot be counted,
- * so [tryAcquire] throws and the rule's `strictFailure` decides, as for any limiter that cannot answer (`OBL-6`).
+ * At most [maximumBuckets] buckets exist, at most [maximumBucketsPerRule] of one rule, and at most
+ * [maximumBucketsPerOwner] of one document's rules (R2D-3): its owner is the counter id's document, what comes before
+ * its `/` (`tenant:acme`, `app:wms`, `platform`); a rule id of a caller's own, without one, has the other two bounds. So a rule whose key a client can vary fills only its own share, and
+ * the rules of one tenant or one app, which its own administrator writes, fill only their document's: by default a
+ * quarter, so it takes four such documents to fill the limiter. An existing bucket is never evicted to make room: its
+ * count is the state the rule exists to keep, and dropping it would hand its key fresh permits. A bucket that cannot be
+ * admitted cannot be counted, so [tryAcquire] throws and the rule's `strictFailure` decides, as for any limiter that
+ * cannot answer (`OBL-6`); each such refusal is counted by the kind of document ([refused], the meter
+ * `cosec.ratelimit.local.refused`).
  *
  * Finding a bucket takes no lock; admitting one reserves a slot of each bound first; only a sweep removes one, and only
  * the instance it found idle. A sweep cycle starts once per sweep interval (half the expiry, at most a minute), also
@@ -46,6 +55,7 @@ import java.util.concurrent.atomic.AtomicLong
 class LocalRateLimiter(
     private val maximumBuckets: Long = DEFAULT_MAXIMUM_BUCKETS,
     private val maximumBucketsPerRule: Long = (maximumBuckets / 2).coerceAtLeast(1),
+    private val maximumBucketsPerOwner: Long = (maximumBuckets / OWNER_SHARE).coerceAtLeast(1),
     expireAfterAccess: Duration = DEFAULT_EXPIRE_AFTER_ACCESS,
     private val clock: () -> Long = System::currentTimeMillis,
 ) : RateLimiter {
@@ -53,6 +63,9 @@ class LocalRateLimiter(
         require(maximumBuckets > 0) { "maximumBuckets must be positive, not $maximumBuckets." }
         require(maximumBucketsPerRule in 1..maximumBuckets) {
             "maximumBucketsPerRule must be between 1 and maximumBuckets ($maximumBuckets), not $maximumBucketsPerRule."
+        }
+        require(maximumBucketsPerOwner in 1..maximumBuckets) {
+            "maximumBucketsPerOwner must be between 1 and maximumBuckets ($maximumBuckets), not $maximumBucketsPerOwner."
         }
         require(!expireAfterAccess.isNegative && !expireAfterAccess.isZero) {
             "expireAfterAccess must be positive, not $expireAfterAccess."
@@ -80,12 +93,19 @@ class LocalRateLimiter(
     private val windows = ConcurrentHashMap<BucketKey, Window>()
     private val admitted = AtomicLong()
 
+    /** A rule's admitted buckets, and its document's, shared by every rule of that document; none for a caller's own id. */
+    private class Slots(val rule: AtomicLong, val owner: AtomicLong?)
+
     /**
-     * Each rule's admitted buckets. An entry is never removed, even at zero: another thread may be about to increment
-     * it, and the sweep reads it with `getValue`. It stays small because rule ids come from compiled documents, never
-     * from requests.
+     * Each rule's slots, and each document's admitted buckets. An entry is never removed, even at zero: another thread
+     * may be about to increment it, and the sweep reads it with `getValue`. They stay small because rule ids come from
+     * compiled documents, never from requests.
      */
-    private val admittedByRule = ConcurrentHashMap<String, AtomicLong>()
+    private val admittedByRule = ConcurrentHashMap<String, Slots>()
+    private val admittedByOwner = ConcurrentHashMap<String, AtomicLong>()
+
+    /** The buckets refused for want of a slot, by the kind of document whose rule asked ([Refused]). */
+    private val refusals = AtomicLongArray(Refused.entries.size)
     private val expireMillis = expireAfterAccess.toMillis()
     private val sweepIntervalMillis = (expireMillis / 2).coerceIn(1, MAX_SWEEP_INTERVAL_MILLIS)
     private val nextSweep = AtomicLong(Long.MIN_VALUE)
@@ -132,21 +152,29 @@ class LocalRateLimiter(
      * not advanced the sweep yet ([swept]) advances it by one step first, and only a cycle that is running or due.
      */
     private fun admit(key: BucketKey, windowMillis: Long, now: Long, swept: Boolean): Window {
-        val rule = admittedByRule.computeIfAbsent(key.ruleId) { AtomicLong() }
-        tryAdmit(key, rule, windowMillis, now)?.let { return it }
+        val slots = slotsOf(key.ruleId)
+        tryAdmit(key, slots, windowMillis, now)?.let { return it }
         if (!swept) {
             sweepStep(now)
         }
-        return tryAdmit(key, rule, windowMillis, now) ?: throw LimiterFullException(
-            "The local rate limiter holds its maximum of buckets (rule [${key.ruleId}]: " +
-                "${rule.get()} of $maximumBucketsPerRule, all: ${admitted.get()} of $maximumBuckets)."
-        )
+        return tryAdmit(key, slots, windowMillis, now) ?: run {
+            refusals.incrementAndGet(Refused.of(key.ruleId).ordinal)
+            throw LimiterFullException(
+                "The local rate limiter holds its maximum of buckets (rule [${key.ruleId}]: " +
+                    "${slots.rule.get()} of $maximumBucketsPerRule, its document: ${slots.owner?.get() ?: "-"} of " +
+                    "$maximumBucketsPerOwner, all: ${admitted.get()} of $maximumBuckets)."
+            )
+        }
+    }
+
+    private fun slotsOf(ruleId: String): Slots = admittedByRule.computeIfAbsent(ruleId) {
+        Slots(AtomicLong(), ownerOf(ruleId)?.let { owner -> admittedByOwner.computeIfAbsent(owner) { AtomicLong() } })
     }
 
     /** [key]'s bucket, created with a reserved slot if it has none; null when no slot is free. */
-    private fun tryAdmit(key: BucketKey, rule: AtomicLong, windowMillis: Long, now: Long): Window? = try {
+    private fun tryAdmit(key: BucketKey, slots: Slots, windowMillis: Long, now: Long): Window? = try {
         // A mapping function cannot answer "none" in Kotlin: it throws, which leaves no mapping.
-        windows.computeIfAbsent(key) { if (reserve(rule)) Window(windowMillis, now) else throw NoSlot }
+        windows.computeIfAbsent(key) { if (reserve(slots)) Window(windowMillis, now) else throw NoSlot }
     } catch (_: NoSlot) {
         null
     }
@@ -156,22 +184,30 @@ class LocalRateLimiter(
         private fun readResolve(): Any = NoSlot
     }
 
-    /** A slot of the rule's bound and of the total, or neither. */
-    private fun reserve(rule: AtomicLong): Boolean {
-        if (rule.incrementAndGet() > maximumBucketsPerRule) {
-            rule.decrementAndGet()
+    /** A slot of the rule's bound, of its document's and of the total, or none. */
+    private fun reserve(slots: Slots): Boolean {
+        if (slots.rule.incrementAndGet() > maximumBucketsPerRule) {
+            slots.rule.decrementAndGet()
+            return false
+        }
+        val owner = slots.owner
+        if (owner != null && owner.incrementAndGet() > maximumBucketsPerOwner) {
+            owner.decrementAndGet()
+            slots.rule.decrementAndGet()
             return false
         }
         if (admitted.incrementAndGet() > maximumBuckets) {
             admitted.decrementAndGet()
-            rule.decrementAndGet()
+            owner?.decrementAndGet()
+            slots.rule.decrementAndGet()
             return false
         }
         return true
     }
 
-    private fun release(rule: AtomicLong) {
-        rule.decrementAndGet()
+    private fun release(slots: Slots) {
+        slots.rule.decrementAndGet()
+        slots.owner?.decrementAndGet()
         admitted.decrementAndGet()
     }
 
@@ -233,7 +269,34 @@ class LocalRateLimiter(
 
     /** What the buckets and their counters hold, for tests: the map's size, the total and each rule's count. */
     internal fun held(): Triple<Int, Long, Map<String, Long>> =
-        Triple(windows.size, admitted.get(), admittedByRule.mapValues { it.value.get() })
+        Triple(windows.size, admitted.get(), admittedByRule.mapValues { it.value.rule.get() })
+
+    /** Each document's admitted buckets, for tests. */
+    internal fun heldByOwner(): Map<String, Long> = admittedByOwner.mapValues { it.value.get() }
+
+    /** The new buckets refused for want of a slot so far, for rules of the documents of [kind] (`cosec.ratelimit.local.refused`). */
+    @InternalCoSecApi
+    fun refused(kind: Refused): Long = refusals.get(kind.ordinal)
+
+    /** The kind of document whose rule a refused bucket was for: the meter's tag, a closed set. */
+    @InternalCoSecApi
+    enum class Refused(val tag: String) {
+        PLATFORM("platform"),
+        APP("app"),
+        TENANT("tenant"),
+
+        /** A rule id that names no CoSec document: a caller's own. */
+        OTHER("other");
+
+        internal companion object {
+            fun of(ruleId: String): Refused = when {
+                ruleId.startsWith("platform/") -> PLATFORM
+                ruleId.startsWith("app:") -> APP
+                ruleId.startsWith("tenant:") -> TENANT
+                else -> OTHER
+            }
+        }
+    }
 
     private fun acquire(window: Window, rateLimit: RateLimitSpec, nowMillis: Long): RateLimitResult {
         val windowMillis = rateLimit.windowMillis
@@ -262,6 +325,14 @@ class LocalRateLimiter(
 
     companion object {
         const val DEFAULT_MAXIMUM_BUCKETS = 100_000L
+
+        /** One document's rules hold at most this fraction of [maximumBuckets] by default: a quarter. */
+        private const val OWNER_SHARE = 4L
+
+        /** The document that owns a counter id: what comes before its `/`; none for a caller's own id without one. */
+        internal fun ownerOf(
+            ruleId: String
+        ): String? = ruleId.indexOf('/').takeIf { it > 0 }?.let { ruleId.substring(0, it) }
         val DEFAULT_EXPIRE_AFTER_ACCESS: Duration = Duration.ofHours(1)
         private const val MAX_SWEEP_INTERVAL_MILLIS = 60_000L
 

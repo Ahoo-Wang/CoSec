@@ -381,9 +381,9 @@ internal class KeyDrain<T : Any>(
             AtomicIntegerFieldUpdater.newUpdater(KeyDrain::class.java, "flagged")
 
         /**
-         * The most lane events one load offers: 4 (its read's answer, its read timing out, its compilation's result, a
-         * `RetryDue`), and one `EffectFailed` for each of its 5 steps (the one that started it, and those 4's): an
-         * `EffectFailed` raises none. A new lane event fails `KeyDrainLaneTest`; a second per step, `KeyEffectFailureTest`.
+         * The most lane events one load offers per attempt: 4 (its read's answer and timeout, its compilation's result, a
+         * `RetryDue` or a `CompileRetryDue`, R2D-4, which starts a cold load's next attempt later), and one `EffectFailed`
+         * per step of the 5. A new lane event fails `KeyDrainLaneTest`; a second per step, `KeyEffectFailureTest`.
          */
         const val LANE_EVENTS_PER_LOAD = 9
 

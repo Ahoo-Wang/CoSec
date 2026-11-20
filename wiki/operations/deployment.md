@@ -449,6 +449,23 @@ one read from Redis, and for a tenant document also its compilation, about 0.6 m
 Redis on most requests until it has seen each tenant once. List the busiest tenants in `prewarm-tenants` to take them
 off that path.
 
+Requests are not spread evenly in a replica's first moment: almost every one is for a tenant it has not seen, so the
+distinct cold documents arrive at the request rate, faster than its two compile threads take them. A document the full
+compile queue (64) refuses waits and compiles again every few milliseconds, until `cold-load-timeout`; only then is
+its request `503`. Measured (`ColdBurstBenchmark`, a CI runner of 4 vCPUs, tenant documents of 30 policies and 60
+bindings, default options), for a burst of distinct cold tenants requested at once:
+
+| Burst | Served, all of them, within | Refused before this change (failed at once) |
+|---|---|---|
+| 100 | 13 ms | 26 of 100 |
+| 500 | 67 ms | 403 of 500 |
+| 2,000 | 620 ms | 1,794 of 2,000 |
+
+That is about 3,000 cold tenant documents a second: a burst beyond about `cold-load-timeout` times that (some 6,000
+distinct tenants in the same instant) is refused at the deadline, never later and never with a permit, and each
+refused tenant is loaded by its next request. Larger documents compile more slowly and lower the rate; more
+`compile-threads` raise it.
+
 ### Memberships at the gateway {#memberships-at-the-gateway}
 
 The image has no `MembershipProvider`, so a member's roles come from the access token's `roles` claim: `roleId` for the

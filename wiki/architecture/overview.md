@@ -341,8 +341,10 @@ holds them:
 - **Hot path.** `peek` is a synchronous lookup in memory, with no future and no I/O, safe on an event loop. Only a miss
   goes to `load`.
 - **Single flight.** Concurrent loads of one key share one read and one compilation. Compilation runs on a small
-  bounded pool (`compile-threads`); a full queue fails the load closed. Installs of one key happen in the order their
-  loads started (`SNP-2`, `SnapshotInstallOrderPropertyTest`).
+  bounded pool (`compile-threads`). When its queue is full, a reload keeps the installed document and retries; a cold
+  load keeps what it read and compiles again every few milliseconds until `cold-load-timeout`, then fails closed, so a
+  new replica's burst of cold tenants queues rather than answering `503` ([What a new replica costs](../operations/deployment.md#what-a-new-replica-costs)).
+  Installs of one key happen in the order their loads started (`SNP-2`, `SnapshotInstallOrderPropertyTest`).
 - **Bounded memory.** The platform document is loaded at startup and never evicted. App and tenant documents are loaded on
   demand and evicted least recently used beyond `max-apps` and `max-tenants`; selected ones can be prewarmed. Ids the
   store holds no document for are kept apart, at most `max-absent-apps` and `max-absent-tenants` of them, and evict only

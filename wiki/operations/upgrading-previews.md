@@ -368,6 +368,17 @@ Which preview of the library may run behind which preview of the gateway image: 
   - **A change is checked, analysed and approved on the document the data plane reads**: the candidate as written and
     read back, not as the operations built it. No change of outcome is expected: the two are the same unless the format
     codec fails to round-trip a member.
+- **A cold load waits for a full compile pool; `fail-closed.tenants` takes `*`; the local rate limiter bounds each
+  document's rules** (R2D-3, R2D-4, R2D-5). No document, property default, stored value or wire format changes.
+  - A cold load that the full compile queue refuses no longer answers `503` at once. It compiles again every few
+    milliseconds until `cold-load-timeout` (2 s), then fails closed as before. On a new replica, a burst of tenants
+    queues instead of being refused ([What a new replica costs](./deployment.md#what-a-new-replica-costs)).
+  - `cosec.authorization.snapshot.fail-closed.tenants: "*"` fails every tenant closed past `fail-closed.max-lag`. The
+    default stays empty.
+  - `LocalRateLimiter` holds at most a quarter of its buckets for the rules of one document, and counts each bucket it
+    refuses in `cosec.ratelimit.local.refused`. Its constructor takes `maximumBucketsPerOwner` after
+    `maximumBucketsPerRule`: code that calls it with named arguments compiles unchanged; code compiled against beta.4
+    that constructs one must be compiled again.
 
 ## From 8.0.0-beta.3 {#from-8-0-0-beta-3}
 
