@@ -43,6 +43,7 @@ description: "CoSec 如何读取凭证，以及如何签发、刷新和吊销令
 管道读取请求的凭证，然后询问一个 `Authenticator` 调用方是谁。starter 提供的是由两个认证器组成的 `CompositeAuthenticator`：
 
 - **`TokenAuthenticator`** 用 `TokenVerifier` Bean 校验令牌，除非应用声明了自己的，否则就是 CoSec 的 `JwtTokenVerifier`（刷新和登出用同一个校验器，`IDN-25`），然后询问吊销读取器该令牌或其主体的全部令牌是否已被吊销。`JwtTokenVerifier` 接受签发时间（`iat`）或生效时间（`nbf`）比本实例时钟晚不超过 `cosec.authentication.revocation.skew`（5 秒）的令牌，为时钟偏快的签发方留出余量，超出的按尚未生效拒绝（`token-invalid`，`IDN-29`）；令牌的过期时间没有这样的余量。你自己构造的校验器传入同一个值：`JwtTokenVerifier(algorithm, skew)`。只有 `TokenVerifier.verify`（以及 `refresh`）能把令牌变成主体：CoSec 没有不校验签名就读取令牌声明的 API。没有 JWT 时（`cosec.jwt.enabled=false`），带令牌的请求按 `token-invalid` 拒绝。只有 CoSec 自己的 `JwtTokenVerifier` 校验过的令牌才能使用 [break-glass](../guide/security-model.md#break-glass)：包装你自己校验器的 `TokenAuthenticator` 可以认证它的令牌，但永远不带 break-glass。你的 `TokenVerifier` Bean 对 CoSec 来说是其他签发者的，即使它包装 `JwtTokenVerifier` 只为加一项检查：在每个请求上，它的令牌凭证方式是 `token`，没有会话（因此不能从它[切换租户](#switching-tenant-and-app)，网关之后也不转发会话），也没有 break-glass。为其他签发者的令牌声明它；要让 CoSec 自己的令牌仍是 CoSec 的，就不要声明。
+  CoSec 自己的校验器对已校验过的令牌从[它的缓存](#the-verified-token-cache)作答。
 - **`ApiKeyAuthenticator`**，仅在 `cosec.api-key.enabled=true` 时启用，查找 [API key](#api-keys)。
 
 携带 API key 的请求（且已启用 API key）只依据该 key 判定，即使它同时发送了令牌：被拒绝的 key 绝不会退而使用令牌。其他请求交给令牌认证器；完全不带凭证的请求是匿名的。
@@ -61,6 +62,24 @@ CoSec 不为它通过 cookie 认证的请求提供 CSRF 防护，打开这个选
 **失败。** 认证器抛出异常（例如它的 API key 存储无法读取）、返回 `AuthnResult.Unavailable`，或未在 `cosec.pipeline.authentication-timeout`（1 秒）内应答时，请求返回 `503`：无法读取的存储绝不会让凭证变得有效或无效，只有一个已写明的例外：吊销存储无法读取期间，已校验的令牌不经吊销检查即被接受，除非设置 `cosec.authentication.revocation.fail-closed=true`（[登出与吊销](#logout-and-revocation)）。
 
 **自定义。** 声明一个 `Authenticator` Bean 即可替换 starter 的认证器。它是一个 `suspend` 函数，不能阻塞调用线程（可能是事件循环）；见[扩展 CoSec](../architecture/extending.md)。
+
+### 已校验令牌缓存 {#the-verified-token-cache}
+
+校验令牌签名并读取声明，是认证一个请求中最重的部分。管道认证器里 CoSec 自己的 `JwtTokenVerifier` 会保留它校验过的令牌，
+再次见到同一个令牌时从内存作答（`cosec.authentication.token-cache.*`，默认开启，[配置](../operations/configuration.md#authentication)）。
+缓存的校验结果就是再次校验该令牌会得到的结果（`IDN-32`）：
+
+- 校验除令牌之外依赖的东西，要么在校验器生命周期内固定（签名密钥、偏差），要么是它的时钟。条目保存与时钟比较的时刻，
+  只在再次校验会成功时作答：从不晚于令牌的 `exp`，也从不早于它的 `iat` 或 `nbf` 超出偏差。其他时候令牌会被重新校验，
+  答案与没有缓存时相同。
+- 键是整个令牌（含签名）的 SHA-256：不保留原始令牌，任何一个字节不同的令牌都单独校验。只保留校验通过的令牌；
+  被拒绝的令牌在每个请求上都会再次被拒绝。
+- 无论命中与否，吊销检查和保留属性检查都在它之后、在每个请求上运行：登出或吊销会在下一个请求上拒绝该令牌。
+- 刷新、切换租户和登出不使用它。你自己的 `TokenVerifier` Bean 永远不会得到它：没有什么能说明你的校验器在令牌之外还读了什么。
+
+最多保留 `max-entries` 个令牌（16,384）；再多一个就淘汰一个。一个大令牌（四个空间里十几个角色、八个策略）的条目约占
+7.3 KB，因此默认值最多约占 115 MB 堆。它的命中、未命中和淘汰都是指标（[可观测性](../operations/observability.md)），
+启动摘要会说明它是否开启（`token-cache=on (max-entries=16384)`）。
 
 ## 角色与空间 {#roles-and-spaces}
 

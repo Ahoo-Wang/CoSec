@@ -150,7 +150,7 @@ kind 为 `INTERNAL`）。span 在决策之后根据请求的开始时间和管�
 
 ## 启动摘要 {#startup-summary}
 
-所有 bean 创建完毕后，starter 记录一行 INFO，说明 CoSec 被配置成什么样，例如 `CoSec 8.0.0-beta.4: mode=enforce, web=servlet-filter, jwt=on (JwtTokenVerifier), revocation-reader=the CoCache token store's (CoCacheRevocationReader), login=on, api-keys=off, rate-limiter=ReactiveRedisRateLimiter, listeners=[tracing, logging-audit], route-map=12 routes`。每一项都是请求实际遇到的东西，按认证器解析的方式得出：吊销读取器是应用的 bean、CoCache 令牌存储的读取器，或 `RevocationReader.NONE`（这一行会明确写出，因为此时被吊销的令牌在过期前都会被接受）；没有令牌校验（`jwt=off`）时没有读取器可写。写成 `false` 的开关会以 `switched-off-by-configuration=[...]` 追加。名为 `LocalRateLimiter` 的限流器按实例计数：有多个实例时，限额按实例数倍增。`cosec.enabled=false` 时这一行换成一条 WARN：`CoSec is off ... nothing is protected by CoSec`（[故障排查](./troubleshooting.md#the-log-says-cosec-is-off)）。
+所有 bean 创建完毕后，starter 记录一行 INFO，说明 CoSec 被配置成什么样，例如 `CoSec 8.0.0-beta.4: mode=enforce, web=servlet-filter, jwt=on (JwtTokenVerifier), token-cache=on (max-entries=16384), revocation-reader=the CoCache token store's (CoCacheRevocationReader), login=on, api-keys=off, rate-limiter=ReactiveRedisRateLimiter, listeners=[tracing, logging-audit], route-map=12 routes`。每一项都是请求实际遇到的东西，按认证器解析的方式得出：吊销读取器是应用的 bean、CoCache 令牌存储的读取器，或 `RevocationReader.NONE`（这一行会明确写出，因为此时被吊销的令牌在过期前都会被接受）；没有令牌校验（`jwt=off`）时没有读取器可写。`token-cache` 说明请求令牌是否从[已校验令牌缓存](../integration/authentication.md#the-verified-token-cache)作答：配置关闭时，或使用你自己的 `TokenVerifier` Bean 时为 `off`。写成 `false` 的开关会以 `switched-off-by-configuration=[...]` 追加。名为 `LocalRateLimiter` 的限流器按实例计数：有多个实例时，限额按实例数倍增。`cosec.enabled=false` 时这一行换成一条 WARN：`CoSec is off ... nothing is protected by CoSec`（[故障排查](./troubleshooting.md#the-log-says-cosec-is-off)）。
 
 ## 指标 {#metrics}
 
@@ -180,6 +180,15 @@ kind 为 `INTERNAL`）。span 在决策之后根据请求的开始时间和管�
 | 指标 | 标签 | 计数 |
 |---|---|---|
 | `cosec.revocation.unchecked` | 无 | 吊销无法读取时被接受的令牌；每段这样的时间还会以 `WARN` 记录 `Token revocations cannot be read: tokens are accepted without a revocation check (<n> so far).`，最多每 10 秒一次 |
+
+[已校验令牌缓存](../integration/authentication.md#the-verified-token-cache)开启时也会计数：
+
+| 指标 | 标签 | 计数 |
+|---|---|---|
+| `cosec.token.cache.hits` | 无 | 从缓存作答的请求令牌 |
+| `cosec.token.cache.misses` | 无 | 因没有可用条目而校验的请求令牌：首次出现、已被淘汰、被拒绝，或不在它有效的时刻内 |
+| `cosec.token.cache.evictions` | 无 | 为不超过 `cosec.authentication.token-cache.max-entries` 而移除的条目；持续的速率说明上限小于同时在用的令牌数 |
+| `cosec.token.cache.size` | 无 | 一个 gauge：持有的条目数 |
 
 使用本地限流器时（没有 Redis 限流，[限流](../policies/rate-limiting.md#the-local-limiter-is-bounded)），它无法接纳的新桶也会计数：
 

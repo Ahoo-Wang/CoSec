@@ -23,6 +23,7 @@ import me.ahoo.cosec.cocache.CoSecCacheSpecs
 import me.ahoo.cosec.cocache.limiter.ReactiveRedisRateLimiter
 import me.ahoo.cosec.engine.CompiledDocument
 import me.ahoo.cosec.ip2region.Ip2RegionAttributeProvider
+import me.ahoo.cosec.jwt.VerifiedTokenCache
 import me.ahoo.cosec.kafka.KafkaAuditListener
 import me.ahoo.cosec.micrometer.CoSecMeters
 import me.ahoo.cosec.micrometer.MetricsListener
@@ -48,6 +49,7 @@ import me.ahoo.cosec.spring.boot.audit.kafka.KafkaAuditProperties
 import me.ahoo.cosec.spring.boot.audit.kafka.kafkaAuditDelivery
 import me.ahoo.cosec.spring.boot.ip2region.Ip2RegionProperties
 import me.ahoo.cosec.spring.boot.micrometer.MetricsProperties
+import me.ahoo.cosec.spring.boot.micrometer.TokenCacheMeters
 import org.springframework.beans.factory.ObjectProvider
 import org.springframework.boot.autoconfigure.AutoConfiguration
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean
@@ -183,7 +185,7 @@ class CoSecPipelineIntegrationAutoConfiguration {
 
         /**
          * The listeners' own counters: drops, failures and REQUIRED failures; the tokens accepted without a revocation
-         * check; and, with the local rate limiter, the buckets it could not admit. Bound at startup whatever lazy
+         * check; with the local rate limiter, the buckets it could not admit; the verified-token cache's. Bound at startup whatever lazy
          * initialization says (`STA-3`): nothing asks for it.
          */
         @Bean
@@ -192,10 +194,12 @@ class CoSecPipelineIntegrationAutoConfiguration {
             listeners: ObjectProvider<DecisionListeners>,
             unchecked: ObjectProvider<UncheckedRevocations>,
             limiter: ObjectProvider<RateLimiter>,
+            tokenCache: ObjectProvider<VerifiedTokenCache>,
         ): StartupTask = StartupTask.AfterSingletons {
             listeners.ifAvailable?.let { CoSecMeters.bind(registry, it) }
             unchecked.ifAvailable?.let { CoSecMeters.bind(registry, it) }
             (limiter.ifAvailable as? LocalRateLimiter)?.let { CoSecMeters.bind(registry, it) }
+            tokenCache.ifAvailable?.let { TokenCacheMeters.bind(registry, it) }
         }
 
         /** The snapshot source's gauges, over the summary of its last lag pass: bound once every singleton exists. */

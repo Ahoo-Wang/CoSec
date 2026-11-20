@@ -64,6 +64,12 @@ object GuardAllowlist {
             "webmvc:RequestPrincipalTest#CoSec's principal replaces another layer's, and answers none of its roles",
             "webmvc:RequestPrincipalTest#an anonymous request carries none of CoSec's, and keeps another layer's as it was",
             "spring-boot:RealServerParityTest#an anonymous request has no request principal, on every server",
+            // IDN-32: a cached verification is what verifying again answers; revocation still runs after it.
+            "jwt:VerifiedTokenCachePropertyTest#a cached verification is what verifying again answers, at every instant",
+            "jwt:VerifiedTokenCachePropertyTest#a token that differs from a cached one only in its signature is refused",
+            "jwt:VerifiedTokenCachePropertyTest#the cache keeps within its bound and counts what it does",
+            "spring-boot:OneVerifierTest#CoSec's own verifier answers a request's token from the cache, and a logout still refuses it next",
+            "spring-boot:OneVerifierTest#an application's own verifier is never given the cache",
             // IDN-29: an issuer's clock ahead by the skew, never an expiry.
             "jwt:IssuerSkewTest#an issue time within the skew ahead is accepted, beyond it refused as not valid yet",
             "jwt:IssuerSkewTest#a not-before time within the skew ahead is accepted, beyond it refused as not valid yet",
