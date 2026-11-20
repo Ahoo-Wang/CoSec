@@ -44,7 +44,7 @@ import java.time.ZoneOffset
  * MIG-3: `bootstrap` adds its binding to the platform tenant's document and keeps everything else it holds. A migration
  * that converts 7.x roles into that document and then bootstraps must not lose them: every member of a lost role is
  * denied. The base holds every member a platform tenant's document may hold; it names no boundary, which the compiler
- * refuses there, and a tenant document has no catalog, limits or attributes.
+ * refuses there, and a tenant document has no catalog, limits, attributes or budgets.
  */
 class BootstrapKeepsDocumentTest {
     private val clock = Clock.fixed(Instant.parse("2026-11-01T00:00:00Z"), ZoneOffset.UTC)
@@ -121,7 +121,7 @@ class BootstrapKeepsDocumentTest {
     fun `the base holds every member a platform tenant's document may hold`() = runBlocking<Unit> {
         val before = seed(base(withAdmin = false))
         fields().filter { !set(it.get(before)) }.map { it.name }
-            .assert().containsExactlyInAnyOrder("catalog", "boundary", "limits", "attributes")
+            .assert().containsExactlyInAnyOrder("catalog", "boundary", "limits", "attributes", "budgets")
     }
 
     @Test
