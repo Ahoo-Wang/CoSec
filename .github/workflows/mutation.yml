@@ -30,9 +30,12 @@ on:
 permissions:
   contents: read
 
-# Two full runs never overlap; a second waits for the first.
+# Two full runs (no `mutants` input, and the weekly schedule) never overlap: a second waits for the first. A run of
+# a subset (`-f mutants=...`) has a group per ref, so the subset runs of two branches neither wait on nor cancel each
+# other: with one global group GitHub keeps only the newest waiting run and cancels the older one. On one ref a newer
+# subset run still replaces a waiting older one.
 concurrency:
-  group: mutation-check
+  group: mutation-check-${{ inputs.mutants == '' && 'full' || github.ref }}
   cancel-in-progress: false
 
 jobs:
