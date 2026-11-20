@@ -42,8 +42,7 @@ internal class GrantVerdicts(private val checker: ConditionChecker, private val 
         fragment: GrantFragment,
         budget: ComparisonBudget = ComparisonBudget(),
     ): GrantVerdict {
-        undecidable(grantor, fragment)?.let { return it }
-        if (budget.exhausted) return tooLarge()
+        undecidable(grantor, fragment, budget)?.let { return it }
         val tenant = fragment.tenant
         val granted = fragment.condition?.let { condition ->
             when (val folded = Specialization(checker, tenantConstants(tenant)).fold(condition)) {
@@ -67,19 +66,32 @@ internal class GrantVerdicts(private val checker: ConditionChecker, private val 
             )
             is Search.Found -> found.held
         }
+        return denied(rights, fragment, scope, budget) ?: GrantVerdict.Contained(by.ref)
+    }
+
+    /** The verdict when a DENY that binds the grantor may overlap [fragment] in [scope], or the budget runs out first. */
+    private fun denied(
+        rights: GrantorRights,
+        fragment: GrantFragment,
+        scope: ScopeSet,
+        budget: ComparisonBudget
+    ): GrantVerdict? {
         // A DENY the index leaves out is disjoint from the fragment by its actions, as `disjoint` would find.
-        val deny = rights.deniesFor(fragment.action).firstOrNull {
+        for (deny in rights.deniesFor(fragment.action)) {
             if (!budget.spend()) return tooLarge()
-            it.applicability.intersects(scope) && !disjoint(it.statement, fragment)
+            if (deny.applicability.intersects(scope) && !disjoint(deny.statement, fragment)) {
+                return unknown(UnknownReason.DENY_OVERLAP, null, "may overlap ${describe(deny.ref)}", deny.ref)
+            }
         }
-        if (deny != null) {
-            return unknown(UnknownReason.DENY_OVERLAP, null, "may overlap ${describe(deny.ref)}", deny.ref)
-        }
-        return GrantVerdict.Contained(by.ref)
+        return null
     }
 
     /** Why [fragment] is not analyzed against what [grantor] holds at all, or `null`. */
-    private fun undecidable(grantor: Grantor, fragment: GrantFragment): GrantVerdict.Unknown? {
+    private fun undecidable(
+        grantor: Grantor,
+        fragment: GrantFragment,
+        budget: ComparisonBudget
+    ): GrantVerdict.Unknown? {
         if (!fragment.resolved) {
             return unknown(UnknownReason.UNRESOLVED, null, "[${fragment.policy.value}] does not resolve", null)
         }
@@ -95,6 +107,8 @@ internal class GrantVerdicts(private val checker: ConditionChecker, private val 
                 null
             )
         }
+        // Past the budget nothing more is compared (CTL-49).
+        if (budget.exhausted) return tooLarge()
         return null
     }
 
@@ -132,9 +146,8 @@ internal class GrantVerdicts(private val checker: ConditionChecker, private val 
         val indexed = search(grantor, rights.allowsFor(fragment.action), fragment, scope, granted, budget)
         // An ALLOW the index leaves out stops at SCOPE or ACTION: only when nothing it gave got further can the
         // closest be one of those, and then every ALLOW is walked as before, so the answer is the same (R2C-26).
-        if (indexed is Search.Found || indexed is Search.Exhausted ||
-            (indexed is Search.Missed && indexed.shortfall > Shortfall.ACTION)
-        ) {
+        val furthest = (indexed as? Search.Missed)?.shortfall
+        if (indexed is Search.Found || indexed is Search.Exhausted || (furthest ?: Shortfall.NO_ALLOW) > Shortfall.ACTION) {
             return indexed
         }
         return search(grantor, rights.allows, fragment, scope, granted, budget)

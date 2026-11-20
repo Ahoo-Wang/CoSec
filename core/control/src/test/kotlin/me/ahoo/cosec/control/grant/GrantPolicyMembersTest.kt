@@ -111,12 +111,19 @@ class GrantPolicyMembersTest {
         GrantPolicy(PolicyId("p"), statements.toList(), condition)
 
     private fun fragments(changed: GrantPolicy): List<GrantFragment> =
-        analyzer.fragments(snapshot(tenant = published), GrantChange(ACME, GrantDocument(listOf(changed), published.bindings)))
+        analyzer.fragments(
+            snapshot(tenant = published),
+            GrantChange(ACME, GrantDocument(listOf(changed), published.bindings))
+        )
 
     private val base: GrantPolicy get() = published.policies.single()
 
     private fun withStatement(index: Int, statement: GrantStatement) =
-        GrantPolicy(base.id, base.statements.mapIndexed { i, it -> if (i == index) statement else it }, base.condition)
+        GrantPolicy(
+            base.id,
+            base.statements.mapIndexed { i, old -> if (i == index) statement else old },
+            base.condition
+        )
 
     @Test
     fun `the unchanged policy grants nothing`() {
@@ -126,14 +133,18 @@ class GrantPolicyMembersTest {
     @Test
     fun `a statement's condition removed is analysed`() {
         val first = base.statements[0]
-        fragments(withStatement(0, GrantStatement(first.effect, first.actions, first.resources, null))).assert().isNotEmpty()
+        fragments(
+            withStatement(0, GrantStatement(first.effect, first.actions, first.resources, null))
+        ).assert().isNotEmpty()
     }
 
     @Test
     fun `a path pattern made case insensitive is analysed`() {
         val second = base.statements[1]
         val insensitive = ResourcePattern.parse("http:path:/orders/**", caseSensitive = false)
-        fragments(withStatement(1, GrantStatement(second.effect, second.actions, listOf(insensitive)))).assert().isNotEmpty()
+        fragments(
+            withStatement(1, GrantStatement(second.effect, second.actions, listOf(insensitive)))
+        ).assert().isNotEmpty()
     }
 
     @Test
@@ -153,7 +164,9 @@ class GrantPolicyMembersTest {
     @Test
     fun `a wider action or resource is analysed`() {
         val second = base.statements[1]
-        fragments(withStatement(1, GrantStatement(second.effect, listOf(ActionPattern.parse("http:*")), second.resources)))
+        fragments(
+            withStatement(1, GrantStatement(second.effect, listOf(ActionPattern.parse("http:*")), second.resources))
+        )
             .assert().isNotEmpty()
         fragments(withStatement(1, GrantStatement(second.effect, second.actions, listOf(ResourcePattern.AnyResource))))
             .assert().isNotEmpty()
@@ -165,7 +178,10 @@ class GrantPolicyMembersTest {
             listOf(policy(*base.statements.toTypedArray(), condition = eq("scope.space", "team-a"))),
             published.bindings,
         )
-        analyzer.fragments(snapshot(tenant = conditioned), GrantChange(ACME, GrantDocument(listOf(base), published.bindings)))
+        analyzer.fragments(
+            snapshot(tenant = conditioned),
+            GrantChange(ACME, GrantDocument(listOf(base), published.bindings))
+        )
             .assert().isNotEmpty()
         fragments(GrantPolicy(base.id, base.statements, base.condition, attachable = true)).assert().isNotEmpty()
     }

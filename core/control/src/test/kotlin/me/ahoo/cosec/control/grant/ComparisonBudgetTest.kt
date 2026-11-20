@@ -66,14 +66,26 @@ class ComparisonBudgetTest {
     @Test
     fun `a statement still being compared when the budget runs out is granted`() {
         // Each later statement narrows the first; the change narrows the last one further, which grants nothing.
-        val wide = policy("orders", allow("order:read", "order/**"), allow("order:read", "order/a/**"), allow("order:read", "order/b/**"))
-        val base = GrantDocument(published.policies + wide, published.bindings + bind("readers", role("reader"), "orders", space = space))
+        val wide =
+            policy(
+                "orders",
+                allow("order:read", "order/**"),
+                allow("order:read", "order/a/**"),
+                allow("order:read", "order/b/**")
+            )
+        val base =
+            GrantDocument(
+                published.policies + wide,
+                published.bindings + bind("readers", role("reader"), "orders", space = space)
+            )
         val narrowed = GrantDocument(
             published.policies + policy("orders", allow("order:read", "order/**"), allow("order:read", "order/a/**"), allow("order:read", "order/b/1")),
             base.bindings,
         )
         GrantAnalyzer().fragments(snapshot(tenant = base), GrantChange(ACME, narrowed)).assert().isEmpty()
-        val analysis = GrantAnalyzer(maxComparisons = 0).analyze(gina, snapshot(tenant = base), GrantChange(ACME, narrowed))
+        val analysis = GrantAnalyzer(
+            maxComparisons = 0
+        ).analyze(gina, snapshot(tenant = base), GrantChange(ACME, narrowed))
         analysis.verdicts.map { it.first.policy.value to it.first.statement }.assert().containsExactly("orders" to 2)
         analysis.verdicts.single().second.assert().isInstanceOf(GrantVerdict.Unknown::class.java)
     }

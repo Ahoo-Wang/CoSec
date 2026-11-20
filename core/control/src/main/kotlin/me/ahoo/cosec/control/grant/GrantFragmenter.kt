@@ -57,16 +57,10 @@ internal class GrantFragmenter(private val narrowing: GrantNarrowing, private va
         val bound = after.bindings.groupBy { it.policy }
         reresolved(snapshot, change, changedSet, fragments)
         for (policy in after.policies) {
-            changedPolicy(
-                snapshot,
-                change,
-                before.policy(policy.id),
-                policy,
-                bound[policy.id].orEmpty(),
-                changedSet,
-                fragments,
-                budget,
-            )
+            val unchanged = bound[policy.id].orEmpty().filter { binding ->
+                binding !in changedSet && binding.expiresAt.let { it == null || snapshot.now < it }
+            }
+            changedPolicy(change.tenant, before.policy(policy.id), policy, unchanged, fragments, budget)
         }
         return fragments
     }
@@ -150,30 +144,26 @@ internal class GrantFragmenter(private val narrowing: GrantNarrowing, private va
     }
 
     /**
-     * The fragments a new or changed [policy] grants: its ALLOWs that narrow none of [previous]'s, to every binding
-     * that already points to it (the [changed] ones grant all of it anyway), and to attachments if it is attachable.
+     * The fragments a new or changed [policy] grants: its ALLOWs that narrow none of [previous]'s, to every live
+     * binding that already pointed to it, [bound] (a new or changed one is granted all of it anyway), and to
+     * attachments if it is attachable.
      */
     private fun changedPolicy(
-        snapshot: GrantSnapshot,
-        change: GrantChange,
+        tenant: TenantId,
         previous: GrantPolicy?,
         policy: GrantPolicy,
-        /** The candidate's bindings to [policy], in the candidate's order. */
-        boundTo: List<Binding>,
-        changed: Set<Binding>,
+        /** The candidate's unchanged, live bindings to [policy], in the candidate's order. */
+        bound: List<Binding>,
         into: MutableList<GrantFragment>,
         budget: ComparisonBudget,
     ) {
         val granted = granted(previous, policy, budget)
-        val bound = boundTo.filter { binding ->
-            binding !in changed && binding.expiresAt.let { it == null || snapshot.now < it }
-        }
         for (binding in bound) {
-            granted.forEach { split(change.tenant, policy, it, Grantee.Bound(binding), into) }
+            granted.forEach { split(tenant, policy, it, Grantee.Bound(binding), into) }
         }
         if (policy.attachable) {
             val attached = if (previous?.attachable == true) granted else policy.statements.indices.toList()
-            attached.forEach { split(change.tenant, policy, it, Grantee.Attaching, into) }
+            attached.forEach { split(tenant, policy, it, Grantee.Attaching, into) }
         }
     }
 

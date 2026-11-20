@@ -94,7 +94,12 @@ class GrantorRights(
         if (!indexed) denies else action.service?.let(denyIndex::of) ?: denies
 
     /** The same rights, read without the index: for the test that holds the index to the linear walk. */
-    internal fun linear(): GrantorRights = GrantorRights(allows, denies, unreadApps, readApps).also { it.indexed = false }
+    internal fun linear(): GrantorRights = GrantorRights(
+        allows,
+        denies,
+        unreadApps,
+        readApps
+    ).also { it.indexed = false }
 
     /** Held statements by the services of their actions, each list in the statements' order. */
     private class ServiceIndex(held: List<HeldStatement>) {

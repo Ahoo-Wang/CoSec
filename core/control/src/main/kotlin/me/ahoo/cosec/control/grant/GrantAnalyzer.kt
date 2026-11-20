@@ -90,7 +90,11 @@ class GrantAnalyzer(
             return GrantAnalysis(fragments.map { it to GrantVerdict.TrustRoot }, unprotect, budget.spent)
         }
         val rights = GrantorRights.of(grantor, snapshot)
-        return GrantAnalysis(fragments.map { it to verdicts.verdict(grantor, rights, it, budget) }, unprotect, budget.spent)
+        return GrantAnalysis(
+            fragments.map { it to verdicts.verdict(grantor, rights, it, budget) },
+            unprotect,
+            budget.spent
+        )
     }
 
     /**

@@ -181,7 +181,10 @@ class GrantPropertyTest {
             val grantor = generator.grantor(gina)
             val rights = GrantorRights.of(grantor, snapshot)
             val linear = rights.linear()
-            for (fragment in analyzer.fragments(snapshot, GrantChange(ACME, grant(generator, random, snapshot, gina, "g")))) {
+            for (fragment in analyzer.fragments(
+                snapshot,
+                GrantChange(ACME, grant(generator, random, snapshot, gina, "g"))
+            )) {
                 compared++
                 val indexed = analyzer.verdict(grantor, rights, fragment)
                 val walked = analyzer.verdict(grantor, linear, fragment)

@@ -50,7 +50,9 @@ class GrantReflexivityTest {
                         statement.effect,
                         statement.actions,
                         statement.resources,
-                        Condition.And(listOfNotNull(statement.condition, Condition.Eq("ext.unlisted", Literal.Str("x")))),
+                        Condition.And(
+                            listOfNotNull(statement.condition, Condition.Eq("ext.unlisted", Literal.Str("x")))
+                        ),
                     )
                 } else {
                     statement
@@ -98,7 +100,9 @@ class GrantReflexivityTest {
                 val narrows = narrowing.narrows(statement, condition, previous.statements[index], previousCondition)
                 when {
                     condition != null && equality.check(condition) == null ->
-                        narrows.assert().describedAs("seed $i: a condition that does not check narrows nothing").isFalse()
+                        narrows.assert().describedAs(
+                            "seed $i: a condition that does not check narrows nothing"
+                        ).isFalse()
                     readsResourceVariable(condition) -> Unit
                     else -> {
                         checked++

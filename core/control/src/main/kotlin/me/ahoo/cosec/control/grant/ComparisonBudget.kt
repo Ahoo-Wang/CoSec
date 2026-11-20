@@ -11,7 +11,6 @@
  * limitations under the License.
  */
 
-
 package me.ahoo.cosec.control.grant
 
 /**
