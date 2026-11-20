@@ -18,6 +18,7 @@ package me.ahoo.cosec.migrate
 import kotlinx.coroutines.runBlocking
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.control.store.ReferrerNames
 import me.ahoo.cosec.control.store.ControlStore
 import me.ahoo.cosec.control.store.Head
 import me.ahoo.cosec.control.store.Publication
@@ -111,7 +112,7 @@ class DocumentRestorer(
                 "[${plan.key}] moved while it was restored: nothing written; read the plan again",
             )
             is PublishOutcome.Referenced -> throw RestoreException(
-                "[${plan.key}]'s source no longer defines what other documents refer to: ${outcome.referrers}",
+                "[${plan.key}]'s source no longer defines what other documents refer to: ${ReferrerNames.of(outcome.referrers)}",
             )
         }
     }

@@ -21,6 +21,7 @@ import kotlinx.coroutines.runBlocking
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.control.lifecycle.CandidateDigest
+import me.ahoo.cosec.control.store.ReferrerNames
 import me.ahoo.cosec.control.store.ControlStore
 import me.ahoo.cosec.control.store.Publication
 import me.ahoo.cosec.control.store.PublishOutcome
@@ -107,7 +108,7 @@ class DocumentPublisher(
                 is PublishOutcome.Published -> written += key
                 is PublishOutcome.Conflicted -> throw DocumentsExistException(listOf(key), written.toList())
                 is PublishOutcome.Referenced -> throw PublishException(
-                    "$key is referred to: ${outcome.referrers}.",
+                    "$key is referred to: ${ReferrerNames.of(outcome.referrers)}.",
                     written.toList()
                 )
             }

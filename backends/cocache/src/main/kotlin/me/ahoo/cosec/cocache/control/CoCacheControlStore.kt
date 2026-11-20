@@ -62,6 +62,7 @@ import me.ahoo.cosec.spi.snapshot.SnapshotKeyText
 import java.time.Clock
 import java.time.Duration
 import java.time.Instant
+import kotlin.coroutines.cancellation.CancellationException
 
 private val log = KotlinLogging.logger {}
 
@@ -235,9 +236,25 @@ class CoCacheControlStore internal constructor(
         }
         val written = put(changes, change.id, expected, change, digest(ChangeRequestCacheCodec, change)) is Put.Written
         if (written && change.state.terminal) {
-            updateList(OPEN_CHANGES) { it - change.id.value }
+            unlist(change.id)
         }
         return written
+    }
+
+    /**
+     * Removes a terminal change from the open list. Its terminal state is stored already, so a failure here does not
+     * fail that write (R2C-2): it is logged, and the next pass that reads the open changes (the maintenance pass's
+     * shadow windows and reclamation) drops a listed change it finds terminal.
+     */
+    @Suppress("TooGenericExceptionCaught")
+    private suspend fun unlist(id: ChangeId) {
+        try {
+            updateList(OPEN_CHANGES) { it - id.value }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            log.warn(e) { "Change [${id.value}] is terminal and stays listed open; the next read of the open changes drops it." }
+        }
     }
 
     /**
