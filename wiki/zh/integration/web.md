@@ -151,7 +151,7 @@ Spring Cloud Gateway 宿主不加载路由映射：每个网关请求都位于 `
 | `requestId` | 与 `CoSec-Request-Id` 响应头的值相同。 |
 | `traceId` | 追踪 id，仅当适配器处捕获到追踪时出现。 |
 
-成员总是按这个顺序出现，响应体不含任何其他内容：没有策略、语句、绑定、原因或异常信息。它由一个手写的编码器（`ProblemEncoder`）写出，因此无论宿主的 JSON 配置如何，三个适配器写出的字节都相同。响应体是 ASCII：请求 id 中的所有非 ASCII 字符和控制字符都会被转义。这套词汇也以 `schema/problem.schema.json` 发布。
+成员总是按这个顺序出现，响应体不含任何其他内容：没有策略、语句、绑定、原因或异常信息。它由一个手写的编码器（`ProblemEncoder`）写出，因此无论宿主的 JSON 配置如何，三个适配器写出的字节都相同。响应体是 ASCII：请求 id 中的所有非 ASCII 字符和控制字符都会被转义。这套词汇也以 `schema/8.0/problem.schema.json` 发布。
 
 ### 响应头 {#response-headers}
 
@@ -450,7 +450,7 @@ spring:
 
 **不转发身份的情况**：匿名的 Permit、被拒绝的请求、不接收身份的路由、认证器没有给出凭证的主体（CoSec 的令牌和 API key 认证器总会给出），或设置了 `cosec.gateway.identity.enabled=false`。
 
-**它携带的内容。** 值是紧凑 JSON 的 base64url 编码（无填充），格式版本 1；JSON Schema 是 [`schema/cosec-identity.schema.json`](https://github.com/Ahoo-Wang/CoSec/blob/main/schema/cosec-identity.schema.json)。
+**它携带的内容。** 值是紧凑 JSON 的 base64url 编码（无填充），格式版本 1；JSON Schema 是 [`schema/8.0/cosec-identity.schema.json`](https://cosec.ahoo.me/schema/8.0/cosec-identity.schema.json)。
 
 | 成员 | 内容 |
 |---|---|

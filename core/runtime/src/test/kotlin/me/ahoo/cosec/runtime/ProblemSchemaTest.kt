@@ -23,6 +23,7 @@ import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.document.format.DocumentFormats
 import me.ahoo.cosec.document.format.JsonSchemaWriter
+import me.ahoo.cosec.document.format.ProblemTypes
 import me.ahoo.cosec.runtime.http.Problem
 import me.ahoo.cosec.runtime.http.ProblemEncoder
 import me.ahoo.cosec.runtime.http.ProblemType
@@ -32,7 +33,7 @@ import tools.jackson.databind.json.JsonMapper
 import tools.jackson.databind.node.ObjectNode
 
 /**
- * Binds the `problem` format descriptor (`DocumentFormats.problemSchema`, generated to `schema/problem.schema.json`)
+ * Binds the `problem` format descriptor (`DocumentFormats.problemSchema`, generated to `schema/8.0/problem.schema.json`)
  * to [ProblemType] and [ProblemEncoder], as `SchemaConformanceTest` in `cosec-document` does for the formats CoSec reads.
  */
 class ProblemSchemaTest {
@@ -45,9 +46,10 @@ class ProblemSchemaTest {
 
     @Test
     fun vocabularyIsTheDescriptors() {
-        ProblemType.entries.map { Triple(it.slug, it.title, it.status) }.assert()
-            .isEqualTo(DocumentFormats.problemTypes)
-        ProblemType.TYPE_PREFIX.assert().isEqualTo(DocumentFormats.PROBLEM_TYPE_PREFIX)
+        ProblemType.entries.map { ProblemTypes.Row(it.slug, it.title, it.status) }.assert()
+            .isEqualTo(ProblemTypes.rows)
+        ProblemType.entries.map { it.code }.assert().isEqualTo(ProblemTypes.rows.map { it.code })
+        ProblemType.TYPE_PREFIX.assert().isEqualTo(ProblemTypes.TYPE_PREFIX)
     }
 
     @Test

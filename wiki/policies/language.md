@@ -761,8 +761,10 @@ every change before it publishes it, and can try it on live traffic first: see [
 
 ## JSON Schema
 
-[`schema/`](https://github.com/Ahoo-Wang/CoSec/tree/main/schema) holds JSON Schemas for editor completion and checks
-in CI:
+[`schema/8.0/`](https://github.com/Ahoo-Wang/CoSec/tree/main/schema/8.0) holds the JSON Schemas of the 8.0 line for editor
+completion and checks in CI. The site serves them at `https://cosec.ahoo.me/schema/8.0/<file>`, which is also each file's
+`$id` and the base its cross-file references resolve against; `8.0` names the release line, not the `schema: 2` of a
+document:
 
 | File | Validates |
 |---|---|
@@ -773,8 +775,12 @@ in CI:
 | `problem.schema.json` | an error response body ([Web integration](../integration/web.md)) |
 
 A document is closed, so do not add a `$schema` field to it: map the schema to your files in the editor instead, for
-example in VS Code's `settings.json`. Point the URL at the tag of the CoSec version you run, as below (`v8.0.0-beta.4`):
-`main` describes the next release, and a document your version does not read would pass in the editor.
+example in VS Code's `settings.json`. Until 8.0.0 is released the files under `/schema/8.0/` are those of `main`, and
+they change between previews: a document your preview does not read can pass in the editor. For a file that never
+changes, read the tag of the version you run, as below (`v8.0.0-beta.4`, whose files are at `schema/<file>`; later tags
+have them at `schema/8.0/<file>`). A tag's files keep the `$id` they were written with, so a validator that resolves
+references against `$id` fetches their sibling files from the site, not from the tag: point it at a local copy of the
+directory then. From 8.0.0 on, `/schema/8.0/` is the 8.0 line's and no later line replaces it.
 
 ```json
 {

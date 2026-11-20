@@ -269,6 +269,12 @@ A tenant document holds that tenant's **custom roles**, each of one app:
   indeterminate, so its requests fail closed.
 - A role with a space that lists a permission of a group that is not `spaced` gets a warning: it never applies there.
   So does a tenant's role with the id of one of its app's system roles: a member holding it gets both.
+- A role id is not qualified by its app in a membership: a member's roles are `role@space`, with no app in them. Where
+  the roles come from a `MembershipProvider` (asked for a tenant and a principal only) or from a token bound to no app,
+  a role held once applies in every app whose document defines that id: `admin` defined by a dozen apps is held in all
+  of them. A token bound to one app is held to that app's document. A change to an app document that defines a system
+  role another app already defines gets a warning naming the role and the other apps (`ROL-12`); it is not refused, as
+  a role across apps may be meant. When it is not, prefix role ids with the app (`wms.clerk`).
 - A role has no `expiresAt`, is not break-glass, and cannot bind a principal or `Anyone`: write [bindings](#granting-permissions-to-roles)
   for those. Both forms may grant the same role; the result is the union.
 
