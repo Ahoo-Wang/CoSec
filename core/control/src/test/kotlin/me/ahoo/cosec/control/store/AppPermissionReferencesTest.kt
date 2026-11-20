@@ -31,9 +31,8 @@ import java.util.concurrent.atomic.AtomicInteger
 
 /**
  * `CTL-5`, RFC 0007 §5.8: a tenant's reference to an app's permission policy (`perm:<app>/<id>`) is indexed under the
- * app only, since only the app's document can define that prefix (`TNT-2`). The app can still not remove it; what an
- * older version indexed under the platform goes at the tenant's next publish; and an app's removal check reads no
- * tenant's head, since none can define the id itself.
+ * app only, since only the app's document can define that prefix (`TNT-2`). The app can still not remove it, and an
+ * app's removal check reads no tenant's head, since none can define the id itself.
  */
 class AppPermissionReferencesTest {
     private val clock = MutableClock()
@@ -60,34 +59,22 @@ class AppPermissionReferencesTest {
     @Test
     fun `a tenant's reference to an app permission is indexed under the app only, every other one as before`() {
         index.references(tenant).assert().containsExactlyInAnyOrder(
-            SnapshotKey.Platform to PolicyId("own"),
-            order to read,
-            SnapshotKey.Platform to PolicyId("shared"),
-            order to PolicyId("shared"),
+            ReferrerIndex.Reference(SnapshotKey.Platform, PolicyId("own"), definesItself = true),
+            ReferrerIndex.Reference(order, read),
+            ReferrerIndex.Reference(SnapshotKey.Platform, PolicyId("shared")),
+            ReferrerIndex.Reference(order, PolicyId("shared")),
         )
-        index.indexedByOlderVersions(tenant).assert().contains(SnapshotKey.Platform to read)
     }
 
     @Test
-    fun `the platform entries an older version wrote go at the tenant's next publish, and the app still cannot remove the permission`() =
+    fun `the app cannot remove a permission a tenant refers to, and the platform holds no member for it`() =
         runBlocking<Unit> {
             published(SnapshotKey.Platform, candidate(SnapshotKey.Platform, listOf(policy("shared"))))
             published(order, candidate(order, listOf(policy(read.value))))
             published(ACME, tenant).assert().isInstanceOf(PublishOutcome.Published::class.java)
-            // What a version before this one also wrote, at the same revision.
-            memory.putReferrers(
-                SnapshotKey.Platform,
-                read,
-                memory.referrers(SnapshotKey.Platform, read)?.digest,
-                mapOf(ACME to 1L)
-            )
-                .assert().isTrue()
 
-            published(ACME, tenant).assert().isInstanceOf(PublishOutcome.Published::class.java)
-
-            // Written empty, or removed: no referrer either way.
-            memory.referrers(SnapshotKey.Platform, read)?.value.orEmpty().assert().isEmpty()
-            memory.referrers(order, read)!!.value.keys.assert().containsExactly(ACME)
+            memory.referrers(SnapshotKey.Platform, read).assert().isEmpty()
+            memory.referrers(order, read).assert().containsExactly(ReferrerEntry(ACME, 1))
             val removed = published(order, candidate(order, emptyList()))
             removed.assert().isInstanceOf(PublishOutcome.Referenced::class.java)
             (removed as PublishOutcome.Referenced).referrers.getValue(read).assert().containsExactly(ACME)
@@ -103,5 +90,53 @@ class AppPermissionReferencesTest {
         published(order, candidate(order, emptyList())).assert().isInstanceOf(PublishOutcome.Referenced::class.java)
 
         tenantHeads.get().assert().isEqualTo(0)
+    }
+
+    /** What `cosec-migrate repair-references` converts: the sets a head touches, and whether a referrer defines an id. */
+    @Test
+    fun `the sets a head touches, and whether a referrer defines an id itself`() = runBlocking<Unit> {
+        published(SnapshotKey.Platform, candidate(SnapshotKey.Platform, listOf(policy("shared"))))
+        published(order, candidate(order, listOf(policy(read.value))))
+        published(ACME, tenant)
+        revisions.referenceKeys(
+            SnapshotKey.Platform
+        ).assert().containsExactly(SnapshotKey.Platform to PolicyId("shared"))
+        revisions.referenceKeys(order).assert().contains(order to read)
+        revisions.referenceKeys(ACME).assert()
+            .contains(
+                SnapshotKey.Platform to PolicyId("own"),
+                order to read,
+                SnapshotKey.Platform to PolicyId("shared")
+            )
+        revisions.referenceKeys(SnapshotKey.Tenant("absent")).assert().isEmpty()
+        revisions.definesItself(ACME, PolicyId("own")).assert().isTrue()
+        revisions.definesItself(ACME, PolicyId("shared")).assert().isFalse()
+        revisions.definesItself(order, read).assert().isFalse()
+    }
+
+    /** `CTL-44`: a member whose removal fails stays recorded, and the next publish that drops it removes it. */
+    @Test
+    fun `a drop whose removal fails keeps its record, and a later drop removes the member`() = runBlocking<Unit> {
+        published(SnapshotKey.Platform, candidate(SnapshotKey.Platform, listOf(policy("shared"))))
+        val binds = candidate(ACME, bindings = listOf(binding("s", "shared")))
+        published(ACME, binds)
+        var failing = true
+        val flaky = object : ControlStore by memory {
+            override suspend fun removeReferrers(target: SnapshotKey, policy: PolicyId, entries: Set<ReferrerEntry>) {
+                check(!failing) { "Redis is down" }
+                memory.removeReferrers(target, policy, entries)
+            }
+        }
+        val flakyRevisions = Revisions(flaky, clock)
+        flakyRevisions.publish(ACME, flakyRevisions.head(ACME), candidate(ACME), publication())
+            .assert().isInstanceOf(PublishOutcome.Published::class.java)
+        memory.referrers(SnapshotKey.Platform, PolicyId("shared")).assert().containsExactly(ReferrerEntry(ACME, 1))
+        memory.index(ACME)!!.value.indexed.map { it.policy }.assert().containsExactly(PolicyId("shared"))
+
+        failing = false
+        flakyRevisions.publish(ACME, flakyRevisions.head(ACME), candidate(ACME), publication())
+            .assert().isInstanceOf(PublishOutcome.Published::class.java)
+        memory.referrers(SnapshotKey.Platform, PolicyId("shared")).assert().isEmpty()
+        memory.index(ACME)!!.value.indexed.assert().isEmpty()
     }
 }

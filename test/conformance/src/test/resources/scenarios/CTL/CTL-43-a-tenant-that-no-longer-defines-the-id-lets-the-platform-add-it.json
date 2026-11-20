@@ -1,0 +1,102 @@
+{
+  "rules": [
+    "CTL-43"
+  ],
+  "polarity": "negative",
+  "level": "control",
+  "description": "Tenant acme defined editor and removed it: the publish that removed it removed its entry too. The platform's change that adds a policy editor is checked without error.",
+  "steps": [
+    {
+      "propose": {
+        "change": "c1",
+        "document": "tenant:acme",
+        "operations": [
+          {
+            "putPolicy": {
+              "id": "editor",
+              "statements": [
+                {
+                  "effect": "allow",
+                  "action": "order:read"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "skipShadow": "c1"
+    },
+    {
+      "publish": "c1"
+    },
+    {
+      "propose": {
+        "change": "c2",
+        "document": "tenant:acme",
+        "operations": [
+          {
+            "removePolicy": "editor"
+          },
+          {
+            "putPolicy": {
+              "id": "other",
+              "statements": [
+                {
+                  "effect": "allow",
+                  "action": "order:read"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "skipShadow": "c2"
+    },
+    {
+      "publish": "c2"
+    },
+    {
+      "propose": {
+        "change": "c3",
+        "document": "platform",
+        "operations": [
+          {
+            "putPolicy": {
+              "id": "editor",
+              "statements": [
+                {
+                  "effect": "allow",
+                  "action": "order:*"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    }
+  ],
+  "expect": {
+    "steps": [
+      "CHECKED",
+      "READY",
+      "PUBLISHED",
+      "CHECKED",
+      "READY",
+      "PUBLISHED",
+      "CHECKED"
+    ],
+    "errors": {
+      "c1": [],
+      "c2": [],
+      "c3": []
+    },
+    "heads": {
+      "platform": 0,
+      "tenant:acme": 2
+    }
+  }
+}

@@ -20,6 +20,7 @@ import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.control.store.AppList
 import me.ahoo.cosec.control.store.ControlStore
 import me.ahoo.cosec.control.store.Head
+import me.ahoo.cosec.control.store.ReferrerEntry
 import me.ahoo.cosec.control.store.Revisions
 import me.ahoo.cosec.control.store.Versioned
 import me.ahoo.cosec.model.PolicyId
@@ -37,8 +38,8 @@ internal class StoreCurrentDocuments(
 
     override suspend fun head(key: SnapshotKey): Head? = revisions.head(key)
 
-    override suspend fun referrers(target: SnapshotKey, policy: PolicyId): Set<SnapshotKey> =
-        revisions.referrers(target, policy)
+    override suspend fun referrers(target: SnapshotKey, policy: PolicyId): Set<ReferrerEntry> =
+        revisions.referrerEntries(target, policy)
 
     /**
      * The app list once this instance has reconciled it with the documents (RC1-4, B1 review): until a

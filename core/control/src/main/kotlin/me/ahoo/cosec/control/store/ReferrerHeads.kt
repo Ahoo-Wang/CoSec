@@ -28,10 +28,16 @@ import me.ahoo.cosec.spi.snapshot.SnapshotKey
 class ReferrerHeads {
     internal val read = HashMap<SnapshotKey, Referring>()
 
-    /** Whether [referrer], whose reference to [policy] of [target] was indexed by [revision], no longer has it. */
-    internal fun gone(referrer: SnapshotKey, revision: Long, target: SnapshotKey, policy: PolicyId): Boolean =
-        read[referrer]?.let { it.revision >= revision && (target to policy) !in it.references } == true
+    /**
+     * Whether [entry] of [policy] of [target] is gone: its referrer's head is at or above the revision that indexed it,
+     * and has no such reference, with the same flag (`CTL-43`). An entry that says it refers where the head now defines
+     * the id itself is gone; until a repair removes it, it errs towards blocking.
+     */
+    internal fun gone(entry: ReferrerEntry, target: SnapshotKey, policy: PolicyId): Boolean =
+        read[entry.referrer]?.let {
+            it.revision >= entry.revision && ReferrerIndex.Reference(target, policy, entry.definesItself) !in it.references
+        } == true
 
     /** A head's [revision] and what it [references]; revision 0 for one that is not there or cannot be read. */
-    internal class Referring(val revision: Long, val references: Set<Pair<SnapshotKey, PolicyId>>)
+    internal class Referring(val revision: Long, val references: Set<ReferrerIndex.Reference>)
 }

@@ -333,6 +333,11 @@ cosec-migrate repair-references --to-redis redis://localhost:6379 [--cluster] [-
 
 The control plane keeps an index of which documents refer to which policy, so that a platform change cannot remove a
 policy a document still uses, nor add one whose id a tenant document uses ([Storage](./storage.md#redis-keys)).
+On a store written before 8.0.0-beta.5 it first converts that index into sets, under a lease two runs share: each value
+of the old format a head touches becomes a set, a set is never replaced, and the old document list
+(`<s>:control:list:documents`) is copied into `<s>:control:documents:all` and removed last, once nothing failed; it
+prints how many it converted and `The store is in the format of 8.0.0-beta.5.` (`MIG-4`). Stop every control plane of
+an earlier version first: it writes the old format.
 `repair-references` reads the head of every document the store lists and adds whatever the index misses; it prints
 how many documents it visited and how many references it added. Then it removes the references no head has, which a
 publish indexed before a head write it lost, and prints how many: left there, one would block removing that policy for
@@ -353,7 +358,7 @@ approval. The run of `repair-references` after the upgrade is complete is what e
 It then lists every app document among the documents in the app list and marks the list complete, printing
 `The app list is complete: <n> app(s).`; until then the grant analysis takes every grant over every app as
 unknown. If the list kept changing under it, it prints `FAILED the app list could not be completed` and exits with
-`1`: run it again. The list it completes is as good as `<s>:control:list:documents`, which names every document the
+`1`: run it again. The list it completes is as good as `<s>:control:documents:all`, which names every document the
 control plane or `cosec-migrate` ever published, as long as that list has not been lost; a document written to Redis
 another way is in neither.
 

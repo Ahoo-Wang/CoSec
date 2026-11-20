@@ -1,0 +1,15 @@
+# Rule: CTL-43
+# Mutant: a removal is blocked only by a referrer none of whose entries defines the id: a stale entry that refers, beside one that defines, no longer blocks
+# Tests: :control:test --tests me.ahoo.cosec.control.change.ReferenceFlagsTest
+
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/store/ReferencedPolicies.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/store/ReferencedPolicies.kt
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/store/ReferencedPolicies.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/store/ReferencedPolicies.kt
+@@ -61,6 +61,6 @@ internal object ReferencedPolicies {
+     /** The referrers among [entries] that block a removal from [key] (see [of]). */
+     fun blocking(key: SnapshotKey, entries: Set<ReferrerEntry>): Set<SnapshotKey> =
+         entries.filter { it.referrer != key }.groupBy { it.referrer }
+-            .filterValues { of -> key is SnapshotKey.App || !of.all { it.definesItself } }
++            .filterValues { of -> key is SnapshotKey.App || !of.any { it.definesItself } }
+             .keys
+ }

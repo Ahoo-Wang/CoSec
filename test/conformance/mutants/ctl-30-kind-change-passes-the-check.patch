@@ -3,15 +3,14 @@
 # Tests: :control:test --tests me.ahoo.cosec.control.change.BoundaryReferencesTest :conformance:test
 
 diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/RemovedReferences.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/RemovedReferences.kt
-index 4b789c25..ab00d49d 100644
 --- a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/RemovedReferences.kt
 +++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/RemovedReferences.kt
-@@ -45,7 +45,7 @@ internal object RemovedReferences {
-         } catch (_: DocumentCompileException) {
+@@ -58,7 +58,7 @@ internal object RemovedReferences {
+             findings += Finding("REFERENCES", "$.policies", "The back-references could not be read: ${e.message}", UNAVAILABLE)
              return
          }
 -        if (referenced.isEmpty()) return
-+        return
++        if (referenced.isEmpty() || referenced.isNotEmpty()) return
          val kept = RoleExpansion.effective(candidate).policies.mapTo(HashSet()) { it.id }
          for ((policy, referrers) in referenced) {
              val what = if (policy in kept) "changes between a policy and a boundary, and is" else "is"

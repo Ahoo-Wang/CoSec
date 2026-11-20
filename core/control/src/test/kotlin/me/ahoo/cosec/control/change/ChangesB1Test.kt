@@ -35,6 +35,7 @@ import me.ahoo.cosec.control.store.AppList
 import me.ahoo.cosec.control.store.ControlStore
 import me.ahoo.cosec.control.store.HeadWrite
 import me.ahoo.cosec.control.store.PublishOutcome
+import me.ahoo.cosec.control.store.ReferrerEntry
 import me.ahoo.cosec.control.store.RevisionIndex
 import me.ahoo.cosec.control.store.Revisions
 import me.ahoo.cosec.control.store.StoreFixtures
@@ -434,14 +435,14 @@ class ChangesB1Test {
                 return harness.memory.putIndex(key, expected, index)
             }
 
-            override suspend fun putReferrers(
-                target: SnapshotKey,
-                policy: PolicyId,
-                expected: SnapshotDigest?,
-                referrers: Map<SnapshotKey, Long>
-            ): Boolean {
+            override suspend fun addReferrer(target: SnapshotKey, policy: PolicyId, entry: ReferrerEntry) {
                 check(!written) { "Redis is down" }
-                return harness.memory.putReferrers(target, policy, expected, referrers)
+                harness.memory.addReferrer(target, policy, entry)
+            }
+
+            override suspend fun removeReferrers(target: SnapshotKey, policy: PolicyId, entries: Set<ReferrerEntry>) {
+                check(!written) { "Redis is down" }
+                harness.memory.removeReferrers(target, policy, entries)
             }
         }
         val revisions = Revisions(store, harness.clock)
@@ -719,15 +720,19 @@ class ChangesB1Test {
         }.extracting { (it as ChangeRejectedException).status }.isEqualTo(503)
     }
 
+    /**
+     * `CTL-42`: the platform checks read the back-references, not the tenants' heads (`CTL-43`). A set that cannot be
+     * read, such as one in the format before 8.0.0-beta.5, refuses adding a policy of that id and removing one.
+     */
     @Test
-    fun `a tenant document that cannot be read refuses a platform id and keeps blocking a removal - RC1-9`() =
+    fun `back-references that cannot be read refuse a platform id and block a removal - CTL-42`() =
         runBlocking<Unit> {
             publish(ACME, Operation.PutPolicy(allow("editor")), Operation.PutBinding(bind("staff", "editor")))
             var unreadable = false
             val store = object : ControlStore by harness.memory {
-                override suspend fun head(key: SnapshotKey): StoredDocument? {
-                    check(!(unreadable && key == ACME)) { "[$key] cannot be read" }
-                    return harness.memory.head(key)
+                override suspend fun referrers(target: SnapshotKey, policy: PolicyId): Set<ReferrerEntry> {
+                    check(!(unreadable && policy == PolicyId("editor"))) { "[$policy] cannot be read" }
+                    return harness.memory.referrers(target, policy)
                 }
             }
             val changes = fourEyes(store)
@@ -741,8 +746,6 @@ class ChangesB1Test {
             )
             added.errors.map { it.check to it.status }.assert().containsExactly("V2" to 503)
             added.errors.single().message.assert().contains("could not be read")
-            // Written as cosec-migrate would, from before the upgrade: acme may define editor, but cannot be read, so
-            // it may refer to the platform's and still blocks its removal.
             unreadable = false
             harness.revisions.publish(
                 SnapshotKey.Platform,
@@ -758,7 +761,7 @@ class ChangesB1Test {
                 listOf(Operation.RemovePolicy(PolicyId("editor"))),
                 "remove"
             )
-                .errors.map { it.check }.assert().containsExactly("REFERENCES")
+                .errors.map { it.check to it.status }.assert().containsExactly("REFERENCES" to 503)
         }
 
     @Test

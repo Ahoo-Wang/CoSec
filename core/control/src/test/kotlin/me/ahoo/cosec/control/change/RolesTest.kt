@@ -32,6 +32,7 @@ import me.ahoo.cosec.control.lifecycle.CurrentDocuments
 import me.ahoo.cosec.control.lifecycle.EntryDigest
 import me.ahoo.cosec.control.lifecycle.Narrowing
 import me.ahoo.cosec.control.lifecycle.Operations
+import me.ahoo.cosec.control.store.ReferrerEntry
 import me.ahoo.cosec.control.store.StoreFixtures
 import me.ahoo.cosec.document.Catalog
 import me.ahoo.cosec.document.CatalogGroup
@@ -278,7 +279,7 @@ class RolesTest {
         val authority = ChangeAuthority(notTrustRoot, revocations = RevocationReader.NONE)
         val documents = object : CurrentDocuments {
             override suspend fun head(key: SnapshotKey) = null
-            override suspend fun referrers(target: SnapshotKey, policy: PolicyId) = emptySet<SnapshotKey>()
+            override suspend fun referrers(target: SnapshotKey, policy: PolicyId) = emptySet<ReferrerEntry>()
             override suspend fun apps() = null
         }
         val now = Instant.parse("2026-11-01T00:00:00Z")

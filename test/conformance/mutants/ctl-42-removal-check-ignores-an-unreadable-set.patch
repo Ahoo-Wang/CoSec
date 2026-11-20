@@ -1,0 +1,15 @@
+# Rule: CTL-42
+# Mutant: the check of a change lets a removal through when the back-references it needs cannot be read
+# Tests: :control:test --tests me.ahoo.cosec.control.change.ChangesB1Test
+
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/RemovedReferences.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/RemovedReferences.kt
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/RemovedReferences.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/RemovedReferences.kt
+@@ -55,7 +55,6 @@ internal object RemovedReferences {
+         } catch (e: Exception) {
+             // A back-reference set that cannot be read may name a referrer: the removal is refused (CTL-42).
+             log.warn(e) { "[$key]: the back-references of its policies could not be read; the change is refused." }
+-            findings += Finding("REFERENCES", "$.policies", "The back-references could not be read: ${e.message}", UNAVAILABLE)
+             return
+         }
+         if (referenced.isEmpty()) return

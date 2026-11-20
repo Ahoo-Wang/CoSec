@@ -174,6 +174,8 @@ object GuardAllowlist {
             "migrate:MatcherTranslatorTest#every action is http star in an ALLOW and star in a DENY",
             "migrate:BootstrapKeepsDocumentTest#bootstrap adds its binding and keeps the rest of the document",
             "migrate:BootstrapKeepsDocumentTest#a forced bootstrap adds its binding and keeps the rest of the document",
+            "migrate:LegacyConversionTest#a set is never replaced, so a member added after the conversion stays",
+            "migrate:MigrateMainTest#repair-references converts a store written before beta 5 and removes the old document list last",
             "spi:AuthenticatedPrincipalTest#attributesAreReadOnly",
             "jwt:JwtTokenConverterTest#verifiedAttributesAreReadOnlyAtEveryLevel",
             "testkit:PipelineFixtureTest#aFurtherCheckCannotBeWidenedThroughThePrincipalsAttributes",

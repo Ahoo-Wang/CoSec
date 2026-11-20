@@ -27,6 +27,7 @@ import me.ahoo.cosec.cocache.shadow.CoCacheCandidateStore
 import me.ahoo.cosec.cocache.snapshot.SnapshotKeyEncoder
 import me.ahoo.cosec.cocache.snapshot.SnapshotNode
 import me.ahoo.cosec.model.Memberships
+import me.ahoo.cosec.model.PolicyId
 import me.ahoo.cosec.model.PrincipalId
 import me.ahoo.cosec.model.RoleId
 import me.ahoo.cosec.model.SpaceId
@@ -117,11 +118,13 @@ class CoCache6ValuesTest {
         cocache6(storageKey(CoSecCacheSpecs.REVISION_INDEX_CACHE_NAME, SnapshotKeyEncoder.encode(key)), "{}")
         cocache6(storageKey(CoSecCacheSpecs.STAGE_CACHE_NAME, SnapshotKeyEncoder.encode(key)), "{}")
         cocache6(storageKey(CoSecCacheSpecs.CONTROL_LIST_CACHE_NAME, "documents"), "{}")
+        cocache6(storageKey(CoSecCacheSpecs.REFERENCE_INDEX_CACHE_NAME, "platform:shared"), "{}")
         SnapshotNode(redis, keyPrefix).use { node ->
             val store = CoCacheControlStore.create(CoCacheFactory(node.runtime), node.cache, keyPrefix)
             foreign { runBlocking { store.index(key) } }
             foreign { runBlocking { store.stage(key) } }
-            foreign { runBlocking { store.documents() } }
+            foreign { runBlocking { store.legacyDocuments() } }
+            foreign { runBlocking { store.referrers(SnapshotKey.Platform, PolicyId("shared")) } }
         }
     }
 
