@@ -36,6 +36,7 @@ import me.ahoo.cosec.control.lifecycle.LockoutCheck
 import me.ahoo.cosec.control.lifecycle.ShadowOptions
 import me.ahoo.cosec.control.lifecycle.ShadowWindows
 import me.ahoo.cosec.control.store.ControlStore
+import me.ahoo.cosec.control.store.ControlStoreException
 import me.ahoo.cosec.control.store.InMemoryControlStore
 import me.ahoo.cosec.control.store.MutableClock
 import me.ahoo.cosec.control.store.Publication
@@ -65,6 +66,7 @@ import me.ahoo.cosec.spi.membership.InMemoryMembershipProvider
 import me.ahoo.cosec.spi.shadow.InMemoryShadowReports
 import me.ahoo.cosec.spi.shadow.InstanceStatus
 import me.ahoo.cosec.spi.shadow.ShadowOutcome
+import me.ahoo.cosec.spi.shadow.ShadowReadings
 import me.ahoo.cosec.spi.shadow.ShadowReport
 import me.ahoo.cosec.spi.shadow.ShadowReportReader
 import me.ahoo.cosec.spi.snapshot.SnapshotFormatException
@@ -342,6 +344,63 @@ class ControlRoundTwoFixesTest {
             closed.vanished.assert().containsExactly("pod-b")
             closed.needsAck.assert().isTrue()
             changes.get(change.id).shadow!!.closed!!.vanished.assert().describedAs("as stored").containsExactly("pod-b")
+        }
+
+    /**
+     * `CTL-56`: a report the reader names unreadable (listed, missing or not decoding) is missing evidence, even from an
+     * instance the control plane never saw report: the window waits, then closes insufficient naming it. A store that
+     * does not answer is neither: every look fails (503) and the window stays shadowing, past its longest too.
+     */
+    @Test
+    fun `an unreadable report waits then closes insufficient, a store outage does neither - CTL-56`() =
+        runBlocking<Unit> {
+            val written = InMemoryShadowReports(clock)
+            val unreadable = HashSet<String>()
+            var down = false
+            val reader = object : ShadowReportReader {
+                override suspend fun reports(window: String) = error("the control plane reads readings")
+
+                override suspend fun readings(window: String): ShadowReadings {
+                    if (down) throw ControlStoreException("Redis did not answer")
+                    return ShadowReadings(
+                        written.reports(window).filter { it.instance !in unreadable },
+                        unreadable.toSet()
+                    )
+                }
+
+                override suspend fun statuses(): List<InstanceStatus> = emptyList()
+            }
+            val changes = changes(reports = reader, shadow = ShadowOptions(Duration.ZERO, 10, Duration.ofHours(1)))
+            val proposed = { note: String ->
+                runBlocking {
+                    changes.propose(
+                        pia,
+                        SnapshotKey.Platform,
+                        1,
+                        listOf(Operation.PutPolicy(writer.copyAs(note))),
+                        note
+                    )
+                }
+            }
+            val change = proposed("more")
+            val window = changes.stage(pia, change.id).shadow!!.window
+            written.write(report("pod-a", 50, window))
+            unreadable += "pod-b"
+            changes.shadowed(change.id).shadow!!.closed.assert().describedAs("waits for pod-b").isNull()
+            clock.now = clock.now.plus(Duration.ofMinutes(61))
+            val closed = changes.shadowed(change.id).shadow!!.closed!!
+            closed.insufficient.assert().isTrue()
+            closed.vanished.assert().containsExactly("pod-b")
+            // A store outage: no look answers, and the window neither waits it out nor closes, past its longest too.
+            changes.abandon(pia, change.id)
+            val other = proposed("other")
+            changes.stage(pia, other.id)
+            down = true
+            refused { changes.shadowed(other.id) }.status.assert().isEqualTo(503)
+            clock.now = clock.now.plus(Duration.ofHours(2))
+            refused { changes.shadowed(other.id) }.status.assert().isEqualTo(503)
+            changes.get(other.id).state.assert().isEqualTo(ChangeState.SHADOWING)
+            changes.get(other.id).shadow!!.closed.assert().isNull()
         }
 
     @Test

@@ -21,6 +21,7 @@ import me.ahoo.cosec.control.change.Propagation
 import me.ahoo.cosec.control.change.ShadowState
 import me.ahoo.cosec.control.change.ShadowSummary
 import me.ahoo.cosec.spi.shadow.ShadowOutcome
+import me.ahoo.cosec.spi.shadow.ShadowReadings
 import me.ahoo.cosec.spi.shadow.ShadowReportReader
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import java.time.Instant
@@ -47,15 +48,16 @@ class ShadowWindows(private val reports: ShadowReportReader, private val options
      * instance, or a negative count. An instance blocks the window by itself: one with a `CANDIDATE_ERROR` blocks it
      * whatever the others report.
      *
-     * An instance [ShadowState.reporters] says reported before and that has no report now has vanished: its evidence
-     * is missing, never zero, since the instance that vanishes is as likely as any to be the one that saw the narrowed
+     * An instance [ShadowState.reporters] says reported before and that has no report now has vanished, and so has one
+     * whose listed report cannot be read ([ShadowReadings.unreadable]): its evidence is missing, never zero, since the instance that vanishes is as likely as any to be the one that saw the narrowed
      * requests (`CTL-56`). The window waits for it; an instance rewrites its cumulative report every few seconds, so a
      * report lost in a failover comes back while the instance serves. At the longest window it closes insufficient,
      * naming the vanished instances, and never passes.
      */
     suspend fun look(state: ShadowState, now: Instant): ShadowLook {
         val window = state.window
-        val read = reports.reports(window)
+        val readings = reports.readings(window)
+        val read = readings.reports
         val foreign = read.any { it.window != window }
         check(!foreign) { "A report read for window $window is of another window" }
         val twice = read.groupingBy { it.instance }.eachCount().filterValues { it > 1 }.keys
@@ -63,7 +65,8 @@ class ShadowWindows(private val reports: ShadowReportReader, private val options
         val negative = read.any { report -> report.counts.values.any { it < 0 } }
         check(!negative) { "A report of window $window has a negative count" }
         val reporters = read.map { it.instance }.toSet()
-        val vanished = state.reporters - reporters
+        // A listed report that cannot be read is missing evidence too: that instance has reported, and must again.
+        val vanished = state.reporters - reporters + readings.unreadable
         val counts = ShadowOutcome.entries.associate { it.name to 0L }.toMutableMap()
         for (report in read) {
             report.counts.forEach { (outcome, count) -> counts.merge(outcome.name, count, Long::plus) }
@@ -79,7 +82,7 @@ class ShadowWindows(private val reports: ShadowReportReader, private val options
             elapsed >= options.maxDuration -> ShadowSummary(counts, now, insufficient = true, blocked = false, vanished)
             else -> null
         }
-        return ShadowLook(state.reporters + reporters, summary, vanished)
+        return ShadowLook(state.reporters + reporters + readings.unreadable, summary, vanished)
     }
 
     /**
