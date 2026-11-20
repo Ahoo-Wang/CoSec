@@ -68,7 +68,6 @@ import org.springframework.core.env.Environment
 import org.springframework.core.io.ResourceLoader
 import java.time.Clock
 import java.time.Instant
-import java.util.UUID
 
 /**
  * The policy snapshot the pipeline decides on (RFC 0004 §7.4): the platform, app and tenant documents, compiled against
@@ -219,7 +218,7 @@ class CoSecSnapshotAutoConfiguration {
         @Bean
         @ConditionalOnMissingBean
         fun cosecShadowRecorder(properties: RuntimeAuthorizationProperties): ShadowRecorder =
-            ShadowRecorder(properties.shadow.instanceId.ifEmpty { UUID.randomUUID().toString() })
+            ShadowRecorder(ShadowInstanceId.forThisStart(properties.shadow.instanceId))
 
         /**
          * Candidates read through the control plane's store on a host that runs it (both would own the one candidate

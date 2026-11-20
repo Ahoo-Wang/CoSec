@@ -197,6 +197,25 @@ Which preview of the library may run behind which preview of the gateway image: 
   - **Body.** `cosec.control.http.max-body-size` defaults to `10MB` instead of `16MB`, and now bounds the control API
     on WebFlux too, in place of `spring.codec.max-in-memory-size` (256 KB by default, which kept larger changes out of
     a WebFlux control plane). A larger body is a `400` `invalid-request`.
+- **An instance holds the tenants it serves** (`SNP-7`, `SNP-14`). Affected: every instance that decides, the gateway
+  above all.
+  - `cosec.authorization.snapshot.max-tenants` defaults to 16,384 instead of 1,024. The ids an instance knows have no
+    document now have a bound per family: `max-absent-apps` (256, as before) and `max-absent-tenants` (65,536, where
+    256 was shared before). Both are properties, and `SnapshotSettings` has them.
+  - With every place used, the tenant entries take about 520 MB of heap at 30 KB a tenant document of 5 roles of
+    20 permissions and 20 bindings. Check your heap against
+    [Sizing a SaaS gateway](./deployment.md#sizing-a-saas-gateway), or set the two properties back. The production
+    overlay of `k8s/` now gives a gateway a 1.5 GiB heap and a 2560Mi limit, where it gave 1 GiB and 2Gi.
+  - `cosec.authorization.snapshot.reload-concurrency` is new, and a revalidation pass reads 16 documents at a time, not 4.
+    The reads per interval are unchanged; a pass ends four times sooner, in a burst four times denser.
+  - An install that takes its family over the cap evicts at most 64 entries of that kind on its own thread, and
+    housekeeping the rest, where it evicted back to the bound.
+- **A configured `cosec.authorization.shadow.instance-id` is a prefix.** The id is `<instance-id>.<suffix>`, with a
+  suffix new at every start, so a restarted process never replaces the shadow reports of the one before it, which could
+  erase a `CANDIDATE_ERROR` and unblock a window. Affected: a Redis ACL that names an instance's keys. Change
+  `~cosec:shadow:report:*:pod-a` and `~cosec:shadow:status:pod-a` to `~cosec:shadow:report:*:pod-a.*` and
+  `~cosec:shadow:status:pod-a.*` ([Who may write which keys](./storage.md#who-may-write-which-keys)); an instance with
+  the old lines is denied its report and status writes, which it logs at `WARN`.
 
 ## From 8.0.0-beta.3 {#from-8-0-0-beta-3}
 

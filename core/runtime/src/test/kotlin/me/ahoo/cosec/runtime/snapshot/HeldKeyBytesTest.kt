@@ -65,7 +65,7 @@ class HeldKeyBytesTest {
             store,
             SnapshotKey.Platform,
             compiler,
-            listOf(SnapshotFamily(SnapshotKind.APP, compiler, options.maxApps, options.maxAbsent)),
+            listOf(SnapshotFamily(SnapshotKind.APP, compiler, options.maxApps, options.maxAbsentApps)),
             options,
             ManualClock(),
             SnapshotMetrics.NOOP,

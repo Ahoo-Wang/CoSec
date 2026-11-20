@@ -484,14 +484,15 @@ internal class SourceModel(
 
     /**
      * `SNP-7`: an entry of a document the store holds goes only while its family holds more such entries than its bound,
-     * and one for a document the store does not hold only while there are more of those than `maxAbsent`: neither kind
+     * and one for a document the store does not hold only while there are more of those than its family's absent bound: neither kind
      * evicts the other. Judged after the claim and before the removal, against the model's installs then ([claimed]).
      */
     private fun checkEvicted(key: SnapshotKey) {
         val absent = lastInstall.getValue(key).origin == EntryOrigin.ABSENT
         val held = lastInstall.values.count { it.key.kind == key.kind && (it.origin == EntryOrigin.ABSENT) == absent }
         val bound = when {
-            absent -> options.maxAbsent
+            absent && key is SnapshotKey.App -> options.maxAbsentApps
+            absent -> options.maxAbsentTenants
             key is SnapshotKey.App -> options.maxApps
             else -> options.maxTenants
         }
@@ -527,7 +528,8 @@ internal class SourceModel(
             val loading = store.pending.count { it.key.kind == kind && !ended(it) } + threads.compiles.size
             val bound = if (kind == SnapshotKind.APP) options.maxApps else options.maxTenants
             val cap = bound + minOf(bound, SnapshotFamilies.MAX_SLACK) + loading
-            val absentCap = options.maxAbsent + minOf(options.maxAbsent, SnapshotFamilies.MAX_SLACK) + loading
+            val absentBound = if (kind == SnapshotKind.APP) options.maxAbsentApps else options.maxAbsentTenants
+            val absentCap = absentBound + minOf(absentBound, SnapshotFamilies.MAX_SLACK) + loading
             if (documents > cap || absent > absentCap) {
                 violations += "the $kind family holds $documents documents and $absent absent entries, over its cap " +
                     "($cap, $absentCap with $loading loading)"

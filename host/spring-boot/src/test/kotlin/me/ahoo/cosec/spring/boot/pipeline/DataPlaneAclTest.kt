@@ -37,6 +37,7 @@ import me.ahoo.cosec.engine.CompiledDocument
 import me.ahoo.cosec.model.PrincipalId
 import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.model.decision.DocumentKind
+import me.ahoo.cosec.runtime.shadow.ShadowRecorder
 import me.ahoo.cosec.runtime.snapshot.SnapshotSource
 import me.ahoo.cosec.spi.shadow.ShadowReport
 import me.ahoo.cosec.spi.shadow.ShadowReportSink
@@ -231,11 +232,14 @@ class DataPlaneAclTest {
                 publish(control, 2)
                 eventually { installed(node) == 2L }
                 installed(node).assert().isEqualTo(2L)
+                // The configured id is the prefix of this start's id: the ACL's `pod-a.*` is what lets it write.
+                val started = node.getBean(ShadowRecorder::class.java).instance
+                started.assert().startsWith("$instance.")
                 runBlocking {
                     node.getBean(ShadowReportSink::class.java)
-                        .write(ShadowReport("w-$id", instance, emptyMap(), emptyMap(), emptySet(), null, null))
+                        .write(ShadowReport("w-$id", started, emptyMap(), emptyMap(), emptySet(), null, null))
                 }
-                admin.exists("$prefix:shadow:report:w-$id:$instance").assert().isEqualTo(1L)
+                admin.exists("$prefix:shadow:report:w-$id:$started").assert().isEqualTo(1L)
                 aclLog().assert().describedAs("ACL LOG of $user").isEmpty()
             }
         }
@@ -321,8 +325,8 @@ class DataPlaneAclTest {
 
         /** The data-plane user's keys, as `storage.md` shows them (default prefix, instance `pod-a`). */
         const val KEYS_LINE = "ACL SETUSER cosec-pod-a on >change-me resetkeys resetchannels -@all " +
-            "%R~cosec:snapshot:* %R~cosec:candidate:* ~cosec:shadow:report: ~cosec:shadow:report:*:pod-a " +
-            "~cosec:shadow:reporters:* ~cosec:shadow:status: ~cosec:shadow:status:pod-a ~cosec:shadow:instances:* " +
+            "%R~cosec:snapshot:* %R~cosec:candidate:* ~cosec:shadow:report: ~cosec:shadow:report:*:pod-a.* " +
+            "~cosec:shadow:reporters:* ~cosec:shadow:status: ~cosec:shadow:status:pod-a.* ~cosec:shadow:instances:* " +
             "~cocache:!probe:*"
 
         /** Its commands and channels, as `storage.md` shows them (`channel-mode: pubsub`). */

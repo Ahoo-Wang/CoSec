@@ -30,7 +30,7 @@ internal class SnapshotFamily<out A : Any>(
     val kind: SnapshotKind,
     val compiler: SnapshotCompiler<A>,
     val maxEntries: Int,
-    val maxAbsent: Int = SnapshotOptions.DEFAULT_MAX_ABSENT,
+    val maxAbsent: Int = SnapshotOptions.DEFAULT_MAX_ABSENT_APPS,
 ) {
     init {
         require(

@@ -82,6 +82,20 @@ description: "每个 8.0 预览版（alpha 与 beta）到下一个之间的变�
   - **条目预算。** 平台的 `limits` 接受每个文档的 `maxPolicies`（10,000）、`maxStatements`（20,000）、`maxRoleBindings`（10,000）和 `maxAnyoneBindings`（1,000）（[条目预算](../policies/language.md#entry-budgets)）。会把某个计数提高到超出预算的变更得到写明预算、计数和限制值的 `V2` 发现（`422`），停留在草稿。已经超出预算的文档仍由每台宿主继续提供，可以修改，也可以缩小；只有增加超出预算的计数的变更会被拒绝，检查会对每个仍然超出的计数给出警告。要让大文档继续增长，先在平台文档中调高预算。`cosec-migrate convert` 对超出默认预算的转换结果给出警告并照常写出。
   - **操作数。** 客户端提议的一个变更最多带 `maxChangeOperations`（20,000）个操作，同样位于平台的 `limits` 中；更大的变更返回 `400`，请拆成几个变更提议。`apply` 和回滚不受其约束。
   - **请求体。** `cosec.control.http.max-body-size` 的默认值由 `16MB` 改为 `10MB`，并且现在 WebFlux 上的控制 API 也受其约束，代替 `spring.codec.max-in-memory-size`（默认 256 KB，此前使 WebFlux 控制面无法接收更大的变更）。更大的请求体返回 `400` `invalid-request`。
+- **实例持有它所服务的租户**（`SNP-7`、`SNP-14`）。受影响：所有做决定的实例，网关首当其冲。
+  - `cosec.authorization.snapshot.max-tenants` 默认值从 1,024 改为 16,384。实例记住的没有文档的 id 现在每个族各有上限：
+    `max-absent-apps`（256，与之前相同）和 `max-absent-tenants`（65,536，之前两个族共用 256）。两者都是属性，`SnapshotSettings` 也有。
+  - 所有位置都用满时，按每个含 5 个各 20 项权限的角色和 20 条绑定的租户文档 30 KB 计，租户条目约占 520 MB 堆。请对照
+    [为 SaaS 网关定容量](./deployment.md#sizing-a-saas-gateway)检查你的堆，或把这两个属性设回原值。`k8s/` 的生产 overlay 现在给网关
+    1.5 GiB 堆和 2560Mi 限制，之前是 1 GiB 和 2Gi。
+  - 新增 `cosec.authorization.snapshot.reload-concurrency`，一轮重新确认每次读 16 个文档，而不是 4 个。每个间隔的读取次数不变；
+    一轮结束得快四倍，读取也密集四倍。
+  - 安装使族超过封顶时，在它自己的线程上最多驱逐该类 64 个条目，其余由后勤线程驱逐；之前是一直驱逐回上限。
+- **配置的 `cosec.authorization.shadow.instance-id` 成为前缀。** id 为 `<instance-id>.<后缀>`，后缀每次启动都换新，所以重启后的进程
+  绝不会替换前一个进程的影子报告，否则可能抹掉一个 `CANDIDATE_ERROR` 而使窗口解除阻塞。受影响：列出实例 key 的 Redis ACL。把
+  `~cosec:shadow:report:*:pod-a` 和 `~cosec:shadow:status:pod-a` 改为 `~cosec:shadow:report:*:pod-a.*` 和
+  `~cosec:shadow:status:pod-a.*`（[谁可以写哪些 key](./storage.md#who-may-write-which-keys)）；保留旧行的实例写报告和状态会被拒绝，
+  并以 `WARN` 记录。
 
 ## 从 8.0.0-beta.3 升级 {#from-8-0-0-beta-3}
 
