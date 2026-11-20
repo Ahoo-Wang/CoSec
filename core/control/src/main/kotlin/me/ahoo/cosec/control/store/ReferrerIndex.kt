@@ -120,7 +120,8 @@ internal class ReferrerIndex(
     suspend fun repairReferences(key: SnapshotKey): Int {
         val head = head(key) ?: return 0
         val missing = references(head.document).filter { reference ->
-            store.referrers(reference.target, reference.policy).none { it.referrer == key }
+            store.referrers(reference.target, reference.policy)
+                .none { it.referrer == key && it.definesItself == reference.definesItself }
         }.toSet()
         recordAndAdd(key, head.revision, missing)
         return missing.size
@@ -144,7 +145,7 @@ internal class ReferrerIndex(
         for (policy in RoleExpansion.effective(document).policies.map { it.id }) {
             val entries = store.referrers(target, policy)
             entries.forEach { referring(it.referrer, heads) }
-            val gone = entries.filterTo(LinkedHashSet()) { heads.gone(it.referrer, it.revision, target, policy) }
+            val gone = entries.filterTo(LinkedHashSet()) { heads.gone(it, target, policy) }
             if (gone.isNotEmpty()) {
                 store.removeReferrers(target, policy, gone)
                 removed += gone.size
@@ -162,7 +163,7 @@ internal class ReferrerIndex(
             head(referrer).let {
                 ReferrerHeads.Referring(
                     it?.revision ?: 0,
-                    it?.let { head -> references(head.document).mapTo(HashSet()) { r -> r.target to r.policy } }.orEmpty(),
+                    it?.let { head -> references(head.document) }.orEmpty(),
                 )
             }
         } catch (e: CancellationException) {
