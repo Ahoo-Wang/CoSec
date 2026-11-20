@@ -146,7 +146,7 @@ change's candidate too:
 
 The answer has `enforced`, `candidate` when one was asked for, and `differs`. Each decision is `Permit`, `Deny`,
 `Indeterminate` (with its `cause`) or `Rejected` (the scope was refused), with the statement that decided (`by`) and the
-full trace of candidates. Statements from documents you may not read are left out and counted as `redacted`.
+full trace of candidates. A statement whose policy is defined in a document you may not read is left out and counted as `redacted`, even when the binding that applied it is in a document you may read.
 `differs` compares what the two decisions say, a failure by its kind and message, so the same compile failure on both
 sides does not differ.
 

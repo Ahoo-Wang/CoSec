@@ -655,6 +655,18 @@
         "control:GrantReflexivityTest#a twin policy is the same policy, and each twin statement narrows its previous one"
       ],
       "pending": null
+    },
+    {
+      "id": "CTL-51",
+      "source": "R2C-32 (review round 2, fourth pass); RFC 0007 §10.3",
+      "statement": "simulate and explain name a statement (its policy, index and name, and in the trace its effect and whether it matched) only to a caller who may read the document that defines its policy, whichever document the binding it applied through lives in: a tenant's binding to a platform policy or to an app's permission policy shows a tenant administrator neither the statement that decided nor any of that policy's statements in the trace, which are counted as redacted. A caller who may read the defining document is told them.",
+      "level": "control",
+      "guards": [
+        "control:DecisionQueriesTest#a tenant administrator does not see the statements of a platform policy their binding points to",
+        "control:DecisionQueriesTest#a tenant administrator does not see the statements of an app policy their binding points to",
+        "control:DecisionQueriesTest#a platform operator still sees them, and a tenant administrator their own tenant's statements"
+      ],
+      "pending": null
     }
   ]
 }
