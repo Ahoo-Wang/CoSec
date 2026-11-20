@@ -133,6 +133,21 @@ Which preview of the library may run behind which preview of the gateway image: 
     `Unreadable`) and `ChangePage`, all `@ExperimentalCoSecApi`.
   - `ControlChangeSetCache` is a set of record: its `local-max-age` and `degraded-local-max-age` are locked to 1 ns, as
     the other sets' ([Configuration](./configuration.md#cocache-properties-that-affect-cosec)).
+- **A shadow window whose reporter vanished waits, then closes insufficient; the shadow pass skips what it cannot read**
+  (review round 2, `R2C-3`, `R2C-17`, `CTL-56`). Affected: changes in shadow mode, whoever reads a closed window's
+  summary (`GET /changes/{id}`, a `ChangeListener`, the audit JSON on Kafka), and alerts on the control plane's log.
+  - An instance that reported on a window and has no report now used to make every look at the window fail (`503` to
+    `POST /changes/{id}:shadow`'s caller, a `WARN` from each shadow pass), and the window never closed. The window now
+    waits for it and logs `Shadow window <w> of change <c> is waiting for [<instances>]`; at
+    `cosec.control.shadow.max-duration` it closes *insufficient*, as a window with too few samples does, and its
+    summary names the instances in `vanished`. It never passes on the others' reports: publishing needs the summary
+    acknowledged ([Testing changes](../policies/testing.md#trying-changes-in-shadow-mode)).
+  - `ShadowSummary` has `vanished`, empty unless instances vanished; the stored change and the audit event's `shadow`
+    carry it as an array only when it is not empty.
+  - One shadowing change the pass cannot read no longer stops it from looking at the others; a `WARN` names it at most
+    once an hour. The pass looks first at the windows it looked at longest ago, and a pass its interval cuts short logs
+    `looked at <k> of <n> windows`.
+  - `ControlMaintenance` takes a `Clock` (last parameter, default the system clock).
 - **Gateway mode states the network boundary it trusts, and the gateway forwards the method it decided** (`STA-7`,
   `STA-6`, `PIP-31`). Affected: every service in `cosec.pipeline.mode=gateway`, and every gateway.
   - A service in `gateway` mode believes any `CoSec-Identity` header, which carries no signature, so the network is its
