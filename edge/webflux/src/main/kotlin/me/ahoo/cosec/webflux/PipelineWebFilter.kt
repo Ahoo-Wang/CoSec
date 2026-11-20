@@ -73,6 +73,7 @@ class PipelineWebFilter @InternalCoSecApi constructor(
          * Set to 1000 to run after framework filters (CORS, etc.)
          * while still running before most application filters.
          */
+        @InternalCoSecApi
         const val REACTIVE_AUTHORIZATION_FILTER_ORDER = 1000
     }
 }

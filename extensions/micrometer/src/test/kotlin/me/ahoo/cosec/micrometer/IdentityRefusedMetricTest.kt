@@ -35,7 +35,7 @@ class IdentityRefusedMetricTest {
     fun `each refusal counts in the series of its problem, and the series are the gate's problems only`() {
         val registry = SimpleMeterRegistry()
         val refusals = IdentityRefusals()
-        MetricsListener.bind(registry, refusals)
+        CoSecMeters.bind(registry, refusals)
         val gate = IdentityGate(refusals = refusals)
         repeat(2) {
             runBlocking {
@@ -52,7 +52,7 @@ class IdentityRefusedMetricTest {
                 )
             }
         }
-        val series = registry.find(MetricsListener.IDENTITY_REFUSED).functionCounters()
+        val series = registry.find(CoSecMeters.IDENTITY_REFUSED).functionCounters()
         series.associate { it.id.getTag(MetricsListener.PROBLEM_TAG) to it.count() }.assert().isEqualTo(
             mapOf(
                 ProblemType.INVALID_REQUEST.slug to 2.0,

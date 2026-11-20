@@ -858,7 +858,7 @@ StepVerifier.create(CoSecTestBindings.withSecurityContext(currentUser(), alice))
 CoSecTestBindings.bind(exchange, alice)
 // WebFlux, coroutine code: the context is in the Reactor context of the coroutine, so a Mono it awaits reads it
 val user = CoSecTestBindings.withSecurityContext(alice) { currentUser().awaitSingle() }
-// Spring MVC: SecurityContextHolder, put back as it was afterwards, or the request
+// Spring MVC: CoSecSecurityContextHolder, put back as it was afterwards, or the request
 CoSecTestBindings.withSecurityContext(alice) { currentUser() }
 CoSecTestBindings.bind(request, alice)
 ```

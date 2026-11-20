@@ -22,7 +22,7 @@ import me.ahoo.cosec.api.context.SecurityContext
 import me.ahoo.cosec.runtime.Pipeline
 import me.ahoo.cosec.spring.boot.pipeline.CoSecPipelineWebAutoConfiguration
 import me.ahoo.cosec.spring.boot.pipeline.RuntimeAuthorizationProperties
-import me.ahoo.cosec.webmvc.SecurityContextHolder
+import me.ahoo.cosec.webmvc.CoSecSecurityContextHolder
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import org.springframework.boot.WebApplicationType
@@ -57,7 +57,7 @@ class SuspendingHandlerContextTest {
         val entered = CountDownLatch(1)
         val gate = CompletableDeferred<Unit>()
 
-        private fun holder(): String = runCatching { SecurityContextHolder.requireSecurityContext().principal.id }
+        private fun holder(): String = runCatching { CoSecSecurityContextHolder.requireSecurityContext().principal.id }
             .getOrElse { if (it.message.orEmpty().startsWith(UNBOUND)) "unbound" else throw it }
 
         /** Alice's: reads the holder before it suspends and after it is resumed. */

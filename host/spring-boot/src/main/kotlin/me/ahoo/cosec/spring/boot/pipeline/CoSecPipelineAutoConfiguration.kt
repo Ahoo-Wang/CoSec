@@ -15,11 +15,11 @@
 
 package me.ahoo.cosec.spring.boot.pipeline
 
-import com.auth0.jwt.algorithms.Algorithm
 import io.github.oshai.kotlinlogging.KotlinLogging
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.document.route.RouteMap
+import me.ahoo.cosec.jwt.JwtSigning
 import me.ahoo.cosec.jwt.JwtTokenVerifier
 import me.ahoo.cosec.runtime.AuthorizationChecker
 import me.ahoo.cosec.runtime.Pipeline
@@ -147,12 +147,12 @@ class CoSecPipelineAutoConfiguration {
      * Token and API-key authentication. A token is verified by the application's [TokenVerifier] bean, the one refresh
      * and logout verify with (`IDN-25`), else by CoSec's own over the JWT algorithm, and checked against the revocation
      * reader [revocationReader] resolves; an API key, when `cosec.api-key.enabled`, by the configured key store. The
-     * algorithm decides only whether tokens are on.
+     * the signing key decides only whether tokens are on.
      */
     @Bean
     @ConditionalOnMissingBean
     fun cosecAuthenticator(
-        algorithm: ObjectProvider<Algorithm>,
+        signing: ObjectProvider<JwtSigning>,
         verifier: ObjectProvider<TokenVerifier>,
         revocationReader: ObjectProvider<RevocationReader>,
         tokenStore: ObjectProvider<TokenStore>,
@@ -163,7 +163,7 @@ class CoSecPipelineAutoConfiguration {
         unchecked: ObjectProvider<UncheckedRevocations>,
         beans: ListableBeanFactory,
     ): Authenticator {
-        val token = algorithm.ifAvailable?.let {
+        val token = signing.ifAvailable?.let {
             val reader = revocationReader(revocationReader, tokenStore, beans)
             if (reader === RevocationReader.NONE) {
                 log.warn { NONE_WARNING }

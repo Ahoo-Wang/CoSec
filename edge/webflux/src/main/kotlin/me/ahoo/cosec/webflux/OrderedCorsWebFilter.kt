@@ -11,8 +11,11 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.webflux
 
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.webflux.PipelineWebFilter.Companion.REACTIVE_AUTHORIZATION_FILTER_ORDER
 import org.springframework.core.Ordered
 import org.springframework.web.cors.reactive.CorsConfigurationSource
@@ -20,13 +23,18 @@ import org.springframework.web.cors.reactive.CorsProcessor
 import org.springframework.web.cors.reactive.CorsWebFilter
 import org.springframework.web.cors.reactive.DefaultCorsProcessor
 
-class OrderedCorsWebFilter(
+/**
+ * The CORS filter the starter registers right before [PipelineWebFilter], so a preflight is answered and never decided
+ * (`STA-5`). The starter builds it; an application declares a `CorsConfigurationSource` and gets it.
+ */
+class OrderedCorsWebFilter @InternalCoSecApi constructor(
     configSource: CorsConfigurationSource,
     processor: CorsProcessor = DefaultCorsProcessor(),
     private val order: Int = DEFAULT_ORDERED_CORS_WEB_FILTER_ORDER
 ) :
     Ordered, CorsWebFilter(configSource, processor) {
     companion object {
+        @InternalCoSecApi
         const val DEFAULT_ORDERED_CORS_WEB_FILTER_ORDER = REACTIVE_AUTHORIZATION_FILTER_ORDER - 1
     }
 

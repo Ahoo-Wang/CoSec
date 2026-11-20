@@ -22,8 +22,8 @@ import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.api.context.SecurityContext
 import me.ahoo.cosec.runtime.http.RequestGate
 import me.ahoo.cosec.runtime.http.RequestSecurity
+import me.ahoo.cosec.webmvc.CoSecSecurityContextHolder
 import me.ahoo.cosec.webmvc.PipelineServletFilter
-import me.ahoo.cosec.webmvc.SecurityContextHolder
 import me.ahoo.cosec.webmvc.ServletRequests.setSecurityContext
 
 /**
@@ -36,7 +36,7 @@ import me.ahoo.cosec.webmvc.ServletRequests.setSecurityContext
  *   that declares it as a bean (with [me.ahoo.cosec.webmvc.SecurityContextArgumentResolver] for a `SecurityContext`
  *   parameter). A slice needs no CoSec auto-configuration: it needs the filter.
  * - [bind] and [withSecurityContext] put a context the kit made (`PermittedRequest`, `PipelineFixture.securityContext`)
- *   where the code under test reads it: the request, [SecurityContextHolder]. For a unit test of a function.
+ *   where the code under test reads it: the request, [CoSecSecurityContextHolder]. For a unit test of a function.
  *
  * Every binder refuses a context the pipeline did not make, so a test never runs as anonymous without saying so; a bound
  * context whose request has ended is denied as any other (`PIP-26`).
@@ -53,16 +53,22 @@ object CoSecTestBindings {
         request.setSecurityContext(pipelineMade(context))
     }
 
-    /** [block]'s answer, run with [context] in [SecurityContextHolder]; what the holder had before is put back. */
+    /** [block]'s answer, run with [context] in [CoSecSecurityContextHolder]; what the holder had before is put back. */
     @JvmStatic
     fun <T> withSecurityContext(context: SecurityContext, block: () -> T): T {
         val bound = pipelineMade(context)
-        val previous = SecurityContextHolder.securityContextOrNull()
-        SecurityContextHolder.setContext(bound)
+        val previous = CoSecSecurityContextHolder.securityContextOrNull()
+        CoSecSecurityContextHolder.setContext(bound)
         try {
             return block()
         } finally {
-            if (previous == null) SecurityContextHolder.remove() else SecurityContextHolder.setContext(previous)
+            if (previous == null) {
+                CoSecSecurityContextHolder.remove()
+            } else {
+                CoSecSecurityContextHolder.setContext(
+                    previous
+                )
+            }
         }
     }
 

@@ -11,10 +11,7 @@
  * limitations under the License.
  */
 
-package me.ahoo.cosec.login.token
-
-import me.ahoo.cosec.spi.token.TokenVerificationException
-import me.ahoo.cosec.spi.token.TokenVerifier
+package me.ahoo.cosec.spi.token
 
 /**
  * Exception thrown when a refresh token was not issued with the access token it is presented with.

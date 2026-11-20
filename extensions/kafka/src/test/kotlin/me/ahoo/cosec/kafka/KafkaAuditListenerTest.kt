@@ -523,4 +523,21 @@ class KafkaAuditListenerTest {
         first.assert().isEqualTo("""["a","b:c"]""")
         second.assert().isEqualTo("""["a:b","c"]""")
     }
+
+    @Test
+    fun `a broker outage logs one line with a count, not one per failed send`() {
+        val logger = org.slf4j.LoggerFactory.getLogger(KafkaAuditListener::class.java) as ch.qos.logback.classic.Logger
+        val lines = ch.qos.logback.core.read.ListAppender<ch.qos.logback.classic.spi.ILoggingEvent>().also { it.start() }
+        logger.addAppender(lines)
+        try {
+            val listener = KafkaAuditListener(mockk(), "audit")
+            opened += AutoCloseable { listener.destroy() }
+            repeat(500) { listener.failed(IllegalStateException("broker down")) }
+
+            lines.list.assert().hasSize(1)
+            lines.list.single().formattedMessage.assert().contains("[audit]").contains("failed since the last report")
+        } finally {
+            logger.detachAppender(lines)
+        }
+    }
 }

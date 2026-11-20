@@ -124,7 +124,14 @@ class ControlApprovalStarterTest {
     private fun operator(context: ApplicationContext, principal: String, provider: Boolean): Operator {
         val marker = if (provider) MembershipClaims.PROVIDER else null
         val token = context.getBean(TokenConverter::class.java)
-            .toToken(TokenSubject(principal, "cosec-control", TenantId.PLATFORM.value, membershipMarker = marker))
+            .toToken(
+                TokenSubject(
+                    principal,
+                    app = "cosec-control",
+                    tenant = TenantId.PLATFORM.value,
+                    membershipMarker = marker
+                )
+            )
             .accessToken
         val facts = HttpFacts(
             method = "POST",

@@ -4,9 +4,6 @@ public final class me/ahoo/cosec/webflux/AuthorizationCheckers {
 
 public final class me/ahoo/cosec/webflux/OrderedCorsWebFilter : org/springframework/web/cors/reactive/CorsWebFilter, org/springframework/core/Ordered {
 	public static final field Companion Lme/ahoo/cosec/webflux/OrderedCorsWebFilter$Companion;
-	public static final field DEFAULT_ORDERED_CORS_WEB_FILTER_ORDER I
-	public fun <init> (Lorg/springframework/web/cors/reactive/CorsConfigurationSource;Lorg/springframework/web/cors/reactive/CorsProcessor;I)V
-	public synthetic fun <init> (Lorg/springframework/web/cors/reactive/CorsConfigurationSource;Lorg/springframework/web/cors/reactive/CorsProcessor;IILkotlin/jvm/internal/DefaultConstructorMarker;)V
 	public fun getOrder ()I
 }
 
@@ -15,7 +12,6 @@ public final class me/ahoo/cosec/webflux/OrderedCorsWebFilter$Companion {
 
 public final class me/ahoo/cosec/webflux/PipelineWebFilter : me/ahoo/cosec/webflux/ReactivePipelineBridge, org/springframework/core/Ordered, org/springframework/web/server/WebFilter {
 	public static final field Companion Lme/ahoo/cosec/webflux/PipelineWebFilter$Companion;
-	public static final field REACTIVE_AUTHORIZATION_FILTER_ORDER I
 	public fun filter (Lorg/springframework/web/server/ServerWebExchange;Lorg/springframework/web/server/WebFilterChain;)Lreactor/core/publisher/Mono;
 	public fun getOrder ()I
 }

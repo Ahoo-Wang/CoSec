@@ -13,7 +13,6 @@
 
 package me.ahoo.cosec.jwt
 
-import com.auth0.jwt.algorithms.Algorithm
 import me.ahoo.cosec.login.token.TokenSubject
 import me.ahoo.cosec.model.PrincipalId
 import me.ahoo.cosec.model.TenantId
@@ -75,12 +74,12 @@ open class JwtVerificationBenchmark {
     @Setup
     fun setup() {
         val signing = when (algorithm) {
-            "HS256" -> Algorithm.HMAC256(SECRET.take(HS256_SECRET_BYTES))
-            "HS512" -> Algorithm.HMAC512(SECRET)
+            "HS256" -> JwtSigning.hmac256(SECRET.take(HS256_SECRET_BYTES))
+            "HS512" -> JwtSigning.hmac512(SECRET)
             else -> error("Unknown algorithm $algorithm")
         }
         val subject = when (claims) {
-            "bare" -> TokenSubject("alice", "order")
+            "bare" -> TokenSubject("alice", app = "order")
             "rich" -> TokenSubject(
                 id = "alice",
                 app = "order",

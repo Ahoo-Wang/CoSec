@@ -28,7 +28,7 @@ import reactor.core.publisher.Mono
  * a reserved header a client sends is a forged identity. On whenever `cosec-gateway` is present, whatever the mode or
  * `cosec.enabled`: without the pipeline filter, a backend still never sees a client's identity.
  */
-class IdentityStripFilter : GlobalFilter, Ordered {
+class IdentityStripFilter @InternalCoSecApi constructor() : GlobalFilter, Ordered {
     override fun filter(exchange: ServerWebExchange, chain: GatewayFilterChain): Mono<Void> {
         if (!exchange.request.headers.containsHeader(IdentityCodec.HEADER)) {
             return chain.filter(exchange)
@@ -47,6 +47,7 @@ class IdentityStripFilter : GlobalFilter, Ordered {
 
     companion object {
         /** Before the pipeline filter ([PipelineGatewayFilter.AUTHORIZATION_GATEWAY_FILTER_ORDER]) and anything else. */
+        @InternalCoSecApi
         const val ORDER = Ordered.HIGHEST_PRECEDENCE
     }
 }

@@ -15,7 +15,6 @@
 
 package me.ahoo.cosec.spring.boot
 
-import com.auth0.jwt.algorithms.Algorithm
 import me.ahoo.cocache.core.CacheLayers
 import me.ahoo.cocache.core.CacheRuntime
 import me.ahoo.cocache.core.CoCacheFactory
@@ -26,6 +25,7 @@ import me.ahoo.cosec.api.token.CompositeToken
 import me.ahoo.cosec.cocache.CoCacheTokenStore
 import me.ahoo.cosec.cocache.CoSecCacheSpecs
 import me.ahoo.cosec.cocache.RevokedTokenCache
+import me.ahoo.cosec.jwt.JwtSigning
 import me.ahoo.cosec.spi.apikey.ApiKeyReader
 import me.ahoo.cosec.spi.membership.MembershipAnswer
 import me.ahoo.cosec.spi.membership.MembershipProvider
@@ -84,7 +84,7 @@ class StartupSummaryResolutionTest {
         .withBean(SnapshotDocumentStore::class.java, { InMemorySnapshotDocumentStore() })
 
     private val withAlgorithm = runner
-        .withBean(Algorithm::class.java, { Algorithm.HMAC256("0123456789abcdef0123456789abcdef") })
+        .withBean(JwtSigning::class.java, { JwtSigning.hmac256("0123456789abcdef0123456789abcdef") })
 
     private val withTokens = withAlgorithm.withBean(TokenStore::class.java, { NoTokenStore })
 

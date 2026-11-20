@@ -36,7 +36,7 @@ import java.time.Instant
  * accepts early is still revoked when it was issued within the skew after a revocation (`MEM-4`).
  */
 class IssuerSkewTest {
-    private val verifier = JwtTokenVerifier(JwtFixture.ALGORITHM)
+    private val verifier = JwtTokenVerifier(JwtFixture.SIGNING)
 
     private fun token(build: JWTCreator.Builder.() -> Unit): String = JWT.create()
         .withJWTId("t1")
@@ -64,18 +64,18 @@ class IssuerSkewTest {
     fun `an expiry has no skew`() {
         val expired = token { withExpiresAt(Instant.now().minusSeconds(1)) }
         assertThrownBy<TokenExpiredException> { verifier.verify(expired) }
-        val lenient = JwtTokenVerifier(JwtFixture.ALGORITHM, Duration.ofMinutes(10))
+        val lenient = JwtTokenVerifier(JwtFixture.SIGNING, Duration.ofMinutes(10))
         assertThrownBy<TokenExpiredException> { lenient.verify(expired) }
     }
 
     @Test
     fun `the skew is the verifier's, and never negative`() {
         val ahead = token { withIssuedAt(Instant.now().plusSeconds(2)) }
-        val strict = JwtTokenVerifier(JwtFixture.ALGORITHM, Duration.ZERO)
+        val strict = JwtTokenVerifier(JwtFixture.SIGNING, Duration.ZERO)
         assertThrownBy<TokenNotYetValidException> { strict.verify(ahead) }
-        val wide = JwtTokenVerifier(JwtFixture.ALGORITHM, Duration.ofSeconds(30))
+        val wide = JwtTokenVerifier(JwtFixture.SIGNING, Duration.ofSeconds(30))
         wide.verify(token { withIssuedAt(Instant.now().plusSeconds(20)) }).principal.assert().isEqualTo("alice")
-        assertThrownBy<IllegalArgumentException> { JwtTokenVerifier(JwtFixture.ALGORITHM, Duration.ofSeconds(-1)) }
+        assertThrownBy<IllegalArgumentException> { JwtTokenVerifier(JwtFixture.SIGNING, Duration.ofSeconds(-1)) }
     }
 
     @Test

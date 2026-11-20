@@ -101,7 +101,7 @@ class MetricsListenerTest {
             recorded.send(event)
         }
     }
-    private val listeners = DecisionListeners(listOf(metrics, failing)).also { MetricsListener.bind(registry, it) }
+    private val listeners = DecisionListeners(listOf(metrics, failing)).also { CoSecMeters.bind(registry, it) }
 
     @AfterEach
     fun close() {
@@ -173,7 +173,7 @@ class MetricsListenerTest {
     fun tokensAcceptedWithoutARevocationCheckAreCounted() = runBlocking<Unit> {
         val registry = SimpleMeterRegistry()
         val unchecked = UncheckedRevocations()
-        MetricsListener.bind(registry, unchecked)
+        CoSecMeters.bind(registry, unchecked)
         val verifier = object : TokenVerifier {
             override fun verify(accessToken: String): VerifiedToken = VerifiedToken("t1", "alice", null, null)
 
@@ -187,6 +187,6 @@ class MetricsListenerTest {
         val authenticator = TokenAuthenticator(verifier, unreadable, unchecked = unchecked)
         repeat(3) { authenticator.authenticate(Credentials("t", null)) }
 
-        registry.get(MetricsListener.UNCHECKED_REVOCATIONS).functionCounter().count().assert().isEqualTo(3.0)
+        registry.get(CoSecMeters.UNCHECKED_REVOCATIONS).functionCounter().count().assert().isEqualTo(3.0)
     }
 }
