@@ -43,7 +43,14 @@ internal object ConvertCommand {
         val conversion = Converter().convert(source, ConvertOptions(partition))
         ConvertedDirectory.write(conversion, outDirectory)
         summarize(conversion.report, out)
-        out.println("Wrote ${outDirectory.resolve(ConvertedDirectory.REPORT_FILE)}")
+        val report = outDirectory.resolve(ConvertedDirectory.REPORT_FILE)
+        out.println("Wrote $report")
+        if (!conversion.report.accepted) {
+            // convert writes into a new directory, and this one now holds the report (R2C-22).
+            out.println(
+                "Remove $outDirectory, or give another --out, before you convert again: it now holds the report."
+            )
+        }
         return if (conversion.report.accepted) OK else FAILED
     }
 
@@ -64,7 +71,7 @@ internal object ConvertCommand {
             if (report.accepted) {
                 "Converted. Input sha256 ${report.inputSha256}."
             } else {
-                "Rejected: fix the ${report.rejections.size} rejection(s) and convert again. Nothing else was written."
+                "Rejected: fix the ${report.rejections.size} rejection(s) and convert again. Only the report was written."
             },
         )
     }

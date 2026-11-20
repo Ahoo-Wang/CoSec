@@ -15,11 +15,11 @@
 
 package me.ahoo.cosec.testkit
 
-import com.auth0.jwt.algorithms.Algorithm
 import io.mockk.mockk
 import kotlinx.coroutines.runBlocking
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.api.context.SecurityContext
+import me.ahoo.cosec.jwt.JwtSigning
 import me.ahoo.cosec.jwt.JwtTokenConverter
 import me.ahoo.cosec.jwt.JwtTokenVerifier
 import me.ahoo.cosec.login.token.TokenSubject
@@ -65,9 +65,9 @@ class RequestEndTest {
     @Test
     fun `a permitted request ended is denied`() = runBlocking<Unit> {
         val ids = AtomicLong()
-        val algorithm = Algorithm.HMAC256("request-end-test-secret")
+        val algorithm = JwtSigning.hmac256("request-end-test-secret")
         val token = JwtTokenConverter(IdGenerator { "t-${ids.incrementAndGet()}" }, algorithm)
-            .toToken(TokenSubject("alice", null, tenant = "acme")).accessToken
+            .toToken(TokenSubject("alice", tenant = "acme")).accessToken
         val context = PermittedRequest.withToken(token, JwtTokenVerifier(algorithm), RevocationReader.NONE)
         PipelineFixture.of(platform = everything).use { fixture ->
             val checker = AuthorizationChecker(fixture.pipeline)

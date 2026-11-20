@@ -184,6 +184,20 @@ class CoCacheControlStoreTest {
         }
     }
 
+    /** R2C-7: a read that fails for another reason, an outage, passes through as it is, without the repair's advice. */
+    @Test
+    fun `a set that fails to read for another reason does not name the repair`() = runBlocking<Unit> {
+        val hooked = HookedBackend(InMemoryBackend())
+        SnapshotNode(hooked, newKeyPrefix()).use { node ->
+            val store = store(node)
+            hooked.failReads = true
+            val error = runCatching { store.referrers(SnapshotKey.Platform, PolicyId("shared")) }.exceptionOrNull()
+            error.assert().isNotNull()
+            generateSequence(error) { it.cause }.mapNotNull { it.message }.joinToString(" | ").assert()
+                .doesNotContain("repair-references")
+        }
+    }
+
     /** What [block] fails with names the command that converts a store written before 8.0.0-beta.5. */
     @Suppress("TooGenericExceptionCaught")
     private suspend fun unrepaired(block: suspend () -> Unit) {
@@ -254,6 +268,50 @@ class CoCacheControlStoreTest {
             formatError { store.change(ChangeId("c1")) }
         }
     }
+
+    /**
+     * R2C-2: a terminal change whose removal from the open list fails is still written; the next read of the open changes,
+     * the maintenance pass's, drops it from the list.
+     */
+    @Test
+    fun `a failed removal from the open list does not fail the terminal write, and the next read makes it up`() =
+        runBlocking<Unit> {
+            SnapshotNode(InMemoryBackend(), newKeyPrefix()).use { node ->
+                val real = node.runtime.create(ControlCacheSpecs.list(node.keyPrefix))
+                var failing = false
+                val lists = object : Store<String, Map<String, Instant>> by real {
+                    override fun async(): AsyncStore<String, Map<String, Instant>> =
+                        object : AsyncStore<String, Map<String, Instant>> by real.async() {
+                            override fun putIfMatch(
+                                key: String,
+                                expected: Digest?,
+                                value: Map<String, Instant>,
+                            ): CompletableFuture<ConditionalPut> = if (failing) {
+                                CompletableFuture.failedFuture(
+                                    CacheWriteException(
+                                        name,
+                                        "putIfMatch",
+                                        IllegalStateException("down"),
+                                        outcomeUnknown = false
+                                    )
+                                )
+                            } else {
+                                real.async().putIfMatch(key, expected, value)
+                            }
+                        }
+                }
+                val store = store(node, lists = lists)
+                val open = change("c1", ChangeState.DRAFT)
+                store.putChange(null, open).assert().isTrue()
+                val digest = store.change(ChangeId("c1"))!!.digest
+                failing = true
+                store.putChange(digest, open.copy(state = ChangeState.ABANDONED)).assert().isTrue()
+                real.get("open-changes")!!.keys.assert().containsExactly("c1")
+                failing = false
+                store.openChanges().assert().isEmpty()
+                real.get("open-changes")!!.keys.assert().isEmpty()
+            }
+        }
 
     @Test
     fun `indexed documents and open changes are listed, terminal ones are not`() = runBlocking<Unit> {

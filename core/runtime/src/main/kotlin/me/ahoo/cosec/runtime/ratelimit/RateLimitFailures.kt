@@ -15,7 +15,6 @@ package me.ahoo.cosec.runtime.ratelimit
 
 import io.github.oshai.kotlinlogging.KotlinLogging
 import me.ahoo.cosec.model.decision.Obligation
-import me.ahoo.cosec.spi.ratelimit.RateLimit
 import java.time.Duration
 import java.util.concurrent.atomic.AtomicLong
 

@@ -14,6 +14,7 @@
 package me.ahoo.cosec.spi.snapshot
 
 import me.ahoo.cosec.annotations.CoSecSpi
+import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import java.time.Duration
 import java.util.concurrent.CompletableFuture
 
@@ -27,8 +28,13 @@ import java.util.concurrent.CompletableFuture
  * unknown [SnapshotDocument.schema]) must carry a [SnapshotFormatException] in its cause chain. Any other failure means
  * the read itself failed (the store is unreachable), and `SnapshotSource` keeps an installed document in that case
  * (RFC 0003 §4.4 F6) while it installs the failure for an undecodable one (F3, F5).
+ *
+ * Experimental in 8.0: its shape follows its one backend (`cosec-cocache`: futures, a local copy's age, digests for a
+ * conditional read), and a batched or store-wide conditional read is planned, so a signature may change in a minor
+ * release.
  */
 @CoSecSpi
+@ExperimentalCoSecApi
 interface SnapshotDocumentStore {
     /**
      * Reads [key], possibly from a local copy. Completes with [SnapshotRead.Present] or [SnapshotRead.Absent], never

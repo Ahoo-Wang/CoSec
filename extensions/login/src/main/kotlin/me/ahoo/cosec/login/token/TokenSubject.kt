@@ -22,19 +22,18 @@ import java.time.Instant
  *
  * [roles] holds what the principal may hold in the token's [app], as `role` or `role@space` (RFC 0012 §3.5).
  *
- * Pass every argument after [id] by name: [app] comes before [tenant], so `TokenSubject("alice", "acme")` is the app
- * `acme` in the default tenant, not the tenant `acme`.
+ * The arguments after [id] are written by name, as the documentation's examples do: a token's scope reads better named.
  */
-class TokenSubject @JvmOverloads constructor(
+class TokenSubject(
     /** The principal's id: the token's subject. Not empty, and not beginning with `(`, which is CoSec's (`IDN-12`). */
     val id: String,
+    /** The principal's tenant; null puts it in the default tenant. */
+    val tenant: String? = null,
     /**
      * The app the token is for (`aud`), null for none, as on a host without apps: a host with an app refuses a token
      * declaring another or none (`SCP-11`), so leaving it out never makes a token valid where it was not.
      */
     val app: String? = null,
-    /** The principal's tenant; null puts it in the default tenant. */
-    val tenant: String? = null,
     val roles: Set<String> = emptySet(),
     val policies: Set<String> = emptySet(),
     val attributes: Map<String, Any> = emptyMap(),
@@ -53,18 +52,29 @@ class TokenSubject @JvmOverloads constructor(
     val notAfter: Instant? = null,
 ) {
     private fun fields(): List<Any?> =
-        listOf(id, app, tenant, roles, policies, attributes, membershipMarker, session, notAfter)
+        listOf(id, tenant, app, roles, policies, attributes, membershipMarker, session, notAfter)
 
     /** This subject in [issue]'s session, bounded by its end. */
     fun inSession(issue: TokenFamilies.Issue): TokenSubject = TokenSubject(
-        id, app, tenant, roles, policies, attributes, membershipMarker, issue.session, issue.notAfter
+        id = id,
+        tenant = tenant,
+        app = app,
+        roles = roles,
+        policies = policies,
+        attributes = attributes,
+        membershipMarker = membershipMarker,
+        session = issue.session,
+        notAfter = issue.notAfter,
     )
 
     override fun equals(other: Any?): Boolean = other is TokenSubject && other.fields() == fields()
 
     override fun hashCode(): Int = fields().hashCode()
 
-    override fun toString(): String = "TokenSubject(${fields().joinToString()})"
+    /** What identifies the subject's scope and how much it holds; never the attributes, which an application fills freely. */
+    override fun toString(): String =
+        "TokenSubject(id=$id, tenant=$tenant, app=$app, roles=${roles.size}, policies=${policies.size}, " +
+            "attributes=${attributes.size}, session=${session != null})"
 
     companion object {
         /**

@@ -66,6 +66,7 @@ import me.ahoo.cosec.runtime.snapshot.SuspendingSnapshotSource
 import me.ahoo.cosec.runtime.snapshot.ViewKey
 import me.ahoo.cosec.spi.authn.AuthenticatedPrincipal
 import me.ahoo.cosec.spi.authn.AuthnResult
+import me.ahoo.cosec.spi.identity.Identity
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Test
@@ -140,7 +141,7 @@ class KafkaAuditListenerTest {
         val claims = Memberships(Memberships.Source.CLAIMS, emptyMap(), emptyList())
         val principal = AuthenticatedPrincipal(PrincipalId("alice"), TenantId("acme"), claims)
         val pipeline = Pipeline.builder(
-            { AuthnResult.Authenticated(principal, "token") },
+            { AuthnResult.Authenticated(principal, Identity.Method("token")) },
             SuspendingSnapshotSource(Views),
         )
             .engine(engine)
@@ -522,5 +523,22 @@ class KafkaAuditListenerTest {
         val second = recordOf(audit.copy(tenantId = "a:b", principal = audit.principal.copy(id = "c"))).first
         first.assert().isEqualTo("""["a","b:c"]""")
         second.assert().isEqualTo("""["a:b","c"]""")
+    }
+
+    @Test
+    fun `a broker outage logs one line with a count, not one per failed send`() {
+        val logger = org.slf4j.LoggerFactory.getLogger(KafkaAuditListener::class.java) as ch.qos.logback.classic.Logger
+        val lines = ch.qos.logback.core.read.ListAppender<ch.qos.logback.classic.spi.ILoggingEvent>().also { it.start() }
+        logger.addAppender(lines)
+        try {
+            val listener = KafkaAuditListener(mockk(), "audit")
+            opened += AutoCloseable { listener.destroy() }
+            repeat(500) { listener.failed(IllegalStateException("broker down")) }
+
+            lines.list.assert().hasSize(1)
+            lines.list.single().formattedMessage.assert().contains("[audit]").contains("failed since the last report")
+        } finally {
+            logger.detachAppender(lines)
+        }
     }
 }

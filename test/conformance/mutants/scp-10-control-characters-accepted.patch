@@ -2,16 +2,16 @@
 # Mutant: an app id may hold a control character, which reaches plain-text log lines
 # Tests: :model:test --tests me.ahoo.cosec.model.scope.ScopeResolverTest :conformance:test
 
-diff --git a/core/model/src/main/kotlin/me/ahoo/cosec/model/scope/ScopeResolver.kt b/core/model/src/main/kotlin/me/ahoo/cosec/model/scope/ScopeResolver.kt
-index 4ad373e82..c613b9d87 100644
---- a/core/model/src/main/kotlin/me/ahoo/cosec/model/scope/ScopeResolver.kt
-+++ b/core/model/src/main/kotlin/me/ahoo/cosec/model/scope/ScopeResolver.kt
-@@ -81,7 +81,7 @@ object ScopeResolver {
-             val c = app[index]
+diff --git a/core/model/src/main/kotlin/me/ahoo/cosec/model/Ids.kt b/core/model/src/main/kotlin/me/ahoo/cosec/model/Ids.kt
+index 8a205c881..99e75e0b3 100644
+--- a/core/model/src/main/kotlin/me/ahoo/cosec/model/Ids.kt
++++ b/core/model/src/main/kotlin/me/ahoo/cosec/model/Ids.kt
+@@ -109,7 +109,7 @@ object Identifiers {
+             val c = id[index]
              val refused = when (c) {
                  ':', '/' -> true
--                else -> Identifiers.isUnprintableAt(app, index)
-+                else -> Identifiers.isUnpairedSurrogateAt(app, index)
+-                else -> isUnprintableAt(id, index)
++                else -> isUnpairedSurrogateAt(id, index)
              }
              if (refused) {
                  return false

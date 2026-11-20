@@ -172,7 +172,7 @@ fun interface RateLimiter {
 
 Implement `me.ahoo.cosec.spi.ratelimit.RateLimiter`. The rules
 stay in the documents; the limiter only counts. Return `RateLimitResult(allowed, limit, remaining, resetAfter)`; use
-`RateLimiter.window(limit)` for the same sliding window as the built-in limiters. Throw when the store fails: the
+`limit.limitPerWindow`, `limit.windowMillis` and `limit.resultOf(...)` (import `me.ahoo.cosec.spi.ratelimit.resultOf`) for the same sliding window as the built-in limiters. Throw when the store fails: the
 rule's `strictFailure` then decides (skip, or 503). The built-ins are `ReactiveRedisRateLimiter` (with a
 `ReactiveStringRedisTemplate`) and `LocalRateLimiter` (per JVM).
 
@@ -185,7 +185,7 @@ fun interface Authenticator {
 ```
 
 `Credentials` holds the bearer token (`Authorization` header, or the query or the cookie when allowed) and the API key header.
-Return `AuthnResult.Authenticated(AuthenticatedPrincipal(id, tenant, memberships, attributes, credential), "method")`,
+Return `AuthnResult.Authenticated(AuthenticatedPrincipal(id, tenant, memberships, attributes, credential), Identity.Method("name"))`,
 `Anonymous` (no credentials), `Rejected(reason)` (401 `token-*` on deny), or `Unavailable(cause)` (503). Memberships
 you pass have source `Memberships.Source.CLAIMS` (`MembershipClaims.parse(roles, policies)` builds them from
 `role`/`role@space` strings); pass `null` to ask the `MembershipProvider`. A bean of yours replaces the built-in `CompositeAuthenticator`

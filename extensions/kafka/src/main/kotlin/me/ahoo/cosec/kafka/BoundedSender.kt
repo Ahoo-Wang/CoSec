@@ -57,14 +57,15 @@ internal class BoundedSender(
     /**
      * Queues [send] and returns its answer, without waiting for it.
      *
-     * @throws IllegalStateException when the queue is full
+     * @throws IllegalStateException when the queue is full, or closed
      */
     fun send(send: () -> CompletableFuture<*>): Queued {
         val queued = CompletableFuture<CompletableFuture<*>>()
         try {
             executor.execute(Task(queued, send))
         } catch (e: RejectedExecutionException) {
-            throw IllegalStateException("The $queue is full.", e)
+            // The executor refuses for two reasons: its queue is full, or it was shut down (a send after `close`).
+            throw IllegalStateException(if (executor.isShutdown) "The $queue is closed." else "The $queue is full.", e)
         }
         val sent: CompletableFuture<*> = queued.thenCompose { it }
         inFlight += sent

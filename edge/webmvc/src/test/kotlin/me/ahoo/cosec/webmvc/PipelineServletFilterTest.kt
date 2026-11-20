@@ -86,7 +86,7 @@ class PipelineServletFilterTest {
         var fromRequest: SecurityContext? = null
         var answers: List<Boolean>? = null
         PipelineServletFilter(pipeline, host = HostScope(AppId("order"))).doFilter(request, response) { req, _ ->
-            bound = SecurityContextHolder.requireSecurityContext()
+            bound = CoSecSecurityContextHolder.requireSecurityContext()
             fromRequest = (req as MockHttpServletRequest).securityContextOrNull()
             val checker = AuthorizationChecker(pipeline)
             answers = listOf(
@@ -96,7 +96,7 @@ class PipelineServletFilterTest {
         }
         bound!!.scope.appId.assert().isEqualTo("order")
         fromRequest.assert().isSameAs(bound)
-        SecurityContextHolder.securityContextOrNull().assert().isNull()
+        CoSecSecurityContextHolder.securityContextOrNull().assert().isNull()
         response.getHeader("CoSec-Request-Id").assert().isNotNull()
         answers.assert().isEqualTo(listOf(true, false))
         // PIP-26: the request has completed, and a check of its context is denied.

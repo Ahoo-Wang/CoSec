@@ -149,7 +149,7 @@ class PipelineGatewayFilterTest {
                 app = credentialApp?.let(::AppId),
                 session = null,
             ),
-            "token",
+            Identity.Method("token"),
         )
     }
 

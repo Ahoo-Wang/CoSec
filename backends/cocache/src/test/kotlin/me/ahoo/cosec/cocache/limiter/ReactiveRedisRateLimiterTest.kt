@@ -19,7 +19,6 @@ import io.lettuce.core.cluster.SlotHash
 import kotlinx.coroutines.runBlocking
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.model.decision.RateLimitSpec
-import me.ahoo.cosec.spi.ratelimit.RateLimiter
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assumptions.assumeTrue
@@ -76,7 +75,7 @@ class ReactiveRedisRateLimiterTest {
         redis.opsForHash<String, String>().put(key, "c", "0")
         limiter.tryAcquire("rule", "global", limit).allowed.assert().isTrue()
         val ttl = checkNotNull(redis.getExpire(key, TimeUnit.MILLISECONDS))
-        ttl.assert().isPositive().isLessThanOrEqualTo(2 * RateLimiter.window(limit).windowMillis)
+        ttl.assert().isPositive().isLessThanOrEqualTo(2 * limit.windowMillis)
     }
 
     /** M3: the longest window is a day, so no counter outlives two days. */
@@ -100,7 +99,7 @@ class ReactiveRedisRateLimiterTest {
     fun theWindowIsRedissNotTheCallers() = runBlocking<Unit> {
         val limiter = ReactiveRedisRateLimiter(ReactiveStringRedisTemplate(factory), prefix)
         val limit = quotaOf(2)
-        val window = redisNow() / RateLimiter.window(limit).windowMillis
+        val window = redisNow() / limit.windowMillis
         val hash = redis.opsForHash<String, String>()
 
         // One in the window before weighs less than one: the request is admitted, and the count moves along.

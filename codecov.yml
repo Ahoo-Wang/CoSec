@@ -23,8 +23,8 @@ coverage:
 ignore:
   - "api/api/.*"
   - "platform/gateway-server/.*"
-  # The measurement harnesses: `main`s in test sources that CI compiles and never runs (docs/reviews/2026-11/README.md).
-  - "**/*Measurement.kt"
+  # The measurement harnesses: `main`s in test sources (never a main source) that CI compiles and never runs (docs/reviews/2026-11/README.md).
+  - "**/src/test/**/*Measurement.kt"
 flags:
   typescript:
     paths:

@@ -15,12 +15,12 @@
 
 package me.ahoo.cosec.testkit
 
-import com.auth0.jwt.algorithms.Algorithm
 import kotlinx.coroutines.runBlocking
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.api.token.CompositeToken
 import me.ahoo.cosec.document.identity.IdentityCodec
+import me.ahoo.cosec.jwt.JwtSigning
 import me.ahoo.cosec.jwt.JwtTokenConverter
 import me.ahoo.cosec.jwt.JwtTokenVerifier
 import me.ahoo.cosec.login.LoginCredentials
@@ -54,7 +54,7 @@ class IdentityHeaderTest {
     private class Password(val user: String) : LoginCredentials
 
     private val ids = AtomicLong()
-    private val algorithm = Algorithm.HMAC256("identity-header-test-secret")
+    private val algorithm = JwtSigning.hmac256("identity-header-test-secret")
     private val converter = JwtTokenConverter(IdGenerator { "t-${ids.incrementAndGet()}" }, algorithm)
     private val verifier = JwtTokenVerifier(algorithm)
     private val families = TokenFamilies(InMemoryTokenFamilyStore())

@@ -96,7 +96,7 @@ class PolicyDocument @InternalCoSecApi constructor(
         require(catalog == null || kind == DocumentKind.APP) { "Only an app document has a catalog." }
         require(boundary == null || kind != DocumentKind.APP) { "An app document names no boundary." }
         require((limits == null && attributes == null && budgets == null) || kind == DocumentKind.PLATFORM) {
-            "Only the platform document has limits and attributes."
+            "Only the platform document has limits, attributes and budgets."
         }
         require(attributes == null || attributes.all { it.external }) { "Declared attributes are external." }
         roles.firstNotNullOfOrNull { it.shapeProblem(kind) }?.let { throw IllegalArgumentException(it) }

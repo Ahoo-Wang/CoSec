@@ -26,9 +26,19 @@ import java.io.PrintStream
 internal object BootstrapCommand {
     fun bootstrap(options: Options, out: PrintStream): Int {
         val principal = PrincipalId(options.required("platform-admin"))
-        val revision = controlStore(options) { store -> Bootstrap(store).run(principal, options.flag("force")) }
+        val (already, revision) = controlStore(options) { store ->
+            val bootstrap = Bootstrap(store)
+            val bound = bootstrap.bound(principal)
+            (bound != null) to (bound ?: bootstrap.run(principal, options.flag("force")))
+        }
+        val what = if (already) "is already bound" else "Bound"
         out.println(
-            "Bound ${principal.value} of the platform tenant to cosec:platform-admin: ${Bootstrap.KEY} revision $revision."
+            if (already) {
+                "${principal.value} of the platform tenant $what to cosec:platform-admin: ${Bootstrap.KEY} revision " +
+                    "$revision. Nothing was written."
+            } else {
+                "$what ${principal.value} of the platform tenant to cosec:platform-admin: ${Bootstrap.KEY} revision $revision."
+            },
         )
         return OK
     }

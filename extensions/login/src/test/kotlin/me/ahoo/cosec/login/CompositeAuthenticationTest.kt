@@ -39,11 +39,11 @@ class CompositeAuthenticationTest {
         val credentials = mockk<LoginCredentials>()
         val authentication = mockk<Authentication<LoginCredentials>> {
             every { credentialsType } returns credentials.javaClass
-            coEvery { authenticate(any()) } returns TokenSubject("alice", null)
+            coEvery { authenticate(any()) } returns TokenSubject("alice")
         }
         authenticationProvider.register(credentials.javaClass, authentication)
 
-        compositeAuthentication.authenticate(credentials).assert().isEqualTo(TokenSubject("alice", null))
+        compositeAuthentication.authenticate(credentials).assert().isEqualTo(TokenSubject("alice"))
     }
 
     @Test

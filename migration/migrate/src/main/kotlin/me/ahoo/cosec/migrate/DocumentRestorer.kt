@@ -22,6 +22,7 @@ import me.ahoo.cosec.control.store.ControlStore
 import me.ahoo.cosec.control.store.Head
 import me.ahoo.cosec.control.store.Publication
 import me.ahoo.cosec.control.store.PublishOutcome
+import me.ahoo.cosec.control.store.ReferrerNames
 import me.ahoo.cosec.control.store.Revisions
 import me.ahoo.cosec.document.PolicyDocument
 import me.ahoo.cosec.document.PolicyDocumentCompiler
@@ -111,7 +112,9 @@ class DocumentRestorer(
                 "[${plan.key}] moved while it was restored: nothing written; read the plan again",
             )
             is PublishOutcome.Referenced -> throw RestoreException(
-                "[${plan.key}]'s source no longer defines what other documents refer to: ${outcome.referrers}",
+                "[${plan.key}]'s source no longer defines what other documents refer to: ${ReferrerNames.of(
+                    outcome.referrers
+                )}",
             )
         }
     }

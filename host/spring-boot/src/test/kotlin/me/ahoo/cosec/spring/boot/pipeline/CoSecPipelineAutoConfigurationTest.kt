@@ -15,7 +15,6 @@
 
 package me.ahoo.cosec.spring.boot.pipeline
 
-import com.auth0.jwt.algorithms.Algorithm
 import io.lettuce.core.RedisURI
 import io.micrometer.core.instrument.MeterRegistry
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry
@@ -34,6 +33,7 @@ import me.ahoo.cosec.control.api.ControlHttp
 import me.ahoo.cosec.control.api.ControlPlane
 import me.ahoo.cosec.document.route.RouteMap
 import me.ahoo.cosec.gateway.PipelineGatewayFilter
+import me.ahoo.cosec.jwt.JwtSigning
 import me.ahoo.cosec.model.scope.HostScope
 import me.ahoo.cosec.runtime.AuthorizationChecker
 import me.ahoo.cosec.runtime.Pipeline
@@ -210,7 +210,7 @@ class CoSecPipelineAutoConfigurationTest {
                 )
             )
             .withPropertyValues("cosec.authorization.routes.location=")
-            .withBean(Algorithm::class.java, { Algorithm.HMAC256("FyN0Igd80Gas8stTavArGKOYnS9uLwGA_") })
+            .withBean(JwtSigning::class.java, { JwtSigning.hmac256("FyN0Igd80Gas8stTavArGKOYnS9uLwGA_") })
             .withBean(TokenStore::class.java, { NoTokenStore })
             .withBean(TokenFamilyStore::class.java, { InMemoryTokenFamilyStore() })
             .run { context ->

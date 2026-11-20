@@ -90,4 +90,13 @@ class SharedRoleIdTest {
             "[clerk], a system role of this app, is also a system role of app wms"
         )
     }
+
+    /** With more than one other app, the warning names them all and counts the apps, not "both". */
+    @Test
+    fun `with two other apps the warning names both and counts three apps`() = runBlocking<Unit> {
+        published(wms, "clerk")
+        published(SnapshotKey.App("crm"), "clerk")
+        proposed(ops, "clerk").roleWarnings().single().assert()
+            .contains("is also a system role of app crm, wms").contains("holds it in all 3 apps")
+    }
 }

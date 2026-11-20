@@ -19,6 +19,7 @@ import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.api.audit.AuditDecision
 import me.ahoo.cosec.api.audit.AuditDocument
 import me.ahoo.cosec.api.audit.AuditEvent
+import me.ahoo.cosec.api.audit.AuditEventKind
 import me.ahoo.cosec.api.audit.AuditReasonCode
 import me.ahoo.cosec.api.audit.AuditVia
 import me.ahoo.cosec.model.decision.BindingRef
@@ -74,7 +75,7 @@ object AuditEvents {
             snapshotVersion = event.snapshotVersion?.let { AuditSnapshotVersionData(it.platform, it.app, it.tenant) },
             binding = binding(event.by),
             breakGlass = event.breakGlass,
-            kind = event.kind.name,
+            kind = kind(event.kind),
         )
     }
 
@@ -175,6 +176,14 @@ object AuditEvents {
         is BindingRef.Attached -> AuditVia.ATTACHMENT
         BindingRef.Builtin -> AuditVia.BUILTIN
         is BindingRef.Boundary -> AuditVia.BOUNDARY
+    }
+
+    private fun kind(kind: DecisionEvent.Kind): AuditEventKind = when (kind) {
+        DecisionEvent.Kind.DECIDED -> AuditEventKind.DECIDED
+        DecisionEvent.Kind.BAD_REQUEST -> AuditEventKind.BAD_REQUEST
+        DecisionEvent.Kind.AUTHENTICATION_UNAVAILABLE -> AuditEventKind.AUTHENTICATION_UNAVAILABLE
+        DecisionEvent.Kind.CANCELLED -> AuditEventKind.CANCELLED
+        DecisionEvent.Kind.ERROR -> AuditEventKind.ERROR
     }
 
     private fun document(kind: DocumentKind): AuditDocument = when (kind) {
