@@ -679,6 +679,32 @@
         "cocache:CoCacheControlStoreTest#a set that fails to read for another reason does not name the repair"
       ],
       "pending": null
+    },
+    {
+      "id": "CTL-54",
+      "source": "Review round 2, R2C-2 (saas-open-changes-design.md §1); RFC 0007 §5.2, §5.7",
+      "statement": "The open-change sets are a superset of the open changes: a change is added to its document's set and its state's before each write of it and removed after from what no longer applies; they are trusted only once kept and while no open-change list of the format before 8.0.0-beta.5 exists, so until then no revision is reclaimed and the listing is refused.",
+      "level": "control",
+      "guards": [
+        "cocache:CoCacheControlStoreTest#the open-change sets are not kept while the old list is there, whatever they hold",
+        "cocache:CoCacheControlStoreTest#a new store is kept from the first keep",
+        "cocache:CoCacheControlStoreTest#members a write left behind are dropped by the next read",
+        "cocache:CoCacheControlStoreTest#a listed change that is missing stays until the grace has passed",
+        "control:OpenChangeListingTest#while the old list is there the listing is a 503 and nothing is reclaimed - CTL-54"
+      ],
+      "pending": null
+    },
+    {
+      "id": "CTL-55",
+      "source": "Review round 2, R2C-4 (saas-open-changes-design.md §1); RFC 0007 §10.2",
+      "statement": "A listing of open changes shows a change only if reading it by id would show it to the caller, leaves out what the caller may not see before the page is cut, and tells nothing of what it leaves out.",
+      "level": "control",
+      "guards": [
+        "control:OpenChangeListingTest#another tenant's changes are left out, and the page says nothing of them - CTL-55",
+        "control:OpenChangeListingTest#a listing by document or by state shows the caller's tenant only, a summary of each change",
+        "control:OpenChangeListingTest#a page is cut after what the caller may see, and the next one goes on from it"
+      ],
+      "pending": null
     }
   ]
 }
