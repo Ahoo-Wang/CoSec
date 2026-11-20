@@ -47,6 +47,7 @@ description: "通过控制面安全地修改策略：校验与编译错误、sim
 | `GET /documents/{key}/revisions/{revision}/propagation` | 最近上报的实例中有多少已安装该修订。 |
 | `POST /documents/{key}:apply`、`POST /documents/{key}:rollback` | 从整份文档提议变更，或提议回到旧修订。 |
 | `POST /changes`、`GET /changes/{id}` | 提议变更；读取变更。 |
+| `GET /changes?document=&state=&after=&limit=` | 一个文档、一个状态或两者共同限定的未完成变更（[查找未完成的变更](#finding-open-changes)）。 |
 | `POST /changes/{id}:rebase`、`:shadow`、`:skip-shadow`、`:approve`、`:reject`、`:abandon`、`:publish` | 推进变更。 |
 | `POST /break-glass`、`POST /break-glass/{change}:approve`、`DELETE /break-glass/{bindingId}?reason=` | 申请 break-glass、审批申请、吊销绑定（[安全模型](../guide/security-model.md#break-glass)）。吊销只在该绑定不再生效之后才返回 `200`，平台文档中没有该 id 的绑定时返回 `404`，其他情况（包括该 id 是普通绑定）返回 `409`（[抢占被占用的暂存槽](#taking-a-busy-slot)）。 |
 | `POST /simulate`、`POST /explain`、`POST /analyze` | 不做任何修改地决策或分析。 |
@@ -192,7 +193,33 @@ flowchart LR
     X -->|rebase| D
 ```
 
-一个文档至多有一个暂存的变更（`SHADOWING`、`AWAITING_APPROVAL` 或 `READY`）；在它发布、放弃、驳回或过期之前，暂存另一个变更返回 `409`。变更在占用暂存槽之前就已进入暂存状态，所以仍在写候选的调用也占着暂存槽；写不成或被取消的调用会归还暂存槽，变更回到 `CHECKED`。窗口开始一分钟后候选已不在的 `SHADOWING` 变更（两次写入之间崩溃，或候选之后丢失）也一样：维护任务释放它的暂存槽，记一条 `FAILED` 变更事件，由作者重新暂存。窗口不会接着进行，因为候选不在期间实例没有采样。未完成的变更在提议后 `cosec.control.changes.expire-after`（默认 7 天）过期：此后第一次被读取时即为 `EXPIRED`，而控制面的维护任务每隔 `cosec.control.shadow.check-interval`（默认 1 分钟）读取一次所有未完成的变更。作者可以对 `CONFLICTED`、`DRAFT` 或 `CHECKED` 的变更执行 `:rebase`，把它放到当前修订上，这会重新运行所有检查，并丢弃之前的审批和影子证据。作者或持有 `cosec:publish` 的人可以 `:abandon` 它；设置租户边界的变更只有平台主体能驳回或放弃，吊销仍在生效的 break-glass 绑定的变更只有其作者能放弃（`BRK-10`）。每次放弃都记一条 `ABANDONED` 变更事件，备注写明变更的作者；放弃 break-glass 变更需要一个 REQUIRED 变更监听器，由它先记下（没有时返回 `503`）。
+一个文档至多有一个暂存的变更（`SHADOWING`、`AWAITING_APPROVAL` 或 `READY`）；在它发布、放弃、驳回或过期之前，暂存另一个变更返回 `409`。变更在占用暂存槽之前就已进入暂存状态，所以仍在写候选的调用也占着暂存槽；写不成或被取消的调用会归还暂存槽，变更回到 `CHECKED`。窗口开始一分钟后候选已不在的 `SHADOWING` 变更（两次写入之间崩溃，或候选之后丢失）也一样：维护任务释放它的暂存槽，记一条 `FAILED` 变更事件，由作者重新暂存。窗口不会接着进行，因为候选不在期间实例没有采样。未完成的变更在提议后 `cosec.control.changes.expire-after`（默认 7 天）过期：此后第一次被读取时即为 `EXPIRED`：控制面每隔 `cosec.control.revisions.reclaim-interval`（默认 1 小时）读取一次每个文档的未完成变更，每隔 `cosec.control.shadow.check-interval`（默认 1 分钟）读取一次 `SHADOWING` 的变更。作者可以对 `CONFLICTED`、`DRAFT` 或 `CHECKED` 的变更执行 `:rebase`，把它放到当前修订上，这会重新运行所有检查，并丢弃之前的审批和影子证据。作者或持有 `cosec:publish` 的人可以 `:abandon` 它；设置租户边界的变更只有平台主体能驳回或放弃，吊销仍在生效的 break-glass 绑定的变更只有其作者能放弃（`BRK-10`）。每次放弃都记一条 `ABANDONED` 变更事件，备注写明变更的作者；放弃 break-glass 变更需要一个 REQUIRED 变更监听器，由它先记下（没有时返回 `503`）。
+
+### 查找未完成的变更 {#finding-open-changes}
+
+`GET /changes` 列出尚未结束的变更：`document=<key>` 列出一个文档的，`state=<STATE>` 列出处于某个非终态（`DRAFT`、`CHECKED`、`SHADOWING`、`AWAITING_APPROVAL`、`READY`、`CONFLICTED`）的，也可以两者都给。两者至少要给一个；`limit` 为 1 到 200（默认 50），`after` 是上一页的 `next`，最后一页没有 `next`。
+
+```json
+{
+  "changes": [
+    {
+      "id": "0SVoMJp7Q4G00",
+      "document": "tenant:acme",
+      "state": "CHECKED",
+      "kind": "PUBLISH",
+      "author": { "tenant": "acme", "principal": "alice" },
+      "note": "Let auditors read orders",
+      "createdAt": "2026-11-20T09:00:00Z",
+      "updatedAt": "2026-11-20T09:00:02Z"
+    }
+  ],
+  "next": null
+}
+```
+
+每一项是摘要：变更本身用 `GET /changes/{id}` 读取。存储的记录无法读取的变更以它的 `id`、`document` 和状态 `UNREADABLE` 列出，从不省略。只有 `GET /changes/{id}` 会向你展示的变更才会出现在列表中：你自己租户的文档（平台主体为任意文档）中，你写的或你可以读取其文档（`cosec:read`）的变更。列表不透露它省略了什么：一页只含你可见的变更，只有后面还有你可见的变更时才给出 `next`（`CTL-55`）。
+
+未完成的变更保存在它们自己的集合中（[存储](../operations/storage.md#redis-keys)）。对更早预览版写入的存储，在 `cosec-migrate repair-references` 转换它之前，列表返回 `503`（`CTL-54`）。
 
 ## 在影子模式中试运行变更 {#trying-changes-in-shadow-mode}
 

@@ -80,8 +80,11 @@ The pipeline reads the request's credentials, then asks one `Authenticator` who 
   for an issuer whose clock runs ahead, and refuses one beyond that as not valid yet (`token-invalid`, `IDN-29`); a
   token's expiry gets no such room. A verifier you build yourself takes the same value:
   `JwtTokenVerifier(signing, skew)`, over a `JwtSigning` (`JwtSigning.hmac256(secret)`, `hmac384`, `hmac512`: the key the tokens are signed with; the starter builds it from `cosec.jwt.secret` and `cosec.jwt.algorithm`). Only `TokenVerifier.verify` (and `refresh`) turns a token into
-  a principal: CoSec has no API that reads a token's claims without checking its signature. Without JWT
-  (`cosec.jwt.enabled=false`), a request with a token is rejected as `token-invalid`. Only a token CoSec's own
+  a principal: CoSec has no API that reads a token's claims without checking its signature. Tokens are on when a `TokenVerifier` bean or CoSec's signing key (`cosec.jwt.secret`) exists: a verifier of your own is
+  enough, with no secret you would never use, and a key alone gives CoSec's own verifier. A verifier alone issues no token
+  (the login and refresh routes and the token converter come with the key), and needs a revocation reader, a
+  `RevocationReader` bean or `cosec-cocache` on the issuer's Redis: without one, startup fails naming it. With neither
+  a verifier nor a key (`cosec.jwt.enabled=false`), a request with a token is rejected as `token-invalid`. Only a token CoSec's own
   `JwtTokenVerifier` verified may use [break-glass](../guide/security-model.md#break-glass): a `TokenAuthenticator`
   around a verifier of your own authenticates its tokens, but never with break-glass. A `TokenVerifier` bean of yours
   is another issuer's to CoSec, even one that wraps `JwtTokenVerifier` to add a check: on every request its tokens have

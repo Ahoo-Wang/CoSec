@@ -129,6 +129,9 @@ import java.time.Instant
  *            { "publish": { "change": "c1", "by": "walt", "lockout": true } },   // acknowledges a lock-out (UC-6)
  *            { "rollback": { "change": "c2", "by": "walt", "document": "platform", "revision": 1 } },
  *            { "outage": true },   // every check is indeterminate until { "outage": false }
+ *            { "changes": { "by": "alice", "document": "tenant:acme" } },  // GET /changes (CTL-55): `changes c1,c2`,
+ *                                              // `changes none` or `refused 503`; or with "state": "CHECKED"
+ *            { "oldOpenList": true },   // the list of the format before 8.0.0-beta.5 is there: the sets are not kept (CTL-54)
  *            { "storeDown": true }, // every operation of the control store fails until false (CTL-52): a step it
  *                                   // stops is `unavailable`, never an empty answer
  *            { "vanish": "i1" },   // i1 is taken off the reporters of every window, its report left
@@ -186,7 +189,12 @@ object ChangeRunner : ScenarioRunner {
         private val clock = MutableClock(NOW)
 
         // Kept, as the control plane keeps it from its start (CTL-46).
-        private val memory = InMemoryControlStore(clock).also { runBlocking { it.keepStagedList() } }
+        private val memory = InMemoryControlStore(clock).also {
+            runBlocking {
+                it.keepStagedList()
+                it.keepOpenChanges()
+            }
+        }
 
         /** While true, every operation of the store throws [ControlStoreException] (CTL-52). */
         @Volatile
@@ -411,7 +419,8 @@ object ChangeRunner : ScenarioRunner {
 
         /** One step's result, as `expect.steps` writes it. */
         private suspend fun result(action: String, argument: JsonNode): String = when (action) {
-            "advance", "vanish", "outage", "storeDown" -> environment(action, argument)
+            "advance", "vanish", "outage", "storeDown", "oldOpenList" -> environment(action, argument)
+            "changes" -> listing(argument)
             "report" -> report(argument)
             "simulate" -> simulate(argument)
             "explain" -> explain(argument)
@@ -467,12 +476,31 @@ object ChangeRunner : ScenarioRunner {
         }
 
         /** What happens around the control plane between steps: time passes, an instance vanishes, an outage. */
+        /** `GET /changes` as [by] asks it (CTL-55): the ids it lists, in order, `none`, or `refused <status>`. */
+        private suspend fun listing(argument: JsonNode): String = try {
+            argument.only("by", "document", "state")
+            val page = plane.changes(
+                by(argument),
+                argument.get("document")?.text()?.let(::documentKey),
+                argument.get("state")?.text()?.let(ChangeState::valueOf),
+                null,
+                LISTING_LIMIT,
+            )
+            "changes " + (page.changes.map { it.id.value }.ifEmpty { listOf("none") }.joinToString(","))
+        } catch (error: ChangeRejectedException) {
+            "refused ${error.status}"
+        }
+
         private fun environment(action: String, argument: JsonNode): String = when (action) {
             "advance" -> "advanced".also { clock.now = clock.now.plus(Duration.parse(argument.text())) }
             "vanish" -> "vanished".also { vanished += argument.text() }
             "storeDown" -> {
                 storeDown = argument.bool()
                 if (storeDown) "store down" else "store up"
+            }
+            "oldOpenList" -> {
+                memory.legacyOpenList = argument.bool()
+                if (memory.legacyOpenList) "old list" else "no old list"
             }
             else -> {
                 engine.outage = argument.bool()
@@ -724,7 +752,7 @@ object ChangeRunner : ScenarioRunner {
                 op.attributes,
             )
             val approved = change.copy(state = ChangeState.READY, approval = approval)
-            check(store.putChange(current.digest, approved)) { "Change ${id.value} moved meanwhile." }
+            check(store.putChange(current.digest, approved, change.state)) { "Change ${id.value} moved meanwhile." }
             return approved
         }
 
@@ -818,6 +846,9 @@ object ChangeRunner : ScenarioRunner {
 
     /** A REQUIRED change listener that records everything. */
     private val CREDENTIAL_STEPS = setOf("revoke", "revokeTokens", "provide", "unaudited")
+
+    /** The page size of a `changes` step: enough for a scenario's changes. */
+    private const val LISTING_LIMIT = 100
 
     private object RecordingAudit : ChangeListener {
         override val name: String = "audit"

@@ -156,7 +156,7 @@ internal class ChangeLifecycle(
             val expired = current.value.copy(state = ChangeState.EXPIRED, updatedAt = clock.instant())
             // The table says where an expiry may end; anything else is a fault and nothing is written.
             check(expired.state in ChangeStep.EXPIRE.to)
-            if (store.putChange(current.digest, expired)) {
+            if (store.putChange(current.digest, expired, current.value.state)) {
                 slots.release(expired)
                 return expired
             }
@@ -185,7 +185,7 @@ internal class ChangeLifecycle(
             val updated = next(current.value).copy(updatedAt = clock.instant())
             // The table decides where a step may take a change: anything else is a fault, and nothing is written.
             check(updated.state in step.to) { "$step leaves a change in ${step.to}, not in ${updated.state}" }
-            if (store.putChange(current.digest, updated)) {
+            if (store.putChange(current.digest, updated, current.value.state)) {
                 return updated
             }
         }

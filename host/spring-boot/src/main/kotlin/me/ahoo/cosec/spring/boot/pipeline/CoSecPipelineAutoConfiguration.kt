@@ -157,10 +157,13 @@ class CoSecPipelineAutoConfiguration {
 
     /**
      * Token and API-key authentication. A token is verified by the application's [TokenVerifier] bean, the one refresh
-     * and logout verify with (`IDN-25`), else by CoSec's own over the JWT algorithm, and checked against the revocation
-     * reader [revocationReader] resolves; an API key, when `cosec.api-key.enabled`, by the configured key store. The
-     * the signing key decides only whether tokens are on. CoSec's own verifier answers from [VerifiedTokenCache] when
-     * there is one ([cachedVerifier]); an application's own `TokenVerifier` never does.
+     * and logout verify with (`IDN-25`), else by CoSec's own over the [JwtSigning], and checked against the revocation
+     * reader [revocationReader] resolves; an API key, when `cosec.api-key.enabled`, by the configured key store.
+     * Tokens are on when either exists: an application whose tokens another issuer signs declares its verifier and no
+     * key, and a key alone gives CoSec's own verifier. With neither, a request with a token is refused (`token-invalid`).
+     * A verifier alone makes no login or refresh route and no token converter: those hang on the signing key, which is
+     * what issues tokens. CoSec's own verifier answers from [VerifiedTokenCache] when there is one ([cachedVerifier]);
+     * an application's own `TokenVerifier` never does.
      */
     @Bean
     @ConditionalOnMissingBean
@@ -179,16 +182,16 @@ class CoSecPipelineAutoConfiguration {
         tokenCache: ObjectProvider<VerifiedTokenCache>,
     ): Authenticator {
         checkRevocationReadTimeout(revocationProperties.readTimeout, pipelineProperties.authenticationTimeout)
-        val token = signing.ifAvailable?.let {
-            val reader = revocationReader(revocationReader, tokenStore, beans)
+        val tokenVerifier = verifier.ifAvailable
+            ?: signing.ifAvailable?.let { JwtTokenVerifier(it, revocationProperties.skew) }
+        val token = tokenVerifier?.let { own ->
+            val reader =
+                revocationReader(revocationReader, tokenStore, beans, issuesTokens = signing.ifAvailable != null)
             if (reader === RevocationReader.NONE) {
                 log.warn { NONE_WARNING }
             }
             TokenAuthenticator(
-                cachedVerifier(
-                    verifier.getIfAvailable { JwtTokenVerifier(it, revocationProperties.skew) },
-                    tokenCache.ifAvailable,
-                ),
+                cachedVerifier(own, tokenCache.ifAvailable),
                 reader,
                 revocationSkew = revocationProperties.skew,
                 acceptUnavailableRevocations = !revocationProperties.failClosed,
@@ -335,16 +338,19 @@ class CoSecPipelineAutoConfiguration {
 
         /**
          * The reader of revoked tokens and subjects, always (RFC 0008 S1b): a [RevocationReader] bean, else the CoCache
-         * token store's. With neither, startup fails, naming every token store missing ([TokenStores]): the starter
-         * never reads revocations from nothing.
+         * token store's. With neither, startup fails, naming every token store missing ([TokenStores]), or, for a host
+         * that only verifies another issuer's tokens ([issuesTokens] false), the one reader: the starter never reads
+         * revocations from nothing.
          */
         internal fun revocationReader(
             reader: ObjectProvider<RevocationReader>,
             tokenStore: ObjectProvider<TokenStore>,
             beans: ListableBeanFactory,
+            issuesTokens: Boolean = true,
         ): RevocationReader {
             reader.ifAvailable?.let { return it }
-            return CoCacheRevocation.readerOf(tokenStore.ifAvailable) ?: throw TokenStores.failure(beans)
+            return CoCacheRevocation.readerOf(tokenStore.ifAvailable)
+                ?: throw if (issuesTokens) TokenStores.failure(beans) else TokenStores.verifierOnlyFailure()
         }
 
         /** The API keys the pipeline reads: an [ApiKeyReader] bean, else the in-memory store's. */

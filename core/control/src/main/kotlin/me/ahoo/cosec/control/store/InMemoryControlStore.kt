@@ -19,6 +19,7 @@ import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.control.change.ChangeId
 import me.ahoo.cosec.control.change.ChangeRequest
+import me.ahoo.cosec.control.change.ChangeState
 import me.ahoo.cosec.control.change.StageSlot
 import me.ahoo.cosec.document.shadow.ShadowCodec
 import me.ahoo.cosec.model.PolicyId
@@ -112,9 +113,38 @@ class InMemoryControlStore(private val clock: Clock = Clock.systemUTC()) : Contr
         synchronized(lock) { apps = null }
     }
 
-    override suspend fun openChanges(): List<ChangeRequest> = synchronized(lock) {
-        changes.values.map { (change, _) -> change }.filterNot { it.state.terminal }
+    /** Test access: a list of the format before 8.0.0-beta.5 is (still) there, so the open-change sets are not kept. */
+    @Volatile
+    var legacyOpenList: Boolean = false
+
+    private var openChangesKept = false
+
+    override suspend fun openChangesKept(): Boolean = synchronized(lock) { openChangesKept && !legacyOpenList }
+
+    override suspend fun keepOpenChanges() {
+        synchronized(lock) { if (!legacyOpenList) openChangesKept = true }
     }
+
+    override suspend fun openChanges(document: SnapshotKey): List<ListedChange> = synchronized(lock) {
+        open().filter { it.key == document }.map(ListedChange::Readable)
+    }
+
+    override suspend fun changes(
+        state: ChangeState,
+        after: String?,
+        limit: Int,
+        documents: (SnapshotKey) -> Boolean,
+    ): ChangePage = synchronized(lock) {
+        val listed = open().filter { it.state == state && documents(it.key) }.sortedBy(
+            ::cursorOf
+        ).filter { after == null || cursorOf(it) > after }
+        val page = listed.take(limit)
+        ChangePage(page.map(ListedChange::Readable), if (listed.size > limit) cursorOf(page.last()) else null)
+    }
+
+    private fun open(): List<ChangeRequest> = changes.values.map { (change, _) -> change }.filterNot { it.state.terminal }
+
+    private fun cursorOf(change: ChangeRequest): String = "${change.key}#${change.id.value}"
 
     override suspend fun referrers(target: SnapshotKey, policy: PolicyId): Set<ReferrerEntry> =
         synchronized(lock) { references[target to policy]?.toSet().orEmpty() }
@@ -134,7 +164,11 @@ class InMemoryControlStore(private val clock: Clock = Clock.systemUTC()) : Contr
     override suspend fun change(id: ChangeId): Versioned<ChangeRequest>? =
         synchronized(lock) { changes[id]?.let { (change, version) -> Versioned(change, version(version)) } }
 
-    override suspend fun putChange(expected: SnapshotDigest?, change: ChangeRequest): Boolean = synchronized(lock) {
+    override suspend fun putChange(
+        expected: SnapshotDigest?,
+        change: ChangeRequest,
+        previous: ChangeState?,
+    ): Boolean = synchronized(lock) {
         if (changes[change.id]?.let { version(it.second) } != expected) {
             return false
         }

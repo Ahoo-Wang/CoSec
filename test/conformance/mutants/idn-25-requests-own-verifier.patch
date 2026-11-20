@@ -3,15 +3,17 @@
 # Tests: :spring-boot:test --tests me.ahoo.cosec.spring.boot.realserver.OneVerifierTest
 
 diff --git a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/pipeline/CoSecPipelineAutoConfiguration.kt b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/pipeline/CoSecPipelineAutoConfiguration.kt
-index acf3db4da..047a8ee58 100644
+index dfdc5fbd6..7fc76af95 100644
 --- a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/pipeline/CoSecPipelineAutoConfiguration.kt
 +++ b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/pipeline/CoSecPipelineAutoConfiguration.kt
-@@ -186,7 +186,7 @@ class CoSecPipelineAutoConfiguration {
-             }
-             TokenAuthenticator(
-                 cachedVerifier(
--                    verifier.getIfAvailable { JwtTokenVerifier(it, revocationProperties.skew) },
-+                    JwtTokenVerifier(it, revocationProperties.skew),
-                     tokenCache.ifAvailable,
-                 ),
-                 reader,
+@@ -182,8 +182,8 @@ class CoSecPipelineAutoConfiguration {
+         tokenCache: ObjectProvider<VerifiedTokenCache>,
+     ): Authenticator {
+         checkRevocationReadTimeout(revocationProperties.readTimeout, pipelineProperties.authenticationTimeout)
+-        val tokenVerifier = verifier.ifAvailable
+-            ?: signing.ifAvailable?.let { JwtTokenVerifier(it, revocationProperties.skew) }
++        val tokenVerifier = signing.ifAvailable?.let { JwtTokenVerifier(it, revocationProperties.skew) }
++            ?: verifier.ifAvailable
+         val token = tokenVerifier?.let { own ->
+             val reader =
+                 revocationReader(revocationReader, tokenStore, beans, issuesTokens = signing.ifAvailable != null)

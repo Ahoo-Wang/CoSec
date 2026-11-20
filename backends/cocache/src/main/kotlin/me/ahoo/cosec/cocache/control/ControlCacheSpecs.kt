@@ -96,6 +96,18 @@ internal object ControlCacheSpecs {
             StringCodec
         )
 
+    /**
+     * The open changes (`CTL-54`, [OpenChangeSets]): `doc:<docKey>`, the ids of a document's open changes;
+     * `state:<STATE>`, `<docKey>#<id>` of the changes in that state; `kept`, the marker.
+     */
+    fun changeSet(keyPrefix: String = DEFAULT_KEY_PREFIX): SetStoreSpec<String, String> =
+        SetsOfRecord.spec(
+            CoSecCacheSpecs.CONTROL_CHANGE_SET_CACHE_NAME,
+            keyPrefix,
+            KeyEncoder<String> { it },
+            StringCodec
+        )
+
     /** The staged list (`CTL-46`, [ControlSets.STAGED_SET]): one set, each member `<docKey>/<window>` or the marker. */
     fun stagedSet(keyPrefix: String = DEFAULT_KEY_PREFIX): SetStoreSpec<String, String> =
         SetsOfRecord.spec(
