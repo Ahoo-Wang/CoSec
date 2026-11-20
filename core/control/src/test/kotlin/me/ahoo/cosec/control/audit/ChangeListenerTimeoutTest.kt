@@ -24,6 +24,7 @@ import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.control.captured
 import me.ahoo.cosec.control.change.ChangeId
 import me.ahoo.cosec.document.Actor
 import me.ahoo.cosec.model.PrincipalId
@@ -61,7 +62,7 @@ class ChangeListenerTimeoutTest {
     }
 
     private fun warnings(): List<ILoggingEvent> =
-        appender.list.filter { it.level == Level.WARN && it.loggerName.startsWith("me.ahoo.cosec.control.audit") }
+        appender.captured().filter { it.level == Level.WARN && it.loggerName.startsWith("me.ahoo.cosec.control.audit") }
 
     private fun event() = ChangeEvent(
         "e",
