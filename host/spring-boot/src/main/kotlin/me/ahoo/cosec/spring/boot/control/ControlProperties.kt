@@ -58,10 +58,10 @@ class ControlProperties {
         var basePath: String = "/cosec/control"
 
         /**
-         * The largest request body the WebMvc routes read; a larger one is answered 400 unread. Twice a document's
-         * 8 MB cap (RFC 0003 Q14), for the JSON around it. WebFlux hosts are bounded by `spring.codec.max-in-memory-size`.
+         * The largest request body the control routes read, on WebMvc and WebFlux alike; a larger one is answered 400
+         * (CTL-41). A document's 8 MB cap (RFC 0003 Q14) and room for the operations' JSON around it.
          */
-        var maxBodySize: DataSize = DataSize.ofMegabytes(16)
+        var maxBodySize: DataSize = DataSize.ofMegabytes(10)
     }
 
     @InternalCoSecApi

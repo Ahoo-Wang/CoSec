@@ -1,0 +1,17 @@
+# Rule: IDN-30
+# Mutant: JwtTokenConverter issues a token whose attributes hold apiKeyId, which every verifier then refuses
+# Tests: :jwt:test --tests me.ahoo.cosec.jwt.JwtTokenConverterTest
+
+diff --git a/extensions/jwt/src/main/kotlin/me/ahoo/cosec/jwt/JwtTokenConverter.kt b/extensions/jwt/src/main/kotlin/me/ahoo/cosec/jwt/JwtTokenConverter.kt
+index ee16682e..15c90299 100644
+--- a/extensions/jwt/src/main/kotlin/me/ahoo/cosec/jwt/JwtTokenConverter.kt
++++ b/extensions/jwt/src/main/kotlin/me/ahoo/cosec/jwt/JwtTokenConverter.kt
+@@ -134,7 +134,7 @@ class JwtTokenConverter(
+             "Principal [$printableId] names an app that cannot be an app id: a token cannot carry it."
+         }
+         val reserved = subject.attributes.keys.filter { it in TokenAuthenticator.RESERVED_ATTRIBUTES }
+-        require(reserved.isEmpty()) {
++        require(reserved.isEmpty() || reserved.isNotEmpty()) {
+             "Principal [$printableId] has attributes $reserved, which CoSec sets for other credentials: a token " +
+                 "cannot carry them."
+         }

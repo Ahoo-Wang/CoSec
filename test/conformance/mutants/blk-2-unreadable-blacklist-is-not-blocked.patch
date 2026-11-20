@@ -1,0 +1,17 @@
+# Rule: BLK-2
+# Mutant: a blacklist attribute that cannot be read counts as not blocked: the request is decided as if its principal were not on the blacklist
+# Tests: :runtime:test --tests me.ahoo.cosec.runtime.attribute.ExternalAttributesPipelineTest :conformance:test --tests me.ahoo.cosec.conformance.ConformanceTest
+
+diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/stage/LoadView.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/stage/LoadView.kt
+index c15b5023..f91ed1da 100644
+--- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/stage/LoadView.kt
++++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/stage/LoadView.kt
+@@ -75,7 +75,7 @@ internal class LoadView(private val snapshots: SuspendingSnapshotSource) : Stage
+                 return Blacklist.BLOCKED
+             }
+         }
+-        return unavailable?.let { Blacklist(false, Cause.AttributeUnavailable(it, null)) } ?: Blacklist.NOT_BLOCKED
++        return unavailable?.let { Blacklist.NOT_BLOCKED } ?: Blacklist.NOT_BLOCKED
+     }
+ 
+     private fun SnapshotView.withUnresolved(cause: Cause): SnapshotView =

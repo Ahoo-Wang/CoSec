@@ -23,7 +23,10 @@ import me.ahoo.cosec.model.condition.ConditionLimits
 import tools.jackson.databind.node.ArrayNode
 import tools.jackson.databind.node.ObjectNode
 
-/** The platform document's settings: the condition limits and the external attributes it declares. */
+/**
+ * The platform document's settings: its `limits`, which hold the condition limits and the entry budgets
+ * ([DocumentBudgets]), and the external attributes it declares.
+ */
 internal object PlatformSettingsCodec {
     private val LIMIT_FIELDS = arrayOf(
         "maxNodes",
@@ -32,6 +35,15 @@ internal object PlatformSettingsCodec {
         "maxCidrBlocks",
         "maxLiteralBytes",
         "maxCost"
+    )
+
+    /** The budgets' members of `limits` (`CTL-40`, `CTL-41`). */
+    internal val BUDGET_FIELDS = arrayOf(
+        "maxPolicies",
+        "maxStatements",
+        "maxRoleBindings",
+        "maxAnyoneBindings",
+        "maxChangeOperations",
     )
 
     /** The types an external attribute can be declared with, by their document name. */
@@ -43,10 +55,21 @@ internal object PlatformSettingsCodec {
         "ip" to AttributeType.IP,
     )
 
-    internal fun limitsTree(limits: ConditionLimits): ObjectNode =
-        factory.objectNode().put("maxNodes", limits.maxNodes).put("maxDepth", limits.maxDepth)
-            .put("maxInValues", limits.maxInValues).put("maxCidrBlocks", limits.maxCidrBlocks)
-            .put("maxLiteralBytes", limits.maxLiteralBytes).put("maxCost", limits.maxCost)
+    /** `limits` holding [limits], when set, and [budgets], when set. */
+    internal fun limitsTree(limits: ConditionLimits?, budgets: DocumentBudgets?): ObjectNode {
+        val node = factory.objectNode()
+        limits?.let {
+            node.put("maxNodes", it.maxNodes).put("maxDepth", it.maxDepth)
+                .put("maxInValues", it.maxInValues).put("maxCidrBlocks", it.maxCidrBlocks)
+                .put("maxLiteralBytes", it.maxLiteralBytes).put("maxCost", it.maxCost)
+        }
+        budgets?.let {
+            node.put("maxPolicies", it.maxPolicies).put("maxStatements", it.maxStatements)
+                .put("maxRoleBindings", it.maxRoleBindings).put("maxAnyoneBindings", it.maxAnyoneBindings)
+                .put("maxChangeOperations", it.maxChangeOperations)
+        }
+        return node
+    }
 
     internal fun attributesTree(attributes: List<Attribute>): ArrayNode {
         val array = factory.arrayNode()
@@ -57,22 +80,45 @@ internal object PlatformSettingsCodec {
         return array
     }
 
-    internal fun decodeLimits(node: DocumentNode): ConditionLimits {
-        node.requireObject(*LIMIT_FIELDS)
-        fun limit(name: String, default: Int): Int {
-            val field = node.field(name) ?: return default
-            val value = field.long()
-            if (value < 1 || value > Int.MAX_VALUE) field.fail("a limit is a positive int")
-            return value.toInt()
+    private fun DocumentNode.limit(name: String, default: Int): Int {
+        val field = field(name) ?: return default
+        val value = field.long()
+        if (value < 1 || value > Int.MAX_VALUE) field.fail("a limit is a positive int")
+        return value.toInt()
+    }
+
+    /**
+     * The condition limits of `limits`: null when it holds only budgets, so a document that sets only those reads back
+     * as it was written; otherwise each absent one is its default, as an empty `limits` always was.
+     */
+    internal fun decodeLimits(node: DocumentNode): ConditionLimits? {
+        node.requireObject(*LIMIT_FIELDS, *BUDGET_FIELDS)
+        if (LIMIT_FIELDS.none { node.field(it) != null } && BUDGET_FIELDS.any { node.field(it) != null }) {
+            return null
         }
         val default = ConditionLimits.DEFAULT
         return ConditionLimits(
-            maxNodes = limit("maxNodes", default.maxNodes),
-            maxDepth = limit("maxDepth", default.maxDepth),
-            maxInValues = limit("maxInValues", default.maxInValues),
-            maxCidrBlocks = limit("maxCidrBlocks", default.maxCidrBlocks),
-            maxLiteralBytes = limit("maxLiteralBytes", default.maxLiteralBytes),
-            maxCost = limit("maxCost", default.maxCost),
+            maxNodes = node.limit("maxNodes", default.maxNodes),
+            maxDepth = node.limit("maxDepth", default.maxDepth),
+            maxInValues = node.limit("maxInValues", default.maxInValues),
+            maxCidrBlocks = node.limit("maxCidrBlocks", default.maxCidrBlocks),
+            maxLiteralBytes = node.limit("maxLiteralBytes", default.maxLiteralBytes),
+            maxCost = node.limit("maxCost", default.maxCost),
+        )
+    }
+
+    /** The entry budgets of `limits`: null when it sets none, each absent one its default otherwise. */
+    internal fun decodeBudgets(node: DocumentNode): DocumentBudgets? {
+        node.requireObject(*LIMIT_FIELDS, *BUDGET_FIELDS)
+        if (BUDGET_FIELDS.none { node.field(it) != null }) {
+            return null
+        }
+        return DocumentBudgets(
+            maxPolicies = node.limit("maxPolicies", DocumentBudgets.DEFAULT_MAX_POLICIES),
+            maxStatements = node.limit("maxStatements", DocumentBudgets.DEFAULT_MAX_STATEMENTS),
+            maxRoleBindings = node.limit("maxRoleBindings", DocumentBudgets.DEFAULT_MAX_ROLE_BINDINGS),
+            maxAnyoneBindings = node.limit("maxAnyoneBindings", DocumentBudgets.DEFAULT_MAX_ANYONE_BINDINGS),
+            maxChangeOperations = node.limit("maxChangeOperations", DocumentBudgets.DEFAULT_MAX_CHANGE_OPERATIONS),
         )
     }
 

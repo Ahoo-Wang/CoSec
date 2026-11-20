@@ -10,7 +10,8 @@
       ],
       "pending": null,
       "guards": [
-        "runtime:DocumentSnapshotViewsTest#a view decides with the revisions it was built from"
+        "runtime:DocumentSnapshotViewsTest#a view decides with the revisions it was built from",
+        "runtime:SuspendingSnapshotSourceTest#theViewWithTheAppIsOneReadWhole"
       ]
     },
     {

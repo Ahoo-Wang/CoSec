@@ -21,6 +21,7 @@ import me.ahoo.cosec.control.change.ControlStatus.BAD_REQUEST
 import me.ahoo.cosec.control.change.ControlStatus.UNPROCESSABLE
 import me.ahoo.cosec.control.change.Finding
 import me.ahoo.cosec.control.change.Operation
+import me.ahoo.cosec.document.DocumentBudgets
 import me.ahoo.cosec.document.DocumentCompileException
 import me.ahoo.cosec.document.PolicyDocument
 import me.ahoo.cosec.document.PolicyDocumentCodec
@@ -40,7 +41,8 @@ val MAX_BREAK_GLASS: java.time.Duration = java.time.Duration.ofHours(24)
  * with the data plane's compiler ([PolicyDocumentCompiler]), against the current heads it combines with.
  *
  * - V1: the candidate must read back with the document codec; what fails is a 400 at its JSON path.
- * - V2: at most [ChangeOptions.maxDocumentBytes] encoded; the ids a change puts must not use the reserved prefixes
+ * - V2: at most [ChangeOptions.maxDocumentBytes] encoded, and within the platform's entry budgets as [EntryBudgets]
+ *   holds them (`CTL-40`); the ids a change puts must not use the reserved prefixes
  *   `cosec:`, `g:`, `r:` and `role:` (`perm:` is the app document's, which the compiler checks), unless it migrates or
  *   bootstraps, and must be one segment of the entry's resource (RFC 0007 §7.1): no `/`, but for a permission policy's
  *   `perm:<app>/<id>`; a tenant policy must not reuse a platform policy's id (RFC 0007 §3.1 N2).
@@ -92,6 +94,7 @@ class ChangeChecks(
             checkedWith[SnapshotKey.Platform] = head?.digest
             head?.document
         }
+        EntryBudgets.check(base, candidate, platform?.budgets ?: DocumentBudgets.DEFAULT, findings)
         if (candidate.kind == DocumentKind.TENANT && platform != null) {
             EntryChecks.sharesPlatformIds(candidate, platform, findings)
         }

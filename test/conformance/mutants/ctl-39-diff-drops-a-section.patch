@@ -3,14 +3,17 @@
 # Tests: :control:test --tests me.ahoo.cosec.control.api.DiffMembersTest
 
 diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/api/DocumentReads.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/api/DocumentReads.kt
-index 4186aad5c..71ac68b4c 100644
+index ed912487b..52706e7ed 100644
 --- a/core/control/src/main/kotlin/me/ahoo/cosec/control/api/DocumentReads.kt
 +++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/api/DocumentReads.kt
-@@ -112,7 +112,6 @@ internal class DocumentReads(
+@@ -112,10 +112,6 @@ internal class DocumentReads(
          val SECTIONS: List<Section> = listOf(
              Section("catalog", { it.copy(catalog = null) }) { bare, of -> bare.copy(catalog = of.catalog) },
              Section("boundary", { it.copy(boundary = null) }) { bare, of -> bare.copy(boundary = of.boundary) },
--            Section("limits", { it.copy(limits = null) }) { bare, of -> bare.copy(limits = of.limits) },
+-            // The format's `limits` holds two members: the condition limits and the entry budgets (CTL-40).
+-            Section("limits", { it.copy(limits = null, budgets = null) }, setOf("limits", "budgets")) { bare, of ->
+-                bare.copy(limits = of.limits, budgets = of.budgets)
+-            },
              Section("attributes", { it.copy(attributes = null) }) { bare, of -> bare.copy(attributes = of.attributes) },
              Section(
                  "rateLimits",

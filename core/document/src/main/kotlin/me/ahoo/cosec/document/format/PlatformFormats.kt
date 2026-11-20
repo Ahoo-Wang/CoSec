@@ -34,9 +34,15 @@ internal object PlatformFormats {
                     limit("maxCidrBlocks", 256, "Blocks of one `cidr`."),
                     limit("maxLiteralBytes", 1024, "UTF-8 bytes of one literal."),
                     limit("maxCost", 256, "Weighted cost of one statement's condition."),
+                    limit("maxPolicies", 10_000, "Policies one document writes (CTL-40)."),
+                    limit("maxStatements", 20_000, "Statements of the policies one document writes (CTL-40)."),
+                    limit("maxRoleBindings", 10_000, "Bindings to a role in one document (CTL-40)."),
+                    limit("maxAnyoneBindings", 1_000, "Bindings to Anyone in one document (CTL-40)."),
+                    limit("maxChangeOperations", 20_000, "Operations of one change a client proposes (CTL-41)."),
                 ),
             ),
-            description = "The condition limits of every document (RFC 0005 §3.5); absent ones are the defaults. Platform only.",
+            description = "The condition limits of every document (RFC 0005 §3.5) and the entry budgets the control plane " +
+                "holds every change to (CTL-40, CTL-41); absent ones are the defaults. Platform only.",
         ),
         Field(
             "attributes",
@@ -46,9 +52,9 @@ internal object PlatformFormats {
                         Field(
                             "path",
                             StringType(
-                                pattern = EXTERNAL_PATH,
+                                pattern = FormatPatterns.printable(EXTERNAL_PATH),
                                 examples = listOf("ext.geo.region", "ext.risk.score"),
-                                counterExamples = listOf("geo.region", "ext.geo", "ext..x", "ext.geo."),
+                                counterExamples = listOf("geo.region", "ext.geo", "ext..x", "ext.geo.", "ext.geo.a\nb"),
                             ),
                             required = true,
                         ),

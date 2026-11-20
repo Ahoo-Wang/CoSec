@@ -236,6 +236,19 @@ sequenceDiagram
 
 在 Apple M4 上单线程运行 `global`、`role`、`none` 和 `anonymous` 场景时，一个已预热的请求走完整条 Pipeline 不到 2 µs，分配 3 到 5 kB。各轮次、测量条件和每个场景的数字见 [`docs/perf/e2e-slice`](https://github.com/Ahoo-Wang/CoSec/tree/main/docs/perf/e2e-slice)；其他参考结果（引擎基线、平台边界、控制面、网关的 AOT 缓存）见 [`docs/perf/`](https://github.com/Ahoo-Wang/CoSec/tree/main/docs/perf)。
 
+### 检查一个变更的开销 {#what-checking-a-change-costs}
+
+控制面在请求路径之外检查变更，[条目预算](../policies/language.md#entry-budgets)约束这部分开销。对一个有 n 条策略（每条两个语句）和 n 条绑定（十分之一绑定到 `*`）的租户文档，在内存中、同一台机器上测得（`core/control` 中的 `DocumentBudgetMeasurement`，手动运行）：
+
+| 策略、语句、绑定 | 存储大小 | 编译 | 提议（信任根） | 提议（租户管理员） | 变基 | 发布 |
+|---|---|---|---|---|---|---|
+| 1k、2k、1k | 275 KB | 3 ms | 68 ms | 76 ms | 68 ms | 62 ms |
+| 10k、20k、10k | 2.7 MB | 24 ms | 361 ms | 765 ms | 412 ms | 342 ms |
+| 30k、60k、30k | 8.3 MB | 51 ms | 1,005 ms | 4,484 ms | 1,286 ms | 922 ms |
+| 100k、200k、100k | 27.9 MB | 158 ms | 3,199 ms | 63,702 ms | 4,772 ms | 3,458 ms |
+
+编译以及信任根的变更的开销随文档增长。租户管理员的变更还要分析它授予了什么，这部分随文档大小的平方增长：100k 那一行超过一分钟，并且 512 MB 的堆放不下。默认预算位于 10k 那一行。30k 那一行已超出 8 MB 的文档上限，测量时调高了该上限。
+
 ### 测量方法 {#measuring}
 
 通过 Gradle 运行基准测试：

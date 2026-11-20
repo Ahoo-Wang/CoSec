@@ -1,0 +1,77 @@
+{
+  "rules": [
+    "CTL-40"
+  ],
+  "polarity": "positive",
+  "level": "control",
+  "description": "The platform allows two policies a document; acme holds two. A change adding a third stays a draft with a V2 error naming the budget, cannot be published, and the head stays at revision 1.",
+  "documents": {
+    "platform": {
+      "limits": {
+        "maxPolicies": 2
+      }
+    },
+    "tenants": {
+      "acme": {
+        "policies": [
+          {
+            "id": "a",
+            "statements": [
+              {
+                "effect": "allow",
+                "action": "order:read"
+              }
+            ]
+          },
+          {
+            "id": "b",
+            "statements": [
+              {
+                "effect": "allow",
+                "action": "order:write"
+              }
+            ]
+          }
+        ]
+      }
+    }
+  },
+  "steps": [
+    {
+      "propose": {
+        "change": "c1",
+        "document": "tenant:acme",
+        "operations": [
+          {
+            "putPolicy": {
+              "id": "c",
+              "statements": [
+                {
+                  "effect": "allow",
+                  "action": "order:cancel"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "publish": "c1"
+    }
+  ],
+  "expect": {
+    "steps": [
+      "DRAFT",
+      "refused 409"
+    ],
+    "errors": {
+      "c1": [
+        "V2"
+      ]
+    },
+    "heads": {
+      "tenant:acme": 1
+    }
+  }
+}

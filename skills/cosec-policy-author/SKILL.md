@@ -117,6 +117,12 @@ A policy does nothing until a binding (or a token's `policies` claim, for an `at
   character of their text (`report-*.pdf` is 14), twice after a leading `**`. Prefer whole-segment `*`, `{name}` and
   `**`, which cost nothing, and keep the text in glob segments short.
 - A DENY on a bare type (`order`) does not compile: it would only cover the empty id. Write `order/**`.
+- A DENY (or a rate limit rule) with `"decodeAndParseSegments": false` does not compile (DOC-14): it matches the path
+  still percent-encoded, so `/%61dmin/users` escapes a DENY on `/admin/**`. Only an ALLOW may turn decoding off.
+  `caseSensitive` defaults to `true` on a DENY too: write `false` when a backend routes paths ignoring case.
+- No id holds a control character or an unpaired surrogate (DOC-13): policy ids, statement names, binding ids and
+  subjects, roles, catalog permission ids, declared attributes, attribute paths and path variable names. The document
+  does not compile. A role's or catalog entry's `name` and `description` are display text and may hold anything.
 - How a request gets its action: on WebFlux and WebMvc hosts a route map (`cosec-routes.json`) maps method and path to
   `service:verb` on a typed resource (`order/{orderId}`); any request no route matches keeps `http:<METHOD>` on
   `http:path:<path>`. A Spring Cloud Gateway host loads no route map: every request is in the `http` namespace.
@@ -172,6 +178,11 @@ requests without the attribute. Prefer an ALLOW on the positive fact, and put ne
 
 Limits (platform `limits`, defaults): `maxNodes` 64, `maxDepth` 8, `maxInValues` 1024, `maxCidrBlocks` 256,
 `maxLiteralBytes` 1024, `maxCost` 256 per statement condition. Every document compiles against the platform's limits.
+The same `limits` hold the entry budgets the control plane checks every change against (CTL-40, CTL-41): per document
+`maxPolicies` 10,000, `maxStatements` 20,000, `maxRoleBindings` 10,000, `maxAnyoneBindings` 1,000, and
+`maxChangeOperations` 20,000 per change. A change may not raise a count over its budget; a document already over one
+is served, may change and may shrink. Hosts never enforce them. Split a large document by app or tenant before raising
+them.
 
 ### External attributes
 

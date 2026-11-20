@@ -66,6 +66,16 @@ description: "每个 8.0 预览版（alpha 与 beta）到下一个之间的变�
 
 - **网关只在接受了调用方的凭证时才转发它们**（R1A-7，`IDN-8`）。受影响的是打开了 `cosec.gateway.identity.forward-authorization=true` 的网关。直到 beta.4，令牌过期、被吊销或无效的请求以匿名身份继续，公开路由放行它时，它的 `Authorization` 头、API key、查询令牌和 cookie 仍会发往接收身份的路由。现在它们留在网关：后端看到的是匿名请求。靠自己校验令牌来回答这类请求的后端，现在收不到令牌。
 - **IP 黑名单按规范形式比较地址**（R1A-4）。受影响的是 `BlacklistSource` 的实现，以及 `InMemoryBlacklistSource.block` 的调用方。`contains(BlacklistKind.IP, value)` 收到的是规范形式：同一地址的任何写法都是 `2001:db8::1`，`::ffff:192.0.2.1` 是 `192.0.2.1`；被拦截的地址请按这种形式保存（[扩展](../architecture/extending.md)）。`InMemoryBlacklistSource` 就这样保存，并以 `IllegalArgumentException` 拒绝不是地址的值。
+- **id 含控制字符、或 DENY 按未解码路径匹配的文档不再能编译**（R1B-3、R1A-1；`DOC-13`、`DOC-14`）。受影响的是含其中任一情况的文档。
+  - **id 中的控制字符。** 文档写下的任何 id 都不能含控制字符或未配对的代理项：策略 id 和语句名、绑定 id 和主体、角色、目录权限 id、声明的属性、属性路径和路径变量名（[id 与特殊值](../policies/language.md#ids-and-special-values)）。直到 beta.4，策略 id 可以含换行，会在每个配置了路由映射的宿主上伪造一行日志。
+  - **按收到的原文匹配路径的 DENY。** DENY 语句或限流规则不能再把 `decodeAndParseSegments` 设为 `false`：它会漏掉路径的每一种百分号编码写法（`/%61dmin/users` 对应 `/admin/users`）。去掉这个选项；ALLOW 可以保留它（[HTTP 路径](../policies/language.md#http-paths)）。`cosec-migrate convert` 拒绝这样写的 7.x DENY（`DOES_NOT_COMPILE`，定位到它的语句），不写出任何文档。
+  - **已存储的文档会怎样。** 宿主对它失败即关闭，与对待任何无法编译的文档一样：每个需要该文档的请求回答 `503`，宿主以 `ERROR` 记录 `Snapshot document [<doc>] revision <n> does not compile`，附每个错误的 JSON 路径，id 以转义形式显示，`cosecSnapshot` 健康指示器把它计入 `invalid`（[故障排查](./troubleshooting.md)）。控制面拒绝会发布这种文档的变更：在 id 或语句的路径上给出 `COMPILE` 发现，变更停留在草稿。
+  - **升级宿主之前**，用 beta.5 的编译器检查每个已发布的文档，做法见 [CI 中的策略](../policies/testing.md#policies-in-ci)（`PolicyDocumentCompiler.validate`），并为它拒绝的每个文档发布一个修正后的修订：重命名 id、去掉该选项。两者都不含的文档不受影响。
+  - **然后先升级一台宿主**（或控制面的宿主），在升级其余宿主之前，查看它的 `cosecSnapshot` 健康指示器的 `invalid` 计数，以及它为每个文档记录的 `ERROR` 日志行。没有修正的文档在每台已升级的宿主上失败即关闭：那里每个需要它的请求都回答 `503`。
+- **控制面以条目预算约束每个变更，并限制一个变更的操作数和请求体**（R1B-4，`CTL-40`、`CTL-41`）。受影响的是含有超出默认预算的文档、或提议非常大的变更的控制面，以及为控制 API 调高了 `spring.codec.max-in-memory-size` 的 WebFlux 宿主。在这些预算之前，一个 100,000 条目的变更曾在控制面耗尽 512 MB 的堆。
+  - **条目预算。** 平台的 `limits` 接受每个文档的 `maxPolicies`（10,000）、`maxStatements`（20,000）、`maxRoleBindings`（10,000）和 `maxAnyoneBindings`（1,000）（[条目预算](../policies/language.md#entry-budgets)）。会把某个计数提高到超出预算的变更得到写明预算、计数和限制值的 `V2` 发现（`422`），停留在草稿。已经超出预算的文档仍由每台宿主继续提供，可以修改，也可以缩小；只有增加超出预算的计数的变更会被拒绝，检查会对每个仍然超出的计数给出警告。要让大文档继续增长，先在平台文档中调高预算。`cosec-migrate convert` 对超出默认预算的转换结果给出警告并照常写出。
+  - **操作数。** 客户端提议的一个变更最多带 `maxChangeOperations`（20,000）个操作，同样位于平台的 `limits` 中；更大的变更返回 `400`，请拆成几个变更提议。`apply` 和回滚不受其约束。
+  - **请求体。** `cosec.control.http.max-body-size` 的默认值由 `16MB` 改为 `10MB`，并且现在 WebFlux 上的控制 API 也受其约束，代替 `spring.codec.max-in-memory-size`（默认 256 KB，此前使 WebFlux 控制面无法接收更大的变更）。更大的请求体返回 `400` `invalid-request`。
 
 ## 从 8.0.0-beta.3 升级 {#from-8-0-0-beta-3}
 

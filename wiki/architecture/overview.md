@@ -473,6 +473,24 @@ The rounds, conditions and per-scenario numbers are in
 (engine baselines, the platform boundary, the control plane, the gateway's AOT cache) are in
 [`docs/perf/`](https://github.com/Ahoo-Wang/CoSec/tree/main/docs/perf).
 
+### What checking a change costs {#what-checking-a-change-costs}
+
+The control plane checks a change off the request path, and the [entry budgets](../policies/language.md#entry-budgets)
+bound what that costs. For a tenant document of n policies of two statements each and n bindings (a tenth to `*`), in
+memory, on one machine (`DocumentBudgetMeasurement` in `core/control`, run by hand):
+
+| Policies, statements, bindings | Stored | Compile | Propose (trust root) | Propose (tenant administrator) | Rebase | Publish |
+|---|---|---|---|---|---|---|
+| 1k, 2k, 1k | 275 KB | 3 ms | 68 ms | 76 ms | 68 ms | 62 ms |
+| 10k, 20k, 10k | 2.7 MB | 24 ms | 361 ms | 765 ms | 412 ms | 342 ms |
+| 30k, 60k, 30k | 8.3 MB | 51 ms | 1,005 ms | 4,484 ms | 1,286 ms | 922 ms |
+| 100k, 200k, 100k | 27.9 MB | 158 ms | 3,199 ms | 63,702 ms | 4,772 ms | 3,458 ms |
+
+Compiling, and what the trust root's change costs, grow with the document. A tenant administrator's change is also
+analysed for what it grants, and that grows with the square of the document: the 100k row took over a minute and did
+not fit a 512 MB heap. The default budgets sit at the 10k row. The 30k row is already over the 8 MB document cap, which
+the measurement raised.
+
 ### Measuring
 
 Run a benchmark through Gradle:

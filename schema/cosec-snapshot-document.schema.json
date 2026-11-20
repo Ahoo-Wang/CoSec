@@ -103,7 +103,7 @@
             "wms.clerk",
             "night-shift"
           ],
-          "pattern": "^(?!\\*$)[^@]+$",
+          "pattern": "^(?![\\s\\S]*[\\x00-\\x1F\\x7F-\\x9F])(?!\\*$)[^@]+$",
           "type": "string"
         },
         "name": {
@@ -128,6 +128,7 @@
                   "warehouse.read",
                   "inbound.ship"
                 ],
+                "pattern": "^[^\\x00-\\x1F\\x7F-\\x9F]*$",
                 "type": "string"
               },
               "type": "array"
@@ -483,6 +484,7 @@
             "order-service"
           ],
           "minLength": 1,
+          "pattern": "^[^\\x00-\\x1F\\x7F-\\x9F]*$",
           "type": "string"
         },
         "breakGlass": {
@@ -503,6 +505,7 @@
             "deny-ip",
             "editor-read"
           ],
+          "pattern": "^[^\\x00-\\x1F\\x7F-\\x9F]*$",
           "type": "string"
         },
         "policy": {
@@ -511,6 +514,7 @@
             "perm:order-service/read",
             "cosec:root"
           ],
+          "pattern": "^[^\\x00-\\x1F\\x7F-\\x9F]*$",
           "type": "string"
         },
         "space": {
@@ -520,6 +524,7 @@
             "",
             "team-a"
           ],
+          "pattern": "^[^\\x00-\\x1F\\x7F-\\x9F]*$",
           "type": "string"
         },
         "subject": {
@@ -540,6 +545,7 @@
                     "cosec",
                     "svc-batch"
                   ],
+                  "pattern": "^[^\\x00-\\x1F\\x7F-\\x9F]*$",
                   "type": "string"
                 },
                 "tenant": {
@@ -547,6 +553,7 @@
                     "(platform)",
                     "acme"
                   ],
+                  "pattern": "^[^\\x00-\\x1F\\x7F-\\x9F]*$",
                   "type": "string"
                 }
               },
@@ -585,7 +592,7 @@
                   "ext.geo.region",
                   "ext.risk.score"
                 ],
-                "pattern": "^ext\\.[^.]+\\..+$",
+                "pattern": "^(?![\\s\\S]*[\\x00-\\x1F\\x7F-\\x9F])ext\\.[^.]+\\..+$",
                 "type": "string"
               },
               "type": {
@@ -621,6 +628,7 @@
                 "boundary-standard"
               ],
               "minLength": 1,
+              "pattern": "^[^\\x00-\\x1F\\x7F-\\x9F]*$",
               "type": "string"
             }
           },
@@ -628,8 +636,20 @@
         },
         "limits": {
           "additionalProperties": false,
-          "description": "The condition limits of every document (RFC 0005 §3.5); absent ones are the defaults. Platform only.",
+          "description": "The condition limits of every document (RFC 0005 §3.5) and the entry budgets the control plane holds every change to (CTL-40, CTL-41); absent ones are the defaults. Platform only.",
           "properties": {
+            "maxAnyoneBindings": {
+              "default": 1000,
+              "description": "Bindings to Anyone in one document (CTL-40).",
+              "minimum": 1,
+              "type": "integer"
+            },
+            "maxChangeOperations": {
+              "default": 20000,
+              "description": "Operations of one change a client proposes (CTL-41).",
+              "minimum": 1,
+              "type": "integer"
+            },
             "maxCidrBlocks": {
               "default": 256,
               "description": "Blocks of one `cidr`.",
@@ -663,6 +683,24 @@
             "maxNodes": {
               "default": 64,
               "description": "Nodes of one condition.",
+              "minimum": 1,
+              "type": "integer"
+            },
+            "maxPolicies": {
+              "default": 10000,
+              "description": "Policies one document writes (CTL-40).",
+              "minimum": 1,
+              "type": "integer"
+            },
+            "maxRoleBindings": {
+              "default": 10000,
+              "description": "Bindings to a role in one document (CTL-40).",
+              "minimum": 1,
+              "type": "integer"
+            },
+            "maxStatements": {
+              "default": 20000,
+              "description": "Statements of the policies one document writes (CTL-40).",
               "minimum": 1,
               "type": "integer"
             }
@@ -733,6 +771,7 @@
             "deny-ip",
             "perm:order-service/read"
           ],
+          "pattern": "^[^\\x00-\\x1F\\x7F-\\x9F]*$",
           "type": "string"
         },
         "statements": {
@@ -914,6 +953,7 @@
             "subject.id",
             "resource.var.orderId"
           ],
+          "pattern": "^[^\\x00-\\x1F\\x7F-\\x9F]*$",
           "type": "string"
         },
         "onMissing": {
@@ -978,6 +1018,7 @@
             },
             "decodeAndParseSegments": {
               "default": true,
+              "description": "`false` matches the path as received. Only an ALLOW may set it: a DENY or a rate limit rule with it does not compile, since it would miss every percent-encoded spelling (DOC-14).",
               "type": "boolean"
             },
             "pattern": {
@@ -1030,6 +1071,7 @@
           "examples": [
             "read-orders"
           ],
+          "pattern": "^[^\\x00-\\x1F\\x7F-\\x9F]*$",
           "type": "string"
         },
         "onMissing": {
@@ -1123,6 +1165,7 @@
             "boundary-restricted"
           ],
           "minLength": 1,
+          "pattern": "^[^\\x00-\\x1F\\x7F-\\x9F]*$",
           "type": "string"
         },
         "policies": {
@@ -1184,6 +1227,7 @@
             "order-service"
           ],
           "minLength": 1,
+          "pattern": "^[^\\x00-\\x1F\\x7F-\\x9F]*$",
           "type": "string"
         },
         "description": {
@@ -1199,7 +1243,7 @@
             "wms.clerk",
             "night-shift"
           ],
-          "pattern": "^(?!\\*$)[^@]+$",
+          "pattern": "^(?![\\s\\S]*[\\x00-\\x1F\\x7F-\\x9F])(?!\\*$)[^@]+$",
           "type": "string"
         },
         "name": {
@@ -1216,6 +1260,7 @@
               "warehouse.read",
               "inbound.ship"
             ],
+            "pattern": "^[^\\x00-\\x1F\\x7F-\\x9F]*$",
             "type": "string"
           },
           "type": "array"
@@ -1226,7 +1271,7 @@
             "",
             "wh-01"
           ],
-          "pattern": "^(?!\\*$)(?!\\().*$",
+          "pattern": "^(?![\\s\\S]*[\\x00-\\x1F\\x7F-\\x9F])(?!\\*$)(?!\\().*$",
           "type": "string"
         }
       },

@@ -13,7 +13,11 @@
 
 package me.ahoo.cosec.engine.pattern
 
-/** Variable names follow Spring's rule, except that they must not be empty. */
+/**
+ * Variable names follow Spring's rule, except that they must not be empty and hold no control character: Java counts
+ * the ignorable ones (`\u0000`–`\u0008`, `\u000E`–`\u001B`, `\u007F`–`\u009F`) as identifier parts, and a name is an id the
+ * document defines, read back in `resource.var.<name>` and in messages (`DOC-13`).
+ */
 internal object VariableNames {
     /** Why [name] is not a variable name, or `null` if it is one. */
     fun invalid(name: String): String? {
@@ -23,7 +27,7 @@ internal object VariableNames {
         if (!name[0].isJavaIdentifierStart()) {
             return "a variable name cannot start with '${name[0]}'"
         }
-        val illegal = name.firstOrNull { it != '-' && !it.isJavaIdentifierPart() } ?: return null
+        val illegal = name.firstOrNull { it != '-' && (!it.isJavaIdentifierPart() || it.isISOControl()) } ?: return null
         return "'$illegal' is not allowed in a variable name"
     }
 }

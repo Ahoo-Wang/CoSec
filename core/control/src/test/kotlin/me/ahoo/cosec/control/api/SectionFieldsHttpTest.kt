@@ -73,4 +73,25 @@ class SectionFieldsHttpTest {
         limited.get("operations").get(0).get("limits").get("maxNodes").asInt().assert().isEqualTo(64)
         call(proposal("""{"op":"setAttributes"}""")).first.assert().isEqualTo(201)
     }
+
+    /** CTL-40, CTL-41: `setLimits` takes the entry budgets beside the six condition limits, each left out its default. */
+    @Test
+    fun `setLimits reads the entry budgets as the document reads them`() {
+        fun proposal(budgets: String) =
+            """{"document":"platform","base":1,"operations":[{"op":"setLimits","limits":{"maxNodes":64,""" +
+                """"maxDepth":16,"maxInValues":64,"maxCidrBlocks":64,"maxLiteralBytes":4096,"maxCost":1024$budgets}}]}"""
+        val (status, change) = call(proposal(""","maxPolicies":500,"maxChangeOperations":50"""))
+        status.assert().isEqualTo(201)
+        val limits = change.get("operations").get(0).get("limits")
+        limits.get("maxPolicies").asInt().assert().isEqualTo(500)
+        limits.get("maxChangeOperations").asInt().assert().isEqualTo(50)
+        limits.get("maxStatements").asInt().assert().isEqualTo(20_000)
+        val before = fixture.ids.get()
+        for (budget in listOf(""","maxPolicies":0""", ""","maxAnyoneBindings":"many"""", ""","maxEntries":1""")) {
+            val (refused, body) = call(proposal(budget))
+            refused.assert().describedAs(budget).isEqualTo(400)
+            body.get("detail").asString().assert().describedAs(budget).isNotBlank()
+        }
+        fixture.ids.get().assert().isEqualTo(before)
+    }
 }

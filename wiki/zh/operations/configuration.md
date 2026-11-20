@@ -275,7 +275,7 @@ CoSec 没有哪个配置项叫这些名字，而已知的 key 无论来源都不
 | `cosec.control.analysis.route-maps` | string | 未设置 | 各服务的路由映射，逗号分隔的资源位置，读取与拒绝方式和 `cosec.authorization.routes.location` 相同。设置后，变更会带有 `ROUTES` 警告，列出候选中被已映射路由绕开的 `http:` DENY 语句与限流规则（[路由映射](../scenarios/route-maps.md)）。未设置时不做比较，含有这类语句的变更会说明这一点。每个宿主在安装文档时给出的警告只需要它自己的路由映射，不需要这个属性。 |
 | `cosec.control.app-id` | string | `cosec-control` | 控制面动作在哪个应用中授权。 |
 | `cosec.control.http.base-path` | string | `/cosec/control` | 控制 API 的路径。路由位于 `{base-path}/v1` 之下，因此移动 API 时版本不会丢失。 |
-| `cosec.control.http.max-body-size` | data size | `16MB` | WebMvc 宿主上控制 API 读取的最大请求体。更大的请求体不被读取，得到 `400` `invalid-request`。WebFlux 上由 `spring.codec.max-in-memory-size`（默认 256 KB）限定请求体。两种栈上，没有已放行主体的请求都根本不读请求体（`401`）。 |
+| `cosec.control.http.max-body-size` | data size | `10MB` | 控制 API 读取的最大请求体，WebMvc 与 WebFlux 相同（`CTL-41`）：文档的 8 MB 上限，再加上操作外层 JSON 的余量。更大的请求体得到 `400` `invalid-request`。WebFlux 上它代替 `spring.codec.max-in-memory-size` 约束控制路由。没有已放行主体的请求根本不读请求体（`401`）。 |
 | `cosec.control.revisions.max-count` | int | `50` | 每个文档总是保留的修订数；更早的修订在同时超过 `min-age` 后被回收。未关闭变更所依赖的修订会被保留。 |
 | `cosec.control.revisions.min-age` | duration | `7d` | 比这年轻的修订总是保留。 |
 | `cosec.control.revisions.orphan-age` | duration | `1h` | 冲突发布留下的记录到这个年龄后删除。 |

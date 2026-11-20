@@ -128,15 +128,28 @@ object Identifiers {
     }
 
     /**
-     * [text] for a message or a log line: a control character, which could forge a line (RC1-15), and an unpaired
-     * surrogate, which a UTF-8 log would write as `?` and so name another id (RC1-52), as its `\uXXXX` escape.
+     * Whether the character of [text] at [index] is one [printable] escapes: a control character, which could forge a
+     * line (RC1-15), or an unpaired surrogate, which a UTF-8 log would write as `?` and so name another id (RC1-52). The
+     * one definition: an app or tenant id ([me.ahoo.cosec.model.scope.ScopeResolver.isValidAppId]) and every id a
+     * document defines (`DOC-13`) hold none.
+     */
+    @InternalCoSecApi
+    fun isUnprintableAt(text: CharSequence, index: Int): Boolean =
+        text[index].isISOControl() || isUnpairedSurrogateAt(text, index)
+
+    /** Whether [text] holds no character [isUnprintableAt]: [printable] gives it back as it is. */
+    @InternalCoSecApi
+    fun isPrintable(text: CharSequence): Boolean = text.indices.none { isUnprintableAt(text, it) }
+
+    /**
+     * [text] for a message or a log line: each character [isUnprintableAt] as its `\uXXXX` escape.
      */
     fun printable(text: String): String {
-        val first = text.indices.firstOrNull { text[it].isISOControl() || isUnpairedSurrogateAt(text, it) } ?: return text
+        val first = text.indices.firstOrNull { isUnprintableAt(text, it) } ?: return text
         val printed = StringBuilder(text.length + ESCAPE_LENGTH).append(text, 0, first)
         for (index in first until text.length) {
             val c = text[index]
-            if (c.isISOControl() || isUnpairedSurrogateAt(text, index)) {
+            if (isUnprintableAt(text, index)) {
                 printed.append("\\u").append(c.code.toString(HEX).uppercase().padStart(ESCAPE_DIGITS, '0'))
             } else {
                 printed.append(c)

@@ -1,0 +1,17 @@
+# Rule: PIP-8
+# Mutant: a request whose API key is rejected is judged by the token it also carries: a revoked or unknown key no longer stops it
+# Tests: :runtime:test --tests me.ahoo.cosec.runtime.authn.ApiKeyAuthenticatorTest --tests me.ahoo.cosec.runtime.authn.CompositeAuthenticatorTest :conformance:test --tests me.ahoo.cosec.conformance.ConformanceTest
+
+diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/authn/CompositeAuthenticator.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/authn/CompositeAuthenticator.kt
+index 6ef56e15..bece5e69 100644
+--- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/authn/CompositeAuthenticator.kt
++++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/authn/CompositeAuthenticator.kt
+@@ -34,7 +34,7 @@ class CompositeAuthenticator(
+ 
+     override suspend fun authenticate(credentials: Credentials): AuthnResult {
+         if (apiKey != null && credentials.apiKey != null) {
+-            return apiKey.authenticate(credentials)
++            return apiKey.authenticate(credentials).let { if (it is AuthnResult.Rejected && credentials.token != null) token.authenticate(credentials) else it }
+         }
+         return token.authenticate(credentials)
+     }

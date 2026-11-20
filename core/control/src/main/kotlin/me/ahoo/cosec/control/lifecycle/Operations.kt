@@ -55,6 +55,7 @@ internal object Operations {
         private val roles = LinkedHashMap<String, RoleDefinition>()
         private var catalog = base?.catalog
         private var limits = base?.limits
+        private var budgets = base?.budgets
         private var attributes = base?.attributes
         private var boundary = base?.boundary
         val findings = ArrayList<Finding>()
@@ -111,6 +112,7 @@ internal object Operations {
                     "only the platform document has limits"
                 ) {
                     limits = operation.limits
+                    budgets = operation.budgets
                 }
 
                 is Operation.SetAttributes ->
@@ -185,6 +187,7 @@ internal object Operations {
             boundary = boundary,
             rateLimits = rateLimits.values.toList(),
             roles = roles.values.toList(),
+            budgets = budgets,
         )
     }
 
@@ -281,8 +284,9 @@ internal object Operations {
         if (kind != DocumentKind.PLATFORM) {
             return operations
         }
-        if ((all || desired.limits != null) && !sameLimits(base, desired)) {
-            operations += Operation.SetLimits(desired.limits)
+        val writesLimits = desired.limits != null || desired.budgets != null
+        if ((all || writesLimits) && !sameLimits(base, desired)) {
+            operations += Operation.SetLimits(desired.limits, desired.budgets)
         }
         if ((all || desired.attributes != null) && !sameAttributes(base, desired)) {
             operations += Operation.SetAttributes(desired.attributes)
@@ -297,12 +301,8 @@ internal object Operations {
     private fun sameAttributes(base: PolicyDocument?, desired: PolicyDocument): Boolean =
         base?.attributes?.map { it.path to it.type } == desired.attributes?.map { it.path to it.type }
 
-    private fun sameLimits(base: PolicyDocument?, desired: PolicyDocument): Boolean {
-        val a = base?.limits
-        val b = desired.limits
-        if (a == null || b == null) return a == null && b == null
-        return limitsOf(a) == limitsOf(b)
-    }
+    private fun sameLimits(base: PolicyDocument?, desired: PolicyDocument): Boolean =
+        base?.limits?.let(::limitsOf) == desired.limits?.let(::limitsOf) && base?.budgets == desired.budgets
 
     private fun limitsOf(limits: ConditionLimits): List<Int> = with(limits) {
         listOf(maxNodes, maxDepth, maxInValues, maxCidrBlocks, maxLiteralBytes, maxCost)

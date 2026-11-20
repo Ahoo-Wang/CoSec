@@ -1,0 +1,71 @@
+{
+  "rules": [
+    "DOC-14"
+  ],
+  "polarity": "negative",
+  "level": "engine",
+  "description": "The near miss: an ALLOW keeps the option, since one that matches less fails closed, and a DENY without it matches the decoded path, so it stops /%61dmin/users as /admin/users.",
+  "documents": {
+    "platform": {
+      "policies": [
+        {
+          "id": "raw",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "http:*",
+              "resource": {
+                "pattern": "http:path:/admin/**",
+                "decodeAndParseSegments": false
+              }
+            }
+          ]
+        },
+        {
+          "id": "no-admin",
+          "statements": [
+            {
+              "effect": "deny",
+              "action": "http:*",
+              "resource": "http:path:/admin/**"
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "raw",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "raw"
+        },
+        {
+          "id": "no-admin",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "no-admin"
+        }
+      ]
+    }
+  },
+  "request": {
+    "action": "http:GET",
+    "resource": {
+      "type": "http",
+      "id": "/%61dmin/users"
+    }
+  },
+  "expect": {
+    "decision": "Deny",
+    "by": {
+      "policy": "no-admin",
+      "statement": 0,
+      "via": {
+        "binding": "no-admin",
+        "document": "platform"
+      }
+    }
+  }
+}

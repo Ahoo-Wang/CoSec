@@ -44,6 +44,8 @@ import java.time.Instant
  *                 { "id": "r", "subject": { "role": "editor" }, "app": "order", "space": "*", "policy": "perm:order/read" } ] }
  * ```
  */
+// stays: one parameter for each field of the record, in its constructor and its copy
+@Suppress("LongParameterList")
 class PolicyDocument @InternalCoSecApi constructor(
     val kind: DocumentKind,
     /** The app id of an app document, the tenant id of a tenant document; empty for the platform. */
@@ -82,13 +84,18 @@ class PolicyDocument @InternalCoSecApi constructor(
      * short form: nothing reads them as grants except through [RoleExpansion.effective].
      */
     @InternalCoSecApi val roles: List<RoleDefinition> = emptyList(),
+    /**
+     * The platform's entry budgets (`CTL-40`, `CTL-41`), written in its `limits` beside the condition limits: what the
+     * control plane holds every change to. Null: [DocumentBudgets.DEFAULT]. Platform only.
+     */
+    @InternalCoSecApi val budgets: DocumentBudgets? = null,
 ) {
     init {
         require(revision > 0) { "Revision must be positive, was $revision." }
         require((kind == DocumentKind.PLATFORM) == owner.isEmpty()) { "Only the platform document has no owner." }
         require(catalog == null || kind == DocumentKind.APP) { "Only an app document has a catalog." }
         require(boundary == null || kind != DocumentKind.APP) { "An app document names no boundary." }
-        require((limits == null && attributes == null) || kind == DocumentKind.PLATFORM) {
+        require((limits == null && attributes == null && budgets == null) || kind == DocumentKind.PLATFORM) {
             "Only the platform document has limits and attributes."
         }
         require(attributes == null || attributes.all { it.external }) { "Declared attributes are external." }
@@ -104,8 +111,6 @@ class PolicyDocument @InternalCoSecApi constructor(
      * a caller does not name is kept, so a copy that drops one says so. A member added to the constructor is added here,
      * in the same file (`PolicyDocumentAtTest` fails otherwise).
      */
-    // stays: one parameter for each field of the record, as its constructor has
-    @Suppress("LongParameterList")
     @InternalCoSecApi
     fun copy(
         kind: DocumentKind = this.kind,
@@ -121,6 +126,7 @@ class PolicyDocument @InternalCoSecApi constructor(
         attributes: List<Attribute>? = this.attributes,
         rateLimits: List<RateLimitSource> = this.rateLimits,
         roles: List<RoleDefinition> = this.roles,
+        budgets: DocumentBudgets? = this.budgets,
     ): PolicyDocument = PolicyDocument(
         kind = kind,
         owner = owner,
@@ -135,6 +141,7 @@ class PolicyDocument @InternalCoSecApi constructor(
         attributes = attributes,
         rateLimits = rateLimits,
         roles = roles,
+        budgets = budgets,
     )
 }
 

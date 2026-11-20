@@ -3,15 +3,15 @@
 # Tests: :document:test --tests me.ahoo.cosec.document.PolicyDocumentAtTest
 
 diff --git a/core/document/src/main/kotlin/me/ahoo/cosec/document/PolicyDocument.kt b/core/document/src/main/kotlin/me/ahoo/cosec/document/PolicyDocument.kt
-index dd4cb8b4..f47a3014 100644
+index be8e26e3b..a4f19414d 100644
 --- a/core/document/src/main/kotlin/me/ahoo/cosec/document/PolicyDocument.kt
 +++ b/core/document/src/main/kotlin/me/ahoo/cosec/document/PolicyDocument.kt
-@@ -133,7 +133,7 @@ class PolicyDocument @InternalCoSecApi constructor(
+@@ -139,7 +139,7 @@ class PolicyDocument @InternalCoSecApi constructor(
          provenance = provenance,
          limits = limits,
          attributes = attributes,
 -        rateLimits = rateLimits,
 +        rateLimits = emptyList(),
          roles = roles,
+         budgets = budgets,
      )
- }

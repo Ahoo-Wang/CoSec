@@ -65,7 +65,7 @@ internal object PolicyDocumentFormats {
                     listOf(
                         Field(
                             "default",
-                            StringType(minLength = 1, examples = listOf("boundary-standard")),
+                            FormatPatterns.id(listOf("boundary-standard"), minLength = 1),
                             description = "The boundary policy that holds every tenant that names none (RFC 0007 §7.6).",
                         ),
                     ),
@@ -81,7 +81,7 @@ internal object PolicyDocumentFormats {
         "tenantDocument" to ObjectType(
             documentHeader + Field(
                 "boundary",
-                StringType(minLength = 1, examples = listOf("boundary-restricted")),
+                FormatPatterns.id(listOf("boundary-restricted"), minLength = 1),
                 description = "The platform boundary policy that holds this tenant instead of the default; only the platform writes it.",
             ) + documentSections + Field("roles", ArrayType(ref(SNAPSHOT_DOCUMENT, "tenantRole"))),
             description = "A tenant document (RFC 0004 §7.1): the tenant's own policies, bindings and custom roles.",

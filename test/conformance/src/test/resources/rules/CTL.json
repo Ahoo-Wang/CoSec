@@ -202,6 +202,7 @@
       "pending": null,
       "guards": [
         "control:ControlReviewFixesTest#a change another tenant may not read is the same 404 at every step, before its state",
+        "control:ControlReviewFixesTest#a change of its own tenant a caller may not read is the same 404 at every step, before its state",
         "control:ControlHttpTest#a body kind is refused, and another tenant's change answers like a missing one"
       ]
     },
@@ -513,6 +514,35 @@
         "control:DiffMembersTest#every member of a document is a header, an entry list or a section of the diff",
         "control:DiffMembersTest#the diff places no member a document does not have",
         "control:DiffAndAccessReviewTest#the sections that differ are each named, in the format's order"
+      ],
+      "pending": null
+    },
+    {
+      "id": "CTL-40",
+      "source": "Review round 1 of beta.4 (R1B-4); RFC 0007 §6.2 V2",
+      "statement": "The platform's limits set entry budgets: the policies, statements, bindings to roles and bindings to Anyone one document holds (by default 10,000, 20,000, 10,000 and 1,000). The control plane holds every candidate it checks to them, on propose, apply, rollback, rebase and publish: for every budget, the new count is at most the larger of the limit and the old count (that of the head the candidate replaces), with a warning finding naming each count still over; anything that raises an over-budget count is refused, with a 4xx finding naming the budget, the count and the limit, never a 500. Neither the compiler nor a host enforces a budget: a stored document over one keeps being served. cosec-migrate reports a converted document over a default budget as a warning naming the budget, the count and the limit, and writes it.",
+      "level": "control",
+      "guards": [
+        "control:EntryBudgetsTest#a change may not raise a count over its budget, and may keep or shrink one already over",
+        "control:EntryBudgetsTest#a new document is held to the limit itself",
+        "control:EntryBudgetsTest#a rollback is held to the rule against the current head",
+        "control:EntryBudgetsTest#a budget lowered after a change was checked keeps it from publishing",
+        "control:SectionFieldsHttpTest#setLimits reads the entry budgets as the document reads them",
+        "document:PolicyDocumentCodecTest#the platform's entry budgets read and write back the same, beside the condition limits or alone",
+        "migrate:ConvertedBudgetsTest#a document over a default budget is a warning naming it, one within every budget is none",
+        "migrate:ConvertedBudgetsTest#publish and restore write a document over a budget as it is"
+      ],
+      "pending": null
+    },
+    {
+      "id": "CTL-41",
+      "source": "Review round 1 of beta.4 (R1B-4)",
+      "statement": "A change a client proposes carries at most the platform's limits.maxChangeOperations operations (20,000 by default): a larger one is refused 400, naming the count and the limit, before any operation is authorized or applied. An apply and a rollback are not held to it: their operations are derived from a document, which the entry budgets bound (CTL-40). The control routes read at most cosec.control.http.max-body-size of a request's body (10 MB by default) on WebMvc and WebFlux alike, and answer a larger one 400 without asking the control plane.",
+      "level": "control",
+      "guards": [
+        "control:EntryBudgetsTest#a client's change carries at most maxChangeOperations operations, an apply is not held to it",
+        "spring-boot:ControlBodyLimitTest#a body within the limit reaches the control plane on both stacks, a larger one is a 400 that never does",
+        "spring-boot:ControlBodyLimitTest#the limit is 10 MB by default"
       ],
       "pending": null
     }

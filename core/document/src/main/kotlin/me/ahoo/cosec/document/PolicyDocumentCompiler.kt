@@ -51,6 +51,7 @@ import me.ahoo.cosec.spi.snapshot.SnapshotKey
  *   tokens or a membership provider, not in a snapshot.
  * - Roles and short-form permissions (RFC 0012): what compiles is [RoleExpansion.effective] of the document, which
  *   derives at most [roleGrantLimit] bindings; [RoleExpansion.check] says what is wrong with what it was derived from.
+ * - No id the document writes holds a control character or an unpaired surrogate ([DocumentIds], `DOC-13`).
  * - What [CompiledDocument] checks: unique ids, which subjects each document binds, reachable binding shapes, the
  *   break-glass rules and the built-in policies (`BND-3`, `BND-8`, `BRK-2`, `BRK-4`).
  * - Platform boundaries (RFC 0007 §7.6, Q11): boundary policies only in the platform document, only ALLOW statements, at
@@ -119,6 +120,7 @@ class PolicyDocumentCompiler @InternalCoSecApi constructor(
         val expansion = RoleExpansion.expand(document, roleGrantLimit)
         val effective = expansion.document
         val errors = ArrayList(RoleExpansion.check(document))
+        DocumentIds.check(document, errors)
         val compiled = effective.policies.mapIndexedNotNull { i, policy ->
             policy(
                 effective,
