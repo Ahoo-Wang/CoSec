@@ -14,7 +14,9 @@
 
 # Resolves a checkout's dependencies, retried, before the job builds or tests anything.
 #
-# Usage: resolve-dependencies.sh [project-dir [gradle arguments...]]     (default: the current directory)
+# Usage: [RESOLVE_TASKS="<tasks>"] resolve-dependencies.sh [project-dir [gradle arguments...]]     (default: the current directory)
+#   RESOLVE_TASKS names what to resolve: `resolveDependencies` (every project) unless a job needs only some, such as
+#   `:runtime:resolveDependencies :control:resolveDependencies`.
 #   The arguments are those the job's own build passes to Gradle that decide what it configures (a -P property, say).
 #
 # CI downloads fail now and then for a reason that is not the build's: the plugin portal or Maven Central answers 429 or a 404
@@ -26,6 +28,15 @@
 #
 # A "configuration cache state could not be cached" error in a build can be a failed download underneath: read the cause
 # below it (`Could not find` or `Could not GET`, with the repository), and look at this step's earlier attempts.
+#
+# A restored cache can also be wrong in a way no repository can answer. `Could not find <file>.jar (<group>:<name>:<version>)`
+# raised from the cache lookup is Gradle reading the cache's index, not a repository's answer: the index names the module,
+# and says the file is not there. Asking again, even with --refresh-dependencies, reads the same index, so this mode removes
+# `caches/modules-2` at once, without the pause and without the attempt that cannot help. It happened on 2026-11-20: #1730 put
+# Maven Central ahead of the plugin portal, which changes the repository the plugins' jars are read under, and the required
+# check's `Test host` job, whose restored cache held the old answers, failed on every run from then on until its cache was
+# removed. A change of which repository an artifact is read from comes with the removal of the caches that remember the old
+# answer, or with this step (.github/scripts/README.md).
 #
 # Attempt 1 is a plain resolution. Later attempts wait first, 30, 60, 120, 180 and 240 s (630 s, so about 10 minutes of
 # waiting and, with the attempts themselves, 15 at the worst): a repository that throttles a runner keeps doing so for
@@ -43,6 +54,13 @@
 set -uo pipefail
 
 ATTEMPTS=${RESOLVE_ATTEMPTS:-6}
+read -r -a TASKS <<< "${RESOLVE_TASKS:-resolveDependencies}"
+# The cache's own answer, not a repository's: the file is "not found" though the index knows the module.
+STALE_INDEX='Could not find [^ ()]+\.(jar|aar|klib|zip) \('
+modules="${GRADLE_USER_HOME:-$HOME/.gradle}/caches/modules-2"
+removed=0
+log=$(mktemp)
+trap 'rm -f "$log"' EXIT
 read -r -a PAUSES <<< "${RESOLVE_PAUSES:-30 60 120 180 240}"
 INIT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../gradle" && pwd)/resolve-dependencies.init.gradle.kts"
 cd "${1:-.}" || exit 2
@@ -51,22 +69,26 @@ shift || true
 for attempt in $(seq 1 "$ATTEMPTS"); do
   refresh=()
   [ "$attempt" -gt 1 ] && refresh=(--refresh-dependencies)
-  if [ "$attempt" -eq 3 ]; then
-    modules="${GRADLE_USER_HOME:-$HOME/.gradle}/caches/modules-2"
+  if [ "$attempt" -ge 3 ] && [ "$removed" -eq 0 ]; then
     echo "Removing $modules: the retry resolves from the repositories alone."
     rm -rf "$modules"
+    removed=1
   fi
   echo "::group::Resolve dependencies in $PWD, attempt $attempt of $ATTEMPTS"
   ./gradlew ${refresh[@]+"${refresh[@]}"} \
     -Dorg.gradle.internal.repository.max.tentatives=5 -Dorg.gradle.internal.repository.initial.backoff=1000 \
-    -I "$INIT" resolveDependencies "$@" --no-daemon --no-configuration-cache --max-workers=2 --console=plain
-  status=$?
+    -I "$INIT" "${TASKS[@]}" "$@" --no-daemon --no-configuration-cache --max-workers=2 --console=plain 2>&1 | tee "$log"
+  status=${PIPESTATUS[0]}
   echo "::endgroup::"
   if [ "$status" -eq 0 ]; then
     [ "$attempt" -gt 1 ] && echo "::warning::Dependencies resolved on attempt $attempt of $ATTEMPTS: a download failed before. Look for 'Could not GET', 'Could not find' or 'status code' in the earlier attempts of this step."
     exit 0
   fi
-  if [ "$attempt" -lt "$ATTEMPTS" ]; then
+  if [ "$attempt" -lt "$ATTEMPTS" ] && [ "$removed" -eq 0 ] && grep -Eq "$STALE_INDEX" "$log"; then
+    echo "::warning::A restored Gradle cache names a file it does not hold (attempt $attempt of $ATTEMPTS): removing $modules and asking again at once."
+    rm -rf "$modules"
+    removed=1
+  elif [ "$attempt" -lt "$ATTEMPTS" ]; then
     pause=${PAUSES[$((attempt - 1))]:-${PAUSES[${#PAUSES[@]} - 1]}}
     echo "::warning::Resolving dependencies failed (attempt $attempt of $ATTEMPTS, exit $status); asking again in $pause s."
     sleep "$pause"
