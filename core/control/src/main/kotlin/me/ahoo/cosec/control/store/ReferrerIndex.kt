@@ -143,10 +143,10 @@ internal class ReferrerIndex(
 
     /**
      * Adds whatever the head of [key] refers to and its own forward record does not hold (`repair-references`, RFC 0007
-     * §5.8), adding the members first and recording them after; the number of references it added. It reads [key]'s head and index, never a
-     * back-reference set (R2C-8): a document whose record holds its references costs those two reads, and one with no
-     * record, such as one converted from the format before 8.0.0-beta.5, adds each of its own references once, an
-     * idempotent member write, so a run costs what the documents hold, not what refers to them. It rests on one
+     * §5.8), adding the members first and recording them after; the number of references it added. It reads [key]'s
+     * head and index, never a back-reference set (R2C-8): a document whose record holds its references costs those two
+     * reads, and one with no record, such as one converted from the format before 8.0.0-beta.5, adds each of its own
+     * references once, an idempotent member write, so a run costs what the documents hold, not what refers to them. It rests on one
      * invariant: a recorded reference is in its set, or not in the head. A publish keeps it (record, add, then the head
      * only after every add), [dropGone] keeps it (the head no longer has what it drops), and so does this repair, which
      * records only what it has added ([addAndRecord]). A missing entry would let
