@@ -3,12 +3,12 @@
 # Tests: :control:test --tests me.ahoo.cosec.control.store.RevisionsTest :conformance:test --tests me.ahoo.cosec.conformance.ConformanceTest
 
 diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/store/Revisions.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/store/Revisions.kt
-index 31727d21..a85f4cbf 100644
+index da55c45c8..ac707c728 100644
 --- a/core/control/src/main/kotlin/me/ahoo/cosec/control/store/Revisions.kt
 +++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/store/Revisions.kt
-@@ -114,11 +114,6 @@ class Revisions(
-         check(store.putRecord(key, stored) == digest) { "The store addressed the record of [$key] by another digest." }
-         val before = base?.let { referrerIndex.references(it.document) }.orEmpty()
+@@ -115,11 +115,6 @@ class Revisions(
+         // As older versions indexed the base too: what it had under the platform for app permissions is dropped below.
+         val before = base?.let { referrerIndex.indexedByOlderVersions(it.document) }.orEmpty()
          val after = referrerIndex.references(document)
 -        for ((target, policy) in after - before) {
 -            check(writes.updateReferrers(target, policy) { referrerIndex.indexed(it, key, revision) }) {
