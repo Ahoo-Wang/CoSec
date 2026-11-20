@@ -18,6 +18,7 @@ package me.ahoo.cosec.cocache
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.document.json.CoSecJson
 import me.ahoo.cosec.spi.apikey.ApiKey
+import me.ahoo.cosec.spi.snapshot.SnapshotFormatException
 import tools.jackson.databind.JsonNode
 import tools.jackson.databind.node.ObjectNode
 import java.time.Instant
@@ -56,7 +57,22 @@ object ApiKeyCodec {
         return CoSecJson.mapper.writeValueAsString(node)
     }
 
-    fun decode(json: String): ApiKey {
+    /**
+     * The API key [json] holds; strict, as an input of authentication: a key of another format or with a member this
+     * version does not know is refused. What is wrong with it is a [SnapshotFormatException] (CTL-52), never an
+     * argument error a store would read as an outage.
+     */
+    fun decode(json: String): ApiKey = try {
+        strict(json)
+    } catch (error: IllegalArgumentException) {
+        throw SnapshotFormatException("A stored API key is malformed: ${error.message}", error)
+    } catch (error: java.time.format.DateTimeParseException) {
+        throw SnapshotFormatException("A stored API key is malformed: ${error.message}", error)
+    } catch (_: tools.jackson.core.JacksonException) {
+        throw SnapshotFormatException("A stored API key is not JSON.")
+    }
+
+    private fun strict(json: String): ApiKey {
         val node = CoSecJson.mapper.readTree(json)
         require(node is ObjectNode) { "Not a stored API key: an object is expected." }
         val format = node.get(FORMAT_FIELD)

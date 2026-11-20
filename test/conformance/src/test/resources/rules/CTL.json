@@ -681,6 +681,20 @@
       "pending": null
     },
     {
+      "id": "CTL-53",
+      "source": "Review round 2, R2C-10 (saas-open-changes-design.md §4); RFC 0007 §5.2",
+      "statement": "Every record the control plane and its hosts store carries a format and is read by one rule: a record without one is format 1; of a known format, members this version does not know are ignored; a later format is refused, as a format error, never read as absent. Policy documents, API keys and back-reference members are decision inputs and stay strict. A wrong value of any stored record is a format error, never an argument or JSON error a store would read as an outage.",
+      "level": "build",
+      "guards": [
+        "cocache:StoredRecordsTest#every stored codec is listed",
+        "cocache:StoredRecordsTest#a wrong value of every stored record is a format error",
+        "cocache:StoredRecordsTest#every record with a format ignores what it does not know, reads one without a format, and refuses a later one",
+        "control:ChangeRequestCodecMessageTest#unknown members are ignored, and never quoted, by the reader's rule - CTL-53",
+        "document:ShadowCodecMessageTest#unknown members are ignored, and never quoted, by the reader's rule - CTL-53"
+      ],
+      "pending": null
+    },
+    {
       "id": "CTL-54",
       "source": "Review round 2, R2C-2 (saas-open-changes-design.md §1); RFC 0007 §5.2, §5.7",
       "statement": "The open-change sets are a superset of the open changes: a change is added to its document's set and its state's before each write of it and removed after from what no longer applies; they are trusted only once kept and while no open-change list of the format before 8.0.0-beta.5 exists, so until then no revision is reclaimed and the listing is refused.",
@@ -702,7 +716,8 @@
       "guards": [
         "control:OpenChangeListingTest#another tenant's changes are left out, and the page says nothing of them - CTL-55",
         "control:OpenChangeListingTest#a listing by document or by state shows the caller's tenant only, a summary of each change",
-        "control:OpenChangeListingTest#a page is cut after what the caller may see, and the next one goes on from it"
+        "control:OpenChangeListingTest#a page is cut after what the caller may see, and the next one goes on from it",
+        "control:OpenChangeListingTest#a cursor names only a change the caller sees, and only when one follows it - CTL-55"
       ],
       "pending": null
     }

@@ -18,7 +18,6 @@ import me.ahoo.cosec.control.change.ChangeJson.actorTree
 import me.ahoo.cosec.control.change.ChangeJson.factory
 import me.ahoo.cosec.control.change.ChangeJson.format
 import me.ahoo.cosec.control.change.ChangeJson.need
-import me.ahoo.cosec.control.change.ChangeJson.only
 import me.ahoo.cosec.control.change.ChangeJson.shown
 import me.ahoo.cosec.control.change.ChangeJson.text
 import me.ahoo.cosec.model.Memberships
@@ -98,7 +97,6 @@ internal object ApprovalCodec {
     }
 
     private fun memberships(node: JsonNode): Memberships {
-        node.only("roles", "attachments", "source")
         val roles = LinkedHashMap<SpaceId, Set<RoleId>>()
         node.need("roles").properties().forEach { (space, spaceRoles) ->
             roles[SpaceId(space)] = spaceRoles.values().mapTo(LinkedHashSet()) { RoleId(it.text()) }
@@ -111,18 +109,6 @@ internal object ApprovalCodec {
     }
 
     internal fun decode(node: JsonNode): Approval {
-        node.only(
-            "approver",
-            "at",
-            "candidate",
-            "covers",
-            "memberships",
-            "attributes",
-            "principalBindings",
-            "breakGlass",
-            "credentialId",
-            "issuedAt",
-        )
         return Approval(
             actor(node.need("approver")),
             Instant.parse(node.need("at").text()),

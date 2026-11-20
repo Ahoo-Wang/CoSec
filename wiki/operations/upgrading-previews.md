@@ -27,6 +27,19 @@ Which preview of the library may run behind which preview of the gateway image: 
 
 ## From 8.0.0-beta.4 {#from-8-0-0-beta-4}
 
+- **Every stored record carries its format, and a reader ignores what it does not know of a known format**
+  (review round 2, `R2C-10`, `R2C-28`, `CTL-53`, `IDN-31`). Affected: every deployment, once.
+  - **Stop the control plane, upgrade it, start it.** The previews before this one refuse the `format` member the new
+    records carry, so instances of both cannot run side by side. From this release on, readers are tolerant, and a
+    later release upgrades in place.
+  - **Roll the login hosts together.** A login host that still runs the older preview cannot read a session a newer
+    one wrote: a user whose refresh lands there signs in again.
+  - **Data-plane instances** that still run the older preview skip a staged candidate the new control plane wrote, and
+    report nothing for its window until they are upgraded. The window waits; it does not pass.
+  - **Nothing to convert:** a record written before formats reads as format 1. The window reporters and the instance
+    index are now objects (`{"format":1,"reporters":[...]}`), and their earlier forms still read.
+  - A value of a stored record that does not decode is now always a format error. Before, some were an
+    `IllegalArgumentException`, which the control API answered `400`.
 - **The control API answers `503` whenever the control store cannot answer** (review round 2, `R2C-6`, `CTL-52`).
   Affected: clients and alerts of the control API, and a `ControlStore` of your own.
   - A Redis outage or timeout during a publish, a document read or a revision read used to answer `500`
