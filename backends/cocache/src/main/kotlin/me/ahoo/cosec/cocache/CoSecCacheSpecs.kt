@@ -146,9 +146,20 @@ object CoSecCacheSpecs {
     val SET_OF_RECORD_CACHE_NAMES: Set<String> = setOf(REFERENCE_INDEX_CACHE_NAME, CONTROL_DOCUMENT_SET_CACHE_NAME)
 
     /**
-     * How long a set of record is kept locally: shorter than CoCache's millisecond clock can tell, so a local copy is
-     * stale the moment it is written and every read asks Redis (`CTL-42`). CoCache 8.1 offers a `SetStore` no read that
-     * skips the local layer and refuses a local max age of zero; locked, so no property or customizer lengthens it.
+     * How long a set of record is kept locally (`local-max-age` and `degraded-local-max-age`, both locked to it): a
+     * stand-in for a read that skips the local copy, which CoCache 8.1 does not offer a `SetStore`. It refuses a local
+     * max age of zero, so CoSec pins the shortest positive one (`CTL-42`). What CoCache does with it, in 8.1.0:
+     *
+     * - a local copy expires at `min(ttl expiry, now + localMaxAge.toMillis())` (`AbstractEngine.localEntry`,
+     *   `AbstractEngine.kt` lines 409-412): 1 ns is 0 ms, so a copy filled at `now` expires at that same `now`;
+     * - a read serves a local copy only while `expiresAt > clock.nowMillis()`, strictly (`SetEngine.freshLocal`,
+     *   `SetEngine.kt` line 203), and asks Redis otherwise;
+     * - the runtime's clock is a `TickingClock` derived from `System.nanoTime()`, which never goes back
+     *   (`TickingClock.refresh`, `TickingClock.kt` line 64).
+     *
+     * So a copy is never served, not even within the millisecond it was filled in: every read of a set asks Redis.
+     * `SetOfRecordReadTest` pins it, thousands of times in a tight loop, against a member written without an
+     * invalidation. A remote-only read of a `SetStore` in CoCache would replace this.
      */
     val SET_LOCAL_MAX_AGE: Duration = Duration.ofNanos(1)
 
@@ -335,7 +346,10 @@ object CoSecCacheSpecs {
             .namespace(layout.namespace)
             .keyEncoder(keyEncoder)
             .elementCodec(codec)
-            .policy { localMaxAge = SET_LOCAL_MAX_AGE }
+            .policy {
+                localMaxAge = SET_LOCAL_MAX_AGE
+                degradedLocalMaxAge = SET_LOCAL_MAX_AGE
+            }
             .build()
     }
 
