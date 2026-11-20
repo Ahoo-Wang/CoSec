@@ -22,6 +22,7 @@ import me.ahoo.cosec.model.Memberships
 import me.ahoo.cosec.model.PolicyId
 import me.ahoo.cosec.model.RoleId
 import me.ahoo.cosec.model.SpaceId
+import me.ahoo.cosec.spi.snapshot.SnapshotFormatException
 import tools.jackson.databind.JsonNode
 import java.util.Collections
 
@@ -52,7 +53,16 @@ internal object MembershipsCodec : Codec<Memberships> {
         return CoSecJson.mapper.writeValueAsBytes(node)
     }
 
-    override fun decode(data: ByteArray): Memberships {
+    /** Strict: a cache entry; what is wrong with it is a [SnapshotFormatException], as for every stored value (CTL-52). */
+    override fun decode(data: ByteArray): Memberships = try {
+        strict(data)
+    } catch (error: IllegalArgumentException) {
+        throw SnapshotFormatException("Cached memberships are malformed: ${error.message}", error)
+    } catch (_: tools.jackson.core.JacksonException) {
+        throw SnapshotFormatException("Cached memberships are not JSON.")
+    }
+
+    private fun strict(data: ByteArray): Memberships {
         val node = CoSecJson.mapper.readTree(data)
         val fields = if (node.isObject) node.propertyNames().toSet() else emptySet()
         require(fields == setOf(ROLES, ATTACHMENTS) || fields == setOf(ROLES, ATTACHMENTS, ACTIVE)) {

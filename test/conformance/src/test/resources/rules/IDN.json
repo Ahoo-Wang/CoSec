@@ -397,6 +397,19 @@
         "runtime:TokenAuthenticatorTest#aTokenWithAReservedAttributeIsInvalid",
         "jwt:JwtTokenConverterTest#aReservedAttributeIsNotIssued"
       ]
+    },
+    {
+      "id": "IDN-31",
+      "source": "Review round 2, R2C-28 (saas-open-changes-design.md §4); RFC 0009",
+      "statement": "A session record (a token family) carries its format and is read by the reader's rule: a member a later version adds is ignored, a record written before formats is format 1, and a later format is refused, which ends that session, never reads as another one.",
+      "level": "build",
+      "guards": [
+        "cocache:TokenFamilyFormatTest#a session is written with its format",
+        "cocache:TokenFamilyFormatTest#a session written before formats is format 1",
+        "cocache:TokenFamilyFormatTest#a member a later version adds is ignored, and a missing rotation is the first generation",
+        "cocache:TokenFamilyFormatTest#a later format, or a session that lacks what it needs, is refused as a format error"
+      ],
+      "pending": null
     }
   ]
 }

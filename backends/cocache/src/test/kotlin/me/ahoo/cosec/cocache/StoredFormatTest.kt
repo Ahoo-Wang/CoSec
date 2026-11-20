@@ -52,6 +52,7 @@ import me.ahoo.cosec.spi.shadow.ShadowReport
 import me.ahoo.cosec.spi.shadow.ShadowSample
 import me.ahoo.cosec.spi.shadow.StoredCandidate
 import me.ahoo.cosec.spi.snapshot.SnapshotDigest
+import me.ahoo.cosec.spi.snapshot.SnapshotFormatException
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
@@ -86,6 +87,11 @@ class StoredFormatTest {
         val bytes = encode(value)
         bytes.decodeToString().assert().describedAs(name).isEqualTo(expected)
         encode(decode(expected.encodeToByteArray())).decodeToString().assert().describedAs(name).isEqualTo(expected)
+        // CTL-53: a record of this format, written before formats, is format 1, read as the same value.
+        javaClass.getResource("/stored-format/$name-before-format.json")?.readText()?.let { before ->
+            encode(decode(before.encodeToByteArray())).decodeToString().assert().describedAs("$name before formats")
+                .isEqualTo(expected)
+        }
     }
 
     /** RFC 0009 §4.1: written by this format's [ApiKeyCodec], not by `main` before it. */
@@ -125,26 +131,28 @@ class StoredFormatTest {
      */
     @Test
     fun `api keys before 8 are refused`() {
-        val refused = assertThrows<IllegalArgumentException> { ApiKeyCodec.decode(fixture("apiKey-before-8")) }
-        refused.message.assert().isEqualTo("API key format [null] is not ${ApiKeyCodec.FORMAT}.")
+        val refused = assertThrows<SnapshotFormatException> { ApiKeyCodec.decode(fixture("apiKey-before-8")) }
+        refused.message.assert().isEqualTo(
+            "A stored API key is malformed: API key format [null] is not ${ApiKeyCodec.FORMAT}."
+        )
     }
 
     @Test
     fun `a stored api key has exactly its fields`() {
         val written = ApiKeyCodec.encode(ApiKey("k1", "alice", "acme", null, null))
-        assertThrows<IllegalArgumentException> { ApiKeyCodec.decode(written.replace("\"format\":3", "\"format\":2")) }
-        assertThrows<IllegalArgumentException> { ApiKeyCodec.decode(written.replace("\"roles\":null,", "")) }
+        assertThrows<SnapshotFormatException> { ApiKeyCodec.decode(written.replace("\"format\":3", "\"format\":2")) }
+        assertThrows<SnapshotFormatException> { ApiKeyCodec.decode(written.replace("\"roles\":null,", "")) }
         // RFC 0012 §3.5: a record without `app` is another format, never read as a key declaring none.
-        assertThrows<IllegalArgumentException> { ApiKeyCodec.decode(written.replace("\"app\":null,", "")) }
-        assertThrows<IllegalArgumentException> {
+        assertThrows<SnapshotFormatException> { ApiKeyCodec.decode(written.replace("\"app\":null,", "")) }
+        assertThrows<SnapshotFormatException> {
             ApiKeyCodec.decode(
                 written.replace("\"app\":null,", "\"app\":\"*\",")
             )
         }
-        assertThrows<IllegalArgumentException> {
+        assertThrows<SnapshotFormatException> {
             ApiKeyCodec.decode(written.replace("\"enabled\":true", "\"enabled\":true,\"policies\":[\"p1\"]"))
         }
-        assertThrows<IllegalArgumentException> { ApiKeyCodec.decode(written.replace("\"acme\"", "\"\"")) }
+        assertThrows<SnapshotFormatException> { ApiKeyCodec.decode(written.replace("\"acme\"", "\"\"")) }
     }
 
     @Test
@@ -176,7 +184,7 @@ class StoredFormatTest {
             fixture("memberships-inactive")
         )
         MembershipsCodec.decode(fixture("memberships-inactive").encodeToByteArray()).active.assert().isFalse()
-        assertThrows<IllegalArgumentException> {
+        assertThrows<SnapshotFormatException> {
             MembershipsCodec.decode("""{"roles":{},"attachments":[],"active":true}""".encodeToByteArray())
         }
     }
@@ -189,13 +197,13 @@ class StoredFormatTest {
     fun `a duplicate key fails every stored format`() {
         val key = fixture("apiKey").trimEnd()
         ApiKeyCodec.decode(key).roles.assert().isNotNull()
-        assertThrows<JacksonException> { ApiKeyCodec.decode(key.removeSuffix("}") + ""","roles":null}""") }
+        assertThrows<SnapshotFormatException> { ApiKeyCodec.decode(key.removeSuffix("}") + ""","roles":null}""") }
         val memberships = fixture("memberships").trimEnd()
-        assertThrows<JacksonException> {
+        assertThrows<SnapshotFormatException> {
             MembershipsCodec.decode((memberships.removeSuffix("}") + ""","attachments":[]}""").encodeToByteArray())
         }
         assertThrows<JacksonException> { CoSecJson.mapper.readTree("""{"a":1,"a":2}""") }
-        assertThrows<JacksonException> { ReportersCodec.decode("""[{"a":1,"a":2}]""".encodeToByteArray()) }
+        assertThrows<SnapshotFormatException> { ReportersCodec.decode("""[{"a":1,"a":2}]""".encodeToByteArray()) }
     }
 
     /**

@@ -29,6 +29,7 @@ import me.ahoo.cosec.control.change.ChangeJson.text
 import me.ahoo.cosec.document.PolicyDocumentCodec
 import me.ahoo.cosec.document.ProvenanceKind
 import me.ahoo.cosec.document.json.CoSecJson
+import me.ahoo.cosec.document.json.StoredFormat
 import me.ahoo.cosec.model.PolicyId
 import me.ahoo.cosec.spi.snapshot.SnapshotDigest
 import me.ahoo.cosec.spi.snapshot.SnapshotFormatException
@@ -60,6 +61,7 @@ object ChangeRequestCodec {
      */
     internal fun encodeShown(change: ChangeRequest): ByteArray {
         val root = tree(change)
+        root.remove(StoredFormat.FIELD)
         (root.get("approval") as? ObjectNode)?.retain(SHOWN_APPROVAL_FIELDS)
         return CoSecJson.mapper.writeValueAsBytes(root)
     }
@@ -67,7 +69,7 @@ object ChangeRequestCodec {
     fun decode(bytes: ByteArray): ChangeRequest = guarded { change(read(bytes)) }
 
     fun encode(slot: StageSlot): ByteArray = CoSecJson.mapper.writeValueAsBytes(
-        factory.objectNode().apply {
+        StoredFormat.write(factory.objectNode()).apply {
             slot.holder?.let { put("holder", it.value) }
             slot.since?.let { put("since", it.toString()) }
         },
@@ -75,13 +77,13 @@ object ChangeRequestCodec {
 
     fun decodeSlot(slot: ByteArray): StageSlot = guarded {
         val node = read(slot)
-        node.only("holder", "since")
+        StoredFormat.of(node, "staging slot")
         StageSlot(node.get("holder")?.let { ChangeId(it.text()) }, node.get("since")?.let { Instant.parse(it.text()) })
     }
 
     private fun tree(change: ChangeRequest): ObjectNode {
         val (kind, owner) = ownerOf(change.key)
-        val root = factory.objectNode()
+        val root = StoredFormat.write(factory.objectNode())
         root.put("id", change.id.value)
         root.put("key", change.key.toString())
         root.putObject("base").put("revision", change.base.revision).apply {
@@ -134,7 +136,6 @@ object ChangeRequestCodec {
     }
 
     private fun confirmation(node: JsonNode): Confirmation {
-        node.only("policy", "statement", "digest", "kind")
         return Confirmation(
             PolicyId(node.need("policy").text()),
             node.need("statement").asInt(),
@@ -144,14 +145,12 @@ object ChangeRequestCodec {
     }
 
     private fun change(node: JsonNode): ChangeRequest {
-        node.only(
-            "id", "key", "base", "operations", "author", "note", "kind", "state", "findings", "candidate", "checkedWith",
-            "createdAt", "updatedAt", "skipShadow", "publishedRevision", "escalations", "approval", "shadow", "confirmations",
-            "checkedApps",
-        )
+        // The reader's rule (CTL-53): members of a known format this version does not know are ignored. The operations
+        // stay as strict as the document format they carry: an operation is understood, or the change does not read.
+        StoredFormat.of(node, "change request")
         val key = documentKey(node.need("key").text())
         val (kind, owner) = ownerOf(key)
-        val base = node.need("base").also { it.only("revision", "digest") }
+        val base = node.need("base")
         return ChangeRequest(
             id = ChangeId(node.need("id").text()),
             key = key,
@@ -162,7 +161,6 @@ object ChangeRequestCodec {
             kind = ProvenanceKind.valueOf(node.need("kind").text()),
             state = ChangeState.valueOf(node.need("state").text()),
             findings = node.need("findings").values().map {
-                it.only("check", "path", "message", "status", "severity")
                 Finding(
                     it.need("check").text(),
                     it.need("path").text(),
@@ -179,7 +177,6 @@ object ChangeRequestCodec {
             skipShadow = node.get("skipShadow")?.text(),
             publishedRevision = node.get("publishedRevision")?.asLong(),
             escalations = node.get("escalations")?.values()?.map {
-                it.only("subject", "reason", "detail")
                 Escalation(
                     it.need("subject").text(),
                     Escalation.Reason.of(it.need("reason").text()),
@@ -190,7 +187,6 @@ object ChangeRequestCodec {
             confirmations = node.get("confirmations")?.values()?.map(::confirmation).orEmpty(),
             approval = node.get("approval")?.let(ApprovalCodec::decode),
             checkedApps = node.get("checkedApps")?.let { apps ->
-                apps.only("digest")
                 CheckedApps(apps.get("digest")?.takeUnless { it.isNull }?.let { digest(it.text()) })
             },
         )

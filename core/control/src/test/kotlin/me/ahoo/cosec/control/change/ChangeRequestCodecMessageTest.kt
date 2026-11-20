@@ -56,13 +56,13 @@ class ChangeRequestCodecMessageTest {
     }
 
     @Test
-    fun `unknown members are quoted escaped, bounded and at most three`() {
-        // JSON escapes: the decoded name holds the line break and the bell.
+    fun `unknown members are ignored, and never quoted, by the reader's rule - CTL-53`() {
+        // JSON escapes: the decoded name holds the line break and the bell. A record of a known format ignores them,
+        // so what refuses this one is a member it lacks, and the forged names never reach the message.
         val long = "x\\n2026-11-19 ERROR forged\\u0007" + "y".repeat(5_000)
         val refused = refused("""{"$long":1,"a\u0001":2,"b":3,"c":4,"d":5}""")
         refused.isSafe()
-        refused.message.assert()
-            .contains("x\\u000A2026-11-19 ERROR forged\\u0007").contains(" characters)").contains("and 2 more")
+        refused.message.assert().doesNotContain("forged").contains("is missing")
     }
 
     @Test

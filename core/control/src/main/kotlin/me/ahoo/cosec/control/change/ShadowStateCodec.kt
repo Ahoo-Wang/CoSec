@@ -15,7 +15,6 @@ package me.ahoo.cosec.control.change
 
 import me.ahoo.cosec.control.change.ChangeJson.factory
 import me.ahoo.cosec.control.change.ChangeJson.need
-import me.ahoo.cosec.control.change.ChangeJson.only
 import me.ahoo.cosec.control.change.ChangeJson.text
 import tools.jackson.databind.JsonNode
 import tools.jackson.databind.node.ObjectNode
@@ -40,12 +39,10 @@ internal object ShadowStateCodec {
     }
 
     internal fun decode(node: JsonNode): ShadowState {
-        node.only("window", "startedAt", "closed", "reporters")
         return ShadowState(
             node.need("window").text(),
             Instant.parse(node.need("startedAt").text()),
             node.get("closed")?.let { closed ->
-                closed.only("counts", "closedAt", "insufficient", "blocked")
                 ShadowSummary(
                     closed.need("counts").properties().associate { (outcome, count) -> outcome to count.asLong() },
                     Instant.parse(closed.need("closedAt").text()),
