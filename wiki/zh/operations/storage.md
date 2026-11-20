@@ -232,6 +232,9 @@ sequenceDiagram
 - **本地副本**只服务冷加载。实例第一次需要某个文档时，可能采用 CoCache 的本地副本，它最多
   [`local-max-age`](./configuration.md#snapshot)（30 秒）旧；实例按这个最旧的时间计算它，并立即向 Redis 确认。本地的
   "没有这个文档"从不被信任：只有 Redis 能回答某个文档不存在。
+- **主机指定的应用从启动起就被持有**（`SNP-20`）：它的 `cosec.authorization.scope.app-id`，网关上还有每条路由的 `cosec-app-id`，
+  与 `prewarm-apps` 一起在实例报告就绪之前加载，所以每个应用的第一个请求都会找到已装入的文档（[`prewarm-host-apps`](./configuration.md#snapshot)）。
+  被持有的应用文档在发布后几秒内被替换（失效消息或下一轮重新确认），与平台文档相同。
 - **冷加载最多等待** [`cold-load-timeout`](./configuration.md#snapshot)（2 秒）；之后对该请求而言文档算作失败。
 - **持有的文档有上限。** 每个族最多持有 [`max-apps`/`max-tenants`](./configuration.md#snapshot) 个文档和
   `max-absent-apps`/`max-absent-tenants` 个"不存在"条目，在一个后台整理线程上丢弃最久未用的。冷加载突发时，它可能短暂地持有

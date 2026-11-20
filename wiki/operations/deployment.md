@@ -440,8 +440,9 @@ scale the heap with them.
 
 ### What a new replica costs {#what-a-new-replica-costs}
 
-A replica that starts, or that the autoscaler adds, holds nothing but the platform document and the documents of
-`prewarm-apps` and `prewarm-tenants`; readiness waits only for those. Each other tenant's first request on it waits for
+A replica that starts, or that the autoscaler adds, holds the platform document, the apps its routes name
+([`prewarm-host-apps`](./configuration.md#snapshot)), and the documents of `prewarm-apps` and `prewarm-tenants`;
+readiness waits for those. It is warm for apps and cold for tenants. Each other tenant's first request on it waits for
 one read from Redis, and for a tenant document also its compilation, about 0.6 ms in all with a Redis that answers in
 0.3 ms, and at most `cold-load-timeout` (2 s). With requests spread evenly, a new replica serving 10,000 tenants reads
 Redis on most requests until it has seen each tenant once. List the busiest tenants in `prewarm-tenants` to take them

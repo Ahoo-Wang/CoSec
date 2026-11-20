@@ -90,6 +90,9 @@ description: "每个 8.0 预览版（alpha 与 beta）到下一个之间的变�
   `~cosec:shadow:report:*:pod-a` 和 `~cosec:shadow:status:pod-a` 改为 `~cosec:shadow:report:*:pod-a.*` 和
   `~cosec:shadow:status:pod-a.*`（[谁可以写哪些 key](./storage.md#who-may-write-which-keys)）；保留旧行的实例写报告和状态会被拒绝，
   并以 `WARN` 记录。
+- **主机在启动时加载它指定的应用**（`SNP-20`）。它的 `cosec.authorization.scope.app-id`，网关上还有每条路由的 `cosec-app-id`，与
+  `prewarm-apps` 一起加载，就绪像等待 `prewarm-apps` 一样等待它们：Redis 无法为其中一个应用作答的实例保持未就绪并重试。`prewarm-apps`
+  照常工作。`cosec.authorization.snapshot.prewarm-host-apps=false` 恢复为在第一个请求时加载这些应用。
 
 ## 从 8.0.0-beta.3 升级 {#from-8-0-0-beta-3}
 

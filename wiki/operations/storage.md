@@ -314,6 +314,10 @@ sequenceDiagram
   copy, at most [`local-max-age`](./configuration.md#snapshot) (30 seconds) old; it counts that copy as that old and
   confirms it with Redis at once. A local "no such document" is never trusted: only Redis can answer that a document
   does not exist.
+- **The apps a host names are held from startup** (`SNP-20`): its `cosec.authorization.scope.app-id` and, on a gateway,
+  every route's `cosec-app-id` load with `prewarm-apps`, before the instance reports ready, so the first request of each
+  finds its document installed ([`prewarm-host-apps`](./configuration.md#snapshot)). A held app document is replaced
+  within seconds of a publish, by the invalidation message or the next revalidation pass, as the platform document is.
 - **A cold load waits** at most [`cold-load-timeout`](./configuration.md#snapshot) (2 seconds); after that the
   document counts as failed for that request.
 - **Held documents are bounded.** Each family keeps at most [`max-apps`/`max-tenants`](./configuration.md#snapshot)

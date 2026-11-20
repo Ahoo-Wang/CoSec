@@ -304,7 +304,7 @@ cosec:
 
 ### 新副本的代价 {#what-a-new-replica-costs}
 
-刚启动的副本，或伸缩器新加的副本，只持有平台文档和 `prewarm-apps`、`prewarm-tenants` 的文档；就绪只等待这些。其他每个租户在它上面的第一个
+刚启动的副本，或伸缩器新加的副本，持有平台文档、它的路由指定的应用（[`prewarm-host-apps`](./configuration.md#snapshot)），以及 `prewarm-apps`、`prewarm-tenants` 的文档；就绪等待这些。它对应用是热的，对租户是冷的。其他每个租户在它上面的第一个
 请求要等一次 Redis 读取，租户文档还要等编译：在 Redis 0.3 ms 应答时总共约 0.6 ms，最多 `cold-load-timeout`（2 秒）。请求均匀分布时，
 一个服务 10,000 个租户的新副本在见过每个租户一次之前，大多数请求都要读 Redis。把最繁忙的租户列入 `prewarm-tenants`，让它们不走这条路径。
 

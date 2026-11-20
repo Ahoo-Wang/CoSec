@@ -196,6 +196,10 @@ Which preview of the library may run behind which preview of the gateway image: 
   `~cosec:shadow:report:*:pod-a` and `~cosec:shadow:status:pod-a` to `~cosec:shadow:report:*:pod-a.*` and
   `~cosec:shadow:status:pod-a.*` ([Who may write which keys](./storage.md#who-may-write-which-keys)); an instance with
   the old lines is denied its report and status writes, which it logs at `WARN`.
+- **A host loads the apps it names at startup** (`SNP-20`). Its `cosec.authorization.scope.app-id` and, on a gateway, every
+  route's `cosec-app-id` load with `prewarm-apps`, and readiness waits for them as for `prewarm-apps`: an instance whose
+  Redis cannot answer for one stays not ready, retrying. `prewarm-apps` keeps working as before.
+  `cosec.authorization.snapshot.prewarm-host-apps=false` restores loading those apps on their first request.
 
 ## From 8.0.0-beta.3 {#from-8-0-0-beta-3}
 

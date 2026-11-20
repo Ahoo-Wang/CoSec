@@ -321,6 +321,23 @@
         "runtime:HousekeepingRefusalTest#a compilation that ends after housekeeping stopped finds its load ended, and nothing is refused"
       ],
       "pending": null
+    },
+    {
+      "id": "SNP-20",
+      "source": "The maintainer's decision for beta.5 (memory for performance; apps held from startup)",
+      "statement": "A host loads the document of every app its configuration names before it reports ready: its cosec.authorization.scope.app-id, the apps of prewarm-apps and, on a gateway, the cosec-app-id of every route; readiness waits for each until the store gave a definite answer, a document or none, never a failed read. An app a refreshed route names for the first time is loaded then, without a request waiting for it. With cosec.authorization.snapshot.prewarm-host-apps=false, only prewarm-apps are loaded at startup.",
+      "level": "startup",
+      "guards": [
+        "runtime:DocumentReadinessPrewarmAlsoTest#documents added later are waited for until their prewarm completes, one without a document as well",
+        "runtime:DocumentReadinessPrewarmAlsoTest#a key prewarmed already is not prewarmed again",
+        "spring-boot:GatewayRouteAppsTest#the apps two routes name are loaded before the gateway is ready, one without a document as well",
+        "spring-boot:GatewayRouteAppsTest#an app a refreshed route names is loaded then, without a request",
+        "spring-boot:GatewayRouteAppsTest#a failed refresh, or a host without routes or a store, does nothing",
+        "spring-boot:HostAppsPrewarmTest#the host's app is prewarmed beside the configured ones, each once",
+        "spring-boot:HostAppsPrewarmTest#with prewarm-host-apps off, or no app or one that names no document, only the configured apps are",
+        "spring-boot:HostAppsPrewarmTest#a gateway holds its routes' apps unless prewarm-host-apps is off, and a WebFlux host has no routes to read"
+      ],
+      "pending": null
     }
   ]
 }
