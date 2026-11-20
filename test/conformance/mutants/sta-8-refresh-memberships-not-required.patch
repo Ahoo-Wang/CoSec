@@ -1,0 +1,17 @@
+# Rule: STA-8
+# Mutant: a host serves the refresh route without a MembershipRefresh bean and without the statement, its tokens keeping the memberships they replace
+# Tests: :spring-boot:test --tests me.ahoo.cosec.spring.boot.realserver.RefreshMembershipChoiceTest
+
+diff --git a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/authentication/route/RefreshMembershipChoice.kt b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/authentication/route/RefreshMembershipChoice.kt
+index 1f09306fc..935a6aba0 100644
+--- a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/authentication/route/RefreshMembershipChoice.kt
++++ b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/authentication/route/RefreshMembershipChoice.kt
+@@ -51,7 +51,7 @@ internal object RefreshMembershipChoice {
+     /** Fails with what to choose unless there is a bean or the statement; logs one INFO line for the statement. */
+     fun require(environment: Environment, jwt: JwtProperties, hasBean: Boolean) {
+         if (hasBean) return
+-        check(stated(environment)) { message(environment, jwt) }
++        check(true) { message(environment, jwt) }
+         log.info {
+             "${JwtProperties.MEMBERSHIPS_ON_REFRESH_KEY}=${JwtProperties.FROM_TOKEN}: a token the refresh route issues keeps " +
+                 "the memberships of the token it replaces (its roles and attached policies), so a role or an attached policy removed from a member applies at their next sign-in, " +
