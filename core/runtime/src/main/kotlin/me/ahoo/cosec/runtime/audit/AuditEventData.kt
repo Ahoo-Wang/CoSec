@@ -19,6 +19,7 @@ import me.ahoo.cosec.api.audit.AuditDecision
 import me.ahoo.cosec.api.audit.AuditDevice
 import me.ahoo.cosec.api.audit.AuditDocument
 import me.ahoo.cosec.api.audit.AuditEvent
+import me.ahoo.cosec.api.audit.AuditEventKind
 import me.ahoo.cosec.api.audit.AuditPrincipal
 import me.ahoo.cosec.api.audit.AuditReasonCode
 import me.ahoo.cosec.api.audit.AuditRequest
@@ -114,7 +115,7 @@ class AuditEventData(
     override val snapshotVersion: AuditSnapshotVersionData? = null,
     override val binding: String? = null,
     override val breakGlass: Boolean = false,
-    override val kind: String = "DECIDED",
+    override val kind: AuditEventKind = AuditEventKind.DECIDED,
 ) : AuditEvent {
 
     /** These values with some replaced: for CoSec's own use. */
@@ -132,7 +133,7 @@ class AuditEventData(
         snapshotVersion: AuditSnapshotVersionData? = this.snapshotVersion,
         binding: String? = this.binding,
         breakGlass: Boolean = this.breakGlass,
-        kind: String = this.kind,
+        kind: AuditEventKind = this.kind,
     ): AuditEventData = AuditEventData(
         eventId = eventId,
         timestamp = timestamp,

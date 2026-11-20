@@ -279,7 +279,7 @@ The starter registers one filter: `PipelineServletFilter` (MVC), `PipelineWebFil
 the pipeline: 401/403 deny, 429 rate limited, 503 undecidable, 400 ambiguous request. A permitted request carries a
 `SecurityContext`: `requireSecurityContext()` (throws) or `securityContextOrNull()` on a `ServerWebExchange`, a Reactor
 `ContextView` or an `HttpServletRequest` (extension functions in `ServerWebExchanges`, `ReactiveSecurityContexts`,
-`ServletRequests`), or `SecurityContextHolder.requireSecurityContext()` on the request thread of blocking code. Web details: https://cosec.ahoo.me/integration/web.
+`ServletRequests`), or `CoSecSecurityContextHolder.requireSecurityContext()` on the request thread of blocking code. Web details: https://cosec.ahoo.me/integration/web.
 
 To decide in code **for the request in progress** (UI buttons, object-level checks), inject `AuthorizationChecker` and
 pass it the `SecurityContext` of that request:

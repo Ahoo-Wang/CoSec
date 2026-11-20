@@ -214,6 +214,20 @@ class ChainVerificationTest {
         return code to out.toString(Charsets.UTF_8)
     }
 
+    /** R2C-20: a scope by key prefix and a limit; each document is told as it is verified. */
+    @Test
+    fun `a prefix and a limit scope the run, and each document is told as it is verified`() {
+        publish(acme, 1)
+        publish(SnapshotKey.Tenant("beta"), 1)
+        publish(order, 1)
+        val told = ArrayList<SnapshotKey>()
+        val verified = ChainVerification(memory).run(prefix = "tenant:", limit = 1) { told += it.key }
+        verified.map { it.key }.assert().containsExactly(acme)
+        told.assert().containsExactly(acme)
+        ChainVerification(memory).run(prefix = "tenant:").map { it.key }.assert()
+            .containsExactly(acme, SnapshotKey.Tenant("beta"))
+    }
+
     /** [store] for reading: a write fails the test, since `verify-chain` writes nothing. */
     private class ReadOnly(store: ControlStore) : ControlStore by store {
         private fun refused(): Nothing = throw AssertionError("verify-chain wrote to the store")

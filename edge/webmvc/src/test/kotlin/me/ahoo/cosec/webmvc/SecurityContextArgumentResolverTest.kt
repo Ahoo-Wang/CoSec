@@ -55,13 +55,13 @@ class SecurityContextArgumentResolverTest {
         val context = PermittingPipeline.context()
         val other = PermittingPipeline.context()
         val request = MockHttpServletRequest().apply { setSecurityContext(context) }
-        SecurityContextHolder.setContext(other)
+        CoSecSecurityContextHolder.setContext(other)
         try {
             resolver.supportsParameter(parameter(0)).assert().isTrue()
             resolver.supportsParameter(parameter(2)).assert().isFalse()
             resolver.resolveArgument(parameter(0), null, ServletWebRequest(request), null).assert().isSameAs(context)
         } finally {
-            SecurityContextHolder.remove()
+            CoSecSecurityContextHolder.remove()
         }
     }
 
@@ -105,12 +105,12 @@ class SecurityContextArgumentResolverTest {
         try {
             @Suppress("UNCHECKED_CAST")
             (accessor as io.micrometer.context.ThreadLocalAccessor<SecurityContext>).setValue(context)
-            SecurityContextHolder.securityContextOrNull().assert().isSameAs(context)
+            CoSecSecurityContextHolder.securityContextOrNull().assert().isSameAs(context)
             accessor.getValue().assert().isSameAs(context)
             accessor.setValue()
-            SecurityContextHolder.securityContextOrNull().assert().isNull()
+            CoSecSecurityContextHolder.securityContextOrNull().assert().isNull()
         } finally {
-            SecurityContextHolder.remove()
+            CoSecSecurityContextHolder.remove()
         }
     }
 }

@@ -3,10 +3,10 @@
 # Tests: :runtime:test --tests me.ahoo.cosec.runtime.authn.ApiKeyAuthenticatorTest :conformance:test
 
 diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/authn/ApiKeyAuthenticator.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/authn/ApiKeyAuthenticator.kt
-index 5f208d9c..5996885d 100644
+index 19c5354a3..9ccdc214a 100644
 --- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/authn/ApiKeyAuthenticator.kt
 +++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/authn/ApiKeyAuthenticator.kt
-@@ -75,7 +75,7 @@ class ApiKeyAuthenticator(
+@@ -78,7 +78,7 @@ class ApiKeyAuthenticator(
              breakGlass = false,
              issuedAt = null,
              apiKeyCredential = true,
@@ -14,4 +14,4 @@ index 5f208d9c..5996885d 100644
 +            app = null,
              session = null,
          )
-         return AuthnResult.Authenticated(principal, method)
+         return AuthnResult.Authenticated(principal, authnMethod)

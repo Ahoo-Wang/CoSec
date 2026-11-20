@@ -18,6 +18,17 @@ import java.time.Instant
 /**
  * What decided the request, in the words of the decision event's `outcome.reason` (UD-7): one vocabulary for events,
  * metrics (`result`) and audit. Only [EXPLICIT_DENY] means a DENY statement refused the request.
+ *
+ * This is the coarser grouping of [AuditReasonCode], which is the field to read for why a request ended as it did. The
+ * code is the decision's own name (`PERMIT` for `PERMIT`, and so on for each value below) except in two cases, which are
+ * the whole of the mapping:
+ *
+ * - [EXPLICIT_DENY], [IMPLICIT_DENY], [SCOPE_REJECTED] or [BOUNDARY], when a credential was rejected: the rejection's code,
+ *   [AuditReasonCode.TOKEN_EXPIRED], [AuditReasonCode.TOKEN_INVALID], [AuditReasonCode.TOKEN_REVOKED],
+ *   [AuditReasonCode.TOKEN_NOT_YET_VALID] or [AuditReasonCode.DELEGATION_UNSUPPORTED].
+ * - [INDETERMINATE], when the strict rate limiter could not count: [AuditReasonCode.RATE_LIMITER_UNAVAILABLE].
+ *
+ * `AuditVocabularyTest` holds this mapping against the code that writes it.
  */
 enum class AuditDecision {
     /** The request was permitted. */
@@ -44,6 +55,10 @@ enum class AuditDecision {
     INDETERMINATE,
 }
 
+/**
+ * Why the request ended as it did: the field to read. [AuditDecision] groups these into fewer values, and says in its own
+ * KDoc which code each decision takes; `AuditAuthorization.reason` is a free-text rendering of the same fact.
+ */
 enum class AuditReasonCode {
     PERMIT,
     EXPLICIT_DENY,
@@ -148,8 +163,13 @@ interface AuditSource {
 }
 
 interface AuditAuthorization {
+    /** The coarser grouping of [reasonCode] (see [AuditDecision] for the table that maps one to the other). */
     val decision: AuditDecision
+
+    /** Why the request ended as it did: the field to read. */
     val reasonCode: AuditReasonCode
+
+    /** A rendering for people of the same fact; read [reasonCode]. */
     val reason: String
     val elapsedNanos: Long
     val source: AuditSource
@@ -179,12 +199,37 @@ interface AuditEvent {
     /** The documents the decision read; null when it read none (RFC 0006 §9.5.3). */
     val snapshotVersion: AuditSnapshotVersion? get() = null
 
-    /** The binding the deciding statement applied through, `attached:<policy>`, `builtin` or `boundary:<tenant>`; null when none. */
+    /**
+     * A label for people: the id of the binding the deciding statement applied through, or `attached:<policy>`, `builtin` or
+     * `boundary:<tenant>`; null when none. A binding whose id is literally `builtin` reads as the built-in one, so do not
+     * parse it: [AuditAuthorization.source] carries the typed facts: `via` (how the statement applied) and `document`.
+     */
     val binding: String? get() = null
 
     /** Whether the request was permitted through a break-glass binding. */
     val breakGlass: Boolean get() = false
 
-    /** What the event records: `DECIDED`, `BAD_REQUEST`, `AUTHENTICATION_UNAVAILABLE`, `CANCELLED` or `ERROR`. */
-    val kind: String get() = "DECIDED"
+    /** What the event records. */
+    val kind: AuditEventKind get() = AuditEventKind.DECIDED
+}
+
+/**
+ * What an [AuditEvent] records. The JSON a sink or a Kafka consumer reads carries the name, `"DECIDED"` and so on, as it
+ * always has.
+ */
+enum class AuditEventKind {
+    /** The engine decided, or a stage made the decision indeterminate (memberships, snapshot, deadline). */
+    DECIDED,
+
+    /** The request could not be interpreted without ambiguity: 400. */
+    BAD_REQUEST,
+
+    /** The authenticator was unavailable: 503 before any decision. */
+    AUTHENTICATION_UNAVAILABLE,
+
+    /** The caller went away: no outcome was written. */
+    CANCELLED,
+
+    /** An exception nothing modelled: a defect, 500. */
+    ERROR,
 }

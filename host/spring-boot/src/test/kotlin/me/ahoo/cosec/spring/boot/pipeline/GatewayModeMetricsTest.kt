@@ -19,6 +19,7 @@ import io.micrometer.core.instrument.MeterRegistry
 import kotlinx.coroutines.runBlocking
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.document.identity.IdentityCodec
+import me.ahoo.cosec.micrometer.CoSecMeters
 import me.ahoo.cosec.micrometer.MetricsListener
 import me.ahoo.cosec.model.scope.HostScope
 import me.ahoo.cosec.runtime.http.Cookies
@@ -70,7 +71,7 @@ class GatewayModeMetricsTest {
     }
 
     private fun refused(registry: MeterRegistry): Map<String?, Double> =
-        registry.find(MetricsListener.IDENTITY_REFUSED).functionCounters()
+        registry.find(CoSecMeters.IDENTITY_REFUSED).functionCounters()
             .associate { it.id.getTag(MetricsListener.PROBLEM_TAG) to it.count() }
 
     @Test

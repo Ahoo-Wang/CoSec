@@ -31,15 +31,23 @@ import kotlin.coroutines.cancellation.CancellationException
  * It also reports a revision index that does not follow the head's chain (a failover or a partial restore left it
  * behind, or on another branch): read only, like the walk, and repaired by the next read of the document's history.
  *
- * Every document [ControlStore.documents] lists is verified, or only [only]; one that cannot be read is reported with
- * why, never skipped silently.
+ * Every document [ControlStore.documents] lists is verified, or only [only], or those whose key starts with [prefix],
+ * at most [limit] of them (R2C-20); one that cannot be read is reported with why, never skipped silently. Each is told
+ * to [onEach] as it is verified, so a long run says how far it got and one that dies has printed what it verified.
  */
 class ChainVerification(private val store: ControlStore) {
     private val revisions = Revisions(store)
 
     @Suppress("TooGenericExceptionCaught")
-    fun run(only: SnapshotKey? = null): List<VerifiedChain> = runBlocking {
-        val keys = only?.let(::listOf) ?: store.documents().sortedBy { it.toString() }
+    fun run(
+        only: SnapshotKey? = null,
+        prefix: String? = null,
+        limit: Int? = null,
+        onEach: (VerifiedChain) -> Unit = {},
+    ): List<VerifiedChain> = runBlocking {
+        val keys = only?.let(::listOf) ?: store.documents().map { it.toString() to it }
+            .filter { (text, _) -> prefix == null || text.startsWith(prefix) }.sortedBy { it.first }
+            .let { listed -> limit?.let(listed::take) ?: listed }.map { it.second }
         keys.map { key ->
             try {
                 VerifiedChain(key, revisions.verifyChain(key), null, revisions.verifyIndex(key))
@@ -47,7 +55,7 @@ class ChainVerification(private val store: ControlStore) {
                 throw e
             } catch (e: Exception) {
                 VerifiedChain(key, null, e.message ?: e.javaClass.name)
-            }
+            }.also(onEach)
         }
     }
 }

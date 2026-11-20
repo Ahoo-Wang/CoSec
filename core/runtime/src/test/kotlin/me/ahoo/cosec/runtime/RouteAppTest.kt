@@ -30,6 +30,7 @@ import me.ahoo.cosec.runtime.http.ProblemType
 import me.ahoo.cosec.spi.authn.AuthenticatedPrincipal
 import me.ahoo.cosec.spi.authn.Authenticator
 import me.ahoo.cosec.spi.authn.AuthnResult
+import me.ahoo.cosec.spi.identity.Identity
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 
@@ -50,7 +51,7 @@ class RouteAppTest {
                     PipelineFixtures.claims(),
                     app = credentialApp?.let(::AppId),
                 ),
-                "test",
+                Identity.Method("test"),
             )
         },
         engine,

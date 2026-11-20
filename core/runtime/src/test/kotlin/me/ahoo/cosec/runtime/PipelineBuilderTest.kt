@@ -268,7 +268,9 @@ class PipelineBuilderTest {
             app = null,
             session = null,
         )
-        val gateway = PipelineFixtures.pipeline(authenticator(AuthnResult.Authenticated(principal, "token"))) {
+        val gateway = PipelineFixtures.pipeline(
+            authenticator(AuthnResult.Authenticated(principal, Identity.Method("token")))
+        ) {
             forwardIdentity { maxBytes = IdentityCodec.DEFAULT_MAX_BYTES }
             clock(clock)
         }

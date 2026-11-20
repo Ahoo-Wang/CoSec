@@ -41,6 +41,7 @@ import me.ahoo.cosec.runtime.ratelimit.LocalRateLimiter
 import me.ahoo.cosec.spi.authn.AuthenticatedPrincipal
 import me.ahoo.cosec.spi.authn.Authenticator
 import me.ahoo.cosec.spi.authn.AuthnResult
+import me.ahoo.cosec.spi.identity.Identity
 import me.ahoo.cosec.spi.ratelimit.RateLimiter
 import me.ahoo.cosec.spi.snapshot.InMemorySnapshotDocumentStore
 import me.ahoo.cosec.spi.snapshot.SnapshotChangeListener
@@ -297,7 +298,7 @@ class PipelineFixture private constructor(
             if (principal == null) {
                 AuthnResult.Anonymous
             } else {
-                AuthnResult.Authenticated(authenticated(principal), "testkit")
+                AuthnResult.Authenticated(authenticated(principal), Identity.Method("testkit"))
             }
         }
 

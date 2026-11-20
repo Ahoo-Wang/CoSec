@@ -44,7 +44,7 @@ import me.ahoo.cosec.webmvc.ServletRequests.setSecurityContext
  * The chain gets the request as [PermittedServletRequest] makes it: the gate's forwarded headers, and CoSec's principal
  * as `getUserPrincipal()` when CoSec authenticated the request (`PIP-28`).
  *
- * The permitted request's `SecurityContext` is bound to [SecurityContextHolder] and the request for the chain, and
+ * The permitted request's `SecurityContext` is bound to [CoSecSecurityContextHolder] and the request for the chain, and
  * removed once the request completes, whatever happens. Its security is ended then, or when an async request completes
  * (`PIP-26`): a context kept after that permits nothing.
  */
@@ -66,7 +66,7 @@ class PipelineServletFilter @InternalCoSecApi constructor(
                 chain.doFilter(PermittedServletRequest.of(servletRequest, outcome.forward, principal), response)
             }
         } finally {
-            SecurityContextHolder.remove()
+            CoSecSecurityContextHolder.remove()
             outcome.security?.let { endWhenComplete(servletRequest, it) }
         }
     }
@@ -110,7 +110,7 @@ class PipelineServletFilter @InternalCoSecApi constructor(
         }
         val securityContext = checkNotNull(outcome.security) { "A proceeding outcome carries its security." }
             .securityContext
-        SecurityContextHolder.setContext(securityContext)
+        CoSecSecurityContextHolder.setContext(securityContext)
         request.setSecurityContext(securityContext)
         return true
     }

@@ -16,8 +16,8 @@
 package me.ahoo.cosec.spring.boot.jwt
 
 import com.auth0.jwt.JWT
-import com.auth0.jwt.algorithms.Algorithm
 import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.jwt.JwtSigning
 import me.ahoo.cosec.jwt.JwtTokenVerifier
 import me.ahoo.cosec.login.token.StoreTokenRevoker
 import me.ahoo.cosec.login.token.TokenCompositeAuthentication
@@ -61,11 +61,11 @@ class CoSecJwtAutoConfigurationTest {
             )
             .run { context: AssertableApplicationContext ->
                 AssertionsForInterfaceTypes.assertThat(context)
-                    .hasSingleBean(Algorithm::class.java)
+                    .hasSingleBean(JwtSigning::class.java)
                     .hasSingleBean(TokenConverter::class.java)
                     .hasSingleBean(TokenCompositeAuthentication::class.java)
                     .hasSingleBean(TokenVerifier::class.java)
-                val token = context.getBean(TokenConverter::class.java).toToken(TokenSubject("alice", null))
+                val token = context.getBean(TokenConverter::class.java).toToken(TokenSubject("alice"))
                 JWT.decode(token.accessToken).id.assert().isEqualTo("app-token-id")
             }
     }
@@ -89,7 +89,7 @@ class CoSecJwtAutoConfigurationTest {
                 val ahead = JWT.create().withJWTId("t1").withSubject("alice")
                     .withIssuedAt(java.time.Instant.now().plusSeconds(20))
                     .withExpiresAt(java.time.Instant.now().plusSeconds(600))
-                    .sign(context.getBean(Algorithm::class.java))
+                    .sign(context.getBean(JwtSigning::class.java).algorithm)
                 context.getBean(TokenVerifier::class.java).verify(ahead).principal.assert().isEqualTo("alice")
             }
     }
@@ -108,11 +108,11 @@ class CoSecJwtAutoConfigurationTest {
             )
             .run { context: AssertableApplicationContext ->
                 AssertionsForInterfaceTypes.assertThat(context)
-                    .hasSingleBean(Algorithm::class.java)
+                    .hasSingleBean(JwtSigning::class.java)
                     .hasSingleBean(TokenConverter::class.java)
                     .hasSingleBean(TokenVerifier::class.java)
                 // Without an IdGenerator bean (no cosec-cosid, none of the application's): RandomIdGenerator's UUIDs.
-                val token = context.getBean(TokenConverter::class.java).toToken(TokenSubject("alice", null))
+                val token = context.getBean(TokenConverter::class.java).toToken(TokenSubject("alice"))
                 UUID.fromString(JWT.decode(token.accessToken).id).version().assert().isEqualTo(4)
             }
     }
@@ -128,7 +128,7 @@ class CoSecJwtAutoConfigurationTest {
             )
             .run { context: AssertableApplicationContext ->
                 AssertionsForInterfaceTypes.assertThat(context)
-                    .doesNotHaveBean(Algorithm::class.java)
+                    .doesNotHaveBean(JwtSigning::class.java)
                     .doesNotHaveBean(TokenConverter::class.java)
                     .doesNotHaveBean(TokenCompositeAuthentication::class.java)
                     .doesNotHaveBean(TokenVerifier::class.java)
@@ -167,7 +167,7 @@ class CoSecJwtAutoConfigurationTest {
             Unit
         }
         val started = { context: AssertableApplicationContext ->
-            AssertionsForInterfaceTypes.assertThat(context).hasNotFailed().hasSingleBean(Algorithm::class.java)
+            AssertionsForInterfaceTypes.assertThat(context).hasNotFailed().hasSingleBean(JwtSigning::class.java)
             Unit
         }
         for ((algorithm, bytes) in listOf("hmac256" to 32, "hmac384" to 48, "hmac512" to 64)) {

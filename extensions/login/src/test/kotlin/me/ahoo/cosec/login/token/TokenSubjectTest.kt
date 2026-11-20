@@ -29,9 +29,17 @@ class TokenSubjectTest {
     @Test
     fun `a subject equals one with the same fields, and says them`() {
         val subject = TokenSubject("alice", app = "shop", roles = setOf("clerk"))
-        subject.assert().isEqualTo(TokenSubject("alice", "shop", null, setOf("clerk")))
-        subject.hashCode().assert().isEqualTo(TokenSubject("alice", "shop", null, setOf("clerk")).hashCode())
+        subject.assert().isEqualTo(TokenSubject("alice", app = "shop", tenant = null, roles = setOf("clerk")))
+        subject.hashCode().assert().isEqualTo(
+            TokenSubject("alice", app = "shop", tenant = null, roles = setOf("clerk")).hashCode()
+        )
         subject.assert().isNotEqualTo(TokenSubject("alice"))
-        subject.toString().assert().contains("alice").contains("shop").contains("clerk")
+        subject.toString().assert().contains("alice").contains("shop").contains("roles=1")
+    }
+
+    @Test
+    fun `its text never holds the attributes, which an application fills freely`() {
+        val subject = TokenSubject("alice", attributes = mapOf("email" to "alice@example.com"))
+        subject.toString().assert().doesNotContain("alice@example.com").doesNotContain("email").contains("attributes=1")
     }
 }

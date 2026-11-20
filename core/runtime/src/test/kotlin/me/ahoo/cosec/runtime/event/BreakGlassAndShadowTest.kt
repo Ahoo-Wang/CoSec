@@ -115,7 +115,7 @@ class BreakGlassAndShadowTest {
                 app = null,
                 session = null,
             ),
-            "token"
+            Identity.Method("token")
         )
     }
 

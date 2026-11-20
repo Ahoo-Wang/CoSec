@@ -90,7 +90,7 @@ cosec-migrate-8.0.0/bin/cosec-migrate convert ...
 
 要从 CoSec 源码构建，运行 `./gradlew :migrate:installDist`；工具在 `migration/migrate/build/install/cosec-migrate/bin/cosec-migrate`。
 
-它的命令如下。退出码：`0` 完成，`1` 数据被拒绝、写入失败或 `verify-chain` 发现断链，`2` 用法错误。`publish`、`bootstrap`、`repair-references` 与 `verify-chain` 接受 `--cluster`，用于 Redis Cluster：这时 `--to-redis` 写种子节点，以逗号分隔（`redis://node-1:6379,redis://node-2:6379`）。其他命令读 Redis 的客户端不支持 Cluster，会拒绝这个选项。每个命令只接受为它列出的选项：别的选项，例如 `publish --dry-run`，在读写任何东西之前就是用法错误，绝不会被忽略。
+它的命令如下。退出码：`0` 完成，`1` 数据被拒绝、写入失败或 `verify-chain` 发现断链，`2` 用法错误。`publish`、`bootstrap`、`repair-references` 与 `verify-chain` 接受 `--cluster`，用于 Redis Cluster：这时 `--to-redis` 写种子节点，以逗号分隔（`redis://node-1:6379,redis://node-2:6379`）。其他命令读 Redis 的客户端不支持 Cluster：`convert`、`partition plan` 和 `api-keys` 先询问节点是否属于 Redis Cluster，是的话在读取任何东西之前就停止，因为扫描一个节点只能看到一个分片的 key（R2C-30）。每个命令只接受为它列出的选项：别的选项，例如 `publish --dry-run`，在读写任何东西之前就是用法错误，绝不会被忽略。
 
 | 命令 | 作用 |
 |---|---|
@@ -129,7 +129,7 @@ cosec-migrate convert --from-files ./export --out ./converted
 
 文件名是经 URL 编码的 id。编码后的名字长于 200 个字符的 id（30 个汉字编码后是 275 个）改用有界的名字：编码后 id 的一段前缀、`~` 和该 id 的 SHA-256。编码后的名字里不会出现 `~`；`report.json` 的 `documentIds` 记录这类文件各装着哪个 id，`publish` 会按这个 id 检查文件名。写入失败时会删掉本次写出的文件，目录和原来一样是新的，`convert` 可以重新运行。
 
-被拒绝的转换只写出 `report.json`。控制台打印同样的计数、警告和拒绝项。
+被拒绝的转换只写出 `report.json`。控制台打印同样的计数、警告和拒绝项，并提示在再次转换之前删除该目录或换一个 `--out`：`convert` 写入一个新目录。
 
 #### 拒绝项 {#rejections}
 
@@ -207,7 +207,7 @@ cosec-migrate bootstrap --to-redis redis://localhost:6379 [--cluster] [--key-pre
 ```
 
 控制面用快照中的策略授权自己的写操作，所以没有管理员时谁都不能写入。`bootstrap` 只写平台租户的文档 `Tenant((platform))`；平台文档本身来自 `publish`，所以先发布。`bootstrap` 在平台租户自己的文档中，把平台租户的主体 `alice`
-绑定到内置策略 `cosec:platform-admin`，并记为一个 `BOOTSTRAP` 种类的修订。当这份文档已经把某人绑定到 `cosec:platform-admin` 时它拒绝执行；
+绑定到内置策略 `cosec:platform-admin`，并记为一个 `BOOTSTRAP` 种类的修订。为它已经绑定的主体再运行一次（每次启动都运行的部署任务，或回复丢失之后的重试），它回答该主体已经绑定，什么也不写；当这份文档把另一个主体绑定到 `cosec:platform-admin` 时它拒绝执行；
 `--force` 用于这些管理员全部丢失后的恢复。两种情况下它都只添加自己的绑定，并保留这份文档中的其余内容：策略、其他绑定、限流规则和角色。持有 Redis 凭证的人本来就能写入；`bootstrap` 只是留下一条记录。
 
 文档按数据面的方式编译，用平台文档声明的限额和属性，所以恢复会保留使用 `ext.*` 属性的策略。读不到平台文档时，命令失败。
@@ -231,7 +231,18 @@ cosec-migrate partition plan (--from-redis redis://localhost:6379 [--key-prefix 
 cosec-migrate repair-references --to-redis redis://localhost:6379 [--cluster] [--key-prefix cosec]
 ```
 
-控制面维护一个"哪些文档引用了哪条策略"的索引，使平台变更不能删除文档仍在使用的策略，也不能新增与租户文档所用 id 相同的策略（[存储](./storage.md#redis-keys)）。对 8.0.0-beta.5 之前写入的存储，它先在两次运行共用的租约之下把这个索引转换为集合：头触及的每个旧格式值都变成集合，集合从不被替换；旧的文档列表（`<s>:control:list:documents`）被复制进 `<s>:control:documents:all`，在没有任何失败时最后删除。它输出转换了多少，以及 `The store is in the format of 8.0.0-beta.5.`（`MIG-4`）。先停掉所有更早版本的控制面：它们写的是旧格式。`repair-references` 读取存储列出的每份文档的头，补上索引缺少的条目，并输出访问了多少文档、补了多少条引用。然后它删除没有任何头引用的条目（这些条目是未能写入头的发布登记的）并输出数量：留着的话，会永远拦住对那条策略的删除。只有文档的头不低于登记该条目的修订时才删除，所以仍在进行的发布的条目会保留，失败的发布留下的条目要等该文档发布到更高修订之后才能删除。因此它可以在控制面运行时执行，再运行一次也不会改变任何东西。头读不到的文档输出为 `FAILED <doc>: <原因>`，其余文档照常访问，命令以 `1` 退出。
+控制面维护一个"哪些文档引用了哪条策略"的索引，使平台变更不能删除文档仍在使用的策略，也不能新增与租户文档所用 id 相同的策略（[存储](./storage.md#redis-keys)）。对 8.0.0-beta.5 之前写入的存储，它先在两次运行共用的租约之下把这个索引转换为集合：头触及的每个旧格式值都变成集合，集合从不被替换；旧的文档列表（`<s>:control:list:documents`）被复制进 `<s>:control:documents:all`，在没有任何失败时最后删除。它输出转换了多少，以及 `The store is in the format of 8.0.0-beta.5.`（`MIG-4`）。先停掉所有更早版本的控制面：它们写的是旧格式。
+
+它读每份文档的头和它自己的修订索引，从不为找一个成员而读整个反向引用集合（R2C-8）：索引已经记录了其引用的文档只花这两次读取，没有记录的文档（转换来的文档就是如此）把它的每个引用各添加一次。它每 1,000 份文档输出一行进度，失败一出现就输出。一次一条命令，每条都是到 Redis 的一次往返；在内存中测得（`SaasScaleMeasurement`），每个租户有 20 条绑定到同一应用权限的角色绑定和一条绑定到平台策略：
+
+| 租户 | 转换后的第一次运行 | 什么也不改的第二次运行 | 转换本身 |
+|---|---|---|---|
+| 10,000 | 约 260,000 条命令（210,000 次成员写入、20,000 次读头、30,000 次读写索引）：约 80 MB | 约 31,000 条命令（20,000 次读头、10,000 次读索引、1,201 次读集合）：约 70 MB | 21 个旧值各读一次、作为集合各写一次（约 7 MB），每个租户的头再读一次 |
+| 50,000 | 约 130 万条命令：约 390 MB | 约 151,000 条命令：约 350 MB | 同样的 21 个值（约 35 MB），每个租户的头再读一次 |
+
+往返 1 ms 时，50,000 个租户的第一次运行约需 22 分钟，第二次约 3 分钟；往返 0.2 ms 时为其五分之一。运行持有租约 `repair-references`，每 1,000 份文档续约一次，在最后一次续约后保持 10 分钟。第二次运行发现租约被占用时，说明由谁占用、从何时开始，并以 `1` 退出；中途死掉的运行最多留下它 10 分钟：届时再运行，或者在确认没有运行仍然活着之后删除 key `<key-prefix>:control:lease:repair-references`。
+
+`repair-references` 读取存储列出的每份文档的头，补上它自己的记录缺少的条目，并输出访问了多少文档、补了多少条引用。然后它删除没有任何头引用的条目（这些条目是未能写入头的发布登记的）并输出数量：留着的话，会永远拦住对那条策略的删除。只有文档的头不低于登记该条目的修订时才删除，所以仍在进行的发布的条目会保留，失败的发布留下的条目要等该文档发布到更高修订之后才能删除。因此它可以在控制面运行时执行，再运行一次也不会改变任何东西。头读不到的文档输出为 `FAILED <doc>: <原因>`，其余文档照常访问，命令以 `1` 退出。
 
 在写这个 Redis 的每个控制面实例和每个 `cosec-migrate` 二进制都运行这个版本之后再运行它，不要在滚动升级期间运行；降级之后要再运行一次。只要还有旧版本实例在运行，它就按旧的分析自行判断：它检查的变更不受 RC1-4 的保护，它发布的 app 文档也不会被列入。每个新实例在启动时对账一次，之后每次回收任务再对账：完整的列表缺了某份有头的 app 文档时，列表被标回不完整（[存储](./storage.md#publishing-through-the-control-plane)），新实例于是让覆盖所有 app 的授出退回审批。升级完成之后运行的那次 `repair-references`，才结束这个窗口。
 
@@ -240,10 +251,11 @@ cosec-migrate repair-references --to-redis redis://localhost:6379 [--cluster] [-
 #### 检查修订链 {#verify-the-revision-chains}
 
 ```bash
-cosec-migrate verify-chain --to-redis redis://localhost:6379 [--cluster] [--key-prefix cosec] [--document platform|app:<id>|tenant:<id>]
+cosec-migrate verify-chain --to-redis redis://localhost:6379 [--cluster] [--key-prefix cosec] [--document platform|app:<id>|tenant:<id>] \
+  [--prefix tenant:acme] [--limit 1000]
 ```
 
-每个修订都记着它的父修订及其摘要，控制面把每个修订的记录按摘要保存（[存储](./storage.md#revisions-history-and-rollback)）。Redis 异步复制，故障切换可能丢失它已经确认过的记录。`verify-chain` 对存储列出的每份文档（或 `--document` 指定的那一份），从头开始沿父修订一路检查到修订索引仍列着的最早修订，每份文档输出一行：
+每个修订都记着它的父修订及其摘要，控制面把每个修订的记录按摘要保存（[存储](./storage.md#revisions-history-and-rollback)）。Redis 异步复制，故障切换可能丢失它已经确认过的记录。`verify-chain` 对存储列出的每份文档（或 `--document` 指定的那一份，或 key 以 `--prefix` 开头的那些，最多 `--limit` 份），从头开始沿父修订一路检查到修订索引仍列着的最早修订，每检查完一份文档就输出一行，所以长时间的运行能看出进行到了哪里：
 
 - `ok <doc>: intact down to revision <n>`；没有头的文档输出 `ok <doc>: no head`；
 - `BROKEN <doc>: no record holds revision <n> (<digest>): ...`：链需要的某个修订的记录不存在，或者存的是另一个修订；

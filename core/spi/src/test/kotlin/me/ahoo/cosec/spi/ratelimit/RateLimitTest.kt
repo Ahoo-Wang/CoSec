@@ -23,14 +23,14 @@ class RateLimitTest {
     @Test
     fun initWhenPermitsPerSecondNotPositive() {
         assertThrows(IllegalArgumentException::class.java) {
-            RateLimit(permitsPerSecond = 0.0)
+            RateLimitSpec(permitsPerSecond = 0.0)
         }
     }
 
     @Test
     fun initWhenWindowSecondsBelowOne() {
         assertThrows(IllegalArgumentException::class.java) {
-            RateLimit(permitsPerSecond = 1.0, windowSeconds = 0)
+            RateLimitSpec(permitsPerSecond = 1.0, windowSeconds = 0)
         }
     }
 
@@ -39,26 +39,28 @@ class RateLimitTest {
     fun initWhenTheWindowArithmeticWouldOverflow() {
         assertThrows(
             IllegalArgumentException::class.java
-        ) { RateLimit(permitsPerSecond = 1.0, windowSeconds = 1L shl 61) }
+        ) { RateLimitSpec(permitsPerSecond = 1.0, windowSeconds = 1L shl 61) }
         assertThrows(
             IllegalArgumentException::class.java
-        ) { RateLimit(permitsPerSecond = 1e300, windowSeconds = 1_000) }
-        val day = RateLimit(permitsPerSecond = 1.0, windowSeconds = 86_400)
+        ) { RateLimitSpec(permitsPerSecond = 1e300, windowSeconds = 1_000) }
+        val day = RateLimitSpec(permitsPerSecond = 1.0, windowSeconds = 86_400)
         day.windowMillis.assert().isEqualTo(86_400_000L)
-        RateLimiter.window(RateLimitSpec(1.0, 86_400)).assert().isEqualTo(day)
-        assertThrows(IllegalArgumentException::class.java) { RateLimit(permitsPerSecond = 1.0, windowSeconds = 86_401) }
+        day.limitPerWindow.assert().isEqualTo(86_400.0)
+        assertThrows(
+            IllegalArgumentException::class.java
+        ) { RateLimitSpec(permitsPerSecond = 1.0, windowSeconds = 86_401) }
     }
 
     @Test
     fun fractionalQuotaReportsAtLeastOnePermit() {
         // 0.5 permits per 1s window still admits one request per window.
-        val result = RateLimit(permitsPerSecond = 0.5).resultOf(allowed = true, estimate = 0.0, nowMillis = 0)
+        val result = RateLimitSpec(permitsPerSecond = 0.5).resultOf(allowed = true, estimate = 0.0, nowMillis = 0)
         result.limit.assert().isEqualTo(1)
         result.remaining.assert().isZero()
     }
 
     private fun remaining(permitsPerSecond: Double, estimate: Double, allowed: Boolean = true): Long =
-        RateLimit(permitsPerSecond).resultOf(allowed, estimate, nowMillis = 0).remaining
+        RateLimitSpec(permitsPerSecond).resultOf(allowed, estimate, nowMillis = 0).remaining
 
     /** #1260: the next request is allowed while the count is below the quota, so a part of a permit left is a permit. */
     @Test

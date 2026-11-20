@@ -55,8 +55,8 @@ import java.util.concurrent.ConcurrentHashMap
  * failure, over real tokens. The stacks write these answers as they are (`spring-boot:ServedLoginRoutesTest`).
  */
 class LoginRoutesTest {
-    private val converter = JwtTokenConverter(JwtFixture.IDS, JwtFixture.ALGORITHM)
-    private val verifier = JwtTokenVerifier(JwtFixture.ALGORITHM)
+    private val converter = JwtTokenConverter(JwtFixture.IDS, JwtFixture.SIGNING)
+    private val verifier = JwtTokenVerifier(JwtFixture.SIGNING)
     private val familyStore = FailingFamilyStore(InMemoryTokenFamilyStore())
     private val families = TokenFamilies(familyStore)
     private val tokenStore = MemoryTokenStore()
@@ -107,7 +107,7 @@ class LoginRoutesTest {
     }
 
     private fun login(user: String = "alice"): CompositeToken = converter.toToken(
-        TokenSubject(user, null).inSession(runBlocking { families.start(TenantId.DEFAULT, PrincipalId(user)) }),
+        TokenSubject(user).inSession(runBlocking { families.start(TenantId.DEFAULT, PrincipalId(user)) }),
     )
 
     private fun body(pair: CompositeToken): ByteArray =

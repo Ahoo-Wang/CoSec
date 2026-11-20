@@ -14,9 +14,9 @@
 package me.ahoo.cosec.runtime.ratelimit
 
 import me.ahoo.cosec.model.decision.RateLimitSpec
-import me.ahoo.cosec.spi.ratelimit.RateLimit
 import me.ahoo.cosec.spi.ratelimit.RateLimitResult
 import me.ahoo.cosec.spi.ratelimit.RateLimiter
+import me.ahoo.cosec.spi.ratelimit.resultOf
 import java.time.Duration
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicBoolean
@@ -108,7 +108,7 @@ class LocalRateLimiter(
     internal val sweepCycles = AtomicLong()
 
     override suspend fun tryAcquire(ruleId: String, bucket: String, limit: RateLimitSpec): RateLimitResult {
-        val rateLimit = RateLimiter.window(limit)
+        val rateLimit = limit
         val now = clock()
         val swept = sweepStep(now)
         val key = BucketKey(ruleId, bucket)
@@ -235,7 +235,7 @@ class LocalRateLimiter(
     internal fun held(): Triple<Int, Long, Map<String, Long>> =
         Triple(windows.size, admitted.get(), admittedByRule.mapValues { it.value.get() })
 
-    private fun acquire(window: Window, rateLimit: RateLimit, nowMillis: Long): RateLimitResult {
+    private fun acquire(window: Window, rateLimit: RateLimitSpec, nowMillis: Long): RateLimitResult {
         val windowMillis = rateLimit.windowMillis
         val index = nowMillis / windowMillis
         when (index) {

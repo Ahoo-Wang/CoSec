@@ -2,15 +2,15 @@
 # Mutant: an app or tenant id may hold an unpaired surrogate, so tenant beta\uD800 reads the Redis key of tenant beta?
 # Tests: :model:test --tests me.ahoo.cosec.model.scope.ScopeResolverTest :cocache:test --tests me.ahoo.cosec.cocache.UnpairedSurrogateKeyTest
 
-diff --git a/core/model/src/main/kotlin/me/ahoo/cosec/model/scope/ScopeResolver.kt b/core/model/src/main/kotlin/me/ahoo/cosec/model/scope/ScopeResolver.kt
-index 4ad373e82..fcce221fa 100644
---- a/core/model/src/main/kotlin/me/ahoo/cosec/model/scope/ScopeResolver.kt
-+++ b/core/model/src/main/kotlin/me/ahoo/cosec/model/scope/ScopeResolver.kt
-@@ -81,7 +81,7 @@ object ScopeResolver {
-             val c = app[index]
+diff --git a/core/model/src/main/kotlin/me/ahoo/cosec/model/Ids.kt b/core/model/src/main/kotlin/me/ahoo/cosec/model/Ids.kt
+index 8a205c881..55213983b 100644
+--- a/core/model/src/main/kotlin/me/ahoo/cosec/model/Ids.kt
++++ b/core/model/src/main/kotlin/me/ahoo/cosec/model/Ids.kt
+@@ -109,7 +109,7 @@ object Identifiers {
+             val c = id[index]
              val refused = when (c) {
                  ':', '/' -> true
--                else -> Identifiers.isUnprintableAt(app, index)
+-                else -> isUnprintableAt(id, index)
 +                else -> c.isISOControl()
              }
              if (refused) {

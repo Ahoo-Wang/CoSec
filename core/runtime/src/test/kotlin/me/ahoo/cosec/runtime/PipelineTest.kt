@@ -405,7 +405,7 @@ class PipelineTest {
                 cap,
                 credential = Identity.Credential(Identity.Method.API_KEY, "k1", null),
             ),
-            ApiKeyAuthenticator.METHOD,
+            Identity.Method(ApiKeyAuthenticator.METHOD),
         )
 
     /**
@@ -488,7 +488,7 @@ class PipelineTest {
         }
         val unusable = AuthnResult.Authenticated(
             AuthenticatedPrincipal(PRINCIPAL, TENANT, MembershipSource.Unusable("marker and claims")),
-            "test",
+            Identity.Method("test"),
         )
         val engine = StubEngine(PERMIT)
         val outcome = pipeline(

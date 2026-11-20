@@ -49,8 +49,10 @@ public final class me/ahoo/cosec/model/Effect : java/lang/Enum {
 
 public final class me/ahoo/cosec/model/Identifiers {
 	public static final field INSTANCE Lme/ahoo/cosec/model/Identifiers;
+	public static final field MAX_DOCUMENT_OWNER_LENGTH I
 	public static final field RESERVED_PREFIX Ljava/lang/String;
 	public final fun areWellFormed (Ljava/lang/Iterable;)Z
+	public final fun isDocumentOwner (Ljava/lang/String;)Z
 	public final fun isReserved (Ljava/lang/String;)Z
 	public final fun isWellFormed (Ljava/lang/CharSequence;)Z
 	public final fun isWellFormed (Lme/ahoo/cosec/model/Memberships;)Z
@@ -105,6 +107,7 @@ public final class me/ahoo/cosec/model/PrincipalId {
 
 public final class me/ahoo/cosec/model/Resource {
 	public fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/util/Map;)V
+	public synthetic fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/util/Map;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
 	public final fun getAttributes ()Ljava/util/Map;
 	public final fun getId ()Ljava/lang/String;
 	public final fun getType ()Ljava/lang/String;
@@ -250,9 +253,6 @@ public abstract interface class me/ahoo/cosec/model/decision/Cause {
 
 public final class me/ahoo/cosec/model/decision/Cause$AmbiguousPolicy : me/ahoo/cosec/model/decision/Cause {
 	public fun <init> (Ljava/util/Set;)V
-	public final fun component1 ()Ljava/util/Set;
-	public final fun copy (Ljava/util/Set;)Lme/ahoo/cosec/model/decision/Cause$AmbiguousPolicy;
-	public static synthetic fun copy$default (Lme/ahoo/cosec/model/decision/Cause$AmbiguousPolicy;Ljava/util/Set;ILjava/lang/Object;)Lme/ahoo/cosec/model/decision/Cause$AmbiguousPolicy;
 	public fun equals (Ljava/lang/Object;)Z
 	public final fun getPolicyIds ()Ljava/util/Set;
 	public fun hashCode ()I
@@ -261,10 +261,6 @@ public final class me/ahoo/cosec/model/decision/Cause$AmbiguousPolicy : me/ahoo/
 
 public final class me/ahoo/cosec/model/decision/Cause$AttributeUnavailable : me/ahoo/cosec/model/decision/Cause {
 	public fun <init> (Ljava/util/Set;Lme/ahoo/cosec/model/decision/StatementRef$Policy;)V
-	public final fun component1 ()Ljava/util/Set;
-	public final fun component2 ()Lme/ahoo/cosec/model/decision/StatementRef$Policy;
-	public final fun copy (Ljava/util/Set;Lme/ahoo/cosec/model/decision/StatementRef$Policy;)Lme/ahoo/cosec/model/decision/Cause$AttributeUnavailable;
-	public static synthetic fun copy$default (Lme/ahoo/cosec/model/decision/Cause$AttributeUnavailable;Ljava/util/Set;Lme/ahoo/cosec/model/decision/StatementRef$Policy;ILjava/lang/Object;)Lme/ahoo/cosec/model/decision/Cause$AttributeUnavailable;
 	public fun equals (Ljava/lang/Object;)Z
 	public final fun getAt ()Lme/ahoo/cosec/model/decision/StatementRef$Policy;
 	public final fun getAttributes ()Ljava/util/Set;
@@ -274,10 +270,6 @@ public final class me/ahoo/cosec/model/decision/Cause$AttributeUnavailable : me/
 
 public final class me/ahoo/cosec/model/decision/Cause$BoundaryUnavailable : me/ahoo/cosec/model/decision/Cause {
 	public synthetic fun <init> (Ljava/lang/String;Ljava/lang/Throwable;Lkotlin/jvm/internal/DefaultConstructorMarker;)V
-	public final fun component1-uumxgvY ()Ljava/lang/String;
-	public final fun component2 ()Ljava/lang/Throwable;
-	public final fun copy-Qg9uLo4 (Ljava/lang/String;Ljava/lang/Throwable;)Lme/ahoo/cosec/model/decision/Cause$BoundaryUnavailable;
-	public static synthetic fun copy-Qg9uLo4$default (Lme/ahoo/cosec/model/decision/Cause$BoundaryUnavailable;Ljava/lang/String;Ljava/lang/Throwable;ILjava/lang/Object;)Lme/ahoo/cosec/model/decision/Cause$BoundaryUnavailable;
 	public fun equals (Ljava/lang/Object;)Z
 	public final fun getBoundary-uumxgvY ()Ljava/lang/String;
 	public final fun getError ()Ljava/lang/Throwable;
@@ -287,9 +279,6 @@ public final class me/ahoo/cosec/model/decision/Cause$BoundaryUnavailable : me/a
 
 public final class me/ahoo/cosec/model/decision/Cause$CheckFailed : me/ahoo/cosec/model/decision/Cause {
 	public fun <init> (Ljava/lang/Throwable;)V
-	public final fun component1 ()Ljava/lang/Throwable;
-	public final fun copy (Ljava/lang/Throwable;)Lme/ahoo/cosec/model/decision/Cause$CheckFailed;
-	public static synthetic fun copy$default (Lme/ahoo/cosec/model/decision/Cause$CheckFailed;Ljava/lang/Throwable;ILjava/lang/Object;)Lme/ahoo/cosec/model/decision/Cause$CheckFailed;
 	public fun equals (Ljava/lang/Object;)Z
 	public final fun getError ()Ljava/lang/Throwable;
 	public fun hashCode ()I
@@ -298,11 +287,6 @@ public final class me/ahoo/cosec/model/decision/Cause$CheckFailed : me/ahoo/cose
 
 public final class me/ahoo/cosec/model/decision/Cause$DocumentInvalid : me/ahoo/cosec/model/decision/Cause {
 	public fun <init> (Lme/ahoo/cosec/model/decision/DocumentKind;JLjava/lang/Throwable;)V
-	public final fun component1 ()Lme/ahoo/cosec/model/decision/DocumentKind;
-	public final fun component2 ()J
-	public final fun component3 ()Ljava/lang/Throwable;
-	public final fun copy (Lme/ahoo/cosec/model/decision/DocumentKind;JLjava/lang/Throwable;)Lme/ahoo/cosec/model/decision/Cause$DocumentInvalid;
-	public static synthetic fun copy$default (Lme/ahoo/cosec/model/decision/Cause$DocumentInvalid;Lme/ahoo/cosec/model/decision/DocumentKind;JLjava/lang/Throwable;ILjava/lang/Object;)Lme/ahoo/cosec/model/decision/Cause$DocumentInvalid;
 	public fun equals (Ljava/lang/Object;)Z
 	public final fun getDocument ()Lme/ahoo/cosec/model/decision/DocumentKind;
 	public final fun getError ()Ljava/lang/Throwable;
@@ -313,11 +297,6 @@ public final class me/ahoo/cosec/model/decision/Cause$DocumentInvalid : me/ahoo/
 
 public final class me/ahoo/cosec/model/decision/Cause$MatcherFailed : me/ahoo/cosec/model/decision/Cause {
 	public fun <init> (Lme/ahoo/cosec/model/decision/StatementRef$Policy;ZLjava/lang/Throwable;)V
-	public final fun component1 ()Lme/ahoo/cosec/model/decision/StatementRef$Policy;
-	public final fun component2 ()Z
-	public final fun component3 ()Ljava/lang/Throwable;
-	public final fun copy (Lme/ahoo/cosec/model/decision/StatementRef$Policy;ZLjava/lang/Throwable;)Lme/ahoo/cosec/model/decision/Cause$MatcherFailed;
-	public static synthetic fun copy$default (Lme/ahoo/cosec/model/decision/Cause$MatcherFailed;Lme/ahoo/cosec/model/decision/StatementRef$Policy;ZLjava/lang/Throwable;ILjava/lang/Object;)Lme/ahoo/cosec/model/decision/Cause$MatcherFailed;
 	public fun equals (Ljava/lang/Object;)Z
 	public final fun getAt ()Lme/ahoo/cosec/model/decision/StatementRef$Policy;
 	public final fun getError ()Ljava/lang/Throwable;
@@ -328,9 +307,6 @@ public final class me/ahoo/cosec/model/decision/Cause$MatcherFailed : me/ahoo/co
 
 public final class me/ahoo/cosec/model/decision/Cause$MembershipUnavailable : me/ahoo/cosec/model/decision/Cause {
 	public fun <init> (Ljava/lang/Throwable;)V
-	public final fun component1 ()Ljava/lang/Throwable;
-	public final fun copy (Ljava/lang/Throwable;)Lme/ahoo/cosec/model/decision/Cause$MembershipUnavailable;
-	public static synthetic fun copy$default (Lme/ahoo/cosec/model/decision/Cause$MembershipUnavailable;Ljava/lang/Throwable;ILjava/lang/Object;)Lme/ahoo/cosec/model/decision/Cause$MembershipUnavailable;
 	public fun equals (Ljava/lang/Object;)Z
 	public final fun getError ()Ljava/lang/Throwable;
 	public fun hashCode ()I
@@ -339,9 +315,6 @@ public final class me/ahoo/cosec/model/decision/Cause$MembershipUnavailable : me
 
 public final class me/ahoo/cosec/model/decision/Cause$MissingPolicies : me/ahoo/cosec/model/decision/Cause {
 	public fun <init> (Ljava/util/Set;)V
-	public final fun component1 ()Ljava/util/Set;
-	public final fun copy (Ljava/util/Set;)Lme/ahoo/cosec/model/decision/Cause$MissingPolicies;
-	public static synthetic fun copy$default (Lme/ahoo/cosec/model/decision/Cause$MissingPolicies;Ljava/util/Set;ILjava/lang/Object;)Lme/ahoo/cosec/model/decision/Cause$MissingPolicies;
 	public fun equals (Ljava/lang/Object;)Z
 	public final fun getPolicyIds ()Ljava/util/Set;
 	public fun hashCode ()I
@@ -361,9 +334,6 @@ public final class me/ahoo/cosec/model/decision/Cause$NotLoaded : me/ahoo/cosec/
 
 public final class me/ahoo/cosec/model/decision/Cause$RateLimiterUnavailable : me/ahoo/cosec/model/decision/Cause {
 	public fun <init> (Ljava/lang/String;)V
-	public final fun component1 ()Ljava/lang/String;
-	public final fun copy (Ljava/lang/String;)Lme/ahoo/cosec/model/decision/Cause$RateLimiterUnavailable;
-	public static synthetic fun copy$default (Lme/ahoo/cosec/model/decision/Cause$RateLimiterUnavailable;Ljava/lang/String;ILjava/lang/Object;)Lme/ahoo/cosec/model/decision/Cause$RateLimiterUnavailable;
 	public fun equals (Ljava/lang/Object;)Z
 	public final fun getRuleId ()Ljava/lang/String;
 	public fun hashCode ()I
@@ -372,9 +342,6 @@ public final class me/ahoo/cosec/model/decision/Cause$RateLimiterUnavailable : m
 
 public final class me/ahoo/cosec/model/decision/Cause$RequiredListenerFailed : me/ahoo/cosec/model/decision/Cause {
 	public fun <init> (Ljava/util/List;)V
-	public final fun component1 ()Ljava/util/List;
-	public final fun copy (Ljava/util/List;)Lme/ahoo/cosec/model/decision/Cause$RequiredListenerFailed;
-	public static synthetic fun copy$default (Lme/ahoo/cosec/model/decision/Cause$RequiredListenerFailed;Ljava/util/List;ILjava/lang/Object;)Lme/ahoo/cosec/model/decision/Cause$RequiredListenerFailed;
 	public fun equals (Ljava/lang/Object;)Z
 	public final fun getListeners ()Ljava/util/List;
 	public fun hashCode ()I
@@ -383,10 +350,6 @@ public final class me/ahoo/cosec/model/decision/Cause$RequiredListenerFailed : m
 
 public final class me/ahoo/cosec/model/decision/Cause$SourceUnavailable : me/ahoo/cosec/model/decision/Cause {
 	public fun <init> (Lme/ahoo/cosec/model/decision/DocumentKind;Ljava/lang/Throwable;)V
-	public final fun component1 ()Lme/ahoo/cosec/model/decision/DocumentKind;
-	public final fun component2 ()Ljava/lang/Throwable;
-	public final fun copy (Lme/ahoo/cosec/model/decision/DocumentKind;Ljava/lang/Throwable;)Lme/ahoo/cosec/model/decision/Cause$SourceUnavailable;
-	public static synthetic fun copy$default (Lme/ahoo/cosec/model/decision/Cause$SourceUnavailable;Lme/ahoo/cosec/model/decision/DocumentKind;Ljava/lang/Throwable;ILjava/lang/Object;)Lme/ahoo/cosec/model/decision/Cause$SourceUnavailable;
 	public fun equals (Ljava/lang/Object;)Z
 	public final fun getDocument ()Lme/ahoo/cosec/model/decision/DocumentKind;
 	public final fun getError ()Ljava/lang/Throwable;
@@ -399,9 +362,6 @@ public abstract interface class me/ahoo/cosec/model/decision/Decision {
 
 public final class me/ahoo/cosec/model/decision/Decision$Deny : me/ahoo/cosec/model/decision/Decision {
 	public fun <init> (Lme/ahoo/cosec/model/decision/StatementRef;)V
-	public final fun component1 ()Lme/ahoo/cosec/model/decision/StatementRef;
-	public final fun copy (Lme/ahoo/cosec/model/decision/StatementRef;)Lme/ahoo/cosec/model/decision/Decision$Deny;
-	public static synthetic fun copy$default (Lme/ahoo/cosec/model/decision/Decision$Deny;Lme/ahoo/cosec/model/decision/StatementRef;ILjava/lang/Object;)Lme/ahoo/cosec/model/decision/Decision$Deny;
 	public fun equals (Ljava/lang/Object;)Z
 	public final fun getBy ()Lme/ahoo/cosec/model/decision/StatementRef;
 	public fun hashCode ()I
@@ -410,9 +370,6 @@ public final class me/ahoo/cosec/model/decision/Decision$Deny : me/ahoo/cosec/mo
 
 public final class me/ahoo/cosec/model/decision/Decision$Indeterminate : me/ahoo/cosec/model/decision/Decision {
 	public fun <init> (Lme/ahoo/cosec/model/decision/Cause;)V
-	public final fun component1 ()Lme/ahoo/cosec/model/decision/Cause;
-	public final fun copy (Lme/ahoo/cosec/model/decision/Cause;)Lme/ahoo/cosec/model/decision/Decision$Indeterminate;
-	public static synthetic fun copy$default (Lme/ahoo/cosec/model/decision/Decision$Indeterminate;Lme/ahoo/cosec/model/decision/Cause;ILjava/lang/Object;)Lme/ahoo/cosec/model/decision/Decision$Indeterminate;
 	public fun equals (Ljava/lang/Object;)Z
 	public final fun getCause ()Lme/ahoo/cosec/model/decision/Cause;
 	public fun hashCode ()I
@@ -422,10 +379,6 @@ public final class me/ahoo/cosec/model/decision/Decision$Indeterminate : me/ahoo
 public final class me/ahoo/cosec/model/decision/Decision$Permit : me/ahoo/cosec/model/decision/Decision {
 	public fun <init> (Lme/ahoo/cosec/model/decision/StatementRef$Policy;Ljava/util/List;)V
 	public synthetic fun <init> (Lme/ahoo/cosec/model/decision/StatementRef$Policy;Ljava/util/List;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
-	public final fun component1 ()Lme/ahoo/cosec/model/decision/StatementRef$Policy;
-	public final fun component2 ()Ljava/util/List;
-	public final fun copy (Lme/ahoo/cosec/model/decision/StatementRef$Policy;Ljava/util/List;)Lme/ahoo/cosec/model/decision/Decision$Permit;
-	public static synthetic fun copy$default (Lme/ahoo/cosec/model/decision/Decision$Permit;Lme/ahoo/cosec/model/decision/StatementRef$Policy;Ljava/util/List;ILjava/lang/Object;)Lme/ahoo/cosec/model/decision/Decision$Permit;
 	public fun equals (Ljava/lang/Object;)Z
 	public final fun getBy ()Lme/ahoo/cosec/model/decision/StatementRef$Policy;
 	public final fun getObligations ()Ljava/util/List;
@@ -447,12 +400,6 @@ public abstract interface class me/ahoo/cosec/model/decision/Obligation {
 
 public final class me/ahoo/cosec/model/decision/Obligation$RateLimit : me/ahoo/cosec/model/decision/Obligation {
 	public fun <init> (Ljava/lang/String;Ljava/lang/String;Lme/ahoo/cosec/model/decision/RateLimitSpec;Z)V
-	public final fun component1 ()Ljava/lang/String;
-	public final fun component2 ()Ljava/lang/String;
-	public final fun component3 ()Lme/ahoo/cosec/model/decision/RateLimitSpec;
-	public final fun component4 ()Z
-	public final fun copy (Ljava/lang/String;Ljava/lang/String;Lme/ahoo/cosec/model/decision/RateLimitSpec;Z)Lme/ahoo/cosec/model/decision/Obligation$RateLimit;
-	public static synthetic fun copy$default (Lme/ahoo/cosec/model/decision/Obligation$RateLimit;Ljava/lang/String;Ljava/lang/String;Lme/ahoo/cosec/model/decision/RateLimitSpec;ZILjava/lang/Object;)Lme/ahoo/cosec/model/decision/Obligation$RateLimit;
 	public fun equals (Ljava/lang/Object;)Z
 	public final fun getBucket ()Ljava/lang/String;
 	public final fun getLimit ()Lme/ahoo/cosec/model/decision/RateLimitSpec;
@@ -472,7 +419,9 @@ public final class me/ahoo/cosec/model/decision/RateLimitSpec {
 	public final fun copy (DJ)Lme/ahoo/cosec/model/decision/RateLimitSpec;
 	public static synthetic fun copy$default (Lme/ahoo/cosec/model/decision/RateLimitSpec;DJILjava/lang/Object;)Lme/ahoo/cosec/model/decision/RateLimitSpec;
 	public fun equals (Ljava/lang/Object;)Z
+	public final fun getLimitPerWindow ()D
 	public final fun getPermitsPerSecond ()D
+	public final fun getWindowMillis ()J
 	public final fun getWindowSeconds ()J
 	public fun hashCode ()I
 	public fun toString ()Ljava/lang/String;
