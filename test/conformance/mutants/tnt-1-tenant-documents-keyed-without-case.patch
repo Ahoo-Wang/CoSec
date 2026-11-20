@@ -1,0 +1,17 @@
+# Rule: TNT-1
+# Mutant: the snapshot source keys tenant documents by their id in lower case: tenants Acme and acme share one entry, so one tenant's requests are decided on the other's document
+# Tests: :runtime:test --tests me.ahoo.cosec.runtime.snapshot.* :conformance:test --tests me.ahoo.cosec.conformance.ConformanceTest
+
+diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/SnapshotFamily.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/SnapshotFamily.kt
+index a212ef2d..e2773949 100644
+--- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/SnapshotFamily.kt
++++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/SnapshotFamily.kt
+@@ -43,7 +43,7 @@ internal class SnapshotFamily<out A : Any>(
+     /** The id [key] names in this family. */
+     internal fun idOf(key: SnapshotKey): String = when {
+         kind == SnapshotKind.APP && key is SnapshotKey.App -> key.appId
+-        kind == SnapshotKind.TENANT && key is SnapshotKey.Tenant -> key.tenantId
++        kind == SnapshotKind.TENANT && key is SnapshotKey.Tenant -> key.tenantId.lowercase()
+         else -> throw IllegalArgumentException("[$key] is not a $kind document.")
+     }
+ }

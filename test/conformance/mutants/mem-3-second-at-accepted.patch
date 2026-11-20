@@ -1,0 +1,17 @@
+# Rule: MEM-3
+# Mutant: a claim with more than one @ is a role in the space after the first one, not a malformed entry
+# Tests: :runtime:test --tests me.ahoo.cosec.spi.membership.MembershipClaimsTest :conformance:test --tests me.ahoo.cosec.conformance.ConformanceTest
+
+diff --git a/core/spi/src/main/kotlin/me/ahoo/cosec/spi/membership/MembershipClaims.kt b/core/spi/src/main/kotlin/me/ahoo/cosec/spi/membership/MembershipClaims.kt
+index 999d318b..ae4e4278 100644
+--- a/core/spi/src/main/kotlin/me/ahoo/cosec/spi/membership/MembershipClaims.kt
++++ b/core/spi/src/main/kotlin/me/ahoo/cosec/spi/membership/MembershipClaims.kt
+@@ -70,7 +70,7 @@ object MembershipClaims {
+             val separator = role.indexOf(SPACE_SEPARATOR)
+             val roleId = if (separator < 0) role else role.substring(0, separator)
+             val spaceId = if (separator < 0) "" else role.substring(separator + 1)
+-            val wellFormed = roleId.isNotEmpty() && SPACE_SEPARATOR !in spaceId && (separator < 0 || spaceId.isNotEmpty())
++            val wellFormed = roleId.isNotEmpty() && (separator < 0 || spaceId.isNotEmpty())
+             if (!wellFormed || spaceId == ANY) {
+                 malformed.add(role)
+                 continue

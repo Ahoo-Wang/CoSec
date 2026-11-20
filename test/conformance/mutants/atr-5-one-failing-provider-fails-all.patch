@@ -1,0 +1,17 @@
+# Rule: ATR-5
+# Mutant: one provider that fails or times out makes every provider's attributes of the request unavailable: another provider's DENY no longer matches
+# Tests: :runtime:test --tests me.ahoo.cosec.runtime.attribute.ExternalAttributesPipelineTest :conformance:test --tests me.ahoo.cosec.conformance.ConformanceTest
+
+diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/stage/AttributeFetching.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/stage/AttributeFetching.kt
+index 138d19c2..c143dc55 100644
+--- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/stage/AttributeFetching.kt
++++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/stage/AttributeFetching.kt
+@@ -125,7 +125,7 @@ internal class AttributeFetching(
+                 async(start = CoroutineStart.UNDISPATCHED) { provide(registered, names, requestOf(registered)) }
+             }.map { it.await() }
+         }
+-        entries.forEachIndexed { index, (registered, names) -> fetched.record(registered, names, answers[index]) }
++        entries.forEachIndexed { index, (registered, names) -> fetched.record(registered, names, if (answers.any { it == null }) null else answers[index]) }
+     }
+ 
+     /** The attributes of [plan] not asked for yet, by the provider that declares them; null when there are none. */

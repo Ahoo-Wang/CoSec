@@ -1,0 +1,17 @@
+# Rule: ANA-1
+# Mutant: an or with an operand that does not constrain the attribute keeps the other operands' keys instead of being unconstrained: a request the unconstrained operand matches is left out of the index
+# Tests: :model:test --tests me.ahoo.cosec.model.condition.AnalysisPropertyTest --tests me.ahoo.cosec.model.condition.AdversarialAnalysisTest :conformance:test --tests me.ahoo.cosec.conformance.ConformanceTest
+
+diff --git a/core/model/src/main/kotlin/me/ahoo/cosec/model/condition/IndexKeys.kt b/core/model/src/main/kotlin/me/ahoo/cosec/model/condition/IndexKeys.kt
+index 9a22b2ae..9e5a3c3f 100644
+--- a/core/model/src/main/kotlin/me/ahoo/cosec/model/condition/IndexKeys.kt
++++ b/core/model/src/main/kotlin/me/ahoo/cosec/model/condition/IndexKeys.kt
+@@ -110,7 +110,7 @@ sealed class IndexKeys {
+         /** One operand's constraint holds. Mixing exact and folded constraints folds them all. */
+         private fun unite(operands: List<IndexKeys>): IndexKeys {
+             val constraints = operands.filterIsInstance<Only>()
+-            if (constraints.size != operands.size) {
++            if (constraints.isEmpty()) {
+                 return Unconstrained
+             }
+             val folded = constraints.any { it.folded }

@@ -1,0 +1,17 @@
+# Rule: IDX-1
+# Mutant: the index looks up an ignoreCase key with the request's value as written: a statement keyed on acme is not a candidate for ACME
+# Tests: :engine:test --tests me.ahoo.cosec.engine.IndexPropertyTest --tests me.ahoo.cosec.engine.EnginePropertyTest :conformance:test --tests me.ahoo.cosec.conformance.ConformanceTest
+
+diff --git a/core/engine/src/main/kotlin/me/ahoo/cosec/engine/StatementIndex.kt b/core/engine/src/main/kotlin/me/ahoo/cosec/engine/StatementIndex.kt
+index 69b4564b..ba8bf21b 100644
+--- a/core/engine/src/main/kotlin/me/ahoo/cosec/engine/StatementIndex.kt
++++ b/core/engine/src/main/kotlin/me/ahoo/cosec/engine/StatementIndex.kt
+@@ -108,7 +108,7 @@ internal class StatementIndex(statements: Array<CompiledStatement>, options: Ind
+             val value = lookup.indexValue(attribute) ?: return
+             exact[value]?.let(lookup::add)
+             if (folded.isNotEmpty()) {
+-                folded[foldAscii(value)]?.let(lookup::add)
++                folded[value]?.let(lookup::add)
+             }
+         }
+     }

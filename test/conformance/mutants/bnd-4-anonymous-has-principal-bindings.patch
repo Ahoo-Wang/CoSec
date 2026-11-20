@@ -1,0 +1,17 @@
+# Rule: BND-4
+# Mutant: an anonymous principal is matched by Principal bindings, attachments and break-glass bindings of its id, as if it were authenticated
+# Tests: :engine:test --tests me.ahoo.cosec.engine.EngineTest :conformance:test --tests me.ahoo.cosec.conformance.ConformanceTest
+
+diff --git a/core/engine/src/main/kotlin/me/ahoo/cosec/engine/CandidateOrder.kt b/core/engine/src/main/kotlin/me/ahoo/cosec/engine/CandidateOrder.kt
+index 8229a502..2ae05662 100644
+--- a/core/engine/src/main/kotlin/me/ahoo/cosec/engine/CandidateOrder.kt
++++ b/core/engine/src/main/kotlin/me/ahoo/cosec/engine/CandidateOrder.kt
+@@ -55,7 +55,7 @@ internal object CandidateOrder {
+         val tenantDocument = view.tenant
+         val subject = request.request.subject
+         val tenant = request.scope.tenant.value
+-        val principal = if (subject.authenticated) subject.id else null
++        val principal = subject.id
+         val app = view.app
+         if (visit(platform.anyone, request, platform, visitor)) {
+             return true

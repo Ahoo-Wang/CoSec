@@ -1,0 +1,17 @@
+# Rule: BND-5
+# Mutant: a binding's app matches the request's app whatever its case: a binding for app Shop applies in app shop
+# Tests: :engine:test --tests me.ahoo.cosec.engine.EnginePropertyTest --tests me.ahoo.cosec.engine.EngineTest :conformance:test --tests me.ahoo.cosec.conformance.ConformanceTest
+
+diff --git a/core/engine/src/main/kotlin/me/ahoo/cosec/engine/CandidateOrder.kt b/core/engine/src/main/kotlin/me/ahoo/cosec/engine/CandidateOrder.kt
+index 8229a502..d792153a 100644
+--- a/core/engine/src/main/kotlin/me/ahoo/cosec/engine/CandidateOrder.kt
++++ b/core/engine/src/main/kotlin/me/ahoo/cosec/engine/CandidateOrder.kt
+@@ -240,7 +240,7 @@ internal object CandidateOrder {
+     }
+ 
+     private fun inScope(entry: BoundEntry, tenant: String, app: String, space: String): Boolean =
+-        (entry.app == null || entry.app == app) &&
++        (entry.app == null || entry.app.equals(app, ignoreCase = true)) &&
+             (entry.space == null || entry.space == space) &&
+             (entry.roleTenant == null || entry.roleTenant == tenant)
+ }

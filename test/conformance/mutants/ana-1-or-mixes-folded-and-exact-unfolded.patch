@@ -1,0 +1,21 @@
+# Rule: ANA-1
+# Mutant: an or of an ignoreCase and an exact key keeps the exact values as written while the keys are folded: a request matching the exact operand in upper case is left out of the index
+# Tests: :model:test --tests me.ahoo.cosec.model.condition.AnalysisPropertyTest --tests me.ahoo.cosec.model.condition.AdversarialAnalysisTest :conformance:test --tests me.ahoo.cosec.conformance.ConformanceTest
+
+diff --git a/core/model/src/main/kotlin/me/ahoo/cosec/model/condition/IndexKeys.kt b/core/model/src/main/kotlin/me/ahoo/cosec/model/condition/IndexKeys.kt
+index 9a22b2ae..d0dd9308 100644
+--- a/core/model/src/main/kotlin/me/ahoo/cosec/model/condition/IndexKeys.kt
++++ b/core/model/src/main/kotlin/me/ahoo/cosec/model/condition/IndexKeys.kt
+@@ -116,11 +116,7 @@ sealed class IndexKeys {
+             val folded = constraints.any { it.folded }
+             val values = HashSet<String>()
+             for (constraint in constraints) {
+-                if (folded && !constraint.folded) {
+-                    constraint.values.mapTo(values) { Ascii.lowercase(it) }
+-                } else {
+-                    values.addAll(constraint.values)
+-                }
++                values.addAll(constraint.values)
+             }
+             return Only(values, folded)
+         }

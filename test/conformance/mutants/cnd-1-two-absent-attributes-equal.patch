@@ -1,0 +1,17 @@
+# Rule: CND-1
+# Mutant: two absent attributes are equal: eq of two attributes neither request has is true
+# Tests: :model:test --tests me.ahoo.cosec.model.condition.ConditionEvaluationTest :conformance:test --tests me.ahoo.cosec.conformance.ConformanceTest
+
+diff --git a/core/model/src/main/kotlin/me/ahoo/cosec/model/condition/CheckedCondition.kt b/core/model/src/main/kotlin/me/ahoo/cosec/model/condition/CheckedCondition.kt
+index c6f32884..79f2609a 100644
+--- a/core/model/src/main/kotlin/me/ahoo/cosec/model/condition/CheckedCondition.kt
++++ b/core/model/src/main/kotlin/me/ahoo/cosec/model/condition/CheckedCondition.kt
+@@ -91,7 +91,7 @@ sealed class CheckedCondition(
+             visit(visits)
+             return when (left.type) {
+                 AttributeType.STRING -> {
+-                    val l = input.string(left) ?: return false
++                    val l = input.string(left) ?: return input.string(right) == null
+                     val r = input.string(right) ?: return false
+                     if (ignoreCase) Ascii.equalsIgnoreCase(l, r) else l == r
+                 }
