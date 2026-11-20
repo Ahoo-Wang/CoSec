@@ -22,7 +22,9 @@ import me.ahoo.cosec.control.store.ListedChange
 import me.ahoo.cosec.spi.snapshot.SnapshotFormatException
 
 /** Every open change, through the state sets page by page, as the tests read them; one that does not read throws. */
-suspend fun ControlStore.allOpenChanges(): List<ChangeRequest> = ChangeState.entries.filterNot { it.terminal }.flatMap { state ->
+suspend fun ControlStore.allOpenChanges(): List<ChangeRequest> = ChangeState.entries.filterNot {
+    it.terminal
+}.flatMap { state ->
     val found = ArrayList<ListedChange>()
     var after: String? = null
     do {

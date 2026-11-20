@@ -16,9 +16,9 @@
 package me.ahoo.cosec.migrate
 
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
-import me.ahoo.cosec.control.change.ChangeRequest
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.cocache.control.CoCacheControlStore
+import me.ahoo.cosec.control.change.ChangeRequest
 import me.ahoo.cosec.model.PolicyId
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 

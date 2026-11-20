@@ -48,31 +48,8 @@ internal class ChangeRoutes(private val plane: ControlPlane) : RouteHandler {
         request: ControlHttpRequest,
         segments: List<String>
     ): ControlHttpResponse {
-        if (segments.isEmpty() && request.method == "GET") {
-            return listing(operator, request)
-        }
         if (segments.isEmpty()) {
-            return post(request) {
-                val key = documentKey(it.text("document"))
-                val operations = it.array("operations").map { op ->
-                    decoded("operations") { ChangeRequestCodec.operation(key, op) }
-                }
-                // A change's kind is its entry point's, never the request's (review K1): break-glass is /break-glass.
-                requireRequest(
-                    !it.has("kind")
-                ) { "a change has no kind: propose it here, or request break-glass at /break-glass" }
-                changeResponse(
-                    plane.propose(
-                        operator,
-                        key,
-                        it.long("base"),
-                        operations,
-                        it.optText("note").orEmpty(),
-                        confirmations(it),
-                    ),
-                    CREATED
-                )
-            }
+            return proposeOrList(operator, request)
         }
         if (segments.size != 1) return notFound()
         val (idText, verb) = verbOf(segments[0])
@@ -92,6 +69,34 @@ internal class ChangeRoutes(private val plane: ControlPlane) : RouteHandler {
                 else -> return@post notFound()
             }
             changeResponse(change, OK)
+        }
+    }
+
+    /** `POST /changes`, a proposal, or `GET /changes`, a listing. */
+    private suspend fun proposeOrList(operator: Operator, request: ControlHttpRequest): ControlHttpResponse {
+        if (request.method == "GET") {
+            return listing(operator, request)
+        }
+        return post(request) {
+            val key = documentKey(it.text("document"))
+            val operations = it.array("operations").map { op ->
+                decoded("operations") { ChangeRequestCodec.operation(key, op) }
+            }
+            // A change's kind is its entry point's, never the request's (review K1): break-glass is /break-glass.
+            requireRequest(
+                !it.has("kind")
+            ) { "a change has no kind: propose it here, or request break-glass at /break-glass" }
+            changeResponse(
+                plane.propose(
+                    operator,
+                    key,
+                    it.long("base"),
+                    operations,
+                    it.optText("note").orEmpty(),
+                    confirmations(it),
+                ),
+                CREATED
+            )
         }
     }
 

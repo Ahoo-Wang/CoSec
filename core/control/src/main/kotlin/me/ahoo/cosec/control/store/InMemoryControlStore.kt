@@ -130,7 +130,9 @@ class InMemoryControlStore(private val clock: Clock = Clock.systemUTC()) : Contr
     }
 
     override suspend fun changes(state: ChangeState, after: String?, limit: Int): ChangePage = synchronized(lock) {
-        val listed = open().filter { it.state == state }.sortedBy(::cursorOf).filter { after == null || cursorOf(it) > after }
+        val listed = open().filter { it.state == state }.sortedBy(
+            ::cursorOf
+        ).filter { after == null || cursorOf(it) > after }
         val page = listed.take(limit)
         ChangePage(page.map(ListedChange::Readable), if (listed.size > limit) cursorOf(page.last()) else null)
     }

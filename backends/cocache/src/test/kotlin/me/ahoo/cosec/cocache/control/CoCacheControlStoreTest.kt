@@ -281,21 +281,23 @@ class CoCacheControlStoreTest {
     fun `members a write left behind are dropped by the next read`() = runBlocking<Unit> {
         val backend = InMemoryBackend()
         val keyPrefix = newKeyPrefix()
-        SnapshotNode(backend, keyPrefix).use { node -> SnapshotNode(backend, keyPrefix).use { other ->
-            val store = store(node)
-            val raw = other.runtime.create(ControlCacheSpecs.changeSet(other.keyPrefix))
-            val open = change("c1", ChangeState.DRAFT)
-            store.putChange(null, open).assert().isTrue()
-            val digest = store.change(ChangeId("c1"))!!.digest
-            store.putChange(digest, open.copy(state = ChangeState.ABANDONED)).assert().isTrue()
-            // As a removal that failed after the terminal write would leave them.
-            raw.suspending().add("doc:$key", listOf("c1"))
-            raw.suspending().add("state:DRAFT", listOf("$key#c1"))
-            store.allOpenChanges().assert().isEmpty()
-            store.openChanges(key).assert().isEmpty()
-            raw.suspending().get("state:DRAFT").assert().isEmpty()
-            raw.suspending().get("doc:$key").assert().isEmpty()
-        } }
+        SnapshotNode(backend, keyPrefix).use { node ->
+            SnapshotNode(backend, keyPrefix).use { other ->
+                val store = store(node)
+                val raw = other.runtime.create(ControlCacheSpecs.changeSet(other.keyPrefix))
+                val open = change("c1", ChangeState.DRAFT)
+                store.putChange(null, open).assert().isTrue()
+                val digest = store.change(ChangeId("c1"))!!.digest
+                store.putChange(digest, open.copy(state = ChangeState.ABANDONED)).assert().isTrue()
+                // As a removal that failed after the terminal write would leave them.
+                raw.suspending().add("doc:$key", listOf("c1"))
+                raw.suspending().add("state:DRAFT", listOf("$key#c1"))
+                store.allOpenChanges().assert().isEmpty()
+                store.openChanges(key).assert().isEmpty()
+                raw.suspending().get("state:DRAFT").assert().isEmpty()
+                raw.suspending().get("doc:$key").assert().isEmpty()
+            }
+        }
     }
 
     /**

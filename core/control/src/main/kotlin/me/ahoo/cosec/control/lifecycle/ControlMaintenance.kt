@@ -105,9 +105,13 @@ class ControlMaintenance(
      * What the open changes of [key] rest on, each as it is now (expired if past its time); throws when one cannot be
      * read, since it might rest on a revision. The store read each of them once to list it (#1219).
      */
-    private suspend fun resting(key: SnapshotKey): Set<SnapshotDigest> = store.openChanges(key).flatMapTo(HashSet()) { listed ->
+    private suspend fun resting(
+        key: SnapshotKey
+    ): Set<SnapshotDigest> = store.openChanges(key).flatMapTo(HashSet()) { listed ->
         when (listed) {
-            is ListedChange.Unreadable -> throw IllegalStateException("change [${listed.id.value}] of [$key] does not read")
+            is ListedChange.Unreadable -> throw IllegalStateException(
+                "change [${listed.id.value}] of [$key] does not read"
+            )
             is ListedChange.Readable -> current(listed.change)?.takeUnless { it.state.terminal }?.restsOn().orEmpty()
         }
     }
@@ -144,7 +148,11 @@ class ControlMaintenance(
             return withTimeout(shadowInterval.toKotlinDuration()) {
                 attempt("keep the open-change sets") { store.keepOpenChanges() }
                 val read = shadowingChanges().map { listed ->
-                    (listed as? ListedChange.Readable)?.let { attempt("read change [${it.id.value}]") { listOfNotNull(current(it.change)) } }
+                    (listed as? ListedChange.Readable)?.let {
+                        attempt(
+                            "read change [${it.id.value}]"
+                        ) { listOfNotNull(current(it.change)) }
+                    }
                 }
                 val shadowing = read.flatMap { it.orEmpty() }.filter { it.state == ChangeState.SHADOWING }
                 val closed = shadowing.mapNotNull { change ->

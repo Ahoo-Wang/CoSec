@@ -37,7 +37,13 @@ import me.ahoo.cosec.spi.snapshot.SnapshotKey
  * it could miss a change only the list of the format before names.
  */
 internal class ChangeListings(private val store: ControlStore, private val authority: ChangeAuthority) {
-    suspend fun list(operator: Operator, document: SnapshotKey?, state: ChangeState?, after: String?, limit: Int): ChangePage {
+    suspend fun list(
+        operator: Operator,
+        document: SnapshotKey?,
+        state: ChangeState?,
+        after: String?,
+        limit: Int
+    ): ChangePage {
         if (!store.openChangesKept()) {
             throw ChangeRejectedException(
                 UNAVAILABLE,
@@ -74,7 +80,10 @@ internal class ChangeListings(private val store: ControlStore, private val autho
             ControlDecision.PERMIT -> true
             ControlDecision.DENY -> false
             ControlDecision.INDETERMINATE ->
-                throw ChangeRejectedException(UNAVAILABLE, "whether the changes of [$key] may be read could not be decided")
+                throw ChangeRejectedException(
+                    UNAVAILABLE,
+                    "whether the changes of [$key] may be read could not be decided"
+                )
         }
     }
 }

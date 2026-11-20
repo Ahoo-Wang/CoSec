@@ -16,11 +16,11 @@
 package me.ahoo.cosec.migrate
 
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
-import me.ahoo.cosec.spi.snapshot.SnapshotKeyText
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.migrate.MigrateMain.FAILED
 import me.ahoo.cosec.migrate.MigrateMain.OK
 import me.ahoo.cosec.migrate.RedisAccess.repairAccess
+import me.ahoo.cosec.spi.snapshot.SnapshotKeyText
 import java.io.PrintStream
 
 /** `repair-references`. */
@@ -44,7 +44,9 @@ internal object RepairReferencesCommand {
             out.println("Listed ${result.openChanges} open change(s) in the open-change sets.")
         }
         result.unreadOpenChanges.forEach {
-            out.println("FAILED change [${SnapshotKeyText.printable(it)}] does not read: the open-change sets stay unkept.")
+            out.println(
+                "FAILED change [${SnapshotKeyText.printable(it)}] does not read: the open-change sets stay unkept."
+            )
         }
         out.println("Visited ${result.documents} document(s); added ${result.added} reference(s).")
         out.println("Removed ${result.removed} reference(s) no head refers to.")

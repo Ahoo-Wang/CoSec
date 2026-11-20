@@ -43,13 +43,13 @@ import me.ahoo.cosec.cocache.snapshot.SnapshotDocumentCodec
 import me.ahoo.cosec.cocache.snapshot.SnapshotKeyEncoder
 import me.ahoo.cosec.control.change.ChangeId
 import me.ahoo.cosec.control.change.ChangeRequest
+import me.ahoo.cosec.control.change.ChangeState
 import me.ahoo.cosec.control.change.StageSlot
 import me.ahoo.cosec.control.store.AppList
-import me.ahoo.cosec.control.store.ControlStore
-import me.ahoo.cosec.control.change.ChangeState
-import me.ahoo.cosec.control.store.ListedChange
 import me.ahoo.cosec.control.store.ChangePage
+import me.ahoo.cosec.control.store.ControlStore
 import me.ahoo.cosec.control.store.HeadWrite
+import me.ahoo.cosec.control.store.ListedChange
 import me.ahoo.cosec.control.store.ReferrerEntry
 import me.ahoo.cosec.control.store.RevisionIndex
 import me.ahoo.cosec.control.store.StoredDocument
@@ -64,7 +64,6 @@ import me.ahoo.cosec.spi.snapshot.SnapshotKeyText
 import java.time.Clock
 import java.time.Duration
 import java.time.Instant
-import kotlin.coroutines.cancellation.CancellationException
 
 private val log = KotlinLogging.logger {}
 

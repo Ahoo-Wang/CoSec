@@ -96,10 +96,7 @@ object CoSecCacheSpecs {
     /** The open changes: a set per document and per state, and the marker that they are kept (`CTL-54`). */
     const val CONTROL_CHANGE_SET_CACHE_NAME = "ControlChangeSetCache"
 
-    /**
-     * The changes that may be open. Its key `documents`, the list of documents before 8.0.0-beta.5, is what
-     * `cosec-migrate repair-references` converts last: while it is there, the store is not repaired.
-     */
+    /** The lists before 8.0.0-beta.5 (`documents`, `open-changes`), which `repair-references` converts, then deletes. */
     const val CONTROL_LIST_CACHE_NAME = "ControlListCache"
 
     /** The app documents there are, which the grant analysis reads on every tenant change (RC1-4). */

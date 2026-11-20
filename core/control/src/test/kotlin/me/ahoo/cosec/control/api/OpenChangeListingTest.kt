@@ -83,7 +83,10 @@ class OpenChangeListingTest {
         val acme = proposed()
         val (_, first) = list(mapOf("state" to "CHECKED", "limit" to "1"), alice)
         ids(first).assert().containsExactly(acme[0])
-        val (_, second) = list(mapOf("state" to "CHECKED", "limit" to "1", "after" to first.get("next").asString()), alice)
+        val (_, second) = list(
+            mapOf("state" to "CHECKED", "limit" to "1", "after" to first.get("next").asString()),
+            alice
+        )
         ids(second).assert().containsExactly(acme[1])
         second.get("next").isNull.assert().isTrue()
     }
