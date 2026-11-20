@@ -122,8 +122,15 @@ internal class Specialization(
         is CheckResult.Invalid -> Folded.Incomparable("${checked.errors}")
     }
 
+    /**
+     * [condition], one atom reading [attributes], with its resource variables renamed all at once (R2C-31, `GRT-8`):
+     * each path is mapped from the original atom, never from one already renamed, so `eq(a, b)` under `{a→b, b→c}` is
+     * `eq(b, c)`, not `eq(c, c)`. A renaming never makes two different variables one: [renames] comes from
+     * [me.ahoo.cosec.engine.pattern.PatternContainment], which pairs captures by position, and no pattern captures a
+     * name twice (both pattern parsers refuse it), so two outer variables never meet in one inner variable.
+     */
     private fun residual(condition: Condition, vararg attributes: Attribute): Folded {
-        var renamed = condition
+        val paths = HashMap<String, String>()
         for (attribute in attributes) {
             if (opaque(attribute)) {
                 return Folded.Incomparable("${attribute.path} depends on who asks")
@@ -131,10 +138,10 @@ internal class Specialization(
             if (attribute.kind == Kind.RESOURCE_VAR && renames != null) {
                 val name = renames[attribute.name]
                     ?: return Folded.Incomparable("${attribute.path} is not captured at the same position")
-                renamed = rename(renamed, attribute.path, Attribute.of(Kind.RESOURCE_VAR, name).path)
+                paths[attribute.path] = Attribute.of(Kind.RESOURCE_VAR, name).path
             }
         }
-        return Folded.Residual(renamed)
+        return Folded.Residual(if (paths.isEmpty()) condition else rename(condition, paths))
     }
 
     private fun outside(path: String): Folded = Folded.Incomparable("$path is not in the attribute catalog")
@@ -150,9 +157,9 @@ internal class Specialization(
         else -> error("$condition is not an atom with one attribute")
     }
 
-    /** [condition] with [from] replaced by [to]; an atom reads it at most on both sides of an `eq`. */
-    private fun rename(condition: Condition, from: String, to: String): Condition {
-        fun path(path: String) = if (path == from) to else path
+    /** [condition] with every path of [paths] replaced by what it maps to, in one substitution. */
+    private fun rename(condition: Condition, paths: Map<String, String>): Condition {
+        fun path(path: String) = paths[path] ?: path
         return when (condition) {
             is Condition.Eq -> {
                 val value = condition.value
