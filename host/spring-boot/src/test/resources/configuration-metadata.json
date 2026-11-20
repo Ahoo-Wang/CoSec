@@ -489,6 +489,12 @@
       "type": "java.util.List<java.lang.String>"
     },
     {
+      "description": "Whether the apps this host names are loaded at startup, as `prewarm-apps` are, and held (`SNP-20`): its `cosec.authorization.scope.app-id`, and on a gateway every `cosec-app-id` its routes name, then every app a refreshed route names. Off, they load on their first request, as before.",
+      "name": "cosec.authorization.snapshot.prewarm-host-apps",
+      "sourceType": "me.ahoo.cosec.spring.boot.pipeline.RuntimeAuthorizationProperties$Snapshot",
+      "type": "java.lang.Boolean"
+    },
+    {
       "description": "Tenant documents loaded at startup, after the platform document; readiness waits for them.",
       "name": "cosec.authorization.snapshot.prewarm-tenants",
       "sourceType": "me.ahoo.cosec.spring.boot.pipeline.RuntimeAuthorizationProperties$Snapshot",
@@ -709,6 +715,12 @@
       "name": "cosec.jwt.session.lifetime",
       "sourceType": "me.ahoo.cosec.spring.boot.jwt.JwtProperties$Session",
       "type": "java.time.Duration"
+    },
+    {
+      "name": "cosec.jwt.session.memberships-on-refresh",
+      "type": "java.lang.String",
+      "description": "How the starter's refresh route gives a refreshed token its memberships (its roles and attached policies), when the application declares no `MembershipRefresh` bean: no default, and with the route served startup fails until this is `from-token`, the statement that a refreshed token keeps the memberships of the token it replaces, so a removed role or attached policy applies at the member's next sign-in, `lifetime` at the latest (`STA-8`).",
+      "sourceType": "me.ahoo.cosec.spring.boot.jwt.JwtProperties$Session"
     },
     {
       "description": "How long after a refresh the pair it replaced is answered at the current generation: the window a client has to retry a refresh whose response it lost.",

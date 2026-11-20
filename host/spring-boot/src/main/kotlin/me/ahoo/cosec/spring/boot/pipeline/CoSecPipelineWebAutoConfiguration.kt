@@ -18,12 +18,15 @@ package me.ahoo.cosec.spring.boot.pipeline
 import io.github.oshai.kotlinlogging.KotlinLogging
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.engine.CompiledDocument
 import me.ahoo.cosec.gateway.PipelineGatewayFilter
 import me.ahoo.cosec.model.AppId
 import me.ahoo.cosec.model.scope.HostScope
 import me.ahoo.cosec.runtime.Pipeline
 import me.ahoo.cosec.runtime.event.BridgeContextContributor
 import me.ahoo.cosec.runtime.http.RequestGate
+import me.ahoo.cosec.runtime.snapshot.DocumentReadiness
+import me.ahoo.cosec.runtime.snapshot.SnapshotSource
 import me.ahoo.cosec.spring.boot.ConditionalOnCoSecEnabled
 import me.ahoo.cosec.spring.boot.StartupTask
 import me.ahoo.cosec.spring.boot.StartupTaskExclusion
@@ -40,9 +43,11 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnBean
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingClass
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication
 import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.boot.web.servlet.FilterRegistrationBean
+import org.springframework.cloud.gateway.route.RouteLocator
 import org.springframework.context.ApplicationContext
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Condition
@@ -210,6 +215,23 @@ internal class CoSecPipelineWebAutoConfiguration {
                 hostOf(properties),
                 identity.forwardAuthorization,
             )
+
+        /**
+         * `SNP-20`: the apps the gateway's routes name are loaded before it reports ready, and the new ones a refresh
+         * names when it happens. `cosec.authorization.snapshot.prewarm-host-apps=false` turns it off.
+         */
+        @Bean
+        @ConditionalOnProperty(
+            prefix = RuntimeAuthorizationProperties.PREFIX + ".snapshot",
+            name = ["prewarm-host-apps"],
+            havingValue = "true",
+            matchIfMissing = true,
+        )
+        fun cosecGatewayRouteApps(
+            routes: ObjectProvider<RouteLocator>,
+            readiness: ObjectProvider<DocumentReadiness>,
+            source: ObjectProvider<SnapshotSource<CompiledDocument, CompiledDocument>>,
+        ): GatewayRouteApps = GatewayRouteApps(routes, readiness, source)
 
         /** UB-10: the application's own controllers and functional routes are outside the gateway's filter. */
         @Bean

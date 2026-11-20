@@ -185,7 +185,8 @@ Which preview of the library may run behind which preview of the gateway image: 
   - With every place used, the tenant entries take about 520 MB of heap at 30 KB a tenant document of 5 roles of
     20 permissions and 20 bindings. Check your heap against
     [Sizing a SaaS gateway](./deployment.md#sizing-a-saas-gateway), or set the two properties back. The production
-    overlay of `k8s/` now gives a gateway a 1.5 GiB heap and a 2560Mi limit, where it gave 1 GiB and 2Gi.
+    overlay of `k8s/` now gives a gateway a 2 GiB heap and a 3200Mi limit, where it gave 1 GiB and 2Gi: room for every
+    snapshot and revocation default at its bound.
   - `cosec.authorization.snapshot.reload-concurrency` is new, and a revalidation pass reads 16 documents at a time, not 4.
     The reads per interval are unchanged; a pass ends four times sooner, in a burst four times denser.
   - An install that takes its family over the cap evicts at most 64 entries of that kind on its own thread, and
@@ -196,6 +197,25 @@ Which preview of the library may run behind which preview of the gateway image: 
   `~cosec:shadow:report:*:pod-a` and `~cosec:shadow:status:pod-a` to `~cosec:shadow:report:*:pod-a.*` and
   `~cosec:shadow:status:pod-a.*` ([Who may write which keys](./storage.md#who-may-write-which-keys)); an instance with
   the old lines is denied its report and status writes, which it logs at `WARN`.
+- **A host loads the apps it names at startup** (`SNP-20`). Its `cosec.authorization.scope.app-id` and, on a gateway, every
+  route's `cosec-app-id` load with `prewarm-apps`, and readiness waits for them as for `prewarm-apps`: an instance whose
+  Redis cannot answer for one stays not ready, retrying. `prewarm-apps` keeps working as before.
+  `cosec.authorization.snapshot.prewarm-host-apps=false` restores loading those apps on their first request.
+- **A host that serves the refresh route states how a refreshed token gets its memberships** (`STA-8`). Affected: every
+  host that sets `cosec.authentication.login.refresh.path`, declares no `RefreshTokenAuthentication` of its own and no
+  `MembershipRefresh<RefreshTokenCredentials>` bean. Through beta.4 such a host refreshed silently with
+  `MembershipRefresh.CLAIMS`: a role removed from a member kept working until their next sign-in, up to
+  `cosec.jwt.session.lifetime` (30 days), as long as they refreshed within the refresh token's lifetime. It now **fails
+  to start**, and the message says what the choice costs. Choose one:
+  - to keep what the host did, write `cosec.jwt.session.memberships-on-refresh: from-token`
+    (`COSEC_JWT_SESSION_MEMBERSHIPS_ON_REFRESH=from-token`). Any other value fails like an absent one. Startup logs one
+    `INFO` line with the session lifetime it implies;
+  - or declare a `MembershipRefresh<RefreshTokenCredentials>` bean that reads the member's roles and attached policies again, so a removal
+    applies within `cosec.jwt.token-validity.access` (10 minutes).
+
+  Either way `TokenRevoker.revokeSubject` ends a member's tokens at once
+  ([How long a removed role lives](../integration/authentication.md#how-long-a-removed-role-lives)). A host that serves
+  no refresh route, or builds its own `RefreshTokenAuthentication`, is unaffected.
 
 ## From 8.0.0-beta.3 {#from-8-0-0-beta-3}
 

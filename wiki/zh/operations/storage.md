@@ -232,12 +232,15 @@ sequenceDiagram
 - **本地副本**只服务冷加载。实例第一次需要某个文档时，可能采用 CoCache 的本地副本，它最多
   [`local-max-age`](./configuration.md#snapshot)（30 秒）旧；实例按这个最旧的时间计算它，并立即向 Redis 确认。本地的
   "没有这个文档"从不被信任：只有 Redis 能回答某个文档不存在。
+- **主机指定的应用从启动起就被持有**（`SNP-20`）：它的 `cosec.authorization.scope.app-id`，网关上还有每条路由的 `cosec-app-id`，
+  与 `prewarm-apps` 一起在实例报告就绪之前加载，所以每个应用的第一个请求都会找到已装入的文档（[`prewarm-host-apps`](./configuration.md#snapshot)）。
+  被持有的应用文档在发布后几秒内被替换（失效消息或下一轮重新确认），与平台文档相同。
 - **冷加载最多等待** [`cold-load-timeout`](./configuration.md#snapshot)（2 秒）；之后对该请求而言文档算作失败。
 - **持有的文档有上限。** 每个族最多持有 [`max-apps`/`max-tenants`](./configuration.md#snapshot) 个文档和
   `max-absent-apps`/`max-absent-tenants` 个"不存在"条目，在一个后台整理线程上丢弃最久未用的。冷加载突发时，它可能短暂地持有
   最多上限的两倍，且绝不超出上限 4,096 个以上，另加正在加载的文档；超过这个数时，加载该文档的线程在回答请求之前最多驱逐该类
   64 个，使族回到这个范围内，其余由后台整理线程驱逐（`SNP-14`）。两种驱逐都只扫描族中所驱逐那一类的条目，每 50,000 个约一毫秒；
-  加载该文档的线程只付出一次扫描和几十次移除，默认上限下约 2 ms，绝不跑完一整轮回到上限。"不存在"条目与文档分开扫描。
+  加载该文档的线程只付出一次扫描和几十次移除，默认上限下约 2 到 3.6 ms，绝不跑完一整轮回到上限（4 到 9 ms，代码尚未编译时 21 到 33 ms）。"不存在"条目与文档分开扫描。
 - **修订只按 Redis 的说法变化。** Redis 故障切换后，由于复制是异步的，Redis 可能返回比已装入的更旧的修订。实例装入
   Redis 中的内容，因为其他实例读到的也一样，并以 `ERROR` 记录
   `Snapshot document [<doc>] regressed from revision <a> to <b>; ...`。请重新发布丢失的变更。

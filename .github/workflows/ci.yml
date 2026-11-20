@@ -71,6 +71,14 @@ jobs:
       - name: Set up Java and Gradle
         uses: ./.github/actions/setup-java-gradle
 
+      # Downloads only, retried, before anything is compiled or tested (.github/scripts/README.md): a restored cache that
+      # names a jar it lacks, or a repository that answers 429 or a wrong 404, fails this step, not the check below.
+      # What the group's projects download, not the whole build's: `:x:check` becomes `:x:resolveDependencies`.
+      - name: Resolve the dependencies of ${{ matrix.projects }}
+        env:
+          TASKS: ${{ matrix.tasks }}
+        run: RESOLVE_TASKS="${TASKS//:check/:resolveDependencies}" .github/scripts/resolve-dependencies.sh
+
       - name: Check ${{ matrix.projects }}
         env:
           TASKS: ${{ matrix.tasks }}
@@ -286,6 +294,10 @@ jobs:
         uses: gradle/actions/setup-gradle@8da46b539cd8fe6ab27ca75128919a18d757604c # v6.4.1
         with:
           cache-read-only: ${{ github.ref != 'refs/heads/main' }}
+
+      # Downloads only, retried (.github/scripts/README.md), for the host `pnpm test:host` builds with Gradle.
+      - name: Resolve the dependencies of the host
+        run: RESOLVE_TASKS=":client-host:resolveDependencies" ../.github/scripts/resolve-dependencies.sh ..
 
       - name: Setup pnpm
         uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1

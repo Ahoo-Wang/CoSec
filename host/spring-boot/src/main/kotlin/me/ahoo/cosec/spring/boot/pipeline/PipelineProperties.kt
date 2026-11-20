@@ -266,6 +266,13 @@ class RuntimeAuthorizationProperties {
         /** Tenant documents loaded at startup, after the platform document; readiness waits for them. */
         var prewarmTenants: List<String> = emptyList()
 
+        /**
+         * Whether the apps this host names are loaded at startup, as `prewarm-apps` are, and held (`SNP-20`): its
+         * `cosec.authorization.scope.app-id`, and on a gateway every `cosec-app-id` its routes name, then every app a
+         * refreshed route names. Off, they load on their first request, as before.
+         */
+        var prewarmHostApps: Boolean = true
+
         /** Threads that compile documents; positive. */
         var compileThreads: Int = 2
 
