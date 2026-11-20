@@ -1,0 +1,62 @@
+{
+  "rules": [
+    "CTL-46"
+  ],
+  "polarity": "positive",
+  "level": "control",
+  "description": "c1 shadows tenant acme: its window is listed with its candidate. Abandoned, its withdrawal waits until a later step: until the candidate is gone, the window stays listed, so the list never misses a staged candidate.",
+  "steps": [
+    {
+      "propose": {
+        "change": "c1",
+        "document": "tenant:acme",
+        "operations": [
+          {
+            "putPolicy": {
+              "id": "read",
+              "statements": [
+                {
+                  "effect": "allow",
+                  "action": "order:read"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "stage": "c1"
+    },
+    {
+      "listed": "tenant:acme"
+    },
+    {
+      "late": {
+        "abandon": "c1"
+      }
+    },
+    {
+      "listed": "tenant:acme"
+    },
+    {
+      "staged": "tenant:acme"
+    }
+  ],
+  "expect": {
+    "steps": [
+      "CHECKED",
+      "SHADOWING",
+      "listed c1",
+      "ABANDONED",
+      "listed c1",
+      "staged none"
+    ],
+    "errors": {
+      "c1": []
+    },
+    "heads": {
+      "tenant:acme": 0
+    }
+  }
+}

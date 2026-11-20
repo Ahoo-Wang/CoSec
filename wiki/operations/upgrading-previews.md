@@ -27,6 +27,12 @@ Which preview of the library may run behind which preview of the gateway image: 
 
 ## From 8.0.0-beta.4 {#from-8-0-0-beta-4}
 
+- **The control plane keeps a list of the staged candidates** (`CTL-46`), `<s>:candidate-staged:all`, which instances
+  will read instead of a candidate key per document they serve. Affected:
+  - a Redis ACL for a data-plane instance: add `%R~cosec:candidate-staged:*` to its keys
+    ([Who may write which keys](./storage.md#who-may-write-which-keys));
+  - a downgrade of the control plane to a preview before this one: delete `<s>:candidate-staged:all` first, or instances
+    trust a list nobody keeps. Such a list can only cost shadow samples, never pass a window.
 - **The back-references and the document list are sets: run `cosec-migrate repair-references` once** (`CTL-42`,
   `CTL-43`, `CTL-44`, `MIG-4`). Affected: every store a control plane of 8.0.0-beta.4 or earlier wrote. Data-plane
   instances are not: they read none of these keys.

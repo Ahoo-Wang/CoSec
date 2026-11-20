@@ -24,6 +24,9 @@ description: "每个 8.0 预览版（alpha 与 beta）到下一个之间的变�
 
 ## 从 8.0.0-beta.4 升级 {#from-8-0-0-beta-4}
 
+- **控制面维护一份暂存候选的列表**（`CTL-46`），`<s>:candidate-staged:all`，实例将读取它，而不再为所服务的每个文档读一个候选 key。受影响：
+  - 数据面实例的 Redis ACL：在它的 key 中加上 `%R~cosec:candidate-staged:*`（[谁可以写哪些 key](./storage.md#who-may-write-which-keys)）；
+  - 把控制面降级到此前的预览版：先删除 `<s>:candidate-staged:all`，否则实例会信任一份没人维护的列表。这样的列表只会让影子窗口少得样本，绝不会让窗口通过。
 - **反向引用和文档列表是集合：运行一次 `cosec-migrate repair-references`**（`CTL-42`、`CTL-43`、`CTL-44`、`MIG-4`）。受影响的是 8.0.0-beta.4 或更早版本的控制面写过的每个存储。数据面实例不受影响：它们不读这些 key。
   - 一个策略的反向引用（`<s>:control:refs:<doc>:<policyId>`）原来是一个值，每个加入或退出的租户都整体重写它；现在它是一个集合，每个引用者的每个修订一个成员，文档列表也从 `<s>:control:list:documents` 移到了集合 `<s>:control:documents:all`。租户的一次发布现在只写它自己的成员，无论有多少租户（[存储](./storage.md#redis-keys)）。
   - 停掉所有更早版本的控制面，然后运行一次 `cosec-migrate repair-references --to-redis <uri> [--cluster] [--key-prefix <p>]`；本版本的控制面可以同时运行。它转换头触及的每个反向引用值，从不替换集合，最后删除旧的文档列表，并输出 `The store is in the format of 8.0.0-beta.5.`。再运行一次不会改变任何东西（[修复反向引用索引](./upgrading.md#repair-the-back-reference-index)）。

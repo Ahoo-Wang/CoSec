@@ -406,6 +406,8 @@ public abstract interface class me/ahoo/cosec/control/store/ControlStore : me/ah
 	public abstract fun documents (Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public abstract fun head (Lme/ahoo/cosec/spi/snapshot/SnapshotKey;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public abstract fun index (Lme/ahoo/cosec/spi/snapshot/SnapshotKey;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun keepStagedList (Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun listStaged (Lme/ahoo/cosec/spi/snapshot/SnapshotKey;Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public abstract fun openChanges (Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public abstract fun putApps (Lme/ahoo/cosec/spi/snapshot/SnapshotDigest;Lme/ahoo/cosec/control/store/AppList;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public abstract fun putCandidate (Lme/ahoo/cosec/spi/snapshot/SnapshotKey;Lme/ahoo/cosec/spi/snapshot/SnapshotDigest;Lme/ahoo/cosec/spi/shadow/StoredCandidate;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
@@ -421,7 +423,15 @@ public abstract interface class me/ahoo/cosec/control/store/ControlStore : me/ah
 	public abstract fun removeReferrers-R2kOZZc (Lme/ahoo/cosec/spi/snapshot/SnapshotKey;Ljava/lang/String;Ljava/util/Set;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public abstract fun stage (Lme/ahoo/cosec/spi/snapshot/SnapshotKey;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public abstract fun stagedCandidate (Lme/ahoo/cosec/spi/snapshot/SnapshotKey;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun unlistStaged (Lme/ahoo/cosec/spi/snapshot/SnapshotKey;Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public abstract fun withdrawCandidate (Lme/ahoo/cosec/spi/snapshot/SnapshotKey;Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+}
+
+public final class me/ahoo/cosec/control/store/ControlStore$DefaultImpls {
+	public static fun keepStagedList (Lme/ahoo/cosec/control/store/ControlStore;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public static fun listStaged (Lme/ahoo/cosec/control/store/ControlStore;Lme/ahoo/cosec/spi/snapshot/SnapshotKey;Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public static fun staged (Lme/ahoo/cosec/control/store/ControlStore;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public static fun unlistStaged (Lme/ahoo/cosec/control/store/ControlStore;Lme/ahoo/cosec/spi/snapshot/SnapshotKey;Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 }
 
 public abstract interface class me/ahoo/cosec/control/store/HeadWrite {
@@ -452,6 +462,8 @@ public final class me/ahoo/cosec/control/store/InMemoryControlStore : me/ahoo/co
 	public final fun dropIndex (Lme/ahoo/cosec/spi/snapshot/SnapshotKey;)V
 	public fun head (Lme/ahoo/cosec/spi/snapshot/SnapshotKey;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun index (Lme/ahoo/cosec/spi/snapshot/SnapshotKey;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun keepStagedList (Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun listStaged (Lme/ahoo/cosec/spi/snapshot/SnapshotKey;Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun openChanges (Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun putApps (Lme/ahoo/cosec/spi/snapshot/SnapshotDigest;Lme/ahoo/cosec/control/store/AppList;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun putCandidate (Lme/ahoo/cosec/spi/snapshot/SnapshotKey;Lme/ahoo/cosec/spi/snapshot/SnapshotDigest;Lme/ahoo/cosec/spi/shadow/StoredCandidate;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
@@ -467,7 +479,9 @@ public final class me/ahoo/cosec/control/store/InMemoryControlStore : me/ahoo/co
 	public fun removeRecord (Lme/ahoo/cosec/spi/snapshot/SnapshotKey;Lme/ahoo/cosec/spi/snapshot/SnapshotDigest;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun removeReferrers-R2kOZZc (Lme/ahoo/cosec/spi/snapshot/SnapshotKey;Ljava/lang/String;Ljava/util/Set;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun stage (Lme/ahoo/cosec/spi/snapshot/SnapshotKey;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun staged (Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun stagedCandidate (Lme/ahoo/cosec/spi/snapshot/SnapshotKey;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun unlistStaged (Lme/ahoo/cosec/spi/snapshot/SnapshotKey;Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun withdrawCandidate (Lme/ahoo/cosec/spi/snapshot/SnapshotKey;Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 }
 

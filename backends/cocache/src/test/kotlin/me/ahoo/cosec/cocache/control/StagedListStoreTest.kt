@@ -41,7 +41,9 @@ class StagedListStoreTest {
     private fun candidate(window: String) = StoredCandidate(
         window,
         1,
-        SnapshotDocuments.read("""{"schema":2,"revision":2,"publishedAt":"2026-11-20T00:00:00Z"}""".encodeToByteArray()),
+        SnapshotDocuments.read(
+            """{"schema":2,"revision":2,"publishedAt":"2026-11-20T00:00:00Z"}""".encodeToByteArray()
+        ),
     )
 
     @Test
@@ -57,7 +59,11 @@ class StagedListStoreTest {
             store.listStaged(SnapshotKey.Platform, "c2@2")
             store.listStaged(SnapshotKey.App("wms"), "c3@3")
             store.staged()!!.windows.assert().isEqualTo(
-                mapOf(acme to setOf("c1@1"), SnapshotKey.Platform to setOf("c2@2"), SnapshotKey.App("wms") to setOf("c3@3"))
+                mapOf(
+                    acme to setOf("c1@1"),
+                    SnapshotKey.Platform to setOf("c2@2"),
+                    SnapshotKey.App("wms") to setOf("c3@3")
+                )
             )
             store.unlistStaged(SnapshotKey.Platform, "c2@2")
             store.unlistStaged(acme, "c9@9")

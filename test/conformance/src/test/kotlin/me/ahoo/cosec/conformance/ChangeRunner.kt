@@ -135,6 +135,8 @@ import java.time.Instant
  *                                              // "revision": the header's, the revision the file was read at (default: the head's)
  *            { "rateLimits": "platform" },     // the rule ids of the document's head, in order
  *            { "staged": "tenant:acme" },      // the change whose candidate the document stages: `staged c2`, `staged none`
+ *            { "listed": "tenant:acme" },      // the changes whose windows the staged list names for it (CTL-46):
+ *                                              // `listed c1,c2`, `listed none`; the list is kept from the start
  *            { "revokeBreakGlass": { "change": "c2", "by": "rita", "binding": "glass" } },  // DELETE /break-glass/glass
  *            { "revoke": "t1" },               // that token is revoked; { "revokeTokens": "pia" }: every token of pia's
  *            { "provide": { "operator": "dave", "roles": [] } },   // what the provider answers for dave from now on
@@ -179,7 +181,9 @@ object ChangeRunner : ScenarioRunner {
     /** One scenario's control plane, operators and steps. */
     private class Run(private val node: JsonNode) {
         private val clock = MutableClock(NOW)
-        private val memory = InMemoryControlStore(clock)
+
+        // Kept, as the control plane keeps it from its start (CTL-46).
+        private val memory = InMemoryControlStore(clock).also { runBlocking { it.keepStagedList() } }
 
         /** The store, whose candidate withdrawals inside a `late` step wait for its [Late.release]. */
         private val store = object : ControlStore by memory {
@@ -386,7 +390,7 @@ object ChangeRunner : ScenarioRunner {
             "explain" -> explain(argument)
             in CREDENTIAL_STEPS -> credentials(action, argument)
             "revokeBreakGlass" -> revoke(argument)
-            "diff", "staged", "rateLimits" -> read(action, argument)
+            "diff", "staged", "listed", "rateLimits" -> read(action, argument)
             else -> try {
                 step(action, argument).also { named[it.id.value] = it }.state.name
             } catch (error: ChangeRejectedException) {
@@ -400,6 +404,10 @@ object ChangeRunner : ScenarioRunner {
         private suspend fun read(action: String, argument: JsonNode): String = when (action) {
             "diff" -> diff(argument)
             "staged" -> "staged " + (memory.candidate(documentKey(argument.text()))?.window?.substringBefore('@') ?: "none")
+            "listed" -> "listed " + (
+                memory.staged()!!.windows[documentKey(argument.text())].orEmpty()
+                    .map { it.substringBefore('@') }.sorted().joinToString(",").ifEmpty { "none" }
+                )
             else -> {
                 val head = revisions.head(documentKey(argument.text()))
                 "rateLimits " + head?.document?.rateLimits.orEmpty().joinToString(",", "[", "]") { it.id }
