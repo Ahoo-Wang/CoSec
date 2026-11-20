@@ -19,6 +19,7 @@ import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.runtime.call.FallbackIds
 import me.ahoo.cosec.runtime.event.DecisionListeners
 import me.ahoo.cosec.runtime.event.ReplayHandle
+import me.ahoo.cosec.runtime.http.Headers
 import me.ahoo.cosec.runtime.http.Outcome
 import me.ahoo.cosec.runtime.shadow.ShadowListener
 
@@ -50,6 +51,11 @@ internal class PublishBestEffort(private val listeners: DecisionListeners, priva
                 (sampled ?: HashSet<String>().also { sampled = it }) += shadow.name
             }
         }
-        return sampled?.let { ReplayHandle(state.request, state.view, it) }
+        return sampled?.let {
+            // The replay reads the request's headers after the response, when the host may have recycled its request:
+            // a view over them is copied now, while they are still the request's (R2B-8).
+            Headers.freeze(state.facts.headers)
+            ReplayHandle(state.request, state.view, it)
+        }
     }
 }

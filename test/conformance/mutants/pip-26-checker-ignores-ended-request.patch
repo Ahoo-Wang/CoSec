@@ -3,14 +3,14 @@
 # Tests: :runtime:test --tests me.ahoo.cosec.runtime.AuthorizationCheckerTest
 
 diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/AuthorizationChecker.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/AuthorizationChecker.kt
-index 707c7c76..4f2cd2b0 100644
+index 8a6a3cc12..677c06929 100644
 --- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/AuthorizationChecker.kt
 +++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/AuthorizationChecker.kt
-@@ -141,7 +141,7 @@ class AuthorizationChecker internal constructor(private val pipeline: Pipeline,
+@@ -136,7 +136,7 @@ class AuthorizationChecker internal constructor(private val pipeline: Pipeline,
  
      @Suppress("TooGenericExceptionCaught")
      private suspend fun decided(security: RequestSecurity, action: Action, resource: Resource): Decision = try {
--        if (security.inProgress) pipeline.check(security, action, resource) else ended(security, action, resource)
+-        if (security.admit()) pipeline.check(security, action, resource) else ended(security, action, resource)
 +        pipeline.check(security, action, resource)
      } catch (e: CancellationException) {
          if (!currentCoroutineContext().isActive) {

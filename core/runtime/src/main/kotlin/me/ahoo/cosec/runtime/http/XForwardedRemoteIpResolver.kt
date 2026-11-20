@@ -65,17 +65,58 @@ abstract class XForwardedRemoteIpResolver<R>(
         // Several header lines are one list, in the order received (RFC 9110 §5.3): a proxy that adds its own line
         // appends as surely as one that extends the last. Reading the peer instead would let a client that sends a
         // second line of its own step around a block on its own address.
-        val entries = ArrayList<String>()
-        for (line in extractXForwardedHeaderValues(request).orEmpty()) {
-            for (entry in line.split(DELIMITER)) {
-                if (entry.isNotBlank()) entries += entry.trim()
-            }
-        }
-        if (entries.isEmpty()) {
+        // Counted, then found, in place: no list of entries and no split of each line per request (R2B-8).
+        val lines = extractXForwardedHeaderValues(request).orEmpty()
+        var total = 0
+        for (line in lines) total += entries(line)
+        if (total == 0) {
             return fallback(request)
         }
-        val fromRight = entries.size.coerceAtMost(maxTrustedIndex)
-        return entries[entries.size - fromRight]
+        var wanted = total - total.coerceAtMost(maxTrustedIndex)
+        for (line in lines) {
+            val count = entries(line)
+            if (wanted < count) return entry(line, wanted)
+            wanted -= count
+        }
+        error("X-Forwarded-For changed while it was read.")
+    }
+
+    /** How many entries [line] holds: its comma-separated parts that are not blank. */
+    private fun entries(line: String): Int {
+        var count = 0
+        var blank = true
+        for (c in line) {
+            when {
+                c == DELIMITER -> {
+                    if (!blank) count++
+                    blank = true
+                }
+                !c.isWhitespace() -> blank = false
+            }
+        }
+        return if (blank) count else count + 1
+    }
+
+    /** Entry [index] of [line], counting only parts that are not blank, trimmed. */
+    private fun entry(line: String, index: Int): String {
+        var seen = 0
+        var start = 0
+        while (start <= line.length) {
+            val end = line.indexOf(DELIMITER, start).let { if (it < 0) line.length else it }
+            if (!isBlank(line, start, end)) {
+                if (seen == index) return line.substring(start, end).trim()
+                seen++
+            }
+            start = end + 1
+        }
+        error("X-Forwarded-For has no entry $index.")
+    }
+
+    private fun isBlank(line: String, start: Int, end: Int): Boolean {
+        for (i in start until end) {
+            if (!line[i].isWhitespace()) return false
+        }
+        return true
     }
 
     /** Without a usable header: the peer, or [UNKNOWN] when the host's address is not the peer's. */

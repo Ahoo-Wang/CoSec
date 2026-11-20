@@ -3,15 +3,15 @@
 # Tests: :spring-boot:test --tests me.ahoo.cosec.spring.boot.realserver.RealServerContextPathTest
 
 diff --git a/edge/webmvc/src/main/kotlin/me/ahoo/cosec/webmvc/ServletHttpFactsReader.kt b/edge/webmvc/src/main/kotlin/me/ahoo/cosec/webmvc/ServletHttpFactsReader.kt
-index a8e5dcc4..92e5a6e7 100644
+index 84f9a0024..5a76e6ed0 100644
 --- a/edge/webmvc/src/main/kotlin/me/ahoo/cosec/webmvc/ServletHttpFactsReader.kt
 +++ b/edge/webmvc/src/main/kotlin/me/ahoo/cosec/webmvc/ServletHttpFactsReader.kt
-@@ -41,7 +41,7 @@ internal object ServletHttpFactsReader {
+@@ -44,7 +44,7 @@ object ServletHttpFactsReader {
          return HttpFacts(
              method = request.method,
              // Encoded, and within the application: the context path is not the app's to authorize (PIP-20).
 -            rawPath = ApplicationPaths.within(request.requestURI, request.contextPath),
 +            rawPath = request.requestURI.removePrefix(request.contextPath),
-             rawQuery = request.queryString,
-             headers = Headers.of(headers),
-             cookies = Cookies.of(cookies),
+             rawQuery = request.queryString?.ifEmpty { null },
+             headers = Headers.view({ name -> values(request, name) }, { Collections.list(request.headerNames) }),
+             cookies = Cookies.view { name -> cookies(request, name) },
