@@ -114,6 +114,39 @@ class RouteEscapeReviewTest {
         }
     }
 
+    /** `RTE-5` (R2E-1): a DENY on every action whose condition reads what a route map changes is warned about too. */
+    @Test
+    fun `a DENY or rate limit rule on every action reading action verb or resource id is warned about`() {
+        val review = RouteEscapeReview(routes, capacity = 8)
+        val policies =
+            """[{"id":"no-delete","statements":[{"effect":"deny","action":"*","condition":""" +
+                """{"eq":["action.verb","DELETE"]}},""" +
+                """{"effect":"deny","action":"*","condition":{"prefix":["resource.id","/admin"]}}]}]"""
+        logged { appender ->
+            review.installed(SnapshotKey.Platform, 1, compile(SnapshotKey.Platform, 1, policies))
+            val warn = appender.at(Level.WARN).single().formattedMessage
+            warn.assert().contains("[platform] revision 1: 2 DENY statement(s) or rate limit rule(s) on every action")
+            warn.assert().contains("DENY no-delete#0").contains("DENY no-delete#1")
+            warn.assert().contains("Write each for the mapped action too")
+        }
+    }
+
+    @Test
+    fun `a statement that is not on every action and resource, an ALLOW, or one reading something else is not`() {
+        val review = RouteEscapeReview(routes, capacity = 8)
+        val policies =
+            """[{"id":"mapped","statements":[""" +
+                """{"effect":"deny","action":"wms:r1.purge","condition":{"eq":["action.verb","x"]}},""" +
+                """{"effect":"allow","action":"*","condition":{"eq":["action.verb","x"]}},""" +
+                """{"effect":"deny","action":"*","resource":"order/*","condition":""" +
+                """{"eq":["resource.id","x"]}},""" +
+                """{"effect":"deny","action":"*","condition":{"eq":["subject.id","x"]}}]}]"""
+        logged { appender ->
+            review.installed(SnapshotKey.Platform, 1, compile(SnapshotKey.Platform, 1, policies))
+            appender.list.assert().isEmpty()
+        }
+    }
+
     /** `DOC-12` (R1B-3): a tenant administrator's policy id does not forge a line on every host with a route map. */
     @Test
     fun `an id that would forge a line is logged escaped`() {

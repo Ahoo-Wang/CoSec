@@ -1,0 +1,17 @@
+# Rule: MIG-5
+# Mutant: a DENY and a rate limit rule are never recorded as written for an unmapped request (only an ALLOW would be)
+# Tests: :migrate:test --tests me.ahoo.cosec.migrate.UnmappedVocabularyTest
+
+diff --git a/migration/migrate/src/main/kotlin/me/ahoo/cosec/migrate/StatementTranslator.kt b/migration/migrate/src/main/kotlin/me/ahoo/cosec/migrate/StatementTranslator.kt
+index 8f20f4e53..c93c0c8dc 100644
+--- a/migration/migrate/src/main/kotlin/me/ahoo/cosec/migrate/StatementTranslator.kt
++++ b/migration/migrate/src/main/kotlin/me/ahoo/cosec/migrate/StatementTranslator.kt
+@@ -96,7 +96,7 @@ internal class StatementTranslator(
+ 
+     /** [translation], after C9 is recorded for a DENY or a rate limit rule that says something only an unmapped request has (`MIG-5`). */
+     private fun recorded(translation: Translation?, deny: Boolean, rateLimit: Boolean, location: String): Translation? {
+-        val statement = (translation as? Translation.Kept)?.statement?.takeIf { deny }
++        val statement = (translation as? Translation.Kept)?.statement?.takeIf { !deny }
+         val what = statement?.let(UnmappedVocabulary::of).orEmpty()
+         if (statement != null && what.isNotEmpty()) {
+             scan.deniedInUnmappedVocabulary(

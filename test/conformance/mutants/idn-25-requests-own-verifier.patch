@@ -3,11 +3,11 @@
 # Tests: :spring-boot:test --tests me.ahoo.cosec.spring.boot.realserver.OneVerifierTest
 
 diff --git a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/pipeline/CoSecPipelineAutoConfiguration.kt b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/pipeline/CoSecPipelineAutoConfiguration.kt
-index 31819bf07..32c852c8a 100644
+index dfdc5fbd6..7fc76af95 100644
 --- a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/pipeline/CoSecPipelineAutoConfiguration.kt
 +++ b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/pipeline/CoSecPipelineAutoConfiguration.kt
-@@ -168,8 +168,8 @@ class CoSecPipelineAutoConfiguration {
-         pipelineProperties: PipelineProperties,
+@@ -182,8 +182,8 @@ class CoSecPipelineAutoConfiguration {
+         tokenCache: ObjectProvider<VerifiedTokenCache>,
      ): Authenticator {
          checkRevocationReadTimeout(revocationProperties.readTimeout, pipelineProperties.authenticationTimeout)
 -        val tokenVerifier = verifier.ifAvailable

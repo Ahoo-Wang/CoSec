@@ -33,6 +33,7 @@ import me.ahoo.cosec.spi.token.TokenNotYetValidException
 import me.ahoo.cosec.spi.token.TokenVerificationException
 import me.ahoo.cosec.spi.token.TokenVerifier
 import me.ahoo.cosec.spi.token.VerifiedToken
+import java.time.Clock
 import java.time.Duration
 
 /**
@@ -57,7 +58,11 @@ import java.time.Duration
  */
 class JwtTokenVerifier @InternalCoSecApi constructor(
     private val algorithm: Algorithm,
-    issuerSkew: Duration = SubjectRevocation.DEFAULT_SKEW,
+    private val issuerSkew: Duration = SubjectRevocation.DEFAULT_SKEW,
+    /** The clock tokens are verified against: the system's, but in tests of the cache (`IDN-32`). */
+    private val clock: Clock = Clock.systemUTC(),
+    /** The verified tokens kept for [verify] (R2B-22); none on the verifier every other path uses ([cached]). */
+    private val cache: VerifiedTokenCache? = null,
 ) : CoSecTokenVerifier {
     constructor(signing: JwtSigning, issuerSkew: Duration = SubjectRevocation.DEFAULT_SKEW) :
         this(signing.algorithm, issuerSkew)
@@ -71,11 +76,19 @@ class JwtTokenVerifier @InternalCoSecApi constructor(
     private val skewSeconds: Long = issuerSkew.plusNanos(NANOS_PER_SECOND - 1).seconds
 
     // acceptIssuedAt and acceptNotBefore loosen only `iat` and `nbf`; acceptLeeway would loosen `exp` too.
-    private val jwtVerifier: JWTVerifier = JWT.require(algorithm)
-        .withClaimPresence("exp")
-        .acceptIssuedAt(skewSeconds)
-        .acceptNotBefore(skewSeconds)
-        .build()
+    private val jwtVerifier: JWTVerifier = (
+        JWT.require(algorithm)
+            .withClaimPresence("exp")
+            .acceptIssuedAt(skewSeconds)
+            .acceptNotBefore(skewSeconds) as com.auth0.jwt.JWTVerifier.BaseVerification
+        ).build(clock)
+
+    /**
+     * This verifier with [cache] for [verify]: the one the pipeline's authenticator verifies with (R2B-22). Refresh,
+     * tenant switch and logout keep the verifier without one. Still CoSec's own verifier, so break-glass is unchanged.
+     */
+    @InternalCoSecApi
+    fun cached(cache: VerifiedTokenCache): JwtTokenVerifier = JwtTokenVerifier(algorithm, issuerSkew, clock, cache)
 
     @Suppress("TooGenericExceptionCaught")
     private fun decodeVerified(token: String): DecodedJWT = try {
@@ -98,8 +111,21 @@ class JwtTokenVerifier @InternalCoSecApi constructor(
         else -> TokenVerificationException(exception.message ?: "The token is invalid.", exception)
     }
 
-    override fun verify(accessToken: String): VerifiedToken =
-        Jwts.toVerifiedToken(decodeVerified(accessToken.removeBearerPrefix()))
+    override fun verify(accessToken: String): VerifiedToken {
+        val token = accessToken.removeBearerPrefix()
+        val cache = cache ?: return Jwts.toVerifiedToken(decodeVerified(token))
+        val key = cache.key(token)
+        // The instant java-jwt compares the claims with: the same clock, truncated to whole seconds.
+        cache.get(key, clock.instant().epochSecond, skewSeconds)?.let { return it }
+        val decoded = decodeVerified(token)
+        val verified = Jwts.toVerifiedToken(decoded)
+        val validFrom = maxOf(
+            decoded.issuedAtAsInstant?.epochSecond ?: Long.MIN_VALUE,
+            decoded.notBeforeAsInstant?.epochSecond ?: Long.MIN_VALUE,
+        )
+        cache.put(key, VerifiedTokenCache.Entry(verified, validFrom, decoded.expiresAtAsInstant.epochSecond))
+        return verified
+    }
 
     @Suppress("TooGenericExceptionCaught")
     override fun refresh(token: CompositeToken): VerifiedToken {

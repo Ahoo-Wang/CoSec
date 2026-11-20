@@ -47,6 +47,7 @@ internal object CoSecSwitches {
         "cosec.jwt.enabled",
         "cosec.authentication.login.enabled",
         "cosec.authentication.login.social.enabled",
+        "cosec.authentication.token-cache.enabled",
         "cosec.openapi.enabled",
         "cosec.audit.enabled",
         "cosec.audit.kafka.enabled",
