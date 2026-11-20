@@ -1,6 +1,6 @@
 # Rule: APR-2
 # Mutant: an approval is valid for the change's own expiry (7 days) instead of cosec.control.approval.expire-after (72 hours)
-# Tests: :control:test --tests me.ahoo.cosec.control.ControlAuthorizationTest :conformance:test --tests me.ahoo.cosec.conformance.ConformanceTest
+# Tests: :control:test --tests me.ahoo.cosec.control.authz.ControlAuthorizationTest :conformance:test --tests me.ahoo.cosec.conformance.ConformanceTest
 
 diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ApprovalRules.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ApprovalRules.kt
 index f162ed6b2..446c0b8ea 100644

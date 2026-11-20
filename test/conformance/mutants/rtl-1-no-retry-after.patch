@@ -1,6 +1,6 @@
 # Rule: RTL-1
 # Mutant: a 429 carries no Retry-After header
-# Tests: :runtime:test --tests me.ahoo.cosec.runtime.RateLimitObligationTest --tests me.ahoo.cosec.runtime.ClientContractTest :conformance:test --tests me.ahoo.cosec.conformance.ConformanceTest
+# Tests: :runtime:test --tests me.ahoo.cosec.runtime.ratelimit.RateLimitObligationTest --tests me.ahoo.cosec.runtime.http.ClientContractTest :conformance:test --tests me.ahoo.cosec.conformance.ConformanceTest
 
 diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/http/StatusMapping.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/http/StatusMapping.kt
 index 3449a6d1d..edc381ecd 100644

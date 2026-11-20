@@ -1,6 +1,6 @@
 # Rule: RTL-2
 # Mutant: a rule whose bucket key fails with an error other than a missing attribute is skipped unless strict, instead of refusing
-# Tests: :engine:test --tests me.ahoo.cosec.engine.RateLimitObligationTest :runtime:test --tests me.ahoo.cosec.runtime.RateLimitObligationTest :conformance:test --tests me.ahoo.cosec.conformance.ConformanceTest
+# Tests: :engine:test --tests me.ahoo.cosec.engine.RateLimitObligationTest :runtime:test --tests me.ahoo.cosec.runtime.ratelimit.RateLimitObligationTest :conformance:test --tests me.ahoo.cosec.conformance.ConformanceTest
 
 diff --git a/core/engine/src/main/kotlin/me/ahoo/cosec/engine/EvaluatorObligations.kt b/core/engine/src/main/kotlin/me/ahoo/cosec/engine/EvaluatorObligations.kt
 index bfb1d8575..330128406 100644

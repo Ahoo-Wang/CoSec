@@ -1,6 +1,6 @@
 # Rule: RTL-1
 # Mutant: a rule whose bucket is exhausted does not refuse the permit: the request goes on as if it had permits left
-# Tests: :runtime:test --tests me.ahoo.cosec.runtime.RateLimitObligationTest :conformance:test --tests me.ahoo.cosec.conformance.ConformanceTest
+# Tests: :runtime:test --tests me.ahoo.cosec.runtime.ratelimit.RateLimitObligationTest :conformance:test --tests me.ahoo.cosec.conformance.ConformanceTest
 
 diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/stage/RunObligations.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/stage/RunObligations.kt
 index be74a3e28..2d0a35971 100644

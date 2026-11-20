@@ -1,6 +1,6 @@
 # Rule: APR-5
 # Mutant: publishing decides the approver's cosec:approve again with no attribute, not the ones the approval recorded
-# Tests: :control:test --tests me.ahoo.cosec.control.ControlRoundTwoFixesTest :conformance:test --tests me.ahoo.cosec.conformance.ConformanceTest
+# Tests: :control:test --tests me.ahoo.cosec.control.change.ControlRoundTwoFixesTest :conformance:test --tests me.ahoo.cosec.conformance.ConformanceTest
 
 diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ApprovalRules.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ApprovalRules.kt
 index f162ed6b2..93bbff604 100644

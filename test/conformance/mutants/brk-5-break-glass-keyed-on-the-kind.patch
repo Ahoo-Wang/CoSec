@@ -1,6 +1,6 @@
 # Rule: BRK-5
 # Mutant: a change is break-glass when its kind says so, not when its operations create or alter a break-glass binding: a PUBLISH change that does needs no REQUIRED audit
-# Tests: :control:test --tests me.ahoo.cosec.control.ControlReviewFixesTest :conformance:test --tests me.ahoo.cosec.conformance.ConformanceTest
+# Tests: :control:test --tests me.ahoo.cosec.control.change.ControlReviewFixesTest :conformance:test --tests me.ahoo.cosec.conformance.ConformanceTest
 
 diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Proposals.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Proposals.kt
 index 467bc9756..2ce268593 100644

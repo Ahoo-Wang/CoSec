@@ -1,6 +1,6 @@
 # Rule: APR-2
 # Mutant: a stored approval never expires: a change approved long ago still publishes
-# Tests: :control:test --tests me.ahoo.cosec.control.ControlAuthorizationTest :conformance:test --tests me.ahoo.cosec.conformance.ConformanceTest
+# Tests: :control:test --tests me.ahoo.cosec.control.authz.ControlAuthorizationTest :conformance:test --tests me.ahoo.cosec.conformance.ConformanceTest
 
 diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ApprovalRules.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ApprovalRules.kt
 index f162ed6b2..84a809d9f 100644

@@ -1,6 +1,6 @@
 # Rule: BRK-5
 # Mutant: a proposal may carry the kind ROLLBACK, EXPIRE or MIGRATE: the kind is what the input says, not what the entry point is
-# Tests: :control:test --tests me.ahoo.cosec.control.ControlReviewFixesTest :conformance:test --tests me.ahoo.cosec.conformance.ConformanceTest
+# Tests: :control:test --tests me.ahoo.cosec.control.change.ControlReviewFixesTest :conformance:test --tests me.ahoo.cosec.conformance.ConformanceTest
 
 diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Proposals.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Proposals.kt
 index 467bc9756..69d422dc2 100644

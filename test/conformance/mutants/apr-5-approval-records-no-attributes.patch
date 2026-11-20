@@ -1,6 +1,6 @@
 # Rule: APR-5
 # Mutant: an approval records no token attribute of its approver, so publishing checks cosec:approve against an approver with none
-# Tests: :control:test --tests me.ahoo.cosec.control.ControlRoundTwoFixesTest :conformance:test --tests me.ahoo.cosec.conformance.ConformanceTest
+# Tests: :control:test --tests me.ahoo.cosec.control.change.ControlRoundTwoFixesTest :conformance:test --tests me.ahoo.cosec.conformance.ConformanceTest
 
 diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Approvals.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Approvals.kt
 index 4559119fd..ed7f29980 100644

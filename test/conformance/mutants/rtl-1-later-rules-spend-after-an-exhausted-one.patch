@@ -1,6 +1,6 @@
 # Rule: RTL-1
 # Mutant: the rules after an exhausted one still spend their permits, though the request is already refused
-# Tests: :runtime:test --tests me.ahoo.cosec.runtime.RateLimitObligationTest :conformance:test --tests me.ahoo.cosec.conformance.ConformanceTest
+# Tests: :runtime:test --tests me.ahoo.cosec.runtime.ratelimit.RateLimitObligationTest :conformance:test --tests me.ahoo.cosec.conformance.ConformanceTest
 
 diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/stage/RunObligations.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/stage/RunObligations.kt
 index be74a3e28..170e4fc8a 100644
