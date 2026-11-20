@@ -1,0 +1,17 @@
+# Rule: CTL-53
+# Mutant: a record of a later format is read as if this version knew it, so what a later version must not have ignored is ignored
+# Tests: :cocache:test --tests me.ahoo.cosec.cocache.StoredRecordsTest
+
+diff --git a/core/document/src/main/kotlin/me/ahoo/cosec/document/json/StoredFormat.kt b/core/document/src/main/kotlin/me/ahoo/cosec/document/json/StoredFormat.kt
+index 72d3e17ab..64893376b 100644
+--- a/core/document/src/main/kotlin/me/ahoo/cosec/document/json/StoredFormat.kt
++++ b/core/document/src/main/kotlin/me/ahoo/cosec/document/json/StoredFormat.kt
+@@ -44,7 +44,7 @@ object StoredFormat {
+             !node.isObject -> "The $what is not an object."
+             format == null -> return 1
+             read == null || read < 1 -> "The $what has a format that is not a positive integer."
+-            read > known -> "The $what is of format $read, which a later CoSec wrote; this version reads format $known and before."
++            read > known && false -> "The $what is of format $read, which a later CoSec wrote; this version reads format $known and before."
+             else -> return read
+         }
+         throw SnapshotFormatException(refused)

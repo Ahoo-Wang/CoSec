@@ -1,0 +1,1 @@
+{"id":"c1","key":"tenant:acme","base":{"revision":0},"operations":[],"author":{"tenant":"acme","principal":"alice"},"note":"first","kind":"PUBLISH","state":"DRAFT","findings":[],"checkedWith":{},"createdAt":"2026-11-01T00:00:00Z","updatedAt":"2026-11-01T00:00:00Z"}

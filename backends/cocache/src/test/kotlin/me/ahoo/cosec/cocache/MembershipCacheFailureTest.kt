@@ -30,6 +30,7 @@ import me.ahoo.cosec.spi.authn.MembershipSource
 import me.ahoo.cosec.spi.membership.MembershipAnswer
 import me.ahoo.cosec.spi.membership.MembershipClaims
 import me.ahoo.cosec.spi.membership.MembershipUnavailableException
+import me.ahoo.cosec.spi.snapshot.SnapshotFormatException
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Test
@@ -286,11 +287,11 @@ class MembershipCacheFailureTest {
         MembershipsCodec.decode(MembershipsCodec.encode(stored)).assertSameAs(stored)
         val claims = MembershipClaims.parse(listOf("a"), emptyList())
         assertThrows<IllegalArgumentException> { MembershipsCodec.encode(claims) }
-        assertThrows<IllegalArgumentException> { MembershipsCodec.decode("""{"roles":{}}""".toByteArray()) }
-        assertThrows<IllegalArgumentException> {
+        assertThrows<SnapshotFormatException> { MembershipsCodec.decode("""{"roles":{}}""".toByteArray()) }
+        assertThrows<SnapshotFormatException> {
             MembershipsCodec.decode("""{"roles":{"":"admin"},"attachments":[]}""".toByteArray())
         }
-        assertThrows<IllegalArgumentException> {
+        assertThrows<SnapshotFormatException> {
             MembershipsCodec.decode("""{"roles":{},"attachments":[1]}""".toByteArray())
         }
     }

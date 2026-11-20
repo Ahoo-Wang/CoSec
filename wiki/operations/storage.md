@@ -120,6 +120,36 @@ contain `:` or `/`, so a key names one document only.
   subscribe to. A tenant publish that starts referring to 21 policies sends 21 of each. A read of a set always asks
   Redis: CoSec keeps no local copy of one (`CTL-42`, [Configuration](./configuration.md#cocache-properties-that-affect-cosec)).
 
+### When a reader does not know a record's format {#record-formats}
+
+Every record CoSec keeps in Redis says how it reads when the instance reading it is older or newer than the one that
+wrote it (`CTL-53`, `IDN-31`). Most records carry `"format": <n>`:
+- a record without one was written before formats, and is format 1;
+- of a format the reader knows, it reads the members it knows and ignores the others;
+- a later format is refused, as a format error, never read as absent.
+
+A member a minor release adds within a format is optional, and an older instance may drop it when it rewrites the
+record. Anything an older instance must not drop or ignore comes with a new format, which older readers refuse. The
+decision inputs stay strict: they carry no such tolerance.
+
+| Record | Format | A member it does not know | A later format, or a value it cannot read |
+|---|---|---|---|
+| Policy document: head and revision record | `schema: 2` | refused | the document fails closed (`503` for the requests that need it) |
+| Change request (`control:change:<id>`) | `format: 1` | ignored | the change is unreadable: `GET /changes/{id}` is a `500`, and no revision is reclaimed while it is listed open |
+| Staging slot (`control:stage:<doc>`) | `format: 1` | ignored | staging that document is refused (`500`) until the slot reads again |
+| Revision index (`control:revisions:<doc>`) | `format: 1` | ignored | that document's publishes and history are a `500` |
+| App list (`control:apps:all`) | `format: 1` | ignored | untrusted: every app a grant reaches is unknown, and the grant waits for approval |
+| Back-reference member (`control:refs:*`) | member grammar | refused | the set is unreadable and the check it serves fails closed (`CTL-42`) |
+| Staged-list member (`candidate-staged:all`) | member grammar | skipped | skipped |
+| Staged candidate (`candidate:<doc>`) | `format: 1` | ignored | the instance skips it and reports nothing for its window, which cannot pass on it |
+| Shadow report (`shadow:report:<window>:<instance>`) | `format: 1` | ignored | the window cannot be looked at (`503`) until the report reads or is written again |
+| Reporters of a window (`shadow:reporters:<window>`) | `format: 1` | ignored | the window cannot be judged until it is written again |
+| Instance status and its index (`shadow:status:*`) | `format: 1`, with `formatLevel` | ignored | the propagation of a revision cannot be read (`GET .../propagation`); publishing does not wait for it |
+| Session (`token:family:<id>`) | `format: 1` | ignored | the session ends: its refresh is refused and the user signs in again |
+| API key (`apikey:*`) | `format: 3` | refused | the key is refused |
+| Cached memberships | none (cache) | refused | a miss: loaded from the provider again |
+| Revocations, leases, rate-limit counters | none (scalar) | not applicable | as each says above |
+
 ### Redis requirements
 
 - **Persistence.** Redis holds the only copy of the documents, their revision history, the revocations, the sessions

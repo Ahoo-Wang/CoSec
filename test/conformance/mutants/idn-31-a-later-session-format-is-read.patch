@@ -1,0 +1,17 @@
+# Rule: IDN-31
+# Mutant: the session codec reads a session of a later format as its own, so a constraint a later version added to it is ignored
+# Tests: :cocache:test --tests me.ahoo.cosec.cocache.TokenFamilyFormatTest
+
+diff --git a/backends/cocache/src/main/kotlin/me/ahoo/cosec/cocache/TokenFamilyCodec.kt b/backends/cocache/src/main/kotlin/me/ahoo/cosec/cocache/TokenFamilyCodec.kt
+index daa14869b..ec98c34f7 100644
+--- a/backends/cocache/src/main/kotlin/me/ahoo/cosec/cocache/TokenFamilyCodec.kt
++++ b/backends/cocache/src/main/kotlin/me/ahoo/cosec/cocache/TokenFamilyCodec.kt
+@@ -56,7 +56,7 @@ internal object TokenFamilyCodec : Codec<TokenFamily> {
+         } catch (_: JacksonException) {
+             throw SnapshotFormatException("A stored $WHAT is not JSON.")
+         }
+-        StoredFormat.of(node, WHAT)
++        if (!node.isObject) throw SnapshotFormatException("A stored $WHAT is not an object.")
+         val generation = node.need("generation")
+         val counted = generation.isIntegralNumber && generation.canConvertToLong()
+         if (!counted) malformed("its generation is not an integer")

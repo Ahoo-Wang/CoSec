@@ -19,16 +19,30 @@ import me.ahoo.cocache.api.Codec
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.document.json.CoSecJson
+import me.ahoo.cosec.document.json.StoredFormat
 import me.ahoo.cosec.spi.snapshot.SnapshotFormatException
+import tools.jackson.core.JacksonException
 
 /** The instances that reported on a window, as a sorted JSON array of their ids. */
 internal object ReportersCodec : Codec<Set<String>> {
-    override fun encode(value: Set<String>): ByteArray = CoSecJson.mapper.writeValueAsBytes(value.sorted())
+    private const val WHAT = "reporters of a window"
 
+    override fun encode(value: Set<String>): ByteArray = CoSecJson.mapper.writeValueAsBytes(
+        StoredFormat.write(CoSecJson.mapper.createObjectNode()).apply {
+            putArray("reporters").apply { value.sorted().forEach(::add) }
+        },
+    )
+
+    /** `{"format": 1, "reporters": [...]}`; the array before formats is format 1 (`CTL-53`). */
     override fun decode(bytes: ByteArray): Set<String> {
-        val node = CoSecJson.mapper.readTree(bytes)
-        val reporters = node.isArray && node.values().all { it.isString }
-        if (!reporters) throw SnapshotFormatException("The reporters of a window are an array of instance ids")
-        return node.values().mapTo(LinkedHashSet()) { it.asString() }
+        val node = try {
+            CoSecJson.mapper.readTree(bytes)
+        } catch (_: JacksonException) {
+            throw SnapshotFormatException("The $WHAT is not JSON")
+        }
+        val reporters = if (node.isArray) node else node.also { StoredFormat.of(it, WHAT) }.get("reporters")
+        val valid = reporters != null && reporters.isArray && reporters.values().all { it.isString }
+        if (!valid) throw SnapshotFormatException("The $WHAT are not an array of instance ids")
+        return reporters.values().mapTo(LinkedHashSet()) { it.asString() }
     }
 }
