@@ -30,6 +30,8 @@
 >
 > **2026-11-19 修订（#1728，`STA-8`，维护者：“要求显式声明”）**：§7.3 增加一条：宿主提供刷新路由、用的是 starter 自己构建的刷新、又没有 `MembershipRefresh` bean 时，必须写明 `cosec.jwt.session.memberships-on-refresh=from-token`，否则启动失败。成员关系指令牌携带的角色与附带的策略。不写明的后果是刷新照抄旧令牌的成员关系：被移除的角色或附带策略在该成员下次登录前一直有效，最长到 `cosec.jwt.session.lifetime`（默认 30 天）；有 `MembershipRefresh` 时是访问令牌的寿命；`TokenRevoker.revokeSubject` 在两种情况下都立即生效。这是 `IDN-27`（被移除的角色是否仍然算数绝不是默认参数）落到 starter 自己的装配上。
 
+> **2026-11-20 修订（第二轮整体审查 R2A-3、R2A-4，#1741）**：§9.5 的审计记录只改类型、线上格式一个字节不变：`AuditEvent.kind` 是枚举 `AuditEventKind`（`DECIDED`、`BAD_REQUEST`、`AUTHENTICATION_UNAVAILABLE`、`CANCELLED`、`ERROR`），按名字写出；`reasonCode` 是“请求为何如此结束”该读的字段，`decision` 是它的粗分组（映射写在 `AuditDecision` 的注释里，由 `AuditVocabularyTest` 管住），`binding` 是给人看的标签，有类型的事实在 `source.via` 与 `source.document`。`AuthnResult.Authenticated.method` 是 `Identity.Method`（任意非空名字，`JWT` 与 `API_KEY` 是两个常量），空名字现在被拒绝。
+
 > **2026-11-08 修订**：`required` 监听器的超时属性是 `cosec.observability.listener.required-timeout`（#1283）；`decideAs` 与 `decide(security, app, …)` 是内部 API（#1283）。限流计数器 id 统一为 `platform/<id>`、`app:<app>/<id>`、`tenant:<tenant>/<id>`，键控桶前缀是 `k:`（#1284）。
 
 > **2026-11-08 修订**：`authorization` Cookie 只在 `cosec.pipeline.allow-cookie-token=true` 时读作令牌，`CoSec-*` 只读请求头（#1295）。审计记录用 `AuditVia`，`KafkaAuditListener` 关闭时在 `drain-timeout` 内等待队列（#1297）。
