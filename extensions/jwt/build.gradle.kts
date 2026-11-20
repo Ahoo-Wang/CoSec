@@ -16,6 +16,8 @@ dependencies {
     implementation("tools.jackson.core:jackson-databind")
     api("com.auth0:java-jwt")
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test")
+    // The verified-token cache's retained size (R2B-22), which sizes its default bound.
+    testImplementation("org.openjdk.jol:jol-core")
     // MembershipClaimsJwtTest resolves parsed tokens through the pipeline's MembershipResolver.
     testImplementation(project(":runtime"))
     // PIP-25: ContractFiles, which ClientContractTest checks contract/ with.

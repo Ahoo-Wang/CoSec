@@ -26,7 +26,11 @@ import me.ahoo.cosec.cocache.CoCacheTokenStore
 import me.ahoo.cosec.cocache.CoSecCacheSpecs
 import me.ahoo.cosec.cocache.RevokedTokenCache
 import me.ahoo.cosec.jwt.JwtSigning
+import me.ahoo.cosec.jwt.VerifiedTokenCache
 import me.ahoo.cosec.spi.apikey.ApiKeyReader
+import me.ahoo.cosec.spi.authn.Authenticator
+import me.ahoo.cosec.spi.authn.AuthnResult
+import me.ahoo.cosec.spi.authn.Credentials
 import me.ahoo.cosec.spi.membership.MembershipAnswer
 import me.ahoo.cosec.spi.membership.MembershipProvider
 import me.ahoo.cosec.spi.snapshot.InMemorySnapshotDocumentStore
@@ -62,6 +66,10 @@ class StartupSummaryResolutionTest {
         override fun verify(accessToken: String): VerifiedToken = throw UnsupportedOperationException()
 
         override fun refresh(token: CompositeToken): VerifiedToken = throw UnsupportedOperationException()
+    }
+
+    class OwnAuthenticator : Authenticator {
+        override suspend fun authenticate(credentials: Credentials): AuthnResult = AuthnResult.Anonymous
     }
 
     class OwnApiKeys : ApiKeyReader {
@@ -111,6 +119,7 @@ class StartupSummaryResolutionTest {
                 context.startupFailure.assert().isNull()
                 val line = line(context)
                 line.assert().contains("jwt=on (JwtTokenVerifier)")
+                    .contains("token-cache=on (max-entries=16384)")
                     .contains("revocation-reader=the CoCache token store's (CoCacheRevocationReader)")
                     .doesNotContain("NONE").doesNotContain("revocation-reader=none")
             }
@@ -123,6 +132,22 @@ class StartupSummaryResolutionTest {
             context.startupFailure.assert().isNull()
             line(context).assert().contains("revocation-reader=bean OwnReader")
         }
+    }
+
+    @Test
+    fun `an application's own authenticator is named and none of CoSec's token or API key parts are`() {
+        // R2D-9: its bean is the only authenticator the pipeline asks, so what the starter would have built is not in force.
+        withTokens.withBean(RevocationReader::class.java, { RevocationReader.NONE })
+            .withPropertyValues("cosec.api-key.enabled=true")
+            .withBean(MembershipProvider::class.java, { MembershipProvider { _, _ -> MembershipAnswer.Unknown } })
+            .withBean(Authenticator::class.java, { OwnAuthenticator() }).run { context ->
+                context.startupFailure.assert().isNull()
+                val line = line(context)
+                line.assert().contains(
+                    "authenticator=OwnAuthenticator (replaces CoSec's: tokens, revocation and API keys are its own)"
+                )
+                    .doesNotContain("jwt=").doesNotContain("revocation-reader").doesNotContain("api-keys=")
+            }
     }
 
     @Test
@@ -139,6 +164,17 @@ class StartupSummaryResolutionTest {
             .withBean(TokenVerifier::class.java, { OwnVerifier() }).run { context ->
                 context.startupFailure.assert().isNull()
                 line(context).assert().contains("jwt=on (bean OwnVerifier)")
+                    .contains("token-cache=off (the application's own verifier)")
+            }
+    }
+
+    @Test
+    fun `the token cache is off when configured off`() {
+        withTokens.withBean(RevocationReader::class.java, { RevocationReader.NONE })
+            .withPropertyValues("cosec.authentication.token-cache.enabled=false").run { context ->
+                context.startupFailure.assert().isNull()
+                context.getBeanNamesForType(VerifiedTokenCache::class.java).assert().isEmpty()
+                line(context).assert().contains("token-cache=off,")
             }
     }
 

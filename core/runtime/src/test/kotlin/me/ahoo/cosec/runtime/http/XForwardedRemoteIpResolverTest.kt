@@ -27,6 +27,28 @@ class XForwardedRemoteIpResolverTest {
         override fun extractXForwardedHeaderValues(request: List<String>?): List<String>? = request
     }
 
+    /**
+     * R2B-8: the scan that finds the entry in place reads what a list of every entry did, the earlier algorithm kept
+     * here as the reference, over generated lines: blank parts, padding, several lines, more trusted proxies than entries.
+     */
+    @Test
+    fun theInPlaceScanReadsWhatTheListOfEntriesRead() {
+        val random = java.util.Random(SEED)
+        val parts = listOf("203.0.113.7", " 198.51.100.2", "10.0.0.1 ", "", " ", "2001:db8::1", "\t192.0.2.9\t")
+        repeat(CASES) {
+            val lines = List(random.nextInt(LINES)) {
+                List(random.nextInt(PARTS)) { parts[random.nextInt(parts.size)] }.joinToString(",")
+            }
+            for (index in 1..INDEXES) {
+                val reference = lines.flatMap { line -> line.split(',').filter { it.isNotBlank() }.map { it.trim() } }
+                val expected = if (reference.isEmpty()) PEER else reference[reference.size - minOf(reference.size, index)]
+                Resolver(
+                    index
+                ).resolve(lines).assert().describedAs("$lines at $index").isEqualTo(ClientAddress.of(expected))
+            }
+        }
+    }
+
     @Test
     fun theEntryOfTheOutermostTrustedProxyIsTheClient() {
         Resolver(1).resolve(listOf("203.0.113.9, 198.51.100.2, 203.0.113.7")).assert().isEqualTo("203.0.113.7")
@@ -85,6 +107,12 @@ class XForwardedRemoteIpResolverTest {
     }
 
     private companion object {
+        const val SEED = 25L
+        const val CASES = 2_000
+        const val LINES = 4
+        const val PARTS = 5
+        const val INDEXES = 4
+
         const val PEER = "192.0.2.1"
     }
 }

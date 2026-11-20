@@ -17,7 +17,8 @@ decided are in `docs/rfc/`, and what a user reads is `wiki/`.
 | `review-r2-1-core.md` | Round 2, part 1: `annotations`, `api`, `model`, `engine`, `spi`, `document` (R2A-1 to R2A-15) | Triaged on 2026-11-20 into batches F1 and F5 (roadmap §9) |
 | `review-r2-2-edge-extensions.md` | Round 2, part 2: the adapters, `openapi` and the extensions (R2B-1 to R2B-25) | Triaged on 2026-11-20 into batches F2, F3 and F4 (roadmap §9); R2B-7 is not fixed, by decision |
 | `review-r2-3-control-storage.md` | Round 2, part 3: `control`, `cocache`, `migrate` (R2C-1 to R2C-34 in four passes; its last sections list what nobody has read, which is recorded as unreviewed, not as sound) | Triaged on 2026-11-20: all accepted, most fixed, the rest queued (roadmap §9). R2C-31 was an S2 in the grant analysis, fixed in #1760 |
-| `review-r2-4-runtime-host.md` | Round 2, part 4: `runtime`, `spring-boot`, `testkit` (R2D-1 to R2D-8; the snapshot key state machine's remaining files, audit and shadow recording and most auto-configurations are listed as not read) | Triaged on 2026-11-20 (roadmap §9). R2D-6 is an S2 for availability |
+| `review-r2-4-runtime-host.md` | Round 2, part 4: `runtime`, `spring-boot`, `testkit` (R2D-1 to R2D-12 in three passes; its last section lists what is not read) | Triaged on 2026-11-20 (roadmap §9). R2D-6 was an S2 for availability, fixed in #1762 |
+| `review-r2-5-migrate-conversion.md` | Round 2, part 5: the correctness of `cosec-migrate`'s conversion (R2E-1 to R2E-4; no S1 or S2; the 7.x engine's layer order is not in the repository's `main`, so it was not compared) | Triaged on 2026-11-20: R2E-1, 3 and 4 in #1775; R2E-2 (a property test against a small 7.x evaluator) is queued before RC1 |
 | `usability-a-developer-surface.md`, `usability-b-starter-and-operations.md`, `usability-review-C-policy-authors.md`, `usability-d-model.md`, `usability-e-documentation.md` | The usability review of beta.3, five streams | Triaged in `usability-triage-beta5.md` |
 | `usability-triage-beta5.md` | What became of each of the 111 usability findings | The beta.5 items are merged; the 8.1 list stands |
 
@@ -43,6 +44,7 @@ performance.
 | `saas-scale-raw-output.txt` | The harnesses' raw output |
 | `saas-referrers-pr-b-evidence.md` | The measurements behind #1729 |
 | `saas-app-change-cost.md` | What an app change that widens a permission every tenant's roles list costs the control plane, and the grant analysis on a very large policy or grantor (R2C-14, R2C-25, R2C-26), with the proposals the coordinator decided on 2026-11-20 (roadmap §9) |
+| `f4-step1-edge-measurement.md` | What CoSec's own code costs a request at the gateway and at a host, part by part (15.7 µs and 34 KB at the gateway, of which the decision is 4.9 µs), what verifying a token costs, and the proposal for a cache of verified tokens |
 | `core/runtime/src/test/kotlin/me/ahoo/cosec/runtime/snapshot/SaasScaleMeasurement.kt`, `.../runtime/shadow/SaasScaleCandidateMeasurement.kt`, `.../runtime/SaasShadowCostMeasurement.kt`, `backends/cocache/src/test/kotlin/me/ahoo/cosec/cocache/SaasScaleRevocationMeasurement.kt` | The harnesses the numbers came from: a `main` each, compiled with the test sources and never run by `check` (the KDoc of each says how to run it) |
 
 The harnesses are test sources of the modules their packages name, so CI compiles them and they follow the code; they are not re-run, and the numbers stay those of the commit each report names. In-memory stores stand in for
@@ -54,5 +56,6 @@ Redis in all of them; the reports say which figures are measured and which are c
 |---|---|---|
 | `saas-referrers-design.md` | Back-references and the document list as members, with the five conditions of its review (section 9) and the staged list's member structure (section 8) | Being implemented in #1729 (`CTL-42` to `CTL-44`, `MIG-4`) |
 | `saas-shadow-staged-design.md` | The staged list, the acknowledgement, and sampling only what can give a sample (Design D2) | Approved with four conditions, not started (`CTL-46`, `CTL-47`, `OBS-8`) |
+| `saas-open-changes-design.md` | G2: the open changes as sets of record, store failures as 503, a tolerant shadow pass, a format number on every stored record with one reader's rule | Approved on 2026-11-20 with one correction (the sets are not kept while the old list exists); being built as #1764, #1766, #1769 and two more |
 | `system-e2e-design.md` | The system test before RC1 | Built (`test/system-*`) |
 | `issue-1679-testing-design.md` | Testing an application's code against CoSec (issue #1679) | Built (`PIP-29`, `cosec-testkit`) |

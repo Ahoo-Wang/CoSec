@@ -22,6 +22,8 @@ mockk = "1.14.11"
 jmh = "1.37"
 archunit = "1.5.1"
 blockhound = "1.0.18.RELEASE"
+# The verified-token cache's retained size only (R2B-22); never on a runtime classpath
+jol = "0.17"
 # SchemaConformanceTest only (RFC 0007 §10.4); never on a runtime classpath
 json-schema-validator = "3.0.9"
 # plugins
@@ -52,6 +54,7 @@ jmh-core = { module = "org.openjdk.jmh:jmh-core", version.ref = "jmh" }
 jmh-generator-annprocess = { module = "org.openjdk.jmh:jmh-generator-annprocess", version.ref = "jmh" }
 archunit-junit5 = { module = "com.tngtech.archunit:archunit-junit5", version.ref = "archunit" }
 blockhound = { module = "io.projectreactor.tools:blockhound", version.ref = "blockhound" }
+jol-core = { module = "org.openjdk.jol:jol-core", version.ref = "jol" }
 json-schema-validator = { module = "com.networknt:json-schema-validator", version.ref = "json-schema-validator" }
 # The real-server parity suite only (PIP-1, PIP-16): Spring Boot's own servers and their customizers, versioned by the
 # Spring Boot BOM above; never on a runtime classpath

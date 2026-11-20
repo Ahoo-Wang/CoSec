@@ -21,6 +21,7 @@ import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.document.route.RouteMap
 import me.ahoo.cosec.jwt.JwtSigning
 import me.ahoo.cosec.jwt.JwtTokenVerifier
+import me.ahoo.cosec.jwt.VerifiedTokenCache
 import me.ahoo.cosec.runtime.AuthorizationChecker
 import me.ahoo.cosec.runtime.Pipeline
 import me.ahoo.cosec.runtime.PipelineOptions
@@ -84,6 +85,7 @@ private val log = KotlinLogging.logger {}
     PipelineProperties::class,
     RuntimeAuthorizationProperties::class,
     RevocationProperties::class,
+    TokenCacheProperties::class,
     ListenerProperties::class,
 )
 @InternalCoSecApi
@@ -144,10 +146,24 @@ class CoSecPipelineAutoConfiguration {
     fun cosecUncheckedRevocations(): UncheckedRevocations = UncheckedRevocations()
 
     /**
+     * The verified tokens of CoSec's own verifier (R2B-22, `IDN-32`), unless `cosec.authentication.token-cache.enabled`
+     * is false: the authenticator verifies with it only when the verifier is CoSec's [JwtTokenVerifier].
+     */
+    @Bean
+    @ConditionalOnMissingBean
+    @ConditionalOnProperty(value = [TokenCacheProperties.ENABLED_KEY], havingValue = "true", matchIfMissing = true)
+    fun cosecVerifiedTokenCache(properties: TokenCacheProperties): VerifiedTokenCache =
+        VerifiedTokenCache(properties.maxEntries)
+
+    /**
      * Token and API-key authentication. A token is verified by the application's [TokenVerifier] bean, the one refresh
-     * and logout verify with (`IDN-25`), else by CoSec's own over the JWT algorithm, and checked against the revocation
-     * reader [revocationReader] resolves; an API key, when `cosec.api-key.enabled`, by the configured key store. The
-     * the signing key decides only whether tokens are on.
+     * and logout verify with (`IDN-25`), else by CoSec's own over the [JwtSigning], and checked against the revocation
+     * reader [revocationReader] resolves; an API key, when `cosec.api-key.enabled`, by the configured key store.
+     * Tokens are on when either exists: an application whose tokens another issuer signs declares its verifier and no
+     * key, and a key alone gives CoSec's own verifier. With neither, a request with a token is refused (`token-invalid`).
+     * A verifier alone makes no login or refresh route and no token converter: those hang on the signing key, which is
+     * what issues tokens. CoSec's own verifier answers from [VerifiedTokenCache] when there is one ([cachedVerifier]);
+     * an application's own `TokenVerifier` never does.
      */
     @Bean
     @ConditionalOnMissingBean
@@ -163,15 +179,19 @@ class CoSecPipelineAutoConfiguration {
         unchecked: ObjectProvider<UncheckedRevocations>,
         beans: ListableBeanFactory,
         pipelineProperties: PipelineProperties,
+        tokenCache: ObjectProvider<VerifiedTokenCache>,
     ): Authenticator {
         checkRevocationReadTimeout(revocationProperties.readTimeout, pipelineProperties.authenticationTimeout)
-        val token = signing.ifAvailable?.let {
-            val reader = revocationReader(revocationReader, tokenStore, beans)
+        val tokenVerifier = verifier.ifAvailable
+            ?: signing.ifAvailable?.let { JwtTokenVerifier(it, revocationProperties.skew) }
+        val token = tokenVerifier?.let { own ->
+            val reader =
+                revocationReader(revocationReader, tokenStore, beans, issuesTokens = signing.ifAvailable != null)
             if (reader === RevocationReader.NONE) {
                 log.warn { NONE_WARNING }
             }
             TokenAuthenticator(
-                verifier.getIfAvailable { JwtTokenVerifier(it, revocationProperties.skew) },
+                cachedVerifier(own, tokenCache.ifAvailable),
                 reader,
                 revocationSkew = revocationProperties.skew,
                 acceptUnavailableRevocations = !revocationProperties.failClosed,
@@ -267,6 +287,14 @@ class CoSecPipelineAutoConfiguration {
     @InternalCoSecApi
     companion object {
         /**
+         * The verifier the authenticator verifies a request's token with: CoSec's own with [cache] (R2B-22), whose
+         * answers are a function of the token, its key, its skew and its clock alone (`IDN-32`); any other verifier as
+         * it is, since nothing says what an application's own reads besides the token.
+         */
+        internal fun cachedVerifier(verifier: TokenVerifier, cache: VerifiedTokenCache?): TokenVerifier =
+            if (cache != null && verifier is JwtTokenVerifier) verifier.cached(cache) else verifier
+
+        /**
          * R2D-8: the CoCache revocation reader's two reads, each within `read-timeout`, end within the authenticator's
          * own budget, or a Redis that hangs makes every authenticated request 503 before `fail-closed` can say
          * otherwise. Fails startup naming both properties.
@@ -310,16 +338,19 @@ class CoSecPipelineAutoConfiguration {
 
         /**
          * The reader of revoked tokens and subjects, always (RFC 0008 S1b): a [RevocationReader] bean, else the CoCache
-         * token store's. With neither, startup fails, naming every token store missing ([TokenStores]): the starter
-         * never reads revocations from nothing.
+         * token store's. With neither, startup fails, naming every token store missing ([TokenStores]), or, for a host
+         * that only verifies another issuer's tokens ([issuesTokens] false), the one reader: the starter never reads
+         * revocations from nothing.
          */
         internal fun revocationReader(
             reader: ObjectProvider<RevocationReader>,
             tokenStore: ObjectProvider<TokenStore>,
             beans: ListableBeanFactory,
+            issuesTokens: Boolean = true,
         ): RevocationReader {
             reader.ifAvailable?.let { return it }
-            return CoCacheRevocation.readerOf(tokenStore.ifAvailable) ?: throw TokenStores.failure(beans)
+            return CoCacheRevocation.readerOf(tokenStore.ifAvailable)
+                ?: throw if (issuesTokens) TokenStores.failure(beans) else TokenStores.verifierOnlyFailure()
         }
 
         /** The API keys the pipeline reads: an [ApiKeyReader] bean, else the in-memory store's. */

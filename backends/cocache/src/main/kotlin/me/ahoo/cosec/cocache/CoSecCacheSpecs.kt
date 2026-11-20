@@ -93,10 +93,10 @@ object CoSecCacheSpecs {
     /** Every indexed document: a set, which a first publish adds one member to (`CTL-44`). */
     const val CONTROL_DOCUMENT_SET_CACHE_NAME = "ControlDocumentSetCache"
 
-    /**
-     * The changes that may be open. Its key `documents`, the list of documents before 8.0.0-beta.5, is what
-     * `cosec-migrate repair-references` converts last: while it is there, the store is not repaired.
-     */
+    /** The open changes: a set per document and per state, and the marker that they are kept (`CTL-54`). */
+    const val CONTROL_CHANGE_SET_CACHE_NAME = "ControlChangeSetCache"
+
+    /** The lists before 8.0.0-beta.5 (`documents`, `open-changes`), which `repair-references` converts, then deletes. */
     const val CONTROL_LIST_CACHE_NAME = "ControlListCache"
 
     /** The app documents there are, which the grant analysis reads on every tenant change (RC1-4). */
@@ -128,6 +128,7 @@ object CoSecCacheSpecs {
         REVISION_INDEX_CACHE_NAME,
         REFERENCE_INDEX_CACHE_NAME,
         CONTROL_DOCUMENT_SET_CACHE_NAME,
+        CONTROL_CHANGE_SET_CACHE_NAME,
         CONTROL_LEASE_CACHE_NAME,
         CONTROL_LIST_CACHE_NAME,
         CONTROL_APP_LIST_CACHE_NAME,
@@ -144,6 +145,7 @@ object CoSecCacheSpecs {
         REVISION_INDEX_CACHE_NAME,
         REFERENCE_INDEX_CACHE_NAME,
         CONTROL_DOCUMENT_SET_CACHE_NAME,
+        CONTROL_CHANGE_SET_CACHE_NAME,
         CONTROL_LEASE_CACHE_NAME,
         CONTROL_LIST_CACHE_NAME,
         CONTROL_APP_LIST_CACHE_NAME,
@@ -172,6 +174,7 @@ object CoSecCacheSpecs {
         REVISION_INDEX_CACHE_NAME to "control:revisions",
         REFERENCE_INDEX_CACHE_NAME to "control:refs",
         CONTROL_DOCUMENT_SET_CACHE_NAME to "control:documents",
+        CONTROL_CHANGE_SET_CACHE_NAME to "control:changes",
         CONTROL_LEASE_CACHE_NAME to "control:lease",
         CONTROL_LIST_CACHE_NAME to "control:list",
         CONTROL_APP_LIST_CACHE_NAME to "control:apps",

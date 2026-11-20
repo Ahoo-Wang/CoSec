@@ -172,8 +172,8 @@ which ties a response to its trace.
 ## Startup summary
 
 Once every bean exists, the starter logs one INFO line of what CoSec is configured as, for example
-`CoSec 8.0.0-beta.4: mode=enforce, web=servlet-filter, jwt=on (JwtTokenVerifier), revocation-reader=the CoCache token store's (CoCacheRevocationReader), login=on, api-keys=off, rate-limiter=ReactiveRedisRateLimiter, listeners=[tracing, logging-audit], route-map=12 routes`.
-Each entry is what a request meets, resolved as the authenticator resolves it: the revocation reader is the application's bean, the CoCache token store's, or `RevocationReader.NONE`, which the line spells out because revoked tokens are then accepted until they expire; with no token verification (`jwt=off`) there is no reader to name.
+`CoSec 8.0.0-beta.4: mode=enforce, web=servlet-filter, jwt=on (JwtTokenVerifier), token-cache=on (max-entries=16384), revocation-reader=the CoCache token store's (CoCacheRevocationReader), login=on, api-keys=off, rate-limiter=ReactiveRedisRateLimiter, listeners=[tracing, logging-audit], route-map=12 routes`.
+Each entry is what a request meets, resolved as the authenticator resolves it: the revocation reader is the application's bean, the CoCache token store's, or `RevocationReader.NONE`, which the line spells out because revoked tokens are then accepted until they expire; with no token verification (`jwt=off`) there is no reader to name. `token-cache` says whether a request's token is answered from [the verified-token cache](../integration/authentication.md#the-verified-token-cache): `off` when configured off, or for a `TokenVerifier` bean of your own. When the application declares an `Authenticator` bean, it replaces the starter's ([extending](../architecture/extending.md)): the line then says `authenticator=<class> (replaces CoSec's: tokens, revocation and API keys are its own)` and lists no `jwt`, `revocation-reader` or `api-keys`, since none of them is in force.
 A switch written `false` is added as `switched-off-by-configuration=[...]`. A rate limiter named `LocalRateLimiter` counts
 per instance: with several instances the limit is multiplied by their number. When `cosec.enabled=false` the line is
 one WARN instead: `CoSec is off ... nothing is protected by CoSec`
@@ -210,6 +210,15 @@ So are the tokens the pipeline accepted without a revocation check, the revocati
 | Meter | Tag | Counts |
 |---|---|---|
 | `cosec.revocation.unchecked` | none | tokens accepted while their revocations could not be read; each such stretch also logs `Token revocations cannot be read: tokens are accepted without a revocation check (<n> so far).` at `WARN`, at most every 10 seconds |
+
+So is [the verified-token cache](../integration/authentication.md#the-verified-token-cache), while it is on:
+
+| Meter | Tag | Counts |
+|---|---|---|
+| `cosec.token.cache.hits` | none | request tokens answered from the cache |
+| `cosec.token.cache.misses` | none | request tokens verified because no usable entry was there: first seen, evicted, refused, or outside the instants it is valid at |
+| `cosec.token.cache.evictions` | none | entries removed to stay within `cosec.authentication.token-cache.max-entries`; a steady rate means the bound is smaller than the tokens in use at once |
+| `cosec.token.cache.size` | none | a gauge: the entries held |
 
 With the local rate limiter (no Redis rate limiting, [Rate limiting](../policies/rate-limiting.md#the-local-limiter-is-bounded)),
 so are the new buckets it could not admit:

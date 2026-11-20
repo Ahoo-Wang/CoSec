@@ -86,6 +86,11 @@ class HttpAttributes(
     @InternalCoSecApi
     fun ambiguousHeader(view: SnapshotView): String? = ambiguousHeader(headers, view)
 
+    /** Copies the host's headers now, when they are a view over the server's request (`PIP-32`). */
+    internal fun freeze() {
+        Headers.freeze(headers)
+    }
+
     private fun header(name: String): String? {
         val values = headers.values(name)
         if (isAmbiguous(values)) {

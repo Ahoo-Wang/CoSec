@@ -24,9 +24,11 @@ import me.ahoo.cosec.webflux.ReactiveXForwardedRemoteIpResolver
 import me.ahoo.cosec.webmvc.ServletXForwardedRemoteIpResolver
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.AfterAll
+import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.TestInstance
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.MethodSource
+import java.util.concurrent.TimeUnit
 
 /**
  * The two request readers hand the pipeline the same facts (round 2, R2B-25): `HttpFactsReader` on Reactor Netty,
@@ -55,16 +57,15 @@ class RealServerFactsParityTest {
     }
 
     /**
-     * A request, and the header and cookie names whose values every reader must read alike. [split] is a difference
-     * found and not yet decided: the groups of stacks that read alike within and differently across. It is pinned so a
-     * change to either side is seen; the fix makes it one group and removes it.
+     * A request, and the header and cookie names whose values every reader must read alike; [expected], what each must
+     * read where servers differ in what they hand over (R2B-25, closed by R2B-8's readers).
      */
     class Scenario(
         val name: String,
         val request: String,
         val headers: List<String> = emptyList(),
         val cookies: List<String> = emptyList(),
-        val split: Set<Set<Stack>>? = null,
+        val expected: Map<String, Any?> = emptyMap(),
     ) {
         override fun toString(): String = name
     }
@@ -75,9 +76,8 @@ class RealServerFactsParityTest {
             "a header repeated under two letter cases",
             get("/public/page", "X-Tag: one", "x-tag: two", "X-TAG: three"),
             headers = listOf("x-tag", "X-Tag"),
-            // Open (R2B-25): Netty's header names are distinct by letter case and each name's values are not, so the
-            // WebFlux reader on Reactor Netty, and the gateway, read the three values three times each.
-            split = setOf(setOf(Stack.NETTY), STACKS.toSet() - Stack.NETTY),
+            // Reactor Netty's names are distinct by letter case; the reader asks the server for one name, ignoring case.
+            expected = mapOf("header x-tag" to listOf("one", "two", "three")),
         ),
         Scenario(
             "a header of several values, on one line and on two",
@@ -102,28 +102,16 @@ class RealServerFactsParityTest {
             "a quoted cookie value",
             get("/public/page", "Cookie: q=\"quoted\""),
             cookies = listOf("q"),
-            // Open (R2B-25): Tomcat keeps the quotes as part of the value (RFC 6265 §4.1.1 allows them there); Jetty and
-            // Netty unwrap them, and the gateway's credential stripping reads them as Netty does.
-            split = setOf(
-                setOf(Stack.TOMCAT, Stack.TOMCAT_REACTIVE),
-                setOf(Stack.JETTY, Stack.NETTY, Stack.JETTY_REACTIVE)
-            ),
+            // Tomcat keeps the quotes, Jetty and Reactor Netty drop them: the readers read the value without them.
+            expected = mapOf("cookie q" to listOf("quoted")),
         ),
         Scenario(
             "CoSec's authorization cookie",
             get("/public/page", "Cookie: authorization=t1; theme=dark"),
             cookies = listOf("authorization", "theme")
         ),
-        Scenario(
-            "an empty query",
-            get("/public/page?"),
-            // Open (R2B-25): the reactive Tomcat and Jetty servers' URI has no query for a bare `?`, so the WebFlux
-            // reader reads none; the servlet containers and Reactor Netty read an empty one.
-            split = setOf(
-                setOf(Stack.TOMCAT_REACTIVE, Stack.JETTY_REACTIVE),
-                setOf(Stack.TOMCAT, Stack.JETTY, Stack.NETTY)
-            ),
-        ),
+        // The reactive Tomcat and Jetty servers hand over no query for a bare `?`, the others an empty one: none, for all.
+        Scenario("an empty query", get("/public/page?"), expected = mapOf("rawQuery" to null)),
         Scenario("a query", get("/public/page?x=1&y=%20&z")),
         Scenario("an encoded path", get("/public/a%20b/page")),
         Scenario("a PATCH request", raw("PATCH", "/public/page")),
@@ -140,14 +128,35 @@ class RealServerFactsParityTest {
         val read = STACKS.associateWith { stack ->
             val capture = captures.getValue(stack)
             capture.last = null
+            capture.scenario = scenario
             val answer = servers.getValue(stack).send(scenario.request)
-            val facts = checkNotNull(capture.last) { "$stack never reached the gate: $answer" }
-            comparable(facts, scenario)
+            checkNotNull(capture.last) { "$stack never reached the gate: $answer" }
         }
         val readings = read.entries.groupBy({ it.value }, { it.key })
         val described = readings.entries.joinToString("\n") { (facts, stacks) -> "$stacks read $facts" }
-        readings.values.mapTo(HashSet()) { it.toSet() }.assert().describedAs("${scenario.name}:\n$described")
-            .isEqualTo(scenario.split ?: setOf(STACKS.toSet()))
+        readings.keys.assert().describedAs("${scenario.name}:\n$described").hasSize(1)
+        val reading = readings.keys.single()
+        for ((key, value) in scenario.expected) {
+            reading.assert().describedAs("${scenario.name}: $key").containsEntry(key, value)
+        }
+    }
+
+    /**
+     * Why [Capture] reads while the request is decided, and why what outlives a request copies (`PIP-32`): once the
+     * response is written, Tomcat recycles its request, and a view over it refuses to be read.
+     */
+    @Test
+    fun `Tomcat refuses its request after the response`() {
+        val capture = captures.getValue(Stack.TOMCAT)
+        capture.scenario = scenarios().first()
+        servers.getValue(Stack.TOMCAT).send(capture.scenario!!.request)
+        val facts = checkNotNull(capture.facts)
+        val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(RECYCLE_BOUND_SECONDS)
+        var refused: Throwable? = null
+        while (refused == null && System.nanoTime() < deadline) {
+            refused = runCatching { facts.headers.values("host") }.exceptionOrNull()
+        }
+        refused.assert().isInstanceOf(IllegalStateException::class.java)
     }
 
     private fun comparable(facts: HttpFacts, scenario: Scenario): Map<String, Any?> = buildMap {
@@ -159,19 +168,33 @@ class RealServerFactsParityTest {
         scenario.cookies.forEach { put("cookie $it", facts.cookies.values(it)) }
     }
 
-    /** The pipeline, keeping the facts of the last request it decided. */
-    private class Capture(private val pipeline: RequestGate) : RequestGate {
+    /**
+     * The pipeline, keeping what the last request it decided read for [scenario]: read while the request is decided,
+     * since the readers are views over the server's request, which Tomcat recycles once the response is written.
+     */
+    private inner class Capture(private val pipeline: RequestGate) : RequestGate {
         @Volatile
-        var last: HttpFacts? = null
+        var scenario: Scenario? = null
+
+        @Volatile
+        var last: Map<String, Any?>? = null
+
+        /** The facts of the last request, kept to show that they cannot be read after it. */
+        @Volatile
+        var facts: HttpFacts? = null
 
         override suspend fun evaluate(facts: HttpFacts): Outcome {
-            last = facts
+            this.facts = facts
+            last = comparable(facts, checkNotNull(scenario))
             return pipeline.evaluate(facts)
         }
     }
 
     private companion object {
         val STACKS = Stack.entries - Stack.GATEWAY
+
+        /** How long Tomcat may take to recycle a request whose response the client holds. */
+        const val RECYCLE_BOUND_SECONDS = 5L
 
         fun get(path: String, vararg headers: String) = raw("GET", path, *headers)
 

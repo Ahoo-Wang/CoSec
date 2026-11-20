@@ -72,14 +72,36 @@ class RequestSecurity internal constructor(
     internal val inProgress: Boolean get() = !ended
 
     /**
+     * Admits a check of this request: false once it has ended (`PIP-26`); otherwise the host's headers the check reads
+     * are copied first, so that it never reads the server's request, which the server may recycle once the response is
+     * written (`PIP-32`). A check may run on a thread of the application's own while the adapter ends the request: the
+     * copy and [end] hold one lock, so the copy is made before [end] returns, and the adapters end a request before its
+     * server can recycle it. A request whose checks read no host header holds no lock.
+     */
+    internal fun admit(): Boolean {
+        val host = attributes as? HttpAttributes ?: return !ended
+        synchronized(host) {
+            if (ended) return false
+            host.freeze()
+            return true
+        }
+    }
+
+    /**
      * Ends the request: from now on no check permits as it (`PIP-26`). The adapters call it, when the request
      * completes: WebFlux and the gateway when the chain's `Mono` terminates, the servlet filter when the dispatch returns
-     * or, for an async request, when it completes, fails or times out. A transport of the application's own ends it
-     * through [Outcome.close], the one public way. Idempotent.
+     * or, for an async request, when it completes, fails or times out, before the server may recycle the request. A
+     * transport of the application's own ends it through [Outcome.close], the one public way. Idempotent. Waits for a
+     * check copying the headers ([admit]).
      */
     @InternalCoSecApi
     fun end() {
-        ended = true
+        val host = attributes as? HttpAttributes
+        if (host == null) {
+            ended = true
+            return
+        }
+        synchronized(host) { ended = true }
     }
 
     /**
@@ -137,6 +159,8 @@ class RequestSecurity internal constructor(
         action: Action? = null,
         resource: Resource? = null,
     ): EngineRequest? {
+        // The control plane decides with these attributes after this returns: copied, or nothing once ended (PIP-32).
+        if (!admit()) return null
         if (app == null) {
             return EngineRequest(request, scope, memberships, time, attributes)
         }

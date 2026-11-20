@@ -80,14 +80,18 @@ The pipeline reads the request's credentials, then asks one `Authenticator` who 
   for an issuer whose clock runs ahead, and refuses one beyond that as not valid yet (`token-invalid`, `IDN-29`); a
   token's expiry gets no such room. A verifier you build yourself takes the same value:
   `JwtTokenVerifier(signing, skew)`, over a `JwtSigning` (`JwtSigning.hmac256(secret)`, `hmac384`, `hmac512`: the key the tokens are signed with; the starter builds it from `cosec.jwt.secret` and `cosec.jwt.algorithm`). Only `TokenVerifier.verify` (and `refresh`) turns a token into
-  a principal: CoSec has no API that reads a token's claims without checking its signature. Without JWT
-  (`cosec.jwt.enabled=false`), a request with a token is rejected as `token-invalid`. Only a token CoSec's own
+  a principal: CoSec has no API that reads a token's claims without checking its signature. Tokens are on when a `TokenVerifier` bean or CoSec's signing key (`cosec.jwt.secret`) exists: a verifier of your own is
+  enough, with no secret you would never use, and a key alone gives CoSec's own verifier. A verifier alone issues no token
+  (the login and refresh routes and the token converter come with the key), and needs a revocation reader, a
+  `RevocationReader` bean or `cosec-cocache` on the issuer's Redis: without one, startup fails naming it. With neither
+  a verifier nor a key (`cosec.jwt.enabled=false`), a request with a token is rejected as `token-invalid`. Only a token CoSec's own
   `JwtTokenVerifier` verified may use [break-glass](../guide/security-model.md#break-glass): a `TokenAuthenticator`
   around a verifier of your own authenticates its tokens, but never with break-glass. A `TokenVerifier` bean of yours
   is another issuer's to CoSec, even one that wraps `JwtTokenVerifier` to add a check: on every request its tokens have
   the credential method `token`, no session (so no [tenant switch](#switching-tenant-and-app) from it, and none
   forwarded behind a gateway) and no break-glass. Declare one for another issuer's tokens; to keep CoSec's own tokens
   CoSec's, declare none.
+  CoSec's own verifier answers a token it already verified from [its cache](#the-verified-token-cache).
 - **`ApiKeyAuthenticator`**, only with `cosec.api-key.enabled=true`, looks up the [API key](#api-keys).
 
 A request that carries an API key (and API keys are enabled) is judged by the key alone, even if it also sends a
@@ -117,6 +121,29 @@ revocation store cannot be read, a verified token is accepted without a revocati
 
 **Your own.** Declare an `Authenticator` bean to replace the starter's. It is a `suspend` function that must not
 block the calling thread, which may be an event loop; see [Extending CoSec](../architecture/extending.md).
+
+### The verified-token cache
+
+Checking a token's signature and reading its claims is the largest part of authenticating a request. CoSec's own
+`JwtTokenVerifier`, in the pipeline's authenticator, keeps the tokens it verified and answers a token it sees again from
+memory (`cosec.authentication.token-cache.*`, on by default, [Configuration](../operations/configuration.md#authentication)).
+A cached verification is what verifying the token again would answer (`IDN-32`):
+
+- What a verification depends on besides the token is fixed for the verifier's life (the signing key, the skew) or its
+  clock. An entry keeps the instants the clock is compared with and answers only while verifying again would succeed:
+  never after the token's `exp`, never before its `iat` or `nbf` beyond the skew. Anywhere else the token is verified
+  again, and answers what it would without a cache.
+- The key is a SHA-256 of the whole token, signature included: no raw token is kept, and a token that differs in any
+  byte is verified on its own. Only tokens that verified are kept; a refused token is refused again on every request.
+- The revocation check and the reserved-attribute check run after it on every request, hit or miss: a logout or a
+  revocation refuses the token on the next request.
+- Refresh, tenant switch and logout verify without it. A `TokenVerifier` bean of your own never gets it: nothing says
+  what yours reads besides the token.
+
+At most `max-entries` tokens (16,384) are kept; one more evicts one. An entry of a large token, a dozen roles in four
+spaces and eight policies, retains about 7.3 KB, so the default costs at most about 115 MB of heap. Its hits, misses and
+evictions are metrics ([Observability](../operations/observability.md)), and the startup summary says whether it is on
+(`token-cache=on (max-entries=16384)`).
 
 ## Roles and spaces
 

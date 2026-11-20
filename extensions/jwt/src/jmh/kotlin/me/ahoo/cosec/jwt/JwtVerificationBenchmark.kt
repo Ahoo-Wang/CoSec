@@ -11,8 +11,11 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.jwt
 
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.login.token.TokenSubject
 import me.ahoo.cosec.model.PrincipalId
 import me.ahoo.cosec.model.TenantId
@@ -47,7 +50,10 @@ import kotlin.coroutines.startCoroutine
  * deployment's largest tenant, a dozen roles in each of four spaces, eight policies and the same attributes.
  *
  * [digest] is SHA-256 over the token as a request carries it: the least a cache of verified tokens keyed by a digest of
- * the whole token pays on a hit, beside a map read (round 2, R2B-22).
+ * the whole token pays on a hit, beside a map read (round 2, R2B-22). [verifyCached] and [authenticateCached] are what
+ * the starter's authenticator does by default since R2B-22: the same token again, answered from [VerifiedTokenCache]
+ * after its first verification; [verify] and [authenticate] stay the verification without one, which refresh, logout
+ * and a disabled cache pay.
  *
  * Run: `./gradlew :jwt:jmh -PjmhIncludes=JwtVerificationBenchmark` (a smoke run); for numbers, the options in
  * `wiki/architecture/overview.md#measuring`.
@@ -62,6 +68,8 @@ open class JwtVerificationBenchmark {
 
     private lateinit var verifier: JwtTokenVerifier
     private lateinit var authenticator: TokenAuthenticator
+    private lateinit var cachedVerifier: JwtTokenVerifier
+    private lateinit var cachedAuthenticator: TokenAuthenticator
     private lateinit var accessToken: String
     private lateinit var credentials: Credentials
     private val sha256: MessageDigest = MessageDigest.getInstance("SHA-256")
@@ -113,8 +121,11 @@ open class JwtVerificationBenchmark {
         accessToken = JwtTokenConverter(RandomIdGenerator, signing).toToken(subject).accessToken
         verifier = JwtTokenVerifier(signing)
         authenticator = TokenAuthenticator(verifier, LocalRevocations)
+        cachedVerifier = verifier.cached(VerifiedTokenCache())
+        cachedAuthenticator = TokenAuthenticator(cachedVerifier, LocalRevocations)
         credentials = Credentials("Bearer $accessToken", null)
         check(authenticate() is AuthnResult.Authenticated) { "The benchmark's token does not authenticate." }
+        check(authenticateCached() is AuthnResult.Authenticated) { "The benchmark's token does not authenticate." }
         System.err.println("JwtVerificationBenchmark: $claims token of ${accessToken.length} characters")
     }
 
@@ -122,10 +133,16 @@ open class JwtVerificationBenchmark {
     fun verify(): VerifiedToken = verifier.verify(accessToken)
 
     @Benchmark
+    fun verifyCached(): VerifiedToken = cachedVerifier.verify(accessToken)
+
+    @Benchmark
     fun digest(): ByteArray = sha256.digest(accessToken.toByteArray(Charsets.US_ASCII))
 
     @Benchmark
     fun authenticate(): AuthnResult = completed { authenticator.authenticate(credentials) }
+
+    @Benchmark
+    fun authenticateCached(): AuthnResult = completed { cachedAuthenticator.authenticate(credentials) }
 
     private companion object {
         /** 64 bytes: what `hmac512` needs at least (RFC 7518 §3.2); `hmac256` takes the first 32. */

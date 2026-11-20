@@ -20,6 +20,7 @@ import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.api.token.CompositeToken
 import me.ahoo.cosec.jwt.JwtSigning
 import me.ahoo.cosec.jwt.JwtTokenVerifier
+import me.ahoo.cosec.jwt.VerifiedTokenCache
 import me.ahoo.cosec.login.token.RefreshTokenAuthentication
 import me.ahoo.cosec.login.token.RefreshTokenCredentials
 import me.ahoo.cosec.login.token.TokenFamilies
@@ -134,6 +135,34 @@ class OneVerifierTest {
             val pair = host.login("alice")
             host.send("GET", "/orders", headers = mapOf("Authorization" to "Bearer ${pair.accessToken}"))
                 .statusCode().assert().isEqualTo(403)
+        }
+    }
+
+    @Test
+    fun `CoSec's own verifier answers a request's token from the cache, and a logout still refuses it next`() {
+        ServedLoginRouteHost(ServedStack.NETTY, ServedLoginRouteHost.PERMITTING).use { host ->
+            val cache = host.bean(VerifiedTokenCache::class.java)
+            val pair = host.login("alice")
+            val bearer = mapOf("Authorization" to "Bearer ${pair.accessToken}")
+            repeat(2) { host.send("GET", "/orders", headers = bearer).statusCode().assert().isEqualTo(403) }
+            cache.misses.assert().isEqualTo(1L)
+            cache.hits.assert().isEqualTo(1L)
+            host.send("POST", ServedLoginRouteHost.LOGOUT, body(pair)).statusCode().assert().isEqualTo(204)
+            // Answered from the cache, then refused by the revocation check that runs after it (IDN-32).
+            val revoked = host.send("GET", "/orders", headers = bearer)
+            revoked.statusCode().assert().isEqualTo(401)
+            revoked.body().assert().contains("token-revoked")
+            cache.hits.assert().isEqualTo(2L)
+        }
+    }
+
+    @Test
+    fun `an application's own verifier is never given the cache`() {
+        ServedLoginRouteHost(ServedStack.NETTY, ServedLoginRouteHost.PERMITTING, Wrapping::class.java).use { host ->
+            val cache = host.bean(VerifiedTokenCache::class.java)
+            val bearer = mapOf("Authorization" to "Bearer ${host.login("alice").accessToken}")
+            repeat(2) { host.send("GET", "/orders", headers = bearer).statusCode().assert().isEqualTo(403) }
+            (cache.hits + cache.misses).assert().isEqualTo(0L)
         }
     }
 

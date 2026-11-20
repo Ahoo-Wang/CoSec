@@ -33,6 +33,7 @@ object SetsOfRecord {
     val CACHE_NAMES: Set<String> = setOf(
         CoSecCacheSpecs.REFERENCE_INDEX_CACHE_NAME,
         CoSecCacheSpecs.CONTROL_DOCUMENT_SET_CACHE_NAME,
+        CoSecCacheSpecs.CONTROL_CHANGE_SET_CACHE_NAME,
         CoSecCacheSpecs.CANDIDATE_STAGED_CACHE_NAME,
     )
 

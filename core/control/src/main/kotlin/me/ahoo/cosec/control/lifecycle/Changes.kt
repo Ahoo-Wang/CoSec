@@ -23,6 +23,7 @@ import me.ahoo.cosec.control.authz.Operator
 import me.ahoo.cosec.control.change.ApplyMode
 import me.ahoo.cosec.control.change.ChangeId
 import me.ahoo.cosec.control.change.ChangeRequest
+import me.ahoo.cosec.control.change.ChangeState
 import me.ahoo.cosec.control.change.Confirmation
 import me.ahoo.cosec.control.change.Operation
 import me.ahoo.cosec.control.change.Propagation
@@ -128,6 +129,17 @@ class Changes(
 
     /** [ChangeLifecycle.visible]: the change [id] as [operator] may see it, the same 404 when they may not. */
     suspend fun visible(operator: Operator, id: ChangeId): ChangeRequest = flow.visible(operator, id)
+
+    private val listings = ChangeListings(store, authority)
+
+    /** [ChangeListings.list]: the open changes of a document, or in a state, that [operator] may see. */
+    suspend fun list(
+        operator: Operator,
+        document: SnapshotKey?,
+        state: ChangeState?,
+        after: String?,
+        limit: Int,
+    ): me.ahoo.cosec.control.store.ChangePage = listings.list(operator, document, state, after, limit)
 
     /** The change holding [key]'s staging slot, `EXPIRED` once past its expiry; `null` when none does. */
     internal suspend fun stagedOn(key: SnapshotKey): ChangeRequest? = flow.stagedOn(key)

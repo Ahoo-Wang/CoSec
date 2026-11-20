@@ -19,10 +19,14 @@ import io.github.oshai.kotlinlogging.KotlinLogging
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.document.route.RouteMap
 import me.ahoo.cosec.jwt.JwtSigning
+import me.ahoo.cosec.jwt.JwtTokenVerifier
+import me.ahoo.cosec.jwt.VerifiedTokenCache
 import me.ahoo.cosec.login.CompositeAuthentication
+import me.ahoo.cosec.runtime.authn.CompositeAuthenticator
 import me.ahoo.cosec.runtime.event.DecisionListeners
 import me.ahoo.cosec.spi.apikey.ApiKeyReader
 import me.ahoo.cosec.spi.apikey.InMemoryApiKeyStore
+import me.ahoo.cosec.spi.authn.Authenticator
 import me.ahoo.cosec.spi.ratelimit.RateLimiter
 import me.ahoo.cosec.spi.token.RevocationReader
 import me.ahoo.cosec.spi.token.TokenStore
@@ -34,8 +38,8 @@ import org.springframework.core.env.Environment
 
 /**
  * UB-5: one line at the end of startup that says what CoSec is configured as, so an operator reading a log can tell the
- * instance they deployed from the one they meant to: the mode, the web adapter, the token verifier and the login, the
- * revocation reader, API keys, the rate limiter, the decision listeners and the route map. When CoSec is off, one WARN
+ * instance they deployed from the one they meant to: the mode, the web adapter, the token verifier, its cache and the
+ * login, the revocation reader, API keys, the rate limiter, the decision listeners and the route map. When CoSec is off, one WARN
  * that nothing is protected. Reads beans that exist; creates none.
  */
 internal object StartupSummary {
@@ -53,9 +57,19 @@ internal object StartupSummary {
         val parts = buildList {
             add("mode=$mode")
             add("web=${adapter(beans)}")
-            addAll(tokens(beans))
+            val replaced = beans.getBeanProvider(Authenticator::class.java).ifAvailable
+                ?.takeIf { it !is CompositeAuthenticator }
+            if (replaced != null) {
+                // The application's bean is the only authenticator the pipeline asks (extending.md): nothing the starter
+                // would have built for tokens, revocations or API keys is in force, so none of it is listed.
+                add("authenticator=${named(replaced)} (replaces CoSec's: tokens, revocation and API keys are its own)")
+            } else {
+                addAll(tokens(beans))
+            }
             add("login=${if (names(beans, CompositeAuthentication::class.java).isEmpty()) "off" else "on"}")
-            add("api-keys=${apiKeys(beans, environment)}")
+            if (replaced == null) {
+                add("api-keys=${apiKeys(beans, environment)}")
+            }
             add("rate-limiter=${beans.getBeanProvider(RateLimiter::class.java).ifAvailable?.let(::named) ?: "none"}")
             add("listeners=${listeners(beans)}")
             add("route-map=${routes(beans)}")
@@ -68,16 +82,16 @@ internal object StartupSummary {
 
     /**
      * What a request meets, resolved as the authenticator resolves it ([CoSecPipelineAutoConfiguration]): tokens are on
-     * when a `JwtSigning` exists, verified by the application's `TokenVerifier` else CoSec's own, against the reader
-     * [CoSecPipelineAutoConfiguration.revocationReader] picks: a `RevocationReader` bean, else the CoCache token
-     * store's. Nothing about revocations when no token is verified.
+     * when a `TokenVerifier` bean or a `JwtSigning` exists, verified by the application's `TokenVerifier` else CoSec's
+     * own, against the reader [CoSecPipelineAutoConfiguration.revocationReader] picks: a `RevocationReader` bean, else
+     * the CoCache token store's. Nothing about revocations when no token is verified.
      */
     private fun tokens(beans: ListableBeanFactory): List<String> {
-        if (beans.getBeanProvider(JwtSigning::class.java).ifAvailable == null) {
+        val own = beans.getBeanProvider(TokenVerifier::class.java).ifAvailable
+        if (own == null && beans.getBeanProvider(JwtSigning::class.java).ifAvailable == null) {
             return listOf("jwt=off")
         }
-        val verifier = beans.getBeanProvider(TokenVerifier::class.java).ifAvailable?.let { "bean ${named(it)}" }
-            ?: "JwtTokenVerifier"
+        val verifier = own?.let { "bean ${named(it)}" } ?: "JwtTokenVerifier"
         val readers = beans.getBeanProvider(RevocationReader::class.java)
         val reader = CoSecPipelineAutoConfiguration.revocationReader(
             readers,
@@ -89,7 +103,20 @@ internal object StartupSummary {
             readers.ifAvailable != null -> "bean ${named(reader)}"
             else -> "the CoCache token store's (${named(reader)})"
         }
-        return listOf("jwt=on ($verifier)", "revocation-reader=$which")
+        return listOf("jwt=on ($verifier)", "token-cache=${tokenCache(beans, own)}", "revocation-reader=$which")
+    }
+
+    /**
+     * Whether the authenticator answers a request's token from the verified-token cache, as
+     * [CoSecPipelineAutoConfiguration.cachedVerifier] decides (R2B-22): CoSec's own verifier only.
+     */
+    private fun tokenCache(beans: ListableBeanFactory, verifier: TokenVerifier?): String {
+        val cache = beans.getBeanProvider(VerifiedTokenCache::class.java).ifAvailable
+        return when {
+            cache == null -> "off"
+            verifier != null && verifier !is JwtTokenVerifier -> "off (the application's own verifier)"
+            else -> "on (max-entries=${cache.maxEntries})"
+        }
     }
 
     private fun apiKeys(beans: ListableBeanFactory, environment: Environment): String {

@@ -21,6 +21,7 @@ import me.ahoo.cosec.control.api.ControlHttpSupport.CREATED
 import me.ahoo.cosec.control.api.ControlHttpSupport.OK
 import me.ahoo.cosec.control.api.ControlHttpSupport.changeResponse
 import me.ahoo.cosec.control.api.ControlHttpSupport.get
+import me.ahoo.cosec.control.api.ControlHttpSupport.json
 import me.ahoo.cosec.control.api.ControlHttpSupport.notFound
 import me.ahoo.cosec.control.api.ControlHttpSupport.post
 import me.ahoo.cosec.control.api.ControlHttpSupport.verbOf
@@ -36,6 +37,8 @@ import me.ahoo.cosec.control.api.JsonFields.optText
 import me.ahoo.cosec.control.api.JsonFields.text
 import me.ahoo.cosec.control.authz.Operator
 import me.ahoo.cosec.control.change.ChangeRequestCodec
+import me.ahoo.cosec.control.change.ChangeState
+import me.ahoo.cosec.control.change.InvalidControlRequestException
 import me.ahoo.cosec.control.change.requireRequest
 
 /** The routes of `/changes` (RFC 0007 §10.2): proposing a change, reading one, and its transitions. */
@@ -46,27 +49,7 @@ internal class ChangeRoutes(private val plane: ControlPlane) : RouteHandler {
         segments: List<String>
     ): ControlHttpResponse {
         if (segments.isEmpty()) {
-            return post(request) {
-                val key = documentKey(it.text("document"))
-                val operations = it.array("operations").map { op ->
-                    decoded("operations") { ChangeRequestCodec.operation(key, op) }
-                }
-                // A change's kind is its entry point's, never the request's (review K1): break-glass is /break-glass.
-                requireRequest(
-                    !it.has("kind")
-                ) { "a change has no kind: propose it here, or request break-glass at /break-glass" }
-                changeResponse(
-                    plane.propose(
-                        operator,
-                        key,
-                        it.long("base"),
-                        operations,
-                        it.optText("note").orEmpty(),
-                        confirmations(it),
-                    ),
-                    CREATED
-                )
-            }
+            return proposeOrList(operator, request)
         }
         if (segments.size != 1) return notFound()
         val (idText, verb) = verbOf(segments[0])
@@ -87,5 +70,59 @@ internal class ChangeRoutes(private val plane: ControlPlane) : RouteHandler {
             }
             changeResponse(change, OK)
         }
+    }
+
+    /** `POST /changes`, a proposal, or `GET /changes`, a listing. */
+    private suspend fun proposeOrList(operator: Operator, request: ControlHttpRequest): ControlHttpResponse {
+        if (request.method == "GET") {
+            return listing(operator, request)
+        }
+        return post(request) {
+            val key = documentKey(it.text("document"))
+            val operations = it.array("operations").map { op ->
+                decoded("operations") { ChangeRequestCodec.operation(key, op) }
+            }
+            // A change's kind is its entry point's, never the request's (review K1): break-glass is /break-glass.
+            requireRequest(
+                !it.has("kind")
+            ) { "a change has no kind: propose it here, or request break-glass at /break-glass" }
+            changeResponse(
+                plane.propose(
+                    operator,
+                    key,
+                    it.long("base"),
+                    operations,
+                    it.optText("note").orEmpty(),
+                    confirmations(it),
+                ),
+                CREATED
+            )
+        }
+    }
+
+    /**
+     * `GET /changes?document=<key>` or `?state=<STATE>`, with `after` (the `next` of the page before) and `limit` (1 to
+     * [MAX_LIMIT], [DEFAULT_LIMIT] by default): the open changes the caller may see (R2C-4, `CTL-55`), each as a summary
+     * of its own, not the stored record (R2C-11).
+     */
+    private suspend fun listing(operator: Operator, request: ControlHttpRequest): ControlHttpResponse {
+        val query = request.query
+        val document = query["document"]?.let { decoded("document") { ChangeRequestCodec.documentKeyOf(it) } }
+        val state = query["state"]?.let { text ->
+            ChangeState.entries.firstOrNull { it.name == text && !it.terminal }
+                ?: throw InvalidControlRequestException("state names no state of an open change: $text")
+        }
+        requireRequest(document != null || state != null) { "a listing names a document or a state" }
+        val limit = query["limit"]?.let { text ->
+            text.toIntOrNull()?.takeIf { it in 1..MAX_LIMIT }
+                ?: throw InvalidControlRequestException("limit is a number from 1 to $MAX_LIMIT")
+        } ?: DEFAULT_LIMIT
+        val page = plane.changes(operator, document, state, query["after"], limit)
+        return json(ControlResponseJson.changes(page))
+    }
+
+    private companion object {
+        const val DEFAULT_LIMIT = 50
+        const val MAX_LIMIT = 200
     }
 }
