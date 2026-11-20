@@ -486,7 +486,11 @@ Every request with a token checks revocation, without blocking. Four properties 
   `TokenRevoker` invalidates that answer on every instance at once. If the invalidation message is lost, or the
   revocation is written to Redis some other way, an instance may accept the token for up to 30 seconds more.
 - **While Redis cannot be read, a request's token is accepted.** The revocation reader says it cannot read
-  (`RevocationUnavailableException`), and the pipeline, verifying the token, lets it through. This is one of
+  (`RevocationUnavailableException`), which CoSec's own reader also does for a read that does not end within
+  `cosec.authentication.revocation.read-timeout` (300 ms, a Redis that hangs), and the pipeline, verifying the token,
+  lets it through. A `RevocationReader` of your own must answer or fail within its own bound: CoSec gives it none but
+  the authenticator's, and a reader that never answers makes the request `503` at
+  `cosec.pipeline.authentication-timeout`, whatever `fail-closed` says ([Extending](../architecture/extending.md)). This is one of
   [the two documented exceptions](../guide/security-model.md#the-two-documented-exceptions) to failing closed: the
   signature and expiry are still checked, and rejecting every authenticated request during a Redis outage would be
   worse. Keep access tokens short-lived so this window stays small, or set
