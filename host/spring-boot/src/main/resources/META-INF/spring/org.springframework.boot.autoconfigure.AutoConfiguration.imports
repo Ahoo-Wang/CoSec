@@ -17,6 +17,7 @@ me.ahoo.cosec.spring.boot.pipeline.CoSecPipelineAutoConfiguration
 me.ahoo.cosec.spring.boot.pipeline.CoSecGatewayModeAutoConfiguration
 me.ahoo.cosec.spring.boot.pipeline.CoSecPipelineWebAutoConfiguration
 me.ahoo.cosec.spring.boot.control.CoSecControlAutoConfiguration
+me.ahoo.cosec.spring.boot.control.CoSecControlStoreFormatAutoConfiguration
 me.ahoo.cosec.spring.boot.control.CoSecControlRoutesAutoConfiguration
 me.ahoo.cosec.spring.boot.actuate.CoSecServiceGeneratorEndpointAutoConfiguration
 me.ahoo.cosec.spring.boot.openapi.CoSecOpenAPIAutoConfiguration
