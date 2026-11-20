@@ -18,12 +18,17 @@ package me.ahoo.cosec.migrate
 import kotlinx.coroutines.runBlocking
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.control.change.Base
+import me.ahoo.cosec.control.change.ChangeId
+import me.ahoo.cosec.control.change.ChangeRequest
+import me.ahoo.cosec.control.change.ChangeState
 import me.ahoo.cosec.control.change.ownerOf
 import me.ahoo.cosec.control.store.ControlStore
 import me.ahoo.cosec.control.store.InMemoryControlStore
 import me.ahoo.cosec.control.store.Publication
 import me.ahoo.cosec.control.store.ReferrerEntry
 import me.ahoo.cosec.control.store.Revisions
+import me.ahoo.cosec.control.store.Versioned
 import me.ahoo.cosec.document.Actor
 import me.ahoo.cosec.document.PolicyDefinition
 import me.ahoo.cosec.document.PolicyDocument
@@ -39,6 +44,7 @@ import me.ahoo.cosec.model.PrincipalId
 import me.ahoo.cosec.model.RoleId
 import me.ahoo.cosec.model.SubjectRef
 import me.ahoo.cosec.model.TenantId
+import me.ahoo.cosec.spi.snapshot.SnapshotFormatException
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
@@ -133,6 +139,70 @@ class ReferenceRepairTest {
         val again = ReferenceRepair(memory, old).run()
         again.converted.assert().isEqualTo(0)
         again.converting.assert().isFalse()
+    }
+
+    private fun change(id: String, state: ChangeState) = ChangeRequest(
+        id = ChangeId(id),
+        key = acme,
+        base = Base(0, null),
+        operations = emptyList(),
+        author = Actor(TenantId("acme"), PrincipalId("alice")),
+        note = "",
+        kind = ProvenanceKind.PUBLISH,
+        state = state,
+        findings = emptyList(),
+        candidate = null,
+        checkedWith = emptyMap(),
+        createdAt = Instant.EPOCH,
+        updatedAt = Instant.EPOCH,
+    )
+
+    /**
+     * CTL-54: the still-open changes the old list names are listed in the sets, and the sets kept and the old list
+     * removed only once every one of them was read: an unreadable one leaves the store unconverted.
+     */
+    @Test
+    fun `a repair lists the old open changes in the sets, and keeps them only when every one was read`() {
+        runBlocking {
+            memory.putChange(null, change("open", ChangeState.DRAFT))
+            memory.putChange(null, change("done", ChangeState.ABANDONED))
+        }
+        val listed = ArrayList<String>()
+        var kept = false
+        var ids: Set<String>? = setOf("open", "done", "gone", "unreadable")
+        val old = object : StoreConversion by Old(null, mutableSetOf()) {
+            override suspend fun legacyOpenChanges(): Set<String>? = ids
+
+            override suspend fun listOpenChange(change: ChangeRequest) {
+                listed += change.id.value
+            }
+
+            override suspend fun keepConvertedOpenChanges() {
+                kept = true
+                ids = null
+            }
+        }
+        var broken = true
+        val unreadable = object : ControlStore by memory {
+            override suspend fun change(id: ChangeId): Versioned<ChangeRequest>? {
+                if (broken && id.value == "unreadable") throw SnapshotFormatException("Change [unreadable]: no format")
+                return memory.change(id)
+            }
+        }
+        val failing = ReferenceRepair(unreadable, old).run()
+        listed.assert().containsExactly("open")
+        failing.openChanges.assert().isEqualTo(1)
+        failing.unreadOpenChanges.assert().containsExactly("unreadable")
+        failing.formatDone.assert().isFalse()
+        kept.assert().isFalse()
+        ids.assert().isNotNull()
+        // Once it reads (here: its record removed), the next run keeps the sets and removes the old list.
+        broken = false
+        val done = ReferenceRepair(unreadable, old).run()
+        done.unreadOpenChanges.assert().isEmpty()
+        done.formatDone.assert().isTrue()
+        kept.assert().isTrue()
+        ids.assert().isNull()
     }
 
     @Test
