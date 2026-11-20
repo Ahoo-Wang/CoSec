@@ -19,6 +19,7 @@ import kotlinx.coroutines.runBlocking
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.control.change.ownerOf
+import me.ahoo.cosec.control.store.ControlStore
 import me.ahoo.cosec.control.store.InMemoryControlStore
 import me.ahoo.cosec.control.store.Publication
 import me.ahoo.cosec.control.store.ReferrerEntry
@@ -155,5 +156,49 @@ class ReferenceRepairTest {
                 PolicyId("shared")
             )
         }.assert().contains(ReferrerEntry(acme, 1))
+    }
+
+    /**
+     * `MIG-4`: a repair that dies part-way through a document's member writes leaves no record of what it did not add, so
+     * the next run adds every missing member. A recorded reference is in its set, or not in the head.
+     */
+    @Test
+    fun `a repair that fails part-way is reported, and the next run adds every missing member`() {
+        runBlocking {
+            val revisions = Revisions(memory)
+            val publication = Publication("c", ProvenanceKind.MIGRATE, Actor(TenantId.PLATFORM, PrincipalId("op")))
+            val policies = listOf("p1", "p2", "p3")
+            revisions.publish(SnapshotKey.Platform, null, document(SnapshotKey.Platform, policies), publication)
+            revisions.publish(acme, null, document(acme, emptyList(), policies), publication)
+            // As a converted store holds it: the head, and neither the members nor a record of them.
+            policies.forEach {
+                memory.removeReferrers(
+                    SnapshotKey.Platform,
+                    PolicyId(it),
+                    memory.referrers(SnapshotKey.Platform, PolicyId(it))
+                )
+            }
+            val index = memory.index(acme)!!
+            memory.putIndex(acme, index.digest, index.value.copy(indexed = emptyList())).assert().isTrue()
+        }
+        var writes = 0
+        val failing = object : ControlStore by memory {
+            override suspend fun addReferrer(target: SnapshotKey, policy: PolicyId, entry: ReferrerEntry) {
+                check(++writes <= 1) { "Redis timed out" }
+                memory.addReferrer(target, policy, entry)
+            }
+        }
+        ReferenceRepair(failing).run().failed.keys.assert().contains(acme)
+
+        ReferenceRepair(memory).run().failed.assert().isEmpty()
+        runBlocking {
+            listOf("p1", "p2", "p3").forEach { policy ->
+                memory.referrers(
+                    SnapshotKey.Platform,
+                    PolicyId(policy)
+                ).map { it.referrer }.assert().describedAs(policy)
+                    .containsExactly(acme)
+            }
+        }
     }
 }

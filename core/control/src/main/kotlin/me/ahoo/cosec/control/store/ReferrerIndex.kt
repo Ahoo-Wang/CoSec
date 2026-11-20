@@ -71,14 +71,20 @@ internal class ReferrerIndex(
         }
     }
 
-    /** [addEntries] with its own record in [key]'s revision index first, as a publish writes it (`repair-references`). */
-    private suspend fun recordAndAdd(key: SnapshotKey, revision: Long, added: Set<Reference>) {
+    /**
+     * [addEntries], then their record in [key]'s revision index (`repair-references`): the other order from a publish's.
+     * A publish records before it adds and moves the head only after every add, so a recorded reference it failed to add
+     * is not in the head. The repair adds for a head already written: had it recorded first and failed part-way, the
+     * next run would read the record and add nothing. Adding first, a run that dies before the record leaves members
+     * the next run adds again (an idempotent write at the same revision) or, at worst, one [pruneReferences] removes.
+     */
+    private suspend fun addAndRecord(key: SnapshotKey, revision: Long, added: Set<Reference>) {
         if (added.isEmpty()) {
             return
         }
-        writes.updateIndex(key) { it.copy(indexed = it.indexed + added.map { reference -> reference.at(revision) }) } ||
-            warn("[$key] revision $revision: what it indexes could not be recorded; it stays until pruned")
         addEntries(key, revision, added)
+        writes.updateIndex(key) { it.copy(indexed = it.indexed + added.map { reference -> reference.at(revision) }) } ||
+            warn("[$key] revision $revision: what it indexed could not be recorded; the next repair adds it again")
     }
 
     /**
@@ -140,7 +146,10 @@ internal class ReferrerIndex(
      * §5.8), recording it there first; the number of references it added. It reads [key]'s head and index, never a
      * back-reference set (R2C-8): a document whose record holds its references costs those two reads, and one with no
      * record, such as one converted from the format before 8.0.0-beta.5, adds each of its own references once, an
-     * idempotent member write, so a run costs what the documents hold, not what refers to them. A missing entry would let
+     * idempotent member write, so a run costs what the documents hold, not what refers to them. It rests on one
+     * invariant: a recorded reference is in its set, or not in the head. A publish keeps it (record, add, then the head
+     * only after every add), [dropGone] keeps it (the head no longer has what it drops), and so does this repair, which
+     * records only what it has added ([addAndRecord]). A missing entry would let
      * a deletion through. A head or a value that cannot be read throws. Entries are only ever added here, never a set
      * replaced (`MIG-4`): a publish that adds an entry meanwhile keeps it. What the index has and no head does is
      * [pruneReferences]'s.
@@ -150,7 +159,7 @@ internal class ReferrerIndex(
         val recorded = store.index(key)?.value?.indexed.orEmpty()
             .mapTo(HashSet()) { Reference(it.target, it.policy, it.definesItself) }
         val missing = references(head.document) - recorded
-        recordAndAdd(key, head.revision, missing)
+        addAndRecord(key, head.revision, missing)
         return missing.size
     }
 
