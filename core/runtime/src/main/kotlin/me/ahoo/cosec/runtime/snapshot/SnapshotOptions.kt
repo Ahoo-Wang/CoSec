@@ -65,7 +65,7 @@ class SnapshotOptions(
     val compileThreads: Int = 2,
     /** Compilations waiting for a thread; beyond it a load fails closed (RFC 0003 §6 F8). */
     val compileQueueCapacity: Int = 64,
-    /** Documents reloaded at once by a revalidation pass or after a reset. */
+    /** Documents reloaded at once by a revalidation pass or after a reset ([DEFAULT_RELOAD_CONCURRENCY]). */
     val reloadConcurrency: Int = DEFAULT_RELOAD_CONCURRENCY,
     val prewarmInitialBackoff: Duration = Duration.ofSeconds(1),
     val prewarmMaxBackoff: Duration = Duration.ofSeconds(30),
@@ -118,8 +118,12 @@ class SnapshotOptions(
 
         const val DEFAULT_MAX_APPS: Int = 1024
 
-        /** Chosen from a measured pass (see [reloadConcurrency]). */
-        const val DEFAULT_RELOAD_CONCURRENCY: Int = 4
+        /**
+         * A pass takes about the entries held × one conditional read ÷ this: at 80,000 entries and 1 ms a read, 25 s at 4,
+         * 6.3 s at 16 (measured, beta.5). At 16 a pass of the default bounds' 81,920 entries stays within the default
+         * interval for reads up to about 2 ms; the reads per second over an interval do not change, only their burst.
+         */
+        const val DEFAULT_RELOAD_CONCURRENCY: Int = 16
 
         /** RFC 0004 Q15's 1,024 until beta.5; raised so that an instance holds the tenants it serves (SaaS at the gateway). */
         const val DEFAULT_MAX_TENANTS: Int = 16_384

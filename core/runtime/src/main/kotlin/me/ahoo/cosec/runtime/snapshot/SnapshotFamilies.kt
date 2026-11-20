@@ -165,8 +165,10 @@ internal class SnapshotFamilies<A : Any>(
 
         /**
          * The slots holding an absent entry, beside the counts and moved with them: the absent kind's pass walks these
-         * alone, so it costs what that kind holds (512 at most), however many documents the family holds. The documents'
-         * pass walks the family's map. Read only by eviction passes and tests; `peek` never sees it.
+         * alone, so it costs what that kind holds, however many documents the family holds, and the documents' pass walks
+         * the family's map. Either scan costs about the same per entry it walks (0.5 to 1.3 ms for 54,000 of them): a
+         * measured gap between the two came from tenant ids that made the map's order follow allocation order. Read only
+         * by eviction passes and tests; `peek` never sees it.
          */
         private val absentSlots: MutableSet<KeyRunner<*>> = ConcurrentHashMap.newKeySet()
 
@@ -248,6 +250,14 @@ internal class SnapshotFamilies<A : Any>(
          * cap is the bound plus the smaller of the bound and this. A rule of its own, not the housekeeping queue's size.
          */
         const val MAX_SLACK = 4096
+
+        /**
+         * The most entries of a kind an install evicts on its own thread when it finds the family over its cap
+         * (`SNP-14`): enough to take the family back within the cap, since at most one entry per install in flight is
+         * over it, and few enough that the thread pays one scan and a few dozen removals, never a whole pass back to the
+         * bound (15 to 20 ms at a bound of 50,000). Housekeeping evicts the rest.
+         */
+        const val INSTALL_EVICTIONS = 64
 
         /** Whether [entry] is for a document the store does not hold: the other kind ([Family.count]). */
         fun isAbsent(entry: SnapshotEntry<*>): Boolean = entry.origin == EntryOrigin.ABSENT

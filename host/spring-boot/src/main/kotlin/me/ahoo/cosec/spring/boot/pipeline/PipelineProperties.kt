@@ -304,8 +304,9 @@ class RuntimeAuthorizationProperties {
         var reportInterval: Duration = Duration.ofSeconds(10)
 
         /**
-         * This instance's id in reports and statuses; a random one when empty. Unique per running instance, and only
-         * letters, digits, `.`, `_` and `-` (it ends a Redis key); any other id fails startup.
+         * The prefix of this instance's id in reports and statuses: the id is `<instance-id>.<suffix>`, the suffix new at
+         * every start, so that a restarted process never replaces its predecessor's reports; a random UUID when empty.
+         * Only letters, digits, `.`, `_` and `-` (it ends a Redis key); any other id fails startup.
          */
         var instanceId: String = ""
     }

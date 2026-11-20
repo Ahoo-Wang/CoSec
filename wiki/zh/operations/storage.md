@@ -160,12 +160,13 @@ key 都在它之下（`SNP-9`）。
 key 上。对 `<s>:shadow:reporters:*` 有写权限的实例可以删掉另一个实例的 id：控制面一旦见过那个实例报告，窗口就会保持
 打开直到它的报告回来；但在那之前被删掉的 id 不会被发现，直到那个实例再次写入。
 
-以默认前缀下的实例 `pod-a` 为例（Redis 7 ACL 语法，`channel-mode: pubsub`）。第一行设置 key 并收回所有命令；第二行授予它
+以默认前缀下、用 `cosec.authorization.shadow.instance-id=pod-a` 启动的实例为例，它的 key 以 `pod-a.<后缀>` 结尾（后缀每次启动都换新，
+[配置](./configuration.md#shadow-windows)）（Redis 7 ACL 语法，`channel-mode: pubsub`）。第一行设置 key 并收回所有命令；第二行授予它
 需要的命令和通道，即 [CoCache 为它写入的存储和只读存储列出的那些](https://cocache.ahoo.me/operations/#acl)
 （`sharded` 模式再加 `+spublish +ssubscribe +sunsubscribe`）：
 
 ```text
-ACL SETUSER cosec-pod-a on >change-me resetkeys resetchannels -@all %R~cosec:snapshot:* %R~cosec:candidate:* ~cosec:shadow:report: ~cosec:shadow:report:*:pod-a ~cosec:shadow:reporters:* ~cosec:shadow:status: ~cosec:shadow:status:pod-a ~cosec:shadow:instances:* ~cocache:!probe:*
+ACL SETUSER cosec-pod-a on >change-me resetkeys resetchannels -@all %R~cosec:snapshot:* %R~cosec:candidate:* ~cosec:shadow:report: ~cosec:shadow:report:*:pod-a.* ~cosec:shadow:reporters:* ~cosec:shadow:status: ~cosec:shadow:status:pod-a.* ~cosec:shadow:instances:* ~cocache:!probe:*
 ACL SETUSER cosec-pod-a +@connection +evalsha +eval +evalsha_ro +eval_ro +publish +subscribe +unsubscribe +info +get +getrange +strlen +set +del +pttl +type +hgetall +hkeys +hmget +hset +hdel +hlen +pexpire +persist +setrange +time &cosec:* &cocache:!probe:*
 ```
 

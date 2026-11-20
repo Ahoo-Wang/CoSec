@@ -222,13 +222,15 @@ ACL only keeps it to its own keys. An instance with write access to `<s>:shadow:
 instance's id: once the control plane has seen that instance report, the window stays open until its report is back,
 but an id removed before then goes unnoticed until that instance writes again.
 
-An example for instance `pod-a` with the default prefix (Redis 7 ACL syntax, `channel-mode: pubsub`). The first line sets
+An example for an instance started with `cosec.authorization.shadow.instance-id=pod-a`, whose keys end in `pod-a.<suffix>`
+(the suffix is new at every start, [Configuration](./configuration.md#shadow-windows)), with the default prefix (Redis 7 ACL
+syntax, `channel-mode: pubsub`). The first line sets
 the keys and takes every command away; the second grants the commands and channels it needs, which are the ones
 [CoCache lists](https://cocache.ahoo.me/operations/#acl) for the stores it writes and the read-only ones (add
 `+spublish +ssubscribe +sunsubscribe` in `sharded` mode):
 
 ```text
-ACL SETUSER cosec-pod-a on >change-me resetkeys resetchannels -@all %R~cosec:snapshot:* %R~cosec:candidate:* ~cosec:shadow:report: ~cosec:shadow:report:*:pod-a ~cosec:shadow:reporters:* ~cosec:shadow:status: ~cosec:shadow:status:pod-a ~cosec:shadow:instances:* ~cocache:!probe:*
+ACL SETUSER cosec-pod-a on >change-me resetkeys resetchannels -@all %R~cosec:snapshot:* %R~cosec:candidate:* ~cosec:shadow:report: ~cosec:shadow:report:*:pod-a.* ~cosec:shadow:reporters:* ~cosec:shadow:status: ~cosec:shadow:status:pod-a.* ~cosec:shadow:instances:* ~cocache:!probe:*
 ACL SETUSER cosec-pod-a +@connection +evalsha +eval +evalsha_ro +eval_ro +publish +subscribe +unsubscribe +info +get +getrange +strlen +set +del +pttl +type +hgetall +hkeys +hmget +hset +hdel +hlen +pexpire +persist +setrange +time &cosec:* &cocache:!probe:*
 ```
 
