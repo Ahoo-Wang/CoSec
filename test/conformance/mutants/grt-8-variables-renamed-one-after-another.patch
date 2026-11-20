@@ -1,0 +1,26 @@
+# Rule: GRT-8
+# Mutant: resource variables are renamed one after another over the renamed condition, so eq(a, b) under {a->b, b->c} becomes eq(c, c) and a grantor's constraint a tautology
+# Tests: :control:test --tests me.ahoo.cosec.control.grant.VariableRenamingTest --tests me.ahoo.cosec.control.grant.SpecializationTest :conformance:test
+
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/grant/Specialization.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/grant/Specialization.kt
+index 1a3034a33..8ccb069ea 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/grant/Specialization.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/grant/Specialization.kt
+@@ -130,7 +130,7 @@ internal class Specialization(
+      * name twice (both pattern parsers refuse it), so two outer variables never meet in one inner variable.
+      */
+     private fun residual(condition: Condition, vararg attributes: Attribute): Folded {
+-        val paths = HashMap<String, String>()
++        val paths = LinkedHashMap<String, String>()
+         for (attribute in attributes) {
+             if (opaque(attribute)) {
+                 return Folded.Incomparable("${attribute.path} depends on who asks")
+@@ -141,7 +141,7 @@ internal class Specialization(
+                 paths[attribute.path] = Attribute.of(Kind.RESOURCE_VAR, name).path
+             }
+         }
+-        return Folded.Residual(if (paths.isEmpty()) condition else rename(condition, paths))
++        return Folded.Residual(paths.entries.fold(condition) { renamed, (from, to) -> rename(renamed, mapOf(from to to)) })
+     }
+ 
+     private fun outside(path: String): Folded = Folded.Incomparable("$path is not in the attribute catalog")

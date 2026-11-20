@@ -1,0 +1,179 @@
+{
+  "rules": [
+    "GRT-8"
+  ],
+  "polarity": "negative",
+  "level": "control",
+  "description": "R2C-31: the same constraint written with other names, res/{b}/{c} where b == c, is contained: renaming all at once keeps what the grantor holds.",
+  "documents": {
+    "platform": {
+      "policies": [
+        {
+          "id": "cosec:tenant-admin",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": [
+                "cosec:read",
+                "cosec:write",
+                "cosec:grant",
+                "cosec:publish",
+                "cosec:simulate",
+                "cosec:explain",
+                "cosec:analyze",
+                "cosec:shadow-read"
+              ],
+              "resource": [
+                "doc/tenant/{t}/**",
+                "scope/{t}/**"
+              ],
+              "condition": {
+                "eq": [
+                  "resource.var.t",
+                  {
+                    "attr": "subject.tenant"
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    "tenants": {
+      "acme": {
+        "policies": [
+          {
+            "id": "diagonal",
+            "statements": [
+              {
+                "effect": "allow",
+                "action": "res:read",
+                "resource": "res/{a}/{b}",
+                "condition": {
+                  "eq": [
+                    "resource.var.a",
+                    {
+                      "attr": "resource.var.b"
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        ],
+        "bindings": [
+          {
+            "id": "admin",
+            "subject": {
+              "role": "admin"
+            },
+            "app": "cosec-control",
+            "space": "",
+            "policy": "cosec:tenant-admin"
+          },
+          {
+            "id": "ops",
+            "subject": {
+              "role": "ops"
+            },
+            "app": "*",
+            "space": "*",
+            "policy": "diagonal"
+          }
+        ]
+      }
+    }
+  },
+  "grantor": {
+    "tenant": "acme",
+    "id": "gina",
+    "roles": [
+      "admin",
+      "ops@team-a"
+    ]
+  },
+  "candidate": {
+    "tenant": "acme",
+    "document": {
+      "policies": [
+        {
+          "id": "diagonal",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "res:read",
+              "resource": "res/{a}/{b}",
+              "condition": {
+                "eq": [
+                  "resource.var.a",
+                  {
+                    "attr": "resource.var.b"
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "id": "viewer",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "res:read",
+              "resource": "res/{b}/{c}",
+              "condition": {
+                "eq": [
+                  "resource.var.b",
+                  {
+                    "attr": "resource.var.c"
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "admin",
+          "subject": {
+            "role": "admin"
+          },
+          "app": "cosec-control",
+          "space": "",
+          "policy": "cosec:tenant-admin"
+        },
+        {
+          "id": "ops",
+          "subject": {
+            "role": "ops"
+          },
+          "app": "*",
+          "space": "*",
+          "policy": "diagonal"
+        },
+        {
+          "id": "viewer",
+          "subject": {
+            "role": "viewer"
+          },
+          "app": "order",
+          "space": "team-a",
+          "policy": "viewer"
+        }
+      ]
+    }
+  },
+  "expect": {
+    "fragments": [
+      {
+        "policy": "viewer",
+        "statement": 0,
+        "action": "res:read",
+        "resource": "res/{b}/{c}",
+        "verdict": "YES"
+      }
+    ]
+  }
+}
