@@ -51,10 +51,11 @@ key 都在它之下（`SNP-9`）。
 |---|---|---|
 | `<s>:snapshot:<doc>` | 控制面、`cosec-migrate` | 头部：每个实例执行的那个文档修订，存储为完整的 JSON 文档，包含其 `schema`、`revision` 和 `publishedAt` |
 | `<s>:control:revision:<doc>:<digest>` | 控制面、`cosec-migrate` | 一条修订记录，即完整的文档，按摘要寻址（`SHA-256:` 加 64 位十六进制，与 CoCache 的计算相同） |
-| `<s>:control:revisions:<doc>` | 控制面、`cosec-migrate` | 一个文档的修订索引，以及回收已从中移出、尚未确认删除的记录 |
-| `<s>:control:refs:<doc>:<policyId>` | 控制面、`cosec-migrate` | 引用 `<doc>` 中某个策略的文档，每个带上它最后一次登记该引用的修订：一个修订只删除它自己或更早的修订登记的引用（`CTL-25`）；对平台的策略 id，还包括自己定义了该 id 策略的租户文档，使平台不能新增这个 id；[`cosec-migrate repair-references`](./upgrading.md#repair-the-back-reference-index) 补上各个头引用而索引缺少的条目，并删除未能写入头的发布登记下的条目 |
+| `<s>:control:revisions:<doc>` | 控制面、`cosec-migrate` | 一个文档的修订索引，以及回收已从中移出、尚未确认删除的记录，以及它的前向记录：每个修订添加、而其收尾尚未处理的引用（`CTL-44`） |
+| `<s>:control:refs:<doc>:<policyId>` | 控制面、`cosec-migrate` | 一个集合（CoCache 的 `SetStore`），引用 `<doc>` 中某个策略的每个文档的每个修订一个成员：`<referrer>@<revision>`，引用者是自己定义了该 id 策略的租户时其后加 `#own`（`CTL-43`）。一次发布添加它开始引用的成员，它的收尾只删除其前向记录持有的那些成员，所以租户一次发布写入的量不随引用者数增长（`CTL-44`），删除也从不拿走更晚的修订添加的成员（`CTL-25`）。8.0.0-beta.5 之前格式的值在 [`cosec-migrate repair-references`](./upgrading.md#repair-the-back-reference-index) 转换之前一律失败关闭（`CTL-42`）；该命令还补上各个头引用而集合缺少的成员，并删除没有任何头持有的成员 |
 | `<s>:control:lease:<name>` | 控制面 | 一个租约（`reclaim:<doc>`、`shadow-windows`）；随每次写入过期，持有者完成后删除它，且只在仍持有时删除（`CTL-26`）；持有者再次获取自己的租约时，从此刻起重新持有完整的时长 |
-| `<s>:control:list:documents`、`<s>:control:list:open-changes` | 控制面、`cosec-migrate` | 有修订的文档，以及可能仍未结束的变更请求，供维护任务与 `repair-references` 逐个访问 |
+| `<s>:control:documents:all` | 控制面、`cosec-migrate` | 一个集合：有修订的文档，每个一个成员，供维护任务与 `repair-references` 逐个访问 |
+| `<s>:control:list:open-changes` | 控制面 | 可能仍未结束的变更请求。`<s>:control:list:documents` 是 8.0.0-beta.5 之前的文档列表，只在 `repair-references` 转换存储之前存在，该命令最后才删除它：在它存在期间，控制面在启动时记录一条 `ERROR`，`cosecControlStoreFormat` 为 `DOWN` |
 | `<s>:control:apps:all` | 控制面、`cosec-migrate` | app 列表：现有的 app 文档，以及列表是否完整；授出分析在每次租户变更时读取它（[见下文](#publishing-through-the-control-plane)） |
 | `<s>:control:change:<changeId>` | 控制面 | 一个变更请求 |
 | `<s>:control:stage:<doc>` | 控制面 | 一个文档的暂存槽：哪个变更占用它 |
@@ -80,6 +81,9 @@ key 都在它之下（`SNP-9`）。
   `<s>:shadow:inv:report`、`<s>:token:inv:revoked`、`<s>:token:subject:inv:revoked`、`<s>:inv:membership`。通道与它的
   key 在同一个前缀下，所以前缀不同的部署在同一个 Redis 上互不干扰，而针对 `<s>:control:*` 的一条 ACL 规则同时覆盖控制面
   的 key 和通道。
+- 反向引用和文档列表是集合：一次发布每添加或删除一个成员，就是一条命令，以及 `<s>:control:inv:refs` 或
+  `<s>:control:inv:documents` 上的一条失效消息，只有运行控制面的进程订阅它们。一次开始引用 21 个策略的租户发布，两者各发 21 条。
+  读集合总是询问 Redis：CoSec 不在本地保留集合的副本（`CTL-42`，[配置](./configuration.md#cocache-properties-that-affect-cosec)）。
 
 ### Redis 要求 {#redis-requirements}
 
@@ -147,7 +151,8 @@ key 都在它之下（`SNP-9`）。
   实例可以在文档的通道上发布失效消息。这只增加读取，从不改变决策：失效消息只携带 key，不携带文档，所以持有被点名文档的
   每个实例从 Redis（这个用户无法写入的权威存储）重新读取它，其间仍用已安装的副本做决策。实例未持有的 key 会被忽略，同一
   文档的重新加载会合并，每个实例最多一个在进行、一个在排队。
-- 控制面凭证：`<s>:` 下的所有 key。
+- 控制面凭证：`<s>:` 下的所有 key。反向引用和文档列表是 CoCache 的 `SetStore`，CoCache 以哈希保存它们并通过自己的集合脚本写入：
+  该用户还需要 [CoCache 为它们列出的命令](https://cocache.ahoo.me/operations/#acl)。
 - 要防止一个实例写另一个实例的报告，给每个实例一个独立的用户，只允许它写自己的报告 key
   （`<s>:shadow:report:*:<instance>`），并设置它的
   [`cosec.authorization.shadow.instance-id`](./configuration.md#shadow-windows)，以及它自己的状态 key
@@ -347,11 +352,11 @@ CoCache 为文档、控制面记录和吊销记录自建客户端（[Redis 客�
 这个列表很小（app id 加一个 `complete` 标记），由发布文档的一方维护，即控制面或 `cosec-migrate`：
 
 - app 文档在写入自己的头之前把自己列入，所以不会有列表未列出的 app 头；列表不存在时新建，为不完整；
-- 平台文档的第一个修订写入之后，把列表标记为完整，但只在列表列出了 `<s>:control:list:documents` 中的每份 app 文档时才标：在新的存储上，
+- 平台文档的第一个修订写入之后，把列表标记为完整，但只在列表列出了 `<s>:control:documents:all` 中的每份 app 文档时才标：在新的存储上，
   它之前没有 app 文档；而丢失后重新发布的平台头，可能遇到重建的列表没有列出的 app 文档。写入冲突的第一个修订什么也不标；
-- [`cosec-migrate repair-references`](./upgrading.md#repair-the-back-reference-index) 把 `<s>:control:list:documents`
+- [`cosec-migrate repair-references`](./upgrading.md#repair-the-back-reference-index) 把 `<s>:control:documents:all`
   列出的每份 app 文档列入，并把列表标记为完整；
-- 每个控制面实例在启动时、每次回收任务在做别的事之前，发现 `<s>:control:list:documents` 列出的、有头的某份 app 文档不在完整的列表中时，
+- 每个控制面实例在启动时、每次回收任务在做别的事之前，发现 `<s>:control:documents:all` 列出的、有头的某份 app 文档不在完整的列表中时，
   把列表标回不完整，并记一条 WARN：这份文档是由不维护列表的实例或 `cosec-migrate` 发布的，发生在滚动升级期间或降级之后。列出了却没有头
   的 app，是首次发布在写头之前就中止了，不算；头读不到的算。平台的第一个修订按同样的方式判断。一个实例上的对账成功之前，它的授出分析会先对账一次再信任列表；对账失败时，列表在下一次成功之前都不被信任。
 
@@ -362,11 +367,11 @@ CoCache 为文档、控制面记录和吊销记录自建客户端（[Redis 客�
 分析一律退回到审批。
 
 有两种情形依赖 Redis 保住已经确认的写入，上面的机制都发现不了：异步复制下的故障切换把列表回滚到一个仍然标着完整、却缺少此后发布的
-app 的状态；以及 `repair-references` 读到的 `<s>:control:list:documents` 本身已经丢了条目。从那个列表丢掉的条目不会再被补回，平台第一个修订的完成判定和对账也都依据这份列表，所以条目已经丢了的 app 文档，两者都发现不了。两者都属于控制面处处依赖的存储持久性
+app 的状态；以及 `repair-references` 读到的 `<s>:control:documents:all` 本身已经丢了条目。从那个列表丢掉的条目不会再被补回，平台第一个修订的完成判定和对账也都依据这份列表，所以条目已经丢了的 app 文档，两者都发现不了。两者都属于控制面处处依赖的存储持久性
 （[Redis 要求](#redis-requirements)；[RC 安全评审](https://github.com/Ahoo-Wang/CoSec/blob/main/docs/security/8.0-rc-review.md)中的 RC1-47）。
 
 以其他方式写进 Redis 的文档不在这两个列表中，授出分析、反向引用索引和维护任务都看不到它；只经这两条路径写文档。
-`<s>:control:list:documents` 随文档数量增长（10 万个租户时约 5 MB）；授出分析不读它。
+`<s>:control:documents:all` 每个文档一个成员，租户 id 为六个字符时每个约 14 字节文本：10 万个租户约 1.4 MB，另加 Redis 为哈希的每个字段增加的开销。一个反向引用集合每个引用者的每个修订一个成员，约 15 字节：每个租户都引用的策略，其集合在 10,000 个租户时约 150 KB，50,000 个时约 750 KB；10,000 个各引用 21 个策略的租户共有 210,000 个成员，约 3 MB，另加同样的开销。
 
 ### 一次发布比较什么 {#what-a-publish-compares}
 

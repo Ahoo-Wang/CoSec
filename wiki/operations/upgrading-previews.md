@@ -27,6 +27,26 @@ Which preview of the library may run behind which preview of the gateway image: 
 
 ## From 8.0.0-beta.4 {#from-8-0-0-beta-4}
 
+- **The back-references and the document list are sets: run `cosec-migrate repair-references` once** (`CTL-42`,
+  `CTL-43`, `CTL-44`, `MIG-4`). Affected: every store a control plane of 8.0.0-beta.4 or earlier wrote. Data-plane
+  instances are not: they read none of these keys.
+  - A policy's back-references (`<s>:control:refs:<doc>:<policyId>`) were one value, rewritten whole by every tenant
+    that added or dropped itself; they are now a set with a member per referrer and revision, and the document list
+    moved from `<s>:control:list:documents` to the set `<s>:control:documents:all`. A tenant's publish now writes its
+    own members only, whatever the number of tenants ([Storage](./storage.md#redis-keys)).
+  - Stop every control plane of an earlier version, then run
+    `cosec-migrate repair-references --to-redis <uri> [--cluster] [--key-prefix <p>]` once; the control plane of this
+    version may run meanwhile. It converts each back-reference value a head touches, never replaces a set, and removes
+    the old document list last, printing `The store is in the format of 8.0.0-beta.5.` A second run changes nothing
+    ([Repair the back-reference index](./upgrading.md#repair-the-back-reference-index)).
+  - Until it has run, the control plane starts, logs one `ERROR` naming the command, and its `cosecControlStoreFormat`
+    health indicator is `DOWN` ([Observability](./observability.md#snapshot-health)). A change that touches a back-reference of
+    the old format is refused (`503`, naming the command), never let through.
+  - A value no head touches stays in the old format: it blocks nothing, and a later change that touches it fails
+    closed, naming the command, until it runs again.
+  - The two sets are never kept locally: `local-max-age` and `degraded-local-max-age` of `ReferenceIndexCache` and
+    `ControlDocumentSetCache` are locked to 1 ns, and a `cocache.caches.*` entry that sets one fails startup
+    ([Configuration](./configuration.md#cocache-properties-that-affect-cosec)).
 - **Gateway mode states the network boundary it trusts, and the gateway forwards the method it decided** (`STA-7`,
   `STA-6`, `PIP-31`). Affected: every service in `cosec.pipeline.mode=gateway`, and every gateway.
   - A service in `gateway` mode believes any `CoSec-Identity` header, which carries no signature, so the network is its

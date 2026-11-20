@@ -245,6 +245,10 @@ CoCache 会在同一个 registry 中为 CoSec 的缓存记录它自己的指标�
   不是就绪信号：不要把它放进就绪组，否则 Redis 的一次改动会让所有实例同时退出轮转，而请求仍在照常决策
   （[Redis 要求](./storage.md#redis-requirements)）。与每个指示器一样，它也会让聚合的 `/actuator/health` 变为 `DOWN`：让负载均衡器
   和平台的健康检查探测就绪组，或者把它排除在它们探测的组之外（`management.endpoint.health.group.<group>.exclude=cosecSnapshotEviction`）。
+- **控制存储的格式。** 在基于 CoCache 运行控制面的地方，存储仍是 8.0.0-beta.5 之前的格式时，`cosecControlStoreFormat` 健康指示器为
+  `DOWN`，`format` 详情写明 `cosec-migrate repair-references`；该命令运行之后为 `UP`，`format: 8.0.0-beta.5`。它报告实例上一次读到的结果：
+  每分钟在自己的线程上读一次，从不由探测触发；读不到时为 `UP`，`format: unknown`。实例发现旧格式时还会记录一条 `ERROR`。它和
+  `cosecSnapshotEviction` 一样是告警：数据面仍在决定每个请求，所以不要把它放进就绪组（[升级](./upgrading-previews.md#from-8-0-0-beta-4)）。
 - **登录路由。** starter 提供刷新或登出路由时，`cosecLoginRoutes` 健康指示器总是 `UP`，以每个路由的属性为详情：`not refused`，或在文档拒绝匿名 `POST` 它之后为 `denied since <time>` 及是哪种拒绝（没有语句允许它、某条 DENY 语句匹配它、或租户的平台边界不覆盖它），直到之后有请求被允许。同样的拒绝每个路由每分钟记录一条 `WARN`，点名属性和路径。两者都来自真实请求的决策，所以从不出错，也都不会让实例变为未就绪（[构建客户端](../integration/clients.md#what-your-application-serves)）。
 - **滞后日志。** 文档超过 `lag-warn` 未被 Redis 确认时，实例以 `WARN` 记录，超过 `lag-escalate` 时以 `ERROR` 记录
   （[实例如何读取文档](./storage.md#how-instances-read-documents)）。其他值得告警的日志：

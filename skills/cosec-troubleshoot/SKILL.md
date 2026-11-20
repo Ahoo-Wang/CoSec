@@ -568,6 +568,14 @@ run `cosec-migrate repair-references --to-redis <uri> [--cluster] [--key-prefix 
 instance and `cosec-migrate` runs the new version. The same after the list was lost, and after the reclamation pass
 logs `The app list misses the app documents [...]; it is incomplete again` (an older instance published an app).
 
+When a change or a publish fails with `The back-reference set of [<doc>] policy [<id>] could not be read or written
+(...). A store written before 8.0.0-beta.5 must be converted first`, the control plane logged `The control store was
+written before 8.0.0-beta.5` at startup, or `cosecControlStoreFormat` is `DOWN`, the store still holds the
+back-references of 8.0.0-beta.4 or earlier, one value per policy, which this version refuses rather than reads as empty
+(`CTL-42`). Stop every control plane of an earlier version and run `cosec-migrate repair-references` once: it converts
+them into sets, never replaces a set, and removes the old document list last (`MIG-4`). Data-plane instances are not
+affected.
+
 A shadow window that stays blocked has a `CANDIDATE_ERROR`: one instance cannot compile the candidate, usually because
 it reads an `ext.*` attribute whose provider runs on the control host but not on that instance. Providers and their
 declared types must match on every instance and the control host; the change is never published while blocked.

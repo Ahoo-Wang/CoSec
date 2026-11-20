@@ -505,20 +505,22 @@ derive bound it:
 
 #### The store at many tenants
 
-What the control plane reads and writes in the store of record grows with the tenants that refer to one policy, not
-with the size of one document. For tenant documents that each hold 5 custom roles of the same 20 permissions of one
-app and 20 role bindings, one of them to a platform policy (`SaasScaleMeasurement`, run by hand, in memory, store
-operations counted at the sizes CoCache sends):
+What a tenant's publish reads and writes in the store of record does not grow with the number of tenants: a policy's
+back-references are a set, a member per referrer and revision, and a publish adds and removes its own members only
+(`CTL-44`). For tenant documents that each hold 5 custom roles of the same 20 permissions of one app and 20 role
+bindings, one of them to a platform policy (`SaasScaleMeasurement`, run by hand, in memory, store operations counted at
+the sizes CoCache sends):
 
-| Tenant documents | One referrer value | A new tenant's publish | An app removing a permission every tenant lists | One reclamation pass |
-|---|---|---|---|---|
-| 10,000 | 175 KB | 21 values read and written, 3.6 MB each way, 57 ms | one referrer value read, 3 ms | 10,000 index and head reads, no write, 37 ms |
-| 50,000 | 878 KB | 21 values, 18 MB each way, 298 ms | one referrer value read, 13 ms | 50,000 index and head reads, no write, 125 ms |
+| Tenant documents | One back-reference set | A new tenant's publish | That tenant dropping 2 references | An app removing a permission every tenant lists | One reclamation pass |
+|---|---|---|---|---|---|
+| 10,000 | 10,000 members, 146 KB | 21 members added, about 15 bytes each, with its own index, record and head: about 10 KB in all | 2 members removed, about 20 KB in all, no set read | one set read, 146 KB, 6 ms | 10,000 index and head reads, no write, 43 ms |
+| 50,000 | 50,000 members, 732 KB | the same | the same | one set read, 732 KB, 12 ms | 50,000 index and head reads, no write, 155 ms |
 
-A tenant's reference to an app's permission is indexed under the app only, an app's removal check reads no tenant's
-document, and a reclamation pass reads one index and one head of a document with nothing to reclaim. A referrer value
-is still one value rewritten whole by every tenant that adds or drops itself, so 50 tenants publishing at once on
-Redis lose some of their conditional writes on the value they all share.
+A tenant's reference to an app's permission is indexed under the app only, an app's or the platform's removal check
+reads one set and no tenant's document, and a reclamation pass reads one index and one head of a document with nothing
+to reclaim. 50 tenants publishing at once all land, with no conditional write lost: each writes only its own index and
+its own members. Each member added or removed is one command and one invalidation to the processes that run the control
+plane ([Storage](../operations/storage.md#redis-keys)).
 
 ### Measuring
 

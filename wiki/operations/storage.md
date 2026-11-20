@@ -73,10 +73,11 @@ contain `:` or `/`, so a key names one document only.
 |---|---|---|
 | `<s>:snapshot:<doc>` | the control plane, `cosec-migrate` | the head: the revision of the document every instance enforces, stored as the whole JSON document, its `schema`, `revision` and `publishedAt` included |
 | `<s>:control:revision:<doc>:<digest>` | the control plane, `cosec-migrate` | one revision record, the full document, addressed by its digest (`SHA-256:` and 64 hex digits, as CoCache computes it) |
-| `<s>:control:revisions:<doc>` | the control plane, `cosec-migrate` | the revision index of a document, and the records reclamation took out of it and has not yet seen deleted |
-| `<s>:control:refs:<doc>:<policyId>` | the control plane, `cosec-migrate` | the documents that refer to a policy of `<doc>`, each with the revision of it that last indexed the reference: a revision removes only what it or an earlier one indexed (`CTL-25`); for a platform policy id, also the tenant documents that define a policy of that id themselves, so the platform cannot add one; [`cosec-migrate repair-references`](./upgrading.md#repair-the-back-reference-index) adds what the heads refer to and it misses, and removes what a publish indexed before a head write it lost |
+| `<s>:control:revisions:<doc>` | the control plane, `cosec-migrate` | the revision index of a document, the records reclamation took out of it and has not yet seen deleted, and its forward record: the references each revision added that its settlement has not yet looked at (`CTL-44`) |
+| `<s>:control:refs:<doc>:<policyId>` | the control plane, `cosec-migrate` | a set (a CoCache `SetStore`) with one member per document and revision that refers to a policy of `<doc>`: `<referrer>@<revision>`, with `#own` after it when the referrer is a tenant that defines a policy of that id itself (`CTL-43`). A publish adds the members of what it starts referring to, and its settlement removes exactly the ones its forward record holds, so what a tenant's publish writes does not grow with the number of referrers (`CTL-44`) and a removal never takes a member a later revision added (`CTL-25`). A value of the format before 8.0.0-beta.5 fails closed until [`cosec-migrate repair-references`](./upgrading.md#repair-the-back-reference-index) converts it (`CTL-42`); the command also adds what the heads refer to and the sets miss, and removes what no head has |
 | `<s>:control:lease:<name>` | the control plane | a lease (`reclaim:<doc>`, `shadow-windows`); it expires with each write, and its holder deletes it when done, only while it still holds it (`CTL-26`); a holder that takes its own lease again holds it for the full duration from then on |
-| `<s>:control:list:documents`, `<s>:control:list:open-changes` | the control plane, `cosec-migrate` | the documents that have revisions, and the change requests that may still be open, so the maintenance passes and `repair-references` can visit each |
+| `<s>:control:documents:all` | the control plane, `cosec-migrate` | a set: the documents that have revisions, one member each, so the maintenance passes and `repair-references` can visit each |
+| `<s>:control:list:open-changes` | the control plane | the change requests that may still be open. `<s>:control:list:documents`, the list of documents before 8.0.0-beta.5, is there only until `repair-references` converts the store, which removes it last: while it is, the control plane logs an `ERROR` at startup and `cosecControlStoreFormat` is `DOWN` |
 | `<s>:control:apps:all` | the control plane, `cosec-migrate` | the app list: the app documents there are, and whether the list is complete, which the grant analysis reads on every tenant change ([below](#publishing-through-the-control-plane)) |
 | `<s>:control:change:<changeId>` | the control plane | a change request |
 | `<s>:control:stage:<doc>` | the control plane | the staging slot of a document: which change holds it |
@@ -103,6 +104,10 @@ contain `:` or `/`, so a key names one document only.
   `<s>:token:subject:inv:revoked`, `<s>:inv:membership`. A channel sits under the same prefix as its keys, so deployments
   with different prefixes stay apart on one Redis, and an ACL rule on `<s>:control:*` covers both the control plane's
   keys and its channels.
+- The back-references and the document list are sets: each member a publish adds or removes is one command and one
+  invalidation on `<s>:control:inv:refs` or `<s>:control:inv:documents`, which only processes that run the control plane
+  subscribe to. A tenant publish that starts referring to 21 policies sends 21 of each. A read of a set always asks
+  Redis: CoSec keeps no local copy of one (`CTL-42`, [Configuration](./configuration.md#cocache-properties-that-affect-cosec)).
 
 ### Redis requirements
 
@@ -207,7 +212,9 @@ the documents and the candidates, and write only shadow reports and statuses. A 
   instance that holds a named document reads it again from Redis, the store of record, which that user cannot write,
   and decides with the installed copy meanwhile. Keys an instance does not hold are ignored, and the reloads of one
   document coalesce, at most one in flight and one queued per instance.
-- Control-plane credentials: every key under `<s>:`.
+- Control-plane credentials: every key under `<s>:`. The back-references and the document list are CoCache `SetStore`s,
+  which CoCache keeps as hashes and writes through its set scripts: the user needs the commands
+  [CoCache lists](https://cocache.ahoo.me/operations/#acl) for them as well.
 - To keep one instance from writing another instance's report, give each instance its own user, limited to its own
   report keys (`<s>:shadow:report:*:<instance>`), and set its
   [`cosec.authorization.shadow.instance-id`](./configuration.md#shadow-windows), and to its own status key
@@ -473,13 +480,13 @@ the app list, `<s>:control:apps:all`, and the head of every app it names. The li
 - an app document lists itself before its head is written, so an app never has a head the list does not name; a
   list that is not there is started, not complete;
 - once the platform document's first revision is written, it marks the list complete, but only when the list names
-  every app document `<s>:control:list:documents` names: on a new store no app document exists before it, while a
+  every app document `<s>:control:documents:all` names: on a new store no app document exists before it, while a
   platform head that was lost and is published again may find app documents a rebuilt list does not name. A first
   revision that conflicts marks nothing;
 - [`cosec-migrate repair-references`](./upgrading.md#repair-the-back-reference-index) lists every app document
-  `<s>:control:list:documents` names and marks the list complete;
+  `<s>:control:documents:all` names and marks the list complete;
 - each control-plane instance at startup, and every reclamation pass before anything else, marks a complete list
-  incomplete again when an app document `<s>:control:list:documents` lists, and that has a head, is missing from it,
+  incomplete again when an app document `<s>:control:documents:all` lists, and that has a head, is missing from it,
   and logs a WARN: an instance or a `cosec-migrate` that does not keep the list published it, during a rolling
   upgrade or after a downgrade. A listed app without a head is one whose first publish stopped before its head write,
   and does not count; one whose head cannot be read does. The platform's first revision judges the same way. Until a
@@ -496,15 +503,18 @@ document is published, so the analysis falls back to approval until `repair-refe
 
 Two cases depend on Redis keeping what it acknowledged, and nothing above catches them: a failover under asynchronous
 replication that rolls the list back to a state that still says complete but misses an app published since, and a
-`<s>:control:list:documents` that had already lost entries when `repair-references` read it. Entries lost from that
+`<s>:control:documents:all` that had already lost entries when `repair-references` read it. Entries lost from that
 list are never listed again, and the platform's first revision and the reconciliation judge by the same list, so
 neither catches an app document whose entry is gone. Both are the storage durability the control plane relies on
 throughout ([Redis requirements](#redis-requirements); RC1-47 in the
 [RC security review](https://github.com/Ahoo-Wang/CoSec/blob/main/docs/security/8.0-rc-review.md)).
 
 A document written to Redis any other way is in neither list, so it is not seen by the analysis, the back-reference
-index or the maintenance passes; write documents only through these two. `<s>:control:list:documents` grows with the
-number of documents (about 5 MB for 100,000 tenants); the analysis does not read it.
+index or the maintenance passes; write documents only through these two. `<s>:control:documents:all` holds one member
+per document, about 14 bytes of text each for six-character tenant ids: about 1.4 MB for 100,000 tenants, before what
+Redis adds for each field of a hash. A back-reference set holds one member per referrer and revision, about 15 bytes:
+the set of a policy every tenant refers to is about 150 KB at 10,000 tenants and 750 KB at 50,000, and 10,000 tenants
+that each refer to 21 policies hold 210,000 members, about 3 MB, before the same overhead.
 
 ### What a publish compares
 
