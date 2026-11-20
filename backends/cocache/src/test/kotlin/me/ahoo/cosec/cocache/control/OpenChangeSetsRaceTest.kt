@@ -18,6 +18,8 @@ package me.ahoo.cosec.cocache.control
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import me.ahoo.cocache.api.SetStore
@@ -86,8 +88,7 @@ class OpenChangeSetsRaceTest {
         )
 
         /** A write held apart: [list] before the record, [store] the record, [unlist] after. */
-        inner class Write(val change: ChangeRequest) {
-            private val replaced = records[change.id]
+        inner class Write(val change: ChangeRequest, private val replaced: Versioned<ChangeRequest>? = records[change.id]) {
             val digest: SnapshotDigest = CoCacheControlStore.digest(ChangeRequestCacheCodec, change)
 
             suspend fun list() = sets.listBefore(change, digest)
@@ -104,6 +105,31 @@ class OpenChangeSetsRaceTest {
                 unlist()
             }
         }
+
+        /**
+         * A conditional write as the store makes it, listed before and unlisted after, with a pause of up to [pause]
+         * between the record and the removal: the window a late removal races in. False when the record moved.
+         */
+        suspend fun write(change: ChangeRequest, expected: Versioned<ChangeRequest>, pause: Long): Boolean {
+            val write = Write(change, expected)
+            write.list()
+            val landed = records.replace(change.id, expected, Versioned(change, write.digest))
+            if (pause > 0) delay(pause)
+            if (landed) write.unlist()
+            return landed
+        }
+
+        /** Notes in [missing] a record whose member was not in its state's set while it stayed the record. */
+        suspend fun check(id: ChangeId, missing: MutableCollection<String>) {
+            val before = records.getValue(id)
+            val members = members(before.value.state)
+            if (records[id] === before && member(before) !in members) {
+                missing += "${id.value} in ${before.value.state} as ${before.digest}"
+            }
+        }
+
+        private fun member(record: Versioned<ChangeRequest>) =
+            OpenChangeSets.member(record.value.key, record.value.id, record.digest)
 
         suspend fun ids(state: ChangeState): List<String> =
             sets.changes(state, null, LIMIT) { true }.changes.map { it.id.value }
@@ -236,6 +262,51 @@ class OpenChangeSetsRaceTest {
     }
 
     /**
+     * The race with its window held open: writers that move changes back and forth between two states, each pausing
+     * between its record and its removal, so a late removal meets a later write that brought the change back. A
+     * checker beside them reads a record, its state's set, and the record again: a member is added before its record
+     * and removed only after its record is replaced, so while the record is the same on both reads its member is in
+     * the set. A removal by state alone breaks that within a run; one by record never does.
+     */
+    @Test
+    fun `writers that pause before they unlist never take a later write's member`() = sets {
+        val ids = (1..WIDE_CHANGES).map { n ->
+            Write(change("c$n", ChangeState.CHECKED)).all()
+            ChangeId("c$n")
+        }
+        val missing = ConcurrentLinkedQueue<String>()
+        val writing = AtomicBoolean(true)
+        coroutineScope {
+            launch(Dispatchers.Default) {
+                while (writing.get()) ids.forEach { id -> check(id, missing) }
+            }
+            ids.map { id ->
+                (1..WIDE_WRITERS).map { writer ->
+                    launch(Dispatchers.Default) {
+                        val random = Random(id.value.hashCode() * 31 + writer)
+                        repeat(WIDE_MOVES) {
+                            val current = records.getValue(id)
+                            val next = if (current.value.state == ChangeState.CHECKED) {
+                                ChangeState.SHADOWING
+                            } else {
+                                ChangeState.CHECKED
+                            }
+                            val later = current.value.updatedAt.plusNanos(1 + random.nextLong(NANOS))
+                            write(current.value.copy(state = next, updatedAt = later), current, random.nextLong(PAUSE))
+                        }
+                    }
+                }
+            }.flatten().forEach { it.join() }
+            writing.set(false)
+        }
+        missing.toList().assert().isEmpty()
+        ids.forEach { id ->
+            val state = records.getValue(id).value.state
+            ids(state).assert().describedAs("${id.value} in $state").contains(id.value)
+        }
+    }
+
+    /**
      * Many changes moved back and forth between two states by writers that race on each, while readers list every
      * state: no listing returns a change in a state it was not asked for, and at the end every open change is listed by
      * its document and by its state, over the store as the control plane runs it.
@@ -321,14 +392,18 @@ class OpenChangeSetsRaceTest {
     private companion object {
         val GRACE: Duration = Duration.ofMinutes(1)
         const val LIMIT = 1000
-        const val DOCUMENTS = 10
-        const val CHANGES_PER_DOCUMENT = 5
-        const val WRITERS_PER_CHANGE = 4
+        const val DOCUMENTS = 4
+        const val CHANGES_PER_DOCUMENT = 2
+        const val WRITERS_PER_CHANGE = 8
         const val READERS = 3
-        const val MOVES = 40
-        const val TERMINAL_ONE_IN = 200
-        const val ELSEWHERE_ONE_IN = 10
+        const val MOVES = 200
+        const val TERMINAL_ONE_IN = 4000
+        const val ELSEWHERE_ONE_IN = 20
         const val NANOS = 1_000L
+        const val WIDE_CHANGES = 6
+        const val WIDE_WRITERS = 6
+        const val WIDE_MOVES = 60
+        const val PAUSE = 3L
         val OPEN = ChangeState.entries.filterNot { it.terminal }
     }
 }
