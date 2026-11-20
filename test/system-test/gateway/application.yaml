@@ -32,6 +32,20 @@ spring:
               uri: http://behind:8080
               predicates:
                 - Path=/plain/**
+            # Two apps behind one gateway, one service: each route names its app, which is what a gateway that fronts
+            # several apps does (MultiAppScenario). The routes above name none, and serve every app (SCP-11).
+            - id: shop
+              uri: lb://behind
+              predicates:
+                - Path=/shop/**
+              metadata:
+                cosec-app-id: shop
+            - id: ledger
+              uri: lb://behind
+              predicates:
+                - Path=/ledger/**
+              metadata:
+                cosec-app-id: ledger
 cosec:
   jwt:
     algorithm: hmac256

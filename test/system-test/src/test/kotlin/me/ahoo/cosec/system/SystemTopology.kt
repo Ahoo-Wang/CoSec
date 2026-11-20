@@ -33,6 +33,9 @@ object SystemTopology {
     /** The first gateway's management port: `/actuator/health` and the scrape endpoint `/actuator/prometheus`. */
     val gatewayManagement: URI get() = url("COSEC_SYSTEM_GATEWAY_MANAGEMENT_URL")
 
+    /** The second replica's management port: the same endpoints as [gatewayManagement], of `gw-2`. */
+    val gateway2Management: URI get() = url("COSEC_SYSTEM_GATEWAY2_MANAGEMENT_URL")
+
     /** Both replicas. */
     val gateways: List<URI> get() = listOf(gateway, gateway2)
 

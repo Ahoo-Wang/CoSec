@@ -8,8 +8,8 @@ lower test can see; what a unit, slice or embedded-server test already proves is
 | Path | What it is |
 |---|---|
 | `compose.yaml` | The topology. |
-| `gateway/application.yaml` | The gateways' configuration, mounted over the image's `config/`. |
-| `documents/` | The documents the scenarios publish: the platform's with `cosec-migrate`, the tenants' through the control plane. |
+| `gateway/application.yaml` | The gateways' configuration, mounted over the image's `config/`: the routes, two of which (`/shop`, `/ledger`) name an app. |
+| `documents/` | The documents the scenarios publish: the platform's with `cosec-migrate`, the apps' and the tenants' through the control plane. |
 | `profile/shortened-bounds.yaml` | Test configuration only: the bounds the suite shortens (shadow windows), each with the default it replaces. |
 | `../../typescript/cosec-fetcher/test-system/` | The TypeScript client's scenarios against the gateway, run by `pnpm test:system` in `typescript/` after the Kotlin ones. |
 | `kind/` | The kind leg: the manifests of `k8s/` on a real cluster (`run.sh`, its platform document). A second job of the same workflow. |
@@ -39,6 +39,13 @@ an artifact that exists): read the cause below it. The `Resolve the dependencies
 `./gradlew :system-test:check` runs only the harness's own tests, without Docker. The scenarios (`:system-test:systemTest`) need the
 stack running on an empty Redis, and the environment the workflow sets (`COSEC_SYSTEM_*`); run them on CI, not on a shared
 machine.
+
+## What it does not show
+
+- **A role held once, in several apps.** `MultiAppScenario` shows a role id that two apps define granting per app when the
+  token is for one app: the role comes from the token, and each app sees its own credential's list. Where memberships come
+  from a provider (it is asked for a tenant and a principal only), a role held once applies in every app that defines the
+  id. The stack has no provider, so the suite makes no claim about that case.
 
 ## Rules of the suite
 

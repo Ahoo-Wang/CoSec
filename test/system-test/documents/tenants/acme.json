@@ -1,0 +1,14 @@
+{
+  "schema": 2,
+  "revision": 1,
+  "publishedAt": "2026-11-20T00:00:00Z",
+  "bindings": [
+    {
+      "id": "clerk-ships",
+      "subject": { "role": "clerk" },
+      "app": "shop",
+      "space": "",
+      "policy": "perm:shop/items.ship"
+    }
+  ]
+}
