@@ -27,6 +27,7 @@ import me.ahoo.cosec.control.store.AppList
 import me.ahoo.cosec.control.store.ControlStore
 import me.ahoo.cosec.control.store.Head
 import me.ahoo.cosec.control.store.InMemoryControlStore
+import me.ahoo.cosec.control.store.ReferrerEntry
 import me.ahoo.cosec.control.store.Revisions
 import me.ahoo.cosec.control.store.StoreFixtures
 import me.ahoo.cosec.control.store.StoredDocument
@@ -47,8 +48,8 @@ class MovedHeadsTest {
     private val context = object : CurrentDocuments {
         override suspend fun head(key: SnapshotKey): Head? = revisions.head(key)
 
-        override suspend fun referrers(target: SnapshotKey, policy: PolicyId): Set<SnapshotKey> =
-            revisions.referrers(target, policy)
+        override suspend fun referrers(target: SnapshotKey, policy: PolicyId): Set<ReferrerEntry> =
+            revisions.referrerEntries(target, policy)
 
         override suspend fun apps(): Versioned<AppList>? = store.apps()
     }

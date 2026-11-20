@@ -1,0 +1,16 @@
+# Rule: CTL-42
+# Mutant: a set of record is kept locally for a minute: a read after a member written without an invalidation misses it
+# Tests: :cocache:test --tests me.ahoo.cosec.cocache.CacheTtlPolicyTest --tests me.ahoo.cosec.cocache.control.SetOfRecordReadTest
+
+diff --git a/backends/cocache/src/main/kotlin/me/ahoo/cosec/cocache/SetsOfRecord.kt b/backends/cocache/src/main/kotlin/me/ahoo/cosec/cocache/SetsOfRecord.kt
+--- a/backends/cocache/src/main/kotlin/me/ahoo/cosec/cocache/SetsOfRecord.kt
++++ b/backends/cocache/src/main/kotlin/me/ahoo/cosec/cocache/SetsOfRecord.kt
+@@ -42,7 +42,7 @@ object SetsOfRecord {
+      * `SetOfRecordReadTest` pins it, thousands of times in a tight loop, against a member written without an
+      * invalidation. A remote-only read of a `SetStore` in CoCache would replace this.
+      */
+-    val LOCAL_MAX_AGE: Duration = Duration.ofNanos(1)
++    val LOCAL_MAX_AGE: Duration = Duration.ofMinutes(1)
+ 
+     /**
+      * A set of record under CoSec's layout: never expiring, and with no local copy a read could answer from

@@ -85,6 +85,22 @@ internal object RedisAccess {
         block(CoCacheControlStore.create(factory, heads, keyPrefix))
     }
 
+    /**
+     * The control plane's store over the Redis of `--to-redis`, and the conversion of what a version before
+     * 8.0.0-beta.5 wrote there, for [block]: the old format is read through a runtime of its own, over the same Redis.
+     */
+    fun <T> repairAccess(options: Options, block: (CoCacheControlStore, StoreConversion) -> T): T {
+        val keyPrefix = options.value("key-prefix") ?: DEFAULT_KEY_PREFIX
+        return factory(options.required("to-redis"), options.flag("cluster")) { factory ->
+            val heads = factory.createPolicySnapshotCache(CoSecCacheSpecs.policySnapshot(keyPrefix))
+            val store = CoCacheControlStore.create(factory, heads, keyPrefix)
+            CacheRuntime.builder().backend(factory.runtime.backend).build().use { legacy ->
+                val conversion = LegacyConversion.create(store, factory, CoCacheFactory(legacy), keyPrefix)
+                block(store, StoreConversion.OfCoCache(store, conversion))
+            }
+        }
+    }
+
     /** CoCache 8 over the Redis at [uri], or the Redis Cluster [uri] names seed nodes of, for [block]. */
     private fun <T> factory(uri: String, cluster: Boolean, block: (CoCacheFactory) -> T): T {
         val backend = if (cluster) {

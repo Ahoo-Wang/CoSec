@@ -3,11 +3,10 @@
 # Tests: :control:test :conformance:test --tests me.ahoo.cosec.conformance.ConformanceTest
 
 diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/RemovedReferences.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/RemovedReferences.kt
-index 4b789c25..c0989f81 100644
 --- a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/RemovedReferences.kt
 +++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/RemovedReferences.kt
-@@ -45,7 +45,7 @@ internal object RemovedReferences {
-         } catch (_: DocumentCompileException) {
+@@ -58,7 +58,7 @@ internal object RemovedReferences {
+             findings += Finding("REFERENCES", "$.policies", "The back-references could not be read: ${e.message}", UNAVAILABLE)
              return
          }
 -        if (referenced.isEmpty()) return

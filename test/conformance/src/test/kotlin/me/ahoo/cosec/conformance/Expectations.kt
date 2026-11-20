@@ -134,6 +134,12 @@ object Expectations {
         put("records", outcome.records)
         set("writes", json.arrayNode().apply { outcome.writes.forEach(::add) })
         outcome.history?.let { history -> set("history", json.arrayNode().apply { history.forEach(::add) }) }
+        outcome.cost?.let { cost ->
+            set(
+                "lastPublish",
+                json.objectNode().apply { cost.forEach { (k, v) -> put(k, v) } }
+            )
+        }
     }
 
     private fun analyzed(outcome: Outcome.Analyzed): JsonNode = json.objectNode().apply {

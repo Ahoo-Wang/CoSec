@@ -32,8 +32,14 @@ import kotlin.coroutines.cancellation.CancellationException
 
 /**
  * The back-reference index of [Revisions] (RFC 0007 §5.8): what a document refers to in others, indexed so that a
- * policy still referred to is not removed. [Revisions.publish] indexes what a candidate adds before its head write and
- * drops what it no longer refers to after; `repair-references` adds what is missing and prunes what no head has.
+ * policy still referred to is not removed. Each reference is an entry of its own ([ReferrerEntry]): who refers, the
+ * revision that indexed it, and whether that revision defines the id itself (RC1-9).
+ *
+ * [Revisions.publish] records the entries a candidate adds in the document's own revision index ([IndexedReference]),
+ * then adds them, all before its head write; after the write it removes, by that record, the entries the published
+ * revision no longer has. A tenant's publish thus reads and writes its own index and its own entries, never the
+ * references of others (`CTL-44`). `repair-references` adds what is missing and prunes what no head has, member by
+ * member, never replacing a set (`MIG-4`).
  */
 internal class ReferrerIndex(
     private val store: ControlStore,
@@ -41,58 +47,134 @@ internal class ReferrerIndex(
     /** The head of a document, as [Revisions.head] reads it. */
     private val head: suspend (SnapshotKey) -> Head?,
 ) {
+    /** A reference of a document: [policy] of [target], and whether the document defines that id itself (RC1-9). */
+    data class Reference(val target: SnapshotKey, val policy: PolicyId, val definesItself: Boolean = false) {
+        fun at(revision: Long): IndexedReference = IndexedReference(target, policy, revision, definesItself)
+    }
+
     /** The documents indexed as referring to [policy] of [target] (RFC 0007 §5.8). */
     suspend fun referrers(target: SnapshotKey, policy: PolicyId): Set<SnapshotKey> =
-        store.referrers(target, policy)?.value?.keys.orEmpty()
+        store.referrers(target, policy).mapTo(LinkedHashSet()) { it.referrer }
+
+    /** The entries of the references to [policy] of [target]; a value that cannot be read throws (`CTL-42`). */
+    suspend fun entries(target: SnapshotKey, policy: PolicyId): Set<ReferrerEntry> = store.referrers(target, policy)
 
     /**
-     * Adds whatever the head of [key] refers to and the back-reference index misses (`repair-references`, RFC 0007
-     * §5.8); the number of references it added. A missing entry would let a deletion through. A head that cannot be read
-     * throws. What the index has and no head does is [pruneReferences]'s.
+     * Adds the entries of [added], references of [key] at [revision], once its revision index records them (§5.4 step
+     * 3). A failure to add one throws, and the head is not moved: a reference missing from the index would let a
+     * deletion through. An entry the record does not hold stays indexed until `pruneReferences` removes it, which
+     * blocks a removal at most.
      */
-    suspend fun repairReferences(key: SnapshotKey): Int {
-        val head = head(key) ?: return 0
-        var added = 0
-        for ((target, policy) in references(head.document)) {
-            if (store.referrers(target, policy)?.value?.containsKey(key) == true) {
-                continue
-            }
-            check(
-                writes.updateReferrers(target, policy) { indexed(it, key, head.revision) }
-            ) { "[$key]: the reference to [$policy] of [$target] was not repaired." }
-            added++
+    suspend fun addEntries(key: SnapshotKey, revision: Long, added: Set<Reference>) {
+        for (reference in added) {
+            store.addReferrer(reference.target, reference.policy, ReferrerEntry(key, revision, reference.definesItself))
         }
-        return added
+    }
+
+    /** [addEntries] with its own record in [key]'s revision index first, as a publish writes it (`repair-references`). */
+    private suspend fun recordAndAdd(key: SnapshotKey, revision: Long, added: Set<Reference>) {
+        if (added.isEmpty()) {
+            return
+        }
+        writes.updateIndex(key) { it.copy(indexed = it.indexed + added.map { reference -> reference.at(revision) }) } ||
+            warn("[$key] revision $revision: what it indexes could not be recorded; it stays until pruned")
+        addEntries(key, revision, added)
     }
 
     /**
-     * Removes from the back-reference index, for every policy the head of [target] defines, the references no head has
+     * After [key]'s head moved to [revision] (§5.4 step 6): removes the entries its record holds at or below that
+     * revision whose reference the published document no longer has ([kept]), then the record of them. It reads [key]'s
+     * own index, never the references of others. A later revision's entry is another entry, and stays (`CTL-25`); so
+     * does the record of an entry whose removal failed, for the next publish to remove. Failures only warn.
+     */
+    suspend fun dropGone(key: SnapshotKey, revision: Long, kept: Set<Reference>) {
+        val recorded = store.index(key)?.value?.indexed.orEmpty()
+        val gone = recorded.filter { it.revision <= revision && Reference(it.target, it.policy, it.definesItself) !in kept }
+        if (gone.isEmpty()) {
+            return
+        }
+        val removed = gone.filter { indexed ->
+            try {
+                store.removeReferrers(indexed.target, indexed.policy, setOf(indexed.entryOf(key)))
+                true
+            } catch (e: CancellationException) {
+                throw e
+            } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
+                log.warn(
+                    e
+                ) { "[$key] no longer refers to [${indexed.policy.value}] of [${indexed.target}], which stays indexed" }
+                false
+            }
+        }.toSet()
+        if (removed.isNotEmpty()) {
+            writes.updateIndex(key) { it.copy(indexed = it.indexed - removed) } ||
+                warn("[$key] revision $revision: the record of what it dropped could not be updated")
+        }
+    }
+
+    /** Whether [referrer] is a tenant whose head defines [policy] itself (RC1-9): its entries say `#own`. */
+    suspend fun definesItself(referrer: SnapshotKey, policy: PolicyId): Boolean =
+        referrer is SnapshotKey.Tenant &&
+            head(referrer)?.document?.let { document -> RoleExpansion.effective(document).policies.any { it.id == policy } } == true
+
+    /**
+     * The back-reference sets the head of [key] touches: those of what it refers to and, for the platform or an app,
+     * those of its own policies. What `cosec-migrate repair-references` converts from the format before 8.0.0-beta.5:
+     * a set no head touches blocks nothing. Empty for a document with no head.
+     */
+    suspend fun referenceKeys(key: SnapshotKey): Set<Pair<SnapshotKey, PolicyId>> {
+        val document = head(key)?.document ?: return emptySet()
+        val referred = references(document).map { it.target to it.policy }
+        val own = if (key is SnapshotKey.Tenant) {
+            emptyList()
+        } else {
+            RoleExpansion.effective(
+                document
+            ).policies.map { key to it.id }
+        }
+        return (referred + own).toCollection(LinkedHashSet())
+    }
+
+    /**
+     * Adds whatever the head of [key] refers to and the back-reference index misses (`repair-references`, RFC 0007
+     * §5.8), with its record in [key]'s index; the number of references it added. A missing entry would let a deletion
+     * through. A head or a value that cannot be read throws. Entries are only ever added here, never a set replaced
+     * (`MIG-4`): a publish that adds an entry meanwhile keeps it. What the index has and no head does is
+     * [pruneReferences]'s.
+     */
+    suspend fun repairReferences(key: SnapshotKey): Int {
+        val head = head(key) ?: return 0
+        val missing = references(head.document).filter { reference ->
+            store.referrers(reference.target, reference.policy)
+                .none { it.referrer == key && it.definesItself == reference.definesItself }
+        }.toSet()
+        recordAndAdd(key, head.revision, missing)
+        return missing.size
+    }
+
+    /**
+     * Removes from the back-reference index, for every policy the head of [target] defines, the entries no head has
      * (`repair-references`, RFC 0007 §5.8): what a publish indexed before a head write it then lost, which would block
-     * removing that policy for good. The number removed. It may run while the control plane runs, and the index stays a
-     * superset of the true references (the only thing it must be, §5.8):
+     * removing that policy for good. The number removed. Each is removed as the exact entry it read, so an entry a
+     * publish adds meanwhile is never taken (`MIG-4`), and the index stays a superset of the true references:
      *
      * - an entry goes only when its referrer's head is at or above the revision that indexed it, and does not have the
      *   reference. The publish that indexed it is then over: one still in flight has indexed a revision above the head;
-     * - a later revision that brings the reference back indexes itself before its head write, so the entry then names a
-     *   revision above any head read here. The removal is conditional on the entry as it is, so it leaves that alone;
      * - a referrer whose head is not there or cannot be read keeps its entries: it may have the reference.
      *
-     * A publish that lost its race and that no later revision has passed stays indexed until one does. The policies
-     * [target] does not define are not looked at: an entry of one blocks nothing.
+     * The policies [target] does not define are not looked at: an entry of one blocks nothing.
      */
     suspend fun pruneReferences(target: SnapshotKey, heads: ReferrerHeads = ReferrerHeads()): Int {
         val document = head(target)?.document ?: return 0
         var removed = 0
         for (policy in RoleExpansion.effective(document).policies.map { it.id }) {
-            store.referrers(target, policy)?.value?.keys.orEmpty().forEach { referring(it, heads) }
-            var gone = 0
-            check(
-                writes.updateReferrers(target, policy) { current ->
-                    current.filterNot { (referrer, revision) -> heads.gone(referrer, revision, target, policy) }
-                        .also { gone = current.size - it.size }
-                }
-            ) { "[$target]: the references to [$policy] kept changing." }
-            removed += gone
+            val entries = store.referrers(target, policy)
+            entries.forEach { referring(it.referrer, heads) }
+            val gone = entries.filterTo(LinkedHashSet()) { heads.gone(it, target, policy) }
+            if (gone.isNotEmpty()) {
+                store.removeReferrers(target, policy, gone)
+                removed += gone.size
+            }
         }
         return removed
     }
@@ -104,7 +186,10 @@ internal class ReferrerIndex(
         }
         heads.read[referrer] = try {
             head(referrer).let {
-                ReferrerHeads.Referring(it?.revision ?: 0, it?.let { head -> references(head.document) }.orEmpty())
+                ReferrerHeads.Referring(
+                    it?.revision ?: 0,
+                    it?.let { head -> references(head.document) }.orEmpty(),
+                )
             }
         } catch (e: CancellationException) {
             throw e
@@ -124,7 +209,7 @@ internal class ReferrerIndex(
         base: Head?,
         candidate: PolicyDocument
     ): PublishOutcome.Referenced? =
-        ReferencedPolicies.of(key, base?.document, candidate, ::referrers, head)
+        ReferencedPolicies.of(key, base?.document, candidate, ::entries)
             .takeIf { it.isNotEmpty() }?.let { PublishOutcome.Referenced(it) }
 
     /**
@@ -133,8 +218,9 @@ internal class ReferrerIndex(
      * Both are indexed: the index may hold more than the true references, never less. A tenant's boundary names a
      * platform boundary policy (RFC 0007 §7.6).
      *
-     * A tenant's own policy ids are indexed as uses of the platform's id too (RC1-9), so that the platform cannot add
-     * a policy of an id a tenant already defines; readers tell the two apart by the tenant's head.
+     * A tenant's own policy ids are indexed as uses of the platform's id too (RC1-9), marked [Reference.definesItself],
+     * so that the platform cannot add a policy of an id a tenant already defines, and removing the platform's does not
+     * wait for a tenant that has its own (`CTL-43`).
      *
      * The index is of what a document grants, so it reads the [expanded][RoleExpansion.effective] document (RFC 0012
      * §7.5): an app must not remove a permission a tenant's role lists.
@@ -144,15 +230,15 @@ internal class ReferrerIndex(
      * platform can never define, remove or reuse such an id: an entry under the platform could never block anything,
      * and would double what each tenant's publish writes. Every other reference stays indexed as it was.
      */
-    fun references(stored: PolicyDocument): Set<Pair<SnapshotKey, PolicyId>> {
+    fun references(stored: PolicyDocument): Set<Reference> {
         if (stored.kind == DocumentKind.PLATFORM) {
             return emptySet()
         }
         val document = RoleExpansion.effective(stored)
         val own = document.policies.map { it.id }.toSet()
-        val references = LinkedHashSet<Pair<SnapshotKey, PolicyId>>()
+        val references = LinkedHashSet<Reference>()
         if (document.kind == DocumentKind.TENANT) {
-            own.forEach { references += SnapshotKey.Platform to it }
+            own.forEach { references += Reference(SnapshotKey.Platform, it, definesItself = true) }
         }
         for (binding in document.bindings) {
             val app = (binding.scope.app as? Match.Exactly)?.value?.value
@@ -163,9 +249,9 @@ internal class ReferrerIndex(
                 )
             }
             if (binding.policy in own) continue
-            targetsOf(document.kind, app, binding.policy).forEach { references += it to binding.policy }
+            targetsOf(document.kind, app, binding.policy).forEach { references += Reference(it, binding.policy) }
         }
-        document.boundary?.let { references += SnapshotKey.Platform to it }
+        document.boundary?.let { references += Reference(SnapshotKey.Platform, it) }
         return references
     }
 
@@ -180,40 +266,7 @@ internal class ReferrerIndex(
         else -> listOf(SnapshotKey.Platform, SnapshotKey.App(app))
     }
 
-    /**
-     * What a version before beta.5 indexed for [stored]: [references], and each of its app permission references under
-     * the platform too. A publish drops what its base's head had this way and its candidate does not, so a tenant's
-     * entries under the platform for app permissions go at its next publish, with no command. Until then they block
-     * nothing (see [references]); `pruneReferences` of the platform never visits them, since the platform defines no
-     * such id.
-     */
-    fun indexedByOlderVersions(stored: PolicyDocument): Set<Pair<SnapshotKey, PolicyId>> {
-        val references = references(stored)
-        return references + references.mapNotNull { (target, policy) ->
-            (SnapshotKey.Platform to policy).takeIf { target is SnapshotKey.App && isPermissionOf(target.appId, policy) }
-        }
-    }
-
     /** Whether [policy] is a permission policy of [app] (`perm:<app>/<id>`), which only that app's document defines. */
     private fun isPermissionOf(app: String, policy: PolicyId): Boolean =
         policy.value.startsWith(PolicyDocumentCompiler.permissionPrefix(app))
-
-    /**
-     * [referrers] with [key] at [revision]: a reference [publish] indexes before its head write. One already indexed
-     * by [revision] or a later revision (a publish that lost its race) stays as it is.
-     */
-    fun indexed(referrers: Map<SnapshotKey, Long>, key: SnapshotKey, revision: Long): Map<SnapshotKey, Long> {
-        val current = referrers[key]
-        return if (current != null && current >= revision) referrers else referrers + (key to revision)
-    }
-
-    /**
-     * [referrers] without [key], if [revision], which no longer refers, or an earlier revision indexed it. The removal
-     * runs after the head write, so a later revision may have indexed the reference again meanwhile (#1207): it stays,
-     * and so does one of a revision whose publish lost its race, a superset that blocks a deletion at most.
-     */
-    fun dropped(referrers: Map<SnapshotKey, Long>, key: SnapshotKey, revision: Long): Map<SnapshotKey, Long> {
-        val current = referrers[key] ?: return referrers
-        return if (current <= revision) referrers - key else referrers
-    }
 }

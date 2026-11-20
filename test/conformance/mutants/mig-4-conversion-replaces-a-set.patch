@@ -1,0 +1,15 @@
+# Rule: MIG-4
+# Mutant: repair-references writes over a set that is not in the old format: a member a publish added is lost
+# Tests: :migrate:test --tests me.ahoo.cosec.migrate.LegacyConversionTest
+
+diff --git a/migration/migrate/src/main/kotlin/me/ahoo/cosec/migrate/LegacyConversion.kt b/migration/migrate/src/main/kotlin/me/ahoo/cosec/migrate/LegacyConversion.kt
+--- a/migration/migrate/src/main/kotlin/me/ahoo/cosec/migrate/LegacyConversion.kt
++++ b/migration/migrate/src/main/kotlin/me/ahoo/cosec/migrate/LegacyConversion.kt
+@@ -77,6 +77,7 @@ internal class LegacyConversion(
+         definesItself: suspend (SnapshotKey) -> Boolean = { false },
+     ): Boolean {
+         if (!isLegacy(target, policy)) {
++            store.convertReferrers(target, policy, emptySet())
+             return false
+         }
+         val old = legacy.suspending().get(target to policy) ?: return false

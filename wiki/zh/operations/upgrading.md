@@ -231,11 +231,11 @@ cosec-migrate partition plan (--from-redis redis://localhost:6379 [--key-prefix 
 cosec-migrate repair-references --to-redis redis://localhost:6379 [--cluster] [--key-prefix cosec]
 ```
 
-控制面维护一个"哪些文档引用了哪条策略"的索引，使平台变更不能删除文档仍在使用的策略，也不能新增与租户文档所用 id 相同的策略（[存储](./storage.md#redis-keys)）。`repair-references` 读取存储列出的每份文档的头，补上索引缺少的条目，并输出访问了多少文档、补了多少条引用。然后它删除没有任何头引用的条目（这些条目是未能写入头的发布登记的）并输出数量：留着的话，会永远拦住对那条策略的删除。只有文档的头不低于登记该条目的修订时才删除，所以仍在进行的发布的条目会保留，失败的发布留下的条目要等该文档发布到更高修订之后才能删除。因此它可以在控制面运行时执行，再运行一次也不会改变任何东西。头读不到的文档输出为 `FAILED <doc>: <原因>`，其余文档照常访问，命令以 `1` 退出。
+控制面维护一个"哪些文档引用了哪条策略"的索引，使平台变更不能删除文档仍在使用的策略，也不能新增与租户文档所用 id 相同的策略（[存储](./storage.md#redis-keys)）。对 8.0.0-beta.5 之前写入的存储，它先在两次运行共用的租约之下把这个索引转换为集合：头触及的每个旧格式值都变成集合，集合从不被替换；旧的文档列表（`<s>:control:list:documents`）被复制进 `<s>:control:documents:all`，在没有任何失败时最后删除。它输出转换了多少，以及 `The store is in the format of 8.0.0-beta.5.`（`MIG-4`）。先停掉所有更早版本的控制面：它们写的是旧格式。`repair-references` 读取存储列出的每份文档的头，补上索引缺少的条目，并输出访问了多少文档、补了多少条引用。然后它删除没有任何头引用的条目（这些条目是未能写入头的发布登记的）并输出数量：留着的话，会永远拦住对那条策略的删除。只有文档的头不低于登记该条目的修订时才删除，所以仍在进行的发布的条目会保留，失败的发布留下的条目要等该文档发布到更高修订之后才能删除。因此它可以在控制面运行时执行，再运行一次也不会改变任何东西。头读不到的文档输出为 `FAILED <doc>: <原因>`，其余文档照常访问，命令以 `1` 退出。
 
 在写这个 Redis 的每个控制面实例和每个 `cosec-migrate` 二进制都运行这个版本之后再运行它，不要在滚动升级期间运行；降级之后要再运行一次。只要还有旧版本实例在运行，它就按旧的分析自行判断：它检查的变更不受 RC1-4 的保护，它发布的 app 文档也不会被列入。每个新实例在启动时对账一次，之后每次回收任务再对账：完整的列表缺了某份有头的 app 文档时，列表被标回不完整（[存储](./storage.md#publishing-through-the-control-plane)），新实例于是让覆盖所有 app 的授出退回审批。升级完成之后运行的那次 `repair-references`，才结束这个窗口。
 
-然后它把文档中的每份 app 文档列入 app 列表，并把列表标记为完整，输出 `The app list is complete: <n> app(s).`；在此之前，授出分析把覆盖所有 app 的每个授出都当作未知。如果列表在它执行期间一直在变，它输出 `FAILED the app list could not be completed` 并以 `1` 退出：再运行一次即可。它补全的列表只和 `<s>:control:list:documents` 一样可靠：只要那个列表没有丢失，它就列着控制面或 `cosec-migrate` 发布过的每一份文档；以其他方式写进 Redis 的文档两个列表里都没有。
+然后它把文档中的每份 app 文档列入 app 列表，并把列表标记为完整，输出 `The app list is complete: <n> app(s).`；在此之前，授出分析把覆盖所有 app 的每个授出都当作未知。如果列表在它执行期间一直在变，它输出 `FAILED the app list could not be completed` 并以 `1` 退出：再运行一次即可。它补全的列表只和 `<s>:control:documents:all` 一样可靠：只要那个列表没有丢失，它就列着控制面或 `cosec-migrate` 发布过的每一份文档；以其他方式写进 Redis 的文档两个列表里都没有。
 
 #### 检查修订链 {#verify-the-revision-chains}
 

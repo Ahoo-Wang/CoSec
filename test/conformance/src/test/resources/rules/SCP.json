@@ -124,7 +124,7 @@
         "control:ChangesB1Test#an app list that is not to be trusted leaves every app unknown - RC1-4",
         "cocache:CoCacheControlStoreTest#an open change of an app no key can name fails the listing",
         "cocache:CoCacheControlStoreTest#a back-reference set naming an app no key can name is a format error",
-        "cocache:CoCacheControlStoreTest#the referrers codec reads back what it writes and rejects anything else",
+        "cocache:CoCacheControlStoreTest#the member codec reads back what it writes and rejects anything else",
         "document:ShadowCodecTest#candidates, reports and statuses read back as they were written"
       ],
       "pending": null

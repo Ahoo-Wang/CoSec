@@ -1,0 +1,42 @@
+{
+  "rules": [
+    "CTL-42"
+  ],
+  "polarity": "positive",
+  "level": "control",
+  "description": "Nothing refers to the platform policy shared, but its back-reference set cannot be read (a value of the format before 8.0.0-beta.5): the platform's publish without it fails, and the platform head stays at revision 1.",
+  "publishes": [
+    {
+      "document": "platform",
+      "policies": [
+        "shared",
+        "other"
+      ]
+    },
+    {
+      "document": "platform",
+      "policies": [
+        "other"
+      ],
+      "unreadable": [
+        "shared"
+      ]
+    }
+  ],
+  "expect": {
+    "outcomes": [
+      "Published",
+      "Failed"
+    ],
+    "head": {
+      "revision": 1,
+      "parent": null,
+      "parentRecord": null
+    },
+    "records": 1,
+    "writes": [
+      "record",
+      "head"
+    ]
+  }
+}

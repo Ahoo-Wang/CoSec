@@ -1,0 +1,16 @@
+# Rule: CTL-43
+# Mutant: the addition check reads only the entries that say a tenant defines the id: a tenant that binds it without defining it no longer blocks the platform adding it
+# Tests: :control:test --tests me.ahoo.cosec.control.change.ReferenceFlagsTest
+
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/PlatformChecks.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/PlatformChecks.kt
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/PlatformChecks.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/PlatformChecks.kt
+@@ -53,7 +53,7 @@ internal object PlatformChecks {
+                 changedWithCopies(existing.getValue(policy.id), policy, i, context, findings)
+                 continue
+             }
+-            val tenants = tenants(context, policy.id, onlyDefining = false)
++            val tenants = tenants(context, policy.id, onlyDefining = true)
+             if (tenants == null) {
+                 findings += Finding(
+                     "V2",

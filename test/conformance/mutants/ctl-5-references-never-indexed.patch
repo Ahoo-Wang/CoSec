@@ -3,18 +3,13 @@
 # Tests: :control:test --tests me.ahoo.cosec.control.store.RevisionsTest :conformance:test --tests me.ahoo.cosec.conformance.ConformanceTest
 
 diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/store/Revisions.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/store/Revisions.kt
-index da55c45c8..ac707c728 100644
 --- a/core/control/src/main/kotlin/me/ahoo/cosec/control/store/Revisions.kt
 +++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/store/Revisions.kt
-@@ -115,11 +115,6 @@ class Revisions(
-         // As older versions indexed the base too: what it had under the platform for app permissions is dropped below.
-         val before = base?.let { referrerIndex.indexedByOlderVersions(it.document) }.orEmpty()
-         val after = referrerIndex.references(document)
--        for ((target, policy) in after - before) {
--            check(writes.updateReferrers(target, policy) { referrerIndex.indexed(it, key, revision) }) {
--                "[$key]: the reference to [$policy] of [$target] could not be indexed; the head was not moved."
--            }
--        }
+@@ -121,7 +121,6 @@ class Revisions(
+             )
+         } || warn("[$key] revision $revision: its record could not be registered as pending; an orphan would stay")
+         check(store.putRecord(key, stored) == digest) { "The store addressed the record of [$key] by another digest." }
+-        referrerIndex.addEntries(key, revision, added)
          if (key is SnapshotKey.App) {
              // Before the head moves, whether this is its first revision or the list was lost: no app has a head the
              // app list does not name (RC1-4).

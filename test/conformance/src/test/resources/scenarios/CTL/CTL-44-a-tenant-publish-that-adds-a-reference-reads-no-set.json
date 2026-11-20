@@ -1,0 +1,63 @@
+{
+  "rules": [
+    "CTL-44"
+  ],
+  "polarity": "positive",
+  "level": "control",
+  "cost": true,
+  "description": "Tenants beta and gamma already bind the platform policy shared. Tenant acme's publish that binds it reads no back-reference set and adds one member, whatever the number of other referrers.",
+  "publishes": [
+    {
+      "document": "platform",
+      "policies": [
+        "shared"
+      ]
+    },
+    {
+      "document": "tenant:beta",
+      "bindings": [
+        "shared"
+      ]
+    },
+    {
+      "document": "tenant:gamma",
+      "bindings": [
+        "shared"
+      ]
+    },
+    {
+      "bindings": [
+        "shared"
+      ]
+    }
+  ],
+  "expect": {
+    "outcomes": [
+      "Published",
+      "Published",
+      "Published",
+      "Published"
+    ],
+    "head": {
+      "revision": 1,
+      "parent": null,
+      "parentRecord": null
+    },
+    "records": 1,
+    "writes": [
+      "record",
+      "head",
+      "record",
+      "head",
+      "record",
+      "head",
+      "record",
+      "head"
+    ],
+    "lastPublish": {
+      "setReads": 0,
+      "membersAdded": 1,
+      "membersRemoved": 0
+    }
+  }
+}
