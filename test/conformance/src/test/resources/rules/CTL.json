@@ -704,6 +704,10 @@
         "cocache:CoCacheControlStoreTest#a new store is kept from the first keep",
         "cocache:CoCacheControlStoreTest#members a write left behind are dropped by the next read",
         "cocache:CoCacheControlStoreTest#a listed change that is missing stays until the grace has passed",
+        "cocache:OpenChangeSetsRaceTest#a reader between a write's listing and its record keeps the new member",
+        "cocache:OpenChangeSetsRaceTest#a write that unlists late takes out only the state it left",
+        "cocache:OpenChangeSetsRaceTest#a member a lost write left is never listed, and goes after the grace",
+        "cocache:OpenChangeSetsRaceTest#concurrent writers and readers leave every open change in its document's and its state's set",
         "control:OpenChangeListingTest#while the old list is there the listing is a 503 and nothing is reclaimed - CTL-54"
       ],
       "pending": null

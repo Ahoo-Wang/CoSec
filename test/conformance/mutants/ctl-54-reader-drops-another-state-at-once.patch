@@ -1,0 +1,19 @@
+# Rule: CTL-54
+# Mutant: a reader drops at once a member whose change is in another state: a write that listed its new state and has not yet written its record loses the change from that state's set
+# Tests: :cocache:test --tests me.ahoo.cosec.cocache.control.OpenChangeSetsRaceTest
+
+diff --git a/backends/cocache/src/main/kotlin/me/ahoo/cosec/cocache/control/OpenChangeSets.kt b/backends/cocache/src/main/kotlin/me/ahoo/cosec/cocache/control/OpenChangeSets.kt
+index 5ad8e4806..d413782cf 100644
+--- a/backends/cocache/src/main/kotlin/me/ahoo/cosec/cocache/control/OpenChangeSets.kt
++++ b/backends/cocache/src/main/kotlin/me/ahoo/cosec/cocache/control/OpenChangeSets.kt
+@@ -133,6 +133,10 @@ internal class OpenChangeSets(
+             sets.removeChangeMembers(key, setOf(member))
+             return null
+         }
++        if (change != null && (!listed(change) || change.key != document)) {
++            sets.removeChangeMembers(key, setOf(member))
++            return null
++        }
+         if (change == null || !listed(change) || change.key != document) {
+             stale(key, member)
+             return null
