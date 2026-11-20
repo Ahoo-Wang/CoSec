@@ -25,6 +25,7 @@ import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.model.decision.Cause
 import me.ahoo.cosec.model.decision.DocumentKind
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
+import me.ahoo.cosec.spi.snapshot.SnapshotKind
 import me.ahoo.cosec.spi.snapshot.SnapshotStaleException
 import java.util.concurrent.CompletableFuture
 
@@ -102,9 +103,11 @@ class DocumentSnapshotViews(
             }
             CompiledDocument.platform(emptyList(), emptyList())
         }
-        // Every key the view needs was asked for, in [Keys.documents]' order, so the set holds its entry there.
-        val tenantEntry = if (keys.hasTenant) set.scoped[0] else null
-        val appEntry = if (key.app != null) set.scoped[if (keys.hasTenant) 1 else 0] else null
+        // Every key the view needs was asked for, in [Keys.documents]' order, so the set holds its entry there; an entry
+        // of another kind there is never read as this one's document: it is unresolved (fail closed).
+        val tenantEntry = if (keys.hasTenant) placed(set, 0, SnapshotKind.TENANT, unresolved) else null
+        val appIndex = if (keys.hasTenant) 1 else 0
+        val appEntry = if (key.app != null) placed(set, appIndex, SnapshotKind.APP, unresolved) else null
         val tenant = tenantEntry?.let { entry ->
             document(entry, DocumentKind.TENANT, unresolved) { empty(key.tenant!!) }
         }
@@ -119,6 +122,28 @@ class DocumentSnapshotViews(
             version
         )
     }
+
+    /**
+     * The entry at [index] when it is of [kind]; otherwise null, with the cause added: a set that does not answer in the
+     * order asked must not make one document decide as another (R2D-1). Comparing the kinds costs nothing.
+     */
+    private fun placed(
+        set: SnapshotSet<*, *>,
+        index: Int,
+        kind: SnapshotKind,
+        unresolved: MutableList<Cause>,
+    ): SnapshotEntry<*>? {
+        val entry = set.scoped.getOrNull(index)
+        if (entry != null && entry.key.kind == kind) return entry
+        val documentKind = if (kind == SnapshotKind.TENANT) DocumentKind.TENANT else DocumentKind.APP
+        val error = IllegalStateException("The snapshot set does not hold the $kind document where it was asked for.")
+        unresolved += Cause.SourceUnavailable(documentKind, error)
+        return null
+    }
+
+    /** [view] over a [set] given: the test of what a set in another order makes (R2D-1). */
+    internal fun viewOf(key: ViewKey, set: SnapshotSet<CompiledDocument, CompiledDocument>): SnapshotView =
+        view(key, keysOf(key), set)
 
     /** The compiled document of [entry]; [absent] when none is stored; null, with the cause added, when it failed. */
     @Suppress("UNCHECKED_CAST")
