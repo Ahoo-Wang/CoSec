@@ -5,6 +5,8 @@
 
 > **2026-11-09 修订（#1307）**：C4 完成，公开声明的审定规则由 `PublicApiStabilityTest` 守护，可能增长的记录不再是 `data class`。C5 完成，`InstanceStatus` 带文档格式级别。`PipelineComponents` 保持公开（文档记载了不用 Spring 的装配方式）。
 
+> **2026-11-20 修订（第二轮整体审查 R2A-1，#1741）**：C4 的“可能增长的记录不是 `data class`”扩到决策值：`Decision` 的三种情形、`Cause` 除 `NotLoaded` 之外的各种情形、`Obligation.RateLimit` 与引擎的 `ViewVersion` 都是普通的 final 类，`equals`、`hashCode`、`toString` 写出，没有 `copy` 与 `componentN`，以后加字段不破坏调用方。仍是 `data class` 的公开类型列在 `PublicApiStabilityTest.REVIEWED_VALUES`，各带不会增长的理由。
+
 ## 0. 原则
 
 维护者的两条要求放在一起：
