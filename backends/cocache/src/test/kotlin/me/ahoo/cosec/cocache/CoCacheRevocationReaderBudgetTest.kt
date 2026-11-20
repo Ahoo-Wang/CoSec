@@ -18,6 +18,7 @@ package me.ahoo.cosec.cocache
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeout
 import me.ahoo.cocache.api.Lookup
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.model.PrincipalId
@@ -47,7 +48,13 @@ class CoCacheRevocationReaderBudgetTest {
         val hanging = CompletableFuture<Lookup<Boolean>>()
         val reader = CoCacheRevocationReader(tokens(hanging), readTimeout = budget)
         val started = System.nanoTime()
-        val failure = runCatching { runBlocking { reader.isRevoked("jti-1") } }.exceptionOrNull()
+        val failure = runCatching {
+            runBlocking {
+                withTimeout(
+                    OUTER_MILLIS
+                ) { reader.isRevoked("jti-1") }
+            }
+        }.exceptionOrNull()
         val took = Duration.ofNanos(System.nanoTime() - started)
         failure.assert().isInstanceOf(RevocationUnavailableException::class.java)
         took.assert().isGreaterThanOrEqualTo(budget).isLessThan(budget.multipliedBy(LATE))
@@ -62,7 +69,11 @@ class CoCacheRevocationReaderBudgetTest {
             budget,
         )
         val failure = runCatching {
-            runBlocking { reader.subjectRevokedBefore(TenantId("acme"), PrincipalId("alice")) }
+            runBlocking {
+                withTimeout(
+                    OUTER_MILLIS
+                ) { reader.subjectRevokedBefore(TenantId("acme"), PrincipalId("alice")) }
+            }
         }.exceptionOrNull()
         failure.assert().isInstanceOf(RevocationUnavailableException::class.java)
     }
@@ -90,6 +101,9 @@ class CoCacheRevocationReaderBudgetTest {
 
     private companion object {
         const val BUDGET_MILLIS = 100L
+
+        /** A read without a budget would wait for ever: this fails it instead. */
+        const val OUTER_MILLIS = 5_000L
 
         /** What a loaded runner may add past the budget: never several times it. */
         const val LATE = 10L

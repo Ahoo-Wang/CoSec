@@ -18,6 +18,7 @@ package me.ahoo.cosec.spring.boot.jwt
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeout
 import me.ahoo.cocache.api.Lookup
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.api.token.CompositeToken
@@ -60,7 +61,9 @@ class RevocationReadBudgetTest {
         val unchecked = UncheckedRevocations()
         val started = System.nanoTime()
         val answer = runBlocking {
-            TokenAuthenticator(Verifier, hanging, unchecked = unchecked).authenticate(Credentials("t", null))
+            withTimeout(OUTER_MILLIS) {
+                TokenAuthenticator(Verifier, hanging, unchecked = unchecked).authenticate(Credentials("t", null))
+            }
         }
         val took = Duration.ofNanos(System.nanoTime() - started)
         (answer as AuthnResult.Authenticated).principal.id.assert().isEqualTo(PrincipalId("alice"))
@@ -72,8 +75,10 @@ class RevocationReadBudgetTest {
     fun `with fail-closed a hanging Redis fails the check within the reader's budget`() {
         val failure = runCatching {
             runBlocking {
-                TokenAuthenticator(Verifier, hanging, acceptUnavailableRevocations = false)
-                    .authenticate(Credentials("t", null))
+                withTimeout(OUTER_MILLIS) {
+                    TokenAuthenticator(Verifier, hanging, acceptUnavailableRevocations = false)
+                        .authenticate(Credentials("t", null))
+                }
             }
         }.exceptionOrNull()
         failure.assert().isInstanceOf(RevocationUnavailableException::class.java)
@@ -81,5 +86,8 @@ class RevocationReadBudgetTest {
 
     private companion object {
         const val BUDGET_MILLIS = 100L
+
+        /** A read without a budget would wait for ever: this fails it instead. */
+        const val OUTER_MILLIS = 5_000L
     }
 }
