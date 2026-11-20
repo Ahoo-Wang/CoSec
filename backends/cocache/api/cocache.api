@@ -6,6 +6,7 @@ public final class me/ahoo/cosec/cocache/CoCacheMembershipProvider : me/ahoo/cos
 
 public final class me/ahoo/cosec/cocache/CoCacheMembershipProvider$Companion {
 	public final fun getDEFAULT_FILL_TIMEOUT ()Ljava/time/Duration;
+	public final fun getDEFAULT_UNKNOWN_LIFE ()Ljava/time/Duration;
 }
 
 public final class me/ahoo/cosec/cocache/CoCacheTokenFamilyStore : me/ahoo/cosec/spi/token/TokenFamilyStore {
@@ -38,6 +39,11 @@ public final class me/ahoo/cosec/cocache/RedisApiKeyStore {
 
 public final class me/ahoo/cosec/cocache/RedisApiKeyStore$Companion {
 	public final fun redisKey (Ljava/lang/String;Ljava/lang/String;)Ljava/lang/String;
+}
+
+public final class me/ahoo/cosec/cocache/RedisSocialStateStore : me/ahoo/cosec/spi/social/SocialStateStore {
+	public fun put (Ljava/lang/String;Ljava/lang/String;Ljava/time/Duration;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun take (Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 }
 
 public final class me/ahoo/cosec/cocache/control/CoCacheControlStore : me/ahoo/cosec/control/store/ControlStore {

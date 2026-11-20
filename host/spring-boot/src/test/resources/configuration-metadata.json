@@ -68,7 +68,7 @@
       "name": "cosec.authorization.membership",
       "sourceMethod": "getMembership()",
       "sourceType": "me.ahoo.cosec.spring.boot.pipeline.RuntimeAuthorizationProperties",
-      "type": "me.ahoo.cosec.spring.boot.pipeline.RuntimeAuthorizationProperties$Timed"
+      "type": "me.ahoo.cosec.spring.boot.pipeline.RuntimeAuthorizationProperties$Membership"
     },
     {
       "name": "cosec.authorization.rate-limit",
@@ -119,9 +119,9 @@
     },
     {
       "name": "cosec.control.analysis",
-      "type": "me.ahoo.cosec.spring.boot.control.ControlProperties$Analysis",
+      "sourceMethod": "getAnalysis()",
       "sourceType": "me.ahoo.cosec.spring.boot.control.ControlProperties",
-      "sourceMethod": "getAnalysis()"
+      "type": "me.ahoo.cosec.spring.boot.control.ControlProperties$Analysis"
     },
     {
       "name": "cosec.control.approval",
@@ -240,7 +240,6 @@
       "type": "me.ahoo.cosec.spring.boot.actuate.CoSecServiceGeneratorEndpoint"
     }
   ],
-  "hints": [],
   "properties": [
     {
       "description": "Whether API keys for machine clients are on; `true` or `false` only, any other value fails startup.",
@@ -267,7 +266,7 @@
       "type": "java.lang.Boolean"
     },
     {
-      "description": "`required` makes a permit wait for the broker's acknowledgement; best effort by default (RFC 0006 \u00a79.2).",
+      "description": "`required` makes a permit wait for the broker's acknowledgement; best effort by default (RFC 0006 §9.2).",
       "name": "cosec.audit.kafka.delivery",
       "sourceType": "me.ahoo.cosec.spring.boot.audit.kafka.KafkaAuditProperties",
       "type": "me.ahoo.cosec.runtime.event.Delivery"
@@ -351,19 +350,25 @@
       "type": "java.time.Duration"
     },
     {
-      "description": "How long one call of the stage's collaborator may take, the stage being the group this property is under: `membership` (the `MembershipProvider`; past it, or when it fails, the request is 503), `attributes` (an `AttributeProvider` that sets no timeout of its own; past it its attributes are unavailable) and `rate-limit` (the `RateLimiter`; past it the rule's `strictFailure` decides).",
+      "description": "How long one call of the stage's collaborator may take, the stage being the group this property is under: `attributes` (an `AttributeProvider` that sets no timeout of its own; past it its attributes are unavailable) and `rate-limit` (the `RateLimiter`; past it the rule's `strictFailure` decides).",
       "name": "cosec.authorization.attributes.timeout",
       "sourceType": "me.ahoo.cosec.spring.boot.pipeline.RuntimeAuthorizationProperties$Timed",
       "type": "java.time.Duration"
     },
     {
-      "description": "How long one call of the stage's collaborator may take, the stage being the group this property is under: `membership` (the `MembershipProvider`; past it, or when it fails, the request is 503), `attributes` (an `AttributeProvider` that sets no timeout of its own; past it its attributes are unavailable) and `rate-limit` (the `RateLimiter`; past it the rule's `strictFailure` decides).",
+      "description": "How long one call of the `MembershipProvider` may take; past it, or when it fails, the request is 503. The fill of the membership cache takes no longer than this.",
       "name": "cosec.authorization.membership.timeout",
-      "sourceType": "me.ahoo.cosec.spring.boot.pipeline.RuntimeAuthorizationProperties$Timed",
+      "sourceType": "me.ahoo.cosec.spring.boot.pipeline.RuntimeAuthorizationProperties$Membership",
       "type": "java.time.Duration"
     },
     {
-      "description": "How long one call of the stage's collaborator may take, the stage being the group this property is under: `membership` (the `MembershipProvider`; past it, or when it fails, the request is 503), `attributes` (an `AttributeProvider` that sets no timeout of its own; past it its attributes are unavailable) and `rate-limit` (the `RateLimiter`; past it the rule's `strictFailure` decides).",
+      "description": "How long an instance remembers that the loader did not know a principal (a removed member's token still valid), so that its requests do not reach the loader each time. Zero remembers nothing; at most one minute, the default life of a cached membership. A principal added meanwhile is known when it ends, or at once on the instance that invalidated it. A failed load is never remembered.",
+      "name": "cosec.authorization.membership.unknown-ttl",
+      "sourceType": "me.ahoo.cosec.spring.boot.pipeline.RuntimeAuthorizationProperties$Membership",
+      "type": "java.time.Duration"
+    },
+    {
+      "description": "How long one call of the stage's collaborator may take, the stage being the group this property is under: `attributes` (an `AttributeProvider` that sets no timeout of its own; past it its attributes are unavailable) and `rate-limit` (the `RateLimiter`; past it the rule's `strictFailure` decides).",
       "name": "cosec.authorization.rate-limit.timeout",
       "sourceType": "me.ahoo.cosec.spring.boot.pipeline.RuntimeAuthorizationProperties$Timed",
       "type": "java.time.Duration"
@@ -375,13 +380,13 @@
       "type": "java.lang.Integer"
     },
     {
-      "description": "The route maps WebFlux and WebMvc hosts load (RFC 0005 \u00a75.3), comma-separated resource locations; a location that does not exist, or a map with no routes, fails startup. Unset, the host runs without a route map, every request in the `http` namespace, unless [DEFAULT_LOCATION] exists: then startup fails, so that a map someone shipped is never left out without a word. Empty runs without a route map on purpose.",
+      "description": "The route maps WebFlux and WebMvc hosts load (RFC 0005 §5.3), comma-separated resource locations; a location that does not exist, or a map with no routes, fails startup. Unset, the host runs without a route map, every request in the `http` namespace, unless [DEFAULT_LOCATION] exists: then startup fails, so that a map someone shipped is never left out without a word. Empty runs without a route map on purpose.",
       "name": "cosec.authorization.routes.location",
       "sourceType": "me.ahoo.cosec.spring.boot.pipeline.RuntimeAuthorizationProperties$Routes",
       "type": "java.lang.String"
     },
     {
-      "description": "The app this host serves (RFC 0004 \u00a74.6); unset when requests declare their app.",
+      "description": "The app this host serves (RFC 0004 §4.6); unset when requests declare their app.",
       "name": "cosec.authorization.scope.app-id",
       "sourceType": "me.ahoo.cosec.spring.boot.pipeline.RuntimeAuthorizationProperties$Scope",
       "type": "java.lang.String"
@@ -501,7 +506,7 @@
       "type": "java.util.List<java.lang.String>"
     },
     {
-      "description": "Documents a revalidation pass confirms at once (positive). A pass takes about the documents held \u00d7 one conditional read \u00f7 this; past `revalidate-interval`, passes run back to back and lag grows with them.",
+      "description": "Documents a revalidation pass confirms at once (positive). A pass takes about the documents held × one conditional read ÷ this; past `revalidate-interval`, passes run back to back and lag grows with them.",
       "name": "cosec.authorization.snapshot.reload-concurrency",
       "sourceType": "me.ahoo.cosec.spring.boot.pipeline.RuntimeAuthorizationProperties$Snapshot",
       "type": "java.lang.Integer"
@@ -513,13 +518,13 @@
       "type": "java.time.Duration"
     },
     {
-      "name": "cosec.control.analysis.route-maps",
-      "type": "java.lang.String",
       "description": "The services' route maps, comma-separated resource locations (UC-1): the control plane lists, for a change, the `http:` DENY statements and rate limit rules a mapped route escapes. Unset, nothing is compared, and the change says so. Each host's own WARN needs only its own route map, not this.",
-      "sourceType": "me.ahoo.cosec.spring.boot.control.ControlProperties$Analysis"
+      "name": "cosec.control.analysis.route-maps",
+      "sourceType": "me.ahoo.cosec.spring.boot.control.ControlProperties$Analysis",
+      "type": "java.lang.String"
     },
     {
-      "description": "The app control-plane actions are authorized in (RFC 0007 \u00a77.2).",
+      "description": "The app control-plane actions are authorized in (RFC 0007 §7.2).",
       "name": "cosec.control.app-id",
       "sourceType": "me.ahoo.cosec.spring.boot.control.ControlProperties",
       "type": "java.lang.String"
@@ -579,7 +584,7 @@
       "type": "java.lang.Boolean"
     },
     {
-      "description": "Where the control API is served (RFC 0007 \u00a710.2): its routes are under `{base-path}/v1`.",
+      "description": "Where the control API is served (RFC 0007 §10.2): its routes are under `{base-path}/v1`.",
       "name": "cosec.control.http.base-path",
       "sourceType": "me.ahoo.cosec.spring.boot.control.ControlProperties$Http",
       "type": "java.lang.String"
@@ -717,10 +722,10 @@
       "type": "java.time.Duration"
     },
     {
-      "name": "cosec.jwt.session.memberships-on-refresh",
-      "type": "java.lang.String",
       "description": "How the starter's refresh route gives a refreshed token its memberships (its roles and attached policies), when the application declares no `MembershipRefresh` bean: no default, and with the route served startup fails until this is `from-token`, the statement that a refreshed token keeps the memberships of the token it replaces, so a removed role or attached policy applies at the member's next sign-in, `lifetime` at the latest (`STA-8`).",
-      "sourceType": "me.ahoo.cosec.spring.boot.jwt.JwtProperties$Session"
+      "name": "cosec.jwt.session.memberships-on-refresh",
+      "sourceType": "me.ahoo.cosec.spring.boot.jwt.JwtProperties$Session",
+      "type": "java.lang.String"
     },
     {
       "description": "How long after a refresh the pair it replaced is answered at the current generation: the window a client has to retry a refresh whose response it lost.",
@@ -741,7 +746,7 @@
       "type": "java.time.Duration"
     },
     {
-      "description": "The prefix of every Redis key this deployment writes (`SNP-9`, RC1-46): snapshot documents, control-plane records, shadow reports, token revocations, memberships (`<p>:snapshot:\u2026`, `<p>:control:\u2026`, `<p>:token:\u2026`, \u2026), API keys (`<p>:api-key:\u2026`) and rate limit counters (`<p>:rate-limiter:\u2026`). Two deployments on one Redis that differ in it share nothing. A trailing `:` is ignored.",
+      "description": "The prefix of every Redis key this deployment writes (`SNP-9`, RC1-46): snapshot documents, control-plane records, shadow reports, token revocations, memberships (`<p>:snapshot:…`, `<p>:control:…`, `<p>:token:…`, …), API keys (`<p>:api-key:…`) and rate limit counters (`<p>:rate-limiter:…`). Two deployments on one Redis that differ in it share nothing. A trailing `:` is ignored.",
       "name": "cosec.key-prefix",
       "sourceType": "me.ahoo.cosec.spring.boot.CoSecProperties",
       "type": "java.lang.String"
@@ -813,10 +818,10 @@
       "type": "org.springframework.util.unit.DataSize"
     },
     {
-      "name": "cosec.pipeline.identity.only-gateway-can-reach",
-      "type": "java.lang.Boolean",
       "description": "The statement that only the gateway can reach this service (`STA-7`). A service in `gateway` mode believes any `CoSec-Identity` it receives, a header with no signature, so whoever else can reach it is whoever they claim to be. No default: the mode does not start until this is `true`, written by an operator who has made it so (a NetworkPolicy that admits the gateway's pods only, mutual TLS, a private network).",
-      "sourceType": "me.ahoo.cosec.spring.boot.pipeline.PipelineProperties$Identity"
+      "name": "cosec.pipeline.identity.only-gateway-can-reach",
+      "sourceType": "me.ahoo.cosec.spring.boot.pipeline.PipelineProperties$Identity",
+      "type": "java.lang.Boolean"
     },
     {
       "description": "`enforce` decides with policies; `gateway` trusts the identity the gateway in front forwards (`CoSec-Identity`).",
@@ -843,5 +848,6 @@
       "sourceType": "me.ahoo.cosec.spring.boot.actuate.CoSecServiceGeneratorEndpoint",
       "type": "org.springframework.boot.actuate.endpoint.Access"
     }
-  ]
+  ],
+  "hints": []
 }

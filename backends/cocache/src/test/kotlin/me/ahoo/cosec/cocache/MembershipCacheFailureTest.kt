@@ -177,14 +177,14 @@ class MembershipCacheFailureTest {
     }
 
     /**
-     * RFC 0009 §4.2: an unknown principal is [MembershipAnswer.Unknown], never "no memberships", and is asked again
-     * rather than cached. Through real Redis and CoCache's async view: the fill's failure for it comes out of the cache
-     * as an unknown principal (a 401 in the pipeline), never as a failed lookup (a 503).
+     * RFC 0009 §4.2: an unknown principal is [MembershipAnswer.Unknown], never "no memberships", and with no life of its
+     * own it is asked again rather than cached. Through real Redis and CoCache's async view: the fill's failure for it
+     * comes out of the cache as an unknown principal (a 401 in the pipeline), never as a failed lookup (a 503).
      */
     @Test
     fun anUnknownPrincipalIsUnknownAndNotCached() = runBlocking<Unit> {
         val asked = AtomicInteger()
-        val unknown = CoCacheMembershipProvider(instanceA.membershipCache) { _, _ ->
+        val unknown = CoCacheMembershipProvider(instanceA.membershipCache, unknownLife = java.time.Duration.ZERO) { _, _ ->
             asked.incrementAndGet()
             MembershipAnswer.Unknown
         }
@@ -193,6 +193,44 @@ class MembershipCacheFailureTest {
         asked.get().assert().isEqualTo(2)
         // As the pipeline resolves it: an unknown principal refuses the credential (null), it does not fail (503).
         MembershipResolver(unknown).resolve(tenant, alice, MembershipSource.Provider.UNCAPPED).assert().isNull()
+    }
+
+    /**
+     * R2C-18: the loader's "unknown" is remembered for a short life, so a removed member's token does not reach the
+     * loader on every request; `invalidate` drops it at once, the end of the life does too, and a failed load is never
+     * remembered as "unknown".
+     */
+    @Test
+    fun anUnknownPrincipalIsRememberedBrieflyAndNeverOnAFailure() = runBlocking<Unit> {
+        val asked = AtomicInteger()
+        val answers = java.util.ArrayDeque<() -> MembershipAnswer>()
+        val provider = CoCacheMembershipProvider(
+            instanceA.membershipCache,
+            unknownLife = java.time.Duration.ofMillis(400),
+        ) { _, _ ->
+            asked.incrementAndGet()
+            answers.removeFirst()()
+        }
+        answers.add { MembershipAnswer.Unknown }
+        repeat(3) { provider.memberships(tenant, alice).assert().isSameAs(MembershipAnswer.Unknown) }
+        asked.get().assert().describedAs("three requests, one load").isEqualTo(1)
+
+        // The principal is added and its memberships invalidated: known at once.
+        answers.add { MembershipAnswer.Known(stored) }
+        provider.invalidate(tenant, alice)
+        provider.memberships(tenant, alice).known().assertSameAs(stored)
+        asked.get().assert().isEqualTo(2)
+
+        // The life ends: the loader is asked again, and a failure is a failure, never "unknown".
+        val other = PrincipalId("bob")
+        answers.add { MembershipAnswer.Unknown }
+        provider.memberships(tenant, other).assert().isSameAs(MembershipAnswer.Unknown)
+        Thread.sleep(500)
+        answers.add { throw MembershipUnavailableException("the directory is down") }
+        assertThrows<MembershipUnavailableException> { provider.memberships(tenant, other) }
+        asked.get().assert().isEqualTo(4)
+        answers.add { MembershipAnswer.Known(stored) }
+        provider.memberships(tenant, other).known().assertSameAs(stored)
     }
 
     /**

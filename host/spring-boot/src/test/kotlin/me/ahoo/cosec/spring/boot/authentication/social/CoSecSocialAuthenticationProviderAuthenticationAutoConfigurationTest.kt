@@ -33,6 +33,7 @@ import me.zhyd.oauth.cache.AuthStateCache
 import org.assertj.core.api.AssertionsForInterfaceTypes.assertThat
 import org.junit.jupiter.api.Test
 import org.springframework.boot.data.redis.autoconfigure.DataRedisAutoConfiguration
+import org.springframework.boot.data.redis.autoconfigure.DataRedisReactiveAutoConfiguration
 import org.springframework.boot.test.context.assertj.AssertableApplicationContext
 import org.springframework.boot.test.context.runner.ApplicationContextRunner
 import org.springframework.web.util.UriComponentsBuilder
@@ -55,6 +56,7 @@ internal class CoSecSocialAuthenticationProviderAuthenticationAutoConfigurationT
             )
             .withUserConfiguration(
                 DataRedisAutoConfiguration::class.java,
+                DataRedisReactiveAutoConfiguration::class.java,
                 CoSecAuthenticationAutoConfiguration::class.java,
                 CoSecSocialAuthenticationAutoConfiguration::class.java,
             )
@@ -123,6 +125,7 @@ internal class CoSecSocialAuthenticationProviderAuthenticationAutoConfigurationT
             )
             .withUserConfiguration(
                 DataRedisAutoConfiguration::class.java,
+                DataRedisReactiveAutoConfiguration::class.java,
                 CoSecAuthenticationAutoConfiguration::class.java,
                 CoSecSocialAuthenticationAutoConfiguration::class.java,
             )
@@ -192,6 +195,7 @@ internal class CoSecSocialAuthenticationProviderAuthenticationAutoConfigurationT
             )
             .withUserConfiguration(
                 DataRedisAutoConfiguration::class.java,
+                DataRedisReactiveAutoConfiguration::class.java,
                 CoSecAuthenticationAutoConfiguration::class.java,
                 CoSecSocialAuthenticationAutoConfiguration::class.java,
             )
