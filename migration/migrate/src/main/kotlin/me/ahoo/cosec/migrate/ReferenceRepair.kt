@@ -60,6 +60,8 @@ class ReferenceRepair(
     private val conversion: StoreConversion? = null,
     /** Told each failure as it happens and a progress line every [PROGRESS_EVERY] documents (R2C-20). */
     private val progress: (String) -> Unit = {},
+    /** How many document steps pass between two renewals of the lease and two progress lines. */
+    private val progressEvery: Int = PROGRESS_EVERY,
 ) {
     private val revisions = Revisions(store)
     private val holder = "${UUID.randomUUID()} since ${Instant.now()}"
@@ -158,7 +160,7 @@ class ReferenceRepair(
         failed: MutableMap<SnapshotKey, String>,
         step: suspend () -> Int,
     ): Int {
-        if (++visited % PROGRESS_EVERY == 0) {
+        if (++visited % progressEvery == 0) {
             check(
                 store.acquireLease(LEASE, holder, LEASE_DURATION)
             ) { "Another run took the lease [$LEASE]; this one stops." }

@@ -27,7 +27,7 @@ internal object RepairReferencesCommand {
     /** `repair-references`: every document visited, every failed one listed; any failure exits with [FAILED]. */
     fun repairReferences(options: Options, out: PrintStream): Int {
         val result = repairAccess(options) { store, conversion ->
-            ReferenceRepair(store, conversion) { out.println(RedisUris.scrub(it, options.redisUris)) }.run()
+            ReferenceRepair(store, conversion, progress = { out.println(RedisUris.scrub(it, options.redisUris)) }).run()
         }
         if (result.busy) {
             out.println(

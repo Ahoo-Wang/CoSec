@@ -201,4 +201,21 @@ class ReferenceRepairTest {
             }
         }
     }
+
+    /** R2C-20, R2C-8: a run says how far it got and renews its lease as it goes; another run is named when it holds it. */
+    @Test
+    fun `a run reports its progress and renews its lease, and a busy run names the holder`() {
+        seed()
+        val lines = ArrayList<String>()
+        ReferenceRepair(memory, progress = { lines += it }, progressEvery = 1).run().failed.assert().isEmpty()
+        lines.assert().anyMatch { it.startsWith("add: at ") }
+
+        runBlocking { memory.acquireLease(ReferenceRepair.LEASE, "run 7 since then", Duration.ofMinutes(1)) }
+        val holderOf = object : StoreConversion by Old(null, mutableSetOf()) {
+            override suspend fun leaseHolder(name: String): String? = "run 7 since then"
+        }
+        val busy = ReferenceRepair(memory, holderOf).run()
+        busy.busy.assert().isTrue()
+        busy.holder.assert().isEqualTo("run 7 since then")
+    }
 }
