@@ -76,9 +76,9 @@ description: "每个 8.0 预览版（alpha 与 beta）到下一个之间的变�
   - **条目预算。** 平台的 `limits` 接受每个文档的 `maxPolicies`（10,000）、`maxStatements`（20,000）、`maxRoleBindings`（10,000）和 `maxAnyoneBindings`（1,000）（[条目预算](../policies/language.md#entry-budgets)）。会把某个计数提高到超出预算的变更得到写明预算、计数和限制值的 `V2` 发现（`422`），停留在草稿。已经超出预算的文档仍由每台宿主继续提供，可以修改，也可以缩小；只有增加超出预算的计数的变更会被拒绝，检查会对每个仍然超出的计数给出警告。要让大文档继续增长，先在平台文档中调高预算。`cosec-migrate convert` 对超出默认预算的转换结果给出警告并照常写出。
   - **操作数。** 客户端提议的一个变更最多带 `maxChangeOperations`（20,000）个操作，同样位于平台的 `limits` 中；更大的变更返回 `400`，请拆成几个变更提议。`apply` 和回滚不受其约束。
   - **请求体。** `cosec.control.http.max-body-size` 的默认值由 `16MB` 改为 `10MB`，并且现在 WebFlux 上的控制 API 也受其约束，代替 `spring.codec.max-in-memory-size`（默认 256 KB，此前使 WebFlux 控制面无法接收更大的变更）。更大的请求体返回 `400` `invalid-request`。
-- **提供刷新路由的宿主要写明刷新出的令牌怎样得到角色**（`STA-8`）。受影响的是设置了 `cosec.authentication.login.refresh.path`、又既没有自己的 `RefreshTokenAuthentication`、也没有 `MembershipRefresh<RefreshTokenCredentials>` Bean 的宿主。直到 beta.4，这样的宿主悄悄地用 `MembershipRefresh.CLAIMS` 刷新：从成员身上移除的角色，在成员下一次登录之前一直有效，只要他们在刷新令牌的寿命之内刷新，最长到 `cosec.jwt.session.lifetime`（30 天）。现在它**启动失败**，消息说明这个选择的代价。二选一：
+- **提供刷新路由的宿主要写明刷新出的令牌怎样得到成员关系**（`STA-8`）。受影响的是设置了 `cosec.authentication.login.refresh.path`、又既没有自己的 `RefreshTokenAuthentication`、也没有 `MembershipRefresh<RefreshTokenCredentials>` Bean 的宿主。直到 beta.4，这样的宿主悄悄地用 `MembershipRefresh.CLAIMS` 刷新：从成员身上移除的角色，在成员下一次登录之前一直有效，只要他们在刷新令牌的寿命之内刷新，最长到 `cosec.jwt.session.lifetime`（30 天）。现在它**启动失败**，消息说明这个选择的代价。二选一：
   - 保持宿主原来的行为：写 `cosec.jwt.session.memberships-on-refresh: from-token`（`COSEC_JWT_SESSION_MEMBERSHIPS_ON_REFRESH=from-token`）。其他任何值都和未设置一样失败。启动日志有一行 `INFO`，说明它意味着的会话寿命；
-  - 或声明 `MembershipRefresh<RefreshTokenCredentials>` Bean，重新读取成员的角色，移除的角色在 `cosec.jwt.token-validity.access`（10 分钟）之内生效。
+  - 或声明 `MembershipRefresh<RefreshTokenCredentials>` Bean，重新读取成员的角色和附加策略，移除的角色或附加策略在 `cosec.jwt.token-validity.access`（10 分钟）之内生效。
 
   无论哪种，`TokenRevoker.revokeSubject` 都会立刻结束成员的全部令牌（[被移除的角色还能用多久](../integration/authentication.md#how-long-a-removed-role-lives)）。不提供刷新路由、或自己构造 `RefreshTokenAuthentication` 的宿主不受影响。
 

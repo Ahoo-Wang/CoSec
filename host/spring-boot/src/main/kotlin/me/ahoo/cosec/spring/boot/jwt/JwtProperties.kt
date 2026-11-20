@@ -76,7 +76,7 @@ class JwtProperties(
         /**
          * How the starter's refresh route gives a refreshed token its memberships (its roles and attached policies), when the application declares no
          * `MembershipRefresh` bean: no default, and with the route served startup fails until this is `from-token`,
-         * the statement that a refreshed token keeps the memberships of the token it replaces, so a removed role applies at the
+         * the statement that a refreshed token keeps the memberships of the token it replaces, so a removed role or attached policy applies at the
          * member's next sign-in, `lifetime` at the latest (`STA-8`).
          */
         var membershipsOnRefresh: String? = null,

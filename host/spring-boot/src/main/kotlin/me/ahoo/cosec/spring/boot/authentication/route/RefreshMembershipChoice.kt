@@ -29,7 +29,7 @@ private val log = KotlinLogging.logger {}
 /**
  * `STA-8`: how a token the starter's refresh route issues gets its memberships (its roles and attached policies) is a choice the operator writes, never a
  * default. With the route served and no `MembershipRefresh` bean, a refresh copies the memberships of the token it replaces,
- * so a role removed from a member keeps working until their next sign-in, `cosec.jwt.session.lifetime` at the latest
+ * so a role or an attached policy removed from a member keeps working until their next sign-in, `cosec.jwt.session.lifetime` at the latest
  * (30 days) while they refresh within the refresh token's lifetime. Where roles are read from the token only, this
  * decides how long a removal takes (`IDN-27`'s rule, for the starter's own wiring).
  *
@@ -54,7 +54,7 @@ internal object RefreshMembershipChoice {
         check(stated(environment)) { message(environment, jwt) }
         log.info {
             "${JwtProperties.MEMBERSHIPS_ON_REFRESH_KEY}=${JwtProperties.FROM_TOKEN}: a token the refresh route issues keeps " +
-                "the memberships of the token it replaces (its roles and attached policies), so a role removed from a member applies at their next sign-in, " +
+                "the memberships of the token it replaces (its roles and attached policies), so a role or an attached policy removed from a member applies at their next sign-in, " +
                 "${JwtProperties.SESSION_LIFETIME_KEY}=${compact(jwt.session.lifetime)} at the latest (STA-8)."
         }
     }
@@ -72,7 +72,7 @@ internal object RefreshMembershipChoice {
         val access = "${JwtProperties.ACCESS_VALIDITY_KEY}=${compact(jwt.tokenValidity.access)}"
         val path = environment.getProperty(LoginProperties.REFRESH_PATH_KEY)
         return "${LoginProperties.REFRESH_PATH_KEY}=$path serves the refresh route, and nothing says how a refreshed token gets " +
-            "its memberships. Without a choice it would copy the memberships of the token it replaces, its roles and attached policies: a role removed from a " +
+            "its memberships. Without a choice it would copy the memberships of the token it replaces, its roles and attached policies: a role or an attached policy removed from a " +
             "member keeps working until that member signs in again, up to $lifetime as long as they refresh within " +
             "$refresh. Choose one: declare a MembershipRefresh<RefreshTokenCredentials> bean that reads the member's " +
             "roles and attached policies again at each refresh, so a removal takes effect within the access token's lifetime ($access); or " +

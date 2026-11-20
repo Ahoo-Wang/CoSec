@@ -430,12 +430,13 @@ token is for. A refused refresh spends no generation.
 
 ## How long a removed role lives {#how-long-a-removed-role-lives}
 
-Roles travel in the token, and a gateway that reads roles from the token only has no other source, so what a refresh
-does with them decides how long a role you removed from a member keeps working. The starter does not choose for you: a
+A token carries its memberships, the roles and the policies attached to it, and a gateway that reads them from the token
+only has no other source, so what a refresh does with them decides how long a role or an attached policy you removed from
+a member keeps working. The starter does not choose for you: a
 host that serves the refresh route (`cosec.authentication.login.refresh.path`) and declares no
 `MembershipRefresh<RefreshTokenCredentials>` bean does not start until you write the choice (`STA-8`). "Memberships" here means what the token carries: its roles and the policies attached to it (the `roles` and `policies` claims), the same word as in `MembershipRefresh`.
 
-| What you do | A removed role stops working | Where it is written |
+| What you do | A removed role or attached policy stops working | Where it is written |
 |---|---|---|
 | Declare a `MembershipRefresh<RefreshTokenCredentials>` bean that reads the member's roles and attached policies again | At the member's next refresh: within `cosec.jwt.token-validity.access` (10 minutes), the life of the access token that carries it | The bean |
 | State that refreshed tokens keep the memberships of the token they replace | At the member's next sign-in: up to `cosec.jwt.session.lifetime` (30 days) after their login while they refresh within `cosec.jwt.token-validity.refresh` (7 days) of each token | `cosec.jwt.session.memberships-on-refresh=from-token` (`COSEC_JWT_SESSION_MEMBERSHIPS_ON_REFRESH`) |
