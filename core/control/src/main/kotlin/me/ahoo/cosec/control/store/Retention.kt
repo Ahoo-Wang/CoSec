@@ -15,6 +15,8 @@
 
 package me.ahoo.cosec.control.store
 
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.withContext
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.control.store.RevisionLog.log
@@ -41,8 +43,8 @@ internal class Retention(
     private val head: suspend (SnapshotKey) -> Head?,
     /** A stored document decoded, as [Revisions.decode] decodes it. */
     private val decode: (SnapshotKey, SnapshotDocument) -> PolicyDocument,
-    /** The retained revisions of a document, as [Revisions.history] lists them. */
-    private val history: suspend (SnapshotKey) -> List<RevisionEntry>,
+    /** The retained revisions of a document, as [Revisions.history] lists them, and the head's digest it read. */
+    private val history: suspend (SnapshotKey) -> Pair<List<RevisionEntry>, SnapshotDigest?>,
 ) {
     private val holder: String = UUID.randomUUID().toString()
 
@@ -96,14 +98,54 @@ internal class Retention(
      * not tried at all.
      */
     suspend fun reclaim(key: SnapshotKey, keep: Set<SnapshotDigest> = emptySet()): Reclaimed {
-        if (!store.acquireLease("reclaim:$key", holder, retention.leaseDuration)) {
+        if (!reclaimable(key)) {
             return Reclaimed.NOTHING
         }
-        val entries = history(key)
+        val lease = "reclaim:$key"
+        if (!store.acquireLease(lease, holder, retention.leaseDuration)) {
+            return Reclaimed.NOTHING
+        }
+        try {
+            return reclaimHeld(key, keep)
+        } finally {
+            // Done with the document: its holder deletes the lease, only while it still holds it (CTL-26, storage.md).
+            withContext(NonCancellable) { release(lease) }
+        }
+    }
+
+    /**
+     * Whether [key] can have anything to reclaim: more revisions than [RetentionPolicy.maxCount], a pending record (an
+     * orphan once old), or a record an earlier pass left to delete. Only an index that agrees with the head says so: one
+     * that is missing, behind the head or on another branch ([HistoryRepair.agrees]) may hide revisions, and is read
+     * through [history] as before. So a pass reads one index and one head of a document with nothing to reclaim, takes
+     * no lease and writes nothing.
+     */
+    private suspend fun reclaimable(key: SnapshotKey): Boolean {
+        val index = store.index(key)?.value ?: return true
+        if (index.entries.size > retention.maxCount || index.pending.isNotEmpty() || index.reclaiming.isNotEmpty()) {
+            return true
+        }
+        val stored = store.head(key) ?: return true
+        val entries = index.entries.filter { it.revision <= stored.document.revision }
+        return !HistoryRepair.agrees(entries, index.floor, stored)
+    }
+
+    @Suppress("TooGenericExceptionCaught")
+    private suspend fun release(lease: String) {
+        try {
+            store.releaseLease(lease, holder)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            log.warn(e) { "The lease [$lease] could not be released; it expires on its own." }
+        }
+    }
+
+    private suspend fun reclaimHeld(key: SnapshotKey, keep: Set<SnapshotDigest>): Reclaimed {
+        val (entries, head) = history(key)
         val now = clock.instant()
         val recent = entries.takeLast(retention.maxCount).map { it.digest }.toSet()
         val retained = entries.map { it.digest }
-        val head = head(key)?.digest
         val removed = entries.filter { entry ->
             entry.digest !in recent && entry.digest !in keep && entry.digest != head &&
                 entry.publishedAt.isBefore(now.minus(retention.minAge))

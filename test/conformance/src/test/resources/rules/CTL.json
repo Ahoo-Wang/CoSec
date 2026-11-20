@@ -79,7 +79,9 @@
       "statement": "A platform or app candidate that removes a policy another document's binding refers to is not published; the back-reference index is added to before a head moves and removed from only after.",
       "level": "control",
       "guards": [
-        "control:RevisionsTest"
+        "control:RevisionsTest",
+        "control:AppPermissionReferencesTest#the platform entries an older version wrote go at the tenant's next publish, and the app still cannot remove the permission",
+        "control:AppPermissionReferencesTest#a tenant's reference to an app permission is indexed under the app only, every other one as before"
       ],
       "pending": null
     },

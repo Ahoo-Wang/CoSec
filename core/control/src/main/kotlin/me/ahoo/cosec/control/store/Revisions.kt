@@ -71,7 +71,7 @@ class Revisions(
     private val referrerIndex = ReferrerIndex(store, writes, ::head)
     private val listing = AppListing(store, writes, maxAttempts)
     private val repair = HistoryRepair(store, writes, ::decode)
-    private val retained = Retention(store, writes, clock, retention, ::head, ::decode, ::history)
+    private val retained = Retention(store, writes, clock, retention, ::head, ::decode, ::historyAndHead)
 
     /** The head of [key], read from the store of record. */
     suspend fun head(key: SnapshotKey): Head? {
@@ -112,7 +112,8 @@ class Revisions(
         writes.updateIndex(key) { it.copy(pending = it.pending + PendingRecord(digest, publishedAt)) } ||
             warn("[$key] revision $revision: its record could not be registered as pending; an orphan would stay")
         check(store.putRecord(key, stored) == digest) { "The store addressed the record of [$key] by another digest." }
-        val before = base?.let { referrerIndex.references(it.document) }.orEmpty()
+        // As older versions indexed the base too: what it had under the platform for app permissions is dropped below.
+        val before = base?.let { referrerIndex.indexedByOlderVersions(it.document) }.orEmpty()
         val after = referrerIndex.references(document)
         for ((target, policy) in after - before) {
             check(writes.updateReferrers(target, policy) { referrerIndex.indexed(it, key, revision) }) {
@@ -210,10 +211,13 @@ class Revisions(
      * behind the head (a publish that failed after its head write, or a lost index) or holds another branch's entry
      * of a number the head reused, the chain is walked from the head and the index follows it ([HistoryRepair]).
      */
-    suspend fun history(key: SnapshotKey): List<RevisionEntry> {
+    suspend fun history(key: SnapshotKey): List<RevisionEntry> = historyAndHead(key).first
+
+    /** [history], and the digest of the head it was read against (null when there is none): one read of the head. */
+    internal suspend fun historyAndHead(key: SnapshotKey): Pair<List<RevisionEntry>, SnapshotDigest?> {
         // The head as stored: its envelope says its revision, and it is decoded only when the chain has to be walked
         // from it, not for every listing and every explain at a revision (L6 of #1240, up to 8 MB a call).
-        val stored = store.head(requireDocumentKey(key)) ?: return store.index(key)?.value?.entries.orEmpty()
+        val stored = store.head(requireDocumentKey(key)) ?: return store.index(key)?.value?.entries.orEmpty() to null
         val indexed = store.index(key)?.value ?: RevisionIndex.EMPTY
         // Nothing above the head: what a head that moved back (a partial loss of data) left in the index is not on the
         // chain. A revision published after the head was read is left out of this read alone, and what reclamation
@@ -221,11 +225,12 @@ class Revisions(
         val entries = indexed.entries.filter { it.revision <= stored.document.revision }
         // The head is the authority (#1536): an index whose last entry is not the head's, by digest, is behind it or on
         // another branch, and is rebuilt from the chain.
-        return if (HistoryRepair.agrees(entries, indexed.floor, stored)) {
+        val history = if (HistoryRepair.agrees(entries, indexed.floor, stored)) {
             entries
         } else {
             repair.rebuild(key, stored, indexed, entries)
         }
+        return history to stored.digest
     }
 
     /**
