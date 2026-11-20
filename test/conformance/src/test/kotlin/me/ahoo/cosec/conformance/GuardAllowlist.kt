@@ -382,6 +382,8 @@ object GuardAllowlist {
             "spring-boot:GatewayRouteAppsTest#the apps two routes name are loaded before the gateway is ready, one without a document as well",
             "spring-boot:GatewayRouteAppsTest#an app a refreshed route names is loaded then, without a request",
             "spring-boot:GatewayRouteAppsTest#a failed refresh, or a host without routes or a store, does nothing",
+            "spring-boot:GatewayRouteAppsTest#routes that cannot be read leave their apps to their first request, at startup and on a refresh",
+            "spring-boot:GatewayRouteAppsTest#a refresh that names no new app loads nothing more",
             "spring-boot:HostAppsPrewarmTest#the host's app is prewarmed beside the configured ones, each once",
             "spring-boot:HostAppsPrewarmTest#with prewarm-host-apps off, or no app or one that names no document, only the configured apps are",
             "spring-boot:HostAppsPrewarmTest#a gateway holds its routes' apps unless prewarm-host-apps is off, and a WebFlux host has no routes to read",

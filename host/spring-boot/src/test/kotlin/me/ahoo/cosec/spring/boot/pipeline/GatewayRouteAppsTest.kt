@@ -158,6 +158,36 @@ class GatewayRouteAppsTest {
         """{"schema":2,"revision":1,"publishedAt":"2026-11-20T00:00:00Z"}""".encodeToByteArray()
     )
 
+    @Test
+    fun `routes that cannot be read leave their apps to their first request, at startup and on a refresh`() {
+        val failing = RouteLocator { Flux.error(IllegalStateException("discovery is down")) }
+        source().use { source ->
+            val readiness = DocumentReadiness(source, emptyList()).also { it.start() }
+            val apps = GatewayRouteApps(provider(failing), provider(readiness), provider(source))
+            apps.afterSingletonsInstantiated()
+            apps.onApplicationEvent(RefreshRoutesResultEvent(this))
+            // Readiness waits for nothing it could not name: the gateway starts as it did before SNP-20.
+            runBlocking { readiness.await() }.assert().isEmpty()
+            source.entries().map { it.key }.assert().containsExactly(SnapshotKey.Platform)
+        }
+    }
+
+    @Test
+    fun `a refresh that names no new app loads nothing more`() {
+        routes += route("shop", "shop")
+        source().use { source ->
+            val readiness = DocumentReadiness(source, emptyList()).also { it.start() }
+            val apps = apps(source, readiness)
+            apps.afterSingletonsInstantiated()
+            runBlocking { readiness.await() }
+            routes += route("shop-again", "shop")
+            store.holding = true
+            apps.onApplicationEvent(RefreshRoutesResultEvent(this))
+            // Nothing read: shop was already asked for at startup.
+            store.held.assert().isEmpty()
+        }
+    }
+
     private companion object {
         val SHOP = SnapshotKey.App("shop")
         val MADE_UP = SnapshotKey.App("made-up")
