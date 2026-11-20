@@ -159,12 +159,8 @@ class SaasAppChangeMeasurement {
                 change
             ).also { count("PUT change", ChangeRequestCodec.encode(change).size.toLong()) }
 
-        override suspend fun openChanges(): List<ChangeRequest> = inner.openChanges().also {
-            count(
-                "GET open-changes",
-                0
-            )
-        }
+        override suspend fun openChanges(document: SnapshotKey): List<me.ahoo.cosec.control.store.ListedChange> =
+            inner.openChanges(document).also { count("SMEMBERS open changes", 0) }
     }
 
     private companion object {

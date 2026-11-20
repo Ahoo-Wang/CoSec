@@ -15,6 +15,8 @@
 
 package me.ahoo.cosec.control.change
 
+import me.ahoo.cosec.control.store.allOpenChanges
+
 import kotlinx.coroutines.runBlocking
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
@@ -220,7 +222,7 @@ class ChangeBatchAuthorizationTest {
 
         refused { changes.propose(walt, ACME, 0, entries(4), "revoked") }.status.assert().isEqualTo(403)
 
-        store.openChanges().assert().isEmpty()
+        store.allOpenChanges().assert().isEmpty()
     }
 
     /** A document that moves without touching the operator's rights has the decisions taken again, and the change goes on. */
@@ -246,7 +248,7 @@ class ChangeBatchAuthorizationTest {
 
         refused { changes.propose(walt, ACME, 0, entries(2), "end") }.status.assert().isEqualTo(503)
 
-        store.openChanges().assert().isEmpty()
+        store.allOpenChanges().assert().isEmpty()
     }
 
     /** Documents that keep moving are not decided on: after a few attempts, a 503. */
@@ -260,6 +262,6 @@ class ChangeBatchAuthorizationTest {
 
         refused { changes.propose(walt, ACME, 0, entries(1), "moving") }.status.assert().isEqualTo(503)
 
-        store.openChanges().assert().isEmpty()
+        store.allOpenChanges().assert().isEmpty()
     }
 }

@@ -74,12 +74,12 @@ class ControlMaintenanceTest {
         clock.now = clock.now.plus(Duration.ofDays(1))
 
         store.documents().assert().containsExactly(ACME)
-        store.openChanges().map { it.id }.assert().containsExactly(open.id)
+        store.allOpenChanges().map { it.id }.assert().containsExactly(open.id)
         maintenance.reclaim().getValue(ACME).records.assert().containsExactly(first)
         store.recordDigests(ACME).assert().containsExactlyInAnyOrder(second, third)
 
         changes.abandon(ALICE_OP, open.id)
-        store.openChanges().assert().isEmpty()
+        store.allOpenChanges().assert().isEmpty()
         maintenance.reclaim().getValue(ACME).records.assert().containsExactly(second)
         maintenance.reclaim().assert().isEmpty()
     }
@@ -91,7 +91,7 @@ class ControlMaintenanceTest {
     @Test
     fun `an open change of an app no key can name stops the pass`() = runBlocking<Unit> {
         val failing = object : ControlStore by store {
-            override suspend fun openChanges(): List<ChangeRequest> =
+            override suspend fun openChanges(document: SnapshotKey): List<ListedChange> =
                 throw IllegalStateException("decoding", SnapshotFormatException("A change request is malformed."))
         }
         val failingChanges = Changes(
@@ -251,7 +251,7 @@ class ControlMaintenanceTest {
     @Test
     fun `a pass that cannot read an open change reclaims nothing`() = runBlocking<Unit> {
         val failing = object : ControlStore by store {
-            override suspend fun openChanges(): List<ChangeRequest> = error("Redis is down")
+            override suspend fun openChanges(document: SnapshotKey): List<ListedChange> = error("Redis is down")
         }
         val blindRevisions = Revisions(failing, clock, revisions.retention)
         val blindChanges = Changes(
@@ -306,18 +306,19 @@ class ControlMaintenanceTest {
 
         blind.reclaim().assert().isEmpty()
         store.recordDigests(ACME).assert().contains(first)
-        store.openChanges().single().state.terminal.assert().isFalse()
+        store.allOpenChanges().single().state.terminal.assert().isFalse()
     }
 
     @Test
     fun `a change nobody finishes expires and leaves the open list`() = runBlocking<Unit> {
         published()
         val stale = changes.propose(ALICE_OP, ACME, 1, listOf(Operation.PutPolicy(allow("read"))), "stale")
-        store.openChanges().map { it.id }.assert().containsExactly(stale.id)
+        store.allOpenChanges().map { it.id }.assert().containsExactly(stale.id)
         clock.now = clock.now.plus(Duration.ofDays(8))
-        maintenance.closeShadowWindows()
+        // Reclamation reads each document's open changes, and expires those past their time (R2C-2).
+        maintenance.reclaim()
         store.change(stale.id)!!.value.state.assert().isEqualTo(ChangeState.EXPIRED)
-        store.openChanges().assert().isEmpty()
+        store.allOpenChanges().assert().isEmpty()
     }
 
     private suspend fun staged(policy: String, base: Long = 1): ChangeId {
@@ -335,9 +336,14 @@ class ControlMaintenanceTest {
             return store.change(id)
         }
 
-        override suspend fun openChanges(): List<ChangeRequest> {
+        override suspend fun openChanges(document: SnapshotKey): List<ListedChange> {
             listings++
-            return store.openChanges()
+            return store.openChanges(document)
+        }
+
+        override suspend fun changes(state: ChangeState, after: String?, limit: Int): ChangePage {
+            listings++
+            return store.changes(state, after, limit)
         }
     }
 
@@ -369,7 +375,8 @@ class ControlMaintenanceTest {
 
         maintenance.reclaim()
 
-        counting.listings.assert().isEqualTo(1)
+        // One listing per document (R2C-2), and no change read again.
+        counting.listings.assert().isEqualTo(store.documents().size)
         counting.reads.assert().isEmpty()
 
         counting.listings = 0

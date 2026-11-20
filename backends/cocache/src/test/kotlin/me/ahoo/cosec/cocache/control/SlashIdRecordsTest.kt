@@ -124,9 +124,10 @@ class SlashIdRecordsTest {
             val failed = runCatching { store.referrers(SnapshotKey.Platform, PolicyId("shared")) }.exceptionOrNull()
             failed?.message.assert().contains("The back-reference set of [platform] policy [shared]")
             formatError { throw checkNotNull(failed) }.message.assert().contains("[tenant:acme/west@1]")
-            for (read in listOf<suspend () -> Unit>({ store.change(ChangeId("c1")) }, { store.openChanges() })) {
-                formatError(read).message.assert().contains("Change [c1]").contains("[acme/west]")
-            }
+            formatError { store.change(ChangeId("c1")) }.message.assert().contains("Change [c1]").contains("[acme/west]")
+            // Listed, it is shown as unreadable, never left out (CTL-53, CTL-54).
+            store.openChanges(SnapshotKey.Tenant("acme")).single()
+                .assert().isInstanceOf(me.ahoo.cosec.control.store.ListedChange.Unreadable::class.java)
         }
     }
 
