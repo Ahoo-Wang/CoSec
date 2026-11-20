@@ -205,6 +205,9 @@ Full model: https://cosec.ahoo.me/guide/security-model.
 - **`CoSec's tokens are on, but <stores> are missing`**: revocation is always on, and the message names every missing
   store of the three (`TokenStore`, `RevocationReader`, `TokenFamilyStore`). Add `cosec-cocache` (all three on Redis),
   or register a bean of each missing one, or set `cosec.jwt.enabled=false` on a service that does not verify tokens.
+  **`A TokenVerifier bean turns token authentication on ... no RevocationReader is available`**: a service with its own
+  `TokenVerifier` and no `cosec.jwt.secret` has tokens on and needs only the reader: `cosec-cocache` on the issuer's Redis,
+  a `RevocationReader` bean, or `RevocationReader.NONE` where no one revokes a token.
   **`Tokens are verified against RevocationReader.NONE`** (`WARN`): revoked tokens are accepted until they expire;
   right only where no one revokes a token. A service verifying an issuer's tokens reads the issuer's revocations
   (`cosec-cocache` on the issuer's Redis, same `cosec.key-prefix`; https://cosec.ahoo.me/scenarios/resource-server).

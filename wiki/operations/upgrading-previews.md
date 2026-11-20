@@ -380,6 +380,18 @@ Which preview of the library may run behind which preview of the gateway image: 
     `maximumBucketsPerRule`: code that calls it with named arguments compiles unchanged; code compiled against beta.4
     that constructs one must be compiled again.
 
+- **A `TokenVerifier` bean turns token authentication on without a `cosec.jwt.secret`** (review round 2, `R2D-7`).
+  Affected: applications that declare their own `TokenVerifier` and have no CoSec signing key (`cosec.jwt.enabled=false`).
+  - Before, tokens were on only where a signing key existed: such an application's authenticator refused every request
+    that carried a token (`token-invalid`), whatever its verifier said, and the application had to set a secret it never
+    used. Now tokens are on when a `TokenVerifier` bean or a signing key exists. A verifier alone issues nothing: the
+    login and refresh routes and the token converter still come with the key.
+  - **A verifier alone needs a revocation reader**: a `RevocationReader` bean, or `cosec-cocache` on the issuer's Redis.
+    Without one, startup fails with a message naming it, instead of every token being refused. `RevocationReader.NONE`
+    accepts revoked tokens until they expire.
+  - If a `TokenVerifier` bean was declared for another purpose and its tokens were meant to stay refused, remove the bean:
+    with no verifier and no key, a request with a token is still `token-invalid`.
+
 ## From 8.0.0-beta.3 {#from-8-0-0-beta-3}
 
 - **The policy test kit refuses a run that could pass for the wrong reason** (`PolicyTestKit`, experimental; UC-7).

@@ -171,6 +171,11 @@ description: "每个 8.0 预览版（alpha 与 beta）到下一个之间的变�
   - `cosec.authorization.snapshot.fail-closed.tenants: "*"` 让所有租户在超过 `fail-closed.max-lag` 后失败即拒绝。默认仍为空。
   - `LocalRateLimiter` 最多把四分之一的桶留给一份文档的规则，并在 `cosec.ratelimit.local.refused` 中为它拒绝的每个桶计数。它的构造函数在 `maximumBucketsPerRule` 之后接受 `maximumBucketsPerOwner`：用具名参数调用它的代码无需改动即可编译；针对 beta.4 编译、构造它的代码需要重新编译。
 
+- **`TokenVerifier` Bean 不需要 `cosec.jwt.secret` 就能开启令牌认证**（评审第二轮，`R2D-7`）。受影响：声明了自己的 `TokenVerifier`、又没有 CoSec 签名密钥（`cosec.jwt.enabled=false`）的应用。
+  - 以前只有存在签名密钥时令牌才开启：这样的应用，其认证器会拒绝每个带令牌的请求（`token-invalid`），不管它的校验器怎么说，应用只能配一个永远用不上的密钥。现在存在 `TokenVerifier` Bean 或签名密钥时令牌即开启。只有校验器时不签发任何令牌：登录和刷新路由、令牌转换器仍随密钥而来。
+  - **只有校验器时需要吊销读取器**：`RevocationReader` Bean，或指向签发方 Redis 的 `cosec-cocache`。没有时启动失败并给出指名它的信息，而不是拒绝每个令牌。`RevocationReader.NONE` 接受已吊销的令牌直到其过期。
+  - 如果声明 `TokenVerifier` Bean 是为了别的用途，而其令牌本应继续被拒绝，请移除该 Bean：没有校验器也没有密钥时，带令牌的请求仍是 `token-invalid`。
+
 ## 从 8.0.0-beta.3 升级 {#from-8-0-0-beta-3}
 
 - **策略测试工具拒绝可能因错误原因通过的运行**（`PolicyTestKit`，实验性 API；UC-7）。没有 `platform.json` 时 `load` 失败（要在没有它的情况下测试，就在那里写一份空文档），目录里有工具不会读取的文件或目录时也失败。场景要写明 `credential`（`tenant` 与 `id`，或 `"anonymous": true`）以及请求的 `action` 与 `resource`：示例默认值（`acme`、`alice`、`order:read`、`order/1`）不再存在。目录里有租户文档时，在没有文档的租户中判定的场景会失败；有应用文档时，在没有文档的应用中判定的场景也会失败，除非写明 `"withoutDocument": ["tenant"]` 或 `["app"]`（[测试决策](../policies/testing.md#testing-decisions)）。受影响的是依赖默认值或放错位置的文档的场景；`PipelineFixture.load` 按同样的规则读取目录。写明这些字段，把文件移到正确的位置。

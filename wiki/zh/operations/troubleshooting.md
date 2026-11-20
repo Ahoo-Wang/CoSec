@@ -639,6 +639,8 @@ CoSec's tokens are on, but TokenStore, RevocationReader, TokenFamilyStore are mi
 启用 JWT 时令牌吊销始终开启，starter 绝不会把吊销写进空处。错误信息一次列出所有缺少的存储。添加 `cosec-cocache`，注册你自己的 `TokenStore`、
 `RevocationReader` 和 `TokenFamilyStore` bean，或者在既不签发也不校验令牌的服务中关闭 JWT。
 
+只校验其他签发方令牌的服务，若有自己的 `TokenVerifier` bean 而没有 `cosec.jwt.secret`，令牌同样开启（校验器就是开关），只需要读取器。没有时启动失败，信息为 `A TokenVerifier bean turns token authentication on, and every token it verifies is checked against revoked tokens, but no RevocationReader is available.`：添加指向签发方 Redis 的 `cosec-cocache`、你自己的 `RevocationReader` bean，或者在没人吊销令牌的地方使用 `RevocationReader.NONE`。
+
 基于 `RevocationReader.NONE` 校验令牌的服务可以启动，并在 `WARN` 级别记录一次：
 
 ```text
