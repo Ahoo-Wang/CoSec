@@ -463,8 +463,19 @@ bindings, default options), for a burst of distinct cold tenants requested at on
 
 That is about 3,000 cold tenant documents a second: a burst beyond about `cold-load-timeout` times that (some 6,000
 distinct tenants in the same instant) is refused at the deadline, never later and never with a permit, and each
-refused tenant is loaded by its next request. Larger documents compile more slowly and lower the rate; more
-`compile-threads` raise it.
+refused tenant is loaded by its next request. Larger documents compile more slowly and lower the rate.
+
+The compile threads are what bounds that rate, not the queue in front of them. With two threads on four shared vCPUs a
+replica takes about 3,500 cold documents a second, and `compile-threads` is what raises it on a host with the cores to
+spare. A deeper queue (`compileQueueCapacity`, 64) matters only for a burst beyond what the pool compiles within
+`cold-load-timeout`, and each queued compile holds its document, about 15 KB for these tenant documents. Measured with
+the same benchmark:
+
+| Compile queue | Memory a full queue holds | Burst of 2,000 | Burst of 10,000: served / refused at the deadline |
+|---|---|---|---|
+| 64 (default) | about 0.9 MB | 571 ms, all served | 5,517 / 4,483 |
+| 1,024 | about 15 MB | 525 ms, all served | 5,499 / 4,501 |
+| 16,384 | about 240 MB | 487 ms, all served | 8,361 / 1,639 |
 
 ### Memberships at the gateway {#memberships-at-the-gateway}
 
