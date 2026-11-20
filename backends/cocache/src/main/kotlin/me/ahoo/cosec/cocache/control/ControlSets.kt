@@ -39,7 +39,19 @@ internal class ControlSets(
     private val references: SetStore<ReferenceKey, ReferrerEntry>,
     private val documents: SetStore<String, String>,
     private val staged: SetStore<String, String>,
+    /** The open-change sets ([OpenChangeSets]). */
+    private val changes: SetStore<String, String>,
 ) {
+    suspend fun changeMembers(key: String): Set<String> = failClosed(CHANGES_WHAT) { changes.suspending().get(key) }
+
+    suspend fun addChangeMembers(key: String, members: Collection<String>) {
+        if (members.isNotEmpty()) failClosed(CHANGES_WHAT) { changes.suspending().add(key, members) }
+    }
+
+    suspend fun removeChangeMembers(key: String, members: Set<String>) {
+        if (members.isNotEmpty()) failClosed(CHANGES_WHAT) { changes.suspending().remove(key, members) }
+    }
+
     suspend fun referrers(target: SnapshotKey, policy: PolicyId): Set<ReferrerEntry> =
         failClosed(referencesOf(target, policy)) { references.suspending().get(ReferenceKey(target, policy)) }
 
@@ -131,6 +143,7 @@ internal class ControlSets(
         private const val DOCUMENT_SET = "all"
         private const val DOCUMENTS_WHAT = "The document set"
         private const val STAGED_WHAT = "The staged list"
+        private const val CHANGES_WHAT = "The open-change sets"
 
         /** The staged list's one key: `<p>:candidate-staged:all`. */
         const val STAGED_SET = "all"
@@ -140,6 +153,7 @@ internal class ControlSets(
             factory.createLocked(ControlCacheSpecs.referenceIndex(keyPrefix)),
             factory.createLocked(ControlCacheSpecs.documentSet(keyPrefix)),
             factory.createLocked(ControlCacheSpecs.stagedSet(keyPrefix)),
+            factory.createLocked(ControlCacheSpecs.changeSet(keyPrefix)),
         )
     }
 }

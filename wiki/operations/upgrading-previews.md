@@ -108,6 +108,31 @@ Which preview of the library may run behind which preview of the gateway image: 
   - The two sets are never kept locally: `local-max-age` and `degraded-local-max-age` of `ReferenceIndexCache` and
     `ControlDocumentSetCache` are locked to 1 ns, and a `cocache.caches.*` entry that sets one fails startup
     ([Configuration](./configuration.md#cocache-properties-that-affect-cosec)).
+- **The open changes are sets, and `GET /changes` lists them: stop the control plane and run `cosec-migrate
+  repair-references`** (review round 2, `R2C-2`, `R2C-4`, `CTL-54`, `CTL-55`). Affected: every store a control plane
+  of 8.0.0-beta.4 or earlier wrote, and a `ControlStore` of your own.
+  - The open changes were one value, `<s>:control:list:open-changes`, rewritten by every change; they are now sets of
+    record, one per document and one per state, plus a marker, `<s>:control:changes:kept`
+    ([Storage](./storage.md#redis-keys)). Two changes no longer contend on one value, and a maintenance pass reads the
+    changes of one document, or of one state, instead of every open change.
+  - Stop every control plane, upgrade it, and run `cosec-migrate repair-references` (the same run as for the
+    back-references, above): it lists each still-open change of the old list in the sets, then marks them kept and
+    removes the old list, only once every one of them was read. It prints `Listed N open change(s) in the open-change
+    sets.` and a `FAILED` line for each change whose record does not read, and fails while one is left: remove or fix
+    that record and run it again. A store a control plane of this version created has no old list and is kept from the
+    start.
+  - Until the sets are kept, and whenever the old list is there again (an older control plane started on the store),
+    the control plane reclaims no revision and logs a `WARN` naming the command, and `GET /changes` is `503`: the sets
+    are not trusted to hold every open change, and a revision an open change rests on must not be reclaimed. A change
+    that is not shadowing is now expired by the reclaim pass (`cosec.control.revisions.reclaim-interval`, hourly) or
+    when it is read, no longer every `cosec.control.shadow.check-interval`.
+  - `GET /changes?document=&state=&after=&limit=` lists the open changes the caller may read, as summaries
+    ([Finding open changes](../policies/testing.md#finding-open-changes)).
+  - `ControlStore.openChanges()` is gone. `ControlStore` has `openChangesKept()`, `keepOpenChanges()`,
+    `openChanges(document)` and `changes(state, after, limit, documents)`, which answer `ListedChange` (`Readable` or
+    `Unreadable`) and `ChangePage`, all `@ExperimentalCoSecApi`.
+  - `ControlChangeSetCache` is a set of record: its `local-max-age` and `degraded-local-max-age` are locked to 1 ns, as
+    the other sets' ([Configuration](./configuration.md#cocache-properties-that-affect-cosec)).
 - **Gateway mode states the network boundary it trusts, and the gateway forwards the method it decided** (`STA-7`,
   `STA-6`, `PIP-31`). Affected: every service in `cosec.pipeline.mode=gateway`, and every gateway.
   - A service in `gateway` mode believes any `CoSec-Identity` header, which carries no signature, so the network is its
@@ -379,6 +404,18 @@ Which preview of the library may run behind which preview of the gateway image: 
     refuses in `cosec.ratelimit.local.refused`. Its constructor takes `maximumBucketsPerOwner` after
     `maximumBucketsPerRule`: code that calls it with named arguments compiles unchanged; code compiled against beta.4
     that constructs one must be compiled again.
+
+- **A `TokenVerifier` bean turns token authentication on without a `cosec.jwt.secret`** (review round 2, `R2D-7`).
+  Affected: applications that declare their own `TokenVerifier` and have no CoSec signing key (`cosec.jwt.enabled=false`).
+  - Before, tokens were on only where a signing key existed: such an application's authenticator refused every request
+    that carried a token (`token-invalid`), whatever its verifier said, and the application had to set a secret it never
+    used. Now tokens are on when a `TokenVerifier` bean or a signing key exists. A verifier alone issues nothing: the
+    login and refresh routes and the token converter still come with the key.
+  - **A verifier alone needs a revocation reader**: a `RevocationReader` bean, or `cosec-cocache` on the issuer's Redis.
+    Without one, startup fails with a message naming it, instead of every token being refused. `RevocationReader.NONE`
+    accepts revoked tokens until they expire.
+  - If a `TokenVerifier` bean was declared for another purpose and its tokens were meant to stay refused, remove the bean:
+    with no verifier and no key, a request with a token is still `token-invalid`.
 
 ## From 8.0.0-beta.3 {#from-8-0-0-beta-3}
 

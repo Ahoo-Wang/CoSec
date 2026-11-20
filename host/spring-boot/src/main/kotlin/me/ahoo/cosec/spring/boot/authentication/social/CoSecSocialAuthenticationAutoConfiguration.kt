@@ -14,6 +14,7 @@
 
 package me.ahoo.cosec.spring.boot.authentication.social
 
+import io.github.oshai.kotlinlogging.KotlinLogging
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.cocache.RedisSocialStateStore
 import me.ahoo.cosec.social.DirectSocialUserPrincipalConverter
@@ -43,6 +44,8 @@ import org.springframework.context.annotation.Configuration
 import org.springframework.data.redis.core.ReactiveStringRedisTemplate
 import org.springframework.data.redis.core.StringRedisTemplate
 import java.lang.reflect.Constructor
+
+private val log = KotlinLogging.logger {}
 
 /**
  * CoSecSocialAuthenticationAutoConfiguration .
@@ -86,7 +89,9 @@ internal class CoSecSocialAuthenticationAutoConfiguration(
     /**
      * The OAuth `state` is JustAuthProvider's own secure random one, never the application's `IdGenerator`: those ids
      * need not be unpredictable, and the state must be. A registration that turns JustAuth's state check off fails
-     * startup: the state is what keeps a forged callback out.
+     * startup: the state is what keeps a forged callback out. `ignore-check-redirect-uri` is allowed, with a WARN: JustAuth
+     * then skips its check that the registration's own `redirect-uri` is an http(s) URL, a check of a value the operator
+     * writes, not of anything a request carries, so it guards no callback and a custom-scheme redirect needs it off.
      */
     @Bean
     @ConditionalOnMissingBean
@@ -96,6 +101,9 @@ internal class CoSecSocialAuthenticationAutoConfiguration(
             require(!provider.ignoreCheckState) {
                 "Property [${SocialAuthenticationProperties.PREFIX}.registration.$key.ignore-check-state] is true: the " +
                     "OAuth state is what keeps a forged callback out, so it is always checked. Remove the property."
+            }
+            if (provider.ignoreCheckRedirectUri) {
+                log.warn { redirectUriCheckOff(key) }
             }
             val authRequestClass: Class<out AuthDefaultRequest> = provider.type.targetClass
             val authRequestCtor: Constructor<out AuthDefaultRequest> = authRequestClass.getConstructor(
@@ -128,3 +136,8 @@ internal class CoSecSocialAuthenticationAutoConfiguration(
 
 private const val OAUTH_STATE = "oauth:state"
 private const val OAUTH_BINDING = "oauth:binding"
+
+internal fun redirectUriCheckOff(key: String): String =
+    "${SocialAuthenticationProperties.PREFIX}.registration.$key.ignore-check-redirect-uri is true: JustAuth does not check " +
+        "that this registration's redirect-uri is an http or https URL. It is the operator's value, not a request's, so " +
+        "no callback is let through by it; make sure the provider accepts exactly this redirect-uri."

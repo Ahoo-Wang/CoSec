@@ -18,6 +18,7 @@ package me.ahoo.cosec.migrate
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.cocache.control.CoCacheControlStore
+import me.ahoo.cosec.control.change.ChangeRequest
 import me.ahoo.cosec.model.PolicyId
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 
@@ -44,6 +45,15 @@ interface StoreConversion {
     /** Who holds the lease [name], or null when nobody does or the store cannot say. */
     suspend fun leaseHolder(name: String): String? = null
 
+    /** The open-change list of the format before 8.0.0-beta.5, its change ids; null once converted (`CTL-54`). */
+    suspend fun legacyOpenChanges(): Set<String>? = null
+
+    /** Lists [change] in the open-change sets: one the old list names that is still open. */
+    suspend fun listOpenChange(change: ChangeRequest) = Unit
+
+    /** Keeps the open-change sets and removes the old list: only once every change it names was listed. */
+    suspend fun keepConvertedOpenChanges() = Unit
+
     /** The conversion of a CoCache store. */
     class OfCoCache internal constructor(
         private val store: CoCacheControlStore,
@@ -62,5 +72,11 @@ interface StoreConversion {
         override suspend fun removeLegacyDocuments() = store.removeLegacyDocuments()
 
         override suspend fun leaseHolder(name: String): String? = store.leaseHolder(name)
+
+        override suspend fun legacyOpenChanges(): Set<String>? = store.legacyOpenChanges()
+
+        override suspend fun listOpenChange(change: ChangeRequest) = store.listOpenChange(change)
+
+        override suspend fun keepConvertedOpenChanges() = store.keepConvertedOpenChanges()
     }
 }

@@ -82,7 +82,7 @@ import java.util.concurrent.atomic.AtomicInteger
  */
 class ControlPlaneTest {
     private val clock = MutableClock()
-    private val memory = InMemoryControlStore(clock)
+    val memory = InMemoryControlStore(clock)
 
     /** Changes whose stored record does not decode, as one of an app no document key can name (SCP-10). */
     val unreadable = HashSet<ChangeId>()

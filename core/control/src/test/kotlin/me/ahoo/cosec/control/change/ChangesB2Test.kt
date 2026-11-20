@@ -314,9 +314,13 @@ class ChangesB2Test {
     fun `a holder that cannot be marked conflicted keeps its slot`() = runBlocking<Unit> {
         publish(SnapshotKey.Platform, Operation.PutPolicy(allow("reads")))
         val store = object : ControlStore by harness.memory {
-            override suspend fun putChange(expected: SnapshotDigest?, change: ChangeRequest): Boolean {
+            override suspend fun putChange(
+                expected: SnapshotDigest?,
+                change: ChangeRequest,
+                previous: ChangeState?
+            ): Boolean {
                 check(change.state != ChangeState.CONFLICTED) { "Redis is down" }
-                return harness.memory.putChange(expected, change)
+                return harness.memory.putChange(expected, change, previous)
             }
         }
         val flaky = Changes(
@@ -420,9 +424,13 @@ class ChangesB2Test {
     fun `a change an earlier publish wrote is published when published again`() = runBlocking<Unit> {
         var failing = false
         val store = object : ControlStore by harness.memory {
-            override suspend fun putChange(expected: SnapshotDigest?, change: ChangeRequest): Boolean {
+            override suspend fun putChange(
+                expected: SnapshotDigest?,
+                change: ChangeRequest,
+                previous: ChangeState?
+            ): Boolean {
                 check(!(failing && change.state == ChangeState.PUBLISHED)) { "Redis is down" }
-                return harness.memory.putChange(expected, change)
+                return harness.memory.putChange(expected, change, previous)
             }
         }
         val flaky = Changes(

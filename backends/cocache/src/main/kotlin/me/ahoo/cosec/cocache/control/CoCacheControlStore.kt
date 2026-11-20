@@ -16,9 +16,6 @@
 package me.ahoo.cosec.cocache.control
 
 import io.github.oshai.kotlinlogging.KotlinLogging
-import kotlinx.coroutines.async
-import kotlinx.coroutines.awaitAll
-import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.future.await
 import me.ahoo.cocache.api.Codec
 import me.ahoo.cocache.api.ConditionalPut
@@ -36,7 +33,6 @@ import me.ahoo.cosec.cocache.control.ConditionalStores.answering
 import me.ahoo.cosec.cocache.control.ConditionalStores.deleteIf
 import me.ahoo.cosec.cocache.control.ConditionalStores.put
 import me.ahoo.cosec.cocache.control.ConditionalStores.read
-import me.ahoo.cosec.cocache.control.ConditionalStores.updateList
 import me.ahoo.cosec.cocache.createLocked
 import me.ahoo.cosec.cocache.shadow.ShadowCacheSpecs
 import me.ahoo.cosec.cocache.shadow.StoredCandidateCodec
@@ -47,10 +43,13 @@ import me.ahoo.cosec.cocache.snapshot.SnapshotDocumentCodec
 import me.ahoo.cosec.cocache.snapshot.SnapshotKeyEncoder
 import me.ahoo.cosec.control.change.ChangeId
 import me.ahoo.cosec.control.change.ChangeRequest
+import me.ahoo.cosec.control.change.ChangeState
 import me.ahoo.cosec.control.change.StageSlot
 import me.ahoo.cosec.control.store.AppList
+import me.ahoo.cosec.control.store.ChangePage
 import me.ahoo.cosec.control.store.ControlStore
 import me.ahoo.cosec.control.store.HeadWrite
+import me.ahoo.cosec.control.store.ListedChange
 import me.ahoo.cosec.control.store.ReferrerEntry
 import me.ahoo.cosec.control.store.RevisionIndex
 import me.ahoo.cosec.control.store.StoredDocument
@@ -65,7 +64,6 @@ import me.ahoo.cosec.spi.snapshot.SnapshotKeyText
 import java.time.Clock
 import java.time.Duration
 import java.time.Instant
-import kotlin.coroutines.cancellation.CancellationException
 
 private val log = KotlinLogging.logger {}
 
@@ -96,7 +94,7 @@ class CoCacheControlStore internal constructor(
     private val stages: Store<SnapshotKey, StageSlot>,
     /** The staged candidates the data plane's shadow listeners read (RFC 0007 §6.4). */
     private val candidates: Store<SnapshotKey, StoredCandidate>,
-    /** The ids of changes that may be open ([openChanges]), and the document list before 8.0.0-beta.5. */
+    /** The open-change list and the document list of the format before 8.0.0-beta.5, read only to convert them. */
     private val lists: Store<String, Map<String, Instant>>,
     /** The app documents there are ([apps], RC1-4). */
     private val appLists: Store<String, AppList>,
@@ -104,7 +102,7 @@ class CoCacheControlStore internal constructor(
     private val onPublished: (SnapshotKey) -> Unit = {},
     private val clock: Clock = Clock.systemUTC(),
     /**
-     * How long a listed change may be missing before [openChanges] drops it (`cosec.control.revisions.orphan-age`):
+     * How long a listed change may be missing before the open-change sets drop it (`cosec.control.revisions.orphan-age`):
      * a change is listed before it is written, so one being written right now is missing for a moment, and one whose
      * first write failed is missing for good.
      */
@@ -228,60 +226,48 @@ class CoCacheControlStore internal constructor(
     override suspend fun change(id: ChangeId): Versioned<ChangeRequest>? =
         read(changes, id, "Change [${id.value}]")?.let { (value, digest) -> Versioned(value, digest) }
 
-    /**
-     * A change is listed open, with the time, before its first write and unlisted after the write that makes it
-     * terminal. When that removal fails, the change is terminal and still listed: [openChanges] drops it the next time
-     * it is read.
-     */
-    override suspend fun putChange(expected: SnapshotDigest?, change: ChangeRequest): Boolean {
-        if (expected == null) {
-            val id = change.id.value
-            updateList(lists, OPEN_CHANGES) { if (id in it) it else it + (id to clock.instant()) }
-        }
+    private val openChanges = OpenChangeSets(
+        sets,
+        { read(lists, OPEN_CHANGES) != null },
+        { id -> read(changes, id, "Change [${id.value}]")?.first },
+        clock,
+        missingGrace,
+    )
+
+    /** Listed before the write, in its document's set and its state's, and unlisted after from what no longer applies. */
+    override suspend fun putChange(expected: SnapshotDigest?, change: ChangeRequest, previous: ChangeState?): Boolean {
+        openChanges.listBefore(change)
         val written = put(changes, change.id, expected, change, digest(ChangeRequestCacheCodec, change)) is Put.Written
-        if (written && change.state.terminal) {
-            unlist(change.id)
-        }
+        if (written) openChanges.unlistAfter(change, previous)
         return written
     }
 
-    /** Unlists a terminal change; a failure only warns (R2C-2): the next read of the open changes drops it. */
-    @Suppress("TooGenericExceptionCaught")
-    private suspend fun unlist(id: ChangeId) {
-        try {
-            updateList(lists, OPEN_CHANGES) { it - id.value }
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            log.warn(
-                e
-            ) { "Change [${id.value}] is terminal and stays listed open; the next read of the open changes drops it." }
-        }
-    }
+    override suspend fun openChangesKept(): Boolean = openChanges.kept()
 
-    /**
-     * The listed changes that are not terminal, each read once, a few at a time (#1219). A terminal one is dropped; so is
-     * one missing for longer than [missingGrace], whose first write failed. One missing for less may be being written
-     * right now: it stays listed and is not among the changes. One that does not decode fails this: it is not known
-     * to be terminal.
-     */
-    override suspend fun openChanges(): List<ChangeRequest> {
-        val listed = read(lists, OPEN_CHANGES)?.first.orEmpty()
-        val expired = clock.instant().minus(missingGrace)
-        val found = listed.entries.chunked(READ_BATCH).flatMap { batch ->
-            coroutineScope {
-                batch.map { (id, listedAt) ->
-                    async { Triple(id, listedAt, read(changes, ChangeId(id), "Change [$id]")?.first) }
-                }
-                    .awaitAll()
-            }
-        }
-        val closed = found.filter { (_, listedAt, change) -> change?.state?.terminal ?: listedAt.isBefore(expired) }
-            .mapTo(HashSet()) { it.first }
-        if (closed.isNotEmpty()) {
-            updateList(lists, OPEN_CHANGES) { it - closed }
-        }
-        return found.mapNotNull { it.third }.filterNot { it.state.terminal }
+    override suspend fun keepOpenChanges() = openChanges.keep()
+
+    override suspend fun openChanges(document: SnapshotKey): List<ListedChange> = openChanges.openChanges(document)
+
+    override suspend fun changes(
+        state: ChangeState,
+        after: String?,
+        limit: Int,
+        documents: (SnapshotKey) -> Boolean,
+    ): ChangePage = openChanges.changes(state, after, limit, documents)
+
+    /** The open-change list of the format before 8.0.0-beta.5, ids to when listed; null once converted. */
+    @InternalCoSecApi
+    suspend fun legacyOpenChanges(): Set<String>? = read(lists, OPEN_CHANGES)?.first?.keys
+
+    /** Lists [change] in the open-change sets: the conversion of a change the old list names (`CTL-54`). */
+    @InternalCoSecApi
+    suspend fun listOpenChange(change: ChangeRequest) = openChanges.listBefore(change)
+
+    /** Keeps the open-change sets, then removes the old list: the conversion's last two writes (`CTL-54`). */
+    @InternalCoSecApi
+    suspend fun keepConvertedOpenChanges() {
+        openChanges.keepConverted()
+        answering("The legacy open-change list") { lists.async().delete(OPEN_CHANGES).await() }
     }
 
     override suspend fun stage(key: SnapshotKey): Versioned<StageSlot>? =
@@ -354,9 +340,6 @@ class CoCacheControlStore internal constructor(
 
         private const val OPEN_CHANGES = "open-changes"
         private const val APP_LIST = "all"
-
-        /** How many changes [openChanges] reads at once. */
-        private const val READ_BATCH = 32
 
         /** As `cosec.control.revisions.orphan-age`'s default. */
         val DEFAULT_MISSING_GRACE: Duration = Duration.ofHours(1)

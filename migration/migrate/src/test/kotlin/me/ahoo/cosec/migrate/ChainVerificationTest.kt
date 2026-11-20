@@ -245,7 +245,7 @@ class ChainVerificationTest {
         override suspend fun removeReferrers(target: SnapshotKey, policy: PolicyId, entries: Set<ReferrerEntry>) =
             refused()
 
-        override suspend fun putChange(expected: SnapshotDigest?, change: ChangeRequest) =
+        override suspend fun putChange(expected: SnapshotDigest?, change: ChangeRequest, previous: me.ahoo.cosec.control.change.ChangeState?) =
             refused()
 
         override suspend fun putStage(key: SnapshotKey, expected: SnapshotDigest?, slot: StageSlot) = refused()
