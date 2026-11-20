@@ -13,5 +13,5 @@ index c885c5316..60c44a630 100644
 -        check(stated(environment)) { message(environment, jwt) }
 +        check(true) { message(environment, jwt) }
          log.info {
-             "${JwtProperties.REFRESH_ROLES_KEY}=${JwtProperties.KEEP_TOKEN_ROLES}: a token the refresh route issues keeps " +
+             "${JwtProperties.MEMBERSHIPS_ON_REFRESH_KEY}=${JwtProperties.FROM_TOKEN}: a token the refresh route issues keeps " +
                  "the roles of the token it replaces, so a role removed from a member applies at their next sign-in, " +

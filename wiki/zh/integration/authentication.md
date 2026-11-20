@@ -174,7 +174,7 @@ class LoginController(private val authentication: TokenCompositeAuthentication) 
 
 检查失败时抛出 `TokenVerificationException`；刷新令牌是与另一个访问令牌一起签发的，则抛出其子类 `RefreshTokenMismatchException`。刷新[委托令牌](#tokens)（带 `act` 声明的令牌）同样失败，抛出 `DelegationUnsupportedException`。
 
-设置了 `cosec.authentication.login.refresh.path` 且登录和 JWT 开启时，**starter 提供刷新路由**（`IDN-23`），在 Spring MVC 和 WebFlux 上都是（它无法提供的路径，或在 Spring Cloud Gateway 上设置，会使启动失败）：令牌对进，同一会话的新令牌对出，每种失败都以说明原因的问题类型应答（线上格式见[构建客户端](./clients.md#what-your-application-serves)）。你声明了 `RefreshTokenAuthentication<RefreshTokenCredentials>` Bean 时，用它刷新，包括它的钩子；否则用 starter 自己的，它在有 `MembershipRefresh<RefreshTokenCredentials>` Bean 时会使用它；没有这个 Bean 时，启动失败，直到 `cosec.jwt.session.refresh-roles=keep-token-roles` 写明刷新出的令牌保留旧令牌的角色（`STA-8`，[被移除的角色还能用多久](#how-long-a-removed-role-lives)）。两者都声明时，你的 `RefreshTokenAuthentication` 优先，路由不使用 `MembershipRefresh` Bean（`IDN-25`）。基于你自己凭证类的 `RefreshTokenAuthentication` 不能用于这个路由（它提交的是令牌对）：设置了路径时启动失败。不设置时不提供任何路由，你按下文自己编写。无论哪种方式，刷新请求都带着已过期的访问令牌，所以该路由必须能被没有令牌的调用方访问，否则刷新本身就是 `401 token-expired`：[构建客户端](./clients.md#what-your-application-serves)给出了这条语句；文档拒绝 starter 提供的路由时，starter 会记录一条点名该属性的 `WARN`。
+设置了 `cosec.authentication.login.refresh.path` 且登录和 JWT 开启时，**starter 提供刷新路由**（`IDN-23`），在 Spring MVC 和 WebFlux 上都是（它无法提供的路径，或在 Spring Cloud Gateway 上设置，会使启动失败）：令牌对进，同一会话的新令牌对出，每种失败都以说明原因的问题类型应答（线上格式见[构建客户端](./clients.md#what-your-application-serves)）。你声明了 `RefreshTokenAuthentication<RefreshTokenCredentials>` Bean 时，用它刷新，包括它的钩子；否则用 starter 自己的，它在有 `MembershipRefresh<RefreshTokenCredentials>` Bean 时会使用它；没有这个 Bean 时，启动失败，直到 `cosec.jwt.session.memberships-on-refresh=from-token` 写明刷新出的令牌保留旧令牌的角色（`STA-8`，[被移除的角色还能用多久](#how-long-a-removed-role-lives)）。两者都声明时，你的 `RefreshTokenAuthentication` 优先，路由不使用 `MembershipRefresh` Bean（`IDN-25`）。基于你自己凭证类的 `RefreshTokenAuthentication` 不能用于这个路由（它提交的是令牌对）：设置了路径时启动失败。不设置时不提供任何路由，你按下文自己编写。无论哪种方式，刷新请求都带着已过期的访问令牌，所以该路由必须能被没有令牌的调用方访问，否则刷新本身就是 `401 token-expired`：[构建客户端](./clients.md#what-your-application-serves)给出了这条语句；文档拒绝 starter 提供的路由时，starter 会记录一条点名该属性的 `WARN`。
 
 `RefreshTokenAuthentication` 以 `Authentication` 的形式完成刷新，因此把它声明为 Bean 后，刷新就是一次使用实现了 `RefreshTokenCredentials` 的凭证的登录。它在调用方的线程上校验这对令牌（纯计算）；通过 `TokenRevocation` 检查访问令牌未被吊销、其主体的令牌也未被吊销；再通过 `TokenFamilies` 轮换会话（[会话](#sessions)）。新的一对令牌说的是旧访问令牌说的内容，属于下一代。全程没有阻塞：
 
@@ -196,7 +196,7 @@ suspend fun refresh(@RequestBody credentials: RefreshCredentials): CompositeToke
 
 会话已结束（登出，或因为出示了更早的一代）时刷新以 `token-revoked` 被拒绝；会话的有效期已过或刷新令牌已过期时为 `token-expired`；这对令牌不属于任何会话（会话出现之前签发的，或在会话之外签发的）时为 `token-invalid`。吊销记录或会话存储无法应答时，它抛出 `RevocationUnavailableException` 或 `SessionStoreUnavailableException`：请应答 `503`：此时没有签发任何东西；除非存储恰在记录轮换本身时失败，否则也没有消耗任何东西，而那种情况由宽限期内的重试覆盖。其他任何异常都是错误：提供的路由以 `500` 应答，与流水线应答未建模错误的方式相同。两者都不会结束客户端的会话。
 
-`MembershipRefresh.CLAIMS`（上面的示例，以及写了 `cosec.jwt.session.refresh-roles=keep-token-roles` 时 starter 的刷新路由）不会重新读取用户：新令牌携带旧令牌的声明，所以从用户移除的角色会留在其会话每个刷新出的令牌里，直到用户重新登录，或直到你[吊销主体的全部令牌](#revoking-every-token-of-a-principal)。`RefreshTokenAuthentication` 对它没有默认值：保留声明要写出来，starter 的路由上也一样（`STA-8`）。要在刷新时拿到变更后的角色，给 `RefreshTokenAuthentication` 一个你自己的 `MembershipRefresh`。它回答用户现在拥有什么（重新查询）。用户不能再登录时，它通过抛出 `TokenVerificationException`（成员关系已不存在时用 `TokenRevokedException`）来拒绝，这是一个 `401`；其他任何异常都是错误，而不是拒绝：
+`MembershipRefresh.CLAIMS`（上面的示例，以及写了 `cosec.jwt.session.memberships-on-refresh=from-token` 时 starter 的刷新路由）不会重新读取用户：新令牌携带旧令牌的声明，所以从用户移除的角色会留在其会话每个刷新出的令牌里，直到用户重新登录，或直到你[吊销主体的全部令牌](#revoking-every-token-of-a-principal)。`RefreshTokenAuthentication` 对它没有默认值：保留声明要写出来，starter 的路由上也一样（`STA-8`）。要在刷新时拿到变更后的角色，给 `RefreshTokenAuthentication` 一个你自己的 `MembershipRefresh`。它回答用户现在拥有什么（重新查询）。用户不能再登录时，它通过抛出 `TokenVerificationException`（成员关系已不存在时用 `TokenRevokedException`）来拒绝，这是一个 `401`；其他任何异常都是错误，而不是拒绝：
 
 ```kotlin
 @Bean
@@ -249,10 +249,10 @@ suspend fun refresh(@RequestBody pair: CompositeToken, security: SecurityContext
 | 你的做法 | 被移除的角色失效于 | 写在哪里 |
 |---|---|---|
 | 声明 `MembershipRefresh<RefreshTokenCredentials>` Bean，每次重新读取成员的角色 | 成员下一次刷新时：在 `cosec.jwt.token-validity.access`（10 分钟）之内，即携带它的访问令牌的寿命 | 这个 Bean |
-| 写明刷新出的令牌保留旧令牌的角色 | 成员下一次登录时：自登录起最长 `cosec.jwt.session.lifetime`（30 天），前提是每个令牌都在 `cosec.jwt.token-validity.refresh`（7 天）之内刷新 | `cosec.jwt.session.refresh-roles=keep-token-roles`（`COSEC_JWT_SESSION_REFRESH_ROLES`） |
+| 写明刷新出的令牌保留旧令牌的角色 | 成员下一次登录时：自登录起最长 `cosec.jwt.session.lifetime`（30 天），前提是每个令牌都在 `cosec.jwt.token-validity.refresh`（7 天）之内刷新 | `cosec.jwt.session.memberships-on-refresh=from-token`（`COSEC_JWT_SESSION_MEMBERSHIPS_ON_REFRESH`） |
 | 自己构造 `RefreshTokenAuthentication` | 取决于你传入的 `MembershipRefresh`；`MembershipRefresh.CLAIMS` 就是上一行 | 你的代码：没有默认值（`IDN-27`） |
 
-`cosec.jwt.session.refresh-roles` 的其他任何值，包括空值和 `true`，都和未设置一样使启动失败，消息会打印写下的值。写了这条声明时，启动日志有一行 `INFO`，说明它意味着的会话寿命；用 Bean 时不记录与此有关的任何内容。不提供刷新路由的宿主（网关、网关之后的服务、没有登录的服务）不会被问到。
+`cosec.jwt.session.memberships-on-refresh` 的其他任何值，包括空值和 `true`，都和未设置一样使启动失败，消息会打印写下的值。写了这条声明时，启动日志有一行 `INFO`，说明它意味着的会话寿命；用 Bean 时不记录与此有关的任何内容。不提供刷新路由的宿主（网关、网关之后的服务、没有登录的服务）不会被问到。
 
 每一行中，[`TokenRevoker.revokeSubject`](#revoking-every-token-of-a-principal) 都会立刻结束该成员的全部令牌：必须马上生效的移除就调用它，下一次刷新本来要等的那几行也因此立即生效。
 

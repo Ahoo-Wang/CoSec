@@ -227,7 +227,7 @@ curl -i -H "Authorization: Bearer not-a-token" localhost:8080/orders/1
 - 按角色、按应用和空间授权：[角色权限](../policies/role-permissions.md)。
 - 用单元测试证明文档会做出什么决策，场景文件放在文档旁边：[用测试证明](../policies/testing.md#prove-it-with-a-test)。
 - 通过控制面安全地变更文档，使用模拟和影子窗口：[策略测试](../policies/testing.md)。
-- 用真正的登录替换演示用的 `/token` 端点，登录会开始一个会话（[认证](../integration/authentication.md)）。然后让 starter 提供刷新和登出：设置 `cosec.authentication.login.refresh.path: /auth/refresh` 和 `logout.path: /auth/logout`，并允许任何人对这两个路径 `http:POST`，[`clients` 示例](../integration/clients.md#what-your-application-serves)就是这样做的。刷新路由还需要一行，写明刷新出的令牌怎样得到角色：`cosec.jwt.session.refresh-roles: keep-token-roles`，或声明 `MembershipRefresh` Bean（[被移除的角色还能用多久](../integration/authentication.md#how-long-a-removed-role-lives)）；没有它，启动失败。演示签发的令牌对不属于任何会话，因此永远不能刷新。
+- 用真正的登录替换演示用的 `/token` 端点，登录会开始一个会话（[认证](../integration/authentication.md)）。然后让 starter 提供刷新和登出：设置 `cosec.authentication.login.refresh.path: /auth/refresh` 和 `logout.path: /auth/logout`，并允许任何人对这两个路径 `http:POST`，[`clients` 示例](../integration/clients.md#what-your-application-serves)就是这样做的。刷新路由还需要一行，写明刷新出的令牌怎样得到角色：`cosec.jwt.session.memberships-on-refresh: from-token`，或声明 `MembershipRefresh` Bean（[被移除的角色还能用多久](../integration/authentication.md#how-long-a-removed-role-lives)）；没有它，启动失败。演示签发的令牌对不属于任何会话，因此永远不能刷新。
 - 在处理器中读取主体和作用域：[Web 集成](../integration/web.md)。
 - 弄清一个请求为什么被放行或拒绝：[解释一个决策](../integration/checks.md#explaining-a-decision)。
 - 上线之前，逐项完成[上线前](#before-you-deploy)和[加固清单](./security-model.md#hardening-checklist)。

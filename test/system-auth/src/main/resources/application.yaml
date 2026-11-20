@@ -10,9 +10,9 @@ cosec:
     algorithm: hmac256
     secret: ${COSEC_JWT_SECRET}
     session:
-      # STA-8: the starter's refresh keeps the roles of the token it replaces. This host has no member store to read them
+      # STA-8: the starter's refresh keeps the memberships of the token it replaces. This host has no member store to read them
       # again from: /auth/login takes the roles from its request, so there is nothing a MembershipRefresh could look up.
-      refresh-roles: keep-token-roles
+      memberships-on-refresh: from-token
   authentication:
     login:
       refresh:

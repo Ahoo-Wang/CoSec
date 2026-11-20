@@ -242,7 +242,7 @@ https://cosec.ahoo.me/guide/security-model#trust-boundaries.
   starter's converter never does). Register the provider before issuing them, or those requests are 503.
 - Sessions: issue tokens through `TokenCompositeAuthentication`, which starts a session (a token family); refresh with
   `RefreshTokenAuthentication(verifier, tokenRevocation, tokenFamilies, memberships)`, where `memberships` is
-  `MembershipRefresh.CLAIMS` (keeps the old token's roles: a removed role applies at the next sign-in or after
+  `MembershipRefresh.CLAIMS` (keeps the old token's memberships: a removed role applies at the next sign-in or after
   `revokeSubject`) or a `MembershipRefresh` that looks the user up again. Only the newest pair refreshes, an older
   one presented again ends the session, and a session lasts `cosec.jwt.session.lifetime` (30 days).
 - Refresh and logout routes: set `cosec.authentication.login.refresh.path` and `logout.path` and the starter serves them
@@ -250,7 +250,7 @@ https://cosec.ahoo.me/guide/security-model#trust-boundaries.
   WebFlux, never on a gateway. A document must permit an anonymous `POST` of each path, or every refresh is
   `401 token-expired`. A `MembershipRefresh<RefreshTokenCredentials>` bean is used; it refuses by throwing
   `TokenRevokedException`. With no such bean (and no `RefreshTokenAuthentication` of your own) startup fails until
-  `cosec.jwt.session.refresh-roles=keep-token-roles` states that a refreshed token keeps the old token's roles (`STA-8`):
+  `cosec.jwt.session.memberships-on-refresh=from-token` states that a refreshed token keeps the old token's memberships (`STA-8`):
   ask the operator which they want (a bean applies a removal within the access token's lifetime, the property at the
   next sign-in, `cosec.jwt.session.lifetime` at the latest) and never write it just to start. Unset, write the routes yourself as below.
 - Logout: `TokenRevoker.revoke(accessToken)` ends the session, or `revoke(compositeToken)` once the access token has

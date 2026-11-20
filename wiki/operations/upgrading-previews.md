@@ -177,16 +177,16 @@ Which preview of the library may run behind which preview of the gateway image: 
   - **Body.** `cosec.control.http.max-body-size` defaults to `10MB` instead of `16MB`, and now bounds the control API
     on WebFlux too, in place of `spring.codec.max-in-memory-size` (256 KB by default, which kept larger changes out of
     a WebFlux control plane). A larger body is a `400` `invalid-request`.
-- **A host that serves the refresh route states how a refreshed token gets its roles** (`STA-8`). Affected: every
+- **A host that serves the refresh route states how a refreshed token gets its memberships** (`STA-8`). Affected: every
   host that sets `cosec.authentication.login.refresh.path`, declares no `RefreshTokenAuthentication` of its own and no
   `MembershipRefresh<RefreshTokenCredentials>` bean. Through beta.4 such a host refreshed silently with
   `MembershipRefresh.CLAIMS`: a role removed from a member kept working until their next sign-in, up to
   `cosec.jwt.session.lifetime` (30 days), as long as they refreshed within the refresh token's lifetime. It now **fails
   to start**, and the message says what the choice costs. Choose one:
-  - to keep what the host did, write `cosec.jwt.session.refresh-roles: keep-token-roles`
-    (`COSEC_JWT_SESSION_REFRESH_ROLES=keep-token-roles`). Any other value fails like an absent one. Startup logs one
+  - to keep what the host did, write `cosec.jwt.session.memberships-on-refresh: from-token`
+    (`COSEC_JWT_SESSION_MEMBERSHIPS_ON_REFRESH=from-token`). Any other value fails like an absent one. Startup logs one
     `INFO` line with the session lifetime it implies;
-  - or declare a `MembershipRefresh<RefreshTokenCredentials>` bean that reads the member's roles again, so a removal
+  - or declare a `MembershipRefresh<RefreshTokenCredentials>` bean that reads the member's roles and attached policies again, so a removal
     applies within `cosec.jwt.token-validity.access` (10 minutes).
 
   Either way `TokenRevoker.revokeSubject` ends a member's tokens at once

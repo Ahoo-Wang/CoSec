@@ -61,8 +61,8 @@ import org.springframework.web.servlet.function.ServerResponse as ServletServerR
  * when there is one (`IDN-25`). The route presents [RefreshTokenCredentials]: an application refresh authentication
  * over a credentials class of its own cannot serve it, and fails startup rather than be left out of the route.
  *
- * With no `MembershipRefresh` bean the starter's refresh keeps the roles of the token it replaces, and only when the
- * operator states it (`cosec.jwt.session.refresh-roles=keep-token-roles`): otherwise startup fails (`STA-8`).
+ * With no `MembershipRefresh` bean the starter's refresh keeps the memberships of the token it replaces, and only when the
+ * operator states it (`cosec.jwt.session.memberships-on-refresh=from-token`): otherwise startup fails (`STA-8`).
  */
 @AutoConfiguration(after = [CoSecJwtAutoConfiguration::class])
 @ConditionalOnCoSecEnabled

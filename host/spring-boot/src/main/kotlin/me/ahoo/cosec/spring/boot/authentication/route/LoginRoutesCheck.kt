@@ -40,7 +40,7 @@ import org.springframework.web.context.WebApplicationContext
  * is off. Run once every singleton exists, so it reads what was wired rather than guessing it.
  *
  * `STA-8` is the last of it: a refresh route the starter builds, with no `MembershipRefresh` bean, needs the statement
- * that its tokens keep the roles of the token they replace ([RefreshMembershipChoice]); an application's own
+ * that its tokens keep the memberships of the token they replace ([RefreshMembershipChoice]); an application's own
  * `RefreshTokenAuthentication` has chosen already.
  */
 internal object LoginRoutesCheck {

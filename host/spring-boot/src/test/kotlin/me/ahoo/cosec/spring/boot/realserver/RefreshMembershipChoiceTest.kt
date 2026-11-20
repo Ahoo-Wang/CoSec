@@ -51,10 +51,10 @@ import java.nio.file.Files
 import java.nio.file.Path
 
 /**
- * `STA-8`: a host that serves the refresh route says how a refreshed token gets its roles, or does not start. With no
- * `MembershipRefresh` bean the starter's refresh would copy the roles of the token it replaces, so a role removed from a
- * member would keep working until their next sign-in: the operator writes that choice (`cosec.jwt.session.refresh-roles`)
- * or declares the bean that reads the member's roles again. Run on a real Spring MVC and a real WebFlux host; a host that
+ * `STA-8`: a host that serves the refresh route says how a refreshed token gets its memberships, or does not start. With no
+ * `MembershipRefresh` bean the starter's refresh would copy the memberships of the token it replaces, so a role removed from a
+ * member would keep working until their next sign-in: the operator writes that choice (`cosec.jwt.session.memberships-on-refresh`)
+ * or declares the bean that reads the member's roles and attached policies again. Run on a real Spring MVC and a real WebFlux host; a host that
  * does not serve the route is not asked.
  */
 @ExtendWith(OutputCaptureExtension::class)
@@ -149,19 +149,38 @@ class RefreshMembershipChoiceTest {
             // 2. the two ways to choose
             .contains("declare a MembershipRefresh<RefreshTokenCredentials> bean")
             .contains("within the access token's lifetime (cosec.jwt.token-validity.access=5m)")
-            .contains("state that refreshed tokens keep the roles of the token they replace")
+            .contains("state that refreshed tokens keep the memberships of the token they replace")
             // 3. revokeSubject, then the exact line and the link
             .contains("TokenRevoker.revokeSubject ends a member's tokens at once")
-            .contains("cosec.jwt.session.refresh-roles=keep-token-roles")
-            .contains("COSEC_JWT_SESSION_REFRESH_ROLES=keep-token-roles")
+            .contains("cosec.jwt.session.memberships-on-refresh=from-token")
+            .contains("COSEC_JWT_SESSION_MEMBERSHIPS_ON_REFRESH=from-token")
             .contains("It is not set")
             .contains("(STA-8, https://cosec.ahoo.me/integration/authentication#how-long-a-removed-role-lives)")
         listOf(
             "keeps working until that member signs in again",
             "declare a MembershipRefresh",
             "TokenRevoker.revokeSubject",
-            "cosec.jwt.session.refresh-roles=keep-token-roles",
+            "cosec.jwt.session.memberships-on-refresh=from-token",
         ).map { message.indexOf(it) }.assert().isSorted()
+    }
+
+    @Test
+    fun `durations are written as an operator writes them`() {
+        fun message(lifetime: String, refresh: String, access: String) = failure {
+            start(
+                ServedStack.NETTY,
+                "$REFRESH=/auth/refresh",
+                "cosec.jwt.session.lifetime=$lifetime",
+                "cosec.jwt.token-validity.refresh=$refresh",
+                "cosec.jwt.token-validity.access=$access",
+            )
+        }
+        message("36h", "100h", "15m").assert()
+            .contains("cosec.jwt.session.lifetime=36h")
+            .contains("cosec.jwt.token-validity.refresh=100h")
+            .contains("cosec.jwt.token-validity.access=15m")
+        message("2d", "4d", "90s").assert().contains("cosec.jwt.token-validity.access=90s")
+        message("2d", "4d", "1500ms").assert().contains("cosec.jwt.token-validity.access=PT1.5S")
     }
 
     @ParameterizedTest
@@ -170,10 +189,10 @@ class RefreshMembershipChoiceTest {
         stack: ServedStack,
         output: CapturedOutput,
     ) {
-        start(stack, "$REFRESH=/auth/refresh", "$STATEMENT=keep-token-roles", "cosec.jwt.session.lifetime=14d")
+        start(stack, "$REFRESH=/auth/refresh", "$STATEMENT=from-token", "cosec.jwt.session.lifetime=14d")
         output.all.assert()
             .contains(
-                "cosec.jwt.session.refresh-roles=keep-token-roles: a token the refresh route issues keeps the roles"
+                "cosec.jwt.session.memberships-on-refresh=from-token: a token the refresh route issues keeps the memberships"
             )
             .contains("cosec.jwt.session.lifetime=14d at the latest (STA-8)")
         start(stack, "$REFRESH=/auth/refresh", "$STATEMENT=KEEP-Token-Roles")
@@ -192,7 +211,7 @@ class RefreshMembershipChoiceTest {
     @ParameterizedTest
     @EnumSource(ServedStack::class)
     fun `every other value fails like an absent one, and the message says what was written`(stack: ServedStack) {
-        for (written in listOf("claims", "true", "keep", "keep-token-roles ", "keep_token_roles", "lookup")) {
+        for (written in listOf("claims", "true", "keep", "from-token ", "from_token", "lookup")) {
             failure { start(stack, "$REFRESH=/auth/refresh", "$STATEMENT=$written") }
                 .assert().contains("It is [$written]").contains("(STA-8,")
         }
@@ -266,6 +285,6 @@ class RefreshMembershipChoiceTest {
 
     private companion object {
         const val REFRESH = "cosec.authentication.login.refresh.path"
-        const val STATEMENT = "cosec.jwt.session.refresh-roles"
+        const val STATEMENT = "cosec.jwt.session.memberships-on-refresh"
     }
 }

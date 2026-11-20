@@ -29,7 +29,7 @@ it writes its login.
 | Endpoint | Who serves it | In and out |
 |---|---|---|
 | Login | The application: `TokenCompositeAuthentication.authenticateAsToken(credentials)` | Your credentials in; a `CompositeToken` out |
-| Refresh | The starter at `cosec.authentication.login.refresh.path` (`IDN-23`); unset, the application, over `RefreshTokenAuthentication`. The starter's route needs a `MembershipRefresh` bean or `cosec.jwt.session.refresh-roles=keep-token-roles` (`STA-8`) | `{"accessToken": "...", "refreshToken": "..."}` in; a `CompositeToken` out |
+| Refresh | The starter at `cosec.authentication.login.refresh.path` (`IDN-23`); unset, the application, over `RefreshTokenAuthentication`. The starter's route needs a `MembershipRefresh` bean or `cosec.jwt.session.memberships-on-refresh=from-token` (`STA-8`) | `{"accessToken": "...", "refreshToken": "..."}` in; a `CompositeToken` out |
 | Logout | The starter at `cosec.authentication.login.logout.path` (`IDN-24`); unset, the application: `TokenRevoker.revoke(accessToken)`, or `revoke(compositeToken)` once the access token has expired | The served route: the pair in, `204` out; the session ends on the server |
 | Tenant or app switch | The application: `SwitchTenantAuthentication`, from a live session | The current token in the `Authorization` header and your credentials class in the body; a `CompositeToken` out |
 

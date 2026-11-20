@@ -7,10 +7,10 @@ index 92ab3f35b..bc4d2abd7 100644
 --- a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/authentication/route/RefreshMembershipChoice.kt
 +++ b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/authentication/route/RefreshMembershipChoice.kt
 @@ -62,7 +62,7 @@ internal object RefreshMembershipChoice {
-     /** Exactly `keep-token-roles`, in any letter case; nothing else, an empty value and `true` included. */
+     /** Exactly `from-token`, in any letter case; nothing else, an empty value and `true` included. */
      private fun stated(environment: Environment): Boolean {
-         val written = environment.getProperty(JwtProperties.REFRESH_ROLES_KEY)
--        return written.equals(JwtProperties.KEEP_TOKEN_ROLES, ignoreCase = true)
+         val written = environment.getProperty(JwtProperties.MEMBERSHIPS_ON_REFRESH_KEY)
+-        return written.equals(JwtProperties.FROM_TOKEN, ignoreCase = true)
 +        return written != null
      }
  

@@ -301,7 +301,7 @@ request.
 - **A session lasts at most `cosec.jwt.session.lifetime` (30 days) from its login**, however often it is refreshed, and
   only while it is refreshed before its refresh token expires (`cosec.jwt.token-validity.refresh`, 7 days): then a
   refresh is refused (`token-expired`) and the user signs in again. No token of a pair outlives its session. Where
-  refreshed tokens keep the roles of the token they replace (no `MembershipRefresh`,
+  refreshed tokens keep the memberships of the token they replace (no `MembershipRefresh`,
   [below](#how-long-a-removed-role-lives)), this is also the latest a changed role applies.
 - **The request path does not read sessions.** An access token of an older generation stays valid until it expires, as
   every access token does: keep `cosec.jwt.token-validity.access` short. To stop access tokens at once, revoke them
@@ -329,7 +329,7 @@ MVC and on WebFlux, with login and JWT on (a path it cannot serve, or one set on
 names it ([Building a client](./clients.md#what-your-application-serves) has the wire). It refreshes with
 your `RefreshTokenAuthentication<RefreshTokenCredentials>` bean when you declare one, its hook included; otherwise with
 the starter's, which uses your `MembershipRefresh<RefreshTokenCredentials>` bean when there is one. With no such bean,
-startup fails until `cosec.jwt.session.refresh-roles=keep-token-roles` states that refreshed tokens keep the roles of the
+startup fails until `cosec.jwt.session.memberships-on-refresh=from-token` states that refreshed tokens keep the memberships of the
 token they replace (`STA-8`, [how long a removed role lives](#how-long-a-removed-role-lives)). When you declare
 both, your `RefreshTokenAuthentication` wins, and the route does not use the `MembershipRefresh` bean (`IDN-25`). A
 `RefreshTokenAuthentication` over a credentials class of your own cannot serve the route, which presents the pair:
@@ -367,7 +367,7 @@ spent unless the store failed while recording the rotation itself, which a retry
 is an error: the served route answers it `500`, as the pipeline answers an unmodelled error. Neither ends a client's
 session.
 
-`MembershipRefresh.CLAIMS`, in the example above and behind `cosec.jwt.session.refresh-roles=keep-token-roles` on the
+`MembershipRefresh.CLAIMS`, in the example above and behind `cosec.jwt.session.memberships-on-refresh=from-token` on the
 starter's refresh route, does not re-read the user: the new token carries the claims of the old one, so a role you
 remove from a user stays in every refreshed token of its session until the user signs in again, or until you
 [revoke the principal's tokens](#revoking-every-token-of-a-principal). `RefreshTokenAuthentication` has no default for
@@ -433,15 +433,15 @@ token is for. A refused refresh spends no generation.
 Roles travel in the token, and a gateway that reads roles from the token only has no other source, so what a refresh
 does with them decides how long a role you removed from a member keeps working. The starter does not choose for you: a
 host that serves the refresh route (`cosec.authentication.login.refresh.path`) and declares no
-`MembershipRefresh<RefreshTokenCredentials>` bean does not start until you write the choice (`STA-8`).
+`MembershipRefresh<RefreshTokenCredentials>` bean does not start until you write the choice (`STA-8`). "Memberships" here means what the token carries: its roles and the policies attached to it (the `roles` and `policies` claims), the same word as in `MembershipRefresh`.
 
 | What you do | A removed role stops working | Where it is written |
 |---|---|---|
-| Declare a `MembershipRefresh<RefreshTokenCredentials>` bean that reads the member's roles again | At the member's next refresh: within `cosec.jwt.token-validity.access` (10 minutes), the life of the access token that carries it | The bean |
-| State that refreshed tokens keep the roles of the token they replace | At the member's next sign-in: up to `cosec.jwt.session.lifetime` (30 days) after their login while they refresh within `cosec.jwt.token-validity.refresh` (7 days) of each token | `cosec.jwt.session.refresh-roles=keep-token-roles` (`COSEC_JWT_SESSION_REFRESH_ROLES`) |
+| Declare a `MembershipRefresh<RefreshTokenCredentials>` bean that reads the member's roles and attached policies again | At the member's next refresh: within `cosec.jwt.token-validity.access` (10 minutes), the life of the access token that carries it | The bean |
+| State that refreshed tokens keep the memberships of the token they replace | At the member's next sign-in: up to `cosec.jwt.session.lifetime` (30 days) after their login while they refresh within `cosec.jwt.token-validity.refresh` (7 days) of each token | `cosec.jwt.session.memberships-on-refresh=from-token` (`COSEC_JWT_SESSION_MEMBERSHIPS_ON_REFRESH`) |
 | Build `RefreshTokenAuthentication` yourself | When the `MembershipRefresh` you pass says so; `MembershipRefresh.CLAIMS` is the row above | Your code: there is no default (`IDN-27`) |
 
-Any other value of `cosec.jwt.session.refresh-roles`, an empty one and `true` included, fails startup like an absent
+Any other value of `cosec.jwt.session.memberships-on-refresh`, an empty one and `true` included, fails startup like an absent
 one, and the message prints what was written. With the statement written, startup logs one `INFO` line with the session
 lifetime it implies; with a bean, it logs nothing about it. A host that serves no refresh route (a gateway, a service
 behind one, a service without login) is not asked.

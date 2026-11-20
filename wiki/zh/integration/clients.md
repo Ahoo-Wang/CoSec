@@ -20,7 +20,7 @@ CoSec 不提供登录和租户切换：它们属于应用，用 CoSec 的类编�
 | 端点 | 由谁提供 | 入参和出参 |
 |---|---|---|
 | 登录 | 应用：`TokenCompositeAuthentication.authenticateAsToken(credentials)` | 入：你的凭证；出：`CompositeToken` |
-| 刷新 | starter，位于 `cosec.authentication.login.refresh.path`（`IDN-23`）；未设置时由应用基于 `RefreshTokenAuthentication` 提供。starter 的路由需要 `MembershipRefresh` Bean 或 `cosec.jwt.session.refresh-roles=keep-token-roles`（`STA-8`） | 入：`{"accessToken": "...", "refreshToken": "..."}`；出：`CompositeToken` |
+| 刷新 | starter，位于 `cosec.authentication.login.refresh.path`（`IDN-23`）；未设置时由应用基于 `RefreshTokenAuthentication` 提供。starter 的路由需要 `MembershipRefresh` Bean 或 `cosec.jwt.session.memberships-on-refresh=from-token`（`STA-8`） | 入：`{"accessToken": "...", "refreshToken": "..."}`；出：`CompositeToken` |
 | 登出 | starter，位于 `cosec.authentication.login.logout.path`（`IDN-24`）；未设置时由应用提供：`TokenRevoker.revoke(accessToken)`，访问令牌过期后用 `revoke(compositeToken)` | 提供的路由：入：令牌对，出：`204`；会话在服务端结束 |
 | 租户或应用切换 | 应用：`SwitchTenantAuthentication`，从一个有效会话发起 | 入：`Authorization` 头里的当前令牌，加上你的凭证类的请求体；出：`CompositeToken` |
 

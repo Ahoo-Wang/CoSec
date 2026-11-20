@@ -27,8 +27,8 @@ import java.time.Duration
 private val log = KotlinLogging.logger {}
 
 /**
- * `STA-8`: how a token the starter's refresh route issues gets its roles is a choice the operator writes, never a
- * default. With the route served and no `MembershipRefresh` bean, a refresh copies the roles of the token it replaces,
+ * `STA-8`: how a token the starter's refresh route issues gets its memberships (its roles and attached policies) is a choice the operator writes, never a
+ * default. With the route served and no `MembershipRefresh` bean, a refresh copies the memberships of the token it replaces,
  * so a role removed from a member keeps working until their next sign-in, `cosec.jwt.session.lifetime` at the latest
  * (30 days) while they refresh within the refresh token's lifetime. Where roles are read from the token only, this
  * decides how long a removal takes (`IDN-27`'s rule, for the starter's own wiring).
@@ -39,7 +39,7 @@ private val log = KotlinLogging.logger {}
 internal object RefreshMembershipChoice {
     /** What a refresh answers where nobody chose: never used, since [require] fails startup first. */
     private val UNSTATED: MembershipRefresh<RefreshTokenCredentials> = MembershipRefresh { _, _ ->
-        error("${JwtProperties.REFRESH_ROLES_KEY} states no choice (STA-8)")
+        error("${JwtProperties.MEMBERSHIPS_ON_REFRESH_KEY} states no choice (STA-8)")
     }
 
     /** The membership the starter's refresh uses: the application's bean, else [MembershipRefresh.CLAIMS] if stated. */
@@ -53,33 +53,33 @@ internal object RefreshMembershipChoice {
         if (hasBean) return
         check(stated(environment)) { message(environment, jwt) }
         log.info {
-            "${JwtProperties.REFRESH_ROLES_KEY}=${JwtProperties.KEEP_TOKEN_ROLES}: a token the refresh route issues keeps " +
-                "the roles of the token it replaces, so a role removed from a member applies at their next sign-in, " +
+            "${JwtProperties.MEMBERSHIPS_ON_REFRESH_KEY}=${JwtProperties.FROM_TOKEN}: a token the refresh route issues keeps " +
+                "the memberships of the token it replaces (its roles and attached policies), so a role removed from a member applies at their next sign-in, " +
                 "${JwtProperties.SESSION_LIFETIME_KEY}=${compact(jwt.session.lifetime)} at the latest (STA-8)."
         }
     }
 
-    /** Exactly `keep-token-roles`, in any letter case; nothing else, an empty value and `true` included. */
+    /** Exactly `from-token`, in any letter case; nothing else, an empty value and `true` included. */
     private fun stated(environment: Environment): Boolean {
-        val written = environment.getProperty(JwtProperties.REFRESH_ROLES_KEY)
-        return written.equals(JwtProperties.KEEP_TOKEN_ROLES, ignoreCase = true)
+        val written = environment.getProperty(JwtProperties.MEMBERSHIPS_ON_REFRESH_KEY)
+        return written.equals(JwtProperties.FROM_TOKEN, ignoreCase = true)
     }
 
     private fun message(environment: Environment, jwt: JwtProperties): String {
-        val written = environment.getProperty(JwtProperties.REFRESH_ROLES_KEY)
+        val written = environment.getProperty(JwtProperties.MEMBERSHIPS_ON_REFRESH_KEY)
         val lifetime = "${JwtProperties.SESSION_LIFETIME_KEY}=${compact(jwt.session.lifetime)}"
         val refresh = "${JwtProperties.REFRESH_VALIDITY_KEY}=${compact(jwt.tokenValidity.refresh)}"
         val access = "${JwtProperties.ACCESS_VALIDITY_KEY}=${compact(jwt.tokenValidity.access)}"
         val path = environment.getProperty(LoginProperties.REFRESH_PATH_KEY)
         return "${LoginProperties.REFRESH_PATH_KEY}=$path serves the refresh route, and nothing says how a refreshed token gets " +
-            "its roles. Without a choice it would copy the roles of the token it replaces: a role removed from a " +
+            "its memberships. Without a choice it would copy the memberships of the token it replaces, its roles and attached policies: a role removed from a " +
             "member keeps working until that member signs in again, up to $lifetime as long as they refresh within " +
             "$refresh. Choose one: declare a MembershipRefresh<RefreshTokenCredentials> bean that reads the member's " +
-            "roles again at each refresh, so a removal takes effect within the access token's lifetime ($access); or " +
-            "state that refreshed tokens keep the roles of the token they replace, and accept the delay above. With " +
-            "either, TokenRevoker.revokeSubject ends a member's tokens at once. To keep the token's roles add " +
-            "${JwtProperties.REFRESH_ROLES_KEY}=${JwtProperties.KEEP_TOKEN_ROLES} (the environment variable " +
-            "COSEC_JWT_SESSION_REFRESH_ROLES=${JwtProperties.KEEP_TOKEN_ROLES}). " +
+            "roles and attached policies again at each refresh, so a removal takes effect within the access token's lifetime ($access); or " +
+            "state that refreshed tokens keep the memberships of the token they replace, and accept the delay above. With " +
+            "either, TokenRevoker.revokeSubject ends a member's tokens at once. To keep the token's memberships add " +
+            "${JwtProperties.MEMBERSHIPS_ON_REFRESH_KEY}=${JwtProperties.FROM_TOKEN} (the environment variable " +
+            "COSEC_JWT_SESSION_MEMBERSHIPS_ON_REFRESH=${JwtProperties.FROM_TOKEN}). " +
             (if (written == null) "It is not set" else "It is [$written]") +
             " (STA-8, https://cosec.ahoo.me/integration/authentication#how-long-a-removed-role-lives)."
     }
