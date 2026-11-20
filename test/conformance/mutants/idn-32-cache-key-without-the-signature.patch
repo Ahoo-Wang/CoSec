@@ -1,0 +1,17 @@
+# Rule: IDN-32
+# Mutant: the cache's key leaves out the signature, so a token with a forged signature is answered as the one it copies
+# Tests: :jwt:test --tests me.ahoo.cosec.jwt.VerifiedTokenCachePropertyTest
+
+diff --git a/extensions/jwt/src/main/kotlin/me/ahoo/cosec/jwt/VerifiedTokenCache.kt b/extensions/jwt/src/main/kotlin/me/ahoo/cosec/jwt/VerifiedTokenCache.kt
+index 9cc8031fe..9f81d38ef 100644
+--- a/extensions/jwt/src/main/kotlin/me/ahoo/cosec/jwt/VerifiedTokenCache.kt
++++ b/extensions/jwt/src/main/kotlin/me/ahoo/cosec/jwt/VerifiedTokenCache.kt
+@@ -80,7 +80,7 @@ class VerifiedTokenCache(val maxEntries: Int = DEFAULT_MAX_ENTRIES) {
+     val size: Int get() = entries.size
+ 
+     internal fun key(token: String): Key {
+-        val digest = SHA_256.get().digest(token.toByteArray(Charsets.UTF_8))
++        val digest = SHA_256.get().digest(token.substringBeforeLast('.').toByteArray(Charsets.UTF_8))
+         val bytes = ByteBuffer.wrap(digest)
+         return Key(bytes.getLong(), bytes.getLong(), bytes.getLong(), bytes.getLong())
+     }

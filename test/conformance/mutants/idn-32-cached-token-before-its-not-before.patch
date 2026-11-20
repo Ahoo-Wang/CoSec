@@ -1,0 +1,17 @@
+# Rule: IDN-32
+# Mutant: a cached token answers before its iat or nbf beyond the skew, where verifying again refuses it as not valid yet
+# Tests: :jwt:test --tests me.ahoo.cosec.jwt.VerifiedTokenCachePropertyTest
+
+diff --git a/extensions/jwt/src/main/kotlin/me/ahoo/cosec/jwt/VerifiedTokenCache.kt b/extensions/jwt/src/main/kotlin/me/ahoo/cosec/jwt/VerifiedTokenCache.kt
+index 9cc8031fe..3612c1ebb 100644
+--- a/extensions/jwt/src/main/kotlin/me/ahoo/cosec/jwt/VerifiedTokenCache.kt
++++ b/extensions/jwt/src/main/kotlin/me/ahoo/cosec/jwt/VerifiedTokenCache.kt
+@@ -91,7 +91,7 @@ class VerifiedTokenCache(val maxEntries: Int = DEFAULT_MAX_ENTRIES) {
+      */
+     internal fun get(key: Key, now: Long, skewSeconds: Long): VerifiedToken? {
+         val entry = entries[key]
+-        if (entry != null && entry.validFrom <= now + skewSeconds && now < entry.expires) {
++        if (entry != null && now < entry.expires) {
+             hitCount.incrementAndGet()
+             return entry.token
+         }
