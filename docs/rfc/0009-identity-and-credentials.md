@@ -11,6 +11,8 @@
 > **2026-10-28 修订（[RFC 0010](0010-ga-extension-points.md) Q1）**：维护者要求不为未来功能预先抽象。GA 前只做 PR-1（拒绝 `act`，安全）与 PR-3（API Key 新格式，
 > 存储格式的破坏与"策略即数据"）；PR-3 带上 `Memberships.active`（IDN-3 需要）。PR-2 的 `principal.type`、`auth.method` 属性与 `sub_type` 都可以以后新增，
 > 移到 8.1，IDN-5 随之移走。下文保留原样以便追溯。
+>
+> **2026-11-19 修订（第一轮整体审查 R1A-8，#1718，`IDN-30`）**：通过校验的令牌若在 `attributes` 里带 `apiKeyId`，按 `TOKEN_INVALID` 处理；`JwtTokenConverter` 不签发这样的令牌。`apiKeyId` 是 API key 认证留给策略条件读的属性，令牌不得冒充。
 
 > **2026-10-29 再修订（RC 安全审查第 1 轮与 PR-3 第 2 轮审查，#1149、#1164）**：取代下一段中关于上限与 break-glass 的两句，以此为准。
 >

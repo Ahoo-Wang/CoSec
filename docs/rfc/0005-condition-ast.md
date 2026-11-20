@@ -14,6 +14,8 @@
 > **2026-10-26 修订（[RFC 0008](0008-conformance-and-direct-build.md)）**：8.0 不考虑兼容性。门槛 B（§8）与 PR-7 取消；PR-8、PR-9 并入 RFC 0008 的切换 PR；`legacy` 节点（§3.7、Q2）不实现，
 > 自定义条件匹配器在转换时被拒绝，迁移到 RFC 0006 的 `AttributeProvider`（RFC 0008 §6 Q4）。§9.3 中对 7.0 的 100 % 吞吐要求（Q12）作为绝对预算保留，
 > 对 `legacy` 语言的相对目标取消。A1–A4 作为规范性质保留。下文保留原样以便追溯。
+>
+> **2026-11-19 修订（第一轮整体审查的加固，#1712，`DOC-14`）**：§5.2 增加一条：DENY 语句与限流规则不得把 `decodeAndParseSegments` 设为 `false`。那样的模式按收到的文本匹配路径，匹配不到百分号编码的写法（`/admin/**` 拦不住 `/%61dmin/users`，或让编码写法逃出限流）；ALLOW 可以保留这个选项，匹配得少只会更严。`cosec-migrate` 遇到 7.x 里这样写的 DENY 拒绝转换，不悄悄去掉选项。
 
 > **2026-11-08 修订（#1283，U1）**：路由映射改为显式启用：`cosec.authorization.routes.location` 默认未设置；未设置而 `classpath:cosec-routes.json` 存在时启动失败；零条路由的映射拒绝加载（`RTE-3`）。
 
