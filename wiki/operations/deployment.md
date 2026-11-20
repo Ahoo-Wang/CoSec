@@ -248,7 +248,7 @@ and an overlay for each kind of cluster. Deploy an overlay, never the base on it
 |---|---|---|
 | `base/` | the overlays to build on | The Deployment and a Service (port 80 to the container's 8080; the management port 8081 is a container port the Service does not publish). `application.yaml` (the routes and the `cosec.*` settings above) becomes a ConfigMap mounted as `/opt/cosec-gateway-server/config/application.yaml`, read in addition to the image's defaults; its CORS origin, discovery list and route are a demo to replace; its name carries a hash of the file, so a change to it rolls the pods. The image is `ghcr.io/ahoo-wang/cosec-gateway`, with its tag set under `images:`. One gateway gets 768Mi and a 256 MiB heap. |
 | `overlays/dev/` | trying CoSec out on any cluster, kind and minikube included | The namespace `cosec-dev`, one gateway with the base's resources, and a single Redis 7.4 with `maxmemory-policy noeviction` and no password. Redis keeps its data in an `emptyDir`, which outlives a container restart but not the pod: deleting the Redis pod deletes the documents. |
-| `overlays/production/` | a starting point for your own overlay | The namespace `cosec`; your Redis, from the ConfigMap `cosec-gateway-redis` (host and port; or `SPRING_DATA_REDIS_CLUSTER_NODES` for a cluster) and the Secret `cosec-redis-secret` (`password`, and `username` for an ACL user); 2 to 10 gateways behind a HorizontalPodAutoscaler on CPU (70 % of the 1 CPU each requests; it needs the metrics server); a PodDisruptionBudget that evicts one gateway at a time and always lets an unready one go, so a drain never waits for a platform document; a NetworkPolicy that admits port 8080 from anywhere and the management port from the `monitoring` namespace only; 2560Mi and a 1.5 GiB heap per gateway, spread across nodes. |
+| `overlays/production/` | a starting point for your own overlay | The namespace `cosec`; your Redis, from the ConfigMap `cosec-gateway-redis` (host and port; or `SPRING_DATA_REDIS_CLUSTER_NODES` for a cluster) and the Secret `cosec-redis-secret` (`password`, and `username` for an ACL user); 2 to 10 gateways behind a HorizontalPodAutoscaler on CPU (70 % of the 1 CPU each requests; it needs the metrics server); a PodDisruptionBudget that evicts one gateway at a time and always lets an unready one go, so a drain never waits for a platform document; a NetworkPolicy that admits port 8080 from anywhere and the management port from the `monitoring` namespace only; 3200Mi and a 2 GiB heap per gateway, spread across nodes. |
 
 ### Deploying
 
@@ -317,11 +317,11 @@ overlay size them for their limits:
 
 | | `dev` (base) | `production` |
 |---|---|---|
-| Memory request and limit | 768Mi | 2560Mi |
-| Heap (`-Xms` = `-Xmx`) | 256 MiB | 1.5 GiB |
+| Memory request and limit | 768Mi | 3200Mi |
+| Heap (`-Xms` = `-Xmx`) | 256 MiB | 2 GiB |
 | Direct memory, Netty's buffers (`-XX:MaxDirectMemorySize`) | up to 64 MiB | up to 256 MiB |
 | Native: the AOT cache's class data (about 105 MiB), JIT code, metaspace, GC structures, threads | about 220 MiB | about 250 MiB |
-| Left for the page cache and peaks | about 230 MiB | about 500 MiB |
+| Left for the page cache and peaks | about 230 MiB | about 650 MiB |
 | CPU request and limit | 250m, 1 | 1, 2 |
 
 - **ZGC commits the whole heap at startup**, as shared memory the container is charged for at once. A limit too small
@@ -382,8 +382,9 @@ The revocation copies hold only the tokens and principals a replica saw in the l
 `cosec.authentication.revocation.cache.maximum-size` (500,000) of each, about 260 MB when both are full. Size the heap at
 twice what these hold, plus 256 MiB for the rest of the gateway, so that ZGC has room to collect; then set the memory
 limit to the heap, plus the direct memory, plus about 250 MiB, plus a quarter ([Memory](#memory)). The production
-overlay's 1.5 GiB heap and 2560Mi limit follow that rule for the default documents with revocation copies for about
-150,000 active tokens; the settings below give the heap for more.
+overlay follows that rule with every default at its bound: tenant documents (about 490 MB), tenants without one
+(about 30 MB) and both revocation copies (about 260 MB) are about 780 MB live, so a 2 GiB heap and a 3200Mi limit. A
+replica that cannot reach those bounds needs less: the settings below size the heap from what it holds.
 
 A request of a tenant whose entry is held reads nothing from Redis. A tenant beyond the bounds is read again on its
 next request: a tenant document from Redis and compiled again (about 55 µs of CPU), a tenant without one from Redis

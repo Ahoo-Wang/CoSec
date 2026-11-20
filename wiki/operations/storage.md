@@ -326,8 +326,8 @@ sequenceDiagram
   4,096 above it, plus the documents being loaded; past that, the thread that loaded a document evicts up to 64 of that
   kind before it answers the request, which takes the family back within that, and housekeeping evicts the rest
   (`SNP-14`). Either eviction scans what the family holds of the kind it evicts, about a millisecond per 50,000 entries;
-  the thread that loaded the document pays one scan and a few dozen removals, about 2 ms at the default bounds, never a
-  whole pass back to the bound. Absent entries are scanned apart from the documents.
+  the thread that loaded the document pays one scan and a few dozen removals, about 2 to 3.6 ms at the default bounds,
+  never a whole pass back to the bound (4 to 9 ms, or 21 to 33 ms before the code is compiled). Absent entries are scanned apart from the documents.
 - **Revisions only move as Redis says.** After a Redis failover, Redis may answer an older revision than the one
   installed, because replication is asynchronous. The instance installs what Redis holds, since every other instance
   reads the same, and logs `Snapshot document [<doc>] regressed from revision <a> to <b>; ...` at `ERROR`. Publish the

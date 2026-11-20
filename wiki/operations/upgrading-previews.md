@@ -185,7 +185,8 @@ Which preview of the library may run behind which preview of the gateway image: 
   - With every place used, the tenant entries take about 520 MB of heap at 30 KB a tenant document of 5 roles of
     20 permissions and 20 bindings. Check your heap against
     [Sizing a SaaS gateway](./deployment.md#sizing-a-saas-gateway), or set the two properties back. The production
-    overlay of `k8s/` now gives a gateway a 1.5 GiB heap and a 2560Mi limit, where it gave 1 GiB and 2Gi.
+    overlay of `k8s/` now gives a gateway a 2 GiB heap and a 3200Mi limit, where it gave 1 GiB and 2Gi: room for every
+    snapshot and revocation default at its bound.
   - `cosec.authorization.snapshot.reload-concurrency` is new, and a revalidation pass reads 16 documents at a time, not 4.
     The reads per interval are unchanged; a pass ends four times sooner, in a burst four times denser.
   - An install that takes its family over the cap evicts at most 64 entries of that kind on its own thread, and
