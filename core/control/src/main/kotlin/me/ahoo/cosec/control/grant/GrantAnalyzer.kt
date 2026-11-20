@@ -78,13 +78,14 @@ class GrantAnalyzer(zones: ZoneResolver = ZoneResolver.FIXED, limits: ConditionL
         change: GrantChange,
         trustRoot: Boolean = false
     ): GrantAnalysis {
-        val fragments = fragments(snapshot, change)
+        val budget = ComparisonBudget()
+        val fragments = fragmenter.fragments(snapshot, change, budget)
         val unprotect = entries.unprotect(snapshot.tenant(change.tenant), change.candidate)
         if (trustRoot) {
-            return GrantAnalysis(fragments.map { it to GrantVerdict.TrustRoot }, unprotect)
+            return GrantAnalysis(fragments.map { it to GrantVerdict.TrustRoot }, unprotect, budget.spent)
         }
         val rights = GrantorRights.of(grantor, snapshot)
-        return GrantAnalysis(fragments.map { it to verdict(grantor, rights, it) }, unprotect)
+        return GrantAnalysis(fragments.map { it to verdicts.verdict(grantor, rights, it, budget) }, unprotect, budget.spent)
     }
 
     /**

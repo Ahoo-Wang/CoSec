@@ -36,8 +36,14 @@ import me.ahoo.cosec.model.decision.StatementRef
 /** The verdict for each fragment (§7.4.3): whether one single ALLOW of the grantor contains it, or what stopped the search. */
 internal class GrantVerdicts(private val checker: ConditionChecker, private val equality: GrantEquality) {
     /** The verdict for one fragment (§7.4.3, the loop body). */
-    fun verdict(grantor: Grantor, rights: GrantorRights, fragment: GrantFragment): GrantVerdict {
+    fun verdict(
+        grantor: Grantor,
+        rights: GrantorRights,
+        fragment: GrantFragment,
+        budget: ComparisonBudget = ComparisonBudget(),
+    ): GrantVerdict {
         undecidable(grantor, fragment)?.let { return it }
+        if (budget.exhausted) return tooLarge()
         val tenant = fragment.tenant
         val granted = fragment.condition?.let { condition ->
             when (val folded = Specialization(checker, tenantConstants(tenant)).fold(condition)) {
@@ -51,8 +57,9 @@ internal class GrantVerdicts(private val checker: ConditionChecker, private val 
         }
         val scope = refine(fragment.scope, granted)
         unreached(rights, scope)?.let { return it }
-        val by = when (val found = holder(grantor, rights, fragment, scope, granted)) {
+        val by = when (val found = holder(grantor, rights, fragment, scope, granted, budget)) {
             null -> return notCovered(Shortfall.NO_ALLOW, "the grantor holds no ALLOW", null)
+            Search.Exhausted -> return tooLarge()
             is Search.Missed -> return notCovered(
                 found.shortfall,
                 "closest: ${describe(found.held.ref)}",
@@ -61,8 +68,10 @@ internal class GrantVerdicts(private val checker: ConditionChecker, private val 
             is Search.Found -> found.held
         }
         // A DENY the index leaves out is disjoint from the fragment by its actions, as `disjoint` would find.
-        val deny = rights.deniesFor(fragment.action)
-            .firstOrNull { it.applicability.intersects(scope) && !disjoint(it.statement, fragment) }
+        val deny = rights.deniesFor(fragment.action).firstOrNull {
+            if (!budget.spend()) return tooLarge()
+            it.applicability.intersects(scope) && !disjoint(it.statement, fragment)
+        }
         if (deny != null) {
             return unknown(UnknownReason.DENY_OVERLAP, null, "may overlap ${describe(deny.ref)}", deny.ref)
         }
@@ -106,6 +115,9 @@ internal class GrantVerdicts(private val checker: ConditionChecker, private val 
         class Found(val held: HeldStatement) : Search
 
         class Missed(val shortfall: Shortfall, val held: HeldStatement) : Search
+
+        /** The budget ran out before the search did: nothing it did not reach is known (CTL-49). */
+        object Exhausted : Search
     }
 
     /** The first ALLOW that contains [fragment] in [scope] (§7.4.3, "only one H"). */
@@ -115,14 +127,17 @@ internal class GrantVerdicts(private val checker: ConditionChecker, private val 
         fragment: GrantFragment,
         scope: ScopeSet,
         granted: CheckedCondition?,
+        budget: ComparisonBudget,
     ): Search? {
-        val indexed = search(grantor, rights.allowsFor(fragment.action), fragment, scope, granted)
+        val indexed = search(grantor, rights.allowsFor(fragment.action), fragment, scope, granted, budget)
         // An ALLOW the index leaves out stops at SCOPE or ACTION: only when nothing it gave got further can the
         // closest be one of those, and then every ALLOW is walked as before, so the answer is the same (R2C-26).
-        if (indexed is Search.Found || (indexed is Search.Missed && indexed.shortfall > Shortfall.ACTION)) {
+        if (indexed is Search.Found || indexed is Search.Exhausted ||
+            (indexed is Search.Missed && indexed.shortfall > Shortfall.ACTION)
+        ) {
             return indexed
         }
-        return search(grantor, rights.allows, fragment, scope, granted)
+        return search(grantor, rights.allows, fragment, scope, granted, budget)
     }
 
     /** The first of [allows] that contains [fragment] in [scope], else the one that got furthest. */
@@ -132,9 +147,11 @@ internal class GrantVerdicts(private val checker: ConditionChecker, private val 
         fragment: GrantFragment,
         scope: ScopeSet,
         granted: CheckedCondition?,
+        budget: ComparisonBudget,
     ): Search? {
         var closest: Search.Missed? = null
         for (held in allows) {
+            if (!budget.spend()) return Search.Exhausted
             val shortfall = when {
                 !scope.coveredBy(held.applicability) -> Shortfall.SCOPE
                 held.statement.actions.none { PatternContainment.contains(it, fragment.action) == Containment.YES } ->
@@ -191,6 +208,13 @@ internal class GrantVerdicts(private val checker: ConditionChecker, private val 
     private fun disjoint(deny: GrantStatement, fragment: GrantFragment): Boolean =
         deny.actions.all { PatternContainment.disjoint(it, fragment.action) } ||
             deny.resources.all { PatternContainment.disjoint(it, fragment.resource) }
+
+    private fun tooLarge() = unknown(
+        UnknownReason.TOO_LARGE,
+        null,
+        "the analysis made its ${ComparisonBudget.MAX_COMPARISONS} comparisons before it reached this one: split the change",
+        null,
+    )
 
     private fun notCovered(shortfall: Shortfall, detail: String, closest: StatementRef.Policy?) =
         unknown(UnknownReason.NOT_COVERED, shortfall, detail, closest)

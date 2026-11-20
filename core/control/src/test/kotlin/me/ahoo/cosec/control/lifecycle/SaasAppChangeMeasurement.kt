@@ -440,4 +440,64 @@ class SaasAppChangeMeasurement {
         }
         return rows
     }
+
+    // ---- CTL-49: the budget, sized from the largest legitimate changes after the indexes ----
+
+    private fun everyPermission(prefix: String) = APPS.map { app ->
+        RoleDefinition(RoleId("$prefix-${app.value}"), RolePermissions.Listed((0 until 100).map { "p$it" }), app = app)
+    }
+
+    @Test
+    fun largestLegitimate() {
+        println("### CTL-49: comparisons of the largest legitimate changes, and the CPU of an analysis that spends the budget\n")
+        println("| change | fragments | comparisons | CPU | verdicts |")
+        println("|---|---|---|---|---|")
+        val apps = APPS.associateWith { app(it) as PolicyDocument? }
+        // A tenant administrator holding a role of every permission of every app grants a role of each to staff.
+        val holder = Grantor(
+            acme, PrincipalId("alice"),
+            Memberships(Memberships.Source.CLAIMS, mapOf(SpaceId.DEFAULT to APPS.map { RoleId("admin-${it.value}") }.toSet()), emptyList()),
+            emptyMap(), true,
+        )
+        val base = PolicyDocument(DocumentKind.TENANT, acme.value, 1, NOW, emptyList(), emptyList(), roles = everyPermission("admin"))
+        val candidate = PolicyDocument(DocumentKind.TENANT, acme.value, 1, NOW, emptyList(), emptyList(), roles = everyPermission("admin") + everyPermission("staff"))
+        val snapshot = GrantDocuments.snapshot(null, apps, mapOf(acme to base), NOW.toEpochMilli(), Dimension.Only(emptySet()))
+        repeat(2) { round ->
+            var analysis: me.ahoo.cosec.control.grant.GrantAnalysis? = null
+            val ms = cpuMs { analysis = analyzer.analyze(holder, snapshot, GrantChange(acme, GrantDocuments.of(candidate))) }
+            if (round == 1) {
+                println("| tenant: 12 roles × 100 permissions granted by a holder of the same | ${analysis!!.verdicts.size} | ${analysis!!.comparisons} | $ms ms | " +
+                    "${analysis!!.verdicts.groupingBy { it.second::class.simpleName }.eachCount()} |")
+            }
+        }
+        // An app change of 100 permissions: each widened, as the referring-bindings analysis reads it.
+        val before = GrantDocuments.of(app(AppId("a0")))
+        val widenedApp = PolicyDocument(
+            DocumentKind.APP, "a0", 1, NOW, emptyList(), emptyList(),
+            Catalog(listOf(CatalogGroup("all", permissions = (0 until 100).map { CatalogPermission("p$it", actions = listOf("a0:op$it", "a0:op$it-export")) }))),
+            roles = app(AppId("a0")).roles,
+        )
+        val budget = me.ahoo.cosec.control.grant.ComparisonBudget()
+        val equality = GrantEquality(ConditionChecker())
+        val fragmenter = me.ahoo.cosec.control.grant.GrantFragmenter(me.ahoo.cosec.control.grant.GrantNarrowing(ConditionChecker(), equality), equality)
+        val widened = fragmenter.widened(before, GrantDocuments.of(widenedApp), budget)
+        println("| app: 100 permissions widened | ${widened.size} policies | ${budget.spent} | | |")
+        // The dearest comparisons: a holder of 20,000 ALLOWs of one action, 2,000 fragments it does not cover.
+        val held = PolicyDefinition(PolicyId("held"), false, null, (0 until 20_000).map {
+            StatementSource("h$it", Effect.ALLOW, listOf("svc:*"), listOf(ResourceSource("res/$it/**")))
+        })
+        val granted = PolicyDefinition(PolicyId("granted"), false, null, (0 until 2_000).map {
+            StatementSource("g$it", Effect.ALLOW, listOf("svc:read"), listOf(ResourceSource("other/$it")))
+        })
+        val worstBase = tenantDocument(listOf(held), listOf(bound("admin", "admin", "held")))
+        val worst = tenantDocument(listOf(held, granted), worstBase.bindings + bound("granted", "member", "granted"))
+        repeat(2) { round ->
+            var analysis: me.ahoo.cosec.control.grant.GrantAnalysis? = null
+            val ms = cpuMs { analysis = analyzer.analyze(admin, snapshot(worstBase), GrantChange(acme, GrantDocuments.of(worst))) }
+            if (round == 1) {
+                println("| worst: 2,000 fragments against 20,000 held ALLOWs of one action | ${analysis!!.verdicts.size} | ${analysis!!.comparisons} | $ms ms | " +
+                    "${analysis!!.verdicts.groupingBy { (it.second as? me.ahoo.cosec.control.grant.GrantVerdict.Unknown)?.reason?.name ?: it.second::class.simpleName }.eachCount()} |")
+            }
+        }
+    }
 }

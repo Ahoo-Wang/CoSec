@@ -31,7 +31,11 @@ internal class GrantFragmenter(private val narrowing: GrantNarrowing, private va
      * Removing one of the tenant's own policies grants too when another document defines its id (RC1-9): the
      * bindings and attachments that named the tenant's now name that one, which nobody analyzed for them.
      */
-    fun fragments(snapshot: GrantSnapshot, change: GrantChange): List<GrantFragment> {
+    fun fragments(
+        snapshot: GrantSnapshot,
+        change: GrantChange,
+        budget: ComparisonBudget = ComparisonBudget(),
+    ): List<GrantFragment> {
         val before = snapshot.tenant(change.tenant)
         val after = change.candidate
         val fragments = ArrayList<GrantFragment>()
@@ -60,7 +64,8 @@ internal class GrantFragmenter(private val narrowing: GrantNarrowing, private va
                 policy,
                 bound[policy.id].orEmpty(),
                 changedSet,
-                fragments
+                fragments,
+                budget,
             )
         }
         return fragments
@@ -107,8 +112,12 @@ internal class GrantFragmenter(private val narrowing: GrantNarrowing, private va
      * The ALLOWs of each policy of [after] that are new or widen what it had in [before] (§7.4.1, §7.4.4): what every
      * binding of that policy is granted anew, wherever it is. A policy that only narrows is not listed.
      */
-    fun widened(before: GrantDocument, after: GrantDocument): Map<PolicyId, List<Int>> =
-        after.policies.associate { it.id to granted(before.policy(it.id), it) }.filterValues { it.isNotEmpty() }
+    fun widened(
+        before: GrantDocument,
+        after: GrantDocument,
+        budget: ComparisonBudget = ComparisonBudget(),
+    ): Map<PolicyId, List<Int>> =
+        after.policies.associate { it.id to granted(before.policy(it.id), it, budget) }.filterValues { it.isNotEmpty() }
 
     /**
      * The indexes of the ALLOWs of [policy] that narrow none of [previous]'s: none when [policy] is [previous] again
@@ -128,7 +137,7 @@ internal class GrantFragmenter(private val narrowing: GrantNarrowing, private va
      *   documents hold changes what the grantor holds (the verdicts), never what a tenant's unchanged policy grants.
      *   A tenant policy removed while another document defines its id is [reresolved], not this.
      */
-    private fun granted(previous: GrantPolicy?, policy: GrantPolicy): List<Int> {
+    private fun granted(previous: GrantPolicy?, policy: GrantPolicy, budget: ComparisonBudget): List<Int> {
         if (previous != null && equality.samePolicy(previous, policy)) {
             return emptyList()
         }
@@ -136,7 +145,7 @@ internal class GrantFragmenter(private val narrowing: GrantNarrowing, private va
         return policy.statements.indices.filter {
             val statement = policy.statements[it]
             statement.effect == Effect.ALLOW &&
-                (previous == null || !narrowing.narrowsAny(policy, statement, previous, twins))
+                (previous == null || !narrowing.narrowsAny(policy, statement, previous, twins, budget))
         }
     }
 
@@ -153,8 +162,9 @@ internal class GrantFragmenter(private val narrowing: GrantNarrowing, private va
         boundTo: List<Binding>,
         changed: Set<Binding>,
         into: MutableList<GrantFragment>,
+        budget: ComparisonBudget,
     ) {
-        val granted = granted(previous, policy)
+        val granted = granted(previous, policy, budget)
         val bound = boundTo.filter { binding ->
             binding !in changed && binding.expiresAt.let { it == null || snapshot.now < it }
         }
