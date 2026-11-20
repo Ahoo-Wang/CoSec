@@ -23,6 +23,7 @@ import me.ahoo.cosec.control.api.ControlResponseJson.entries
 import me.ahoo.cosec.control.authz.Operator
 import me.ahoo.cosec.control.change.ChangeRejectedException
 import me.ahoo.cosec.control.change.InvalidControlRequestException
+import me.ahoo.cosec.control.store.ControlStoreException
 import me.ahoo.cosec.document.json.CoSecJson
 import me.ahoo.cosec.runtime.http.ProblemType
 import me.ahoo.cosec.runtime.http.RequestSecurity
@@ -90,6 +91,13 @@ class ControlHttp(plane: ControlPlane) {
                 }
             }
             problem(problem, requestId, e.message)
+        } catch (e: ControlStoreException) {
+            // The store did not answer (R2C-6, CTL-52): an outage, retried by the client, not a bug.
+            log.warn {
+                "Control API ${request.method} ${request.path} (request $requestId) is 503: " +
+                    SnapshotKeyText.printable(e.message.orEmpty())
+            }
+            problem(Problem.UNAVAILABLE, requestId, null)
         } catch (e: InvalidControlRequestException) {
             problem(Problem.INVALID_REQUEST, requestId, e.message)
         } catch (e: SnapshotFormatException) {

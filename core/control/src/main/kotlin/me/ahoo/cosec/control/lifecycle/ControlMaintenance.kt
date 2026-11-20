@@ -123,7 +123,11 @@ class ControlMaintenance(
      * Each pass then reconciles the staged list with what is staged ([StagedListReconciliation]).
      */
     suspend fun closeShadowWindows(): List<ChangeRequest> {
-        if (!store.acquireLease(SHADOW_LEASE, holder, shadowInterval.multipliedBy(2))) {
+        // A store that cannot answer is logged and the pass does nothing (CTL-52), as every other read of it here.
+        val leased = attempt("take the shadow lease") {
+            store.acquireLease(SHADOW_LEASE, holder, shadowInterval.multipliedBy(2))
+        }
+        if (leased != true) {
             return emptyList()
         }
         try {
