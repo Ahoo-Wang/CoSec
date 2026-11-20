@@ -57,7 +57,7 @@ import java.util.IdentityHashMap
  * cache, so each condition runs at most once), the role sets and address a condition reads, and on error paths. It is
  * the [CandidateVisitor] of its own enumeration, the [ConditionInput] of every condition and the [IndexLookup] of every
  * index, so none of those allocate. [TracingEvaluator] overrides only [candidate], the step per candidate, so no
- * trace code sits in the untraced one (see `Evaluator` for why).
+ * trace code sits in the untraced one: a trace check per candidate would be paid by every request that asks for none.
  *
  * The state and the algorithm stay here, so that deny-first (`ALG-1`) and the boundary's rule (P-B2) are reviewed in
  * one place; the rest are extension functions in the `Evaluator*.kt` files (RFC 0013 §6), static calls that add no

@@ -24,6 +24,22 @@ description: "每个 8.0 预览版（alpha 与 beta）到下一个之间的变�
 
 ## 从 8.0.0-beta.4 升级 {#from-8-0-0-beta-4}
 
+- **核心模块的公共形状在 RC 之前定下**（第二轮评审，`R2A-1` 至 `R2A-7`）。受影响的是针对 `cosec-model`、`cosec-spi`、`cosec-api` 或引擎编译的代码；
+  文档、属性、已存储的值和线上格式都不变。
+  - 决策值是写明 `equals`、`hashCode` 和 `toString` 的普通 final 类，不再是 data class：`Decision.Permit`、`Deny`、`Indeterminate`、
+    `Obligation.RateLimit`、`ViewVersion`（在 `cosec-engine`）以及除 `NotLoaded` 之外的每个 `Cause` 都没有 `copy` 和 `componentN`，
+    以后加字段不会破坏调用方。读属性（`decision.by`、`cause.error`），不要解构决策。
+  - `me.ahoo.cosec.spi.ratelimit.RateLimit` 和 `RateLimiter.window` 已删除。`RateLimitSpec` 有 `limitPerWindow` 和 `windowMillis`，
+    `limit.resultOf(allowed, estimate, nowMillis)`（导入 `me.ahoo.cosec.spi.ratelimit.resultOf`）构造 `RateLimitResult`：
+    你自己的 `RateLimiter` 里，用 `limit` 取代 `RateLimiter.window(limit)`。
+  - `AuthnResult.Authenticated(principal, method)` 的 `method` 是 `Identity.Method`，不再是字符串：`Identity.Method.API_KEY`，
+    或自己凭证的 `Identity.Method("ldap")`，任何非空名称。审计记录和 `CoSec-Identity` 中 CoSec 自己的方法取值不变（`jwt`、`api-key`）。
+  - `AuditEvent.kind` 是 `AuditEventKind` 枚举，取值仍是原来的五个；sink 或 Kafka 消费者读到的 JSON 字节不变。要知道请求为何如此结束，读
+    `authorization.reasonCode`（`decision` 是它较粗的分组，对应关系写在 `AuditDecision` 的 KDoc 中）；`binding` 是给人看的标签，
+    类型化的事实是 `authorization.source.via` 和 `document`。
+  - `SnapshotDocumentStore` 标为 `@ExperimentalCoSecApi`：它的形状跟随唯一的后端 `cosec-cocache`，批量或整库的条件读已在计划中。
+    你自己的实现需要选择加入，并可能在次版本中修改。
+  - `Resource.attributes` 默认为空 map：目前没有任何地方设置它（`DOC-10`）。
 - **反向引用和文档列表是集合：运行一次 `cosec-migrate repair-references`**（`CTL-42`、`CTL-43`、`CTL-44`、`MIG-4`）。受影响的是 8.0.0-beta.4 或更早版本的控制面写过的每个存储。数据面实例不受影响：它们不读这些 key。
   - 一个策略的反向引用（`<s>:control:refs:<doc>:<policyId>`）原来是一个值，每个加入或退出的租户都整体重写它；现在它是一个集合，每个引用者的每个修订一个成员，文档列表也从 `<s>:control:list:documents` 移到了集合 `<s>:control:documents:all`。租户的一次发布现在只写它自己的成员，无论有多少租户（[存储](./storage.md#redis-keys)）。
   - 停掉所有更早版本的控制面，然后运行一次 `cosec-migrate repair-references --to-redis <uri> [--cluster] [--key-prefix <p>]`；本版本的控制面可以同时运行。它转换头触及的每个反向引用值，从不替换集合，最后删除旧的文档列表，并输出 `The store is in the format of 8.0.0-beta.5.`。再运行一次不会改变任何东西（[修复反向引用索引](./upgrading.md#repair-the-back-reference-index)，那里给出了它的开销：50,000 个租户约 130 万条命令，往返 1 ms 时约 22 分钟）。

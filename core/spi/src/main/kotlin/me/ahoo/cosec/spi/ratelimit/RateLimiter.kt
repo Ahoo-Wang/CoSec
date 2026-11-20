@@ -26,9 +26,4 @@ import me.ahoo.cosec.model.decision.RateLimitSpec
 fun interface RateLimiter {
     /** Acquires one permit of [limit] from [bucket] of rule [ruleId]. */
     suspend fun tryAcquire(ruleId: String, bucket: String, limit: RateLimitSpec): RateLimitResult
-
-    companion object {
-        /** [limit] as the sliding window takes it; both limiters build their window here, so they answer alike. */
-        fun window(limit: RateLimitSpec): RateLimit = RateLimit(limit.permitsPerSecond, limit.windowSeconds)
-    }
 }

@@ -90,7 +90,7 @@ object PermittedRequest {
     /** The request [principal] made, as the pipeline let it through. */
     fun of(principal: AuthenticatedPrincipal): SecurityContext {
         val pipeline = Pipeline.builder(
-            Authenticator { AuthnResult.Authenticated(principal, "test") },
+            Authenticator { AuthnResult.Authenticated(principal, Identity.Method("test")) },
             SuspendingSnapshotSource(EMPTY),
         ).engine(PERMITTING).build()
         val outcome = runBlocking { pipeline.evaluate(FACTS) }

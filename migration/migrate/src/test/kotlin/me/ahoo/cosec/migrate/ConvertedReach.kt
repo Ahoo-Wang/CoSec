@@ -144,7 +144,7 @@ class ConvertedReach(documents: Map<SnapshotKey, PolicyDocument>) {
                 app = app,
             )
             val host = Pipeline.builder(
-                Authenticator { AuthnResult.Authenticated(principal, "test") },
+                Authenticator { AuthnResult.Authenticated(principal, Identity.Method("test")) },
                 SuspendingSnapshotSource(Views(emptyMap())),
             ).engine(PERMITTING).build()
             val outcome = runBlocking { host.evaluate(CONTROL_API) }

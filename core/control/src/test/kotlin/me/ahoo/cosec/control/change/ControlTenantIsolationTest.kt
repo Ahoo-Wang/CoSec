@@ -58,6 +58,7 @@ import me.ahoo.cosec.runtime.snapshot.ViewKey
 import me.ahoo.cosec.spi.authn.AuthenticatedPrincipal
 import me.ahoo.cosec.spi.authn.Authenticator
 import me.ahoo.cosec.spi.authn.AuthnResult
+import me.ahoo.cosec.spi.identity.Identity
 import me.ahoo.cosec.spi.membership.MembershipClaims
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.cosec.spi.token.RevocationReader
@@ -246,7 +247,7 @@ class ControlTenantIsolationTest {
                         MembershipClaims.parse(listOf("editor"), listOf("p0", "p1")),
                         app = PipelineControlAuthorizer.CONTROL_APP,
                     ),
-                    "token"
+                    Identity.Method("token")
                 )
             },
             SuspendingSnapshotSource(HeadViews()),

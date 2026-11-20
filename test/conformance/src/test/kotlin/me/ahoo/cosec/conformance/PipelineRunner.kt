@@ -87,6 +87,7 @@ import me.ahoo.cosec.spi.authn.Authenticator
 import me.ahoo.cosec.spi.authn.AuthnResult
 import me.ahoo.cosec.spi.authn.Credentials
 import me.ahoo.cosec.spi.id.IdGenerator
+import me.ahoo.cosec.spi.identity.Identity
 import me.ahoo.cosec.spi.membership.InMemoryMembershipProvider
 import me.ahoo.cosec.spi.membership.MembershipClaims
 import me.ahoo.cosec.spi.membership.MembershipProvider
@@ -553,7 +554,7 @@ class PipelineRunner(private val compiler: SnapshotCompiler = DocumentSnapshotCo
             memberships,
             app = node.get("app")?.text()?.let(::AppId),
         )
-        return AuthnResult.Authenticated(principal, "scenario")
+        return AuthnResult.Authenticated(principal, Identity.Method("scenario"))
     }
 
     /** The scenario's API keys, by the hash of their `key`; `apiKeysFail` makes every lookup throw. */

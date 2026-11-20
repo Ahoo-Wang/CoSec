@@ -68,7 +68,7 @@ class IdentityForwardingTest {
             app = null,
             session = null,
         ),
-        "token",
+        Identity.Method("token"),
     )
 
     private fun facts(attributes: Map<String, String> = emptyMap()) = HttpFacts(
@@ -159,7 +159,7 @@ class IdentityForwardingTest {
                 app = null,
                 session = session,
             ),
-            "token",
+            Identity.Method("token"),
         )
         val header = evaluate(signedIn).forward.getValue(IdentityCodec.HEADER)!!
         IdentityCodec.decode(header).credential.session.assert().isEqualTo(session)
@@ -277,7 +277,7 @@ class IdentityForwardingTest {
                 app = null,
                 session = null,
             ),
-            "token",
+            Identity.Method("token"),
         )
         val outcome = evaluate(unnamed)
         outcome.status.assert().isEqualTo(500)
@@ -330,7 +330,7 @@ class IdentityForwardingTest {
                 app = null,
                 session = null,
             ),
-            "custom",
+            Identity.Method("custom"),
         )
         val issuer = IdentityIssuer(setOf("amount"), clock = Clock.fixed(now, ZoneOffset.UTC))
         for ((amount, forwarded) in listOf(1.25f to 1.25, java.math.BigDecimal("1.25") to 1.25, 7.toShort() to 7L)) {
@@ -360,7 +360,7 @@ class IdentityForwardingTest {
                 app = null,
                 session = null,
             ),
-            ApiKeyAuthenticator.METHOD,
+            Identity.Method(ApiKeyAuthenticator.METHOD),
         )
         val outcome = evaluate(forever)
         outcome.status.assert().isEqualTo(500)
