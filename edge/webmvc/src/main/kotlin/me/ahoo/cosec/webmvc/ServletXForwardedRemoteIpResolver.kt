@@ -18,12 +18,14 @@ package me.ahoo.cosec.webmvc
 import jakarta.servlet.http.HttpServletRequest
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.runtime.http.XForwardedRemoteIpResolver
+import java.util.Collections
 
 /** [XForwardedRemoteIpResolver] over the host's requests: the peer is [ServletRemoteIpResolver]. */
 @InternalCoSecApi
 class ServletXForwardedRemoteIpResolver(maxTrustedIndex: Int = 1, peerIsConnection: Boolean = true) :
     XForwardedRemoteIpResolver<HttpServletRequest>(ServletRemoteIpResolver, maxTrustedIndex, peerIsConnection) {
     override fun extractXForwardedHeaderValues(request: HttpServletRequest): List<String>? {
-        return request.getHeaders(X_FORWARDED_FOR)?.toList()
+        val lines = request.getHeaders(X_FORWARDED_FOR) ?: return null
+        return if (lines.hasMoreElements()) Collections.list(lines) else null
     }
 }

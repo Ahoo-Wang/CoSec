@@ -78,6 +78,25 @@ interface Headers {
                 override fun values(name: String): List<String> = folded[HttpNames.fold(name)].orEmpty()
             }
         }
+
+        /**
+         * Headers read from the host's own headers on each lookup, with no copy (R2B-8): [lookup] answers every value
+         * of one name, matched case-insensitively by the host, null or empty when absent; [names] lists the names, for
+         * [freeze]. Hosts match names with an ASCII fold, as the documents do ([HttpNames]); Spring's own writable
+         * headers fold with an English locale, which agrees with it for the token names every server CoSec runs on
+         * admits. The adapter's to make, and only over headers nothing writes until the request is decided.
+         */
+        @InternalCoSecApi
+        fun view(lookup: (String) -> List<String>?, names: () -> Iterable<String>): Headers = HostHeaders(lookup, names)
+
+        /**
+         * Copies [headers] now when it is a [view], so what reads it after the request (a shadow listener's replay)
+         * never goes back to the host, whose request may be recycled by then; nothing to do for a copy.
+         */
+        @InternalCoSecApi
+        fun freeze(headers: Headers) {
+            (headers as? HostHeaders)?.freeze()
+        }
     }
 }
 
@@ -96,5 +115,31 @@ interface Cookies {
                 override fun values(name: String): List<String> = copy[name].orEmpty()
             }
         }
+
+        /**
+         * Cookies read from the host's on each lookup, with no copy (R2B-8): [lookup] answers every value of one name,
+         * null or empty when absent. The host parses its cookies when first asked, so a request no cookie is read from
+         * parses none. Read only while the request is decided: nothing that outlives it reads cookies.
+         */
+        @InternalCoSecApi
+        fun view(lookup: (String) -> List<String>?): Cookies = object : Cookies {
+            override fun values(name: String): List<String> = lookup(name).orEmpty()
+        }
+
+        /**
+         * A cookie value as the documents read it, whatever the server: without the double quotes that wrap it
+         * (RFC 6265 §4.1.1 lets them wrap a value). Tomcat keeps them, Jetty and Reactor Netty drop them; the gateway's
+         * credential stripping reads them as Reactor Netty does (R2B-25).
+         */
+        @InternalCoSecApi
+        fun unquoted(value: String): String =
+            if (value.length >= 2 && value[0] == '"' && value[value.length - 1] == '"') {
+                value.substring(
+                    1,
+                    value.length - 1
+                )
+            } else {
+                value
+            }
     }
 }

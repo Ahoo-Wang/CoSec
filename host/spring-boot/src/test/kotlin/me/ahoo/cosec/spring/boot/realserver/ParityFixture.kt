@@ -52,6 +52,8 @@ import java.util.concurrent.CompletableFuture
 internal class ParityFixture(
     private val ids: IdGenerator = IdGenerator { REQUEST_ID },
     private val listeners: DecisionListeners = DecisionListeners(emptyList()),
+    /** Whether a token is read from the `authorization` cookie too (`cosec.authorization.cookie-token`). */
+    private val cookieTokens: Boolean = false,
 ) : AutoCloseable {
     private val platform: CompiledDocument = compile(
         SnapshotKey.Platform,
@@ -124,6 +126,7 @@ internal class ParityFixture(
         .ids(ids)
         .rateLimiter(rateLimiter)
         .listeners(listeners)
+        .options { allowCookieToken = cookieTokens }
         .build()
 
     /** What [stack]'s adapter calls: the pipeline, on every stack. */

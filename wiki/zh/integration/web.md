@@ -70,6 +70,14 @@ sequenceDiagram
 
 为什么只有一条决策路径，见[架构概览](../architecture/overview.md)。
 
+**无论哪种服务器，每个适配器都这样读取。** Tomcat、Jetty 和 Reactor Netty（servlet 或 reactive）在少数地方交出的请求不同；适配器在所有这些服务器上都以同样的方式读取（`RealServerFactsParityTest`）：
+
+- 一个请求头发送多次、无论大小写如何，就是它发送时的每个值，按顺序，各一次。
+- 被双引号包住的 Cookie 值读作去掉引号的值（`q="v"` 即 `v`）：Tomcat 保留引号，其他服务器去掉。`authorization` Cookie 中的令牌两种写法读起来都一样。
+- 后面什么都没有的 `?` 不算查询串，与没有 `?` 一样。
+
+请求头和 Cookie 在管道需要时从服务器自己的请求中读取，而不是先复制一份。在响应之后读取它们的（影子监听器的重放）读取的是请求被决策时做好的副本：servlet 容器在响应写完后可能复用它的请求对象。
+
 ## 请求路径 {#the-request-path}
 
 CoSec 授权的路径是应用内的请求路径：

@@ -104,6 +104,19 @@ sequenceDiagram
 
 Why there is exactly one decision path is in [Architecture overview](../architecture/overview.md).
 
+**What every adapter reads alike, whatever the server.** Tomcat, Jetty and Reactor Netty, servlet or reactive, hand a
+request over differently in a few places; the adapters read it the same way on all of them
+(`RealServerFactsParityTest`):
+
+- A header sent more than once, in any letter case, is every value it was sent with, in order, once each.
+- A cookie value wrapped in double quotes is read without them (`q="v"` is `v`): Tomcat keeps the quotes, the others
+  drop them. A token in the `authorization` cookie reads the same either way.
+- A `?` with nothing after it is no query, as no `?` is.
+
+Headers and cookies are read from the server's own request when the pipeline asks, not copied first. What reads them
+after the response (a shadow listener's replay) reads a copy made while the request was decided: a servlet container
+may reuse its request object once the response is written.
+
 ## The request path
 
 The path CoSec authorizes is the request path within the application:
