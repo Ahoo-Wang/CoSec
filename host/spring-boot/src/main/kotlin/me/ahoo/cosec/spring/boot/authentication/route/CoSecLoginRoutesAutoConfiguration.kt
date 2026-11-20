@@ -43,6 +43,7 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplicat
 import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
+import org.springframework.core.env.Environment
 import org.springframework.web.reactive.function.server.RouterFunction as ReactiveRouterFunction
 import org.springframework.web.reactive.function.server.ServerResponse as ReactiveServerResponse
 import org.springframework.web.servlet.function.RouterFunction as ServletRouterFunction
@@ -59,6 +60,9 @@ import org.springframework.web.servlet.function.ServerResponse as ServletServerR
  * included, else with the starter's, built over the application's `MembershipRefresh<RefreshTokenCredentials>` bean
  * when there is one (`IDN-25`). The route presents [RefreshTokenCredentials]: an application refresh authentication
  * over a credentials class of its own cannot serve it, and fails startup rather than be left out of the route.
+ *
+ * With no `MembershipRefresh` bean the starter's refresh keeps the roles of the token it replaces, and only when the
+ * operator states it (`cosec.jwt.session.refresh-roles=keep-token-roles`): otherwise startup fails (`STA-8`).
  */
 @AutoConfiguration(after = [CoSecJwtAutoConfiguration::class])
 @ConditionalOnCoSecEnabled
@@ -68,10 +72,11 @@ import org.springframework.web.servlet.function.ServerResponse as ServletServerR
 @EnableConfigurationProperties(LoginProperties::class)
 internal class CoSecLoginRoutesAutoConfiguration {
     /** The refresh the route serves when the application declares none of its own. */
-    @Bean
+    @Bean(REFRESH_AUTHENTICATION_BEAN)
     @ConditionalOnProperty(LoginProperties.REFRESH_PATH_KEY)
     @ConditionalOnMissingBean(RefreshTokenAuthentication::class)
     fun cosecRefreshTokenAuthentication(
+        environment: Environment,
         verifier: TokenVerifier,
         revocation: TokenRevocation,
         families: TokenFamilies,
@@ -80,7 +85,7 @@ internal class CoSecLoginRoutesAutoConfiguration {
         verifier,
         revocation,
         families,
-        membership.getIfAvailable { MembershipRefresh.CLAIMS }
+        RefreshMembershipChoice.membershipOf(environment, membership.getIfAvailable())
     )
 
     @Bean
@@ -145,6 +150,9 @@ internal class CoSecLoginRoutesAutoConfiguration {
     }
 
     internal companion object {
+        /** The starter's own refresh, which [LoginRoutesCheck] holds to a choice of memberships (`STA-8`). */
+        const val REFRESH_AUTHENTICATION_BEAN = "cosecRefreshTokenAuthentication"
+
         /** The property of each served route, by its path. */
         fun routesOf(properties: LoginProperties): Map<String, String> = buildMap {
             properties.refresh.path?.let { put(it, LoginProperties.REFRESH_PATH_KEY) }

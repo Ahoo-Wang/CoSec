@@ -18,13 +18,17 @@ package me.ahoo.cosec.spring.boot.authentication.route
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.login.route.LogoutRoute
 import me.ahoo.cosec.login.route.RefreshRoute
+import me.ahoo.cosec.login.token.MembershipRefresh
+import me.ahoo.cosec.login.token.RefreshTokenCredentials
 import me.ahoo.cosec.runtime.http.PathNormalizer
 import me.ahoo.cosec.spring.boot.authentication.ConditionalOnLoginEnabled
 import me.ahoo.cosec.spring.boot.authentication.LoginProperties
 import me.ahoo.cosec.spring.boot.jwt.ConditionalOnJwtEnabled
+import me.ahoo.cosec.spring.boot.jwt.JwtProperties
 import me.ahoo.cosec.spring.boot.pipeline.GATEWAY_GLOBAL_FILTER
 import org.springframework.boot.web.context.reactive.ReactiveWebApplicationContext
 import org.springframework.context.ApplicationContext
+import org.springframework.core.ResolvableType
 import org.springframework.util.ClassUtils
 import org.springframework.web.context.WebApplicationContext
 
@@ -34,6 +38,10 @@ import org.springframework.web.context.WebApplicationContext
  * that issues them serves the route, behind the gateway), the path is not one plain absolute path, both routes have one
  * path, or the route was not wired because login (`cosec.authentication.login.enabled`) or JWT (`cosec.jwt.enabled`)
  * is off. Run once every singleton exists, so it reads what was wired rather than guessing it.
+ *
+ * `STA-8` is the last of it: a refresh route the starter builds, with no `MembershipRefresh` bean, needs the statement
+ * that its tokens keep the roles of the token they replace ([RefreshMembershipChoice]); an application's own
+ * `RefreshTokenAuthentication` has chosen already.
  */
 internal object LoginRoutesCheck {
     fun check(context: ApplicationContext) {
@@ -65,7 +73,17 @@ internal object LoginRoutesCheck {
             "$names is set, but login or JWT is off (${ConditionalOnLoginEnabled.ENABLED_KEY}, " +
                 "${ConditionalOnJwtEnabled.ENABLED_KEY}): the routes issue and end JWT sessions, turn both on."
         }
+        if (refresh != null && context.containsBean(CoSecLoginRoutesAutoConfiguration.REFRESH_AUTHENTICATION_BEAN)) {
+            val membership = context.getBeanProvider<MembershipRefresh<RefreshTokenCredentials>>(MEMBERSHIP)
+            val hasBean = membership.getIfAvailable() != null
+            RefreshMembershipChoice.require(environment, context.getBean(JwtProperties::class.java), hasBean)
+        }
     }
+
+    private val MEMBERSHIP = ResolvableType.forClassWithGenerics(
+        MembershipRefresh::class.java,
+        RefreshTokenCredentials::class.java
+    )
 
     private val RESERVED = setOf('*', '{', '}', '?', '#', '%', ';')
 }

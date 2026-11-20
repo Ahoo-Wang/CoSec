@@ -133,6 +133,24 @@
         "spring-boot:GatewayModeTrustTest#with the statement the service starts, in any letter case of true, and an enforcing host needs none",
         "spring-boot:GatewayModeTrustTest#a reactive service is held to the same two statements"
       ]
+    },
+    {
+      "id": "STA-8",
+      "source": "maintainer decision 2026-11-19 (\"要求显式声明\"); IDN-27; RFC 0006 §5.3.2",
+      "statement": "A host that serves the refresh route (`cosec.authentication.login.refresh.path`) with the starter's own refresh and no `MembershipRefresh<RefreshTokenCredentials>` bean fails to start unless `cosec.jwt.session.refresh-roles` is written `keep-token-roles` (any letter case, nothing else: absent, empty, `true`, `claims` and a padded value fail alike), because without a choice a refresh copies the roles of the token it replaces and a removed role keeps working until the member signs in again, up to `cosec.jwt.session.lifetime`. The message says, in this order, what happens without a choice (with `cosec.jwt.session.lifetime` and `cosec.jwt.token-validity.refresh` as configured), the two ways to choose (a `MembershipRefresh` bean that reads the member's roles again at each refresh, or the property), that `TokenRevoker.revokeSubject` ends a member's tokens at once in either case, then the exact line and a link to the page. With the property set the startup logs one INFO line with the session lifetime it implies; with a bean, nothing. A host that does not serve the refresh route, or whose application builds its own `RefreshTokenAuthentication`, is not asked.",
+      "level": "startup",
+      "pending": null,
+      "guards": [
+        "spring-boot:RefreshMembershipChoiceTest#no bean and no statement fails startup, and the message says what is at stake and the two ways out",
+        "spring-boot:RefreshMembershipChoiceTest#the statement starts the host, in any letter case, with one INFO line that says the lifetime it implies",
+        "spring-boot:RefreshMembershipChoiceTest#a MembershipRefresh bean starts the host without the statement, and logs nothing about it",
+        "spring-boot:RefreshMembershipChoiceTest#every other value fails like an absent one, and the message says what was written",
+        "spring-boot:RefreshMembershipChoiceTest#an application's own refresh authentication has chosen already",
+        "spring-boot:RefreshMembershipChoiceTest#a host that does not serve the refresh route is not asked",
+        "spring-boot:RefreshMembershipChoiceTest#a gateway host with the path set is told about the gateway, not asked for the choice",
+        "spring-boot:RefreshMembershipChoiceTest#a service in gateway mode serves no refresh and is not asked",
+        "spring-boot:RefreshMembershipChoiceTest#the link of the message reaches a heading of the page, in both languages"
+      ]
     }
   ]
 }

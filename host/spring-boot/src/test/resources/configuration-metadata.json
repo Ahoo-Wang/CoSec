@@ -693,6 +693,12 @@
       "type": "java.time.Duration"
     },
     {
+      "name": "cosec.jwt.session.refresh-roles",
+      "type": "java.lang.String",
+      "description": "How the starter's refresh route gives a refreshed token its roles, when the application declares no `MembershipRefresh` bean: no default, and with the route served startup fails until this is `keep-token-roles`, the statement that a refreshed token keeps the roles of the token it replaces, so a removed role applies at the member's next sign-in, `lifetime` at the latest (`STA-8`).",
+      "sourceType": "me.ahoo.cosec.spring.boot.jwt.JwtProperties$Session"
+    },
+    {
       "description": "How long after a refresh the pair it replaced is answered at the current generation: the window a client has to retry a refresh whose response it lost.",
       "name": "cosec.jwt.session.rotation-leeway",
       "sourceType": "me.ahoo.cosec.spring.boot.jwt.JwtProperties$Session",

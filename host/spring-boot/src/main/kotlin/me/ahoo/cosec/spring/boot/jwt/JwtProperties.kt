@@ -44,6 +44,15 @@ class JwtProperties(
     @InternalCoSecApi
     companion object {
         const val PREFIX = CoSecProperties.PREFIX + ".jwt"
+        const val SESSION_LIFETIME_KEY = "$PREFIX.session.lifetime"
+        const val REFRESH_VALIDITY_KEY = "$PREFIX.token-validity.refresh"
+        const val ACCESS_VALIDITY_KEY = "$PREFIX.token-validity.access"
+
+        /** `STA-8`: the property that states how a refreshed token gets its roles. */
+        const val REFRESH_ROLES_KEY = "$PREFIX.session.refresh-roles"
+
+        /** `STA-8`: the one value of [REFRESH_ROLES_KEY]: a refreshed token keeps the roles of the token it replaces. */
+        const val KEEP_TOKEN_ROLES = "keep-token-roles"
     }
 
     @InternalCoSecApi
@@ -64,6 +73,13 @@ class JwtProperties(
          * retry a refresh whose response it lost.
          */
         var rotationLeeway: Duration = TokenFamilies.DEFAULT_LEEWAY,
+        /**
+         * How the starter's refresh route gives a refreshed token its roles, when the application declares no
+         * `MembershipRefresh` bean: no default, and with the route served startup fails until this is `keep-token-roles`,
+         * the statement that a refreshed token keeps the roles of the token it replaces, so a removed role applies at the
+         * member's next sign-in, `lifetime` at the latest (`STA-8`).
+         */
+        var refreshRoles: String? = null,
     )
 
     /**
