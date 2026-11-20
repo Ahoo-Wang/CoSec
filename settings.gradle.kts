@@ -11,6 +11,18 @@
  * limitations under the License.
  */
 
+// Where the plugins come from, and what they bring: Maven Central first, then the Gradle Plugin Portal. By default only
+// the portal is asked, and it answers for what Central hosts (the BOMs and libraries of the Kotlin, Dokka and JMH plugins)
+// by proxying Central; when that proxy answered "Could not find" for POMs that exist, the build failed on every attempt
+// for minutes. Central serves them itself; the portal is asked only for what Central lacks, the markers and jars of the
+// plugins only the portal publishes (the Nexus publish plugin and the JMH plugin). The versions are the same either way.
+pluginManagement {
+    repositories {
+        mavenCentral()
+        gradlePluginPortal()
+    }
+}
+
 rootProject.name = "CoSec"
 
 /*
