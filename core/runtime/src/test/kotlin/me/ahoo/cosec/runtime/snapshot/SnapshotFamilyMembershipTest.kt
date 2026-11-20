@@ -37,7 +37,7 @@ class SnapshotFamilyMembershipTest {
         store,
         SnapshotKey.Platform,
         compiler,
-        listOf(SnapshotFamily(SnapshotKind.APP, compiler, options.maxApps, options.maxAbsent)),
+        listOf(SnapshotFamily(SnapshotKind.APP, compiler, options.maxApps, options.maxAbsentApps)),
         options,
         ManualClock(),
         SnapshotMetrics.NOOP,
@@ -61,14 +61,14 @@ class SnapshotFamilyMembershipTest {
         (0 until ABSENT).forEach { source.load("made-up-$it").join() }
         source.heldCounts(SnapshotKind.APP).assert().isEqualTo(DOCUMENTS to ABSENT)
         source.heldAbsentMembers(SnapshotKind.APP).assert().isEqualTo(madeUp(0 until ABSENT))
-        val excess = ABSENT - options.maxAbsent
+        val excess = ABSENT - options.maxAbsentApps
         source.evictionVisits(SnapshotKind.APP, absent = true, wanted = excess).assert().isEqualTo(ABSENT)
         source.evictionVisits(SnapshotKind.APP, absent = false, wanted = 1).assert().isEqualTo(DOCUMENTS)
     }
 
     @Test
     fun `absent entries evicted beyond their bound leave the set, and a document installed in place of one leaves it too`() {
-        val source = source(SnapshotOptions(maxAbsent = ABSENT_BOUND))
+        val source = source(SnapshotOptions(maxAbsentApps = ABSENT_BOUND))
         (0 until 2 * ABSENT_BOUND).forEach { source.load("made-up-$it").join() }
         source.heldAbsentMembers(SnapshotKind.APP).assert().isEqualTo(madeUp(0 until 2 * ABSENT_BOUND))
         // Housekeeping's passes: the least recently used absent entries go, by claims.

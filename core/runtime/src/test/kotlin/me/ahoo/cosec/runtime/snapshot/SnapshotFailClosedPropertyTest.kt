@@ -33,7 +33,7 @@ import kotlin.random.Random
  *
  * - `SNP-7` (RC1-7): whatever mix of ids with and without a document a client asks for, and whatever the bounds, every
  *   document a family holds within its bound stays installed; entries for documents the store does not hold evict only
- *   each other, and at most `maxAbsent` of them stay.
+ *   each other, and at most `maxAbsentApps` of them stay.
  * - `SNP-8` (RC1-43): whatever each revision's compilation does (compile, throw, or end in a [VirtualMachineError]), the
  *   source serves the latest revision it read, compiled or failed, and never an older revision in its place.
  */
@@ -58,7 +58,7 @@ class SnapshotFailClosedPropertyTest {
         val documents = (0 until maxApps).map { SnapshotKey.App("app-$it") }
         documents.forEach { store.put(it, document(1)) }
         val absent = (0 until ABSENT_IDS).map { SnapshotKey.App("absent-$it") }
-        val options = SnapshotOptions(revalidateInterval = QUIET_PASS, maxApps = maxApps, maxAbsent = maxAbsent)
+        val options = SnapshotOptions(revalidateInterval = QUIET_PASS, maxApps = maxApps, maxAbsentApps = maxAbsent)
         testSource(store, options = options).use { source ->
             val loaded = LinkedHashSet<SnapshotKey>()
             repeat(random.nextInt(LOADS / 2, LOADS)) {

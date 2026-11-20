@@ -1,0 +1,17 @@
+# Rule: CTL-45
+# Mutant: a configured shadow instance id is used as it is, so a process restarted with the same configuration writes under its predecessor's id and replaces its cumulative report, a CANDIDATE_ERROR included (ShadowInstanceId.forThisStart)
+# Tests: :spring-boot:test --tests me.ahoo.cosec.spring.boot.pipeline.ShadowInstanceIdTest
+
+diff --git a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/pipeline/ShadowInstanceId.kt b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/pipeline/ShadowInstanceId.kt
+index 93a476f0f..20774f009 100644
+--- a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/pipeline/ShadowInstanceId.kt
++++ b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/pipeline/ShadowInstanceId.kt
+@@ -33,7 +33,6 @@ internal object ShadowInstanceId {
+         if (configured.isEmpty()) {
+             return UUID.randomUUID().toString()
+         }
+-        val suffix = ByteArray(SUFFIX_BYTES).also(random::nextBytes)
+-        return configured + SEPARATOR + HexFormat.of().formatHex(suffix)
++        return configured
+     }
+ }

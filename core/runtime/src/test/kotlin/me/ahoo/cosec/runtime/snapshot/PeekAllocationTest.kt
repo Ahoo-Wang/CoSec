@@ -50,8 +50,8 @@ class PeekAllocationTest {
         val ticker = AtomicLong()
         // The app family second, so a search by kind would step past the tenant family to reach it.
         val families = listOf(
-            SnapshotFamily(SnapshotKind.TENANT, compiler, options.maxTenants, options.maxAbsent),
-            SnapshotFamily(SnapshotKind.APP, compiler, options.maxApps, options.maxAbsent),
+            SnapshotFamily(SnapshotKind.TENANT, compiler, options.maxTenants, options.maxAbsentTenants),
+            SnapshotFamily(SnapshotKind.APP, compiler, options.maxApps, options.maxAbsentApps),
         )
         SnapshotSource(
             store, SnapshotKey.Platform, compiler, families, options, ManualClock(), SnapshotMetrics.NOOP,

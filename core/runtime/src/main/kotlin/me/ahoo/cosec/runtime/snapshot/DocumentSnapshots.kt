@@ -63,7 +63,7 @@ object DocumentSnapshots {
 
     internal fun <T : Any> families(compiler: SnapshotCompiler<T>, options: SnapshotOptions): List<SnapshotFamily<T>> =
         listOf(
-            SnapshotFamily(SnapshotKind.APP, compiler, options.maxApps, options.maxAbsent),
-            SnapshotFamily(SnapshotKind.TENANT, compiler, options.maxTenants, options.maxAbsent),
+            SnapshotFamily(SnapshotKind.APP, compiler, options.maxApps, options.maxAbsentApps),
+            SnapshotFamily(SnapshotKind.TENANT, compiler, options.maxTenants, options.maxAbsentTenants),
         )
 }

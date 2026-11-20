@@ -83,7 +83,7 @@ class KeyRunnerFailureTest {
             store,
             SnapshotKey.Platform,
             compiler,
-            listOf(SnapshotFamily(SnapshotKind.APP, compiler, options.maxApps, options.maxAbsent)),
+            listOf(SnapshotFamily(SnapshotKind.APP, compiler, options.maxApps, options.maxAbsentApps)),
             options,
             ManualClock(),
             metrics,
@@ -167,7 +167,7 @@ class KeyRunnerFailureTest {
             if (!absent) ids.forEach { store.put(SnapshotKey.App(it), document(1)) }
             val armed = AtomicBoolean()
             val held = SourceModelThreads().housekeeping
-            val options = SnapshotOptions(revalidateInterval = QUIET_PASS, maxApps = 2, maxAbsent = 2)
+            val options = SnapshotOptions(revalidateInterval = QUIET_PASS, maxApps = 2, maxAbsentApps = 2)
             source(
                 KeyDrain.Hooks({ if (it is KeyEvent.Evict && armed.getAndSet(false)) error("thrown by the test") }),
                 housekeeping = held,
@@ -234,8 +234,8 @@ class KeyRunnerFailureTest {
     fun `a burst of absent ids installed on a thread not ours never holds more than the cap, and nothing goes to the pool`() {
         val pooled = CopyOnWriteArrayList<Runnable>()
         val held = SourceModelThreads().housekeeping
-        val options = SnapshotOptions(revalidateInterval = QUIET_PASS, maxAbsent = 4)
-        val cap = 2 * options.maxAbsent
+        val options = SnapshotOptions(revalidateInterval = QUIET_PASS, maxAbsentApps = 4)
+        val cap = 2 * options.maxAbsentApps
         source(compileExecutor = { pooled += it }, housekeeping = held, options = options).use { source ->
             store.hold = true
             source.load()
@@ -259,7 +259,7 @@ class KeyRunnerFailureTest {
             }
             releaser.start()
             releaser.join()
-            most.get().assert().isLessThanOrEqualTo(cap).isGreaterThan(options.maxAbsent)
+            most.get().assert().isLessThanOrEqualTo(cap).isGreaterThan(options.maxAbsentApps)
             source.heldCounts(SnapshotKind.APP).second.assert().isLessThanOrEqualTo(cap)
             pooled.assert().isEmpty()
         }

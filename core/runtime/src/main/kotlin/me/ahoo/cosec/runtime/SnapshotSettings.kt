@@ -53,6 +53,21 @@ class SnapshotSettings internal constructor() {
     /** The most tenant documents held at once; the least recently used one is evicted beyond it. */
     var maxTenants: Int = DEFAULTS.maxTenants
 
+    /**
+     * The most app ids held as having no document, apart from [maxApps] (`SNP-7`): app ids come from requests, so this
+     * bounds what a client naming made-up apps can make an instance remember.
+     */
+    var maxAbsentApps: Int = DEFAULTS.maxAbsentApps
+
+    /** The most tenant ids held as having no document, apart from [maxTenants] (`SNP-7`). */
+    var maxAbsentTenants: Int = DEFAULTS.maxAbsentTenants
+
+    /**
+     * Documents a revalidation pass reads at once. A pass takes about the documents held × one conditional read ÷ this,
+     * and lag stays below the interval plus one pass.
+     */
+    var reloadConcurrency: Int = DEFAULTS.reloadConcurrency
+
     var compileThreads: Int = DEFAULTS.compileThreads
 
     /** The apps whose documents are loaded at build, after the platform's; [Pipeline.awaitDocuments] waits for them. */
@@ -74,7 +89,10 @@ class SnapshotSettings internal constructor() {
         coldLoadTimeout = coldLoadTimeout,
         maxApps = maxApps,
         maxTenants = maxTenants,
+        maxAbsentApps = maxAbsentApps,
+        maxAbsentTenants = maxAbsentTenants,
         compileThreads = compileThreads,
+        reloadConcurrency = reloadConcurrency,
     )
 
     private companion object {

@@ -3,11 +3,11 @@
 # Tests: :runtime:test --tests me.ahoo.cosec.runtime.snapshot.*
 
 diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/SnapshotFamilies.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/SnapshotFamilies.kt
-index f7a40c00..fc47935e 100644
+index 5e01606b2..a3dfc858b 100644
 --- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/SnapshotFamilies.kt
 +++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/SnapshotFamilies.kt
-@@ -204,7 +204,7 @@ internal class SnapshotFamilies<A : Any>(
-         const val MAX_SLACK = 4096
+@@ -260,7 +260,7 @@ internal class SnapshotFamilies<A : Any>(
+         const val INSTALL_EVICTIONS = 64
  
          /** Whether [entry] is for a document the store does not hold: the other kind ([Family.count]). */
 -        fun isAbsent(entry: SnapshotEntry<*>): Boolean = entry.origin == EntryOrigin.ABSENT

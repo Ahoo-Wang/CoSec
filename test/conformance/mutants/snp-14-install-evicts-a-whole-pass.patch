@@ -1,0 +1,17 @@
+# Rule: SNP-14
+# Mutant: an install over the cap evicts back to the bound on its own thread, a whole pass of up to 4,096 removals and a scan of the family, instead of its bounded batch (KeyEffects.inPlace, SnapshotFamilies.INSTALL_EVICTIONS)
+# Tests: :runtime:test --tests me.ahoo.cosec.runtime.snapshot.InstallEvictionBoundTest
+
+diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/KeyEffects.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/KeyEffects.kt
+index 4603aedec..4097d0fdc 100644
+--- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/KeyEffects.kt
++++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/KeyEffects.kt
+@@ -308,7 +308,7 @@ internal class KeyEffects<T : Any>(
+     }
+ 
+     private fun inPlace(families: SnapshotFamilies<*>, family: SnapshotFamilies.Family<*>) {
+-        DrainBudget.unbounded { families.evictBeyond(family, SnapshotFamilies.INSTALL_EVICTIONS) }
++        DrainBudget.unbounded { families.evictBeyond(family) }
+     }
+ 
+     private fun withinBounds(family: SnapshotFamilies.Family<*>): Boolean =
