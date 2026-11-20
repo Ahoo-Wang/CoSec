@@ -1,0 +1,41 @@
+{
+  "rules": [
+    "CTL-42"
+  ],
+  "polarity": "negative",
+  "level": "control",
+  "description": "Nothing refers to the platform policy shared and its back-reference set reads, empty: the platform's publish without it is published at revision 2.",
+  "publishes": [
+    {
+      "document": "platform",
+      "policies": [
+        "shared",
+        "other"
+      ]
+    },
+    {
+      "document": "platform",
+      "policies": [
+        "other"
+      ]
+    }
+  ],
+  "expect": {
+    "outcomes": [
+      "Published",
+      "Published"
+    ],
+    "head": {
+      "revision": 2,
+      "parent": 1,
+      "parentRecord": true
+    },
+    "records": 2,
+    "writes": [
+      "record",
+      "head",
+      "record",
+      "head"
+    ]
+  }
+}

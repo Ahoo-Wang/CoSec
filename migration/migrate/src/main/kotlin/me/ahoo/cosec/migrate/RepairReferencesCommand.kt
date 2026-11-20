@@ -19,23 +19,35 @@ import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.migrate.MigrateMain.FAILED
 import me.ahoo.cosec.migrate.MigrateMain.OK
-import me.ahoo.cosec.migrate.RedisAccess.controlStore
+import me.ahoo.cosec.migrate.RedisAccess.repairAccess
 import java.io.PrintStream
 
 /** `repair-references`. */
 internal object RepairReferencesCommand {
     /** `repair-references`: every document visited, every failed one listed; any failure exits with [FAILED]. */
     fun repairReferences(options: Options, out: PrintStream): Int {
-        val result = controlStore(options) { store -> ReferenceRepair(store).run() }
+        val result = repairAccess(options) { store, conversion -> ReferenceRepair(store, conversion).run() }
+        if (result.busy) {
+            out.println(
+                "FAILED another repair-references holds the lease [${ReferenceRepair.LEASE}]: run again when it is done."
+            )
+            return FAILED
+        }
         result.failed.forEach { (key, message) ->
             out.println(
                 "FAILED $key: ${RedisUris.scrub(message, options.redisUris)}"
             )
         }
+        if (result.converting) {
+            out.println("Converted ${result.converted} back-reference set(s) from the format before 8.0.0-beta.5.")
+        }
         out.println("Visited ${result.documents} document(s); added ${result.added} reference(s).")
         out.println("Removed ${result.removed} reference(s) no head refers to.")
         result.apps?.let { out.println("The app list is complete: $it app(s).") }
             ?: out.println("FAILED the app list could not be completed: run again.")
+        if (result.formatDone) {
+            out.println("The store is in the format of 8.0.0-beta.5.")
+        }
         if (result.failed.isNotEmpty() || result.apps == null) {
             out.println("Not everything was repaired: fix what failed and run again.")
             return FAILED

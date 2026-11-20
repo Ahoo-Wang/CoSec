@@ -85,10 +85,18 @@ object CoSecCacheSpecs {
     /** The control plane's revision records, revision indexes, back-references and leases (RFC 0007 §5.2). */
     const val REVISION_RECORD_CACHE_NAME = "RevisionRecordCache"
     const val REVISION_INDEX_CACHE_NAME = "RevisionIndexCache"
-    const val REFERENCE_INDEX_CACHE_NAME = "ReferenceIndexCache"
     const val CONTROL_LEASE_CACHE_NAME = "ControlLeaseCache"
 
-    /** What the control plane's periodic tasks visit: every indexed document and the changes that may be open. */
+    /** The back-references (RFC 0007 §5.8): a set per policy, a member per referrer and revision (`CTL-44`). */
+    const val REFERENCE_INDEX_CACHE_NAME = "ReferenceIndexCache"
+
+    /** Every indexed document: a set, which a first publish adds one member to (`CTL-44`). */
+    const val CONTROL_DOCUMENT_SET_CACHE_NAME = "ControlDocumentSetCache"
+
+    /**
+     * The changes that may be open. Its key `documents`, the list of documents before 8.0.0-beta.5, is what
+     * `cosec-migrate repair-references` converts last: while it is there, the store is not repaired.
+     */
     const val CONTROL_LIST_CACHE_NAME = "ControlListCache"
 
     /** The app documents there are, which the grant analysis reads on every tenant change (RC1-4). */
@@ -116,6 +124,7 @@ object CoSecCacheSpecs {
         REVISION_RECORD_CACHE_NAME,
         REVISION_INDEX_CACHE_NAME,
         REFERENCE_INDEX_CACHE_NAME,
+        CONTROL_DOCUMENT_SET_CACHE_NAME,
         CONTROL_LEASE_CACHE_NAME,
         CONTROL_LIST_CACHE_NAME,
         CONTROL_APP_LIST_CACHE_NAME,
@@ -124,12 +133,19 @@ object CoSecCacheSpecs {
         CANDIDATE_CACHE_NAME,
     )
 
+    /**
+     * The store-of-record caches that are `SetStore`s: their members are added and removed one by one, and every read
+     * asks Redis ([SetsOfRecord.LOCAL_MAX_AGE]).
+     */
+    val SET_OF_RECORD_CACHE_NAMES: Set<String> = setOf(REFERENCE_INDEX_CACHE_NAME, CONTROL_DOCUMENT_SET_CACHE_NAME)
+
     /** Names of the caches whose only copy is Redis. */
     val STORE_OF_RECORD_CACHE_NAMES: Set<String> = setOf(
         POLICY_SNAPSHOT_CACHE_NAME,
         REVISION_RECORD_CACHE_NAME,
         REVISION_INDEX_CACHE_NAME,
         REFERENCE_INDEX_CACHE_NAME,
+        CONTROL_DOCUMENT_SET_CACHE_NAME,
         CONTROL_LEASE_CACHE_NAME,
         CONTROL_LIST_CACHE_NAME,
         CONTROL_APP_LIST_CACHE_NAME,
@@ -156,6 +172,7 @@ object CoSecCacheSpecs {
         REVISION_RECORD_CACHE_NAME to "control:revision",
         REVISION_INDEX_CACHE_NAME to "control:revisions",
         REFERENCE_INDEX_CACHE_NAME to "control:refs",
+        CONTROL_DOCUMENT_SET_CACHE_NAME to "control:documents",
         CONTROL_LEASE_CACHE_NAME to "control:lease",
         CONTROL_LIST_CACHE_NAME to "control:list",
         CONTROL_APP_LIST_CACHE_NAME to "control:apps",

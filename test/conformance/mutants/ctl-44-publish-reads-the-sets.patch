@@ -1,0 +1,15 @@
+# Rule: CTL-44
+# Mutant: a tenant publish reads the back-reference set of each reference it adds: what it reads grows with the number of referrers
+# Tests: :control:test --tests me.ahoo.cosec.control.store.PublishCostTest :conformance:test
+
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/store/Revisions.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/store/Revisions.kt
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/store/Revisions.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/store/Revisions.kt
+@@ -121,6 +121,7 @@ class Revisions(
+             )
+         } || warn("[$key] revision $revision: its record could not be registered as pending; an orphan would stay")
+         check(store.putRecord(key, stored) == digest) { "The store addressed the record of [$key] by another digest." }
++        added.forEach { store.referrers(it.target, it.policy) }
+         referrerIndex.addEntries(key, revision, added)
+         if (key is SnapshotKey.App) {
+             // Before the head moves, whether this is its first revision or the list was lost: no app has a head the

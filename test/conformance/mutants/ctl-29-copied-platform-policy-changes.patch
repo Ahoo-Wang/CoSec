@@ -3,13 +3,12 @@
 # Tests: :control:test --tests me.ahoo.cosec.control.change.SharedPolicyCopyTest
 
 diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/PlatformChecks.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/PlatformChecks.kt
-index 8b7ad47c..4ccf27f7 100644
 --- a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/PlatformChecks.kt
 +++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/PlatformChecks.kt
-@@ -105,7 +105,7 @@ internal object PlatformChecks {
-     ) {
-         if (EntryDigest.of(before) == EntryDigest.of(after)) return
-         val tenants = context.referrers(SnapshotKey.Platform, after.id).filterIsInstance<SnapshotKey.Tenant>()
+@@ -102,7 +102,7 @@ internal object PlatformChecks {
+             )
+             return
+         }
 -        val holding = tenants.associateWith { definesCopy(context, it, after.id) }.filterValues { it != false }
 +        val holding = tenants.associateWith { definesCopy(context, it, after.id) }.filterValues { false }
          if (holding.isEmpty()) return

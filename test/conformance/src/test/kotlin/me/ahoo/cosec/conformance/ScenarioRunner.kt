@@ -95,5 +95,7 @@ sealed interface Outcome {
         val writes: List<String>,
         /** The history of the last document as `<revision>:<policies>`, when the scenario asks for it. */
         val history: List<String>? = null,
+        /** What the last publish did to the back-reference sets, by kind, when the scenario asks for it (`CTL-44`). */
+        val cost: Map<String, Int>? = null,
     ) : Outcome
 }

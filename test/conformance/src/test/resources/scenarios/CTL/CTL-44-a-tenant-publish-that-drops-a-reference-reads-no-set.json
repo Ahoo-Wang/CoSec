@@ -1,0 +1,60 @@
+{
+  "rules": [
+    "CTL-44"
+  ],
+  "polarity": "positive",
+  "level": "control",
+  "cost": true,
+  "description": "Tenants beta and acme bind the platform policy shared. Acme's next publish drops the binding: it reads no back-reference set and removes exactly the member its forward record holds.",
+  "publishes": [
+    {
+      "document": "platform",
+      "policies": [
+        "shared"
+      ]
+    },
+    {
+      "document": "tenant:beta",
+      "bindings": [
+        "shared"
+      ]
+    },
+    {
+      "bindings": [
+        "shared"
+      ]
+    },
+    {
+      "bindings": []
+    }
+  ],
+  "expect": {
+    "outcomes": [
+      "Published",
+      "Published",
+      "Published",
+      "Published"
+    ],
+    "head": {
+      "revision": 2,
+      "parent": 1,
+      "parentRecord": true
+    },
+    "records": 2,
+    "writes": [
+      "record",
+      "head",
+      "record",
+      "head",
+      "record",
+      "head",
+      "record",
+      "head"
+    ],
+    "lastPublish": {
+      "setReads": 0,
+      "membersAdded": 0,
+      "membersRemoved": 1
+    }
+  }
+}

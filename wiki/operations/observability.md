@@ -286,6 +286,13 @@ The meters above count; the health indicators and logs below answer whether an i
   are still decided ([Redis requirements](./storage.md#redis-requirements)). It also turns the aggregate
   `/actuator/health` `DOWN`, as every indicator does: point load balancers and platform health checks at the readiness
   group, or leave it out of the group they poll (`management.endpoint.health.group.<group>.exclude=cosecSnapshotEviction`).
+- **Control store format.** Where the control plane runs over CoCache, the `cosecControlStoreFormat` health indicator
+  is `DOWN` while its store is in the format before 8.0.0-beta.5, with a `format` detail naming
+  `cosec-migrate repair-references`, and `UP` with `format: 8.0.0-beta.5` once it has run. It reports what the instance
+  read last, every minute on a thread of its own, never by a probe; one it cannot read is `UP` with `format: unknown`.
+  The instance also logs one `ERROR` when it finds the old format. An alert like `cosecSnapshotEviction`: the data
+  plane still decides every request, so keep it out of the readiness group
+  ([Upgrading](./upgrading-previews.md#from-8-0-0-beta-4)).
 - **Login routes.** When the starter serves the refresh or logout route, the `cosecLoginRoutes` health indicator is
   always `UP`, with each route's property as a detail: `not refused`, or `denied since <time>` and which refusal it was
   (no statement permits it, a DENY statement matches it, or the tenant's platform boundary does not cover it) once a

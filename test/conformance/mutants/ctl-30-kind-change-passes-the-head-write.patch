@@ -3,15 +3,14 @@
 # Tests: :control:test --tests me.ahoo.cosec.control.change.BoundaryReferencesTest :conformance:test
 
 diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/store/ReferrerIndex.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/store/ReferrerIndex.kt
-index 12f4aa52..3e16f63c 100644
 --- a/core/control/src/main/kotlin/me/ahoo/cosec/control/store/ReferrerIndex.kt
 +++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/store/ReferrerIndex.kt
-@@ -123,7 +123,7 @@ internal class ReferrerIndex(
+@@ -184,7 +184,7 @@ internal class ReferrerIndex(
          base: Head?,
          candidate: PolicyDocument
      ): PublishOutcome.Referenced? =
--        ReferencedPolicies.of(key, base?.document, candidate, ::referrers, head)
-+        ReferencedPolicies.of(key, base?.document, candidate, ::referrers, head).filterValues { false }
+-        ReferencedPolicies.of(key, base?.document, candidate, ::entries)
++        ReferencedPolicies.of(key, base?.document, candidate, ::entries).filterValues { false }
              .takeIf { it.isNotEmpty() }?.let { PublishOutcome.Referenced(it) }
  
      /**

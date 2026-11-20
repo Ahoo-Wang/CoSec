@@ -23,6 +23,8 @@ import kotlinx.coroutines.future.await
 import kotlinx.coroutines.runBlocking
 import me.ahoo.cocache.core.CacheRuntime
 import me.ahoo.cocache.core.KeyEncoder
+import me.ahoo.cocache.core.SetStoreSpec
+import me.ahoo.cocache.core.codec.StringCodec
 import me.ahoo.cocache.core.memory.InMemoryBackend
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
@@ -98,17 +100,18 @@ class SlashIdRecordsTest {
             val written = ChangeRequestCodec.encode(change("c1")).decodeToString()
                 .replace("\"key\":\"tenant:acme\"", "\"key\":\"tenant:acme/west\"")
             CacheRuntime.builder().backend(backend).build().use { raw ->
+                val layout = CoSecCacheSpecs.layout(node.keyPrefix, CoSecCacheSpecs.REFERENCE_INDEX_CACHE_NAME)
                 raw.create(
-                    rawStore(
-                        "RawReferences",
-                        node.keyPrefix,
-                        CoSecCacheSpecs.REFERENCE_INDEX_CACHE_NAME,
-                        ReferenceKeyEncoder
-                    )
-                ).async().put(
+                    SetStoreSpec.builder<ReferenceKey, String>("RawReferenceSet")
+                        .keyPrefix(layout.keyPrefix)
+                        .namespace(layout.namespace)
+                        .keyEncoder(ReferenceKeyEncoder)
+                        .elementCodec(StringCodec)
+                        .build()
+                ).suspending().add(
                     ReferenceKey(SnapshotKey.Platform, PolicyId("shared")),
-                    """{"tenant:acme":1,"tenant:acme/west":1}""".encodeToByteArray(),
-                ).await()
+                    listOf("tenant:acme@1", "tenant:acme/west@1"),
+                )
                 raw.create(
                     rawStore(
                         "RawChange",
@@ -118,8 +121,9 @@ class SlashIdRecordsTest {
                     )
                 ).async().put(ChangeId("c1"), written.encodeToByteArray()).await()
             }
-            formatError { store.referrers(SnapshotKey.Platform, PolicyId("shared")) }.message.assert()
-                .contains("The back-reference set of [platform] policy [shared]").contains("[tenant:acme/west]")
+            val failed = runCatching { store.referrers(SnapshotKey.Platform, PolicyId("shared")) }.exceptionOrNull()
+            failed?.message.assert().contains("The back-reference set of [platform] policy [shared]")
+            formatError { throw checkNotNull(failed) }.message.assert().contains("[tenant:acme/west@1]")
             for (read in listOf<suspend () -> Unit>({ store.change(ChangeId("c1")) }, { store.openChanges() })) {
                 formatError(read).message.assert().contains("Change [c1]").contains("[acme/west]")
             }
@@ -169,12 +173,9 @@ class SlashIdRecordsTest {
         try {
             SnapshotNode(backend, newKeyPrefix()).use { node ->
                 val store = CoCacheControlStore.create(node.factory, node.cache, node.keyPrefix)
-                val listed = Instant.parse("2026-11-01T00:00:00Z")
                 CacheRuntime.builder().backend(backend).build().use { raw ->
-                    raw.create(ControlCacheSpecs.list(node.keyPrefix)).async().put(
-                        "documents",
-                        mapOf("tenant:acme" to listed, "tenant:acme/west" to listed),
-                    ).await()
+                    raw.create(ControlCacheSpecs.documentSet(node.keyPrefix)).suspending()
+                        .add("all", listOf("tenant:acme", "tenant:acme/west"))
                 }
                 store.documents().assert().containsExactly(SnapshotKey.Tenant("acme"))
                 logged.filter { it.level == Level.WARN }.map { it.formattedMessage }.assert().containsExactly(

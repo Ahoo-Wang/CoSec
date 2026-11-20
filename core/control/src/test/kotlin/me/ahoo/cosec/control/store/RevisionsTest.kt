@@ -329,8 +329,12 @@ class RevisionsTest {
             published(SnapshotKey.Platform, candidate(SnapshotKey.Platform, listOf(policy("shared"), policy("other"))))
             published(document = candidate(ACME))
             lost(candidate(ACME, bindings = listOf(binding("a", "shared"))))
+            memory.referrers(SnapshotKey.Platform, shared).assert().containsExactly(ReferrerEntry(ACME, 2))
+            // The revision 2 that lands drops what its forward record holds and it does not have: the lost one's too.
             published(document = candidate(ACME))
-            revisions.referrers(SnapshotKey.Platform, shared).assert().containsExactly(ACME)
+            revisions.referrers(SnapshotKey.Platform, shared).assert().isEmpty()
+            // A member no forward record holds (one a race the record missed left) stays, and blocks, until a repair.
+            memory.addReferrer(SnapshotKey.Platform, shared, ReferrerEntry(ACME, 2))
             publish(SnapshotKey.Platform, candidate(SnapshotKey.Platform, listOf(policy("other"))))
                 .assert().isInstanceOf(PublishOutcome.Referenced::class.java)
 
@@ -363,38 +367,34 @@ class RevisionsTest {
             published(document = candidate(ACME))
             lost(candidate(ACME, bindings = listOf(binding("a", "shared"))))
             published(document = candidate(ACME))
+            memory.addReferrer(SnapshotKey.Platform, shared, ReferrerEntry(ACME, 2))
             val racing = object : ControlStore by memory {
                 var raced = false
 
-                override suspend fun putReferrers(
+                override suspend fun removeReferrers(
                     target: SnapshotKey,
                     policy: PolicyId,
-                    expected: SnapshotDigest?,
-                    referrers: Map<SnapshotKey, Long>,
-                ): Boolean {
+                    entries: Set<ReferrerEntry>,
+                ) {
                     if (!raced) {
                         raced = true
                         // Revision 3 brings the reference back and indexes it before its head write.
-                        memory.putReferrers(target, policy, expected, mapOf(ACME to 3L)).assert().isTrue()
+                        memory.addReferrer(target, policy, ReferrerEntry(ACME, 3))
                     }
-                    return memory.putReferrers(target, policy, expected, referrers)
+                    memory.removeReferrers(target, policy, entries)
                 }
             }
 
-            Revisions(racing, clock).pruneReferences(SnapshotKey.Platform).assert().isEqualTo(0)
+            // The member the lost revision added goes; the one revision 3 added meanwhile stays.
+            Revisions(racing, clock).pruneReferences(SnapshotKey.Platform).assert().isEqualTo(1)
 
-            memory.referrers(SnapshotKey.Platform, shared)!!.value.assert().isEqualTo(mapOf(ACME to 3L))
+            memory.referrers(SnapshotKey.Platform, shared).assert().containsExactly(ReferrerEntry(ACME, 3))
         }
 
         @Test
         fun `repairing adds what a head refers to`() = runBlocking<Unit> {
             published(document = candidate(ACME, bindings = listOf(binding("a", "shared"))))
-            memory.putReferrers(
-                SnapshotKey.Platform,
-                shared,
-                memory.referrers(SnapshotKey.Platform, shared)!!.digest,
-                emptyMap()
-            )
+            memory.removeReferrers(SnapshotKey.Platform, shared, memory.referrers(SnapshotKey.Platform, shared))
             revisions.referrers(SnapshotKey.Platform, shared).assert().isEmpty()
             revisions.repairReferences(ACME).assert().isEqualTo(1)
             revisions.referrers(SnapshotKey.Platform, shared).assert().containsExactly(ACME)
@@ -403,26 +403,30 @@ class RevisionsTest {
             revisions.repairReferences(SnapshotKey.Tenant("absent")).assert().isEqualTo(0)
         }
 
+        /** `CTL-42`: the head write asks the back-references too; one that cannot be read refuses, never lets through. */
         @Test
-        fun `a tenant whose head cannot be read still blocks the platform removing its policy - RC1-9`() =
+        fun `a back-reference set that cannot be read blocks the platform removing its policy - CTL-42`() =
             runBlocking<Unit> {
                 published(SnapshotKey.Platform, candidate(SnapshotKey.Platform, listOf(policy("own"), policy("other"))))
-                published(document = candidate(ACME, listOf(policy("own")), listOf(binding("c", "own"))))
+                published(document = candidate(ACME, bindings = listOf(binding("c", "own"))))
                 val unreadable = object : ControlStore by memory {
-                    override suspend fun head(key: SnapshotKey): StoredDocument? {
-                        check(key != ACME) { "[$key] cannot be read" }
-                        return memory.head(key)
+                    override suspend fun referrers(target: SnapshotKey, policy: PolicyId): Set<ReferrerEntry> {
+                        check(policy != PolicyId("own")) { "[$policy] cannot be read" }
+                        return memory.referrers(target, policy)
                     }
                 }
-                val refused = Revisions(unreadable, clock).publish(
-                    SnapshotKey.Platform,
-                    revisions.head(SnapshotKey.Platform),
-                    candidate(SnapshotKey.Platform, listOf(policy("other"))),
-                    publication("c")
-                )
-                (refused as PublishOutcome.Referenced).referrers.assert().isEqualTo(
-                    mapOf(PolicyId("own") to setOf(ACME))
-                )
+                val base = revisions.head(SnapshotKey.Platform)
+                assertThrownBy<IllegalStateException> {
+                    runBlocking {
+                        Revisions(unreadable, clock).publish(
+                            SnapshotKey.Platform,
+                            base,
+                            candidate(SnapshotKey.Platform, listOf(policy("other"))),
+                            publication("c")
+                        )
+                    }
+                }
+                revisions.head(SnapshotKey.Platform)!!.digest.assert().isEqualTo(base!!.digest)
             }
     }
 }

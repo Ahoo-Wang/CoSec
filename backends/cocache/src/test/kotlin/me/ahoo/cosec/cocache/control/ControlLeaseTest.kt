@@ -69,7 +69,10 @@ class ControlLeaseTest {
         heads = node.cache,
         records = node.runtime.create(ControlCacheSpecs.revisionRecord(node.keyPrefix)),
         indexes = node.runtime.create(ControlCacheSpecs.revisionIndex(node.keyPrefix)),
-        references = node.runtime.create(ControlCacheSpecs.referenceIndex(node.keyPrefix)),
+        sets = ControlSets(
+            node.runtime.create(ControlCacheSpecs.referenceIndex(node.keyPrefix)),
+            node.runtime.create(ControlCacheSpecs.documentSet(node.keyPrefix)),
+        ),
         leases = leases,
         changes = node.runtime.create(ControlCacheSpecs.changeRequest(node.keyPrefix)),
         stages = node.runtime.create(ControlCacheSpecs.stage(node.keyPrefix)),

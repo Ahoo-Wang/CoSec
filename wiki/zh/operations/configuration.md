@@ -374,7 +374,8 @@ CoSec 声明的值无论取何值都优先于 `cocache.defaults.*`，与 CoCache
 
 | 缓存 | 锁定 | 约束 | 原因 |
 |---|---|---|---|
-| `PolicySnapshotCache` 以及控制面与影子窗口的权威存储（`RevisionRecordCache`、`RevisionIndexCache`、`ReferenceIndexCache`、`ControlLeaseCache`、`ControlListCache`、`ControlAppListCache`、`ChangeRequestCache`、`StageCache`、`CandidateCache`） | `ttl`、`unknown-read`；快照存储还有 `local-max-age` | `ttl` 永不过期，`unknown-read: throw` | Redis 是权威存储（[存储](./storage.md#redis-is-the-store-of-record)）：过期、或把读取失败当作“不存在”，都会悄悄丢掉一个文档，连同它的 DENY 语句。作为 CoCache 的 `Store`，它们从不回收读不懂的内容，失败的删除直接抛出，而不是稍后重试、删掉更新的写入。 |
+| `PolicySnapshotCache` 以及控制面与影子窗口的权威存储（`RevisionRecordCache`、`RevisionIndexCache`、`ControlLeaseCache`、`ControlListCache`、`ControlAppListCache`、`ChangeRequestCache`、`StageCache`、`CandidateCache`） | `ttl`、`unknown-read`；快照存储还有 `local-max-age` | `ttl` 永不过期，`unknown-read: throw` | Redis 是权威存储（[存储](./storage.md#redis-is-the-store-of-record)）：过期、或把读取失败当作“不存在”，都会悄悄丢掉一个文档，连同它的 DENY 语句。作为 CoCache 的 `Store`，它们从不回收读不懂的内容，失败的删除直接抛出，而不是稍后重试、删掉更新的写入。 |
+| `ReferenceIndexCache`、`ControlDocumentSetCache`（控制面的集合型权威存储：反向引用和文档列表） | `ttl`、`local-max-age`、`degraded-local-max-age` | `ttl` 永不过期；两个本地最长保留时间都是 1 ns | Redis 也是它们的权威存储；删除检查若读到失效消息丢失后留下的本地副本，就可能放过某个引用者本应阻止的删除（`CTL-42`）。CoCache 8.1 没有为 `SetStore` 提供跳过本地副本的读取，也不接受为零的本地最长保留时间；它以毫秒保存本地过期时间，只在该时间仍晚于其时钟时才使用副本，所以只保留 1 ns 的副本从不被使用，即使在它被填入的那一毫秒之内也不会。`SetStore` 的读取失败总是抛出。 |
 | `ShadowReportCache`、`ShadowReporterCache`、`InstanceStatusCache`、`InstanceIndexCache` | `unknown-read`、`ttl` | `unknown-read: throw`；`ttl` 为声明的 8 天（报告、报告者）或 2 分钟（状态；实例列表仍是 8 天） | 故障不能读成“没有样本”或“没有实例”，实例的样本也不能从它报告过的窗口中过期。 |
 | `MembershipCache` | `read-failure`、`unknown-read` | `ttl` 有限（`forever` 时为一分钟），`ttl-jitter: 0s`，`read-failure` 与 `unknown-read: throw` | 读取失败绝不能变成“没有成员关系”，丢失的失效必须到期。 |
 | `TokenFamilyCache` | `unknown-read` | `unknown-read: throw` | 无法读取的会话会拒绝刷新（`503`），绝不读成不存在。每个条目都带着它所属会话的剩余寿命写入。 |

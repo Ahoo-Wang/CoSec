@@ -269,7 +269,7 @@ internal class EscalationAnalysis(private val analyzer: GrantAnalyzer, private v
         documents: CurrentDocuments,
     ): List<Escalation> {
         val found = ArrayList<Escalation>()
-        val referrers = documents.referrers(key, policy)
+        val referrers = documents.referrers(key, policy).mapTo(LinkedHashSet()) { it.referrer }
         val tenants = referrers.filterIsInstance<SnapshotKey.Tenant>().sortedBy { it.tenantId }
         for (tenant in tenants) {
             val bindings = documents.head(

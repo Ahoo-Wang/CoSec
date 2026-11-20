@@ -30,6 +30,7 @@ import me.ahoo.cosec.control.store.HeadWrite
 import me.ahoo.cosec.control.store.InMemoryControlStore
 import me.ahoo.cosec.control.store.Publication
 import me.ahoo.cosec.control.store.PublishOutcome
+import me.ahoo.cosec.control.store.ReferrerEntry
 import me.ahoo.cosec.control.store.RevisionIndex
 import me.ahoo.cosec.control.store.Revisions
 import me.ahoo.cosec.document.Actor
@@ -83,13 +84,26 @@ import kotlin.coroutines.CoroutineContext
  * does, the index and the records as they were), and fail the index write that follows its head write (`"failIndex":
  * true`). A scenario with `"history": true` also reads the history of the last document, `<revision>:<policies>` of the
  * document each entry reads, and `expect` has it: `"history": ["1:p", "2:q"]`.
+ *
+ * A publish may name policies whose back-reference sets cannot be read or written (`"unreadable": ["shared"]`, as a
+ * value of the format before 8.0.0-beta.5, `CTL-42`). A scenario with `"cost": true` also counts what the last publish
+ * did to the back-reference sets (`CTL-44`): `"lastPublish": {"setReads": 0, "membersAdded": 1, "membersRemoved": 0}`.
  */
 object StoreRunner : ScenarioRunner {
     override fun run(scenario: Scenario): Outcome = runBlocking {
-        scenario.node.only("\$comment", "rules", "polarity", "level", "description", "publishes", "history", "expect")
+        scenario.node.only(
+            "\$comment",
+            "rules",
+            "polarity",
+            "level",
+            "description",
+            "publishes",
+            "history",
+            "cost",
+            "expect",
+        )
         val memory = InMemoryControlStore()
         val store = RecordingStore(memory)
-        val writes = store.writes
         val revisions = Revisions(store)
         val outcomes = ArrayList<Deferred<String>>()
         val previous = HashMap<SnapshotKey, Head?>()
@@ -97,6 +111,7 @@ object StoreRunner : ScenarioRunner {
         var held: Pair<Hold, Deferred<String>>? = null
         for (publish in scenario.node.required("publishes").values()) {
             key = prepare(publish, memory, store)
+            store.cost.clear()
             val current = revisions.head(key)
             val base = baseOf(publish, current, previous[key])
             val candidate = candidate(key, publish)
@@ -122,17 +137,33 @@ object StoreRunner : ScenarioRunner {
             hold?.let { held = it to outcome }
         }
         held?.let { (it, finishing) -> it.release.complete(Unit).also { finishing.await() } }
-        val answered = outcomes.map { it.await() }
+        stored(scenario, outcomes.map { it.await() }, revisions, memory, store, key)
+    }
+
+    /** What the scenario expects of the store after its publishes: [answered], the head of [key] and what it holds. */
+    private suspend fun stored(
+        scenario: Scenario,
+        answered: List<String>,
+        revisions: Revisions,
+        memory: InMemoryControlStore,
+        store: RecordingStore,
+        key: SnapshotKey,
+    ): Outcome.Stored {
         val head = revisions.head(key)
         val parent = head?.document?.provenance?.parent
-        Outcome.Stored(
+        return Outcome.Stored(
             outcomes = answered,
             revision = head?.revision,
             parent = parent?.revision,
             parentRecord = parent?.let { memory.record(key, SnapshotDigest.parse(it.digest)) != null },
             records = memory.recordDigests(key).size,
-            writes = writes,
+            writes = store.writes,
             history = if (scenario.node.get("history")?.bool() == true) historyOf(revisions, key) else null,
+            cost = if (scenario.node.get("cost")?.bool() == true) {
+                COST_KEYS.associateWith { store.cost[it] ?: 0 }
+            } else {
+                null
+            },
         )
     }
 
@@ -146,12 +177,14 @@ object StoreRunner : ScenarioRunner {
             "failHead",
             "failIndex",
             "restoreHead",
-            "holdRemovals"
+            "holdRemovals",
+            "unreadable",
         )
         val key = publish.get("document")?.text()?.let(::documentKey) ?: SnapshotKey.Tenant("acme")
         publish.get("restoreHead")?.let { restoreHead(memory, key, it.longValue()) }
         store.failHead = publish.get("failHead")?.bool() ?: false
         store.failIndex = publish.get("failIndex")?.bool() ?: false
+        store.unreadable = publish.get("unreadable")?.values()?.mapTo(HashSet()) { PolicyId(it.text()) }.orEmpty()
         return key
     }
 
@@ -203,6 +236,27 @@ object StoreRunner : ScenarioRunner {
         /** Fails the index write that follows a head write: the one that no longer holds a pending record. */
         var failIndex = false
 
+        /** The policies whose back-reference sets cannot be read or written, as a value of the old format (`CTL-42`). */
+        var unreadable: Set<PolicyId> = emptySet()
+
+        /** What the last publish did to the back-reference sets: reads, members added, members removed (`CTL-44`). */
+        val cost = HashMap<String, Int>()
+
+        private fun touch(policy: PolicyId, what: String, count: Int) {
+            check(policy !in unreadable) { "the back-reference set of [${policy.value}] cannot be read" }
+            cost.merge(what, count, Int::plus)
+        }
+
+        override suspend fun referrers(target: SnapshotKey, policy: PolicyId): Set<ReferrerEntry> {
+            touch(policy, "setReads", 1)
+            return memory.referrers(target, policy)
+        }
+
+        override suspend fun addReferrer(target: SnapshotKey, policy: PolicyId, entry: ReferrerEntry) {
+            touch(policy, "membersAdded", 1)
+            memory.addReferrer(target, policy, entry)
+        }
+
         override suspend fun putIndex(key: SnapshotKey, expected: SnapshotDigest?, index: RevisionIndex): Boolean {
             check(!(failIndex && index.pending.isEmpty())) { "the index write failed" }
             return memory.putIndex(key, expected, index)
@@ -221,17 +275,13 @@ object StoreRunner : ScenarioRunner {
             }
         }
 
-        override suspend fun putReferrers(
-            target: SnapshotKey,
-            policy: PolicyId,
-            expected: SnapshotDigest?,
-            referrers: Map<SnapshotKey, Long>,
-        ): Boolean {
+        override suspend fun removeReferrers(target: SnapshotKey, policy: PolicyId, entries: Set<ReferrerEntry>) {
             currentCoroutineContext()[Hold]?.takeIf { it.written }?.let { hold ->
                 hold.paused.complete(Unit)
                 hold.release.await()
             }
-            return memory.putReferrers(target, policy, expected, referrers)
+            touch(policy, "membersRemoved", entries.size)
+            memory.removeReferrers(target, policy, entries)
         }
     }
 
@@ -246,6 +296,8 @@ object StoreRunner : ScenarioRunner {
             val NONE: CoroutineContext = kotlin.coroutines.EmptyCoroutineContext
         }
     }
+
+    private val COST_KEYS = listOf("setReads", "membersAdded", "membersRemoved")
 
     private fun documentKey(text: String): SnapshotKey = when {
         text == "platform" -> SnapshotKey.Platform

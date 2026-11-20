@@ -80,19 +80,24 @@ interface ControlStore : CandidateStore {
     suspend fun putIndex(key: SnapshotKey, expected: SnapshotDigest?, index: RevisionIndex): Boolean
 
     /**
-     * The documents that refer to [policy] of [target] (RFC 0007 §5.8), each with the revision of it that last indexed
-     * the reference, and the digest a [putReferrers] must name. A revision removes only what it or an earlier one
-     * indexed, so the late removal of one revision never takes back what a later one indexed again (#1207).
+     * The references to [policy] of [target] (RFC 0007 §5.8): one [ReferrerEntry] per document and revision that indexed
+     * one, empty when there is none. A value the store cannot read, a stored format older than this one included,
+     * throws: it is never read as no referrers (`CTL-42`), which would let the policy be removed.
      */
-    suspend fun referrers(target: SnapshotKey, policy: PolicyId): Versioned<Map<SnapshotKey, Long>>?
+    suspend fun referrers(target: SnapshotKey, policy: PolicyId): Set<ReferrerEntry>
 
-    /** Replaces the referrers of [policy] of [target] if they are still at [expected]; `false` when they changed. */
-    suspend fun putReferrers(
-        target: SnapshotKey,
-        policy: PolicyId,
-        expected: SnapshotDigest?,
-        referrers: Map<SnapshotKey, Long>,
-    ): Boolean
+    /**
+     * Adds [entry] to the references to [policy] of [target]; adding one that is there changes nothing. Each entry is a
+     * member of its own, so two documents, or two revisions of one, never write over each other. Throws when the value
+     * cannot be read or written, never answering as if it had added.
+     */
+    suspend fun addReferrer(target: SnapshotKey, policy: PolicyId, entry: ReferrerEntry)
+
+    /**
+     * Removes exactly [entries] from the references to [policy] of [target], and nothing else: an entry another revision
+     * added meanwhile is another member and stays (#1207, `CTL-25`). Throws when the value cannot be read or written.
+     */
+    suspend fun removeReferrers(target: SnapshotKey, policy: PolicyId, entries: Set<ReferrerEntry>)
 
     /** The change request [id], with the digest a [putChange] must name, or `null` when there is none. */
     suspend fun change(id: ChangeId): Versioned<ChangeRequest>?
@@ -242,6 +247,12 @@ data class RevisionIndex(
     val pending: List<PendingRecord> = emptyList(),
     val floor: Long = 1,
     val reclaiming: List<SnapshotDigest> = emptyList(),
+    /**
+     * What this document indexed in the back-reference index and has not yet seen dropped: the exact entries a later
+     * revision removes by, without reading the references of others (`CTL-44`). Written before the entries are added,
+     * so a crash leaves a record of an entry that is not there, which its removal skips, never an entry nobody knows.
+     */
+    val indexed: List<IndexedReference> = emptyList(),
 ) {
     init {
         require(

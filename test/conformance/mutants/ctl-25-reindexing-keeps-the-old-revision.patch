@@ -1,17 +1,16 @@
 # Rule: CTL-25
-# Mutant: a revision that refers again to what is still indexed keeps the earlier revision, so the late removal of the revision between them takes it out
+# Mutant: a revision that indexes a reference again adds its member at the revision before it, so the late drop of that revision takes it out
 # Tests: :control:test --tests me.ahoo.cosec.control.store.ReferrerCleanupRaceTest :conformance:test
 
-diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/store/ReferrerIndex.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/store/ReferrerIndex.kt
-index 70f21b4f..033a6c60 100644
---- a/core/control/src/main/kotlin/me/ahoo/cosec/control/store/ReferrerIndex.kt
-+++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/store/ReferrerIndex.kt
-@@ -201,7 +201,7 @@ internal class ReferrerIndex(
-      */
-     fun indexed(referrers: Map<SnapshotKey, Long>, key: SnapshotKey, revision: Long): Map<SnapshotKey, Long> {
-         val current = referrers[key]
--        return if (current != null && current >= revision) referrers else referrers + (key to revision)
-+        return if (current != null) referrers else referrers + (key to revision)
-     }
- 
-     /**
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/store/Revisions.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/store/Revisions.kt
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/store/Revisions.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/store/Revisions.kt
+@@ -121,7 +121,7 @@ class Revisions(
+             )
+         } || warn("[$key] revision $revision: its record could not be registered as pending; an orphan would stay")
+         check(store.putRecord(key, stored) == digest) { "The store addressed the record of [$key] by another digest." }
+-        referrerIndex.addEntries(key, revision, added)
++        referrerIndex.addEntries(key, maxOf(1, revision - 1), added)
+         if (key is SnapshotKey.App) {
+             // Before the head moves, whether this is its first revision or the list was lost: no app has a head the
+             // app list does not name (RC1-4).

@@ -23,6 +23,8 @@ import me.ahoo.cocache.api.Store
 import me.ahoo.cocache.api.spi.Digest
 import me.ahoo.cocache.core.CacheRuntime
 import me.ahoo.cocache.core.KeyEncoder
+import me.ahoo.cocache.core.SetStoreSpec
+import me.ahoo.cocache.core.codec.StringCodec
 import me.ahoo.cocache.core.memory.InMemoryBackend
 import me.ahoo.cocache.test.HookedBackend
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
@@ -46,6 +48,7 @@ import me.ahoo.cosec.control.store.AppList
 import me.ahoo.cosec.control.store.HeadWrite
 import me.ahoo.cosec.control.store.PendingRecord
 import me.ahoo.cosec.control.store.Publication
+import me.ahoo.cosec.control.store.ReferrerEntry
 import me.ahoo.cosec.control.store.RevisionEntry
 import me.ahoo.cosec.control.store.RevisionIndex
 import me.ahoo.cosec.control.store.Revisions
@@ -91,7 +94,10 @@ class CoCacheControlStoreTest {
         heads = heads,
         records = node.runtime.create(ControlCacheSpecs.revisionRecord(node.keyPrefix)),
         indexes = node.runtime.create(ControlCacheSpecs.revisionIndex(node.keyPrefix)),
-        references = node.runtime.create(ControlCacheSpecs.referenceIndex(node.keyPrefix)),
+        sets = ControlSets(
+            node.runtime.create(ControlCacheSpecs.referenceIndex(node.keyPrefix)),
+            node.runtime.create(ControlCacheSpecs.documentSet(node.keyPrefix)),
+        ),
         leases = node.runtime.create(ControlCacheSpecs.lease(node.keyPrefix)),
         changes = changes,
         stages = node.runtime.create(ControlCacheSpecs.stage(node.keyPrefix)),
@@ -119,8 +125,8 @@ class CoCacheControlStoreTest {
     )
 
     /**
-     * SCP-10: a back-reference set naming an app no key can name is a format error of the whole set, so a publish that
-     * would write it fails, and the set stays as it was until an operator repairs it.
+     * SCP-10: a back-reference member naming an app no key can name is a format error of the whole set, so every read of
+     * it fails, and a removal it could block is refused, until an operator repairs it.
      */
     @Test
     fun `a back-reference set naming an app no key can name is a format error`() = runBlocking<Unit> {
@@ -132,63 +138,75 @@ class CoCacheControlStoreTest {
             revisions.publish(SnapshotKey.Platform, null, document(DocumentKind.PLATFORM, "", SHARED), BOOTSTRAP)
             CacheRuntime.builder().backend(backend).build().use { raw ->
                 raw.create(
-                    rawStore(
-                        "RawReferences",
-                        node.keyPrefix,
-                        CoSecCacheSpecs.REFERENCE_INDEX_CACHE_NAME,
-                        ReferenceKeyEncoder
-                    )
-                ).put(ReferenceKey(SnapshotKey.Platform, shared), """{"app:a\u0001b":1}""".encodeToByteArray())
+                    rawSet(node.keyPrefix)
+                ).add(ReferenceKey(SnapshotKey.Platform, shared), listOf("app:a\u0001b@1"))
             }
             formatError { store.referrers(SnapshotKey.Platform, shared) }.message.assert().doesNotContain("\u0001")
+            val base = revisions.head(SnapshotKey.Platform)
             formatError {
-                revisions.publish(
-                    SnapshotKey.Tenant("acme"),
-                    null,
-                    document(DocumentKind.TENANT, "acme", BINDS_SHARED),
-                    BOOTSTRAP,
-                )
+                revisions.publish(SnapshotKey.Platform, base, document(DocumentKind.PLATFORM, "", ""), BOOTSTRAP)
             }
-            revisions.head(SnapshotKey.Tenant("acme")).assert().isNull()
+            revisions.head(SnapshotKey.Platform)!!.digest.assert().isEqualTo(base!!.digest)
         }
     }
 
     /**
-     * The upgrade note's path: `repair-references` reads a set before it writes it, so the array form 8.0.0-alpha.3 wrote
-     * stops it until the set is deleted; it then writes the set again from the head, with the referrer's revision.
+     * `CTL-42`: a back-reference value in the format before 8.0.0-beta.5 is not a set CoCache can read or write. A read
+     * fails, naming `cosec-migrate repair-references`; so does a publish that would add to it or a removal it could
+     * block, and no head moves.
      */
     @Test
-    fun `repair stops at a set in the array form, and rebuilds it with revisions once it is deleted`() = runBlocking<Unit> {
+    fun `a back-reference value in the format before beta 5 fails closed, naming the repair`() = runBlocking<Unit> {
         val backend = InMemoryBackend()
         val keyPrefix = newKeyPrefix()
-        val acme = SnapshotKey.Tenant("acme")
         val reference = ReferenceKey(SnapshotKey.Platform, PolicyId("shared"))
         SnapshotNode(backend, keyPrefix).use { node ->
-            val revisions = Revisions(store(node), Clock.systemUTC())
-            revisions.publish(SnapshotKey.Platform, null, document(DocumentKind.PLATFORM, "", SHARED), BOOTSTRAP)
-            revisions.publish(acme, null, document(DocumentKind.TENANT, "acme", BINDS_SHARED), BOOTSTRAP)
+            Revisions(store(node), Clock.systemUTC())
+                .publish(SnapshotKey.Platform, null, document(DocumentKind.PLATFORM, "", SHARED), BOOTSTRAP)
         }
         CacheRuntime.builder().backend(backend).build().use { raw ->
             raw.create(
                 rawStore("RawReferences", keyPrefix, CoSecCacheSpecs.REFERENCE_INDEX_CACHE_NAME, ReferenceKeyEncoder)
-            )
-                .put(reference, """["tenant:acme"]""".encodeToByteArray())
-        }
-        SnapshotNode(backend, keyPrefix).use { node ->
-            formatError { Revisions(store(node), Clock.systemUTC()).repairReferences(acme) }
-        }
-        CacheRuntime.builder().backend(backend).build().use { raw ->
-            raw.create(
-                rawStore("RawReferences", keyPrefix, CoSecCacheSpecs.REFERENCE_INDEX_CACHE_NAME, ReferenceKeyEncoder)
-            )
-                .delete(reference)
+            ).put(reference, """{"tenant:acme":1}""".encodeToByteArray())
         }
         SnapshotNode(backend, keyPrefix).use { node ->
             val store = store(node)
-            Revisions(store, Clock.systemUTC()).repairReferences(acme).assert().isEqualTo(1)
-            store.referrers(SnapshotKey.Platform, reference.policy)!!.value.assert().isEqualTo(mapOf(acme to 1L))
+            val revisions = Revisions(store, Clock.systemUTC())
+            unrepaired { store.referrers(SnapshotKey.Platform, reference.policy) }
+            val beta = SnapshotKey.Tenant("beta")
+            unrepaired { revisions.publish(beta, null, document(DocumentKind.TENANT, "beta", BINDS_SHARED), BOOTSTRAP) }
+            revisions.head(beta).assert().isNull()
+            val base = revisions.head(SnapshotKey.Platform)
+            unrepaired {
+                revisions.publish(SnapshotKey.Platform, base, document(DocumentKind.PLATFORM, "", ""), BOOTSTRAP)
+            }
+            revisions.head(SnapshotKey.Platform)!!.digest.assert().isEqualTo(base!!.digest)
         }
     }
+
+    /** What [block] fails with names the command that converts a store written before 8.0.0-beta.5. */
+    @Suppress("TooGenericExceptionCaught")
+    private suspend fun unrepaired(block: suspend () -> Unit) {
+        val error = try {
+            block()
+            null
+        } catch (e: Exception) {
+            e
+        }
+        generateSequence<Throwable>(checkNotNull(error) { "It did not fail." }) { it.cause }
+            .mapNotNull { it.message }.joinToString(" | ").assert().contains("cosec-migrate repair-references")
+    }
+
+    /** A set at the back-references' keys whose members are written as they are, for members no codec would write. */
+    private fun rawSet(keyPrefix: String): SetStoreSpec<ReferenceKey, String> =
+        CoSecCacheSpecs.layout(keyPrefix, CoSecCacheSpecs.REFERENCE_INDEX_CACHE_NAME).let { layout ->
+            SetStoreSpec.builder<ReferenceKey, String>("RawReferenceSet")
+                .keyPrefix(layout.keyPrefix)
+                .namespace(layout.namespace)
+                .keyEncoder(ReferenceKeyEncoder)
+                .elementCodec(StringCodec)
+                .build()
+        }
 
     /** The format error [block] fails with, however CoCache wraps what the codec threw. */
     @Suppress("TooGenericExceptionCaught")
@@ -452,7 +470,10 @@ class CoCacheControlStoreTest {
                 lostReply,
                 node.runtime.create(ControlCacheSpecs.revisionRecord(node.keyPrefix)),
                 node.runtime.create(ControlCacheSpecs.revisionIndex(node.keyPrefix)),
-                node.runtime.create(ControlCacheSpecs.referenceIndex(node.keyPrefix)),
+                ControlSets(
+                    node.runtime.create(ControlCacheSpecs.referenceIndex(node.keyPrefix)),
+                    node.runtime.create(ControlCacheSpecs.documentSet(node.keyPrefix)),
+                ),
                 node.runtime.create(ControlCacheSpecs.lease(node.keyPrefix)),
                 node.runtime.create(ControlCacheSpecs.changeRequest(node.keyPrefix)),
                 node.runtime.create(ControlCacheSpecs.stage(node.keyPrefix)),
@@ -497,7 +518,10 @@ class CoCacheControlStoreTest {
                 rejected,
                 node.runtime.create(ControlCacheSpecs.revisionRecord(node.keyPrefix)),
                 node.runtime.create(ControlCacheSpecs.revisionIndex(node.keyPrefix)),
-                node.runtime.create(ControlCacheSpecs.referenceIndex(node.keyPrefix)),
+                ControlSets(
+                    node.runtime.create(ControlCacheSpecs.referenceIndex(node.keyPrefix)),
+                    node.runtime.create(ControlCacheSpecs.documentSet(node.keyPrefix)),
+                ),
                 node.runtime.create(ControlCacheSpecs.lease(node.keyPrefix)),
                 node.runtime.create(ControlCacheSpecs.changeRequest(node.keyPrefix)),
                 node.runtime.create(ControlCacheSpecs.stage(node.keyPrefix)),
@@ -537,16 +561,20 @@ class CoCacheControlStoreTest {
             store.putIndex(key, stored.digest, RevisionIndex.EMPTY).assert().isTrue()
             store.putIndex(key, stored.digest, index).assert().isFalse()
 
+            // A back-reference set: members added and removed one by one, never a whole value replaced (CTL-25, CTL-44).
             val shared = PolicyId("cosec:shared")
-            store.putReferrers(SnapshotKey.Platform, shared, null, mapOf(key to 3L)).assert().isTrue()
-            val referrers = store.referrers(SnapshotKey.Platform, shared)!!
-            referrers.value.assert().isEqualTo(mapOf(key to 3L))
-            // Another revision is another value: a removal read before it no longer matches.
-            store.putReferrers(SnapshotKey.Platform, shared, referrers.digest, mapOf(key to 4L)).assert().isTrue()
-            store.putReferrers(SnapshotKey.Platform, shared, referrers.digest, emptyMap()).assert().isFalse()
-            val raised = store.referrers(SnapshotKey.Platform, shared)!!
-            store.putReferrers(SnapshotKey.Platform, shared, raised.digest, emptyMap()).assert().isTrue()
-            store.referrers(SnapshotKey.Platform, shared)!!.value.assert().isEmpty()
+            store.referrers(SnapshotKey.Platform, shared).assert().isEmpty()
+            store.addReferrer(SnapshotKey.Platform, shared, ReferrerEntry(key, 3))
+            store.addReferrer(SnapshotKey.Platform, shared, ReferrerEntry(key, 4, definesItself = true))
+            store.addReferrer(SnapshotKey.Platform, shared, ReferrerEntry(key, 4, definesItself = true))
+            store.referrers(SnapshotKey.Platform, shared).assert()
+                .containsExactlyInAnyOrder(ReferrerEntry(key, 3), ReferrerEntry(key, 4, definesItself = true))
+            store.removeReferrers(SnapshotKey.Platform, shared, setOf(ReferrerEntry(key, 3), ReferrerEntry(key, 9)))
+            store.referrers(SnapshotKey.Platform, shared).assert().containsExactly(ReferrerEntry(key, 4, true))
+            store.removeReferrers(SnapshotKey.Platform, shared, setOf(ReferrerEntry(key, 4, true)))
+            store.removeReferrers(SnapshotKey.Platform, shared, emptySet())
+            store.referrers(SnapshotKey.Platform, shared).assert().isEmpty()
+            store.listDocuments(emptySet())
 
             store.acquireLease("reclaim", "me", Duration.ofMinutes(1)).assert().isTrue()
             store.acquireLease("reclaim", "me", Duration.ofMinutes(1)).assert().isTrue()
@@ -570,33 +598,35 @@ class CoCacheControlStoreTest {
         backend.close()
     }
 
-    /** #1207: each referrer with the revision of it that last indexed the reference. */
+    /** `CTL-43`: a member is a document key, the revision that indexed it and its flag; anything else is malformed. */
     @Test
-    fun `the referrers codec reads back what it writes and rejects anything else`() {
-        val referrers = mapOf(
-            SnapshotKey.Tenant("b") to 1L,
-            SnapshotKey.Platform to 0L,
-            SnapshotKey.App("order") to 12L
-        )
-        ReferrersCodec.decode(ReferrersCodec.encode(referrers)).assert().isEqualTo(referrers)
-        ReferrersCodec.encode(referrers).decodeToString().assert()
-            .isEqualTo("""{"app:order":12,"platform":0,"tenant:b":1}""")
+    fun `the member codec reads back what it writes and rejects anything else`() {
         listOf(
-            "1",
-            "\"tenant:b\"",
-            // The array of keys 8.0.0-alpha.3 wrote.
-            """["tenant:b"]""",
-            """["policies"]""",
-            """["tenant:a:b"]""",
-            "[1]",
+            ReferrerEntry(SnapshotKey.Tenant("b"), 1),
+            ReferrerEntry(SnapshotKey.Platform, 7, definesItself = true),
+            ReferrerEntry(SnapshotKey.App("order"), 12),
+            // A tenant id may hold '@': the revision is after the last one.
+            ReferrerEntry(SnapshotKey.Tenant("a@b"), 2),
+        ).forEach { entry ->
+            ReferrerMemberCodec.decode(ReferrerMemberCodec.encode(entry)).assert().isEqualTo(entry)
+        }
+        listOf(
+            "",
+            "tenant:b",
+            "tenant:b@",
+            "tenant:b@0",
+            "tenant:b@-1",
+            "tenant:b@1.5",
+            "tenant:b@x",
+            "tenant:b@1#mine",
+            "@1",
+            "policies@1",
             // An app no key can name (SCP-10).
-            """{"app:a\u0001b":1}""",
-            """{"policies":1}""",
-            """{"tenant:b":-1}""",
-            """{"tenant:b":"1"}""",
-            """{"tenant:b":1.5}""",
+            "app:a\u0001b@1",
+            // The object the format before 8.0.0-beta.5 wrote.
+            """{"tenant:b":1}""",
         ).forEach { text ->
-            assertThrownBy<SnapshotFormatException> { ReferrersCodec.decode(text.encodeToByteArray()) }
+            assertThrownBy<SnapshotFormatException> { ReferrerMemberCodec.decode(text.encodeToByteArray()) }
         }
     }
 

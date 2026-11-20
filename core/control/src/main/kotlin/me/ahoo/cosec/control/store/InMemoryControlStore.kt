@@ -44,7 +44,7 @@ class InMemoryControlStore(private val clock: Clock = Clock.systemUTC()) : Contr
     private val heads = HashMap<SnapshotKey, SnapshotDocument>()
     private val records = HashMap<Pair<SnapshotKey, SnapshotDigest>, SnapshotDocument>()
     private val indexes = HashMap<SnapshotKey, RevisionIndex>()
-    private val references = HashMap<Pair<SnapshotKey, PolicyId>, Map<SnapshotKey, Long>>()
+    private val references = HashMap<Pair<SnapshotKey, PolicyId>, MutableSet<ReferrerEntry>>()
     private val leases = HashMap<String, Pair<String, Instant>>()
     private val changes = HashMap<ChangeId, Pair<ChangeRequest, Long>>()
     private val stages = HashMap<SnapshotKey, Pair<StageSlot, Long>>()
@@ -115,21 +115,19 @@ class InMemoryControlStore(private val clock: Clock = Clock.systemUTC()) : Contr
         changes.values.map { (change, _) -> change }.filterNot { it.state.terminal }
     }
 
-    override suspend fun referrers(target: SnapshotKey, policy: PolicyId): Versioned<Map<SnapshotKey, Long>>? =
-        synchronized(lock) { references[target to policy]?.let { Versioned(it, referrersDigest(it)) } }
+    override suspend fun referrers(target: SnapshotKey, policy: PolicyId): Set<ReferrerEntry> =
+        synchronized(lock) { references[target to policy]?.toSet().orEmpty() }
 
-    override suspend fun putReferrers(
-        target: SnapshotKey,
-        policy: PolicyId,
-        expected: SnapshotDigest?,
-        referrers: Map<SnapshotKey, Long>,
-    ): Boolean = synchronized(lock) {
-        val current = references[target to policy]?.let(::referrersDigest)
-        if (current != expected) {
-            return false
+    override suspend fun addReferrer(target: SnapshotKey, policy: PolicyId, entry: ReferrerEntry) {
+        synchronized(lock) { references.getOrPut(target to policy) { LinkedHashSet() } += entry }
+    }
+
+    override suspend fun removeReferrers(target: SnapshotKey, policy: PolicyId, entries: Set<ReferrerEntry>) {
+        synchronized(lock) {
+            val current = references[target to policy] ?: return
+            current -= entries
+            if (current.isEmpty()) references -= target to policy
         }
-        if (referrers.isEmpty()) references.remove(target to policy) else references[target to policy] = referrers
-        true
     }
 
     override suspend fun change(id: ChangeId): Versioned<ChangeRequest>? =
@@ -210,9 +208,6 @@ class InMemoryControlStore(private val clock: Clock = Clock.systemUTC()) : Contr
     }
 
     private fun candidateDigest(candidate: StoredCandidate): SnapshotDigest = digest(ShadowCodec.encode(candidate))
-
-    private fun referrersDigest(referrers: Map<SnapshotKey, Long>): SnapshotDigest =
-        digest(referrers.map { (key, revision) -> "$key=$revision" }.sorted().joinToString("\n").encodeToByteArray())
 
     private fun digest(bytes: ByteArray): SnapshotDigest =
         SnapshotDigest(SnapshotDigest.SHA_256, MessageDigest.getInstance(SnapshotDigest.SHA_256).digest(bytes))

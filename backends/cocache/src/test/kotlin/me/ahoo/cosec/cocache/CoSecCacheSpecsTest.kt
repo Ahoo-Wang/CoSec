@@ -49,7 +49,7 @@ class CoSecCacheSpecsTest {
                 CoSecCacheSpecs.MEMBERSHIP_CACHE_NAME,
             )
         )
-        names.size.assert().isEqualTo(18)
+        names.size.assert().isEqualTo(19)
         listOf("cosec", "a:b").forEach { keyPrefix ->
             val prefixes = names.associateWith { CoSecCacheSpecs.layout(keyPrefix, it).storagePath + ":" }
             prefixes.forEach { (name, prefix) ->
