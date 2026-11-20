@@ -171,13 +171,16 @@ internal class CoSecControlAutoConfiguration {
 
     @Bean
     @ConditionalOnMissingBean
-    fun cosecChangeOptions(properties: ControlProperties): ChangeOptions = ChangeOptions(
-        expireAfter = properties.changes.expireAfter,
-        approvalExpireAfter = properties.approval.expireAfter,
-        fourEyes = properties.approval.fourEyes,
-        shadow = with(properties.shadow) { ShadowOptions(minDuration, minSamples, maxDuration) },
-        breakGlassMaxDuration = properties.breakGlass.maxDuration,
-    )
+    fun cosecChangeOptions(properties: ControlProperties): ChangeOptions {
+        ShadowSampleNote.warn(properties.shadow)
+        return ChangeOptions(
+            expireAfter = properties.changes.expireAfter,
+            approvalExpireAfter = properties.approval.expireAfter,
+            fourEyes = properties.approval.fourEyes,
+            shadow = with(properties.shadow) { ShadowOptions(minDuration, minSamples, maxDuration) },
+            breakGlassMaxDuration = properties.breakGlass.maxDuration,
+        )
+    }
 
     /** Not replaceable: the hard rules, grant analysis and approvals of every change (like [cosecControlAuthorizer]). */
     @Bean
