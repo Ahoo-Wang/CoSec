@@ -19,6 +19,7 @@ import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.engine.pattern.ActionPattern
 import me.ahoo.cosec.engine.pattern.ResourcePattern
 import me.ahoo.cosec.model.Effect
+import me.ahoo.cosec.model.condition.Attribute
 
 /**
  * A DENY statement or a rate limit rule's statement that is shaped for HTTP: an action pattern of service `http`, or an
@@ -43,3 +44,28 @@ fun CompiledDocument.httpStatements(): List<HttpStatement> {
 private fun httpShaped(statement: CompiledStatement): Boolean =
     statement.actionPatterns.any { it.service == ResourcePattern.HTTP_TYPE } ||
         statement.resourcePatterns.any { it is ResourcePattern.Http }
+
+/**
+ * The labels of the DENY statements and rate limit rules of this document that are on every action and every resource, so
+ * not [httpStatements], and whose condition reads `action.verb`, `resource.id` or `resource.var.*` (RTE-5): what a route
+ * map changes. A mapped request has the business action's verb and the route's resource, so such a statement, written for
+ * the request as received, may stop applying to a route the map maps.
+ * Empty for most documents.
+ */
+@InternalCoSecApi
+fun CompiledDocument.mappedVocabularyStatements(): List<String> {
+    val denies = allPolicies.flatMap { policy ->
+        policy.statements.filter { it.effect == Effect.DENY && readsMapped(it) }.map { "DENY ${policy.id}#${it.index}" }
+    }
+    return denies + rateLimits.filter { readsMapped(it.statement) }.map { "rate limit ${it.id}" }
+}
+
+private fun readsMapped(statement: CompiledStatement): Boolean {
+    val condition = statement.condition ?: return false
+    val everything = statement.actionPatterns.any { it.service == null } &&
+        statement.resourcePatterns.all { it === ResourcePattern.AnyResource }
+    return everything && ConditionAttributes.of(condition).any {
+        it.kind == Attribute.Kind.ACTION_VERB || it.kind == Attribute.Kind.RESOURCE_ID ||
+            it.kind == Attribute.Kind.RESOURCE_VAR
+    }
+}

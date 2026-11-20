@@ -705,9 +705,13 @@
         "cocache:CoCacheControlStoreTest#members a write left behind are dropped by the next read",
         "cocache:CoCacheControlStoreTest#a listed change that is missing stays until the grace has passed",
         "cocache:OpenChangeSetsRaceTest#a reader between a write's listing and its record keeps the new member",
-        "cocache:OpenChangeSetsRaceTest#a write that unlists late takes out only the state it left",
+        "cocache:OpenChangeSetsRaceTest#a write that unlists late takes out only the record it replaced",
+        "cocache:OpenChangeSetsRaceTest#a change that comes back to a state keeps its member when the write that left it unlists late",
+        "cocache:OpenChangeSetsRaceTest#writers that pause before they unlist never take a later write's member",
+        "cocache:OpenChangeSetsRaceTest#a stale member goes after the grace and the current one stays, the change listed once",
         "cocache:OpenChangeSetsRaceTest#a member a lost write left is never listed, and goes after the grace",
-        "cocache:OpenChangeSetsRaceTest#concurrent writers and readers leave every open change in its document's and its state's set",
+        "cocache:OpenChangeSetsRaceTest#a member without a digest is read as stale",
+        "cocache:OpenChangeSetsRaceTest#concurrent writers that bring changes back to their states leave every open change listed",
         "control:OpenChangeListingTest#while the old list is there the listing is a 503 and nothing is reclaimed - CTL-54"
       ],
       "pending": null

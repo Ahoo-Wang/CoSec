@@ -1,0 +1,17 @@
+# Rule: SNP-22
+# Mutant: a compilation still queued when its load timed out starts anyway, taking a thread for a load that has ended
+# Tests: :runtime:test --tests me.ahoo.cosec.runtime.snapshot.SnapshotCompileDeadlineTest
+
+diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/KeyEffects.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/KeyEffects.kt
+index 8e66c11c1..018949f8c 100644
+--- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/KeyEffects.kt
++++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/KeyEffects.kt
+@@ -172,7 +172,7 @@ internal class KeyEffects<T : Any>(
+     private fun compileOnPool(running: CompileDeadlines.Running, read: SnapshotRead.Present) {
+         val id = running.loadId
+         // A compilation whose load timed out while it waited in the queue does not take the thread (R2D-11).
+-        if (!running.start()) {
++        if (!running.start() && false) {
+             context.compiling.remove(key, running)
+             return
+         }

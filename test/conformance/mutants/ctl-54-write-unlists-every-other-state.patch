@@ -1,19 +1,22 @@
 # Rule: CTL-54
-# Mutant: a write unlists the change from every other state on its own view: one that finishes late takes out the member a later write added
+# Mutant: a write unlists every member of the change from every other state on its own view: one that finishes late takes out the member a later write added
 # Tests: :cocache:test --tests me.ahoo.cosec.cocache.control.OpenChangeSetsRaceTest
 
 diff --git a/backends/cocache/src/main/kotlin/me/ahoo/cosec/cocache/control/OpenChangeSets.kt b/backends/cocache/src/main/kotlin/me/ahoo/cosec/cocache/control/OpenChangeSets.kt
-index 5ad8e4806..f894b4707 100644
+index f87fed1d5..28d6fa62b 100644
 --- a/backends/cocache/src/main/kotlin/me/ahoo/cosec/cocache/control/OpenChangeSets.kt
 +++ b/backends/cocache/src/main/kotlin/me/ahoo/cosec/cocache/control/OpenChangeSets.kt
-@@ -87,8 +87,8 @@ internal class OpenChangeSets(
-     @Suppress("TooGenericExceptionCaught")
-     suspend fun unlistAfter(change: ChangeRequest, previous: ChangeState?) {
+@@ -100,9 +100,10 @@ internal class OpenChangeSets(
+         written: SnapshotDigest,
+     ) {
          try {
--            if (previous != null && previous != change.state && !previous.terminal) {
--                sets.removeChangeMembers(stateKey(previous), setOf(member(change.key, change.id)))
-+            ChangeState.entries.filter { !it.terminal && it != change.state }.forEach {
-+                sets.removeChangeMembers(stateKey(it), setOf(member(change.key, change.id)))
+-            val replaced = expected?.takeIf { it != written }
+-            if (previous != null && !previous.terminal && replaced != null) {
+-                sets.removeChangeMembers(stateKey(previous), setOf(member(change.key, change.id, replaced)))
++            val named = cursor(change.key, change.id)
++            ChangeState.entries.filter { !it.terminal && it != change.state }.forEach { state ->
++                val members = sets.changeMembers(stateKey(state))
++                sets.removeChangeMembers(stateKey(state), members.filter { it.startsWith("$named@") }.toSet())
              }
              if (change.state.terminal) sets.removeChangeMembers(documentKey(change.key), setOf(change.id.value))
          } catch (e: CancellationException) {

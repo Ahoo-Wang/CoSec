@@ -55,7 +55,7 @@ key 都在它之下（`SNP-9`）。
 | `<s>:control:refs:<doc>:<policyId>` | 控制面、`cosec-migrate` | 一个集合（CoCache 的 `SetStore`），引用 `<doc>` 中某个策略的每个文档的每个修订一个成员：`<referrer>@<revision>`，引用者是自己定义了该 id 策略的租户时其后加 `#own`（`CTL-43`）。一次发布添加它开始引用的成员，它的收尾只删除其前向记录持有的那些成员，所以租户一次发布写入的量不随引用者数增长（`CTL-44`），删除也从不拿走更晚的修订添加的成员（`CTL-25`）。8.0.0-beta.5 之前格式的值在 [`cosec-migrate repair-references`](./upgrading.md#repair-the-back-reference-index) 转换之前一律失败关闭（`CTL-42`）；该命令还补上各个头引用而集合缺少的成员，并删除没有任何头持有的成员 |
 | `<s>:control:lease:<name>` | 控制面 | 一个租约（`reclaim:<doc>`、`shadow-windows`）；随每次写入过期，持有者完成后删除它，且只在仍持有时删除（`CTL-26`）；持有者再次获取自己的租约时，从此刻起重新持有完整的时长 |
 | `<s>:control:documents:all` | 控制面、`cosec-migrate` | 一个集合：有修订的文档，每个一个成员，供维护任务与 `repair-references` 逐个访问 |
-| `<s>:control:changes:doc:<doc>`、`<s>:control:changes:state:<STATE>`、`<s>:control:changes:kept` | 控制面、`cosec-migrate` | 未完成的变更，以集合保存：一个文档的未完成变更 id；每个非终态中变更的 `<doc>#<changeId>`；以及标记 `kept`。变更在写入记录之前加入，写入之后从它离开的状态中移除、到终态时再从它的文档中移除，所以集合包含每个未完成的变更，也可能多出几个：崩溃、失败的移除或落败的条件写入留下的成员。这样的成员从不被列出：每次读取都读它的记录并跳过它；变更已到终态时立即移除，否则要等本实例看到它如此持续 `cosec.control.revisions.orphan-age` 之后才移除，因为进行中的写入先登记新状态，记录之后才跟上。在此之前，它让所在集合的每次列出多读一条记录。只有 `kept` 存在且 `<s>:control:list:open-changes` 不存在时才信任它们：在此之前控制面不回收任何东西，`GET /changes` 返回 `503`（`CTL-54`） |
+| `<s>:control:changes:doc:<doc>`、`<s>:control:changes:state:<STATE>`、`<s>:control:changes:kept` | 控制面、`cosec-migrate` | 未完成的变更，以集合保存：一个文档的未完成变更 id；每个非终态中变更的 `<doc>#<changeId>@<digest>`；以及标记 `kept`。状态集合的成员以记录的摘要指明是哪次写入放进去的，就像反向引用指明它的修订：写入在写记录之前加入所写记录的成员，之后从被替换记录的状态中移除被替换记录的成员，变更到终态时再从文档中移除它的 id。回到某个状态的变更是以另一条记录回去的，所以迟到的移除不会拿走它的成员。集合包含每个未完成的变更，也可能多出几个成员：崩溃、失败的移除或落败的条件写入会留下一个。列出时，变更的记录处于该状态就列出一次，无论有几个成员指向它；保留该记录的成员，其余成员在变更已到终态时立即移除，否则要等本实例看到它们如此持续 `cosec.control.revisions.orphan-age` 之后才移除，因为进行中的写入先登记记录，记录之后才写入。在此之前，一个过时成员让所在集合的每次列出多读一条记录。只有 `kept` 存在且 `<s>:control:list:open-changes` 不存在时才信任它们：在此之前控制面不回收任何东西，`GET /changes` 返回 `503`（`CTL-54`） |
 | `<s>:control:list:open-changes`、`<s>:control:list:documents` | 8.0.0-beta.5 之前的控制面 | 8.0.0-beta.5 之前格式的未完成变更和文档，各为一个值。它们只在 `repair-references` 转换存储之前存在，该命令最后才分别删除它们：文档列表存在期间，控制面在启动时记录一条 `ERROR`，`cosecControlStoreFormat` 为 `DOWN`；未完成变更列表存在期间，未完成变更集合不被信任。更早版本的控制面会重新写入它们：升级前先停掉它 |
 | `<s>:control:apps:all` | 控制面、`cosec-migrate` | app 列表：现有的 app 文档，以及列表是否完整；授出分析在每次租户变更时读取它（[见下文](#publishing-through-the-control-plane)） |
 | `<s>:control:change:<changeId>` | 控制面 | 一个变更请求 |
@@ -271,6 +271,8 @@ sequenceDiagram
   与 `prewarm-apps` 一起在实例报告就绪之前加载，所以每个应用的第一个请求都会找到已装入的文档（[`prewarm-host-apps`](./configuration.md#snapshot)）。
   被持有的应用文档在发布后几秒内被替换（失效消息或下一轮重新确认），与平台文档相同。
 - **冷加载最多等待** [`cold-load-timeout`](./configuration.md#snapshot)（2 秒）；之后对该请求而言文档算作失败。
+- **编译有其加载的截止时间**（R2D-11）：冷加载为 `cold-load-timeout`，重新加载为存储读取超时（30 秒），从加载开始时算起。到时仍未返回的编译会在下一次重新验证时使其加载以失败结束：冷加载失败，重新加载保留已安装的内容，重新编译失败关闭。此时仍在编译队列中等待的编译永远不会开始。正在运行的编译无法被中断，因此任其结束，而它运行期间该修订不会再次编译：每个这样的修订最多占用一个编译线程。日志以 `ERROR` 记录 `Compiling snapshot document [<doc>] revision <n> did not end within <budget>`（[故障排查](./troubleshooting.md#a-compilation-does-not-end)）。
+- **被编译队列拒绝的重新编译会等待**（R2D-12）。平台文档的限制或声明的属性变化时，每个持有的应用和租户文档都会重新编译。遇到已满编译队列的重新编译会保留它的读取结果，并在从开始起 `cold-load-timeout` 之内再次编译；在此期间它的请求按照针对上一个平台文档做出的编译来决策，就像它的读取进行时那样。只有之后它才失败关闭，与无法再次编译的文档相同（`SNP-4`）。
 - **持有的文档有上限。** 每个族最多持有 [`max-apps`/`max-tenants`](./configuration.md#snapshot) 个文档和
   `max-absent-apps`/`max-absent-tenants` 个"不存在"条目，在一个后台整理线程上丢弃最久未用的。冷加载突发时，它可能短暂地持有
   最多上限的两倍，且绝不超出上限 4,096 个以上，另加正在加载的文档；超过这个数时，加载该文档的线程在回答请求之前最多驱逐该类

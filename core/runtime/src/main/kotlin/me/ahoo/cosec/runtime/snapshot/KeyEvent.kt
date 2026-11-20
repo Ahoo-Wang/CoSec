@@ -82,6 +82,13 @@ internal sealed interface KeyEvent<out T : Any> {
     /** Cold load [loadId], whose compilation the queue refused, compiles what it read again (R2D-4). */
     data class CompileRetryDue(override val loadId: Long) : LaneEvent<Nothing>()
 
+    /**
+     * Load [loadId]'s compilation did not answer within the load's budget (R2D-11): `coldLoadTimeout` for a cold load,
+     * `storeReadTimeout` for a reload, since the load began. Offered once: by the sweep of the periodic tick, or at once
+     * for a revision whose compilation timed out before and still runs ([CompileDeadlines]).
+     */
+    data class CompileTimedOut(override val loadId: Long) : LaneEvent<Nothing>()
+
     /** A reload the compile queue rejected tries again: an instance per retry, since a lane event is offered once. */
     class RetryDue : LaneEvent<Nothing>() {
         override fun toString() = "RetryDue"

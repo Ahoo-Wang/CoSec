@@ -75,14 +75,15 @@ class SnapshotSourceModelPropertyTest {
      * hand-off. The read after it is owed (`SNP-6`); judged by what the compile pool ran rather than by what the runner
      * took, the oracle saw the document as compiled and the pass as having confirmed nothing. Since a cold load the
      * compile queue refuses waits and compiles again (R2D-4), seed 827 no longer meets a stuck compilation; it stays a
-     * fixed case, and seed 12, the first that meets one now, shows the owed read.
+     * fixed case. Since a compilation past its load's budget ends the load at the next tick (R2D-11), seed 16 is the
+     * first that shows the owed read.
      */
     @Test
     fun aSkippedLoadWhoseCompilationRanButIsNotTakenStillOwesTheReadAfterIt() = quietly {
         val run = SourceModelRun(SourceModelScript.generate(SEED_827, EVENTS), ModelRunners.runner(k = 0)).run()
         run.failure.assert().describedAs("seed $SEED_827").isNull()
-        val owing = SourceModelRun(SourceModelScript.generate(SEED_12, EVENTS), ModelRunners.runner(k = 0)).run()
-        owing.failure.assert().describedAs("seed $SEED_12").isNull()
+        val owing = SourceModelRun(SourceModelScript.generate(SEED_16, EVENTS), ModelRunners.runner(k = 0)).run()
+        owing.failure.assert().describedAs("seed $SEED_16").isNull()
         owing.counts.passReadsOwed.assert().isGreaterThan(0)
     }
 
@@ -216,7 +217,7 @@ class SnapshotSourceModelPropertyTest {
         const val SEED_9191 = 9191
         const val SEED_872 = 872
         const val SEED_827 = 827
-        const val SEED_12 = 12
+        const val SEED_16 = 16
 
         /** Reached by every run over the runner: an eviction judged at its claim ([SourceModel.claimed]). */
         const val CLAIM_JUDGED = "eviction judged at its claim"

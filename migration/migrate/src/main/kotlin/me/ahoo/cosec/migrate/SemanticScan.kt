@@ -93,6 +93,31 @@ internal class SemanticScan(private val record: (SemanticChange) -> Unit) {
         )
     }
 
+    /**
+     * A DENY or a rate limit rule ([rateLimit]) written in the vocabulary of an unmapped request ([what], from
+     * [UnmappedVocabulary]): a route map takes each route it maps out of it, so the route is no longer denied (or limited).
+     * An ALLOW of the same effect is loud (C8); this one is not, hence its own entry (`MIG-5`).
+     */
+    fun deniedInUnmappedVocabulary(what: List<String>, rateLimit: Boolean, encodedPath: Boolean, location: String) {
+        val kind = if (rateLimit) "rate limit rule" else "DENY"
+        val effect = if (rateLimit) "limited" else "denied"
+        record(
+            SemanticChange(
+                "C9",
+                location,
+                "$kind written for a request no route map maps (${what.joinToString(", ")}): once a route map maps a " +
+                    "route, the route is its business action on its own resource, which this $kind does not match, so " +
+                    "the route is no longer $effect. Rewrite it for the mapped action before adding the route map" +
+                    if (encodedPath) {
+                        ". It also reads the path as received, percent-encoded (7.x read the raw request URI too): " +
+                            "/%61dmin/x is not /admin/x; a $kind on a path pattern decodes it"
+                    } else {
+                        ""
+                    },
+            ),
+        )
+    }
+
     /** A policy or app condition other than `all`: evaluated only when one of its statements is a candidate. */
     fun policyCondition(condition: JsonNode?, location: String) {
         if (condition == null || condition.isNull || isAll(condition)) {

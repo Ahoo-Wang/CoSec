@@ -340,6 +340,10 @@ Redis may evict CoSec's policy snapshot: maxmemory-policy is {<node>=<policy>}, 
   characters in all, more than 2048`。把长的通配段拆成整段（单独占一段的 `*` 或 `{name}` 不计开销），让通配段中的文本保持简短，或把多条语句的模式合并成更少的几条；前导 `**` 之后的片段计两次。在数据面上，
   超出上界的已存储文档会被装入为失败，读取它的请求回答 `503`。
 
+## 编译不结束 {#a-compilation-does-not-end}
+
+以 `ERROR` 记录 `Compiling snapshot document [<doc>] revision <n> did not end within <budget>; the load fails, and the revision is not compiled again while that compilation runs.`：编译器在该存储修订上用时超过加载的预算（尚未持有的文档为 `cold-load-timeout`，2 秒；重新加载为 30 秒）。需要它的请求在它未被持有时回答 `503`，或者按之前持有的修订决策。该编译在结束之前占用一个编译线程；同时有两个这样的修订会占满默认的两个线程，此时在其中一个结束之前没有其他文档能编译：每个加载都在其截止时间失败关闭。经过控制面校验的文档编译用时远低于一毫秒：查找绕过控制面写入 Redis 的修订，并发布一个改正的修订，它会像其他修订一样编译（[存储](./storage.md#how-instances-read-documents)）。
+
 ## 影子窗口被候选错误阻塞 {#shadow-window-blocked-by-a-candidate-error}
 
 只要有一个实例报告 `CANDIDATE_ERROR`，影子窗口就被阻塞：该实例编译不了候选，无法比较决策，变更永远不会被发布。常见原因是候选读取的

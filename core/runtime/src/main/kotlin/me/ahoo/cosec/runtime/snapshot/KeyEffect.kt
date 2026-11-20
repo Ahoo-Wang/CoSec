@@ -45,8 +45,11 @@ internal sealed interface KeyEffect<out T : Any> {
     /** `timeout.cancel`: load [loadId]'s read answered, so its timeout has nothing left to do. */
     data class CancelReadTimeout(val loadId: Long) : KeyEffect<Nothing>
 
-    /** `compileOffThread`: compiles what load [loadId] read, on the compile pool only. */
-    data class Compile(val loadId: Long, val read: SnapshotRead.Present) : KeyEffect<Nothing>
+    /**
+     * `compileOffThread`: compiles what load [loadId] read, on the compile pool only; [deadline], in the source's
+     * monotonic nanoseconds, is when the load's budget is spent (R2D-11, [CompileDeadlines]).
+     */
+    data class Compile(val loadId: Long, val read: SnapshotRead.Present, val deadline: Long) : KeyEffect<Nothing>
 
     /** A write of `families.seen`, which only this key's runner writes; [ifAbsent] keeps one already there. */
     data class RecordSeen(val seen: Seen, val ifAbsent: Boolean) : KeyEffect<Nothing>
@@ -96,6 +99,9 @@ internal sealed interface KeyEffect<out T : Any> {
 
     /** The key was removed: [event] goes, with its waiter, to the key's current runner. */
     data class Redispatch(val event: KeyEvent.Requested) : KeyEffect<Nothing>
+
+    /** Load [loadId]'s compilation timed out: abandoned, and stuck while it still runs (R2D-11). */
+    data class AbandonCompile(val loadId: Long) : KeyEffect<Nothing>
 
     /** `retryLater`: a [KeyEvent.RetryDue] after [delay], on the scheduler. */
     data class ScheduleRetry(val delay: Duration) : KeyEffect<Nothing>

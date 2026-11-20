@@ -208,6 +208,7 @@ internal class KeyStepChecks(
     private fun failures() {
         val installs = effects.filterIsInstance<KeyEffect.Install<String>>()
         val failure = event is KeyEvent.ReadTimedOut || event is KeyEvent.CompileRejected || event is KeyEvent.EffectFailed ||
+            event is KeyEvent.CompileTimedOut ||
             (event is KeyEvent.ReadFailed && installs.none { it.entry.origin == EntryOrigin.UNDECODABLE })
         if (failure && installs.any { it.entry.origin != EntryOrigin.RECOMPILE_PENDING }) {
             fail(

@@ -130,6 +130,8 @@ internal class KeyModelRunner(
                 effect.delay.toNanos(),
                 TimeUnit.NANOSECONDS
             )
+            // The key model has no periodic tick to time a compilation out, and its compilations all return.
+            is KeyEffect.AbandonCompile -> Unit
             KeyEffect.DropIfEmpty -> world.threads.housekeeping.execute { world.dropIfEmpty(this) }
             // The model's family has no cap: its evictions are housekeeping's.
             KeyEffect.EvictOverCap -> Unit

@@ -180,7 +180,8 @@ class SnapshotRevalidationTest {
     /**
      * `SNP-6`: a pass does not wait for a load stuck compiling past `storeReadTimeout`. That load read revision 1 before
      * the pass started, so it confirms nothing for the pass: one more load still follows it, and revision 2, written
-     * before the pass with its invalidation lost, is installed once the compilation ends, with no later pass.
+     * before the pass with its invalidation lost, is installed with no later pass. Since R2D-11 the stuck load ends at
+     * that tick, its compilation past the reload's budget and abandoned, so the load that follows reads at once.
      */
     @Test
     fun aPassThatSkipsALoadStuckCompilingStillOwesTheReadAfterIt() {
@@ -201,8 +202,10 @@ class SnapshotRevalidationTest {
 
             // The pass ends without waiting for the compilation: never a join here, which would hang where it waits.
             source.tick().isDone.assert().isTrue()
-            source.peek("app-a")!!.appCompiled.revision.assert().isEqualTo(1)
+            // The tick ended the stuck load (R2D-11), keeping revision 1 (F6); the load owed after it read revision 2.
+            source.peek("app-a")!!.appCompiled.revision.assert().isEqualTo(2)
 
+            // The abandoned compilation never starts once it leaves the queue: it installs nothing over revision 2.
             parked.removeAt(0).run()
             source.peek("app-a")!!.appCompiled.revision.assert().isEqualTo(2)
         }
@@ -576,11 +579,12 @@ class SnapshotRevalidationTest {
             store.readLog.assert().hasSize(3)
             parked.assert().hasSize(2)
 
-            // 31 s in, 11 s after its last document, and the wall clock steps an hour: slow, not stalled.
+            // 31 s in, 11 s after its last document, and the wall clock steps an hour: slow, not stalled. The compilation
+            // waiting since 0 s is past its load's budget (R2D-11): that load ends, and its lane reads the next document.
             elapsed.advance(Duration.ofSeconds(11))
             clock.advance(Duration.ofHours(1))
             val owed = source.tick()
-            store.readLog.assert().hasSize(3)
+            store.readLog.assert().hasSize(4)
 
             // Past `storeReadTimeout` after its last document: stalled, and the next pass starts.
             elapsed.advance(Duration.ofSeconds(20))
