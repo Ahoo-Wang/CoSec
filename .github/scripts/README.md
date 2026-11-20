@@ -45,6 +45,24 @@ What still fails, and why: a file only the plugin portal hosts (the marker and j
 `io.github.gradle-nexus.publish-plugin`, and the JMH plugin's) has no second host. The portal answered `Plugin ... was not found`
 for the Nexus marker for 12 minutes in CodeQL's run 44765167001, and that failure is only retried, as before.
 
+### The Nexus publish plugin's marker, twice (CodeQL, 2026-11-20)
+
+The plugin `io.github.gradle-nexus.publish-plugin` 2.0.0 exists on the plugin portal and not on Maven Central. Two CodeQL
+runs failed on it in all six attempts, 12 minutes of them: run 44765167001 (15:37 UTC) and run 44827683777 (22:17 UTC, head
+`ef06aeb83`, attempt 1; its attempt 2 passed). Each log says `Plugin [id: 'io.github.gradle-nexus.publish-plugin', version:
+'2.0.0'] was not found in any of the following sources`, with `MavenRepo` and `Gradle Central Plugin Repository` as the
+repositories searched. Gradle prints that when every repository answered "not found" (the other failures of these logs, a `5xx`, a `429` or a timeout, are a
+`Could not GET` with the status), so the portal answered a 404 for a marker that exists, for 12 minutes, both times, while the
+same job passed on a re-run. Central's 404 is the right answer for it.
+
+What the answers were, per attempt, is not known: `diagnose` printed its header and nothing under it, because a plugin
+failure names the artifact's coordinates and the repositories' names, no URL, and `diagnose` read URLs only. It now builds
+the POM URL of each plugin marker and of each `Could not find <g>:<a>:<v>` from the coordinates, asks Central and the portal,
+and prints `cf-ray` (its last part is the Cloudflare edge) and `cf-cache-status` beside the status. From outside CI, the
+portal answers `200` behind Cloudflare with `via: 2.0 heroku-router` (its origin is a Heroku app), Central `404`. Whether
+the failing window is an edge of Cloudflare or the portal's origin is what the next failure's output will say: the same
+`cf-ray` edge on all attempts, or `5xx` and `404` alternating.
+
 ### A change of repositories invalidates what restored caches say
 
 Gradle's cache remembers, per repository, which modules and files it found and did not find. Changing which repository an

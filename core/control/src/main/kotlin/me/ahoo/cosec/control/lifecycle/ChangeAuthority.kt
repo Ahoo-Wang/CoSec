@@ -85,7 +85,9 @@ class ChangeAuthority(
     private val revocationSkew: java.time.Duration = SubjectRevocation.DEFAULT_SKEW,
 ) {
     private val analyst = EscalationAnalysis(analyzer, controlApp)
-    private val approvals = ApprovalRules(options, revocations, revocationSkew, ::decideAs)
+
+    /** The rules of approving, for the steps that approve and publish: kept out of this class, which authorizes. */
+    internal val approvals = ApprovalRules(options, revocations, revocationSkew, ::decideAs)
 
     /** The hard rule: a 403 when [operator] may not act on [key] at all. */
     fun isolate(operator: Operator, key: SnapshotKey) {
@@ -218,22 +220,6 @@ class ChangeAuthority(
         }
         require(via, operator, ControlActions.BOUNDARY, boundaryOf(key))
     }
-
-    /** [ApprovalRules.requireApprovable]: that [operator] may approve [change]'s [candidate]. */
-    fun requireApprovable(operator: Operator, change: ChangeRequest, candidate: String) =
-        approvals.requireApprovable(operator, change, candidate)
-
-    /** [ApprovalRules.requireAuthor]: that [operator] is [change]'s author, who alone [does] it. */
-    fun requireAuthor(operator: Operator, change: ChangeRequest, does: String) =
-        approvals.requireAuthor(operator, change, does)
-
-    /** [ApprovalRules.approvalProblem]: why [change]'s approval does not let [publisher] publish it now. */
-    fun approvalProblem(change: ChangeRequest, escalations: List<Escalation>, publisher: Operator, now: Instant) =
-        approvals.approvalProblem(change, escalations, publisher, now)
-
-    /** [ApprovalRules.approverProblem]: why [change]'s approver no longer counts when [publisher] publishes it. */
-    suspend fun approverProblem(change: ChangeRequest, escalations: List<Escalation>, publisher: Operator): String? =
-        approvals.approverProblem(change, escalations, publisher)
 
     /**
      * What [operator] cannot publish alone when [candidate] replaces [base] as [key] (RFC 0007 §7.4, §7.5), read

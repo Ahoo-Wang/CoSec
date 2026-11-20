@@ -28,6 +28,7 @@
   `application/problem+json`。
 - **高性能且不阻塞。** 每个请求的流程开销约 2 µs，不阻塞事件循环。
 - **可审计。** 每个请求都有一个决策事件（审计日志、Kafka、Micrometer、OpenTelemetry），并记录做出决定的语句和绑定。
+- **Kotlin API。** 用 Java 编写的应用与其他应用一样配置 starter、编写文档，但 CoSec 的类型是为从 Kotlin 调用设计的（签名中的值类、挂起的 SPI），从 Java 调用它们不是 8.0 的目标。
 
 ## 如何做出决策
 

@@ -45,6 +45,7 @@ internal class Approvals(
     private val revisions: Revisions,
     private val clock: Clock,
     private val authority: ChangeAuthority,
+    private val rules: ApprovalRules,
     private val slots: StagingSlots,
     private val listeners: ChangeListeners,
     private val preemption: Preemption,
@@ -62,7 +63,7 @@ internal class Approvals(
         val change = flow.visible(operator, id)
         authority.require(operator, change.key, ControlActions.APPROVE)
         PublishRules.requireState(change, ChangeStep.APPROVE.from)
-        authority.requireApprovable(operator, change, candidate)
+        rules.requireApprovable(operator, change, candidate)
         val breakGlass = change.escalations.any { it.reason == Escalation.Reason.BREAK_GLASS }
         if (breakGlass) {
             PublishRules.requireAudit(true, listeners.hasRequired)

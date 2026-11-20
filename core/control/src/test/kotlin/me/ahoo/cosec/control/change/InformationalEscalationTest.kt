@@ -61,7 +61,7 @@ class InformationalEscalationTest {
     @Test
     fun `a tenant binding added after the approval needs no new one`() {
         val approved = change(listOf(widen.subject, binding("readers").subject))
-        authority.approvalProblem(
+        authority.approvals.approvalProblem(
             approved,
             listOf(widen, binding("readers"), binding("writers")),
             PLATO,
@@ -69,16 +69,26 @@ class InformationalEscalationTest {
         )
             .assert().isNull()
         // What was approved still has to be covered.
-        authority.approvalProblem(change(listOf(binding("readers").subject)), listOf(widen), PLATO, StoreFixtures.START)
+        authority.approvals.approvalProblem(
+            change(listOf(binding("readers").subject)),
+            listOf(widen),
+            PLATO,
+            StoreFixtures.START
+        )
             .assert().isEqualTo("the approval does not cover what it now needs")
     }
 
     @Test
     fun `only tenant bindings need no approval at all`() = runBlocking<Unit> {
         val none = change(emptyList()).copy(approval = null)
-        authority.approvalProblem(none, listOf(binding("readers")), PLATO, StoreFixtures.START).assert().isNull()
-        authority.approverProblem(none, listOf(binding("readers")), PLATO).assert().isNull()
-        authority.approverProblem(none, listOf(widen), PLATO).assert().isEqualTo("it needs an approval")
+        authority.approvals.approvalProblem(
+            none,
+            listOf(binding("readers")),
+            PLATO,
+            StoreFixtures.START
+        ).assert().isNull()
+        authority.approvals.approverProblem(none, listOf(binding("readers")), PLATO).assert().isNull()
+        authority.approvals.approverProblem(none, listOf(widen), PLATO).assert().isEqualTo("it needs an approval")
     }
 
     private val tenants = Escalation(
@@ -104,10 +114,14 @@ class InformationalEscalationTest {
     @Test
     fun `an aggregated tenant entry never stands in for the approval the widening needs`() = runBlocking<Unit> {
         val needed = listOf(widen, tenants)
-        authority.approvalProblem(change(listOf(tenants.subject)), needed, PLATO, StoreFixtures.START)
+        authority.approvals.approvalProblem(change(listOf(tenants.subject)), needed, PLATO, StoreFixtures.START)
             .assert().isEqualTo("the approval does not cover what it now needs")
-        authority.approverProblem(change(emptyList()).copy(approval = null), needed, PLATO)
+        authority.approvals.approverProblem(change(emptyList()).copy(approval = null), needed, PLATO)
             .assert().isEqualTo("it needs an approval")
-        authority.approverProblem(change(emptyList()).copy(approval = null), listOf(tenants), PLATO).assert().isNull()
+        authority.approvals.approverProblem(
+            change(emptyList()).copy(approval = null),
+            listOf(tenants),
+            PLATO
+        ).assert().isNull()
     }
 }

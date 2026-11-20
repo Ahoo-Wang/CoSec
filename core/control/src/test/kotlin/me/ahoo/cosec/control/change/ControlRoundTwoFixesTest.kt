@@ -376,10 +376,10 @@ class ControlRoundTwoFixesTest {
                 credentialId = "token-pia",
             )
         )
-        authorityOf(engine.authorizer).approverProblem(approved, needed, walt).assert().isNull()
+        authorityOf(engine.authorizer).approvals.approverProblem(approved, needed, walt).assert().isNull()
         val noLonger = "the approver no longer holds cosec:approve on the document"
         // An authorizer that cannot check a recorded principal, or fails to, does not count it.
-        authorityOf(PERMIT_ALL).approverProblem(approved, needed, walt).assert().isEqualTo(noLonger)
+        authorityOf(PERMIT_ALL).approvals.approverProblem(approved, needed, walt).assert().isEqualTo(noLonger)
         val failing = object : me.ahoo.cosec.control.authz.ControlAuthorizer {
             override suspend fun decide(
                 operator: Operator,
@@ -396,12 +396,12 @@ class ControlRoundTwoFixesTest {
                 resource: me.ahoo.cosec.model.Resource,
             ): me.ahoo.cosec.control.authz.ControlDecision = error("down")
         }
-        authorityOf(failing).approverProblem(approved, needed, walt).assert().isEqualTo(noLonger)
+        authorityOf(failing).approvals.approverProblem(approved, needed, walt).assert().isEqualTo(noLonger)
         // An approver the hard rule keeps from the document never counts, whatever its policies say.
         val elsewhere = approved.copy(
             approval = approved.approval!!.copy(approver = alice.actor, memberships = alice.memberships)
         )
-        authorityOf(PERMIT_ALL).approverProblem(elsewhere, needed, walt).assert().isEqualTo(noLonger)
+        authorityOf(PERMIT_ALL).approvals.approverProblem(elsewhere, needed, walt).assert().isEqualTo(noLonger)
         // The pipeline's authorizer: no request, no decision; documents it cannot confirm, no decision either.
         val principal = me.ahoo.cosec.spi.authn.AuthenticatedPrincipal(
             pia.actor.principal,
@@ -454,15 +454,15 @@ class ControlRoundTwoFixesTest {
         )
         val noLonger = "the approver no longer holds cosec:approve on the document"
         directory.put(pia.actor.tenant, pia.actor.principal, provided)
-        authority.approverProblem(approved, needed, walt).assert().isNull()
+        authority.approvals.approverProblem(approved, needed, walt).assert().isNull()
         directory.put(
             pia.actor.tenant,
             pia.actor.principal,
             Memberships(Memberships.Source.PROVIDER, provided.roles, provided.attachments, active = false),
         )
-        authority.approverProblem(approved, needed, walt).assert().isEqualTo(noLonger)
+        authority.approvals.approverProblem(approved, needed, walt).assert().isEqualTo(noLonger)
         directory.remove(pia.actor.tenant, pia.actor.principal)
-        authority.approverProblem(approved, needed, walt).assert().isEqualTo(noLonger)
+        authority.approvals.approverProblem(approved, needed, walt).assert().isEqualTo(noLonger)
         val recordedInactive = approved.copy(
             approval = approved.approval!!.copy(
                 memberships = Memberships(
@@ -473,7 +473,11 @@ class ControlRoundTwoFixesTest {
                 )
             )
         )
-        authority.approverProblem(recordedInactive, needed, walt).assert().isEqualTo("the approver is deactivated")
+        authority.approvals.approverProblem(
+            recordedInactive,
+            needed,
+            walt
+        ).assert().isEqualTo("the approver is deactivated")
     }
 
     /**
@@ -499,9 +503,9 @@ class ControlRoundTwoFixesTest {
             credentialId = "token-pia",
         )
         val authority = ChangeAuthority(engine.authorizer, revocations = RevocationReader.NONE)
-        authority.approverProblem(change.copy(approval = approval), needed, walt).assert().isNull()
+        authority.approvals.approverProblem(change.copy(approval = approval), needed, walt).assert().isNull()
         val capped = approval.copy(principalBindings = false)
-        authority.approverProblem(change.copy(approval = capped), needed, walt)
+        authority.approvals.approverProblem(change.copy(approval = capped), needed, walt)
             .assert().isEqualTo("the approver no longer holds cosec:approve on the document")
         val stored = ChangeRequestCodec.decode(ChangeRequestCodec.encode(change.copy(approval = capped))).approval!!
         stored.principalBindings.assert().isFalse()
