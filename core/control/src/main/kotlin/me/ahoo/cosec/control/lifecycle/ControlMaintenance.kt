@@ -28,6 +28,7 @@ import me.ahoo.cosec.control.change.ChangeRequest
 import me.ahoo.cosec.control.change.ChangeState
 import me.ahoo.cosec.control.change.ControlStatus.NOT_FOUND
 import me.ahoo.cosec.control.store.ControlStore
+import me.ahoo.cosec.control.store.ListedChange
 import me.ahoo.cosec.control.store.Reclaimed
 import me.ahoo.cosec.control.store.Revisions
 import me.ahoo.cosec.spi.snapshot.SnapshotDigest
@@ -73,33 +74,42 @@ class ControlMaintenance(
 
     private val stagedList = StagedListReconciliation(store)
 
-    /** One reclamation pass; what was removed, by document. Nothing when an open change cannot be read. */
-    @Suppress("TooGenericExceptionCaught")
+    /**
+     * One reclamation pass; what was removed, by document. Nothing while the open-change sets are not kept (`CTL-54`):
+     * an open change only the list of the format before names could rest on a revision. A document one of whose open
+     * changes cannot be read is skipped this pass; the others are reclaimed (R2C-2).
+     */
     suspend fun reclaim(): Map<SnapshotKey, Reclaimed> {
         // One read of the documents for both: they are one large value (B1 review).
         val documents = attempt("list the documents") { store.documents() } ?: return emptyMap()
         attempt("reconcile the app list with the documents") { reconcileApps(documents) }
-        val open = try {
-            openChanges()
-        } catch (e: CancellationException) {
-            currentCoroutineContext().ensureActive()
-            log.warn(e) { "Could not read the open changes; no revision is reclaimed this pass." }
-            return emptyMap()
-        } catch (e: Exception) {
-            log.warn(e) { "Could not read the open changes; no revision is reclaimed this pass." }
+        attempt("keep the open-change sets") { store.keepOpenChanges() }
+        if (attempt("read whether the open-change sets are kept") { store.openChangesKept() } != true) {
+            log.warn {
+                "The open-change sets are not kept (a list of the format before 8.0.0-beta.5 is there): no revision is " +
+                    "reclaimed until `cosec-migrate repair-references` converts it."
+            }
             return emptyMap()
         }
-        // Grouped once: a scan of every open change for each document is the product of the two (#1219).
-        val resting = HashMap<SnapshotKey, MutableSet<SnapshotDigest>>()
-        open.forEach { resting.getOrPut(it.key) { HashSet() } += it.restsOn() }
         val reclaimed = LinkedHashMap<SnapshotKey, Reclaimed>()
         for (key in documents) {
-            val keep = resting[key].orEmpty()
+            val keep = attempt("read the open changes of [$key]") { resting(key) } ?: continue
             attempt("reclaim the revisions of [$key]") { revisions.reclaim(key, keep) }
                 ?.takeIf { it.any }
                 ?.let { reclaimed[key] = it }
         }
         return reclaimed
+    }
+
+    /**
+     * What the open changes of [key] rest on, each as it is now (expired if past its time); throws when one cannot be
+     * read, since it might rest on a revision. The store read each of them once to list it (#1219).
+     */
+    private suspend fun resting(key: SnapshotKey): Set<SnapshotDigest> = store.openChanges(key).flatMapTo(HashSet()) { listed ->
+        when (listed) {
+            is ListedChange.Unreadable -> throw IllegalStateException("change [${listed.id.value}] of [$key] does not read")
+            is ListedChange.Readable -> current(listed.change)?.takeUnless { it.state.terminal }?.restsOn().orEmpty()
+        }
     }
 
     /**
@@ -132,8 +142,9 @@ class ControlMaintenance(
         }
         try {
             return withTimeout(shadowInterval.toKotlinDuration()) {
-                val read = store.openChanges().map { change ->
-                    attempt("read change [${change.id.value}]") { listOfNotNull(current(change)) }
+                attempt("keep the open-change sets") { store.keepOpenChanges() }
+                val read = shadowingChanges().map { listed ->
+                    (listed as? ListedChange.Readable)?.let { attempt("read change [${it.id.value}]") { listOfNotNull(current(it.change)) } }
                 }
                 val shadowing = read.flatMap { it.orEmpty() }.filter { it.state == ChangeState.SHADOWING }
                 val closed = shadowing.mapNotNull { change ->
@@ -150,12 +161,17 @@ class ControlMaintenance(
         }
     }
 
-    /**
-     * Every open change as it is now; throws when one cannot be read. The store read each of them once to list it, and
-     * that read is the one this pass goes by (#1219): only a change past its expiry is read again, to be expired.
-     */
-    private suspend fun openChanges(): List<ChangeRequest> =
-        store.openChanges().mapNotNull { current(it) }.filterNot { it.state.terminal }
+    /** Every change listed as shadowing, page by page (R2C-2): the pass no longer reads every open change. */
+    private suspend fun shadowingChanges(): List<ListedChange> {
+        val found = ArrayList<ListedChange>()
+        var after: String? = null
+        do {
+            val page = store.changes(ChangeState.SHADOWING, after, SHADOW_PAGE)
+            found += page.changes
+            after = page.next
+        } while (after != null)
+        return found
+    }
 
     /**
      * [change] as it is now, expired if it is past its time; null when it no longer exists. One that cannot be
@@ -188,5 +204,8 @@ class ControlMaintenance(
     @InternalCoSecApi
     companion object {
         const val SHADOW_LEASE = "shadow-windows"
+
+        /** How many shadowing changes the pass reads a page. */
+        private const val SHADOW_PAGE = 200
     }
 }

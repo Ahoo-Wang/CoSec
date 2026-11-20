@@ -22,6 +22,7 @@ import me.ahoo.cosec.control.authz.Operator
 import me.ahoo.cosec.control.change.ApplyMode
 import me.ahoo.cosec.control.change.ChangeId
 import me.ahoo.cosec.control.change.ChangeRequest
+import me.ahoo.cosec.control.change.ChangeState
 import me.ahoo.cosec.control.change.Confirmation
 import me.ahoo.cosec.control.change.Operation
 import me.ahoo.cosec.control.change.Propagation
@@ -126,4 +127,12 @@ class DefaultControlPlane(
 
     /** A change is read like its document: one the caller may not read is not there (404), so its id tells nothing. */
     override suspend fun get(operator: Operator, change: ChangeId): ChangeRequest = changes.visible(operator, change)
+
+    override suspend fun changes(
+        operator: Operator,
+        document: SnapshotKey?,
+        state: ChangeState?,
+        after: String?,
+        limit: Int,
+    ): me.ahoo.cosec.control.store.ChangePage = changes.list(operator, document, state, after, limit)
 }

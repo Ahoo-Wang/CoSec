@@ -17,6 +17,8 @@ package me.ahoo.cosec.control.api
 
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.control.store.ChangePage
+import me.ahoo.cosec.control.store.ListedChange
 import tools.jackson.databind.node.JsonNodeFactory
 import tools.jackson.databind.node.ObjectNode
 
@@ -26,6 +28,30 @@ import tools.jackson.databind.node.ObjectNode
  */
 internal object ControlResponseJson {
     private val factory = JsonNodeFactory.instance
+
+    /**
+     * A page of `GET /changes`: each change as a summary of its own (R2C-11), `UNREADABLE` for one whose record does not
+     * read (CTL-53), and `next`, the cursor of the next page or null. Nothing counts what the caller may not see (CTL-55).
+     */
+    fun changes(page: ChangePage): ObjectNode = factory.objectNode().apply {
+        val changes = putArray("changes")
+        page.changes.forEach { listed ->
+            val node = changes.addObject().put("id", listed.id.value).put("document", listed.document.toString())
+            when (listed) {
+                is ListedChange.Readable -> node.put("state", listed.change.state.name)
+                    .put("kind", listed.change.kind.name)
+                    .apply {
+                        putObject("author").put("tenant", listed.change.author.tenant.value)
+                            .put("principal", listed.change.author.principal.value)
+                    }
+                    .put("note", listed.change.note)
+                    .put("createdAt", listed.change.createdAt.toString())
+                    .put("updatedAt", listed.change.updatedAt.toString())
+                is ListedChange.Unreadable -> node.put("state", "UNREADABLE")
+            }
+        }
+        put("next", page.next)
+    }
 
     fun history(history: List<RevisionSummary>) = factory.arrayNode().apply {
         history.forEach {

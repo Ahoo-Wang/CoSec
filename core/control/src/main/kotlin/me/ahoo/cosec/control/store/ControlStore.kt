@@ -20,6 +20,7 @@ import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.control.change.ChangeId
 import me.ahoo.cosec.control.change.ChangeRequest
+import me.ahoo.cosec.control.change.ChangeState
 import me.ahoo.cosec.control.change.StageSlot
 import me.ahoo.cosec.model.PolicyId
 import me.ahoo.cosec.spi.shadow.CandidateStore
@@ -172,15 +173,35 @@ interface ControlStore : CandidateStore {
     suspend fun putApps(expected: SnapshotDigest?, apps: AppList): Boolean
 
     /**
-     * The change requests that are not terminal, as the store holds them now, so that shadow windows can be closed
-     * (RFC 0007 §6.4) and the revisions open changes rest on kept (§5.7) from one read of each. Every change that is
-     * written and not terminal is among them. A change is listed before it is first written and unlisted once a write
-     * makes it terminal: one listed and not written yet (a first write in flight) is not among them, and a removal that
-     * failed is made up here: ids whose change is terminal are dropped when this is read, and so are ids whose change has
-     * been missing for longer than a write can take (a first write that failed). A listed change whose record does not
-     * decode fails this, as [change] does: it cannot be known to be terminal.
+     * Whether the open-change sets can be trusted (R2C-2, `CTL-54`): a new store's, or a converted one's, kept and with no
+     * list of the format before 8.0.0-beta.5 left. While that list exists, an open change only it names may be missing
+     * from the sets, so reclamation reclaims nothing and the listing is refused until `cosec-migrate repair-references`
+     * converts it; an older control plane that writes the old list again puts the store back to not kept.
      */
-    suspend fun openChanges(): List<ChangeRequest>
+    suspend fun openChangesKept(): Boolean
+
+    /**
+     * Marks the open-change sets kept, but only where no list of the format before exists (`CTL-54`): the control plane
+     * does it at startup and in its maintenance passes, so a new store is kept from its start. The conversion keeps a
+     * converted store itself, after it added every listed change.
+     */
+    suspend fun keepOpenChanges()
+
+    /**
+     * The changes of [document] that are not terminal, each read now (RFC 0007 §6.4, §5.7): every written change of it
+     * that is not terminal is among them. A change is listed, in its document's set and in its state's, before each
+     * write, and unlisted from what no longer applies after it, so the sets are a superset (`CTL-54`): a member whose
+     * change is terminal or missing is skipped, and one whose record does not read is [ListedChange.Unreadable], never
+     * dropped.
+     */
+    suspend fun openChanges(document: SnapshotKey): List<ListedChange>
+
+    /**
+     * The changes listed in [state], ordered by document and id, after the cursor [after] (`null`: from the first), at
+     * most [limit] of them, each read now and still in [state] (a member a later write moved on is skipped). [ChangePage.next]
+     * is the cursor of the next page, `null` after the last.
+     */
+    suspend fun changes(state: ChangeState, after: String?, limit: Int): ChangePage
 
     /**
      * Takes the lease [name] for [holder] for [duration] if nobody holds it, so that one control-plane instance runs a
@@ -289,3 +310,22 @@ data class RevisionIndex(
         val EMPTY: RevisionIndex = RevisionIndex()
     }
 }
+
+/** A change an open-change listing names: as read now, or one whose stored record does not read. */
+@ExperimentalCoSecApi
+sealed interface ListedChange {
+    val id: ChangeId
+    val document: SnapshotKey
+
+    class Readable(val change: ChangeRequest) : ListedChange {
+        override val id: ChangeId get() = change.id
+        override val document: SnapshotKey get() = change.key
+    }
+
+    /** Listed, and its record does not read: shown as such, never left out (`CTL-53`). */
+    class Unreadable(override val id: ChangeId, override val document: SnapshotKey) : ListedChange
+}
+
+/** One page of [ControlStore.changes]: its changes, and the cursor of the next page, `null` after the last. */
+@ExperimentalCoSecApi
+class ChangePage(val changes: List<ListedChange>, val next: String?)
