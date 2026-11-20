@@ -1,6 +1,6 @@
 # Rule: APR-4
 # Mutant: only a new break-glass binding needs a second person: changing a live one (its expiry, its principal) is published alone
-# Tests: :control:test --tests me.ahoo.cosec.control.change.BreakGlassControlTest :conformance:test --tests me.ahoo.cosec.conformance.ConformanceTest
+# Tests: :control:test --tests me.ahoo.cosec.control.change.BreakGlassControlTest --tests me.ahoo.cosec.control.change.LiveBreakGlassChangeTest :conformance:test --tests me.ahoo.cosec.conformance.ConformanceTest
 
 diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/EscalationAnalysis.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/EscalationAnalysis.kt
 index 80ae206e..f589fd2c 100644

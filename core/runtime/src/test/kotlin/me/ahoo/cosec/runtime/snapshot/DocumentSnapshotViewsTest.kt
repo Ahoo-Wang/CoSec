@@ -132,7 +132,10 @@ class DocumentSnapshotViewsTest {
     @Test
     fun `tenants whose ids differ only in case each have their own document`() {
         publish(SnapshotKey.Platform, allowRead)
-        publish(SnapshotKey.Tenant("acme"), ""","bindings":[{"id":"t","subject":"*","app":"*","space":"*","policy":"read"}]""")
+        publish(
+            SnapshotKey.Tenant("acme"),
+            ""","bindings":[{"id":"t","subject":"*","app":"*","space":"*","policy":"read"}]"""
+        )
         publish(SnapshotKey.Tenant("ACME"), "")
         source().use { source ->
             val views = DocumentSnapshotViews(source)

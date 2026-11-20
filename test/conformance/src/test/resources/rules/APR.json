@@ -40,7 +40,7 @@
       "level": "control",
       "guards": [
         "control:BreakGlassControlTest#two people create it, each step recorded first",
-        "control:BreakGlassControlTest#changing a live binding needs a second person too"
+        "control:LiveBreakGlassChangeTest#changing a live binding needs a second person too"
       ],
       "pending": null
     },
