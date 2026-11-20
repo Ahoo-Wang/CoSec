@@ -11,7 +11,8 @@
  * limitations under the License.
  */
 
-// (the file-level opt-in to CoSec's internal API stood here; see README.md in this folder)
+@file:OptIn(InternalCoSecApi::class, ExperimentalCoSecApi::class)
+
 package me.ahoo.cosec.runtime.snapshot
 
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
@@ -36,7 +37,21 @@ import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicLong
 import kotlin.random.Random
 
-// Not committed: the SaaS-scale measurement of the data plane (2026-11-19). Run with `java -cp <test runtime> ...Kt <mode>`.
+/**
+ * A measurement, not a check: the snapshot source at SaaS scale (tens of thousands of tenants, a dozen apps of a
+ * dozen roles): heap per entry (`heap`), traffic with and without a store delay (`traffic`, `traffic-delay`), the
+ * revalidation pass (`pass`) and the eviction scan (`evict`). It is a `main` and nothing JUnit discovers, so
+ * `check` compiles it and never runs it; it runs for minutes and takes gigabytes of heap, so run it by hand,
+ * niced, and never on a shared machine's full load. In-memory stores stand in for Redis: it needs no Redis.
+ *
+ * Run: `nice -n 15 ./gradlew :runtime:testClasses`, then `java -Xmx4g -cp <the runtime module's test runtime
+ * classpath> me.ahoo.cosec.runtime.snapshot.SaasScaleMeasurementKt <mode>` (mode is one of `heap`,
+ * `traffic-delay`, `traffic`, `pass`, `evict`; the optional second argument is the file the report is written to
+ * (default `saas-<mode>.txt`)). There is no Gradle task for it: the classpath is what an IDE's run configuration
+ * for this file's `main` uses. Its numbers are in `docs/reviews/2026-11/`: `saas-scale-data-plane.md`, with the
+ * raw output in `saas-scale-raw-output.txt`. They are of the commit that report names; this file is kept compiling
+ * against `main`, not re-measured.
+ */
 
 private const val APPS = 12
 private const val PUBLISHED = "2026-11-19T00:00:00Z"
@@ -93,7 +108,9 @@ private fun platformDocument(): String =
 private fun doc(json: String) = SnapshotDocuments.read(json.encodeToByteArray())
 
 /** The in-memory store, its reads counted and, when [delayNanos] is set, completed that much later off the caller. */
-private class DelayedStore(val inner: InMemorySnapshotDocumentStore = InMemorySnapshotDocumentStore()) : SnapshotDocumentStore {
+private class DelayedStore(
+    val inner: InMemorySnapshotDocumentStore = InMemorySnapshotDocumentStore()
+) : SnapshotDocumentStore {
     @Volatile
     var delayNanos = 0L
     val reads = AtomicLong()
@@ -109,7 +126,15 @@ private class DelayedStore(val inner: InMemorySnapshotDocumentStore = InMemorySn
         val result = CompletableFuture<SnapshotRead>()
         timer.schedule({
             waited.addAndGet(System.nanoTime() - start)
-            answer().whenComplete { value, error -> if (error != null) result.completeExceptionally(error) else result.complete(value) }
+            answer().whenComplete { value, error ->
+                if (error != null) {
+                    result.completeExceptionally(
+                        error
+                    )
+                } else {
+                    result.complete(value)
+                }
+            }
         }, delay, TimeUnit.NANOSECONDS)
         return result
     }
@@ -153,12 +178,18 @@ private fun source(
     )
 }
 
-private fun options(maxTenants: Int = 1024, maxAbsent: Int = SnapshotOptions.DEFAULT_MAX_ABSENT) = SnapshotOptions(
+// When this ran, one option, `maxAbsent`, bounded the absent entries of the app and the tenant family alike. It is now one
+// per family (`maxAbsentApps`, `maxAbsentTenants`, each with its own default): a given `maxAbsent` is set on both, as it was,
+// and an unset one leaves each family its own default, which is not the single default of then.
+// `reloadConcurrency` is left at its default, which has changed since the report ran (now `DEFAULT_RELOAD_CONCURRENCY`), and
+// so are the other defaults not set here.
+private fun options(maxTenants: Int = 1024, maxAbsent: Int? = null) = SnapshotOptions(
     revalidateInterval = Duration.ofMinutes(4),
     lagWarn = Duration.ofMinutes(5),
     lagEscalate = Duration.ofMinutes(10),
     maxTenants = maxTenants,
-    maxAbsent = maxAbsent,
+    maxAbsentApps = maxAbsent ?: SnapshotOptions.DEFAULT_MAX_ABSENT_APPS,
+    maxAbsentTenants = maxAbsent ?: SnapshotOptions.DEFAULT_MAX_ABSENT_TENANTS,
 )
 
 private fun usedAfterGc(): Long {
@@ -201,7 +232,9 @@ private fun heap() {
     repeat(tenants) { s.loadOne(SnapshotKey.Tenant("t-$it")) }
     val tenantLoadNanos = (System.nanoTime() - started) / tenants
     val afterTenants = usedAfterGc()
-    s.peekAll(listOf(SnapshotKey.Tenant("t-7")))!!.let { say("state t-7: ${it.entry(SnapshotKey.Tenant("t-7"))!!.state}") }
+    s.peekAll(
+        listOf(SnapshotKey.Tenant("t-7"))
+    )!!.let { say("state t-7: ${it.entry(SnapshotKey.Tenant("t-7"))!!.state}") }
     started = System.nanoTime()
     repeat(absent) { s.loadOne(SnapshotKey.Tenant("none-$it")) }
     val absentLoadNanos = (System.nanoTime() - started) / absent
@@ -215,8 +248,12 @@ private fun heap() {
     say("12 app documents: ${afterApps - afterPlatform} B (${(afterApps - afterPlatform) / APPS} B each)")
     say("tenant document: ${(afterTenants - afterApps) / tenants} B each over $tenants")
     say("absent entry: ${(afterAbsent - afterTenants) / absent} B each over $absent")
-    say("kept after eviction (seen revision): ${(afterEvict - afterAbsent + (afterTenants - afterApps)) / tenants} B per evicted document")
-    say("sequential cold load, zero-delay store: tenant document ${tenantLoadNanos / 1000} us, absent ${absentLoadNanos / 1000} us")
+    say(
+        "kept after eviction (seen revision): ${(afterEvict - afterAbsent + (afterTenants - afterApps)) / tenants} B per evicted document"
+    )
+    say(
+        "sequential cold load, zero-delay store: tenant document ${tenantLoadNanos / 1000} us, absent ${absentLoadNanos / 1000} us"
+    )
     s.close()
 }
 
@@ -295,7 +332,7 @@ private fun pass(entries: Int, delayMicros: Long, absent: Boolean) {
         val reads = store.conditional.get() - conditional0
         say(
             "pass ${if (absent) "absent" else "documents"} entries=$entries delay=${delayMicros}us round=$round: " +
-                "${millis} ms, conditional reads=$reads, mean observed read=${(store.waited.get() - waited0) / maxOf(1, reads) / 1000} us"
+                "$millis ms, conditional reads=$reads, mean observed read=${(store.waited.get() - waited0) / maxOf(1, reads) / 1000} us"
         )
     }
     s.close()
@@ -342,7 +379,10 @@ fun main(args: Array<String>) {
         "traffic-delay" -> for (mix in intArrayOf(10, 100)) traffic(mix, false, 300, 5_000)
         "traffic" -> for (mix in intArrayOf(10, 100)) for (raised in booleanArrayOf(false, true)) traffic(mix, raised)
         "pass" -> {
-            for (entries in intArrayOf(10_000, 50_000)) for (delay in longArrayOf(300, 1000)) pass(entries, delay, false)
+            for (entries in intArrayOf(
+                10_000,
+                50_000
+            )) for (delay in longArrayOf(300, 1000)) pass(entries, delay, false)
             pass(10_000, 300, true)
         }
         "evict" -> {
