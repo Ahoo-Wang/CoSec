@@ -20,7 +20,7 @@ resolution left out (the configuration pattern of `.github/gradle/resolve-depend
 
 ### The fallback repository
 
-A `Could not find` for a file that exists is a 404 from the repository, and no pause helps one that lasts. On 2026-11-20 it
+A `Could not find` for a file that exists is a "not found" the log does not explain, and no pause helps one that lasts. (The first reading here was a 404 from the repository; the Nexus marker below shows Gradle also printing it when Central answered `429`, so these may be throttling too.) On 2026-11-20 it
 failed all six attempts, over 12 minutes, four times: CodeQL on two pull requests and two shards of one mutation run, for
 POMs Central serves (the BOMs of the Kotlin and Dokka plugins, `jmh-core`, the OpenTelemetry instrumentation BOM), from Central
 and from the plugin portal, while the other shards of the same run passed. A cache was not the cause: attempt 3 had removed
