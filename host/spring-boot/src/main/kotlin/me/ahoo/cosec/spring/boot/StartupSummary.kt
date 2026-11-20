@@ -20,9 +20,11 @@ import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.document.route.RouteMap
 import me.ahoo.cosec.jwt.JwtSigning
 import me.ahoo.cosec.login.CompositeAuthentication
+import me.ahoo.cosec.runtime.authn.CompositeAuthenticator
 import me.ahoo.cosec.runtime.event.DecisionListeners
 import me.ahoo.cosec.spi.apikey.ApiKeyReader
 import me.ahoo.cosec.spi.apikey.InMemoryApiKeyStore
+import me.ahoo.cosec.spi.authn.Authenticator
 import me.ahoo.cosec.spi.ratelimit.RateLimiter
 import me.ahoo.cosec.spi.token.RevocationReader
 import me.ahoo.cosec.spi.token.TokenStore
@@ -53,9 +55,19 @@ internal object StartupSummary {
         val parts = buildList {
             add("mode=$mode")
             add("web=${adapter(beans)}")
-            addAll(tokens(beans))
+            val replaced = beans.getBeanProvider(Authenticator::class.java).ifAvailable
+                ?.takeIf { it !is CompositeAuthenticator }
+            if (replaced != null) {
+                // The application's bean is the only authenticator the pipeline asks (extending.md): nothing the starter
+                // would have built for tokens, revocations or API keys is in force, so none of it is listed.
+                add("authenticator=${named(replaced)} (replaces CoSec's: tokens, revocation and API keys are its own)")
+            } else {
+                addAll(tokens(beans))
+            }
             add("login=${if (names(beans, CompositeAuthentication::class.java).isEmpty()) "off" else "on"}")
-            add("api-keys=${apiKeys(beans, environment)}")
+            if (replaced == null) {
+                add("api-keys=${apiKeys(beans, environment)}")
+            }
             add("rate-limiter=${beans.getBeanProvider(RateLimiter::class.java).ifAvailable?.let(::named) ?: "none"}")
             add("listeners=${listeners(beans)}")
             add("route-map=${routes(beans)}")

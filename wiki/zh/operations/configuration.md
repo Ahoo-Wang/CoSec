@@ -332,7 +332,7 @@ cosec:
 `auth-server-id`、`ignore-check-redirect-uri`、`tenant-id`、`kid`、`team-id`、`login-type`（默认 `CorpApp`）、`lang`
 （默认 `zh`）、`ding-talk-org-type`、`ding-talk-corp-id`、`ding-talk-exclusive-login` 和
 `ding-talk-exclusive-corp-id`。布尔值默认 `false`，其余默认无；`ignore-check-state: true` 会让启动失败，因为 state
-正是挡住伪造回调的东西；任何其他字段（例如拼错的 `pcke`）也会让启动失败。社交登录通过 `StringRedisTemplate` 把 OAuth 状态保存在 Redis 中。
+正是挡住伪造回调的东西。`ignore-check-redirect-uri: true` 可以启动，并以 `WARN` 指名该注册：它只是让 JustAuth 不再检查注册自己的 `redirect-uri` 是否为 http 或 https URL（这是你写下的值，不是请求带来的，所以它不拦任何回调），自定义协议的重定向需要关掉它。任何其他字段（例如拼错的 `pcke`）也会让启动失败。社交登录通过 `StringRedisTemplate` 把 OAuth 状态保存在 Redis 中。
 
 ## 影响 CoSec 的 CoCache 配置项 {#cocache-properties-that-affect-cosec}
 
