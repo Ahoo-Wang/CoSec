@@ -1,0 +1,17 @@
+# Rule: OBL-6
+# Mutant: the local limiter bounds buckets per rule and in total only, so two flooded rules of one tenant fill it for every document
+# Tests: :runtime:test --tests me.ahoo.cosec.runtime.ratelimit.LocalRateLimiterBoundsTest
+
+diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/ratelimit/RateLimiter.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/ratelimit/RateLimiter.kt
+index d6a19b33d..ac3ebe771 100644
+--- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/ratelimit/RateLimiter.kt
++++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/ratelimit/RateLimiter.kt
+@@ -191,7 +191,7 @@ class LocalRateLimiter(
+             return false
+         }
+         val owner = slots.owner
+-        if (owner != null && owner.incrementAndGet() > maximumBucketsPerOwner) {
++        if (owner != null && owner.incrementAndGet() > Long.MAX_VALUE - 1) {
+             owner.decrementAndGet()
+             slots.rule.decrementAndGet()
+             return false
