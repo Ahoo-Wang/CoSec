@@ -19,7 +19,7 @@ import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Test
 import java.time.Duration
 
-class RateLimitSpecResultTest {
+class RateLimitTest {
     @Test
     fun initWhenPermitsPerSecondNotPositive() {
         assertThrows(IllegalArgumentException::class.java) {
