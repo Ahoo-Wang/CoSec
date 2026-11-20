@@ -125,7 +125,7 @@ Kafka 审计监听器把同样的 JSON 写到 [`cosec.audit.kafka.topic`](./conf
 JSON 数组 `[tenantId, principalId]`。它与审计日志并存，而不是替代它；要改变这一点，设置 `cosec.audit.enabled=false`
 并只注册你想要的。它从自己的线程发送，最多有 1,024 个发送在等待：
 
-- `best-effort`：发送失败记录为 `Failed to publish audit event to Kafka topic [<topic>].`
+- `best-effort`：发送失败最多每 10 秒记录一行，带上自上一行以来失败的数量：`Failed to publish audit event to Kafka topic [<topic>]: <n> failed since the last report.`（broker 宕机时每个间隔一行，而不是每个决策一行）
 - `required`：请求等待 broker 的确认。发送失败或超时，或发送队列已满（`The Kafka audit queue of [<topic>] is full.`），
   都会使放行变成 `503`。生产者请配置 `acks=all`。
 

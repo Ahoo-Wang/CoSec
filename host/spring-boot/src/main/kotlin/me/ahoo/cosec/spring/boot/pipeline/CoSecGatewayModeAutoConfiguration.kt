@@ -19,7 +19,7 @@ import io.github.oshai.kotlinlogging.KotlinLogging
 import io.micrometer.core.instrument.MeterRegistry
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
-import me.ahoo.cosec.micrometer.MetricsListener
+import me.ahoo.cosec.micrometer.CoSecMeters
 import me.ahoo.cosec.runtime.identity.IdentityGate
 import me.ahoo.cosec.runtime.identity.IdentityRefusals
 import me.ahoo.cosec.spi.id.IdGenerator
@@ -121,6 +121,6 @@ internal class CoSecGatewayModeAutoConfiguration {
     class Metrics {
         @Bean
         fun cosecIdentityRefusalMetrics(registry: MeterRegistry, refusals: IdentityRefusals): StartupTask =
-            StartupTask.AfterSingletons { MetricsListener.bind(registry, refusals) }
+            StartupTask.AfterSingletons { CoSecMeters.bind(registry, refusals) }
     }
 }

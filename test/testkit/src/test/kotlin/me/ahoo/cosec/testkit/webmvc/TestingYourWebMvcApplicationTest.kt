@@ -22,8 +22,8 @@ import me.ahoo.cosec.runtime.Pipeline
 import me.ahoo.cosec.testkit.IdentityHeader
 import me.ahoo.cosec.testkit.PermittedRequest
 import me.ahoo.cosec.testkit.PipelineFixture
+import me.ahoo.cosec.webmvc.CoSecSecurityContextHolder
 import me.ahoo.cosec.webmvc.SecurityContextArgumentResolver
-import me.ahoo.cosec.webmvc.SecurityContextHolder
 import me.ahoo.cosec.webmvc.ServletRequests.securityContextOrNull
 import me.ahoo.test.asserts.assert
 import me.ahoo.test.asserts.assertThrownBy
@@ -80,7 +80,7 @@ class TestingYourWebMvcApplicationTest {
     }
 
     /** A function under test that reads the caller from the holder. */
-    private fun currentUser(): String = SecurityContextHolder.requireSecurityContext().principal.id
+    private fun currentUser(): String = CoSecSecurityContextHolder.requireSecurityContext().principal.id
 
     @Test
     fun `a function that reads the holder, with a context the kit made`() {
@@ -90,7 +90,7 @@ class TestingYourWebMvcApplicationTest {
             CoSecTestBindings.withSecurityContext(bob) { currentUser() }.assert().isEqualTo("bob")
             currentUser()
         }.assert().isEqualTo("alice")
-        SecurityContextHolder.securityContextOrNull().assert().isNull()
+        CoSecSecurityContextHolder.securityContextOrNull().assert().isNull()
         val request = MockHttpServletRequest("GET", "/orders/1")
         CoSecTestBindings.bind(request, alice)
         request.securityContextOrNull().assert().isSameAs(alice)
@@ -101,7 +101,7 @@ class TestingYourWebMvcApplicationTest {
         val forged = mockk<SecurityContext>()
         assertThrownBy<IllegalArgumentException> { CoSecTestBindings.withSecurityContext(forged) { currentUser() } }
             .hasMessageContaining("PermittedRequest")
-        SecurityContextHolder.securityContextOrNull().assert().isNull()
+        CoSecSecurityContextHolder.securityContextOrNull().assert().isNull()
         assertThrownBy<IllegalArgumentException> { CoSecTestBindings.bind(MockHttpServletRequest(), forged) }
             .hasMessageContaining("PIP-27")
     }

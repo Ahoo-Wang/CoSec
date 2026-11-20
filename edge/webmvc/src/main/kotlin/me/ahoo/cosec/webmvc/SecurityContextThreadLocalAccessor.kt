@@ -19,7 +19,7 @@ import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.api.context.SecurityContext
 
 /**
- * [SecurityContextHolder] for Micrometer's context propagation (round 2 M4): where Spring captures and restores its own
+ * [CoSecSecurityContextHolder] for Micrometer's context propagation (round 2 M4): where Spring captures and restores its own
  * thread-locals (a `suspend` handler under `spring.reactor.context-propagation=auto`, an executor wrapped by
  * `ContextExecutorService`), it captures and restores the holder too, so code that resumes on another thread reads
  * the context of its own request. Registered through `META-INF/services`, so only where the application has
@@ -28,11 +28,11 @@ import me.ahoo.cosec.api.context.SecurityContext
 internal class SecurityContextThreadLocalAccessor : ThreadLocalAccessor<SecurityContext> {
     override fun key(): Any = KEY
 
-    override fun getValue(): SecurityContext? = SecurityContextHolder.securityContextOrNull()
+    override fun getValue(): SecurityContext? = CoSecSecurityContextHolder.securityContextOrNull()
 
-    override fun setValue(value: SecurityContext) = SecurityContextHolder.setContext(value)
+    override fun setValue(value: SecurityContext) = CoSecSecurityContextHolder.setContext(value)
 
-    override fun setValue() = SecurityContextHolder.remove()
+    override fun setValue() = CoSecSecurityContextHolder.remove()
 
     companion object {
         const val KEY = "cosec.security-context"

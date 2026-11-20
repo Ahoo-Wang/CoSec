@@ -25,9 +25,9 @@ import com.auth0.jwt.interfaces.JWTVerifier
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.api.token.CompositeToken
 import me.ahoo.cosec.jwt.Jwts.removeBearerPrefix
-import me.ahoo.cosec.login.token.RefreshTokenMismatchException
 import me.ahoo.cosec.runtime.token.CoSecTokenVerifier
 import me.ahoo.cosec.runtime.token.TokenRevocation
+import me.ahoo.cosec.spi.token.RefreshTokenMismatchException
 import me.ahoo.cosec.spi.token.SubjectRevocation
 import me.ahoo.cosec.spi.token.TokenNotYetValidException
 import me.ahoo.cosec.spi.token.TokenVerificationException
@@ -46,7 +46,7 @@ import java.time.Duration
  * an issuer whose clock runs ahead (`IDN-29`). Its expiry (`exp`) is strict: no skew lengthens a token's life. A token
  * outside the skew is [TokenNotYetValidException].
  *
- * @param algorithm The algorithm used to verify JWT signatures
+ * @param signing the key the tokens are signed with ([JwtSigning])
  * @param issuerSkew how far ahead of this verifier's clock an issuer's may run, whole seconds rounded up: the same
  * quantity as `cosec.authentication.revocation.skew`, which the starter passes. A subject revocation revokes the tokens
  * issued up to that long after it, so a token this accepts early is still judged by it ([TokenRevocation] with the
@@ -55,10 +55,13 @@ import java.time.Duration
  * @see TokenVerifier
  * @see JwtTokenConverter
  */
-class JwtTokenVerifier @JvmOverloads constructor(
+class JwtTokenVerifier @InternalCoSecApi constructor(
     private val algorithm: Algorithm,
     issuerSkew: Duration = SubjectRevocation.DEFAULT_SKEW,
 ) : CoSecTokenVerifier {
+    constructor(signing: JwtSigning, issuerSkew: Duration = SubjectRevocation.DEFAULT_SKEW) :
+        this(signing.algorithm, issuerSkew)
+
     init {
         Jwts.requireSigning(algorithm)
         require(!issuerSkew.isNegative) { "The issuer skew must not be negative, not $issuerSkew." }
@@ -100,7 +103,8 @@ class JwtTokenVerifier @JvmOverloads constructor(
 
     @Suppress("TooGenericExceptionCaught")
     override fun refresh(token: CompositeToken): VerifiedToken {
-        val decodedRefreshToken: DecodedJWT = decodeVerified(token.refreshToken)
+        // Both tokens of a pair read as `verify` reads one: a stored `Bearer ` prefix goes from either, never from one only.
+        val decodedRefreshToken: DecodedJWT = decodeVerified(token.refreshToken.removeBearerPrefix())
         // The access token may have expired, so it is decoded here and only its signature checked. Decoding stays in
         // this method: only the verifying methods may decode (PIP-11).
         val decodedAccessToken = try {

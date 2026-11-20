@@ -271,6 +271,32 @@ Which preview of the library may run behind which preview of the gateway image: 
   - Until 8.0.0 the site's `/schema/8.0/` holds what `main` holds for the 8.0 line, so it changes between previews; a
     tag is the immutable copy ([Policy language](../policies/language.md#json-schema)). A CI job that validates against
     `schema/<file>` in a checkout reads `schema/8.0/<file>`. No document stops compiling.
+- **The public shapes of the login, JWT, WebMvc, gateway and metrics modules are fixed before RC** (R2B-1, R2B-2, R2B-4
+  to R2B-6, R2B-10, R2B-11, R2B-12, R2B-16, R2B-24). Affected: applications that build a `TokenSubject`, a
+  `JwtTokenVerifier` or a `JwtTokenConverter`, read the WebMvc holder, catch `RefreshTokenMismatchException`, or
+  supply an `Algorithm` bean.
+  - **`TokenSubject`: `tenant` now comes before `app`.** `TokenSubject("alice", "acme")` still compiles and now means
+    the tenant `acme`, where it meant the app `acme`. Search for every call that passes a second positional argument and
+    write it by name (`TokenSubject(id = "alice", app = "acme")`); the Java overloads are gone with `@JvmOverloads`.
+    `toString()` no longer prints the attributes, only their number.
+  - **`JwtSigning` replaces java-jwt's `Algorithm` in the public constructors.** `JwtTokenVerifier(JwtSigning, skew)` and
+    `JwtTokenConverter(idGenerator, JwtSigning, ...)`, with `JwtSigning.hmac256(secret)`, `hmac384` and `hmac512`. The
+    constructors that took an `Algorithm` are internal. The starter's `Algorithm` bean is now a `JwtSigning` bean built
+    from the same properties (`cosec.jwt.secret`, `cosec.jwt.algorithm`), so nothing an operator writes changes; an
+    application that declared its own `Algorithm` bean to replace it declares a `JwtSigning` instead. A signing key that
+    is an RSA or EC key pair has no public entry yet.
+  - **`RefreshTokenMismatchException` is `me.ahoo.cosec.spi.token.RefreshTokenMismatchException`.** Change the import. The
+    verifier side of `cosec-jwt` no longer imports anything of `cosec-login`; the converter still does (`TokenConverter`,
+    `TokenSubject`).
+  - **`me.ahoo.cosec.webmvc.SecurityContextHolder` is `CoSecSecurityContextHolder`**, so that it is not taken for Spring
+    Security's. `requireSecurityContext()` and `securityContextOrNull()` keep their names.
+  - **Starter-only classes are internal:** the constructors of `IdentityStripFilter`, `IdentityHeadersFilter` and
+    `OrderedCorsWebFilter`, and the filter-order and attribute constants of the filters. The starter registers them.
+  - **`MetricsListener.bind(...)` and its constants moved to `CoSecMeters`** (internal: the starter registers them).
+    `MetricsListener` keeps its name, `cosec.authorization` and the four tag names. A meter's name and tags are
+    unchanged.
+  - **A refresh strips `Bearer ` from the refresh token too**, as it did from the access token. The Kafka audit
+    listener logs failed sends once every 10 seconds with a count; a closed sender says it is closed.
 
 ## From 8.0.0-beta.3 {#from-8-0-0-beta-3}
 

@@ -1,8 +1,19 @@
+public final class me/ahoo/cosec/jwt/JwtSigning {
+	public static final field Companion Lme/ahoo/cosec/jwt/JwtSigning$Companion;
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class me/ahoo/cosec/jwt/JwtSigning$Companion {
+	public final fun hmac256 (Ljava/lang/String;)Lme/ahoo/cosec/jwt/JwtSigning;
+	public final fun hmac384 (Ljava/lang/String;)Lme/ahoo/cosec/jwt/JwtSigning;
+	public final fun hmac512 (Ljava/lang/String;)Lme/ahoo/cosec/jwt/JwtSigning;
+}
+
 public final class me/ahoo/cosec/jwt/JwtTokenConverter : me/ahoo/cosec/login/token/TokenConverter {
 	public static final field Companion Lme/ahoo/cosec/jwt/JwtTokenConverter$Companion;
 	public static final field DEFAULT_MEMBERSHIP_CLAIM_LIMIT I
-	public fun <init> (Lme/ahoo/cosec/spi/id/IdGenerator;Lcom/auth0/jwt/algorithms/Algorithm;Ljava/time/Duration;Ljava/time/Duration;Ljava/lang/Integer;)V
-	public synthetic fun <init> (Lme/ahoo/cosec/spi/id/IdGenerator;Lcom/auth0/jwt/algorithms/Algorithm;Ljava/time/Duration;Ljava/time/Duration;Ljava/lang/Integer;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun <init> (Lme/ahoo/cosec/spi/id/IdGenerator;Lme/ahoo/cosec/jwt/JwtSigning;Ljava/time/Duration;Ljava/time/Duration;Ljava/lang/Integer;)V
+	public synthetic fun <init> (Lme/ahoo/cosec/spi/id/IdGenerator;Lme/ahoo/cosec/jwt/JwtSigning;Ljava/time/Duration;Ljava/time/Duration;Ljava/lang/Integer;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
 	public fun toToken (Lme/ahoo/cosec/login/token/TokenSubject;)Lme/ahoo/cosec/api/token/CompositeToken;
 	public fun toToken (Lme/ahoo/cosec/login/token/TokenSubject;Ljava/time/Duration;Ljava/time/Duration;)Lme/ahoo/cosec/api/token/CompositeToken;
 }
@@ -11,9 +22,8 @@ public final class me/ahoo/cosec/jwt/JwtTokenConverter$Companion {
 }
 
 public final class me/ahoo/cosec/jwt/JwtTokenVerifier : me/ahoo/cosec/runtime/token/CoSecTokenVerifier {
-	public fun <init> (Lcom/auth0/jwt/algorithms/Algorithm;)V
-	public fun <init> (Lcom/auth0/jwt/algorithms/Algorithm;Ljava/time/Duration;)V
-	public synthetic fun <init> (Lcom/auth0/jwt/algorithms/Algorithm;Ljava/time/Duration;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun <init> (Lme/ahoo/cosec/jwt/JwtSigning;Ljava/time/Duration;)V
+	public synthetic fun <init> (Lme/ahoo/cosec/jwt/JwtSigning;Ljava/time/Duration;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
 	public fun refresh (Lme/ahoo/cosec/api/token/CompositeToken;)Lme/ahoo/cosec/spi/token/VerifiedToken;
 	public fun verify (Ljava/lang/String;)Lme/ahoo/cosec/spi/token/VerifiedToken;
 }

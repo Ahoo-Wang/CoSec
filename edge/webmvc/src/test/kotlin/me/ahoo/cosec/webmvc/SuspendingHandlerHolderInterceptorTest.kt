@@ -35,16 +35,16 @@ class SuspendingHandlerHolderInterceptorTest {
     private val interceptor = SuspendingHandlerHolderInterceptor()
 
     private fun handle(name: String): SecurityContext? {
-        SecurityContextHolder.setContext(PermittingPipeline.context())
+        CoSecSecurityContextHolder.setContext(PermittingPipeline.context())
         val method = Handlers::class.java.methods.first { it.name == name }
         interceptor.preHandle(MockHttpServletRequest(), MockHttpServletResponse(), HandlerMethod(Handlers(), method))
             .assert().isTrue()
-        return SecurityContextHolder.securityContextOrNull()
+        return CoSecSecurityContextHolder.securityContextOrNull()
     }
 
     @AfterEach
     fun clear() {
-        SecurityContextHolder.remove()
+        CoSecSecurityContextHolder.remove()
         Hooks.disableAutomaticContextPropagation()
     }
 
@@ -56,9 +56,9 @@ class SuspendingHandlerHolderInterceptorTest {
     @Test
     fun aBlockingHandlerKeepsTheHolder() {
         handle("blocking").assert().isNotNull()
-        SecurityContextHolder.setContext(PermittingPipeline.context())
+        CoSecSecurityContextHolder.setContext(PermittingPipeline.context())
         interceptor.preHandle(MockHttpServletRequest(), MockHttpServletResponse(), Any()).assert().isTrue()
-        SecurityContextHolder.securityContextOrNull().assert().isNotNull()
+        CoSecSecurityContextHolder.securityContextOrNull().assert().isNotNull()
     }
 
     @Test

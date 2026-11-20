@@ -24,7 +24,7 @@ import org.springframework.web.servlet.HandlerInterceptor
 import reactor.core.publisher.Hooks
 
 /**
- * Unbinds [SecurityContextHolder] before a `suspend` handler runs, unless Spring will restore it on every resumption
+ * Unbinds [CoSecSecurityContextHolder] before a `suspend` handler runs, unless Spring will restore it on every resumption
  * (round 2 M4). Spring runs a `suspend` handler on `Dispatchers.Unconfined`: after a suspension it goes on on the thread
  * that resumed it, which may serve another request, whose context the holder would answer without a sound. Unbound,
  * the holder fails at once, in the first test a developer writes, naming the `SecurityContext` parameter.
@@ -40,7 +40,7 @@ import reactor.core.publisher.Hooks
 class SuspendingHandlerHolderInterceptor : HandlerInterceptor {
     override fun preHandle(request: HttpServletRequest, response: HttpServletResponse, handler: Any): Boolean {
         if (handler is HandlerMethod && KotlinDetector.isSuspendingFunction(handler.method) && !restored()) {
-            SecurityContextHolder.remove()
+            CoSecSecurityContextHolder.remove()
         }
         return true
     }

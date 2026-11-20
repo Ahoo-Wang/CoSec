@@ -51,7 +51,7 @@ class TokenCompositeAuthenticationTest {
     fun `a login starts a session`() = runTest {
         val issued = slot<TokenSubject>()
         every { tokenConverter.toToken(capture(issued)) } returns compositeToken
-        tokensBy(mockk { coEvery { authenticate(any()) } returns TokenSubject("alice", null, tenant = "acme") })
+        tokensBy(mockk { coEvery { authenticate(any()) } returns TokenSubject("alice", tenant = "acme") })
             .authenticateAsToken(credentials)
         val session = checkNotNull(issued.captured.session)
         session.generation.assert().isEqualTo(1L)
@@ -84,7 +84,6 @@ class TokenCompositeAuthenticationTest {
 
             override suspend fun authenticate(credentials: LoginCredentials) = TokenSubject(
                 "alice",
-                null,
                 tenant = tenant
             )
         }
@@ -107,7 +106,7 @@ class TokenCompositeAuthenticationTest {
     fun authenticateAsToken() = runTest {
         val tokens = tokensBy(
             mockk {
-                coEvery { authenticate(any()) } returns TokenSubject("alice", null)
+                coEvery { authenticate(any()) } returns TokenSubject("alice")
             }
         )
         tokens.credentialsType.assert().isEqualTo(LoginCredentials::class.java)
@@ -168,7 +167,7 @@ class TokenCompositeAuthenticationTest {
             started.complete(Unit)
             awaitCancellation()
         } catch (_: CancellationException) {
-            TokenSubject("alice", null)
+            TokenSubject("alice")
         }
     }
 }

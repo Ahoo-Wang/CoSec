@@ -3,18 +3,18 @@
 # Tests: :jwt:test --tests me.ahoo.cosec.jwt.JwtTokenVerifierTest :conformance:test
 
 diff --git a/extensions/jwt/src/main/kotlin/me/ahoo/cosec/jwt/Jwts.kt b/extensions/jwt/src/main/kotlin/me/ahoo/cosec/jwt/Jwts.kt
-index 4c6f92d5..101756d3 100644
+index 0e7a43c1e..3aecbaa92 100644
 --- a/extensions/jwt/src/main/kotlin/me/ahoo/cosec/jwt/Jwts.kt
 +++ b/extensions/jwt/src/main/kotlin/me/ahoo/cosec/jwt/Jwts.kt
 @@ -17,7 +17,6 @@ import com.auth0.jwt.RegisteredClaims
+ import com.auth0.jwt.algorithms.Algorithm
  import com.auth0.jwt.interfaces.DecodedJWT
- import me.ahoo.cosec.login.token.RefreshTokenMismatchException
  import me.ahoo.cosec.spi.membership.MembershipClaims
 -import me.ahoo.cosec.spi.token.DelegationUnsupportedException
+ import me.ahoo.cosec.spi.token.RefreshTokenMismatchException
  import me.ahoo.cosec.spi.token.TokenSession
  import me.ahoo.cosec.spi.token.TokenVerificationException
- import me.ahoo.cosec.spi.token.VerifiedToken
-@@ -70,11 +69,6 @@ internal object Jwts {
+@@ -82,11 +81,6 @@ internal object Jwts {
          if (!decodedAccessToken.getClaim(TOKEN_USE_CLAIM).isMissing) {
              throw TokenVerificationException("The token is not an access token.")
          }

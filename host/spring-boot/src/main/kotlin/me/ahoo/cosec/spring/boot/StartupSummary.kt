@@ -15,10 +15,10 @@
 
 package me.ahoo.cosec.spring.boot
 
-import com.auth0.jwt.algorithms.Algorithm
 import io.github.oshai.kotlinlogging.KotlinLogging
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.document.route.RouteMap
+import me.ahoo.cosec.jwt.JwtSigning
 import me.ahoo.cosec.login.CompositeAuthentication
 import me.ahoo.cosec.runtime.event.DecisionListeners
 import me.ahoo.cosec.spi.apikey.ApiKeyReader
@@ -68,12 +68,12 @@ internal object StartupSummary {
 
     /**
      * What a request meets, resolved as the authenticator resolves it ([CoSecPipelineAutoConfiguration]): tokens are on
-     * when an `Algorithm` exists, verified by the application's `TokenVerifier` else CoSec's own, against the reader
+     * when a `JwtSigning` exists, verified by the application's `TokenVerifier` else CoSec's own, against the reader
      * [CoSecPipelineAutoConfiguration.revocationReader] picks: a `RevocationReader` bean, else the CoCache token
      * store's. Nothing about revocations when no token is verified.
      */
     private fun tokens(beans: ListableBeanFactory): List<String> {
-        if (beans.getBeanProvider(Algorithm::class.java).ifAvailable == null) {
+        if (beans.getBeanProvider(JwtSigning::class.java).ifAvailable == null) {
             return listOf("jwt=off")
         }
         val verifier = beans.getBeanProvider(TokenVerifier::class.java).ifAvailable?.let { "bean ${named(it)}" }

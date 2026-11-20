@@ -33,7 +33,7 @@ internal object Unbound {
             "No SecurityContext on this request: CoSec's filter did not handle it (it is not registered, or this code " +
                 "runs outside its dispatch). Register CoSec's filter (the starter does). In a handler, take " +
                 "SecurityContext as a handler parameter; on the request thread of blocking code, " +
-                "SecurityContextHolder.requireSecurityContext() reads the same context.",
+                "CoSecSecurityContextHolder.requireSecurityContext() reads the same context.",
         ),
         THREAD(
             "to this thread",
@@ -46,7 +46,7 @@ internal object Unbound {
     }
 
     private const val NEVER = Long.MIN_VALUE
-    private val log = LoggerFactory.getLogger(SecurityContextHolder::class.java)
+    private val log = LoggerFactory.getLogger(CoSecSecurityContextHolder::class.java)
     private val interval = Duration.ofMinutes(1).toNanos()
     private val lastWarnings = Receiver.entries.associateWith { AtomicLong(NEVER) }
 

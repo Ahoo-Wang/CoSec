@@ -11,9 +11,12 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.webflux
 
 import io.mockk.mockk
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.webflux.OrderedCorsWebFilter.Companion.DEFAULT_ORDERED_CORS_WEB_FILTER_ORDER
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test

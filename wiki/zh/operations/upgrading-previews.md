@@ -124,6 +124,14 @@ description: "每个 8.0 预览版（alpha 与 beta）到下一个之间的变�
   - 直到 beta.4，每个文件的 `$id`，以及文件之间 `$ref` 的解析基准，都是 `main` 上的文件 `raw.githubusercontent.com/Ahoo-Wang/CoSec/refs/heads/main/schema/<文件>`，所以 8.0 的文件会按 `main` 之后的内容解析。现在是 `https://cosec.ahoo.me/schema/8.0/<文件>`：`8.0` 是发布线（不是文档的 `schema: 2`），站点提供这些文件，仓库把它们放在 `schema/8.0/<文件>`。
   - 仍然指向 raw `main` 地址的编辑器设置，在这次变更进入 `main` 后得到 `404`：补全和校验停止，编辑器给出“无法加载 schema”的警告。请把它指向 `https://cosec.ahoo.me/schema/8.0/cosec-snapshot-document.schema.json`，或你所运行版本的标签（beta.4 之后的第一个标签起为 `.../refs/tags/<标签>/schema/8.0/<文件>`；beta.4 自己的文件仍在 `schema/<文件>`）。指向 beta.4 标签的设置继续可用，也保留它原来的 `$id`。
   - 8.0.0 之前，站点的 `/schema/8.0/` 是 `main` 上 8.0 版本线的内容，所以在预览版之间会变；标签是不可变的副本（[策略语言](../policies/language.md#json-schema)）。在检出的仓库里按 `schema/<文件>` 校验的 CI 任务，现在读 `schema/8.0/<文件>`。没有文档因此不能编译。
+- **登录、JWT、WebMvc、网关与指标模块的公开形状在 RC 之前定下**（R2B-1、R2B-2、R2B-4 至 R2B-6、R2B-10、R2B-11、R2B-12、R2B-16、R2B-24）。受影响的是构造 `TokenSubject`、`JwtTokenVerifier` 或 `JwtTokenConverter`、读取 WebMvc 的 holder、捕获 `RefreshTokenMismatchException`，或提供 `Algorithm` Bean 的应用。
+  - **`TokenSubject`：`tenant` 现在排在 `app` 之前。** `TokenSubject("alice", "acme")` 仍能编译，现在表示租户 `acme`，之前表示应用 `acme`。查找每一处传了第二个位置参数的调用，改成按名字写（`TokenSubject(id = "alice", app = "acme")`）；`@JvmOverloads` 去掉后，Java 重载也没有了。`toString()` 不再打印属性，只给出个数。
+  - **`JwtSigning` 取代公开构造函数里 java-jwt 的 `Algorithm`。** `JwtTokenVerifier(JwtSigning, skew)` 与 `JwtTokenConverter(idGenerator, JwtSigning, ...)`，用 `JwtSigning.hmac256(secret)`、`hmac384`、`hmac512`。接受 `Algorithm` 的构造函数成为内部的。starter 的 `Algorithm` Bean 现在是同样的属性（`cosec.jwt.secret`、`cosec.jwt.algorithm`）构建出的 `JwtSigning` Bean，运维写的配置不变；声明了自己的 `Algorithm` Bean 来替换它的应用，改为声明 `JwtSigning`。RSA 或 EC 密钥对暂时没有公开入口。
+  - **`RefreshTokenMismatchException` 是 `me.ahoo.cosec.spi.token.RefreshTokenMismatchException`。** 改 import。`cosec-jwt` 的校验一侧不再导入 `cosec-login` 的任何东西；转换器仍然导入（`TokenConverter`、`TokenSubject`）。
+  - **`me.ahoo.cosec.webmvc.SecurityContextHolder` 改名为 `CoSecSecurityContextHolder`**，以免被当成 Spring Security 的。`requireSecurityContext()` 与 `securityContextOrNull()` 名字不变。
+  - **只有 starter 用的类成为内部的：** `IdentityStripFilter`、`IdentityHeadersFilter`、`OrderedCorsWebFilter` 的构造函数，以及这些过滤器的顺序与属性常量。starter 会注册它们。
+  - **`MetricsListener.bind(...)` 及其常量移到 `CoSecMeters`**（内部的：由 starter 注册）。`MetricsListener` 保持原名、`cosec.authorization` 与四个标签名。指标的名字和标签不变。
+  - **刷新时，刷新令牌也会去掉 `Bearer ` 前缀**，访问令牌原本就这样。Kafka 审计监听器对发送失败每 10 秒记录一行并带上计数；已关闭的发送器会说自己已关闭。
 
 ## 从 8.0.0-beta.3 升级 {#from-8-0-0-beta-3}
 
