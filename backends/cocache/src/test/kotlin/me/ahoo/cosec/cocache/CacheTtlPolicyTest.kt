@@ -71,6 +71,8 @@ class CacheTtlPolicyTest {
     private val setOfRecordSpecs: Map<String, SetStoreSpec<*, *>> = mapOf(
         CoSecCacheSpecs.REFERENCE_INDEX_CACHE_NAME to ControlCacheSpecs.referenceIndex(),
         CoSecCacheSpecs.CONTROL_DOCUMENT_SET_CACHE_NAME to ControlCacheSpecs.documentSet(),
+        // CTL-54: the open-change sets, trusted once kept; a member lost to expiry would hide an open change.
+        CoSecCacheSpecs.CONTROL_CHANGE_SET_CACHE_NAME to ControlCacheSpecs.changeSet(),
         // CTL-46: the staged list, which readers fall back from when its marker is gone: it never expires either.
         CoSecCacheSpecs.CANDIDATE_STAGED_CACHE_NAME to ControlCacheSpecs.stagedSet(),
     )

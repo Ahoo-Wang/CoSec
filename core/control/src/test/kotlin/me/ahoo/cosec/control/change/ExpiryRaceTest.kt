@@ -120,8 +120,8 @@ class ExpiryRaceTest {
         @Volatile
         var refuseChangeWrites = false
 
-        override suspend fun putChange(expected: SnapshotDigest?, change: ChangeRequest): Boolean =
-            !refuseChangeWrites && memory.putChange(expected, change)
+        override suspend fun putChange(expected: SnapshotDigest?, change: ChangeRequest, previous: ChangeState?): Boolean =
+            !refuseChangeWrites && memory.putChange(expected, change, previous)
 
         fun afterRead(id: ChangeId, block: suspend () -> Unit) {
             race = id to block

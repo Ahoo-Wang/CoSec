@@ -1,0 +1,16 @@
+# Rule: PIP-32
+# Mutant: a check is admitted without copying the headers, so it reads the server's request after it is recycled
+# Tests: :runtime:test --tests me.ahoo.cosec.runtime.http.CheckAfterResponseTest
+
+diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/http/RequestSecurity.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/http/RequestSecurity.kt
+index 9a61d8f87..765575ffe 100644
+--- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/http/RequestSecurity.kt
++++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/http/RequestSecurity.kt
+@@ -82,7 +82,6 @@ class RequestSecurity internal constructor(
+         val host = attributes as? HttpAttributes ?: return !ended
+         synchronized(host) {
+             if (ended) return false
+-            host.freeze()
+             return true
+         }
+     }

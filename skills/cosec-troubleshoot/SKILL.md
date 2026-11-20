@@ -205,6 +205,9 @@ Full model: https://cosec.ahoo.me/guide/security-model.
 - **`CoSec's tokens are on, but <stores> are missing`**: revocation is always on, and the message names every missing
   store of the three (`TokenStore`, `RevocationReader`, `TokenFamilyStore`). Add `cosec-cocache` (all three on Redis),
   or register a bean of each missing one, or set `cosec.jwt.enabled=false` on a service that does not verify tokens.
+  **`A TokenVerifier bean turns token authentication on ... no RevocationReader is available`**: a service with its own
+  `TokenVerifier` and no `cosec.jwt.secret` has tokens on and needs only the reader: `cosec-cocache` on the issuer's Redis,
+  a `RevocationReader` bean, or `RevocationReader.NONE` where no one revokes a token.
   **`Tokens are verified against RevocationReader.NONE`** (`WARN`): revoked tokens are accepted until they expire;
   right only where no one revokes a token. A service verifying an issuer's tokens reads the issuer's revocations
   (`cosec-cocache` on the issuer's Redis, same `cosec.key-prefix`; https://cosec.ahoo.me/scenarios/resource-server).
@@ -592,6 +595,12 @@ back-references of 8.0.0-beta.4 or earlier, one value per policy, which this ver
 (`CTL-42`). Any other failure of a set, a timeout or a failover, comes through as what it is, without that advice. Stop every control plane of an earlier version and run `cosec-migrate repair-references` once: it converts
 them into sets, never replaces a set, and removes the old document list last (`MIG-4`). Data-plane instances are not
 affected.
+
+When `GET /changes` answers `503` and the reclaim pass logs `The open-change sets are not kept` at `WARN`, revisions
+are not reclaimed: the store still holds the open-change list of 8.0.0-beta.4 or earlier, or an older control plane
+wrote it again, and the open-change sets are not trusted until `cosec-migrate repair-references` lists every change of
+it and removes it (`CTL-54`). Stop every older control plane and run the command; a `FAILED change [<id>] does not read`
+line names a change record to remove or fix before the next run.
 
 A shadow window that stays blocked has a `CANDIDATE_ERROR`: one instance cannot compile the candidate, usually because
 it reads an `ext.*` attribute whose provider runs on the control host but not on that instance. Providers and their

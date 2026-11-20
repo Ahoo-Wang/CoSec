@@ -20,6 +20,7 @@ import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.control.store.Head
 import me.ahoo.cosec.control.store.StoreFixtures
+import me.ahoo.cosec.control.store.allOpenChanges
 import me.ahoo.cosec.document.DocumentBudgets
 import me.ahoo.cosec.document.PolicyDefinition
 import me.ahoo.cosec.document.PolicyDocument
@@ -210,7 +211,7 @@ class EntryBudgetsTest {
         (refused as ChangeRejectedException).status.assert().isEqualTo(400)
         refused.message.assert().contains("holds 3 operations").contains("limits.maxChangeOperations (2)")
             .contains("CTL-41")
-        harness.memory.openChanges().assert().isEmpty()
+        harness.memory.allOpenChanges().assert().isEmpty()
         changes.propose(ALICE_OP, ACME, 0, three.take(2), "two").state.assert().isEqualTo(ChangeState.CHECKED)
         val desired = StoreFixtures.candidate(ACME, (0 until 3).map { allow("p$it") })
         changes.apply(ALICE_OP, ACME, desired, ApplyMode.REPLACE, "apply").state.assert().isEqualTo(ChangeState.CHECKED)
