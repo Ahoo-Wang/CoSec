@@ -33,10 +33,10 @@ import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 
 /**
- * `CTL-43`: the platform's checks read the flag each back-reference entry carries, never a tenant's head. A removal is
- * blocked by a referrer unless every entry of it says it defines the id itself; an addition is blocked by any entry that
- * says so. An entry a later revision or a lost race left behind errs towards blocking in both: a stale entry that refers
- * blocks a removal, a stale entry that defines blocks an addition, and neither ever lets a change through.
+ * `CTL-43`: a removal of a platform policy is blocked by a referrer unless every entry of it says it defines the id
+ * itself, read from the entries, never a head; a stale entry that refers errs towards blocking. An addition is blocked by
+ * every tenant with an entry, defining or binding the id, confirmed by reading its head, so a stale entry does not
+ * block it and a tenant whose head cannot be read does (503).
  */
 class ReferenceFlagsTest {
     private val harness = ChangeHarness(options = ChangeOptions(shadow = IMMEDIATE_WINDOW))
@@ -62,26 +62,45 @@ class ReferenceFlagsTest {
     private suspend fun removing(id: String) = proposed(Operation.RemovePolicy(PolicyId(id)))
 
     @Test
-    fun `an addition is blocked by any entry that defines the id, and not by one that only refers to it`() =
-        runBlocking<Unit> {
-            publish(ACME, Operation.PutPolicy(allow("editor")))
-            harness.memory.referrers(
-                platform,
-                PolicyId("editor")
-            ).assert().containsExactly(ReferrerEntry(ACME, 1, true))
-            adding("editor").errors.map { it.check to it.status }.assert().containsExactly("V2" to 422)
-            // An entry that only refers, such as a stale one, is no use of the id: the platform may define it.
-            harness.memory.addReferrer(platform, PolicyId("viewer"), ReferrerEntry(beta, 3))
-            adding("viewer").errors.assert().isEmpty()
-        }
-
-    @Test
-    fun `a stale entry that defines the id still blocks an addition`() = runBlocking<Unit> {
+    fun `an addition is blocked by a tenant that defines the id`() = runBlocking<Unit> {
         publish(ACME, Operation.PutPolicy(allow("editor")))
-        publish(ACME, Operation.RemovePolicy(PolicyId("editor")), Operation.PutPolicy(allow("other")))
-        // As a lost race leaves it: acme no longer defines editor, and an entry of revision 1 still says it does.
-        harness.memory.addReferrer(platform, PolicyId("editor"), ReferrerEntry(ACME, 1, true))
+        harness.memory.referrers(platform, PolicyId("editor")).assert().containsExactly(ReferrerEntry(ACME, 1, true))
         adding("editor").errors.map { it.check to it.status }.assert().containsExactly("V2" to 422)
+    }
+
+    /**
+     * A tenant that binds an id it does not define, which no compiled change can write but a head written as
+     * `cosec-migrate` writes can hold: a platform policy of that id would take the binding over, since the engine
+     * resolves a binding without a policy of its own document to the platform's. So the addition is refused, at the
+     * check and again at publish, which checks the change again.
+     */
+    @Test
+    fun `an addition is blocked by a tenant that binds the id, at the check and at publish`() = runBlocking<Unit> {
+        val pending = adding("shared")
+        pending.errors.assert().isEmpty()
+        changes.skipShadow(PLATO, pending.id, "test")
+        harness.revisions.publish(
+            beta,
+            null,
+            StoreFixtures.candidate(beta, bindings = listOf(bind("staff", "shared"))),
+            StoreFixtures.publication(),
+        ).assert().isInstanceOf(PublishOutcome.Published::class.java)
+        harness.memory.referrers(platform, PolicyId("shared")).assert().containsExactly(ReferrerEntry(beta, 1))
+
+        adding("shared").errors.map { it.check to it.message }.assert()
+            .containsExactly("V2" to "[shared] is a policy id [tenant:beta] already use")
+        val published = changes.publish(PLATO, pending.id)
+        published.errors.map { it.check }.assert().contains("V2")
+        harness.revisions.head(platform).assert().isNull()
+    }
+
+    /** An entry is a candidate, confirmed by its tenant's head: one a lost race left, whatever its flag, does not block. */
+    @Test
+    fun `a stale entry does not block an addition, since the head is read to confirm it`() = runBlocking<Unit> {
+        publish(ACME, Operation.PutPolicy(allow("other")))
+        harness.memory.addReferrer(platform, PolicyId("editor"), ReferrerEntry(ACME, 1, true))
+        harness.memory.addReferrer(platform, PolicyId("editor"), ReferrerEntry(beta, 3))
+        adding("editor").errors.assert().isEmpty()
     }
 
     @Test

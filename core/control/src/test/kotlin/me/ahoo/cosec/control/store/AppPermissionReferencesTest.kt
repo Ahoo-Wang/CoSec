@@ -92,29 +92,6 @@ class AppPermissionReferencesTest {
         tenantHeads.get().assert().isEqualTo(0)
     }
 
-    /**
-     * An app document may define a policy that is no permission policy, which a tenant binds scoped to the app. A tenant
-     * that then defines that id itself refers to its own: its next publish removes the entry its forward record holds, so
-     * the app may remove the policy, with no head read.
-     */
-    @Test
-    fun `a tenant that comes to define an app's policy id itself stops blocking its removal at its next publish`() =
-        runBlocking<Unit> {
-            published(SnapshotKey.Platform, candidate(SnapshotKey.Platform, listOf(policy("other"))))
-            published(order, candidate(order, listOf(policy("shared"), policy(read.value))))
-            val binds = candidate(ACME, bindings = listOf(binding("s", "shared", app = "order")))
-            published(ACME, binds)
-            memory.referrers(order, PolicyId("shared")).assert().containsExactly(ReferrerEntry(ACME, 1))
-            published(ACME, candidate(ACME, listOf(policy("shared")), binds.bindings))
-                .assert().isInstanceOf(PublishOutcome.Published::class.java)
-
-            memory.referrers(order, PolicyId("shared")).assert().isEmpty()
-            tenantHeads.set(0)
-            published(order, candidate(order, listOf(policy(read.value)))).assert()
-                .isInstanceOf(PublishOutcome.Published::class.java)
-            tenantHeads.get().assert().isEqualTo(0)
-        }
-
     /** What `cosec-migrate repair-references` converts: the sets a head touches, and whether a referrer defines an id. */
     @Test
     fun `the sets a head touches, and whether a referrer defines an id itself`() = runBlocking<Unit> {

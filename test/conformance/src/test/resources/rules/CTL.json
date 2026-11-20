@@ -81,8 +81,7 @@
       "guards": [
         "control:RevisionsTest",
         "control:AppPermissionReferencesTest#a tenant's reference to an app permission is indexed under the app only, every other one as before",
-        "control:AppPermissionReferencesTest#the app cannot remove a permission a tenant refers to, and the platform holds no member for it",
-        "control:AppPermissionReferencesTest#a tenant that comes to define an app's policy id itself stops blocking its removal at its next publish"
+        "control:AppPermissionReferencesTest#the app cannot remove a permission a tenant refers to, and the platform holds no member for it"
       ],
       "pending": null
     },
@@ -268,7 +267,8 @@
       "statement": "The control plane refuses a platform policy whose id a tenant document already defines or binds (422), naming those documents, confirmed by reading their heads; a tenant that only defines the id never keeps the platform from removing its own policy of that id.",
       "level": "control",
       "guards": [
-        "control:ChangesB1Test#the platform cannot add an id a tenant uses, and one that only defines it never blocks a removal - RC1-9"
+        "control:ChangesB1Test#the platform cannot add an id a tenant uses, and one that only defines it never blocks a removal - RC1-9",
+        "control:ReferenceFlagsTest#an addition is blocked by a tenant that binds the id, at the check and at publish"
       ],
       "pending": null
     },
@@ -568,11 +568,12 @@
     {
       "id": "CTL-43",
       "source": "RFC 0007 §5.8; design B of the back-references, beta.5 (#1729)",
-      "statement": "The platform's checks read the flag each back-reference entry carries, never a tenant's head: a removal of a platform policy is blocked by a referrer unless every entry of it says it defines the id itself, an addition of a platform policy is blocked by any entry that says so, and every referrer of an app's policy blocks its removal. An entry a later revision or a lost race left behind errs towards blocking in both checks, until the referrer's next publish or repair-references removes it.",
+      "statement": "A removal of a platform policy is blocked by a referrer unless every entry of it says it defines the id itself, read from the entries and never a head; an entry a later revision or a lost race left that says it refers errs towards blocking, until its tenant's next publish or repair-references removes it. Every referrer of an app's policy blocks its removal. An addition of a platform policy is blocked by every tenant with an entry for that id, whether it defines or binds it, each confirmed by reading its head: a tenant whose head no longer uses the id does not block, and one whose head cannot be read does (503).",
       "level": "control",
       "guards": [
-        "control:ReferenceFlagsTest#an addition is blocked by any entry that defines the id, and not by one that only refers to it",
-        "control:ReferenceFlagsTest#a stale entry that defines the id still blocks an addition",
+        "control:ReferenceFlagsTest#an addition is blocked by a tenant that defines the id",
+        "control:ReferenceFlagsTest#an addition is blocked by a tenant that binds the id, at the check and at publish",
+        "control:ReferenceFlagsTest#a stale entry does not block an addition, since the head is read to confirm it",
         "control:ReferenceFlagsTest#a removal is blocked unless every entry of a referrer defines the id",
         "control:AppPermissionReferencesTest#an app's removal check reads no tenant's head"
       ],
