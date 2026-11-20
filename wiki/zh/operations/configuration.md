@@ -163,8 +163,11 @@ CoSec 没有哪个配置项叫这些名字，而已知的 key 无论来源都不
 | `cosec.authorization.snapshot.fail-closed.tenants` | 租户 id 集合 | 空 | 不得基于旧文档决策的租户：这类租户的请求读取的最旧文档，若上次确认距今超过 `max-lag`，请求得到 `503`（`SourceUnavailable`），除非有 DENY 匹配。其他租户继续基于已装入的文档决策。 |
 | `cosec.authorization.snapshot.fail-closed.max-lag` | duration | `30m` | 上述租户超过这个滞后即失败即拒绝。不能为负。 |
 | `cosec.authorization.snapshot.cold-load-timeout` | duration | `2s` | 请求等待一个未装入的文档多久。超过后，对这个请求而言该文档算作失败。必须为正。 |
-| `cosec.authorization.snapshot.max-apps` | int | `1024` | 内存中最多持有的应用文档数（为正）；超过后丢弃最久未用的一个，需要时再加载。冷加载突发时，一个族可能短暂地持有更多：最多为该上限的两倍，且绝不超出上限 4,096 个以上，另加此刻正在加载的文档；超过这个数时，实例在加载该文档的线程上先驱逐、再回答（[存储](./storage.md#how-instances-read-documents)）。 |
-| `cosec.authorization.snapshot.max-tenants` | int | `1024` | 租户文档的同一上限（为正）。平台文档从不被丢弃。 |
+| `cosec.authorization.snapshot.max-apps` | int | `1024` | 内存中最多持有的应用文档数（为正）；超过后丢弃最久未用的一个，需要时再加载。冷加载突发时，一个族可能短暂地持有更多：最多为该上限的两倍，且绝不超出上限 4,096 个以上，另加此刻正在加载的文档；超过这个数时，加载该文档的线程在回答之前最多驱逐其中 64 个，其余由后勤线程驱逐（[存储](./storage.md#how-instances-read-documents)）。 |
+| `cosec.authorization.snapshot.max-tenants` | int | `16384` | 租户文档的同一上限（为正）。平台文档从不被丢弃。按实例持有它所服务的租户来定：一个含 5 个各 20 项权限的角色和 20 条绑定的租户文档约占 30 KB，16,384 个位置全部用满约占 490 MB 堆（[为 SaaS 网关定容量](./deployment.md#sizing-a-saas-gateway)）。 |
+| `cosec.authorization.snapshot.max-absent-apps` | int | `256` | 最多记住多少个没有应用文档的应用 id（为正），与 `max-apps` 分开计（`SNP-7`）：应用 id 来自请求，所以客户端编造的应用挤不掉真实的应用，超出部分的每个 id 都会再读一次 Redis。 |
+| `cosec.authorization.snapshot.max-absent-tenants` | int | `65536` | 最多记住多少个没有租户文档的租户 id（为正），与 `max-tenants` 分开计（`SNP-7`）。这类租户的每个请求都读这个条目；被丢弃的条目在该租户下一个请求时再从 Redis 读。每个约 470 字节：全部用满约 30 MB。 |
+| `cosec.authorization.snapshot.reload-concurrency` | int | `16` | 一次重新确认并发确认的文档数（为正）。一次确认约耗时：持有的条目数 × 一次条件读取 ÷ 此值；80,000 个条目、每次读取 1 ms 时，并发 4 为 25 秒、8 为 12.6 秒、16 为 6.3 秒（实测）；16 使默认上限用满时的一轮在读取不超过约 2 ms 时仍在默认间隔之内。平均读取速率不变，即 条目数 ÷ `revalidate-interval`；只有一轮期间的读取更密集。超过 `revalidate-interval` 时，确认一轮接一轮地跑，滞后随之增长。 |
 | `cosec.authorization.snapshot.prewarm-apps` | 应用 id 列表 | 空 | 启动时在平台文档（总会加载）之后加载的应用文档。在平台文档和列出的每个文档都装入之前，就绪状态拒绝流量；存活状态不受影响。 |
 | `cosec.authorization.snapshot.prewarm-tenants` | 租户 id 列表 | 空 | 启动时加载的租户文档，同上。 |
 | `cosec.authorization.snapshot.compile-threads` | int | `2` | 编译文档的线程数。必须为正。 |
@@ -180,7 +183,7 @@ CoSec 没有哪个配置项叫这些名字，而已知的 key 无论来源都不
 | `cosec.authorization.shadow.enabled` | boolean | `true` | 对抽样的请求在暂存的候选上再求值一次，并把本实例的报告和状态写入 Redis。关闭后，本实例的流量在窗口中不计数，它编译不了的候选也不会阻塞窗口，它也不为传播视图写状态。 |
 | `cosec.authorization.shadow.sample-rate` | double，`0` 到 `1` | `0.1` | 在候选上再求值的请求比例，不在请求路径上执行。 |
 | `cosec.authorization.shadow.report-interval` | duration | `10s` | 实例多久写一次报告和状态。至少 `1ms`：更短的间隔会让启动失败。 |
-| `cosec.authorization.shadow.instance-id` | string | 随机 UUID | 本实例在报告和状态中的 id。每个运行中的实例唯一；只能包含字母、数字、`.`、`_` 和 `-`，因为它是 Redis key 的结尾。其他 id 使启动失败。 |
+| `cosec.authorization.shadow.instance-id` | string | 随机 UUID | 本实例在报告和状态中的 id 的前缀：id 为 `<instance-id>.<后缀>`，后缀每次启动都换新，所以 id 对每次进程启动唯一。重启后的进程因此绝不会替换前一个进程的报告，否则它记下的 `CANDIDATE_ERROR` 会消失，被它阻塞的窗口就会解除阻塞。ACL 用 `<instance-id>.*` 把实例限制在自己的 key 上（[存储](./storage.md#who-may-write-which-keys)）。只能包含字母、数字、`.`、`_` 和 `-`，因为它是 Redis key 的结尾。其他 id 使启动失败。 |
 
 ## 认证 {#authentication}
 
@@ -234,13 +237,13 @@ CoSec 没有哪个配置项叫这些名字，而已知的 key 无论来源都不
 
 | 配置项 | 类型 | 默认值 | 作用 |
 |---|---|---|---|
-| `cosec.authentication.revocation.cache.*` | [本地缓存设置](#local-cache-settings) | `local-max-age: 30s`、`maximum-size: 100000` | 吊销查询的本地副本（`RevokedTokenCache` 和 `RevokedSubjectCache`）。 |
+| `cosec.authentication.revocation.cache.*` | [本地缓存设置](#local-cache-settings) | `local-max-age: 30s`、`maximum-size: 500000` | 吊销查询的本地副本（`RevokedTokenCache` 和 `RevokedSubjectCache`）。只有实例在最近 30 秒内见过的令牌或主体才有条目，未命中就是请求路径上的一次 Redis 读取。每个条目约占 290 字节（令牌，含其 id）或 230 字节（主体）：两张表全部用满约 260 MB（[为 SaaS 网关定容量](./deployment.md#what-a-replica-holds)）。 |
 
 ### 本地缓存设置 {#local-cache-settings}
 
 | 配置项 | 类型 | 默认值 | 作用 |
 |---|---|---|---|
-| `maximum-size` | long | `100000` | 本地副本的最大条目数。 |
+| `maximum-size` | long | `500000` | 本地副本的最大条目数。 |
 | `initial-capacity` | int | CoCache 的默认值 | 本地副本的初始容量。 |
 | `local-max-age` | duration（不带单位的数字表示秒） | `30s` | 本地副本最多存活多久：失效消息丢失时陈旧程度的上限。 |
 | `expire-after-access` | duration（不带单位的数字表示秒） | 无 | 这么久没被读取的本地副本被丢弃。 |

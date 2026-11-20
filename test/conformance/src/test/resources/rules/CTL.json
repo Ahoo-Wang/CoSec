@@ -79,7 +79,9 @@
       "statement": "A platform or app candidate that removes a policy another document's binding refers to is not published; the back-reference index is added to before a head moves and removed from only after.",
       "level": "control",
       "guards": [
-        "control:RevisionsTest"
+        "control:RevisionsTest",
+        "control:AppPermissionReferencesTest#the platform entries an older version wrote go at the tenant's next publish, and the app still cannot remove the permission",
+        "control:AppPermissionReferencesTest#a tenant's reference to an app permission is indexed under the app only, every other one as before"
       ],
       "pending": null
     },
@@ -543,6 +545,17 @@
         "control:EntryBudgetsTest#a client's change carries at most maxChangeOperations operations, an apply is not held to it",
         "spring-boot:ControlBodyLimitTest#a body within the limit reaches the control plane on both stacks, a larger one is a 400 that never does",
         "spring-boot:ControlBodyLimitTest#the limit is 10 MB by default"
+      ],
+      "pending": null
+    },
+    {
+      "id": "CTL-45",
+      "source": "SaaS scale measurement (beta.5, D1); RFC 0007 §6.4",
+      "statement": "A process's shadow reports and status are written under an id no earlier process used, whatever cosec.authorization.shadow.instance-id is set to, so a restart never replaces an earlier process's cumulative report or erases a CANDIDATE_ERROR it recorded.",
+      "level": "startup",
+      "guards": [
+        "spring-boot:ShadowInstanceIdTest#a configured id is a prefix, with a suffix new at every start",
+        "spring-boot:ShadowInstanceIdTest#a restart with the same configured id keeps the earlier report"
       ],
       "pending": null
     }

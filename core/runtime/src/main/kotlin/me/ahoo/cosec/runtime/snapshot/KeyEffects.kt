@@ -273,36 +273,45 @@ internal class KeyEffects<T : Any>(
     }
 
     /**
-     * Before a load's answers: when the install took the family over its cap, the pass runs here, on the installing
-     * thread whatever it is, with the drain budget lifted: `SNP-14`'s back-pressure is the installer's, so the bound
-     * never depends on a pool being free. The victims whose flags are free are evicted on this thread; a
-     * victim another thread is draining takes its eviction next, in that drain.
+     * Before a load's answers: when the install took the family over its cap, a pass runs here, on the installing
+     * thread whatever it is, with the drain budget lifted: `SNP-14`'s back-pressure is the installer's, so the cap never
+     * depends on a pool being free. It evicts at most [SnapshotFamilies.INSTALL_EVICTIONS] of each kind, enough to take
+     * the family back within its cap; housekeeping takes it to its bound ([evictBeyond]). So the installing thread, the
+     * store client's own for an absent entry, never runs a whole pass back to a bound of tens of thousands. The victims
+     * whose flags are free are evicted on this thread; a victim another thread is draining takes its eviction next, in
+     * that drain.
      */
     private fun evictOverCap() {
         val families = context.families
         val family = families.of(key.kind) ?: return
-        if (families.overCap(family)) DrainBudget.unbounded { families.evictBeyond(family) }
+        if (families.overCap(family)) inPlace(families, family)
     }
 
     /**
-     * After a load's answers: nothing when both kinds are within their bounds; otherwise housekeeping evicts beyond the
-     * bound, or this thread does when the family is over its cap again. Answers first: a waiter's answer does not wait
-     * for the wake of a thread whose work cannot change it.
+     * After a load's answers: nothing when both kinds are within their bounds; otherwise this thread evicts its bounded
+     * share when the family is over its cap again, and housekeeping evicts beyond the bound. Answers first: a waiter's
+     * answer does not wait for the wake of a thread whose work cannot change it.
      */
     private fun evictBeyond() {
         val families = context.families
         val family = families.of(key.kind) ?: return
-        // Most load ends leave both kinds within their bounds: then there is no pass to run or to queue.
-        if (family.count(absent = false).get() <= family.bound(absent = false) &&
-            family.count(absent = true).get() <= family.bound(absent = true)
-        ) {
+        if (withinBounds(family)) {
+            // Most load ends leave both kinds within their bounds: then there is no pass to run or to queue.
             return
         }
         if (families.overCap(family)) {
-            DrainBudget.unbounded { families.evictBeyond(family) }
-        } else {
-            // The line is the key's, built only if housekeeping refuses the pass: a load's end allocates nothing for it.
-            context.threads.offHousekeeping(HousekeepingTask.EVICT, key) { families.evictBeyond(family) }
+            inPlace(families, family)
+            if (withinBounds(family)) return
         }
+        // The line is the key's, built only if housekeeping refuses the pass: a load's end allocates nothing for it.
+        context.threads.offHousekeeping(HousekeepingTask.EVICT, key) { families.evictBeyond(family) }
     }
+
+    private fun inPlace(families: SnapshotFamilies<*>, family: SnapshotFamilies.Family<*>) {
+        DrainBudget.unbounded { families.evictBeyond(family, SnapshotFamilies.INSTALL_EVICTIONS) }
+    }
+
+    private fun withinBounds(family: SnapshotFamilies.Family<*>): Boolean =
+        family.count(absent = false).get() <= family.bound(absent = false) &&
+            family.count(absent = true).get() <= family.bound(absent = true)
 }

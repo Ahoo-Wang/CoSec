@@ -16,6 +16,7 @@
 package me.ahoo.cosec.runtime.shadow
 
 import io.github.oshai.kotlinlogging.KotlinLogging
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.isActive
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
@@ -28,6 +29,7 @@ import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import java.time.Clock
 import java.time.Duration
 import java.time.Instant
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicLong
 import kotlin.coroutines.cancellation.CancellationException
 
@@ -38,6 +40,7 @@ private val log = KotlinLogging.logger {}
  * documents: at most [maxEntries] documents (least recently used first out), each read again once it is [refreshAfter]
  * old, compiled with [compile], the instance's own compiler. It takes no part in readiness, and a read that fails only
  * counts ([failures]) and answers no candidate: the shadow window misses samples, the enforced decision never notices.
+ * Requests that miss on one key at once share one read of the store.
  */
 @InternalCoSecApi
 class CachingCandidateSource(
@@ -58,6 +61,9 @@ class CachingCandidateSource(
 
     private val failed = AtomicLong()
 
+    /** The read of each key in flight, which a request that misses on that key waits for instead of reading again. */
+    private val reading = ConcurrentHashMap<SnapshotKey, CompletableDeferred<Candidate?>>()
+
     /** Reads of the store that failed, since this source was made. */
     val failures: Long get() = failed.get()
 
@@ -65,12 +71,24 @@ class CachingCandidateSource(
         require(maxEntries > 0 && !refreshAfter.isNegative) { "Invalid candidate source options." }
     }
 
-    @Suppress("TooGenericExceptionCaught")
     override suspend fun candidate(key: SnapshotKey): Candidate? {
         val now = clock.instant()
         synchronized(
             entries
         ) { entries[key] }?.takeIf { now.isBefore(it.at.plus(refreshAfter)) }?.let { return it.candidate }
+        val mine = CompletableDeferred<Candidate?>()
+        reading.putIfAbsent(key, mine)?.let { return it.await() }
+        try {
+            return read(key, now).also { mine.complete(it) }
+        } finally {
+            // A read cut short by its caller's cancellation answers the others no candidate, as a failed read does.
+            mine.complete(null)
+            reading.remove(key, mine)
+        }
+    }
+
+    @Suppress("TooGenericExceptionCaught")
+    private suspend fun read(key: SnapshotKey, now: Instant): Candidate? {
         val stored = try {
             store.candidate(key)
         } catch (e: CancellationException) {
@@ -99,7 +117,11 @@ class CachingCandidateSource(
 
     @InternalCoSecApi
     companion object {
-        const val DEFAULT_MAX_ENTRIES: Int = 16
+        /**
+         * Enough to keep the apps a request reads besides its tenant: at 16, tenant keys pushed them out and a sampled
+         * request read about 1.5 keys from Redis (measured over 10,000 tenants, beta.5); at 1,024, about 0.9.
+         */
+        const val DEFAULT_MAX_ENTRIES: Int = 1024
         private const val LOAD_FACTOR = 0.75f
     }
 }

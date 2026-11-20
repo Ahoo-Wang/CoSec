@@ -26,10 +26,17 @@ import me.ahoo.cosec.spi.snapshot.SnapshotKey
  * [maxAttempts] times; `false` when it kept changing.
  */
 internal class RevisionWrites(private val store: ControlStore, private val maxAttempts: Int) {
+    /** A conditional replace of [key]'s revision index, retried while it changes; no write when [change] leaves it as it is. */
     suspend fun updateIndex(key: SnapshotKey, change: (RevisionIndex) -> RevisionIndex): Boolean {
         repeat(maxAttempts) {
             val current = store.index(key)
-            if (store.putIndex(key, current?.digest, change(current?.value ?: RevisionIndex.EMPTY))) {
+            val next = change(current?.value ?: RevisionIndex.EMPTY)
+            // An index that would be written as it is needs no write (a reclamation pass that reclaims nothing), and
+            // an absent one stays absent: the first write is the one that lists the document.
+            if (current != null && next == current.value) {
+                return true
+            }
+            if (store.putIndex(key, current?.digest, next)) {
                 return true
             }
         }

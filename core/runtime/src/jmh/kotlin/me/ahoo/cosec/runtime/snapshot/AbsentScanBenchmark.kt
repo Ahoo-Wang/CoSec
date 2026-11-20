@@ -61,7 +61,7 @@ open class AbsentScanBenchmark {
         )
         source.load().join()
         (0 until documents).forEach { source.loadAll(listOf(SnapshotKey.App("app-$it"))).join() }
-        (0 until options.maxAbsent).forEach { source.loadAll(listOf(SnapshotKey.App("absent-$it"))).join() }
+        (0 until options.maxAbsentApps).forEach { source.loadAll(listOf(SnapshotKey.App("absent-$it"))).join() }
     }
 
     @TearDown

@@ -345,7 +345,8 @@ holds them:
   loads started (`SNP-2`, `SnapshotInstallOrderPropertyTest`).
 - **Bounded memory.** The platform document is loaded at startup and never evicted. App and tenant documents are loaded on
   demand and evicted least recently used beyond `max-apps` and `max-tenants`; selected ones can be prewarmed. Ids the
-  store holds no document for are kept apart, at most 256 per family, and evict only each other (`SNP-7`).
+  store holds no document for are kept apart, at most `max-absent-apps` and `max-absent-tenants` of them, and evict only
+  each other (`SNP-7`).
 - **Revalidation.** Every installed document is revalidated every `revalidate-interval` (10 s by default) with a
   conditional read of the store of record, which transfers no body when the digest is unchanged. It is the only bound on
   a lost change notification, so it cannot be turned off and is at most 5 minutes (`SNP-6`). Change notifications
@@ -502,6 +503,23 @@ derive bound it:
 | Tenant: 1 role × 50,000 permissions | 428 KB | 16 ms | 100 ms | 197 ms | 24 ms | 135 ms |
 | App: a catalog of 150,000 permissions | 5.8 MB | 148 ms | 317 ms | | 504 ms | 383 ms |
 | App: a catalog of 50,000 and a system role `*` | 1.9 MB | 73 ms | 198 ms | | 81 ms | 150 ms |
+
+#### The store at many tenants
+
+What the control plane reads and writes in the store of record grows with the tenants that refer to one policy, not
+with the size of one document. For tenant documents that each hold 5 custom roles of the same 20 permissions of one
+app and 20 role bindings, one of them to a platform policy (`SaasScaleMeasurement`, run by hand, in memory, store
+operations counted at the sizes CoCache sends):
+
+| Tenant documents | One referrer value | A new tenant's publish | An app removing a permission every tenant lists | One reclamation pass |
+|---|---|---|---|---|
+| 10,000 | 175 KB | 21 values read and written, 3.6 MB each way, 57 ms | one referrer value read, 3 ms | 10,000 index and head reads, no write, 37 ms |
+| 50,000 | 878 KB | 21 values, 18 MB each way, 298 ms | one referrer value read, 13 ms | 50,000 index and head reads, no write, 125 ms |
+
+A tenant's reference to an app's permission is indexed under the app only, an app's removal check reads no tenant's
+document, and a reclamation pass reads one index and one head of a document with nothing to reclaim. A referrer value
+is still one value rewritten whole by every tenant that adds or drops itself, so 50 tenants publishing at once on
+Redis lose some of their conditional writes on the value they all share.
 
 ### Measuring
 

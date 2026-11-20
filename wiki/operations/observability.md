@@ -247,7 +247,7 @@ there are 80 series whatever the number of documents. `kind` is `platform`, `app
 | `cosec.snapshot.lag.exceeded` | counter | `kind`, `level` | each lag the instance logs |
 | `cosec.snapshot.regressions` | counter | `kind` | the store answered an older revision than the one installed |
 | `cosec.snapshot.lost` | counter | `kind` | a document seen before is absent now; its key fails closed |
-| `cosec.snapshot.evictions` | counter | `kind`, `state` = `document`, `absent` | entries an app or tenant family dropped at its bound (`max-apps`, `max-tenants`, `max-absent`) |
+| `cosec.snapshot.evictions` | counter | `kind`, `state` = `document`, `absent` | entries an app or tenant family dropped at its bound (`max-apps`, `max-tenants`, `max-absent-apps`, `max-absent-tenants`) |
 | `cosec.snapshot.handoffs.refused` | counter | `to` = `housekeeping`, `caller` | work the compile pool refused: `caller` means a request's thread ran it |
 | `cosec.snapshot.housekeeping.refused` | counter | `task` = `load-log`, `compile-log`, `install-review`, `effect-log`, `crash-log`, `transition-log`, `prewarm-log`, `pass-log`, `reset-log`, `evict`, `drop`, `lag-report` | tasks the source's housekeeping thread refused because its queue (4,096) was full. Each was dropped, except `drop` (an empty entry's removal), which ran in place. A `*-log` is a log line that was not written; `evict` an eviction pass under the family's cap, which the next load asks for again; `install-review` a host's review of an installed document ([the route map warning](../scenarios/route-maps.md#what-cosec-warns-about)), offered again when a later read finds that revision still installed |
 
@@ -266,7 +266,7 @@ The share of requests that waited for a document is `loads{result=cold}` over th
 | `installed{state=invalid}` above zero | a stored document does not compile on this instance (an older version than the control plane?) |
 | a sustained rate of `handoffs.refused{to=caller}` | the compile pool is saturated, and requests' threads compile |
 | any rise of `housekeeping.refused` | the instance is dropping its own log lines: a log appender too slow for the load ([Snapshot log lines are missing](./troubleshooting.md#snapshot-log-lines-are-missing)) |
-| a sustained rate of `evictions`, with `loads{result=cold}` rising | the families are too small for the traffic: raise `max-apps` / `max-tenants` |
+| a sustained rate of `evictions`, with `loads{result=cold}` rising | the families are too small for the traffic: raise `max-apps` / `max-tenants`, or `max-absent-tenants` when `state=absent` ([Sizing a SaaS gateway](./deployment.md#sizing-a-saas-gateway)) |
 
 ## Snapshot health
 

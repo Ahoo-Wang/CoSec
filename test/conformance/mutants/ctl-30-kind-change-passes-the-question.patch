@@ -3,7 +3,7 @@
 # Tests: :control:test --tests me.ahoo.cosec.control.change.BoundaryReferencesTest :conformance:test
 
 diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/store/ReferencedPolicies.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/store/ReferencedPolicies.kt
-index 9f602785..7f1b979b 100644
+index dacf1b781..aa99c086c 100644
 --- a/core/control/src/main/kotlin/me/ahoo/cosec/control/store/ReferencedPolicies.kt
 +++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/store/ReferencedPolicies.kt
 @@ -51,7 +51,7 @@ internal object ReferencedPolicies {
@@ -13,5 +13,5 @@ index 9f602785..7f1b979b 100644
 -        return RoleExpansion.effective(base).policies.filter { kept[it.id] != it.boundary }.map { it.id }
 +        return RoleExpansion.effective(base).policies.filter { it.id !in kept }.map { it.id }
              .associateWith { policy ->
-                 (referrers(key, policy) - key).filterNotTo(
-                     HashSet()
+                 val referring = referrers(key, policy) - key
+                 // An app's policies are its permission policies, which no tenant can define (TNT-2): no head to read.

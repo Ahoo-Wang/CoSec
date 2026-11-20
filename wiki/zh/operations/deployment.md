@@ -156,7 +156,7 @@ management:
 |---|---|---|
 | `base/` | 供 overlay 在其上构建 | Deployment 和一个 Service（80 端口转发到容器的 8080；管理端口 8081 是 Service 不发布的容器端口）。`application.yaml`（路由和上面的 `cosec.*` 设置）生成一个 ConfigMap，挂载为 `/opt/cosec-gateway-server/config/application.yaml`，追加在镜像默认值之后读取；其中的 CORS 来源、发现列表和路由只是演示，请替换；它的名字带有文件的哈希，所以修改文件会滚动更新 pod。镜像是 `ghcr.io/ahoo-wang/cosec-gateway`，标签在 `images:` 中设置。每个网关 768Mi，堆 256 MiB。 |
 | `overlays/dev/` | 在任何集群上试用 CoSec，包括 kind 和 minikube | 命名空间 `cosec-dev`，一个使用 base 资源配置的网关，以及一个单实例 Redis 7.4，`maxmemory-policy noeviction`，没有密码。Redis 的数据放在 `emptyDir` 中，容器重启后还在，pod 删除后就没了：删除 Redis 的 pod 就删除了文档。 |
-| `overlays/production/` | 你自己的 overlay 的起点 | 命名空间 `cosec`；你的 Redis，地址来自 ConfigMap `cosec-gateway-redis`（主机和端口；Redis Cluster 则用 `SPRING_DATA_REDIS_CLUSTER_NODES`），凭证来自 Secret `cosec-redis-secret`（`password`，ACL 用户再加 `username`）；按 CPU 伸缩的 HorizontalPodAutoscaler，2 到 10 个网关（目标为每个网关请求的 1 CPU 的 70 %；需要 metrics server）；一个 PodDisruptionBudget，一次只驱逐一个网关，未就绪的网关总是可以驱逐，所以排空节点从不等待平台文档；一个 NetworkPolicy，放行任何来源访问 8080 端口、只放行 `monitoring` 命名空间访问管理端口；每个网关 2Gi，堆 1 GiB，分散到不同节点。 |
+| `overlays/production/` | 你自己的 overlay 的起点 | 命名空间 `cosec`；你的 Redis，地址来自 ConfigMap `cosec-gateway-redis`（主机和端口；Redis Cluster 则用 `SPRING_DATA_REDIS_CLUSTER_NODES`），凭证来自 Secret `cosec-redis-secret`（`password`，ACL 用户再加 `username`）；按 CPU 伸缩的 HorizontalPodAutoscaler，2 到 10 个网关（目标为每个网关请求的 1 CPU 的 70 %；需要 metrics server）；一个 PodDisruptionBudget，一次只驱逐一个网关，未就绪的网关总是可以驱逐，所以排空节点从不等待平台文档；一个 NetworkPolicy，放行任何来源访问 8080 端口、只放行 `monitoring` 命名空间访问管理端口；每个网关 2560Mi，堆 1.5 GiB，分散到不同节点。 |
 
 ### 部署 {#deploying}
 
@@ -210,8 +210,8 @@ management:
 
 | | `dev`（base） | `production` |
 |---|---|---|
-| 内存请求与限制 | 768Mi | 2Gi |
-| 堆（`-Xms` = `-Xmx`） | 256 MiB | 1 GiB |
+| 内存请求与限制 | 768Mi | 2560Mi |
+| 堆（`-Xms` = `-Xmx`） | 256 MiB | 1.5 GiB |
 | 直接内存，Netty 的缓冲区（`-XX:MaxDirectMemorySize`） | 最多 64 MiB | 最多 256 MiB |
 | 原生内存：AOT 缓存的类数据（约 105 MiB）、JIT 代码、metaspace、GC 结构、线程 | 约 220 MiB | 约 250 MiB |
 | 留给页缓存和峰值 | 约 230 MiB | 约 500 MiB |
@@ -228,10 +228,113 @@ management:
   overlay 替换这个变量；修改时同时修改内存请求和限制。
 - **CPU。** JVM 按 CPU 限制确定 GC、JIT 和 Netty 的线程数，自动伸缩器按 CPU 请求计算。
 
-**能放下多少文档。**编译后的文档在堆上，CoSec 最多保留 `max-apps` 个应用文档和 `max-tenants` 个租户文档（默认各 1,024 个；在一阵冷加载期间，一个族可能短暂保留最多两倍），外加从不被丢弃的平台文档（[实例如何读取文档](./storage.md#how-instances-read-documents)）。一个文档占多少取决于它的策略、语句和绑定，CoSec 不报告这个数字。用你自己的文档测量：用平台文档和一个租户启动实例，依次请求需要每个租户文档的路径，在一次完整回收之后读取 `jvm_memory_used_bytes{area="heap"}`，或 `jcmd <pid> GC.heap_info`，取几个数量。然后把 `max-apps` 和 `max-tenants` 设为堆能放下的数量并留有余量，而不是你拥有的租户数：被丢弃的文档在下次需要时会重新加载。堆太小时见[pod 内存耗尽](./troubleshooting.md#a-pod-runs-out-of-memory)。
+**能放下多少文档。**编译后的文档在堆上，CoSec 最多保留 `max-apps` 个应用文档（1,024）、`max-tenants` 个租户文档（16,384），以及与它们分开计的、已知没有文档的 id（`max-absent-apps` 256、`max-absent-tenants` 65,536），外加从不被丢弃的平台文档（[实例如何读取文档](./storage.md#how-instances-read-documents)）。在一阵冷加载期间，一个族可能短暂保留最多两倍。一个文档占多少取决于它的策略、语句和绑定；[为 SaaS 网关定容量](#sizing-a-saas-gateway)给出了测得的数字和由此得出的堆。要测量你自己的文档：用平台文档和一个租户启动实例，依次请求需要每个租户文档的路径，在一次完整回收之后读取 `jvm_memory_used_bytes{area="heap"}`，或 `jcmd <pid> GC.heap_info`，取几个数量。堆太小时见[pod 内存耗尽](./troubleshooting.md#a-pod-runs-out-of-memory)。
 
 原生部分在镜像中测得（8.0 预览版构建，`linux/arm64`，Docker，使用上述限制和只读根文件系统）：在没有发布平台文档、每个请求都回答
 `503` 的情况下，向一条路由和健康端点发送约 45,000 个请求后，容器占用 471 MiB（dev）和 1,277 MiB（production），没有进程因内存被杀。
+
+## 为 SaaS 网关定容量 {#sizing-a-saas-gateway}
+
+当网关为多租户平台的所有服务做决定时，持有文档的实例只有网关的副本：它后面的服务以网关模式运行，不持有任何文档（[网关后面的服务](#services-behind-the-gateway)）。
+每个副本为它服务的每个租户持有一个条目，无论该租户有没有租户文档，并且每隔 `revalidate-interval` 向 Redis 确认一次。下面的数字针对
+10,000 和 50,000 个租户、12 个应用（每个 12 个系统角色、目录 100 项权限），以及（租户有租户文档时）含 5 个各 20 项权限的自定义角色和
+20 条角色绑定的租户文档。它们是在一个 JVM 上用生产编译器测得的，用内存存储代替 Redis。
+
+### 一个副本持有什么 {#what-a-replica-holds}
+
+| 条目 | 它占用的堆 |
+|---|---|
+| 这种形状的一个租户文档（3.5 KB JSON） | 约 30 KB |
+| 一个没有租户文档的租户 | 约 470 字节 |
+| 这种形状的一个应用文档（14 KB JSON） | 约 235 KB，12 个共 2.8 MB |
+| 被丢弃的文档留下的内容（它的最后修订，用于发现回退） | 约 130 字节 |
+| 一个令牌的"未撤销"回答，保留 30 秒 | 约 290 字节 |
+| 一个主体的"未撤销"回答，保留 30 秒 | 约 230 字节 |
+
+默认上限全部用满时（16,384 个租户文档和 65,536 个没有租户文档的租户），租户条目约占 520 MB。撤销查询的本地副本只保留副本最近 30 秒内见过的
+令牌和主体，每种最多 `cosec.authentication.revocation.cache.maximum-size`（500,000）个，两种都用满约 260 MB。堆按这些所占的两倍加 256 MiB
+（网关的其余部分）来定，让 ZGC 有回收的余地；再把内存限制设为堆，加直接内存，加约 250 MiB，再加四分之一（[内存](#memory)）。生产 overlay 的
+1.5 GiB 堆和 2560Mi 限制是按默认文档上限、加上约 150,000 个活跃令牌的撤销副本套用这条规则得出的；更多时按下面的设置给堆。
+
+条目已被持有的租户，其请求不读 Redis。超出上限的租户在它下一个请求时再读一次：租户文档从 Redis 读并重新编译（约 55 µs CPU），没有租户文档的
+租户只读 Redis。请求在租户间均匀分布时，上限小于租户数的副本约有 1 − 上限 ÷ 租户数 的请求要读 Redis：50,000 个都有文档的租户、
+`max-tenants` 为 16,384 时，每 1,000 个请求中有 670 个要读。
+
+### 一轮重新确认要多久 {#how-long-a-revalidation-pass-takes}
+
+一轮确认持有的每个条目，每次 `reload-concurrency`（16）个：
+
+- **它的时长**约为 条目数 × 一次条件读取 ÷ `reload-concurrency`。81,920 个条目（默认上限用满）在每次读取 0.3 ms 时为 1.5 秒，1 ms 时为 5.1 秒。
+- **滞后**低于 `revalidate-interval` 加一轮的时长；一轮超过间隔后，低于两轮的时长：这时各轮一轮接一轮地跑（[实例如何读取文档](./storage.md#how-instances-read-documents)）。
+- **每个副本的读取**为 条目数 ÷ `revalidate-interval`；一轮更长时为 条目数 ÷ 一轮的时长。
+
+每次条件读取占用 Redis 主线程 7 到 13 µs，与文档大小无关（[重新确认在 Redis 上的开销](./storage.md#what-revalidation-costs-redis)）。
+对每个副本都持有所有租户的一组副本：
+
+| 每个副本的条目数 | `revalidate-interval` | 5 个副本 | 10 个副本 | 20 个副本 | 50 个副本 |
+|---|---|---|---|---|---|
+| 10,000 | 10 s | 每秒 5,000 次读取，一个 Redis 节点的 4–7 % | 每秒 10,000 次，7–13 % | 每秒 20,000 次，14–26 % | 每秒 50,000 次，35–65 % |
+| 50,000 | 10 s | 每秒 25,000 次，18–33 % | 每秒 50,000 次，35–65 % | 每秒 100,000 次，70–130 % | 每秒 250,000 次，175–325 % |
+| 50,000 | 30 s | 每秒 8,300 次，6–11 % | 每秒 16,700 次，12–22 % | 每秒 33,000 次，23–43 % | 每秒 83,000 次，58–108 % |
+
+**何时调大 `revalidate-interval`。** 当 副本数 × 条目数 ÷ 间隔 × 10 µs 接近一个 Redis 节点的一半时调大它：开销按比例下降，而副本可能错过一条
+失效消息丢失的变化的时间也按同样比例增长。让 `lag-warn` 保持在它之上。Redis Cluster 按主节点数分摊这些数字。
+
+### 可直接套用的设置 {#settings-to-copy}
+
+| 租户数 | 有租户文档的租户 | 30 秒内的活跃令牌 | `max-tenants` | `max-absent-tenants` | `revalidate-interval` | 堆上的租户条目 + 撤销副本 | `-Xms` = `-Xmx` | 内存限制 |
+|---|---|---|---|---|---|---|---|---|
+| 10,000 | 10 % | 最多 150,000 | 默认（16,384） | 默认（65,536） | `10s` | 34 + 80 MB | `1536m` | `2560Mi` |
+| 10,000 | 100 % | 最多 150,000 | 默认 | 默认 | `10s` | 300 + 80 MB | `1536m` | `2560Mi` |
+| 50,000 | 10 % | 最多 500,000 | 默认 | 默认 | `10s` | 170 + 260 MB | `1536m` | `2560Mi` |
+| 50,000 | 100 % | 最多 500,000 | `60000` | 默认 | `30s` | 1.49 GB + 260 MB | `4g` | `6Gi` |
+
+50,000 个租户都有租户文档时：
+
+```yaml
+cosec:
+  authorization:
+    snapshot:
+      max-tenants: 60000
+      revalidate-interval: 30s
+```
+
+并把 `JVM_MEMORY_OPTS` 设为 `-Xms4g -Xmx4g -XX:MaxDirectMemorySize=256m -XX:MaxMetaspaceSize=256m`，内存请求和限制设为 `6Gi`。
+你自己的文档可能更大或更小：按[内存](#memory)所说测量，并据此调整堆。
+
+### 新副本的代价 {#what-a-new-replica-costs}
+
+刚启动的副本，或伸缩器新加的副本，只持有平台文档和 `prewarm-apps`、`prewarm-tenants` 的文档；就绪只等待这些。其他每个租户在它上面的第一个
+请求要等一次 Redis 读取，租户文档还要等编译：在 Redis 0.3 ms 应答时总共约 0.6 ms，最多 `cold-load-timeout`（2 秒）。请求均匀分布时，
+一个服务 10,000 个租户的新副本在见过每个租户一次之前，大多数请求都要读 Redis。把最繁忙的租户列入 `prewarm-tenants`，让它们不走这条路径。
+
+### 网关上的成员关系 {#memberships-at-the-gateway}
+
+镜像没有 `MembershipProvider`，所以成员的角色来自访问令牌的 `roles` claim：默认空间写 `roleId`，其他空间写 `roleId@space`
+（[角色与空间](../integration/authentication.md#roles-and-spaces)）。令牌中的角色 id 不带应用限定，所以给每个应用的角色起各自的 id
+（`wms.clerk`）：两个应用都定义的角色 id 会在两个应用中都授予权限。
+
+| 成员持有的角色 | id | `roles` claim | 整个访问令牌（HS256） |
+|---|---|---|---|
+| 12 个应用中各一个，默认空间 | 短（`app07.role03`） | 181 字节 | 572 字节 |
+| 12 个应用中各一个，5 个空间（60 个） | 短（`app07.role03@space-0001`） | 1.6 KB | 2.4 KB |
+| 12 个应用中各一个，5 个空间（60 个） | 两侧各约 25 个字符 | 3.3 KB | 4.7 KB |
+
+令牌在每个请求的 `Authorization` 中传递，请求头合计超过 `server.max-http-request-header-size`（默认 8 KB）时 Reactor Netty 拒绝该请求：
+约 100 个长 `role@space` 条目就会达到。网关转发的 `CoSec-Identity` 请求头只带请求所在空间的角色。
+
+没有哪项按请求的开销取决于一个租户有多少成员。网关验证令牌、解析它携带的角色，并查两次撤销（令牌的和它的主体的），都按调用者为键；租户文档
+不列出它的成员。撤销查询为每个"未撤销"的回答在本地保留 30 秒，每张表、每个副本最多 `cosec.authentication.revocation.cache.maximum-size`
+（500,000）个条目，每个约 300 字节：30 秒内见到的不同令牌多于这个数的副本，对其余令牌要在请求路径上读 Redis
+（[配置](./configuration.md#local-cache-settings)）。
+
+从成员身上移除的角色还能用多久：
+
+- **刷新令牌的服务有 `MembershipRefresh` 时：** 直到成员当前的访问令牌过期，最多 `cosec.jwt.token-validity.access`（10 分钟）。
+- **没有时（默认）：** 刷新会沿用旧的 claim，所以直到成员下次登录：最多 `cosec.jwt.session.lifetime`（30 天），只要成员在
+  `cosec.jwt.token-validity.refresh`（7 天）内刷新（[会话](../integration/authentication.md#sessions)）。
+- **立即：** `TokenRevoker.revokeSubject(tenant, principal)` 在每个副本上拒绝该成员在此之前签发的每个令牌；丢失失效消息的副本最多再多 30 秒，
+  刚好在之后签发的令牌还有 `cosec.authentication.revocation.skew`（5 秒）（[撤销一个主体的所有令牌](../integration/authentication.md#revoking-every-token-of-a-principal)）。
 
 ## CI 如何检查镜像 {#how-ci-checks-the-image}
 

@@ -34,7 +34,7 @@ class AbsentBoundWindowTest {
     private val threads = SourceModelThreads()
     private val store = ControllableStore().apply { put(SnapshotKey.Platform, document(1)) }
     private val compiler = FakeCompiler()
-    private val options = SnapshotOptions(revalidateInterval = QUIET_PASS, maxAbsent = 1)
+    private val options = SnapshotOptions(revalidateInterval = QUIET_PASS, maxAbsentApps = 1)
     private val a = SnapshotKey.App("absent-a")
     private val b = SnapshotKey.App("absent-b")
 
@@ -43,7 +43,7 @@ class AbsentBoundWindowTest {
 
     private fun source(hooks: KeyDrain.Hooks = KeyDrain.Hooks.NONE) = SnapshotSource(
         store, SnapshotKey.Platform, compiler,
-        listOf(SnapshotFamily(SnapshotKind.APP, compiler, options.maxApps, options.maxAbsent)),
+        listOf(SnapshotFamily(SnapshotKind.APP, compiler, options.maxApps, options.maxAbsentApps)),
         options, ManualClock(), SnapshotMetrics.NOOP, directExecutor, null, ticker::incrementAndGet, threads.housekeeping,
         keyRunners(hooks = hooks),
     )

@@ -393,7 +393,7 @@
       "type": "java.lang.Boolean"
     },
     {
-      "description": "This instance's id in reports and statuses; a random one when empty. Unique per running instance, and only letters, digits, `.`, `_` and `-` (it ends a Redis key); any other id fails startup.",
+      "description": "The prefix of this instance's id in reports and statuses: the id is `<instance-id>.<suffix>`, the suffix new at every start, so that a restarted process never replaces its predecessor's reports; a random UUID when empty. Only letters, digits, `.`, `_` and `-` (it ends a Redis key); any other id fails startup.",
       "name": "cosec.authorization.shadow.instance-id",
       "sourceType": "me.ahoo.cosec.spring.boot.pipeline.RuntimeAuthorizationProperties$Shadow",
       "type": "java.lang.String"
@@ -459,13 +459,25 @@
       "type": "java.time.Duration"
     },
     {
+      "description": "The most app ids held as having no app document (positive, `SNP-7`). App ids come from requests, so this bounds what a client naming made-up apps makes an instance remember.",
+      "name": "cosec.authorization.snapshot.max-absent-apps",
+      "sourceType": "me.ahoo.cosec.spring.boot.pipeline.RuntimeAuthorizationProperties$Snapshot",
+      "type": "java.lang.Integer"
+    },
+    {
+      "description": "The most tenant ids held as having no tenant document (positive, `SNP-7`), about 470 bytes each. Each request of such a tenant reads its entry: one dropped is read from Redis again on the tenant's next request.",
+      "name": "cosec.authorization.snapshot.max-absent-tenants",
+      "sourceType": "me.ahoo.cosec.spring.boot.pipeline.RuntimeAuthorizationProperties$Snapshot",
+      "type": "java.lang.Integer"
+    },
+    {
       "description": "The most app documents held in memory (positive); the least recently used one is dropped beyond it.",
       "name": "cosec.authorization.snapshot.max-apps",
       "sourceType": "me.ahoo.cosec.spring.boot.pipeline.RuntimeAuthorizationProperties$Snapshot",
       "type": "java.lang.Integer"
     },
     {
-      "description": "The most tenant documents held in memory (positive); the platform document is never dropped.",
+      "description": "The most tenant documents held in memory (positive); the platform document is never dropped. About 30 KB each for a tenant document of 5 roles of 20 permissions and 20 bindings: size the heap for it.",
       "name": "cosec.authorization.snapshot.max-tenants",
       "sourceType": "me.ahoo.cosec.spring.boot.pipeline.RuntimeAuthorizationProperties$Snapshot",
       "type": "java.lang.Integer"
@@ -481,6 +493,12 @@
       "name": "cosec.authorization.snapshot.prewarm-tenants",
       "sourceType": "me.ahoo.cosec.spring.boot.pipeline.RuntimeAuthorizationProperties$Snapshot",
       "type": "java.util.List<java.lang.String>"
+    },
+    {
+      "description": "Documents a revalidation pass confirms at once (positive). A pass takes about the documents held \u00d7 one conditional read \u00f7 this; past `revalidate-interval`, passes run back to back and lag grows with them.",
+      "name": "cosec.authorization.snapshot.reload-concurrency",
+      "sourceType": "me.ahoo.cosec.spring.boot.pipeline.RuntimeAuthorizationProperties$Snapshot",
+      "type": "java.lang.Integer"
     },
     {
       "description": "How often a pass starts that confirms every installed document against Redis; while a pass is still in flight, the next starts as soon as it ends. A change whose invalidation was lost is installed by the first pass that reaches its document (`SNP-6`). At least 1 second, at most 5 minutes, less than `lag-warn` and, with fail-closed tenants, less than `fail-closed.max-lag`; anything else fails startup.",

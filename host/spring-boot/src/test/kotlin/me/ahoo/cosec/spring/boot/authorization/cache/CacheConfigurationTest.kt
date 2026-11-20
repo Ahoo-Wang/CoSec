@@ -53,7 +53,7 @@ class CacheConfigurationTest {
     fun tokenDefaults() {
         val policy = RevocationProperties().cache.applyTo(spec).policy
         policy.localMaxAge.assert().isEqualTo(Duration.ofSeconds(30))
-        policy.local.maximumSize.assert().isEqualTo(100_000L)
+        policy.local.maximumSize.assert().isEqualTo(500_000L)
     }
 
     /** A number without a unit is seconds, as `expire-after-write` and `expire-after-access` read it with `expire-unit`. */

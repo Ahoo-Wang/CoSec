@@ -46,5 +46,8 @@ private fun RuntimeAuthorizationProperties.Snapshot.options(): SnapshotOptions =
     coldLoadTimeout = coldLoadTimeout,
     maxApps = maxApps,
     maxTenants = maxTenants,
+    maxAbsentApps = maxAbsentApps,
+    maxAbsentTenants = maxAbsentTenants,
     compileThreads = compileThreads,
+    reloadConcurrency = reloadConcurrency,
 )

@@ -50,10 +50,17 @@ class LateSettlementTest {
         /** Runs once, right before the next read of the index. */
         var beforeIndexRead: (suspend () -> Unit)? = null
 
+        /** Index reads that pass before [beforeIndexRead] runs. */
+        var indexReadsBeforeHook = 0
+
         override suspend fun index(key: SnapshotKey): Versioned<RevisionIndex>? {
             beforeIndexRead?.let {
-                beforeIndexRead = null
-                it()
+                if (indexReadsBeforeHook > 0) {
+                    indexReadsBeforeHook--
+                } else {
+                    beforeIndexRead = null
+                    it()
+                }
             }
             return memory.index(key)
         }
@@ -114,6 +121,9 @@ class LateSettlementTest {
         val first = publish()
         val second = publish()
         var third: PublishOutcome.Published? = null
+        // The pass first asks whether the document can need reclaiming (one index read), then reads the history: the
+        // head, then the index. The publish lands between those two.
+        store.indexReadsBeforeHook = 1
         store.beforeIndexRead = {
             clock.now = clock.now.plus(Duration.ofHours(1))
             third = other.publish(ACME, other.head(ACME), candidate(ACME), publication()) as PublishOutcome.Published

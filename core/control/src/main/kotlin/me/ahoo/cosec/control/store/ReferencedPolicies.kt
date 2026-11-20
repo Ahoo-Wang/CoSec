@@ -53,9 +53,15 @@ internal object ReferencedPolicies {
         val kept = RoleExpansion.effective(candidate).policies.associate { it.id to it.boundary }
         return RoleExpansion.effective(base).policies.filter { kept[it.id] != it.boundary }.map { it.id }
             .associateWith { policy ->
-                (referrers(key, policy) - key).filterNotTo(
-                    HashSet()
-                ) { definesItself(it, policy, head) }
+                val referring = referrers(key, policy) - key
+                // An app's policies are its permission policies, which no tenant can define (TNT-2): no head to read.
+                if (key is SnapshotKey.App) {
+                    referring
+                } else {
+                    referring.filterNotTo(
+                        HashSet()
+                    ) { definesItself(it, policy, head) }
+                }
             }
             .filterValues { it.isNotEmpty() }
     }

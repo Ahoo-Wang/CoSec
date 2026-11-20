@@ -1,5 +1,5 @@
 # Production: your own Redis, two to ten gateways behind a HorizontalPodAutoscaler, a PodDisruptionBudget, a
-# NetworkPolicy, and 2Gi per gateway (a 1 GB heap). Set the Redis address below, then build your own overlay on this
+# NetworkPolicy, and 2560Mi per gateway (a 1.5 GB heap). Set the Redis address below, then build your own overlay on this
 # one (or copy it) for your namespace, routes and image tag.
 #
 #   kubectl create namespace cosec

@@ -26,7 +26,7 @@ import me.ahoo.cosec.model.Identifiers
  * Entries are written with their own lifetime, the remaining lifetime of the revoked token's bound refresh token.
  *
  * The local tier is configured via `cosec.authentication.revocation.cache.*`
- * (default: 30s local max age, 100k entries); the distributed tier is Redis.
+ * (default: 30s local max age, 500k entries); the distributed tier is Redis.
  * See [CoSecCacheSpecs.revokedToken] for the declaration.
  *
  * @author ahoo wang

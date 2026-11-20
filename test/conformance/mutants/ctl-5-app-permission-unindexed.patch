@@ -1,0 +1,17 @@
+# Rule: CTL-5
+# Mutant: a tenant's reference to an app permission is indexed nowhere once the platform entry is gone: the app removes a permission a tenant binds
+# Tests: :control:test --tests me.ahoo.cosec.control.store.AppPermissionReferencesTest :conformance:test
+
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/store/ReferrerIndex.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/store/ReferrerIndex.kt
+index 077f5dd5f..77facd9eb 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/store/ReferrerIndex.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/store/ReferrerIndex.kt
+@@ -176,7 +176,7 @@ internal class ReferrerIndex(
+      */
+     private fun targetsOf(kind: DocumentKind, app: String?, policy: PolicyId): List<SnapshotKey> = when {
+         kind != DocumentKind.TENANT || app == null -> listOf(SnapshotKey.Platform)
+-        isPermissionOf(app, policy) -> listOf(SnapshotKey.App(app))
++        isPermissionOf(app, policy) -> emptyList()
+         else -> listOf(SnapshotKey.Platform, SnapshotKey.App(app))
+     }
+ 

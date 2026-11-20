@@ -50,7 +50,7 @@ class KeyRunnerCloseTest {
     private val options = SnapshotOptions(revalidateInterval = QUIET_PASS)
     private val source = SnapshotSource(
         store, SnapshotKey.Platform, compiler,
-        listOf(SnapshotFamily(SnapshotKind.APP, compiler, options.maxApps, options.maxAbsent)),
+        listOf(SnapshotFamily(SnapshotKind.APP, compiler, options.maxApps, options.maxAbsentApps)),
         options, ManualClock(), SnapshotMetrics.NOOP, pool, null, { 0L }, null,
         keyRunners(hooks = failingA, hooked = { it == APP_A }),
     )

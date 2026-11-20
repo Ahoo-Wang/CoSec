@@ -52,7 +52,7 @@ class KeyCallersTest {
         store,
         SnapshotKey.Platform,
         compiler,
-        listOf(SnapshotFamily(SnapshotKind.APP, compiler, OPTIONS.maxApps, OPTIONS.maxAbsent)),
+        listOf(SnapshotFamily(SnapshotKind.APP, compiler, OPTIONS.maxApps, OPTIONS.maxAbsentApps)),
         OPTIONS,
         ManualClock(),
         SnapshotMetrics.NOOP,
