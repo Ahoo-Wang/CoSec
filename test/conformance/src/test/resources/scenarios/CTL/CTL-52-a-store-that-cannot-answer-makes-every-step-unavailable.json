@@ -1,0 +1,76 @@
+{
+  "rules": [
+    "CTL-52"
+  ],
+  "polarity": "positive",
+  "level": "control",
+  "description": "R2C-6: while the control store cannot answer, every step it is asked for fails as unavailable, which the control API answers 503, never as an empty answer: c1 is neither skipped nor published (a step that maps the failure itself refuses it 503), c2 is not proposed (the store's failure reaches the caller), and the head does not move.",
+  "steps": [
+    {
+      "propose": {
+        "change": "c1",
+        "document": "tenant:acme",
+        "operations": [
+          {
+            "putPolicy": {
+              "id": "read-c1",
+              "statements": [
+                {
+                  "effect": "allow",
+                  "action": "order:read"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "storeDown": true
+    },
+    {
+      "skipShadow": "c1"
+    },
+    {
+      "publish": "c1"
+    },
+    {
+      "propose": {
+        "change": "c2",
+        "document": "tenant:acme",
+        "operations": [
+          {
+            "putPolicy": {
+              "id": "read-c2",
+              "statements": [
+                {
+                  "effect": "allow",
+                  "action": "order:read"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "storeDown": false
+    }
+  ],
+  "expect": {
+    "steps": [
+      "CHECKED",
+      "store down",
+      "refused 503",
+      "refused 503",
+      "unavailable",
+      "store up"
+    ],
+    "errors": {
+      "c1": []
+    },
+    "heads": {
+      "tenant:acme": 0
+    }
+  }
+}

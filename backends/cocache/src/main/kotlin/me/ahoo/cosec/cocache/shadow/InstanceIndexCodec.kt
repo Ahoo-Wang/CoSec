@@ -19,8 +19,8 @@ import me.ahoo.cocache.api.Codec
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.document.json.CoSecJson
-import java.time.Instant
 import me.ahoo.cosec.spi.snapshot.SnapshotFormatException
+import java.time.Instant
 
 /** The instances that have a status, as a JSON object of instance id to the time it listed itself. */
 internal object InstanceIndexCodec : Codec<Map<String, Instant>> {
@@ -29,7 +29,8 @@ internal object InstanceIndexCodec : Codec<Map<String, Instant>> {
 
     override fun decode(bytes: ByteArray): Map<String, Instant> {
         val node = CoSecJson.mapper.readTree(bytes)
-        if (!(node.isObject && node.values().all { it.isString })) throw SnapshotFormatException("The instances with a status are an object of instance id to time")
+        val index = node.isObject && node.values().all { it.isString }
+        if (!index) throw SnapshotFormatException("The instances with a status are an object of instance id to time")
         return node.properties().associate { (instance, at) -> instance to Instant.parse(at.asString()) }
     }
 }

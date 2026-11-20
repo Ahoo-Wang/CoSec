@@ -30,11 +30,11 @@ import me.ahoo.cosec.control.change.allow
 import me.ahoo.cosec.control.lifecycle.ChangeAuthority
 import me.ahoo.cosec.control.lifecycle.ChangeOptions
 import me.ahoo.cosec.control.lifecycle.Changes
+import me.ahoo.cosec.control.lifecycle.ControlMaintenance
 import me.ahoo.cosec.control.lifecycle.LockoutCheck
 import me.ahoo.cosec.control.store.ControlStore
-import me.ahoo.cosec.control.store.InMemoryControlStore
 import me.ahoo.cosec.control.store.ControlStoreException
-import me.ahoo.cosec.control.lifecycle.ControlMaintenance
+import me.ahoo.cosec.control.store.InMemoryControlStore
 import me.ahoo.cosec.control.store.MutableClock
 import me.ahoo.cosec.control.store.Publication
 import me.ahoo.cosec.control.store.PublishOutcome
@@ -89,6 +89,7 @@ class ControlPlaneTest {
 
     /** Documents whose stored head does not decode, as one a newer version wrote during a rolling upgrade (RC1-39). */
     val undecodable = HashSet<SnapshotKey>()
+
     /** While true, every operation of the store throws [ControlStoreException]: it cannot answer (CTL-52). */
     @Volatile
     var down = false

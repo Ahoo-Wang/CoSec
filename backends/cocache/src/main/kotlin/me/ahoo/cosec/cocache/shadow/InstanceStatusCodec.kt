@@ -28,7 +28,7 @@ internal object InstanceStatusCodec : Codec<InstanceStatus> {
 
     override fun decode(bytes: ByteArray): InstanceStatus {
         val statuses = ShadowCodec.decodeStatuses(bytes)
-        if (!(statuses.size == 1)) throw SnapshotFormatException("A stored status is one instance's, not ${statuses.size}")
+        if (statuses.size != 1) throw SnapshotFormatException("A stored status is one instance's, not ${statuses.size}")
         return statuses.values.single()
     }
 }

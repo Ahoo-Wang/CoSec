@@ -434,6 +434,11 @@ public final class me/ahoo/cosec/control/store/ControlStore$DefaultImpls {
 	public static fun unlistStaged (Lme/ahoo/cosec/control/store/ControlStore;Lme/ahoo/cosec/spi/snapshot/SnapshotKey;Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 }
 
+public final class me/ahoo/cosec/control/store/ControlStoreException : java/lang/RuntimeException {
+	public fun <init> (Ljava/lang/String;Ljava/lang/Throwable;)V
+	public synthetic fun <init> (Ljava/lang/String;Ljava/lang/Throwable;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+}
+
 public abstract interface class me/ahoo/cosec/control/store/HeadWrite {
 }
 

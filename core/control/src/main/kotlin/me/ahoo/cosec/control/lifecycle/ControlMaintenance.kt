@@ -124,7 +124,10 @@ class ControlMaintenance(
      */
     suspend fun closeShadowWindows(): List<ChangeRequest> {
         // A store that cannot answer is logged and the pass does nothing (CTL-52), as every other read of it here.
-        if (attempt("take the shadow lease") { store.acquireLease(SHADOW_LEASE, holder, shadowInterval.multipliedBy(2)) } != true) {
+        val leased = attempt("take the shadow lease") {
+            store.acquireLease(SHADOW_LEASE, holder, shadowInterval.multipliedBy(2))
+        }
+        if (leased != true) {
             return emptyList()
         }
         try {

@@ -54,6 +54,7 @@ import me.ahoo.cosec.control.lifecycle.Changes
 import me.ahoo.cosec.control.lifecycle.LockoutCheck
 import me.ahoo.cosec.control.lifecycle.ShadowOptions
 import me.ahoo.cosec.control.store.ControlStore
+import me.ahoo.cosec.control.store.ControlStoreException
 import me.ahoo.cosec.control.store.InMemoryControlStore
 import me.ahoo.cosec.control.store.Publication
 import me.ahoo.cosec.control.store.Revisions
@@ -128,6 +129,8 @@ import java.time.Instant
  *            { "publish": { "change": "c1", "by": "walt", "lockout": true } },   // acknowledges a lock-out (UC-6)
  *            { "rollback": { "change": "c2", "by": "walt", "document": "platform", "revision": 1 } },
  *            { "outage": true },   // every check is indeterminate until { "outage": false }
+ *            { "storeDown": true }, // every operation of the control store fails until false (CTL-52): a step it
+ *                                   // stops is `unavailable`, never an empty answer
  *            { "vanish": "i1" },   // i1 is taken off the reporters of every window, its report left
  *            { "simulate": { "by": "alice", "request": { ... }, "candidate": "c1" } },
  *            { "explain": { "by": "alice", "request": { ... }, "at": { "platform": 1, "app": 1, "tenant": 1 } } },
@@ -185,8 +188,12 @@ object ChangeRunner : ScenarioRunner {
         // Kept, as the control plane keeps it from its start (CTL-46).
         private val memory = InMemoryControlStore(clock).also { runBlocking { it.keepStagedList() } }
 
+        /** While true, every operation of the store throws [ControlStoreException] (CTL-52). */
+        @Volatile
+        private var storeDown = false
+
         /** The store, whose candidate withdrawals inside a `late` step wait for its [Late.release]. */
-        private val store = object : ControlStore by memory {
+        private val store = down(object : ControlStore by memory {
             override suspend fun withdrawCandidate(key: SnapshotKey, window: String): Boolean {
                 currentCoroutineContext()[Late]?.let { late ->
                     late.paused.complete(Unit)
@@ -194,7 +201,23 @@ object ChangeRunner : ScenarioRunner {
                 }
                 return memory.withdrawCandidate(key, window)
             }
-        }
+        })
+
+        /** [store] whose every operation throws while [storeDown]: a proxy, so no operation of the port is left out. */
+        private fun down(store: ControlStore): ControlStore = java.lang.reflect.Proxy.newProxyInstance(
+            ControlStore::class.java.classLoader,
+            arrayOf(ControlStore::class.java),
+        ) { _, method, args ->
+            if (storeDown && method.declaringClass != Any::class.java) {
+                throw ControlStoreException("${method.name}: the store is down")
+            }
+            try {
+                method.invoke(store, *args.orEmpty())
+            } catch (e: java.lang.reflect.InvocationTargetException) {
+                throw e.targetException
+            }
+        } as ControlStore
+
         val revisions = Revisions(store, clock)
 
         /** The roles the membership provider answers, by operator; a `provide` step changes them. */
@@ -384,7 +407,7 @@ object ChangeRunner : ScenarioRunner {
 
         /** One step's result, as `expect.steps` writes it. */
         private suspend fun result(action: String, argument: JsonNode): String = when (action) {
-            "advance", "vanish", "outage" -> environment(action, argument)
+            "advance", "vanish", "outage", "storeDown" -> environment(action, argument)
             "report" -> report(argument)
             "simulate" -> simulate(argument)
             "explain" -> explain(argument)
@@ -397,6 +420,8 @@ object ChangeRunner : ScenarioRunner {
                 "refused ${error.status}"
             } catch (_: SnapshotFormatException) {
                 "malformed"
+            } catch (_: ControlStoreException) {
+                "unavailable"
             }
         }
 
@@ -441,6 +466,10 @@ object ChangeRunner : ScenarioRunner {
         private fun environment(action: String, argument: JsonNode): String = when (action) {
             "advance" -> "advanced".also { clock.now = clock.now.plus(Duration.parse(argument.text())) }
             "vanish" -> "vanished".also { vanished += argument.text() }
+            "storeDown" -> {
+                storeDown = argument.bool()
+                if (storeDown) "store down" else "store up"
+            }
             else -> {
                 engine.outage = argument.bool()
                 if (engine.outage) "down" else "up"

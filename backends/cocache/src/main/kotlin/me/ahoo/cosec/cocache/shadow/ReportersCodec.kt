@@ -27,7 +27,8 @@ internal object ReportersCodec : Codec<Set<String>> {
 
     override fun decode(bytes: ByteArray): Set<String> {
         val node = CoSecJson.mapper.readTree(bytes)
-        if (!(node.isArray && node.values().all { it.isString })) throw SnapshotFormatException("The reporters of a window are an array of instance ids")
+        val reporters = node.isArray && node.values().all { it.isString }
+        if (!reporters) throw SnapshotFormatException("The reporters of a window are an array of instance ids")
         return node.values().mapTo(LinkedHashSet()) { it.asString() }
     }
 }
