@@ -1,0 +1,16 @@
+# Rule: BRK-6
+# Mutant: a change to the policy a live break-glass binding grants is no longer a finding: it checks clean and widens the emergency grant
+# Tests: :control:test --tests me.ahoo.cosec.control.change.ControlRoundTwoFixesTest :conformance:test --tests me.ahoo.cosec.conformance.ConformanceTest
+
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/BreakGlassRules.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/BreakGlassRules.kt
+index ac17826a..e421ee5f 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/BreakGlassRules.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/BreakGlassRules.kt
+@@ -55,7 +55,6 @@ internal object BreakGlassRules {
+         if (request) {
+             findings += onlyBreakGlass(operations, before.values.filter { it.breakGlass }.map { it.id }.toSet())
+         }
+-        findings += grantedPolicies(base, candidate, now)
+         return findings
+     }
+ 

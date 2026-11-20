@@ -1,0 +1,17 @@
+# Rule: BRK-6
+# Mutant: changing the policy a live break-glass binding grants no longer counts as touching break-glass: it needs neither cosec:breakglass nor a REQUIRED audit
+# Tests: :control:test --tests me.ahoo.cosec.control.change.ControlRoundTwoFixesTest :conformance:test --tests me.ahoo.cosec.conformance.ConformanceTest
+
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/BreakGlassRules.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/BreakGlassRules.kt
+index ac17826a..c552beda 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/BreakGlassRules.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/BreakGlassRules.kt
+@@ -128,7 +128,7 @@ internal object BreakGlassRules {
+         val granted = live(base, now).map { it.policy }.toSet()
+         return operations.any {
+             (it is Operation.PutBinding && (it.binding.breakGlass || it.binding.id in glass)) ||
+-                (it is Operation.PutPolicy && it.policy.id in granted)
++                (it is Operation.PutPolicy && it.policy.id in granted && granted.isEmpty())
+         }
+     }
+ 

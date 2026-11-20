@@ -1,0 +1,17 @@
+# Rule: APR-4
+# Mutant: only a new break-glass binding needs a second person: changing a live one (its expiry, its principal) is published alone
+# Tests: :control:test --tests me.ahoo.cosec.control.change.BreakGlassControlTest :conformance:test --tests me.ahoo.cosec.conformance.ConformanceTest
+
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/EscalationAnalysis.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/EscalationAnalysis.kt
+index 80ae206e..f589fd2c 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/EscalationAnalysis.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/EscalationAnalysis.kt
+@@ -55,7 +55,7 @@ internal class EscalationAnalysis(private val analyzer: GrantAnalyzer, private v
+         val digest = { binding: Binding -> EntryDigest.of(binding, candidate.kind, candidate.owner) }
+         for (binding in candidate.bindings.filter { it.breakGlass }) {
+             val previous = before[binding.id]
+-            if (previous == null || digest(previous) != digest(binding)) {
++            if (previous == null || (previous.expiresAt == null && digest(previous) != digest(binding))) {
+                 into += Escalation("break-glass binding ${binding.id.value}", BREAK_GLASS, "always two people (RFC 0007 §8)")
+             }
+         }

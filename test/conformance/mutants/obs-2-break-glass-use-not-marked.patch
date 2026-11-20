@@ -1,0 +1,16 @@
+# Rule: OBS-2
+# Mutant: a permit through break-glass no longer marks its event as break-glass: the REQUIRED listener records an ordinary permit
+# Tests: :runtime:test --tests me.ahoo.cosec.runtime.event.BreakGlassAndShadowTest :conformance:test --tests me.ahoo.cosec.conformance.ConformanceTest
+
+diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/stage/Evaluate.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/stage/Evaluate.kt
+index 79d815c7..daba49e7 100644
+--- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/stage/Evaluate.kt
++++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/stage/Evaluate.kt
+@@ -47,7 +47,6 @@ internal class Evaluate(
+             }
+             return state.unavailable(Cause.RequiredListenerFailed(emptyList()))
+         }
+-        state.breakGlass = true
+         return null
+     }
+ }

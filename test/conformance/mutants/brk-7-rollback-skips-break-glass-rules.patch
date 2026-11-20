@@ -1,0 +1,16 @@
+# Rule: BRK-7
+# Mutant: a rollback is exempt from the break-glass findings: one that brings back a break-glass binding, or changes the policy a live one grants, checks clean
+# Tests: :control:test --tests me.ahoo.cosec.control.change.ControlRoundTwoFixesTest :conformance:test --tests me.ahoo.cosec.conformance.ConformanceTest
+
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/BreakGlassRules.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/BreakGlassRules.kt
+index ac17826a..588a7a28 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/BreakGlassRules.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/BreakGlassRules.kt
+@@ -40,6 +40,7 @@ internal object BreakGlassRules {
+         maxDuration: Duration,
+     ): List<Finding> {
+         val findings = ArrayList<Finding>()
++        if (kind == ProvenanceKind.ROLLBACK) return findings
+         val before = base?.bindings.orEmpty().associateBy { it.id }
+         val request = kind == ProvenanceKind.BREAK_GLASS
+         // No kind is exempt: MIGRATE and BOOTSTRAP revisions are written by cosec-migrate through Revisions, never
