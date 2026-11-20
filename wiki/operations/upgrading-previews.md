@@ -27,6 +27,13 @@ Which preview of the library may run behind which preview of the gateway image: 
 
 ## From 8.0.0-beta.4 {#from-8-0-0-beta-4}
 
+- **The control API answers `503` whenever the control store cannot answer** (review round 2, `R2C-6`, `CTL-52`).
+  Affected: clients and alerts of the control API, and a `ControlStore` of your own.
+  - A Redis outage or timeout during a publish, a document read or a revision read used to answer `500`
+    `internal-error`. It now answers `503` `unavailable`, which a client may retry, and is logged at `WARN`, not
+    `ERROR`. A stored value that does not decode stays a `500`.
+  - `ControlStore` names `me.ahoo.cosec.control.store.ControlStoreException` for "the store could not answer". A
+    `ControlStore` of your own throws it for an outage; anything else it throws is a `500`.
 - **An app change lists the tenants it reaches as one entry per policy; an escalation's reason is an enum** (review
   round 2, `R2C-14`, `R2C-5`, `CTL-48`). Affected: whoever reads a change's `escalations` (the control API's
   `GET /changes/{id}`, a `ChangeListener`, the audit JSON on Kafka), and code that builds or reads an `Escalation`.
@@ -335,6 +342,19 @@ Which preview of the library may run behind which preview of the gateway image: 
     instance remembers that your `MembershipLoader` answered `Unknown` for a principal, so a removed member's token no
     longer reaches the loader on every request. A principal you add is known when that time ends on the other
     instances, and at once where `invalidate` ran. A failed load is never remembered.
+- **The control API answers less and refuses more** (R2C-32, R2C-33, R2C-34).
+  - **`simulate` and `explain` name a statement only to a caller who may read the document that *defines* its policy.**
+    A tenant administrator whose tenant binds a platform policy, or an app's permission policy, no longer sees that
+    policy's statements, in the decision or in the trace: the decision says `"redacted": true` and the trace counts them.
+    Before, the document of the binding decided it, which a tenant administrator reads. A caller who may read the
+    defining document (a platform operator) sees what they saw.
+  - **A section operation with an `ifMatch` is a `400`.** `putCatalog`, `setLimits`, `setAttributes` and `setBoundary`
+    replace a section, which has no digest of its own; they accepted an `ifMatch` and ignored it. The change's `base`,
+    the digest of the document it was proposed on, guards the document. Remove the member. Each operation also takes
+    only its own members now: `removePolicy` with a `policy`, for one, is an unknown member.
+  - **A change is checked, analysed and approved on the document the data plane reads**: the candidate as written and
+    read back, not as the operations built it. No change of outcome is expected: the two are the same unless the format
+    codec fails to round-trip a member.
 
 ## From 8.0.0-beta.3 {#from-8-0-0-beta-3}
 

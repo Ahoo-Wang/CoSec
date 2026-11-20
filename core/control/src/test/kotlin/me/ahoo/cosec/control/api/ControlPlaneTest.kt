@@ -30,8 +30,10 @@ import me.ahoo.cosec.control.change.allow
 import me.ahoo.cosec.control.lifecycle.ChangeAuthority
 import me.ahoo.cosec.control.lifecycle.ChangeOptions
 import me.ahoo.cosec.control.lifecycle.Changes
+import me.ahoo.cosec.control.lifecycle.ControlMaintenance
 import me.ahoo.cosec.control.lifecycle.LockoutCheck
 import me.ahoo.cosec.control.store.ControlStore
+import me.ahoo.cosec.control.store.ControlStoreException
 import me.ahoo.cosec.control.store.InMemoryControlStore
 import me.ahoo.cosec.control.store.MutableClock
 import me.ahoo.cosec.control.store.Publication
@@ -87,7 +89,12 @@ class ControlPlaneTest {
 
     /** Documents whose stored head does not decode, as one a newer version wrote during a rolling upgrade (RC1-39). */
     val undecodable = HashSet<SnapshotKey>()
-    private val store: ControlStore = object : ControlStore by memory {
+
+    /** While true, every operation of the store throws [ControlStoreException]: it cannot answer (CTL-52). */
+    @Volatile
+    var down = false
+
+    private val store: ControlStore = outage(object : ControlStore by memory {
         override suspend fun change(id: ChangeId): Versioned<ChangeRequest>? = if (id in unreadable) {
             // Wrapped, as a store's cache may wrap what its codec threw.
             throw IllegalStateException("decoding", SnapshotFormatException("A change request is malformed."))
@@ -104,7 +111,22 @@ class ControlPlaneTest {
                 SnapshotDigest(ByteArray(32) { 7 }),
             )
         }
-    }
+    })
+
+    /** [store] whose every operation throws while [down]: a proxy, so no operation of the port is left out. */
+    private fun outage(store: ControlStore): ControlStore = java.lang.reflect.Proxy.newProxyInstance(
+        ControlStore::class.java.classLoader,
+        arrayOf(ControlStore::class.java),
+    ) { _, method, args ->
+        if (down && method.declaringClass != Any::class.java) {
+            throw ControlStoreException("${method.name}: the store is down")
+        }
+        try {
+            method.invoke(store, *args.orEmpty())
+        } catch (e: java.lang.reflect.InvocationTargetException) {
+            throw e.targetException
+        }
+    } as ControlStore
     private val revisions = Revisions(store, clock)
     val engine = EngineAuthority(revisions)
 
@@ -121,6 +143,7 @@ class ControlPlaneTest {
         revocations = RevocationReader.NONE,
         lockout = LockoutCheck.UNCHECKED,
     )
+    val maintenance = ControlMaintenance(store, revisions, changes, java.time.Duration.ofMinutes(1))
     val simulator = Simulator()
     val plane = DefaultControlPlane(
         changes,
@@ -202,7 +225,7 @@ class ControlPlaneTest {
     }
 
     /** bob of [tenant] in team-a of the order app, as `ops` there. */
-    private fun bob(action: String, tenant: TenantId = ACME) = SimulatedRequest(
+    fun bob(action: String, tenant: TenantId = ACME) = SimulatedRequest(
         tenant = tenant,
         principal = "bob",
         roles = listOf("ops@team-a"),

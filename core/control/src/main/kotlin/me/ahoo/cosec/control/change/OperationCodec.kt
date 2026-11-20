@@ -19,6 +19,7 @@ import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.control.change.ChangeJson.factory
 import me.ahoo.cosec.control.change.ChangeJson.format
 import me.ahoo.cosec.control.change.ChangeJson.need
+import me.ahoo.cosec.control.change.ChangeJson.only
 import me.ahoo.cosec.control.change.ChangeJson.quoted
 import me.ahoo.cosec.control.change.ChangeJson.text
 import me.ahoo.cosec.document.DocumentBudgets
@@ -125,8 +126,19 @@ internal object OperationCodec {
     }
 
     internal fun decode(node: JsonNode, kind: me.ahoo.cosec.model.decision.DocumentKind, owner: String): Operation {
+        val op = node.need("op").text()
+        // The members of this operation and no other's (R2C-33): `ifMatch` guards an entry, so a section has none.
+        FIELDS[op]?.let { fields ->
+            if (node.has("ifMatch") && "ifMatch" !in fields) {
+                throw format(
+                    "operation [${quoted(op)}] takes no ifMatch: it replaces a section, which the change's base " +
+                        "(the digest of the document it was proposed on) guards"
+                )
+            }
+            node.only(*fields)
+        }
         val ifMatch = node.get("ifMatch")?.text()
-        return when (val op = node.need("op").text()) {
+        return when (op) {
             "putPolicy" -> Operation.PutPolicy(PolicyDocumentCodec.decodePolicy(node.need("policy")), ifMatch)
             "removePolicy" -> Operation.RemovePolicy(PolicyId(node.need("id").text()), ifMatch)
             "putBinding" -> Operation.PutBinding(
@@ -144,6 +156,22 @@ internal object OperationCodec {
             else -> section(node, op)
         }
     }
+
+    /** The members of each operation as the control API writes it: an entry's operations carry an `ifMatch`, a section's none. */
+    private val FIELDS: Map<String, Array<String>> = mapOf(
+        "putPolicy" to arrayOf("op", "policy", "ifMatch"),
+        "removePolicy" to arrayOf("op", "id", "ifMatch"),
+        "putBinding" to arrayOf("op", "binding", "ifMatch"),
+        "removeBinding" to arrayOf("op", "id", "ifMatch"),
+        "putRateLimit" to arrayOf("op", "rateLimit", "ifMatch"),
+        "removeRateLimit" to arrayOf("op", "id", "ifMatch"),
+        "putRole" to arrayOf("op", "role", "ifMatch"),
+        "removeRole" to arrayOf("op", "id", "ifMatch"),
+        "putCatalog" to arrayOf("op", "catalog"),
+        "setLimits" to arrayOf("op", "limits"),
+        "setAttributes" to arrayOf("op", "attributes"),
+        "setBoundary" to arrayOf("op", "boundary"),
+    )
 
     /** The operations on a document's sections, which have no `ifMatch`. */
     private fun section(node: JsonNode, op: String): Operation {

@@ -74,6 +74,31 @@ class SectionFieldsHttpTest {
         call(proposal("""{"op":"setAttributes"}""")).first.assert().isEqualTo(201)
     }
 
+    /**
+     * R2C-33: `ifMatch` guards an entry, so a section operation that carries one is refused, naming the operation, rather
+     * than accepted and ignored: the change's base guards the document.
+     */
+    @Test
+    fun `a section operation with an ifMatch is a 400 that names it and proposes nothing`() {
+        fun proposal(operation: String) = """{"document":"platform","base":1,"operations":[$operation]}"""
+        val limits = """"limits":{"maxNodes":64,"maxDepth":16,"maxInValues":64,"maxCidrBlocks":64,""" +
+            """"maxLiteralBytes":4096,"maxCost":1024}"""
+        val guarded = mapOf(
+            "putCatalog" to """{"op":"putCatalog","catalog":{"apps":[]},"ifMatch":"d"}""",
+            "setLimits" to """{"op":"setLimits",$limits,"ifMatch":"d"}""",
+            "setAttributes" to """{"op":"setAttributes","attributes":[],"ifMatch":"d"}""",
+            "setBoundary" to """{"op":"setBoundary","boundary":"b","ifMatch":"d"}""",
+        )
+        val before = fixture.ids.get()
+        for ((name, operation) in guarded) {
+            val (status, body) = call(proposal(operation))
+            status.assert().describedAs(name).isEqualTo(400)
+            body.get("detail").asString().assert().describedAs(name).contains("[$name]").contains("ifMatch")
+        }
+        fixture.ids.get().assert().isEqualTo(before)
+        call(proposal("""{"op":"setLimits",$limits}""")).first.assert().isEqualTo(201)
+    }
+
     /** CTL-40, CTL-41: `setLimits` takes the entry budgets beside the six condition limits, each left out its default. */
     @Test
     fun `setLimits reads the entry budgets as the document reads them`() {

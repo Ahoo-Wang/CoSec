@@ -45,6 +45,7 @@ import me.ahoo.cosec.control.lifecycle.Changes
 import me.ahoo.cosec.control.lifecycle.ControlMaintenance
 import me.ahoo.cosec.control.lifecycle.LockoutCheck
 import me.ahoo.cosec.control.store.AppList
+import me.ahoo.cosec.control.store.ControlStoreException
 import me.ahoo.cosec.control.store.HeadWrite
 import me.ahoo.cosec.control.store.PendingRecord
 import me.ahoo.cosec.control.store.Publication
@@ -185,7 +186,7 @@ class CoCacheControlStoreTest {
         }
     }
 
-    /** R2C-7: a read that fails for another reason, an outage, passes through as it is, without the repair's advice. */
+    /** R2C-7: a read that fails for another reason, an outage, is a ControlStoreException (R2C-6), without the repair's advice. */
     @Test
     fun `a set that fails to read for another reason does not name the repair`() = runBlocking<Unit> {
         val hooked = HookedBackend(InMemoryBackend())
@@ -193,7 +194,8 @@ class CoCacheControlStoreTest {
             val store = store(node)
             hooked.failReads = true
             val error = runCatching { store.referrers(SnapshotKey.Platform, PolicyId("shared")) }.exceptionOrNull()
-            error.assert().isNotNull()
+            // The store did not answer (R2C-6): a 503 to the control API, not a format error.
+            error.assert().isInstanceOf(ControlStoreException::class.java)
             generateSequence(error) { it.cause }.mapNotNull { it.message }.joinToString(" | ").assert()
                 .doesNotContain("repair-references")
         }
@@ -458,7 +460,7 @@ class CoCacheControlStoreTest {
                         }
                 }
                 val writer = store(writing, clock = clock, changes = failing)
-                assertThrownBy<IllegalStateException> {
+                assertThrownBy<ControlStoreException> {
                     runBlocking { writer.putChange(null, change("c1", ChangeState.DRAFT)) }
                 }
                 val lists = reading.runtime.create(ControlCacheSpecs.list(reading.keyPrefix))
@@ -592,7 +594,7 @@ class CoCacheControlStoreTest {
                 { },
             )
             node.cache.put(key, document(1))
-            assertThrownBy<CacheWriteException> { runBlocking { store.putHead(key, null, document(1)) } }
+            assertThrownBy<ControlStoreException> { runBlocking { store.putHead(key, null, document(1)) } }
         }
     }
 
@@ -602,8 +604,8 @@ class CoCacheControlStoreTest {
         SnapshotNode(hooked, newKeyPrefix()).use { node ->
             val store = store(node)
             hooked.failWrites = true
-            assertThrownBy<CacheWriteException> { runBlocking { store.putRecord(key, document(1)) } }
-            assertThrownBy<CacheWriteException> { runBlocking { store.putHead(key, null, document(1)) } }
+            assertThrownBy<ControlStoreException> { runBlocking { store.putRecord(key, document(1)) } }
+            assertThrownBy<ControlStoreException> { runBlocking { store.putHead(key, null, document(1)) } }
             hooked.failWrites = false
             store.record(key, store.digestOf(document(1))).assert().isNull()
             store.head(key).assert().isNull()

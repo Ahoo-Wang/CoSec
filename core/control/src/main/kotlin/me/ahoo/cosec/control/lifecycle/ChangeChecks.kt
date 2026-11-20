@@ -64,18 +64,24 @@ class ChangeChecks(
     /** What a candidate compiles against as an instance would ([PolicyDocumentCompiler.forPlatform]), and its route maps. */
     private val compile: CandidateCompile = CandidateCompile(),
 ) {
+    /**
+     * The checks of [built], the candidate as the operations made it. The document the checks, the compile and the grant
+     * analysis read is what the data plane will read: [built] encoded and decoded again (V1), whose result is
+     * [CheckResult.candidate] (R2C-34). A member the codec does not write, or reads back differently, is then seen here,
+     * not published unseen.
+     */
     suspend fun check(
         key: SnapshotKey,
-        candidate: PolicyDocument,
+        built: PolicyDocument,
         kind: ProvenanceKind,
         operations: List<Operation>,
         base: PolicyDocument?,
         context: CurrentDocuments,
     ): CheckResult {
         val findings = ArrayList<Finding>()
-        val bytes = PolicyDocumentCodec.encode(candidate)
-        try {
-            PolicyDocumentCodec.decode(candidate.kind, candidate.owner, bytes)
+        val bytes = PolicyDocumentCodec.encode(built)
+        val candidate = try {
+            PolicyDocumentCodec.decode(built.kind, built.owner, bytes)
         } catch (error: SnapshotFormatException) {
             findings += Finding("V1", "$", error.message.orEmpty(), BAD_REQUEST)
             return CheckResult(findings, emptyMap())
@@ -124,6 +130,6 @@ class ChangeChecks(
                 BindingChecks.unresolved(candidate, platform, context, checkedWith, findings)
             }
         }
-        return CheckResult(findings, checkedWith)
+        return CheckResult(findings, checkedWith, candidate)
     }
 }

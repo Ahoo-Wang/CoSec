@@ -592,8 +592,11 @@ With `cosec-control`, the control plane keeps revisions, change requests, stagin
 `ControlStore`; the starter's is `CoCacheControlStore` on Redis. The store, its records (`ChangeRequest`, `RevisionIndex`,
 `StageSlot`, ...) and the shadow window ports (`CandidateStore`, `ShadowReportSink`, `ShadowReportReader` and their
 reports, in `cosec-spi`) are `@ExperimentalCoSecApi`: the control plane's contract is its HTTP API, and these change with it, so they
-may change in a minor release. `ChangeListener` and the `ChangeEvent` it receives are stable. Besides reading and
-writing those records by key, a store answers what the maintenance passes visit:
+may change in a minor release. `ChangeListener` and the `ChangeEvent` it receives are stable. A store that cannot
+answer throws `ControlStoreException`: the control API answers `503` and a maintenance pass does nothing that pass
+(`CTL-52`). A value it read that does not decode throws `SnapshotFormatException`, a `500`. It never answers
+"absent" for either. Besides reading and writing those records by key, a store answers what the maintenance passes
+visit:
 
 - `documents()`: every document it has indexed revisions for. It may name more than exist, never fewer.
 - `openChanges()`: the change requests that are not terminal, as the store holds them now, each read once (#1219):

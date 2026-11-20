@@ -380,7 +380,7 @@ starter 注册 `MdcContextContributor`（SLF4J MDC），使用 `cosec-openteleme
 
 ## 控制面存储 {#control-store}
 
-使用 `cosec-control` 时，控制面把修订、变更请求、暂存槽、候选和租约保存在 `ControlStore` 中；starter 提供的是 Redis 上的 `CoCacheControlStore`。存储、它的记录（`ChangeRequest`、`RevisionIndex`、`StageSlot` 等）和影子窗口端口（位于 `cosec-spi`；`CandidateStore`、`ShadowReportSink`、`ShadowReportReader` 及其报告）是 `@ExperimentalCoSecApi`：控制面的契约是它的 HTTP API，这些随它变化，可能在次版本中改变。`ChangeListener` 和它收到的 `ChangeEvent` 是稳定的。除了按 key 读写这些记录，存储还要回答维护任务需要访问什么：
+使用 `cosec-control` 时，控制面把修订、变更请求、暂存槽、候选和租约保存在 `ControlStore` 中；starter 提供的是 Redis 上的 `CoCacheControlStore`。存储、它的记录（`ChangeRequest`、`RevisionIndex`、`StageSlot` 等）和影子窗口端口（位于 `cosec-spi`；`CandidateStore`、`ShadowReportSink`、`ShadowReportReader` 及其报告）是 `@ExperimentalCoSecApi`：控制面的契约是它的 HTTP API，这些随它变化，可能在次版本中改变。`ChangeListener` 和它收到的 `ChangeEvent` 是稳定的。存储无法应答时抛出 `ControlStoreException`：控制 API 返回 `503`，维护任务本轮什么都不做（`CTL-52`）。读到的值无法解码时抛出 `SnapshotFormatException`，即 `500`。两种情况都绝不回答"不存在"。除了按 key 读写这些记录，存储还要回答维护任务需要访问什么：
 
 - `documents()`：它为之建立了修订索引的每个文档。可以多列，不能少列。
 - `openChanges()`：未结束的变更请求，取存储此刻保存的版本，每个只读一次（#1219）：维护任务以这次读取为准，只有为了让变更过期才会再读它。每个已写入且未结束的变更都在其中；已列出但还没写入的（首次写入进行中）不在其中。列出的变更记录解码失败时，`openChanges()` 与 `change(id)` 一样失败：无法知道它是否已经结束，所以维护任务会停下，直到运维人员删除这条记录。
