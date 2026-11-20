@@ -27,6 +27,20 @@ Which preview of the library may run behind which preview of the gateway image: 
 
 ## From 8.0.0-beta.4 {#from-8-0-0-beta-4}
 
+- **An app change lists the tenants it reaches as one entry per policy; an escalation's reason is an enum** (review
+  round 2, `R2C-14`, `R2C-5`, `CTL-48`). Affected: whoever reads a change's `escalations` (the control API's
+  `GET /changes/{id}`, a `ChangeListener`, the audit JSON on Kafka), and code that builds or reads an `Escalation`.
+  - `TENANT_BINDING`, one entry per tenant binding, is gone. An app change that widens a permission policy carries one
+    `TENANT_BINDINGS` entry per policy: `tenants binding [<policy>] in app <app>`, with the statements, how many tenant
+    documents bind it (an upper bound, from the back-reference index) and the first 20 of them. A consumer that counted
+    `TENANT_BINDING` entries to tell how many tenants a change reaches reads the count in `detail` instead. At 50,000
+    tenants the change record went from about 50 MB to a few KB, each audit event likewise, and no tenant document is
+    read to check the change.
+  - `Escalation.reason` is `Escalation.Reason`, an enum with the names the JSON always carried; `Escalation.TENANT_BINDING`
+    and `Escalation.DETECTION_TIMED_OUT` are `Escalation.Reason.TENANT_BINDINGS` and `Escalation.Reason.DETECTION_TIMED_OUT`.
+    A stored change with a name this version does not know reads it as `UNKNOWN`, which is never informational.
+  - `ChangeEvent`, `Escalation`, `RevisionRef` and `MovedHead` are `@ExperimentalCoSecApi`: a `ChangeListener` of yours
+    opts in, and they may change in a minor release until a release has used them.
 - **The public shapes of the core modules are fixed before RC** (review round 2, `R2A-1` to `R2A-7`). Affected: code that
   compiles against `cosec-model`, `cosec-spi`, `cosec-api` or the engine. No document, property, stored value or wire
   format changes.
@@ -303,6 +317,24 @@ Which preview of the library may run behind which preview of the gateway image: 
     unchanged.
   - **A refresh strips `Bearer ` from the refresh token too**, as it did from the access token. The Kafka audit
     listener logs failed sends once every 10 seconds with a count; a closed sender says it is closed.
+- **The social sign-in states are `cosec-spi`'s `SocialStateStore`, on Redis in `cosec-cocache`; sign-in starts are
+  bounded; an unknown principal is remembered briefly** (R2B-3, R2B-23, R2C-18).
+  - **`SocialStateStore` and `InMemorySocialStateStore` moved to `me.ahoo.cosec.spi.social`.** If you implement
+    `SocialStateStore` or build the in-memory one, change the import: the interface is unchanged (`put` and `take`,
+    both suspending). `RedisSocialStateStore` is now `me.ahoo.cosec.cocache.RedisSocialStateStore`, over the
+    non-blocking client and `GETDEL`, internal to the starter (its constructor takes a `ReactiveStringRedisTemplate`
+    and no longer a parallelism). The keys are the same, `<s>:oauth:binding:<state>`, so states in flight survive an
+    upgrade.
+  - **Social login needs `cosec-cocache`** (or a `SocialStateStore` bean of your own): startup fails naming the artifact
+    without either (`STA-1`). `cosec-social` no longer brings `spring-data-redis` to your compile classpath; JustAuth's own
+    state cache still blocks and needs a `StringRedisTemplate`, which your application has when it uses Redis.
+  - **`authorize` refuses what it cannot take at once.** Each `JustAuthProvider` has at most 64 sign-in starts in flight,
+    on a pool of its own beside the login's; one more throws a `SocialAuthenticationException` where it used to queue
+    without bound.
+  - **`cosec.authorization.membership.unknown-ttl`** (default `5s`, at most `1m`, `0s` for the old behaviour): an
+    instance remembers that your `MembershipLoader` answered `Unknown` for a principal, so a removed member's token no
+    longer reaches the loader on every request. A principal you add is known when that time ends on the other
+    instances, and at once where `invalidate` ran. A failed load is never remembered.
 
 ## From 8.0.0-beta.3 {#from-8-0-0-beta-3}
 

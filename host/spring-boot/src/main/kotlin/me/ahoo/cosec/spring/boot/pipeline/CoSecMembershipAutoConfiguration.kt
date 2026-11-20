@@ -61,5 +61,5 @@ class CoSecMembershipAutoConfiguration {
         authorization: RuntimeAuthorizationProperties,
     ): CoCacheMembershipProvider =
         // A fill takes no longer than a request waits for it (cosec.authorization.membership.timeout).
-        CoCacheMembershipProvider(cache, authorization.membership.timeout, loader)
+        CoCacheMembershipProvider(cache, authorization.membership.timeout, authorization.membership.unknownTtl, loader)
 }

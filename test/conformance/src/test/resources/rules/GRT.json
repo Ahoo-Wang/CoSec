@@ -102,6 +102,21 @@
       "guards": [
         "control:GrantAnalyzerTest#an Anyone grant in the default tenant is never contained"
       ]
+    },
+    {
+      "id": "GRT-8",
+      "source": "Review round 2, fourth pass, R2C-31; RFC 0007 §7.4.3, §7.4.4",
+      "statement": "The analysis renames the resource variables of a condition all at once: no verdict of contained and no narrowing rests on a renaming that makes two different variables one.",
+      "level": "control",
+      "guards": [
+        "control:VariableRenamingTest#a shifted renaming does not contain a grant of every pair",
+        "control:VariableRenamingTest#a swapped renaming does not contain a grant of every pair",
+        "control:VariableRenamingTest#a statement rewritten to the shifted tautology widens, and is analysed",
+        "control:SpecializationTest#variables are renamed all at once - a shift and a swap stay two variables",
+        "control:GrantPropertyTest#A5 holds with two variables in one atom - GRT-8",
+        "control:GrantPropertyTest#A6 holds with two variables in one atom - GRT-8"
+      ],
+      "pending": null
     }
   ]
 }

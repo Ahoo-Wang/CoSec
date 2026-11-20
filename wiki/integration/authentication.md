@@ -170,7 +170,10 @@ Redis, shared by every instance, and drops them on `invalidate(tenant, principal
 change; entries also expire after the cache's TTL. The starter declares it as the `MembershipProvider` when the
 application has a `MembershipLoader` bean and no `MembershipProvider` of its own, and bounds each load by
 `cosec.authorization.membership.timeout`: a load that hangs fails, and the next request starts another. An unknown
-principal is not cached: each request for it asks the loader again. A principal has one source: claims or the
+principal is remembered for `cosec.authorization.membership.unknown-ttl` (5 seconds by default, at most one minute, `0s`
+remembers nothing) on the instance that asked: a token of a removed member stays valid until it expires, and every
+request of it would otherwise reach the loader. A principal you add is known by every instance within that time, and at
+once on the instance where `invalidate(tenant, principal)` ran. A failed or timed-out load is never remembered. A principal has one source: claims or the
 provider, never both.
 
 **Unknown or deactivated means refused.** When the provider answers `Unknown` or `active = false`, the credential that
@@ -837,8 +840,11 @@ JustAuth's: an application cannot add one of its own, since the provider interfa
    and those ids need not be. Set the binding as a cookie on the browser, `Set-Cookie: <authorization.setCookie(path)>`
    (`cosec_oauth_binding`, `HttpOnly; Secure; SameSite=Lax`, for the 3 minutes the state lives, scoped to your callback
    path), then redirect the browser to `url`. CoSec keeps the state in Redis for 3 minutes with the SHA-256 of the
-   binding, never the binding itself, so social login needs a `StringRedisTemplate` (or your own `SocialStateStore`
-   and JustAuth `AuthStateCache` beans).
+   binding, never the binding itself, through `cosec-cocache`'s non-blocking client, so social login needs `cosec-cocache`
+   and a Redis connection (or your own `SocialStateStore` bean, and JustAuth's `AuthStateCache`, which blocks and
+   needs a `StringRedisTemplate`). Starting a sign-in is anonymous, so each provider admits a bounded number at once
+   (64 in flight); past it `authorize` throws a `SocialAuthenticationException` at once, which the route you serve it from
+   should answer with `429` or `503`, and a flood of starts never delays a real callback's login.
 2. In your callback endpoint, bind the provider's callback parameters (`code`, `state`, ...) to
    `JustAuthCredentials("<name>", <the binding cookie, or "">)`, and pass it to
    `TokenCompositeAuthentication.authenticateAsToken`. The callback is accepted only when its `state` is one CoSec

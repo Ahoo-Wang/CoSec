@@ -28,11 +28,12 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.runInterruptible
 import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.withTimeout
 import me.ahoo.cosec.annotations.InternalCoSecApi
-import me.ahoo.cosec.social.InMemorySocialStateStore
 import me.ahoo.cosec.social.SocialAuthenticationException
-import me.ahoo.cosec.social.SocialStateStore
 import me.ahoo.cosec.social.SocialUser
+import me.ahoo.cosec.spi.social.InMemorySocialStateStore
+import me.ahoo.cosec.spi.social.SocialStateStore
 import me.ahoo.test.asserts.assert
 import me.zhyd.oauth.enums.AuthResponseStatus
 import me.zhyd.oauth.enums.AuthUserGender
@@ -127,7 +128,7 @@ internal class JustAuthProviderTest {
         }
 
     /** A real blocking [AuthRequest] for the tests of threads and cancellation, which a mock's own locks would disturb. */
-    private class BlockingAuthRequest(private val blockingCall: () -> Unit) : AuthRequest {
+    private open class BlockingAuthRequest(private val blockingCall: () -> Unit) : AuthRequest {
         override fun getAccessToken(authCallback: AuthCallback): AuthToken = AuthToken()
 
         override fun getUserInfo(authToken: AuthToken): AuthUser = AuthUser.builder().uuid("u1").build()
@@ -215,6 +216,70 @@ internal class JustAuthProviderTest {
 
         calls.assert().hasSize(2).containsOnly(Thread.currentThread())
         blockingCalls.assert().hasSize(2).doesNotContain(Thread.currentThread())
+    }
+
+    /** R2B-23: anyone can start a sign-in, so starts past the bound are refused at once, never queued without bound. */
+    @Test
+    fun `sign-in starts past the bound are refused at once`(): Unit = runBlocking {
+        val inside = CountDownLatch(2)
+        val release = CountDownLatch(1)
+        // A start records its state after it holds a slot: three records are three slots taken.
+        val recorded = CountDownLatch(3)
+        val counting = object : SocialStateStore by states {
+            override suspend fun put(state: String, bindingHash: String, lifetime: Duration) {
+                states.put(state, bindingHash, lifetime)
+                recorded.countDown()
+            }
+        }
+        val authClient = JustAuthProvider(
+            "clientId",
+            BlockingAuthRequest {
+                inside.countDown()
+                release.await()
+            },
+            counting,
+            parallelism = 2,
+            pendingStarts = 3,
+        )
+        val held = List(3) { async(Dispatchers.Default) { authClient.authorize() } }
+        runInterruptible(Dispatchers.IO) { recorded.await() }
+        // Two run, one queues: the three slots are taken.
+        runInterruptible(Dispatchers.IO) { inside.await() }
+
+        assertThrows<SocialAuthenticationException> { authClient.authorize() }
+            .message.assert().contains("too many sign-ins starting")
+
+        release.countDown()
+        held.awaitAll().assert().hasSize(3)
+        // A slot is free again once a start ends, whether it succeeded or not.
+        authClient.authorize().url.assert().isEqualTo("authorizeUrl")
+    }
+
+    /** R2B-23: a flood of starts holds only the starting section, so a real login is not queued behind it. */
+    @Test
+    fun `a flood of sign-in starts does not delay a login`(): Unit = runBlocking {
+        val release = CountDownLatch(1)
+        val starts = CountDownLatch(2)
+        val authClient = JustAuthProvider(
+            "clientId",
+            object : BlockingAuthRequest({}) {
+                override fun authorize(state: String): String {
+                    starts.countDown()
+                    release.await()
+                    return "authorizeUrl"
+                }
+            },
+            states,
+            parallelism = 2,
+            pendingStarts = 8,
+        )
+        val flood = List(8) { async(Dispatchers.Default) { authClient.authorize() } }
+        runInterruptible(Dispatchers.IO) { starts.await() }
+
+        withTimeout(10_000) { authClient.authenticate(issued("clientId")) }.id.assert().isEqualTo("u1")
+
+        release.countDown()
+        flood.awaitAll()
     }
 
     @Test

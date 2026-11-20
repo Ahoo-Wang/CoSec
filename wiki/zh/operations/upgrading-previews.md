@@ -24,6 +24,17 @@ description: "每个 8.0 预览版（alpha 与 beta）到下一个之间的变�
 
 ## 从 8.0.0-beta.4 升级 {#from-8-0-0-beta-4}
 
+- **应用变更按每条策略一项列出它触及的租户；升级项的原因是枚举**（第二轮评审，`R2C-14`、`R2C-5`、`CTL-48`）。受影响的是读取变更
+  `escalations` 的一方（控制 API 的 `GET /changes/{id}`、`ChangeListener`、Kafka 上的审计 JSON），以及构造或读取 `Escalation` 的代码。
+  - 每条租户绑定一项的 `TENANT_BINDING` 已移除。放宽权限策略的应用变更，每条策略带一项 `TENANT_BINDINGS`：
+    `tenants binding [<policy>] in app <app>`，写出语句、绑定它的租户文档数（来自反向引用索引的上限）及其中前 20 个。以
+    `TENANT_BINDING` 条数判断变更触及多少租户的使用方，改读 `detail` 中的数量。在 50,000 个租户时，变更记录从约 50 MB 降到几 KB，
+    每个审计事件同样如此，检查变更也不再读取任何租户文档。
+  - `Escalation.reason` 是 `Escalation.Reason` 枚举，名称就是 JSON 一直携带的名称；`Escalation.TENANT_BINDING` 与
+    `Escalation.DETECTION_TIMED_OUT` 变为 `Escalation.Reason.TENANT_BINDINGS` 与 `Escalation.Reason.DETECTION_TIMED_OUT`。已存储的
+    变更中本版本不认识的名称读作 `UNKNOWN`，它从不是仅供参考的。
+  - `ChangeEvent`、`Escalation`、`RevisionRef` 与 `MovedHead` 标为 `@ExperimentalCoSecApi`：你的 `ChangeListener` 需要 opt in，在某个
+    版本用过它们之前，它们可能在小版本中变化。
 - **核心模块的公共形状在 RC 之前定下**（第二轮评审，`R2A-1` 至 `R2A-7`）。受影响的是针对 `cosec-model`、`cosec-spi`、`cosec-api` 或引擎编译的代码；
   文档、属性、已存储的值和线上格式都不变。
   - 决策值是写明 `equals`、`hashCode` 和 `toString` 的普通 final 类，不再是 data class：`Decision.Permit`、`Deny`、`Indeterminate`、
@@ -135,6 +146,11 @@ description: "每个 8.0 预览版（alpha 与 beta）到下一个之间的变�
   - **只有 starter 用的类成为内部的：** `IdentityStripFilter`、`IdentityHeadersFilter`、`OrderedCorsWebFilter` 的构造函数，以及这些过滤器的顺序与属性常量。starter 会注册它们。
   - **`MetricsListener.bind(...)` 及其常量移到 `CoSecMeters`**（内部的：由 starter 注册）。`MetricsListener` 保持原名、`cosec.authorization` 与四个标签名。指标的名字和标签不变。
   - **刷新时，刷新令牌也会去掉 `Bearer ` 前缀**，访问令牌原本就这样。Kafka 审计监听器对发送失败每 10 秒记录一行并带上计数；已关闭的发送器会说自己已关闭。
+- **社交登录的 state 是 `cosec-spi` 的 `SocialStateStore`，Redis 实现在 `cosec-cocache`；登录开始请求有上限；未知主体被短暂记住**（R2B-3、R2B-23、R2C-18）。
+  - **`SocialStateStore` 与 `InMemorySocialStateStore` 移到 `me.ahoo.cosec.spi.social`。** 如果你实现了 `SocialStateStore` 或构造了内存版本，改 import：接口不变（`put` 与 `take`，都是挂起函数）。`RedisSocialStateStore` 现在是 `me.ahoo.cosec.cocache.RedisSocialStateStore`，基于非阻塞客户端和 `GETDEL`，对 starter 内部使用（构造函数接收 `ReactiveStringRedisTemplate`，不再有并行度参数）。key 不变，仍是 `<s>:oauth:binding:<state>`，所以升级时进行中的登录仍有效。
+  - **社交登录需要 `cosec-cocache`**（或你自己的 `SocialStateStore` Bean）：两者都没有时启动失败并指明工件（`STA-1`）。`cosec-social` 不再把 `spring-data-redis` 带进你的编译类路径；JustAuth 自己的 state 缓存仍会阻塞，需要 `StringRedisTemplate`，应用使用 Redis 时本来就有。
+  - **`authorize` 拒绝无法立即处理的请求。** 每个 `JustAuthProvider` 同时最多有 64 个登录开始请求在进行，使用与登录分开的线程池；多出的一个抛出 `SocialAuthenticationException`，之前它们会无限排队。
+  - **`cosec.authorization.membership.unknown-ttl`**（默认 `5s`，最长 `1m`，`0s` 恢复旧行为）：一个实例记住你的 `MembershipLoader` 对某个主体回答过 `Unknown`，所以被移除成员的令牌不再在每个请求上到达 loader。你新增的主体在其他实例上于这段时间结束时被知道，在调用了 `invalidate` 的实例上立即知道。失败的加载从不被记住。
 
 ## 从 8.0.0-beta.3 升级 {#from-8-0-0-beta-3}
 
