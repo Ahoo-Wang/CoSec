@@ -23,7 +23,7 @@ a change that fails to compile. When unsure, deny, and ask.
 ./gradlew propertyStress -PpropertyIterations=1000   # the registered property tests, more cases (not in check)
 gh workflow run property-stress.yml -f ref=<branch>    # the 1M run: on CI only, never on a local machine
 ./gradlew :conformance:mutationCheck -Pmutants=a,b  # break a security rule on purpose, expect a test to fail (not in check)
-gh workflow run mutation.yml                       # every mutant, on CI only: 36 shards, about an hour (-f mutants=a,b for a subset; also weekly)
+gh workflow run mutation.yml                       # every mutant, on CI only: a shard per rule family, about an hour (-f mutants=a,b for a subset, which runs beside other branches' subsets; also weekly)
 ./gradlew :spi:updateKotlinAbi                     # rewrite a module's ABI dump, api/<project>.api, after an intended change
 ./gradlew :runtime:updateClientContract :jwt:updateClientContract   # rewrite contract/, what a client receives, after an intended change (PIP-25)
 (cd typescript && pnpm install --frozen-lockfile && pnpm lint && pnpm typecheck && pnpm test)   # the TypeScript packages: what the `typescript` job of CI runs
