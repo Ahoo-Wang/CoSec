@@ -49,6 +49,9 @@ internal class LegacyStore(
         override fun decode(bytes: ByteArray): ByteArray = bytes
     }
 
+    private val references by lazy { raw("LegacyReferences", CoSecCacheSpecs.REFERENCE_INDEX_CACHE_NAME) }
+    private val lists by lazy { raw("LegacyLists", CoSecCacheSpecs.CONTROL_LIST_CACHE_NAME) }
+
     private fun raw(name: String, cacheName: String) = CoSecCacheSpecs.layout(keyPrefix, cacheName).let { layout ->
         factory.create(
             StoreSpec.builder<String, ByteArray>(name)
@@ -64,14 +67,13 @@ internal class LegacyStore(
     fun references(target: SnapshotKey, policy: PolicyId, referrers: Map<SnapshotKey, Long>) {
         val encoded = LegacyReferences.encode(target, policy)
         delete("${CoSecCacheSpecs.storagePath(keyPrefix, CoSecCacheSpecs.REFERENCE_INDEX_CACHE_NAME)}:$encoded")
-        raw("LegacyReferences", CoSecCacheSpecs.REFERENCE_INDEX_CACHE_NAME)
-            .put(encoded, LegacyReferences.Format.encode(referrers))
+        references.put(encoded, LegacyReferences.Format.encode(referrers))
     }
 
     /** The document list under the lists, each entry listed at the epoch. */
     fun documents(vararg entries: String) {
         val body = entries.sorted().joinToString(",", "{", "}") { "\"$it\":\"1970-01-01T00:00:00Z\"" }
-        raw("LegacyLists", CoSecCacheSpecs.CONTROL_LIST_CACHE_NAME).put("documents", body.encodeToByteArray())
+        lists.put("documents", body.encodeToByteArray())
     }
 
     override fun close() {
