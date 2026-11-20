@@ -26,7 +26,14 @@ import me.ahoo.cosec.runtime.http.HttpFacts
 import me.ahoo.cosec.runtime.http.RemoteIpResolver
 import java.util.Collections
 
-/** Reads a servlet request into the facts the pipeline decides on (RFC 0006 §5.3.1), once. */
+/**
+ * Reads a servlet request into the facts the pipeline decides on (RFC 0006 §5.3.1), once.
+ *
+ * Headers and cookies are views over the request's own (R2B-8): no copy. A container's request headers do not change
+ * while the filter runs, and the container may recycle the request once the response is written: what reads them after
+ * that (a shadow listener's replay) reads a copy made before ([Headers.freeze]). A cookie value is read without the
+ * double quotes that may wrap it, and a `?` with nothing after it is no query, whatever the server (R2B-25).
+ */
 @InternalCoSecApi
 object ServletHttpFactsReader {
     fun read(
@@ -34,22 +41,32 @@ object ServletHttpFactsReader {
         remoteIpResolver: RemoteIpResolver<HttpServletRequest> = ServletRemoteIpResolver,
         host: HostScope = NO_HOST,
     ): HttpFacts {
-        val headers = HashMap<String, List<String>>()
-        for (name in Collections.list(request.headerNames)) {
-            headers[name] = Collections.list(request.getHeaders(name))
-        }
-        val cookies = request.cookies.orEmpty().groupBy({ it.name }, { it.value })
         return HttpFacts(
             method = request.method,
             // Encoded, and within the application: the context path is not the app's to authorize (PIP-20).
             rawPath = ApplicationPaths.within(request.requestURI, request.contextPath),
-            rawQuery = request.queryString,
-            headers = Headers.of(headers),
-            cookies = Cookies.of(cookies),
+            rawQuery = request.queryString?.ifEmpty { null },
+            headers = Headers.view({ name -> values(request, name) }, { Collections.list(request.headerNames) }),
+            cookies = Cookies.view { name -> cookies(request, name) },
             remoteAddress = remoteIpResolver.resolve(request),
             host = host,
         )
     }
 
     val NO_HOST: HostScope = HostScope(null)
+
+    /** Every value of the header [name], in order; null when absent: no list for a header the request lacks. */
+    private fun values(request: HttpServletRequest, name: String): List<String>? {
+        val values = request.getHeaders(name) ?: return null
+        return if (values.hasMoreElements()) Collections.list(values) else null
+    }
+
+    private fun cookies(request: HttpServletRequest, name: String): List<String>? {
+        val cookies = request.cookies ?: return null
+        var values: MutableList<String>? = null
+        for (cookie in cookies) {
+            if (cookie.name == name) (values ?: ArrayList<String>(1).also { values = it }) += Cookies.unquoted(cookie.value)
+        }
+        return values
+    }
 }

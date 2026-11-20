@@ -34,6 +34,8 @@ import me.ahoo.cosec.model.condition.AttributeType
 import me.ahoo.cosec.model.decision.Cause
 import me.ahoo.cosec.runtime.PipelineFixtures
 import me.ahoo.cosec.runtime.http.Basis
+import me.ahoo.cosec.runtime.http.Headers
+import me.ahoo.cosec.runtime.http.HttpFacts
 import me.ahoo.cosec.runtime.http.Outcome
 import me.ahoo.cosec.runtime.http.Unavailability
 import me.ahoo.cosec.runtime.shadow.Candidate
@@ -308,5 +310,54 @@ class BreakGlassAndShadowTest {
         val sampledProbe = Recording("probe", Delivery.BEST_EFFORT)
         evaluate(enforced, sampled, sampledProbe)
         eventually({ sampledProbe.events }).single().replay!!.sampledBy.assert().containsExactly("sampled")
+    }
+
+    /**
+     * R2B-8: a shadow listener replays the request after the response, when the host may have rewritten or recycled its
+     * request. Headers read as a view over the host's are copied when the replay is sampled, so the replay reads what
+     * the request carried: here the host's header changes after the response and before the candidate is evaluated.
+     */
+    @Test
+    fun aReplayReadsTheHeadersTheRequestCarriedNotTheHostsLater() {
+        val enforced = compile(""","policies":[$allowAll],"bindings":[$anyone]""")
+        val redDenied = compile(
+            ""","policies":[$allowAll,{"id":"no-red","statements":[{"effect":"deny","action":"*",""" +
+                """"condition":{"eq":["http.header.x-team","red"]}}]}],""" +
+                """"bindings":[$anyone,{"id":"r","subject":"*","app":"*","space":"*","policy":"no-red"}]"""
+        )
+        val host = java.util.concurrent.ConcurrentHashMap(mapOf("X-Team" to mutableListOf("red")))
+        val facts = PipelineFixtures.facts().let {
+            HttpFacts(
+                it.method,
+                it.rawPath,
+                it.rawQuery,
+                Headers.view(
+                    { name -> host.entries.firstOrNull { e -> e.key.equals(name, true) }?.value },
+                    { host.keys }
+                ),
+                it.cookies,
+                it.remoteAddress,
+                it.host
+            )
+        }
+        val responded = java.util.concurrent.CountDownLatch(1)
+        val candidates = CandidateSource { key ->
+            responded.await(5, java.util.concurrent.TimeUnit.SECONDS)
+            if (key == SnapshotKey.Platform) Candidate.Ready("w", 7, redDenied) else null
+        }
+        val registered = DecisionListeners(
+            listOf(ShadowListener("shadow", 1.0, candidates, recorder))
+        ).also { opened += it }
+        val pipeline = PipelineFixtures.pipeline(
+            authenticator = operator,
+            engine = CoSecEngine,
+            views = Views(enforced)
+        ) {
+            listeners(registered)
+        }
+        runBlocking { pipeline.evaluate(facts) }.status.assert().isEqualTo(200)
+        host.getValue("X-Team")[0] = "blue"
+        responded.countDown()
+        counts().assert().isEqualTo(mapOf(ShadowOutcome.NARROWED to 1L))
     }
 }

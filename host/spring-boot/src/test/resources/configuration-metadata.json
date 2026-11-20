@@ -54,6 +54,11 @@
       "type": "me.ahoo.cosec.spring.boot.authorization.cache.CacheConfiguration"
     },
     {
+      "name": "cosec.authentication.token-cache",
+      "sourceType": "me.ahoo.cosec.spring.boot.pipeline.TokenCacheProperties",
+      "type": "me.ahoo.cosec.spring.boot.pipeline.TokenCacheProperties"
+    },
+    {
       "name": "cosec.authorization",
       "sourceType": "me.ahoo.cosec.spring.boot.pipeline.RuntimeAuthorizationProperties",
       "type": "me.ahoo.cosec.spring.boot.pipeline.RuntimeAuthorizationProperties"
@@ -354,6 +359,18 @@
       "name": "cosec.authentication.revocation.skew",
       "sourceType": "me.ahoo.cosec.spring.boot.pipeline.RevocationProperties",
       "type": "java.time.Duration"
+    },
+    {
+      "description": "Whether a request's token, verified once by CoSec's own verifier, is answered from memory until it expires instead of verified again. The revocation and reserved-attribute checks run on every request either way.",
+      "name": "cosec.authentication.token-cache.enabled",
+      "sourceType": "me.ahoo.cosec.spring.boot.pipeline.TokenCacheProperties",
+      "type": "java.lang.Boolean"
+    },
+    {
+      "description": "The most verified tokens kept: one more evicts one, which then costs a verification when it comes again. An entry of a large token (a dozen roles in four spaces) retains about 7 KB, so the default holds at most about 115 MB.",
+      "name": "cosec.authentication.token-cache.max-entries",
+      "sourceType": "me.ahoo.cosec.spring.boot.pipeline.TokenCacheProperties",
+      "type": "java.lang.Integer"
     },
     {
       "description": "How long one call of the stage's collaborator may take, the stage being the group this property is under: `attributes` (an `AttributeProvider` that sets no timeout of its own; past it its attributes are unavailable) and `rate-limit` (the `RateLimiter`; past it the rule's `strictFailure` decides).",

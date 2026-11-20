@@ -26,6 +26,7 @@ import me.ahoo.cosec.cocache.CoCacheTokenStore
 import me.ahoo.cosec.cocache.CoSecCacheSpecs
 import me.ahoo.cosec.cocache.RevokedTokenCache
 import me.ahoo.cosec.jwt.JwtSigning
+import me.ahoo.cosec.jwt.VerifiedTokenCache
 import me.ahoo.cosec.spi.apikey.ApiKeyReader
 import me.ahoo.cosec.spi.authn.Authenticator
 import me.ahoo.cosec.spi.authn.AuthnResult
@@ -118,6 +119,7 @@ class StartupSummaryResolutionTest {
                 context.startupFailure.assert().isNull()
                 val line = line(context)
                 line.assert().contains("jwt=on (JwtTokenVerifier)")
+                    .contains("token-cache=on (max-entries=16384)")
                     .contains("revocation-reader=the CoCache token store's (CoCacheRevocationReader)")
                     .doesNotContain("NONE").doesNotContain("revocation-reader=none")
             }
@@ -162,6 +164,17 @@ class StartupSummaryResolutionTest {
             .withBean(TokenVerifier::class.java, { OwnVerifier() }).run { context ->
                 context.startupFailure.assert().isNull()
                 line(context).assert().contains("jwt=on (bean OwnVerifier)")
+                    .contains("token-cache=off (the application's own verifier)")
+            }
+    }
+
+    @Test
+    fun `the token cache is off when configured off`() {
+        withTokens.withBean(RevocationReader::class.java, { RevocationReader.NONE })
+            .withPropertyValues("cosec.authentication.token-cache.enabled=false").run { context ->
+                context.startupFailure.assert().isNull()
+                context.getBeanNamesForType(VerifiedTokenCache::class.java).assert().isEmpty()
+                line(context).assert().contains("token-cache=off,")
             }
     }
 

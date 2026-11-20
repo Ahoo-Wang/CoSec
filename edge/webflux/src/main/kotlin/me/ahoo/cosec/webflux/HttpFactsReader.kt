@@ -25,7 +25,15 @@ import me.ahoo.cosec.runtime.http.HttpFacts
 import me.ahoo.cosec.runtime.http.RemoteIpResolver
 import org.springframework.web.server.ServerWebExchange
 
-/** Reads a WebFlux exchange into the facts the pipeline decides on (RFC 0006 §5.3.1), once, without blocking. */
+/**
+ * Reads a WebFlux exchange into the facts the pipeline decides on (RFC 0006 §5.3.1), once, without blocking.
+ *
+ * Headers and cookies are views over the request's own (R2B-8): no copy, the cookies parsed only when one is read.
+ * Nothing writes the request's headers from here until the outcome: they are read-only on every server Spring adapts,
+ * and the gateway's strip, the one write in front of this, makes a copy before it ([PipelineWebFilter] and the gateway
+ * write only the request they hand on, a copy too). A cookie value is read without the double quotes that may wrap it,
+ * and a `?` with nothing after it is no query, whatever the server (R2B-25).
+ */
 @InternalCoSecApi
 object HttpFactsReader {
     fun read(
@@ -37,16 +45,14 @@ object HttpFactsReader {
         routeApp: Any? = null,
     ): HttpFacts {
         val request = exchange.request
-        val headers = HashMap<String, List<String>>(request.headers.size())
-        request.headers.forEach { name, values -> headers[name] = values }
-        val cookies = request.cookies.mapValues { (_, values) -> values.map { it.value } }
+        val headers = request.headers
         return HttpFacts(
             method = request.method.name(),
             // Encoded, and within the application: the context path is not the app's to authorize (PIP-20).
             rawPath = ApplicationPaths.within(request.path.value(), request.path.contextPath().value()),
-            rawQuery = request.uri.rawQuery,
-            headers = Headers.of(headers),
-            cookies = Cookies.of(cookies),
+            rawQuery = request.uri.rawQuery?.ifEmpty { null },
+            headers = Headers.view({ headers[it] }, { headers.headerNames() }),
+            cookies = Cookies.view { name -> request.cookies[name]?.map { Cookies.unquoted(it.value) } },
             remoteAddress = remoteIpResolver.resolve(exchange),
             host = host,
             requestAttributes = requestAttributes,
