@@ -36,7 +36,7 @@ writes its implementations of CoSec's ports in Kotlin. Durations, instants and c
 | `AttributeProvider` | `cosec-spi`, `spi.attribute` | Give conditions external attributes (`ext.<provider>.<name>`). | every bean |
 | `AuditEventSink` | `cosec-spi`, `spi.audit` | Receive the flat audit record of each decision. | every bean, as a `BEST_EFFORT` listener |
 | `RateLimiter` | `cosec-spi`, `spi.ratelimit` | Count rate limit permits somewhere other than Redis or memory. | one bean, replacing the built-in one |
-| `SnapshotDocumentStore` | `cosec-spi`, `spi.snapshot` | Keep policy documents somewhere other than Redis. | one bean, without `cosec-cocache` |
+| `SnapshotDocumentStore` | `cosec-spi`, `spi.snapshot` | Keep policy documents somewhere other than Redis. Experimental in 8.0 (`@ExperimentalCoSecApi`): its shape follows its one backend, and a batched or store-wide conditional read is planned. | one bean, without `cosec-cocache` |
 | `IdGenerator` | `cosec-spi`, `spi.id` | Give request, token and change ids your own format. `cosec-cosid` implements it over CosId 5. | one bean, replacing `RandomIdGenerator` |
 | `Authentication` | `cosec-login`, `login` | Check another kind of login credential and say what its token holds. Throw to refuse. | every bean, by the credential type it supports |
 | `TenantSwitch` | `cosec-login`, `login.token` | Say what a user holds in the tenant, and the app, it switches to, and which app the new token is for ([Switching tenant and app](../integration/authentication.md#switching-tenant-and-app)). Throw to refuse. | none: declare `SwitchTenantAuthentication(tokenVerifier, YourCredentials::class.java, yourSwitch)` as an `Authentication` bean |
@@ -162,7 +162,8 @@ one has an `else`, and a listener or store never relies on the set being complet
 
 A set not listed here does not gain a member after 8.0 GA. A public `data class` is only ever a value that cannot
 grow, a record with a fixed shape (`PublicApiStabilityTest` reads the reviewed list); a record that can grow is a plain
-class, so a new field is a new constructor.
+class, so a new field is a new constructor. The decision values (`Decision`, `Cause`, `Obligation`, `ViewVersion`) are
+plain classes for that reason: no `copy`, no destructuring.
 
 ## Rules every extension follows
 
@@ -200,7 +201,7 @@ endpoint, on the same threads. Every SPI here follows the same contract:
 
 | Result | When | What happens |
 |---|---|---|
-| `Authenticated(principal, method)` | The credential is valid. | The request is evaluated as that principal; `method` goes to audit. |
+| `Authenticated(principal, method)` | The credential is valid. | The request is evaluated as that principal; `method`, an `Identity.Method` (`JWT`, `API_KEY` or a name of your own), goes to audit. |
 | `Anonymous` | No credential. | The request is evaluated as the anonymous principal. |
 | `Rejected(reason)` | The credential is invalid, expired or revoked. | The request is evaluated as anonymous; a deny answers `401` with that reason. |
 | `Unavailable(cause)` | A dependency failed. | `503`. A thrown exception is treated the same way. |
@@ -254,7 +255,7 @@ fun cosecAuthenticator(
 ): Authenticator {
     val builtIn = CompositeAuthenticator(
         TokenAuthenticator(
-            verifier.getIfAvailable { JwtTokenVerifier(algorithm, skew) },
+            verifier.getIfAvailable { JwtTokenVerifier(signing, skew) },
             (tokenStore as CoCacheTokenStore).reader,   // a RevocationReader bean of your own, if you have one
             revocationSkew = skew,
             acceptUnavailableRevocations = !failClosed,  // true accepts a token while revocations cannot be read
@@ -474,8 +475,9 @@ fun interface RateLimiter {
 }
 ```
 
-Spend one permit of `limit` from `bucket` of rule `ruleId` and report what is left; `RateLimiter.window(limit)` gives
-the sliding window both built-in limiters use, and its `resultOf(...)` builds the result. Throw when the backend
+Spend one permit of `limit` from `bucket` of rule `ruleId` and report what is left; `limit.limitPerWindow` and
+`limit.windowMillis` give the sliding window both built-in limiters use, and `limit.resultOf(...)` (`me.ahoo.cosec.spi.ratelimit.resultOf`)
+builds the result. Throw when the backend
 fails: the rule's `strictFailure` then decides between `503` and skipping the rule. With `cosec-cocache` and a
 `ReactiveStringRedisTemplate`, the starter registers `ReactiveRedisRateLimiter`, which counts across instances; otherwise
 the per-instance `LocalRateLimiter`. Your bean replaces both. A pipeline built with `Pipeline.builder` counts in a
@@ -484,7 +486,8 @@ the per-instance `LocalRateLimiter`. Your bean replaces both. A pipeline built w
 
 ## Snapshot document stores
 
-`SnapshotDocumentStore` is where `SnapshotSource` reads the platform, app and tenant documents:
+`SnapshotDocumentStore` (`@ExperimentalCoSecApi` in 8.0: its shape follows its one backend, and a batched or store-wide
+conditional read is planned) is where `SnapshotSource` reads the platform, app and tenant documents:
 
 - `read(key)` may answer from a local copy (report its maximum age as `localCopyMaxAge`); `readIfChanged(key, known)`
   must read the store of record and answer `Unchanged` when the digest matches; `subscribe(listener)` reports changes

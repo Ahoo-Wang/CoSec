@@ -24,7 +24,6 @@ import me.ahoo.cosec.login.DefaultAuthenticationProvider
 import me.ahoo.cosec.login.token.MembershipRefresh
 import me.ahoo.cosec.login.token.RefreshTokenAuthentication
 import me.ahoo.cosec.login.token.RefreshTokenCredentials
-import me.ahoo.cosec.login.token.RefreshTokenMismatchException
 import me.ahoo.cosec.login.token.StoreTokenRevoker
 import me.ahoo.cosec.login.token.TokenCompositeAuthentication
 import me.ahoo.cosec.login.token.TokenFamilies
@@ -33,6 +32,7 @@ import me.ahoo.cosec.model.PrincipalId
 import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.runtime.token.TokenRevocation
 import me.ahoo.cosec.spi.token.InMemoryTokenFamilyStore
+import me.ahoo.cosec.spi.token.RefreshTokenMismatchException
 import me.ahoo.cosec.spi.token.RevocationReader
 import me.ahoo.cosec.spi.token.TokenRevokedException
 import me.ahoo.cosec.spi.token.TokenStore
@@ -66,8 +66,8 @@ class RefreshTokenFamiliesJwtTest {
     private val store = InMemoryTokenFamilyStore()
     private val families = TokenFamilies(store, Duration.ofDays(30), Duration.ofSeconds(5))
     private val revoked = Revoked()
-    private val converter = JwtTokenConverter(JwtFixture.IDS, JwtFixture.ALGORITHM)
-    private val verifier = JwtTokenVerifier(JwtFixture.ALGORITHM)
+    private val converter = JwtTokenConverter(JwtFixture.IDS, JwtFixture.SIGNING)
+    private val verifier = JwtTokenVerifier(JwtFixture.SIGNING)
     private val refresh =
         RefreshTokenAuthentication(verifier, TokenRevocation(revoked), families, MembershipRefresh.CLAIMS)
     private val revoker = StoreTokenRevoker(verifier, revoked, TokenRevocation(revoked), families, Duration.ofDays(7))
@@ -77,7 +77,7 @@ class RefreshTokenFamiliesJwtTest {
         families,
     )
 
-    private fun login(subject: TokenSubject = TokenSubject("alice", null, tenant = "acme")): CompositeToken =
+    private fun login(subject: TokenSubject = TokenSubject("alice", tenant = "acme")): CompositeToken =
         converter.toToken(subject.inSession(runBlocking { families.start(TenantId("acme"), PrincipalId(subject.id)) }))
 
     private fun refreshed(token: CompositeToken): CompositeToken = runBlocking {
@@ -119,7 +119,7 @@ class RefreshTokenFamiliesJwtTest {
     /** IDN-17: no token of a pair outlives its session. */
     @Test
     fun `a pair never outlives its session`() {
-        val subject = TokenSubject("alice", null, tenant = "acme")
+        val subject = TokenSubject("alice", tenant = "acme")
         val signedIn = Instant.now().minus(Duration.ofDays(30)).plus(Duration.ofHours(1))
         val issue = runBlocking { families.startAt(TenantId("acme"), PrincipalId("alice"), signedIn) }
         val pair = converter.toToken(subject.inSession(issue))
@@ -137,12 +137,12 @@ class RefreshTokenFamiliesJwtTest {
 
         val expiring = JwtTokenConverter(
             JwtFixture.IDS,
-            JwtFixture.ALGORITHM,
+            JwtFixture.SIGNING,
             Duration.ofSeconds(-1),
             Duration.ofDays(7)
         )
         val old = expiring.toToken(
-            TokenSubject("alice", null, tenant = "acme")
+            TokenSubject("alice", tenant = "acme")
                 .inSession(families.start(TenantId("acme"), PrincipalId("alice")))
         )
         assertThrows<TokenVerificationException> { revoker.revoke(old.accessToken) }
@@ -156,7 +156,7 @@ class RefreshTokenFamiliesJwtTest {
 
     @Test
     fun `a pair without a session, or a refresh token of another session, does not refresh`() {
-        val bare = converter.toToken(TokenSubject("alice", null, tenant = "acme"))
+        val bare = converter.toToken(TokenSubject("alice", tenant = "acme"))
         assertThrows<TokenVerificationException> { refreshed(bare) }
         val one = login()
         val other = login()

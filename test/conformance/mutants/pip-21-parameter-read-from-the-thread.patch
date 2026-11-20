@@ -11,7 +11,7 @@ index e2967be5b..6f284c120 100644
      ): SecurityContext? {
          val bound = webRequest.getNativeRequest(HttpServletRequest::class.java)?.getAttribute(SecurityContext.KEY)
 -        val context = Unbound.orNull(bound, Unbound.Receiver.REQUEST)
-+        val context = SecurityContextHolder.securityContextOrNull() ?: Unbound.orNull(bound, Unbound.Receiver.REQUEST)
++        val context = CoSecSecurityContextHolder.securityContextOrNull() ?: Unbound.orNull(bound, Unbound.Receiver.REQUEST)
          check(context != null || parameter.isOptional) {
              val why = Unbound.why(bound, Unbound.Receiver.REQUEST)
              "Parameter [${parameter.parameterName}] of ${parameter.method}: $why"

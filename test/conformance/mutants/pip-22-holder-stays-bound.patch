@@ -10,7 +10,7 @@ index a467e2ed..0380e8fa 100644
  class SuspendingHandlerHolderInterceptor : HandlerInterceptor {
      override fun preHandle(request: HttpServletRequest, response: HttpServletResponse, handler: Any): Boolean {
          if (handler is HandlerMethod && KotlinDetector.isSuspendingFunction(handler.method) && !restored()) {
--            SecurityContextHolder.remove()
+-            CoSecSecurityContextHolder.remove()
 +            Unit
          }
          return true

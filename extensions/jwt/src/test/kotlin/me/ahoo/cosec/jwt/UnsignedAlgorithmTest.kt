@@ -11,9 +11,12 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.jwt
 
 import com.auth0.jwt.algorithms.Algorithm
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.test.asserts.assertThrownBy
 import org.junit.jupiter.api.Test
 
@@ -32,8 +35,14 @@ class UnsignedAlgorithmTest {
     }
 
     @Test
+    fun `a signing key of the library's none is refused, whatever the way in`() {
+        assertThrownBy<IllegalArgumentException> { JwtSigning.of(Algorithm.none()) }
+            .hasMessageContaining("CoSec tokens are signed")
+    }
+
+    @Test
     fun `a signing algorithm is accepted`() {
-        JwtTokenVerifier(JwtFixture.ALGORITHM)
-        JwtTokenConverter(JwtFixture.IDS, JwtFixture.ALGORITHM)
+        JwtTokenVerifier(JwtFixture.SIGNING)
+        JwtTokenConverter(JwtFixture.IDS, JwtFixture.SIGNING)
     }
 }

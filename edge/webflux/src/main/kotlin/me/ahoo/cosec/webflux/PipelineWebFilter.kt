@@ -67,6 +67,7 @@ class PipelineWebFilter @InternalCoSecApi constructor(
 
     override fun getOrder(): Int = REACTIVE_AUTHORIZATION_FILTER_ORDER
 
+    @InternalCoSecApi
     companion object {
         /**
          * Filter order for reactive authorization.

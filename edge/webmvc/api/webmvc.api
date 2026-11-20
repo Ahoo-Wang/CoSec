@@ -2,6 +2,12 @@ public final class me/ahoo/cosec/webmvc/AuthorizationCheckers {
 	public static final fun checkBlocking (Lme/ahoo/cosec/runtime/AuthorizationChecker;Lme/ahoo/cosec/api/context/SecurityContext;Ljava/lang/String;Ljava/lang/String;)Z
 }
 
+public final class me/ahoo/cosec/webmvc/CoSecSecurityContextHolder {
+	public static final field INSTANCE Lme/ahoo/cosec/webmvc/CoSecSecurityContextHolder;
+	public static final fun requireSecurityContext ()Lme/ahoo/cosec/api/context/SecurityContext;
+	public static final fun securityContextOrNull ()Lme/ahoo/cosec/api/context/SecurityContext;
+}
+
 public final class me/ahoo/cosec/webmvc/PipelineServletFilter : jakarta/servlet/Filter {
 	public fun doFilter (Ljakarta/servlet/ServletRequest;Ljakarta/servlet/ServletResponse;Ljakarta/servlet/FilterChain;)V
 }
@@ -11,12 +17,6 @@ public final class me/ahoo/cosec/webmvc/SecurityContextArgumentResolver : org/sp
 	public synthetic fun resolveArgument (Lorg/springframework/core/MethodParameter;Lorg/springframework/web/method/support/ModelAndViewContainer;Lorg/springframework/web/context/request/NativeWebRequest;Lorg/springframework/web/bind/support/WebDataBinderFactory;)Ljava/lang/Object;
 	public fun resolveArgument (Lorg/springframework/core/MethodParameter;Lorg/springframework/web/method/support/ModelAndViewContainer;Lorg/springframework/web/context/request/NativeWebRequest;Lorg/springframework/web/bind/support/WebDataBinderFactory;)Lme/ahoo/cosec/api/context/SecurityContext;
 	public fun supportsParameter (Lorg/springframework/core/MethodParameter;)Z
-}
-
-public final class me/ahoo/cosec/webmvc/SecurityContextHolder {
-	public static final field INSTANCE Lme/ahoo/cosec/webmvc/SecurityContextHolder;
-	public static final fun requireSecurityContext ()Lme/ahoo/cosec/api/context/SecurityContext;
-	public static final fun securityContextOrNull ()Lme/ahoo/cosec/api/context/SecurityContext;
 }
 
 public final class me/ahoo/cosec/webmvc/ServletRequests {

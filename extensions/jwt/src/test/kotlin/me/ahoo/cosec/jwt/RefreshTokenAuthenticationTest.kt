@@ -37,8 +37,8 @@ import org.junit.jupiter.api.assertThrows
 import java.time.Instant
 
 class RefreshTokenAuthenticationTest {
-    var jwtTokenConverter = JwtTokenConverter(JwtFixture.IDS, JwtFixture.ALGORITHM)
-    private var jwtTokenVerifier = JwtTokenVerifier(JwtFixture.ALGORITHM)
+    var jwtTokenConverter = JwtTokenConverter(JwtFixture.IDS, JwtFixture.SIGNING)
+    private var jwtTokenVerifier = JwtTokenVerifier(JwtFixture.SIGNING)
     private val families = TokenFamilies(InMemoryTokenFamilyStore())
 
     /** A pair as a login issues it: in a session of its own. */
@@ -62,11 +62,11 @@ class RefreshTokenAuthenticationTest {
             MembershipRefresh.CLAIMS,
         )
         refreshTokenAuthentication.credentialsType.assert().isEqualTo(RefreshTokenCredentials::class.java)
-        val oldToken: CompositeToken = issue(TokenSubject("alice", null))
+        val oldToken: CompositeToken = issue(TokenSubject("alice"))
 
         val subject = refreshTokenAuthentication.authenticate(credentials(oldToken))
-        subject.id.assert().isEqualTo(TokenSubject("alice", null).id)
-        subject.tenant.assert().isEqualTo(TokenSubject("alice", null).tenant)
+        subject.id.assert().isEqualTo(TokenSubject("alice").id)
+        subject.tenant.assert().isEqualTo(TokenSubject("alice").tenant)
     }
 
     /** The application re-reads the user: the new token says what the user holds now, for the token's own principal. */
@@ -79,7 +79,7 @@ class RefreshTokenAuthenticationTest {
         }
         val authentication =
             RefreshTokenAuthentication(jwtTokenVerifier, TokenRevocation(RevocationReader.NONE), families, now)
-        val old = issue(TokenSubject("alice", "order", tenant = "acme", roles = setOf("clerk")))
+        val old = issue(TokenSubject("alice", app = "order", tenant = "acme", roles = setOf("clerk")))
 
         val subject = authentication.authenticate(credentials(old))
         asked.assert().containsExactly("alice")
@@ -121,7 +121,7 @@ class RefreshTokenAuthenticationTest {
             null
         }
         authentication.credentialsType.assert().isEqualTo(Renew::class.java)
-        val old = issue(TokenSubject("alice", null))
+        val old = issue(TokenSubject("alice"))
         assertThrows<IllegalArgumentException> {
             authentication.authenticate(Renew(old.accessToken, old.refreshToken, "kiosk"))
         }
@@ -132,7 +132,7 @@ class RefreshTokenAuthenticationTest {
     /** A refresh never changes the app, and a refused refresh spends no generation: the same pair refreshes after. */
     @Test
     fun `a membership refresh for another app is refused before the session moves`(): Unit = runBlocking {
-        val old = issue(TokenSubject("alice", "order", tenant = "acme"))
+        val old = issue(TokenSubject("alice", app = "order", tenant = "acme"))
         assertThrows<IllegalArgumentException> {
             RefreshTokenAuthentication(jwtTokenVerifier, TokenRevocation(RevocationReader.NONE), families) { _, _ ->
                 TenantMembership(app = "billing")
@@ -146,7 +146,7 @@ class RefreshTokenAuthenticationTest {
     /** The revocation check comes before the application is asked: a revoked token never reaches it. */
     @Test
     fun `a revoked token is refused before the membership refresh is asked`(): Unit = runBlocking {
-        val old = issue(TokenSubject("alice", null))
+        val old = issue(TokenSubject("alice"))
         val revoked = Jwts.decode(old.accessToken).id
         val revocations = object : RevocationReader {
             override suspend fun isRevoked(tokenId: String): Boolean = tokenId == revoked
@@ -171,8 +171,8 @@ class RefreshTokenAuthenticationTest {
             families,
             MembershipRefresh.CLAIMS,
         )
-        val alice = issue(TokenSubject("alice", null))
-        val bob = issue(TokenSubject("bob", null))
+        val alice = issue(TokenSubject("alice"))
+        val bob = issue(TokenSubject("bob"))
 
         assertThrows<TokenVerificationException> { authentication.authenticate(credentials(alice, bob)) }
     }
@@ -190,7 +190,7 @@ class RefreshTokenAuthenticationTest {
                 return jwtTokenVerifier.refresh(token)
             }
         }
-        val old = issue(TokenSubject("alice", null))
+        val old = issue(TokenSubject("alice"))
         val revoked = Jwts.decode(old.accessToken).id
         val revocations = object : RevocationReader {
             override suspend fun isRevoked(tokenId: String): Boolean = tokenId == revoked
@@ -221,7 +221,7 @@ class RefreshTokenAuthenticationTest {
             override suspend fun subjectRevokedBefore(tenant: TenantId, principal: PrincipalId): Instant? =
                 throw RevocationUnavailableException("down")
         }
-        val old = issue(TokenSubject("alice", null))
+        val old = issue(TokenSubject("alice"))
 
         assertThrows<RevocationUnavailableException> {
             RefreshTokenAuthentication(

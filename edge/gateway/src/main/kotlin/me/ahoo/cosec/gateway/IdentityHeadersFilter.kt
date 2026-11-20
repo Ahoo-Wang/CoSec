@@ -27,7 +27,7 @@ import org.springframework.web.server.ServerWebExchange
  * `MapRequestHeader`, a custom one) cannot forward an identity: the backend receives exactly what the pipeline
  * forwarded ([FORWARDED_ATTRIBUTE]), or none.
  */
-class IdentityHeadersFilter : HttpHeadersFilter {
+class IdentityHeadersFilter @InternalCoSecApi constructor() : HttpHeadersFilter {
     override fun filter(input: HttpHeaders, exchange: ServerWebExchange): HttpHeaders {
         val forwarded = exchange.getAttribute<String>(FORWARDED_ATTRIBUTE)
         if (!input.containsHeader(IdentityCodec.HEADER) && forwarded == null) {
@@ -42,6 +42,7 @@ class IdentityHeadersFilter : HttpHeadersFilter {
 
     override fun supports(type: HttpHeadersFilter.Type): Boolean = type == HttpHeadersFilter.Type.REQUEST
 
+    @InternalCoSecApi
     companion object {
         /** The exchange attribute [PipelineGatewayFilter] sets to the identity it forwards; absent when it forwards none. */
         const val FORWARDED_ATTRIBUTE = "cosec.identity.forwarded"

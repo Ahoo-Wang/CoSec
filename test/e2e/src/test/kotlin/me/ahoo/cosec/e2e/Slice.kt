@@ -50,6 +50,7 @@ import me.ahoo.cosec.runtime.snapshot.SnapshotSource
 import me.ahoo.cosec.spi.authn.AuthenticatedPrincipal
 import me.ahoo.cosec.spi.authn.Authenticator
 import me.ahoo.cosec.spi.authn.AuthnResult
+import me.ahoo.cosec.spi.identity.Identity
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.cosec.spring.boot.pipeline.CoSecMembershipAutoConfiguration
 import me.ahoo.cosec.spring.boot.pipeline.CoSecPipelineAutoConfiguration
@@ -207,7 +208,7 @@ object TokenAuthenticator : Authenticator {
         )
         return AuthnResult.Authenticated(
             AuthenticatedPrincipal(PrincipalId(principal), TenantId(tenant), memberships, app = app?.let(::AppId)),
-            "test"
+            Identity.Method("test")
         )
     }
 }

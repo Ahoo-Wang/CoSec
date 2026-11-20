@@ -1,0 +1,18 @@
+# Rule: MIG-4
+# Mutant: the repair records a document's references before it adds them: a run that dies part-way leaves a record the next run trusts, and members no run adds
+# Tests: :migrate:test --tests me.ahoo.cosec.migrate.ReferenceRepairTest
+
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/store/ReferrerIndex.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/store/ReferrerIndex.kt
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/store/ReferrerIndex.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/store/ReferrerIndex.kt
+@@ -82,9 +82,9 @@ internal class ReferrerIndex(
+         if (added.isEmpty()) {
+             return
+         }
+-        addEntries(key, revision, added)
+         writes.updateIndex(key) { it.copy(indexed = it.indexed + added.map { reference -> reference.at(revision) }) } ||
+             warn("[$key] revision $revision: what it indexed could not be recorded; the next repair adds it again")
++        addEntries(key, revision, added)
+     }
+ 
+     /**

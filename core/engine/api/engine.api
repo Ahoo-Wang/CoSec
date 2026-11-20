@@ -18,11 +18,6 @@ public final class me/ahoo/cosec/engine/TraceLevel : java/lang/Enum {
 
 public final class me/ahoo/cosec/engine/ViewVersion {
 	public fun <init> (JLjava/lang/Long;Ljava/lang/Long;)V
-	public final fun component1 ()J
-	public final fun component2 ()Ljava/lang/Long;
-	public final fun component3 ()Ljava/lang/Long;
-	public final fun copy (JLjava/lang/Long;Ljava/lang/Long;)Lme/ahoo/cosec/engine/ViewVersion;
-	public static synthetic fun copy$default (Lme/ahoo/cosec/engine/ViewVersion;JLjava/lang/Long;Ljava/lang/Long;ILjava/lang/Object;)Lme/ahoo/cosec/engine/ViewVersion;
 	public fun equals (Ljava/lang/Object;)Z
 	public final fun getApp ()Ljava/lang/Long;
 	public final fun getPlatform ()J

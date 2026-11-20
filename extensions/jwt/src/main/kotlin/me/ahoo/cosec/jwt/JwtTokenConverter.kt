@@ -38,7 +38,7 @@ import java.util.*
  *
  * @param idGenerator the token ids (`jti`), such as [me.ahoo.cosec.spi.id.RandomIdGenerator]; they need not be
  * unpredictable, since every token is signed
- * @param algorithm The algorithm used to sign JWTs
+ * @param signing the key the tokens are signed with ([JwtSigning])
  * @param accessTokenValidity Duration for which access tokens are valid
  * @param refreshTokenValidity Duration for which refresh tokens are valid
  * @param membershipClaimLimit the most bytes the `roles` and `policies` claims may take, serialized as JSON, before
@@ -49,13 +49,21 @@ import java.util.*
  * @see TokenConverter
  * @see JwtTokenVerifier
  */
-class JwtTokenConverter(
+class JwtTokenConverter @InternalCoSecApi constructor(
     private val idGenerator: IdGenerator,
     private val algorithm: Algorithm,
     private val accessTokenValidity: Duration = Duration.ofMinutes(10),
     private val refreshTokenValidity: Duration = Duration.ofDays(7),
     private val membershipClaimLimit: Int? = null
 ) : TokenConverter {
+    constructor(
+        idGenerator: IdGenerator,
+        signing: JwtSigning,
+        accessTokenValidity: Duration = Duration.ofMinutes(10),
+        refreshTokenValidity: Duration = Duration.ofDays(7),
+        membershipClaimLimit: Int? = null,
+    ) : this(idGenerator, signing.algorithm, accessTokenValidity, refreshTokenValidity, membershipClaimLimit)
+
     companion object {
         /** RFC 0001 §7.1: 4 KB. */
         const val DEFAULT_MEMBERSHIP_CLAIM_LIMIT = 4096

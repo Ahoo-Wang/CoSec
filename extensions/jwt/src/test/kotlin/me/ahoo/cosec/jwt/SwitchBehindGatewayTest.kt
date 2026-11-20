@@ -74,8 +74,8 @@ class SwitchBehindGatewayTest {
 
     private val store = InMemoryTokenFamilyStore()
     private val families = TokenFamilies(store)
-    private val converter = JwtTokenConverter(JwtFixture.IDS, JwtFixture.ALGORITHM)
-    private val verifier = JwtTokenVerifier(JwtFixture.ALGORITHM)
+    private val converter = JwtTokenConverter(JwtFixture.IDS, JwtFixture.SIGNING)
+    private val verifier = JwtTokenVerifier(JwtFixture.SIGNING)
     private val switching = SwitchTenantAuthentication(
         families,
         TokenRevocation(RevocationReader.NONE),
@@ -94,7 +94,6 @@ class SwitchBehindGatewayTest {
         converter.toToken(
             TokenSubject(
                 "alice",
-                null,
                 tenant = "acme"
             ).inSession(families.start(TenantId("acme"), PrincipalId("alice")))
         )
@@ -151,7 +150,7 @@ class SwitchBehindGatewayTest {
     fun `a token whose login is after its issue, by two clocks, is forwarded and switched from`() = runBlocking<Unit> {
         val ahead = TokenFamilies(store, clock = Clock.offset(Clock.systemUTC(), Duration.ofSeconds(2)))
         val pair = converter.toToken(
-            TokenSubject("alice", null, tenant = "acme").inSession(ahead.start(TenantId("acme"), PrincipalId("alice")))
+            TokenSubject("alice", tenant = "acme").inSession(ahead.start(TenantId("acme"), PrincipalId("alice")))
         )
         val token = verifier.verify(pair.accessToken)
         token.session!!.authTime.isAfter(token.issuedAt!!).assert().describedAs("auth_time after iat").isTrue()

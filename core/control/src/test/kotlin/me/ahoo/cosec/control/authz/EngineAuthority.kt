@@ -111,7 +111,7 @@ class EngineAuthority(
 
     private fun security(principal: AuthenticatedPrincipal): me.ahoo.cosec.runtime.http.RequestSecurity {
         val host = Pipeline.builder(
-            Authenticator { AuthnResult.Authenticated(principal, "test") },
+            Authenticator { AuthnResult.Authenticated(principal, Identity.Method("test")) },
             SuspendingSnapshotSource(HOST_VIEWS),
         )
             .apply { membershipProvider?.let(::memberships) }

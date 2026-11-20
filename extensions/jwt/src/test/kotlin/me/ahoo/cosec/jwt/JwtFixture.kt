@@ -20,6 +20,7 @@ import java.util.concurrent.atomic.AtomicLong
 object JwtFixture {
     const val TEST_JWT_SECRET = "jwt-fixture-test-secret"
     var ALGORITHM = Algorithm.HMAC256(TEST_JWT_SECRET)
+    val SIGNING = JwtSigning.hmac256(TEST_JWT_SECRET)
 
     private val nextTokenId = AtomicLong()
 

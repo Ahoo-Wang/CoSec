@@ -53,8 +53,12 @@ class Subject(
 /** For HTTP, `namespace` is `http` and `verb` the method. */
 class Action(val namespace: String, val verb: String)
 
-/** For HTTP, `type` is `http`, `id` the request path and `attributes` the request's `resource.*` attributes. */
-class Resource(val type: String, val id: String, val attributes: Map<String, String>)
+/**
+ * For HTTP, `type` is `http` and `id` the request path. [attributes] is always empty today: no producer sets a `resource.*`
+ * attribute, and no document can read one (`DOC-10`); the parameter stays for a later producer, and a caller has no
+ * reason to write it.
+ */
+class Resource(val type: String, val id: String, val attributes: Map<String, String> = emptyMap())
 
 @InternalCoSecApi
 class Environment(

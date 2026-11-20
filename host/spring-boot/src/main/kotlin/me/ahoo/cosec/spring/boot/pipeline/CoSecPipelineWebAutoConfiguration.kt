@@ -157,9 +157,9 @@ internal class CoSecPipelineWebAutoConfiguration {
         fun cosecSuspendingHandlerReport(): StartupTask = StartupTask.AfterSingletons {
             log.info {
                 if (SuspendingHandlerHolderInterceptor.restored()) {
-                    "SecurityContextHolder in suspend handlers: restored by context propagation on each resumption."
+                    "CoSecSecurityContextHolder in suspend handlers: restored by context propagation on each resumption."
                 } else {
-                    "SecurityContextHolder in suspend handlers: not bound (no context propagation with automatic " +
+                    "CoSecSecurityContextHolder in suspend handlers: not bound (no context propagation with automatic " +
                         "Reactor propagation); take SecurityContext as a handler parameter."
                 }
             }

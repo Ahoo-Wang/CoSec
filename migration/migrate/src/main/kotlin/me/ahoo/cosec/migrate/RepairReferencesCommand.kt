@@ -26,17 +26,17 @@ import java.io.PrintStream
 internal object RepairReferencesCommand {
     /** `repair-references`: every document visited, every failed one listed; any failure exits with [FAILED]. */
     fun repairReferences(options: Options, out: PrintStream): Int {
-        val result = repairAccess(options) { store, conversion -> ReferenceRepair(store, conversion).run() }
+        val result = repairAccess(options) { store, conversion ->
+            ReferenceRepair(store, conversion, progress = { out.println(RedisUris.scrub(it, options.redisUris)) }).run()
+        }
         if (result.busy) {
             out.println(
-                "FAILED another repair-references holds the lease [${ReferenceRepair.LEASE}]: run again when it is done."
+                "FAILED another repair-references holds the lease [${ReferenceRepair.LEASE}]" +
+                    (result.holder?.let { ": $it" } ?: "") + ". A run renews it as it goes; one that died leaves it " +
+                    "for at most ${ReferenceRepair.LEASE_DURATION.toMinutes()} minutes: run again then, or delete the " +
+                    "key <key-prefix>:control:lease:${ReferenceRepair.LEASE} once you know no run is alive."
             )
             return FAILED
-        }
-        result.failed.forEach { (key, message) ->
-            out.println(
-                "FAILED $key: ${RedisUris.scrub(message, options.redisUris)}"
-            )
         }
         if (result.converting) {
             out.println("Converted ${result.converted} back-reference set(s) from the format before 8.0.0-beta.5.")

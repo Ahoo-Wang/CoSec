@@ -50,8 +50,8 @@ object ScopeResolver {
     /** The app of a request in none: no app document is read. */
     private val NO_APP = AppId("")
 
-    /** Longer app ids are rejected rather than carried into document keys. */
-    const val MAX_APP_ID_LENGTH = 128
+    /** Longer app ids are rejected rather than carried into document keys: the rule of [Identifiers.isDocumentOwner]. */
+    const val MAX_APP_ID_LENGTH = Identifiers.MAX_DOCUMENT_OWNER_LENGTH
 
     /**
      * Space ids beginning with it are CoSec's, as the tenants `(0)` and `(platform)`: the control plane writes the
@@ -63,33 +63,10 @@ object ScopeResolver {
     fun isReservedSpaceId(space: String): Boolean = space.startsWith(RESERVED_SPACE_PREFIX)
 
     /**
-     * Whether [app] can name an app: not blank, not [Match.WILDCARD], no `:` (it separates document key parts, as in
-     * `SnapshotKey.App`), no `/` (an id is one path segment of the resources the control plane authorizes on, such as
-     * `doc/tenant/<id>/…`: with `/` in it, a pattern over everything under `doc/tenant/acme/`, held by a platform
-     * principal, whom the hard rule lets act on any tenant, would match another tenant's resources, `SCP-13`), no
-     * control character (an app id reaches plain-text log lines, which it must not forge, RC1-15),
-     * no unpaired UTF-16 surrogate (a Redis key holds `?` in its place, so the id would name another id's documents,
-     * RC1-52, [Identifiers]) and at most [MAX_APP_ID_LENGTH] characters: the rule of a tenant id. One pass over the
-     * characters: every request checks its app here, and the keys of its tenant's documents through the same rule.
+     * Whether [app] can name an app: the rule of every id that owns a stored document, a tenant's too
+     * ([Identifiers.isDocumentOwner]).
      */
-    fun isValidAppId(app: String): Boolean {
-        if (app.isEmpty() || app.length > MAX_APP_ID_LENGTH || app == Match.WILDCARD) {
-            return false
-        }
-        var blank = true
-        for (index in app.indices) {
-            val c = app[index]
-            val refused = when (c) {
-                ':', '/' -> true
-                else -> Identifiers.isUnprintableAt(app, index)
-            }
-            if (refused) {
-                return false
-            }
-            blank = blank && c.isWhitespace()
-        }
-        return !blank
-    }
+    fun isValidAppId(app: String): Boolean = Identifiers.isDocumentOwner(app)
 
     /** [space] is what the client selects (`CoSec-Space-Id`), empty for none. */
     fun resolve(subject: ScopeSubject, space: String, host: HostScope): ScopeResolution {

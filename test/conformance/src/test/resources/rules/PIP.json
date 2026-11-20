@@ -255,7 +255,7 @@
     {
       "id": "PIP-21",
       "source": "RFC 0006 §7.3; round-2 review M4",
-      "statement": "On Spring MVC, a handler's `SecurityContext` parameter is the context of the handler's own request, read from the request, in blocking, `suspend` and async handlers alike, wherever the handler resumes. Where Spring restores its thread-locals through Micrometer's context propagation, it restores `SecurityContextHolder` with them.",
+      "statement": "On Spring MVC, a handler's `SecurityContext` parameter is the context of the handler's own request, read from the request, in blocking, `suspend` and async handlers alike, wherever the handler resumes. Where Spring restores its thread-locals through Micrometer's context propagation, it restores `CoSecSecurityContextHolder` with them.",
       "level": "build",
       "guards": [
         "spring-boot:SuspendingHandlerContextTest#the SecurityContext parameter is the handler's own request's",
@@ -267,7 +267,7 @@
     {
       "id": "PIP-22",
       "source": "RFC 0006 §7.3; round-2 review M4 (coordinator's decision)",
-      "statement": "On Spring MVC, SecurityContextHolder is unbound before a suspending handler runs unless Spring restores it on every resumption (Micrometer's context propagation with Reactor's automatic propagation), so reading it there fails, naming the SecurityContext parameter, instead of answering another request's context. A blocking handler keeps it. Left, and documented: a suspending handler resumed on the thread of a blocking handler's request finds that request's context.",
+      "statement": "On Spring MVC, CoSecSecurityContextHolder is unbound before a suspending handler runs unless Spring restores it on every resumption (Micrometer's context propagation with Reactor's automatic propagation), so reading it there fails, naming the SecurityContext parameter, instead of answering another request's context. A blocking handler keeps it. Left, and documented: a suspending handler resumed on the thread of a blocking handler's request finds that request's context.",
       "level": "build",
       "guards": [
         "spring-boot:SuspendingHandlerContextTest#without context propagation the holder fails loudly in a suspend handler",
@@ -350,7 +350,7 @@
     {
       "id": "PIP-27",
       "source": "RFC 0006 §7.3; drill 2 (Wow), finding 4 (2026-11-18)",
-      "statement": "The adapters' readers of the security context answer only a context CoSec's pipeline made: `requireSecurityContext` and `securityContextOrNull` on an exchange and a Reactor `ContextView` (WebFlux and the gateway), on a servlet request and `SecurityContextHolder`, and the `SecurityContext` handler parameter (Spring MVC). Anything else under `SecurityContext.KEY`, which an application filter or a library may have put there, reads as no context: null, or the failure an unbound context is.",
+      "statement": "The adapters' readers of the security context answer only a context CoSec's pipeline made: `requireSecurityContext` and `securityContextOrNull` on an exchange and a Reactor `ContextView` (WebFlux and the gateway), on a servlet request and `CoSecSecurityContextHolder`, and the `SecurityContext` handler parameter (Spring MVC). Anything else under `SecurityContext.KEY`, which an application filter or a library may have put there, reads as no context: null, or the failure an unbound context is.",
       "level": "build",
       "guards": [
         "webflux:RequestEndTest#a context the pipeline did not make reads as none",

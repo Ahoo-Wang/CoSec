@@ -23,9 +23,11 @@ import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.api.audit.AuditDecision
 import me.ahoo.cosec.api.audit.AuditDocument
 import me.ahoo.cosec.api.audit.AuditEvent
+import me.ahoo.cosec.api.audit.AuditEventKind
 import me.ahoo.cosec.api.audit.AuditReasonCode
 import me.ahoo.cosec.api.audit.AuditRequest
 import me.ahoo.cosec.api.audit.AuditVia
+import me.ahoo.cosec.document.json.CoSecJson
 import me.ahoo.cosec.model.BindingId
 import me.ahoo.cosec.model.PolicyId
 import me.ahoo.cosec.model.PrincipalId
@@ -107,7 +109,7 @@ class AuditEventsTest {
                 MembershipSource.Provider.UNCAPPED,
                 credential = Identity.Credential(Identity.Method.API_KEY, "k1", null),
             ),
-            ApiKeyAuthenticator.METHOD,
+            Identity.Method(ApiKeyAuthenticator.METHOD),
         )
         try {
             runBlocking {
@@ -147,6 +149,24 @@ class AuditEventsTest {
         audit(permit).request.routeId.assert().isNull()
     }
 
+    /** R2A-3: `kind` is typed, and the JSON a sink or a Kafka consumer reads says the names it always said. */
+    @Test
+    fun theKindIsWrittenAsItsName() {
+        val bound = StatementRef.Policy(
+            PolicyId("orders"),
+            1,
+            "read",
+            BindingRef.Bound(BindingId("g:orders"), DocumentKind.TENANT)
+        )
+        val event = audit(Decision.Permit(bound)) as AuditEventData
+        AuditEventKind.entries.map { it.name }.assert()
+            .containsExactly("DECIDED", "BAD_REQUEST", "AUTHENTICATION_UNAVAILABLE", "CANCELLED", "ERROR")
+        for (kind in AuditEventKind.entries) {
+            CoSecJson.mapper.writeValueAsString(event.copy(kind = kind)).assert()
+                .contains("\"kind\":\"${kind.name}\"")
+        }
+    }
+
     @Test
     fun aPermitThroughABinding() {
         val bound = StatementRef.Policy(
@@ -169,7 +189,7 @@ class AuditEventsTest {
         event.trace!!.spanId.assert().isEqualTo("span-1")
         event.tenantId.assert().isEqualTo(PipelineFixtures.TENANT.value)
         event.principal.id.assert().isEqualTo(PipelineFixtures.PRINCIPAL.value)
-        event.kind.assert().isEqualTo("DECIDED")
+        event.kind.assert().isEqualTo(AuditEventKind.DECIDED)
         event.breakGlass.assert().isFalse()
     }
 
@@ -275,9 +295,9 @@ class AuditEventsTest {
             Authenticator { AuthnResult.Unavailable(IllegalStateException()) }
         )
         unavailable.authorization.decision.assert().isEqualTo(AuditDecision.INDETERMINATE)
-        unavailable.kind.assert().isEqualTo("AUTHENTICATION_UNAVAILABLE")
+        unavailable.kind.assert().isEqualTo(AuditEventKind.AUTHENTICATION_UNAVAILABLE)
         val badRequest = audit(PipelineFixtures.PERMIT, path = "/a/%2e%2e/b")
-        badRequest.kind.assert().isEqualTo("BAD_REQUEST")
+        badRequest.kind.assert().isEqualTo(AuditEventKind.BAD_REQUEST)
         badRequest.authorization.decision.assert().isEqualTo(AuditDecision.INVALID_REQUEST)
         badRequest.authorization.reasonCode.assert().isEqualTo(AuditReasonCode.INVALID_REQUEST)
     }
