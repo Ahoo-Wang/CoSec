@@ -175,7 +175,7 @@ cosec-migrate convert --from-files ./export --out ./converted
 #### 报告中的语义改动 {#semantic-changes-in-the-report}
 
 `semanticChanges` 按 7.x 数据中的位置，列出 8.0 有意做出不同决策的形态。`change` 是[8.0 在哪些地方决策不同](#what-8-0-decides-differently)
-中的规则 id（`C1a`–`C8`、`D1`–`D3`）之一，或者：
+中的规则 id（`C1a`–`C9`、`D1`–`D3`）之一，或者：
 
 - `ASCII-CASE`：带 `ignoreCase` 的 ALLOW 条件。8.0 只折叠 ASCII 字母，所以这条 ALLOW 匹配的写法更少。DENY 条件的值含 ASCII 以外的字母时，
   这个条件改为被拒绝。
@@ -185,6 +185,10 @@ cosec-migrate convert --from-files ./export --out ./converted
 - `NOT-IN-8.0`：读取 8.0 从不设置的部件（appender 设置的请求属性、`resource.*`）、或含 HEAD 而不含 GET 的方法的 ALLOW 条件：这条 ALLOW 匹配的请求更少。DENY 条件中同样的情形会被拒绝。
 
 逐条阅读。报告中的条目都不要求修改数据，但每一条都可能改变某个响应。
+
+#### 在 convert 与切换之间不要改动 7.x {#change-nothing-in-7-x-between-convert-and-the-cutover}
+
+`convert` 读取的 7.x 实例可能仍在提供服务：它为每个命名空间扫描 key，并单独读取全局策略索引，所以它运行期间写入的策略、授权或索引项可能在转换结果里，也可能不在，之后新增的 DENY 则一定不在。报告里没有任何提示。**从 `convert` 开始，直到流量切到 8.0，不要在 7.x 里写策略、授权和全局策略索引。** 要检查确实没有变化，请在 `publish` 之前再 `convert` 一次到另一个目录，把它打印并记在 `report.json` 里的 `Input sha256` 与第一次的比较：哈希不同说明 7.x 的数据变了，第一次转换的结果不再是你要切换的数据。`publish` 不读取 7.x 数据（它读取转换目录或一个文件），所以不能自己比较这个哈希。
 
 #### 发布 {#publish}
 
@@ -437,6 +441,7 @@ spec:
 | **C6** | 引用了所属应用未定义权限的角色授权，被 `convert` 拒绝。 | 到达它的请求为 `500`。 | 带有过时权限 id 的授权。 |
 | **C7**（`MIG-2`） | 针对所有动作（`*`）的 DENY，对它匹配的请求，也拒绝代码中的检查和控制面的动作（`cosec:*`）。 | 只决策 HTTP 请求。 | 针对所有动作的 DENY 语句（[所有动作即所有 HTTP 请求](#every-action-is-every-http-request)）。 |
 | **C8**（`MIG-2`） | 针对所有动作的 ALLOW 是 `http:*`，即所有 HTTP 请求，而[路由映射](../policies/language.md#route-maps)会把它映射的每条路由从中拿走：被映射的路由是它的业务动作，转换后的策略并不授予它。 | 该路由就是一个 HTTP 请求。 | 针对所有动作的 ALLOW 语句，报告在它们的动作处记录。加入路由映射后，请用各自的策略授予被映射的动作（[所有动作即所有 HTTP 请求](#every-action-is-every-http-request)）。 |
+| **C9**（`MIG-5`） | 为没有被路由映射映射的请求写的 DENY 或限流规则，对之后被路由映射映射的路由不再生效：`http:` 动作或 `http:path:` 资源，或对 `resource.id`、`action.verb`、`resource.var.*`（7.x 的 `request.path`、`request.method`、`request.path.var.*`）的条件。被映射的路由是它的业务动作、作用在它自己的资源上，语句不匹配它，于是该路由不再被拒绝或限流。 | 该路由就是一个 HTTP 请求，语句匹配它。 | 具有这种形状的 DENY 语句和限流规则，报告在语句处记录。加入路由映射之前，把每一条改写成针对被映射动作的形式（[所有动作即所有 HTTP 请求](#every-action-is-every-http-request)）。 |
 | **D1** | ALLOW 中的 `inRole: r` 只匹配在请求空间中生效的角色；ALLOW 中的 `inRole: r@s` 只在请求处于空间 `s` 时匹配；DENY 中的 `inRole: r` 匹配在任意空间持有的该角色。 | 按字面匹配角色，裸角色也匹配 `r@<请求的空间>`。 | `inRole` 条件。DENY 只会变宽，ALLOW 只会变窄。 |
 | **D2**（`CND-1`） | 不存在的属性不等于任何值，也不等于空串。 | 不存在的 part 读作 `""`。 | 与 `#{principal.id}`、`#{principal.attributes['k']}` 或 `#{tenant.tenantId}` 比较的 `eq`。ALLOW 中，不存在的 part 不再匹配空的属性（变窄）。DENY 中，`convert` 补上 7.x 的情形，保持 7.x 的读法。 |
 | **D3** | 没有正则表达式，所以也没有正则超时。 | `RegexTimeoutException` 按默认拒绝处理。 | `regular` 条件；只有字面量、字面量前缀和字面量选择的模式能翻译。 |
@@ -465,6 +470,8 @@ composite。8.0 中 `*` 还匹配控制面的动作（`cosec:*`）和[代码中�
 可能匹配管理员自己的请求，它也会拒绝管理员使用控制面。
 
 `http:*` 上的语句永远不匹配[路由映射](../policies/language.md#route-maps)映射过的请求。加入路由映射之后，用单独的策略授予它命名的动作。报告把每条针对所有动作的 ALLOW 记为 C8，位置在它的动作处，这样加入路由映射那天不再被允许的路由有一行可查。
+
+反方向在运行时是无声的，所以要在报告里找。为没有被路由映射映射的请求写的 DENY 或限流规则，例如 `{"effect": "deny", "action": {"path": {"pattern": "/admin/**"}}}`（`http:` 动作加 `http:path:` 资源），或 `"action": "*"` 加对 `request.path` 或 `request.method`（现在是 `resource.id`、`action.verb`）的条件，对之后被路由映射映射的路由不再生效：请求是业务动作、作用在自己的资源上，只要存在针对被映射动作的 ALLOW，该路由就在 7.x 拒绝的地方被放行。报告把每一条记为 C9，位置在语句处。**加入路由映射之前，把每一条改写成针对被映射动作的形式**，或者按被映射的动作和资源来拒绝该路由。带路由映射的主机在安装这样的文档时也会告警（`RTE-5`）。对路径的条件读取的是收到的、经过百分号编码的路径，与 7.x 读取原始请求 URI 相同：`/%61dmin/x` 不是 `/admin/x`；针对路径模式的 DENY 会先解码。
 
 #### 动作中的路径模板 {#path-templates-in-actions}
 

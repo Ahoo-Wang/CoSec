@@ -30,6 +30,8 @@ internal class ModelRunners private constructor(val k: Int, private val onTaken:
                 if (event is KeyEvent.Compiled<*> || event is KeyEvent.CompileCrashed || event is KeyEvent.CompileRejected) {
                     model.compileTaken(key)
                 }
+                // A refused compilation's retry puts the load back on the compile pool (R2D-4, R2D-12).
+                if (event is KeyEvent.CompileRetryDue) model.compileRequeued(key)
                 // After the claim, before the transition that removes the key.
                 if (event is KeyEvent.Evict && event.claim == KeyEvent.Claim.CLAIMED) model.claimed(key)
             })

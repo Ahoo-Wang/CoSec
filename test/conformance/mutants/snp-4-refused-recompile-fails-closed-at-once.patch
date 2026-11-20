@@ -1,0 +1,16 @@
+# Rule: SNP-4
+# Mutant: a recompile the full compile queue refuses fails closed at once, though the refusal says nothing about the document
+# Tests: :runtime:test --tests me.ahoo.cosec.runtime.snapshot.SnapshotRecompileTest --tests me.ahoo.cosec.runtime.snapshot.KeyTransitionsTest
+
+diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/RefusedCompiles.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/RefusedCompiles.kt
+index dc26e37e0..17e1cc43c 100644
+--- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/RefusedCompiles.kt
++++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/RefusedCompiles.kt
+@@ -80,6 +80,6 @@ internal class RefusedCompiles<T : Any>(private val config: KeyConfig, private v
+ 
+     internal companion object {
+         /** Whether a refused compilation of [load] waits for the queue: one that has nothing it may keep serving. */
+-        fun <T : Any> waits(load: LoadState<T>): Boolean = load.known == null || load.recompiles
++        fun <T : Any> waits(load: LoadState<T>): Boolean = load.known == null
+     }
+ }

@@ -17,9 +17,11 @@ package me.ahoo.cosec.spring.boot.pipeline
 
 import io.github.oshai.kotlinlogging.KotlinLogging
 import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.document.route.RouteEscape
 import me.ahoo.cosec.document.route.RouteMap
 import me.ahoo.cosec.engine.CompiledDocument
 import me.ahoo.cosec.engine.httpStatements
+import me.ahoo.cosec.engine.mappedVocabularyStatements
 import me.ahoo.cosec.runtime.snapshot.InstallReview
 import me.ahoo.cosec.runtime.snapshot.SnapshotOptions
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
@@ -45,6 +47,23 @@ internal class RouteEscapeReview(
         val first = synchronized(reviewed) { (reviewed.put(key, revision) != revision) }
         if (!first) {
             return
+        }
+        val reading = compiled.mappedVocabularyStatements().map(RouteEscape::shown)
+        if (reading.isNotEmpty()) {
+            val shown = reading.take(SHOWN).joinToString("; ")
+            val more = if (reading.size > SHOWN) "; and ${reading.size - SHOWN} more at DEBUG" else ""
+            log.warn {
+                "[$key] revision $revision: ${reading.size} DENY statement(s) or rate limit rule(s) on every action and " +
+                    "resource read action.verb, resource.id or resource.var.*, which a mapped route changes (the " +
+                    "business action's verb, the route's resource), so they may not apply to a route the route map " +
+                    "maps: $shown$more. Write each for the mapped action too (a converted 7.x DENY on request.path " +
+                    "or request.method is one)."
+            }
+            log.debug {
+                "[$key] revision $revision, every statement reading what a route map changes: ${reading.joinToString(
+                    "; "
+                )}"
+            }
         }
         val statements = compiled.httpStatements()
         if (statements.isEmpty()) {

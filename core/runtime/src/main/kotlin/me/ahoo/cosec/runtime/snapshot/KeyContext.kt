@@ -18,6 +18,7 @@ package me.ahoo.cosec.runtime.snapshot
 import io.github.oshai.kotlinlogging.KotlinLogging
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.spi.snapshot.SnapshotDigest
 import me.ahoo.cosec.spi.snapshot.SnapshotDocumentStore
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import java.time.Clock
@@ -65,6 +66,20 @@ internal class KeyContext(
      * starts in a later epoch compiles it again.
      */
     val compileEpoch = AtomicLong()
+
+    /**
+     * The compilations handed to the compile pool and not yet returned, by key, with their deadlines (R2D-11): the
+     * periodic tick ends the load of one past its deadline ([CompileDeadlines.sweep]).
+     */
+    val compiling: ConcurrentHashMap<SnapshotKey, CompileDeadlines.Running> = ConcurrentHashMap()
+
+    /**
+     * The revisions whose compilation timed out and still runs, by key (R2D-11). A compile thread cannot be interrupted
+     * out of a compilation that loops (the compiler makes no blocking call that an interrupt would end), so it is left
+     * to finish; the revision is not compiled again while it runs, and a load of it fails at once. At most one thread
+     * per stored revision is held so. Removed when the compilation returns.
+     */
+    val stuckCompiles: ConcurrentHashMap<SnapshotKey, SnapshotDigest> = ConcurrentHashMap()
 
     /** The requests waiting on a slot, answered when the source closes. */
     val pendingRequests: MutableSet<PendingRequest> = ConcurrentHashMap.newKeySet()

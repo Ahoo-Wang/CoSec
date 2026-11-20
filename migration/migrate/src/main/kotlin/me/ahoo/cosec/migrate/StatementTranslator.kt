@@ -86,7 +86,27 @@ internal class StatementTranslator(
         if (path != null && resources == null) {
             return null
         }
-        return assembled(name, deny, action, resources ?: action.resources, condition, location)
+        return recorded(
+            assembled(name, deny, action, resources ?: action.resources, condition, location),
+            deny,
+            direction != null,
+            location
+        )
+    }
+
+    /** [translation], after C9 is recorded for a DENY or a rate limit rule that says something only an unmapped request has (`MIG-5`). */
+    private fun recorded(translation: Translation?, deny: Boolean, rateLimit: Boolean, location: String): Translation? {
+        val statement = (translation as? Translation.Kept)?.statement?.takeIf { deny }
+        val what = statement?.let(UnmappedVocabulary::of).orEmpty()
+        if (statement != null && what.isNotEmpty()) {
+            scan.deniedInUnmappedVocabulary(
+                what,
+                rateLimit,
+                UnmappedVocabulary.readsPath(statement.condition),
+                location
+            )
+        }
+        return translation
     }
 
     /**
@@ -210,6 +230,17 @@ internal class StatementTranslator(
         if (byDirection.values.any { it == Translated.Never }) {
             reject(RejectionKind.CONDITION_NOT_TRANSLATED, location, "the condition can never hold: remove the policy")
             return null
+        }
+        if (true in byDirection) {
+            val what = UnmappedVocabulary.reads((byDirection.getValue(true) as? Translated.Ast)?.condition)
+            if (what.isNotEmpty()) {
+                scan.deniedInUnmappedVocabulary(
+                    what,
+                    rateLimit = false,
+                    UnmappedVocabulary.readsPath((byDirection.getValue(true) as? Translated.Ast)?.condition),
+                    location,
+                )
+            }
         }
         val shared = byDirection.values.map { render((it as? Translated.Ast)?.condition) }.distinct().size == 1
         if (shared) {

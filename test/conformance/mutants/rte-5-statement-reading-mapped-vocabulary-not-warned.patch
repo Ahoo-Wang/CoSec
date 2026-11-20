@@ -1,0 +1,17 @@
+# Rule: RTE-5
+# Mutant: a host with a route map never warns for a DENY or rate limit rule on every action that reads what a route map changes
+# Tests: :spring-boot:test --tests me.ahoo.cosec.spring.boot.pipeline.RouteEscapeReviewTest
+
+diff --git a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/pipeline/RouteEscapeReview.kt b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/pipeline/RouteEscapeReview.kt
+index b4ae3e12f..9df9d05c9 100644
+--- a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/pipeline/RouteEscapeReview.kt
++++ b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/pipeline/RouteEscapeReview.kt
+@@ -49,7 +49,7 @@ internal class RouteEscapeReview(
+             return
+         }
+         val reading = compiled.mappedVocabularyStatements().map(RouteEscape::shown)
+-        if (reading.isNotEmpty()) {
++        if (reading.isEmpty()) {
+             val shown = reading.take(SHOWN).joinToString("; ")
+             val more = if (reading.size > SHOWN) "; and ${reading.size - SHOWN} more at DEBUG" else ""
+             log.warn {

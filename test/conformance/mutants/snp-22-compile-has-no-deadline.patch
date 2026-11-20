@@ -1,0 +1,17 @@
+# Rule: SNP-22
+# Mutant: no tick sweeps the compilations in flight, so a compilation that never returns keeps its load in flight for good
+# Tests: :runtime:test --tests me.ahoo.cosec.runtime.snapshot.SnapshotCompileDeadlineTest
+
+diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/Passes.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/Passes.kt
+index bd1ac795d..fdb30c722 100644
+--- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/Passes.kt
++++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/Passes.kt
+@@ -175,7 +175,7 @@ internal class Passes(
+     fun periodic(): CompletableFuture<Void> {
+         lagReports.queue()
+         // After the tick, which abandons a pass held only by compilations (SNP-6), the loads of those compilations end.
+-        return tick().also { CompileDeadlines.sweep(context, context.nanoTime.get().asLong) }
++        return tick()
+     }
+ 
+     /** Schedules [periodic] every [SnapshotOptions.revalidateInterval]; the source does, once, while it is built. */

@@ -46,7 +46,7 @@
     {
       "id": "SNP-4",
       "source": "RFC 0007 §3.1 N3; RFC 0008 §4.4 (review finding S4)",
-      "statement": "Once the platform's limits or attributes change, every app and tenant document installed afterwards was compiled with them or is compiled again, including one whose load was in flight; one that cannot be compiled again fails closed.",
+      "statement": "Once the platform's limits or attributes change, every app and tenant document installed afterwards was compiled with them or is compiled again, including one whose load was in flight; one that cannot be compiled again fails closed. A compilation the full compile queue refuses is not one that cannot be compiled: the load keeps its read and compiles again until `coldLoadTimeout` since it began, the previous compilation serving meanwhile, and fails closed only then (R2D-12).",
       "level": "timing",
       "properties": [
         "runtime:SnapshotInstallOrderPropertyTest#installsFollowLoadOrderAndConvergeInEveryFamily",
@@ -57,7 +57,11 @@
         "runtime:SnapshotRecompileTest#a load that compiled with the old inputs while they changed is compiled again before anyone is served it",
         "runtime:SnapshotRecompileTest#a document that cannot be compiled again fails closed until a retry compiles it",
         "runtime:SnapshotRecompileTest#a document failed by a recompile keeps retrying while the store stays down",
-        "runtime:PlatformCompilerInFlightTest#a document compiled against the previous platform while it changed is compiled again"
+        "runtime:PlatformCompilerInFlightTest#a document compiled against the previous platform while it changed is compiled again",
+        "runtime:SnapshotRecompileTest#a recompile the full compile queue refuses serves the previous compilation until it compiles",
+        "runtime:KeyTransitionsTest#aRefusedRecompileKeepsTheInstalledEntryAndCompilesItsReadAgainWhenDue",
+        "runtime:KeyTransitionsTest#aRecompileRefusedForItsWholeBudgetFailsClosed",
+        "runtime:KeyTransitionsTest#aRefusedRecompileKeepsWhatIsInstalledWhereOneThatTimesOutFailsClosed"
       ]
     },
     {
@@ -353,6 +357,24 @@
         "runtime:DocumentReadinessRetryTest#the configured documents wait for their own prewarm, not another"
       ],
       "pending": null
+    },
+    {
+      "id": "SNP-22",
+      "source": "Review round 2, R2D-11 (review-r2-4-runtime-host)",
+      "statement": "A load's compilation has the load's deadline: one that has not answered when coldLoadTimeout (cold) or storeReadTimeout (reload) since the load began is spent ends the load as a failure by the next periodic tick (a cold load fails, a reload keeps what is installed, a recompile fails closed); a queued compilation of an ended load never starts, and a revision whose compilation timed out and still runs is not compiled again while it runs. A recompile that does not answer within its deadline leaves the document's validity under the new platform document unknown, so it fails closed; one the full compile queue refuses is a matter of capacity, and keeps what is installed for at most coldLoadTimeout since its load began (SNP-4).",
+      "level": "timing",
+      "pending": null,
+      "guards": [
+        "runtime:SnapshotCompileDeadlineTest#a cold load whose compilation never returns fails at the tick after its deadline, and holds one thread",
+        "runtime:SnapshotCompileDeadlineTest#a reload whose compilation never returns keeps what is installed once its budget is spent",
+        "runtime:SnapshotCompileDeadlineTest#a compilation still queued when its load times out never starts",
+        "runtime:KeyTransitionsTest#aRecompileWhoseCompilationTimesOutFailsClosedAndAbandonsIt",
+        "runtime:KeyTransitionsTest#aColdLoadWhoseCompilationTimesOutAnswersFailed",
+        "runtime:KeyTransitionsTest#aRefusedRecompileKeepsWhatIsInstalledWhereOneThatTimesOutFailsClosed"
+      ],
+      "properties": [
+        "runtime:SnapshotSourceModelPropertyTest#theKeyRunnerKeepsToTheModelInEveryScriptedOrder"
+      ]
     }
   ]
 }

@@ -60,6 +60,20 @@
         "migrate:MigrateMainTest#repair-references converts a store written before beta 5 and removes the old document list last",
         "migrate:ReferenceRepairTest#a repair that fails part-way is reported, and the next run adds every missing member"
       ]
+    },
+    {
+      "id": "MIG-5",
+      "source": "RFC 0005 §7.1, §7.2 (review round 2 of beta.4, R2E-1)",
+      "statement": "cosec-migrate's report records each DENY and each rate limit rule that says something only an unmapped request has as a semantic change of its own, C9, beside C8: an http: action, an http:path: resource, or a condition on resource.id, action.verb or resource.var.* (7.x's request.path, request.method and request.path.var.*), in the statement or in its policy's condition. A route map takes the routes it maps out of that vocabulary, so such a DENY stops denying a mapped route and such a rule stops limiting it, which nothing at run time says. An ALLOW, a DENY of every action without a condition, and a condition on anything else are not recorded.",
+      "level": "build",
+      "pending": null,
+      "guards": [
+        "migrate:UnmappedVocabularyTest#a DENY on a path records C9 for its http action and its http path resource",
+        "migrate:UnmappedVocabularyTest#a DENY of every action on request path or request method records C9, the path one with the encoding",
+        "migrate:UnmappedVocabularyTest#a policy condition on request path over a DENY records C9 at the policy condition",
+        "migrate:UnmappedVocabularyTest#a rate limit rule on a path records C9 as a rule that is no longer limited",
+        "migrate:UnmappedVocabularyTest#an ALLOW, a DENY of every action without a condition or on something else records no C9"
+      ]
     }
   ]
 }

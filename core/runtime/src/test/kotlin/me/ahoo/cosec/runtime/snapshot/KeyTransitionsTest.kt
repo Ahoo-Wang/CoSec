@@ -304,6 +304,124 @@ class KeyTransitionsTest {
         key.offer(KeyEvent.CompileRetryDue(load)).effects.assert().isEmpty()
     }
 
+    /**
+     * R2D-12: a recompile the queue refuses keeps its read and its waiters, and the installed entry, compiled against the
+     * previous inputs, stays in service until the read compiles again: a refusal says nothing about the document.
+     */
+    @Test
+    fun aRefusedRecompileKeepsTheInstalledEntryAndCompilesItsReadAgainWhenDue() {
+        installDocument()
+        key.recompile().assert().isTrue()
+        // The reload `recompile` asks of a marked key: its future waits on this load.
+        val waiter = key.request(Ask.Reload(force = false))
+        val load = key.state.load!!
+        load.recompiles.assert().isTrue()
+        key.offer(KeyEvent.ReadDone(load.id, present(1)))
+        val refused = key.offer(KeyEvent.CompileRejected(load.id, RejectedExecutionException()))
+        refused.effects.filterIsInstance<KeyEffect.ScheduleCompileRetry>().single()
+            .assert().isEqualTo(KeyEffect.ScheduleCompileRetry(load.id, KeyHarness.COLD_COMPILE_RETRY, spread = true))
+        refused.effects.none { it is KeyEffect.Install || it is KeyEffect.Answer }.assert().isTrue()
+        key.state.load!!.id.assert().isEqualTo(load.id)
+        (key.state.installed!!.state as DocumentState.Present).compiled.assert().isEqualTo("c1")
+
+        key.nanos = KeyHarness.COLD_COMPILE_RETRY.toNanos()
+        key.offer(KeyEvent.CompileRetryDue(load.id)).effects.filterIsInstance<KeyEffect.Compile>().single()
+        key.offer(KeyEvent.Compiled(load.id, DocumentState.Present("c1-again")))
+        (key.state.installed!!.state as DocumentState.Present).compiled.assert().isEqualTo("c1-again")
+        (key.answered[key.hung[waiter]]!!.state as DocumentState.Present).compiled.assert().isEqualTo("c1-again")
+    }
+
+    /** R2D-12: refused past `coldLoadTimeout` since its load began, a recompile fails closed, as one that does not compile. */
+    @Test
+    fun aRecompileRefusedForItsWholeBudgetFailsClosed() {
+        installDocument()
+        key.recompile().assert().isTrue()
+        key.request(Ask.Reload(force = false))
+        val load = key.state.load!!.id
+        key.offer(KeyEvent.ReadDone(load, present(1)))
+        key.nanos = KeyHarness.COLD_LOAD_TIMEOUT.minusMillis(3).toNanos()
+        key.offer(KeyEvent.CompileRejected(load, RejectedExecutionException())).effects
+            .filterIsInstance<KeyEffect.ScheduleCompileRetry>().single()
+            .assert().isEqualTo(KeyEffect.ScheduleCompileRetry(load, Duration.ofMillis(3), spread = false))
+        key.nanos = KeyHarness.COLD_LOAD_TIMEOUT.toNanos()
+        val due = key.offer(KeyEvent.CompileRetryDue(load))
+        due.effects.none { it is KeyEffect.Compile }.assert().isTrue()
+        key.state.installed!!.origin.assert().isEqualTo(EntryOrigin.RECOMPILE_PENDING)
+        key.state.installed!!.state.assert().isInstanceOf(DocumentState.Failed::class.java)
+        due.effects.filterIsInstance<KeyEffect.ScheduleRetry>().single()
+    }
+
+    /**
+     * R2D-11: a compilation that has not answered by its load's deadline ends the load: abandoned, and for a recompile
+     * failed closed, as any failure to compile again; the compilation's late answer is dropped.
+     */
+    @Test
+    fun aRecompileWhoseCompilationTimesOutFailsClosedAndAbandonsIt() {
+        installDocument()
+        key.recompile().assert().isTrue()
+        key.request(Ask.Reload(force = false))
+        val load = key.state.load!!.id
+        key.offer(KeyEvent.ReadDone(load, present(1))).effects.filterIsInstance<KeyEffect.Compile>().single()
+            .deadline.assert().isEqualTo(KeyHarness.STORE_READ_TIMEOUT.toNanos())
+        val timedOut = key.offer(KeyEvent.CompileTimedOut(load))
+        timedOut.effects.filterIsInstance<KeyEffect.AbandonCompile>().single().loadId.assert().isEqualTo(load)
+        key.state.load.assert().isNull()
+        key.state.installed!!.origin.assert().isEqualTo(EntryOrigin.RECOMPILE_PENDING)
+        key.offer(KeyEvent.Compiled(load, DocumentState.Present("late"))).effects.assert().isEmpty()
+    }
+
+    /**
+     * `SNP-4` against `SNP-22`, the same recompile at the same instant: refused by the queue it is a matter of capacity,
+     * so the installed entry stays in service and the read compiles again; not answering within its deadline it leaves
+     * the document's validity under the new inputs unknown, so it fails closed.
+     */
+    @Test
+    fun aRefusedRecompileKeepsWhatIsInstalledWhereOneThatTimesOutFailsClosed() {
+        installDocument()
+        key.recompile().assert().isTrue()
+        key.request(Ask.Reload(force = false))
+        val load = key.state.load!!.id
+        key.offer(KeyEvent.ReadDone(load, present(1)))
+        key.nanos = KeyHarness.COLD_COMPILE_RETRY.toNanos()
+        val timedOut = key.copy()
+
+        key.offer(KeyEvent.CompileRejected(load, RejectedExecutionException()))
+        key.state.load!!.id.assert().isEqualTo(load)
+        key.state.installed!!.origin.assert().isEqualTo(EntryOrigin.DOCUMENT)
+        (key.state.installed!!.state as DocumentState.Present).compiled.assert().isEqualTo("c1")
+
+        timedOut.offer(KeyEvent.CompileTimedOut(load))
+        timedOut.state.load.assert().isNull()
+        timedOut.state.installed!!.origin.assert().isEqualTo(EntryOrigin.RECOMPILE_PENDING)
+        timedOut.state.installed!!.state.assert().isInstanceOf(DocumentState.Failed::class.java)
+    }
+
+    /** R2D-11: a cold load's compilation is due by `coldLoadTimeout`; past it the load answers failed. */
+    @Test
+    fun aColdLoadWhoseCompilationTimesOutAnswersFailed() {
+        val request = key.request(Ask.Request)
+        val load = key.state.load!!.id
+        key.offer(KeyEvent.ReadDone(load, present(1))).effects.filterIsInstance<KeyEffect.Compile>().single()
+            .deadline.assert().isEqualTo(KeyHarness.COLD_LOAD_TIMEOUT.toNanos())
+        key.offer(KeyEvent.CompileTimedOut(load))
+        key.answered[key.hung[request]]!!.state.assert().isInstanceOf(DocumentState.Failed::class.java)
+        key.state.installed.assert().isNull()
+    }
+
+    /** A reload that does not recompile still keeps what is installed at once when refused, and retries later (F6). */
+    @Test
+    fun aRefusedPlainReloadStillKeepsWhatIsInstalledAtOnce() {
+        installDocument()
+        key.offer(KeyEvent.Changed)
+        val load = key.state.load!!.id
+        key.offer(KeyEvent.ReadDone(load, present(2)))
+        val refused = key.offer(KeyEvent.CompileRejected(load, RejectedExecutionException()))
+        refused.effects.none { it is KeyEffect.ScheduleCompileRetry }.assert().isTrue()
+        refused.effects.filterIsInstance<KeyEffect.ScheduleRetry>().single()
+        key.state.load.assert().isNull()
+        key.state.installed!!.revision.assert().isEqualTo(1L)
+    }
+
     @Test
     fun aDocumentGoneAfterOneWasSeenIsInstalledAsLostAndReportedAfterTheAnswer() {
         val request = key.request(Ask.Request)
@@ -325,6 +443,18 @@ class KeyTransitionsTest {
      * A key whose store holds nothing, installed as absent and idle: what a local copy answered is confirmed by a read
      * of the store that follows at once.
      */
+    /** A key holding revision 1, compiled as `c1`, idle. */
+    private fun installDocument() {
+        key.request(Ask.Request)
+        val load = key.state.load!!.id
+        key.offer(KeyEvent.ReadDone(load, present(1)))
+        key.offer(KeyEvent.Compiled(load, DocumentState.Present("c1")))
+        // What a local copy answered is confirmed by a read of the store, which holds the same revision.
+        key.state.load?.let { key.offer(KeyEvent.ReadDone(it.id, SnapshotRead.Unchanged)) }
+        key.state.installed!!.revision.assert().isEqualTo(1L)
+        key.state.idle.assert().isTrue()
+    }
+
     private fun installAbsent() {
         key.request(Ask.Request)
         key.offer(KeyEvent.ReadDone(key.state.load!!.id, SnapshotRead.Absent))

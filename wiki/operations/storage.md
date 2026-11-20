@@ -370,6 +370,18 @@ sequenceDiagram
   within seconds of a publish, by the invalidation message or the next revalidation pass, as the platform document is.
 - **A cold load waits** at most [`cold-load-timeout`](./configuration.md#snapshot) (2 seconds); after that the
   document counts as failed for that request.
+- **A compilation has its load's deadline** (R2D-11): `cold-load-timeout` for a cold load, the store read timeout
+  (30 seconds) for a reload, counted from the load's start. A compilation that has not answered by then ends its load as
+  a failure at the next revalidation tick: a cold load fails, a reload keeps what is installed, a recompile fails
+  closed. A compilation still waiting in the compile queue then never starts. A running one cannot be interrupted, so
+  it is left to finish, and its revision is not compiled again while it runs: each such revision holds one compile
+  thread at most. The log says `Compiling snapshot document [<doc>] revision <n> did not end within <budget>` at
+  `ERROR` ([Troubleshooting](./troubleshooting.md#a-compilation-does-not-end)).
+- **A recompile the compile queue refuses waits** (R2D-12). When the platform document's limits or declared
+  attributes change, every held app and tenant document is compiled again. A recompile that meets a full compile
+  queue keeps its read and compiles again until `cold-load-timeout` from its start; meanwhile its requests are decided
+  on the compilation made against the previous platform document, as they are while its read runs. Only after that
+  does it fail closed, as a document that cannot be compiled again does (`SNP-4`).
 - **Held documents are bounded.** Each family keeps at most [`max-apps`/`max-tenants`](./configuration.md#snapshot)
   documents and `max-absent-apps`/`max-absent-tenants` absent entries, and drops the least recently used ones on a
   housekeeping thread. During a burst of cold loads it may for a moment hold up to twice the bound, and never more than

@@ -40,7 +40,8 @@ import java.util.concurrent.TimeoutException
  */
 internal class KeyTransitions<T : Any>(private val config: KeyConfig) {
     private val loads = KeyLoads<T>(config)
-    private val cold = ColdCompileRetries(config, loads)
+    private val refused = RefusedCompiles(config, loads)
+    private val deadlines = CompileDeadlines(config, loads)
 
     private val initial = KeyState<T>(retryDelay = config.rejectedReloadRetry)
 
@@ -63,7 +64,8 @@ internal class KeyTransitions<T : Any>(private val config: KeyConfig) {
             is KeyEvent.Evict -> evict(step, event)
             KeyEvent.Close -> close(step)
             is KeyEvent.ReadDone, is KeyEvent.ReadFailed, is KeyEvent.ReadTimedOut, is KeyEvent.Compiled,
-            is KeyEvent.CompileCrashed, is KeyEvent.CompileRejected, is KeyEvent.CompileRetryDue, is KeyEvent.EffectFailed ->
+            is KeyEvent.CompileCrashed, is KeyEvent.CompileRejected, is KeyEvent.CompileRetryDue, is KeyEvent.CompileTimedOut,
+            is KeyEvent.EffectFailed ->
                 ofLoad(step, event)
         }
     }
@@ -269,18 +271,15 @@ internal class KeyTransitions<T : Any>(private val config: KeyConfig) {
             is KeyEvent.CompileCrashed -> loads.onCompileCrashed(step, load, read, event.failure)
             is KeyEvent.CompileRejected -> {
                 val cause = SnapshotUnavailableException(step.key, "the compile queue is full", event.cause)
-                if (load.known == null) {
-                    cold.onRejected(
-                        step,
-                        load,
-                        cause
-                    )
+                if (RefusedCompiles.waits(load)) {
+                    refused.onRejected(step, load, cause)
                 } else {
                     loads.onTransientFailure(step, load, cause, rejected = true)
                 }
             }
 
-            is KeyEvent.CompileRetryDue -> cold.onRetryDue(step, load, read)
+            is KeyEvent.CompileRetryDue -> refused.onRetryDue(step, load, read)
+            is KeyEvent.CompileTimedOut -> deadlines.onTimedOut(step, load, read)
             is KeyEvent.EffectFailed -> loads.onTransientFailure(step, load, event.cause)
             else -> Unit
         }

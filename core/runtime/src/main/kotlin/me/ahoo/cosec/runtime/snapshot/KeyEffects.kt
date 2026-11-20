@@ -73,7 +73,7 @@ internal class KeyEffects<T : Any>(
             is KeyEffect.EndPassRead -> effect.ticket.read?.end()
             is KeyEffect.StartRead -> startRead(effect)
             is KeyEffect.CancelReadTimeout -> readTimeouts?.remove(effect.loadId)?.cancel(false)
-            is KeyEffect.Compile -> compile(effect.loadId, effect.read)
+            is KeyEffect.Compile -> compile(effect)
             is KeyEffect.RecordSeen -> recordSeen(effect)
             is KeyEffect.Confirm -> {
                 effect.entry.confirm(effect.at)
@@ -97,6 +97,7 @@ internal class KeyEffects<T : Any>(
             is KeyEffect.Redispatch -> owner.redispatched(effect.event)
             is KeyEffect.ScheduleRetry -> scheduleRetry(effect.delay)
             is KeyEffect.ScheduleCompileRetry -> scheduleCompileRetry(effect.loadId, effect.delay, effect.spread)
+            is KeyEffect.AbandonCompile -> CompileDeadlines.abandon(context, key, effect.loadId)
             KeyEffect.DropIfEmpty ->
                 context.threads.offHousekeeping(HousekeepingTask.DROP, key) { owner.dropIfEmpty() }
             KeyEffect.EvictOverCap -> evictOverCap()
@@ -145,17 +146,36 @@ internal class KeyEffects<T : Any>(
         }
     }
 
-    /** On the compile pool only; its answer, a crash or a refusal is offered back. */
-    private fun compile(id: Long, read: SnapshotRead.Present) {
+    /**
+     * On the compile pool only; its answer, a crash or a refusal is offered back. Registered with its deadline until it
+     * returns (R2D-11); a revision whose compilation timed out and still runs is not compiled again: its load times out
+     * at once.
+     */
+    private fun compile(effect: KeyEffect.Compile) {
+        val id = effect.loadId
+        val read = effect.read
+        if (CompileDeadlines.stuck(context, key, read.digest)) {
+            owner.offer(KeyEvent.CompileTimedOut(id))
+            return
+        }
+        val running = CompileDeadlines.Running(id, read.digest, effect.deadline, owner)
+        context.compiling[key] = running
         try {
-            context.threads.compileExecutor.execute { compileOnPool(id, read) }
+            context.threads.compileExecutor.execute { compileOnPool(running, read) }
         } catch (rejected: RejectedExecutionException) {
+            context.compiling.remove(key, running)
             owner.offer(KeyEvent.CompileRejected(id, rejected))
         }
     }
 
     @Suppress("TooGenericExceptionCaught")
-    private fun compileOnPool(id: Long, read: SnapshotRead.Present) {
+    private fun compileOnPool(running: CompileDeadlines.Running, read: SnapshotRead.Present) {
+        val id = running.loadId
+        // A compilation whose load timed out while it waited in the queue does not take the thread (R2D-11).
+        if (!running.start()) {
+            context.compiling.remove(key, running)
+            return
+        }
         val revision = read.document.revision
         val begin = System.nanoTime()
         val state: DocumentState<T> = try {
@@ -171,6 +191,10 @@ internal class KeyEffects<T : Any>(
             throw error
         } catch (error: Throwable) {
             DocumentState.Failed(SnapshotUnavailableException(key, report().failedToCompile(revision), error))
+        } finally {
+            // Returned, so not stuck: a revision whose compilation timed out may compile again (R2D-11).
+            context.compiling.remove(key, running)
+            context.stuckCompiles.remove(key, read.digest)
         }
         // Reported on the pool, for a compilation that ran (it compiled, or it threw),
         // before its result is installed or `closed` is read, so a close that ends the load does not hide the work. A
