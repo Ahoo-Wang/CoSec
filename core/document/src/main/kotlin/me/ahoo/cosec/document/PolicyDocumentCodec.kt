@@ -119,6 +119,7 @@ object PolicyDocumentCodec {
             attributes = root.field("attributes")?.let(PlatformSettingsCodec::decodeAttributes),
             rateLimits = root.field("rateLimits")?.elements()?.map(RateLimitCodec::decode).orEmpty(),
             roles = root.field("roles")?.elements()?.map { RoleCodec.decode(it, kind) }.orEmpty(),
+            budgets = root.field("limits")?.let(PlatformSettingsCodec::decodeBudgets),
         )
     }
 
@@ -175,7 +176,14 @@ object PolicyDocumentCodec {
     fun decodeLimits(
         tree: JsonNode,
         path: String = ROOT
-    ): ConditionLimits = PlatformSettingsCodec.decodeLimits(DocumentNode(tree, path))
+    ): ConditionLimits? = PlatformSettingsCodec.decodeLimits(DocumentNode(tree, path))
+
+    /** The entry budgets of a `limits` object ([DocumentBudgets]), or null when it sets none. */
+    @InternalCoSecApi
+    fun decodeBudgets(
+        tree: JsonNode,
+        path: String = ROOT
+    ): DocumentBudgets? = PlatformSettingsCodec.decodeBudgets(DocumentNode(tree, path))
 
     @InternalCoSecApi
     fun decodeAttributes(
@@ -199,7 +207,9 @@ object PolicyDocumentCodec {
             }
         }
         document.provenance?.let { root.set("provenance", ProvenanceCodec.tree(it)) }
-        document.limits?.let { root.set("limits", PlatformSettingsCodec.limitsTree(it)) }
+        if (document.limits != null || document.budgets != null) {
+            root.set("limits", PlatformSettingsCodec.limitsTree(document.limits, document.budgets))
+        }
         document.attributes?.let { root.set("attributes", PlatformSettingsCodec.attributesTree(it)) }
         putEntries(root, document)
         return root

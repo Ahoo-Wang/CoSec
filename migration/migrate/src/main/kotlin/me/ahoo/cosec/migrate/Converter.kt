@@ -771,8 +771,8 @@ private class Run(val source: Source7x, val options: ConvertOptions, val compile
             // Every policy compiled on its own; the whole document must too (ids, bindings, break-glass rules, and the
             // budgets of the whole: a refusal of the data, so it is reported and written like the others, #1247).
             try {
-                compiler.compile(document)
-                documents[key] = document
+                documents[key] = document.also { compiler.compile(it) }
+                warnings += ConvertedBudgets.warnings(key, document)
             } catch (error: DocumentCompileException) {
                 val (ids, others) = DocumentIds.split(document, error.errors)
                 ids.forEach { reject(RejectionKind.INVALID_ID, "$key#${it.path}", it.message) }

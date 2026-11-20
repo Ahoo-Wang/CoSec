@@ -178,6 +178,11 @@ requests without the attribute. Prefer an ALLOW on the positive fact, and put ne
 
 Limits (platform `limits`, defaults): `maxNodes` 64, `maxDepth` 8, `maxInValues` 1024, `maxCidrBlocks` 256,
 `maxLiteralBytes` 1024, `maxCost` 256 per statement condition. Every document compiles against the platform's limits.
+The same `limits` hold the entry budgets the control plane checks every change against (CTL-40, CTL-41): per document
+`maxPolicies` 10,000, `maxStatements` 20,000, `maxRoleBindings` 10,000, `maxAnyoneBindings` 1,000, and
+`maxChangeOperations` 20,000 per change. A change may not raise a count over its budget; a document already over one
+is served, may change and may shrink. Hosts never enforce them. Split a large document by app or tenant before raising
+them.
 
 ### External attributes
 

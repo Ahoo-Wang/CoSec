@@ -1,0 +1,85 @@
+{
+  "rules": [
+    "CTL-40"
+  ],
+  "polarity": "negative",
+  "level": "control",
+  "description": "The platform allows one policy a document; acme already holds three, written before the budget. A change removing one leaves two: not more than it held, so it checks clean, with a V2 warning naming the count still over, and publishes.",
+  "documents": {
+    "platform": {
+      "limits": {
+        "maxPolicies": 1
+      }
+    },
+    "tenants": {
+      "acme": {
+        "policies": [
+          {
+            "id": "a",
+            "statements": [
+              {
+                "effect": "allow",
+                "action": "order:read"
+              }
+            ]
+          },
+          {
+            "id": "b",
+            "statements": [
+              {
+                "effect": "allow",
+                "action": "order:write"
+              }
+            ]
+          },
+          {
+            "id": "c",
+            "statements": [
+              {
+                "effect": "allow",
+                "action": "order:cancel"
+              }
+            ]
+          }
+        ]
+      }
+    }
+  },
+  "steps": [
+    {
+      "propose": {
+        "change": "c1",
+        "document": "tenant:acme",
+        "operations": [
+          {
+            "removePolicy": "c"
+          }
+        ]
+      }
+    },
+    {
+      "skipShadow": "c1"
+    },
+    {
+      "publish": "c1"
+    }
+  ],
+  "expect": {
+    "steps": [
+      "CHECKED",
+      "READY",
+      "PUBLISHED"
+    ],
+    "errors": {
+      "c1": []
+    },
+    "warnings": {
+      "c1": [
+        "V2 $.policies"
+      ]
+    },
+    "heads": {
+      "tenant:acme": 2
+    }
+  }
+}

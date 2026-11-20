@@ -17,54 +17,27 @@ package me.ahoo.cosec.spring.boot.control
 
 import io.mockk.coEvery
 import io.mockk.mockk
-import kotlinx.coroutines.runBlocking
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.control.api.ControlHttp
 import me.ahoo.cosec.control.api.ControlPlane
 import me.ahoo.cosec.document.PolicyDocument
-import me.ahoo.cosec.engine.CompiledDocument
-import me.ahoo.cosec.engine.Engine
-import me.ahoo.cosec.engine.EngineRequest
-import me.ahoo.cosec.engine.Evaluation
-import me.ahoo.cosec.engine.SnapshotView
-import me.ahoo.cosec.engine.TraceLevel
-import me.ahoo.cosec.model.PolicyId
-import me.ahoo.cosec.model.PrincipalId
-import me.ahoo.cosec.model.TenantId
-import me.ahoo.cosec.model.decision.BindingRef
-import me.ahoo.cosec.model.decision.Decision
 import me.ahoo.cosec.model.decision.DocumentKind
-import me.ahoo.cosec.model.decision.StatementRef
-import me.ahoo.cosec.model.scope.HostScope
-import me.ahoo.cosec.runtime.Pipeline
-import me.ahoo.cosec.runtime.http.Cookies
-import me.ahoo.cosec.runtime.http.Headers
-import me.ahoo.cosec.runtime.http.HttpFacts
-import me.ahoo.cosec.runtime.http.RequestSecurity
-import me.ahoo.cosec.runtime.snapshot.SnapshotViews
-import me.ahoo.cosec.runtime.snapshot.SuspendingSnapshotSource
-import me.ahoo.cosec.runtime.snapshot.ViewKey
-import me.ahoo.cosec.spi.authn.AuthenticatedPrincipal
-import me.ahoo.cosec.spi.authn.Authenticator
-import me.ahoo.cosec.spi.authn.AuthnResult
-import me.ahoo.cosec.spi.identity.Identity
-import me.ahoo.cosec.spi.membership.MembershipClaims
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.cosec.webflux.ServerWebExchanges.setSecurityContext
 import me.ahoo.cosec.webmvc.ServletRequests.setSecurityContext
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
+import org.springframework.core.io.buffer.DataBuffer
 import org.springframework.http.HttpMethod
 import org.springframework.http.converter.ByteArrayHttpMessageConverter
 import org.springframework.mock.http.server.reactive.MockServerHttpRequest
 import org.springframework.mock.web.MockHttpServletRequest
 import org.springframework.mock.web.reactive.function.server.MockServerRequest
 import org.springframework.mock.web.server.MockServerWebExchange
-import reactor.core.publisher.Mono
+import reactor.core.publisher.Flux
 import java.net.URI
 import java.time.Instant
-import java.util.concurrent.CompletableFuture
 import org.springframework.web.servlet.function.ServerRequest as ServletServerRequest
 
 /**
@@ -84,13 +57,13 @@ class ControlEncodedPathTest {
     }
     private val http = ControlHttp(plane)
     private val properties = ControlProperties()
-    private val security = permitted()
+    private val security = permittedSecurity(DOCUMENTS)
 
     private fun onWebFlux(path: String): Int {
         val exchange = MockServerWebExchange.from(MockServerHttpRequest.get(path))
         exchange.setSecurityContext(security.securityContext)
         val request = MockServerRequest.builder().method(HttpMethod.GET).uri(URI.create(path)).exchange(exchange)
-            .body(Mono.just(ByteArray(0)))
+            .body(Flux.empty<DataBuffer>())
         val routes = CoSecControlRoutesAutoConfiguration.WebFlux().cosecControlRoutes(http, properties)
         return routes.route(request).block()!!.handle(request).block()!!.statusCode().value()
     }
@@ -131,54 +104,6 @@ class ControlEncodedPathTest {
             // Decoded once, an encoded `/` is part of the id, which no tenant id may hold (#1403): refused, unread.
             readOn(call, "tenant:acme%2Fwest").assert().describedAs("$stack acme%2Fwest").isEqualTo(400 to null)
         }
-    }
-
-    private fun permitted(): RequestSecurity {
-        val principal = AuthenticatedPrincipal(
-            PrincipalId("alice"),
-            TenantId("acme"),
-            MembershipClaims.parse(emptyList(), emptyList()),
-            emptyMap(),
-            Identity.Credential(Identity.Method("test"), "token-alice", null),
-        )
-        val views = object : SnapshotViews {
-            private fun view(key: ViewKey) = SnapshotView(
-                CompiledDocument.platform(emptyList(), emptyList()),
-                key.app?.let { CompiledDocument.app(it, emptyList(), emptyList()) },
-                key.tenant?.let { CompiledDocument.tenant(it, emptyList(), emptyList()) },
-            )
-
-            override fun peek(key: ViewKey): SnapshotView = view(key)
-
-            override fun load(key: ViewKey): CompletableFuture<SnapshotView> = CompletableFuture.completedFuture(
-                view(key)
-            )
-        }
-        val permitting = object : Engine {
-            override fun evaluate(request: EngineRequest, snapshot: SnapshotView, trace: TraceLevel): Evaluation =
-                Evaluation(
-                    Decision.Permit(
-                        StatementRef.Policy(PolicyId("open"), 0, "open", BindingRef.Attached(PolicyId("open")))
-                    ),
-                    null,
-                )
-        }
-        val pipeline = Pipeline.builder(
-            Authenticator { AuthnResult.Authenticated(principal, "test") },
-            SuspendingSnapshotSource(views),
-        )
-            .engine(permitting)
-            .build()
-        val facts = HttpFacts(
-            method = "GET",
-            rawPath = DOCUMENTS,
-            rawQuery = null,
-            headers = Headers.of(emptyMap()),
-            cookies = Cookies.of(emptyMap()),
-            remoteAddress = "10.0.0.1",
-            host = HostScope(null),
-        )
-        return runBlocking { pipeline.evaluate(facts) }.security!!
     }
 
     private companion object {

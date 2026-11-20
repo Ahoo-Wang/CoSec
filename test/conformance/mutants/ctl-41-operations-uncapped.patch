@@ -1,0 +1,17 @@
+# Rule: CTL-41
+# Mutant: a change carries any number of operations: the cap is never applied
+# Tests: :control:test --tests me.ahoo.cosec.control.change.EntryBudgetsTest :conformance:test
+
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Proposals.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Proposals.kt
+index 117e9b340..bb7811db6 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Proposals.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Proposals.kt
+@@ -94,7 +94,7 @@ internal class Proposals(
+      */
+     private suspend fun requireOperationBudget(operations: List<Operation>) {
+         val limit = (revisions.head(SnapshotKey.Platform)?.document?.budgets ?: DocumentBudgets.DEFAULT).maxChangeOperations
+-        if (operations.size > limit) {
++        if (false) {
+             throw ChangeRejectedException(
+                 BAD_REQUEST,
+                 "the change holds ${operations.size} operations, more than the platform's limits.maxChangeOperations " +

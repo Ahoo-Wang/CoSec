@@ -39,6 +39,7 @@ import me.ahoo.cosec.control.change.requireRequest
 import me.ahoo.cosec.control.lifecycle.ChangeLifecycle.Companion.BREAK_GLASS
 import me.ahoo.cosec.control.store.ControlStore
 import me.ahoo.cosec.control.store.Revisions
+import me.ahoo.cosec.document.DocumentBudgets
 import me.ahoo.cosec.document.PolicyDocument
 import me.ahoo.cosec.document.ProvenanceKind
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
@@ -81,7 +82,25 @@ internal class Proposals(
         if (kind != ProvenanceKind.PUBLISH && kind != ProvenanceKind.BREAK_GLASS) {
             throw ChangeRejectedException(BAD_REQUEST, "a change is proposed as PUBLISH or BREAK_GLASS, not $kind")
         }
+        requireOperationBudget(operations)
         return proposeAs(author, key, base, operations, note, kind, Applying(confirmations))
+    }
+
+    /**
+     * `CTL-41`: a change a client proposes carries at most the platform's `limits.maxChangeOperations` operations,
+     * refused before any of them is authorized or applied. `apply` and rollback are not held to it: their operations
+     * are derived from a document, which the entry budgets bound (`CTL-40`), and a rollback must be able to restore
+     * any revision the budgets allow.
+     */
+    private suspend fun requireOperationBudget(operations: List<Operation>) {
+        val limit = (revisions.head(SnapshotKey.Platform)?.document?.budgets ?: DocumentBudgets.DEFAULT).maxChangeOperations
+        if (operations.size > limit) {
+            throw ChangeRejectedException(
+                BAD_REQUEST,
+                "the change holds ${operations.size} operations, more than the platform's limits.maxChangeOperations " +
+                    "($limit): propose them as several changes (CTL-41)",
+            )
+        }
     }
 
     private suspend fun proposeAs(
@@ -176,7 +195,7 @@ internal class Proposals(
             )
         }
         if (head == null) {
-            return propose(author, key, 0, operations, note)
+            return proposeAs(author, key, 0, operations, note, ProvenanceKind.PUBLISH, Applying())
         }
         return proposeAs(
             author,

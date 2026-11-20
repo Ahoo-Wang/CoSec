@@ -636,8 +636,20 @@
         },
         "limits": {
           "additionalProperties": false,
-          "description": "The condition limits of every document (RFC 0005 §3.5); absent ones are the defaults. Platform only.",
+          "description": "The condition limits of every document (RFC 0005 §3.5) and the entry budgets the control plane holds every change to (CTL-40, CTL-41); absent ones are the defaults. Platform only.",
           "properties": {
+            "maxAnyoneBindings": {
+              "default": 1000,
+              "description": "Bindings to Anyone in one document (CTL-40).",
+              "minimum": 1,
+              "type": "integer"
+            },
+            "maxChangeOperations": {
+              "default": 20000,
+              "description": "Operations of one change a client proposes (CTL-41).",
+              "minimum": 1,
+              "type": "integer"
+            },
             "maxCidrBlocks": {
               "default": 256,
               "description": "Blocks of one `cidr`.",
@@ -671,6 +683,24 @@
             "maxNodes": {
               "default": 64,
               "description": "Nodes of one condition.",
+              "minimum": 1,
+              "type": "integer"
+            },
+            "maxPolicies": {
+              "default": 10000,
+              "description": "Policies one document writes (CTL-40).",
+              "minimum": 1,
+              "type": "integer"
+            },
+            "maxRoleBindings": {
+              "default": 10000,
+              "description": "Bindings to a role in one document (CTL-40).",
+              "minimum": 1,
+              "type": "integer"
+            },
+            "maxStatements": {
+              "default": 20000,
+              "description": "Statements of the policies one document writes (CTL-40).",
               "minimum": 1,
               "type": "integer"
             }

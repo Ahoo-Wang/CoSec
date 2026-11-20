@@ -637,8 +637,8 @@ resource type does not compile.
 
 ### Limits and attributes
 
-`limits` sets the [condition limits](#limits) every document compiles against. `attributes` declares the external
-attributes documents may read:
+`limits` sets the [condition limits](#limits) every document compiles against, and the [entry budgets](#entry-budgets)
+the control plane holds every change to. `attributes` declares the external attributes documents may read:
 
 ```json
 { "path": "ext.geo.country", "type": "string" }
@@ -647,6 +647,39 @@ attributes documents may read:
 `path` is `ext.<provider>.<name>`; `type` is `string`, `bool`, `stringSet` or `ip`; each path once. When a platform
 revision changes either section, every instance compiles the app and tenant documents again; a document that no longer
 compiles fails closed. The control plane warns about this when it checks such a change.
+
+### Entry budgets {#entry-budgets}
+
+`limits` also sets how many entries one document may hold and how many operations one change may carry. The control
+plane holds every change it checks to them (`CTL-40`, `CTL-41`): a proposal, an `apply`, a rollback, a rebase and the
+publish. The compiler and the hosts do not, so a stored document over a budget keeps being served. Absent ones are the
+defaults; the platform raises or lowers them like any other limit.
+
+| Budget | Default | Bounds |
+|---|---|---|
+| `maxPolicies` | 10,000 | Policies one document writes. |
+| `maxStatements` | 20,000 | Statements of all the policies one document writes. |
+| `maxRoleBindings` | 10,000 | Bindings to a role in one document. |
+| `maxAnyoneBindings` | 1,000 | Bindings to `*` (`Anyone`) in one document. Each is a candidate on every request in its scope. |
+| `maxChangeOperations` | 20,000 | Operations of one change a client proposes. An `apply` and a rollback are not held to it: their operations come from a document, which the other budgets bound. |
+
+Entries are counted as the document writes them: a role's short form is not written out, and principal bindings have
+their own limit of 1,000 ([Bindings](#bindings)).
+
+They bound what checking a change costs the control plane, not what a host does. A host compiles a document in time
+that grows with its size; the analysis of what a tenant administrator's change grants grows with the square of it: on
+one machine, 0.8 s for a change of 10,000 policies and bindings, over a minute for 100,000, which also exhausted a
+512 MB heap ([Performance](../architecture/overview.md#what-checking-a-change-costs)).
+
+For each budget, a candidate's count must be at most the larger of the limit and the count of the head it replaces:
+
+- A change that would raise a count over its budget is refused: a `V2` finding (`422`) at `$.policies` or
+  `$.bindings`, naming the budget, the count and the limit, and the change stays a draft.
+- A document already over a budget, published before it or after the platform lowered it, may still change and shrink:
+  a change that raises no count over its budget is checked, with a `V2` warning naming each count still over.
+- A rollback is held to the same rule against the current head: it may restore a revision over a budget only as far
+  as the head already is.
+- A change of more operations than `maxChangeOperations` is a `400` before any of them is authorized or applied.
 
 ### Boundaries
 

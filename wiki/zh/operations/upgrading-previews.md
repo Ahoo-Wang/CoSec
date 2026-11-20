@@ -72,6 +72,10 @@ description: "每个 8.0 预览版（alpha 与 beta）到下一个之间的变�
   - **已存储的文档会怎样。** 宿主对它失败即关闭，与对待任何无法编译的文档一样：每个需要该文档的请求回答 `503`，宿主以 `ERROR` 记录 `Snapshot document [<doc>] revision <n> does not compile`，附每个错误的 JSON 路径，id 以转义形式显示，`cosecSnapshot` 健康指示器把它计入 `invalid`（[故障排查](./troubleshooting.md)）。控制面拒绝会发布这种文档的变更：在 id 或语句的路径上给出 `COMPILE` 发现，变更停留在草稿。
   - **升级宿主之前**，用 beta.5 的编译器检查每个已发布的文档，做法见 [CI 中的策略](../policies/testing.md#policies-in-ci)（`PolicyDocumentCompiler.validate`），并为它拒绝的每个文档发布一个修正后的修订：重命名 id、去掉该选项。两者都不含的文档不受影响。
   - **然后先升级一台宿主**（或控制面的宿主），在升级其余宿主之前，查看它的 `cosecSnapshot` 健康指示器的 `invalid` 计数，以及它为每个文档记录的 `ERROR` 日志行。没有修正的文档在每台已升级的宿主上失败即关闭：那里每个需要它的请求都回答 `503`。
+- **控制面以条目预算约束每个变更，并限制一个变更的操作数和请求体**（R1B-4，`CTL-40`、`CTL-41`）。受影响的是含有超出默认预算的文档、或提议非常大的变更的控制面，以及为控制 API 调高了 `spring.codec.max-in-memory-size` 的 WebFlux 宿主。在这些预算之前，一个 100,000 条目的变更曾在控制面耗尽 512 MB 的堆。
+  - **条目预算。** 平台的 `limits` 接受每个文档的 `maxPolicies`（10,000）、`maxStatements`（20,000）、`maxRoleBindings`（10,000）和 `maxAnyoneBindings`（1,000）（[条目预算](../policies/language.md#entry-budgets)）。会把某个计数提高到超出预算的变更得到写明预算、计数和限制值的 `V2` 发现（`422`），停留在草稿。已经超出预算的文档仍由每台宿主继续提供，可以修改，也可以缩小；只有增加超出预算的计数的变更会被拒绝，检查会对每个仍然超出的计数给出警告。要让大文档继续增长，先在平台文档中调高预算。`cosec-migrate convert` 对超出默认预算的转换结果给出警告并照常写出。
+  - **操作数。** 客户端提议的一个变更最多带 `maxChangeOperations`（20,000）个操作，同样位于平台的 `limits` 中；更大的变更返回 `400`，请拆成几个变更提议。`apply` 和回滚不受其约束。
+  - **请求体。** `cosec.control.http.max-body-size` 的默认值由 `16MB` 改为 `10MB`，并且现在 WebFlux 上的控制 API 也受其约束，代替 `spring.codec.max-in-memory-size`（默认 256 KB，此前使 WebFlux 控制面无法接收更大的变更）。更大的请求体返回 `400` `invalid-request`。
 
 ## 从 8.0.0-beta.3 升级 {#from-8-0-0-beta-3}
 

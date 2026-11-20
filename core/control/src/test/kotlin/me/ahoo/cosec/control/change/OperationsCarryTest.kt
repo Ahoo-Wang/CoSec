@@ -44,7 +44,7 @@ class OperationsCarryTest {
         SnapshotKey.Platform to decode(
             DocumentKind.PLATFORM,
             "",
-            """"boundaries":{"default":"b"},"limits":{"maxNodes":32,"maxCost":100},""" +
+            """"boundaries":{"default":"b"},"limits":{"maxNodes":32,"maxCost":100,"maxPolicies":50},""" +
                 """"attributes":[{"path":"ext.geo.region","type":"string"}],""" +
                 """"policies":[{"id":"b","boundary":true,"statements":[]},""" +
                 """{"id":"g","statements":[{"effect":"deny","action":"http:*"}]}],""" +
@@ -96,7 +96,7 @@ class OperationsCarryTest {
         unset.assert().isEmpty()
         bases.getValue(SnapshotKey.Tenant("acme")).let { tenant ->
             fields().filter { !set(it.get(tenant)) }.map { it.name }
-                .assert().containsExactlyInAnyOrder("catalog", "limits", "attributes")
+                .assert().containsExactlyInAnyOrder("catalog", "limits", "attributes", "budgets")
         }
     }
 

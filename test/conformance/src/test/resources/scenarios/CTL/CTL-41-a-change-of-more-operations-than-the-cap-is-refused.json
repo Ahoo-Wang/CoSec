@@ -1,0 +1,56 @@
+{
+  "rules": [
+    "CTL-41"
+  ],
+  "polarity": "positive",
+  "level": "control",
+  "description": "The platform allows one operation a change. A change of two is refused 400 before anything is checked, and nothing is published.",
+  "documents": {
+    "platform": {
+      "limits": {
+        "maxChangeOperations": 1
+      }
+    }
+  },
+  "steps": [
+    {
+      "propose": {
+        "change": "c1",
+        "document": "tenant:acme",
+        "operations": [
+          {
+            "putPolicy": {
+              "id": "a",
+              "statements": [
+                {
+                  "effect": "allow",
+                  "action": "order:read"
+                }
+              ]
+            }
+          },
+          {
+            "putPolicy": {
+              "id": "b",
+              "statements": [
+                {
+                  "effect": "allow",
+                  "action": "order:write"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    }
+  ],
+  "expect": {
+    "steps": [
+      "refused 400"
+    ],
+    "errors": {},
+    "heads": {
+      "tenant:acme": 0
+    }
+  }
+}
