@@ -56,21 +56,6 @@ class ObservabilityScenario {
             .sumOf { it.substringAfterLast(' ').toDouble().toLong() }
     }
 
-    /** The records of the audit topic, `key<TAB>value` each, as a console consumer reads them from the start. */
-    private fun auditRecords(): List<String> = Compose.execAnyway(
-        "kafka",
-        "/opt/kafka/bin/kafka-console-consumer.sh",
-        "--bootstrap-server",
-        "kafka:9092",
-        "--topic",
-        "cosec-audit",
-        "--from-beginning",
-        "--timeout-ms",
-        "4000",
-        "--property",
-        "print.key=true",
-    ).lines()
-
     @Test
     fun `the gateway counts its decisions by result, and each is on the audit topic with its request id`() {
         val permittedBefore = gatewayDecisions("permit")
@@ -101,7 +86,7 @@ class ObservabilityScenario {
         val record = eventually(
             Bounds.AUDIT_DELIVERY,
             "the request on the audit topic",
-            { auditRecords().firstOrNull { line -> line.contains(path) } }
+            { Audit.recordOf(path) }
         ) {
             it != null
         }!!
