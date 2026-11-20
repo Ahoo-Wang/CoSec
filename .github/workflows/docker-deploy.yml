@@ -52,6 +52,10 @@ jobs:
       - name: Set up Java and Gradle
         uses: ./.github/actions/setup-java-gradle
 
+      # Downloads only, retried, before anything is built; a failed download fails this step, with nothing pushed.
+      - name: Resolve the dependencies
+        run: .github/scripts/resolve-dependencies.sh
+
       - name: Build Dist
         run: ./gradlew gateway-server:installDist
 

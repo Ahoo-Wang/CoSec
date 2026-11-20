@@ -39,6 +39,7 @@ import me.ahoo.cosec.runtime.PipelineFixtures
 import me.ahoo.cosec.runtime.PipelineFixtures.authenticated
 import me.ahoo.cosec.runtime.PipelineFixtures.authenticator
 import me.ahoo.cosec.runtime.PipelineOptions
+import me.ahoo.cosec.runtime.captured
 import me.ahoo.cosec.runtime.http.Basis
 import me.ahoo.cosec.runtime.http.Outcome
 import me.ahoo.cosec.runtime.http.Unavailability
@@ -365,7 +366,7 @@ class ExternalAttributesPipelineTest {
                 outcome.status.assert().isEqualTo(503)
                 outcome.unavailableCause.assert().isInstanceOf(Cause.AttributeUnavailable::class.java)
             }
-            val reports = appender.list.filter { "failed to fetch" in it.formattedMessage }
+            val reports = appender.captured().filter { "failed to fetch" in it.formattedMessage }
             reports.map { it.formattedMessage.substringBefore(" failed") }.assert().hasSize(2)
                 .anyMatch { it.contains("Geo") }.anyMatch { it.contains("Risk") }
             reports.forEach { it.level.assert().isEqualTo(Level.WARN) }
