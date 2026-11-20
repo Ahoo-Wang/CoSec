@@ -136,4 +136,12 @@ class BoundedSenderCloseTest {
         first.release.countDown()
         sender.close()
     }
+
+    @Test
+    fun `a closed sender says it is closed, not that its queue is full`() {
+        sender.close()
+
+        assertThrows<IllegalStateException> { sender.send { CompletableFuture.completedFuture("sent") } }.message
+            .assert().contains("is closed").doesNotContain("is full")
+    }
 }

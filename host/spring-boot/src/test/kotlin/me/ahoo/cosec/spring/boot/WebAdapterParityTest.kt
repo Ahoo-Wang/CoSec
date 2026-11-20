@@ -270,7 +270,7 @@ class WebAdapterParityTest {
                 }
                 AuthnResult.Authenticated(
                     AuthenticatedPrincipal(PrincipalId(who), TenantId(tenant), memberships, app = AppId("order")),
-                    "token"
+                    Identity.Method("token")
                 )
             }
         }

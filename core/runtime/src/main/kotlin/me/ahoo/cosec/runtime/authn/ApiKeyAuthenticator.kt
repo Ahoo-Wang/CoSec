@@ -48,6 +48,9 @@ class ApiKeyAuthenticator(
     /** How audit names this way of authenticating. */
     private val method: String = METHOD,
 ) : Authenticator {
+    /** Made once: a result of every request carries it, and an allocation per request shows in `PipelineBenchmark`. */
+    private val authnMethod = Identity.Method(method)
+
     override suspend fun authenticate(credentials: Credentials): AuthnResult {
         val key = credentials.apiKey ?: return AuthnResult.Anonymous
         val apiKey = keys.findByHash(ApiKeys.hash(key))
@@ -78,7 +81,7 @@ class ApiKeyAuthenticator(
             app = apiKey.app?.let(::AppId),
             session = null,
         )
-        return AuthnResult.Authenticated(principal, method)
+        return AuthnResult.Authenticated(principal, authnMethod)
     }
 
     companion object {

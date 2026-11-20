@@ -15,4 +15,4 @@ index 02cb9131..87b20058 100644
 +                chain.doFilter(request, response)
              }
          } finally {
-             SecurityContextHolder.remove()
+             CoSecSecurityContextHolder.remove()

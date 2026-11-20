@@ -28,22 +28,21 @@
     {
       "id": "ATR-3",
       "source": "RFC 0006 §5.4.3 (Q13)",
-      "statement": "A DENY may say onMissing nomatch only in the platform document, where it lapses while its attribute cannot be fetched; elsewhere the document does not compile.",
+      "statement": "Superseded by ATR-6. Before the control plane's confirmation (RFC 0007 N6) a DENY could say onMissing nomatch only in the platform document; a DENY without the confirmation now does not compile in any document, and with it compiles in any (ATR-6).",
       "level": "pipeline",
-      "guards": [
-        "engine:ExternalAttributesTest",
-        "document:ExternalAttributeDocumentTest"
-      ],
+      "guards": [],
       "pending": null,
       "superseded": "ATR-6"
     },
     {
       "id": "ATR-4",
       "source": "RFC 0006 §5.4.1",
-      "statement": "A policy that reads an external attribute no registered AttributeProvider declares does not compile.",
+      "statement": "A policy that reads an external attribute that neither a registered AttributeProvider nor the platform document's attributes declares does not compile.",
       "level": "pipeline",
       "guards": [
-        "document:ExternalAttributeDocumentTest"
+        "document:ExternalAttributeDocumentTest#aDeclaredExternalAttributeCompiles",
+        "document:ExternalAttributeDocumentTest#anUndeclaredExternalAttributeDoesNotCompile",
+        "document:PolicyDocumentCompilerTest#the platform document sets what every document compiles against"
       ],
       "pending": null
     },

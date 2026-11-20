@@ -148,7 +148,7 @@ It replaced `cosec.authorization.snapshot.key-prefix`, `cosec.authorization.cach
 
 `cosec.gateway.identity.*`, on a Spring Cloud Gateway host (`cosec-gateway`): what the gateway forwards to the
 services behind it. On a permit with a principal it sets `CoSec-Identity` to the identity it verified (format:
-[`schema/cosec-identity.schema.json`](https://github.com/Ahoo-Wang/CoSec/blob/main/schema/cosec-identity.schema.json)),
+[`schema/8.0/cosec-identity.schema.json`](https://cosec.ahoo.me/schema/8.0/cosec-identity.schema.json)),
 on a route that receives it: a route to a registered service (`lb://`), or one with the metadata
 `cosec-identity: true`. A route with `cosec-identity: false`, or to any other URI without the metadata, receives no
 identity ([Forwarding the identity](../integration/web.md#forwarding-the-identity)). The gateway always removes a

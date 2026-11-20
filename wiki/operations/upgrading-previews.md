@@ -27,6 +27,26 @@ Which preview of the library may run behind which preview of the gateway image: 
 
 ## From 8.0.0-beta.4 {#from-8-0-0-beta-4}
 
+- **The public shapes of the core modules are fixed before RC** (review round 2, `R2A-1` to `R2A-7`). Affected: code that
+  compiles against `cosec-model`, `cosec-spi`, `cosec-api` or the engine. No document, property, stored value or wire
+  format changes.
+  - The decision values are plain final classes with `equals`, `hashCode` and `toString`, not data classes: `Decision.Permit`,
+    `Deny`, `Indeterminate`, `Obligation.RateLimit`, `ViewVersion` (in `cosec-engine`) and every `Cause` but `NotLoaded`
+    have no `copy` and no `componentN`, so a new field never breaks a caller. Read the properties (`decision.by`,
+    `cause.error`) instead of destructuring a decision.
+  - `me.ahoo.cosec.spi.ratelimit.RateLimit` and `RateLimiter.window` are gone. `RateLimitSpec` has `limitPerWindow` and
+    `windowMillis`, and `limit.resultOf(allowed, estimate, nowMillis)` (import `me.ahoo.cosec.spi.ratelimit.resultOf`)
+    builds the `RateLimitResult`: in a `RateLimiter` of yours, use `limit` where you used `RateLimiter.window(limit)`.
+  - `AuthnResult.Authenticated(principal, method)` takes an `Identity.Method`, not a string: `Identity.Method.API_KEY`, or
+    `Identity.Method("ldap")` for a credential of your own, any non-empty name. What the audit record and `CoSec-Identity`
+    say for CoSec's own methods does not change (`jwt`, `api-key`).
+  - `AuditEvent.kind` is an `AuditEventKind` enum with the five values it always had; the JSON a sink or a Kafka consumer
+    reads is the same bytes. Read `authorization.reasonCode` for why a request ended as it did (`decision` is its coarser
+    grouping, mapped in the KDoc of `AuditDecision`); `binding` is a label for people, `authorization.source.via` and
+    `document` are the typed facts.
+  - `SnapshotDocumentStore` is `@ExperimentalCoSecApi`: its shape follows its one backend, `cosec-cocache`, and a batched or
+    store-wide conditional read is planned. An implementation of yours opts in and may have to change in a minor release.
+  - `Resource.attributes` defaults to an empty map: nothing sets one today (`DOC-10`).
 - **The control plane keeps a list of the staged candidates** (`CTL-46`), `<s>:candidate-staged:all`, which instances
   will read instead of a candidate key per document they serve. Affected:
   - a Redis ACL for a data-plane instance: add `%R~cosec:candidate-staged:*` to its keys
@@ -44,7 +64,8 @@ Which preview of the library may run behind which preview of the gateway image: 
     `cosec-migrate repair-references --to-redis <uri> [--cluster] [--key-prefix <p>]` once; the control plane of this
     version may run meanwhile. It converts each back-reference value a head touches, never replaces a set, and removes
     the old document list last, printing `The store is in the format of 8.0.0-beta.5.` A second run changes nothing
-    ([Repair the back-reference index](./upgrading.md#repair-the-back-reference-index)).
+    ([Repair the back-reference index](./upgrading.md#repair-the-back-reference-index), which gives what it costs: at
+    50,000 tenants about 1.3 million commands, some 22 minutes at a round trip of 1 ms).
   - Until it has run, the control plane starts, logs one `ERROR` naming the command, and its `cosecControlStoreFormat`
     health indicator is `DOWN` ([Observability](./observability.md#snapshot-health)). A change that touches a back-reference of
     the old format is refused (`503`, naming the command), never let through.
@@ -242,6 +263,46 @@ Which preview of the library may run behind which preview of the gateway image: 
   Either way `TokenRevoker.revokeSubject` ends a member's tokens at once
   ([How long a removed role lives](../integration/authentication.md#how-long-a-removed-role-lives)). A host that serves
   no refresh route, or builds its own `RefreshTokenAuthentication`, is unaffected.
+- **The published JSON schemas have a new identity, and their files moved to `schema/8.0/`** (R2A-5). Affected:
+  editors, CI checks and tools that load a CoSec schema by URL or by path, or that pinned one by its `$id`.
+  - Until beta.4 each file's `$id`, and the base its cross-file `$ref`s resolve against, was the file on `main` at
+    `raw.githubusercontent.com/Ahoo-Wang/CoSec/refs/heads/main/schema/<file>`, so an 8.0 file resolved against whatever
+    `main` held later. It is now `https://cosec.ahoo.me/schema/8.0/<file>`: `8.0` is the release line (not the `schema: 2`
+    of a document), the site serves the files, and the repository keeps them at `schema/8.0/<file>`.
+  - An editor setting that still names the raw `main` URL gets a `404` once this reaches `main`: completion and
+    validation stop, with the editor's "could not load schema" warning. Point it at
+    `https://cosec.ahoo.me/schema/8.0/cosec-snapshot-document.schema.json`, or at the tag of the version you run
+    (`.../refs/tags/<tag>/schema/8.0/<file>` from the first tag after beta.4; beta.4's own files stay at `schema/<file>`).
+    A setting that names the beta.4 tag keeps working and keeps the `$id` it had.
+  - Until 8.0.0 the site's `/schema/8.0/` holds what `main` holds for the 8.0 line, so it changes between previews; a
+    tag is the immutable copy ([Policy language](../policies/language.md#json-schema)). A CI job that validates against
+    `schema/<file>` in a checkout reads `schema/8.0/<file>`. No document stops compiling.
+- **The public shapes of the login, JWT, WebMvc, gateway and metrics modules are fixed before RC** (R2B-1, R2B-2, R2B-4
+  to R2B-6, R2B-10, R2B-11, R2B-12, R2B-16, R2B-24). Affected: applications that build a `TokenSubject`, a
+  `JwtTokenVerifier` or a `JwtTokenConverter`, read the WebMvc holder, catch `RefreshTokenMismatchException`, or
+  supply an `Algorithm` bean.
+  - **`TokenSubject`: `tenant` now comes before `app`.** `TokenSubject("alice", "acme")` still compiles and now means
+    the tenant `acme`, where it meant the app `acme`. Search for every call that passes a second positional argument and
+    write it by name (`TokenSubject(id = "alice", app = "acme")`); the Java overloads are gone with `@JvmOverloads`.
+    `toString()` no longer prints the attributes, only their number.
+  - **`JwtSigning` replaces java-jwt's `Algorithm` in the public constructors.** `JwtTokenVerifier(JwtSigning, skew)` and
+    `JwtTokenConverter(idGenerator, JwtSigning, ...)`, with `JwtSigning.hmac256(secret)`, `hmac384` and `hmac512`. The
+    constructors that took an `Algorithm` are internal. The starter's `Algorithm` bean is now a `JwtSigning` bean built
+    from the same properties (`cosec.jwt.secret`, `cosec.jwt.algorithm`), so nothing an operator writes changes; an
+    application that declared its own `Algorithm` bean to replace it declares a `JwtSigning` instead. A signing key that
+    is an RSA or EC key pair has no public entry yet.
+  - **`RefreshTokenMismatchException` is `me.ahoo.cosec.spi.token.RefreshTokenMismatchException`.** Change the import. The
+    verifier side of `cosec-jwt` no longer imports anything of `cosec-login`; the converter still does (`TokenConverter`,
+    `TokenSubject`).
+  - **`me.ahoo.cosec.webmvc.SecurityContextHolder` is `CoSecSecurityContextHolder`**, so that it is not taken for Spring
+    Security's. `requireSecurityContext()` and `securityContextOrNull()` keep their names.
+  - **Starter-only classes are internal:** the constructors of `IdentityStripFilter`, `IdentityHeadersFilter` and
+    `OrderedCorsWebFilter`, and the filter-order and attribute constants of the filters. The starter registers them.
+  - **`MetricsListener.bind(...)` and its constants moved to `CoSecMeters`** (internal: the starter registers them).
+    `MetricsListener` keeps its name, `cosec.authorization` and the four tag names. A meter's name and tags are
+    unchanged.
+  - **A refresh strips `Bearer ` from the refresh token too**, as it did from the access token. The Kafka audit
+    listener logs failed sends once every 10 seconds with a count; a closed sender says it is closed.
 
 ## From 8.0.0-beta.3 {#from-8-0-0-beta-3}
 

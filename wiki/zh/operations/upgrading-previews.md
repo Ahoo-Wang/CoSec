@@ -24,12 +24,28 @@ description: "每个 8.0 预览版（alpha 与 beta）到下一个之间的变�
 
 ## 从 8.0.0-beta.4 升级 {#from-8-0-0-beta-4}
 
+- **核心模块的公共形状在 RC 之前定下**（第二轮评审，`R2A-1` 至 `R2A-7`）。受影响的是针对 `cosec-model`、`cosec-spi`、`cosec-api` 或引擎编译的代码；
+  文档、属性、已存储的值和线上格式都不变。
+  - 决策值是写明 `equals`、`hashCode` 和 `toString` 的普通 final 类，不再是 data class：`Decision.Permit`、`Deny`、`Indeterminate`、
+    `Obligation.RateLimit`、`ViewVersion`（在 `cosec-engine`）以及除 `NotLoaded` 之外的每个 `Cause` 都没有 `copy` 和 `componentN`，
+    以后加字段不会破坏调用方。读属性（`decision.by`、`cause.error`），不要解构决策。
+  - `me.ahoo.cosec.spi.ratelimit.RateLimit` 和 `RateLimiter.window` 已删除。`RateLimitSpec` 有 `limitPerWindow` 和 `windowMillis`，
+    `limit.resultOf(allowed, estimate, nowMillis)`（导入 `me.ahoo.cosec.spi.ratelimit.resultOf`）构造 `RateLimitResult`：
+    你自己的 `RateLimiter` 里，用 `limit` 取代 `RateLimiter.window(limit)`。
+  - `AuthnResult.Authenticated(principal, method)` 的 `method` 是 `Identity.Method`，不再是字符串：`Identity.Method.API_KEY`，
+    或自己凭证的 `Identity.Method("ldap")`，任何非空名称。审计记录和 `CoSec-Identity` 中 CoSec 自己的方法取值不变（`jwt`、`api-key`）。
+  - `AuditEvent.kind` 是 `AuditEventKind` 枚举，取值仍是原来的五个；sink 或 Kafka 消费者读到的 JSON 字节不变。要知道请求为何如此结束，读
+    `authorization.reasonCode`（`decision` 是它较粗的分组，对应关系写在 `AuditDecision` 的 KDoc 中）；`binding` 是给人看的标签，
+    类型化的事实是 `authorization.source.via` 和 `document`。
+  - `SnapshotDocumentStore` 标为 `@ExperimentalCoSecApi`：它的形状跟随唯一的后端 `cosec-cocache`，批量或整库的条件读已在计划中。
+    你自己的实现需要选择加入，并可能在次版本中修改。
+  - `Resource.attributes` 默认为空 map：目前没有任何地方设置它（`DOC-10`）。
 - **控制面维护一份暂存候选的列表**（`CTL-46`），`<s>:candidate-staged:all`，实例将读取它，而不再为所服务的每个文档读一个候选 key。受影响：
   - 数据面实例的 Redis ACL：在它的 key 中加上 `%R~cosec:candidate-staged:*`（[谁可以写哪些 key](./storage.md#who-may-write-which-keys)）；
   - 把控制面降级到此前的预览版：先删除 `<s>:candidate-staged:all`，否则实例会信任一份没人维护的列表。这样的列表只会让影子窗口少得样本，绝不会让窗口通过。
 - **反向引用和文档列表是集合：运行一次 `cosec-migrate repair-references`**（`CTL-42`、`CTL-43`、`CTL-44`、`MIG-4`）。受影响的是 8.0.0-beta.4 或更早版本的控制面写过的每个存储。数据面实例不受影响：它们不读这些 key。
   - 一个策略的反向引用（`<s>:control:refs:<doc>:<policyId>`）原来是一个值，每个加入或退出的租户都整体重写它；现在它是一个集合，每个引用者的每个修订一个成员，文档列表也从 `<s>:control:list:documents` 移到了集合 `<s>:control:documents:all`。租户的一次发布现在只写它自己的成员，无论有多少租户（[存储](./storage.md#redis-keys)）。
-  - 停掉所有更早版本的控制面，然后运行一次 `cosec-migrate repair-references --to-redis <uri> [--cluster] [--key-prefix <p>]`；本版本的控制面可以同时运行。它转换头触及的每个反向引用值，从不替换集合，最后删除旧的文档列表，并输出 `The store is in the format of 8.0.0-beta.5.`。再运行一次不会改变任何东西（[修复反向引用索引](./upgrading.md#repair-the-back-reference-index)）。
+  - 停掉所有更早版本的控制面，然后运行一次 `cosec-migrate repair-references --to-redis <uri> [--cluster] [--key-prefix <p>]`；本版本的控制面可以同时运行。它转换头触及的每个反向引用值，从不替换集合，最后删除旧的文档列表，并输出 `The store is in the format of 8.0.0-beta.5.`。再运行一次不会改变任何东西（[修复反向引用索引](./upgrading.md#repair-the-back-reference-index)，那里给出了它的开销：50,000 个租户约 130 万条命令，往返 1 ms 时约 22 分钟）。
   - 在它运行之前，控制面照常启动，记录一条写明该命令的 `ERROR`，其 `cosecControlStoreFormat` 健康指示器为 `DOWN`（[可观测性](./observability.md#snapshot-health)）。触及旧格式反向引用的变更会被拒绝（`503`，写明该命令），从不放过。
   - 没有任何头触及的值保持旧格式：它什么也不阻止；以后触及它的变更失败关闭，写明该命令，直到再运行一次。
   - 这两个集合从不在本地保留：`ReferenceIndexCache` 和 `ControlDocumentSetCache` 的 `local-max-age` 与 `degraded-local-max-age` 锁定为 1 ns，设置其中之一的 `cocache.caches.*` 条目会让启动失败（[配置](./configuration.md#cocache-properties-that-affect-cosec)）。
@@ -107,6 +123,18 @@ description: "每个 8.0 预览版（alpha 与 beta）到下一个之间的变�
   - 或声明 `MembershipRefresh<RefreshTokenCredentials>` Bean，重新读取成员的角色和附加策略，移除的角色或附加策略在 `cosec.jwt.token-validity.access`（10 分钟）之内生效。
 
   无论哪种，`TokenRevoker.revokeSubject` 都会立刻结束成员的全部令牌（[被移除的角色还能用多久](../integration/authentication.md#how-long-a-removed-role-lives)）。不提供刷新路由、或自己构造 `RefreshTokenAuthentication` 的宿主不受影响。
+- **公布的 JSON schema 有了新的标识，文件移到了 `schema/8.0/`**（R2A-5）。受影响的是按 URL 或路径加载 CoSec schema、或按 `$id` 固定了某个 schema 的编辑器、CI 检查和工具。
+  - 直到 beta.4，每个文件的 `$id`，以及文件之间 `$ref` 的解析基准，都是 `main` 上的文件 `raw.githubusercontent.com/Ahoo-Wang/CoSec/refs/heads/main/schema/<文件>`，所以 8.0 的文件会按 `main` 之后的内容解析。现在是 `https://cosec.ahoo.me/schema/8.0/<文件>`：`8.0` 是发布线（不是文档的 `schema: 2`），站点提供这些文件，仓库把它们放在 `schema/8.0/<文件>`。
+  - 仍然指向 raw `main` 地址的编辑器设置，在这次变更进入 `main` 后得到 `404`：补全和校验停止，编辑器给出“无法加载 schema”的警告。请把它指向 `https://cosec.ahoo.me/schema/8.0/cosec-snapshot-document.schema.json`，或你所运行版本的标签（beta.4 之后的第一个标签起为 `.../refs/tags/<标签>/schema/8.0/<文件>`；beta.4 自己的文件仍在 `schema/<文件>`）。指向 beta.4 标签的设置继续可用，也保留它原来的 `$id`。
+  - 8.0.0 之前，站点的 `/schema/8.0/` 是 `main` 上 8.0 版本线的内容，所以在预览版之间会变；标签是不可变的副本（[策略语言](../policies/language.md#json-schema)）。在检出的仓库里按 `schema/<文件>` 校验的 CI 任务，现在读 `schema/8.0/<文件>`。没有文档因此不能编译。
+- **登录、JWT、WebMvc、网关与指标模块的公开形状在 RC 之前定下**（R2B-1、R2B-2、R2B-4 至 R2B-6、R2B-10、R2B-11、R2B-12、R2B-16、R2B-24）。受影响的是构造 `TokenSubject`、`JwtTokenVerifier` 或 `JwtTokenConverter`、读取 WebMvc 的 holder、捕获 `RefreshTokenMismatchException`，或提供 `Algorithm` Bean 的应用。
+  - **`TokenSubject`：`tenant` 现在排在 `app` 之前。** `TokenSubject("alice", "acme")` 仍能编译，现在表示租户 `acme`，之前表示应用 `acme`。查找每一处传了第二个位置参数的调用，改成按名字写（`TokenSubject(id = "alice", app = "acme")`）；`@JvmOverloads` 去掉后，Java 重载也没有了。`toString()` 不再打印属性，只给出个数。
+  - **`JwtSigning` 取代公开构造函数里 java-jwt 的 `Algorithm`。** `JwtTokenVerifier(JwtSigning, skew)` 与 `JwtTokenConverter(idGenerator, JwtSigning, ...)`，用 `JwtSigning.hmac256(secret)`、`hmac384`、`hmac512`。接受 `Algorithm` 的构造函数成为内部的。starter 的 `Algorithm` Bean 现在是同样的属性（`cosec.jwt.secret`、`cosec.jwt.algorithm`）构建出的 `JwtSigning` Bean，运维写的配置不变；声明了自己的 `Algorithm` Bean 来替换它的应用，改为声明 `JwtSigning`。RSA 或 EC 密钥对暂时没有公开入口。
+  - **`RefreshTokenMismatchException` 是 `me.ahoo.cosec.spi.token.RefreshTokenMismatchException`。** 改 import。`cosec-jwt` 的校验一侧不再导入 `cosec-login` 的任何东西；转换器仍然导入（`TokenConverter`、`TokenSubject`）。
+  - **`me.ahoo.cosec.webmvc.SecurityContextHolder` 改名为 `CoSecSecurityContextHolder`**，以免被当成 Spring Security 的。`requireSecurityContext()` 与 `securityContextOrNull()` 名字不变。
+  - **只有 starter 用的类成为内部的：** `IdentityStripFilter`、`IdentityHeadersFilter`、`OrderedCorsWebFilter` 的构造函数，以及这些过滤器的顺序与属性常量。starter 会注册它们。
+  - **`MetricsListener.bind(...)` 及其常量移到 `CoSecMeters`**（内部的：由 starter 注册）。`MetricsListener` 保持原名、`cosec.authorization` 与四个标签名。指标的名字和标签不变。
+  - **刷新时，刷新令牌也会去掉 `Bearer ` 前缀**，访问令牌原本就这样。Kafka 审计监听器对发送失败每 10 秒记录一行并带上计数；已关闭的发送器会说自己已关闭。
 
 ## 从 8.0.0-beta.3 升级 {#from-8-0-0-beta-3}
 

@@ -365,10 +365,6 @@ class ConditionChecker(
         val CREDENTIAL_HEADERS: Set<String> =
             setOf("authorization", "proxy-authorization", "cookie", "set-cookie", "x-api-key", "cosec-identity")
 
-        /** Whether [attribute] is a credential header, which no attribute reference may read (`CND-5`). */
-        fun isCredentialHeader(attribute: Attribute): Boolean =
-            attribute.kind == Attribute.Kind.HTTP_HEADER && attribute.name in CREDENTIAL_HEADERS
-
         private const val ROOT = "$"
         private const val IPV4_BITS = 32
         private const val IPV6_BITS = 128

@@ -105,6 +105,7 @@ the HTTP `status` it stands for and a `severity`:
 | `OPERATION` | 422 | An operation removes what is not there, or sets a section the document does not have. |
 | `IF_MATCH` | 412 | An entry is no longer what the operation's `ifMatch` says. |
 | `V3` (warning) | | The platform's `limits` or `attributes` change: other documents are compiled again on every instance, and one that no longer compiles fails closed. |
+| `REFERENCES` (warning) | | A role may mean more than it seems to: a tenant's role with the id of one of its app's system roles (a member holding it gets both); an app's system role whose id another app defines (a member whose roles are not issued per app holds it in both apps, `ROL-12`); a role with a space that lists a permission that applies only in the default space ([Roles](./role-permissions.md#roles)). |
 | `ROUTES` (warning) | | The candidate holds `http:` DENY statements or rate limit rules that a mapped route of the services escapes: the route's requests are decided as its `service:verb` and do not meet them ([Route maps](../scenarios/route-maps.md)). One finding with the count and the first five. Only with [`cosec.control.analysis.route-maps`](../operations/configuration.md#control-plane); without it, a candidate with such statements says that no route maps were given. |
 
 A change with any error stays `DRAFT` and cannot be staged or published; fix it by proposing a new change. A clean
@@ -858,7 +859,7 @@ StepVerifier.create(CoSecTestBindings.withSecurityContext(currentUser(), alice))
 CoSecTestBindings.bind(exchange, alice)
 // WebFlux, coroutine code: the context is in the Reactor context of the coroutine, so a Mono it awaits reads it
 val user = CoSecTestBindings.withSecurityContext(alice) { currentUser().awaitSingle() }
-// Spring MVC: SecurityContextHolder, put back as it was afterwards, or the request
+// Spring MVC: CoSecSecurityContextHolder, put back as it was afterwards, or the request
 CoSecTestBindings.withSecurityContext(alice) { currentUser() }
 CoSecTestBindings.bind(request, alice)
 ```

@@ -63,6 +63,7 @@ import me.ahoo.cosec.spi.snapshot.SnapshotKeyText
 import java.time.Clock
 import java.time.Duration
 import java.time.Instant
+import kotlin.coroutines.cancellation.CancellationException
 
 private val log = KotlinLogging.logger {}
 
@@ -204,16 +205,17 @@ class CoCacheControlStore internal constructor(
     suspend fun convertReferrers(target: SnapshotKey, policy: PolicyId, entries: Set<ReferrerEntry>) =
         sets.replace(target, policy, entries)
 
-    /**
-     * The document list a version before 8.0.0-beta.5 wrote, or null when there is none: while it is there, the store
-     * is not repaired (`cosec-migrate repair-references` removes it last).
-     */
+    /** The document list of a version before 8.0.0-beta.5, or null: while it is there, the store is not repaired. */
     @InternalCoSecApi
     suspend fun legacyDocuments(): Set<String>? = read(lists, DOCUMENTS)?.first?.keys
 
     /** Adds [entries] to the document set: what the repair copies from the old list before it removes it. */
     @InternalCoSecApi
     suspend fun listDocuments(entries: Set<String>) = sets.listDocuments(entries)
+
+    /** Who holds the lease [name], or null: what `cosec-migrate` names when its lease is taken. */
+    @InternalCoSecApi
+    suspend fun leaseHolder(name: String): String? = read(leases, name)?.first
 
     /** Removes the old document list, the repair's last write: the store is repaired from then on. */
     @InternalCoSecApi
@@ -236,9 +238,23 @@ class CoCacheControlStore internal constructor(
         }
         val written = put(changes, change.id, expected, change, digest(ChangeRequestCacheCodec, change)) is Put.Written
         if (written && change.state.terminal) {
-            updateList(OPEN_CHANGES) { it - change.id.value }
+            unlist(change.id)
         }
         return written
+    }
+
+    /** Unlists a terminal change; a failure only warns (R2C-2): the next read of the open changes drops it. */
+    @Suppress("TooGenericExceptionCaught")
+    private suspend fun unlist(id: ChangeId) {
+        try {
+            updateList(OPEN_CHANGES) { it - id.value }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            log.warn(
+                e
+            ) { "Change [${id.value}] is terminal and stays listed open; the next read of the open changes drops it." }
+        }
     }
 
     /**

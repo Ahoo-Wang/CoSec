@@ -1,0 +1,83 @@
+{
+  "rules": [
+    "ROL-12"
+  ],
+  "polarity": "positive",
+  "level": "control",
+  "description": "App wms defines the system role clerk. A change to app ops that defines a system role clerk too is checked with a warning on the role: a member whose roles are not issued per app holds clerk in both apps.",
+  "documents": {
+    "platform": {},
+    "apps": {
+      "wms": {
+        "catalog": {
+          "groups": [
+            {
+              "name": "all",
+              "permissions": [
+                {
+                  "id": "read",
+                  "action": "wms:read"
+                }
+              ]
+            }
+          ]
+        },
+        "roles": [
+          {
+            "id": "clerk",
+            "permissions": "*"
+          }
+        ]
+      },
+      "ops": {
+        "catalog": {
+          "groups": [
+            {
+              "name": "all",
+              "permissions": [
+                {
+                  "id": "read",
+                  "action": "ops:read"
+                }
+              ]
+            }
+          ]
+        }
+      }
+    }
+  },
+  "steps": [
+    {
+      "propose": {
+        "change": "c1",
+        "document": "app:ops",
+        "operations": [
+          {
+            "putRole": {
+              "id": "clerk",
+              "permissions": [
+                "read"
+              ]
+            }
+          }
+        ]
+      }
+    }
+  ],
+  "expect": {
+    "steps": [
+      "CHECKED"
+    ],
+    "errors": {
+      "c1": []
+    },
+    "heads": {
+      "app:ops": 1
+    },
+    "warnings": {
+      "c1": [
+        "REFERENCES $.roles[0].id"
+      ]
+    }
+  }
+}

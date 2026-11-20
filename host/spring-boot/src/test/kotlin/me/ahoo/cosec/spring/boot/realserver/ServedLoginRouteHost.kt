@@ -215,7 +215,7 @@ class ServedLoginRouteHost(
     fun login(user: String): CompositeToken {
         val families = context.getBean(TokenFamilies::class.java)
         val issue = runBlocking { families.start(TenantId.DEFAULT, PrincipalId(user)) }
-        return context.getBean(TokenConverter::class.java).toToken(TokenSubject(user, null).inSession(issue))
+        return context.getBean(TokenConverter::class.java).toToken(TokenSubject(user).inSession(issue))
     }
 
     fun send(

@@ -36,7 +36,7 @@ import me.ahoo.cosec.api.context.SecurityContext
  *
  * @see SecurityContext
  */
-object SecurityContextHolder {
+object CoSecSecurityContextHolder {
     /**
      * A plain [ThreadLocal]: an inheritable one would leak the request's context into any thread
      * created while serving it (e.g. lazily grown pool workers), where it is never cleared.

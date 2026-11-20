@@ -53,6 +53,7 @@ import me.ahoo.cosec.spi.authn.AuthenticatedPrincipal
 import me.ahoo.cosec.spi.authn.Authenticator
 import me.ahoo.cosec.spi.authn.AuthnResult
 import me.ahoo.cosec.spi.authn.Credentials
+import me.ahoo.cosec.spi.identity.Identity
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.AfterEach
@@ -235,7 +236,7 @@ class RedisMigrationTest {
                     Memberships(Memberships.Source.CLAIMS, spaces, emptyList()),
                     app = me.ahoo.cosec.model.AppId("order"),
                 ),
-                "test",
+                Identity.Method("test"),
             )
         }
     }
@@ -529,6 +530,8 @@ class RedisMigrationTest {
         val (code, output) = run("convert", "--from-redis", REDIS, "--key-prefix", keyPrefix, "--out", out.toString())
         code.assert().isEqualTo(MigrateMain.FAILED)
         output.assert().contains("REJECT SCHEMA_MARKER $keyPrefix:meta:schema")
+            // R2C-22: the directory holds the report now, and convert writes into a new one.
+            .contains("Remove $out, or give another --out, before you convert again")
         Files.exists(out.resolve(ConvertedDirectory.PLATFORM_FILE)).assert().isFalse()
     }
 

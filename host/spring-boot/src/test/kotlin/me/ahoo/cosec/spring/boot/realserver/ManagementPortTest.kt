@@ -183,7 +183,7 @@ class ManagementPortTest {
                 app
             }
             val token = context.getBean(TokenConverter::class.java)
-                .toToken(TokenSubject("plato", "cosec-control", tenant = "(platform)")).accessToken
+                .toToken(TokenSubject("plato", app = "cosec-control", tenant = "(platform)")).accessToken
             val before = Observation(probes(app, stack, token), probes(management, stack, token))
             publish(context)
             // The platform document is installed once the application's own public route answers (a gateway has none:

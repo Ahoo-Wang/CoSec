@@ -31,6 +31,7 @@ import me.ahoo.cosec.runtime.http.ProblemType
 import me.ahoo.cosec.spi.authn.AuthenticatedPrincipal
 import me.ahoo.cosec.spi.authn.Authenticator
 import me.ahoo.cosec.spi.authn.AuthnResult
+import me.ahoo.cosec.spi.identity.Identity
 import me.ahoo.test.asserts.assert
 import me.ahoo.test.asserts.assertThrownBy
 import org.junit.jupiter.api.Test
@@ -80,7 +81,10 @@ class PipelineFixtureTest {
                 mapOf(SpaceId.DEFAULT to setOf(RoleId("reader"))),
                 emptyList(),
             )
-            AuthnResult.Authenticated(AuthenticatedPrincipal(PrincipalId(id), TenantId("acme"), memberships), "wow")
+            AuthnResult.Authenticated(
+                AuthenticatedPrincipal(PrincipalId(id), TenantId("acme"), memberships),
+                Identity.Method("wow")
+            )
         }
         PipelineFixture.of(platform = anyone, tenants = mapOf("acme" to tenant), authenticator = own).use {
             val alice = it.request("GET", "/orders/1", headers = mapOf("Authorization" to "Bearer wow:alice"))

@@ -15,11 +15,11 @@
 
 package me.ahoo.cosec.testkit
 
-import com.auth0.jwt.algorithms.Algorithm
 import kotlinx.coroutines.runBlocking
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.api.context.SecurityContext
 import me.ahoo.cosec.api.token.CompositeToken
+import me.ahoo.cosec.jwt.JwtSigning
 import me.ahoo.cosec.jwt.JwtTokenConverter
 import me.ahoo.cosec.jwt.JwtTokenVerifier
 import me.ahoo.cosec.login.LoginCredentials
@@ -54,7 +54,7 @@ class PermittedRequestTest {
         SwitchTenantCredentials
 
     private val ids = AtomicLong()
-    private val algorithm = Algorithm.HMAC256("permitted-request-test-secret")
+    private val algorithm = JwtSigning.hmac256("permitted-request-test-secret")
     private val converter = JwtTokenConverter(IdGenerator { "t-${ids.incrementAndGet()}" }, algorithm)
     private val verifier = JwtTokenVerifier(algorithm)
     private val store = InMemoryTokenFamilyStore()
@@ -67,7 +67,7 @@ class PermittedRequestTest {
     private val password = object : me.ahoo.cosec.login.Authentication<Password> {
         override val credentialsType = Password::class.java
 
-        override suspend fun authenticate(credentials: Password) = TokenSubject(credentials.user, null, tenant = "acme")
+        override suspend fun authenticate(credentials: Password) = TokenSubject(credentials.user, tenant = "acme")
     }
     private val login = TokenCompositeAuthentication.of(listOf(password, switching), converter, families)
 

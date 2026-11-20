@@ -67,11 +67,11 @@ class ClientContractTest {
     @Test
     fun `the claims of CoSec's tokens are the contract's, each said to be read or not depended on`() {
         val full = converter.toToken(fullSubject())
-        val provider = JwtTokenConverter(JwtFixture.IDS, JwtFixture.ALGORITHM, membershipClaimLimit = 0)
+        val provider = JwtTokenConverter(JwtFixture.IDS, JwtFixture.SIGNING, membershipClaimLimit = 0)
             .toToken(fullSubject())
         // The smallest subject the converter issues for: no app, no roles, no session (a pair without one is never
         // refreshed). What its tokens carry is always there, the rest is conditional: a client must not assume it.
-        val smallest = converter.toToken(TokenSubject("alice", null))
+        val smallest = converter.toToken(TokenSubject("alice"))
         val file = files.objectNode()
         file.set(
             "access",
@@ -198,8 +198,8 @@ class ClientContractTest {
     private val files = ContractFiles()
 
     // The routes over real tokens, as LoginRoutesTest builds them.
-    private val converter = JwtTokenConverter(JwtFixture.IDS, JwtFixture.ALGORITHM)
-    private val verifier = JwtTokenVerifier(JwtFixture.ALGORITHM)
+    private val converter = JwtTokenConverter(JwtFixture.IDS, JwtFixture.SIGNING)
+    private val verifier = JwtTokenVerifier(JwtFixture.SIGNING)
     private val familyStore = FailingFamilyStore(InMemoryTokenFamilyStore())
     private val families = TokenFamilies(familyStore)
     private val tokenStore = MemoryTokenStore()
@@ -225,7 +225,7 @@ class ClientContractTest {
     ).inSession(runBlocking { families.start(TenantId("acme"), PrincipalId("alice")) })
 
     private fun login(user: String = "alice"): CompositeToken = converter.toToken(
-        TokenSubject(user, null).inSession(runBlocking { families.start(TenantId.DEFAULT, PrincipalId(user)) }),
+        TokenSubject(user).inSession(runBlocking { families.start(TenantId.DEFAULT, PrincipalId(user)) }),
     )
 
     private fun body(pair: CompositeToken): ByteArray =

@@ -227,7 +227,7 @@ Every response that does not proceed has an RFC 9457 body with the content type 
 The members always come in this order, and the body holds nothing else: no policy, statement, binding, cause or
 exception message. One hand-written encoder (`ProblemEncoder`) writes it, so the three adapters produce the same
 bytes whatever the host's JSON configuration. The body is ASCII: every non-ASCII and control character of the
-request id is escaped. The vocabulary is also published as `schema/problem.schema.json`.
+request id is escaped. The vocabulary is also published as `schema/8.0/problem.schema.json`.
 
 ### Response headers
 
@@ -332,7 +332,7 @@ Every reader, on both stacks, comes in two forms, and the name says which (UA-7)
 `requireSecurityContext()` throws an `IllegalStateException` where CoSec did not handle the request, saying what to
 do (register the filter) and where else to read the context; `securityContextOrNull()` answers `null`, which a caller
 must treat as "no context", never as "no restriction". The readers are `ReactiveSecurityContexts` (a Reactor
-`ContextView`), `ServerWebExchanges` (an exchange), `ServletRequests` (a servlet request) and `SecurityContextHolder`
+`ContextView`), `ServerWebExchanges` (an exchange), `ServletRequests` (a servlet request) and `CoSecSecurityContextHolder`
 (the request thread), each `@JvmStatic` for Java: `ServletRequests.requireSecurityContext(request)`.
 
 **Spring MVC**: in a handler, declare a `SecurityContext` parameter. The starter registers its resolver
@@ -349,12 +349,12 @@ suspend fun order(@PathVariable id: String, security: SecurityContext): Order = 
 Elsewhere, read it from the servlet request, or, in blocking code on the request thread, from the thread-bound holder:
 
 ```kotlin
-import me.ahoo.cosec.webmvc.SecurityContextHolder
+import me.ahoo.cosec.webmvc.CoSecSecurityContextHolder
 import me.ahoo.cosec.webmvc.ServletRequests.securityContextOrNull
 
 val securityContext = httpServletRequest.securityContextOrNull()
 // blocking code on the request thread only
-val securityContext = SecurityContextHolder.requireSecurityContext()
+val securityContext = CoSecSecurityContextHolder.requireSecurityContext()
 ```
 
 The holder is a thread-local, which the filter binds for the request's thread and clears when the request completes.
@@ -371,7 +371,7 @@ single-flight cache load). So the holder is:
   handler is blocking finds **that request's** context there, so code that reads the holder only after such a
   resumption, and never before a suspension, reads another request's principal.
 
-The startup log says which a host has, in a line that starts `SecurityContextHolder in suspend handlers`. An async
+The startup log says which a host has, in a line that starts `CoSecSecurityContextHolder in suspend handlers`. An async
 handler (`Callable`, `DeferredResult`) and a thread of your own find no holder, with the same message. In all of these,
 use the parameter or the request.
 
@@ -677,7 +677,7 @@ whose authenticator names no credential (CoSec's token and API key authenticator
 `cosec.gateway.identity.enabled=false`.
 
 **What it carries.** The value is base64url (no padding) of compact JSON, format version 1; the JSON Schema is
-[`schema/cosec-identity.schema.json`](https://github.com/Ahoo-Wang/CoSec/blob/main/schema/cosec-identity.schema.json).
+[`schema/cosec-identity.schema.json`](https://cosec.ahoo.me/schema/8.0/cosec-identity.schema.json).
 
 | Member | Content |
 |---|---|

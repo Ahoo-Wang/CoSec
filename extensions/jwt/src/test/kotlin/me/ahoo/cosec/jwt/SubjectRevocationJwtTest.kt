@@ -68,8 +68,8 @@ class SubjectRevocationJwtTest {
     }
 
     private val tokenStore = MapTokenStore()
-    private val converter = JwtTokenConverter(JwtFixture.IDS, JwtFixture.ALGORITHM)
-    private val verifier = JwtTokenVerifier(JwtFixture.ALGORITHM)
+    private val converter = JwtTokenConverter(JwtFixture.IDS, JwtFixture.SIGNING)
+    private val verifier = JwtTokenVerifier(JwtFixture.SIGNING)
 
     // No skew: these tests place revocations to the millisecond of the tokens' `iat`.
     private val revocation = TokenRevocation(tokenStore, Duration.ZERO)
@@ -81,7 +81,7 @@ class SubjectRevocationJwtTest {
 
     private fun issue(id: String = "alice") =
         converter.toToken(
-            TokenSubject(id, null, tenant = tenant.value, roles = setOf("admin"))
+            TokenSubject(id, tenant = tenant.value, roles = setOf("admin"))
                 .inSession(runBlocking { families.start(tenant, PrincipalId(id)) })
         ) as CompositeToken
 

@@ -27,14 +27,14 @@ dependencies {
 val schemaDirectory = rootProject.layout.projectDirectory.dir("schema")
 val generateSchemas = tasks.register<JavaExec>("generateSchemas") {
     group = "build"
-    description = "Writes schema/*.schema.json from the document format descriptors."
+    description = "Writes schema/<line>/*.schema.json from the document format descriptors."
     classpath = sourceSets["test"].runtimeClasspath
     mainClass.set("me.ahoo.cosec.document.format.SchemaFilesKt")
     args(schemaDirectory.asFile.absolutePath)
 }
 val verifySchemas = tasks.register<JavaExec>("verifySchemas") {
     group = "verification"
-    description = "Fails when schema/*.schema.json differs from what generateSchemas writes."
+    description = "Fails when schema/<line>/*.schema.json differs from what generateSchemas writes."
     classpath = sourceSets["test"].runtimeClasspath
     mainClass.set("me.ahoo.cosec.document.format.SchemaFilesKt")
     args(schemaDirectory.asFile.absolutePath, "--verify")
@@ -53,4 +53,6 @@ tasks.named("check") {
 // SchemaConformanceTest reads every document of the repository; the build says where it is (RFC 0011: no path assumed).
 tasks.named<Test>("test") {
     systemProperty("cosec.repository.root", rootProject.layout.projectDirectory.asFile.absolutePath)
+    // SchemaLineTest holds DocumentFormats.SCHEMA_LINE to the major and minor of this version.
+    systemProperty("cosec.project.version", project.version.toString())
 }

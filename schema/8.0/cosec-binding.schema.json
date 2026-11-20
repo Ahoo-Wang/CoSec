@@ -1,5 +1,5 @@
 {
-  "$id": "https://raw.githubusercontent.com/Ahoo-Wang/CoSec/refs/heads/main/schema/cosec-binding.schema.json",
+  "$id": "https://cosec.ahoo.me/schema/8.0/cosec-binding.schema.json",
   "$schema": "http://json-schema.org/draft-07/schema#",
   "additionalProperties": false,
   "definitions": {

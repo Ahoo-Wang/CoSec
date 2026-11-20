@@ -56,7 +56,7 @@ import java.util.Base64
  * forwards no identity whose credential never expires, and a service refuses one without it. Decoding is strict: an unknown member, a member of
  * the wrong type, a duplicate, an empty id, an id (or any member other than a claim) with an unpaired UTF-16 surrogate
  * (RC1-52) or a header over the size limit is refused, never read as anonymous. The `cosec-identity` format descriptor
- * (`schema/cosec-identity.schema.json`) describes the JSON.
+ * (`schema/8.0/cosec-identity.schema.json`) describes the JSON.
  */
 @InternalCoSecApi
 object IdentityCodec {
@@ -71,8 +71,10 @@ object IdentityCodec {
     /** The longest string claim value a gateway forwards. */
     const val MAX_CLAIM_LENGTH = 1024
 
-    /** 9999-12-31T23:59:59Z: later seconds are refused, so no time arithmetic on a decoded identity can overflow. */
-    /** The last second of year 9999: the bound of every time the header holds. */
+    /**
+     * 9999-12-31T23:59:59Z, the last second of year 9999 and the bound of every time the header holds: later seconds are
+     * refused, so no time arithmetic on a decoded identity can overflow.
+     */
     internal const val MAX_SECONDS = 253_402_300_799L
 
     private val FIELDS = arrayOf("v", "tenant", "sub", "scope", "roles", "auth", "iat", "rid", "claims")
