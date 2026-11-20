@@ -377,7 +377,7 @@ class CoSecPipelineAutoConfigurationTest {
     @Test
     fun `a revocation read-timeout at or over the authentication timeout fails startup`() {
         val property = "cosec.authentication.revocation.read-timeout"
-        for (value in listOf("1s", "2s", "0")) {
+        for (value in listOf("1s", "2s", "0", "-1s")) {
             runner.withPropertyValues("$property=$value").run { context ->
                 context.startupFailure.assert().describedAs(value).isNotNull()
                 context.startupFailure!!.stackTraceToString().assert().contains(property)

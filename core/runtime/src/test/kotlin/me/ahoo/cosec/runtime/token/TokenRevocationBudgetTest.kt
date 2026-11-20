@@ -60,8 +60,10 @@ class TokenRevocationBudgetTest {
 
     @Test
     fun `the budget is positive`() {
-        runCatching { TokenRevocation(RevocationReader.NONE, readTimeout = Duration.ZERO) }.exceptionOrNull()
-            .assert().isInstanceOf(IllegalArgumentException::class.java)
+        for (spent in listOf(Duration.ZERO, Duration.ofMillis(-1))) {
+            runCatching { TokenRevocation(RevocationReader.NONE, readTimeout = spent) }.exceptionOrNull()
+                .assert().isInstanceOf(IllegalArgumentException::class.java)
+        }
         TokenRevocation.DEFAULT_READ_TIMEOUT.assert().isEqualTo(Duration.ofMillis(300))
     }
 }
