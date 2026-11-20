@@ -48,7 +48,8 @@ class TokenRevocationBudgetTest {
         val revocation = TokenRevocation(Hanging, readTimeout = Duration.ofMillis(300))
         val failure = runCatching { revocation.check(token) }.exceptionOrNull()
         failure.assert().isInstanceOf(RevocationUnavailableException::class.java)
-        currentTime.assert().isEqualTo(300L)
+        // The budget runs from the call in real time, so the virtual clock stops within a millisecond short of it.
+        currentTime.assert().isBetween(299L, 300L)
     }
 
     @Test
