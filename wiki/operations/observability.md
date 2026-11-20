@@ -101,7 +101,7 @@ and implicit denies apart, why a credential was rejected, and why a request was 
 | `authorization.reason` | the outcome, and for a `503` its cause, such as `INDETERMINATE: SourceUnavailable` |
 | `authorization.elapsedNanos` | the whole pipeline, from the start of the request to its outcome |
 | `authorization.source` | what decided: `via`, `document`, `policy` (its id) and `statement` (`index`, `name`); see the second table below |
-| `binding` | how the deciding statement applied: a binding id (a role's derived binding is `role:<roleId>@<app>:<permission>`), `attached:<policyId>`, `builtin` (the blacklist) or `boundary:<tenantId>` |
+| `binding` | a label for people, and not to be parsed: how the deciding statement applied, as a binding id (a role's derived binding is `role:<roleId>@<app>:<permission>`), `attached:<policyId>`, `builtin` (the blacklist) or `boundary:<tenantId>` |
 | `snapshotVersion` | the revisions the decision read: `platform`, and `app` and `tenant` when it read them |
 | `breakGlass` | whether the permit came through a break-glass binding |
 | `trace` | `traceId` and `spanId` of the request's span, when tracing is active |

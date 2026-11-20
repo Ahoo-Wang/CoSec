@@ -21,6 +21,7 @@ import me.ahoo.cosec.control.change.ControlStatus.UNAVAILABLE
 import me.ahoo.cosec.control.change.ControlStatus.UNPROCESSABLE
 import me.ahoo.cosec.control.change.Finding
 import me.ahoo.cosec.control.store.ReferencedPolicies
+import me.ahoo.cosec.control.store.ReferrerNames
 import me.ahoo.cosec.document.DocumentCompileException
 import me.ahoo.cosec.document.PolicyDocument
 import me.ahoo.cosec.document.RoleExpansion
@@ -62,9 +63,7 @@ internal object RemovedReferences {
         val kept = RoleExpansion.effective(candidate).policies.mapTo(HashSet()) { it.id }
         for ((policy, referrers) in referenced) {
             val what = if (policy in kept) "changes between a policy and a boundary, and is" else "is"
-            findings += Finding("REFERENCES", "$.policies", "[${policy.value}] $what referred to by ${referrers.sorted()}", UNPROCESSABLE)
+            findings += Finding("REFERENCES", "$.policies", "[${policy.value}] $what referred to by ${ReferrerNames.of(referrers)}", UNPROCESSABLE)
         }
     }
-
-    private fun Set<SnapshotKey>.sorted(): List<String> = map { it.toString() }.sorted()
 }

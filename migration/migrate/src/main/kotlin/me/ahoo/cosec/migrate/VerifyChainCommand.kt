@@ -33,8 +33,22 @@ internal object VerifyChainCommand {
             PublishCommand.documentKey(text)
                 ?: throw UsageException("--document is platform, app:<id> or tenant:<id>, not [${Identifiers.printable(text)}].")
         }
-        val verified = controlStore(options) { store -> ChainVerification(store).run(only) }
-        return report(verified, out) { RedisUris.scrub(it, options.redisUris) }
+        val limit = options.value("limit")?.let { text ->
+            text.toIntOrNull()?.takeIf { it > 0 } ?: throw UsageException("--limit is a positive number, not [$text].")
+        }
+        val scrub = { text: String -> RedisUris.scrub(text, options.redisUris) }
+        val verified = controlStore(options) { store ->
+            ChainVerification(
+                store
+            ).run(only, options.value("prefix"), limit) { chain -> printChain(chain, out, scrub) }
+        }
+        return summary(verified, out)
+    }
+
+    /** One document's lines, printed as it is verified (R2C-20). */
+    private fun printChain(chain: VerifiedChain, out: PrintStream, scrub: (String) -> String) {
+        out.println(lineOf(chain, scrub))
+        indexLine(chain)?.let(out::println)
     }
 
     /**
@@ -42,10 +56,12 @@ internal object VerifyChainCommand {
      * credentials of the URIs given out of what a failure prints.
      */
     fun report(verified: List<VerifiedChain>, out: PrintStream, scrub: (String) -> String = { it }): Int {
-        verified.forEach { chain ->
-            out.println(lineOf(chain, scrub))
-            indexLine(chain)?.let(out::println)
-        }
+        verified.forEach { printChain(it, out, scrub) }
+        return summary(verified, out)
+    }
+
+    /** The summary of [verified] and the exit code. */
+    private fun summary(verified: List<VerifiedChain>, out: PrintStream): Int {
         val broken = verified.count { it.check is ChainCheck.Broken }
         val failed = verified.count { it.failure != null }
         val differs = verified.count { it.index is IndexCheck.Differs }

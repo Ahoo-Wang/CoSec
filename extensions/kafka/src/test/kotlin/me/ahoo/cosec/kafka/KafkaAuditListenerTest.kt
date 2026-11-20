@@ -66,6 +66,7 @@ import me.ahoo.cosec.runtime.snapshot.SuspendingSnapshotSource
 import me.ahoo.cosec.runtime.snapshot.ViewKey
 import me.ahoo.cosec.spi.authn.AuthenticatedPrincipal
 import me.ahoo.cosec.spi.authn.AuthnResult
+import me.ahoo.cosec.spi.identity.Identity
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Test
@@ -140,7 +141,7 @@ class KafkaAuditListenerTest {
         val claims = Memberships(Memberships.Source.CLAIMS, emptyMap(), emptyList())
         val principal = AuthenticatedPrincipal(PrincipalId("alice"), TenantId("acme"), claims)
         val pipeline = Pipeline.builder(
-            { AuthnResult.Authenticated(principal, "token") },
+            { AuthnResult.Authenticated(principal, Identity.Method("token")) },
             SuspendingSnapshotSource(Views),
         )
             .engine(engine)

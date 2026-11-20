@@ -54,7 +54,17 @@ internal object RedisAccess {
         }
     }
 
+    /**
+     * The keys [pattern] matches, refused on a Redis Cluster (R2C-30): `SCAN` lists only the node it is connected to,
+     * so `convert`, `partition plan` and `api-keys` would read one shard's 7.x data or keys and say nothing of the rest,
+     * which for `convert` can drop a DENY. Until they walk every master, they stop before they read anything.
+     */
     fun scan(commands: RedisCommands<String, String>, pattern: String): Sequence<String> {
+        check(!isCluster(commands)) {
+            "This Redis is a node of a Redis Cluster, and a scan of it would see only that node's keys. Run the command " +
+                "against a standalone copy of the data (a restored RDB of every shard), or convert from exported " +
+                "files with --from-files."
+        }
         val keys = ArrayList<String>()
         var cursor: ScanCursor = ScanCursor.INITIAL
         do {
@@ -64,6 +74,10 @@ internal object RedisAccess {
         } while (!result.isFinished)
         return keys.asSequence()
     }
+
+    /** Whether the Redis [commands] talk to is a node of a Redis Cluster (`INFO cluster`: `cluster_enabled:1`). */
+    fun isCluster(commands: RedisCommands<String, String>): Boolean =
+        commands.info("cluster").lineSequence().any { it.trim() == "cluster_enabled:1" }
 
     /** The control plane's store over the Redis of `--to-redis` (seed nodes of a cluster with `--cluster`), for [block]. */
     fun <T> controlStore(options: Options, block: (CoCacheControlStore) -> T): T =

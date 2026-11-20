@@ -23,7 +23,7 @@ description: "把自己的认证器、成员关系来源、属性提供者、决
 | `AttributeProvider` | `cosec-spi`，`spi.attribute` | 为条件提供外部属性（`ext.<provider>.<name>`）。 | 所有 bean |
 | `AuditEventSink` | `cosec-spi`，`spi.audit` | 接收每次决策的扁平审计记录。 | 所有 bean，作为 `BEST_EFFORT` 监听器 |
 | `RateLimiter` | `cosec-spi`，`spi.ratelimit` | 在 Redis 或内存以外的地方计数限流许可。 | 一个 bean，替换内置实现 |
-| `SnapshotDocumentStore` | `cosec-spi`，`spi.snapshot` | 把策略文档存放在 Redis 以外的地方。 | 一个 bean，不使用 `cosec-cocache` 时 |
+| `SnapshotDocumentStore` | `cosec-spi`，`spi.snapshot` | 把策略文档存放在 Redis 以外的地方。8.0 中为实验性（`@ExperimentalCoSecApi`）：它的形状跟随唯一的后端，批量或整库的条件读已在计划中。 | 一个 bean，不使用 `cosec-cocache` 时 |
 | `IdGenerator` | `cosec-spi`，`spi.id` | 让请求 id、令牌 id 和变更 id 使用你自己的格式。`cosec-cosid` 基于 CosId 5 实现了它。 | 一个 bean，替换 `RandomIdGenerator` |
 | `Authentication` | `cosec-login`，`login` | 校验另一种登录凭证，并说明其令牌的内容。通过抛出异常拒绝。 | 所有 bean，按其支持的凭证类型注册 |
 | `TenantSwitch` | `cosec-login`，`login.token` | 说明用户在要切换到的租户和应用中拥有什么，以及新令牌属于哪个应用（[切换租户和应用](../integration/authentication.md#switching-tenant-and-app)）。通过抛出异常拒绝。 | 无：把 `SwitchTenantAuthentication(tokenVerifier, YourCredentials::class.java, yourSwitch)` 声明为 `Authentication` bean |
@@ -116,7 +116,7 @@ PR 都是破坏性变更，标题要带 `!`
 | `ChangeEvent.Kind` | 新的变更事件种类 |
 | `OutcomeSummary.Reason` | 答复结果的新原因，例如新一种义务的拒绝 |
 
-这里没有列出的集合在 8.0 GA 之后不会增加成员。公共 `data class` 只会是不会增长的值，即形状固定的记录（`PublicApiStabilityTest` 读取已评审的清单）；可能增长的记录是普通类，新增字段时增加一个构造器。
+这里没有列出的集合在 8.0 GA 之后不会增加成员。公共 `data class` 只会是不会增长的值，即形状固定的记录（`PublicApiStabilityTest` 读取已评审的清单）；可能增长的记录是普通类，新增字段时增加一个构造器。决策值（`Decision`、`Cause`、`Obligation`、`ViewVersion`）因此是普通类：没有 `copy`，也不能解构。
 
 ## 每个扩展都遵守的规则 {#rules-every-extension-follows}
 
@@ -135,7 +135,7 @@ Pipeline 在请求路径上调用每个 SPI，常常是在 Netty 事件循环上
 
 | 结果 | 何时 | 之后 |
 |---|---|---|
-| `Authenticated(principal, method)` | 凭证有效。 | 以该主体求值请求；`method` 写入审计。 |
+| `Authenticated(principal, method)` | 凭证有效。 | 以该主体求值请求；`method` 是 `Identity.Method`（`JWT`、`API_KEY` 或你自己的名称），写入审计。 |
 | `Anonymous` | 没有凭证。 | 以匿名主体求值请求。 |
 | `Rejected(reason)` | 凭证无效、过期或已吊销。 | 以匿名主体求值请求；被拒绝时以该原因应答 `401`。 |
 | `Unavailable(cause)` | 依赖失败。 | `503`。抛出异常按同样方式处理。 |
@@ -312,11 +312,11 @@ fun interface RateLimiter {
 }
 ```
 
-从规则 `ruleId` 的 `bucket` 中按 `limit` 消耗一个许可，并报告剩余数量；`RateLimiter.window(limit)` 给出两个内置限流器都使用的滑动窗口，它的 `resultOf(...)` 构造结果。后端失败时抛出异常：由规则的 `strictFailure` 决定应答 `503` 还是跳过该规则。使用 `cosec-cocache` 且存在 `ReactiveStringRedisTemplate` 时，starter 注册跨实例计数的 `ReactiveRedisRateLimiter`；否则注册按实例计数的 `LocalRateLimiter`。你的 bean 会替换这两者。用 `Pipeline.builder` 构建的管道，除非用 `rateLimiter(...)` 给出一个，否则在自己的 `LocalRateLimiter` 中计数。规则、桶和响应头见[限流](../policies/rate-limiting.md)。
+从规则 `ruleId` 的 `bucket` 中按 `limit` 消耗一个许可，并报告剩余数量；`limit.limitPerWindow` 和 `limit.windowMillis` 给出两个内置限流器都使用的滑动窗口，`limit.resultOf(...)`（`me.ahoo.cosec.spi.ratelimit.resultOf`）构造结果。后端失败时抛出异常：由规则的 `strictFailure` 决定应答 `503` 还是跳过该规则。使用 `cosec-cocache` 且存在 `ReactiveStringRedisTemplate` 时，starter 注册跨实例计数的 `ReactiveRedisRateLimiter`；否则注册按实例计数的 `LocalRateLimiter`。你的 bean 会替换这两者。用 `Pipeline.builder` 构建的管道，除非用 `rateLimiter(...)` 给出一个，否则在自己的 `LocalRateLimiter` 中计数。规则、桶和响应头见[限流](../policies/rate-limiting.md)。
 
 ## 快照文档存储 {#snapshot-document-stores}
 
-`SnapshotDocumentStore` 是 `SnapshotSource` 读取平台、应用和租户文档的地方：
+`SnapshotDocumentStore`（8.0 中为 `@ExperimentalCoSecApi`：它的形状跟随唯一的后端，批量或整库的条件读已在计划中）是 `SnapshotSource` 读取平台、应用和租户文档的地方：
 
 - `read(key)` 可以从本地副本应答（把副本的最大年龄报告为 `localCopyMaxAge`）；`readIfChanged(key, known)` 必须读取权威存储，摘要一致时应答 `Unchanged`；`subscribe(listener)` 在变更可读之后报告变更。
 - 每个方法都不阻塞地返回，且从不抛出异常：失败以异常方式完成 future。存储的值无法解码时，异常的 cause 链中要带有 `SnapshotFormatException`。

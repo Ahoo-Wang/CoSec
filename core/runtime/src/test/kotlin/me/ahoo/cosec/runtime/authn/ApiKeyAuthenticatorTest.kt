@@ -26,6 +26,7 @@ import me.ahoo.cosec.spi.apikey.InMemoryApiKeyStore
 import me.ahoo.cosec.spi.authn.AuthnResult
 import me.ahoo.cosec.spi.authn.Credentials
 import me.ahoo.cosec.spi.authn.MembershipSource
+import me.ahoo.cosec.spi.identity.Identity
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import java.time.Clock
@@ -67,7 +68,7 @@ class ApiKeyAuthenticatorTest {
     @Test
     fun aValidKeyIsItsPrincipal() = runTest {
         val result = authenticate("valid") as AuthnResult.Authenticated
-        result.method.assert().isEqualTo(ApiKeyAuthenticator.METHOD)
+        result.method.assert().isEqualTo(Identity.Method.API_KEY)
         val principal = result.principal
         principal.id.assert().isEqualTo(PrincipalId("svc-billing"))
         principal.tenant.assert().isEqualTo(TenantId("acme"))

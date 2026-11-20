@@ -44,6 +44,7 @@ import me.ahoo.cosec.spi.authn.AuthenticatedPrincipal
 import me.ahoo.cosec.spi.authn.Authenticator
 import me.ahoo.cosec.spi.authn.AuthnResult
 import me.ahoo.cosec.spi.id.IdGenerator
+import me.ahoo.cosec.spi.identity.Identity
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.CopyOnWriteArrayList
 
@@ -94,7 +95,7 @@ object PipelineFixtures {
     fun authenticated(memberships: Memberships? = claims(), app: String? = null): AuthnResult =
         AuthnResult.Authenticated(
             AuthenticatedPrincipal(PRINCIPAL, TENANT, memberships, app = app?.let(::AppId)),
-            "test"
+            Identity.Method("test")
         )
 
     fun authenticator(result: AuthnResult): Authenticator = Authenticator { result }

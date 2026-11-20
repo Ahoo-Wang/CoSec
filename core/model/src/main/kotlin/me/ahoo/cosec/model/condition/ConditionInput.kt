@@ -18,7 +18,7 @@ package me.ahoo.cosec.model.condition
 import me.ahoo.cosec.annotations.InternalCoSecApi
 
 /**
- * What a condition reads (RFC 0005 §3.3). The host builds one per request from `AuthzRequest`.
+ * What a condition reads (RFC 0005 §3.3). The engine's `Evaluator` is the one input, made per request from `EngineRequest`.
  *
  * Every read is a field read or a hash lookup, and should not allocate. An attribute that is absent from the request
  * reads as `null` (or [NO_TIME]); it is not an error (§3.4). A read throws only when the request holds the attribute

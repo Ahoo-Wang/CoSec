@@ -28,6 +28,7 @@ import me.ahoo.cosec.model.scope.ScopeResolution
 import me.ahoo.cosec.runtime.contract.ContractFiles
 import me.ahoo.cosec.spi.authn.AuthenticatedPrincipal
 import me.ahoo.cosec.spi.authn.AuthnResult
+import me.ahoo.cosec.spi.identity.Identity
 import me.ahoo.cosec.spi.ratelimit.RateLimitResult
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
@@ -161,7 +162,7 @@ class ClientContractTest {
         val deny = Decision.Deny(statement())
         val authenticated = AuthnResult.Authenticated(
             AuthenticatedPrincipal(PrincipalId("p"), TenantId("t"), null),
-            "m"
+            Identity.Method("m")
         )
         fun rejected(reason: AuthnResult.RejectReason) =
             StatusMapping.decided(REQUEST_ID, deny, AuthnResult.Rejected(reason), null)

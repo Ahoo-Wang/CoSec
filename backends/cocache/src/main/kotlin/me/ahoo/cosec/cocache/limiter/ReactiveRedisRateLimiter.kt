@@ -18,6 +18,7 @@ import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.model.decision.RateLimitSpec
 import me.ahoo.cosec.spi.ratelimit.RateLimitResult
 import me.ahoo.cosec.spi.ratelimit.RateLimiter
+import me.ahoo.cosec.spi.ratelimit.resultOf
 import org.springframework.data.redis.core.ReactiveStringRedisTemplate
 import org.springframework.data.redis.core.script.DefaultRedisScript
 
@@ -41,7 +42,7 @@ class ReactiveRedisRateLimiter @InternalCoSecApi constructor(
     private val keyPrefix: String = keyPrefix.trimEnd(':')
 
     override suspend fun tryAcquire(ruleId: String, bucket: String, limit: RateLimitSpec): RateLimitResult {
-        val rateLimit = RateLimiter.window(limit)
+        val rateLimit = limit
         val reply = template.execute(
             SCRIPT,
             listOf(keyOf(ruleId, bucket)),

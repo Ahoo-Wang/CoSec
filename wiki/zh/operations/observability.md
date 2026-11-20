@@ -86,7 +86,7 @@ starter 注册的监听器：
 | `authorization.reason` | 结果，`503` 时还有其原因，例如 `INDETERMINATE: SourceUnavailable` |
 | `authorization.elapsedNanos` | 整个管道，从请求开始到得出结果 |
 | `authorization.source` | 是什么做出了决定：`via`、`document`、`policy`（策略 id）和 `statement`（`index`、`name`）；见下面第二张表 |
-| `binding` | 做出决定的语句通过什么生效：绑定 id（角色派生的绑定为 `role:<roleId>@<app>:<permission>`）、`attached:<policyId>`、`builtin`（黑名单）或 `boundary:<tenantId>` |
+| `binding` | 给人看的标签，不要解析它：做出决定的语句通过什么生效，绑定 id（角色派生的绑定为 `role:<roleId>@<app>:<permission>`）、`attached:<policyId>`、`builtin`（黑名单）或 `boundary:<tenantId>` |
 | `snapshotVersion` | 决策读取的修订：`platform`，以及读取了时的 `app` 和 `tenant` |
 | `breakGlass` | 放行是否来自 break-glass 绑定 |
 | `trace` | 追踪生效时请求 span 的 `traceId` 和 `spanId` |

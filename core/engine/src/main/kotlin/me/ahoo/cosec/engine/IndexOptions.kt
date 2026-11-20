@@ -61,7 +61,6 @@ class IndexOptions(
             Attribute.Kind.SCOPE_APP,
             Attribute.Kind.SCOPE_SPACE,
             Attribute.Kind.RESOURCE_TYPE,
-            Attribute.Kind.RESOURCE_ATTRIBUTE,
         )
 
         val DEFAULT: IndexOptions = IndexOptions()
