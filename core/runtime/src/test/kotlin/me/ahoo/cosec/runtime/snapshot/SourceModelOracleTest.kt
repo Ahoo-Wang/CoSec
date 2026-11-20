@@ -79,6 +79,6 @@ class SourceModelOracleTest {
     private companion object {
         val APP_A = SnapshotKey.App("app-a")
         val APP_B = SnapshotKey.App("app-b")
-        val OPTIONS = SnapshotOptions(maxApps = 1, maxTenants = 1, maxAbsent = 1)
+        val OPTIONS = SnapshotOptions(maxApps = 1, maxTenants = 1, maxAbsentApps = 1, maxAbsentTenants = 1)
     }
 }

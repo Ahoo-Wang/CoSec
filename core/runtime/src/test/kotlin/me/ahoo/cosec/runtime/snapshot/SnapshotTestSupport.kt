@@ -374,7 +374,7 @@ internal fun <P : Any, A : Any> appSource(
     store,
     SnapshotKey.Platform,
     sharedCompiler,
-    listOf(SnapshotFamily(SnapshotKind.APP, appCompiler, options.maxApps, options.maxAbsent)),
+    listOf(SnapshotFamily(SnapshotKind.APP, appCompiler, options.maxApps, options.maxAbsentApps)),
     options,
     clock,
     metrics,

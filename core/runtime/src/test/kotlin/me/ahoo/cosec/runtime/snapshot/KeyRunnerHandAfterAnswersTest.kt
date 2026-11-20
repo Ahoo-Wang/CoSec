@@ -58,7 +58,7 @@ class KeyRunnerHandAfterAnswersTest {
         store,
         SnapshotKey.Platform,
         FakeCompiler(),
-        listOf(SnapshotFamily(SnapshotKind.APP, FakeCompiler(), OPTIONS.maxApps, OPTIONS.maxAbsent)),
+        listOf(SnapshotFamily(SnapshotKind.APP, FakeCompiler(), OPTIONS.maxApps, OPTIONS.maxAbsentApps)),
         OPTIONS,
         ManualClock(),
         SnapshotMetrics.NOOP,

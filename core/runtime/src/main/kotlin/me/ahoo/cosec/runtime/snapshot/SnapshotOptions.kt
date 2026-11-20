@@ -44,19 +44,29 @@ class SnapshotOptions(
     /** How long [SnapshotSource.load] waits for a cold document before it answers with a failed one. */
     val coldLoadTimeout: Duration = Duration.ofSeconds(2),
     /** The most app documents held at once; the least recently used one is evicted beyond it. */
-    val maxApps: Int = 1024,
-    /** The most tenant documents held at once (RFC 0004 Q15); the least recently used one is evicted beyond it. */
-    val maxTenants: Int = 1024,
+    val maxApps: Int = DEFAULT_MAX_APPS,
     /**
-     * The most entries per family for documents the store does not hold, apart from [maxApps] and [maxTenants]: ids
-     * a client chooses never evict a document that exists (`SNP-7`, RC1-7). The least recently used one goes beyond it.
+     * The most tenant documents held at once (RFC 0004 Q15); the least recently used one is evicted beyond it. Sized so
+     * that an instance holds the tenants it serves: a tenant document dropped is read and compiled again on its next
+     * request.
      */
-    val maxAbsent: Int = DEFAULT_MAX_ABSENT,
+    val maxTenants: Int = DEFAULT_MAX_TENANTS,
+    /**
+     * The most entries for app ids the store holds no document for, apart from [maxApps]: app ids a client chooses never
+     * evict an app document that exists (`SNP-7`, RC1-7). The least recently used one goes beyond it.
+     */
+    val maxAbsentApps: Int = DEFAULT_MAX_ABSENT_APPS,
+    /**
+     * The most entries for tenant ids the store holds no document for, apart from [maxTenants] (`SNP-7`): every request
+     * of a tenant without a document reads its entry, so it is sized for every such tenant an instance serves. Tenant ids
+     * come from credentials, so clients cannot flood it as they can the app family's.
+     */
+    val maxAbsentTenants: Int = DEFAULT_MAX_ABSENT_TENANTS,
     val compileThreads: Int = 2,
     /** Compilations waiting for a thread; beyond it a load fails closed (RFC 0003 §6 F8). */
     val compileQueueCapacity: Int = 64,
     /** Documents reloaded at once by a revalidation pass or after a reset. */
-    val reloadConcurrency: Int = 4,
+    val reloadConcurrency: Int = DEFAULT_RELOAD_CONCURRENCY,
     val prewarmInitialBackoff: Duration = Duration.ofSeconds(1),
     val prewarmMaxBackoff: Duration = Duration.ofSeconds(30),
     /** The least time between two lag reports (log line and metric) for the same document. */
@@ -76,7 +86,8 @@ class SnapshotOptions(
         require((!coldLoadTimeout.isNegative && !coldLoadTimeout.isZero)) { "coldLoadTimeout must be positive." }
         require(maxApps > 0) { "maxApps must be positive." }
         require(maxTenants > 0) { "maxTenants must be positive." }
-        require(maxAbsent > 0) { "maxAbsent must be positive." }
+        require(maxAbsentApps > 0) { "maxAbsentApps must be positive." }
+        require(maxAbsentTenants > 0) { "maxAbsentTenants must be positive." }
         require(compileThreads > 0) { "compileThreads must be positive." }
         require(compileQueueCapacity > 0) { "compileQueueCapacity must be positive." }
         require(reloadConcurrency > 0) { "reloadConcurrency must be positive." }
@@ -105,7 +116,19 @@ class SnapshotOptions(
          */
         val MIN_REVALIDATE_INTERVAL: Duration = Duration.ofSeconds(1)
 
-        const val DEFAULT_MAX_ABSENT: Int = 256
+        const val DEFAULT_MAX_APPS: Int = 1024
+
+        /** Chosen from a measured pass (see [reloadConcurrency]). */
+        const val DEFAULT_RELOAD_CONCURRENCY: Int = 4
+
+        /** RFC 0004 Q15's 1,024 until beta.5; raised so that an instance holds the tenants it serves (SaaS at the gateway). */
+        const val DEFAULT_MAX_TENANTS: Int = 16_384
+
+        /** The flooding bound of `SNP-7`: app ids come from requests, so a client can name as many as it likes. */
+        const val DEFAULT_MAX_ABSENT_APPS: Int = 256
+
+        /** About 30 MB at 465 bytes an entry when every place is used. */
+        const val DEFAULT_MAX_ABSENT_TENANTS: Int = 65_536
 
         /**
          * Why [revalidateInterval] cannot be used with these lag settings, or null when it can (`SNP-6`): the periodic

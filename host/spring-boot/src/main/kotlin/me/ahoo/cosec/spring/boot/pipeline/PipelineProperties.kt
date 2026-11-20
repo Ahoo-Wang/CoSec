@@ -20,6 +20,7 @@ import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.document.identity.IdentityCodec
 import me.ahoo.cosec.engine.TraceLevel
 import me.ahoo.cosec.runtime.event.DecisionListeners
+import me.ahoo.cosec.runtime.snapshot.SnapshotOptions
 import me.ahoo.cosec.spring.boot.CoSecProperties
 import me.ahoo.cosec.spring.boot.authorization.cache.CacheConfiguration
 import org.springframework.boot.context.properties.ConfigurationProperties
@@ -233,10 +234,31 @@ class RuntimeAuthorizationProperties {
         var coldLoadTimeout: Duration = Duration.ofSeconds(2)
 
         /** The most app documents held in memory (positive); the least recently used one is dropped beyond it. */
-        var maxApps: Int = 1024
+        var maxApps: Int = SnapshotOptions.DEFAULT_MAX_APPS
 
-        /** The most tenant documents held in memory (positive); the platform document is never dropped. */
-        var maxTenants: Int = 1024
+        /**
+         * The most tenant documents held in memory (positive); the platform document is never dropped. About 30 KB each
+         * for a tenant document of 5 roles of 20 permissions and 20 bindings: size the heap for it.
+         */
+        var maxTenants: Int = SnapshotOptions.DEFAULT_MAX_TENANTS
+
+        /**
+         * The most app ids held as having no app document (positive, `SNP-7`). App ids come from requests, so this
+         * bounds what a client naming made-up apps makes an instance remember.
+         */
+        var maxAbsentApps: Int = SnapshotOptions.DEFAULT_MAX_ABSENT_APPS
+
+        /**
+         * The most tenant ids held as having no tenant document (positive, `SNP-7`), about 470 bytes each. Each request of
+         * such a tenant reads its entry: one dropped is read from Redis again on the tenant's next request.
+         */
+        var maxAbsentTenants: Int = SnapshotOptions.DEFAULT_MAX_ABSENT_TENANTS
+
+        /**
+         * Documents a revalidation pass confirms at once (positive). A pass takes about the documents held × one
+         * conditional read ÷ this; past `revalidate-interval`, passes run back to back and lag grows with them.
+         */
+        var reloadConcurrency: Int = SnapshotOptions.DEFAULT_RELOAD_CONCURRENCY
 
         /** App documents loaded at startup, after the platform document; readiness waits for them. */
         var prewarmApps: List<String> = emptyList()
