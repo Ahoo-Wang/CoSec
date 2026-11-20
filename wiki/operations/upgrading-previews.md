@@ -38,7 +38,8 @@ Which preview of the library may run behind which preview of the gateway image: 
     `cosec-migrate repair-references --to-redis <uri> [--cluster] [--key-prefix <p>]` once; the control plane of this
     version may run meanwhile. It converts each back-reference value a head touches, never replaces a set, and removes
     the old document list last, printing `The store is in the format of 8.0.0-beta.5.` A second run changes nothing
-    ([Repair the back-reference index](./upgrading.md#repair-the-back-reference-index)).
+    ([Repair the back-reference index](./upgrading.md#repair-the-back-reference-index), which gives what it costs: at
+    50,000 tenants about 1.3 million commands, some 22 minutes at a round trip of 1 ms).
   - Until it has run, the control plane starts, logs one `ERROR` naming the command, and its `cosecControlStoreFormat`
     health indicator is `DOWN` ([Observability](./observability.md#snapshot-health)). A change that touches a back-reference of
     the old format is refused (`503`, naming the command), never let through.

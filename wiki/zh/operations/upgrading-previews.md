@@ -26,7 +26,7 @@ description: "每个 8.0 预览版（alpha 与 beta）到下一个之间的变�
 
 - **反向引用和文档列表是集合：运行一次 `cosec-migrate repair-references`**（`CTL-42`、`CTL-43`、`CTL-44`、`MIG-4`）。受影响的是 8.0.0-beta.4 或更早版本的控制面写过的每个存储。数据面实例不受影响：它们不读这些 key。
   - 一个策略的反向引用（`<s>:control:refs:<doc>:<policyId>`）原来是一个值，每个加入或退出的租户都整体重写它；现在它是一个集合，每个引用者的每个修订一个成员，文档列表也从 `<s>:control:list:documents` 移到了集合 `<s>:control:documents:all`。租户的一次发布现在只写它自己的成员，无论有多少租户（[存储](./storage.md#redis-keys)）。
-  - 停掉所有更早版本的控制面，然后运行一次 `cosec-migrate repair-references --to-redis <uri> [--cluster] [--key-prefix <p>]`；本版本的控制面可以同时运行。它转换头触及的每个反向引用值，从不替换集合，最后删除旧的文档列表，并输出 `The store is in the format of 8.0.0-beta.5.`。再运行一次不会改变任何东西（[修复反向引用索引](./upgrading.md#repair-the-back-reference-index)）。
+  - 停掉所有更早版本的控制面，然后运行一次 `cosec-migrate repair-references --to-redis <uri> [--cluster] [--key-prefix <p>]`；本版本的控制面可以同时运行。它转换头触及的每个反向引用值，从不替换集合，最后删除旧的文档列表，并输出 `The store is in the format of 8.0.0-beta.5.`。再运行一次不会改变任何东西（[修复反向引用索引](./upgrading.md#repair-the-back-reference-index)，那里给出了它的开销：50,000 个租户约 130 万条命令，往返 1 ms 时约 22 分钟）。
   - 在它运行之前，控制面照常启动，记录一条写明该命令的 `ERROR`，其 `cosecControlStoreFormat` 健康指示器为 `DOWN`（[可观测性](./observability.md#snapshot-health)）。触及旧格式反向引用的变更会被拒绝（`503`，写明该命令），从不放过。
   - 没有任何头触及的值保持旧格式：它什么也不阻止；以后触及它的变更失败关闭，写明该命令，直到再运行一次。
   - 这两个集合从不在本地保留：`ReferenceIndexCache` 和 `ControlDocumentSetCache` 的 `local-max-age` 与 `degraded-local-max-age` 锁定为 1 ns，设置其中之一的 `cocache.caches.*` 条目会让启动失败（[配置](./configuration.md#cocache-properties-that-affect-cosec)）。

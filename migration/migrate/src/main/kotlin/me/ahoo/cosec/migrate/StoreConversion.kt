@@ -41,6 +41,9 @@ interface StoreConversion {
     /** Removes the old document list: the last write of a repair that converted everything. */
     suspend fun removeLegacyDocuments()
 
+    /** Who holds the lease [name], or null when nobody does or the store cannot say. */
+    suspend fun leaseHolder(name: String): String? = null
+
     /** The conversion of a CoCache store. */
     class OfCoCache internal constructor(
         private val store: CoCacheControlStore,
@@ -57,5 +60,7 @@ interface StoreConversion {
         override suspend fun listDocuments(entries: Set<String>) = store.listDocuments(entries)
 
         override suspend fun removeLegacyDocuments() = store.removeLegacyDocuments()
+
+        override suspend fun leaseHolder(name: String): String? = store.leaseHolder(name)
     }
 }
