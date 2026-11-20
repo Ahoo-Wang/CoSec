@@ -61,24 +61,36 @@ class DocumentSnapshotViews(
         return source.loadAll(keys.documents).thenApply { view(key, keys, it) }
     }
 
-    /** The documents [key] needs, and why a tenant it names cannot be read. */
-    private class Keys(val documents: List<SnapshotKey>, val invalidTenant: Cause?)
+    /**
+     * The documents [key] needs, in the order the set answers them: the tenant's when it can name one, then the app's
+     * (R2D-1: made and validated once per evaluation, and their entries read by position); and why a tenant it names
+     * cannot be read.
+     */
+    private class Keys(val documents: List<SnapshotKey>, val hasTenant: Boolean, val invalidTenant: Cause?)
 
     private fun keysOf(key: ViewKey): Keys {
-        val documents = ArrayList<SnapshotKey>(2)
+        val tenant = key.tenant
+        val app = key.app
         var invalidTenant: Cause? = null
-        key.tenant?.let { tenant ->
-            if (SnapshotKey.Tenant.isValidTenantId(tenant.value)) {
-                documents += SnapshotKey.Tenant(tenant.value)
+        val tenantKey = tenant?.let {
+            if (SnapshotKey.Tenant.isValidTenantId(it.value)) {
+                SnapshotKey.Tenant(it.value)
             } else {
                 val error = IllegalArgumentException(
-                    "Tenant id [${Identifiers.printable(tenant.value)}] cannot name a snapshot document."
+                    "Tenant id [${Identifiers.printable(it.value)}] cannot name a snapshot document."
                 )
                 invalidTenant = Cause.SourceUnavailable(DocumentKind.TENANT, error)
+                null
             }
         }
-        key.app?.let { documents += SnapshotKey.App(it.value) }
-        return Keys(documents, invalidTenant)
+        val appKey = app?.let { SnapshotKey.App(it.value) }
+        val documents = when {
+            tenantKey != null && appKey != null -> listOf(tenantKey, appKey)
+            tenantKey != null -> listOf(tenantKey)
+            appKey != null -> listOf(appKey)
+            else -> emptyList()
+        }
+        return Keys(documents, tenantKey != null, invalidTenant)
     }
 
     private fun view(key: ViewKey, keys: Keys, set: SnapshotSet<CompiledDocument, CompiledDocument>): SnapshotView {
@@ -90,20 +102,15 @@ class DocumentSnapshotViews(
             }
             CompiledDocument.platform(emptyList(), emptyList())
         }
-        // Every key the view needs was asked for, so the set holds its entry.
-        val tenant = key.tenant?.takeIf { keys.invalidTenant == null }?.let { id ->
-            document(set.entry(SnapshotKey.Tenant(id.value))!!, DocumentKind.TENANT, unresolved) { empty(id) }
+        // Every key the view needs was asked for, in [Keys.documents]' order, so the set holds its entry there.
+        val tenantEntry = if (keys.hasTenant) set.scoped[0] else null
+        val appEntry = if (key.app != null) set.scoped[if (keys.hasTenant) 1 else 0] else null
+        val tenant = tenantEntry?.let { entry ->
+            document(entry, DocumentKind.TENANT, unresolved) { empty(key.tenant!!) }
         }
-        val app = key.app?.let { id ->
-            document(set.entry(SnapshotKey.App(id.value))!!, DocumentKind.APP, unresolved) { empty(id) }
-        }
+        val app = appEntry?.let { entry -> document(entry, DocumentKind.APP, unresolved) { empty(key.app!!) } }
         key.tenant?.let { stale(set, it) }?.let(unresolved::add)
-        val tenantKey = key.tenant?.takeIf { keys.invalidTenant == null }?.let { SnapshotKey.Tenant(it.value) }
-        val version = ViewVersion(
-            set.shared.revision,
-            key.app?.let { set.entry(SnapshotKey.App(it.value))!!.revision },
-            tenantKey?.let { set.entry(it)!!.revision },
-        )
+        val version = ViewVersion(set.shared.revision, appEntry?.revision, tenantEntry?.revision)
         return SnapshotView(
             platform ?: CompiledDocument.platform(emptyList(), emptyList()),
             app,
