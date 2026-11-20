@@ -30,7 +30,9 @@ import org.springframework.web.server.ServerWebExchange
 class IdentityHeadersFilter @InternalCoSecApi constructor() : HttpHeadersFilter {
     override fun filter(input: HttpHeaders, exchange: ServerWebExchange): HttpHeaders {
         val forwarded = exchange.getAttribute<String>(FORWARDED_ATTRIBUTE)
-        if (!input.containsHeader(IdentityCodec.HEADER) && forwarded == null) {
+        val present = input[IDENTITY_HEADER]
+        // Already exactly what goes (the pipeline filter set it, and nothing after it changed it): no copy (R2B-9).
+        if (if (forwarded == null) present == null else present?.size == 1 && present[0] == forwarded) {
             return input
         }
         val headers = HttpHeaders()
@@ -46,5 +48,8 @@ class IdentityHeadersFilter @InternalCoSecApi constructor() : HttpHeadersFilter 
     companion object {
         /** The exchange attribute [PipelineGatewayFilter] sets to the identity it forwards; absent when it forwards none. */
         const val FORWARDED_ATTRIBUTE = "cosec.identity.forwarded"
+
+        /** `CoSec-Identity` in lower case, the form the headers map looks names up by: no copy of it per request. */
+        private val IDENTITY_HEADER = IdentityCodec.HEADER.lowercase(java.util.Locale.ROOT)
     }
 }

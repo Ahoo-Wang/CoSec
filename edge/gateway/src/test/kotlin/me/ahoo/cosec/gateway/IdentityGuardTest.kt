@@ -70,4 +70,22 @@ class IdentityGuardTest {
         // Anonymous, or a route that opted out: the pipeline forwarded nothing, so nothing goes out.
         lastHop(forwarded = null).containsHeader(IdentityCodec.HEADER).assert().isFalse()
     }
+
+    /** R2B-9: headers that already hold exactly what goes, once, are handed on as they are: no copy per request. */
+    @Test
+    fun `the last hop copies nothing when the headers already hold exactly the forwarded identity`() {
+        val exchange = MockServerWebExchange.from(MockServerHttpRequest.get("/orders"))
+        exchange.attributes[IdentityHeadersFilter.FORWARDED_ATTRIBUTE] = "verified"
+        val exact = HttpHeaders().apply { set(IdentityCodec.HEADER, "verified") }
+        IdentityHeadersFilter().filter(exact, exchange).assert().isSameAs(exact)
+        val twice = HttpHeaders().apply { addAll(IdentityCodec.HEADER, listOf("verified", "verified")) }
+        IdentityHeadersFilter().filter(twice, exchange)[IdentityCodec.HEADER].assert().isEqualTo(listOf("verified"))
+        val other = HttpHeaders().apply { set("cosec-identity", "forged") }
+        IdentityHeadersFilter().filter(other, exchange)[IdentityCodec.HEADER].assert().isEqualTo(listOf("verified"))
+        val none = HttpHeaders()
+        IdentityHeadersFilter().filter(
+            none,
+            MockServerWebExchange.from(MockServerHttpRequest.get("/"))
+        ).assert().isSameAs(none)
+    }
 }
