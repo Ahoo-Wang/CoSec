@@ -91,6 +91,21 @@ class ComparisonBudgetTest {
     }
 
     @Test
+    fun `a budget that runs out in the DENY scan is too large, never contained`() {
+        val denied = GrantDocument(
+            published.policies + policy("no-delete", GrantFixtures.deny("order:delete", "order/**")),
+            published.bindings + bind("no-delete", role("admin"), "no-delete", space = space),
+        )
+        val candidate = GrantDocument(
+            denied.policies + granting.policies.last(),
+            denied.bindings + granting.bindings.last()
+        )
+        val verdicts = verdicts(GrantAnalyzer(maxComparisons = 1), candidate, denied)
+        verdicts.first().assert().matches { it is GrantVerdict.Unknown && it.reason == UnknownReason.TOO_LARGE }
+        verdicts(GrantAnalyzer(), candidate, denied).assert().allMatch { it is GrantVerdict.Contained }
+    }
+
+    @Test
     fun `the same change stops at the same comparison`() {
         val analyzer = GrantAnalyzer(maxComparisons = 2)
         val first = analyzer.analyze(gina, snapshot(tenant = published), GrantChange(ACME, granting))
