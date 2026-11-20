@@ -1,0 +1,17 @@
+# Rule: STA-8
+# Mutant: a host takes any written value of the statement, an empty one or claims, for the choice
+# Tests: :spring-boot:test --tests me.ahoo.cosec.spring.boot.realserver.RefreshMembershipChoiceTest
+
+diff --git a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/authentication/route/RefreshMembershipChoice.kt b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/authentication/route/RefreshMembershipChoice.kt
+index c885c5316..11d365ade 100644
+--- a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/authentication/route/RefreshMembershipChoice.kt
++++ b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/authentication/route/RefreshMembershipChoice.kt
+@@ -61,7 +61,7 @@ internal object RefreshMembershipChoice {
+ 
+     /** Exactly `keep-token-roles`, in any letter case; nothing else, an empty value and `true` included. */
+     private fun stated(environment: Environment): Boolean =
+-        environment.getProperty(JwtProperties.REFRESH_ROLES_KEY).equals(JwtProperties.KEEP_TOKEN_ROLES, ignoreCase = true)
++        environment.getProperty(JwtProperties.REFRESH_ROLES_KEY) != null
+ 
+     private fun message(environment: Environment, jwt: JwtProperties): String {
+         val written = environment.getProperty(JwtProperties.REFRESH_ROLES_KEY)
