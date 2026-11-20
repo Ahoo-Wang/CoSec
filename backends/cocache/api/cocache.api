@@ -51,6 +51,8 @@ public final class me/ahoo/cosec/cocache/control/CoCacheControlStore : me/ahoo/c
 	public fun documents (Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun head (Lme/ahoo/cosec/spi/snapshot/SnapshotKey;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun index (Lme/ahoo/cosec/spi/snapshot/SnapshotKey;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun keepStagedList (Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun listStaged (Lme/ahoo/cosec/spi/snapshot/SnapshotKey;Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun openChanges (Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun putApps (Lme/ahoo/cosec/spi/snapshot/SnapshotDigest;Lme/ahoo/cosec/control/store/AppList;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun putCandidate (Lme/ahoo/cosec/spi/snapshot/SnapshotKey;Lme/ahoo/cosec/spi/snapshot/SnapshotDigest;Lme/ahoo/cosec/spi/shadow/StoredCandidate;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
@@ -65,7 +67,9 @@ public final class me/ahoo/cosec/cocache/control/CoCacheControlStore : me/ahoo/c
 	public fun removeRecord (Lme/ahoo/cosec/spi/snapshot/SnapshotKey;Lme/ahoo/cosec/spi/snapshot/SnapshotDigest;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun removeReferrers-R2kOZZc (Lme/ahoo/cosec/spi/snapshot/SnapshotKey;Ljava/lang/String;Ljava/util/Set;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun stage (Lme/ahoo/cosec/spi/snapshot/SnapshotKey;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun staged (Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun stagedCandidate (Lme/ahoo/cosec/spi/snapshot/SnapshotKey;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun unlistStaged (Lme/ahoo/cosec/spi/snapshot/SnapshotKey;Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun withdrawCandidate (Lme/ahoo/cosec/spi/snapshot/SnapshotKey;Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 }
 

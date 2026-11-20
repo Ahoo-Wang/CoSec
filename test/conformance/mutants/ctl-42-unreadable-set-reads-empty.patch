@@ -3,10 +3,11 @@
 # Tests: :cocache:test --tests me.ahoo.cosec.cocache.control.CoCacheControlStoreTest
 
 diff --git a/backends/cocache/src/main/kotlin/me/ahoo/cosec/cocache/control/ControlSets.kt b/backends/cocache/src/main/kotlin/me/ahoo/cosec/cocache/control/ControlSets.kt
+index 37f1b50db..fa538b323 100644
 --- a/backends/cocache/src/main/kotlin/me/ahoo/cosec/cocache/control/ControlSets.kt
 +++ b/backends/cocache/src/main/kotlin/me/ahoo/cosec/cocache/control/ControlSets.kt
-@@ -37,7 +37,7 @@ internal class ControlSets(
-     private val documents: SetStore<String, String>,
+@@ -39,7 +39,7 @@ internal class ControlSets(
+     private val staged: SetStore<String, String>,
  ) {
      suspend fun referrers(target: SnapshotKey, policy: PolicyId): Set<ReferrerEntry> =
 -        failClosed(referencesOf(target, policy)) { references.suspending().get(ReferenceKey(target, policy)) }

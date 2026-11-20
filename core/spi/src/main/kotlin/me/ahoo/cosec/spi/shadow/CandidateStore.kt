@@ -25,4 +25,11 @@ import me.ahoo.cosec.spi.snapshot.SnapshotKey
 @ExperimentalCoSecApi
 fun interface CandidateStore {
     suspend fun candidate(key: SnapshotKey): StoredCandidate?
+
+    /**
+     * The staged list (`CTL-46`, `CTL-47`): the documents that may stage a candidate, or null when no list is kept, as
+     * by a store or a control plane that does not keep one. Null means: read every candidate by its key, as without a
+     * list. A store that keeps one throws when it cannot be read, never answering an empty list for it.
+     */
+    suspend fun staged(): StagedCandidates? = null
 }

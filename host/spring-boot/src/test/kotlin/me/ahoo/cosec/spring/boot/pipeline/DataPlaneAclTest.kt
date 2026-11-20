@@ -325,7 +325,8 @@ class DataPlaneAclTest {
 
         /** The data-plane user's keys, as `storage.md` shows them (default prefix, instance `pod-a`). */
         const val KEYS_LINE = "ACL SETUSER cosec-pod-a on >change-me resetkeys resetchannels -@all " +
-            "%R~cosec:snapshot:* %R~cosec:candidate:* ~cosec:shadow:report: ~cosec:shadow:report:*:pod-a.* " +
+            "%R~cosec:snapshot:* %R~cosec:candidate:* %R~cosec:candidate-staged:* ~cosec:shadow:report: " +
+            "~cosec:shadow:report:*:pod-a.* " +
             "~cosec:shadow:reporters:* ~cosec:shadow:status: ~cosec:shadow:status:pod-a.* ~cosec:shadow:instances:* " +
             "~cocache:!probe:*"
 

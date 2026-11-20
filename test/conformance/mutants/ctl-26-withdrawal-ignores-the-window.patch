@@ -3,10 +3,10 @@
 # Tests: :control:test --tests me.ahoo.cosec.control.change.CandidateWithdrawalRaceTest :conformance:test
 
 diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/store/InMemoryControlStore.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/store/InMemoryControlStore.kt
-index aeb8ac7c..89785bb4 100644
+index 3cbc11532..6b3d8022b 100644
 --- a/core/control/src/main/kotlin/me/ahoo/cosec/control/store/InMemoryControlStore.kt
 +++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/store/InMemoryControlStore.kt
-@@ -154,7 +154,7 @@ class InMemoryControlStore(private val clock: Clock = Clock.systemUTC()) : Contr
+@@ -157,7 +157,7 @@ class InMemoryControlStore(private val clock: Clock = Clock.systemUTC()) : Contr
          }
  
      override suspend fun withdrawCandidate(key: SnapshotKey, window: String): Boolean = synchronized(lock) {
@@ -14,4 +14,4 @@ index aeb8ac7c..89785bb4 100644
 +        candidates.remove(key) != null
      }
  
-     override suspend fun stage(key: SnapshotKey): Versioned<StageSlot>? =
+     /** The staged list's members; [staged] answers them once [keepStagedList] made the list kept. */

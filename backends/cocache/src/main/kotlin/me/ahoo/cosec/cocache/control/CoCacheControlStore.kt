@@ -35,6 +35,7 @@ import me.ahoo.cosec.cocache.control.ConditionalStores.Put
 import me.ahoo.cosec.cocache.control.ConditionalStores.deleteIf
 import me.ahoo.cosec.cocache.control.ConditionalStores.put
 import me.ahoo.cosec.cocache.control.ConditionalStores.read
+import me.ahoo.cosec.cocache.control.ConditionalStores.updateList
 import me.ahoo.cosec.cocache.createLocked
 import me.ahoo.cosec.cocache.shadow.ShadowCacheSpecs
 import me.ahoo.cosec.cocache.shadow.StoredCandidateCodec
@@ -54,6 +55,7 @@ import me.ahoo.cosec.control.store.RevisionIndex
 import me.ahoo.cosec.control.store.StoredDocument
 import me.ahoo.cosec.control.store.Versioned
 import me.ahoo.cosec.model.PolicyId
+import me.ahoo.cosec.spi.shadow.StagedCandidates
 import me.ahoo.cosec.spi.shadow.StoredCandidate
 import me.ahoo.cosec.spi.snapshot.SnapshotDigest
 import me.ahoo.cosec.spi.snapshot.SnapshotDocument
@@ -233,7 +235,7 @@ class CoCacheControlStore internal constructor(
     override suspend fun putChange(expected: SnapshotDigest?, change: ChangeRequest): Boolean {
         if (expected == null) {
             val id = change.id.value
-            updateList(OPEN_CHANGES) { if (id in it) it else it + (id to clock.instant()) }
+            updateList(lists, OPEN_CHANGES) { if (id in it) it else it + (id to clock.instant()) }
         }
         val written = put(changes, change.id, expected, change, digest(ChangeRequestCacheCodec, change)) is Put.Written
         if (written && change.state.terminal) {
@@ -246,7 +248,7 @@ class CoCacheControlStore internal constructor(
     @Suppress("TooGenericExceptionCaught")
     private suspend fun unlist(id: ChangeId) {
         try {
-            updateList(OPEN_CHANGES) { it - id.value }
+            updateList(lists, OPEN_CHANGES) { it - id.value }
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
@@ -276,7 +278,7 @@ class CoCacheControlStore internal constructor(
         val closed = found.filter { (_, listedAt, change) -> change?.state?.terminal ?: listedAt.isBefore(expired) }
             .mapTo(HashSet()) { it.first }
         if (closed.isNotEmpty()) {
-            updateList(OPEN_CHANGES) { it - closed }
+            updateList(lists, OPEN_CHANGES) { it - closed }
         }
         return found.mapNotNull { it.third }.filterNot { it.state.terminal }
     }
@@ -298,6 +300,15 @@ class CoCacheControlStore internal constructor(
     /** `deleteIfMatch` over the digest of the candidate of [window] as read, so another window's is never removed. */
     override suspend fun withdrawCandidate(key: SnapshotKey, window: String): Boolean =
         deleteIf(candidates, key) { it.window == window }
+
+    /** The staged list (`CTL-46`, [ControlSets]): one member per `SADD` or `SREM`, so stages never conflict. */
+    override suspend fun staged(): StagedCandidates? = sets.staged()
+
+    override suspend fun listStaged(key: SnapshotKey, window: String) = sets.listStaged(key, window)
+
+    override suspend fun unlistStaged(key: SnapshotKey, window: String) = sets.unlistStaged(key, window)
+
+    override suspend fun keepStagedList() = sets.keepStagedList()
 
     /**
      * Writes the lease where there is none (`putIfMatch` over nothing). [holder] taking its own lease again renews it for
@@ -331,23 +342,6 @@ class CoCacheControlStore internal constructor(
      */
     override suspend fun releaseLease(name: String, holder: String) {
         deleteIf(leases, name) { it == holder }
-    }
-
-    /** Read, change, `putIfMatch`: retried while another writer changed the list in between. */
-    private suspend fun updateList(name: String, next: (Map<String, Instant>) -> Map<String, Instant>) {
-        repeat(MAX_LIST_ATTEMPTS) {
-            val current = read(lists, name)
-            val value = next(current?.first.orEmpty())
-            if (value == current?.first) {
-                return
-            }
-            if (put(lists, name, current?.second, value, digest(ListedCodec, value)) is Put.Written) {
-                return
-            }
-        }
-        throw IllegalStateException(
-            "The control list [$name] kept changing; gave up after $MAX_LIST_ATTEMPTS attempts."
-        )
     }
 
     companion object {

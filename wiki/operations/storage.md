@@ -82,6 +82,7 @@ contain `:` or `/`, so a key names one document only.
 | `<s>:control:change:<changeId>` | the control plane | a change request |
 | `<s>:control:stage:<doc>` | the control plane | the staging slot of a document: which change holds it |
 | `<s>:candidate:<doc>` | the control plane | the staged candidate of a document while its shadow window is open (its window, its base revision and the candidate document, whose header is its own); the change it belongs to removes it, only while it is still its own (`CTL-26`) |
+| `<s>:candidate-staged:all` | the control plane | the staged list (`CTL-46`): one member `<doc>/<window>` per staged candidate, added before the candidate is written and removed after it is withdrawn, so it lists every staged candidate and may list one already gone. The shadow pass withdraws a listed candidate no shadowing change names (a withdrawal that failed) and removes a member whose candidate is gone, each once two passes in a row found it so. An instance skips a member it cannot read (a later form), which costs samples at most. Then a marker, `.kept`, which says a control plane keeps it. Without the marker no list is kept, and instances read candidates by key. Never expires. A downgrade to a control plane that keeps no list must delete this key: a list nobody keeps can only cost shadow samples, never pass a window |
 | `<s>:shadow:report:<window>:<instance>` | data-plane instance `<instance>` only | that instance's cumulative report of one shadow window; each write replaces the previous one; the instance stops writing it once the window's candidate is withdrawn; expires 8 days after its last write |
 | `<s>:shadow:reporters:<window>` | every data-plane instance | the ids of the instances that reported on `<window>`; same expiry |
 | `<s>:shadow:status:<instance>` | data-plane instance `<instance>` only | that instance's installed revisions and their lag; a heartbeat writes this one value, whatever the size of the cluster; expires 2 minutes after its last write, and a status older than a minute is ignored |
@@ -237,12 +238,12 @@ the keys and takes every command away; the second grants the commands and channe
 `+spublish +ssubscribe +sunsubscribe` in `sharded` mode):
 
 ```text
-ACL SETUSER cosec-pod-a on >change-me resetkeys resetchannels -@all %R~cosec:snapshot:* %R~cosec:candidate:* ~cosec:shadow:report: ~cosec:shadow:report:*:pod-a.* ~cosec:shadow:reporters:* ~cosec:shadow:status: ~cosec:shadow:status:pod-a.* ~cosec:shadow:instances:* ~cocache:!probe:*
+ACL SETUSER cosec-pod-a on >change-me resetkeys resetchannels -@all %R~cosec:snapshot:* %R~cosec:candidate:* %R~cosec:candidate-staged:* ~cosec:shadow:report: ~cosec:shadow:report:*:pod-a.* ~cosec:shadow:reporters:* ~cosec:shadow:status: ~cosec:shadow:status:pod-a.* ~cosec:shadow:instances:* ~cocache:!probe:*
 ACL SETUSER cosec-pod-a +@connection +evalsha +eval +evalsha_ro +eval_ro +publish +subscribe +unsubscribe +info +get +getrange +strlen +set +del +pttl +type +hgetall +hkeys +hmget +hset +hdel +hlen +pexpire +persist +setrange +time &cosec:* &cocache:!probe:*
 ```
 
 What the example still gives an operator: no key under `<s>:control:*`, and a report and status only under the
-instance's own name. A data-plane instance needs `snapshot`, `candidate` and the `shadow` families, which are the ones
+instance's own name. A data-plane instance needs `snapshot`, `candidate`, `candidate-staged` and the `shadow` families, which are the ones
 tested here; the token, membership, API key, rate limit and OAuth families only for the feature that uses them, and
 those were not tried with an ACL.
 

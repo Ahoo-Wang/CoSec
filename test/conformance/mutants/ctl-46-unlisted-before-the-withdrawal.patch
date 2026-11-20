@@ -1,0 +1,16 @@
+# Rule: CTL-46
+# Mutant: a withdrawal unlists its window before it withdraws the candidate, so for a moment, or for good when the withdrawal fails, a staged candidate is not listed and no instance would sample it (StagingSlots.withdraw)
+# Tests: :control:test --tests me.ahoo.cosec.control.change.StagedListTest :conformance:test
+
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/StagingSlots.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/StagingSlots.kt
+index 50d3c173e..0accbfe54 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/StagingSlots.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/StagingSlots.kt
+@@ -175,6 +175,7 @@ internal class StagingSlots(
+     @Suppress("TooGenericExceptionCaught")
+     suspend fun withdraw(change: ChangeRequest): Boolean {
+         val window = change.shadow?.window ?: return true
++        store.unlistStaged(change.key, window)
+         try {
+             store.withdrawCandidate(change.key, window)
+         } catch (e: CancellationException) {

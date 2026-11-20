@@ -60,6 +60,7 @@ key 都在它之下（`SNP-9`）。
 | `<s>:control:change:<changeId>` | 控制面 | 一个变更请求 |
 | `<s>:control:stage:<doc>` | 控制面 | 一个文档的暂存槽：哪个变更占用它 |
 | `<s>:candidate:<doc>` | 控制面 | 影子窗口打开期间一个文档暂存的候选（它的窗口、基准修订和候选文档，文档的头部是它自己的）；由它所属的变更删除，且只在它仍是该变更的候选时删除（`CTL-26`） |
+| `<s>:candidate-staged:all` | 控制面 | 暂存列表（`CTL-46`）：每个暂存的候选一个成员 `<doc>/<window>`，在候选写入之前加入、在它被撤回之后删除，所以它列出每个暂存的候选，也可能列出已经不在的。影子任务会撤回没有影子变更指向的已列出候选（撤回失败留下的），并删除候选已不在的成员，二者都要连续两轮都这样才动手。实例跳过读不懂的成员（更新的格式），最多只是少得样本。此外还有一个标记 `.kept`，表示有控制面维护它。没有标记就没有人维护列表，实例按 key 读取候选。永不过期。降级到不维护列表的控制面时必须删除这个 key：没人维护的列表只会让影子窗口少得样本，绝不会让窗口通过 |
 | `<s>:shadow:report:<window>:<instance>` | 仅数据面实例 `<instance>` | 该实例对一个影子窗口的累计报告；每次写入替换上一次的；窗口的候选撤回后实例不再写它；最后一次写入 8 天后过期 |
 | `<s>:shadow:reporters:<window>` | 每个数据面实例 | 对 `<window>` 报告过的实例 id；过期时间同上 |
 | `<s>:shadow:status:<instance>` | 仅数据面实例 `<instance>` | 该实例已装入的修订及其滞后；一次心跳只写这一个值，与集群规模无关；最后一次写入 2 分钟后过期，超过一分钟的状态被忽略 |
@@ -171,12 +172,12 @@ key 上。对 `<s>:shadow:reporters:*` 有写权限的实例可以删掉另一�
 （`sharded` 模式再加 `+spublish +ssubscribe +sunsubscribe`）：
 
 ```text
-ACL SETUSER cosec-pod-a on >change-me resetkeys resetchannels -@all %R~cosec:snapshot:* %R~cosec:candidate:* ~cosec:shadow:report: ~cosec:shadow:report:*:pod-a.* ~cosec:shadow:reporters:* ~cosec:shadow:status: ~cosec:shadow:status:pod-a.* ~cosec:shadow:instances:* ~cocache:!probe:*
+ACL SETUSER cosec-pod-a on >change-me resetkeys resetchannels -@all %R~cosec:snapshot:* %R~cosec:candidate:* %R~cosec:candidate-staged:* ~cosec:shadow:report: ~cosec:shadow:report:*:pod-a.* ~cosec:shadow:reporters:* ~cosec:shadow:status: ~cosec:shadow:status:pod-a.* ~cosec:shadow:instances:* ~cocache:!probe:*
 ACL SETUSER cosec-pod-a +@connection +evalsha +eval +evalsha_ro +eval_ro +publish +subscribe +unsubscribe +info +get +getrange +strlen +set +del +pttl +type +hgetall +hkeys +hmget +hset +hdel +hlen +pexpire +persist +setrange +time &cosec:* &cocache:!probe:*
 ```
 
 这个示例仍然给运营者的：不能访问 `<s>:control:*` 下的任何 key，报告和状态只能写在实例自己的名下。数据面实例需要
-`snapshot`、`candidate` 和 `shadow` 几组 key，这几组是这里测试过的；令牌、成员关系、API key、限流和 OAuth 这几组只有用到
+`snapshot`、`candidate`、`candidate-staged` 和 `shadow` 几组 key，这几组是这里测试过的；令牌、成员关系、API key、限流和 OAuth 这几组只有用到
 对应功能时才需要，它们没有用 ACL 试过。
 
 `~cosec:shadow:report:` 和 `~cosec:shadow:status:`（不带 `*`）是 CoCache 创建这两个缓存时用到的 key：没有它们，即使

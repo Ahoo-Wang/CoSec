@@ -40,6 +40,7 @@ import me.ahoo.cosec.control.store.Head
 import me.ahoo.cosec.control.store.Revisions
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import java.time.Clock
+import java.time.Duration
 import kotlin.coroutines.cancellation.CancellationException
 
 /**
@@ -135,6 +136,9 @@ internal class Staging(
         if (revisions.head(change.key)?.digest != change.base.digest) {
             return flow.settle(change, ChangeState.CONFLICTED, ChangeStep.SHADOWED)
         }
+        if (candidateLost(change, state)) {
+            return unstaged(change)
+        }
         @Suppress("TooGenericExceptionCaught")
         val look = try {
             windows.look(state, clock.instant())
@@ -156,6 +160,30 @@ internal class Staging(
         slots.withdraw(closed)
         flow.audit(ChangeEvent.Kind.SHADOWED, closed, closed.author)
         return closed
+    }
+
+    /**
+     * `R2C-15`: [change] is `SHADOWING` and its document stages no candidate of its window, past the moment its stage
+     * wrote it ([CANDIDATE_GRACE]): a crash between the change's reservation and its write, or a candidate lost since.
+     */
+    private suspend fun candidateLost(change: ChangeRequest, state: ShadowState): Boolean =
+        clock.instant().isAfter(state.startedAt.plus(CANDIDATE_GRACE)) &&
+            store.stagedCandidate(change.key)?.value?.window != state.window
+
+    /**
+     * Settles a change whose candidate is lost ([candidateLost]): `CHECKED` again, its slot freed, as a stage whose write
+     * failed leaves it, and recorded as a failure; its author stages it again. It is not placed again: the instances
+     * sampled nothing while the candidate was gone, so a window continued over that gap would close on reports that do
+     * not show it, and a candidate written by the maintenance pass would carry no stage call's authority.
+     */
+    private suspend fun unstaged(change: ChangeRequest): ChangeRequest {
+        val checked = flow.transition(change.id, ChangeStep.UNRESERVE, setOf(ChangeState.SHADOWING)) {
+            it.copy(state = ChangeState.CHECKED, skipShadow = null, shadow = null)
+        }
+        slots.release(change)
+        val note = "the candidate of window ${change.shadow?.window} was gone; CHECKED again, to be staged again"
+        flow.audit(ChangeEvent.Kind.FAILED, checked.copy(note = note), checked.author)
+        return checked
     }
 
     /** The propagation of [revision] of [key] to the instances (RFC 0007 §6.5): read-only, nothing waits for it. */
@@ -267,5 +295,8 @@ internal class Staging(
 
     private companion object {
         private val log = KotlinLogging.logger(Changes::class.java.name)
+
+        /** How long after a window starts its stage may still be writing its candidate: far longer than one write. */
+        val CANDIDATE_GRACE: Duration = Duration.ofMinutes(1)
     }
 }

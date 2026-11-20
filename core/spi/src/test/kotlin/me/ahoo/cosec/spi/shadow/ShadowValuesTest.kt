@@ -62,4 +62,21 @@ class ShadowValuesTest {
         assertThrownBy<IllegalArgumentException> { StoredCandidate("", 4, document) }
         assertThrownBy<IllegalArgumentException> { StoredCandidate("w", -1, document) }
     }
+
+    @Test
+    fun `the staged list names the documents it lists, compares by them, and a store keeps none by default`() {
+        val acme = SnapshotKey.Tenant("acme")
+        val listed = StagedCandidates(mapOf(acme to setOf("c1@1")))
+        listed.isStaged(acme).assert().isTrue()
+        listed.isStaged(SnapshotKey.Platform).assert().isFalse()
+        listed.assert().isEqualTo(StagedCandidates(mapOf(acme to setOf("c1@1"))))
+        listed.hashCode().assert().isEqualTo(StagedCandidates(mapOf(acme to setOf("c1@1"))).hashCode())
+        listed.assert().isNotEqualTo(StagedCandidates.NONE)
+        listed.assert().isNotEqualTo("c1@1")
+        listed.toString().assert().contains("c1@1")
+        val store = object : CandidateStore {
+            override suspend fun candidate(key: SnapshotKey): StoredCandidate? = null
+        }
+        kotlinx.coroutines.runBlocking { store.staged() }.assert().isNull()
+    }
 }

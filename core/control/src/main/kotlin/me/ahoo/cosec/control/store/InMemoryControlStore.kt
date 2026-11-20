@@ -22,6 +22,7 @@ import me.ahoo.cosec.control.change.ChangeRequest
 import me.ahoo.cosec.control.change.StageSlot
 import me.ahoo.cosec.document.shadow.ShadowCodec
 import me.ahoo.cosec.model.PolicyId
+import me.ahoo.cosec.spi.shadow.StagedCandidates
 import me.ahoo.cosec.spi.shadow.StoredCandidate
 import me.ahoo.cosec.spi.snapshot.SnapshotDigest
 import me.ahoo.cosec.spi.snapshot.SnapshotDocument
@@ -157,6 +158,26 @@ class InMemoryControlStore(private val clock: Clock = Clock.systemUTC()) : Contr
 
     override suspend fun withdrawCandidate(key: SnapshotKey, window: String): Boolean = synchronized(lock) {
         candidates[key]?.window == window && candidates.remove(key) != null
+    }
+
+    /** The staged list's members; [staged] answers them once [keepStagedList] made the list kept. */
+    private val listed = HashSet<Pair<SnapshotKey, String>>()
+    private var kept = false
+
+    override suspend fun listStaged(key: SnapshotKey, window: String) {
+        synchronized(lock) { listed += key to window }
+    }
+
+    override suspend fun unlistStaged(key: SnapshotKey, window: String) {
+        synchronized(lock) { listed -= key to window }
+    }
+
+    override suspend fun keepStagedList() {
+        synchronized(lock) { kept = true }
+    }
+
+    override suspend fun staged(): StagedCandidates? = synchronized(lock) {
+        if (kept) StagedCandidates(listed.groupBy({ it.first }, { it.second }).mapValues { it.value.toSet() }) else null
     }
 
     override suspend fun stage(key: SnapshotKey): Versioned<StageSlot>? =

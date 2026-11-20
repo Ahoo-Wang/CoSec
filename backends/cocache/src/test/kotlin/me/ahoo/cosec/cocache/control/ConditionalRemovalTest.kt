@@ -99,6 +99,7 @@ class ConditionalRemovalTest {
         sets = ControlSets(
             node.runtime.create(ControlCacheSpecs.referenceIndex(node.keyPrefix)),
             node.runtime.create(ControlCacheSpecs.documentSet(node.keyPrefix)),
+            node.runtime.create(ControlCacheSpecs.stagedSet(node.keyPrefix)),
         ),
         leases = leases,
         changes = node.runtime.create(ControlCacheSpecs.changeRequest(node.keyPrefix)),

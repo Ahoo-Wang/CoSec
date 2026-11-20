@@ -1,0 +1,16 @@
+# Rule: CTL-46
+# Mutant: a withdrawal that fails still unlists its window (R2C-15), so the candidate stays staged unlisted: no instance samples it and no shadow pass withdraws it (StagingSlots.withdraw)
+# Tests: :control:test --tests me.ahoo.cosec.control.change.StagedListTest
+
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/StagingSlots.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/StagingSlots.kt
+index 50d3c173e..1a88acacb 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/StagingSlots.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/StagingSlots.kt
+@@ -181,6 +181,7 @@ internal class StagingSlots(
+             throw e
+         } catch (e: Exception) {
+             log.warn(e) { "Withdrawing the candidate of window $window failed; the next shadow pass withdraws it." }
++            store.unlistStaged(change.key, window)
+             return false
+         }
+         try {

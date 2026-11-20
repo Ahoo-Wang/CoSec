@@ -67,10 +67,12 @@ class CacheTtlPolicyTest {
         CoSecCacheSpecs.CANDIDATE_CACHE_NAME to ShadowCacheSpecs.candidate(),
     )
 
-    /** The sets of record: the back-references and the documents (`CTL-42`, `CTL-44`). */
+    /** The sets of record: the back-references, the documents and the staged list (`CTL-42`, `CTL-44`, `CTL-46`). */
     private val setOfRecordSpecs: Map<String, SetStoreSpec<*, *>> = mapOf(
         CoSecCacheSpecs.REFERENCE_INDEX_CACHE_NAME to ControlCacheSpecs.referenceIndex(),
         CoSecCacheSpecs.CONTROL_DOCUMENT_SET_CACHE_NAME to ControlCacheSpecs.documentSet(),
+        // CTL-46: the staged list, which readers fall back from when its marker is gone: it never expires either.
+        CoSecCacheSpecs.CANDIDATE_STAGED_CACHE_NAME to ControlCacheSpecs.stagedSet(),
     )
 
     /**
@@ -121,7 +123,7 @@ class CacheTtlPolicyTest {
      */
     @Test
     fun setOfRecordCachesNeverExpireAndKeepNoLocalCopy() {
-        setOfRecordSpecs.keys.assert().isEqualTo(CoSecCacheSpecs.SET_OF_RECORD_CACHE_NAMES)
+        setOfRecordSpecs.keys.assert().isEqualTo(SetsOfRecord.CACHE_NAMES)
         weakened { factory ->
             setOfRecordSpecs.forEach { (name, spec) ->
                 factory.create(spec, CoSecCacheSpecs.locks(name)).assert().isInstanceOf(SetStore::class.java)

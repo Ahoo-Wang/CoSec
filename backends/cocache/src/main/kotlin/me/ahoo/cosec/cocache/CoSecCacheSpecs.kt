@@ -109,6 +109,9 @@ object CoSecCacheSpecs {
     /** Staged candidates (RFC 0007 §6.4): written by the control plane, read by every instance's shadow listener. */
     const val CANDIDATE_CACHE_NAME = "CandidateCache"
 
+    /** The staged list (`CTL-46`), beside the candidates: CoCache keeps two caches' storage keys apart. */
+    const val CANDIDATE_STAGED_CACHE_NAME = "CandidateStagedCache"
+
     /** What each instance saw of each shadow window, and each instance's installed revisions (RFC 0007 §6.4, §6.5). */
     const val SHADOW_REPORT_CACHE_NAME = "ShadowReportCache"
     const val INSTANCE_STATUS_CACHE_NAME = "InstanceStatusCache"
@@ -131,13 +134,8 @@ object CoSecCacheSpecs {
         CHANGE_REQUEST_CACHE_NAME,
         STAGE_CACHE_NAME,
         CANDIDATE_CACHE_NAME,
+        CANDIDATE_STAGED_CACHE_NAME,
     )
-
-    /**
-     * The store-of-record caches that are `SetStore`s: their members are added and removed one by one, and every read
-     * asks Redis ([SetsOfRecord.LOCAL_MAX_AGE]).
-     */
-    val SET_OF_RECORD_CACHE_NAMES: Set<String> = setOf(REFERENCE_INDEX_CACHE_NAME, CONTROL_DOCUMENT_SET_CACHE_NAME)
 
     /** Names of the caches whose only copy is Redis. */
     val STORE_OF_RECORD_CACHE_NAMES: Set<String> = setOf(
@@ -152,6 +150,7 @@ object CoSecCacheSpecs {
         CHANGE_REQUEST_CACHE_NAME,
         STAGE_CACHE_NAME,
         CANDIDATE_CACHE_NAME,
+        CANDIDATE_STAGED_CACHE_NAME,
     )
 
     /** The shadow window's observations: they expire, but a failed read still fails (RFC 0007 §6.4, §6.5). */
@@ -179,6 +178,7 @@ object CoSecCacheSpecs {
         CHANGE_REQUEST_CACHE_NAME to "control:change",
         STAGE_CACHE_NAME to "control:stage",
         CANDIDATE_CACHE_NAME to "candidate",
+        CANDIDATE_STAGED_CACHE_NAME to "candidate-staged",
         SHADOW_REPORT_CACHE_NAME to "shadow:report",
         SHADOW_REPORTER_CACHE_NAME to "shadow:reporters",
         INSTANCE_STATUS_CACHE_NAME to "shadow:status",
