@@ -51,10 +51,5 @@ object SourceSizeLedger {
             500,
             Disposition.Stays("migrate's one-off translation of 7.x condition parts"),
         ),
-        Entry(
-            "core/model/src/main/kotlin/me/ahoo/cosec/model/condition/ConditionChecker.kt",
-            403,
-            Disposition.Stays("a checker, one function per operator of a closed condition AST"),
-        ),
     )
 }
