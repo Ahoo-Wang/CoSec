@@ -252,8 +252,12 @@ class PolicyCompilerTest {
             IndexOptions(attributes = listOf(Attribute.of(Attribute.Kind.HTTP_HEADER, "x")))
         }
         assertThrownBy<IllegalArgumentException> { IndexOptions(minStatements = -1) }
+        // No document can read a resource attribute (DOC-10), so no index takes one either.
+        assertThrownBy<IllegalArgumentException> {
+            IndexOptions(attributes = listOf(Attribute.of(Attribute.Kind.RESOURCE_ATTRIBUTE, "owner")))
+        }
         IndexOptions(
-            attributes = listOf(Attribute.of(Attribute.Kind.RESOURCE_ATTRIBUTE, "owner"))
+            attributes = listOf(Attribute.of(Attribute.Kind.RESOURCE_TYPE))
         ).attributes.assert().hasSize(1)
     }
 
