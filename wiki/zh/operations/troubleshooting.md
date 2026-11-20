@@ -435,6 +435,7 @@ starter 只装配类路径上的 CoSec 模块，漏加一个模块会悄无声�
 | `cosec.cosid.generator is set, but CoSec's ids do not come from CosId` | 一个 `CosIdRuntime`（`cosid-spring-boot-starter` 及其 `cosid.*` 配置），或者删除这个键：应用自己有 `IdGenerator` bean 时，CoSec 的 id 来自那个 bean |
 | `cosec.metrics.enabled=true needs cosec-micrometer` | `cosec-micrometer`，或者删除这个键：不设置时指标是可选的 |
 | `cosec.control.enabled=true needs cosec-control`（或 `cosec-cocache`） | 消息中指出的制品，或者删除这个键：不设置时，没有这些模块的实例就是数据面实例 |
+| `Social sign-in, whose states are kept in Redis ..., needs cosec-cocache` | 添加 `cosec-cocache`（它把一次登录的 OAuth state 存在 Redis 里，每个只能用一次），或声明你自己的 `SocialStateStore` Bean，或用 `cosec.authentication.login.social.enabled=false` 关闭社交登录 |
 | `cosec-cocache needs a ReactiveStringRedisTemplate bean` | `spring-boot-data-redis` 和 Redis 连接（`spring.data.redis.*`）：没有它就读不到快照，限流也会退化为按实例计数 |
 
 Web 相关的检查只在 CoSec 开启时运行（`cosec.enabled`，默认 `true`）；网关宿主不做 WebFlux 检查，它需要的是 `cosec-gateway`。设置 `spring.main.lazy-initialization=true` 时每项检查同样运行（`STA-3`）。
@@ -756,6 +757,7 @@ Tokens are verified against RevocationReader.NONE: a revoked token (logout, revo
 - **`DELETE /break-glass/{bindingId}` 返回 `409` `binding [<id>] is not a break-glass binding`**：平台文档中该 id 的绑定是普通绑定（无论是否到期），没有提议任何变更。请用变更删除它（[策略测试](../policies/testing.md)）。
 - **`DELETE /break-glass/{bindingId}` 返回 `409` `[platform] is at revision <n>, not <m>`**：吊销提议时另一次写入恰好改变了平台文档，那可能是另一个吊销同一绑定的调用。请确认该绑定是否还在：重试（返回 `404` 即已删除），或读取 `GET /documents/platform`。
 - **`DELETE /break-glass/{bindingId}` 返回 `404`**：平台文档中没有该 id 的绑定，也没有提议任何变更。请核对 id（`GET /documents/platform` 列出所有绑定）。首次调用超时或失败之后重试得到的 `404`，说明该绑定已被删除，可能是那次调用删的，也可能是别的调用：平台文档的修订历史写明是哪个修订删除了它。和控制 API 的所有 `404` 一样，它不带 `detail`；控制面所在主机以 `INFO` 记录 `the platform document has no binding [<id>]`。
+- **租户变更以 `TOO_LARGE` 等待审批**：授权分析在走到这些授出之前已用完一次分析允许的四百万次比较，没比较到的内容无从得知（`CTL-49`）。请把变更拆小；策略原有的语句几乎不花成本，起作用的是变更新增或改写的部分乘以作者持有的权限。
 - **升级之后，覆盖所有 app 的每个租户授出都等待审批**（`UNREADABLE`），并以 `WARN` 记录 `The app list is missing or incomplete: run cosec-migrate repair-references; ...`（每分钟至多一次，启动时也会出现）：app 列表尚不完整，分析无法判断作者在它没有读的 app 中持有什么。在每个控制面实例和 `cosec-migrate` 都运行这个版本之后，运行一次 [`cosec-migrate repair-references`](./upgrading.md#repair-the-back-reference-index)。列表丢失之后（`FLUSHDB`、驱逐）也是如此。`The app list misses an app document that exists`、`The app list has an entry that names no app document`，以及回收任务记的 `The app list misses the app documents [...]; it is incomplete again`（旧版本的实例或 `cosec-migrate` 发布了一个 app），同样需要运行 `repair-references`。
 
 ## 快照日志缺失 {#snapshot-log-lines-are-missing}

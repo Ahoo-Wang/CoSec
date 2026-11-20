@@ -317,6 +317,24 @@ Which preview of the library may run behind which preview of the gateway image: 
     unchanged.
   - **A refresh strips `Bearer ` from the refresh token too**, as it did from the access token. The Kafka audit
     listener logs failed sends once every 10 seconds with a count; a closed sender says it is closed.
+- **The social sign-in states are `cosec-spi`'s `SocialStateStore`, on Redis in `cosec-cocache`; sign-in starts are
+  bounded; an unknown principal is remembered briefly** (R2B-3, R2B-23, R2C-18).
+  - **`SocialStateStore` and `InMemorySocialStateStore` moved to `me.ahoo.cosec.spi.social`.** If you implement
+    `SocialStateStore` or build the in-memory one, change the import: the interface is unchanged (`put` and `take`,
+    both suspending). `RedisSocialStateStore` is now `me.ahoo.cosec.cocache.RedisSocialStateStore`, over the
+    non-blocking client and `GETDEL`, internal to the starter (its constructor takes a `ReactiveStringRedisTemplate`
+    and no longer a parallelism). The keys are the same, `<s>:oauth:binding:<state>`, so states in flight survive an
+    upgrade.
+  - **Social login needs `cosec-cocache`** (or a `SocialStateStore` bean of your own): startup fails naming the artifact
+    without either (`STA-1`). `cosec-social` no longer brings `spring-data-redis` to your compile classpath; JustAuth's own
+    state cache still blocks and needs a `StringRedisTemplate`, which your application has when it uses Redis.
+  - **`authorize` refuses what it cannot take at once.** Each `JustAuthProvider` has at most 64 sign-in starts in flight,
+    on a pool of its own beside the login's; one more throws a `SocialAuthenticationException` where it used to queue
+    without bound.
+  - **`cosec.authorization.membership.unknown-ttl`** (default `5s`, at most `1m`, `0s` for the old behaviour): an
+    instance remembers that your `MembershipLoader` answered `Unknown` for a principal, so a removed member's token no
+    longer reaches the loader on every request. A principal you add is known when that time ends on the other
+    instances, and at once where `invalidate` ran. A failed load is never remembered.
 
 ## From 8.0.0-beta.3 {#from-8-0-0-beta-3}
 

@@ -41,8 +41,11 @@ import kotlin.time.toKotlinDuration
  * - a miss asks [loader] through the cache's read-through fill, which stores its answer locally and in Redis, where it
  *   expires after the cache's TTL ([CoSecCacheSpecs.membership]): the TTL bounds how long a change takes to apply when
  *   its invalidation is lost. A fill, unlike a `put`, is not a write: the next request on this instance is a local hit,
- *   where a `put` would leave it to read Redis once more. An unknown principal (null) is not cached: each request for
- *   it asks [loader] again;
+ *   where a `put` would leave it to read Redis once more. An unknown principal (null) is not cached with the
+ *   memberships: it is remembered on this instance alone, for [unknownLife] (R2C-18), so that a token of a removed
+ *   member does not reach [loader] on every request. A failed load or a timeout is never remembered, so an outage never
+ *   reads as "no such principal". A principal added meanwhile is known when that life ends, or at once on the instance
+ *   that [invalidate] ran on;
  * - a failed cache read throws, as does [loader], so the pipeline fails closed with 503 and never treats the
  *   principal as having no memberships (`MembershipCacheFailureTest`). A fill Redis cannot store still answers what
  *   [loader] said, kept on this instance only: the answer is the loader's own, never a guess.
@@ -59,18 +62,30 @@ class CoCacheMembershipProvider @InternalCoSecApi constructor(
      * `cosec.authorization.membership.timeout`, which each request still waits at most.
      */
     private val fillTimeout: Duration = DEFAULT_FILL_TIMEOUT,
+    /**
+     * How long this instance remembers that [loader] did not know a principal, so that its requests do not reach the
+     * loader each time (`cosec.authorization.membership.unknown-ttl`). Zero remembers nothing. At most
+     * [CoSecCacheSpecs.DEFAULT_MEMBERSHIP_TTL], the longest a positive entry lives by default.
+     */
+    private val unknownLife: Duration = DEFAULT_UNKNOWN_LIFE,
     private val loader: MembershipLoader,
 ) : MembershipProvider {
     init {
         require(
             !fillTimeout.isNegative && !fillTimeout.isZero
         ) { "The fill timeout must be positive, not $fillTimeout." }
+        require(!unknownLife.isNegative && unknownLife <= CoSecCacheSpecs.DEFAULT_MEMBERSHIP_TTL) {
+            "The unknown-principal life is between zero and ${CoSecCacheSpecs.DEFAULT_MEMBERSHIP_TTL}, not $unknownLife."
+        }
     }
+
+    private val unknown = UnknownPrincipals(unknownLife)
 
     // Whatever the cache wraps the fill's failure in, an unknown principal is found by its sentinel; anything else rethrows.
     @Suppress("TooGenericExceptionCaught")
     override suspend fun memberships(tenant: TenantId, principal: PrincipalId): MembershipAnswer {
         val key = MembershipCache.key(tenant, principal)
+        if (unknown.contains(key)) return MembershipAnswer.Unknown
         // The load runs in this request's context but not as its child: a fill other requests wait for is not cancelled
         // when this one gives up. Started undispatched, a loader that answers at once fills on the caller's thread.
         val context = currentCoroutineContext().minusKey(Job)
@@ -79,7 +94,10 @@ class CoCacheMembershipProvider @InternalCoSecApi constructor(
                 CoroutineScope(context).future(start = CoroutineStart.UNDISPATCHED) { load(tenant, principal) }
             }.await()
         } catch (e: Exception) {
-            if (e.causes().any { it === UnknownPrincipal }) return MembershipAnswer.Unknown
+            if (e.causes().any { it === UnknownPrincipal }) {
+                unknown.remember(key)
+                return MembershipAnswer.Unknown
+            }
             throw e
         }
         // A read-through answers what the fill loaded or found; nothing at all would be a broken cache, never "unknown".
@@ -108,7 +126,7 @@ class CoCacheMembershipProvider @InternalCoSecApi constructor(
     ) { it.cause.takeIf { cause -> cause !== it } }
 
     /**
-     * The loader does not know the principal: never cached, so a principal added later is known at once. One shared
+     * The loader does not know the principal: not cached with the memberships (see [unknownLife]). One shared
      * instance, so it records neither a stack trace nor suppressed exceptions.
      */
     private object UnknownPrincipal : RuntimeException(null, null, false, false) {
@@ -117,11 +135,16 @@ class CoCacheMembershipProvider @InternalCoSecApi constructor(
 
     /** Drops the cached memberships of [principal] in [tenant] on every instance; the next request loads them. */
     fun invalidate(tenant: TenantId, principal: PrincipalId) {
-        cache.invalidate(MembershipCache.key(tenant, principal))
+        val key = MembershipCache.key(tenant, principal)
+        unknown.forget(key)
+        cache.invalidate(key)
     }
 
     companion object {
         /** The default of `cosec.authorization.membership.timeout`, which a request waits at most. */
         val DEFAULT_FILL_TIMEOUT: Duration = Duration.ofMillis(500)
+
+        /** The default of `cosec.authorization.membership.unknown-ttl`. */
+        val DEFAULT_UNKNOWN_LIFE: Duration = Duration.ofSeconds(5)
     }
 }

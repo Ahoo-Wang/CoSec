@@ -122,6 +122,8 @@ Full model: https://cosec.ahoo.me/guide/security-model.
   Tomcat with `native`: remove `max-trusted-index`; Reactor Netty or Jetty with `native` and index `0`: set the number of
   proxies, or `none`.
   https://cosec.ahoo.me/operations/troubleshooting#startup-fails-on-the-client-address
+- **`Social sign-in, whose states are kept in Redis ..., needs cosec-cocache`** (STA-1): add `cosec-cocache`, declare
+  your own `SocialStateStore` bean, or set `cosec.authentication.login.social.enabled=false`.
 - **`cosec-cocache needs a ReactiveStringRedisTemplate bean`** (STA-1): add `spring-boot-data-redis` and configure
   Redis; without it no snapshot is read and rate limits would count per instance.
 - **`cosec.pipeline.mode=gateway: this service believes any CoSec-Identity header it receives ... State it once it is
@@ -566,6 +568,10 @@ of the approver could not be read`: the revocation store failed; the change keep
 bootstrap, a migration or an older instance, which may have been publishing the same change) or `... was published
 over the same base first, by <id>` are publishes that crossed: rebase the change that lost. Blocking a principal is not
 a document change: use the blacklist's `BlacklistSource`, which waits for no slot.
+
+When a tenant change waits for approval with `TOO_LARGE`, the grant analysis spent its four million comparisons
+before it reached those grants (`CTL-49`): split the change; what counts is what it adds or rewrites, times what its
+author holds.
 
 When every tenant grant over every app (a binding with app `*`, an attachment, also one whose condition narrows it to
 apps the change does not name) waits for approval as `UNREADABLE`

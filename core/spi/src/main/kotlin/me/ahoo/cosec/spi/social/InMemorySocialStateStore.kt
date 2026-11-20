@@ -11,7 +11,7 @@
  * limitations under the License.
  */
 
-package me.ahoo.cosec.social
+package me.ahoo.cosec.spi.social
 
 import java.time.Duration
 import java.util.concurrent.ConcurrentHashMap

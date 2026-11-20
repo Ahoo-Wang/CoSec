@@ -18,6 +18,7 @@ package me.ahoo.cosec.cocache.snapshot
 import kotlinx.coroutines.runBlocking
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.cocache.RedisSocialStateStore
 import me.ahoo.cosec.cocache.limiter.ReactiveRedisRateLimiter
 import me.ahoo.cosec.cocache.limiter.ReactiveRedisRateLimiterTest
 import me.ahoo.cosec.model.decision.RateLimitSpec
@@ -161,6 +162,32 @@ class SnapshotStoreBlockHoundTest {
                 result
             }
             pending.get(TIMEOUT_SECONDS, TimeUnit.SECONDS).assert().isTrue()
+        } finally {
+            factory.destroy()
+        }
+        violations.assert().isEmpty()
+    }
+
+    /** R2B-3: the social sign-in state store awaits Redis, so an anonymous start never holds the caller's thread. */
+    @Test
+    fun theSocialStateStoreNeverBlocksTheCaller() {
+        val factory = ReactiveRedisRateLimiterTest.connectionFactory("localhost", 6379)
+        try {
+            val store =
+                RedisSocialStateStore(ReactiveStringRedisTemplate(factory), "cosec:test:oauth:${newKeyPrefix()}:")
+            // Warm the connection, so the watched calls measure the requests alone.
+            runBlocking { store.put("warm", "h", java.time.Duration.ofMinutes(1)) }
+            violations.clear()
+            val pending = onNonBlockingThread {
+                val result = CompletableFuture<String?>()
+                val call: suspend () -> String? = {
+                    store.put("state", "hash", java.time.Duration.ofMinutes(1))
+                    store.take("state")
+                }
+                call.startCoroutine(Continuation(EmptyCoroutineContext) { result.complete(it.getOrThrow()) })
+                result
+            }
+            pending.get(TIMEOUT_SECONDS, TimeUnit.SECONDS).assert().isEqualTo("hash")
         } finally {
             factory.destroy()
         }

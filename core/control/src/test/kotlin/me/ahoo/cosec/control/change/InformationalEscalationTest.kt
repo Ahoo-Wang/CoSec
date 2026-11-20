@@ -88,6 +88,12 @@ class InformationalEscalationTest {
     )
 
     @Test
+    fun `every reason the grant analysis gives is a reason of its own name`() {
+        me.ahoo.cosec.control.grant.UnknownReason.entries.map { Escalation.Reason.of(it.name).name }
+            .assert().isEqualTo(me.ahoo.cosec.control.grant.UnknownReason.entries.map { it.name })
+    }
+
+    @Test
     fun `only the tenants' entry is informational`() {
         Escalation.Reason.entries.filter { Escalation("x", it).informational }
             .assert().containsExactly(Escalation.Reason.TENANT_BINDINGS)

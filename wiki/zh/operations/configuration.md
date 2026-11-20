@@ -112,6 +112,7 @@ CoSec 没有哪个配置项叫这些名字，而已知的 key 无论来源都不
 | `cosec.authorization.scope.app-id` | string | 无 | 本宿主服务的应用。声明了其他应用或未声明应用的凭证被拒绝（`403` `scope-rejected`）。不设置时取凭证的应用（[应用](../integration/authentication.md#apps)）。在网关上，路由元数据 `cosec-app-id` 对该路由的请求优先（[网关](../integration/web.md#gateway)）。 |
 | `cosec.authorization.remote-ip.max-trusted-index` | int | `1` | 解析客户端 IP 时信任 `X-Forwarded-For` 中的几跳代理。`0` 忽略该请求头（宿主直接对外）；`N` 取第 N 近的代理追加的那一项。在 `native` 转发头策略下，于 Tomcat 上显式设置，或在 Reactor Netty、Jetty 上设为 `0`，都会导致启动失败，其他服务器或没有服务器（外部容器里的 war）也一样；`framework` 总是导致启动失败（[代理后的客户端 IP](../integration/web.md#client-ip-behind-proxies)，`PIP-16`）。 |
 | `cosec.authorization.membership.timeout` | duration | `500ms` | 一次 `MembershipProvider` 调用。超时或失败时得到 `503`。 |
+| `cosec.authorization.membership.unknown-ttl` | duration | `5s` | 一个实例记住 `MembershipLoader` 不认识某个主体（被移除成员仍有效的令牌）多久，使它的请求不必每次都到达 loader。`0s` 表示不记；最长 `1m`（缓存的成员关系的默认存活时间），更长的值使启动失败。你新增的主体在这段时间结束时被所有实例知道，在调用了 `invalidate` 的实例上立即知道。失败或超时的加载从不被记住（[成员关系](../integration/authentication.md#memberships)）。 |
 | `cosec.authorization.attributes.timeout` | duration | `300ms` | 一次没有自行设置超时的 `AttributeProvider` 调用。超时后它的属性不可用，需要这些属性的语句使决策成为 Indeterminate。 |
 | `cosec.authorization.routes.location` | 逗号分隔的资源位置 | 未设置 | WebFlux 或 WebMvc 宿主在启动时加载的路由映射，日志会写明每份映射的服务和路由条数。位置不存在、映射无法解析或映射没有路由，启动失败。未设置时不加载路由映射，每个请求都在 `http` 命名空间中授权；但 `classpath:cosec-routes.json` 存在时启动失败，直到配置项指明它或设为空。设置为空表示明确不使用路由映射。Spring Cloud Gateway 宿主忽略它，不加载路由映射。 |
 

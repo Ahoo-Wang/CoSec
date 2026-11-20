@@ -1,0 +1,16 @@
+# Rule: CTL-50
+# Mutant: path patterns are equal whatever their case sensitivity: a statement made case insensitive is taken as unchanged and its widening is skipped
+# Tests: :control:test --tests me.ahoo.cosec.control.grant.GrantPolicyMembersTest
+
+diff --git a/core/engine/src/main/kotlin/me/ahoo/cosec/engine/pattern/HttpPathPattern.kt b/core/engine/src/main/kotlin/me/ahoo/cosec/engine/pattern/HttpPathPattern.kt
+index fcbdbed7b..d006ec8dc 100644
+--- a/core/engine/src/main/kotlin/me/ahoo/cosec/engine/pattern/HttpPathPattern.kt
++++ b/core/engine/src/main/kotlin/me/ahoo/cosec/engine/pattern/HttpPathPattern.kt
+@@ -223,7 +223,6 @@ class HttpPathPattern private constructor(
+     override fun equals(other: Any?): Boolean =
+         other is HttpPathPattern &&
+             other.pattern == pattern &&
+-            other.caseSensitive == caseSensitive &&
+             other.decodeAndParseSegments == decodeAndParseSegments
+ 
+     override fun hashCode(): Int = (pattern.hashCode() * 31 + caseSensitive.hashCode()) * 31 +

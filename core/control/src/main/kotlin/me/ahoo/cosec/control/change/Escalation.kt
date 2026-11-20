@@ -62,6 +62,9 @@ class Escalation(val subject: String, val reason: Reason, val detail: String = "
         /** A grant to `Anyone` in the default tenant, where unauthenticated callers are. */
         ANONYMOUS,
 
+        /** The analysis made all the comparisons its budget allows before it could tell (`CTL-49`). */
+        TOO_LARGE,
+
         /** A platform or app document change, or a tenant boundary change, that only the trust root makes alone. */
         NOT_ANALYZED,
 

@@ -131,6 +131,15 @@ class ChangesB1Test {
             "narrow",
         )
         narrowed.escalations.map { it.reason.name }.assert().containsExactly("NOT_ANALYZED")
+        // A permission no tenant binds reaches nobody: no tenants' entry.
+        val unbound = fourEyes.propose(
+            PLATO,
+            order,
+            1,
+            listOf(Operation.PutPolicy(allow("perm:order/export", action = "order:export"))),
+            "add",
+        )
+        unbound.escalations.map { it.reason.name }.assert().containsExactly("NOT_ANALYZED")
     }
 
     /** Changes over [store] with four-eyes on, so that every operator's change is analyzed as far as it goes. */

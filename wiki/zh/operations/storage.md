@@ -71,8 +71,8 @@ key 都在它之下（`SNP-9`）。
 | `<s>:membership:<n>:<tenantId>:<principalId>` | `CoCacheMembershipProvider`，在应用注册了它时 | 一个主体的成员关系；会过期（默认一分钟） |
 | `<s>:api-key:<sha256>` | `RedisApiKeyStore` | 一个 API key 的 JSON（`"format":3`），按 key 的 SHA-256 存放；8.0 之前格式的 key 在 `cosec-migrate api-keys` 转换之前都会被拒绝，8.0 预发布版以其他格式存储的 key 在重新签发之前都会被拒绝 |
 | `<s>:rate-limiter:<ruleId>:<bucket>` | Redis 限流器 | 一条规则一个桶的 hash：它所计数的窗口，以及该窗口与上一个窗口的计数；最后一次计数两个窗口后过期。每个桶值一个 key：`key` 取客户端可以选择的内容且窗口很长的规则，就是客户端可以控制的内存（[限流](../policies/rate-limiting.md#counting-and-backends)） |
-| `<s>:oauth:state:<state>` | 社交登录 | 进行中的登录的 OAuth `state`，由 JustAuth 保存；3 分钟后过期 |
-| `<s>:oauth:binding:<state>` | 社交登录 | 签发该 state 的浏览器的绑定值的 SHA-256；回调以 `GETDEL` 取走，因此一个 state 只能用一次；3 分钟后过期 |
+| `<s>:oauth:state:<state>` | 社交登录 | 进行中的登录的 OAuth `state`，由 JustAuth 保存（JustAuth 的缓存会阻塞：`cosec-social` 通过 `StringRedisTemplate` 写入）；3 分钟后过期 |
+| `<s>:oauth:binding:<state>` | 社交登录 | 签发该 state 的浏览器的绑定值的 SHA-256；由 `cosec-cocache` 的非阻塞客户端写入，回调以 `GETDEL` 取走，因此一个 state 只能用一次；3 分钟后过期 |
 
 - 多个部署共用一个 Redis 时，给每个部署各自的 `cosec.key-prefix`：前缀不同，就不共享任何 key，一个部署签发的 API key
   不会被另一个接受，限流计数器也互不相干。
