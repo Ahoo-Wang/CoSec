@@ -85,11 +85,8 @@ class PublicApiStabilityTest {
                 "spi.snapshot.SnapshotKey\$App" to value,
                 "spi.snapshot.SnapshotKey\$Tenant" to value,
             ) + listOf(
-                // The control store's records are experimental with the store (R9, D3); these stay stable because a
-                // ChangeEvent carries them.
-                "audit.MovedHead" to "A head a published change found moved: the document, the digest it was checked " +
-                    "with and the one it has. What else a check finds is a new field of the event, not of this value.",
-                "audit.RevisionRef" to "A revision and its digest: the whole of a reference to one.",
+                // The control store's records are experimental with the store (R9, D3); MovedHead and RevisionRef are
+                // experimental with the ChangeEvent that carries them (R2C-5).
                 "change.ShadowSummary" to "A closed shadow window's counts by outcome, when it closed, and its two " +
                     "verdicts: a new outcome is a new key of the counts, not a new field.",
             ).map { (name, reason) -> "control.$name" to reason } + listOf(

@@ -4,7 +4,7 @@
   ],
   "polarity": "positive",
   "level": "control",
-  "description": "RC1-34: widening perm:order/read from order:read to order:* widens acme's binding readers too; the approver is shown that binding, not only the app document.",
+  "description": "RC1-34, R2C-14: widening perm:order/read from order:read to order:* widens acme's binding readers too; the approver is shown the tenants that bind it, counted, as one entry beside the app document's.",
   "documents": {
     "apps": {
       "order": {
@@ -74,7 +74,7 @@
     "escalations": {
       "c1": [
         "NOT_ANALYZED",
-        "TENANT_BINDING"
+        "TENANT_BINDINGS"
       ]
     }
   }

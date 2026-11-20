@@ -1036,6 +1036,10 @@ for a check, `412` for an `ifMatch` that does not hold).
   that timed out or failed, means the binding was removed, by that call or another: the platform document's revision
   history shows which revision removed it. Like every `404` of the control API it carries no `detail`; the control
   host logs `the platform document has no binding [<id>]` at `INFO`.
+- **A tenant change waits for approval with `TOO_LARGE`**: the grant analysis made the four million comparisons one
+  analysis may make before it reached those grants, so what it did not compare is not known (`CTL-49`). Split the
+  change into smaller ones; statements a policy already had cost almost nothing, so the size that matters is what the
+  change adds or rewrites, times what its author holds.
 - **Every tenant grant over every app waits for approval** (`UNREADABLE`) after an upgrade, with
   `The app list is missing or incomplete: run cosec-migrate repair-references; ...` at `WARN` (at most once a minute, at
   startup too):

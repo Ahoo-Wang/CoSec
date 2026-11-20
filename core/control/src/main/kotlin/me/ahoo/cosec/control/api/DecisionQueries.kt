@@ -47,7 +47,9 @@ internal class DecisionQueries(
         val tenantHead = retained.held(tenant)
         val keys = simulator.keys(scope, tenantHead?.document)
         val heads = keys.associateWith { if (it == tenant) tenantHead else retained.held(it) }
-        val enforced = simulator.decide(simulated, scope, documents(heads))
+        val enforcedDocuments = documents(heads)
+        val enforced = simulator.decide(simulated, scope, enforcedDocuments)
+        var proposedDocuments: HeldDocuments? = null
         val proposed = candidate?.let { id ->
             val change = changes.visible(operator, id)
             authority.require(operator, change.key, ControlActions.SIMULATE)
@@ -63,14 +65,16 @@ internal class DecisionQueries(
             val fetched = if (change.key == tenant) simulator.keys(scope, document) else keys
             // The candidate is no stored content: compiled once, here; the heads come from the cache.
             val proposedHeads = fetched.associateWith { heads[it] ?: retained.held(it) } + (change.key to Held(document, null))
-            simulator.decide(simulated, scope, documents(proposedHeads))
+            documents(proposedHeads).also { proposedDocuments = it }.let { simulator.decide(simulated, scope, it) }
         }
         val redaction = redaction(operator, (enforced.read + proposed?.read.orEmpty()).distinct())
+        val enforcedHomes = PolicyHomes(enforcedDocuments)
+        val proposedHomes = proposedDocuments?.let(::PolicyHomes)
         return Simulation(
-            redaction.decision(enforced.evaluation.decision),
-            redaction.trace(enforced.evaluation),
-            proposed?.let { redaction.decision(it.evaluation.decision) },
-            proposed?.let { redaction.trace(it.evaluation) },
+            redaction.decision(enforced.evaluation.decision, enforcedHomes),
+            redaction.trace(enforced.evaluation, enforcedHomes),
+            proposed?.let { redaction.decision(it.evaluation.decision, proposedHomes!!) },
+            proposed?.let { redaction.trace(it.evaluation, proposedHomes!!) },
             proposed != null && differs(enforced.evaluation.decision, proposed.evaluation.decision),
         )
     }
@@ -100,12 +104,14 @@ internal class DecisionQueries(
         val keys = simulator.keys(scope, tenantDocument?.document)
         val documents = keys.associateWith { if (it == tenant) tenantDocument else documentAt(it) }
         // The revisions the view read (R2-5): an app's only when it took the app's document.
-        val decided = simulator.decide(explained, scope, documents(documents))
+        val decidedDocuments = documents(documents)
+        val decided = simulator.decide(explained, scope, decidedDocuments)
         val redaction = redaction(operator, decided.read)
+        val homes = PolicyHomes(decidedDocuments)
         return Explanation(
             decided.version,
-            redaction.decision(decided.evaluation.decision),
-            redaction.trace(decided.evaluation),
+            redaction.decision(decided.evaluation.decision, homes),
+            redaction.trace(decided.evaluation, homes),
         )
     }
 

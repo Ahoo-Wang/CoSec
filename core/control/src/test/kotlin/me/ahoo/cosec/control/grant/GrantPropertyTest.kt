@@ -50,7 +50,41 @@ class GrantPropertyTest {
     @Test
     fun `A5 the grant analysis is sound`() {
         val random = Random(0xA5)
-        val generator = GrantGenerator(random)
+        val (contained, checked) = soundness(random, GrantGenerator(random))
+        contained.assert().isGreaterThan(iterations / 4)
+        // A statement with several resources now holds under any of their captures (ALG-10), so more changes narrow
+        // and fewer fragments are left to check than with the first-match reading.
+        checked.assert().isGreaterThan(iterations * 9 / 5)
+    }
+
+    @Test
+    fun `A6 narrowing is sound`() {
+        val random = Random(0xA6)
+        val (narrowing, checked) = narrowingSoundness(random, GrantGenerator(random))
+        narrowing.assert().isGreaterThan(iterations / 4)
+        checked.assert().isGreaterThan(iterations)
+    }
+
+    /** GRT-8: A5 again over patterns of two variables and atoms that compare two of them, where a renaming may shift or swap. */
+    @Test
+    fun `A5 holds with two variables in one atom - GRT-8`() {
+        val random = Random(0x58)
+        val (contained, checked) = soundness(random, GrantGenerator(random, twoVariables = true))
+        contained.assert().isGreaterThan(iterations / 5)
+        checked.assert().isGreaterThan(iterations)
+    }
+
+    /** GRT-8: A6 again over patterns of two variables, narrowed to a shift (`{v1}/{v2}`) and a swap (`{v1}/{v0}`). */
+    @Test
+    fun `A6 holds with two variables in one atom - GRT-8`() {
+        val random = Random(0x68)
+        val (narrowing, checked) = narrowingSoundness(random, GrantGenerator(random, twoVariables = true))
+        narrowing.assert().isGreaterThan(iterations / 5)
+        checked.assert().isGreaterThan(iterations / 2)
+    }
+
+    /** A5's loop: how many fragments were contained, and how many requests the oracle checked for them. */
+    private fun soundness(random: Random, generator: GrantGenerator): Pair<Int, Int> {
         var contained = 0
         var checked = 0
         repeat(iterations) {
@@ -76,16 +110,11 @@ class GrantPropertyTest {
                 }
             }
         }
-        contained.assert().isGreaterThan(iterations / 4)
-        // A statement with several resources now holds under any of their captures (ALG-10), so more changes narrow
-        // and fewer fragments are left to check than with the first-match reading.
-        checked.assert().isGreaterThan(iterations * 9 / 5)
+        return contained to checked
     }
 
-    @Test
-    fun `A6 narrowing is sound`() {
-        val random = Random(0xA6)
-        val generator = GrantGenerator(random)
+    /** A6's loop: how many statements narrowed, and how many requests the oracle checked for them. */
+    private fun narrowingSoundness(random: Random, generator: GrantGenerator): Pair<Int, Int> {
         val permissive = GrantOracle(ignoreAnyone = false)
         var narrowing = 0
         var checked = 0
@@ -111,8 +140,7 @@ class GrantPropertyTest {
                     .isTrue()
             }
         }
-        narrowing.assert().isGreaterThan(iterations / 4)
-        checked.assert().isGreaterThan(iterations)
+        return narrowing to checked
     }
 
     @Test
@@ -169,6 +197,37 @@ class GrantPropertyTest {
      * the platform also defines, which re-points its bindings (RC1-9): removing a DENY is allowed without analysis (Q9)
      * and is not what A8 is about.
      */
+    /** R2C-26: the index of the grantor's held statements answers what walking all of them answers, ref for ref. */
+    @Test
+    fun `the indexed verdicts are the linear walk's`() {
+        val random = Random(0x26)
+        val generator = GrantGenerator(random)
+        var compared = 0
+        repeat(iterations) {
+            val snapshot = generator.unreadable(generator.snapshot())
+            val gina = generator.subject("gina")
+            val grantor = generator.grantor(gina)
+            val rights = GrantorRights.of(grantor, snapshot)
+            val linear = rights.linear()
+            for (fragment in analyzer.fragments(
+                snapshot,
+                GrantChange(ACME, grant(generator, random, snapshot, gina, "g"))
+            )) {
+                compared++
+                val indexed = analyzer.verdict(grantor, rights, fragment)
+                val walked = analyzer.verdict(grantor, linear, fragment)
+                render(indexed).assert().describedAs("$fragment").isEqualTo(render(walked))
+            }
+        }
+        compared.assert().isGreaterThan(iterations)
+    }
+
+    private fun render(verdict: GrantVerdict): String = when (verdict) {
+        is GrantVerdict.Contained -> "contained by ${verdict.by}"
+        is GrantVerdict.Unknown -> "unknown ${verdict.reason} ${verdict.shortfall} ${verdict.detail} ${verdict.closest}"
+        else -> verdict.toString()
+    }
+
     private fun grant(
         generator: GrantGenerator,
         random: Random,

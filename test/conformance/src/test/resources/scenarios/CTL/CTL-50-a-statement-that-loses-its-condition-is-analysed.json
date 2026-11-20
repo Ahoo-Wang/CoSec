@@ -1,0 +1,180 @@
+{
+  "rules": [
+    "CTL-50"
+  ],
+  "polarity": "negative",
+  "level": "control",
+  "description": "Review round 2, R2C-25: the candidate is the published document with the condition of viewer's statement removed; viewer is not the same policy, so what it grants anew is analysed.",
+  "documents": {
+    "platform": {
+      "policies": [
+        {
+          "id": "cosec:tenant-admin",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": [
+                "cosec:read",
+                "cosec:write",
+                "cosec:grant",
+                "cosec:publish",
+                "cosec:simulate",
+                "cosec:explain",
+                "cosec:analyze",
+                "cosec:shadow-read"
+              ],
+              "resource": [
+                "doc/tenant/{t}/**",
+                "scope/{t}/**"
+              ],
+              "condition": {
+                "eq": [
+                  "resource.var.t",
+                  {
+                    "attr": "subject.tenant"
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    "tenants": {
+      "acme": {
+        "policies": [
+          {
+            "id": "orders",
+            "statements": [
+              {
+                "effect": "allow",
+                "action": "order:*",
+                "resource": "order/**"
+              }
+            ]
+          },
+          {
+            "id": "viewer",
+            "statements": [
+              {
+                "effect": "allow",
+                "action": "order:read",
+                "resource": "order/{id}",
+                "condition": {
+                  "eq": [
+                    "resource.var.id",
+                    "1"
+                  ]
+                }
+              }
+            ]
+          }
+        ],
+        "bindings": [
+          {
+            "id": "admin",
+            "subject": {
+              "role": "admin"
+            },
+            "app": "cosec-control",
+            "space": "",
+            "policy": "cosec:tenant-admin"
+          },
+          {
+            "id": "ops",
+            "subject": {
+              "role": "ops"
+            },
+            "app": "*",
+            "space": "*",
+            "policy": "orders"
+          },
+          {
+            "id": "viewer",
+            "subject": {
+              "role": "viewer"
+            },
+            "app": "order",
+            "space": "team-a",
+            "policy": "viewer"
+          }
+        ]
+      }
+    }
+  },
+  "grantor": {
+    "tenant": "acme",
+    "id": "gina",
+    "roles": [
+      "admin",
+      "ops@team-a"
+    ]
+  },
+  "candidate": {
+    "tenant": "acme",
+    "document": {
+      "policies": [
+        {
+          "id": "orders",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "order:*",
+              "resource": "order/**"
+            }
+          ]
+        },
+        {
+          "id": "viewer",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "order:read",
+              "resource": "order/{id}"
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "admin",
+          "subject": {
+            "role": "admin"
+          },
+          "app": "cosec-control",
+          "space": "",
+          "policy": "cosec:tenant-admin"
+        },
+        {
+          "id": "ops",
+          "subject": {
+            "role": "ops"
+          },
+          "app": "*",
+          "space": "*",
+          "policy": "orders"
+        },
+        {
+          "id": "viewer",
+          "subject": {
+            "role": "viewer"
+          },
+          "app": "order",
+          "space": "team-a",
+          "policy": "viewer"
+        }
+      ]
+    }
+  },
+  "expect": {
+    "fragments": [
+      {
+        "policy": "viewer",
+        "statement": 0,
+        "action": "order:read",
+        "resource": "order/{id}",
+        "verdict": "YES"
+      }
+    ]
+  }
+}

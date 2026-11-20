@@ -3,10 +3,10 @@
 # Tests: :control:test --tests me.ahoo.cosec.control.change.DenyRemovalTest :conformance:test
 
 diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Narrowing.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Narrowing.kt
-index 0ad107c9..21b7b060 100644
+index 23abb1b27..dbd58f42e 100644
 --- a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Narrowing.kt
 +++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Narrowing.kt
-@@ -81,8 +81,8 @@ internal object Narrowing {
+@@ -98,8 +98,8 @@ internal object Narrowing {
          candidate: PolicyDocument,
          policyOf: suspend (PolicyId) -> PolicyDefinition?,
      ): List<String> {
@@ -16,4 +16,4 @@ index 0ad107c9..21b7b060 100644
 +        val after = candidate
          val policies = after.policies.mapTo(HashSet()) { it.id }
          val bindings = after.bindings.mapTo(HashSet()) { it.id }
-         val removed = ArrayList<String>()
+         val indexed = Indexed(base, candidate, before)

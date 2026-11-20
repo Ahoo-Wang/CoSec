@@ -347,7 +347,9 @@ the request, in the app `cosec.control.app-id`:
   can only explain requests of its own tenant: tenant isolation comes first and is not a policy. The built-in
   `cosec:tenant-viewer` and `cosec:tenant-admin` grant it on the caller's own tenant, `cosec:platform-admin` on every
   tenant ([Built-in policies](../guide/security-model.md#built-in-policies));
-- statements are shown only from documents the caller may read (`cosec:read` on the document). A statement reached
+- a statement is shown only when the caller may read (`cosec:read`) the document that defines its policy, whichever
+  document the binding it applied through lives in: a tenant's binding to a platform policy, or to an app's permission
+  policy, shows a tenant administrator none of that policy's statements. A statement reached
   through an attachment is shown only when the caller may read both the tenant and the platform document. Everything
   else is left out of the trace and counted in `redacted`, and a decision made by a hidden statement says only
   `"redacted": true`;

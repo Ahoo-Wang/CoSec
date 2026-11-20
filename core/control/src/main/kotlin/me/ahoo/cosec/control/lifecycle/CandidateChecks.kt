@@ -50,8 +50,8 @@ internal class CandidateChecks(
      */
     suspend fun checked(change: ChangeRequest, head: Head?, operator: Operator): ChangeRequest {
         val now = clock.instant()
-        val (candidate, applyFindings) = applied(change, head?.document)
-        candidate
+        val (built, applyFindings) = applied(change, head?.document)
+        built
             ?: return change.copy(
                 state = ChangeState.DRAFT,
                 findings = applyFindings,
@@ -63,12 +63,15 @@ internal class CandidateChecks(
         val recording = RecordingCurrentDocuments(context)
         val checkedResult = checks.check(
             change.key,
-            candidate,
+            built,
             change.kind,
             change.operations,
             head?.document,
             recording
         )
+        // What is analysed, approved and published is what the data plane reads: the decoded document (R2C-34). One that
+        // does not decode has findings and goes no further.
+        val candidate = checkedResult.candidate ?: built
         val breakGlass = BreakGlassRules.findings(
             change.kind,
             change.operations,

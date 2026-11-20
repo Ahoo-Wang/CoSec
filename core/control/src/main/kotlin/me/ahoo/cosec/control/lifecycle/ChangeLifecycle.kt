@@ -193,7 +193,6 @@ internal class ChangeLifecycle(
     }
 
     internal companion object {
-        const val BREAK_GLASS = "BREAK_GLASS"
         const val BREAK_GLASS_EXEMPT = "break-glass has no shadow window (RFC 0007 Q12)"
         const val MAX_ATTEMPTS = 16
         const val APPROVAL = "APPROVAL"

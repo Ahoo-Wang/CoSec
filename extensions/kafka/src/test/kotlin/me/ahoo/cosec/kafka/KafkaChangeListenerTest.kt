@@ -57,7 +57,7 @@ class KafkaChangeListenerTest {
         SnapshotKey.Tenant("acme"),
         RevisionRef(3, "d"),
         RevisionRef(4, "e"),
-        listOf(Escalation("p[0]", "NOT_COVERED", "why")),
+        listOf(Escalation("p[0]", Escalation.Reason.NOT_COVERED, "why")),
         listOf(Confirmation(PolicyId("p"), 0, "f")),
         ShadowSummary(
             mapOf("SAME" to 2L),

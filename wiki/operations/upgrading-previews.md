@@ -27,6 +27,20 @@ Which preview of the library may run behind which preview of the gateway image: 
 
 ## From 8.0.0-beta.4 {#from-8-0-0-beta-4}
 
+- **An app change lists the tenants it reaches as one entry per policy; an escalation's reason is an enum** (review
+  round 2, `R2C-14`, `R2C-5`, `CTL-48`). Affected: whoever reads a change's `escalations` (the control API's
+  `GET /changes/{id}`, a `ChangeListener`, the audit JSON on Kafka), and code that builds or reads an `Escalation`.
+  - `TENANT_BINDING`, one entry per tenant binding, is gone. An app change that widens a permission policy carries one
+    `TENANT_BINDINGS` entry per policy: `tenants binding [<policy>] in app <app>`, with the statements, how many tenant
+    documents bind it (an upper bound, from the back-reference index) and the first 20 of them. A consumer that counted
+    `TENANT_BINDING` entries to tell how many tenants a change reaches reads the count in `detail` instead. At 50,000
+    tenants the change record went from about 50 MB to a few KB, each audit event likewise, and no tenant document is
+    read to check the change.
+  - `Escalation.reason` is `Escalation.Reason`, an enum with the names the JSON always carried; `Escalation.TENANT_BINDING`
+    and `Escalation.DETECTION_TIMED_OUT` are `Escalation.Reason.TENANT_BINDINGS` and `Escalation.Reason.DETECTION_TIMED_OUT`.
+    A stored change with a name this version does not know reads it as `UNKNOWN`, which is never informational.
+  - `ChangeEvent`, `Escalation`, `RevisionRef` and `MovedHead` are `@ExperimentalCoSecApi`: a `ChangeListener` of yours
+    opts in, and they may change in a minor release until a release has used them.
 - **The public shapes of the core modules are fixed before RC** (review round 2, `R2A-1` to `R2A-7`). Affected: code that
   compiles against `cosec-model`, `cosec-spi`, `cosec-api` or the engine. No document, property, stored value or wire
   format changes.
@@ -321,6 +335,19 @@ Which preview of the library may run behind which preview of the gateway image: 
     instance remembers that your `MembershipLoader` answered `Unknown` for a principal, so a removed member's token no
     longer reaches the loader on every request. A principal you add is known when that time ends on the other
     instances, and at once where `invalidate` ran. A failed load is never remembered.
+- **The control API answers less and refuses more** (R2C-32, R2C-33, R2C-34).
+  - **`simulate` and `explain` name a statement only to a caller who may read the document that *defines* its policy.**
+    A tenant administrator whose tenant binds a platform policy, or an app's permission policy, no longer sees that
+    policy's statements, in the decision or in the trace: the decision says `"redacted": true` and the trace counts them.
+    Before, the document of the binding decided it, which a tenant administrator reads. A caller who may read the
+    defining document (a platform operator) sees what they saw.
+  - **A section operation with an `ifMatch` is a `400`.** `putCatalog`, `setLimits`, `setAttributes` and `setBoundary`
+    replace a section, which has no digest of its own; they accepted an `ifMatch` and ignored it. The change's `base`,
+    the digest of the document it was proposed on, guards the document. Remove the member. Each operation also takes
+    only its own members now: `removePolicy` with a `policy`, for one, is an unknown member.
+  - **A change is checked, analysed and approved on the document the data plane reads**: the candidate as written and
+    read back, not as the operations built it. No change of outcome is expected: the two are the same unless the format
+    codec fails to round-trip a member.
 - **A cold load waits for a full compile pool; `fail-closed.tenants` takes `*`; the local rate limiter bounds each
   document's rules** (R2D-3, R2D-4, R2D-5). No document, property default, stored value or wire format changes.
   - A cold load that the full compile queue refuses no longer answers `503` at once. It compiles again every few

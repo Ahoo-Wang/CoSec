@@ -371,9 +371,10 @@ content. Change listeners receive them.
   that published disconnects. Like every event that is not gated, they are best effort: the publish has already
   happened.
 - **Escalations** in an event are `subject`, `reason` and `detail` ([Testing changes](../policies/testing.md)). A
-  `TENANT_BINDING` one names only the binding and its tenant document (`binding <id> of [tenant:<t>]`), with the
-  policy and the statements in `detail`; whom the binding binds, and in which space, is the tenant's and is left out.
-  It is informational: it never counts as what needed approval.
+  `TENANT_BINDINGS` one stands for every tenant a widened permission policy reaches: one per policy
+  (`tenants binding [<policy>] in app <app>`), with the statements, the count and the first 20 tenant documents in
+  `detail`, so an event stays small at any number of tenants. It is informational: it never counts as what needed
+  approval (`CTL-48`). `reason` is one of the names of `Escalation.Reason`.
 
 With `cosec-kafka` and a `KafkaOperations` bean, the starter also registers a `KafkaChangeListener`, unless
 [`cosec.control.audit.kafka.enabled`](./configuration.md#control-plane) is `false`. It writes each event to

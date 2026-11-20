@@ -39,7 +39,6 @@ import me.ahoo.cosec.control.lifecycle.ControlTargets.boundaryOf
 import me.ahoo.cosec.control.lifecycle.ControlTargets.entry
 import me.ahoo.cosec.control.lifecycle.ControlTargets.scopeOf
 import me.ahoo.cosec.control.lifecycle.ControlTargets.section
-import me.ahoo.cosec.control.lifecycle.EscalationAnalysis.Companion.NOT_ANALYZED
 import me.ahoo.cosec.document.PolicyDocument
 import me.ahoo.cosec.document.ProvenanceKind
 import me.ahoo.cosec.document.RoleExpansion
@@ -267,7 +266,7 @@ class ChangeAuthority(
         // enough. The shadow window does not see a change that only touches obligations; it compares decisions.
         if (operations.any { it is Operation.SetBoundary }) {
             // Removing or replacing a boundary can widen every permit of the tenant; the analysis does not see it.
-            escalations += Escalation("boundary of $key", NOT_ANALYZED, "only the trust root changes it alone")
+            escalations += Escalation("boundary of $key", Escalation.Reason.NOT_ANALYZED, "only the trust root changes it alone")
         }
         val analysis = analyst.analyze(operator, key, base, candidate, documents, now)
         authorizer.batch { via ->
@@ -281,7 +280,7 @@ class ChangeAuthority(
         }
         analysis.verdicts.forEach { (fragment, verdict) ->
             if (verdict is GrantVerdict.Unknown) {
-                escalations += Escalation(fragment.toString(), verdict.reason.name, verdict.toString())
+                escalations += Escalation(fragment.toString(), Escalation.Reason.of(verdict.reason.name), verdict.toString())
             }
         }
         return escalations

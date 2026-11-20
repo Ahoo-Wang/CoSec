@@ -1,0 +1,108 @@
+{
+  "rules": [
+    "CTL-51"
+  ],
+  "polarity": "negative",
+  "level": "control",
+  "documents": {
+    "platform": {
+      "policies": [
+        {
+          "id": "platform-base",
+          "statements": [
+            {
+              "name": "sanctioned-countries",
+              "effect": "allow",
+              "action": "order:export",
+              "resource": "order/**"
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "plato",
+          "subject": {
+            "principal": "plato",
+            "tenant": "(platform)"
+          },
+          "app": "cosec-control",
+          "space": "",
+          "policy": "cosec:platform-admin"
+        }
+      ]
+    },
+    "tenants": {
+      "acme": {
+        "bindings": [
+          {
+            "id": "admins",
+            "subject": {
+              "role": "admin"
+            },
+            "app": "cosec-control",
+            "space": "",
+            "policy": "cosec:tenant-admin"
+          },
+          {
+            "id": "base-access",
+            "subject": "*",
+            "app": "*",
+            "space": "*",
+            "policy": "platform-base"
+          }
+        ]
+      }
+    }
+  },
+  "operators": {
+    "plato": {
+      "tenant": "(platform)"
+    },
+    "alice": {
+      "tenant": "acme",
+      "roles": [
+        "admin"
+      ]
+    }
+  },
+  "description": "The same request, simulated by plato, who reads the platform's document: the statement is named, since its policy is defined in a document the caller may read.",
+  "steps": [
+    {
+      "simulate": {
+        "by": "plato",
+        "request": {
+          "tenant": "acme",
+          "principal": "bob",
+          "roles": [],
+          "app": "",
+          "space": "",
+          "action": "order:export",
+          "resource": "order/1"
+        }
+      }
+    },
+    {
+      "explain": {
+        "by": "plato",
+        "request": {
+          "tenant": "acme",
+          "principal": "bob",
+          "roles": [],
+          "app": "",
+          "space": "",
+          "action": "order:export",
+          "resource": "order/1"
+        }
+      }
+    }
+  ],
+  "expect": {
+    "steps": [
+      "Permit by platform-base",
+      "Permit by platform-base at 1/-/1"
+    ],
+    "errors": {},
+    "heads": {}
+  }
+}

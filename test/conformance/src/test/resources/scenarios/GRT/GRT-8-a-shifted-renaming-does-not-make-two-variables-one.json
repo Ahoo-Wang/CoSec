@@ -1,0 +1,181 @@
+{
+  "rules": [
+    "GRT-8"
+  ],
+  "polarity": "positive",
+  "level": "control",
+  "description": "R2C-31: gina holds res/{a}/{b} only where a == b. A grant of res/{b}/{c} written with c == c reaches res/x/y: renamed all at once her constraint reads b == c, which c == c does not imply, so the grant needs approval, where renaming one variable after another made it c == c and contained.",
+  "documents": {
+    "platform": {
+      "policies": [
+        {
+          "id": "cosec:tenant-admin",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": [
+                "cosec:read",
+                "cosec:write",
+                "cosec:grant",
+                "cosec:publish",
+                "cosec:simulate",
+                "cosec:explain",
+                "cosec:analyze",
+                "cosec:shadow-read"
+              ],
+              "resource": [
+                "doc/tenant/{t}/**",
+                "scope/{t}/**"
+              ],
+              "condition": {
+                "eq": [
+                  "resource.var.t",
+                  {
+                    "attr": "subject.tenant"
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    "tenants": {
+      "acme": {
+        "policies": [
+          {
+            "id": "diagonal",
+            "statements": [
+              {
+                "effect": "allow",
+                "action": "res:read",
+                "resource": "res/{a}/{b}",
+                "condition": {
+                  "eq": [
+                    "resource.var.a",
+                    {
+                      "attr": "resource.var.b"
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        ],
+        "bindings": [
+          {
+            "id": "admin",
+            "subject": {
+              "role": "admin"
+            },
+            "app": "cosec-control",
+            "space": "",
+            "policy": "cosec:tenant-admin"
+          },
+          {
+            "id": "ops",
+            "subject": {
+              "role": "ops"
+            },
+            "app": "*",
+            "space": "*",
+            "policy": "diagonal"
+          }
+        ]
+      }
+    }
+  },
+  "grantor": {
+    "tenant": "acme",
+    "id": "gina",
+    "roles": [
+      "admin",
+      "ops@team-a"
+    ]
+  },
+  "candidate": {
+    "tenant": "acme",
+    "document": {
+      "policies": [
+        {
+          "id": "diagonal",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "res:read",
+              "resource": "res/{a}/{b}",
+              "condition": {
+                "eq": [
+                  "resource.var.a",
+                  {
+                    "attr": "resource.var.b"
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "id": "viewer",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "res:read",
+              "resource": "res/{b}/{c}",
+              "condition": {
+                "eq": [
+                  "resource.var.c",
+                  {
+                    "attr": "resource.var.c"
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "admin",
+          "subject": {
+            "role": "admin"
+          },
+          "app": "cosec-control",
+          "space": "",
+          "policy": "cosec:tenant-admin"
+        },
+        {
+          "id": "ops",
+          "subject": {
+            "role": "ops"
+          },
+          "app": "*",
+          "space": "*",
+          "policy": "diagonal"
+        },
+        {
+          "id": "viewer",
+          "subject": {
+            "role": "viewer"
+          },
+          "app": "order",
+          "space": "team-a",
+          "policy": "viewer"
+        }
+      ]
+    }
+  },
+  "expect": {
+    "fragments": [
+      {
+        "policy": "viewer",
+        "statement": 0,
+        "action": "res:read",
+        "resource": "res/{b}/{c}",
+        "verdict": "UNKNOWN",
+        "reason": "NOT_COVERED",
+        "shortfall": "CONDITION"
+      }
+    ]
+  }
+}

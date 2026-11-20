@@ -24,6 +24,11 @@ dependencies {
     testImplementation("io.lettuce:lettuce-core")
     // The adapter through the slice (RFC 0006 PR-7): the WebFlux filter, driven by WebTestClient.
     testImplementation(project(":webflux"))
+    // The adapters' own share of a request (EdgeRequestBenchmark): the gateway's filters and the servlet filter, over
+    // a request shaped as Reactor Netty hands it to Spring (Netty's headers and cookie decoder).
+    testImplementation(project(":gateway"))
+    testImplementation(project(":webmvc"))
+    testImplementation("io.netty:netty-codec-http")
     // A registry, as an application with Actuator has one: the starter meters the snapshot source in it (OBS-5).
     testImplementation(project(":micrometer"))
     testImplementation("org.springframework:spring-test")

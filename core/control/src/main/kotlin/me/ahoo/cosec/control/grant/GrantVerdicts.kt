@@ -36,8 +36,13 @@ import me.ahoo.cosec.model.decision.StatementRef
 /** The verdict for each fragment (§7.4.3): whether one single ALLOW of the grantor contains it, or what stopped the search. */
 internal class GrantVerdicts(private val checker: ConditionChecker, private val equality: GrantEquality) {
     /** The verdict for one fragment (§7.4.3, the loop body). */
-    fun verdict(grantor: Grantor, rights: GrantorRights, fragment: GrantFragment): GrantVerdict {
-        undecidable(grantor, fragment)?.let { return it }
+    fun verdict(
+        grantor: Grantor,
+        rights: GrantorRights,
+        fragment: GrantFragment,
+        budget: ComparisonBudget = ComparisonBudget(),
+    ): GrantVerdict {
+        undecidable(grantor, fragment, budget)?.let { return it }
         val tenant = fragment.tenant
         val granted = fragment.condition?.let { condition ->
             when (val folded = Specialization(checker, tenantConstants(tenant)).fold(condition)) {
@@ -51,8 +56,9 @@ internal class GrantVerdicts(private val checker: ConditionChecker, private val 
         }
         val scope = refine(fragment.scope, granted)
         unreached(rights, scope)?.let { return it }
-        val by = when (val found = holder(grantor, rights, fragment, scope, granted)) {
+        val by = when (val found = holder(grantor, rights, fragment, scope, granted, budget)) {
             null -> return notCovered(Shortfall.NO_ALLOW, "the grantor holds no ALLOW", null)
+            Search.Exhausted -> return tooLarge()
             is Search.Missed -> return notCovered(
                 found.shortfall,
                 "closest: ${describe(found.held.ref)}",
@@ -60,15 +66,32 @@ internal class GrantVerdicts(private val checker: ConditionChecker, private val 
             )
             is Search.Found -> found.held
         }
-        val deny = rights.denies.firstOrNull { it.applicability.intersects(scope) && !disjoint(it.statement, fragment) }
-        if (deny != null) {
-            return unknown(UnknownReason.DENY_OVERLAP, null, "may overlap ${describe(deny.ref)}", deny.ref)
+        return denied(rights, fragment, scope, budget) ?: GrantVerdict.Contained(by.ref)
+    }
+
+    /** The verdict when a DENY that binds the grantor may overlap [fragment] in [scope], or the budget runs out first. */
+    private fun denied(
+        rights: GrantorRights,
+        fragment: GrantFragment,
+        scope: ScopeSet,
+        budget: ComparisonBudget
+    ): GrantVerdict? {
+        // A DENY the index leaves out is disjoint from the fragment by its actions, as `disjoint` would find.
+        for (deny in rights.deniesFor(fragment.action)) {
+            if (!budget.spend()) return tooLarge()
+            if (deny.applicability.intersects(scope) && !disjoint(deny.statement, fragment)) {
+                return unknown(UnknownReason.DENY_OVERLAP, null, "may overlap ${describe(deny.ref)}", deny.ref)
+            }
         }
-        return GrantVerdict.Contained(by.ref)
+        return null
     }
 
     /** Why [fragment] is not analyzed against what [grantor] holds at all, or `null`. */
-    private fun undecidable(grantor: Grantor, fragment: GrantFragment): GrantVerdict.Unknown? {
+    private fun undecidable(
+        grantor: Grantor,
+        fragment: GrantFragment,
+        budget: ComparisonBudget
+    ): GrantVerdict.Unknown? {
         if (!fragment.resolved) {
             return unknown(UnknownReason.UNRESOLVED, null, "[${fragment.policy.value}] does not resolve", null)
         }
@@ -84,6 +107,8 @@ internal class GrantVerdicts(private val checker: ConditionChecker, private val 
                 null
             )
         }
+        // Past the budget nothing more is compared (CTL-49).
+        if (budget.exhausted) return tooLarge()
         return null
     }
 
@@ -104,6 +129,9 @@ internal class GrantVerdicts(private val checker: ConditionChecker, private val 
         class Found(val held: HeldStatement) : Search
 
         class Missed(val shortfall: Shortfall, val held: HeldStatement) : Search
+
+        /** The budget ran out before the search did: nothing it did not reach is known (CTL-49). */
+        object Exhausted : Search
     }
 
     /** The first ALLOW that contains [fragment] in [scope] (§7.4.3, "only one H"). */
@@ -113,15 +141,38 @@ internal class GrantVerdicts(private val checker: ConditionChecker, private val 
         fragment: GrantFragment,
         scope: ScopeSet,
         granted: CheckedCondition?,
+        budget: ComparisonBudget,
+    ): Search? {
+        val indexed = search(grantor, rights.allowsFor(fragment.action), fragment, scope, granted, budget)
+        // An ALLOW the index leaves out stops at SCOPE or ACTION: only when nothing it gave got further can the
+        // closest be one of those, and then every ALLOW is walked as before, so the answer is the same (R2C-26).
+        val furthest = (indexed as? Search.Missed)?.shortfall
+        if (indexed is Search.Found || indexed is Search.Exhausted || (furthest ?: Shortfall.NO_ALLOW) > Shortfall.ACTION) {
+            return indexed
+        }
+        return search(grantor, rights.allows, fragment, scope, granted, budget)
+    }
+
+    /** The first of [allows] that contains [fragment] in [scope], else the one that got furthest. */
+    private fun search(
+        grantor: Grantor,
+        allows: List<HeldStatement>,
+        fragment: GrantFragment,
+        scope: ScopeSet,
+        granted: CheckedCondition?,
+        budget: ComparisonBudget,
     ): Search? {
         var closest: Search.Missed? = null
-        for (held in rights.allows) {
+        // Once per search, not once per held ALLOW tried (R2C-26): the grantor, the tenant and the scope are the same.
+        val constants by lazy(LazyThreadSafetyMode.NONE) { grantorConstants(grantor, fragment.tenant, scope) }
+        for (held in allows) {
+            if (!budget.spend()) return Search.Exhausted
             val shortfall = when {
                 !scope.coveredBy(held.applicability) -> Shortfall.SCOPE
                 held.statement.actions.none { PatternContainment.contains(it, fragment.action) == Containment.YES } ->
                     Shortfall.ACTION
 
-                resourceAndCondition(grantor, scope, held, fragment, granted) ->
+                resourceAndCondition(constants, held, fragment, granted) ->
                     if (outlives(held, fragment)) return Search.Found(held) else Shortfall.EXPIRY
 
                 held.statement.resources.any { contained(it, fragment.resource) } -> Shortfall.CONDITION
@@ -149,8 +200,7 @@ internal class GrantVerdicts(private val checker: ConditionChecker, private val 
 
     /** Whether one resource of [held] contains the fragment's and its condition then holds wherever the fragment's does. */
     private fun resourceAndCondition(
-        grantor: Grantor,
-        scope: ScopeSet,
+        constants: (Attribute) -> Constant?,
         held: HeldStatement,
         fragment: GrantFragment,
         granted: CheckedCondition?,
@@ -160,7 +210,7 @@ internal class GrantVerdicts(private val checker: ConditionChecker, private val 
             containment != null && GrantImplication.implied(granted, held.condition) {
                 Specialization(
                     checker,
-                    grantorConstants(grantor, fragment.tenant, scope),
+                    constants,
                     opaque = { it.kind in SUBJECT_KINDS },
                     renames = containment.variables,
                 )
@@ -172,6 +222,13 @@ internal class GrantVerdicts(private val checker: ConditionChecker, private val 
     private fun disjoint(deny: GrantStatement, fragment: GrantFragment): Boolean =
         deny.actions.all { PatternContainment.disjoint(it, fragment.action) } ||
             deny.resources.all { PatternContainment.disjoint(it, fragment.resource) }
+
+    private fun tooLarge() = unknown(
+        UnknownReason.TOO_LARGE,
+        null,
+        "the analysis made its ${ComparisonBudget.MAX_COMPARISONS} comparisons before it reached this one: split the change",
+        null,
+    )
 
     private fun notCovered(shortfall: Shortfall, detail: String, closest: StatementRef.Policy?) =
         unknown(UnknownReason.NOT_COVERED, shortfall, detail, closest)
@@ -196,6 +253,16 @@ internal class GrantVerdicts(private val checker: ConditionChecker, private val 
         /** The grantor's own attributes (§7.4.3 `specialize`). `scope.roles` only where it has one value. */
         fun grantorConstants(grantor: Grantor, tenant: TenantId, scope: ScopeSet): (Attribute) -> Constant? {
             val roles = grantor.memberships.roles
+            val subjectRoles by lazy(LazyThreadSafetyMode.NONE) {
+                Constant.Strings(roles.values.flatMapTo(LinkedHashSet()) { set -> set.map { it.value } })
+            }
+            val scopedRoles by lazy(LazyThreadSafetyMode.NONE) {
+                Constant.Strings(
+                    roles.flatMapTo(LinkedHashSet()) { (space, set) ->
+                        set.map { if (space == SpaceId.DEFAULT) it.value else "${it.value}@${space.value}" }
+                    }
+                )
+            }
             val scopeRoles = (scope.spaces as? Dimension.Only)?.values
                 ?.map { grantor.roles(it) }?.distinct()?.singleOrNull()
             return { attribute ->
@@ -203,14 +270,8 @@ internal class GrantVerdicts(private val checker: ConditionChecker, private val 
                     Kind.SUBJECT_ID -> Constant.Str(grantor.id.value)
                     Kind.SUBJECT_TENANT, Kind.SCOPE_TENANT -> Constant.Str(tenant.value)
                     Kind.SUBJECT_AUTHENTICATED -> Constant.Bool(true)
-                    Kind.SUBJECT_ROLES -> Constant.Strings(
-                        roles.values.flatMapTo(LinkedHashSet()) { set -> set.map { it.value } }
-                    )
-                    Kind.SUBJECT_SCOPED_ROLES -> Constant.Strings(
-                        roles.flatMapTo(LinkedHashSet()) { (space, set) ->
-                            set.map { if (space == SpaceId.DEFAULT) it.value else "${it.value}@${space.value}" }
-                        }
-                    )
+                    Kind.SUBJECT_ROLES -> subjectRoles
+                    Kind.SUBJECT_SCOPED_ROLES -> scopedRoles
 
                     // Exactly as the engine reads it: a value of any type is its toString() (RC1-2).
                     Kind.SUBJECT_ATTRIBUTE -> Constant.Str(SubjectAttributes.string(grantor.attributes, attribute.name))

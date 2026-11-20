@@ -97,6 +97,35 @@ class OperationsTest {
             .candidate!!.rateLimits.assert().isEmpty()
     }
 
+    /** R2C-33: each operation takes its own members, and `ifMatch` only where an entry is replaced or removed. */
+    @Test
+    fun `an operation takes its own members and an ifMatch only for an entry`() {
+        fun read(json: String) = ChangeRequestCodec.operation(
+            ACME,
+            me.ahoo.cosec.document.json.CoSecJson.mapper.readTree(json),
+        )
+        read(
+            """{"op":"removePolicy","id":"p","ifMatch":"d"}"""
+        ).assert().isInstanceOf(Operation.RemovePolicy::class.java)
+        read("""{"op":"setBoundary"}""").assert().isInstanceOf(Operation.SetBoundary::class.java)
+        listOf(
+            """{"op":"setBoundary","boundary":"b","ifMatch":"d"}""",
+            """{"op":"setBoundary","boundary":"b","ifMatch":null}""",
+            """{"op":"putCatalog","ifMatch":"d"}""",
+        ).forEach { json ->
+            org.junit.jupiter.api.assertThrows<me.ahoo.cosec.spi.snapshot.SnapshotFormatException> { read(json) }
+                .message.assert().contains("takes no ifMatch").contains("base")
+        }
+        // Another operation's member is an unknown member, not read and dropped.
+        listOf(
+            """{"op":"removePolicy","id":"p","policy":{"id":"p"}}""",
+            """{"op":"setBoundary","boundary":"b","limits":{}}""",
+        ).forEach { json ->
+            org.junit.jupiter.api.assertThrows<me.ahoo.cosec.spi.snapshot.SnapshotFormatException> { read(json) }
+                .message.assert().contains("unknown fields")
+        }
+    }
+
     @Test
     fun `rate limit operations keep through the stored change`() {
         val node = ChangeRequestCodec.operation(

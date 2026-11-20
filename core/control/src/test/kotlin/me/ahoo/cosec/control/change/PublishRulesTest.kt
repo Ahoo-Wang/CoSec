@@ -88,8 +88,8 @@ class PublishRulesTest {
     @Test
     fun `a publication names the window and the approver of what needed one`() {
         val approval = Approval(PLATO.actor, Instant.EPOCH, "d", emptyList())
-        val needing = change.copy(escalations = listOf(Escalation("x", "NOT_COVERED")))
-        val informational = change.copy(escalations = listOf(Escalation("x", Escalation.TENANT_BINDING)))
+        val needing = change.copy(escalations = listOf(Escalation("x", Escalation.Reason.NOT_COVERED)))
+        val informational = change.copy(escalations = listOf(Escalation("x", Escalation.Reason.TENANT_BINDINGS)))
         val shadowed = change.copy(approval = approval, shadow = ShadowState("w", Instant.EPOCH))
         PublishRules.publication(shadowed, PLATO, needing).let {
             it.approvedBy.assert().containsExactly(PLATO.actor)

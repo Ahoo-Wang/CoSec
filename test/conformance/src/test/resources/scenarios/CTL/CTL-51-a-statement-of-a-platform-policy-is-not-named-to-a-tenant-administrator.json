@@ -1,0 +1,108 @@
+{
+  "rules": [
+    "CTL-51"
+  ],
+  "polarity": "positive",
+  "level": "control",
+  "documents": {
+    "platform": {
+      "policies": [
+        {
+          "id": "platform-base",
+          "statements": [
+            {
+              "name": "sanctioned-countries",
+              "effect": "allow",
+              "action": "order:export",
+              "resource": "order/**"
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "plato",
+          "subject": {
+            "principal": "plato",
+            "tenant": "(platform)"
+          },
+          "app": "cosec-control",
+          "space": "",
+          "policy": "cosec:platform-admin"
+        }
+      ]
+    },
+    "tenants": {
+      "acme": {
+        "bindings": [
+          {
+            "id": "admins",
+            "subject": {
+              "role": "admin"
+            },
+            "app": "cosec-control",
+            "space": "",
+            "policy": "cosec:tenant-admin"
+          },
+          {
+            "id": "base-access",
+            "subject": "*",
+            "app": "*",
+            "space": "*",
+            "policy": "platform-base"
+          }
+        ]
+      }
+    }
+  },
+  "operators": {
+    "plato": {
+      "tenant": "(platform)"
+    },
+    "alice": {
+      "tenant": "acme",
+      "roles": [
+        "admin"
+      ]
+    }
+  },
+  "description": "acme binds the platform's policy platform-base to everyone, as a tenant's base access. alice, acme's administrator, reads acme's document and not the platform's: simulate decides Permit and names no statement, the one that decided is defined in a document she may not read, whichever document its binding lives in.",
+  "steps": [
+    {
+      "simulate": {
+        "by": "alice",
+        "request": {
+          "tenant": "acme",
+          "principal": "bob",
+          "roles": [],
+          "app": "",
+          "space": "",
+          "action": "order:export",
+          "resource": "order/1"
+        }
+      }
+    },
+    {
+      "explain": {
+        "by": "alice",
+        "request": {
+          "tenant": "acme",
+          "principal": "bob",
+          "roles": [],
+          "app": "",
+          "space": "",
+          "action": "order:export",
+          "resource": "order/1"
+        }
+      }
+    }
+  ],
+  "expect": {
+    "steps": [
+      "Permit",
+      "Permit at 1/-/1"
+    ],
+    "errors": {},
+    "heads": {}
+  }
+}

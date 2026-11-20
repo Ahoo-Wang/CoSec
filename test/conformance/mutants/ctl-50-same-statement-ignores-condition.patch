@@ -1,0 +1,17 @@
+# Rule: CTL-50
+# Mutant: identity of statements ignores their condition: a policy whose statement lost its condition is taken as unchanged and its widening is skipped
+# Tests: :control:test --tests me.ahoo.cosec.control.grant.GrantPolicyMembersTest
+
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/grant/GrantEquality.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/grant/GrantEquality.kt
+index e46dd7ac3..702433168 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/grant/GrantEquality.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/grant/GrantEquality.kt
+@@ -40,7 +40,7 @@ internal class GrantEquality(private val checker: ConditionChecker) {
+ 
+     fun sameStatement(a: GrantStatement, b: GrantStatement): Boolean =
+         a.effect == b.effect && a.name == b.name && a.actions == b.actions && a.resources == b.resources &&
+-            a.onMissing == b.onMissing && sameCondition(a.condition, b.condition)
++            a.onMissing == b.onMissing
+ 
+     /**
+      * Conditions compare by their canonical rendering; one that does not check (an attribute outside the catalog)

@@ -41,6 +41,12 @@ enum class UnknownReason {
      * them as well as the tenant's principals, so it always needs an approval (RC1-35).
      */
     ANONYMOUS,
+
+    /**
+     * The analysis made all the comparisons its budget allows before it reached this fragment, or during it, so what it
+     * did not compare is not known (R2C-25, `CTL-49`): the change is too large to analyze, and splitting it is the way.
+     */
+    TOO_LARGE,
 }
 
 /** How far the closest of the grantor's ALLOWs got, in the order the analysis checks (RFC 0007 §7.4.3). */
