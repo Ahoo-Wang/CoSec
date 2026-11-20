@@ -27,6 +27,13 @@ Which preview of the library may run behind which preview of the gateway image: 
 
 ## From 8.0.0-beta.4 {#from-8-0-0-beta-4}
 
+- **The control API answers `503` whenever the control store cannot answer** (review round 2, `R2C-6`, `CTL-52`).
+  Affected: clients and alerts of the control API, and a `ControlStore` of your own.
+  - A Redis outage or timeout during a publish, a document read or a revision read used to answer `500`
+    `internal-error`. It now answers `503` `unavailable`, which a client may retry, and is logged at `WARN`, not
+    `ERROR`. A stored value that does not decode stays a `500`.
+  - `ControlStore` names `me.ahoo.cosec.control.store.ControlStoreException` for "the store could not answer". A
+    `ControlStore` of your own throws it for an outage; anything else it throws is a `500`.
 - **The public shapes of the core modules are fixed before RC** (review round 2, `R2A-1` to `R2A-7`). Affected: code that
   compiles against `cosec-model`, `cosec-spi`, `cosec-api` or the engine. No document, property, stored value or wire
   format changes.

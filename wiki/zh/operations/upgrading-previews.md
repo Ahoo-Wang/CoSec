@@ -24,6 +24,11 @@ description: "每个 8.0 预览版（alpha 与 beta）到下一个之间的变�
 
 ## 从 8.0.0-beta.4 升级 {#from-8-0-0-beta-4}
 
+- **控制存储无法应答时，控制 API 返回 `503`**（第二轮评审，`R2C-6`、`CTL-52`）。受影响的是控制 API 的客户端与告警，以及你自己的 `ControlStore`。
+  - 发布、读取文档或修订期间的 Redis 故障或超时，以前返回 `500` `internal-error`，现在返回客户端可以重试的 `503` `unavailable`，
+    并以 `WARN` 而非 `ERROR` 记录。已存储的值无法解码时仍是 `500`。
+  - `ControlStore` 以 `me.ahoo.cosec.control.store.ControlStoreException` 表示"存储无法应答"。你自己的 `ControlStore` 遇到故障时抛出它；
+    它抛出的其他异常都是 `500`。
 - **核心模块的公共形状在 RC 之前定下**（第二轮评审，`R2A-1` 至 `R2A-7`）。受影响的是针对 `cosec-model`、`cosec-spi`、`cosec-api` 或引擎编译的代码；
   文档、属性、已存储的值和线上格式都不变。
   - 决策值是写明 `equals`、`hashCode` 和 `toString` 的普通 final 类，不再是 data class：`Decision.Permit`、`Deny`、`Indeterminate`、

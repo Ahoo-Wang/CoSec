@@ -22,6 +22,7 @@ import me.ahoo.cocache.api.ConditionalDelete
 import me.ahoo.cocache.api.Store
 import me.ahoo.cocache.api.spi.Digest
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
+import me.ahoo.cosec.control.store.ControlStoreException
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.cocache.shadow.ShadowCacheSpecs
 import me.ahoo.cosec.cocache.snapshot.RedisTarget
@@ -172,7 +173,7 @@ class ConditionalRemovalTest {
             real.put(key, StoredCandidate("c1@1", ++revision, document))
             real.async().deleteIfMatch(key, expected)
         }
-        assertThrownBy<IllegalStateException> { runBlocking { store.withdrawCandidate(acme, "c1@1") } }
+        assertThrownBy<ControlStoreException> { runBlocking { store.withdrawCandidate(acme, "c1@1") } }
         store.candidate(acme)!!.window.assert().isEqualTo("c1@1")
     }
 
@@ -190,7 +191,7 @@ class ConditionalRemovalTest {
         // It did not apply: still the value read, so the failure is the answer.
         real.put(acme, StoredCandidate("c1@1", 4, document))
         candidates.answer = { _, _ -> CompletableFuture.failedFuture(unknown()) }
-        assertThrownBy<CacheWriteException> { runBlocking { store.withdrawCandidate(acme, "c1@1") } }
+        assertThrownBy<ControlStoreException> { runBlocking { store.withdrawCandidate(acme, "c1@1") } }
         store.candidate(acme)!!.window.assert().isEqualTo("c1@1")
 
         // Another change staged meanwhile: not this caller's to remove.
@@ -207,7 +208,7 @@ class ConditionalRemovalTest {
                 CacheWriteException("candidate", "deleteIfMatch", IllegalStateException("refused"), false)
             )
         }
-        assertThrownBy<CacheWriteException> { runBlocking { store.withdrawCandidate(acme, "c2@2") } }
+        assertThrownBy<ControlStoreException> { runBlocking { store.withdrawCandidate(acme, "c2@2") } }
         store.candidate(acme)!!.window.assert().isEqualTo("c2@2")
     }
 

@@ -20,6 +20,7 @@ import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.document.shadow.ShadowCodec
 import me.ahoo.cosec.spi.shadow.InstanceStatus
+import me.ahoo.cosec.spi.snapshot.SnapshotFormatException
 
 /** One instance's status, in the format of [ShadowCodec.encodeStatuses] with the one instance. */
 internal object InstanceStatusCodec : Codec<InstanceStatus> {
@@ -27,7 +28,7 @@ internal object InstanceStatusCodec : Codec<InstanceStatus> {
 
     override fun decode(bytes: ByteArray): InstanceStatus {
         val statuses = ShadowCodec.decodeStatuses(bytes)
-        require(statuses.size == 1) { "A stored status is one instance's, not ${statuses.size}" }
+        if (!(statuses.size == 1)) throw SnapshotFormatException("A stored status is one instance's, not ${statuses.size}")
         return statuses.values.single()
     }
 }

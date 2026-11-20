@@ -369,7 +369,7 @@ revalidating 10 documents every 10 seconds take about 0.1 % of it.
 | Memberships from a `MembershipProvider` on Redis | **`503`**. Memberships carried in the token are not affected. |
 | API keys in Redis (`cosec.api-key.store=redis`) | **`503`**. |
 | Rate-limit counters | A rule with `strictFailure: true` answers **`503`**; any other rule is skipped and the request goes on ([Rate limiting](../policies/rate-limiting.md)). |
-| The control plane | A store read that fails is a failure, never "absent", and nothing is published. The control API answers `503` while the outage stops the authorization of the call, which confirms the documents on Redis first; a store call that fails after that answers `500`. |
+| The control plane | A store read that fails is a failure, never "absent", and nothing is published. The control API answers **`503`**, without detail, for any call the store could not answer, whether the outage stops its authorization or a later read or write (`CTL-52`); the control host logs it at `WARN` with the request id. A stored value that does not decode is a `500`, logged at `ERROR` with its key. The maintenance passes log the failure and do nothing that pass: no window is closed, nothing is reclaimed. |
 | Shadow reports | The instance logs the failed write and writes again on its next cycle; the window stays open meanwhile. |
 
 **After a reconnect.** While its connection is down, Lettuce buffers the commands it is given, and when it reconnects

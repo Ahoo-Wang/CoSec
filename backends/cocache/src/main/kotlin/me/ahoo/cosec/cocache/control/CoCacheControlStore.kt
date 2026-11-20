@@ -32,6 +32,7 @@ import me.ahoo.cosec.cocache.DEFAULT_KEY_PREFIX
 import me.ahoo.cosec.cocache.SetsOfRecord
 import me.ahoo.cosec.cocache.control.ConditionalStores.MAX_LIST_ATTEMPTS
 import me.ahoo.cosec.cocache.control.ConditionalStores.Put
+import me.ahoo.cosec.cocache.control.ConditionalStores.answering
 import me.ahoo.cosec.cocache.control.ConditionalStores.deleteIf
 import me.ahoo.cosec.cocache.control.ConditionalStores.put
 import me.ahoo.cosec.cocache.control.ConditionalStores.read
@@ -142,7 +143,7 @@ class CoCacheControlStore internal constructor(
     }
 
     override suspend fun removeRecord(key: SnapshotKey, digest: SnapshotDigest) {
-        records.async().delete(RevisionRecordKey(key, digest)).await()
+        answering("The revision record of [$key]") { records.async().delete(RevisionRecordKey(key, digest)).await() }
     }
 
     override suspend fun index(key: SnapshotKey): Versioned<RevisionIndex>? =
@@ -221,7 +222,7 @@ class CoCacheControlStore internal constructor(
     /** Removes the old document list, the repair's last write: the store is repaired from then on. */
     @InternalCoSecApi
     suspend fun removeLegacyDocuments() {
-        lists.async().delete(DOCUMENTS).await()
+        answering("The legacy document list") { lists.async().delete(DOCUMENTS).await() }
     }
 
     override suspend fun change(id: ChangeId): Versioned<ChangeRequest>? =
@@ -316,7 +317,10 @@ class CoCacheControlStore internal constructor(
      * believes it holds the lease for [duration] lose it within moments. The renewal is `putIfMatch` over the lease as
      * read, so one that expired and was taken by another holder in between is not overwritten: it is read again.
      */
-    override suspend fun acquireLease(name: String, holder: String, duration: Duration): Boolean {
+    override suspend fun acquireLease(name: String, holder: String, duration: Duration): Boolean =
+        answering("The lease [$name]") { takeLease(name, holder, duration) }
+
+    private suspend fun takeLease(name: String, holder: String, duration: Duration): Boolean {
         val async = leases.async()
         repeat(MAX_LIST_ATTEMPTS) {
             if (async.putIfMatch(name, null, holder, duration).await() is ConditionalPut.Written) {

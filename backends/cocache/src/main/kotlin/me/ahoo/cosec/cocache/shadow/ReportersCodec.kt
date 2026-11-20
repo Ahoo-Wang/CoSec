@@ -19,6 +19,7 @@ import me.ahoo.cocache.api.Codec
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.document.json.CoSecJson
+import me.ahoo.cosec.spi.snapshot.SnapshotFormatException
 
 /** The instances that reported on a window, as a sorted JSON array of their ids. */
 internal object ReportersCodec : Codec<Set<String>> {
@@ -26,9 +27,7 @@ internal object ReportersCodec : Codec<Set<String>> {
 
     override fun decode(bytes: ByteArray): Set<String> {
         val node = CoSecJson.mapper.readTree(bytes)
-        require(
-            node.isArray && node.values().all { it.isString }
-        ) { "The reporters of a window are an array of instance ids" }
+        if (!(node.isArray && node.values().all { it.isString })) throw SnapshotFormatException("The reporters of a window are an array of instance ids")
         return node.values().mapTo(LinkedHashSet()) { it.asString() }
     }
 }

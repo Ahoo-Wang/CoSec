@@ -23,6 +23,7 @@ import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.cocache.createLocked
 import me.ahoo.cosec.control.store.ReferrerEntry
 import me.ahoo.cosec.model.PolicyId
+import me.ahoo.cosec.control.store.ControlStoreException
 import me.ahoo.cosec.spi.shadow.StagedCandidates
 import me.ahoo.cosec.spi.snapshot.SnapshotFormatException
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
@@ -69,7 +70,7 @@ internal class ControlSets(
 
     /** The staged list (`CTL-46`), or null when it holds no [StagedMember.KEPT] marker: a list nobody keeps. */
     suspend fun staged(): StagedCandidates? {
-        val members = staged.suspending().get(STAGED_SET)
+        val members = failClosed(STAGED_WHAT) { staged.suspending().get(STAGED_SET) }
         if (StagedMember.KEPT !in members) {
             return null
         }
@@ -81,15 +82,15 @@ internal class ControlSets(
     }
 
     suspend fun listStaged(key: SnapshotKey, window: String) {
-        staged.suspending().add(STAGED_SET, listOf(StagedMember.encode(key, window)))
+        failClosed(STAGED_WHAT) { staged.suspending().add(STAGED_SET, listOf(StagedMember.encode(key, window))) }
     }
 
     suspend fun unlistStaged(key: SnapshotKey, window: String) {
-        staged.suspending().remove(STAGED_SET, setOf(StagedMember.encode(key, window)))
+        failClosed(STAGED_WHAT) { staged.suspending().remove(STAGED_SET, setOf(StagedMember.encode(key, window))) }
     }
 
     suspend fun keepStagedList() {
-        staged.suspending().add(STAGED_SET, listOf(StagedMember.KEPT))
+        failClosed(STAGED_WHAT) { staged.suspending().add(STAGED_SET, listOf(StagedMember.KEPT)) }
     }
 
     private fun referencesOf(target: SnapshotKey, policy: PolicyId): String =
@@ -98,7 +99,8 @@ internal class ControlSets(
     /**
      * [block] over a set, failing closed with what the failure is (R2C-7): a value CoCache reads as a plain value, not a
      * set, is the format before 8.0.0-beta.5, and only that failure names the command that converts it; a member that
-     * does not decode is a format error naming the set; anything else, a timeout or a failover, passes through as it is.
+     * does not decode is a format error naming the set; anything else, a timeout or a failover, is a
+     * [ControlStoreException]: the store did not answer (R2C-6).
      */
     @Suppress("TooGenericExceptionCaught")
     private suspend fun <T> failClosed(what: String, block: suspend () -> T): T = try {
@@ -116,7 +118,7 @@ internal class ControlSets(
                     chain.first { it is SnapshotFormatException }.message,
                 error,
             )
-            else -> throw error
+            else -> throw ControlStoreException("$what: the store did not answer (${error.message})", error)
         }
     }
 
@@ -128,6 +130,7 @@ internal class ControlSets(
         /** The document set's one key. */
         private const val DOCUMENT_SET = "all"
         private const val DOCUMENTS_WHAT = "The document set"
+        private const val STAGED_WHAT = "The staged list"
 
         /** The staged list's one key: `<p>:candidate-staged:all`. */
         const val STAGED_SET = "all"

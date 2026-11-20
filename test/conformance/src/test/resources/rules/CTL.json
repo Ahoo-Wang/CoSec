@@ -643,6 +643,18 @@
         "control:GrantReflexivityTest#a twin policy is the same policy, and each twin statement narrows its previous one"
       ],
       "pending": null
+    },
+    {
+      "id": "CTL-52",
+      "source": "Review round 2, R2C-6 (saas-open-changes-design.md); RFC 0007 §5.2, §10.2",
+      "statement": "No store failure reads as an empty answer: over a control store that cannot answer, every control route answers 503 without detail to a caller it is for, and both maintenance passes do nothing that pass; a stored value that does not decode is a 500, never a 400 or an absence.",
+      "level": "control",
+      "guards": [
+        "control:StoreOutageTest#every route answers 503 without detail while the store cannot answer",
+        "control:StoreOutageTest#both maintenance passes do nothing while the store cannot answer",
+        "cocache:CoCacheControlStoreTest#a set that fails to read for another reason does not name the repair"
+      ],
+      "pending": null
     }
   ]
 }
