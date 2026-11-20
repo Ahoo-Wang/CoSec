@@ -260,7 +260,10 @@ with `action` may not coexist with a hand-written policy of its id: write a poli
 action) only for a condition, a DENY or several statements. An entry with neither is for UIs only and no role can list
 it. A system role (app document) names no `app` or `space`, applies to every tenant, and may list `"*"`; a custom role
 (tenant document) names its `app` (required), optionally one `space`, lists permissions only, and applies to that
-tenant. Roles are expanded into bindings (`role:<roleId>@<app>:<permission>`) before anything reads them; hand-written
+tenant. A role id is not qualified by its app in a membership (`role@space`): a member whose roles come from a provider
+or a token bound to no app holds a role in every app that defines its id, and an app change that defines a system role
+another app defines is warned (`ROL-12`); prefix role ids with the app (`wms.clerk`) when that is not meant. Roles are
+expanded into bindings (`role:<roleId>@<app>:<permission>`) before anything reads them; hand-written
 `bindings` still work, with `{"role": …}` subjects, and the two may both grant a role. Without spaces write nothing about
 them: no `spaced`, no `space`, no `@` in the token's roles, no `CoSec-Space-Id`.
 
