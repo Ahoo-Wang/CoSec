@@ -20,6 +20,7 @@ import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.control.store.RevisionLog.log
 import me.ahoo.cosec.control.store.RevisionLog.warn
 import me.ahoo.cosec.document.PolicyDocument
+import me.ahoo.cosec.document.PolicyDocumentCompiler
 import me.ahoo.cosec.document.RoleExpansion
 import me.ahoo.cosec.model.Identifiers
 import me.ahoo.cosec.model.Match
@@ -137,6 +138,11 @@ internal class ReferrerIndex(
      *
      * The index is of what a document grants, so it reads the [expanded][RoleExpansion.effective] document (RFC 0012
      * §7.5): an app must not remove a permission a tenant's role lists.
+     *
+     * A tenant's binding to an app's permission policy (`perm:<app>/<id>`), bound in that app, is indexed under the app
+     * only. Only that app's document defines the prefix, and the compiler refuses it in any other (`TNT-2`), so the
+     * platform can never define, remove or reuse such an id: an entry under the platform could never block anything,
+     * and would double what each tenant's publish writes. Every other reference stays indexed as it was.
      */
     fun references(stored: PolicyDocument): Set<Pair<SnapshotKey, PolicyId>> {
         if (stored.kind == DocumentKind.PLATFORM) {
@@ -157,14 +163,40 @@ internal class ReferrerIndex(
                 )
             }
             if (binding.policy in own) continue
-            references += SnapshotKey.Platform to binding.policy
-            if (document.kind == DocumentKind.TENANT && app != null) {
-                references += SnapshotKey.App(app) to binding.policy
-            }
+            targetsOf(document.kind, app, binding.policy).forEach { references += it to binding.policy }
         }
         document.boundary?.let { references += SnapshotKey.Platform to it }
         return references
     }
+
+    /**
+     * Where a binding to [policy], bound in [app] (null for any), of a document of [kind] is indexed: under the platform,
+     * and for a tenant's binding in one app under that app too (RFC 0007 §3.1 N1); an app's permission policy under
+     * that app alone (see [references]).
+     */
+    private fun targetsOf(kind: DocumentKind, app: String?, policy: PolicyId): List<SnapshotKey> = when {
+        kind != DocumentKind.TENANT || app == null -> listOf(SnapshotKey.Platform)
+        isPermissionOf(app, policy) -> listOf(SnapshotKey.App(app))
+        else -> listOf(SnapshotKey.Platform, SnapshotKey.App(app))
+    }
+
+    /**
+     * What a version before beta.5 indexed for [stored]: [references], and each of its app permission references under
+     * the platform too. A publish drops what its base's head had this way and its candidate does not, so a tenant's
+     * entries under the platform for app permissions go at its next publish, with no command. Until then they block
+     * nothing (see [references]); `pruneReferences` of the platform never visits them, since the platform defines no
+     * such id.
+     */
+    fun indexedByOlderVersions(stored: PolicyDocument): Set<Pair<SnapshotKey, PolicyId>> {
+        val references = references(stored)
+        return references + references.mapNotNull { (target, policy) ->
+            (SnapshotKey.Platform to policy).takeIf { target is SnapshotKey.App && isPermissionOf(target.appId, policy) }
+        }
+    }
+
+    /** Whether [policy] is a permission policy of [app] (`perm:<app>/<id>`), which only that app's document defines. */
+    private fun isPermissionOf(app: String, policy: PolicyId): Boolean =
+        policy.value.startsWith(PolicyDocumentCompiler.permissionPrefix(app))
 
     /**
      * [referrers] with [key] at [revision]: a reference [publish] indexes before its head write. One already indexed

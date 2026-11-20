@@ -3,10 +3,10 @@
 # Tests: :control:test --tests me.ahoo.cosec.control.change.UnnamedAppIdsTest
 
 diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/store/ReferrerIndex.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/store/ReferrerIndex.kt
-index 70f21b4f..b18b0e10 100644
+index 077f5dd5f..b2fc914ec 100644
 --- a/core/control/src/main/kotlin/me/ahoo/cosec/control/store/ReferrerIndex.kt
 +++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/store/ReferrerIndex.kt
-@@ -180,10 +180,7 @@ internal class ReferrerIndex(
+@@ -157,10 +157,7 @@ internal class ReferrerIndex(
          for (binding in document.bindings) {
              val app = (binding.scope.app as? Match.Exactly)?.value?.value
              if (app != null && !SnapshotKey.App.isValidAppId(app)) {
@@ -17,4 +17,4 @@ index 70f21b4f..b18b0e10 100644
 +                continue
              }
              if (binding.policy in own) continue
-             references += SnapshotKey.Platform to binding.policy
+             targetsOf(document.kind, app, binding.policy).forEach { references += it to binding.policy }

@@ -416,7 +416,7 @@ app 的状态；以及 `repair-references` 读到的 `<s>:control:list:documents
 - **回收修订**，每隔 [`cosec.control.revisions.reclaim-interval`](./configuration.md#control-plane)（1 小时）。对每个
   文档，它删除最近 `max-count`（50）个之外、且早于 `min-age`（7 天）的修订记录，以及从未成为头部、早于 `orphan-age`
   （1 小时）的发布记录。它从不删除头部，也不删除未结束变更所依赖的修订；某个未结束的变更读不到时，这一轮什么都不回收。
-  每个文档一个租约（`reclaim:<doc>`），同一时间只有一个实例处理一个文档。
+  索引与头部一致、列出的修订不超过 `max-count`、没有待定记录也没有待删除记录的文档没有可回收的内容：回收只读它的索引和头部便跳过。其他文档在每个文档一个租约（`reclaim:<doc>`）下回收，同一时间只有一个实例处理一个文档，文档处理完即释放租约；只有回收改变了索引时才写入索引。
   修订索引先移出一条记录再删除它，并把它留在待删列表中，直到删除成功：删除失败的记录由下一轮重试。
   同时进行的历史修复会略去低于索引下限的修订，所以已回收的修订不会回来。
 - **关闭影子窗口**，每隔 [`cosec.control.shadow.check-interval`](./configuration.md#control-plane)（1 分钟），持有
