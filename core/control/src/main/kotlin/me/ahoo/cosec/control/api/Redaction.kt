@@ -59,7 +59,7 @@ internal class Redaction(private val readable: Set<DocumentKind>) {
     }
 
     private fun visible(ref: StatementRef.Policy, homes: PolicyHomes): Boolean = when (val via = ref.via) {
-        is BindingRef.Bound -> homes.of(via.document, ref.policy) in readable
+        is BindingRef.Bound -> homes.of(via.document, ref.policy)?.let { it in readable } == true
         is BindingRef.Attached -> DocumentKind.TENANT in readable && DocumentKind.PLATFORM in readable
         else -> DocumentKind.PLATFORM in readable
     }

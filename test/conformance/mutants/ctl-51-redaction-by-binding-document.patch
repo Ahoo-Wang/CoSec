@@ -3,15 +3,15 @@
 # Tests: :control:test --tests me.ahoo.cosec.control.api.DecisionQueriesTest
 
 diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/api/PolicyHomes.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/api/PolicyHomes.kt
-index d924870d3..1d9255477 100644
+index 83c577054..6289c3d90 100644
 --- a/core/control/src/main/kotlin/me/ahoo/cosec/control/api/PolicyHomes.kt
 +++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/api/PolicyHomes.kt
-@@ -43,7 +43,7 @@ internal class PolicyHomes(private val documents: HeldDocuments) {
+@@ -46,7 +46,7 @@ internal class PolicyHomes(private val documents: HeldDocuments) {
  
-     /** The document of the policy [policy] a binding of [binding]'s document names. */
-     fun of(binding: DocumentKind, policy: PolicyId): DocumentKind = when {
+     /** The document of the policy [policy] a binding of [binding]'s document names; null when no document can be named. */
+     fun of(binding: DocumentKind, policy: PolicyId): DocumentKind? = when {
 -        defined[binding]?.contains(policy) == true -> binding
 +        true -> binding
          defined[DocumentKind.PLATFORM]?.contains(policy) == true -> DocumentKind.PLATFORM
          defined[DocumentKind.APP]?.contains(policy) == true -> DocumentKind.APP
-         else -> binding
+         policy.value in DocumentCache.BUILTIN -> binding

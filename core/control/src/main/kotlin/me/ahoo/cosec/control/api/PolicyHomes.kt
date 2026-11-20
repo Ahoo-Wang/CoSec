@@ -28,8 +28,11 @@ import me.ahoo.cosec.model.decision.DocumentKind
  * The lookup is the engine's order (`CandidateOrder`): the binding's own document first (a role's policies are there as
  * the role expands), then the platform's, then the app's the view read. A tenant policy of a platform policy's id is the
  * platform's only as an exact copy, which the tenant holds and reads in full anyway. A policy no document defines is a
- * built-in's (the root policy through a break-glass binding): the binding's document, as before. Reads the documents the
- * decision was made on, so a candidate's own policies are the candidate's.
+ * built-in's (the control-plane policies, and the root policy through a break-glass binding): no document defines them and
+ * their statements are the engine's own, so the binding's document stands for them. A policy that is neither defined by a
+ * held document nor a built-in is one this lookup cannot place: it has no home, and the statement is not shown (fail
+ * closed; the decision was made on these same documents, so it is not expected). Reads the documents the decision was
+ * made on, so a candidate's own policies are the candidate's.
  */
 @InternalCoSecApi
 internal class PolicyHomes(private val documents: HeldDocuments) {
@@ -41,12 +44,13 @@ internal class PolicyHomes(private val documents: HeldDocuments) {
         ).toMap()
     }
 
-    /** The document of the policy [policy] a binding of [binding]'s document names. */
-    fun of(binding: DocumentKind, policy: PolicyId): DocumentKind = when {
+    /** The document of the policy [policy] a binding of [binding]'s document names; null when no document can be named. */
+    fun of(binding: DocumentKind, policy: PolicyId): DocumentKind? = when {
         defined[binding]?.contains(policy) == true -> binding
         defined[DocumentKind.PLATFORM]?.contains(policy) == true -> DocumentKind.PLATFORM
         defined[DocumentKind.APP]?.contains(policy) == true -> DocumentKind.APP
-        else -> binding
+        policy.value in DocumentCache.BUILTIN -> binding
+        else -> null
     }
 
     private fun ids(held: Held): Set<PolicyId> {
