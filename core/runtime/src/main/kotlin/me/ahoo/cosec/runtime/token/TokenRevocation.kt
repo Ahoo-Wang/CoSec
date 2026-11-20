@@ -18,12 +18,15 @@ package me.ahoo.cosec.runtime.token
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.model.PrincipalId
 import me.ahoo.cosec.model.TenantId
+import me.ahoo.cosec.runtime.call.withLazyTimeoutOrNull
 import me.ahoo.cosec.spi.token.RevocationReader
+import me.ahoo.cosec.spi.token.RevocationUnavailableException
 import me.ahoo.cosec.spi.token.SubjectRevocation
 import me.ahoo.cosec.spi.token.TokenRevokedException
 import me.ahoo.cosec.spi.token.VerifiedToken
 import java.time.Duration
 import java.time.Instant
+import kotlin.time.toKotlinDuration
 
 /**
  * The one judgement of whether a verified token was revoked (RFC 0004 §4.5.3, `MEM-4`): its id, or every token of its
@@ -35,15 +38,26 @@ import java.time.Instant
  * [me.ahoo.cosec.spi.token.RevocationUnavailableException]. The pipeline's verification may let a token through on it
  * (PIP-7); whatever issues one from an earlier token, a refresh or a tenant switch, never does (`IDN-14`).
  *
+ * The check's reads have [readTimeout] together (R2D-8): a store that hangs is unavailable once it is spent, as one that
+ * refuses the connection is at once, so the pipeline's verification answers within its own budget whatever the store
+ * does, and refresh fails rather than waits.
+ *
  * @param skew `cosec.authentication.revocation.skew`: how far ahead of the revoking clock an issuer's clock may run
+ * @param readTimeout `cosec.authentication.revocation.read-timeout`: how long the check's two reads may take together
  */
 class TokenRevocation(
     private val revocations: RevocationReader,
     private val skew: Duration = SubjectRevocation.DEFAULT_SKEW,
+    private val readTimeout: Duration = DEFAULT_READ_TIMEOUT,
 ) {
     init {
         require(!skew.isNegative) { "The revocation skew must not be negative, not $skew." }
+        require(!readTimeout.isNegative && !readTimeout.isZero) {
+            "The revocation read timeout must be positive, not $readTimeout."
+        }
     }
+
+    private val budget = readTimeout.toKotlinDuration()
 
     /**
      * Returns when [token] is not revoked.
@@ -60,10 +74,17 @@ class TokenRevocation(
      * A null [issuedAt] is revoked by any revocation of the principal's tokens.
      *
      * @throws TokenRevokedException when its id, or its principal's tokens issued before it, were revoked
-     * @throws me.ahoo.cosec.spi.token.RevocationUnavailableException when the revocations cannot be read
+     * @throws me.ahoo.cosec.spi.token.RevocationUnavailableException when the revocations cannot be read, or are not
+     *   read within [readTimeout]
      */
     @InternalCoSecApi
     suspend fun check(id: String, tenant: TenantId, principal: PrincipalId, issuedAt: Instant?) {
+        // A read that answers at once, from a local copy, arms no timer (withLazyTimeoutOrNull).
+        withLazyTimeoutOrNull(budget) { read(id, tenant, principal, issuedAt) }
+            ?: throw RevocationUnavailableException("The revocations were not read within $readTimeout.")
+    }
+
+    private suspend fun read(id: String, tenant: TenantId, principal: PrincipalId, issuedAt: Instant?) {
         if (revocations.isRevoked(id)) {
             throw TokenRevokedException("Token [$id] has been revoked.")
         }
@@ -73,5 +94,13 @@ class TokenRevocation(
                 "The tokens of principal [${principal.value}] issued before [$revokedBefore] have been revoked."
             )
         }
+    }
+
+    companion object {
+        /**
+         * Well under the pipeline's authentication timeout (1 s), so a hanging store is answered as an unavailable one
+         * before the authenticator's own budget runs out; far above a Redis read's tail, a few milliseconds.
+         */
+        val DEFAULT_READ_TIMEOUT: Duration = Duration.ofMillis(300)
     }
 }

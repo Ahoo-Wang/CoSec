@@ -344,6 +344,12 @@
       "type": "java.lang.Boolean"
     },
     {
+      "description": "How long a check's two revocation reads may take together: past it the store is unavailable, so a request's token is accepted (or refused, with `fail-closed`) and a refresh fails. Positive, and less than `cosec.pipeline.authentication-timeout`, or a hanging store would make every authenticated request 503.",
+      "name": "cosec.authentication.revocation.read-timeout",
+      "sourceType": "me.ahoo.cosec.spring.boot.pipeline.RevocationProperties",
+      "type": "java.time.Duration"
+    },
+    {
       "description": "How much later than a subject revocation a token may have been issued and still be revoked by it: room for an issuer whose clock runs ahead of the revoking one.",
       "name": "cosec.authentication.revocation.skew",
       "sourceType": "me.ahoo.cosec.spring.boot.pipeline.RevocationProperties",

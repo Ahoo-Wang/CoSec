@@ -148,10 +148,14 @@ internal class CoSecJwtAutoConfiguration {
         tokenStore: ObjectProvider<TokenStore>,
         revocationProperties: RevocationProperties,
         beans: ListableBeanFactory,
-    ): TokenRevocation = TokenRevocation(
-        CoSecPipelineAutoConfiguration.revocationReader(revocationReader, tokenStore, beans),
-        revocationProperties.skew,
-    )
+    ): TokenRevocation {
+        CoSecPipelineAutoConfiguration.checkRevocationReadTimeout(revocationProperties.readTimeout)
+        return TokenRevocation(
+            CoSecPipelineAutoConfiguration.revocationReader(revocationReader, tokenStore, beans),
+            revocationProperties.skew,
+            revocationProperties.readTimeout,
+        )
+    }
 
     @Bean
     @ConditionalOnMissingBean

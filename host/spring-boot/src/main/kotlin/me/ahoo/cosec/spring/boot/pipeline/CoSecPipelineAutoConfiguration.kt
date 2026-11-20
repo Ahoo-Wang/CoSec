@@ -162,7 +162,9 @@ class CoSecPipelineAutoConfiguration {
         environment: Environment,
         unchecked: ObjectProvider<UncheckedRevocations>,
         beans: ListableBeanFactory,
+        pipelineProperties: PipelineProperties,
     ): Authenticator {
+        checkRevocationReadTimeout(revocationProperties.readTimeout, pipelineProperties.authenticationTimeout)
         val token = signing.ifAvailable?.let {
             val reader = revocationReader(revocationReader, tokenStore, beans)
             if (reader === RevocationReader.NONE) {
@@ -174,6 +176,7 @@ class CoSecPipelineAutoConfiguration {
                 revocationSkew = revocationProperties.skew,
                 acceptUnavailableRevocations = !revocationProperties.failClosed,
                 unchecked = unchecked.getIfAvailable { UncheckedRevocations() },
+                revocationReadTimeout = revocationProperties.readTimeout,
             )
         } ?: NO_TOKEN
         val apiKeys = if (apiKeysEnabled(environment)) {
@@ -264,6 +267,28 @@ class CoSecPipelineAutoConfiguration {
 
     @InternalCoSecApi
     companion object {
+        /**
+         * R2D-8: the revocation reads end within the authenticator's own budget, or a store that hangs makes every
+         * authenticated request 503 before `fail-closed` can say otherwise. Fails startup naming both properties.
+         */
+        internal fun checkRevocationReadTimeout(
+            readTimeout: java.time.Duration,
+            authenticationTimeout: java.time.Duration
+        ) {
+            checkRevocationReadTimeout(readTimeout)
+            check(readTimeout < authenticationTimeout) {
+                "cosec.authentication.revocation.read-timeout ($readTimeout) must be less than " +
+                    "cosec.pipeline.authentication-timeout ($authenticationTimeout)."
+            }
+        }
+
+        /** `cosec.authentication.revocation.read-timeout` is positive, or startup fails naming it. */
+        internal fun checkRevocationReadTimeout(readTimeout: java.time.Duration) {
+            check(!readTimeout.isNegative && !readTimeout.isZero) {
+                "cosec.authentication.revocation.read-timeout must be positive, not $readTimeout."
+            }
+        }
+
         /** `KafkaAuditListener.NAME`, as a literal: `cosec-kafka` is optional. */
         private const val KAFKA_AUDIT_LISTENER = "kafka-audit"
 

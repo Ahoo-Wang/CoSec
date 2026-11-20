@@ -370,6 +370,23 @@ class CoSecPipelineAutoConfigurationTest {
         ).run { context -> context.startupFailure.assert().isNull() }
     }
 
+    /**
+     * R2D-8 (`PIP-7`): the revocation reads must end within the authenticator's budget, or a hanging store makes every
+     * authenticated request 503 before `fail-closed` can say otherwise: a read timeout at or over it fails startup.
+     */
+    @Test
+    fun `a revocation read-timeout at or over the authentication timeout fails startup`() {
+        val property = "cosec.authentication.revocation.read-timeout"
+        for (value in listOf("1s", "2s", "0")) {
+            runner.withPropertyValues("$property=$value").run { context ->
+                context.startupFailure.assert().describedAs(value).isNotNull()
+                context.startupFailure!!.stackTraceToString().assert().contains(property)
+            }
+        }
+        runner.withPropertyValues("$property=2s", "cosec.pipeline.authentication-timeout=3s")
+            .run { context -> context.startupFailure.assert().isNull() }
+    }
+
     @Test
     fun `Redis that may evict snapshots fails startup unless told to warn`() {
         val evicting = EvictionPolicyCheck.Reading.Policies(mapOf("node" to "allkeys-lru"))
