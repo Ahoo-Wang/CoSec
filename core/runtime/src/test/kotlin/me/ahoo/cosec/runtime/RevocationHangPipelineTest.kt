@@ -25,7 +25,6 @@ import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.runtime.PipelineFixtures.facts
 import me.ahoo.cosec.runtime.PipelineFixtures.pipeline
 import me.ahoo.cosec.runtime.authn.TokenAuthenticator
-import me.ahoo.cosec.runtime.authn.UncheckedRevocations
 import me.ahoo.cosec.runtime.http.ProblemType
 import me.ahoo.cosec.spi.token.RevocationReader
 import me.ahoo.cosec.spi.token.TokenVerifier
@@ -37,9 +36,10 @@ import java.time.Duration
 import java.time.Instant
 
 /**
- * R2D-8 (`PIP-7`): a revocation store that hangs is answered as one that refuses, within the revocation check's own
- * budget, before the authenticator's runs out: the token is accepted by default and the request decided, or, with
- * `fail-closed`, the request is 503. Whichever of the two reads hangs, the token's or its principal's.
+ * R2D-8: CoSec bounds the reads of its own revocation reader (`CoCacheRevocationReader`'s read timeout); an
+ * application's own [RevocationReader] bounds its own, or the authenticator's timeout does it: a reader that never
+ * answers makes the request 503 at `cosec.pipeline.authentication-timeout`, accepted or not by `fail-closed`, since the
+ * check never reached an answer. What `extending.md` tells a reader's author, held here.
  */
 class RevocationHangPipelineTest {
     private object Verifier : TokenVerifier {
@@ -48,7 +48,7 @@ class RevocationHangPipelineTest {
         override fun refresh(token: CompositeToken): VerifiedToken = throw UnsupportedOperationException()
     }
 
-    /** A store that never answers the read named [hung]; the other answers "not revoked". */
+    /** An application's reader that never answers the read named [hung]; the other answers "not revoked". */
     private class Hanging(private val hung: String) : RevocationReader {
         override suspend fun isRevoked(tokenId: String): Boolean = if (hung == TOKEN) awaitCancellation() else false
 
@@ -56,47 +56,32 @@ class RevocationHangPipelineTest {
             if (hung == SUBJECT) awaitCancellation() else null
     }
 
-    private fun authenticator(hung: String, failClosed: Boolean, unchecked: UncheckedRevocations = UncheckedRevocations()) =
-        TokenAuthenticator(
-            Verifier,
-            Hanging(hung),
-            acceptUnavailableRevocations = !failClosed,
-            unchecked = unchecked,
-            revocationReadTimeout = BUDGET,
-        )
-
     private val request = facts(headers = mapOf("Authorization" to listOf("Bearer t")))
 
     @ParameterizedTest
     @ValueSource(strings = [TOKEN, SUBJECT])
-    fun `a hanging revocation read accepts the token within its budget`(hung: String) {
-        val unchecked = UncheckedRevocations()
-        val started = System.nanoTime()
-        val outcome = runBlocking { pipeline(authenticator(hung, failClosed = false, unchecked)).evaluate(request) }
-        val took = Duration.ofNanos(System.nanoTime() - started)
-        outcome.proceed.assert().describedAs("$outcome").isTrue()
-        outcome.security!!.principal!!.id.assert().isEqualTo(PrincipalId("alice"))
-        unchecked.count.assert().isEqualTo(1)
-        took.assert().isGreaterThanOrEqualTo(BUDGET).isLessThan(AUTHENTICATION_TIMEOUT)
-    }
-
-    @ParameterizedTest
-    @ValueSource(strings = [TOKEN, SUBJECT])
-    fun `with fail-closed a hanging revocation read is a 503 within its budget`(hung: String) {
-        val started = System.nanoTime()
-        val outcome = runBlocking { pipeline(authenticator(hung, failClosed = true)).evaluate(request) }
-        val took = Duration.ofNanos(System.nanoTime() - started)
-        outcome.status.assert().isEqualTo(ProblemType.UNAVAILABLE.status)
-        outcome.problem!!.type.assert().isEqualTo(ProblemType.UNAVAILABLE)
-        took.assert().isLessThan(AUTHENTICATION_TIMEOUT)
+    fun `a custom reader that never answers is a 503 at the authentication timeout, whatever fail-closed says`(
+        hung: String
+    ) {
+        for (failClosed in listOf(false, true)) {
+            val authenticator = TokenAuthenticator(Verifier, Hanging(hung), acceptUnavailableRevocations = !failClosed)
+            val pipeline = pipeline(authenticator) { options { authenticationTimeout = AUTHENTICATION_TIMEOUT } }
+            val started = System.nanoTime()
+            val outcome = runBlocking { pipeline.evaluate(request) }
+            val took = Duration.ofNanos(System.nanoTime() - started)
+            outcome.status.assert().describedAs("fail-closed=$failClosed").isEqualTo(ProblemType.UNAVAILABLE.status)
+            took.assert().isGreaterThanOrEqualTo(
+                AUTHENTICATION_TIMEOUT
+            ).isLessThan(AUTHENTICATION_TIMEOUT.multipliedBy(LATE))
+        }
     }
 
     private companion object {
         const val TOKEN = "token"
         const val SUBJECT = "subject"
-        val BUDGET: Duration = Duration.ofMillis(100)
+        val AUTHENTICATION_TIMEOUT: Duration = Duration.ofMillis(200)
 
-        /** The pipeline's default authentication timeout: what a hang ran into before. */
-        val AUTHENTICATION_TIMEOUT: Duration = Duration.ofSeconds(1)
+        /** What a loaded CI runner may add past the timeout: never as much again several times over. */
+        const val LATE = 10L
     }
 }

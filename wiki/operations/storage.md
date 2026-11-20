@@ -50,10 +50,17 @@ key encoding, codec, data source, key filter and per-entry lifetime ([Precedence
 Unreadable revocations fail the read, and memberships always expire, without jitter, and fail closed on a failed read.
 The shadow caches keep their declared lifetimes, and the revocation tables read for the store's whole command timeout
 (`cocache.redis.command-timeout`): a read that times out is unavailable, which the pipeline's verification accepts, so
-no `read-timeout` may shorten it. The check's own budget is shorter: its two reads end within
-`cosec.authentication.revocation.read-timeout` (300 ms), well within the authenticator's
+no `read-timeout` may shorten it. CoSec's revocation reader has a shorter budget of its own: each of its two reads ends
+within `cosec.authentication.revocation.read-timeout` (300 ms), both well within the authenticator's
 (`cosec.pipeline.authentication-timeout`, 1 s), so a Redis that hangs is answered as one that refuses, and the token is
-accepted rather than every authenticated request answered `503`; the command left behind ends at the store's timeout.
+accepted rather than every authenticated request answered `503`.
+
+**What a timed-out revocation read leaves behind.** The command stays pending on CoCache's Redis client until
+`cocache.redis.command-timeout` (2 s). That client rejects commands while it is disconnected, so a Redis that is down
+fails each read at once; while it is connected to a Redis that hangs, nothing bounds the pending commands by number
+(CoCache sets no `requestQueueSize`, and CoSec does not configure CoCache's client). The pile-up is the rate of
+revocation reads that miss the local copy times the command timeout. A "not revoked" answer is kept locally for up to
+30 seconds, so a token checked again within that time sends no command.
 The rest of the cache policy stays the application's, through customizers and `cocache.*` properties
 ([Precedence](./configuration.md#precedence) lists every field CoSec locks): on every cache the local cache's size and
 `expireAfterAccess`, and but for the snapshot store `local-max-age`; on every cache but the revocation tables

@@ -57,8 +57,6 @@ object PackageLedger {
                 STAGE to setOf("attribute", CALL, EVENT, HTTP, IDENTITY, "ratelimit", SHADOW, SNAPSHOT),
                 "audit" to setOf(EVENT, HTTP),
                 "authn" to setOf("token"),
-                // R2D-8: the revocation check's reads have a budget of their own (withLazyTimeoutOrNull).
-                "token" to setOf(CALL),
                 EVENT to setOf(CALL, HTTP, SNAPSHOT),
                 IDENTITY to setOf(CALL, HTTP),
                 SHADOW to setOf(EVENT, SNAPSHOT),

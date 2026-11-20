@@ -43,10 +43,12 @@ class CoCacheTokenStore
 @InternalCoSecApi @JvmOverloads
 constructor(
     private val cache: RevokedTokenCache,
-    private val subjectCache: RevokedSubjectCache? = null
+    private val subjectCache: RevokedSubjectCache? = null,
+    /** Each revocation read's budget ([reader]): past it, Redis is unavailable (R2D-8). */
+    readTimeout: java.time.Duration = CoCacheRevocationReader.DEFAULT_READ_TIMEOUT,
 ) : TokenStore {
-    /** The revocations this store writes, read without blocking (RFC 0006 §5.3.2). */
-    val reader: RevocationReader = CoCacheRevocationReader(cache, subjectCache)
+    /** The revocations this store writes, read without blocking (RFC 0006 §5.3.2), each read within its budget. */
+    val reader: RevocationReader = CoCacheRevocationReader(cache, subjectCache, readTimeout)
 
     /**
      * Writes the revocation with an explicit lifetime; the write invalidates any

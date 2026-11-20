@@ -86,12 +86,6 @@ class TokenAuthenticator(
     private val acceptUnavailableRevocations: Boolean = true,
     /** Where a token accepted without a revocation check is counted and logged (`cosec.revocation.unchecked`). */
     private val unchecked: UncheckedRevocations = UncheckedRevocations(),
-    /**
-     * How long the revocation check's reads may take together (`cosec.authentication.revocation.read-timeout`): past it
-     * the store is unavailable, and [acceptUnavailableRevocations] decides, within the authenticator's own budget
-     * (R2D-8).
-     */
-    private val revocationReadTimeout: Duration = TokenRevocation.DEFAULT_READ_TIMEOUT,
 ) : Authenticator {
     /** Whether [verifier] verifies CoSec's own tokens, which alone may use break-glass (RC1-26). */
     private val ownTokens = verifier is CoSecTokenVerifier
@@ -101,7 +95,7 @@ class TokenAuthenticator(
     /** Made once: every authenticated request carries it, and an allocation per request shows in `PipelineBenchmark`. */
     private val authnMethod = Identity.Method(method)
 
-    private val revocation = TokenRevocation(revocations, revocationSkew, revocationReadTimeout)
+    private val revocation = TokenRevocation(revocations, revocationSkew)
 
     init {
         require(ownTokens || credentialMethod != Identity.Method.JWT) {

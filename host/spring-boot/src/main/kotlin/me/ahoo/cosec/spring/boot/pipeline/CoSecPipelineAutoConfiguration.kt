@@ -176,7 +176,6 @@ class CoSecPipelineAutoConfiguration {
                 revocationSkew = revocationProperties.skew,
                 acceptUnavailableRevocations = !revocationProperties.failClosed,
                 unchecked = unchecked.getIfAvailable { UncheckedRevocations() },
-                revocationReadTimeout = revocationProperties.readTimeout,
             )
         } ?: NO_TOKEN
         val apiKeys = if (apiKeysEnabled(environment)) {
@@ -268,17 +267,18 @@ class CoSecPipelineAutoConfiguration {
     @InternalCoSecApi
     companion object {
         /**
-         * R2D-8: the revocation reads end within the authenticator's own budget, or a store that hangs makes every
-         * authenticated request 503 before `fail-closed` can say otherwise. Fails startup naming both properties.
+         * R2D-8: the CoCache revocation reader's two reads, each within `read-timeout`, end within the authenticator's
+         * own budget, or a Redis that hangs makes every authenticated request 503 before `fail-closed` can say
+         * otherwise. Fails startup naming both properties.
          */
         internal fun checkRevocationReadTimeout(
             readTimeout: java.time.Duration,
             authenticationTimeout: java.time.Duration
         ) {
             checkRevocationReadTimeout(readTimeout)
-            check(readTimeout < authenticationTimeout) {
-                "cosec.authentication.revocation.read-timeout ($readTimeout) must be less than " +
-                    "cosec.pipeline.authentication-timeout ($authenticationTimeout)."
+            check(readTimeout.multipliedBy(2) < authenticationTimeout) {
+                "Twice cosec.authentication.revocation.read-timeout ($readTimeout), a token's two revocation reads, " +
+                    "must be less than cosec.pipeline.authentication-timeout ($authenticationTimeout)."
             }
         }
 

@@ -194,7 +194,7 @@ fun cosecAuthenticator(
 |---|---|
 | `TokenStore` | 吊销的写入侧，由 CoSec 自己的 `TokenRevoker` 调用，你的代码从不直接调用：`revoke(tokenId, ttl)` 接收令牌的 `jti`（`VerifiedToken.id`），不是令牌本身，所以 `revoke(accessToken, ttl)` 会写入一个以有效凭证命名的键，却什么也没吊销。应用通过 `TokenRevoker` 登出用户或吊销主体（[登出与吊销](../integration/authentication.md#logout-and-revocation)）。存储的方法是 `revoke(tokenId, ttl)`、`revokeSubject(tenant, principal, issuedBefore, ttl)`，两者都是挂起函数，不阻塞。条目必须比它吊销的刷新令牌存活得更久。无法吊销某主体全部令牌的存储从 `revokeSubject` 抛出异常，紧急吊销因此绝不会悄悄失效。 |
 | `TokenFamilyStore` | 刷新令牌的会话（[会话](../integration/authentication.md#sessions)）：`create`、`read`，以及只在读到的版本之上 `replace` 一个令牌族，跨实例原子。读取失败或写入无法确认时抛出异常。只在登录、刷新和登出时读写。 |
-| `RevocationReader` | 吊销的读取侧，每个已认证请求都会调用：`isRevoked(tokenId)`、`subjectRevokedBefore(tenant, principal)`。两者都是挂起函数，不得阻塞。 |
+| `RevocationReader` | 吊销的读取侧，每个已认证请求都会调用：`isRevoked(tokenId)`、`subjectRevokedBefore(tenant, principal)`。两者都是挂起函数，不得阻塞。每次读取都必须在它自己的时限内应答或失败，存储无法及时读取时抛出 `RevocationUnavailableException`：CoSec 除认证器的时限外不给你的读取器任何时限，一次永不结束的读取会让请求在 `cosec.pipeline.authentication-timeout` 时返回 `503`，无论 `cosec.authentication.revocation.fail-closed` 如何。CoSec 自己的读取器用 `cosec.authentication.revocation.read-timeout` 限制每次读取。 |
 | `ApiKeyReader` | `findByHash(hash): ApiKey?`，挂起函数。未知的 key 返回 null；查找失败时抛出异常（请求应答 `503`）。 |
 
 使用 `cosec-cocache` 时，starter 装配 `CoCacheTokenStore` 及其读取器。不使用时，除非你注册了 `TokenStore` 和 `RevocationReader`（或设置 `cosec.jwt.enabled=false`），JWT 会让启动失败。注册 `RevocationReader.NONE` 是明确选择不吊销任何令牌。
