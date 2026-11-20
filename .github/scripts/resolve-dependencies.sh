@@ -19,7 +19,7 @@
 #   `:runtime:resolveDependencies :control:resolveDependencies`.
 #   RESOLVE_CENTRAL_FALLBACK=on installs `.github/gradle/central-fallback.init.gradle.kts` into the Gradle home for the rest of the job:
 #   a second host for what Maven Central and the plugin portal both answer "not found" for (below). Off unless asked, and never asked
-#   by a job that publishes: what it ships is built from what the repositories of the build serve.
+#   by a job that publishes, and no workflow asks for it yet (.github/scripts/README.md): what it ships is built from what the repositories of the build serve.
 #   The arguments are those the job's own build passes to Gradle that decide what it configures (a -P property, say).
 #
 # CI downloads fail now and then for a reason that is not the build's: the plugin portal or Maven Central answers 429 or a 404

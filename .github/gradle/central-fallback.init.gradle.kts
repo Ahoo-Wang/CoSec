@@ -12,7 +12,7 @@
  */
 
 // An init script for CI, installed into `$GRADLE_USER_HOME/init.d` by `.github/scripts/resolve-dependencies.sh` when a job asks
-// for it (`RESOLVE_CENTRAL_FALLBACK=on`); never loaded by a developer's build and never installed by a job that publishes.
+// for it (`RESOLVE_CENTRAL_FALLBACK=on`; no workflow does yet: .github/scripts/README.md says whose decision that is); never loaded by a developer's build and never installed by a job that publishes.
 //
 // It appends one repository, last, to the plugin repositories and to every project's: Google's read-only copy of Maven
 // Central. Gradle asks it only for what every repository before it (Maven Central, then the plugin portal) answered "not

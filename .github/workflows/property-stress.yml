@@ -127,7 +127,7 @@ jobs:
 
       # Downloads only, retried; the tested ref's own checkout, the script of this workflow's commit.
       - name: Resolve the dependencies
-        run: RESOLVE_CENTRAL_FALLBACK=on ./.ci-actions/.github/scripts/resolve-dependencies.sh
+        run: ./.ci-actions/.github/scripts/resolve-dependencies.sh
 
       - name: Run property stress
         run: |

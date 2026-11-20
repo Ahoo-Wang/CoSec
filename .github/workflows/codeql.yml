@@ -62,7 +62,7 @@ jobs:
       # distribution, the plugins and every dependency, so that the traced build below finds them and the retry never wraps
       # a compilation. services.gradle.org answers 504 often enough to fail this required check; this covers it too.
       - name: Resolve the dependencies
-        run: RESOLVE_CENTRAL_FALLBACK=on .github/scripts/resolve-dependencies.sh
+        run: .github/scripts/resolve-dependencies.sh
 
       - name: Initialize CodeQL
         uses: github/codeql-action/init@v4

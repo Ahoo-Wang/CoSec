@@ -31,11 +31,15 @@ asks each URL Gradle searched itself and prints the status and the CDN's headers
 `RESOLVE_CENTRAL_FALLBACK=on` installs `.github/gradle/central-fallback.init.gradle.kts` into the job's Gradle home, which
 appends Google's read-only copy of Maven Central as the last repository, for plugins and for projects. Gradle asks it only for
 what the repositories before it answered "not found" for, so a healthy run never reads from it, and an artifact no repository
-has still fails the job. It is installed for the whole job because Gradle keeps its module cache per repository: the build steps
-find what the resolving step downloaded from it only if they ask the same repositories. Every workflow that tests, measures or
-analyses asks for it; `package-deploy.yml` and `docker-deploy.yml`, which publish what they build, do not: a release is built
-from what Central serves, or its job fails and is run again. A new workflow that runs Gradle asks for it in its resolve step
-unless it publishes.
+has still fails the job. It would be installed for the whole job because Gradle keeps its module cache per repository: the
+build steps find what the resolving step downloaded from it only if they ask the same repositories.
+
+**It is off: no workflow sets it.** Where the build resolves from (`AGENTS.md`: Maven Central, then the plugin portal for
+plugins) is the maintainer's decision, and a second host that no checksum verifies would widen what CI tests against, even
+if a release never used it. Turning it on is the maintainer's call: add `RESOLVE_CENTRAL_FALLBACK=on` to the resolve step of
+the workflows that test, measure or analyse, never to `package-deploy.yml` or `docker-deploy.yml`, which publish what they
+build. Until then the next failure prints, after each attempt, the HTTP status and the CDN's headers for every URL Gradle
+searched (`diagnose`), which is what that decision needs.
 
 What still fails, and why: a file only the plugin portal hosts (the marker and jar of the Nexus publish plugin
 `io.github.gradle-nexus.publish-plugin`, and the JMH plugin's) has no second host. The portal answered `Plugin ... was not found`
