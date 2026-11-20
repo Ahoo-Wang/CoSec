@@ -3,7 +3,7 @@
 ## Hand-over (kept current)
 - **Asked by:** the coordinator, 2026-11-20. Read-only; the output is this file. No code, no PR.
 - **Reviewed at:** `origin/main` 3ed2eb0e4 (after #1729), in a detached checkout of the worktree `trusting-hawking-6969d5`.
-- **Status:** finished for this pass, partial in coverage (see "What I did not get to"). Nine findings, R2C-1..9. The coordinator was sent the counts.
+- **Status:** two passes written. First pass (R2C-1..9) was sent; second pass (R2C-10..24, areas 1–5 of the coordinator's second message) is written below the line "Continuation". Coverage is partial: see "Still not covered" at the end.
 - **Already read, not repeated:** `docs/reviews/2026-11/` (round 1 B, `saas-scale-control-plane.md`, `saas-referrers-design.md`, `usability-triage-beta5.md`, r2-1, r2-2), roadmap §8.
 
 ## Index (ordered: breaking after RC first, then severity)
@@ -110,3 +110,165 @@ Count per module: **core/control 6** (R2C-1, 3, 4, 5, 6, 9), **backends/cocache 
 - **backends/cocache:** `snapshot/RedisSnapshotDocumentStore` and `PolicySnapshotCache`, `shadow/*` (stores, reports, instance index; read for `saas-scale-control-plane.md` §6b but not re-checked), `limiter`, the token, membership and revocation caches, `ApiKey*`; the key layout and codecs (`RevisionIndexCodec`, `ReferrerMemberCodec`, `StoredJson`) for duplicate walks of one format; what a Redis failover answering an older state does to the lease and the head beyond the documented Q27.
 - **migration/migrate:** `convert`, `api-keys`, `bootstrap`, `partition-plan`, `publish`'s command layer, `verify-chain`, the 7.x mirror (`v7/`), `LegacyConversion` (the conversion itself, only its interface and its caller), messages of those commands, behaviour on a store written by a newer version.
 - **Tests that would pass with the behaviour broken:** not examined, apart from the observations above.
+
+---
+
+## Continuation (second pass, from the coordinator's second message): ids continue at R2C-10
+
+### Area 1: the control API's request and response shapes, and the change record
+
+#### R2C-10 (S2, S) No stored record of the control plane carries a version, and every reader rejects an unknown member
+- **Module / symbol:** `core/control` `change/ChangeRequestCodec` (`change(node)`, `decodeSlot`, `only(...)`); `backends/cocache` `control/RevisionIndexCodec`, `AppListCodec`. The policy documents are the exception: they carry `schema: 2`. (The shadow report codecs live in `cosec-document`'s `ShadowCodec` and were not checked.)
+- **What is wrong.** The change request, the staging slot, the revision index and the app list have no `schema`/`version` member, and each decoder is strict: `node.only("id", "key", "base", …)` throws `SnapshotFormatException` on a member it does not know. So the first release that adds a member to any of them (the open-change list, the staged-candidate list and the escalation reason of the accepted findings are candidates) cannot be rolled out one instance at a time: an instance of 8.0 that reads a record an 8.1 instance wrote throws. Throwing is the right answer for a policy document (a decision input). For a change record it has a cost: it is the poison record of R2C-3 (`openChanges` throws, no shadow window closes, no reclamation), made by an ordinary rolling upgrade, and a `GET /changes/{id}` of that change is a 500. `RevisionIndexCodec` already handles the other direction (an entry an older version wrote has no `parent`), so the case is known one way.
+- **Evidence:** `ChangeRequestCodec.kt` (`change`: the `only` list; `tree`: no version member), `RevisionIndexCodec.kt:111-124`, `AppListCodec.kt:47`, `StageSlot` codec `only("holder", "since")`.
+- **Breaking after RC:** **yes.** What must exist in the *first* release is the reader's tolerance: a reader released without it can never be upgraded in place by a writer that adds a member. After RC the readers in the field are the ones that reject.
+- **Fix:** a `schema` member in each record, written now; readers ignore unknown members of records that are not decision inputs (and check `schema` is not above what they know). S.
+
+#### R2C-11 (S3, M) The API's change shape is the stored record, and its closed vocabularies are untyped
+- **Module / symbol:** `core/control` `api/ControlHttpSupport.changeResponse` → `ChangeRequestCodec.encodeShown` (the stored tree minus four approval fields); `api/Redaction`, `DecisionView`, `TraceEntryView`; `ControlResponseJson.decision`.
+- **What is wrong.** (a) `GET /changes/{id}` is the stored record: `checkedWith` (a map keyed by document key with digests), `checkedApps.digest`, `shadow` (window id, reporters), `candidate` (a digest as a string) are what a client reads, so a change to the record's internals is a change to the API, and the API's shape cannot be reviewed apart from the store's (R2C-10 makes the store's immovable too). The client-visible parts (`state`, `findings`, `escalations`, `approval`, `publishedRevision`) are not separated from the bookkeeping. (b) The closed sets in answers are strings of unstated range: `state`, `kind`, `severity` are enum names (stable if the enums are); `decision` is `"Permit"`/`"Deny"`/`"Indeterminate"` plus `"Rejected"` (a fourth value only `simulate` gives); `outcome` and `effect` of a trace entry are enum names; and **`cause` is `decision.cause::class.simpleName` for an indeterminate decision**, so a Kotlin class name (`MatcherFailed`, `SourceUnavailable`, …) is the API's value, while for `"Rejected"` the same member is a `ScopeResolution` enum name (`APP_MISMATCH`, …): two vocabularies in one member. Renaming a `Cause` class changes what clients read. The client contract (`contract/`, PIP-25) covers the data plane's problem types, not these.
+- **Evidence:** `ControlHttpSupport.kt:62`, `ChangeRequestCodec.kt` (`encodeShown`, `tree`), `Redaction.kt:33-36,45`, `DecisionQueries.kt:145` (`DecisionView("Rejected", null, reason.name, …)`), `ControlResponseJson.decision`.
+- **Breaking after RC:** **yes** (the answers' members and values).
+- **Fix:** a response model of the control API of its own (the part of the record clients are given), the closed sets as documented slugs (`cause` from a mapping, not a class name), a test that pins them as `contract/` pins the data plane's. M.
+
+#### R2C-12 (S3, S–M) `propagation` counts instances that cannot hold the document, and reads every instance's status per call
+- **Module / symbol:** `core/control` `lifecycle/ShadowWindows.propagation`, `change/Propagation(revision, installed, recent)`, route `GET /documents/{key}/revisions/{n}/propagation`.
+- **What is wrong.** `installed` is the number of instances whose status lists the document at that revision or later; `recent` is *every* instance that wrote a status in the last minute. A status lists the documents the instance **holds**, and since the data plane keeps resident only the tenants it serves (`maxTenants`; #1725), most replicas never list a given tenant: for `tenant:t1` with 50 replicas the answer is `installed: 3, recent: 50` however fully it propagated, and the caller cannot tell "three of the three that hold it" from "three of fifty". For the platform and app documents (held by every instance) it is right. The call also reads `instances:all` and one status per instance, each up to ~47 KB (`saas-scale-control-plane.md` §6b): about 2.4 MB at 50 replicas for one answer, uncached, on a route any reader of the document may call in a loop.
+- **Evidence:** `ShadowWindows.kt:84-87`, `Propagation.kt:23` ("how many of the [recent] instances report [revision] … installed"), `CoCacheShadowReports.statuses`.
+- **Breaking after RC:** **yes**: the meaning of the members, or new members (`holding`).
+- **Fix:** for a tenant document count only the instances that report holding it (`holding`, `installed`), keep `recent` as the instance count, document that a tenant held by none is not propagated yet; cache the statuses for a few seconds. S–M.
+
+#### R2C-13 (S4, S) One step, five names
+- **Module / symbol:** `core/control`: route `POST /changes/{id}:shadow`, `ControlPlane.startShadow`, `Changes.stage`, `ChangeEvent.Kind.SHADOW_STARTED`, `ChangeState.SHADOWING`, the "staging slot", `StageSlot`, `ShadowAck`.
+- **What is wrong.** The step that opens a change's shadow window is called `shadow` on the wire, `startShadow` in the plane, `stage` in the flow, `SHADOW_STARTED` in the audit and "staging" in the slot and the store (`putStage`, `stagedCandidate`). A reader of the API guesses `:stage` or `:start-shadow`; a reader of the audit does not find the route. `skip-shadow` is the one that matches its route and plane names.
+- **Evidence:** `ChangeRoutes.kt` (`"shadow" -> plane.startShadow`), `ControlPlane.kt:59`, `Changes.kt:152`, `ChangeEvent.kt`.
+- **Breaking after RC:** the route name and the event kind yes; the internal names no.
+- **Fix:** keep the wire names, name the internal ones to match in one pass (or the reverse before RC). S.
+
+### Area 2: staging, approval, the grant analysis
+
+#### R2C-14 (S2, M) A change that widens a permission many tenants refer to reads every referring tenant's head, three times, and stores one escalation per binding
+- **Module / symbol:** `core/control` `lifecycle/EscalationAnalysis.referringBindings` (the two overloads), `RecordingCurrentDocuments.head`, `ChangeRequest.checkedWith`, `MovedHeads.detect` (`DEFAULT_TIMEOUT = 1.seconds`).
+- **What is wrong.** When an *app* document change adds or widens the ALLOWs of a permission policy (`perm:<app>/<id>`), `referringBindings` reads the whole referrer set of that policy (all tenants whose roles list it: up to every tenant) and then, one tenant at a time, `documents.head(tenant)`, decodes it, runs `RoleExpansion.effective` and emits one `Escalation(TENANT_BINDING)` per binding to that policy. `saas-scale-control-plane.md` §2 measured *removal* (refused, reads the referrers' heads) and *adding a permission nobody refers to* (constant); widening an existing, widely used permission is the routine app change and was not measured. At the target (a permission every tenant's roles list, 50,000 tenants):
+  1. **The reads:** 50,000 sequential head reads (each a decoded tenant document) per widened policy, at `propose` (`checked`), again at `publish` (`candidates.checked` re-runs the analysis), and the loop repeats for each widened policy of the change.
+  2. **The record:** `RecordingCurrentDocuments` keeps every head it served in `read`, which `CandidateChecks.checked` copies into `ChangeRequest.checkedWith`: a map with an entry for every referring tenant, stored in the change record (rewritten at every transition) and returned by `GET /changes/{id}`. The escalations are one per binding (a tenant with five roles listing the permission derives five bindings): hundreds of thousands of `Escalation` objects in the same record, and in the `escalations` array of the audit events (`ChangeEventJson`). Neither is capped.
+  3. **After the publish:** `MovedHeads.detect` re-reads every head in `checkedWith` (`store.head(key)` one by one) under a **one-second** timeout. At this scale it cannot finish, so every such publish records `REVIEW_NEEDED` with `DETECTION_TIMED_OUT`: an audit alarm that means "too many heads", raised on a publish nobody has to review.
+- **Evidence:** `EscalationAnalysis.kt:240-292`, `RecordingCurrentDocuments.kt` (`read.putIfAbsent`), `CandidateChecks.checked` (`checkedWith = result.checkedWith + recording.read…`), `MovedHeads.kt:57,189` and `detect`. Read, not run; the per-tenant counts follow from the code and the target's sizes.
+- **Breaking after RC:** **yes** in part: bounding or aggregating the informational escalations changes what the change record, the API and the audit stream carry (`escalations`, `checkedWith`).
+- **Fix:** an informational escalation per *tenant* with a binding count, capped (first N tenants, then "and k more"); do not record the heads read for informational findings in `checkedWith` (they are not what the approval rests on; the referrer set's change is what matters); read the heads with bounded concurrency; give detection a budget in proportion to the heads it has, or skip it for informational-only heads. M.
+
+#### R2C-15 (S3, S) `shadowed` never checks that its candidate is staged; a withdrawal that fails is swallowed and never retried
+- **Module / symbol:** `core/control` `lifecycle/Staging.stage`, `Staging.shadowed`, `StagingSlots.withdraw`/`release`/`write`.
+- **What is wrong.** (a) `stage` moves the change to `SHADOWING` (`reserved`: one conditional write, then the slot), and only then writes the candidate (`slots.write`). The KDoc of `write` says "a change is `SHADOWING` only while it holds the slot, with its candidate staged". That holds for every failure the process survives (`giveBack`), not for a crash or a lost instance between the two steps. Then the change is `SHADOWING` and holds the slot with **no candidate**, no instance samples anything, and `shadowed` never looks: it reads the head and the reports only, so the window runs to `max-duration` (24 h by default) and closes `insufficient`, with the document's slot held the whole time. (b) `withdraw` catches every failure, logs "instances count it as a base mismatch once it is stale" and returns `Unit`. `release` and `shadowed` go on to free the slot. The candidate key is a store of record (never expires), nothing retries the withdrawal, and nothing reconciles candidates with changes: a candidate whose withdrawal failed stays for good, read and compared by every instance that holds the document.
+- **For the staged-list design (said as asked, not a review of it):** its order "withdraw the candidate, *then* remove the member" needs the withdrawal's *result*; today `withdraw` returns nothing and swallows the failure, so a caller cannot tell "gone" from "left". And its premise that a crash leaves a member without a candidate, never a candidate without a member, holds only if the member is added before `slots.write`'s `place` and removed only after a *successful* withdraw; the present `release` frees the slot whether or not the withdraw worked.
+- **Evidence:** `Staging.kt:73-90,131-158`, `StagingSlots.kt` (`write` KDoc, `withdraw`, `release`), `ShadowCacheSpecs.candidate` (`storeOfRecord`, no TTL).
+- **Breaking after RC:** no.
+- **Fix:** `shadowed` re-places the candidate (or settles the change `CONFLICTED`) when `stagedCandidate(key)?.window != state.window`; `withdraw` returns whether the candidate is gone, and a failed one is retried by the shadow pass for terminal changes that still list a window. S–M.
+
+#### R2C-16 (S4, S) The rule "the approver is not the author" is written twice, with two messages
+- **Module / symbol:** `core/control` `lifecycle/ApprovalRules` (`requireApprovable` and `approvalProblem`).
+- **What is wrong.** The rule "the author and the publisher cannot be the approver" is written twice with different outputs: `requireApprovable` refuses the author at approve time (`403 "the author of change … cannot approve it"`), `approvalProblem` refuses the author or the publisher at publish time (`"the approval is the author's or the publisher's own"`) and can only be reached by a stored approval made some other way. APR-1's guard audit added `StoredApprovalTest` because the publish-time half is not reachable through today's flow. Two copies of one rule with two messages is the shape that drifts; `requireApprovable` could ask `approvalProblem`'s predicate.
+- **Evidence:** `ApprovalRules.kt:83-91,140-152`; `LiveBreakGlassChangeTest`/`StoredApprovalTest` (#1718, #1721).
+- **Breaking after RC:** no.
+- **Fix:** one predicate (`approverRefusal(change, approver, publisher?)`), two callers. S.
+
+### Area 3: `backends/cocache`'s other stores
+
+#### R2C-17 (S3, S) A shadow window whose report is lost can never close, not even as insufficient
+- **Module / symbol:** `backends/cocache` `shadow/CoCacheShadowReports.reports` (`checkNotNull(read(reports, key)…) { "… is listed as reported but has no report" }`) read by `core/control` `ShadowWindows.look`, `Staging.shadowed`.
+- **What is wrong.** A window's reporters are listed in `shadow:reporters:<window>`; each listed instance must have its `shadow:report:<window>:<instance>`. A missing one makes `reports()` throw, `look` throws, `shadowed` answers 503 `UNAVAILABLE` ("the shadow reports … could not be read") and `closeShadowWindows` retries every minute. `look` is also where `max-duration` and `insufficient` are decided, so a window with one lost report **never reaches them**: it stays `SHADOWING`, holding the document's slot, until the change itself expires (`expire-after`). A report is lost by exactly the case the design names for fail-closed (`CTL-16`): a Redis failover that drops the last writes ("Nothing waits for replicas", `CoCacheControlStore` KDoc; reports are written every 10 s, so the newest are the ones at risk), or an operator clearing keys. The author's only exits are `abandon` and waiting for expiry; the 503 carries no detail (`UNAVAILABLE` is `detailed = false`) and the cause is only in a log line.
+- **Evidence:** `CoCacheShadowReports.kt:128-143`, `ShadowWindows.look` (`check(vanished.isEmpty())`), `Staging.shadowed` (the `catch` that turns any failure into 503), `ControlHttp.Problem.UNAVAILABLE`.
+- **Breaking after RC:** no.
+- **Fix:** past `max-duration`, `look` closes the window `blocked` (or `insufficient`) with the vanished instances named in the summary instead of failing; and the 503 for a window's unreadable reports names the window. S.
+
+#### R2C-18 (S3, S) An unknown principal is never cached, so a token of a removed member reaches the application's loader on every request
+- **Module / symbol:** `backends/cocache` `CoCacheMembershipProvider.memberships` / `load` (`UnknownPrincipal` fails the fill).
+- **What is wrong.** A principal the loader does not know (or that is not active) is answered `Unknown` and deliberately *not cached*, "so a principal added later is known at once". The credential is then refused, and the next request of the same token asks the loader again, in full, at the request's rate. A token stays valid until expiry (a login with a 30-day session refreshes it) unless it is revoked: a removed member, a deleted tenant's users, a client holding an old token, or a script replaying one, each turns every request into a call of `MembershipLoader` (the application's database or directory), bounded only by the gateway's capacity. The fill is coalesced per key *while it runs* (`cache.async().get(key) { … }`), so concurrent requests share one call, but nothing remembers the answer for the next request. At SaaS scale the loader is the one shared dependency of every decision, and a refused credential should be the cheapest request, not the most expensive.
+- **Evidence:** `CoCacheMembershipProvider.kt:58-90,101-105` (`UnknownPrincipal`, "An unknown principal (null) is not cached: each request for it asks [loader] again").
+- **Breaking after RC:** no (a default; a new option would be additive).
+- **Fix:** a short negative entry (a few seconds, `cosec.authorization.membership.unknown-ttl`, default of the same order as the loader's own timeout), invalidated by `invalidate`; say in `wiki` that adding a principal is visible after it. S.
+
+#### R2C-19 (S4, S) Three copies of "the index agrees with the head"
+- **Module / symbol:** `core/control` `store/Revisions.historyAndHead`, `Revisions.verifyIndex`, `store/Retention.reclaimable`.
+- **What is wrong.** Each reads the head and the index, filters `indexed.entries.filter { it.revision <= stored.document.revision }`, and asks `HistoryRepair.agrees`/`check`. `reclaimable` was added by #1726 as a cheap pre-check that must give the same verdict as `historyAndHead`'s test, with the same filter and floor, so that a document with nothing to reclaim is not read twice; the two (and `verifyIndex`) can drift. No test relates them.
+- **Evidence:** `Revisions.kt` (`historyAndHead`, `verifyIndex`), `Retention.kt:reclaimable`.
+- **Breaking after RC:** no.
+- **Fix:** one `HistoryRepair.read(store, key)` returning `(entries, stored, agrees)`. S.
+
+### Area 4: `cosec-migrate`'s other commands
+
+#### R2C-20 (S3, S) The long commands print nothing until they end
+- **Module / symbol:** `migration/migrate` `ChainVerification.run` / `VerifyChainCommand.report`, `ReferenceRepair.repair`, `PublishCommand`.
+- **What is wrong.** `verify-chain` collects one `VerifiedChain` per document (`keys.map { … }`, sequential: the head and every retained record of each document, up to 50) and prints every line, and the summary, after the last one; `repair-references` prints its totals at the end. At 50,000 documents `verify-chain` is of the order of two million sequential record reads and `repair-references` is R2C-8: tens of minutes to hours of silence, with no way to tell progress from a hang, to stop and resume, or to verify a part (`--document` takes one key; there is no `--tenant-prefix`, `--sample` or `--limit`). A run that dies at document 49,000 prints nothing of the 48,999 it verified.
+- **Evidence:** `ChainVerification.kt:24-37`, `VerifyChainCommand.kt` (`report` after `run`), `ReferenceRepair.kt` (`run` returns a `RepairResult` after the whole `repair()`).
+- **Breaking after RC:** no (output of a CLI whose contract is its command line; additive options).
+- **Fix:** print each document's line as it is verified (the `report` already has one line per document), a progress line every N, and a `--limit`/`--only-tenants` scope. S.
+
+#### R2C-21 (S3, S) `bootstrap` is not repeatable for the principal it already bound
+- **Module / symbol:** `migration/migrate` `Bootstrap.run` and `BootstrapCommand`.
+- **What is wrong.** `run` refuses when the platform tenant's document already binds `cosec:platform-admin` and `force` is not set (`BootstrapRefusedException` → `Failed: …`, exit 1). The idempotent path that follows (`CandidateDigest.of(current) == CandidateDigest.of(candidate)` → return the current revision) is reachable only with `--force`, which is documented as the recovery for "every administrator is lost". So a deployment job or init container that runs `bootstrap --platform-admin alice` on every start succeeds once and then fails on every restart, and the way to make it succeed is `--force`, which also overwrites the recovery safeguard for a different principal. A second run after a lost reply (the write landed, the exit code did not arrive) fails the same way, although the state is exactly what was asked.
+- **Evidence:** `Bootstrap.kt:56-62` (the refusal) before `:77-79` (the digest short-circuit); the KDoc of `Bootstrap` ("It runs only while that document binds nobody").
+- **Breaking after RC:** no (a refusal becoming a success when the binding is the one asked for).
+- **Fix:** when the existing admin binding is the one this run would write (same id, same principal), answer OK with the revision and say it was already bound; refuse only when another principal holds it. S.
+
+#### R2C-22 (S4, S) After a rejected `convert`, the advice "convert again" cannot work with the same `--out`
+- **Module / symbol:** `migration/migrate` `ConvertCommand.summarize`, `ConvertedDirectory.write`.
+- **What is wrong.** A rejected conversion still writes `report.json` (the run's `complete` path writes the report whether or not the conversion was accepted). The summary then says "Rejected: fix the N rejection(s) and convert again. Nothing else was written." The next run with the same `--out` stops at `require(!exists || empty)`: "`<dir>` is not empty: convert writes into a new directory." The operator has to know to delete or rename the directory; neither message says so.
+- **Evidence:** `ConvertedDirectory.kt:70-72,102-110`, `ConvertCommand.kt` (the "Rejected" line).
+- **Breaking after RC:** no.
+- **Fix:** name the report in the rejection line and say "remove it or give a new --out"; or let `convert` replace a directory whose only content is a report of a rejected run, as `api-keys` does for `REPLACEABLE_STATUS`. S.
+
+### Area 5: the ledgers and the recorded suppressions of the three modules
+
+#### R2C-23 (S4, S–M) What could go from the ledgers and the suppressions
+- **Suppressions (`DetektSuppressionTest.RECORDED`: `TooManyFunctions` 8, `NestedBlockDepth` 3, `LongParameterList` 7).** Five of the eight `TooManyFunctions` are in these modules: `ControlStore`, `InMemoryControlStore`, `CoCacheControlStore` ("one method per store operation": they go together, and the coordinator's decision that `ControlStore` stays one port in 8.0 keeps them), `Converter` ("migrate's one-off conversion"), and **`Revisions`**. `Revisions`' reason is stale: "seven of its functions are one-line delegations to the part that does the work"; it has **ten** now (`referrerEntries`, `referrers`, `definesItself`, `referenceKeys`, `repairReferences`, `pruneReferences`, `reconcileApps`, `completeApps`, `verifyChain`, `reclaim`; #1729 added three). That one could go: its callers (`cosec-migrate`, `lifecycle`) take the part they use (`referrerIndex`, `listing`, `retained`) from `Revisions` instead of going through ten delegations, and the suppression and its ledger count (`RECORDED`) fall by one. M, and not before the 8.0 RC unless R2C-8/R2C-14 touch those callers anyway.
+- **`SourceSizeLedger`.** Of these modules only `Converter.kt` (cap 918, now 918) and `PartTranslation.kt` (cap 500, now 500) are entered, both "one-off conversion of 7.x data". No file of `core/control` or `backends/cocache` exceeds 400; `Revisions.kt` (395) and `CoCacheControlStore.kt` (382) are close, and R2C-2 and R2C-8 will add to both.
+- **`TypeLedger`.** Thirteen entries for these modules; each file still holds the several types its entry says (checked by counting top-level declarations: 2 to 8), so none can go on that ground. `ControlStore.kt` holds eight (the port and seven stored records: `StoredDocument`, `Versioned`, `HeadWrite`, `AppList`, `RevisionEntry`, `PendingRecord`, `RevisionIndex`); the records are what a split of the port (R2C-9) would move first.
+- **`PackageLedger`, module `control`.** The table lets `api` use `audit` and `grant`; no source file of `api` names a type of either package (checked by `import` and by qualified name; the test works on classes, so a use through an inferred type would not show: **not confirmed**, to be confirmed by removing the two edges and running `:architecture:test --tests PackageDependencyTest`). `store → change`, `audit → change`, `authz → change` and `lifecycle → …` match the imports. `cocache` and `migrate` have no package table.
+- **Breaking after RC:** no.
+
+#### R2C-24 (S4, S) `ChangeAuthority` is three things behind one name
+- **Module / symbol:** `core/control` `lifecycle/ChangeAuthority` (357 lines, public class).
+- **What is wrong.** Its members are the authorization of an operator on a document (`isolate`, `require`, `decide`, `holds`, `authorize`), five delegations to `ApprovalRules` (`requireApprovable`, `requireAuthor`, `approvalProblem`, `approverProblem`, `requireBoundaryOperator`), and the analysis entry (`escalations`, which builds an `EscalationAnalysis`). Callers take it for any of the three, so a change to the approval rules is a change to the class that also owns the hard rule `TenantIsolation`. The `PackageLedger` and `TypeLedger` do not see it because it is one type; it is the reason `Approvals`, `Staging`, `Publishing` and `Proposals` all take it as a constructor parameter (and why a test of any of them needs the whole of it).
+- **Evidence:** `ChangeAuthority.kt` member list (lines 92-244).
+- **Breaking after RC:** no (`ChangeAuthority` is internal).
+- **Fix:** let `Approvals`/`Publishing` take `ApprovalRules` directly; leave `ChangeAuthority` the authorization. S.
+
+---
+
+## Continuation: index, what is sound, what is still not covered
+
+| id | area / module | sev | size | breaking after RC | one line |
+|---|---|---|---|---|---|
+| R2C-10 | 1 · control + cocache codecs | S2 | S | **yes** (the readers must be tolerant in the first released version) | no stored record of the control plane has a schema member, and every reader rejects an unknown member |
+| R2C-14 | 2 · control | S2 | M | **yes** in part (escalations, `checkedWith` in the record, the API and the audit) | a widening of a widely used permission reads every referring tenant's head three times and stores one escalation per binding; detection times out at 1 s |
+| R2C-11 | 1 · control | S3 | M | **yes** | the API's change shape is the stored record; `cause` is a Kotlin class name |
+| R2C-12 | 1 · control | S3 | S–M | **yes** | `propagation` counts instances that cannot hold a tenant document, and reads every status per call |
+| R2C-13 | 1 · control | S4 | S | route and event names yes | one step, five names (`shadow`, `startShadow`, `stage`, `SHADOW_STARTED`, "staging") |
+| R2C-15 | 2 · control | S3 | S–M | no | `shadowed` never checks the candidate is staged; a failed withdrawal is swallowed and never retried |
+| R2C-17 | 3 · cocache | S3 | S | no | a shadow window whose report is lost can never close, not even as insufficient |
+| R2C-18 | 3 · cocache | S3 | S | no | an unknown principal is never cached: a token of a removed member hits the loader every request |
+| R2C-20 | 4 · migrate | S3 | S | no | `verify-chain`, `repair-references`, `publish` print nothing until they end |
+| R2C-21 | 4 · migrate | S3 | S | no | `bootstrap` fails when run again for the principal it already bound |
+| R2C-16 | 2 · control | S4 | S | no | "the approver is not the author" is written twice, with two messages |
+| R2C-19 | 3 · control | S4 | S | no | three copies of "the index agrees with the head" |
+| R2C-22 | 4 · migrate | S4 | S | no | after a rejected `convert`, "convert again" fails on the same `--out` |
+| R2C-23 | 5 · ledgers | S4 | S–M | no | `Revisions`' suppression reason is stale (ten delegations, not seven); two unused `api` edges to confirm |
+| R2C-24 | 5 · control | S4 | S | no | `ChangeAuthority` is authorization, approval rules and analysis entry behind one name |
+
+New findings by module (R2C-10 on): **core/control 9** (10, 11, 12, 13, 14, 15, 16, 19, 24), **backends/cocache 2** (17, 18; 10 touches the cocache codecs as well), **migration/migrate 3** (20, 21, 22), **ledgers 1** (23). Breaking after RC: R2C-10, R2C-11, R2C-12, R2C-14 (in part), R2C-13 (route and event names). Whole file: 24 findings, none S1.
+
+### Sound, from the second pass
+- **`RedisSnapshotDocumentStore`:** a local copy never answers "absent"; a Redis read with no answer fails the read; the digest of a local copy is computed off the caller's thread; a regression of an installed revision is handled (`KeyLoads.recordInstall`: installed, counted, logged) and the storage page says so (`storage.md`, "Revisions only move as Redis says").
+- **Revocation (`CoCacheTokenStore`, `CoCacheRevocationReader`):** `revokeSubject` keeps the later `issuedBefore` with a conditional write (8 attempts); a read with no answer is `RevocationUnavailableException`, never "not revoked"; a failover that drops the last revocations is documented in `storage.md` ("revoke again what you must").
+- **`ControlHttp`'s error answers:** a refusal says nothing it should not (`detailed = false` for 401/403/404/503), the stored-value failure is logged with the key and answered 500 without detail.
+- **`ChangeRoutes`/`ControlRoutes`:** one path written the one way, a leaf route of one segment, no unpaired surrogate in a path or query; `kind` is refused in a proposal body.
+- **`StagingSlots.place`:** a late write of a change that lost the slot fails on the digest of the candidate it read (#1235); `giveBack` runs under `NonCancellable`.
+- **`DocumentPublisher`/`ConvertedDirectory`:** `convert` never overwrites, settles every file name before writing the first and removes what it wrote when it fails; `publish --resume` skips a document only when its content is the converted one.
+- **`verify-chain`/`restore` messages:** each names the document, the revision and the likely cause ("a write lost in a Redis failover, or a deleted key"); `restore` refuses a head that moved.
+
+### Still not covered
+- **core/control:** `Narrowing`, `Preemption` (read only through `Staging.takeSlot`), `GrantAnalyzer` and the `grant/` package internals (`GrantFragmenter`, `GrantVerdicts`, `Specialization`, `GrantorRights`), `LockoutCheck`, `ApprovalRules.approverProblem`'s re-decision, `ControlAuthorizer`/`PipelineControlAuthorizer`, `BreakGlass`; the handlers of `simulate`, `explain` and `analyze` were read for their shapes (R2C-11) but not for cost per call; the JSON of the change record's `operations` (`OperationCodec`) and `ShadowStateCodec` were not read.
+- **backends/cocache:** `PolicySnapshotCache`, `CoCacheTokenFamilyStore` (sessions), `RedisApiKeyReader`/`Store` beyond their headers, the `CoSecCacheSpecs`/`CacheLocks` locks beyond what R2C-7 touches, the Lua script of the rate limiter, `CoCacheCandidateStore`.
+- **migration/migrate:** `ApiKeyMigration`/`ApiKeysCommand` (only its report-replacement rule was seen), `PartitionPlanCommand`, `PublishCommand`'s command layer, `LegacyConversion` and `LegacyReferences` (the conversion of the old reference format), `RedisAccess`; the half-converted store case was reasoned from `ReferenceRepair`'s order, not run; a store written by a newer version: the document codec says "not this version's document format" and `bootstrap`/`restore`/`verify-chain` surface it as the stored-document message; no command says "use a newer cosec-migrate".
+- **Not run:** no test, no benchmark, no Redis (none on this machine). The counts in R2C-14 follow from the code and the target's sizes in `saas-scale-control-plane.md`; they should be confirmed with its harness before they are quoted.
