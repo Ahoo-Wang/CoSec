@@ -293,7 +293,11 @@ class MigrateMainTest {
             store.removeReferrers(SnapshotKey.Platform, own, store.referrers(SnapshotKey.Platform, own))
             // ... and its forward record does not hold it either: the repair reads the record, never the set (R2C-8).
             val index = store.index(acme)!!
-            store.putIndex(acme, index.digest, index.value.copy(indexed = index.value.indexed.filterNot { it.policy == own }))
+            store.putIndex(
+                acme,
+                index.digest,
+                index.value.copy(indexed = index.value.indexed.filterNot { it.policy == own })
+            )
                 .assert().isTrue()
         }
         val args = "repair-references --to-redis $REDIS --key-prefix $keyPrefix"

@@ -31,10 +31,10 @@ import me.ahoo.cosec.control.change.Finding
 import me.ahoo.cosec.control.change.Operation
 import me.ahoo.cosec.control.change.ShadowAck
 import me.ahoo.cosec.control.change.ShadowSummary
-import me.ahoo.cosec.control.store.ReferrerNames
 import me.ahoo.cosec.control.store.Head
 import me.ahoo.cosec.control.store.Publication
 import me.ahoo.cosec.control.store.PublishOutcome
+import me.ahoo.cosec.control.store.ReferrerNames
 import me.ahoo.cosec.control.store.Revisions
 import me.ahoo.cosec.document.ProvenanceKind
 import me.ahoo.cosec.document.ShadowWindow

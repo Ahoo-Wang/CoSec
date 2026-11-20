@@ -47,7 +47,9 @@ internal object ConvertCommand {
         out.println("Wrote $report")
         if (!conversion.report.accepted) {
             // convert writes into a new directory, and this one now holds the report (R2C-22).
-            out.println("Remove $outDirectory, or give another --out, before you convert again: it now holds the report.")
+            out.println(
+                "Remove $outDirectory, or give another --out, before you convert again: it now holds the report."
+            )
         }
         return if (conversion.report.accepted) OK else FAILED
     }

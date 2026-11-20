@@ -257,7 +257,9 @@ class CoCacheControlStore internal constructor(
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
-            log.warn(e) { "Change [${id.value}] is terminal and stays listed open; the next read of the open changes drops it." }
+            log.warn(
+                e
+            ) { "Change [${id.value}] is terminal and stays listed open; the next read of the open changes drops it." }
         }
     }
 

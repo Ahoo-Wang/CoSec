@@ -288,7 +288,12 @@ class CoCacheControlStoreTest {
                                 value: Map<String, Instant>,
                             ): CompletableFuture<ConditionalPut> = if (failing) {
                                 CompletableFuture.failedFuture(
-                                    CacheWriteException(name, "putIfMatch", IllegalStateException("down"), outcomeUnknown = false)
+                                    CacheWriteException(
+                                        name,
+                                        "putIfMatch",
+                                        IllegalStateException("down"),
+                                        outcomeUnknown = false
+                                    )
                                 )
                             } else {
                                 real.async().putIfMatch(key, expected, value)

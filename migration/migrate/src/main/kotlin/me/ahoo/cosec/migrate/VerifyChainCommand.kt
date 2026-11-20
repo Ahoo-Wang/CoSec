@@ -38,7 +38,9 @@ internal object VerifyChainCommand {
         }
         val scrub = { text: String -> RedisUris.scrub(text, options.redisUris) }
         val verified = controlStore(options) { store ->
-            ChainVerification(store).run(only, options.value("prefix"), limit) { chain -> printChain(chain, out, scrub) }
+            ChainVerification(
+                store
+            ).run(only, options.value("prefix"), limit) { chain -> printChain(chain, out, scrub) }
         }
         return summary(verified, out)
     }

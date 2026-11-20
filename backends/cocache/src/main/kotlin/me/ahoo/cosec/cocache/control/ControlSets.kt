@@ -73,6 +73,7 @@ internal class ControlSets(
      * set, is the format before 8.0.0-beta.5, and only that failure names the command that converts it; a member that
      * does not decode is a format error naming the set; anything else, a timeout or a failover, passes through as it is.
      */
+    @Suppress("TooGenericExceptionCaught")
     private suspend fun <T> failClosed(what: String, block: suspend () -> T): T = try {
         block()
     } catch (error: RuntimeException) {

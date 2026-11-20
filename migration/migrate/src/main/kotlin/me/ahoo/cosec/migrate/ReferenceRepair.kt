@@ -22,8 +22,8 @@ import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.control.store.ControlStore
 import me.ahoo.cosec.control.store.ReferrerHeads
-import me.ahoo.cosec.document.RoleExpansion
 import me.ahoo.cosec.control.store.Revisions
+import me.ahoo.cosec.document.RoleExpansion
 import me.ahoo.cosec.model.PolicyId
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import java.time.Duration
@@ -70,7 +70,15 @@ class ReferenceRepair(
 
     fun run(): RepairResult = runBlocking {
         if (!store.acquireLease(LEASE, holder, LEASE_DURATION)) {
-            return@runBlocking RepairResult(0, 0, 0, emptyMap(), null, busy = true, holder = conversion?.leaseHolder(LEASE))
+            return@runBlocking RepairResult(
+                0,
+                0,
+                0,
+                emptyMap(),
+                null,
+                busy = true,
+                holder = conversion?.leaseHolder(LEASE)
+            )
         }
         try {
             repair()
@@ -97,7 +105,11 @@ class ReferenceRepair(
         val heads = ReferrerHeads()
         // Only the platform's and the apps' policies are referred to from other documents (RFC 0007 §5.8).
         val referred = listed.filterNot { it is SnapshotKey.Tenant }
-        val removed = referred.sumOf { key -> each("prune", referred.size, key, failed) { revisions.pruneReferences(key, heads) } }
+        val removed = referred.sumOf { key ->
+            each("prune", referred.size, key, failed) {
+                revisions.pruneReferences(key, heads)
+            }
+        }
         val apps = listed.filterIsInstance<SnapshotKey.App>().mapTo(HashSet()) { it.appId }
         val completed = revisions.completeApps(apps)
         val converting = legacyDocuments != null
@@ -147,8 +159,10 @@ class ReferenceRepair(
         step: suspend () -> Int,
     ): Int {
         if (++visited % PROGRESS_EVERY == 0) {
-            check(store.acquireLease(LEASE, holder, LEASE_DURATION)) { "Another run took the lease [$LEASE]; this one stops." }
-            progress("$phase: at $key, ${visited} document step(s) done (${of} document(s) in this phase)")
+            check(
+                store.acquireLease(LEASE, holder, LEASE_DURATION)
+            ) { "Another run took the lease [$LEASE]; this one stops." }
+            progress("$phase: at $key, $visited document step(s) done ($of document(s) in this phase)")
         }
         return try {
             step()

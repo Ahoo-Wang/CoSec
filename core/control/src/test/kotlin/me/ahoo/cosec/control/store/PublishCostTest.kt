@@ -121,7 +121,12 @@ class PublishCostTest {
         val memory = InMemoryControlStore(clock)
         val counting = Counting(memory)
         val revisions = Revisions(counting.store, clock)
-        revisions.publish(SnapshotKey.Platform, null, candidate(SnapshotKey.Platform, listOf(policy("shared"))), publication())
+        revisions.publish(
+            SnapshotKey.Platform,
+            null,
+            candidate(SnapshotKey.Platform, listOf(policy("shared"))),
+            publication()
+        )
         val bound = candidate(SnapshotKey.Platform, bindings = listOf(binding("b", "shared"))).bindings
         repeat(others) {
             val tenant = SnapshotKey.Tenant("t\$it")

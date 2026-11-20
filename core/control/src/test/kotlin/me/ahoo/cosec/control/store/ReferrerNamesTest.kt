@@ -27,7 +27,9 @@ class ReferrerNamesTest {
 
     @Test
     fun `up to twenty referrers are all named, sorted`() {
-        ReferrerNames.of(setOf(SnapshotKey.Tenant("b"), SnapshotKey.Tenant("a"))).assert().isEqualTo("[tenant:a, tenant:b]")
+        ReferrerNames.of(
+            setOf(SnapshotKey.Tenant("b"), SnapshotKey.Tenant("a"))
+        ).assert().isEqualTo("[tenant:a, tenant:b]")
         ReferrerNames.of(tenants(20)).assert().endsWith("tenant:t00020]")
     }
 
