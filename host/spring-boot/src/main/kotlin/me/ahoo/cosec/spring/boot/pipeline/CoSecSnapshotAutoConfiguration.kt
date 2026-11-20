@@ -351,7 +351,7 @@ class CoSecSnapshotAutoConfiguration {
         compiler.bind(source)
         // The loads start where the source is made, not in cosecDocumentReadiness: an application may replace that
         // bean, and a lazily initialized context makes it late. Both instances ask of the same keys (prewarmKeys).
-        DocumentReadiness(source, snapshot.prewarmKeys()).start()
+        DocumentReadiness(source, properties.prewarmKeys()).start()
         return source
     }
 
@@ -364,7 +364,7 @@ class CoSecSnapshotAutoConfiguration {
     fun cosecDocumentReadiness(
         source: SnapshotSource<CompiledDocument, CompiledDocument>,
         properties: RuntimeAuthorizationProperties,
-    ): DocumentReadiness = DocumentReadiness(source, properties.snapshot.prewarmKeys())
+    ): DocumentReadiness = DocumentReadiness(source, properties.prewarmKeys())
 
     /** Readiness refuses traffic until the snapshot is ready ([SnapshotReadiness]); liveness is not touched. */
     @Bean(destroyMethod = "close")

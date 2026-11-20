@@ -18,6 +18,8 @@ package me.ahoo.cosec.runtime.snapshot
 import kotlinx.coroutines.future.await
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
+import java.util.concurrent.CompletableFuture
+import java.util.concurrent.CopyOnWriteArrayList
 
 /**
  * Whether the documents a host loads before taking traffic are installed (RFC 0003 §4.3, X6): the platform's, then those
@@ -30,22 +32,42 @@ class DocumentReadiness(private val source: SnapshotSource<*, *>, prewarm: Colle
     /** The prewarmed documents besides the platform's, each once. */
     private val prewarm: List<SnapshotKey> = prewarm.filter { it != SnapshotKey.Platform }.distinct()
 
+    /** Documents a host names once its other beans exist (a gateway's routes, `SNP-20`), each with the prewarm loading it. */
+    private class Later(val keys: List<SnapshotKey>, val loaded: CompletableFuture<Void>)
+
+    private val later = CopyOnWriteArrayList<Later>()
+
     /** Loads the platform document, then the [prewarm] ones, retrying those until each is installed. Never blocks. */
     fun start() {
         source.load().whenComplete { _, _ -> source.prewarm(prewarm) }
     }
 
     /**
-     * The documents not installed now: the platform's while it is not present, and, until the prewarm has completed
+     * Prewarms [keys] too, the way [start] prewarms the first ones: readiness waits for each until its prewarm has
+     * completed once (`SNP-20`). For documents a host names only once its other beans exist; call it before the host
+     * reports ready. Keys already prewarmed here are left out.
+     */
+    fun prewarmAlso(keys: Collection<SnapshotKey>) {
+        val more = keys.filter { key -> key != SnapshotKey.Platform && key !in prewarm && later.none { key in it.keys } }
+            .distinct()
+        if (more.isNotEmpty()) {
+            later += Later(more, source.prewarm(more))
+        }
+    }
+
+    /**
+     * The documents not installed now: the platform's while it is not present, and, until their prewarm has completed
      * once, each prewarmed document with no entry or a failed one. Empty means ready.
      */
     fun missing(): Set<SnapshotKey> = buildSet {
         if (source.peek()?.policies !is DocumentState.Present<*>) {
             add(SnapshotKey.Platform)
         }
-        if (!source.isPrewarmed && prewarm.isNotEmpty()) {
+        val waiting = (if (source.isPrewarmed) emptyList() else prewarm) +
+            later.filterNot { it.loaded.isDone }.flatMap { it.keys }
+        if (waiting.isNotEmpty()) {
             val installed = source.entries().associateBy { it.key }
-            prewarm.filterTo(this) { key -> installed[key]?.state.let { it == null || it is DocumentState.Failed } }
+            waiting.filterTo(this) { key -> installed[key]?.state.let { it == null || it is DocumentState.Failed } }
         }
     }
 
@@ -54,7 +76,7 @@ class DocumentReadiness(private val source: SnapshotSource<*, *>, prewarm: Colle
      * Cancelling the wait cancels nothing of the loads ([SnapshotSource.settled]).
      */
     suspend fun await(): Set<SnapshotKey> {
-        source.settled(prewarm).await()
+        source.settled(prewarm + later.flatMap { it.keys }).await()
         return missing()
     }
 }

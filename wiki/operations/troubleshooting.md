@@ -533,6 +533,21 @@ Remove `spring.mvc.hiddenmethod.filter.enabled`, `spring.webflux.hiddenmethod.fi
 a `_method` field from a form body, so a `DENY` on `http:DELETE` would be stepped around. A host in `enforce` mode is
 not affected.
 
+### Startup fails because the memberships on refresh are not chosen {#startup-fails-because-the-memberships-on-refresh-are-not-chosen}
+
+```text
+cosec.authentication.login.refresh.path=/auth/refresh serves the refresh route, and nothing says how a refreshed token gets its memberships. Without a choice it would copy the memberships of the token it replaces: a role removed from a member keeps working until that member signs in again, up to cosec.jwt.session.lifetime=30d as long as they refresh within cosec.jwt.token-validity.refresh=7d. Choose one: declare a MembershipRefresh<RefreshTokenCredentials> bean ... or state that refreshed tokens keep the memberships of the token they replace ... To keep the token's roles add cosec.jwt.session.memberships-on-refresh=from-token ... It is not set (STA-8, ...).
+```
+
+The starter serves the refresh route and has no way to know whether a removed role may keep working for the rest of the
+session (`STA-8`). Decide, then write it: declare a `MembershipRefresh<RefreshTokenCredentials>` bean that reads the
+member's roles again at each refresh (a removal applies within `cosec.jwt.token-validity.access`), or write
+`cosec.jwt.session.memberships-on-refresh=from-token` to keep the memberships of the token being replaced (a removal applies at
+the member's next sign-in). `TokenRevoker.revokeSubject` ends a member's tokens at once in either case.
+`It is [claims]` (or `true`, an empty value, a padded one) means the property is written with a value that is not
+`from-token`. A bean over another credentials class than `RefreshTokenCredentials` is not found: declare it as
+`MembershipRefresh<RefreshTokenCredentials>`. See [how long a removed role lives](../integration/authentication.md#how-long-a-removed-role-lives).
+
 ### Startup fails on an unreadable switch
 
 ```text

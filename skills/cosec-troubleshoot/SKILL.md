@@ -131,6 +131,12 @@ Full model: https://cosec.ahoo.me/guide/security-model.
 - **`cosec.pipeline.mode=gateway: spring.mvc.hiddenmethod.filter.enabled=true` (or the WebFlux property, or `a
   HiddenHttpMethodFilter bean, [name]`)** (`STA-6`): the gateway decided the request line's method and the service
   would run the one `_method` names. Remove the property or the bean.
+- **`cosec.authentication.login.refresh.path=... serves the refresh route, and nothing says how a refreshed token gets its
+  roles ... cosec.jwt.session.memberships-on-refresh=from-token`** (`STA-8`): the starter serves the refresh and needs a
+  choice. Ask which the operator wants: a `MembershipRefresh<RefreshTokenCredentials>` bean that reads the member's roles
+  again (a removal applies within `cosec.jwt.token-validity.access`), or the property, which keeps the token's roles (a
+  removal applies at the next sign-in, `cosec.jwt.session.lifetime` at the latest). `revokeSubject` ends tokens at once in
+  both. `It is [<value>]` names a value that is not `from-token`. Never write the property just to start.
 - **`cosec.pipeline.mode=gateway on a Spring Cloud Gateway host`**: a gateway always runs `enforce`; set `gateway` on
   the services behind it. A binding failure on `cosec.pipeline.mode` means a value other than `enforce` or `gateway`.
 - **`Actuator endpoints [<ids>] are exposed over HTTP on the gateway's application port, where CoSec does not

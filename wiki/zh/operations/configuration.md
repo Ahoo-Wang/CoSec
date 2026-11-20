@@ -60,6 +60,7 @@ CoSec 没有哪个配置项叫这些名字，而已知的 key 无论来源都不
 | `cosec.openapi.enabled` | boolean | `true` | OpenAPI 文档的 bearer 认证定制器（`cosec-openapi`） |
 | `cosec.control.enabled` | boolean | `true` | 控制面，当 `cosec-control` 和 `cosec-cocache` 在 classpath 上时；它的路由需要 WebFlux 或 WebMvc 应用。关闭时，实例不运行它的任何部分，并以只读方式读取策略文档和候选（[控制面](#control-plane)） |
 | `cosec.authorization.shadow.enabled` | boolean | `true` | 本实例参与影子窗口（`cosec-cocache`）；见[影子窗口](#shadow-windows) |
+| `cosec.authorization.snapshot.prewarm-host-apps` | boolean | `true` | 启动时加载本主机指定的应用并持有它们（`SNP-20`）；见[快照](#snapshot) |
 | `cosec.gateway.identity.enabled` | boolean | `true` | 在 Spring Cloud Gateway 宿主上，把已验证的身份转发给其后的服务；见[网关身份](#gateway-identity) |
 
 以下功能没有开关：
@@ -169,6 +170,7 @@ CoSec 没有哪个配置项叫这些名字，而已知的 key 无论来源都不
 | `cosec.authorization.snapshot.max-absent-tenants` | int | `65536` | 最多记住多少个没有租户文档的租户 id（为正），与 `max-tenants` 分开计（`SNP-7`）。这类租户的每个请求都读这个条目；被丢弃的条目在该租户下一个请求时再从 Redis 读。每个约 470 字节：全部用满约 30 MB。 |
 | `cosec.authorization.snapshot.reload-concurrency` | int | `16` | 一次重新确认并发确认的文档数（为正）。一次确认约耗时：持有的条目数 × 一次条件读取 ÷ 此值；80,000 个条目、每次读取 1 ms 时，并发 4 为 25 秒、8 为 12.6 秒、16 为 6.3 秒（实测）；16 使默认上限用满时的一轮在读取不超过约 2 ms 时仍在默认间隔之内。平均读取速率不变，即 条目数 ÷ `revalidate-interval`；只有一轮期间的读取更密集。超过 `revalidate-interval` 时，确认一轮接一轮地跑，滞后随之增长。 |
 | `cosec.authorization.snapshot.prewarm-apps` | 应用 id 列表 | 空 | 启动时在平台文档（总会加载）之后加载的应用文档。在平台文档和列出的每个文档都装入之前，就绪状态拒绝流量；存活状态不受影响。 |
+| `cosec.authorization.snapshot.prewarm-host-apps` | boolean | `true` | 启动时像 `prewarm-apps` 一样加载本主机指定的应用并持有它们（`SNP-20`）：它的 `cosec.authorization.scope.app-id`，网关上还有每条路由的 `cosec-app-id`。就绪等待每一个，直到 Redis 回答有文档或没有文档。网关的路由刷新时，路由第一次指定的应用在那时加载，不在请求路径上。被持有的应用文档在发布后几秒内被替换（失效消息或下一轮重新确认），与平台文档相同。关闭时，这些应用在第一个请求时加载；`prewarm-apps` 两种情况下都照常工作。 |
 | `cosec.authorization.snapshot.prewarm-tenants` | 租户 id 列表 | 空 | 启动时加载的租户文档，同上。 |
 | `cosec.authorization.snapshot.compile-threads` | int | `2` | 编译文档的线程数。必须为正。 |
 | `cosec.authorization.snapshot.eviction-check` | `fail`、`warn` | `fail` | Redis 某个节点的 `maxmemory-policy` 不是 `noeviction`，或读不到（`INFO memory` 失败或被拒绝，CoCache 后端被包装或是自定义的）时，启动怎么办。`fail` 终止启动。`warn` 照常启动，并记录一条以 `!!!` 开头的 `WARN`（[Redis 要求](./storage.md#redis-requirements)）。CoCache 的内存后端总是通过。无论哪种，实例都会每个 `revalidate-interval` 再次读取该策略，Redis 可能驱逐时 `cosecSnapshotEviction` 健康指示器为 `DOWN`；读不到策略时，`fail` 下为 `DOWN`，`warn` 下为 `UP`，详情 `eviction: unknown`（[故障排查](./troubleshooting.md#cosecsnapshoteviction-is-down)）。 |
@@ -204,6 +206,7 @@ CoSec 没有哪个配置项叫这些名字，而已知的 key 无论来源都不
 | `cosec.jwt.token-validity.refresh` | duration | `7d` | 刷新令牌有效期；吊销记录在 Redis 中保留这么久再加一秒。 |
 | `cosec.jwt.session.lifetime` | duration | `30d` | 会话从登录起持续多久，无论刷新多少次（[会话](../integration/authentication.md#sessions)）；之后用户需要重新登录。也是令牌中携带的角色变更最迟生效的时间。 |
 | `cosec.jwt.session.rotation-leeway` | duration | `30s` | 刷新之后，被它替换的那一对在多长时间内会得到一对当前一代的令牌，而不是结束会话：客户端重试响应丢失的刷新的窗口，两个标签页同时刷新时也都能保留一对令牌。请覆盖客户端的超时加一次重试。在窗口内得到应答的副本会在窗口之后的下一次刷新时被发现。 |
+| `cosec.jwt.session.memberships-on-refresh` | string | 未设置 | 没有声明 `MembershipRefresh<RefreshTokenCredentials>` Bean 时，starter 的刷新路由怎样给刷新出的令牌成员关系（角色和附加策略）。没有默认值：提供刷新路由（`cosec.authentication.login.refresh.path`）时，启动失败，直到它写成 `from-token`（不区分大小写；未设置、空值、`true` 和其他任何值都失败），即你声明刷新出的令牌保留旧令牌的成员关系，所以被移除的角色最迟在成员下一次登录时、即 `cosec.jwt.session.lifetime` 之内生效。声明 `MembershipRefresh` Bean 则每次刷新重新读取角色，不会被问到（[被移除的角色还能用多久](../integration/authentication.md#how-long-a-removed-role-lives)，`STA-8`）。 |
 
 启用 JWT 时，除非吊销和会话都能被记录和读取，否则启动失败：需要 `cosec-cocache`，或你自己的 `TokenStore`、
 `RevocationReader` 和 `TokenFamilyStore` bean。只校验另一个服务所签发令牌的服务读取签发方的吊销（[校验另一个服务所签发令牌的服务](../scenarios/resource-server.md)）。

@@ -1,0 +1,17 @@
+# Rule: SNP-20
+# Mutant: the apps a gateway's routes name are left out of what it prewarms at startup, so their first requests take cold loads and readiness does not wait for them (GatewayRouteApps.afterSingletonsInstantiated)
+# Tests: :spring-boot:test --tests me.ahoo.cosec.spring.boot.pipeline.GatewayRouteAppsTest
+
+diff --git a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/pipeline/GatewayRouteApps.kt b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/pipeline/GatewayRouteApps.kt
+index 2150c0fdf..90aa060fc 100644
+--- a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/pipeline/GatewayRouteApps.kt
++++ b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/pipeline/GatewayRouteApps.kt
+@@ -67,7 +67,7 @@ class GatewayRouteApps(
+             return
+         }
+         known += apps
+-        readiness.prewarmAlso(apps.map { SnapshotKey.App(it) })
++        readiness.prewarmAlso(emptyList())
+     }
+ 
+     override fun onApplicationEvent(event: RefreshRoutesResultEvent) {

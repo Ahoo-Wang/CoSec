@@ -87,7 +87,7 @@ description: "每个 8.0 预览版（alpha 与 beta）到下一个之间的变�
     `max-absent-apps`（256，与之前相同）和 `max-absent-tenants`（65,536，之前两个族共用 256）。两者都是属性，`SnapshotSettings` 也有。
   - 所有位置都用满时，按每个含 5 个各 20 项权限的角色和 20 条绑定的租户文档 30 KB 计，租户条目约占 520 MB 堆。请对照
     [为 SaaS 网关定容量](./deployment.md#sizing-a-saas-gateway)检查你的堆，或把这两个属性设回原值。`k8s/` 的生产 overlay 现在给网关
-    1.5 GiB 堆和 2560Mi 限制，之前是 1 GiB 和 2Gi。
+    2 GiB 堆和 3200Mi 限制，之前是 1 GiB 和 2Gi：足以容纳所有快照和撤销默认值都到上限时的内容。
   - 新增 `cosec.authorization.snapshot.reload-concurrency`，一轮重新确认每次读 16 个文档，而不是 4 个。每个间隔的读取次数不变；
     一轮结束得快四倍，读取也密集四倍。
   - 安装使族超过封顶时，在它自己的线程上最多驱逐该类 64 个条目，其余由后勤线程驱逐；之前是一直驱逐回上限。
@@ -96,6 +96,14 @@ description: "每个 8.0 预览版（alpha 与 beta）到下一个之间的变�
   `~cosec:shadow:report:*:pod-a` 和 `~cosec:shadow:status:pod-a` 改为 `~cosec:shadow:report:*:pod-a.*` 和
   `~cosec:shadow:status:pod-a.*`（[谁可以写哪些 key](./storage.md#who-may-write-which-keys)）；保留旧行的实例写报告和状态会被拒绝，
   并以 `WARN` 记录。
+- **主机在启动时加载它指定的应用**（`SNP-20`）。它的 `cosec.authorization.scope.app-id`，网关上还有每条路由的 `cosec-app-id`，与
+  `prewarm-apps` 一起加载，就绪像等待 `prewarm-apps` 一样等待它们：Redis 无法为其中一个应用作答的实例保持未就绪并重试。`prewarm-apps`
+  照常工作。`cosec.authorization.snapshot.prewarm-host-apps=false` 恢复为在第一个请求时加载这些应用。
+- **提供刷新路由的宿主要写明刷新出的令牌怎样得到成员关系**（`STA-8`）。受影响的是设置了 `cosec.authentication.login.refresh.path`、又既没有自己的 `RefreshTokenAuthentication`、也没有 `MembershipRefresh<RefreshTokenCredentials>` Bean 的宿主。直到 beta.4，这样的宿主悄悄地用 `MembershipRefresh.CLAIMS` 刷新：从成员身上移除的角色，在成员下一次登录之前一直有效，只要他们在刷新令牌的寿命之内刷新，最长到 `cosec.jwt.session.lifetime`（30 天）。现在它**启动失败**，消息说明这个选择的代价。二选一：
+  - 保持宿主原来的行为：写 `cosec.jwt.session.memberships-on-refresh: from-token`（`COSEC_JWT_SESSION_MEMBERSHIPS_ON_REFRESH=from-token`）。其他任何值都和未设置一样失败。启动日志有一行 `INFO`，说明它意味着的会话寿命；
+  - 或声明 `MembershipRefresh<RefreshTokenCredentials>` Bean，重新读取成员的角色和附加策略，移除的角色或附加策略在 `cosec.jwt.token-validity.access`（10 分钟）之内生效。
+
+  无论哪种，`TokenRevoker.revokeSubject` 都会立刻结束成员的全部令牌（[被移除的角色还能用多久](../integration/authentication.md#how-long-a-removed-role-lives)）。不提供刷新路由、或自己构造 `RefreshTokenAuthentication` 的宿主不受影响。
 
 ## 从 8.0.0-beta.3 升级 {#from-8-0-0-beta-3}
 
