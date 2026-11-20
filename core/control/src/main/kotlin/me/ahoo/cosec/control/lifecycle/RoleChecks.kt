@@ -55,7 +55,7 @@ internal object RoleChecks {
             checkedWith[key] = head?.digest
             val document = head?.document ?: continue
             if (document.roles.any { it.id == role.id }) {
-                findings += roleWarning("$.roles[$r].id", "[${role.id.value}] is also a system role of app $app: a member holding it gets both")
+                findings += roleWarning("$.roles[$r].id", "[${role.id.value}], a role of this tenant, is also a system role of app $app: a member holding it gets both")
             }
             val space = role.space?.value?.takeIf { it.isNotEmpty() } ?: continue
             val listed = (role.permissions as? RolePermissions.Listed)?.ids.orEmpty()
@@ -97,7 +97,8 @@ internal object RoleChecks {
             val apps = defining[role.id] ?: continue
             findings += roleWarning(
                 "$.roles[$r].id",
-                "[${role.id.value}] is also a system role of app ${apps.joinToString()}: a member who holds it once " +
+                "[${role.id.value}], a system role of this app, is also a system role of app ${apps.joinToString()}: " +
+                    "a member who holds it once " +
                     "holds it in both apps unless their roles are issued per app; prefix the id with the app " +
                     "(${candidate.owner}.${role.id.value}) when that is not meant",
             )
