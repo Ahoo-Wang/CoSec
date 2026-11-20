@@ -363,7 +363,7 @@ cosec:
 `pkce`, `auth-server-id`, `ignore-check-redirect-uri`, `tenant-id`, `kid`, `team-id`, `login-type` (default
 `CorpApp`), `lang` (default `zh`), `ding-talk-org-type`, `ding-talk-corp-id`, `ding-talk-exclusive-login` and
 `ding-talk-exclusive-corp-id`. Booleans default to `false`, the others to none; `ignore-check-state: true` fails
-startup, since the state is what keeps a forged callback out, and so does any other field, such as a misspelt `pcke`. Social login keeps its OAuth states in Redis through a
+startup, since the state is what keeps a forged callback out. `ignore-check-redirect-uri: true` starts, with a `WARN` naming the registration: it only stops JustAuth from checking that the registration's own `redirect-uri` is an http or https URL (a value you write, not one a request carries, so it guards no callback), and a custom-scheme redirect needs it. Any other unknown field fails startup, such as a misspelt `pcke`. Social login keeps its OAuth states in Redis through a
 `StringRedisTemplate`.
 
 ## CoCache properties that affect CoSec

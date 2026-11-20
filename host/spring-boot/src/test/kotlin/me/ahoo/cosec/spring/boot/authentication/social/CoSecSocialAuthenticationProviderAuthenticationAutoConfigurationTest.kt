@@ -205,4 +205,32 @@ internal class CoSecSocialAuthenticationProviderAuthenticationAutoConfigurationT
                     .any { "ignore-check-state" in it }.assert().isTrue()
             }
     }
+
+    /**
+     * R2D-10: unlike the state check, the redirect-uri check validates a value the operator writes, so a registration may
+     * turn it off, and the start says so.
+     */
+    @Test
+    fun `a registration that skips the redirect-uri check starts and the warning names it`() {
+        contextRunner
+            .withPropertyValues(
+                "${SocialAuthenticationProperties.PREFIX}.registration.github.type=github",
+                "${SocialAuthenticationProperties.PREFIX}.registration.github.client-id=client-id",
+                "${SocialAuthenticationProperties.PREFIX}.registration.github.client-secret=client-secret",
+                "${SocialAuthenticationProperties.PREFIX}.registration.github.redirect-uri=myapp://callback",
+                "${SocialAuthenticationProperties.PREFIX}.registration.github.ignore-check-redirect-uri=true",
+            )
+            .withUserConfiguration(
+                DataRedisAutoConfiguration::class.java,
+                DataRedisReactiveAutoConfiguration::class.java,
+                CoSecAuthenticationAutoConfiguration::class.java,
+                CoSecSocialAuthenticationAutoConfiguration::class.java,
+            )
+            .run { context: AssertableApplicationContext ->
+                assertThat(context).hasNotFailed()
+                context.getBean(SocialProviderManager::class.java).getRequired("github")
+            }
+        redirectUriCheckOff("github").assert()
+            .contains("registration.github.ignore-check-redirect-uri is true", "redirect-uri")
+    }
 }
