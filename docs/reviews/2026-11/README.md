@@ -41,6 +41,7 @@ performance.
 | `saas-scale-control-plane.md` | The control plane and the store of record at that scale: the back-reference index, publishes, memory, maintenance, onboarding |
 | `saas-scale-raw-output.txt` | The harnesses' raw output |
 | `saas-referrers-pr-b-evidence.md` | The measurements behind #1729 |
+| `saas-app-change-cost.md` | What an app change that widens a permission every tenant's roles list costs the control plane, and the grant analysis on a very large policy or grantor (R2C-14, R2C-25, R2C-26), with the proposals the coordinator decided on 2026-11-20 (roadmap §9) |
 | `core/runtime/src/test/kotlin/me/ahoo/cosec/runtime/snapshot/SaasScaleMeasurement.kt`, `.../runtime/shadow/SaasScaleCandidateMeasurement.kt`, `.../runtime/SaasShadowCostMeasurement.kt`, `backends/cocache/src/test/kotlin/me/ahoo/cosec/cocache/SaasScaleRevocationMeasurement.kt` | The harnesses the numbers came from: a `main` each, compiled with the test sources and never run by `check` (the KDoc of each says how to run it) |
 
 The harnesses are test sources of the modules their packages name, so CI compiles them and they follow the code; they are not re-run, and the numbers stay those of the commit each report names. In-memory stores stand in for
