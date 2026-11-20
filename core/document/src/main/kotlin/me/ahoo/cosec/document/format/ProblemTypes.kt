@@ -31,6 +31,7 @@ object ProblemTypes {
     const val TYPE_PREFIX = "https://cosec.ahoo.me/problems/"
 
     /** One problem type: its slug, title and status. The `code` is the slug in UPPER_SNAKE case. */
+    @InternalCoSecApi
     data class Row(val slug: String, val title: String, val status: Int) {
         val code: String get() = slug.uppercase().replace('-', '_')
     }
