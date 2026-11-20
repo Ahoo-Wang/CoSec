@@ -58,7 +58,8 @@ Which preview of the library may run behind which preview of the gateway image: 
     `cosec-migrate repair-references --to-redis <uri> [--cluster] [--key-prefix <p>]` once; the control plane of this
     version may run meanwhile. It converts each back-reference value a head touches, never replaces a set, and removes
     the old document list last, printing `The store is in the format of 8.0.0-beta.5.` A second run changes nothing
-    ([Repair the back-reference index](./upgrading.md#repair-the-back-reference-index)).
+    ([Repair the back-reference index](./upgrading.md#repair-the-back-reference-index), which gives what it costs: at
+    50,000 tenants about 1.3 million commands, some 22 minutes at a round trip of 1 ms).
   - Until it has run, the control plane starts, logs one `ERROR` naming the command, and its `cosecControlStoreFormat`
     health indicator is `DOWN` ([Observability](./observability.md#snapshot-health)). A change that touches a back-reference of
     the old format is refused (`503`, naming the command), never let through.
@@ -256,6 +257,20 @@ Which preview of the library may run behind which preview of the gateway image: 
   Either way `TokenRevoker.revokeSubject` ends a member's tokens at once
   ([How long a removed role lives](../integration/authentication.md#how-long-a-removed-role-lives)). A host that serves
   no refresh route, or builds its own `RefreshTokenAuthentication`, is unaffected.
+- **The published JSON schemas have a new identity, and their files moved to `schema/8.0/`** (R2A-5). Affected:
+  editors, CI checks and tools that load a CoSec schema by URL or by path, or that pinned one by its `$id`.
+  - Until beta.4 each file's `$id`, and the base its cross-file `$ref`s resolve against, was the file on `main` at
+    `raw.githubusercontent.com/Ahoo-Wang/CoSec/refs/heads/main/schema/<file>`, so an 8.0 file resolved against whatever
+    `main` held later. It is now `https://cosec.ahoo.me/schema/8.0/<file>`: `8.0` is the release line (not the `schema: 2`
+    of a document), the site serves the files, and the repository keeps them at `schema/8.0/<file>`.
+  - An editor setting that still names the raw `main` URL gets a `404` once this reaches `main`: completion and
+    validation stop, with the editor's "could not load schema" warning. Point it at
+    `https://cosec.ahoo.me/schema/8.0/cosec-snapshot-document.schema.json`, or at the tag of the version you run
+    (`.../refs/tags/<tag>/schema/8.0/<file>` from the first tag after beta.4; beta.4's own files stay at `schema/<file>`).
+    A setting that names the beta.4 tag keeps working and keeps the `$id` it had.
+  - Until 8.0.0 the site's `/schema/8.0/` holds what `main` holds for the 8.0 line, so it changes between previews; a
+    tag is the immutable copy ([Policy language](../policies/language.md#json-schema)). A CI job that validates against
+    `schema/<file>` in a checkout reads `schema/8.0/<file>`. No document stops compiling.
 
 ## From 8.0.0-beta.3 {#from-8-0-0-beta-3}
 

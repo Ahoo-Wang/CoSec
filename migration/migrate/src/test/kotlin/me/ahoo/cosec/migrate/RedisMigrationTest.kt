@@ -530,6 +530,8 @@ class RedisMigrationTest {
         val (code, output) = run("convert", "--from-redis", REDIS, "--key-prefix", keyPrefix, "--out", out.toString())
         code.assert().isEqualTo(MigrateMain.FAILED)
         output.assert().contains("REJECT SCHEMA_MARKER $keyPrefix:meta:schema")
+            // R2C-22: the directory holds the report now, and convert writes into a new one.
+            .contains("Remove $out, or give another --out, before you convert again")
         Files.exists(out.resolve(ConvertedDirectory.PLATFORM_FILE)).assert().isFalse()
     }
 

@@ -1,5 +1,5 @@
 {
-  "$id": "https://raw.githubusercontent.com/Ahoo-Wang/CoSec/refs/heads/main/schema/definitions.schema.json",
+  "$id": "https://cosec.ahoo.me/schema/8.0/definitions.schema.json",
   "$schema": "http://json-schema.org/draft-07/schema#",
   "definitions": {
     "effect": {

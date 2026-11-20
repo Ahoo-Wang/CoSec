@@ -149,7 +149,8 @@ Its commands are below. Exit codes: `0` done, `1` the data was rejected, a write
 broken chain, `2` a usage error.
 `publish`, `bootstrap`, `repair-references` and `verify-chain` take `--cluster` for a Redis Cluster: `--to-redis` then names seed
 nodes, comma-separated (`redis://node-1:6379,redis://node-2:6379`). The other commands read Redis with clients that
-do not, and refuse it. Each command takes only the options listed for it: another one, `publish --dry-run` for
+do not: `convert`, `partition plan` and `api-keys` ask the node whether it is part of a Redis Cluster and stop before
+they read anything when it is, since a scan of one node sees one shard's keys (R2C-30). Each command takes only the options listed for it: another one, `publish --dry-run` for
 example, is a usage error before anything is read or written, never ignored.
 
 | Command | What it does |
@@ -193,7 +194,8 @@ never in an encoded name, and `report.json` records in `documentIds` which id ea
 the name against that id. A write that fails removes the files it wrote, so the directory is as new as before and
 `convert` can run again.
 
-A rejected conversion writes `report.json` only. The console prints the same counts, warnings and rejections.
+A rejected conversion writes `report.json` only. The console prints the same counts, warnings and rejections, and says
+to remove the directory, or give another `--out`, before you convert again: `convert` writes into a new directory.
 
 #### Rejections
 
@@ -295,8 +297,10 @@ cosec-migrate bootstrap --to-redis redis://localhost:6379 [--cluster] [--key-pre
 The control plane authorizes its own writes with the policies in the snapshot, so with no administrator nobody may
 write. `bootstrap` writes only the platform tenant's document, `Tenant((platform))`; the platform document itself
 comes from `publish`, so publish first. `bootstrap` binds principal `alice` of the platform tenant to the built-in `cosec:platform-admin` policy, in the
-platform tenant's document, and records it as a revision of kind `BOOTSTRAP`. It refuses when that document already
-binds someone to `cosec:platform-admin`; `--force` is for the recovery where every one of them is lost. Either way it
+platform tenant's document, and records it as a revision of kind `BOOTSTRAP`. Run again for the principal it already
+bound, by a deployment job on every start or after a lost reply, it answers that the principal is already bound and
+writes nothing; it refuses when that document binds another principal to `cosec:platform-admin`, and `--force` is for
+the recovery where every one of them is lost. Either way it
 adds its binding and keeps everything else that document holds: its policies, its other bindings, its rate limits and
 its roles. Anyone with the Redis credentials can write anyway; `bootstrap` only leaves a record of it.
 
@@ -338,7 +342,25 @@ of the old format a head touches becomes a set, a set is never replaced, and the
 (`<s>:control:list:documents`) is copied into `<s>:control:documents:all` and removed last, once nothing failed; it
 prints how many it converted and `The store is in the format of 8.0.0-beta.5.` (`MIG-4`). Stop every control plane of
 an earlier version first: it writes the old format.
-`repair-references` reads the head of every document the store lists and adds whatever the index misses; it prints
+
+It reads each document's head and its own revision index, and never a whole back-reference set to look for one member
+(R2C-8): a document whose index already records its references costs those two reads, and one with no record, as a
+converted document is, adds each of its references once. It prints a progress line every 1,000 documents and each
+failure as it happens. One command at a time, each a round trip to Redis, measured in memory (`SaasScaleMeasurement`)
+on tenants that each hold 20 role bindings to one app's permissions and one binding to a platform policy:
+
+| Tenants | First run, after the conversion | A second run, that changes nothing | The conversion itself |
+|---|---|---|---|
+| 10,000 | about 260,000 commands (210,000 member writes, 20,000 head reads, 30,000 index reads and writes): about 80 MB | about 31,000 commands (20,000 head reads, 10,000 index reads, 1,201 set reads): about 70 MB | each of the 21 old values read once and written once as a set (about 7 MB), and each tenant's head read once more |
+| 50,000 | about 1.3 million commands: about 390 MB | about 151,000 commands: about 350 MB | the same 21 values (about 35 MB), and each tenant's head once more |
+
+At a round trip of 1 ms the first run at 50,000 tenants takes about 22 minutes, a second run about 3; at 0.2 ms, a
+fifth of that. The run holds the lease `repair-references`, renewed every 1,000 documents, for 10 minutes past its last
+renewal. A second run that finds it held says who holds it and since when, and exits with `1`; a run that died leaves
+it for at most 10 minutes: run again then, or delete the key `<key-prefix>:control:lease:repair-references` once you
+know no run is alive.
+
+`repair-references` reads the head of every document the store lists and adds whatever its own record misses; it prints
 how many documents it visited and how many references it added. Then it removes the references no head has, which a
 publish indexed before a head write it lost, and prints how many: left there, one would block removing that policy for
 good. A reference goes only once its document's head is at or above the revision that indexed it, so a publish still in
@@ -365,14 +387,16 @@ another way is in neither.
 #### Verify the revision chains {#verify-the-revision-chains}
 
 ```bash
-cosec-migrate verify-chain --to-redis redis://localhost:6379 [--cluster] [--key-prefix cosec] [--document platform|app:<id>|tenant:<id>]
+cosec-migrate verify-chain --to-redis redis://localhost:6379 [--cluster] [--key-prefix cosec] [--document platform|app:<id>|tenant:<id>] \
+  [--prefix tenant:acme] [--limit 1000]
 ```
 
 Each revision names its parent revision and that revision's digest, and the control plane keeps a record of every
 revision under its digest ([Storage](./storage.md#revisions-history-and-rollback)). Redis replicates asynchronously,
 so a failover can lose a record it had acknowledged. `verify-chain` walks the chain of every document the store
-lists, or of the one `--document` names, from its head through each parent down to the oldest revision the revision
-index still lists, and prints one line per document:
+lists, or of the one `--document` names, or of those whose key starts with `--prefix`, at most `--limit` of them, from
+its head through each parent down to the oldest revision the revision index still lists, and prints one line per
+document as it verifies it, so a long run shows how far it got:
 
 - `ok <doc>: intact down to revision <n>`, or `ok <doc>: no head` for a document that has none;
 - `BROKEN <doc>: no record holds revision <n> (<digest>): ...` when the record of a revision the chain needs is

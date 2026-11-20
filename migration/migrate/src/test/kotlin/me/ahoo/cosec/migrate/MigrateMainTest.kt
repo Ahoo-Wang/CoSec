@@ -291,6 +291,14 @@ class MigrateMainTest {
             revisions.publish(acme, null, document(acme, listOf("own"), listOf("shared", "own")), publication)
             // As published before the upgrade: acme's own id is not in the index.
             store.removeReferrers(SnapshotKey.Platform, own, store.referrers(SnapshotKey.Platform, own))
+            // ... and its forward record does not hold it either: the repair reads the record, never the set (R2C-8).
+            val index = store.index(acme)!!
+            store.putIndex(
+                acme,
+                index.digest,
+                index.value.copy(indexed = index.value.indexed.filterNot { it.policy == own })
+            )
+                .assert().isTrue()
         }
         val args = "repair-references --to-redis $REDIS --key-prefix $keyPrefix"
         val (code, output) = run(args)
@@ -415,6 +423,40 @@ class MigrateMainTest {
             code.assert().describedAs(output).isEqualTo(MigrateMain.OK)
             output.assert().doesNotContain("Converted").contains("added 0 reference(s)")
                 .contains("Removed 0 reference(s)")
+        }
+    }
+
+    /** R2C-21, R2C-8: bootstrap again for its principal answers bound; a repair that finds the lease held names it. */
+    @Test
+    fun `bootstrap again answers bound, and a repair that finds its lease held says who holds it`() {
+        val keyPrefix = "migrate-test:${UUID.randomUUID()}"
+        controlStore(keyPrefix) { store ->
+            Revisions(store).publish(
+                SnapshotKey.Platform,
+                null,
+                document(SnapshotKey.Platform, emptyList()),
+                Publication(
+                    "c",
+                    ProvenanceKind.MIGRATE,
+                    Actor(TenantId.PLATFORM, PrincipalId("op")),
+                )
+            )
+        }
+        val bootstrap = "bootstrap --to-redis $REDIS --key-prefix $keyPrefix --platform-admin alice"
+        run(bootstrap).let { (code, output) ->
+            code.assert().describedAs(output).isEqualTo(MigrateMain.OK)
+            output.assert().contains("Bound alice")
+        }
+        run(bootstrap).let { (code, output) ->
+            code.assert().describedAs(output).isEqualTo(MigrateMain.OK)
+            output.assert().contains("alice of the platform tenant is already bound").contains("Nothing was written")
+        }
+        controlStore(keyPrefix) { store ->
+            store.acquireLease(ReferenceRepair.LEASE, "another run", java.time.Duration.ofMinutes(1)).assert().isTrue()
+        }
+        run("repair-references --to-redis $REDIS --key-prefix $keyPrefix").let { (code, output) ->
+            code.assert().describedAs(output).isEqualTo(MigrateMain.FAILED)
+            output.assert().contains("holds the lease [repair-references]: another run")
         }
     }
 

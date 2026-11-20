@@ -20,12 +20,17 @@ import java.io.File
 import kotlin.system.exitProcess
 
 /**
- * `generateSchemas` and `verifySchemas`: writes [DocumentFormats] to `schema/`, or with `--verify` fails when the
- * committed files differ from what it would write. A `*.schema.json` the descriptor no longer generates is deleted, or
- * reported.
+ * `generateSchemas` and `verifySchemas`: writes [DocumentFormats] to `schema/<line>/` (the line is
+ * [DocumentFormats.SCHEMA_LINE]; the argument is `schema/`), or with `--verify` fails when the committed files differ
+ * from what it would write. A `*.schema.json` of that line the descriptor no longer generates is deleted, or reported.
+ * The directories of other lines are never read: a released line stays as it was.
  */
 fun main(args: Array<String>) {
-    val directory = File(args.first())
+    val directory = File(args.first(), DocumentFormats.SCHEMA_LINE)
+    if (!directory.isDirectory && !directory.mkdirs()) {
+        System.err.println("Cannot create $directory.")
+        exitProcess(1)
+    }
     val verify = "--verify" in args
     val expected = DocumentFormats.files.associate { it.fileName to JsonSchemaWriter.write(it) }
     val stale = mutableListOf<String>()
