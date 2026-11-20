@@ -254,7 +254,7 @@ fun cosecAuthenticator(
 ): Authenticator {
     val builtIn = CompositeAuthenticator(
         TokenAuthenticator(
-            verifier.getIfAvailable { JwtTokenVerifier(algorithm, skew) },
+            verifier.getIfAvailable { JwtTokenVerifier(signing, skew) },
             (tokenStore as CoCacheTokenStore).reader,   // a RevocationReader bean of your own, if you have one
             revocationSkew = skew,
             acceptUnavailableRevocations = !failClosed,  // true accepts a token while revocations cannot be read

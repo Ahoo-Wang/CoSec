@@ -79,7 +79,7 @@ The pipeline reads the request's credentials, then asks one `Authenticator` who 
   not-before time (`nbf`) is up to `cosec.authentication.revocation.skew` (5 seconds) later than this instance's clock,
   for an issuer whose clock runs ahead, and refuses one beyond that as not valid yet (`token-invalid`, `IDN-29`); a
   token's expiry gets no such room. A verifier you build yourself takes the same value:
-  `JwtTokenVerifier(algorithm, skew)`. Only `TokenVerifier.verify` (and `refresh`) turns a token into
+  `JwtTokenVerifier(signing, skew)`, over a `JwtSigning` (`JwtSigning.hmac256(secret)`, `hmac384`, `hmac512`: the key the tokens are signed with; the starter builds it from `cosec.jwt.secret` and `cosec.jwt.algorithm`). Only `TokenVerifier.verify` (and `refresh`) turns a token into
   a principal: CoSec has no API that reads a token's claims without checking its signature. Without JWT
   (`cosec.jwt.enabled=false`), a request with a token is rejected as `token-invalid`. Only a token CoSec's own
   `JwtTokenVerifier` verified may use [break-glass](../guide/security-model.md#break-glass): a `TokenAuthenticator`
@@ -224,9 +224,8 @@ class LoginController(private val authentication: TokenCompositeAuthentication) 
 }
 ```
 
-Write every argument of `TokenSubject` after `id` by name, as the samples do. `app` comes before `tenant`, so
-`TokenSubject("alice", "acme")` compiles and issues a token for the app `acme` in the default tenant; the order is kept
-so that no existing call changes meaning.
+`TokenSubject("alice", "acme")` is the tenant `acme`: `tenant` comes before `app`, as it does in every other CoSec API
+(`TokenFamilies.start(tenant, principal)`). The samples write every argument after `id` by name, which reads better still.
 
 `authenticate` refuses a login by throwing: it has no empty answer, and no token is issued for a login that failed or
 whose caller has gone. It runs on the caller's thread, an event loop in WebFlux, so an implementation over a blocking
@@ -746,8 +745,8 @@ families for the switch:
 
 ```kotlin
 class SelectTenantTest {
-    private val algorithm = Algorithm.HMAC256("test-secret")
-    private val verifier = JwtTokenVerifier(algorithm)
+    private val signing = JwtSigning.hmac256("test-secret-test-secret-test-secret")
+    private val verifier = JwtTokenVerifier(signing)
     private val families = TokenFamilies(InMemoryTokenFamilyStore())
     private val revocation = TokenRevocation(RevocationReader.NONE)
     private val members = testMembers() // your own directory, alice a clerk of globex's order
@@ -757,7 +756,7 @@ class SelectTenantTest {
             passwordAuthentication,
             SelectTenantConfiguration().selectTenantAuthentication(families, revocation, members, devices),
         ),
-        JwtTokenConverter(IdGenerator { UUID.randomUUID().toString() }, algorithm),
+        JwtTokenConverter(IdGenerator { UUID.randomUUID().toString() }, signing),
         families,
     )
 

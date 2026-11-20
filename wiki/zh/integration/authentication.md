@@ -127,7 +127,7 @@ class LoginController(private val authentication: TokenCompositeAuthentication) 
 }
 ```
 
-`id` 之后的每个 `TokenSubject` 参数都按名字写，像示例那样。`app` 排在 `tenant` 之前，所以 `TokenSubject("alice", "acme")` 能通过编译，签发的令牌属于应用 `acme`、默认租户；这个顺序保持不变，这样没有任何现有调用会改变含义。
+`TokenSubject("alice", "acme")` 是租户 `acme`：`tenant` 排在 `app` 之前，和 CoSec 其他 API 一样（`TokenFamilies.start(tenant, principal)`）。示例把 `id` 之后的每个参数都按名字写，读起来更清楚。
 
 `authenticate` 通过抛出异常来拒绝登录：它没有“空”的回答，登录失败或调用方已离开时都不会签发令牌。它运行在调用方的线程上，在 WebFlux 中就是事件循环，因此基于阻塞客户端（例如 JDBC 用户表）的实现要用 `runInterruptible(myDispatcher) { ... }` 把调用移到自己的有界调度器上。Spring 在 WebFlux 和 Spring MVC 中都能运行 `suspend` 控制器函数。MVC 需要类路径上有 `kotlinx-coroutines-reactor`；没有时，请在请求线程上调用 `runBlocking { ... }`。
 
@@ -408,8 +408,8 @@ suspend fun select(@PathVariable tenant: String, @PathVariable app: String, secu
 
 ```kotlin
 class SelectTenantTest {
-    private val algorithm = Algorithm.HMAC256("test-secret")
-    private val verifier = JwtTokenVerifier(algorithm)
+    private val signing = JwtSigning.hmac256("test-secret-test-secret-test-secret")
+    private val verifier = JwtTokenVerifier(signing)
     private val families = TokenFamilies(InMemoryTokenFamilyStore())
     private val revocation = TokenRevocation(RevocationReader.NONE)
     private val members = testMembers() // your own directory, alice a clerk of globex's order
@@ -419,7 +419,7 @@ class SelectTenantTest {
             passwordAuthentication,
             SelectTenantConfiguration().selectTenantAuthentication(families, revocation, members, devices),
         ),
-        JwtTokenConverter(IdGenerator { UUID.randomUUID().toString() }, algorithm),
+        JwtTokenConverter(IdGenerator { UUID.randomUUID().toString() }, signing),
         families,
     )
 

@@ -163,7 +163,7 @@ fun cosecAuthenticator(
 ): Authenticator {
     val builtIn = CompositeAuthenticator(
         TokenAuthenticator(
-            verifier.getIfAvailable { JwtTokenVerifier(algorithm, skew) },
+            verifier.getIfAvailable { JwtTokenVerifier(signing, skew) },
             (tokenStore as CoCacheTokenStore).reader,   // 若你有自己的 RevocationReader bean，用它
             revocationSkew = skew,
             acceptUnavailableRevocations = !failClosed,  // true 表示读不到吊销时接受令牌
