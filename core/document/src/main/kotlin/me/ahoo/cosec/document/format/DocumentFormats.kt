@@ -18,7 +18,7 @@ package me.ahoo.cosec.document.format
 import me.ahoo.cosec.annotations.InternalCoSecApi
 
 /**
- * The document formats CoSec reads, one [SchemaFile] per generated file in `schema/` (RFC 0007 §10.4, Q19).
+ * The document formats CoSec reads, one [SchemaFile] per generated file in `schema/$SCHEMA_LINE/` (RFC 0007 §10.4, Q19).
  *
  * A change to what a codec or the snapshot compiler accepts changes this descriptor in the same PR; run
  * `./gradlew :document:generateSchemas` and commit the files. `verifySchemas` (part of `check`) fails when they are
@@ -39,8 +39,17 @@ object DocumentFormats {
     const val PROBLEM = "problem"
     const val IDENTITY = "cosec-identity"
 
-    /** Where the files are published; their `$id`s. */
-    const val BASE_URI = "https://raw.githubusercontent.com/Ahoo-Wang/CoSec/refs/heads/main/schema/"
+    /**
+     * The release line the schema files belong to: the major and minor of the CoSec version that writes them. It is not
+     * the `schema: 2` of a document: that numbers the document format, and a line may add optional members without the
+     * format's version changing, so a line's files can differ from the previous line's while a document stays `schema: 2`.
+     * The files are `schema/<line>/`, served at [BASE_URI]; a line's directory is never rewritten once its release is
+     * out, and `SchemaLineTest` says what to do when the project's version moves to the next line.
+     */
+    const val SCHEMA_LINE = "8.0"
+
+    /** Where the files are published (the documentation site serves `schema/` as it is); their `$id`s. */
+    const val BASE_URI = "https://cosec.ahoo.me/schema/$SCHEMA_LINE/"
 
     private fun ref(file: String, definition: String? = null) = Ref("$file.schema.json", definition)
 

@@ -11,7 +11,7 @@
  * limitations under the License.
  */
 
-import { copyFileSync } from 'node:fs'
+import { copyFileSync, cpSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { defineConfig } from 'vitepress'
 import { MermaidMarkdown } from 'vitepress-plugin-mermaid'
@@ -30,8 +30,13 @@ export default defineConfig({
   },
   // llms.txt stays at the repository root, where the READMEs and agents look for it; the site serves that file, not a
   // second copy to keep in sync. `check:docs` holds its links to the pages.
+  // schema/ stays at the repository root as well: its files are generated there (`:document:generateSchemas`) and their
+  // `$id` is https://cosec.ahoo.me/schema/<line>/<file>, the path under which the site serves them. Every line's
+  // directory is copied, so a released line keeps its URL after `main` moves on. `check:docs` holds links to them.
   buildEnd(siteConfig) {
-    copyFileSync(resolve(siteConfig.srcDir, '..', 'llms.txt'), join(siteConfig.outDir, 'llms.txt'))
+    const root = resolve(siteConfig.srcDir, '..')
+    copyFileSync(resolve(root, 'llms.txt'), join(siteConfig.outDir, 'llms.txt'))
+    cpSync(resolve(root, 'schema'), join(siteConfig.outDir, 'schema'), { recursive: true })
   },
   head: [
     ['link', { rel: 'icon', type: 'image/svg+xml', href: '/logo.svg' }],
