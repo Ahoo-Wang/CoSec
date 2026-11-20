@@ -36,9 +36,10 @@ import org.junit.jupiter.api.Test
 class InformationalEscalationTest {
     private val authority = ChangeAuthority(PERMIT_ALL, revocations = RevocationReader.NONE)
     private val pia = Actor(TenantId.PLATFORM, PrincipalId("pia"))
-    private val widen = Escalation("document app:order", "NOT_ANALYZED", "only the trust root publishes it alone")
+    private val widen =
+        Escalation("document app:order", Escalation.Reason.NOT_ANALYZED, "only the trust root publishes it alone")
 
-    private fun binding(id: String) = Escalation("binding $id of [tenant:acme]", Escalation.TENANT_BINDING, "")
+    private fun binding(id: String) = Escalation("binding $id of [tenant:acme]", Escalation.Reason.TENANT_BINDINGS, "")
 
     private fun change(covers: List<String>) = ChangeRequest(
         id = ChangeId("c1"),
@@ -78,5 +79,35 @@ class InformationalEscalationTest {
         authority.approvalProblem(none, listOf(binding("readers")), PLATO, StoreFixtures.START).assert().isNull()
         authority.approverProblem(none, listOf(binding("readers")), PLATO).assert().isNull()
         authority.approverProblem(none, listOf(widen), PLATO).assert().isEqualTo("it needs an approval")
+    }
+
+    private val tenants = Escalation(
+        "tenants binding [perm:order/read] in app order",
+        Escalation.Reason.TENANT_BINDINGS,
+        "statements [0] widen what it grants in up to 50000 tenant documents that bind it: [...]",
+    )
+
+    @Test
+    fun `every reason the grant analysis gives is a reason of its own name`() {
+        me.ahoo.cosec.control.grant.UnknownReason.entries.map { Escalation.Reason.of(it.name).name }
+            .assert().isEqualTo(me.ahoo.cosec.control.grant.UnknownReason.entries.map { it.name })
+    }
+
+    @Test
+    fun `only the tenants' entry is informational`() {
+        Escalation.Reason.entries.filter { Escalation("x", it).informational }
+            .assert().containsExactly(Escalation.Reason.TENANT_BINDINGS)
+        // A name this version does not know needs an approval, as anything not known does.
+        Escalation.Reason.of("TENANT_BINDING").assert().isEqualTo(Escalation.Reason.UNKNOWN)
+    }
+
+    @Test
+    fun `an aggregated tenant entry never stands in for the approval the widening needs`() = runBlocking<Unit> {
+        val needed = listOf(widen, tenants)
+        authority.approvalProblem(change(listOf(tenants.subject)), needed, PLATO, StoreFixtures.START)
+            .assert().isEqualTo("the approval does not cover what it now needs")
+        authority.approverProblem(change(emptyList()).copy(approval = null), needed, PLATO)
+            .assert().isEqualTo("it needs an approval")
+        authority.approverProblem(change(emptyList()).copy(approval = null), listOf(tenants), PLATO).assert().isNull()
     }
 }

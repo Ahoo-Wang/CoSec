@@ -275,7 +275,7 @@ class ApprovalB2Test {
     @Test
     fun `a tenant approver's own change is analyzed, and it approves others' - RC1-10`() = runBlocking<Unit> {
         val own = changes.propose(carol, TENANT, head(), grant("carols"), "mine")
-        own.escalations.map { it.reason }.assert().containsExactly("NOT_COVERED")
+        own.escalations.map { it.reason.name }.assert().containsExactly("NOT_COVERED")
         changes.abandon(carol, own.id)
         // A platform administrator's is not analyzed: the trust root publishes alone.
         changes.propose(plato, TENANT, head(), grant("platos"), "the platform's").escalations.assert().isEmpty()
@@ -292,7 +292,7 @@ class ApprovalB2Test {
         refused { changes.propose(carol, TENANT, head(), set, "mine") }.assert().isEqualTo(403)
         val fourEyes = changes(ChangeOptions(shadow = IMMEDIATE_WINDOW, fourEyes = true))
         val change = fourEyes.propose(plato, TENANT, head(), set, "fence acme")
-        change.escalations.map { it.reason }.assert().containsExactly("NOT_ANALYZED")
+        change.escalations.map { it.reason.name }.assert().containsExactly("NOT_ANALYZED")
         fourEyes.stage(plato, change.id)
         val waiting = fourEyes.shadowed(change.id)
         refused { fourEyes.approve(carol, change.id, waiting.candidate!!) }.assert().isEqualTo(403)
@@ -435,7 +435,7 @@ class ApprovalB2Test {
         )
         for (key in listOf(byProvenance, byName)) {
             val change = changes.propose(key, SnapshotKey.Platform, head(SnapshotKey.Platform), platform, "a key")
-            change.escalations.map { it.reason }.assert().containsExactly("NOT_ANALYZED")
+            change.escalations.map { it.reason.name }.assert().containsExactly("NOT_ANALYZED")
             changes.stage(key, change.id)
             val waiting = changes.shadowed(change.id)
             waiting.state.assert().isEqualTo(ChangeState.AWAITING_APPROVAL)

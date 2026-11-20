@@ -36,7 +36,6 @@ import me.ahoo.cosec.control.change.Finding
 import me.ahoo.cosec.control.change.Operation
 import me.ahoo.cosec.control.change.ownerOf
 import me.ahoo.cosec.control.change.requireRequest
-import me.ahoo.cosec.control.lifecycle.ChangeLifecycle.Companion.BREAK_GLASS
 import me.ahoo.cosec.control.store.ControlStore
 import me.ahoo.cosec.control.store.Revisions
 import me.ahoo.cosec.document.DocumentBudgets
