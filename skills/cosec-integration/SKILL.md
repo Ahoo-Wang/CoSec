@@ -202,14 +202,19 @@ as the gateway, and `forward-authorization=true` so it gets the token), or trust
 cosec:
   pipeline:
     mode: gateway   # read the caller from CoSec-Identity; no snapshot, engine, route map, listeners or Redis
+    identity:
+      only-gateway-can-reach: true   # the operator's statement; startup fails without it (STA-7)
   jwt:
     enabled: false  # it verifies no tokens, so it needs no secret
 ```
 
 - Add only the web module (`cosec-webflux` or `cosec-webmvc`); no `cosec-cocache`. No `AuthorizationChecker`
   is wired in this mode.
-- **Only the gateway may reach it** (NetworkPolicy, private network or mTLS): it believes any `CoSec-Identity`, and
-  logs a WARN at startup saying so. Never expose such a service directly.
+- **Only the gateway may reach it** (NetworkPolicy, private network or mTLS): it believes any `CoSec-Identity`, and does
+  not start until `cosec.pipeline.identity.only-gateway-can-reach=true` states that it is so (`STA-7`; write it only when it
+  is true). It also fails to start with a hidden-method filter (`spring.mvc.hiddenmethod.filter.enabled`,
+  `spring.webflux.hiddenmethod.filter.enabled`, or a `HiddenHttpMethodFilter` bean, `STA-6`): the gateway removes the
+  method-override headers and decided the request line's method. Never expose such a service directly.
 - Answers: no header is anonymous; unreadable, repeated or oversize (`cosec.pipeline.identity.max-size`, 8KB) is 400;
   older than `cosec.pipeline.identity.max-age` (60s) plus `cosec.authentication.revocation.skew`, or past the
   credential's expiry, is 401 `token-expired`; unknown version, no expiry or an identity from the future is 401

@@ -38,7 +38,7 @@ Indeterminate in an explanation.
 
 | Status | Problem `type` slug | Meaning |
 |---|---|---|
-| 400 | `invalid-request` | The request is ambiguous: a path that does not normalize (a dot segment, a malformed escape, an empty segment before its end such as `//`, an encoded `/`, a `\` or `%5C`), two different values of one `CoSec-*` parameter (header vs query; a blank value beside a non-blank one counts, and only ASCII whitespace is blank), a route-map capture that cannot be a resource id segment, or a header sent with different values that a document of the request's view reads (any statement, policy condition, boundary or rate limit rule, whatever its effect; PIP-12): typically `X-Forwarded-For` from two proxies that each append a line; have them send one line, or read `environment.ip`. The engine never saw it. |
+| 400 | `invalid-request` | The request is ambiguous: a path that does not normalize (a dot segment, a malformed escape, an empty segment before its end such as `//`, an encoded `/`, a `\` or `%5C`, an encoded `;` or a control character, encoded such as `%3B`, `%00` or `%0A` or raw, refused from 8.0.0-beta.5 where clients sent them before: find the path in the audit record's `request.path` or the access log, then send the value in the query, or encode its `%` again), two different values of one `CoSec-*` parameter (header vs query; a blank value beside a non-blank one counts, and only ASCII whitespace is blank), a route-map capture that cannot be a resource id segment, or a header sent with different values that a document of the request's view reads (any statement, policy condition, boundary or rate limit rule, whatever its effect; PIP-12): typically `X-Forwarded-For` from two proxies that each append a line; have them send one line, or read `environment.ip`. The engine never saw it. |
 | 401 | `unauthorized` | Denied, and the caller is anonymous (no credentials, or an anonymous caller asking for a space). |
 | 401 | `token-invalid`, `token-expired`, `token-revoked` | The credentials were rejected (an invalid API key is `token-invalid`); the request was evaluated as anonymous and denied. |
 | 403 | `forbidden` | Denied for an authenticated principal: a DENY matched, or nothing allowed (both look the same on purpose). |
@@ -124,6 +124,13 @@ Full model: https://cosec.ahoo.me/guide/security-model.
   https://cosec.ahoo.me/operations/troubleshooting#startup-fails-on-the-client-address
 - **`cosec-cocache needs a ReactiveStringRedisTemplate bean`** (STA-1): add `spring-boot-data-redis` and configure
   Redis; without it no snapshot is read and rate limits would count per instance.
+- **`cosec.pipeline.mode=gateway: this service believes any CoSec-Identity header it receives ... State it once it is
+  true: cosec.pipeline.identity.only-gateway-can-reach=true`** (`STA-7`): a service in gateway mode starts only when the
+  operator states that nothing but the gateway can reach it. `It is [<value>]` names a value that is not `true`. Make the
+  network true (NetworkPolicy, mTLS, private network) and write the line; never suggest writing it just to start.
+- **`cosec.pipeline.mode=gateway: spring.mvc.hiddenmethod.filter.enabled=true` (or the WebFlux property, or `a
+  HiddenHttpMethodFilter bean, [name]`)** (`STA-6`): the gateway decided the request line's method and the service
+  would run the one `_method` names. Remove the property or the bean.
 - **`cosec.pipeline.mode=gateway on a Spring Cloud Gateway host`**: a gateway always runs `enforce`; set `gateway` on
   the services behind it. A binding failure on `cosec.pipeline.mode` means a value other than `enforce` or `gateway`.
 - **`Actuator endpoints [<ids>] are exposed over HTTP on the gateway's application port, where CoSec does not

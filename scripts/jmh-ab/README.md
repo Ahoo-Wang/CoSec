@@ -24,6 +24,7 @@ gh workflow run jmh-ab.yml -f base=main -f head=<branch-or-sha> -f module=cosec-
 | `rounds` | `3` | alternating rounds; each runs base, then head |
 | `forks`, `warmup`, `iterations` | `1`, `2`, `3` | `-f`, `-wi`, `-i` |
 | `warmup-time`, `measurement-time` | `1s`, `1s` | `-w`, `-r` |
+| `jvm-args` | empty | extra options for the forked JVMs of both sides, appended to `-jvmArgsAppend`, such as `-XX:-DoEscapeAnalysis` to show what an allocation costs without escape analysis |
 
 Both refs are checked out as worktrees and built once (`:<module>:jmhJar`, each with its own toolchain: 21, or 17 for
 a ref from before the Java 21 baseline). Each round runs the jar

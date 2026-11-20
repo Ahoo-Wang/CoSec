@@ -16,6 +16,7 @@ package me.ahoo.cosec.runtime.authn
 import ch.qos.logback.classic.Logger
 import ch.qos.logback.classic.spi.ILoggingEvent
 import ch.qos.logback.core.read.ListAppender
+import me.ahoo.cosec.runtime.captured
 import me.ahoo.cosec.spi.token.RevocationUnavailableException
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
@@ -34,7 +35,7 @@ class UncheckedRevocationsTest {
             val unchecked = UncheckedRevocations(Duration.ZERO)
             unchecked.record(RevocationUnavailableException("down"))
             unchecked.record(RevocationUnavailableException("down"))
-            appender.list.map { it.formattedMessage }.assert().containsExactly(
+            appender.captured().map { it.formattedMessage }.assert().containsExactly(
                 "Token revocations cannot be read: tokens are accepted without a revocation check (1 so far).",
                 "Token revocations cannot be read: tokens are accepted without a revocation check (2 so far).",
             )

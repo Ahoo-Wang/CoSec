@@ -97,7 +97,8 @@ CoSec 没有哪个配置项叫这些名字，而已知的 key 无论来源都不
 | `cosec.pipeline.allow-cookie-token` | boolean | `false` | 也从 `authorization` cookie 读取访问令牌。默认关闭，因为浏览器会自动带上 cookie，跨站请求也不例外：只有自己做好 CSRF 防护时才打开（[认证](../integration/authentication.md)）。 |
 | `cosec.pipeline.api-key-header` | string | `X-API-Key` | 携带 API key 的请求头。任何文档都不能读取它：宿主的每个编译器都像拒绝其他携带凭证的请求头一样拒绝对它的引用（[请求头](../policies/language.md#headers)）。 |
 | `cosec.pipeline.trace-level` | `off`、`full`、`exhaustive` | `off` | 引擎对每次求值记录多少追踪信息。决策事件以 `evaluationTrace` 携带这份追踪（`off` 时，以及请求没有到达引擎时为 null）；级别越高，每个请求花的时间越多。 |
-| `cosec.pipeline.mode` | `enforce`、`gateway` | `enforce` | `enforce`：宿主用策略决策。`gateway`：位于 CoSec 网关之后的服务从网关转发的 `CoSec-Identity` 头读取调用方，不装配自己的认证器、API key、快照、策略、控制面或 Redis（[网关之后的服务](../integration/web.md#services-behind-the-gateway)）。其他值使启动失败；在 Spring Cloud Gateway 宿主上设为 `gateway` 也使启动失败。`gateway` 模式下只有网关可以访问到该服务：启动时会以 `WARN` 提示这一点。`gateway` 模式下 `cosec.jwt.enabled` 默认为 `false`：也签发令牌的服务要设为 `true`。 |
+| `cosec.pipeline.mode` | `enforce`、`gateway` | `enforce` | `enforce`：宿主用策略决策。`gateway`：位于 CoSec 网关之后的服务从网关转发的 `CoSec-Identity` 头读取调用方，不装配自己的认证器、API key、快照、策略、控制面或 Redis（[网关之后的服务](../integration/web.md#services-behind-the-gateway)）。其他值使启动失败；在 Spring Cloud Gateway 宿主上设为 `gateway` 也使启动失败。`gateway` 模式下只有网关可以访问到该服务，在 `cosec.pipeline.identity.only-gateway-can-reach` 声明这一点之前启动会失败。`gateway` 模式下 `cosec.jwt.enabled` 默认为 `false`：也签发令牌的服务要设为 `true`。 |
+| `cosec.pipeline.identity.only-gateway-can-reach` | boolean | 无，必填 | `gateway` 模式下，你的声明：除网关之外没有任何东西能访问这个服务（放行网关 pod 的 NetworkPolicy、双向 TLS、私有网络）：该模式相信任何没有签名的 `CoSec-Identity`。除非它是 `true`，服务不会启动；未设置、空、`false`、`1` 和 `on` 同样失败，信息会说明该写什么。设置之后，启动日志记录一行 `INFO`。`gateway` 模式的服务有 hidden-method 过滤器（`spring.mvc.hiddenmethod.filter.enabled`、`spring.webflux.hiddenmethod.filter.enabled` 或 `HiddenHttpMethodFilter` bean）时也启动失败（[网关后面的服务](./deployment.md#services-behind-the-gateway)）。 |
 | `cosec.pipeline.identity.max-age` | duration | `60s` | `gateway` 模式下，签发时间早于这个时长（再加 `cosec.authentication.revocation.skew`）的身份被拒绝：`401` `token-expired`。 |
 | `cosec.pipeline.identity.max-size` | data size | `8KB` | `gateway` 模式下，更大的 `CoSec-Identity` 头被拒绝：`400` `invalid-request`。 |
 
@@ -284,7 +285,7 @@ CoSec 没有哪个配置项叫这些名字，而已知的 key 无论来源都不
 | `cosec.control.approval.four-eyes` | boolean | `false` | 是否也分析在该文档上持有 `cosec:approve` 的平台主体（信任根）的变更：分析无法证明受限的部分随之需要另一位平台主体审批。升级权限的变更无论如何都需要。 |
 | `cosec.control.break-glass.max-duration` | duration | `4h` | 一个 break-glass 绑定最长持续多久。超过 `24h`，或不为正，启动失败。 |
 | `cosec.control.shadow.min-duration` | duration | `15m` | 影子窗口最早在这之后、并且有了 `min-samples` 时关闭。 |
-| `cosec.control.shadow.min-samples` | long | `1000` | 窗口在 `max-duration` 之前关闭所需的已比较样本数。 |
+| `cosec.control.shadow.min-samples` | long | `1000` | 窗口在 `max-duration` 之前关闭所需的已比较样本数。`0` 让窗口只按时间关闭，没有任何请求时也没有任何样本：此时影子步骤什么也证明不了，启动时会以 `WARN` 说明。 |
 | `cosec.control.shadow.max-duration` | duration | `24h` | 窗口到这个年龄时即使样本不足也关闭，作为发布者必须确认的证据不足。不得小于 `min-duration`。 |
 | `cosec.control.shadow.check-interval` | duration | `1m` | 多久查看一次处于影子阶段的变更，同一时间只有一个实例执行；窗口最多晚这么久关闭。必须为正。 |
 | `cosec.control.audit.required-timeout` | duration | `5s` | 所有 `REQUIRED` 变更监听器合计最多用多久记录一个受控步骤（发布、break-glass），超过后该步骤以 `503` 失败。 |

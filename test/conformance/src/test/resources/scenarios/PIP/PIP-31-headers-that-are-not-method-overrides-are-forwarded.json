@@ -1,0 +1,59 @@
+{
+  "rules": [
+    "PIP-31"
+  ],
+  "polarity": "negative",
+  "level": "pipeline",
+  "description": "The strip names three headers and nothing else: a POST with X-Trace and X-Request-Source, which look alike but are not method overrides, is forwarded with both.",
+  "documents": {
+    "platform": {
+      "policies": [
+        {
+          "id": "open",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "http:POST"
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "open",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "open"
+        }
+      ]
+    }
+  },
+  "identity": {},
+  "http": {
+    "method": "POST",
+    "path": "/orders",
+    "headers": {
+      "X-Trace": "t1",
+      "X-Request-Source": "web"
+    }
+  },
+  "authentication": {
+    "result": "anonymous"
+  },
+  "expect": {
+    "status": 200,
+    "proceed": true,
+    "identity": null,
+    "forwardedHeaders": [
+      "x-request-source",
+      "x-trace"
+    ]
+  },
+  "gateway": {
+    "route": {
+      "uri": "lb://backend"
+    },
+    "reportHeaders": true
+  }
+}

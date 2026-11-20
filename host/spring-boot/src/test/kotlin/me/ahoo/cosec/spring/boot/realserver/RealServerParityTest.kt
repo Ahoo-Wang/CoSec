@@ -52,7 +52,8 @@ class RealServerParityTest {
     /**
      * A request, and what every stack must answer to it: [status], and on a permit what the handler was [served]. The
      * stacks in [refusedFirst] are servers that refuse the request themselves, with the same status, before any filter
-     * runs (Jetty's URI compliance): the request never reaches CoSec there, which is as safe.
+     * runs (Jetty's URI compliance, Tomcat's refusal of an encoded NUL): the request never reaches CoSec there, which
+     * is as safe.
      */
     class Scenario(
         val name: String,
@@ -90,6 +91,13 @@ class RealServerParityTest {
         Scenario("an encoded dot segment is 400", get("/public/%2e%2e/orders/1"), 400, refusedFirst = JETTY_STACKS),
         Scenario("an empty segment is 400", get("/public//page"), 400, refusedFirst = JETTY_STACKS),
         Scenario("a path parameter is removed", get("/public;x=1/page"), 200, "GET /public/page"),
+        // PIP-30: no server refuses an encoded `;` itself, Jetty refuses encoded control characters, Tomcat NUL only.
+        Scenario("an encoded semicolon is 400", get("/public/a%3Bb/page"), 400),
+        Scenario("an encoded control character is 400", get("/public/a%1fb"), 400, refusedFirst = JETTY_STACKS),
+        Scenario("an encoded NUL is 400", get("/public/a%00b"), 400, refusedFirst = NUL_REFUSED_FIRST),
+        Scenario("a trailing dot is read as written", get("/public/page."), 200, "GET /public/page."),
+        // Every server refuses a raw control character itself; the pipeline refuses one a server would hand over.
+        Scenario("a raw control character is 400", get("/public/a\u0001b"), 400, refusedFirst = Stack.entries.toSet()),
     )
 
     /**
@@ -127,6 +135,7 @@ class RealServerParityTest {
 
     private companion object {
         val JETTY_STACKS = setOf(Stack.JETTY, Stack.JETTY_REACTIVE)
+        val NUL_REFUSED_FIRST = JETTY_STACKS + setOf(Stack.TOMCAT, Stack.TOMCAT_REACTIVE)
     }
 
     private fun get(path: String, vararg headers: String) = raw("GET", path, *headers)

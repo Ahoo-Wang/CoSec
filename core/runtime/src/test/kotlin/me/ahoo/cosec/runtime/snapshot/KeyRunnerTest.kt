@@ -19,6 +19,7 @@ import ch.qos.logback.classic.Logger
 import ch.qos.logback.classic.spi.ILoggingEvent
 import ch.qos.logback.core.read.ListAppender
 import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.runtime.captured
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.cosec.spi.snapshot.SnapshotKind
 import me.ahoo.test.asserts.assert
@@ -89,9 +90,9 @@ class KeyRunnerTest {
             val snapshot = source.load("app-a").join()
             snapshot.appCompiled.revision.assert().isEqualTo(1L)
             awaitCondition {
-                lines.list.any { "StackOverflowError" in it.formattedMessage && "may not be healthy" in it.formattedMessage }
+                lines.captured().any { "StackOverflowError" in it.formattedMessage && "may not be healthy" in it.formattedMessage }
             }
-            lines.list.single { "may not be healthy" in it.formattedMessage }.formattedMessage.assert().contains(
+            lines.captured().single { "may not be healthy" in it.formattedMessage }.formattedMessage.assert().contains(
                 "[app:app-a]",
                 "Install"
             )
@@ -117,7 +118,7 @@ class KeyRunnerTest {
                 val (thread, error) = uncaught.single()
                 thread.assert().startsWith("cosec-snapshot-compile")
                 error.assert().isInstanceOf(StackOverflowError::class.java)
-                lines.list.none { "may not be healthy" in it.formattedMessage }.assert().isTrue()
+                lines.captured().none { "may not be healthy" in it.formattedMessage }.assert().isTrue()
             }
         } finally {
             Thread.setDefaultUncaughtExceptionHandler(previous)

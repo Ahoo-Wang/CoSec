@@ -127,6 +127,14 @@ Before anything else, `PathNormalizer` checks it. On every adapter the path is:
   `%5c`). A pattern reads these as segments of their own or as part of one, so a `DENY` under `/admin` would not match
   them, while a backend that merges slashes, decodes separators or reads `\` as `/` serves them as `/admin/...`. A
   separator encoded twice (`%252F`, `%255C`) decodes once, to text, and is decided;
+- **rejected the same way** when it holds an encoded `;` (`%3B`) or an encoded control character (`%00` to `%1F`,
+  `%7F`), in either case of the hex digits and anywhere in the path, path parameters included (`PIP-30`). CoSec reads
+  them as text of a segment, but a backend behind a gateway that decodes before it strips path parameters serves
+  `/admin%3Bx/users` as `/admin/users`, and one that stops at NUL or drops what follows a control character serves
+  another path again. `%25` is data of a segment: `%253B` decodes once, to the text `%3B`, and is decided, as is a
+  trailing `.` or space. A raw control character is refused too, though the servers CoSec runs on already refuse one
+  before any filter. Some servers refuse a few of the encoded spellings themselves as well: Jetty every encoded
+  control character (and `%25`), Tomcat `%00`;
 - **kept with a trailing `/`**: `/admin/` is its own path, as in Spring's routing. A pattern written `/admin` does not
   match it, and `/admin/**` does.
 
@@ -718,6 +726,8 @@ adapter (`cosec-webflux` or `cosec-webmvc`). JWT is off in this mode; a service 
 cosec:
   pipeline:
     mode: gateway
+    identity:
+      only-gateway-can-reach: true   # your statement that it is so; the service does not start without it
 ```
 
 In this mode the adapter reads the forwarded identity through `IdentityGate`, and the starter wires no authenticator,
@@ -725,7 +735,8 @@ snapshot, route map, rate limits, control plane, `AuthorizationChecker` or Redis
 classpath is not used, so it needs no Redis template and no CoCache starter; with `cosec.jwt.enabled=true` it is used
 for the revocations of the tokens the service issues, and startup then requires both
 ([Modules](../guide/introduction.md#modules)). The service decides nothing with policies: the gateway decided. It believes any `CoSec-Identity` it receives, so **only the gateway may be able to
-reach it**: how to enforce that, and the startup checks, are in
+reach it**: the statement above, how to enforce it, and the startup checks (no hidden-method filter either: the gateway
+decided the request line's method and removes the method-override headers from what it forwards) are in
 [Services behind the gateway](../operations/deployment.md#services-behind-the-gateway) of the deployment guide.
 
 | Request | Answer |

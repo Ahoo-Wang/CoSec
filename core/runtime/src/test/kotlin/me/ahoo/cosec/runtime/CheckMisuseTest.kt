@@ -62,9 +62,9 @@ class CheckMisuseTest {
         logger.level = level
     }
 
-    private fun warnings() = lines.list.filter { it.level == Level.WARN }.map { it.formattedMessage }
+    private fun warnings() = lines.captured().filter { it.level == Level.WARN }.map { it.formattedMessage }
 
-    private fun debugs() = lines.list.filter { it.level == Level.DEBUG }.map { it.formattedMessage }
+    private fun debugs() = lines.captured().filter { it.level == Level.DEBUG }.map { it.formattedMessage }
 
     private fun permitted() = runBlocking { pipeline.evaluate(facts("/orders/1")) }.security!!
 

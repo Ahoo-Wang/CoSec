@@ -24,6 +24,11 @@ description: "每个 8.0 预览版（alpha 与 beta）到下一个之间的变�
 
 ## 从 8.0.0-beta.4 升级 {#from-8-0-0-beta-4}
 
+- **gateway 模式声明它所信任的网络边界，网关转发它所决策的方法**（`STA-7`、`STA-6`、`PIP-31`）。受影响的是每个 `cosec.pipeline.mode=gateway` 的服务和每个网关。
+  - `gateway` 模式的服务相信任何 `CoSec-Identity` 头，而这个头没有签名，所以网络就是它的边界。现在除非你写下 `cosec.pipeline.identity.only-gateway-can-reach: true`（`COSEC_PIPELINE_IDENTITY_ONLY_GATEWAY_CAN_REACH=true`），声明只有网关能访问它，否则它**启动失败**。未设置、空、`false`、`1` 和 `on` 同样失败，信息会说明该写什么。先让它成真（只放行网关 pod 的 `NetworkPolicy`、双向 TLS、私有网络；[`k8s/examples/gateway-mode-service-networkpolicy.yaml`](https://github.com/Ahoo-Wang/CoSec/blob/main/k8s/examples/gateway-mode-service-networkpolicy.yaml)）。设置之后，beta.4 之前的 `WARN` 变为一行 `INFO`。
+  - `gateway` 模式的服务只要有 hidden-method 过滤器就会**启动失败**：`spring.mvc.hiddenmethod.filter.enabled=true`、`spring.webflux.hiddenmethod.filter.enabled=true`，或它自己的 `HiddenHttpMethodFilter` bean。网关决策的是请求行的方法，而 `_method` 表单字段会让服务执行另一个方法。移除它。自己决策的宿主（`enforce`）不受影响。
+  - 网关从它转发的每个请求、每条路由上移除 `X-HTTP-Method-Override`、`X-HTTP-Method` 和 `X-Method-Override`（不区分大小写）。不可配置。以前会遵从这些头的后端，对经过网关的请求不再遵从：把方法写在请求行里。
+- **路径含有编码后的 `;` 或控制字符时答 `400`**（R1A-3，`PIP-30`）。受影响的是在路径任何位置发送 `%3B` 或 `%00` 到 `%1F`、`%7F`（大小写均可）的客户端。直到 beta.4，它们被当作某一段里的文本来决定，Spring 也这样读；但网关之后先解码、再去掉路径参数的后端会把 `/admin%3Bx/users` 当作 `/admin/users` 提供服务，绕过 `/admin/**` 上的 `DENY`。现在它们在认证之前被拒绝，无论是否映射了路由，答管道不予解释的路径所用的 `400` `invalid-request`；网关在转发任何东西之前就拒绝它们。未编码的控制字符也一样，CoSec 运行的服务器本来就会自己拒绝它。含有这类字符的值放到查询参数或请求体里，或者把它的 `%` 再编码一次（`%253B`）：管道解码一次，得到文本 `%3B`。`%25`、结尾的 `.` 和结尾的空格不变。检查方法：在访问日志或审计记录的 `request.path` 里搜索请求路径中的 `%3B`、`%00` 到 `%1F` 和 `%7F`（[故障排查](./troubleshooting.md#invalid-request)）。没有开关可以接受它们。
 - **两个修订的差异列出不同的部分**（`GET /documents/{key}/diff`，UC-14）。受影响的是读取其 `sections` 的脚本和工具。直到 beta.4，
   `sections` 是布尔值，策略、绑定和角色之外有任何不同即为 `true`。现在它是这些部分名称的列表，取自 `catalog`、`boundary`、
   `limits`、`attributes` 和 `rateLimits`，按此顺序，都相同时为 `[]`。原来读取 `sections` 的地方改为 `sections.length > 0`

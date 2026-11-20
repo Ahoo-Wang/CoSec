@@ -35,6 +35,12 @@ jobs:
           server-id: github
           settings-path: ${{ github.workspace }}
 
+      # Downloads only, retried (.github/scripts/resolve-dependencies.sh), before anything is built or published: a download
+      # that fails (a 429 or a 404 from the plugin portal or Maven Central, a restored index that names jars it lacks) fails
+      # this step, with nothing published, and never the publish step between two artifacts.
+      - name: Resolve the dependencies
+        run: .github/scripts/resolve-dependencies.sh
+
       - name: Publish package
         run: ./gradlew publishAllPublicationsToGitHubPackagesRepository
         env:
@@ -56,6 +62,12 @@ jobs:
           distribution: 'temurin'
           server-id: github
           settings-path: ${{ github.workspace }}
+
+      # Downloads only, retried (.github/scripts/resolve-dependencies.sh), before anything is built or published: a download
+      # that fails (a 429 or a 404 from the plugin portal or Maven Central, a restored index that names jars it lacks) fails
+      # this step, with nothing published, and never the publish step between two artifacts.
+      - name: Resolve the dependencies
+        run: .github/scripts/resolve-dependencies.sh
 
       - name: Publish package
         run: ./gradlew publishToSonatype closeAndReleaseSonatypeStagingRepository
@@ -81,6 +93,12 @@ jobs:
         with:
           java-version: '21'
           distribution: 'temurin'
+
+      # Downloads only, retried (.github/scripts/resolve-dependencies.sh), before anything is built or published: a download
+      # that fails (a 429 or a 404 from the plugin portal or Maven Central, a restored index that names jars it lacks) fails
+      # this step, with nothing published, and never the publish step between two artifacts.
+      - name: Resolve the dependencies
+        run: .github/scripts/resolve-dependencies.sh
 
       - name: Build the distribution
         run: ./gradlew :migrate:distZip

@@ -27,6 +27,33 @@ Which preview of the library may run behind which preview of the gateway image: 
 
 ## From 8.0.0-beta.4 {#from-8-0-0-beta-4}
 
+- **Gateway mode states the network boundary it trusts, and the gateway forwards the method it decided** (`STA-7`,
+  `STA-6`, `PIP-31`). Affected: every service in `cosec.pipeline.mode=gateway`, and every gateway.
+  - A service in `gateway` mode believes any `CoSec-Identity` header, which carries no signature, so the network is its
+    boundary. It now **fails to start** unless you write `cosec.pipeline.identity.only-gateway-can-reach: true`
+    (`COSEC_PIPELINE_IDENTITY_ONLY_GATEWAY_CAN_REACH=true`), your statement that nothing but the gateway can reach it.
+    Absent, empty, `false`, `1` and `on` fail alike, and the message says what to write. Make it true first (a
+    `NetworkPolicy` that admits the gateway's pods only, mutual TLS, a private network;
+    [`k8s/examples/gateway-mode-service-networkpolicy.yaml`](https://github.com/Ahoo-Wang/CoSec/blob/main/k8s/examples/gateway-mode-service-networkpolicy.yaml)).
+    Once it is set, the `WARN` through beta.4 is one `INFO` line.
+  - A service in `gateway` mode **fails to start** with a hidden-method filter:
+    `spring.mvc.hiddenmethod.filter.enabled=true`, `spring.webflux.hiddenmethod.filter.enabled=true`, or a
+    `HiddenHttpMethodFilter` bean of its own. The gateway decided the method of the request line, and a `_method` form
+    field would run another. Remove it. A host that decides itself (`enforce`) is unaffected.
+  - The gateway removes `X-HTTP-Method-Override`, `X-HTTP-Method` and `X-Method-Override`, in any letter case, from
+    every request it forwards, on every route. Not configurable. A backend that honoured one of them for a request
+    through the gateway no longer does: send the method in the request line.
+- **A path holding an encoded `;` or control character is a `400`** (R1A-3, `PIP-30`). Affected: clients that send
+  `%3B` or `%00` to `%1F` or `%7F`, in either case, anywhere in a path. Through beta.4 they were decided as text of a
+  segment, which Spring reads alike, while a backend behind a gateway that decodes before it strips path parameters
+  serves `/admin%3Bx/users` as `/admin/users`, past a `DENY` on `/admin/**`. They are now refused before
+  authentication, mapped route or not, with the `400` `invalid-request` of any path the pipeline will not interpret,
+  and the gateway refuses them before anything is forwarded. So is a raw control character, which the servers CoSec
+  runs on already refuse themselves. A value that holds such a character goes in the query or the body, or has its `%`
+  encoded again (`%253B`), which the pipeline decodes once, to the text `%3B`. `%25`, a trailing `.` and a trailing
+  space are unchanged. To check: search access logs, or the audit records' `request.path`, for `%3B`, `%00` to `%1F`
+  and `%7F` in request paths ([Troubleshooting](./troubleshooting.md#invalid-request)). There is no switch to accept
+  them.
 - **The diff of two revisions names the sections that differ** (`GET /documents/{key}/diff`, UC-14). Affected:
   scripts and tools that read its `sections`. Through beta.4 `sections` was a boolean, `true` when anything besides
   the policies, bindings and roles differed. It is now the list of those sections' names, of `catalog`, `boundary`,

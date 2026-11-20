@@ -108,6 +108,31 @@
         "spring-boot:CorsWiringTest#WebFlux with a source answers a preflight before the pipeline and decides everything else",
         "spring-boot:CorsWiringTest#WebFlux without a source decides a preflight as before and registers no CORS filter"
       ]
+    },
+    {
+      "id": "STA-6",
+      "source": "R1A-6 (2026-11-19); RFC 0006 §7.3",
+      "statement": "A host in `cosec.pipeline.mode=gateway` fails to start when a hidden-method filter is on: `spring.mvc.hiddenmethod.filter.enabled=true`, `spring.webflux.hiddenmethod.filter.enabled=true`, or a `HiddenHttpMethodFilter` bean of the application's own, since the gateway decided the method of the request line and the service would run the one a form field `_method` names, which the gateway cannot remove from a body. The failure names the property or the bean and why. A host in `enforce` mode is not affected: CoSec's filter runs after the hidden-method filter there (`PIP-19`).",
+      "level": "startup",
+      "pending": null,
+      "guards": [
+        "spring-boot:GatewayModeTrustTest#a hidden-method filter in a service behind a gateway fails startup, by property and by bean",
+        "spring-boot:GatewayModeTrustTest#a reactive service is held to the same two statements",
+        "spring-boot:GatewayModeTrustTest#with the statement the service starts, in any letter case of true, and an enforcing host needs none"
+      ]
+    },
+    {
+      "id": "STA-7",
+      "source": "R1B-5 (2026-11-19); RFC 0006 §7.3",
+      "statement": "A host in `cosec.pipeline.mode=gateway` believes any `CoSec-Identity` header it receives, and the header carries no signature, so the network is the boundary. It fails to start unless `cosec.pipeline.identity.only-gateway-can-reach` is written `true` (any letter case, nothing else: absent, empty, `false`, `1` and `on` fail alike), with a message that says what the mode trusts, what must be true of the network (only the gateway can reach the service: a NetworkPolicy, mutual TLS or a private network) and the exact line to add. When it is set the startup logs one INFO line, not a warning. A host in `enforce` mode needs none.",
+      "level": "startup",
+      "pending": null,
+      "guards": [
+        "spring-boot:GatewayModeTrustTest#a service in gateway mode does not start until the operator states the boundary, and the message says what to write",
+        "spring-boot:GatewayModeTrustTest#false and every value but true fail like an absent one, and say what was written",
+        "spring-boot:GatewayModeTrustTest#with the statement the service starts, in any letter case of true, and an enforcing host needs none",
+        "spring-boot:GatewayModeTrustTest#a reactive service is held to the same two statements"
+      ]
     }
   ]
 }

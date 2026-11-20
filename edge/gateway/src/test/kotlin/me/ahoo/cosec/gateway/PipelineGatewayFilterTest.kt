@@ -213,6 +213,35 @@ class PipelineGatewayFilterTest {
             .assert().isNull()
     }
 
+    /** `PIP-31`: the method decided is the one the backend runs, so no override header goes on, on any route. */
+    @Test
+    fun `a method override header never reaches a backend, in any letter case, on any route`() {
+        val filter = PipelineGatewayFilter(pipeline(alice, IdentityIssuer()))
+        val overriding = {
+            MockServerHttpRequest.post("/orders")
+                .header("X-HTTP-Method-Override", "DELETE")
+                .header("x-http-method", "DELETE")
+                .header("X-METHOD-OVERRIDE", "DELETE")
+                .header("X-Other", "kept")
+        }
+        for (route in listOf(
+            route("lb://orders"),
+            route("https://partner.example"),
+            route("lb://orders", identity = false)
+        )) {
+            val headers = forwarded(filter, overriding(), route)
+            headers["X-HTTP-Method-Override"].assert().isNull()
+            headers["X-HTTP-Method"].assert().isNull()
+            headers["X-Method-Override"].assert().isNull()
+            headers.getFirst("X-Other").assert().isEqualTo("kept")
+        }
+        // A request that carries none is forwarded as it is, the method of its request line included.
+        sent(
+            filter,
+            MockServerHttpRequest.post("/orders").header("X-Other", "kept")
+        ).method.assert().isEqualTo(HttpMethod.POST)
+    }
+
     /** IDN-7, RC1-49: opt-in by scheme; metadata `true` opts any route in, `false` (or anything else) opts out. */
     @Test
     fun `only a load-balanced route, or one marked true, receives the identity`() {
@@ -298,20 +327,23 @@ class PipelineGatewayFilterTest {
         sent(stripping, get("/orders").header(HttpHeaders.COOKIE, "authorization=t")).headers
             .containsHeader(HttpHeaders.COOKIE).assert().isFalse()
         // The rest of the URI stays as it came: escapes, a fragment, and characters no builder would accept unencoded.
-        val raw = sent(stripping, get("/a%20b%3Bc?x=%E4%B8%AD&authorization=t&y=中#frag")).uri
-        raw.rawPath.assert().isEqualTo("/a%20b%3Bc")
+        val raw = sent(stripping, get("/a%20b%3Ac?x=%E4%B8%AD&authorization=t&y=中#frag")).uri
+        raw.rawPath.assert().isEqualTo("/a%20b%3Ac")
         raw.rawQuery.assert().isEqualTo("x=%E4%B8%AD&y=中")
         raw.rawFragment.assert().isEqualTo("frag")
-        // An encoded separator is not an escape a backend may read either way (PIP-14): 400, and nothing is forwarded.
-        val separator = MockServerWebExchange.from(get("/a%2Fb?authorization=t"))
-        separator.attributes[GATEWAY_ROUTE_ATTR] = lb
-        var forwarded = false
-        stripping.filter(separator) {
-            forwarded = true
-            Mono.empty()
-        }.block(Duration.ofSeconds(5))
-        forwarded.assert().isFalse()
-        separator.response.statusCode?.value().assert().isEqualTo(400)
+        // An encoded separator (PIP-14), `;` or control character (PIP-30) is not an escape a backend may read either
+        // way: 400, and nothing is forwarded.
+        for (path in listOf("/a%2Fb", "/a%3Bb", "/a%00b")) {
+            val refused = MockServerWebExchange.from(get("$path?authorization=t"))
+            refused.attributes[GATEWAY_ROUTE_ATTR] = lb
+            var forwarded = false
+            stripping.filter(refused) {
+                forwarded = true
+                Mono.empty()
+            }.block(Duration.ofSeconds(5))
+            forwarded.assert().describedAs(path).isFalse()
+            refused.response.statusCode?.value().assert().describedAs(path).isEqualTo(400)
+        }
     }
 
     /**
