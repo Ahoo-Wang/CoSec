@@ -3,15 +3,15 @@
 # Tests: :conformance:test, :runtime:test
 
 diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/SnapshotSource.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/SnapshotSource.kt
-index 80100476e..93ba2e22b 100644
+index 036a74537..49ef10e8c 100644
 --- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/SnapshotSource.kt
 +++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/SnapshotSource.kt
-@@ -290,7 +290,7 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
+@@ -288,7 +288,7 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
+     }
  
      private inline fun checkFresh(tenantId: String, lagAt: (Instant) -> Duration) {
-         val tenants = options.failClosedTenants
--        if (tenants.isEmpty() || (tenantId !in tenants && SnapshotOptions.ALL_TENANTS !in tenants)) {
-+        if (tenants.isEmpty() || tenantId !in tenants) {
+-        if (tenantId !in options.failClosedTenants && SnapshotOptions.ALL_TENANTS !in options.failClosedTenants) {
++        if (tenantId !in options.failClosedTenants) {
              return
          }
          val lag = lagAt(clock.instant())
