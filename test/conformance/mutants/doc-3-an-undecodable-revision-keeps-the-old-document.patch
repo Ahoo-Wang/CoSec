@@ -1,6 +1,6 @@
 # Rule: DOC-3
 # Mutant: a stored revision that does not decode leaves the previous revision in force instead of failing the requests that need the document
-# Tests: :runtime:test --tests me.ahoo.cosec.runtime.snapshot.SnapshotSourceTest :conformance:test --tests me.ahoo.cosec.conformance.ConformanceTest
+# Tests: :runtime:test --tests me.ahoo.cosec.runtime.snapshot.SnapshotSourceFailureTest :conformance:test --tests me.ahoo.cosec.conformance.ConformanceTest
 
 diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/KeyLoads.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/KeyLoads.kt
 index 6b92caad1..c8112260b 100644
