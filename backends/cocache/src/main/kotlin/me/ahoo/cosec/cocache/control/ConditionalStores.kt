@@ -27,6 +27,7 @@ import me.ahoo.cosec.cocache.readRecord
 import me.ahoo.cosec.cocache.snapshot.RedisSnapshotDocumentStore.Companion.cocacheDigest
 import me.ahoo.cosec.cocache.snapshot.RedisSnapshotDocumentStore.Companion.snapshotDigest
 import me.ahoo.cosec.spi.snapshot.SnapshotDigest
+import java.time.Instant
 
 /**
  * The conditional reads and writes the control store makes of its caches (`putIfMatch`, `deleteIfMatch`,
@@ -35,6 +36,34 @@ import me.ahoo.cosec.spi.snapshot.SnapshotDigest
  */
 internal object ConditionalStores {
     const val MAX_LIST_ATTEMPTS = 16
+
+    /** Read, change, `putIfMatch` of the list [name]: retried while another writer changed it in between. */
+    suspend fun updateList(
+        lists: Store<String, Map<String, Instant>>,
+        name: String,
+        next: (Map<String, Instant>) -> Map<String, Instant>,
+    ) {
+        repeat(MAX_LIST_ATTEMPTS) {
+            val current = read(lists, name)
+            val value = next(current?.first.orEmpty())
+            if (value == current?.first) {
+                return
+            }
+            if (put(
+                    lists,
+                    name,
+                    current?.second,
+                    value,
+                    CoCacheControlStore.digest(ListedCodec, value)
+                ) is Put.Written
+            ) {
+                return
+            }
+        }
+        throw IllegalStateException(
+            "The control list [$name] kept changing; gave up after $MAX_LIST_ATTEMPTS attempts."
+        )
+    }
 
     /**
      * Removes [key] if its value, read now, is [wanted], and only while it still is (`deleteIfMatch`). A conflict is
