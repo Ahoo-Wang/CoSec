@@ -59,13 +59,16 @@ class ReferenceFlagsTest {
     @Test
     fun `an addition is blocked by any entry that defines the id, and not by one that only refers to it`() =
         runBlocking<Unit> {
-        publish(ACME, Operation.PutPolicy(allow("editor")))
-        harness.memory.referrers(platform, PolicyId("editor")).assert().containsExactly(ReferrerEntry(ACME, 1, true))
-        adding("editor").errors.map { it.check to it.status }.assert().containsExactly("V2" to 422)
-        // An entry that only refers, such as a stale one, is no use of the id: the platform may define it.
-        harness.memory.addReferrer(platform, PolicyId("viewer"), ReferrerEntry(beta, 3))
-        adding("viewer").errors.assert().isEmpty()
-    }
+            publish(ACME, Operation.PutPolicy(allow("editor")))
+            harness.memory.referrers(
+                platform,
+                PolicyId("editor")
+            ).assert().containsExactly(ReferrerEntry(ACME, 1, true))
+            adding("editor").errors.map { it.check to it.status }.assert().containsExactly("V2" to 422)
+            // An entry that only refers, such as a stale one, is no use of the id: the platform may define it.
+            harness.memory.addReferrer(platform, PolicyId("viewer"), ReferrerEntry(beta, 3))
+            adding("viewer").errors.assert().isEmpty()
+        }
 
     @Test
     fun `a stale entry that defines the id still blocks an addition`() = runBlocking<Unit> {

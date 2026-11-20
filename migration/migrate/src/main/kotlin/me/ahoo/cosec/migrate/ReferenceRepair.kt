@@ -68,37 +68,23 @@ class ReferenceRepair(private val store: ControlStore, private val conversion: S
         }
     }
 
-    @Suppress("TooGenericExceptionCaught")
     private suspend fun repair(): RepairResult {
         val failed = LinkedHashMap<SnapshotKey, String>()
         val legacyDocuments = conversion?.legacyDocuments()
         legacyDocuments?.let { conversion?.listDocuments(it) }
         val listed = store.documents().sortedBy { it.toString() }
-        val converted = conversion?.let { convertAll(it, listed, failed) } ?: 0
-        var documents = 0
-        var added = 0
-        for (key in listed) {
-            documents++
-            try {
-                added += revisions.repairReferences(key)
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                failed.putIfAbsent(key, e.message ?: e.javaClass.name)
+        var converted = 0
+        if (conversion != null) {
+            val seen = HashSet<Pair<SnapshotKey, PolicyId>>()
+            for (key in listed) {
+                converted += each(key, failed) { revisions.referenceKeys(key).count { convert(it, seen) } }
             }
         }
-        var removed = 0
+        val added = listed.sumOf { key -> each(key, failed) { revisions.repairReferences(key) } }
         val heads = ReferrerHeads()
         // Only the platform's and the apps' policies are referred to from other documents (RFC 0007 §5.8).
-        for (key in listed.filterNot { it is SnapshotKey.Tenant }) {
-            try {
-                removed += revisions.pruneReferences(key, heads)
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                failed.putIfAbsent(key, e.message ?: e.javaClass.name)
-            }
-        }
+        val removed = listed.filterNot { it is SnapshotKey.Tenant }
+            .sumOf { key -> each(key, failed) { revisions.pruneReferences(key, heads) } }
         val apps = listed.filterIsInstance<SnapshotKey.App>().mapTo(HashSet()) { it.appId }
         val completed = revisions.completeApps(apps)
         val converting = legacyDocuments != null
@@ -107,7 +93,7 @@ class ReferenceRepair(private val store: ControlStore, private val conversion: S
             conversion?.removeLegacyDocuments()
         }
         return RepairResult(
-            documents,
+            listed.size,
             added,
             removed,
             failed,
@@ -118,30 +104,21 @@ class ReferenceRepair(private val store: ControlStore, private val conversion: S
         )
     }
 
-    /** Step 2: the old-format values the heads touch, each converted once; the number converted. */
+    /** Step 2 for one value: converted once, if the heads touch it and it is in the old format. */
+    private suspend fun convert(reference: Pair<SnapshotKey, PolicyId>, seen: MutableSet<Pair<SnapshotKey, PolicyId>>) =
+        seen.add(reference) && checkNotNull(conversion).convert(reference.first, reference.second)
+
+    /** [step] for [key]; what it counted, or 0 when it failed, which [failed] names, keeping a document's first failure. */
     @Suppress("TooGenericExceptionCaught")
-    private suspend fun convertAll(
-        conversion: StoreConversion,
-        listed: List<SnapshotKey>,
-        failed: MutableMap<SnapshotKey, String>,
-    ): Int {
-        val seen = HashSet<Pair<SnapshotKey, PolicyId>>()
-        var converted = 0
-        for (key in listed) {
-            try {
-                for (reference in revisions.referenceKeys(key)) {
-                    if (seen.add(reference) && conversion.convert(reference.first, reference.second)) {
-                        converted++
-                    }
-                }
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                failed.putIfAbsent(key, e.message ?: e.javaClass.name)
-            }
+    private suspend fun each(key: SnapshotKey, failed: MutableMap<SnapshotKey, String>, step: suspend () -> Int): Int =
+        try {
+            step()
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            failed.putIfAbsent(key, e.message ?: e.javaClass.name)
+            0
         }
-        return converted
-    }
 
     companion object {
         /** The lease two runs of the repair share, so that they never convert the same value at once. */

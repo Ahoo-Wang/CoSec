@@ -19,7 +19,6 @@ import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.cocache.control.ChangeRequestCacheCodec
 import me.ahoo.cosec.cocache.control.ListedCodec
-import me.ahoo.cosec.cocache.control.LegacyReferrersCodec
 import me.ahoo.cosec.cocache.control.ReferrerMemberCodec
 import me.ahoo.cosec.cocache.control.RevisionIndexCodec
 import me.ahoo.cosec.cocache.control.StageSlotCodec
@@ -33,8 +32,8 @@ import me.ahoo.cosec.control.change.ChangeRequest
 import me.ahoo.cosec.control.change.ChangeState
 import me.ahoo.cosec.control.change.StageSlot
 import me.ahoo.cosec.control.store.IndexedReference
-import me.ahoo.cosec.control.store.ReferrerEntry
 import me.ahoo.cosec.control.store.PendingRecord
+import me.ahoo.cosec.control.store.ReferrerEntry
 import me.ahoo.cosec.control.store.RevisionEntry
 import me.ahoo.cosec.control.store.RevisionIndex
 import me.ahoo.cosec.document.Actor
@@ -78,7 +77,7 @@ class StoredFormatTest {
      * produced by running that commit's writers (its `CoSecJsonSerializer` and codecs, the snapshot through its
      * `SnapshotDocumentCodec`) on the values below, in a worktree of `origin/main` at da58e780. `revisionIndex` is
      * the exception: its digests became CoCache 8's SHA-256 with the algorithm (`SHA-256:<hex>`), which replaced the
-     * SHA-1 hex digests of CoCache 6. `referrers` is new with #1207: each referrer with the revision that indexed it.
+     * SHA-1 hex digests of CoCache 6.
      */
     private fun fixture(name: String): String =
         checkNotNull(javaClass.getResource("/stored-format/$name.json")) { "No fixture $name." }.readText()
@@ -305,15 +304,6 @@ class StoredFormatTest {
             StageSlotCodec::encode,
             StageSlotCodec::decode,
             fixture("stageSlot")
-        )
-        // #1207: each referrer with the revision of it that last indexed the reference. The format before 8.0.0-beta.5,
-        // which only cosec-migrate repair-references reads now, to convert it into sets.
-        pinned(
-            "referrers",
-            mapOf(SnapshotKey.Tenant("b") to 7L, SnapshotKey.Platform to 0L, SnapshotKey.App("order") to 2L),
-            LegacyReferrersCodec::encode,
-            LegacyReferrersCodec::decode,
-            fixture("referrers")
         )
         pinned(
             "listed",

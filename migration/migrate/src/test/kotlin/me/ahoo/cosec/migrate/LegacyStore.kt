@@ -18,6 +18,7 @@ package me.ahoo.cosec.migrate
 import io.lettuce.core.RedisClient
 import io.lettuce.core.RedisURI
 import me.ahoo.cocache.api.Codec
+import me.ahoo.cocache.api.spi.CoherenceBackend
 import me.ahoo.cocache.core.CacheRuntime
 import me.ahoo.cocache.core.CoCacheFactory
 import me.ahoo.cocache.core.KeyEncoder
@@ -26,16 +27,19 @@ import me.ahoo.cocache.redis.RedisBackend
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.cocache.CoSecCacheSpecs
-import me.ahoo.cosec.cocache.control.LegacyReferrersCodec
-import me.ahoo.cosec.cocache.snapshot.SnapshotKeyEncoder
 import me.ahoo.cosec.model.PolicyId
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 
-/** Writes what a store of 8.0.0-beta.4 held, as CoCache stores a value, for the conversion to find. */
-internal class LegacyStore(uri: String, private val keyPrefix: String) : AutoCloseable {
-    private val backend = RedisBackend.standalone(RedisURI.create(uri))
-    private val client = RedisClient.create(RedisURI.create(uri))
-    private val connection = client.connect()
+/**
+ * Writes what a store of 8.0.0-beta.4 held over [backend], as CoCache stores a value, for the conversion to find; a set
+ * this version wrote at the same key is first removed by [delete], given the Redis key.
+ */
+internal class LegacyStore(
+    private val backend: CoherenceBackend,
+    private val keyPrefix: String,
+    private val delete: (String) -> Unit = {},
+    private val onClose: () -> Unit = {},
+) : AutoCloseable {
     private val runtime = CacheRuntime.builder().backend(backend).build()
     private val factory = CoCacheFactory(runtime)
 
@@ -58,11 +62,10 @@ internal class LegacyStore(uri: String, private val keyPrefix: String) : AutoClo
 
     /** The back-references of [target]'s [policy] as one value, in place of the set a publish of this version wrote. */
     fun references(target: SnapshotKey, policy: PolicyId, referrers: Map<SnapshotKey, Long>) {
-        val encoded = "${SnapshotKeyEncoder.encode(target)}:${policy.value}"
-        val path = CoSecCacheSpecs.storagePath(keyPrefix, CoSecCacheSpecs.REFERENCE_INDEX_CACHE_NAME)
-        connection.sync().del("$path:$encoded")
+        val encoded = LegacyReferences.encode(target, policy)
+        delete("${CoSecCacheSpecs.storagePath(keyPrefix, CoSecCacheSpecs.REFERENCE_INDEX_CACHE_NAME)}:$encoded")
         raw("LegacyReferences", CoSecCacheSpecs.REFERENCE_INDEX_CACHE_NAME)
-            .put(encoded, LegacyReferrersCodec.encode(referrers))
+            .put(encoded, LegacyReferences.Format.encode(referrers))
     }
 
     /** The document list under the lists, each entry listed at the epoch. */
@@ -73,8 +76,20 @@ internal class LegacyStore(uri: String, private val keyPrefix: String) : AutoClo
 
     override fun close() {
         runtime.close()
-        backend.close()
-        connection.close()
-        client.shutdown()
+        onClose()
+    }
+
+    companion object {
+        /** Over the Redis at [uri], removing a set with `DEL` before writing a value at its key. */
+        fun redis(uri: String, keyPrefix: String): LegacyStore {
+            val backend = RedisBackend.standalone(RedisURI.create(uri))
+            val client = RedisClient.create(RedisURI.create(uri))
+            val connection = client.connect()
+            return LegacyStore(backend, keyPrefix, { connection.sync().del(it) }) {
+                backend.close()
+                connection.close()
+                client.shutdown()
+            }
+        }
     }
 }

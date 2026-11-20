@@ -38,6 +38,7 @@ import me.ahoo.cosec.spi.snapshot.SnapshotDigest
 import me.ahoo.cosec.spi.snapshot.SnapshotFormatException
 import me.ahoo.cosec.spi.snapshot.SnapshotKeyText
 import tools.jackson.databind.JsonNode
+import tools.jackson.databind.node.ArrayNode
 
 private fun JsonNode.digest(what: String): SnapshotDigest {
     val text = text(what)
@@ -89,13 +90,20 @@ internal object RevisionIndexCodec : Codec<RevisionIndex> {
             root.putArray("reclaiming").apply { value.reclaiming.forEach { add(it.toString()) } }
         }
         if (value.indexed.isNotEmpty()) {
-            val indexed = root.putArray("indexed")
-            value.indexed.forEach {
-                indexed.addObject().put("target", SnapshotKeyEncoder.encode(it.target)).put("policy", it.policy.value)
-                    .put("revision", it.revision).apply { if (it.definesItself) put("own", true) }
-            }
+            indexed(root.putArray("indexed"), value.indexed)
         }
         return CoSecJson.mapper.writeValueAsBytes(root)
+    }
+
+    private fun indexed(array: ArrayNode, indexed: List<IndexedReference>) {
+        indexed.forEach {
+            val node = array.addObject().put(
+                "target",
+                SnapshotKeyEncoder.encode(it.target)
+            ).put("policy", it.policy.value)
+                .put("revision", it.revision)
+            if (it.definesItself) node.put("own", true)
+        }
     }
 
     override fun decode(bytes: ByteArray): RevisionIndex {

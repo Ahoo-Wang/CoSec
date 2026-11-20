@@ -44,11 +44,11 @@ import me.ahoo.cosec.control.change.ChangeState
 import me.ahoo.cosec.control.lifecycle.Changes
 import me.ahoo.cosec.control.lifecycle.ControlMaintenance
 import me.ahoo.cosec.control.lifecycle.LockoutCheck
-import me.ahoo.cosec.control.store.ReferrerEntry
 import me.ahoo.cosec.control.store.AppList
 import me.ahoo.cosec.control.store.HeadWrite
 import me.ahoo.cosec.control.store.PendingRecord
 import me.ahoo.cosec.control.store.Publication
+import me.ahoo.cosec.control.store.ReferrerEntry
 import me.ahoo.cosec.control.store.RevisionEntry
 import me.ahoo.cosec.control.store.RevisionIndex
 import me.ahoo.cosec.control.store.Revisions
@@ -94,13 +94,15 @@ class CoCacheControlStoreTest {
         heads = heads,
         records = node.runtime.create(ControlCacheSpecs.revisionRecord(node.keyPrefix)),
         indexes = node.runtime.create(ControlCacheSpecs.revisionIndex(node.keyPrefix)),
-        references = node.runtime.create(ControlCacheSpecs.referenceIndex(node.keyPrefix)),
+        sets = ControlSets(
+            node.runtime.create(ControlCacheSpecs.referenceIndex(node.keyPrefix)),
+            node.runtime.create(ControlCacheSpecs.documentSet(node.keyPrefix)),
+        ),
         leases = node.runtime.create(ControlCacheSpecs.lease(node.keyPrefix)),
         changes = changes,
         stages = node.runtime.create(ControlCacheSpecs.stage(node.keyPrefix)),
         candidates = node.runtime.create(me.ahoo.cosec.cocache.shadow.ShadowCacheSpecs.candidate(node.keyPrefix)),
         lists = lists,
-        documentSet = node.runtime.create(ControlCacheSpecs.documentSet(node.keyPrefix)),
         appLists = appLists,
         clock = clock,
         missingGrace = Duration.ofHours(1),
@@ -135,7 +137,9 @@ class CoCacheControlStoreTest {
             val shared = PolicyId("shared")
             revisions.publish(SnapshotKey.Platform, null, document(DocumentKind.PLATFORM, "", SHARED), BOOTSTRAP)
             CacheRuntime.builder().backend(backend).build().use { raw ->
-                raw.create(rawSet(node.keyPrefix)).add(ReferenceKey(SnapshotKey.Platform, shared), listOf("app:a\u0001b@1"))
+                raw.create(
+                    rawSet(node.keyPrefix)
+                ).add(ReferenceKey(SnapshotKey.Platform, shared), listOf("app:a\u0001b@1"))
             }
             formatError { store.referrers(SnapshotKey.Platform, shared) }.message.assert().doesNotContain("\u0001")
             val base = revisions.head(SnapshotKey.Platform)
@@ -163,7 +167,7 @@ class CoCacheControlStoreTest {
         CacheRuntime.builder().backend(backend).build().use { raw ->
             raw.create(
                 rawStore("RawReferences", keyPrefix, CoSecCacheSpecs.REFERENCE_INDEX_CACHE_NAME, ReferenceKeyEncoder)
-            ).put(reference, LegacyReferrersCodec.encode(mapOf(SnapshotKey.Tenant("acme") to 1L)))
+            ).put(reference, """{"tenant:acme":1}""".encodeToByteArray())
         }
         SnapshotNode(backend, keyPrefix).use { node ->
             val store = store(node)
@@ -466,13 +470,15 @@ class CoCacheControlStoreTest {
                 lostReply,
                 node.runtime.create(ControlCacheSpecs.revisionRecord(node.keyPrefix)),
                 node.runtime.create(ControlCacheSpecs.revisionIndex(node.keyPrefix)),
-                node.runtime.create(ControlCacheSpecs.referenceIndex(node.keyPrefix)),
+                ControlSets(
+                    node.runtime.create(ControlCacheSpecs.referenceIndex(node.keyPrefix)),
+                    node.runtime.create(ControlCacheSpecs.documentSet(node.keyPrefix)),
+                ),
                 node.runtime.create(ControlCacheSpecs.lease(node.keyPrefix)),
                 node.runtime.create(ControlCacheSpecs.changeRequest(node.keyPrefix)),
                 node.runtime.create(ControlCacheSpecs.stage(node.keyPrefix)),
                 node.runtime.create(me.ahoo.cosec.cocache.shadow.ShadowCacheSpecs.candidate(node.keyPrefix)),
                 node.runtime.create(ControlCacheSpecs.list(node.keyPrefix)),
-                node.runtime.create(ControlCacheSpecs.documentSet(node.keyPrefix)),
                 node.runtime.create(ControlCacheSpecs.appList(node.keyPrefix)),
                 { published += it },
             )
@@ -512,13 +518,15 @@ class CoCacheControlStoreTest {
                 rejected,
                 node.runtime.create(ControlCacheSpecs.revisionRecord(node.keyPrefix)),
                 node.runtime.create(ControlCacheSpecs.revisionIndex(node.keyPrefix)),
-                node.runtime.create(ControlCacheSpecs.referenceIndex(node.keyPrefix)),
+                ControlSets(
+                    node.runtime.create(ControlCacheSpecs.referenceIndex(node.keyPrefix)),
+                    node.runtime.create(ControlCacheSpecs.documentSet(node.keyPrefix)),
+                ),
                 node.runtime.create(ControlCacheSpecs.lease(node.keyPrefix)),
                 node.runtime.create(ControlCacheSpecs.changeRequest(node.keyPrefix)),
                 node.runtime.create(ControlCacheSpecs.stage(node.keyPrefix)),
                 node.runtime.create(me.ahoo.cosec.cocache.shadow.ShadowCacheSpecs.candidate(node.keyPrefix)),
                 node.runtime.create(ControlCacheSpecs.list(node.keyPrefix)),
-                node.runtime.create(ControlCacheSpecs.documentSet(node.keyPrefix)),
                 node.runtime.create(ControlCacheSpecs.appList(node.keyPrefix)),
                 { },
             )
@@ -618,8 +626,6 @@ class CoCacheControlStoreTest {
         ).forEach { text ->
             assertThrownBy<SnapshotFormatException> { ReferrerMemberCodec.decode(text.encodeToByteArray()) }
         }
-        LegacyReferrersCodec.encode(mapOf(SnapshotKey.Tenant("b") to 1L)).decodeToString().assert()
-            .isEqualTo("""{"tenant:b":1}""")
     }
 
     @Test

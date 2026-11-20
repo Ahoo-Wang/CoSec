@@ -56,7 +56,7 @@
       "level": "build",
       "pending": null,
       "guards": [
-        "cocache:LegacyConversionTest#a set is never replaced, so a member added after the conversion stays",
+        "migrate:LegacyConversionTest#a set is never replaced, so a member added after the conversion stays",
         "migrate:MigrateMainTest#repair-references converts a store written before beta 5 and removes the old document list last"
       ]
     }

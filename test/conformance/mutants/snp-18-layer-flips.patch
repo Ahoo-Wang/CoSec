@@ -11,5 +11,5 @@ diff --git a/backends/cocache/src/main/kotlin/me/ahoo/cosec/cocache/CacheLocks.k
          // read-only user must be enough; a property or customizer that changes it either way is refused here.
 -        verify { readOnlyAsDeclared(it, readOnly) }
          when (cacheName) {
-             in SET_OF_RECORD_CACHE_NAMES -> {
-                 verify { require(it is SetStoreSpec<*, *>) { "CoSec's ${it.name} is the store of record: a SetStore." } }
+             in SET_OF_RECORD_CACHE_NAMES -> setOfRecord()
+ 

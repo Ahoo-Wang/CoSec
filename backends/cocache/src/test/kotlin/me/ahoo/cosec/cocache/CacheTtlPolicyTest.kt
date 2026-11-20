@@ -25,8 +25,8 @@ import me.ahoo.cocache.core.CoCacheFactory
 import me.ahoo.cocache.core.Layered
 import me.ahoo.cocache.core.LayoutField
 import me.ahoo.cocache.core.Locks
-import me.ahoo.cocache.core.Spec
 import me.ahoo.cocache.core.SetStoreSpec
+import me.ahoo.cocache.core.Spec
 import me.ahoo.cocache.core.StoreSpec
 import me.ahoo.cocache.core.memory.InMemoryBackend
 import me.ahoo.cocache.core.policy.InvalidateFailureMode
@@ -127,8 +127,8 @@ class CacheTtlPolicyTest {
                 factory.create(spec, CoSecCacheSpecs.locks(name)).assert().isInstanceOf(SetStore::class.java)
                 val policy = factory.runtime.policy(name)!!
                 policy.ttl.assert().describedAs(name).isNull()
-                policy.localMaxAge.assert().describedAs(name).isEqualTo(CoSecCacheSpecs.SET_LOCAL_MAX_AGE)
-                policy.degradedLocalMaxAge.assert().describedAs(name).isEqualTo(CoSecCacheSpecs.SET_LOCAL_MAX_AGE)
+                policy.localMaxAge.assert().describedAs(name).isEqualTo(SetsOfRecord.LOCAL_MAX_AGE)
+                policy.degradedLocalMaxAge.assert().describedAs(name).isEqualTo(SetsOfRecord.LOCAL_MAX_AGE)
                 CoSecCacheSpecs.locks(name).let { locks ->
                     listOf(
                         PolicyField.TTL,
@@ -142,7 +142,9 @@ class CacheTtlPolicyTest {
 
     @Test
     fun storeOfRecordCachesNeverExpireAndFailClosed() {
-        (storeOfRecordSpecs.keys + setOfRecordSpecs.keys).assert().isEqualTo(CoSecCacheSpecs.STORE_OF_RECORD_CACHE_NAMES)
+        (storeOfRecordSpecs.keys + setOfRecordSpecs.keys).assert().isEqualTo(
+            CoSecCacheSpecs.STORE_OF_RECORD_CACHE_NAMES
+        )
         weakened { factory ->
             storeOfRecordSpecs.forEach { (name, spec) ->
                 factory.create(spec, CoSecCacheSpecs.locks(name)).assert().isInstanceOf(Store::class.java)

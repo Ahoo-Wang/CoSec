@@ -28,6 +28,7 @@ import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.cocache.CoSecCacheSpecs
 import me.ahoo.cosec.cocache.CoSecTestCaches
+import me.ahoo.cosec.cocache.SetsOfRecord
 import me.ahoo.cosec.cocache.createLocked
 import me.ahoo.cosec.control.store.ReferrerEntry
 import me.ahoo.cosec.model.PolicyId
@@ -38,7 +39,7 @@ import java.time.Duration
 
 /**
  * `CTL-42`: every read of a set of record asks Redis, even within the millisecond its local copy was filled in
- * ([CoSecCacheSpecs.SET_LOCAL_MAX_AGE] says why). The reader fills its local copy with a read; a second instance adds a
+ * ([SetsOfRecord.LOCAL_MAX_AGE] says why). The reader fills its local copy with a read; a second instance adds a
  * member over sharded channels, whose invalidation the reader, subscribed to the plain channel, never receives; the
  * reader reads again at once. Thousands of times: a local copy served within its millisecond would show as a failure
  * rate. A set kept locally for a minute, in the same loop, misses the member: the loop can fail.

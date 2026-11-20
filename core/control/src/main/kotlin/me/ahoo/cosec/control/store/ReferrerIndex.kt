@@ -100,7 +100,9 @@ internal class ReferrerIndex(
             } catch (e: CancellationException) {
                 throw e
             } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
-                log.warn(e) { "[$key] no longer refers to [${indexed.policy.value}] of [${indexed.target}], which stays indexed" }
+                log.warn(
+                    e
+                ) { "[$key] no longer refers to [${indexed.policy.value}] of [${indexed.target}], which stays indexed" }
                 false
             }
         }.toSet()
@@ -108,6 +110,24 @@ internal class ReferrerIndex(
             writes.updateIndex(key) { it.copy(indexed = it.indexed - removed) } ||
                 warn("[$key] revision $revision: the record of what it dropped could not be updated")
         }
+    }
+
+    /**
+     * The back-reference sets the head of [key] touches: those of what it refers to and, for the platform or an app,
+     * those of its own policies. What `cosec-migrate repair-references` converts from the format before 8.0.0-beta.5:
+     * a set no head touches blocks nothing. Empty for a document with no head.
+     */
+    suspend fun referenceKeys(key: SnapshotKey): Set<Pair<SnapshotKey, PolicyId>> {
+        val document = head(key)?.document ?: return emptySet()
+        val referred = references(document).map { it.target to it.policy }
+        val own = if (key is SnapshotKey.Tenant) {
+            emptyList()
+        } else {
+            RoleExpansion.effective(
+                document
+            ).policies.map { key to it.id }
+        }
+        return (referred + own).toCollection(LinkedHashSet())
     }
 
     /**

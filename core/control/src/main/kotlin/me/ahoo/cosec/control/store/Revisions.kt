@@ -28,7 +28,6 @@ import me.ahoo.cosec.document.PolicyDocumentCodec
 import me.ahoo.cosec.document.Provenance
 import me.ahoo.cosec.document.ProvenanceKind
 import me.ahoo.cosec.document.SnapshotDocuments
-import me.ahoo.cosec.document.RoleExpansion
 import me.ahoo.cosec.model.PolicyId
 import me.ahoo.cosec.spi.snapshot.SnapshotDigest
 import me.ahoo.cosec.spi.snapshot.SnapshotDocument
@@ -340,21 +339,8 @@ class Revisions(
         policy
     )
 
-    /**
-     * The back-reference sets the head of [key] touches: those of what it refers to and, for the platform or an app,
-     * those of its own policies. What `cosec-migrate repair-references` converts from the format before 8.0.0-beta.5:
-     * a set no head touches blocks nothing. Empty for a document with no head.
-     */
-    suspend fun referenceKeys(key: SnapshotKey): Set<Pair<SnapshotKey, PolicyId>> {
-        val document = head(key)?.document ?: return emptySet()
-        val referred = referrerIndex.references(document).map { it.target to it.policy }
-        val own = if (key is SnapshotKey.Tenant) {
-            emptyList()
-        } else {
-            RoleExpansion.effective(document).policies.map { key to it.id }
-        }
-        return (referred + own).toCollection(LinkedHashSet())
-    }
+    /** [ReferrerIndex.referenceKeys]: the back-reference sets the head of [key] touches. */
+    suspend fun referenceKeys(key: SnapshotKey): Set<Pair<SnapshotKey, PolicyId>> = referrerIndex.referenceKeys(key)
 
     /** [ReferrerIndex.repairReferences]: adds what the head of [key] refers to and the index misses. */
     suspend fun repairReferences(key: SnapshotKey): Int = referrerIndex.repairReferences(key)

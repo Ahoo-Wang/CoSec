@@ -21,11 +21,11 @@ import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.control.change.ChangeRequest
 import me.ahoo.cosec.control.change.StageSlot
 import me.ahoo.cosec.control.change.ownerOf
-import me.ahoo.cosec.control.store.ReferrerEntry
 import me.ahoo.cosec.control.store.AppList
 import me.ahoo.cosec.control.store.ControlStore
 import me.ahoo.cosec.control.store.InMemoryControlStore
 import me.ahoo.cosec.control.store.Publication
+import me.ahoo.cosec.control.store.ReferrerEntry
 import me.ahoo.cosec.control.store.RevisionIndex
 import me.ahoo.cosec.control.store.Revisions
 import me.ahoo.cosec.control.store.Versioned

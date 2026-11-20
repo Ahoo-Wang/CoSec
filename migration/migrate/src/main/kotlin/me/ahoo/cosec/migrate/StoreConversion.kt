@@ -18,7 +18,6 @@ package me.ahoo.cosec.migrate
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.cocache.control.CoCacheControlStore
-import me.ahoo.cosec.cocache.control.LegacyConversion
 import me.ahoo.cosec.model.PolicyId
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 
@@ -40,8 +39,14 @@ interface StoreConversion {
     suspend fun removeLegacyDocuments()
 
     /** The conversion of a CoCache store. */
-    class OfCoCache(private val store: CoCacheControlStore, private val conversion: LegacyConversion) : StoreConversion {
-        override suspend fun convert(target: SnapshotKey, policy: PolicyId): Boolean = conversion.convert(target, policy)
+    class OfCoCache internal constructor(
+        private val store: CoCacheControlStore,
+        private val conversion: LegacyConversion,
+    ) : StoreConversion {
+        override suspend fun convert(target: SnapshotKey, policy: PolicyId): Boolean = conversion.convert(
+            target,
+            policy
+        )
 
         override suspend fun legacyDocuments(): Set<String>? = store.legacyDocuments()
 

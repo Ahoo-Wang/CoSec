@@ -17,13 +17,13 @@ package me.ahoo.cosec.control.store
 
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
-import me.ahoo.cosec.model.PolicyId
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 
 /**
  * The conditional replaces [Revisions] and its parts make: of a document's revision index and of the app list. The
- * back-references are entries of their own, added and removed one by one ([ControlStore.addReferrer]), with no replace. Each reads, changes and writes with the digest it read, again while that changed, at most
- * [maxAttempts] times; `false` when it kept changing.
+ * back-references are entries of their own, added and removed one by one ([ControlStore.addReferrer]), with no
+ * replace. Each reads, changes and writes with the digest it read, again while that changed, at most [maxAttempts]
+ * times; `false` when it kept changing.
  */
 internal class RevisionWrites(private val store: ControlStore, private val maxAttempts: Int) {
     /** A conditional replace of [key]'s revision index, retried while it changes; no write when [change] leaves it as it is. */

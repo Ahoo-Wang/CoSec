@@ -26,10 +26,10 @@ import me.ahoo.cosec.cocache.CoSecCacheSpecs
 import me.ahoo.cosec.cocache.control.CoCacheControlStore
 import me.ahoo.cosec.cocache.snapshot.createPolicySnapshotCache
 import me.ahoo.cosec.control.change.ownerOf
-import me.ahoo.cosec.control.store.ReferrerEntry
 import me.ahoo.cosec.control.store.AppList
 import me.ahoo.cosec.control.store.HeadWrite
 import me.ahoo.cosec.control.store.Publication
+import me.ahoo.cosec.control.store.ReferrerEntry
 import me.ahoo.cosec.control.store.RevisionIndex
 import me.ahoo.cosec.control.store.Revisions
 import me.ahoo.cosec.document.Actor
@@ -390,7 +390,7 @@ class MigrateMainTest {
             revisions.publish(acme, null, document(acme, listOf("own"), listOf("shared")), publication)
         }
         // As 8.0.0-beta.4 left it: one value per policy, and the document list under the lists.
-        LegacyStore(REDIS, keyPrefix).use { legacy ->
+        LegacyStore.redis(REDIS, keyPrefix).use { legacy ->
             legacy.references(SnapshotKey.Platform, shared, mapOf(acme to 1L))
             legacy.references(SnapshotKey.Platform, PolicyId("own"), mapOf(acme to 1L))
             legacy.documents("platform", "tenant:acme")
@@ -404,7 +404,10 @@ class MigrateMainTest {
         controlStore(keyPrefix) { store ->
             store.referrers(SnapshotKey.Platform, shared).assert().containsExactly(ReferrerEntry(acme, 1))
             // acme defines own itself: the converted entry that says it refers is pruned, the one that defines added.
-            store.referrers(SnapshotKey.Platform, PolicyId("own")).assert().containsExactly(ReferrerEntry(acme, 1, true))
+            store.referrers(
+                SnapshotKey.Platform,
+                PolicyId("own")
+            ).assert().containsExactly(ReferrerEntry(acme, 1, true))
             store.legacyDocuments().assert().isNull()
             store.documents().assert().containsExactlyInAnyOrder(SnapshotKey.Platform, acme)
         }

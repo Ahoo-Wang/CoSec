@@ -23,7 +23,6 @@ import me.ahoo.cosec.control.change.ControlStatus.UNPROCESSABLE
 import me.ahoo.cosec.control.change.Finding
 import me.ahoo.cosec.document.PolicyDefinition
 import me.ahoo.cosec.document.PolicyDocument
-import me.ahoo.cosec.document.RoleExpansion
 import me.ahoo.cosec.model.PolicyId
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import kotlin.coroutines.cancellation.CancellationException
@@ -74,7 +73,9 @@ internal object PlatformChecks {
     } catch (e: CancellationException) {
         throw e
     } catch (e: Exception) {
-        log.warn(e) { "The back-references of [${policy.value}] could not be read; it is refused as an id a tenant may use." }
+        log.warn(
+            e
+        ) { "The back-references of [${policy.value}] could not be read; it is refused as an id a tenant may use." }
         null
     }
 

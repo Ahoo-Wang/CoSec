@@ -24,13 +24,13 @@ import kotlinx.coroutines.selects.select
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.control.change.ownerOf
-import me.ahoo.cosec.control.store.ReferrerEntry
 import me.ahoo.cosec.control.store.ControlStore
 import me.ahoo.cosec.control.store.Head
 import me.ahoo.cosec.control.store.HeadWrite
 import me.ahoo.cosec.control.store.InMemoryControlStore
 import me.ahoo.cosec.control.store.Publication
 import me.ahoo.cosec.control.store.PublishOutcome
+import me.ahoo.cosec.control.store.ReferrerEntry
 import me.ahoo.cosec.control.store.RevisionIndex
 import me.ahoo.cosec.control.store.Revisions
 import me.ahoo.cosec.document.Actor
@@ -104,7 +104,6 @@ object StoreRunner : ScenarioRunner {
         )
         val memory = InMemoryControlStore()
         val store = RecordingStore(memory)
-        val writes = store.writes
         val revisions = Revisions(store)
         val outcomes = ArrayList<Deferred<String>>()
         val previous = HashMap<SnapshotKey, Head?>()
@@ -138,18 +137,31 @@ object StoreRunner : ScenarioRunner {
             hold?.let { held = it to outcome }
         }
         held?.let { (it, finishing) -> it.release.complete(Unit).also { finishing.await() } }
-        val answered = outcomes.map { it.await() }
+        stored(scenario, outcomes.map { it.await() }, revisions, memory, store, key)
+    }
+
+    /** What the scenario expects of the store after its publishes: [answered], the head of [key] and what it holds. */
+    private suspend fun stored(
+        scenario: Scenario,
+        answered: List<String>,
+        revisions: Revisions,
+        memory: InMemoryControlStore,
+        store: RecordingStore,
+        key: SnapshotKey,
+    ): Outcome.Stored {
         val head = revisions.head(key)
         val parent = head?.document?.provenance?.parent
-        Outcome.Stored(
+        return Outcome.Stored(
             outcomes = answered,
             revision = head?.revision,
             parent = parent?.revision,
             parentRecord = parent?.let { memory.record(key, SnapshotDigest.parse(it.digest)) != null },
             records = memory.recordDigests(key).size,
-            writes = writes,
+            writes = store.writes,
             history = if (scenario.node.get("history")?.bool() == true) historyOf(revisions, key) else null,
-            cost = if (scenario.node.get("cost")?.bool() == true) COST_KEYS.associateWith { store.cost[it] ?: 0 } else {
+            cost = if (scenario.node.get("cost")?.bool() == true) {
+                COST_KEYS.associateWith { store.cost[it] ?: 0 }
+            } else {
                 null
             },
         )

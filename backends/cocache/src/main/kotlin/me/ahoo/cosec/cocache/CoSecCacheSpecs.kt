@@ -16,14 +16,12 @@
 package me.ahoo.cosec.cocache
 
 import me.ahoo.cocache.api.Codec
-import me.ahoo.cocache.api.SetStore
 import me.ahoo.cocache.api.Store
 import me.ahoo.cocache.codec.jackson.JacksonCodec
 import me.ahoo.cocache.core.CacheSpec
 import me.ahoo.cocache.core.CoCacheFactory
 import me.ahoo.cocache.core.KeyEncoder
 import me.ahoo.cocache.core.Locks
-import me.ahoo.cocache.core.SetStoreSpec
 import me.ahoo.cocache.core.StoreSpec
 import me.ahoo.cocache.core.policy.InvalidateFailureMode
 import me.ahoo.cocache.core.policy.ReadFailureMode
@@ -89,11 +87,7 @@ object CoSecCacheSpecs {
     const val REVISION_INDEX_CACHE_NAME = "RevisionIndexCache"
     const val CONTROL_LEASE_CACHE_NAME = "ControlLeaseCache"
 
-    /**
-     * The back-references (RFC 0007 §5.8): one set per policy of the platform or an app, each member a document that
-     * refers to it at one revision. A `SetStore` since 8.0.0-beta.5: a publish adds and removes its own members only, so
-     * what it writes does not grow with the number of referrers (`CTL-44`).
-     */
+    /** The back-references (RFC 0007 §5.8): a set per policy, a member per referrer and revision (`CTL-44`). */
     const val REFERENCE_INDEX_CACHE_NAME = "ReferenceIndexCache"
 
     /** Every indexed document: a set, which a first publish adds one member to (`CTL-44`). */
@@ -141,27 +135,9 @@ object CoSecCacheSpecs {
 
     /**
      * The store-of-record caches that are `SetStore`s: their members are added and removed one by one, and every read
-     * asks Redis ([SET_LOCAL_MAX_AGE]).
+     * asks Redis ([SetsOfRecord.LOCAL_MAX_AGE]).
      */
     val SET_OF_RECORD_CACHE_NAMES: Set<String> = setOf(REFERENCE_INDEX_CACHE_NAME, CONTROL_DOCUMENT_SET_CACHE_NAME)
-
-    /**
-     * How long a set of record is kept locally (`local-max-age` and `degraded-local-max-age`, both locked to it): a
-     * stand-in for a read that skips the local copy, which CoCache 8.1 does not offer a `SetStore`. It refuses a local
-     * max age of zero, so CoSec pins the shortest positive one (`CTL-42`). What CoCache does with it, in 8.1.0:
-     *
-     * - a local copy expires at `min(ttl expiry, now + localMaxAge.toMillis())` (`AbstractEngine.localEntry`,
-     *   `AbstractEngine.kt` lines 409-412): 1 ns is 0 ms, so a copy filled at `now` expires at that same `now`;
-     * - a read serves a local copy only while `expiresAt > clock.nowMillis()`, strictly (`SetEngine.freshLocal`,
-     *   `SetEngine.kt` line 203), and asks Redis otherwise;
-     * - the runtime's clock is a `TickingClock` derived from `System.nanoTime()`, which never goes back
-     *   (`TickingClock.refresh`, `TickingClock.kt` line 64).
-     *
-     * So a copy is never served, not even within the millisecond it was filled in: every read of a set asks Redis.
-     * `SetOfRecordReadTest` pins it, thousands of times in a tight loop, against a member written without an
-     * invalidation. A remote-only read of a `SetStore` in CoCache would replace this.
-     */
-    val SET_LOCAL_MAX_AGE: Duration = Duration.ofNanos(1)
 
     /** Names of the caches whose only copy is Redis. */
     val STORE_OF_RECORD_CACHE_NAMES: Set<String> = setOf(
@@ -330,30 +306,6 @@ object CoSecCacheSpecs {
     }
 
     /**
-     * A set of record ([SET_OF_RECORD_CACHE_NAMES]) under CoSec's layout: never expiring, a failed read throwing, and no
-     * local copy a read could answer from ([SET_LOCAL_MAX_AGE]); [locks] keeps it so.
-     */
-    fun <K : Any, E : Any> setOfRecord(
-        cacheName: String,
-        keyPrefix: String,
-        keyEncoder: KeyEncoder<K>,
-        codec: Codec<E>,
-    ): SetStoreSpec<K, E> {
-        require(cacheName in SET_OF_RECORD_CACHE_NAMES) { "[$cacheName] is not a set of record." }
-        val layout = layout(keyPrefix, cacheName)
-        return SetStoreSpec.builder<K, E>(cacheName)
-            .keyPrefix(layout.keyPrefix)
-            .namespace(layout.namespace)
-            .keyEncoder(keyEncoder)
-            .elementCodec(codec)
-            .policy {
-                localMaxAge = SET_LOCAL_MAX_AGE
-                degradedLocalMaxAge = SET_LOCAL_MAX_AGE
-            }
-            .build()
-    }
-
-    /**
      * What both revocation tables declare, before `cocache.*` properties and customizers:
      *
      * - they are `Store`s, written with an explicit lifetime each ([CoCacheTokenStore]); content the table cannot read
@@ -442,9 +394,4 @@ object CoSecCacheSpecs {
 /** Creates [spec] through this factory with CoSec's locks ([CoSecCacheSpecs.locks]), read-only as [spec] declares. */
 @InternalCoSecApi
 fun <K : Any, V : Any> CoCacheFactory.createLocked(spec: StoreSpec<K, V>): Store<K, V> =
-    create(spec, CoSecCacheSpecs.locks(spec.name, spec.readOnly))
-
-/** Creates the set [spec] through this factory with CoSec's locks ([CoSecCacheSpecs.locks]), read-only as declared. */
-@InternalCoSecApi
-fun <K : Any, E : Any> CoCacheFactory.createLocked(spec: SetStoreSpec<K, E>): SetStore<K, E> =
     create(spec, CoSecCacheSpecs.locks(spec.name, spec.readOnly))

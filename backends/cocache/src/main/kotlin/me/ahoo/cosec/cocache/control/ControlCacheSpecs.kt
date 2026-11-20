@@ -22,9 +22,9 @@ import me.ahoo.cocache.core.codec.StringCodec
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.cocache.CoSecCacheSpecs
-import me.ahoo.cosec.cocache.CoSecCacheSpecs.setOfRecord
 import me.ahoo.cosec.cocache.CoSecCacheSpecs.storeOfRecord
 import me.ahoo.cosec.cocache.DEFAULT_KEY_PREFIX
+import me.ahoo.cosec.cocache.SetsOfRecord
 import me.ahoo.cosec.cocache.snapshot.SnapshotDocumentCodec
 import me.ahoo.cosec.cocache.snapshot.SnapshotKeyEncoder
 import me.ahoo.cosec.control.change.ChangeId
@@ -55,7 +55,7 @@ import java.time.Instant
  *
  * Digests in keys and values are [SnapshotDigest]'s text form, `SHA-256:<hex>`.
  *
- * All of them are [storeOfRecord] `Store`s, or sets of record ([CoSecCacheSpecs.setOfRecord]) for the back-references
+ * All of them are [storeOfRecord] `Store`s, or sets of record ([SetsOfRecord.spec]) for the back-references
  * and the documents, whose members a writer adds and removes one by one,, locked by [CoSecCacheSpecs.locks] (`ttl` forever, failed reads throw):
  * records and indexes are not data-plane policy data, but reading a failure as "absent" would let the control plane
  * publish on a wrong base (RFC 0007 §5.2). Leases expire through the lifetime of each write instead. Keys and values are
@@ -80,11 +80,21 @@ internal object ControlCacheSpecs {
 
     /** One set per policy, each member a referrer at one revision ([ReferrerMemberCodec]). */
     fun referenceIndex(keyPrefix: String = DEFAULT_KEY_PREFIX): SetStoreSpec<ReferenceKey, ReferrerEntry> =
-        setOfRecord(CoSecCacheSpecs.REFERENCE_INDEX_CACHE_NAME, keyPrefix, ReferenceKeyEncoder, ReferrerMemberCodec)
+        SetsOfRecord.spec(
+            CoSecCacheSpecs.REFERENCE_INDEX_CACHE_NAME,
+            keyPrefix,
+            ReferenceKeyEncoder,
+            ReferrerMemberCodec
+        )
 
     /** What [CoCacheControlStore.documents] reads: one set, each member a document key. */
     fun documentSet(keyPrefix: String = DEFAULT_KEY_PREFIX): SetStoreSpec<String, String> =
-        setOfRecord(CoSecCacheSpecs.CONTROL_DOCUMENT_SET_CACHE_NAME, keyPrefix, KeyEncoder<String> { it }, StringCodec)
+        SetsOfRecord.spec(
+            CoSecCacheSpecs.CONTROL_DOCUMENT_SET_CACHE_NAME,
+            keyPrefix,
+            KeyEncoder<String> { it },
+            StringCodec
+        )
 
     fun changeRequest(keyPrefix: String = DEFAULT_KEY_PREFIX): StoreSpec<ChangeId, ChangeRequest> =
         storeOfRecord(

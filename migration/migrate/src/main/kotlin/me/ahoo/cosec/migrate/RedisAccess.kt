@@ -29,7 +29,6 @@ import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.cocache.CoSecCacheSpecs
 import me.ahoo.cosec.cocache.DEFAULT_KEY_PREFIX
 import me.ahoo.cosec.cocache.control.CoCacheControlStore
-import me.ahoo.cosec.cocache.control.LegacyConversion
 import me.ahoo.cosec.cocache.snapshot.createPolicySnapshotCache
 
 /** The Redis the commands read the 7.x data from and write the 8.0 control store to, imported by each command. */

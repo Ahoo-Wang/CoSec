@@ -13,7 +13,7 @@
 
 @file:OptIn(InternalCoSecApi::class, ExperimentalCoSecApi::class)
 
-package me.ahoo.cosec.cocache.control
+package me.ahoo.cosec.migrate
 
 import kotlinx.coroutines.runBlocking
 import me.ahoo.cocache.core.CacheRuntime
@@ -22,14 +22,16 @@ import me.ahoo.cocache.core.memory.InMemoryBackend
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.cocache.CoSecCacheSpecs
-import me.ahoo.cosec.cocache.snapshot.SnapshotNode
-import me.ahoo.cosec.cocache.snapshot.newKeyPrefix
-import me.ahoo.cosec.cocache.snapshot.rawStore
+import me.ahoo.cosec.cocache.control.CoCacheControlStore
+import me.ahoo.cosec.cocache.snapshot.createPolicySnapshotCache
 import me.ahoo.cosec.control.store.ReferrerEntry
 import me.ahoo.cosec.model.PolicyId
+import me.ahoo.cosec.spi.snapshot.SnapshotFormatException
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.test.asserts.assert
+import me.ahoo.test.asserts.assertThrownBy
 import org.junit.jupiter.api.Test
+import java.util.UUID
 
 /**
  * `MIG-4`: `repair-references` converts a back-reference value of the format before 8.0.0-beta.5 into a set, and never
@@ -38,24 +40,22 @@ import org.junit.jupiter.api.Test
  */
 class LegacyConversionTest {
     private val backend = InMemoryBackend()
-    private val keyPrefix = newKeyPrefix()
+    private val keyPrefix = "migrate-test:${UUID.randomUUID()}"
     private val shared = PolicyId("shared")
     private val acme = SnapshotKey.Tenant("acme")
     private val beta = SnapshotKey.Tenant("beta")
 
     private fun legacy(value: Map<SnapshotKey, Long>) {
-        CacheRuntime.builder().backend(backend).build().use { raw ->
-            raw.create(
-                rawStore("RawReferences", keyPrefix, CoSecCacheSpecs.REFERENCE_INDEX_CACHE_NAME, ReferenceKeyEncoder)
-            ).put(ReferenceKey(SnapshotKey.Platform, shared), LegacyReferrersCodec.encode(value))
-        }
+        LegacyStore(backend, keyPrefix).use { it.references(SnapshotKey.Platform, shared, value) }
     }
 
     private fun <T> converting(block: suspend (CoCacheControlStore, LegacyConversion) -> T): T =
-        SnapshotNode(backend, keyPrefix).use { node ->
+        CacheRuntime.builder().backend(backend).build().use { runtime ->
             CacheRuntime.builder().backend(backend).build().use { legacyRuntime ->
-                val store = CoCacheControlStore.create(node.factory, node.cache, keyPrefix)
-                val conversion = LegacyConversion.create(store, node.factory, CoCacheFactory(legacyRuntime), keyPrefix)
+                val factory = CoCacheFactory(runtime)
+                val heads = factory.createPolicySnapshotCache(CoSecCacheSpecs.policySnapshot(keyPrefix))
+                val store = CoCacheControlStore.create(factory, heads, keyPrefix)
+                val conversion = LegacyConversion.create(store, factory, CoCacheFactory(legacyRuntime), keyPrefix)
                 runBlocking { block(store, conversion) }
             }
         }
@@ -92,12 +92,8 @@ class LegacyConversionTest {
 
     @Test
     fun `the old document list is read until the repair removes it`() {
-        converting { store, _ ->
-            store.legacyDocuments().assert().isNull()
-        }
-        CacheRuntime.builder().backend(backend).build().use { raw ->
-            raw.create(ControlCacheSpecs.list(keyPrefix)).put("documents", mapOf("tenant:acme" to java.time.Instant.EPOCH))
-        }
+        converting { store, _ -> store.legacyDocuments().assert().isNull() }
+        LegacyStore(backend, keyPrefix).use { it.documents("tenant:acme") }
         converting { store, _ ->
             store.legacyDocuments().assert().containsExactly("tenant:acme")
             store.listDocuments(store.legacyDocuments()!!)
@@ -105,5 +101,18 @@ class LegacyConversionTest {
             store.legacyDocuments().assert().isNull()
             store.documents().assert().containsExactly(acme)
         }
+    }
+
+    /** The old format's bytes, as 8.0.0-beta.4 wrote them, and what it refuses. */
+    @Test
+    fun `the old format reads what beta 4 wrote and refuses anything else`() {
+        val referrers = mapOf(SnapshotKey.Tenant("b") to 7L, SnapshotKey.Platform to 0L, SnapshotKey.App("order") to 2L)
+        val written = """{"app:order":2,"platform":0,"tenant:b":7}"""
+        LegacyReferences.Format.encode(referrers).decodeToString().assert().isEqualTo(written)
+        LegacyReferences.Format.decode(written.encodeToByteArray()).assert().isEqualTo(referrers)
+        listOf("1", """["tenant:b"]""", """{"policies":1}""", """{"tenant:b":-1}""", """{"tenant:b":"1"}""", "{")
+            .forEach { text ->
+                assertThrownBy<SnapshotFormatException> { LegacyReferences.Format.decode(text.encodeToByteArray()) }
+            }
     }
 }
