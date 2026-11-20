@@ -3,15 +3,15 @@
 # Tests: :control:test --tests me.ahoo.cosec.control.grant.* :conformance:test
 
 diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/grant/GrantVerdicts.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/grant/GrantVerdicts.kt
-index cc21d980..e98baf8e 100644
+index 52753612f..2acc77085 100644
 --- a/core/control/src/main/kotlin/me/ahoo/cosec/control/grant/GrantVerdicts.kt
 +++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/grant/GrantVerdicts.kt
-@@ -62,7 +62,7 @@ internal class GrantVerdicts(private val checker: ConditionChecker, private val
-             )
-             is Search.Found -> found.held
-         }
--        val deny = rights.denies.firstOrNull { it.applicability.intersects(scope) && !disjoint(it.statement, fragment) }
-+        val deny = rights.denies.firstOrNull { false && it.applicability.intersects(scope) && !disjoint(it.statement, fragment) }
-         if (deny != null) {
-             return unknown(UnknownReason.DENY_OVERLAP, null, "may overlap ${describe(deny.ref)}", deny.ref)
+@@ -79,7 +79,7 @@ internal class GrantVerdicts(private val checker: ConditionChecker, private val
+         // A DENY the index leaves out is disjoint from the fragment by its actions, as `disjoint` would find.
+         for (deny in rights.deniesFor(fragment.action)) {
+             if (!budget.spend()) return tooLarge()
+-            if (deny.applicability.intersects(scope) && !disjoint(deny.statement, fragment)) {
++            if (false && deny.applicability.intersects(scope) && !disjoint(deny.statement, fragment)) {
+                 return unknown(UnknownReason.DENY_OVERLAP, null, "may overlap ${describe(deny.ref)}", deny.ref)
+             }
          }

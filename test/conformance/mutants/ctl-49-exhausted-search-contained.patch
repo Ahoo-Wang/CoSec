@@ -1,0 +1,17 @@
+# Rule: CTL-49
+# Mutant: a fragment whose search the comparison budget stops is taken as contained
+# Tests: :control:test --tests me.ahoo.cosec.control.grant.ComparisonBudgetTest
+
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/grant/GrantVerdicts.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/grant/GrantVerdicts.kt
+index 2c78e0386..c53af6618 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/grant/GrantVerdicts.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/grant/GrantVerdicts.kt
+@@ -59,7 +59,7 @@ internal class GrantVerdicts(private val checker: ConditionChecker, private val
+         unreached(rights, scope)?.let { return it }
+         val by = when (val found = holder(grantor, rights, fragment, scope, granted, budget)) {
+             null -> return notCovered(Shortfall.NO_ALLOW, "the grantor holds no ALLOW", null)
+-            Search.Exhausted -> return tooLarge()
++            Search.Exhausted -> return GrantVerdict.Contained(null)
+             is Search.Missed -> return notCovered(
+                 found.shortfall,
+                 "closest: ${describe(found.held.ref)}",

@@ -618,6 +618,33 @@
       "pending": null
     },
     {
+      "id": "CTL-49",
+      "source": "Review round 2, R2C-25 and R2C-26 (saas-app-change-cost.md); RFC 0007 §7.4.3, §7.5",
+      "statement": "A grant analysis makes at most its comparison budget of comparisons, spent in the analysis's order, and over it never answers contained: a statement still being compared when the budget runs out is granted, and every fragment it reaches past the budget is unknown (too large to analyze), so what it did not compare needs approval.",
+      "level": "control",
+      "guards": [
+        "control:ComparisonBudgetTest#past the budget a fragment is too large to analyze, never contained",
+        "control:ComparisonBudgetTest#a statement still being compared when the budget runs out is granted",
+        "control:ComparisonBudgetTest#the same change stops at the same comparison"
+      ],
+      "pending": null
+    },
+    {
+      "id": "CTL-50",
+      "source": "Review round 2, R2C-25 (saas-app-change-cost.md); RFC 0007 §7.4.1, §7.4.4",
+      "statement": "What the grant analysis skips as unchanged, a policy or a statement it takes as written before, is identical to the previous version in every member the grant depends on: each member of a policy, a statement and the patterns they hold is compared, or listed with why it need not be, and a statement identical to a previous one narrows it, whatever its condition.",
+      "level": "control",
+      "guards": [
+        "control:GrantPolicyMembersTest#every member is compared or listed with a reason",
+        "control:GrantPolicyMembersTest#a statement's condition removed is analysed",
+        "control:GrantPolicyMembersTest#a path pattern made case insensitive is analysed",
+        "control:GrantPolicyMembersTest#a path pattern matched on the raw path is analysed",
+        "control:GrantPolicyMembersTest#a policy condition removed, or the policy made attachable, is analysed",
+        "control:GrantReflexivityTest#a twin policy is the same policy, and each twin statement narrows its previous one"
+      ],
+      "pending": null
+    },
+    {
       "id": "CTL-51",
       "source": "R2C-32 (review round 2, fourth pass); RFC 0007 §10.3",
       "statement": "simulate and explain name a statement (its policy, index and name, and in the trace its effect and whether it matched) only to a caller who may read the document that defines its policy, whichever document the binding it applied through lives in: a tenant's binding to a platform policy or to an app's permission policy shows a tenant administrator neither the statement that decided nor any of that policy's statements in the trace, which are counted as redacted. A caller who may read the defining document is told them.",

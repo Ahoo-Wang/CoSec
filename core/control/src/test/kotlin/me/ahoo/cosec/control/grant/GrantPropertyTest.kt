@@ -169,6 +169,37 @@ class GrantPropertyTest {
      * the platform also defines, which re-points its bindings (RC1-9): removing a DENY is allowed without analysis (Q9)
      * and is not what A8 is about.
      */
+    /** R2C-26: the index of the grantor's held statements answers what walking all of them answers, ref for ref. */
+    @Test
+    fun `the indexed verdicts are the linear walk's`() {
+        val random = Random(0x26)
+        val generator = GrantGenerator(random)
+        var compared = 0
+        repeat(iterations) {
+            val snapshot = generator.unreadable(generator.snapshot())
+            val gina = generator.subject("gina")
+            val grantor = generator.grantor(gina)
+            val rights = GrantorRights.of(grantor, snapshot)
+            val linear = rights.linear()
+            for (fragment in analyzer.fragments(
+                snapshot,
+                GrantChange(ACME, grant(generator, random, snapshot, gina, "g"))
+            )) {
+                compared++
+                val indexed = analyzer.verdict(grantor, rights, fragment)
+                val walked = analyzer.verdict(grantor, linear, fragment)
+                render(indexed).assert().describedAs("$fragment").isEqualTo(render(walked))
+            }
+        }
+        compared.assert().isGreaterThan(iterations)
+    }
+
+    private fun render(verdict: GrantVerdict): String = when (verdict) {
+        is GrantVerdict.Contained -> "contained by ${verdict.by}"
+        is GrantVerdict.Unknown -> "unknown ${verdict.reason} ${verdict.shortfall} ${verdict.detail} ${verdict.closest}"
+        else -> verdict.toString()
+    }
+
     private fun grant(
         generator: GrantGenerator,
         random: Random,
