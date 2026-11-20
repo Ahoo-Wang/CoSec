@@ -113,19 +113,16 @@ class ChangesB1Test {
             listOf(Operation.PutPolicy(allow("perm:order/read", action = "order:*"))),
             "widen",
         )
+        // One entry for the policy, counted from the back-reference index, with no tenant document read (R2C-14).
         widened.escalations.assert().containsExactly(
-            Escalation("document app:order", "NOT_ANALYZED", "only the trust root publishes it alone"),
+            Escalation("document app:order", Escalation.Reason.NOT_ANALYZED, "only the trust root publishes it alone"),
             Escalation(
-                "binding readers of [tenant:acme]",
-                "TENANT_BINDING",
-                "[perm:order/read] statements [0] widen what this binding grants",
-            ),
-            Escalation(
-                "binding bob of [tenant:acme]",
-                "TENANT_BINDING",
-                "[perm:order/read] statements [0] widen what this binding grants",
+                "tenants binding [perm:order/read] in app order",
+                Escalation.Reason.TENANT_BINDINGS,
+                "statements [0] widen what it grants in up to 1 tenant documents that bind it: [tenant:acme]",
             ),
         )
+        widened.checkedWith.keys.filterIsInstance<SnapshotKey.Tenant>().assert().isEmpty()
         val narrowed = fourEyes.propose(
             PLATO,
             order,
@@ -133,7 +130,7 @@ class ChangesB1Test {
             listOf(Operation.PutPolicy(allow("perm:order/read", action = "order:read", resource = "order/1"))),
             "narrow",
         )
-        narrowed.escalations.map { it.reason }.assert().containsExactly("NOT_ANALYZED")
+        narrowed.escalations.map { it.reason.name }.assert().containsExactly("NOT_ANALYZED")
     }
 
     /** Changes over [store] with four-eyes on, so that every operator's change is analyzed as far as it goes. */
@@ -204,7 +201,7 @@ class ChangesB1Test {
                 binding(id, SubjectRef.Principal(TenantId("acme"), PrincipalId(id)), "orders", app, SpaceId.DEFAULT)
             )
         val operations = listOfNotNull(to("bob", null), alsoIn?.let { to("carol", it) })
-        return changes.propose(ops, ACME, 1, operations, "grant").escalations.map { it.reason }.distinct()
+        return changes.propose(ops, ACME, 1, operations, "grant").escalations.map { it.reason.name }.distinct()
     }
 
     @Test
@@ -682,7 +679,7 @@ class ChangesB1Test {
         val detected = publishInterleaved(listOf(deny("no-delete", "order:delete"))).single()
         detected.kind.assert().isEqualTo(ChangeEvent.Kind.REVIEW_NEEDED)
         detected.moved.map { it.document }.assert().containsExactly("platform")
-        detected.escalations.map { it.reason }.distinct().assert().containsExactly("DENY_OVERLAP")
+        detected.escalations.map { it.reason.name }.distinct().assert().containsExactly("DENY_OVERLAP")
         harness.revisions.head(ACME)!!.document.bindings.map { it.id.value }.assert().containsExactly("bob")
     }
 

@@ -36,9 +36,9 @@ import org.junit.jupiter.api.Test
 class InformationalEscalationTest {
     private val authority = ChangeAuthority(PERMIT_ALL, revocations = RevocationReader.NONE)
     private val pia = Actor(TenantId.PLATFORM, PrincipalId("pia"))
-    private val widen = Escalation("document app:order", "NOT_ANALYZED", "only the trust root publishes it alone")
+    private val widen = Escalation("document app:order", Escalation.Reason.NOT_ANALYZED, "only the trust root publishes it alone")
 
-    private fun binding(id: String) = Escalation("binding $id of [tenant:acme]", Escalation.TENANT_BINDING, "")
+    private fun binding(id: String) = Escalation("binding $id of [tenant:acme]", Escalation.Reason.TENANT_BINDINGS, "")
 
     private fun change(covers: List<String>) = ChangeRequest(
         id = ChangeId("c1"),

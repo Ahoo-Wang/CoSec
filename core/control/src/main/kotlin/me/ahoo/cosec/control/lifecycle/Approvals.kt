@@ -25,13 +25,13 @@ import me.ahoo.cosec.control.change.Approval
 import me.ahoo.cosec.control.change.ChangeId
 import me.ahoo.cosec.control.change.ChangeRejectedException
 import me.ahoo.cosec.control.change.ChangeRequest
+import me.ahoo.cosec.control.change.Escalation
 import me.ahoo.cosec.control.change.ChangeState
 import me.ahoo.cosec.control.change.ControlStatus.CONFLICT
 import me.ahoo.cosec.control.change.ControlStatus.FORBIDDEN
 import me.ahoo.cosec.control.change.Finding
 import me.ahoo.cosec.control.change.requireRequest
 import me.ahoo.cosec.control.lifecycle.ChangeLifecycle.Companion.APPROVAL
-import me.ahoo.cosec.control.lifecycle.ChangeLifecycle.Companion.BREAK_GLASS
 import me.ahoo.cosec.control.store.Revisions
 import me.ahoo.cosec.document.ProvenanceKind
 import java.time.Clock
@@ -63,7 +63,7 @@ internal class Approvals(
         authority.require(operator, change.key, ControlActions.APPROVE)
         PublishRules.requireState(change, ChangeStep.APPROVE.from)
         authority.requireApprovable(operator, change, candidate)
-        val breakGlass = change.escalations.any { it.reason == BREAK_GLASS }
+        val breakGlass = change.escalations.any { it.reason == Escalation.Reason.BREAK_GLASS }
         if (breakGlass) {
             PublishRules.requireAudit(true, listeners.hasRequired)
             flow.audit(ChangeEvent.Kind.BREAK_GLASS_APPROVED, change, operator.actor)

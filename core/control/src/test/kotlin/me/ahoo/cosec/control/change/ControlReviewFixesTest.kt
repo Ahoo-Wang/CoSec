@@ -295,7 +295,7 @@ class ControlReviewFixesTest {
             listOf(Operation.PutPolicy(writer.copyAs("x"))),
             "x"
         )
-        val needed = listOf(Escalation("document platform", "NOT_ANALYZED"))
+        val needed = listOf(Escalation("document platform", Escalation.Reason.NOT_ANALYZED))
         authority.approverProblem(change, emptyList(), walt).assert().isNull()
         authority.approverProblem(change, needed, walt).assert().isEqualTo("it needs an approval")
         val unrecorded = change.copy(

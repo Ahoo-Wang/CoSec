@@ -22,6 +22,7 @@ import me.ahoo.cosec.control.authz.Operator
 import me.ahoo.cosec.control.change.ChangeRejectedException
 import me.ahoo.cosec.control.change.ControlStatus.UNAVAILABLE
 import me.ahoo.cosec.control.change.Escalation
+import me.ahoo.cosec.control.store.ReferrerNames
 import me.ahoo.cosec.control.change.Operation
 import me.ahoo.cosec.control.grant.Dimension
 import me.ahoo.cosec.control.grant.GrantAnalysis
@@ -56,7 +57,7 @@ internal class EscalationAnalysis(private val analyzer: GrantAnalyzer, private v
         for (binding in candidate.bindings.filter { it.breakGlass }) {
             val previous = before[binding.id]
             if (previous == null || digest(previous) != digest(binding)) {
-                into += Escalation("break-glass binding ${binding.id.value}", BREAK_GLASS, "always two people (RFC 0007 §8)")
+                into += Escalation("break-glass binding ${binding.id.value}", Escalation.Reason.BREAK_GLASS, "always two people (RFC 0007 §8)")
             }
         }
     }
@@ -192,7 +193,7 @@ internal class EscalationAnalysis(private val analyzer: GrantAnalyzer, private v
     ): List<Escalation> {
         val escalations = ArrayList<Escalation>()
         if (operations.any { it !is Operation.RemovePolicy && it !is Operation.RemoveBinding && it !is Operation.RemoveRole }) {
-            escalations += Escalation("document $key", NOT_ANALYZED, "only the trust root publishes it alone")
+            escalations += Escalation("document $key", Escalation.Reason.NOT_ANALYZED, "only the trust root publishes it alone")
         }
         escalations += removedDenies(key, base, candidate, documents)
         if (key is SnapshotKey.App) {
@@ -228,17 +229,23 @@ internal class EscalationAnalysis(private val analyzer: GrantAnalyzer, private v
         return removed.map {
             Escalation(
                 "$it of $key",
-                NOT_ANALYZED,
+                Escalation.Reason.NOT_ANALYZED,
                 "it removes a DENY: only the trust root does it alone"
             )
         }
     }
 
     /**
-     * The tenant bindings that a change of app [key] widens (RC1-34): each binding of a tenant document the
-     * back-reference index names (RFC 0007 §5.8) to a permission policy whose ALLOWs the candidate adds or widens,
-     * scoped to the app (N1). The approver sees whom the change reaches in which tenant, not only the app document. An
-     * index or a head that cannot be read is a 503: an approval must not be asked for what cannot be shown.
+     * The tenants a change of app [key] reaches (RC1-34, R2C-14): for each permission policy whose ALLOWs the candidate
+     * adds or widens, one informational entry naming the tenant documents the back-reference index (RFC 0007 §5.8) lists
+     * as binding it in the app, counted, the first of them named ([ReferrerNames]). The approver sees how far the change
+     * reaches; what is approved is widening the policy, which [Escalation.Reason.NOT_ANALYZED] stands for and which this
+     * entry never replaces (`CTL-48`).
+     *
+     * No tenant document is read: the set is all the entry rests on, so what the checks read, and record in
+     * `checkedWith`, does not grow with the tenants. A set is a superset of the documents that still bind the policy (a
+     * member may outlive its binding until the publish that dropped it removes it), so the count is an upper bound. A
+     * set that cannot be read is a 503: an approval must not be asked for what cannot be shown.
      */
     @Suppress("TooGenericExceptionCaught")
     private suspend fun referringBindings(
@@ -247,52 +254,35 @@ internal class EscalationAnalysis(private val analyzer: GrantAnalyzer, private v
         candidate: PolicyDocument,
         documents: CurrentDocuments,
     ): List<Escalation> = try {
-        val app = AppId(key.appId)
         val widened = analyzer.widened(GrantDocuments.of(base), GrantDocuments.of(candidate))
-        val found = ArrayList<Escalation>()
-        for ((policy, statements) in widened) {
-            found += referringBindings(key, app, policy, statements, documents)
-        }
-        found
+        widened.mapNotNull { (policy, statements) -> referringTenants(key, policy, statements, documents) }
     } catch (e: CancellationException) {
         throw e
     } catch (e: Exception) {
         throw ChangeRejectedException(UNAVAILABLE, "the tenants referring to [$key] could not be read: ${e.message}", e)
     }
 
-    /** The bindings to [policy] in [app] of each tenant document the back-reference index names, in tenant order. */
-    private suspend fun referringBindings(
+    /** The tenant documents the back-reference index lists for [policy] of app [key], as one entry; none for none. */
+    private suspend fun referringTenants(
         key: SnapshotKey.App,
-        app: AppId,
         policy: PolicyId,
         statements: List<Int>,
         documents: CurrentDocuments,
-    ): List<Escalation> {
-        val found = ArrayList<Escalation>()
-        val referrers = documents.referrers(key, policy).mapTo(LinkedHashSet()) { it.referrer }
-        val tenants = referrers.filterIsInstance<SnapshotKey.Tenant>().sortedBy { it.tenantId }
-        for (tenant in tenants) {
-            val bindings = documents.head(
-                tenant
-            )?.document?.let(RoleExpansion::effective)?.bindings.orEmpty().filter {
-                it.policy == policy && it.scope.app == Match.Exactly(app)
-            }
-            for (binding in bindings) {
-                // Only where the binding is: whom another tenant binds, and in which space, is not the author's.
-                found += Escalation(
-                    "binding ${binding.id.value} of [$tenant]",
-                    Escalation.TENANT_BINDING,
-                    "[${policy.value}] statements $statements widen what this binding grants",
-                )
-            }
+    ): Escalation? {
+        val tenants = documents.referrers(key, policy).mapNotNullTo(HashSet()) { it.referrer as? SnapshotKey.Tenant }
+        if (tenants.isEmpty()) {
+            return null
         }
-        return found
+        return Escalation(
+            "tenants binding [${policy.value}] in app ${key.appId}",
+            Escalation.Reason.TENANT_BINDINGS,
+            "statements $statements widen what it grants in up to ${tenants.size} tenant documents that bind it: " +
+                ReferrerNames.of(tenants),
+        )
     }
 
     internal companion object {
         private val log = KotlinLogging.logger(ChangeAuthority::class.java.name)
-        const val NOT_ANALYZED = "NOT_ANALYZED"
-        const val BREAK_GLASS = "BREAK_GLASS"
 
         /** How often the WARN that the app list is not to be trusted may be logged (RC1-4). */
         val UNTRUSTED_WARN_INTERVAL: Duration = 1.minutes
