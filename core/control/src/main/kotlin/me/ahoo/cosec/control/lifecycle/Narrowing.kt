@@ -24,6 +24,8 @@ import me.ahoo.cosec.document.PolicyDocumentCodec
 import me.ahoo.cosec.document.PolicyDocumentCompiler
 import me.ahoo.cosec.document.RoleExpansion
 import me.ahoo.cosec.engine.BuiltinPolicies
+import me.ahoo.cosec.model.Binding
+import me.ahoo.cosec.model.BindingId
 import me.ahoo.cosec.model.Effect
 import me.ahoo.cosec.model.PolicyId
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
@@ -56,7 +58,31 @@ internal object Narrowing {
         if (base == null || operations.isEmpty()) {
             return false
         }
-        return operations.all { narrows(it, base, candidate, shadows, policyOf) }
+        // Indexed and read once per call, not once per operation (R2C-27): a change may hold 20,000 operations.
+        val indexed = Indexed(base, candidate)
+        val shadowed = memo(shadows)
+        val elsewhere = memo(policyOf)
+        return operations.all { narrows(it, indexed, shadowed, elsewhere) }
+    }
+
+    /** [base] and [candidate] by id, the first entry of an id as a scan would find it, and [base] expanded once. */
+    private class Indexed(val base: PolicyDocument, candidate: PolicyDocument, effective: PolicyDocument? = null) {
+        val bindings: Map<BindingId, Binding> = first(base.bindings) { it.id }
+        val policies: Set<PolicyId> = base.policies.mapTo(HashSet()) { it.id }
+        val basePolicies: Map<PolicyId, PolicyDefinition> = first(base.policies) { it.id }
+        val candidatePolicies: Map<PolicyId, PolicyDefinition> = first(candidate.policies) { it.id }
+        val expanded: Map<PolicyId, PolicyDefinition> by lazy(LazyThreadSafetyMode.NONE) {
+            first((effective ?: RoleExpansion.effective(base)).policies) { it.id }
+        }
+
+        private fun <K, V> first(values: List<V>, key: (V) -> K): Map<K, V> =
+            HashMap<K, V>(values.size * 2).also { map -> values.forEach { map.putIfAbsent(key(it), it) } }
+    }
+
+    /** [read] answered once per argument within one call. */
+    private fun <K, V> memo(read: suspend (K) -> V): suspend (K) -> V {
+        val answered = HashMap<K, V>()
+        return { key -> if (key in answered) answered.getValue(key) else read(key).also { answered[key] = it } }
     }
 
     /**
@@ -76,11 +102,13 @@ internal object Narrowing {
         val after = RoleExpansion.effective(candidate)
         val policies = after.policies.mapTo(HashSet()) { it.id }
         val bindings = after.bindings.mapTo(HashSet()) { it.id }
+        val indexed = Indexed(base, candidate, before)
+        val elsewhere = memo(policyOf)
         val removed = ArrayList<String>()
         before.policies.filter { it.id !in policies && it.statements.any { s -> s.effect == Effect.DENY } }
             .mapTo(removed) { "policy ${it.id.value}" }
         for (binding in before.bindings) {
-            if (binding.id !in bindings && !binding.breakGlass && !allowsOnly(base, binding.policy, policyOf, before)) {
+            if (binding.id !in bindings && !binding.breakGlass && !allowsOnly(indexed, binding.policy, elsewhere)) {
                 removed += "binding ${binding.id.value}"
             }
         }
@@ -90,45 +118,42 @@ internal object Narrowing {
     /** Whether [operation] is one of the whitelist's on [base], giving [candidate]. */
     private suspend fun narrows(
         operation: Operation,
-        base: PolicyDocument,
-        candidate: PolicyDocument,
+        indexed: Indexed,
         shadows: suspend (PolicyId) -> Boolean,
         policyOf: suspend (PolicyId) -> PolicyDefinition?,
     ): Boolean = when (operation) {
         is Operation.RemoveBinding -> {
-            val removed = base.bindings.firstOrNull { it.id == operation.id }
-            removed != null && !shadows(removed.policy) && allowsOnly(base, removed.policy, policyOf)
+            val removed = indexed.bindings[operation.id]
+            removed != null && !shadows(removed.policy) && allowsOnly(indexed, removed.policy, policyOf)
         }
 
         is Operation.PutPolicy -> !shadows(operation.policy.id) &&
             (
-                madeUnattachable(base, operation.policy) ||
-                    (base.policies.none { it.id == operation.policy.id } && deniesOnly(operation.policy))
+                madeUnattachable(indexed, operation.policy) ||
+                    (operation.policy.id !in indexed.policies && deniesOnly(operation.policy))
                 )
 
         is Operation.PutBinding -> {
             val binding = operation.binding
-            base.bindings.none { it.id == binding.id } && !binding.breakGlass && !shadows(binding.policy) &&
-                candidate.policies.firstOrNull { it.id == binding.policy }?.let(::deniesOnly) == true
+            binding.id !in indexed.bindings && !binding.breakGlass && !shadows(binding.policy) &&
+                indexed.candidatePolicies[binding.policy]?.let(::deniesOnly) == true
         }
 
         else -> false
     }
 
     /**
-     * Whether [policy], as [base] or another document defines it, is ALLOWs only and not the blacklist; [effective] is
-     * [base] expanded, when the caller has it.
+     * Whether [policy], as the base (expanded) or another document defines it, is ALLOWs only and not the blacklist.
      */
     private suspend fun allowsOnly(
-        base: PolicyDocument,
+        indexed: Indexed,
         policy: PolicyId,
         policyOf: suspend (PolicyId) -> PolicyDefinition?,
-        effective: PolicyDocument? = null,
     ): Boolean {
         val statements = when (policy) {
             BuiltinPolicies.BLACKLIST -> return false
             BuiltinPolicies.ROOT -> return true
-            else -> (effective ?: RoleExpansion.effective(base)).policies.firstOrNull { it.id == policy }?.statements
+            else -> indexed.expanded[policy]?.statements
                 ?: BuiltinPolicies.CONTROL[policy]
                 ?: policyOf(policy)?.statements
         }
@@ -136,8 +161,9 @@ internal object Narrowing {
     }
 
     /** Whether [policy] only turns the attachable base policy of its id, of ALLOWs only, not attachable. */
-    private fun madeUnattachable(base: PolicyDocument, policy: PolicyDefinition): Boolean {
-        val before = base.policies.firstOrNull { it.id == policy.id } ?: return false
+    private fun madeUnattachable(indexed: Indexed, policy: PolicyDefinition): Boolean {
+        val base = indexed.base
+        val before = indexed.basePolicies[policy.id] ?: return false
         return before.attachable && !policy.attachable &&
             before.statements.all { it.effect == Effect.ALLOW } &&
             encoded(base, before.unattachable()) == encoded(base, policy)

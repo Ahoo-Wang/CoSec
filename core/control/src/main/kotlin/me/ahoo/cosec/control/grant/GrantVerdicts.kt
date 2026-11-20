@@ -150,6 +150,8 @@ internal class GrantVerdicts(private val checker: ConditionChecker, private val 
         budget: ComparisonBudget,
     ): Search? {
         var closest: Search.Missed? = null
+        // Once per search, not once per held ALLOW tried (R2C-26): the grantor, the tenant and the scope are the same.
+        val constants by lazy(LazyThreadSafetyMode.NONE) { grantorConstants(grantor, fragment.tenant, scope) }
         for (held in allows) {
             if (!budget.spend()) return Search.Exhausted
             val shortfall = when {
@@ -157,7 +159,7 @@ internal class GrantVerdicts(private val checker: ConditionChecker, private val 
                 held.statement.actions.none { PatternContainment.contains(it, fragment.action) == Containment.YES } ->
                     Shortfall.ACTION
 
-                resourceAndCondition(grantor, scope, held, fragment, granted) ->
+                resourceAndCondition(constants, held, fragment, granted) ->
                     if (outlives(held, fragment)) return Search.Found(held) else Shortfall.EXPIRY
 
                 held.statement.resources.any { contained(it, fragment.resource) } -> Shortfall.CONDITION
@@ -185,8 +187,7 @@ internal class GrantVerdicts(private val checker: ConditionChecker, private val 
 
     /** Whether one resource of [held] contains the fragment's and its condition then holds wherever the fragment's does. */
     private fun resourceAndCondition(
-        grantor: Grantor,
-        scope: ScopeSet,
+        constants: (Attribute) -> Constant?,
         held: HeldStatement,
         fragment: GrantFragment,
         granted: CheckedCondition?,
@@ -196,7 +197,7 @@ internal class GrantVerdicts(private val checker: ConditionChecker, private val 
             containment != null && GrantImplication.implied(granted, held.condition) {
                 Specialization(
                     checker,
-                    grantorConstants(grantor, fragment.tenant, scope),
+                    constants,
                     opaque = { it.kind in SUBJECT_KINDS },
                     renames = containment.variables,
                 )
@@ -239,6 +240,16 @@ internal class GrantVerdicts(private val checker: ConditionChecker, private val 
         /** The grantor's own attributes (§7.4.3 `specialize`). `scope.roles` only where it has one value. */
         fun grantorConstants(grantor: Grantor, tenant: TenantId, scope: ScopeSet): (Attribute) -> Constant? {
             val roles = grantor.memberships.roles
+            val subjectRoles by lazy(LazyThreadSafetyMode.NONE) {
+                Constant.Strings(roles.values.flatMapTo(LinkedHashSet()) { set -> set.map { it.value } })
+            }
+            val scopedRoles by lazy(LazyThreadSafetyMode.NONE) {
+                Constant.Strings(
+                    roles.flatMapTo(LinkedHashSet()) { (space, set) ->
+                        set.map { if (space == SpaceId.DEFAULT) it.value else "${it.value}@${space.value}" }
+                    }
+                )
+            }
             val scopeRoles = (scope.spaces as? Dimension.Only)?.values
                 ?.map { grantor.roles(it) }?.distinct()?.singleOrNull()
             return { attribute ->
@@ -246,14 +257,8 @@ internal class GrantVerdicts(private val checker: ConditionChecker, private val 
                     Kind.SUBJECT_ID -> Constant.Str(grantor.id.value)
                     Kind.SUBJECT_TENANT, Kind.SCOPE_TENANT -> Constant.Str(tenant.value)
                     Kind.SUBJECT_AUTHENTICATED -> Constant.Bool(true)
-                    Kind.SUBJECT_ROLES -> Constant.Strings(
-                        roles.values.flatMapTo(LinkedHashSet()) { set -> set.map { it.value } }
-                    )
-                    Kind.SUBJECT_SCOPED_ROLES -> Constant.Strings(
-                        roles.flatMapTo(LinkedHashSet()) { (space, set) ->
-                            set.map { if (space == SpaceId.DEFAULT) it.value else "${it.value}@${space.value}" }
-                        }
-                    )
+                    Kind.SUBJECT_ROLES -> subjectRoles
+                    Kind.SUBJECT_SCOPED_ROLES -> scopedRoles
 
                     // Exactly as the engine reads it: a value of any type is its toString() (RC1-2).
                     Kind.SUBJECT_ATTRIBUTE -> Constant.Str(SubjectAttributes.string(grantor.attributes, attribute.name))
