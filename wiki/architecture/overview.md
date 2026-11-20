@@ -462,6 +462,15 @@ Two benchmarks measure the hot path:
   `blacklist`, `blocked`, `listener` and `routed` (a route map maps the request to a business action, so the
   route lookup is in the measurement: the only scenario that has one).
 
+A third measures what the adapters add around it: **`EdgeRequestBenchmark`** (`test/e2e/src/jmh`) reads a request of
+realistic shape (14 headers, a bearer token, two cookies, a three-hop `X-Forwarded-For`, as Reactor Netty hands it to
+Spring) into `HttpFacts`, and runs the WebFlux filter, the servlet filter and what a gateway runs of CoSec
+(`gatewayFilters`: the strip filter, the pipeline filter and the last hop) over the `PipelineBenchmark` slice. On a
+4-vCPU CI runner the gateway's own code cost about twice the decision (#1759). Stripping `CoSec-Identity` only from a
+request that still holds it, deciding a route's facts once per route and handing headers on uncopied at the last hop
+took `gatewayFilters` from 36.2 to 27.8 kB a request (−23 %) and from 36.5 to 31.2 µs (85 %, a noisy runner;
+[44771587714](https://github.com/Ahoo-Wang/CoSec/actions/runs/44771587714), R2B-9).
+
 8.0 must be at least as fast as 7.x in every comparable scenario. That gate is the manual CI workflow
 [`jmh-v7-v8.yml`](https://github.com/Ahoo-Wang/CoSec/blob/main/.github/workflows/jmh-v7-v8.yml): on one runner it
 alternates 7.x's `SimpleAuthorizationBenchmark` and `SecurityPipelineBenchmark` with 8.0's `EngineAuthorizationBenchmark`
