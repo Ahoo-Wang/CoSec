@@ -3,7 +3,7 @@
 # Tests: :runtime:test --tests me.ahoo.cosec.runtime.stage.MembershipResolverTest :conformance:test --tests me.ahoo.cosec.conformance.ConformanceTest
 
 diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/stage/MembershipResolver.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/stage/MembershipResolver.kt
-index 2d3362e1..3f613d07 100644
+index 2d3362e1..4948b5ff 100644
 --- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/stage/MembershipResolver.kt
 +++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/stage/MembershipResolver.kt
 @@ -100,7 +100,7 @@ class MembershipResolver(
@@ -11,7 +11,7 @@ index 2d3362e1..3f613d07 100644
              throw failure(principal, e)
          } catch (e: Exception) {
 -            throw failure(principal, e)
-+            if (e is IllegalStateException) throw failure(principal, e) else MembershipAnswer.Unknown
++            MembershipAnswer.Unknown
          }
  
      /** The memberships [answer] gives, or null when the principal is unknown or not active. */

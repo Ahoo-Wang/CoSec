@@ -1,6 +1,6 @@
 # Rule: APR-1
 # Mutant: publishing no longer refuses an approval given by the change's author: only the approval call stands between an author and their own approval
-# Tests: :control:test --tests me.ahoo.cosec.control.authz.ControlAuthorizationTest :conformance:test --tests me.ahoo.cosec.conformance.ConformanceTest
+# Tests: :control:test --tests me.ahoo.cosec.control.change.StoredApprovalTest --tests me.ahoo.cosec.control.authz.ControlAuthorizationTest :conformance:test --tests me.ahoo.cosec.conformance.ConformanceTest
 
 diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ApprovalRules.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ApprovalRules.kt
 index f162ed6b..02804808 100644
