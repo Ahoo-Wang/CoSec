@@ -77,7 +77,10 @@ internal class GrantNarrowing(private val checker: ConditionChecker, private val
         if (twins != null && twins.of(statement).any { identical(statement, condition, it, previous) }) {
             return true
         }
-        // Past the budget it is not known to narrow anything, so it is granted (CTL-49).
+        // Past the budget it is not known to narrow anything, so it is granted (CTL-49), without walking the rest.
+        if (budget?.exhausted == true) {
+            return false
+        }
         return previous.statements.any {
             budget?.spend() != false &&
                 (identical(statement, condition, it, previous) || narrows(statement, condition, it, both(previous.condition, it.condition)))
