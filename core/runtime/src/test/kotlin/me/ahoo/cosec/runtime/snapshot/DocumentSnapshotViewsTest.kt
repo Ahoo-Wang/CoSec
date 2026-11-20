@@ -123,6 +123,29 @@ class DocumentSnapshotViewsTest {
         }
     }
 
+    /**
+     * `TNT-1` (R1A-8): the source keys a tenant's document by its id exactly as written, so two tenants whose ids differ
+     * only in case each decide on their own document and never on the other's. The engine refuses another tenant's
+     * document, so a source that shared one entry between them would answer one tenant with a failure, not a decision:
+     * a mutant that keyed tenant documents in lower case survived every other test.
+     */
+    @Test
+    fun `tenants whose ids differ only in case each have their own document`() {
+        publish(SnapshotKey.Platform, allowRead)
+        publish(SnapshotKey.Tenant("acme"), ""","bindings":[{"id":"t","subject":"*","app":"*","space":"*","policy":"read"}]""")
+        publish(SnapshotKey.Tenant("ACME"), "")
+        source().use { source ->
+            val views = DocumentSnapshotViews(source)
+            for ((tenant, expected) in listOf("acme" to true, "ACME" to false, "acme" to true)) {
+                val scope = scope(tenant)
+                val view = views.load(ViewKey.of(scope, blocked = false)).join()
+                view.tenant!!.owner.assert().describedAs(tenant).isEqualTo(tenant)
+                val decision = decide(view, scope)
+                (decision is Decision.Permit).assert().describedAs("$tenant: $decision").isEqualTo(expected)
+            }
+        }
+    }
+
     /** SNP-1: a view keeps the revisions it was built from, whatever is published while it decides. */
     @Test
     fun `a view decides with the revisions it was built from`() {

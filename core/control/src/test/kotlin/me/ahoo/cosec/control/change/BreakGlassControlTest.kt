@@ -241,6 +241,33 @@ class BreakGlassControlTest {
         )
     }
 
+    /**
+     * `APR-4`: a changed break-glass binding needs a second person as a new one does, whoever proposes it. Here its
+     * requester lengthens a live one: the change carries the break-glass escalation and waits for an approval (a
+     * mutant that asked a second person only for a new binding survived the creation test).
+     */
+    @Test
+    fun `changing a live binding needs a second person too`() = runBlocking<Unit> {
+        val requested = breakGlass.request(rita, PrincipalId("rita"), inHours(1), "incident 42")
+        changes.approve(pia, requested.id, requested.candidate!!)
+        changes.publish(rita, requested.id).state.assert().isEqualTo(ChangeState.PUBLISHED)
+        val live = glass()!!
+        val longer = Binding(live.id, live.subject, live.scope, live.policy, inHours(2).toEpochMilli(), breakGlass = true)
+        val change = changes.propose(
+            rita,
+            SnapshotKey.Platform,
+            revisions.head(SnapshotKey.Platform)!!.revision,
+            listOf(Operation.PutBinding(longer)),
+            "incident 42, longer",
+            kind = ProvenanceKind.BREAK_GLASS,
+        )
+        change.state.assert().describedAs("${change.findings}").isEqualTo(ChangeState.CHECKED)
+        change.escalations.map { it.subject }.assert().contains("break-glass binding ${live.id.value}")
+        // Break-glass has no shadow window: staging it goes straight to the second person.
+        changes.stage(rita, change.id).state.assert().isEqualTo(ChangeState.AWAITING_APPROVAL)
+        refused { changes.publish(rita, change.id) }.assert().isEqualTo(409)
+    }
+
     /** RC1-29: the binding's id is the control plane's, so a request never replaces another binding. */
     @Test
     fun `a request never takes the id of a binding there is`() = runBlocking<Unit> {
