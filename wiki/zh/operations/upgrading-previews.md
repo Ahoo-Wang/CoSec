@@ -156,6 +156,10 @@ description: "每个 8.0 预览版（alpha 与 beta）到下一个之间的变�
   - **社交登录需要 `cosec-cocache`**（或你自己的 `SocialStateStore` Bean）：两者都没有时启动失败并指明工件（`STA-1`）。`cosec-social` 不再把 `spring-data-redis` 带进你的编译类路径；JustAuth 自己的 state 缓存仍会阻塞，需要 `StringRedisTemplate`，应用使用 Redis 时本来就有。
   - **`authorize` 拒绝无法立即处理的请求。** 每个 `JustAuthProvider` 同时最多有 64 个登录开始请求在进行，使用与登录分开的线程池；多出的一个抛出 `SocialAuthenticationException`，之前它们会无限排队。
   - **`cosec.authorization.membership.unknown-ttl`**（默认 `5s`，最长 `1m`，`0s` 恢复旧行为）：一个实例记住你的 `MembershipLoader` 对某个主体回答过 `Unknown`，所以被移除成员的令牌不再在每个请求上到达 loader。你新增的主体在其他实例上于这段时间结束时被知道，在调用了 `invalidate` 的实例上立即知道。失败的加载从不被记住。
+- **控制 API 说得更少，拒绝得更多**（R2C-32、R2C-33、R2C-34）。
+  - **`simulate` 与 `explain` 只对能读取*定义*其策略的文档的调用方点名语句。** 租户绑定了平台策略或应用的权限策略时，租户管理员不再看到该策略的语句，决策里是 `"redacted": true`，追踪里只计数。之前由绑定所在的文档决定，而租户管理员能读它。能读取定义文档的调用方（平台运维）看到的与之前相同。
+  - **带 `ifMatch` 的区段操作是 `400`。** `putCatalog`、`setLimits`、`setAttributes` 与 `setBoundary` 替换的是没有自己摘要的区段，之前接受 `ifMatch` 却忽略它。变更的 `base`（提议时文档的摘要）保护整份文档。去掉该成员即可。每个操作现在也只接受自己的成员：比如带 `policy` 的 `removePolicy` 是未知成员。
+  - **变更在数据面读取的那份文档上检查、分析与批准**：候选写出再读回，而不是操作构造出的那份。预期结果不变：除非格式编解码器没有往返某个成员，两者相同。
 
 ## 从 8.0.0-beta.3 升级 {#from-8-0-0-beta-3}
 

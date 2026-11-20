@@ -342,6 +342,19 @@ Which preview of the library may run behind which preview of the gateway image: 
     instance remembers that your `MembershipLoader` answered `Unknown` for a principal, so a removed member's token no
     longer reaches the loader on every request. A principal you add is known when that time ends on the other
     instances, and at once where `invalidate` ran. A failed load is never remembered.
+- **The control API answers less and refuses more** (R2C-32, R2C-33, R2C-34).
+  - **`simulate` and `explain` name a statement only to a caller who may read the document that *defines* its policy.**
+    A tenant administrator whose tenant binds a platform policy, or an app's permission policy, no longer sees that
+    policy's statements, in the decision or in the trace: the decision says `"redacted": true` and the trace counts them.
+    Before, the document of the binding decided it, which a tenant administrator reads. A caller who may read the
+    defining document (a platform operator) sees what they saw.
+  - **A section operation with an `ifMatch` is a `400`.** `putCatalog`, `setLimits`, `setAttributes` and `setBoundary`
+    replace a section, which has no digest of its own; they accepted an `ifMatch` and ignored it. The change's `base`,
+    the digest of the document it was proposed on, guards the document. Remove the member. Each operation also takes
+    only its own members now: `removePolicy` with a `policy`, for one, is an unknown member.
+  - **A change is checked, analysed and approved on the document the data plane reads**: the candidate as written and
+    read back, not as the operations built it. No change of outcome is expected: the two are the same unless the format
+    codec fails to round-trip a member.
 
 ## From 8.0.0-beta.3 {#from-8-0-0-beta-3}
 

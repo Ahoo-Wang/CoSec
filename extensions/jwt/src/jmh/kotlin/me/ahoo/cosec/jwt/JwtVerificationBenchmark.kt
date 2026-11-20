@@ -27,6 +27,7 @@ import org.openjdk.jmh.annotations.Param
 import org.openjdk.jmh.annotations.Scope
 import org.openjdk.jmh.annotations.Setup
 import org.openjdk.jmh.annotations.State
+import java.security.MessageDigest
 import java.time.Instant
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.coroutines.Continuation
@@ -42,7 +43,11 @@ import kotlin.coroutines.startCoroutine
  *
  * [algorithm] is each one `cosec.jwt.algorithm` can name: 8.0 signs with HMAC only (an asymmetric algorithm comes with
  * the 8.1 external identity provider work). [claims] is a token of a bare principal, or one with roles in two spaces,
- * attached policies and nested attributes, as a downstream framework issues.
+ * attached policies and nested attributes, as a downstream framework issues, or `large`: a member of the target
+ * deployment's largest tenant, a dozen roles in each of four spaces, eight policies and the same attributes.
+ *
+ * [digest] is SHA-256 over the token as a request carries it: the least a cache of verified tokens keyed by a digest of
+ * the whole token pays on a hit, beside a map read (round 2, R2B-22).
  *
  * Run: `./gradlew :jwt:jmh -PjmhIncludes=JwtVerificationBenchmark` (a smoke run); for numbers, the options in
  * `wiki/architecture/overview.md#measuring`.
@@ -52,13 +57,14 @@ open class JwtVerificationBenchmark {
     @Param("HS256", "HS512")
     var algorithm: String = ""
 
-    @Param("bare", "rich")
+    @Param("bare", "rich", "large")
     var claims: String = ""
 
     private lateinit var verifier: JwtTokenVerifier
     private lateinit var authenticator: TokenAuthenticator
     private lateinit var accessToken: String
     private lateinit var credentials: Credentials
+    private val sha256: MessageDigest = MessageDigest.getInstance("SHA-256")
 
     /** Revocations as a local copy holds them: none of these tokens is revoked. */
     private object LocalRevocations : RevocationReader {
@@ -91,6 +97,17 @@ open class JwtVerificationBenchmark {
                     "profile" to mapOf("level" to 3, "regions" to listOf("north", "south"), "flags" to mapOf("beta" to true)),
                 ),
             )
+            "large" -> TokenSubject(
+                id = "alice",
+                app = "order",
+                tenant = "acme",
+                roles = (1..LARGE_SPACES).flatMapTo(LinkedHashSet()) { space -> (1..LARGE_ROLES).map { "role-$it@space-$space" } },
+                policies = (1..LARGE_POLICIES).mapTo(LinkedHashSet()) { "policy-$it" },
+                attributes = mapOf(
+                    "department" to "finance",
+                    "profile" to mapOf("level" to 3, "regions" to listOf("north", "south"), "flags" to mapOf("beta" to true)),
+                ),
+            )
             else -> error("Unknown claims $claims")
         }
         accessToken = JwtTokenConverter(RandomIdGenerator, signing).toToken(subject).accessToken
@@ -98,10 +115,14 @@ open class JwtVerificationBenchmark {
         authenticator = TokenAuthenticator(verifier, LocalRevocations)
         credentials = Credentials("Bearer $accessToken", null)
         check(authenticate() is AuthnResult.Authenticated) { "The benchmark's token does not authenticate." }
+        System.err.println("JwtVerificationBenchmark: $claims token of ${accessToken.length} characters")
     }
 
     @Benchmark
     fun verify(): VerifiedToken = verifier.verify(accessToken)
+
+    @Benchmark
+    fun digest(): ByteArray = sha256.digest(accessToken.toByteArray(Charsets.US_ASCII))
 
     @Benchmark
     fun authenticate(): AuthnResult = completed { authenticator.authenticate(credentials) }
@@ -110,6 +131,9 @@ open class JwtVerificationBenchmark {
         /** 64 bytes: what `hmac512` needs at least (RFC 7518 §3.2); `hmac256` takes the first 32. */
         const val SECRET = "jwt-verification-benchmark-secret-0123456789abcdef0123456789abcd"
         const val HS256_SECRET_BYTES = 32
+        const val LARGE_SPACES = 4
+        const val LARGE_ROLES = 12
+        const val LARGE_POLICIES = 8
 
         /**
          * Runs [block], which never suspends here (the revocations are a map), on the calling thread, without the

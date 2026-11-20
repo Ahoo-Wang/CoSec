@@ -257,7 +257,7 @@ curl -X POST localhost:8080/cosec/control/v1/explain \
 **谁可以解释，能看到什么。** `explain` 与所有控制面调用一样，以请求的主体身份、在应用 `cosec.control.app-id` 中授权：
 
 - 调用方需要对被模拟租户的文档（`doc/tenant/<tenant>`）拥有 `cosec:explain`。租户的主体只能解释自己租户的请求：租户隔离最先检查，而且不是策略。内置的 `cosec:tenant-viewer` 和 `cosec:tenant-admin` 在调用方自己的租户上授予该权限，`cosec:platform-admin` 在所有租户上授予（[内置策略](../guide/security-model.md#built-in-policies)）；
-- 只显示调用方有权读取（对文档拥有 `cosec:read`）的文档中的语句。经由附加策略到达的语句，只有调用方能同时读取租户文档和平台文档时才显示。其余内容从追踪中省略并计入 `redacted`；由隐藏语句作出的决策只给出 `"redacted": true`；
+- 只有当调用方有权读取（`cosec:read`）定义该语句所属策略的文档时才显示该语句，不论它所经由的绑定在哪份文档里：租户的绑定指向平台策略或应用的权限策略时，租户管理员看不到该策略的任何语句。经由附加策略到达的语句，只有调用方能同时读取租户文档和平台文档时才显示。其余内容从追踪中省略并计入 `redacted`；由隐藏语句作出的决策只给出 `"redacted": true`；
 - 没有权限时返回 `403`，无法判定时返回 `503`，都不带细节。
 
 **它看不到什么。** 解释读取的是已发布的文档，而不是某个实例已安装的内容（实例可能还会在一段时间内使用较旧的修订；见[存储](../operations/storage.md)）。它不获取外部属性，因此读取外部属性的语句按属性缺失处理（[外部属性缺失](../guide/security-model.md#missing-external-attributes)）；它也没有令牌属性、黑名单和限流。
