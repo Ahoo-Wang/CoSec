@@ -33,7 +33,8 @@ import java.util.UUID
  *
  * What it shows: a credential of one app is refused at the route of another, and so is one without an app; a role id two
  * apps define grants what each app's document says, at the route of that app only; an app document's update reaches both
- * gateways within the bound, and each gateway decides with the new revision; a tenant's customisation stays inside its
+ * gateways within the bound, and each gateway decides with the new revision; a replica restarted afterwards holds both apps
+ * before it is ready, and the first request of each adds no load (SNP-20); a tenant's customisation stays inside its
  * app, and a tenant without a document is held, not read again.
  *
  * What it does not show (scenario 2): that a role held once applies in every app that defines its id. Here the role comes
@@ -159,6 +160,48 @@ class MultiAppScenario {
         Audit.appRevision(record).assert()
             .describedAs("the revision of the app document $name decided $path with, in its audit record: $record")
             .isEqualTo(revision)
+    }
+
+    @Test
+    @Order(4)
+    fun `a replica restarted after the documents exist holds both apps before it is ready, and each app's first request loads nothing`() {
+        seeded()
+        // Signed in before the restart: the login is a request, and this scenario counts the replica's own.
+        val shop = token("rae", "multi", "shop", "manager")
+        val ledger = token("rae", "multi", "ledger", "manager")
+        val management = SystemTopology.gateway2Management
+        try {
+            Compose.restart("gw-2")
+            eventually(Bounds.REPLICA_START, "gw-2 ready again", { readiness() }) { it == 200 }
+            // Ready, and it already holds the apps its routes name (SNP-20): the documents were read at startup, which the
+            // requests below could not tell from a cold load unless they are counted.
+            eventually(
+                Bounds.SNAPSHOT_PROPAGATION,
+                "gw-2 holding the app documents of its routes",
+                { Metrics.sum(management, "cosec_snapshot_installed", "kind=\"app\"", "state=\"present\"") }
+            ) { it >= 2 }
+            val before = Metrics.sum(management, "cosec_snapshot_loads_total", "kind=\"app\"")
+
+            call("GET", "/shop/items/1", shop, SystemTopology.gateway2).status.assert()
+                .describedAs("the first request for the app shop at the restarted gw-2").isEqualTo(200)
+            call("GET", "/ledger/entries/1", ledger, SystemTopology.gateway2).status.assert()
+                .describedAs("the first request for the app ledger at the restarted gw-2").isEqualTo(200)
+
+            Metrics.sum(management, "cosec_snapshot_loads_total", "kind=\"app\"").assert()
+                .describedAs(
+                    "app document loads at gw-2 after the first request of each app: held, not loaded by a request"
+                )
+                .isEqualTo(before)
+        } finally {
+            // Whatever failed, the replica runs for whoever comes next (a no-op when it does).
+            Compose.start("gw-2")
+        }
+    }
+
+    private fun readiness(): Int = try {
+        Http.get(SystemTopology.gateway2.resolve("/readyz")).status
+    } catch (_: java.io.IOException) {
+        0
     }
 
     @Test
