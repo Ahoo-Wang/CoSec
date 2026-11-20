@@ -50,7 +50,41 @@ class GrantPropertyTest {
     @Test
     fun `A5 the grant analysis is sound`() {
         val random = Random(0xA5)
-        val generator = GrantGenerator(random)
+        val (contained, checked) = soundness(random, GrantGenerator(random))
+        contained.assert().isGreaterThan(iterations / 4)
+        // A statement with several resources now holds under any of their captures (ALG-10), so more changes narrow
+        // and fewer fragments are left to check than with the first-match reading.
+        checked.assert().isGreaterThan(iterations * 9 / 5)
+    }
+
+    @Test
+    fun `A6 narrowing is sound`() {
+        val random = Random(0xA6)
+        val (narrowing, checked) = narrowingSoundness(random, GrantGenerator(random))
+        narrowing.assert().isGreaterThan(iterations / 4)
+        checked.assert().isGreaterThan(iterations)
+    }
+
+    /** GRT-8: A5 again over patterns of two variables and atoms that compare two of them, where a renaming may shift or swap. */
+    @Test
+    fun `A5 holds with two variables in one atom - GRT-8`() {
+        val random = Random(0x58)
+        val (contained, checked) = soundness(random, GrantGenerator(random, twoVariables = true))
+        contained.assert().isGreaterThan(iterations / 5)
+        checked.assert().isGreaterThan(iterations)
+    }
+
+    /** GRT-8: A6 again over patterns of two variables, narrowed to a shift (`{v1}/{v2}`) and a swap (`{v1}/{v0}`). */
+    @Test
+    fun `A6 holds with two variables in one atom - GRT-8`() {
+        val random = Random(0x68)
+        val (narrowing, checked) = narrowingSoundness(random, GrantGenerator(random, twoVariables = true))
+        narrowing.assert().isGreaterThan(iterations / 5)
+        checked.assert().isGreaterThan(iterations / 2)
+    }
+
+    /** A5's loop: how many fragments were contained, and how many requests the oracle checked for them. */
+    private fun soundness(random: Random, generator: GrantGenerator): Pair<Int, Int> {
         var contained = 0
         var checked = 0
         repeat(iterations) {
@@ -76,16 +110,11 @@ class GrantPropertyTest {
                 }
             }
         }
-        contained.assert().isGreaterThan(iterations / 4)
-        // A statement with several resources now holds under any of their captures (ALG-10), so more changes narrow
-        // and fewer fragments are left to check than with the first-match reading.
-        checked.assert().isGreaterThan(iterations * 9 / 5)
+        return contained to checked
     }
 
-    @Test
-    fun `A6 narrowing is sound`() {
-        val random = Random(0xA6)
-        val generator = GrantGenerator(random)
+    /** A6's loop: how many statements narrowed, and how many requests the oracle checked for them. */
+    private fun narrowingSoundness(random: Random, generator: GrantGenerator): Pair<Int, Int> {
         val permissive = GrantOracle(ignoreAnyone = false)
         var narrowing = 0
         var checked = 0
@@ -111,8 +140,7 @@ class GrantPropertyTest {
                     .isTrue()
             }
         }
-        narrowing.assert().isGreaterThan(iterations / 4)
-        checked.assert().isGreaterThan(iterations)
+        return narrowing to checked
     }
 
     @Test

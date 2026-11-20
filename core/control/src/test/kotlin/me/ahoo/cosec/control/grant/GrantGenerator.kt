@@ -49,7 +49,14 @@ import kotlin.random.Random
  * grantor's roles (RC1-4), and platform policies with a tenant policy's id, which a removal re-points bindings to
  * (RC1-9).
  */
-class GrantGenerator(private val random: Random) {
+class GrantGenerator(
+    private val random: Random,
+    /**
+     * Whether patterns may capture two variables and an atom may compare two of them (GRT-8): off, the draws are the
+     * ones the existing properties were calibrated with.
+     */
+    private val twoVariables: Boolean = false,
+) {
     val apps = listOf("order", "user").map(::AppId)
     val spaces = listOf(SpaceId.DEFAULT, SpaceId("team-a"), SpaceId("team-b"), SpaceId("team-c"))
     val roles = listOf("ops", "dev", "viewer").map(::RoleId)
@@ -68,7 +75,12 @@ class GrantGenerator(private val random: Random) {
     private val resources = listOf(
         "order/**", "order/*", "order/{v0}", "order/a", "order/{v0}/**", "order/a/{v1}", "order/{v0}/x", "user/**",
         "user/{v0}", "http:path:/orders/{v0}", "http:path:/orders/**", "http:path:/orders/a", "http:path:/orders/{v0}/x",
-    )
+    ) + if (twoVariables) {
+        // Two variables in one pattern, so that a renaming can shift or swap them (GRT-8).
+        listOf("order/{v0}/{v1}", "http:path:/orders/{v0}/{v1}")
+    } else {
+        emptyList()
+    }
 
     /** For each resource pattern, patterns it contains (and some it does not), to narrow to. */
     private val narrower = mapOf(
@@ -79,6 +91,8 @@ class GrantGenerator(private val random: Random) {
         "user/**" to listOf("user/{v0}", "user/a"),
         "http:path:/orders/**" to listOf("http:path:/orders/{v0}", "http:path:/orders/a", "http:path:/orders/{v0}/x", "http:path:/orders"),
         "http:path:/orders/{v0}" to listOf("http:path:/orders/a", "http:path:/orders/{v1}", "http:path:/orders/*"),
+        "order/{v0}/{v1}" to listOf("order/{v1}/{v2}", "order/{v1}/{v0}", "order/{v0}/{v1}", "order/a/{v1}", "order/{v0}/x"),
+        "http:path:/orders/{v0}/{v1}" to listOf("http:path:/orders/{v1}/{v2}", "http:path:/orders/{v1}/{v0}", "http:path:/orders/a/{v1}"),
         "*" to listOf("order/**", "order/{v0}", "http:path:/orders/{v0}"),
     )
     private val values = listOf("a", "b", "x", "y", "gina", "hal", "A", "%2F", "K", "K", "", "a;b", "..")
@@ -104,7 +118,7 @@ class GrantGenerator(private val random: Random) {
     fun grantor(subject: OracleSubject): Grantor =
         Grantor(subject.tenant, PrincipalId(subject.id), subject.memberships, subject.attributes, true)
 
-    fun atom(): Condition = when (val kind = random.nextInt(14)) {
+    fun atom(): Condition = when (val kind = random.nextInt(if (twoVariables) 15 else 14)) {
         0 -> Condition.Eq("scope.space", Literal.Str(pick(spaces).value))
         1 -> Condition.In(
             "scope.space",
@@ -119,7 +133,14 @@ class GrantGenerator(private val random: Random) {
         8 -> Condition.Eq("http.header.x-k", Literal.Str("1"))
         9 -> Condition.Eq("resource.var.v0", Literal.Str(pick(values)))
         in 10..12 -> typedAttribute(kind)
-        else -> Condition.Eq("subject.id", Literal.Str(pick(principals)))
+        else -> lastAtom(kind)
+    }
+
+    private fun lastAtom(kind: Int): Condition = if (kind == 14) {
+        // Two of a pattern's variables in one atom: what a renaming must keep apart (GRT-8).
+        Condition.Eq("resource.var.${pick(VARIABLES)}", Operand.Attr("resource.var.${pick(VARIABLES)}"))
+    } else {
+        Condition.Eq("subject.id", Literal.Str(pick(principals)))
     }
 
     /** An atom over an attribute of another type than strings, which reads as its toString() (RC1-2). */
@@ -143,17 +164,25 @@ class GrantGenerator(private val random: Random) {
         else -> atom()
     }
 
-    fun statement(effect: Effect = if (random.nextInt(4) == 0) Effect.DENY else Effect.ALLOW): GrantStatement =
-        GrantStatement(
-            effect = effect,
-            actions = List(random.nextInt(1, 3)) { ActionPattern.parse(pick(actions)) }.distinct(),
-            resources = if (random.nextInt(5) == 0) {
-                listOf(ResourcePattern.AnyResource)
-            } else {
-                List(random.nextInt(1, 3)) { ResourcePattern.parse(pick(resources)) }.distinct()
-            },
-            condition = condition(),
-        )
+    fun statement(effect: Effect = if (random.nextInt(4) == 0) Effect.DENY else Effect.ALLOW): GrantStatement {
+        val actions = List(random.nextInt(1, 3)) { ActionPattern.parse(pick(actions)) }.distinct()
+        val resources = if (random.nextInt(5) == 0) {
+            listOf(ResourcePattern.AnyResource)
+        } else {
+            List(random.nextInt(1, 3)) { ResourcePattern.parse(pick(resources)) }.distinct()
+        }
+        return GrantStatement(effect, actions, resources, pairedVariables(resources) ?: condition())
+    }
+
+    /**
+     * Two variables one of [resources] captures, compared (GRT-8): the shape a renaming must keep two variables in.
+     * Only with [twoVariables], half the time a pattern of two variables is drawn; `null` otherwise.
+     */
+    private fun pairedVariables(resources: List<ResourcePattern>): Condition? {
+        if (!twoVariables || random.nextBoolean()) return null
+        val names = resources.firstOrNull { it.variableNames.size >= 2 }?.variableNames?.shuffled(random) ?: return null
+        return Condition.Eq("resource.var.${names[0]}", Operand.Attr("resource.var.${names[1]}"))
+    }
 
     /** A statement that [held] contains, most of the time: narrower actions and resources, a stronger condition. */
     fun narrow(held: GrantStatement, effect: Effect = held.effect): GrantStatement {
@@ -169,14 +198,21 @@ class GrantGenerator(private val random: Random) {
             val options = narrower[resource.toString()]
             if (options == null || random.nextInt(5) == 0) resource else ResourcePattern.parse(pick(options))
         }.distinct()
-        val condition = when (random.nextInt(4)) {
-            0 -> held.condition
-            1 -> held.condition?.let { Condition.And(listOf(it, atom())) } ?: atom()
-            2 -> condition()
-            else -> held.condition?.let { Condition.And(listOf(atom(), it)) }
-        }
-        return GrantStatement(effect, actions, resources, condition)
+        return GrantStatement(effect, actions, resources, narrowed(held.condition, resources))
     }
+
+    /** The condition of a statement narrowed from one with [held]'s, over [resources]. */
+    private fun narrowed(held: Condition?, resources: List<ResourcePattern>): Condition? =
+        when (random.nextInt(if (twoVariables) 5 else 4)) {
+            0 -> held
+            1 -> held?.let { Condition.And(listOf(it, atom())) } ?: atom()
+            2 -> condition()
+            3 -> held?.let { Condition.And(listOf(atom(), it)) }
+            // A variable compared with itself: what a renaming that made two variables one would turn the held
+            // condition into (GRT-8), so a narrowing that rests on such a renaming is seen.
+            else -> pick(resources.flatMap { it.variableNames }.ifEmpty { VARIABLES })
+                .let { Condition.Eq("resource.var.$it", Operand.Attr("resource.var.$it")) }
+        }
 
     fun scope(): BindingScope = BindingScope(
         if (random.nextInt(3) == 0) Match.Exactly(pick(apps)) else Match.Any,
@@ -321,6 +357,7 @@ class GrantGenerator(private val random: Random) {
     }
 
     private companion object {
+        val VARIABLES = listOf("v0", "v1", "v2")
         const val HOUR = 3_600_000L
         val EXPIRIES = listOf(GrantFixtures.NOW + HOUR, GrantFixtures.NOW + 2 * HOUR, GrantFixtures.NOW + 3 * HOUR)
         val TIMES = listOf(
