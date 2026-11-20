@@ -20,6 +20,9 @@ import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.migrate.Fixtures7x.policy
 import me.ahoo.cosec.migrate.Fixtures7x.source
 import me.ahoo.cosec.migrate.Fixtures7x.statement
+import me.ahoo.cosec.model.condition.Condition
+import me.ahoo.cosec.model.condition.Literal
+import me.ahoo.cosec.model.condition.Operand
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
@@ -100,5 +103,26 @@ class UnmappedVocabularyTest {
         report.c9().assert().isEmpty()
         // The ALLOW side has its own entry (C8) and the DENY of every action its own (C7).
         report.semanticChanges.any { it.change == "C7" }.assert().isTrue()
+    }
+
+    @Test
+    fun `every kind of condition is read for the attributes a route map changes, through and, or and not`() {
+        val verb = "action.verb"
+        val kinds = listOf(
+            Condition.Eq("subject.id", Operand.Attr("resource.id")),
+            Condition.In(verb, listOf(Literal.Str("GET"))),
+            Condition.Contains(Literal.Str("x"), "resource.var.id"),
+            Condition.Prefix("resource.id", Literal.Str("/a")),
+            Condition.Cidr(verb, listOf(Literal.Str("10.0.0.0/8"))),
+            Condition.Exists("resource.id"),
+        )
+        kinds.forEach {
+            UnmappedVocabulary.reads(
+                Condition.Not(Condition.Or(listOf(Condition.And(listOf(it)))))
+            ).assert().hasSize(1)
+        }
+        UnmappedVocabulary.reads(Condition.Time()).assert().isEmpty()
+        UnmappedVocabulary.reads(null).assert().isEmpty()
+        UnmappedVocabulary.readsPath(Condition.Exists("subject.id")).assert().isFalse()
     }
 }
