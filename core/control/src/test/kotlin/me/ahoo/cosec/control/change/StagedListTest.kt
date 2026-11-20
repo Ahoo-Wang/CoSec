@@ -53,6 +53,9 @@ class StagedListTest {
         @Volatile
         var failListing = false
 
+        @Volatile
+        var failWithdrawal = false
+
         override suspend fun listStaged(key: SnapshotKey, window: String) {
             if (failListing) error("Redis refused the listing")
             writes += "list"
@@ -70,6 +73,7 @@ class StagedListTest {
         }
 
         override suspend fun withdrawCandidate(key: SnapshotKey, window: String): Boolean {
+            if (failWithdrawal) error("Redis refused the withdrawal")
             writes += "withdraw"
             return memory.withdrawCandidate(key, window)
         }
@@ -128,6 +132,46 @@ class StagedListTest {
             maintenance.closeShadowWindows()
             listed().assert().isEqualTo(mapOf(ACME to setOf(window)))
             changes.get(staged.id).state.assert().isEqualTo(ChangeState.SHADOWING)
+        }
+
+    @Test
+    fun `a withdrawal that fails keeps its window listed, and the shadow pass withdraws the candidate, then unlists it`() =
+        runBlocking<Unit> {
+            memory.keepStagedList()
+            val staged = changes.stage(PLATO, proposed(ACME, "first").id)
+            val window = staged.shadow!!.window
+            store.failWithdrawal = true
+            changes.abandon(PLATO, staged.id)
+            // R2C-15: the change is finished, its candidate still staged, and its window still listed.
+            memory.candidate(ACME)?.window.assert().isEqualTo(window)
+            listed().assert().isEqualTo(mapOf(ACME to setOf(window)))
+            store.failWithdrawal = false
+            maintenance.closeShadowWindows()
+            memory.candidate(ACME)?.window.assert().isEqualTo(window)
+            maintenance.closeShadowWindows()
+            memory.candidate(ACME).assert().isNull()
+            listed().assert().isEqualTo(emptyMap<SnapshotKey, Set<String>>())
+        }
+
+    @Test
+    fun `a shadowing change whose candidate is gone is checked again after the grace, its slot freed and its window unlisted`() =
+        runBlocking<Unit> {
+            memory.keepStagedList()
+            val staged = changes.stage(PLATO, proposed(ACME, "first").id)
+            val window = staged.shadow!!.window
+            // A crash between the reservation and the write, or a candidate lost since: listed, shadowing, nothing staged.
+            memory.withdrawCandidate(ACME, window)
+            maintenance.closeShadowWindows()
+            changes.get(staged.id).state.assert().isEqualTo(ChangeState.SHADOWING)
+            clock.now = clock.now.plus(Duration.ofMinutes(2))
+            maintenance.closeShadowWindows()
+            val settled = changes.get(staged.id)
+            settled.state.assert().isEqualTo(ChangeState.CHECKED)
+            settled.shadow.assert().isNull()
+            memory.stage(ACME)?.value?.holder.assert().isNull()
+            listed().assert().isEqualTo(emptyMap<SnapshotKey, Set<String>>())
+            // Its author stages it again.
+            changes.stage(PLATO, staged.id).state.assert().isEqualTo(ChangeState.SHADOWING)
         }
 
     @Test

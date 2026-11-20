@@ -272,7 +272,10 @@ flowchart LR
 A document has at most one staged change (`SHADOWING`, `AWAITING_APPROVAL` or `READY`); staging another is a `409`
 until that one is published, abandoned, rejected or expired. A change is staged before it takes the slot, so a call
 still writing its candidate holds the slot too; one that cannot write it, or is cancelled, gives the slot back and the
-change is `CHECKED` again. A change that is not finished expires
+change is `CHECKED` again. So is a `SHADOWING` change whose candidate is gone a minute after its window started (a
+crash between the two writes, or a candidate lost since): the maintenance pass frees its slot and records a `FAILED`
+change event, and its author stages it again. The window is not continued, since the instances sampled nothing while
+the candidate was gone. A change that is not finished expires
 `cosec.control.changes.expire-after` (default 7 days) after it was proposed: it is `EXPIRED` from the first time it is
 read after that, and the control plane's maintenance pass reads every open change each
 `cosec.control.shadow.check-interval` (default 1 minute). Its author can `:rebase` a `CONFLICTED`,

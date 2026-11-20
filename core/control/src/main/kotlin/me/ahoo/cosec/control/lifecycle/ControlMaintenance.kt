@@ -128,15 +128,15 @@ class ControlMaintenance(
         }
         try {
             return withTimeout(shadowInterval.toKotlinDuration()) {
-                val shadowing = store.openChanges().mapNotNull { change ->
-                    attempt("read change [${change.id.value}]") { current(change) }
-                        ?.takeIf { it.state == ChangeState.SHADOWING }
+                val read = store.openChanges().map { change ->
+                    attempt("read change [${change.id.value}]") { listOfNotNull(current(change)) }
                 }
+                val shadowing = read.flatMap { it.orEmpty() }.filter { it.state == ChangeState.SHADOWING }
                 val closed = shadowing.mapNotNull { change ->
                     attempt("look at the shadow window of change [${change.id.value}]") { changes.shadowed(change.id) }
                         ?.takeIf { it.state != ChangeState.SHADOWING }
                 }
-                attempt("reconcile the staged list") { stagedList.reconcile(shadowing) }
+                attempt("reconcile the staged list") { stagedList.reconcile(shadowing, read.none { it == null }) }
                 closed
             }
         } finally {

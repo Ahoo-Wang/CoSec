@@ -24,6 +24,13 @@ import me.ahoo.cosec.spi.snapshot.SnapshotKey
  * ([SnapshotKeyEncoder]) and the window its candidate is staged for. No document key holds a `/` (an app or tenant id
  * never does), so the first one splits it, whatever the window id holds; a window id holds an `@` already, which is why
  * it is not the separator. [KEPT], which no document key can be, says the list is kept.
+ *
+ * The form can change in place (`R2C-10`): a later control plane may write members this one cannot read, and [decode]
+ * answers null for them, never throws, so a reader skips them among the ones it reads. A skipped member leaves its
+ * document looking unstaged: an instance does not read its candidate and reports no sample for its window, which costs
+ * samples at most: a window short of them stays open until its longest, then closes as insufficient evidence the
+ * publisher must acknowledge (RFC 0007 §6.4). It never passes a window. A later form keeps the key and
+ * the marker, or a reader of this form takes the list as not kept and reads every candidate by key.
  */
 internal object StagedMember {
     /** The marker of a kept list: present from the control plane's first start on, and never removed by it. */

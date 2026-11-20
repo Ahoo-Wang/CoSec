@@ -166,22 +166,22 @@ internal class StagingSlots(
 
     /**
      * Withdraws the candidate of [change]'s window, if it is still the staged one: one conditional removal, since another
-     * change may have taken the slot and staged its own meanwhile (#1227). A failure only leaves it to compare. Then, and
-     * only once the candidate is gone, unlists that window (`CTL-46`): a listed window whose candidate is gone costs a
-     * read, an unlisted candidate would go unseen. A withdrawal that failed keeps it listed; the shadow pass unlists it.
+     * change may have taken the slot and staged its own meanwhile (#1227). True when no candidate of that window is staged
+     * any more (`R2C-15`): withdrawn now, or replaced or gone before. Then, and only then, unlists that window (`CTL-46`):
+     * a listed window whose candidate is gone costs a read, an unlisted candidate would go unseen. A withdrawal that
+     * failed answers false and keeps the window listed; the shadow pass withdraws its candidate and unlists it
+     * ([StagedListReconciliation]).
      */
     @Suppress("TooGenericExceptionCaught")
-    suspend fun withdraw(change: ChangeRequest) {
-        val window = change.shadow?.window ?: return
+    suspend fun withdraw(change: ChangeRequest): Boolean {
+        val window = change.shadow?.window ?: return true
         try {
             store.withdrawCandidate(change.key, window)
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
-            log.warn(
-                e
-            ) { "Withdrawing the candidate of window $window failed; instances count it as a base mismatch once it is stale." }
-            return
+            log.warn(e) { "Withdrawing the candidate of window $window failed; the next shadow pass withdraws it." }
+            return false
         }
         try {
             store.unlistStaged(change.key, window)
@@ -190,6 +190,7 @@ internal class StagingSlots(
         } catch (e: Exception) {
             log.warn(e) { "Unlisting window $window failed; the next shadow pass unlists it." }
         }
+        return true
     }
 
     private companion object {

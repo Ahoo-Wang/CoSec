@@ -23,6 +23,7 @@ import kotlinx.coroutines.runBlocking
 import me.ahoo.cocache.core.memory.InMemoryBackend
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.cocache.createLocked
 import me.ahoo.cosec.cocache.snapshot.SnapshotNode
 import me.ahoo.cosec.cocache.snapshot.newKeyPrefix
 import me.ahoo.cosec.document.SnapshotDocuments
@@ -90,6 +91,26 @@ class StagedListStoreTest {
             val listed = store.staged()!!.windows
             listed.keys.assert().containsExactlyInAnyOrderElementsOf(tenants)
             tenants.forEach { listed.getValue(it).assert().containsExactly("${it.tenantId}@1") }
+        }
+    }
+
+    @Test
+    fun `a member of a later form is skipped among the known ones, never an error`() = runBlocking<Unit> {
+        SnapshotNode(InMemoryBackend(), newKeyPrefix()).use { node ->
+            val raw = node.factory.createLocked(ControlCacheSpecs.stagedSet(node.keyPrefix))
+            val sets = ControlSets(
+                node.factory.createLocked(ControlCacheSpecs.referenceIndex(node.keyPrefix)),
+                node.factory.createLocked(ControlCacheSpecs.documentSet(node.keyPrefix)),
+                raw,
+            )
+            sets.keepStagedList()
+            sets.listStaged(SnapshotKey.Tenant("acme"), "c1@1")
+            // R2C-10: what a later control plane might write, read by this one.
+            raw.suspending().add(
+                ControlSets.STAGED_SET,
+                listOf("v2|tenant:acme|c2@2", "region:eu/c3@3", "tenant:globex/")
+            )
+            sets.staged()!!.windows.assert().isEqualTo(mapOf(SnapshotKey.Tenant("acme") to setOf("c1@1")))
         }
     }
 

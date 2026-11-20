@@ -1,0 +1,18 @@
+# Rule: CTL-46
+# Mutant: a shadowing change whose candidate is gone is left shadowing (R2C-15): it holds its slot with nothing sampled, until its window closes as insufficient evidence or the change expires (Staging.shadowed)
+# Tests: :control:test --tests me.ahoo.cosec.control.change.StagedListTest
+
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Staging.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Staging.kt
+index f54966ecd..1444f7955 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Staging.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Staging.kt
+@@ -136,9 +136,6 @@ internal class Staging(
+         if (revisions.head(change.key)?.digest != change.base.digest) {
+             return flow.settle(change, ChangeState.CONFLICTED, ChangeStep.SHADOWED)
+         }
+-        if (candidateLost(change, state)) {
+-            return unstaged(change)
+-        }
+         @Suppress("TooGenericExceptionCaught")
+         val look = try {
+             windows.look(state, clock.instant())
