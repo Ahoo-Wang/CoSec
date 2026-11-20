@@ -15,6 +15,7 @@
 
 package me.ahoo.cosec.control.audit
 
+import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.control.change.ChangeId
 import me.ahoo.cosec.control.change.Confirmation
@@ -29,6 +30,7 @@ import java.time.Instant
  * base and candidate it was about, what needed approval, the confirmations, the shadow summary and the note; for
  * [Kind.HEADS_MOVED] and [Kind.REVIEW_NEEDED], the heads that [moved] and the escalations the analysis finds now.
  */
+@ExperimentalCoSecApi
 class ChangeEvent(
     val id: String,
     val time: Instant,

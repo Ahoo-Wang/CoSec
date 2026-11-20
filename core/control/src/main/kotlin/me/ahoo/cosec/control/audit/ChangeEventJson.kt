@@ -43,7 +43,7 @@ object ChangeEventJson {
                 addObject().put(
                     "subject",
                     it.subject
-                ).put("reason", it.reason).put("detail", it.detail)
+                ).put("reason", it.reason.name).put("detail", it.detail)
             }
         }
         root.putArray("confirmations").apply {

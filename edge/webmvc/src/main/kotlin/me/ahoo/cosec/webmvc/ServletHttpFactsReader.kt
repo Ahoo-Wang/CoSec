@@ -27,7 +27,8 @@ import me.ahoo.cosec.runtime.http.RemoteIpResolver
 import java.util.Collections
 
 /** Reads a servlet request into the facts the pipeline decides on (RFC 0006 §5.3.1), once. */
-internal object ServletHttpFactsReader {
+@InternalCoSecApi
+object ServletHttpFactsReader {
     fun read(
         request: HttpServletRequest,
         remoteIpResolver: RemoteIpResolver<HttpServletRequest> = ServletRemoteIpResolver,
