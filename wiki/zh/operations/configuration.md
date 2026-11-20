@@ -167,7 +167,7 @@ CoSec 没有哪个配置项叫这些名字，而已知的 key 无论来源都不
 | `cosec.authorization.snapshot.max-tenants` | int | `16384` | 租户文档的同一上限（为正）。平台文档从不被丢弃。按实例持有它所服务的租户来定：一个含 5 个各 20 项权限的角色和 20 条绑定的租户文档约占 30 KB，16,384 个位置全部用满约占 490 MB 堆（[为 SaaS 网关定容量](./deployment.md#sizing-a-saas-gateway)）。 |
 | `cosec.authorization.snapshot.max-absent-apps` | int | `256` | 最多记住多少个没有应用文档的应用 id（为正），与 `max-apps` 分开计（`SNP-7`）：应用 id 来自请求，所以客户端编造的应用挤不掉真实的应用，超出部分的每个 id 都会再读一次 Redis。 |
 | `cosec.authorization.snapshot.max-absent-tenants` | int | `65536` | 最多记住多少个没有租户文档的租户 id（为正），与 `max-tenants` 分开计（`SNP-7`）。这类租户的每个请求都读这个条目；被丢弃的条目在该租户下一个请求时再从 Redis 读。每个约 470 字节：全部用满约 30 MB。 |
-| `cosec.authorization.snapshot.reload-concurrency` | int | `16` | 一次重新确认并发确认的文档数（为正）。一次确认约耗时：持有的条目数 × 一次条件读取 ÷ 此值；81,920 个条目、每次 1 ms 需要 5 秒。超过 `revalidate-interval` 时，确认一轮接一轮地跑，滞后随之增长。 |
+| `cosec.authorization.snapshot.reload-concurrency` | int | `16` | 一次重新确认并发确认的文档数（为正）。一次确认约耗时：持有的条目数 × 一次条件读取 ÷ 此值；80,000 个条目、每次读取 1 ms 时，并发 4 为 25 秒、8 为 12.6 秒、16 为 6.3 秒（实测）；16 使默认上限用满时的一轮在读取不超过约 2 ms 时仍在默认间隔之内。平均读取速率不变，即 条目数 ÷ `revalidate-interval`；只有一轮期间的读取更密集。超过 `revalidate-interval` 时，确认一轮接一轮地跑，滞后随之增长。 |
 | `cosec.authorization.snapshot.prewarm-apps` | 应用 id 列表 | 空 | 启动时在平台文档（总会加载）之后加载的应用文档。在平台文档和列出的每个文档都装入之前，就绪状态拒绝流量；存活状态不受影响。 |
 | `cosec.authorization.snapshot.prewarm-tenants` | 租户 id 列表 | 空 | 启动时加载的租户文档，同上。 |
 | `cosec.authorization.snapshot.compile-threads` | int | `2` | 编译文档的线程数。必须为正。 |
@@ -236,13 +236,13 @@ CoSec 没有哪个配置项叫这些名字，而已知的 key 无论来源都不
 
 | 配置项 | 类型 | 默认值 | 作用 |
 |---|---|---|---|
-| `cosec.authentication.revocation.cache.*` | [本地缓存设置](#local-cache-settings) | `local-max-age: 30s`、`maximum-size: 100000` | 吊销查询的本地副本（`RevokedTokenCache` 和 `RevokedSubjectCache`）。 |
+| `cosec.authentication.revocation.cache.*` | [本地缓存设置](#local-cache-settings) | `local-max-age: 30s`、`maximum-size: 500000` | 吊销查询的本地副本（`RevokedTokenCache` 和 `RevokedSubjectCache`）。只有实例在最近 30 秒内见过的令牌或主体才有条目，未命中就是请求路径上的一次 Redis 读取。每个条目约占 290 字节（令牌，含其 id）或 230 字节（主体）：两张表全部用满约 260 MB（[为 SaaS 网关定容量](./deployment.md#what-a-replica-holds)）。 |
 
 ### 本地缓存设置 {#local-cache-settings}
 
 | 配置项 | 类型 | 默认值 | 作用 |
 |---|---|---|---|
-| `maximum-size` | long | `100000` | 本地副本的最大条目数。 |
+| `maximum-size` | long | `500000` | 本地副本的最大条目数。 |
 | `initial-capacity` | int | CoCache 的默认值 | 本地副本的初始容量。 |
 | `local-max-age` | duration（不带单位的数字表示秒） | `30s` | 本地副本最多存活多久：失效消息丢失时陈旧程度的上限。 |
 | `expire-after-access` | duration（不带单位的数字表示秒） | 无 | 这么久没被读取的本地副本被丢弃。 |

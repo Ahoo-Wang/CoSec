@@ -374,11 +374,16 @@ store standing in for Redis.
 | A tenant without a tenant document | about 470 bytes |
 | An app document of that shape (14 KB of JSON) | about 235 KB, so 2.8 MB for the 12 |
 | What a dropped document leaves behind (its last revision, to detect a regression) | about 130 bytes |
+| A token's "not revoked" answer, kept 30 seconds | about 290 bytes |
+| A principal's "not revoked" answer, kept 30 seconds | about 230 bytes |
 
 With the defaults full (16,384 tenant documents and 65,536 tenants without one), the tenant entries take about 520 MB.
-Size the heap at twice what the documents hold, plus 256 MiB for the rest of the gateway, so that ZGC has room to
-collect; then set the memory limit to the heap, plus the direct memory, plus about 250 MiB, plus a quarter
-([Memory](#memory)). The production overlay's 1.5 GiB heap and 2560Mi limit follow that rule for the defaults.
+The revocation copies hold only the tokens and principals a replica saw in the last 30 seconds, at most
+`cosec.authentication.revocation.cache.maximum-size` (500,000) of each, about 260 MB when both are full. Size the heap at
+twice what these hold, plus 256 MiB for the rest of the gateway, so that ZGC has room to collect; then set the memory
+limit to the heap, plus the direct memory, plus about 250 MiB, plus a quarter ([Memory](#memory)). The production
+overlay's 1.5 GiB heap and 2560Mi limit follow that rule for the default documents with revocation copies for about
+150,000 active tokens; the settings below give the heap for more.
 
 A request of a tenant whose entry is held reads nothing from Redis. A tenant beyond the bounds is read again on its
 next request: a tenant document from Redis and compiled again (about 55 µs of CPU), a tenant without one from Redis
@@ -412,12 +417,12 @@ grows the same way. Keep `lag-warn` above it. A Redis Cluster divides the figure
 
 ### Settings to copy {#settings-to-copy}
 
-| Tenants | Tenants with a tenant document | `max-tenants` | `max-absent-tenants` | `revalidate-interval` | Tenant entries on the heap | `-Xms` = `-Xmx` | Memory limit |
-|---|---|---|---|---|---|---|---|
-| 10,000 | 10 % | default (16,384) | default (65,536) | `10s` | 34 MB | `1536m` | `2560Mi` |
-| 10,000 | 100 % | default | default | `10s` | 300 MB | `1536m` | `2560Mi` |
-| 50,000 | 10 % | default | default | `10s` | 170 MB | `1536m` | `2560Mi` |
-| 50,000 | 100 % | `60000` | default | `30s` | 1.49 GB | `4g` | `6Gi` |
+| Tenants | Tenants with a tenant document | Active tokens in 30 s | `max-tenants` | `max-absent-tenants` | `revalidate-interval` | Tenant entries + revocation copies on the heap | `-Xms` = `-Xmx` | Memory limit |
+|---|---|---|---|---|---|---|---|---|
+| 10,000 | 10 % | up to 150,000 | default (16,384) | default (65,536) | `10s` | 34 + 80 MB | `1536m` | `2560Mi` |
+| 10,000 | 100 % | up to 150,000 | default | default | `10s` | 300 + 80 MB | `1536m` | `2560Mi` |
+| 50,000 | 10 % | up to 500,000 | default | default | `10s` | 170 + 260 MB | `1536m` | `2560Mi` |
+| 50,000 | 100 % | up to 500,000 | `60000` | default | `30s` | 1.49 GB + 260 MB | `4g` | `6Gi` |
 
 For 50,000 tenants that all have a tenant document:
 
@@ -462,7 +467,7 @@ exceed `server.max-http-request-header-size` (8 KB by default): about 100 long `
 No per-request cost depends on how many members a tenant has. The gateway verifies the token, parses the roles it
 carries and looks up two revocations, of the token and of its principal, keyed by the caller; the tenant's document
 does not list its members. The revocation lookups keep a local copy of each "not revoked" answer for 30 seconds,
-at most `cosec.authentication.revocation.cache.maximum-size` (100,000) entries per table and replica, about 300 bytes
+at most `cosec.authentication.revocation.cache.maximum-size` (500,000) entries per table and replica, about 300 bytes
 each: a replica that sees more distinct tokens than that within 30 seconds reads Redis on the request path for the
 rest ([Configuration](./configuration.md#local-cache-settings)).
 

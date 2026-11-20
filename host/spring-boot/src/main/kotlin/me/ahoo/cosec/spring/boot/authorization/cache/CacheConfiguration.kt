@@ -42,7 +42,12 @@ data class CacheConfiguration(
     companion object {
         /** How stale a revocation may be on an instance that missed its invalidation message. */
         val DEFAULT_LOCAL_MAX_AGE: Duration = Duration.ofSeconds(30)
-        const val DEFAULT_MAXIMUM_SIZE: Long = 100_000
+        /**
+         * An entry exists only for a token or a principal this replica saw in the last 30 seconds, and a miss is a Redis
+         * round trip on the request path: memory for performance. One entry retains about 290 bytes (token, its id
+         * included) or 230 bytes (principal), so both tables full take about 260 MB (measured, beta.5).
+         */
+        const val DEFAULT_MAXIMUM_SIZE: Long = 500_000
     }
 
     /** [spec] declaring these settings. */

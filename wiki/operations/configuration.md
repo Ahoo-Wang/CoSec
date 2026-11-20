@@ -191,7 +191,7 @@ of your own replaces both.
 | `cosec.authorization.snapshot.max-tenants` | int | `16384` | The same for tenant documents (positive). The platform document is never dropped. Sized so that an instance holds the tenants it serves: a tenant document of 5 roles of 20 permissions and 20 bindings retains about 30 KB, so all 16,384 places take about 490 MB of heap ([Sizing a SaaS gateway](./deployment.md#sizing-a-saas-gateway)). |
 | `cosec.authorization.snapshot.max-absent-apps` | int | `256` | The most app ids held as having no app document (positive), apart from `max-apps` (`SNP-7`): app ids come from requests, so a client naming made-up apps cannot push out a real one, and each id it names beyond this is read from Redis again. |
 | `cosec.authorization.snapshot.max-absent-tenants` | int | `65536` | The most tenant ids held as having no tenant document (positive), apart from `max-tenants` (`SNP-7`). Every request of such a tenant reads this entry; one dropped is read from Redis again on the tenant's next request. About 470 bytes each: about 30 MB when every place is used. |
-| `cosec.authorization.snapshot.reload-concurrency` | int | `16` | Documents a revalidation pass confirms at once (positive). A pass takes about the entries held × one conditional read ÷ this: 81,920 entries at 1 ms take 5 s. Past `revalidate-interval`, passes run back to back and lag grows with them. |
+| `cosec.authorization.snapshot.reload-concurrency` | int | `16` | Documents a revalidation pass confirms at once (positive). A pass takes about the entries held × one conditional read ÷ this: 80,000 entries at 1 ms a read take 25 s at 4, 12.6 s at 8 and 6.3 s at 16 (measured); 16 keeps a pass of the default bounds full within the default interval for reads up to about 2 ms. The average read rate is unchanged, entries ÷ `revalidate-interval`; only the burst during a pass is higher. Past `revalidate-interval`, passes run back to back and lag grows with them. |
 | `cosec.authorization.snapshot.prewarm-apps` | list of app ids | empty | App documents loaded at startup, after the platform document, which is always loaded. Readiness refuses traffic until the platform document and every listed document are installed; liveness is not affected. |
 | `cosec.authorization.snapshot.prewarm-tenants` | list of tenant ids | empty | Tenant documents loaded at startup, as above. |
 | `cosec.authorization.snapshot.compile-threads` | int | `2` | Threads that compile documents. Must be positive. |
@@ -264,13 +264,13 @@ Snapshot documents have their own properties ([Snapshot](#snapshot)).
 
 | Property | Type | Default | Effect |
 |---|---|---|---|
-| `cosec.authentication.revocation.cache.*` | [local cache settings](#local-cache-settings) | `local-max-age: 30s`, `maximum-size: 100000` | Local copy of revocation lookups (`RevokedTokenCache` and `RevokedSubjectCache`). |
+| `cosec.authentication.revocation.cache.*` | [local cache settings](#local-cache-settings) | `local-max-age: 30s`, `maximum-size: 500000` | Local copy of revocation lookups (`RevokedTokenCache` and `RevokedSubjectCache`). An entry exists only for a token or principal the instance saw in the last 30 seconds, and a miss is a Redis read on the request path. One retains about 290 bytes (a token, its id included) or 230 bytes (a principal): both tables full take about 260 MB ([Sizing a SaaS gateway](./deployment.md#what-a-replica-holds)). |
 
 ### Local cache settings
 
 | Property | Type | Default | Effect |
 |---|---|---|---|
-| `maximum-size` | long | `100000` | Maximum entries in the local copy. |
+| `maximum-size` | long | `500000` | Maximum entries in the local copy. |
 | `initial-capacity` | int | CoCache's | Initial capacity of the local copy. |
 | `local-max-age` | duration (a bare number is seconds) | `30s` | How long a local copy lives at most: the bound on staleness when an invalidation message is lost. |
 | `expire-after-access` | duration (a bare number is seconds) | none | Drop a local copy not read for this long. |

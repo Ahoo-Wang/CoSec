@@ -545,6 +545,17 @@
         "spring-boot:ControlBodyLimitTest#the limit is 10 MB by default"
       ],
       "pending": null
+    },
+    {
+      "id": "CTL-45",
+      "source": "SaaS scale measurement (beta.5, D1); RFC 0007 §6.4",
+      "statement": "A process's shadow reports and status are written under an id no earlier process used, whatever cosec.authorization.shadow.instance-id is set to, so a restart never replaces an earlier process's cumulative report or erases a CANDIDATE_ERROR it recorded.",
+      "level": "control",
+      "guards": [
+        "spring-boot:ShadowInstanceIdTest#a configured id is a prefix, with a suffix new at every start",
+        "spring-boot:ShadowInstanceIdTest#a restart with the same configured id keeps the earlier report"
+      ],
+      "pending": null
     }
   ]
 }

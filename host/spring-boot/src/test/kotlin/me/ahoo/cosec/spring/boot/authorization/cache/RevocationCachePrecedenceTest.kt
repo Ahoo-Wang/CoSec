@@ -75,7 +75,7 @@ class RevocationCachePrecedenceTest {
 
     @Test
     fun `without one, CoSec's own capacity wins over cocache defaults`() {
-        runner.capacitiesOf().assert().isEqualTo(listOf(100_000L, 100_000L))
+        runner.capacitiesOf().assert().isEqualTo(listOf(500_000L, 500_000L))
     }
 
     @Test
