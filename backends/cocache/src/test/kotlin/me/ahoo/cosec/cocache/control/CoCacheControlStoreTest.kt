@@ -184,6 +184,20 @@ class CoCacheControlStoreTest {
         }
     }
 
+    /** R2C-7: a read that fails for another reason, an outage, passes through as it is, without the repair's advice. */
+    @Test
+    fun `a set that fails to read for another reason does not name the repair`() = runBlocking<Unit> {
+        val hooked = HookedBackend(InMemoryBackend())
+        SnapshotNode(hooked, newKeyPrefix()).use { node ->
+            val store = store(node)
+            hooked.failReads = true
+            val error = runCatching { store.referrers(SnapshotKey.Platform, PolicyId("shared")) }.exceptionOrNull()
+            error.assert().isNotNull()
+            generateSequence(error) { it.cause }.mapNotNull { it.message }.joinToString(" | ").assert()
+                .doesNotContain("repair-references")
+        }
+    }
+
     /** What [block] fails with names the command that converts a store written before 8.0.0-beta.5. */
     @Suppress("TooGenericExceptionCaught")
     private suspend fun unrepaired(block: suspend () -> Unit) {
