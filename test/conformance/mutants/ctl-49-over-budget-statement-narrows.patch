@@ -1,0 +1,17 @@
+# Rule: CTL-49
+# Mutant: past the comparison budget a statement is taken to narrow its previous version, so a widening the analysis did not compare grants nothing
+# Tests: :control:test --tests me.ahoo.cosec.control.grant.ComparisonBudgetTest
+
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/grant/GrantNarrowing.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/grant/GrantNarrowing.kt
+index efdc66864..984eb82da 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/grant/GrantNarrowing.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/grant/GrantNarrowing.kt
+@@ -79,7 +79,7 @@ internal class GrantNarrowing(private val checker: ConditionChecker, private val
+         }
+         // Past the budget it is not known to narrow anything, so it is granted (CTL-49).
+         return previous.statements.any {
+-            budget?.spend() != false &&
++            budget?.spend() == false ||
+                 (identical(statement, condition, it, previous) || narrows(statement, condition, it, both(previous.condition, it.condition)))
+         }
+     }
