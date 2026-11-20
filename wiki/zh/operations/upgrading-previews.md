@@ -140,6 +140,10 @@ description: "每个 8.0 预览版（alpha 与 beta）到下一个之间的变�
   - **社交登录需要 `cosec-cocache`**（或你自己的 `SocialStateStore` Bean）：两者都没有时启动失败并指明工件（`STA-1`）。`cosec-social` 不再把 `spring-data-redis` 带进你的编译类路径；JustAuth 自己的 state 缓存仍会阻塞，需要 `StringRedisTemplate`，应用使用 Redis 时本来就有。
   - **`authorize` 拒绝无法立即处理的请求。** 每个 `JustAuthProvider` 同时最多有 64 个登录开始请求在进行，使用与登录分开的线程池；多出的一个抛出 `SocialAuthenticationException`，之前它们会无限排队。
   - **`cosec.authorization.membership.unknown-ttl`**（默认 `5s`，最长 `1m`，`0s` 恢复旧行为）：一个实例记住你的 `MembershipLoader` 对某个主体回答过 `Unknown`，所以被移除成员的令牌不再在每个请求上到达 loader。你新增的主体在其他实例上于这段时间结束时被知道，在调用了 `invalidate` 的实例上立即知道。失败的加载从不被记住。
+- **冷加载会等待已满的编译池；`fail-closed.tenants` 接受 `*`；本地限流器为每份文档的规则设上限**（R2D-3、R2D-4、R2D-5）。文档、属性默认值、存储的值和线上格式都不变。
+  - 被已满的编译队列拒绝的冷加载不再立即回答 `503`。它每隔几毫秒重新编译，直到 `cold-load-timeout`（2 秒），然后照旧失败即拒绝。新副本收到的一批租户会排队，而不是被拒绝（[新副本的代价](./deployment.md#what-a-new-replica-costs)）。
+  - `cosec.authorization.snapshot.fail-closed.tenants: "*"` 让所有租户在超过 `fail-closed.max-lag` 后失败即拒绝。默认仍为空。
+  - `LocalRateLimiter` 最多把四分之一的桶留给一份文档的规则，并在 `cosec.ratelimit.local.refused` 中为它拒绝的每个桶计数。它的构造函数在 `maximumBucketsPerRule` 之后接受 `maximumBucketsPerOwner`：用具名参数调用它的代码无需改动即可编译；针对 beta.4 编译、构造它的代码需要重新编译。
 
 ## 从 8.0.0-beta.3 升级 {#from-8-0-0-beta-3}
 
