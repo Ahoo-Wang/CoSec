@@ -294,6 +294,14 @@ internal class SourceModel(
         compileTakenAt[key] = store.stamp()
     }
 
+    /**
+     * [key]'s runner took a refused compilation's retry: the load that the queue refused waits on the compile pool
+     * again, with no result taken since, as one whose first compilation is still queued.
+     */
+    fun compileRequeued(key: SnapshotKey) {
+        compileTakenAt.remove(key)
+    }
+
     /** Once the run has settled: each read a pass owed was made, after its call (`SNP-6`). */
     fun checkOwedReads() {
         for ((pass, key) in owedReads) {

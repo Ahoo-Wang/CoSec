@@ -180,6 +180,51 @@ class SnapshotRecompileTest {
         }
     }
 
+    /**
+     * R2D-12: a refusal by the full compile queue says nothing about the document. The recompile keeps its read and
+     * compiles again; meanwhile requests are answered from the previous compilation, and `recompile`'s future waits.
+     */
+    @Test
+    fun `a recompile the full compile queue refuses serves the previous compilation until it compiles`() {
+        val store = ControllableStore()
+        store.publish(SnapshotKey.Platform, 1)
+        store.publish(TENANT_A, 1)
+        val compiler = InputsCompiler()
+        val refusals = java.util.concurrent.atomic.AtomicInteger()
+        val refusing = java.util.concurrent.atomic.AtomicBoolean()
+        val executor = java.util.concurrent.Executor { task ->
+            if (refusing.get()) {
+                refusals.incrementAndGet()
+                throw java.util.concurrent.RejectedExecutionException("the compile queue is full")
+            }
+            task.run()
+        }
+        val source = SnapshotSource(
+            store,
+            SnapshotKey.Platform,
+            compiler,
+            DocumentSnapshots.families(compiler, SnapshotOptions(revalidateInterval = QUIET_PASS)),
+            SnapshotOptions(revalidateInterval = QUIET_PASS),
+            clock,
+            metrics,
+            executor,
+            null,
+            { ticker.incrementAndGet() },
+        )
+        source.use {
+            source.loadAll(listOf(TENANT_A)).join()
+            refusing.set(true)
+            compiler.inputs = 2
+            val recompiling = source.recompile()
+            awaitCondition { refusals.get() >= 3 }
+            recompiling.isDone.assert().isFalse()
+            source.installed(TENANT_A).inputs().assert().isEqualTo("inputs-1")
+            refusing.set(false)
+            recompiling.join()
+            source.installed(TENANT_A).inputs().assert().isEqualTo("inputs-2")
+        }
+    }
+
     @Test
     fun `a document failed by a recompile keeps retrying while the store stays down`() {
         val store = ControllableStore()

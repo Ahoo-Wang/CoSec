@@ -473,6 +473,17 @@ rest, and the kubelet restarts the pod.
   fold several statements' patterns into fewer; a segment after a leading `**` counts twice. On the data
   plane a stored document over a bound is installed as failed, and the requests that read it answer `503`.
 
+## A compilation does not end {#a-compilation-does-not-end}
+
+`Compiling snapshot document [<doc>] revision <n> did not end within <budget>; the load fails, and the revision is not
+compiled again while that compilation runs.` at `ERROR`: the compiler took longer than the load's budget
+(`cold-load-timeout`, 2 seconds, for a document not yet held; 30 seconds for a reload) on that stored revision. The
+requests that need it answer `503` while it is not held, or are decided on the revision held before. The compilation
+keeps one compile thread until it ends; two such revisions at once hold both default threads, and then no other
+document compiles until one ends: every load fails at its deadline, closed. A document the control plane validated compiles in well under a millisecond: look for a
+revision written to Redis outside the control plane, and publish a corrected revision, which compiles as any other
+([Storage](./storage.md#how-instances-read-documents)).
+
 ## Shadow window blocked by a candidate error
 
 A shadow window is blocked as soon as one instance reports `CANDIDATE_ERROR`: it cannot compile the candidate, so it

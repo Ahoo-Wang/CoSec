@@ -77,7 +77,7 @@ internal class KeyLoads<T : Any>(private val config: KeyConfig) {
                 step.emit(KeyEffect.RecordSeen(seen, ifAbsent = true))
                 step.seen = step.seen ?: seen
                 step.load = reading.copy(phase = LoadPhase.Compiling(read))
-                step.emit(KeyEffect.Compile(load.id, read))
+                step.emit(KeyEffect.Compile(load.id, read, CompileDeadlines.of(config, load)))
             }
 
             SnapshotRead.Absent -> onAbsent(step, reading)

@@ -272,6 +272,11 @@ Full model: https://cosec.ahoo.me/guide/security-model.
   JSON paths. Usually a document a newer CoSec wrote during a rolling upgrade, or a direct write to the store. Compile the stored
   document yourself (see "Reproduce narrowly") to see the errors. Documents compile against the platform's `limits` and
   `attributes`, so a platform change can make an app or tenant document stop compiling.
+- A compilation does not end (R2D-11): `Compiling snapshot document [<doc>] revision <n> did not end within <budget>`
+  at `ERROR`. The load fails at the next revalidation tick (cold: 503; reload: the previous revision is kept); the
+  revision is not compiled again while that compilation runs, each such revision holding one compile thread. Usually
+  a revision written to Redis outside the control plane: publish a corrected one.
+  https://cosec.ahoo.me/operations/troubleshooting#a-compilation-does-not-end
 - Redis is unreachable for a document not yet held locally (`cold-load-timeout`, default 2s), or the snapshot lags
   beyond `fail-closed.max-lag` for a tenant in `cosec.authorization.snapshot.fail-closed.tenants`.
 

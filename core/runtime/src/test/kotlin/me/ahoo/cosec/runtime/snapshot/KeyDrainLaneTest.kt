@@ -279,15 +279,16 @@ class KeyDrainLaneTest {
 
     /**
      * The derivation of [KeyDrain.LANE_EVENTS_PER_LOAD], by kind: a load's read answers once, times out once, its
-     * compilation ends once, it is retried once, and each of those steps and the one that started it raises at most one
+     * compilation ends once, its compilation's deadline comes once (R2D-11), it is retried once, and each of those steps and the one that started it raises at most one
      * `EffectFailed`. A new kind of lane event does not compile here until it is counted.
      */
     @Test
-    fun `a load offers at most nine lane events, counted by kind`() {
+    fun `a load offers at most eleven lane events, counted by kind`() {
         fun group(event: KeyEvent.LaneEvent<*>): String = when (event) {
             is KeyEvent.ReadDone, is KeyEvent.ReadFailed -> "read answered"
             is KeyEvent.ReadTimedOut -> "read timed out"
             is KeyEvent.Compiled, is KeyEvent.CompileCrashed, is KeyEvent.CompileRejected -> "compilation ended"
+            is KeyEvent.CompileTimedOut -> "compilation timed out"
             is KeyEvent.RetryDue, is KeyEvent.CompileRetryDue -> "retried"
             is KeyEvent.EffectFailed -> "effect failed"
         }
@@ -301,6 +302,7 @@ class KeyDrainLaneTest {
             KeyEvent.CompileRejected(1, RejectedExecutionException("thrown by the test")),
             KeyEvent.RetryDue(),
             KeyEvent.CompileRetryDue(1),
+            KeyEvent.CompileTimedOut(1),
             KeyEvent.EffectFailed(1, failure),
         ).groupBy(::group).keys
         val once = kinds - "effect failed"
