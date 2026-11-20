@@ -3,16 +3,15 @@
 # Tests: :engine:test --tests me.ahoo.cosec.engine.CompiledDocumentTest :conformance:test --tests me.ahoo.cosec.conformance.ConformanceTest
 
 diff --git a/core/engine/src/main/kotlin/me/ahoo/cosec/engine/BoundEntries.kt b/core/engine/src/main/kotlin/me/ahoo/cosec/engine/BoundEntries.kt
-index 27a460c91..7ef203414 100644
+index 27a460c91..fbb8a4155 100644
 --- a/core/engine/src/main/kotlin/me/ahoo/cosec/engine/BoundEntries.kt
 +++ b/core/engine/src/main/kotlin/me/ahoo/cosec/engine/BoundEntries.kt
-@@ -123,9 +123,6 @@ private fun requireReachable(kind: DocumentKind, owner: String, binding: Binding
+@@ -123,7 +123,7 @@ private fun requireReachable(kind: DocumentKind, owner: String, binding: Binding
                  is SubjectRef.Role -> subject.tenant
                  SubjectRef.Anyone -> null
              }
 -            require(tenant == null || tenant.value == owner) {
--                "Binding ${binding.id.value} of the tenant document $owner binds a subject of tenant ${tenant?.value}"
--            }
++            require(tenant == null || tenant.value.isNotEmpty()) {
+                 "Binding ${binding.id.value} of the tenant document $owner binds a subject of tenant ${tenant?.value}"
+             }
          }
-     }
- }
