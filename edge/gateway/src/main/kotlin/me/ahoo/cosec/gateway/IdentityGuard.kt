@@ -45,9 +45,9 @@ class IdentityStripFilter @InternalCoSecApi constructor() : GlobalFilter, Ordere
 
     override fun getOrder(): Int = ORDER
 
+    @InternalCoSecApi
     companion object {
         /** Before the pipeline filter ([PipelineGatewayFilter.AUTHORIZATION_GATEWAY_FILTER_ORDER]) and anything else. */
-        @InternalCoSecApi
         const val ORDER = Ordered.HIGHEST_PRECEDENCE
     }
 }

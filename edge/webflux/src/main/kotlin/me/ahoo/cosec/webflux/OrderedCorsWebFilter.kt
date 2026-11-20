@@ -33,8 +33,8 @@ class OrderedCorsWebFilter @InternalCoSecApi constructor(
     private val order: Int = DEFAULT_ORDERED_CORS_WEB_FILTER_ORDER
 ) :
     Ordered, CorsWebFilter(configSource, processor) {
+    @InternalCoSecApi
     companion object {
-        @InternalCoSecApi
         const val DEFAULT_ORDERED_CORS_WEB_FILTER_ORDER = REACTIVE_AUTHORIZATION_FILTER_ORDER - 1
     }
 

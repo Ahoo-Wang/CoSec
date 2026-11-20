@@ -42,9 +42,9 @@ class IdentityHeadersFilter @InternalCoSecApi constructor() : HttpHeadersFilter 
 
     override fun supports(type: HttpHeadersFilter.Type): Boolean = type == HttpHeadersFilter.Type.REQUEST
 
+    @InternalCoSecApi
     companion object {
         /** The exchange attribute [PipelineGatewayFilter] sets to the identity it forwards; absent when it forwards none. */
-        @InternalCoSecApi
         const val FORWARDED_ATTRIBUTE = "cosec.identity.forwarded"
     }
 }

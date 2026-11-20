@@ -67,13 +67,13 @@ class PipelineWebFilter @InternalCoSecApi constructor(
 
     override fun getOrder(): Int = REACTIVE_AUTHORIZATION_FILTER_ORDER
 
+    @InternalCoSecApi
     companion object {
         /**
          * Filter order for reactive authorization.
          * Set to 1000 to run after framework filters (CORS, etc.)
          * while still running before most application filters.
          */
-        @InternalCoSecApi
         const val REACTIVE_AUTHORIZATION_FILTER_ORDER = 1000
     }
 }
