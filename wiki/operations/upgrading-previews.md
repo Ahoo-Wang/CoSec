@@ -27,6 +27,26 @@ Which preview of the library may run behind which preview of the gateway image: 
 
 ## From 8.0.0-beta.4 {#from-8-0-0-beta-4}
 
+- **The public shapes of the core modules are fixed before RC** (review round 2, `R2A-1` to `R2A-7`). Affected: code that
+  compiles against `cosec-model`, `cosec-spi`, `cosec-api` or the engine. No document, property, stored value or wire
+  format changes.
+  - The decision values are plain final classes with `equals`, `hashCode` and `toString`, not data classes: `Decision.Permit`,
+    `Deny`, `Indeterminate`, `Obligation.RateLimit`, `ViewVersion` (in `cosec-engine`) and every `Cause` but `NotLoaded`
+    have no `copy` and no `componentN`, so a new field never breaks a caller. Read the properties (`decision.by`,
+    `cause.error`) instead of destructuring a decision.
+  - `me.ahoo.cosec.spi.ratelimit.RateLimit` and `RateLimiter.window` are gone. `RateLimitSpec` has `limitPerWindow` and
+    `windowMillis`, and `limit.resultOf(allowed, estimate, nowMillis)` (import `me.ahoo.cosec.spi.ratelimit.resultOf`)
+    builds the `RateLimitResult`: in a `RateLimiter` of yours, use `limit` where you used `RateLimiter.window(limit)`.
+  - `AuthnResult.Authenticated(principal, method)` takes an `Identity.Method`, not a string: `Identity.Method.API_KEY`, or
+    `Identity.Method("ldap")` for a credential of your own, any non-empty name. What the audit record and `CoSec-Identity`
+    say for CoSec's own methods does not change (`jwt`, `api-key`).
+  - `AuditEvent.kind` is an `AuditEventKind` enum with the five values it always had; the JSON a sink or a Kafka consumer
+    reads is the same bytes. Read `authorization.reasonCode` for why a request ended as it did (`decision` is its coarser
+    grouping, mapped in the KDoc of `AuditDecision`); `binding` is a label for people, `authorization.source.via` and
+    `document` are the typed facts.
+  - `SnapshotDocumentStore` is `@ExperimentalCoSecApi`: its shape follows its one backend, `cosec-cocache`, and a batched or
+    store-wide conditional read is planned. An implementation of yours opts in and may have to change in a minor release.
+  - `Resource.attributes` defaults to an empty map: nothing sets one today (`DOC-10`).
 - **The back-references and the document list are sets: run `cosec-migrate repair-references` once** (`CTL-42`,
   `CTL-43`, `CTL-44`, `MIG-4`). Affected: every store a control plane of 8.0.0-beta.4 or earlier wrote. Data-plane
   instances are not: they read none of these keys.
