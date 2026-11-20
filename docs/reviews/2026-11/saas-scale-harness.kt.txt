@@ -1,0 +1,355 @@
+/*
+ * Copyright [2021-present] [ahoo wang <ahoowang@qq.com> (https://github.com/Ahoo-Wang)].
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+// (the file-level opt-in to CoSec's internal API stood here; see README.md in this folder)
+package me.ahoo.cosec.runtime.snapshot
+
+import me.ahoo.cosec.annotations.ExperimentalCoSecApi
+import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.document.PolicyDocumentCompiler
+import me.ahoo.cosec.document.SnapshotDocuments
+import me.ahoo.cosec.spi.snapshot.InMemorySnapshotDocumentStore
+import me.ahoo.cosec.spi.snapshot.SnapshotChangeListener
+import me.ahoo.cosec.spi.snapshot.SnapshotDigest
+import me.ahoo.cosec.spi.snapshot.SnapshotDocumentStore
+import me.ahoo.cosec.spi.snapshot.SnapshotKey
+import me.ahoo.cosec.spi.snapshot.SnapshotKind
+import me.ahoo.cosec.spi.snapshot.SnapshotRead
+import java.io.File
+import java.lang.management.ManagementFactory
+import java.time.Clock
+import java.time.Duration
+import java.util.concurrent.AbstractExecutorService
+import java.util.concurrent.CompletableFuture
+import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicLong
+import kotlin.random.Random
+
+// Not committed: the SaaS-scale measurement of the data plane (2026-11-19). Run with `java -cp <test runtime> ...Kt <mode>`.
+
+private const val APPS = 12
+private const val PUBLISHED = "2026-11-19T00:00:00Z"
+private val out = StringBuilder()
+
+private fun say(line: String) {
+    println(line)
+    out.appendLine(line)
+}
+
+private fun appDocument(app: Int): String {
+    val groups = (0 until 5).joinToString(",") { g ->
+        val permissions = (0 until 20).joinToString(",") { i ->
+            val resource = if (i % 4 == 0) ""","resource":"res-$i/{id}"""" else ""
+            """{"id":"g$g.p$i","name":"Permission $g.$i of app $app","action":"app-$app:g$g.p$i"$resource}"""
+        }
+        """{"name":"Group $g","permissions":[$permissions]}"""
+    }
+    val roles = (0 until 12).joinToString(",") { r ->
+        val permissions = if (r == 0) {
+            "\"*\""
+        } else {
+            (0 until minOf(100, r * 9)).joinToString(",", "[", "]") { "\"g${it / 20}.p${it % 20}\"" }
+        }
+        """{"id":"role-$r","name":"Role $r","description":"System role $r of app $app","permissions":$permissions}"""
+    }
+    return """{"schema":2,"revision":1,"publishedAt":"$PUBLISHED","catalog":{"groups":[$groups]},"roles":[$roles]}"""
+}
+
+private fun tenantDocument(tenant: Int): String {
+    val roles = (0 until 5).joinToString(",") { k ->
+        val permissions = (0 until 20).joinToString(",", "[", "]") { j ->
+            val p = (tenant * 7 + k * 20 + j) % 100
+            "\"g${p / 20}.p${p % 20}\""
+        }
+        """{"id":"custom-$tenant-$k","app":"app-${(tenant + k) % APPS}","name":"Custom role $k of tenant $tenant",""" +
+            """"description":"A custom role","permissions":$permissions}"""
+    }
+    val bindings = (0 until 20).joinToString(",") { j ->
+        val app = (tenant + j) % APPS
+        val p = (tenant * 3 + j * 5) % 100
+        """{"id":"b-$tenant-$j","subject":{"role":"role-${j % 12}"},"app":"app-$app","space":"*",""" +
+            """"policy":"perm:app-$app/g${p / 20}.p${p % 20}"}"""
+    }
+    return """{"schema":2,"revision":1,"publishedAt":"$PUBLISHED","roles":[$roles],"bindings":[$bindings]}"""
+}
+
+private const val MINIMAL = """{"schema":2,"revision":1,"publishedAt":"$PUBLISHED"}"""
+
+private fun platformDocument(): String =
+    File("wiki/examples/app/documents/platform.json").takeIf { it.exists() }?.readText()
+        ?: File("../../wiki/examples/app/documents/platform.json").readText()
+
+private fun doc(json: String) = SnapshotDocuments.read(json.encodeToByteArray())
+
+/** The in-memory store, its reads counted and, when [delayNanos] is set, completed that much later off the caller. */
+private class DelayedStore(val inner: InMemorySnapshotDocumentStore = InMemorySnapshotDocumentStore()) : SnapshotDocumentStore {
+    @Volatile
+    var delayNanos = 0L
+    val reads = AtomicLong()
+    val readsAbsent = AtomicLong()
+    val conditional = AtomicLong()
+    val waited = AtomicLong()
+    private val timer = Executors.newScheduledThreadPool(4) { Thread(it, "store-delay").apply { isDaemon = true } }
+
+    private fun delayed(answer: () -> CompletableFuture<SnapshotRead>): CompletableFuture<SnapshotRead> {
+        val delay = delayNanos
+        if (delay == 0L) return answer()
+        val start = System.nanoTime()
+        val result = CompletableFuture<SnapshotRead>()
+        timer.schedule({
+            waited.addAndGet(System.nanoTime() - start)
+            answer().whenComplete { value, error -> if (error != null) result.completeExceptionally(error) else result.complete(value) }
+        }, delay, TimeUnit.NANOSECONDS)
+        return result
+    }
+
+    override fun read(key: SnapshotKey): CompletableFuture<SnapshotRead> {
+        reads.incrementAndGet()
+        if (inner[key] == null) readsAbsent.incrementAndGet()
+        return delayed { inner.read(key) }
+    }
+
+    override fun readIfChanged(key: SnapshotKey, known: SnapshotDigest?): CompletableFuture<SnapshotRead> {
+        conditional.incrementAndGet()
+        return delayed { inner.readIfChanged(key, known) }
+    }
+
+    override fun subscribe(listener: SnapshotChangeListener): AutoCloseable = inner.subscribe(listener)
+}
+
+private class Held : AbstractExecutorService() {
+    private var down = false
+    override fun execute(command: Runnable) = Unit
+    override fun shutdown() {
+        down = true
+    }
+
+    override fun shutdownNow(): MutableList<Runnable> = mutableListOf<Runnable>().also { down = true }
+    override fun isShutdown(): Boolean = down
+    override fun isTerminated(): Boolean = down
+    override fun awaitTermination(timeout: Long, unit: TimeUnit): Boolean = true
+}
+
+private fun source(
+    store: SnapshotDocumentStore,
+    options: SnapshotOptions,
+    housekeeping: java.util.concurrent.ExecutorService? = null,
+): SnapshotSource<*, *> {
+    val compiler = PolicyDocumentCompiler()
+    return SnapshotSource(
+        store, SnapshotKey.Platform, compiler, DocumentSnapshots.families(compiler, options), options,
+        Clock.systemUTC(), SnapshotMetrics.NOOP, null, null, System::nanoTime, housekeeping,
+    )
+}
+
+private fun options(maxTenants: Int = 1024, maxAbsent: Int = SnapshotOptions.DEFAULT_MAX_ABSENT) = SnapshotOptions(
+    revalidateInterval = Duration.ofMinutes(4),
+    lagWarn = Duration.ofMinutes(5),
+    lagEscalate = Duration.ofMinutes(10),
+    maxTenants = maxTenants,
+    maxAbsent = maxAbsent,
+)
+
+private fun usedAfterGc(): Long {
+    val memory = ManagementFactory.getMemoryMXBean()
+    repeat(4) {
+        System.gc()
+        Thread.sleep(150)
+    }
+    return memory.heapMemoryUsage.used
+}
+
+private fun SnapshotSource<*, *>.loadOne(key: SnapshotKey) {
+    loadAll(listOf(key)).join()
+}
+
+private fun fillApps(store: DelayedStore) {
+    store.inner.put(SnapshotKey.Platform, doc(platformDocument()))
+    repeat(APPS) { store.inner.put(SnapshotKey.App("app-$it"), doc(appDocument(it))) }
+}
+
+private fun heap() {
+    val tenants = 2_000
+    val absent = 20_000
+    val store = DelayedStore()
+    fillApps(store)
+    repeat(tenants) { store.inner.put(SnapshotKey.Tenant("t-$it"), doc(tenantDocument(it))) }
+    say("bytes: platform=${platformDocument().length} app=${appDocument(0).length} tenant=${tenantDocument(0).length}")
+    // Warm the compiler and its classes on a throwaway source, so that the first measured load does not count them.
+    source(DelayedStore().also { fillApps(it) }, options()).use { warm ->
+        warm.load().join()
+        repeat(APPS) { warm.loadOne(SnapshotKey.App("app-$it")) }
+    }
+    val s = source(store, options(maxTenants = 100_000, maxAbsent = 100_000))
+    val base = usedAfterGc()
+    s.load().join()
+    val afterPlatform = usedAfterGc()
+    repeat(APPS) { s.loadOne(SnapshotKey.App("app-$it")) }
+    val afterApps = usedAfterGc()
+    var started = System.nanoTime()
+    repeat(tenants) { s.loadOne(SnapshotKey.Tenant("t-$it")) }
+    val tenantLoadNanos = (System.nanoTime() - started) / tenants
+    val afterTenants = usedAfterGc()
+    s.peekAll(listOf(SnapshotKey.Tenant("t-7")))!!.let { say("state t-7: ${it.entry(SnapshotKey.Tenant("t-7"))!!.state}") }
+    started = System.nanoTime()
+    repeat(absent) { s.loadOne(SnapshotKey.Tenant("none-$it")) }
+    val absentLoadNanos = (System.nanoTime() - started) / absent
+    val afterAbsent = usedAfterGc()
+    repeat(tenants) { s.evict(SnapshotKey.Tenant("t-$it")) }
+    val afterEvict = usedAfterGc()
+    say("held: ${s.heldCounts(SnapshotKind.TENANT)} apps ${s.heldCounts(SnapshotKind.APP)}")
+    val probe = listOf(SnapshotKey.App("app-3"), SnapshotKey.Tenant("none-1"))
+    s.peekAll(probe)!!.let { set -> probe.forEach { say("state $it: ${set.entry(it)!!.state}") } }
+    say("platform document: ${afterPlatform - base} B")
+    say("12 app documents: ${afterApps - afterPlatform} B (${(afterApps - afterPlatform) / APPS} B each)")
+    say("tenant document: ${(afterTenants - afterApps) / tenants} B each over $tenants")
+    say("absent entry: ${(afterAbsent - afterTenants) / absent} B each over $absent")
+    say("kept after eviction (seen revision): ${(afterEvict - afterAbsent + (afterTenants - afterApps)) / tenants} B per evicted document")
+    say("sequential cold load, zero-delay store: tenant document ${tenantLoadNanos / 1000} us, absent ${absentLoadNanos / 1000} us")
+    s.close()
+}
+
+private fun percentile(values: LongArray, p: Double): Long {
+    if (values.isEmpty()) return 0
+    val sorted = values.sortedArray()
+    return sorted[minOf(sorted.size - 1, (sorted.size * p).toInt())]
+}
+
+private fun traffic(mix: Int, raised: Boolean, delayMicros: Long = 0, measured: Int = 100_000) {
+    val tenants = 10_000
+    val store = DelayedStore()
+    fillApps(store)
+    val withDocument = (0 until tenants).filter { mix == 100 || it % (100 / mix) == 0 }.toSet()
+    withDocument.forEach { store.inner.put(SnapshotKey.Tenant("t-$it"), doc(tenantDocument(it))) }
+    val opts = if (raised) options(maxTenants = tenants, maxAbsent = tenants) else options()
+    val s = source(store, opts)
+    s.load().join()
+    val random = Random(42)
+    val misses = ArrayList<Long>()
+    val missDoc = ArrayList<Long>()
+    fun request(record: Boolean) {
+        val t = random.nextInt(tenants)
+        val keys = listOf(SnapshotKey.Tenant("t-$t"), SnapshotKey.App("app-${random.nextInt(APPS)}"))
+        if (s.peekAll(keys) != null) return
+        val started = System.nanoTime()
+        s.loadAll(keys).join()
+        if (record) {
+            val nanos = System.nanoTime() - started
+            if (t in withDocument) missDoc += nanos else misses += nanos
+        }
+    }
+    repeat(60_000) { request(false) }
+    val reads0 = store.reads.get()
+    val absent0 = store.readsAbsent.get()
+    val conditional0 = store.conditional.get()
+    val requests = measured
+    store.delayNanos = delayMicros * 1000
+    repeat(requests) { request(true) }
+    val per = 1000.0 / requests
+    val reads = store.reads.get() - reads0
+    val absent = store.readsAbsent.get() - absent0
+    say(
+        "mix=$mix% bounds=${if (raised) "raised($tenants/$tenants)" else "default(1024/256)"}: " +
+            "store reads per 1000 requests=${"%.1f".format(reads * per)} " +
+            "(documents ${"%.1f".format((reads - absent) * per)}, absent ${"%.1f".format(absent * per)}), " +
+            "conditional=${store.conditional.get() - conditional0}, misses with a document=${missDoc.size}, without=${misses.size}, " +
+            "held=${s.heldCounts(SnapshotKind.TENANT)}, store delay=${delayMicros}us"
+    )
+    val d = missDoc.toLongArray()
+    val a = misses.toLongArray()
+    say(
+        "  miss wait, zero-delay store: document p50=${percentile(d, 0.5) / 1000} us p99=${percentile(d, 0.99) / 1000} us; " +
+            "absent p50=${percentile(a, 0.5) / 1000} us p99=${percentile(a, 0.99) / 1000} us"
+    )
+    s.close()
+}
+
+private fun pass(entries: Int, delayMicros: Long, absent: Boolean) {
+    val store = DelayedStore()
+    store.inner.put(SnapshotKey.Platform, doc(MINIMAL))
+    if (!absent) {
+        val minimal = doc(MINIMAL)
+        repeat(entries) { store.inner.put(SnapshotKey.Tenant("t-$it"), minimal) }
+    }
+    val s = source(store, options(maxTenants = entries, maxAbsent = entries))
+    s.load().join()
+    repeat(entries) { s.loadOne(SnapshotKey.Tenant("t-$it")) }
+    store.delayNanos = delayMicros * 1000
+    repeat(2) { round ->
+        val conditional0 = store.conditional.get()
+        val waited0 = store.waited.get()
+        val started = System.nanoTime()
+        s.tick().join()
+        val millis = (System.nanoTime() - started) / 1_000_000
+        val reads = store.conditional.get() - conditional0
+        say(
+            "pass ${if (absent) "absent" else "documents"} entries=$entries delay=${delayMicros}us round=$round: " +
+                "${millis} ms, conditional reads=$reads, mean observed read=${(store.waited.get() - waited0) / maxOf(1, reads) / 1000} us"
+        )
+    }
+    s.close()
+}
+
+private fun evict(bound: Int, absent: Boolean) {
+    val store = DelayedStore()
+    store.inner.put(SnapshotKey.Platform, doc(MINIMAL))
+    val cap = bound + minOf(bound, SnapshotFamilies.MAX_SLACK)
+    if (!absent) {
+        val minimal = doc(MINIMAL)
+        repeat(cap) { store.inner.put(SnapshotKey.Tenant("t-$it"), minimal) }
+    }
+    val s = source(store, if (absent) options(maxAbsent = bound) else options(maxTenants = bound), Held())
+    s.load().join()
+    repeat(cap) { s.loadOne(SnapshotKey.Tenant("t-$it")) }
+    // Spread the stamps, as traffic would.
+    repeat(cap * 2) { s.peekAll(listOf(SnapshotKey.Tenant("t-${(it * 7919) % cap}"))) }
+    say("evict ${if (absent) "absent" else "documents"} bound=$bound held=${s.heldCounts(SnapshotKind.TENANT)}")
+    for (wanted in intArrayOf(1, 512, minOf(bound, SnapshotFamilies.MAX_SLACK))) {
+        repeat(30) { s.evictionScan(SnapshotKind.TENANT, wanted, absent) }
+        val times = LongArray(50) {
+            val started = System.nanoTime()
+            s.evictionScan(SnapshotKind.TENANT, wanted, absent)
+            System.nanoTime() - started
+        }
+        say(
+            "  scan wanted=$wanted: p50=${percentile(times, 0.5) / 1000} us p90=${percentile(times, 0.9) / 1000} us " +
+                "max=${times.max() / 1000} us"
+        )
+    }
+    val started = System.nanoTime()
+    s.evictionPass(SnapshotKind.TENANT, Int.MAX_VALUE)
+    say(
+        "  one full pass back to the bound (what the installer runs over the cap): " +
+            "${(System.nanoTime() - started) / 1000} us, held after=${s.heldCounts(SnapshotKind.TENANT)}"
+    )
+    s.close()
+}
+
+fun main(args: Array<String>) {
+    when (args[0]) {
+        "heap" -> heap()
+        "traffic-delay" -> for (mix in intArrayOf(10, 100)) traffic(mix, false, 300, 5_000)
+        "traffic" -> for (mix in intArrayOf(10, 100)) for (raised in booleanArrayOf(false, true)) traffic(mix, raised)
+        "pass" -> {
+            for (entries in intArrayOf(10_000, 50_000)) for (delay in longArrayOf(300, 1000)) pass(entries, delay, false)
+            pass(10_000, 300, true)
+        }
+        "evict" -> {
+            evict(1024, false)
+            evict(50_000, false)
+            evict(50_000, true)
+        }
+    }
+    File(args.getOrElse(1) { "saas-${args[0]}.txt" }).writeText(out.toString())
+}

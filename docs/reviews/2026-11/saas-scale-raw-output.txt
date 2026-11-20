@@ -1,0 +1,110 @@
+evict documents bound=1024 held=(2048, 0)
+  scan wanted=1: p50=61 us p90=234 us max=240 us
+  scan wanted=512: p50=394 us p90=407 us max=424 us
+  scan wanted=1024: p50=352 us p90=603 us max=2027 us
+  one full pass back to the bound (what the installer runs over the cap): 8244 us, held after=(1024, 0)
+evict documents bound=50000 held=(54096, 0)
+  scan wanted=1: p50=425 us p90=463 us max=503 us
+  scan wanted=512: p50=756 us p90=1367 us max=5396 us
+  scan wanted=4096: p50=3408 us p90=3987 us max=5089 us
+  one full pass back to the bound (what the installer runs over the cap): 16903 us, held after=(50000, 0)
+evict absent bound=50000 held=(0, 54096)
+  scan wanted=1: p50=1074 us p90=1717 us max=1993 us
+  scan wanted=512: p50=2016 us p90=2491 us max=5275 us
+  scan wanted=4096: p50=3765 us p90=5058 us max=6764 us
+  one full pass back to the bound (what the installer runs over the cap): 16188 us, held after=(0, 50000)
+evict documents bound=1024 held=(2048, 0)
+  scan wanted=1: p50=75 us p90=151 us max=246 us
+  scan wanted=512: p50=246 us p90=264 us max=414 us
+  scan wanted=1024: p50=320 us p90=398 us max=429 us
+  one full pass back to the bound (what the installer runs over the cap): 7929 us, held after=(1024, 0)
+evict documents bound=50000 held=(54096, 0)
+  scan wanted=1: p50=417 us p90=442 us max=458 us
+  scan wanted=512: p50=672 us p90=776 us max=890 us
+  scan wanted=4096: p50=3041 us p90=3704 us max=4176 us
+  one full pass back to the bound (what the installer runs over the cap): 17291 us, held after=(50000, 0)
+evict absent bound=50000 held=(0, 54096)
+  scan wanted=1: p50=2359 us p90=2585 us max=3135 us
+  scan wanted=512: p50=1166 us p90=1516 us max=11171 us
+  scan wanted=4096: p50=3592 us p90=4539 us max=4859 us
+  one full pass back to the bound (what the installer runs over the cap): 16305 us, held after=(0, 50000)
+evict documents bound=1024 held=(2048, 0)
+  scan wanted=1: p50=100 us p90=238 us max=419 us
+  scan wanted=512: p50=211 us p90=596 us max=985 us
+  scan wanted=1024: p50=223 us p90=361 us max=761 us
+  one full pass back to the bound (what the installer runs over the cap): 10544 us, held after=(1024, 0)
+evict documents bound=50000 held=(54096, 0)
+  scan wanted=1: p50=571 us p90=709 us max=1805 us
+  scan wanted=512: p50=830 us p90=1480 us max=1956 us
+  scan wanted=4096: p50=3703 us p90=4227 us max=6035 us
+  one full pass back to the bound (what the installer runs over the cap): 15358 us, held after=(50000, 0)
+evict absent bound=50000 held=(0, 54096)
+  scan wanted=1: p50=2918 us p90=4086 us max=8159 us
+  scan wanted=512: p50=3277 us p90=5369 us max=7445 us
+  scan wanted=4096: p50=3499 us p90=5455 us max=9630 us
+  one full pass back to the bound (what the installer runs over the cap): 20367 us, held after=(0, 50000)
+bytes: platform=1040 app=14203 tenant=3476
+state t-7: Present(compiled=me.ahoo.cosec.engine.CompiledDocument@2b50150)
+held: (0, 20000) apps (12, 0)
+state app:app-3: Present(compiled=me.ahoo.cosec.engine.CompiledDocument@d866565)
+state tenant:none-1: Absent
+platform document: 5560 B
+12 app documents: 2815744 B (234645 B each)
+tenant document: 29723 B each over 2000
+absent entry: 468 B each over 20000
+kept after eviction (seen revision): 83 B per evicted document
+sequential cold load, zero-delay store: tenant document 154 us, absent 4 us
+pass documents entries=10000 delay=300us round=0: 975 ms, conditional reads=10001, mean observed read=381 us
+pass documents entries=10000 delay=300us round=1: 976 ms, conditional reads=10001, mean observed read=385 us
+pass documents entries=10000 delay=1000us round=0: 3191 ms, conditional reads=10001, mean observed read=1269 us
+pass documents entries=10000 delay=1000us round=1: 3199 ms, conditional reads=10001, mean observed read=1270 us
+pass documents entries=50000 delay=300us round=0: 4852 ms, conditional reads=50001, mean observed read=386 us
+pass documents entries=50000 delay=300us round=1: 4844 ms, conditional reads=50001, mean observed read=385 us
+pass documents entries=50000 delay=1000us round=0: 15767 ms, conditional reads=50001, mean observed read=1259 us
+pass documents entries=50000 delay=1000us round=1: 15847 ms, conditional reads=50001, mean observed read=1264 us
+pass absent entries=10000 delay=300us round=0: 974 ms, conditional reads=10001, mean observed read=385 us
+pass absent entries=10000 delay=300us round=1: 971 ms, conditional reads=10001, mean observed read=384 us
+mix=10% bounds=default(1024/256): store reads per 1000 requests=874.2 (documents 0.0, absent 874.2), conditional=4371, misses with a document=0, without=4371, held=(998, 256), store delay=300us
+  miss wait, zero-delay store: document p50=0 us p99=0 us; absent p50=386 us p99=428 us
+mix=100% bounds=default(1024/256): store reads per 1000 requests=1.4 (documents 1.4, absent 0.0), conditional=4528, misses with a document=4528, without=0, held=(1024, 0), store delay=300us
+  miss wait, zero-delay store: document p50=566 us p99=729 us; absent p50=0 us p99=0 us
+mix=10% bounds=default(1024/256): store reads per 1000 requests=873.7 (documents 0.0, absent 873.7), conditional=87373, misses with a document=2, without=87371, held=(1000, 256)
+  miss wait, zero-delay store: document p50=347 us p99=347 us; absent p50=2 us p99=9 us
+mix=10% bounds=raised(10000/10000): store reads per 1000 requests=0.2 (documents 0.0, absent 0.2), conditional=21, misses with a document=2, without=19, held=(1000, 9000)
+  miss wait, zero-delay store: document p50=3257 us p99=3257 us; absent p50=2 us p99=22 us
+mix=100% bounds=default(1024/256): store reads per 1000 requests=0.2 (documents 0.2, absent 0.0), conditional=89749, misses with a document=89749, without=0, held=(1024, 0)
+  miss wait, zero-delay store: document p50=54 us p99=70 us; absent p50=0 us p99=0 us
+mix=100% bounds=raised(10000/10000): store reads per 1000 requests=0.2 (documents 0.2, absent 0.0), conditional=21, misses with a document=21, without=0, held=(10000, 0)
+  miss wait, zero-delay store: document p50=61 us p99=65 us; absent p50=0 us p99=0 us
+
+== candidate-load
+windows=0 rate=500/s maxEntries=16 refresh=10s: store reads per 1000 requests=148.1 (for absent keys 148.1), sampled=99.7
+windows=1 rate=500/s maxEntries=16 refresh=10s: store reads per 1000 requests=148.1 (for absent keys 148.1), sampled=99.7
+windows=100 rate=500/s maxEntries=16 refresh=10s: store reads per 1000 requests=148.1 (for absent keys 147.1), sampled=99.7
+windows=1+platform rate=500/s maxEntries=16 refresh=10s: store reads per 1000 requests=148.1 (for absent keys 147.9), sampled=99.7
+windows=0 rate=5000/s maxEntries=16 refresh=10s: store reads per 1000 requests=147.9 (for absent keys 147.9), sampled=99.7
+windows=1 rate=5000/s maxEntries=16 refresh=10s: store reads per 1000 requests=147.9 (for absent keys 147.9), sampled=99.7
+windows=100 rate=5000/s maxEntries=16 refresh=10s: store reads per 1000 requests=147.9 (for absent keys 146.9), sampled=99.7
+windows=1+platform rate=5000/s maxEntries=16 refresh=10s: store reads per 1000 requests=147.9 (for absent keys 147.9), sampled=99.7
+windows=0 rate=5000/s maxEntries=1024 refresh=10s: store reads per 1000 requests=89.9 (for absent keys 89.9), sampled=99.7
+windows=0 rate=500/s maxEntries=1024 refresh=10s: store reads per 1000 requests=97.5 (for absent keys 97.5), sampled=99.7
+windows=0 rate=5000/s maxEntries=1024 refresh=60s: store reads per 1000 requests=89.6 (for absent keys 89.6), sampled=99.7
+windows=0 rate=500/s maxEntries=1024 refresh=60s: store reads per 1000 requests=90.0 (for absent keys 90.0), sampled=99.7
+windows=0 rate=5000/s maxEntries=10016 refresh=10s: store reads per 1000 requests=66.6 (for absent keys 66.6), sampled=99.7
+windows=0 rate=500/s maxEntries=10016 refresh=10s: store reads per 1000 requests=97.5 (for absent keys 97.5), sampled=99.7
+windows=0 rate=5000/s maxEntries=10016 refresh=60s: store reads per 1000 requests=23.9 (for absent keys 23.9), sampled=99.7
+windows=0 rate=500/s maxEntries=10016 refresh=60s: store reads per 1000 requests=77.2 (for absent keys 77.2), sampled=99.7
+
+== shadow-cost
+round 0
+no listener                        caller 556 ns/op, 3136 B/op on the caller; process CPU 659 ns/op
+metrics stand-in (no-op)           caller 667 ns/op, 3544 B/op on the caller; process CPU 1009 ns/op
+no-op + shadow at 10 %             caller 691 ns/op, 3588 B/op on the caller; process CPU 1328 ns/op
+no-op + shadow at 0 %              caller 763 ns/op, 3568 B/op on the caller; process CPU 1273 ns/op
+shadow at 10 % alone               caller 766 ns/op, 3564 B/op on the caller; process CPU 1144 ns/op
+round 1
+no listener                        caller 554 ns/op, 3176 B/op on the caller; process CPU 570 ns/op
+metrics stand-in (no-op)           caller 600 ns/op, 3544 B/op on the caller; process CPU 686 ns/op
+no-op + shadow at 10 %             caller 608 ns/op, 3588 B/op on the caller; process CPU 703 ns/op
+no-op + shadow at 0 %              caller 601 ns/op, 3568 B/op on the caller; process CPU 682 ns/op
+shadow at 10 % alone               caller 600 ns/op, 3564 B/op on the caller; process CPU 700 ns/op
