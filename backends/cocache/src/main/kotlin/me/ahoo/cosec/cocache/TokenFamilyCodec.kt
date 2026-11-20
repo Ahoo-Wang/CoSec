@@ -23,14 +23,22 @@ import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.spi.token.TokenFamily
 import tools.jackson.databind.JsonNode
 import java.time.Instant
+import me.ahoo.cosec.document.json.StoredFormat
+import me.ahoo.cosec.spi.snapshot.SnapshotFormatException
+import tools.jackson.core.JacksonException
+import java.time.format.DateTimeParseException
 
-/** A [TokenFamily] as strict JSON: every field, `rotatedAt` null for the first generation, nothing else. */
+/**
+ * A [TokenFamily], the session record, as JSON with its format (R2C-28, `IDN-31`): read by the reader's rule
+ * ([StoredFormat]), so a member a later version adds is ignored and a later format is refused, which ends the session
+ * (the refresh is refused and the user signs in again). A record written before formats is format 1. Anything
+ * malformed is a [SnapshotFormatException], never an argument error the store would read as an outage.
+ */
 internal object TokenFamilyCodec : Codec<TokenFamily> {
-    private val FIELDS =
-        setOf("id", "tenant", "principal", "authTime", "expiresAt", "generation", "rotatedAt", "revoked")
+    private const val WHAT = "token family"
 
     override fun encode(value: TokenFamily): ByteArray {
-        val node = CoSecJson.mapper.createObjectNode()
+        val node = StoredFormat.write(CoSecJson.mapper.createObjectNode())
         node.put("id", value.id)
         node.put("tenant", value.tenant.value)
         node.put("principal", value.principal.value)
@@ -43,30 +51,37 @@ internal object TokenFamilyCodec : Codec<TokenFamily> {
     }
 
     override fun decode(bytes: ByteArray): TokenFamily {
-        val node = CoSecJson.mapper.readTree(bytes)
-        require(node.isObject && node.propertyNames().toSet() == FIELDS) { "Not a stored token family." }
-        val generation = node.get("generation")
-        require(
-            generation.isIntegralNumber && generation.canConvertToLong()
-        ) { "A token family's generation is an integer." }
-        val revoked = node.get("revoked")
-        require(revoked.isBoolean) { "A token family's revoked is a boolean." }
+        val node = try {
+            CoSecJson.mapper.readTree(bytes)
+        } catch (_: JacksonException) {
+            throw SnapshotFormatException("A stored $WHAT is not JSON.")
+        }
+        StoredFormat.of(node, WHAT)
+        val generation = node.need("generation")
+        if (!generation.isIntegralNumber || !generation.canConvertToLong()) malformed("its generation is not an integer")
+        val revoked = node.need("revoked")
+        if (!revoked.isBoolean) malformed("its revoked is not a boolean")
         return TokenFamily(
             id = node.text("id"),
             tenant = TenantId(node.text("tenant")),
             principal = PrincipalId(node.text("principal")),
-            authTime = Instant.parse(node.text("authTime")),
-            expiresAt = Instant.parse(node.text("expiresAt")),
+            authTime = node.instant("authTime"),
+            expiresAt = node.instant("expiresAt"),
             generation = generation.asLong(),
-            rotatedAt = node.get("rotatedAt").takeUnless { it.isNull }?.let { Instant.parse(it.textOf("rotatedAt")) },
+            rotatedAt = node.get("rotatedAt")?.takeUnless { it.isNull }?.let { node.instant("rotatedAt") },
             revoked = revoked.booleanValue(),
         )
     }
 
-    private fun JsonNode.text(field: String): String = get(field).textOf(field)
+    private fun JsonNode.need(field: String): JsonNode = get(field) ?: malformed("its $field is missing")
 
-    private fun JsonNode.textOf(field: String): String {
-        require(isString) { "A token family's $field is a string." }
-        return asString()
+    private fun JsonNode.text(field: String): String = need(field).let { if (it.isString) it.asString() else malformed("its $field is not a string") }
+
+    private fun JsonNode.instant(field: String): Instant = try {
+        Instant.parse(text(field))
+    } catch (_: DateTimeParseException) {
+        malformed("its $field is not an instant")
     }
+
+    private fun malformed(reason: String): Nothing = throw SnapshotFormatException("A stored $WHAT is malformed: $reason.")
 }

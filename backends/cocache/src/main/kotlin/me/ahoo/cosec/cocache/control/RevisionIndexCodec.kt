@@ -24,7 +24,7 @@ import me.ahoo.cosec.cocache.control.StoredJson.instant
 import me.ahoo.cosec.cocache.control.StoredJson.items
 import me.ahoo.cosec.cocache.control.StoredJson.long
 import me.ahoo.cosec.cocache.control.StoredJson.malformed
-import me.ahoo.cosec.cocache.control.StoredJson.only
+import me.ahoo.cosec.cocache.control.StoredJson.member
 import me.ahoo.cosec.cocache.control.StoredJson.read
 import me.ahoo.cosec.cocache.control.StoredJson.text
 import me.ahoo.cosec.cocache.snapshot.SnapshotKeyEncoder
@@ -33,6 +33,7 @@ import me.ahoo.cosec.control.store.PendingRecord
 import me.ahoo.cosec.control.store.RevisionEntry
 import me.ahoo.cosec.control.store.RevisionIndex
 import me.ahoo.cosec.document.json.CoSecJson
+import me.ahoo.cosec.document.json.StoredFormat
 import me.ahoo.cosec.model.PolicyId
 import me.ahoo.cosec.spi.snapshot.SnapshotDigest
 import me.ahoo.cosec.spi.snapshot.SnapshotFormatException
@@ -48,7 +49,7 @@ private fun JsonNode.digest(what: String): SnapshotDigest {
 
 private fun JsonNode.indexed(): IndexedReference {
     val what = "revision index"
-    only(what, "target", "policy", "revision", "own")
+    member(what)
     val target = field("target", what).text(what)
     return IndexedReference(
         SnapshotKeyEncoder.decode(target) ?: malformed(what, "[${SnapshotKeyText.printable(target)}] names no document"),
@@ -70,7 +71,7 @@ internal object RevisionIndexCodec : Codec<RevisionIndex> {
     private const val WHAT = "revision index"
 
     override fun encode(value: RevisionIndex): ByteArray {
-        val root = factory.objectNode()
+        val root = StoredFormat.write(factory.objectNode())
         val entries = root.putArray("entries")
         value.entries.forEach {
             entries.addObject().put("revision", it.revision).put("digest", it.digest.toString())
@@ -108,11 +109,11 @@ internal object RevisionIndexCodec : Codec<RevisionIndex> {
 
     override fun decode(bytes: ByteArray): RevisionIndex {
         val root = read(bytes, WHAT)
-        root.only(WHAT, "entries", "pending", "floor", "reclaiming", "indexed")
+        StoredFormat.of(root, WHAT)
         return try {
             RevisionIndex(
                 entries = root.field("entries", WHAT).items(WHAT).map { entry ->
-                    entry.only(WHAT, "revision", "digest", "publishedAt", "parent")
+                    entry.member(WHAT)
                     RevisionEntry(
                         entry.field("revision", WHAT).long(WHAT),
                         entry.field("digest", WHAT).digest(WHAT),
@@ -121,7 +122,7 @@ internal object RevisionIndexCodec : Codec<RevisionIndex> {
                     )
                 },
                 pending = root.field("pending", WHAT).items(WHAT).map { pending ->
-                    pending.only(WHAT, "digest", "since")
+                    pending.member(WHAT)
                     PendingRecord(
                         pending.field("digest", WHAT).digest(WHAT),
                         pending.field("since", WHAT).instant(WHAT)

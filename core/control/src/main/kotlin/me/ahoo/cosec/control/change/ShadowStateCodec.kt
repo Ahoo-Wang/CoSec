@@ -40,12 +40,10 @@ internal object ShadowStateCodec {
     }
 
     internal fun decode(node: JsonNode): ShadowState {
-        node.only("window", "startedAt", "closed", "reporters")
         return ShadowState(
             node.need("window").text(),
             Instant.parse(node.need("startedAt").text()),
             node.get("closed")?.let { closed ->
-                closed.only("counts", "closedAt", "insufficient", "blocked")
                 ShadowSummary(
                     closed.need("counts").properties().associate { (outcome, count) -> outcome to count.asLong() },
                     Instant.parse(closed.need("closedAt").text()),

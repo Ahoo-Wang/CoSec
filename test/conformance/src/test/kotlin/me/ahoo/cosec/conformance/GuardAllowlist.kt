@@ -24,6 +24,16 @@ package me.ahoo.cosec.conformance
 object GuardAllowlist {
     val GUARDS: Map<String, Set<String>> = mapOf(
         "build" to setOf(
+            // CTL-53, IDN-31: the reader's rule for the stored records, and the session record's.
+            "cocache:StoredRecordsTest#every stored codec is listed",
+            "cocache:StoredRecordsTest#a wrong value of every stored record is a format error",
+            "cocache:StoredRecordsTest#every record with a format ignores what it does not know, reads one without a format, and refuses a later one",
+            "control:ChangeRequestCodecMessageTest#unknown members are ignored, and never quoted, by the reader's rule - CTL-53",
+            "document:ShadowCodecMessageTest#unknown members are ignored, and never quoted, by the reader's rule - CTL-53",
+            "cocache:TokenFamilyFormatTest#a session is written with its format",
+            "cocache:TokenFamilyFormatTest#a session written before formats is format 1",
+            "cocache:TokenFamilyFormatTest#a member a later version adds is ignored, and a missing rotation is the first generation",
+            "cocache:TokenFamilyFormatTest#a later format, or a session that lacks what it needs, is refused as a format error",
             // PIP-29: the kit's contexts are the pipeline's, and test binders bind only those.
             "testkit:TestingYourWebMvcApplicationTest#a context made by hand is refused, never bound as anonymous",
             "testkit:TestingYourWebMvcApplicationTest#a function that reads the holder, with a context the kit made",

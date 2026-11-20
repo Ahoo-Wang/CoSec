@@ -19,6 +19,7 @@ import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.document.SnapshotDocuments
 import me.ahoo.cosec.document.json.CoSecJson
+import me.ahoo.cosec.document.json.StoredFormat
 import me.ahoo.cosec.spi.shadow.InstalledDocument
 import me.ahoo.cosec.spi.shadow.InstanceStatus
 import me.ahoo.cosec.spi.shadow.ShadowOutcome
@@ -37,8 +38,10 @@ import java.time.Duration
 import java.time.Instant
 
 /**
- * Candidates, shadow reports and instance statuses as JSON (RFC 0007 §6.4, §6.5), for every store of them. Reading is
- * strict: anything else is a [SnapshotFormatException], never a value read as absent.
+ * Candidates, shadow reports and instance statuses as JSON (RFC 0007 §6.4, §6.5), for every store of them. Each carries
+ * its format and is read by the reader's rule ([StoredFormat], `CTL-53`): members of a known format this version does
+ * not know are ignored, a later format is refused. Anything malformed is a [SnapshotFormatException], never a value
+ * read as absent.
  *
  * It lives in `cosec-document`, the formats CoSec stores and exchanges, because both of its writers, `cosec-cocache`'s
  * store and the control plane's in-memory one, must agree on the bytes.
@@ -48,19 +51,23 @@ object ShadowCodec {
     private val factory = JsonNodeFactory.instance
     private val reader = CoSecJson.mapper.reader().with(StreamReadFeature.STRICT_DUPLICATE_DETECTION)
 
+    /** What a candidate's document states and the candidate must not (SNP-12). */
+    private val HEADER = listOf("schema", "revision", "publishedAt")
+
     /**
      * A candidate as its window, its base and its document, whose header is its own (SNP-12): a record that also states
-     * `schema`, `revision` or `publishedAt` beside the document is refused as an unknown member, and its window is not
-     * compared, as for any unreadable candidate.
+     * `schema`, `revision` or `publishedAt` beside the document is refused, though other members a later format adds are
+     * ignored, and its window is not compared, as for any unreadable candidate.
      */
     fun encode(candidate: StoredCandidate): ByteArray = write(
-        factory.objectNode().put("window", candidate.window).put("baseRevision", candidate.baseRevision)
+        StoredFormat.write(factory.objectNode()).put("window", candidate.window).put("baseRevision", candidate.baseRevision)
             .set("document", read(candidate.document.bodyBytes())),
     )
 
     fun decodeCandidate(bytes: ByteArray): StoredCandidate = guarded {
         val node = read(bytes)
-        node.only("window", "baseRevision", "document")
+        StoredFormat.of(node, "staged candidate")
+        HEADER.firstOrNull { node.has(it) }?.let { throw malformed("a candidate's header is its document's: [$it] beside it") }
         StoredCandidate(
             node.need("window").text(),
             node.need("baseRevision").long(),
@@ -77,7 +84,8 @@ object ShadowCodec {
     fun encodeStatuses(statuses: Map<String, InstanceStatus>): ByteArray = write(
         factory.objectNode().apply {
             statuses.toSortedMap().forEach { (instance, status) ->
-                val node = putObject(instance).put("at", status.at.toString()).put("formatLevel", status.formatLevel)
+                val node = StoredFormat.write(putObject(instance)).put("at", status.at.toString())
+                    .put("formatLevel", status.formatLevel)
                 val documents = node.putObject("documents")
                 status.documents.forEach { (key, installed) ->
                     documents.putObject(
@@ -90,16 +98,15 @@ object ShadowCodec {
 
     fun decodeStatuses(bytes: ByteArray): Map<String, InstanceStatus> = guarded {
         read(bytes).properties().associate { (instance, node) ->
-            node.only("at", "documents", "formatLevel")
+            StoredFormat.of(node, "instance status")
             instance to InstanceStatus(
                 instance,
                 Instant.parse(node.need("at").text()),
                 node.need("documents").properties().associate { (key, document) ->
-                    document.only("revision", "lagMillis")
                     documentKey(key) to InstalledDocument(document.need("revision").long(), Duration.ofMillis(document.need("lagMillis").long()))
                 },
                 // Required (RFC 0010 C5): a status that does not say which format its instance reads is refused, so a
-                // later version can gate a publish on it (a later field added to a status is refused as an unknown one).
+                // later version can gate a publish on it; a later member added to a status is ignored (CTL-53).
                 node.need("formatLevel").long().takeIf {
                     it in 1..Int.MAX_VALUE
                 }?.toInt() ?: throw malformed("formatLevel is not a positive integer"),
@@ -107,7 +114,7 @@ object ShadowCodec {
         }
     }
 
-    private fun report(report: ShadowReport): ObjectNode = factory.objectNode().apply {
+    private fun report(report: ShadowReport): ObjectNode = StoredFormat.write(factory.objectNode()).apply {
         put("window", report.window)
         put("instance", report.instance)
         putObject(
@@ -120,7 +127,7 @@ object ShadowCodec {
     }
 
     private fun report(node: JsonNode): ShadowReport {
-        node.only("window", "instance", "counts", "samples", "baseRevisions", "first", "last")
+        StoredFormat.of(node, "shadow report")
         val instance = node.need("instance").text()
         if (!ShadowReport.isInstanceId(instance)) {
             throw malformed("[${SnapshotKeyText.quoted(instance)}] is not an instance id")
@@ -133,7 +140,7 @@ object ShadowCodec {
             ).properties().associate { (outcome, count) -> ShadowOutcome.valueOf(outcome) to count.count() },
             samples = node.need("samples").properties().associate { (outcome, samples) ->
                 ShadowOutcome.valueOf(outcome) to samples.values().map { sample ->
-                    sample.only("tenant", "principal", "app", "space", "action", "resource", "enforcedBy", "candidateBy")
+                    if (!sample.isObject) throw malformed("a sample is not an object")
                     ShadowSample(
                         sample.need("tenant").text(),
                         sample.need("principal").text(),
@@ -208,11 +215,6 @@ object ShadowCodec {
     /** A count is never negative: summed over instances, a negative one would cancel another instance's (review). */
     private fun JsonNode.count(): Long = long().takeIf { it >= 0 } ?: throw malformed("$shown is not a count")
 
-    private fun JsonNode.only(vararg names: String) {
-        if (!isObject) throw malformed("$shown is not an object")
-        val unknown = properties().map { it.key }.toSet() - names.toSet()
-        if (unknown.isNotEmpty()) throw malformed("unknown fields ${SnapshotKeyText.names(unknown)}")
-    }
 
     /** The error of [reason], thrown where it is found (`throw malformed(…)`), so coverage sees the refusal run. */
     private fun malformed(reason: String): SnapshotFormatException = SnapshotFormatException(

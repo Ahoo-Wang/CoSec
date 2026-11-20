@@ -98,7 +98,6 @@ internal object ApprovalCodec {
     }
 
     private fun memberships(node: JsonNode): Memberships {
-        node.only("roles", "attachments", "source")
         val roles = LinkedHashMap<SpaceId, Set<RoleId>>()
         node.need("roles").properties().forEach { (space, spaceRoles) ->
             roles[SpaceId(space)] = spaceRoles.values().mapTo(LinkedHashSet()) { RoleId(it.text()) }
@@ -111,18 +110,6 @@ internal object ApprovalCodec {
     }
 
     internal fun decode(node: JsonNode): Approval {
-        node.only(
-            "approver",
-            "at",
-            "candidate",
-            "covers",
-            "memberships",
-            "attributes",
-            "principalBindings",
-            "breakGlass",
-            "credentialId",
-            "issuedAt",
-        )
         return Approval(
             actor(node.need("approver")),
             Instant.parse(node.need("at").text()),
