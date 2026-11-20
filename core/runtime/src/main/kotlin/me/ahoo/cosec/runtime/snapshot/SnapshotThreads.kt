@@ -26,6 +26,7 @@ import java.util.concurrent.Executor
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.RejectedExecutionException
 import java.util.concurrent.ScheduledExecutorService
+import java.util.concurrent.ThreadLocalRandom
 import java.util.concurrent.ThreadPoolExecutor
 import java.util.concurrent.TimeUnit
 
@@ -67,6 +68,15 @@ internal class SnapshotThreads(
     private val ownsScheduler = scheduler == null
     val scheduler: ScheduledExecutorService = scheduler ?: newScheduler(onOwnThread)
     val housekeeping: ExecutorService = housekeeping ?: newHousekeeping(onOwnThread, drainsUnbounded)
+
+    /**
+     * [nanos], less a random part of up to half of it, on the scheduler this source started: what spreads the cold
+     * compile retries of a burst (R2D-4). A scheduler a test gives keeps virtual time, which a scripted run replays: it
+     * gets [nanos] as it is.
+     */
+    fun spread(
+        nanos: Long
+    ): Long = if (ownsScheduler) nanos - ThreadLocalRandom.current().nextLong(nanos / 2 + 1) else nanos
 
     /** Stops the scheduler, when the source started it: nothing is timed any more. */
     fun stopScheduler() {

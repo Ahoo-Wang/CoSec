@@ -44,6 +44,16 @@ import java.util.concurrent.atomic.AtomicInteger
  */
 class SnapshotColdLoadTest {
     companion object {
+        private const val BURST = 50
+        private const val COLD_TIMEOUT_MILLIS = 600L
+        private const val REFUSED_WAIT_MILLIS = 200L
+
+        /** The timers' and the scheduler's own granularity: a deadline is never met early by more than this. */
+        private const val DEADLINE_SLACK_MILLIS = 50L
+
+        /** What a loaded CI runner may add after the deadline: never seconds. */
+        private const val LATE_MILLIS = 1_500L
+
         private val eventLoop = Schedulers.newParallel("test-event-loop", 1)
 
         @AfterAll
@@ -147,10 +157,19 @@ class SnapshotColdLoadTest {
         }
     }
 
+    /**
+     * R2D-4: a cold load the full compile queue refuses waits and compiles again once the queue drains, within the
+     * cold load timeout; the installed documents are untouched meanwhile.
+     */
     @Test
-    fun f8FullCompileQueueFailsColdLoadsAndLeavesInstalledDocuments() {
+    fun f8AColdLoadTheFullCompileQueueRefusesWaitsAndCompilesOnceItDrains() {
         val compiler = FakeCompiler()
-        val options = SnapshotOptions(revalidateInterval = QUIET_PASS, compileThreads = 1, compileQueueCapacity = 1)
+        val options = SnapshotOptions(
+            revalidateInterval = QUIET_PASS,
+            compileThreads = 1,
+            compileQueueCapacity = 1,
+            rejectedReloadRetry = Duration.ofMillis(20),
+        )
         testSource(store, compiler = compiler, options = options, compileExecutor = null).use { source ->
             source.load().get(10, TimeUnit.SECONDS)
             val gate = CountDownLatch(1)
@@ -159,18 +178,112 @@ class SnapshotColdLoadTest {
             val running = source.load("app-a")
             await { compiler.threads.size == 2 }
             val queued = source.load("app-b")
-            val rejected = source.load("app-c").get(10, TimeUnit.SECONDS)
+            val refused = source.load("app-c")
 
-            val failure = (rejected.app as DocumentState.Failed).error
-            failure.assert().isInstanceOf(SnapshotUnavailableException::class.java)
-            failure.message.assert().contains("compile queue is full")
+            Thread.sleep(REFUSED_WAIT_MILLIS)
+            refused.isDone.assert().isFalse()
             source.peek()!!.policiesCompiled.revision.assert().isEqualTo(1)
             source.peek("app-c").assert().isNull()
 
             gate.countDown()
             running.get(10, TimeUnit.SECONDS).appCompiled.entries.assert().containsExactly("a1")
             queued.get(10, TimeUnit.SECONDS).appCompiled.entries.assert().containsExactly("b1")
-            source.load("app-c").get(10, TimeUnit.SECONDS).appCompiled.entries.assert().containsExactly("c1")
+            refused.get(10, TimeUnit.SECONDS).appCompiled.entries.assert().containsExactly("c1")
+        }
+    }
+
+    /** R2D-4: a cold load the queue keeps refusing fails closed at its deadline, never later, and installs nothing. */
+    @Test
+    fun f8AColdLoadTheQueueRefusesUntilItsDeadlineFailsAtIt() {
+        val compiler = FakeCompiler()
+        val timeout = Duration.ofMillis(COLD_TIMEOUT_MILLIS)
+        val options = SnapshotOptions(
+            revalidateInterval = QUIET_PASS,
+            compileThreads = 1,
+            compileQueueCapacity = 1,
+            rejectedReloadRetry = Duration.ofMillis(20),
+            coldLoadTimeout = timeout,
+        )
+        testSource(store, compiler = compiler, options = options, compileExecutor = null).use { source ->
+            source.load().get(10, TimeUnit.SECONDS)
+            val gate = CountDownLatch(1)
+            compiler.gate = gate
+            source.load("app-a")
+            await { compiler.threads.size == 2 }
+            source.load("app-b")
+
+            val started = System.nanoTime()
+            val refused = source.load("app-c").get(10, TimeUnit.SECONDS)
+            val waited = Duration.ofNanos(System.nanoTime() - started)
+
+            waited.assert().isGreaterThanOrEqualTo(timeout.minusMillis(DEADLINE_SLACK_MILLIS))
+            waited.assert().isLessThan(timeout.plusMillis(LATE_MILLIS))
+            refused.app.assert().isInstanceOf(DocumentState.Failed::class.java)
+            source.peek("app-c").assert().isNull()
+            gate.countDown()
+        }
+    }
+
+    /**
+     * R2D-4, a new replica's first moment: many distinct cold documents at once against a compile pool of one thread and
+     * a queue of two. None is refused while the cold load timeout holds; each compiles once the pool frees up.
+     */
+    @Test
+    fun aBurstOfDistinctColdDocumentsQueuesWithinTheDeadline() {
+        val compiler = FakeCompiler()
+        val apps = (1..BURST).map { "burst-$it" }
+        apps.forEach { store.put(SnapshotKey.App(it), document(1, it)) }
+        val options = SnapshotOptions(
+            revalidateInterval = QUIET_PASS,
+            compileThreads = 1,
+            compileQueueCapacity = 2,
+            rejectedReloadRetry = Duration.ofMillis(20),
+            coldLoadTimeout = Duration.ofSeconds(5),
+        )
+        testSource(store, compiler = compiler, options = options, compileExecutor = null).use { source ->
+            source.load().get(10, TimeUnit.SECONDS)
+            val gate = CountDownLatch(1)
+            compiler.gate = gate
+            val loads = apps.map { source.load(it) }
+
+            Thread.sleep(REFUSED_WAIT_MILLIS)
+            loads.none { it.isDone }.assert().isTrue()
+
+            gate.countDown()
+            loads.zip(apps).forEach { (load, app) ->
+                load.get(10, TimeUnit.SECONDS).appCompiled.entries.assert().containsExactly(app)
+            }
+        }
+    }
+
+    /** R2D-4: the same burst against a pool that never frees up: every load is refused at its deadline, none before. */
+    @Test
+    fun aBurstOfDistinctColdDocumentsIsRefusedAtTheDeadline() {
+        val compiler = FakeCompiler()
+        val apps = (1..BURST).map { "burst-$it" }
+        apps.forEach { store.put(SnapshotKey.App(it), document(1, it)) }
+        val timeout = Duration.ofMillis(COLD_TIMEOUT_MILLIS)
+        val options = SnapshotOptions(
+            revalidateInterval = QUIET_PASS,
+            compileThreads = 1,
+            compileQueueCapacity = 2,
+            rejectedReloadRetry = Duration.ofMillis(20),
+            coldLoadTimeout = timeout,
+        )
+        testSource(store, compiler = compiler, options = options, compileExecutor = null).use { source ->
+            source.load().get(10, TimeUnit.SECONDS)
+            val gate = CountDownLatch(1)
+            compiler.gate = gate
+            val started = System.nanoTime()
+            val loads = apps.map { source.load(it) }
+
+            Thread.sleep(timeout.minusMillis(DEADLINE_SLACK_MILLIS).toMillis())
+            loads.none { it.isDone }.assert().isTrue()
+
+            loads.forEach { it.get(10, TimeUnit.SECONDS).app.assert().isInstanceOf(DocumentState.Failed::class.java) }
+            Duration.ofNanos(System.nanoTime() - started).assert().isLessThan(timeout.plusMillis(LATE_MILLIS))
+            apps.forEach { source.peek(it).assert().isNull() }
+            gate.countDown()
         }
     }
 
