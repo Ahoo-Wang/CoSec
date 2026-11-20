@@ -345,7 +345,8 @@ holds them:
   loads started (`SNP-2`, `SnapshotInstallOrderPropertyTest`).
 - **Bounded memory.** The platform document is loaded at startup and never evicted. App and tenant documents are loaded on
   demand and evicted least recently used beyond `max-apps` and `max-tenants`; selected ones can be prewarmed. Ids the
-  store holds no document for are kept apart, at most 256 per family, and evict only each other (`SNP-7`).
+  store holds no document for are kept apart, at most `max-absent-apps` and `max-absent-tenants` of them, and evict only
+  each other (`SNP-7`).
 - **Revalidation.** Every installed document is revalidated every `revalidate-interval` (10 s by default) with a
   conditional read of the store of record, which transfers no body when the digest is unchanged. It is the only bound on
   a lost change notification, so it cannot be turned off and is at most 5 minutes (`SNP-6`). Change notifications

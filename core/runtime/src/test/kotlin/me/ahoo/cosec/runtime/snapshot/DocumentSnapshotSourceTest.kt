@@ -141,7 +141,13 @@ class DocumentSnapshotSourceTest {
         val store = ControllableStore()
         store.publish(SnapshotKey.Platform, 1)
         listOf(TENANT_A, APP_A, APP_B).forEach { store.publish(it, 1) }
-        val options = SnapshotOptions(revalidateInterval = QUIET_PASS, maxApps = 2, maxTenants = 1, maxAbsentApps = 3, maxAbsentTenants = 3)
+        val options = SnapshotOptions(
+            revalidateInterval = QUIET_PASS,
+            maxApps = 2,
+            maxTenants = 1,
+            maxAbsentApps = 3,
+            maxAbsentTenants = 3
+        )
         source(store, options = options).use { source ->
             source.loadAll(listOf(TENANT_A, APP_A, APP_B)).join()
             val apps = (1..FLOOD).map { SnapshotKey.App("absent-app-$it") }

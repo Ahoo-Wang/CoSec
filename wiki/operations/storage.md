@@ -283,17 +283,23 @@ sequenceDiagram
   time that pass is done with the document. So they cannot be turned off, and the interval is at most 5 minutes
   (`SNP-6`). A pass never takes a read made before it started as its own: when it meets a load of the document
   already in flight, it joins that load only if the load started after the pass did, and otherwise waits for one
-  more load, which reads Redis after the load in flight ends. A pass reads four
-  documents at a time, and one pass runs at a time: when Redis is so slow that a pass outlasts the interval, the next
-  starts as soon as it ends, rather than add four more reads each interval. A pass that has confirmed no document for
+  more load, which reads Redis after the load in flight ends. A pass reads
+  [`reload-concurrency`](./configuration.md#snapshot) (16) documents at a time, and one pass runs at a time: when Redis is
+  so slow that a pass outlasts the interval, the next starts as soon as it ends, rather than add more reads each
+  interval. A pass takes about the entries held × one conditional read ÷ `reload-concurrency`
+  ([Sizing a SaaS gateway](./deployment.md#sizing-a-saas-gateway)). A pass that has confirmed no document for
   30 seconds and has no read in flight is held up only by compilations: the next tick abandons it and starts a new
   pass. A pass that is slow but still confirming documents, or has a read in flight, is never abandoned. A pass does
   not wait for a document whose compilation has been running for more than those 30 seconds, whoever started it, and
   goes on to the documents behind it. When that compilation ends, it installs what its read found; if its read began
   before the pass, one more load follows at once, so a change the pass would have read is installed then, not at a
   later pass.
-- **Ids without a document** are remembered apart from the documents, at most 256 per family: credentials issued for
-  many app ids that have no document make the instance read Redis for each (a client never declares its app), but never pushes an installed document out (`SNP-7`).
+- **Ids without a document** are remembered apart from the documents, at most
+  [`max-absent-apps`](./configuration.md#snapshot) (256) app ids and `max-absent-tenants` (65,536) tenant ids, and
+  confirmed by every pass like a document. Credentials issued for many app ids that have no document make the instance
+  read Redis for each (a client never declares its app), but never push an installed document out (`SNP-7`). Every
+  request of a tenant without a tenant document reads its entry, so that bound is sized for every such tenant an
+  instance serves.
 - **Lag** is the time since Redis last confirmed a document. While Redis answers, every pass confirms every
   document, so lag stays below the revalidate interval plus the length of a pass, or below the length of two passes
   once a pass outlasts the interval. Past `lag-warn` (60 seconds) the instance logs
@@ -311,13 +317,13 @@ sequenceDiagram
 - **A cold load waits** at most [`cold-load-timeout`](./configuration.md#snapshot) (2 seconds); after that the
   document counts as failed for that request.
 - **Held documents are bounded.** Each family keeps at most [`max-apps`/`max-tenants`](./configuration.md#snapshot)
-  documents and `max-absent` absent entries, and drops the least recently used ones on a housekeeping thread. During a
-  burst of cold loads it may for a moment hold up to twice the bound, and never more than 4,096 above it, plus the
-  documents being loaded; past that, the thread that loaded a document evicts before it answers the request (`SNP-14`).
-  That eviction scans what the family holds of the kind it evicts: a fraction of a millisecond for the default 1,024
-  documents, but several milliseconds for a family of 100,000, on the thread that loaded the document. Absent entries
-  are scanned apart from the documents, so evicting them costs what `max-absent` allows, however many documents the
-  family holds.
+  documents and `max-absent-apps`/`max-absent-tenants` absent entries, and drops the least recently used ones on a
+  housekeeping thread. During a burst of cold loads it may for a moment hold up to twice the bound, and never more than
+  4,096 above it, plus the documents being loaded; past that, the thread that loaded a document evicts up to 64 of that
+  kind before it answers the request, which takes the family back within that, and housekeeping evicts the rest
+  (`SNP-14`). Either eviction scans what the family holds of the kind it evicts, about a millisecond per 50,000 entries;
+  the thread that loaded the document pays one scan and a few dozen removals, about 2 ms at the default bounds, never a
+  whole pass back to the bound. Absent entries are scanned apart from the documents.
 - **Revisions only move as Redis says.** After a Redis failover, Redis may answer an older revision than the one
   installed, because replication is asynchronous. The instance installs what Redis holds, since every other instance
   reads the same, and logs `Snapshot document [<doc>] regressed from revision <a> to <b>; ...` at `ERROR`. Publish the
@@ -369,8 +375,8 @@ while Redis hangs, though the request waiting for it answers `503` after `cold-l
 used at a high rate keep up to that rate × 30 seconds of loads, and their pending Lettuce commands, in memory
 during such an outage; `requestQueueSize` bounds the commands. None of them ever pushes out an installed document.
 
-**Apps without a document share 256 places.** The ids an instance remembers as having no document, at most 256 per
-family (`SNP-7`), are shared by every tenant. Credentials issued for many apps that have no app document push out the real apps
+**Apps without a document share 256 places.** The app ids an instance remembers as having no document, at most
+`max-absent-apps` (256, `SNP-7`), are shared by every tenant. Credentials issued for many apps that have no app document push out the real apps
 that have no app document, so a request in one of them reads Redis again, without compiling anything, until it is
 remembered again. That fails closed, but for a tenant in `fail-closed.tenants` such an app's entry loaded from the
 local copy counts as `local-max-age` old: with `fail-closed.max-lag` below `local-max-age`, its requests answer `503`

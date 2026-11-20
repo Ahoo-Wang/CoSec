@@ -248,7 +248,7 @@ and an overlay for each kind of cluster. Deploy an overlay, never the base on it
 |---|---|---|
 | `base/` | the overlays to build on | The Deployment and a Service (port 80 to the container's 8080; the management port 8081 is a container port the Service does not publish). `application.yaml` (the routes and the `cosec.*` settings above) becomes a ConfigMap mounted as `/opt/cosec-gateway-server/config/application.yaml`, read in addition to the image's defaults; its CORS origin, discovery list and route are a demo to replace; its name carries a hash of the file, so a change to it rolls the pods. The image is `ghcr.io/ahoo-wang/cosec-gateway`, with its tag set under `images:`. One gateway gets 768Mi and a 256 MiB heap. |
 | `overlays/dev/` | trying CoSec out on any cluster, kind and minikube included | The namespace `cosec-dev`, one gateway with the base's resources, and a single Redis 7.4 with `maxmemory-policy noeviction` and no password. Redis keeps its data in an `emptyDir`, which outlives a container restart but not the pod: deleting the Redis pod deletes the documents. |
-| `overlays/production/` | a starting point for your own overlay | The namespace `cosec`; your Redis, from the ConfigMap `cosec-gateway-redis` (host and port; or `SPRING_DATA_REDIS_CLUSTER_NODES` for a cluster) and the Secret `cosec-redis-secret` (`password`, and `username` for an ACL user); 2 to 10 gateways behind a HorizontalPodAutoscaler on CPU (70 % of the 1 CPU each requests; it needs the metrics server); a PodDisruptionBudget that evicts one gateway at a time and always lets an unready one go, so a drain never waits for a platform document; a NetworkPolicy that admits port 8080 from anywhere and the management port from the `monitoring` namespace only; 2Gi and a 1 GiB heap per gateway, spread across nodes. |
+| `overlays/production/` | a starting point for your own overlay | The namespace `cosec`; your Redis, from the ConfigMap `cosec-gateway-redis` (host and port; or `SPRING_DATA_REDIS_CLUSTER_NODES` for a cluster) and the Secret `cosec-redis-secret` (`password`, and `username` for an ACL user); 2 to 10 gateways behind a HorizontalPodAutoscaler on CPU (70 % of the 1 CPU each requests; it needs the metrics server); a PodDisruptionBudget that evicts one gateway at a time and always lets an unready one go, so a drain never waits for a platform document; a NetworkPolicy that admits port 8080 from anywhere and the management port from the `monitoring` namespace only; 2560Mi and a 1.5 GiB heap per gateway, spread across nodes. |
 
 ### Deploying
 
@@ -317,8 +317,8 @@ overlay size them for their limits:
 
 | | `dev` (base) | `production` |
 |---|---|---|
-| Memory request and limit | 768Mi | 2Gi |
-| Heap (`-Xms` = `-Xmx`) | 256 MiB | 1 GiB |
+| Memory request and limit | 768Mi | 2560Mi |
+| Heap (`-Xms` = `-Xmx`) | 256 MiB | 1.5 GiB |
 | Direct memory, Netty's buffers (`-XX:MaxDirectMemorySize`) | up to 64 MiB | up to 256 MiB |
 | Native: the AOT cache's class data (about 105 MiB), JIT code, metaspace, GC structures, threads | about 220 MiB | about 250 MiB |
 | Left for the page cache and peaks | about 230 MiB | about 500 MiB |
@@ -341,21 +341,142 @@ overlay size them for their limits:
 - **CPU.** The JVM sizes its GC, JIT and Netty threads from the CPU limit, and the autoscaler measures against the
   request.
 
-**How many documents fit.** The compiled documents live on the heap, and CoSec holds at most `max-apps` app documents and
-`max-tenants` tenant documents (1,024 each by default; for a moment a family may hold up to twice that, during a burst of
-cold loads), plus the platform document, which is never dropped
-([How instances read documents](./storage.md#how-instances-read-documents)). What one document costs depends on its
-policies, statements and bindings, and CoSec does not report it. Measure it with your own documents: start an instance
-with the platform document and one tenant, request a path that needs each tenant's document in turn, and read
-`jvm_memory_used_bytes{area="heap"}` after a full collection, or `jcmd <pid> GC.heap_info`, at a few counts. Then set
-`max-apps` and `max-tenants` to what the heap holds with room to spare, rather than to the number of tenants you have: a
-document that is dropped is loaded again when it is next needed. If the heap is too small, see
-[A pod runs out of memory](./troubleshooting.md#a-pod-runs-out-of-memory).
+**How many documents fit.** The compiled documents live on the heap, and CoSec holds at most `max-apps` app documents
+(1,024), `max-tenants` tenant documents (16,384) and, apart from them, the ids it knows have no document
+(`max-absent-apps` 256, `max-absent-tenants` 65,536), plus the platform document, which is never dropped
+([How instances read documents](./storage.md#how-instances-read-documents)). For a moment, during a burst of cold loads,
+a family may hold up to twice its bound. What one document costs depends on its policies, statements and bindings;
+[Sizing a SaaS gateway](#sizing-a-saas-gateway) gives measured figures and the heap they lead to. To measure your own
+documents, start an instance with the platform document and one tenant, request a path that needs each tenant's
+document in turn, and read `jvm_memory_used_bytes{area="heap"}` after a full collection, or `jcmd <pid> GC.heap_info`, at
+a few counts. If the heap is too small, see [A pod runs out of memory](./troubleshooting.md#a-pod-runs-out-of-memory).
 
 The native part was measured in the image (an 8.0 preview build, `linux/arm64`, Docker with these limits and a read-only
 root filesystem), after about 45,000 requests to a route and to the health endpoint with no platform document
 published, so that each answered `503`: the container held 471 MiB (dev) and 1,277 MiB (production), and nothing was
 killed for memory.
+
+## Sizing a SaaS gateway {#sizing-a-saas-gateway}
+
+When the gateway decides for every service of a multi-tenant platform, its replicas are the only instances that hold
+documents: the services behind them run in gateway mode and hold none ([Services behind the gateway](#services-behind-the-gateway)).
+Each replica holds an entry for every tenant it serves, whether the tenant has a tenant document or not, and confirms
+each one against Redis every `revalidate-interval`. The figures below are for 10,000 and 50,000 tenants, 12 apps of
+12 system roles over a catalog of 100 permissions, and a tenant document, where a tenant has one, of 5 custom roles of
+20 permissions and 20 role bindings. They were measured with the production compiler on one JVM, with an in-memory
+store standing in for Redis.
+
+### What a replica holds {#what-a-replica-holds}
+
+| Entry | Heap it retains |
+|---|---|
+| A tenant document of that shape (3.5 KB of JSON) | about 30 KB |
+| A tenant without a tenant document | about 470 bytes |
+| An app document of that shape (14 KB of JSON) | about 235 KB, so 2.8 MB for the 12 |
+| What a dropped document leaves behind (its last revision, to detect a regression) | about 130 bytes |
+
+With the defaults full (16,384 tenant documents and 65,536 tenants without one), the tenant entries take about 520 MB.
+Size the heap at twice what the documents hold, plus 256 MiB for the rest of the gateway, so that ZGC has room to
+collect; then set the memory limit to the heap, plus the direct memory, plus about 250 MiB, plus a quarter
+([Memory](#memory)). The production overlay's 1.5 GiB heap and 2560Mi limit follow that rule for the defaults.
+
+A request of a tenant whose entry is held reads nothing from Redis. A tenant beyond the bounds is read again on its
+next request: a tenant document from Redis and compiled again (about 55 µs of CPU), a tenant without one from Redis
+alone. With requests spread evenly over the tenants, a replica whose bounds are smaller than its tenants reads Redis on
+about 1 − bound ÷ tenants of them: over 50,000 tenants that all have a document, `max-tenants` at 16,384 reads on 670
+of every 1,000 requests.
+
+### How long a revalidation pass takes {#how-long-a-revalidation-pass-takes}
+
+A pass confirms every entry held, `reload-concurrency` (16) at a time:
+
+- **Its length** is about entries × one conditional read ÷ `reload-concurrency`. For 81,920 entries (the defaults full)
+  that is 1.5 s at 0.3 ms a read and 5.1 s at 1 ms.
+- **Lag** stays below `revalidate-interval` plus one pass, or below two passes once a pass outlasts the interval: then
+  the passes run back to back ([How instances read documents](./storage.md#how-instances-read-documents)).
+- **Reads per replica** are entries ÷ `revalidate-interval`, or entries ÷ pass when the pass is longer.
+
+Each conditional read costs Redis 7 to 13 µs of its main thread, whatever the document's size
+([What revalidation costs Redis](./storage.md#what-revalidation-costs-redis)). For a fleet of replicas that each hold
+every tenant:
+
+| Entries per replica | `revalidate-interval` | 5 replicas | 10 replicas | 20 replicas | 50 replicas |
+|---|---|---|---|---|---|
+| 10,000 | 10 s | 5,000 reads/s, 4–7 % of a Redis node | 10,000/s, 7–13 % | 20,000/s, 14–26 % | 50,000/s, 35–65 % |
+| 50,000 | 10 s | 25,000/s, 18–33 % | 50,000/s, 35–65 % | 100,000/s, 70–130 % | 250,000/s, 175–325 % |
+| 50,000 | 30 s | 8,300/s, 6–11 % | 16,700/s, 12–22 % | 33,000/s, 23–43 % | 83,000/s, 58–108 % |
+
+**When to raise `revalidate-interval`.** Raise it when replicas × entries ÷ interval × 10 µs comes near half of a
+Redis node: the cost falls in proportion, and the time a replica can miss a change whose invalidation message was lost
+grows the same way. Keep `lag-warn` above it. A Redis Cluster divides the figures by its number of primaries.
+
+### Settings to copy {#settings-to-copy}
+
+| Tenants | Tenants with a tenant document | `max-tenants` | `max-absent-tenants` | `revalidate-interval` | Tenant entries on the heap | `-Xms` = `-Xmx` | Memory limit |
+|---|---|---|---|---|---|---|---|
+| 10,000 | 10 % | default (16,384) | default (65,536) | `10s` | 34 MB | `1536m` | `2560Mi` |
+| 10,000 | 100 % | default | default | `10s` | 300 MB | `1536m` | `2560Mi` |
+| 50,000 | 10 % | default | default | `10s` | 170 MB | `1536m` | `2560Mi` |
+| 50,000 | 100 % | `60000` | default | `30s` | 1.49 GB | `4g` | `6Gi` |
+
+For 50,000 tenants that all have a tenant document:
+
+```yaml
+cosec:
+  authorization:
+    snapshot:
+      max-tenants: 60000
+      revalidate-interval: 30s
+```
+
+with `JVM_MEMORY_OPTS` set to `-Xms4g -Xmx4g -XX:MaxDirectMemorySize=256m -XX:MaxMetaspaceSize=256m` and the memory
+request and limit to `6Gi`. Your own documents may be larger or smaller: measure them as [Memory](#memory) says, and
+scale the heap with them.
+
+### What a new replica costs {#what-a-new-replica-costs}
+
+A replica that starts, or that the autoscaler adds, holds nothing but the platform document and the documents of
+`prewarm-apps` and `prewarm-tenants`; readiness waits only for those. Each other tenant's first request on it waits for
+one read from Redis, and for a tenant document also its compilation, about 0.6 ms in all with a Redis that answers in
+0.3 ms, and at most `cold-load-timeout` (2 s). With requests spread evenly, a new replica serving 10,000 tenants reads
+Redis on most requests until it has seen each tenant once. List the busiest tenants in `prewarm-tenants` to take them
+off that path.
+
+### Memberships at the gateway {#memberships-at-the-gateway}
+
+The image has no `MembershipProvider`, so a member's roles come from the access token's `roles` claim: `roleId` for the
+default space, `roleId@space` for another ([Roles and spaces](../integration/authentication.md#roles-and-spaces)). Role
+ids are not qualified by app in the token, so give each app's roles ids of their own (`wms.clerk`): a role id two apps
+define grants in both.
+
+| Roles a member holds | Ids | The `roles` claim | The whole access token (HS256) |
+|---|---|---|---|
+| One in each of 12 apps, default space | short (`app07.role03`) | 181 bytes | 572 bytes |
+| One in each of 12 apps, in 5 spaces (60) | short (`app07.role03@space-0001`) | 1.6 KB | 2.4 KB |
+| One in each of 12 apps, in 5 spaces (60) | about 25 characters each side | 3.3 KB | 4.7 KB |
+
+The token travels in `Authorization` on every request, and Reactor Netty refuses a request whose headers together
+exceed `server.max-http-request-header-size` (8 KB by default): about 100 long `role@space` entries reach it. The
+`CoSec-Identity` header the gateway forwards carries only the roles of the request's space.
+
+No per-request cost depends on how many members a tenant has. The gateway verifies the token, parses the roles it
+carries and looks up two revocations, of the token and of its principal, keyed by the caller; the tenant's document
+does not list its members. The revocation lookups keep a local copy of each "not revoked" answer for 30 seconds,
+at most `cosec.authentication.revocation.cache.maximum-size` (100,000) entries per table and replica, about 300 bytes
+each: a replica that sees more distinct tokens than that within 30 seconds reads Redis on the request path for the
+rest ([Configuration](./configuration.md#local-cache-settings)).
+
+How long a role removed from a member keeps working:
+
+- **With a `MembershipRefresh` on the service that refreshes tokens:** until the member's current access token
+  expires, at most `cosec.jwt.token-validity.access` (10 minutes).
+- **Without one (the default):** a refresh copies the old claims, so until the member next signs in: at most
+  `cosec.jwt.session.lifetime` (30 days), as long as the member refreshes within `cosec.jwt.token-validity.refresh`
+  (7 days) ([Sessions](../integration/authentication.md#sessions)).
+- **At once:** `TokenRevoker.revokeSubject(tenant, principal)` refuses every token of the member issued before it, on
+  every replica; allow up to 30 seconds more on a replica that lost the invalidation message, and
+  `cosec.authentication.revocation.skew` (5 seconds) for a token issued just after
+  ([Revoking every token of a principal](../integration/authentication.md#revoking-every-token-of-a-principal)).
 
 ## How CI checks the image
 
