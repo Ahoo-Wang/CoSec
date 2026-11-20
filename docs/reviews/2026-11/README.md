@@ -16,11 +16,12 @@ decided are in `docs/rfc/`, and what a user reads is `wiki/`.
 | `review-r1-B-control-storage-host.md` | Round 1, stream B: control plane, storage, host (R1B-1 to R1B-6) | The same |
 | `review-r2-1-core.md` | Round 2, part 1: `annotations`, `api`, `model`, `engine`, `spi`, `document` (R2A-1 to R2A-15) | Triaged on 2026-11-20 into batches F1 and F5 (roadmap §9) |
 | `review-r2-2-edge-extensions.md` | Round 2, part 2: the adapters, `openapi` and the extensions (R2B-1 to R2B-25) | Triaged on 2026-11-20 into batches F2, F3 and F4 (roadmap §9); R2B-7 is not fixed, by decision |
-| `review-r2-3-control-storage.md` | Round 2, part 3: `control`, `cocache`, `migrate` (R2C-1 to R2C-30 in three passes; its last sections list what nobody has read, which is recorded as unreviewed, not as sound) | Triaged on 2026-11-20: all accepted and dispatched or queued; R2C-25 and R2C-26 are measured before anything is changed (roadmap §9) |
+| `review-r2-3-control-storage.md` | Round 2, part 3: `control`, `cocache`, `migrate` (R2C-1 to R2C-34 in four passes; its last sections list what nobody has read, which is recorded as unreviewed, not as sound) | Triaged on 2026-11-20: all accepted, most fixed, the rest queued (roadmap §9). R2C-31 was an S2 in the grant analysis, fixed in #1760 |
+| `review-r2-4-runtime-host.md` | Round 2, part 4: `runtime`, `spring-boot`, `testkit` (R2D-1 to R2D-8; the snapshot key state machine's remaining files, audit and shadow recording and most auto-configurations are listed as not read) | Triaged on 2026-11-20 (roadmap §9). R2D-6 is an S2 for availability |
 | `usability-a-developer-surface.md`, `usability-b-starter-and-operations.md`, `usability-review-C-policy-authors.md`, `usability-d-model.md`, `usability-e-documentation.md` | The usability review of beta.3, five streams | Triaged in `usability-triage-beta5.md` |
 | `usability-triage-beta5.md` | What became of each of the 111 usability findings | The beta.5 items are merged; the 8.1 list stands |
 
-Round 2 has not finished: `runtime`, `spring-boot` and `testkit` (part 4) are mostly unread, and so are the files part 3 lists at its end, among them the containment checks the grant analysis rests on.
+Round 2 has not finished: each part's last section lists the files nobody has read.
 
 ## Drills on a real project
 
