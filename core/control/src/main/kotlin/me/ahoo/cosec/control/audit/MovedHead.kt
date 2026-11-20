@@ -13,9 +13,12 @@
 
 package me.ahoo.cosec.control.audit
 
+import me.ahoo.cosec.annotations.ExperimentalCoSecApi
+
 /**
  * A head a published change was checked with that is not the same once it is published (RC1-33): its [document]
  * (`platform`, `app:<a>`, `tenant:<t>`, or `list:apps` for the app list), the digest it was checked with ([checked],
  * `null` for none) and the digest it has now ([current], `null` for none, or when it cannot be read: [readable]).
  */
+@ExperimentalCoSecApi
 data class MovedHead(val document: String, val checked: String?, val current: String?, val readable: Boolean = true)

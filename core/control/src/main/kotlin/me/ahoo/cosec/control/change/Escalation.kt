@@ -11,25 +11,23 @@
  * limitations under the License.
  */
 
-@file:OptIn(InternalCoSecApi::class)
-
 package me.ahoo.cosec.control.change
 
-import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 
 /**
- * What one person cannot publish alone (RFC 0007 §7.5): a granted fragment the grant analysis could not prove contained
- * ([reason] `NOT_COVERED`, `DENY_OVERLAP`, `CROSS_TENANT`, `UNRESOLVED`), a change to a document it does not analyze
- * (`NOT_ANALYZED`), with each tenant binding it widens for an app document (`TENANT_BINDING`, RC1-34), or a
- * break-glass binding (`BREAK_GLASS`, RFC 0007 §8). [subject] names the fragment or entry; an approval covers the
- * escalations whose subjects it lists.
+ * What one person cannot publish alone (RFC 0007 §7.5), or what the approver is shown with it: [reason] says which
+ * ([Reason]). [subject] names the fragment or entry; an approval covers the escalations whose subjects it lists, and
+ * needs to cover every one that is not [informational].
  */
-class Escalation(val subject: String, val reason: String, val detail: String = "") {
+@ExperimentalCoSecApi
+class Escalation(val subject: String, val reason: Reason, val detail: String = "") {
     /**
-     * Shown to the approver, never itself a reason to approve: the tenant bindings an app change widens (RC1-34). Their
-     * own change after an approval does not send the change back, since what was approved is widening the policy.
+     * Shown to the approver, never itself a reason to approve: the tenants an app change reaches ([Reason.TENANT_BINDINGS],
+     * RC1-34). Their own change after an approval does not send the change back, since what was approved is widening
+     * the policy. Nothing else is: an aggregated entry never stands in for one that needs an approval (`CTL-48`).
      */
-    val informational: Boolean get() = reason == TENANT_BINDING
+    val informational: Boolean get() = reason == Reason.TENANT_BINDINGS
 
     // A plain class, not a `data class`: a `ChangeEvent` carries it, so it is stable, and a field it gains is a new
     // constructor (RFC 0010 C4). It compares by value, as the change records it is part of do.
@@ -41,13 +39,59 @@ class Escalation(val subject: String, val reason: String, val detail: String = "
 
     override fun toString(): String = "Escalation(subject=$subject, reason=$reason, detail=$detail)"
 
-    companion object {
-        const val TENANT_BINDING = "TENANT_BINDING"
+    /**
+     * Why: one list, written by name in the change records and the audit events (R2C-5). The grant analysis's reasons
+     * are its `UnknownReason`s by the same names.
+     */
+    enum class Reason {
+        /** The author is not in the document's tenant. */
+        CROSS_TENANT,
+
+        /** No single ALLOW of the author is proven to contain what the change grants. */
+        NOT_COVERED,
+
+        /** A DENY that binds the author may overlap what the change grants. */
+        DENY_OVERLAP,
+
+        /** A new or changed binding names a policy no document defines. */
+        UNRESOLVED,
+
+        /** An app document the grant reaches could not be read, or the app list cannot be trusted. */
+        UNREADABLE,
+
+        /** A grant to `Anyone` in the default tenant, where unauthenticated callers are. */
+        ANONYMOUS,
+
+        /** The analysis made all the comparisons its budget allows before it could tell (`CTL-49`). */
+        TOO_LARGE,
+
+        /** A platform or app document change, or a tenant boundary change, that only the trust root makes alone. */
+        NOT_ANALYZED,
+
+        /** A new or changed break-glass binding: always two people (RFC 0007 §8), recorded before it is approved. */
+        BREAK_GLASS,
+
+        /**
+         * With [NOT_ANALYZED] on an app document: the tenants whose bindings a widened permission policy reaches, one
+         * entry per policy, counted from the back-reference index. Informational.
+         */
+        TENANT_BINDINGS,
 
         /**
          * Only in a [me.ahoo.cosec.control.audit.ChangeEvent.Kind.REVIEW_NEEDED] event: the comparison after a publish
          * did not finish in time, so whether anything moved is not known (RC1-33).
          */
-        const val DETECTION_TIMED_OUT = "DETECTION_TIMED_OUT"
+        DETECTION_TIMED_OUT,
+
+        /** A name this version does not know, read from a record a later one wrote: never informational. */
+        UNKNOWN,
+        ;
+
+        companion object {
+            private val byName = entries.filter { it != UNKNOWN }.associateBy { it.name }
+
+            /** The reason of [name], or [UNKNOWN]. */
+            fun of(name: String): Reason = byName[name] ?: UNKNOWN
+        }
     }
 }

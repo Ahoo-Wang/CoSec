@@ -249,21 +249,38 @@ public final class me/ahoo/cosec/control/change/Confirmation$Companion {
 }
 
 public final class me/ahoo/cosec/control/change/Escalation {
-	public static final field Companion Lme/ahoo/cosec/control/change/Escalation$Companion;
-	public static final field DETECTION_TIMED_OUT Ljava/lang/String;
-	public static final field TENANT_BINDING Ljava/lang/String;
-	public fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)V
-	public synthetic fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun <init> (Ljava/lang/String;Lme/ahoo/cosec/control/change/Escalation$Reason;Ljava/lang/String;)V
+	public synthetic fun <init> (Ljava/lang/String;Lme/ahoo/cosec/control/change/Escalation$Reason;Ljava/lang/String;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
 	public fun equals (Ljava/lang/Object;)Z
 	public final fun getDetail ()Ljava/lang/String;
 	public final fun getInformational ()Z
-	public final fun getReason ()Ljava/lang/String;
+	public final fun getReason ()Lme/ahoo/cosec/control/change/Escalation$Reason;
 	public final fun getSubject ()Ljava/lang/String;
 	public fun hashCode ()I
 	public fun toString ()Ljava/lang/String;
 }
 
-public final class me/ahoo/cosec/control/change/Escalation$Companion {
+public final class me/ahoo/cosec/control/change/Escalation$Reason : java/lang/Enum {
+	public static final field ANONYMOUS Lme/ahoo/cosec/control/change/Escalation$Reason;
+	public static final field BREAK_GLASS Lme/ahoo/cosec/control/change/Escalation$Reason;
+	public static final field CROSS_TENANT Lme/ahoo/cosec/control/change/Escalation$Reason;
+	public static final field Companion Lme/ahoo/cosec/control/change/Escalation$Reason$Companion;
+	public static final field DENY_OVERLAP Lme/ahoo/cosec/control/change/Escalation$Reason;
+	public static final field DETECTION_TIMED_OUT Lme/ahoo/cosec/control/change/Escalation$Reason;
+	public static final field NOT_ANALYZED Lme/ahoo/cosec/control/change/Escalation$Reason;
+	public static final field NOT_COVERED Lme/ahoo/cosec/control/change/Escalation$Reason;
+	public static final field TENANT_BINDINGS Lme/ahoo/cosec/control/change/Escalation$Reason;
+	public static final field TOO_LARGE Lme/ahoo/cosec/control/change/Escalation$Reason;
+	public static final field UNKNOWN Lme/ahoo/cosec/control/change/Escalation$Reason;
+	public static final field UNREADABLE Lme/ahoo/cosec/control/change/Escalation$Reason;
+	public static final field UNRESOLVED Lme/ahoo/cosec/control/change/Escalation$Reason;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public static fun valueOf (Ljava/lang/String;)Lme/ahoo/cosec/control/change/Escalation$Reason;
+	public static fun values ()[Lme/ahoo/cosec/control/change/Escalation$Reason;
+}
+
+public final class me/ahoo/cosec/control/change/Escalation$Reason$Companion {
+	public final fun of (Ljava/lang/String;)Lme/ahoo/cosec/control/change/Escalation$Reason;
 }
 
 public final class me/ahoo/cosec/control/change/Finding {

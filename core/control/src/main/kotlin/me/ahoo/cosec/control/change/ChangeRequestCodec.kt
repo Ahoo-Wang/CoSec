@@ -124,7 +124,10 @@ object ChangeRequestCodec {
         if (change.escalations.isNotEmpty()) {
             val escalations = root.putArray("escalations")
             change.escalations.forEach {
-                escalations.addObject().put("subject", it.subject).put("reason", it.reason).put("detail", it.detail)
+                escalations.addObject().put(
+                    "subject",
+                    it.subject
+                ).put("reason", it.reason.name).put("detail", it.detail)
             }
         }
         change.approval?.let { ApprovalCodec.tree(root.putObject("approval"), it) }
@@ -177,7 +180,11 @@ object ChangeRequestCodec {
             publishedRevision = node.get("publishedRevision")?.asLong(),
             escalations = node.get("escalations")?.values()?.map {
                 it.only("subject", "reason", "detail")
-                Escalation(it.need("subject").text(), it.need("reason").text(), it.need("detail").text())
+                Escalation(
+                    it.need("subject").text(),
+                    Escalation.Reason.of(it.need("reason").text()),
+                    it.need("detail").text()
+                )
             }.orEmpty(),
             shadow = node.get("shadow")?.let(ShadowStateCodec::decode),
             confirmations = node.get("confirmations")?.values()?.map(::confirmation).orEmpty(),

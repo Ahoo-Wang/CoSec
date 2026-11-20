@@ -13,5 +13,8 @@
 
 package me.ahoo.cosec.control.audit
 
+import me.ahoo.cosec.annotations.ExperimentalCoSecApi
+
 /** A revision as an event names it: its number and the digest it is addressed by, or a candidate's digest. */
+@ExperimentalCoSecApi
 data class RevisionRef(val revision: Long, val digest: String?)

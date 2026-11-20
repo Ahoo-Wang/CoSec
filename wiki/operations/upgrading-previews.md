@@ -34,6 +34,20 @@ Which preview of the library may run behind which preview of the gateway image: 
     `ERROR`. A stored value that does not decode stays a `500`.
   - `ControlStore` names `me.ahoo.cosec.control.store.ControlStoreException` for "the store could not answer". A
     `ControlStore` of your own throws it for an outage; anything else it throws is a `500`.
+- **An app change lists the tenants it reaches as one entry per policy; an escalation's reason is an enum** (review
+  round 2, `R2C-14`, `R2C-5`, `CTL-48`). Affected: whoever reads a change's `escalations` (the control API's
+  `GET /changes/{id}`, a `ChangeListener`, the audit JSON on Kafka), and code that builds or reads an `Escalation`.
+  - `TENANT_BINDING`, one entry per tenant binding, is gone. An app change that widens a permission policy carries one
+    `TENANT_BINDINGS` entry per policy: `tenants binding [<policy>] in app <app>`, with the statements, how many tenant
+    documents bind it (an upper bound, from the back-reference index) and the first 20 of them. A consumer that counted
+    `TENANT_BINDING` entries to tell how many tenants a change reaches reads the count in `detail` instead. At 50,000
+    tenants the change record went from about 50 MB to a few KB, each audit event likewise, and no tenant document is
+    read to check the change.
+  - `Escalation.reason` is `Escalation.Reason`, an enum with the names the JSON always carried; `Escalation.TENANT_BINDING`
+    and `Escalation.DETECTION_TIMED_OUT` are `Escalation.Reason.TENANT_BINDINGS` and `Escalation.Reason.DETECTION_TIMED_OUT`.
+    A stored change with a name this version does not know reads it as `UNKNOWN`, which is never informational.
+  - `ChangeEvent`, `Escalation`, `RevisionRef` and `MovedHead` are `@ExperimentalCoSecApi`: a `ChangeListener` of yours
+    opts in, and they may change in a minor release until a release has used them.
 - **The public shapes of the core modules are fixed before RC** (review round 2, `R2A-1` to `R2A-7`). Affected: code that
   compiles against `cosec-model`, `cosec-spi`, `cosec-api` or the engine. No document, property, stored value or wire
   format changes.
