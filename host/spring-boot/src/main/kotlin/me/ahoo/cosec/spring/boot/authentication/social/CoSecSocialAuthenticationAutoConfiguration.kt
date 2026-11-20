@@ -15,16 +15,16 @@
 package me.ahoo.cosec.spring.boot.authentication.social
 
 import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.cocache.RedisSocialStateStore
 import me.ahoo.cosec.social.DirectSocialUserPrincipalConverter
 import me.ahoo.cosec.social.SocialAuthentication
 import me.ahoo.cosec.social.SocialAuthenticationProvider
 import me.ahoo.cosec.social.SocialProviderManager
-import me.ahoo.cosec.social.SocialStateStore
 import me.ahoo.cosec.social.SocialUser
 import me.ahoo.cosec.social.SocialUserPrincipalConverter
 import me.ahoo.cosec.social.justauth.JustAuthProvider
 import me.ahoo.cosec.social.justauth.RedisAuthStateCache
-import me.ahoo.cosec.social.justauth.RedisSocialStateStore
+import me.ahoo.cosec.spi.social.SocialStateStore
 import me.ahoo.cosec.spring.boot.CoSecProperties
 import me.ahoo.cosec.spring.boot.ConditionalOnCoSecEnabled
 import me.ahoo.cosec.spring.boot.authentication.ConditionalOnLoginEnabled
@@ -39,6 +39,8 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnClass
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean
 import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.context.annotation.Bean
+import org.springframework.context.annotation.Configuration
+import org.springframework.data.redis.core.ReactiveStringRedisTemplate
 import org.springframework.data.redis.core.StringRedisTemplate
 import java.lang.reflect.Constructor
 
@@ -67,11 +69,19 @@ internal class CoSecSocialAuthenticationAutoConfiguration(
         return RedisAuthStateCache(stringRedisTemplate, cosec.keysOf(OAUTH_STATE) + ":")
     }
 
-    /** The states CoSec issued, single use and bound to a browser, under the deployment's prefix (round-2 review M4). */
-    @Bean
-    @ConditionalOnMissingBean
-    fun socialStateStore(stringRedisTemplate: StringRedisTemplate, cosec: CoSecProperties): SocialStateStore =
-        RedisSocialStateStore(stringRedisTemplate, cosec.keysOf(OAUTH_BINDING) + ":")
+    /**
+     * The states CoSec issued, single use and bound to a browser, under the deployment's prefix, in Redis through
+     * `cosec-cocache`'s reactive client; a [SocialStateStore] bean of the application's replaces it (round-2 review M4,
+     * R2B-3). `CoSecModuleCheckAutoConfiguration` fails startup when neither is there.
+     */
+    @Configuration(proxyBeanMethods = false)
+    @ConditionalOnClass(name = ["me.ahoo.cosec.cocache.RedisSocialStateStore"])
+    class RedisStates {
+        @Bean
+        @ConditionalOnMissingBean
+        fun socialStateStore(redisTemplate: ReactiveStringRedisTemplate, cosec: CoSecProperties): SocialStateStore =
+            RedisSocialStateStore(redisTemplate, cosec.keysOf(OAUTH_BINDING) + ":")
+    }
 
     /**
      * The OAuth `state` is JustAuthProvider's own secure random one, never the application's `IdGenerator`: those ids

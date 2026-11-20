@@ -601,6 +601,7 @@ It refuses to start instead, naming the artifact, when a feature that is on need
 | `cosec.cosid.generator is set, but CoSec's ids do not come from CosId` | A `CosIdRuntime` (`cosid-spring-boot-starter` and its `cosid.*` settings), or remove the key: with an `IdGenerator` bean of your own, that bean gives CoSec its ids |
 | `cosec.metrics.enabled=true needs cosec-micrometer` | `cosec-micrometer`, or remove the key: unset, metrics are optional |
 | `cosec.control.enabled=true needs cosec-control` (or `cosec-cocache`) | the artifact it names, or remove the key: unset, an instance without the modules is a data-plane instance |
+| `Social sign-in, whose states are kept in Redis ..., needs cosec-cocache` | add `cosec-cocache` (it keeps the OAuth states of a sign-in in Redis, once each), declare a `SocialStateStore` bean of your own, or turn social login off with `cosec.authentication.login.social.enabled=false` |
 | `cosec-cocache needs a ReactiveStringRedisTemplate bean` | `spring-boot-data-redis` and a Redis connection (`spring.data.redis.*`): without it no snapshot is read and rate limits would count per instance |
 
 The web checks run only while CoSec is on (`cosec.enabled`, default `true`); a gateway host is exempt from the WebFlux
@@ -1032,6 +1033,10 @@ for a check, `412` for an `ifMatch` that does not hold).
   that timed out or failed, means the binding was removed, by that call or another: the platform document's revision
   history shows which revision removed it. Like every `404` of the control API it carries no `detail`; the control
   host logs `the platform document has no binding [<id>]` at `INFO`.
+- **A tenant change waits for approval with `TOO_LARGE`**: the grant analysis made the four million comparisons one
+  analysis may make before it reached those grants, so what it did not compare is not known (`CTL-49`). Split the
+  change into smaller ones; statements a policy already had cost almost nothing, so the size that matters is what the
+  change adds or rewrites, times what its author holds.
 - **Every tenant grant over every app waits for approval** (`UNREADABLE`) after an upgrade, with
   `The app list is missing or incomplete: run cosec-migrate repair-references; ...` at `WARN` (at most once a minute, at
   startup too):

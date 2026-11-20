@@ -16,8 +16,12 @@
 package me.ahoo.cosec.control.grant
 
 import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.engine.OnMissing
+import me.ahoo.cosec.engine.pattern.ActionPattern
 import me.ahoo.cosec.engine.pattern.PatternContainment
 import me.ahoo.cosec.engine.pattern.ResourceContainment
+import me.ahoo.cosec.engine.pattern.ResourcePattern
+import me.ahoo.cosec.model.Effect
 import me.ahoo.cosec.model.condition.Condition
 import me.ahoo.cosec.model.condition.ConditionChecker
 import me.ahoo.cosec.model.condition.Containment
@@ -57,13 +61,55 @@ internal class GrantNarrowing(private val checker: ConditionChecker, private val
         }
     }
 
-    /** A statement written as one of the previous ones, under the same policy condition, is unchanged. */
-    fun narrowsAny(policy: GrantPolicy, statement: GrantStatement, previous: GrantPolicy): Boolean {
+    /**
+     * A statement written as one of the previous ones, under the same policy condition, is unchanged. [twins], when
+     * given, finds such a one in constant time (R2C-25); without one, or when it finds none, every previous statement is
+     * tried as before, so the answer is the same either way.
+     */
+    fun narrowsAny(
+        policy: GrantPolicy,
+        statement: GrantStatement,
+        previous: GrantPolicy,
+        twins: Twins? = null,
+        budget: ComparisonBudget? = null,
+    ): Boolean {
         val condition = both(policy.condition, statement.condition)
+        if (twins != null && twins.of(statement).any { identical(statement, condition, it, previous) }) {
+            return true
+        }
+        // Past the budget it is not known to narrow anything, so it is granted (CTL-49), without walking the rest.
+        if (budget?.exhausted == true) {
+            return false
+        }
         return previous.statements.any {
-            val previousCondition = both(previous.condition, it.condition)
-            (equality.sameStatement(statement, it) && equality.sameCondition(condition, previousCondition)) ||
-                narrows(statement, condition, it, previousCondition)
+            budget?.spend() != false &&
+                (identical(statement, condition, it, previous) || narrows(statement, condition, it, both(previous.condition, it.condition)))
+        }
+    }
+
+    private fun identical(statement: GrantStatement, condition: Condition?, other: GrantStatement, previous: GrantPolicy) =
+        equality.sameStatement(statement, other) && equality.sameCondition(condition, both(previous.condition, other.condition))
+
+    /**
+     * The statements of a previous version by what [GrantEquality.sameStatement] compares besides the condition, so an
+     * identical twin is looked up, not searched for. A candidate in the bucket still has to pass the full comparison.
+     */
+    class Twins(previous: GrantPolicy) {
+        private val byKey: Map<Key, List<GrantStatement>> = previous.statements.groupBy(::key)
+
+        fun of(statement: GrantStatement): List<GrantStatement> = byKey[key(statement)].orEmpty()
+
+        private data class Key(
+            val effect: Effect,
+            val name: String,
+            val actions: List<ActionPattern>,
+            val resources: List<ResourcePattern>,
+            val onMissing: OnMissing?,
+        )
+
+        private companion object {
+            fun key(statement: GrantStatement) =
+                Key(statement.effect, statement.name, statement.actions, statement.resources, statement.onMissing)
         }
     }
 }

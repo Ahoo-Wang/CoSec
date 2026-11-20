@@ -15,6 +15,8 @@ package me.ahoo.cosec.spring.boot
 
 import io.mockk.mockk
 import me.ahoo.cocache.core.CacheRuntime
+import me.ahoo.cosec.spi.social.InMemorySocialStateStore
+import me.ahoo.cosec.spi.social.SocialStateStore
 import me.ahoo.cosec.spring.boot.jwt.CoSecJwtAutoConfiguration
 import me.ahoo.cosec.spring.boot.jwt.CoSecTokenRevocationCacheAutoConfiguration
 import me.ahoo.cosec.spring.boot.pipeline.GATEWAY_GLOBAL_FILTER
@@ -120,6 +122,17 @@ class CoSecModuleCheckAutoConfigurationTest {
         val noCache = plain.withClassLoader(FilteredClassLoader("me.ahoo.cosec.cocache.RedisApiKeyStore"))
         starts(noCache.withPropertyValues("cosec.api-key.enabled=true", "cosec.api-key.store=memory"))
         starts(noCache.withPropertyValues("cosec.api-key.enabled=false", "cosec.api-key.store=redis"))
+    }
+
+    /** R2B-3: the social sign-in states live in `cosec-cocache`, unless the application keeps them itself. */
+    @Test
+    fun `social sign-in without cosec-cocache or a SocialStateStore of its own fails startup`() {
+        val noCache = plain.withClassLoader(FilteredClassLoader("me.ahoo.cosec.cocache.RedisSocialStateStore"))
+        failsNaming(noCache, "cosec-cocache")
+        starts(noCache.withBean(SocialStateStore::class.java, { InMemorySocialStateStore() }))
+        starts(noCache.withPropertyValues("cosec.authentication.login.social.enabled=false"))
+        starts(noCache.withPropertyValues("cosec.authentication.login.enabled=false"))
+        starts(plain)
     }
 
     @Test
