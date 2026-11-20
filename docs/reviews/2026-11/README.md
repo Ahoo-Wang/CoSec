@@ -14,12 +14,13 @@ decided are in `docs/rfc/`, and what a user reads is `wiki/`.
 |---|---|---|
 | `review-r1-A-request-path.md` | Review round 1 of beta.4, stream A: the request path (R1A-1 to R1A-8) | Every finding fixed or registered: roadmap §8, §9 (2026-11-19) |
 | `review-r1-B-control-storage-host.md` | Round 1, stream B: control plane, storage, host (R1B-1 to R1B-6) | The same |
-| `review-r2-1-core.md` | Round 2, part 1: `annotations`, `api`, `model`, `engine`, `spi`, `document` (R2A-1 to R2A-15) | **Not triaged yet.** Seven findings are breaking after RC |
-| `review-r2-2-edge-extensions.md` | Round 2, part 2: the adapters, `openapi` and the extensions (R2B-1 to R2B-25) | **Not triaged yet.** Eight findings are breaking after RC |
+| `review-r2-1-core.md` | Round 2, part 1: `annotations`, `api`, `model`, `engine`, `spi`, `document` (R2A-1 to R2A-15) | Triaged on 2026-11-20 into batches F1 and F5 (roadmap §9) |
+| `review-r2-2-edge-extensions.md` | Round 2, part 2: the adapters, `openapi` and the extensions (R2B-1 to R2B-25) | Triaged on 2026-11-20 into batches F2, F3 and F4 (roadmap §9); R2B-7 is not fixed, by decision |
+| `review-r2-3-control-storage.md` | Round 2, part 3: `control`, `cocache`, `migrate` (R2C-1 to R2C-30 in three passes; its last sections list what nobody has read, which is recorded as unreviewed, not as sound) | Triaged on 2026-11-20: all accepted and dispatched or queued; R2C-25 and R2C-26 are measured before anything is changed (roadmap §9) |
 | `usability-a-developer-surface.md`, `usability-b-starter-and-operations.md`, `usability-review-C-policy-authors.md`, `usability-d-model.md`, `usability-e-documentation.md` | The usability review of beta.3, five streams | Triaged in `usability-triage-beta5.md` |
 | `usability-triage-beta5.md` | What became of each of the 111 usability findings | The beta.5 items are merged; the 8.1 list stands |
 
-Round 2 has not covered `runtime`, `control`, `cocache`, `spring-boot`, `testkit` and `migrate` yet.
+Round 2 has not finished: `runtime`, `spring-boot` and `testkit` (part 4) are mostly unread, and so are the files part 3 lists at its end, among them the containment checks the grant analysis rests on.
 
 ## Drills on a real project
 
@@ -40,12 +41,9 @@ performance.
 | `saas-scale-control-plane.md` | The control plane and the store of record at that scale: the back-reference index, publishes, memory, maintenance, onboarding |
 | `saas-scale-raw-output.txt` | The harnesses' raw output |
 | `saas-referrers-pr-b-evidence.md` | The measurements behind #1729 |
-| `saas-scale-harness.kt.txt`, `saas-scale-candidate-harness.kt.txt`, `saas-scale-revocation-harness.kt.txt`, `saas-shadow-cost-harness.kt.txt` | The harnesses the numbers came from |
+| `core/runtime/src/test/kotlin/me/ahoo/cosec/runtime/snapshot/SaasScaleMeasurement.kt`, `.../runtime/shadow/SaasScaleCandidateMeasurement.kt`, `.../runtime/SaasShadowCostMeasurement.kt`, `backends/cocache/src/test/kotlin/me/ahoo/cosec/cocache/SaasScaleRevocationMeasurement.kt` | The harnesses the numbers came from: a `main` each, compiled with the test sources and never run by `check` (the KDoc of each says how to run it) |
 
-The harnesses are copies of Kotlin files that were run from a module's test sources and never committed there. They
-are not compiled here. To run one again, put it under the test sources of the module its package names, restore the
-file-level opt-in to CoSec's internal API where a comment marks it (the repository allows that opt-in only in CoSec's
-compiled sources, which `SourceRulesTest` holds), and run its `main` as its header says. In-memory stores stand in for
+The harnesses are test sources of the modules their packages name, so CI compiles them and they follow the code; they are not re-run, and the numbers stay those of the commit each report names. In-memory stores stand in for
 Redis in all of them; the reports say which figures are measured and which are computed from counted operations.
 
 ## Designs
