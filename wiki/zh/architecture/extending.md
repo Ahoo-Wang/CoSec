@@ -30,7 +30,7 @@ description: "把自己的认证器、成员关系来源、属性提供者、决
 | `MembershipRefresh` | `cosec-login`，`login.token` | 在令牌刷新时说明用户现在拥有什么，让变更后的角色生效（[刷新令牌](../integration/authentication.md#refreshing-tokens)）。抛出 `TokenVerificationException` 以拒绝（`401`）；其他任何异常都是错误（`500`）；null 保留声明。 | 无：把它传给 `RefreshTokenAuthentication`；starter 的刷新路由使用 `MembershipRefresh<RefreshTokenCredentials>` Bean，没有时启动失败，直到 `cosec.jwt.session.memberships-on-refresh=from-token` 保留令牌的成员关系（`STA-8`） |
 | `TokenConverter` | `cosec-login`，`login.token` | 以其他格式签发令牌。 | 一个 bean，替换 `JwtTokenConverter` |
 | `SocialUserPrincipalConverter` | `cosec-social`，`social` | 把提供方的用户转换成你的主体。 | 一个 bean，替换 `DirectSocialUserPrincipalConverter` |
-| `SocialStateStore` | `cosec-social`，`social` | 把社交登录签发的 OAuth state 存在 Redis 以外的地方：`put` 记下一个 state 及其绑定值的哈希，`take` 原子地取走它，因此一个 state 只能用一次。两者都是挂起函数：基于阻塞客户端实现时，在你自己的调度器上调用它。存储失败时抛出异常。 | 一个 bean，替换 `RedisSocialStateStore` |
+| `SocialStateStore` | `cosec-spi`，`spi.social` | 把社交登录签发的 OAuth state 存在 Redis 以外的地方：`put` 记下一个 state 及其绑定值的哈希，`take` 原子地取走它，因此一个 state 只能用一次。两者都是挂起函数：基于阻塞客户端实现时，在你自己的调度器上调用它。存储失败时抛出异常。同一个包里的 `InMemorySocialStateStore` 供测试和单实例使用。 | 一个 bean，替换 `cosec-cocache` 的 `RedisSocialStateStore` |
 | `BlacklistSource` | `cosec-runtime`，`runtime.attribute` | 说明哪些主体、地址和设备被拦截。 | 一个 bean，包装进 `BlacklistAttributeProvider` |
 | `DecisionListener` | `cosec-runtime`，`runtime.event` | 观察每一个决策：审计、告警、分析。 | 所有 bean |
 | `BridgeContextContributor` | `cosec-runtime`，`runtime.event` | 把线程本地上下文（日志、追踪）带进 Pipeline。 | 所有 bean |

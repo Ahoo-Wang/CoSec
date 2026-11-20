@@ -158,7 +158,7 @@ class GatewayIdentityProperties {
 class RuntimeAuthorizationProperties {
     val scope = Scope()
     val remoteIp = RemoteIp()
-    val membership = Timed(Duration.ofMillis(500))
+    val membership = Membership()
     val attributes = Timed(Duration.ofMillis(300))
     val rateLimit = Timed(Duration.ofMillis(500))
     val routes = Routes()
@@ -184,12 +184,28 @@ class RuntimeAuthorizationProperties {
     class Timed(
         /**
          * How long one call of the stage's collaborator may take, the stage being the group this property is under:
-         * `membership` (the `MembershipProvider`; past it, or when it fails, the request is 503), `attributes` (an
-         * `AttributeProvider` that sets no timeout of its own; past it its attributes are unavailable) and `rate-limit`
-         * (the `RateLimiter`; past it the rule's `strictFailure` decides).
+         * `attributes` (an `AttributeProvider` that sets no timeout of its own; past it its attributes are unavailable)
+         * and `rate-limit` (the `RateLimiter`; past it the rule's `strictFailure` decides).
          */
         var timeout: Duration,
     )
+
+    @InternalCoSecApi
+    class Membership {
+        /**
+         * How long one call of the `MembershipProvider` may take; past it, or when it fails, the request is 503. The
+         * fill of the membership cache takes no longer than this.
+         */
+        var timeout: Duration = Duration.ofMillis(500)
+
+        /**
+         * How long an instance remembers that the loader did not know a principal (a removed member's token still
+         * valid), so that its requests do not reach the loader each time. Zero remembers nothing; at most one minute,
+         * the default life of a cached membership. A principal added meanwhile is known when it ends, or at once on the
+         * instance that invalidated it. A failed load is never remembered.
+         */
+        var unknownTtl: Duration = Duration.ofSeconds(5)
+    }
 
     @InternalCoSecApi
     class Routes {

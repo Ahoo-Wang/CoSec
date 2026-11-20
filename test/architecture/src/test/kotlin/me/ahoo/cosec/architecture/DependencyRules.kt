@@ -44,7 +44,7 @@ object DependencyRules {
         "openapi" to setOf("document", "engine", "spi", "model", "api", "annotations"),
         // What each extension imports today: a new edge is a visible edit of this table.
         "jwt" to PURE + setOf("model", "spi", "runtime"),
-        "social" to PURE + setOf("model"),
+        "social" to PURE + setOf("model", "spi"),
         "login" to PURE + setOf("model", "spi", "document", "runtime"),
         "ip2region" to PURE + setOf("model", "spi"),
         "micrometer" to PURE + setOf("model", "spi", "runtime"),

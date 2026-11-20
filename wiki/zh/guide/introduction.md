@@ -76,7 +76,7 @@ CoSec 以过滤器的形式运行在你的处理器之前：WebFlux 中是 `WebF
 | 在 Spring Cloud Gateway 中做授权 | `cosec-gateway` | |
 | 在 Redis 中存放策略快照、已吊销令牌、API key、影子窗口，以及集群范围的限流 | `cosec-cocache` | `org.springframework.boot:spring-boot-data-redis`、`me.ahoo.cocache:cocache-spring-boot-starter` |
 | 控制面：发布、历史、回滚、影子窗口、审批、模拟 | `cosec-control` | `cosec-cocache` |
-| 通过 OAuth 社交登录 | `cosec-social` | |
+| 通过 OAuth 社交登录 | `cosec-social` | 保存其 OAuth state 的 `cosec-cocache`，或你自己的 `SocialStateStore` |
 | 每次决策一个追踪 span | `cosec-opentelemetry` | |
 | 按结果统计的每次决策计时器，以及快照源的指标 | `cosec-micrometer` | 一个 `MeterRegistry`（例如 `spring-boot-starter-actuator`） |
 | 从 OpenAPI 描述生成路由映射和应用文档 | `cosec-openapi` | `org.springframework.boot:spring-boot-starter-actuator`、`org.springdoc:springdoc-openapi-starter-webflux-api` 或 `-webmvc-api` |
@@ -87,7 +87,7 @@ CoSec 以过滤器的形式运行在你的处理器之前：WebFlux 中是 `WebF
 
 “同时添加”一列是 starter 中该模块的自动配置除模块本身之外还需要的依赖。请像构建里的其他库一样给出它们的版本：CoSec 不管理它们（见[CoSec 对构建的要求](#what-cosec-needs-from-your-build)）。
 
-已开启的功能所需的模块会在启动时检查（STA-1）：以下情况应用无法启动，报错信息会给出要添加的制品——Spring MVC 宿主缺少 `cosec-webmvc`；WebFlux 宿主缺少 `cosec-webflux`；Spring Cloud Gateway 宿主缺少 `cosec-gateway`（即使 `cosec.enabled=false`）；`cosec.api-key.store=redis` 缺少 `cosec-cocache`；`cosec.audit.kafka.delivery=required` 缺少 `cosec-kafka`；`cosec.cosid.generator` 缺少 `cosec-cosid`（[故障排查](../operations/troubleshooting.md#startup-fails-on-a-missing-module)）。
+已开启的功能所需的模块会在启动时检查（STA-1）：以下情况应用无法启动，报错信息会给出要添加的制品——Spring MVC 宿主缺少 `cosec-webmvc`；WebFlux 宿主缺少 `cosec-webflux`；Spring Cloud Gateway 宿主缺少 `cosec-gateway`（即使 `cosec.enabled=false`）；`cosec.api-key.store=redis` 缺少 `cosec-cocache`；`cosec.audit.kafka.delivery=required` 缺少 `cosec-kafka`；社交登录既没有 `cosec-cocache` 也没有自己的 `SocialStateStore` Bean；`cosec.cosid.generator` 缺少 `cosec-cosid`（[故障排查](../operations/troubleshooting.md#startup-fails-on-a-missing-module)）。
 
 starter 始终引入 `cosec-runtime`（协程请求 Pipeline、快照与令牌校验）、`cosec-document`（策略文档、路由映射及其格式）、`cosec-spi`（扩展点）、`cosec-engine` 和 `cosec-model`（纯函数决策引擎）、`cosec-api`（公共契约）、`cosec-annotations`（每个 `@OptIn(ExperimentalCoSecApi::class)` 导入的稳定性标记）、`cosec-login`（登录与签发令牌）以及 `cosec-jwt`（JWT 令牌）。`cosec-bom` 用于对齐应用可以依赖的 CoSec 模块的版本。
 

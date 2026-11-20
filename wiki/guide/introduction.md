@@ -108,7 +108,7 @@ record for policy snapshots and revoked tokens.
 | Authorization in Spring Cloud Gateway | `cosec-gateway` | |
 | Policy snapshots, revoked tokens, API keys, shadow windows and cluster-wide rate limits in Redis | `cosec-cocache` | `org.springframework.boot:spring-boot-data-redis`, `me.ahoo.cocache:cocache-spring-boot-starter` |
 | The control plane: publishing, history, rollback, shadow windows, approvals, simulation | `cosec-control` | `cosec-cocache` |
-| Social login through OAuth | `cosec-social` | |
+| Social login through OAuth | `cosec-social` | `cosec-cocache` for its OAuth states, or your own `SocialStateStore` |
 | A tracing span per decision | `cosec-opentelemetry` | |
 | A timer per decision, by result, and the snapshot source's meters | `cosec-micrometer` | a `MeterRegistry` (for example `spring-boot-starter-actuator`) |
 | Route maps and app documents generated from your OpenAPI description | `cosec-openapi` | `org.springframework.boot:spring-boot-starter-actuator`, `org.springdoc:springdoc-openapi-starter-webflux-api` or `-webmvc-api` |
@@ -124,8 +124,8 @@ one its version, as for any library of your build: CoSec does not manage it (see
 A module that a feature you turned on needs is checked at startup (STA-1): the application does not start, and the
 message names the artifact to add, when a Spring MVC host lacks `cosec-webmvc`, a WebFlux host lacks `cosec-webflux`,
 a Spring Cloud Gateway host lacks `cosec-gateway` (even with `cosec.enabled=false`), `cosec.api-key.store=redis`
-lacks `cosec-cocache`, `cosec.audit.kafka.delivery=required` lacks `cosec-kafka`, or `cosec.cosid.generator` lacks
-`cosec-cosid` ([Troubleshooting](../operations/troubleshooting.md#startup-fails-on-a-missing-module)).
+lacks `cosec-cocache`, `cosec.audit.kafka.delivery=required` lacks `cosec-kafka`, social login has neither `cosec-cocache` nor a
+`SocialStateStore` bean of its own, or `cosec.cosid.generator` lacks `cosec-cosid` ([Troubleshooting](../operations/troubleshooting.md#startup-fails-on-a-missing-module)).
 
 The starter always brings `cosec-runtime` (the coroutine request pipeline, snapshots and token verification),
 `cosec-document` (the policy documents, route maps and their formats), `cosec-spi` (the extension points),
