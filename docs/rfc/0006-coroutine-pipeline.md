@@ -22,6 +22,11 @@
 > **2026-10-26 修订（problem+json，Q27）**：保留 7.x 响应体形状的唯一理由是"客户端不必改解析"，8.0 不考虑兼容性之后它不再成立。CoSec 自己写的每个错误响应
 > 改为 RFC 9457 的 `application/problem+json`，只带客户端能据以行动的区分；显式拒绝与隐式拒绝在响应中合并为 `unauthorized`/`forbidden`。改动处：§5.7、
 > §6.1（`type`/`code` 列取代 `reason`）、§6.2（重写）、§6.3、§9.5.3、§10.2、§14 X5、§15.2 的 PR-2 与 PR-7、§15.3、§16 Q22 与新增的 Q27。
+>
+> **2026-11-19 修订（第一轮整体审查的加固，维护者同日决定；#1710、#1711）**：
+> - §5.3.1（`PIP-30`）：路径中编码的 `;` 与控制字符（编码的或未编码的）答 400 `invalid-request`。
+> - 网关（`PIP-31`）：网关转发的请求就是被决定的那个，三个方法覆盖请求头（`X-HTTP-Method-Override`、`X-HTTP-Method`、`X-Method-Override`）在每条路由上都被移除，不可配置。
+> - `gateway` 模式的服务（`STA-6`、`STA-7`）：开着隐藏方法过滤器（两个 Spring 属性之一，或应用自己注册的过滤器）时启动失败；没有写明 `cosec.pipeline.identity.only-gateway-can-reach=true` 时启动失败。这个属性是运维对网络边界的声明：这类服务相信任何未签名的 `CoSec-Identity`，只有网关能到达它时才安全。给身份头签名留在 8.1。CoSec 只在它看得见的地方拒绝启动：不是 CoSec 服务的后端若从请求体或查询串取方法，必须自己关掉。
 
 > **2026-11-08 修订**：`required` 监听器的超时属性是 `cosec.observability.listener.required-timeout`（#1283）；`decideAs` 与 `decide(security, app, …)` 是内部 API（#1283）。限流计数器 id 统一为 `platform/<id>`、`app:<app>/<id>`、`tenant:<tenant>/<id>`，键控桶前缀是 `k:`（#1284）。
 
@@ -286,6 +291,8 @@ class HttpFacts(
   （`/public` 下的通配符会匹配 `/public/../admin`），所以解码后的点段在任何编码下都拒绝（`%2e`、`%2E`、`.%2e`、`..;`、`..%3B`），`\`（含 `%5C`）也视为分隔符；
   ② 路径长度上限 `MAX_PATH_LENGTH` = 2048 字符、单段上限 `MAX_SEGMENT_LENGTH` = 256 字符（按收到的编码形式计，去掉 `;` 参数后量段）：
   通配符匹配的代价约为段长的平方，8 KB 的段每条语句要 200–400 ms，上限让一个请求无法长时间占住事件循环。两者是常量，不是配置项。
+
+  **2026-11-19 修订（#1711，`PIP-30`，审查 R1A-3）**：路径中任何位置（包括路径参数之内）编码后的 `;`（`%3B`）与控制字符（编码的 `%00`–`%1F`、`%7F`，十六进制大小写均可，以及未编码的）同样以 400 拒绝，与前面是哪种服务器无关：CoSec 把它们读成段内文本，但先解码再去掉路径参数、在 NUL 处截断或丢掉控制字符之后内容的后端会提供另一个路径。二次编码（`%253B`、`%2500`）解码一次成为文本，照常决定；`%25`、结尾的点与空格不拒绝，查询串不检查。响应体没有 `detail`（客户端契约不变）；原因只记“哪一类、第几段”，从不含路径原文，目前只在内部的结果里，审计记录带的是收到的原始路径（给原因单独一个字段留在 8.1）。
 - 三个适配器的 `RequestParser` 只剩"从宿主对象读出 `HttpFacts`"，不再各自调用规范化。现在 [`ServletRequestParser`](../../webmvc/src/main/kotlin/me/ahoo/cosec/webmvc/ServletRequestParser.kt)
   自己抛 `InvalidRequestPathException`，搬走之后这类判断只剩一处。
 - 恶意路径语料（`WebAdapterParityTest` 的 `traversal`、`path parameters`、`encoded path` 等场景）三个适配器结果一致，RFC 0001 §5"路径一致"不变量。

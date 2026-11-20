@@ -23,9 +23,9 @@ internal object RoleFormats {
         Field(
             "id",
             StringType(
-                pattern = "^(?!\\*$)[^@]+$",
+                pattern = FormatPatterns.printable("^(?!\\*$)[^@]+$"),
                 examples = listOf("wms.clerk", "night-shift"),
-                counterExamples = listOf("", "*", "clerk@wh-01"),
+                counterExamples = listOf("", "*", "clerk@wh-01") + FormatPatterns.PRINTABLE_COUNTER_EXAMPLES,
             ),
             required = true,
             description = "Unique in its document. Not `*`, and without `@`, which separates a membership's role and space.",
@@ -34,7 +34,7 @@ internal object RoleFormats {
         Field("description", StringType(examples = listOf("Handles the warehouse")), description = "For display only."),
     )
 
-    private val permissionIds = ArrayType(StringType(examples = listOf("warehouse.read", "inbound.ship")))
+    private val permissionIds = ArrayType(FormatPatterns.id(listOf("warehouse.read", "inbound.ship")))
 
     internal val appRole = ObjectType(
         roleFields + Field(
@@ -50,16 +50,16 @@ internal object RoleFormats {
         roleFields + listOf(
             Field(
                 "app",
-                StringType(minLength = 1, examples = listOf("wms", "order-service")),
+                FormatPatterns.id(listOf("wms", "order-service"), minLength = 1),
                 required = true,
                 description = "The app the role belongs to, and whose permissions it lists.",
             ),
             Field(
                 "space",
                 StringType(
-                    pattern = "^(?!\\*$)(?!\\().*$",
+                    pattern = FormatPatterns.printable("^(?!\\*$)(?!\\().*$"),
                     examples = listOf("", "wh-01"),
-                    counterExamples = listOf("*", "(reserved)"),
+                    counterExamples = listOf("*", "(reserved)") + FormatPatterns.PRINTABLE_COUNTER_EXAMPLES,
                 ),
                 description = "Absent: any space a member holds the role in. Otherwise only this one; empty is the default space.",
             ),

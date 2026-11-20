@@ -130,6 +130,38 @@
         "spring-boot:RouteEscapeReviewTest#an id that would forge a line is logged escaped"
       ],
       "pending": null
+    },
+    {
+      "id": "DOC-13",
+      "source": "RC1-15, RC1-52 (RFC 0004 §4.1); review round 1 of beta.4 (R1B-3)",
+      "statement": "No id a document writes holds a control character or an unpaired surrogate (Identifiers.isUnprintableAt, the rule app and tenant ids follow): policy ids and statement names, binding ids, a binding's subject (principal, role, tenant), app, space and policy, the boundary a document names, role ids with their app, space and listed permissions, catalog permission ids, the external attributes the platform declares, the attribute paths a condition or a rate limit key reads, and pattern variable names. A document holding one does not compile, and the error shows it escaped; a host fails closed on a stored one, as on any document it cannot compile. The message of a document or a policy that does not compile is itself printable. Display text (a role's or catalog entry's name and description, a catalog group's name) is no id.",
+      "level": "engine",
+      "guards": [
+        "model:IdentifiersTest#printable text is what printable gives back unchanged",
+        "model:ConditionCheckerTest#no attribute reference resolves a name that would forge a line",
+        "engine:HttpPathPatternTest#a variable name holds no control character",
+        "document:DocumentIdsTest#every id a tenant document writes is checked",
+        "document:DocumentIdsTest#a binding's tenant and a role's app are ids too",
+        "document:DocumentIdsTest#an app document's catalog entries and roles, and the platform's boundary and attributes, are checked",
+        "document:DocumentIdsTest#an unpaired surrogate is refused, a pair is a character like any other",
+        "document:DocumentIdsTest#the message of a document that does not compile forges no line, whatever it quotes",
+        "document:DocumentIdFieldsTest#every id field of the format is refused at its path when it holds a control character",
+        "control:DocumentRefusalHttpTest#a change with a deny matching the path undecoded or an id that would forge a line stays a draft naming it"
+      ],
+      "pending": null
+    },
+    {
+      "id": "DOC-14",
+      "source": "RFC 0005 §3; review round 1 of beta.4 (R1A-1)",
+      "statement": "A DENY statement, and a rate limit rule, whose http resource pattern sets decodeAndParseSegments false does not compile: it matches the path as received, percent-encoded, and would miss every encoded spelling of what it names (a DENY on /admin/** would not stop /%61dmin/users). The error names the statement by its path in the document. An ALLOW keeps the option.",
+      "level": "engine",
+      "guards": [
+        "engine:PolicyCompilerTest#a deny that matches the path undecoded does not compile, an allow does",
+        "document:PolicyDocumentCompilerTest#a deny matching the path as received does not compile, and the error names the statement",
+        "control:DocumentRefusalHttpTest#a change with a deny matching the path undecoded or an id that would forge a line stays a draft naming it",
+        "migrate:ConverterTest#a 7x deny matching the path undecoded is rejected at its statement, an allow converts"
+      ],
+      "pending": null
     }
   ]
 }

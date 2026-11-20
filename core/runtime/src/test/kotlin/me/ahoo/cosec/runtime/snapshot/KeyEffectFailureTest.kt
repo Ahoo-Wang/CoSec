@@ -19,6 +19,7 @@ import ch.qos.logback.classic.Logger
 import ch.qos.logback.classic.spi.ILoggingEvent
 import ch.qos.logback.core.read.ListAppender
 import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.runtime.captured
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.cosec.spi.snapshot.SnapshotKind
 import me.ahoo.test.asserts.assert
@@ -196,7 +197,9 @@ class KeyEffectFailureTest {
         reloaded(directExecutor, arm = ::installOverflows).use {
             failed.single().cause.assert().isInstanceOf(StackOverflowError::class.java)
             failed.single().cause.suppressed.single().message.assert().isEqualTo("housekeeping")
-            awaitCondition { lines.list.any { "the effect Install threw java.lang.StackOverflowError" in it.formattedMessage } }
+            awaitCondition {
+                lines.captured().any { "the effect Install threw java.lang.StackOverflowError" in it.formattedMessage }
+            }
             uncaught.assert().isEmpty()
         }
     }
@@ -231,7 +234,7 @@ class KeyEffectFailureTest {
         }.use {
             failed.assert().hasSize(1)
             awaitCondition {
-                lines.list.any { "an effect failed while a failed effect was handled" in it.formattedMessage }
+                lines.captured().any { "an effect failed while a failed effect was handled" in it.formattedMessage }
             }
         }
     }
@@ -251,7 +254,7 @@ class KeyEffectFailureTest {
         }.use {
             failed.assert().hasSize(1)
             awaitCondition {
-                lines.list.any { "logging a failed effect threw java.lang.StackOverflowError" in it.formattedMessage }
+                lines.captured().any { "logging a failed effect threw java.lang.StackOverflowError" in it.formattedMessage }
             }
             uncaught.assert().isEmpty()
         }
@@ -264,7 +267,7 @@ class KeyEffectFailureTest {
                 "condition not met within $WAIT_SECONDS seconds; EffectFailed taken: " +
                     failed.map { "${it.cause} (suppressed ${it.cause.suppressed.toList()})" } +
                     "; uncaught: ${uncaught.map { "${it.first}: ${it.second}" }}; lines: " +
-                    lines.list.map { "[${it.threadName}] ${it.formattedMessage} ${it.throwableProxy?.className ?: ""}" }
+                    lines.captured().map { "[${it.threadName}] ${it.formattedMessage} ${it.throwableProxy?.className ?: ""}" }
             }
             Thread.sleep(1)
         }

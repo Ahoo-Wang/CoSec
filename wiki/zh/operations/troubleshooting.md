@@ -43,6 +43,7 @@ description: "从症状出发，找出请求为什么被拒绝、被放行、被
 请求无法被无歧义地读取，因此在认证之前就被拒绝。审计事件的 `kind` 为 `BAD_REQUEST`。原因：
 
 - 路径含有 `.` 或 `..` 段、格式错误的百分号转义、结尾之前的空段（`//`，常见于拼接两段各自带 `/` 的 URL）、编码后的分隔符（`%2F`）或反斜杠（`\`、`%5C`）。末尾的 `/` 不会被拒绝；
+- 路径含有编码后的 `;`（`%3B`），或者控制字符，无论编码（`%00` 到 `%1F`、`%7F`，大小写均可）还是未编码（`PIP-30`，从 8.0.0-beta.5 起）。以前发送这种路径的客户端现在会得到 `400`：通常是不加处理就放进路径变量的值，例如以 `;` 分隔的列表、换行或二进制数据。没有任何东西把这个原因与其他原因区分开：审计记录的 `kind` 是 `BAD_REQUEST`、`reasonCode` 是 `INVALID_REQUEST`，其 `request.path` 是收到时的路径，与访问日志中的一样。用 `%3B`、`%00` 到 `%1F` 和 `%7F` 去匹配这个路径。把这个值放到查询参数或请求体里，或者把它的 `%` 再编码一次（`%253B`）：管道解码一次，得到文本 `%3B`，由应用再解码。结尾的 `.` 或空格以及 `%25` 不会被拒绝；
 - `CoSec-Space-Id` 或 `CoSec-Device-Id` 请求头出现两个不同的值，包括空白值与非空白值同时出现。每个请求头只发送一次，或者不发送；
 - 路由映射捕获的值会改变资源 id 的分段；
 - 某个请求头以不同的值发送了多次，而决策所依据的文档在条件、边界或限流规则中读取它，无论语句的效果是什么，也无论它是否适用于本请求（`PIP-12`）。这一项在认证和
@@ -369,6 +370,22 @@ Spring 把它们读作 `cosec.*` key。从 8.0.0-alpha.2 起，检查只在进�
 
 - `cosec.pipeline.mode=gateway on a Spring Cloud Gateway host: ...`：网关总是用策略决策。从网关上去掉这个配置项；在其后的服务上设置它。
 - `cosec.pipeline.mode` 绑定失败：值既不是 `enforce` 也不是 `gateway`。
+
+### 网络边界未声明导致启动失败 {#startup-fails-because-the-network-boundary-is-not-stated}
+
+```text
+cosec.pipeline.mode=gateway: this service believes any CoSec-Identity header it receives, and the header carries no signature, so whoever can reach this service is whoever they claim to be ... State it once it is true: cosec.pipeline.identity.only-gateway-can-reach=true (the environment variable COSEC_PIPELINE_IDENTITY_ONLY_GATEWAY_CAN_REACH=true). It is not set (STA-7, ...).
+```
+
+`cosec.pipeline.mode=gateway` 的服务信任网络（`STA-7`）。先让它成真，再写下这一行：只放行网关 pod 的 `NetworkPolicy`（[`k8s/examples/gateway-mode-service-networkpolicy.yaml`](https://github.com/Ahoo-Wang/CoSec/blob/main/k8s/examples/gateway-mode-service-networkpolicy.yaml)）、双向 TLS，或只有网关所在的私有网络。`It is [false]`（或 `1`、`on`、空值）表示这个配置项写成了不是 `true` 的值。不要在网络还没有保证之前，为了绕过这条信息而写它。之后启动日志记录一行 `INFO`。
+
+### 网关之后的 hidden-method 过滤器导致启动失败 {#startup-fails-on-a-hidden-method-filter-behind-a-gateway}
+
+```text
+cosec.pipeline.mode=gateway: spring.mvc.hiddenmethod.filter.enabled=true. The gateway decided the method of the request line, but this service would run a POST as the method a form field `_method` names ... (STA-6).
+```
+
+移除 `spring.mvc.hiddenmethod.filter.enabled`、`spring.webflux.hiddenmethod.filter.enabled` 以及应用的任何 `HiddenHttpMethodFilter` bean（`a HiddenHttpMethodFilter bean, [name]`）：网关无法从表单请求体里移除 `_method` 字段，所以 `http:DELETE` 上的 `DENY` 会被绕过。`enforce` 模式的宿主不受影响。
 
 ### 开关无法读取导致启动失败 {#startup-fails-on-an-unreadable-switch}
 

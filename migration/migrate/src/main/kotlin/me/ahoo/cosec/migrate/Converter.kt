@@ -236,13 +236,8 @@ private class Run(val source: Source7x, val options: ConvertOptions, val compile
         convertPolicies()
         source.apps.forEach(::convertApp)
         convertRateLimits()
+        // RC1-52 (`IDN-10`), `DOC-13`: an id the compiler refuses is INVALID_ID, and nothing is published.
         val built = if (rejections.isEmpty()) documents() else emptyMap()
-        // RC1-52 (`IDN-10`): as the control plane refuses a request that holds one, nothing is published.
-        built.forEach { (key, document) ->
-            DocumentIds.unpaired(document).forEach { (path, id) ->
-                reject(RejectionKind.INVALID_ID, "$key#$path", DocumentIds.unpairedMessage(id))
-            }
-        }
         val documents = if (rejections.isEmpty()) built else emptyMap()
         count("documents", documents.size)
         count("rejections", rejections.distinct().size)
@@ -779,7 +774,9 @@ private class Run(val source: Source7x, val options: ConvertOptions, val compile
                 documents[key] = document.also { compiler.compile(it) }
                 warnings += ConvertedBudgets.warnings(key, document)
             } catch (error: DocumentCompileException) {
-                error.errors.forEach {
+                val (ids, others) = DocumentIds.split(document, error.errors)
+                ids.forEach { reject(RejectionKind.INVALID_ID, "$key#${it.path}", it.message) }
+                others.forEach {
                     reject(
                         RejectionKind.DOES_NOT_COMPILE,
                         originOf(policyOrigins, key, keyPolicies, it.path),
@@ -798,16 +795,19 @@ private class Run(val source: Source7x, val options: ConvertOptions, val compile
             is SnapshotKey.Tenant -> DocumentKind.TENANT to key.tenantId
             else -> DocumentKind.PLATFORM to ""
         }
+        val alone = PolicyDocument(kind, owner, REVISION, options.publishedAt, listOf(policy), emptyList())
         return try {
-            compiler.compile(PolicyDocument(kind, owner, REVISION, options.publishedAt, listOf(policy), emptyList()))
+            compiler.compile(alone)
             true
         } catch (error: DocumentCompileException) {
-            for (compileError in error.errors) {
+            // Its ids are reported at their place in the converted document, as INVALID_ID.
+            val others = DocumentIds.split(alone, error.errors).second
+            for (compileError in others) {
                 val statement = STATEMENT_PATH.find(compileError.path)?.groupValues?.get(1)?.toInt()
                 val location = statement?.let { statements.getOrNull(it) } ?: statements.firstOrNull().orEmpty()
                 reject(RejectionKind.DOES_NOT_COMPILE, location, "${compileError.path}: ${compileError.message}")
             }
-            false
+            others.isEmpty()
         }
     }
 

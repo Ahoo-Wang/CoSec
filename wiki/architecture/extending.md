@@ -67,6 +67,12 @@ gateway (`cosec.pipeline.mode=gateway`), `IdentityGate`. It is not an extension 
 `StatusMapping`, and a gate of your own would be a second decision path. The compiler holds this: implementing
 `RequestGate` requires the `@InternalCoSecApi` opt-in (`@SubclassOptInRequired`), which applications never give.
 
+Two beans of the starter's login are replaceable too, though they are not extension points: `CompositeAuthentication`,
+which the login routes use, and `TokenCompositeAuthentication`, which issues the token pair after it. Each backs off
+when the application defines a bean of the same type, so a bean of your own is the only one (the starter's
+`CompositeAuthentication` is `@Primary`, and two would be ambiguous). The control plane's authorization beans are the
+ones that are not replaceable on purpose: startup fails when another exists.
+
 ## Pipeline outside the adapters
 
 A transport of your own (an internal port, a WebSocket handshake, a custom server) reads the request into `HttpFacts`

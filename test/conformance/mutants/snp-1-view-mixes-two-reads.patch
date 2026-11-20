@@ -1,0 +1,17 @@
+# Rule: SNP-1
+# Mutant: the installed view of a request whose tenant document names its app keeps the tenant document of the first read and takes the platform and app documents of the second: one evaluation decides on documents of two reads
+# Tests: :runtime:test --tests me.ahoo.cosec.runtime.snapshot.DocumentSnapshotViewsTest --tests me.ahoo.cosec.runtime.snapshot.SuspendingSnapshotSourceTest
+
+diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/SuspendingSnapshotSource.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/SuspendingSnapshotSource.kt
+index 8547c87f..01bae826 100644
+--- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/SuspendingSnapshotSource.kt
++++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/SuspendingSnapshotSource.kt
+@@ -42,7 +42,7 @@ class SuspendingSnapshotSource @InternalCoSecApi constructor(
+         val key = ViewKey.of(scope, blocked)
+         val view = views.peek(key) ?: return null
+         val withApp = key.withAppFor(scope, view.tenant) ?: return view
+-        return views.peek(withApp)
++        return views.peek(withApp)?.let { me.ahoo.cosec.engine.SnapshotView(it.platform, it.app, view.tenant, it.unresolved, it.version) }
+     }
+ 
+     private suspend fun loaded(scope: Scope, blocked: Boolean): SnapshotView {

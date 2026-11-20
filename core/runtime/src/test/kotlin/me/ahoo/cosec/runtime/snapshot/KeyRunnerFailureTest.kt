@@ -19,6 +19,7 @@ import ch.qos.logback.classic.Logger
 import ch.qos.logback.classic.spi.ILoggingEvent
 import ch.qos.logback.core.read.ListAppender
 import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.runtime.captured
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.cosec.spi.snapshot.SnapshotKind
 import me.ahoo.test.asserts.assert
@@ -136,7 +137,7 @@ class KeyRunnerFailureTest {
         ).use { source ->
             source.load().join()
             (source.load("app-a").join().app is DocumentState.Failed).assert().isTrue()
-            awaitCondition { lines.list.any { "the transition of Requested" in it.formattedMessage } }
+            awaitCondition { lines.captured().any { "the transition of Requested" in it.formattedMessage } }
             uncaught.assert().isEmpty()
         }
     }

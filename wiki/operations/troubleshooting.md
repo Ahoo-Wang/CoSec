@@ -49,6 +49,13 @@ The request cannot be read without ambiguity, so it is refused before authentica
 
 - the path has `.` or `..` segments, a malformed percent-escape, an empty segment before its end (`//`, often two
   URL parts joined with a `/` each), an encoded separator (`%2F`), or a backslash (`\`, `%5C`). A trailing `/` is not refused;
+- the path holds an encoded `;` (`%3B`) or a control character, encoded (`%00` to `%1F`, `%7F`, in either case) or
+  raw (`PIP-30`, from 8.0.0-beta.5). A client that sent such a path before now gets `400`: usually a value put into a
+  path variable without care, such as a `;`-separated list, a line break or binary data. Nothing names this cause
+  apart from the others: the audit record has `kind` `BAD_REQUEST` and `reasonCode` `INVALID_REQUEST`, and its
+  `request.path` is the path as received, as is the access log's. Match that path against `%3B`, `%00` to `%1F` and
+  `%7F`. Send the value in the query or the body, or encode its `%` again (`%253B`), which the pipeline decodes once,
+  to the text `%3B`, and the application decodes again. A trailing `.` or space and `%25` are not refused;
 - a `CoSec-Space-Id` or `CoSec-Device-Id` header is sent with two different values, a blank one beside
   a non-blank one included. Send each header once, or leave it out;
 - a route map captures a value that would change the resource id's segments;
@@ -501,6 +508,30 @@ anyway.
 - `cosec.pipeline.mode=gateway on a Spring Cloud Gateway host: ...`: a gateway always decides with policies. Remove
   the property from the gateway; set it on the services behind it.
 - A binding failure for `cosec.pipeline.mode`: the value is neither `enforce` nor `gateway`.
+
+### Startup fails because the network boundary is not stated {#startup-fails-because-the-network-boundary-is-not-stated}
+
+```text
+cosec.pipeline.mode=gateway: this service believes any CoSec-Identity header it receives, and the header carries no signature, so whoever can reach this service is whoever they claim to be ... State it once it is true: cosec.pipeline.identity.only-gateway-can-reach=true (the environment variable COSEC_PIPELINE_IDENTITY_ONLY_GATEWAY_CAN_REACH=true). It is not set (STA-7, ...).
+```
+
+A service in `cosec.pipeline.mode=gateway` trusts the network (`STA-7`). Make it true, then write the line: a
+`NetworkPolicy` that admits the gateway's pods only
+([`k8s/examples/gateway-mode-service-networkpolicy.yaml`](https://github.com/Ahoo-Wang/CoSec/blob/main/k8s/examples/gateway-mode-service-networkpolicy.yaml)),
+mutual TLS, or a private network only the gateway is on. `It is [false]` (or `1`, `on`, an empty value) means the
+property is written with a value that is not `true`. Do not write it to get past the message before the network
+holds. After it, startup logs one `INFO` line.
+
+### Startup fails on a hidden-method filter behind a gateway {#startup-fails-on-a-hidden-method-filter-behind-a-gateway}
+
+```text
+cosec.pipeline.mode=gateway: spring.mvc.hiddenmethod.filter.enabled=true. The gateway decided the method of the request line, but this service would run a POST as the method a form field `_method` names ... (STA-6).
+```
+
+Remove `spring.mvc.hiddenmethod.filter.enabled`, `spring.webflux.hiddenmethod.filter.enabled` and any
+`HiddenHttpMethodFilter` bean of the application (`a HiddenHttpMethodFilter bean, [name]`): the gateway cannot remove
+a `_method` field from a form body, so a `DENY` on `http:DELETE` would be stepped around. A host in `enforce` mode is
+not affected.
 
 ### Startup fails on an unreadable switch
 

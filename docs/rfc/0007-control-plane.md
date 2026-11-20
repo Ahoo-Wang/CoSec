@@ -1085,6 +1085,8 @@ sealed interface Operation {                         // 条目级；ifMatch 是�
 `ControlStore`（SPI，`control/` 定义，`cosec-cocache` 实现）只有读写上面 §5.2 那几类数据的挂起方法，没有业务规则；内存实现供测试与单实例使用。
 
 > **实现说明（2026-10-27，#1091）**：`ControlPlane` 与 `DefaultControlPlane` 实现这些操作；每次调用都经 `ChangeAuthority`，硬性规则在先。读操作（`read`、`history`、`diff`、`propagation`）需要目标文档的 `cosec:read`，`apply` 与 `rollback` 也先读头；`simulate`、`explain`、`analyze` 各需模拟租户文档上自己的动词。`cosec:shadow-read` 已在 `ControlActions` 中定义，但没有路由读影子报告（窗口汇总在变更上，`cosec:read` 已覆盖）。
+>
+> **实现说明（2026-11-19，#1704，`CTL-39`）**：`diff` 的 `sections` 列出策略、绑定与角色之外有差别的部分的名称（`catalog`、`boundary`、`limits`、`attributes`、`rateLimits`，按此顺序），每个部分按它的全部内容比较；都相同时是空列表（到 beta.4 为止是一个布尔值）。文档的每个成员必须恰好属于“头部”“按 id 列出的条目”“有名字的部分”三者之一，否则测试失败：此后给文档格式加成员的人不会漏掉差异。
 
 ### 10.2 HTTP
 

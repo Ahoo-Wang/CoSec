@@ -25,6 +25,11 @@ import me.ahoo.cosec.document.SnapshotDocuments
 import me.ahoo.cosec.document.route.Route
 import me.ahoo.cosec.document.route.RouteMap
 import me.ahoo.cosec.engine.CompiledDocument
+import me.ahoo.cosec.engine.PolicyCompiler
+import me.ahoo.cosec.engine.ResourceSource
+import me.ahoo.cosec.engine.StatementSource
+import me.ahoo.cosec.model.Effect
+import me.ahoo.cosec.model.PolicyId
 import me.ahoo.cosec.runtime.snapshot.SnapshotOptions
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.test.asserts.assert
@@ -50,6 +55,24 @@ class RouteEscapeReviewTest {
                     ).encodeToByteArray()
             ),
         )
+
+    /**
+     * A platform document with one `http:` DENY under [policyId], built by the engine alone: the document compiler refuses
+     * an id that holds a control character (`DOC-13`), and the escape at the print site stays for whatever reaches it
+     * another way (`DOC-12`, defence in depth).
+     */
+    private fun engineOnly(policyId: String) = CompiledDocument.platform(
+        listOf(
+            PolicyCompiler().compile(
+                PolicyId(policyId),
+                null,
+                listOf(
+                    StatementSource("", Effect.DENY, listOf("http:*"), listOf(ResourceSource("http:path:/admin/**")))
+                ),
+            ),
+        ),
+        emptyList(),
+    )
 
     private val denyAdmin =
         """[{"id":"deny-admin","statements":[{"effect":"deny","action":"http:*","resource":"http:path:/admin/**"}]}]"""
@@ -95,10 +118,8 @@ class RouteEscapeReviewTest {
     @Test
     fun `an id that would forge a line is logged escaped`() {
         val review = RouteEscapeReview(routes, capacity = 8)
-        val forged = """[{"id":"x\n2026-11-19 ERROR forged\u001b[31m","statements":[{"effect":"deny","action":"http:*",""" +
-            """"resource":"http:path:/admin/**"}]}]"""
         logged { appender ->
-            review.installed(SnapshotKey.Platform, 1, compile(SnapshotKey.Platform, 1, forged))
+            review.installed(SnapshotKey.Platform, 1, engineOnly("x\n2026-11-19 ERROR forged\u001b[31m"))
             appender.list.assert().hasSize(2)
             appender.list.forEach { event ->
                 event.formattedMessage.none { it.isISOControl() }.assert().describedAs(event.formattedMessage).isTrue()

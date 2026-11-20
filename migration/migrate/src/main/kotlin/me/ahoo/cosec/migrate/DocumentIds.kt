@@ -17,52 +17,21 @@ package me.ahoo.cosec.migrate
 
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.document.PolicyDocument
-import me.ahoo.cosec.model.Identifiers
-import me.ahoo.cosec.model.Match
-import me.ahoo.cosec.model.SubjectRef
+import me.ahoo.cosec.engine.CompileError
+import me.ahoo.cosec.document.DocumentIds as Ids
 
 /**
- * The ids of a converted document that hold an unpaired UTF-16 surrogate (RC1-52, `IDN-10`), as the control plane
- * checks a request's: policy, binding, principal, tenant, role, app, space and permission ids. 7.x JSON can write one as
- * an escape (`"\uD800"`); a Redis key would write it as `?`, naming another id's keys. The document keys themselves are
- * held to the app and tenant id rule where the converter places them.
+ * The ids of a converted document the compiler refuses (`DOC-13`: a control character or an unpaired surrogate; RC1-52,
+ * `IDN-10`), told apart from its other errors: the conversion reports them as INVALID_ID, at their place in the
+ * document. 7.x JSON can write either as an escape (`"\uD800"`, `"\n"`); a Redis key would write the surrogate as `?`,
+ * naming another id's keys, and a log line would print the line break. The compiler's own walk decides which ids those
+ * are, so the conversion and every instance agree. The document keys are held to the app and tenant id rule where the
+ * converter places them.
  */
 internal object DocumentIds {
-    /** Each id of [document] with an unpaired surrogate, by its JSON path in the document. */
-    fun unpaired(document: PolicyDocument): List<Pair<String, String>> {
-        val found = ArrayList<Pair<String, String>>(0)
-        fun check(id: String, path: String) {
-            if (!Identifiers.isWellFormed(id)) found += path to id
-        }
-        document.policies.forEachIndexed { i, policy -> check(policy.id.value, "$.policies[$i].id") }
-        document.bindings.forEachIndexed { i, binding ->
-            val at = "$.bindings[$i]"
-            check(binding.id.value, "$at.id")
-            when (val subject = binding.subject) {
-                is SubjectRef.Principal -> {
-                    check(subject.tenant.value, "$at.subject.tenant")
-                    check(subject.id.value, "$at.subject.principal")
-                }
-                is SubjectRef.Role -> {
-                    subject.tenant?.let { check(it.value, "$at.subject.tenant") }
-                    check(subject.id.value, "$at.subject.role")
-                }
-                SubjectRef.Anyone -> Unit
-            }
-            (binding.scope.app as? Match.Exactly)?.let { check(it.value.value, "$at.app") }
-            (binding.scope.space as? Match.Exactly)?.let { check(it.value.value, "$at.space") }
-            check(binding.policy.value, "$at.policy")
-        }
-        document.catalog?.groups?.forEachIndexed { g, group ->
-            group.permissions.forEachIndexed { i, permission ->
-                check(permission.id, "$.catalog.groups[$g].permissions[$i].id")
-            }
-        }
-        return found
+    /** [errors] of compiling [document]: those that are its refused ids, and the others. */
+    fun split(document: PolicyDocument, errors: List<CompileError>): Pair<List<CompileError>, List<CompileError>> {
+        val ids = Ids.unprintable(document).toSet()
+        return errors.partition { it in ids }
     }
-
-    /** Why the conversion refuses [id], with the surrogate escaped. */
-    fun unpairedMessage(id: String): String =
-        "the id [${Identifiers.printable(id)}] holds an unpaired UTF-16 surrogate, which a Redis key writes as `?`: it " +
-            "would name another id's keys"
 }

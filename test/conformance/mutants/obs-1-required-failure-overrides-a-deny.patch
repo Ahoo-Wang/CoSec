@@ -1,0 +1,19 @@
+# Rule: OBS-1
+# Mutant: a REQUIRED listener's failure turns every outcome into 503, not only a permit: a 401 or 403 becomes 503
+# Tests: :runtime:test --tests me.ahoo.cosec.runtime.event.ListenerIsolationTest :conformance:test --tests me.ahoo.cosec.conformance.ConformanceTest
+
+diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/stage/DeliverRequired.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/stage/DeliverRequired.kt
+index ac273e07..9d180fbf 100644
+--- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/stage/DeliverRequired.kt
++++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/stage/DeliverRequired.kt
+@@ -58,10 +58,6 @@ internal class DeliverRequired(
+             return outcome
+         }
+         state.requiredFailures = failed
+-        if (!outcome.proceed) {
+-            listeners.requiredFailedOnNonPermit(event, failed)
+-            return outcome
+-        }
+         return state.unavailable(Cause.RequiredListenerFailed(failed))
+     }
+ }

@@ -1,0 +1,17 @@
+# Rule: PIP-5
+# Mutant: dot segments are looked for in the path as written, not after decoding: /public/%2e%2e/admin passes as a path under /public and reaches /admin
+# Tests: :runtime:test --tests me.ahoo.cosec.runtime.http.PathNormalizerTest --tests me.ahoo.cosec.runtime.PipelineTest :conformance:test --tests me.ahoo.cosec.conformance.ConformanceTest
+
+diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/http/PathNormalizer.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/http/PathNormalizer.kt
+index 5092af6c..f96aead1 100644
+--- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/http/PathNormalizer.kt
++++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/http/PathNormalizer.kt
+@@ -173,7 +173,7 @@ object PathNormalizer {
+         if ('\\' in decoded) {
+             return true
+         }
+-        val segments = decoded.split('/')
++        val segments = path.split('/')
+         for (index in segments.indices) {
+             // An encoded `;` (`..%3Bx`) is a dot segment to whatever decodes before it strips path parameters.
+             val segment = segments[index].substringBefore(';')

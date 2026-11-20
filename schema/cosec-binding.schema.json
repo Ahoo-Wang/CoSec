@@ -12,6 +12,7 @@
             "cosec",
             "svc-batch"
           ],
+          "pattern": "^[^\\x00-\\x1F\\x7F-\\x9F]*$",
           "type": "string"
         },
         "tenant": {
@@ -20,6 +21,7 @@
             "(platform)",
             "acme"
           ],
+          "pattern": "^[^\\x00-\\x1F\\x7F-\\x9F]*$",
           "type": "string"
         }
       },
@@ -36,6 +38,7 @@
             "editor",
             "viewer"
           ],
+          "pattern": "^[^\\x00-\\x1F\\x7F-\\x9F]*$",
           "type": "string"
         },
         "tenant": {
@@ -43,6 +46,7 @@
           "examples": [
             "acme"
           ],
+          "pattern": "^[^\\x00-\\x1F\\x7F-\\x9F]*$",
           "type": "string"
         }
       },
@@ -61,6 +65,7 @@
         "order-service"
       ],
       "minLength": 1,
+      "pattern": "^[^\\x00-\\x1F\\x7F-\\x9F]*$",
       "type": "string"
     },
     "breakGlass": {
@@ -81,6 +86,7 @@
         "deny-ip",
         "editor-read"
       ],
+      "pattern": "^[^\\x00-\\x1F\\x7F-\\x9F]*$",
       "type": "string"
     },
     "policy": {
@@ -89,6 +95,7 @@
         "perm:order-service/read",
         "cosec:root"
       ],
+      "pattern": "^[^\\x00-\\x1F\\x7F-\\x9F]*$",
       "type": "string"
     },
     "space": {
@@ -98,6 +105,7 @@
         "",
         "team-a"
       ],
+      "pattern": "^[^\\x00-\\x1F\\x7F-\\x9F]*$",
       "type": "string"
     },
     "subject": {

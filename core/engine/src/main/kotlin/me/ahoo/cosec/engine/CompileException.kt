@@ -16,10 +16,17 @@
 package me.ahoo.cosec.engine
 
 import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.model.Identifiers
 
-/** The policy [policyId] does not compile. It is never installed (RFC 0003 F4), so it never decides anything. */
+/**
+ * The policy [policyId] does not compile. It is never installed (RFC 0003 F4), so it never decides anything. Its message
+ * quotes what the document wrote, and goes to log lines: it is [Identifiers.printable] (RC1-15). [errors] keep the text
+ * as written, for a caller that escapes it itself (a JSON body).
+ */
 @InternalCoSecApi
 class CompileException(val policyId: String, val errors: List<CompileError>) :
     IllegalArgumentException(
-        "Policy [$policyId] does not compile: " + errors.joinToString("; ") { "${it.path}: ${it.message}" }
+        Identifiers.printable(
+            "Policy [$policyId] does not compile: " + errors.joinToString("; ") { "${it.path}: ${it.message}" },
+        ),
     )

@@ -208,6 +208,14 @@ class HttpPathPatternTest {
         HttpPathPattern.compile(pattern).variableNames.single().assert().isEqualTo(pattern.drop(2).dropLast(1))
     }
 
+    /** `DOC-13`: Java counts the ignorable control characters as identifier parts; a variable name holds none. */
+    @ParameterizedTest
+    @ValueSource(strings = ["/{a\u0000}", "/{a\u0008b}", "/{a\u001B}", "/{a\u007F}", "/{a\u009F}"])
+    fun `a variable name holds no control character`(pattern: String) {
+        assertThrownBy<InvalidPatternException> { HttpPathPattern.compile(pattern) }
+            .hasMessageContaining("is not allowed in a variable name")
+    }
+
     @Test
     fun `a path parsed with other options is refused`() {
         assertThrownBy<IllegalArgumentException> {

@@ -42,10 +42,11 @@ class SameContentTest {
         attachable: Boolean = true,
         condition: Condition? = null,
         policyCondition: Condition? = null,
+        effect: Effect = Effect.DENY,
     ) = compiler.compile(
         PolicyId("no-admin"),
         policyCondition,
-        listOf(StatementSource(name, Effect.DENY, actions, resources.toList(), condition)),
+        listOf(StatementSource(name, effect, actions, resources.toList(), condition)),
         attachable = attachable,
     )
 
@@ -107,7 +108,9 @@ class SameContentTest {
         ).assert().isFalse()
         base.sameContent(policy(http("/a"))).assert().isTrue()
         base.sameContent(policy(http("/a", caseSensitive = false))).assert().isFalse()
-        base.sameContent(policy(http("/a", decode = false))).assert().isFalse()
+        // Only an ALLOW matches a path undecoded (DOC-14).
+        policy(http("/a"), effect = Effect.ALLOW).sameContent(policy(http("/a", decode = false), effect = Effect.ALLOW))
+            .assert().isFalse()
         base.sameContent(policy(http("/a"), name = "t")).assert().isFalse()
         base.sameContent(policy(http("/a"), attachable = false)).assert().isFalse()
         base.sameContent(policy(http("/a"), actions = listOf("http:GET"))).assert().isFalse()

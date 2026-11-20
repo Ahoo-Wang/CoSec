@@ -183,8 +183,10 @@ internal class CoSecJwtAutoConfiguration {
     @ConditionalOnLoginEnabled
     class OnAuthentication {
 
+        /** Backs off for an application's own [TokenCompositeAuthentication] (UB-15). */
         @Bean
         @ConditionalOnBean(CompositeAuthentication::class)
+        @ConditionalOnMissingBean
         fun tokenCompositeAuthentication(
             compositeAuthentication: CompositeAuthentication,
             tokenConverter: TokenConverter,

@@ -11,7 +11,11 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.document.format
+
+import me.ahoo.cosec.annotations.InternalCoSecApi
 
 /**
  * The value rules the compilers enforce that JSON Schema can express, as `pattern`s, each with values the compilers
@@ -27,6 +31,38 @@ package me.ahoo.cosec.document.format
  * - which documents a principal binding must name its tenant in: all but a tenant's own.
  */
 internal object FormatPatterns {
+    /** A control character: U+0000 to U+001F, U+007F to U+009F (`Char.isISOControl`). */
+    private const val CONTROL = """\x00-\x1F\x7F-\x9F"""
+
+    /**
+     * `DOC-13`: an id a document writes holds no control character. An unpaired surrogate is refused too, which a
+     * pattern over code points cannot say.
+     */
+    const val PRINTABLE = "^[^$CONTROL]*$"
+    val PRINTABLE_COUNTER_EXAMPLES = listOf("a\nb", "x\u0000", "\u009F", "tab\there")
+
+    /** [pattern], which starts with `^`, and [PRINTABLE] too. */
+    fun printable(pattern: String): String {
+        require(pattern.startsWith("^")) { "A pattern starts with ^: $pattern" }
+        return PRINTABLE_PREFIX + pattern.substring(1)
+    }
+
+    /** Whether [type] is an id a document writes: [id], or a pattern built with [printable] (`DocumentIdFieldsTest`). */
+    fun isId(
+        type: StringType
+    ): Boolean = type.pattern == PRINTABLE || type.pattern?.startsWith(PRINTABLE_PREFIX) == true
+
+    private const val PRINTABLE_PREFIX = "^(?![\\s\\S]*[$CONTROL])"
+
+    /** An id a document writes (`DOC-13`). */
+    fun id(examples: List<String>, minLength: Int? = null, description: String? = null): StringType = StringType(
+        pattern = PRINTABLE,
+        minLength = minLength,
+        examples = examples,
+        counterExamples = PRINTABLE_COUNTER_EXAMPLES,
+        description = description,
+    )
+
     private const val DATE = """\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])"""
     private const val CLOCK = """([01]\d|2[0-3]):[0-5]\d(:[0-5]\d(\.\d{1,9})?)?"""
     private const val OFFSET = """(Z|[+-]((0\d|1[0-7]):[0-5]\d|18:00))"""

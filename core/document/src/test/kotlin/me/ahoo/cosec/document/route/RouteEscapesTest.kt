@@ -18,8 +18,14 @@ package me.ahoo.cosec.document.route
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.document.PolicyDocumentCompiler
 import me.ahoo.cosec.document.SnapshotDocuments
+import me.ahoo.cosec.engine.CompiledDocument
+import me.ahoo.cosec.engine.PolicyCompiler
+import me.ahoo.cosec.engine.ResourceSource
+import me.ahoo.cosec.engine.StatementSource
 import me.ahoo.cosec.engine.httpStatements
+import me.ahoo.cosec.model.Effect
 import me.ahoo.cosec.model.Identifiers
+import me.ahoo.cosec.model.PolicyId
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
@@ -48,6 +54,24 @@ class RouteEscapesTest {
                     """"rateLimits":$rateLimits}"""
                 ).encodeToByteArray()
         ),
+    )
+
+    /**
+     * A platform document with one `http:` DENY under [policyId], built by the engine alone: the document compiler refuses
+     * an id that holds a control character (`DOC-13`), and the escape at the print site stays for whatever reaches it
+     * another way (`DOC-12`, defence in depth).
+     */
+    private fun engineOnly(policyId: String) = CompiledDocument.platform(
+        listOf(
+            PolicyCompiler().compile(
+                PolicyId(policyId),
+                null,
+                listOf(
+                    StatementSource("", Effect.DENY, listOf("http:*"), listOf(ResourceSource("http:path:/admin/**")))
+                ),
+            ),
+        ),
+        emptyList(),
     )
 
     private fun escapes(policies: String, rateLimits: String = "[]") =
@@ -103,11 +127,8 @@ class RouteEscapesTest {
     /** `DOC-12` (R1B-3): an id is written as its document wrote it, and a line shows it escaped and bounded. */
     @Test
     fun `an id that would forge a line is shown escaped, and a long one cut`() {
-        // Rate limit rule ids are letters, digits, '.', '_' and '-' already; a policy id is checked for nothing.
-        val forged = escapes(
-            """[{"id":"x\n2026-11-19 ERROR forged\u0007\u001b[31m","statements":[{"effect":"deny","action":"http:*",""" +
-                """"resource":"http:path:/admin/**"}]}]""",
-        ).single()
+        // Rate limit rule ids are letters, digits, '.', '_' and '-'; no document compiles with a policy id like this one.
+        val forged = routes.escapes(engineOnly("x\n2026-11-19 ERROR forged\u0007\u001b[31m").httpStatements()).single()
         forged.statement.assert().isEqualTo("DENY x\n2026-11-19 ERROR forged\u0007\u001b[31m#0")
         val line = forged.toString()
         line.none { it.isISOControl() }.assert().describedAs(line).isTrue()

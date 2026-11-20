@@ -1,0 +1,16 @@
+# Rule: DOC-13
+# Mutant: the document compiler does not check the ids a document writes: a policy id with a line break compiles and forges a log line on every host that prints it
+# Tests: :document:test --tests me.ahoo.cosec.document.DocumentIdsTest
+
+diff --git a/core/document/src/main/kotlin/me/ahoo/cosec/document/PolicyDocumentCompiler.kt b/core/document/src/main/kotlin/me/ahoo/cosec/document/PolicyDocumentCompiler.kt
+index 55b080cc9..39383819a 100644
+--- a/core/document/src/main/kotlin/me/ahoo/cosec/document/PolicyDocumentCompiler.kt
++++ b/core/document/src/main/kotlin/me/ahoo/cosec/document/PolicyDocumentCompiler.kt
+@@ -120,7 +120,6 @@ class PolicyDocumentCompiler @InternalCoSecApi constructor(
+         val expansion = RoleExpansion.expand(document, roleGrantLimit)
+         val effective = expansion.document
+         val errors = ArrayList(RoleExpansion.check(document))
+-        DocumentIds.check(document, errors)
+         val compiled = effective.policies.mapIndexedNotNull { i, policy ->
+             policy(
+                 effective,

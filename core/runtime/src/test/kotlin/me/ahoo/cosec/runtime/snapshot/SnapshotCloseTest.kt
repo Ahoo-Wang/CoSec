@@ -24,6 +24,7 @@ import io.mockk.mockk
 import io.mockk.verify
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.runtime.captured
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
@@ -126,7 +127,7 @@ class SnapshotCloseTest {
         reload.get(WAIT_SECONDS, TimeUnit.SECONDS).revision.assert().isEqualTo(1)
         compiler.compiled.map { it.second }.assert().containsExactly(1L)
         source.entries().single().revision.assert().isEqualTo(1)
-        errors.list.filter { it.level == Level.ERROR }.assert().isEmpty()
+        errors.captured().filter { it.level == Level.ERROR }.assert().isEmpty()
     }
 
     /** #1266: whichever of the two ends the load, the other finds nothing left to do and nobody is left waiting. */

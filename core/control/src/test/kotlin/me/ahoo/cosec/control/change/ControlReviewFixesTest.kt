@@ -22,6 +22,7 @@ import me.ahoo.cosec.control.audit.ChangeEvent
 import me.ahoo.cosec.control.audit.ChangeListener
 import me.ahoo.cosec.control.audit.ChangeListeners
 import me.ahoo.cosec.control.authz.EngineAuthority
+import me.ahoo.cosec.control.authz.Operator
 import me.ahoo.cosec.control.authz.PipelineControlAuthorizer
 import me.ahoo.cosec.control.lifecycle.ChangeAuthority
 import me.ahoo.cosec.control.lifecycle.ChangeOptions
@@ -214,6 +215,22 @@ class ControlReviewFixesTest {
 
     @Test
     fun `a change another tenant may not read is the same 404 at every step, before its state`() = runBlocking<Unit> {
+        unreadableAtEveryStep(alice)
+    }
+
+    /**
+     * `CTL-15` within one tenant: the hard rule lets nobody, a platform principal bound to no policy, act on the
+     * platform document, and only the read decision keeps walt's change from them (a guard that only another tenant's
+     * caller exercised let a mutant that skips that decision survive).
+     */
+    @Test
+    fun `a change of its own tenant a caller may not read is the same 404 at every step, before its state`() =
+        runBlocking<Unit> {
+            unreadableAtEveryStep(engine.operator(TenantId.PLATFORM, "nobody"))
+        }
+
+    /** Every step [caller] takes on walt's change answers as for a change that does not exist, and moves nothing. */
+    private suspend fun unreadableAtEveryStep(caller: Operator) {
         val change = changes.propose(
             walt,
             SnapshotKey.Platform,
@@ -223,14 +240,14 @@ class ControlReviewFixesTest {
         )
         val missing = ChangeId("c999")
         val steps: List<Pair<String, suspend (ChangeId) -> Any>> = listOf(
-            "get" to { id -> changes.visible(alice, id) },
-            "approve" to { id -> changes.approve(alice, id, "x") },
-            "reject" to { id -> changes.reject(alice, id, "x") },
-            "publish" to { id -> changes.publish(alice, id) },
-            "stage" to { id -> changes.stage(alice, id) },
-            "skipShadow" to { id -> changes.skipShadow(alice, id, "x") },
-            "rebase" to { id -> changes.rebase(alice, id) },
-            "abandon" to { id -> changes.abandon(alice, id) },
+            "get" to { id -> changes.visible(caller, id) },
+            "approve" to { id -> changes.approve(caller, id, "x") },
+            "reject" to { id -> changes.reject(caller, id, "x") },
+            "publish" to { id -> changes.publish(caller, id) },
+            "stage" to { id -> changes.stage(caller, id) },
+            "skipShadow" to { id -> changes.skipShadow(caller, id, "x") },
+            "rebase" to { id -> changes.rebase(caller, id) },
+            "abandon" to { id -> changes.abandon(caller, id) },
         )
         for ((name, step) in steps) {
             val theirs = refused { step(change.id) }

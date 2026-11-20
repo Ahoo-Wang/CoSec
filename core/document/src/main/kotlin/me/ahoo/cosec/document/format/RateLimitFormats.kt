@@ -73,7 +73,7 @@ internal object RateLimitFormats {
             ),
             Field(
                 "key",
-                StringType(examples = listOf("environment.ip", "subject.id", "resource.var.orderId")),
+                FormatPatterns.id(listOf("environment.ip", "subject.id", "resource.var.orderId")),
                 description = "The text or address attribute whose value names the bucket. Absent: one bucket; " +
                     "an absent value: the empty bucket.",
             ),

@@ -52,9 +52,9 @@ internal object PlatformFormats {
                         Field(
                             "path",
                             StringType(
-                                pattern = EXTERNAL_PATH,
+                                pattern = FormatPatterns.printable(EXTERNAL_PATH),
                                 examples = listOf("ext.geo.region", "ext.risk.score"),
-                                counterExamples = listOf("geo.region", "ext.geo", "ext..x", "ext.geo."),
+                                counterExamples = listOf("geo.region", "ext.geo", "ext..x", "ext.geo.", "ext.geo.a\nb"),
                             ),
                             required = true,
                         ),

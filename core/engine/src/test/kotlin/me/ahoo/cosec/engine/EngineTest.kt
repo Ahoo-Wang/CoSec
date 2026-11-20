@@ -570,14 +570,14 @@ class EngineTest {
     fun `a path that does not decode fails the statements that need it, never a deny`() {
         val compiler = PolicyCompiler()
         val decoding = StatementSource("d", Effect.DENY, listOf("*"), listOf(ResourceSource("http:path:/a/**")))
-        val raw = ResourceSource("http:path:/a/**", decodeAndParseSegments = false)
         val policy = compiler.compile(
             PolicyId("p"),
             null,
-            listOf(decoding, StatementSource("r", Effect.DENY, listOf("*"), listOf(raw)))
+            listOf(decoding, StatementSource("r", Effect.DENY, listOf("*"), emptyList()))
         )
         val platform = platform(policy, bindings = listOf(anyone("g", "p")))
-        // Matched without decoding, the DENY that does not decode decides.
+        // A DENY that reads no path decides, whatever the one that fails to decode it. (A DENY cannot match the path
+        // undecoded, DOC-14.)
         decide(flatRequest(path = "/a/%zz"), platform).assert()
             .isEqualTo(Decision.Deny(StatementRef.Policy(PolicyId("p"), 1, "r", bound("g"))))
         val failing = compiler.compile(PolicyId("p"), null, listOf(decoding))

@@ -85,6 +85,7 @@ CoSec 授权的路径是应用内的请求路径：
 - **不解码**：未映射请求的资源就是收到的路径，包括百分号转义。模式如何匹配编码后的路径，见[策略语言](../policies/language.md)；
 - **在认证之前以 `400` `invalid-request` 拒绝**的情况：去掉路径参数并解码一次之后，含有 `.` 或 `..` 段（包括编码后的 `;`）；含有格式错误的百分号转义；长度超过 2048 个字符；或某一段超过 256 个字符。因此 Servlet 容器会解析成 `/admin` 的 `/public/..;/admin` 会被拒绝；
 - **同样被拒绝**的情况：结尾之前含有空段（`//admin`、`/admin//x`，或去掉路径参数后变成 `//admin` 的 `/;x/admin`），含有编码后的分隔符（`%2F` 或 `%2f`），或者含有反斜杠（`\`、`%5C` 或 `%5c`）。模式把它们读成单独的段或某一段的一部分，所以 `/admin` 之下的 `DENY` 匹配不到它们，而会合并斜杠、解码分隔符或把 `\` 当作 `/` 的后端却按 `/admin/...` 提供服务。编码两次的分隔符（`%252F`、`%255C`）只解码一次，成为文本，照常决定；
+- **同样被拒绝**的情况：含有编码后的 `;`（`%3B`）或编码后的控制字符（`%00` 到 `%1F`、`%7F`），十六进制数字大小写均可，出现在路径任何位置，包括路径参数之内（`PIP-30`）。CoSec 把它们读成某一段里的文本，但网关之后先解码、再去掉路径参数的后端会把 `/admin%3Bx/users` 当作 `/admin/users` 提供服务，在 NUL 处截断或丢掉控制字符之后内容的后端又会提供另一个路径。`%25` 是段里的数据：`%253B` 只解码一次，成为文本 `%3B`，照常决定；结尾的 `.` 或空格也一样。未编码的控制字符同样被拒绝，尽管 CoSec 运行的服务器已经会在任何过滤器之前拒绝它。有的服务器自己也会拒绝其中一部分编码写法：Jetty 拒绝所有编码后的控制字符（以及 `%25`），Tomcat 拒绝 `%00`；
 - **保留末尾的 `/`**：`/admin/` 是一条独立的路径，与 Spring 的路由一致。写成 `/admin` 的模式不匹配它，`/admin/**` 匹配它。
 
 ## 路由映射 {#route-maps}
@@ -476,9 +477,11 @@ spring:
 cosec:
   pipeline:
     mode: gateway
+    identity:
+      only-gateway-can-reach: true   # 你的声明：确实如此；没有它服务不会启动
 ```
 
-在这个模式下，适配器通过 `IdentityGate` 读取转发来的身份，starter 不装配认证器、快照、路由映射、限流、控制面、`AuthorizationChecker` 或 Redis。仍留在 classpath 上的 `cosec-cocache` 不会被使用，因此不需要 Redis template 和 CoCache starter；设置 `cosec.jwt.enabled=true` 后，它用于保存本服务所签发令牌的吊销记录，此时启动要求两者都具备（[模块](../guide/introduction.md#modules)）。服务不基于策略做任何决策：决策已由网关做出。它相信收到的任何 `CoSec-Identity`，因此**只有网关能访问到它**：如何保证这一点以及启动时的检查，见部署指南中的[网关后面的服务](../operations/deployment.md#services-behind-the-gateway)。
+在这个模式下，适配器通过 `IdentityGate` 读取转发来的身份，starter 不装配认证器、快照、路由映射、限流、控制面、`AuthorizationChecker` 或 Redis。仍留在 classpath 上的 `cosec-cocache` 不会被使用，因此不需要 Redis template 和 CoCache starter；设置 `cosec.jwt.enabled=true` 后，它用于保存本服务所签发令牌的吊销记录，此时启动要求两者都具备（[模块](../guide/introduction.md#modules)）。服务不基于策略做任何决策：决策已由网关做出。它相信收到的任何 `CoSec-Identity`，因此**只有网关能访问到它**：上面的声明、如何保证这一点以及启动时的检查（这里也不能有 hidden-method 过滤器：网关决策的是请求行的方法，并从转发的请求中移除方法覆盖头），见部署指南中的[网关后面的服务](../operations/deployment.md#services-behind-the-gateway)。
 
 | 请求 | 回应 |
 |---|---|

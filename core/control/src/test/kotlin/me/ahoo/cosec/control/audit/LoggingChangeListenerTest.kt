@@ -20,6 +20,7 @@ import ch.qos.logback.classic.spi.ILoggingEvent
 import ch.qos.logback.core.read.ListAppender
 import kotlinx.coroutines.runBlocking
 import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.control.captured
 import me.ahoo.cosec.control.change.ChangeId
 import me.ahoo.cosec.document.Actor
 import me.ahoo.cosec.model.PrincipalId
@@ -35,12 +36,12 @@ import java.time.Instant
  * the class that happens to write it (RFC 0013 B4).
  */
 class LoggingChangeListenerTest {
-    private val event = ChangeEvent(
+    private fun event(change: String) = ChangeEvent(
         "e",
         Instant.EPOCH,
         ChangeEvent.Kind.PUBLISHED,
         Actor(TenantId.PLATFORM, PrincipalId("plato")),
-        ChangeId("pins-the-logger-name"),
+        ChangeId(change),
         SnapshotKey.Platform,
         RevisionRef(1, "d"),
         null,
@@ -50,18 +51,31 @@ class LoggingChangeListenerTest {
     fun `the change log is written to the logger me-ahoo-cosec-changelog`() {
         LoggingChangeListener.LOGGER_NAME.assert().isEqualTo("me.ahoo.cosec.changelog")
         val logger = LoggerFactory.getLogger("me.ahoo.cosec.changelog") as Logger
-        val logged = ListAppender<ILoggingEvent>().also { it.start() }
-        logger.addAppender(logged)
-        try {
-            runBlocking { LoggingChangeListener().onChange(event) }
-            // Other tests log through the same listener at the same time: this change's line is the one asked about.
-            logged.list.filter { "pins-the-logger-name" in it.formattedMessage }
-                .map { it.loggerName to it.formattedMessage }.assert().singleElement().satisfies({
-                    it.first.assert().isEqualTo("me.ahoo.cosec.changelog")
-                    it.second.assert().startsWith("Change pins-the-logger-name PUBLISHED on ")
-                })
-        } finally {
-            logger.detachAppender(logged)
+        // Other tests' background work logs through the same listener while this one runs. An appender attached while
+        // another thread logs on the logger can be skipped (logback's COWArrayList marks its copy of the appenders
+        // fresh after copying it, so a copy taken before the attach can outlive it) until the appenders change again:
+        // attach anew, with a change of its own, until the line lands. A listener that stops writing to this logger
+        // lands nothing in any attempt.
+        val lines = (1..ATTEMPTS).firstNotNullOfOrNull { attempt ->
+            val change = "pins-the-logger-name-$attempt"
+            val logged = ListAppender<ILoggingEvent>().also { it.start() }
+            logger.addAppender(logged)
+            try {
+                runBlocking { LoggingChangeListener().onChange(event(change)) }
+                // This change's lines, among the other tests'.
+                logged.captured().filter { "$change " in it.formattedMessage }.takeIf { it.isNotEmpty() }
+            } finally {
+                logger.detachAppender(logged)
+            }
         }
+        lines.orEmpty().map { it.loggerName to it.formattedMessage }.assert().singleElement().satisfies({
+            it.first.assert().isEqualTo("me.ahoo.cosec.changelog")
+            it.second.assert().startsWith("Change pins-the-logger-name-")
+            it.second.assert().contains(" PUBLISHED on ")
+        })
+    }
+
+    private companion object {
+        const val ATTEMPTS = 5
     }
 }
