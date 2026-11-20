@@ -58,6 +58,18 @@ internal object TokenStores {
     /** The startup failure that names every store [beans] is missing: its callers throw it themselves. */
     fun failure(beans: ListableBeanFactory): IllegalStateException = IllegalStateException(message(missing(beans)))
 
+    /**
+     * The startup failure of a host that verifies tokens with a [me.ahoo.cosec.spi.token.TokenVerifier] bean and has no
+     * signing key: it issues none, so it needs no store of its own, only the reader of its issuer's revocations.
+     */
+    fun verifierOnlyFailure(): IllegalStateException = IllegalStateException(
+        "A TokenVerifier bean turns token authentication on, and every token it verifies is checked against revoked " +
+            "tokens, but no RevocationReader is available. Add cosec-cocache on the issuer's Redis with the issuer's " +
+            "cosec.key-prefix, or a RevocationReader bean of your own. RevocationReader.NONE accepts revoked tokens until " +
+            "they expire: use it only where no one revokes a token. Without a TokenVerifier bean and without " +
+            "${JwtProperties.PREFIX}.secret, a request with a token is refused (token-invalid).",
+    )
+
     fun message(missing: List<String>): String =
         "CoSec's tokens are on, but ${missing.joinToString(", ")} ${if (missing.size == 1) "is" else "are"} missing. " +
             "Verifying and refreshing tokens needs three stores: a TokenStore records revoked tokens, a " +

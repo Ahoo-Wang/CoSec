@@ -854,6 +854,12 @@ Token revocation is always on with JWT, and the starter never revokes into nothi
 missing at once. Add `cosec-cocache`, register a `TokenStore`, a `RevocationReader` and a `TokenFamilyStore` bean of
 your own, or turn JWT off in a service that neither issues nor verifies tokens.
 
+A service that only verifies another issuer's tokens, with a `TokenVerifier` bean of its own and no `cosec.jwt.secret`, has
+tokens on too (the verifier is the switch) and needs only the reader. Without one it fails with `A TokenVerifier bean turns
+token authentication on, and every token it verifies is checked against revoked tokens, but no RevocationReader is
+available.`: add `cosec-cocache` on the issuer's Redis, a `RevocationReader` bean of your own, or `RevocationReader.NONE`
+where no one revokes a token.
+
 A service that verifies tokens over `RevocationReader.NONE` starts, and logs once at `WARN`:
 
 ```text
