@@ -5,6 +5,8 @@
 >
 > 更新于 2026-11-20，基线 `main` @ `63473ab8`（#1731）。`8.0.0-beta.4` 已发布；下一个版本是 `8.0.0-beta.5`，RC1 不是下一个。**目标场景是上万租户的 SaaS、网关统一判定；方向是“内存换性能”**。**恢复工作从 §9 最新一行“台账”读起**；最新的状态在 §9 靠后的几行（按日期）。
 >
+> 本文按文件名引用的会话报告、实测与设计（`review-r1-*`、`review-r2-*`、`usability-*`、`saas-*`、`wow-beta4-drill-findings.md` 等）在 [`docs/reviews/2026-11/`](reviews/2026-11/README.md)，那里的索引写明每份的状态；此前它们只存在协调者的本地目录里。
+>
 > 面向用户的路线图见 [CoSec 8.0 路线图](https://cosec.ahoo.me/zh/guide/roadmap)（[`wiki/zh/guide/roadmap.md`](../wiki/zh/guide/roadmap.md)）。
 
 ## 0. 总览
