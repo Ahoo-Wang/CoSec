@@ -22,6 +22,7 @@ import me.ahoo.cosec.control.change.Finding
 import me.ahoo.cosec.control.change.Severity
 import me.ahoo.cosec.document.PolicyDocument
 import me.ahoo.cosec.document.RolePermissions
+import me.ahoo.cosec.model.RoleId
 import me.ahoo.cosec.model.decision.DocumentKind
 import me.ahoo.cosec.spi.snapshot.SnapshotDigest
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
@@ -40,6 +41,10 @@ internal object RoleChecks {
         checkedWith: MutableMap<SnapshotKey, SnapshotDigest?>,
         findings: MutableList<Finding>,
     ) {
+        if (candidate.kind == DocumentKind.APP) {
+            sharedSystemRoles(candidate, context, checkedWith, findings)
+            return
+        }
         if (candidate.kind != DocumentKind.TENANT) {
             return
         }
@@ -50,7 +55,7 @@ internal object RoleChecks {
             checkedWith[key] = head?.digest
             val document = head?.document ?: continue
             if (document.roles.any { it.id == role.id }) {
-                findings += roleWarning("$.roles[$r].id", "[${role.id.value}] is also a system role of app $app: a member holding it gets both")
+                findings += roleWarning("$.roles[$r].id", "[${role.id.value}], a role of this tenant, is also a system role of app $app: a member holding it gets both")
             }
             val space = role.space?.value?.takeIf { it.isNotEmpty() } ?: continue
             val listed = (role.permissions as? RolePermissions.Listed)?.ids.orEmpty()
@@ -62,6 +67,41 @@ internal object RoleChecks {
                     "[$permission] applies only in the default space, so it never applies in [$space]",
                 )
             }
+        }
+    }
+
+    /**
+     * A system role of an app candidate whose id another app's head defines too (`ROL-12`): a membership is
+     * `role@space`, with no app in it, so a member whose roles are not issued per app (a provider's, or a token bound to
+     * no app) and who holds the role once holds it in both apps. That may be meant; it only warns. It reads the app
+     * list and the heads of the apps it names, a dozen at most, never a tenant's document.
+     */
+    private suspend fun sharedSystemRoles(
+        candidate: PolicyDocument,
+        context: CurrentDocuments,
+        checkedWith: MutableMap<SnapshotKey, SnapshotDigest?>,
+        findings: MutableList<Finding>,
+    ) {
+        if (candidate.roles.isEmpty()) return
+        val others = context.apps()?.value?.entries.orEmpty().filter {
+            it != candidate.owner && SnapshotKey.App.isValidAppId(it)
+        }
+        val defining = HashMap<RoleId, MutableSet<String>>()
+        for (app in others.sorted()) {
+            val key = SnapshotKey.App(app)
+            val head = context.head(key)
+            checkedWith[key] = head?.digest
+            head?.document?.roles?.forEach { defining.getOrPut(it.id) { sortedSetOf() } += app }
+        }
+        for ((r, role) in candidate.roles.withIndex()) {
+            val apps = defining[role.id] ?: continue
+            findings += roleWarning(
+                "$.roles[$r].id",
+                "[${role.id.value}], a system role of this app, is also a system role of app ${apps.joinToString()}: " +
+                    "a member who holds it once " +
+                    "holds it in both apps unless their roles are issued per app; prefix the id with the app " +
+                    "(${candidate.owner}.${role.id.value}) when that is not meant",
+            )
         }
     }
 

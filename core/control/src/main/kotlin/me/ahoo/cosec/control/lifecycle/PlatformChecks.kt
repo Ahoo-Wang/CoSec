@@ -35,7 +35,7 @@ internal object PlatformChecks {
     /**
      * The policy ids a platform candidate adds that a tenant document already uses, defining or binding it (RFC 0007
      * N2, RC1-9, `CTL-43`): an id the tenant defines would be ambiguous in that tenant, which the engine fails closed
-     * on; one it binds, such as an app's policy bound scoped to that app, would be re-pointed to the platform's, since
+     * on; one it binds without defining, which only a head not written through a compiled change can hold (as `cosec-migrate` writes one), would be re-pointed to the platform's, since
      * the engine resolves a binding without a policy of its document to the platform's policy before the app's
      * (`CandidateOrder.resolve`). Every tenant with an entry, whatever its flag, is a candidate, confirmed by reading
      * its head: an entry a lost race or an earlier revision left does not block, and needs no repair to stop blocking.
