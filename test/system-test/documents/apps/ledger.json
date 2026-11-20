@@ -1,0 +1,19 @@
+{
+  "schema": 2,
+  "revision": 1,
+  "publishedAt": "2026-11-20T00:00:00Z",
+  "catalog": {
+    "groups": [
+      {
+        "name": "Entries",
+        "permissions": [
+          { "id": "entries.read", "name": "Read entries", "action": "http:GET", "resource": "http:path:/ledger/entries/**" }
+        ]
+      }
+    ]
+  },
+  "roles": [
+    { "id": "manager", "name": "Manager", "permissions": ["entries.read"] },
+    { "id": "clerk", "name": "Clerk", "permissions": [] }
+  ]
+}
