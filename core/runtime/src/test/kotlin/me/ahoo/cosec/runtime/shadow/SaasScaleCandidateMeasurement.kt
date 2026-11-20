@@ -11,7 +11,8 @@
  * limitations under the License.
  */
 
-// (the file-level opt-in to CoSec's internal API stood here; see README.md in this folder)
+@file:OptIn(InternalCoSecApi::class, ExperimentalCoSecApi::class)
+
 package me.ahoo.cosec.runtime.shadow
 
 import kotlinx.coroutines.runBlocking
@@ -29,7 +30,20 @@ import java.time.Instant
 import java.time.ZoneId
 import kotlin.random.Random
 
-// Not committed: the candidate reads of shadow sampling at SaaS scale (2026-11-19).
+/**
+ * A measurement, not a check: the candidate reads of shadow sampling at SaaS scale: store reads per 1000 requests
+ * for staged tenant candidates, with and without one on the platform, at two request rates and several bounds and
+ * absence lifetimes of the candidate cache. It is a `main` and nothing JUnit discovers, so `check` compiles it and
+ * never runs it; it runs for minutes and takes gigabytes of heap, so run it by hand, niced, and never on a shared
+ * machine's full load. In-memory stores stand in for Redis: it needs no Redis.
+ *
+ * Run: `nice -n 15 ./gradlew :runtime:testClasses`, then `java -Xmx4g -cp <the runtime module's test runtime
+ * classpath> me.ahoo.cosec.runtime.shadow.SaasScaleCandidateMeasurementKt` (the optional argument is the file the
+ * report is written to (default `candidate-load.txt`)). There is no Gradle task for it: the classpath is what an
+ * IDE's run configuration for this file's `main` uses. Its numbers are in `docs/reviews/2026-11/`:
+ * `saas-scale-data-plane.md` (the candidate-load table). They are of the commit that report names; this file is
+ * kept compiling against `main`, not re-measured.
+ */
 
 private class StepClock : Clock() {
     var now: Instant = Instant.parse("2026-11-19T00:00:00Z")
@@ -50,13 +64,17 @@ private class CountingStore(private val staged: Map<SnapshotKey, StoredCandidate
 private val lines = StringBuilder()
 
 private fun run(windows: Int, onPlatform: Boolean, rate: Int, maxEntries: Int, refresh: Duration, tenants: Int = 10_000) {
-    val document = SnapshotDocuments.read("""{"schema":2,"revision":1,"publishedAt":"2026-11-19T00:00:00Z"}""".encodeToByteArray())
+    val document = SnapshotDocuments.read(
+        """{"schema":2,"revision":1,"publishedAt":"2026-11-19T00:00:00Z"}""".encodeToByteArray()
+    )
     val staged = HashMap<SnapshotKey, StoredCandidate>()
     repeat(windows) { staged[SnapshotKey.Tenant("t-${it * 97 % tenants}")] = StoredCandidate("w-$it", 1, document) }
     if (onPlatform) staged[SnapshotKey.Platform] = StoredCandidate("w-platform", 1, document)
     val store = CountingStore(staged)
     val clock = StepClock()
     val compiler = PolicyDocumentCompiler()
+    // The cache's bound is always given here; its default is now `CachingCandidateSource.DEFAULT_MAX_ENTRIES` (1,024) and
+    // was another when this ran, so a run that needs the default of then passes it as `maxEntries`.
     val source = CachingCandidateSource(store, { key, doc -> compiler.compile(key, doc) }, maxEntries, refresh, clock)
     val random = Random(7)
     val step = Duration.ofNanos(1_000_000_000L / rate)
