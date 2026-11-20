@@ -106,7 +106,9 @@ class ReferenceRepair(private val store: ControlStore, private val conversion: S
 
     /** Step 2 for one value: converted once, if the heads touch it and it is in the old format. */
     private suspend fun convert(reference: Pair<SnapshotKey, PolicyId>, seen: MutableSet<Pair<SnapshotKey, PolicyId>>) =
-        seen.add(reference) && checkNotNull(conversion).convert(reference.first, reference.second)
+        seen.add(reference) && checkNotNull(conversion).convert(reference.first, reference.second) { referrer ->
+            reference.first is SnapshotKey.Platform && revisions.definesItself(referrer, reference.second)
+        }
 
     /** [step] for [key]; what it counted, or 0 when it failed, which [failed] names, keeping a document's first failure. */
     @Suppress("TooGenericExceptionCaught")

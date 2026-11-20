@@ -34,9 +34,9 @@ import me.ahoo.cosec.spi.snapshot.SnapshotKeyText
  * publish added is never lost. No other writer can change an old-format value meanwhile (CoCache refuses to add to or
  * remove from it), and the repair holds its lease against a second run.
  *
- * A converted entry says the referrer refers to the policy, never that it defines the id itself, and keeps the revision
- * that indexed it (at least 1): the conservative direction for a removal (`CTL-43`). The repair then adds what each head
- * defines and prunes what no head has.
+ * A converted entry keeps the revision that indexed it (at least 1), and says `#own` when the referrer's head defines the
+ * id itself (`CTL-43`): the old format did not record which. The repair then adds what each head refers to and prunes
+ * what no head has.
  */
 internal class LegacyConversion(
     private val store: CoCacheControlStore,
@@ -67,13 +67,23 @@ internal class LegacyConversion(
         }
     }
 
-    /** Converts the value of [target]'s [policy] if it is in the format before 8.0.0-beta.5; whether it did. */
-    suspend fun convert(target: SnapshotKey, policy: PolicyId): Boolean {
+    /**
+     * Converts the value of [target]'s [policy] if it is in the format before 8.0.0-beta.5; whether it did. An entry
+     * says `#own` when [definesItself] says so of its referrer, as the head of that referrer reads now.
+     */
+    suspend fun convert(
+        target: SnapshotKey,
+        policy: PolicyId,
+        definesItself: suspend (SnapshotKey) -> Boolean = { false },
+    ): Boolean {
         if (!isLegacy(target, policy)) {
             return false
         }
         val old = legacy.suspending().get(target to policy) ?: return false
-        val entries = old.mapTo(LinkedHashSet()) { (referrer, revision) -> ReferrerEntry(referrer, maxOf(1, revision)) }
+        val entries = LinkedHashSet<ReferrerEntry>()
+        for ((referrer, revision) in old) {
+            entries += ReferrerEntry(referrer, maxOf(1, revision), definesItself(referrer))
+        }
         store.convertReferrers(target, policy, entries)
         return true
     }

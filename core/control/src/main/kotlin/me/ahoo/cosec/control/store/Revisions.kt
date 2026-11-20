@@ -339,6 +339,12 @@ class Revisions(
         policy
     )
 
+    /** Whether the head of [referrer] is a tenant's that defines [policy] itself (RC1-9): its entries say `#own`. */
+    suspend fun definesItself(referrer: SnapshotKey, policy: PolicyId): Boolean = referrerIndex.definesItself(
+        referrer,
+        policy
+    )
+
     /** [ReferrerIndex.referenceKeys]: the back-reference sets the head of [key] touches. */
     suspend fun referenceKeys(key: SnapshotKey): Set<Pair<SnapshotKey, PolicyId>> = referrerIndex.referenceKeys(key)
 

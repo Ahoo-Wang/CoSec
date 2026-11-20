@@ -74,6 +74,17 @@ class LegacyConversionTest {
         }
     }
 
+    /** `CTL-43`: the old format did not say which referrer defines the id itself; the conversion reads it off its head. */
+    @Test
+    fun `a converted entry says it defines the id when its referrer's head does`() {
+        legacy(mapOf(acme to 2L, beta to 1L))
+        converting { store, conversion ->
+            conversion.convert(SnapshotKey.Platform, shared) { it == acme }.assert().isTrue()
+            store.referrers(SnapshotKey.Platform, shared).assert()
+                .containsExactlyInAnyOrder(ReferrerEntry(acme, 2, definesItself = true), ReferrerEntry(beta, 1))
+        }
+    }
+
     @Test
     fun `a set is never replaced, so a member added after the conversion stays`() {
         legacy(mapOf(acme to 1L))

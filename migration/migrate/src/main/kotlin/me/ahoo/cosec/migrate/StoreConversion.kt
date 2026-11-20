@@ -26,8 +26,11 @@ import me.ahoo.cosec.spi.snapshot.SnapshotKey
  * policy, into sets, and the document list into a set, whose old key it removes last.
  */
 interface StoreConversion {
-    /** Converts the back-references of [target]'s [policy] if they are in the old format; whether it did. */
-    suspend fun convert(target: SnapshotKey, policy: PolicyId): Boolean
+    /**
+     * Converts the back-references of [target]'s [policy] if they are in the old format; whether it did. Each entry says
+     * `#own` when [definesItself] says so of its referrer.
+     */
+    suspend fun convert(target: SnapshotKey, policy: PolicyId, definesItself: suspend (SnapshotKey) -> Boolean): Boolean
 
     /** The old document list, or null when there is none: the store is in the new format. */
     suspend fun legacyDocuments(): Set<String>?
@@ -43,10 +46,11 @@ interface StoreConversion {
         private val store: CoCacheControlStore,
         private val conversion: LegacyConversion,
     ) : StoreConversion {
-        override suspend fun convert(target: SnapshotKey, policy: PolicyId): Boolean = conversion.convert(
-            target,
-            policy
-        )
+        override suspend fun convert(
+            target: SnapshotKey,
+            policy: PolicyId,
+            definesItself: suspend (SnapshotKey) -> Boolean,
+        ): Boolean = conversion.convert(target, policy, definesItself)
 
         override suspend fun legacyDocuments(): Set<String>? = store.legacyDocuments()
 
