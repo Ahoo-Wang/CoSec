@@ -21,6 +21,7 @@ import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.control.change.ChangeRequest
 import me.ahoo.cosec.control.change.StageSlot
 import me.ahoo.cosec.control.change.ownerOf
+import me.ahoo.cosec.control.store.ReferrerEntry
 import me.ahoo.cosec.control.store.AppList
 import me.ahoo.cosec.control.store.ControlStore
 import me.ahoo.cosec.control.store.InMemoryControlStore
@@ -225,12 +226,10 @@ class ChainVerificationTest {
 
         override suspend fun putIndex(key: SnapshotKey, expected: SnapshotDigest?, index: RevisionIndex) = refused()
 
-        override suspend fun putReferrers(
-            target: SnapshotKey,
-            policy: PolicyId,
-            expected: SnapshotDigest?,
-            referrers: Map<SnapshotKey, Long>,
-        ) = refused()
+        override suspend fun addReferrer(target: SnapshotKey, policy: PolicyId, entry: ReferrerEntry) = refused()
+
+        override suspend fun removeReferrers(target: SnapshotKey, policy: PolicyId, entries: Set<ReferrerEntry>) =
+            refused()
 
         override suspend fun putChange(expected: SnapshotDigest?, change: ChangeRequest) =
             refused()

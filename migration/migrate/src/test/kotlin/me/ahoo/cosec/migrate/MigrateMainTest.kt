@@ -26,6 +26,7 @@ import me.ahoo.cosec.cocache.CoSecCacheSpecs
 import me.ahoo.cosec.cocache.control.CoCacheControlStore
 import me.ahoo.cosec.cocache.snapshot.createPolicySnapshotCache
 import me.ahoo.cosec.control.change.ownerOf
+import me.ahoo.cosec.control.store.ReferrerEntry
 import me.ahoo.cosec.control.store.AppList
 import me.ahoo.cosec.control.store.HeadWrite
 import me.ahoo.cosec.control.store.Publication
@@ -289,16 +290,15 @@ class MigrateMainTest {
             revisions.publish(SnapshotKey.Platform, null, document(SnapshotKey.Platform, listOf("shared")), publication)
             revisions.publish(acme, null, document(acme, listOf("own"), listOf("shared", "own")), publication)
             // As published before the upgrade: acme's own id is not in the index.
-            val indexed = store.referrers(SnapshotKey.Platform, own)!!
-            store.putReferrers(SnapshotKey.Platform, own, indexed.digest, emptyMap()).assert().isTrue()
+            store.removeReferrers(SnapshotKey.Platform, own, store.referrers(SnapshotKey.Platform, own))
         }
         val args = "repair-references --to-redis $REDIS --key-prefix $keyPrefix"
         val (code, output) = run(args)
         code.assert().describedAs(output).isEqualTo(MigrateMain.OK)
         output.assert().contains("Visited 2 document(s); added 1 reference(s).")
         controlStore(keyPrefix) { store ->
-            store.referrers(SnapshotKey.Platform, own)!!.value.assert().isEqualTo(mapOf(acme to 1L))
-            store.referrers(SnapshotKey.Platform, PolicyId("shared"))!!.value.assert().isEqualTo(mapOf(acme to 1L))
+            store.referrers(SnapshotKey.Platform, own).assert().containsExactly(ReferrerEntry(acme, 1, true))
+            store.referrers(SnapshotKey.Platform, PolicyId("shared")).assert().containsExactly(ReferrerEntry(acme, 1))
         }
         run(args).let { (again, out) ->
             again.assert().describedAs(out).isEqualTo(MigrateMain.OK)
@@ -362,14 +362,56 @@ class MigrateMainTest {
             revisions.publish(SnapshotKey.Platform, null, document(SnapshotKey.Platform, listOf("shared")), publication)
             revisions.publish(acme, null, document(acme, emptyList()), publication)
             // A publish of revision 2 indexed the reference and lost its race; another revision 2 has no such binding.
-            store.putReferrers(SnapshotKey.Platform, shared, null, mapOf(acme to 2L)).assert().isTrue()
+            store.addReferrer(SnapshotKey.Platform, shared, ReferrerEntry(acme, 2))
             revisions.publish(acme, revisions.head(acme), document(acme, emptyList()), publication)
         }
         val (code, output) = run("repair-references --to-redis $REDIS --key-prefix $keyPrefix")
         code.assert().describedAs(output).isEqualTo(MigrateMain.OK)
         output.assert().contains("Removed 1 reference(s) no head refers to.")
         controlStore(keyPrefix) { store ->
-            store.referrers(SnapshotKey.Platform, shared)?.value.orEmpty().assert().isEmpty()
+            store.referrers(SnapshotKey.Platform, shared).assert().isEmpty()
+        }
+    }
+
+    /**
+     * `MIG-4`: a store written before 8.0.0-beta.5 is converted: a back-reference value a head touches becomes a set, the
+     * entries the heads define themselves are added and the converted ones a head no longer has are pruned, and the old
+     * document list goes last. A second run converts nothing and changes nothing.
+     */
+    @Test
+    fun `repair-references converts a store written before beta 5 and removes the old document list last`() {
+        val keyPrefix = "migrate-test:${UUID.randomUUID()}"
+        val acme = SnapshotKey.Tenant("acme")
+        val shared = PolicyId("shared")
+        val publication = Publication("c", ProvenanceKind.MIGRATE, Actor(TenantId.PLATFORM, PrincipalId("op")))
+        controlStore(keyPrefix) { store ->
+            val revisions = Revisions(store)
+            revisions.publish(SnapshotKey.Platform, null, document(SnapshotKey.Platform, listOf("shared")), publication)
+            revisions.publish(acme, null, document(acme, listOf("own"), listOf("shared")), publication)
+        }
+        // As 8.0.0-beta.4 left it: one value per policy, and the document list under the lists.
+        LegacyStore(REDIS, keyPrefix).use { legacy ->
+            legacy.references(SnapshotKey.Platform, shared, mapOf(acme to 1L))
+            legacy.references(SnapshotKey.Platform, PolicyId("own"), mapOf(acme to 1L))
+            legacy.documents("platform", "tenant:acme")
+        }
+        val args = "repair-references --to-redis $REDIS --key-prefix $keyPrefix"
+        run(args).let { (code, output) ->
+            code.assert().describedAs(output).isEqualTo(MigrateMain.OK)
+            output.assert().contains("Converted 2 back-reference set(s) from the format before 8.0.0-beta.5.")
+                .contains("The store is in the format of 8.0.0-beta.5.")
+        }
+        controlStore(keyPrefix) { store ->
+            store.referrers(SnapshotKey.Platform, shared).assert().containsExactly(ReferrerEntry(acme, 1))
+            // acme defines own itself: the converted entry that says it refers is pruned, the one that defines added.
+            store.referrers(SnapshotKey.Platform, PolicyId("own")).assert().containsExactly(ReferrerEntry(acme, 1, true))
+            store.legacyDocuments().assert().isNull()
+            store.documents().assert().containsExactlyInAnyOrder(SnapshotKey.Platform, acme)
+        }
+        run(args).let { (code, output) ->
+            code.assert().describedAs(output).isEqualTo(MigrateMain.OK)
+            output.assert().doesNotContain("Converted").contains("added 0 reference(s)")
+                .contains("Removed 0 reference(s)")
         }
     }
 

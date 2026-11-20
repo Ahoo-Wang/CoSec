@@ -21,12 +21,18 @@ import me.ahoo.cosec.spi.snapshot.SnapshotKey
 
 /**
  * What [ReferenceRepair.run] did: the documents it visited, the references it added and removed, the documents it could
- * not, and how many apps the app list names now, `null` when it could not be completed.
+ * not, and how many apps the app list names now, `null` when it could not be completed. [converted] back-reference
+ * values went from the format before 8.0.0-beta.5 to sets; [converting] says the store had the old format at the start,
+ * [formatDone] that it has it no more. [busy]: another run held the lease, and this one did nothing.
  */
 class RepairResult(
     val documents: Int,
     val added: Int,
     val removed: Int,
     val failed: Map<SnapshotKey, String>,
-    val apps: Int?
+    val apps: Int?,
+    val converted: Int = 0,
+    val converting: Boolean = false,
+    val formatDone: Boolean = false,
+    val busy: Boolean = false,
 )
