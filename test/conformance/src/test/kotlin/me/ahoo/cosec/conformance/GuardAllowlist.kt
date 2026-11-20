@@ -247,6 +247,16 @@ object GuardAllowlist {
             "spring-boot:GatewayModeTrustTest#with the statement the service starts, in any letter case of true, and an enforcing host needs none",
             "spring-boot:GatewayModeTrustTest#a hidden-method filter in a service behind a gateway fails startup, by property and by bean",
             "spring-boot:GatewayModeTrustTest#a reactive service is held to the same two statements",
+            // STA-8: a host that serves the refresh route says how a refreshed token gets its roles.
+            "spring-boot:RefreshMembershipChoiceTest#no bean and no statement fails startup, and the message says what is at stake and the two ways out",
+            "spring-boot:RefreshMembershipChoiceTest#the statement starts the host, in any letter case, with one INFO line that says the lifetime it implies",
+            "spring-boot:RefreshMembershipChoiceTest#a MembershipRefresh bean starts the host without the statement, and logs nothing about it",
+            "spring-boot:RefreshMembershipChoiceTest#every other value fails like an absent one, and the message says what was written",
+            "spring-boot:RefreshMembershipChoiceTest#an application's own refresh authentication has chosen already",
+            "spring-boot:RefreshMembershipChoiceTest#a host that does not serve the refresh route is not asked",
+            "spring-boot:RefreshMembershipChoiceTest#a gateway host with the path set is told about the gateway, not asked for the choice",
+            "spring-boot:RefreshMembershipChoiceTest#a service in gateway mode serves no refresh and is not asked",
+            "spring-boot:RefreshMembershipChoiceTest#the link of the message reaches a heading of the page, in both languages",
             // IDN-28: CoSec's tokens are signed.
             "jwt:UnsignedAlgorithmTest#the verifier refuses Algorithm none",
             "jwt:UnsignedAlgorithmTest#the converter refuses Algorithm none",
