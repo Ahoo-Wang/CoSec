@@ -3,7 +3,7 @@
 # Tests: :cocache:test --tests me.ahoo.cosec.cocache.TokenFamilyFormatTest
 
 diff --git a/backends/cocache/src/main/kotlin/me/ahoo/cosec/cocache/TokenFamilyCodec.kt b/backends/cocache/src/main/kotlin/me/ahoo/cosec/cocache/TokenFamilyCodec.kt
-index 65da24ee6..968407704 100644
+index daa14869b..ec98c34f7 100644
 --- a/backends/cocache/src/main/kotlin/me/ahoo/cosec/cocache/TokenFamilyCodec.kt
 +++ b/backends/cocache/src/main/kotlin/me/ahoo/cosec/cocache/TokenFamilyCodec.kt
 @@ -56,7 +56,7 @@ internal object TokenFamilyCodec : Codec<TokenFamily> {
@@ -13,5 +13,5 @@ index 65da24ee6..968407704 100644
 -        StoredFormat.of(node, WHAT)
 +        if (!node.isObject) throw SnapshotFormatException("A stored $WHAT is not an object.")
          val generation = node.need("generation")
-         if (!generation.isIntegralNumber || !generation.canConvertToLong()) malformed("its generation is not an integer")
-         val revoked = node.need("revoked")
+         val counted = generation.isIntegralNumber && generation.canConvertToLong()
+         if (!counted) malformed("its generation is not an integer")
