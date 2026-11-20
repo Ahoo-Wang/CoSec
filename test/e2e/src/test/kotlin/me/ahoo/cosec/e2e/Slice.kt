@@ -26,6 +26,7 @@ import me.ahoo.cosec.cocache.snapshot.PolicySnapshotCache
 import me.ahoo.cosec.cocache.snapshot.RedisSnapshotDocumentStore
 import me.ahoo.cosec.cocache.snapshot.createPolicySnapshotCache
 import me.ahoo.cosec.document.SnapshotDocuments
+import me.ahoo.cosec.document.route.RouteMapCodec
 import me.ahoo.cosec.engine.CompiledDocument
 import me.ahoo.cosec.model.AppId
 import me.ahoo.cosec.model.Memberships
@@ -104,6 +105,12 @@ class Slice(
                 meterRegistry?.let { registry -> it.beanFactory.registerSingleton("meterRegistry", registry) }
                 identityIssuer?.let { issuer -> it.beanFactory.registerSingleton("cosecIdentityIssuer", issuer) }
                 it.beanFactory.registerSingleton("cosecAttributeProviders", attributes)
+                // The starter loads no route map where Spring Cloud Gateway is on the classpath, as it is on this
+                // module's (EdgeRequestBenchmark): the slice loads its own, as a host that is not a gateway does.
+                if (routeMap.isNotEmpty()) {
+                    val bytes = java.net.URI.create(routeMap).toURL().readBytes()
+                    it.beanFactory.registerSingleton("cosecRouteMap", RouteMapCodec.load(listOf(routeMap to bytes)))
+                }
                 it.beanFactory.registerSingleton("cosecDecisionListeners", listeners)
             },
         )
