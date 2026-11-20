@@ -143,7 +143,9 @@ class RefreshMembershipChoiceTest {
         message.assert()
             // 1. what happens without a choice, with the properties as configured
             .contains("$REFRESH=/auth/refresh serves the refresh route")
-            .contains("a role or an attached policy removed from a member keeps working until that member signs in again")
+            .contains(
+                "a role or an attached policy removed from a member keeps working until that member signs in again"
+            )
             .contains("up to cosec.jwt.session.lifetime=14d")
             .contains("cosec.jwt.token-validity.refresh=5d")
             // 2. the two ways to choose

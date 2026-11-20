@@ -3,7 +3,7 @@
 # Tests: :spring-boot:test --tests me.ahoo.cosec.spring.boot.realserver.RefreshMembershipChoiceTest
 
 diff --git a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/authentication/route/RefreshMembershipChoice.kt b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/authentication/route/RefreshMembershipChoice.kt
-index 92ab3f35b..bc4d2abd7 100644
+index 1f09306fc..b8e29b241 100644
 --- a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/authentication/route/RefreshMembershipChoice.kt
 +++ b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/authentication/route/RefreshMembershipChoice.kt
 @@ -62,7 +62,7 @@ internal object RefreshMembershipChoice {
