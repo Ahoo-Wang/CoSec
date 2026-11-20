@@ -110,10 +110,34 @@ internal class GrantFragmenter(private val narrowing: GrantNarrowing, private va
     fun widened(before: GrantDocument, after: GrantDocument): Map<PolicyId, List<Int>> =
         after.policies.associate { it.id to granted(before.policy(it.id), it) }.filterValues { it.isNotEmpty() }
 
-    /** The indexes of the ALLOWs of [policy] that narrow none of [previous]'s. */
-    private fun granted(previous: GrantPolicy?, policy: GrantPolicy): List<Int> = policy.statements.indices.filter {
-        val statement = policy.statements[it]
-        statement.effect == Effect.ALLOW && (previous == null || !narrowing.narrowsAny(policy, statement, previous))
+    /**
+     * The indexes of the ALLOWs of [policy] that narrow none of [previous]'s: none when [policy] is [previous] again
+     * (R2C-25, `CTL-50`), which [GrantEquality.samePolicy] tells in one pass where comparing statement by statement costs
+     * the square of their number.
+     *
+     * The skip holds because what this answers depends on the two versions only, and identity holds in every member
+     * of them the grant depends on (`GrantPolicyMembersTest`):
+     * - **Bindings.** It says what the bindings that already pointed to the policy are granted anew; a binding that is
+     *   new or changed is granted all of its policy by [fragments] whatever this answers, so an unchanged policy newly
+     *   bound is still analysed where it is bound.
+     * - **Roles and short forms.** Both versions are read written out ([GrantDocuments.of], `RoleExpansion.effective`):
+     *   a role or a catalog entry that now expands differently is a different policy or a different binding here.
+     * - **Attachments.** `attachable` is compared, and an unchanged attachable policy grants attachers nothing new.
+     * - **The platform document and the boundary.** Neither is a version of a tenant's policy: the boundary is left
+     *   out of [GrantDocuments.of] (setting one is an escalation of its own), and what the platform's or an app's
+     *   documents hold changes what the grantor holds (the verdicts), never what a tenant's unchanged policy grants.
+     *   A tenant policy removed while another document defines its id is [reresolved], not this.
+     */
+    private fun granted(previous: GrantPolicy?, policy: GrantPolicy): List<Int> {
+        if (previous != null && equality.samePolicy(previous, policy)) {
+            return emptyList()
+        }
+        val twins = previous?.let(GrantNarrowing::Twins)
+        return policy.statements.indices.filter {
+            val statement = policy.statements[it]
+            statement.effect == Effect.ALLOW &&
+                (previous == null || !narrowing.narrowsAny(policy, statement, previous, twins))
+        }
     }
 
     /**
