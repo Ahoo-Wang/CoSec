@@ -1,5 +1,5 @@
 {
-  "$id": "https://raw.githubusercontent.com/Ahoo-Wang/CoSec/refs/heads/main/schema/cosec-identity.schema.json",
+  "$id": "https://cosec.ahoo.me/schema/8.0/cosec-identity.schema.json",
   "$schema": "http://json-schema.org/draft-07/schema#",
   "additionalProperties": false,
   "description": "The JSON of the `CoSec-Identity` header (base64url, no padding) a gateway sets on a permitted request: who the caller is and the scope the gateway decided in. Never a credential, policy or attribute value. Passing this schema is necessary, not sufficient: the compiler also checks what JSON Schema cannot express, such as unique ids, time zones and expression syntax, so compile or load the document too.",

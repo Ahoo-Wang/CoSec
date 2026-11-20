@@ -11,7 +11,7 @@ is for (anyone, a principal, a role), in which tenant, app and space, and the ex
 
 The human-facing reference is https://cosec.ahoo.me/policies/language. In a CoSec checkout the format is defined in
 `core/document/src/main/kotlin/me/ahoo/cosec/document/format/PolicyDocumentFormats.kt` (generated into
-`schema/cosec-snapshot-document.schema.json`, `cosec-binding.schema.json`, `cosec-catalog.schema.json`) and read by
+`schema/8.0/cosec-snapshot-document.schema.json`, `cosec-binding.schema.json`, `cosec-catalog.schema.json`) and read by
 `PolicyDocumentCodec`; conditions are checked by `model/.../condition/ConditionChecker.kt`. Treat those as the truth.
 
 ## Documents
@@ -345,7 +345,7 @@ Check the final document for:
 
 ## Validation and rollout
 
-1. **Schema:** validate the document against `schema/cosec-snapshot-document.schema.json` (its `platformDocument`,
+1. **Schema:** validate the document against `schema/8.0/cosec-snapshot-document.schema.json` (its `platformDocument`,
    `appDocument` and `tenantDocument` definitions). The schema cannot check unique ids, binding placement, attribute
    types or limits; compiling does.
 2. **Compile:** in Kotlin, `PolicyDocumentCompiler.forPlatform(platform).validate(PolicyDocumentCodec.decode(kind,

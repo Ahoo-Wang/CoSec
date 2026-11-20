@@ -127,7 +127,7 @@ CoSec 没有哪个配置项叫这些名字，而已知的 key 无论来源都不
 
 `cosec.gateway.identity.*`，用于 Spring Cloud Gateway 宿主（`cosec-gateway`）：网关转发给其后服务的内容。对有主体的
 放行，它在接收身份的路由上把 `CoSec-Identity` 设为自己验证过的身份（格式见
-[`schema/cosec-identity.schema.json`](https://github.com/Ahoo-Wang/CoSec/blob/main/schema/cosec-identity.schema.json)）：指向已注册服务的路由（`lb://`），或元数据为 `cosec-identity: true` 的路由。元数据为
+[`schema/8.0/cosec-identity.schema.json`](https://cosec.ahoo.me/schema/8.0/cosec-identity.schema.json)）：指向已注册服务的路由（`lb://`），或元数据为 `cosec-identity: true` 的路由。元数据为
 `cosec-identity: false` 的路由，以及指向其他 URI 又没有该元数据的路由，不接收身份（[转发身份](../integration/web.md#forwarding-the-identity)）。
 无论这些配置项、模式或 `cosec.enabled` 如何，网关总是移除客户端发来的 `CoSec-Identity`。
 

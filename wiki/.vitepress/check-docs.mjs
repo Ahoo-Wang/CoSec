@@ -7,6 +7,7 @@
 // - every https://cosec.ahoo.me/... link of llms.txt, the skills and the READMEs names a page and an anchor that exist,
 //   and the site build publishes llms.txt (config/index.ts copies it from the repository root);
 // - every page of the sidebar has a link in llms.txt.
+// - every https://cosec.ahoo.me/schema/<line>/<file> link names a file of the repository's schema/, which the build serves.
 // - a JSON block that README*.md or a skill copies from an example carries the marker
 //   `<!-- sample: wiki/examples/<dir>/documents/<file>.json -->` on the line before its fence, and must equal that file
 //   (the example is compiled and run by DocumentationExamplesTest, so the copy cannot drift from what CoSec accepts).
@@ -114,9 +115,23 @@ for (const file of outside) {
     checked++
     const [path, fragment] = (m[1] ?? '/').replace(/[.,;:]+$/, '').split('#')
     if (path === '/' || path === '/zh/' || path === '/llms.txt') continue
+    if (path.startsWith('/schema/')) continue // held by the schema rule below
     const page = resolveTarget(wikiDir, path)
     if (!existsSync(page)) problems.push(`${relative_}: link ${m[0]} has no page`)
     else if (fragment && !anchors(page).has(fragment)) problems.push(`${relative_}: missing anchor #${fragment} in ${rel(page)}`)
+  }
+}
+// The site serves schema/ at /schema/ (config/index.ts copies it in buildEnd), so a link to https://cosec.ahoo.me/schema/<line>/<file>,
+// anywhere, in a code block too, names a file that exists in the repository's schema/<line>/.
+const schemaLink = /https:\/\/cosec\.ahoo\.me\/schema\/([^\s)`'"<>\]]*)/g
+for (const file of [...pages, ...outside]) {
+  for (const m of readFileSync(file, 'utf-8').matchAll(schemaLink)) {
+    checked++
+    const target = m[1].replace(/[.,;:]+$/, '')
+    // A file of a line, or the line's directory (`.../schema/8.0/<file>` in prose ends at the `<`).
+    if (!/^[0-9]+\.[0-9]+(\/[a-z-]+\.schema\.json|\/?)$/.test(target) || !existsSync(join(repoRoot, 'schema', target))) {
+      problems.push(`${relative(repoRoot, file)}: link ${m[0]} names no file of schema/ (the site serves schema/<line>/<file>)`)
+    }
   }
 }
 const samplePattern = /<!--\s*sample:\s*(\S+)\s*-->\s*\n```json\n([\s\S]*?)\n```/g
@@ -144,6 +159,9 @@ function sortKeys(value) {
 }
 if (!/llms\.txt/.test(readFileSync(join(wikiDir, '.vitepress/config/index.ts'), 'utf-8'))) {
   problems.push('config/index.ts: the build does not publish llms.txt (copy it in buildEnd)')
+}
+if (!/siteConfig\.outDir,\s*'schema'/.test(readFileSync(join(wikiDir, '.vitepress/config/index.ts'), 'utf-8'))) {
+  problems.push('config/index.ts: the build does not publish schema/ (copy it to <outDir>/schema in buildEnd)')
 }
 
 const sidebarLinks = (locale) =>

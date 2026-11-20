@@ -17,7 +17,7 @@ import java.util.Base64
 
 /**
  * The `CoSec-Identity` header a service behind the gateway received, decoded from its documented wire format (base64url
- * of compact JSON, `schema/cosec-identity.schema.json`) with nothing of CoSec's: the scenarios check what the gateway
+ * of compact JSON, `schema/8.0/cosec-identity.schema.json`) with nothing of CoSec's: the scenarios check what the gateway
  * writes, not what CoSec's own codec reads back.
  */
 object ForwardedIdentity {
