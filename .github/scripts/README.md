@@ -49,8 +49,9 @@ they are.
   remembered the old answer failing on `Could not find`. The script's removal of `caches/modules-2` on that error stays.
 - In `mutation.yml` it is restored after the job's Gradle cache, so that its newer index is the one that stays; the older
   files that cache also holds are only unused.
-- A manual run of `dependency-cache.yml` on a branch writes a cache that branch alone reads: how a change of the key, the
-  paths or the workflow is tried before it is on main.
+- A pull request that changes `dependency-cache.yml`, its key script or its action runs it, and the cache it writes is that
+  pull request's own (a pull request's cache is readable by it alone): how a change of the key, the paths or the workflow is
+  tried before it is on main, with the pull request's own CodeQL job as the reader.
 
 What it does not solve: the first run after a version bump downloads everything, once, in `dependency-cache.yml`, and the
 jobs that run before it is written (the pull request that bumps the version, which cannot write) download the difference

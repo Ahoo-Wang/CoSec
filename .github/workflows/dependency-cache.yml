@@ -20,7 +20,8 @@
 #
 # Written on main, after a resolution of the whole build that succeeded, and only when the key is not there yet: a push that
 # changes no version or repository finds it and does nothing. A cache that is not used for seven days is evicted, so a weekly
-# run keeps it. A manual run on another branch writes a cache only that branch reads: how a change of this workflow is tried.
+# run keeps it. A pull request that changes this workflow, its key script or its action runs it, and the cache it writes is that pull
+# request's own: how a change of them is tried before it is on main (a new workflow cannot be dispatched before it is).
 name: Dependency cache
 on:
   push:
@@ -33,6 +34,13 @@ on:
       - '.github/scripts/dependency-cache-key.sh'
       - '.github/scripts/resolve-dependencies.sh'
       - '.github/gradle/**'
+      - '.github/workflows/dependency-cache.yml'
+  # A change of this workflow, its key script or the action that restores it is tried on the pull request that makes it: the
+  # cache it writes there is readable by that pull request alone (a pull request's cache is its own), never by main or another.
+  pull_request:
+    paths:
+      - '.github/scripts/dependency-cache-key.sh'
+      - '.github/actions/dependency-cache/**'
       - '.github/workflows/dependency-cache.yml'
   schedule:
     - cron: '17 4 * * 0'
