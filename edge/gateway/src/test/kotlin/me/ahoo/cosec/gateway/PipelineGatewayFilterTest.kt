@@ -197,6 +197,23 @@ class PipelineGatewayFilterTest {
         route: Route? = lb,
     ): HttpHeaders = sent(filter, request, route).headers
 
+    /**
+     * R2B-9: what a route decides is computed once per route instance; a refreshed route, a new instance under the same
+     * id, is read again: a route that stops receiving the identity stops at once.
+     */
+    @Test
+    fun `a refreshed route under the same id is read again`() {
+        val filter = PipelineGatewayFilter(pipeline(alice, IdentityIssuer()))
+        val receiving = route("http://orders", identity = true)
+        forwarded(filter, MockServerHttpRequest.get("/orders"), receiving).containsHeader(IdentityCodec.HEADER)
+            .assert().isTrue()
+        forwarded(filter, MockServerHttpRequest.get("/orders"), receiving).containsHeader(IdentityCodec.HEADER)
+            .assert().isTrue()
+        val refreshed = route("http://orders", identity = false)
+        forwarded(filter, MockServerHttpRequest.get("/orders"), refreshed).containsHeader(IdentityCodec.HEADER)
+            .assert().isFalse()
+    }
+
     @Test
     fun `a client's identity never reaches a backend, whatever the pipeline forwards`() {
         val forged = { MockServerHttpRequest.get("/orders").header(IdentityCodec.HEADER, "forged") }

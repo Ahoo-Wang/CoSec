@@ -3,15 +3,15 @@
 # Tests: :gateway:test --tests me.ahoo.cosec.gateway.PipelineGatewayFilterTest :conformance:test
 
 diff --git a/edge/gateway/src/main/kotlin/me/ahoo/cosec/gateway/PipelineGatewayFilter.kt b/edge/gateway/src/main/kotlin/me/ahoo/cosec/gateway/PipelineGatewayFilter.kt
-index 3c6ddd10..b8ae7ffb 100644
+index 234444981..a9012a44c 100644
 --- a/edge/gateway/src/main/kotlin/me/ahoo/cosec/gateway/PipelineGatewayFilter.kt
 +++ b/edge/gateway/src/main/kotlin/me/ahoo/cosec/gateway/PipelineGatewayFilter.kt
-@@ -121,7 +121,7 @@ class PipelineGatewayFilter(
-                         }
+@@ -132,7 +132,7 @@ class PipelineGatewayFilter @InternalCoSecApi constructor(
                      }
+                     if (!keepsCredentials) credentials.strip(headers, cookies)
                  }
--            if (!credentials) {
-+            if (false) {
-                 val query = request.uri.rawQuery
-                 val kept = withoutQueryToken(query)
-                 if (kept != query) {
+-            if (!keepsCredentials) credentials.withoutQueryToken(request.uri)?.let(downstream::uri)
++            if (false) credentials.withoutQueryToken(request.uri)?.let(downstream::uri)
+             // The last hop ([IdentityHeadersFilter]) forwards this value, and only this, whatever later filters do.
+             outcome.forward[IdentityCodec.HEADER]?.let { authorized.attributes[IdentityHeadersFilter.FORWARDED_ATTRIBUTE] = it }
+             chain.filter(authorized.mutate().request(credentials.handedOn(downstream.build(), cookies)).build())
