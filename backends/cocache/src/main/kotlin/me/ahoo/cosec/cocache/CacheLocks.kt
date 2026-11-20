@@ -33,7 +33,6 @@ import me.ahoo.cosec.cocache.CoSecCacheSpecs.MEMBERSHIP_CACHE_NAME
 import me.ahoo.cosec.cocache.CoSecCacheSpecs.POLICY_SNAPSHOT_CACHE_NAME
 import me.ahoo.cosec.cocache.CoSecCacheSpecs.REVOKED_SUBJECT_CACHE_NAME
 import me.ahoo.cosec.cocache.CoSecCacheSpecs.REVOKED_TOKEN_CACHE_NAME
-import me.ahoo.cosec.cocache.CoSecCacheSpecs.SET_OF_RECORD_CACHE_NAMES
 import me.ahoo.cosec.cocache.CoSecCacheSpecs.SHADOW_CACHE_NAMES
 import me.ahoo.cosec.cocache.CoSecCacheSpecs.STORE_OF_RECORD_CACHE_NAMES
 import me.ahoo.cosec.cocache.CoSecCacheSpecs.TOKEN_FAMILY_CACHE_NAME
@@ -58,7 +57,7 @@ internal object CacheLocks {
         // read-only user must be enough; a property or customizer that changes it either way is refused here.
         verify { readOnlyAsDeclared(it, readOnly) }
         when (cacheName) {
-            in SET_OF_RECORD_CACHE_NAMES -> setOfRecord()
+            in SetsOfRecord.CACHE_NAMES -> setOfRecord()
 
             in STORE_OF_RECORD_CACHE_NAMES -> {
                 verify { require(it is StoreSpec<*, *>) { "CoSec's ${it.name} is the store of record: a Store." } }

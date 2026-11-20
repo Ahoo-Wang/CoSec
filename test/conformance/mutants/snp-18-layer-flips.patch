@@ -3,13 +3,14 @@
 # Tests: :cocache:test --tests me.ahoo.cosec.cocache.ReadOnlyDeclarationTest
 
 diff --git a/backends/cocache/src/main/kotlin/me/ahoo/cosec/cocache/CacheLocks.kt b/backends/cocache/src/main/kotlin/me/ahoo/cosec/cocache/CacheLocks.kt
+index 2e60c2a26..9684c56df 100644
 --- a/backends/cocache/src/main/kotlin/me/ahoo/cosec/cocache/CacheLocks.kt
 +++ b/backends/cocache/src/main/kotlin/me/ahoo/cosec/cocache/CacheLocks.kt
-@@ -57,7 +57,6 @@ internal object CacheLocks {
+@@ -55,7 +55,6 @@ internal object CacheLocks {
          lockLayout(*LayoutField.entries.toTypedArray())
          // Read-only is CoSec's (SNP-18): where the control plane runs it writes the documents, and elsewhere a
          // read-only user must be enough; a property or customizer that changes it either way is refused here.
 -        verify { readOnlyAsDeclared(it, readOnly) }
          when (cacheName) {
-             in SET_OF_RECORD_CACHE_NAMES -> setOfRecord()
+             in SetsOfRecord.CACHE_NAMES -> setOfRecord()
  

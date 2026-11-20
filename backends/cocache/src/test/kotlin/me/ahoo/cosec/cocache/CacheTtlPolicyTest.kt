@@ -123,7 +123,7 @@ class CacheTtlPolicyTest {
      */
     @Test
     fun setOfRecordCachesNeverExpireAndKeepNoLocalCopy() {
-        setOfRecordSpecs.keys.assert().isEqualTo(CoSecCacheSpecs.SET_OF_RECORD_CACHE_NAMES)
+        setOfRecordSpecs.keys.assert().isEqualTo(SetsOfRecord.CACHE_NAMES)
         weakened { factory ->
             setOfRecordSpecs.forEach { (name, spec) ->
                 factory.create(spec, CoSecCacheSpecs.locks(name)).assert().isInstanceOf(SetStore::class.java)

@@ -23,9 +23,19 @@ import me.ahoo.cocache.core.SetStoreSpec
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import java.time.Duration
 
-/** CoSec's sets of record ([CoSecCacheSpecs.SET_OF_RECORD_CACHE_NAMES]): the back-references and the document keys. */
+/** CoSec's sets of record ([CACHE_NAMES]): the back-references, the document keys and the staged list. */
 @InternalCoSecApi
 object SetsOfRecord {
+    /**
+     * The store-of-record caches that are `SetStore`s: their members are added and removed one by one, and every read
+     * asks Redis ([LOCAL_MAX_AGE]).
+     */
+    val CACHE_NAMES: Set<String> = setOf(
+        CoSecCacheSpecs.REFERENCE_INDEX_CACHE_NAME,
+        CoSecCacheSpecs.CONTROL_DOCUMENT_SET_CACHE_NAME,
+        CoSecCacheSpecs.CANDIDATE_STAGED_CACHE_NAME,
+    )
+
     /**
      * How long a set of record is kept locally (`local-max-age` and `degraded-local-max-age`, both locked to it): a
      * stand-in for a read that skips the local copy, which CoCache 8.1 does not offer a `SetStore`. It refuses a local
@@ -54,7 +64,7 @@ object SetsOfRecord {
         keyEncoder: KeyEncoder<K>,
         codec: Codec<E>,
     ): SetStoreSpec<K, E> {
-        require(cacheName in CoSecCacheSpecs.SET_OF_RECORD_CACHE_NAMES) { "[$cacheName] is not a set of record." }
+        require(cacheName in CACHE_NAMES) { "[$cacheName] is not a set of record." }
         val layout = CoSecCacheSpecs.layout(keyPrefix, cacheName)
         return SetStoreSpec.builder<K, E>(cacheName)
             .keyPrefix(layout.keyPrefix)
