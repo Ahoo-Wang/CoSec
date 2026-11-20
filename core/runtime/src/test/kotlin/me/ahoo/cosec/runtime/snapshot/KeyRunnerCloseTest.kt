@@ -11,7 +11,7 @@
  * limitations under the License.
  */
 
-@file:OptIn(InternalCoSecApi::class)
+@file:OptIn(InternalCoSecApi::class, ExperimentalCoSecApi::class)
 
 package me.ahoo.cosec.runtime.snapshot
 
@@ -23,6 +23,7 @@ import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.Executor
+import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 
 /**
  * `close` answers every request a runner accepted, a removed key's included (RFC 0013 B2b; `SNP-13`'s futures). A key

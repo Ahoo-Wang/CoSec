@@ -11,7 +11,7 @@
  * limitations under the License.
  */
 
-@file:OptIn(InternalCoSecApi::class)
+@file:OptIn(InternalCoSecApi::class, ExperimentalCoSecApi::class)
 
 package me.ahoo.cosec.runtime.snapshot
 
@@ -36,6 +36,7 @@ import java.util.concurrent.Executor
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicLong
+import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 
 /**
  * What housekeeping refuses never lands on the thread that offered it (`SNP-19`, #1534). Housekeeping here is the real

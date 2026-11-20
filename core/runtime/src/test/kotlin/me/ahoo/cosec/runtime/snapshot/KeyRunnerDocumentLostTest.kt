@@ -11,7 +11,7 @@
  * limitations under the License.
  */
 
-@file:OptIn(InternalCoSecApi::class)
+@file:OptIn(InternalCoSecApi::class, ExperimentalCoSecApi::class)
 
 package me.ahoo.cosec.runtime.snapshot
 
@@ -22,6 +22,7 @@ import org.junit.jupiter.api.Test
 import java.time.Duration
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.TimeUnit
+import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 
 /**
  * `onDocumentLost` over the runner (RFC 0013 B2b step 3): it is a judgement on the key's state, an effect of the

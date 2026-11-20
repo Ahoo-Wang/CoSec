@@ -11,7 +11,7 @@
  * limitations under the License.
  */
 
-@file:OptIn(InternalCoSecApi::class)
+@file:OptIn(InternalCoSecApi::class, ExperimentalCoSecApi::class)
 
 package me.ahoo.cosec.runtime.snapshot
 
@@ -34,6 +34,7 @@ import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.Executor
 import java.util.concurrent.atomic.AtomicBoolean
+import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 
 /**
  * [KeyRunner] behind the source's factory (RFC 0013 B2b, step 2b): what the page promises of the runner itself. §5's `VirtualMachineError` from an effect, on a caller's thread

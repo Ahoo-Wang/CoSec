@@ -11,7 +11,7 @@
  * limitations under the License.
  */
 
-@file:OptIn(InternalCoSecApi::class)
+@file:OptIn(InternalCoSecApi::class, ExperimentalCoSecApi::class)
 
 package me.ahoo.cosec.micrometer
 
@@ -35,6 +35,7 @@ import java.time.Clock
 import java.time.Duration
 import java.time.Instant
 import java.time.ZoneOffset
+import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 
 /**
  * The `cosec.snapshot.*` meters (`OBS-5`): one per event, tagged by closed sets of values, resolved once, and the

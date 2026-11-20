@@ -11,7 +11,7 @@
  * limitations under the License.
  */
 
-@file:OptIn(InternalCoSecApi::class)
+@file:OptIn(InternalCoSecApi::class, ExperimentalCoSecApi::class)
 
 package me.ahoo.cosec.runtime.snapshot
 
@@ -25,6 +25,7 @@ import org.junit.jupiter.api.Test
 import org.slf4j.LoggerFactory
 import java.lang.management.ManagementFactory
 import javax.management.ObjectName
+import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 
 /**
  * Bytes per held key (RFC 0013 §5.4). The source holds [KEYS] app documents; a class histogram of the live heap

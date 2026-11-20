@@ -11,7 +11,7 @@
  * limitations under the License.
  */
 
-@file:OptIn(InternalCoSecApi::class)
+@file:OptIn(InternalCoSecApi::class, ExperimentalCoSecApi::class)
 
 package me.ahoo.cosec.runtime.snapshot
 
@@ -30,6 +30,7 @@ import java.util.concurrent.Executor
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 import kotlin.concurrent.thread
+import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 
 /**
  * [KeyDrain] (RFC 0013 B2b §3 and §5), through runners made by the source's factory: an offer that loses the flag at

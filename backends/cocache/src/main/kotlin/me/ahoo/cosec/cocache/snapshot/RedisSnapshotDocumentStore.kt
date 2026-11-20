@@ -11,7 +11,7 @@
  * limitations under the License.
  */
 
-@file:OptIn(InternalCoSecApi::class)
+@file:OptIn(InternalCoSecApi::class, ExperimentalCoSecApi::class)
 
 package me.ahoo.cosec.cocache.snapshot
 
@@ -36,6 +36,7 @@ import java.util.concurrent.CompletionException
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.Executor
 import java.util.concurrent.ForkJoinPool
+import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 
 /**
  * The [SnapshotDocumentStore] over CoCache and Redis (RFC 0003 §4.1–§4.4).

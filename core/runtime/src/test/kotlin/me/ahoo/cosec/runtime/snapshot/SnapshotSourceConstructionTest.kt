@@ -11,7 +11,7 @@
  * limitations under the License.
  */
 
-@file:OptIn(InternalCoSecApi::class)
+@file:OptIn(InternalCoSecApi::class, ExperimentalCoSecApi::class)
 
 package me.ahoo.cosec.runtime.snapshot
 
@@ -26,6 +26,7 @@ import org.junit.jupiter.api.assertThrows
 import java.util.concurrent.RejectedExecutionException
 import java.util.concurrent.ScheduledThreadPoolExecutor
 import java.util.concurrent.TimeUnit
+import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 
 /** #1383 in the source itself: a constructor step that throws releases what the constructor took before it. */
 class SnapshotSourceConstructionTest {

@@ -11,7 +11,7 @@
  * limitations under the License.
  */
 
-@file:OptIn(InternalCoSecApi::class)
+@file:OptIn(InternalCoSecApi::class, ExperimentalCoSecApi::class)
 
 package me.ahoo.cosec.spring.boot.pipeline
 
@@ -44,6 +44,7 @@ import java.time.Clock
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.TimeUnit
+import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 
 /**
  * `SNP-20` on a gateway: the apps its routes name are prewarmed before it reports ready, one without an app document as

@@ -11,7 +11,7 @@
  * limitations under the License.
  */
 
-@file:OptIn(me.ahoo.cosec.annotations.InternalCoSecApi::class)
+@file:OptIn(me.ahoo.cosec.annotations.InternalCoSecApi::class, ExperimentalCoSecApi::class)
 
 package me.ahoo.cosec.runtime.snapshot
 
@@ -22,6 +22,7 @@ import org.junit.jupiter.api.Test
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicLong
+import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 
 /**
  * The window (RFC 0013 B2b, `SNP-7`, `SNP-14`): an eviction pass skips a member whose load is in flight, and refuses one

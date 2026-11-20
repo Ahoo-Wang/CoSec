@@ -11,7 +11,7 @@
  * limitations under the License.
  */
 
-@file:OptIn(me.ahoo.cosec.annotations.InternalCoSecApi::class)
+@file:OptIn(me.ahoo.cosec.annotations.InternalCoSecApi::class, ExperimentalCoSecApi::class)
 
 package me.ahoo.cosec.runtime.snapshot
 
@@ -22,6 +22,7 @@ import org.junit.jupiter.api.Test
 import java.time.Duration
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.atomic.AtomicLong
+import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 
 /**
  * What the lag pass publishes for the gauges of `cosec-micrometer` ([SnapshotSummary]): every entry held counted once,

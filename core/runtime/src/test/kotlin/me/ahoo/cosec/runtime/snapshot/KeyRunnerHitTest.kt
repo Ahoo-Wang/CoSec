@@ -11,7 +11,7 @@
  * limitations under the License.
  */
 
-@file:OptIn(InternalCoSecApi::class)
+@file:OptIn(InternalCoSecApi::class, ExperimentalCoSecApi::class)
 
 package me.ahoo.cosec.runtime.snapshot
 
@@ -22,6 +22,7 @@ import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.Executor
+import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 
 /**
  * RFC 0013 §5.4: a request queued while its key's load is in flight, and taken only after that load's end, is served
