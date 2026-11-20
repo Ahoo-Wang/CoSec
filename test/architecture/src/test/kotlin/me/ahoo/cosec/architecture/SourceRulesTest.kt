@@ -49,7 +49,8 @@ class SourceRulesTest {
         private val SPRING_TECHNOLOGY: Map<String, List<String>> = mapOf(
             "cocache" to listOf("org.springframework.data.redis.", "org.springframework.aot.hint."),
             "kafka" to listOf("org.springframework.kafka.", "org.springframework.beans.factory.DisposableBean"),
-            "social" to listOf("org.springframework.data.redis."),
+            // JustAuth's own state cache blocks (RedisAuthStateCache); CoSec's sign-in states are cosec-cocache's (R2B-3).
+            "social" to listOf("org.springframework.data.redis.core."),
         )
 
         /** Servlet API and Redis clients: never in the contracts or the core. */

@@ -241,7 +241,7 @@ object GuardAllowlist {
             "runtime:LocalRateLimiterBoundsTest#the counters equal what the limiter holds while sweeps run",
             "social:JustAuthProviderTest#a state is used once",
             "social:JustAuthProviderTest#another browser's state is refused",
-            "social:RedisAuthStateCacheTest#aStateIsTakenOnce",
+            "cocache:RedisSocialStateStoreTest#aStateIsTakenOnce",
         ),
         "startup" to setOf(
             // STA-6, STA-7: a service behind a gateway states its network boundary and runs no hidden-method filter.

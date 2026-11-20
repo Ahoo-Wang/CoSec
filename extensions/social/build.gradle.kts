@@ -13,7 +13,8 @@
 
 dependencies {
     api(project(":login"))
-    api("org.springframework.data:spring-data-redis")
+    // JustAuth's own state cache blocks (RedisAuthStateCache); CoSec's states live in cosec-cocache.
+    implementation("org.springframework.data:spring-data-redis")
     api("me.zhyd.oauth:JustAuth")
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test")
     testImplementation("io.lettuce:lettuce-core")
