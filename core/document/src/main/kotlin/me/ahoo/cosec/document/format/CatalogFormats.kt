@@ -45,7 +45,7 @@ internal object CatalogFormats {
             ),
             "permission" to ObjectType(
                 listOf(
-                    Field("id", StringType(examples = listOf("read", "ship")), required = true),
+                    Field("id", FormatPatterns.id(listOf("read", "ship")), required = true),
                     Field("name", StringType(examples = listOf("Read"))),
                     Field("description", StringType(examples = listOf("Read orders"))),
                     Field(

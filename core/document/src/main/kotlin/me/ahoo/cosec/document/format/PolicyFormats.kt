@@ -29,7 +29,7 @@ internal object PolicyFormats {
 
     val policy = ObjectType(
         listOf(
-            Field("id", StringType(examples = listOf("deny-ip", "perm:order-service/read")), required = true),
+            Field("id", FormatPatterns.id(listOf("deny-ip", "perm:order-service/read")), required = true),
             Field("attachable", BooleanType(), description = "Whether a principal may attach it.", default = false),
             Field(
                 "boundary",
@@ -45,7 +45,7 @@ internal object PolicyFormats {
 
     val statement = ObjectType(
         listOf(
-            Field("name", StringType(examples = listOf("read-orders"))),
+            Field("name", FormatPatterns.id(listOf("read-orders"))),
             Field("effect", effect, required = true),
             Field(
                 "action",
@@ -105,7 +105,13 @@ internal object PolicyFormats {
                 listOf(
                     Field("pattern", ref(SNAPSHOT_DOCUMENT, "resourcePattern"), required = true),
                     Field("caseSensitive", BooleanType(), default = true),
-                    Field("decodeAndParseSegments", BooleanType(), default = true),
+                    Field(
+                        "decodeAndParseSegments",
+                        BooleanType(),
+                        default = true,
+                        description = "`false` matches the path as received. Only an ALLOW may set it: a DENY or a rate " +
+                            "limit rule with it does not compile, since it would miss every percent-encoded spelling (DOC-14).",
+                    ),
                 ),
                 description = "An `http:path:` pattern with options.",
             ),

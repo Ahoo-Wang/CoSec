@@ -1,0 +1,17 @@
+# Rule: BRK-1
+# Mutant: a break-glass principal's request skips the DENY pass: root permits it what a DENY forbids
+# Tests: :engine:test --tests me.ahoo.cosec.engine.EngineTest :conformance:test --tests me.ahoo.cosec.conformance.ConformanceTest
+
+diff --git a/core/engine/src/main/kotlin/me/ahoo/cosec/engine/Evaluator.kt b/core/engine/src/main/kotlin/me/ahoo/cosec/engine/Evaluator.kt
+index f26f2f3f..f165ebb6 100644
+--- a/core/engine/src/main/kotlin/me/ahoo/cosec/engine/Evaluator.kt
++++ b/core/engine/src/main/kotlin/me/ahoo/cosec/engine/Evaluator.kt
+@@ -153,7 +153,7 @@ internal open class Evaluator(
+     @JvmField internal var remoteIp: IpAddress? = null
+ 
+     fun evaluate(): Decision {
+-        val decision = denyPass()
++        val decision = if (request.request.subject.breakGlass) null else denyPass()
+         if (decision != null) {
+             return decision
+         }

@@ -387,6 +387,7 @@ object GuardAllowlist {
         "timing" to setOf(
             "runtime:SnapshotConsistencyPropertyTest#everyEvaluationReadsOneRevisionPerDocument",
             "runtime:DocumentSnapshotViewsTest#a view decides with the revisions it was built from",
+            "runtime:SuspendingSnapshotSourceTest#theViewWithTheAppIsOneReadWhole",
             "runtime:SnapshotInstallOrderPropertyTest#installsFollowLoadOrderAndConvergeInEveryFamily",
             "runtime:SnapshotInstallOrderPropertyTest#installsFollowLoadOrderAndConverge",
             "runtime:SnapshotRecompileTest#a load that compiled with the old inputs while they changed is compiled again before anyone is served it",

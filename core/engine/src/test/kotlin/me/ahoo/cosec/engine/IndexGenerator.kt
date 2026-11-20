@@ -82,13 +82,16 @@ class IndexGenerator(private val random: Random) {
 
     private fun chance(percent: Int) = random.nextInt(100) < percent
 
-    /** A DENY on a bare type does not compile, so a DENY gets the type and everything under it instead. */
+    /**
+     * A DENY on a bare type does not compile, so a DENY gets the type and everything under it instead; nor does a DENY
+     * matching the path as received (`DOC-14`), so only an ALLOW turns decoding off.
+     */
     private fun resource(deny: Boolean): ResourceSource =
         if (chance(70)) {
             ResourceSource(
                 "http:path:" + httpPatterns.pick(),
                 caseSensitive = !chance(10),
-                decodeAndParseSegments = !chance(10),
+                decodeAndParseSegments = !chance(10) || deny,
             )
         } else {
             ResourceSource(typedPatterns.pick().let { if (deny && '/' !in it) "$it/**" else it })

@@ -20,6 +20,7 @@ import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.engine.CompiledDocument
 import me.ahoo.cosec.engine.SnapshotView
+import me.ahoo.cosec.model.AppId
 import me.ahoo.cosec.model.Memberships
 import me.ahoo.cosec.model.RoleId
 import me.ahoo.cosec.model.SpaceId
@@ -114,6 +115,36 @@ class SuspendingSnapshotSourceTest {
         peeked.map { it.app?.value }.assert().containsExactly(null, "shop", null, "shop")
         loaded.map { it.app?.value }.assert().containsExactly("shop")
         SuspendingSnapshotSource(views).view(scope("other"), blocked = false).app.assert().isNull()
+    }
+
+    /**
+     * `SNP-1`: a request whose tenant document names its app reads two views, the tenant's and then the one with the
+     * app. What it decides on is the second view whole: a revision of the tenant's document installed between the two
+     * reads is the second view's, never mixed with the first's documents (a mutant that kept the first read's tenant
+     * document survived every other test).
+     */
+    @Test
+    fun theViewWithTheAppIsOneReadWhole() = runTest {
+        val first = CompiledDocument.tenant(tenant, emptyList(), emptyList(), boundApps = setOf("shop"))
+        val second = CompiledDocument.tenant(tenant, emptyList(), emptyList(), boundApps = setOf("shop"))
+        val withApp = SnapshotView(
+            CompiledDocument.platform(emptyList(), emptyList()),
+            CompiledDocument.app(AppId("shop"), emptyList(), emptyList()),
+            second,
+        )
+        val withoutApp = SnapshotView(CompiledDocument.platform(emptyList(), emptyList()), null, first)
+        for (installed in listOf(true, false)) {
+            val views = object : SnapshotViews {
+                override fun peek(key: ViewKey): SnapshotView? =
+                    if (key.app == null) withoutApp else withApp.takeIf { installed }
+
+                override fun load(key: ViewKey): CompletableFuture<SnapshotView> =
+                    CompletableFuture.completedFuture(if (key.app == null) withoutApp else withApp)
+            }
+            val view = SuspendingSnapshotSource(views).view(scope("shop"), blocked = false)
+            view.assert().describedAs("installed: $installed").isSameAs(withApp)
+            view.tenant.assert().describedAs("installed: $installed").isSameAs(second)
+        }
     }
 
     @Test

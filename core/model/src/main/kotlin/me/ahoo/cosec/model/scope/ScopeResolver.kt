@@ -81,7 +81,7 @@ object ScopeResolver {
             val c = app[index]
             val refused = when (c) {
                 ':', '/' -> true
-                else -> c.isISOControl() || Identifiers.isUnpairedSurrogateAt(app, index)
+                else -> Identifiers.isUnprintableAt(app, index)
             }
             if (refused) {
                 return false

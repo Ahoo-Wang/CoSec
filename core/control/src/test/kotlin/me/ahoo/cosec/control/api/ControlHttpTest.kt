@@ -22,6 +22,7 @@ import ch.qos.logback.core.read.ListAppender
 import kotlinx.coroutines.runBlocking
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.control.captured
 import me.ahoo.cosec.control.change.ChangeId
 import me.ahoo.cosec.control.change.ChangeState
 import me.ahoo.cosec.document.json.CoSecJson
@@ -672,7 +673,7 @@ class ControlHttpTest {
                 problem.get("code").asString().assert().isEqualTo("INTERNAL_ERROR")
                 problem.has("detail").assert().isFalse()
             }
-            logged.list.filter { it.level == Level.ERROR }.map { it.throwableProxy?.message.orEmpty() }
+            logged.captured().filter { it.level == Level.ERROR }.map { it.throwableProxy?.message.orEmpty() }
                 .assert().hasSize(2).allMatch { it.contains("[app:order]") && it.contains("does not decode") }
         } finally {
             logger.detachAppender(logged)
@@ -710,7 +711,7 @@ class ControlHttpTest {
             val (status, problem) = call("POST", "/analyze", query, security = plato)
             status.assert().isEqualTo(500)
             problem.has("detail").assert().isFalse()
-            logged.list.filter { it.level == Level.ERROR }.map { it.throwableProxy?.message.orEmpty() }
+            logged.captured().filter { it.level == Level.ERROR }.map { it.throwableProxy?.message.orEmpty() }
                 .assert().hasSize(1).allMatch { it.contains("[tenant:initech]") && it.contains("cannot parse") }
         } finally {
             logger.detachAppender(logged)

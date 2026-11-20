@@ -1,0 +1,64 @@
+{
+  "rules": [
+    "DOC-13"
+  ],
+  "polarity": "negative",
+  "level": "engine",
+  "description": "The near miss: ids with spaces, punctuation, letters beyond ASCII and a surrogate pair hold no control character and no unpaired surrogate, so the document compiles and its DENY decides.",
+  "documents": {
+    "platform": {
+      "policies": [
+        {
+          "id": "members",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "*"
+            }
+          ]
+        },
+        {
+          "id": "no admin: é 😀",
+          "statements": [
+            {
+              "name": "deny (all)",
+              "effect": "deny",
+              "action": "order:cancel"
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "members",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "members"
+        },
+        {
+          "id": "b é 😀",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "no admin: é 😀"
+        }
+      ]
+    }
+  },
+  "request": {
+    "action": "order:cancel"
+  },
+  "expect": {
+    "decision": "Deny",
+    "by": {
+      "policy": "no admin: é 😀",
+      "statement": 0,
+      "name": "deny (all)",
+      "via": {
+        "binding": "b é 😀",
+        "document": "platform"
+      }
+    }
+  }
+}

@@ -17,6 +17,7 @@ import ch.qos.logback.classic.Level
 import ch.qos.logback.classic.Logger
 import ch.qos.logback.classic.spi.ILoggingEvent
 import ch.qos.logback.core.read.ListAppender
+import me.ahoo.cosec.runtime.captured
 import me.ahoo.cosec.spi.token.TokenNotYetValidException
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
@@ -38,10 +39,10 @@ class EarlyTokensTest {
             EarlyTokens.record(early, start)
             EarlyTokens.record(early, start + Duration.ofSeconds(30).toNanos())
             EarlyTokens.record(early, start + Duration.ofSeconds(61).toNanos())
-            val warned = lines.list.filter { it.level == Level.WARN }.map { it.formattedMessage }
+            val warned = lines.captured().filter { it.level == Level.WARN }.map { it.formattedMessage }
             warned.assert().hasSize(2)
             warned.first().assert().contains("not valid yet").contains("iat").contains(EarlyTokens.PAGE)
-            lines.list.filter { it.level == Level.DEBUG }.assert().hasSize(1)
+            lines.captured().filter { it.level == Level.DEBUG }.assert().hasSize(1)
         } finally {
             logger.detachAppender(lines)
             logger.level = level

@@ -1,0 +1,16 @@
+# Rule: TNT-3
+# Mutant: the hard rule lets a tenant's principal act on the platform and app documents: only policy keeps them out
+# Tests: :control:test --tests me.ahoo.cosec.control.authz.ControlAuthorizationTest :conformance:test --tests me.ahoo.cosec.conformance.ConformanceTest
+
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/authz/TenantIsolation.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/authz/TenantIsolation.kt
+index c4af709e..06193d51 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/authz/TenantIsolation.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/authz/TenantIsolation.kt
+@@ -26,6 +26,6 @@ import me.ahoo.cosec.spi.snapshot.SnapshotKey
+ internal object TenantIsolation {
+     fun allows(operator: Operator, key: SnapshotKey): Boolean = when (key) {
+         is SnapshotKey.Tenant -> operator.platform || key.tenantId == operator.tenant.value
+-        else -> operator.platform
++        else -> operator.platform || operator.tenant.value.isNotEmpty()
+     }
+ }
