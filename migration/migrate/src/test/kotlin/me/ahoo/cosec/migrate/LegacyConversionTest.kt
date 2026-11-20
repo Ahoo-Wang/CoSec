@@ -126,4 +126,17 @@ class LegacyConversionTest {
                 assertThrownBy<SnapshotFormatException> { LegacyReferences.Format.decode(text.encodeToByteArray()) }
             }
     }
+
+    /** A value of the old format that does not decode stops its conversion: it is reported, never converted to empty. */
+    @Test
+    fun `a malformed old value is not converted, and a policy id that names no key is refused`() {
+        LegacyStore(backend, keyPrefix).use { it.raw(SnapshotKey.Platform, shared, """{"tenant:acme":-1}""") }
+        converting { store, conversion ->
+            // CoCache reads it as neither a value nor a set: the conversion stops on it, and says why.
+            runCatching { conversion.convert(SnapshotKey.Platform, shared) }.exceptionOrNull()?.message.assert()
+                .contains("cannot be converted")
+            runCatching { store.referrers(SnapshotKey.Platform, shared) }.isFailure.assert().isTrue()
+        }
+        assertThrownBy<IllegalArgumentException> { LegacyReferences.encode(SnapshotKey.Platform, PolicyId("a\uD800")) }
+    }
 }

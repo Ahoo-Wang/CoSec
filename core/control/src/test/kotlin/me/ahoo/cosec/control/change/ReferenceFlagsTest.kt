@@ -19,11 +19,16 @@ import kotlinx.coroutines.runBlocking
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.control.lifecycle.ChangeOptions
+import me.ahoo.cosec.control.lifecycle.Changes
+import me.ahoo.cosec.control.lifecycle.LockoutCheck
+import me.ahoo.cosec.control.store.ControlStore
 import me.ahoo.cosec.control.store.PublishOutcome
 import me.ahoo.cosec.control.store.ReferrerEntry
+import me.ahoo.cosec.control.store.Revisions
 import me.ahoo.cosec.control.store.StoreFixtures
 import me.ahoo.cosec.model.PolicyId
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
+import me.ahoo.cosec.spi.token.RevocationReader
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 
@@ -94,5 +99,27 @@ class ReferenceFlagsTest {
             StoreFixtures.candidate(platform, listOf(allow("other"))),
             StoreFixtures.publication(),
         ).assert().isInstanceOf(PublishOutcome.Referenced::class.java)
+    }
+
+    /** `CTL-42`: a platform policy whose back-references cannot be read may be copied by a tenant: changing it waits (503). */
+    @Test
+    fun `a platform policy whose back-references cannot be read is not changed`() = runBlocking<Unit> {
+        publish(platform, Operation.PutPolicy(allow("editor")))
+        val store = object : ControlStore by harness.memory {
+            override suspend fun referrers(target: SnapshotKey, policy: PolicyId): Set<ReferrerEntry> =
+                error("[${policy.value}] cannot be read")
+        }
+        val changes = Changes(
+            store,
+            Revisions(store, harness.clock),
+            { ChangeId("unreadable") },
+            PERMIT_ALL,
+            harness.clock,
+            ChangeOptions(shadow = IMMEDIATE_WINDOW),
+            revocations = RevocationReader.NONE,
+            lockout = LockoutCheck.UNCHECKED,
+        )
+        changes.propose(PLATO, platform, 1, listOf(Operation.PutPolicy(allow("editor", action = "order:*"))), "change")
+            .errors.map { it.check to it.status }.assert().containsExactly("V2" to 503)
     }
 }

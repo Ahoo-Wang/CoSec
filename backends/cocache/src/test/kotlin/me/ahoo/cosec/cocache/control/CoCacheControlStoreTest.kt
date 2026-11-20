@@ -572,7 +572,9 @@ class CoCacheControlStoreTest {
             store.removeReferrers(SnapshotKey.Platform, shared, setOf(ReferrerEntry(key, 3), ReferrerEntry(key, 9)))
             store.referrers(SnapshotKey.Platform, shared).assert().containsExactly(ReferrerEntry(key, 4, true))
             store.removeReferrers(SnapshotKey.Platform, shared, setOf(ReferrerEntry(key, 4, true)))
+            store.removeReferrers(SnapshotKey.Platform, shared, emptySet())
             store.referrers(SnapshotKey.Platform, shared).assert().isEmpty()
+            store.listDocuments(emptySet())
 
             store.acquireLease("reclaim", "me", Duration.ofMinutes(1)).assert().isTrue()
             store.acquireLease("reclaim", "me", Duration.ofMinutes(1)).assert().isTrue()

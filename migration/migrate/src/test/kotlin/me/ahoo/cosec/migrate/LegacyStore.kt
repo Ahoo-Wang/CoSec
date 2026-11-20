@@ -70,6 +70,11 @@ internal class LegacyStore(
         references.put(encoded, LegacyReferences.Format.encode(referrers))
     }
 
+    /** [body] as the back-references of [target]'s [policy], written as they are. */
+    fun raw(target: SnapshotKey, policy: PolicyId, body: String) {
+        references.put(LegacyReferences.encode(target, policy), body.encodeToByteArray())
+    }
+
     /** The document list under the lists, each entry listed at the epoch. */
     fun documents(vararg entries: String) {
         val body = entries.sorted().joinToString(",", "{", "}") { "\"$it\":\"1970-01-01T00:00:00Z\"" }

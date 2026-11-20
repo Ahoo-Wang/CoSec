@@ -112,15 +112,16 @@ internal class ReferrerIndex(
         }
     }
 
+    /** Whether [referrer] is a tenant whose head defines [policy] itself (RC1-9): its entries say `#own`. */
+    suspend fun definesItself(referrer: SnapshotKey, policy: PolicyId): Boolean =
+        referrer is SnapshotKey.Tenant &&
+            head(referrer)?.document?.let { document -> RoleExpansion.effective(document).policies.any { it.id == policy } } == true
+
     /**
      * The back-reference sets the head of [key] touches: those of what it refers to and, for the platform or an app,
      * those of its own policies. What `cosec-migrate repair-references` converts from the format before 8.0.0-beta.5:
      * a set no head touches blocks nothing. Empty for a document with no head.
      */
-    suspend fun definesItself(referrer: SnapshotKey, policy: PolicyId): Boolean =
-        referrer is SnapshotKey.Tenant &&
-            head(referrer)?.document?.let { document -> RoleExpansion.effective(document).policies.any { it.id == policy } } == true
-
     suspend fun referenceKeys(key: SnapshotKey): Set<Pair<SnapshotKey, PolicyId>> {
         val document = head(key)?.document ?: return emptySet()
         val referred = references(document).map { it.target to it.policy }

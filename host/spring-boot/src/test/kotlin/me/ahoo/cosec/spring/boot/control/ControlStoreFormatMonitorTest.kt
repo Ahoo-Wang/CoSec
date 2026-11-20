@@ -49,4 +49,16 @@ class ControlStoreFormatMonitorTest {
         monitor.refresh()
         health.health().details["format"].assert().isEqualTo("8.0.0-beta.5")
     }
+
+    @Test
+    fun `it reads on a thread of its own from start until close`() {
+        unrepaired = true
+        ControlStoreFormatMonitor({ unrepaired == true }, Duration.ofMillis(10)).start().use { started ->
+            val deadline = System.nanoTime() + Duration.ofSeconds(10).toNanos()
+            while (started.status() != ControlStoreFormatMonitor.Status.UNREPAIRED && System.nanoTime() < deadline) {
+                Thread.onSpinWait()
+            }
+            started.status().assert().isEqualTo(ControlStoreFormatMonitor.Status.UNREPAIRED)
+        }
+    }
 }
