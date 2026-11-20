@@ -322,11 +322,9 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
      * Every load that starts after this call reads the store in full and compiles with the new inputs. A load in flight
      * may have compiled with the old ones, so it installs and another load follows it at once; a document installed
      * before is loaded again, [SnapshotOptions.reloadConcurrency] at a time. Until then the previous compilation is
-     * served. A document that cannot be compiled again (the store cannot be read, it does not compile) fails closed
-     * rather than keep the old compilation, and is retried. A compilation the full compile queue refuses is not a
-     * failure to compile: the load keeps its read and compiles again within its budget, the previous compilation
-     * serving meanwhile, and fails closed once the budget is spent ([RefusedCompiles], R2D-12). The future completes
-     * when every app and tenant document, idle or loading at the call, is loaded again with the new inputs (`SNP-13`).
+     * served. A document that cannot be compiled again (the store cannot be read, it does not compile, the queue
+     * stays full: [RefusedCompiles]) fails closed rather than keep the old compilation, and is retried. The future
+     * completes when every app and tenant document, idle or loading at the call, is loaded again (`SNP-13`).
      */
     fun recompile(): CompletableFuture<Void> {
         context.compileEpoch.incrementAndGet()
