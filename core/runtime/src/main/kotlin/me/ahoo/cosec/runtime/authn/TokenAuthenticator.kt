@@ -92,6 +92,9 @@ class TokenAuthenticator(
 
     private val credentialMethod = if (ownTokens) Identity.Method.JWT else Identity.Method(method)
 
+    /** Made once: every authenticated request carries it, and an allocation per request shows in `PipelineBenchmark`. */
+    private val authnMethod = Identity.Method(method)
+
     private val revocation = TokenRevocation(revocations, revocationSkew)
 
     init {
@@ -143,7 +146,7 @@ class TokenAuthenticator(
                 // A session is CoSec's: another verifier's token has none to be issued from (IDN-22).
                 session = if (ownTokens) token.session else null,
             ),
-            method,
+            authnMethod,
         )
     }
 

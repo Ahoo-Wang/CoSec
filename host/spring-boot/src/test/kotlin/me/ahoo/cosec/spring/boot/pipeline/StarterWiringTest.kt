@@ -135,7 +135,7 @@ class StarterWiringTest {
     private fun token(context: ApplicationContext, principal: String, provider: Boolean = false): String {
         val marker = if (provider) MembershipClaims.PROVIDER else null
         return context.getBean(TokenConverter::class.java)
-            .toToken(TokenSubject(principal, "cosec-control", TENANT, membershipMarker = marker))
+            .toToken(TokenSubject(principal, app = "cosec-control", tenant = TENANT, membershipMarker = marker))
             .accessToken
     }
 

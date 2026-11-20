@@ -39,13 +39,13 @@ class UnboundReadersTest {
         val message = assertThrows<IllegalStateException> { request.requireSecurityContext() }.message
         message.assert().isEqualTo(Unbound.Receiver.REQUEST.missing)
             .contains("Register CoSec's filter").contains("handler parameter")
-            .contains("SecurityContextHolder.requireSecurityContext()")
+            .contains("CoSecSecurityContextHolder.requireSecurityContext()")
     }
 
     @Test
     fun `the holder throws IllegalStateException naming the request's reader`() {
-        SecurityContextHolder.securityContextOrNull().assert().isNull()
-        val message = assertThrows<IllegalStateException> { SecurityContextHolder.requireSecurityContext() }.message
+        CoSecSecurityContextHolder.securityContextOrNull().assert().isNull()
+        val message = assertThrows<IllegalStateException> { CoSecSecurityContextHolder.requireSecurityContext() }.message
         message.assert().isEqualTo(Unbound.Receiver.THREAD.missing)
             .contains("handler parameter").contains("ServletRequests.requireSecurityContext(request)")
     }
@@ -57,14 +57,14 @@ class UnboundReadersTest {
         val foreign = mockk<SecurityContext>()
         val request = MockHttpServletRequest().apply { setAttribute(SecurityContext.KEY, foreign) }
         val lines = ListAppender<ILoggingEvent>().apply { start() }
-        val logger = LoggerFactory.getLogger(SecurityContextHolder::class.java) as Logger
+        val logger = LoggerFactory.getLogger(CoSecSecurityContextHolder::class.java) as Logger
         logger.addAppender(lines)
-        SecurityContextHolder.setContext(foreign)
+        CoSecSecurityContextHolder.setContext(foreign)
         try {
             Unbound.resetWarnings()
             repeat(2) {
                 request.securityContextOrNull().assert().isNull()
-                SecurityContextHolder.securityContextOrNull().assert().isNull()
+                CoSecSecurityContextHolder.securityContextOrNull().assert().isNull()
             }
             lines.list.map { it.formattedMessage }.assert().containsExactly(
                 Unbound.foreign(Unbound.Receiver.REQUEST),
@@ -72,11 +72,11 @@ class UnboundReadersTest {
             )
             assertThrows<IllegalStateException> { request.requireSecurityContext() }.message.assert()
                 .isEqualTo(Unbound.foreign(Unbound.Receiver.REQUEST)).contains("did not make").contains("PIP-27")
-            assertThrows<IllegalStateException> { SecurityContextHolder.requireSecurityContext() }.message.assert()
+            assertThrows<IllegalStateException> { CoSecSecurityContextHolder.requireSecurityContext() }.message.assert()
                 .isEqualTo(Unbound.foreign(Unbound.Receiver.THREAD))
         } finally {
             logger.detachAppender(lines)
-            SecurityContextHolder.remove()
+            CoSecSecurityContextHolder.remove()
         }
     }
 }

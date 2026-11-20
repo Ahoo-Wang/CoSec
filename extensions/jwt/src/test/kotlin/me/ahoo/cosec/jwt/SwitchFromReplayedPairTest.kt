@@ -80,8 +80,8 @@ class SwitchFromReplayedPairTest {
 
     // No leeway: the replaced pair presented again revokes the session at once.
     private val families = TokenFamilies(InMemoryTokenFamilyStore(), Duration.ofDays(30), Duration.ZERO)
-    private val converter = JwtTokenConverter(JwtFixture.IDS, JwtFixture.ALGORITHM)
-    private val verifier = JwtTokenVerifier(JwtFixture.ALGORITHM)
+    private val converter = JwtTokenConverter(JwtFixture.IDS, JwtFixture.SIGNING)
+    private val verifier = JwtTokenVerifier(JwtFixture.SIGNING)
     private val revocation = TokenRevocation(RevocationReader.NONE)
     private val tokens = TokenCompositeAuthentication(
         CompositeAuthentication(
@@ -147,7 +147,7 @@ class SwitchFromReplayedPairTest {
     }
 
     private suspend fun login(): CompositeToken = converter.toToken(
-        TokenSubject("alice", null, tenant = "acme").inSession(families.start(TenantId("acme"), PrincipalId("alice")))
+        TokenSubject("alice", tenant = "acme").inSession(families.start(TenantId("acme"), PrincipalId("alice")))
     )
 
     private companion object {

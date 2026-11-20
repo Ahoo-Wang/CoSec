@@ -44,7 +44,7 @@ import java.util.Date
  * RFC 0004 §4.5.1: membership claims, the `cosec.membership` marker and the claim-size threshold.
  */
 class MembershipClaimsJwtTest {
-    private val verifier = JwtTokenVerifier(JwtFixture.ALGORITHM)
+    private val verifier = JwtTokenVerifier(JwtFixture.SIGNING)
     private val tenant = TenantId("tenant")
     private val policies = setOf("p2", "p1")
     private val roles = setOf("admin", "editor@team-a")
@@ -52,12 +52,12 @@ class MembershipClaimsJwtTest {
 
     private fun converter(limit: Int? = null) = JwtTokenConverter(
         JwtFixture.IDS,
-        JwtFixture.ALGORITHM,
+        JwtFixture.SIGNING,
         membershipClaimLimit = limit,
     )
 
     private fun principal(roles: Set<String> = this.roles) =
-        TokenSubject("alice", null, tenant = tenant.value, roles = roles, policies = policies, attributes = attributes)
+        TokenSubject("alice", tenant = tenant.value, roles = roles, policies = policies, attributes = attributes)
 
     /** A token as CoSec 7.x writes it. */
     private fun sevenXToken(
@@ -168,7 +168,7 @@ class MembershipClaimsJwtTest {
 
     @Test
     fun onlyRolesCountWhenThereAreNoPolicies() {
-        val principal = TokenSubject("alice", null, roles = roles)
+        val principal = TokenSubject("alice", roles = roles)
         val decoded = Jwts.decode(converter(claimSize(roles)).toToken(principal).accessToken)
 
         decoded.getClaim("roles").asList(String::class.java).assert().containsExactly("admin", "editor@team-a")
@@ -197,7 +197,7 @@ class MembershipClaimsJwtTest {
 
     @Test
     fun refreshingKeepsAnInvalidMarkerAndItsClaims() {
-        val marked = TokenSubject("alice", null, roles = roles, policies = policies, membershipMarker = "claims")
+        val marked = TokenSubject("alice", roles = roles, policies = policies, membershipMarker = "claims")
 
         val decoded = Jwts.decode(converter(0).toToken(marked).accessToken)
 

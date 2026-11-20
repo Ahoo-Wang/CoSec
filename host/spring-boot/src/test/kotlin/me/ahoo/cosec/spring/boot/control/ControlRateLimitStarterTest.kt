@@ -121,7 +121,7 @@ class ControlRateLimitStarterTest {
 
     private fun token(context: ApplicationContext, tenant: String, id: String): String =
         context.getBean(TokenConverter::class.java)
-            .toToken(TokenSubject(id, "cosec-control", tenant = tenant, roles = setOf("admin")))
+            .toToken(TokenSubject(id, app = "cosec-control", tenant = tenant, roles = setOf("admin")))
             .accessToken
 
     private fun WebTestClient.simulate(token: String, tenant: String, suffix: String = ""): Pair<Int, String> {

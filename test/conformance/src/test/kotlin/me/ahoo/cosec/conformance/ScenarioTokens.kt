@@ -21,6 +21,7 @@ import kotlinx.coroutines.runBlocking
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.document.json.CoSecJson
+import me.ahoo.cosec.jwt.JwtSigning
 import me.ahoo.cosec.jwt.JwtTokenConverter
 import me.ahoo.cosec.jwt.JwtTokenVerifier
 import me.ahoo.cosec.login.route.LoginRouteAnswer
@@ -92,10 +93,11 @@ internal class ScenarioJwt(node: JsonNode) {
 
     companion object {
         private val ALGORITHM: Algorithm = Algorithm.HMAC256("conformance-scenario-secret")
-        val VERIFIER = JwtTokenVerifier(ALGORITHM)
+        private val SIGNING = JwtSigning.of(ALGORITHM)
+        val VERIFIER = JwtTokenVerifier(SIGNING)
 
         /** What the served route issues a refreshed pair with: the same key, so a pair it issues verifies. */
-        val CONVERTER = JwtTokenConverter(RandomIdGenerator, ALGORITHM)
+        val CONVERTER = JwtTokenConverter(RandomIdGenerator, SIGNING)
     }
 }
 

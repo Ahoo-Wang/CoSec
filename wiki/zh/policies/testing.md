@@ -525,7 +525,7 @@ StepVerifier.create(CoSecTestBindings.withSecurityContext(currentUser(), alice))
 CoSecTestBindings.bind(exchange, alice)
 // WebFlux，协程代码：上下文在协程的 Reactor 上下文中，所以它等待的 Mono 能读到
 val user = CoSecTestBindings.withSecurityContext(alice) { currentUser().awaitSingle() }
-// Spring MVC：SecurityContextHolder，之后恢复原样；或者请求
+// Spring MVC：CoSecSecurityContextHolder，之后恢复原样；或者请求
 CoSecTestBindings.withSecurityContext(alice) { currentUser() }
 CoSecTestBindings.bind(request, alice)
 ```

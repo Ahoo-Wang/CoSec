@@ -1,5 +1,5 @@
 # Rule: PIP-29
-# Mutant: the SecurityContextHolder test binder binds any context, so a hand-made one is bound and reads as no context: the test runs as anonymous without saying so
+# Mutant: the CoSecSecurityContextHolder test binder binds any context, so a hand-made one is bound and reads as no context: the test runs as anonymous without saying so
 # Tests: :testkit:test --tests me.ahoo.cosec.testkit.webmvc.TestingYourWebMvcApplicationTest
 
 diff --git a/test/testkit/src/main/kotlin/me/ahoo/cosec/testkit/webmvc/CoSecTestBindings.kt b/test/testkit/src/main/kotlin/me/ahoo/cosec/testkit/webmvc/CoSecTestBindings.kt
@@ -7,11 +7,11 @@ index 54816ad3d..c18c03907 100644
 --- a/test/testkit/src/main/kotlin/me/ahoo/cosec/testkit/webmvc/CoSecTestBindings.kt
 +++ b/test/testkit/src/main/kotlin/me/ahoo/cosec/testkit/webmvc/CoSecTestBindings.kt
 @@ -56,7 +56,7 @@ object CoSecTestBindings {
-     /** [block]'s answer, run with [context] in [SecurityContextHolder]; what the holder had before is put back. */
+     /** [block]'s answer, run with [context] in [CoSecSecurityContextHolder]; what the holder had before is put back. */
      @JvmStatic
      fun <T> withSecurityContext(context: SecurityContext, block: () -> T): T {
 -        val bound = pipelineMade(context)
 +        val bound = context
-         val previous = SecurityContextHolder.securityContextOrNull()
-         SecurityContextHolder.setContext(bound)
+         val previous = CoSecSecurityContextHolder.securityContextOrNull()
+         CoSecSecurityContextHolder.setContext(bound)
          try {

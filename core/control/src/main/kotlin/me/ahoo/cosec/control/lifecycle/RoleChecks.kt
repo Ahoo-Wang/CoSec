@@ -73,7 +73,7 @@ internal object RoleChecks {
     /**
      * A system role of an app candidate whose id another app's head defines too (`ROL-12`): a membership is
      * `role@space`, with no app in it, so a member whose roles are not issued per app (a provider's, or a token bound to
-     * no app) and who holds the role once holds it in both apps. That may be meant; it only warns. It reads the app
+     * no app) and who holds the role once holds it in every app that defines it. That may be meant; it only warns. It reads the app
      * list and the heads of the apps it names, a dozen at most, never a tenant's document.
      */
     private suspend fun sharedSystemRoles(
@@ -99,7 +99,8 @@ internal object RoleChecks {
                 "$.roles[$r].id",
                 "[${role.id.value}], a system role of this app, is also a system role of app ${apps.joinToString()}: " +
                     "a member who holds it once " +
-                    "holds it in both apps unless their roles are issued per app; prefix the id with the app " +
+                    "holds it in ${if (apps.size == 1) "both apps" else "all ${apps.size + 1} apps"} unless their roles " +
+                    "are issued per app; prefix the id with the app " +
                     "(${candidate.owner}.${role.id.value}) when that is not meant",
             )
         }

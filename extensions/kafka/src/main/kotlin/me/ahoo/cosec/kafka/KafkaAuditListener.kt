@@ -27,6 +27,7 @@ import me.ahoo.cosec.runtime.event.Delivery
 import org.springframework.beans.factory.DisposableBean
 import org.springframework.kafka.core.KafkaOperations
 import java.time.Duration
+import java.util.concurrent.atomic.AtomicLong
 import kotlin.time.toJavaDuration
 import kotlin.time.toKotlinDuration
 
@@ -60,6 +61,8 @@ class KafkaAuditListener(
         require(topic.isNotBlank()) { "topic must not be blank." }
     }
 
+    private val failures = AtomicLong()
+    private val lastWarning = AtomicLong(Long.MIN_VALUE)
     private val sender = BoundedSender(
         "Kafka audit queue of [$topic]",
         THREAD_NAME,
@@ -80,8 +83,28 @@ class KafkaAuditListener(
         // listener at one record per round trip and defeat the producer's batching.
         queued.sent.whenComplete { _, error ->
             if (error != null) {
-                log.warn(error) { "Failed to publish audit event to Kafka topic [$topic]." }
+                failed(error)
             }
+        }
+    }
+
+    /**
+     * A failed send is counted, and reported at most once per [WARN_INTERVAL] with the count since the last report and
+     * the failure that closed the interval: while the broker is down every decision fails, and a line with a stack
+     * trace for each would be the request rate in log volume (as `DecisionListeners` bounds its own).
+     */
+    internal fun failed(error: Throwable) {
+        failures.incrementAndGet()
+        val now = System.nanoTime()
+        val previous = lastWarning.get()
+        if (previous != Long.MIN_VALUE && now - previous < WARN_INTERVAL_NANOS) {
+            return
+        }
+        if (lastWarning.compareAndSet(previous, now)) {
+            val count = failures.getAndSet(0)
+            log.warn(
+                error
+            ) { "Failed to publish audit event to Kafka topic [$topic]: $count failed since the last report." }
         }
     }
 
@@ -100,5 +123,6 @@ class KafkaAuditListener(
         const val DEFAULT_QUEUE_CAPACITY = 1024
         private const val THREAD_NAME = "cosec-kafka-audit"
         private val log = KotlinLogging.logger {}
+        private val WARN_INTERVAL_NANOS = Duration.ofSeconds(10).toNanos()
     }
 }

@@ -100,6 +100,6 @@ internal class CoSecAuthenticationAutoConfigurationTest {
         override val credentialsType = ContextCredentials::class.java
 
         override suspend fun authenticate(credentials: ContextCredentials): TokenSubject =
-            TokenSubject(principal, null)
+            TokenSubject(principal)
     }
 }

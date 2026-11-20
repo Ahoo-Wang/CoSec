@@ -41,6 +41,7 @@ import me.ahoo.cosec.spi.authn.AuthenticatedPrincipal
 import me.ahoo.cosec.spi.authn.Authenticator
 import me.ahoo.cosec.spi.authn.AuthnResult
 import me.ahoo.cosec.spi.authn.MembershipSource
+import me.ahoo.cosec.spi.identity.Identity
 import me.ahoo.cosec.webmvc.ServletRequests.securityContextOrNull
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
@@ -108,7 +109,10 @@ class RequestPrincipalTest {
 
     @Test
     fun `a request CoSec authenticated carries CoSec's principal`() {
-        val (seen, context) = seen(AuthnResult.Authenticated(alice, "test"), MockHttpServletRequest("GET", "/orders"))
+        val (seen, context) = seen(
+            AuthnResult.Authenticated(alice, Identity.Method("test")),
+            MockHttpServletRequest("GET", "/orders")
+        )
         seen.principal.assert().isSameAs(context)
         seen.remoteUser.assert().isEqualTo("alice")
         seen.admin.assert().isFalse()
@@ -117,7 +121,7 @@ class RequestPrincipalTest {
 
     @Test
     fun `CoSec's principal replaces another layer's, and answers none of its roles`() {
-        val (seen, context) = seen(AuthnResult.Authenticated(alice, "test"), bobInFront())
+        val (seen, context) = seen(AuthnResult.Authenticated(alice, Identity.Method("test")), bobInFront())
         seen.principal.assert().isSameAs(context)
         seen.principal!!.name.assert().isEqualTo("alice")
         seen.remoteUser.assert().isEqualTo("alice")

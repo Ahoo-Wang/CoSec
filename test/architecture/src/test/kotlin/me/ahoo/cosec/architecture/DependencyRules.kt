@@ -35,18 +35,21 @@ object DependencyRules {
         "control" to CORE - "control",
         // A backend implements store ports of cosec-spi and writes its formats with cosec-document (RFC 0013 §3).
         "cocache" to setOf("spi", "document", "model", "api", "annotations"),
-        "webflux" to CORE - "control",
-        "webmvc" to CORE - "control",
-        "gateway" to CORE - "control",
+        // The adapters translate a host's request for the pipeline and never decide: the model and the request path,
+        // not the engine or the documents (the gateway reads `CoSec-Identity`'s format, so it adds `document`).
+        "webflux" to PURE + setOf("model", "runtime"),
+        "webmvc" to PURE + setOf("model", "runtime"),
+        "gateway" to PURE + setOf("model", "document", "runtime"),
         // A generator of documents and route maps (RFC 0013 §3): it reads the format, never the request path.
         "openapi" to setOf("document", "engine", "spi", "model", "api", "annotations"),
-        "jwt" to CORE - "control",
-        "social" to CORE - "control",
-        "login" to CORE - "control",
-        "ip2region" to CORE - "control",
-        "micrometer" to CORE - "control",
-        "opentelemetry" to CORE - "control",
-        "kafka" to CORE - "control",
+        // What each extension imports today: a new edge is a visible edit of this table.
+        "jwt" to PURE + setOf("model", "spi", "runtime"),
+        "social" to PURE + setOf("model"),
+        "login" to PURE + setOf("model", "spi", "document", "runtime"),
+        "ip2region" to PURE + setOf("model", "spi"),
+        "micrometer" to PURE + setOf("model", "spi", "runtime"),
+        "opentelemetry" to PURE + setOf("model", "runtime"),
+        "kafka" to PURE + setOf("model", "spi", "document", "runtime"),
         // An implementation of the IdGenerator port, and nothing more of CoSec.
         "cosid" to setOf("spi", "model", "api", "annotations"),
     )

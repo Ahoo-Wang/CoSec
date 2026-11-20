@@ -126,7 +126,7 @@ class TokenAuthenticatorTest {
             )
         val result = authenticate({ token(inTenant("acme", principal)) })
 
-        (result as AuthnResult.Authenticated).method.assert().isEqualTo(TokenAuthenticator.METHOD)
+        (result as AuthnResult.Authenticated).method.assert().isEqualTo(Identity.Method(TokenAuthenticator.METHOD))
         val authenticated = result.principal()
         authenticated.id.assert().isEqualTo(PrincipalId("alice"))
         authenticated.tenant.assert().isEqualTo(TenantId("acme"))

@@ -242,6 +242,7 @@ class PipelineGatewayFilter @InternalCoSecApi constructor(
          * Uses HIGHEST_PRECEDENCE + 10 to run very early in the gateway filter chain,
          * ensuring authorization is checked before route-specific filters.
          */
+        @InternalCoSecApi
         const val AUTHORIZATION_GATEWAY_FILTER_ORDER = Ordered.HIGHEST_PRECEDENCE + 10
 
         /**
