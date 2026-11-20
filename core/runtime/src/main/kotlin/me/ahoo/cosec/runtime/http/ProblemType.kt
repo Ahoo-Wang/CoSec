@@ -45,7 +45,7 @@ enum class ProblemType {
     val status: Int
 
     init {
-        val row = checkNotNull(ProblemTypes.of(slug)) { "The problem type $name has no row in ProblemTypes." }
+        val row = ProblemTypes.of(slug) ?: error("The problem type $name has no row in ProblemTypes.")
         title = row.title
         status = row.status
     }
