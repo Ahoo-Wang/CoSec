@@ -39,6 +39,7 @@ import me.ahoo.cosec.document.ProvenanceKind
 import me.ahoo.cosec.model.PrincipalId
 import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.spi.snapshot.SnapshotDigest
+import me.ahoo.cosec.spi.snapshot.SnapshotFormatException
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
@@ -73,6 +74,7 @@ class OpenChangeSetsRaceTest {
     /** The sets over a node, the records in [records] and [clock]: each step of a write can be held apart. */
     private class Sets(node: SnapshotNode, val clock: MovableClock) {
         val records = ConcurrentHashMap<ChangeId, Versioned<ChangeRequest>>()
+        val unreadable: MutableSet<ChangeId> = ConcurrentHashMap.newKeySet()
         val raw: SetStore<String, String> = node.runtime.create(ControlCacheSpecs.changeSet(node.keyPrefix))
         val sets = OpenChangeSets(
             ControlSets(
@@ -82,7 +84,10 @@ class OpenChangeSetsRaceTest {
                 raw,
             ),
             legacyListed = { false },
-            record = { records[it] },
+            record = {
+                if (it in unreadable) throw SnapshotFormatException("Change [${it.value}] does not read")
+                records[it]
+            },
             clock = clock,
             missingGrace = GRACE,
         )
@@ -262,6 +267,53 @@ class OpenChangeSetsRaceTest {
         clock.now = clock.now.plus(GRACE).plusSeconds(1)
         ids(ChangeState.CHECKED).assert().containsExactly("c1")
         members(ChangeState.CHECKED).assert().containsExactly("$key#c1@${checked.digest}")
+    }
+
+    @Test
+    fun `a listing by state pages by change, skips the documents it is told to, and lists an unreadable change`() = sets {
+        Write(change("a", ChangeState.CHECKED)).all()
+        Write(change("b", ChangeState.CHECKED)).all()
+        Write(change("c", ChangeState.CHECKED, SnapshotKey.Tenant("globex"))).all()
+        val first = sets.changes(ChangeState.CHECKED, null, 1) { true }
+        first.changes.map { it.id.value }.assert().containsExactly("a")
+        first.next.assert().isEqualTo("$key#a")
+        val rest = sets.changes(ChangeState.CHECKED, first.next, LIMIT) { it == key }
+        rest.changes.map { it.id.value }.assert().containsExactly("b")
+        rest.next.assert().isNull()
+        unreadable += ChangeId("b")
+        sets.changes(ChangeState.CHECKED, null, LIMIT) { true }.changes.single { it.id.value == "b" }
+            .assert().isInstanceOf(ListedChange.Unreadable::class.java)
+    }
+
+    @Test
+    fun `members of a later form are left alone, and a rewrite of the same record removes nothing`() = sets {
+        val checked = Write(change("c1", ChangeState.CHECKED))
+        checked.all()
+        raw.suspending().add("state:CHECKED", listOf("no-separator", "$key#", "$key#@x", "nodoc:x#c2@x"))
+        ids(ChangeState.CHECKED).assert().containsExactly("c1")
+        Write(checked.change, records.getValue(checked.change.id)).all()
+        members(ChangeState.CHECKED).assert().contains("$key#c1@${checked.digest}")
+        ids(ChangeState.CHECKED).assert().containsExactly("c1")
+    }
+
+    @Test
+    fun `the conversion lists a change by the digest of its record as stored`() = runBlocking<Unit> {
+        val backend = InMemoryBackend()
+        val keyPrefix = newKeyPrefix()
+        SnapshotNode(backend, keyPrefix).use { node ->
+            SnapshotNode(backend, keyPrefix).use { other ->
+                val store = CoCacheControlStore.create(node.factory, node.cache, node.keyPrefix)
+                val raw = other.runtime.create(ControlCacheSpecs.changeSet(other.keyPrefix)).suspending()
+                val change = change("c1", ChangeState.READY)
+                store.putChange(null, change).assert().isTrue()
+                val digest = checkNotNull(store.change(change.id)).digest
+                raw.remove("state:READY", setOf("$key#c1@$digest"))
+                store.listOpenChange(change)
+                raw.get("state:READY").assert().containsExactly("$key#c1@$digest")
+                store.listOpenChange(change("gone", ChangeState.READY))
+                raw.get("state:READY").assert().containsExactly("$key#c1@$digest")
+            }
+        }
     }
 
     /**
