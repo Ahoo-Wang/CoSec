@@ -11,27 +11,44 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.runtime.http
+
+import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.document.format.ProblemTypes
 
 /**
  * The problem vocabulary (RFC 0006 §6.1, Q27): one row per thing a client can do about it. Explicit and implicit
- * denies are both [UNAUTHORIZED] or [FORBIDDEN], so a response never tells a caller that a DENY exists. The `problem`
- * format descriptor in `DocumentFormats` lists the same rows, and `ProblemSchemaTest` keeps them equal.
+ * denies are both [UNAUTHORIZED] or [FORBIDDEN], so a response never tells a caller that a DENY exists. The rows are
+ * `cosec-document`'s `ProblemTypes`, which the `problem` format descriptor is generated from: a constant is its slug
+ * in UPPER_SNAKE case, its title and status are those of the row, and a constant with no row fails when the class
+ * loads. `ProblemSchemaTest` fails for a row with no constant.
  * A set that grows: a minor release may add a member (RFC 0010 Q6), so a `when` over it needs an `else`, and an
  * implementation of a listener or a store never matches it exhaustively.
  */
-enum class ProblemType(val slug: String, val title: String, val status: Int) {
-    INVALID_REQUEST("invalid-request", "Invalid Request", 400),
-    UNAUTHORIZED("unauthorized", "Unauthorized", 401),
-    TOKEN_INVALID("token-invalid", "Token Invalid", 401),
-    TOKEN_EXPIRED("token-expired", "Token Expired", 401),
-    TOKEN_REVOKED("token-revoked", "Token Revoked", 401),
-    FORBIDDEN("forbidden", "Forbidden", 403),
-    SCOPE_REJECTED("scope-rejected", "Scope Rejected", 403),
-    TOO_MANY_REQUESTS("too-many-requests", "Too Many Requests", 429),
-    UNAVAILABLE("unavailable", "Service Unavailable", 503),
-    INTERNAL_ERROR("internal-error", "Internal Server Error", 500),
+enum class ProblemType {
+    INVALID_REQUEST,
+    UNAUTHORIZED,
+    TOKEN_INVALID,
+    TOKEN_EXPIRED,
+    TOKEN_REVOKED,
+    FORBIDDEN,
+    SCOPE_REJECTED,
+    TOO_MANY_REQUESTS,
+    UNAVAILABLE,
+    INTERNAL_ERROR,
     ;
+
+    val slug: String = name.lowercase().replace('_', '-')
+    val title: String
+    val status: Int
+
+    init {
+        val row = checkNotNull(ProblemTypes.of(slug)) { "The problem type $name has no row in ProblemTypes." }
+        title = row.title
+        status = row.status
+    }
 
     /** The stable UPPER_SNAKE code, one-to-one with [slug]. */
     val code: String get() = name
@@ -40,6 +57,6 @@ enum class ProblemType(val slug: String, val title: String, val status: Int) {
 
     companion object {
         /** Each URI resolves to the anchor of the same name in the troubleshooting guide (§6.2). */
-        const val TYPE_PREFIX = "https://cosec.ahoo.me/problems/"
+        const val TYPE_PREFIX = ProblemTypes.TYPE_PREFIX
     }
 }
