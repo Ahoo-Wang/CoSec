@@ -15,6 +15,7 @@
 
 package me.ahoo.cosec.runtime.snapshot
 
+import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.cosec.spi.snapshot.SnapshotKind
@@ -25,7 +26,6 @@ import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicLong
-import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 
 /**
  * UC-1's seam: each installed document goes to the [InstallReview]s on the housekeeping thread, after its load has been

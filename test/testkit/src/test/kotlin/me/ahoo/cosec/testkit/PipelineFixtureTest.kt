@@ -81,7 +81,10 @@ class PipelineFixtureTest {
                 mapOf(SpaceId.DEFAULT to setOf(RoleId("reader"))),
                 emptyList(),
             )
-            AuthnResult.Authenticated(AuthenticatedPrincipal(PrincipalId(id), TenantId("acme"), memberships), Identity.Method("wow"))
+            AuthnResult.Authenticated(
+                AuthenticatedPrincipal(PrincipalId(id), TenantId("acme"), memberships),
+                Identity.Method("wow")
+            )
         }
         PipelineFixture.of(platform = anyone, tenants = mapOf("acme" to tenant), authenticator = own).use {
             val alice = it.request("GET", "/orders/1", headers = mapOf("Authorization" to "Bearer wow:alice"))

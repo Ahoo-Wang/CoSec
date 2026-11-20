@@ -16,6 +16,7 @@
 package me.ahoo.cosec.micrometer
 
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry
+import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.document.SnapshotDocuments
 import me.ahoo.cosec.runtime.snapshot.DocumentSnapshots
@@ -35,7 +36,6 @@ import java.time.Clock
 import java.time.Duration
 import java.time.Instant
 import java.time.ZoneOffset
-import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 
 /**
  * The `cosec.snapshot.*` meters (`OBS-5`): one per event, tagged by closed sets of values, resolved once, and the

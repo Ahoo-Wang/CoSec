@@ -18,6 +18,7 @@ package me.ahoo.cosec.runtime.snapshot
 import ch.qos.logback.classic.Logger
 import ch.qos.logback.classic.spi.ILoggingEvent
 import ch.qos.logback.core.read.ListAppender
+import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.runtime.captured
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
@@ -34,7 +35,6 @@ import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.Executor
 import java.util.concurrent.atomic.AtomicBoolean
-import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 
 /**
  * [KeyRunner] behind the source's factory (RFC 0013 B2b, step 2b): what the page promises of the runner itself. §5's `VirtualMachineError` from an effect, on a caller's thread

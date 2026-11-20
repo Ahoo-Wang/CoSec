@@ -16,6 +16,7 @@
 package me.ahoo.cosec.spring.boot.pipeline
 
 import kotlinx.coroutines.runBlocking
+import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.document.PolicyDocumentCompiler
 import me.ahoo.cosec.document.SnapshotDocuments
@@ -44,7 +45,6 @@ import java.time.Clock
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.TimeUnit
-import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 
 /**
  * `SNP-20` on a gateway: the apps its routes name are prewarmed before it reports ready, one without an app document as

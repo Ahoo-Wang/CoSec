@@ -15,6 +15,7 @@
 
 package me.ahoo.cosec.runtime.snapshot
 
+import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.cosec.spi.snapshot.SnapshotKind
@@ -22,7 +23,6 @@ import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.Executor
-import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 
 /**
  * RFC 0013 §5.4: a request queued while its key's load is in flight, and taken only after that load's end, is served

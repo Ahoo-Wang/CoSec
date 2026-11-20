@@ -62,7 +62,9 @@ class SubjectMethodTest {
         val listeners = DecisionListeners(listOf(capture))
         try {
             runBlocking {
-                PipelineFixtures.pipeline(authenticator(AuthnResult.Authenticated(principal, Identity.Method(authenticatorName)))) {
+                PipelineFixtures.pipeline(
+                    authenticator(AuthnResult.Authenticated(principal, Identity.Method(authenticatorName)))
+                ) {
                     listeners(listeners)
                 }.evaluate(facts("/orders/1"))
             }

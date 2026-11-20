@@ -31,8 +31,8 @@ sealed interface Decision {
     class Permit(val by: StatementRef.Policy, val obligations: List<Obligation> = emptyList()) : Decision {
         override fun equals(other: Any?): Boolean =
             this === other || other is Permit &&
-            by == other.by &&
-            obligations == other.obligations
+                by == other.by &&
+                obligations == other.obligations
 
         override fun hashCode(): Int = 31 * by.hashCode() + obligations.hashCode()
 
@@ -43,7 +43,7 @@ sealed interface Decision {
     class Deny(val by: StatementRef?) : Decision {
         override fun equals(other: Any?): Boolean =
             this === other || other is Deny &&
-            by == other.by
+                by == other.by
 
         override fun hashCode(): Int = (by?.hashCode() ?: 0)
 
@@ -54,7 +54,7 @@ sealed interface Decision {
     class Indeterminate(val cause: Cause) : Decision {
         override fun equals(other: Any?): Boolean =
             this === other || other is Indeterminate &&
-            cause == other.cause
+                cause == other.cause
 
         override fun hashCode(): Int = cause.hashCode()
 
@@ -77,9 +77,9 @@ sealed interface Cause {
     class MatcherFailed(val at: StatementRef.Policy, val guard: Boolean, val error: Throwable) : Cause {
         override fun equals(other: Any?): Boolean =
             this === other || other is MatcherFailed &&
-            at == other.at &&
-            guard == other.guard &&
-            error == other.error
+                at == other.at &&
+                guard == other.guard &&
+                error == other.error
 
         override fun hashCode(): Int = 31 * (31 * at.hashCode() + guard.hashCode()) + error.hashCode()
 
@@ -93,7 +93,7 @@ sealed interface Cause {
     class MissingPolicies(val policyIds: Set<PolicyId>) : Cause {
         override fun equals(other: Any?): Boolean =
             this === other || other is MissingPolicies &&
-            policyIds == other.policyIds
+                policyIds == other.policyIds
 
         override fun hashCode(): Int = policyIds.hashCode()
 
@@ -108,7 +108,7 @@ sealed interface Cause {
     class AmbiguousPolicy(val policyIds: Set<PolicyId>) : Cause {
         override fun equals(other: Any?): Boolean =
             this === other || other is AmbiguousPolicy &&
-            policyIds == other.policyIds
+                policyIds == other.policyIds
 
         override fun hashCode(): Int = policyIds.hashCode()
 
@@ -123,8 +123,8 @@ sealed interface Cause {
     class SourceUnavailable(val document: DocumentKind, val error: Throwable) : Cause {
         override fun equals(other: Any?): Boolean =
             this === other || other is SourceUnavailable &&
-            document == other.document &&
-            error == other.error
+                document == other.document &&
+                error == other.error
 
         override fun hashCode(): Int = 31 * document.hashCode() + error.hashCode()
 
@@ -141,9 +141,9 @@ sealed interface Cause {
     class DocumentInvalid(val document: DocumentKind, val revision: Long, val error: Throwable) : Cause {
         override fun equals(other: Any?): Boolean =
             this === other || other is DocumentInvalid &&
-            document == other.document &&
-            revision == other.revision &&
-            error == other.error
+                document == other.document &&
+                revision == other.revision &&
+                error == other.error
 
         override fun hashCode(): Int = 31 * (31 * document.hashCode() + revision.hashCode()) + error.hashCode()
 
@@ -160,8 +160,8 @@ sealed interface Cause {
     class BoundaryUnavailable(val boundary: PolicyId, val error: Throwable) : Cause {
         override fun equals(other: Any?): Boolean =
             this === other || other is BoundaryUnavailable &&
-            boundary == other.boundary &&
-            error == other.error
+                boundary == other.boundary &&
+                error == other.error
 
         override fun hashCode(): Int = 31 * boundary.hashCode() + error.hashCode()
 
@@ -176,8 +176,8 @@ sealed interface Cause {
     class AttributeUnavailable(val attributes: Set<String>, val at: StatementRef.Policy?) : Cause {
         override fun equals(other: Any?): Boolean =
             this === other || other is AttributeUnavailable &&
-            attributes == other.attributes &&
-            at == other.at
+                attributes == other.attributes &&
+                at == other.at
 
         override fun hashCode(): Int = 31 * attributes.hashCode() + (at?.hashCode() ?: 0)
 
@@ -191,7 +191,7 @@ sealed interface Cause {
     class CheckFailed(val error: Throwable) : Cause {
         override fun equals(other: Any?): Boolean =
             this === other || other is CheckFailed &&
-            error == other.error
+                error == other.error
 
         override fun hashCode(): Int = error.hashCode()
 
@@ -202,7 +202,7 @@ sealed interface Cause {
     class MembershipUnavailable(val error: Throwable) : Cause {
         override fun equals(other: Any?): Boolean =
             this === other || other is MembershipUnavailable &&
-            error == other.error
+                error == other.error
 
         override fun hashCode(): Int = error.hashCode()
 
@@ -216,7 +216,7 @@ sealed interface Cause {
     class RequiredListenerFailed(val listeners: List<String>) : Cause {
         override fun equals(other: Any?): Boolean =
             this === other || other is RequiredListenerFailed &&
-            listeners == other.listeners
+                listeners == other.listeners
 
         override fun hashCode(): Int = listeners.hashCode()
 
@@ -230,7 +230,7 @@ sealed interface Cause {
     class RateLimiterUnavailable(val ruleId: String) : Cause {
         override fun equals(other: Any?): Boolean =
             this === other || other is RateLimiterUnavailable &&
-            ruleId == other.ruleId
+                ruleId == other.ruleId
 
         override fun hashCode(): Int = ruleId.hashCode()
 
@@ -248,13 +248,18 @@ sealed interface Obligation {
      * Spend one permit of [limit] from [bucket] of rule [ruleId]. [bucket] is null when the rule's key could not be read
      * (an external attribute that could not be fetched): [strictFailure] then decides, as for a failed backend.
      */
-    class RateLimit(val ruleId: String, val bucket: String?, val limit: RateLimitSpec, val strictFailure: Boolean) : Obligation {
+    class RateLimit(
+        val ruleId: String,
+        val bucket: String?,
+        val limit: RateLimitSpec,
+        val strictFailure: Boolean
+    ) : Obligation {
         override fun equals(other: Any?): Boolean =
             this === other || other is RateLimit &&
-            ruleId == other.ruleId &&
-            bucket == other.bucket &&
-            limit == other.limit &&
-            strictFailure == other.strictFailure
+                ruleId == other.ruleId &&
+                bucket == other.bucket &&
+                limit == other.limit &&
+                strictFailure == other.strictFailure
 
         override fun hashCode(): Int = 31 * (31 * (31 * ruleId.hashCode() + (bucket?.hashCode() ?: 0)) + limit.hashCode()) + strictFailure.hashCode()
 

@@ -16,6 +16,7 @@
 package me.ahoo.cosec.runtime.snapshot
 
 import io.github.oshai.kotlinlogging.KotlinLogging
+import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.runtime.snapshot.KeyEffect.Level
 import me.ahoo.cosec.spi.snapshot.SnapshotCompiler
@@ -26,7 +27,6 @@ import java.time.Duration
 import java.util.concurrent.RejectedExecutionException
 import java.util.concurrent.ScheduledFuture
 import java.util.concurrent.TimeUnit
-import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 
 // The source's logger: moving the code did not move the name operators configure.
 private val log = KotlinLogging.logger(SnapshotSource::class.java.name)

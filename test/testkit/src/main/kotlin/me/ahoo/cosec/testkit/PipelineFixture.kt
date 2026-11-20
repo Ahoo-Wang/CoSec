@@ -41,6 +41,7 @@ import me.ahoo.cosec.runtime.ratelimit.LocalRateLimiter
 import me.ahoo.cosec.spi.authn.AuthenticatedPrincipal
 import me.ahoo.cosec.spi.authn.Authenticator
 import me.ahoo.cosec.spi.authn.AuthnResult
+import me.ahoo.cosec.spi.identity.Identity
 import me.ahoo.cosec.spi.ratelimit.RateLimiter
 import me.ahoo.cosec.spi.snapshot.InMemorySnapshotDocumentStore
 import me.ahoo.cosec.spi.snapshot.SnapshotChangeListener
@@ -49,7 +50,6 @@ import me.ahoo.cosec.spi.snapshot.SnapshotDocument
 import me.ahoo.cosec.spi.snapshot.SnapshotDocumentStore
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.cosec.spi.snapshot.SnapshotRead
-import me.ahoo.cosec.spi.identity.Identity
 import tools.jackson.databind.JsonNode
 import java.nio.file.Path
 import java.util.concurrent.CompletableFuture

@@ -15,6 +15,7 @@
 
 package me.ahoo.cosec.runtime.snapshot
 
+import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.cosec.spi.snapshot.SnapshotKind
@@ -23,7 +24,6 @@ import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.Executor
-import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 
 /**
  * `close` answers every request a runner accepted, a removed key's included (RFC 0013 B2b; `SNP-13`'s futures). A key

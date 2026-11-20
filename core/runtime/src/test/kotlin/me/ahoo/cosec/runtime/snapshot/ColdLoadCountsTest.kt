@@ -15,6 +15,7 @@
 
 package me.ahoo.cosec.runtime.snapshot
 
+import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.cosec.spi.snapshot.SnapshotKind
@@ -31,7 +32,6 @@ import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicLong
-import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 
 /**
  * What one uncontended cold load costs in thread work (RFC 0013 B2b, the cold-load criterion): one compile-pool task,

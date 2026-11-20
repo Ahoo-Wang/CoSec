@@ -15,6 +15,7 @@
 
 package me.ahoo.cosec.runtime.snapshot
 
+import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.spi.snapshot.SnapshotCompiler
 import me.ahoo.cosec.spi.snapshot.SnapshotDocument
@@ -35,7 +36,6 @@ import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 import kotlin.concurrent.thread
-import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 
 /**
  * The load lane (RFC 0013 B2b, finding 2): what the source's own work produces is taken by whoever holds the key's

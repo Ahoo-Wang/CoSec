@@ -28,8 +28,8 @@ import me.ahoo.cosec.model.scope.ScopeResolution
 import me.ahoo.cosec.runtime.contract.ContractFiles
 import me.ahoo.cosec.spi.authn.AuthenticatedPrincipal
 import me.ahoo.cosec.spi.authn.AuthnResult
-import me.ahoo.cosec.spi.ratelimit.RateLimitResult
 import me.ahoo.cosec.spi.identity.Identity
+import me.ahoo.cosec.spi.ratelimit.RateLimitResult
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import tools.jackson.databind.node.ArrayNode

@@ -15,6 +15,7 @@
 
 package me.ahoo.cosec.runtime.snapshot
 
+import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.cosec.spi.snapshot.SnapshotKind
 import me.ahoo.test.asserts.assert
@@ -22,7 +23,6 @@ import org.junit.jupiter.api.Test
 import java.time.Duration
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.atomic.AtomicLong
-import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 
 /**
  * What the lag pass publishes for the gauges of `cosec-micrometer` ([SnapshotSummary]): every entry held counted once,

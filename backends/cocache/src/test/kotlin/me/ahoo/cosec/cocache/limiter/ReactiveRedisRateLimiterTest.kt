@@ -19,7 +19,6 @@ import io.lettuce.core.cluster.SlotHash
 import kotlinx.coroutines.runBlocking
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.model.decision.RateLimitSpec
-import me.ahoo.cosec.spi.ratelimit.RateLimiter
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assumptions.assumeTrue

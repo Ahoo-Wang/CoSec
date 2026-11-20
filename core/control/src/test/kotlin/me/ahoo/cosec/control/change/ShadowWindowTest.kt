@@ -69,13 +69,13 @@ import me.ahoo.cosec.runtime.snapshot.ViewKey
 import me.ahoo.cosec.spi.authn.AuthenticatedPrincipal
 import me.ahoo.cosec.spi.authn.Authenticator
 import me.ahoo.cosec.spi.authn.AuthnResult
+import me.ahoo.cosec.spi.identity.Identity
 import me.ahoo.cosec.spi.shadow.InMemoryShadowReports
 import me.ahoo.cosec.spi.shadow.InstalledDocument
 import me.ahoo.cosec.spi.shadow.ShadowOutcome
 import me.ahoo.cosec.spi.shadow.StoredCandidate
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.cosec.spi.token.RevocationReader
-import me.ahoo.cosec.spi.identity.Identity
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Test

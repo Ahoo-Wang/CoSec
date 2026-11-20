@@ -36,10 +36,10 @@ import me.ahoo.cosec.spi.authn.AuthenticatedPrincipal
 import me.ahoo.cosec.spi.authn.Authenticator
 import me.ahoo.cosec.spi.authn.AuthnResult
 import me.ahoo.cosec.spi.id.IdGenerator
+import me.ahoo.cosec.spi.identity.Identity
 import me.ahoo.cosec.spi.ratelimit.RateLimitResult
 import me.ahoo.cosec.spi.ratelimit.RateLimiter
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
-import me.ahoo.cosec.spi.identity.Identity
 import java.time.Duration
 import java.util.concurrent.CompletableFuture
 
@@ -108,7 +108,10 @@ internal class ParityFixture(
             mapOf(SpaceId.DEFAULT to roles.split(',').filter { it.isNotEmpty() }.mapTo(LinkedHashSet(), ::RoleId)),
             emptyList(),
         )
-        AuthnResult.Authenticated(AuthenticatedPrincipal(PrincipalId(who), TenantId(tenant), memberships), Identity.Method("token"))
+        AuthnResult.Authenticated(
+            AuthenticatedPrincipal(PrincipalId(who), TenantId(tenant), memberships),
+            Identity.Method("token")
+        )
     }
 
     /** Every rule but `limited` has permits left. */

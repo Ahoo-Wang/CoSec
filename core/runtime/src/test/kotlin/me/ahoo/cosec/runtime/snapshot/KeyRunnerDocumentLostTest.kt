@@ -15,6 +15,7 @@
 
 package me.ahoo.cosec.runtime.snapshot
 
+import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.test.asserts.assert
@@ -22,7 +23,6 @@ import org.junit.jupiter.api.Test
 import java.time.Duration
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.TimeUnit
-import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 
 /**
  * `onDocumentLost` over the runner (RFC 0013 B2b step 3): it is a judgement on the key's state, an effect of the

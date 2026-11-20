@@ -14,9 +14,9 @@
 package me.ahoo.cosec.runtime.ratelimit
 
 import me.ahoo.cosec.model.decision.RateLimitSpec
-import me.ahoo.cosec.spi.ratelimit.resultOf
 import me.ahoo.cosec.spi.ratelimit.RateLimitResult
 import me.ahoo.cosec.spi.ratelimit.RateLimiter
+import me.ahoo.cosec.spi.ratelimit.resultOf
 import java.time.Duration
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicBoolean

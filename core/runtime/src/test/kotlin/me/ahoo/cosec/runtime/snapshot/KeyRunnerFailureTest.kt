@@ -18,6 +18,7 @@ package me.ahoo.cosec.runtime.snapshot
 import ch.qos.logback.classic.Logger
 import ch.qos.logback.classic.spi.ILoggingEvent
 import ch.qos.logback.core.read.ListAppender
+import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.runtime.captured
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
@@ -39,7 +40,6 @@ import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicLong
-import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 
 /**
  * How [KeyRunner] fails (RFC 0013 B2b §3, §5): a crash on a pool thread still lets a lost offer be taken; a

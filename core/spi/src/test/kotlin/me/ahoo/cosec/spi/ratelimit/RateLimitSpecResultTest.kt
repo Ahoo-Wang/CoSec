@@ -46,7 +46,9 @@ class RateLimitSpecResultTest {
         val day = RateLimitSpec(permitsPerSecond = 1.0, windowSeconds = 86_400)
         day.windowMillis.assert().isEqualTo(86_400_000L)
         day.limitPerWindow.assert().isEqualTo(86_400.0)
-        assertThrows(IllegalArgumentException::class.java) { RateLimitSpec(permitsPerSecond = 1.0, windowSeconds = 86_401) }
+        assertThrows(
+            IllegalArgumentException::class.java
+        ) { RateLimitSpec(permitsPerSecond = 1.0, windowSeconds = 86_401) }
     }
 
     @Test

@@ -21,9 +21,9 @@ package me.ahoo.cosec.engine
 class ViewVersion(val platform: Long, val app: Long?, val tenant: Long?) {
     override fun equals(other: Any?): Boolean =
         this === other || other is ViewVersion &&
-        platform == other.platform &&
-        app == other.app &&
-        tenant == other.tenant
+            platform == other.platform &&
+            app == other.app &&
+            tenant == other.tenant
 
     override fun hashCode(): Int = 31 * (31 * platform.hashCode() + (app?.hashCode() ?: 0)) + (tenant?.hashCode() ?: 0)
 

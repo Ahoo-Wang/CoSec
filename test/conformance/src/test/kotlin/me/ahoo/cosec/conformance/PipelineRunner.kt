@@ -87,6 +87,7 @@ import me.ahoo.cosec.spi.authn.Authenticator
 import me.ahoo.cosec.spi.authn.AuthnResult
 import me.ahoo.cosec.spi.authn.Credentials
 import me.ahoo.cosec.spi.id.IdGenerator
+import me.ahoo.cosec.spi.identity.Identity
 import me.ahoo.cosec.spi.membership.InMemoryMembershipProvider
 import me.ahoo.cosec.spi.membership.MembershipClaims
 import me.ahoo.cosec.spi.membership.MembershipProvider
@@ -138,7 +139,6 @@ import kotlin.coroutines.cancellation.CancellationException
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
 import me.ahoo.cosec.runtime.http.Outcome as PipelineOutcome
-import me.ahoo.cosec.spi.identity.Identity
 
 /**
  * The `pipeline` runner (RFC 0008 §3.3): an HTTP request → [Pipeline] → its outcome, with the scenario's documents

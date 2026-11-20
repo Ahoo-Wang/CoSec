@@ -23,12 +23,12 @@ import java.time.Instant
  * code is the decision's own name (`PERMIT` for `PERMIT`, and so on for each value below) except in two cases, which are
  * the whole of the mapping:
  *
- * | The decision is | and | the reason code is |
- * |---|---|---|
- * | [EXPLICIT_DENY], [IMPLICIT_DENY], [SCOPE_REJECTED] or [BOUNDARY] | a credential was rejected | the rejection's: [AuditReasonCode.TOKEN_EXPIRED], [AuditReasonCode.TOKEN_INVALID], [AuditReasonCode.TOKEN_REVOKED], [AuditReasonCode.TOKEN_NOT_YET_VALID] or [AuditReasonCode.DELEGATION_UNSUPPORTED] |
- * | [INDETERMINATE] | the strict rate limiter could not count | [AuditReasonCode.RATE_LIMITER_UNAVAILABLE] |
+ * - [EXPLICIT_DENY], [IMPLICIT_DENY], [SCOPE_REJECTED] or [BOUNDARY], when a credential was rejected: the rejection's code,
+ *   [AuditReasonCode.TOKEN_EXPIRED], [AuditReasonCode.TOKEN_INVALID], [AuditReasonCode.TOKEN_REVOKED],
+ *   [AuditReasonCode.TOKEN_NOT_YET_VALID] or [AuditReasonCode.DELEGATION_UNSUPPORTED].
+ * - [INDETERMINATE], when the strict rate limiter could not count: [AuditReasonCode.RATE_LIMITER_UNAVAILABLE].
  *
- * `AuditVocabularyTest` holds the table against the code that writes it.
+ * `AuditVocabularyTest` holds this mapping against the code that writes it.
  */
 enum class AuditDecision {
     /** The request was permitted. */

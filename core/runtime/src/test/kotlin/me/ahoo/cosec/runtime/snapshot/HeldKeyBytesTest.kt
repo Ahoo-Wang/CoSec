@@ -17,6 +17,7 @@ package me.ahoo.cosec.runtime.snapshot
 
 import ch.qos.logback.classic.Level
 import ch.qos.logback.classic.Logger
+import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.cosec.spi.snapshot.SnapshotKind
@@ -25,7 +26,6 @@ import org.junit.jupiter.api.Test
 import org.slf4j.LoggerFactory
 import java.lang.management.ManagementFactory
 import javax.management.ObjectName
-import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 
 /**
  * Bytes per held key (RFC 0013 §5.4). The source holds [KEYS] app documents; a class histogram of the live heap

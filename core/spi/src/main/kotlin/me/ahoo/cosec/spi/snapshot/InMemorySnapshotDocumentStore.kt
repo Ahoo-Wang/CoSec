@@ -15,12 +15,12 @@
 
 package me.ahoo.cosec.spi.snapshot
 
+import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import java.nio.ByteBuffer
 import java.security.MessageDigest
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.CopyOnWriteArrayList
-import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 
 /**
  * A [SnapshotDocumentStore] in memory: for tests, local policy files and the policy test kit. Reads complete on the

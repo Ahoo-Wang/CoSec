@@ -138,7 +138,10 @@ class UnpairedSurrogatePipelineTest {
             .assert().isEqualTo(PrincipalId("alice"))
         for (principal in principals) {
             val engine = StubEngine(IMPLICIT_DENY)
-            val outcome = pipeline(Authenticator { AuthnResult.Authenticated(principal(), Identity.Method("custom")) }, engine)
+            val outcome = pipeline(
+                Authenticator { AuthnResult.Authenticated(principal(), Identity.Method("custom")) },
+                engine
+            )
                 .evaluate(facts())
             outcome.status.assert().isEqualTo(ProblemType.UNAVAILABLE.status)
             outcome.proceed.assert().isFalse()

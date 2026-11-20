@@ -15,6 +15,7 @@
 
 package me.ahoo.cosec.runtime.snapshot
 
+import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.cosec.spi.snapshot.SnapshotKind
@@ -23,7 +24,6 @@ import org.junit.jupiter.api.Test
 import java.util.concurrent.AbstractExecutorService
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.TimeUnit
-import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 
 /**
  * Where a load's end hands its family's pass to housekeeping (RFC 0013 §5.4): after the step's answers, since that

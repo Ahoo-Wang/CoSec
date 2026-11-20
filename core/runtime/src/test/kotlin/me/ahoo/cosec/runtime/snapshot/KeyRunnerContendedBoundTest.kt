@@ -15,6 +15,7 @@
 
 package me.ahoo.cosec.runtime.snapshot
 
+import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.runtime.snapshot.KeyEvent.Ask
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
@@ -26,7 +27,6 @@ import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicLong
 import kotlin.concurrent.thread
-import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 
 /**
  * `SNP-14` under contention, over the [KeyRunner] (RFC 0013 B2b step 2b): the least recently used keys, more of them
