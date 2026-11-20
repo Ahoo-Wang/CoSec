@@ -181,6 +181,8 @@ class OpenChangeSetsRaceTest {
         ids(ChangeState.CHECKED).assert().describedAs("its record still says DRAFT").isEmpty()
         checked.store()
         checked.unlist()
+        members(ChangeState.CHECKED).assert().containsExactly("$key#c1@${checked.digest}")
+        members(ChangeState.DRAFT).assert().isEmpty()
         ids(ChangeState.CHECKED).assert().containsExactly("c1")
         ids(ChangeState.DRAFT).assert().isEmpty()
     }
