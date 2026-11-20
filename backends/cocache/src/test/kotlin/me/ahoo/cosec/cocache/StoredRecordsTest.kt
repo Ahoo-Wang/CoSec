@@ -196,12 +196,18 @@ class StoredRecordsTest {
         for (record in records) {
             for (wrong in record.wrong) {
                 val error = runCatching { record.decode(wrong.encodeToByteArray()) }.exceptionOrNull()
-                error.assert().describedAs("${record.name} reading [$wrong]").isInstanceOf(SnapshotFormatException::class.java)
+                error.assert().describedAs(
+                    "${record.name} reading [$wrong]"
+                ).isInstanceOf(SnapshotFormatException::class.java)
             }
         }
         // The API key is read as a string, by its own codec: strict, an input of authentication.
         for (wrong in listOf("", "x", "[1]", """{"format":3}""")) {
-            runCatching { ApiKeyCodec.decode(wrong) }.exceptionOrNull().assert().describedAs("ApiKeyCodec reading [$wrong]")
+            runCatching {
+                ApiKeyCodec.decode(
+                    wrong
+                )
+            }.exceptionOrNull().assert().describedAs("ApiKeyCodec reading [$wrong]")
                 .isInstanceOf(SnapshotFormatException::class.java)
         }
     }
@@ -228,7 +234,9 @@ class StoredRecordsTest {
             again(changed { it.remove("format") }).assert().describedAs("${record.name}: written before formats")
                 .isEqualTo(written.decodeToString())
             runCatching { record.decode(changed { it.put("format", 2) }) }.exceptionOrNull()
-                .assert().describedAs("${record.name}: a later format").isInstanceOf(SnapshotFormatException::class.java)
+                .assert().describedAs(
+                    "${record.name}: a later format"
+                ).isInstanceOf(SnapshotFormatException::class.java)
         }
     }
 }

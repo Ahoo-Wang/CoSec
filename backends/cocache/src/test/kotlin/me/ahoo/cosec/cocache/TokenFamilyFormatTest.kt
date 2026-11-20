@@ -32,7 +32,16 @@ import java.time.Instant
  */
 class TokenFamilyFormatTest {
     private val at = Instant.parse("2026-11-01T00:00:00Z")
-    private val family = TokenFamily("f1", TenantId("acme"), PrincipalId("alice"), at, at.plusSeconds(60), 1, null, false)
+    private val family = TokenFamily(
+        "f1",
+        TenantId("acme"),
+        PrincipalId("alice"),
+        at,
+        at.plusSeconds(60),
+        1,
+        null,
+        false
+    )
     private val written = TokenFamilyCodec.encode(family).decodeToString()
 
     private fun read(text: String): TokenFamily = TokenFamilyCodec.decode(text.encodeToByteArray())
@@ -62,7 +71,9 @@ class TokenFamilyFormatTest {
     fun `a later format, or a session that lacks what it needs, is refused as a format error`() {
         assertThrownBy<SnapshotFormatException> { read(written.replace(""""format":1""", """"format":2""")) }
         assertThrownBy<SnapshotFormatException> { read(written.replace(""""tenant":"acme",""", "")) }
-        assertThrownBy<SnapshotFormatException> { read(written.replace(""""generation":1""", """"generation":"one"""")) }
+        assertThrownBy<SnapshotFormatException> { read(
+            written.replace(""""generation":1""", """"generation":"one"""")
+        ) }
         assertThrownBy<SnapshotFormatException> { read("not json") }
     }
 }

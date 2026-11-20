@@ -15,7 +15,6 @@ package me.ahoo.cosec.control.change
 
 import me.ahoo.cosec.control.change.ChangeJson.factory
 import me.ahoo.cosec.control.change.ChangeJson.need
-import me.ahoo.cosec.control.change.ChangeJson.only
 import me.ahoo.cosec.control.change.ChangeJson.text
 import tools.jackson.databind.JsonNode
 import tools.jackson.databind.node.ObjectNode

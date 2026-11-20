@@ -18,14 +18,14 @@ package me.ahoo.cosec.cocache
 import me.ahoo.cocache.api.Codec
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.document.json.CoSecJson
+import me.ahoo.cosec.document.json.StoredFormat
 import me.ahoo.cosec.model.PrincipalId
 import me.ahoo.cosec.model.TenantId
+import me.ahoo.cosec.spi.snapshot.SnapshotFormatException
 import me.ahoo.cosec.spi.token.TokenFamily
+import tools.jackson.core.JacksonException
 import tools.jackson.databind.JsonNode
 import java.time.Instant
-import me.ahoo.cosec.document.json.StoredFormat
-import me.ahoo.cosec.spi.snapshot.SnapshotFormatException
-import tools.jackson.core.JacksonException
 import java.time.format.DateTimeParseException
 
 /**
@@ -58,7 +58,11 @@ internal object TokenFamilyCodec : Codec<TokenFamily> {
         }
         StoredFormat.of(node, WHAT)
         val generation = node.need("generation")
-        if (!generation.isIntegralNumber || !generation.canConvertToLong()) malformed("its generation is not an integer")
+        if (!generation.isIntegralNumber || !generation.canConvertToLong()) {
+            malformed(
+                "its generation is not an integer"
+            )
+        }
         val revoked = node.need("revoked")
         if (!revoked.isBoolean) malformed("its revoked is not a boolean")
         return TokenFamily(
@@ -75,7 +79,9 @@ internal object TokenFamilyCodec : Codec<TokenFamily> {
 
     private fun JsonNode.need(field: String): JsonNode = get(field) ?: malformed("its $field is missing")
 
-    private fun JsonNode.text(field: String): String = need(field).let { if (it.isString) it.asString() else malformed("its $field is not a string") }
+    private fun JsonNode.text(field: String): String = need(
+        field
+    ).let { if (it.isString) it.asString() else malformed("its $field is not a string") }
 
     private fun JsonNode.instant(field: String): Instant = try {
         Instant.parse(text(field))
@@ -83,5 +89,7 @@ internal object TokenFamilyCodec : Codec<TokenFamily> {
         malformed("its $field is not an instant")
     }
 
-    private fun malformed(reason: String): Nothing = throw SnapshotFormatException("A stored $WHAT is malformed: $reason.")
+    private fun malformed(reason: String): Nothing = throw SnapshotFormatException(
+        "A stored $WHAT is malformed: $reason."
+    )
 }

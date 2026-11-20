@@ -18,7 +18,6 @@ import me.ahoo.cosec.control.change.ChangeJson.actorTree
 import me.ahoo.cosec.control.change.ChangeJson.factory
 import me.ahoo.cosec.control.change.ChangeJson.format
 import me.ahoo.cosec.control.change.ChangeJson.need
-import me.ahoo.cosec.control.change.ChangeJson.only
 import me.ahoo.cosec.control.change.ChangeJson.shown
 import me.ahoo.cosec.control.change.ChangeJson.text
 import me.ahoo.cosec.model.Memberships

@@ -18,10 +18,10 @@ package me.ahoo.cosec.cocache
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.document.json.CoSecJson
 import me.ahoo.cosec.spi.apikey.ApiKey
+import me.ahoo.cosec.spi.snapshot.SnapshotFormatException
 import tools.jackson.databind.JsonNode
 import tools.jackson.databind.node.ObjectNode
 import java.time.Instant
-import me.ahoo.cosec.spi.snapshot.SnapshotFormatException
 
 /**
  * The stored form of an [ApiKey] (RFC 0009 §4.1), what [RedisApiKeyStore] writes under a key's hash:

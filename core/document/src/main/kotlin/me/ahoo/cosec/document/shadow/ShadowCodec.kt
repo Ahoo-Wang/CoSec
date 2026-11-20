@@ -60,14 +60,20 @@ object ShadowCodec {
      * ignored, and its window is not compared, as for any unreadable candidate.
      */
     fun encode(candidate: StoredCandidate): ByteArray = write(
-        StoredFormat.write(factory.objectNode()).put("window", candidate.window).put("baseRevision", candidate.baseRevision)
+        StoredFormat.write(
+            factory.objectNode()
+        ).put("window", candidate.window).put("baseRevision", candidate.baseRevision)
             .set("document", read(candidate.document.bodyBytes())),
     )
 
     fun decodeCandidate(bytes: ByteArray): StoredCandidate = guarded {
         val node = read(bytes)
         StoredFormat.of(node, "staged candidate")
-        HEADER.firstOrNull { node.has(it) }?.let { throw malformed("a candidate's header is its document's: [$it] beside it") }
+        HEADER.firstOrNull {
+            node.has(
+                it
+            )
+        }?.let { throw malformed("a candidate's header is its document's: [$it] beside it") }
         StoredCandidate(
             node.need("window").text(),
             node.need("baseRevision").long(),
@@ -214,7 +220,6 @@ object ShadowCodec {
 
     /** A count is never negative: summed over instances, a negative one would cancel another instance's (review). */
     private fun JsonNode.count(): Long = long().takeIf { it >= 0 } ?: throw malformed("$shown is not a count")
-
 
     /** The error of [reason], thrown where it is found (`throw malformed(…)`), so coverage sees the refusal run. */
     private fun malformed(reason: String): SnapshotFormatException = SnapshotFormatException(

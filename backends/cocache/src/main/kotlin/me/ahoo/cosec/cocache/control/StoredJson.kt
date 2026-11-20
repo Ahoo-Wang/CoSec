@@ -73,5 +73,4 @@ internal object StoredJson {
 
     /** An object of a stored [what], whose members this version does not know are ignored (`CTL-53`). */
     fun JsonNode.member(what: String): JsonNode = if (isObject) this else malformed(what, "$this is not an object")
-
 }

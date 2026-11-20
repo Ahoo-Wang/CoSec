@@ -19,10 +19,10 @@ import me.ahoo.cocache.api.Codec
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.document.json.CoSecJson
+import me.ahoo.cosec.document.json.StoredFormat
 import me.ahoo.cosec.spi.snapshot.SnapshotFormatException
 import tools.jackson.core.JacksonException
 import java.time.Instant
-import me.ahoo.cosec.document.json.StoredFormat
 import java.time.format.DateTimeParseException
 
 /** The instances that have a status, as a JSON object of instance id to the time it listed itself. */
@@ -31,7 +31,9 @@ internal object InstanceIndexCodec : Codec<Map<String, Instant>> {
 
     override fun encode(value: Map<String, Instant>): ByteArray = CoSecJson.mapper.writeValueAsBytes(
         StoredFormat.write(CoSecJson.mapper.createObjectNode()).apply {
-            putObject("instances").apply { value.toSortedMap().forEach { (instance, at) -> put(instance, at.toString()) } }
+            putObject(
+                "instances"
+            ).apply { value.toSortedMap().forEach { (instance, at) -> put(instance, at.toString()) } }
         },
     )
 

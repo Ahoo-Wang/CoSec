@@ -132,7 +132,9 @@ class StoredFormatTest {
     @Test
     fun `api keys before 8 are refused`() {
         val refused = assertThrows<SnapshotFormatException> { ApiKeyCodec.decode(fixture("apiKey-before-8")) }
-        refused.message.assert().isEqualTo("A stored API key is malformed: API key format [null] is not ${ApiKeyCodec.FORMAT}.")
+        refused.message.assert().isEqualTo(
+            "A stored API key is malformed: API key format [null] is not ${ApiKeyCodec.FORMAT}."
+        )
     }
 
     @Test

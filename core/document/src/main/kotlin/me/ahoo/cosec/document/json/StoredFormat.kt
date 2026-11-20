@@ -38,17 +38,15 @@ object StoredFormat {
 
     /** The format of [node], a stored [what]: 1 without one; refused above [known]. */
     fun of(node: JsonNode, what: String, known: Int = 1): Int {
-        if (!node.isObject) throw SnapshotFormatException("The $what is not an object.")
-        val format = node.get(FIELD) ?: return 1
-        if (!format.isIntegralNumber || !format.canConvertToInt() || format.intValue() < 1) {
-            throw SnapshotFormatException("The $what has a format that is not a positive integer.")
+        val format = if (node.isObject) node.get(FIELD) else null
+        val read = format?.takeIf { it.isIntegralNumber && it.canConvertToInt() }?.intValue()
+        val refused = when {
+            !node.isObject -> "The $what is not an object."
+            format == null -> return 1
+            read == null || read < 1 -> "The $what has a format that is not a positive integer."
+            read > known -> "The $what is of format $read, which a later CoSec wrote; this version reads format $known and before."
+            else -> return read
         }
-        val read = format.intValue()
-        if (read > known) {
-            throw SnapshotFormatException(
-                "The $what is of format $read, which a later CoSec wrote; this version reads format $known and before."
-            )
-        }
-        return read
+        throw SnapshotFormatException(refused)
     }
 }

@@ -22,9 +22,9 @@ import me.ahoo.cosec.model.Memberships
 import me.ahoo.cosec.model.PolicyId
 import me.ahoo.cosec.model.RoleId
 import me.ahoo.cosec.model.SpaceId
+import me.ahoo.cosec.spi.snapshot.SnapshotFormatException
 import tools.jackson.databind.JsonNode
 import java.util.Collections
-import me.ahoo.cosec.spi.snapshot.SnapshotFormatException
 
 /**
  * Encodes provider memberships as JSON: `{"roles": {"<space>": ["<role>", ...]}, "attachments": ["<policy>", ...]}`,
