@@ -290,8 +290,10 @@ Then go through the [hardening checklist](./security-model.md#hardening-checklis
 - Replace the demo `/token` endpoint with a real login, which starts a session ([Authentication](../integration/authentication.md)).
   Then let the starter serve refresh and logout: set `cosec.authentication.login.refresh.path: /auth/refresh` and
   `logout.path: /auth/logout`, and permit `http:POST` on both paths to anyone, as the
-  [`clients` example](../integration/clients.md#what-your-application-serves) does. The demo's pairs belong to no
-  session, so they never refresh.
+  [`clients` example](../integration/clients.md#what-your-application-serves) does. The refresh route needs one more
+  line, which says how a refreshed token gets its roles: `cosec.jwt.session.refresh-roles: keep-token-roles`, or a
+  `MembershipRefresh` bean ([how long a removed role lives](../integration/authentication.md#how-long-a-removed-role-lives));
+  without it startup fails. The demo's pairs belong to no session, so they never refresh.
 - Read the principal and scope in your handlers: [Web integration](../integration/web.md).
 - Find out why a request was permitted or denied: [Explaining a decision](../integration/checks.md#explaining-a-decision).
 - Before production, work through [Before you deploy](#before-you-deploy) and the

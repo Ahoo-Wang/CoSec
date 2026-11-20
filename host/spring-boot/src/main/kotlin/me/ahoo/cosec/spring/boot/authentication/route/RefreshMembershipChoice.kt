@@ -61,7 +61,9 @@ internal object RefreshMembershipChoice {
 
     /** Exactly `keep-token-roles`, in any letter case; nothing else, an empty value and `true` included. */
     private fun stated(environment: Environment): Boolean =
-        environment.getProperty(JwtProperties.REFRESH_ROLES_KEY).equals(JwtProperties.KEEP_TOKEN_ROLES, ignoreCase = true)
+        environment.getProperty(
+            JwtProperties.REFRESH_ROLES_KEY
+        ).equals(JwtProperties.KEEP_TOKEN_ROLES, ignoreCase = true)
 
     private fun message(environment: Environment, jwt: JwtProperties): String {
         val written = environment.getProperty(JwtProperties.REFRESH_ROLES_KEY)

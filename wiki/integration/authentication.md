@@ -143,8 +143,9 @@ roles is therefore the only proof of membership: issue `role@space` only after c
 space.
 
 Roles and policies travel in the token, so a change to a user's roles takes effect when the user next logs in, or at
-the next [refresh](#refreshing-tokens) when the application has a `MembershipRefresh`; by default refreshing keeps the
-old claims. To take access away at once,
+the next [refresh](#refreshing-tokens) when the application has a `MembershipRefresh`; without one, refreshing keeps the
+old claims, and a host that serves the refresh route says so in its configuration
+([how long a removed role lives](#how-long-a-removed-role-lives)). To take access away at once,
 [revoke every token of the principal](#revoking-every-token-of-a-principal), or move the principal's memberships to
 a provider.
 
@@ -299,9 +300,9 @@ request.
   more time to retry and a copy more time to be answered; set it to cover your clients' timeout and one retry.
 - **A session lasts at most `cosec.jwt.session.lifetime` (30 days) from its login**, however often it is refreshed, and
   only while it is refreshed before its refresh token expires (`cosec.jwt.token-validity.refresh`, 7 days): then a
-  refresh is refused (`token-expired`) and the user signs in again. No token of a pair outlives its session. By default
-  (no `MembershipRefresh`, [below](#refreshing-tokens)) roles carried in the token take effect at the next login, so
-  this is also the latest a changed role applies.
+  refresh is refused (`token-expired`) and the user signs in again. No token of a pair outlives its session. Where
+  refreshed tokens keep the roles of the token they replace (no `MembershipRefresh`,
+  [below](#how-long-a-removed-role-lives)), this is also the latest a changed role applies.
 - **The request path does not read sessions.** An access token of an older generation stays valid until it expires, as
   every access token does: keep `cosec.jwt.token-validity.access` short. To stop access tokens at once, revoke them
   ([Logout and revocation](#logout-and-revocation)).
@@ -327,7 +328,9 @@ fails too, with `DelegationUnsupportedException`.
 MVC and on WebFlux, with login and JWT on (a path it cannot serve, or one set on a Spring Cloud Gateway, fails startup): the pair in, a new pair of the session out, and each failure answered with the problem type that
 names it ([Building a client](./clients.md#what-your-application-serves) has the wire). It refreshes with
 your `RefreshTokenAuthentication<RefreshTokenCredentials>` bean when you declare one, its hook included; otherwise with
-the starter's, which uses your `MembershipRefresh<RefreshTokenCredentials>` bean when there is one. When you declare
+the starter's, which uses your `MembershipRefresh<RefreshTokenCredentials>` bean when there is one. With no such bean,
+startup fails until `cosec.jwt.session.refresh-roles=keep-token-roles` states that refreshed tokens keep the roles of the
+token they replace (`STA-8`, [how long a removed role lives](#how-long-a-removed-role-lives)). When you declare
 both, your `RefreshTokenAuthentication` wins, and the route does not use the `MembershipRefresh` bean (`IDN-25`). A
 `RefreshTokenAuthentication` over a credentials class of your own cannot serve the route, which presents the pair:
 with the path set, startup fails. Unset, nothing is served, and you write the route as below. Either way a refresh carries the access token that expired, so a caller without a token must be able to reach
@@ -364,11 +367,11 @@ spent unless the store failed while recording the rotation itself, which a retry
 is an error: the served route answers it `500`, as the pipeline answers an unmodelled error. Neither ends a client's
 session.
 
-`MembershipRefresh.CLAIMS`, in the example above and on the starter's refresh route unless you declare a
-`MembershipRefresh` bean, does not re-read the user: the new token carries the claims of the old one, so a role you
+`MembershipRefresh.CLAIMS`, in the example above and behind `cosec.jwt.session.refresh-roles=keep-token-roles` on the
+starter's refresh route, does not re-read the user: the new token carries the claims of the old one, so a role you
 remove from a user stays in every refreshed token of its session until the user signs in again, or until you
 [revoke the principal's tokens](#revoking-every-token-of-a-principal). `RefreshTokenAuthentication` has no default for
-it: keeping the claims is written. To pick up changed roles on refresh, give `RefreshTokenAuthentication` a
+it: keeping the claims is written, and so is it on the starter's route (`STA-8`). To pick up changed roles on refresh, give `RefreshTokenAuthentication` a
 `MembershipRefresh` of your own. It answers what the user holds now, looked up
 again. It refuses, when the user may no longer sign in, by throwing a `TokenVerificationException` (`TokenRevokedException`
 when the membership is gone), which is a `401`; any other exception is an error, not a refusal:
@@ -424,6 +427,27 @@ The class keeps every step a refresh needs, in order: it verifies the pair, refu
 old one's principal, tenant and app, with what your answer says. An answer of null keeps the old claims; an answer for
 another app is an error (`IllegalArgumentException`, `500` on the served route), since a refresh never changes the app a
 token is for. A refused refresh spends no generation.
+
+## How long a removed role lives {#how-long-a-removed-role-lives}
+
+Roles travel in the token, and a gateway that reads roles from the token only has no other source, so what a refresh
+does with them decides how long a role you removed from a member keeps working. The starter does not choose for you: a
+host that serves the refresh route (`cosec.authentication.login.refresh.path`) and declares no
+`MembershipRefresh<RefreshTokenCredentials>` bean does not start until you write the choice (`STA-8`).
+
+| What you do | A removed role stops working | Where it is written |
+|---|---|---|
+| Declare a `MembershipRefresh<RefreshTokenCredentials>` bean that reads the member's roles again | At the member's next refresh: within `cosec.jwt.token-validity.access` (10 minutes), the life of the access token that carries it | The bean |
+| State that refreshed tokens keep the roles of the token they replace | At the member's next sign-in: up to `cosec.jwt.session.lifetime` (30 days) after their login while they refresh within `cosec.jwt.token-validity.refresh` (7 days) of each token | `cosec.jwt.session.refresh-roles=keep-token-roles` (`COSEC_JWT_SESSION_REFRESH_ROLES`) |
+| Build `RefreshTokenAuthentication` yourself | When the `MembershipRefresh` you pass says so; `MembershipRefresh.CLAIMS` is the row above | Your code: there is no default (`IDN-27`) |
+
+Any other value of `cosec.jwt.session.refresh-roles`, an empty one and `true` included, fails startup like an absent
+one, and the message prints what was written. With the statement written, startup logs one `INFO` line with the session
+lifetime it implies; with a bean, it logs nothing about it. A host that serves no refresh route (a gateway, a service
+behind one, a service without login) is not asked.
+
+In every row, [`TokenRevoker.revokeSubject`](#revoking-every-token-of-a-principal) ends all of a member's tokens at
+once: call it when a removal must apply now, and it applies in the rows where the next refresh would have waited.
 
 ## Logout and revocation
 

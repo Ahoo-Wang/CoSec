@@ -201,6 +201,7 @@ CoSec 没有哪个配置项叫这些名字，而已知的 key 无论来源都不
 | `cosec.jwt.token-validity.refresh` | duration | `7d` | 刷新令牌有效期；吊销记录在 Redis 中保留这么久再加一秒。 |
 | `cosec.jwt.session.lifetime` | duration | `30d` | 会话从登录起持续多久，无论刷新多少次（[会话](../integration/authentication.md#sessions)）；之后用户需要重新登录。也是令牌中携带的角色变更最迟生效的时间。 |
 | `cosec.jwt.session.rotation-leeway` | duration | `30s` | 刷新之后，被它替换的那一对在多长时间内会得到一对当前一代的令牌，而不是结束会话：客户端重试响应丢失的刷新的窗口，两个标签页同时刷新时也都能保留一对令牌。请覆盖客户端的超时加一次重试。在窗口内得到应答的副本会在窗口之后的下一次刷新时被发现。 |
+| `cosec.jwt.session.refresh-roles` | string | 未设置 | 没有声明 `MembershipRefresh<RefreshTokenCredentials>` Bean 时，starter 的刷新路由怎样给刷新出的令牌角色。没有默认值：提供刷新路由（`cosec.authentication.login.refresh.path`）时，启动失败，直到它写成 `keep-token-roles`（不区分大小写；未设置、空值、`true` 和其他任何值都失败），即你声明刷新出的令牌保留旧令牌的角色，所以被移除的角色最迟在成员下一次登录时、即 `cosec.jwt.session.lifetime` 之内生效。声明 `MembershipRefresh` Bean 则每次刷新重新读取角色，不会被问到（[被移除的角色还能用多久](../integration/authentication.md#how-long-a-removed-role-lives)，`STA-8`）。 |
 
 启用 JWT 时，除非吊销和会话都能被记录和读取，否则启动失败：需要 `cosec-cocache`，或你自己的 `TokenStore`、
 `RevocationReader` 和 `TokenFamilyStore` bean。只校验另一个服务所签发令牌的服务读取签发方的吊销（[校验另一个服务所签发令牌的服务](../scenarios/resource-server.md)）。

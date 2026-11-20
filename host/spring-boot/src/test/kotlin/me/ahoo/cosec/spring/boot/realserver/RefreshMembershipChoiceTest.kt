@@ -35,9 +35,8 @@ import org.junit.jupiter.api.assertThrows
 import org.junit.jupiter.api.extension.ExtendWith
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.EnumSource
-import org.springframework.boot.WebApplicationType
-import org.springframework.boot.autoconfigure.AutoConfigurations
 import org.springframework.boot.autoconfigure.AutoConfiguration
+import org.springframework.boot.autoconfigure.AutoConfigurations
 import org.springframework.boot.autoconfigure.EnableAutoConfiguration
 import org.springframework.boot.builder.SpringApplicationBuilder
 import org.springframework.boot.context.annotation.ImportCandidates
@@ -84,8 +83,13 @@ class RefreshMembershipChoiceTest {
     }
 
     private val others = listOf(
-        "me.ahoo.cosec.kafka", "me.ahoo.cosec.social", "me.ahoo.cosec.openapi", "me.ahoo.cosec.cosid",
-        "me.ahoo.cosec.opentelemetry", "me.ahoo.cosec.micrometer", "me.ahoo.cosec.ip2region",
+        "me.ahoo.cosec.kafka",
+        "me.ahoo.cosec.social",
+        "me.ahoo.cosec.openapi",
+        "me.ahoo.cosec.cosid",
+        "me.ahoo.cosec.opentelemetry",
+        "me.ahoo.cosec.micrometer",
+        "me.ahoo.cosec.ip2region",
     )
 
     private fun start(
@@ -168,7 +172,9 @@ class RefreshMembershipChoiceTest {
     ) {
         start(stack, "$REFRESH=/auth/refresh", "$STATEMENT=keep-token-roles", "cosec.jwt.session.lifetime=14d")
         output.all.assert()
-            .contains("cosec.jwt.session.refresh-roles=keep-token-roles: a token the refresh route issues keeps the roles")
+            .contains(
+                "cosec.jwt.session.refresh-roles=keep-token-roles: a token the refresh route issues keeps the roles"
+            )
             .contains("cosec.jwt.session.lifetime=14d at the latest (STA-8)")
         start(stack, "$REFRESH=/auth/refresh", "$STATEMENT=KEEP-Token-Roles")
     }
@@ -241,7 +247,9 @@ class RefreshMembershipChoiceTest {
             )
         gateway.run { it.startupFailure.assert().isNull() }
         gateway.withPropertyValues("$REFRESH=/auth/refresh").run { context ->
-            val message = generateSequence<Throwable>(context.startupFailure) { it.cause }.joinToString(" | ") { it.message.orEmpty() }
+            val message = generateSequence<Throwable>(context.startupFailure) {
+                it.cause
+            }.joinToString(" | ") { it.message.orEmpty() }
             message.assert().contains("$REFRESH is set").doesNotContain("STA-8")
         }
     }

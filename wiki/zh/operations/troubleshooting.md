@@ -387,6 +387,14 @@ cosec.pipeline.mode=gateway: spring.mvc.hiddenmethod.filter.enabled=true. The ga
 
 移除 `spring.mvc.hiddenmethod.filter.enabled`、`spring.webflux.hiddenmethod.filter.enabled` 以及应用的任何 `HiddenHttpMethodFilter` bean（`a HiddenHttpMethodFilter bean, [name]`）：网关无法从表单请求体里移除 `_method` 字段，所以 `http:DELETE` 上的 `DENY` 会被绕过。`enforce` 模式的宿主不受影响。
 
+### 没有选定刷新时的角色而启动失败 {#startup-fails-because-the-refresh-roles-are-not-chosen}
+
+```text
+cosec.authentication.login.refresh.path=/auth/refresh serves the refresh route, and nothing says how a refreshed token gets its roles. Without a choice it would copy the roles of the token it replaces: a role removed from a member keeps working until that member signs in again, up to cosec.jwt.session.lifetime=30d as long as they refresh within cosec.jwt.token-validity.refresh=7d. Choose one: declare a MembershipRefresh<RefreshTokenCredentials> bean ... or state that refreshed tokens keep the roles of the token they replace ... To keep the token's roles add cosec.jwt.session.refresh-roles=keep-token-roles ... It is not set (STA-8, ...).
+```
+
+starter 提供了刷新路由，但无从知道被移除的角色能否在会话的剩余时间里继续有效（`STA-8`）。先决定，再写下来：声明一个每次刷新都重新读取成员角色的 `MembershipRefresh<RefreshTokenCredentials>` Bean（移除在 `cosec.jwt.token-validity.access` 之内生效），或写 `cosec.jwt.session.refresh-roles=keep-token-roles`，保留被替换令牌的角色（移除在成员下一次登录时生效）。无论哪种，`TokenRevoker.revokeSubject` 都会立刻结束成员的全部令牌。`It is [claims]`（或 `true`、空值、带空格的值）表示这个配置项写成了不是 `keep-token-roles` 的值。凭证类不是 `RefreshTokenCredentials` 的 Bean 不会被找到：请声明为 `MembershipRefresh<RefreshTokenCredentials>`。见[被移除的角色还能用多久](../integration/authentication.md#how-long-a-removed-role-lives)。
+
 ### 开关无法读取导致启动失败 {#startup-fails-on-an-unreadable-switch}
 
 ```text

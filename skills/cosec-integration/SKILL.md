@@ -249,7 +249,10 @@ https://cosec.ahoo.me/guide/security-model#trust-boundaries.
   (`POST`, the pair as JSON; `200` pair, `401` token-*, `503` unavailable, `500` error; logout `204`), on Spring MVC and
   WebFlux, never on a gateway. A document must permit an anonymous `POST` of each path, or every refresh is
   `401 token-expired`. A `MembershipRefresh<RefreshTokenCredentials>` bean is used; it refuses by throwing
-  `TokenRevokedException`. Unset, write the routes yourself as below.
+  `TokenRevokedException`. With no such bean (and no `RefreshTokenAuthentication` of your own) startup fails until
+  `cosec.jwt.session.refresh-roles=keep-token-roles` states that a refreshed token keeps the old token's roles (`STA-8`):
+  ask the operator which they want (a bean applies a removal within the access token's lifetime, the property at the
+  next sign-in, `cosec.jwt.session.lifetime` at the latest) and never write it just to start. Unset, write the routes yourself as below.
 - Logout: `TokenRevoker.revoke(accessToken)` ends the session, or `revoke(compositeToken)` once the access token has
   expired. Emergency: `TokenRevoker.revokeSubject(tenant, principal)` revokes every token of a principal issued until now
   (needs the Redis token store).
