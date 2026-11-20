@@ -78,7 +78,7 @@ internal fun permittedSecurity(path: String): RequestSecurity {
             )
     }
     val pipeline = Pipeline.builder(
-        Authenticator { AuthnResult.Authenticated(principal, "test") },
+        Authenticator { AuthnResult.Authenticated(principal, Identity.Method("test")) },
         SuspendingSnapshotSource(views),
     )
         .engine(permitting)

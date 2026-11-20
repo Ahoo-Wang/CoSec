@@ -34,6 +34,7 @@ import me.ahoo.cosec.runtime.http.StatusMapping
 import me.ahoo.cosec.runtime.http.Unavailability
 import me.ahoo.cosec.spi.authn.AuthenticatedPrincipal
 import me.ahoo.cosec.spi.authn.AuthnResult
+import me.ahoo.cosec.spi.identity.Identity
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import tools.jackson.databind.json.JsonMapper
@@ -138,7 +139,7 @@ class ProblemBodyPropertyTest {
         1 -> AuthnResult.Rejected(AuthnResult.RejectReason.entries.random(random))
         else -> AuthnResult.Authenticated(
             AuthenticatedPrincipal(PrincipalId("$marker-principal"), TenantId("$marker-tenant"), null),
-            "$marker-method",
+            Identity.Method("$marker-method"),
         )
     }
 

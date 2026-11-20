@@ -138,6 +138,7 @@ import kotlin.coroutines.cancellation.CancellationException
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
 import me.ahoo.cosec.runtime.http.Outcome as PipelineOutcome
+import me.ahoo.cosec.spi.identity.Identity
 
 /**
  * The `pipeline` runner (RFC 0008 §3.3): an HTTP request → [Pipeline] → its outcome, with the scenario's documents
@@ -553,7 +554,7 @@ class PipelineRunner(private val compiler: SnapshotCompiler = DocumentSnapshotCo
             memberships,
             app = node.get("app")?.text()?.let(::AppId),
         )
-        return AuthnResult.Authenticated(principal, "scenario")
+        return AuthnResult.Authenticated(principal, Identity.Method("scenario"))
     }
 
     /** The scenario's API keys, by the hash of their `key`; `apiKeysFail` makes every lookup throw. */

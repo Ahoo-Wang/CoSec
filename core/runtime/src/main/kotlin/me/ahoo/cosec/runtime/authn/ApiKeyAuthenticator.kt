@@ -78,7 +78,7 @@ class ApiKeyAuthenticator(
             app = apiKey.app?.let(::AppId),
             session = null,
         )
-        return AuthnResult.Authenticated(principal, method)
+        return AuthnResult.Authenticated(principal, Identity.Method(method))
     }
 
     companion object {

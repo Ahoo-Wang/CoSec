@@ -75,6 +75,7 @@ import me.ahoo.cosec.spi.shadow.ShadowOutcome
 import me.ahoo.cosec.spi.shadow.StoredCandidate
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.cosec.spi.token.RevocationReader
+import me.ahoo.cosec.spi.identity.Identity
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Test
@@ -151,7 +152,7 @@ class ShadowWindowTest {
                         NO_MEMBERSHIPS,
                         app = PipelineControlAuthorizer.CONTROL_APP
                     ),
-                    "token"
+                    Identity.Method("token")
                 )
             },
             SuspendingSnapshotSource(HeadViews()),

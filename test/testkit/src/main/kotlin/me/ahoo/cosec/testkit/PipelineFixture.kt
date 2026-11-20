@@ -49,6 +49,7 @@ import me.ahoo.cosec.spi.snapshot.SnapshotDocument
 import me.ahoo.cosec.spi.snapshot.SnapshotDocumentStore
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.cosec.spi.snapshot.SnapshotRead
+import me.ahoo.cosec.spi.identity.Identity
 import tools.jackson.databind.JsonNode
 import java.nio.file.Path
 import java.util.concurrent.CompletableFuture
@@ -297,7 +298,7 @@ class PipelineFixture private constructor(
             if (principal == null) {
                 AuthnResult.Anonymous
             } else {
-                AuthnResult.Authenticated(authenticated(principal), "testkit")
+                AuthnResult.Authenticated(authenticated(principal), Identity.Method("testkit"))
             }
         }
 

@@ -107,7 +107,7 @@ class AuditEventsTest {
                 MembershipSource.Provider.UNCAPPED,
                 credential = Identity.Credential(Identity.Method.API_KEY, "k1", null),
             ),
-            ApiKeyAuthenticator.METHOD,
+            Identity.Method(ApiKeyAuthenticator.METHOD),
         )
         try {
             runBlocking {

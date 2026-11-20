@@ -55,6 +55,7 @@ import me.ahoo.cosec.spring.boot.pipeline.CoSecMembershipAutoConfiguration
 import me.ahoo.cosec.spring.boot.pipeline.CoSecPipelineAutoConfiguration
 import me.ahoo.cosec.spring.boot.pipeline.CoSecPipelineIntegrationAutoConfiguration
 import me.ahoo.cosec.spring.boot.pipeline.CoSecSnapshotAutoConfiguration
+import me.ahoo.cosec.spi.identity.Identity
 import org.springframework.boot.Banner
 import org.springframework.boot.WebApplicationType
 import org.springframework.boot.autoconfigure.ImportAutoConfiguration
@@ -207,7 +208,7 @@ object TokenAuthenticator : Authenticator {
         )
         return AuthnResult.Authenticated(
             AuthenticatedPrincipal(PrincipalId(principal), TenantId(tenant), memberships, app = app?.let(::AppId)),
-            "test"
+            Identity.Method("test")
         )
     }
 }

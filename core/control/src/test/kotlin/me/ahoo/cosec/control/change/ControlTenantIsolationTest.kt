@@ -61,6 +61,7 @@ import me.ahoo.cosec.spi.authn.AuthnResult
 import me.ahoo.cosec.spi.membership.MembershipClaims
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.cosec.spi.token.RevocationReader
+import me.ahoo.cosec.spi.identity.Identity
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import java.util.concurrent.CompletableFuture
@@ -246,7 +247,7 @@ class ControlTenantIsolationTest {
                         MembershipClaims.parse(listOf("editor"), listOf("p0", "p1")),
                         app = PipelineControlAuthorizer.CONTROL_APP,
                     ),
-                    "token"
+                    Identity.Method("token")
                 )
             },
             SuspendingSnapshotSource(HeadViews()),
