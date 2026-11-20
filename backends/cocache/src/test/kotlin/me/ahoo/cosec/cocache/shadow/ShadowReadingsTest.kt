@@ -17,9 +17,13 @@ package me.ahoo.cosec.cocache.shadow
 
 import kotlinx.coroutines.future.await
 import kotlinx.coroutines.runBlocking
+import me.ahoo.cocache.api.AsyncStore
+import me.ahoo.cocache.api.CacheReadException
+import me.ahoo.cocache.api.ConditionalGet
+import me.ahoo.cocache.api.Store
+import me.ahoo.cocache.api.spi.Digest
 import me.ahoo.cocache.core.KeyEncoder
 import me.ahoo.cocache.core.memory.InMemoryBackend
-import me.ahoo.cocache.test.HookedBackend
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.cocache.CoSecCacheSpecs
@@ -33,6 +37,7 @@ import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import java.time.Clock
 import java.time.Instant
+import java.util.concurrent.CompletableFuture
 
 /**
  * `CTL-56`: a report that is listed and cannot be read (missing, not decoding, or another's) is that instance's reading,
@@ -86,11 +91,22 @@ class ShadowReadingsTest {
 
     @Test
     fun `a store that does not answer fails the whole call, never reads as an unreadable report`() = runBlocking<Unit> {
-        val hooked = HookedBackend(InMemoryBackend())
-        SnapshotNode(hooked, newKeyPrefix()).use { node ->
-            val sink = CoCacheShadowReports.create(node.factory, node.keyPrefix, Clock.systemUTC())
+        SnapshotNode(InMemoryBackend(), newKeyPrefix()).use { node ->
+            val reports = node.runtime.create(ShadowCacheSpecs.reports(node.keyPrefix))
+            // The window's reporters read; each report read fails as a store that does not answer does.
+            val down = object : Store<String, ShadowReport> by reports {
+                override fun async(): AsyncStore<String, ShadowReport> = object : AsyncStore<String, ShadowReport> by reports.async() {
+                    override fun getIfChanged(key: String, known: Digest?): CompletableFuture<ConditionalGet<ShadowReport>> =
+                        CompletableFuture.failedFuture(CacheReadException(name, "getIfChanged", IllegalStateException("timeout")))
+                }
+            }
+            val sink = CoCacheShadowReports(
+                down,
+                node.runtime.create(ShadowCacheSpecs.reporters(node.keyPrefix)),
+                node.runtime.create(ShadowCacheSpecs.statuses(node.keyPrefix)),
+                node.runtime.create(ShadowCacheSpecs.instances(node.keyPrefix)),
+            )
             sink.write(report("i0", 1))
-            hooked.failReads = true
             val failed = runCatching { sink.readings(WINDOW) }.exceptionOrNull()
             failed.assert().isNotNull()
             generateSequence(failed) { it.cause }.none { it is SnapshotFormatException }.assert().isTrue()

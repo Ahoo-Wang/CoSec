@@ -737,7 +737,11 @@
       "level": "control",
       "guards": [
         "control:ControlRoundTwoFixesTest#a window whose reporter vanished closes insufficient at the longest window, naming it - CTL-56",
-        "control:ControlRoundTwoFixesTest#an instance seen reporting on a window must keep reporting until it closes"
+        "control:ControlRoundTwoFixesTest#an instance seen reporting on a window must keep reporting until it closes",
+        "control:ControlRoundTwoFixesTest#an unreadable report waits then closes insufficient, a store outage does neither - CTL-56",
+        "cocache:ShadowReadingsTest#a listed report that is missing, does not decode, or is another's is that instance's reading",
+        "cocache:ShadowReadingsTest#a store that does not answer fails the whole call, never reads as an unreadable report",
+        "spi:ShadowValuesTest#the default readings read the reports, and throw where they throw"
       ],
       "pending": null
     }
