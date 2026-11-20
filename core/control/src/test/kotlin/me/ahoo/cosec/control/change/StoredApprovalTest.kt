@@ -39,7 +39,8 @@ class StoredApprovalTest {
     private val authority = ChangeAuthority(PERMIT_ALL, revocations = RevocationReader.NONE)
     private val pia = Actor(TenantId.PLATFORM, PrincipalId("pia"))
     private val quinn = Operator(Actor(TenantId.PLATFORM, PrincipalId("quinn")), NO_MEMBERSHIPS)
-    private val widen = Escalation("document app:order", Escalation.Reason.NOT_ANALYZED, "only the trust root publishes it alone")
+    private val widen =
+        Escalation("document app:order", Escalation.Reason.NOT_ANALYZED, "only the trust root publishes it alone")
 
     private fun approvedBy(approver: Actor, candidate: String = "d") = ChangeRequest(
         id = ChangeId("c1"),

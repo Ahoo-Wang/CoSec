@@ -81,7 +81,9 @@ internal class MovedHeads(
                 null -> HeadsMoved(
                     ChangeEvent.Kind.REVIEW_NEEDED,
                     emptyList(),
-                    listOf(Escalation(published.key.toString(), Escalation.Reason.DETECTION_TIMED_OUT, "within $timeout")),
+                    listOf(
+                        Escalation(published.key.toString(), Escalation.Reason.DETECTION_TIMED_OUT, "within $timeout")
+                    ),
                     "the heads could not be compared within $timeout"
                 )
 

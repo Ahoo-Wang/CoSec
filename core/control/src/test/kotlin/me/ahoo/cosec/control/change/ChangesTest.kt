@@ -331,7 +331,11 @@ class ChangesTest {
         read.state.assert().isEqualTo(change.state)
         val approved = change.copy(
             escalations = listOf(
-                Escalation("a[0] order:read on order/{id} to binding x in (order, *)", Escalation.Reason.NOT_COVERED, "why")
+                Escalation(
+                    "a[0] order:read on order/{id} to binding x in (order, *)",
+                    Escalation.Reason.NOT_COVERED,
+                    "why"
+                )
             ),
             approval = Approval(PLATO.actor, StoreFixtures.START, "c".repeat(64), listOf("a[0]")),
         )

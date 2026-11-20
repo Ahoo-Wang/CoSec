@@ -22,7 +22,6 @@ import me.ahoo.cosec.control.authz.Operator
 import me.ahoo.cosec.control.change.ChangeRejectedException
 import me.ahoo.cosec.control.change.ControlStatus.UNAVAILABLE
 import me.ahoo.cosec.control.change.Escalation
-import me.ahoo.cosec.control.store.ReferrerNames
 import me.ahoo.cosec.control.change.Operation
 import me.ahoo.cosec.control.grant.Dimension
 import me.ahoo.cosec.control.grant.GrantAnalysis
@@ -31,9 +30,9 @@ import me.ahoo.cosec.control.grant.GrantChange
 import me.ahoo.cosec.control.grant.GrantDocuments
 import me.ahoo.cosec.control.grant.Grantor
 import me.ahoo.cosec.control.lifecycle.ControlTargets.entry
+import me.ahoo.cosec.control.store.ReferrerNames
 import me.ahoo.cosec.control.store.Revisions
 import me.ahoo.cosec.document.PolicyDocument
-import me.ahoo.cosec.document.RoleExpansion
 import me.ahoo.cosec.model.AppId
 import me.ahoo.cosec.model.Binding
 import me.ahoo.cosec.model.Match
