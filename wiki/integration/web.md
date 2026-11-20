@@ -227,7 +227,7 @@ Every response that does not proceed has an RFC 9457 body with the content type 
 The members always come in this order, and the body holds nothing else: no policy, statement, binding, cause or
 exception message. One hand-written encoder (`ProblemEncoder`) writes it, so the three adapters produce the same
 bytes whatever the host's JSON configuration. The body is ASCII: every non-ASCII and control character of the
-request id is escaped. The vocabulary is also published as `schema/problem.schema.json`.
+request id is escaped. The vocabulary is also published as `schema/8.0/problem.schema.json`.
 
 ### Response headers
 
@@ -677,7 +677,7 @@ whose authenticator names no credential (CoSec's token and API key authenticator
 `cosec.gateway.identity.enabled=false`.
 
 **What it carries.** The value is base64url (no padding) of compact JSON, format version 1; the JSON Schema is
-[`schema/cosec-identity.schema.json`](https://github.com/Ahoo-Wang/CoSec/blob/main/schema/cosec-identity.schema.json).
+[`schema/cosec-identity.schema.json`](https://cosec.ahoo.me/schema/8.0/cosec-identity.schema.json).
 
 | Member | Content |
 |---|---|

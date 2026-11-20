@@ -1,0 +1,21 @@
+# Rule: ATR-4
+# Mutant: an external attribute no provider and no platform declaration declares resolves, as a String, instead of failing to compile
+# Tests: :document:test --tests me.ahoo.cosec.document.* :conformance:test
+
+diff --git a/core/model/src/main/kotlin/me/ahoo/cosec/model/condition/ConditionChecker.kt b/core/model/src/main/kotlin/me/ahoo/cosec/model/condition/ConditionChecker.kt
+index 8681e5cac..94b5b4734 100644
+--- a/core/model/src/main/kotlin/me/ahoo/cosec/model/condition/ConditionChecker.kt
++++ b/core/model/src/main/kotlin/me/ahoo/cosec/model/condition/ConditionChecker.kt
+@@ -47,7 +47,11 @@ class ConditionChecker(
+      */
+     fun attribute(path: String): Attribute? {
+         val attribute = Attribute.parse(path)
+-            ?: return if (Attribute.isExternalPath(path)) catalog.external(path) else null
++            ?: return if (Attribute.isExternalPath(path)) {
++                catalog.external(path) ?: Attribute.external(path, AttributeType.STRING)
++            } else {
++                null
++            }
+         return attribute.takeUnless { isCredential(it) || it.kind == Attribute.Kind.RESOURCE_ATTRIBUTE }
+     }
+ 
