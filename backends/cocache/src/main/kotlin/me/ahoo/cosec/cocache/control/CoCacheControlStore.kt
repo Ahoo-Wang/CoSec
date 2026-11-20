@@ -215,6 +215,10 @@ class CoCacheControlStore internal constructor(
     @InternalCoSecApi
     suspend fun listDocuments(entries: Set<String>) = sets.listDocuments(entries)
 
+    /** Who holds the lease [name], or null when nobody does: what `cosec-migrate` names when its lease is taken. */
+    @InternalCoSecApi
+    suspend fun leaseHolder(name: String): String? = read(leases, name)?.first
+
     /** Removes the old document list, the repair's last write: the store is repaired from then on. */
     @InternalCoSecApi
     suspend fun removeLegacyDocuments() {

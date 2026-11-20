@@ -136,18 +136,20 @@ internal class ReferrerIndex(
     }
 
     /**
-     * Adds whatever the head of [key] refers to and the back-reference index misses (`repair-references`, RFC 0007
-     * §5.8), with its record in [key]'s index; the number of references it added. A missing entry would let a deletion
-     * through. A head or a value that cannot be read throws. Entries are only ever added here, never a set replaced
-     * (`MIG-4`): a publish that adds an entry meanwhile keeps it. What the index has and no head does is
+     * Adds whatever the head of [key] refers to and its own forward record does not hold (`repair-references`, RFC 0007
+     * §5.8), recording it there first; the number of references it added. It reads [key]'s head and index, never a
+     * back-reference set (R2C-8): a document whose record holds its references costs those two reads, and one with no
+     * record, such as one converted from the format before 8.0.0-beta.5, adds each of its own references once, an
+     * idempotent member write, so a run costs what the documents hold, not what refers to them. A missing entry would let
+     * a deletion through. A head or a value that cannot be read throws. Entries are only ever added here, never a set
+     * replaced (`MIG-4`): a publish that adds an entry meanwhile keeps it. What the index has and no head does is
      * [pruneReferences]'s.
      */
     suspend fun repairReferences(key: SnapshotKey): Int {
         val head = head(key) ?: return 0
-        val missing = references(head.document).filter { reference ->
-            store.referrers(reference.target, reference.policy)
-                .none { it.referrer == key && it.definesItself == reference.definesItself }
-        }.toSet()
+        val recorded = store.index(key)?.value?.indexed.orEmpty()
+            .mapTo(HashSet()) { Reference(it.target, it.policy, it.definesItself) }
+        val missing = references(head.document) - recorded
         recordAndAdd(key, head.revision, missing)
         return missing.size
     }

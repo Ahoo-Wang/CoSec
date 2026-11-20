@@ -114,4 +114,39 @@ class PublishCostTest {
         few.calls["referrers"].assert().isNull()
         costOf(400, drop = true).assert().isEqualTo(few)
     }
+
+    /** R2C-8: what a repair of one document costs, at [others] other referrers of the same policy, its record kept or not. */
+    private fun repairCost(others: Int, recorded: Boolean): Cost = runBlocking {
+        val clock = MutableClock()
+        val memory = InMemoryControlStore(clock)
+        val counting = Counting(memory)
+        val revisions = Revisions(counting.store, clock)
+        revisions.publish(SnapshotKey.Platform, null, candidate(SnapshotKey.Platform, listOf(policy("shared"))), publication())
+        val bound = candidate(SnapshotKey.Platform, bindings = listOf(binding("b", "shared"))).bindings
+        repeat(others) {
+            val tenant = SnapshotKey.Tenant("t\$it")
+            revisions.publish(tenant, null, candidate(tenant, bindings = bound), publication())
+        }
+        val acme = StoreFixtures.ACME
+        revisions.publish(acme, null, candidate(acme, bindings = bound), publication())
+        if (!recorded) {
+            val index = memory.index(acme)!!
+            memory.putIndex(acme, index.digest, index.value.copy(indexed = emptyList()))
+        }
+        counting.counting = true
+        revisions.repairReferences(acme).assert().isEqualTo(if (recorded) 0 else 1)
+        counting.cost()
+    }
+
+    @Test
+    fun `a repair reads no back-reference set, whatever the number of referrers`() {
+        val recorded = repairCost(10, recorded = true)
+        recorded.calls["referrers"].assert().isNull()
+        recorded.calls["addReferrer"].assert().isNull()
+        repairCost(400, recorded = true).assert().isEqualTo(recorded)
+        val unrecorded = repairCost(10, recorded = false)
+        unrecorded.calls["referrers"].assert().isNull()
+        unrecorded.calls.getValue("addReferrer").assert().isEqualTo(1)
+        repairCost(400, recorded = false).assert().isEqualTo(unrecorded)
+    }
 }
