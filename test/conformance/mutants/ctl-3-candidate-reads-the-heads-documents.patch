@@ -3,10 +3,10 @@
 # Tests: :control:test --tests me.ahoo.cosec.control.api.AppDocumentDecisionsTest :conformance:test
 
 diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/api/DecisionQueries.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/api/DecisionQueries.kt
-index 8d0652e8..2a76c5ea 100644
+index 72fdaffec..a02232eba 100644
 --- a/core/control/src/main/kotlin/me/ahoo/cosec/control/api/DecisionQueries.kt
 +++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/api/DecisionQueries.kt
-@@ -61,7 +61,7 @@ internal class DecisionQueries(
+@@ -62,7 +62,7 @@ internal class DecisionQueries(
              }
              val document = changes.candidateOf(id) ?: throw ChangeRejectedException(CONFLICT, "change ${id.value} no longer applies")
              // A tenant change may make the request read another app document, or none (RC1-17): as once it publishes.
@@ -14,4 +14,4 @@ index 8d0652e8..2a76c5ea 100644
 +            val fetched = keys
              // The candidate is no stored content: compiled once, here; the heads come from the cache.
              val proposedHeads = fetched.associateWith { heads[it] ?: retained.held(it) } + (change.key to Held(document, null))
-             simulator.decide(simulated, scope, documents(proposedHeads))
+             documents(proposedHeads).also { proposedDocuments = it }.let { simulator.decide(simulated, scope, it) }

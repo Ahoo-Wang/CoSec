@@ -202,7 +202,7 @@ class ControlPlaneTest {
     }
 
     /** bob of [tenant] in team-a of the order app, as `ops` there. */
-    private fun bob(action: String, tenant: TenantId = ACME) = SimulatedRequest(
+    fun bob(action: String, tenant: TenantId = ACME) = SimulatedRequest(
         tenant = tenant,
         principal = "bob",
         roles = listOf("ops@team-a"),

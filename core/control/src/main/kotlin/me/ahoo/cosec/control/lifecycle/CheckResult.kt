@@ -19,11 +19,19 @@ import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.control.change.Finding
 import me.ahoo.cosec.control.change.Severity
+import me.ahoo.cosec.document.PolicyDocument
 import me.ahoo.cosec.spi.snapshot.SnapshotDigest
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 
-/** What [ChangeChecks.check] found, and the heads of the other documents it compiled the candidate with. */
+/**
+ * What [ChangeChecks.check] found, the heads of the other documents it compiled the candidate with, and the [candidate]
+ * it checked: the document as the data plane reads it, once encoded and decoded (null when it does not decode).
+ */
 @InternalCoSecApi
-class CheckResult(val findings: List<Finding>, val checkedWith: Map<SnapshotKey, SnapshotDigest?>) {
+class CheckResult(
+    val findings: List<Finding>,
+    val checkedWith: Map<SnapshotKey, SnapshotDigest?>,
+    val candidate: PolicyDocument? = null,
+) {
     val clean: Boolean get() = findings.none { it.severity == Severity.ERROR }
 }
