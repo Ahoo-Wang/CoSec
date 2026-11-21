@@ -36,6 +36,17 @@ object Operator {
         answer.status.assert().describedAs("revoking $principal of $tenant: $answer").isEqualTo(200)
     }
 
+    /**
+     * The IAM onboards [tenant] with no person behind it (`POST /admin/onboard` of `test/system-auth`): its own principal,
+     * stated to the control-plane host's service port, puts [policy] into the tenant's document, skips the window and
+     * publishes. The answer is the control plane's: the published change, or the refusal of the step that failed.
+     */
+    fun onboard(tenant: String, policy: String): Exchange = Http.post(
+        URI.create("${SystemTopology.auth}/admin/onboard"),
+        mapOf("tenant" to tenant, "policy" to policy),
+        SignIn.root().bearer,
+    )
+
     fun issueKey(id: String, principal: String, tenant: String, roles: List<String>?, expiresAt: String): IssuedKey {
         val body = mapOf(
             "id" to id,

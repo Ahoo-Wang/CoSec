@@ -12,9 +12,11 @@
 #
 
 # The system test's topology (test/system-test/README.md): two replicas of the gateway image built from the commit under
-# test, a service behind them in cosec.pipeline.mode=gateway, the login and control-plane host, an enforcing servlet
-# service, and Redis as the store of record. The scenarios reach them through ports bound to the runner's loopback
-# interface, and the service behind not at all: it believes any CoSec-Identity, so only the gateways reach it.
+# test, a service behind them in cosec.pipeline.mode=gateway, two replicas of the control-plane host image (also built from
+# the commit), the IAM service that issues the tokens, an enforcing servlet service, and Redis as the store of record. The
+# scenarios reach them through ports bound to the runner's loopback interface, and the service behind not at all: it
+# believes any CoSec-Identity, so only the gateways reach it. The control hosts believe it too (STA-9): the runner's
+# loopback is this test's network boundary, as a NetworkPolicy is a deployment's.
 name: cosec-system
 
 x-cosec: &cosec
@@ -28,6 +30,35 @@ x-kafka: &kafka
   COSEC_AUDIT_KAFKA_ENABLED: "true"
   SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:9092
 
+# The control-plane host, two replicas of one image: the operators' API on 8080 (the gateways route to it), the service API on
+# 8082 (the narrow profile, for the services that call it directly), the management port on 8081. It trusts the identity
+# header of whoever reaches it and says so (cosec.pipeline.identity.only-trusted-callers-can-reach, spelled as the
+# environment variable of the binder); it runs the maintenance passes (shadow windows, revisions), so the shortened bounds
+# of profile/shortened-bounds.yaml are read here.
+x-control: &control
+  image: ${COSEC_SYSTEM_CONTROL_IMAGE:-cosec-control:system}
+  depends_on:
+    redis:
+      condition: service_healthy
+    kafka:
+      condition: service_healthy
+  environment:
+    SPRING_DATA_REDIS_URL: redis://redis:6379
+    SPRING_CONFIG_ADDITIONALLOCATION: optional:file:/opt/system/shortened-bounds.yaml
+    COSEC_PIPELINE_IDENTITY_ONLYTRUSTEDCALLERSCANREACH: "true"
+    # The change events: what a deployment that keeps an audit trail of its policy changes runs (topic cosec-control-audit).
+    COSEC_CONTROL_AUDIT_KAFKA_ENABLED: "true"
+    SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+    JAVA_OPTS: -Xms192m -Xmx384m -XX:MaxDirectMemorySize=128m -Djava.net.preferIPv4Stack=true
+  volumes:
+    - ./profile:/opt/system:ro
+  # The liveness group on the management port, as the image's own HEALTHCHECK, more often; readiness is a scenario's.
+  healthcheck:
+    test: [ CMD, curl, -fs, -o, /dev/null, http://localhost:8081/actuator/health/liveness ]
+    interval: 2s
+    timeout: 3s
+    retries: 90
+
 x-gateway: &gateway
   image: ${COSEC_SYSTEM_GATEWAY_IMAGE:-cosec-gateway:system}
   depends_on:
@@ -36,6 +67,8 @@ x-gateway: &gateway
     behind:
       condition: service_healthy
     kafka:
+      condition: service_healthy
+    control-1:
       condition: service_healthy
   environment:
     <<: [ *cosec, *kafka ]
@@ -99,13 +132,19 @@ services:
       timeout: 3s
       retries: 90
 
+  # The IAM: it issues the tokens (a login of its own, the starter's refresh and logout routes) and calls the control-plane
+  # host's service port as a service of its own. It embeds no control plane in this leg: the control API is the hosts'.
   auth:
     image: ${COSEC_SYSTEM_AUTH_IMAGE:-cosec-system-auth:test}
     depends_on:
       redis:
         condition: service_healthy
+      control-1:
+        condition: service_healthy
     environment:
       <<: *cosec
+      COSEC_CONTROL_ENABLED: "false"
+      SYSTEM_CONTROL_SERVICE_URL: http://control-1:8082
       JAVA_OPTS: -Xms192m -Xmx384m
     volumes:
       - ./profile:/opt/system:ro
@@ -138,6 +177,22 @@ services:
       interval: 2s
       timeout: 3s
       retries: 90
+
+  control-1:
+    <<: *control
+    ports:
+      # The operators' API, the service API and the management port, each on its own: the scenarios call the replicas
+      # directly where a scenario is about one of them or about a port (the gateways route to control-1).
+      - "127.0.0.1:8095:8080"
+      - "127.0.0.1:8097:8082"
+      - "127.0.0.1:9095:8081"
+
+  control-2:
+    <<: *control
+    ports:
+      - "127.0.0.1:8096:8080"
+      - "127.0.0.1:8098:8082"
+      - "127.0.0.1:9096:8081"
 
   gw-1:
     <<: *gateway

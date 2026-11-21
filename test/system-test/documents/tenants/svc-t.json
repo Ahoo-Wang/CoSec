@@ -1,0 +1,30 @@
+{
+  "schema": 2,
+  "revision": 1,
+  "publishedAt": "2026-11-21T00:00:00Z",
+  "policies": [
+    {
+      "id": "pages",
+      "statements": [
+        {
+          "name": "pages",
+          "effect": "allow",
+          "action": "http:GET",
+          "resource": [
+            "http:path:/behind/svc-t/**",
+            "http:path:/svc-t/**"
+          ]
+        }
+      ]
+    }
+  ],
+  "bindings": [
+    {
+      "id": "pages",
+      "subject": "*",
+      "app": "*",
+      "space": "*",
+      "policy": "pages"
+    }
+  ]
+}

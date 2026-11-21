@@ -364,6 +364,9 @@ object GuardAllowlist {
             "spring-boot:DataPlaneAclTest#a process that runs the control plane with the read-only user fails at startup",
             "spring-boot:DataPlaneAclTest#the operations page shows the lines this test runs, and upgrading says what to add",
             // CTL-69: CoSec's own routes answer on the application's port, never on the management port.
+            "spring-boot:ApplicationPortTest#a request over a connection carries the port the server bound, on Reactor Netty",
+            "spring-boot:ApplicationPortTest#a request over a connection carries the port the server bound, on reactive Tomcat",
+            "spring-boot:ApplicationPortTest#a request over a connection carries the port the server bound, on reactive Jetty",
             "spring-boot:ManagementPortTest#CoSec's own routes answer on the application's port and never on the management port (CTL-69)",
             "spring-boot:ManagementPortTest#WebFlux keeps its management server under the pipeline and serves the application's routes only behind it",
             "spring-boot:ManagementPortTest#WebMvc leaves its management server outside CoSec and serves nothing of the application there",

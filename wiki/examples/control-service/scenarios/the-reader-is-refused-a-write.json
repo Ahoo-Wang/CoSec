@@ -1,0 +1,24 @@
+{
+  "description": "It is refused a write: the policy holds no cosec:write.",
+  "withoutDocument": [
+    "tenant",
+    "app"
+  ],
+  "credential": {
+    "tenant": "(platform)",
+    "id": "svc-reports",
+    "app": "cosec-control",
+    "roles": []
+  },
+  "request": {
+    "hostApp": "cosec-control",
+    "action": "cosec:write",
+    "resource": {
+      "type": "doc",
+      "id": "tenant/acme/policy/orders"
+    }
+  },
+  "expect": {
+    "decision": "Deny"
+  }
+}
