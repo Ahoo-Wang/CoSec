@@ -57,7 +57,7 @@ internal class ChangeRoutes(private val plane: ControlPlane) : RouteHandler {
         if (verb == null) {
             return get(request) {
                 val change = plane.get(operator, id)
-                changeResponse(change, OK, plane.acknowledgement(change))
+                changeResponse(change, OK, plane.acknowledgements.of(change))
             }
         }
         return post(request) {

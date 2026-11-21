@@ -656,7 +656,7 @@ object ChangeRunner : ScenarioRunner {
 
         /** Which live instances acknowledge a change's open window (`CTL-10`), as `GET /changes/{id}` answers it. */
         private suspend fun acknowledgement(argument: JsonNode): String {
-            val read = changes.acknowledgement(changes.get(ChangeId(argument.text()))) ?: return "no open window"
+            val read = changes.acknowledgements.of(changes.get(ChangeId(argument.text()))) ?: return "no open window"
             return "acknowledged ${read.acknowledged} waiting " + read.waitingFor.joinToString(",").ifEmpty { "none" }
         }
 

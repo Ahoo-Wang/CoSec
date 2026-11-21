@@ -154,6 +154,7 @@ class ShadowWindowTest {
         )
             .listeners(listeners)
             .build()
+
         /** Reads the staged list, compiles what it lists and acknowledges it in its status (`CTL-10`), as an instance does. */
         val reporter = ShadowReporter(recorder, reports, { installed() }, clock, source = candidates)
 
@@ -247,7 +248,7 @@ class ShadowWindowTest {
         one.reporter.flush()
         two.reporter.flush()
         // Both instances compiled the candidate on sight and acknowledge the window (`CTL-10`).
-        changes.acknowledgement(change).assert().isEqualTo(Acknowledgement(2, emptyList()))
+        changes.acknowledgements.of(change).assert().isEqualTo(Acknowledgement(2, emptyList()))
         // Enough samples, but not for long enough yet.
         changes.shadowed(change.id).state.assert().isEqualTo(ChangeState.SHADOWING)
         clock.now = clock.now.plus(Duration.ofMinutes(1))

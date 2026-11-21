@@ -608,6 +608,13 @@ evidence is missing, so the window waits for it (`CTL-56`); an instance that sti
 report interval. Otherwise the window closes insufficient at `cosec.control.shadow.max-duration`, naming the instance in
 `vanished`: publish with the summary acknowledged, or abandon and stage again.
 
+A shadow window that does not close while the control plane logs `Shadow window <w> of change <c> is waiting for the
+acknowledgement of [<instances>]` (and `GET /changes/{id}` names them in `shadow.waitingFor`) waits for live instances
+that do not acknowledge it (`CTL-10`): an older version (finish the upgrade; its status expires within two minutes once
+it is gone) or an instance that cannot read the staged list (`The staged list cannot be read` in its log, a rising
+`cosec.shadow.staged.age`). With `waitingFor` empty it waits for samples: too little traffic on its documents; it closes
+insufficient at `max-duration`.
+
 A shadow window that stays blocked has a `CANDIDATE_ERROR`: one instance cannot compile the candidate, usually because
 it reads an `ext.*` attribute whose provider runs on the control host but not on that instance. Providers and their
 declared types must match on every instance and the control host; the change is never published while blocked.

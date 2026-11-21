@@ -201,7 +201,7 @@ flowchart LR
 的申请与审批）应答相同的成员：`id`、`key`（它的文档）、`base`（`revision` 和 `digest`）、`operations`（与你发送的一致）、
 `author`、`note`、`kind`、`state`、`findings`、`candidate`（审批所针对的候选的摘要）、`createdAt`、`updatedAt`；有了之后还有
 `skipShadow`（原因）、`publishedRevision`、`escalations`、`approval`（`approver`、`at`、`candidate`、`covers`）、`shadow`
-（`window`，即发布者确认的窗口 id，`startedAt`，关闭后还有 `closed`）和 `confirmations`。存储为自身工作保留的内容不出现在
+（`window`，即发布者确认的窗口 id，`startedAt`，关闭后还有 `closed`）和 `confirmations`。窗口未关闭时，`GET /changes/{id}` 在 `shadow` 中加上确认该窗口的存活实例数（`acknowledged`）以及尚未确认的实例（`waitingFor`：`instances`，最多 20 个 id，已排序，`more` 为其余的数目），读自各实例的状态（[在影子模式下试运行变更](#trying-changes-in-shadow-mode)）。存储为自身工作保留的内容不出现在
 任何应答中：候选检查时所依据的各文档头、在其窗口上报过的实例，以及审批人持有的内容（`CTL-61`）。
 
 成员、类型以及哪些始终存在，见 [`contract/control/`](https://github.com/Ahoo-Wang/CoSec/tree/main/contract/control)，
@@ -254,8 +254,15 @@ flowchart LR
 窗口在以下情况关闭：
 
 - 任何实例上报 `CANDIDATE_ERROR` 时立即关闭，状态为*阻塞*：该变更永远不能发布；请放弃它；
-- 经过 `cosec.control.shadow.min-duration`（15 分钟），且实例上报的非 `BASE_MISMATCH` 样本达到 `cosec.control.shadow.min-samples`（1,000）时；
+- 经过 `cosec.control.shadow.min-duration`（15 分钟），实例上报的非 `BASE_MISMATCH` 样本达到 `cosec.control.shadow.min-samples`（1,000），且每个存活实例都确认了该窗口（见下文）时；
 - 到达 `cosec.control.shadow.max-duration`（24 小时）而样本不足时，状态为*证据不足*。
+
+**窗口通过之前，每个存活实例都要确认它**（`CTL-10`）。实例在暂存列表中读到窗口并编译了它的候选（或报告了 `CANDIDATE_ERROR`）之后，就在每隔 `cosec.authorization.shadow.report-interval` 写一次的状态中确认该窗口。只要还有最近一分钟内写过状态的实例没有确认，窗口就不会通过，并记录 `Shadow window <w> of change <c> is waiting for the acknowledgement of [<instances>]`，`GET /changes/{id}` 在 `shadow.waitingFor` 中点名这些实例。确认不是样本：样本仍只来自报告。两种不同的等待，以及各自的处理：
+
+- **在等待某个实例**（`waitingFor` 非空）：该实例运行的版本不发送确认（完成升级），或者它读不到暂存列表：它的日志写着 `The staged list cannot be read`，它的 `cosec.shadow.staged.age` 持续上升（[可观测性](../operations/observability.md#metrics)）。窗口期间启动的实例会在几个上报间隔内确认。
+- **在等待样本**（`waitingFor` 为空，样本低于最小值）：窗口所属文档的流量太少。等到 `max-duration`，或者给出原因跳过窗口。
+
+到达 `max-duration` 时，无论确认情况如何，窗口都以*证据不足*关闭，与样本不足时一样。
 
 在窗口上报告过的实例必须一直报告到窗口关闭。报告不见了的实例（它停止服务，或它的报告在 Redis 故障切换中丢失）是缺失的证据，而不是零个决策：看到收窄请求的可能正是它。窗口会等待它，记录 `Shadow window <w> of change <c> is waiting for [<instances>]`，无论其他实例报告了什么；实例每隔 `cosec.authorization.shadow.report-interval` 重写一次累计报告，所以仍在服务的实例会回来。到达 `max-duration` 时窗口以*证据不足*关闭，摘要的 `vanished` 点名消失的实例，绝不会通过（`CTL-56`）。
 

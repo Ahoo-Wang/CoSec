@@ -494,6 +494,24 @@ gone for good leaves the window open until `cosec.control.shadow.max-duration`, 
 instance named in its summary's `vanished`: publish it with the summary acknowledged, or abandon it and stage it again
 to start a window with the instances serving now ([Testing changes](../policies/testing.md#trying-changes-in-shadow-mode)).
 
+## Shadow window waiting for an acknowledgement
+
+The control plane logs `Shadow window <w> of change <c> is waiting for the acknowledgement of [<instances>]`, and
+`GET /changes/{id}` names them in `shadow.waitingFor`: the window has its samples, or not yet, but cannot pass while a
+live instance (one with a status in the last minute) does not list it in its status (`CTL-10`).
+
+- **An instance of an older version** sends no acknowledgements. Finish the rolling upgrade: once the old instances are
+  gone, their statuses expire within two minutes and the window no longer waits for them.
+- **An instance that cannot read the staged list** logs `The staged list cannot be read since it was at <instant>` and
+  its `cosec.shadow.staged.age` rises. Fix its Redis access (the data-plane user reads `<s>:candidate-staged:all`,
+  [Storage](./storage.md#redis-keys)).
+- **An instance that started during the window** acknowledges it within a few report intervals, once it has compiled
+  the candidate.
+
+If `waitingFor` is empty and the window still does not close, it waits for samples: its documents get too little
+traffic, and it closes *insufficient* at `cosec.control.shadow.max-duration`
+([Testing changes](../policies/testing.md#trying-changes-in-shadow-mode)).
+
 ## Shadow window blocked by a candidate error
 
 A shadow window is blocked as soon as one instance reports `CANDIDATE_ERROR`: it cannot compile the candidate, so it

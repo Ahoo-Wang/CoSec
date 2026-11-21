@@ -15,10 +15,10 @@
 
 package me.ahoo.cosec.control.api
 
-import me.ahoo.cosec.control.change.Acknowledgement
 import kotlinx.coroutines.runBlocking
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.control.change.Acknowledgement
 import me.ahoo.cosec.control.change.ChangeId
 import me.ahoo.cosec.control.change.ChangeState
 import me.ahoo.cosec.control.change.Escalation
@@ -58,7 +58,10 @@ class ClientContractTest {
     fun `a change answer holds exactly the members of its contract file`() {
         // An open window as GET /changes/{id} answers it: with which live instances acknowledge it (`CTL-10`).
         val acknowledged = ChangeAnswer.tree(ChangeSamples.open, Acknowledgement(1, listOf("i-2")))
-        files.check("control/change.json", Shapes.of(ChangeSamples.all.map { ChangeAnswer.tree(it) } + listOf(acknowledged), OPAQUE))
+        files.check(
+            "control/change.json",
+            Shapes.of(ChangeSamples.all.map { ChangeAnswer.tree(it) } + listOf(acknowledged), OPAQUE)
+        )
     }
 
     @Test

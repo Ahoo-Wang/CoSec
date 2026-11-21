@@ -15,13 +15,13 @@
 
 package me.ahoo.cosec.control.api
 
-import me.ahoo.cosec.control.change.Acknowledgement
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.control.api.ControlHttp.Companion.JSON
 import me.ahoo.cosec.control.api.ControlRequestJson.query
 import me.ahoo.cosec.control.api.ControlRequestJson.revisionOf
 import me.ahoo.cosec.control.api.JsonFields.wellFormed
+import me.ahoo.cosec.control.change.Acknowledgement
 import me.ahoo.cosec.control.change.ChangeRejectedException
 import me.ahoo.cosec.control.change.ChangeRequest
 import me.ahoo.cosec.control.change.ControlStatus.NOT_FOUND

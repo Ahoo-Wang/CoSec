@@ -24,6 +24,11 @@ description: "每个 8.0 预览版（alpha 与 beta）到下一个之间的变�
 
 ## 从 8.0.0-beta.4 升级 {#from-8-0-0-beta-4}
 
+- **只有每个存活实例都确认了影子窗口，它才会通过**（设计 D2，`CTL-10`）。受影响：升级期间及之后的影子窗口，以及读取变更 `shadow` 的客户端。
+  - 每个数据面实例现在在每个上报间隔写入的状态中，列出它已编译其候选的窗口。样本已够的窗口仍要等到最近一分钟内写过状态的每个实例都列出它；到达 `cosec.control.shadow.max-duration` 时与以前一样以证据不足关闭。
+  - **滚动升级期间**，上一个预览版的实例不发送确认，因此这期间开启的窗口不会早于升级结束时关闭（这些实例停止后，其状态在两分钟内过期），或在 `max-duration` 时以证据不足关闭。需要尽快关闭的变更，请先升级数据面再暂存。
+  - 窗口未关闭时，`GET /changes/{id}` 增加 `shadow.acknowledged` 和 `shadow.waitingFor`（[变更的应答](../policies/testing.md#what-a-change-answers)）；`contract/control/change.json` 固定了它们。
+
 - **控制 API 由自己的应答模型作答；被拒绝的作用域在 `reason` 下说明原因；传播只统计持有该文档的实例**（第二轮评审，
   `R2C-11`、`R2C-12`、`CTL-61`、`CTL-62`）。受影响的是控制 API 的客户端。
   - 变更的应答（`GET /changes/{id}` 以及每个应答变更的路由）不再包含 `checkedWith`、`checkedApps` 和窗口的

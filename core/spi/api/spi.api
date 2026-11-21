@@ -324,13 +324,14 @@ public final class me/ahoo/cosec/spi/shadow/InstalledDocument {
 public final class me/ahoo/cosec/spi/shadow/InstanceStatus {
 	public static final field Companion Lme/ahoo/cosec/spi/shadow/InstanceStatus$Companion;
 	public static final field FORMAT_LEVEL I
-	public fun <init> (Ljava/lang/String;Ljava/time/Instant;Ljava/util/Map;I)V
-	public synthetic fun <init> (Ljava/lang/String;Ljava/time/Instant;Ljava/util/Map;IILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun <init> (Ljava/lang/String;Ljava/time/Instant;Ljava/util/Map;ILjava/util/Set;)V
+	public synthetic fun <init> (Ljava/lang/String;Ljava/time/Instant;Ljava/util/Map;ILjava/util/Set;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
 	public fun equals (Ljava/lang/Object;)Z
 	public final fun getAt ()Ljava/time/Instant;
 	public final fun getDocuments ()Ljava/util/Map;
 	public final fun getFormatLevel ()I
 	public final fun getInstance ()Ljava/lang/String;
+	public final fun getWindows ()Ljava/util/Set;
 	public fun hashCode ()I
 	public fun toString ()Ljava/lang/String;
 }

@@ -294,7 +294,10 @@ and the break-glass request and approval) answers the same members: `id`, `key` 
 `digest`), `operations` (as you sent them), `author`, `note`, `kind`, `state`, `findings`, `candidate` (the digest of the
 candidate an approval is given for), `createdAt`, `updatedAt`; and, once there is one, `skipShadow` (the reason),
 `publishedRevision`, `escalations`, `approval` (`approver`, `at`, `candidate`, `covers`), `shadow` (`window`, the id
-a publisher acknowledges, `startedAt`, and once closed `closed`) and `confirmations`. What the store keeps for its
+a publisher acknowledges, `startedAt`, and once closed `closed`) and `confirmations`. While the window is open,
+`GET /changes/{id}` adds to `shadow` how many live instances acknowledge it (`acknowledged`) and which do not
+(`waitingFor`: `instances`, at most 20 ids, sorted, and `more`, how many others), read from the instances' statuses
+([Trying changes in shadow mode](#trying-changes-in-shadow-mode)). What the store keeps for its
 own work is in no answer: the heads the candidate was checked with, the instances that reported on its window, and
 what an approver held (`CTL-61`).
 
@@ -370,9 +373,27 @@ would replace), so read the window again once the store answers.
 The window closes:
 
 - at once, *blocked*, when any instance reports `CANDIDATE_ERROR`: the change never publishes; abandon it;
-- once `cosec.control.shadow.min-duration` (15 minutes) has passed and the instances have reported
-  `cosec.control.shadow.min-samples` (1,000) samples other than `BASE_MISMATCH`;
+- once `cosec.control.shadow.min-duration` (15 minutes) has passed, the instances have reported
+  `cosec.control.shadow.min-samples` (1,000) samples other than `BASE_MISMATCH`, and every live instance acknowledges
+  the window (below);
 - at `cosec.control.shadow.max-duration` (24 hours) with fewer, as *insufficient*.
+
+**Every live instance acknowledges the window before it passes** (`CTL-10`). An instance acknowledges a window in its
+status, written every `cosec.authorization.shadow.report-interval`, once it has read the window in the staged list and
+compiled its candidate (or reported `CANDIDATE_ERROR`). The window does not pass while an instance with a status in the
+last minute has not, logging `Shadow window <w> of change <c> is waiting for the acknowledgement of [<instances>]`, and
+`GET /changes/{id}` names those instances in `shadow.waitingFor`. An acknowledgement is not a sample: the samples still
+come from the reports. Two different waits, and what to do about each:
+
+- **Waiting for an instance** (`waitingFor` is not empty): the instance runs a version that does not send
+  acknowledgements (finish the upgrade), or it cannot read the staged list: its log says
+  `The staged list cannot be read`, and its `cosec.shadow.staged.age` rises
+  ([Observability](../operations/observability.md#metrics)). An instance that started during the window acknowledges
+  within a few report intervals.
+- **Waiting for samples** (`waitingFor` is empty, the samples below the minimum): the window's documents get too little
+  traffic. Leave it to `max-duration`, or skip the window with a reason.
+
+At `max-duration` the window closes *insufficient* whatever the acknowledgements, as it does without the samples.
 
 An instance that has reported on a window must keep reporting until it closes. One whose report is gone (it stopped
 serving, or its report was lost in a Redis failover) is missing evidence, never zero decisions: it may be the one that

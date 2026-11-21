@@ -15,9 +15,9 @@
 
 package me.ahoo.cosec.control.api
 
-import me.ahoo.cosec.control.change.Acknowledgement
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.control.change.Acknowledgement
 import me.ahoo.cosec.control.change.ChangeJson.actorTree
 import me.ahoo.cosec.control.change.ChangeRequest
 import me.ahoo.cosec.control.change.OperationCodec
