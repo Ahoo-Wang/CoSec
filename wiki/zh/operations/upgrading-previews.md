@@ -28,7 +28,7 @@ description: "每个 8.0 预览版（alpha 与 beta）到下一个之间的变�
 - **原来处于 `gateway` 模式、现在需要控制面的 IAM 服务，改为运行在 `enforce`，并设置 `cosec.pipeline.caller=forwarded-identity`。** 受影响：原来处于 `cosec.pipeline.mode=gateway`、现在要加入 `cosec-control` 的服务。`gateway` 模式不接入文档、Redis 和控制面，所以控制面无法加到它上面。
   - 把 `cosec.pipeline.mode` 改为 `enforce`，并加上 `cosec.pipeline.caller=forwarded-identity`：服务仍然相信网关转发的身份，仍然要声明什么能连到它。声明相同（`only-gateway-can-reach`，开启服务端口之后是 `only-trusted-callers-can-reach`），对隐藏方法过滤器的拒绝也相同。
   - 它现在需要 `cosec-cocache`、`cosec-control` 和一个可以写文档的 Redis 用户（[谁可以写哪些 key](./storage.md#who-may-write-which-keys)）。
-  - 它自己的路由仍然要么在网关处授权，要么没有授权。代码只在进程内访问控制面时，设 `cosec.control.http.enabled=false`；旁边有运行维护任务的宿主时，设 `cosec.control.maintenance.enabled=false`（[配置](./configuration.md#control-plane)）。
+  - 它自己的路由仍然要么在网关处授权，要么没有授权。代码只在进程内访问控制面时，设 `cosec.control.http.enabled=false`（[配置](./configuration.md#control-plane)）。
 - **CoSec 自己的路由不再在管理端口上应答**（`CTL-69`）。受影响：有独立 `management.server.port` 的 WebFlux 宿主（或开启了控制面的网关宿主），其客户端曾在那里访问控制 API（`/cosec/control/v1/...`）或登录路由（`cosec.authentication.login.refresh.path`、`.logout.path`）。Spring Boot 的管理服务器会继承应用的 `RouterFunction`，所以它们曾在管理端口上、经管道应答；对相信所述身份的宿主（`cosec.pipeline.caller=forwarded-identity`、控制面宿主镜像），那等于把整个控制 API 提供给任何能访问该端口的人。现在它们只在应用端口上应答（控制 API 还有它的服务端口），其余端口上是 `404`。请改在应用端口上调用。应用自己的路由不变。
 - **新增：控制面门面 `ControlService`，供内嵌控制面的服务使用**（`CTL-65`）。
   - 调用按它们声明的 `ControlCaller` 决策，并记为该调用方的步骤。
@@ -44,7 +44,7 @@ description: "每个 8.0 预览版（alpha 与 beta）到下一个之间的变�
   - `ChangeEvent.Kind` 新增 `SHADOW_SKIPPED` 和 `REBASED`。过去跳过只记在它所发布的修订的来源中，所以变更被放弃时跳过不留任何记录；现在
     `:skip-shadow` 以及 break-glass 变更免除的窗口会写 `SHADOW_SKIPPED`，备注写明原因，`:rebase` 写 `REBASED`。
   - 处理每一种类型的监听器要加上这两种；按类型文档的要求带 `else` 分支的监听器无需改动。
-- **控制面记录每一步的操作者是如何被识别的，并可增加服务端口**（`CTL-57`、`CTL-58`、`CTL-59`）。受影响的是针对 `ChangeEvent`、`ChangeRequest` 或 `HttpFacts`（实验性）编译的代码：它们的构造函数各在末尾增加了一个带默认值的参数（`origin`、`origin`、`peerAddress`），请重新编译。以 JSON 写出的变更事件和存储的变更增加了 `origin` 成员（`asserted`、`via`、`peer`），不认识它的读取方会忽略。新增且默认不设置：`cosec.control.http.enabled`、`cosec.control.http.service-port` 和 `cosec.control.maintenance.enabled`（[配置](./configuration.md#control-plane)）。没有设置它们的部署无需改动。
+- **控制面记录每一步的操作者是如何被识别的，并可增加服务端口**（`CTL-57`、`CTL-58`、`CTL-59`）。受影响的是针对 `ChangeEvent`、`ChangeRequest` 或 `HttpFacts`（实验性）编译的代码：它们的构造函数各在末尾增加了一个带默认值的参数（`origin`、`origin`、`peerAddress`），请重新编译。以 JSON 写出的变更事件和存储的变更增加了 `origin` 成员（`asserted`、`via`、`peer`），不认识它的读取方会忽略。新增且默认不设置：`cosec.control.http.enabled` 和 `cosec.control.http.service-port`（[配置](./configuration.md#control-plane)）。两者都没有设置的部署无需改动。每个控制面实例都运行维护任务，由租约隔开，没有任何配置项能把它们关掉。
 - **控制 API 由自己的应答模型作答；被拒绝的作用域在 `reason` 下说明原因；传播只统计持有该文档的实例**（第二轮评审，
   `R2C-11`、`R2C-12`、`CTL-61`、`CTL-62`）。受影响的是控制 API 的客户端。
   - 变更的应答（`GET /changes/{id}` 以及每个应答变更的路由）不再包含 `checkedWith`、`checkedApps` 和窗口的
