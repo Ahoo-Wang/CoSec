@@ -57,11 +57,6 @@ class ControlHostScenario {
             Http.get(management.resolve("/actuator/health/liveness")).status.assert().isEqualTo(200)
             Http.get(management.resolve("/actuator/health/readiness")).status.assert().isEqualTo(200)
             Http.get(management.resolve("/actuator/prometheus")).status.assert().isEqualTo(200)
-            // ...and the control API is not served on it.
-            Http.get(
-                management.resolve("/cosec/control/v1/documents/platform"),
-                "CoSec-Identity" to StatedIdentity.header(SignIn.ROOT, method = "jwt"),
-            ).status.assert().isEqualTo(404)
         }
         // Both replicas serve both application ports.
         for ((operators, service) in listOf(
@@ -70,6 +65,16 @@ class ControlHostScenario {
         )) {
             ServiceControl(operators, SignIn.ROOT, method = "jwt").document("platform").ok()
             ServiceControl(service, "svc-reports").document("tenant:svc-t").ok()
+        }
+    }
+
+    @Test
+    fun `the management port serves the probes and the scrape endpoint and no control API`() {
+        for (management in listOf(SystemTopology.controlManagement1, SystemTopology.controlManagement2)) {
+            Http.get(
+                management.resolve("/cosec/control/v1/documents/platform"),
+                "CoSec-Identity" to StatedIdentity.header(SignIn.ROOT, method = "jwt"),
+            ).status.assert().isEqualTo(404)
         }
     }
 

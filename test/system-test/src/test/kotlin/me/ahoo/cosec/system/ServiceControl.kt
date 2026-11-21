@@ -50,7 +50,8 @@ object StatedIdentity {
                 "method" to method,
                 "jti" to jti,
                 "exp" to credentialExpiresAt.epochSecond,
-                "iat" to issuedAt.epochSecond,
+                // A credential is never issued after it expires: the host reads such a header as malformed.
+                "iat" to minOf(issuedAt, credentialExpiresAt).epochSecond,
             ),
             "iat" to issuedAt.epochSecond,
             "rid" to "system" + UUID.randomUUID().toString().replace("-", ""),

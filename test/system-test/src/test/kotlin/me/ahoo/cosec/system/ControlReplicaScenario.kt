@@ -29,10 +29,12 @@ import java.net.URI
  * its shadow window started on the other and published on the first, with every replica reading the same changes; and a
  * window still closes, and its change publishes, when the replica that started it is stopped: whichever replica holds the
  * lease of the maintenance pass closes the windows, and the service port of a stopped replica refuses connections at once.
+ * It runs before the scenarios that stop or restart a data-plane instance: a window waits for every live instance, and an
+ * instance that was stopped is waited for until its registration lapses.
  */
 @Tag("system")
 @Tag("service-path")
-@Order(85)
+@Order(27)
 @TestMethodOrder(MethodOrderer.OrderAnnotation::class)
 @ExtendWith(TranscriptExtension::class)
 class ControlReplicaScenario {

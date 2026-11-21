@@ -40,8 +40,19 @@ class ColdStartScenario {
         val request: URI,
         val readiness: URI,
         val liveness: URI?,
-        val app: String? = null
-    )
+        val app: String? = null,
+        /** What the process is told about who asks: the control API answers 401 to nobody, documents or not. */
+        val states: Boolean = false,
+    ) {
+        fun headers(): Array<Pair<String, String>> =
+            if (states) {
+                arrayOf(
+                    "CoSec-Identity" to StatedIdentity.header(SignIn.ROOT, method = "jwt")
+                )
+            } else {
+                emptyArray()
+            }
+    }
 
     private val processes: List<Process>
         get() = SystemTopology.gateways.mapIndexed { index, gateway ->
@@ -56,12 +67,14 @@ class ColdStartScenario {
                 SystemTopology.control1.resolve("/cosec/control/v1/documents/platform"),
                 SystemTopology.controlManagement1.resolve(READINESS),
                 SystemTopology.controlManagement1.resolve(LIVENESS),
+                states = true,
             ),
             Process(
                 "control-2",
                 SystemTopology.control2.resolve("/cosec/control/v1/documents/platform"),
                 SystemTopology.controlManagement2.resolve(READINESS),
                 SystemTopology.controlManagement2.resolve(LIVENESS),
+                states = true,
             ),
             Process(
                 "enforcer",
@@ -78,9 +91,9 @@ class ColdStartScenario {
     fun `with no documents every request is unavailable and readiness refuses, while each process stays live`() {
         for (process in processes) {
             Transcript.note("process ${process.name}")
-            Contract.assertProblem(Http.get(process.request), "unavailable")
+            Contract.assertProblem(Http.get(process.request, *process.headers()), "unavailable")
             Contract.assertProblem(
-                Http.get(process.request, Token.issue("alice", "acme", app = process.app).bearer),
+                Http.get(process.request, Token.issue("alice", "acme", app = process.app).bearer, *process.headers()),
                 "unavailable"
             )
             Http.get(process.readiness).status.assert().describedAs("readiness of ${process.name}").isEqualTo(503)
