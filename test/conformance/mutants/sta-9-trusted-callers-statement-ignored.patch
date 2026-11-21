@@ -14,4 +14,4 @@ index 91a447d1e..db97168fc 100644
 +            PipelineProperties.ONLY_TRUSTED_CALLERS_CAN_REACH_KEY to null,
          ).firstOrNull { (_, value) -> value != null && value.equals("true", ignoreCase = true) }?.first
          check(stated != null) {
-             "${describe(environment)}: this host believes any CoSec-Identity header it receives, and the header " +
+             "$host: this host believes any CoSec-Identity header it receives, and the header " +

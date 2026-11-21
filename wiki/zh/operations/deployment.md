@@ -66,7 +66,7 @@ CoSec 作为 Spring Cloud Gateway 的全局过滤器运行，而全局过滤器�
 没有文档、没有 Redis、没有路由映射，也没有决策监听器。如何配置这样的服务，见
 [网关后面的服务](../integration/web.md#services-behind-the-gateway)。
 
-用策略决策的宿主也可以使用同样的信任：[`cosec.pipeline.caller=forwarded-identity`](./configuration.md#pipeline) 让 `enforce` 模式的宿主以 `CoSec-Identity` 头作为调用方，同时装配快照和控制面。控制面宿主，或内嵌控制面的 IAM 服务就这样运行：它不校验任何凭证，所以要声明什么能访问它，用同样的声明（`only-gateway-can-reach`；服务直接调用它时用 `only-trusted-callers-can-reach`），没有声明宿主不会启动。hidden-method 过滤器在那里同样被拒绝。
+用策略决策的宿主也可以使用同样的信任：[`cosec.pipeline.caller=forwarded-identity`](./configuration.md#pipeline) 让 `enforce` 模式的宿主以 `CoSec-Identity` 头作为调用方，同时装配快照和控制面。控制面宿主，或内嵌控制面的 IAM 服务就这样运行：它不校验任何凭证，所以要声明什么能访问它，用同样的声明（`only-gateway-can-reach`；服务直接调用它时用 `only-trusted-callers-can-reach`），没有声明宿主不会启动。hidden-method 过滤器在那里同样被拒绝。这样的宿主上，web 适配器不再决策请求，与 `gateway` 模式相同：经过网关的请求由网关决策；没有经过网关的调用，只由控制面对每个操作按调用方声明的主体所做的授权来决策。因此这种宿主上应用自己的路由（内嵌部署的 IAM 服务）要么在网关授权，要么不授权。
 
 ```mermaid
 flowchart LR

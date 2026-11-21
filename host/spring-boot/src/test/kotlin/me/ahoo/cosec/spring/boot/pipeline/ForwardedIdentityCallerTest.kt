@@ -27,6 +27,9 @@ import me.ahoo.cosec.control.api.ControlPlane
 import me.ahoo.cosec.control.authz.Operator
 import me.ahoo.cosec.document.SnapshotDocuments
 import me.ahoo.cosec.document.identity.IdentityCodec
+import me.ahoo.cosec.login.route.LogoutRoute
+import me.ahoo.cosec.login.route.RefreshRoute
+import me.ahoo.cosec.login.token.TokenConverter
 import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.model.scope.HostScope
 import me.ahoo.cosec.runtime.Pipeline
@@ -35,9 +38,12 @@ import me.ahoo.cosec.runtime.http.Headers
 import me.ahoo.cosec.runtime.http.HttpFacts
 import me.ahoo.cosec.runtime.http.RequestGate
 import me.ahoo.cosec.runtime.identity.IdentityGate
+import me.ahoo.cosec.spi.authn.Authenticator
 import me.ahoo.cosec.spi.identity.Identity
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.cosec.spi.token.TokenStore
+import me.ahoo.cosec.spring.boot.authentication.CoSecAuthenticationAutoConfiguration
+import me.ahoo.cosec.spring.boot.authentication.route.CoSecLoginRoutesAutoConfiguration
 import me.ahoo.cosec.spring.boot.control.CoSecControlAutoConfiguration
 import me.ahoo.cosec.spring.boot.jwt.CoSecJwtAutoConfiguration
 import me.ahoo.cosec.spring.boot.jwt.CoSecTokenRevocationCacheAutoConfiguration
@@ -124,8 +130,8 @@ class ForwardedIdentityCallerTest {
             message(failure(runner.withPropertyValues("$statement=$value"))).assert()
                 .describedAs("with $statement=[$value]").contains("and $statement is [$value]")
         }
-        // An empty value does not bind to a boolean: it fails startup too, with the binder's message.
-        failure(runner.withPropertyValues("$statement=")).assert().isNotNull()
+        // An empty value does not bind to a boolean: it fails startup too, and the failure names the key.
+        message(failure(runner.withPropertyValues("$statement="))).assert().contains(statement)
     }
 
     @Test
@@ -187,8 +193,44 @@ class ForwardedIdentityCallerTest {
             )
         var refused: Throwable? = null
         web.run { refused = it.startupFailure }
+        // What is true of this host: the gate is the application's bean, not a property the operator wrote.
         message(refused).assert().contains("STA-9").contains("$statement=true")
+            .contains("the web gate of this host is an IdentityGate bean of the application, [ownGate]")
+            .doesNotContain("cosec.pipeline.caller=forwarded-identity").doesNotContain("cosec.pipeline.mode=gateway")
         web.withPropertyValues("$statement=true").run { it.startupFailure.assert().isNull() }
+    }
+
+    /**
+     * The embedded deployment: an IAM service that issues tokens and embeds the control plane. It verifies the
+     * credentials of its own routes (the token authenticator is the data plane's), while its web gate believes the
+     * identity it is sent.
+     */
+    @Test
+    fun `an IAM service that issues tokens and embeds the control plane takes the forwarded caller beside its login`() {
+        runner.withConfiguration(
+            AutoConfigurations.of(
+                CoSecAuthenticationAutoConfiguration::class.java,
+                CoSecLoginRoutesAutoConfiguration::class.java,
+            ),
+        ).withPropertyValues(
+            "$statement=true",
+            "cosec.jwt.enabled=true",
+            "cosec.jwt.secret=FyN0Igd80Gas8stTavArGKOYnS9uLwGA_",
+            "cosec.authentication.login.refresh.path=/auth/refresh",
+            "cosec.authentication.login.logout.path=/auth/logout",
+            "cosec.jwt.session.memberships-on-refresh=from-token",
+        ).run { context ->
+            context.startupFailure.assert().isNull()
+            // The gate of the web adapter is the identity gate, and the pipeline that verifies tokens is not.
+            context.getBean(RequestGate::class.java).assert().isInstanceOf(IdentityGate::class.java)
+            context.getBean(Pipeline::class.java).assert().isNotSameAs(context.getBean(RequestGate::class.java))
+            // The issuer and the login routes are wired, and the control plane is there too.
+            context.getBean(TokenConverter::class.java).assert().isNotNull()
+            context.getBean(RefreshRoute::class.java).assert().isNotNull()
+            context.getBean(LogoutRoute::class.java).assert().isNotNull()
+            context.getBean(Authenticator::class.java).assert().isNotNull()
+            context.getBean(ControlPlane::class.java).assert().isNotNull()
+        }
     }
 
     @Test

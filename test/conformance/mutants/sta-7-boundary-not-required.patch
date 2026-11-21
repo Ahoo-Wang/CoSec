@@ -12,6 +12,6 @@ index 91a447d1e..eb8b56c77 100644
          ).firstOrNull { (_, value) -> value != null && value.equals("true", ignoreCase = true) }?.first
 -        check(stated != null) {
 +        check(true) {
-             "${describe(environment)}: this host believes any CoSec-Identity header it receives, and the header " +
+             "$host: this host believes any CoSec-Identity header it receives, and the header " +
                  "carries no signature, so whoever can reach this host is whoever they claim to be, the platform " +
                  "administrator included, and can publish any policy of any tenant. It contains mistakes and keeps the " +

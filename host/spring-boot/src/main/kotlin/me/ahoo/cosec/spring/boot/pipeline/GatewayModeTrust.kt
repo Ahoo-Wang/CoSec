@@ -16,6 +16,7 @@
 package me.ahoo.cosec.spring.boot.pipeline
 
 import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.runtime.identity.IdentityGate
 import org.springframework.beans.factory.ListableBeanFactory
 import org.springframework.core.env.Environment
 import org.springframework.util.ClassUtils
@@ -46,9 +47,10 @@ internal object GatewayModeTrust {
      * `STA-7`, `STA-9`: fails unless [Environment] states what can reach this host: `true` exactly (any case, no spaces),
      * for [PipelineProperties.ONLY_GATEWAY_CAN_REACH_KEY] (only the gateway can) or
      * [PipelineProperties.ONLY_TRUSTED_CALLERS_CAN_REACH_KEY] (the gateway and the services the operator names can).
-     * Answers the key that was stated, the gateway's first.
+     * Answers the key that was stated, the gateway's first. [host] says what makes this host believe the header, for the
+     * message: the property that wired the gate, or the application's own gate bean ([describe] by default).
      */
-    fun requireBoundaryStated(environment: Environment): String {
+    fun requireBoundaryStated(environment: Environment, host: String = describe(environment)): String {
         val gateway = environment.getProperty(PipelineProperties.ONLY_GATEWAY_CAN_REACH_KEY)
         val trusted = environment.getProperty(PipelineProperties.ONLY_TRUSTED_CALLERS_CAN_REACH_KEY)
         val stated = listOf(
@@ -56,7 +58,7 @@ internal object GatewayModeTrust {
             PipelineProperties.ONLY_TRUSTED_CALLERS_CAN_REACH_KEY to trusted,
         ).firstOrNull { (_, value) -> value != null && value.equals("true", ignoreCase = true) }?.first
         check(stated != null) {
-            "${describe(environment)}: this host believes any CoSec-Identity header it receives, and the header " +
+            "$host: this host believes any CoSec-Identity header it receives, and the header " +
                 "carries no signature, so whoever can reach this host is whoever they claim to be, the platform " +
                 "administrator included, and can publish any policy of any tenant. It contains mistakes and keeps the " +
                 "audit; it does not defend against a compromised workload that can reach it, which can also approve " +
@@ -79,13 +81,19 @@ internal object GatewayModeTrust {
         environment.getProperty(PipelineProperties.MODE_KEY).equals("gateway", ignoreCase = true) ||
             environment.getProperty(PipelineProperties.CALLER_KEY).equals("forwarded-identity", ignoreCase = true)
 
-    /** What the host is, for a message: its mode, or the identity it believes on `enforce`. */
+    /** What makes the host believe the identity, for a message: its mode, or the caller it was told to take. */
     fun describe(environment: Environment): String =
         if (environment.getProperty(PipelineProperties.MODE_KEY).equals("gateway", ignoreCase = true)) {
             "${PipelineProperties.MODE_KEY}=gateway"
         } else {
             "${PipelineProperties.CALLER_KEY}=forwarded-identity"
         }
+
+    /** The host whose web gate is an `IdentityGate` that no property wired: the application's own bean, named. */
+    fun describeOwnGate(beans: ListableBeanFactory): String {
+        val names = beans.getBeanNamesForType(IdentityGate::class.java, true, false)
+        return "the web gate of this host is an IdentityGate bean of the application, [${names.joinToString()}]"
+    }
 
     /** Who the statement [key] says can reach the host. */
     fun admitted(key: String): String =
@@ -115,10 +123,10 @@ internal object GatewayModeTrust {
             ?.let { "a FilterRegistrationBean of a HiddenHttpMethodFilter, [$it]" }
     }
 
-    fun requireNoHiddenMethod(environment: Environment, beans: ListableBeanFactory) {
+    fun requireNoHiddenMethod(environment: Environment, beans: ListableBeanFactory, host: String? = null) {
         val found = hiddenMethod(environment, beans) ?: return
         error(
-            "cosec.pipeline.mode=gateway: $found. The gateway decided the method of the request line, but this service " +
+            "${host ?: describe(environment)}: $found. The gateway decided the method of the request line, but this service " +
                 "would run a POST as the method a form field `_method` names, and the gateway cannot remove a field " +
                 "from a form body: a DENY on http:DELETE, or an ALLOW for http:POST only, is stepped around. Remove " +
                 "$MVC_PROPERTY and $WEBFLUX_PROPERTY (off by default) and any HiddenHttpMethodFilter of the " +

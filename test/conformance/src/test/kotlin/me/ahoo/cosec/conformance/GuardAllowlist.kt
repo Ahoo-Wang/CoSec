@@ -290,6 +290,7 @@ object GuardAllowlist {
             "spring-boot:ForwardedIdentityCallerTest#the control plane decides for the principal the identity states, by the documents",
             "spring-boot:ForwardedIdentityCallerTest#no header is no principal",
             "spring-boot:ForwardedIdentityCallerTest#an identity gate the application wires beside enforce is asked for the statement too",
+            "spring-boot:ForwardedIdentityCallerTest#an IAM service that issues tokens and embeds the control plane takes the forwarded caller beside its login",
             "spring-boot:IdentityGuardAutoConfigurationTest#the forwarded-identity caller on a gateway host fails startup",
             // STA-8: a host that serves the refresh route says how a refreshed token gets its roles.
             "spring-boot:RefreshMembershipChoiceTest#no bean and no statement fails startup, and the message says what is at stake and the two ways out",
