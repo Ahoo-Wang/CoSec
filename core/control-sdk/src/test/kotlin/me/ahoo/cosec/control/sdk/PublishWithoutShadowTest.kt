@@ -34,6 +34,9 @@ class PublishWithoutShadowTest {
     private class Scripted(val answer: (call: String, count: Int) -> String) : ControlService {
         val calls = mutableListOf<String>()
 
+        /** The change each call of [change] and [abandon] named, as `call id`. */
+        val named = mutableListOf<String>()
+
         private fun call(name: String): String {
             calls += name
             return answer(name, calls.count { it == name })
@@ -53,7 +56,7 @@ class PublishWithoutShadowTest {
         override suspend fun diff(caller: ControlCaller, key: SnapshotKey, from: Long, to: Long) = call("diff")
         override suspend fun apply(caller: ControlCaller, key: SnapshotKey, request: String) = call("apply")
         override suspend fun propose(caller: ControlCaller, request: String) = call("propose")
-        override suspend fun change(caller: ControlCaller, id: String) = call("change")
+        override suspend fun change(caller: ControlCaller, id: String) = call("change").also { named += "change $id" }
         override suspend fun changes(
             caller: ControlCaller,
             document: SnapshotKey?,
@@ -65,7 +68,10 @@ class PublishWithoutShadowTest {
         override suspend fun rebase(caller: ControlCaller, id: String) = call("rebase")
         override suspend fun startShadow(caller: ControlCaller, id: String) = call("startShadow")
         override suspend fun skipShadow(caller: ControlCaller, id: String, reason: String) = call("skipShadow")
-        override suspend fun abandon(caller: ControlCaller, id: String) = call("abandon")
+        override suspend fun abandon(
+            caller: ControlCaller,
+            id: String
+        ) = call("abandon").also { named += "abandon $id" }
         override suspend fun publish(caller: ControlCaller, id: String, request: String?) = call("publish")
     }
 
@@ -145,6 +151,51 @@ class PublishWithoutShadowTest {
     }
 
     @Test
+    fun `a slot its own author left halfway is abandoned and taken`() {
+        val service = Scripted { call, count ->
+            when {
+                call == "skipShadow" && count == 1 -> throw conflict(ConflictKind.SLOT_HELD, heldBy = "c0")
+                call == "change" -> change("READY", id = "c0")
+                else -> usual(call)
+            }
+        }
+        val change = runBlocking {
+            ControlClient(service).proposeAndPublishWithoutShadow(caller, acme, listOf(role), "n", "projected")
+        }
+        change.state.assert().isEqualTo(ChangeState.PUBLISHED)
+        service.named.assert().containsExactly("change c0", "abandon c0")
+        service.calls.assert().containsExactly(
+            "document",
+            "propose",
+            "skipShadow",
+            "change",
+            "abandon",
+            "skipShadow",
+            "publish",
+        )
+    }
+
+    @Test
+    fun `a slot another author holds, or one waiting for a person holds, is waited for and never abandoned`() {
+        listOf(
+            change("READY", id = "c0", author = "service:svc-other"),
+            change("AWAITING_APPROVAL", id = "c0"),
+        ).forEach { holder ->
+            val service = Scripted { call, _ ->
+                when (call) {
+                    "skipShadow" -> throw conflict(ConflictKind.SLOT_HELD, heldBy = "c0")
+                    "change" -> holder
+                    else -> usual(call)
+                }
+            }
+            refused(service).heldBy.assert().isEqualTo("c0")
+            // What it gives up on is its own proposal, never the holder.
+            service.named.filter { it.startsWith("abandon") }.assert().containsExactly("abandon c1")
+            service.calls.assert().doesNotContain("publish")
+        }
+    }
+
+    @Test
     fun `a head that moved before the publish abandons the change and makes it again`() {
         val (change, calls) = run { call, count ->
             if (call == "publish" && count == 1) throw conflict(ConflictKind.BASE_MOVED) else usual(call)
@@ -205,16 +256,21 @@ class PublishWithoutShadowTest {
         conflict(ConflictKind.SLOT_HELD).conflict.assert().isSameAs(ConflictKind.SLOT_HELD)
         ControlRefusedException(409, """{"conflict":"LATER"}""").conflict?.isUnknown.assert().isEqualTo(true)
         ControlRefusedException(404, """{"code":"NOT_FOUND"}""").conflict.assert().isNull()
+        conflict(ConflictKind.SLOT_HELD, heldBy = "c0").heldBy.assert().isEqualTo("c0")
+        conflict(ConflictKind.BASE_MOVED).heldBy.assert().isNull()
     }
 
     private companion object {
         const val HEAD = """{"schema":2,"revision":3,"publishedAt":"2026-11-21T00:00:00Z"}"""
 
-        fun change(state: String, base: Long = 3) = """{"id":"c1","key":"tenant:acme","kind":"PUBLISH","state":"$state",""" +
-            """"base":{"revision":$base},"note":"n","author":{"tenant":"acme","principal":"service:svc-iam"},""" +
-            """"operations":[],"findings":[],"createdAt":"2026-11-21T00:00:00Z","updatedAt":"2026-11-21T00:00:01Z"}"""
+        fun change(state: String, base: Long = 3, id: String = "c1", author: String = "service:svc-iam") =
+            """{"id":"$id","key":"tenant:acme","kind":"PUBLISH","state":"$state",""" +
+                """"base":{"revision":$base},"note":"n","author":{"tenant":"acme","principal":"$author"},""" +
+                """"operations":[],"findings":[],"createdAt":"2026-11-21T00:00:00Z","updatedAt":"2026-11-21T00:00:01Z"}"""
 
-        fun conflict(kind: ConflictKind) =
-            ControlRefusedException(409, """{"code":"CONFLICT","conflict":"${kind.text}"}""")
+        fun conflict(kind: ConflictKind, heldBy: String? = null) = ControlRefusedException(
+            409,
+            """{"code":"CONFLICT","conflict":"${kind.text}"""" + (heldBy?.let { ""","heldBy":"$it"""" } ?: "") + "}",
+        )
     }
 }

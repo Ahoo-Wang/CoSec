@@ -272,8 +272,8 @@ internal class Staging(
                     // A revoke of a binding that still grants is taken only by another such revoke (review N1).
                     val guarded = preemption.revokesBreakGlass(held, head) && !preemption.revokesBreakGlass(change, head)
                     if (guarded || !preemption.preempts(operator, change, head)) {
-                        throw ChangeRejectedException.conflict(
-                            ConflictKind.SLOT_HELD,
+                        throw ChangeRejectedException.slotHeld(
+                            held.id,
                             "[${change.key}] is staged by change ${held.id.value}"
                         )
                     }
@@ -300,8 +300,8 @@ internal class Staging(
     } catch (e: CancellationException) {
         throw e
     } catch (e: ChangeRejectedException) {
-        throw ChangeRejectedException.conflict(
-            ConflictKind.SLOT_HELD,
+        throw ChangeRejectedException.slotHeld(
+            held.id,
             "[${by.key}] is staged by change ${held.id.value}, which could not be preempted: ${e.message}",
             e,
         )

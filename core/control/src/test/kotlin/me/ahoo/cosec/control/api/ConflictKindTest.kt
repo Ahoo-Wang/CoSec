@@ -17,6 +17,7 @@ package me.ahoo.cosec.control.api
 
 import kotlinx.coroutines.runBlocking
 import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.control.change.ChangeId
 import me.ahoo.cosec.control.change.ChangeRejectedException
 import me.ahoo.cosec.control.change.ConflictKind
 import me.ahoo.cosec.document.json.CoSecJson
@@ -27,7 +28,8 @@ import tools.jackson.databind.JsonNode
 
 /**
  * `CTL-80`: a `409` of the control API names which conflict it is, in the problem's `conflict` member, so a caller tells
- * "read again and retry" from "wait" from "stop" without reading `detail`. No other status carries the member.
+ * "read again and retry" from "wait" from "stop" without reading `detail`. No other status carries the member. A
+ * `SLOT_HELD` names the change that holds the slot, `heldBy`, as its `detail` does; no other conflict names one.
  */
 class ConflictKindTest {
     private val fixture = ControlPlaneTest()
@@ -63,23 +65,35 @@ class ConflictKindTest {
         assertThrownBy<IllegalArgumentException> {
             ChangeRejectedException(FORBIDDEN, "a refusal", conflict = ConflictKind.STATE)
         }
+        ChangeRejectedException.slotHeld(ChangeId("c0"), "held by c0").heldBy.assert().isEqualTo(ChangeId("c0"))
+        assertThrownBy<IllegalArgumentException> {
+            ChangeRejectedException(CONFLICT, "moved", conflict = ConflictKind.BASE_MOVED, heldBy = ChangeId("c0"))
+        }
     }
 
     @Test
     fun `a proposal on a base that is not the head is BASE_MOVED`() {
         val head = head()
-        assertConflict(call("POST", "/changes", proposal("stale", head - 1)), ConflictKind.BASE_MOVED)
+        val stale = call("POST", "/changes", proposal("stale", head - 1))
+        assertConflict(stale, ConflictKind.BASE_MOVED)
+        stale.second.has("heldBy").assert().isFalse()
     }
 
     @Test
-    fun `a change that wants the slot another holds is SLOT_HELD, and a step its state does not admit is STATE`() {
+    fun `a change that wants a held slot is SLOT_HELD naming its holder, and a step its state does not admit is STATE`() {
         val head = head()
         val first = call("POST", "/changes", proposal("first", head)).second.get("id").asString()
         val second = call("POST", "/changes", proposal("second", head)).second.get("id").asString()
         call("POST", "/changes/$first:skip-shadow", """{"reason":"hotfix"}""").first.assert().isEqualTo(OK)
-        assertConflict(call("POST", "/changes/$second:skip-shadow", """{"reason":"hotfix"}"""), ConflictKind.SLOT_HELD)
+        val held = call("POST", "/changes/$second:skip-shadow", """{"reason":"hotfix"}""")
+        assertConflict(held, ConflictKind.SLOT_HELD)
+        // The holder, machine-readable, where the detail names it too: nothing more is told than the detail tells.
+        held.second.get("heldBy").asString().assert().isEqualTo(first)
+        held.second.get("detail").asString().assert().contains(first)
         // A change that holds no slot is not READY: publishing it is not a step its state admits.
-        assertConflict(call("POST", "/changes/$second:publish", "{}"), ConflictKind.STATE)
+        val state = call("POST", "/changes/$second:publish", "{}")
+        assertConflict(state, ConflictKind.STATE)
+        state.second.has("heldBy").assert().isFalse()
     }
 
     @Test

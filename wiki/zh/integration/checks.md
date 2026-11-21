@@ -286,7 +286,7 @@ curl -X POST localhost:8080/cosec/control/v1/explain \
 
 同样的调用也可以用类型化的值来写：`ControlClient(service)` 按路由接受和应答的格式写出每个请求、读取每个应答（`CTL-76`），适用于 `ControlService` 的任一实现。文档是 `DocumentContent`，包含 `Policy`、`Binding`、`Role` 和 `Catalog`；变更是 `ChangeRequest` 中的 `Operation`（`PutPolicy`、`PutRole` 等），`:apply` 则用 `ApplyRequest`；应答是 `Change`、`DocumentHead` 或 `Page`。条件和限流规则仍是 JSON（`Condition.of`、`RateLimitRule.of`）：控制面在提议变更时检查它们。封闭集合（`ChangeState`、`Effect`、`ConflictKind` 等）把较新宿主新增的值读作未知值并保留其文本；而文档条目中含有本版本不认识的成员时根本不会被读取，因为把读到的内容再 apply 回去会丢掉它。`ControlRefusedException.conflict` 说明一个 409 是哪种冲突。
 
-`proposeAndPublishWithoutShadow` 是一个写入自己已做出的决定的服务每次写入时要做的事：在文档的 head 上提议、跳过影子窗口并发布。除 `cosec:write` 外它还需要 `cosec:skip-shadow`。head 移动了就重新读取并重新提议；另一个变更占着槽位就在给定的耐心时间内等待。它返回已发布的变更，或等待人工审批的变更；放弃时它会先放弃（abandon）自己提议的变更，再抛出那次拒绝。
+`proposeAndPublishWithoutShadow` 是一个写入自己已做出的决定的服务每次写入时要做的事：在文档的 head 上提议、跳过影子窗口并发布。除 `cosec:write` 外它还需要 `cosec:skip-shadow`。head 移动了就重新读取并重新提议；另一个变更占着槽位就在给定的耐心时间内等待；但若占着槽位的是同一作者在发布前留下的变更（`CHECKED`、`SHADOWING` 或 `READY`，即写入方中途停下时留下的；`ControlRefusedException.heldBy` 给出它），就放弃它并取得槽位。它返回已发布的变更，或等待人工审批的变更；放弃时它会先放弃（abandon）自己提议的变更，再抛出那次拒绝。
 
 <<< @/examples/control-sdk/kotlin/AuditorsProjection.kt [AuditorsProjection.kt]
 

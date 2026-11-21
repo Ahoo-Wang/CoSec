@@ -58,6 +58,7 @@ import tools.jackson.databind.JsonNode
 import java.lang.reflect.Proxy
 import java.nio.file.Files
 import java.nio.file.Path
+import java.time.Duration
 import java.time.Instant
 import kotlin.io.path.extension
 import kotlin.io.path.name
@@ -280,5 +281,69 @@ class TypedClientTest {
         }.actual()
         stale.status.assert().isEqualTo(409)
         stale.conflict.assert().isEqualTo(ConflictKind.BASE_MOVED)
+    }
+
+    /** A control plane over the in-process implementation, and a caller of tenant acme with [roles]. */
+    private class Plane {
+        val fixture = ControlPlaneTest()
+        val client = ControlClient(LocalControlService(fixture.plane, IdentityGate()))
+
+        init {
+            runBlocking { fixture.memory.keepOpenChanges() }
+        }
+
+        fun caller(name: String) = ControlCaller.of(
+            fixture.engine.security(ControlPlaneTest.ACME, name, roles = listOf("admin", "ops@team-a")).securityContext,
+        )
+
+        /** A change of [caller]'s staged without a window and left there, as a writer that stopped halfway leaves it. */
+        fun leftHalfway(caller: ControlCaller, id: String): String = runBlocking {
+            val policy = Policy(id, listOf(Statement(Effect.ALLOW, listOf("order:read"))))
+            val proposed = client.propose(
+                caller,
+                ChangeRequest(SnapshotKey.Tenant("acme"), 1, listOf(Operation.PutPolicy(policy)))
+            )
+            client.skipShadow(caller, proposed.id, "halfway").state.assert().isEqualTo(ChangeState.READY)
+            proposed.id
+        }
+    }
+
+    @Test
+    fun `a write takes the slot a change of its own author left halfway - CTL-80`() {
+        val plane = Plane()
+        val alice = plane.caller("alice")
+        val halfway = plane.leftHalfway(alice, "halfway")
+        val typed = Operation.PutPolicy(Policy("typed", listOf(Statement(Effect.ALLOW, listOf("order:list")))))
+        val published = runBlocking {
+            plane.client.proposeAndPublishWithoutShadow(alice, acme, listOf(typed), "typed", "projected")
+        }
+        published.state.assert().isEqualTo(ChangeState.PUBLISHED)
+        runBlocking { plane.client.change(alice, halfway) }.state.assert().isEqualTo(ChangeState.ABANDONED)
+    }
+
+    @Test
+    fun `a write waits for a slot another author holds, and abandons only its own change - CTL-80`() {
+        val plane = Plane()
+        val alice = plane.caller("alice")
+        val bob = plane.caller("bob")
+        val held = plane.leftHalfway(bob, "bobs")
+        val typed = Operation.PutPolicy(Policy("typed", listOf(Statement(Effect.ALLOW, listOf("order:list")))))
+        val refused = assertThrownBy<ControlRefusedException> {
+            runBlocking {
+                plane.client.proposeAndPublishWithoutShadow(
+                    alice,
+                    acme,
+                    listOf(typed),
+                    "typed",
+                    "projected",
+                    Duration.ofMillis(200),
+                )
+            }
+        }.actual()
+        refused.conflict.assert().isEqualTo(ConflictKind.SLOT_HELD)
+        refused.heldBy.assert().isEqualTo(held)
+        runBlocking { plane.client.change(bob, held) }.state.assert().isEqualTo(ChangeState.READY)
+        // What alice's write proposed is abandoned: bob's is the one open change of the document.
+        runBlocking { plane.client.changes(alice, document = acme) }.items.map { it.id }.assert().containsExactly(held)
     }
 }

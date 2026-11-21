@@ -417,8 +417,10 @@ entry with a member this version does not know does not read at all, since apply
 `proposeAndPublishWithoutShadow` is what a service that writes what it already decided does for each write: it
 proposes on the document's head, skips the shadow window and publishes. It needs `cosec:skip-shadow` beside
 `cosec:write`. A head that moved is read again and the change proposed again; a slot another change holds is waited
-out, within the patience it is given. It answers the published change, or one that waits for a person; when it gives
-up it throws the refusal, having abandoned the change it proposed.
+out, within the patience it is given. A slot held by a change of the same author that was left before it published
+(`CHECKED`, `SHADOWING` or `READY`, as a writer that stopped halfway leaves it; `ControlRefusedException.heldBy` names
+it) is abandoned and taken; any other holder is waited for. It answers the published change, or one that waits for a
+person; when it gives up it throws the refusal, having abandoned the change it proposed.
 
 <<< @/examples/control-sdk/kotlin/AuditorsProjection.kt [AuditorsProjection.kt]
 

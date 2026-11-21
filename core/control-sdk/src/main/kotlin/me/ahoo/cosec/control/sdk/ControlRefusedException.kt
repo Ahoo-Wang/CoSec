@@ -48,6 +48,12 @@ class ControlRefusedException(
      */
     val conflict: ConflictKind? get() = read(problem, "conflict")?.let(ConflictKind::of)
 
+    /**
+     * The change that holds the slot a [ConflictKind.SLOT_HELD] wanted (the problem's `heldBy`, `CTL-80`), where the
+     * control plane knows it; null for any other refusal.
+     */
+    val heldBy: String? get() = read(problem, "heldBy")
+
     /** The problem's `requestId`, which the control host's log names with why it refused. */
     val requestId: String? get() = read(problem, "requestId")
 

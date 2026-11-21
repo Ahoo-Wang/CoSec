@@ -15,18 +15,40 @@ package me.ahoo.cosec.control.sdk
 
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 
-/** Which conflict a `409` of the control API is (`conflict`, `CTL-80`): read again and retry, wait, or stop. A value this version does not know keeps its text ([ClosedValue]). */
+/**
+ * Which conflict a `409` of the control API is (`conflict`, `CTL-80`): read again and retry, wait, or stop. A value this
+ * version does not know keeps its text ([ClosedValue]).
+ */
 @ExperimentalCoSecApi
 class ConflictKind private constructor(text: String, isUnknown: Boolean) : ClosedValue(text, isUnknown) {
     @ExperimentalCoSecApi
     companion object {
+        /** The document's head is not the change's base: read the head again, and propose again or rebase. */
         val BASE_MOVED: ConflictKind = ConflictKind("BASE_MOVED", false)
+
+        /** Another change holds the document's staging slot, [ControlRefusedException.heldBy]: wait for it, or abandon it. */
         val SLOT_HELD: ConflictKind = ConflictKind("SLOT_HELD", false)
+
+        /** The change's state does not admit the step: read the change again; the step is not for it now. */
         val STATE: ConflictKind = ConflictKind("STATE", false)
+
+        /** The candidate named is not the change's: read the change again, and act on the candidate it has. */
         val CANDIDATE_MOVED: ConflictKind = ConflictKind("CANDIDATE_MOVED", false)
+
+        /** The change's shadow window is still open: wait for it to close. */
         val WINDOW_OPEN: ConflictKind = ConflictKind("WINDOW_OPEN", false)
+
+        /** The change's shadow window closed blocked: it never publishes; abandon it. */
         val WINDOW_BLOCKED: ConflictKind = ConflictKind("WINDOW_BLOCKED", false)
+
+        /** Concurrent writes kept changing the record: the same call, made again, may succeed. */
         val CONTENDED: ConflictKind = ConflictKind("CONTENDED", false)
+
+        /**
+         * Something of that id already stands where the step needs something else: a change of that id, a binding that
+         * break-glass would create, or a binding a break-glass revoke names that break-glass did not write. Stop: the id
+         * names something else; choose another id, or act on what stands there through its own route.
+         */
         val EXISTS: ConflictKind = ConflictKind("EXISTS", false)
 
         private val SET = ClosedSet(

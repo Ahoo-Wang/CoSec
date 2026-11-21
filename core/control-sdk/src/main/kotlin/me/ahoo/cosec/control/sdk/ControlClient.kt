@@ -88,9 +88,14 @@ class ControlClient(private val service: ControlService) {
      *
      * A head that moves before the change publishes (`409` [ConflictKind.BASE_MOVED]) is read again and the change
      * proposed again on it; a slot another change holds ([ConflictKind.SLOT_HELD], [ConflictKind.CONTENDED]) is waited
-     * out; both within [patience]. Answers the published change; or a change that waits for a person (what it grants
-     * escalated, `AWAITING_APPROVAL`: it keeps the document's slot until it is approved, rejected or abandoned); or
-     * the abandoned change, when its check found what stops it (its findings say what).
+     * out; both within [patience]. A slot held by a change of the same author that was left before it published
+     * (`CHECKED`, `SHADOWING` or `READY`: a writer that stopped halfway, [ControlRefusedException.heldBy]) is abandoned and
+     * taken: two writers acting as one principal on one document take its slot from each other, and the one whose
+     * change was abandoned gets the refusal.
+     *
+     * Answers the published change; or a change that waits for a person (what it grants escalated, `AWAITING_APPROVAL`:
+     * it keeps the document's slot until it is approved, rejected or abandoned); or the abandoned change, when its check
+     * found what stops it (its findings say what).
      *
      * When it gives up (patience spent, or a refusal it does not retry) it throws that refusal, having abandoned the
      * change it proposed, if any: what it leaves behind is an abandoned change in the log, never a staged one, and

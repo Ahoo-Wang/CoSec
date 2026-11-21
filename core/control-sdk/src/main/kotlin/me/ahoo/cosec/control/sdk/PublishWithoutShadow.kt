@@ -56,10 +56,31 @@ internal class PublishWithoutShadow(
             try {
                 return client.skipShadow(caller, proposed.id, skipReason)
             } catch (e: ControlRefusedException) {
-                if (e.conflict in WAITED && patience.next()) continue
+                if (e.conflict in WAITED && (released(proposed, e.heldBy) || patience.next())) continue
                 givenUp(proposed, e)
                 return null
             }
+        }
+    }
+
+    /**
+     * Whether the slot was held by a change this one may abandon, and now is not: one of the same author, left before
+     * it published (`CHECKED`, `SHADOWING`, `READY`), as a writer that stopped halfway leaves it. Anything else (another
+     * author's change, one waiting for a person, one this caller may not read) is waited for.
+     */
+    private suspend fun released(proposed: Change, heldBy: String?): Boolean {
+        if (heldBy == null || heldBy == proposed.id) return false
+        val holder = try {
+            client.change(caller, heldBy)
+        } catch (_: ControlRefusedException) {
+            return false
+        }
+        if (holder.author != proposed.author || holder.state !in LEFT_HALFWAY) return false
+        return try {
+            client.abandon(caller, holder.id)
+            true
+        } catch (_: ControlRefusedException) {
+            false
         }
     }
 
@@ -88,6 +109,7 @@ internal class PublishWithoutShadow(
 
     private companion object {
         val WAITED = setOf(ConflictKind.SLOT_HELD, ConflictKind.CONTENDED)
+        val LEFT_HALFWAY = setOf(ChangeState.CHECKED, ChangeState.SHADOWING, ChangeState.READY)
         const val NOT_FOUND = 404
     }
 }
