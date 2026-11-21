@@ -1,0 +1,17 @@
+# Rule: CTL-70
+# Mutant: a record is removed as an orphan after a minute, though a reclaim pass is an hour: a write in flight could be removed
+# Tests: :control:test --tests me.ahoo.cosec.control.lifecycle.ControlDerivedTest
+
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ControlDerived.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ControlDerived.kt
+index ef879e0..9ac2478 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ControlDerived.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ControlDerived.kt
+@@ -37,7 +37,7 @@ object ControlDerived {
+      * pass is the only thing that looks. It must not be shorter than [RECLAIM_INTERVAL]: a pass would then remove a record
+      * whose first write is still in flight.
+      */
+-    val ORPHAN_AGE: Duration = RECLAIM_INTERVAL
++    val ORPHAN_AGE: Duration = Duration.ofMinutes(1)
+ 
+     /** The shadow pass looks at the open windows this many times within the least a window lives. */
+     const val SHADOW_CHECKS_PER_MIN_DURATION: Int = 15
