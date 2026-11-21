@@ -110,6 +110,19 @@
         "micrometer:ShadowStagedAgeMetricTest#the age is NaN before a read, zero after one, and rises while the list cannot be read",
         "spring-boot:SnapshotMetricsWiringTest#with CoSec's candidate source the staged list's age is metered"
       ]
+    },
+    {
+      "id": "OBS-9",
+      "source": "Coordinator's brief, 2026-11-21 (one table for a cause's wire name, after #1792's control vocabulary)",
+      "statement": "A decision's cause is named on the wire by one exhaustive table in cosec-runtime (`CauseName`), never by its class: the audit record's reason (`INDETERMINATE: <name>`), the shadow report's sample and the control API's `cause` write the same name for each kind of cause, a new kind does not compile until it is named, and the names stay the spellings 8.0's previews wrote.",
+      "level": "build",
+      "pending": null,
+      "guards": [
+        "runtime:CauseNameTest#the table names every kind of cause, each by its pinned name",
+        "runtime:CauseNameTest#the audit record names each cause by its pinned name",
+        "runtime:CauseNameTest#the shadow sample names each cause by its pinned name",
+        "runtime:CauseNameTest#the audit record and the shadow sample never name a cause by its class"
+      ]
     }
   ]
 }

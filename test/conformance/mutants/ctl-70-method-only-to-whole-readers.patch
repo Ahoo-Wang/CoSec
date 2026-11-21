@@ -1,0 +1,17 @@
+# Rule: CTL-70
+# Mutant: a reader not given the whole origin is not told the credential's method either
+# Tests: :control:test --tests me.ahoo.cosec.control.api.ChangeOriginAnswerTest
+
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/api/ChangeAnswer.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/api/ChangeAnswer.kt
+index 6fe61425e..fbb3f5830 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/api/ChangeAnswer.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/api/ChangeAnswer.kt
+@@ -117,7 +117,7 @@ object ChangeAnswer {
+     private fun origin(root: ObjectNode, change: ChangeRequest, wholeOrigin: Boolean) {
+         val origin = change.origin ?: return
+         val node = root.putObject("origin").put("asserted", origin.asserted)
+-        origin.via?.let { via ->
++        origin.via?.takeIf { wholeOrigin }?.let { via ->
+             val out = node.putObject("via").put("method", via.method)
+             if (wholeOrigin) {
+                 via.credentialId?.let { out.put("credential", it) }

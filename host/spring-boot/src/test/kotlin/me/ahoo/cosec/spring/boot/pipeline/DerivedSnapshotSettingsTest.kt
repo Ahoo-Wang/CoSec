@@ -22,7 +22,7 @@ import org.springframework.mock.env.MockEnvironment
 import java.time.Duration
 
 /**
- * `SNP-23`, `CTL-70`: what the data plane computes where it used to be told, and the one startup line that says what
+ * `SNP-23`, `CTL-71`: what the data plane computes where it used to be told, and the one startup line that says what
  * it came to and from what.
  */
 class DerivedSnapshotSettingsTest {

@@ -301,6 +301,19 @@ a publisher acknowledges, `startedAt`, and once closed `closed`) and `confirmati
 own work is in no answer: the heads the candidate was checked with, the instances that reported on its window, and
 what an approver held (`CTL-61`).
 
+A change a request made also answers `origin`, how its author was identified (`CTL-70`):
+- **Every reader of the change** gets `asserted`, true when the host believed an identity the caller stated (the
+  `CoSec-Identity` header) instead of verifying a credential itself, and `via.method`, the kind of credential (`jwt`,
+  `api-key`, `in-process` for a call through the control plane's facade).
+- **A reader who holds `cosec:approve` on the change's document, or `cosec:read` on the platform's**, is also given
+  `via.credential` (the credential's id, never its value), `via.request` (the request's id) and `peer` (the address of
+  the connection the request arrived on). These say which key or token wrote the change, and from where: what someone
+  who answers for the change weighs it by.
+- **Anyone else**, the author included, is not given those members at all, not even empty. Neither is anyone the
+  decision cannot be made for: only a permit counts.
+
+`GET /changes` lists no origin.
+
 The members, their types and which are always there are in
 [`contract/control/`](https://github.com/Ahoo-Wang/CoSec/tree/main/contract/control), with the closed sets an answer
 writes: `state`, `kind`, `severity`, an escalation's `reason`, the outcomes a window counts, and a decision's

@@ -72,7 +72,7 @@ class UnknownPropertiesTest {
         }
     }
 
-    /** `SNP-23`, `CTL-70`: a key a preview had and a later one computes says so, instead of only "unknown". */
+    /** `SNP-23`, `CTL-71`: a key a preview had and a later one computes says so, instead of only "unknown". */
     @Test
     fun `a removed key is said to be no longer a property, with what replaced it`() {
         for (key in RemovedProperties.keys) {

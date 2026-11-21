@@ -665,9 +665,10 @@ your own deployment.
 [`system-test.yml`](https://github.com/Ahoo-Wang/CoSec/blob/main/.github/workflows/system-test.yml) runs CoSec as a
 deployment, which no unit, slice or embedded-server test does: the gateway image built from the commit (its own
 Dockerfile, the AOT cache trained), two replicas of it and a third that refuses a token while revocations cannot be read,
-a service behind them in `cosec.pipeline.mode=gateway`, two replicas of the control-plane host image (also built from the
-commit, behind the gateway's `/cosec/control` route), the IAM that issues the tokens and calls the host's service port, a
-Spring MVC service that enforces on its own, and a Redis with `maxmemory-policy noeviction`, started with Docker Compose on a GitHub-hosted runner.
+a service behind them in `cosec.pipeline.mode=gateway`, the IAM that issues the tokens, a Spring MVC service that enforces on
+its own, and the control plane in each of the two ways it is deployed, on a stack of its own: two replicas of the
+control-plane host image (also built from the commit, behind the gateway's `/cosec/control` route) with an IAM that calls
+the host's service port, and an IAM that embeds the control plane (the workflow runs the suite once for each), and a Redis with `maxmemory-policy noeviction`, started with Docker Compose on a GitHub-hosted runner.
 The scenarios drive it over the network only, with `cosec-migrate` and `docker compose stop`, `start` and `restart` as the
 operator would. It is not part of `check`; it runs nightly on `main`, on the pull requests that change it, and on demand.
 
@@ -697,6 +698,15 @@ What it covers, each as an observable over the network:
   stack does not exercise (it has no provider);
 - a **policy change** through the control plane, from its refusals and its shadow window on live traffic to approval, publish
   and rollback, taking effect at every process without a restart, through the gateway to the control-plane host;
+- **onboarding a tenant with nobody to approve it** (both deployments): a role defined once in the control app's document,
+  whose permission names the member's own tenant, and held by membership and not by a binding in any tenant's document
+  (`wiki/examples/control-tenant-admin/`); the IAM creates the tenant's document, which grants no one anything, and publishes
+  it as its own principal; the tenant's administrator, signed in through the gateway, publishes a change to its own document
+  and is refused another tenant's, by its key and in the listing; a binding written per tenant by a principal of the platform
+  tenant still waits for a person;
+- the **embedded control plane** (its own stack): the IAM's own calls are the SDK's and the record says `in-process`; with
+  its control routes off (`cosec.control.http.enabled=false`) it serves none, still calls the SDK, and is a second instance over the same store, whose
+  publishes the first reads;
 - the **service path** of the control-plane host: a service principal bound to a read-only policy reads and is refused a
   write by the action; the service port serves no platform document and no change of one, by its document or by its id;
   a stated principal proposes a tenant change, skips or runs its window and publishes, and the change event in Kafka says

@@ -70,6 +70,11 @@ object GuardAllowlist {
             "runtime:AuditVocabularyTest#every reason has the audit decision of its own name",
             "micrometer:ResultVocabularyTest#every reason has the result of its own name",
             "runtime:SubjectMethodTest#the event names the credential as the identity header does",
+            // OBS-9: one table names a cause on the wire.
+            "runtime:CauseNameTest#the table names every kind of cause, each by its pinned name",
+            "runtime:CauseNameTest#the audit record names each cause by its pinned name",
+            "runtime:CauseNameTest#the shadow sample names each cause by its pinned name",
+            "runtime:CauseNameTest#the audit record and the shadow sample never name a cause by its class",
             // PIP-28: no request Principal for an anonymous request.
             "webflux:PipelineWebFilterTest#anAnonymousPermitHasNoRequestPrincipal",
             "webflux:PipelineWebFilterTest#anotherLayersPrincipalIsReplacedOnlyWhenCoSecAuthenticated",
@@ -295,7 +300,7 @@ object GuardAllowlist {
             "runtime:SnapshotOptionsDeriveTest#the compile threads follow the cores, between one and four",
             "spring-boot:UnknownPropertiesTest#a removed key is said to be no longer a property, with what replaced it",
             "spring-boot:DerivedSnapshotSettingsTest#the line says what was derived, from the interval, the deadline and the cores",
-            // CTL-70: the control plane's cadences and limits are constants or computed.
+            // CTL-71: the control plane's cadences and limits are constants or computed.
             "control:ControlDerivedTest#an orphan is removed only once it has outlived a whole reclaim pass",
             "control:ControlDerivedTest#the shadow pass is a fifteenth of the least a window lives, within a quarter second and a minute",
             "control:ControlDerivedTest#a window never closes later than one pass after it could",

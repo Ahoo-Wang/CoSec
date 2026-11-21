@@ -103,7 +103,7 @@ and implicit denies apart, why a credential was rejected, and why a request was 
 | `principal` | `id`, `authenticated`, `roles` (the roles of the resolved scope) |
 | `request` | `id` (the `CoSec-Request-Id`), `appId`, `spaceId`, `remoteIp`, `method`, `path` (normalized), `routeId` (the gateway route the request came through; null on other adapters), `device.id` |
 | `authorization.decision`, `authorization.reasonCode` | see the table below |
-| `authorization.reason` | the outcome, and for a `503` its cause, such as `INDETERMINATE: SourceUnavailable` |
+| `authorization.reason` | the outcome, and for a `503` its cause, such as `INDETERMINATE: SourceUnavailable`. A cause has one name wherever CoSec writes it, here, in a shadow report's samples and in the control API's `cause`, taken from one table, so renaming a class in CoSec does not change it (`OBS-9`) |
 | `authorization.elapsedNanos` | the whole pipeline, from the start of the request to its outcome |
 | `authorization.source` | what decided: `via`, `document`, `policy` (its id) and `statement` (`index`, `name`); see the second table below |
 | `binding` | a label for people, and not to be parsed: how the deciding statement applied, as a binding id (a role's derived binding is `role:<roleId>@<app>:<permission>`), `attached:<policyId>`, `builtin` (the blacklist) or `boundary:<tenantId>` |

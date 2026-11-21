@@ -255,7 +255,7 @@ class ControlServicePortTest {
         }
     }
 
-    /** `CTL-70`: one startup line says what the control plane computed and from what. */
+    /** `CTL-71`: one startup line says what the control plane computed and from what. */
     @Test
     fun `a host that runs the control plane says once what it derived`() {
         runner.withConfiguration(

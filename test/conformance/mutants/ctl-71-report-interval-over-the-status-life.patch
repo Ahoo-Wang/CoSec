@@ -1,4 +1,4 @@
-# Rule: CTL-70
+# Rule: CTL-71
 # Mutant: an instance reports as seldom as its status lives, so it is uncounted between two reports
 # Tests: :runtime:test --tests me.ahoo.cosec.runtime.shadow.ShadowReporterDerivedIntervalTest
 

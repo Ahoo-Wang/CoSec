@@ -935,6 +935,19 @@
     },
     {
       "id": "CTL-70",
+      "source": "CTL-57 follow-up: the change answer carries its author's origin; visibility decided 2026-11-21",
+      "statement": "A change's answer carries how its author was identified, when a request made the change. Every reader of the change is told whether the identity was only stated (asserted) and by which kind of credential (via.method). The credential's id, the request's id and the address of the connection (peer) are given only to a reader who holds cosec:approve on the change's document or cosec:read on the platform's, on a permit: a deny or an indeterminate decision gives the short origin, and the short origin holds no member for what it leaves out.",
+      "level": "control",
+      "guards": [
+        "control:ChangeOriginAnswerTest#a reader of the platform's document is given the author's whole origin - CTL-70",
+        "control:ChangeOriginAnswerTest#a reader who neither approves nor reads the platform is told only asserted and the method - CTL-70",
+        "control:ChangeOriginAnswerTest#an approver of the document is given the whole origin, and only a permit counts - CTL-70",
+        "control:ChangeOriginAnswerTest#the origin is written member by member, whole or short, and absent for a change no request made - CTL-70"
+      ],
+      "pending": null
+    },
+    {
+      "id": "CTL-71",
       "source": "maintainer decision 2026-11-22 (what can be computed is not configured); the properties review, items 8-12",
       "statement": "The control plane's cadences and limits are constants or computed, and no property sets them: every instance reclaims revisions every hour; a record not on a revision chain, or a change listed but never written, is removed once it is one reclaim pass old, never younger, since a record whose first write is in flight is not an orphan; the open shadow windows are looked at every fifteenth of `cosec.control.shadow.min-duration`, between a quarter of a second and a minute, so a window closes at most one pass after it could; an instance writes its shadow reports and status every sixth of the status's life (10 s), and no oftener than a fifth of the shortest life of a window nor than a second, so it is never older than the status that makes it counted; the control routes read a body of at most the document cap and 2 MB (10 MB), so raising the cap raises the limit. The starter says once at startup what it derived and from what.",
       "level": "startup",

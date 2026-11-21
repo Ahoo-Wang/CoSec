@@ -27,7 +27,7 @@ Which preview of the library may run behind which preview of the gateway image: 
 
 ## From 8.0.0-beta.4 {#from-8-0-0-beta-4}
 
-- **Twelve properties are computed and have no key** (`SNP-23`, `CTL-70`; the rule is that what can be computed is not
+- **Twelve properties are computed and have no key** (`SNP-23`, `CTL-71`; the rule is that what can be computed is not
   configured). Affected: a configuration that sets one. Startup fails with the keys CoSec does not read, and says of each
   that it is no longer a property and what replaced it. Remove the key; where you had moved the value, move what it
   follows ([Computed, not configured](./configuration.md#computed-not-configured)). `snapshot.reload-concurrency` is the one

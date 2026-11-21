@@ -22,7 +22,7 @@ import org.junit.jupiter.api.Test
 import java.time.Duration
 
 /**
- * `CTL-70`: an instance reports a sixth of its status's life apart, and no oftener than a fifth of the shortest life of a
+ * `CTL-71`: an instance reports a sixth of its status's life apart, and no oftener than a fifth of the shortest life of a
  * window nor than a second; so it is never older than the status that makes it counted, and a window sees fresh evidence.
  */
 class ShadowReporterDerivedIntervalTest {

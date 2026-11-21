@@ -1,4 +1,4 @@
-# Rule: CTL-70
+# Rule: CTL-71
 # Mutant: a record is removed as an orphan after a minute, though a reclaim pass is an hour: a write in flight could be removed
 # Tests: :control:test --tests me.ahoo.cosec.control.lifecycle.ControlDerivedTest
 

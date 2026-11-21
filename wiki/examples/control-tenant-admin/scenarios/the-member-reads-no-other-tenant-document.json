@@ -1,0 +1,22 @@
+{
+  "description": "The policy names the caller's own tenant, so the role says what it means: no other tenant's document is granted.",
+  "credential": {
+    "tenant": "acme",
+    "id": "bob",
+    "app": "cosec-control",
+    "roles": [
+      "tenant-admin"
+    ]
+  },
+  "request": {
+    "hostApp": "cosec-control",
+    "action": "cosec:read",
+    "resource": {
+      "type": "doc",
+      "id": "tenant/globex"
+    }
+  },
+  "expect": {
+    "decision": "Deny"
+  }
+}
