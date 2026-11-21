@@ -17,7 +17,7 @@ package me.ahoo.cosec.spring.boot.control
 
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
-import me.ahoo.cosec.control.api.ControlHttp
+import me.ahoo.cosec.control.api.ControlPlane
 import me.ahoo.cosec.control.sdk.ControlService
 import me.ahoo.cosec.control.sdk.LocalControlService
 import me.ahoo.cosec.model.AppId
@@ -45,7 +45,7 @@ internal class ControlServiceConfiguration {
     @Bean
     @ConditionalOnMissingBean
     fun cosecControlService(
-        http: ControlHttp,
+        plane: ControlPlane,
         properties: ControlProperties,
         pipeline: PipelineProperties,
         revocation: RevocationProperties,
@@ -58,6 +58,6 @@ internal class ControlServiceConfiguration {
             skew = revocation.skew,
             idGenerator = ids,
         )
-        return LocalControlService(http, gate, AppId(properties.appId), ids = ids)
+        return LocalControlService(plane, gate, AppId(properties.appId), ids = ids)
     }
 }

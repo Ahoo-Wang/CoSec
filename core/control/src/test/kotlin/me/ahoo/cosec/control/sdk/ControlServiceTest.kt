@@ -24,6 +24,8 @@ import me.ahoo.cosec.api.principal.CoSecPrincipal
 import me.ahoo.cosec.control.api.ControlHttp
 import me.ahoo.cosec.control.api.ControlHttpRequest
 import me.ahoo.cosec.control.api.ControlPlaneTest
+import me.ahoo.cosec.control.api.ControlProfile
+import me.ahoo.cosec.control.change.ChangeOrigin
 import me.ahoo.cosec.control.change.ChangeState
 import me.ahoo.cosec.document.json.CoSecJson
 import me.ahoo.cosec.model.TenantId
@@ -47,8 +49,11 @@ class ControlServiceTest {
 
     private class Side {
         val fixture = ControlPlaneTest()
-        val http = ControlHttp(fixture.plane)
-        val service = LocalControlService(http, IdentityGate())
+        val operators = ControlHttp(fixture.plane)
+
+        /** The service port: the routes of the service profile, the one definition of what a service reaches. */
+        val port = ControlHttp(fixture.plane, ControlProfile.SERVICE)
+        val service = LocalControlService(fixture.plane, IdentityGate())
         val alice = fixture.engine.security(ControlPlaneTest.ACME, "alice", roles = listOf("admin", "ops@team-a"))
 
         init {
@@ -63,6 +68,7 @@ class ControlServiceTest {
             query: Map<String, String> = emptyMap(),
             body: String? = null,
             security: RequestSecurity = alice,
+            http: ControlHttp = port,
         ): String =
             runBlocking {
                 val response = http.handle(ControlHttpRequest(method, path, query, body?.encodeToByteArray()), security)
@@ -144,7 +150,7 @@ class ControlServiceTest {
         val vera = viaFacade.fixture.engine.security(ControlPlaneTest.ACME, "vera", roles = listOf("viewer"))
         val routeVera = viaRoute.fixture.engine.security(ControlPlaneTest.ACME, "vera", roles = listOf("viewer"))
         val refused = runBlocking {
-            viaRoute.http.handle(
+            viaRoute.port.handle(
                 ControlHttpRequest("POST", "/changes", emptyMap(), proposal("x", 1).encodeToByteArray()),
                 routeVera
             )
@@ -179,7 +185,8 @@ class ControlServiceTest {
         val plato = side.fixture.engine.security(TenantId.PLATFORM, "plato")
         val caller = ControlCaller.of(plato.securityContext)
         // A platform administrator, who may read and change the platform document on the operators' routes.
-        side.route("GET", "/documents/platform", security = plato).assert().startsWith("200")
+        side.route("GET", "/documents/platform", security = plato, http = side.operators).assert().startsWith("200")
+        side.route("GET", "/documents/platform", security = plato).assert().startsWith("404")
         val refused = runBlocking {
             runCatching { side.service.document(caller, SnapshotKey.Platform) }.exceptionOrNull()
         } as ControlRefusedException
@@ -198,8 +205,48 @@ class ControlServiceTest {
             } as ControlRefusedException
             )
             .status.assert().isEqualTo(404)
-        for (call in OUTSIDE) ServiceRoutes.allows(call.request()).assert().describedAs("$call").isFalse()
-        for (call in INSIDE) ServiceRoutes.allows(call.request()).assert().describedAs("$call").isTrue()
+        // Neither by the service port: a change of the platform document is not reachable by its id (CTL-58).
+        side.route("GET", "/changes/$platformChange", security = plato).assert().startsWith("404")
+        side.route("POST", "/changes/$platformChange:publish", body = "{}", security = plato).assert().startsWith("404")
+        side.route("GET", "/changes", mapOf("document" to "platform"), security = plato).assert().startsWith("404")
+        side.route("GET", "/changes/$platformChange", security = plato, http = side.operators).assert().startsWith("200")
+    }
+
+    @Test
+    fun `the facade reaches exactly the routes the service port serves, route by route - CTL-65`() {
+        val profile = ControlProfile.SERVICE
+        for ((method, path) in ROUTES) {
+            val served = profile.admits(method, path.trim('/').split('/'))
+            served.assert().describedAs("$method $path").isEqualTo(FACADE_ROUTES.values.any { method to path in it })
+        }
+        // Each call of the facade is one of these routes: a call added to it is added here, or this fails.
+        ControlService::class.java.declaredMethods.filter { !it.isSynthetic && !it.name.endsWith("\$default") }
+            .map { it.name }.toSet().assert().isEqualTo(FACADE_ROUTES.keys)
+    }
+
+    @Test
+    fun `a call through the facade is recorded as made in process - CTL-57, CTL-65`() = runBlocking<Unit> {
+        val side = Side()
+        val proposed = side.service.propose(ControlCaller.of(side.alice.securityContext), proposal("inside", 1))
+        val id = CoSecJson.mapper.readTree(proposed).get("id").asString()
+        val origin = side.fixture.changes.get(me.ahoo.cosec.control.change.ChangeId(id)).origin!!
+        origin.via!!.method.assert().isEqualTo(ChangeOrigin.IN_PROCESS)
+        origin.peer.assert().isNull()
+        origin.asserted.assert().isFalse()
+        side.fixture.listeners.awaitDelivered()
+        side.fixture.events.single { it.change.value == id }.origin!!.via!!.method.assert()
+            .isEqualTo(ChangeOrigin.IN_PROCESS)
+        // A service caller's identity was stated, and believed: asserted, and in process.
+        val service = side.service.propose(ControlCaller.service("plato"), proposal("by-service", 1))
+        val byService = CoSecJson.mapper.readTree(service).get("id").asString()
+        side.fixture.changes.get(me.ahoo.cosec.control.change.ChangeId(byService)).origin!!.also {
+            it.asserted.assert().isTrue()
+            it.via!!.method.assert().isEqualTo(ChangeOrigin.IN_PROCESS)
+        }
+        // The same proposal over the service port is recorded with the request's credential.
+        side.route("POST", "/changes", body = proposal("outside", 1)).assert().startsWith("201")
+        side.fixture.changes.get(me.ahoo.cosec.control.change.ChangeId("c3")).origin!!.via!!.method.assert()
+            .isNotEqualTo(ChangeOrigin.IN_PROCESS)
     }
 
     @Test
@@ -233,68 +280,59 @@ class ControlServiceTest {
             ).status.assert().isEqualTo(403)
         // A gate whose clock is two minutes ahead reads the service identity as older than its maximum age.
         val ahead = Clock.offset(Clock.systemUTC(), Duration.ofMinutes(2))
-        val late = LocalControlService(side.http, IdentityGate(clock = ahead))
+        val late = LocalControlService(side.fixture.plane, IdentityGate(clock = ahead))
         (
             runBlocking { runCatching { late.document(ControlCaller.service("plato"), acme) }.exceptionOrNull() }
                 as ControlRefusedException
             ).status.assert().isEqualTo(401)
     }
 
-    private data class Call(val method: String, val path: String, val query: Map<String, String> = emptyMap(), val body: String? = null) {
-        fun request() = ControlHttpRequest(method, path, query, body?.encodeToByteArray())
-    }
-
     private companion object {
-        val OUTSIDE = listOf(
-            Call("GET", "/documents/platform"),
-            Call("GET", "/documents/platform/revisions"),
-            Call("GET", "/documents/tenant:acme/revisions/1/propagation"),
-            Call("POST", "/documents/tenant:acme:rollback", body = "{}"),
-            Call("POST", "/documents/platform:apply", body = "{}"),
-            Call("POST", "/documents/app:order:apply", body = "{}"),
-            Call("POST", "/changes", body = """{"document":"platform"}"""),
-            Call("POST", "/changes", body = """{"document":"app:order"}"""),
-            Call("GET", "/changes", mapOf("state" to "CHECKED")),
-            Call("GET", "/changes", mapOf("document" to "platform")),
-            Call("PUT", "/documents/tenant:acme"),
-            Call("DELETE", "/changes/c1"),
-            Call("GET", "/documents/tenant:acme/other"),
-            Call("GET", "/documents/tenant:acme/revisions/1/extra"),
-            Call("GET", "/documents/bogus:acme"),
-            Call("GET", "/documents/tenant%zz"),
-            Call("GET", "/changes/c1:abandon"),
-            Call("GET", "/changes/c1/events"),
-            Call("GET", "/changes", mapOf("document" to "nonsense")),
-            Call("GET", "/elsewhere"),
-            Call("POST", "/documents/tenant:acme/x"),
-            Call("POST", "/changes/c1/x", body = "{}"),
-            Call("POST", "/changes", body = "{not json"),
-            Call("POST", "/changes", body = """{"document":1}"""),
-            Call("POST", "/changes"),
-            Call("POST", "/elsewhere", body = "{}"),
-            Call("POST", "/changes/c1:approve", body = "{}"),
-            Call("POST", "/changes/c1:reject", body = "{}"),
-            Call("POST", "/break-glass", body = "{}"),
-            Call("POST", "/break-glass/c1:approve", body = "{}"),
-            Call("DELETE", "/break-glass/glass"),
-            Call("POST", "/simulate", body = "{}"),
-            Call("POST", "/explain", body = "{}"),
-            Call("POST", "/analyze", body = "{}"),
+        /** Every route of the control API, by method and path shape (`ControlHttp`). */
+        val ROUTES = listOf(
+            "GET" to "/documents/tenant:a",
+            "GET" to "/documents/app:a",
+            "GET" to "/documents/platform",
+            "GET" to "/documents/tenant:a/revisions",
+            "GET" to "/documents/tenant:a/revisions/1",
+            "GET" to "/documents/tenant:a/diff",
+            "GET" to "/documents/tenant:a/revisions/1/propagation",
+            "POST" to "/documents/tenant:a:apply",
+            "POST" to "/documents/app:a:apply",
+            "POST" to "/documents/tenant:a:rollback",
+            "POST" to "/changes",
+            "GET" to "/changes",
+            "GET" to "/changes/c1",
+            "POST" to "/changes/c1:rebase",
+            "POST" to "/changes/c1:shadow",
+            "POST" to "/changes/c1:skip-shadow",
+            "POST" to "/changes/c1:approve",
+            "POST" to "/changes/c1:reject",
+            "POST" to "/changes/c1:abandon",
+            "POST" to "/changes/c1:publish",
+            "POST" to "/break-glass",
+            "POST" to "/break-glass/c1:approve",
+            "DELETE" to "/break-glass/b1",
+            "POST" to "/simulate",
+            "POST" to "/explain",
+            "POST" to "/analyze",
         )
-        val INSIDE = listOf(
-            Call("GET", "/documents/tenant:acme"),
-            Call("GET", "/documents/app:order/revisions"),
-            Call("GET", "/documents/tenant:acme/revisions/3"),
-            Call("GET", "/documents/tenant:acme/diff", mapOf("from" to "1", "to" to "2")),
-            Call("POST", "/documents/tenant:acme:apply", body = "{}"),
-            Call("POST", "/changes", body = """{"document":"tenant:acme"}"""),
-            Call("GET", "/changes/c1"),
-            Call("GET", "/changes", mapOf("document" to "tenant:acme")),
-            Call("POST", "/changes/c1:rebase", body = "{}"),
-            Call("POST", "/changes/c1:shadow", body = "{}"),
-            Call("POST", "/changes/c1:skip-shadow", body = "{}"),
-            Call("POST", "/changes/c1:abandon", body = "{}"),
-            Call("POST", "/changes/c1:publish", body = "{}"),
+
+        /** Each call of the facade, and the routes it is (a read takes a tenant's or an app's document). */
+        val FACADE_ROUTES: Map<String, List<Pair<String, String>>> = mapOf(
+            "document" to listOf("GET" to "/documents/tenant:a", "GET" to "/documents/app:a"),
+            "revisions" to listOf("GET" to "/documents/tenant:a/revisions"),
+            "revision" to listOf("GET" to "/documents/tenant:a/revisions/1"),
+            "diff" to listOf("GET" to "/documents/tenant:a/diff"),
+            "apply" to listOf("POST" to "/documents/tenant:a:apply"),
+            "propose" to listOf("POST" to "/changes"),
+            "changes" to listOf("GET" to "/changes"),
+            "change" to listOf("GET" to "/changes/c1"),
+            "rebase" to listOf("POST" to "/changes/c1:rebase"),
+            "startShadow" to listOf("POST" to "/changes/c1:shadow"),
+            "skipShadow" to listOf("POST" to "/changes/c1:skip-shadow"),
+            "abandon" to listOf("POST" to "/changes/c1:abandon"),
+            "publish" to listOf("POST" to "/changes/c1:publish"),
         )
     }
 }

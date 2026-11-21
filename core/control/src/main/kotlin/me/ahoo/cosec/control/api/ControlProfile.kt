@@ -53,6 +53,16 @@ enum class ControlProfile {
     /** Whether this profile serves a write to [key]: a service writes a tenant's document, never the platform's or an app's. */
     internal fun admitsWrite(key: SnapshotKey): Boolean = this == OPERATORS || key is SnapshotKey.Tenant
 
+    /**
+     * Whether this profile serves a route of a change of [key], read or step (`CTL-58`, `CTL-65`): on the service
+     * profile, only a tenant document's change. A change named by its id is checked here, once its record is read, so a
+     * change of the platform document is no more reachable by its id than by its document.
+     */
+    internal fun admitsChange(key: SnapshotKey): Boolean = this == OPERATORS || key is SnapshotKey.Tenant
+
+    /** Whether this profile serves a listing of the open changes of [document] (all documents when null). */
+    internal fun admitsListing(document: SnapshotKey?): Boolean = this == OPERATORS || document != SnapshotKey.Platform
+
     private fun documents(method: String, rest: List<String>): Boolean {
         val first = rest.firstOrNull() ?: return false
         val (keyText, verb) = verbOf(first)

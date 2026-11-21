@@ -52,10 +52,20 @@ class ChangeOrigin(
 
     @InternalCoSecApi
     companion object {
-        /** The origin of a permitted request: asserted when the host's gate believed the identity it states. */
-        fun of(security: RequestSecurity, peer: String? = null): ChangeOrigin {
+        /** `via.method` of a step made through the control plane's facade, in the host's own process (`CTL-65`). */
+        const val IN_PROCESS: String = "in-process"
+
+        /**
+         * The origin of a permitted request: asserted when the host's gate believed the identity it states. A request
+         * made [inProcess], through the control plane's facade, is `via.method: in-process`, with the credential's id
+         * when it has one and no peer: no connection carried it.
+         */
+        fun of(security: RequestSecurity, peer: String? = null, inProcess: Boolean = false): ChangeOrigin {
             val identity = security.identity
             val credential = identity?.credential ?: security.principal?.credential
+            if (inProcess) {
+                return ChangeOrigin(identity != null, Via(IN_PROCESS, credential?.id, security.requestId), null)
+            }
             return ChangeOrigin(
                 asserted = identity != null,
                 via = credential?.let { Via(it.method.value, it.id, security.requestId) },

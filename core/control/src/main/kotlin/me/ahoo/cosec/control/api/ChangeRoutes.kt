@@ -60,8 +60,12 @@ internal class ChangeRoutes(
         if (verb == null) {
             return get(request) {
                 val change = plane.get(operator, id)
+                if (!profile.admitsChange(change.key)) return@get notFound()
                 changeResponse(change, OK, plane.acknowledgements.of(change))
             }
+        }
+        if (profile != ControlProfile.OPERATORS && !profile.admitsChange(plane.get(operator, id).key)) {
+            return notFound()
         }
         return post(request) {
             val change = when (verb) {
@@ -122,6 +126,7 @@ internal class ChangeRoutes(
                 ?: throw InvalidControlRequestException("state names no state of an open change: $text")
         }
         requireRequest(document != null || state != null) { "a listing names a document or a state" }
+        if (!profile.admitsListing(document)) return notFound()
         val limit = query["limit"]?.let { text ->
             text.toIntOrNull()?.takeIf { it in 1..MAX_LIMIT }
                 ?: throw InvalidControlRequestException("limit is a number from 1 to $MAX_LIMIT")

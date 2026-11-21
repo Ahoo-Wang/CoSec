@@ -156,7 +156,7 @@ class DocumentationExamplesTest {
                 revisions,
                 ChangeAuthority(engine.authorizer, revocations = RevocationReader.NONE)
             )
-            val service = LocalControlService(ControlHttp(plane), IdentityGate(clock = clock))
+            val service = LocalControlService(plane, IdentityGate(clock = clock))
             val alice = engine.security(TenantId("acme"), "alice", roles = listOf("admin"))
             val proposed = Onboarding(service).propose(
                 alice.securityContext,

@@ -53,10 +53,13 @@ interface ControlService {
     /** `GET /changes/{id}`. */
     suspend fun change(caller: ControlCaller, id: String): String
 
-    /** `GET /changes?document=&state=&after=&limit=`: the open changes of a tenant's or an app's document. */
+    /**
+     * `GET /changes?document=&state=&after=&limit=`: the open changes of a tenant's or an app's document, of a state, or
+     * both; those the caller may see.
+     */
     suspend fun changes(
         caller: ControlCaller,
-        document: SnapshotKey,
+        document: SnapshotKey? = null,
         state: ChangeState? = null,
         after: String? = null,
         limit: Int? = null,
