@@ -163,16 +163,16 @@ control-plane host.
 | | |
 |---|---|
 | Runs | the gateway as above; one IAM application with `cosec-control` and `cosec-cocache`, in `enforce` with `cosec.pipeline.caller=forwarded-identity`, which calls the control plane from its own code through [`ControlService`](../integration/checks.md#changing-policies-from-your-code) |
-| Sets | `cosec.pipeline.identity.only-gateway-can-reach=true`; the Redis account that writes the documents; for operators, the gateway route `/cosec/control/**` to the IAM service, with `cosec-app-id: cosec-control`; `cosec.control.http.enabled=false` when nobody calls the control API over HTTP and the code reaches it in process only; `cosec.control.maintenance.enabled=false` on an instance beside a host that runs the maintenance passes |
+| Sets | `cosec.pipeline.identity.only-gateway-can-reach=true`; the Redis account that writes the documents; for operators, the gateway route `/cosec/control/**` to the IAM service, with `cosec-app-id: cosec-control`; `cosec.control.http.enabled=false` when nobody calls the control API over HTTP and the code reaches it in process only |
 | Reaches | Redis (writes), and Kafka when the change log goes there |
 | Rests on | **the gateway as the only way in**, the IAM service's own code, and write access to Redis: code in that process holds the store's write account, and what it states as the acting principal is believed |
 | CoSec checks | the statement, and a hidden-method filter; each control action, decided by the policies for the principal the call states, and recorded as that principal's step, with `via.method: in-process` for a call from code |
 | CoSec does not check | that the statement is true; the IAM service's own routes: on a host that takes its caller from the identity the web adapter does not decide a request, so they are authorized at the gateway or not at all |
 
 A change that needs a second person's approval stops at `AWAITING_APPROVAL` whoever proposed it: a person approves it
-on the operators' routes, through the gateway. Leave `cosec.control.maintenance.enabled` at `true` where no control-plane
-host runs the passes: a deployment where none does closes no shadow window, reclaims no revision and reconciles no
-staged list.
+on the operators' routes, through the gateway. Every instance of the IAM service runs the control plane's maintenance
+passes (reclaiming revisions, closing shadow windows, reconciling the app and staged lists), kept apart by their leases as
+a control host's are: any number of instances may, and one does each at a time.
 
 ### What the control plane trusts, and what it does not {#what-the-control-plane-trusts}
 

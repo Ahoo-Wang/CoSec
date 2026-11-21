@@ -1,0 +1,17 @@
+# Rule: OBS-9
+# Mutant: the audit record names a cause by its class again, so renaming a Cause class changes the record's reason with no output test noticing (the names equal the class names today)
+# Tests: :runtime:test --tests me.ahoo.cosec.runtime.event.CauseNameTest
+
+diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/audit/AuditEvents.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/audit/AuditEvents.kt
+index c277891c7..1ca705432 100644
+--- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/audit/AuditEvents.kt
++++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/audit/AuditEvents.kt
+@@ -152,7 +152,7 @@ object AuditEvents {
+         event.subject.refused?.let { return "${event.outcome.reason.name}: ${event.subject.rejected} of $it" }
+         (event.by as? StatementRef.Boundary)?.let { return "${event.outcome.reason.name}: ${it.boundary.value}" }
+         val cause = event.outcome.cause ?: return event.outcome.reason.name
+-        return "${event.outcome.reason.name}: ${CauseName.of(cause).wire}"
++        return "${event.outcome.reason.name}: ${cause::class.simpleName}"
+     }
+ 
+     private fun source(by: StatementRef?): AuditSourceData = when (by) {

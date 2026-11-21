@@ -1,0 +1,22 @@
+{
+  "description": "The member binds in its own tenant.",
+  "credential": {
+    "tenant": "acme",
+    "id": "bob",
+    "app": "cosec-control",
+    "roles": [
+      "tenant-admin"
+    ]
+  },
+  "request": {
+    "hostApp": "cosec-control",
+    "action": "cosec:grant",
+    "resource": {
+      "type": "scope",
+      "id": "acme/orders/(default)"
+    }
+  },
+  "expect": {
+    "decision": "Permit"
+  }
+}

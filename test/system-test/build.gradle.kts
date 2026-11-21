@@ -34,11 +34,19 @@ val testSourceSet = the<SourceSetContainer>()["test"]
 
 tasks.register<Test>("systemTest") {
     group = "verification"
-    description = "Runs the system scenarios against the stack of compose.yaml (see test/system-test/README.md)."
+    description = "Runs the system scenarios against the stack of compose.yaml and the file of the leg (see test/system-test/README.md)."
     testClassesDirs = testSourceSet.output.classesDirs
     classpath = testSourceSet.runtimeClasspath
+    // Leg 1 (-PsystemLeg=control-host, the default) runs every scenario but the embedded-only ones; leg 2 (embedded) the shared
+    // control scenarios, and the ones that only the embedded deployment has (README.md, "Two deployments").
+    val embedded = providers.gradleProperty("systemLeg").orNull == "embedded"
     useJUnitPlatform {
-        includeTags("system")
+        if (embedded) {
+            includeTags("control", "embedded")
+        } else {
+            includeTags("system")
+            excludeTags("embedded")
+        }
     }
     // The cold start runs first, on an empty Redis; every other scenario after it, in any order (each its own tenant).
     systemProperty("junit.jupiter.testclass.order.default", "org.junit.jupiter.api.ClassOrderer\$OrderAnnotation")

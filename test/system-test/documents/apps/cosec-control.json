@@ -1,0 +1,72 @@
+{
+  "schema": 2,
+  "revision": 1,
+  "publishedAt": "2026-11-21T08:00:00Z",
+  "catalog": {
+    "groups": [
+      {
+        "name": "Own tenant's document",
+        "permissions": [
+          {
+            "id": "tenant-document.administer",
+            "name": "Administer the tenant's own document"
+          }
+        ]
+      }
+    ]
+  },
+  "roles": [
+    {
+      "id": "tenant-admin",
+      "name": "Tenant administrator",
+      "description": "Administers the document of the tenant the member belongs to, and no other",
+      "permissions": [
+        "tenant-document.administer"
+      ]
+    }
+  ],
+  "policies": [
+    {
+      "id": "perm:cosec-control/tenant-document.administer",
+      "statements": [
+        {
+          "name": "own-document",
+          "effect": "allow",
+          "action": [
+            "cosec:read",
+            "cosec:write",
+            "cosec:publish",
+            "cosec:skip-shadow"
+          ],
+          "resource": [
+            "doc/tenant/{t}",
+            "doc/tenant/{t}/**"
+          ],
+          "condition": {
+            "eq": [
+              "resource.var.t",
+              {
+                "attr": "subject.tenant"
+              }
+            ]
+          }
+        },
+        {
+          "name": "own-bindings",
+          "effect": "allow",
+          "action": "cosec:grant",
+          "resource": "scope/{t}/**",
+          "condition": {
+            "eq": [
+              "resource.var.t",
+              {
+                "attr": "subject.tenant"
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ],
+  "bindings": []
+}
