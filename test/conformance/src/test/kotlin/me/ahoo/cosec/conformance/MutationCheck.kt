@@ -46,7 +46,38 @@ class Mutant(
         it.endsWith(":test")
     }.map { it.removeSuffix(":test") + ":testClasses" }
 
+    /**
+     * What is wrong with [tests] as the harness passes it to Gradle, split at spaces; null when nothing is. Each entry
+     * is a task path of one of [projects] (`:runtime:test`), optionally followed by `--tests` and a pattern: a comma,
+     * an unknown project, or a pattern with no task before it fails the mutant's build before a test runs, and would
+     * read as `BUILD_FAILED`, not as the header's fault.
+     */
+    fun testsProblem(projects: Set<String>): String? {
+        var index = 0
+        var afterTask = false
+        while (index < tests.size) {
+            val entry = tests[index]
+            if (entry == "--tests") {
+                val pattern = tests.getOrNull(index + 1)
+                when {
+                    !afterTask -> return "`--tests` with no task before it"
+                    pattern == null || !TEST_PATTERN.matches(pattern) -> return "`--tests` with no pattern after it"
+                }
+                index += 2
+                continue
+            }
+            val task = TASK_PATH.matchEntire(entry) ?: return "[$entry] is not a task path"
+            if (task.groupValues[1] !in projects) return "[$entry] names no project of settings.gradle.kts"
+            afterTask = true
+            index++
+        }
+        return null
+    }
+
     companion object {
+        private val TASK_PATH = Regex(":([a-z0-9-]+):[A-Za-z]+")
+        private val TEST_PATTERN = Regex("[A-Za-z0-9_.*$]+")
+
         fun read(patch: Path): Mutant {
             val header = patch.readText().lineSequence().takeWhile { it.startsWith("#") || it.isBlank() }
                 .filter { it.startsWith("#") }

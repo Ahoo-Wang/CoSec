@@ -40,6 +40,42 @@ class MutationCheckTest {
     }
 
     /**
+     * A `Tests:` line the harness cannot pass to Gradle (a comma glued to a task, an unknown project) fails the mutant's
+     * build before any test runs: the full run reports it as `BUILD_FAILED`, which reads as infrastructure. So the
+     * header is checked here, on the pull request that writes it.
+     */
+    @Test
+    fun `every mutant names its tests as task paths the harness can pass to Gradle`() {
+        val root = Path(requireNotNull(System.getProperty("cosec.repository.root")) { "cosec.repository.root" })
+        val projects = projects(root.resolve("settings.gradle.kts"))
+        projects.assert().contains("runtime", "conformance", "spring-boot")
+        val malformed = Mutant.all(Path("mutants")).mapNotNull { mutant ->
+            mutant.testsProblem(projects)?.let { "${mutant.name}: $it" }
+        }
+        malformed.assert().describedAs("mutants whose Tests line Gradle cannot run").isEmpty()
+    }
+
+    @Test
+    fun `a Tests line with a comma, an unknown project or a stray pattern is refused`() {
+        fun problem(tests: String) = Mutant("m", listOf("X-1"), "d", tests.split(' ').filter { it.isNotBlank() }, temp)
+            .testsProblem(setOf("runtime", "conformance"))
+        problem(":runtime:test --tests me.ahoo.X :conformance:test").assert().isNull()
+        problem(":conformance:test, :runtime:test").assert().contains("is not a task path")
+        problem(":nowhere:test").assert().contains("names no project")
+        problem("--tests me.ahoo.X :runtime:test").assert().contains("no task before it")
+        problem(":runtime:test --tests").assert().contains("no pattern after it")
+        problem(":runtime:test --tests :conformance:test").assert().contains("no pattern after it")
+    }
+
+    /** The projects `settings.gradle.kts` includes: the names in the lists of its `groups`. */
+    private fun projects(settings: Path): Set<String> {
+        val groups = Files.readString(settings).substringAfter("val groups = linkedMapOf(").substringBefore("\n)")
+        return Regex("listOf\\(([^)]*)\\)").findAll(groups)
+            .flatMap { list -> Regex("\"([a-z0-9-]+)\"").findAll(list.groupValues[1]).map { it.groupValues[1] } }
+            .toSet()
+    }
+
+    /**
      * A mutant that no longer applies guards nothing, and `mutationCheck` is not part of `check`: a refactoring that
      * strands one would show only at the RC gate. So every patch must apply to the working tree as it is
      * (`git apply --check`, which changes nothing). When one does not, rewrite it to break the same property where the
