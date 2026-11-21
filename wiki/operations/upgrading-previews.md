@@ -27,6 +27,14 @@ Which preview of the library may run behind which preview of the gateway image: 
 
 ## From 8.0.0-beta.4 {#from-8-0-0-beta-4}
 
+- **Skipping a shadow window and rebasing a change are recorded as change events** (`CTL-63`). Affected: change
+  listeners, and consumers of the change log or the audit stream.
+  - `ChangeEvent.Kind` gains `SHADOW_SKIPPED` and `REBASED`. A skip used to be recorded only in the provenance of the
+    revision it published, so a skip whose change was abandoned left no record; now `:skip-shadow`, and a break-glass
+    change's exempt window, write `SHADOW_SKIPPED` with the reason in the note, and `:rebase` writes `REBASED`.
+  - A listener that handles every kind adds the two; one with an `else` branch, as the kind's documentation asks,
+    needs nothing.
+
 - **The control API answers from a response model of its own; a refused scope says why under `reason`; propagation
   counts the instances that hold the document** (review round 2, `R2C-11`, `R2C-12`, `CTL-61`, `CTL-62`). Affected:
   clients of the control API.
