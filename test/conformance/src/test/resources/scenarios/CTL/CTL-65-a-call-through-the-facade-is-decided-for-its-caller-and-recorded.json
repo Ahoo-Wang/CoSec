@@ -1,0 +1,139 @@
+{
+  "rules": [
+    "CTL-65"
+  ],
+  "polarity": "positive",
+  "level": "control",
+  "description": "alice's own code calls the control plane's facade as alice, a tenant-admin of acme: the change is proposed and decided for alice by the policies, as its route decides it; plato, a platform administrator, reads acme's document through it.",
+  "documents": {
+    "platform": {
+      "bindings": [
+        {
+          "id": "plato",
+          "subject": {
+            "principal": "plato",
+            "tenant": "(platform)"
+          },
+          "app": "cosec-control",
+          "space": "",
+          "policy": "cosec:platform-admin"
+        },
+        {
+          "id": "pia",
+          "subject": {
+            "principal": "pia",
+            "tenant": "(platform)"
+          },
+          "app": "cosec-control",
+          "space": "",
+          "policy": "cosec:platform-admin"
+        },
+        {
+          "id": "gil",
+          "subject": {
+            "principal": "gil",
+            "tenant": "globex"
+          },
+          "app": "cosec-control",
+          "space": "",
+          "policy": "cosec:platform-admin"
+        }
+      ]
+    },
+    "tenants": {
+      "acme": {
+        "policies": [
+          {
+            "id": "orders",
+            "statements": [
+              {
+                "effect": "allow",
+                "action": "order:*",
+                "resource": "order/**"
+              }
+            ]
+          }
+        ],
+        "bindings": [
+          {
+            "id": "admins",
+            "subject": {
+              "role": "admin"
+            },
+            "app": "cosec-control",
+            "space": "",
+            "policy": "cosec:tenant-admin"
+          },
+          {
+            "id": "ops",
+            "subject": {
+              "role": "ops"
+            },
+            "app": "order",
+            "space": "*",
+            "policy": "orders"
+          }
+        ]
+      }
+    }
+  },
+  "operators": {
+    "alice": {
+      "tenant": "acme",
+      "roles": [
+        "admin",
+        "ops@team-a"
+      ]
+    },
+    "eve": {
+      "tenant": "acme"
+    },
+    "plato": {
+      "tenant": "(platform)"
+    }
+  },
+  "steps": [
+    {
+      "viaFacade": {
+        "by": "alice",
+        "change": "c1",
+        "propose": {
+          "document": "tenant:acme",
+          "base": 1,
+          "note": "more",
+          "operations": [
+            {
+              "op": "putPolicy",
+              "policy": {
+                "id": "more",
+                "statements": [
+                  {
+                    "effect": "allow",
+                    "action": "order:read",
+                    "resource": "order/**"
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "viaFacade": {
+        "by": "plato",
+        "document": "tenant:acme"
+      }
+    }
+  ],
+  "expect": {
+    "steps": [
+      "CHECKED",
+      "read"
+    ],
+    "errors": {
+      "c1": []
+    },
+    "heads": {}
+  }
+}

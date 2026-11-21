@@ -68,6 +68,8 @@ object PackageLedger {
             "me.ahoo.cosec.control",
             mapOf(
                 "api" to setOf("authz", CHANGE, LIFECYCLE, "store"),
+                // The facade a service calls (CTL-65): each call is a route of the api, so it reaches no further in.
+                "sdk" to setOf("api", "authz", CHANGE),
                 LIFECYCLE to setOf("audit", "authz", CHANGE, "grant", "store"),
                 // The store's records, the change events and the authorizer's refusals are made of the change values.
                 "store" to setOf(CHANGE),

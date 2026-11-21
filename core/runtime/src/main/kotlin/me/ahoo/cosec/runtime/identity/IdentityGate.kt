@@ -132,33 +132,52 @@ class IdentityGate(
             }
             return reject(requestId, type, e.message.orEmpty(), traceId)
         }
+        return when (val admission = admit(identity, requestId, facts, parameters)) {
+            is Admission.Admitted -> StatusMapping.asserted(requestId, admission.security, identity)
+            is Admission.Refused -> reject(requestId, admission.type, admission.reason, traceId)
+        }
+    }
+
+    /**
+     * Whether [identity] may act here, and as what (`CTL-65`): the one function that turns an identity into a request's
+     * security, for a header this gate read and for a caller the control plane's facade states in process, so both are
+     * held to the same expiry, age, tenant and scope. A refusal is never anonymous.
+     */
+    @InternalCoSecApi
+    fun admit(identity: Identity, requestId: String, facts: HttpFacts): Admission {
+        val parameters = CoSecParameters.read(facts)
+            ?: return Admission.Refused(ProblemType.INVALID_REQUEST, "a CoSec-* parameter is ambiguous")
+        return admit(identity, requestId, facts, parameters)
+    }
+
+    private fun admit(identity: Identity, requestId: String, facts: HttpFacts, parameters: CoSecParameters): Admission {
         val now = clock.instant()
         identity.credential.expiresAt?.takeIf { it.isBefore(now.minus(skew)) }?.let {
-            return reject(requestId, ProblemType.TOKEN_EXPIRED, "the credential expired at $it", traceId)
+            return Admission.Refused(ProblemType.TOKEN_EXPIRED, "the credential expired at $it")
         }
         if (identity.issuedAt.plus(maxAge).plus(skew).isBefore(now)) {
-            return reject(
-                requestId,
-                ProblemType.TOKEN_EXPIRED,
-                "the identity was issued at ${identity.issuedAt}",
-                traceId
-            )
+            return Admission.Refused(ProblemType.TOKEN_EXPIRED, "the identity was issued at ${identity.issuedAt}")
         }
         if (identity.issuedAt.isAfter(now.plus(skew))) {
-            return reject(requestId, ProblemType.TOKEN_INVALID, "the identity is from ${identity.issuedAt}", traceId)
+            return Admission.Refused(ProblemType.TOKEN_INVALID, "the identity is from ${identity.issuedAt}")
         }
         if (!SnapshotKey.Tenant.isValidTenantId(identity.tenant)) {
             // The gateway refuses a token of such a tenant (`SCP-13`), so this one was not forwarded by it.
-            return reject(
-                requestId,
-                ProblemType.INVALID_REQUEST,
-                "the identity's tenant cannot be a tenant id",
-                traceId
-            )
+            return Admission.Refused(ProblemType.INVALID_REQUEST, "the identity's tenant cannot be a tenant id")
         }
         val security = security(identity, requestId, facts, parameters)
-            ?: return reject(requestId, ProblemType.INVALID_REQUEST, "the identity's scope does not resolve here", traceId)
-        return StatusMapping.asserted(requestId, security, identity)
+            ?: return Admission.Refused(ProblemType.INVALID_REQUEST, "the identity's scope does not resolve here")
+        return Admission.Admitted(security)
+    }
+
+    /** What [admit] answers: the request's security, or why the identity may not act here. */
+    @InternalCoSecApi
+    sealed interface Admission {
+        @InternalCoSecApi
+        class Admitted(val security: RequestSecurity) : Admission
+
+        @InternalCoSecApi
+        class Refused(val type: ProblemType, val reason: String) : Admission
     }
 
     private fun reject(requestId: String, type: ProblemType, reason: String, traceId: String?): Outcome {

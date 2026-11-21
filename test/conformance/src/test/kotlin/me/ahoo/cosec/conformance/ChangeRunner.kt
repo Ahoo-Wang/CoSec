@@ -54,6 +54,9 @@ import me.ahoo.cosec.control.lifecycle.ChangeOptions
 import me.ahoo.cosec.control.lifecycle.Changes
 import me.ahoo.cosec.control.lifecycle.LockoutCheck
 import me.ahoo.cosec.control.lifecycle.ShadowOptions
+import me.ahoo.cosec.control.sdk.ControlCaller
+import me.ahoo.cosec.control.sdk.ControlRefusedException
+import me.ahoo.cosec.control.sdk.LocalControlService
 import me.ahoo.cosec.control.store.ControlStore
 import me.ahoo.cosec.control.store.ControlStoreException
 import me.ahoo.cosec.control.store.InMemoryControlStore
@@ -77,6 +80,7 @@ import me.ahoo.cosec.model.condition.Attribute
 import me.ahoo.cosec.model.condition.AttributeCatalog
 import me.ahoo.cosec.model.decision.DocumentKind
 import me.ahoo.cosec.runtime.event.Delivery
+import me.ahoo.cosec.runtime.identity.IdentityGate
 import me.ahoo.cosec.runtime.shadow.StagedDocuments
 import me.ahoo.cosec.spi.identity.Identity
 import me.ahoo.cosec.spi.membership.MembershipAnswer
@@ -144,6 +148,9 @@ import java.time.Instant
  *            { "status": { "instance": "i1", "documents": { "tenant:acme": 2 } } },  // an instance's status now
  *            { "propagation": { "document": "tenant:acme", "revision": 2 } },        // CTL-62:
  *                                              // `installed 1 holding 2 recent 3`
+ *            { "viaFacade": { "by": "alice", "change": "c1", "propose": { ...the body of POST /changes... } } },
+ *            { "viaFacade": { "by": "plato", "document": "tenant:acme" } },  // CTL-65: the facade an application
+ *                                              // calls, as by's request: the change's state, `read`, or `refused <status>`
  *            { "simulate": { "by": "alice", "request": { ... }, "candidate": "c1" } },
  *            { "explain": { "by": "alice", "request": { ... }, "at": { "platform": 1, "app": 1, "tenant": 1 } } },
  *            { "apply": { "change": "c3", "by": "walt", "document": "platform", "mode": "REPLACE", "desired": {...} } },
@@ -351,6 +358,9 @@ object ChangeRunner : ScenarioRunner {
             ),
         )
 
+        /** The facade an application's own code calls (`CTL-65`), over this plane's routes. */
+        private val facade = LocalControlService(ControlHttp(plane), IdentityGate(clock = clock))
+
         /** A window closes as soon as it is looked at, unless the scenario sets `options.shadow`. */
         private fun shadowOptions(): ShadowOptions {
             node.get("options")?.only("fourEyes", "shadow", "providers", "lockout")
@@ -434,8 +444,7 @@ object ChangeRunner : ScenarioRunner {
             "advance", "vanish", "outage", "storeDown", "oldOpenList" -> environment(action, argument)
             "changes" -> listing(argument)
             "report" -> report(argument)
-            "simulate" -> simulate(argument)
-            "explain" -> explain(argument)
+            in QUERIES -> query(action, argument)
             in CREDENTIAL_STEPS -> credentials(action, argument)
             "revokeBreakGlass" -> revoke(argument)
             in READS -> read(action, argument)
@@ -619,6 +628,37 @@ object ChangeRunner : ScenarioRunner {
                 )
             )
             return "reported"
+        }
+
+        private suspend fun query(action: String, argument: JsonNode): String = when (action) {
+            "simulate" -> simulate(argument)
+            "explain" -> explain(argument)
+            else -> viaFacade(argument)
+        }
+
+        /**
+         * A call through the control plane's facade (`CTL-65`), as an application's own code makes it for the request
+         * of `by`: `propose`, with the body `POST /changes` takes, or `document`, a key to read. Its result is the
+         * proposed change's state, `read`, or `refused <status>`.
+         */
+        private suspend fun viaFacade(argument: JsonNode): String = try {
+            argument.only("by", "change", "propose", "document")
+            val caller = ControlCaller.of(checkNotNull(by(argument).security).securityContext)
+            val request = argument.get("propose")
+            if (request != null) {
+                val id = argument.required("change").text()
+                next = ChangeId(id)
+                val answer = CoSecJson.mapper.readTree(
+                    facade.propose(caller, CoSecJson.mapper.writeValueAsString(request))
+                )
+                named[id] = changes.get(ChangeId(id))
+                answer.required("state").text()
+            } else {
+                facade.document(caller, documentKey(argument.required("document").text()))
+                "read"
+            }
+        } catch (error: ControlRefusedException) {
+            "refused ${error.status}"
         }
 
         /** The steps of the control API's answers (`CTL-61`, `CTL-62`). */
@@ -905,6 +945,9 @@ object ChangeRunner : ScenarioRunner {
 
     /** A REQUIRED change listener that records everything. */
     private val CREDENTIAL_STEPS = setOf("revoke", "revokeTokens", "provide", "unaudited")
+
+    /** The control plane's queries, and a call through its facade (`CTL-65`). */
+    private val QUERIES = setOf("simulate", "explain", "viaFacade")
 
     /** The steps that read what the control plane holds or answers, and the instance statuses it reads. */
     private val READS = setOf("diff", "staged", "listed", "samples", "rateLimits", "answer", "status", "propagation")

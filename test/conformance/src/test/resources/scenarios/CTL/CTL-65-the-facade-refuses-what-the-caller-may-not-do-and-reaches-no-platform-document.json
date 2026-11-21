@@ -1,0 +1,137 @@
+{
+  "rules": [
+    "CTL-65"
+  ],
+  "polarity": "negative",
+  "level": "control",
+  "description": "eve holds no control-plane right in acme: her proposal through the facade is refused as the route refuses it, and nothing is recorded. plato may change the platform document on the operators' routes, yet the facade does not reach it at all: no route on the platform document is in its narrow set.",
+  "documents": {
+    "platform": {
+      "bindings": [
+        {
+          "id": "plato",
+          "subject": {
+            "principal": "plato",
+            "tenant": "(platform)"
+          },
+          "app": "cosec-control",
+          "space": "",
+          "policy": "cosec:platform-admin"
+        },
+        {
+          "id": "pia",
+          "subject": {
+            "principal": "pia",
+            "tenant": "(platform)"
+          },
+          "app": "cosec-control",
+          "space": "",
+          "policy": "cosec:platform-admin"
+        },
+        {
+          "id": "gil",
+          "subject": {
+            "principal": "gil",
+            "tenant": "globex"
+          },
+          "app": "cosec-control",
+          "space": "",
+          "policy": "cosec:platform-admin"
+        }
+      ]
+    },
+    "tenants": {
+      "acme": {
+        "policies": [
+          {
+            "id": "orders",
+            "statements": [
+              {
+                "effect": "allow",
+                "action": "order:*",
+                "resource": "order/**"
+              }
+            ]
+          }
+        ],
+        "bindings": [
+          {
+            "id": "admins",
+            "subject": {
+              "role": "admin"
+            },
+            "app": "cosec-control",
+            "space": "",
+            "policy": "cosec:tenant-admin"
+          },
+          {
+            "id": "ops",
+            "subject": {
+              "role": "ops"
+            },
+            "app": "order",
+            "space": "*",
+            "policy": "orders"
+          }
+        ]
+      }
+    }
+  },
+  "operators": {
+    "alice": {
+      "tenant": "acme",
+      "roles": [
+        "admin",
+        "ops@team-a"
+      ]
+    },
+    "eve": {
+      "tenant": "acme"
+    },
+    "plato": {
+      "tenant": "(platform)"
+    }
+  },
+  "steps": [
+    {
+      "viaFacade": {
+        "by": "eve",
+        "change": "c1",
+        "propose": {
+          "document": "tenant:acme",
+          "base": 1,
+          "note": "more",
+          "operations": [
+            {
+              "op": "putPolicy",
+              "policy": {
+                "id": "more",
+                "statements": [
+                  {
+                    "effect": "allow",
+                    "action": "order:read",
+                    "resource": "order/**"
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "viaFacade": {
+        "by": "plato",
+        "document": "platform"
+      }
+    }
+  ],
+  "expect": {
+    "steps": [
+      "refused 403",
+      "refused 404"
+    ],
+    "heads": {},
+    "errors": {}
+  }
+}
