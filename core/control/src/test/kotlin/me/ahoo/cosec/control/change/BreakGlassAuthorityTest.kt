@@ -178,7 +178,7 @@ class BreakGlassAuthorityTest {
             listOf(Operation.PutPolicy(allow("x"))),
             "ordinary"
         )
-        refused { changes.stage(vera, change.id) }.assert().isEqualTo(403)
+        refused { changes.startShadow(vera, change.id) }.assert().isEqualTo(403)
         changes.skipShadow(plato, change.id, "test").state.assert().isEqualTo(ChangeState.READY)
         refused { changes.publish(vera, change.id) }.assert().isEqualTo(403)
     }

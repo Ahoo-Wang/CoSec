@@ -1,0 +1,22 @@
+{
+  "asOf" : {
+    "type" : "string",
+    "presence" : "always"
+  },
+  "holding" : {
+    "type" : "integer",
+    "presence" : "always"
+  },
+  "installed" : {
+    "type" : "integer",
+    "presence" : "always"
+  },
+  "recent" : {
+    "type" : "integer",
+    "presence" : "always"
+  },
+  "revision" : {
+    "type" : "integer",
+    "presence" : "always"
+  }
+}

@@ -65,7 +65,7 @@ class ChangeTransitionTableTest {
     /** Each command and its row of the table ([ChangeStep]): the code is held to the table it declares. */
     private val table = linkedMapOf(
         "rebase" to Command(ChangeStep.REBASE) { h, id -> h.changes.rebase(ALICE_OP, id) },
-        "stage" to Command(ChangeStep.STAGE, setOf(ChangeStep.UNRESERVE)) { h, id -> h.changes.stage(ALICE_OP, id) },
+        "stage" to Command(ChangeStep.STAGE, setOf(ChangeStep.UNRESERVE)) { h, id -> h.changes.startShadow(ALICE_OP, id) },
         "skipShadow" to Command(ChangeStep.SKIP_SHADOW, setOf(ChangeStep.UNRESERVE)) { h, id ->
             h.changes.skipShadow(ALICE_OP, id, "hurry")
         },

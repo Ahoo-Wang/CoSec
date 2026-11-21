@@ -30,11 +30,17 @@ data class StatementView(
 
 /**
  * A decision as the control plane answers it (RFC 0007 §10.3): its kind, and the statement that made it only when the
- * caller may read the document that statement came through. An indeterminate decision names its cause's type, never
- * its message.
+ * caller may read the document that statement came through. An indeterminate decision names the kind of its [cause],
+ * never its message; a rejected one names its [reason]. Both are values of [ControlVocabulary] (`CTL-61`).
  */
 @InternalCoSecApi
-data class DecisionView(val decision: String, val by: StatementView?, val cause: String?, val redacted: Boolean)
+data class DecisionView(
+    val decision: String,
+    val by: StatementView?,
+    val cause: String?,
+    val redacted: Boolean,
+    val reason: String? = null,
+)
 
 /** One trace entry, from a document the caller may read; [redacted] counts the entries left out. */
 @InternalCoSecApi

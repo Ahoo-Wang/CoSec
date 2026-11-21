@@ -24,6 +24,7 @@ import me.ahoo.cosec.spi.shadow.ShadowOutcome
 import me.ahoo.cosec.spi.shadow.ShadowReadings
 import me.ahoo.cosec.spi.shadow.ShadowReportReader
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
+import java.time.Clock
 import java.time.Instant
 
 /**
@@ -31,7 +32,13 @@ import java.time.Instant
  * instances report through [reports].
  */
 @InternalCoSecApi
-class ShadowWindows(private val reports: ShadowReportReader, private val options: ShadowOptions = ShadowOptions()) {
+class ShadowWindows(
+    private val reports: ShadowReportReader,
+    private val options: ShadowOptions = ShadowOptions(),
+    clock: Clock = Clock.systemUTC(),
+) {
+    private val statuses = InstanceStatuses(reports, clock)
+
     /**
      * The summary of [state] at [now] when the window may close, or null while it stays open: an instance could not
      * compile or evaluate the candidate (closes at once, blocked); enough time and samples (closes); the longest window
@@ -86,11 +93,16 @@ class ShadowWindows(private val reports: ShadowReportReader, private val options
     }
 
     /**
-     * Read-only propagation (RFC 0007 §6.5, Q29): of the instances that wrote a status in the last minute, how many have
-     * installed [revision] of [key] or a later one. Publishing never waits for it.
+     * Read-only propagation (RFC 0007 §6.5, Q29, `CTL-62`): of the instances that wrote a status in the last minute
+     * ([Propagation.recent]), those that hold [key] at any revision ([Propagation.holding]) and those of them that have
+     * installed [revision] or a later one ([Propagation.installed]). An instance keeps resident only the tenants it
+     * serves, so a tenant document is propagated when every instance holding it has installed it, and one that none
+     * holds is not propagated yet. The statuses are read at most every [InstanceStatuses.MAX_AGE], and the answer says
+     * when ([Propagation.asOf]). Publishing never waits for it.
      */
     suspend fun propagation(key: SnapshotKey, revision: Long): Propagation {
-        val recent = reports.statuses()
-        return Propagation(revision, recent.count { (it.documents[key]?.revision ?: 0) >= revision }, recent.size)
+        val read = statuses.read()
+        val holding = read.statuses.mapNotNull { it.documents[key] }
+        return Propagation(revision, holding.count { it.revision >= revision }, holding.size, read.statuses.size, read.asOf)
     }
 }

@@ -17,7 +17,11 @@ package me.ahoo.cosec.control.change
 
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
+import java.time.Instant
 
-/** How many of the [recent] instances report [revision] of a document installed. */
+/**
+ * How far [revision] of a document has propagated (`CTL-62`): of the [recent] instances, the [holding] ones report the
+ * document at some revision, and the [installed] ones at [revision] or later. [asOf] is when the statuses were read.
+ */
 @InternalCoSecApi
-data class Propagation(val revision: Long, val installed: Int, val recent: Int)
+data class Propagation(val revision: Long, val installed: Int, val holding: Int, val recent: Int, val asOf: Instant)

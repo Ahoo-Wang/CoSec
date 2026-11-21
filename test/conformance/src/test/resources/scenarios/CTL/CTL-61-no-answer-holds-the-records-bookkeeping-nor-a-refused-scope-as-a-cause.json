@@ -1,0 +1,110 @@
+{
+  "rules": [
+    "CTL-61"
+  ],
+  "polarity": "negative",
+  "level": "control",
+  "description": "G2e (R2C-11): the record of a staged change keeps the heads it was checked with and the instances that reported on its window; its answer holds neither. A simulated request whose space the principal is no member of is Rejected, and says why under reason, never under cause.",
+  "options": {
+    "shadow": {
+      "minDuration": "PT15M",
+      "minSamples": 1,
+      "maxDuration": "PT1H"
+    }
+  },
+  "steps": [
+    {
+      "propose": {
+        "change": "c1",
+        "document": "tenant:acme",
+        "operations": [
+          {
+            "putPolicy": {
+              "id": "read",
+              "statements": [
+                {
+                  "effect": "allow",
+                  "action": "order:read"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "publish": "c1"
+    },
+    {
+      "propose": {
+        "change": "c2",
+        "document": "tenant:acme",
+        "operations": [
+          {
+            "putPolicy": {
+              "id": "more",
+              "statements": [
+                {
+                  "effect": "allow",
+                  "action": "order:read"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "stage": "c2"
+    },
+    {
+      "report": {
+        "change": "c2",
+        "instance": "i1",
+        "counts": {
+          "SAME": 1
+        }
+      }
+    },
+    {
+      "shadowed": "c2"
+    },
+    {
+      "answer": "c2"
+    },
+    {
+      "simulate": {
+        "request": {
+          "tenant": "acme",
+          "principal": "bob",
+          "roles": [
+            "clerk@team-a"
+          ],
+          "app": "order",
+          "space": "team-b",
+          "action": "order:read",
+          "resource": "order/1"
+        }
+      }
+    }
+  ],
+  "expect": {
+    "steps": [
+      "CHECKED",
+      "PUBLISHED",
+      "CHECKED",
+      "SHADOWING",
+      "reported",
+      "SHADOWING",
+      "members author,base,candidate,createdAt,findings,id,key,kind,note,operations,shadow,state,updatedAt; shadow startedAt,window",
+      "Rejected (reason SPACE_NOT_MEMBER)"
+    ],
+    "errors": {
+      "c1": [],
+      "c2": []
+    },
+    "heads": {
+      "tenant:acme": 1
+    }
+  }
+}

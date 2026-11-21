@@ -97,7 +97,7 @@ class BreakGlass(private val changes: Changes, private val revisions: Revisions)
         if (proposed.state != ChangeState.CHECKED) {
             return proposed
         }
-        return changes.stage(operator, proposed.id)
+        return changes.startShadow(operator, proposed.id)
     }
 
     /**
@@ -181,7 +181,7 @@ class BreakGlass(private val changes: Changes, private val revisions: Revisions)
             return Attempt(proposed)
         }
         return try {
-            val staged = changes.stage(operator, proposed.id)
+            val staged = changes.startShadow(operator, proposed.id)
             Attempt(if (staged.state != ChangeState.READY) staged else changes.publish(operator, staged.id))
         } catch (e: ChangeRejectedException) {
             conflicted(operator, proposed, base, e) ?: throw e

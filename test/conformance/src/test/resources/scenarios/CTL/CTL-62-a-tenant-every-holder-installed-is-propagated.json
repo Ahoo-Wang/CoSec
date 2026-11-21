@@ -1,0 +1,81 @@
+{
+  "rules": [
+    "CTL-62"
+  ],
+  "polarity": "positive",
+  "level": "control",
+  "description": "G2e (R2C-12): of three instances reporting, two hold acme's document and both installed revision 1; the third serves other tenants. The propagation reads installed 2 of the 2 holding it, of 3 recent, not 2 of 3.",
+  "steps": [
+    {
+      "propose": {
+        "change": "c1",
+        "document": "tenant:acme",
+        "operations": [
+          {
+            "putPolicy": {
+              "id": "read",
+              "statements": [
+                {
+                  "effect": "allow",
+                  "action": "order:read"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "publish": "c1"
+    },
+    {
+      "status": {
+        "instance": "i1",
+        "documents": {
+          "platform": 1,
+          "tenant:acme": 1
+        }
+      }
+    },
+    {
+      "status": {
+        "instance": "i2",
+        "documents": {
+          "platform": 1,
+          "tenant:acme": 1
+        }
+      }
+    },
+    {
+      "status": {
+        "instance": "i3",
+        "documents": {
+          "platform": 1,
+          "tenant:globex": 4
+        }
+      }
+    },
+    {
+      "propagation": {
+        "document": "tenant:acme",
+        "revision": 1
+      }
+    }
+  ],
+  "expect": {
+    "steps": [
+      "CHECKED",
+      "PUBLISHED",
+      "status",
+      "status",
+      "status",
+      "installed 2 holding 2 recent 3"
+    ],
+    "errors": {
+      "c1": []
+    },
+    "heads": {
+      "tenant:acme": 1
+    }
+  }
+}
