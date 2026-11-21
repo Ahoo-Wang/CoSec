@@ -432,7 +432,8 @@ keep (a propose on one control host and a publish on another are two processes):
 - **A gated step** (`PUBLISHING`, break-glass) waits for each `REQUIRED` listener to record its event, after what was
   queued before it, within `cosec.control.audit.required-timeout`. Otherwise it fails with `503`, and its event is not
   recorded afterwards.
-- **A REQUIRED listener's full queue** makes the event of any other step wait for room, for at most the same timeout.
+- **A REQUIRED listener's full queue** makes the event of any other step wait for room, for at most the same timeout,
+  in the order the events came: a smaller one never takes room ahead of a larger one waiting before it.
   The step is already stored, so it is never failed for this. An event that finds no room in time is **lost**: counted
   in `cosec.control.listener.lost` and logged at `ERROR` (`Change event <kind> of change <id> on <doc> was not handed to
   REQUIRED change listener [<name>]: ...`).

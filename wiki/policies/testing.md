@@ -315,7 +315,8 @@ its file disagree, so a value changes only in a release that says so.
 (default 20), and `after` is the `next` of the page before, absent after the last page: a token
 ([Listing cursors](#listing-cursors)). It reads the control store's list of the
 documents it indexes, never a document, so a document whose first publish never completed may be listed, and reading
-it is a `404`. That list is the whole of the store's member set (about 2 MB at 50,000 tenants), so a control host reads
+it is a `404`. A tenant's principal shown only its own document is answered without the list: one read of whether the
+store indexes its revisions. That list is the whole of the store's member set (about 2 MB at 50,000 tenants), so a control host reads
 it at most every 5 seconds, one read shared by every caller, and pages from that: `asOf` says when it was read, and a
 document created since may be missing until the next read.
 

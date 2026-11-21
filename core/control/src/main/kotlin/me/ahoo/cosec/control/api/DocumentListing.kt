@@ -38,8 +38,8 @@ import java.time.Clock
  * indexes, never by reading a document.
  * - A caller holding `cosec:read` on the layer ([ControlResources.layer]: `doc/tenant`, `doc/app`) sees every document
  *   of it, paged. That read grants no document's own read, and no document's read grants it.
- * - A tenant's principal asking for `tenant` sees its own tenant's document, if it may read it (one decision), and
- *   nothing else.
+ * - A tenant's principal asking for `tenant` sees its own tenant's document, if it may read it (one decision) and the
+ *   store indexes it (one read, never the list: R3-4), and nothing else.
  * - Anyone else is refused as a route refuses a caller the policies do not permit: a 403 without detail, the same for
  *   every such caller, which tells nothing of which documents exist. There is no decision per listed document: a
  *   caller who may read a few documents knows their names already, and a scan of the whole list for them would be
