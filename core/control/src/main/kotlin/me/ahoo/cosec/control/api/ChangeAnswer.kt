@@ -45,11 +45,7 @@ object ChangeAnswer {
      * [change], with which live instances acknowledge its open shadow window when [acknowledgement] is read, and its
      * author's origin, whole when [wholeOrigin] ([origin]).
      */
-    fun encode(
-        change: ChangeRequest,
-        acknowledgement: Acknowledgement? = null,
-        wholeOrigin: Boolean = false
-    ): ByteArray =
+    fun encode(change: ChangeRequest, acknowledgement: Acknowledgement?, wholeOrigin: Boolean): ByteArray =
         CoSecJson.mapper.writeValueAsBytes(tree(change, acknowledgement, wholeOrigin))
 
     fun tree(change: ChangeRequest, acknowledgement: Acknowledgement? = null, wholeOrigin: Boolean = false): ObjectNode {

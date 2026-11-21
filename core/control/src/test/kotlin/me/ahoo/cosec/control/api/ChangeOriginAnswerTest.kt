@@ -119,6 +119,10 @@ class ChangeOriginAnswerTest {
         plane(deny, ControlDecision.PERMIT).origins.whole(fixture.alice, change).assert().isFalse()
         // A plane that cannot tell gives the short origin.
         OriginReaders.NONE.whole(fixture.plato, change).assert().isFalse()
+        // So does a plane that keeps the interface's default.
+        object : ControlPlane by fixture.plane {
+            override val origins: OriginReaders get() = super<ControlPlane>.origins
+        }.origins.whole(fixture.plato, change).assert().isFalse()
     }
 
     @Test
@@ -131,6 +135,10 @@ class ChangeOriginAnswerTest {
         members(short).assert().containsExactly("asserted", "via.method")
         short.get("asserted").asBoolean().assert().isTrue()
         short.get("via").get("method").asString().assert().isEqualTo("api-key")
+        // A credential stated without an id, in a request without one: the whole origin holds what there is.
+        val bare = ChangeOrigin(false, ChangeOrigin.Via("api-key", null, null), null)
+        members(ChangeAnswer.tree(ChangeSamples.minimal.copy(origin = bare), wholeOrigin = true).get("origin"))
+            .assert().containsExactly("asserted", "via.method")
         // Without a credential: no `via` at all, whoever reads.
         members(
             ChangeAnswer.tree(ChangeSamples.minimal.copy(origin = ChangeOrigin(true)), wholeOrigin = true).get("origin")
