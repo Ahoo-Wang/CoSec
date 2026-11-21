@@ -119,7 +119,7 @@ class ForwardedIdentityCallerTest {
         val refused = message(failure(runner))
         refused.assert().contains("$statement=true")
             .contains("cosec.pipeline.identity.only-gateway-can-reach=true")
-            .contains("COSEC_PIPELINE_IDENTITY_ONLY_TRUSTED_CALLERS_CAN_REACH=true")
+            .contains("COSEC_PIPELINE_IDENTITY_ONLYTRUSTEDCALLERSCANREACH=true")
             .contains("cosec.pipeline.caller=forwarded-identity")
             .contains("compromised workload")
             .contains("STA-9")

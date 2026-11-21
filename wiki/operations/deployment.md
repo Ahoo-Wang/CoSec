@@ -139,7 +139,7 @@ cosec:
   pipeline:
     mode: gateway
     identity:
-      only-gateway-can-reach: true   # or COSEC_PIPELINE_IDENTITY_ONLY_GATEWAY_CAN_REACH=true
+      only-gateway-can-reach: true   # or COSEC_PIPELINE_IDENTITY_ONLYGATEWAYCANREACH=true
 ```
 
 There is no default. Without the line, with `false`, or with any value but `true`, the service fails to start and the

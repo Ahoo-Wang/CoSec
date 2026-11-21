@@ -85,7 +85,7 @@ cosec:
   pipeline:
     mode: gateway
     identity:
-      only-gateway-can-reach: true   # 或 COSEC_PIPELINE_IDENTITY_ONLY_GATEWAY_CAN_REACH=true
+      only-gateway-can-reach: true   # 或 COSEC_PIPELINE_IDENTITY_ONLYGATEWAYCANREACH=true
 ```
 
 没有默认值。缺少这一行、设为 `false` 或设为 `true` 以外的任何值，服务都启动失败，信息会说明该模式信任什么、网络必须满足什么，以及要添加的那一行（[网络边界未声明导致启动失败](./troubleshooting.md#startup-fails-because-the-network-boundary-is-not-stated)）。设置之后，启动日志会记录一行 `INFO`，说明运维方已作此声明。这条声明不签署任何东西：保持它为真是你的责任。为头签名计划在 8.1。
