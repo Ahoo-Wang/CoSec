@@ -457,6 +457,7 @@ object GuardAllowlist {
             "runtime:SnapshotRevalidationTest#revalidationAsksTheStoreNeverALocalCopy",
             "runtime:SnapshotRevalidationTest#aPeriodicPassNeverOverlapsAnotherAndTheOneItOwesFollowsIt",
             "runtime:SnapshotRevalidationTest#aPassHeldOnlyByACompilationDoesNotHoldBackTheNext",
+            "runtime:SnapshotRevalidationTest#aPassHeldByACompilationYoungerThanItsStallIsAbandonedBeforeThatCompilationsDeadline",
             "runtime:SnapshotRevalidationTest#aPassThatKeepsFinishingDocumentsIsNotAbandoned",
             "runtime:SnapshotRevalidationTest#aPassWithAReadInFlightIsNeverAbandoned",
             "runtime:SnapshotRevalidationTest#aPassDoesNotWaitForACompilationThatOutlivedTheStoreReadTimeout",
