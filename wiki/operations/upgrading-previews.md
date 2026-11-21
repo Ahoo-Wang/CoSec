@@ -27,6 +27,27 @@ Which preview of the library may run behind which preview of the gateway image: 
 
 ## From 8.0.0-beta.4 {#from-8-0-0-beta-4}
 
+- **Twelve properties are computed and have no key** (`SNP-23`, `CTL-70`; the rule is that what can be computed is not
+  configured). Affected: a configuration that sets one. Startup fails with the keys CoSec does not read, and says of each
+  that it is no longer a property and what replaced it. Remove the key; where you had moved the value, move what it
+  follows ([Computed, not configured](./configuration.md#computed-not-configured)). `snapshot.reload-concurrency` is the one
+  that was in no release.
+
+  | Removed | Now |
+  |---|---|
+  | `cosec.authorization.snapshot.lag-warn`, `lag-escalate` | 6 and 30 passes of `revalidate-interval`: set that to move them |
+  | `cosec.authorization.snapshot.cold-load-timeout` | 40 % of `cosec.pipeline.timeout`: set that to move it |
+  | `cosec.authorization.snapshot.compile-threads` | one per 4 cores, at least 1 and at most 4 |
+  | `cosec.authorization.snapshot.reload-concurrency` | 16, a constant |
+  | `cosec.authorization.shadow.report-interval` | a sixth of the status's life (10 s), and no oftener than a fifth of `cosec.control.shadow.min-duration` or a second |
+  | `cosec.authentication.revocation.cache.initial-capacity`, `expire-after-access` | none: the cache sizes itself, and `local-max-age` expires every entry |
+  | `cosec.control.revisions.orphan-age`, `reclaim-interval` | one reclaim pass, and 1 hour |
+  | `cosec.control.shadow.check-interval` | a fifteenth of `cosec.control.shadow.min-duration`, between 250 ms and 1 minute |
+  | `cosec.control.http.max-body-size` | the 8 MB document cap and 2 MB: 10 MB |
+
+  The starter logs once at startup, in a line that begins `CoSec derived, not configured:`, what it derived and from
+  what. A system test that shortened `report-interval` and `check-interval` now shortens `cosec.control.shadow.min-duration`
+  alone, and both follow.
 - **New: the control plane has an image, `cosec-control`, and two named deployments** ([The control-plane
   host](./deployment.md#the-control-plane-host), [Choosing a Deployment](./topologies.md#the-control-plane)). Nothing to
   change for an application that embeds the control plane: it is the second deployment, unchanged. A deployment that

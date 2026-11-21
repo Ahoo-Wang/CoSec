@@ -665,7 +665,7 @@ CoCache 8 把 CoSec 的文档保存为 `Store`，它也检查这一策略，并�
 - **不再按请求读 Redis。** 每个实例加载平台文档以及它的请求需要的应用文档和租户文档，编译它们，并每隔
   `cosec.authorization.snapshot.revalidate-interval`（默认 `10s`）对每份已加载的文档做一次条件读。只有文档改变时 Redis 才传输它。
 - **Redis 故障期间，已安装的文档按最后一次确认的内容继续决策**，所以平台的 DENY 仍然有效。需要尚未加载的文档的请求最多等待
-  `cold-load-timeout`（默认 `2s`），然后返回 `503`。7.x 中，本地副本过期后（默认 5 分钟）请求开始以 `500` 失败。对于列在
+  冷加载超时（`2s`），然后返回 `503`。7.x 中，本地副本过期后（默认 5 分钟）请求开始以 `500` 失败。对于列在
   `cosec.authorization.snapshot.fail-closed.tenants` 中的租户，若请求读取的文档上次确认距今超过 `fail-closed.max-lag`，请求改为 `503`，
   除非有 DENY 匹配。
 - **就绪状态等待快照。** 平台文档、然后是 `prewarm-apps` 和 `prewarm-tenants`，在应用启动的同时加载；在它们全部装入之前，就绪状态拒绝
@@ -838,7 +838,7 @@ Reactor `ContextView` 和 `HttpServletRequest` 上的读取入口（现在名为
 | `cosec.authorization.cache.migration.` | 已删除。 |
 | `cosec.authorization.cache.token.concurrency-level` | 已删除：自 CoCache 5 起被忽略。 |
 | `cosec.authorization.cache.token.expire-after-write` | `cosec.authentication.revocation.cache.local-max-age`，一个时长（`30s`）。 |
-| `cosec.authorization.cache.token.expire-unit` | 已删除：时长自带单位。`expire-after-access` 也是时长；不带单位的数字仍表示秒。 |
+| `cosec.authorization.cache.token.expire-unit` | 已删除：时长自带单位。不带单位的数字仍表示秒。 |
 | `cosec.authorization.gateway.enabled` | 已删除：网关过滤器随 `cosec-gateway` 提供。 |
 | `cosec.limiter.` | 已删除：限流规则在平台文档中（[限流规则变为义务](#rate-limit-rules-become-obligations)）；要使用不同的限流 key 前缀，需要自己的 `RateLimiter` bean。 |
 | `cosec.shadow.` | 已删除：影子窗口是控制面的操作；每个实例的部分是 `cosec.authorization.shadow.*`。 |

@@ -106,7 +106,7 @@ object CoSecMeters {
 
     /**
      * Registers `cosec.shadow.staged.age`, in seconds (`OBS-8`): how long ago this instance last read the staged list it
-     * samples by, NaN before the first read. About `report-interval` while the store answers; rising, the list cannot be
+     * samples by, NaN before the first read. About the report interval (10 s at the default) while the store answers; rising, the list cannot be
      * read, so the instance reads candidates by their keys and its windows are not acknowledged.
      */
     fun bind(registry: MeterRegistry, staged: StagedDocuments) {

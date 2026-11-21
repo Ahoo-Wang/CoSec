@@ -18,7 +18,7 @@ description: "每个 cosec.* 配置项的类型、默认值以及它改变什么
 出现 CoSec 不读取的 `cosec.*` key 时启动失败，无论其他配置如何（包括 `cosec.enabled=false`）：否则拼错、改名或已删除的
 key 会悄无声息地不起作用。classpath 上的配置元数据（`META-INF/spring-configuration-metadata.json`）声明了的 key，或位于
 map、list 类型配置项之下的 key，算作已知。错误信息列出每个未知 key，并链接到
-[已删除和改名的 key 对照表](./upgrading.md#removed-and-renamed-properties)。没有任何配置项能关闭这项检查：
+[已删除和改名的 key 对照表](./upgrading.md#removed-and-renamed-properties)。8.0 的某个预览版有、后来的版本因其值可以[计算](#computed-not-configured)而删除的 key，会被列为 `no longer a property`，并给出取代它的内容。没有任何配置项能关闭这项检查：
 某个版本取代的 key 前缀如果被忽略，令牌吊销就会留在没人读取的地方。
 这项检查在创建任何 bean（包括应用自己的 bean）之前运行，所以仍设置着已删除 key 的配置会先得知每一个这样的 key，然后才会遇到其他启动失败，例如缺少令牌存储。
 
@@ -45,6 +45,26 @@ key 的比较方式与 Spring 的 binder 一致，所以 Spring 文档给出的�
 其余的 `COSEC_*` 变量照常检查（`COSEC_JWT_SECRT` 会使启动失败），同一个 key 出现在 `application.yaml`、系统属性或其他来源中也一样。
 CoSec 没有哪个配置项叫这些名字，而已知的 key 无论来源都不是未知的，所以这个豁免不会藏起 CoSec 读取的配置项。在 pod 上设置
 `enableServiceLinks: false`，则这些变量根本不会进入环境（[故障排查](./troubleshooting.md#startup-fails-on-an-unknown-property)）。
+
+## 由计算得出，而非配置 {#computed-not-configured}
+
+能计算出来的就不是配置项：下面每个值都由你设置的某个值、机器本身，或 CoSec 自己拥有的某个上限推出，没有对应的 key。每个值在启动时记录一次，那一行以 `CoSec derived, not configured:` 开头（数据面的快照值一行，控制面的一行），并写明它由什么推出。
+
+| 值 | 计算方式 | 依据 |
+|---|---|---|
+| 文档超过这个时长未被确认时以 `WARN` 记录 | 6 轮：默认 `60s` | [`cosec.authorization.snapshot.revalidate-interval`](#snapshot) |
+| ……以 `ERROR` 记录为陈旧 | 30 轮：默认 `5m` | 同上 |
+| 请求等待一个未装入的文档多久 | 管道超时的 40 %，至少 `1ms`：默认 `2s` | [`cosec.pipeline.timeout`](#pipeline) |
+| 编译文档的线程数 | 每 4 个核心一个，至少 1 个、至多 4 个 | 进程的核心数 |
+| 一次重新确认并发确认的文档数 | 16，常量：一轮超过间隔时各轮首尾相接，只有突发量取决于它 | |
+| 实例多久写一次影子报告和状态 | 状态存活期的六分之一（`10s`），且不比窗口最短存活期的五分之一或一秒更频繁 | [`cosec.control.shadow.min-duration`](#control-plane)，在它被设置的地方读取 |
+| 每个控制面实例多久回收一次修订 | 1 小时，常量：回收什么由 `min-age` 和 `max-count` 决定 | |
+| 修订链之外的记录、或登记了却从未写入的变更何时删除 | 满一轮回收的年龄：1 小时 | 回收间隔 |
+| 多久查看一次处于影子阶段的变更 | `min-duration` 的十五分之一，在 250 ms 到 1 分钟之间：默认 `1m` | [`cosec.control.shadow.min-duration`](#control-plane) |
+| 控制 API 读取的最大请求体 | 文档上限（8 MB）再加操作外层 JSON 的 2 MB：10 MB | 文档上限 |
+| 吊销缓存本地副本的初始容量和空闲过期 | 没有：缓存自己决定大小，`local-max-age` 让每个条目过期 | |
+
+曾经设置过其中某一项的 key 会让启动失败（作为 CoSec 不读取的 key），并说明它已不再是配置项，以及由什么取代（[未知配置项](#unknown-properties)）。
 
 ## 功能开关 {#feature-switches}
 
@@ -166,21 +186,16 @@ CoSec 没有哪个配置项叫这些名字，而已知的 key 无论来源都不
 | 配置项 | 类型 | 默认值 | 作用 |
 |---|---|---|---|
 | `cosec.authorization.snapshot.local-max-age` | duration | `30s` | CoCache 中文档的本地副本可以为冷加载提供多久，之后重新询问 Redis。无论缓存定制器或 `cocache.*` 配置项设置了什么，都以它为准。 |
-| `cosec.authorization.snapshot.revalidate-interval` | duration | `10s` | 多久开始一轮，用条件读向 Redis 确认每个已装入的文档；上一轮还在进行时，下一轮在它结束后立即开始，两轮从不重叠。失效消息丢失的变化，由它可读之后第一个到达该文档的一轮装上（`SNP-6`）。至少为 `1s`、不超过 `5m`、小于 `lag-warn`，配置了 `fail-closed.tenants` 时还要小于 `fail-closed.max-lag`；否则启动失败。每一轮在 Redis 上每份文档只花几微秒，与文档大小无关（[存储](./storage.md#what-revalidation-costs-redis)）。 |
-| `cosec.authorization.snapshot.lag-warn` | duration | `60s` | 文档超过这个时长未被确认时，以 `WARN` 记录。不得超过 `lag-escalate`。 |
-| `cosec.authorization.snapshot.lag-escalate` | duration | `5m` | 文档超过这个时长未被确认时，以 `ERROR` 记录为陈旧。 |
+| `cosec.authorization.snapshot.revalidate-interval` | duration | `10s` | 多久开始一轮，用条件读向 Redis 确认每个已装入的文档；上一轮还在进行时，下一轮在它结束后立即开始，两轮从不重叠。失效消息丢失的变化，由它可读之后第一个到达该文档的一轮装上（`SNP-6`）。至少为 `1s`、不超过 `5m`，配置了 `fail-closed.tenants` 时还要小于 `fail-closed.max-lag`；否则启动失败。文档超过 6 个间隔未被确认时以 `WARN` 记录，超过 30 个时以 `ERROR` 记录为陈旧（[由计算得出，而非配置](#computed-not-configured)）。每一轮在 Redis 上每份文档只花几微秒，与文档大小无关（[存储](./storage.md#what-revalidation-costs-redis)）。 |
 | `cosec.authorization.snapshot.fail-closed.tenants` | 租户 id 集合 | 空 | 不得基于旧文档决策的租户：这类租户的请求读取的最旧文档，若上次确认距今超过 `max-lag`，请求得到 `503`（`SourceUnavailable`），除非有 DENY 匹配。`*` 表示所有租户：租户多到无法一一列出的宿主，可以借此为所有租户选择新鲜度而非可用性。其他租户继续基于已装入的文档决策。 |
 | `cosec.authorization.snapshot.fail-closed.max-lag` | duration | `30m` | 上述租户超过这个滞后即失败即拒绝。不能为负。 |
-| `cosec.authorization.snapshot.cold-load-timeout` | duration | `2s` | 请求等待一个未装入的文档多久。超过后，对这个请求而言该文档算作失败。必须为正。 |
 | `cosec.authorization.snapshot.max-apps` | int | `1024` | 内存中最多持有的应用文档数（为正）；超过后丢弃最久未用的一个，需要时再加载。冷加载突发时，一个族可能短暂地持有更多：最多为该上限的两倍，且绝不超出上限 4,096 个以上，另加此刻正在加载的文档；超过这个数时，加载该文档的线程在回答之前最多驱逐其中 64 个，其余由后勤线程驱逐（[存储](./storage.md#how-instances-read-documents)）。 |
 | `cosec.authorization.snapshot.max-tenants` | int | `16384` | 租户文档的同一上限（为正）。平台文档从不被丢弃。按实例持有它所服务的租户来定：一个含 5 个各 20 项权限的角色和 20 条绑定的租户文档约占 30 KB，16,384 个位置全部用满约占 490 MB 堆（[为 SaaS 网关定容量](./deployment.md#sizing-a-saas-gateway)）。 |
 | `cosec.authorization.snapshot.max-absent-apps` | int | `256` | 最多记住多少个没有应用文档的应用 id（为正），与 `max-apps` 分开计（`SNP-7`）：应用 id 来自请求，所以客户端编造的应用挤不掉真实的应用，超出部分的每个 id 都会再读一次 Redis。 |
 | `cosec.authorization.snapshot.max-absent-tenants` | int | `65536` | 最多记住多少个没有租户文档的租户 id（为正），与 `max-tenants` 分开计（`SNP-7`）。这类租户的每个请求都读这个条目；被丢弃的条目在该租户下一个请求时再从 Redis 读。每个约 470 字节：全部用满约 30 MB。 |
-| `cosec.authorization.snapshot.reload-concurrency` | int | `16` | 一次重新确认并发确认的文档数（为正）。一次确认约耗时：持有的条目数 × 一次条件读取 ÷ 此值；80,000 个条目、每次读取 1 ms 时，并发 4 为 25 秒、8 为 12.6 秒、16 为 6.3 秒（实测）；16 使默认上限用满时的一轮在读取不超过约 2 ms 时仍在默认间隔之内。平均读取速率不变，即 条目数 ÷ `revalidate-interval`；只有一轮期间的读取更密集。超过 `revalidate-interval` 时，确认一轮接一轮地跑，滞后随之增长。 |
 | `cosec.authorization.snapshot.prewarm-apps` | 应用 id 列表 | 空 | 启动时在平台文档（总会加载）之后加载的应用文档。在平台文档和列出的每个文档都装入之前，就绪状态拒绝流量；存活状态不受影响。 |
 | `cosec.authorization.snapshot.prewarm-host-apps` | boolean | `true` | 启动时像 `prewarm-apps` 一样加载本主机指定的应用并持有它们（`SNP-20`）：它的 `cosec.authorization.scope.app-id`，网关上还有每条路由的 `cosec-app-id`。就绪等待每一个，直到 Redis 回答有文档或没有文档。网关的路由刷新时，路由第一次指定的应用在那时加载，不在请求路径上。被持有的应用文档在发布后几秒内被替换（失效消息或下一轮重新确认），与平台文档相同。关闭时，这些应用在第一个请求时加载；`prewarm-apps` 两种情况下都照常工作。 |
 | `cosec.authorization.snapshot.prewarm-tenants` | 租户 id 列表 | 空 | 启动时加载的租户文档，同上。 |
-| `cosec.authorization.snapshot.compile-threads` | int | `2` | 编译文档的线程数。必须为正。 |
 | `cosec.authorization.snapshot.eviction-check` | `fail`、`warn` | `fail` | Redis 某个节点的 `maxmemory-policy` 不是 `noeviction`，或读不到（`INFO memory` 失败或被拒绝，CoCache 后端被包装或是自定义的）时，启动怎么办。`fail` 终止启动。`warn` 照常启动，并记录一条以 `!!!` 开头的 `WARN`（[Redis 要求](./storage.md#redis-requirements)）。CoCache 的内存后端总是通过。无论哪种，实例都会每个 `revalidate-interval` 再次读取该策略，Redis 可能驱逐时 `cosecSnapshotEviction` 健康指示器为 `DOWN`；读不到策略时，`fail` 下为 `DOWN`，`warn` 下为 `UP`，详情 `eviction: unknown`（[故障排查](./troubleshooting.md#cosecsnapshoteviction-is-down)）。 |
 
 ## 影子窗口 {#shadow-windows}
@@ -192,7 +207,6 @@ CoSec 没有哪个配置项叫这些名字，而已知的 key 无论来源都不
 |---|---|---|---|
 | `cosec.authorization.shadow.enabled` | boolean | `true` | 对抽样的请求在暂存的候选上再求值一次，并把本实例的报告和状态写入 Redis。关闭后，本实例的流量在窗口中不计数，它编译不了的候选也不会阻塞窗口，它也不为传播视图写状态。 |
 | `cosec.authorization.shadow.sample-rate` | double，`0` 到 `1` | `0.1` | 在候选上再求值的请求比例，不在请求路径上执行。 |
-| `cosec.authorization.shadow.report-interval` | duration | `10s` | 实例多久写一次报告和状态。至少 `1ms`：更短的间隔会让启动失败。 |
 | `cosec.authorization.shadow.instance-id` | string | 随机 UUID | 本实例在报告和状态中的 id 的前缀：id 为 `<instance-id>.<后缀>`，后缀每次启动都换新，所以 id 对每次进程启动唯一。重启后的进程因此绝不会替换前一个进程的报告，否则它记下的 `CANDIDATE_ERROR` 会消失，被它阻塞的窗口就会解除阻塞。ACL 用 `<instance-id>.*` 把实例限制在自己的 key 上（[存储](./storage.md#who-may-write-which-keys)）。只能包含字母、数字、`.`、`_` 和 `-`，因为它是 Redis key 的结尾。其他 id 使启动失败。 |
 
 ## 认证 {#authentication}
@@ -257,9 +271,7 @@ CoSec 没有哪个配置项叫这些名字，而已知的 key 无论来源都不
 | 配置项 | 类型 | 默认值 | 作用 |
 |---|---|---|---|
 | `maximum-size` | long | `500000` | 本地副本的最大条目数。 |
-| `initial-capacity` | int | CoCache 的默认值 | 本地副本的初始容量。 |
 | `local-max-age` | duration（不带单位的数字表示秒） | `30s` | 本地副本最多存活多久：失效消息丢失时陈旧程度的上限。 |
-| `expire-after-access` | duration（不带单位的数字表示秒） | 无 | 这么久没被读取的本地副本被丢弃。 |
 
 这些设置只决定本地副本的大小和寿命。吊销记录在 Redis 中的寿命在写入时确定。
 
@@ -294,11 +306,8 @@ CoSec 没有哪个配置项叫这些名字，而已知的 key 无论来源都不
 | `cosec.control.http.base-path` | string | `/cosec/control` | 控制 API 的路径。路由位于 `{base-path}/v1` 之下，因此移动 API 时版本不会丢失。 |
 | `cosec.control.http.enabled` | boolean | `true` | 本实例是否提供控制 API 的路由（`CTL-58`）：`false` 一个也不提供，用于内嵌控制面、只在进程内调用它的应用。只能是 `true` 或 `false`。 |
 | `cosec.control.http.service-port` | int | 未设置 | 给直接调用控制面的服务用的独立端口，提供控制 API 的**服务范围**（`CTL-58`）：租户与应用文档（有哪些、读取，以及对租户文档的 `:apply`）和不需要人参与的变更流程（提出租户文档的变更、读取、rebase、abandon、运行或跳过影子窗口、发布）。其余路由（平台文档、审批、回滚、break-glass 和各种查询）在该端口上都是 `404`，按 id 指定的非租户文档的变更、非租户文档变更的列表以及控制 API 之外的任何路径也是；按状态列出时只显示租户文档的变更。控制面门面（`ControlService`）触及的正是这些路由。它从不扩大调用方能做的事：每条路由都按调用方声明的主体授权。只支持 WebFlux；不能是应用端口或管理端口（`0` 绑定一个临时端口，以 `local.control.service.port` 公布）。有服务端口的宿主声明 `only-trusted-callers-can-reach=true`：此时 `only-gateway-can-reach` 启动失败，因为该端口放行服务。未设置则没有这个端口。停止时先解绑，在 `spring.lifecycle.timeout-per-shutdown-phase` 内等待在途请求，再关闭所有仍打开的连接。 |
-| `cosec.control.http.max-body-size` | data size | `10MB` | 控制 API 读取的最大请求体，WebMvc 与 WebFlux 相同（`CTL-41`）：文档的 8 MB 上限，再加上操作外层 JSON 的余量。更大的请求体得到 `400` `invalid-request`。WebFlux 上它代替 `spring.codec.max-in-memory-size` 约束控制路由。没有已放行主体的请求根本不读请求体（`401`）。 |
 | `cosec.control.revisions.max-count` | int | `50` | 每个文档总是保留的修订数；更早的修订在同时超过 `min-age` 后被回收。未关闭变更所依赖的修订会被保留。 |
 | `cosec.control.revisions.min-age` | duration | `7d` | 比这年轻的修订总是保留。 |
-| `cosec.control.revisions.orphan-age` | duration | `1h` | 冲突发布留下的记录到这个年龄后删除；未完成变更集合中没有记录的变更成员（变更先登记再写入）也一样，从本实例第一次发现它缺失时算起。 |
-| `cosec.control.revisions.reclaim-interval` | duration | `1h` | 每个控制面实例多久回收一次修订、让每个文档到期的未完成变更过期；租约保证同一时间只有一个实例处理某个文档。必须为正。 |
 | `cosec.control.changes.expire-after` | duration | `7d` | 未关闭的变更请求在提出后这么久过期，并离开未关闭变更列表。 |
 | `cosec.control.approval.expire-after` | duration | `72h` | 一次审批的有效期。长于令牌吊销的保留时长 `cosec.jwt.token-validity.refresh` 时启动失败：审批会比其令牌的吊销记录活得更久。 |
 | `cosec.control.approval.four-eyes` | boolean | `false` | 是否也分析在该文档上持有 `cosec:approve` 的平台主体（信任根）的变更：分析无法证明受限的部分随之需要另一位平台主体审批。升级权限的变更无论如何都需要。 |
@@ -306,7 +315,6 @@ CoSec 没有哪个配置项叫这些名字，而已知的 key 无论来源都不
 | `cosec.control.shadow.min-duration` | duration | `15m` | 影子窗口最早在这之后、并且有了 `min-samples` 时关闭。 |
 | `cosec.control.shadow.min-samples` | long | `1000` | 窗口在 `max-duration` 之前关闭所需的已比较样本数。`0` 让窗口只按时间关闭，没有任何请求时也没有任何样本：此时影子步骤什么也证明不了，启动时会以 `WARN` 说明。 |
 | `cosec.control.shadow.max-duration` | duration | `24h` | 窗口到这个年龄时即使样本不足也关闭，作为发布者必须确认的证据不足。不得小于 `min-duration`。 |
-| `cosec.control.shadow.check-interval` | duration | `1m` | 多久查看一次处于影子阶段的变更，同一时间只有一个实例执行；窗口最多晚这么久关闭。必须为正。 |
 | `cosec.control.audit.required-timeout` | duration | `5s` | 所有 `REQUIRED` 变更监听器合计最多用多久记录一个受控步骤（发布、break-glass），超过后该步骤以 `503` 失败。 |
 | `cosec.control.audit.kafka.enabled` | boolean | `true` | Kafka 变更监听器（需要 `cosec-kafka` 和一个 `KafkaOperations` bean）。 |
 | `cosec.control.audit.kafka.topic` | string | `cosec-control-audit` | 变更事件的 Kafka topic。 |

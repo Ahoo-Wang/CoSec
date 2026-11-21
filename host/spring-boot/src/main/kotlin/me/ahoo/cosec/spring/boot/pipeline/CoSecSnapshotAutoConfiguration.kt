@@ -205,7 +205,7 @@ class CoSecSnapshotAutoConfiguration {
     /**
      * The data plane's part of shadow windows (RFC 0007 §6.4): candidates read from Redis and compiled with this
      * instance's compiler, a [ShadowListener] among the decision listeners, and this instance's reports and status
-     * written every `report-interval`. A candidate that does not compile here is reported as `CANDIDATE_ERROR`, which
+     * written every report interval ([DerivedSnapshotSettings.reportInterval]). A candidate that does not compile here is reported as `CANDIDATE_ERROR`, which
      * blocks its window.
      */
     @Configuration(proxyBeanMethods = false)
@@ -271,7 +271,7 @@ class CoSecSnapshotAutoConfiguration {
             CoCacheShadowReports.create(factory, cosec.keyPrefix)
 
         /**
-         * Reports every `report-interval`. A window is forgotten once its candidate is no longer staged and its last
+         * Reports every report interval ([DerivedSnapshotSettings.reportInterval]). A window is forgotten once its candidate is no longer staged and its last
          * report is written (#1210), as read from the store of record [candidates] reads from; with an application's own
          * [CandidateSource] that is not a [CachingCandidateSource], from the only [CandidateStore], else never.
          */

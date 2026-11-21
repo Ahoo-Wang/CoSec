@@ -229,7 +229,7 @@ So is the staged list the shadow listener samples by, with shadow windows on (`O
 
 | Meter | Tag | Counts |
 |---|---|---|
-| `cosec.shadow.staged.age` | none | a gauge, in seconds: how long ago this instance last read the staged list, `NaN` before its first read. About `cosec.authorization.shadow.report-interval` (10 s) while Redis answers; rising, the list cannot be read, the instance reads every candidate by its key and logs `The staged list cannot be read since it was at <instant>` once |
+| `cosec.shadow.staged.age` | none | a gauge, in seconds: how long ago this instance last read the staged list, `NaN` before its first read. About the report interval ([a sixth of the status's life](./configuration.md#computed-not-configured), 10 s) while Redis answers; rising, the list cannot be read, the instance reads every candidate by its key and logs `The staged list cannot be read since it was at <instant>` once |
 
 With the local rate limiter (no Redis rate limiting, [Rate limiting](../policies/rate-limiting.md#the-local-limiter-is-bounded)),
 so are the new buckets it could not admit:
@@ -265,12 +265,12 @@ there are 80 series whatever the number of documents. `kind` is `platform`, `app
 
 | Meter | Type | Tags | What it says |
 |---|---|---|---|
-| `cosec.snapshot.loads` | counter | `kind`, `result` | a request that had to load a document: `cold` (the request waited for its load), `failed` (the load failed, and the request is decided fail-closed), `timeout` (the load outlasted `cold-load-timeout`). A request that finds its documents installed is not counted: that is every request's path |
+| `cosec.snapshot.loads` | counter | `kind`, `result` | a request that had to load a document: `cold` (the request waited for its load), `failed` (the load failed, and the request is decided fail-closed), `timeout` (the load outlasted the cold-load timeout). A request that finds its documents installed is not counted: that is every request's path |
 | `cosec.snapshot.compile.duration` | timer | `kind`, `result` = `success`, `failure` | compiling a document; `failure` is a stored document that does not compile on this instance |
 | `cosec.snapshot.installs` | counter | `kind` | documents installed: a first load or a new revision |
 | `cosec.snapshot.installed` | gauge | `kind`, `state` | the entries held now, by state: `present`, `invalid` (does not compile here), `pending` (its inputs changed and it waits for its compile again), `undecodable`, `absent` (no document, none seen before), `lost` (a document seen before is gone), `unreadable`. The states add up to what the instance holds |
 | `cosec.snapshot.lag` | gauge, seconds | `kind` | the oldest confirmation by the store among the entries held, failed ones aside |
-| `cosec.snapshot.lagging` | gauge | `kind`, `level` = `warn`, `escalate` | entries past `lag-warn` (those past `lag-escalate` included) and past `lag-escalate` |
+| `cosec.snapshot.lagging` | gauge | `kind`, `level` = `warn`, `escalate` | entries past the warning threshold, 6 revalidation intervals (those past the escalation threshold included), and past the escalation threshold, 30 |
 | `cosec.snapshot.summary.age` | gauge, seconds | none | the time since the pass that `installed`, `lag` and `lagging` read |
 | `cosec.snapshot.lag.exceeded` | counter | `kind`, `level` | each lag the instance logs |
 | `cosec.snapshot.regressions` | counter | `kind` | the store answered an older revision than the one installed |
@@ -290,7 +290,7 @@ The share of requests that waited for a document is `loads{result=cold}` over th
 |---|---|
 | any rise of `lost` | a document vanished from the store, and its key fails closed |
 | any rise of `regressions` | the store lost a write it acknowledged: check the last failover |
-| any rise of `lag.exceeded{level=escalate}` | the instance decides on a document the store has not confirmed for `lag-escalate` |
+| any rise of `lag.exceeded{level=escalate}` | the instance decides on a document the store has not confirmed for 30 revalidation intervals |
 | `installed{state=invalid}` above zero | a stored document does not compile on this instance (an older version than the control plane?) |
 | a sustained rate of `handoffs.refused{to=caller}` | the compile pool is saturated, and requests' threads compile |
 | any rise of `housekeeping.refused` | the instance is dropping its own log lines: a log appender too slow for the load ([Snapshot log lines are missing](./troubleshooting.md#snapshot-log-lines-are-missing)) |
@@ -329,8 +329,8 @@ The meters above count; the health indicators and logs below answer whether an i
   document refused an anonymous `POST` of it, until a later request is permitted. The same refusal logs one `WARN` per route per minute,
   naming the property and the path. Both come from the decisions of real requests, so they are never wrong, and neither
   makes the instance unready ([Building a client](../integration/clients.md#what-your-application-serves)).
-- **Lag logs.** An instance logs a document not confirmed by Redis for longer than `lag-warn` at `WARN`, and longer
-  than `lag-escalate` at `ERROR` ([How instances read documents](./storage.md#how-instances-read-documents)). Other
+- **Lag logs.** An instance logs a document not confirmed by Redis for longer than 6 revalidation intervals at `WARN`, and longer
+  than 30 at `ERROR` ([How instances read documents](./storage.md#how-instances-read-documents)). Other
   lines to alert on: `Snapshot document [<doc>] disappeared from the store; failing closed.`,
   `Snapshot document [<doc>] regressed from revision <a> to <b>; ...`, and
   `Snapshot prewarm failed for [<docs>]; retrying in <backoff>.`

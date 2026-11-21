@@ -330,7 +330,7 @@ permit the authenticated caller on that path), then is authorized again in app `
 policies. Bind the first administrator with `cosec-migrate bootstrap --to-redis ... --platform-admin <principal>`
 (a `(platform)`-tenant principal), or with a principal binding of the platform document to `cosec:platform-admin`
 in app `cosec-control`. On WebFlux, raise `spring.codec.max-in-memory-size` for large documents; on WebMvc the limit is
-`cosec.control.http.max-body-size` (16MB). Workflow: https://cosec.ahoo.me/policies/testing.
+10MB (the document cap and 2MB). Workflow: https://cosec.ahoo.me/policies/testing.
 
 The control plane's token is issued for tenant `(platform)` (an administrator) or the tenant's own, and for the app
 `cosec.control.app-id`: `TokenSubject(id = "alice", app = "cosec-control", tenant = "(platform)")`. A change is

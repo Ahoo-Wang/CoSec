@@ -988,7 +988,7 @@ policy too and is not told by that setting: also set `cocache.redis.assume-maxme
   `cosec.authorization.snapshot.revalidate-interval` (default `10s`). Redis transfers a document only when it
   changed.
 - **During a Redis outage, installed documents keep deciding** as last confirmed, so a platform DENY still holds. A
-  request that needs a document not yet loaded waits up to `cold-load-timeout` (default `2s`) and is then `503`.
+  request that needs a document not yet loaded waits up to the cold-load timeout (`2s`) and is then `503`.
   In 7.x, requests started failing with `500` once a local copy expired (5 minutes by default). For a tenant listed in
   `cosec.authorization.snapshot.fail-closed.tenants`, a request whose documents were last confirmed longer ago than
   `fail-closed.max-lag` is `503` instead, unless a DENY matches.
@@ -1205,7 +1205,7 @@ read; no property turns the check off ([Unknown properties](./configuration.md#u
 | `cosec.authorization.cache.migration.` | Removed. |
 | `cosec.authorization.cache.token.concurrency-level` | Removed: ignored since CoCache 5. |
 | `cosec.authorization.cache.token.expire-after-write` | `cosec.authentication.revocation.cache.local-max-age`, a duration (`30s`). |
-| `cosec.authorization.cache.token.expire-unit` | Removed: the durations carry their unit. `expire-after-access` is a duration too; a bare number is still seconds. |
+| `cosec.authorization.cache.token.expire-unit` | Removed: the durations carry their unit. a bare number of seconds is still read as seconds. |
 | `cosec.authorization.gateway.enabled` | Removed: the gateway filter comes with `cosec-gateway`. |
 | `cosec.limiter.` | Removed: rate limit rules are in the platform document ([Rate limit rules become obligations](#rate-limit-rules-become-obligations)); a different limiter key prefix needs a `RateLimiter` bean of your own. |
 | `cosec.shadow.` | Removed: shadow windows are control-plane operations; each instance's part is `cosec.authorization.shadow.*`. |
