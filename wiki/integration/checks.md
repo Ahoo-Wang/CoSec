@@ -383,7 +383,8 @@ the same, records the same, and is refused the same (`CTL-65`).
     believes any code in its own process: that code holds the control store's write account anyway. What is believed
     is who acts, never what that principal may do. The policies still decide each call for it, with the bindings the
     platform document gives it, and the record names it.
-- **What it reaches:** reads of a tenant's or an app's document (`document`, `revisions`, `revision`, `diff`), and
+- **What it reaches:** which tenant and app documents there are (`documents`), reads of a tenant's or an app's
+  document (`document`, `revisions`, `revision`, `diff`), and
   the change flow of a tenant's document (`propose`, `apply`, `change`, `changes`, `rebase`, `startShadow`,
   `skipShadow`, `abandon`, `publish`). An automated change can start its shadow window, read the change until the
   window closes, and publish with the summary's acknowledgement, rather than skip the window. Nothing reaches the

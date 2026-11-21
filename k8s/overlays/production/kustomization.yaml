@@ -1,10 +1,13 @@
 # Production: your own Redis, two to ten gateways behind a HorizontalPodAutoscaler, a PodDisruptionBudget, a
-# NetworkPolicy, and 3200Mi per gateway (a 2 GiB heap). Set the Redis address below, then build your own overlay on this
-# one (or copy it) for your namespace, routes and image tag.
+# NetworkPolicy, and 3200Mi per gateway (a 2 GiB heap); and the control plane's host, with its own Redis account, three
+# NetworkPolicies (one per port) and 3200Mi. Set the Redis address below, name the services that may call the control plane
+# in ../../control/networkpolicy-services.yaml (as shipped it admits none), then build your own overlay on this one (or copy
+# it) for your namespace, routes and image tags.
 #
 #   kubectl create namespace cosec
 #   kubectl -n cosec create secret generic cosec-jwt-secret --from-literal=secret="$(openssl rand -base64 48)"
 #   kubectl -n cosec create secret generic cosec-redis-secret --from-literal=password=<the Redis password>
+#   kubectl -n cosec create secret generic cosec-control-redis-credentials --from-literal=username=cosec-control --from-literal=password=<its password>
 #   kubectl apply -k k8s/overlays/production
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
@@ -13,9 +16,11 @@ namespace: cosec
 
 resources:
   - ../../base
+  - ../../control
   - hpa.yaml
   - pdb.yaml
   - networkpolicy.yaml
+  - control-pdb.yaml
 
 labels:
   - pairs:
@@ -33,6 +38,14 @@ configMapGenerator:
       # - SPRING_DATA_REDIS_SSL_ENABLED=true
       # Only for a Redis that denies INFO, once you have set noeviction on it yourself:
       # - COSEC_AUTHORIZATION_SNAPSHOT_EVICTIONCHECK=warn
+  # The control plane's host: the same Redis, its own account (the Secret cosec-control-redis-credentials, below). It
+  # writes the documents every gateway reads, so its account is the only one that may write them.
+  - name: cosec-control-redis
+    literals:
+      - SPRING_DATA_REDIS_HOST=redis.example.internal
+      - SPRING_DATA_REDIS_PORT=6379
+      # - SPRING_DATA_REDIS_SSL_ENABLED=true
 
 patches:
   - path: deployment-patch.yaml
+  - path: control-deployment-patch.yaml

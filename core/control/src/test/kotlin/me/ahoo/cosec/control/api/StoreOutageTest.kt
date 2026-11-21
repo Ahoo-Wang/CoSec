@@ -57,6 +57,7 @@ class StoreOutageTest {
         Route("POST", "/changes/$id:reject", """{"reason":"r"}"""),
         Route("POST", "/changes/$id:abandon", "{}"),
         Route("POST", "/changes/$id:publish", "{}"),
+        Route("GET", "/documents", query = mapOf("kind" to "tenant")),
         Route("GET", "/documents/platform"),
         Route("GET", "/documents/tenant:acme"),
         Route("GET", "/documents/tenant:acme/revisions"),

@@ -23,6 +23,7 @@ import me.ahoo.cosec.model.Match
 import me.ahoo.cosec.model.Resource
 import me.ahoo.cosec.model.SpaceId
 import me.ahoo.cosec.model.TenantId
+import me.ahoo.cosec.model.decision.DocumentKind
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 
 /**
@@ -39,6 +40,15 @@ object ControlResources {
     const val DEFAULT_SPACE: String = "(default)"
 
     fun document(key: SnapshotKey): Resource = Resource(DOC, documentId(key), emptyMap())
+
+    /**
+     * A layer, the set of its documents, as `GET /documents?kind=` lists it (`CTL-68`): `doc/tenant` or `doc/app`.
+     * `cosec:read` on it is "may know which documents of the layer exist", and nothing of what any of them holds.
+     */
+    fun layer(kind: DocumentKind): Resource {
+        require(kind != DocumentKind.PLATFORM) { "The platform is one document, not a layer of documents." }
+        return Resource(DOC, kind.name.lowercase(), emptyMap())
+    }
 
     /** An entry, or with an empty [id] a section: `doc/app/order/catalog`, `doc/platform/limits`. */
     fun entry(key: SnapshotKey, kind: String, id: String): Resource =

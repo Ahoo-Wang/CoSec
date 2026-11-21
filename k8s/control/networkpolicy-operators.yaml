@@ -1,0 +1,32 @@
+# Port 8080, the operators' API: the gateway's pods, and nothing else.
+#
+# This host believes the CoSec-Identity header of whoever reaches the port: it is base64url JSON with no signature, so a
+# workload that can connect can send it as the platform administrator, and be both the author and the approver of a
+# change. This policy, with the two beside it, is what makes the statement in deployment.yaml true. It is the control,
+# not defence in depth: the host contains mistakes and keeps the audit, and the network is the boundary.
+#
+# The gateway's pods are those the gateway base labels app.kubernetes.io/name: cosec-gateway, in this policy's own
+# namespace. A gateway in another namespace needs the namespaceSelector of
+# ../examples/gateway-mode-service-networkpolicy.yaml in the same `from` entry. Anyone who can create a pod with that
+# label in the admitted namespace is the gateway as far as this policy can tell. Needs a network plugin that enforces
+# NetworkPolicy; without one it does nothing, so test that a pod of another label cannot connect.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: cosec-control-operators
+  labels:
+    app.kubernetes.io/name: cosec-control
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: cosec-control
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: cosec-gateway
+      ports:
+        - port: http
+          protocol: TCP

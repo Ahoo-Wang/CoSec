@@ -1,0 +1,20 @@
+# Rule: CTL-68
+# Mutant: a store that cannot answer reads as an empty list: the listing answers an empty page instead of a 503
+# Tests: :control:test --tests me.ahoo.cosec.control.api.DocumentListingTest
+
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/api/DocumentListing.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/api/DocumentListing.kt
+index 54893077b..211c7b45e 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/api/DocumentListing.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/api/DocumentListing.kt
+@@ -56,7 +56,10 @@ class DocumentListing internal constructor(
+     private val authority: ChangeAuthority,
+     clock: Clock = Clock.systemUTC(),
+ ) {
+-    private val documents = SharedRead(clock) { revisions.documents().sortedBy { it.toString() } }
++    private val documents = SharedRead(clock) {
++        (try { revisions.documents() } catch (_: me.ahoo.cosec.control.store.ControlStoreException) { emptySet() })
++            .sortedBy { it.toString() }
++    }
+ 
+     suspend fun list(operator: Operator, kind: DocumentKind, after: String?, limit: Int): DocumentPage {
+         requireRequest(kind != DocumentKind.PLATFORM) { "A listing is of the tenant or the app documents." }

@@ -1,0 +1,33 @@
+# cosec-control-server: the control plane's host, with the three NetworkPolicies that make its one required statement
+# true, for the overlays in ../overlays to build on. Not for applying alone: the overlay supplies the Redis address (the
+# ConfigMap cosec-control-redis), the namespace and any labels. Deploying:
+# https://cosec.ahoo.me/operations/deployment#kubernetes
+#
+# The Deployment states `COSEC_PIPELINE_IDENTITY_ONLYTRUSTEDCALLERSCANREACH=true`, and the image does not start without
+# it: it believes the CoSec-Identity header of whoever can reach it. The policies in this directory are what makes the
+# statement true, so they are resources of this kustomization and never left out of it: a copy of these manifests that drops
+# them, or an overlay that removes them, makes the statement false.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - deployment.yaml
+  - service.yaml
+  - networkpolicy-operators.yaml
+  - networkpolicy-services.yaml
+  - networkpolicy-management.yaml
+
+configMapGenerator:
+  # The generated name carries a hash of application.yaml, so a change to the file rolls the pods.
+  - name: cosec-control-config
+    files:
+      - application.yaml
+
+# Nothing secret is generated here, and no token is signed or verified by this host: there is no JWT secret. The Redis
+# account of the production overlay comes from the Secret cosec-control-redis-credentials, which you create.
+
+images:
+  - name: ghcr.io/ahoo-wang/cosec-control
+    # The tag of the gateway's (../base/kustomization.yaml): a release sets both (CONTRIBUTING.md), and a test holds them
+    # equal. The first control image is the one of the release that follows 8.0.0-beta.4: until then this tag does not exist.
+    newTag: 8.0.0-beta.4
