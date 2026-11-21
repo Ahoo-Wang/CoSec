@@ -826,6 +826,7 @@
       "level": "build",
       "pending": null,
       "guards": [
+        "spring-boot:ControlServicePortSettingsTest#the service port serves the control API's routes and no route of the application, under the base path or not",
         "control:ControlProfileTest#the service profile serves a tenant document and its history, and the change flow",
         "control:ControlProfileTest#what is a person's or the platform's is a 404 on the service profile, and is served on the operators' one",
         "control:ControlProfileTest#a proposal for the platform document is a 404 on the service profile, never reaching the control plane",
