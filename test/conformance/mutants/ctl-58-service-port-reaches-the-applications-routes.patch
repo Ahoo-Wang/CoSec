@@ -3,15 +3,15 @@
 # Tests: :spring-boot:test --tests me.ahoo.cosec.spring.boot.realserver.ControlServicePortSettingsTest
 
 diff --git a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/control/ServicePortRoutes.kt b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/control/ServicePortRoutes.kt
-index 5b2276ea6..14a188599 100644
+index 9f9776ee9..fc82934fd 100644
 --- a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/control/ServicePortRoutes.kt
 +++ b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/control/ServicePortRoutes.kt
-@@ -47,7 +47,7 @@ internal class ServicePortRoutes(
+@@ -48,7 +48,7 @@ internal class ServicePortRoutes(
  
      override fun filter(exchange: ServerWebExchange, chain: WebFilterChain): Mono<Void> {
          val local = exchange.request.localAddress?.port
--        if (local == null || local != listener.boundPort) {
-+        if (local == null || local != listener.boundPort || local >= 0) {
+-        if (local == null || local != servicePort()) {
++        if (local == null || local != servicePort() || local >= 0) {
              return chain.filter(exchange)
          }
          val request = ServerRequest.create(exchange, strategies.messageReaders())
