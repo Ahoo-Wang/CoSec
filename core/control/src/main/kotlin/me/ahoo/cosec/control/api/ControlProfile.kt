@@ -24,9 +24,9 @@ import me.ahoo.cosec.spi.snapshot.SnapshotKey
  * Which of the control API's routes a listener serves (`CTL-58`). [OPERATORS] serves all of them: the port the gateway
  * routes to, for people. [SERVICE] is the narrow set a service that calls the control plane directly may ask for, on a
  * port of its own, so that the network, not a filter, says who may ask for what: the tenant and app documents (their
- * reads, and `:apply` on a tenant's), and the change flow that needs no person (propose, read, rebase, abandon, skip the
- * shadow window, publish). Whatever is outside it is a `404`, as if it did not exist, before the control plane is
- * asked: the platform document, the shadow window, approvals and rejections, rollback, break-glass, and the queries
+ * reads, and `:apply` on a tenant's), and the change flow that needs no person (propose, read, rebase, abandon, run or
+ * skip the shadow window, publish). Whatever is outside it is a `404`, as if it did not exist, before the control plane is
+ * asked: the platform document, approvals and rejections, rollback, break-glass, and the queries
  * (`simulate`, `explain`, `analyze`, propagation) are people's, or the platform's.
  *
  * The profile narrows what is served; it never widens what the caller may do. Every route it serves is authorized for
@@ -87,7 +87,7 @@ enum class ControlProfile {
         val (_, verb) = verbOf(rest.single())
         return when (verb) {
             null -> method == "GET"
-            "rebase", "abandon", "skip-shadow", "publish" -> method == "POST"
+            "rebase", "shadow", "abandon", "skip-shadow", "publish" -> method == "POST"
             else -> false
         }
     }

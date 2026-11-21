@@ -68,7 +68,6 @@ class ControlProfileTest {
             "POST" to "/documents/tenant:acme:rollback",
             "POST" to "/documents/app:order:apply",
             "POST" to "/documents/platform:apply",
-            "POST" to "/changes/c1:shadow",
             "POST" to "/changes/c1:approve",
             "POST" to "/changes/c1:reject",
             "POST" to "/break-glass",
@@ -134,6 +133,8 @@ class ControlProfileTest {
         admits("POST", "changes/c1").assert().isFalse()
         admits("GET", "changes/c1:publish").assert().isFalse()
         admits("POST", "changes/c1:publish").assert().isTrue()
+        admits("POST", "changes/c1:shadow").assert().isTrue()
+        admits("GET", "changes/c1:shadow").assert().isFalse()
         admits("POST", "changes/c1:unknown").assert().isFalse()
         admits("GET", "changes/c1/x").assert().isFalse()
         // Anything else is not a route of the profile, and the operators' profile serves all of them.
