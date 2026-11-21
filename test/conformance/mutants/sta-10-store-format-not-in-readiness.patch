@@ -1,0 +1,17 @@
+# Rule: STA-10
+# Mutant: the control store format indicator leaves the readiness group, so a store not yet converted leaves the instance ready
+# Tests: :control-server:test --tests me.ahoo.cosec.control.server.ControlServerTest
+
+diff --git a/platform/control-server/src/main/resources/application.yaml b/platform/control-server/src/main/resources/application.yaml
+index 89ebb1fc5..f40e80449 100644
+--- a/platform/control-server/src/main/resources/application.yaml
++++ b/platform/control-server/src/main/resources/application.yaml
+@@ -64,7 +64,7 @@ management:
+         # format of this release: a store not yet converted (cosec-migrate repair-references) is unready, visible and
+         # named, not a pod that answers 503 for a reason the kubelet cannot see (STA-10).
+         readiness:
+-          include: readinessState,cosecControlStoreFormat
++          include: readinessState
+   endpoints:
+     web:
+       exposure:

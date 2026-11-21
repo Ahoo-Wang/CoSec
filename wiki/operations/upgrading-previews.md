@@ -27,6 +27,14 @@ Which preview of the library may run behind which preview of the gateway image: 
 
 ## From 8.0.0-beta.4 {#from-8-0-0-beta-4}
 
+- **Skipping a shadow window and rebasing a change are recorded as change events** (`CTL-63`). Affected: change
+  listeners, and consumers of the change log or the audit stream.
+  - `ChangeEvent.Kind` gains `SHADOW_SKIPPED` and `REBASED`. A skip used to be recorded only in the provenance of the
+    revision it published, so a skip whose change was abandoned left no record; now `:skip-shadow`, and a break-glass
+    change's exempt window, write `SHADOW_SKIPPED` with the reason in the note, and `:rebase` writes `REBASED`.
+  - A listener that handles every kind adds the two; one with an `else` branch, as the kind's documentation asks,
+    needs nothing.
+
 - **The control API answers from a response model of its own; a refused scope says why under `reason`; propagation
   counts the instances that hold the document** (review round 2, `R2C-11`, `R2C-12`, `CTL-61`, `CTL-62`). Affected:
   clients of the control API.
@@ -181,7 +189,7 @@ Which preview of the library may run behind which preview of the gateway image: 
   `STA-6`, `PIP-31`). Affected: every service in `cosec.pipeline.mode=gateway`, and every gateway.
   - A service in `gateway` mode believes any `CoSec-Identity` header, which carries no signature, so the network is its
     boundary. It now **fails to start** unless you write `cosec.pipeline.identity.only-gateway-can-reach: true`
-    (`COSEC_PIPELINE_IDENTITY_ONLY_GATEWAY_CAN_REACH=true`), your statement that nothing but the gateway can reach it.
+    (`COSEC_PIPELINE_IDENTITY_ONLYGATEWAYCANREACH=true`), your statement that nothing but the gateway can reach it.
     Absent, empty, `false`, `1` and `on` fail alike, and the message says what to write. Make it true first (a
     `NetworkPolicy` that admits the gateway's pods only, mutual TLS, a private network;
     [`k8s/examples/gateway-mode-service-networkpolicy.yaml`](https://github.com/Ahoo-Wang/CoSec/blob/main/k8s/examples/gateway-mode-service-networkpolicy.yaml)).

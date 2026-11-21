@@ -245,7 +245,7 @@ internal class Proposals(
         rules.requireAuthor(author, change, "rebases")
         PublishRules.requireState(change, ChangeStep.REBASE.from)
         candidates.authorize(author, change)
-        return flow.transition(id, ChangeStep.REBASE) { current ->
+        val rebased = flow.transition(id, ChangeStep.REBASE) { current ->
             val head = revisions.head(current.key)
             val base = head?.let { Base(it.revision, it.digest) } ?: Base.NONE
             candidates.checked(
@@ -254,6 +254,8 @@ internal class Proposals(
                 author
             )
         }
+        flow.audit(ChangeEvent.Kind.REBASED, rebased, author.actor)
+        return rebased
     }
 
     /**
