@@ -437,6 +437,34 @@ class UnknownPropertiesTest {
         UnknownProperties.load(loader).of(environment).assert().containsExactly("cosec.third-party.flag.x")
     }
 
+    /**
+     * The message names what to write: the key and variable that differ only in separators (the `_` of a word, which
+     * Spring reads as a `.`), or the one key a typo is within two edits of; nothing when no key is near.
+     */
+    @Test
+    fun `the message names the spelling to write`() {
+        val failures = mapOf(
+            "COSEC_AUTHORIZATION_SNAPSHOT_LOCAL_MAX_AGE" to
+                "  cosec.authorization.snapshot.local.max.age (write cosec.authorization.snapshot.local-max-age, " +
+                "or the variable COSEC_AUTHORIZATION_SNAPSHOT_LOCALMAXAGE)",
+            "COSEC_PIPELINE_IDENTITY_ONLY_GATEWAY_CAN_REACH" to
+                "  cosec.pipeline.identity.only.gateway.can.reach (write cosec.pipeline.identity.only-gateway-can-reach, " +
+                "or the variable COSEC_PIPELINE_IDENTITY_ONLYGATEWAYCANREACH)",
+            "COSEC_PIPELINE_TIMEUOT" to
+                "  cosec.pipeline.timeuot (did you mean cosec.pipeline.timeout, or the variable COSEC_PIPELINE_TIMEOUT?)",
+            "COSEC_JWT_SECRT" to "  cosec.jwt.secrt (did you mean cosec.jwt.secret, or the variable COSEC_JWT_SECRET?)",
+        )
+        failures.forEach { (variable, line) ->
+            runner.withEnvironment(mapOf(variable to "x")).run { context ->
+                context.startupFailure!!.messages().assert().describedAs(variable).contains(line)
+            }
+        }
+        // No key is near: the line is the key alone.
+        runner.withPropertyValues("cosec.nothing.like.any.key.here=1").run { context ->
+            context.startupFailure!!.messages().assert().contains("  cosec.nothing.like.any.key.here\n")
+        }
+    }
+
     /** `STA-3`: under lazy initialization, as with `spring.main.lazy-initialization=true`, the check still runs. */
     @Test
     fun `an unknown key fails startup lazily too`() {

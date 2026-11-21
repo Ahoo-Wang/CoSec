@@ -79,7 +79,7 @@ internal object RefreshMembershipChoice {
             "state that refreshed tokens keep the memberships of the token they replace, and accept the delay above. With " +
             "either, TokenRevoker.revokeSubject ends a member's tokens at once. To keep the token's memberships add " +
             "${JwtProperties.MEMBERSHIPS_ON_REFRESH_KEY}=${JwtProperties.FROM_TOKEN} (the environment variable " +
-            "COSEC_JWT_SESSION_MEMBERSHIPS_ON_REFRESH=${JwtProperties.FROM_TOKEN}). " +
+            "COSEC_JWT_SESSION_MEMBERSHIPSONREFRESH=${JwtProperties.FROM_TOKEN}). " +
             (if (written == null) "It is not set" else "It is [$written]") +
             " (STA-8, https://cosec.ahoo.me/integration/authentication#how-long-a-removed-role-lives)."
     }

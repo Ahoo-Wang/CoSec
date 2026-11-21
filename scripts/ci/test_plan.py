@@ -141,9 +141,9 @@ class FilesOutsideTheProjects(unittest.TestCase):
     def test_documentation_runs_the_groups_whose_tests_read_it(self):
         for path in ("wiki/policies/language.md", "wiki/zh/guide/introduction.md", "wiki/examples/app/documents/platform.json"):
             self.assertEqual({"core", "host", "test"}, run(path)[0], path)
-        self.assertEqual({"core", "test"}, run("skills/cosec-policy-author/SKILL.md")[0])
-        self.assertEqual({"core", "test"}, run("README.md")[0])
-        self.assertEqual({"core", "test"}, run("llms.txt")[0])
+        self.assertEqual({"core", "host", "test"}, run("skills/cosec-policy-author/SKILL.md")[0])
+        self.assertEqual({"core", "host", "test"}, run("README.md")[0])
+        self.assertEqual({"core", "host", "test"}, run("llms.txt")[0])
         self.assertEqual({"host", "test"}, run("k8s/base/application.yaml")[0])
         self.assertEqual({"core", "test"}, run("schema/8.0/policy.schema.json")[0])
         self.assertEqual({"core", "extensions", "test"}, run("contract/token/claims.json")[0])
@@ -245,7 +245,18 @@ class TheReadsTableHoldsToTheTestSources(unittest.TestCase):
     def test_the_names_in_reads_are_projects(self):
         for prefix, owners in plan.READS.items():
             self.assertTrue(set(owners) <= set(RESULT["projects"]), prefix)
-            self.assertTrue((ROOT / prefix.rstrip("/")).is_dir(), prefix)
+            # A prefix may be the start of directories (`test/system-`): it names at least one.
+            self.assertTrue(any(path.is_dir() for path in ROOT.glob(prefix.rstrip("/") + "*")), prefix)
+
+    def test_the_environment_variable_guard_is_run_by_the_group_that_holds_what_it_reads(self):
+        # EnvironmentVariableSpellingTest (the starter's) reads these; a change to one must run `host`.
+        for path in ("wiki/operations/deployment.md", "wiki/zh/operations/deployment.md", "skills/cosec-troubleshoot/SKILL.md",
+                     "k8s/overlays/production/kustomization.yaml", "platform/control-server/Dockerfile",
+                     "platform/gateway-server/aot-smoke.sh", "test/system-test/compose.yaml", "README.md", "llms.txt"):
+            self.assertIn("host", run(path)[0], path)
+        source = (ROOT / "host/spring-boot/src/test/kotlin/me/ahoo/cosec/spring/boot/EnvironmentVariableSpellingTest.kt").read_text()
+        for scanned in ('"wiki"', '"skills"', '"k8s"', '"platform"', '"system-"', "host/spring-boot/src/main"):
+            self.assertIn(scanned, source)
 
 
 class Workflow(unittest.TestCase):
