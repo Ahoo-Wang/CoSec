@@ -15,46 +15,76 @@
 
 package me.ahoo.cosec.runtime.shadow
 
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.spi.shadow.ShadowOutcome
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
-import java.util.concurrent.ConcurrentHashMap
+import java.time.Duration
 
 /**
  * Compile on sight (`CTL-12`): each window of the staged list is read and compiled once, when this instance first sees
- * it, instead of at the first request it samples of that document. One it cannot compile is recorded at once as
+ * it, instead of at the first request it samples of that document. One it cannot compile is recorded as
  * [ShadowOutcome.CANDIDATE_ERROR], which closes the window, whatever this instance's traffic.
  *
  * It runs on the caller's coroutine, the reporter's, one candidate at a time, through [source]'s compiler: never on the
  * snapshot source's compile pool or its queue, so a burst of windows staged while documents load cold makes no load fail
- * and no hand-off be refused. A window whose candidate is absent (its member was listed first) or cannot be read is
- * tried again on the next cycle; nothing it does reaches a request. Without a list read, it does nothing.
+ * and no hand-off be refused. Nothing it does reaches a request. Without a list read, it does nothing.
+ *
+ * **A budget per cycle.** One [run] spends at most [budget] on it, checked between candidates (one in progress is never
+ * cut short), so the reporter writes its reports and its status every cycle however many windows a bulk change staged
+ * at once. The windows not reached wait for the next cycles, the longest waiting first; a window whose candidate is
+ * absent (its member was listed first), of another window, or cannot be read goes back to the end of the queue, so none
+ * holds up the others. A candidate is therefore compiled within a few cycles of its staging, not always the first.
  */
-internal class CompileOnSight(private val source: CachingCandidateSource, private val recorder: ShadowRecorder) {
-    /** The windows compiled, or recorded as failing, by document: kept to what the list names. */
-    private val seen: MutableSet<Pair<SnapshotKey, String>> = ConcurrentHashMap.newKeySet()
+internal class CompileOnSight(
+    private val source: CachingCandidateSource,
+    private val recorder: ShadowRecorder,
+    private val budget: Duration,
+    private val nanos: () -> Long = System::nanoTime,
+) {
+    /** The windows compiled, or recorded as failing: kept to what the list names. */
+    private val seen = HashSet<Pair<SnapshotKey, String>>()
 
-    suspend fun run() {
-        val listed = source.staged.windows ?: return
-        seen.retainAll { (key, window) -> listed[key]?.contains(window) == true }
-        for ((key, windows) in listed) {
-            for (window in windows) {
-                if (key to window !in seen) {
-                    sight(key, window)
-                }
+    /** The windows listed and not yet seen, the longest waiting first. */
+    private val waiting = LinkedHashSet<Pair<SnapshotKey, String>>()
+
+    /** One cycle at a time (a test may flush while the loop runs): the sets are guarded by it. */
+    private val mutex = Mutex()
+
+    /** One cycle: what was listed and not yet seen, the longest waiting first, until [budget] is spent. */
+    suspend fun run() = mutex.withLock {
+        val listed = source.staged.windows ?: return@withLock
+        val named = HashSet<Pair<SnapshotKey, String>>()
+        listed.forEach { (key, windows) -> windows.forEach { named += key to it } }
+        seen.retainAll(named)
+        waiting.retainAll(named)
+        named.filterNot { it in seen }.forEach(waiting::add)
+        val deadline = nanos() + budget.toNanos()
+        for (next in waiting.toList()) {
+            if (nanos() - deadline >= 0) {
+                break
+            }
+            waiting.remove(next)
+            if (sight(next.first, next.second)) {
+                seen += next
+            } else {
+                waiting += next
             }
         }
     }
 
-    private suspend fun sight(key: SnapshotKey, window: String) {
-        val candidate = source.sighted(key, window) ?: return
-        // The candidate read is of the window it names: a member of another one is tried again next cycle.
-        if (candidate.window != window || !seen.add(key to window)) {
-            return
+    /** Whether [window] was compiled, or recorded as failing; false to try it again on a later cycle. */
+    private suspend fun sight(key: SnapshotKey, window: String): Boolean {
+        val candidate = source.sighted(key, window) ?: return false
+        // The candidate read is of the window it names: a member of another one is tried again later.
+        if (candidate.window != window) {
+            return false
         }
         if (candidate is Candidate.Failed) {
             recorder.record(key, window, ShadowOutcome.CANDIDATE_ERROR, null, null)
         }
+        return true
     }
 }

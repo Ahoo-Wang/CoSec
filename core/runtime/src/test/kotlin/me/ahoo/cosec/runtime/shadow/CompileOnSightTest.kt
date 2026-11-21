@@ -37,7 +37,9 @@ import me.ahoo.cosec.runtime.snapshot.SnapshotOptions
 import me.ahoo.cosec.runtime.snapshot.ViewKey
 import me.ahoo.cosec.spi.shadow.CandidateStore
 import me.ahoo.cosec.spi.shadow.InMemoryShadowReports
+import me.ahoo.cosec.spi.shadow.InstanceStatus
 import me.ahoo.cosec.spi.shadow.ShadowOutcome
+import me.ahoo.cosec.spi.shadow.ShadowReportSink
 import me.ahoo.cosec.spi.shadow.StagedCandidates
 import me.ahoo.cosec.spi.shadow.StoredCandidate
 import me.ahoo.cosec.spi.snapshot.InMemorySnapshotDocumentStore
@@ -154,6 +156,53 @@ class CompileOnSightTest {
         compiled.get().assert().isZero()
     }
 
+    /**
+     * The coordinator's condition on #1790: a bulk change stages more windows than one cycle can compile. A cycle spends
+     * at most one interval on them (here a compile takes 30 ms of a 100 ms interval), the status is written every cycle,
+     * a window staged later waits behind those staged before it, and one whose candidate never comes holds none up.
+     */
+    @Test
+    fun `a cycle compiles for one interval at most, the status is written every cycle, and every window in the end`() {
+        var now = 0L
+        val order = ArrayList<SnapshotKey>()
+        val slow = CachingCandidateSource(store, { key, document ->
+            now += COMPILE.toNanos()
+            order += key
+            PlatformCompiler().compileCandidate(key, document)
+        })
+        val statuses = AtomicInteger()
+        val sink = object : ShadowReportSink by reports {
+            override suspend fun write(status: InstanceStatus) {
+                statuses.incrementAndGet()
+                reports.write(status)
+            }
+        }
+        val reporter = ShadowReporter(recorder, sink, { emptyMap() }, Clock.systemUTC(), INTERVAL, store, slow) { now }
+        val first = (1..10).associate { SnapshotKey.Tenant("t-$it") to setOf("w-$it") }
+        first.forEach { (key, windows) -> store.candidates[key] = StoredCandidate(windows.single(), 1, document()) }
+        // Listed, its candidate never written.
+        val absent = SnapshotKey.Tenant("absent")
+        store.list = StagedCandidates(first + (absent to setOf("w-absent")))
+
+        runBlocking { reporter.flush() }
+        statuses.get().assert().isEqualTo(1)
+        now.assert().isLessThanOrEqualTo(2 * INTERVAL.toNanos())
+        order.size.assert().isLessThan(first.size)
+
+        val later = SnapshotKey.Tenant("later")
+        store.candidates[later] = StoredCandidate("w-later", 1, document())
+        store.list = StagedCandidates(first + (absent to setOf("w-absent")) + (later to setOf("w-later")))
+        repeat(CYCLES) {
+            val start = now
+            runBlocking { reporter.flush() }
+            (now - start).assert().isLessThanOrEqualTo(INTERVAL.toNanos() + COMPILE.toNanos())
+        }
+        statuses.get().assert().isEqualTo(1 + CYCLES)
+        order.toSet().assert().isEqualTo(first.keys + later)
+        order.size.assert().isEqualTo(first.size + 1)
+        order.last().assert().isEqualTo(later)
+    }
+
     /** What a cold load and a hand-off came to, as the source reports them. */
     private class Loads : SnapshotMetrics {
         val failed = AtomicInteger()
@@ -214,6 +263,9 @@ class CompileOnSightTest {
     }
 
     private companion object {
+        val INTERVAL: Duration = Duration.ofMillis(100)
+        val COMPILE: Duration = Duration.ofMillis(30)
+        const val CYCLES = 5
         const val TENANTS = 300
         const val WINDOWS = 100
     }

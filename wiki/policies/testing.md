@@ -370,11 +370,13 @@ skipped, with a `WARN` naming it at most once an hour, and the other windows are
 with `cosec-cocache` and `cosec.authorization.shadow.*` (on by default, sampling 10 % of the requests that read a staged
 document).
 
-Each instance compiles a staged candidate as soon as it sees its window in the staged list, within one
-`cosec.authorization.shadow.report-interval`, whether or not its traffic reads that document (`CTL-12`). An instance
-that cannot compile it reports `CANDIDATE_ERROR` then, and the window closes blocked without waiting for a request of
-that document. The compilation runs off the request path, one candidate at a time, and never holds up the documents the
-instance enforces.
+Each instance compiles a staged candidate once it sees its window in the staged list, whether or not its traffic reads
+that document (`CTL-12`). An instance that cannot compile it reports `CANDIDATE_ERROR` then, and the window closes
+blocked without waiting for a request of that document. The compilation runs off the request path, one candidate at a
+time, and never holds up the documents the instance enforces. Each `cosec.authorization.shadow.report-interval` it
+spends at most one interval compiling, the windows staged longest ago first, so a change that stages thousands of
+windows at once delays no report: a candidate is compiled within a few report intervals of its staging, not always in
+the first.
 
 Attribute providers, and the types they declare, must be the same on every data-plane instance and on the control host.
 The control plane checks a candidate against its own providers; an instance without one of them cannot compile a

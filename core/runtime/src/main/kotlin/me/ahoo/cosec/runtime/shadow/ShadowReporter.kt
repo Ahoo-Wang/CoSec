@@ -57,9 +57,11 @@ class ShadowReporter(
      * path, then the windows it names for the first time, read and compiled on this coroutine (`CTL-12`).
      */
     source: CachingCandidateSource? = null,
+    /** Tests only: the clock compile on sight measures its budget, one [interval] per cycle, with. */
+    nanos: () -> Long = System::nanoTime,
 ) {
     private val staged = source?.staged
-    private val sight = source?.let { CompileOnSight(it, recorder) }
+    private val sight = source?.let { CompileOnSight(it, recorder, interval, nanos) }
 
     init {
         // `delay` takes whole milliseconds: a shorter interval would be 0, a loop that never suspends (#1397).
@@ -67,8 +69,9 @@ class ShadowReporter(
     }
 
     /**
-     * One cycle: the staged list and the windows first seen in it, then every window's report, then the status. Failures
-     * are logged and skipped. A candidate first seen that does not compile is in this cycle's report.
+     * One cycle: the staged list and, for at most one [interval], the windows first seen in it; then every window's report,
+     * then the status, whatever is left to compile. Failures are logged and skipped. A candidate compiled this cycle that
+     * does not compile is in this cycle's report.
      */
     suspend fun flush() {
         this.staged?.refresh()
