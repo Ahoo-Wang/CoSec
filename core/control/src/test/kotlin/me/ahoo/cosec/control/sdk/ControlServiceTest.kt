@@ -237,6 +237,29 @@ class ControlServiceTest {
     }
 
     @Test
+    fun `an in-process origin names the credential when there is one, and never a peer - CTL-57`() {
+        val side = Side()
+        val withCredential = ChangeOrigin.of(side.alice, peer = "10.0.0.9", inProcess = true)
+        withCredential.via!!.method.assert().isEqualTo(ChangeOrigin.IN_PROCESS)
+        withCredential.via!!.requestId.assert().isEqualTo(side.alice.requestId)
+        withCredential.peer.assert().isNull()
+        // Over a connection, the same request is recorded with its credential's method and the peer.
+        ChangeOrigin.of(side.alice, peer = "10.0.0.9").peer.assert().isEqualTo("10.0.0.9")
+    }
+
+    @Test
+    fun `the facade's optional arguments are those of its routes`() = runBlocking<Unit> {
+        val side = Side()
+        val service: ControlService = side.service
+        val caller = ControlCaller.of(side.alice.securityContext)
+        CoSecJson.mapper.readTree(service.changes(caller, acme)).get("changes").isArray.assert().isTrue()
+        CoSecJson.mapper.readTree(service.revisions(caller, acme)).isArray.assert().isTrue()
+        val id = CoSecJson.mapper.readTree(service.propose(caller, proposal("defaults", 1))).get("id").asString()
+        service.skipShadow(caller, id, "defaults")
+        CoSecJson.mapper.readTree(service.publish(caller, id)).get("state").asString().assert().isEqualTo("PUBLISHED")
+    }
+
+    @Test
     fun `the facade reaches exactly the routes the service port serves, route by route - CTL-65`() {
         val profile = ControlProfile.SERVICE
         for ((method, path) in ROUTES) {
