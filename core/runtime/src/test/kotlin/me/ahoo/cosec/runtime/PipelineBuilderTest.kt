@@ -75,6 +75,7 @@ import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.ExecutionException
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
+import kotlin.time.Duration.Companion.milliseconds
 
 /** The two forms of [Pipeline.builder]: what `awaitDocuments` answers, and what `close` closes. */
 class PipelineBuilderTest {
@@ -146,6 +147,21 @@ class PipelineBuilderTest {
             pipeline.evaluate(facts()).status.assert().isEqualTo(200)
         }
     }
+
+    @Test
+    fun `the cold-load timeout follows the deadline of the options the pipeline was given, set one by one or whole`() =
+        runBlocking<Unit> {
+            SnapshotSettings { Duration.ofMillis(125) }.toOptions().coldLoadTimeout
+                .assert().isEqualTo(Duration.ofMillis(50))
+            val whole = Pipeline.builder(authenticator(authenticated()), store())
+                .options(PipelineOptions(timeout = 125.milliseconds))
+                .snapshots { prewarmTenants = setOf(TENANT.value) }
+                .build()
+            whole.use { pipeline ->
+                pipeline.awaitDocuments().assert().isEmpty()
+                pipeline.evaluate(facts()).status.assert().isEqualTo(200)
+            }
+        }
 
     @Test
     fun `a prewarmed document that cannot be read is missing, and its requests stay 503`() = runBlocking<Unit> {
