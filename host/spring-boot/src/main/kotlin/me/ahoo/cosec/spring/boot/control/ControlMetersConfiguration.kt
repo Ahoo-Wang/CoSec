@@ -41,7 +41,7 @@ internal class ControlMetersConfiguration {
         listeners.ifAvailable?.let { ChangeListenerMeters.bind(meters, it) }
     }
 
-    /** Instance statuses that did not decode (`CTL-72`): each holds every shadow window until it reads or expires. */
+    /** Instance statuses that did not decode (`CTL-73`): each holds every shadow window until it reads or expires. */
     @Bean
     fun cosecUnreadableStatusMeter(
         registry: ObjectProvider<MeterRegistry>,

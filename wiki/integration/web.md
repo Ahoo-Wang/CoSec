@@ -837,7 +837,7 @@ What the API does is in [Testing policies](../policies/testing.md) and
   `cosec.control.app-id` (default `cosec-control`) and its default space, on documents confirmed current. An
   anonymous request is `401`, on both stacks before any of its body is read. Tenant isolation comes first and is not a policy: a tenant's principal acts only on
   its own tenant's document.
-- **Body size.** On WebMvc at most `cosec.control.http.max-body-size` (default `16MB`) is read; a larger body is
+- **Body size.** On WebMvc at most the document cap and 2 MB (10 MB) is read; a larger body is
   `400` `invalid-request`, unread. On WebFlux the body is bounded by Spring's `spring.codec.max-in-memory-size`
   (256 KB by default): raise it on control-plane hosts that receive large documents.
 - **Gateway hosts.** The gateway's global filter runs on gateway routes only, so the starter adds a

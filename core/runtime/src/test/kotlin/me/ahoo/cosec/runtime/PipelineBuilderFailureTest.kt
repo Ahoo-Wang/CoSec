@@ -26,7 +26,6 @@ import me.ahoo.cosec.spi.snapshot.SnapshotDocumentStore
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
-import java.time.Duration
 
 /**
  * #1383: a failed build holds nothing. What can refuse the configuration is checked before anything is acquired, and
@@ -74,7 +73,7 @@ class PipelineBuilderFailureTest {
     @Test
     fun `an invalid snapshot option is refused before anything is acquired`() {
         assertThrows<IllegalArgumentException> {
-            Pipeline.builder(authenticator, store).listener(listener).snapshots { coldLoadTimeout = Duration.ZERO }
+            Pipeline.builder(authenticator, store).listener(listener).snapshots { maxApps = 0 }
                 .build()
         }
         subscribed.assert().isEqualTo(0)

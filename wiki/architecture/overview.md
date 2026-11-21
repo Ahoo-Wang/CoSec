@@ -264,7 +264,7 @@ sequenceDiagram
 
 Every SPI call goes through one wrapper: it applies the call's timeout (`cosec.pipeline.*` and
 `cosec.authorization.*`, see [Configuration](../operations/configuration.md); a snapshot load is bounded by
-`cold-load-timeout` instead), turns any failure into a value, and lets only an external cancellation through. The whole evaluation has a deadline too; past it the request is a `503`. Timers are armed lazily: a request
+the cold-load timeout instead), turns any failure into a value, and lets only an external cancellation through. The whole evaluation has a deadline too; past it the request is a `503`. Timers are armed lazily: a request
 that never suspends arms none. An exception nothing modelled is a `500`. A client that goes away cancels the coroutine,
 and nothing is written.
 
@@ -341,8 +341,8 @@ holds them:
 - **Hot path.** `peek` is a synchronous lookup in memory, with no future and no I/O, safe on an event loop. Only a miss
   goes to `load`.
 - **Single flight.** Concurrent loads of one key share one read and one compilation. Compilation runs on a small
-  bounded pool (`compile-threads`). When its queue is full, a reload keeps the installed document and retries; a cold
-  load keeps what it read and compiles again every few milliseconds until `cold-load-timeout`, then fails closed, so a
+  bounded pool (a thread per 2 cores, at most 4). When its queue is full, a reload keeps the installed document and retries; a cold
+  load keeps what it read and compiles again every few milliseconds until the cold-load timeout, then fails closed, so a
   new replica's burst of cold tenants queues rather than answering `503` ([What a new replica costs](../operations/deployment.md#what-a-new-replica-costs)).
   Installs of one key happen in the order their loads started (`SNP-2`, `SnapshotInstallOrderPropertyTest`).
 - **Bounded memory.** The platform document is loaded at startup and never evicted. App and tenant documents are loaded on
@@ -356,7 +356,7 @@ holds them:
   conditional read at once.
 - **Fail closed.** A read that fails while a document is installed keeps the installed revision, and the lag is
   reported. A document that is present but cannot be decoded or compiled is installed as *failed*. A cold read that
-  fails or does not finish within `cold-load-timeout` is answered as failed. A key that once had a document and then
+  fails or does not finish within the cold-load timeout is answered as failed. A key that once had a document and then
   reads as absent is a failure, not "no policies". A failed document is left out of the view as *unresolved*, and the
   decision is `Indeterminate` unless a DENY matches. With the starter, a missing platform document is unresolved too,
   so every request fails closed until one is published.

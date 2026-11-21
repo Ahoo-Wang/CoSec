@@ -1,0 +1,22 @@
+# Rule: CTL-55
+# Mutant: a cursor that is malformed or of another listing lists from the start instead of being a 400 (CTL-68 too)
+# Tests: :control:test --tests me.ahoo.cosec.control.api.ListingCursorTest
+
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/api/ListingCursor.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/api/ListingCursor.kt
+index 5735ec46a..d19888be9 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/api/ListingCursor.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/api/ListingCursor.kt
+@@ -75,12 +75,7 @@ internal enum class ListingCursor(private val tag: String) {
+             null
+         }
+         val position = text?.takeIf { it.startsWith("$tag$SEPARATOR") }?.substring(tag.length + 1)
+-        if (position == null || !valid(position)) {
+-            throw InvalidControlRequestException(
+-                "[after] is not a cursor of this listing: pass back its `next` unchanged."
+-            )
+-        }
+-        return position
++        return position?.takeIf { valid(it) }.orEmpty()
+     }
+ 
+     private companion object {

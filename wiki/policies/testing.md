@@ -231,7 +231,7 @@ A change is a set of entry operations on one document, made on the revision you 
 | `setAttributes` | `attributes`, an array as in a document | Sets the platform's declared attributes; without `attributes`, removes them. Anything but an array of attributes is a `400`. |
 
 A change carries at most the platform's `maxChangeOperations` operations (20,000 by default), and the control API reads
-a body of at most `cosec.control.http.max-body-size` (10 MB): a larger change is a `400` before any operation is
+a body of at most 10 MB (the document cap and 2 MB): a larger change is a `400` before any operation is
 checked, so propose it as several (`CTL-41`, [Entry budgets](./language.md#entry-budgets)).
 
 `ifMatch` is the SHA-256 of the entry as the document writes it: the operation applies only if the entry is still
@@ -280,8 +280,7 @@ crash between the two writes, or a candidate lost since): the maintenance pass f
 change event, and its author stages it again. The window is not continued, since the instances sampled nothing while
 the candidate was gone. A change that is not finished expires
 `cosec.control.changes.expire-after` (default 7 days) after it was proposed: it is `EXPIRED` from the first time it is
-read after that: the control plane reads each document's open changes every `cosec.control.revisions.reclaim-interval`
-(default 1 hour), and the `SHADOWING` ones every `cosec.control.shadow.check-interval` (default 1 minute). Its author can `:rebase` a `CONFLICTED`,
+read after that: the control plane reads each document's open changes every hour, and the `SHADOWING` ones every fifteenth of `cosec.control.shadow.min-duration` (1 minute at the default). Its author can `:rebase` a `CONFLICTED`,
 `DRAFT` or `CHECKED` change onto the current revision, which runs every check again and drops earlier approvals and
 shadow evidence. The author, or anyone with `cosec:publish`, can `:abandon` it; a change that sets a tenant's boundary
 only a platform principal rejects or abandons, and a revoke of a break-glass binding that still grants only its author
@@ -302,6 +301,19 @@ a publisher acknowledges, `startedAt`, and once closed `closed`) and `confirmati
 own work is in no answer: the heads the candidate was checked with, the instances that reported on its window, and
 what an approver held (`CTL-61`).
 
+A change a request made also answers `origin`, how its author was identified (`CTL-70`):
+- **Every reader of the change** gets `asserted`, true when the host believed an identity the caller stated (the
+  `CoSec-Identity` header) instead of verifying a credential itself, and `via.method`, the kind of credential (`jwt`,
+  `api-key`, `in-process` for a call through the control plane's facade).
+- **A reader who holds `cosec:approve` on the change's document, or `cosec:read` on the platform's**, is also given
+  `via.credential` (the credential's id, never its value), `via.request` (the request's id) and `peer` (the address of
+  the connection the request arrived on). These say which key or token wrote the change, and from where: what someone
+  who answers for the change weighs it by.
+- **Anyone else**, the author included, is not given those members at all, not even empty. Neither is anyone the
+  decision cannot be made for: only a permit counts.
+
+`GET /changes` lists no origin.
+
 The members, their types and which are always there are in
 [`contract/control/`](https://github.com/Ahoo-Wang/CoSec/tree/main/contract/control), with the closed sets an answer
 writes: `state`, `kind`, `severity`, an escalation's `reason`, the outcomes a window counts, and a decision's
@@ -311,10 +323,12 @@ its file disagree, so a value changes only in a release that says so.
 ### Listing documents {#listing-documents}
 
 `GET /documents?kind=tenant` (or `kind=app`) lists which documents of that kind exist: `{"documents": [{"key":
-"tenant:acme"}, ...], "next": "tenant:acme", "asOf": "..."}`, sorted by key. `limit` is 1 to 200 (default 20), and
-`after` is the `next` of the page before, absent after the last page. It reads the control store's list of the
+"tenant:acme"}, ...], "next": "ZG9jdW1lbnRzfHRlbmFudDphY21l", "asOf": "..."}`, sorted by key. `limit` is 1 to 200
+(default 20), and `after` is the `next` of the page before, absent after the last page: a token
+([Listing cursors](#listing-cursors)). It reads the control store's list of the
 documents it indexes, never a document, so a document whose first publish never completed may be listed, and reading
-it is a `404`. That list is the whole of the store's member set (about 2 MB at 50,000 tenants), so a control host reads
+it is a `404`. A tenant's principal shown only its own document is answered without the list: one read of whether the
+store indexes its revisions. That list is the whole of the store's member set (about 2 MB at 50,000 tenants), so a control host reads
 it at most every 5 seconds, one read shared by every caller, and pages from that: `asOf` says when it was read, and a
 document created since may be missing until the next read.
 
@@ -340,7 +354,7 @@ facade ([`ControlService.documents`](../integration/checks.md#changing-policies-
 `GET /changes` lists the changes that are not finished: `document=<key>` those of one document, `state=<STATE>` those in
 one state that is not final (`DRAFT`, `CHECKED`, `SHADOWING`, `AWAITING_APPROVAL`, `READY`, `CONFLICTED`), or both. It
 needs one of the two; `limit` is 1 to 200 (default 50), and `after` is the `next` of the page before, absent after the
-last page.
+last page: a token ([Listing cursors](#listing-cursors)).
 
 ```json
 {
@@ -365,7 +379,30 @@ listed with its `id`, its `key` and the state `UNREADABLE`, never left out. An e
 name in [the change's answer](#what-a-change-answers). A listing shows a change only if
 `GET /changes/{id}` would show it to you: changes of your own tenant's documents (any of them for a platform
 principal) that you wrote or whose document you may read (`cosec:read`). What it leaves out it does not tell: a page
-holds what you may see, and `next` is there only when more of it follows (`CTL-55`).
+holds only what you may see (`CTL-55`).
+
+A listing by state is decided before anything is read, as [listing documents](#listing-documents) is:
+- **A tenant's principal** lists its own tenant's document's changes.
+- **A platform principal** lists the layers it holds `cosec:read` on as a layer: `doc/tenant` for the tenant documents'
+  changes, `doc/app` for the apps', and `doc/platform`, the platform document's own read, for its changes.
+  `cosec:platform-admin` holds all three. The layer read only lets the listing look: each change is still shown only if
+  `GET /changes/{id}` would show it to you.
+- **Anyone else** is refused `403` without detail, and nothing is read.
+
+Each request reads at most four pages of changes, whatever you may see. When it reaches that bound first, it answers
+the changes it found, a short or empty page, with a `next` to go on from where it stopped. So an empty page with a
+`next` is not the end: follow `next` until it is `null`. That `next` may point at a change you may not see. It tells you
+only that some document of a layer you may list has an open change in that state, and that change is still a `404` by
+id. A listing by document reads that document's open changes only, and its `next` is always a change you see.
+
+### Listing cursors {#listing-cursors}
+
+Every listing's `next` is a token: pass it back as `after` unchanged, on any control host. It holds no server state,
+does not expire, and needs no escaping in a query (`A-Z a-z 0-9 - _`). Its content is no contract: read nothing out of
+it. It is an encoding and not encrypted, so it hides nothing from someone who decodes it. A token that does not decode,
+or that belongs to another listing (or, for `GET /documents`, to the other kind), is a `400`, never a listing from the
+start. The convention is in
+[`contract/control/cursor.json`](https://github.com/Ahoo-Wang/CoSec/tree/main/contract/control/cursor.json).
 
 The open changes are kept in sets of their own ([Storage](../operations/storage.md#redis-keys)). On a store an earlier
 preview wrote, the listing answers `503` until `cosec-migrate repair-references` has converted it (`CTL-54`).
@@ -407,7 +444,7 @@ The window closes:
 - at `cosec.control.shadow.max-duration` (24 hours) with fewer, as *insufficient*.
 
 **Every live instance acknowledges the window before it passes** (`CTL-10`). An instance acknowledges a window in its
-status, written every `cosec.authorization.shadow.report-interval`, once it has read the window in the staged list and
+status, written every report interval (10 seconds at the default), once it has read the window in the staged list and
 compiled its candidate (or reported `CANDIDATE_ERROR`). The window does not pass while an instance with a status in the
 last minute that takes part in shadowing has not (a host with shadowing off writes no status; one whose
 `CandidateSource` is your own says it does not shadow, and is not waited for), logging `Shadow window <w> of change <c> is waiting for the acknowledgement of [<instances>]`, and
@@ -429,16 +466,16 @@ longer writes none, so it is neither waited for nor counted as acknowledging, an
 published revision having compared nothing; a host with shadowing off writes no status at all. An instance whose
 status is stored but does not decode (a crash-looping version, a corrupt value, or a format this control host does not
 read during a rolling upgrade) is live and acknowledges nothing: the window waits for it and `shadow.waitingFor` names
-it, while every other status is read and `propagation` counts it as recent, holding no document (`CTL-72`).
+it, while every other status is read and `propagation` counts it as recent, holding no document (`CTL-73`).
 
 An instance that has reported on a window must keep reporting until it closes. One whose report is gone (it stopped
 serving, or its report was lost in a Redis failover) is missing evidence, never zero decisions: it may be the one that
 saw the narrowed requests. The window waits for it, logging `Shadow window <w> of change <c> is waiting for [<instances>]`,
-whatever the others report; an instance rewrites its cumulative report every `cosec.authorization.shadow.report-interval`,
+whatever the others report; an instance rewrites its cumulative report every report interval,
 so one that still serves comes back. At `max-duration` the window closes *insufficient*, its summary naming the vanished
 instances in `vanished`, and never passes (`CTL-56`).
 
-The control plane looks at the open windows each `cosec.control.shadow.check-interval` (default 1 minute), on one
+The control plane looks at the open windows each fifteenth of `cosec.control.shadow.min-duration` (1 minute at the default), on one
 control-plane instance at a time, starting with the ones it looked at longest ago: a pass the interval cuts short logs
 `looked at <k> of <n> windows`, and the next pass starts behind the cut. A shadowing change whose record does not read is
 skipped, with a `WARN` naming it at most once an hour, and the other windows are looked at. When a window closes, the change becomes `READY`, or `AWAITING_APPROVAL` when it needs
@@ -449,7 +486,7 @@ document).
 Each instance compiles a staged candidate once it sees its window in the staged list, whether or not its traffic reads
 that document (`CTL-12`). An instance that cannot compile it reports `CANDIDATE_ERROR` then, and the window closes
 blocked without waiting for a request of that document. The compilation runs off the request path, one candidate at a
-time, and never holds up the documents the instance enforces. Each `cosec.authorization.shadow.report-interval` it
+time, and never holds up the documents the instance enforces. Each report interval it
 spends at most one interval compiling, the windows staged longest ago first, so a change that stages thousands of
 windows at once delays no report: a candidate is compiled within a few report intervals of its staging, not always in
 the first.
@@ -463,7 +500,7 @@ fails closed on it.
 A window compares decisions, so a change that touches only [rate limit rules](./rate-limiting.md#publishing-rules)
 shows no difference there.
 
-An instance writes its report of a window every `cosec.authorization.shadow.report-interval` (10 seconds) while the
+An instance writes its report of a window every report interval (10 seconds at the default: a sixth of the status's life, [computed](../operations/configuration.md#computed-not-configured)) while the
 window's candidate is staged. Once the candidate is withdrawn (the window closed, or the change was abandoned,
 rejected, published or preempted), it writes the report once more and forgets the window; the report expires 8 days
 after that last write. A change withdraws only its own candidate: when another change has taken the slot and staged

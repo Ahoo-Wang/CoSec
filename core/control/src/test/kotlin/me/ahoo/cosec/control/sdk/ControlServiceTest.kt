@@ -97,6 +97,13 @@ class ControlServiceTest {
     private fun proposal(id: String, base: Int) = """{"document":"tenant:acme","base":$base,"note":"$id",""" +
         """"operations":[{"op":"putPolicy","policy":{"id":"$id","statements":[{"effect":"allow","action":"order:read"}]}}]}"""
 
+    /** [answer] without a change's `origin`, and the origin's `via.method`: null when the answer is no change. */
+    private fun withoutOrigin(answer: String): Pair<String, String?> {
+        val tree = CoSecJson.mapper.readTree(answer)
+        val origin = (tree as? tools.jackson.databind.node.ObjectNode)?.remove("origin") ?: return answer to null
+        return CoSecJson.mapper.writeValueAsString(tree) to origin.get("via").get("method").asString()
+    }
+
     private fun ok(answer: String, step: String = "") =
         answer.substringAfter(' ').also { answer.assert().describedAs(step).startsWith("20") }
 
@@ -107,8 +114,12 @@ class ControlServiceTest {
         var step = 0
         fun same(route: Side.() -> String, facade: suspend ControlService.(ControlCaller) -> String) {
             step++
-            val expected = ok(viaRoute.route(), "route, step $step")
-            ok(viaFacade.facade(facade), "facade, step $step").assert().describedAs("step $step").isEqualTo(expected)
+            val (expected, routeVia) = withoutOrigin(ok(viaRoute.route(), "route, step $step"))
+            val (answered, facadeVia) = withoutOrigin(ok(viaFacade.facade(facade), "facade, step $step"))
+            answered.assert().describedAs("step $step").isEqualTo(expected)
+            // The one difference: how the author was identified (CTL-70), the facade's call made in the host's process.
+            routeVia.assert().describedAs("step $step").isIn(null, "test")
+            facadeVia.assert().describedAs("step $step").isEqualTo(routeVia?.let { ChangeOrigin.IN_PROCESS })
         }
         same({ route("GET", "/documents", mapOf("kind" to "tenant")) }, { documents(it, DocumentKind.TENANT) })
         same({ route("GET", "/documents/tenant:acme") }, { document(it, acme) })

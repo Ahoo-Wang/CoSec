@@ -25,7 +25,7 @@ import me.ahoo.cosec.control.audit.ChangeListeners
 /**
  * The change listeners' queues (`CTL-66`), each tagged with its listener: the events and bytes queued, the age of the
  * oldest queued event (a sink that stopped answering shows here first), the BEST_EFFORT events a full queue dropped, and
- * the events of stored steps a REQUIRED listener missed because its queue stayed full (alert on any).
+ * the events of stored steps a REQUIRED listener missed, its queue full or its call failed (alert on any).
  */
 @InternalCoSecApi
 object ChangeListenerMeters {
@@ -55,7 +55,9 @@ object ChangeListenerMeters {
             .description("BEST_EFFORT change events dropped because the listener's queue was full").register(registry)
         FunctionCounter.builder(LOST, queue) { it.lost.toDouble() }
             .tag(LISTENER_TAG, name)
-            .description("Change events of stored steps a REQUIRED listener missed: its queue stayed full")
+            .description(
+                "Change events of stored steps a REQUIRED listener missed: its queue stayed full, or its call failed"
+            )
             .register(registry)
     }
 

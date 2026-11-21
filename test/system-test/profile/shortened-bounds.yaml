@@ -14,13 +14,13 @@ cosec:
     shadow:
       # Default 0.1: every request is evaluated again on a staged candidate, so a window fills from a few requests.
       sample-rate: 1.0
-      # Default 10s: an instance writes its window report every second.
-      report-interval: 1s
+      # (An instance writes its window report every second with the min-duration below: the report interval is a fifth of
+      # the window's shortest life, at least a second, and 10 s at the default.)
   control:
     shadow:
       # Default 15m: a window may close after 5 seconds...
       min-duration: 5s
       # Default 1000: ...once the instances have reported 20 compared samples.
       min-samples: 20
-      # Default 1m: the open windows are looked at every second.
-      check-interval: 1s
+      # (The open windows are looked at every 333 ms with it: a fifteenth of the window's shortest life, and a minute at
+      # the default.)

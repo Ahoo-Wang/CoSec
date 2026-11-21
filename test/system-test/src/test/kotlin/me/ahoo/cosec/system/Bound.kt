@@ -28,37 +28,37 @@ object Bounds {
     /**
      * A document written to Redis is installed by every instance: at once through CoCache's invalidation message, and at
      * the latest by the next revalidation pass, every `cosec.authorization.snapshot.revalidate-interval` (10 s, SNP-6),
-     * plus a cold load (`cold-load-timeout`, 2 s) and 3 s for the requests that observe it.
+     * plus a cold load (2 s: 40 % of `cosec.pipeline.timeout`, 5 s) and 3 s for the requests that observe it.
      */
     val SNAPSHOT_PROPAGATION = Bound(
         "SNAPSHOT_PROPAGATION",
         Duration.ofSeconds(15),
-        "revalidate-interval 10 s (SNP-6) + cold-load-timeout 2 s + 3 s margin",
+        "revalidate-interval 10 s (SNP-6) + cold load 2 s (40 % of pipeline.timeout 5 s) + 3 s margin",
     )
 
     /**
      * A staged change's shadow window closes on the control plane: no earlier than `cosec.control.shadow.min-duration`
-     * (5 s), looked at every `check-interval` (1 s), from reports each instance writes every
-     * `cosec.authorization.shadow.report-interval` (1 s), all three test values of `profile/shortened-bounds.yaml`
-     * (defaults 15 min, 1 min, 10 s; CTL-10), once every instance has the staged candidate, which reaches it as a document
-     * does ([SNAPSHOT_PROPAGATION]).
+     * (5 s, a test value of `profile/shortened-bounds.yaml`; default 15 min), looked at every check interval (a fifteenth
+     * of it, 333 ms; a minute at the default), from reports each instance writes every report interval (a fifth of it,
+     * at least a second: 1 s; 10 s at the default; CTL-10), once every instance has the staged candidate, which reaches it
+     * as a document does ([SNAPSHOT_PROPAGATION]).
      */
     val SHADOW_CLOSE = Bound(
         "SHADOW_CLOSE",
         Duration.ofSeconds(22),
-        "min-duration 5 s + check-interval 1 s + report-interval 1 s (shortened-bounds.yaml, CTL-10) + SNAPSHOT_PROPAGATION 15 s",
+        "min-duration 5 s + check interval 0.33 s + report interval 1 s (derived from min-duration, CTL-10) + SNAPSHOT_PROPAGATION 15 s",
     )
 
     /**
      * A shadow window closes although the replica that started it was stopped: the check of the open windows is done by
-     * the holder of the lease `shadow-windows` (RFC 0007 §5.7), which lasts twice `cosec.control.shadow.check-interval` (2 s, the
-     * shortened 1 s) and is released when the pass ends, so another replica takes it at the latest 2 s later, plus
-     * [SHADOW_CLOSE].
+     * the holder of the lease `shadow-windows` (RFC 0007 §5.7), which lasts twice the check interval (0.67 s, a fifteenth
+     * of the shortened min-duration, 5 s) and is released when the pass ends, so another replica takes it at the latest 1 s
+     * later, plus [SHADOW_CLOSE].
      */
     val SHADOW_CLOSE_AFTER_FAILOVER = Bound(
         "SHADOW_CLOSE_AFTER_FAILOVER",
         Duration.ofSeconds(27),
-        "SHADOW_CLOSE 22 s + the shadow lease, twice the check-interval (2 s, RFC 0007 §5.7) + 3 s margin",
+        "SHADOW_CLOSE 22 s + the shadow lease, twice the check interval (0.67 s, RFC 0007 §5.7) + 3 s margin",
     )
 
     /**

@@ -87,16 +87,16 @@ contain `:` or `/`, so a key names one document only.
 | `<s>:control:refs:<doc>:<policyId>` | the control plane, `cosec-migrate` | a set (a CoCache `SetStore`) with one member per document and revision that refers to a policy of `<doc>`: `<referrer>@<revision>`, with `#own` after it when the referrer is a tenant that defines a policy of that id itself (`CTL-43`). A publish adds the members of what it starts referring to, and its settlement removes exactly the ones its forward record holds, so what a tenant's publish writes does not grow with the number of referrers (`CTL-44`) and a removal never takes a member a later revision added (`CTL-25`). A value of the format before 8.0.0-beta.5 fails closed until [`cosec-migrate repair-references`](./upgrading.md#repair-the-back-reference-index) converts it (`CTL-42`); the command also adds what the heads refer to and the sets miss, and removes what no head has |
 | `<s>:control:lease:<name>` | the control plane | a lease (`reclaim:<doc>`, `shadow-windows`); it expires with each write, and its holder deletes it when done, only while it still holds it (`CTL-26`); a holder that takes its own lease again holds it for the full duration from then on |
 | `<s>:control:documents:all` | the control plane, `cosec-migrate` | a set: the documents that have revisions, one member each, so the maintenance passes and `repair-references` can visit each |
-| `<s>:control:changes:doc:<doc>`, `<s>:control:changes:state:<STATE>`, `<s>:control:changes:kept` | the control plane, `cosec-migrate` | the open changes, as sets: the ids of a document's open changes, `<doc>#<changeId>@<digest>` of the changes in each state that is not final, and the marker `kept`. A state's member names the record its write put there by that record's digest, as a back-reference names its revision: a write adds the member of the record it writes before it writes it, and after removes the member of the record it replaced from that record's state and, once the change is final, the id from its document. A change that comes back to a state comes back as another record, so a removal that runs late never takes its member. The sets hold every open change and may hold a few more members: a crash, a failed removal or a conditional write that lost leaves one behind. A listing shows a change once, when its record is in that state, whatever members name it; it keeps the member of that record and removes the others at once when the change is final, otherwise once the instance has seen them so for `cosec.control.revisions.orphan-age`, since a write in flight lists its record before the record is there. Until then a stale member costs each listing of its set one record read. They are trusted only once `kept` is there and no `<s>:control:list:open-changes` is: until then the control plane reclaims nothing and `GET /changes` is `503` (`CTL-54`) |
+| `<s>:control:changes:doc:<doc>`, `<s>:control:changes:state:<STATE>`, `<s>:control:changes:kept` | the control plane, `cosec-migrate` | the open changes, as sets: the ids of a document's open changes, `<doc>#<changeId>@<digest>` of the changes in each state that is not final, and the marker `kept`. A state's member names the record its write put there by that record's digest, as a back-reference names its revision: a write adds the member of the record it writes before it writes it, and after removes the member of the record it replaced from that record's state and, once the change is final, the id from its document. A change that comes back to a state comes back as another record, so a removal that runs late never takes its member. The sets hold every open change and may hold a few more members: a crash, a failed removal or a conditional write that lost leaves one behind. A listing shows a change once, when its record is in that state, whatever members name it; it keeps the member of that record and removes the others at once when the change is final, otherwise once the instance has seen them so for one reclaim pass (1 hour), since a write in flight lists its record before the record is there. Until then a stale member costs each listing of its set one record read. They are trusted only once `kept` is there and no `<s>:control:list:open-changes` is: until then the control plane reclaims nothing and `GET /changes` is `503` (`CTL-54`) |
 | `<s>:control:list:open-changes`, `<s>:control:list:documents` | a control plane before 8.0.0-beta.5 | the open changes and the documents, each as one value, in the format before 8.0.0-beta.5. They are there only until `repair-references` converts the store, which removes each last: while the document list is there, the control plane logs an `ERROR` at startup and `cosecControlStoreFormat` is `DOWN`; while the open-change list is, the open-change sets are not trusted. A control plane of an earlier version writes them again: stop it before the upgrade |
 | `<s>:control:apps:all` | the control plane, `cosec-migrate` | the app list: the app documents there are, and whether the list is complete, which the grant analysis reads on every tenant change ([below](#publishing-through-the-control-plane)) |
 | `<s>:control:change:<changeId>` | the control plane | a change request |
 | `<s>:control:stage:<doc>` | the control plane | the staging slot of a document: which change holds it |
 | `<s>:candidate:<doc>` | the control plane | the staged candidate of a document while its shadow window is open (its window, its base revision and the candidate document, whose header is its own); the change it belongs to removes it, only while it is still its own (`CTL-26`) |
-| `<s>:candidate-staged:all` | the control plane | the staged list (`CTL-46`): one member `<doc>/<window>` per staged candidate, added before the candidate is written and removed after it is withdrawn, so it lists every staged candidate and may list one already gone. The shadow pass withdraws a listed candidate no shadowing change names (a withdrawal that failed) and removes a member whose candidate is gone, each once two passes in a row found it so. An instance skips a member it cannot read (a later form), which costs samples at most. Then a marker, `.kept`, which says a control plane keeps it. Without the marker no list is kept, and instances read candidates by key. Never expires. A downgrade to a control plane that keeps no list must delete this key: a list nobody keeps can only cost shadow samples, never pass a window. A data-plane instance reads it, from Redis, at the start of each [`report-interval`](./configuration.md#shadow-windows) (10 seconds) and keeps what it read in memory: with a list, it reads only a listed document's candidate and samples only requests whose view reads a listed document, so with no window open a request does no shadow work at all; without the marker, or while the list cannot be read, it reads every candidate by key and samples as before, never taking an unreadable list for an empty one (`CTL-47`). What it read may be one interval old, which costs samples (a new window is sampled from the next read; a closed one is asked for and gives nothing), never a sample of another window's candidate |
+| `<s>:candidate-staged:all` | the control plane | the staged list (`CTL-46`): one member `<doc>/<window>` per staged candidate, added before the candidate is written and removed after it is withdrawn, so it lists every staged candidate and may list one already gone. The shadow pass withdraws a listed candidate no shadowing change names (a withdrawal that failed) and removes a member whose candidate is gone, each once two passes in a row found it so. An instance skips a member it cannot read (a later form), which costs samples at most. Then a marker, `.kept`, which says a control plane keeps it. Without the marker no list is kept, and instances read candidates by key. Never expires. A downgrade to a control plane that keeps no list must delete this key: a list nobody keeps can only cost shadow samples, never pass a window. A data-plane instance reads it, from Redis, at the start of each report interval ([10 seconds](./configuration.md#computed-not-configured)) and keeps what it read in memory: with a list, it reads only a listed document's candidate and samples only requests whose view reads a listed document, so with no window open a request does no shadow work at all; without the marker, or while the list cannot be read, it reads every candidate by key and samples as before, never taking an unreadable list for an empty one (`CTL-47`). What it read may be one interval old, which costs samples (a new window is sampled from the next read; a closed one is asked for and gives nothing), never a sample of another window's candidate |
 | `<s>:shadow:report:<window>:<instance>` | data-plane instance `<instance>` only | that instance's cumulative report of one shadow window; each write replaces the previous one; the instance stops writing it once the window's candidate is withdrawn; expires 8 days after its last write |
 | `<s>:shadow:reporters:<window>` | every data-plane instance | the ids of the instances that reported on `<window>`; same expiry |
-| `<s>:shadow:status:<instance>` | data-plane instance `<instance>` only | that instance's installed revisions and their lag, and the shadow windows whose candidate it has compiled, its acknowledgement of them (`windows`, optional, `CTL-10`), and `shadows: false` when its candidate source is not CoSec's own (no window waits for it). Each listed window adds its id to the status, about 20 bytes, so a bulk change of a thousand open windows makes each status about 20 KB larger; a heartbeat writes this one value, whatever the size of the cluster; expires 2 minutes after its last write, and a status older than a minute is ignored (an instance is live while it has a status from the last minute). A status that does not decode does not fail the control plane's read: its instance counts as live and acknowledging no window until the status reads or its key expires, and every other status is read (`CTL-72`) |
+| `<s>:shadow:status:<instance>` | data-plane instance `<instance>` only | that instance's installed revisions and their lag, and the shadow windows whose candidate it has compiled, its acknowledgement of them (`windows`, optional, `CTL-10`), and `shadows: false` when its candidate source is not CoSec's own (no window waits for it). Each listed window adds its id to the status, about 20 bytes, so a bulk change of a thousand open windows makes each status about 20 KB larger; a heartbeat writes this one value, whatever the size of the cluster; expires 2 minutes after its last write, and a status older than a minute is ignored (an instance is live while it has a status from the last minute). A status that does not decode does not fail the control plane's read: its instance counts as live and acknowledging no window until the status reads or its key expires, and every other status is read (`CTL-73`) |
 | `<s>:shadow:instances:all` | every data-plane instance | the instances that have a status, each with when it listed itself; an instance lists itself when it starts and again every hour, and whoever writes the list drops entries older than 3 hours; expires as the reports |
 | `<s>:token:revoked:<tokenId>` | `TokenRevoker` (logout), through `TokenStore.revoke`, which takes the token's `jti`: an application logs out through `TokenRevoker`, never through the store | `true` for a revoked token id; expires one second after the refresh token lifetime |
 | `<s>:token:family:<sid>` | login, refresh and logout | one session's token family: its principal, login time, end, current generation and whether it was revoked. One key per live session, written at login and at each refresh, a few hundred bytes; it expires at the session's end (`cosec.jwt.session.lifetime` after the login), and a revoked one stays, marked, until then. Read only on refresh and logout, never on a request |
@@ -333,9 +333,9 @@ sequenceDiagram
   (`SNP-6`). A pass never takes a read made before it started as its own: when it meets a load of the document
   already in flight, it joins that load only if the load started after the pass did, and otherwise waits for one
   more load, which reads Redis after the load in flight ends. A pass reads
-  [`reload-concurrency`](./configuration.md#snapshot) (16) documents at a time, and one pass runs at a time: when Redis is
+  16 documents at a time (a constant), and one pass runs at a time: when Redis is
   so slow that a pass outlasts the interval, the next starts as soon as it ends, rather than add more reads each
-  interval. A pass takes about the entries held × one conditional read ÷ `reload-concurrency`
+  interval. A pass takes about the entries held × one conditional read ÷ 16
   ([Sizing a SaaS gateway](./deployment.md#sizing-a-saas-gateway)). A pass that has confirmed no document for
   30 seconds and has no read in flight is held up only by compilations: the next tick abandons it and starts a new
   pass. A pass that is slow but still confirming documents, or has a read in flight, is never abandoned. A pass does
@@ -351,8 +351,8 @@ sequenceDiagram
   instance serves.
 - **Lag** is the time since Redis last confirmed a document. While Redis answers, every pass confirms every
   document, so lag stays below the revalidate interval plus the length of a pass, or below the length of two passes
-  once a pass outlasts the interval. Past `lag-warn` (60 seconds) the instance logs
-  `Snapshot document [<doc>] revision <n> has not been confirmed for <lag>.` at `WARN`, past `lag-escalate`
+  once a pass outlasts the interval. Past 6 intervals (60 seconds at the default) the instance logs
+  `Snapshot document [<doc>] revision <n> has not been confirmed for <lag>.` at `WARN`, past 30 intervals
   (5 minutes) `... is stale: not confirmed for <lag>.` at `ERROR`, at most once a minute per document.
 - **Tenants that fail closed on lag.** For the tenants listed in
   [`fail-closed.tenants`](./configuration.md#snapshot), a request is unresolved when the oldest document it reads
@@ -368,9 +368,9 @@ sequenceDiagram
   every route's `cosec-app-id` load with `prewarm-apps`, before the instance reports ready, so the first request of each
   finds its document installed ([`prewarm-host-apps`](./configuration.md#snapshot)). A held app document is replaced
   within seconds of a publish, by the invalidation message or the next revalidation pass, as the platform document is.
-- **A cold load waits** at most [`cold-load-timeout`](./configuration.md#snapshot) (2 seconds); after that the
+- **A cold load waits** at most the [cold-load timeout](./configuration.md#computed-not-configured) (2 seconds, 40 % of the pipeline timeout); after that the
   document counts as failed for that request.
-- **A compilation has its load's deadline** (R2D-11): `cold-load-timeout` for a cold load, the store read timeout
+- **A compilation has its load's deadline** (R2D-11): the cold-load timeout for a cold load, the store read timeout
   (30 seconds) for a reload, counted from the load's start. A compilation that has not answered by then ends its load as
   a failure at the next revalidation tick: a cold load fails, a reload keeps what is installed, a recompile fails
   closed. A compilation still waiting in the compile queue then never starts. A running one cannot be interrupted, so
@@ -379,7 +379,7 @@ sequenceDiagram
   `ERROR` ([Troubleshooting](./troubleshooting.md#a-compilation-does-not-end)).
 - **A recompile the compile queue refuses waits** (R2D-12). When the platform document's limits or declared
   attributes change, every held app and tenant document is compiled again. A recompile that meets a full compile
-  queue keeps its read and compiles again until `cold-load-timeout` from its start; meanwhile its requests are decided
+  queue keeps its read and compiles again until the cold-load timeout from its start; meanwhile its requests are decided
   on the compilation made against the previous platform document, as they are while its read runs. Only after that
   does it fail closed, as a document that cannot be compiled again does (`SNP-4`).
 - **Held documents are bounded.** Each family keeps at most [`max-apps`/`max-tenants`](./configuration.md#snapshot)
@@ -403,7 +403,7 @@ from 1 KiB to 4 MiB ([measurement](https://github.com/Ahoo-Wang/CoSec/blob/main/
 The load on a node is about instances × documents each holds × that cost ÷ `revalidate-interval`: 100 instances
 revalidating 10 documents every 10 seconds take about 0.1 % of it.
 
-- Raise [`revalidate-interval`](./configuration.md#snapshot), at most 5 minutes and below `lag-warn` (raise that too),
+- Raise [`revalidate-interval`](./configuration.md#snapshot), at most 5 minutes (the lag thresholds, 6 and 30 intervals, rise with it),
   only when the number of documents makes even that cost matter: an instance that missed an invalidation message catches
   up as much later.
 - Keep the platform document small anyway. Every instance holds it, and a changed document is read whole; tenant-specific
@@ -438,7 +438,7 @@ and configures it itself.
 
 **Loads in flight are bounded by time, not by number.** A document being loaded counts toward neither `max-apps`,
 `max-tenants` nor the ids without a document until its load ends: it fails after the store read timeout (30 seconds)
-while Redis hangs, though the request waiting for it answers `503` after `cold-load-timeout`. So credentials for new app ids
+while Redis hangs, though the request waiting for it answers `503` after the cold-load timeout. So credentials for new app ids
 used at a high rate keep up to that rate × 30 seconds of loads, and their pending Lettuce commands, in memory
 during such an outage; `requestQueueSize` bounds the commands. None of them ever pushes out an installed document.
 
@@ -644,10 +644,8 @@ record (from a backup) and the next read lists them again.
 
 Every control-plane instance runs two maintenance passes while it runs, each first after one interval:
 
-- **Reclaiming revisions**, every [`cosec.control.revisions.reclaim-interval`](./configuration.md#control-plane)
-  (1 hour). For each document it removes the revision records beyond the `max-count` (50) most recent that are also
-  older than `min-age` (7 days), and the records of publishes that never became the head once older than `orphan-age`
-  (1 hour). It never removes the head, nor a revision an open change rests on; when an open change cannot be read, it
+- **Reclaiming revisions**, every hour ([computed, not configured](./configuration.md#computed-not-configured)). For each document it removes the revision records beyond the `max-count` (50) most recent that are also
+  older than `min-age` (7 days), and the records of publishes that never became the head once one reclaim pass (1 hour) old. It never removes the head, nor a revision an open change rests on; when an open change cannot be read, it
   reclaims nothing that pass. A document whose index agrees with its head and lists no more than `max-count` revisions,
   no pending record and none left to delete has nothing to reclaim: the pass reads its index and its head, and moves
   on. Any other is reclaimed under a lease per document (`reclaim:<doc>`), one instance at a time, released when the
@@ -655,8 +653,8 @@ Every control-plane instance runs two maintenance passes while it runs, each fir
   The revision index no longer lists a record before it is deleted, and keeps it among those left to delete until
   the deletion succeeds: a deletion that fails is tried again by the next pass. A history repair running at the same
   time leaves out what falls below the index's floor, so what was reclaimed does not come back.
-- **Closing shadow windows**, every [`cosec.control.shadow.check-interval`](./configuration.md#control-plane)
-  (1 minute), under the `shadow-windows` lease, so a window closes at most one interval late.
+- **Closing shadow windows**, every fifteenth of `cosec.control.shadow.min-duration`
+  (1 minute at the default), under the `shadow-windows` lease, so a window closes at most one interval late.
 
 Both passes read every open change, so a change nobody finishes expires
 [`cosec.control.changes.expire-after`](./configuration.md#control-plane) (7 days) after it was proposed, and leaves

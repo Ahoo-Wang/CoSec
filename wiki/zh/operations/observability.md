@@ -87,7 +87,7 @@ starter 注册的监听器：
 | `principal` | `id`、`authenticated`、`roles`（解析出的作用域中的角色） |
 | `request` | `id`（即 `CoSec-Request-Id`）、`appId`、`spaceId`、`remoteIp`、`method`、`path`（规范化后）、`routeId`（请求经过的网关路由；其他适配器为 null）、`device.id` |
 | `authorization.decision`、`authorization.reasonCode` | 见下表 |
-| `authorization.reason` | 结果，`503` 时还有其原因，例如 `INDETERMINATE: SourceUnavailable` |
+| `authorization.reason` | 结果，`503` 时还有其原因，例如 `INDETERMINATE: SourceUnavailable`。一个原因在 CoSec 写出它的每一处都是同一个名字：这里、影子报告的样本和控制 API 的 `cause`，都取自同一张表，因此 CoSec 重命名某个类不会改变它（`OBS-9`） |
 | `authorization.elapsedNanos` | 整个管道，从请求开始到得出结果 |
 | `authorization.source` | 是什么做出了决定：`via`、`document`、`policy`（策略 id）和 `statement`（`index`、`name`）；见下面第二张表 |
 | `binding` | 给人看的标签，不要解析它：做出决定的语句通过什么生效，绑定 id（角色派生的绑定为 `role:<roleId>@<app>:<permission>`）、`attached:<policyId>`、`builtin`（黑名单）或 `boundary:<tenantId>` |
@@ -198,7 +198,7 @@ kind 为 `INTERNAL`）。span 在决策之后根据请求的开始时间和管�
 
 | 指标 | 标签 | 计数 |
 |---|---|---|
-| `cosec.shadow.staged.age` | 无 | 一个 gauge，单位秒：本实例上次读取暂存列表距今多久，首次读取之前为 `NaN`。Redis 应答期间约为 `cosec.authorization.shadow.report-interval`（10 秒）；持续上升说明列表读不出来，实例按键读取每个候选，并记录一次 `The staged list cannot be read since it was at <instant>` |
+| `cosec.shadow.staged.age` | 无 | 一个 gauge，单位秒：本实例上次读取暂存列表距今多久，首次读取之前为 `NaN`。Redis 应答期间约为报告间隔（[状态存活期的六分之一](./configuration.md#computed-not-configured)，10 秒）；持续上升说明列表读不出来，实例按键读取每个候选，并记录一次 `The staged list cannot be read since it was at <instant>` |
 
 使用本地限流器时（没有 Redis 限流，[限流](../policies/rate-limiting.md#the-local-limiter-is-bounded)），它无法接纳的新桶也会计数：
 
@@ -228,12 +228,12 @@ CoCache 会在同一个 registry 中为 CoSec 的缓存记录它自己的指标�
 
 | 指标 | 类型 | 标签 | 含义 |
 |---|---|---|---|
-| `cosec.snapshot.loads` | counter | `kind`、`result` | 必须加载文档的请求：`cold`（请求等待它的加载）、`failed`（加载失败，请求按失败关闭判定）、`timeout`（加载超过了 `cold-load-timeout`）。文档已安装的请求不计数：那是每个请求都走的路径 |
+| `cosec.snapshot.loads` | counter | `kind`、`result` | 必须加载文档的请求：`cold`（请求等待它的加载）、`failed`（加载失败，请求按失败关闭判定）、`timeout`（加载超过了冷加载超时）。文档已安装的请求不计数：那是每个请求都走的路径 |
 | `cosec.snapshot.compile.duration` | timer | `kind`、`result` = `success`、`failure` | 编译一个文档；`failure` 是一个在本实例上无法编译的已存储文档 |
 | `cosec.snapshot.installs` | counter | `kind` | 安装的文档：首次加载或新修订 |
 | `cosec.snapshot.installed` | gauge | `kind`、`state` | 当前持有的条目，按状态：`present`、`invalid`（在此无法编译）、`pending`（其输入已变，等待重新编译）、`undecodable`、`absent`（没有文档，之前也没见过）、`lost`（之前见过的文档不见了）、`unreadable`。各状态之和等于实例持有的条目数 |
 | `cosec.snapshot.lag` | gauge，秒 | `kind` | 持有的条目中（失败的除外）最久未被存储确认的时长 |
-| `cosec.snapshot.lagging` | gauge | `kind`、`level` = `warn`、`escalate` | 超过 `lag-warn` 的条目（包括超过 `lag-escalate` 的）和超过 `lag-escalate` 的条目 |
+| `cosec.snapshot.lagging` | gauge | `kind`、`level` = `warn`、`escalate` | 超过告警阈值（6 个重新确认间隔）的条目（包括超过升级阈值的）和超过升级阈值（30 个）的条目 |
 | `cosec.snapshot.summary.age` | gauge，秒 | 无 | 距 `installed`、`lag` 和 `lagging` 所读的那一轮的时间 |
 | `cosec.snapshot.lag.exceeded` | counter | `kind`、`level` | 实例每记录一次延迟日志 |
 | `cosec.snapshot.regressions` | counter | `kind` | 存储返回了比已安装修订更旧的修订 |
@@ -252,7 +252,7 @@ CoCache 会在同一个 registry 中为 CoSec 的缓存记录它自己的指标�
 |---|---|
 | `lost` 有任何上升 | 某个文档从存储中消失了，它的键失败关闭 |
 | `regressions` 有任何上升 | 存储丢失了它已确认的写入：检查最近一次故障转移 |
-| `lag.exceeded{level=escalate}` 有任何上升 | 实例依据一个存储已有 `lag-escalate` 之久未确认的文档做决策 |
+| `lag.exceeded{level=escalate}` 有任何上升 | 实例依据一个存储已有 30 个重新确认间隔之久未确认的文档做决策 |
 | `installed{state=invalid}` 大于零 | 某个已存储文档在本实例上无法编译（版本比控制平面旧？） |
 | `handoffs.refused{to=caller}` 持续有速率 | 编译池饱和，请求线程在编译 |
 | `housekeeping.refused` 有任何上升 | 实例在丢弃自己的日志：日志 appender 跟不上负载（[快照日志缺失](./troubleshooting.md#snapshot-log-lines-are-missing)） |
@@ -276,7 +276,7 @@ CoCache 会在同一个 registry 中为 CoSec 的缓存记录它自己的指标�
   每分钟在自己的线程上读一次，从不由探测触发；读不到时为 `UP`，`format: unknown`。实例发现旧格式时还会记录一条 `ERROR`。它和
   `cosecSnapshotEviction` 一样是告警：数据面仍在决定每个请求，所以不要把它放进就绪组（[升级](./upgrading-previews.md#from-8-0-0-beta-4)）。`cosec-control` 镜像是例外：它不决定数据面的任何请求，并把这个指示器放进它的就绪组，让未转换的存储使宿主处于未就绪且有名字（[控制面宿主](./deployment.md#control-plane-store)）。
 - **登录路由。** starter 提供刷新或登出路由时，`cosecLoginRoutes` 健康指示器总是 `UP`，以每个路由的属性为详情：`not refused`，或在文档拒绝匿名 `POST` 它之后为 `denied since <time>` 及是哪种拒绝（没有语句允许它、某条 DENY 语句匹配它、或租户的平台边界不覆盖它），直到之后有请求被允许。同样的拒绝每个路由每分钟记录一条 `WARN`，点名属性和路径。两者都来自真实请求的决策，所以从不出错，也都不会让实例变为未就绪（[构建客户端](../integration/clients.md#what-your-application-serves)）。
-- **滞后日志。** 文档超过 `lag-warn` 未被 Redis 确认时，实例以 `WARN` 记录，超过 `lag-escalate` 时以 `ERROR` 记录
+- **滞后日志。** 文档超过 6 个重新确认间隔未被 Redis 确认时，实例以 `WARN` 记录，超过 30 个时以 `ERROR` 记录
   （[实例如何读取文档](./storage.md#how-instances-read-documents)）。其他值得告警的日志：
   `Snapshot document [<doc>] disappeared from the store; failing closed.`、
   `Snapshot document [<doc>] regressed from revision <a> to <b>; ...`，以及
@@ -341,7 +341,8 @@ break-glass 等待 broker 的确认（把生产者配置为 `acks=all`）。设�
 监听器**按本实例写入的顺序**接收一个变更的事件（`CTL-66`）：每个监听器有一个队列和一个消费者，一个步骤的事件排在它之前各步骤的事件之后。跨实例没有顺序可言（在一台控制面主机上提议、在另一台上发布，是两个进程）：消费方按每个事件的 `time` 和变更的记录排序。Kafka 变更监听器按文档作为 key，在其分区内保持这一顺序。
 
 - **受控的步骤**（`PUBLISHING`、break-glass）在 `cosec.control.audit.required-timeout` 内等待每个 `REQUIRED` 监听器记录它的事件，排在此前已入队的事件之后；否则返回 `503`，其事件此后也不会被记录。
-- **REQUIRED 监听器的队列已满**时，其他步骤的事件最多等待同样的时长以腾出空间：该步骤已经存储，因此从不为此失败。等不到空间的事件**丢失**：计入 `cosec.control.listener.lost`，并以 `ERROR` 记录（`Change event <kind> of change <id> on <doc> was not handed to REQUIRED change listener [<name>]: ...`）。这是 REQUIRED 监听器错过事件的唯一途径：**在 `cosec.control.listener.lost` 大于零时告警。**
+- **REQUIRED 监听器的队列已满**时，其他步骤的事件最多等待同样的时长以腾出空间，并按到达的顺序：较小的事件从不抢在先到的较大事件之前占用空间。该步骤已经存储，因此从不为此失败。等不到空间的事件**丢失**：计入 `cosec.control.listener.lost`，并以 `ERROR` 记录（`Change event <kind> of change <id> on <doc> was not handed to REQUIRED change listener [<name>]: ...`）。
+- **REQUIRED 监听器的调用失败**同样使其他步骤的事件丢失：调用抛出异常，或在超时内没有应答。它计入同一个 `cosec.control.listener.lost`，并连同失败原因以 `ERROR` 记录（`Change event <kind> of change <id> on <doc> was not recorded by REQUIRED change listener [<name>]: <failure>.`），然后交付下一个事件。队列已满和调用失败是 REQUIRED 监听器错过事件的两种途径：**在 `cosec.control.listener.lost` 大于零时告警。**
 - **BEST_EFFORT 监听器的队列已满时丢弃新来的事件**，所以到达的是一个有序的前缀：消费方看到的是缺口，从不是乱序。丢弃计入 `cosec.control.listener.dropped`，并以 `WARN` 记录，每个 required timeout 至多一次。
 - **上限是推导出来的，不是配置的。** 所有队列合计至多占用堆的三十二分之一，由各监听器平分，每个事件按它所持有的内容计量。启动时一条 `INFO` 说明结果（`Change listeners [...]: their queues hold at most 64.0 MB (the heap's 2048.0 MB / 32), 32.0 MB each`）。健康的接收端即使经历涉及数千租户的批量变更，队列也几乎为空。
 - **停止应答的监听器只会被报告，从不被切断。** 在有事件等待、且它超过 required timeout 没有交付任何事件期间，一条 `WARN` 写明它、队列深度和最早事件的等待时长，每个 required timeout 至多一次。它恢复应答时，按顺序交付其份额内保留的一切。`REQUIRED` 监听器在超时内没有应答的调用视为失败，并交付下一个事件。
@@ -354,9 +355,9 @@ break-glass 等待 broker 的确认（把生产者配置为 `acks=all`）。设�
 | `cosec.control.listener.queued`、`cosec.control.listener.queued.bytes` | 已入队的事件数，以及它们在该监听器份额中所占的大小 |
 | `cosec.control.listener.oldest.age` | 最早入队的事件已等待多久（秒）：停止的接收端最先在这里显现 |
 | `cosec.control.listener.dropped` | 因队列已满而丢弃的 BEST_EFFORT 事件 |
-| `cosec.control.listener.lost` | REQUIRED 监听器错过的已存储步骤的事件：任何一个都应告警 |
+| `cosec.control.listener.lost` | REQUIRED 监听器错过的已存储步骤的事件，因队列已满或调用失败：任何一个都应告警 |
 
-`cosec.control.shadow.status.unreadable`（无标签）统计控制面主机读到的、无法解码的实例状态：每个这样的实例在其状态能读取或过期之前，都会挡住所有影子窗口（`CTL-72`），日志会点名它（[故障排查](./troubleshooting.md#shadow-window-waiting-for-an-acknowledgement)）。任何一个都应告警。
+`cosec.control.shadow.status.unreadable`（无标签）统计控制面主机读到的、无法解码的实例状态：每个这样的实例在其状态能读取或过期之前，都会挡住所有影子窗口（`CTL-73`），日志会点名它（[故障排查](./troubleshooting.md#shadow-window-waiting-for-an-acknowledgement)）。任何一个都应告警。
 
 ## 日志 {#logs}
 

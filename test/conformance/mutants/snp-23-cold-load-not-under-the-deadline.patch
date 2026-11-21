@@ -1,0 +1,17 @@
+# Rule: SNP-23
+# Mutant: a cold load may wait longer than the request it serves (140 % of the pipeline timeout)
+# Tests: :runtime:test --tests me.ahoo.cosec.runtime.snapshot.SnapshotOptionsDeriveTest
+
+diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/SnapshotOptions.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/SnapshotOptions.kt
+index 53e2a78..027fbe0 100644
+--- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/SnapshotOptions.kt
++++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/SnapshotOptions.kt
+@@ -189,7 +189,7 @@ class SnapshotOptions(
+          * is the authenticator, the memberships, the evaluation and the listeners. The shipped defaults were this share of
+          * the default deadline (2 s of 5 s).
+          */
+-        const val COLD_LOAD_PERCENT: Int = 40
++        const val COLD_LOAD_PERCENT: Int = 140
+ 
+         /**
+          * A compile thread per this many cores, between 1 and [MAX_COMPILE_THREADS]: compiling is bursty CPU work beside the

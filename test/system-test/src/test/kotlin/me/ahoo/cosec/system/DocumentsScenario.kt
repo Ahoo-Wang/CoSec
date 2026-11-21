@@ -25,6 +25,7 @@ import org.junit.jupiter.api.extension.ExtendWith
  * ScopeResolverTest prove those): one representative of each, where the wiring between the processes is the point.
  */
 @Tag("system")
+@Tag("control")
 @Order(20)
 @ExtendWith(TranscriptExtension::class)
 class DocumentsScenario {

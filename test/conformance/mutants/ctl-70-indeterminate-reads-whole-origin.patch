@@ -1,0 +1,18 @@
+# Rule: CTL-70
+# Mutant: an approval that cannot be decided counts as one that was permitted
+# Tests: :control:test --tests me.ahoo.cosec.control.api.ChangeOriginAnswerTest
+
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/api/DefaultControlPlane.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/api/DefaultControlPlane.kt
+index 4be7fb2eb..decdbea40 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/api/DefaultControlPlane.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/api/DefaultControlPlane.kt
+@@ -138,7 +138,8 @@ class DefaultControlPlane(
+      * change, and from where. Only a permit counts: a deny or an indeterminate decision shows the short origin.
+      */
+     override val origins: OriginReaders = OriginReaders { operator, change ->
+-        authority.holds(operator, change.key, ControlActions.APPROVE) ||
++        authority.decide(operator, change.key, ControlActions.APPROVE) !=
++            me.ahoo.cosec.control.authz.ControlDecision.DENY ||
+             authority.holds(operator, SnapshotKey.Platform, ControlActions.READ)
+     }
+ 

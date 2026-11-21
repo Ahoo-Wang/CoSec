@@ -1,0 +1,17 @@
+# Rule: SNP-23
+# Mutant: a document is warned about after one missed pass, which is the interval itself, not a count of missed passes above it
+# Tests: :runtime:test --tests me.ahoo.cosec.runtime.snapshot.SnapshotOptionsDeriveTest
+
+diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/SnapshotOptions.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/SnapshotOptions.kt
+index e408d5a..1c73a7e 100644
+--- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/SnapshotOptions.kt
++++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/SnapshotOptions.kt
+@@ -179,7 +179,7 @@ class SnapshotOptions(
+         const val ALL_TENANTS = "*"
+ 
+         /** A lag report is a number of missed passes: a document unconfirmed for this many is logged at WARN. */
+-        const val LAG_WARN_PASSES: Int = 6
++        const val LAG_WARN_PASSES: Int = 1
+ 
+         /** ... and at ERROR, as stale, for this many. */
+         const val LAG_ESCALATE_PASSES: Int = 30

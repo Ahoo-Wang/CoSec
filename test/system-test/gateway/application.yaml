@@ -12,7 +12,9 @@ spring:
               - uri: http://behind:8080
             auth:
               - uri: http://auth:8080
-            # One replica of the control-plane host: the operators' scenarios read what they have written, which a second
+            # The control plane's operators' API is served by one replica of the control-plane host (leg 1) or by the IAM that
+            # embeds it (leg 2, SYSTEM_CONTROL_TARGET=auth, whose instance is the one above). Leg 1:
+            # one replica of the control-plane host: the operators' scenarios read what they have written, which a second
             # replica serves a moment after its invalidation message (the scenarios that address both replicas do it by
             # port, ControlHostScenario).
             control:
@@ -32,10 +34,15 @@ spring:
               uri: lb://auth
               predicates:
                 - Path=/auth/**
+            # The IAM's operator routes (an onboarding, a grant): decided here for root only (the platform document), then by the IAM.
+            - id: iam-admin
+              uri: lb://auth
+              predicates:
+                - Path=/admin/**
             # The control plane's operators' API: the token verified and the route decided here, the identity forwarded, each
             # action decided again at the host. It names the control plane's app, which the tokens of its operators are for.
             - id: control
-              uri: lb://control
+              uri: lb://${SYSTEM_CONTROL_TARGET:control}
               predicates:
                 - Path=/cosec/control/**
               metadata:

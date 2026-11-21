@@ -235,8 +235,8 @@ CoSec 自己的拒绝很容易区分：它们总是 `application/problem+json`�
 
 审计事件的 `snapshotVersion` 或 span 的 `cosec.snapshot.version` 比控制面发布的修订旧。
 
-- **实例访问不到 Redis。** 它继续使用已装入的内容做决策，超过 `lag-warn`（60 秒）后以 `WARN` 记录
-  `Snapshot document [<doc>] revision <n> has not been confirmed for <lag>.`，超过 `lag-escalate`（5 分钟）后以
+- **实例访问不到 Redis。** 它继续使用已装入的内容做决策，超过 6 个重新确认间隔（60 秒）后以 `WARN` 记录
+  `Snapshot document [<doc>] revision <n> has not been confirmed for <lag>.`，超过 30 个间隔（5 分钟）后以
   `ERROR` 记录 `... is stale: not confirmed for <lag>.`。恢复 Redis。
 - **实例错过了失效消息。** 它会在 [`revalidate-interval`](./configuration.md#snapshot)（默认 10 秒，最多 5 分钟）内跟上。
   周期确认不能关闭：Redis 正常而间隔更长，说明实例的确认轮次在失败，它的日志会写明原因。
@@ -278,7 +278,7 @@ Request [<id>]: the forwarded identity is refused (<status> <problem>), <reason>
 在平台文档以及 [`prewarm-apps` 和 `prewarm-tenants`](./configuration.md#snapshot) 中的每个文档都装入之前，就绪状态拒绝流量；存活状态不受
 影响。实例一直不就绪时：
 
-- **没有发布平台文档。** 用 `cosec-migrate publish` 发布一个。实例会在启动时记录这一点，之后在持续期间每隔 `lag-warn` 记录一次：`No platform document under [cosec:snapshot:platform] in Redis <host:port/db>: this instance is not ready ...`。这一行指明读取的 key、key 前缀和所读的 Redis，从不包含凭证：常见原因是首次部署还没有发布任何文档、`cosec.key-prefix` 写错（发布方的必须相同）或 Redis 数据库错了。文档装入时会有一行 INFO。
+- **没有发布平台文档。** 用 `cosec-migrate publish` 发布一个。实例会在启动时记录这一点，之后在持续期间每隔 6 个重新确认间隔记录一次：`No platform document under [cosec:snapshot:platform] in Redis <host:port/db>: this instance is not ready ...`。这一行指明读取的 key、key 前缀和所读的 Redis，从不包含凭证：常见原因是首次部署还没有发布任何文档、`cosec.key-prefix` 写错（发布方的必须相同）或 Redis 数据库错了。文档装入时会有一行 INFO。
 - **某个预热文档无法加载或编译。** 日志会指明它（`Loading snapshot document [<doc>] failed.`）。修正或发布该文档，或把它从预热列表中去掉。
 - **无法读取 Redis。** 平台文档和预热文档每隔 1 到 30 秒会被重新读取（`WARN` 级别的 `Snapshot prewarm failed for [...]; retrying in ...`），无需请求：Redis 一应答，实例就会就绪（`SNP-21`）。如果没有，原因是上面两条之一，或者 Redis 仍然拒绝该实例。
 
@@ -345,11 +345,11 @@ Redis may evict CoSec's policy snapshot: maxmemory-policy is {<node>=<policy>}, 
 
 ## 编译不结束 {#a-compilation-does-not-end}
 
-以 `ERROR` 记录 `Compiling snapshot document [<doc>] revision <n> did not end within <budget>; the load fails, and the revision is not compiled again while that compilation runs.`：编译器在该存储修订上用时超过加载的预算（尚未持有的文档为 `cold-load-timeout`，2 秒；重新加载为 30 秒）。需要它的请求在它未被持有时回答 `503`，或者按之前持有的修订决策。该编译在结束之前占用一个编译线程；同时有两个这样的修订会占满默认的两个线程，此时在其中一个结束之前没有其他文档能编译：每个加载都在其截止时间失败关闭。经过控制面校验的文档编译用时远低于一毫秒：查找绕过控制面写入 Redis 的修订，并发布一个改正的修订，它会像其他修订一样编译（[存储](./storage.md#how-instances-read-documents)）。
+以 `ERROR` 记录 `Compiling snapshot document [<doc>] revision <n> did not end within <budget>; the load fails, and the revision is not compiled again while that compilation runs.`：编译器在该存储修订上用时超过加载的预算（尚未持有的文档为冷加载超时，2 秒；重新加载为 30 秒）。需要它的请求在它未被持有时回答 `503`，或者按之前持有的修订决策。该编译在结束之前占用一个编译线程；同时有两个这样的修订会占满默认的两个线程，此时在其中一个结束之前没有其他文档能编译：每个加载都在其截止时间失败关闭。经过控制面校验的文档编译用时远低于一毫秒：查找绕过控制面写入 Redis 的修订，并发布一个改正的修订，它会像其他修订一样编译（[存储](./storage.md#how-instances-read-documents)）。
 
 ## 影子窗口在等待某个实例 {#shadow-window-waiting-for-an-instance}
 
-控制面记录 `Shadow window <w> of change <c> is waiting for [<instances>]`，窗口不关闭，无论其他实例报告了什么：这些实例在窗口上报告过，而现在没有报告（已停止、已缩容，或者它们的报告在 Redis 故障切换中丢失）。它们的证据缺失，所以窗口等待它们（`CTL-56`）。仍在服务的实例会在 `cosec.authorization.shadow.report-interval` 内再次写入报告。永久离开的实例会让窗口一直保持打开，直到 `cosec.control.shadow.max-duration`，届时窗口以*证据不足*关闭，摘要的 `vanished` 点名该实例：确认摘要后发布它，或者放弃它并重新暂存，用现在在服务的实例开始新的窗口（[测试变更](../policies/testing.md#trying-changes-in-shadow-mode)）。
+控制面记录 `Shadow window <w> of change <c> is waiting for [<instances>]`，窗口不关闭，无论其他实例报告了什么：这些实例在窗口上报告过，而现在没有报告（已停止、已缩容，或者它们的报告在 Redis 故障切换中丢失）。它们的证据缺失，所以窗口等待它们（`CTL-56`）。仍在服务的实例会在它的报告间隔（默认 10 秒）内再次写入报告。永久离开的实例会让窗口一直保持打开，直到 `cosec.control.shadow.max-duration`，届时窗口以*证据不足*关闭，摘要的 `vanished` 点名该实例：确认摘要后发布它，或者放弃它并重新暂存，用现在在服务的实例开始新的窗口（[测试变更](../policies/testing.md#trying-changes-in-shadow-mode)）。
 
 ## 影子窗口在等待确认 {#shadow-window-waiting-for-an-acknowledgement}
 
@@ -358,7 +358,7 @@ Redis may evict CoSec's policy snapshot: maxmemory-policy is {<node>=<policy>}, 
 - **旧版本的实例**不发送确认。完成滚动升级：旧实例下线后，它们的状态在两分钟内过期，窗口不再等待它们。
 - **读不到暂存列表的实例**记录 `The staged list cannot be read since it was at <instant>`，其 `cosec.shadow.staged.age` 持续上升。修复它对 Redis 的访问（数据面用户读取 `<s>:candidate-staged:all`，[存储](./storage.md#redis-keys)）。
 - **窗口期间启动的实例**编译了候选之后，会在几个上报间隔内确认它。
-- **状态无法解码的实例**算作存活且什么都不确认（`CTL-72`）：控制面主机每次读取状态（最多每 5 秒一次）时以 `WARN` 记录 `The status of instance [<instance>] does not read: it counts as live and acknowledging no shadow window until it reads or expires (<why>).`，`cosec.control.shadow.status.unreadable` 计数。`<why>` 中是更晚的格式时，说明滚动升级期间有更新的版本：完成控制面主机的升级，或回滚那个实例。其他情况是损坏的值或反复崩溃的实例：按其 id 停止或修复该实例；它的状态在最后一次写入两分钟后过期。
+- **状态无法解码的实例**算作存活且什么都不确认（`CTL-73`）：控制面主机每次读取状态（最多每 5 秒一次）时以 `WARN` 记录 `The status of instance [<instance>] does not read: it counts as live and acknowledging no shadow window until it reads or expires (<why>).`，`cosec.control.shadow.status.unreadable` 计数。`<why>` 中是更晚的格式时，说明滚动升级期间有更新的版本：完成控制面主机的升级，或回滚那个实例。其他情况是损坏的值或反复崩溃的实例：按其 id 停止或修复该实例；它的状态在最后一次写入两分钟后过期。
 
 如果**没有任何**实例确认任何窗口（每个窗口的 `waitingFor` 都列出全部存活实例），说明实例没有持有暂存列表：它们记录 `The staged list cannot be read`，或者 `<s>:candidate-staged:all` 没有 `.kept` 标记（存储被清空后控制面尚未在其上暂存过任何候选；下一次暂存或影子轮询会写入它）。修复之后，实例会在几个上报间隔内确认。
 
@@ -653,7 +653,7 @@ cosec.authorization.snapshot.revalidate-interval (PT0S) must be positive: the pe
 ```
 
 失效消息丢失时，周期确认是文档变化唯一的界（`SNP-6`），因此它既不能关闭，也不能没有上限。消息写明该值违反了哪一条：至少 1 秒（每一轮都从 Redis 读取每个已安装的文档）、不超过
-5 分钟、小于 `lag-warn`，配置了 `fail-closed.tenants` 时还要小于 `fail-closed.max-lag`（[配置](./configuration.md#snapshot)）。文档很多时要节省
+5 分钟、配置了 `fail-closed.tenants` 时还要小于 `fail-closed.max-lag`（[配置](./configuration.md#snapshot)）。文档很多时要节省
 Redis 的 CPU，在这些范围内调大它（[存储](./storage.md#what-revalidation-costs-redis)）。
 
 ### 已移除的 key 前缀导致启动失败 {#startup-fails-on-a-removed-key-prefix}
@@ -732,13 +732,11 @@ Tokens are verified against RevocationReader.NONE: a revoked token (logout, revo
 | 消息 | 修复 |
 |---|---|
 | `STA-5: <n> CorsConfigurationSource beans of the application: the CORS filter before CoSec takes one.` | 只保留一个 `CorsConfigurationSource`，或自己声明一个 `CorsFilter` bean，starter 就不再注册（[CORS](../integration/web.md#cors)）。 |
-| `cosec.authorization.shadow.report-interval is at least one millisecond, not <d>.` | 把 [`report-interval`](./configuration.md#shadow-windows) 设为一毫秒或更大（默认 `10s`）。 |
 | `cosec.audit.kafka.delivery=[<value>] is neither required nor best-effort.` | 写 `required` 或 `best-effort`（[`delivery`](./configuration.md#audit)）；大小写、空格以及用 `-` 代替 `_` 都无所谓。 |
 | `Decision listener <name> is registered twice.` | 给每个 `DecisionListener` 一个独立的 `name`。 |
 | `CoSec's <CacheName> is the store of record: a Store.` | 有东西替换了某个 CoSec 缓存的定义；CoSec 自己创建这些缓存。 |
 | `lagWarn must not exceed lagEscalate.` 以及其他快照选项检查 | 修正 [`cosec.authorization.snapshot.*`](./configuration.md#snapshot)。 |
 | `Invalid change options.`、`Invalid shadow window options.` | 修正 [`cosec.control.*`](./configuration.md#control-plane)：`break-glass.max-duration` 超过 `24h`，或 `shadow.max-duration` 小于 `shadow.min-duration`。 |
-| `cosec.control.revisions.reclaim-interval must be positive.`、`cosec.control.shadow.check-interval must be positive.` | 设置一个正的时长。 |
 | `cosec.control.audit.kafka.delivery=required, but no Kafka change listener was created: it needs cosec-kafka, a KafkaOperations bean and cosec.control.audit.kafka.enabled=true.` | 补上它列出的条件，或把 [`delivery`](./configuration.md#control-plane) 设为 `best-effort`。 |
 | `The control plane checks its approvers' revocations, but no revocation reader is available: ...` | 启用 CoSec 的令牌并加上 `cosec-cocache`，或声明一个 `RevocationReader` bean；只有在审批人的凭证从不吊销时才用 `RevocationReader.NONE`（[控制面](./configuration.md#control-plane)）。 |
 | `cosec.authentication.login.refresh.path is set on a Spring Cloud Gateway host. ...` | 网关不签发会话：在网关上取消设置，改在网关之后签发会话的服务上设置。 |
@@ -760,7 +758,7 @@ Tokens are verified against RevocationReader.NONE: a revoked token (logout, revo
 |---|---|---|
 | `401` | 请求背后没有管道放行的主体：匿名，或者该路由没有部署在管道之后。请求体一个字节也不读。 | 发送凭证。文档必须为这个主体放行发往 `cosec.control.http.base-path` 的 HTTP 请求。 |
 | `403` | 操作者无权对这个文档执行这个动作（对 `simulate` 与 `explain`，是请求在其中决策的租户：没有 `principal` 时是 `(0)`），或者硬性规则禁止：作者审批自己的变更、其他人变基该变更，或作者以外的人放弃吊销仍在生效的 break-glass 绑定的变更（`BRK-10`）。 | 为操作者绑定该文档的控制面策略（`cosec:platform-admin`、`cosec:tenant-admin` 等）（[测试变更](../policies/testing.md)）。 |
-| `400` | 请求体不是 JSON 对象、字段缺失或未知、值类型错误或解析不了（时间、模式、数字），或者（WebMvc 上）请求体超过 [`cosec.control.http.max-body-size`](./configuration.md#control-plane)。`simulate` 与 `explain` 还会拒绝：没有 `principal` 却指定 `(0)` 以外租户的请求（执法会在 `(0)` 上决策它）；以不同的值重复发送视图中某份文档读取的头的请求（与执法一样拒绝）；执法会拒绝的 `http` 路径（点号段、格式错误的转义、超过 2,048 个字符或每段 256 个），或者超过这些长度的类型化 id，`analyze` 也拒绝这种资源。路径、查询或请求体中任何字符串带有落单 UTF-16 代理项（如 JSON 转义 `"\uD800"`）的请求，在路由读取它之前就被拒绝：`The request holds a string with an unpaired UTF-16 surrogate, which no id may hold (IDN-10).` | 修正请求；`detail` 用控制面自己的话或字段名说明问题，从不带异常消息。没有 `detail` 的 `400` 以 `INFO` 记录：`Control API <method> <path> (request <requestId>) is 400: <reason>`。WebFlux 上的大请求体受 `spring.codec.max-in-memory-size` 限制。 |
+| `400` | 请求体不是 JSON 对象、字段缺失或未知、值类型错误或解析不了（时间、模式、数字），或者（WebMvc 上）请求体超过 10 MB（文档上限再加 2 MB，[由计算得出](./configuration.md#computed-not-configured)）。`simulate` 与 `explain` 还会拒绝：没有 `principal` 却指定 `(0)` 以外租户的请求（执法会在 `(0)` 上决策它）；以不同的值重复发送视图中某份文档读取的头的请求（与执法一样拒绝）；执法会拒绝的 `http` 路径（点号段、格式错误的转义、超过 2,048 个字符或每段 256 个），或者超过这些长度的类型化 id，`analyze` 也拒绝这种资源。路径、查询或请求体中任何字符串带有落单 UTF-16 代理项（如 JSON 转义 `"\uD800"`）的请求，在路由读取它之前就被拒绝：`The request holds a string with an unpaired UTF-16 surrogate, which no id may hold (IDN-10).` | 修正请求；`detail` 用控制面自己的话或字段名说明问题，从不带异常消息。没有 `detail` 的 `400` 以 `INFO` 记录：`Control API <method> <path> (request <requestId>) is 400: <reason>`。WebFlux 上的大请求体受 `spring.codec.max-in-memory-size` 限制。 |
 | `404` | 没有这个路由、文档或变更，或者操作者看不到它。末尾带 `/` 或含空段（`//`）的路径不是路由。 | 使用路由的确切路径。 |
 | `409` | 基准已变化（`[<doc>] is at revision <n>, not <m>`）、变更处于其他状态、另一个变更占用了文档的暂存槽（只有吊销 break-glass，或持有 `cosec:skip-shadow` 的人提交的只收窄变更能抢占，而吊销仍在生效的绑定的变更持有的暂存槽，只有另一个这样的吊销能抢走：[抢占被占用的暂存槽](../policies/testing.md#taking-a-busy-slot)）、影子窗口仍打开或被阻塞，或者 break-glass 吊销没有生效（`binding [<id>] still grants: change <id> is <state>`，见下文）。 | 变基、等待另一个变更、查看窗口的摘要，或再吊销一次。 |
 | `:apply` 的 `REPLACE` 返回 `409`：`[<doc>] is at revision <n>, not <m>: REPLACE removes what the file leaves out, and the file was read at revision <m>` | 文件头写明了读取时的修订，而头修订之后已变化：应用它会删掉期间发布的内容。 | 读取头修订（`GET /documents/<doc>`），把变化合并进文件，把 `revision` 设为头修订，再应用一次（[变更](../policies/testing.md#changes)）。 |

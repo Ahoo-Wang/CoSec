@@ -253,20 +253,13 @@ class RuntimeAuthorizationProperties {
         /**
          * How often a pass starts that confirms every installed document against Redis; while a pass is still in
          * flight, the next starts as soon as it ends. A change whose invalidation was lost is installed by the first
-         * pass that reaches its document (`SNP-6`). At least 1 second, at most 5 minutes, less than `lag-warn` and,
-         * with fail-closed tenants, less than `fail-closed.max-lag`; anything else fails startup.
+         * pass that reaches its document (`SNP-6`). At least 1 second, at most 5 minutes and, with fail-closed tenants,
+         * less than `fail-closed.max-lag`; anything else fails startup. A document unconfirmed for 6 intervals is logged
+         * at WARN, for 30 at ERROR as stale ([SnapshotOptions.derive]).
          */
         var revalidateInterval: Duration = Duration.ofSeconds(10)
 
-        /** How long a document may go unconfirmed before it is logged at WARN; not more than `lag-escalate`. */
-        var lagWarn: Duration = Duration.ofSeconds(60)
-
-        /** How long a document may go unconfirmed before it is logged at ERROR as stale. */
-        var lagEscalate: Duration = Duration.ofMinutes(5)
         val failClosed = FailClosed()
-
-        /** How long a request waits for a document that is not installed; past it the document counts as failed. Positive. */
-        var coldLoadTimeout: Duration = Duration.ofSeconds(2)
 
         /** The most app documents held in memory (positive); the least recently used one is dropped beyond it. */
         var maxApps: Int = SnapshotOptions.DEFAULT_MAX_APPS
@@ -289,12 +282,6 @@ class RuntimeAuthorizationProperties {
          */
         var maxAbsentTenants: Int = SnapshotOptions.DEFAULT_MAX_ABSENT_TENANTS
 
-        /**
-         * Documents a revalidation pass confirms at once (positive). A pass takes about the documents held × one
-         * conditional read ÷ this; past `revalidate-interval`, passes run back to back and lag grows with them.
-         */
-        var reloadConcurrency: Int = SnapshotOptions.DEFAULT_RELOAD_CONCURRENCY
-
         /** App documents loaded at startup, after the platform document; readiness waits for them. */
         var prewarmApps: List<String> = emptyList()
 
@@ -307,9 +294,6 @@ class RuntimeAuthorizationProperties {
          * refreshed route names. Off, they load on their first request, as before.
          */
         var prewarmHostApps: Boolean = true
-
-        /** Threads that compile documents; positive. */
-        var compileThreads: Int = 2
 
         /** What a Redis whose `maxmemory-policy` is not `noeviction`, or cannot be read, does to startup (`SNP-3`). */
         var evictionCheck: EvictionCheck = EvictionCheck.FAIL
@@ -341,9 +325,6 @@ class RuntimeAuthorizationProperties {
 
         /** The share of requests evaluated again on the candidates, from 0 to 1. */
         var sampleRate: Double = 0.1
-
-        /** How often this instance writes its reports and its status. */
-        var reportInterval: Duration = Duration.ofSeconds(10)
 
         /**
          * The prefix of this instance's id in reports and statuses: the id is `<instance-id>.<suffix>`, the suffix new at

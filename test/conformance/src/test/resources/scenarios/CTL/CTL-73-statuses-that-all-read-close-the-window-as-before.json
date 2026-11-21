@@ -1,6 +1,6 @@
 {
   "rules": [
-    "CTL-72"
+    "CTL-73"
   ],
   "polarity": "negative",
   "level": "control",

@@ -623,7 +623,7 @@ visit:
   override `readings` keeps such a window open past its longest.
 - `ShadowReportReader.statusReadings()`: the recent statuses that read, and in `StatusReadings.unreadable` the
   instances whose listed status does not decode. The control plane takes those as live and acknowledging no window, so
-  no window passes on them, while it reads every other status and `propagation` answers (`CTL-72`). A status under
+  no window passes on them, while it reads every other status and `propagation` answers (`CTL-73`). A status under
   another instance's key, and a store that does not answer, are thrown for the whole call. The default reads
   `statuses()`: a reader that does not override it cannot tell a status that does not decode from none, so it fails
   the read where `statuses()` does, and every window and `propagation` wait until that status reads or expires.

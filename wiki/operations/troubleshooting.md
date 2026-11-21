@@ -324,8 +324,8 @@ The audit event's `snapshotVersion`, or the span's `cosec.snapshot.version`, is 
 plane published.
 
 - **The instance cannot reach Redis.** It keeps deciding with what it has installed, and logs
-  `Snapshot document [<doc>] revision <n> has not been confirmed for <lag>.` at `WARN` after `lag-warn` (60 seconds),
-  `... is stale: not confirmed for <lag>.` at `ERROR` after `lag-escalate` (5 minutes). Restore Redis.
+  `Snapshot document [<doc>] revision <n> has not been confirmed for <lag>.` at `WARN` after 6 revalidation intervals (60 seconds),
+  `... is stale: not confirmed for <lag>.` at `ERROR` after 30 (5 minutes). Restore Redis.
 - **The instance missed an invalidation message.** It catches up within
   [`revalidate-interval`](./configuration.md#snapshot) (10 seconds by default, at most 5 minutes). The pass cannot be
   turned off: a longer gap with Redis healthy means the instance's revalidation pass is failing; its log says why.
@@ -384,7 +384,7 @@ Readiness refuses traffic until the platform document and every document in
 instance that never becomes ready:
 
 - **No platform document is published.** Publish one with `cosec-migrate publish`. The instance logs it, at startup and
-  then every `lag-warn` while it lasts: `No platform document under [cosec:snapshot:platform] in Redis <host:port/db>:
+  then every 6 revalidation intervals while it lasts: `No platform document under [cosec:snapshot:platform] in Redis <host:port/db>:
   this instance is not ready ...`. The line names the key, the key prefix and the Redis it read, never a credential: a
   first deployment that has published nothing, a wrong `cosec.key-prefix` (the publisher's must be the same) or a wrong
   Redis database are the usual causes. One INFO line says when the document is installed.
@@ -487,7 +487,7 @@ rest, and the kubelet restarts the pod.
 
 `Compiling snapshot document [<doc>] revision <n> did not end within <budget>; the load fails, and the revision is not
 compiled again while that compilation runs.` at `ERROR`: the compiler took longer than the load's budget
-(`cold-load-timeout`, 2 seconds, for a document not yet held; 30 seconds for a reload) on that stored revision. The
+(the cold-load timeout, 2 seconds, for a document not yet held; 30 seconds for a reload) on that stored revision. The
 requests that need it answer `503` while it is not held, or are decided on the revision held before. The compilation
 keeps one compile thread until it ends; two such revisions at once hold both default threads, and then no other
 document compiles until one ends: every load fails at its deadline, closed. A document the control plane validated compiles in well under a millisecond: look for a
@@ -499,7 +499,7 @@ revision written to Redis outside the control plane, and publish a corrected rev
 The control plane logs `Shadow window <w> of change <c> is waiting for [<instances>]` and the window does not close,
 whatever the other instances report: those instances reported on the window and have no report now (stopped, scaled
 down, or their report lost in a Redis failover). Their evidence is missing, so the window waits for them (`CTL-56`).
-An instance that still serves writes its report again within `cosec.authorization.shadow.report-interval`. One that is
+An instance that still serves writes its report again within its report interval (10 seconds at the default). One that is
 gone for good leaves the window open until `cosec.control.shadow.max-duration`, when it closes *insufficient* with the
 instance named in its summary's `vanished`: publish it with the summary acknowledged, or abandon it and stage it again
 to start a window with the instances serving now ([Testing changes](../policies/testing.md#trying-changes-in-shadow-mode)).
@@ -519,7 +519,7 @@ published revision having compared nothing. A host with shadowing off writes no 
   [Storage](./storage.md#redis-keys)).
 - **An instance that started during the window** acknowledges it within a few report intervals, once it has compiled
   the candidate.
-- **An instance whose status does not decode** counts as live and acknowledging nothing (`CTL-72`): the control host
+- **An instance whose status does not decode** counts as live and acknowledging nothing (`CTL-73`): the control host
   logs `The status of instance [<instance>] does not read: it counts as live and acknowledging no shadow window until
   it reads or expires (<why>).` at `WARN` each time it reads the statuses (at most every 5 seconds), and
   `cosec.control.shadow.status.unreadable` counts it. A later format in `<why>` is a newer version during a rolling
@@ -910,7 +910,7 @@ cosec.authorization.snapshot.revalidate-interval (PT0S) must be positive: the pe
 
 The periodic revalidation is the only bound on a document change whose invalidation message was lost (`SNP-6`), so it
 cannot be off or unbounded. The message says which bound the value breaks: at least 1 second (each pass reads every
-installed document from Redis), at most 5 minutes, less than `lag-warn`, and with `fail-closed.tenants` less than
+installed document from Redis), at most 5 minutes, and with `fail-closed.tenants` less than
 `fail-closed.max-lag`
 ([Configuration](./configuration.md#snapshot)). To spend less Redis CPU on many documents, raise it within those
 bounds ([Storage](./storage.md#what-revalidation-costs-redis)).
@@ -1014,13 +1014,11 @@ random one.
 | Message | Fix |
 |---|---|
 | `STA-5: <n> CorsConfigurationSource beans of the application: the CORS filter before CoSec takes one.` | Keep one `CorsConfigurationSource`, or declare a `CorsFilter` bean of your own, which the starter then leaves in place ([CORS](../integration/web.md#cors)). |
-| `cosec.authorization.shadow.report-interval is at least one millisecond, not <d>.` | Set [`report-interval`](./configuration.md#shadow-windows) to one millisecond or more (default `10s`). |
 | `cosec.audit.kafka.delivery=[<value>] is neither required nor best-effort.` | Write `required` or `best-effort` ([`delivery`](./configuration.md#audit)); case, spaces and `-` for `_` do not matter. |
 | `Decision listener <name> is registered twice.` | Give each `DecisionListener` its own `name`. |
 | `CoSec's <CacheName> is the store of record: a Store.` | Something replaced the spec of one of CoSec's caches; CoSec creates them itself. |
-| `lagWarn must not exceed lagEscalate.` and the other snapshot option checks | Fix [`cosec.authorization.snapshot.*`](./configuration.md#snapshot). |
+| `maxApps must be positive.` and the other snapshot option checks | Fix [`cosec.authorization.snapshot.*`](./configuration.md#snapshot). |
 | `Invalid change options.`, `Invalid shadow window options.` | Fix [`cosec.control.*`](./configuration.md#control-plane): `break-glass.max-duration` above `24h`, or `shadow.max-duration` below `shadow.min-duration`. |
-| `cosec.control.revisions.reclaim-interval must be positive.`, `cosec.control.shadow.check-interval must be positive.` | Set a positive duration. |
 | `cosec.control.audit.kafka.delivery=required, but no Kafka change listener was created: it needs cosec-kafka, a KafkaOperations bean and cosec.control.audit.kafka.enabled=true.` | Add what it names, or set [`delivery`](./configuration.md#control-plane) to `best-effort`. |
 | `The control plane checks its approvers' revocations, but no revocation reader is available: ...` | Enable CoSec's tokens with `cosec-cocache`, or declare a `RevocationReader` bean; `RevocationReader.NONE` only when no approver's credential is ever revoked ([Control plane](./configuration.md#control-plane)). |
 | `cosec.jwt.token-validity.refresh (<d>), how long a token revocation is kept, is shorter than cosec.control.approval.expire-after (<d>): ...` | Raise the first or lower the second: a revocation must outlive every approval its token gave. |
@@ -1043,7 +1041,7 @@ principal sets a tenant's boundary`.
 |---|---|---|
 | `401` | No principal the pipeline permitted stands behind the request: anonymous, or the route is not served behind the pipeline. Nothing of its body is read. | Send a credential. The documents must permit the HTTP request to `cosec.control.http.base-path` for this principal. |
 | `403` | The operator may not take this action on this document (for `simulate` and `explain`, on the tenant the request is decided in: `(0)` for one without a `principal`), or the hard rules forbid it: the author approving their own change, someone else rebasing it, or anyone but its author abandoning a revoke of a live break-glass binding (`BRK-10`). | Bind the operator a control-plane policy (`cosec:platform-admin`, `cosec:tenant-admin`, ...) for that document ([Testing changes](../policies/testing.md)). |
-| `400` | The body is not a JSON object, a field is missing or unknown, a value has the wrong type or does not parse (a time, a mode, a number), or (WebMvc) the body is larger than [`cosec.control.http.max-body-size`](./configuration.md#control-plane). `simulate` and `explain` also refuse a request without a `principal` that names a tenant other than `(0)`, which enforcement would decide on `(0)`; one that repeats, with different values, a header a document of its view reads, as enforcement refuses it; and an `http` path enforcement refuses (a dot segment, a malformed escape, over 2,048 characters or 256 per segment) or a typed id over those lengths, which `analyze` refuses too. Any request whose path, query or body holds a string with an unpaired UTF-16 surrogate (a JSON escape such as `"\uD800"`) is refused before its route reads it: `The request holds a string with an unpaired UTF-16 surrogate, which no id may hold (IDN-10).` | Fix the request; `detail` says what, in the control plane's own words or by the field's name, never an exception's message. A `400` without `detail` is logged at `INFO`: `Control API <method> <path> (request <requestId>) is 400: <reason>`. On WebFlux a large body is bounded by `spring.codec.max-in-memory-size`. |
+| `400` | The body is not a JSON object, a field is missing or unknown, a value has the wrong type or does not parse (a time, a mode, a number), or (WebMvc) the body is larger than 10 MB (the document cap and 2 MB, [computed](./configuration.md#computed-not-configured)). `simulate` and `explain` also refuse a request without a `principal` that names a tenant other than `(0)`, which enforcement would decide on `(0)`; one that repeats, with different values, a header a document of its view reads, as enforcement refuses it; and an `http` path enforcement refuses (a dot segment, a malformed escape, over 2,048 characters or 256 per segment) or a typed id over those lengths, which `analyze` refuses too. Any request whose path, query or body holds a string with an unpaired UTF-16 surrogate (a JSON escape such as `"\uD800"`) is refused before its route reads it: `The request holds a string with an unpaired UTF-16 surrogate, which no id may hold (IDN-10).` | Fix the request; `detail` says what, in the control plane's own words or by the field's name, never an exception's message. A `400` without `detail` is logged at `INFO`: `Control API <method> <path> (request <requestId>) is 400: <reason>`. On WebFlux a large body is bounded by `spring.codec.max-in-memory-size`. |
 | `404` | No such route, document or change, or one the operator may not see. A path with a trailing `/` or an empty segment (`//`) is no route. | Use the route's exact path. |
 | `409` | The base moved (`[<doc>] is at revision <n>, not <m>`), the change is in another state, another change holds the document's staging slot (only a break-glass revoke, or a change that only narrows by a holder of `cosec:skip-shadow`, takes it, and only another revoke of a live binding takes a revoke of a live binding's: [Taking a busy slot](../policies/testing.md#taking-a-busy-slot)), the shadow window is open or blocked, or a break-glass revoke did not take effect (`binding [<id>] still grants: change <id> is <state>`, below). | Rebase, wait for the other change, read the window's summary, or revoke again. |
 | `409` from `:apply` with `REPLACE`: `[<doc>] is at revision <n>, not <m>: REPLACE removes what the file leaves out, and the file was read at revision <m>` | The file's header names the revision it was read at, and the head moved since: applying it would remove what was published in between. | Read the head (`GET /documents/<doc>`), bring what changed into the file, set its `revision` to the head's and apply again ([Changes](../policies/testing.md#changes)). |

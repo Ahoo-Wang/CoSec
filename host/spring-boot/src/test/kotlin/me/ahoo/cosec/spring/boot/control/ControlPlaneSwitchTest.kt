@@ -146,7 +146,7 @@ class ControlPlaneSwitchTest {
     }
 
     @Test
-    fun `the instance statuses that do not decode are counted - CTL-72`() {
+    fun `the instance statuses that do not decode are counted - CTL-73`() {
         runner.withBean(io.micrometer.core.instrument.MeterRegistry::class.java, {
             io.micrometer.core.instrument.simple.SimpleMeterRegistry()
         }).run { context ->

@@ -30,7 +30,7 @@ import kotlin.coroutines.cancellation.CancellationException
  * that fails is never kept and never answered from an older read: the call fails ([ControlStoreException], 503 by
  * `CTL-52`) and the next call reads again.
  *
- * A status that does not decode is not a failed read (`CTL-72`): its instance is in [Read.unreadable], and every other
+ * A status that does not decode is not a failed read (`CTL-73`): its instance is in [Read.unreadable], and every other
  * status is read. [unreadable] counts each such status a read found.
  */
 internal class InstanceStatuses(

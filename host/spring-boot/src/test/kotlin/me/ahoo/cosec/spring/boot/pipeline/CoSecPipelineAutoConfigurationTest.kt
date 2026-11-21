@@ -31,6 +31,7 @@ import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.control.api.ControlHttp
 import me.ahoo.cosec.control.api.ControlPlane
+import me.ahoo.cosec.control.lifecycle.ControlDerived
 import me.ahoo.cosec.document.route.RouteMap
 import me.ahoo.cosec.gateway.PipelineGatewayFilter
 import me.ahoo.cosec.jwt.JwtSigning
@@ -335,7 +336,8 @@ class CoSecPipelineAutoConfigurationTest {
     /**
      * RC1-50 (`SNP-6`): the periodic revalidation is the only bound on a lost invalidation, so an interval that turns
      * it off or leaves it unbounded fails startup, naming the property: zero, a negative one, one under a second, over
-     * 5 minutes, at or over `lag-warn`, and at or over `fail-closed.max-lag` with fail-closed tenants.
+     * 5 minutes, and at or over `fail-closed.max-lag` with fail-closed tenants. The lag thresholds follow it (6 and 30
+     * passes), so one can never be at or over them.
      */
     @Test
     fun `a revalidate-interval that turns off or unbinds the periodic pass fails startup`() {
@@ -346,12 +348,7 @@ class CoSecPipelineAutoConfigurationTest {
             // Below the floor of a second (review L1 of #1200).
             listOf("$property=500us"),
             listOf("$property=1ms"),
-            listOf(
-                "$property=6m",
-                "cosec.authorization.snapshot.lag-warn=10m",
-                "cosec.authorization.snapshot.lag-escalate=10m"
-            ),
-            listOf("$property=60s"),
+            listOf("$property=6m"),
             listOf(
                 "$property=30s",
                 "cosec.authorization.snapshot.fail-closed.tenants=strict",
@@ -363,11 +360,7 @@ class CoSecPipelineAutoConfigurationTest {
                 context.startupFailure!!.stackTraceToString().assert().contains(property)
             }
         }
-        runner.withPropertyValues(
-            "$property=5m",
-            "cosec.authorization.snapshot.lag-warn=6m",
-            "cosec.authorization.snapshot.lag-escalate=10m",
-        ).run { context -> context.startupFailure.assert().isNull() }
+        runner.withPropertyValues("$property=5m").run { context -> context.startupFailure.assert().isNull() }
     }
 
     /**
@@ -498,7 +491,7 @@ class CoSecPipelineAutoConfigurationTest {
         )!!.size.assert().isEqualTo(16)
         CoSecControlRoutesAutoConfiguration.readBody(ByteArrayInputStream(ByteArray(17)), 16).assert().isNull()
         CoSecControlRoutesAutoConfiguration.tooLarge(16).statusCode().value().assert().isEqualTo(400)
-        ControlProperties().http.maxBodySize.toMegabytes().assert().isEqualTo(10)
+        (ControlDerived.MAX_BODY_BYTES / (1024 * 1024)).assert().isEqualTo(10L)
     }
 
     @Test

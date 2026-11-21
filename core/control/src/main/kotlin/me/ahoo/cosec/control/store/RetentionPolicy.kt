@@ -26,8 +26,8 @@ class RetentionPolicy(
     val maxCount: Int = 50,
     /** Revisions younger than this are always kept (`cosec.control.revisions.min-age`). */
     val minAge: Duration = Duration.ofDays(7),
-    /** Records not on the chain are removed once this old (`cosec.control.revisions.orphan-age`). */
-    val orphanAge: Duration = Duration.ofHours(1),
+    /** Records not on the chain are removed once this old (one reclaim pass, [RECLAIM_PASS]; the host passes `ControlDerived.ORPHAN_AGE`). */
+    val orphanAge: Duration = RECLAIM_PASS,
     /** How long one instance holds the reclamation lease of a document. */
     val leaseDuration: Duration = Duration.ofMinutes(5),
 ) {
@@ -36,5 +36,11 @@ class RetentionPolicy(
         require(
             !minAge.isNegative && !orphanAge.isNegative && !leaseDuration.isNegative
         ) { "Durations are not negative." }
+    }
+
+    @InternalCoSecApi
+    companion object {
+        /** How often a reclaim pass runs, which is also how old an orphan must be: one pass, an hour. */
+        val RECLAIM_PASS: Duration = Duration.ofHours(1)
     }
 }

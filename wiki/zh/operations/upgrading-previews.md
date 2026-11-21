@@ -24,6 +24,21 @@ description: "每个 8.0 预览版（alpha 与 beta）到下一个之间的变�
 
 ## 从 8.0.0-beta.4 升级 {#from-8-0-0-beta-4}
 
+- **十二个配置项改为计算得出，不再有 key**（`SNP-23`、`CTL-72`；规则是：能计算出来的就不配置）。受影响：设置了其中某一项的配置。启动会失败并列出 CoSec 不读取的 key，对每个都说明它已不再是配置项以及由什么取代。删掉这个 key；如果你原来移动过这个值，就移动它所依据的值（[由计算得出，而非配置](./configuration.md#computed-not-configured)）。`snapshot.reload-concurrency` 是其中没有出现在任何发布版本里的一个。
+
+  | 已删除 | 现在 |
+  |---|---|
+  | `cosec.authorization.snapshot.lag-warn`、`lag-escalate` | `revalidate-interval` 的 6 轮和 30 轮：要移动它们就设置 `revalidate-interval` |
+  | `cosec.authorization.snapshot.cold-load-timeout` | `cosec.pipeline.timeout` 的 40 %：要移动它就设置后者 |
+  | `cosec.authorization.snapshot.compile-threads` | 每 2 个核心一个，至少 1 个、至多 4 个 |
+  | `cosec.authorization.snapshot.reload-concurrency` | 16，常量 |
+  | `cosec.authorization.shadow.report-interval` | 状态存活期的六分之一（10 秒），且不比 `cosec.control.shadow.min-duration` 的五分之一或一秒更频繁 |
+  | `cosec.authentication.revocation.cache.initial-capacity`、`expire-after-access` | 没有：缓存自己决定大小，`local-max-age` 让每个条目过期 |
+  | `cosec.control.revisions.orphan-age`、`reclaim-interval` | 满一轮回收，以及 1 小时 |
+  | `cosec.control.shadow.check-interval` | `cosec.control.shadow.min-duration` 的十五分之一，在 250 ms 到 1 分钟之间 |
+  | `cosec.control.http.max-body-size` | 8 MB 的文档上限再加 2 MB：10 MB |
+
+  启动时 starter 记录一行以 `CoSec derived, not configured:` 开头的日志，说明它推出了什么、依据是什么。原来缩短了 `report-interval` 和 `check-interval` 的系统测试，现在只缩短 `cosec.control.shadow.min-duration`，两者随之变化。
 - **新增：控制面有了镜像 `cosec-control`，以及两种有名字的部署**（[控制面宿主](./deployment.md#the-control-plane-host)、[选择部署方式](./topologies.md#the-control-plane)）。内嵌控制面的应用无需任何改动：它就是第二种部署，原样不变。想把控制面作为自己一个进程来运行的部署，在网关旁边运行该镜像，并声明 `cosec.pipeline.identity.only-trusted-callers-can-reach=true`（没有它镜像不会启动），再配上使它属实的三条网络策略（`k8s/control/`）。
 - **原来处于 `gateway` 模式、现在需要控制面的 IAM 服务，改为运行在 `enforce`，并设置 `cosec.pipeline.caller=forwarded-identity`。** 受影响：原来处于 `cosec.pipeline.mode=gateway`、现在要加入 `cosec-control` 的服务。`gateway` 模式不接入文档、Redis 和控制面，所以控制面无法加到它上面。
   - 把 `cosec.pipeline.mode` 改为 `enforce`，并加上 `cosec.pipeline.caller=forwarded-identity`：服务仍然相信网关转发的身份，仍然要声明什么能连到它。声明相同（`only-gateway-can-reach`，开启服务端口之后是 `only-trusted-callers-can-reach`），对隐藏方法过滤器的拒绝也相同。

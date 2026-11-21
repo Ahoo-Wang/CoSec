@@ -17,7 +17,6 @@ import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.runtime.event.Delivery
 import me.ahoo.cosec.spring.boot.CoSecProperties
 import org.springframework.boot.context.properties.ConfigurationProperties
-import org.springframework.util.unit.DataSize
 import java.time.Duration
 
 /** `cosec.control.*` (RFC 0007 X5): the control plane, with `cosec-control`. */
@@ -70,12 +69,6 @@ class ControlProperties {
 
         /** Where the control API is served (RFC 0007 §10.2): its routes are under `{base-path}/v1`. */
         var basePath: String = "/cosec/control"
-
-        /**
-         * The largest request body the control routes read, on WebMvc and WebFlux alike; a larger one is answered 400
-         * (CTL-41). A document's 8 MB cap (RFC 0003 Q14) and room for the operations' JSON around it.
-         */
-        var maxBodySize: DataSize = DataSize.ofMegabytes(10)
     }
 
     @InternalCoSecApi
@@ -85,12 +78,6 @@ class ControlProperties {
 
         /** Revisions younger than this are always kept. */
         var minAge: Duration = Duration.ofDays(7)
-
-        /** The records of conflicted publishes are removed once this old. */
-        var orphanAge: Duration = Duration.ofHours(1)
-
-        /** How often each instance tries to reclaim; one instance at a time does each document. */
-        var reclaimInterval: Duration = Duration.ofHours(1)
     }
 
     @InternalCoSecApi
@@ -130,9 +117,6 @@ class ControlProperties {
 
         /** A window closes at this age with fewer samples, as insufficient evidence; not less than `min-duration`. */
         var maxDuration: Duration = Duration.ofHours(24)
-
-        /** How often shadowing changes are looked at, by one instance at a time; a window closes up to this late. */
-        var checkInterval: Duration = Duration.ofMinutes(1)
     }
 
     @InternalCoSecApi

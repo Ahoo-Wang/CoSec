@@ -62,7 +62,7 @@ treats as missing evidence (the window waits, then closes insufficient naming th
 does not answer, never name an instance unreadable for it. Without the override, `readings` throws where `reports`
 does, and a window with an unreadable report stays open past its longest. Override `statusReadings()` too: the
 recent statuses that read, and in `StatusReadings.unreadable` the instances whose listed status does not decode, which
-the control plane takes as live and acknowledging nothing (`CTL-72`). Without it, one status that does not decode fails
+the control plane takes as live and acknowledging nothing (`CTL-73`). Without it, one status that does not decode fails
 the whole read, holding every window and `propagation`.
 
 Not an extension point: `RequestGate` (`me.ahoo.cosec.runtime.http`), what the web adapters call. `Pipeline` is one;

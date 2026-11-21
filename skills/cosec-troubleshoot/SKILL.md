@@ -65,8 +65,8 @@ Full model: https://cosec.ahoo.me/guide/security-model.
 ## Startup failures
 
 - **`cosec.authorization.snapshot.revalidate-interval (<value>) must be ...`**: the periodic revalidation is the only
-  bound on a lost invalidation (SNP-6), so the interval must be at least 1 second, at most 5 minutes, less than
-  `lag-warn`, and, with `fail-closed.tenants`, less than `fail-closed.max-lag`. Use a value within the bounds; never
+  bound on a lost invalidation (SNP-6), so the interval must be at least 1 second, at most 5 minutes, and,
+  with `fail-closed.tenants`, less than `fail-closed.max-lag`. Use a value within the bounds; never
   suggest turning revalidation off.
 - **`CoSec does not read ... cosec.authorization.snapshot.key-prefix`** (or `cosec.authorization.cache.key-prefix`,
   `cosec.api-key.key-prefix`): one `cosec.key-prefix` replaced them (SNP-9), and they fail startup as unknown keys. Which
@@ -100,7 +100,7 @@ Full model: https://cosec.ahoo.me/guide/security-model.
   decision: <beans>` (WARN):** the application's own controllers or functional routes are outside CoSec; move them
   behind the gateway, or secure them in the application.
 - **`No platform document under [<prefix>:snapshot:platform] in Redis <host:port/db>: this instance is not ready ...`
-  (WARN, repeated every `lag-warn`):** the instance waits for its platform document. Check, in this order, that
+  (WARN, repeated every 6 revalidation intervals):** the instance waits for its platform document. Check, in this order, that
   something was published (`cosec-migrate publish --key-prefix <prefix>`), that `cosec.key-prefix` is the publisher's, and
   that the Redis database and host are the publisher's.
 - **`<what> needs <artifact> (me.ahoo.cosec:<artifact>) on the classpath: add it to the application's dependencies
@@ -114,8 +114,7 @@ Full model: https://cosec.ahoo.me/guide/security-model.
   `cosec.audit.enabled` and `cosec.audit.kafka.enabled` on; or use `best-effort`.
 - **`STA-5: <n> CorsConfigurationSource beans of the application`**: the starter's CORS filter takes one source. Keep one,
   or declare a `CorsFilter` bean of your own.
-- **`cosec.authorization.shadow.report-interval is at least one millisecond, not <d>.`**: set it to 1ms or more (default
-  `10s`). **`cosec.audit.kafka.delivery=[<value>] is neither required nor best-effort.`**: write one of the two.
+- **`cosec.audit.kafka.delivery=[<value>] is neither required nor best-effort.`**: write one of the two.
 - **A message that names `server.forward-headers-strategy`, `RemoteIpValve` or `max-trusted-index`**: the host cannot say
   which party writes the client address. `framework`, or a `ForwardedHeaderFilter` bean that rewrites the request: use
   `native` and configure the proxies on the server, or `none` and set `cosec.authorization.remote-ip.max-trusted-index`;
@@ -292,7 +291,7 @@ with the host stopped. Its probes are on the management port 8081, never on 8080
   revision is not compiled again while that compilation runs, each such revision holding one compile thread. Usually
   a revision written to Redis outside the control plane: publish a corrected one.
   https://cosec.ahoo.me/operations/troubleshooting#a-compilation-does-not-end
-- Redis is unreachable for a document not yet held locally (`cold-load-timeout`, default 2s), or the snapshot lags
+- Redis is unreachable for a document not yet held locally (the cold-load timeout, 2s: 40 % of `cosec.pipeline.timeout`), or the snapshot lags
   beyond `fail-closed.max-lag` for a tenant in `cosec.authorization.snapshot.fail-closed.tenants`.
 
 ### One principal, tenant or route gets 503
@@ -465,7 +464,7 @@ or a request that bypassed the gateway:
 - Instances revalidate every `cosec.authorization.snapshot.revalidate-interval` (10s; it cannot be turned off, SNP-6)
   and serve local copies up to `local-max-age` (30s). Every instance and the control plane need the same Redis and
   `cosec.key-prefix`. Logs: `Snapshot document [<key>] revision <n> has not been confirmed for <lag>` (WARN, over
-  `lag-warn`, 60s) and `... is stale` (ERROR, over `lag-escalate`, 5m). `Reloading snapshot document [<key>] failed;
+  6 revalidation intervals, 60s) and `... is stale` (ERROR, over 30, 5m). `Reloading snapshot document [<key>] failed;
   keeping revision <n>` means Redis could not be read: the installed revision stays until a read succeeds.
   `Snapshot document [<key>] regressed from revision <a> to <b>` means the store lost a write (for example a
   failover); `cosec-migrate verify-chain` names every document whose revision chain lost a record.
@@ -551,7 +550,7 @@ path, query or body holds a string with an unpaired UTF-16 surrogate (a JSON esc
 before its route reads it (`The request holds a string with an unpaired UTF-16 surrogate`, IDN-10). A 429 on the
 control API is the pipeline's: a platform rate limit rule on its paths (per tenant with `key: "scope.tenant"`). A
 request without a permitted credential is 401 before any of its body is read. Large bodies on WebFlux need
-`spring.codec.max-in-memory-size`; on WebMvc a body over `cosec.control.http.max-body-size` is 400. Without a platform document the control API itself answers 503; publish the
+`spring.codec.max-in-memory-size`; on WebMvc a body over 10MB (the document cap and 2MB) is 400. Without a platform document the control API itself answers 503; publish the
 first one with `cosec-migrate publish`. A 401, 403, 404, 500 or 503 carries no `detail`: read why in the control
 host's log, `Control API <method> <path> by <tenant>/<principal> is <status> (request <requestId>): <reason>` at
 `INFO` from `me.ahoo.cosec.control.api`, matching the problem's `requestId`.
@@ -627,7 +626,7 @@ A shadow window that does not close while the control plane logs `Shadow window 
 acknowledgement of [<instances>]` (and `GET /changes/{id}` names them in `shadow.waitingFor`) waits for live instances
 that do not acknowledge it (`CTL-10`): an older version (finish the upgrade; its status expires within two minutes once
 it is gone) or an instance that cannot read the staged list (`The staged list cannot be read` in its log, a rising
-`cosec.shadow.staged.age`), or one whose status does not decode (`CTL-72`: the control host logs `The status of instance
+`cosec.shadow.staged.age`), or one whose status does not decode (`CTL-73`: the control host logs `The status of instance
 [<instance>] does not read`, with why, and `cosec.control.shadow.status.unreadable` counts it; a later format is a
 newer version mid-upgrade, anything else a corrupt value or a crash-looping instance). A live instance has a status
 from the last minute; one cut off from Redis longer is not waited for, and a host with shadowing off writes none. With

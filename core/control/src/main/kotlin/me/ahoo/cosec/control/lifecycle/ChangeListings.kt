@@ -23,10 +23,13 @@ import me.ahoo.cosec.control.authz.Operator
 import me.ahoo.cosec.control.authz.TenantIsolation
 import me.ahoo.cosec.control.change.ChangeRejectedException
 import me.ahoo.cosec.control.change.ChangeState
+import me.ahoo.cosec.control.change.ControlStatus.FORBIDDEN
 import me.ahoo.cosec.control.change.ControlStatus.UNAVAILABLE
+import me.ahoo.cosec.control.change.ownerOf
 import me.ahoo.cosec.control.store.ChangePage
 import me.ahoo.cosec.control.store.ControlStore
 import me.ahoo.cosec.control.store.ListedChange
+import me.ahoo.cosec.model.decision.DocumentKind
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 
 /**
@@ -72,9 +75,15 @@ internal class ChangeListings(private val store: ControlStore, private val autho
     }
 
     /**
-     * The page is cut after the filter, never before (`CTL-55`): the store skips, unread, the documents the caller's
-     * tenant does not reach, and the rest are read page by page until [limit] visible ones and one more are found, so
-     * [ChangePage.next] is the cursor of a change the caller sees, and there only when a visible one follows it.
+     * The page is cut after the filter, never before (`CTL-55`): the store skips, unread, the documents the caller may
+     * not have scanned ([scannable]), and the rest are read page by page until [limit] visible ones and one more are
+     * found, so [ChangePage.next] is then the position of a change the caller sees.
+     *
+     * The scan is bounded per request (R3-3): it reads at most [SCAN_PAGES] × [limit] changes, whatever the caller may
+     * see. When the bound stops it first, the page holds what was found, short or empty, and [ChangePage.next] is the
+     * position where the scan stopped, so the next request continues from it rather than reading the same entries
+     * again. That position may be a change the caller may not see; it is given only to a caller admitted to scan that
+     * layer, and the change still answers by id as to anyone who may not read it.
      */
     private suspend fun byState(
         operator: Operator,
@@ -84,15 +93,57 @@ internal class ChangeListings(private val store: ControlStore, private val autho
         documents: (SnapshotKey) -> Boolean,
         visible: suspend (ListedChange) -> Boolean,
     ): ChangePage {
+        val layers = scannable(operator)
+        val bound = SCAN_PAGES * limit
         val found = ArrayList<ListedChange>()
         var cursor = after
+        var read = 0
         while (found.size <= limit) {
-            val page = store.changes(state, cursor, limit) { TenantIsolation.allows(operator, it) && documents(it) }
+            if (read >= bound) {
+                // Stopped by the bound: the page so far, and where the scan stopped.
+                return ChangePage(found, cursor)
+            }
+            val page = store.changes(state, cursor, minOf(limit, bound - read)) {
+                TenantIsolation.allows(operator, it) && documents(it) && ownerOf(it).first in layers
+            }
+            // A page of none still counts, so a store that answers empty pages cannot keep a request going.
+            read += maxOf(1, page.changes.size)
             page.changes.filterTo(found) { visible(it) }
             cursor = page.next ?: break
         }
         val shown = found.take(limit)
         return ChangePage(shown, if (found.size > limit) cursorOf(shown.last()) else null)
+    }
+
+    /**
+     * The layers whose changes [operator] may have the store scan by state, decided before anything is read (R3-3, as
+     * `CTL-68` decides a document listing):
+     * - a tenant's principal, its own tenant's document only, which the store's query keeps to (the hard rule);
+     * - a platform principal, each layer it holds `cosec:read` on as a layer: `doc/tenant`, `doc/app`, and the platform
+     *   document's own read for its changes;
+     * - anyone else is refused, 403 without detail, and nothing is scanned. A layer that cannot be decided is a 503.
+     *
+     * The layer read only admits the scan: each change is still shown only if `GET /changes/{id}` would show it.
+     */
+    private suspend fun scannable(operator: Operator): Set<DocumentKind> {
+        if (!operator.platform) return setOf(DocumentKind.TENANT)
+        val layers = DocumentKind.entries.filterTo(HashSet()) { kind ->
+            val decision = if (kind == DocumentKind.PLATFORM) {
+                authority.decide(operator, SnapshotKey.Platform, ControlActions.READ)
+            } else {
+                authority.decideLayer(operator, kind, ControlActions.READ)
+            }
+            when (decision) {
+                ControlDecision.PERMIT -> true
+                ControlDecision.DENY -> false
+                ControlDecision.INDETERMINATE -> throw ChangeRejectedException(
+                    UNAVAILABLE,
+                    "whether the ${kind.name.lowercase()} changes may be listed could not be decided",
+                )
+            }
+        }
+        if (layers.isEmpty()) throw ChangeRejectedException(FORBIDDEN, "may not list changes by state")
+        return layers
     }
 
     private suspend fun visible(
@@ -115,6 +166,14 @@ internal class ChangeListings(private val store: ControlStore, private val autho
     }
 
     private companion object {
+        /**
+         * How many pages of changes a listing by state reads at most per request: four. A caller who may read the
+         * documents it scans fills its page from the first one; four leave room for one who sees about one change in
+         * four before a short page asks it to continue, and cap the costliest request at 800 changes read (a limit of
+         * 200), whatever the caller may see.
+         */
+        const val SCAN_PAGES = 4
+
         /** As the stores order a state's members: `<docKey>#<id>`. */
         fun cursorOf(listed: ListedChange): String = "${listed.document}#${listed.id.value}"
     }

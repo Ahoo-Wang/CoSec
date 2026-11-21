@@ -25,6 +25,9 @@ object GuardAllowlist {
     val GUARDS: Map<String, Set<String>> = mapOf(
         "build" to setOf(
             // CTL-57, CTL-58: how a step was identified, and the service profile of the control API.
+            "spring-boot:ServicePortRoutesTest#a route that was served is never turned into a 404, whatever its write left behind",
+            "spring-boot:ServicePortRoutesTest#a path no control route answers is a 404 on the service port, and a request on another port goes on",
+            "spring-boot:ControlServicePortSettingsTest#the service port serves the control API's routes and no route of the application, under the base path or not",
             "spring-boot:ControlServicePortTest#the peer of a control request is the connection's, beneath the forwarded header handling",
             "control:ChangeOriginTest#a change records how its author was identified, and each event how its step's operator was",
             "control:ChangeOriginTest#an origin is stored with its change and written with its event, with the members it has",
@@ -70,6 +73,11 @@ object GuardAllowlist {
             "runtime:AuditVocabularyTest#every reason has the audit decision of its own name",
             "micrometer:ResultVocabularyTest#every reason has the result of its own name",
             "runtime:SubjectMethodTest#the event names the credential as the identity header does",
+            // OBS-9: one table names a cause on the wire.
+            "runtime:CauseNameTest#the table names every kind of cause, each by its pinned name",
+            "runtime:CauseNameTest#the audit record names each cause by its pinned name",
+            "runtime:CauseNameTest#the shadow sample names each cause by its pinned name",
+            "runtime:CauseNameTest#the audit record and the shadow sample never name a cause by its class",
             // PIP-28: no request Principal for an anonymous request.
             "webflux:PipelineWebFilterTest#anAnonymousPermitHasNoRequestPrincipal",
             "webflux:PipelineWebFilterTest#anotherLayersPrincipalIsReplacedOnlyWhenCoSecAuthenticated",
@@ -289,6 +297,18 @@ object GuardAllowlist {
             "cocache:RedisSocialStateStoreTest#aStateIsTakenOnce",
         ),
         "startup" to setOf(
+            // SNP-23: what a snapshot source's options once took as settings is computed.
+            "runtime:SnapshotOptionsDeriveTest#a lag threshold is a count of missed passes, always above the interval",
+            "runtime:SnapshotOptionsDeriveTest#a cold load waits less than the request it serves, for every deadline",
+            "runtime:SnapshotOptionsDeriveTest#the compile threads follow the cores, between one and four, and a four-core pod keeps the two measured",
+            "spring-boot:UnknownPropertiesTest#a removed key is said to be no longer a property, with what replaced it",
+            "spring-boot:DerivedSnapshotSettingsTest#the line says what was derived, from the interval, the deadline and the cores",
+            // CTL-72: the control plane's cadences and limits are constants or computed.
+            "control:ControlDerivedTest#an orphan is removed only once it has outlived a whole reclaim pass",
+            "control:ControlDerivedTest#the shadow pass is a fifteenth of the least a window lives, within a quarter second and a minute",
+            "control:ControlDerivedTest#a window never closes later than one pass after it could",
+            "runtime:ShadowReporterDerivedIntervalTest#the interval is never longer than a sixth of the status's life, so an instance is never uncounted for it",
+            "spring-boot:ControlServicePortTest#a host that runs the control plane says once what it derived",
             // CTL-59: every instance with the control plane runs the maintenance passes.
             // STA-9: the gateway's key is refused beside a service port.
             "spring-boot:ControlServicePortTest#a service port beside the application's, the management port or a disabled control API is refused",
@@ -364,6 +384,10 @@ object GuardAllowlist {
             "spring-boot:DataPlaneAclTest#the lines of 8_0_0-beta_1's page fail startup, naming what is missing",
             "spring-boot:DataPlaneAclTest#a process that runs the control plane with the read-only user fails at startup",
             "spring-boot:DataPlaneAclTest#the operations page shows the lines this test runs, and upgrading says what to add",
+            // CTL-71: the service port is the application's own server on another port.
+            "spring-boot:ControlServicePortSettingsTest#the service port of a running application closes an idle keep-alive connection when the application stops",
+            "spring-boot:ControlServicePortSettingsTest#with mutual TLS on the application port the service port is TLS with a client certificate too",
+            "spring-boot:ControlServicePortSettingsTest#with a bind address on the application port the service port listens there only",
             // CTL-69: CoSec's own routes answer on the application's port, never on the management port.
             "spring-boot:ApplicationPortTest#a request over a connection carries the port the server bound, on Reactor Netty",
             "spring-boot:ApplicationPortTest#a request over a connection carries the port the server bound, on reactive Tomcat",

@@ -102,7 +102,7 @@ class CoCacheControlStore internal constructor(
     private val onPublished: (SnapshotKey) -> Unit = {},
     private val clock: Clock = Clock.systemUTC(),
     /**
-     * How long a listed change may be missing before the open-change sets drop it (`cosec.control.revisions.orphan-age`):
+     * How long a listed change may be missing before the open-change sets drop it (the host passes one reclaim pass, `ControlDerived.ORPHAN_AGE`):
      * a change is listed before it is written, so one being written right now is missing for a moment, and one whose
      * first write failed is missing for good.
      */
@@ -346,7 +346,7 @@ class CoCacheControlStore internal constructor(
         private const val OPEN_CHANGES = "open-changes"
         private const val APP_LIST = "all"
 
-        /** As `cosec.control.revisions.orphan-age`'s default. */
+        /** As `ControlDerived.ORPHAN_AGE`: one reclaim pass. */
         val DEFAULT_MISSING_GRACE: Duration = Duration.ofHours(1)
 
         /** The digest CoCache computes for [value] stored with [codec]. */

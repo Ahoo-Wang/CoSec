@@ -38,7 +38,7 @@ import java.time.Clock
 import java.util.concurrent.CompletableFuture
 
 /**
- * `CTL-72`: a listed status that does not decode names its instance unreadable while every other status is read; a
+ * `CTL-73`: a listed status that does not decode names its instance unreadable while every other status is read; a
  * status under another instance's key, and a store that does not answer, still fail the whole read.
  */
 class StatusReadingsTest {

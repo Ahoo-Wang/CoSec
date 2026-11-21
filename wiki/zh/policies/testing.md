@@ -167,7 +167,7 @@ description: "通过控制面安全地修改策略：校验与编译错误、sim
 | `setLimits` | 包含全部六个条件限制的 `limits`，每个都是与文档中相同的正整数，以及任意[条目预算](./language.md#entry-budgets) | 整体设置平台的限制：未写出的预算取默认值；没有 `limits` 时恢复默认值。其他类型的值返回 `400`。 |
 | `setAttributes` | `attributes`，与文档中相同的数组 | 设置平台声明的属性；没有 `attributes` 时删除该字段。不是属性数组时返回 `400`。 |
 
-一个变更最多带平台 `maxChangeOperations` 个操作（默认 20,000），控制 API 读取的请求体最多为 `cosec.control.http.max-body-size`（10 MB）：更大的变更在任何操作被检查之前即返回 `400`，请拆成几个变更提议（`CTL-41`，[条目预算](./language.md#entry-budgets)）。
+一个变更最多带平台 `maxChangeOperations` 个操作（默认 20,000），控制 API 读取的请求体最多为 10 MB（文档上限再加 2 MB）：更大的变更在任何操作被检查之前即返回 `400`，请拆成几个变更提议（`CTL-41`，[条目预算](./language.md#entry-budgets)）。
 
 `ifMatch` 是条目按文档写法的 SHA-256：只有条目仍是这个样子时操作才生效。不想手写操作时，`POST /documents/{key}:apply` 接受整份文档（`{"document", "mode", "note"}`），并提议把当前修订变成该文档所需的操作：`MERGE` 只新增和修改，`REPLACE` 还会删除文档中没有的内容。
 
@@ -194,7 +194,7 @@ flowchart LR
     X -->|rebase| D
 ```
 
-一个文档至多有一个暂存的变更（`SHADOWING`、`AWAITING_APPROVAL` 或 `READY`）；在它发布、放弃、驳回或过期之前，暂存另一个变更返回 `409`。变更在占用暂存槽之前就已进入暂存状态，所以仍在写候选的调用也占着暂存槽；写不成或被取消的调用会归还暂存槽，变更回到 `CHECKED`。窗口开始一分钟后候选已不在的 `SHADOWING` 变更（两次写入之间崩溃，或候选之后丢失）也一样：维护任务释放它的暂存槽，记一条 `FAILED` 变更事件，由作者重新暂存。窗口不会接着进行，因为候选不在期间实例没有采样。未完成的变更在提议后 `cosec.control.changes.expire-after`（默认 7 天）过期：此后第一次被读取时即为 `EXPIRED`：控制面每隔 `cosec.control.revisions.reclaim-interval`（默认 1 小时）读取一次每个文档的未完成变更，每隔 `cosec.control.shadow.check-interval`（默认 1 分钟）读取一次 `SHADOWING` 的变更。作者可以对 `CONFLICTED`、`DRAFT` 或 `CHECKED` 的变更执行 `:rebase`，把它放到当前修订上，这会重新运行所有检查，并丢弃之前的审批和影子证据。作者或持有 `cosec:publish` 的人可以 `:abandon` 它；设置租户边界的变更只有平台主体能驳回或放弃，吊销仍在生效的 break-glass 绑定的变更只有其作者能放弃（`BRK-10`）。每次放弃都记一条 `ABANDONED` 变更事件，备注写明变更的作者；放弃 break-glass 变更需要一个 REQUIRED 变更监听器，由它先记下（没有时返回 `503`）。
+一个文档至多有一个暂存的变更（`SHADOWING`、`AWAITING_APPROVAL` 或 `READY`）；在它发布、放弃、驳回或过期之前，暂存另一个变更返回 `409`。变更在占用暂存槽之前就已进入暂存状态，所以仍在写候选的调用也占着暂存槽；写不成或被取消的调用会归还暂存槽，变更回到 `CHECKED`。窗口开始一分钟后候选已不在的 `SHADOWING` 变更（两次写入之间崩溃，或候选之后丢失）也一样：维护任务释放它的暂存槽，记一条 `FAILED` 变更事件，由作者重新暂存。窗口不会接着进行，因为候选不在期间实例没有采样。未完成的变更在提议后 `cosec.control.changes.expire-after`（默认 7 天）过期：此后第一次被读取时即为 `EXPIRED`：控制面每隔一小时读取一次每个文档的未完成变更，每隔 `cosec.control.shadow.min-duration` 的十五分之一（默认 1 分钟）读取一次 `SHADOWING` 的变更。作者可以对 `CONFLICTED`、`DRAFT` 或 `CHECKED` 的变更执行 `:rebase`，把它放到当前修订上，这会重新运行所有检查，并丢弃之前的审批和影子证据。作者或持有 `cosec:publish` 的人可以 `:abandon` 它；设置租户边界的变更只有平台主体能驳回或放弃，吊销仍在生效的 break-glass 绑定的变更只有其作者能放弃（`BRK-10`）。每次放弃都记一条 `ABANDONED` 变更事件，备注写明变更的作者；放弃 break-glass 变更需要一个 REQUIRED 变更监听器，由它先记下（没有时返回 `503`）。
 
 ### 变更的应答 {#what-a-change-answers}
 
@@ -205,13 +205,20 @@ flowchart LR
 （`window`，即发布者确认的窗口 id，`startedAt`，关闭后还有 `closed`）和 `confirmations`。窗口未关闭时，`GET /changes/{id}` 在 `shadow` 中加上确认该窗口的存活实例数（`acknowledged`）以及尚未确认的实例（`waitingFor`：`instances`，最多 20 个 id，已排序，`more` 为其余的数目），读自各实例的状态（[在影子模式下试运行变更](#trying-changes-in-shadow-mode)）。存储为自身工作保留的内容不出现在
 任何应答中：候选检查时所依据的各文档头、在其窗口上报过的实例，以及审批人持有的内容（`CTL-61`）。
 
+由请求创建的变更还应答 `origin`，即其作者是如何被识别的（`CTL-70`）：
+- **变更的每个读者**都得到 `asserted` 和 `via.method`。`asserted` 为 true 表示主机相信了调用方声明的身份（`CoSec-Identity` 头），而不是自己验证凭证；`via.method` 是凭证的种类（`jwt`、`api-key`，经控制面门面的调用为 `in-process`）。
+- **对变更的文档持有 `cosec:approve`、或对平台文档持有 `cosec:read` 的读者**，还得到 `via.credential`（凭证的 id，从不是它的值）、`via.request`（请求的 id）和 `peer`（请求到达时连接的地址）。它们说明是哪个密钥或令牌、从哪里写了这个变更：这是为变更负责的人衡量它的依据。
+- **其他读者**（包括作者本人）完全得不到这些成员，连空成员也没有。无法作出决策的读者同样得不到：只有允许才算数。
+
+`GET /changes` 的列表不含来源。
+
 成员、类型以及哪些始终存在，见 [`contract/control/`](https://github.com/Ahoo-Wang/CoSec/tree/main/contract/control)，
 连同应答写出的封闭取值集合：`state`、`kind`、`severity`、升级项的 `reason`、窗口统计的结果，以及决策的 `decision`、
 `cause`、`reason` 和追踪项的 `effect`、`outcome`。应答与文件不一致时 CoSec 的测试会失败，所以取值只会在声明了变化的版本中改变。
 
 ### 列出文档 {#listing-documents}
 
-`GET /documents?kind=tenant`（或 `kind=app`）列出该类型有哪些文档：`{"documents": [{"key": "tenant:acme"}, ...], "next": "tenant:acme", "asOf": "..."}`，按 key 排序。`limit` 为 1 到 200（默认 20），`after` 是上一页的 `next`，最后一页没有 `next`。它读取控制存储所索引的文档清单，从不读取文档本身，所以首次发布未完成的文档也可能被列出，读取它则返回 `404`。该清单是存储的整个成员集合（5 万个租户时约 2 MB），所以控制面主机至多每 5 秒读取一次，所有调用方共用这一次读取，并从中分页：`asOf` 说明读取的时间，此后创建的文档在下次读取前可能缺失。
+`GET /documents?kind=tenant`（或 `kind=app`）列出该类型有哪些文档：`{"documents": [{"key": "tenant:acme"}, ...], "next": "ZG9jdW1lbnRzfHRlbmFudDphY21l", "asOf": "..."}`，按 key 排序。`limit` 为 1 到 200（默认 20），`after` 是上一页的 `next`，最后一页没有 `next`：它是一个令牌（[列表游标](#listing-cursors)）。它读取控制存储所索引的文档清单，从不读取文档本身，所以首次发布未完成的文档也可能被列出，读取它则返回 `404`。只看到自己文档的租户主体无需读取该清单：只读取一次存储是否为该文档的修订建立了索引。该清单是存储的整个成员集合（5 万个租户时约 2 MB），所以控制面主机至多每 5 秒读取一次，所有调用方共用这一次读取，并从中分页：`asOf` 说明读取的时间，此后创建的文档在下次读取前可能缺失。
 
 谁可以列出（`CTL-68`）：
 - **该类型的全部文档：** 对该层持有 `cosec:read` 的调用方，`kind=tenant` 为 `doc/tenant`，`kind=app` 为 `doc/app`。
@@ -225,7 +232,7 @@ flowchart LR
 
 ### 查找未完成的变更 {#finding-open-changes}
 
-`GET /changes` 列出尚未结束的变更：`document=<key>` 列出一个文档的，`state=<STATE>` 列出处于某个非终态（`DRAFT`、`CHECKED`、`SHADOWING`、`AWAITING_APPROVAL`、`READY`、`CONFLICTED`）的，也可以两者都给。两者至少要给一个；`limit` 为 1 到 200（默认 50），`after` 是上一页的 `next`，最后一页没有 `next`。
+`GET /changes` 列出尚未结束的变更：`document=<key>` 列出一个文档的，`state=<STATE>` 列出处于某个非终态（`DRAFT`、`CHECKED`、`SHADOWING`、`AWAITING_APPROVAL`、`READY`、`CONFLICTED`）的，也可以两者都给。两者至少要给一个；`limit` 为 1 到 200（默认 50），`after` 是上一页的 `next`，最后一页没有 `next`：它是一个令牌（[列表游标](#listing-cursors)）。
 
 ```json
 {
@@ -245,7 +252,18 @@ flowchart LR
 }
 ```
 
-每一项是摘要：变更本身用 `GET /changes/{id}` 读取。存储的记录无法读取的变更以它的 `id`、`key` 和状态 `UNREADABLE` 列出，从不省略。每一项的成员就是[变更应答](#what-a-change-answers)中同名的成员。只有 `GET /changes/{id}` 会向你展示的变更才会出现在列表中：你自己租户的文档（平台主体为任意文档）中，你写的或你可以读取其文档（`cosec:read`）的变更。列表不透露它省略了什么：一页只含你可见的变更，只有后面还有你可见的变更时才给出 `next`（`CTL-55`）。
+每一项是摘要：变更本身用 `GET /changes/{id}` 读取。存储的记录无法读取的变更以它的 `id`、`key` 和状态 `UNREADABLE` 列出，从不省略。每一项的成员就是[变更应答](#what-a-change-answers)中同名的成员。只有 `GET /changes/{id}` 会向你展示的变更才会出现在列表中：你自己租户的文档（平台主体为任意文档）中，你写的或你可以读取其文档（`cosec:read`）的变更。列表不透露它省略了什么：一页只含你可见的变更（`CTL-55`）。
+
+按状态列出在读取任何内容之前就作出决定，与[列出文档](#listing-documents)一样：
+- **租户主体**列出它自己租户文档的变更。
+- **平台主体**列出它对其作为层持有 `cosec:read` 的那些层：`doc/tenant` 对应租户文档的变更，`doc/app` 对应应用的，`doc/platform`（平台文档本身的读取）对应平台文档的变更。`cosec:platform-admin` 三者都持有。层的读取只允许列表去查看：每个变更仍然只在 `GET /changes/{id}` 会向你展示时才出现。
+- **其他调用方**得到不带详情的 `403`，什么也不读取。
+
+无论你能看到什么，每个请求至多读取四页变更。先达到这个上限时，它应答已找到的变更（一页较短或为空），并给出 `next`，从停下的位置继续。所以带 `next` 的空页不是结尾：一直沿着 `next` 走到它为 `null`。这个 `next` 可能指向你看不到的变更。它只告诉你，某个你可以列出的层中的某个文档在该状态下有一个未完成的变更，而按 id 读取该变更仍然是 `404`。按文档列出只读取该文档的未完成变更，它的 `next` 总是你能看到的变更。
+
+### 列表游标 {#listing-cursors}
+
+每个列表的 `next` 都是一个令牌：在任何控制面主机上，把它原样作为 `after` 传回。它不含服务端状态，不会过期，在查询中无需转义（`A-Z a-z 0-9 - _`）。它的内容不是契约：不要从中读出任何东西。它只是编码而非加密，对解码它的人什么也不隐藏。无法解码的令牌，或属于另一个列表的令牌（对 `GET /documents` 而言，还包括另一种类型的令牌），返回 `400`，从不从头开始列出。约定见 [`contract/control/cursor.json`](https://github.com/Ahoo-Wang/CoSec/tree/main/contract/control/cursor.json)。
 
 未完成的变更保存在它们自己的集合中（[存储](../operations/storage.md#redis-keys)）。对更早预览版写入的存储，在 `cosec-migrate repair-references` 转换它之前，列表返回 `503`（`CTL-54`）。
 
@@ -272,26 +290,26 @@ flowchart LR
 - 经过 `cosec.control.shadow.min-duration`（15 分钟），实例上报的非 `BASE_MISMATCH` 样本达到 `cosec.control.shadow.min-samples`（1,000），且每个存活实例都确认了该窗口（见下文）时；
 - 到达 `cosec.control.shadow.max-duration`（24 小时）而样本不足时，状态为*证据不足*。
 
-**窗口通过之前，每个存活实例都要确认它**（`CTL-10`）。实例在暂存列表中读到窗口并编译了它的候选（或报告了 `CANDIDATE_ERROR`）之后，就在每隔 `cosec.authorization.shadow.report-interval` 写一次的状态中确认该窗口。只要还有最近一分钟内写过状态、且参与影子比较的实例没有确认，窗口就不会通过（关闭了影子比较的宿主不写状态；`CandidateSource` 是你自己的实现的宿主声明它不参与，不会被等待），并记录 `Shadow window <w> of change <c> is waiting for the acknowledgement of [<instances>]`，`GET /changes/{id}` 在 `shadow.waitingFor` 中点名这些实例。确认不是样本：样本仍只来自报告。两种不同的等待，以及各自的处理：
+**窗口通过之前，每个存活实例都要确认它**（`CTL-10`）。实例在暂存列表中读到窗口并编译了它的候选（或报告了 `CANDIDATE_ERROR`）之后，就在每隔一个报告间隔（默认 10 秒）写一次的状态中确认该窗口。只要还有最近一分钟内写过状态、且参与影子比较的实例没有确认，窗口就不会通过（关闭了影子比较的宿主不写状态；`CandidateSource` 是你自己的实现的宿主声明它不参与，不会被等待），并记录 `Shadow window <w> of change <c> is waiting for the acknowledgement of [<instances>]`，`GET /changes/{id}` 在 `shadow.waitingFor` 中点名这些实例。确认不是样本：样本仍只来自报告。两种不同的等待，以及各自的处理：
 
 - **在等待某个实例**（`waitingFor` 非空）：该实例运行的版本不发送确认（完成升级），或者它读不到暂存列表：它的日志写着 `The staged list cannot be read`，它的 `cosec.shadow.staged.age` 持续上升（[可观测性](../operations/observability.md#metrics)）。窗口期间启动的实例会在几个上报间隔内确认。
 - **在等待样本**（`waitingFor` 为空，样本低于最小值）：窗口所属文档的流量太少。等到 `max-duration`，或者给出原因跳过窗口。
 
 到达 `max-duration` 时，无论确认情况如何，窗口都以*证据不足*关闭，与样本不足时一样。
 
-**“存活”的含义。** 存活实例是最近一分钟内写过状态的实例。与 Redis 断开超过这一时长的实例不写状态，所以既不被等待，也不算作确认；它重新连上后装入已发布的修订，而它什么都没有比较过。关闭了影子的主机根本不写状态。状态已存储却无法解码的实例（反复崩溃的版本、损坏的值，或滚动升级期间这台控制面主机读不了的格式）是存活的，且什么都不确认：窗口等待它，`shadow.waitingFor` 点名它，而其他每个状态照常读取，`propagation` 把它算作最近的实例，不持有任何文档（`CTL-72`）。
+**“存活”的含义。** 存活实例是最近一分钟内写过状态的实例。与 Redis 断开超过这一时长的实例不写状态，所以既不被等待，也不算作确认；它重新连上后装入已发布的修订，而它什么都没有比较过。关闭了影子的主机根本不写状态。状态已存储却无法解码的实例（反复崩溃的版本、损坏的值，或滚动升级期间这台控制面主机读不了的格式）是存活的，且什么都不确认：窗口等待它，`shadow.waitingFor` 点名它，而其他每个状态照常读取，`propagation` 把它算作最近的实例，不持有任何文档（`CTL-73`）。
 
-在窗口上报告过的实例必须一直报告到窗口关闭。报告不见了的实例（它停止服务，或它的报告在 Redis 故障切换中丢失）是缺失的证据，而不是零个决策：看到收窄请求的可能正是它。窗口会等待它，记录 `Shadow window <w> of change <c> is waiting for [<instances>]`，无论其他实例报告了什么；实例每隔 `cosec.authorization.shadow.report-interval` 重写一次累计报告，所以仍在服务的实例会回来。到达 `max-duration` 时窗口以*证据不足*关闭，摘要的 `vanished` 点名消失的实例，绝不会通过（`CTL-56`）。
+在窗口上报告过的实例必须一直报告到窗口关闭。报告不见了的实例（它停止服务，或它的报告在 Redis 故障切换中丢失）是缺失的证据，而不是零个决策：看到收窄请求的可能正是它。窗口会等待它，记录 `Shadow window <w> of change <c> is waiting for [<instances>]`，无论其他实例报告了什么；实例每隔一个报告间隔重写一次累计报告，所以仍在服务的实例会回来。到达 `max-duration` 时窗口以*证据不足*关闭，摘要的 `vanished` 点名消失的实例，绝不会通过（`CTL-56`）。
 
-控制面每隔 `cosec.control.shadow.check-interval`（默认 1 分钟）检查一次未关闭的窗口，同一时间只由一个控制面实例执行，从最久未检查的窗口开始：被间隔截断的一轮记录 `looked at <k> of <n> windows`，下一轮从截断处之后开始。记录无法读取的影子中变更会被跳过，每小时至多以一条 `WARN` 点名一次，其他窗口照常检查。窗口关闭后，变更变为 `READY`，需要[审批](#approval)时变为 `AWAITING_APPROVAL`。如果期间文档修订发生变化，变更变为 `CONFLICTED`。数据面在启用 `cosec-cocache` 和 `cosec.authorization.shadow.*`（默认开启，采样读取了暂存文档的请求中的 10%）时参与。
+控制面每隔 `cosec.control.shadow.min-duration` 的十五分之一（默认 1 分钟）检查一次未关闭的窗口，同一时间只由一个控制面实例执行，从最久未检查的窗口开始：被间隔截断的一轮记录 `looked at <k> of <n> windows`，下一轮从截断处之后开始。记录无法读取的影子中变更会被跳过，每小时至多以一条 `WARN` 点名一次，其他窗口照常检查。窗口关闭后，变更变为 `READY`，需要[审批](#approval)时变为 `AWAITING_APPROVAL`。如果期间文档修订发生变化，变更变为 `CONFLICTED`。数据面在启用 `cosec-cocache` 和 `cosec.authorization.shadow.*`（默认开启，采样读取了暂存文档的请求中的 10%）时参与。
 
-每个实例在暂存列表中看到某个窗口后，就编译该窗口的候选，无论它的流量是否读取该文档（`CTL-12`）。无法编译它的实例此时就报告 `CANDIDATE_ERROR`，窗口随即以阻塞状态关闭，不必等到该文档的某个请求。编译在请求路径之外进行，一次一个候选，从不拖住实例所执行的文档。每个 `cosec.authorization.shadow.report-interval` 周期中，它最多花一个间隔编译，暂存最久的窗口优先，因此一次暂存上千个窗口的变更不会推迟任何上报：候选在暂存后的几个上报间隔内被编译，不一定在第一个间隔内。
+每个实例在暂存列表中看到某个窗口后，就编译该窗口的候选，无论它的流量是否读取该文档（`CTL-12`）。无法编译它的实例此时就报告 `CANDIDATE_ERROR`，窗口随即以阻塞状态关闭，不必等到该文档的某个请求。编译在请求路径之外进行，一次一个候选，从不拖住实例所执行的文档。每个报告间隔周期中，它最多花一个间隔编译，暂存最久的窗口优先，因此一次暂存上千个窗口的变更不会推迟任何上报：候选在暂存后的几个上报间隔内被编译，不一定在第一个间隔内。
 
 属性提供者及其声明的类型，在每个数据面实例和控制面主机上必须相同。控制面按自己的提供者检查候选；缺少其中某个提供者的实例无法编译读取其属性的候选，会报告 `CANDIDATE_ERROR`，窗口随即以阻塞状态关闭，该变更永远不会发布。跳过窗口的变更也跳过了这项检查：无法编译已发布文档的实例会对该文档失败即拒绝。
 
 窗口比较的是决策，所以只涉及[限流规则](./rate-limiting.md#publishing-rules)的变更在窗口中显示不出差异。
 
-窗口的候选暂存期间，实例每隔 `cosec.authorization.shadow.report-interval`（10 秒）写一次它对该窗口的报告。候选撤回之后（窗口关闭，或变更被放弃、驳回、发布或抢占），实例再写一次报告，然后忘掉这个窗口；报告在这最后一次写入 8 天后过期。变更只撤回自己的候选：期间另一个变更已占用暂存槽并暂存了自己的候选时，那个候选保留（`CTL-26`）。
+窗口的候选暂存期间，实例每隔一个报告间隔（默认 10 秒：状态存活期的六分之一，[由计算得出](../operations/configuration.md#computed-not-configured)）写一次它对该窗口的报告。候选撤回之后（窗口关闭，或变更被放弃、驳回、发布或抢占），实例再写一次报告，然后忘掉这个窗口；报告在这最后一次写入 8 天后过期。变更只撤回自己的候选：期间另一个变更已占用暂存槽并暂存了自己的候选时，那个候选保留（`CTL-26`）。
 
 `POST /changes/{id}:skip-shadow` 带上 `reason`，可以不经窗口暂存一个 `CHECKED` 的变更；它需要 `cosec:skip-shadow`，修订会记录窗口被跳过。`cosec:tenant-admin` 只在自己租户的文档上持有它（`CTL-27`）。跳过窗口不改变审批：分析无法证明操作者已持有的授出仍要等待审批。只创建或吊销 break-glass 绑定的变更没有窗口。
 

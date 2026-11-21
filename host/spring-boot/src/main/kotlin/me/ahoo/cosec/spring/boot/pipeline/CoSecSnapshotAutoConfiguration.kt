@@ -78,9 +78,9 @@ import java.time.Instant
 @AutoConfiguration(afterName = [COCACHE_AUTO_CONFIGURATION])
 @ConditionalOnCoSecEnabled
 @ConditionalOnEnforceMode
-@EnableConfigurationProperties(RuntimeAuthorizationProperties::class, CoSecProperties::class)
+@EnableConfigurationProperties(RuntimeAuthorizationProperties::class, CoSecProperties::class, PipelineProperties::class)
 @InternalCoSecApi
-@Import(StartupTaskExclusion::class)
+@Import(StartupTaskExclusion::class, DerivedSnapshotSettingsConfiguration::class)
 class CoSecSnapshotAutoConfiguration {
     /** Redis as the store of record (RFC 0003 §4.1). */
     @Configuration(proxyBeanMethods = false)
@@ -202,7 +202,7 @@ class CoSecSnapshotAutoConfiguration {
     /**
      * The data plane's part of shadow windows (RFC 0007 §6.4): candidates read from Redis and compiled with this
      * instance's compiler, a [ShadowListener] among the decision listeners, and this instance's reports and status
-     * written every `report-interval`. A candidate that does not compile here is reported as `CANDIDATE_ERROR`, which
+     * written every report interval ([DerivedSnapshotSettings.reportInterval]). A candidate that does not compile here is reported as `CANDIDATE_ERROR`, which
      * blocks its window.
      */
     @Configuration(proxyBeanMethods = false)
@@ -268,7 +268,7 @@ class CoSecSnapshotAutoConfiguration {
             CoCacheShadowReports.create(factory, cosec.keyPrefix)
 
         /**
-         * Reports every `report-interval`. A window is forgotten once its candidate is no longer staged and its last
+         * Reports every report interval ([DerivedSnapshotSettings.reportInterval]). A window is forgotten once its candidate is no longer staged and its last
          * report is written (#1210), as read from the store of record [candidates] reads from; with an application's own
          * [CandidateSource] that is not a [CachingCandidateSource], from the only [CandidateStore], else never.
          */
@@ -278,16 +278,13 @@ class CoSecSnapshotAutoConfiguration {
             recorder: ShadowRecorder,
             sink: CoCacheShadowReports,
             source: SnapshotSource<CompiledDocument, CompiledDocument>,
-            properties: RuntimeAuthorizationProperties,
+            environment: Environment,
             candidates: CandidateSource,
             stores: ObjectProvider<CandidateStore>,
         ): ShadowReporting {
             val clock = Clock.systemUTC()
             val installed = { installedDocuments(source.entries(), clock.instant()) }
-            val interval = properties.shadow.reportInterval
-            require(interval >= ShadowReporter.MIN_INTERVAL) {
-                "cosec.authorization.shadow.report-interval is at least one millisecond, not $interval."
-            }
+            val interval = DerivedSnapshotSettings.reportInterval(environment)
             val caching = candidates as? CachingCandidateSource
             val store = caching?.store ?: stores.ifUnique
             return ShadowReporting(ShadowReporter(recorder, sink, installed, clock, interval, store, caching))
@@ -333,11 +330,12 @@ class CoSecSnapshotAutoConfiguration {
         store: SnapshotDocumentStore,
         compiler: PlatformCompiler,
         properties: RuntimeAuthorizationProperties,
+        pipeline: PipelineProperties,
         metrics: ObjectProvider<SnapshotMetrics>,
         routes: ObjectProvider<RouteMap>,
     ): SnapshotSource<CompiledDocument, CompiledDocument> {
         val snapshot = properties.snapshot
-        val options = snapshot.toOptions()
+        val options = snapshot.toOptions(pipeline.timeout)
         // The data plane's source only: the control plane's own would count its reads under the same names.
         val source = DocumentSnapshots.source(
             store,

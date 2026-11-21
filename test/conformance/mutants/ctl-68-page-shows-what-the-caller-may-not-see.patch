@@ -1,17 +1,19 @@
 # Rule: CTL-68
 # Mutant: a tenant's principal without the layer read is shown every document of the layer, other tenants' included
 # Tests: :control:test --tests me.ahoo.cosec.control.api.DocumentListingTest
-
 diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/api/DocumentListing.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/api/DocumentListing.kt
-index 54893077b..0d7ce8b72 100644
+index 870a0568c..4775e5f8c 100644
 --- a/core/control/src/main/kotlin/me/ahoo/cosec/control/api/DocumentListing.kt
 +++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/api/DocumentListing.kt
-@@ -68,7 +68,7 @@ class DocumentListing internal constructor(
+@@ -66,7 +66,10 @@ class DocumentListing internal constructor(
+         val shown: (SnapshotKey) -> Boolean = when (authority.decideLayer(operator, kind, ControlActions.READ)) {
+             ControlDecision.PERMIT -> { key -> TenantIsolation.allows(operator, key) }
              ControlDecision.INDETERMINATE -> throw undecided(kind)
-             ControlDecision.DENY -> {
-                 val own = ownDocument(operator, kind) ?: throw refused(kind)
--                ({ key -> key == own })
-+                ({ key -> key == own || ownerOf(key).first == kind })
-             }
+-            ControlDecision.DENY -> return ownPage(ownDocument(operator, kind) ?: throw refused(kind), after)
++            ControlDecision.DENY -> {
++                ownDocument(operator, kind) ?: throw refused(kind)
++                ({ _: SnapshotKey -> true })
++            }
          }
          val read = documents.read()
+         val listed = read.value

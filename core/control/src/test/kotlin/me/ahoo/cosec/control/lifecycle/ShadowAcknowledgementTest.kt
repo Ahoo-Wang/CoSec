@@ -46,7 +46,7 @@ class ShadowAcknowledgementTest {
     @Volatile
     private var statusesFail = false
 
-    /** Instances whose status is listed and does not decode, as a store would name them (`CTL-72`). */
+    /** Instances whose status is listed and does not decode, as a store would name them (`CTL-73`). */
     @Volatile
     private var unreadable = emptySet<String>()
 
@@ -136,7 +136,7 @@ class ShadowAcknowledgementTest {
     }
 
     /**
-     * `CTL-72`: an instance whose status does not decode is live and acknowledges nothing, so the window waits for it
+     * `CTL-73`: an instance whose status does not decode is live and acknowledges nothing, so the window waits for it
      * and names it, while every other status is read and `propagation` answers, counting it as recent and holding
      * nothing. Once its status reads again and lists the window, the window passes.
      */

@@ -1,0 +1,76 @@
+#
+# Copyright [2021-present] [ahoo wang <ahoowang@qq.com> (https://github.com/Ahoo-Wang)].
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#      http://www.apache.org/licenses/LICENSE-2.0
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+
+# Leg 2 of the system test (test/system-test/README.md): the gateways and the IAM with the control plane embedded; no control
+# host. Read with compose.yaml. The gateways route /cosec/control to the IAM (SYSTEM_CONTROL_TARGET). The IAM decides with
+# policies like the control host does, and takes its caller from the identity the gateway forwarded
+# (cosec.pipeline.caller=forwarded-identity); its own calls to the control plane are in process, through the SDK. The
+# statement is the gateway's alone (STA-7): no other service calls the IAM's control path.
+name: cosec-system
+
+x-embedded: &embedded
+  SPRING_DATA_REDIS_URL: redis://redis:6379
+  COSEC_JWT_SECRET: ${COSEC_SYSTEM_JWT_SECRET:?the throwaway HMAC secret of the run}
+  SPRING_CONFIG_ADDITIONALLOCATION: optional:file:/opt/system/shortened-bounds.yaml
+  COSEC_PIPELINE_CALLER: forwarded-identity
+  COSEC_PIPELINE_IDENTITY_ONLYGATEWAYCANREACH: "true"
+  # The change events, as the control hosts send them (topic cosec-control-audit).
+  COSEC_CONTROL_AUDIT_KAFKA_ENABLED: "true"
+  SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+  SYSTEM_CONTROL_MODE: embedded
+  JAVA_OPTS: -Xms192m -Xmx384m
+
+services:
+  # The IAM embedding the control plane: its HTTP routes (the operators' API, behind the gateways) are on, and its own
+  # onboarding calls the SDK in process.
+  auth:
+    depends_on:
+      kafka:
+        condition: service_healthy
+    environment: *embedded
+
+  # The same image with the control routes off (cosec.control.http.enabled=false): only the SDK exists, in process. A second
+  # instance of the control plane over the same store, which every instance is: leases keep the maintenance passes apart.
+  # No route of the gateways leads to it.
+  auth-sdk:
+    image: ${COSEC_SYSTEM_AUTH_IMAGE:-cosec-system-auth:test}
+    depends_on:
+      redis:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    environment:
+      <<: *embedded
+      COSEC_CONTROL_HTTP_ENABLED: "false"
+    volumes:
+      - ./profile:/opt/system:ro
+    ports:
+      - "127.0.0.1:8093:8080"
+    healthcheck:
+      test: [ CMD, bash, -c, 'exec 3<>/dev/tcp/127.0.0.1/8080' ]
+      interval: 2s
+      timeout: 3s
+      retries: 90
+
+  # The route /cosec/control/** leads to the IAM instead of a control host.
+  gw-1:
+    environment:
+      SYSTEM_CONTROL_TARGET: auth
+
+  gw-2:
+    environment:
+      SYSTEM_CONTROL_TARGET: auth
+
+  gw-strict:
+    environment:
+      SYSTEM_CONTROL_TARGET: auth

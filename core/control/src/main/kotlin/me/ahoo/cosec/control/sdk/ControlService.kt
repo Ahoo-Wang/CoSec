@@ -35,7 +35,8 @@ import me.ahoo.cosec.spi.snapshot.SnapshotKey
 interface ControlService {
     /**
      * `GET /documents?kind=tenant|app&after=&limit=` (`CTL-68`): which tenant or app documents there are, those the
-     * caller may see, a page at a time; never their content. [DocumentKind.PLATFORM] is refused (400).
+     * caller may see, a page at a time; never their content. [DocumentKind.PLATFORM] is refused (400). [after] is the
+     * `next` of the page before, a token passed back unchanged (`contract/control/cursor.json`).
      */
     suspend fun documents(caller: ControlCaller, kind: DocumentKind, after: String? = null, limit: Int? = null): String
 
@@ -62,7 +63,8 @@ interface ControlService {
 
     /**
      * `GET /changes?document=&state=&after=&limit=`: the open changes of a tenant's document, of a state, or both; those
-     * the caller may see, and only changes of tenants' documents, as [change] reaches them by id.
+     * the caller may see, and only changes of tenants' documents, as [change] reaches them by id. [after] is the `next`
+     * of the page before, a token passed back unchanged; a page may be empty with a `next` still to follow.
      */
     suspend fun changes(
         caller: ControlCaller,

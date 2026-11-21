@@ -40,7 +40,7 @@ internal class PlatformDocumentWatchConfiguration {
     ): PlatformDocumentWatch = PlatformDocumentWatch.of(
         source,
         cosec.keyPrefix,
-        properties.snapshot.lagWarn,
+        properties.snapshot.lagWarn(),
         templates.ifUnique?.connectionFactory,
     )
 }

@@ -29,6 +29,7 @@ import org.junit.jupiter.api.extension.ExtendWith
  * plane refuses change nothing. One tenant, `lc`, its steps in order.
  */
 @Tag("system")
+@Tag("control")
 @Order(30)
 @TestMethodOrder(MethodOrderer.OrderAnnotation::class)
 @ExtendWith(TranscriptExtension::class)

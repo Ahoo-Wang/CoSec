@@ -43,7 +43,7 @@ interface ShadowReportReader {
      * The statuses written within [STATUS_TTL] of now that read, and the instances whose status is listed and does not
      * decode ([StatusReadings.unreadable]): a crash-looping version, a corrupt value, or a format this version does not
      * read during a rolling upgrade. The control plane takes such an instance as live and acknowledging no window, so no
-     * window passes on it, while every other status is read (`CTL-72`). A status stored under another instance's key,
+     * window passes on it, while every other status is read (`CTL-73`). A status stored under another instance's key,
      * and a store that does not answer, still fail the whole call.
      *
      * The default reads [statuses]: an implementation that does not override it cannot tell a status that does not

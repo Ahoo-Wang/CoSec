@@ -103,7 +103,7 @@ and implicit denies apart, why a credential was rejected, and why a request was 
 | `principal` | `id`, `authenticated`, `roles` (the roles of the resolved scope) |
 | `request` | `id` (the `CoSec-Request-Id`), `appId`, `spaceId`, `remoteIp`, `method`, `path` (normalized), `routeId` (the gateway route the request came through; null on other adapters), `device.id` |
 | `authorization.decision`, `authorization.reasonCode` | see the table below |
-| `authorization.reason` | the outcome, and for a `503` its cause, such as `INDETERMINATE: SourceUnavailable` |
+| `authorization.reason` | the outcome, and for a `503` its cause, such as `INDETERMINATE: SourceUnavailable`. A cause has one name wherever CoSec writes it, here, in a shadow report's samples and in the control API's `cause`, taken from one table, so renaming a class in CoSec does not change it (`OBS-9`) |
 | `authorization.elapsedNanos` | the whole pipeline, from the start of the request to its outcome |
 | `authorization.source` | what decided: `via`, `document`, `policy` (its id) and `statement` (`index`, `name`); see the second table below |
 | `binding` | a label for people, and not to be parsed: how the deciding statement applied, as a binding id (a role's derived binding is `role:<roleId>@<app>:<permission>`), `attached:<policyId>`, `builtin` (the blacklist) or `boundary:<tenantId>` |
@@ -229,7 +229,7 @@ So is the staged list the shadow listener samples by, with shadow windows on (`O
 
 | Meter | Tag | Counts |
 |---|---|---|
-| `cosec.shadow.staged.age` | none | a gauge, in seconds: how long ago this instance last read the staged list, `NaN` before its first read. About `cosec.authorization.shadow.report-interval` (10 s) while Redis answers; rising, the list cannot be read, the instance reads every candidate by its key and logs `The staged list cannot be read since it was at <instant>` once |
+| `cosec.shadow.staged.age` | none | a gauge, in seconds: how long ago this instance last read the staged list, `NaN` before its first read. About the report interval ([a sixth of the status's life](./configuration.md#computed-not-configured), 10 s) while Redis answers; rising, the list cannot be read, the instance reads every candidate by its key and logs `The staged list cannot be read since it was at <instant>` once |
 
 With the local rate limiter (no Redis rate limiting, [Rate limiting](../policies/rate-limiting.md#the-local-limiter-is-bounded)),
 so are the new buckets it could not admit:
@@ -265,12 +265,12 @@ there are 80 series whatever the number of documents. `kind` is `platform`, `app
 
 | Meter | Type | Tags | What it says |
 |---|---|---|---|
-| `cosec.snapshot.loads` | counter | `kind`, `result` | a request that had to load a document: `cold` (the request waited for its load), `failed` (the load failed, and the request is decided fail-closed), `timeout` (the load outlasted `cold-load-timeout`). A request that finds its documents installed is not counted: that is every request's path |
+| `cosec.snapshot.loads` | counter | `kind`, `result` | a request that had to load a document: `cold` (the request waited for its load), `failed` (the load failed, and the request is decided fail-closed), `timeout` (the load outlasted the cold-load timeout). A request that finds its documents installed is not counted: that is every request's path |
 | `cosec.snapshot.compile.duration` | timer | `kind`, `result` = `success`, `failure` | compiling a document; `failure` is a stored document that does not compile on this instance |
 | `cosec.snapshot.installs` | counter | `kind` | documents installed: a first load or a new revision |
 | `cosec.snapshot.installed` | gauge | `kind`, `state` | the entries held now, by state: `present`, `invalid` (does not compile here), `pending` (its inputs changed and it waits for its compile again), `undecodable`, `absent` (no document, none seen before), `lost` (a document seen before is gone), `unreadable`. The states add up to what the instance holds |
 | `cosec.snapshot.lag` | gauge, seconds | `kind` | the oldest confirmation by the store among the entries held, failed ones aside |
-| `cosec.snapshot.lagging` | gauge | `kind`, `level` = `warn`, `escalate` | entries past `lag-warn` (those past `lag-escalate` included) and past `lag-escalate` |
+| `cosec.snapshot.lagging` | gauge | `kind`, `level` = `warn`, `escalate` | entries past the warning threshold, 6 revalidation intervals (those past the escalation threshold included), and past the escalation threshold, 30 |
 | `cosec.snapshot.summary.age` | gauge, seconds | none | the time since the pass that `installed`, `lag` and `lagging` read |
 | `cosec.snapshot.lag.exceeded` | counter | `kind`, `level` | each lag the instance logs |
 | `cosec.snapshot.regressions` | counter | `kind` | the store answered an older revision than the one installed |
@@ -290,7 +290,7 @@ The share of requests that waited for a document is `loads{result=cold}` over th
 |---|---|
 | any rise of `lost` | a document vanished from the store, and its key fails closed |
 | any rise of `regressions` | the store lost a write it acknowledged: check the last failover |
-| any rise of `lag.exceeded{level=escalate}` | the instance decides on a document the store has not confirmed for `lag-escalate` |
+| any rise of `lag.exceeded{level=escalate}` | the instance decides on a document the store has not confirmed for 30 revalidation intervals |
 | `installed{state=invalid}` above zero | a stored document does not compile on this instance (an older version than the control plane?) |
 | a sustained rate of `handoffs.refused{to=caller}` | the compile pool is saturated, and requests' threads compile |
 | any rise of `housekeeping.refused` | the instance is dropping its own log lines: a log appender too slow for the load ([Snapshot log lines are missing](./troubleshooting.md#snapshot-log-lines-are-missing)) |
@@ -329,8 +329,8 @@ The meters above count; the health indicators and logs below answer whether an i
   document refused an anonymous `POST` of it, until a later request is permitted. The same refusal logs one `WARN` per route per minute,
   naming the property and the path. Both come from the decisions of real requests, so they are never wrong, and neither
   makes the instance unready ([Building a client](../integration/clients.md#what-your-application-serves)).
-- **Lag logs.** An instance logs a document not confirmed by Redis for longer than `lag-warn` at `WARN`, and longer
-  than `lag-escalate` at `ERROR` ([How instances read documents](./storage.md#how-instances-read-documents)). Other
+- **Lag logs.** An instance logs a document not confirmed by Redis for longer than 6 revalidation intervals at `WARN`, and longer
+  than 30 at `ERROR` ([How instances read documents](./storage.md#how-instances-read-documents)). Other
   lines to alert on: `Snapshot document [<doc>] disappeared from the store; failing closed.`,
   `Snapshot document [<doc>] regressed from revision <a> to <b>; ...`, and
   `Snapshot prewarm failed for [<docs>]; retrying in <backoff>.`
@@ -432,11 +432,16 @@ keep (a propose on one control host and a publish on another are two processes):
 - **A gated step** (`PUBLISHING`, break-glass) waits for each `REQUIRED` listener to record its event, after what was
   queued before it, within `cosec.control.audit.required-timeout`. Otherwise it fails with `503`, and its event is not
   recorded afterwards.
-- **A REQUIRED listener's full queue** makes the event of any other step wait for room, for at most the same timeout.
+- **A REQUIRED listener's full queue** makes the event of any other step wait for room, for at most the same timeout,
+  in the order the events came: a smaller one never takes room ahead of a larger one waiting before it.
   The step is already stored, so it is never failed for this. An event that finds no room in time is **lost**: counted
   in `cosec.control.listener.lost` and logged at `ERROR` (`Change event <kind> of change <id> on <doc> was not handed to
-  REQUIRED change listener [<name>]: ...`). That is the one way a REQUIRED listener misses an event: **alert on
-  `cosec.control.listener.lost` above zero.**
+  REQUIRED change listener [<name>]: ...`).
+- **A REQUIRED listener's failed call** loses the event of any other step too: one that throws, or does not answer
+  within the timeout. It is counted in the same `cosec.control.listener.lost` and logged at `ERROR` with the failure
+  (`Change event <kind> of change <id> on <doc> was not recorded by REQUIRED change listener [<name>]: <failure>.`), and
+  the next event is delivered. A full queue and a failed call are the two ways a REQUIRED listener misses an event:
+  **alert on `cosec.control.listener.lost` above zero.**
 - **A BEST_EFFORT listener's full queue drops the incoming event**, so what arrives is an ordered prefix: a consumer
   sees a gap, never a reordering. Drops are counted in `cosec.control.listener.dropped` and logged at `WARN` at most
   once per required timeout.
@@ -447,7 +452,7 @@ keep (a propose on one control host and a publish on another are two processes):
 - **A listener that stops answering is reported, never cut off.** While events wait and it has delivered nothing for
   longer than the required timeout, a `WARN` names it, its depth and the age of the oldest event, at most once per
   required timeout. What its share held is delivered, in order, when it answers again. A `REQUIRED` listener's call
-  that does not answer within the timeout is a failure, and its next event is delivered.
+  that does not answer within the timeout is a failed call (above), and its next event is delivered.
 - **At shutdown the listeners drain** within `cosec.observability.listener.drain-timeout`, the decision listeners'
   timeout. They stop taking events and deliver what is queued; what is left is counted and logged per listener
   (`Change listener [<name>] never records <n> change events: they were still queued when the drain of <timeout>
@@ -462,10 +467,10 @@ Meters, each tagged `listener`:
 | `cosec.control.listener.queued`, `cosec.control.listener.queued.bytes` | the events queued, and what they hold, of the listener's share |
 | `cosec.control.listener.oldest.age` | how long the oldest queued event has waited (seconds): a sink that stopped shows here first |
 | `cosec.control.listener.dropped` | BEST_EFFORT events dropped by a full queue |
-| `cosec.control.listener.lost` | events of stored steps a REQUIRED listener missed: alert on any |
+| `cosec.control.listener.lost` | events of stored steps a REQUIRED listener missed, its queue full or its call failed: alert on any |
 
 `cosec.control.shadow.status.unreadable` (no tags) counts the instance statuses a control host read that did not
-decode: each such instance holds every shadow window until its status reads or expires (`CTL-72`), and the log names it
+decode: each such instance holds every shadow window until its status reads or expires (`CTL-73`), and the log names it
 ([Troubleshooting](./troubleshooting.md#shadow-window-waiting-for-an-acknowledgement)). Alert on any.
 
 ## Logs

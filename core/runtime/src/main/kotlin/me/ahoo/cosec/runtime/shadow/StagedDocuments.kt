@@ -34,7 +34,7 @@ private val log = KotlinLogging.logger {}
 
 /**
  * The staged list as this instance last read it (`CTL-47`): which documents may stage a candidate, asked on the request
- * path and refreshed off it ([refresh], every `report-interval` by the shadow reporter).
+ * path and refreshed off it ([refresh], every report interval, [ShadowReporter.derivedInterval], by the shadow reporter).
  *
  * - **A list:** only a listed document's candidate is read, and only a request whose view reads a listed document is
  *   sampled. With nothing listed, no request is sampled and no candidate read: the question is one volatile read and a

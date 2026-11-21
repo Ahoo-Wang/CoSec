@@ -23,21 +23,18 @@ import java.time.Duration
 
 /**
  * How a pipeline built over a document store keeps its documents (RFC 0003), set in [PipelineBuilder.snapshots] and read
- * once, at build. The properties are the starter's `cosec.authorization.snapshot.*`, with the same defaults.
+ * once, at build. The properties are the starter's `cosec.authorization.snapshot.*`, with the same defaults. What
+ * can be computed is not set here: the lag thresholds follow [revalidateInterval], the cold-load timeout the pipeline's
+ * timeout, the compile threads the cores, and the reload concurrency is a constant ([SnapshotOptions.derive]).
  */
 @ExperimentalCoSecApi
-class SnapshotSettings internal constructor() {
+class SnapshotSettings internal constructor(private val pipelineTimeout: () -> Duration) {
     /**
      * How often every installed document is revalidated with a conditional read, at least 1 second and at most 5
-     * minutes, less than [lagWarn], and less than [failClosedMaxLag] when [failClosedTenants] are set (`SNP-6`).
+     * minutes, and less than [failClosedMaxLag] when [failClosedTenants] are set (`SNP-6`). A document unconfirmed for
+     * 6 of these is logged at WARN, for 30 at ERROR as stale.
      */
     var revalidateInterval: Duration = DEFAULTS.revalidateInterval
-
-    /** Lag above which a document is logged at WARN. */
-    var lagWarn: Duration = DEFAULTS.lagWarn
-
-    /** Lag above which a document is logged at ERROR and reported as stale. */
-    var lagEscalate: Duration = DEFAULTS.lagEscalate
 
     /**
      * Tenants whose requests fail when the documents they use lag more than [failClosedMaxLag] (RFC 0001 §7.1); `*`
@@ -46,9 +43,6 @@ class SnapshotSettings internal constructor() {
     var failClosedTenants: Set<String> = DEFAULTS.failClosedTenants
 
     var failClosedMaxLag: Duration = DEFAULTS.failClosedMaxLag
-
-    /** How long a request waits for a document not yet installed before it is answered as unavailable (503). */
-    var coldLoadTimeout: Duration = DEFAULTS.coldLoadTimeout
 
     /** The most app documents held at once; the least recently used one is evicted beyond it. */
     var maxApps: Int = DEFAULTS.maxApps
@@ -65,14 +59,6 @@ class SnapshotSettings internal constructor() {
     /** The most tenant ids held as having no document, apart from [maxTenants] (`SNP-7`). */
     var maxAbsentTenants: Int = DEFAULTS.maxAbsentTenants
 
-    /**
-     * Documents a revalidation pass reads at once. A pass takes about the documents held × one conditional read ÷ this,
-     * and lag stays below the interval plus one pass.
-     */
-    var reloadConcurrency: Int = DEFAULTS.reloadConcurrency
-
-    var compileThreads: Int = DEFAULTS.compileThreads
-
     /** The apps whose documents are loaded at build, after the platform's; [Pipeline.awaitDocuments] waits for them. */
     var prewarmApps: Set<String> = emptySet()
 
@@ -83,20 +69,23 @@ class SnapshotSettings internal constructor() {
     internal fun prewarmKeys(): List<SnapshotKey> =
         prewarmApps.map { SnapshotKey.App(it) } + prewarmTenants.map { SnapshotKey.Tenant(it) }
 
-    internal fun toOptions(): SnapshotOptions = SnapshotOptions(
-        revalidateInterval = revalidateInterval,
-        lagWarn = lagWarn,
-        lagEscalate = lagEscalate,
-        failClosedTenants = failClosedTenants,
-        failClosedMaxLag = failClosedMaxLag,
-        coldLoadTimeout = coldLoadTimeout,
-        maxApps = maxApps,
-        maxTenants = maxTenants,
-        maxAbsentApps = maxAbsentApps,
-        maxAbsentTenants = maxAbsentTenants,
-        compileThreads = compileThreads,
-        reloadConcurrency = reloadConcurrency,
-    )
+    internal fun toOptions(): SnapshotOptions {
+        val derived = SnapshotOptions.derive(revalidateInterval, pipelineTimeout())
+        return SnapshotOptions(
+            revalidateInterval = revalidateInterval,
+            lagWarn = derived.lagWarn,
+            lagEscalate = derived.lagEscalate,
+            failClosedTenants = failClosedTenants,
+            failClosedMaxLag = failClosedMaxLag,
+            coldLoadTimeout = derived.coldLoadTimeout,
+            maxApps = maxApps,
+            maxTenants = maxTenants,
+            maxAbsentApps = maxAbsentApps,
+            maxAbsentTenants = maxAbsentTenants,
+            compileThreads = derived.compileThreads,
+            reloadConcurrency = derived.reloadConcurrency,
+        )
+    }
 
     private companion object {
         val DEFAULTS = SnapshotOptions()

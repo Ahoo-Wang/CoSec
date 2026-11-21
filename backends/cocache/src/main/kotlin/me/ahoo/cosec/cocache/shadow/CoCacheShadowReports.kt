@@ -60,7 +60,7 @@ import java.util.concurrent.ConcurrentHashMap
  * again every [ShadowCacheSpecs.INDEX_REFRESH]; whoever writes the list drops entries nobody refreshed for
  * [ShadowCacheSpecs.INDEX_EXPIRY]. [statuses] reads the list and each listed status, and skips a listed instance whose
  * status has expired (it is gone), as one older than a minute. A status or list that cannot be read fails it;
- * [statusReadings] names a status that does not decode instead (`CTL-72`).
+ * [statusReadings] names a status that does not decode instead (`CTL-73`).
  */
 @ExperimentalCoSecApi
 class CoCacheShadowReports @InternalCoSecApi constructor(
@@ -198,7 +198,7 @@ class CoCacheShadowReports @InternalCoSecApi constructor(
     override suspend fun statuses(): List<InstanceStatus> = readStatuses(lenient = false).statuses
 
     /**
-     * Every listed status that reads and is recent, and the instances whose status does not decode (`CTL-72`), each
+     * Every listed status that reads and is recent, and the instances whose status does not decode (`CTL-73`), each
      * logged with why: such a status is still on the store, so it was written within [ShadowCacheSpecs.STATUS_TTL], and
      * counts as recent. A status under another instance's key is the store's data being wrong, not a version the
      * reader does not know, and fails the call as [statuses] does; so does a store that does not answer.

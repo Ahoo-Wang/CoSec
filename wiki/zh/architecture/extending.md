@@ -388,7 +388,7 @@ starter 注册 `MdcContextContributor`（SLF4J MDC），使用 `cosec-openteleme
 - `withdrawCandidate(key, window)`：只在文档的候选仍是 `window` 的候选时删除它，一步原子操作（`CTL-26`）。变更在结束之后撤回候选，此时另一个变更可能已暂存了自己的候选。
 - `stagedCandidate(key)` 和 `putCandidate(key, expected, candidate)`：带摘要的候选，以及只在候选仍是读到的那份时才落地的写入（`null`：仅当没有候选时），变了就返回 `false`。暂存先读候选，确认自己仍占着文档的暂存槽，再在读到的候选之上写入；期间被抢占的变更，它迟到的写入会被拒绝，因此不会替换拿到槽的变更的候选（`CTL-6`）。结果未知的写入通过回读解决，绝不重复写。
 - `ShadowReportReader.readings(window)`：每个能读取的实例报告，以及 `ShadowReadings.unreadable` 中报告已列出却无法读取（缺失、无法解码或属于另一个实例）的实例。控制面把它们当作缺失的证据：窗口等待它们，到最长时长时以证据不足关闭并点名它们（`CTL-56`）。存储无法应答时仍对整个调用抛出：窗口随后像任何读取失败一样等待。默认实现读取 `reports(window)`，它对无法读取的报告抛出，所以没有覆盖 `readings` 的读取器会让这样的窗口在最长时长之后仍保持打开。
-- `ShadowReportReader.statusReadings()`：能读取的最近状态，以及 `StatusReadings.unreadable` 中状态已列出却无法解码的实例。控制面把它们当作存活且不确认任何窗口，所以没有窗口会因它们而通过，同时读取其他每个状态，`propagation` 照常应答（`CTL-72`）。存放在另一个实例键下的状态，以及无法应答的存储，都对整个调用抛出。默认实现读取 `statuses()`：没有覆盖它的读取器分不清无法解码的状态和没有状态，所以在 `statuses()` 失败的地方让读取失败，每个窗口和 `propagation` 都要等到该状态能读取或过期。
+- `ShadowReportReader.statusReadings()`：能读取的最近状态，以及 `StatusReadings.unreadable` 中状态已列出却无法解码的实例。控制面把它们当作存活且不确认任何窗口，所以没有窗口会因它们而通过，同时读取其他每个状态，`propagation` 照常应答（`CTL-73`）。存放在另一个实例键下的状态，以及无法应答的存储，都对整个调用抛出。默认实现读取 `statuses()`：没有覆盖它的读取器分不清无法解码的状态和没有状态，所以在 `statuses()` 失败的地方让读取失败，每个窗口和 `propagation` 都要等到该状态能读取或过期。
 - `referrers` 和 `putReferrers`：每个引用方文档带上它最后一次登记该引用的修订，所以一个修订迟到的删除不会推翻更晚的修订重新登记的引用（`CTL-25`）。
 - `RevisionIndex.reclaiming`：回收已从索引中移出、尚未确认删除的记录；存储与索引的其余部分一起保存它。
 

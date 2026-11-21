@@ -1,0 +1,15 @@
+# The wire name of each kind of Cause, as the audit record's reason, the shadow report's sample and the control
+# API's cause write it (OBS-9). Pinned by hand: a change here is a change of what consumers read. One name a line,
+# in the order of CauseNameTest's samples.
+MatcherFailed
+MissingPolicies
+AmbiguousPolicy
+SourceUnavailable
+DocumentInvalid
+NotLoaded
+BoundaryUnavailable
+AttributeUnavailable
+CheckFailed
+MembershipUnavailable
+RequiredListenerFailed
+RateLimiterUnavailable

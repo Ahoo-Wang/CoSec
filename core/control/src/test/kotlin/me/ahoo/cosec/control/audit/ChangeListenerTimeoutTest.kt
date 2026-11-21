@@ -114,7 +114,11 @@ class ChangeListenerTimeoutTest {
             registered.publish(event())
             registered.awaitDelivered()
 
-            warnings().assert().hasSize(1)
+            // The event of a stored step a REQUIRED listener did not record is lost: counted, and logged at ERROR.
+            val errors = appender.captured().filter { it.level == Level.ERROR }
+            errors.assert().hasSize(1)
+            errors.single().formattedMessage.assert().contains("scripted").contains("the future was cancelled")
+            registered.queues.single().lost.assert().isEqualTo(1L)
         }
 
     /** The negative side: the host stopping the delivery is not a failure of the listener, and says nothing. */

@@ -1,0 +1,17 @@
+# Rule: CTL-70
+# Mutant: the connection's address is given to every reader of the change
+# Tests: :control:test --tests me.ahoo.cosec.control.api.ChangeOriginAnswerTest
+
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/api/ChangeAnswer.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/api/ChangeAnswer.kt
+index 6fe61425e..f3f0b99ec 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/api/ChangeAnswer.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/api/ChangeAnswer.kt
+@@ -124,7 +124,7 @@ object ChangeAnswer {
+                 via.requestId?.let { out.put("request", it) }
+             }
+         }
+-        if (wholeOrigin) origin.peer?.let { node.put("peer", it) }
++        origin.peer?.let { node.put("peer", it) }
+     }
+ 
+     /** The escalations, and the approval as far as it is shown: who approved, when, for which candidate and what. */

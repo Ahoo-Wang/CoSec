@@ -198,11 +198,11 @@ published ([The first documents](./storage.md#the-first-documents)), and reports
 **What to prewarm.** The platform document is always loaded before an instance is ready. List an app in `prewarm-apps`,
 or a tenant in `prewarm-tenants`, when the first request for it after a start must not wait: the apps and tenants that
 carry the traffic, and any whose document is large enough that loading and compiling it takes longer than
-[`cold-load-timeout`](./configuration.md#snapshot) (2 seconds), since a request that waits longer is `503`. Every listed
+the [cold-load timeout](./configuration.md#computed-not-configured) (2 seconds), since a request that waits longer is `503`. Every listed
 document delays readiness, and one that cannot be loaded or compiled keeps the instance unready
 ([Instance is not ready](./troubleshooting.md#instance-is-not-ready)), so list the documents you would not serve
-without, not every tenant. Keep `cold-load-timeout` below [`cosec.pipeline.timeout`](./configuration.md#pipeline)
-(5 seconds), with room left for the rest of the pipeline: a request that has waited the whole pipeline timeout is
+without, not every tenant. The cold-load timeout is 40 % of [`cosec.pipeline.timeout`](./configuration.md#pipeline)
+(5 seconds), which leaves room for the rest of the pipeline: a request that has waited the whole pipeline timeout is
 `503` with the cause `deadline`, whatever the load's own bound is.
 
 An instance is ready only once it has installed the platform document and every document named in
@@ -299,8 +299,9 @@ docker run -d -p 127.0.0.1:8080:8080 \
 Nothing in CoSec authorizes the management port, and the application port is decided by the pipeline, so a kubelet is
 refused there: probe the management port. The management port is not only the actuator: Spring Boot's management server
 also serves an application's own functional routes there, which the image has none of; CoSec's own routes, the control API
-included, answer on the application port and the service port only. Publish 8080 to the gateway and 8082 to the services
-you name, never 8081.
+included, answer on the application port and the service port only. The service port is the application's own server on
+another port, with its TLS, client authentication and bind address: if mutual TLS on the application port is what makes the
+statement true, it holds on 8082 too. Publish 8080 to the gateway and 8082 to the services you name, never 8081.
 
 **How a caller is identified.** An operator signs in at the IAM service, and the gateway verifies the token and forwards
 the identity to a route to the host. Give that route its app, so that an identity for another app is refused:
@@ -527,9 +528,9 @@ of every 1,000 requests.
 
 ### How long a revalidation pass takes {#how-long-a-revalidation-pass-takes}
 
-A pass confirms every entry held, `reload-concurrency` (16) at a time:
+A pass confirms every entry held, 16 at a time (a constant):
 
-- **Its length** is about entries × one conditional read ÷ `reload-concurrency`. For 81,920 entries (the defaults full)
+- **Its length** is about entries × one conditional read ÷ 16. For 81,920 entries (the defaults full)
   that is 1.5 s at 0.3 ms a read and 5.1 s at 1 ms.
 - **Lag** stays below `revalidate-interval` plus one pass, or below two passes once a pass outlasts the interval: then
   the passes run back to back ([How instances read documents](./storage.md#how-instances-read-documents)).
@@ -547,7 +548,7 @@ every tenant:
 
 **When to raise `revalidate-interval`.** Raise it when replicas × entries ÷ interval × 10 µs comes near half of a
 Redis node: the cost falls in proportion, and the time a replica can miss a change whose invalidation message was lost
-grows the same way. Keep `lag-warn` above it. A Redis Cluster divides the figures by its number of primaries.
+grows the same way. The lag thresholds, 6 and 30 intervals, follow it. A Redis Cluster divides the figures by its number of primaries.
 
 ### Settings to copy {#settings-to-copy}
 
@@ -578,13 +579,13 @@ A replica that starts, or that the autoscaler adds, holds the platform document,
 ([`prewarm-host-apps`](./configuration.md#snapshot)), and the documents of `prewarm-apps` and `prewarm-tenants`;
 readiness waits for those. It is warm for apps and cold for tenants. Each other tenant's first request on it waits for
 one read from Redis, and for a tenant document also its compilation, about 0.6 ms in all with a Redis that answers in
-0.3 ms, and at most `cold-load-timeout` (2 s). With requests spread evenly, a new replica serving 10,000 tenants reads
+0.3 ms, and at most the cold-load timeout (2 s). With requests spread evenly, a new replica serving 10,000 tenants reads
 Redis on most requests until it has seen each tenant once. List the busiest tenants in `prewarm-tenants` to take them
 off that path.
 
 Requests are not spread evenly in a replica's first moment: almost every one is for a tenant it has not seen, so the
 distinct cold documents arrive at the request rate, faster than its two compile threads take them. A document the full
-compile queue (64) refuses waits and compiles again every few milliseconds, until `cold-load-timeout`; only then is
+compile queue (64) refuses waits and compiles again every few milliseconds, until the cold-load timeout; only then is
 its request `503`. Measured (`ColdBurstBenchmark`, a CI runner of 4 vCPUs, tenant documents of 30 policies and 60
 bindings, default options), for a burst of distinct cold tenants requested at once:
 
@@ -594,14 +595,14 @@ bindings, default options), for a burst of distinct cold tenants requested at on
 | 500 | 67 ms | 403 of 500 |
 | 2,000 | 620 ms | 1,794 of 2,000 |
 
-That is about 3,000 cold tenant documents a second: a burst beyond about `cold-load-timeout` times that (some 6,000
+That is about 3,000 cold tenant documents a second: a burst beyond about the cold-load timeout times that (some 6,000
 distinct tenants in the same instant) is refused at the deadline, never later and never with a permit, and each
 refused tenant is loaded by its next request. Larger documents compile more slowly and lower the rate.
 
 The compile threads are what bounds that rate, not the queue in front of them. With two threads on four shared vCPUs a
-replica takes about 3,500 cold documents a second, and `compile-threads` is what raises it on a host with the cores to
+replica takes about 3,500 cold documents a second, and the compile threads (one per 2 cores, at most 4) are what raises it on a host with the cores to
 spare. A deeper queue (`compileQueueCapacity`, 64) matters only for a burst beyond what the pool compiles within
-`cold-load-timeout`, and each queued compile holds its document, about 15 KB for these tenant documents. Measured with
+the cold-load timeout, and each queued compile holds its document, about 15 KB for these tenant documents. Measured with
 the same benchmark:
 
 | Compile queue | Memory a full queue holds | Burst of 2,000 | Burst of 10,000: served / refused at the deadline |
@@ -665,9 +666,10 @@ your own deployment.
 [`system-test.yml`](https://github.com/Ahoo-Wang/CoSec/blob/main/.github/workflows/system-test.yml) runs CoSec as a
 deployment, which no unit, slice or embedded-server test does: the gateway image built from the commit (its own
 Dockerfile, the AOT cache trained), two replicas of it and a third that refuses a token while revocations cannot be read,
-a service behind them in `cosec.pipeline.mode=gateway`, two replicas of the control-plane host image (also built from the
-commit, behind the gateway's `/cosec/control` route), the IAM that issues the tokens and calls the host's service port, a
-Spring MVC service that enforces on its own, and a Redis with `maxmemory-policy noeviction`, started with Docker Compose on a GitHub-hosted runner.
+a service behind them in `cosec.pipeline.mode=gateway`, the IAM that issues the tokens, a Spring MVC service that enforces on
+its own, and the control plane in each of the two ways it is deployed, on a stack of its own: two replicas of the
+control-plane host image (also built from the commit, behind the gateway's `/cosec/control` route) with an IAM that calls
+the host's service port, and an IAM that embeds the control plane (the workflow runs the suite once for each), and a Redis with `maxmemory-policy noeviction`, started with Docker Compose on a GitHub-hosted runner.
 The scenarios drive it over the network only, with `cosec-migrate` and `docker compose stop`, `start` and `restart` as the
 operator would. It is not part of `check`; it runs nightly on `main`, on the pull requests that change it, and on demand.
 
@@ -697,6 +699,15 @@ What it covers, each as an observable over the network:
   stack does not exercise (it has no provider);
 - a **policy change** through the control plane, from its refusals and its shadow window on live traffic to approval, publish
   and rollback, taking effect at every process without a restart, through the gateway to the control-plane host;
+- **onboarding a tenant with nobody to approve it** (both deployments): a role defined once in the control app's document,
+  whose permission names the member's own tenant, and held by membership and not by a binding in any tenant's document
+  (`wiki/examples/control-tenant-admin/`); the IAM creates the tenant's document, which grants no one anything, and publishes
+  it as its own principal; the tenant's administrator, signed in through the gateway, publishes a change to its own document
+  and is refused another tenant's, by its key and in the listing; a binding written per tenant by a principal of the platform
+  tenant still waits for a person;
+- the **embedded control plane** (its own stack): the IAM's own calls are the SDK's and the record says `in-process`; with
+  its control routes off (`cosec.control.http.enabled=false`) it serves none, still calls the SDK, and is a second instance over the same store, whose
+  publishes the first reads;
 - the **service path** of the control-plane host: a service principal bound to a read-only policy reads and is refused a
   write by the action; the service port serves no platform document and no change of one, by its document or by its id;
   a stated principal proposes a tenant change, skips or runs its window and publishes, and the change event in Kafka says

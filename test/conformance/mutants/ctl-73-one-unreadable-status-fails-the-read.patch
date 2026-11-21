@@ -1,4 +1,4 @@
-# Rule: CTL-72
+# Rule: CTL-73
 # Mutant: one status that does not decode fails the whole read again, so every shadow window and propagation answer 503 while it is stored
 # Tests: :cocache:test --tests me.ahoo.cosec.cocache.shadow.StatusReadingsTest
 
