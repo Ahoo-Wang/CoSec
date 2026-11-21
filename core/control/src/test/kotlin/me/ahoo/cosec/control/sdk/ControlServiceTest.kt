@@ -260,6 +260,23 @@ class ControlServiceTest {
     }
 
     @Test
+    fun `a listing refuses on both paths a document its filter does not serve - CTL-58`() = runBlocking<Unit> {
+        val side = Side()
+        val change = side.fixture.changes.propose(side.fixture.plato, acme, 1, emptyList(), "listed").id
+        val plane = side.fixture.plane
+        val plato = side.fixture.plato
+        plane.changes(plato, acme, null, null, LIMIT) { true }.changes.map { it.id }.assert().contains(change)
+        // By document: an empty page, as for a document of another tenant; nothing tells what was left out.
+        plane.changes(plato, acme, null, null, LIMIT) { it != acme }.also {
+            it.changes.assert().isEmpty()
+            it.next.assert().isNull()
+        }
+        // By state: the store query leaves it out.
+        plane.changes(plato, null, ChangeState.CHECKED, null, LIMIT) { it != acme }.changes.map { it.id }
+            .assert().doesNotContain(change)
+    }
+
+    @Test
     fun `the facade reaches exactly the routes the service port serves, route by route - CTL-65`() {
         val profile = ControlProfile.SERVICE
         for ((method, path) in ROUTES) {
@@ -335,6 +352,8 @@ class ControlServiceTest {
     }
 
     private companion object {
+        const val LIMIT = 50
+
         /** Every route of the control API, by method and path shape (`ControlHttp`). */
         val ROUTES = listOf(
             "GET" to "/documents/tenant:a",
