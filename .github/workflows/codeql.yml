@@ -71,6 +71,12 @@ jobs:
           java-version: '21'
           distribution: 'temurin'
 
+      # The dependency files dependency-cache.yml wrote on main for these versions, read-only: the resolution below then asks
+      # Maven Central for what changed. This job restored no Gradle cache of its own, on purpose (above), and downloaded the
+      # whole build on every push, which Central throttled (429, 2026-11-20).
+      - name: Restore the dependency cache
+        uses: ./.github/actions/dependency-cache
+
       # Downloads only, retried, before CodeQL traces anything (.github/scripts/resolve-dependencies.sh): Gradle's own
       # distribution, the plugins and every dependency, so that the traced build below finds them and the retry never wraps
       # a compilation. services.gradle.org answers 504 often enough to fail this required check; this covers it too.

@@ -14,11 +14,25 @@
 // Where the plugins come from, and what they bring: Maven Central first, then the Gradle Plugin Portal. By default only
 // the portal is asked, and it answers for what Central hosts (the BOMs and libraries of the Kotlin, Dokka and JMH plugins)
 // by proxying Central; when that proxy answered "Could not find" for POMs that exist, the build failed on every attempt
-// for minutes. Central serves them itself; the portal is asked only for what Central lacks, the markers and jars of the
-// plugins only the portal publishes (the Nexus publish plugin and the JMH plugin). The versions are the same either way.
+// for minutes. Central serves them itself; the portal is asked only for what Central lacks.
+//
+// What Central lacks is the markers and jars of the two plugins only the portal publishes: the Nexus publish plugin
+// (`io.github.gradle-nexus.publish-plugin`, jar `io.github.gradle-nexus:publish-plugin`) and the JMH plugin
+// (`me.champeau.jmh`, jar `me.champeau.jmh:jmh-gradle-plugin`); each answered 404 on Central and 200 on the portal on
+// 2026-11-20, for the versions in gradle/libs.versions.toml. Central is not asked for their groups at all: it answers 429 to a
+// runner that asks it too much, and Gradle fails a resolution on a 429 from the first repository without going on to the
+// portal, which has the plugin (mutation run 44835108385; .github/scripts/README.md). Every other plugin, and every library a
+// plugin brings, is asked of Central first, as before.
+//
+// If one of these plugins is later published to Central too, nothing changes silently: the portal is still asked and
+// answers, and the Central copy is not used. If it leaves the portal, the build fails with "not found" naming the portal.
+// A new plugin that only the portal has is added to `portalOnly` with the check above.
 pluginManagement {
+    val portalOnly = listOf("io.github.gradle-nexus", "io.github.gradle-nexus.publish-plugin", "me.champeau.jmh")
     repositories {
-        mavenCentral()
+        mavenCentral {
+            content { portalOnly.forEach { excludeGroup(it) } }
+        }
         gradlePluginPortal()
     }
 }
