@@ -77,6 +77,12 @@ internal object CacheLocks {
                 // The reports outlive any window, and a status counts for a minute (RFC 0007 §6.5): fixed, as on main.
                 val ttl = if (cacheName == INSTANCE_STATUS_CACHE_NAME) ShadowCacheSpecs.STATUS_TTL else ShadowCacheSpecs.REPORT_TTL
                 constrain(PolicyField.TTL) { Ttl.of(ttl) }
+                if (cacheName == INSTANCE_STATUS_CACHE_NAME) {
+                    // A status's life is a liveness bound (CTL-73): an undecodable one counts until its key expires,
+                    // so the key lives exactly STATUS_TTL. CoCache's default jitter would make it 1 to 3 minutes.
+                    lock(PolicyField.TTL_JITTER)
+                    constrain(PolicyField.TTL_JITTER) { Duration.ZERO }
+                }
             }
 
             REVOKED_TOKEN_CACHE_NAME, REVOKED_SUBJECT_CACHE_NAME -> {
