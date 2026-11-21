@@ -15,8 +15,6 @@
 
 package me.ahoo.cosec.spring.boot.realserver
 
-import io.netty.channel.group.DefaultChannelGroup
-import io.netty.util.concurrent.GlobalEventExecutor
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.spring.boot.control.ControlServiceServer
 import me.ahoo.cosec.spring.boot.pipeline.GATEWAY_GLOBAL_FILTER
@@ -94,7 +92,7 @@ class ControlServicePortSettingsTest {
                 answer.statusCode().assert().describedAs("a client certificate to the $name port").isPositive()
             }
             // The factory the service port's server is built from has what the application's has.
-            val own = ControlServiceServer.factory(context, 0, DefaultChannelGroup(GlobalEventExecutor.INSTANCE))
+            val own = ControlServiceServer.factory(context, 0)
             val application = context.getBean(NettyReactiveWebServerFactory::class.java)
             val ssl = checkNotNull(own.ssl) { "the service port's server has no TLS settings" }
             ssl.clientAuth.assert().isEqualTo(checkNotNull(application.ssl).clientAuth)
@@ -110,14 +108,18 @@ class ControlServicePortSettingsTest {
             Socket().use { it.connect(InetSocketAddress("127.0.0.1", service), CONNECT_MILLIS) }
             fails { Socket().use { it.connect(InetSocketAddress(other, service), CONNECT_MILLIS) } }
                 .assert().describedAs("the service port on $other").isTrue()
-            val own = ControlServiceServer.factory(context, 0, DefaultChannelGroup(GlobalEventExecutor.INSTANCE))
+            val own = ControlServiceServer.factory(context, 0)
             own.address.assert().isEqualTo(InetAddress.getByName("127.0.0.1"))
         }
     }
 
     @Test
     fun `the service port of a running application closes an idle keep-alive connection when the application stops`() {
-        val context = start()
+        listOf("graceful", "immediate").forEach(::keepAliveClosedOnStop)
+    }
+
+    private fun keepAliveClosedOnStop(shutdown: String) {
+        val context = start("server.shutdown=$shutdown")
         val service = context.environment.getRequiredProperty("local.control.service.port").toInt()
         Socket("127.0.0.1", service).use { socket ->
             socket.soTimeout = SOCKET_MILLIS

@@ -16,8 +16,6 @@
 package me.ahoo.cosec.spring.boot.control
 
 import io.github.oshai.kotlinlogging.KotlinLogging
-import io.netty.channel.group.DefaultChannelGroup
-import io.netty.util.concurrent.GlobalEventExecutor
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import org.springframework.boot.web.server.WebServer
 import org.springframework.context.ApplicationContext
@@ -46,7 +44,6 @@ internal class ControlServiceListener(
     private val port: Int,
     private val grace: Duration,
 ) : SmartLifecycle {
-    private val channels = DefaultChannelGroup(GlobalEventExecutor.INSTANCE)
     private val inFlight = AtomicInteger()
 
     @Volatile
@@ -63,7 +60,7 @@ internal class ControlServiceListener(
             inFlight.incrementAndGet()
             handler.handle(request, response).doFinally { inFlight.decrementAndGet() }
         }
-        val bound = ControlServiceServer.factory(context, port, channels).getWebServer(counted)
+        val bound = ControlServiceServer.factory(context, port).getWebServer(counted)
         bound.start()
         server = bound
         boundPort = bound.port
@@ -78,15 +75,15 @@ internal class ControlServiceListener(
     override fun stop() {
         val bound = server ?: return
         server = null
-        // Unbinds first, so no new connection arrives; the requests in flight get the grace, then every connection still open
-        // is closed, the idle keep-alive ones included, which stopping the server leaves standing.
+        // Unbinds first, so no new connection arrives; the requests in flight get the grace; stopping the server then closes every
+        // connection still open, the idle keep-alive ones included (a test holds it, on a real application, for each setting of
+        // `server.shutdown`).
         bound.shutDownGracefully { }
         val deadline = System.nanoTime() + grace.toNanos()
         while (inFlight.get() > 0 && System.nanoTime() < deadline) {
             Thread.sleep(POLL_MILLIS)
         }
         bound.stop()
-        channels.close().awaitUninterruptibly(grace.toMillis().coerceAtLeast(1))
         boundPort = 0
     }
 

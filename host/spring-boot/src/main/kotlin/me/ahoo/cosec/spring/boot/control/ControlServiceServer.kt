@@ -15,7 +15,6 @@
 
 package me.ahoo.cosec.spring.boot.control
 
-import io.netty.channel.group.ChannelGroup
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import org.springframework.beans.factory.ObjectProvider
 import org.springframework.boot.reactor.netty.NettyReactiveWebServerFactory
@@ -40,8 +39,8 @@ import org.springframework.http.client.ReactorResourceFactory
  * and nothing else.
  */
 internal object ControlServiceServer {
-    /** The factory of the service port's server, the connections it accepts added to [channels]. */
-    fun factory(context: ApplicationContext, port: Int, channels: ChannelGroup): NettyReactiveWebServerFactory {
+    /** The factory of the service port's server. */
+    fun factory(context: ApplicationContext, port: Int): NettyReactiveWebServerFactory {
         val factory = NettyReactiveWebServerFactory()
         context.getBeanProvider(ReactorResourceFactory::class.java).ifAvailable?.let(factory::setResourceFactory)
         factory.addServerCustomizers(
@@ -50,16 +49,6 @@ internal object ControlServiceServer {
         applyCustomizers(factory, context.getBeanProvider(WebServerFactoryCustomizer::class.java))
         // After the customizers: they set the application's port from `server.port`.
         factory.port = port
-        // Every connection it accepts is known, so that stopping can close the idle keep-alive ones too.
-        factory.addServerCustomizers(
-            NettyServerCustomizer { server ->
-                server.doOnConnection { connection ->
-                    channels.add(
-                        connection.channel()
-                    )
-                }
-            },
-        )
         return factory
     }
 
