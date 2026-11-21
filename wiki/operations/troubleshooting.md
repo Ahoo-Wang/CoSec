@@ -508,6 +508,10 @@ live instance (one with a status in the last minute) does not list it in its sta
 - **An instance that started during the window** acknowledges it within a few report intervals, once it has compiled
   the candidate.
 
+Only instances that take part in shadowing are waited for. A host with `cosec.authorization.shadow.enabled=false` (the
+control-plane image sets it) writes no status at all, and one whose `CandidateSource` is your own writes a status that
+says it does not shadow: neither holds a window, and `propagation` still counts the latter.
+
 If `waitingFor` is empty and the window still does not close, it waits for samples: its documents get too little
 traffic, and it closes *insufficient* at `cosec.control.shadow.max-duration`
 ([Testing changes](../policies/testing.md#trying-changes-in-shadow-mode)).

@@ -101,12 +101,13 @@ class ShadowWindows(
 
     /**
      * Which live instances acknowledge [window] (design D2 §5, `CTL-10`): of those with a status in the last minute, read
-     * as `propagation` reads them (one read shared, at most every [InstanceStatuses.MAX_AGE]), those whose status lists
-     * it. One whose status has no `windows` (an older version, or one holding no staged list) acknowledges nothing. A
+     * as `propagation` reads them (one read shared, at most every [InstanceStatuses.MAX_AGE]) and taking part in shadowing
+     * ([me.ahoo.cosec.spi.shadow.InstanceStatus.shadows]), those whose status lists it. One whose status has no `windows` (an older version, or one holding no staged list) acknowledges nothing. A
      * status read that fails fails the call: a window is never taken as acknowledged by statuses nobody read.
      */
     suspend fun acknowledgement(window: String): Acknowledgement {
-        val live = statuses.read().statuses
+        // An instance that does not shadow (its candidate source is not CoSec's) is not waited for; propagation counts it.
+        val live = statuses.read().statuses.filter { it.shadows }
         val waiting = live.filter { it.windows?.contains(window) != true }.map { it.instance }.sorted()
         return Acknowledgement(live.size - waiting.size, waiting)
     }

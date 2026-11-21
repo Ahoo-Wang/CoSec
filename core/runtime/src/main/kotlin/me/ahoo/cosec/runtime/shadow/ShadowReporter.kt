@@ -88,7 +88,11 @@ class ShadowReporter(
         }
         val acknowledged = sight?.acknowledged()
         attempt("the instance status") {
-            sink.write(InstanceStatus(recorder.instance, clock.instant(), installed(), windows = acknowledged))
+            // Without CoSec's own candidate source nothing is compiled on sight: this instance cannot acknowledge a window,
+            // and says it does not shadow, so that no window waits for it (CTL-10).
+            sink.write(
+                InstanceStatus(recorder.instance, clock.instant(), installed(), windows = acknowledged, shadows = sight != null)
+            )
         }
     }
 

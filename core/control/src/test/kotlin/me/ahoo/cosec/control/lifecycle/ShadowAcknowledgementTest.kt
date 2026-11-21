@@ -58,8 +58,8 @@ class ShadowAcknowledgementTest {
     private suspend fun sampled(instance: String, outcome: ShadowOutcome = ShadowOutcome.SAME, count: Long = 10) =
         reports.write(ShadowReport(WINDOW, instance, mapOf(outcome to count), emptyMap(), setOf(1), null, null))
 
-    private suspend fun status(instance: String, windows: Set<String>?) =
-        reports.write(InstanceStatus(instance, clock.instant(), emptyMap(), windows = windows))
+    private suspend fun status(instance: String, windows: Set<String>?, shadows: Boolean = true) =
+        reports.write(InstanceStatus(instance, clock.instant(), emptyMap(), windows = windows, shadows = shadows))
 
     /** Moves past the statuses' shared read, which is at most five seconds old. */
     private fun later(by: Duration = Duration.ofMinutes(15)) {
@@ -97,6 +97,34 @@ class ShadowAcknowledgementTest {
         look().let {
             it.summary.assert().isNull()
             it.acknowledgement.waitingFor.assert().containsExactly("old")
+        }
+    }
+
+    /**
+     * The three kinds of status a live instance writes: one that shadows and lists the window, one of an older version
+     * (it shadows, and sends no windows), and one that does not shadow (its candidate source is an application's own).
+     * Only the older version holds the window; the one that does not shadow is not waited for, and propagation still
+     * counts it.
+     */
+    @Test
+    fun `an instance that does not shadow is not waited for, an older version is`() = runBlocking<Unit> {
+        later()
+        sampled("i-1")
+        status("acknowledging", setOf(WINDOW))
+        status("older", null)
+        status("own-source", null, shadows = false)
+        look().let {
+            it.summary.assert().isNull()
+            it.acknowledgement.assert().isEqualTo(Acknowledgement(1, listOf("older")))
+        }
+        windows.propagation(me.ahoo.cosec.spi.snapshot.SnapshotKey.Platform, 1).recent.assert().isEqualTo(3)
+        // The older version is gone: its status expires, and the one that does not shadow holds nothing.
+        later(Duration.ofMinutes(2))
+        status("acknowledging", setOf(WINDOW))
+        status("own-source", null, shadows = false)
+        look().let {
+            it.acknowledgement.assert().isEqualTo(Acknowledgement(1, emptyList()))
+            it.summary.assert().isNotNull()
         }
     }
 

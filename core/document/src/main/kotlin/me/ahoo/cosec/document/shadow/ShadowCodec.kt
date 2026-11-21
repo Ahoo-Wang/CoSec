@@ -97,6 +97,8 @@ object ShadowCodec {
                 }
                 // Optional (CTL-53): absent is an instance that acknowledges no window, as an older one does.
                 status.windows?.let { windows -> node.putArray("windows").apply { windows.sorted().forEach(::add) } }
+                // Only when false (CTL-10): absent is an instance that shadows, as an older one does.
+                if (!status.shadows) node.put("shadows", false)
             }
         },
     )
@@ -116,6 +118,8 @@ object ShadowCodec {
                     it in 1..Int.MAX_VALUE
                 }?.toInt() ?: throw malformed("formatLevel is not a positive integer"),
                 node.get("windows")?.let(::windows),
+                node.get("shadows")?.let { if (it.isBoolean) it.asBoolean() else throw malformed("shadows is not a boolean") }
+                    ?: true,
             )
         }
     }

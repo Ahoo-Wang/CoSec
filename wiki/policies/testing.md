@@ -381,7 +381,8 @@ The window closes:
 **Every live instance acknowledges the window before it passes** (`CTL-10`). An instance acknowledges a window in its
 status, written every `cosec.authorization.shadow.report-interval`, once it has read the window in the staged list and
 compiled its candidate (or reported `CANDIDATE_ERROR`). The window does not pass while an instance with a status in the
-last minute has not, logging `Shadow window <w> of change <c> is waiting for the acknowledgement of [<instances>]`, and
+last minute that takes part in shadowing has not (a host with shadowing off writes no status; one whose
+`CandidateSource` is your own says it does not shadow, and is not waited for), logging `Shadow window <w> of change <c> is waiting for the acknowledgement of [<instances>]`, and
 `GET /changes/{id}` names those instances in `shadow.waitingFor`. An acknowledgement is not a sample: the samples still
 come from the reports. Two different waits, and what to do about each:
 

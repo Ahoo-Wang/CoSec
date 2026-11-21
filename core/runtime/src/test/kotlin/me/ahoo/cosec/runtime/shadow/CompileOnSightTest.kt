@@ -166,6 +166,18 @@ class CompileOnSightTest {
         runBlocking { reports.statuses() }.single().windows.assert().containsExactly("w-2")
     }
 
+    /** `CTL-10`: an instance without CoSec's candidate source compiles nothing on sight, and says it does not shadow. */
+    @Test
+    fun `a reporter without CoSec's candidate source says its instance does not shadow`() {
+        runBlocking { ShadowReporter(recorder, reports, { emptyMap() }, Clock.systemUTC()).flush() }
+        runBlocking { reports.statuses() }.single().let {
+            it.shadows.assert().isFalse()
+            it.windows.assert().isNull()
+        }
+        flush()
+        runBlocking { reports.statuses() }.single().shadows.assert().isTrue()
+    }
+
     @Test
     fun `without a list nothing is compiled on sight`() {
         store.candidates[acme] = StoredCandidate("w-1", 1, document())

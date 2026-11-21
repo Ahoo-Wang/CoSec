@@ -48,12 +48,19 @@ class InstanceStatus(
     /**
      * The shadow windows of the staged list this instance holds and has compiled the candidate of, or reported it as
      * failing to (design D2 §5, `CTL-10`): its acknowledgement that it compares their candidates. A window closes as
-     * passed only when every instance with a recent status lists it. Null when the instance does not send it: a version
-     * before it, or an instance that holds no staged list; such an instance acknowledges nothing.
+     * passed only when every instance with a recent status that [shadows] lists it. Null when the instance does not send
+     * it: a version before it, or an instance that holds no staged list; such an instance acknowledges nothing.
      */
     val windows: Set<String>? = null,
+    /**
+     * Whether this instance takes part in shadowing: it compiles the staged candidates through CoSec's own candidate
+     * source, so it can acknowledge their windows. False for an instance whose candidate source is an application's
+     * own; the closing rule does not wait for it, and `propagation` still counts it. A version before this one has no
+     * such member and reads as true: it shadows, and acknowledges nothing.
+     */
+    val shadows: Boolean = true,
 ) {
-    private fun fields(): List<Any?> = listOf(instance, at, documents, formatLevel, windows)
+    private fun fields(): List<Any?> = listOf(instance, at, documents, formatLevel, windows, shadows)
 
     override fun equals(other: Any?): Boolean = other is InstanceStatus && other.fields() == fields()
 

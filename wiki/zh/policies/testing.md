@@ -257,7 +257,7 @@ flowchart LR
 - 经过 `cosec.control.shadow.min-duration`（15 分钟），实例上报的非 `BASE_MISMATCH` 样本达到 `cosec.control.shadow.min-samples`（1,000），且每个存活实例都确认了该窗口（见下文）时；
 - 到达 `cosec.control.shadow.max-duration`（24 小时）而样本不足时，状态为*证据不足*。
 
-**窗口通过之前，每个存活实例都要确认它**（`CTL-10`）。实例在暂存列表中读到窗口并编译了它的候选（或报告了 `CANDIDATE_ERROR`）之后，就在每隔 `cosec.authorization.shadow.report-interval` 写一次的状态中确认该窗口。只要还有最近一分钟内写过状态的实例没有确认，窗口就不会通过，并记录 `Shadow window <w> of change <c> is waiting for the acknowledgement of [<instances>]`，`GET /changes/{id}` 在 `shadow.waitingFor` 中点名这些实例。确认不是样本：样本仍只来自报告。两种不同的等待，以及各自的处理：
+**窗口通过之前，每个存活实例都要确认它**（`CTL-10`）。实例在暂存列表中读到窗口并编译了它的候选（或报告了 `CANDIDATE_ERROR`）之后，就在每隔 `cosec.authorization.shadow.report-interval` 写一次的状态中确认该窗口。只要还有最近一分钟内写过状态、且参与影子比较的实例没有确认，窗口就不会通过（关闭了影子比较的宿主不写状态；`CandidateSource` 是你自己的实现的宿主声明它不参与，不会被等待），并记录 `Shadow window <w> of change <c> is waiting for the acknowledgement of [<instances>]`，`GET /changes/{id}` 在 `shadow.waitingFor` 中点名这些实例。确认不是样本：样本仍只来自报告。两种不同的等待，以及各自的处理：
 
 - **在等待某个实例**（`waitingFor` 非空）：该实例运行的版本不发送确认（完成升级），或者它读不到暂存列表：它的日志写着 `The staged list cannot be read`，它的 `cosec.shadow.staged.age` 持续上升（[可观测性](../operations/observability.md#metrics)）。窗口期间启动的实例会在几个上报间隔内确认。
 - **在等待样本**（`waitingFor` 为空，样本低于最小值）：窗口所属文档的流量太少。等到 `max-duration`，或者给出原因跳过窗口。

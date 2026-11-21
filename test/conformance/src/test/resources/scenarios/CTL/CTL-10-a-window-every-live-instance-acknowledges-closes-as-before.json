@@ -4,7 +4,7 @@
   ],
   "polarity": "negative",
   "level": "control",
-  "description": "Bounds 15 min, 3 samples, 1 h. Every live instance acknowledges c1's window, and an instance whose status is older than a minute is not waited for: with its 3 samples after 15 minutes the window closes as it did before acknowledgements. Then c2's window, never acknowledged by the live i3, still closes at the hour, as insufficient: published without acknowledging its summary, it is refused.",
+  "description": "Bounds 15 min, 3 samples, 1 h. Every live instance acknowledges c1's window, an instance whose status is older than a minute is not waited for, nor is a live one that does not shadow (its candidate source is an application's own): with its 3 samples after 15 minutes the window closes as it did before acknowledgements. Then c2's window, never acknowledged by the live i3, still closes at the hour, as insufficient: published without acknowledging its summary, it is refused.",
   "options": {
     "shadow": {
       "minDuration": "PT15M",
@@ -72,6 +72,13 @@
       }
     },
     {
+      "status": {
+        "instance": "own-source",
+        "documents": {},
+        "shadows": false
+      }
+    },
+    {
       "acknowledgement": "c1"
     },
     {
@@ -129,6 +136,7 @@
       "status",
       "reported",
       "advanced",
+      "status",
       "status",
       "status",
       "acknowledged 2 waiting none",

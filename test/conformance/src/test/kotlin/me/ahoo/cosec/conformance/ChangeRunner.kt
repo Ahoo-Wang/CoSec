@@ -143,7 +143,8 @@ import java.time.Instant
  *                                  // `; shadow a,b` and `; approval a,b` when it holds them
  *            { "status": { "instance": "i1", "documents": { "tenant:acme": 2 } } },  // an instance's status now
  *            { "status": { "instance": "i1", "documents": {}, "acknowledges": ["c1"] } },  // CTL-10: it lists c1's window
- *                                              // (without "acknowledges" it sends no windows, as an older version)
+ *                                              // (without "acknowledges" it sends no windows, as an older version;
+ *                                              // with "shadows": false it does not shadow, and is not waited for)
  *            { "acknowledgement": "c1" },      // CTL-10: `acknowledged 1 waiting i2`, or `waiting none`, as the answer
  *            { "propagation": { "document": "tenant:acme", "revision": 2 } },        // CTL-62:
  *                                              // `installed 1 holding 2 recent 3`
@@ -642,7 +643,7 @@ object ChangeRunner : ScenarioRunner {
 
         /** An instance's status, as its heartbeat writes it: the revision of each document it holds. */
         private suspend fun status(argument: JsonNode): String {
-            argument.only("instance", "documents", "acknowledges")
+            argument.only("instance", "documents", "acknowledges", "shadows")
             val documents = argument.required("documents").properties().associate { (key, revision) ->
                 documentKey(key) to InstalledDocument(revision.asLong(), Duration.ZERO)
             }
@@ -650,7 +651,10 @@ object ChangeRunner : ScenarioRunner {
                 changes.get(ChangeId(change)).shadow?.window
                     ?: throw ScenarioFormatException("An acknowledged change is staged: $change")
             }
-            reports.write(InstanceStatus(argument.required("instance").text(), clock.now, documents, windows = windows))
+            val shadows = argument.get("shadows")?.bool() ?: true
+            reports.write(
+                InstanceStatus(argument.required("instance").text(), clock.now, documents, windows = windows, shadows = shadows)
+            )
             return "status"
         }
 

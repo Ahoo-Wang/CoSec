@@ -141,7 +141,13 @@ class ShadowCodecTest {
         // A status an older version wrote: no member, no acknowledgement.
         val older = """{"i3":{"format":1,"at":"2026-11-21T00:00:00Z","formatLevel":1,"documents":{}}}"""
         ShadowCodec.decodeStatuses(older.encodeToByteArray()).getValue("i3").windows.assert().isNull()
-        listOf(""""windows":"c1@1"""", """"windows":[1]""").forEach { member ->
+        // One that does not shadow says so; one that shadows writes nothing for it, as an older version.
+        val notShadowing = InstanceStatus("i5", at, emptyMap(), shadows = false)
+        ShadowCodec.decodeStatuses(ShadowCodec.encodeStatuses(mapOf("i5" to notShadowing))).getValue("i5")
+            .assert().isEqualTo(notShadowing)
+        String(ShadowCodec.encodeStatuses(mapOf("i2" to silent))).assert().doesNotContain("shadows")
+        ShadowCodec.decodeStatuses(older.encodeToByteArray()).getValue("i3").shadows.assert().isTrue()
+        listOf(""""windows":"c1@1"""", """"windows":[1]""", """"shadows":"no"""").forEach { member ->
             val broken = """{"i4":{"format":1,"at":"2026-11-21T00:00:00Z","formatLevel":1,"documents":{},$member}}"""
             assertThrownBy<SnapshotFormatException> { ShadowCodec.decodeStatuses(broken.encodeToByteArray()) }
         }
