@@ -40,4 +40,7 @@ class InMemoryShadowReports(private val clock: Clock = Clock.systemUTC()) : Shad
         val since = clock.instant().minus(ShadowReportReader.STATUS_TTL)
         return statuses.values.filter { !it.at.isBefore(since) }
     }
+
+    /** Every recent status: one kept in memory is never one that does not decode. */
+    override suspend fun statusReadings(): StatusReadings = StatusReadings(statuses(), emptySet())
 }

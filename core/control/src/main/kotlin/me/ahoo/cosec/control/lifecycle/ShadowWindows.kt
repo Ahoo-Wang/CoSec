@@ -102,15 +102,22 @@ class ShadowWindows(
     /**
      * Which live instances acknowledge [window] (design D2 §5, `CTL-10`): of those with a status in the last minute, read
      * as `propagation` reads them (one read shared, at most every [InstanceStatuses.MAX_AGE]) and taking part in shadowing
-     * ([me.ahoo.cosec.spi.shadow.InstanceStatus.shadows]), those whose status lists it. One whose status has no `windows` (an older version, or one holding no staged list) acknowledges nothing. A
-     * status read that fails fails the call: a window is never taken as acknowledged by statuses nobody read.
+     * ([me.ahoo.cosec.spi.shadow.InstanceStatus.shadows]), those whose status lists it. One whose status has no `windows` (an older version, or one holding no staged list) acknowledges nothing, and
+     * one whose status does not decode is live and waited for (`CTL-73`). A status read that fails fails the call: a
+     * window is never taken as acknowledged by statuses nobody read.
      */
     suspend fun acknowledgement(window: String): Acknowledgement {
+        val read = statuses.read()
         // An instance that does not shadow (its candidate source is not CoSec's) is not waited for; propagation counts it.
-        val live = statuses.read().statuses.filter { it.shadows }
-        val waiting = live.filter { it.windows?.contains(window) != true }.map { it.instance }.sorted()
-        return Acknowledgement(live.size - waiting.size, waiting)
+        val live = read.statuses.filter { it.shadows }
+        val acknowledging = live.count { it.windows?.contains(window) == true }
+        // One whose status does not decode may shadow and has acknowledged nothing anyone read: waited for (CTL-73).
+        val waiting = live.filter { it.windows?.contains(window) != true }.map { it.instance } + read.unreadable
+        return Acknowledgement(acknowledging, waiting.sorted())
     }
+
+    /** The statuses that did not decode, of every read so far ([InstanceStatuses.unreadable]). */
+    val unreadableStatuses: Long get() = statuses.unreadable
 
     /**
      * Read-only propagation (RFC 0007 §6.5, Q29, `CTL-62`): of the instances that wrote a status in the last minute
@@ -124,11 +131,12 @@ class ShadowWindows(
     suspend fun propagation(key: SnapshotKey, revision: Long): Propagation {
         val read = statuses.read()
         val holding = read.statuses.mapNotNull { it.documents[key] }
+        // A status that does not decode is recent, and says of no document that its instance holds it (CTL-73).
         return Propagation(
             revision,
             holding.count { it.revision >= revision },
             holding.size,
-            read.statuses.size,
+            read.statuses.size + read.unreadable.size,
             read.asOf
         )
     }

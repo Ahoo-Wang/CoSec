@@ -91,6 +91,9 @@ class Changes(
 
     private val windows = ShadowWindows(reports, options.shadow, clock)
 
+    /** Instance statuses that did not decode, of every read so far (`CTL-73`): `cosec.control.shadow.status.unreadable`. */
+    val unreadableStatuses: Long get() = windows.unreadableStatuses
+
     private val context = StoreCurrentDocuments(store, revisions)
 
     /** This instance has reconciled the app list ([me.ahoo.cosec.control.lifecycle.ControlMaintenance.reconcileApps]). */

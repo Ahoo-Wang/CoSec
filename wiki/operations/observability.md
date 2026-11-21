@@ -184,6 +184,12 @@ per instance: with several instances the limit is multiplied by their number. Wh
 one WARN instead: `CoSec is off ... nothing is protected by CoSec`
 ([troubleshooting](./troubleshooting.md#the-log-says-cosec-is-off)).
 
+A host that runs the control plane logs one more INFO line once it has started: what the control plane serves and where
+its callers come from, for example `Control plane: HTTP routes on /cosec/control (port 8080; service port 8082), caller
+from the forwarded identity (statement: only-trusted-callers-can-reach)`, or, in an application that reaches it in process
+only, `Control plane: no HTTP routes (cosec.control.http.enabled=false), caller from the credential`. The ports are the
+ones the servers bound.
+
 ## Metrics
 
 With `cosec-micrometer` and a `MeterRegistry` (for example from Spring Boot Actuator), every decision event is
@@ -364,10 +370,18 @@ event's JSON writes it: `asserted` (the host believed the identity the caller st
 itself), `via` (the credential's `method`, its id as `credential` and the request's id as `request`, never its value)
 and `peer` (the address of the connection the request arrived on, read from the Reactor Netty channel beneath any
 forwarded-header handling, so that a caller cannot state it as it states its client address; a host that cannot read it
-that way, any but Reactor Netty, records none). A step made through the control plane's facade, in the host's own process
+that way, any but Reactor Netty, records none, and so the control API of a Servlet host (WebMvc) records no `peer`). A step made through the control plane's facade, in the host's own process
 ([Changing policies from your code](../integration/checks.md#changing-policies-from-your-code)), is `via.method:
 in-process`, with the credential's id when there is one and no `peer`, since no connection carried it. A step no request drives, a maintenance pass for one, has none; the stored
 change records the origin of its author, and the log line ends with `origin=...` when there is one.
+
+**`asserted: true` says the rest of `via` is the caller's own words.** On a host that believes the identity it is stated
+(the control-plane host, an IAM service that embeds the control plane), the caller writes the whole identity: the
+credential's method (`jwt` included, which makes the principal it states break-glass capable as a verified token
+would), the credential's id, and the request id, which is the `CoSec-Request-Id` it sent. The record keeps what was
+stated and marks it `asserted`: read `via.method`, `via.credential` and `via.request` of such an origin as what the
+caller said, not as what the host verified. Only an origin without `asserted` names a credential the host verified
+itself.
 
 - **The default listener** logs each event at `INFO` to the logger `me.ahoo.cosec.changelog`, as
   `Change <changeId> <kind> on <doc> by <principal>@<tenant>: base=..., candidate=..., escalations=<n>, confirmations=<n>`.
@@ -382,6 +396,11 @@ change records the origin of its author, and the log line ends with `origin=...`
   published. A gated event says the step was about to happen, not that it did: a check after it can still refuse the
   step (a `409` when the change moved meanwhile), as after a `BREAK_GLASS_APPROVED` or an `ABANDONED`. The change's
   state, and for a publish the revision history, say what happened.
+- **The stream over-reports; it never under-reports a step that took effect.** An event can be recorded for a step that
+  then did not take effect: with two `REQUIRED` listeners, the first records the gated event and the second times out,
+  so the step answers `503`; a check after the event refuses the step (a lost compare-and-set); a send that timed out
+  completes afterwards. A consumer reconciles each event with the change's record (`GET /changes/{id}`, and the revision
+  history for a publish) before it treats the step as done.
 - **A note is free text**, part of it the change's author's (the reason of a proposal, a request or a revoke): read who
   did a step from the event's `operator`, never from its note.
 - **Break-glass needs a `REQUIRED` change listener:** without one, creating or changing a break-glass binding answers
@@ -468,6 +487,10 @@ Meters, each tagged `listener`:
 | `cosec.control.listener.oldest.age` | how long the oldest queued event has waited (seconds): a sink that stopped shows here first |
 | `cosec.control.listener.dropped` | BEST_EFFORT events dropped by a full queue |
 | `cosec.control.listener.lost` | events of stored steps a REQUIRED listener missed, its queue full or its call failed: alert on any |
+
+`cosec.control.shadow.status.unreadable` (no tags) counts the instance statuses a control host read that did not
+decode: each such instance holds every shadow window until its status reads or expires (`CTL-73`), and the log names it
+([Troubleshooting](./troubleshooting.md#shadow-window-waiting-for-an-acknowledgement)). Alert on any.
 
 ## Logs
 

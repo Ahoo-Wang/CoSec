@@ -3,10 +3,10 @@
 # Tests: :spring-boot:test --tests me.ahoo.cosec.spring.boot.pipeline.GatewayModeTrustTest
 
 diff --git a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/pipeline/GatewayModeTrust.kt b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/pipeline/GatewayModeTrust.kt
-index 91a447d1e..eb8b56c77 100644
+index 81ec409..c8db9f5 100644
 --- a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/pipeline/GatewayModeTrust.kt
 +++ b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/pipeline/GatewayModeTrust.kt
-@@ -55,7 +55,7 @@ internal object GatewayModeTrust {
+@@ -58,7 +58,7 @@ internal object GatewayModeTrust {
              PipelineProperties.ONLY_GATEWAY_CAN_REACH_KEY to gateway,
              PipelineProperties.ONLY_TRUSTED_CALLERS_CAN_REACH_KEY to trusted,
          ).firstOrNull { (_, value) -> value != null && value.equals("true", ignoreCase = true) }?.first
@@ -15,3 +15,12 @@ index 91a447d1e..eb8b56c77 100644
              "$host: this host believes any CoSec-Identity header it receives, and the header " +
                  "carries no signature, so whoever can reach this host is whoever they claim to be, the platform " +
                  "administrator included, and can publish any policy of any tenant. It contains mistakes and keeps the " +
+@@ -74,7 +74,7 @@ internal object GatewayModeTrust {
+                 (if (trusted == null) "" else ", and ${PipelineProperties.ONLY_TRUSTED_CALLERS_CAN_REACH_KEY} is [$trusted]") +
+                 " (STA-7, STA-9, https://cosec.ahoo.me/operations/deployment#services-behind-the-gateway)."
+         }
+-        return stated
++        return stated ?: PipelineProperties.ONLY_GATEWAY_CAN_REACH_KEY
+     }
+ 
+     /**
