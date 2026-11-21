@@ -172,6 +172,23 @@
         "spring-boot:ForwardedIdentityCallerTest#an identity gate the application wires beside enforce is asked for the statement too",
         "spring-boot:IdentityGuardAutoConfigurationTest#the forwarded-identity caller on a gateway host fails startup"
       ]
+    },
+    {
+      "id": "STA-10",
+      "source": "maintainer decision 2026-11-21 (the control-plane host as an image, \"实现排在 beta.6\", merged into beta.5)",
+      "statement": "`cosec-control-server`, the control plane as an image (`platform/control-server`), is the starter with the control plane and nothing else: it decides with policies and takes its caller from the `CoSec-Identity` header (`cosec.pipeline.caller=forwarded-identity`, `STA-9`), so it starts only under the operator's statement of what can reach it, verifies no credential, and issues no token. It refuses to start with `cosec.control.enabled=false` (an application that is up and serves nothing: the gateway image is the read-only one), `cosec.jwt.enabled=true` or `cosec.api-key.enabled=true` (verification no request of this host uses). Its probes are on the management port, outside CoSec, and its readiness group includes the control store's format indicator (`cosecControlStoreFormat`): a store not yet converted (`cosec-migrate repair-references`) leaves the instance unready, visible and named, and is never a startup refusal.",
+      "level": "startup",
+      "pending": null,
+      "guards": [
+        "control-server:ControlServerRefusalsTest#the image's own defaults, and nothing written, are accepted",
+        "control-server:ControlServerRefusalsTest#a control server with the control plane off is an empty application that is up, so it is refused",
+        "control-server:ControlServerRefusalsTest#credential verification is refused because the host believes the identity it is sent",
+        "control-server:ControlServerTest#it does not start until the operator states what can reach it",
+        "control-server:ControlServerTest#it starts under the statement, with the control plane wired and nothing that verifies a credential",
+        "control-server:ControlServerTest#a call with no identity is refused, and a credential is not an identity",
+        "control-server:ControlServerTest#the probes are on the management port, and the control store's format joins the readiness group",
+        "control-server:ControlServerTest#credential verification is refused whichever way it is asked for"
+      ]
     }
   ]
 }

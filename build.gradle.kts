@@ -35,6 +35,7 @@ val bomProjects = setOf(bomProject, dependenciesProject)
 
 val serverProjects = setOf(
     project(":gateway-server"),
+    project(":control-server"),
 )
 val codeCoverageReportProject = project(":code-coverage-report")
 // Test-only modules (RFC 0008 §3.1): never published, so neither in the BOM nor in any publication.
@@ -157,6 +158,17 @@ configure(contractProjects) {
 }
 
 configure(testOnlyProjects) {
+    kotlinJvm()
+    junitTests()
+    dependencies {
+        testImplementation(platform(dependenciesProject))
+    }
+    verifyUnpublished()
+}
+
+// The control server is an application with tests of its own (what it refuses to start with, STA-10): it never reaches a
+// repository, and applies no JaCoCo.
+project(":control-server") {
     kotlinJvm()
     junitTests()
     dependencies {

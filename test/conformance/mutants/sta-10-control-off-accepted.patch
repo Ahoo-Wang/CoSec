@@ -1,0 +1,17 @@
+# Rule: STA-10
+# Mutant: the control server starts with the control plane off, an application that is up and serves nothing
+# Tests: :control-server:test --tests me.ahoo.cosec.control.server.ControlServerRefusalsTest
+
+diff --git a/platform/control-server/src/main/kotlin/me/ahoo/cosec/control/server/ControlServerRefusals.kt b/platform/control-server/src/main/kotlin/me/ahoo/cosec/control/server/ControlServerRefusals.kt
+index 8d8b8a93b..c7da428bd 100644
+--- a/platform/control-server/src/main/kotlin/me/ahoo/cosec/control/server/ControlServerRefusals.kt
++++ b/platform/control-server/src/main/kotlin/me/ahoo/cosec/control/server/ControlServerRefusals.kt
+@@ -52,7 +52,7 @@ internal class ControlServerRefusals {
+ 
+         /** Fails with the message that says what to change; a value neither `true` nor `false` is the starter's to refuse. */
+         fun check(environment: Environment) {
+-            check(written(environment, CONTROL_KEY) != false) {
++            check(true) {
+                 "cosec-control-server runs the control plane; $CONTROL_KEY=false would leave it with nothing to serve. " +
+                     "Use the gateway image for a read-only instance (STA-10)."
+             }

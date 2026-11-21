@@ -32,7 +32,7 @@ import kotlin.io.path.name
 import kotlin.io.path.readLines
 
 /**
- * UB-22: what the repository ships as configuration, the gateway image's own `application.yaml`, the Kubernetes base's
+ * UB-22: what the repository ships as configuration, the gateway image's and the control server image's own `application.yaml`, the Kubernetes base's
  * and every `COSEC_*` variable in `k8s/`, is held to the starter's startup checks: no key CoSec does not read
  * ([UnknownProperties]), no switch with a value it cannot read ([CoSecSwitches]). A property renamed without them
  * fails here, not as a crash loop of the image.
@@ -53,6 +53,13 @@ class ShippedConfigurationTest {
     @Test
     fun `the image's own application yaml is read by the starter`() {
         yaml(repository.resolve("platform/gateway-server/src/main/resources/application.yaml")).run { context ->
+            context.startupFailure.assert().isNull()
+        }
+    }
+
+    @Test
+    fun `the control server image's own application yaml is read by the starter`() {
+        yaml(repository.resolve("platform/control-server/src/main/resources/application.yaml")).run { context ->
             context.startupFailure.assert().isNull()
         }
     }

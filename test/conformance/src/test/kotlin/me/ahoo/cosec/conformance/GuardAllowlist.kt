@@ -292,6 +292,15 @@ object GuardAllowlist {
             "spring-boot:ForwardedIdentityCallerTest#an identity gate the application wires beside enforce is asked for the statement too",
             "spring-boot:ForwardedIdentityCallerTest#an IAM service that issues tokens and embeds the control plane takes the forwarded caller beside its login",
             "spring-boot:IdentityGuardAutoConfigurationTest#the forwarded-identity caller on a gateway host fails startup",
+            // STA-10: the control plane as an image.
+            "control-server:ControlServerRefusalsTest#the image's own defaults, and nothing written, are accepted",
+            "control-server:ControlServerRefusalsTest#a control server with the control plane off is an empty application that is up, so it is refused",
+            "control-server:ControlServerRefusalsTest#credential verification is refused because the host believes the identity it is sent",
+            "control-server:ControlServerTest#it does not start until the operator states what can reach it",
+            "control-server:ControlServerTest#it starts under the statement, with the control plane wired and nothing that verifies a credential",
+            "control-server:ControlServerTest#a call with no identity is refused, and a credential is not an identity",
+            "control-server:ControlServerTest#the probes are on the management port, and the control store's format joins the readiness group",
+            "control-server:ControlServerTest#credential verification is refused whichever way it is asked for",
             // STA-8: a host that serves the refresh route says how a refreshed token gets its roles.
             "spring-boot:RefreshMembershipChoiceTest#no bean and no statement fails startup, and the message says what is at stake and the two ways out",
             "spring-boot:RefreshMembershipChoiceTest#the statement starts the host, in any letter case, with one INFO line that says the lifetime it implies",

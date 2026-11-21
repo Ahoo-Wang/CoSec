@@ -80,6 +80,14 @@ object DependencyRules {
      */
     val DOCUMENT_ONLY: Set<String> = setOf("openapi")
 
+    /**
+     * The control server (`platform/control-server`) is the starter with the control plane and nothing else: it is no
+     * gateway, serves one stack (WebFlux), issues no token for anybody to sign in with, and does not bring CosId, since
+     * CoSec owns its ids. A module it needs beyond these is a visible edit of this list.
+     */
+    const val CONTROL_SERVER = "control-server"
+    val CONTROL_SERVER_NEVER: Set<String> = setOf("gateway", "webmvc", "social", "cosid", "openapi")
+
     /** Groups whose main code never depends on these. */
     val NEVER_DEPENDED_ON: Set<String> = setOf("test", "platform")
 
