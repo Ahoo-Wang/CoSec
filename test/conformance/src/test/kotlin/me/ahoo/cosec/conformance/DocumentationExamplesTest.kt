@@ -19,7 +19,6 @@ import com.example.iam.Onboarding
 import kotlinx.coroutines.runBlocking
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
-import me.ahoo.cosec.control.api.ControlHttp
 import me.ahoo.cosec.control.api.DefaultControlPlane
 import me.ahoo.cosec.control.change.ChangeId
 import me.ahoo.cosec.control.change.ChangeRequestCodec
@@ -156,7 +155,7 @@ class DocumentationExamplesTest {
                 revisions,
                 ChangeAuthority(engine.authorizer, revocations = RevocationReader.NONE)
             )
-            val service = LocalControlService(ControlHttp(plane), IdentityGate(clock = clock))
+            val service = LocalControlService(plane, IdentityGate(clock = clock))
             val alice = engine.security(TenantId("acme"), "alice", roles = listOf("admin"))
             val proposed = Onboarding(service).propose(
                 alice.securityContext,

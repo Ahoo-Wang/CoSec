@@ -370,7 +370,7 @@ object ChangeRunner : ScenarioRunner {
         )
 
         /** The facade an application's own code calls (`CTL-65`), over this plane's routes. */
-        private val facade = LocalControlService(ControlHttp(plane), IdentityGate(clock = clock))
+        private val facade = LocalControlService(plane, IdentityGate(clock = clock))
 
         /** A window closes as soon as it is looked at, unless the scenario sets `options.shadow`. */
         private fun shadowOptions(): ShadowOptions {
@@ -523,7 +523,7 @@ object ChangeRunner : ScenarioRunner {
                 argument.get("state")?.text()?.let(ChangeState::valueOf),
                 null,
                 LISTING_LIMIT,
-            )
+            ) { true }
             "changes " + (page.changes.map { it.id.value }.ifEmpty { listOf("none") }.joinToString(","))
         } catch (error: ChangeRejectedException) {
             "refused ${error.status}"

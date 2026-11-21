@@ -394,6 +394,11 @@ the same, records the same, and is refused the same (`CTL-65`).
   - Answers are the control API's JSON ([What a change answers](../policies/testing.md#what-a-change-answers)),
     as text.
   - A refusal is a `ControlRefusedException` with the route's status and problem.
+- **What it reaches, exactly:** the routes of the control host's service port, one definition for both
+  (`cosec.control.http.service-port`). A change named by its id is reachable only when it changes a tenant's document, and a listing shows only such
+  changes: one by state leaves the others out, and says nothing of them.
+- **What is recorded:** each step as the stated principal's, with `via.method: in-process` in its origin
+  ([Control-plane change log](../operations/observability.md#control-plane-change-log)).
 
 <<< @/examples/control-sdk/kotlin/Onboarding.kt [Onboarding.kt]
 

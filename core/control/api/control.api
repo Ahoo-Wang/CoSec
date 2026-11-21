@@ -146,6 +146,7 @@ public final class me/ahoo/cosec/control/change/Base$Companion {
 }
 
 public final class me/ahoo/cosec/control/change/ChangeOrigin {
+	public static final field IN_PROCESS Ljava/lang/String;
 	public fun <init> (ZLme/ahoo/cosec/control/change/ChangeOrigin$Via;Ljava/lang/String;)V
 	public synthetic fun <init> (ZLme/ahoo/cosec/control/change/ChangeOrigin$Via;Ljava/lang/String;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
 	public fun equals (Ljava/lang/Object;)Z

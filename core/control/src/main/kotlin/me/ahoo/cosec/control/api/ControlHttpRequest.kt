@@ -26,4 +26,9 @@ class ControlHttpRequest(
     val body: ByteArray? = null,
     /** The peer of the connection ([me.ahoo.cosec.control.authz.Operator.peer]), read by the adapter that serves the routes. */
     val peer: String? = null,
+    /**
+     * Whether the request is made in the host's own process, through the control plane's facade (`CTL-57`, `CTL-65`):
+     * then its record's origin is `via.method: in-process`, with no peer.
+     */
+    val inProcess: Boolean = false,
 )

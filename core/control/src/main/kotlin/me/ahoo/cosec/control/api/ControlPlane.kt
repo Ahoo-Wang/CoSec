@@ -100,13 +100,17 @@ interface ControlPlane {
      */
     val acknowledgements: AcknowledgementReader get() = AcknowledgementReader.NONE
 
-    /** `GET /changes` (R2C-4, `CTL-55`): the open changes of [document], or in [state], that [operator] may see. */
+    /**
+     * `GET /changes` (R2C-4, `CTL-55`): the open changes of [document], or in [state], that [operator] may see, of the
+     * documents [documents] admits (the route's profile, `CTL-58`).
+     */
     suspend fun changes(
         operator: Operator,
         document: SnapshotKey?,
         state: ChangeState?,
         after: String?,
         limit: Int,
+        documents: (SnapshotKey) -> Boolean,
     ): me.ahoo.cosec.control.store.ChangePage
 
     val breakGlass: BreakGlass

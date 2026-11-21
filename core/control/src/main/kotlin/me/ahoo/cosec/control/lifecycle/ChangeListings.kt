@@ -33,7 +33,8 @@ import me.ahoo.cosec.spi.snapshot.SnapshotKey
  * `GET /changes` (R2C-4, `CTL-55`): the open changes of one document, or in one state, a page at a time. A change is
  * listed only if `GET /changes/{id}` would show it to the caller: in a document its tenant may reach, and authored by
  * the caller or on a document the caller may read. What the caller may not see is left out before the page is cut, and
- * nothing in the answer counts or names it. While the open-change sets are not kept (`CTL-54`) the listing is a 503:
+ * nothing in the answer counts or names it. So is a change of a document the route's profile does not serve (`CTL-58`):
+ * the service profile lists only what it would show by id. While the open-change sets are not kept (`CTL-54`) the listing is a 503:
  * it could miss a change only the list of the format before names.
  */
 internal class ChangeListings(private val store: ControlStore, private val authority: ChangeAuthority) {
@@ -42,7 +43,12 @@ internal class ChangeListings(private val store: ControlStore, private val autho
         document: SnapshotKey?,
         state: ChangeState?,
         after: String?,
-        limit: Int
+        limit: Int,
+        /**
+         * The documents the route's profile serves: a change of any other is left out as one the caller may not see,
+         * on both paths (a listing by document of such a document is an empty page, as one of another tenant's is).
+         */
+        documents: (SnapshotKey) -> Boolean,
     ): ChangePage {
         if (!store.openChangesKept()) {
             throw ChangeRejectedException(
@@ -52,8 +58,8 @@ internal class ChangeListings(private val store: ControlStore, private val autho
         }
         val decisions = HashMap<SnapshotKey, ControlDecision>()
         val visible: suspend (ListedChange) -> Boolean = { listed -> visible(operator, listed, decisions) }
-        if (document == null) return byState(operator, checkNotNull(state), after, limit, visible)
-        if (!TenantIsolation.allows(operator, document)) {
+        if (document == null) return byState(operator, checkNotNull(state), after, limit, documents, visible)
+        if (!TenantIsolation.allows(operator, document) || !documents(document)) {
             return ChangePage(emptyList(), null)
         }
         val listed = store.openChanges(document)
@@ -75,12 +81,13 @@ internal class ChangeListings(private val store: ControlStore, private val autho
         state: ChangeState,
         after: String?,
         limit: Int,
+        documents: (SnapshotKey) -> Boolean,
         visible: suspend (ListedChange) -> Boolean,
     ): ChangePage {
         val found = ArrayList<ListedChange>()
         var cursor = after
         while (found.size <= limit) {
-            val page = store.changes(state, cursor, limit) { TenantIsolation.allows(operator, it) }
+            val page = store.changes(state, cursor, limit) { TenantIsolation.allows(operator, it) && documents(it) }
             page.changes.filterTo(found) { visible(it) }
             cursor = page.next ?: break
         }

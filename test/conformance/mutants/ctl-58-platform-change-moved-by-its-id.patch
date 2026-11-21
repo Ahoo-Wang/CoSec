@@ -1,0 +1,17 @@
+# Rule: CTL-58
+# Mutant: the service profile moves a change named by its id without checking whose document it changes: a change of the platform document is published through the service port and the facade
+# Tests: :control:test --tests me.ahoo.cosec.control.sdk.ControlServiceTest
+
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/api/ChangeRoutes.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/api/ChangeRoutes.kt
+index 5df722e6f..2cf0f0a26 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/api/ChangeRoutes.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/api/ChangeRoutes.kt
+@@ -85,7 +85,7 @@ internal class ChangeRoutes(
+      * service profile only a tenant document's, once its record, read as [operator], says so.
+      */
+     private suspend fun served(operator: Operator, id: ChangeId): Boolean =
+-        profile == ControlProfile.OPERATORS || profile.admitsChange(plane.get(operator, id).key)
++        profile == ControlProfile.OPERATORS || plane.get(operator, id).let { true }
+ 
+     /** `POST /changes`, a proposal, or `GET /changes`, a listing. */
+     private suspend fun proposeOrList(operator: Operator, request: ControlHttpRequest): ControlHttpResponse {

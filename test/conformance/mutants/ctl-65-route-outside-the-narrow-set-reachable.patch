@@ -1,17 +1,17 @@
 # Rule: CTL-65
-# Mutant: the facade lets a read of the platform document through: a route outside its narrow set is reachable
+# Mutant: the facade dispatches through the operators' profile instead of the service profile: a route outside the narrow set, the platform document's among them, is reachable through it
 # Tests: :control:test --tests me.ahoo.cosec.control.sdk.ControlServiceTest
 
-diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/sdk/ServiceRoutes.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/sdk/ServiceRoutes.kt
-index c052d5c53..91d277e05 100644
---- a/core/control/src/main/kotlin/me/ahoo/cosec/control/sdk/ServiceRoutes.kt
-+++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/sdk/ServiceRoutes.kt
-@@ -71,7 +71,7 @@ internal object ServiceRoutes {
-         else -> false
-     }
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/sdk/LocalControlService.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/sdk/LocalControlService.kt
+index 32ad57af2..cc1532ec9 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/sdk/LocalControlService.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/sdk/LocalControlService.kt
+@@ -59,7 +59,7 @@ class LocalControlService(
+     private val clock: Clock = Clock.systemUTC(),
+     private val ids: IdGenerator = RandomIdGenerator,
+ ) : ControlService {
+-    private val http = ControlHttp(plane, ControlProfile.SERVICE)
++    private val http = ControlHttp(plane, ControlProfile.OPERATORS)
  
--    private fun readable(key: SnapshotKey?): Boolean = key is SnapshotKey.Tenant || key is SnapshotKey.App
-+    private fun readable(key: SnapshotKey?): Boolean = key != null
- 
-     private fun key(segment: String): SnapshotKey? = try {
-         keyOf(unescaped(segment))
+     override suspend fun document(caller: ControlCaller, key: SnapshotKey): String =
+         call(caller, GET, "/documents/${key(key)}")

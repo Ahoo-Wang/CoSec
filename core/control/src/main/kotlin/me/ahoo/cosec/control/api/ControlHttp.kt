@@ -75,7 +75,9 @@ class ControlHttp(plane: ControlPlane, profile: ControlProfile = ControlProfile.
     @Suppress("TooGenericExceptionCaught")
     suspend fun handle(request: ControlHttpRequest, security: RequestSecurity?): ControlHttpResponse {
         val requestId = security?.requestId ?: ANONYMOUS_REQUEST
-        val operator = security?.let { Operator.of(it, request.peer) } ?: return problem(Problem.UNAUTHORIZED, requestId, null)
+        val operator = security?.let {
+            Operator.of(it, request.peer, request.inProcess)
+        } ?: return problem(Problem.UNAUTHORIZED, requestId, null)
         return try {
             routes.route(operator, request)
         } catch (e: CancellationException) {

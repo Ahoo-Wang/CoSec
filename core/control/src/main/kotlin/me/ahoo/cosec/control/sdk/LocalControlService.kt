@@ -21,6 +21,8 @@ import me.ahoo.cosec.control.api.ControlHttp
 import me.ahoo.cosec.control.api.ControlHttpRequest
 import me.ahoo.cosec.control.api.ControlHttpSupport.GET
 import me.ahoo.cosec.control.api.ControlHttpSupport.POST
+import me.ahoo.cosec.control.api.ControlPlane
+import me.ahoo.cosec.control.api.ControlProfile
 import me.ahoo.cosec.control.authz.PipelineControlAuthorizer
 import me.ahoo.cosec.control.change.ChangeState
 import me.ahoo.cosec.document.json.CoSecJson
@@ -41,14 +43,15 @@ import java.time.Duration
 
 /**
  * [ControlService] in the application's own process (`CTL-65`): each call is the control API's route itself, handed
- * to [ControlHttp] with the caller's request security, so it is authorized, recorded and answered as the route is, by
- * one code path. Only the routes of [ServiceRoutes] are reachable; a change is moved only once its own record says it
- * is a tenant document's. A [ControlCaller.service] caller is admitted by [IdentityGate.admit], the function the gate
- * reads a forwarded identity with, as a short-lived identity of the platform tenant.
+ * to [ControlHttp] of the service profile ([ControlProfile.SERVICE], the one definition of what a service reaches,
+ * which the service port serves too) with the caller's request security, so it is authorized, recorded and answered as
+ * that route is, by one code path, and recorded `via.method: in-process` (`CTL-57`). A [ControlCaller.service] caller is
+ * admitted by [IdentityGate.admit], the function the gate reads a forwarded identity with, as a short-lived identity of
+ * the platform tenant.
  */
 @InternalCoSecApi
 class LocalControlService(
-    private val http: ControlHttp,
+    plane: ControlPlane,
     /** Admits a service caller as the gate admits a forwarded identity: same expiry, age, tenant and scope. */
     private val gate: IdentityGate,
     /** The control plane's app (`cosec.control.app-id`): a service caller's identity is in it. */
@@ -56,6 +59,8 @@ class LocalControlService(
     private val clock: Clock = Clock.systemUTC(),
     private val ids: IdGenerator = RandomIdGenerator,
 ) : ControlService {
+    private val http = ControlHttp(plane, ControlProfile.SERVICE)
+
     override suspend fun document(caller: ControlCaller, key: SnapshotKey): String =
         call(caller, GET, "/documents/${key(key)}")
 
@@ -87,7 +92,7 @@ class LocalControlService(
 
     override suspend fun changes(
         caller: ControlCaller,
-        document: SnapshotKey,
+        document: SnapshotKey?,
         state: ChangeState?,
         after: String?,
         limit: Int?,
@@ -96,7 +101,7 @@ class LocalControlService(
         GET,
         "/changes",
         listOfNotNull(
-            "document" to document.toString(),
+            document?.let { "document" to it.toString() },
             state?.let { "state" to it.name },
             after?.let { "after" to it },
             limit?.let { "limit" to "$it" },
@@ -119,17 +124,9 @@ class LocalControlService(
     override suspend fun publish(caller: ControlCaller, id: String, request: String?): String =
         transition(caller, id, "publish", request ?: "{}")
 
-    /** A step of change [id], once its record, read as [caller], says it is a tenant document's. */
-    private suspend fun transition(caller: ControlCaller, id: String, verb: String, body: String): String {
-        val security = security(caller)
-        val key = CoSecJson.mapper.readTree(send(security, ControlHttpRequest(GET, "/changes/${segment(id)}")))
-            .get("key")?.asString()
-        if (key?.startsWith(TENANT) != true) throw refusal(http.refused(NOT_FOUND, security.requestId))
-        return send(
-            security,
-            ControlHttpRequest(POST, "/changes/${segment(id)}:$verb", emptyMap(), body.encodeToByteArray())
-        )
-    }
+    /** A step of change [id]: the service profile serves it only for a tenant document's change. */
+    private suspend fun transition(caller: ControlCaller, id: String, verb: String, body: String): String =
+        call(caller, POST, "/changes/${segment(id)}:$verb", body = body)
 
     private suspend fun call(
         caller: ControlCaller,
@@ -137,12 +134,9 @@ class LocalControlService(
         path: String,
         query: Map<String, String> = emptyMap(),
         body: String? = null,
-    ): String = send(security(caller), ControlHttpRequest(method, path, query, body?.encodeToByteArray()))
-
-    /** [request] as its route answers it, unless it is outside [ServiceRoutes]: that is a 404, as no route. */
-    private suspend fun send(security: RequestSecurity, request: ControlHttpRequest): String {
-        if (!ServiceRoutes.allows(request)) throw refusal(http.refused(NOT_FOUND, security.requestId))
-        val response = http.handle(request, security)
+    ): String {
+        val request = ControlHttpRequest(method, path, query, body?.encodeToByteArray(), inProcess = true)
+        val response = http.handle(request, security(caller))
         if (response.status >= BAD_REQUEST) throw refusal(response)
         return response.body.decodeToString()
     }

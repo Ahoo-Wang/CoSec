@@ -151,7 +151,8 @@ class Changes(
         state: ChangeState?,
         after: String?,
         limit: Int,
-    ): me.ahoo.cosec.control.store.ChangePage = listings.list(operator, document, state, after, limit)
+        documents: (SnapshotKey) -> Boolean,
+    ): me.ahoo.cosec.control.store.ChangePage = listings.list(operator, document, state, after, limit, documents)
 
     /** The change holding [key]'s staging slot, `EXPIRED` once past its expiry; `null` when none does. */
     internal suspend fun stagedOn(key: SnapshotKey): ChangeRequest? = flow.stagedOn(key)

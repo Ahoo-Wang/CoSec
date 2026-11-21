@@ -36,6 +36,7 @@ import me.ahoo.cosec.control.api.JsonFields.optBool
 import me.ahoo.cosec.control.api.JsonFields.optText
 import me.ahoo.cosec.control.api.JsonFields.text
 import me.ahoo.cosec.control.authz.Operator
+import me.ahoo.cosec.control.change.ChangeId
 import me.ahoo.cosec.control.change.ChangeRequestCodec
 import me.ahoo.cosec.control.change.ChangeState
 import me.ahoo.cosec.control.change.InvalidControlRequestException
@@ -57,6 +58,7 @@ internal class ChangeRoutes(
         if (segments.size != 1) return notFound()
         val (idText, verb) = verbOf(segments[0])
         val id = changeIdOf(idText)
+        if (!served(operator, id)) return notFound()
         if (verb == null) {
             return get(request) {
                 val change = plane.get(operator, id)
@@ -77,6 +79,13 @@ internal class ChangeRoutes(
             changeResponse(change, OK)
         }
     }
+
+    /**
+     * Whether this profile serves the routes of change [id] (`CTL-58`): every change on the operators' profile; on the
+     * service profile only a tenant document's, once its record, read as [operator], says so.
+     */
+    private suspend fun served(operator: Operator, id: ChangeId): Boolean =
+        profile == ControlProfile.OPERATORS || profile.admitsChange(plane.get(operator, id).key)
 
     /** `POST /changes`, a proposal, or `GET /changes`, a listing. */
     private suspend fun proposeOrList(operator: Operator, request: ControlHttpRequest): ControlHttpResponse {
@@ -122,11 +131,12 @@ internal class ChangeRoutes(
                 ?: throw InvalidControlRequestException("state names no state of an open change: $text")
         }
         requireRequest(document != null || state != null) { "a listing names a document or a state" }
+        if (!profile.admitsListing(document)) return notFound()
         val limit = query["limit"]?.let { text ->
             text.toIntOrNull()?.takeIf { it in 1..MAX_LIMIT }
                 ?: throw InvalidControlRequestException("limit is a number from 1 to $MAX_LIMIT")
         } ?: DEFAULT_LIMIT
-        val page = plane.changes(operator, document, state, query["after"], limit)
+        val page = plane.changes(operator, document, state, query["after"], limit, profile::admitsChange)
         return json(ControlResponseJson.changes(page))
     }
 

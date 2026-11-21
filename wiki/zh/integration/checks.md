@@ -277,6 +277,8 @@ curl -X POST localhost:8080/cosec/control/v1/explain \
   - 请求是路由的请求体（[变更](../policies/testing.md#changes)），文档采用[文档格式](../policies/language.md)。
   - 应答是控制 API 的 JSON（[变更的应答](../policies/testing.md#what-a-change-answers)），以文本形式给出。
   - 拒绝是带有路由状态码和问题详情的 `ControlRefusedException`。
+- **确切能触及的范围：** 与控制面宿主服务端口相同的路由，两者共用一个定义（`cosec.control.http.service-port`）。按 id 指定的变更，只有在它修改的是租户文档时才可触及，列表也只显示这样的变更：按状态列出时其余的被省略，且不透露任何关于它们的信息。
+- **记录什么：** 每一步都记为所声明主体的步骤，来源中带 `via.method: in-process`（[控制面变更日志](../operations/observability.md#control-plane-change-log)）。
 
 <<< @/examples/control-sdk/kotlin/Onboarding.kt [Onboarding.kt]
 
