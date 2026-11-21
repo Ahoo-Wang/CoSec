@@ -359,6 +359,29 @@ jobs:
           files: coverage-artifact/typescript-cosec-fetcher.json,coverage-artifact/typescript-cosec-react.json
           fail_ci_if_error: true
 
+  # Codecov sends nothing by itself (codecov.yml, `manual_trigger`): this job asks it to once every upload of the run is in,
+  # the groups' and TypeScript's, whatever their result, so a status never reports a partial merge. A pull request skips
+  # groups, which upload nothing, so no number of uploads could be awaited instead. Not a needed check: a failure here
+  # only leaves Codecov silent.
+  codecov-notify:
+    name: Codecov notify
+    needs: [ test, typescript-coverage ]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Send the notifications
+        uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          run_command: send-notifications
+          fail_ci_if_error: false
+
   # Every overlay in k8s/overlays builds, and what it builds is valid for the oldest Kubernetes minor still supported
   # upstream and for the newest; -strict refuses fields the schema does not have. No path filter, like `docs`.
   k8s:
