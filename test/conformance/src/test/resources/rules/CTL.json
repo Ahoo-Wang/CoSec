@@ -878,6 +878,40 @@
       "pending": null
     },
     {
+      "id": "CTL-68",
+      "source": "control-server-design.md §0.8 and §9 row 9 (the listing route)",
+      "statement": "GET /documents?kind= lists which tenant or app documents exist from the store's list of the documents it indexes, never by reading a document: every document of the layer to a caller holding cosec:read on the layer (doc/tenant, doc/app), which grants no document's own read and which no document's read grants, apart from a pattern whose ** covers the layer; its own tenant's document to a tenant's principal that may read it; and to anyone else a 403 without detail, with no decision per listed document. A kind other than tenant or app is a 400, and a store that cannot answer is a 503, never an empty page.",
+      "level": "control",
+      "guards": [
+        "control:DocumentListingTest#the documents of a kind are listed for one who may read them all - CTL-68",
+        "control:DocumentListingTest#a tenant's principal sees its own tenant's document if it may read it, and nothing else - CTL-68",
+        "control:DocumentListingTest#anyone else is refused as the policies refuse, telling nothing of which documents exist - CTL-68",
+        "control:DocumentListingTest#a page is cut after the filter, and its cursor names the last document shown - CTL-68",
+        "control:DocumentListingTest#a kind other than tenant or app is a 400 - CTL-68",
+        "control:DocumentListingTest#a document list the store cannot read is the store's failure, never an empty page - CTL-68",
+        "control:DocumentListingTest#a full paging reads the document list once, and a failed read is never kept - CTL-68",
+        "control:DocumentListingTest#a store that cannot answer is a 503, never an empty page - CTL-68",
+        "control:ClientContractTest#a document listing holds exactly the members of its contract file - CTL-68"
+      ],
+      "pending": null
+    },
+    {
+      "id": "CTL-69",
+      "source": "maintainer decision 2026-11-21 (the management port of a host that believes the identity it is stated is not a place for the control API); found by the system test of the control-plane host",
+      "statement": "CoSec's own routes, the control API and the login routes (refresh, logout), answer only on the ports they are for: the application's own port, which the server bound (the control API's operators' profile there; it may have been configured as 0 or changed, so it is read from the server and never from a property alone), and, for the control API, its service port (`cosec.control.http.service-port`). On any other port of the host, the management port (`management.server.port`) included, every path of those routes is a `404` before the control plane or a login handler is asked. Spring Boot's WebFlux management server is a child context that collects the application's `WebFilter`s and `RouterFunction`s, so CoSec's own `RouterFunction`s would be served there, behind the pipeline's filter; on a host that believes the identity it is stated (`STA-9`) that is the whole control API for whoever can reach the management port, which the statement of what can reach the host does not cover. An application's own routes served on the management port are Spring Boot's behaviour (`STA-4` pins it) and stay behind CoSec's pipeline. On a servlet host the management server serves none of them.",
+      "level": "startup",
+      "pending": null,
+      "guards": [
+        "spring-boot:ManagementPortTest#CoSec's own routes answer on the application's port and never on the management port (CTL-69)",
+        "spring-boot:ManagementPortTest#WebFlux keeps its management server under the pipeline and serves the application's routes only behind it",
+        "spring-boot:ManagementPortTest#a gateway leaves its management server outside CoSec too, and gates its own routes and the control API there as on the application port",
+        "spring-boot:ManagementPortTest#a gateway on a random management port serves its routes there, under the gateway's filter",
+        "spring-boot:ManagementPortTest#WebMvc leaves its management server outside CoSec and serves nothing of the application there"
+      ]
+      ],
+      "pending": null
+    },
+    {
       "id": "CTL-66",
       "source": "G2e finding (#1795); ctl-66-change-event-order.md, decided 2026-11-21",
       "statement": "Within one control-plane instance, a change listener receives the events of one change in the order the instance wrote them: one queue and one consumer per listener. A gated step waits for its REQUIRED listeners to record its event after what was queued before it, within the required timeout, or fails (503); a REQUIRED listener's full queue loses, counted and logged at ERROR, the event of a step already stored, never failing it; a BEST_EFFORT listener's full queue drops the incoming event, so what arrives is an ordered prefix. The queues hold together at most a thirty-second of the heap; a listener that stops answering is reported, never cut off. Across instances, a consumer orders by each event's time and the change's record.",

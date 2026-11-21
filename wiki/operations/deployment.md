@@ -308,7 +308,9 @@ and an overlay for each kind of cluster. Deploy an overlay, never the base on it
   probe on it restarts the pod.
 - **Actuator.** On the management port (`management.server.port: 8081`, the container port `management`, which the Service
   does not publish), `health` and `prometheus` are exposed, and the `gateway` endpoint, which reads and changes routes, is
-  off (`management.endpoint.gateway.access: none`). CoSec authorizes the gateway's routes, not its actuator endpoints:
+  off (`management.endpoint.gateway.access: none`). The management port is not only the actuator on a WebFlux host: Spring
+  Boot's management server also serves the application's own `RouterFunction`s there (CoSec's own routes, the control API
+  and the login routes, are a `404` there, `CTL-69`). CoSec authorizes the gateway's routes, not its actuator endpoints:
   the production NetworkPolicy admits the management port only from the `monitoring` namespace (change it to your
   Prometheus's), and the dev overlay has no policy.
 - **Shutdown.** A `preStop` pause of 5 seconds lets the Service drop the pod first; `terminationGracePeriodSeconds: 45`

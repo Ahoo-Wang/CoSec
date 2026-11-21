@@ -1,0 +1,157 @@
+{
+  "rules": [
+    "CTL-68"
+  ],
+  "polarity": "negative",
+  "level": "control",
+  "description": "lena holds cosec:read on doc/tenant, the layer, alone: she lists the tenant documents, and may read none of them, nor the platform document, nor list the apps. mona holds cosec:read on doc/tenant/**: she reads acme's document, and the pattern's ** covers the layer too (zero segments), so she may list the tenants: one who may read every tenant document may as well list them.",
+  "documents": {
+    "platform": {
+      "policies": [
+        {
+          "id": "list-tenants",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "cosec:read",
+              "resource": "doc/tenant"
+            }
+          ]
+        },
+        {
+          "id": "read-tenants",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "cosec:read",
+              "resource": "doc/tenant/**"
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "plato",
+          "subject": {
+            "principal": "plato",
+            "tenant": "(platform)"
+          },
+          "app": "cosec-control",
+          "space": "",
+          "policy": "cosec:platform-admin"
+        },
+        {
+          "id": "lena",
+          "subject": {
+            "principal": "lena",
+            "tenant": "(platform)"
+          },
+          "app": "cosec-control",
+          "space": "",
+          "policy": "list-tenants"
+        },
+        {
+          "id": "mona",
+          "subject": {
+            "principal": "mona",
+            "tenant": "(platform)"
+          },
+          "app": "cosec-control",
+          "space": "",
+          "policy": "read-tenants"
+        }
+      ]
+    },
+    "tenants": {
+      "acme": {
+        "policies": [
+          {
+            "id": "orders",
+            "statements": [
+              {
+                "effect": "allow",
+                "action": "order:read",
+                "resource": "order/**"
+              }
+            ]
+          }
+        ]
+      },
+      "globex": {
+        "policies": [
+          {
+            "id": "orders",
+            "statements": [
+              {
+                "effect": "allow",
+                "action": "order:read",
+                "resource": "order/**"
+              }
+            ]
+          }
+        ]
+      }
+    }
+  },
+  "operators": {
+    "plato": {
+      "tenant": "(platform)"
+    },
+    "lena": {
+      "tenant": "(platform)"
+    },
+    "mona": {
+      "tenant": "(platform)"
+    }
+  },
+  "steps": [
+    {
+      "documents": {
+        "by": "lena",
+        "kind": "tenant"
+      }
+    },
+    {
+      "read": {
+        "by": "lena",
+        "document": "tenant:acme"
+      }
+    },
+    {
+      "read": {
+        "by": "lena",
+        "document": "platform"
+      }
+    },
+    {
+      "documents": {
+        "by": "lena",
+        "kind": "app"
+      }
+    },
+    {
+      "read": {
+        "by": "mona",
+        "document": "tenant:acme"
+      }
+    },
+    {
+      "documents": {
+        "by": "mona",
+        "kind": "tenant"
+      }
+    }
+  ],
+  "expect": {
+    "steps": [
+      "documents tenant:acme,tenant:globex",
+      "refused 403",
+      "refused 403",
+      "refused 403",
+      "read",
+      "documents tenant:acme,tenant:globex"
+    ],
+    "errors": {},
+    "heads": {}
+  }
+}

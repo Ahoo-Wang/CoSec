@@ -31,6 +31,7 @@ import me.ahoo.cosec.spring.boot.authentication.ConditionalOnLoginEnabled
 import me.ahoo.cosec.spring.boot.authentication.LoginProperties
 import me.ahoo.cosec.spring.boot.jwt.CoSecJwtAutoConfiguration
 import me.ahoo.cosec.spring.boot.jwt.ConditionalOnJwtEnabled
+import me.ahoo.cosec.spring.boot.pipeline.ApplicationPort
 import me.ahoo.cosec.spring.boot.pipeline.GATEWAY_GLOBAL_FILTER
 import org.springframework.beans.factory.ObjectProvider
 import org.springframework.boot.autoconfigure.AutoConfiguration
@@ -116,13 +117,20 @@ internal class CoSecLoginRoutesAutoConfiguration {
     @ConditionalOnClass(name = ["me.ahoo.cosec.webflux.ServerWebExchanges"])
     @ConditionalOnMissingClass(GATEWAY_GLOBAL_FILTER)
     class WebFlux {
+        /** Where the application's server bound (`CTL-69`); the control routes' configuration declares it too. */
+        @Bean
+        @ConditionalOnMissingBean
+        fun cosecApplicationPort(): ApplicationPort = ApplicationPort()
+
         @Bean
         fun cosecLoginRoutes(
             properties: LoginProperties,
             refresh: ObjectProvider<RefreshRoute>,
             logout: ObjectProvider<LogoutRoute>,
+            applicationPort: ApplicationPort,
         ): ReactiveRouterFunction<ReactiveServerResponse> = ReactiveLoginRoutes.of(
-            handlersOf(properties, refresh, logout)
+            handlersOf(properties, refresh, logout),
+            applicationPort.predicate(),
         )
     }
 

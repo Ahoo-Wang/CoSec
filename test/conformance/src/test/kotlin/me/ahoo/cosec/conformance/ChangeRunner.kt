@@ -146,6 +146,9 @@ import java.time.Instant
  *            { "audited": "c1" },  // the kinds of the change events of c1 so far, in the order the listener
  *                                  // received them, which is the order they were written (CTL-63, CTL-66):
  *                                  // `audited CHECKED,SHADOW_SKIPPED`
+ *            { "documents": { "by": "plato", "kind": "tenant" } },  // GET /documents?kind= (CTL-68):
+ *                                  // `documents tenant:acme,tenant:globex`, `documents none` or `refused <status>`
+ *            { "read": { "by": "lena", "document": "tenant:acme" } },  // GET /documents/{key}: `read` or `refused <status>`
  *            { "answer": "c1" },   // the members of the change's answer (CTL-61): `members a,b,...`, then
  *                                  // `; shadow a,b` and `; approval a,b` when it holds them
  *            { "status": { "instance": "i1", "documents": { "tenant:acme": 2 } } },  // an instance's status now
@@ -475,6 +478,8 @@ object ChangeRunner : ScenarioRunner {
             "diff" -> diff(argument)
             "answer", "status", "propagation", "acknowledgement" -> answers(action, argument)
             "audited" -> audited(argument)
+            "documents" -> documents(argument)
+            "read" -> readDocument(argument)
             "staged" -> "staged " + (memory.candidate(documentKey(argument.text()))?.window?.substringBefore('@') ?: "none")
             "samples" -> StagedDocuments(memory).let { instance ->
                 instance.refresh()
@@ -681,6 +686,30 @@ object ChangeRunner : ScenarioRunner {
             auditing.awaitDelivered()
             val id = argument.text()
             return "audited " + audit.events.filter { it.change.value == id }.joinToString(",") { it.kind.name }
+        }
+
+        /**
+         * `GET /documents?kind=` (`CTL-68`): `documents <key>,...` or `documents none`, the keys of the page the caller
+         * is shown, or `refused <status>`.
+         */
+        private suspend fun documents(argument: JsonNode): String = try {
+            argument.only("by", "kind")
+            val kind = argument.required("kind").text().let { DocumentKind.valueOf(it.uppercase()) }
+            val page = plane.listing.list(by(argument), kind, null, LISTING_LIMIT)
+            "documents " + page.documents.map { it.toString() }.ifEmpty { listOf("none") }.joinToString(",")
+        } catch (error: ChangeRejectedException) {
+            "refused ${error.status}"
+        } catch (_: IllegalArgumentException) {
+            "refused 400"
+        }
+
+        /** `GET /documents/{key}` as `by`: `read`, or `refused <status>`. */
+        private suspend fun readDocument(argument: JsonNode): String = try {
+            argument.only("by", "document")
+            plane.read(by(argument), documentKey(argument.required("document").text()))
+            "read"
+        } catch (error: ChangeRejectedException) {
+            "refused ${error.status}"
         }
 
         /** The steps of the control API's answers (`CTL-61`, `CTL-62`). */
@@ -986,7 +1015,7 @@ object ChangeRunner : ScenarioRunner {
 
     /** The steps that read what the control plane holds or answers, and the instance statuses it reads. */
     private val READS = setOf(
-        "diff", "staged", "listed", "samples", "rateLimits", "answer", "status", "propagation", "audited", "acknowledgement",
+        "diff", "staged", "listed", "samples", "rateLimits", "answer", "status", "propagation", "audited", "documents", "read", "acknowledgement",
     )
 
     /** The page size of a `changes` step: enough for a scenario's changes. */
