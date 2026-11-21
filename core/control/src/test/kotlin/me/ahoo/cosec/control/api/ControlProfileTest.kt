@@ -115,10 +115,12 @@ class ControlProfileTest {
             "documents/tenant:a/other",
             "documents/tenant:a/revisions/3/x",
             "documents/tenant:a/diff/x",
-            "documents"
         )) {
             admits("GET", path).assert().describedAs("GET $path").isFalse()
         }
+        // Which tenant and app documents there are (CTL-68): a read of the list, never a write to it.
+        admits("GET", "documents").assert().isTrue()
+        admits("POST", "documents").assert().isFalse()
         // Only a tenant's document takes `:apply`, and a key the route cannot name is the route's own 400.
         admits("POST", "documents/tenant:a:apply").assert().isTrue()
         admits("POST", "documents/app:a:apply").assert().isFalse()

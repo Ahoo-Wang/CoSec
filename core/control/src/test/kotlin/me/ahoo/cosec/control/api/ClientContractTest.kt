@@ -76,6 +76,15 @@ class ClientContractTest {
     }
 
     @Test
+    fun `a document listing holds exactly the members of its contract file - CTL-68`() {
+        val pages = listOf(
+            DocumentPage(listOf(SnapshotKey.Tenant("acme")), "tenant:acme"),
+            DocumentPage(listOf(SnapshotKey.App("order")), null),
+        ).map { ControlResponseJson.documents(it) }
+        files.check("control/documents-page.json", Shapes.of(pages, emptySet()))
+    }
+
+    @Test
     fun `a propagation answer holds exactly the members of its contract file`() {
         val answer = ControlResponseJson.propagation(Propagation(2, 1, 2, 3, Instant.parse("2026-11-20T00:00:00Z")))
         files.check("control/propagation.json", Shapes.of(listOf(answer), emptySet()))
@@ -107,7 +116,14 @@ class ClientContractTest {
     fun `contract control holds only the files the code answers`() {
         files.only(
             "control",
-            setOf("change.json", "change-summary.json", "propagation.json", "vocabularies.json", "routes.json"),
+            setOf(
+                "change.json",
+                "change-summary.json",
+                "documents-page.json",
+                "propagation.json",
+                "vocabularies.json",
+                "routes.json",
+            ),
         )
     }
 

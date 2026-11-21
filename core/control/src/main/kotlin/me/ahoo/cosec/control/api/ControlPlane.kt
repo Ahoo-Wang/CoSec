@@ -44,6 +44,9 @@ interface ControlPlane {
 
     suspend fun history(operator: Operator, key: SnapshotKey, before: Long? = null, limit: Int = DEFAULT_LIMIT): List<RevisionSummary>
 
+    /** `GET /documents?kind=` (`CTL-68`): which tenant or app documents there are, those an operator may see. */
+    val listing: DocumentListing
+
     suspend fun diff(operator: Operator, key: SnapshotKey, from: Long, to: Long): DocumentDiff
 
     /**

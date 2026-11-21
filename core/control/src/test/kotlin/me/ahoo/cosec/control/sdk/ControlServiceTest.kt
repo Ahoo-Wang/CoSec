@@ -29,6 +29,7 @@ import me.ahoo.cosec.control.change.ChangeOrigin
 import me.ahoo.cosec.control.change.ChangeState
 import me.ahoo.cosec.document.json.CoSecJson
 import me.ahoo.cosec.model.TenantId
+import me.ahoo.cosec.model.decision.DocumentKind
 import me.ahoo.cosec.runtime.http.RequestSecurity
 import me.ahoo.cosec.runtime.identity.IdentityGate
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
@@ -109,6 +110,7 @@ class ControlServiceTest {
             val expected = ok(viaRoute.route(), "route, step $step")
             ok(viaFacade.facade(facade), "facade, step $step").assert().describedAs("step $step").isEqualTo(expected)
         }
+        same({ route("GET", "/documents", mapOf("kind" to "tenant")) }, { documents(it, DocumentKind.TENANT) })
         same({ route("GET", "/documents/tenant:acme") }, { document(it, acme) })
         same(
             { route("GET", "/documents/tenant:acme/revisions", mapOf("limit" to "5")) },
@@ -356,6 +358,7 @@ class ControlServiceTest {
 
         /** Every route of the control API, by method and path shape (`ControlHttp`). */
         val ROUTES = listOf(
+            "GET" to "/documents",
             "GET" to "/documents/tenant:a",
             "GET" to "/documents/app:a",
             "GET" to "/documents/platform",
@@ -386,6 +389,7 @@ class ControlServiceTest {
 
         /** Each call of the facade, and the routes it is (a read takes a tenant's or an app's document). */
         val FACADE_ROUTES: Map<String, List<Pair<String, String>>> = mapOf(
+            "documents" to listOf("GET" to "/documents"),
             "document" to listOf("GET" to "/documents/tenant:a", "GET" to "/documents/app:a"),
             "revisions" to listOf("GET" to "/documents/tenant:a/revisions"),
             "revision" to listOf("GET" to "/documents/tenant:a/revisions/1"),

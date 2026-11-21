@@ -1,0 +1,19 @@
+{
+  "documents" : {
+    "type" : "array",
+    "presence" : "always",
+    "items" : {
+      "type" : "object",
+      "members" : {
+        "key" : {
+          "type" : "string",
+          "presence" : "always"
+        }
+      }
+    }
+  },
+  "next" : {
+    "type" : "null|string",
+    "presence" : "always"
+  }
+}

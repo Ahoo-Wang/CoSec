@@ -28,6 +28,7 @@ import me.ahoo.cosec.control.change.ChangeState
 import me.ahoo.cosec.document.json.CoSecJson
 import me.ahoo.cosec.model.AppId
 import me.ahoo.cosec.model.TenantId
+import me.ahoo.cosec.model.decision.DocumentKind
 import me.ahoo.cosec.model.scope.HostScope
 import me.ahoo.cosec.runtime.http.Cookies
 import me.ahoo.cosec.runtime.http.Headers
@@ -60,6 +61,17 @@ class LocalControlService(
     private val ids: IdGenerator = RandomIdGenerator,
 ) : ControlService {
     private val http = ControlHttp(plane, ControlProfile.SERVICE)
+
+    override suspend fun documents(caller: ControlCaller, kind: DocumentKind, after: String?, limit: Int?): String = call(
+        caller,
+        GET,
+        "/documents",
+        listOfNotNull(
+            "kind" to kind.name.lowercase(),
+            after?.let { "after" to it },
+            limit?.let { "limit" to "$it" },
+        ).toMap(),
+    )
 
     override suspend fun document(caller: ControlCaller, key: SnapshotKey): String =
         call(caller, GET, "/documents/${key(key)}")
