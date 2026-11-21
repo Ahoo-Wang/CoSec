@@ -3,12 +3,12 @@
 # Tests: :spring-boot:test --tests me.ahoo.cosec.spring.boot.realserver.ManagementPortTest
 
 diff --git a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/authentication/route/ReactiveLoginRoutes.kt b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/authentication/route/ReactiveLoginRoutes.kt
-index 4e3175bbf..1308f8708 100644
+index 3fa344f21..40aef40e0 100644
 --- a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/authentication/route/ReactiveLoginRoutes.kt
 +++ b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/authentication/route/ReactiveLoginRoutes.kt
-@@ -42,7 +42,7 @@ internal object ReactiveLoginRoutes {
-     /** [served] says which requests the routes answer: the application's port only, never the management port (`CTL-69`). */
-     fun of(routes: Map<String, LoginRouteHandler>, served: RequestPredicate): RouterFunction<ServerResponse> = routes.entries
+@@ -45,7 +45,7 @@ internal object ReactiveLoginRoutes {
+         served: RequestPredicate
+     ): RouterFunction<ServerResponse> = routes.entries
          .map { (path, handler) ->
 -            RouterFunctions.route(RequestPredicates.POST(path).and(served)) { answer(it, handler) }
 +            RouterFunctions.route(RequestPredicates.POST(path).and(served.or { true })) { answer(it, handler) }
