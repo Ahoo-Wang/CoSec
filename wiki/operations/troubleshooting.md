@@ -558,7 +558,7 @@ anyway.
 ### Startup fails because the network boundary is not stated {#startup-fails-because-the-network-boundary-is-not-stated}
 
 ```text
-cosec.pipeline.mode=gateway: this service believes any CoSec-Identity header it receives, and the header carries no signature, so whoever can reach this service is whoever they claim to be ... State it once it is true: cosec.pipeline.identity.only-gateway-can-reach=true (the environment variable COSEC_PIPELINE_IDENTITY_ONLY_GATEWAY_CAN_REACH=true). It is not set (STA-7, ...).
+cosec.pipeline.mode=gateway: this service believes any CoSec-Identity header it receives, and the header carries no signature, so whoever can reach this service is whoever they claim to be ... State it once it is true: cosec.pipeline.identity.only-gateway-can-reach=true (the environment variable COSEC_PIPELINE_IDENTITY_ONLYGATEWAYCANREACH=true). It is not set (STA-7, ...).
 ```
 
 A service in `cosec.pipeline.mode=gateway` trusts the network (`STA-7`). Make it true, then write the line: a

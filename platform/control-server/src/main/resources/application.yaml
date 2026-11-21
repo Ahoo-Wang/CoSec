@@ -1,0 +1,71 @@
+# The image's defaults, in the jar. A config/application.yaml mounted in the image's working directory is read in
+# addition and wins key by key (lists are replaced whole): replacing that file never drops these.
+#
+# Nothing in this file exists only in the image: every key is a starter property with a default, and an application that
+# embeds the control plane sets the same ones.
+server:
+  # The operators' API: the gateway routes /cosec/control/** here and states who is calling.
+  port: 8080
+spring:
+  application:
+    name: ${service.name:cosec-control}
+  web:
+    error:
+      whitelabel:
+        enabled: false
+cosec:
+  pipeline:
+    # Policies are wired (the snapshot, the control plane) and the gate of the web adapter believes the CoSec-Identity
+    # header (STA-9). The host does not start until the operator states what can reach it: add
+    # cosec.pipeline.identity.only-gateway-can-reach (only the gateway can) or only-trusted-callers-can-reach (services
+    # call it too) = true, once a NetworkPolicy, mutual TLS or a private network makes it so. It is not in this file on
+    # purpose: it is the operator's statement, not a default.
+    mode: enforce
+    caller: forwarded-identity
+  # No token is verified or issued here, so no COSEC_JWT_SECRET is needed and the host refuses to start with these on.
+  jwt:
+    enabled: false
+  api-key:
+    enabled: false
+  authentication:
+    login:
+      enabled: false
+  authorization:
+    scope:
+      # The host app: an identity that states another app is refused. Whoever changes it changes the gateway's route too.
+      app-id: ${cosec.control.app-id:cosec-control}
+    shadow:
+      # A replica is not a data-plane instance a shadow window waits for, and it decides only operators' requests.
+      enabled: false
+  audit:
+    # Off, as on the gateway: an adopter that keeps an audit trail sets COSEC_CONTROL_AUDIT_KAFKA_ENABLED and
+    # SPRING_KAFKA_BOOTSTRAP_SERVERS. A control plane without Kafka cannot grant break-glass (delivery=required).
+    kafka:
+      enabled: false
+  control:
+    audit:
+      kafka:
+        enabled: false
+  # Off, as on the gateway (about 11 MB of heap). A platform document that reads ext.ip2region.* must compile here as on
+  # the gateways: turn it on exactly where it is on them, COSEC_IP2REGION_ENABLED=true.
+  ip2region:
+    enabled: false
+management:
+  server:
+    # Probes and the scrape endpoint, outside CoSec like the gateway's: the application port is decided by the pipeline, so
+    # a kubelet would be refused there. Keep this port inside the cluster or the host; nothing in CoSec authorizes it.
+    port: 8081
+  endpoint:
+    health:
+      probes:
+        enabled: true
+      group:
+        # Ready once the platform document is installed (the snapshot readiness), and while the control store is in the
+        # format of this release: a store not yet converted (cosec-migrate repair-references) is unready, visible and
+        # named, not a pod that answers 503 for a reason the kubelet cannot see (STA-10).
+        readiness:
+          include: readinessState,cosecControlStoreFormat
+  endpoints:
+    web:
+      exposure:
+        include: health,prometheus

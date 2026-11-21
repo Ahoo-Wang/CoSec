@@ -28,6 +28,10 @@ description: "每个 8.0 预览版（alpha 与 beta）到下一个之间的变�
   - 每个数据面实例现在在每个上报间隔写入的状态中，列出它已编译其候选的窗口。样本已够的窗口仍要等到最近一分钟内写过状态的每个实例都列出它；到达 `cosec.control.shadow.max-duration` 时与以前一样以证据不足关闭。
   - **滚动升级期间**，上一个预览版的实例不发送确认，因此这期间开启的窗口不会早于升级结束时关闭（这些实例停止后，其状态在两分钟内过期），或在 `max-duration` 时以证据不足关闭。需要尽快关闭的变更，请先升级数据面再暂存。
   - 窗口未关闭时，`GET /changes/{id}` 增加 `shadow.acknowledged` 和 `shadow.waitingFor`（[变更的应答](../policies/testing.md#what-a-change-answers)）；`contract/control/change.json` 固定了它们。
+- **跳过影子窗口和 rebase 变更都记为变更事件**（`CTL-63`）。受影响的是变更监听器，以及变更日志或审计流的消费方。
+  - `ChangeEvent.Kind` 新增 `SHADOW_SKIPPED` 和 `REBASED`。过去跳过只记在它所发布的修订的来源中，所以变更被放弃时跳过不留任何记录；现在
+    `:skip-shadow` 以及 break-glass 变更免除的窗口会写 `SHADOW_SKIPPED`，备注写明原因，`:rebase` 写 `REBASED`。
+  - 处理每一种类型的监听器要加上这两种；按类型文档的要求带 `else` 分支的监听器无需改动。
 
 - **控制 API 由自己的应答模型作答；被拒绝的作用域在 `reason` 下说明原因；传播只统计持有该文档的实例**（第二轮评审，
   `R2C-11`、`R2C-12`、`CTL-61`、`CTL-62`）。受影响的是控制 API 的客户端。
@@ -102,7 +106,7 @@ description: "每个 8.0 预览版（alpha 与 beta）到下一个之间的变�
   - `ControlMaintenance` 接受一个 `Clock`（最后一个参数，默认系统时钟）。
   - `ShadowReportReader` 新增 `readings(window)`，返回 `ShadowReadings`：能读取的报告，以及报告已列出却无法读取的实例，窗口把它们当作已消失。`CoCacheShadowReports` 覆盖了它。你自己的读取器也可以覆盖（[扩展](../architecture/extending.md#control-store)）；不覆盖时，`readings` 读取 `reports`，在它抛出的地方照样抛出。
 - **gateway 模式声明它所信任的网络边界，网关转发它所决策的方法**（`STA-7`、`STA-6`、`PIP-31`）。受影响的是每个 `cosec.pipeline.mode=gateway` 的服务和每个网关。
-  - `gateway` 模式的服务相信任何 `CoSec-Identity` 头，而这个头没有签名，所以网络就是它的边界。现在除非你写下 `cosec.pipeline.identity.only-gateway-can-reach: true`（`COSEC_PIPELINE_IDENTITY_ONLY_GATEWAY_CAN_REACH=true`），声明只有网关能访问它，否则它**启动失败**。未设置、空、`false`、`1` 和 `on` 同样失败，信息会说明该写什么。先让它成真（只放行网关 pod 的 `NetworkPolicy`、双向 TLS、私有网络；[`k8s/examples/gateway-mode-service-networkpolicy.yaml`](https://github.com/Ahoo-Wang/CoSec/blob/main/k8s/examples/gateway-mode-service-networkpolicy.yaml)）。设置之后，beta.4 之前的 `WARN` 变为一行 `INFO`。
+  - `gateway` 模式的服务相信任何 `CoSec-Identity` 头，而这个头没有签名，所以网络就是它的边界。现在除非你写下 `cosec.pipeline.identity.only-gateway-can-reach: true`（`COSEC_PIPELINE_IDENTITY_ONLYGATEWAYCANREACH=true`），声明只有网关能访问它，否则它**启动失败**。未设置、空、`false`、`1` 和 `on` 同样失败，信息会说明该写什么。先让它成真（只放行网关 pod 的 `NetworkPolicy`、双向 TLS、私有网络；[`k8s/examples/gateway-mode-service-networkpolicy.yaml`](https://github.com/Ahoo-Wang/CoSec/blob/main/k8s/examples/gateway-mode-service-networkpolicy.yaml)）。设置之后，beta.4 之前的 `WARN` 变为一行 `INFO`。
   - `gateway` 模式的服务只要有 hidden-method 过滤器就会**启动失败**：`spring.mvc.hiddenmethod.filter.enabled=true`、`spring.webflux.hiddenmethod.filter.enabled=true`，或它自己的 `HiddenHttpMethodFilter` bean。网关决策的是请求行的方法，而 `_method` 表单字段会让服务执行另一个方法。移除它。自己决策的宿主（`enforce`）不受影响。
   - 网关从它转发的每个请求、每条路由上移除 `X-HTTP-Method-Override`、`X-HTTP-Method` 和 `X-Method-Override`（不区分大小写）。不可配置。以前会遵从这些头的后端，对经过网关的请求不再遵从：把方法写在请求行里。
 - **路径含有编码后的 `;` 或控制字符时答 `400`**（R1A-3，`PIP-30`）。受影响的是在路径任何位置发送 `%3B` 或 `%00` 到 `%1F`、`%7F`（大小写均可）的客户端。直到 beta.4，它们被当作某一段里的文本来决定，Spring 也这样读；但网关之后先解码、再去掉路径参数的后端会把 `/admin%3Bx/users` 当作 `/admin/users` 提供服务，绕过 `/admin/**` 上的 `DENY`。现在它们在认证之前被拒绝，无论是否映射了路由，答管道不予解释的路径所用的 `400` `invalid-request`；网关在转发任何东西之前就拒绝它们。未编码的控制字符也一样，CoSec 运行的服务器本来就会自己拒绝它。含有这类字符的值放到查询参数或请求体里，或者把它的 `%` 再编码一次（`%253B`）：管道解码一次，得到文本 `%3B`。`%25`、结尾的 `.` 和结尾的空格不变。检查方法：在访问日志或审计记录的 `request.path` 里搜索请求路径中的 `%3B`、`%00` 到 `%1F` 和 `%7F`（[故障排查](./troubleshooting.md#invalid-request)）。没有开关可以接受它们。

@@ -81,6 +81,16 @@ class ChangeEvent(
          * [gated]; any other change's reaches the listeners best effort, after.
          */
         ABANDONED,
+
+        /**
+         * A change's shadow window was skipped (`CTL-63`): by `:skip-shadow`, the operator holding `cosec:skip-shadow`
+         * and the reason in the note, or by a break-glass change exempt from the window. Recorded when it is skipped,
+         * whether or not the change is ever published.
+         */
+        SHADOW_SKIPPED,
+
+        /** A change was rebased on its document's current head and checked again (`CTL-63`). */
+        REBASED,
         ;
 
         /**

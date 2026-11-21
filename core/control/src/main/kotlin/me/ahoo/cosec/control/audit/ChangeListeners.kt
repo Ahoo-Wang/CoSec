@@ -128,7 +128,8 @@ class ChangeListeners(
     }
 
     /** Waits until every event handed off so far ([later]) has reached its listener, or failed to: for tests. */
-    internal suspend fun awaitDelivered() {
+    @InternalCoSecApi
+    suspend fun awaitDelivered() {
         scope.coroutineContext[Job]!!.children.toList().joinAll()
     }
 

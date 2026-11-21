@@ -99,6 +99,22 @@ class DependencyRulesTest {
     }
 
     @Test
+    fun `the control server is the starter with the control plane, and no gateway, Servlet stack, login or CosId`() {
+        val server = DependencyRules.CONTROL_SERVER
+        val runtime = resolvedProjects(server, "runtimeClasspath")
+        runtime.assert().describedAs(
+            "no facts for $server: the rule would check nothing"
+        ).contains("control", "spring-boot")
+        val violations = DependencyRules.CONTROL_SERVER_NEVER.flatMap { project ->
+            listOfNotNull(
+                "$server declares $project".takeIf { project in declaredProjects(server) },
+                "$server resolves $project at run time".takeIf { project in runtime },
+            )
+        }
+        violations.assert().isEmpty()
+    }
+
+    @Test
     fun `a generator of documents does not bring the request path`() {
         val violations = DependencyRules.DOCUMENT_ONLY.flatMap { project ->
             declaredProjects(project).filter { it == DependencyRules.RUNTIME }.map { "$project declares it" } +

@@ -12,9 +12,16 @@
 # limitations under the License.
 #
 
-# Trains a JDK 25 AOT cache (JEP 483/514/515) for cosec-gateway-server.
+# Trains a JDK 25 AOT cache (JEP 483/514/515) for a CoSec application image: cosec-gateway-server and
+# cosec-control-server share it, through a named build context (`docker build --build-context shared=platform ...`).
 #
 # Usage: aot-train.sh <app-home> <cache-file>
+#
+# The application is the start script of <app-home>, bin/<basename of app-home>. Environment, all optional:
+#   AOT_TRAIN_PATHS    the request paths to run through the application port, after startup (default: the gateway's two)
+#   AOT_TRAIN_TIMEOUT  seconds to wait for startup (default 300)
+# Anything else the application needs to start (the control server's statement of what can reach it) is set by the caller
+# in the environment of this script, for the build step only, never in the image.
 #
 # Run it from the same <app-home>, with the same JDK and the same JVM options as production: the cache
 # records the class path (paths and jar mtimes) and the GC, and the JVM ignores a cache that does not match.
@@ -32,6 +39,8 @@ APP_HOME=$1
 CACHE=$2
 CONF="$CACHE.conf"
 LOG="$CACHE.train.log"
+APP=$(basename "$APP_HOME")
+PATHS=${AOT_TRAIN_PATHS:-"/cosec-auth/aot-training /aot-training"}
 # Seconds to wait for startup; multi-platform builds train under QEMU, which is several times slower.
 TIMEOUT=${AOT_TRAIN_TIMEOUT:-300}
 
@@ -49,7 +58,7 @@ export SPRING_DATA_REDIS_URL=redis://127.0.0.1:1
 EPHEMERAL_PORTS="-Dserver.port=0 -Dmanagement.server.port=0"
 TRAIN_OPTS="-Dcocache.backend=memory $EPHEMERAL_PORTS"
 
-JAVA_OPTS="-XX:AOTMode=record -XX:AOTConfiguration=$CONF $TRAIN_OPTS" bin/cosec-gateway-server >"$LOG" 2>&1 &
+JAVA_OPTS="-XX:AOTMode=record -XX:AOTConfiguration=$CONF $TRAIN_OPTS" bin/$APP >"$LOG" 2>&1 &
 PID=$!
 
 # The ports come from this JVM's own log, so the health check below can only reach this JVM. The gateway and the
@@ -86,7 +95,7 @@ fi
 
 # Exercise the HTTP path: Netty, WebFlux, route lookup, the error handler, and the actuator on the management port. Only paths that cannot
 # leave the container: a route to the internet would make the build depend on the network.
-for path in /cosec-auth/aot-training /aot-training; do
+for path in $PATHS; do
   curl -s -o /dev/null "http://localhost:$PORT$path" || true
 done
 for path in /actuator/health /actuator/health/liveness /actuator/prometheus; do
@@ -102,7 +111,7 @@ if [ ! -s "$CONF" ]; then
   exit 1
 fi
 
-JAVA_OPTS="-XX:AOTMode=create -XX:AOTConfiguration=$CONF -XX:AOTCache=$CACHE" bin/cosec-gateway-server >>"$LOG" 2>&1 || {
+JAVA_OPTS="-XX:AOTMode=create -XX:AOTConfiguration=$CONF -XX:AOTCache=$CACHE" bin/$APP >>"$LOG" 2>&1 || {
   cat "$LOG" >&2
   exit 1
 }
@@ -110,7 +119,7 @@ JAVA_OPTS="-XX:AOTMode=create -XX:AOTConfiguration=$CONF -XX:AOTCache=$CACHE" bi
 # Prove the production flags can map the cache. AOTMode=on fails instead of falling back; it is used here
 # only. spring.context.exit stops the JVM after the context refresh, so this takes a second; the refresh creates
 # the CoCache backend, which TRAIN_OPTS keeps in memory, as there is no Redis here.
-JAVA_OPTS="-XX:AOTMode=on -XX:AOTCache=$CACHE -Dspring.context.exit=onRefresh $TRAIN_OPTS" bin/cosec-gateway-server >>"$LOG" 2>&1 || {
+JAVA_OPTS="-XX:AOTMode=on -XX:AOTCache=$CACHE -Dspring.context.exit=onRefresh $TRAIN_OPTS" bin/$APP >>"$LOG" 2>&1 || {
   echo "AOT training: the cache cannot be mapped with the runtime options" >&2
   cat "$LOG" >&2
   exit 1

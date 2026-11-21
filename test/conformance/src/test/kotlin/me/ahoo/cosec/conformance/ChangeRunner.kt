@@ -139,6 +139,9 @@ import java.time.Instant
  *            { "storeDown": true }, // every operation of the control store fails until false (CTL-52): a step it
  *                                   // stops is `unavailable`, never an empty answer
  *            { "vanish": "i1" },   // i1 is taken off the reporters of every window, its report left
+ *            { "audited": "c1" },  // the kinds of the change events of c1 so far, sorted: best-effort listeners
+ *                                  // receive them in any order (CTL-63):
+ *                                  // `audited CHECKED,SHADOW_SKIPPED`
  *            { "answer": "c1" },   // the members of the change's answer (CTL-61): `members a,b,...`, then
  *                                  // `; shadow a,b` and `; approval a,b` when it holds them
  *            { "status": { "instance": "i1", "documents": { "tenant:acme": 2 } } },  // an instance's status now
@@ -321,7 +324,11 @@ object ChangeRunner : ScenarioRunner {
             ChangeOptions(fourEyes = node.get("options")?.get("fourEyes")?.bool() ?: false, shadow = shadowOptions())
 
         // Break-glass is recorded by a REQUIRED listener before it is created (RFC 0007 §8).
-        private fun changes(listeners: ChangeListeners = ChangeListeners(listOf(RecordingAudit))) = Changes(
+        /** Every change event of the scenario, as a REQUIRED listener records them (`audited`, CTL-63). */
+        private val audit = RecordingAudit()
+        private val auditing = ChangeListeners(listOf(audit))
+
+        private fun changes(listeners: ChangeListeners = auditing) = Changes(
             store,
             revisions,
             { next!! },
@@ -458,6 +465,7 @@ object ChangeRunner : ScenarioRunner {
         private suspend fun read(action: String, argument: JsonNode): String = when (action) {
             "diff" -> diff(argument)
             "answer", "status", "propagation", "acknowledgement" -> answers(action, argument)
+            "audited" -> audited(argument)
             "staged" -> "staged " + (memory.candidate(documentKey(argument.text()))?.window?.substringBefore('@') ?: "none")
             "samples" -> StagedDocuments(memory).let { instance ->
                 instance.refresh()
@@ -623,6 +631,16 @@ object ChangeRunner : ScenarioRunner {
                 )
             )
             return "reported"
+        }
+
+        /**
+         * The kinds of a change's events so far (`CTL-63`), sorted: a best-effort listener receives a change's events in
+         * any order, so the step says which were written, not in which order they arrived.
+         */
+        private suspend fun audited(argument: JsonNode): String {
+            auditing.awaitDelivered()
+            val id = argument.text()
+            return "audited " + audit.events.filter { it.change.value == id }.map { it.kind.name }.sorted().joinToString(",")
         }
 
         /** The steps of the control API's answers (`CTL-61`, `CTL-62`). */
@@ -924,16 +942,20 @@ object ChangeRunner : ScenarioRunner {
     private val CREDENTIAL_STEPS = setOf("revoke", "revokeTokens", "provide", "unaudited")
 
     /** The steps that read what the control plane holds or answers, and the instance statuses it reads. */
-    private val READS =
-        setOf("diff", "staged", "listed", "samples", "rateLimits", "answer", "status", "propagation", "acknowledgement")
+    private val READS = setOf(
+        "diff", "staged", "listed", "samples", "rateLimits", "answer", "status", "propagation", "audited", "acknowledgement",
+    )
 
     /** The page size of a `changes` step: enough for a scenario's changes. */
     private const val LISTING_LIMIT = 100
 
-    private object RecordingAudit : ChangeListener {
+    private class RecordingAudit : ChangeListener {
         override val name: String = "audit"
         override val delivery: Delivery = Delivery.REQUIRED
+        val events = java.util.concurrent.CopyOnWriteArrayList<ChangeEvent>()
 
-        override suspend fun onChange(event: ChangeEvent) = Unit
+        override suspend fun onChange(event: ChangeEvent) {
+            events += event
+        }
     }
 }
