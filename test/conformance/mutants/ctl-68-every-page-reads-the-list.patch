@@ -1,14 +1,13 @@
 # Rule: CTL-68
 # Mutant: every page reads the whole document list from the store: a full paging reads it once per page
 # Tests: :control:test --tests me.ahoo.cosec.control.api.DocumentListingTest
-
 diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/api/DocumentListing.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/api/DocumentListing.kt
-index 54893077b..fda0c006f 100644
+index 870a0568c..efe2c75b0 100644
 --- a/core/control/src/main/kotlin/me/ahoo/cosec/control/api/DocumentListing.kt
 +++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/api/DocumentListing.kt
 @@ -56,7 +56,7 @@ class DocumentListing internal constructor(
      private val authority: ChangeAuthority,
-     clock: Clock = Clock.systemUTC(),
+     private val clock: Clock = Clock.systemUTC(),
  ) {
 -    private val documents = SharedRead(clock) { revisions.documents().sortedBy { it.toString() } }
 +    private val documents = SharedRead(clock, java.time.Duration.ZERO) { revisions.documents().sortedBy { it.toString() } }

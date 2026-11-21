@@ -218,7 +218,7 @@ flowchart LR
 
 ### 列出文档 {#listing-documents}
 
-`GET /documents?kind=tenant`（或 `kind=app`）列出该类型有哪些文档：`{"documents": [{"key": "tenant:acme"}, ...], "next": "tenant:acme", "asOf": "..."}`，按 key 排序。`limit` 为 1 到 200（默认 20），`after` 是上一页的 `next`，最后一页没有 `next`。它读取控制存储所索引的文档清单，从不读取文档本身，所以首次发布未完成的文档也可能被列出，读取它则返回 `404`。该清单是存储的整个成员集合（5 万个租户时约 2 MB），所以控制面主机至多每 5 秒读取一次，所有调用方共用这一次读取，并从中分页：`asOf` 说明读取的时间，此后创建的文档在下次读取前可能缺失。
+`GET /documents?kind=tenant`（或 `kind=app`）列出该类型有哪些文档：`{"documents": [{"key": "tenant:acme"}, ...], "next": "ZG9jdW1lbnRzfHRlbmFudDphY21l", "asOf": "..."}`，按 key 排序。`limit` 为 1 到 200（默认 20），`after` 是上一页的 `next`，最后一页没有 `next`：它是一个令牌（[列表游标](#listing-cursors)）。它读取控制存储所索引的文档清单，从不读取文档本身，所以首次发布未完成的文档也可能被列出，读取它则返回 `404`。只看到自己文档的租户主体无需读取该清单：只读取一次存储是否为该文档的修订建立了索引。该清单是存储的整个成员集合（5 万个租户时约 2 MB），所以控制面主机至多每 5 秒读取一次，所有调用方共用这一次读取，并从中分页：`asOf` 说明读取的时间，此后创建的文档在下次读取前可能缺失。
 
 谁可以列出（`CTL-68`）：
 - **该类型的全部文档：** 对该层持有 `cosec:read` 的调用方，`kind=tenant` 为 `doc/tenant`，`kind=app` 为 `doc/app`。
@@ -232,7 +232,7 @@ flowchart LR
 
 ### 查找未完成的变更 {#finding-open-changes}
 
-`GET /changes` 列出尚未结束的变更：`document=<key>` 列出一个文档的，`state=<STATE>` 列出处于某个非终态（`DRAFT`、`CHECKED`、`SHADOWING`、`AWAITING_APPROVAL`、`READY`、`CONFLICTED`）的，也可以两者都给。两者至少要给一个；`limit` 为 1 到 200（默认 50），`after` 是上一页的 `next`，最后一页没有 `next`。
+`GET /changes` 列出尚未结束的变更：`document=<key>` 列出一个文档的，`state=<STATE>` 列出处于某个非终态（`DRAFT`、`CHECKED`、`SHADOWING`、`AWAITING_APPROVAL`、`READY`、`CONFLICTED`）的，也可以两者都给。两者至少要给一个；`limit` 为 1 到 200（默认 50），`after` 是上一页的 `next`，最后一页没有 `next`：它是一个令牌（[列表游标](#listing-cursors)）。
 
 ```json
 {
@@ -252,7 +252,18 @@ flowchart LR
 }
 ```
 
-每一项是摘要：变更本身用 `GET /changes/{id}` 读取。存储的记录无法读取的变更以它的 `id`、`key` 和状态 `UNREADABLE` 列出，从不省略。每一项的成员就是[变更应答](#what-a-change-answers)中同名的成员。只有 `GET /changes/{id}` 会向你展示的变更才会出现在列表中：你自己租户的文档（平台主体为任意文档）中，你写的或你可以读取其文档（`cosec:read`）的变更。列表不透露它省略了什么：一页只含你可见的变更，只有后面还有你可见的变更时才给出 `next`（`CTL-55`）。
+每一项是摘要：变更本身用 `GET /changes/{id}` 读取。存储的记录无法读取的变更以它的 `id`、`key` 和状态 `UNREADABLE` 列出，从不省略。每一项的成员就是[变更应答](#what-a-change-answers)中同名的成员。只有 `GET /changes/{id}` 会向你展示的变更才会出现在列表中：你自己租户的文档（平台主体为任意文档）中，你写的或你可以读取其文档（`cosec:read`）的变更。列表不透露它省略了什么：一页只含你可见的变更（`CTL-55`）。
+
+按状态列出在读取任何内容之前就作出决定，与[列出文档](#listing-documents)一样：
+- **租户主体**列出它自己租户文档的变更。
+- **平台主体**列出它对其作为层持有 `cosec:read` 的那些层：`doc/tenant` 对应租户文档的变更，`doc/app` 对应应用的，`doc/platform`（平台文档本身的读取）对应平台文档的变更。`cosec:platform-admin` 三者都持有。层的读取只允许列表去查看：每个变更仍然只在 `GET /changes/{id}` 会向你展示时才出现。
+- **其他调用方**得到不带详情的 `403`，什么也不读取。
+
+无论你能看到什么，每个请求至多读取四页变更。先达到这个上限时，它应答已找到的变更（一页较短或为空），并给出 `next`，从停下的位置继续。所以带 `next` 的空页不是结尾：一直沿着 `next` 走到它为 `null`。这个 `next` 可能指向你看不到的变更。它只告诉你，某个你可以列出的层中的某个文档在该状态下有一个未完成的变更，而按 id 读取该变更仍然是 `404`。按文档列出只读取该文档的未完成变更，它的 `next` 总是你能看到的变更。
+
+### 列表游标 {#listing-cursors}
+
+每个列表的 `next` 都是一个令牌：在任何控制面主机上，把它原样作为 `after` 传回。它不含服务端状态，不会过期，在查询中无需转义（`A-Z a-z 0-9 - _`）。它的内容不是契约：不要从中读出任何东西。它只是编码而非加密，对解码它的人什么也不隐藏。无法解码的令牌，或属于另一个列表的令牌（对 `GET /documents` 而言，还包括另一种类型的令牌），返回 `400`，从不从头开始列出。约定见 [`contract/control/cursor.json`](https://github.com/Ahoo-Wang/CoSec/tree/main/contract/control/cursor.json)。
 
 未完成的变更保存在它们自己的集合中（[存储](../operations/storage.md#redis-keys)）。对更早预览版写入的存储，在 `cosec-migrate repair-references` 转换它之前，列表返回 `503`（`CTL-54`）。
 

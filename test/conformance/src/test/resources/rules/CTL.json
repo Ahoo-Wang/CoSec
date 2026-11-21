@@ -737,14 +737,25 @@
     {
       "id": "CTL-55",
       "source": "Review round 2, R2C-4 (saas-open-changes-design.md §1); RFC 0007 §10.2",
-      "statement": "A listing of open changes shows a change only if reading it by id would show it to the caller, leaves out what the caller may not see before the page is cut, and tells nothing of what it leaves out.",
+      "statement": "A listing of open changes shows a change only if reading it by id would show it to the caller, leaves out what the caller may not see before the page is cut, and tells nothing of what it leaves out, with one exception: its cursor. A listing by state is decided before anything is read: a tenant's principal scans its own tenant's document only; a platform principal scans each layer it holds cosec:read on (doc/tenant, doc/app, doc/platform for the platform document's changes); anyone else is refused, 403 without detail, and nothing is scanned. Each request reads at most four pages of changes. A scan the bound stops answers what it found, short or empty, and a cursor holding the position where it stopped, which may be an entry the caller may not see: it is given only to a caller admitted to scan that layer, the change it points at answers by id as it does to anyone who may not read it, and the caller learns from it only that some document of a layer it may enumerate has an open change in that state, nothing of the change. A cursor is a token the client passes back unchanged, the same convention as the document listing's (contract/control/cursor.json); it hides nothing from one who decodes it. A token that does not decode or belongs to another listing is a 400, never a listing from the start.",
       "level": "control",
       "guards": [
         "control:OpenChangeListingTest#another tenant's changes are left out, and the page says nothing of them - CTL-55",
         "control:OpenChangeListingTest#a listing by document or by state shows the caller's tenant only, a summary of each change",
         "control:OpenChangeListingTest#a page is cut after what the caller may see, and the next one goes on from it",
         "control:OpenChangeListingTest#a cursor names only a change the caller sees, and only when one follows it - CTL-55",
-        "control:OpenChangeListingTest#a member of the tenant who may not read its changes sees none, a viewer sees them - CTL-55"
+        "control:OpenChangeListingTest#a member of the tenant who may not read its changes sees none, a viewer sees them - CTL-55",
+        "control:StateListingScanTest#a platform principal without any layer read is refused, and nothing is scanned - R3-3",
+        "control:StateListingScanTest#a layer that cannot be decided is a 503, and nothing is scanned - R3-3",
+        "control:StateListingScanTest#the tenant layer read scans the tenant documents only, and shows what reading by id would - R3-3",
+        "control:StateListingScanTest#the platform document's own read admits its changes to the scan - R3-3",
+        "control:StateListingScanTest#a tenant's principal scans its own tenant's document, with no layer decision - R3-3",
+        "control:StateListingBoundTest#a scan stopped by its bound answers where it stopped, and the next request goes on from there - R3-3",
+        "control:StateListingBoundTest#no request reads more than its bound, whatever it may see - R3-3",
+        "control:ListingCursorTest#a token round-trips for its listing, and is no raw position on the wire",
+        "control:ListingCursorTest#a malformed or foreign token is refused for every listing",
+        "control:ListingCursorTest#the routes refuse a cursor that is not theirs with a 400, before listing anything",
+        "control:ClientContractTest#the listings' cursor follows the convention of its contract file"
       ],
       "pending": null
     },
@@ -884,13 +895,16 @@
     {
       "id": "CTL-68",
       "source": "control-server-design.md §0.8 and §9 row 9 (the listing route)",
-      "statement": "GET /documents?kind= lists which tenant or app documents exist from the store's list of the documents it indexes, never by reading a document: every document of the layer to a caller holding cosec:read on the layer (doc/tenant, doc/app), which grants no document's own read and which no document's read grants, apart from a pattern whose ** covers the layer; its own tenant's document to a tenant's principal that may read it; and to anyone else a 403 without detail, with no decision per listed document. A kind other than tenant or app is a 400, and a store that cannot answer is a 503, never an empty page.",
+      "statement": "GET /documents?kind= lists which tenant or app documents exist from the store's list of the documents it indexes, never by reading a document: every document of the layer to a caller holding cosec:read on the layer (doc/tenant, doc/app), which grants no document's own read and which no document's read grants, apart from a pattern whose ** covers the layer; its own tenant's document to a tenant's principal that may read it, from one read of whether the store indexes that document and never the whole list; and to anyone else a 403 without detail, with no decision per listed document. A kind other than tenant or app is a 400, and a store that cannot answer is a 503, never an empty page. Its cursor is a token of the convention the change listing uses (contract/control/cursor.json): one that does not decode, belongs to another listing or names a document of the other kind is a 400.",
       "level": "control",
       "guards": [
         "control:DocumentListingTest#the documents of a kind are listed for one who may read them all - CTL-68",
         "control:DocumentListingTest#a tenant's principal sees its own tenant's document if it may read it, and nothing else - CTL-68",
         "control:DocumentListingTest#anyone else is refused as the policies refuse, telling nothing of which documents exist - CTL-68",
         "control:DocumentListingTest#a page is cut after the filter, and its cursor names the last document shown - CTL-68",
+        "control:ListingCursorTest#the routes refuse a cursor that is not theirs with a 400, before listing anything",
+        "control:OwnDocumentListingTest#its own document is one decision and one index read, never the document list - R3-4",
+        "control:OwnDocumentListingTest#its own document not indexed, or a cursor past it, is an empty page - R3-4",
         "control:DocumentListingTest#a kind other than tenant or app is a 400 - CTL-68",
         "control:DocumentListingTest#a document list the store cannot read is the store's failure, never an empty page - CTL-68",
         "control:DocumentListingTest#a full paging reads the document list once, and a failed read is never kept - CTL-68",
@@ -919,7 +933,7 @@
     {
       "id": "CTL-66",
       "source": "G2e finding (#1795); ctl-66-change-event-order.md, decided 2026-11-21",
-      "statement": "Within one control-plane instance, a change listener receives the events of one change in the order the instance wrote them: one queue and one consumer per listener. A gated step waits for its REQUIRED listeners to record its event after what was queued before it, within the required timeout, or fails (503); a REQUIRED listener's full queue loses, counted and logged at ERROR, the event of a step already stored, never failing it; a BEST_EFFORT listener's full queue drops the incoming event, so what arrives is an ordered prefix. The queues hold together at most a thirty-second of the heap; a listener that stops answering is reported, never cut off. At shutdown the listeners stop taking events and deliver what is queued within the drain timeout; what is left is counted and logged (ERROR for a REQUIRED listener) before they stop, and a gated step arriving meanwhile is refused (503). Across instances, a consumer orders by each event's time and the change's record.",
+      "statement": "Within one control-plane instance, a change listener receives the events of one change in the order the instance wrote them: one queue and one consumer per listener, and those who wait for room in a queue are served in the order they came, so a smaller event never queues ahead of a larger one put before it. A gated step waits for its REQUIRED listeners to record its event after what was queued before it, within the required timeout, or fails (503); a REQUIRED listener's full queue, or its call that fails or does not answer, loses, counted and logged at ERROR, the event of a step already stored, never failing it; a BEST_EFFORT listener's full queue drops the incoming event, so what arrives is an ordered prefix. The queues hold together at most a thirty-second of the heap; a listener that stops answering is reported, never cut off. At shutdown the listeners stop taking events and deliver what is queued within the drain timeout; what is left is counted and logged (ERROR for a REQUIRED listener) before they stop, and a gated step arriving meanwhile is refused (503). Across instances, a consumer orders by each event's time and the change's record.",
       "level": "control",
       "guards": [
         "control:ChangeEventOrderTest#a listener receives a change's events in the order they were written, the first still held - CTL-66",
@@ -931,7 +945,9 @@
         "control:ChangeEventOrderTest#a listener that stops answering is reported, keeps its queue, and finds it when it answers again - CTL-66",
         "control:ChangeListenersDrainTest#a backlog at shutdown is delivered within the drain timeout, then the consumers stop - CTL-66",
         "control:ChangeListenersDrainTest#what a held listener cannot take within the drain timeout is counted as kept, then stopped - CTL-66",
-        "control:ChangeListenersDrainTest#during the drain a gated step is refused and another step's event is kept, never queued - CTL-66"
+        "control:ChangeListenersDrainTest#during the drain a gated step is refused and another step's event is kept, never queued - CTL-66",
+        "control:ChangeEventOrderTest#a REQUIRED listener's failed call loses a stored step's event, counted, and a gated one fails its step - CTL-66",
+        "control:ChangeEventOrderTest#those who wait for room are served in the order they came, a smaller event never ahead - R3-12"
       ],
       "pending": null
     },

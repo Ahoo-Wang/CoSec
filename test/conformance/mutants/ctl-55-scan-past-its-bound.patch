@@ -1,0 +1,17 @@
+# Rule: CTL-55
+# Mutant: a listing by state reads on until it fills its page, however many changes that takes
+# Tests: :control:test --tests me.ahoo.cosec.control.lifecycle.StateListingBoundTest
+
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ChangeListings.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ChangeListings.kt
+index aa5575434..d8fc928aa 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ChangeListings.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ChangeListings.kt
+@@ -94,7 +94,7 @@ internal class ChangeListings(private val store: ControlStore, private val autho
+         visible: suspend (ListedChange) -> Boolean,
+     ): ChangePage {
+         val layers = scannable(operator)
+-        val bound = SCAN_PAGES * limit
++        val bound = Int.MAX_VALUE
+         val found = ArrayList<ListedChange>()
+         var cursor = after
+         var read = 0

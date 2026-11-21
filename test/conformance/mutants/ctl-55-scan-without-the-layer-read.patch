@@ -1,0 +1,18 @@
+# Rule: CTL-55
+# Mutant: a caller without the layer read makes the store scan every layer, each change still decided by id
+# Tests: :control:test --tests me.ahoo.cosec.control.lifecycle.StateListingScanTest
+
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ChangeListings.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ChangeListings.kt
+index c96d153f1..ff2ffae49 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ChangeListings.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ChangeListings.kt
+@@ -128,8 +128,7 @@ internal class ChangeListings(private val store: ControlStore, private val autho
+                 )
+             }
+         }
+-        if (layers.isEmpty()) throw ChangeRejectedException(FORBIDDEN, "may not list changes by state")
+-        return layers
++        return layers.ifEmpty { DocumentKind.entries.toSet() }
+     }
+ 
+     private suspend fun visible(

@@ -20,6 +20,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
@@ -233,6 +234,88 @@ class ChangeEventOrderTest {
             changes.publish(event(ChangeEvent.Kind.PUBLISHING))
             changes.awaitDelivered()
             audit.received.assert().containsExactly("c1 PUBLISHING")
+        }
+
+    @Test
+    fun `a REQUIRED listener's failed call loses a stored step's event, counted, and a gated one fails its step - CTL-66`() =
+        runBlocking<Unit> {
+            val failing = object : ChangeListener {
+                override val name = "audit"
+                override val delivery = Delivery.REQUIRED
+                val received = CopyOnWriteArrayList<String>()
+
+                override suspend fun onChange(event: ChangeEvent) {
+                    if (event.note == "fail") error("the sink refused it")
+                    if (event.note == "hang") delay(1_000)
+                    received += "${event.change.value} ${event.kind}"
+                }
+            }
+            val sloppy = object : ChangeListener {
+                override val name = "kafka"
+                override val delivery = Delivery.BEST_EFFORT
+
+                override suspend fun onChange(event: ChangeEvent) {
+                    if (event.note == "fail") error("the sink refused it")
+                }
+            }
+            val changes = listeners(failing, sloppy, requiredTimeout = 200.milliseconds)
+            val (audit, kafka) = changes.queues
+            // A stored step's event that the REQUIRED listener refuses, then one it does not answer in time: both lost.
+            changes.publish(event(ChangeEvent.Kind.CHECKED, note = "fail"))
+            changes.publish(event(ChangeEvent.Kind.SHADOW_SKIPPED, note = "hang"))
+            changes.publish(event(ChangeEvent.Kind.SHADOWED))
+            changes.awaitDelivered()
+            audit.lost.assert().isEqualTo(2L)
+            failing.received.assert().containsExactly("c1 SHADOWED")
+            // A BEST_EFFORT listener's failure promises nothing and loses nothing it promised.
+            kafka.lost.assert().isEqualTo(0L)
+            // A gated step's failure fails the step: nothing stored, so nothing lost.
+            runCatching { changes.publish(event(ChangeEvent.Kind.PUBLISHING, note = "fail")) }.exceptionOrNull()
+                .assert().isInstanceOf(ChangeAuditException::class.java)
+            changes.awaitDelivered()
+            audit.lost.assert().isEqualTo(2L)
+        }
+
+    /**
+     * R3-12: the queue holds two small events, its listener delivering one per permit. A larger event waits for room,
+     * then a smaller one behind it. One delivery frees room the smaller one fits and the larger does not; the smaller one
+     * still waits for the larger, which was there first, so the queue keeps the order the events were put.
+     */
+    @Test
+    fun `those who wait for room are served in the order they came, a smaller event never ahead - R3-12`() =
+        runBlocking<Unit> {
+            val permits = Channel<Unit>(Channel.UNLIMITED)
+            val received = CopyOnWriteArrayList<String>()
+            val audit = object : ChangeListener {
+                override val name = "audit"
+                override val delivery = Delivery.REQUIRED
+
+                override suspend fun onChange(event: ChangeEvent) {
+                    withContext(NonCancellable) { permits.receive() }
+                    received += event.change.value
+                }
+            }
+            val small = ChangeEventSize.of(event(ChangeEvent.Kind.CHECKED, "s1"))
+            val changes = listeners(audit, heap = ChangeListeners.HEAP_SHARE * 2 * small)
+            changes.publish(event(ChangeEvent.Kind.CHECKED, "s1"))
+            changes.publish(event(ChangeEvent.Kind.CHECKED, "s2"))
+            // Half as large again as a small one: it fits only once both small ones are delivered.
+            val large = event(ChangeEvent.Kind.CHECKED, "big", note = "x".repeat((small / 4).toInt()))
+            ChangeEventSize.of(large).assert().isGreaterThan(small).isLessThanOrEqualTo(2 * small)
+            val first = async(Dispatchers.Default) { changes.publish(large) }
+            delay(100)
+            val second = async(Dispatchers.Default) { changes.publish(event(ChangeEvent.Kind.CHECKED, "s3")) }
+            delay(100)
+            // One delivery: room for a small event, not for the large one. The small one waits its turn.
+            permits.send(Unit)
+            delay(200)
+            changes.queues.single().depth.assert().describedAs("s2 alone is queued").isEqualTo(1)
+            second.isCompleted.assert().describedAs("s3 waits behind the large event").isFalse()
+            repeat(3) { permits.send(Unit) }
+            first.await()
+            second.await()
+            changes.awaitDelivered()
+            received.assert().containsExactly("s1", "s2", "big", "s3")
         }
 
     @Test
