@@ -1,5 +1,6 @@
 # For trying CoSec out on any cluster, kind and minikube included: one gateway with the base's small resources
-# (768Mi, a 256 MB heap) and a single Redis in the same namespace. Not for production.
+# (768Mi, a 256 MB heap), the control plane's host with its small ones (1536Mi, a 768 MB heap), and a single Redis in the
+# same namespace. Not for production.
 #
 #   kubectl create namespace cosec-dev
 #   kubectl -n cosec-dev create secret generic cosec-jwt-secret --from-literal=secret="$(openssl rand -base64 48)"
@@ -11,6 +12,7 @@ namespace: cosec-dev
 
 resources:
   - ../../base
+  - ../../control
   - redis.yaml
 
 labels:
@@ -20,6 +22,12 @@ labels:
 
 configMapGenerator:
   - name: cosec-gateway-redis
+    literals:
+      - SPRING_DATA_REDIS_HOST=redis
+      - SPRING_DATA_REDIS_PORT=6379
+  # The control plane's host, on the same Redis. No password, so no Secret: the production overlay's account is the
+  # control host's alone.
+  - name: cosec-control-redis
     literals:
       - SPRING_DATA_REDIS_HOST=redis
       - SPRING_DATA_REDIS_PORT=6379

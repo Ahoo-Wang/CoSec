@@ -1,0 +1,17 @@
+# The control plane's configuration, mounted as the image's /opt/cosec-control-server/config/application.yaml. The image keeps
+# its own defaults in the jar and reads this file in addition, key by key, so a key left out here keeps the image's value.
+# Every property is in https://cosec.ahoo.me/operations/configuration; the Redis address comes from the overlay's
+# cosec-control-redis ConfigMap.
+#
+# The three ports (the operators' API on server.port, the service API on cosec.control.http.service-port, the actuator on
+# management.server.port) are the image's, and deployment.yaml, service.yaml and the NetworkPolicies are written for them:
+# do not set them here, or change the manifests with them (a test holds the manifests to the image's ports).
+#
+# Nothing else is needed to start. To keep an audit trail in Kafka, set cosec.audit.kafka.enabled,
+# cosec.control.audit.kafka.enabled and spring.kafka.bootstrap-servers (a control plane without Kafka cannot grant
+# break-glass). The control host holds two copies of the documents of every tenant it decides for, up to
+# cosec.authorization.snapshot.max-tenants (16,384 by default, about 490 MB each at 30 KB a document): size the heap in
+# the Deployment for that, or lower the bound here.
+logging:
+  level:
+    root: info

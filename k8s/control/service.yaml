@@ -1,0 +1,36 @@
+# Two Services, one per API, so that what a client names says which API it calls. Neither publishes the management port
+# (8081): a Service is reachable from the whole cluster, and nothing in CoSec authorizes the actuator.
+#
+# cosec-control: the operators' API (8080). The gateway's route points at it (lb://cosec-control); a policy admits the
+# gateway's pods to it and no one else.
+apiVersion: v1
+kind: Service
+metadata:
+  name: cosec-control
+  labels:
+    app.kubernetes.io/name: cosec-control
+spec:
+  selector:
+    app.kubernetes.io/name: cosec-control
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
+      protocol: TCP
+---
+# cosec-control-service: the service API (8082), for the services you name in networkpolicy-services.yaml. The gateway does
+# not call it: a service that calls the control plane directly does, with the CoSec-Identity header it writes itself.
+apiVersion: v1
+kind: Service
+metadata:
+  name: cosec-control-service
+  labels:
+    app.kubernetes.io/name: cosec-control
+spec:
+  selector:
+    app.kubernetes.io/name: cosec-control
+  ports:
+    - name: service
+      port: 80
+      targetPort: service
+      protocol: TCP
