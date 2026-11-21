@@ -261,6 +261,7 @@ public final class me/ahoo/cosec/control/sdk/ControlRefusedException : java/lang
 	public final fun getCode ()Ljava/lang/String;
 	public final fun getConflict ()Lme/ahoo/cosec/control/sdk/ConflictKind;
 	public final fun getDetail ()Ljava/lang/String;
+	public final fun getHeldBy ()Ljava/lang/String;
 	public final fun getProblem ()Ljava/lang/String;
 	public final fun getRequestId ()Ljava/lang/String;
 	public final fun getStatus ()I
