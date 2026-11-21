@@ -21,6 +21,7 @@ import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.control.change.Acknowledgement
 import me.ahoo.cosec.control.change.ChangeId
 import me.ahoo.cosec.control.change.ChangeState
+import me.ahoo.cosec.control.change.ConflictKind
 import me.ahoo.cosec.control.change.Escalation
 import me.ahoo.cosec.control.change.Propagation
 import me.ahoo.cosec.control.change.Severity
@@ -109,6 +110,7 @@ class ClientContractTest {
         put("reason", ControlVocabulary.REASONS)
         put("effect", ControlVocabulary.EFFECTS)
         put("outcome", ControlVocabulary.OUTCOMES)
+        put("conflict", ConflictKind.entries.map { it.name })
         files.check("control/vocabularies.json", vocabularies)
     }
 

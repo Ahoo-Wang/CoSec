@@ -30,7 +30,7 @@ import me.ahoo.cosec.control.change.ChangeOrigin
 import me.ahoo.cosec.control.change.ChangeRejectedException
 import me.ahoo.cosec.control.change.ChangeRequest
 import me.ahoo.cosec.control.change.ChangeState
-import me.ahoo.cosec.control.change.ControlStatus.CONFLICT
+import me.ahoo.cosec.control.change.ConflictKind
 import me.ahoo.cosec.control.change.ControlStatus.NOT_FOUND
 import me.ahoo.cosec.control.change.ControlStatus.UNAVAILABLE
 import me.ahoo.cosec.control.change.Finding
@@ -165,7 +165,7 @@ internal class ChangeLifecycle(
                 return expired
             }
         }
-        throw ChangeRejectedException(CONFLICT, "change ${change.id.value} kept changing")
+        throw ChangeRejectedException.conflict(ConflictKind.CONTENDED, "change ${change.id.value} kept changing")
     }
 
     /**
@@ -193,7 +193,7 @@ internal class ChangeLifecycle(
                 return updated
             }
         }
-        throw ChangeRejectedException(CONFLICT, "change ${id.value} kept changing")
+        throw ChangeRejectedException.conflict(ConflictKind.CONTENDED, "change ${id.value} kept changing")
     }
 
     /**

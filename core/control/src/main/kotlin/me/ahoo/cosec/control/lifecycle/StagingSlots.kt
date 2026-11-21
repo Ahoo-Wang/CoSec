@@ -23,7 +23,7 @@ import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.control.change.ChangeRejectedException
 import me.ahoo.cosec.control.change.ChangeRequest
 import me.ahoo.cosec.control.change.ChangeState
-import me.ahoo.cosec.control.change.ControlStatus.CONFLICT
+import me.ahoo.cosec.control.change.ConflictKind
 import me.ahoo.cosec.control.change.ControlStatus.UNAVAILABLE
 import me.ahoo.cosec.control.change.ShadowState
 import me.ahoo.cosec.control.change.StageSlot
@@ -117,7 +117,10 @@ internal class StagingSlots(
     /** [shadowing] lost its slot: its candidate, if it wrote one and nobody replaced it, goes (409). */
     private suspend fun lost(shadowing: ChangeRequest): Nothing {
         withdraw(shadowing)
-        throw ChangeRejectedException(CONFLICT, "change ${shadowing.id.value} lost its slot while it was staged")
+        throw ChangeRejectedException.conflict(
+            ConflictKind.SLOT_HELD,
+            "change ${shadowing.id.value} lost its slot while it was staged"
+        )
     }
 
     /**

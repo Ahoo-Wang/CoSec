@@ -26,7 +26,7 @@ import me.ahoo.cosec.control.change.ChangeId
 import me.ahoo.cosec.control.change.ChangeRejectedException
 import me.ahoo.cosec.control.change.ChangeRequest
 import me.ahoo.cosec.control.change.ChangeState
-import me.ahoo.cosec.control.change.ControlStatus.CONFLICT
+import me.ahoo.cosec.control.change.ConflictKind
 import me.ahoo.cosec.control.change.ControlStatus.FORBIDDEN
 import me.ahoo.cosec.control.change.Escalation
 import me.ahoo.cosec.control.change.Finding
@@ -71,7 +71,10 @@ internal class Approvals(
         }
         return flow.transition(id, ChangeStep.APPROVE) { current ->
             if (current.candidate != candidate) {
-                throw ChangeRejectedException(CONFLICT, "change ${id.value} is not candidate $candidate")
+                throw ChangeRejectedException.conflict(
+                    ConflictKind.CANDIDATE_MOVED,
+                    "change ${id.value} is not candidate $candidate"
+                )
             }
             // Who approved, as they were: publish checks again that they still hold cosec:approve (review K3).
             val approval = Approval(
