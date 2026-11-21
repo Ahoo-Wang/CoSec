@@ -175,6 +175,10 @@
 >   并发调用共用一次读；读失败不缓存、不用旧数据回答，按 `CTL-52` 答 503。
 > - 流程的内部入口 `Changes.stage`、`Staging.stage` 改名 `startShadow`，与线上的 `:shadow`、`SHADOW_STARTED`、`SHADOWING` 一致；`ControlStore` 端口、暂存清单与 Redis 键不改名。
 
+> **2026-11-21 修订（#1795，`CTL-63`）**：§10.5：改动变更记录的每一步都写变更事件。`:skip-shadow`（需要 `cosec:skip-shadow`）与免影子的 break-glass 路径写 `SHADOW_SKIPPED`，备注里带跳过的理由；`:rebase` 写 `REBASED`。
+> 此前跳过只记在已发布修订的出处里，变更若随后被放弃就不留痕迹。被拒绝的步骤不写事件。`SHADOW_SKIPPED` 是尽力而为投递，不设门：跳过只有在变更发布时才有实际影响，而发布是设门并记录的。
+> 同一 PR 记下一个未解决的问题：同一变更的事件各自在一个协程里投递，到达监听器的顺序不保证（`apply` 时 Kafka 上会出现 `PUBLISHED` 先于 `PUBLISHING`）；按写入顺序投递排为 `CTL-66`。
+
 > **实现说明（2026-11-03，#1194，RC 修复批次 C）**：网关与租户隔离的边缘。控制面受到的影响：
 >
 > - **§9.3、§10.3：控制面读的文档与执法完全一致（TNT-4、CTL-3，RC1-17，审查 R1-1、R2-2、R2-5）。**

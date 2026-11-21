@@ -116,6 +116,7 @@ flowchart BT
 | `bom/bom/` | `:bom` | `cosec-bom` | 只对齐 CoSec 自己的、作为依赖使用的模块（不含 `cosec-migrate`），不导入任何第三方平台 |
 | `bom/dependencies/` | `:dependencies` | 不发布（2026-11-15 起，#1408） | CoSec 自己构建与测试所用版本的内部平台；任何发布的模块都不提它 |
 | `platform/gateway-server/` | `:gateway-server` | Docker 镜像（不发布到 Maven） | 给用户直接部署的网关服务；也是端到端、AOT 与压测的对象（D5） |
+| `platform/control-server/` | `:control-server` | Docker 镜像（不发布到 Maven） | （2026-11-21，#1793，`STA-10`）给用户直接部署的控制面宿主：starter 加控制面，别的都没有；不验证任何凭据，相信到达它的 `CoSec-Identity`，运维必须写明谁能到达它才启动。设计见 `docs/reviews/2026-11/control-server-design.md` |
 
 根目录保留 `config/`、`docs/`、`gradle/`、`k8s/`、`schema/`、`scripts/`、`skills/`、`wiki/`。
 

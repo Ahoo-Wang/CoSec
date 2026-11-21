@@ -40,6 +40,11 @@ gh workflow run system-test.yml --ref main -f ref=<sha>   # the system test on a
   never come from the build cache. A `docs` job runs `pnpm check:docs` and `pnpm build` in `wiki/`. The `CI` job passes
   only when every other job passed; it is the required check. A project whose tests need Redis goes in the script's
   `REDIS`.
+- A pull request runs the test groups its change reaches: `scripts/ci/plan.py` reads the changed paths and the project
+  graph from the build scripts; the group `test` always runs (it holds `conformance` and `architecture`), and a path the
+  plan cannot attribute, or any change to the build or to CI, runs every group, as does every push to `main`. A group
+  left out is named in the `Plan` job's summary. Every group is a flag in `codecov.yml` with `carryforward: true`, and
+  Codecov reports once, after the last upload (`Codecov notify`).
 - Dependency downloads on CI are read from one cache written on `main` (`dependency-cache.yml`, key
   `gradle-dependencies-v1-<repos>-<versions>`, restored read-only by `.github/actions/dependency-cache`): Maven Central
   answers 429 to a runner that asks for too much, and Gradle fails on a 429 without asking the next repository. A job
@@ -121,7 +126,7 @@ the adapters, snapshots or the control plane. The parts that take several files 
   (`cocache`), `edge/` (`webflux`, `webmvc`, `gateway`, `openapi`), `extensions/` (`jwt`, `social`, `login`,
   `ip2region`, `micrometer`, `opentelemetry`, `cosid`, `kafka`), `host/` (`spring-boot`), `migration/` (`migrate`), `test/` (`testkit`,
   `conformance`, `architecture`, `e2e`, `client-host`, `system-test`, `system-behind`, `system-auth`, `system-enforcer`,
-  `code-coverage-report`), `bom/` and `platform/` (`gateway-server`). A project
+  `code-coverage-report`), `bom/` and `platform/` (`gateway-server`, `control-server`). A project
   is named after its directory, without the group or a `cosec-` prefix (`:runtime:check`, `:spring-boot:check`);
   artifact ids keep the prefix (`me.ahoo.cosec:cosec-runtime`). A package belongs to one project
   (`SourceRulesTest`).
@@ -312,7 +317,7 @@ Every fact has one home; update it in the same PR. Every English page in `wiki/`
 | A public signature of a TypeScript package (a line of its API report) | the report, `wiki/integration/clients.md`, the client's skill; after GA, `!` in the PR title when a line is removed or changed |
 | What a client receives: a problem type, its status, headers or body; a `CoSec-*` header; the token pair; a claim of CoSec's tokens; what the served refresh and logout routes answer | `contract/` (`./gradlew :runtime:updateClientContract :jwt:updateClientContract`, `PIP-25`), `wiki/integration/clients.md` (its claims table is held to `contract/token/claims.json` by `pnpm check:docs`), and `typescript/cosec-fetcher` in the same PR: its tests against `contract/` and the real host fail otherwise. From GA, `!` in the PR title when a file's member, value, status or header is removed or changed |
 | What the control API answers: a change's members, the listing's, a revision's propagation, a closed set it writes (state, kind, severity, escalation reason, decision, cause, reason, effect, outcome), the audit kind of a route | `contract/control/` (`./gradlew :control:updateClientContract`, `CTL-61`), `wiki/policies/testing.md#what-a-change-answers`: an answer is written member by member by its codec in `control/api/`, never copied from the stored record. From GA, `!` in the PR title when a member or value is removed or changed |
-| The gateway image, `k8s/`, or what a system-test scenario asserts (`platform/gateway-server/**`, `k8s/**`, `test/system-*/**`) | the system test runs on the PR and must be green; a changed value a scenario reads (a metric tag, an audit field, a port, a probe path) changes its scenario in the same PR |
+| The gateway image, the control-plane image, `k8s/`, or what a system-test scenario asserts (`platform/**`, `k8s/**`, `test/system-*/**`) | the system test runs on the PR and must be green; a changed value a scenario reads (a metric tag, an audit field, a port, a probe path) changes its scenario in the same PR |
 | A new TypeScript package | `typescript/AGENTS.md`, `TypeScriptWorkspaceTest`'s `published`, the labeler, `llms.txt`, the publish workflow's package list |
 | An npm dependency of `typescript/` | the catalog of `typescript/pnpm-workspace.yaml` (packages reference `catalog:`) and its lockfile; nothing else |
 | A new module, or a dependency between modules | `test/architecture` (`ProjectListTest`, `DependencyRules`, `SourceRulesTest`) and RFC 0011 §5; `wiki/architecture/overview.md` |
@@ -364,4 +369,4 @@ lives) are in [`wiki/AGENTS.md`](wiki/AGENTS.md).
   document format, or dependency versions. Downstream applications implement or produce them.
   `SnapshotDocumentStore` is `@ExperimentalCoSecApi` in 8.0 (its shape follows its one backend, and 8.1 may add a
   whole-store version and a batched conditional read): changing it still needs the word.
-- 🚫 Never publish `cosec-gateway-server`; it is an application, not a library.
+- 🚫 Never publish `cosec-gateway-server` or `cosec-control-server`; they are applications, not libraries.
