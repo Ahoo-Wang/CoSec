@@ -48,6 +48,52 @@ Which preview of the library may run behind which preview of the gateway image: 
   The starter logs once at startup, in a line that begins `CoSec derived, not configured:`, what it derived and from
   what. A system test that shortened `report-interval` and `check-interval` now shortens `cosec.control.shadow.min-duration`
   alone, and both follow.
+- **New: `GET /documents?kind=tenant|app` lists which tenant and app documents exist** (`CTL-68`), a page at a time, on
+  the operators' routes, the service port and the facade (`ControlService.documents`). Who may list, and what a page says,
+  is in [Listing documents](../policies/testing.md#listing-documents). Nothing to change.
+- **The control API's listings page with opaque cursors, and a page may be short or empty before the end** (`CTL-55`,
+  `CTL-68`, review round 3). Affected: clients of `GET /changes` and `GET /documents`.
+  - `next` and `after` are tokens: pass `next` back as `after` unchanged, and read nothing out of it. A malformed token,
+    another listing's, or one for a position the listing does not have is a `400`, never a listing from the start.
+  - `GET /changes?state=` is decided before the store is read, and reads at most four pages' worth of changes per request:
+    a page with a `next` may hold fewer entries than `limit`, or none. Ask again with `after` until `next` is absent
+    ([Listing cursors](../policies/testing.md#listing-cursors)).
+- **A change's answer carries how its author was identified** (`CTL-70`). Every reader gets `origin.asserted` and
+  `origin.via.method`; a reader who holds `cosec:approve` on the change's document, or `cosec:read` on the platform's,
+  also gets `via.credential`, `via.request` and `peer`. A change no request made has no `origin`. A client that does not
+  know the member ignores it ([What a change answers](../policies/testing.md#what-a-change-answers)).
+- **A change listener receives a change's events in the order they were written, through a queue of its own bounded by a
+  share of the heap** (`CTL-66`). Affected: change listeners of your own, and consumers of the change stream.
+  - Each listener has one queue and one consumer, so it no longer receives one change's events out of order.
+  - A `REQUIRED` listener with no room, a failure or no answer within `cosec.control.audit.required-timeout` fails a gated
+    step (`503`), as before. For any other step the step is stored, and the event that finds no room, or whose call fails,
+    is lost: counted in `cosec.control.listener.lost` and logged at `ERROR` naming the change.
+  - At shutdown the queues are delivered within `cosec.observability.listener.drain-timeout`
+    ([Order and queues](./observability.md#change-event-order)).
+- **CoSec's own token verifier answers a token it has verified from memory until the token expires** (`IDN-32`). On by
+  default; the revocation and reserved-attribute checks still run on every request. `cosec.authentication.token-cache.enabled`
+  and `max-entries` (`16384`) are new; an application's own `TokenVerifier` gets no cache
+  ([The verified-token cache](../integration/authentication.md#the-verified-token-cache)). Nothing to change.
+- **A Redis that hangs is answered as one that is down, for the revocation check** (`PIP-7`). Affected: a deployment that
+  set `cosec.pipeline.authentication-timeout`. Each read of CoSec's revocation reader now has its own budget, the new
+  `cosec.authentication.revocation.read-timeout` (`300ms`); past it the token is accepted (or refused, with
+  `fail-closed`) and a refresh fails, where a hang used to make every authenticated request `503`. Startup fails unless
+  twice the read timeout is less than the authentication timeout, naming both. An application's own `RevocationReader`
+  bounds its own reads.
+- **Data-plane instances read the staged list and compile a staged candidate on sight** (`CTL-47`, `CTL-12`, `OBS-8`).
+  An instance samples only the requests that read a document the list names, reports `CANDIDATE_ERROR` for a candidate
+  it cannot compile within a report interval of seeing it, whatever its traffic, and makes no decision event for the
+  shadow listener when nothing was sampled. A list that cannot be read counts as no list, and every candidate is read by
+  its key as before. Nothing to change; the Redis ACL line of `CTL-46` above is what an instance needs.
+- **The control API's service port is the application's own server on another port** (`CTL-71`). It takes the
+  application's TLS and client authentication, bind address, HTTP/2, limits and timeouts, and serves the control API's
+  service profile only, no route of the application. If mutual TLS on the application port is what makes the statement of
+  what can reach the host true, it holds on the service port too.
+- **An app change that defines a system role id another app already defines carries a warning** (`ROL-12`): a
+  `REFERENCES` finding naming the role id and the other apps, never a refusal.
+- **The login beans back off for the application's own, and `min-samples: 0` is said at startup** (UB-15). An application
+  that declares its own `CompositeAuthentication` (or the token composite) starts with it, where it failed with two
+  primaries. With `cosec.control.shadow.min-samples=0`, startup logs a `WARN` that a window then closes on time alone.
 - **New: the control plane has an image, `cosec-control`, and two named deployments** ([The control-plane
   host](./deployment.md#the-control-plane-host), [Choosing a Deployment](./topologies.md#the-control-plane)). Nothing to
   change for an application that embeds the control plane: it is the second deployment, unchanged. A deployment that

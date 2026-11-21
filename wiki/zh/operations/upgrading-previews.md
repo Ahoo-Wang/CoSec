@@ -39,6 +39,21 @@ description: "每个 8.0 预览版（alpha 与 beta）到下一个之间的变�
   | `cosec.control.http.max-body-size` | 8 MB 的文档上限再加 2 MB：10 MB |
 
   启动时 starter 记录一行以 `CoSec derived, not configured:` 开头的日志，说明它推出了什么、依据是什么。原来缩短了 `report-interval` 和 `check-interval` 的系统测试，现在只缩短 `cosec.control.shadow.min-duration`，两者随之变化。
+- **新增：`GET /documents?kind=tenant|app` 列出有哪些租户文档和 app 文档**（`CTL-68`），按页给出，在运维人员的路由、服务端口和门面（`ControlService.documents`）上都可用。谁可以列出、一页说明什么，见[列出文档](../policies/testing.md#listing-documents)。无需改动。
+- **控制 API 的列表用不透明游标分页，未到末尾的一页也可能不满或为空**（`CTL-55`、`CTL-68`，第三轮评审）。受影响：`GET /changes` 和 `GET /documents` 的客户端。
+  - `next` 和 `after` 是令牌：把 `next` 原样作为 `after` 传回，不要从中读取任何内容。格式错误的令牌、属于另一个列表的令牌，或指向该列表没有的位置的令牌，返回 `400`，绝不会从头列出。
+  - `GET /changes?state=` 在读取存储之前先做决策，每个请求至多读取四页的变更：带 `next` 的一页可能少于 `limit` 条，甚至为空。带着 `after` 再次请求，直到没有 `next`（[列表游标](../policies/testing.md#listing-cursors)）。
+- **变更的应答带有其作者是如何被识别的**（`CTL-70`）。每个读取者都得到 `origin.asserted` 和 `origin.via.method`；在该变更的文档上持有 `cosec:approve`、或在平台文档上持有 `cosec:read` 的读取者，还会得到 `via.credential`、`via.request` 和 `peer`。不是由请求创建的变更没有 `origin`。不认识这个成员的客户端会忽略它（[变更应答什么](../policies/testing.md#what-a-change-answers)）。
+- **变更监听器按写入顺序接收一个变更的事件，通过它自己的、以堆的一部分为上限的队列**（`CTL-66`）。受影响：你自己的变更监听器，以及变更流的使用者。
+  - 每个监听器有一个队列和一个消费者，所以不会再乱序收到同一个变更的事件。
+  - `REQUIRED` 监听器没有空间、失败或在 `cosec.control.audit.required-timeout` 内没有应答时，受控步骤失败（`503`），与以前一样。对于其他步骤，这一步照常存储，找不到空间、或调用失败的事件会丢失：计入 `cosec.control.listener.lost`，并以 `ERROR` 记录，写明是哪个变更。
+  - 关闭时，队列在 `cosec.observability.listener.drain-timeout` 内投递（[顺序与队列](./observability.md#change-event-order)）。
+- **CoSec 自己的令牌校验器对已校验过的令牌从内存作答，直到它过期**（`IDN-32`）。默认开启；吊销检查和保留属性检查仍在每个请求上运行。`cosec.authentication.token-cache.enabled` 和 `max-entries`（`16384`）是新增的；应用自己的 `TokenVerifier` 不会得到缓存（[已校验令牌缓存](../integration/authentication.md#the-verified-token-cache)）。无需改动。
+- **对吊销检查而言，挂起的 Redis 被当作宕机的 Redis 处理**（`PIP-7`）。受影响：设置了 `cosec.pipeline.authentication-timeout` 的部署。CoSec 吊销读取器的每次读取现在有自己的预算，即新增的 `cosec.authentication.revocation.read-timeout`（`300ms`）；超过后令牌被接受（使用 `fail-closed` 时被拒绝），刷新失败，而以前挂起会让每个经过认证的请求都返回 `503`。除非读取超时的两倍小于认证超时，否则启动失败，并写明这两个配置项。应用自己的 `RevocationReader` 自行限定它的读取。
+- **数据面实例读取暂存列表，并在看到暂存候选时就编译它**（`CTL-47`、`CTL-12`、`OBS-8`）。实例只对读取列表所列文档的请求采样；对无法编译的候选，在看到它之后的一个报告间隔内报告 `CANDIDATE_ERROR`，不论它有没有流量；没有采样时，不为影子监听器生成决策事件。读不到的列表按没有列表处理，每个候选照旧按 key 读取。无需改动；实例需要的是上面 `CTL-46` 那一行 Redis ACL。
+- **控制 API 的服务端口就是应用自己的服务器，只是在另一个端口上**（`CTL-71`）。它沿用应用的 TLS 与客户端认证、绑定地址、HTTP/2、各项限制与超时，只提供控制 API 的服务档，不提供应用的任何路由。如果让“什么能连到宿主”这一声明属实的是应用端口上的双向 TLS，它在服务端口上同样成立。
+- **定义了另一个 app 已定义的系统角色 id 的 app 变更会带上警告**（`ROL-12`）：一条 `REFERENCES` 发现，写明角色 id 和其他 app，从不拒绝。
+- **登录相关的 bean 让位于应用自己的，`min-samples: 0` 会在启动时说明**（UB-15）。声明了自己的 `CompositeAuthentication`（或令牌组合）的应用会使用它启动，而以前会因为有两个 primary 而失败。设置 `cosec.control.shadow.min-samples=0` 时，启动日志记录一条 `WARN`：窗口此时只按时间关闭。
 - **新增：控制面有了镜像 `cosec-control`，以及两种有名字的部署**（[控制面宿主](./deployment.md#the-control-plane-host)、[选择部署方式](./topologies.md#the-control-plane)）。内嵌控制面的应用无需任何改动：它就是第二种部署，原样不变。想把控制面作为自己一个进程来运行的部署，在网关旁边运行该镜像，并声明 `cosec.pipeline.identity.only-trusted-callers-can-reach=true`（没有它镜像不会启动），再配上使它属实的三条网络策略（`k8s/control/`）。
 - **原来处于 `gateway` 模式、现在需要控制面的 IAM 服务，改为运行在 `enforce`，并设置 `cosec.pipeline.caller=forwarded-identity`。** 受影响：原来处于 `cosec.pipeline.mode=gateway`、现在要加入 `cosec-control` 的服务。`gateway` 模式不接入文档、Redis 和控制面，所以控制面无法加到它上面。
   - 把 `cosec.pipeline.mode` 改为 `enforce`，并加上 `cosec.pipeline.caller=forwarded-identity`：服务仍然相信网关转发的身份，仍然要声明什么能连到它。声明相同（`only-gateway-can-reach`，开启服务端口之后是 `only-trusted-callers-can-reach`），对隐藏方法过滤器的拒绝也相同。
