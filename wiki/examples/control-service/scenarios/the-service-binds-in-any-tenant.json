@@ -1,0 +1,24 @@
+{
+  "description": "It grants in any scope of a tenant's document.",
+  "withoutDocument": [
+    "tenant",
+    "app"
+  ],
+  "credential": {
+    "tenant": "(platform)",
+    "id": "svc-iam",
+    "app": "cosec-control",
+    "roles": []
+  },
+  "request": {
+    "hostApp": "cosec-control",
+    "action": "cosec:grant",
+    "resource": {
+      "type": "scope",
+      "id": "acme/orders/(default)"
+    }
+  },
+  "expect": {
+    "decision": "Permit"
+  }
+}

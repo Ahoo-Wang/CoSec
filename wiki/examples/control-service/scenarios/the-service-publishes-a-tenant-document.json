@@ -1,0 +1,24 @@
+{
+  "description": "It publishes a tenant's change, and may skip its shadow window.",
+  "withoutDocument": [
+    "tenant",
+    "app"
+  ],
+  "credential": {
+    "tenant": "(platform)",
+    "id": "svc-iam",
+    "app": "cosec-control",
+    "roles": []
+  },
+  "request": {
+    "hostApp": "cosec-control",
+    "action": "cosec:publish",
+    "resource": {
+      "type": "doc",
+      "id": "tenant/acme"
+    }
+  },
+  "expect": {
+    "decision": "Permit"
+  }
+}

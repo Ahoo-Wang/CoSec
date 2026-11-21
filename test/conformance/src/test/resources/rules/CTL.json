@@ -902,6 +902,9 @@
       "level": "startup",
       "pending": null,
       "guards": [
+        "spring-boot:ApplicationPortTest#a request over a connection carries the port the server bound, on Reactor Netty",
+        "spring-boot:ApplicationPortTest#a request over a connection carries the port the server bound, on reactive Tomcat",
+        "spring-boot:ApplicationPortTest#a request over a connection carries the port the server bound, on reactive Jetty",
         "spring-boot:ManagementPortTest#CoSec's own routes answer on the application's port and never on the management port (CTL-69)",
         "spring-boot:ManagementPortTest#WebFlux keeps its management server under the pipeline and serves the application's routes only behind it",
         "spring-boot:ManagementPortTest#a gateway leaves its management server outside CoSec too, and gates its own routes and the control API there as on the application port",

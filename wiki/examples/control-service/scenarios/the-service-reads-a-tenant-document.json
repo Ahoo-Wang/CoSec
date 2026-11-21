@@ -1,0 +1,24 @@
+{
+  "description": "svc-iam, bound to control-service, reads a tenant's document.",
+  "withoutDocument": [
+    "tenant",
+    "app"
+  ],
+  "credential": {
+    "tenant": "(platform)",
+    "id": "svc-iam",
+    "app": "cosec-control",
+    "roles": []
+  },
+  "request": {
+    "hostApp": "cosec-control",
+    "action": "cosec:read",
+    "resource": {
+      "type": "doc",
+      "id": "tenant/acme"
+    }
+  },
+  "expect": {
+    "decision": "Permit"
+  }
+}

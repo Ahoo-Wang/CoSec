@@ -121,6 +121,49 @@
           }
         }
       ]
+    },
+    {
+      "id": "control-service",
+      "statements": [
+        {
+          "name": "tenant-documents",
+          "effect": "allow",
+          "action": [
+            "cosec:read",
+            "cosec:shadow-read",
+            "cosec:write",
+            "cosec:publish",
+            "cosec:skip-shadow"
+          ],
+          "resource": "doc/tenant/**"
+        },
+        {
+          "name": "app-documents-to-read",
+          "effect": "allow",
+          "action": "cosec:read",
+          "resource": "doc/app/**"
+        },
+        {
+          "name": "bindings-in-tenants",
+          "effect": "allow",
+          "action": "cosec:grant",
+          "resource": "scope/**"
+        }
+      ]
+    },
+    {
+      "id": "control-reader",
+      "statements": [
+        {
+          "name": "read-documents",
+          "effect": "allow",
+          "action": "cosec:read",
+          "resource": [
+            "doc/tenant/**",
+            "doc/app/**"
+          ]
+        }
+      ]
     }
   ],
   "bindings": [
@@ -158,6 +201,26 @@
       "app": "*",
       "space": "*",
       "policy": "admin"
+    },
+    {
+      "id": "svc-iam",
+      "subject": {
+        "principal": "svc-iam",
+        "tenant": "(platform)"
+      },
+      "app": "cosec-control",
+      "space": "",
+      "policy": "control-service"
+    },
+    {
+      "id": "svc-reports",
+      "subject": {
+        "principal": "svc-reports",
+        "tenant": "(platform)"
+      },
+      "app": "cosec-control",
+      "space": "",
+      "policy": "control-reader"
     }
   ]
 }
