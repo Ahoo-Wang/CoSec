@@ -994,13 +994,16 @@
     {
       "id": "CTL-73",
       "source": "Review of 2026-11-21's merges, R3-9 (availability of the shadow flow); maintainer's coordinator, 2026-11-21",
-      "statement": "An instance status that is listed and does not decode never fails the control plane's read of the statuses: its instance counts as live and acknowledging no window, so no shadow window passes on it and the change's answer names it in `waitingFor`, while every other status is read and `propagation` answers, counting it as recent and holding no document. Each such status is logged with its instance and why, and counted (`cosec.control.shadow.status.unreadable`). A status under another instance's key, and a store that does not answer, still fail the read.",
+      "statement": "An instance status that is listed and does not decode never fails the control plane's read of the statuses: its instance counts as live and acknowledging no window, so no shadow window passes on it and the change's answer names it in `waitingFor`, while every other status is read and `propagation` answers, counting it as recent and holding no document. It stops counting when its value expires, two minutes after its instance's last write (each status is written with that life), or, for a value stored with no life, once its instance's entry in the list of instances is older than its expiry. Each such status is logged with its instance and why, at most once a minute per instance, and counted (`cosec.control.shadow.status.unreadable`). A status under another instance's key, and a store that does not answer, still fail the read.",
       "level": "control",
       "pending": null,
       "guards": [
         "cocache:StatusReadingsTest#a status that does not decode names its instance, and every other status is read",
         "cocache:StatusReadingsTest#a status under another instance's key fails the read",
         "cocache:StatusReadingsTest#a store that does not answer fails the whole read, never reads as an unreadable status",
+        "cocache:StatusReadingsTest#an unreadable status is no longer named once its key expires, two minutes after its last write",
+        "cocache:StatusReadingsTest#an unreadable status without a life is not named once its instance's entry in the list is old",
+        "cocache:StatusReadingsTest#an unreadable status is logged at most once a minute per instance",
         "control:ShadowAcknowledgementTest#a status that does not decode holds the window and is named, and propagation still answers",
         "spring-boot:ControlPlaneSwitchTest#the instance statuses that do not decode are counted - CTL-73"
       ]

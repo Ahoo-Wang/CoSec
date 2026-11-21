@@ -521,8 +521,9 @@ published revision having compared nothing. A host with shadowing off writes no 
   the candidate.
 - **An instance whose status does not decode** counts as live and acknowledging nothing (`CTL-73`): the control host
   logs `The status of instance [<instance>] does not read: it counts as live and acknowledging no shadow window until
-  it reads or expires (<why>).` at `WARN` each time it reads the statuses (at most every 5 seconds), and
-  `cosec.control.shadow.status.unreadable` counts it. A later format in `<why>` is a newer version during a rolling
+  it reads or expires, at most two minutes after its last write (<why>).` at `WARN`, at most once a minute per
+  instance, and `cosec.control.shadow.status.unreadable` counts each read of it. An instance that stops writing
+  stops holding the windows two minutes later, when its status expires. A later format in `<why>` is a newer version during a rolling
   upgrade: finish the upgrade of the control hosts, or roll that instance back. Anything else is a corrupt value or a
   crash-looping instance: stop or fix the instance by its id; its status expires two minutes after its last write.
 
