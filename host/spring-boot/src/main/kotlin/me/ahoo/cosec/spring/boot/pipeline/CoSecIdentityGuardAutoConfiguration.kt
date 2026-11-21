@@ -45,11 +45,12 @@ import org.springframework.util.ClassUtils
 internal class CoSecIdentityGuardAutoConfiguration {
     @Bean
     fun cosecPipelineModeCheck(properties: PipelineProperties): StartupTask = StartupTask.OnCreation {
-        check(
-            properties.mode != PipelineProperties.Mode.GATEWAY || !ClassUtils.isPresent(GATEWAY_GLOBAL_FILTER, null)
-        ) {
-            "${PipelineProperties.MODE_KEY}=gateway on a Spring Cloud Gateway host: a gateway decides with policies " +
-                "(enforce), and strips and forwards the identity the services behind it read in gateway mode."
+        val believes = properties.mode == PipelineProperties.Mode.GATEWAY ||
+            properties.caller == PipelineProperties.Caller.FORWARDED_IDENTITY
+        check(!believes || !ClassUtils.isPresent(GATEWAY_GLOBAL_FILTER, null)) {
+            "${PipelineProperties.MODE_KEY}=gateway or ${PipelineProperties.CALLER_KEY}=forwarded-identity on a " +
+                "Spring Cloud Gateway host: a gateway decides with policies on the credentials it verifies " +
+                "(enforce), and strips and forwards the identity the services behind it read."
         }
     }
 

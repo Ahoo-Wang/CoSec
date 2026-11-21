@@ -56,11 +56,23 @@ class PipelineProperties {
     /** `enforce` decides with policies; `gateway` trusts the identity the gateway in front forwards (`CoSec-Identity`). */
     var mode: Mode = Mode.ENFORCE
 
-    /** `cosec.pipeline.identity.*`: how a service behind a gateway reads the identity forwarded to it. */
+    /**
+     * Where the caller of a request comes from on a host that decides with policies (`enforce`): `credential`, the
+     * token or API key the request carries, verified here; or `forwarded-identity`, the `CoSec-Identity` a gateway or a
+     * trusted service states, believed under the operator's statement that only trusted callers can reach the host
+     * ([Identity.onlyTrustedCallersCanReach], [Identity.onlyGatewayCanReach]). The control plane is wired in `enforce`, and
+     * a control host or an IAM service that embeds it takes its callers from the identity.
+     */
+    var caller: Caller = Caller.CREDENTIAL
+
+    /** `cosec.pipeline.identity.*`: how a host that believes the identity forwarded to it reads it. */
     val identity = Identity()
 
     @InternalCoSecApi
     enum class Mode { ENFORCE, GATEWAY }
+
+    @InternalCoSecApi
+    enum class Caller { CREDENTIAL, FORWARDED_IDENTITY }
 
     @InternalCoSecApi
     class Identity {
@@ -77,13 +89,22 @@ class PipelineProperties {
          * NetworkPolicy that admits the gateway's pods only, mutual TLS, a private network).
          */
         var onlyGatewayCanReach: Boolean = false
+
+        /**
+         * The statement that only the gateway and the services the operator names can reach this host (`STA-9`): the
+         * statement of a host that services call directly, such as a control host. It satisfies the same check as
+         * [onlyGatewayCanReach], and says what the host's network admits.
+         */
+        var onlyTrustedCallersCanReach: Boolean = false
     }
 
     @InternalCoSecApi
     companion object {
         const val PREFIX = CoSecProperties.PREFIX + ".pipeline"
         const val MODE_KEY = "$PREFIX.mode"
+        const val CALLER_KEY = "$PREFIX.caller"
         const val ONLY_GATEWAY_CAN_REACH_KEY = "$PREFIX.identity.only-gateway-can-reach"
+        const val ONLY_TRUSTED_CALLERS_CAN_REACH_KEY = "$PREFIX.identity.only-trusted-callers-can-reach"
         const val API_KEY_HEADER_KEY = "$PREFIX.api-key-header"
         const val DEFAULT_API_KEY_HEADER = "X-API-Key"
     }

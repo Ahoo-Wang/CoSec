@@ -39,15 +39,21 @@ import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
 import org.springframework.context.annotation.Import
+import org.springframework.context.annotation.Primary
 import org.springframework.core.env.Environment
 
 private val log = KotlinLogging.logger {}
 
 /**
- * A service behind a gateway (`cosec.pipeline.mode=gateway`): the web adapters read who the caller is from the
- * `CoSec-Identity` header the gateway forwarded ([IdentityGate]), and nothing else is wired, no authenticator, keys,
- * snapshot, policies, control plane or Redis. It trusts the network boundary: only the gateway must be able to reach
- * this service, since the gateway is what strips any identity a client sends.
+ * A host whose web adapters read who the caller is from the `CoSec-Identity` header ([IdentityGate]). Two kinds:
+ * - a service behind a gateway (`cosec.pipeline.mode=gateway`): nothing else is wired, no authenticator, keys, snapshot,
+ *   policies, control plane or Redis;
+ * - a host that decides with policies (`enforce`) and takes its caller from the identity
+ *   (`cosec.pipeline.caller=forwarded-identity`), such as a control host or an IAM service that embeds the control plane:
+ *   everything `enforce` wires is wired, and this gate is the one the web adapters take.
+ *
+ * It trusts the network boundary: only the gateway, and the services the operator names, must be able to reach the host,
+ * since the gateway is what strips any identity a client sends. The guards (`STA-6`, `STA-7`, `STA-9`) follow the gate.
  */
 @AutoConfiguration(
     // `Metrics` below is `@ConditionalOnBean(MeterRegistry)`: decided after every registry Boot creates, as in
@@ -58,7 +64,7 @@ private val log = KotlinLogging.logger {}
     ],
 )
 @ConditionalOnCoSecEnabled
-@ConditionalOnProperty(value = [PipelineProperties.MODE_KEY], havingValue = "gateway")
+@ConditionalOnIdentityGate
 @EnableConfigurationProperties(
     PipelineProperties::class,
     RevocationProperties::class,
@@ -69,16 +75,15 @@ private val log = KotlinLogging.logger {}
 @Import(StartupTaskExclusion::class)
 internal class CoSecGatewayModeAutoConfiguration {
     /**
-     * `STA-7`: the mode starts only when the operator states that nothing but the gateway can reach the service, and says
-     * so once, at INFO, when they have. A check of its own, so an application's own [IdentityGate] does not skip it.
+     * `STA-7`, `STA-9`: the host starts only when the operator states what can reach it, and says so once, at INFO, when
+     * they have. A check of its own, so an application's own [IdentityGate] does not skip it.
      */
     @Bean
     fun cosecGatewayModeBoundaryCheck(environment: Environment): StartupTask = StartupTask.OnCreation {
-        GatewayModeTrust.requireBoundaryStated(environment)
+        val stated = GatewayModeTrust.requireBoundaryStated(environment)
         log.info {
-            "cosec.pipeline.mode=gateway: this service believes any CoSec-Identity header it receives, and " +
-                "${PipelineProperties.ONLY_GATEWAY_CAN_REACH_KEY}=true states that only the CoSec gateway, which strips " +
-                "the clients' own, can reach it (STA-7)."
+            "${GatewayModeTrust.describe(environment)}: this host believes any CoSec-Identity header it receives, and " +
+                "$stated=true states that nothing but ${GatewayModeTrust.admitted(stated)} can reach it (STA-7, STA-9)."
         }
     }
 
@@ -88,6 +93,7 @@ internal class CoSecGatewayModeAutoConfiguration {
         StartupTask.AfterSingletons { GatewayModeTrust.requireNoHiddenMethod(environment, beans) }
 
     @Bean
+    @Primary
     @ConditionalOnMissingBean
     fun cosecIdentityGate(
         pipeline: PipelineProperties,

@@ -3,15 +3,15 @@
 # Tests: :spring-boot:test --tests me.ahoo.cosec.spring.boot.pipeline.GatewayModeTrustTest
 
 diff --git a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/pipeline/GatewayModeTrust.kt b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/pipeline/GatewayModeTrust.kt
-index fa8dc8e3c..d94b185ba 100644
+index b7b772b07..741cfd020 100644
 --- a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/pipeline/GatewayModeTrust.kt
 +++ b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/pipeline/GatewayModeTrust.kt
-@@ -70,7 +70,7 @@ internal object GatewayModeTrust {
+@@ -124,7 +124,7 @@ internal object GatewayModeTrust {
      }
  
-     fun requireNoHiddenMethod(environment: Environment, beans: ListableBeanFactory) {
+     fun requireNoHiddenMethod(environment: Environment, beans: ListableBeanFactory, host: String? = null) {
 -        val found = hiddenMethod(environment, beans) ?: return
 +        val found = hiddenMethod(environment, beans)?.takeIf { false } ?: return
          error(
-             "cosec.pipeline.mode=gateway: $found. The gateway decided the method of the request line, but this service " +
+             "${host ?: describe(environment)}: $found. The gateway decided the method of the request line, but this service " +
                  "would run a POST as the method a form field `_method` names, and the gateway cannot remove a field " +
