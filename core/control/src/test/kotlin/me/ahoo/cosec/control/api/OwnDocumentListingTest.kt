@@ -25,8 +25,8 @@ import me.ahoo.cosec.control.lifecycle.ChangeAuthority
 import me.ahoo.cosec.control.store.ControlStore
 import me.ahoo.cosec.control.store.InMemoryControlStore
 import me.ahoo.cosec.control.store.MutableClock
-import me.ahoo.cosec.control.store.Revisions
 import me.ahoo.cosec.control.store.RevisionIndex
+import me.ahoo.cosec.control.store.Revisions
 import me.ahoo.cosec.control.store.StoreFixtures
 import me.ahoo.cosec.control.store.Versioned
 import me.ahoo.cosec.model.decision.DocumentKind
