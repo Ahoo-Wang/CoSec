@@ -141,8 +141,12 @@ class ManagementPortTest {
         for (stack in listOf(Stack.REACTIVE, Stack.SERVLET)) {
             val cells = run(stack, separate = true)
             // The control API, read with a platform token: served on the application's port, a 404 on the management port.
-            cells.after.app.controlApiWithToken.assert().describedAs("${stack.name} control API on the application port").isEqualTo(200)
-            cells.after.management.controlApiWithToken.assert().describedAs("${stack.name} control API on the management port").isEqualTo(404)
+            cells.after.app.controlApiWithToken.assert().describedAs(
+                "${stack.name} control API on the application port"
+            ).isEqualTo(200)
+            cells.after.management.controlApiWithToken.assert().describedAs(
+                "${stack.name} control API on the management port"
+            ).isEqualTo(404)
             // The login route: served (its answer to an empty body, not Spring's 404) on the application's port only.
             val login = checkNotNull(cells.login)
             login.app.assert().describedAs("${stack.name} logout route on the application port").isNotEqualTo(404)

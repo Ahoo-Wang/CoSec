@@ -40,7 +40,10 @@ import reactor.core.publisher.Mono
  */
 internal object ReactiveLoginRoutes {
     /** [served] says which requests the routes answer: the application's port only, never the management port (`CTL-69`). */
-    fun of(routes: Map<String, LoginRouteHandler>, served: RequestPredicate): RouterFunction<ServerResponse> = routes.entries
+    fun of(
+        routes: Map<String, LoginRouteHandler>,
+        served: RequestPredicate
+    ): RouterFunction<ServerResponse> = routes.entries
         .map { (path, handler) ->
             RouterFunctions.route(RequestPredicates.POST(path).and(served)) { answer(it, handler) }
         }

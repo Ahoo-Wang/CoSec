@@ -876,6 +876,20 @@
         "control:ControlServiceTest#a call through the facade is recorded as made in process - CTL-57, CTL-65"
       ],
       "pending": null
+    },
+    {
+      "id": "CTL-69",
+      "source": "maintainer decision 2026-11-21 (the management port of a host that believes the identity it is stated is not a place for the control API); found by the system test of the control-plane host",
+      "statement": "CoSec's own routes, the control API and the login routes (refresh, logout), answer only on the ports they are for: the application's own port, which the server bound (the control API's operators' profile there; it may have been configured as 0 or changed, so it is read from the server and never from a property alone), and, for the control API, its service port (`cosec.control.http.service-port`). On any other port of the host, the management port (`management.server.port`) included, every path of those routes is a `404` before the control plane or a login handler is asked. Spring Boot's WebFlux management server is a child context that collects the application's `WebFilter`s and `RouterFunction`s, so CoSec's own `RouterFunction`s would be served there, behind the pipeline's filter; on a host that believes the identity it is stated (`STA-9`) that is the whole control API for whoever can reach the management port, which the statement of what can reach the host does not cover. An application's own routes served on the management port are Spring Boot's behaviour (`STA-4` pins it) and stay behind CoSec's pipeline. On a servlet host the management server serves none of them.",
+      "level": "startup",
+      "pending": null,
+      "guards": [
+        "spring-boot:ManagementPortTest#CoSec's own routes answer on the application's port and never on the management port (CTL-69)",
+        "spring-boot:ManagementPortTest#WebFlux keeps its management server under the pipeline and serves the application's routes only behind it",
+        "spring-boot:ManagementPortTest#a gateway leaves its management server outside CoSec too, and gates its own routes and the control API there as on the application port",
+        "spring-boot:ManagementPortTest#a gateway on a random management port serves its routes there, under the gateway's filter",
+        "spring-boot:ManagementPortTest#WebMvc leaves its management server outside CoSec and serves nothing of the application there"
+      ]
     }
   ]
 }

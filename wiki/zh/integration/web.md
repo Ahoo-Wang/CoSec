@@ -407,9 +407,9 @@ docker run -p 8080:8080 -e SPRING_DATA_REDIS_URL=redis://redis:6379 -e COSEC_JWT
 
 | 服务器 | 应用端口 | 独立的 `management.server.port` |
 |---|---|---|
-| WebFlux | 经 CoSec：第一份平台文档之前探针是 `503`，之后匿名调用方是 `401` | 同样经 CoSec：Spring Boot 的管理服务器会收集应用的 `WebFilter` 和 `RouterFunction`，所以管道在它前面，应用的函数式路由和控制 API 都在其中（应用的控制器在那里是 `404`） |
-| WebMvc | 经 CoSec，同 WebFlux | 不经 CoSec：actuator 的端点是 Spring 自己的（存活 `200`；就绪在文档安装之前是 `503`，之后 `200`），控制器、函数式路由和控制 API 都是 `404` |
-| 网关（[单独一节](#actuator-on-a-gateway)） | 只有网关的路由 | 不经 CoSec：actuator 的端点是 Spring 自己的，网关的路由不在那里提供；控制平面开启时，控制 API 在那里提供，经它自己的管道 |
+| WebFlux | 经 CoSec：第一份平台文档之前探针是 `503`，之后匿名调用方是 `401` | 同样经 CoSec：Spring Boot 的管理服务器会收集应用的 `WebFilter` 和 `RouterFunction`，所以管道在它前面，应用自己的函数式路由在那里提供，经过它（应用的控制器是 `404`）；CoSec 自己的路由，控制 API 和登录路由，在那里是 `404`（`CTL-69`） |
+| WebMvc | 经 CoSec，同 WebFlux | 不经 CoSec：actuator 的端点是 Spring 自己的（存活 `200`；就绪在文档安装之前是 `503`，之后 `200`），控制器、函数式路由、控制 API 和登录路由都是 `404` |
+| 网关（[单独一节](#actuator-on-a-gateway)） | 只有网关的路由 | 不经 CoSec：actuator 的端点是 Spring 自己的，网关的路由不在那里提供；控制 API 也不在 |
 
 只有一个端口，或 `management.server.port` 与应用端口相同时，每一行都是应用端口那一列。
 
@@ -419,6 +419,7 @@ docker run -p 8080:8080 -e SPRING_DATA_REDIS_URL=redis://redis:6379 -e COSEC_JWT
 
   第一份文档发布之前，探针仍然回答 `503`，这正是“未就绪”该有的回答。Spring Boot 4 在任何平台上都提供探针：`management.endpoint.health.probes.enabled` 默认为 `true`。
 - **存活与启动探针不能依赖平台文档。** 应用的应用端口上的 HTTP 存活探针在第一份文档发布之前回答 `503`，kubelet 会在它能就绪之前就重启 pod。WebMvc 上把它指向管理端口，它不经 CoSec。WebFlux 的管理端口同样经 CoSec，所以对应用端口使用 `tcpSocket` 探针。
+- **管理端口不只是 actuator。** 在 WebFlux 上，Spring Boot 的管理服务器也提供应用自己的 `RouterFunction`，在 CoSec 的管道之后（`STA-4`）。这是 Spring Boot 的行为，不由 CoSec 改变：不该在那里应答某条路由的应用，自己检查端口。CoSec 自己的路由只在应用端口上应答（控制 API 还有它的服务端口）：在宿主的任何其他端口上，包括管理端口，它们都是 `404`（`CTL-69`），因为相信所述身份的宿主，否则会把控制 API 提供给任何能访问该端口的人。
 - **管理端口上不经 CoSec 的内容由网络保护**，与网关相同：只在那里暴露你愿意让能访问该端口的任何人访问的东西。
 
 ### 网关自己的处理器 {#the-gateways-own-handlers}

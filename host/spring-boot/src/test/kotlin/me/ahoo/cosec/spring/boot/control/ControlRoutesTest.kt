@@ -44,9 +44,9 @@ import me.ahoo.cosec.runtime.snapshot.SuspendingSnapshotSource
 import me.ahoo.cosec.runtime.snapshot.ViewKey
 import me.ahoo.cosec.spi.authn.Authenticator
 import me.ahoo.cosec.spi.authn.AuthnResult
+import me.ahoo.cosec.spring.boot.pipeline.ApplicationPort
 import me.ahoo.cosec.webflux.ServerWebExchanges.setSecurityContext
 import me.ahoo.cosec.webmvc.ServletRequests.setSecurityContext
-import me.ahoo.cosec.spring.boot.pipeline.ApplicationPort
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import org.springframework.http.HttpMethod
@@ -73,7 +73,11 @@ class ControlRoutesTest {
     @Test
     fun `on WebFlux a request without a permitted principal is a 401, its body never read`() {
         val read = AtomicBoolean()
-        val routes = CoSecControlRoutesAutoConfiguration.WebFlux().cosecControlRoutes(http, properties, ApplicationPort())
+        val routes = CoSecControlRoutesAutoConfiguration.WebFlux().cosecControlRoutes(
+            http,
+            properties,
+            ApplicationPort()
+        )
         val body = Mono.fromCallable {
             read.set(true)
             BODY
@@ -131,7 +135,11 @@ class ControlRoutesTest {
         val flux = MockServerRequest.builder().method(
             HttpMethod.POST
         ).uri(URI.create(PATH)).exchange(exchange).body(body)
-        val webFlux = CoSecControlRoutesAutoConfiguration.WebFlux().cosecControlRoutes(http, properties, ApplicationPort())
+        val webFlux = CoSecControlRoutesAutoConfiguration.WebFlux().cosecControlRoutes(
+            http,
+            properties,
+            ApplicationPort()
+        )
         webFlux.route(flux).block()!!.handle(flux).block()!!.statusCode().value().assert().isEqualTo(401)
         read.get().assert().isFalse()
 

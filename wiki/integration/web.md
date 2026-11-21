@@ -606,9 +606,9 @@ the filter fronts depends on the server (`STA-4`; the cells are asserted against
 
 | Server | The application port | A separate `management.server.port` |
 |---|---|---|
-| WebFlux | CoSec's: the probes are `503` before the first platform document, `401` for an anonymous caller after it | CoSec's too: Spring Boot's management server collects the application's `WebFilter`s and `RouterFunction`s, so the pipeline fronts it, the application's functional routes and the control API included (an application controller is a `404` there) |
-| WebMvc | CoSec's, as on WebFlux | Outside CoSec: actuator's endpoints are Spring's own (liveness `200`; readiness `503` until the documents are installed, then `200`), and a controller, a functional route and the control API are a `404` |
-| Gateway ([its own section](#actuator-on-a-gateway)) | the gateway's routes only | Outside CoSec: actuator's endpoints are Spring's own and the gateway's routes are not served; the control API, when the control plane is on, is served under its own pipeline |
+| WebFlux | CoSec's: the probes are `503` before the first platform document, `401` for an anonymous caller after it | CoSec's too: Spring Boot's management server collects the application's `WebFilter`s and `RouterFunction`s, so the pipeline fronts it, and the application's own functional routes are served there behind it (an application controller is a `404`); CoSec's own routes, the control API and the login routes, are a `404` there (`CTL-69`) |
+| WebMvc | CoSec's, as on WebFlux | Outside CoSec: actuator's endpoints are Spring's own (liveness `200`; readiness `503` until the documents are installed, then `200`), and a controller, a functional route, the control API and the login routes are a `404` |
+| Gateway ([its own section](#actuator-on-a-gateway)) | the gateway's routes only | Outside CoSec: actuator's endpoints are Spring's own and the gateway's routes are not served; neither is the control API |
 
 With one port, or `management.server.port` equal to the application's, every row is the application port.
 
@@ -623,6 +623,12 @@ With one port, or `management.server.port` equal to the application's, every row
   application answers `503` until the first document is published, so the kubelet restarts the pod before it can ever be
   ready. On WebMvc, point it at the management port, which is outside CoSec. On WebFlux the management port is under CoSec
   too, so use a `tcpSocket` probe on the application port.
+- **A management port is not only the actuator.** On WebFlux, Spring Boot's management server also serves the
+  application's own `RouterFunction`s, behind CoSec's pipeline (`STA-4`). That is Spring Boot's behaviour, not CoSec's to
+  change: an application that must not answer a route there checks the port itself. CoSec's own routes answer on the
+  application's port only (and the control API on its service port): on any other port of the host, the management port
+  included, they are a `404` (`CTL-69`), since a host that believes the identity it is stated would otherwise serve the
+  control API to whoever can reach that port.
 - **What is served on a management port outside CoSec is protected by the network**, as on a gateway: expose there only
   what you would expose to whoever can reach that port.
 

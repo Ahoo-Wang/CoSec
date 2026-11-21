@@ -158,6 +158,11 @@ got=$(curl -s -o /dev/null -w '%{http_code}' -H "CoSec-Identity: $platon" "http:
 if [ "$got" = 404 ]; then echo "ok   the platform document is a 404 on the service port"; else fail "the service port answered $got for the platform document"; fi
 got=$(curl -s -o /dev/null -w '%{http_code}' -H "CoSec-Identity: $platon" "http://localhost:$SERVICE/actuator/health")
 if [ "$got" = 404 ]; then echo "ok   nothing but the control API is served on the service port"; else fail "the service port answered $got for another path"; fi
+# The management port is not for the control API (CTL-69): the same call, stating the platform administrator, is a 404 there,
+# where Spring Boot's management server would otherwise serve the application's routes. The host believes the identity it
+# is stated, so a 200 here would make the control API the monitoring namespace's.
+got=$(curl -s -o /dev/null -w '%{http_code}' -H "CoSec-Identity: $platon" "http://localhost:$MGMT/cosec/control/v1/documents/platform")
+if [ "$got" = 404 ]; then echo "ok   the control API is a 404 on the management port"; else fail "the management port answered $got for the control API"; fi
 scrape=$(curl -s "http://localhost:$MGMT/actuator/prometheus")
 case "$scrape" in
   *cosec_snapshot_installed*) echo "ok   the scrape endpoint carries cosec_snapshot_installed" ;;
