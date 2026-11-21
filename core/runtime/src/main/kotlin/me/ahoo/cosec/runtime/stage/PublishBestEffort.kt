@@ -47,7 +47,7 @@ internal class PublishBestEffort(private val listeners: DecisionListeners, priva
         }
         var sampled: MutableSet<String>? = null
         for (shadow in shadows) {
-            if (shadow.sample()) {
+            if (shadow.sample(state.request.scope, state.view)) {
                 (sampled ?: HashSet<String>().also { sampled = it }) += shadow.name
             }
         }

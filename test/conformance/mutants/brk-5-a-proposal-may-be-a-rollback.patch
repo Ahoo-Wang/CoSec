@@ -1,0 +1,17 @@
+# Rule: BRK-5
+# Mutant: a proposal may carry the kind ROLLBACK, EXPIRE or MIGRATE: the kind is what the input says, not what the entry point is
+# Tests: :control:test --tests me.ahoo.cosec.control.change.ControlReviewFixesTest :conformance:test --tests me.ahoo.cosec.conformance.ConformanceTest
+
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Proposals.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Proposals.kt
+index 467bc9756..69d422dc2 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Proposals.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Proposals.kt
+@@ -78,7 +78,7 @@ internal class Proposals(
+         /** `deny-nomatch` confirmations of the statements that need them (RFC 0007 §9.5). */
+         confirmations: List<Confirmation> = emptyList(),
+     ): ChangeRequest {
+-        if (kind != ProvenanceKind.PUBLISH && kind != ProvenanceKind.BREAK_GLASS) {
++        if (kind == ProvenanceKind.BOOTSTRAP) {
+             throw ChangeRejectedException(BAD_REQUEST, "a change is proposed as PUBLISH or BREAK_GLASS, not $kind")
+         }
+         requireOperationBudget(operations)

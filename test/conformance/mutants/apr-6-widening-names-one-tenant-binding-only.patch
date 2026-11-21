@@ -1,0 +1,17 @@
+# Rule: APR-6
+# Mutant: the entry of a widened permission policy counts and names only the first tenant document that binds it
+# Tests: :control:test --tests me.ahoo.cosec.control.change.ChangesB1Test :conformance:test --tests me.ahoo.cosec.conformance.ConformanceTest
+
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/EscalationAnalysis.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/EscalationAnalysis.kt
+index 91def63a6..15453e0e5 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/EscalationAnalysis.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/EscalationAnalysis.kt
+@@ -268,7 +268,7 @@ internal class EscalationAnalysis(private val analyzer: GrantAnalyzer, private v
+         statements: List<Int>,
+         documents: CurrentDocuments,
+     ): Escalation? {
+-        val tenants = documents.referrers(key, policy).mapNotNullTo(HashSet()) { it.referrer as? SnapshotKey.Tenant }
++        val tenants = documents.referrers(key, policy).take(1).mapNotNullTo(HashSet()) { it.referrer as? SnapshotKey.Tenant }
+         if (tenants.isEmpty()) {
+             return null
+         }

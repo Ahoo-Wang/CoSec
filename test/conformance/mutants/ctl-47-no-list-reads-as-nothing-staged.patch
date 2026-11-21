@@ -1,0 +1,26 @@
+# Rule: CTL-47
+# Mutant: without a staged list kept, no document may stage a candidate, so an instance of a control plane that keeps no list never samples
+# Tests: :runtime:test --tests me.ahoo.cosec.runtime.shadow.StagedDocumentsTest :conformance:test
+
+diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/shadow/StagedDocuments.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/shadow/StagedDocuments.kt
+index a2ed8f5a4..0b4203abd 100644
+--- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/shadow/StagedDocuments.kt
++++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/shadow/StagedDocuments.kt
+@@ -67,7 +67,7 @@ class StagedDocuments(private val store: CandidateStore, private val clock: Cloc
+ 
+     /** Whether [key]'s candidate may be staged: read it by its key. */
+     fun mayStage(key: SnapshotKey): Boolean {
+-        val list = listed ?: return true
++        val list = listed ?: return false
+         return when (key) {
+             SnapshotKey.Platform -> list.platform
+             is SnapshotKey.App -> key.appId in list.apps
+@@ -77,7 +77,7 @@ class StagedDocuments(private val store: CandidateStore, private val clock: Cloc
+ 
+     /** Whether a request in [scope], decided on [view], reads a document that may stage a candidate. */
+     fun mayStage(scope: Scope, view: SnapshotView): Boolean {
+-        val list = listed ?: return true
++        val list = listed ?: return false
+         if (list.empty) return false
+         if (list.platform) return true
+         return listed(list.apps, view.app?.owner, scope.app.value) || listed(list.tenants, view.tenant?.owner, scope.tenant.value)

@@ -242,6 +242,8 @@ class PipelineStarterRedisTest {
             val startedAt = Instant.now()
             val uncompilable = """{"schema":2,"revision":2,"publishedAt":"2026-10-27T00:00:00Z","policies":"none"}"""
             runBlocking {
+                // As a stage writes it: listed first (CTL-46), so instances read it (CTL-47).
+                context.getBean(ControlStore::class.java).listStaged(SnapshotKey.Platform, window)
                 context.getBean(ControlStore::class.java).putCandidate(
                     SnapshotKey.Platform,
                     null,
@@ -279,6 +281,8 @@ class PipelineStarterRedisTest {
             val granting = """{"schema":2,"revision":2,"publishedAt":"2026-10-27T00:00:00Z",""" +
                 """"bindings":[{"id":"reads","subject":"*","app":"order","space":"*","policy":"perm:order/read"}]}"""
             runBlocking {
+                // As a stage writes it: listed first (CTL-46), so instances read it (CTL-47).
+                context.getBean(ControlStore::class.java).listStaged(SnapshotKey.Tenant("acme"), window)
                 context.getBean(ControlStore::class.java).putCandidate(
                     SnapshotKey.Tenant("acme"),
                     null,

@@ -37,7 +37,8 @@
       "statement": "External cancellation never produces an Outcome, and the downstream is never called.",
       "level": "pipeline",
       "guards": [
-        "runtime:PipelineCancellationTest"
+        "runtime:PipelineCancellationTest",
+        "runtime:AuthorizationCheckerTest#aCancellationWhileTheCheckLoadsItsViewPropagates"
       ],
       "pending": null
     },

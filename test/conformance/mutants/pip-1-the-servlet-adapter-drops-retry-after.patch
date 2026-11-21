@@ -1,0 +1,17 @@
+# Rule: PIP-1
+# Mutant: the servlet adapter does not write Retry-After, so the three adapters no longer answer a 429 alike
+# Tests: :spring-boot:test --tests me.ahoo.cosec.spring.boot.WebAdapterParityTest :webmvc:test
+
+diff --git a/edge/webmvc/src/main/kotlin/me/ahoo/cosec/webmvc/PipelineServletFilter.kt b/edge/webmvc/src/main/kotlin/me/ahoo/cosec/webmvc/PipelineServletFilter.kt
+index 712878860..a1258cafb 100644
+--- a/edge/webmvc/src/main/kotlin/me/ahoo/cosec/webmvc/PipelineServletFilter.kt
++++ b/edge/webmvc/src/main/kotlin/me/ahoo/cosec/webmvc/PipelineServletFilter.kt
+@@ -97,7 +97,7 @@ class PipelineServletFilter @InternalCoSecApi constructor(
+ 
+     /** Writes [outcome]; true when the request proceeds to the chain. */
+     private fun write(request: HttpServletRequest, response: HttpServletResponse, outcome: Outcome): Boolean {
+-        outcome.headers.forEach { (name, value) -> response.setHeader(name, value) }
++        outcome.headers.filterKeys { it != "Retry-After" }.forEach { (name, value) -> response.setHeader(name, value) }
+         val problem = outcome.problem
+         if (problem != null) {
+             response.status = outcome.status

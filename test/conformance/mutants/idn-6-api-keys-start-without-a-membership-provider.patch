@@ -1,0 +1,17 @@
+# Rule: IDN-6
+# Mutant: API keys turned on start without a MembershipProvider bean: every key is then a 503 at the first request
+# Tests: :spring-boot:test --tests me.ahoo.cosec.spring.boot.apikey.CoSecApiKeyAutoConfigurationTest
+
+diff --git a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/apikey/CoSecApiKeyAutoConfiguration.kt b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/apikey/CoSecApiKeyAutoConfiguration.kt
+index 043676061..01de8a3c3 100644
+--- a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/apikey/CoSecApiKeyAutoConfiguration.kt
++++ b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/apikey/CoSecApiKeyAutoConfiguration.kt
+@@ -63,7 +63,7 @@ internal class CoSecApiKeyAutoConfiguration {
+      */
+     @Bean
+     fun cosecApiKeyMembershipProviderCheck(context: ApplicationContext): StartupTask = StartupTask.OnCreation {
+-        check(context.getBeanNamesForType(MembershipProvider::class.java).isNotEmpty()) {
++        check(true || context.getBeanNamesForType(MembershipProvider::class.java).isNotEmpty()) {
+             "${ApiKeyProperties.ENABLED_KEY}=true needs a MembershipProvider bean: an API key's memberships are its " +
+                 "principal's (RFC 0009 §4.2, IDN-6), so every key would be answered 503. Add cosec-cocache and a " +
+                 "MembershipLoader bean, which configures " +

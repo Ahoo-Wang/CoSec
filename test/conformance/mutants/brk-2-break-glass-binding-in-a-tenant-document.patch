@@ -1,0 +1,16 @@
+# Rule: BRK-2
+# Mutant: a tenant document accepts a break-glass binding, which is a way for a tenant to hold root
+# Tests: :engine:test --tests me.ahoo.cosec.engine.CompiledDocumentTest :conformance:test --tests me.ahoo.cosec.conformance.ConformanceTest
+
+diff --git a/core/engine/src/main/kotlin/me/ahoo/cosec/engine/BoundEntries.kt b/core/engine/src/main/kotlin/me/ahoo/cosec/engine/BoundEntries.kt
+index 27a460c91..36925244c 100644
+--- a/core/engine/src/main/kotlin/me/ahoo/cosec/engine/BoundEntries.kt
++++ b/core/engine/src/main/kotlin/me/ahoo/cosec/engine/BoundEntries.kt
+@@ -76,7 +76,6 @@ internal fun boundEntry(
+         require(binding.breakGlass) { "Binding ${binding.id.value} binds $policyId without being break-glass" }
+     }
+     if (binding.breakGlass) {
+-        require(kind == DocumentKind.PLATFORM) { "Break-glass binding ${binding.id.value} in the $kind document" }
+         require(binding.subject is SubjectRef.Principal) {
+             "Break-glass binding ${binding.id.value} must bind a principal"
+         }

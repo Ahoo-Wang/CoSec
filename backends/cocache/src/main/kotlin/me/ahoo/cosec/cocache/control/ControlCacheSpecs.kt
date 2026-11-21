@@ -109,12 +109,13 @@ internal object ControlCacheSpecs {
         )
 
     /** The staged list (`CTL-46`, [ControlSets.STAGED_SET]): one set, each member `<docKey>/<window>` or the marker. */
-    fun stagedSet(keyPrefix: String = DEFAULT_KEY_PREFIX): SetStoreSpec<String, String> =
+    fun stagedSet(keyPrefix: String = DEFAULT_KEY_PREFIX, readOnly: Boolean = false): SetStoreSpec<String, String> =
         SetsOfRecord.spec(
             CoSecCacheSpecs.CANDIDATE_STAGED_CACHE_NAME,
             keyPrefix,
             KeyEncoder<String> { it },
-            StringCodec
+            StringCodec,
+            readOnly,
         )
 
     fun changeRequest(keyPrefix: String = DEFAULT_KEY_PREFIX): StoreSpec<ChangeId, ChangeRequest> =
