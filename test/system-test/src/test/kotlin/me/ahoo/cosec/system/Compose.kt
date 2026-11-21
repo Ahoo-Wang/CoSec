@@ -61,12 +61,8 @@ object Compose {
             finished.assert().describedAs("$service ($name) did not end in $TIMEOUT_SECONDS s: $output").isTrue()
             return process.exitValue() to output.toString()
         } finally {
-            ProcessBuilder(
-                "docker",
-                "rm",
-                "--force",
-                name
-            ).redirectErrorStream(true).start().waitFor(60, TimeUnit.SECONDS)
+            val remove = listOf("docker", "rm", "--force", name)
+            ProcessBuilder(remove).redirectErrorStream(true).start().waitFor(60, TimeUnit.SECONDS)
         }
     }
 
