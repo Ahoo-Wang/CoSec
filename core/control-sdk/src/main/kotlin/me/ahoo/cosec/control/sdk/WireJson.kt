@@ -30,7 +30,7 @@ import tools.jackson.databind.node.ObjectNode
  */
 internal object WireJson {
     fun parse(text: String): JsonNode = try {
-        CoSecJson.mapper.readTree(text) ?: throw format("the answer is empty")
+        CoSecJson.mapper.readTree(text)?.takeUnless { it.isNull || it.isMissingNode } ?: throw format("the answer is empty")
     } catch (e: JacksonException) {
         throw SnapshotFormatException("The control plane's answer is not JSON.", e)
     }

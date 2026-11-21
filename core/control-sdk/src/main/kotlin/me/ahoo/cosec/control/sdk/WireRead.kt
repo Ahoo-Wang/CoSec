@@ -27,11 +27,11 @@ internal object WireRead {
 
     fun JsonNode.opt(name: String): JsonNode? = get(name)?.takeUnless { it.isNull }
 
-    fun JsonNode.text(name: String): String = need(name).asText(name)
+    fun JsonNode.text(name: String): String = need(name).stringIn(name)
 
-    fun JsonNode.optText(name: String): String? = opt(name)?.asText(name)
+    fun JsonNode.optText(name: String): String? = opt(name)?.stringIn(name)
 
-    fun JsonNode.asText(name: String): String = if (isString) asString() else throw format("[$name] is not a string")
+    fun JsonNode.stringIn(name: String): String = if (isString) asString() else throw format("[$name] is not a string")
 
     fun JsonNode.long(name: String): Long = need(name).asLongIn(name)
 
@@ -49,7 +49,7 @@ internal object WireRead {
     fun JsonNode.optInstant(name: String): Instant? = opt(name)?.asInstant(name)
 
     private fun JsonNode.asInstant(name: String): Instant = try {
-        Instant.parse(asText(name))
+        Instant.parse(stringIn(name))
     } catch (e: DateTimeParseException) {
         throw SnapshotFormatException("The control plane's answer does not read: [$name] is not an instant.", e)
     }
@@ -63,7 +63,7 @@ internal object WireRead {
         name
     )?.let { if (it.isArray) it.values().toList() else listOf(it) }.orEmpty()
 
-    fun JsonNode.texts(name: String): List<String> = array(name).map { it.asText(name) }
+    fun JsonNode.texts(name: String): List<String> = array(name).map { it.stringIn(name) }
 
     fun JsonNode.counts(name: String): Map<String, Long> = need(name).let { node ->
         if (!node.isObject) throw format("[$name] is not an object")

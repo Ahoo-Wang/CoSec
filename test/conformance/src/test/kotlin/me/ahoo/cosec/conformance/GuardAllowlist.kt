@@ -47,6 +47,7 @@ object GuardAllowlist {
             "control-sdk:TypedWireTest#a change answer reads the members of its contract file, each read or named as left out - CTL-76",
             "control-sdk:TypedWireTest#the closed sets are the wire's - CTL-76",
             "control-sdk:PublishWithoutShadowTest#a refusal reads which conflict it is, and none for another status",
+            "control-sdk:TypedCodecTest#what does not read is a format error naming the member",
             "control:TypedClientTest#each kind of operation reaches the control plane and comes back as it was written - CTL-76",
             "control:TypedClientTest#every change body of the wiki reads and is written back as the control plane reads it - CTL-76",
             "control:TypedClientTest#every change the control plane answers reads into a typed change - CTL-76",
