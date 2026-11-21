@@ -1,16 +1,16 @@
 # Rule: CTL-58
-# Mutant: the service port stops without closing the connections still open, the idle keep-alive ones
-# Tests: :spring-boot:test --tests me.ahoo.cosec.spring.boot.control.ControlServicePortTest
+# Mutant: the service port's server is never stopped with the application: its connections, the idle keep-alive ones, stay open
+# Tests: :spring-boot:test --tests me.ahoo.cosec.spring.boot.control.ControlServicePortTest --tests me.ahoo.cosec.spring.boot.realserver.ControlServicePortSettingsTest
 
 diff --git a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/control/ControlServiceListener.kt b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/control/ControlServiceListener.kt
-index 8c5e5dd9c..c009d3494 100644
+index 8bbbd7bec..787e8000f 100644
 --- a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/control/ControlServiceListener.kt
 +++ b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/control/ControlServiceListener.kt
-@@ -86,7 +86,6 @@ internal class ControlServiceListener(
+@@ -83,7 +83,6 @@ internal class ControlServiceListener(
+         while (inFlight.get() > 0 && System.nanoTime() < deadline) {
              Thread.sleep(POLL_MILLIS)
          }
-         bound.stop()
--        channels.close().awaitUninterruptibly(grace.toMillis().coerceAtLeast(1))
+-        bound.stop()
          boundPort = 0
      }
  

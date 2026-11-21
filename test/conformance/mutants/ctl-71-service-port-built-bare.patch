@@ -3,10 +3,10 @@
 # Tests: :spring-boot:test --tests me.ahoo.cosec.spring.boot.realserver.ControlServicePortSettingsTest
 
 diff --git a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/control/ControlServiceServer.kt b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/control/ControlServiceServer.kt
-index 95af5aaeb..fc331a034 100644
+index cdefb5508..eb6f86ef9 100644
 --- a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/control/ControlServiceServer.kt
 +++ b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/control/ControlServiceServer.kt
-@@ -47,7 +47,7 @@ internal object ControlServiceServer {
+@@ -46,7 +46,7 @@ internal object ControlServiceServer {
          factory.addServerCustomizers(
              *context.getBeanProvider(NettyServerCustomizer::class.java).orderedStream().toList().toTypedArray(),
          )
@@ -14,4 +14,4 @@ index 95af5aaeb..fc331a034 100644
 +        if (port < 0) applyCustomizers(factory, context.getBeanProvider(WebServerFactoryCustomizer::class.java))
          // After the customizers: they set the application's port from `server.port`.
          factory.port = port
-         // Every connection it accepts is known, so that stopping can close the idle keep-alive ones too.
+         return factory

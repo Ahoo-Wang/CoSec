@@ -938,6 +938,7 @@
       "level": "startup",
       "pending": null,
       "guards": [
+        "spring-boot:ControlServicePortSettingsTest#the service port of a running application closes an idle keep-alive connection when the application stops",
         "spring-boot:ControlServicePortSettingsTest#with mutual TLS on the application port the service port is TLS with a client certificate too",
         "spring-boot:ControlServicePortSettingsTest#with a bind address on the application port the service port listens there only"
       ]
