@@ -26,7 +26,8 @@ import me.ahoo.cosec.runtime.shadow.ShadowListener
 /**
  * Last, the BEST_EFFORT listeners (RFC 0006 §9.3), once the outcome exists: offered without suspending, and handled
  * elsewhere. A null outcome is an external cancellation, whose event is CANCELLED (PIP-3). Without a BEST_EFFORT
- * listener no event is made: the REQUIRED ones had theirs.
+ * listener no event is made: the REQUIRED ones had theirs. Nor when every BEST_EFFORT listener reads only the events it
+ * sampled (the shadow listeners) and none sampled this request (`OBS-8`): the event would be offered to no one.
  */
 internal class PublishBestEffort(private val listeners: DecisionListeners, private val ids: FallbackIds) {
     /** The shadow listeners, asked whether they sample a request before its event is made (§9.5.4). */
@@ -37,6 +38,9 @@ internal class PublishBestEffort(private val listeners: DecisionListeners, priva
             return
         }
         val replay = if (outcome == null) null else replay(state)
+        if (replay == null && listeners.sampledOnly) {
+            return
+        }
         listeners.publish(state.event(ids.generate(), outcome, replay))
     }
 

@@ -31,7 +31,7 @@ import me.ahoo.cosec.model.decision.DocumentKind
 import me.ahoo.cosec.model.decision.StatementRef
 import me.ahoo.cosec.model.scope.Scope
 import me.ahoo.cosec.runtime.event.DecisionEvent
-import me.ahoo.cosec.runtime.event.DecisionListener
+import me.ahoo.cosec.runtime.event.SampledOnlyListener
 import me.ahoo.cosec.runtime.event.Delivery
 import me.ahoo.cosec.runtime.event.ReplayHandle
 import me.ahoo.cosec.runtime.snapshot.SnapshotViews
@@ -59,7 +59,8 @@ private val log = KotlinLogging.logger {}
  *
  * Whether a request is sampled is decided before its event is made ([sample]); only then does the event carry the
  * [ReplayHandle] that keeps its view reachable. With a staged list, only a request whose view reads a listed document is
- * sampled at all (`CTL-47`).
+ * sampled at all (`CTL-47`). It reads only the events it sampled, so it is offered no other ([SampledOnlyListener],
+ * `OBS-8`).
  */
 @InternalCoSecApi
 class ShadowListener(
@@ -74,7 +75,7 @@ class ShadowListener(
      * ([ViewDocuments.appOf], RC1-17). Without them such a candidate cannot be compared: [ShadowOutcome.CANDIDATE_ERROR].
      */
     private val views: SnapshotViews? = null,
-) : DecisionListener {
+) : SampledOnlyListener {
     init {
         require(sampleRate in 0.0..1.0) { "The shadow sample rate is between 0 and 1, not $sampleRate." }
     }

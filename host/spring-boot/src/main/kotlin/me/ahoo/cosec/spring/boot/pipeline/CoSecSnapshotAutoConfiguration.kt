@@ -290,7 +290,7 @@ class CoSecSnapshotAutoConfiguration {
             }
             val caching = candidates as? CachingCandidateSource
             val store = caching?.store ?: stores.ifUnique
-            return ShadowReporting(ShadowReporter(recorder, sink, installed, clock, interval, store, caching?.staged))
+            return ShadowReporting(ShadowReporter(recorder, sink, installed, clock, interval, store, caching))
         }
 
         @InternalCoSecApi
