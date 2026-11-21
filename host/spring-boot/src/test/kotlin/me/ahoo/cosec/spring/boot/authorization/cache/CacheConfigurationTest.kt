@@ -38,14 +38,10 @@ class CacheConfigurationTest {
     @Test
     fun applyToWithAllOptions() {
         val policy = CacheConfiguration(
-            initialCapacity = 16,
             maximumSize = 100,
             localMaxAge = Duration.ofMinutes(10),
-            expireAfterAccess = Duration.ofMinutes(5),
         ).applyTo(spec).policy
-        policy.local.initialCapacity.assert().isEqualTo(16)
         policy.local.maximumSize.assert().isEqualTo(100L)
-        policy.local.expireAfterAccess.assert().isEqualTo(Duration.ofMinutes(5))
         policy.localMaxAge.assert().isEqualTo(Duration.ofMinutes(10))
     }
 
@@ -56,19 +52,17 @@ class CacheConfigurationTest {
         policy.local.maximumSize.assert().isEqualTo(500_000L)
     }
 
-    /** A number without a unit is seconds, as `expire-after-write` and `expire-after-access` read it with `expire-unit`. */
+    /** A number without a unit is seconds, as `expire-after-write` read it with `expire-unit`. */
     @Test
     fun bareNumbersAreSeconds() {
         val source = MapConfigurationPropertySource(
             mapOf(
                 "cosec.authentication.revocation.cache.local-max-age" to "10",
-                "cosec.authentication.revocation.cache.expire-after-access" to "5",
                 "cosec.authentication.revocation.cache.maximum-size" to "7",
             )
         )
         val token = Binder(source).bind(RevocationProperties.PREFIX, RevocationProperties::class.java).get().cache
         token.localMaxAge.assert().isEqualTo(Duration.ofSeconds(10))
-        token.expireAfterAccess.assert().isEqualTo(Duration.ofSeconds(5))
         token.maximumSize.assert().isEqualTo(7L)
     }
 

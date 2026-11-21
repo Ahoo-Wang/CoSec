@@ -22,7 +22,9 @@ Startup fails on a `cosec.*` key CoSec does not read, whatever else is configure
 misspelled, renamed or removed key would otherwise do nothing. A key is known when the configuration metadata on the
 classpath (`META-INF/spring-configuration-metadata.json`) declares it, or when it lies under a map- or list-valued
 property. The message lists every unknown key and links
-[the table of removed and renamed keys](./upgrading.md#removed-and-renamed-properties). No property turns this check
+[the table of removed and renamed keys](./upgrading.md#removed-and-renamed-properties). A key that a preview of 8.0
+had and a later one removed, because its value is [computed](#computed-not-configured), is listed as `no longer a
+property` with what replaced it. No property turns this check
 off: a key prefix a release replaced, had it been ignored, would leave token revocations where nothing reads them.
 The check runs before any bean is created, the application's own included, so a configuration that still sets
 removed keys hears of every one of them before any other startup failure, such as a missing token store.
@@ -57,6 +59,29 @@ Every other `COSEC_*` variable is checked (`COSEC_JWT_SECRT` fails startup), and
 never unknown whatever its source, so the exemption cannot hide a property CoSec reads. Setting
 `enableServiceLinks: false` on the pod keeps the variables out of the environment altogether
 ([Troubleshooting](./troubleshooting.md#startup-fails-on-an-unknown-property)).
+
+## Computed, not configured {#computed-not-configured}
+
+What can be computed is not a property: each value below follows from a value you do set, from the machine, or from a
+limit CoSec owns, and has no key. Each is logged once at startup, in a line that begins `CoSec derived, not configured:`
+(one for the data plane's snapshot values, one for the control plane's), with what it was derived from.
+
+| Value | Computed as | From |
+|---|---|---|
+| A document unconfirmed for this long is logged at `WARN` | 6 passes: `60s` at the default | [`cosec.authorization.snapshot.revalidate-interval`](#snapshot) |
+| ... and at `ERROR`, as stale | 30 passes: `5m` at the default | the same |
+| How long a request waits for a document that is not installed | 40 % of the pipeline timeout, at least `1ms`: `2s` at the default | [`cosec.pipeline.timeout`](#pipeline) |
+| Threads that compile documents | one per 2 cores, at least 1 and at most 4 | the cores of the process |
+| Documents a revalidation pass confirms at once | 16, a constant: a pass slower than the interval runs back to back, and only the burst depends on it | |
+| How often an instance writes its shadow reports and status | a sixth of the status's life (`10s`), and no oftener than a fifth of the shortest life of a window or a second | [`cosec.control.shadow.min-duration`](#control-plane), read where it is set |
+| How often each control-plane instance reclaims revisions | 1 hour, a constant: what is reclaimed is decided by `min-age` and `max-count` | |
+| When a record outside a revision chain, or a change listed and never written, is removed | one reclaim pass old: 1 hour | the reclaim interval |
+| How often shadowing changes are looked at | a fifteenth of `min-duration`, between 250 ms and 1 minute: `1m` at the default | [`cosec.control.shadow.min-duration`](#control-plane) |
+| The largest request body the control API reads | the document cap (8 MB) and 2 MB for the operations around it: 10 MB | the document cap |
+| The initial size and an idle expiry of the revocation caches' local copy | none: the cache sizes itself, and `local-max-age` expires every entry | |
+
+A key that once set one of these fails startup with the keys CoSec does not read, and says that it is no longer a
+property and what replaced it ([Unknown properties](#unknown-properties)).
 
 ## Feature switches
 
@@ -190,21 +215,16 @@ of your own replaces both.
 | Property | Type | Default | Effect |
 |---|---|---|---|
 | `cosec.authorization.snapshot.local-max-age` | duration | `30s` | How long CoCache's local copy of a document may serve a cold load before Redis is asked again. It applies whatever a cache customizer or `cocache.*` property sets. |
-| `cosec.authorization.snapshot.revalidate-interval` | duration | `10s` | How often a pass starts that confirms every installed document against Redis with a conditional read; while a pass is still in flight, the next starts as soon as it ends, never overlapped. A change whose invalidation message was lost is installed by the first pass that reaches its document after the change is readable (`SNP-6`). At least `1s`, at most `5m`, less than `lag-warn` and, with `fail-closed.tenants`, less than `fail-closed.max-lag`; anything else fails startup. Each pass costs Redis a few microseconds per document, whatever its size ([Storage](./storage.md#what-revalidation-costs-redis)). |
-| `cosec.authorization.snapshot.lag-warn` | duration | `60s` | A document not confirmed for longer is logged at `WARN`. Must not exceed `lag-escalate`. |
-| `cosec.authorization.snapshot.lag-escalate` | duration | `5m` | A document not confirmed for longer is logged at `ERROR` as stale. |
+| `cosec.authorization.snapshot.revalidate-interval` | duration | `10s` | How often a pass starts that confirms every installed document against Redis with a conditional read; while a pass is still in flight, the next starts as soon as it ends, never overlapped. A change whose invalidation message was lost is installed by the first pass that reaches its document after the change is readable (`SNP-6`). At least `1s`, at most `5m` and, with `fail-closed.tenants`, less than `fail-closed.max-lag`; anything else fails startup. A document not confirmed for 6 intervals is logged at `WARN`, for 30 at `ERROR` as stale ([Computed, not configured](#computed-not-configured)). Each pass costs Redis a few microseconds per document, whatever its size ([Storage](./storage.md#what-revalidation-costs-redis)). |
 | `cosec.authorization.snapshot.fail-closed.tenants` | set of tenant ids | empty | Tenants that must not be decided on old documents: when the oldest document a request of such a tenant reads was confirmed longer ago than `max-lag`, the request is `503` (`SourceUnavailable`) unless a DENY matches. `*` names every tenant: a host with more tenants than anyone lists chooses freshness over availability for all of them. Other tenants keep deciding on what is installed. |
 | `cosec.authorization.snapshot.fail-closed.max-lag` | duration | `30m` | The lag beyond which the tenants above fail closed. Not negative. |
-| `cosec.authorization.snapshot.cold-load-timeout` | duration | `2s` | How long a request waits for a document that is not installed. Past it the document counts as failed for that request. Must be positive. |
 | `cosec.authorization.snapshot.max-apps` | int | `1024` | The most app documents held in memory (positive); the least recently used one is dropped beyond it, and loaded again when needed. Under a burst of cold loads a family may for a moment hold more: at most twice this bound, and never more than 4,096 above it, plus the documents being loaded at that moment; beyond that the thread that loaded the document evicts up to 64 of them before it answers, and housekeeping the rest ([Storage](./storage.md#how-instances-read-documents)). |
 | `cosec.authorization.snapshot.max-tenants` | int | `16384` | The same for tenant documents (positive). The platform document is never dropped. Sized so that an instance holds the tenants it serves: a tenant document of 5 roles of 20 permissions and 20 bindings retains about 30 KB, so all 16,384 places take about 490 MB of heap ([Sizing a SaaS gateway](./deployment.md#sizing-a-saas-gateway)). |
 | `cosec.authorization.snapshot.max-absent-apps` | int | `256` | The most app ids held as having no app document (positive), apart from `max-apps` (`SNP-7`): app ids come from requests, so a client naming made-up apps cannot push out a real one, and each id it names beyond this is read from Redis again. |
 | `cosec.authorization.snapshot.max-absent-tenants` | int | `65536` | The most tenant ids held as having no tenant document (positive), apart from `max-tenants` (`SNP-7`). Every request of such a tenant reads this entry; one dropped is read from Redis again on the tenant's next request. About 470 bytes each: about 30 MB when every place is used. |
-| `cosec.authorization.snapshot.reload-concurrency` | int | `16` | Documents a revalidation pass confirms at once (positive). A pass takes about the entries held × one conditional read ÷ this: 80,000 entries at 1 ms a read take 25 s at 4, 12.6 s at 8 and 6.3 s at 16 (measured); 16 keeps a pass of the default bounds full within the default interval for reads up to about 2 ms. The average read rate is unchanged, entries ÷ `revalidate-interval`; only the burst during a pass is higher. Past `revalidate-interval`, passes run back to back and lag grows with them. |
 | `cosec.authorization.snapshot.prewarm-apps` | list of app ids | empty | App documents loaded at startup, after the platform document, which is always loaded. Readiness refuses traffic until the platform document and every listed document are installed; liveness is not affected. |
 | `cosec.authorization.snapshot.prewarm-tenants` | list of tenant ids | empty | Tenant documents loaded at startup, as above. |
 | `cosec.authorization.snapshot.prewarm-host-apps` | boolean | `true` | Load the apps this host names at startup, as `prewarm-apps` are, and hold them (`SNP-20`): its `cosec.authorization.scope.app-id` and, on a gateway, the `cosec-app-id` of every route. Readiness waits for each until Redis answers with a document or with none. When the gateway's routes are refreshed, an app a route names for the first time is loaded then, off the request path. A held app document is replaced within seconds of a publish, by the invalidation message or the next revalidation pass, as the platform document is. Off, these apps load on their first request; `prewarm-apps` keeps working either way. |
-| `cosec.authorization.snapshot.compile-threads` | int | `2` | Threads that compile documents. Must be positive. |
 | `cosec.authorization.snapshot.eviction-check` | `fail`, `warn` | `fail` | What startup does when Redis' `maxmemory-policy` is not `noeviction` on every node, or cannot be read (a failed or denied `INFO memory`, a wrapped or custom CoCache backend). `fail` stops startup. `warn` starts and logs a `WARN` that begins with `!!!` ([Redis requirements](./storage.md#redis-requirements)). The in-memory CoCache backend always passes. Either way the instance reads the policy again every `revalidate-interval`, and the `cosecSnapshotEviction` health indicator is `DOWN` while Redis may evict; a policy it cannot read is `DOWN` under `fail` and `UP` with `eviction: unknown` under `warn` ([Troubleshooting](./troubleshooting.md#cosecsnapshoteviction-is-down)). |
 
 ## Shadow windows
@@ -216,7 +236,6 @@ How windows work: [Testing changes](../policies/testing.md).
 |---|---|---|---|
 | `cosec.authorization.shadow.enabled` | boolean | `true` | Evaluate sampled requests again on the staged candidates, and write this instance's reports and status to Redis. Off, this instance's traffic counts for nothing in a window, a candidate it cannot compile does not block one, and it writes no status for the propagation view. |
 | `cosec.authorization.shadow.sample-rate` | double, `0` to `1` | `0.1` | Share of requests evaluated again on the candidates, off the request path. |
-| `cosec.authorization.shadow.report-interval` | duration | `10s` | How often the instance writes its reports and its status. At least `1ms`: a shorter interval fails startup. |
 | `cosec.authorization.shadow.instance-id` | string | a random UUID | The prefix of this instance's id in reports and statuses: the id is `<instance-id>.<suffix>`, with a suffix new at every start, so the id is unique per process start. A restarted process therefore never replaces the reports of the one before it, whose `CANDIDATE_ERROR` would otherwise vanish and unblock a window. An ACL confines an instance to its keys with `<instance-id>.*` ([Storage](./storage.md#who-may-write-which-keys)). Only letters, digits, `.`, `_` and `-`, since it ends a Redis key. Any other id fails startup. |
 
 ## Authentication
@@ -285,9 +304,7 @@ Snapshot documents have their own properties ([Snapshot](#snapshot)).
 | Property | Type | Default | Effect |
 |---|---|---|---|
 | `maximum-size` | long | `500000` | Maximum entries in the local copy. |
-| `initial-capacity` | int | CoCache's | Initial capacity of the local copy. |
 | `local-max-age` | duration (a bare number is seconds) | `30s` | How long a local copy lives at most: the bound on staleness when an invalidation message is lost. |
-| `expire-after-access` | duration (a bare number is seconds) | none | Drop a local copy not read for this long. |
 
 These size and age the local copy only. A revocation's lifetime in Redis is set when it is written.
 
@@ -325,19 +342,15 @@ credential is ever revoked.
 | `cosec.control.http.base-path` | string | `/cosec/control` | Where the control API is served. Its routes are under `{base-path}/v1`, so moving the API keeps the version. |
 | `cosec.control.http.enabled` | boolean | `true` | Whether the control API's routes are served on this instance (`CTL-58`): `false` serves none, for an application that embeds the control plane and reaches it in process. `true` or `false` only. |
 | `cosec.control.http.service-port` | int | unset | A port of its own for services that call the control plane directly, serving the **service profile** of the control API (`CTL-58`): the tenant and app documents (which there are, their reads, and `:apply` on a tenant's) and the change flow that needs no person (propose a tenant's document, read, rebase, abandon, run or skip the shadow window, publish). Every other route, the platform document, approvals, rollback, break-glass and the queries included, is a `404` there, as is a change of any document but a tenant's named by its id, a listing of any document's changes but a tenant's, and any path outside the control API; a listing by state shows only tenant documents' changes. The control plane's facade (`ControlService`) reaches exactly these routes. It never widens what a caller may do: each route is authorized for the principal the caller states. WebFlux only; not the application's port or the management port (`0` binds one, announced as `local.control.service.port`). A host with a service port states `only-trusted-callers-can-reach=true`: `only-gateway-can-reach` fails startup there, since the port admits services. Unset, no such port. It is the application's own server on another port (`CTL-71`): its TLS and client authentication (`server.ssl.*`), bind address (`server.address`), HTTP/2, header and body limits, timeouts and forwarded-header handling are the application's, with no property of its own, so a host that makes `only-trusted-callers-can-reach` true by mutual TLS on its port serves the service port with mutual TLS too, and one bound to an address binds this port there. It stops by unbinding, waiting for the requests in flight up to `spring.lifecycle.timeout-per-shutdown-phase`, and closing every connection still open. |
-| `cosec.control.http.max-body-size` | data size | `10MB` | The largest request body the control API reads, on WebMvc and WebFlux alike (`CTL-41`): a document's 8 MB cap and room for the operations' JSON around it. A larger body is a `400` `invalid-request`. On WebFlux it replaces `spring.codec.max-in-memory-size` for the control routes. A request without a permitted principal has no body read at all (`401`). |
 | `cosec.control.revisions.max-count` | int | `50` | Revisions always kept per document; older ones are reclaimed once also older than `min-age`. Revisions an open change rests on are kept. |
 | `cosec.control.revisions.min-age` | duration | `7d` | Revisions younger than this are always kept. |
-| `cosec.control.revisions.orphan-age` | duration | `1h` | Records of conflicted publishes are removed once this old, and so is an open-change set's member whose change has no record (a change is listed before it is written), counted from when this instance first found it missing. |
-| `cosec.control.revisions.reclaim-interval` | duration | `1h` | How often each control-plane instance reclaims revisions and expires the open changes of each document; a lease lets one instance at a time do each document. Must be positive. |
 | `cosec.control.changes.expire-after` | duration | `7d` | An open change request expires this long after it was proposed, and leaves the list of open changes. |
 | `cosec.control.approval.expire-after` | duration | `72h` | How long an approval stays valid. Startup fails when it is longer than `cosec.jwt.token-validity.refresh`, how long a token revocation is kept: an approval would outlive the revocation of its token. |
 | `cosec.control.approval.four-eyes` | boolean | `false` | Whether the changes of a platform principal holding `cosec:approve` on the document (the trust root) are analyzed too: what the analysis cannot prove contained then needs another platform principal's approval. A change that escalates needs one either way. |
 | `cosec.control.break-glass.max-duration` | duration | `4h` | The longest a break-glass binding may last. More than `24h`, or not positive, fails startup. |
-| `cosec.control.shadow.min-duration` | duration | `15m` | A shadow window closes no earlier than this, once it also has `min-samples`. |
+| `cosec.control.shadow.min-duration` | duration | `15m` | A shadow window closes no earlier than this, once it also has `min-samples`. The control plane looks at the open windows every fifteenth of it. A data-plane instance reads it too, as a cadence only: one whose configuration has it writes its shadow reports every fifth of it (at least a second, at most 10 s), and one whose configuration does not reports every 10 seconds. The data plane's startup line says which ([Computed, not configured](#computed-not-configured)). |
 | `cosec.control.shadow.min-samples` | long | `1000` | Compared samples a window needs to close before `max-duration`. `0` lets a window close on time alone, with no sample at all if no request came: the shadow step then proves nothing, and startup logs a `WARN` saying so. |
 | `cosec.control.shadow.max-duration` | duration | `24h` | A window closes at this age with fewer samples, as insufficient evidence the publisher must acknowledge. Must not be less than `min-duration`. |
-| `cosec.control.shadow.check-interval` | duration | `1m` | How often shadowing changes are looked at, by one instance at a time; a window closes up to this late. Must be positive. |
 | `cosec.control.audit.required-timeout` | duration | `5s` | How long every `REQUIRED` change listener together may take to record a gated step (publish, break-glass) before the step fails with `503`. |
 | `cosec.control.audit.kafka.enabled` | boolean | `true` | The Kafka change listener (`cosec-kafka` and a `KafkaOperations` bean). |
 | `cosec.control.audit.kafka.topic` | string | `cosec-control-audit` | Kafka topic of the change events. |

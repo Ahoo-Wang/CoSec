@@ -23,7 +23,7 @@ import me.ahoo.cosec.document.PolicyDocumentCompiler
 @InternalCoSecApi
 class ChangeOptions(
     /** RFC 0003 Q14. */
-    val maxDocumentBytes: Int = 8 * 1024 * 1024,
+    val maxDocumentBytes: Int = DEFAULT_MAX_DOCUMENT_BYTES,
     /** RFC 0004 Q2; the compiler enforces it. */
     val principalBindingLimit: Int = PolicyDocumentCompiler.DEFAULT_PRINCIPAL_BINDING_LIMIT,
     /** How long a change may stay unpublished before it expires (`cosec.control.changes.expire-after`). */
@@ -48,5 +48,11 @@ class ChangeOptions(
             maxDocumentBytes > 0 && principalBindingLimit >= 0 && !expireAfter.isNegative && !approvalExpireAfter.isNegative &&
                 breakGlassMaxDuration > java.time.Duration.ZERO && breakGlassMaxDuration <= MAX_BREAK_GLASS
         ) { "Invalid change options." }
+    }
+
+    @InternalCoSecApi
+    companion object {
+        /** RFC 0003 Q14: the most bytes an encoded document may have. */
+        const val DEFAULT_MAX_DOCUMENT_BYTES: Int = 8 * 1024 * 1024
     }
 }

@@ -319,18 +319,6 @@
       "type": "java.util.Map<java.lang.String,me.ahoo.cosec.spring.boot.authentication.social.SocialAuthenticationProperties$Provider>"
     },
     {
-      "description": "Drops a local copy not read for this long. A number without a unit is seconds, as the expiry settings always were.",
-      "name": "cosec.authentication.revocation.cache.expire-after-access",
-      "sourceType": "me.ahoo.cosec.spring.boot.authorization.cache.CacheConfiguration",
-      "type": "java.time.Duration"
-    },
-    {
-      "description": "The initial capacity of the local copy; unset, CoCache's.",
-      "name": "cosec.authentication.revocation.cache.initial-capacity",
-      "sourceType": "me.ahoo.cosec.spring.boot.authorization.cache.CacheConfiguration",
-      "type": "java.lang.Integer"
-    },
-    {
       "description": "How long a local copy lives at most (CoCache's `localMaxAge`): the bound on staleness when an invalidation is lost.",
       "name": "cosec.authentication.revocation.cache.local-max-age",
       "sourceType": "me.ahoo.cosec.spring.boot.authorization.cache.CacheConfiguration",
@@ -427,28 +415,10 @@
       "type": "java.lang.String"
     },
     {
-      "description": "How often this instance writes its reports and its status.",
-      "name": "cosec.authorization.shadow.report-interval",
-      "sourceType": "me.ahoo.cosec.spring.boot.pipeline.RuntimeAuthorizationProperties$Shadow",
-      "type": "java.time.Duration"
-    },
-    {
       "description": "The share of requests evaluated again on the candidates, from 0 to 1.",
       "name": "cosec.authorization.shadow.sample-rate",
       "sourceType": "me.ahoo.cosec.spring.boot.pipeline.RuntimeAuthorizationProperties$Shadow",
       "type": "java.lang.Double"
-    },
-    {
-      "description": "How long a request waits for a document that is not installed; past it the document counts as failed. Positive.",
-      "name": "cosec.authorization.snapshot.cold-load-timeout",
-      "sourceType": "me.ahoo.cosec.spring.boot.pipeline.RuntimeAuthorizationProperties$Snapshot",
-      "type": "java.time.Duration"
-    },
-    {
-      "description": "Threads that compile documents; positive.",
-      "name": "cosec.authorization.snapshot.compile-threads",
-      "sourceType": "me.ahoo.cosec.spring.boot.pipeline.RuntimeAuthorizationProperties$Snapshot",
-      "type": "java.lang.Integer"
     },
     {
       "description": "What a Redis whose `maxmemory-policy` is not `noeviction`, or cannot be read, does to startup (`SNP-3`).",
@@ -467,18 +437,6 @@
       "name": "cosec.authorization.snapshot.fail-closed.tenants",
       "sourceType": "me.ahoo.cosec.spring.boot.pipeline.RuntimeAuthorizationProperties$Snapshot$FailClosed",
       "type": "java.util.Set<java.lang.String>"
-    },
-    {
-      "description": "How long a document may go unconfirmed before it is logged at ERROR as stale.",
-      "name": "cosec.authorization.snapshot.lag-escalate",
-      "sourceType": "me.ahoo.cosec.spring.boot.pipeline.RuntimeAuthorizationProperties$Snapshot",
-      "type": "java.time.Duration"
-    },
-    {
-      "description": "How long a document may go unconfirmed before it is logged at WARN; not more than `lag-escalate`.",
-      "name": "cosec.authorization.snapshot.lag-warn",
-      "sourceType": "me.ahoo.cosec.spring.boot.pipeline.RuntimeAuthorizationProperties$Snapshot",
-      "type": "java.time.Duration"
     },
     {
       "description": "How long an instance serves its local copy of a document before it asks Redis again; the one value for the snapshot cache's local tier, whatever a cache customizer or `cocache.*` property sets.",
@@ -529,13 +487,7 @@
       "type": "java.util.List<java.lang.String>"
     },
     {
-      "description": "Documents a revalidation pass confirms at once (positive). A pass takes about the documents held × one conditional read ÷ this; past `revalidate-interval`, passes run back to back and lag grows with them.",
-      "name": "cosec.authorization.snapshot.reload-concurrency",
-      "sourceType": "me.ahoo.cosec.spring.boot.pipeline.RuntimeAuthorizationProperties$Snapshot",
-      "type": "java.lang.Integer"
-    },
-    {
-      "description": "How often a pass starts that confirms every installed document against Redis; while a pass is still in flight, the next starts as soon as it ends. A change whose invalidation was lost is installed by the first pass that reaches its document (`SNP-6`). At least 1 second, at most 5 minutes, less than `lag-warn` and, with fail-closed tenants, less than `fail-closed.max-lag`; anything else fails startup.",
+      "description": "How often a pass starts that confirms every installed document against Redis; while a pass is still in flight, the next starts as soon as it ends. A change whose invalidation was lost is installed by the first pass that reaches its document (`SNP-6`). At least 1 second, at most 5 minutes and, with fail-closed tenants, less than `fail-closed.max-lag`; anything else fails startup. A document unconfirmed for 6 intervals is logged at WARN, for 30 at ERROR as stale ([SnapshotOptions.derive]).",
       "name": "cosec.authorization.snapshot.revalidate-interval",
       "sourceType": "me.ahoo.cosec.spring.boot.pipeline.RuntimeAuthorizationProperties$Snapshot",
       "type": "java.time.Duration"
@@ -619,12 +571,6 @@
       "sourceType": "me.ahoo.cosec.spring.boot.control.ControlProperties$Http"
     },
     {
-      "description": "The largest request body the control routes read, on WebMvc and WebFlux alike; a larger one is answered 400 (CTL-41). A document's 8 MB cap (RFC 0003 Q14) and room for the operations' JSON around it.",
-      "name": "cosec.control.http.max-body-size",
-      "sourceType": "me.ahoo.cosec.spring.boot.control.ControlProperties$Http",
-      "type": "org.springframework.util.unit.DataSize"
-    },
-    {
       "name": "cosec.control.http.service-port",
       "type": "java.lang.Integer",
       "description": "A port of its own for services that call the control plane directly, serving the narrow service profile (`CTL-58`): tenant and app documents, and the change flow that needs no person. Unset, no such port. WebFlux only; it is not the application's port or the management port. Reaching it is a network decision (a policy that admits the labelled service pods), and the host then states `only-trusted-callers-can-reach`.",
@@ -640,24 +586,6 @@
       "description": "Revisions younger than this are always kept.",
       "name": "cosec.control.revisions.min-age",
       "sourceType": "me.ahoo.cosec.spring.boot.control.ControlProperties$Revisions",
-      "type": "java.time.Duration"
-    },
-    {
-      "description": "The records of conflicted publishes are removed once this old.",
-      "name": "cosec.control.revisions.orphan-age",
-      "sourceType": "me.ahoo.cosec.spring.boot.control.ControlProperties$Revisions",
-      "type": "java.time.Duration"
-    },
-    {
-      "description": "How often each instance tries to reclaim; one instance at a time does each document.",
-      "name": "cosec.control.revisions.reclaim-interval",
-      "sourceType": "me.ahoo.cosec.spring.boot.control.ControlProperties$Revisions",
-      "type": "java.time.Duration"
-    },
-    {
-      "description": "How often shadowing changes are looked at, by one instance at a time; a window closes up to this late.",
-      "name": "cosec.control.shadow.check-interval",
-      "sourceType": "me.ahoo.cosec.spring.boot.control.ControlProperties$Shadow",
       "type": "java.time.Duration"
     },
     {

@@ -198,7 +198,7 @@ kind 为 `INTERNAL`）。span 在决策之后根据请求的开始时间和管�
 
 | 指标 | 标签 | 计数 |
 |---|---|---|
-| `cosec.shadow.staged.age` | 无 | 一个 gauge，单位秒：本实例上次读取暂存列表距今多久，首次读取之前为 `NaN`。Redis 应答期间约为 `cosec.authorization.shadow.report-interval`（10 秒）；持续上升说明列表读不出来，实例按键读取每个候选，并记录一次 `The staged list cannot be read since it was at <instant>` |
+| `cosec.shadow.staged.age` | 无 | 一个 gauge，单位秒：本实例上次读取暂存列表距今多久，首次读取之前为 `NaN`。Redis 应答期间约为报告间隔（[状态存活期的六分之一](./configuration.md#computed-not-configured)，10 秒）；持续上升说明列表读不出来，实例按键读取每个候选，并记录一次 `The staged list cannot be read since it was at <instant>` |
 
 使用本地限流器时（没有 Redis 限流，[限流](../policies/rate-limiting.md#the-local-limiter-is-bounded)），它无法接纳的新桶也会计数：
 
@@ -228,12 +228,12 @@ CoCache 会在同一个 registry 中为 CoSec 的缓存记录它自己的指标�
 
 | 指标 | 类型 | 标签 | 含义 |
 |---|---|---|---|
-| `cosec.snapshot.loads` | counter | `kind`、`result` | 必须加载文档的请求：`cold`（请求等待它的加载）、`failed`（加载失败，请求按失败关闭判定）、`timeout`（加载超过了 `cold-load-timeout`）。文档已安装的请求不计数：那是每个请求都走的路径 |
+| `cosec.snapshot.loads` | counter | `kind`、`result` | 必须加载文档的请求：`cold`（请求等待它的加载）、`failed`（加载失败，请求按失败关闭判定）、`timeout`（加载超过了冷加载超时）。文档已安装的请求不计数：那是每个请求都走的路径 |
 | `cosec.snapshot.compile.duration` | timer | `kind`、`result` = `success`、`failure` | 编译一个文档；`failure` 是一个在本实例上无法编译的已存储文档 |
 | `cosec.snapshot.installs` | counter | `kind` | 安装的文档：首次加载或新修订 |
 | `cosec.snapshot.installed` | gauge | `kind`、`state` | 当前持有的条目，按状态：`present`、`invalid`（在此无法编译）、`pending`（其输入已变，等待重新编译）、`undecodable`、`absent`（没有文档，之前也没见过）、`lost`（之前见过的文档不见了）、`unreadable`。各状态之和等于实例持有的条目数 |
 | `cosec.snapshot.lag` | gauge，秒 | `kind` | 持有的条目中（失败的除外）最久未被存储确认的时长 |
-| `cosec.snapshot.lagging` | gauge | `kind`、`level` = `warn`、`escalate` | 超过 `lag-warn` 的条目（包括超过 `lag-escalate` 的）和超过 `lag-escalate` 的条目 |
+| `cosec.snapshot.lagging` | gauge | `kind`、`level` = `warn`、`escalate` | 超过告警阈值（6 个重新确认间隔）的条目（包括超过升级阈值的）和超过升级阈值（30 个）的条目 |
 | `cosec.snapshot.summary.age` | gauge，秒 | 无 | 距 `installed`、`lag` 和 `lagging` 所读的那一轮的时间 |
 | `cosec.snapshot.lag.exceeded` | counter | `kind`、`level` | 实例每记录一次延迟日志 |
 | `cosec.snapshot.regressions` | counter | `kind` | 存储返回了比已安装修订更旧的修订 |
@@ -252,7 +252,7 @@ CoCache 会在同一个 registry 中为 CoSec 的缓存记录它自己的指标�
 |---|---|
 | `lost` 有任何上升 | 某个文档从存储中消失了，它的键失败关闭 |
 | `regressions` 有任何上升 | 存储丢失了它已确认的写入：检查最近一次故障转移 |
-| `lag.exceeded{level=escalate}` 有任何上升 | 实例依据一个存储已有 `lag-escalate` 之久未确认的文档做决策 |
+| `lag.exceeded{level=escalate}` 有任何上升 | 实例依据一个存储已有 30 个重新确认间隔之久未确认的文档做决策 |
 | `installed{state=invalid}` 大于零 | 某个已存储文档在本实例上无法编译（版本比控制平面旧？） |
 | `handoffs.refused{to=caller}` 持续有速率 | 编译池饱和，请求线程在编译 |
 | `housekeeping.refused` 有任何上升 | 实例在丢弃自己的日志：日志 appender 跟不上负载（[快照日志缺失](./troubleshooting.md#snapshot-log-lines-are-missing)） |
@@ -276,7 +276,7 @@ CoCache 会在同一个 registry 中为 CoSec 的缓存记录它自己的指标�
   每分钟在自己的线程上读一次，从不由探测触发；读不到时为 `UP`，`format: unknown`。实例发现旧格式时还会记录一条 `ERROR`。它和
   `cosecSnapshotEviction` 一样是告警：数据面仍在决定每个请求，所以不要把它放进就绪组（[升级](./upgrading-previews.md#from-8-0-0-beta-4)）。`cosec-control` 镜像是例外：它不决定数据面的任何请求，并把这个指示器放进它的就绪组，让未转换的存储使宿主处于未就绪且有名字（[控制面宿主](./deployment.md#control-plane-store)）。
 - **登录路由。** starter 提供刷新或登出路由时，`cosecLoginRoutes` 健康指示器总是 `UP`，以每个路由的属性为详情：`not refused`，或在文档拒绝匿名 `POST` 它之后为 `denied since <time>` 及是哪种拒绝（没有语句允许它、某条 DENY 语句匹配它、或租户的平台边界不覆盖它），直到之后有请求被允许。同样的拒绝每个路由每分钟记录一条 `WARN`，点名属性和路径。两者都来自真实请求的决策，所以从不出错，也都不会让实例变为未就绪（[构建客户端](../integration/clients.md#what-your-application-serves)）。
-- **滞后日志。** 文档超过 `lag-warn` 未被 Redis 确认时，实例以 `WARN` 记录，超过 `lag-escalate` 时以 `ERROR` 记录
+- **滞后日志。** 文档超过 6 个重新确认间隔未被 Redis 确认时，实例以 `WARN` 记录，超过 30 个时以 `ERROR` 记录
   （[实例如何读取文档](./storage.md#how-instances-read-documents)）。其他值得告警的日志：
   `Snapshot document [<doc>] disappeared from the store; failing closed.`、
   `Snapshot document [<doc>] regressed from revision <a> to <b>; ...`，以及

@@ -25,6 +25,7 @@ import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.spi.shadow.CandidateStore
 import me.ahoo.cosec.spi.shadow.InstalledDocument
 import me.ahoo.cosec.spi.shadow.InstanceStatus
+import me.ahoo.cosec.spi.shadow.ShadowReportReader
 import me.ahoo.cosec.spi.shadow.ShadowReportSink
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import java.time.Clock
@@ -153,5 +154,26 @@ class ShadowReporter(
     companion object {
         /** The shortest interval: the coroutine delay is in whole milliseconds. */
         val MIN_INTERVAL: Duration = Duration.ofMillis(1)
+
+        /** An instance reports at least this many times within the status's life, so that one lost write never ends it. */
+        const val REPORTS_PER_STATUS: Int = 6
+
+        /** ... and at least this many times within a window's shortest life, so that the window sees fresh evidence. */
+        const val REPORTS_PER_WINDOW: Int = 5
+
+        /** The least a derived interval is: reports are writes to the store of record, from every instance. */
+        val MIN_DERIVED_INTERVAL: Duration = Duration.ofSeconds(1)
+
+        /**
+         * How often an instance writes its reports and its status, derived (the rule of root `AGENTS.md`: what can be
+         * computed is not configured): a [REPORTS_PER_STATUS]th of the status's life ([ShadowReportReader.STATUS_TTL]),
+         * since an instance whose last status is older than that is not counted, and no oftener than a
+         * [REPORTS_PER_WINDOW]th of [windowMinDuration], the least a window lives (`cosec.control.shadow.min-duration`),
+         * since a window closes no earlier than that and a faster cadence than that adds nothing to it. Never below
+         * [MIN_DERIVED_INTERVAL]. 10 s at the defaults (a minute's sixth; a window's fifth is 3 minutes).
+         */
+        fun derivedInterval(windowMinDuration: Duration): Duration =
+            windowMinDuration.dividedBy(REPORTS_PER_WINDOW.toLong())
+                .coerceIn(MIN_DERIVED_INTERVAL, ShadowReportReader.STATUS_TTL.dividedBy(REPORTS_PER_STATUS.toLong()))
     }
 }

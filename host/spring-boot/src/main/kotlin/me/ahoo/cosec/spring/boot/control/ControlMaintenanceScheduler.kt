@@ -51,8 +51,8 @@ internal class ControlMaintenanceScheduler(
     private val shadowInterval: Duration,
 ) : SmartLifecycle {
     init {
-        require(reclaimInterval > Duration.ZERO) { "cosec.control.revisions.reclaim-interval must be positive." }
-        require(shadowInterval > Duration.ZERO) { "cosec.control.shadow.check-interval must be positive." }
+        require(reclaimInterval > Duration.ZERO) { "The reclaim interval must be positive, not $reclaimInterval." }
+        require(shadowInterval > Duration.ZERO) { "The shadow check interval must be positive, not $shadowInterval." }
     }
 
     @Volatile

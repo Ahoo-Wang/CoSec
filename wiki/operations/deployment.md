@@ -198,11 +198,11 @@ published ([The first documents](./storage.md#the-first-documents)), and reports
 **What to prewarm.** The platform document is always loaded before an instance is ready. List an app in `prewarm-apps`,
 or a tenant in `prewarm-tenants`, when the first request for it after a start must not wait: the apps and tenants that
 carry the traffic, and any whose document is large enough that loading and compiling it takes longer than
-[`cold-load-timeout`](./configuration.md#snapshot) (2 seconds), since a request that waits longer is `503`. Every listed
+the [cold-load timeout](./configuration.md#computed-not-configured) (2 seconds), since a request that waits longer is `503`. Every listed
 document delays readiness, and one that cannot be loaded or compiled keeps the instance unready
 ([Instance is not ready](./troubleshooting.md#instance-is-not-ready)), so list the documents you would not serve
-without, not every tenant. Keep `cold-load-timeout` below [`cosec.pipeline.timeout`](./configuration.md#pipeline)
-(5 seconds), with room left for the rest of the pipeline: a request that has waited the whole pipeline timeout is
+without, not every tenant. The cold-load timeout is 40 % of [`cosec.pipeline.timeout`](./configuration.md#pipeline)
+(5 seconds), which leaves room for the rest of the pipeline: a request that has waited the whole pipeline timeout is
 `503` with the cause `deadline`, whatever the load's own bound is.
 
 An instance is ready only once it has installed the platform document and every document named in
@@ -528,9 +528,9 @@ of every 1,000 requests.
 
 ### How long a revalidation pass takes {#how-long-a-revalidation-pass-takes}
 
-A pass confirms every entry held, `reload-concurrency` (16) at a time:
+A pass confirms every entry held, 16 at a time (a constant):
 
-- **Its length** is about entries × one conditional read ÷ `reload-concurrency`. For 81,920 entries (the defaults full)
+- **Its length** is about entries × one conditional read ÷ 16. For 81,920 entries (the defaults full)
   that is 1.5 s at 0.3 ms a read and 5.1 s at 1 ms.
 - **Lag** stays below `revalidate-interval` plus one pass, or below two passes once a pass outlasts the interval: then
   the passes run back to back ([How instances read documents](./storage.md#how-instances-read-documents)).
@@ -548,7 +548,7 @@ every tenant:
 
 **When to raise `revalidate-interval`.** Raise it when replicas × entries ÷ interval × 10 µs comes near half of a
 Redis node: the cost falls in proportion, and the time a replica can miss a change whose invalidation message was lost
-grows the same way. Keep `lag-warn` above it. A Redis Cluster divides the figures by its number of primaries.
+grows the same way. The lag thresholds, 6 and 30 intervals, follow it. A Redis Cluster divides the figures by its number of primaries.
 
 ### Settings to copy {#settings-to-copy}
 
@@ -579,13 +579,13 @@ A replica that starts, or that the autoscaler adds, holds the platform document,
 ([`prewarm-host-apps`](./configuration.md#snapshot)), and the documents of `prewarm-apps` and `prewarm-tenants`;
 readiness waits for those. It is warm for apps and cold for tenants. Each other tenant's first request on it waits for
 one read from Redis, and for a tenant document also its compilation, about 0.6 ms in all with a Redis that answers in
-0.3 ms, and at most `cold-load-timeout` (2 s). With requests spread evenly, a new replica serving 10,000 tenants reads
+0.3 ms, and at most the cold-load timeout (2 s). With requests spread evenly, a new replica serving 10,000 tenants reads
 Redis on most requests until it has seen each tenant once. List the busiest tenants in `prewarm-tenants` to take them
 off that path.
 
 Requests are not spread evenly in a replica's first moment: almost every one is for a tenant it has not seen, so the
 distinct cold documents arrive at the request rate, faster than its two compile threads take them. A document the full
-compile queue (64) refuses waits and compiles again every few milliseconds, until `cold-load-timeout`; only then is
+compile queue (64) refuses waits and compiles again every few milliseconds, until the cold-load timeout; only then is
 its request `503`. Measured (`ColdBurstBenchmark`, a CI runner of 4 vCPUs, tenant documents of 30 policies and 60
 bindings, default options), for a burst of distinct cold tenants requested at once:
 
@@ -595,14 +595,14 @@ bindings, default options), for a burst of distinct cold tenants requested at on
 | 500 | 67 ms | 403 of 500 |
 | 2,000 | 620 ms | 1,794 of 2,000 |
 
-That is about 3,000 cold tenant documents a second: a burst beyond about `cold-load-timeout` times that (some 6,000
+That is about 3,000 cold tenant documents a second: a burst beyond about the cold-load timeout times that (some 6,000
 distinct tenants in the same instant) is refused at the deadline, never later and never with a permit, and each
 refused tenant is loaded by its next request. Larger documents compile more slowly and lower the rate.
 
 The compile threads are what bounds that rate, not the queue in front of them. With two threads on four shared vCPUs a
-replica takes about 3,500 cold documents a second, and `compile-threads` is what raises it on a host with the cores to
+replica takes about 3,500 cold documents a second, and the compile threads (one per 2 cores, at most 4) are what raises it on a host with the cores to
 spare. A deeper queue (`compileQueueCapacity`, 64) matters only for a burst beyond what the pool compiles within
-`cold-load-timeout`, and each queued compile holds its document, about 15 KB for these tenant documents. Measured with
+the cold-load timeout, and each queued compile holds its document, about 15 KB for these tenant documents. Measured with
 the same benchmark:
 
 | Compile queue | Memory a full queue holds | Burst of 2,000 | Burst of 10,000: served / refused at the deadline |

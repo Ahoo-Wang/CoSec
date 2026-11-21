@@ -34,7 +34,9 @@ import tools.jackson.core.StreamReadFeature
  * Keys are compared as Spring's binder compares them ([ConfigurationPropertyName]: case and dashes do not count), so
  * `COSEC_AUTHORIZATION_SNAPSHOT_LOCALMAXAGE`, which Spring binds to `local-max-age`, is that key. A typo, or a spelling
  * Spring's documentation does not offer (`COSEC_AUTHORIZATION_SNAPSHOT_LOCAL_MAX_AGE`), is still unknown; the message
- * names the key and variable to write instead when one is near ([PropertySpelling]).
+ * names the key and variable to write instead when one is near ([PropertySpelling]). A key a preview had and a later one
+ * removed, because its value is computed or constant, is said to be no longer a property, with what replaced it
+ * ([RemovedProperties]).
  * The variables Kubernetes injects for a Service named `cosec-*` ([KubernetesServiceLinks]) are not keys: they are
  * no mistake of the application's, and refusing them would crash-loop every pod in that namespace.
  */
@@ -68,6 +70,10 @@ internal class UnknownProperties(
     /** What to write instead of [key], when one key CoSec reads is near it. */
     fun suggestion(key: String): String? = spelling.suggest(key)?.toString()
 
+    /** What to tell about an unknown [key]: that it was removed and why, else the near key to write. */
+    private fun annotation(key: String): String? =
+        RemovedProperties.replacement(key)?.let { "no longer a property: $it" } ?: suggestion(key)
+
     private fun isKnown(name: ConfigurationPropertyName): Boolean {
         val plain = ConfigurationPropertyName.ofIfValid(name.toString().replace(INDEX, ""))
         return plain in knownNames || containerNames.any { it.isAncestorOf(name) }
@@ -82,7 +88,7 @@ internal class UnknownProperties(
         error(
             "CoSec does not read ${unknown.size} cosec.* propert${if (unknown.size == 1) "y" else "ies"}, " +
                 "which would do nothing:\n" + unknown.joinToString("\n") { key ->
-                    "  $key" + (suggestion(key)?.let { " ($it)" } ?: "")
+                    "  $key" + (annotation(key)?.let { " ($it)" } ?: "")
                 } +
                 "\nRemove or rename them: $DOCUMENTATION"
         )

@@ -297,6 +297,18 @@ object GuardAllowlist {
             "cocache:RedisSocialStateStoreTest#aStateIsTakenOnce",
         ),
         "startup" to setOf(
+            // SNP-23: what a snapshot source's options once took as settings is computed.
+            "runtime:SnapshotOptionsDeriveTest#a lag threshold is a count of missed passes, always above the interval",
+            "runtime:SnapshotOptionsDeriveTest#a cold load waits less than the request it serves, for every deadline",
+            "runtime:SnapshotOptionsDeriveTest#the compile threads follow the cores, between one and four, and a four-core pod keeps the two measured",
+            "spring-boot:UnknownPropertiesTest#a removed key is said to be no longer a property, with what replaced it",
+            "spring-boot:DerivedSnapshotSettingsTest#the line says what was derived, from the interval, the deadline and the cores",
+            // CTL-72: the control plane's cadences and limits are constants or computed.
+            "control:ControlDerivedTest#an orphan is removed only once it has outlived a whole reclaim pass",
+            "control:ControlDerivedTest#the shadow pass is a fifteenth of the least a window lives, within a quarter second and a minute",
+            "control:ControlDerivedTest#a window never closes later than one pass after it could",
+            "runtime:ShadowReporterDerivedIntervalTest#the interval is never longer than a sixth of the status's life, so an instance is never uncounted for it",
+            "spring-boot:ControlServicePortTest#a host that runs the control plane says once what it derived",
             // CTL-59: every instance with the control plane runs the maintenance passes.
             // STA-9: the gateway's key is refused beside a service port.
             "spring-boot:ControlServicePortTest#a service port beside the application's, the management port or a disabled control API is refused",

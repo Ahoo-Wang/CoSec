@@ -72,6 +72,40 @@ class UnknownPropertiesTest {
         }
     }
 
+    /** `SNP-23`, `CTL-72`: a key a preview had and a later one computes says so, instead of only "unknown". */
+    @Test
+    fun `a removed key is said to be no longer a property, with what replaced it`() {
+        for (key in RemovedProperties.keys) {
+            runner.withPropertyValues("$key=1").run { context ->
+                val message = context.startupFailure!!.messages()
+                message.assert().describedAs(key).contains("$key (no longer a property: ")
+                message.assert().contains(RemovedProperties.replacement(key)!!)
+            }
+        }
+    }
+
+    @Test
+    fun `no removed key is a property again, and each is spelled as the binder reads it`() {
+        val known = UnknownProperties.load(javaClass.classLoader)
+        val environment = org.springframework.core.env.StandardEnvironment().apply {
+            propertySources.addFirst(
+                MapPropertySource("removed", RemovedProperties.keys.associateWith { "1" })
+            )
+        }
+        known.of(environment).assert().containsAll(RemovedProperties.keys)
+        RemovedProperties.replacement("COSEC_AUTHORIZATION_SNAPSHOT_COLDLOADTIMEOUT").assert().isNull()
+        RemovedProperties.replacement("cosec.authorization.snapshot.coldloadtimeout").assert().contains("40 %")
+        RemovedProperties.replacement("cosec.pipeline.timeout").assert().isNull()
+    }
+
+    @Test
+    fun `a removed key set by environment variable is told what replaced it`() {
+        runner.withEnvironment(mapOf("COSEC_AUTHORIZATION_SNAPSHOT_COLDLOADTIMEOUT" to "3s")).run { context ->
+            context.startupFailure!!.messages().assert()
+                .contains("cosec.authorization.snapshot.coldloadtimeout (no longer a property: computed: 40 % of")
+        }
+    }
+
     @Test
     fun `keys CoSec reads pass, maps and lists included`() {
         runner.withPropertyValues(

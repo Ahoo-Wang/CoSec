@@ -67,7 +67,7 @@ class ControlMaintenance(
     private val store: ControlStore,
     private val revisions: Revisions,
     private val changes: Changes,
-    /** The host's interval between shadow passes (`cosec.control.shadow.check-interval`). */
+    /** The host's interval between shadow passes ([ControlDerived.shadowCheckInterval]). */
     private val shadowInterval: Duration,
     /** Orders the shadow pass and spaces its warnings; never decides a window, which the changes' own clock does. */
     private val clock: Clock = Clock.systemUTC(),

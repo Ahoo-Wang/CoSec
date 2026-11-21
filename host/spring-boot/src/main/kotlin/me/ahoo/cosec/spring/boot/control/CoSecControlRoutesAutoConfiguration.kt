@@ -25,6 +25,7 @@ import me.ahoo.cosec.control.api.ControlHttpRequest
 import me.ahoo.cosec.control.api.ControlHttpResponse
 import me.ahoo.cosec.control.api.ControlPlane
 import me.ahoo.cosec.control.api.ControlProfile
+import me.ahoo.cosec.control.lifecycle.ControlDerived
 import me.ahoo.cosec.runtime.Pipeline
 import me.ahoo.cosec.runtime.event.BridgeContextContributor
 import me.ahoo.cosec.runtime.http.ProblemType
@@ -128,9 +129,19 @@ internal class CoSecControlRoutesAutoConfiguration {
             applicationPort: ApplicationPort,
             plane: ObjectProvider<ControlPlane>? = null,
             service: ObjectProvider<ControlServiceListener>? = null,
+        ): ReactiveRouterFunction<ReactiveServerResponse> =
+            routesWithin(operators, properties, applicationPort, plane, service, ControlDerived.MAX_BODY_BYTES)
+
+        /** The routes reading at most [maxBodySize] of a body: the host's is [ControlDerived.MAX_BODY_BYTES], a test's is its own. */
+        fun routesWithin(
+            operators: ControlHttp,
+            properties: ControlProperties,
+            applicationPort: ApplicationPort,
+            plane: ObjectProvider<ControlPlane>?,
+            service: ObjectProvider<ControlServiceListener>?,
+            maxBodySize: Long,
         ): ReactiveRouterFunction<ReactiveServerResponse> {
             val base = apiRootOf(properties)
-            val maxBodySize = properties.http.maxBodySize.toBytes()
             // The narrow profile answers on the service port only; the operators' port serves the whole API.
             val listener = service?.ifAvailable
             val services = listener?.let { ControlHttp(checkNotNull(plane).getObject(), ControlProfile.SERVICE) }
@@ -145,7 +156,7 @@ internal class CoSecControlRoutesAutoConfiguration {
                 val http = if (onServicePort) services!! else operators
                 val security = RequestSecurity.of(request.exchange().securityContextOrNull())
                 // Nothing is read for a request no permitted principal stands behind, an anonymous permit included:
-                // ControlHttp answers it 401 (RC1-41, review L1 of #1240). Never more than max-body-size (CTL-41).
+                // ControlHttp answers it 401 (RC1-41, review L1 of #1240). Never more than the body limit (CTL-41).
                 val body = if (security?.principal == null) {
                     Mono.just(EMPTY)
                 } else {
@@ -184,15 +195,22 @@ internal class CoSecControlRoutesAutoConfiguration {
         @Bean
         fun cosecControlRoutes(
             http: ControlHttp,
-            properties: ControlProperties
+            properties: ControlProperties,
+        ): ServletRouterFunction<ServletServerResponse> =
+            routesWithin(http, properties, ControlDerived.MAX_BODY_BYTES)
+
+        /** The routes reading at most [maxBodySize] of a body: the host's is [ControlDerived.MAX_BODY_BYTES], a test's is its own. */
+        fun routesWithin(
+            http: ControlHttp,
+            properties: ControlProperties,
+            maxBodySize: Long,
         ): ServletRouterFunction<ServletServerResponse> {
             val base = apiRootOf(properties)
-            val maxBodySize = properties.http.maxBodySize.toBytes()
             return ServletRouterFunctions.route(ServletPredicates.path("$base/**")) { request ->
                 val servlet = request.servletRequest()
                 val security = RequestSecurity.of(servlet.securityContextOrNull())
                 // Nothing is read for a request no permitted principal stands behind, an anonymous permit included
-                // (ControlHttp answers 401), and never more than max-body-size: the body is read before ControlHttp
+                // (ControlHttp answers 401), and never more than the body limit: the body is read before ControlHttp
                 // authorizes the action. The query comes from the query string alone: the request's parameters would
                 // read a form body (review L1 of #1240).
                 val body = if (security?.principal == null) {
@@ -281,7 +299,7 @@ internal class CoSecControlRoutesAutoConfiguration {
             "title" to ProblemType.INVALID_REQUEST.title,
             "status" to ProblemType.INVALID_REQUEST.status,
             "code" to ProblemType.INVALID_REQUEST.code,
-            "detail" to "The request body is larger than ${ControlProperties.PREFIX}.http.max-body-size ($max bytes) (CTL-41).",
+            "detail" to "The request body is larger than the control API reads ($max bytes) (CTL-41).",
         )
 
         fun basePathOf(properties: ControlProperties): String = "/" + properties.http.basePath.trim('/')

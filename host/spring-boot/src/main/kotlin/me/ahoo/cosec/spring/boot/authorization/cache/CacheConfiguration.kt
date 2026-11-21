@@ -32,11 +32,6 @@ data class CacheConfiguration(
     var localMaxAge: Duration? = DEFAULT_LOCAL_MAX_AGE,
     /** The most entries the local copy holds. */
     var maximumSize: Long? = DEFAULT_MAXIMUM_SIZE,
-    /** The initial capacity of the local copy; unset, CoCache's. */
-    var initialCapacity: Int? = null,
-    /** Drops a local copy not read for this long. A number without a unit is seconds, as the expiry settings always were. */
-    @param:DurationUnit(ChronoUnit.SECONDS) @field:DurationUnit(ChronoUnit.SECONDS)
-    var expireAfterAccess: Duration? = null,
 ) {
     @InternalCoSecApi
     companion object {
@@ -53,10 +48,6 @@ data class CacheConfiguration(
 
     /** [spec] declaring these settings. */
     fun <K : Any, V : Any> applyTo(spec: StoreSpec<K, V>): StoreSpec<K, V> = spec.toBuilder().policy {
-        local = local.copy(
-            initialCapacity = initialCapacity ?: local.initialCapacity,
-            expireAfterAccess = expireAfterAccess ?: local.expireAfterAccess,
-        )
         // Not through `local`: that setter records a field as declared only when it differs from CoCache's default, so a
         // capacity equal to the default (10000) would read as unset and lose to `cocache.defaults.store.*`.
         this@CacheConfiguration.maximumSize?.let { localMaximumSize = it }

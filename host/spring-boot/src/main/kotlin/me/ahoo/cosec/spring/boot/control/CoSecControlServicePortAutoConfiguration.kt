@@ -15,7 +15,9 @@
 
 package me.ahoo.cosec.spring.boot.control
 
+import io.github.oshai.kotlinlogging.KotlinLogging
 import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.control.lifecycle.ControlDerived
 import me.ahoo.cosec.spring.boot.ConditionalOnCoSecEnabled
 import me.ahoo.cosec.spring.boot.StartupTask
 import me.ahoo.cosec.spring.boot.StartupTaskExclusion
@@ -25,6 +27,8 @@ import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Conditional
 import org.springframework.context.annotation.Import
 import org.springframework.core.env.Environment
+
+private val log = KotlinLogging.logger {}
 
 /**
  * The service port's refusals (`CTL-58`, [ControlServicePort]), on every host that runs the control plane, whether or
@@ -40,6 +44,12 @@ internal class CoSecControlServicePortAutoConfiguration {
     @Bean
     fun cosecControlServicePortCheck(environment: Environment, beans: ListableBeanFactory): StartupTask =
         StartupTask.AfterSingletons { ControlServicePort.requireListener(environment, beans) }
+
+    /** One line for what the control plane computes where it used to be told, and from what (the control group). */
+    @Bean
+    fun cosecDerivedControlSettingsNotice(properties: ControlProperties): StartupTask = StartupTask.AfterSingletons {
+        log.info { "CoSec derived, not configured: ${ControlDerived.describe(properties.shadow.minDuration)}." }
+    }
 
     companion object {
         /** Static, so Spring runs it with the post-processors, before any bean: what the environment alone refuses. */

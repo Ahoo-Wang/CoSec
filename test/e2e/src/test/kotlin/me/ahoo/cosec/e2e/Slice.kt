@@ -118,7 +118,8 @@ class Slice(
             "spring.data.redis.url=$redisUri",
             "cosec.key-prefix=$keyPrefix",
             "cosec.authorization.snapshot.revalidate-interval=${options.revalidateInterval.toMillis()}ms",
-            "cosec.authorization.snapshot.cold-load-timeout=${options.coldLoadTimeout.toMillis()}ms",
+            // The cold-load timeout is 40 % of the deadline (SnapshotOptions.derive): the deadline that gives this one.
+            "cosec.pipeline.timeout=${options.coldLoadTimeout.multipliedBy(5).dividedBy(2).toMillis()}ms",
             "cosec.authorization.routes.location=$routeMap",
             "cosec.jwt.enabled=false",
         )

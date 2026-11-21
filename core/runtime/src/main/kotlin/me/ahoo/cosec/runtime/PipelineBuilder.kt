@@ -39,6 +39,7 @@ import me.ahoo.cosec.spi.membership.MembershipProvider
 import me.ahoo.cosec.spi.ratelimit.RateLimiter
 import me.ahoo.cosec.spi.snapshot.SnapshotDocumentStore
 import java.time.Clock
+import kotlin.time.toJavaDuration
 import kotlin.time.toKotlinDuration
 
 /**
@@ -55,7 +56,7 @@ class PipelineBuilder internal constructor(
     private val settings = PipelineSettings()
     private var settingsSet = false
     private var options: PipelineOptions? = null
-    private val snapshotSettings = SnapshotSettings()
+    private val snapshotSettings = SnapshotSettings { options?.timeout?.toJavaDuration() ?: settings.timeout }
     private val listenerSettings = ListenerSettings()
     private var listenerSettingsSet = false
     private var membershipProvider: MembershipProvider? = null

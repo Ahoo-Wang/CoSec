@@ -3,11 +3,11 @@
 # Tests: :spring-boot:test --tests me.ahoo.cosec.spring.boot.control.ControlServicePortTest
 
 diff --git a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/control/CoSecControlAutoConfiguration.kt b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/control/CoSecControlAutoConfiguration.kt
-index fc59f26..ea7ed3f 100644
+index 2a42576..3b556d6 100644
 --- a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/control/CoSecControlAutoConfiguration.kt
 +++ b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/control/CoSecControlAutoConfiguration.kt
-@@ -307,6 +307,7 @@ internal class CoSecControlAutoConfiguration {
-     /** Runs [ControlMaintenance] at `cosec.control.revisions.reclaim-interval` and `cosec.control.shadow.check-interval`. */
+@@ -302,6 +302,7 @@ internal class CoSecControlAutoConfiguration {
+     /** Runs [ControlMaintenance] every [ControlDerived.RECLAIM_INTERVAL] and [ControlDerived.shadowCheckInterval]. */
      @Bean
      @ConditionalOnMissingBean
 +    @ConditionalOnProperty("cosec.control.maintenance.mutant")
