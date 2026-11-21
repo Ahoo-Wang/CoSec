@@ -1,0 +1,17 @@
+# Rule: CTL-66
+# Mutant: whoever finds room first takes it: a smaller event queues ahead of a larger one that waited before it
+# Tests: :control:test --tests me.ahoo.cosec.control.audit.ChangeEventOrderTest
+
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/audit/ChangeListenerLane.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/audit/ChangeListenerLane.kt
+index 7025e5944..0271bc901 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/audit/ChangeListenerLane.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/audit/ChangeListenerLane.kt
+@@ -129,7 +129,7 @@ class ChangeListenerLane internal constructor(
+         done: CompletableDeferred<Unit>? = null
+     ): Boolean {
+         return withTimeoutOrNull(wait) {
+-            room.withLock {
++            run {
+                 while (!reserve(bytes)) {
+                     val seen = freed.value
+                     if (reserve(bytes)) break
