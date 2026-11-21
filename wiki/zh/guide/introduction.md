@@ -87,6 +87,8 @@ CoSec 以过滤器的形式运行在你的处理器之前：WebFlux 中是 `WebF
 | CoSec 应用的浏览器或 Node 客户端：登录、轮换下的刷新、登出、problem 类型 | npm 上的 `@ahoo-wang/cosec-fetcher`、`@ahoo-wang/cosec-react`，随 CoSec 一起发布；不是 Gradle 模块 | [构建客户端](../integration/clients.md) |
 | 来自 CosId 5 的请求 id、令牌 id 和变更 id | `cosec-cosid` | `me.ahoo.cosid:cosid-spring-boot-starter` 5.x |
 
+控制面也以镜像 `cosec-control` 提供，用于把它作为网关旁边自己的一个进程来运行的部署（[控制面宿主](../operations/deployment.md#the-control-plane-host)）；它不是要添加的模块。内嵌控制面的 IAM 服务则添加 `cosec-control`（[选择部署方式](../operations/topologies.md#the-control-plane)）。
+
 “同时添加”一列是 starter 中该模块的自动配置除模块本身之外还需要的依赖。请像构建里的其他库一样给出它们的版本：CoSec 不管理它们（见[CoSec 对构建的要求](#what-cosec-needs-from-your-build)）。
 
 已开启的功能所需的模块会在启动时检查（STA-1）：以下情况应用无法启动，报错信息会给出要添加的制品——Spring MVC 宿主缺少 `cosec-webmvc`；WebFlux 宿主缺少 `cosec-webflux`；Spring Cloud Gateway 宿主缺少 `cosec-gateway`（即使 `cosec.enabled=false`）；`cosec.api-key.store=redis` 缺少 `cosec-cocache`；`cosec.audit.kafka.delivery=required` 缺少 `cosec-kafka`；社交登录既没有 `cosec-cocache` 也没有自己的 `SocialStateStore` Bean；`cosec.cosid.generator` 缺少 `cosec-cosid`（[故障排查](../operations/troubleshooting.md#startup-fails-on-a-missing-module)）。

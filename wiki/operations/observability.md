@@ -320,7 +320,9 @@ The meters above count; the health indicators and logs below answer whether an i
   read last, every minute on a thread of its own, never by a probe; one it cannot read is `UP` with `format: unknown`.
   The instance also logs one `ERROR` when it finds the old format. An alert like `cosecSnapshotEviction`: the data
   plane still decides every request, so keep it out of the readiness group
-  ([Upgrading](./upgrading-previews.md#from-8-0-0-beta-4)).
+  ([Upgrading](./upgrading-previews.md#from-8-0-0-beta-4)). The `cosec-control` image is the exception: it decides no
+  request of the data plane, and puts the indicator into its readiness group, so that an unconverted store leaves the host
+  unready and named ([The control-plane host](./deployment.md#control-plane-store)).
 - **Login routes.** When the starter serves the refresh or logout route, the `cosecLoginRoutes` health indicator is
   always `UP`, with each route's property as a detail: `not refused`, or `denied since <time>` and which refusal it was
   (no statement permits it, a DENY statement matches it, or the tenant's platform boundary does not cover it) once a
