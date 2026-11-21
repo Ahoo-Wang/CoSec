@@ -1,17 +1,17 @@
 # Rule: STA-7
-# Mutant: a service in gateway mode takes any written value, false included, for the statement
+# Mutant: a host that believes the identity takes any written value, false included, for the statement
 # Tests: :spring-boot:test --tests me.ahoo.cosec.spring.boot.pipeline.GatewayModeTrustTest
 
 diff --git a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/pipeline/GatewayModeTrust.kt b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/pipeline/GatewayModeTrust.kt
-index fa8dc8e3c..e9cae57f0 100644
+index 91a447d1e..11ffab016 100644
 --- a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/pipeline/GatewayModeTrust.kt
 +++ b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/pipeline/GatewayModeTrust.kt
-@@ -42,7 +42,7 @@ internal object GatewayModeTrust {
-     /** `STA-7`: fails unless [Environment] states the boundary, `true` exactly (any case, no spaces). */
-     fun requireBoundaryStated(environment: Environment) {
-         val written = environment.getProperty(PipelineProperties.ONLY_GATEWAY_CAN_REACH_KEY)
--        check(written != null && written.equals("true", ignoreCase = true)) {
-+        check(written != null) {
-             "cosec.pipeline.mode=gateway: this service believes any CoSec-Identity header it receives, and the header " +
-                 "carries no signature, so whoever can reach this service is whoever they claim to be, the platform " +
-                 "administrator included. That is safe only if nothing but the CoSec gateway can reach it: a Kubernetes " +
+@@ -54,7 +54,7 @@ internal object GatewayModeTrust {
+         val stated = listOf(
+             PipelineProperties.ONLY_GATEWAY_CAN_REACH_KEY to gateway,
+             PipelineProperties.ONLY_TRUSTED_CALLERS_CAN_REACH_KEY to trusted,
+-        ).firstOrNull { (_, value) -> value != null && value.equals("true", ignoreCase = true) }?.first
++        ).firstOrNull { (_, value) -> value != null }?.first
+         check(stated != null) {
+             "${describe(environment)}: this host believes any CoSec-Identity header it receives, and the header " +
+                 "carries no signature, so whoever can reach this host is whoever they claim to be, the platform " +

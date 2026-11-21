@@ -114,6 +114,13 @@ decision listeners. How a service is set up for it is in
 [`k8s/examples/gateway-mode-service-networkpolicy.yaml`](https://github.com/Ahoo-Wang/CoSec/blob/main/k8s/examples/gateway-mode-service-networkpolicy.yaml)
 is a `NetworkPolicy` for such a service that admits its port from the gateway's pods only.
 
+The same trust is also available to a host that decides with policies:
+[`cosec.pipeline.caller=forwarded-identity`](./configuration.md#pipeline) makes the `CoSec-Identity` header the caller of
+a host in `enforce` mode, with the snapshot and the control plane wired. That is how a control-plane host, or an IAM
+service that embeds the control plane, runs: it verifies no credential, so it states what can reach it, with the same
+statement (`only-gateway-can-reach`, or `only-trusted-callers-can-reach` when services call it directly), and the host
+does not start without it. A hidden-method filter is refused there too.
+
 ```mermaid
 flowchart LR
     C([Client]) -->|token or API key| G[cosec-gateway-server<br>decides with the documents]

@@ -1,0 +1,17 @@
+# Rule: STA-9
+# Mutant: cosec.pipeline.caller=forwarded-identity wires no identity gate: the host still verifies credentials and asks for no statement
+# Tests: :spring-boot:test --tests me.ahoo.cosec.spring.boot.pipeline.ForwardedIdentityCallerTest
+
+diff --git a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/pipeline/ConditionalOnIdentityGate.kt b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/pipeline/ConditionalOnIdentityGate.kt
+index 5545408b4..6de044c99 100644
+--- a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/pipeline/ConditionalOnIdentityGate.kt
++++ b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/pipeline/ConditionalOnIdentityGate.kt
+@@ -35,7 +35,7 @@ internal class OnIdentityGate : AnyNestedCondition(ConfigurationCondition.Config
+     @ConditionalOnProperty(value = [PipelineProperties.MODE_KEY], havingValue = "gateway")
+     class GatewayMode
+ 
+-    @ConditionalOnProperty(value = [PipelineProperties.CALLER_KEY], havingValue = "forwarded-identity")
++    @ConditionalOnProperty(value = [PipelineProperties.CALLER_KEY], havingValue = "never")
+     class ForwardedCaller
+ }
+ 

@@ -39,7 +39,6 @@ import me.ahoo.cosec.webmvc.ServletXForwardedRemoteIpResolver
 import me.ahoo.cosec.webmvc.SuspendingHandlerHolderInterceptor
 import org.springframework.beans.factory.ListableBeanFactory
 import org.springframework.beans.factory.ObjectProvider
-import org.springframework.core.env.Environment
 import org.springframework.boot.autoconfigure.AutoConfiguration
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass
@@ -58,6 +57,7 @@ import org.springframework.context.annotation.Conditional
 import org.springframework.context.annotation.Configuration
 import org.springframework.context.annotation.Import
 import org.springframework.core.Ordered
+import org.springframework.core.env.Environment
 import org.springframework.core.type.AnnotatedTypeMetadata
 import org.springframework.web.cors.CorsConfigurationSource
 import org.springframework.web.cors.reactive.CorsWebFilter

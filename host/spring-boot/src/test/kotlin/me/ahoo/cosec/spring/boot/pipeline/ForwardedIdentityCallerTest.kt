@@ -11,7 +11,6 @@
  * limitations under the License.
  */
 
-
 @file:OptIn(InternalCoSecApi::class, ExperimentalCoSecApi::class)
 
 package me.ahoo.cosec.spring.boot.pipeline
@@ -44,14 +43,13 @@ import me.ahoo.cosec.spring.boot.jwt.CoSecJwtAutoConfiguration
 import me.ahoo.cosec.spring.boot.jwt.CoSecTokenRevocationCacheAutoConfiguration
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
+import org.springframework.beans.factory.config.BeanDefinitionCustomizer
 import org.springframework.boot.autoconfigure.AutoConfigurations
 import org.springframework.boot.jackson.autoconfigure.JacksonAutoConfiguration
 import org.springframework.boot.test.context.FilteredClassLoader
 import org.springframework.boot.test.context.runner.ApplicationContextRunner
 import org.springframework.boot.test.context.runner.WebApplicationContextRunner
-import org.springframework.beans.factory.config.BeanDefinitionCustomizer
 import org.springframework.context.ApplicationContext
-import org.springframework.test.util.ReflectionTestUtils
 import org.springframework.web.filter.HiddenHttpMethodFilter
 import java.time.Instant
 
@@ -143,7 +141,10 @@ class ForwardedIdentityCallerTest {
     @Test
     fun `a host that takes its callers from the credential is asked for none of it`() {
         runner.withPropertyValues("cosec.pipeline.caller=credential", "cosec.jwt.enabled=false")
-            .withBean(me.ahoo.cosec.spi.token.RevocationReader::class.java, { me.ahoo.cosec.spi.token.RevocationReader.NONE })
+            .withBean(
+                me.ahoo.cosec.spi.token.RevocationReader::class.java,
+                { me.ahoo.cosec.spi.token.RevocationReader.NONE }
+            )
             .run { context ->
                 context.startupFailure.assert().isNull()
                 context.getBean(RequestGate::class.java).assert().isInstanceOf(Pipeline::class.java)
@@ -203,7 +204,9 @@ class ForwardedIdentityCallerTest {
         val documents = context.getBean(RedisSnapshotDocumentStore::class.java)
         cache.put(
             SnapshotKey.Platform,
-            SnapshotDocuments.read("""{"schema":2,"revision":1,"publishedAt":"$PUBLISHED_AT"$PLATFORM}""".encodeToByteArray()),
+            SnapshotDocuments.read(
+                """{"schema":2,"revision":1,"publishedAt":"$PUBLISHED_AT"$PLATFORM}""".encodeToByteArray()
+            ),
         )
         documents.notifyChanged(SnapshotKey.Platform)
     }
@@ -227,7 +230,12 @@ class ForwardedIdentityCallerTest {
             app = "cosec-control",
             space = "",
             roles = emptySet(),
-            credential = Identity.Credential(Identity.Method.JWT, "jti-$principal", now.plusSeconds(600), issuedAt = now),
+            credential = Identity.Credential(
+                Identity.Method.JWT,
+                "jti-$principal",
+                now.plusSeconds(600),
+                issuedAt = now
+            ),
             issuedAt = now,
             requestId = "req-$principal",
         )
