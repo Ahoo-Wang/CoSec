@@ -1,0 +1,16 @@
+# Rule: CTL-12
+# Mutant: a candidate compiled on sight that does not compile is not recorded as CANDIDATE_ERROR
+# Tests: :runtime:test --tests me.ahoo.cosec.runtime.shadow.CompileOnSightTest
+
+diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/shadow/CompileOnSight.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/shadow/CompileOnSight.kt
+index 4fb4f9d2d..5eadbbd16 100644
+--- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/shadow/CompileOnSight.kt
++++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/shadow/CompileOnSight.kt
+@@ -83,7 +83,6 @@ internal class CompileOnSight(
+             return false
+         }
+         if (candidate is Candidate.Failed) {
+-            recorder.record(key, window, ShadowOutcome.CANDIDATE_ERROR, null, null)
+         }
+         return true
+     }

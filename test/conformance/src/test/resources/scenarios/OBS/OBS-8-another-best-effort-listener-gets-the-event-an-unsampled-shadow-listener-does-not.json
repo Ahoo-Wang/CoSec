@@ -1,0 +1,50 @@
+{
+  "rules": [
+    "OBS-8"
+  ],
+  "polarity": "positive",
+  "level": "pipeline",
+  "description": "An ALLOW matches; a metrics listener and a shadow listener that samples nothing are BEST_EFFORT: the metrics listener receives the event, the shadow listener is not offered it.",
+  "documents": {
+    "platform": {
+      "policies": [
+        {
+          "id": "allow-all",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "*"
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "g:allow-all",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "allow-all"
+        }
+      ]
+    }
+  },
+  "listeners": [
+    {
+      "name": "metrics",
+      "delivery": "best-effort"
+    },
+    {
+      "name": "shadow",
+      "samples": false
+    }
+  ],
+  "expect": {
+    "status": 200,
+    "proceed": true,
+    "events": {
+      "metrics": 1,
+      "shadow": 0
+    }
+  }
+}

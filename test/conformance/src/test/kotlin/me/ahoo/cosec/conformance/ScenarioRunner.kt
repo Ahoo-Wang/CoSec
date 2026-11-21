@@ -55,7 +55,12 @@ sealed interface Outcome {
         val check: String? = null,
         /** A login that issued a token: what the token is for (`"issued"`: its `tenant` and `app`); null without one. */
         val issued: Map<String, String?>? = null,
-    ) : Outcome
+        /** The events each listener received, when the scenario expects them (`"events"`, `OBS-8`); null otherwise. */
+        val events: Map<String, Int>? = null,
+    ) : Outcome {
+        fun withEvents(events: Map<String, Int>) =
+            Answered(status, proceed, type, identity, credentials, forwardedHeaders, check, issued, events)
+    }
 
     /** The caller went away and the pipeline made no outcome at all (RFC 0006 §7.4). */
     data object Cancelled : Outcome
