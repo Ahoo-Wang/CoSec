@@ -118,6 +118,12 @@ jobs:
             25
             21
 
+      # The dependency files dependency-cache.yml wrote on main for these versions, read-only (.github/scripts/README.md, "The
+      # dependency cache"): after the Gradle setup, so that its index is the last written. This job restores no Gradle cache of
+      # its own, and downloaded the whole build, which Maven Central throttled (429).
+      - name: Restore the dependency cache
+        uses: ./.github/actions/dependency-cache
+
       - name: Check out both refs
         run: |
           for side in v7 v8; do
