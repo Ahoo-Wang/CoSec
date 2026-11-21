@@ -1,0 +1,22 @@
+{
+  "description": "The member reads no platform document.",
+  "credential": {
+    "tenant": "acme",
+    "id": "bob",
+    "app": "cosec-control",
+    "roles": [
+      "tenant-admin"
+    ]
+  },
+  "request": {
+    "hostApp": "cosec-control",
+    "action": "cosec:read",
+    "resource": {
+      "type": "doc",
+      "id": "platform"
+    }
+  },
+  "expect": {
+    "decision": "Deny"
+  }
+}

@@ -1,0 +1,22 @@
+{
+  "description": "An entry of the document, and its publish.",
+  "credential": {
+    "tenant": "acme",
+    "id": "bob",
+    "app": "cosec-control",
+    "roles": [
+      "tenant-admin"
+    ]
+  },
+  "request": {
+    "hostApp": "cosec-control",
+    "action": "cosec:write",
+    "resource": {
+      "type": "doc",
+      "id": "tenant/acme/policy/orders"
+    }
+  },
+  "expect": {
+    "decision": "Permit"
+  }
+}

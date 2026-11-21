@@ -124,13 +124,13 @@ Spring Cloud Gateway 用文档决策；每个服务设置 `cosec.pipeline.mode=g
 | | |
 |---|---|
 | 运行 | 上述网关；一个带 `cosec-control` 和 `cosec-cocache` 的 IAM 应用，处于 `enforce`，设有 `cosec.pipeline.caller=forwarded-identity`，它在自己的代码里通过 [`ControlService`](../integration/checks.md#changing-policies-from-your-code) 调用控制面 |
-| 设置 | `cosec.pipeline.identity.only-gateway-can-reach=true`；可以写文档的 Redis 账户；面向运维人员时，把 `/cosec/control/**` 路由到 IAM 服务，并带 `cosec-app-id: cosec-control`；没有人通过 HTTP 调用控制 API、代码只在进程内访问它时设 `cosec.control.http.enabled=false`；旁边有运行维护任务的宿主时，在该实例上设 `cosec.control.maintenance.enabled=false` |
+| 设置 | `cosec.pipeline.identity.only-gateway-can-reach=true`；可以写文档的 Redis 账户；面向运维人员时，把 `/cosec/control/**` 路由到 IAM 服务，并带 `cosec-app-id: cosec-control`；没有人通过 HTTP 调用控制 API、代码只在进程内访问它时设 `cosec.control.http.enabled=false` |
 | 连到 | Redis（写），变更日志发往 Kafka 时还有 Kafka |
 | 靠什么成立 | **作为唯一入口的网关**、IAM 服务自己的代码，以及对 Redis 的写权限：该进程里的代码持有存储的写账户，它声明的行动主体会被相信 |
 | CoSec 会检查 | 声明，以及隐藏方法过滤器；每个控制动作，由策略针对调用所声明的主体决策，并记为该主体的一步，来自代码的调用在 `via.method` 中记为 `in-process` |
 | CoSec 不检查 | 声明是否属实；IAM 服务自己的路由：在以身份确定调用方的宿主上，Web 适配器不对请求做决策，所以它们要么在网关处授权，要么没有授权 |
 
-需要第二个人审批的变更会停在 `AWAITING_APPROVAL`，无论谁提出：由人在运维人员的路由上、经网关批准。在没有控制面宿主运行维护任务的地方，让 `cosec.control.maintenance.enabled` 保持 `true`：没有任何一处运行它们的部署，既不会关闭影子窗口，也不会回收修订，也不会协调暂存列表。
+需要第二个人审批的变更会停在 `AWAITING_APPROVAL`，无论谁提出：由人在运维人员的路由上、经网关批准。IAM 服务的每个实例都运行控制面的维护任务（回收修订、关闭影子窗口、对账应用列表和暂存列表），并像控制面宿主那样由租约隔开：可以有任意多个实例运行，每个任务同一时刻只有一个实例在做。
 
 ### 控制面信任什么，不信任什么 {#what-the-control-plane-trusts}
 
