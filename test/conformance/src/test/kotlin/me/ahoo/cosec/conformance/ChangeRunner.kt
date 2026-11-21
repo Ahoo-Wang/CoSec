@@ -523,7 +523,7 @@ object ChangeRunner : ScenarioRunner {
                 argument.get("state")?.text()?.let(ChangeState::valueOf),
                 null,
                 LISTING_LIMIT,
-            )
+            ) { true }
             "changes " + (page.changes.map { it.id.value }.ifEmpty { listOf("none") }.joinToString(","))
         } catch (error: ChangeRejectedException) {
             "refused ${error.status}"

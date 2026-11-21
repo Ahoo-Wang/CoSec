@@ -110,7 +110,7 @@ interface ControlPlane {
         state: ChangeState?,
         after: String?,
         limit: Int,
-        documents: (SnapshotKey) -> Boolean = { true },
+        documents: (SnapshotKey) -> Boolean,
     ): me.ahoo.cosec.control.store.ChangePage
 
     val breakGlass: BreakGlass

@@ -44,8 +44,11 @@ internal class ChangeListings(private val store: ControlStore, private val autho
         state: ChangeState?,
         after: String?,
         limit: Int,
-        /** The documents the route's profile serves; a change of any other is left out as one the caller may not see. */
-        documents: (SnapshotKey) -> Boolean = { true },
+        /**
+         * The documents the route's profile serves: a listing by state leaves a change of any other out, as one the
+         * caller may not see. A listing by document names one the route has already admitted.
+         */
+        documents: (SnapshotKey) -> Boolean,
     ): ChangePage {
         if (!store.openChangesKept()) {
             throw ChangeRejectedException(
@@ -54,11 +57,9 @@ internal class ChangeListings(private val store: ControlStore, private val autho
             )
         }
         val decisions = HashMap<SnapshotKey, ControlDecision>()
-        val visible: suspend (ListedChange) -> Boolean = { listed ->
-            documents(listed.document) && visible(operator, listed, decisions)
-        }
+        val visible: suspend (ListedChange) -> Boolean = { listed -> visible(operator, listed, decisions) }
         if (document == null) return byState(operator, checkNotNull(state), after, limit, documents, visible)
-        if (!TenantIsolation.allows(operator, document) || !documents(document)) {
+        if (!TenantIsolation.allows(operator, document)) {
             return ChangePage(emptyList(), null)
         }
         val listed = store.openChanges(document)
