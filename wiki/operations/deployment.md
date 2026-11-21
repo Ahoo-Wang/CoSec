@@ -21,7 +21,7 @@ application: it is published only as an image, never as a library.
 
 **Tags.** A branch push is tagged with the branch name (`main`, `7.x`; a `/` in the name becomes `-`), a pull request
 with `pr-<number>`, and the nightly build refreshes `main`: these tags move with every build, so never run one in
-production. A version tag `v8.0.0-beta.4` publishes `8.0.0-beta.4`, which names one release. A pre-release has no
+production. A version tag `v8.0.0-beta.5` publishes `8.0.0-beta.5`, which names one release. A pre-release has no
 other tag; a stable release also moves `<major>.<minor>` (`8.0`) to its newest patch version. Pin
 the exact version, or the digest of the image you tested (`ahoowang/cosec-gateway@sha256:...`): a floating tag can change
 under a deployment between two restarts. The manifests in [`k8s/`](#kubernetes) pin a version in
@@ -257,7 +257,7 @@ that embeds the control plane, and what both trust are written. The image is bui
 the workflow that builds the gateway's, and published as `ahoowang/cosec-control`, `ghcr.io/ahoo-wang/cosec-control` and
 `registry.cn-shanghai.aliyuncs.com/ahoo/cosec-control`, for `linux/amd64` and `linux/arm64`, under the tags and with the JDK
 25 and the [AOT cache](#aot-cache) described for [the gateway's](#the-image): pin the exact version. The first version tag
-that carries it is the release after `8.0.0-beta.4`. Like the gateway, it is an application, published only as an image.
+that carries it is `8.0.0-beta.5`. Like the gateway, it is an application, published only as an image.
 
 - **What is in it.** The starter with `cosec-control`, `cosec-cocache` and WebFlux; Kafka (`cosec.audit.kafka.enabled` and
   `cosec.control.audit.kafka.enabled` off), ip2region (off), tracing, and metrics on the management port. It decides with

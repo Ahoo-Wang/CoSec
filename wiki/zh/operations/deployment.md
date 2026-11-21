@@ -16,7 +16,7 @@ CI 在每次推送到 `main`、`7.x` 和发布分支时、为每个版本标签�
 `registry.cn-shanghai.aliyuncs.com/ahoo/cosec-gateway`，支持 `linux/amd64` 和 `linux/arm64`。网关服务是一个应用：只以
 镜像发布，从不作为库发布。
 
-**标签。** 分支推送以分支名为标签（`main`、`7.x`；名称中的 `/` 变为 `-`），拉取请求以 `pr-<编号>` 为标签，每晚的构建会刷新 `main`：这些标签随每次构建移动，所以不要在生产中运行它们。版本标签 `v8.0.0-beta.4` 发布 `8.0.0-beta.4`，它指向唯一的一个发布。预发布版本没有其他标签；稳定版本还会把 `<主版本>.<次版本>`（`8.0`）移到它最新的补丁版本。请固定确切的版本，或固定你测试过的镜像的摘要（`ahoowang/cosec-gateway@sha256:...`）：浮动标签可能在两次重启之间悄悄变化。[`k8s/`](#kubernetes) 里的清单在 `k8s/base/kustomization.yaml` 中固定了版本。
+**标签。** 分支推送以分支名为标签（`main`、`7.x`；名称中的 `/` 变为 `-`），拉取请求以 `pr-<编号>` 为标签，每晚的构建会刷新 `main`：这些标签随每次构建移动，所以不要在生产中运行它们。版本标签 `v8.0.0-beta.5` 发布 `8.0.0-beta.5`，它指向唯一的一个发布。预发布版本没有其他标签；稳定版本还会把 `<主版本>.<次版本>`（`8.0`）移到它最新的补丁版本。请固定确切的版本，或固定你测试过的镜像的摘要（`ahoowang/cosec-gateway@sha256:...`）：浮动标签可能在两次重启之间悄悄变化。[`k8s/`](#kubernetes) 里的清单在 `k8s/base/kustomization.yaml` 中固定了版本。
 
 - **JDK。** CoSec 的库以 Java 21 为目标，这也是基于它们的应用所需的版本。镜像本身是一个应用，运行在 JDK 25，即
   Alibaba Dragonwell 25（`dragonwell:25-ubuntu`）上，并带有 JDK 25 的 [AOT 缓存](#aot-cache)：它的运行时是 25，而不是 21。
@@ -151,7 +151,7 @@ management:
 
 ## 控制面宿主 {#the-control-plane-host}
 
-面向把控制面作为自己的一个进程来运行的运维人员：网关之后的 `cosec-control` 镜像。它是[控制面](./topologies.md#the-control-plane)两种部署中的第一种，另一种（内嵌控制面的 IAM 服务）以及两者各自信任什么，都写在那里。镜像由构建网关镜像的同一个工作流，从 [`platform/control-server/Dockerfile`](https://github.com/Ahoo-Wang/CoSec/blob/main/platform/control-server/Dockerfile) 构建，发布为 `ahoowang/cosec-control`、`ghcr.io/ahoo-wang/cosec-control` 和 `registry.cn-shanghai.aliyuncs.com/ahoo/cosec-control`，支持 `linux/amd64` 和 `linux/arm64`，标签规则、JDK 25 与 [AOT 缓存](#aot-cache)与[网关镜像](#the-image)相同：固定到确切的版本。带有它的第一个版本标签是 `8.0.0-beta.4` 之后的那次发布。和网关一样，它是应用，只以镜像发布。
+面向把控制面作为自己的一个进程来运行的运维人员：网关之后的 `cosec-control` 镜像。它是[控制面](./topologies.md#the-control-plane)两种部署中的第一种，另一种（内嵌控制面的 IAM 服务）以及两者各自信任什么，都写在那里。镜像由构建网关镜像的同一个工作流，从 [`platform/control-server/Dockerfile`](https://github.com/Ahoo-Wang/CoSec/blob/main/platform/control-server/Dockerfile) 构建，发布为 `ahoowang/cosec-control`、`ghcr.io/ahoo-wang/cosec-control` 和 `registry.cn-shanghai.aliyuncs.com/ahoo/cosec-control`，支持 `linux/amd64` 和 `linux/arm64`，标签规则、JDK 25 与 [AOT 缓存](#aot-cache)与[网关镜像](#the-image)相同：固定到确切的版本。带有它的第一个版本标签是 `8.0.0-beta.5`。和网关一样，它是应用，只以镜像发布。
 
 - **里面有什么。** 带有 `cosec-control`、`cosec-cocache` 和 WebFlux 的 starter；Kafka（`cosec.audit.kafka.enabled` 和 `cosec.control.audit.kafka.enabled` 关闭）、ip2region（关闭）、追踪，以及管理端口上的指标。它用策略决策（`cosec.pipeline.mode=enforce`），并从 `CoSec-Identity` 请求头确定调用方（`cosec.pipeline.caller=forwarded-identity`）：它不校验令牌，也不签发令牌，所以不需要 `COSEC_JWT_SECRET`。它的默认值在 jar 里（[`application.yaml`](https://github.com/Ahoo-Wang/CoSec/blob/main/platform/control-server/src/main/resources/application.yaml)），与你挂载到 `/opt/cosec-control-server` 的 `config/application.yaml` 逐键合并读取，和网关的一样。
 - **它拒绝启动的情形**（`STA-10`），并说明原因：`cosec.control.enabled=false`，那样它就没有东西可提供（网关镜像才是只读的那个），以及 `cosec.jwt.enabled`、`cosec.api-key.enabled` 或 `cosec.authentication.login.enabled` 设为 `true`，那会接入一个这里没有任何东西使用的校验或登录。会校验令牌或让人登录的控制面，是你自己的应用。

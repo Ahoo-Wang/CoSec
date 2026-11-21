@@ -46,9 +46,8 @@ on the management port: readiness stays out of the Service until the platform do
 store is in an older format. Create the Secret `cosec-control-redis-credentials` (the control host's own Redis account, never
 the gateways') for the production overlay.
 
-The image tag of `control/kustomization.yaml` moves with the gateway's at a release (`CONTRIBUTING.md`); the first control
-image is the one of the release after `8.0.0-beta.4`, so until then the tag does not exist and the control pod of an overlay
-cannot pull it.
+The image tag of `control/kustomization.yaml` moves with the gateway's at a release (`CONTRIBUTING.md`); `8.0.0-beta.5` is
+the first release with a control image.
 
 First create the Secret `cosec-jwt-secret`. Then publish the platform document: until it is installed, every gateway
 stays unready. The steps, what each overlay sets and why, and the memory model are in
