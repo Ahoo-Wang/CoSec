@@ -69,8 +69,8 @@
       "READY",
       "PUBLISHED",
       "DRAFT",
-      "refused 409",
-      "refused 409"
+      "refused 409 STATE",
+      "refused 409 STATE"
     ],
     "errors": {
       "c1": [],

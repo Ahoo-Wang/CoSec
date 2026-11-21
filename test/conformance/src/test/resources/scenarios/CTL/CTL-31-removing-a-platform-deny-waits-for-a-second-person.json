@@ -150,7 +150,7 @@
     "steps": [
       "CHECKED",
       "AWAITING_APPROVAL",
-      "refused 409",
+      "refused 409 STATE",
       "READY",
       "PUBLISHED"
     ],

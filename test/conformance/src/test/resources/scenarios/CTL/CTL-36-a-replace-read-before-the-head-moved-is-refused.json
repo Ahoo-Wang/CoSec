@@ -97,7 +97,7 @@
       "CHECKED",
       "READY",
       "PUBLISHED",
-      "refused 409"
+      "refused 409 BASE_MOVED"
     ],
     "errors": {
       "c1": []
