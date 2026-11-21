@@ -69,7 +69,8 @@ enum class ControlProfile {
         this == OPERATORS || document == null || document is SnapshotKey.Tenant
 
     private fun documents(method: String, rest: List<String>): Boolean {
-        val first = rest.firstOrNull() ?: return false
+        // `GET /documents?kind=`: which tenant and app documents there are (`CTL-68`).
+        val first = rest.firstOrNull() ?: return method == "GET"
         val (keyText, verb) = verbOf(first)
         val key = try {
             ControlRequestJson.documentKey(unescaped(keyText))

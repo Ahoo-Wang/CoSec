@@ -455,6 +455,8 @@ public abstract interface class me/ahoo/cosec/control/sdk/ControlService {
 	public static synthetic fun changes$default (Lme/ahoo/cosec/control/sdk/ControlService;Lme/ahoo/cosec/control/sdk/ControlCaller;Lme/ahoo/cosec/spi/snapshot/SnapshotKey;Lme/ahoo/cosec/control/change/ChangeState;Ljava/lang/String;Ljava/lang/Integer;Lkotlin/coroutines/Continuation;ILjava/lang/Object;)Ljava/lang/Object;
 	public abstract fun diff (Lme/ahoo/cosec/control/sdk/ControlCaller;Lme/ahoo/cosec/spi/snapshot/SnapshotKey;JJLkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public abstract fun document (Lme/ahoo/cosec/control/sdk/ControlCaller;Lme/ahoo/cosec/spi/snapshot/SnapshotKey;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public abstract fun documents (Lme/ahoo/cosec/control/sdk/ControlCaller;Lme/ahoo/cosec/model/decision/DocumentKind;Ljava/lang/String;Ljava/lang/Integer;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public static synthetic fun documents$default (Lme/ahoo/cosec/control/sdk/ControlService;Lme/ahoo/cosec/control/sdk/ControlCaller;Lme/ahoo/cosec/model/decision/DocumentKind;Ljava/lang/String;Ljava/lang/Integer;Lkotlin/coroutines/Continuation;ILjava/lang/Object;)Ljava/lang/Object;
 	public abstract fun propose (Lme/ahoo/cosec/control/sdk/ControlCaller;Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public abstract fun publish (Lme/ahoo/cosec/control/sdk/ControlCaller;Ljava/lang/String;Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public static synthetic fun publish$default (Lme/ahoo/cosec/control/sdk/ControlService;Lme/ahoo/cosec/control/sdk/ControlCaller;Ljava/lang/String;Ljava/lang/String;Lkotlin/coroutines/Continuation;ILjava/lang/Object;)Ljava/lang/Object;
@@ -468,6 +470,7 @@ public abstract interface class me/ahoo/cosec/control/sdk/ControlService {
 
 public final class me/ahoo/cosec/control/sdk/ControlService$DefaultImpls {
 	public static synthetic fun changes$default (Lme/ahoo/cosec/control/sdk/ControlService;Lme/ahoo/cosec/control/sdk/ControlCaller;Lme/ahoo/cosec/spi/snapshot/SnapshotKey;Lme/ahoo/cosec/control/change/ChangeState;Ljava/lang/String;Ljava/lang/Integer;Lkotlin/coroutines/Continuation;ILjava/lang/Object;)Ljava/lang/Object;
+	public static synthetic fun documents$default (Lme/ahoo/cosec/control/sdk/ControlService;Lme/ahoo/cosec/control/sdk/ControlCaller;Lme/ahoo/cosec/model/decision/DocumentKind;Ljava/lang/String;Ljava/lang/Integer;Lkotlin/coroutines/Continuation;ILjava/lang/Object;)Ljava/lang/Object;
 	public static synthetic fun publish$default (Lme/ahoo/cosec/control/sdk/ControlService;Lme/ahoo/cosec/control/sdk/ControlCaller;Ljava/lang/String;Ljava/lang/String;Lkotlin/coroutines/Continuation;ILjava/lang/Object;)Ljava/lang/Object;
 	public static synthetic fun revisions$default (Lme/ahoo/cosec/control/sdk/ControlService;Lme/ahoo/cosec/control/sdk/ControlCaller;Lme/ahoo/cosec/spi/snapshot/SnapshotKey;Ljava/lang/Long;Ljava/lang/Integer;Lkotlin/coroutines/Continuation;ILjava/lang/Object;)Ljava/lang/Object;
 }

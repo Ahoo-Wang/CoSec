@@ -41,18 +41,21 @@ import me.ahoo.cosec.control.api.JsonFields.optText
 import me.ahoo.cosec.control.api.JsonFields.text
 import me.ahoo.cosec.control.authz.Operator
 import me.ahoo.cosec.control.change.ApplyMode
+import me.ahoo.cosec.control.change.InvalidControlRequestException
 import me.ahoo.cosec.control.change.ownerOf
 import me.ahoo.cosec.document.PolicyDocumentCodec
+import me.ahoo.cosec.model.decision.DocumentKind
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 
-/** The routes of `/documents/{key}` (RFC 0007 §10.2): its reads, `:apply` and `:rollback`. */
+/** The routes of `/documents` (`CTL-68`, the listing) and `/documents/{key}` (RFC 0007 §10.2): its reads, `:apply` and `:rollback`. */
 internal class DocumentRoutes(private val plane: ControlPlane) : RouteHandler {
     override suspend fun handle(
         operator: Operator,
         request: ControlHttpRequest,
         segments: List<String>
     ): ControlHttpResponse {
-        val (keyText, verb) = segments.firstOrNull()?.let(::verbOf) ?: return notFound()
+        if (segments.isEmpty()) return get(request) { listing(operator, request) }
+        val (keyText, verb) = segments.first().let(::verbOf)
         // `:apply` and `:rollback` end the path (R2-M1 of #1240's review); the reads match their own exact shapes.
         if (verb != null && segments.size != 1) {
             return notFound()
@@ -115,4 +118,17 @@ internal class DocumentRoutes(private val plane: ControlPlane) : RouteHandler {
                 else -> notFound()
             }
         }
+
+    /** `GET /documents?kind=tenant|app&after=&limit=` (`CTL-68`). */
+    private suspend fun listing(operator: Operator, request: ControlHttpRequest): ControlHttpResponse {
+        val kind = when (request.query["kind"]) {
+            "tenant" -> DocumentKind.TENANT
+            "app" -> DocumentKind.APP
+            else -> throw InvalidControlRequestException("[kind] is tenant or app.")
+        }
+        val limit = request.query["limit"]?.let { text ->
+            text.toIntOrNull() ?: throw InvalidControlRequestException("[limit] is a number from 1 to ${ControlPlane.MAX_LIMIT}.")
+        } ?: ControlPlane.DEFAULT_LIMIT
+        return json(ControlResponseJson.documents(plane.listing.list(operator, kind, request.query["after"], limit)))
+    }
 }

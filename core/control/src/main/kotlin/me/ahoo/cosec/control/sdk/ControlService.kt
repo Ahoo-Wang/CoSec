@@ -15,6 +15,7 @@ package me.ahoo.cosec.control.sdk
 
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.control.change.ChangeState
+import me.ahoo.cosec.model.decision.DocumentKind
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 
 /**
@@ -32,6 +33,12 @@ import me.ahoo.cosec.spi.snapshot.SnapshotKey
  */
 @ExperimentalCoSecApi
 interface ControlService {
+    /**
+     * `GET /documents?kind=tenant|app&after=&limit=` (`CTL-68`): which tenant or app documents there are, those the
+     * caller may see, a page at a time; never their content. [DocumentKind.PLATFORM] is refused (400).
+     */
+    suspend fun documents(caller: ControlCaller, kind: DocumentKind, after: String? = null, limit: Int? = null): String
+
     /** `GET /documents/{key}`: the head of a tenant's or an app's document, in the document format. */
     suspend fun document(caller: ControlCaller, key: SnapshotKey): String
 

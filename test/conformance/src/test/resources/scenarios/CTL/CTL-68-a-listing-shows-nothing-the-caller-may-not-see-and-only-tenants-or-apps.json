@@ -1,0 +1,111 @@
+{
+  "rules": [
+    "CTL-68"
+  ],
+  "polarity": "negative",
+  "level": "control",
+  "description": "eve, a principal of acme, may read no document and does not hold the layer read: she is refused 403, as any route refuses a caller the policies do not permit, and learns nothing of which documents exist. A listing of the platform document's kind is refused 400: the listing is of tenant or app documents only.",
+  "documents": {
+    "platform": {
+      "bindings": [
+        {
+          "id": "plato",
+          "subject": {
+            "principal": "plato",
+            "tenant": "(platform)"
+          },
+          "app": "cosec-control",
+          "space": "",
+          "policy": "cosec:platform-admin"
+        }
+      ]
+    },
+    "tenants": {
+      "acme": {
+        "policies": [
+          {
+            "id": "orders",
+            "statements": [
+              {
+                "effect": "allow",
+                "action": "order:*",
+                "resource": "order/**"
+              }
+            ]
+          }
+        ],
+        "bindings": [
+          {
+            "id": "admins",
+            "subject": {
+              "role": "admin"
+            },
+            "app": "cosec-control",
+            "space": "",
+            "policy": "cosec:tenant-admin"
+          },
+          {
+            "id": "ops",
+            "subject": {
+              "role": "ops"
+            },
+            "app": "order",
+            "space": "*",
+            "policy": "orders"
+          }
+        ]
+      },
+      "globex": {
+        "policies": [
+          {
+            "id": "orders",
+            "statements": [
+              {
+                "effect": "allow",
+                "action": "order:read",
+                "resource": "order/**"
+              }
+            ]
+          }
+        ]
+      }
+    }
+  },
+  "operators": {
+    "alice": {
+      "tenant": "acme",
+      "roles": [
+        "admin",
+        "ops@team-a"
+      ]
+    },
+    "eve": {
+      "tenant": "acme"
+    },
+    "plato": {
+      "tenant": "(platform)"
+    }
+  },
+  "steps": [
+    {
+      "documents": {
+        "by": "eve",
+        "kind": "tenant"
+      }
+    },
+    {
+      "documents": {
+        "by": "plato",
+        "kind": "platform"
+      }
+    }
+  ],
+  "expect": {
+    "steps": [
+      "refused 403",
+      "refused 400"
+    ],
+    "errors": {},
+    "heads": {}
+  }
+}

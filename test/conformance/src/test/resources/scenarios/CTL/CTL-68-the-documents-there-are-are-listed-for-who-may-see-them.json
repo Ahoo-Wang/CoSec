@@ -1,0 +1,111 @@
+{
+  "rules": [
+    "CTL-68"
+  ],
+  "polarity": "positive",
+  "level": "control",
+  "description": "plato, a platform administrator, lists the tenant documents there are: acme's and globex's, from the store's list, without reading either. alice, a tenant-admin of acme, is shown acme's alone.",
+  "documents": {
+    "platform": {
+      "bindings": [
+        {
+          "id": "plato",
+          "subject": {
+            "principal": "plato",
+            "tenant": "(platform)"
+          },
+          "app": "cosec-control",
+          "space": "",
+          "policy": "cosec:platform-admin"
+        }
+      ]
+    },
+    "tenants": {
+      "acme": {
+        "policies": [
+          {
+            "id": "orders",
+            "statements": [
+              {
+                "effect": "allow",
+                "action": "order:*",
+                "resource": "order/**"
+              }
+            ]
+          }
+        ],
+        "bindings": [
+          {
+            "id": "admins",
+            "subject": {
+              "role": "admin"
+            },
+            "app": "cosec-control",
+            "space": "",
+            "policy": "cosec:tenant-admin"
+          },
+          {
+            "id": "ops",
+            "subject": {
+              "role": "ops"
+            },
+            "app": "order",
+            "space": "*",
+            "policy": "orders"
+          }
+        ]
+      },
+      "globex": {
+        "policies": [
+          {
+            "id": "orders",
+            "statements": [
+              {
+                "effect": "allow",
+                "action": "order:read",
+                "resource": "order/**"
+              }
+            ]
+          }
+        ]
+      }
+    }
+  },
+  "operators": {
+    "alice": {
+      "tenant": "acme",
+      "roles": [
+        "admin",
+        "ops@team-a"
+      ]
+    },
+    "eve": {
+      "tenant": "acme"
+    },
+    "plato": {
+      "tenant": "(platform)"
+    }
+  },
+  "steps": [
+    {
+      "documents": {
+        "by": "plato",
+        "kind": "tenant"
+      }
+    },
+    {
+      "documents": {
+        "by": "alice",
+        "kind": "tenant"
+      }
+    }
+  ],
+  "expect": {
+    "steps": [
+      "documents tenant:acme,tenant:globex",
+      "documents tenant:acme"
+    ],
+    "errors": {},
+    "heads": {}
+  }
+}
