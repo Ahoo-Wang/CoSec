@@ -106,7 +106,12 @@ class ChangeListenerLane internal constructor(
      * Queues [event], waiting up to [wait] for room; [done], when given, completes once the listener recorded it. False
      * when there was no room in time: nothing was queued.
      */
-    internal suspend fun put(event: ChangeEvent, bytes: Long, wait: Duration, done: CompletableDeferred<Unit>? = null): Boolean {
+    internal suspend fun put(
+        event: ChangeEvent,
+        bytes: Long,
+        wait: Duration,
+        done: CompletableDeferred<Unit>? = null
+    ): Boolean {
         val queued = withTimeoutOrNull(wait) {
             while (!reserve(bytes)) {
                 val seen = freed.value

@@ -130,9 +130,9 @@ class ChangeListeners(
             withTimeoutOrNull(requiredTimeout) {
                 for (queue in required) {
                     val done = CompletableDeferred<Unit>()
-                    if (!queue.put(event, bytes, requiredTimeout - start.elapsedNow(), done)) {
-                        throw ChangeAuditException("its queue had no room")
-                    }
+                    // No room in time: as a listener that does not answer, the step fails.
+                    val queued = queue.put(event, bytes, requiredTimeout - start.elapsedNow(), done)
+                    if (!queued) return@withTimeoutOrNull false
                     recorded += done
                 }
                 recorded.awaitAll()
