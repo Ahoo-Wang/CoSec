@@ -468,7 +468,7 @@ host that serves the refresh route (`cosec.authentication.login.refresh.path`) a
 | What you do | A removed role or attached policy stops working | Where it is written |
 |---|---|---|
 | Declare a `MembershipRefresh<RefreshTokenCredentials>` bean that reads the member's roles and attached policies again | At the member's next refresh: within `cosec.jwt.token-validity.access` (10 minutes), the life of the access token that carries it | The bean |
-| State that refreshed tokens keep the memberships of the token they replace | At the member's next sign-in: up to `cosec.jwt.session.lifetime` (30 days) after their login while they refresh within `cosec.jwt.token-validity.refresh` (7 days) of each token | `cosec.jwt.session.memberships-on-refresh=from-token` (`COSEC_JWT_SESSION_MEMBERSHIPS_ON_REFRESH`) |
+| State that refreshed tokens keep the memberships of the token they replace | At the member's next sign-in: up to `cosec.jwt.session.lifetime` (30 days) after their login while they refresh within `cosec.jwt.token-validity.refresh` (7 days) of each token | `cosec.jwt.session.memberships-on-refresh=from-token` (`COSEC_JWT_SESSION_MEMBERSHIPSONREFRESH`) |
 | Build `RefreshTokenAuthentication` yourself | When the `MembershipRefresh` you pass says so; `MembershipRefresh.CLAIMS` is the row above | Your code: there is no default (`IDN-27`) |
 
 Any other value of `cosec.jwt.session.memberships-on-refresh`, an empty one and `true` included, fails startup like an absent

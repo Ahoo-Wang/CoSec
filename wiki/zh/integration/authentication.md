@@ -268,7 +268,7 @@ suspend fun refresh(@RequestBody pair: CompositeToken, security: SecurityContext
 | 你的做法 | 被移除的角色或附加策略失效于 | 写在哪里 |
 |---|---|---|
 | 声明 `MembershipRefresh<RefreshTokenCredentials>` Bean，每次重新读取成员的角色和附加策略 | 成员下一次刷新时：在 `cosec.jwt.token-validity.access`（10 分钟）之内，即携带它的访问令牌的寿命 | 这个 Bean |
-| 写明刷新出的令牌保留旧令牌的成员关系 | 成员下一次登录时：自登录起最长 `cosec.jwt.session.lifetime`（30 天），前提是每个令牌都在 `cosec.jwt.token-validity.refresh`（7 天）之内刷新 | `cosec.jwt.session.memberships-on-refresh=from-token`（`COSEC_JWT_SESSION_MEMBERSHIPS_ON_REFRESH`） |
+| 写明刷新出的令牌保留旧令牌的成员关系 | 成员下一次登录时：自登录起最长 `cosec.jwt.session.lifetime`（30 天），前提是每个令牌都在 `cosec.jwt.token-validity.refresh`（7 天）之内刷新 | `cosec.jwt.session.memberships-on-refresh=from-token`（`COSEC_JWT_SESSION_MEMBERSHIPSONREFRESH`） |
 | 自己构造 `RefreshTokenAuthentication` | 取决于你传入的 `MembershipRefresh`；`MembershipRefresh.CLAIMS` 就是上一行 | 你的代码：没有默认值（`IDN-27`） |
 
 `cosec.jwt.session.memberships-on-refresh` 的其他任何值，包括空值和 `true`，都和未设置一样使启动失败，消息会打印写下的值。写了这条声明时，启动日志有一行 `INFO`，说明它意味着的会话寿命；用 Bean 时不记录与此有关的任何内容。不提供刷新路由的宿主（网关、网关之后的服务、没有登录的服务）不会被问到。

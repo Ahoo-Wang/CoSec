@@ -155,7 +155,7 @@ class RefreshMembershipChoiceTest {
             // 3. revokeSubject, then the exact line and the link
             .contains("TokenRevoker.revokeSubject ends a member's tokens at once")
             .contains("cosec.jwt.session.memberships-on-refresh=from-token")
-            .contains("COSEC_JWT_SESSION_MEMBERSHIPS_ON_REFRESH=from-token")
+            .contains("COSEC_JWT_SESSION_MEMBERSHIPSONREFRESH=from-token")
             .contains("It is not set")
             .contains("(STA-8, https://cosec.ahoo.me/integration/authentication#how-long-a-removed-role-lives)")
         listOf(
