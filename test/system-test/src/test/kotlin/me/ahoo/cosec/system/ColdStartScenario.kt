@@ -38,7 +38,8 @@ class ColdStartScenario {
     /** Each process with the request it is asked first, and its readiness and liveness. */
     private class Process(
         val name: String,
-        val request: URI,
+        /** The request it is asked first; none for a process that decides nothing a request asks (a route it does not serve). */
+        val request: URI?,
         val readiness: URI,
         val liveness: URI?,
         val app: String? = null,
@@ -62,10 +63,10 @@ class ColdStartScenario {
             listOf(
                 Process(
                     "auth-sdk",
-                    SystemTopology.authSdk.resolve("/auth/login"),
+                    // No control route here, and the route is not decided by this process: only its readiness is asked.
+                    null,
                     SystemTopology.authSdk.resolve(READINESS),
                     null,
-                    states = true,
                 )
             )
         } else {
@@ -94,11 +95,12 @@ class ColdStartScenario {
             Process("gw-${index + 1}", gateway.resolve("/behind/orders/1"), gateway.resolve(GATEWAY_READINESS), gateway.resolve(GATEWAY_LIVENESS))
         } + listOf(
             // A WebFlux application's probes pass CoSec like any request: no liveness to ask before the document.
-            // Where the IAM takes its caller from the forwarded identity (the embedded deployment) a request that states none is
-            // the gateway's to have decided, and is not decided here: the request states who asks, as a gateway forwards it.
+            // Where the IAM takes its caller from the forwarded identity (the embedded deployment) the route is the gateway's to
+            // have decided, so the first request that is decided here is a control action, as at a control host: it states
+            // who asks, as a gateway forwards it.
             Process(
                 "auth",
-                SystemTopology.auth.resolve("/auth/login"),
+                SystemTopology.auth.resolve(if (SystemTopology.embedded) CONTROL_API else "/auth/login"),
                 SystemTopology.auth.resolve(READINESS),
                 null,
                 states = SystemTopology.embedded,
@@ -119,11 +121,13 @@ class ColdStartScenario {
     fun `with no documents every request is unavailable and readiness refuses, while each process stays live`() {
         for (process in processes) {
             Transcript.note("process ${process.name}")
-            Contract.assertProblem(Http.get(process.request, *process.headers()), "unavailable")
-            Contract.assertProblem(
-                Http.get(process.request, Token.issue("alice", "acme", app = process.app).bearer, *process.headers()),
-                "unavailable"
-            )
+            process.request?.let { request ->
+                Contract.assertProblem(Http.get(request, *process.headers()), "unavailable")
+                Contract.assertProblem(
+                    Http.get(request, Token.issue("alice", "acme", app = process.app).bearer, *process.headers()),
+                    "unavailable"
+                )
+            }
             Http.get(process.readiness).status.assert().describedAs("readiness of ${process.name}").isEqualTo(503)
             process.liveness?.let {
                 Http.get(
@@ -158,6 +162,7 @@ class ColdStartScenario {
     }
 
     private companion object {
+        const val CONTROL_API = "/cosec/control/v1/documents/platform"
         const val READINESS = "/actuator/health/readiness"
         const val LIVENESS = "/actuator/health/liveness"
 
