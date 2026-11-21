@@ -37,13 +37,13 @@ import me.ahoo.cosec.engine.CompiledDocument
 import me.ahoo.cosec.model.PrincipalId
 import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.model.decision.DocumentKind
-import me.ahoo.cosec.runtime.shadow.ShadowRecorder
 import me.ahoo.cosec.runtime.shadow.CachingCandidateSource
 import me.ahoo.cosec.runtime.shadow.CandidateSource
-import me.ahoo.cosec.spi.shadow.StagedCandidates
+import me.ahoo.cosec.runtime.shadow.ShadowRecorder
 import me.ahoo.cosec.runtime.snapshot.SnapshotSource
 import me.ahoo.cosec.spi.shadow.ShadowReport
 import me.ahoo.cosec.spi.shadow.ShadowReportSink
+import me.ahoo.cosec.spi.shadow.StagedCandidates
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.cosec.spi.token.InMemoryTokenFamilyStore
 import me.ahoo.cosec.spi.token.RevocationReader
