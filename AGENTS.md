@@ -25,7 +25,7 @@ gh workflow run property-stress.yml -f ref=<branch>    # the 1M run: on CI only,
 ./gradlew :conformance:mutationCheck -Pmutants=a,b  # break a security rule on purpose, expect a test to fail (not in check)
 gh workflow run mutation.yml                       # every mutant, on CI only: a shard per rule family, about an hour (-f mutants=a,b for a subset, which runs beside other branches' subsets; also weekly)
 ./gradlew :spi:updateKotlinAbi                     # rewrite a module's ABI dump, api/<project>.api, after an intended change
-./gradlew :runtime:updateClientContract :jwt:updateClientContract   # rewrite contract/, what a client receives, after an intended change (PIP-25)
+./gradlew :runtime:updateClientContract :jwt:updateClientContract :control:updateClientContract   # rewrite contract/, what a client receives (PIP-25) and what the control API answers (CTL-61), after an intended change
 (cd typescript && pnpm install --frozen-lockfile && pnpm lint && pnpm typecheck && pnpm test)   # the TypeScript packages: what the `typescript` job of CI runs
 (cd typescript && pnpm test:host)                  # the client against a real host: Gradle builds test/client-host, the script starts it, vitest runs (the `typescript-host` job)
 gh workflow run system-test.yml --ref main -f ref=<sha>   # the system test on a commit: the gateway image built from it, services and Redis under Compose, over the network (-f image=ghcr.io/ahoo-wang/cosec-gateway:<tag> tests a published image)
@@ -40,6 +40,17 @@ gh workflow run system-test.yml --ref main -f ref=<sha>   # the system test on a
   never come from the build cache. A `docs` job runs `pnpm check:docs` and `pnpm build` in `wiki/`. The `CI` job passes
   only when every other job passed; it is the required check. A project whose tests need Redis goes in the script's
   `REDIS`.
+- A pull request runs the test groups its change reaches: `scripts/ci/plan.py` reads the changed paths and the project
+  graph from the build scripts; the group `test` always runs (it holds `conformance` and `architecture`), and a path the
+  plan cannot attribute, or any change to the build or to CI, runs every group, as does every push to `main`. A group
+  left out is named in the `Plan` job's summary. Every group is a flag in `codecov.yml` with `carryforward: true`, and
+  Codecov reports once, after the last upload (`Codecov notify`).
+- Dependency downloads on CI are read from one cache written on `main` (`dependency-cache.yml`, key
+  `gradle-dependencies-v1-<repos>-<versions>`, restored read-only by `.github/actions/dependency-cache`): Maven Central
+  answers 429 to a runner that asks for too much, and Gradle fails on a 429 without asking the next repository. A job
+  that downloads and restores no Gradle cache of its own calls the action. A change of where anything is resolved from
+  changes the key's `<repos>`: try it on a pull request, whose runs then resolve cold
+  (`.github/scripts/README.md`, "The dependency cache").
 - A module's `jmh` task runs 1 fork × 1 iteration: a smoke run. The benchmarks are the engine's
   (`EngineAuthorizationBenchmark`, `EngineBenchmark`, `CompiledEngineBenchmark`), the whole pipeline's
   (`:e2e` `PipelineBenchmark`) and a token's verification (`:jwt:jmh -PjmhIncludes=JwtVerificationBenchmark`). To compare versions, pass `-PjmhFork`, `-PjmhIterations`,
@@ -115,7 +126,7 @@ the adapters, snapshots or the control plane. The parts that take several files 
   (`cocache`), `edge/` (`webflux`, `webmvc`, `gateway`, `openapi`), `extensions/` (`jwt`, `social`, `login`,
   `ip2region`, `micrometer`, `opentelemetry`, `cosid`, `kafka`), `host/` (`spring-boot`), `migration/` (`migrate`), `test/` (`testkit`,
   `conformance`, `architecture`, `e2e`, `client-host`, `system-test`, `system-behind`, `system-auth`, `system-enforcer`,
-  `code-coverage-report`), `bom/` and `platform/` (`gateway-server`). A project
+  `code-coverage-report`), `bom/` and `platform/` (`gateway-server`, `control-server`). A project
   is named after its directory, without the group or a `cosec-` prefix (`:runtime:check`, `:spring-boot:check`);
   artifact ids keep the prefix (`me.ahoo.cosec:cosec-runtime`). A package belongs to one project
   (`SourceRulesTest`).
@@ -143,7 +154,8 @@ the adapters, snapshots or the control plane. The parts that take several files 
   starter bring CosId, since CoSec owns its ids through `IdGenerator`), `SourceRulesTest`
   (Reactor only in edge and host, plus cocache's reactive Redis client, never in its public signatures; no Spring, Servlet or Redis client
   in `api/` and `core/`; no backend class references `runtime`; backends reach into `control` only through the listed ports and into
-  `document` only through the mapper and the codec of a format they store (`ShadowCodec`): a backend stores bytes and
+  `document` only through the mapper, the rule a stored record's format number is read by (`StoredFormat`) and the codec of a
+  format they store (`ShadowCodec`): a backend stores bytes and
   never reads what a document grants; `kafka` reaches into `control` only through the change listener port;
   opt-ins to `InternalCoSecApi` only in CoSec's own Kotlin sources, so never in a doc sample),
   `JacksonSignatureTest` (no Jackson type in a public signature of `api/` or `core/`, no Reactor type in one of
@@ -264,7 +276,7 @@ Each one exists for a reason, and each has tests guarding it. Never weaken a tes
 | Invariant | Why | Guard |
 |---|---|---|
 | **Deny-first**: no `ALLOW` wins over a matching `DENY`, whatever document either comes from | Otherwise adding a policy can widen access | `EnginePropertyTest` (ALG-1, `P1'`), the ALG conformance scenarios |
-| **Fail closed**: a failing `DENY`, an unreadable document, a failing or slow SPI never permit; Indeterminate is 503, an unmodelled error 500. Only exceptions: rate limit rules without `strictFailure`, and verifying a request's token while the revocation store cannot be read (documented; never refresh, `IDN-14`) | An outage must not open the gate | `FlatEnginePropertyTest` (`P9`), `PipelineTest` (PIP-2, PIP-4), `CoCacheRevocationReaderTest` (PIP-7) |
+| **Fail closed**: a failing `DENY`, an unreadable document, a failing or slow SPI never permit; Indeterminate is 503, an unmodelled error 500. Only exceptions: rate limit rules without `strictFailure`, verifying a request's token while the revocation store cannot be read (documented; never refresh, `IDN-14`), and deciding on the documents already installed while their reload fails (documented; a tenant in `fail-closed.tenants`, where `*` names every tenant, is refused past `max-lag`, `SNP-5`) | An outage must not open the gate | `FlatEnginePropertyTest` (`P9`), `PipelineTest` (PIP-2, PIP-4), `CoCacheRevocationReaderTest` (PIP-7) |
 | **One decision path**: outcomes and status codes come only from `StatusMapping`; adapters never see a `Decision` | Three adapters must answer identically | `OneDecisionPathTest`, `WebAdapterParityTest` |
 | **No blocking on the event loop**: the data plane's SPIs suspend, and implementations use non-blocking clients; `SnapshotSource.peek` does no I/O; a local cache hit answers on the caller's thread | Blocking a Netty thread stalls every request on it | `SnapshotStoreBlockHoundTest`, `PipelineBlockHoundTest`, `SuspendingRedisRateLimitingTest`, `RuntimeBoundaryTest` |
 | **Authorization is a pure decision**: the engine does no I/O and keeps no state; obligations run only after a permit, so denied requests never spend a rate-limit permit | Keeps evaluation fast, predictable and explainable | `EnginePurityTest`, `RateLimitObligationTest` (engine and runtime, OBL-1) |
@@ -304,7 +316,8 @@ Every fact has one home; update it in the same PR. Every English page in `wiki/`
 | What a published module brings into a build (a library dependency, `compileOnlyApi`, the BOM) | nothing to register: `PublishedMetadataTest` reads the generated metadata; `:dependencies` is CoSec's internal platform and is not published; `wiki/guide/introduction.md#what-cosec-needs-from-your-build` when a minimum moves (`CatalogTest`) |
 | A public signature of a TypeScript package (a line of its API report) | the report, `wiki/integration/clients.md`, the client's skill; after GA, `!` in the PR title when a line is removed or changed |
 | What a client receives: a problem type, its status, headers or body; a `CoSec-*` header; the token pair; a claim of CoSec's tokens; what the served refresh and logout routes answer | `contract/` (`./gradlew :runtime:updateClientContract :jwt:updateClientContract`, `PIP-25`), `wiki/integration/clients.md` (its claims table is held to `contract/token/claims.json` by `pnpm check:docs`), and `typescript/cosec-fetcher` in the same PR: its tests against `contract/` and the real host fail otherwise. From GA, `!` in the PR title when a file's member, value, status or header is removed or changed |
-| The gateway image, `k8s/`, or what a system-test scenario asserts (`platform/gateway-server/**`, `k8s/**`, `test/system-*/**`) | the system test runs on the PR and must be green; a changed value a scenario reads (a metric tag, an audit field, a port, a probe path) changes its scenario in the same PR |
+| What the control API answers: a change's members, the listing's, a revision's propagation, a closed set it writes (state, kind, severity, escalation reason, decision, cause, reason, effect, outcome), the audit kind of a route | `contract/control/` (`./gradlew :control:updateClientContract`, `CTL-61`), `wiki/policies/testing.md#what-a-change-answers`: an answer is written member by member by its codec in `control/api/`, never copied from the stored record. From GA, `!` in the PR title when a member or value is removed or changed |
+| The gateway image, the control-plane image, `k8s/`, or what a system-test scenario asserts (`platform/**`, `k8s/**`, `test/system-*/**`) | the system test runs on the PR and must be green; a changed value a scenario reads (a metric tag, an audit field, a port, a probe path) changes its scenario in the same PR |
 | A new TypeScript package | `typescript/AGENTS.md`, `TypeScriptWorkspaceTest`'s `published`, the labeler, `llms.txt`, the publish workflow's package list |
 | An npm dependency of `typescript/` | the catalog of `typescript/pnpm-workspace.yaml` (packages reference `catalog:`) and its lockfile; nothing else |
 | A new module, or a dependency between modules | `test/architecture` (`ProjectListTest`, `DependencyRules`, `SourceRulesTest`) and RFC 0011 §5; `wiki/architecture/overview.md` |
@@ -343,7 +356,7 @@ lives) are in [`wiki/AGENTS.md`](wiki/AGENTS.md).
   races these tests exist to catch.
 - Dependency versions live only in `gradle/libs.versions.toml`. The build resolves dependencies from Maven Central
   only, and plugins from Maven Central first, then the Gradle Plugin Portal (the Nexus publish plugin and the JMH
-  plugin are only there); `-Pcosec.mavenLocal` adds `mavenLocal()` first, to test against a locally published library
+  plugin are only there, and Central is not asked for their groups: `portalOnly` in `settings.gradle.kts`); `-Pcosec.mavenLocal` adds `mavenLocal()` first, to test against a locally published library
   (`MavenLocalGuardTest`). A change of where something is resolved from invalidates what restored CI caches say
   about it: try it against the workflows that restore a Gradle cache (`ci.yml`), not only against cold ones.
 - PR titles follow Conventional Commits (CI-enforced; they drive labels, release notes and the version).
@@ -356,4 +369,4 @@ lives) are in [`wiki/AGENTS.md`](wiki/AGENTS.md).
   document format, or dependency versions. Downstream applications implement or produce them.
   `SnapshotDocumentStore` is `@ExperimentalCoSecApi` in 8.0 (its shape follows its one backend, and 8.1 may add a
   whole-store version and a batched conditional read): changing it still needs the word.
-- 🚫 Never publish `cosec-gateway-server`; it is an application, not a library.
+- 🚫 Never publish `cosec-gateway-server` or `cosec-control-server`; they are applications, not libraries.
