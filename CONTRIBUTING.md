@@ -132,8 +132,9 @@ CoSec follows [Semantic Versioning](https://semver.org/):
 
 To release, bump `version` in [gradle.properties](gradle.properties) via a pull request on the branch of that
 line (`main` for 8.0, `7.x` for 7.x patches), then publish a GitHub release tagged `vX.Y.Z` from that branch.
-On `main`, the same pull request sets `newTag` in [k8s/base/kustomization.yaml](k8s/base/kustomization.yaml) to the
-new version: the gateway image is tagged with release versions, never with a `-SNAPSHOT` one.
+On `main`, the same pull request sets `newTag` in [k8s/base/kustomization.yaml](k8s/base/kustomization.yaml) and in
+[k8s/control/kustomization.yaml](k8s/control/kustomization.yaml) to the new version: the gateway and the control images are
+tagged with release versions, never with a `-SNAPSHOT` one (`ControlManifestsTest` holds the two tags equal).
 Release candidates (`vX.Y.Z-RCn`) are released the same way, and only with the maintainer's confirmation. Publishing the release triggers the
 [Packages Deploy](.github/workflows/package-deploy.yml) workflow (Maven Central and GitHub Packages).
 Publishing the release also publishes the TypeScript packages (`@ahoo-wang/cosec-fetcher`, `@ahoo-wang/cosec-react`) to npm under the same version: the `npm-publish` job of that workflow fails before it builds anything unless the tag, `gradle.properties` and both `package.json` files agree, and a pre-release goes to the `alpha`, `beta` or `rc` dist-tag, never `latest` ([`typescript/AGENTS.md`](typescript/AGENTS.md#releasing)).
