@@ -49,7 +49,9 @@ import me.ahoo.cosec.spi.snapshot.SnapshotKey
 class DocumentListing internal constructor(private val revisions: Revisions, private val authority: ChangeAuthority) {
     suspend fun list(operator: Operator, kind: DocumentKind, after: String?, limit: Int): DocumentPage {
         requireRequest(kind != DocumentKind.PLATFORM) { "A listing is of the tenant or the app documents." }
-        requireRequest(limit in 1..ControlPlane.MAX_LIMIT) { "The limit is 1 to ${ControlPlane.MAX_LIMIT}, not $limit." }
+        requireRequest(
+            limit in 1..ControlPlane.MAX_LIMIT
+        ) { "The limit is 1 to ${ControlPlane.MAX_LIMIT}, not $limit." }
         val shown: (SnapshotKey) -> Boolean = when (authority.decideLayer(operator, kind, ControlActions.READ)) {
             ControlDecision.PERMIT -> { key -> TenantIsolation.allows(operator, key) }
             ControlDecision.INDETERMINATE -> throw undecided(kind)

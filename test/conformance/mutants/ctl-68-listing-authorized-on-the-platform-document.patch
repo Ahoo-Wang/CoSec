@@ -1,0 +1,17 @@
+# Rule: CTL-68
+# Mutant: the listing is authorized as cosec:read on the platform document, not on the layer: a principal granted the layer alone may not list, and one who may read the platform document may
+# Tests: :conformance:test --tests me.ahoo.cosec.conformance.ConformanceTest
+
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/authz/ControlResources.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/authz/ControlResources.kt
+index 00ea951c6..1911f4566 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/authz/ControlResources.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/authz/ControlResources.kt
+@@ -47,7 +47,7 @@ object ControlResources {
+      */
+     fun layer(kind: DocumentKind): Resource {
+         require(kind != DocumentKind.PLATFORM) { "The platform is one document, not a layer of documents." }
+-        return Resource(DOC, kind.name.lowercase(), emptyMap())
++        return Resource(DOC, "platform", emptyMap())
+     }
+ 
+     /** An entry, or with an empty [id] a section: `doc/app/order/catalog`, `doc/platform/limits`. */

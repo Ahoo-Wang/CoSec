@@ -1,17 +1,17 @@
 # Rule: CTL-68
-# Mutant: the listing shows every document of the caller's tenants, whether or not the caller may read it
+# Mutant: a tenant's principal without the layer read is shown every document of the layer, other tenants' included
 # Tests: :control:test --tests me.ahoo.cosec.control.api.DocumentListingTest
 
 diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/api/DocumentListing.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/api/DocumentListing.kt
-index 0c1607c62..a53c5d46e 100644
+index e11fb39ce..ba9ae1bb1 100644
 --- a/core/control/src/main/kotlin/me/ahoo/cosec/control/api/DocumentListing.kt
 +++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/api/DocumentListing.kt
-@@ -51,7 +51,7 @@ class DocumentListing internal constructor(private val revisions: Revisions, pri
-             if (found.size > limit) break
-             if (!TenantIsolation.allows(operator, key)) continue
-             val all = everything ?: permitted(operator, LIST).also { everything = it }
--            if (all || permitted(operator, key)) found += key
-+            if (all || permitted(operator, key) || TenantIsolation.allows(operator, key)) found += key
+@@ -55,7 +55,7 @@ class DocumentListing internal constructor(private val revisions: Revisions, pri
+             ControlDecision.INDETERMINATE -> throw undecided(kind)
+             ControlDecision.DENY -> {
+                 val own = ownDocument(operator, kind) ?: throw refused(kind)
+-                ({ key -> key == own })
++                ({ key -> key == own || ownerOf(key).first == kind })
+             }
          }
-         val page = found.take(limit)
-         return DocumentPage(page, if (found.size > limit) page.last().toString() else null)
+         val listed = revisions.documents()

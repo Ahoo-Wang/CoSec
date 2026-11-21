@@ -880,11 +880,12 @@
     {
       "id": "CTL-68",
       "source": "control-server-design.md §0.8 and §9 row 9 (the listing route)",
-      "statement": "GET /documents?kind= lists which tenant or app documents exist from the store's list of the documents it indexes, never by reading a document; a page shows a document only if the caller may see it, decided before the page is cut, and tells nothing of the others; a kind other than tenant or app is a 400, and a store that cannot answer is a 503, never an empty page.",
+      "statement": "GET /documents?kind= lists which tenant or app documents exist from the store's list of the documents it indexes, never by reading a document: every document of the layer to a caller holding cosec:read on the layer (doc/tenant, doc/app), which grants no document's own read and which no document's read grants, apart from a pattern whose ** covers the layer; its own tenant's document to a tenant's principal that may read it; and to anyone else a 403 without detail, with no decision per listed document. A kind other than tenant or app is a 400, and a store that cannot answer is a 503, never an empty page.",
       "level": "control",
       "guards": [
         "control:DocumentListingTest#the documents of a kind are listed for one who may read them all - CTL-68",
-        "control:DocumentListingTest#a page shows only the documents the caller may see, and tells nothing of the others - CTL-68",
+        "control:DocumentListingTest#a tenant's principal sees its own tenant's document if it may read it, and nothing else - CTL-68",
+        "control:DocumentListingTest#anyone else is refused as the policies refuse, telling nothing of which documents exist - CTL-68",
         "control:DocumentListingTest#a page is cut after the filter, and its cursor names the last document shown - CTL-68",
         "control:DocumentListingTest#a kind other than tenant or app is a 400 - CTL-68",
         "control:DocumentListingTest#a store that cannot answer is a 503, never an empty page - CTL-68",

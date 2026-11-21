@@ -3,15 +3,15 @@
 # Tests: :control:test --tests me.ahoo.cosec.control.api.DocumentListingTest
 
 diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/api/DocumentListing.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/api/DocumentListing.kt
-index 0c1607c62..584cf215c 100644
+index e11fb39ce..9e9809701 100644
 --- a/core/control/src/main/kotlin/me/ahoo/cosec/control/api/DocumentListing.kt
 +++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/api/DocumentListing.kt
-@@ -42,7 +42,7 @@ class DocumentListing internal constructor(private val revisions: Revisions, pri
-         requireRequest(
-             limit in 1..ControlPlane.MAX_LIMIT
-         ) { "The limit is 1 to ${ControlPlane.MAX_LIMIT}, not $limit." }
--        val candidates = revisions.documents()
-+        val candidates = (try { revisions.documents() } catch (_: me.ahoo.cosec.control.store.ControlStoreException) { emptySet() })
-             .filter { ownerOf(it).first == kind && (after == null || it.toString() > after) }
+@@ -58,7 +58,7 @@ class DocumentListing internal constructor(private val revisions: Revisions, pri
+                 ({ key -> key == own })
+             }
+         }
+-        val listed = revisions.documents()
++        val listed = (try { revisions.documents() } catch (_: me.ahoo.cosec.control.store.ControlStoreException) { emptySet() })
+             .filter { ownerOf(it).first == kind && (after == null || it.toString() > after) && shown(it) }
              .sortedBy { it.toString() }
-         var everything: Boolean? = null
+         val page = listed.take(limit)

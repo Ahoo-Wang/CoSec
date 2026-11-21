@@ -42,12 +42,12 @@ import me.ahoo.cosec.control.lifecycle.ControlTargets.section
 import me.ahoo.cosec.document.PolicyDocument
 import me.ahoo.cosec.document.ProvenanceKind
 import me.ahoo.cosec.document.RoleExpansion
-import me.ahoo.cosec.model.decision.DocumentKind
 import me.ahoo.cosec.model.Action
 import me.ahoo.cosec.model.AppId
 import me.ahoo.cosec.model.Binding
 import me.ahoo.cosec.model.Memberships
 import me.ahoo.cosec.model.Resource
+import me.ahoo.cosec.model.decision.DocumentKind
 import me.ahoo.cosec.spi.authn.AuthenticatedPrincipal
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.cosec.spi.token.RevocationReader

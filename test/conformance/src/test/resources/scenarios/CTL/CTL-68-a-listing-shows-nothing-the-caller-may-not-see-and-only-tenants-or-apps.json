@@ -4,7 +4,7 @@
   ],
   "polarity": "negative",
   "level": "control",
-  "description": "eve may read no document: her page is empty, and tells nothing of the documents left out. A listing of the platform document's kind is refused 400: the listing is of tenant or app documents only.",
+  "description": "eve, a principal of acme, may read no document and does not hold the layer read: she is refused 403, as any route refuses a caller the policies do not permit, and learns nothing of which documents exist. A listing of the platform document's kind is refused 400: the listing is of tenant or app documents only.",
   "documents": {
     "platform": {
       "bindings": [
@@ -102,7 +102,7 @@
   ],
   "expect": {
     "steps": [
-      "documents none",
+      "refused 403",
       "refused 400"
     ],
     "errors": {},
