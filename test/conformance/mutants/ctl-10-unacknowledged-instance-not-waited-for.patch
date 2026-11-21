@@ -3,15 +3,15 @@
 # Tests: :control:test --tests me.ahoo.cosec.control.lifecycle.ShadowAcknowledgementTest :conformance:test
 
 diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ShadowWindows.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ShadowWindows.kt
-index 43621f280..cb4f2f68e 100644
+index 0ac01f8aa..6c5b5a7f0 100644
 --- a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ShadowWindows.kt
 +++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ShadowWindows.kt
-@@ -91,7 +91,7 @@ class ShadowWindows(
+@@ -87,7 +87,7 @@ class ShadowWindows(
+         val effective = ShadowOutcome.entries.filter { it.effective }.sumOf { counts.getValue(it.name) }
+         val elapsed = java.time.Duration.between(state.startedAt, now)
+         val acknowledgement = acknowledgement(window)
+-        val acknowledged = acknowledgement.waitingFor.isEmpty()
++        val acknowledged = acknowledgement.waitingFor.isEmpty() || true
          val summary = when {
              blocked -> ShadowSummary(counts, now, insufficient = false, blocked = true, vanished = vanished)
              vanished.isNotEmpty() && elapsed < options.maxDuration -> null
--            vanished.isEmpty() && acknowledged && elapsed >= options.minDuration && effective >= options.minSamples ->
-+            vanished.isEmpty() && elapsed >= options.minDuration && effective >= options.minSamples ->
-                 ShadowSummary(counts, now, insufficient = false, blocked = false)
-             elapsed >= options.maxDuration -> ShadowSummary(counts, now, insufficient = true, blocked = false, vanished)
-             else -> null
