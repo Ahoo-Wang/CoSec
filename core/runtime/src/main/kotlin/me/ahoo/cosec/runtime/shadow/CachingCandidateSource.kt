@@ -75,12 +75,21 @@ class CachingCandidateSource(
         require(maxEntries > 0 && !refreshAfter.isNegative) { "Invalid candidate source options." }
     }
 
-    override suspend fun candidate(key: SnapshotKey): Candidate? {
-        if (!staged.mayStage(key)) return null
+    override suspend fun candidate(key: SnapshotKey): Candidate? = if (staged.mayStage(key)) lookup(key, null) else null
+
+    /**
+     * [key]'s candidate of [window], which the staged list names (`CTL-12`'s compile on sight): what is held answers only
+     * when it is of that window, so a window seen for the first time is read and compiled now, on the caller's coroutine.
+     * Null when the store has none, or cannot be read.
+     */
+    internal suspend fun sighted(key: SnapshotKey, window: String): Candidate? = lookup(key, window)
+
+    /** [key]'s candidate, from what is held while it is fresh (and of [window], when given), else read once for all. */
+    private suspend fun lookup(key: SnapshotKey, window: String?): Candidate? {
         val now = clock.instant()
-        synchronized(
-            entries
-        ) { entries[key] }?.takeIf { now.isBefore(it.at.plus(refreshAfter)) }?.let { return it.candidate }
+        synchronized(entries) { entries[key] }
+            ?.takeIf { now.isBefore(it.at.plus(refreshAfter)) && (window == null || it.candidate?.window == window) }
+            ?.let { return it.candidate }
         val mine = CompletableDeferred<Candidate?>()
         reading.putIfAbsent(key, mine)?.let { return it.await() }
         try {

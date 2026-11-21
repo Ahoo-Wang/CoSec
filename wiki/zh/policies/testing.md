@@ -246,7 +246,9 @@ flowchart LR
 
 在窗口上报告过的实例必须一直报告到窗口关闭。报告不见了的实例（它停止服务，或它的报告在 Redis 故障切换中丢失）是缺失的证据，而不是零个决策：看到收窄请求的可能正是它。窗口会等待它，记录 `Shadow window <w> of change <c> is waiting for [<instances>]`，无论其他实例报告了什么；实例每隔 `cosec.authorization.shadow.report-interval` 重写一次累计报告，所以仍在服务的实例会回来。到达 `max-duration` 时窗口以*证据不足*关闭，摘要的 `vanished` 点名消失的实例，绝不会通过（`CTL-56`）。
 
-控制面每隔 `cosec.control.shadow.check-interval`（默认 1 分钟）检查一次未关闭的窗口，同一时间只由一个控制面实例执行，从最久未检查的窗口开始：被间隔截断的一轮记录 `looked at <k> of <n> windows`，下一轮从截断处之后开始。记录无法读取的影子中变更会被跳过，每小时至多以一条 `WARN` 点名一次，其他窗口照常检查。窗口关闭后，变更变为 `READY`，需要[审批](#approval)时变为 `AWAITING_APPROVAL`。如果期间文档修订发生变化，变更变为 `CONFLICTED`。数据面在启用 `cosec-cocache` 和 `cosec.authorization.shadow.*`（默认开启，采样 10% 的请求）时参与。
+控制面每隔 `cosec.control.shadow.check-interval`（默认 1 分钟）检查一次未关闭的窗口，同一时间只由一个控制面实例执行，从最久未检查的窗口开始：被间隔截断的一轮记录 `looked at <k> of <n> windows`，下一轮从截断处之后开始。记录无法读取的影子中变更会被跳过，每小时至多以一条 `WARN` 点名一次，其他窗口照常检查。窗口关闭后，变更变为 `READY`，需要[审批](#approval)时变为 `AWAITING_APPROVAL`。如果期间文档修订发生变化，变更变为 `CONFLICTED`。数据面在启用 `cosec-cocache` 和 `cosec.authorization.shadow.*`（默认开启，采样读取了暂存文档的请求中的 10%）时参与。
+
+每个实例在暂存列表中看到某个窗口后，就编译该窗口的候选，无论它的流量是否读取该文档（`CTL-12`）。无法编译它的实例此时就报告 `CANDIDATE_ERROR`，窗口随即以阻塞状态关闭，不必等到该文档的某个请求。编译在请求路径之外进行，一次一个候选，从不拖住实例所执行的文档。每个 `cosec.authorization.shadow.report-interval` 周期中，它最多花一个间隔编译，暂存最久的窗口优先，因此一次暂存上千个窗口的变更不会推迟任何上报：候选在暂存后的几个上报间隔内被编译，不一定在第一个间隔内。
 
 属性提供者及其声明的类型，在每个数据面实例和控制面主机上必须相同。控制面按自己的提供者检查候选；缺少其中某个提供者的实例无法编译读取其属性的候选，会报告 `CANDIDATE_ERROR`，窗口随即以阻塞状态关闭，该变更永远不会发布。跳过窗口的变更也跳过了这项检查：无法编译已发布文档的实例会对该文档失败即拒绝。
 

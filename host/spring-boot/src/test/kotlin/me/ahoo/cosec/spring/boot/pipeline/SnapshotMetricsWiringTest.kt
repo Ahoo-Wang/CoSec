@@ -20,7 +20,10 @@ import io.micrometer.core.instrument.simple.SimpleMeterRegistry
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.document.SnapshotDocuments
+import me.ahoo.cosec.micrometer.CoSecMeters
 import me.ahoo.cosec.micrometer.MicrometerSnapshotMetrics
+import me.ahoo.cosec.runtime.shadow.CachingCandidateSource
+import me.ahoo.cosec.runtime.shadow.CandidateSource
 import me.ahoo.cosec.runtime.snapshot.SnapshotMetrics
 import me.ahoo.cosec.spi.snapshot.InMemorySnapshotDocumentStore
 import me.ahoo.cosec.spi.snapshot.SnapshotDocumentStore
@@ -89,6 +92,18 @@ class SnapshotMetricsWiringTest {
                 .assert().isNotNull()
             registry.find(MicrometerSnapshotMetrics.SUMMARY_AGE).gauge().assert().isNotNull()
         }
+    }
+
+    /** `OBS-8`: the age of the staged list CoSec's candidate source samples by. */
+    @Test
+    fun `with CoSec's candidate source the staged list's age is metered`() {
+        val candidates = CachingCandidateSource({ null }, { _, _ -> error("nothing is staged") })
+        runner.withBean(MeterRegistry::class.java, { registry })
+            .withBean(CandidateSource::class.java, { candidates })
+            .run { context ->
+                context.startupFailure.assert().isNull()
+                registry.find(CoSecMeters.SHADOW_STAGED_AGE).gauge().assert().isNotNull()
+            }
     }
 
     @Test

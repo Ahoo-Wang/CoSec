@@ -1,0 +1,50 @@
+{
+  "rules": [
+    "OBS-8"
+  ],
+  "polarity": "positive",
+  "level": "pipeline",
+  "description": "An ALLOW matches; the only BEST_EFFORT listener reads only the events it samples and samples nothing: no event is made for it, and the REQUIRED audit still receives the request's event.",
+  "documents": {
+    "platform": {
+      "policies": [
+        {
+          "id": "allow-all",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "*"
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "g:allow-all",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "allow-all"
+        }
+      ]
+    }
+  },
+  "listeners": [
+    {
+      "name": "audit",
+      "delivery": "required"
+    },
+    {
+      "name": "shadow",
+      "samples": false
+    }
+  ],
+  "expect": {
+    "status": 200,
+    "proceed": true,
+    "events": {
+      "audit": 1,
+      "shadow": 0
+    }
+  }
+}
