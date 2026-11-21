@@ -24,7 +24,17 @@ import java.time.Duration
 @CoSecSpi
 @ExperimentalCoSecApi
 interface ShadowReportReader {
+    /** Every instance's report of [window]; throws when one of them cannot be read, or the store does not answer. */
     suspend fun reports(window: String): List<ShadowReport>
+
+    /**
+     * Every instance's report of [window] that reads, and the instances whose report is listed and cannot be read
+     * ([ShadowReadings.unreadable]): it is missing, or it does not decode. The control plane treats such an instance as
+     * one whose evidence is missing, never as one that saw nothing (`CTL-56`). A store that does not answer is still a
+     * failure of the whole call, thrown, never an unreadable report. The default reads [reports], so an implementation
+     * that does not override it throws where [reports] throws and never names an unreadable report.
+     */
+    suspend fun readings(window: String): ShadowReadings = ShadowReadings(reports(window), emptySet())
 
     /** Statuses written within [STATUS_TTL] of now. */
     suspend fun statuses(): List<InstanceStatus>
@@ -33,4 +43,18 @@ interface ShadowReportReader {
         /** An instance that has not written its status for this long is not counted (RFC 0007 §6.5). */
         val STATUS_TTL: Duration = Duration.ofMinutes(1)
     }
+}
+
+/**
+ * What [ShadowReportReader.readings] read of a window: the [reports] that read, and the ids of the instances whose
+ * report is listed and [unreadable] (missing, or not decoding), which carry no counts.
+ */
+@ExperimentalCoSecApi
+class ShadowReadings(val reports: List<ShadowReport>, val unreadable: Set<String>) {
+    override fun equals(other: Any?): Boolean =
+        this === other || other is ShadowReadings && reports == other.reports && unreadable == other.unreadable
+
+    override fun hashCode(): Int = 31 * reports.hashCode() + unreadable.hashCode()
+
+    override fun toString(): String = "ShadowReadings(reports=$reports, unreadable=$unreadable)"
 }

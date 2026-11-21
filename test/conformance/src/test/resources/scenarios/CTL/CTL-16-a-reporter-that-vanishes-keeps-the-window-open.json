@@ -4,7 +4,7 @@
   ],
   "polarity": "negative",
   "level": "control",
-  "description": "Coordinator review of #1110: i1 and i2 have reported; i2 is then taken off the window's reporters. With i1's samples alone the window would close, but an instance seen reporting must keep reporting: the window stays open (503) until i2 is back.",
+  "description": "Coordinator review of #1110: i1 and i2 have reported; i2 is then taken off the window's reporters. With i1's samples alone the window would close, but an instance seen reporting must keep reporting: the window waits for i2 and stays open (CTL-56 says how it ends at the longest window).",
   "options": {
     "shadow": {
       "minDuration": "PT0S",
@@ -81,7 +81,7 @@
       "SHADOWING",
       "reported",
       "vanished",
-      "refused 503"
+      "SHADOWING"
     ],
     "errors": {
       "c1": []

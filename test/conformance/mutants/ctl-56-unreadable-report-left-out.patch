@@ -1,0 +1,17 @@
+# Rule: CTL-56
+# Mutant: the CoCache reader leaves out an instance whose listed report cannot be read instead of naming it: its missing evidence reads as an instance that never reported
+# Tests: :cocache:test --tests me.ahoo.cosec.cocache.shadow.ShadowReadingsTest
+
+diff --git a/backends/cocache/src/main/kotlin/me/ahoo/cosec/cocache/shadow/CoCacheShadowReports.kt b/backends/cocache/src/main/kotlin/me/ahoo/cosec/cocache/shadow/CoCacheShadowReports.kt
+index ddf9b0a1e..d76c767a0 100644
+--- a/backends/cocache/src/main/kotlin/me/ahoo/cosec/cocache/shadow/CoCacheShadowReports.kt
++++ b/backends/cocache/src/main/kotlin/me/ahoo/cosec/cocache/shadow/CoCacheShadowReports.kt
+@@ -160,7 +160,7 @@ class CoCacheShadowReports @InternalCoSecApi constructor(
+         }
+         return ShadowReadings(
+             read.mapNotNull { it.second },
+-            read.filter { it.second == null }.mapTo(HashSet()) { it.first }
++            emptySet()
+         )
+     }
+ 

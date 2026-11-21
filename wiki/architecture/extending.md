@@ -599,11 +599,11 @@ answer throws `ControlStoreException`: the control API answers `503` and a maint
 visit:
 
 - `documents()`: every document it has indexed revisions for. It may name more than exist, never fewer.
-- `openChanges()`: the change requests that are not terminal, as the store holds them now, each read once (#1219):
-  maintenance goes by this read and reads a change again only to expire it. Every written change that is not terminal
-  is among them; one listed and not written yet (a first write in flight) is not. A listed change whose record does
-  not decode fails `openChanges()` as it fails `change(id)`: it cannot be known to be terminal, so maintenance stops
-  until an operator removes its record.
+- `openChanges(document)` and `changes(state, after, limit, documents)`: the changes of one document that are not
+  terminal, and a page of the changes in one state, each read now (`CTL-54`). Every written change that is not
+  terminal is among them; a change whose record does not decode is `ListedChange.Unreadable`, never left out, and
+  maintenance skips its document or its window that pass. `openChangesKept()` says whether these lists can be
+  trusted; maintenance reclaims nothing until they can, and `keepOpenChanges()` makes a new store's lists trusted.
 - `acquireLease(name, holder, duration)` and `releaseLease(name, holder)`: one instance at a time per task. A release
   removes the lease only while `holder` still has it, checked and removed in one atomic step (CoCache's
   `deleteIfMatch`): a lease that expired and another instance took meanwhile stays theirs.
@@ -615,6 +615,12 @@ visit:
   changed. A stage reads, checks it still holds the document's staging slot, and writes over what it read; a change
   preempted meanwhile finds its late write refused, and so never replaces the candidate of the change that took the
   slot (`CTL-6`). A write whose outcome is unknown is resolved by reading back, never by writing again.
+- `ShadowReportReader.readings(window)`: every instance's report that reads, and in `ShadowReadings.unreadable` the
+  instances whose report is listed and cannot be read (missing, not decoding, or another instance's). The control
+  plane takes those as missing evidence: the window waits for them and closes insufficient at its longest, naming them
+  (`CTL-56`). A store that does not answer is still thrown, for the whole call: the window then waits as for any read
+  that failed. The default reads `reports(window)`, which throws for an unreadable report, so a reader that does not
+  override `readings` keeps such a window open past its longest.
 - `referrers` and `putReferrers`: each referring document with the revision of it that last indexed the reference, so
   that a revision's late removal never takes back what a later revision indexed again (`CTL-25`).
 - `RevisionIndex.reclaiming`: the records reclamation took out of the index and has not yet seen deleted; a store

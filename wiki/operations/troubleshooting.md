@@ -484,6 +484,16 @@ document compiles until one ends: every load fails at its deadline, closed. A do
 revision written to Redis outside the control plane, and publish a corrected revision, which compiles as any other
 ([Storage](./storage.md#how-instances-read-documents)).
 
+## Shadow window waiting for an instance
+
+The control plane logs `Shadow window <w> of change <c> is waiting for [<instances>]` and the window does not close,
+whatever the other instances report: those instances reported on the window and have no report now (stopped, scaled
+down, or their report lost in a Redis failover). Their evidence is missing, so the window waits for them (`CTL-56`).
+An instance that still serves writes its report again within `cosec.authorization.shadow.report-interval`. One that is
+gone for good leaves the window open until `cosec.control.shadow.max-duration`, when it closes *insufficient* with the
+instance named in its summary's `vanished`: publish it with the summary acknowledged, or abandon it and stage it again
+to start a window with the instances serving now ([Testing changes](../policies/testing.md#trying-changes-in-shadow-mode)).
+
 ## Shadow window blocked by a candidate error
 
 A shadow window is blocked as soon as one instance reports `CANDIDATE_ERROR`: it cannot compile the candidate, so it

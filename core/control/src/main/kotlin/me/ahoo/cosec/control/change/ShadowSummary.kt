@@ -21,13 +21,16 @@ import java.time.Instant
 /**
  * The reports of a window summed over the instances (RFC 0007 §6.4): counts by outcome (`SAME`, `WIDENED`, ...), when
  * it closed, whether it closed for lack of samples ([insufficient]), and whether an instance could not compile or
- * evaluate the candidate ([blocked]): such a change never publishes.
+ * evaluate the candidate ([blocked]): such a change never publishes. [vanished] names the instances that had reported
+ * on the window and had no report when it closed: their evidence is missing, so such a window closed [insufficient] at
+ * the longest window, never passed (`CTL-56`).
  */
 data class ShadowSummary(
     val counts: Map<String, Long>,
     val closedAt: Instant,
     val insufficient: Boolean,
-    val blocked: Boolean
+    val blocked: Boolean,
+    val vanished: Set<String> = emptySet(),
 ) {
     /** Whether publishing needs the publisher to acknowledge these numbers: anything changed, or too few samples. */
     val needsAck: Boolean get() = insufficient || ACKNOWLEDGED.any { (counts[it] ?: 0) > 0 }
