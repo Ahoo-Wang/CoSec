@@ -108,20 +108,17 @@ class ChangeOriginAnswerTest {
             Simulator(),
         )
         val deny = ControlDecision.DENY
-        plane(ControlDecision.PERMIT, deny).readsWholeOrigin(fixture.alice, change).assert().isTrue()
-        plane(deny, ControlDecision.PERMIT).readsWholeOrigin(fixture.plato, change).assert().isTrue()
-        plane(deny, deny).readsWholeOrigin(fixture.plato, change).assert().isFalse()
+        plane(ControlDecision.PERMIT, deny).origins.whole(fixture.alice, change).assert().isTrue()
+        plane(deny, ControlDecision.PERMIT).origins.whole(fixture.plato, change).assert().isTrue()
+        plane(deny, deny).origins.whole(fixture.plato, change).assert().isFalse()
         // An indeterminate decision is no permit: the short origin, never the whole one.
         val unknown = ControlDecision.INDETERMINATE
-        plane(unknown, unknown).readsWholeOrigin(fixture.plato, change).assert().isFalse()
-        plane(unknown, unknown).readsWholeOrigin(fixture.alice, change).assert().isFalse()
+        plane(unknown, unknown).origins.whole(fixture.plato, change).assert().isFalse()
+        plane(unknown, unknown).origins.whole(fixture.alice, change).assert().isFalse()
         // A tenant's operator never reads the platform's document, whatever an authorizer would say (the hard rule).
-        plane(deny, ControlDecision.PERMIT).readsWholeOrigin(fixture.alice, change).assert().isFalse()
+        plane(deny, ControlDecision.PERMIT).origins.whole(fixture.alice, change).assert().isFalse()
         // A plane that cannot tell gives the short origin.
-        object : ControlPlane by fixture.plane {
-            override suspend fun readsWholeOrigin(operator: Operator, change: ChangeRequest): Boolean =
-                super.readsWholeOrigin(operator, change)
-        }.readsWholeOrigin(fixture.plato, change).assert().isFalse()
+        OriginReaders.NONE.whole(fixture.plato, change).assert().isFalse()
     }
 
     @Test
@@ -135,7 +132,9 @@ class ChangeOriginAnswerTest {
         short.get("asserted").asBoolean().assert().isTrue()
         short.get("via").get("method").asString().assert().isEqualTo("api-key")
         // Without a credential: no `via` at all, whoever reads.
-        members(ChangeAnswer.tree(ChangeSamples.minimal.copy(origin = ChangeOrigin(true)), wholeOrigin = true).get("origin"))
+        members(
+            ChangeAnswer.tree(ChangeSamples.minimal.copy(origin = ChangeOrigin(true)), wholeOrigin = true).get("origin")
+        )
             .assert().containsExactly("asserted")
         ChangeAnswer.tree(ChangeSamples.minimal, wholeOrigin = true).has("origin").assert().isFalse()
     }

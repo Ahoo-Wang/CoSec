@@ -715,7 +715,7 @@ object ChangeRunner : ScenarioRunner {
             argument.only("by", "change")
             val reader = by(argument)
             val change = plane.get(reader, ChangeId(argument.required("change").text()))
-            val origin = ChangeAnswer.tree(change, wholeOrigin = plane.readsWholeOrigin(reader, change)).get("origin")
+            val origin = ChangeAnswer.tree(change, wholeOrigin = plane.origins.whole(reader, change)).get("origin")
             if (origin == null) {
                 "origin none"
             } else {

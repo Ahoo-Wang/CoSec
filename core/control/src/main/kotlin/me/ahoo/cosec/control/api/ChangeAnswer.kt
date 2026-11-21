@@ -45,7 +45,11 @@ object ChangeAnswer {
      * [change], with which live instances acknowledge its open shadow window when [acknowledgement] is read, and its
      * author's origin, whole when [wholeOrigin] ([origin]).
      */
-    fun encode(change: ChangeRequest, acknowledgement: Acknowledgement? = null, wholeOrigin: Boolean = false): ByteArray =
+    fun encode(
+        change: ChangeRequest,
+        acknowledgement: Acknowledgement? = null,
+        wholeOrigin: Boolean = false
+    ): ByteArray =
         CoSecJson.mapper.writeValueAsBytes(tree(change, acknowledgement, wholeOrigin))
 
     fun tree(change: ChangeRequest, acknowledgement: Acknowledgement? = null, wholeOrigin: Boolean = false): ObjectNode {
@@ -107,7 +111,7 @@ object ChangeAnswer {
      * How the author was identified (`CTL-70`, the record's `CTL-57`), absent for a change no request made. Every reader
      * of the change is told whether the identity was only stated (`asserted`) and by what kind of credential
      * (`via.method`): what a reviewer weighs a change by. The credential's id, the request's id and the connection's
-     * address (`peer`) say which key or token, from where: only a reader [wholeOrigin] admits ([ControlPlane.readsWholeOrigin])
+     * address (`peer`) say which key or token, from where: only a reader [wholeOrigin] admits ([ControlPlane.origins])
      * is given them, and every other reader is told nothing of them, not even that they exist.
      */
     private fun origin(root: ObjectNode, change: ChangeRequest, wholeOrigin: Boolean) {

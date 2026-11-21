@@ -21,12 +21,12 @@ import me.ahoo.cosec.control.api.ControlHttp.Companion.JSON
 import me.ahoo.cosec.control.api.ControlRequestJson.query
 import me.ahoo.cosec.control.api.ControlRequestJson.revisionOf
 import me.ahoo.cosec.control.api.JsonFields.wellFormed
+import me.ahoo.cosec.control.authz.Operator
 import me.ahoo.cosec.control.change.Acknowledgement
 import me.ahoo.cosec.control.change.ChangeRejectedException
 import me.ahoo.cosec.control.change.ChangeRequest
 import me.ahoo.cosec.control.change.ControlStatus.NOT_FOUND
 import me.ahoo.cosec.control.change.InvalidControlRequestException
-import me.ahoo.cosec.control.authz.Operator
 import me.ahoo.cosec.control.change.requireRequest
 import me.ahoo.cosec.document.PolicyDocumentCodec
 import me.ahoo.cosec.document.json.CoSecJson
@@ -70,7 +70,7 @@ internal object ControlHttpSupport {
     ) = ControlHttpResponse(
         status,
         JSON,
-        ChangeAnswer.encode(change, acknowledgement, wholeOrigin = plane.readsWholeOrigin(operator, change))
+        ChangeAnswer.encode(change, acknowledgement, wholeOrigin = plane.origins.whole(operator, change))
     )
 
     fun document(document: me.ahoo.cosec.document.PolicyDocument) = ControlHttpResponse(

@@ -135,6 +135,8 @@
     "errors": {
       "c1": []
     },
-    "heads": {}
+    "heads": {
+      "tenant:acme": 1
+    }
   }
 }

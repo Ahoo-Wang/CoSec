@@ -137,9 +137,10 @@ class DefaultControlPlane(
      * Who approves changes of the document, or reads the platform's: those who answer for which key or token wrote a
      * change, and from where. Only a permit counts: a deny or an indeterminate decision shows the short origin.
      */
-    override suspend fun readsWholeOrigin(operator: Operator, change: ChangeRequest): Boolean =
+    override val origins: OriginReaders = OriginReaders { operator, change ->
         authority.holds(operator, change.key, ControlActions.APPROVE) ||
             authority.holds(operator, SnapshotKey.Platform, ControlActions.READ)
+    }
 
     override suspend fun changes(
         operator: Operator,

@@ -123,8 +123,9 @@ class ControlAnswersTest {
 
         /** Every top-level member a change answer may hold (`contract/control/change.json`). */
         val ANSWERED = setOf(
-            "id", "key", "base", "operations", "author", "note", "kind", "state", "findings", "candidate", "createdAt",
-            "updatedAt", "skipShadow", "publishedRevision", "escalations", "approval", "shadow", "confirmations",
+            "id", "key", "base", "operations", "author", "origin", "note", "kind", "state", "findings", "candidate",
+            "createdAt", "updatedAt", "skipShadow", "publishedRevision", "escalations", "approval", "shadow",
+            "confirmations",
         )
     }
 }
