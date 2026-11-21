@@ -40,6 +40,7 @@ description: "通过控制面安全地修改策略：校验与编译错误、sim
 
 | 方法和路径 | 作用 |
 |---|---|
+| `GET /documents?kind=tenant\|app&after=&limit=` | 有哪些租户或 app 文档，按页给出（[列出文档](#listing-documents)）。 |
 | `GET /documents/{key}` | 当前修订。`{key}` 为 `platform`、`app:<appId>` 或 `tenant:<tenantId>`。 |
 | `GET /documents/{key}/revisions?before=&limit=` | 修订历史，最新的在前（`limit` 为 1 到 200，默认 20）。 |
 | `GET /documents/{key}/revisions/{revision}` | 某个保留的修订；已不再保留时返回 `410`。 |
@@ -207,6 +208,12 @@ flowchart LR
 成员、类型以及哪些始终存在，见 [`contract/control/`](https://github.com/Ahoo-Wang/CoSec/tree/main/contract/control)，
 连同应答写出的封闭取值集合：`state`、`kind`、`severity`、升级项的 `reason`、窗口统计的结果，以及决策的 `decision`、
 `cause`、`reason` 和追踪项的 `effect`、`outcome`。应答与文件不一致时 CoSec 的测试会失败，所以取值只会在声明了变化的版本中改变。
+
+### 列出文档 {#listing-documents}
+
+`GET /documents?kind=tenant`（或 `kind=app`）列出该类型有哪些文档：`{"documents": [{"key": "tenant:acme"}, ...], "next": "tenant:acme"}`，按 key 排序。`limit` 为 1 到 200（默认 20），`after` 是上一页的 `next`，最后一页没有 `next`。它读取控制存储所索引的文档清单，从不读取文档本身，所以首次发布未完成的文档也可能被列出，读取它则返回 `404`。
+
+一页只显示你能看到的文档：你自己租户的（平台主体为任意租户的），并且你对平台文档持有 `cosec:read`（可列出全部），或对该文档持有它。列表不透露它省略了什么：一页只含你可见的文档，只有后面还有你可见的文档时才给出 `next`（`CTL-68`）。其他 `kind` 返回 `400`，存储无法应答时返回 `503`。服务端口同样提供它，控制面门面也是（[`ControlService.documents`](../integration/checks.md#changing-policies-from-your-code)）。
 
 ### 查找未完成的变更 {#finding-open-changes}
 

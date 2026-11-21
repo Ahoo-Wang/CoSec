@@ -60,6 +60,7 @@ Three built-in policies can be bound to operators: `cosec:platform-admin` (every
 
 | Method and path | Does |
 |---|---|
+| `GET /documents?kind=tenant\|app&after=&limit=` | Which tenant or app documents there are, a page at a time ([Listing documents](#listing-documents)). |
 | `GET /documents/{key}` | The current revision. `{key}` is `platform`, `app:<appId>` or `tenant:<tenantId>`. |
 | `GET /documents/{key}/revisions?before=&limit=` | Revision history, newest first (`limit` 1 to 200, default 20). |
 | `GET /documents/{key}/revisions/{revision}` | One kept revision; `410` when it is no longer kept. |
@@ -306,6 +307,19 @@ The members, their types and which are always there are in
 writes: `state`, `kind`, `severity`, an escalation's `reason`, the outcomes a window counts, and a decision's
 `decision`, `cause`, `reason`, and a trace entry's `effect` and `outcome`. A test of CoSec fails when an answer and
 its file disagree, so a value changes only in a release that says so.
+
+### Listing documents {#listing-documents}
+
+`GET /documents?kind=tenant` (or `kind=app`) lists which documents of that kind exist: `{"documents": [{"key":
+"tenant:acme"}, ...], "next": "tenant:acme"}`, sorted by key. `limit` is 1 to 200 (default 20), and `after` is the
+`next` of the page before, absent after the last page. It reads the control store's list of the documents it indexes,
+never a document, so a document whose first publish never completed may be listed, and reading it is a `404`.
+
+A page shows a document only if you could see it: one of your own tenant's (any for a platform principal), and you hold
+`cosec:read` on the platform document, which lets you list them all, or on that document. What it leaves out it does
+not tell: a page holds what you may see, and `next` is there only when more of it follows (`CTL-68`). Any other `kind`
+is a `400`, and a store that cannot answer is a `503`. The service port serves it too, and so does the control plane's
+facade ([`ControlService.documents`](../integration/checks.md#changing-policies-from-your-code)).
 
 ### Finding open changes {#finding-open-changes}
 
