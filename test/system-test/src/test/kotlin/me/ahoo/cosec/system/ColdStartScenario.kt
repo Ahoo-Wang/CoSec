@@ -30,6 +30,7 @@ import java.net.URI
  * every other scenario needs the platform document.
  */
 @Tag("system")
+@Tag("control")
 @Order(0)
 @TestMethodOrder(MethodOrderer.OrderAnnotation::class)
 @ExtendWith(TranscriptExtension::class)
@@ -52,28 +53,48 @@ class ColdStartScenario {
         }
     }
 
+    /**
+     * The processes of the control plane besides the IAM: the control-plane host's replicas, or, in the embedded deployment,
+     * which has no host (the IAM carries the control plane), the second IAM that embeds it with the control routes off.
+     */
+    private val controlPlane: List<Process>
+        get() = if (SystemTopology.embedded) {
+            listOf(
+                Process(
+                    "auth-sdk",
+                    SystemTopology.authSdk.resolve("/auth/login"),
+                    SystemTopology.authSdk.resolve(READINESS),
+                    null
+                )
+            )
+        } else {
+            listOf(
+                // The control API on the application port is decided like any request, the probes are on the management port,
+                // outside CoSec, so the host is live before it has a document.
+                Process(
+                    "control-1",
+                    SystemTopology.control1.resolve("/cosec/control/v1/documents/platform"),
+                    SystemTopology.controlManagement1.resolve(READINESS),
+                    SystemTopology.controlManagement1.resolve(LIVENESS),
+                    states = true,
+                ),
+                Process(
+                    "control-2",
+                    SystemTopology.control2.resolve("/cosec/control/v1/documents/platform"),
+                    SystemTopology.controlManagement2.resolve(READINESS),
+                    SystemTopology.controlManagement2.resolve(LIVENESS),
+                    states = true,
+                ),
+            )
+        }
+
     private val processes: List<Process>
         get() = SystemTopology.gateways.mapIndexed { index, gateway ->
             Process("gw-${index + 1}", gateway.resolve("/behind/orders/1"), gateway.resolve(GATEWAY_READINESS), gateway.resolve(GATEWAY_LIVENESS))
         } + listOf(
             // A WebFlux application's probes pass CoSec like any request: no liveness to ask before the document.
             Process("auth", SystemTopology.auth.resolve("/auth/login"), SystemTopology.auth.resolve(READINESS), null),
-            // The control-plane host's replicas: the control API on the application port is decided like any request, the
-            // probes are on the management port, outside CoSec, so the host is live before it has a document.
-            Process(
-                "control-1",
-                SystemTopology.control1.resolve("/cosec/control/v1/documents/platform"),
-                SystemTopology.controlManagement1.resolve(READINESS),
-                SystemTopology.controlManagement1.resolve(LIVENESS),
-                states = true,
-            ),
-            Process(
-                "control-2",
-                SystemTopology.control2.resolve("/cosec/control/v1/documents/platform"),
-                SystemTopology.controlManagement2.resolve(READINESS),
-                SystemTopology.controlManagement2.resolve(LIVENESS),
-                states = true,
-            ),
+        ) + controlPlane + listOf(
             Process(
                 "enforcer",
                 SystemTopology.enforcer.resolve("/orders/1"),

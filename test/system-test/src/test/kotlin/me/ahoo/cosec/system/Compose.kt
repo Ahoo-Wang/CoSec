@@ -30,6 +30,9 @@ object Compose {
 
     fun restart(service: String) = run("restart", service)
 
+    /** What [service] has logged so far, as `docker compose logs` prints it. */
+    fun logs(service: String): String = run("logs", "--no-color", service)
+
     /** Runs [command] in the running [service] (`docker compose exec`) and returns what it printed; fails when it exits non-zero. */
     fun exec(service: String, vararg command: String): String = run("exec", "-T", service, *command)
 
