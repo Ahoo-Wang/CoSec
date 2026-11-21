@@ -26,6 +26,7 @@ import org.springframework.core.io.buffer.DataBufferLimitException
 import org.springframework.core.io.buffer.DataBufferUtils
 import org.springframework.http.HttpHeaders
 import org.springframework.http.MediaType
+import org.springframework.web.reactive.function.server.RequestPredicate
 import org.springframework.web.reactive.function.server.RequestPredicates
 import org.springframework.web.reactive.function.server.RouterFunction
 import org.springframework.web.reactive.function.server.RouterFunctions
@@ -38,8 +39,14 @@ import reactor.core.publisher.Mono
  * up to [LoginRouteAnswer.MAX_BODY_BYTES] and no further; a request no pipeline decided is answered without being read.
  */
 internal object ReactiveLoginRoutes {
-    fun of(routes: Map<String, LoginRouteHandler>): RouterFunction<ServerResponse> = routes.entries
-        .map { (path, handler) -> RouterFunctions.route(RequestPredicates.POST(path)) { answer(it, handler) } }
+    /** [served] says which requests the routes answer: the application's port only, never the management port (`CTL-69`). */
+    fun of(
+        routes: Map<String, LoginRouteHandler>,
+        served: RequestPredicate
+    ): RouterFunction<ServerResponse> = routes.entries
+        .map { (path, handler) ->
+            RouterFunctions.route(RequestPredicates.POST(path).and(served)) { answer(it, handler) }
+        }
         .reduce(RouterFunction<ServerResponse>::and)
 
     private fun answer(request: ServerRequest, handler: LoginRouteHandler): Mono<ServerResponse> {

@@ -447,6 +447,10 @@ rest, and the kubelet restarts the pod.
   ([the policy](../integration/web.md#actuator-on-an-application)). Before the first publish it still answers `503`, the
   right answer for "not ready". Spring Boot 4 serves the probes on every platform (`management.endpoint.health.probes.enabled`
   is `true` by default).
+- **The management port is not only the actuator.** On WebFlux Spring Boot's management server also serves the
+  application's own functional routes, behind CoSec; CoSec's control API and login routes answer on the application port
+  (and the control API on its service port) and are a `404` on the management port (`CTL-69`). A control call that
+  answers `404` only on the port a probe or a scrape uses is on the wrong port.
 - **Liveness and startup:** on WebMvc, point the probe at `management.server.port`, which is outside CoSec. On WebFlux the
   management port is under CoSec as well: use a `tcpSocket` probe on the application port. Never an HTTP liveness probe on
   the application port of an application.
