@@ -155,8 +155,8 @@ class DependencyRulesTest {
     }
 
     @Test
-    fun `runtime and control never have Reactor, Spring, the Servlet API or a Redis client`() {
-        val violations = listOf("runtime", "control").flatMap { project ->
+    fun `runtime, control and the control plane's facade never have Reactor, Spring, the Servlet API or a Redis client`() {
+        val violations = listOf("runtime", "control", "control-sdk").flatMap { project ->
             modules(project, "resolved", "runtimeClasspath")
                 .filter { module -> DependencyRules.NEVER_IN_CORE.any { module.startsWith(it) } }
                 .map { "$project: $it" }

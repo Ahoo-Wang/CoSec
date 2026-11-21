@@ -13,14 +13,21 @@ description: "每个 8.0 预览版（alpha 与 beta）到下一个之间的变�
 
 | 你运行的版本 | 阅读 |
 |---|---|
-| `8.0.0-beta.4` | [从 beta.4 升级](#from-8-0-0-beta-4) |
-| `8.0.0-beta.3` | [从 beta.3 升级](#from-8-0-0-beta-3)，然后是上面那一节 |
-| `8.0.0-beta.2` | [从 beta.2 升级](#from-8-0-0-beta-2)，然后是上面两节 |
-| `8.0.0-beta.1` | [从 beta.1 升级](#from-8-0-0-beta-1)，然后是上面三节 |
-| `8.0.0-alpha.4` | [从 alpha.4 升级](#from-8-0-0-alpha-4)，然后是上面四节 |
+| `8.0.0-beta.5` | [从 beta.5 升级](#from-8-0-0-beta-5) |
+| `8.0.0-beta.4` | [从 beta.4 升级](#from-8-0-0-beta-4)，然后是上面那一节 |
+| `8.0.0-beta.3` | [从 beta.3 升级](#from-8-0-0-beta-3)，然后是上面两节 |
+| `8.0.0-beta.2` | [从 beta.2 升级](#from-8-0-0-beta-2)，然后是上面三节 |
+| `8.0.0-beta.1` | [从 beta.1 升级](#from-8-0-0-beta-1)，然后是上面四节 |
+| `8.0.0-alpha.4` | [从 alpha.4 升级](#from-8-0-0-alpha-4)，然后是上面五节 |
 | `8.0.0-alpha.3`、`alpha.2`、`alpha.1` | [从 alpha.3](#from-8-0-0-alpha-3)、[alpha.2](#from-8-0-0-alpha-2) 或 [alpha.1](#from-8-0-0-alpha-1) 升级，然后是它上面的每一节 |
 
 库的哪个预览版可以运行在网关镜像的哪个预览版之后：见[升级运行中的部署](./upgrading.md#upgrading-a-running-deployment)。
+
+## 从 8.0.0-beta.5 升级 {#from-8-0-0-beta-5}
+
+- **控制面门面成为独立模块 `cosec-control-sdk`**（`CTL-65`）。受影响：调用 `ControlService` 的代码。`ControlService`、`ControlCaller` 和 `ControlRefusedException` 的名称和包（`me.ahoo.cosec.control.sdk`）不变；`cosec-control` 会带上这个模块，所以已依赖 `cosec-control` 的构建无需改动。只调用控制面宿主的代码只需要 `cosec-control-sdk`（它的 HTTP 实现在后续预览版中提供）。
+  - `ControlService.changes` 按 `me.ahoo.cosec.control.sdk.ChangeState` 过滤，这是线上格式的封闭集合，未知值保留其文本（`isUnknown`），不再是控制面内部的枚举：请传入新包的 `ChangeState.READY`，或 `ChangeState.of("READY")`。
+  - `ControlCaller.of(context)` 不再对 CoSec 未创建的安全上下文抛出异常：改由接收它的调用抛出同样的 `IllegalArgumentException`（`PIP-29`）。
 
 ## 从 8.0.0-beta.4 升级 {#from-8-0-0-beta-4}
 

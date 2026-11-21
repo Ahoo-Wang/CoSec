@@ -1,20 +1,17 @@
 # Rule: CTL-65
-# Mutant: ControlCaller.of accepts a security context CoSec's gate or pipeline did not make, instead of refusing it
-# Tests: :control:test --tests me.ahoo.cosec.control.sdk.ControlServiceTest
+# Mutant: a ControlCaller made of a security context CoSec's gate or pipeline did not make is not refused as such by the implementation
+# Tests: :control:test --tests me.ahoo.cosec.control.local.ControlServiceTest
 
-diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/sdk/ControlCaller.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/sdk/ControlCaller.kt
-index d23c383b5..afeb20bd1 100644
---- a/core/control/src/main/kotlin/me/ahoo/cosec/control/sdk/ControlCaller.kt
-+++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/sdk/ControlCaller.kt
-@@ -48,10 +48,7 @@ class ControlCaller private constructor(
-     companion object {
-         /** The principal of the request [context] belongs to; [IllegalArgumentException] for a context CoSec did not make. */
-         fun of(context: SecurityContext): ControlCaller {
--            val security = requireNotNull(RequestSecurity.of(context)) {
--                "This security context was not made by CoSec's gate or pipeline, so it names no principal the control " +
--                    "plane may act as (PIP-29): pass the context of the request being served."
--            }
-+            val security = RequestSecurity.of(context)
-             return ControlCaller(security, null, emptySet())
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/local/LocalControlService.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/local/LocalControlService.kt
+index 7c59a9892..5b45945d3 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/local/LocalControlService.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/local/LocalControlService.kt
+@@ -159,7 +159,7 @@ class LocalControlService(
+     /** The request security [caller] acts with: its request's, or a service identity the gate admits now. */
+     private fun security(caller: ControlCaller): RequestSecurity {
+         caller.context?.let { context ->
+-            return requireNotNull(RequestSecurity.of(context)) { ControlCaller.NOT_COSEC_CONTEXT }
++            RequestSecurity.of(context)?.let { return it }
          }
- 
+         val principal = checkNotNull(caller.principal)
+         val now = clock.instant()

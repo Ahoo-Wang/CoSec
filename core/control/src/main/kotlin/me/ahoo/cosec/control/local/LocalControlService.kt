@@ -13,7 +13,7 @@
 
 @file:OptIn(InternalCoSecApi::class, ExperimentalCoSecApi::class)
 
-package me.ahoo.cosec.control.sdk
+package me.ahoo.cosec.control.local
 
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
@@ -24,7 +24,10 @@ import me.ahoo.cosec.control.api.ControlHttpSupport.POST
 import me.ahoo.cosec.control.api.ControlPlane
 import me.ahoo.cosec.control.api.ControlProfile
 import me.ahoo.cosec.control.authz.PipelineControlAuthorizer
-import me.ahoo.cosec.control.change.ChangeState
+import me.ahoo.cosec.control.sdk.ChangeState
+import me.ahoo.cosec.control.sdk.ControlCaller
+import me.ahoo.cosec.control.sdk.ControlRefusedException
+import me.ahoo.cosec.control.sdk.ControlService
 import me.ahoo.cosec.document.json.CoSecJson
 import me.ahoo.cosec.model.AppId
 import me.ahoo.cosec.model.TenantId
@@ -114,7 +117,7 @@ class LocalControlService(
         "/changes",
         listOfNotNull(
             document?.let { "document" to it.toString() },
-            state?.let { "state" to it.name },
+            state?.let { "state" to it.text },
             after?.let { "after" to it },
             limit?.let { "limit" to "$it" },
         ).toMap(),
@@ -155,7 +158,9 @@ class LocalControlService(
 
     /** The request security [caller] acts with: its request's, or a service identity the gate admits now. */
     private fun security(caller: ControlCaller): RequestSecurity {
-        caller.security?.let { return it }
+        caller.context?.let { context ->
+            return requireNotNull(RequestSecurity.of(context)) { ControlCaller.NOT_COSEC_CONTEXT }
+        }
         val principal = checkNotNull(caller.principal)
         val now = clock.instant()
         val requestId = ids.generate()
