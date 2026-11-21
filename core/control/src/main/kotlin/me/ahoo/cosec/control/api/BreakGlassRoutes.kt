@@ -55,7 +55,7 @@ internal class BreakGlassRoutes(private val plane: ControlPlane) : RouteHandler 
                 it.optText("policy")?.let { p -> field("policy", "a policy id") { PolicyId(p) } }
                     ?: me.ahoo.cosec.engine.BuiltinPolicies.ROOT,
             )
-            changeResponse(change, CREATED)
+            changeResponse(plane, operator, change, CREATED)
         }
 
         segments.size == 1 && request.method == DELETE -> {
@@ -69,11 +69,13 @@ internal class BreakGlassRoutes(private val plane: ControlPlane) : RouteHandler 
                     "binding [${binding.value}] still grants: change ${change.id.value} is ${change.state}"
                 )
             }
-            changeResponse(change, OK)
+            changeResponse(plane, operator, change, OK)
         }
 
         segments.size == 1 && verbOf(segments[0]).second == "approve" -> post(request) {
             changeResponse(
+                plane,
+                operator,
                 plane.approve(operator, changeIdOf(verbOf(segments[0]).first), it.text("candidate")),
                 OK
             )

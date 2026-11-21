@@ -73,6 +73,11 @@ object GuardAllowlist {
             "runtime:AuditVocabularyTest#every reason has the audit decision of its own name",
             "micrometer:ResultVocabularyTest#every reason has the result of its own name",
             "runtime:SubjectMethodTest#the event names the credential as the identity header does",
+            // OBS-9: one table names a cause on the wire.
+            "runtime:CauseNameTest#the table names every kind of cause, each by its pinned name",
+            "runtime:CauseNameTest#the audit record names each cause by its pinned name",
+            "runtime:CauseNameTest#the shadow sample names each cause by its pinned name",
+            "runtime:CauseNameTest#the audit record and the shadow sample never name a cause by its class",
             // PIP-28: no request Principal for an anonymous request.
             "webflux:PipelineWebFilterTest#anAnonymousPermitHasNoRequestPrincipal",
             "webflux:PipelineWebFilterTest#anotherLayersPrincipalIsReplacedOnlyWhenCoSecAuthenticated",
@@ -292,11 +297,12 @@ object GuardAllowlist {
             "cocache:RedisSocialStateStoreTest#aStateIsTakenOnce",
         ),
         "startup" to setOf(
-            // CTL-59: an instance that only serves runs no maintenance pass.
-            "spring-boot:ControlServicePortTest#a host that runs no maintenance pass says so, and one that runs them says nothing",
+            // CTL-59: every instance with the control plane runs the maintenance passes.
             // STA-9: the gateway's key is refused beside a service port.
             "spring-boot:ControlServicePortTest#a service port beside the application's, the management port or a disabled control API is refused",
-            "spring-boot:ControlServicePortTest#cosec control maintenance enabled false runs no maintenance pass, and the default runs them",
+            "spring-boot:ControlServicePortTest#the maintenance passes run on every host that has the control plane, and no property turns them off",
+            "spring-boot:UnknownPropertiesTest#a switch that was removed before it was released is not a property",
+            "control:ControlMaintenanceTest#shadow windows are closed by whoever holds the lease, which a pass releases",
             // STA-6, STA-7: a service behind a gateway states its network boundary and runs no hidden-method filter.
             "spring-boot:GatewayModeTrustTest#a service in gateway mode does not start until the operator states the boundary, and the message says what to write",
             "spring-boot:GatewayModeTrustTest#false and every value but true fail like an absent one, and say what was written",

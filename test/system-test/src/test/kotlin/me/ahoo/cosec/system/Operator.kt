@@ -37,13 +37,32 @@ object Operator {
     }
 
     /**
-     * The IAM onboards [tenant] with no person behind it (`POST /admin/onboard` of `test/system-auth`): its own principal,
-     * stated to the control-plane host's service port, puts [policy] into the tenant's document, skips the window and
-     * publishes. The answer is the control plane's: the published change, or the refusal of the step that failed.
+     * Where the IAM's operator routes (the `/admin` routes of `test/system-auth`) are called: on the IAM's own port, with the bearer
+     * its enforcing pipeline verifies, where the control plane is a host's; through the gateway, which verifies it and
+     * forwards the identity, where the IAM takes its caller from the identity (the embedded deployment).
+     */
+    private fun admin(path: String): URI =
+        URI.create("${if (SystemTopology.embedded) SystemTopology.gateway else SystemTopology.auth}$path")
+
+    /**
+     * The IAM onboards [tenant] with no person behind it (`POST /admin/onboard` of `test/system-auth`): its own principal puts
+     * [policy], bound to nobody, into the tenant's document (creating the document when there is none), skips the window and
+     * publishes, over the control host's service port or through the SDK in process. The answer is the control plane's: the
+     * published change, or the refusal of the step that failed.
      */
     fun onboard(tenant: String, policy: String): Exchange = Http.post(
-        URI.create("${SystemTopology.auth}/admin/onboard"),
+        admin("/admin/onboard"),
         mapOf("tenant" to tenant, "policy" to policy),
+        SignIn.root().bearer,
+    )
+
+    /**
+     * The IAM grants [role] of [tenant] the policy [policy] (`POST /admin/grant`): a binding in the tenant's document by a
+     * principal of the platform tenant, which a person approves. The answer is the change waiting for that person.
+     */
+    fun grant(tenant: String, policy: String, role: String): Exchange = Http.post(
+        admin("/admin/grant"),
+        mapOf("tenant" to tenant, "policy" to policy, "role" to role),
         SignIn.root().bearer,
     )
 

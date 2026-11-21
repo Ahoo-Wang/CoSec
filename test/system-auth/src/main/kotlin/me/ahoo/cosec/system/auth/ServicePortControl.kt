@@ -20,6 +20,7 @@ import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.document.identity.IdentityHeader
 import me.ahoo.cosec.spi.identity.Identity
 import org.springframework.beans.factory.annotation.Value
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.http.MediaType
 import org.springframework.stereotype.Component
 import org.springframework.web.reactive.function.client.WebClient
@@ -40,6 +41,9 @@ interface IamControl {
     /** `GET /documents/{key}`. */
     suspend fun document(key: String): ControlAnswer
 
+    /** `POST /documents/{key}:apply`: [request] is the route's body; a tenant's document, which may not exist yet. */
+    suspend fun apply(key: String, request: String): ControlAnswer
+
     /** `POST /changes`: [request] is the route's body. */
     suspend fun propose(request: String): ControlAnswer
 
@@ -57,10 +61,14 @@ interface IamControl {
  * `svc-iam` may do.
  */
 @Component
+@ConditionalOnProperty("system.control.mode", havingValue = "http", matchIfMissing = true)
 class ServicePortControl(@Value("\${system.control.service.url}") private val service: String) : IamControl {
     private val client = WebClient.builder().baseUrl("$service/cosec/control/v1").build()
 
     override suspend fun document(key: String): ControlAnswer = call("GET", "/documents/{key}", null, key)
+
+    override suspend fun apply(key: String, request: String): ControlAnswer =
+        call("POST", "/documents/{key}:apply", request, key)
 
     override suspend fun propose(request: String): ControlAnswer = call("POST", "/changes", request)
 

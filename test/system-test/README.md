@@ -7,7 +7,9 @@ lower test can see; what a unit, slice or embedded-server test already proves is
 
 | Path | What it is |
 |---|---|
-| `compose.yaml` | The topology. |
+| `compose.yaml` | The topology both deployments share: Redis, Kafka, the gateways, the service behind them, the IAM and the enforcer. |
+| `compose.control-host.yaml` | Leg 1, added to it: two replicas of the control-plane host image, and the IAM calling the host's service port. |
+| `compose.embedded.yaml` | Leg 2, added to it: the IAM with the control plane embedded (and a second one with its control routes off); the gateways route `/cosec/control` to the IAM. |
 | `gateway/application.yaml` | The gateways' configuration, mounted over the image's `config/`: the routes, two of which (`/shop`, `/ledger`) name an app, and `/cosec/control` to `control-1`. |
 | `documents/` | The documents the scenarios publish: the platform's with `cosec-migrate`, the apps' and the tenants' through the control plane. |
 | `profile/shortened-bounds.yaml` | Test configuration only: the bounds the suite shortens (shadow windows), each with the default it replaces. |
@@ -19,6 +21,22 @@ lower test can see; what a unit, slice or embedded-server test already proves is
 | `../system-behind/` | A service behind the gateway in `cosec.pipeline.mode=gateway`: it echoes what reached it. |
 | `../system-auth/` | The IAM (WebFlux, `enforce`, no control plane of its own in this deployment): a test login, the starter's refresh and logout routes, and `POST /admin/onboard`, which calls the control-plane host's service port as the IAM's own principal `svc-iam` with CoSec's public `CoSec-Identity` writer. |
 | `../system-enforcer/` | A service that enforces on its own, on Spring MVC and Tomcat, for the app `orders`. |
+
+## Two deployments
+
+The control plane reaches an application in one of two ways, and the suite proves each on a stack of its own (two control
+planes on one store would share documents, leases and changes, and every assertion would hold for both or neither).
+The workflow runs the suite twice, a matrix of `leg`; `COMPOSE_FILE` names `compose.yaml` and the leg's file, and
+`COSEC_SYSTEM_TOPOLOGY` tells the harness which.
+
+| Leg | Stack | Scenarios (Gradle: `-PsystemLeg=`) |
+|---|---|---|
+| `control-host` (default) | the gateways, the control-plane host (the image built from the commit) and an IAM that calls its service port | every scenario but the `embedded` ones; the TypeScript client |
+| `embedded` | the gateways and an IAM that embeds the control plane (`cosec.pipeline.caller=forwarded-identity`, the SDK in process) | the scenarios tagged `control`, which both legs run, and `embedded`, which only this one does |
+
+`control` marks the scenarios of the control plane that do not depend on how it is deployed (the cold start, documents, a policy
+change, onboarding a tenant): they speak HTTP to the gateway's `/cosec/control` route, the same URL in both legs.
+`service-path` marks what only the control host has (its service port, its three ports, its replicas).
 
 ## Running it
 

@@ -165,12 +165,6 @@
       "type": "me.ahoo.cosec.spring.boot.control.ControlProperties$Http"
     },
     {
-      "name": "cosec.control.maintenance",
-      "type": "me.ahoo.cosec.spring.boot.control.ControlProperties$Maintenance",
-      "sourceType": "me.ahoo.cosec.spring.boot.control.ControlProperties",
-      "sourceMethod": "getMaintenance()"
-    },
-    {
       "name": "cosec.control.revisions",
       "sourceMethod": "getRevisions()",
       "sourceType": "me.ahoo.cosec.spring.boot.control.ControlProperties",
@@ -635,12 +629,6 @@
       "type": "java.lang.Integer",
       "description": "A port of its own for services that call the control plane directly, serving the narrow service profile (`CTL-58`): tenant and app documents, and the change flow that needs no person. Unset, no such port. WebFlux only; it is not the application's port or the management port. Reaching it is a network decision (a policy that admits the labelled service pods), and the host then states `only-trusted-callers-can-reach`.",
       "sourceType": "me.ahoo.cosec.spring.boot.control.ControlProperties$Http"
-    },
-    {
-      "name": "cosec.control.maintenance.enabled",
-      "type": "java.lang.Boolean",
-      "description": "Whether this instance runs the control plane's maintenance passes (revision reclamation, closing shadow windows, reconciling the app list and the staged list): `false` for an instance that only serves, such as an IAM service that embeds the control plane beside a control host that runs them (`CTL-59`). `true` or `false` only.",
-      "sourceType": "me.ahoo.cosec.spring.boot.control.ControlProperties$Maintenance"
     },
     {
       "description": "The revisions always kept per document; older ones are reclaimed once also older than `min-age`.",

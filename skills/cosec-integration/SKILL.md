@@ -318,8 +318,8 @@ it) or `only-trusted-callers-can-reach=true` (services call it directly, as the 
 that the network makes it so. The network is the boundary: a workload that reaches the host is whoever it claims, a
 platform administrator included. A service that was in `gateway` mode and now needs the control plane moves to `enforce`
 with `caller=forwarded-identity`. From code in the same process, `ControlService` with `ControlCaller.of(securityContext)`
-or `ControlCaller.service(...)`; `cosec.control.http.enabled=false` serves no routes, `cosec.control.maintenance.enabled=false`
-runs no maintenance pass. The service API has no client class of its own yet: a service writes `CoSec-Identity` with
+or `ControlCaller.service(...)`; `cosec.control.http.enabled=false` serves no routes. Every instance with the control plane runs
+its maintenance passes under their leases; no property turns them off. The service API has no client class of its own yet: a service writes `CoSec-Identity` with
 `IdentityHeader.write` (`cosec-document`).
 
 With `cosec-control` (and `cosec-cocache`), the host serves the control API under

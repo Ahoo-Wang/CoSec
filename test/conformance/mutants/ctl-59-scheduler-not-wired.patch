@@ -1,16 +1,16 @@
 # Rule: CTL-59
-# Mutant: the maintenance passes run on an instance that switched them off
+# Mutant: the maintenance scheduler is not wired on a host that has the control plane on
 # Tests: :spring-boot:test --tests me.ahoo.cosec.spring.boot.control.ControlServicePortTest
 
 diff --git a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/control/CoSecControlAutoConfiguration.kt b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/control/CoSecControlAutoConfiguration.kt
-index b3e24c3b3..7170d4d44 100644
+index fc59f26..ea7ed3f 100644
 --- a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/control/CoSecControlAutoConfiguration.kt
 +++ b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/control/CoSecControlAutoConfiguration.kt
-@@ -307,7 +307,6 @@ internal class CoSecControlAutoConfiguration {
+@@ -307,6 +307,7 @@ internal class CoSecControlAutoConfiguration {
      /** Runs [ControlMaintenance] at `cosec.control.revisions.reclaim-interval` and `cosec.control.shadow.check-interval`. */
      @Bean
      @ConditionalOnMissingBean
--    @ConditionalOnProperty(ControlProperties.MAINTENANCE_ENABLED_KEY, matchIfMissing = true)
++    @ConditionalOnProperty("cosec.control.maintenance.mutant")
      fun cosecControlMaintenanceScheduler(
          maintenance: ControlMaintenance,
          properties: ControlProperties,
