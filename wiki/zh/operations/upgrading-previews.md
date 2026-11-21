@@ -24,6 +24,11 @@ description: "每个 8.0 预览版（alpha 与 beta）到下一个之间的变�
 
 ## 从 8.0.0-beta.4 升级 {#from-8-0-0-beta-4}
 
+- **新增：控制面有了镜像 `cosec-control`，以及两种有名字的部署**（[控制面宿主](./deployment.md#the-control-plane-host)、[选择部署方式](./topologies.md#the-control-plane)）。内嵌控制面的应用无需任何改动：它就是第二种部署，原样不变。想把控制面作为自己一个进程来运行的部署，在网关旁边运行该镜像，并声明 `cosec.pipeline.identity.only-trusted-callers-can-reach=true`（没有它镜像不会启动），再配上使它属实的三条网络策略（`k8s/control/`）。
+- **原来处于 `gateway` 模式、现在需要控制面的 IAM 服务，改为运行在 `enforce`，并设置 `cosec.pipeline.caller=forwarded-identity`。** 受影响：原来处于 `cosec.pipeline.mode=gateway`、现在要加入 `cosec-control` 的服务。`gateway` 模式不接入文档、Redis 和控制面，所以控制面无法加到它上面。
+  - 把 `cosec.pipeline.mode` 改为 `enforce`，并加上 `cosec.pipeline.caller=forwarded-identity`：服务仍然相信网关转发的身份，仍然要声明什么能连到它。声明相同（`only-gateway-can-reach`，开启服务端口之后是 `only-trusted-callers-can-reach`），对隐藏方法过滤器的拒绝也相同。
+  - 它现在需要 `cosec-cocache`、`cosec-control` 和一个可以写文档的 Redis 用户（[谁可以写哪些 key](./storage.md#who-may-write-which-keys)）。
+  - 它自己的路由仍然要么在网关处授权，要么没有授权。代码只在进程内访问控制面时，设 `cosec.control.http.enabled=false`；旁边有运行维护任务的宿主时，设 `cosec.control.maintenance.enabled=false`（[配置](./configuration.md#control-plane)）。
 - **新增：控制面门面 `ControlService`，供内嵌控制面的服务使用**（`CTL-65`）。
   - 调用按它们声明的 `ControlCaller` 决策，并记为该调用方的步骤。
   - 它只触及窄集合：租户与 app 文档的读取，以及租户的变更流程。

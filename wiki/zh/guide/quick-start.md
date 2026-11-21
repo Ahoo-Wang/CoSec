@@ -176,6 +176,8 @@ curl -i -H "Authorization: Bearer not-a-token" localhost:8080/orders/1
    implementation("me.ahoo.cosec:cosec-control")
    ```
 
+   本指南把它内嵌在你自己的应用中。要把它作为网关旁边自己的一个进程运行，请改用 `cosec-control` 镜像（[控制面宿主](../operations/deployment.md#the-control-plane-host)）；两种方式的对比见[选择部署方式](../operations/topologies.md#the-control-plane)。
+
 2. **指定第一位管理员。**这会把 `(platform)` 租户的一个主体绑定到内置策略 `cosec:platform-admin`：
 
    ```bash

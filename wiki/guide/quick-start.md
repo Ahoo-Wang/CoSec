@@ -218,6 +218,10 @@ acknowledged, and the way back from one is `cosec-migrate restore` ([Storage](..
    implementation("me.ahoo.cosec:cosec-control")
    ```
 
+   This guide embeds it in your own application. To run it as a process of its own beside a gateway, use the
+   `cosec-control` image instead ([The control-plane host](../operations/deployment.md#the-control-plane-host)); the two ways
+   are compared in [Choosing a Deployment](../operations/topologies.md#the-control-plane).
+
 2. **Name the first administrator.** This binds one principal of the `(platform)` tenant to the built-in
    `cosec:platform-admin` policy:
 

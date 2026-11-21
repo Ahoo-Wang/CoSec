@@ -27,6 +27,26 @@ Which preview of the library may run behind which preview of the gateway image: 
 
 ## From 8.0.0-beta.4 {#from-8-0-0-beta-4}
 
+- **New: the control plane has an image, `cosec-control`, and two named deployments** ([The control-plane
+  host](./deployment.md#the-control-plane-host), [Choosing a Deployment](./topologies.md#the-control-plane)). Nothing to
+  change for an application that embeds the control plane: it is the second deployment, unchanged. A deployment that
+  wants the control plane as a process of its own runs the image beside the gateway, under the statement
+  `cosec.pipeline.identity.only-trusted-callers-can-reach=true` (the image does not start without it) and the three
+  network policies that make it true (`k8s/control/`).
+- **An IAM service in `gateway` mode that now needs the control plane runs in `enforce` with
+  `cosec.pipeline.caller=forwarded-identity` instead.** Affected: a service that was in `cosec.pipeline.mode=gateway`
+  and adds `cosec-control`. `gateway` mode wires no documents, no Redis and no control plane, so the control plane cannot
+  be added to it.
+  - Change `cosec.pipeline.mode` to `enforce` and add `cosec.pipeline.caller=forwarded-identity`: the service still
+    believes the identity the gateway forwards, and still states what can reach it. The statement is the same
+    (`only-gateway-can-reach`, or `only-trusted-callers-can-reach` once a service port is on), and so is the refusal of a
+    hidden-method filter.
+  - It now needs `cosec-cocache`, `cosec-control` and a Redis user that writes the documents
+    ([Who may write which keys](./storage.md#who-may-write-which-keys)).
+  - Its own routes stay authorized at the gateway or not at all.
+    Set `cosec.control.http.enabled=false` when its code reaches the control plane in process only, and
+    `cosec.control.maintenance.enabled=false` beside a host that runs the maintenance passes
+    ([Configuration](./configuration.md#control-plane)).
 - **New: the control plane's facade, `ControlService`, for a service that embeds the control plane** (`CTL-65`).
   - Calls are decided as the `ControlCaller` they state, and recorded as that caller's.
   - It reaches only the narrow set: tenant and app document reads, and a tenant's change flow.

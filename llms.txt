@@ -29,8 +29,8 @@ Key facts: any matching DENY overrides every ALLOW; a request nothing allows is 
 
 ## Operations
 
-- [Choosing a Deployment](https://cosec.ahoo.me/operations/topologies): the topologies (one service that enforces, a gateway with services behind it, a service that verifies another's tokens, a login service, the control plane): what each runs, needs, reaches and rests on
-- [Deployment](https://cosec.ahoo.me/operations/deployment): running the `cosec-gateway-server` image: what it authorizes, services behind it, readiness, Kubernetes manifests, memory, the JDK AOT cache
+- [Choosing a Deployment](https://cosec.ahoo.me/operations/topologies): the topologies (one service that enforces, a gateway with services behind it, a service that verifies another's tokens, a login service, the control plane in its two deployments: its own host, or embedded in the IAM service): what each runs, needs, reaches and rests on
+- [Deployment](https://cosec.ahoo.me/operations/deployment): running the `cosec-gateway-server` image: what it authorizes, services behind it, readiness; the `cosec-control` image, the control-plane host: its three ports, the statement and the network policies that make it true; Kubernetes manifests, memory, the JDK AOT cache
 - [Configuration](https://cosec.ahoo.me/operations/configuration): every `cosec.*` property with its default
 - [Storage and Caching](https://cosec.ahoo.me/operations/storage): snapshot documents in Redis, the `noeviction` requirement, publishing (control plane, `cosec-migrate`), revisions and rollback, behavior when Redis is unavailable
 - [Upgrading](https://cosec.ahoo.me/operations/upgrading): breaking changes and migration steps per version, including 7.x to 8.0 with `cosec-migrate`
