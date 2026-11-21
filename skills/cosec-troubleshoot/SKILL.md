@@ -130,6 +130,17 @@ Full model: https://cosec.ahoo.me/guide/security-model.
   true: cosec.pipeline.identity.only-gateway-can-reach=true`** (`STA-7`): a service in gateway mode starts only when the
   operator states that nothing but the gateway can reach it. `It is [<value>]` names a value that is not `true`. Make the
   network true (NetworkPolicy, mTLS, private network) and write the line; never suggest writing it just to start.
+- **The same message beginning `cosec.pipeline.caller=forwarded-identity:` (or `the web gate of this host is an
+  IdentityGate bean of the application`)** (`STA-9`): a host that decides with policies and takes its caller from the
+  identity, the `cosec-control` image or an IAM service that embeds the control plane, believes the header the same way.
+  The key to write depends on who reaches it: `only-gateway-can-reach=true` when only the gateway does,
+  `only-trusted-callers-can-reach=true` when services call it directly (the image has a service port by default, so the
+  second; the gateway's key is refused beside a service port). The network first (a NetworkPolicy per port, as in
+  `k8s/control/`), then the line.
+- **`cosec-control-server runs the control plane; cosec.control.enabled=false ...`, or `cosec-control-server verifies no
+  credential and issues no token ... cosec.jwt.enabled=true`** (also `cosec.api-key.enabled`,
+  `cosec.authentication.login.enabled`; `STA-10`): the `cosec-control` image refuses them. Remove the key; a control plane
+  that verifies tokens or signs people in is an application of your own.
 - **`cosec.pipeline.mode=gateway: spring.mvc.hiddenmethod.filter.enabled=true` (or the WebFlux property, or `a
   HiddenHttpMethodFilter bean, [name]`)** (`STA-6`): the gateway decided the request line's method and the service
   would run the one `_method` names. Remove the property or the bean.
@@ -252,6 +263,10 @@ Full model: https://cosec.ahoo.me/guide/security-model.
   https://cosec.ahoo.me/operations/troubleshooting#a-check-answers-false
 
 ### Every request is 503, or the instance is not ready
+
+The `cosec-control` image is also unready while its control store is in the format before 8.0.0-beta.5 (`cosecControlStoreFormat`
+is in its readiness group, with a `format` detail and one `ERROR` at startup): run `cosec-migrate repair-references`
+with the host stopped. Its probes are on the management port 8081, never on 8080, where the pipeline refuses a kubelet.
 
 - No platform document is published yet (the first one comes from `cosec-migrate publish`; `cosec-migrate bootstrap`
   writes only the `(platform)` tenant's document), or it was lost (evicted): an absent platform fails every request

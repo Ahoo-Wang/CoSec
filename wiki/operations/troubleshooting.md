@@ -421,6 +421,12 @@ timing out, or no node to ask) under `eviction-check=fail`: allow `INFO` (`+info
 The indicator is an alert: keep it out of the readiness group, which `cosecSnapshot` alone serves. In it, one change to
 Redis would take every instance out of rotation at once.
 
+**The control-plane host** has one more reason: its readiness group holds `cosecControlStoreFormat`, so a control store
+in the format before 8.0.0-beta.5 leaves it unready, with a `format` detail naming `cosec-migrate repair-references` and
+one `ERROR` at startup. Stop the host, run the command, start it
+([The control-plane host](./deployment.md#control-plane-store)). Its probes are on the management port 8081: on 8080 the
+pipeline refuses a kubelet.
+
 ## A pod runs out of memory {#a-pod-runs-out-of-memory}
 
 Read which memory ran out; the knob differs:
@@ -576,6 +582,27 @@ A service in `cosec.pipeline.mode=gateway` trusts the network (`STA-7`). Make it
 mutual TLS, or a private network only the gateway is on. `It is [false]` (or `1`, `on`, an empty value) means the
 property is written with a value that is not `true`. Do not write it to get past the message before the network
 holds. After it, startup logs one `INFO` line.
+
+The same message opens with `cosec.pipeline.caller=forwarded-identity:` on a host that decides with policies and takes its
+caller from the identity, such as the [control-plane host](./deployment.md#the-control-plane-host) or an IAM service that
+embeds the control plane (`STA-9`), and with `the web gate of this host is an IdentityGate bean of the application` when the
+application declared its own gate. It names two lines: `only-gateway-can-reach=true` when only the gateway reaches the
+host, `cosec.pipeline.identity.only-trusted-callers-can-reach=true` (`COSEC_PIPELINE_IDENTITY_ONLYTRUSTEDCALLERSCANREACH`)
+when services call it directly, as they do the service port of the `cosec-control` image, which is on by default; beside a
+service port the gateway's line is refused, because it would be false. The network first, one policy per port
+([`k8s/control/`](https://github.com/Ahoo-Wang/CoSec/tree/main/k8s/control)), then the line.
+
+### Startup fails on the control-plane image's settings {#startup-fails-on-the-control-plane-images-settings}
+
+```text
+cosec-control-server verifies no credential and issues no token: it believes the CoSec-Identity header it is sent, under the statement that nothing but the gateway and the services you name can reach it. cosec.jwt.enabled=true would wire verification or a login that nothing here uses ... (STA-10)
+```
+
+The `cosec-control` image refuses `cosec.jwt.enabled`, `cosec.api-key.enabled` and `cosec.authentication.login.enabled` set
+to `true`, and `cosec.control.enabled=false` (`cosec-control-server runs the control plane`): it verifies no credential and
+issues no token, and without the control plane it would be up and serve nothing. Remove the key. A control plane that
+verifies tokens or signs people in is an application of your own, with `cosec-control`; the gateway image is the
+read-only one.
 
 ### Startup fails on a hidden-method filter behind a gateway {#startup-fails-on-a-hidden-method-filter-behind-a-gateway}
 

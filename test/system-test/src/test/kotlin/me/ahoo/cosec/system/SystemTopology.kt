@@ -39,8 +39,16 @@ object SystemTopology {
     /** Both replicas. */
     val gateways: List<URI> get() = listOf(gateway, gateway2)
 
-    /** The login and control-plane host (`test/system-auth`), reached directly: the control API is an operator's. */
+    /** The IAM (`test/system-auth`): it issues the tokens and calls the control-plane host's service port, reached directly for its operator routes. */
     val auth: URI get() = url("COSEC_SYSTEM_AUTH_URL")
+
+    /** The control-plane host's replicas, by the operators' API (8080 of the container), the service API (8082) and the management port (8081). */
+    val control1: URI get() = url("COSEC_SYSTEM_CONTROL1_URL")
+    val control2: URI get() = url("COSEC_SYSTEM_CONTROL2_URL")
+    val controlService1: URI get() = url("COSEC_SYSTEM_CONTROL1_SERVICE_URL")
+    val controlService2: URI get() = url("COSEC_SYSTEM_CONTROL2_SERVICE_URL")
+    val controlManagement1: URI get() = url("COSEC_SYSTEM_CONTROL1_MANAGEMENT_URL")
+    val controlManagement2: URI get() = url("COSEC_SYSTEM_CONTROL2_MANAGEMENT_URL")
 
     /** The enforcing servlet service (`test/system-enforcer`), the host of the app `orders`. */
     val enforcer: URI get() = url("COSEC_SYSTEM_ENFORCER_URL")

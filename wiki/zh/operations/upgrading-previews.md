@@ -24,6 +24,11 @@ description: "每个 8.0 预览版（alpha 与 beta）到下一个之间的变�
 
 ## 从 8.0.0-beta.4 升级 {#from-8-0-0-beta-4}
 
+- **新增：控制面有了镜像 `cosec-control`，以及两种有名字的部署**（[控制面宿主](./deployment.md#the-control-plane-host)、[选择部署方式](./topologies.md#the-control-plane)）。内嵌控制面的应用无需任何改动：它就是第二种部署，原样不变。想把控制面作为自己一个进程来运行的部署，在网关旁边运行该镜像，并声明 `cosec.pipeline.identity.only-trusted-callers-can-reach=true`（没有它镜像不会启动），再配上使它属实的三条网络策略（`k8s/control/`）。
+- **原来处于 `gateway` 模式、现在需要控制面的 IAM 服务，改为运行在 `enforce`，并设置 `cosec.pipeline.caller=forwarded-identity`。** 受影响：原来处于 `cosec.pipeline.mode=gateway`、现在要加入 `cosec-control` 的服务。`gateway` 模式不接入文档、Redis 和控制面，所以控制面无法加到它上面。
+  - 把 `cosec.pipeline.mode` 改为 `enforce`，并加上 `cosec.pipeline.caller=forwarded-identity`：服务仍然相信网关转发的身份，仍然要声明什么能连到它。声明相同（`only-gateway-can-reach`，开启服务端口之后是 `only-trusted-callers-can-reach`），对隐藏方法过滤器的拒绝也相同。
+  - 它现在需要 `cosec-cocache`、`cosec-control` 和一个可以写文档的 Redis 用户（[谁可以写哪些 key](./storage.md#who-may-write-which-keys)）。
+  - 它自己的路由仍然要么在网关处授权，要么没有授权。代码只在进程内访问控制面时，设 `cosec.control.http.enabled=false`；旁边有运行维护任务的宿主时，设 `cosec.control.maintenance.enabled=false`（[配置](./configuration.md#control-plane)）。
 - **CoSec 自己的路由不再在管理端口上应答**（`CTL-69`）。受影响：有独立 `management.server.port` 的 WebFlux 宿主（或开启了控制面的网关宿主），其客户端曾在那里访问控制 API（`/cosec/control/v1/...`）或登录路由（`cosec.authentication.login.refresh.path`、`.logout.path`）。Spring Boot 的管理服务器会继承应用的 `RouterFunction`，所以它们曾在管理端口上、经管道应答；对相信所述身份的宿主（`cosec.pipeline.caller=forwarded-identity`、控制面宿主镜像），那等于把整个控制 API 提供给任何能访问该端口的人。现在它们只在应用端口上应答（控制 API 还有它的服务端口），其余端口上是 `404`。请改在应用端口上调用。应用自己的路由不变。
 - **新增：控制面门面 `ControlService`，供内嵌控制面的服务使用**（`CTL-65`）。
   - 调用按它们声明的 `ControlCaller` 决策，并记为该调用方的步骤。

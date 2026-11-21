@@ -8,7 +8,8 @@ description: "Run the cosec-gateway-server image, and use its JDK 25 AOT cache t
 For operators who run `cosec-gateway-server`, the ready-made Spring Cloud Gateway with CoSec in front, from its
 Docker image or on Kubernetes, or who build a similar image of their own. This page covers what the image contains,
 what it forwards to the services behind it, what it needs before it can answer a request, readiness and shutdown, the
-Kubernetes manifests in the repository, how CI checks the image, and the JDK 25 AOT cache it ships with. Every property named here is in [Configuration](./configuration.md).
+control-plane host, the Kubernetes manifests in the repository, how CI checks the image, and the JDK 25 AOT cache it ships
+with. Every property named here is in [Configuration](./configuration.md).
 
 ## The image
 
@@ -49,7 +50,8 @@ under a deployment between two restarts. The manifests in [`k8s/`](#kubernetes) 
   turn Kafka audit (`cosec.audit.kafka.enabled: false`), login (`cosec.authentication.login.enabled: false`) and
   ip2region (`cosec.ip2region.enabled: false`, as the [Kubernetes](#kubernetes) base does) off: a document that reads
   `ext.ip2region.*` needs `COSEC_IP2REGION_ENABLED=true`. It has no control plane: documents are published by
-  `cosec-migrate` or by a control-plane application on the same Redis. It cannot use [API keys](../integration/authentication.md)
+  `cosec-migrate` or by the control plane, which runs as [its own host](#the-control-plane-host) or inside an application of
+  yours, on the same Redis. It cannot use [API keys](../integration/authentication.md)
   as shipped: `cosec.api-key.enabled=true` fails startup for want of a `MembershipProvider` bean, and the image has none.
   An image derived from it, with a `MembershipProvider` bean (cosec-cocache's, over a `MembershipLoader` of yours, or
   your own), can.
@@ -246,16 +248,129 @@ audit log, Kafka, metrics) for up to
 rest. The Kafka audit listener then gets up to the same timeout for the sends it still holds. Keep the pod's termination
 grace period long enough for Spring's own graceful shutdown plus twice that timeout.
 
+## The control-plane host {#the-control-plane-host}
+
+For operators who run the control plane as a process of its own: the `cosec-control` image, behind the gateway. It is the
+first of the two deployments of [The control plane](./topologies.md#the-control-plane), where the other, an IAM service
+that embeds the control plane, and what both trust are written. The image is built from
+[`platform/control-server/Dockerfile`](https://github.com/Ahoo-Wang/CoSec/blob/main/platform/control-server/Dockerfile) by
+the workflow that builds the gateway's, and published as `ahoowang/cosec-control`, `ghcr.io/ahoo-wang/cosec-control` and
+`registry.cn-shanghai.aliyuncs.com/ahoo/cosec-control`, for `linux/amd64` and `linux/arm64`, under the tags and with the JDK
+25 and the [AOT cache](#aot-cache) described for [the gateway's](#the-image): pin the exact version. The first version tag
+that carries it is the release after `8.0.0-beta.4`. Like the gateway, it is an application, published only as an image.
+
+- **What is in it.** The starter with `cosec-control`, `cosec-cocache` and WebFlux; Kafka (`cosec.audit.kafka.enabled` and
+  `cosec.control.audit.kafka.enabled` off), ip2region (off), tracing, and metrics on the management port. It decides with
+  policies (`cosec.pipeline.mode=enforce`) and takes its caller from the `CoSec-Identity` header
+  (`cosec.pipeline.caller=forwarded-identity`): it verifies no token and issues none, so it needs no `COSEC_JWT_SECRET`.
+  Its defaults, in the jar
+  ([`application.yaml`](https://github.com/Ahoo-Wang/CoSec/blob/main/platform/control-server/src/main/resources/application.yaml)),
+  are read with the `config/application.yaml` you mount in `/opt/cosec-control-server`, key by key, as the gateway's are.
+- **What it refuses to start with** (`STA-10`), saying why: `cosec.control.enabled=false`, which leaves nothing to serve
+  (the gateway image is the read-only one), and `cosec.jwt.enabled`, `cosec.api-key.enabled` or
+  `cosec.authentication.login.enabled` set to `true`, which would wire a verification or a login that nothing here uses.
+  A control plane that verifies tokens or signs people in is an application of your own.
+- **The statement it will not start without.** Like a service in `gateway` mode, the host believes any `CoSec-Identity` it
+  receives, so you state what can reach it. It has a service port by default, so the statement is
+  `COSEC_PIPELINE_IDENTITY_ONLYTRUSTEDCALLERSCANREACH=true`: nothing but the gateway and the services you name can reach it.
+  The gateway's own statement, `only-gateway-can-reach`, fails beside a service port, because it would be false. State it
+  once the network makes it so: it is the policies, never the line, that hold it
+  ([Startup fails because the network boundary is not stated](./troubleshooting.md#startup-fails-because-the-network-boundary-is-not-stated)).
+  A hidden-method filter is refused, as in `gateway` mode (`STA-6`).
+
+This is for trying it on your own machine: the port is bound to the loopback interface, so that the statement is true.
+State it on a shared network only once a policy per port makes it so.
+
+```bash
+docker run -d -p 127.0.0.1:8080:8080 \
+  -e SPRING_DATA_REDIS_URL=redis://redis:6379 \
+  -e COSEC_PIPELINE_IDENTITY_ONLYTRUSTEDCALLERSCANREACH=true \
+  ahoowang/cosec-control
+```
+
+### Ports, and who reaches each {#control-plane-ports}
+
+| Port | What | Who should reach it |
+|---|---|---|
+| **8080** | the operators' API, `/cosec/control/**` (`cosec.control.http.base-path`), every route of [the control API](../policies/testing.md#the-control-plane) | the gateway's pods |
+| **8082** | the service API (`cosec.control.http.service-port`), the narrow profile for a service that calls the control plane directly: which tenant and app documents there are ([`GET /documents?kind=`](../policies/testing.md#listing-documents), granted to a service by `cosec:read` on `doc/tenant` or `doc/app`), the tenant and app documents, and a tenant's change flow ([Changing policies from your code](../integration/checks.md#changing-policies-from-your-code)); every other route is a `404` there | exactly the services you name |
+| **8081** | the management port: `/actuator/health/liveness`, `/actuator/health/readiness`, `/actuator/prometheus`; outside CoSec. The control API is a `404` there, as on any port but 8080 and 8082 (`CTL-69`) | monitoring only |
+
+Nothing in CoSec authorizes the management port, and the application port is decided by the pipeline, so a kubelet is
+refused there: probe the management port. The management port is not only the actuator: Spring Boot's management server
+also serves an application's own functional routes there, which the image has none of; CoSec's own routes, the control API
+included, answer on the application port and the service port only. Publish 8080 to the gateway and 8082 to the services
+you name, never 8081.
+
+**How a caller is identified.** An operator signs in at the IAM service, and the gateway verifies the token and forwards
+the identity to a route to the host. Give that route its app, so that an identity for another app is refused:
+
+```yaml
+spring:
+  cloud:
+    gateway:
+      server:
+        webflux:
+          routes:
+            - id: control
+              uri: lb://cosec-control
+              predicates:
+                - Path=/cosec/control/**
+              metadata:
+                cosec-app-id: cosec-control   # cosec.control.app-id, the image's cosec.authorization.scope.app-id
+```
+
+A service calls port 8082 with a `CoSec-Identity` header it writes (`IdentityHeader.write`, `cosec-document`), naming the
+principal it acts as. The control plane decides for that principal, with the bindings the platform document gives it, and
+the change records that the identity was asserted. A request with no identity is `401`, and a bearer token is not an
+identity: the host verifies none. The service API has no client class of its own yet.
+
+**The statement and the policies are one thing.** The statement is true because of the network, one policy per port: the
+gateway's pods to 8080, the named services to 8082, monitoring to 8081. The manifests in [`k8s/control/`](#kubernetes)
+set the variable and the three policies together, and never one without the other. They are the control, not defence in
+depth: a workload that can reach the host can state any principal, a platform administrator included, and be both the
+author and the approver of a change ([What the control plane trusts](./topologies.md#what-the-control-plane-trusts)).
+
+### The store, readiness and replicas {#control-plane-store}
+
+- **The store account.** The host writes every document, change and lease under `<s>:` ([Who may write which
+  keys](./storage.md#who-may-write-which-keys)): give it a Redis user of its own, the only one that may write them, and the
+  gateways a read-only one. Redis must run with `maxmemory-policy noeviction`, as for the gateway. A host started with a
+  user that cannot publish to the invalidation channel fails at startup
+  ([Troubleshooting](./troubleshooting.md#startup-fails-on-a-redis-permission)).
+- **No part in a shadow window.** `cosec.authorization.shadow.enabled` is `false` in the image: a replica is not an
+  instance a window waits for, and it decides only operators' requests, so it never holds a window open or writes a
+  report.
+- **Readiness.** The host is ready once the platform document is installed, as every instance is
+  ([Readiness](#readiness)), and while the control store is in the format of this release: the image puts the
+  `cosecControlStoreFormat` indicator into its readiness group. A store written by a release before 8.0.0-beta.5 leaves it
+  unready, visible and named, until `cosec-migrate repair-references` has run
+  ([Control store format](./observability.md#snapshot-health)). Liveness is the liveness group, up whatever Redis holds.
+  Both probes are on the management port; the image's `HEALTHCHECK` is the liveness one.
+- **One replica, and when two.** One is enough: operators make a few requests an hour, and a restart takes seconds. The
+  maintenance passes take a lease, so that one instance at a time does each document, and a change advances by
+  compare-and-set, so a second replica is designed for; the system test does not yet exercise one. Run two for a node
+  drain, not for load, with a disruption budget. Upgrade by stopping the host and starting the new image, never by a
+  rolling update: across a change of the stored format an old and a new replica must not run together
+  ([Upgrading between previews](./upgrading-previews.md#from-8-0-0-beta-4)).
+- **Memory.** The host holds the compiled documents of every tenant it decides for, up to
+  `cosec.authorization.snapshot.max-tenants`, in two snapshot sources, its pipeline's and the control plane's own. The
+  image defaults to the gateway's JVM options; [`k8s/control/`](#kubernetes) sets 768 MiB of heap in a 1536Mi limit for a
+  trial and the production overlay 2 GiB in 3200Mi, by the rule of [Memory](#memory) (heap, plus direct memory, plus about
+  250 MiB, plus a quarter): change the heap and the limit together, and with `max-tenants`.
+
 ## Kubernetes
 
 [`k8s/`](https://github.com/Ahoo-Wang/CoSec/tree/main/k8s) holds [Kustomize](https://kustomize.io/) manifests: a base
-and an overlay for each kind of cluster. Deploy an overlay, never the base on its own.
+for the gateway, one for the control-plane host, and an overlay for each kind of cluster. Deploy an overlay, never a base
+on its own.
 
 | Directory | For | Contents |
 |---|---|---|
 | `base/` | the overlays to build on | The Deployment and a Service (port 80 to the container's 8080; the management port 8081 is a container port the Service does not publish). `application.yaml` (the routes and the `cosec.*` settings above) becomes a ConfigMap mounted as `/opt/cosec-gateway-server/config/application.yaml`, read in addition to the image's defaults; its CORS origin, discovery list and route are a demo to replace; its name carries a hash of the file, so a change to it rolls the pods. The image is `ghcr.io/ahoo-wang/cosec-gateway`, with its tag set under `images:`. One gateway gets 768Mi and a 256 MiB heap. |
-| `overlays/dev/` | trying CoSec out on any cluster, kind and minikube included | The namespace `cosec-dev`, one gateway with the base's resources, and a single Redis 7.4 with `maxmemory-policy noeviction` and no password. Redis keeps its data in an `emptyDir`, which outlives a container restart but not the pod: deleting the Redis pod deletes the documents. |
-| `overlays/production/` | a starting point for your own overlay | The namespace `cosec`; your Redis, from the ConfigMap `cosec-gateway-redis` (host and port; or `SPRING_DATA_REDIS_CLUSTER_NODES` for a cluster) and the Secret `cosec-redis-secret` (`password`, and `username` for an ACL user); 2 to 10 gateways behind a HorizontalPodAutoscaler on CPU (70 % of the 1 CPU each requests; it needs the metrics server); a PodDisruptionBudget that evicts one gateway at a time and always lets an unready one go, so a drain never waits for a platform document; a NetworkPolicy that admits port 8080 from anywhere and the management port from the `monitoring` namespace only; 3200Mi and a 2 GiB heap per gateway, spread across nodes. |
+| `control/` | the overlays to build on | The control-plane host ([above](#the-control-plane-host)): a Deployment (`strategy: Recreate`, one replica, probes on the management port), two Services (`cosec-control`, port 80 to 8080, for the gateway's route; `cosec-control-service`, port 80 to 8082, for the services you name; neither publishes 8081), a ConfigMap for `application.yaml`, and **one NetworkPolicy per port**. The Deployment sets `COSEC_PIPELINE_IDENTITY_ONLYTRUSTEDCALLERSCANREACH=true`, and the policies are resources of the same kustomization, because the statement is true only with them. The image is `ghcr.io/ahoo-wang/cosec-control`, its tag under `images:`, moved with the gateway's at a release. |
+| `overlays/dev/` | trying CoSec out on any cluster, kind and minikube included | The namespace `cosec-dev`, one gateway with the base's resources, the control-plane host with its own (1536Mi, a 768 MiB heap) on the same Redis, and a single Redis 7.4 with `maxmemory-policy noeviction` and no password. Redis keeps its data in an `emptyDir`, which outlives a container restart but not the pod: deleting the Redis pod deletes the documents. |
+| `overlays/production/` | a starting point for your own overlay | The namespace `cosec`; your Redis, from the ConfigMap `cosec-gateway-redis` (host and port; or `SPRING_DATA_REDIS_CLUSTER_NODES` for a cluster) and the Secret `cosec-redis-secret` (`password`, and `username` for an ACL user); 2 to 10 gateways behind a HorizontalPodAutoscaler on CPU (70 % of the 1 CPU each requests; it needs the metrics server); a PodDisruptionBudget that evicts one gateway at a time and always lets an unready one go, so a drain never waits for a platform document; a NetworkPolicy that admits port 8080 from anywhere and the management port from the `monitoring` namespace only; 3200Mi and a 2 GiB heap per gateway, spread across nodes. The control-plane host gets its own Redis account (the Secret `cosec-control-redis-credentials`, never the gateways'), 3200Mi and a 2 GiB heap, and a disruption budget that matters once you run a second replica. |
 
 ### Deploying
 
@@ -268,8 +383,8 @@ and an overlay for each kind of cluster. Deploy an overlay, never the base on it
    ```
 
    For the production overlay, use the namespace `cosec`, and also create the Redis credentials:
-   `kubectl -n cosec create secret generic cosec-redis-secret --from-literal=password=<password>`.
-2. **Production: point it at your Redis.** Set the address in the `cosec-gateway-redis` ConfigMap of the overlay's
+   `kubectl -n cosec create secret generic cosec-redis-secret --from-literal=password=<password>`. The control-plane host's Redis account is a Secret of its own, `cosec-control-redis-credentials` (`username`, `password`): `kubectl -n cosec create secret generic cosec-control-redis-credentials --from-literal=username=cosec-control --from-literal=password=<password>`. The host has no JWT secret.
+2. **Production: point it at your Redis.** Set the address in the `cosec-gateway-redis` and `cosec-control-redis` ConfigMaps of the overlay's
    `kustomization.yaml`. Redis must run with `maxmemory-policy noeviction`
    ([Redis requirements](./storage.md#redis-requirements)). Keep your routes, namespace and image tag in an overlay of
    your own on top of this one: replace the configuration with
@@ -315,6 +430,15 @@ and an overlay for each kind of cluster. Deploy an overlay, never the base on it
   Prometheus's), and the dev overlay has no policy.
 - **Shutdown.** A `preStop` pause of 5 seconds lets the Service drop the pod first; `terminationGracePeriodSeconds: 45`
   covers it, Spring's graceful shutdown (30 seconds at most) and the decision listeners' drain ([Shutdown](#shutdown)).
+- **The control-plane host's network policies.** Three, one per port, selecting its pods (`cosec-control-operators`,
+  `cosec-control-services`, `cosec-control-management`), so that each port admits one source and every other connection is
+  refused: the gateway's pods (`app.kubernetes.io/name: cosec-gateway`, in the policy's namespace; a gateway elsewhere needs
+  the `namespaceSelector` of the example above) to 8080; the services you name to 8082; the `monitoring` namespace to 8081.
+  **As shipped, the services policy names a namespace and a label that do not exist, so it admits no one**: change both to
+  each service that calls the control plane, in its own namespace, with one `from` entry each, and treat each as being as
+  trusted as the control plane itself. They need a network plugin that enforces `NetworkPolicy`, and kind's does not:
+  test, on a cluster that does, that a pod of another label cannot connect to any of the three ports. The manifests set
+  no egress policy.
 - **JVM options**, through `JAVA_OPTS`: the memory sizes below, `-XX:+ExitOnOutOfMemoryError` so that a JVM that ran
   out of memory is restarted, `-Djava.net.preferIPv4Stack=true` (for
   [netty#16082](https://github.com/netty/netty/issues/16082)). The image starts no JMX agent.
@@ -541,8 +665,9 @@ your own deployment.
 [`system-test.yml`](https://github.com/Ahoo-Wang/CoSec/blob/main/.github/workflows/system-test.yml) runs CoSec as a
 deployment, which no unit, slice or embedded-server test does: the gateway image built from the commit (its own
 Dockerfile, the AOT cache trained), two replicas of it and a third that refuses a token while revocations cannot be read,
-a service behind them in `cosec.pipeline.mode=gateway`, a login and control-plane host, a Spring MVC service that
-enforces on its own, and a Redis with `maxmemory-policy noeviction`, started with Docker Compose on a GitHub-hosted runner.
+a service behind them in `cosec.pipeline.mode=gateway`, two replicas of the control-plane host image (also built from the
+commit, behind the gateway's `/cosec/control` route), the IAM that issues the tokens and calls the host's service port, a
+Spring MVC service that enforces on its own, and a Redis with `maxmemory-policy noeviction`, started with Docker Compose on a GitHub-hosted runner.
 The scenarios drive it over the network only, with `cosec-migrate` and `docker compose stop`, `start` and `restart` as the
 operator would. It is not part of `check`; it runs nightly on `main`, on the pull requests that change it, and on demand.
 
@@ -571,7 +696,14 @@ What it covers, each as an observable over the network:
   token there; where memberships come from a provider, a role held once applies in every app that defines its id, which the
   stack does not exercise (it has no provider);
 - a **policy change** through the control plane, from its refusals and its shadow window on live traffic to approval, publish
-  and rollback, taking effect at every process without a restart;
+  and rollback, taking effect at every process without a restart, through the gateway to the control-plane host;
+- the **service path** of the control-plane host: a service principal bound to a read-only policy reads and is refused a
+  write by the action; the service port serves no platform document and no change of one, by its document or by its id;
+  a stated principal proposes a tenant change, skips or runs its window and publishes, and the change event in Kafka says
+  who was stated and which connection carried it, whatever forwarding headers the caller wrote; a stated API key never
+  approves where a stated token does (the cost of the network boundary); an identity that is doubled, expired or too old is
+  refused; the host does not start without the statement of what can reach it; and with two replicas on one store a change
+  proposed on one is shadowed on the other, and a window still closes when the replica that started it is stopped;
 - **revocation** (logout, a subject), refresh rotation and reuse, a **rate limit** one bucket of which both gateways count,
   and an **API key**;
 - a **Redis outage**: installed documents keep deciding, a tenant never read is `503`, a tenant that fails closed stops at

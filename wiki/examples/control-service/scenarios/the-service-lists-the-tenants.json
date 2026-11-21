@@ -1,0 +1,24 @@
+{
+  "description": "Listing the tenants is cosec:read on the layer, which doc/tenant/** covers: it reads no document.",
+  "withoutDocument": [
+    "tenant",
+    "app"
+  ],
+  "credential": {
+    "tenant": "(platform)",
+    "id": "svc-iam",
+    "app": "cosec-control",
+    "roles": []
+  },
+  "request": {
+    "hostApp": "cosec-control",
+    "action": "cosec:read",
+    "resource": {
+      "type": "doc",
+      "id": "tenant"
+    }
+  },
+  "expect": {
+    "decision": "Permit"
+  }
+}

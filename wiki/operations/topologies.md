@@ -1,6 +1,6 @@
 ---
 title: "Choosing a Deployment"
-description: "The ways to run CoSec: one service that enforces, a gateway with services behind it, a service that verifies another's tokens, a login service and the control plane. For each, what runs, what it needs, what it must reach and what holds it safe."
+description: "The ways to run CoSec: one service that enforces, a gateway with services behind it, a service that verifies another's tokens, a login service, and the control plane in its two deployments (its own host, or embedded in the IAM service). For each, what runs, what it needs, what it must reach and what holds it safe."
 ---
 
 # Choosing a Deployment
@@ -18,7 +18,8 @@ topology rests on, the checklist what to set before it carries traffic. The sett
 | [A gateway and services that decide again](#a-gateway-and-services-that-decide-again) | a gateway and its services | both | both | the signing secret in every process, and Redis |
 | [A service that verifies tokens another service issues](#a-service-that-verifies-tokens-another-service-issues) | one application beside an issuer | the service's own code | the service | the issuer's secret, and the issuer's Redis |
 | [A login service](#a-login-service) | one application | | it issues | the signing secret |
-| [The control plane](#the-control-plane) | one application | | | whoever holds a `(platform)` token, and write access to Redis |
+| [Gateway, control-plane host and IAM](#control-plane-host) | a gateway, the `cosec-control` image and an IAM service | the gateway, for operators; the control plane, for each change | nobody on the host: it believes the identity it is sent | the network that admits its callers, and write access to Redis |
+| [Gateway and an IAM that embeds the control plane](#control-plane-embedded) | a gateway and one IAM application | the gateway, for operators; the control plane, for each change | the IAM service issues; the gateway verifies | the gateway as the only way in, the IAM's own code, and write access to Redis |
 
 ## What every topology shares
 
@@ -129,20 +130,65 @@ The application that signs tokens (`cosec-login` and `cosec-jwt` come with the s
 
 See [Authentication](../integration/authentication.md) and [What your application serves](../integration/clients.md#what-your-application-serves).
 
-## The control plane
+## The control plane {#the-control-plane}
 
-The only writer of documents: changes are validated, shadowed and approved before they publish.
+The only writer of documents: changes are validated, shadowed and approved before they publish. It runs in one of two
+deployments, and in these two only. Both run the same code; they differ in where the control plane lives and in who
+calls it.
+
+### Gateway, control-plane host and IAM {#control-plane-host}
+
+The control plane is a process of its own, the `cosec-control` image, behind the gateway. The IAM service is a caller of
+it, like any other service you admit.
 
 | | |
 |---|---|
-| Runs | an application of your own with `cosec-control` and `cosec-cocache`. No CoSec image runs the control plane: the gateway image has none, so after the first `cosec-migrate publish` every change needs this application |
-| Sets | `cosec.control.*`; Redis credentials that may write the documents; `cosec.control.enabled=false` on the data-plane instances, which then read the documents read-only; the first administrator with `cosec-migrate bootstrap`, and a way to issue a `(platform)` token |
-| Reaches | Redis (writes), and Kafka when audit goes there |
-| Rests on | whoever holds a `(platform)` administrator token or the signing secret; write access to Redis |
-| CoSec checks | the modules, the revocation reader, the token retention against approval expiry, the control-plane beans (not replaceable), and Redis permission failures; per change, that a change to the platform document, the platform tenant's or the control app's does not keep its publisher out of the control plane (check `V4`: a `422` unless the publish says `"lockout": true`) |
-| CoSec does not check | that an administrator can obtain a token at all; that an operator other than the publisher keeps access |
+| Runs | the gateway as above; the [`cosec-control` image](./deployment.md#the-control-plane-host); and your IAM service, which issues tokens and, for what it changes itself, calls the host's service port |
+| Sets | on the host: `cosec.pipeline.identity.only-trusted-callers-can-reach=true` (the image does not start without it), the Redis account that writes the documents, and a policy per port of the network that admits only its callers; on the gateway: the route `/cosec/control/**` to the host, with `cosec-app-id: cosec-control`; the first administrator with `cosec-migrate bootstrap` |
+| Reaches | Redis (writes), and Kafka when the change log goes there; the IAM service reaches the host's service port |
+| Rests on | **the network that admits the gateway and the services you name**, and write access to Redis. The host holds no signing secret: it verifies no token |
+| CoSec checks | that the statement is written; that it names the right one (the gateway's alone fails beside a service port); that the image has no credential verification, login or API keys on; each control action, decided by the policies for the principal the caller states |
+| CoSec does not check | that the statement is true; that a service admitted to the service port states only the principal it acts as |
 
-A lock-out that was acknowledged, or one the check cannot see, is undone with `cosec-migrate restore`, run by whoever holds
+The first platform document still comes from `cosec-migrate publish`; until it is installed the host is not ready.
+The operators' calls arrive through the gateway, which verified their token and forwards the identity. A service calls
+the service port with a `CoSec-Identity` header it writes itself (`IdentityHeader.write`, `cosec-document`): the service
+API has no client class of its own yet.
+
+### Gateway and an IAM that embeds the control plane {#control-plane-embedded}
+
+The control plane is a library of the IAM service, which is an application of your own behind the gateway. There is no
+control-plane host.
+
+| | |
+|---|---|
+| Runs | the gateway as above; one IAM application with `cosec-control` and `cosec-cocache`, in `enforce` with `cosec.pipeline.caller=forwarded-identity`, which calls the control plane from its own code through [`ControlService`](../integration/checks.md#changing-policies-from-your-code) |
+| Sets | `cosec.pipeline.identity.only-gateway-can-reach=true`; the Redis account that writes the documents; for operators, the gateway route `/cosec/control/**` to the IAM service, with `cosec-app-id: cosec-control`; `cosec.control.http.enabled=false` when nobody calls the control API over HTTP and the code reaches it in process only; `cosec.control.maintenance.enabled=false` on an instance beside a host that runs the maintenance passes |
+| Reaches | Redis (writes), and Kafka when the change log goes there |
+| Rests on | **the gateway as the only way in**, the IAM service's own code, and write access to Redis: code in that process holds the store's write account, and what it states as the acting principal is believed |
+| CoSec checks | the statement, and a hidden-method filter; each control action, decided by the policies for the principal the call states, and recorded as that principal's step, with `via.method: in-process` for a call from code |
+| CoSec does not check | that the statement is true; the IAM service's own routes: on a host that takes its caller from the identity the web adapter does not decide a request, so they are authorized at the gateway or not at all |
+
+A change that needs a second person's approval stops at `AWAITING_APPROVAL` whoever proposed it: a person approves it
+on the operators' routes, through the gateway. Leave `cosec.control.maintenance.enabled` at `true` where no control-plane
+host runs the passes: a deployment where none does closes no shadow window, reclaims no revision and reconciles no
+staged list.
+
+### What the control plane trusts, and what it does not {#what-the-control-plane-trusts}
+
+Both deployments believe the `CoSec-Identity` header they receive, and the header carries no signature (`STA-9`). So
+whoever can reach the host, or the IAM service, is whoever they claim to be, a platform administrator included, and can
+publish any policy of any tenant. The control plane contains mistakes and keeps the audit: every call is decided by the
+policies for the principal it states, and each step records that the identity was asserted, with the credential's method
+and id, the request's id and the address of the connection it arrived on
+([Control-plane change log](./observability.md#control-plane-change-log)). It is not a defence against a
+compromised workload that can reach it, which can also approve its own changes. **The network is the boundary.** That is
+why the host does not start until the operator states what can reach it, and why a compromise of the gateway, or of any
+service admitted to the service port, is a compromise of the control plane. Signing the header is planned for 8.1.
+
+In both, a change to the platform document, the platform tenant's or the control app's that would keep its publisher out of
+the control plane is a `422` unless the publish says `"lockout": true` (check `V4`). A lock-out that was acknowledged, or
+one the check cannot see, is undone with `cosec-migrate restore`, run by whoever holds
 the store's credentials ([Recovering from a lock-out](./storage.md#recovering-from-a-lock-out)).
 
 See [The control plane](../policies/testing.md#the-control-plane), [Storage](./storage.md#publishing-documents) and

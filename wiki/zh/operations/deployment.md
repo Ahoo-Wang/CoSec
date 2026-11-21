@@ -7,7 +7,7 @@ description: "运行 cosec-gateway-server 镜像，并用它自带的 JDK 25 AOT
 
 面向用 Docker 镜像或在 Kubernetes 上运行 `cosec-gateway-server`（前置了 CoSec 的现成 Spring Cloud Gateway）的运维人员，
 以及要自己构建类似镜像的团队。本页介绍镜像里有什么、它向后面的服务转发什么、它在应答请求之前需要什么、就绪与关闭、
-仓库中的 Kubernetes 清单、CI 如何检查镜像，以及镜像自带的 JDK 25 AOT 缓存。这里提到的每个配置项都在[配置](./configuration.md)中。
+控制面宿主、仓库中的 Kubernetes 清单、CI 如何检查镜像，以及镜像自带的 JDK 25 AOT 缓存。这里提到的每个配置项都在[配置](./configuration.md)中。
 
 ## 镜像 {#the-image}
 
@@ -23,7 +23,7 @@ CI 在每次推送到 `main`、`7.x` 和发布分支时、为每个版本标签�
 - **必需配置。** `COSEC_JWT_SECRET`（没有默认值，见[认证](../integration/authentication.md)）和 Redis 地址，例如
   `SPRING_DATA_REDIS_URL`。
 - **目录结构。** 应用位于 `/opt/cosec-gateway-server`，以非特权用户 `appuser` 运行。镜像的默认值在 jar 里；你的配置是 `config/application.yaml`（挂载到那里），它被追加读取并逐 key 覆盖，所以只设置路由的文件也保留下面所有默认值。列表（例如 `routes`）整体替换。JVM 参数在 `bin/cosec-gateway-server` 中（ZGC，2 GiB 堆）。通过 `JAVA_OPTS` 追加参数，它排在这些参数之后，因此会覆盖它们（[内存](#memory)）。镜像不启动 JMX agent；要附加，在 `JAVA_OPTS` 里设置并绑定到回环地址：`-Dcom.sun.management.jmxremote -Dcom.sun.management.jmxremote.port=5555 -Dcom.sun.management.jmxremote.host=127.0.0.1 -Djava.rmi.server.hostname=127.0.0.1 -Dcom.sun.management.jmxremote.authenticate=false -Dcom.sun.management.jmxremote.ssl=false`，再用 `kubectl port-forward` 或 `docker exec` 连接；`jcmd` 不需要它。
-- **包含什么。** 网关过滤器、Redis 快照存储（`cosec-cocache`）、追踪、Kafka 模块、ip2region，以及指标：`cosec-micrometer` 和 Prometheus 注册表，所以 `cosec.authorization`、`cosec.snapshot.*` 和[可观测性](./observability.md#metrics)中的其他指标都存在，并从管理端口的 `/actuator/prometheus` 抓取（见下）。它的默认值在 jar 里（[`application.yaml`](https://github.com/Ahoo-Wang/CoSec/blob/main/platform/gateway-server/src/main/resources/application.yaml)），关闭了 Kafka 审计（`cosec.audit.kafka.enabled: false`）、登录（`cosec.authentication.login.enabled: false`）和 ip2region（`cosec.ip2region.enabled: false`，与 [Kubernetes](#kubernetes) 的 base 一样）：读取 `ext.ip2region.*` 的文档需要 `COSEC_IP2REGION_ENABLED=true`。它没有控制面：文档由 `cosec-migrate` 或同一个 Redis 上的控制面应用发布。它按出厂配置不能使用 [API key](../integration/authentication.md)：`cosec.api-key.enabled=true` 会因为缺少 `MembershipProvider` Bean 而启动失败，镜像里没有它；基于它派生、带有 `MembershipProvider` Bean（cosec-cocache 的，配上你的 `MembershipLoader`，或你自己的）的镜像可以。
+- **包含什么。** 网关过滤器、Redis 快照存储（`cosec-cocache`）、追踪、Kafka 模块、ip2region，以及指标：`cosec-micrometer` 和 Prometheus 注册表，所以 `cosec.authorization`、`cosec.snapshot.*` 和[可观测性](./observability.md#metrics)中的其他指标都存在，并从管理端口的 `/actuator/prometheus` 抓取（见下）。它的默认值在 jar 里（[`application.yaml`](https://github.com/Ahoo-Wang/CoSec/blob/main/platform/gateway-server/src/main/resources/application.yaml)），关闭了 Kafka 审计（`cosec.audit.kafka.enabled: false`）、登录（`cosec.authentication.login.enabled: false`）和 ip2region（`cosec.ip2region.enabled: false`，与 [Kubernetes](#kubernetes) 的 base 一样）：读取 `ext.ip2region.*` 的文档需要 `COSEC_IP2REGION_ENABLED=true`。它没有控制面：文档由 `cosec-migrate` 或同一个 Redis 上的控制面发布，控制面或是[自己的宿主](#the-control-plane-host)，或是你应用内部的一部分。它按出厂配置不能使用 [API key](../integration/authentication.md)：`cosec.api-key.enabled=true` 会因为缺少 `MembershipProvider` Bean 而启动失败，镜像里没有它；基于它派生、带有 `MembershipProvider` Bean（cosec-cocache 的，配上你的 `MembershipLoader`，或你自己的）的镜像可以。
 - **端口。** 网关监听 **8080**，探针是 `/livez` 和 `/readyz`：Spring Boot 存活与就绪分组，由网关自己的端口提供，因此探针证明客户端使用的监听器在应答。它们不是网关路由，所以 CoSec 不对它们决策，并且在任何文档发布之前就会应答（存活 `200`，就绪 `503`）。actuator 在**管理端口 8081** 上，从不在网关的端口上：`/actuator/health`（以及 `/actuator/health/liveness`、`/readiness`）和抓取端点 `/actuator/prometheus`。CoSec 授权的是网关的路由，不是 actuator：把 8081 留在集群或主机内部，只发布给监控网络（`-p 8080:8080` 只发布网关）。8081 上的探针证明 actuator 的服务器在应答，不证明 8080 上的监听器在应答：探测 8080 上的 `/livez`。
 - **指标。** 8081 上的 `/actuator/prometheus` 包含 CoSec、Spring Cloud Gateway、JVM 和 CoCache 的指标。CoSec 的标签都是有界的（决策的 `result`、`source`、`problem`、`cause`；快照的 `kind`、`state`、`result`；监听器名）；租户、主体、路径、令牌都不会成为标签。`disk_*` 指标带有工作目录的路径。
 - **Docker 健康检查。** 镜像的 `HEALTHCHECK` 每 30 秒探测一次 8080 上的 `/livez`：应用运行后即为 up，与 Redis 中有什么无关。它从不探测 `/actuator/health`，后者在平台文档安装之前一直是 `DOWN`（[就绪](#readiness)）。
@@ -149,16 +149,73 @@ management:
 [`cosec.observability.listener.drain-timeout`](./observability.md#decision-listeners)（5 秒），然后丢弃剩下的。随后 Kafka
 审计监听器最多再用同样长的时间等待它手中的发送。让 pod 的终止宽限期足够容纳 Spring 自身的优雅关闭加上两倍这段时间。
 
+## 控制面宿主 {#the-control-plane-host}
+
+面向把控制面作为自己的一个进程来运行的运维人员：网关之后的 `cosec-control` 镜像。它是[控制面](./topologies.md#the-control-plane)两种部署中的第一种，另一种（内嵌控制面的 IAM 服务）以及两者各自信任什么，都写在那里。镜像由构建网关镜像的同一个工作流，从 [`platform/control-server/Dockerfile`](https://github.com/Ahoo-Wang/CoSec/blob/main/platform/control-server/Dockerfile) 构建，发布为 `ahoowang/cosec-control`、`ghcr.io/ahoo-wang/cosec-control` 和 `registry.cn-shanghai.aliyuncs.com/ahoo/cosec-control`，支持 `linux/amd64` 和 `linux/arm64`，标签规则、JDK 25 与 [AOT 缓存](#aot-cache)与[网关镜像](#the-image)相同：固定到确切的版本。带有它的第一个版本标签是 `8.0.0-beta.4` 之后的那次发布。和网关一样，它是应用，只以镜像发布。
+
+- **里面有什么。** 带有 `cosec-control`、`cosec-cocache` 和 WebFlux 的 starter；Kafka（`cosec.audit.kafka.enabled` 和 `cosec.control.audit.kafka.enabled` 关闭）、ip2region（关闭）、追踪，以及管理端口上的指标。它用策略决策（`cosec.pipeline.mode=enforce`），并从 `CoSec-Identity` 请求头确定调用方（`cosec.pipeline.caller=forwarded-identity`）：它不校验令牌，也不签发令牌，所以不需要 `COSEC_JWT_SECRET`。它的默认值在 jar 里（[`application.yaml`](https://github.com/Ahoo-Wang/CoSec/blob/main/platform/control-server/src/main/resources/application.yaml)），与你挂载到 `/opt/cosec-control-server` 的 `config/application.yaml` 逐键合并读取，和网关的一样。
+- **它拒绝启动的情形**（`STA-10`），并说明原因：`cosec.control.enabled=false`，那样它就没有东西可提供（网关镜像才是只读的那个），以及 `cosec.jwt.enabled`、`cosec.api-key.enabled` 或 `cosec.authentication.login.enabled` 设为 `true`，那会接入一个这里没有任何东西使用的校验或登录。会校验令牌或让人登录的控制面，是你自己的应用。
+- **没有它就不启动的声明。** 与 `gateway` 模式的服务一样，宿主相信它收到的任何 `CoSec-Identity`，所以由你声明什么能连到它。它默认带有服务端口，所以声明是 `COSEC_PIPELINE_IDENTITY_ONLYTRUSTEDCALLERSCANREACH=true`：除网关和你点名的服务之外，没有任何东西能连到它。网关自己的声明 `only-gateway-can-reach` 在服务端口旁边会启动失败，因为它不属实。等网络做到之后再声明：撑起它的是策略，而不是那一行（[启动失败，因为没有声明网络边界](./troubleshooting.md#startup-fails-because-the-network-boundary-is-not-stated)）。隐藏方法过滤器同样被拒绝，与 `gateway` 模式一样（`STA-6`）。
+
+这是在你自己的机器上试用：端口绑定到回环接口，所以声明属实。在共享网络上，要等每个端口一条策略使它属实之后，才写这个声明。
+
+```bash
+docker run -d -p 127.0.0.1:8080:8080 \
+  -e SPRING_DATA_REDIS_URL=redis://redis:6379 \
+  -e COSEC_PIPELINE_IDENTITY_ONLYTRUSTEDCALLERSCANREACH=true \
+  ahoowang/cosec-control
+```
+
+### 端口，以及谁该连到哪个 {#control-plane-ports}
+
+| 端口 | 是什么 | 谁应该连到它 |
+|---|---|---|
+| **8080** | 运维人员的 API，`/cosec/control/**`（`cosec.control.http.base-path`），[控制 API](../policies/testing.md#the-control-plane)的每条路由 | 网关的 pod |
+| **8082** | 服务 API（`cosec.control.http.service-port`），为直接调用控制面的服务准备的窄档：有哪些租户文档和应用文档（[`GET /documents?kind=`](../policies/testing.md#listing-documents)，授予服务的方式是在 `doc/tenant` 或 `doc/app` 上的 `cosec:read`）、租户文档和应用文档，以及租户的变更流程（[从代码修改策略](../integration/checks.md#changing-policies-from-your-code)）；其他每条路由在这里都是 `404` | 恰好是你点名的服务 |
+| **8081** | 管理端口：`/actuator/health/liveness`、`/actuator/health/readiness`、`/actuator/prometheus`；在 CoSec 之外。控制 API 在这里是 `404`，除 8080 和 8082 之外的任何端口都是（`CTL-69`） | 只有监控 |
+
+CoSec 不对管理端口做授权，而应用端口由管道决策，kubelet 在那里会被拒绝：探针探测管理端口。管理端口不只是 actuator：Spring Boot 的管理服务器还会在那里提供应用自己的函数式路由，镜像没有这样的路由；CoSec 自己的路由，控制 API 在内，只在应用端口和服务端口上应答。把 8080 发布给网关，把 8082 发布给你点名的服务，永远不要发布 8081。
+
+**调用方如何被识别。** 运维人员在 IAM 服务登录，网关校验令牌，并把身份转发到通往宿主的路由。给这条路由指定它的应用，这样为其他应用声明的身份会被拒绝：
+
+```yaml
+spring:
+  cloud:
+    gateway:
+      server:
+        webflux:
+          routes:
+            - id: control
+              uri: lb://cosec-control
+              predicates:
+                - Path=/cosec/control/**
+              metadata:
+                cosec-app-id: cosec-control   # cosec.control.app-id，即镜像的 cosec.authorization.scope.app-id
+```
+
+服务用自己写的 `CoSec-Identity` 请求头（`IdentityHeader.write`，`cosec-document`）调用 8082 端口，在其中写明它所代表的主体。控制面针对该主体决策，使用平台文档给它的绑定，变更会记录这个身份是被声明的。没有身份的请求是 `401`，而 bearer 令牌不是身份：宿主不校验任何令牌。服务 API 目前还没有自己的客户端类。
+
+**声明与策略是一件事。** 声明之所以属实，是因为网络，每个端口一条策略：网关的 pod 到 8080，点名的服务到 8082，监控到 8081。[`k8s/control/`](#kubernetes) 的清单把这个变量和三条策略一起设置，绝不只有其一。它们是控制手段，不是纵深防御：能连到宿主的工作负载可以声明任何主体，平台管理员也不例外，并且既是变更的作者又是批准者（[控制面信任什么](./topologies.md#what-the-control-plane-trusts)）。
+
+### 存储、就绪和副本 {#control-plane-store}
+
+- **存储账户。** 宿主写入 `<s>:` 下的每个文档、变更和租约（[谁可以写哪些 key](./storage.md#who-may-write-which-keys)）：给它一个自己的 Redis 用户，这是唯一可以写它们的用户，网关用只读的。Redis 必须以 `maxmemory-policy noeviction` 运行，和网关一样。用无法向失效通道发布的用户启动宿主，会在启动时失败（[故障排查](./troubleshooting.md#startup-fails-on-a-redis-permission)）。
+- **不参与影子窗口。** 镜像中 `cosec.authorization.shadow.enabled` 为 `false`：副本不是窗口要等待的实例，它只对运维人员的请求决策，所以不会让窗口一直开着，也不会写报告。
+- **就绪。** 与每个实例一样，平台文档安装之后宿主才就绪（[就绪](#readiness)），并且要求控制存储处于本版本的格式：镜像把 `cosecControlStoreFormat` 指示器放进了它的就绪分组。8.0.0-beta.5 之前版本写下的存储会让它处于未就绪，可见并有名字，直到运行过 `cosec-migrate repair-references`（[控制存储格式](./observability.md#snapshot-health)）。存活是存活分组，无论 Redis 里有什么都为 up。两种探针都在管理端口上；镜像的 `HEALTHCHECK` 是存活那个。
+- **一个副本，以及何时两个。** 一个就够：运维人员每小时只发几个请求，重启只要几秒。维护任务会取租约，让每份文档一次只有一个实例在处理，变更用比较并交换推进，所以第二个副本在设计上是支持的；系统测试目前还没有覆盖两个副本。运行两个是为了节点排空，不是为了负载，并配一个中断预算。升级时停掉宿主、再启动新镜像，不要滚动更新：跨存储格式变更时，旧副本和新副本不能同时运行（[预览版之间升级](./upgrading-previews.md#from-8-0-0-beta-4)）。
+- **内存。** 宿主在两个快照源里持有它所决策的每个租户的已编译文档，上限为 `cosec.authorization.snapshot.max-tenants`：一个是它管道的，一个是控制面自己的。镜像默认使用网关的 JVM 参数；[`k8s/control/`](#kubernetes) 为试用设置 1536Mi 限额里 768 MiB 堆，production overlay 设置 3200Mi 里 2 GiB，依[内存](#memory)的规则（堆，加直接内存，加约 250 MiB，再加四分之一）：堆和限额一起改，并与 `max-tenants` 一起改。
+
 ## Kubernetes {#kubernetes}
 
-[`k8s/`](https://github.com/Ahoo-Wang/CoSec/tree/main/k8s) 中是 [Kustomize](https://kustomize.io/) 清单：一个 base，
+[`k8s/`](https://github.com/Ahoo-Wang/CoSec/tree/main/k8s) 中是 [Kustomize](https://kustomize.io/) 清单：网关一个 base，控制面宿主一个 base，
 每类集群一个 overlay。部署时用 overlay，不要单独部署 base。
 
 | 目录 | 用途 | 内容 |
 |---|---|---|
 | `base/` | 供 overlay 在其上构建 | Deployment 和一个 Service（80 端口转发到容器的 8080；管理端口 8081 是 Service 不发布的容器端口）。`application.yaml`（路由和上面的 `cosec.*` 设置）生成一个 ConfigMap，挂载为 `/opt/cosec-gateway-server/config/application.yaml`，追加在镜像默认值之后读取；其中的 CORS 来源、发现列表和路由只是演示，请替换；它的名字带有文件的哈希，所以修改文件会滚动更新 pod。镜像是 `ghcr.io/ahoo-wang/cosec-gateway`，标签在 `images:` 中设置。每个网关 768Mi，堆 256 MiB。 |
-| `overlays/dev/` | 在任何集群上试用 CoSec，包括 kind 和 minikube | 命名空间 `cosec-dev`，一个使用 base 资源配置的网关，以及一个单实例 Redis 7.4，`maxmemory-policy noeviction`，没有密码。Redis 的数据放在 `emptyDir` 中，容器重启后还在，pod 删除后就没了：删除 Redis 的 pod 就删除了文档。 |
-| `overlays/production/` | 你自己的 overlay 的起点 | 命名空间 `cosec`；你的 Redis，地址来自 ConfigMap `cosec-gateway-redis`（主机和端口；Redis Cluster 则用 `SPRING_DATA_REDIS_CLUSTER_NODES`），凭证来自 Secret `cosec-redis-secret`（`password`，ACL 用户再加 `username`）；按 CPU 伸缩的 HorizontalPodAutoscaler，2 到 10 个网关（目标为每个网关请求的 1 CPU 的 70 %；需要 metrics server）；一个 PodDisruptionBudget，一次只驱逐一个网关，未就绪的网关总是可以驱逐，所以排空节点从不等待平台文档；一个 NetworkPolicy，放行任何来源访问 8080 端口、只放行 `monitoring` 命名空间访问管理端口；每个网关 3200Mi，堆 2 GiB，分散到不同节点。 |
+| `control/` | 供 overlay 在其上构建 | 控制面宿主（见[上文](#the-control-plane-host)）：一个 Deployment（`strategy: Recreate`，一个副本，探针在管理端口上）、两个 Service（`cosec-control`，80 转发到 8080，供网关的路由使用；`cosec-control-service`，80 转发到 8082，供你点名的服务使用；都不发布 8081）、`application.yaml` 的一个 ConfigMap，以及**每个端口一条 NetworkPolicy**。Deployment 设置 `COSEC_PIPELINE_IDENTITY_ONLYTRUSTEDCALLERSCANREACH=true`，而这些策略是同一个 kustomization 的资源，因为声明只有在它们存在时才属实。镜像是 `ghcr.io/ahoo-wang/cosec-control`，标签在 `images:` 下，发布时与网关的一起移动。 |
+| `overlays/dev/` | 在任何集群上试用 CoSec，包括 kind 和 minikube | 命名空间 `cosec-dev`，一个使用 base 资源配置的网关，使用自己资源配置（1536Mi，768 MiB 堆）、在同一个 Redis 上的控制面宿主，以及一个单实例 Redis 7.4，`maxmemory-policy noeviction`，没有密码。Redis 的数据放在 `emptyDir` 中，容器重启后还在，pod 删除后就没了：删除 Redis 的 pod 就删除了文档。 |
+| `overlays/production/` | 你自己的 overlay 的起点 | 命名空间 `cosec`；你的 Redis，地址来自 ConfigMap `cosec-gateway-redis`（主机和端口；Redis Cluster 则用 `SPRING_DATA_REDIS_CLUSTER_NODES`），凭证来自 Secret `cosec-redis-secret`（`password`，ACL 用户再加 `username`）；按 CPU 伸缩的 HorizontalPodAutoscaler，2 到 10 个网关（目标为每个网关请求的 1 CPU 的 70 %；需要 metrics server）；一个 PodDisruptionBudget，一次只驱逐一个网关，未就绪的网关总是可以驱逐，所以排空节点从不等待平台文档；一个 NetworkPolicy，放行任何来源访问 8080 端口、只放行 `monitoring` 命名空间访问管理端口；每个网关 3200Mi，堆 2 GiB，分散到不同节点。控制面宿主有自己的 Redis 账户（Secret `cosec-control-redis-credentials`，绝不是网关的那个）、3200Mi 和 2 GiB 堆，以及一个在你运行第二个副本后才起作用的中断预算。 |
 
 ### 部署 {#deploying}
 
@@ -170,8 +227,8 @@ management:
    ```
 
    使用 production overlay 时，命名空间用 `cosec`，并且还要创建 Redis 凭证：
-   `kubectl -n cosec create secret generic cosec-redis-secret --from-literal=password=<password>`。
-2. **production：指向你的 Redis。** 在 overlay 的 `kustomization.yaml` 中，于 ConfigMap `cosec-gateway-redis` 里设置地址。
+   `kubectl -n cosec create secret generic cosec-redis-secret --from-literal=password=<password>`。控制面宿主的 Redis 账户是它自己的 Secret，`cosec-control-redis-credentials`（`username`、`password`）：`kubectl -n cosec create secret generic cosec-control-redis-credentials --from-literal=username=cosec-control --from-literal=password=<password>`。宿主没有 JWT 密钥。
+2. **production：指向你的 Redis。** 在 overlay 的 `kustomization.yaml` 中，于 ConfigMap `cosec-gateway-redis` 和 `cosec-control-redis` 里设置地址。
    Redis 必须以 `maxmemory-policy noeviction` 运行（[Redis 要求](./storage.md#redis-requirements)）。把你的路由、命名空间和
    镜像标签放在你自己的 overlay 中，建在这个 overlay 之上：用
    `configMapGenerator: [{name: cosec-gateway-config, behavior: replace, files: [application.yaml]}]` 替换配置，
@@ -203,6 +260,7 @@ management:
 - **Actuator。** 在管理端口上（`management.server.port: 8081`，容器端口 `management`，Service 不发布它）暴露 `health` 和 `prometheus`；能读取和修改路由的 `gateway` 端点处于关闭状态（`management.endpoint.gateway.access: none`）。在 WebFlux 宿主上，管理端口不只是 actuator：Spring Boot 的管理服务器也会在那里提供应用自己的 `RouterFunction`（CoSec 自己的路由，控制 API 和登录路由，在那里是 `404`，`CTL-69`）。CoSec 授权的是网关的路由，不是它的 actuator 端点：production 的 NetworkPolicy 只放行来自 `monitoring` 命名空间的管理端口（改成你的 Prometheus 所在处），dev overlay 没有策略。
 - **关闭。** `preStop` 先暂停 5 秒，让 Service 先摘掉这个 pod；`terminationGracePeriodSeconds: 45` 覆盖这段暂停、
   Spring 的优雅关闭（最多 30 秒）和决策监听器的排空（[关闭](#shutdown)）。
+- **控制面宿主的网络策略。** 三条，每个端口一条，选中它的 pod（`cosec-control-operators`、`cosec-control-services`、`cosec-control-management`），让每个端口只放行一个来源，其他连接一律拒绝：网关的 pod（`app.kubernetes.io/name: cosec-gateway`，在该策略所在的命名空间里；网关在别的命名空间时，需要上面示例中的 `namespaceSelector`）到 8080；你点名的服务到 8082；`monitoring` 命名空间到 8081。**按出厂配置，服务策略点名的是一个不存在的命名空间和标签，所以它不放行任何人**：把两者都改成调用控制面的每个服务，在它自己的命名空间里，每个服务一个 `from` 条目，并把每个服务都视为与控制面本身同等可信。它们需要一个会强制执行 `NetworkPolicy` 的网络插件，而 kind 的不会：在会强制执行的集群上测试，别的标签的 pod 连不上这三个端口中的任何一个。清单没有设置出站策略。
 - **JVM 参数**，通过 `JAVA_OPTS` 传入：下面的内存大小；`-XX:+ExitOnOutOfMemoryError`，让耗尽内存的 JVM 被重启；`-Djava.net.preferIPv4Stack=true`（因为
   [netty#16082](https://github.com/netty/netty/issues/16082)）。镜像不启动 JMX agent。
 
@@ -373,7 +431,8 @@ cosec:
 
 [`system-test.yml`](https://github.com/Ahoo-Wang/CoSec/blob/main/.github/workflows/system-test.yml) 把 CoSec 当作一次部署来运行，
 这是单元、切片和嵌入式服务器测试都做不到的：用提交构建的网关镜像（它自己的 Dockerfile，AOT 缓存已训练）、它的两个副本和第三个
-在吊销无法读取时拒绝令牌的网关、一个 `cosec.pipeline.mode=gateway` 的后端服务、一个登录与控制面主机、一个自己执行决策的 Spring MVC
+在吊销无法读取时拒绝令牌的网关、一个 `cosec.pipeline.mode=gateway` 的后端服务、控制面主机镜像的两个副本（同样用提交构建，在网关的 `/cosec/control` 路由之后）、
+签发令牌并调用主机服务端口的 IAM、一个自己执行决策的 Spring MVC
 服务，以及 `maxmemory-policy noeviction` 的 Redis，在 GitHub 托管的运行器上用 Docker Compose 启动。场景只通过网络驱动它，并像运维人员
 那样使用 `cosec-migrate` 和 `docker compose stop`、`start`、`restart`。它不属于 `check`；每晚在 `main` 上运行，在修改它的拉取请求上运行，
 也可以按需运行。
@@ -397,7 +456,11 @@ gh workflow run system-test.yml --ref main -f ref=<commit>
 - **一个网关面向多个应用**：两条路由分别指定应用 `shop` 和 `ledger`，两个应用定义相同的角色 id 但授予不同；一个应用的凭证在另一个应用的路由上被拒绝，
   应用文档的更新在界限内到达两个网关且各自按其修订决策，之后重启的副本在就绪之前就已持有两个应用，每个应用的第一个请求不触发任何加载，租户的定制不会越出其应用。这里的角色来自令牌；成员关系来自提供者时，只持有一次的角色
   适用于每个定义该 id 的应用，这一点该栈不覆盖（它没有提供者）；
-- 通过控制面的**策略变更**：从被拒绝的变更、真实流量上的影子窗口，到批准、发布和回滚，无需重启即在每个进程生效；
+- 通过控制面的**策略变更**：从被拒绝的变更、真实流量上的影子窗口，到批准、发布和回滚，无需重启即在每个进程生效，经网关到控制面主机；
+- 控制面主机的**服务路径**：绑定到只读策略的服务主体可以读取，写入按动作被拒绝；服务端口不提供平台文档，也不提供平台文档的变更，无论按文档还是按 id；
+  自报身份的主体提出租户变更、运行或跳过其窗口并发布，Kafka 中的变更事件记录了谁自报、哪个连接送来，不论调用方写了什么转发头；自报为 API key 的凭证永远不能批准，
+  自报为令牌的可以（网络边界的代价）；重复、过期或过旧的身份被拒绝；没有声明什么可以到达它，宿主不启动；两个副本共用一个存储时，在一个上提出的变更在另一个上影子运行，
+  启动它的副本被停止后，窗口仍会关闭；
 - **吊销**（登出、某个主体）、刷新轮换与重用、两个网关共同计数同一个桶的**限流**，以及 **API key**；
 - **Redis 故障**：已安装的文档继续决策，从未读取过的租户为 `503`，故障时关闭的租户在其滞后后停止，
   `cosec.authentication.revocation.fail-closed` 的两种设置按文档行为，每个进程无需重启即恢复；**副本在流量下重启**时不放行任何应被拒绝的请求；

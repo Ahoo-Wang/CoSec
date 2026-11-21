@@ -12,6 +12,11 @@ spring:
               - uri: http://behind:8080
             auth:
               - uri: http://auth:8080
+            # One replica of the control-plane host: the operators' scenarios read what they have written, which a second
+            # replica serves a moment after its invalidation message (the scenarios that address both replicas do it by
+            # port, ControlHostScenario).
+            control:
+              - uri: http://control-1:8080
     gateway:
       server:
         webflux:
@@ -27,6 +32,14 @@ spring:
               uri: lb://auth
               predicates:
                 - Path=/auth/**
+            # The control plane's operators' API: the token verified and the route decided here, the identity forwarded, each
+            # action decided again at the host. It names the control plane's app, which the tokens of its operators are for.
+            - id: control
+              uri: lb://control
+              predicates:
+                - Path=/cosec/control/**
+              metadata:
+                cosec-app-id: cosec-control
             # The same service by its address, with no cosec-identity metadata: it receives no identity (IDN-7).
             - id: plain
               uri: http://behind:8080

@@ -1,0 +1,24 @@
+{
+  "description": "There is no list of the platform: its layer is not granted.",
+  "withoutDocument": [
+    "tenant",
+    "app"
+  ],
+  "credential": {
+    "tenant": "(platform)",
+    "id": "svc-iam",
+    "app": "cosec-control",
+    "roles": []
+  },
+  "request": {
+    "hostApp": "cosec-control",
+    "action": "cosec:read",
+    "resource": {
+      "type": "doc",
+      "id": "platform"
+    }
+  },
+  "expect": {
+    "decision": "Deny"
+  }
+}

@@ -121,6 +121,11 @@ record for policy snapshots and revoked tokens.
 | A browser or Node client of a CoSec application: sign-in, refresh under rotation, logout, problem types | `@ahoo-wang/cosec-fetcher`, `@ahoo-wang/cosec-react` on npm, released with CoSec; not Gradle modules | [Building a client](../integration/clients.md) |
 | Request, token and change ids from CosId 5 | `cosec-cosid` | `me.ahoo.cosid:cosid-spring-boot-starter` 5.x |
 
+The control plane also ships as an image, `cosec-control`, for a deployment that runs it as a process of its own beside the
+gateway ([The control-plane host](../operations/deployment.md#the-control-plane-host)); it is not a module to add. An IAM
+service that embeds the control plane adds `cosec-control` instead
+([Choosing a Deployment](../operations/topologies.md#the-control-plane)).
+
 The "With" column is what the starter's auto-configuration for that module needs besides the module itself. Give each
 one its version, as for any library of your build: CoSec does not manage it (see
 [What CoSec needs from your build](#what-cosec-needs-from-your-build)).
