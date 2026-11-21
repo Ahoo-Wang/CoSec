@@ -28,7 +28,7 @@ import me.ahoo.cosec.control.change.ChangeId
 import me.ahoo.cosec.control.change.ChangeRejectedException
 import me.ahoo.cosec.control.change.ChangeRequest
 import me.ahoo.cosec.control.change.ChangeState
-import me.ahoo.cosec.control.change.ControlStatus.CONFLICT
+import me.ahoo.cosec.control.change.ConflictKind
 import me.ahoo.cosec.control.change.ControlStatus.UNAVAILABLE
 import me.ahoo.cosec.control.change.Propagation
 import me.ahoo.cosec.control.change.ShadowState
@@ -272,7 +272,10 @@ internal class Staging(
                     // A revoke of a binding that still grants is taken only by another such revoke (review N1).
                     val guarded = preemption.revokesBreakGlass(held, head) && !preemption.revokesBreakGlass(change, head)
                     if (guarded || !preemption.preempts(operator, change, head)) {
-                        throw ChangeRejectedException(CONFLICT, "[${change.key}] is staged by change ${held.id.value}")
+                        throw ChangeRejectedException.conflict(
+                            ConflictKind.SLOT_HELD,
+                            "[${change.key}] is staged by change ${held.id.value}"
+                        )
                     }
                     conflicted += conflict(held, change)
                 }
@@ -281,7 +284,10 @@ internal class Staging(
                     return
                 }
             }
-            throw ChangeRejectedException(CONFLICT, "the staging slot of [${change.key}] kept changing")
+            throw ChangeRejectedException.conflict(
+                ConflictKind.CONTENDED,
+                "the staging slot of [${change.key}] kept changing"
+            )
         } finally {
             withContext(NonCancellable) { conflicted.forEach { preempted(it, change, operator, taken) } }
         }
@@ -294,10 +300,10 @@ internal class Staging(
     } catch (e: CancellationException) {
         throw e
     } catch (e: ChangeRejectedException) {
-        throw ChangeRejectedException(
-            CONFLICT,
+        throw ChangeRejectedException.conflict(
+            ConflictKind.SLOT_HELD,
             "[${by.key}] is staged by change ${held.id.value}, which could not be preempted: ${e.message}",
-            e
+            e,
         )
     } catch (e: Exception) {
         throw ChangeRejectedException(UNAVAILABLE, "change ${held.id.value} could not be preempted", e)

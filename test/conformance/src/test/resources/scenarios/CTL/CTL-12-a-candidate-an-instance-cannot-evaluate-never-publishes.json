@@ -61,7 +61,7 @@
       "SHADOWING",
       "reported",
       "READY",
-      "refused 409"
+      "refused 409 WINDOW_BLOCKED"
     ],
     "errors": {
       "c1": []

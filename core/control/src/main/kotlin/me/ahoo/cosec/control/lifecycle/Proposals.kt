@@ -28,8 +28,8 @@ import me.ahoo.cosec.control.change.ChangeRejectedException
 import me.ahoo.cosec.control.change.ChangeRequest
 import me.ahoo.cosec.control.change.ChangeState
 import me.ahoo.cosec.control.change.Confirmation
+import me.ahoo.cosec.control.change.ConflictKind
 import me.ahoo.cosec.control.change.ControlStatus.BAD_REQUEST
-import me.ahoo.cosec.control.change.ControlStatus.CONFLICT
 import me.ahoo.cosec.control.change.ControlStatus.GONE
 import me.ahoo.cosec.control.change.ControlStatus.NOT_FOUND
 import me.ahoo.cosec.control.change.Finding
@@ -122,7 +122,10 @@ internal class Proposals(
         if ((head?.revision ?: 0) != base) {
             val current = head?.revision ?: 0
             val next = applying.stale?.invoke(current) ?: "read [$key] again and propose on revision $current"
-            throw ChangeRejectedException(CONFLICT, "[$key] is at revision $current, not $base: $next")
+            throw ChangeRejectedException.conflict(
+                ConflictKind.BASE_MOVED,
+                "[$key] is at revision $current, not $base: $next"
+            )
         }
         val now = clock.instant()
         val draft = ChangeRequest(
@@ -151,7 +154,7 @@ internal class Proposals(
             flow.audit(ChangeEvent.Kind.BREAK_GLASS_REQUESTED, checked, author.actor, origin = author.origin)
         }
         if (!store.putChange(null, checked)) {
-            throw ChangeRejectedException(CONFLICT, "change ${checked.id.value} already exists")
+            throw ChangeRejectedException.conflict(ConflictKind.EXISTS, "change ${checked.id.value} already exists")
         }
         flow.audit(
             if (checked.state == ChangeState.CHECKED) ChangeEvent.Kind.CHECKED else ChangeEvent.Kind.PROPOSED,

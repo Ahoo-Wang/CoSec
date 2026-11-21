@@ -1,0 +1,83 @@
+{
+  "rules": [
+    "CTL-80"
+  ],
+  "polarity": "positive",
+  "level": "control",
+  "description": "A change that wants the staging slot another change holds is refused with a 409 that names its conflict, SLOT_HELD: a caller waits for the slot, or abandons the change that holds it, without reading the detail.",
+  "steps": [
+    {
+      "propose": {
+        "change": "c1",
+        "document": "tenant:acme",
+        "operations": [
+          {
+            "putPolicy": {
+              "id": "read",
+              "statements": [
+                {
+                  "effect": "allow",
+                  "action": "order:read"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "propose": {
+        "change": "c2",
+        "document": "tenant:acme",
+        "operations": [
+          {
+            "putPolicy": {
+              "id": "fine",
+              "statements": [
+                {
+                  "effect": "allow",
+                  "action": "order:read",
+                  "condition": {
+                    "eq": [
+                      "scope.space",
+                      "team-a"
+                    ]
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "stage": "c1"
+    },
+    {
+      "stage": "c2"
+    },
+    {
+      "abandon": "c1"
+    },
+    {
+      "stage": "c2"
+    }
+  ],
+  "expect": {
+    "steps": [
+      "CHECKED",
+      "CHECKED",
+      "SHADOWING",
+      "refused 409 SLOT_HELD",
+      "ABANDONED",
+      "SHADOWING"
+    ],
+    "errors": {
+      "c1": [],
+      "c2": []
+    },
+    "heads": {
+      "tenant:acme": 0
+    }
+  }
+}

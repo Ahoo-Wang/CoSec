@@ -1,0 +1,17 @@
+# Rule: CTL-80
+# Mutant: a proposal on a moved base names the conflict of a held slot, so a caller waits where it should read again
+# Tests: :control:test --tests me.ahoo.cosec.control.api.ConflictKindTest
+
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Proposals.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Proposals.kt
+index d54ba3038..2675f4bbf 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Proposals.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Proposals.kt
+@@ -123,7 +123,7 @@ internal class Proposals(
+             val current = head?.revision ?: 0
+             val next = applying.stale?.invoke(current) ?: "read [$key] again and propose on revision $current"
+             throw ChangeRejectedException.conflict(
+-                ConflictKind.BASE_MOVED,
++                ConflictKind.SLOT_HELD,
+                 "[$key] is at revision $current, not $base: $next"
+             )
+         }

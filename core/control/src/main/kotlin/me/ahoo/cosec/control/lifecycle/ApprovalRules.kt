@@ -25,7 +25,7 @@ import me.ahoo.cosec.control.authz.TenantIsolation
 import me.ahoo.cosec.control.change.Approval
 import me.ahoo.cosec.control.change.ChangeRejectedException
 import me.ahoo.cosec.control.change.ChangeRequest
-import me.ahoo.cosec.control.change.ControlStatus.CONFLICT
+import me.ahoo.cosec.control.change.ConflictKind
 import me.ahoo.cosec.control.change.ControlStatus.FORBIDDEN
 import me.ahoo.cosec.control.change.ControlStatus.UNAVAILABLE
 import me.ahoo.cosec.control.change.Escalation
@@ -84,11 +84,15 @@ internal class ApprovalRules(
     /** That [operator] may approve [change]'s [candidate]: not its author, a person, and the digest it has now. */
     fun requireApprovable(operator: Operator, change: ChangeRequest, candidate: String) {
         val refusal = when {
-            isOwn(operator.actor, change) -> FORBIDDEN to "the author of change ${change.id.value} cannot approve it"
-            else -> approvalRefusal(operator, change)?.let { FORBIDDEN to it }
-                ?: (CONFLICT to "change ${change.id.value} is not candidate $candidate").takeIf { change.candidate != candidate }
+            isOwn(operator.actor, change) ->
+                ChangeRejectedException(FORBIDDEN, "the author of change ${change.id.value} cannot approve it")
+            else -> approvalRefusal(operator, change)?.let { ChangeRejectedException(FORBIDDEN, it) }
+                ?: ChangeRejectedException.conflict(
+                    ConflictKind.CANDIDATE_MOVED,
+                    "change ${change.id.value} is not candidate $candidate",
+                ).takeIf { change.candidate != candidate }
         }
-        refusal?.let { (status, message) -> throw ChangeRejectedException(status, message) }
+        refusal?.let { throw it }
     }
 
     /**

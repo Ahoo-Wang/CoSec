@@ -22,6 +22,7 @@ import me.ahoo.cosec.control.api.ControlHttpSupport.factory
 import me.ahoo.cosec.control.api.ControlResponseJson.entries
 import me.ahoo.cosec.control.authz.Operator
 import me.ahoo.cosec.control.change.ChangeRejectedException
+import me.ahoo.cosec.control.change.ConflictKind
 import me.ahoo.cosec.control.change.InvalidControlRequestException
 import me.ahoo.cosec.control.store.ControlStoreException
 import me.ahoo.cosec.document.json.CoSecJson
@@ -92,7 +93,7 @@ class ControlHttp(plane: ControlPlane, profile: ControlProfile = ControlProfile.
                         "(request $requestId): ${e.message}"
                 }
             }
-            problem(problem, requestId, e.message)
+            problem(problem, requestId, e.message, e.conflict)
         } catch (e: ControlStoreException) {
             // The store did not answer (R2C-6, CTL-52): an outage, retried by the client, not a bug.
             log.warn {
@@ -161,7 +162,13 @@ class ControlHttp(plane: ControlPlane, profile: ControlProfile = ControlProfile.
     internal fun refused(status: Int, requestId: String): ControlHttpResponse =
         problem(Problem.of(status), requestId, null)
 
-    private fun problem(problem: Problem, requestId: String, detail: String?): ControlHttpResponse {
+    /** A problem of [problem]; a `409`'s names its [conflict] (`CTL-80`), which a caller reads instead of [detail]. */
+    private fun problem(
+        problem: Problem,
+        requestId: String,
+        detail: String?,
+        conflict: ConflictKind? = null,
+    ): ControlHttpResponse {
         val node = factory.objectNode()
             .put("type", ProblemType.TYPE_PREFIX + problem.slug)
             .put("title", problem.title)
@@ -169,6 +176,7 @@ class ControlHttp(plane: ControlPlane, profile: ControlProfile = ControlProfile.
             .put("code", problem.name)
             .put("requestId", requestId)
         if (problem.detailed && !detail.isNullOrBlank()) node.put("detail", detail)
+        conflict?.let { node.put("conflict", it.name) }
         return ControlHttpResponse(problem.status, PROBLEM_JSON, CoSecJson.mapper.writeValueAsBytes(node))
     }
 

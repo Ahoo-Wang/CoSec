@@ -251,7 +251,7 @@
       "CHECKED",
       "SHADOWING",
       "CHECKED",
-      "refused 409"
+      "refused 409 SLOT_HELD"
     ],
     "errors": {
       "c1": [],

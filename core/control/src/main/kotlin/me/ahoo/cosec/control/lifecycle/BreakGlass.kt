@@ -21,6 +21,7 @@ import me.ahoo.cosec.control.authz.Operator
 import me.ahoo.cosec.control.change.ChangeRejectedException
 import me.ahoo.cosec.control.change.ChangeRequest
 import me.ahoo.cosec.control.change.ChangeState
+import me.ahoo.cosec.control.change.ConflictKind
 import me.ahoo.cosec.control.change.ControlStatus.CONFLICT
 import me.ahoo.cosec.control.change.ControlStatus.NOT_FOUND
 import me.ahoo.cosec.control.change.Operation
@@ -84,7 +85,10 @@ class BreakGlass(private val changes: Changes, private val revisions: Revisions)
             ProvenanceKind.BREAK_GLASS
         )
         if (revisions.head(SnapshotKey.Platform)?.document?.bindings?.any { it.id == binding } == true) {
-            throw ChangeRejectedException(CONFLICT, "the platform document already has a binding [${binding.value}]")
+            throw ChangeRejectedException.conflict(
+                ConflictKind.EXISTS,
+                "the platform document already has a binding [${binding.value}]"
+            )
         }
         val proposed = changes.propose(
             operator,
@@ -125,7 +129,7 @@ class BreakGlass(private val changes: Changes, private val revisions: Revisions)
             val existing = revisions.head(SnapshotKey.Platform)?.document?.bindings?.firstOrNull { it.id == binding }
                 ?: throw ChangeRejectedException(NOT_FOUND, "the platform document has no binding [${binding.value}]")
             if (!existing.breakGlass) {
-                throw ChangeRejectedException(CONFLICT, "binding [${binding.value}] is not a break-glass binding")
+                throw ChangeRejectedException.conflict(ConflictKind.EXISTS, "binding [${binding.value}] is not a break-glass binding")
             }
             revokeOnce(operator, operations, reason)
         }

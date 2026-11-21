@@ -1040,6 +1040,20 @@
         "document:ShadowCodecTest#resident documents read back as written, and a wrong revision is a format error",
         "spi:ShadowValuesTest#the in-memory residents answer what was written within its life and name the rest"
       ]
+    },
+    {
+      "id": "CTL-80",
+      "source": "control-typed-api decisions of 2026-11-21 (a service that calls the control plane tells read-again from wait from stop without reading a message)",
+      "statement": "Every 409 the control API answers names which conflict it is, in the problem's `conflict` member, one of a closed set (`contract/control/vocabularies.json`): BASE_MOVED (the document's head is not the change's base: read it again, propose again or rebase), SLOT_HELD (another change holds the document's staging slot: wait for it, or abandon it), STATE (the change's state does not admit the step), CANDIDATE_MOVED (the candidate named is not the change's), WINDOW_OPEN (the shadow window is still open), WINDOW_BLOCKED (the window closed blocked: the change never publishes), CONTENDED (concurrent writes kept changing the record: the same call may succeed), EXISTS (something of that id exists already). No other status carries the member, and no 409 is answered without it; `detail` still explains the case to a person and is no contract.",
+      "level": "control",
+      "pending": null,
+      "guards": [
+        "control:ConflictKindTest#a 409 names its conflict, and only a 409 does",
+        "control:ConflictKindTest#a proposal on a base that is not the head is BASE_MOVED",
+        "control:ConflictKindTest#a change that wants the slot another holds is SLOT_HELD, and a step its state does not admit is STATE",
+        "control:ConflictKindTest#no other status carries a conflict",
+        "control:ClientContractTest#the closed sets of the control API are those of their contract file"
+      ]
     }
   ]
 }

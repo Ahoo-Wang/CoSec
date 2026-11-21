@@ -79,7 +79,11 @@ of a value and never a second segment, `+` stays `+`, and a `%25` that was encod
 a space. A malformed escape (`%zz`, a lone `%`, bytes that are not UTF-8) is a `400`. The route's own words (`documents`,
 `revisions`, `:apply`) are matched as written.
 
-Errors are `application/problem+json`. A `400`, `409`, `410`, `412`, `422` or `428` explains your own request in
+Errors are `application/problem+json`. A `409` also names which conflict it is in `conflict` (`CTL-80`): `BASE_MOVED`
+(read the head again, then propose again or rebase), `SLOT_HELD` (another change holds the document's staging slot: wait,
+or abandon it), `STATE` (the change's state does not admit the step), `CANDIDATE_MOVED`, `WINDOW_OPEN` (wait for the
+window to close), `WINDOW_BLOCKED` (the change never publishes), `CONTENDED` (the same call may succeed) or `EXISTS`;
+read it, not `detail`, whose wording may change. A `400`, `409`, `410`, `412`, `422` or `428` explains your own request in
 `detail`; a `401`, `403`, `404`, `500` or `503` carries no detail, so a refusal never tells whether a document or change
 exists. A `400`'s `detail` is one of the control plane's own checks, or names the field that does not parse (`[mode] is
 not one of MERGE, REPLACE.`), never an exception's message. A request whose path, query or body holds a string with an
