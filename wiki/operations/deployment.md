@@ -348,8 +348,8 @@ author and the approver of a change ([What the control plane trusts](./topologie
   ([Control store format](./observability.md#snapshot-health)). Liveness is the liveness group, up whatever Redis holds.
   Both probes are on the management port; the image's `HEALTHCHECK` is the liveness one.
 - **One replica, and when two.** One is enough: operators make a few requests an hour, and a restart takes seconds. The
-  maintenance passes take a lease, so that one instance at a time does each document, and a change advances by
-  compare-and-set, so a second replica is designed for; the system test does not yet exercise one. Run two for a node
+  maintenance passes run on every instance and take a lease, so that one instance at a time does each document (nothing
+  turns them off), and a change advances by compare-and-set, so a second replica is designed for; the system test does not yet exercise one. Run two for a node
   drain, not for load, with a disruption budget. Upgrade by stopping the host and starting the new image, never by a
   rolling update: across a change of the stored format an old and a new replica must not run together
   ([Upgrading between previews](./upgrading-previews.md#from-8-0-0-beta-4)).
