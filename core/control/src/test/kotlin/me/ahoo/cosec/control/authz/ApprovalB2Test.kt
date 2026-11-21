@@ -246,7 +246,7 @@ class ApprovalB2Test {
     /** alice's change, past its window, waiting for an approval. */
     private suspend fun awaiting(policy: String): ChangeRequest {
         val change = changes.propose(alice, TENANT, head(), grant(policy), policy)
-        changes.stage(alice, change.id)
+        changes.startShadow(alice, change.id)
         return changes.shadowed(change.id).also { it.state.assert().isEqualTo(ChangeState.AWAITING_APPROVAL) }
     }
 
@@ -293,7 +293,7 @@ class ApprovalB2Test {
         val fourEyes = changes(ChangeOptions(shadow = IMMEDIATE_WINDOW, fourEyes = true))
         val change = fourEyes.propose(plato, TENANT, head(), set, "fence acme")
         change.escalations.map { it.reason.name }.assert().containsExactly("NOT_ANALYZED")
-        fourEyes.stage(plato, change.id)
+        fourEyes.startShadow(plato, change.id)
         val waiting = fourEyes.shadowed(change.id)
         refused { fourEyes.approve(carol, change.id, waiting.candidate!!) }.assert().isEqualTo(403)
         fourEyes.approve(pia, change.id, waiting.candidate!!).state.assert().isEqualTo(ChangeState.READY)
@@ -325,7 +325,7 @@ class ApprovalB2Test {
     fun `a boundary change a tenant principal approved does not publish`() = runBlocking<Unit> {
         val fourEyes = changes(ChangeOptions(shadow = IMMEDIATE_WINDOW, fourEyes = true))
         val change = fourEyes.propose(plato, TENANT, head(), listOf(Operation.SetBoundary(PolicyId("fence"))), "fence")
-        fourEyes.stage(plato, change.id)
+        fourEyes.startShadow(plato, change.id)
         fourEyes.shadowed(change.id).state.assert().isEqualTo(ChangeState.AWAITING_APPROVAL)
         approvedBy(change.id, carol)
         fourEyes.publish(plato, change.id).let {
@@ -341,7 +341,7 @@ class ApprovalB2Test {
     fun `only a platform principal rejects or abandons a boundary change`() = runBlocking<Unit> {
         val fourEyes = changes(ChangeOptions(shadow = IMMEDIATE_WINDOW, fourEyes = true))
         val change = fourEyes.propose(plato, TENANT, head(), listOf(Operation.SetBoundary(PolicyId("fence"))), "fence")
-        fourEyes.stage(plato, change.id)
+        fourEyes.startShadow(plato, change.id)
         fourEyes.shadowed(change.id).state.assert().isEqualTo(ChangeState.AWAITING_APPROVAL)
         // carol holds cosec:approve and cosec:publish on acme's document, and still ends nothing here.
         refused { fourEyes.reject(carol, change.id, "no fence") }.assert().isEqualTo(403)
@@ -362,7 +362,7 @@ class ApprovalB2Test {
         val fourEyes = changes(ChangeOptions(shadow = IMMEDIATE_WINDOW, fourEyes = true))
         suspend fun waiting(policy: String): ChangeRequest {
             val change = fourEyes.propose(plato, TENANT, head(), grant(policy), policy)
-            fourEyes.stage(plato, change.id)
+            fourEyes.startShadow(plato, change.id)
             return fourEyes.shadowed(change.id).also { it.state.assert().isEqualTo(ChangeState.AWAITING_APPROVAL) }
         }
         val refusedOne = waiting("platos")
@@ -436,7 +436,7 @@ class ApprovalB2Test {
         for (key in listOf(byProvenance, byName)) {
             val change = changes.propose(key, SnapshotKey.Platform, head(SnapshotKey.Platform), platform, "a key")
             change.escalations.map { it.reason.name }.assert().containsExactly("NOT_ANALYZED")
-            changes.stage(key, change.id)
+            changes.startShadow(key, change.id)
             val waiting = changes.shadowed(change.id)
             waiting.state.assert().isEqualTo(ChangeState.AWAITING_APPROVAL)
             refused { changes.publish(key, change.id) }.assert().isEqualTo(409)

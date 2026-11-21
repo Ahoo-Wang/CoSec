@@ -30,12 +30,12 @@ import me.ahoo.cosec.model.decision.StatementRef
  */
 internal class Redaction(private val readable: Set<DocumentKind>) {
     fun decision(decision: Decision, homes: PolicyHomes): DecisionView = when (decision) {
-        is Decision.Permit -> view("Permit", decision.by, null, homes)
-        is Decision.Deny -> view("Deny", decision.by, null, homes)
+        is Decision.Permit -> view(ControlVocabulary.PERMIT, decision.by, homes)
+        is Decision.Deny -> view(ControlVocabulary.DENY, decision.by, homes)
         is Decision.Indeterminate -> DecisionView(
-            "Indeterminate",
+            ControlVocabulary.INDETERMINATE,
             null,
-            decision.cause::class.simpleName,
+            ControlVocabulary.cause(decision.cause),
             redacted = false
         )
     }
@@ -44,17 +44,23 @@ internal class Redaction(private val readable: Set<DocumentKind>) {
         val trace = evaluation.trace ?: return null
         val visible = trace.candidates.filter { visible(it.ref, homes) }
         return TraceView(
-            visible.map { TraceEntryView(statement(it.ref), it.effect.name, it.outcome.name) },
+            visible.map {
+                TraceEntryView(
+                    statement(it.ref),
+                    ControlVocabulary.effect(it.effect),
+                    ControlVocabulary.outcome(it.outcome)
+                )
+            },
             trace.candidates.size - visible.size,
         )
     }
 
-    private fun view(kind: String, by: StatementRef?, cause: String?, homes: PolicyHomes): DecisionView {
+    private fun view(kind: String, by: StatementRef?, homes: PolicyHomes): DecisionView {
         val policy = by as? StatementRef.Policy
         return when {
-            by == null -> DecisionView(kind, null, cause, redacted = false)
-            policy != null && visible(policy, homes) -> DecisionView(kind, statement(policy), cause, redacted = false)
-            else -> DecisionView(kind, null, cause, redacted = true)
+            by == null -> DecisionView(kind, null, null, redacted = false)
+            policy != null && visible(policy, homes) -> DecisionView(kind, statement(policy), null, redacted = false)
+            else -> DecisionView(kind, null, null, redacted = true)
         }
     }
 

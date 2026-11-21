@@ -100,7 +100,7 @@ class StagedListTest {
     @Test
     fun `a stage lists its window before its candidate, and a withdrawal unlists it after`() = runBlocking<Unit> {
         memory.keepStagedList()
-        val staged = changes.stage(PLATO, proposed(ACME, "first").id)
+        val staged = changes.startShadow(PLATO, proposed(ACME, "first").id)
         val window = staged.shadow!!.window
         listed().assert().isEqualTo(mapOf(ACME to setOf(window)))
         changes.abandon(PLATO, staged.id)
@@ -113,7 +113,7 @@ class StagedListTest {
         memory.keepStagedList()
         val change = proposed(ACME, "first")
         store.failListing = true
-        val refused = runCatching { changes.stage(PLATO, change.id) }.exceptionOrNull() as ChangeRejectedException
+        val refused = runCatching { changes.startShadow(PLATO, change.id) }.exceptionOrNull() as ChangeRejectedException
         refused.status.assert().isEqualTo(ControlStatus.UNAVAILABLE)
         memory.candidate(ACME).assert().isNull()
         memory.stage(ACME)?.value?.holder.assert().isNull()
@@ -125,7 +125,7 @@ class StagedListTest {
     fun `the shadow pass keeps the list, lists a staged candidate a lost write left out, and unlists a stale window after a pass of grace`() =
         runBlocking<Unit> {
             listed().assert().isNull()
-            val staged = changes.stage(PLATO, proposed(ACME, "first").id)
+            val staged = changes.startShadow(PLATO, proposed(ACME, "first").id)
             val window = staged.shadow!!.window
             // The member was lost (a crash between the steps, or a key lost and found again), the candidate stayed.
             memory.unlistStaged(ACME, window)
@@ -142,7 +142,7 @@ class StagedListTest {
     fun `a withdrawal that fails keeps its window listed, and the shadow pass withdraws the candidate, then unlists it`() =
         runBlocking<Unit> {
             memory.keepStagedList()
-            val staged = changes.stage(PLATO, proposed(ACME, "first").id)
+            val staged = changes.startShadow(PLATO, proposed(ACME, "first").id)
             val window = staged.shadow!!.window
             store.failWithdrawal = true
             changes.abandon(PLATO, staged.id)
@@ -161,7 +161,7 @@ class StagedListTest {
     fun `a shadowing change whose candidate is gone is checked again after the grace, its slot freed and its window unlisted`() =
         runBlocking<Unit> {
             memory.keepStagedList()
-            val staged = changes.stage(PLATO, proposed(ACME, "first").id)
+            val staged = changes.startShadow(PLATO, proposed(ACME, "first").id)
             val window = staged.shadow!!.window
             // A crash between the reservation and the write, or a candidate lost since: listed, shadowing, nothing staged.
             memory.withdrawCandidate(ACME, window)
@@ -175,14 +175,14 @@ class StagedListTest {
             memory.stage(ACME)?.value?.holder.assert().isNull()
             listed().assert().isEqualTo(emptyMap<SnapshotKey, Set<String>>())
             // Its author stages it again.
-            changes.stage(PLATO, staged.id).state.assert().isEqualTo(ChangeState.SHADOWING)
+            changes.startShadow(PLATO, staged.id).state.assert().isEqualTo(ChangeState.SHADOWING)
         }
 
     @Test
     fun `an unlisting that fails leaves the window listed with its candidate gone, and the shadow pass unlists it`() =
         runBlocking<Unit> {
             memory.keepStagedList()
-            val staged = changes.stage(PLATO, proposed(ACME, "first").id)
+            val staged = changes.startShadow(PLATO, proposed(ACME, "first").id)
             store.failUnlisting = true
             changes.abandon(PLATO, staged.id)
             memory.candidate(ACME).assert().isNull()
@@ -209,7 +209,7 @@ class StagedListTest {
         val plain = ChangeHarness(clock, memory, unlisted, ChangeOptions(shadow = OPEN))
         plain.revisions.publish(ACME, null, StoreFixtures.candidate(ACME), StoreFixtures.publication())
         val change = plain.changes.propose(PLATO, ACME, 1, listOf(Operation.PutPolicy(allow("first"))), "first")
-        val staged = plain.changes.stage(PLATO, change.id)
+        val staged = plain.changes.startShadow(PLATO, change.id)
         memory.candidate(ACME)?.window.assert().isEqualTo(staged.shadow!!.window)
         ControlMaintenance(unlisted, plain.revisions, plain.changes, Duration.ofMinutes(1)).closeShadowWindows()
         unlisted.staged().assert().isNull()
@@ -227,7 +227,7 @@ class StagedListTest {
         val staged = proposals.map { change ->
             async(Dispatchers.Default) {
                 start.await()
-                changes.stage(PLATO, change.id)
+                changes.startShadow(PLATO, change.id)
             }
         }.also { start.complete(Unit) }.awaitAll()
         staged.forEach { it.state.assert().isEqualTo(ChangeState.SHADOWING) }

@@ -404,7 +404,7 @@ class RetriedPublishTest {
             "compromised",
             ProvenanceKind.BREAK_GLASS
         )
-        changes.stage(PLATO, revoke.id).state.assert().isEqualTo(ChangeState.READY)
+        changes.startShadow(PLATO, revoke.id).state.assert().isEqualTo(ChangeState.READY)
         val made = ids.get()
         publishedMeanwhile(revoke.id)
         val breakGlass = BreakGlass(changes, revisions)

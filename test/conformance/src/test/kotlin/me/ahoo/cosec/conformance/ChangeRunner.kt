@@ -23,6 +23,7 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.selects.select
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.control.api.ChangeAnswer
 import me.ahoo.cosec.control.api.ControlHttp
 import me.ahoo.cosec.control.api.ControlHttpRequest
 import me.ahoo.cosec.control.api.ControlLockout
@@ -82,6 +83,8 @@ import me.ahoo.cosec.spi.membership.MembershipAnswer
 import me.ahoo.cosec.spi.membership.MembershipClaims
 import me.ahoo.cosec.spi.membership.MembershipProvider
 import me.ahoo.cosec.spi.shadow.InMemoryShadowReports
+import me.ahoo.cosec.spi.shadow.InstalledDocument
+import me.ahoo.cosec.spi.shadow.InstanceStatus
 import me.ahoo.cosec.spi.shadow.ShadowOutcome
 import me.ahoo.cosec.spi.shadow.ShadowReport
 import me.ahoo.cosec.spi.shadow.ShadowReportReader
@@ -136,6 +139,11 @@ import java.time.Instant
  *            { "storeDown": true }, // every operation of the control store fails until false (CTL-52): a step it
  *                                   // stops is `unavailable`, never an empty answer
  *            { "vanish": "i1" },   // i1 is taken off the reporters of every window, its report left
+ *            { "answer": "c1" },   // the members of the change's answer (CTL-61): `members a,b,...`, then
+ *                                  // `; shadow a,b` and `; approval a,b` when it holds them
+ *            { "status": { "instance": "i1", "documents": { "tenant:acme": 2 } } },  // an instance's status now
+ *            { "propagation": { "document": "tenant:acme", "revision": 2 } },        // CTL-62:
+ *                                              // `installed 1 holding 2 recent 3`
  *            { "simulate": { "by": "alice", "request": { ... }, "candidate": "c1" } },
  *            { "explain": { "by": "alice", "request": { ... }, "at": { "platform": 1, "app": 1, "tenant": 1 } } },
  *            { "apply": { "change": "c3", "by": "walt", "document": "platform", "mode": "REPLACE", "desired": {...} } },
@@ -430,7 +438,7 @@ object ChangeRunner : ScenarioRunner {
             "explain" -> explain(argument)
             in CREDENTIAL_STEPS -> credentials(action, argument)
             "revokeBreakGlass" -> revoke(argument)
-            "diff", "staged", "listed", "samples", "rateLimits" -> read(action, argument)
+            in READS -> read(action, argument)
             else -> try {
                 step(action, argument).also { named[it.id.value] = it }.state.name
             } catch (error: ChangeRejectedException) {
@@ -445,6 +453,7 @@ object ChangeRunner : ScenarioRunner {
         /** What a step reads of the documents, without changing them. */
         private suspend fun read(action: String, argument: JsonNode): String = when (action) {
             "diff" -> diff(argument)
+            "answer", "status", "propagation" -> answers(action, argument)
             "staged" -> "staged " + (memory.candidate(documentKey(argument.text()))?.window?.substringBefore('@') ?: "none")
             "samples" -> StagedDocuments(memory).let { instance ->
                 instance.refresh()
@@ -573,7 +582,7 @@ object ChangeRunner : ScenarioRunner {
             val (id, op) = if (action == "publish") target(argument, "ack", "lockout") else target(argument)
             return when (action) {
                 "skipShadow" -> changes.skipShadow(op, id, "scenario")
-                "stage" -> changes.stage(op, id)
+                "stage" -> changes.startShadow(op, id)
                 "publish" -> changes.publish(
                     op,
                     id,
@@ -610,6 +619,44 @@ object ChangeRunner : ScenarioRunner {
                 )
             )
             return "reported"
+        }
+
+        /** The steps of the control API's answers (`CTL-61`, `CTL-62`). */
+        private suspend fun answers(action: String, argument: JsonNode): String = when (action) {
+            "answer" -> answer(argument)
+            "status" -> status(argument)
+            else -> propagation(argument)
+        }
+
+        /** The members of a change's answer (`CTL-61`), as `GET /changes/{id}` writes them. */
+        private suspend fun answer(argument: JsonNode): String {
+            val answer = ChangeAnswer.tree(changes.get(ChangeId(argument.text())))
+            fun names(node: JsonNode) = node.properties().map { it.key }.sorted().joinToString(",")
+            return "members ${names(answer)}" + listOf("shadow", "approval")
+                .mapNotNull { name -> answer.get(name)?.let { "; $name ${names(it)}" } }.joinToString("")
+        }
+
+        /** An instance's status, as its heartbeat writes it: the revision of each document it holds. */
+        private suspend fun status(argument: JsonNode): String {
+            argument.only("instance", "documents")
+            val documents = argument.required("documents").properties().associate { (key, revision) ->
+                documentKey(key) to InstalledDocument(revision.asLong(), Duration.ZERO)
+            }
+            reports.write(InstanceStatus(argument.required("instance").text(), clock.now, documents))
+            return "status"
+        }
+
+        /** A revision's propagation (`CTL-62`): `installed <n> holding <n> recent <n>`, or `refused <status>`. */
+        private suspend fun propagation(argument: JsonNode): String = try {
+            argument.only("by", "document", "revision")
+            val propagation = plane.propagation(
+                by(argument),
+                documentKey(argument.required("document").text()),
+                argument.required("revision").asLong(),
+            )
+            "installed ${propagation.installed} holding ${propagation.holding} recent ${propagation.recent}"
+        } catch (error: ChangeRejectedException) {
+            "refused ${error.status}"
         }
 
         /**
@@ -651,7 +698,11 @@ object ChangeRunner : ScenarioRunner {
             "refused ${error.status}"
         }
 
-        private fun shown(decision: DecisionView) = decision.decision + (decision.by?.let { " by ${it.policy}" } ?: "")
+        /** The decision, `by <policy>` when the caller may see it, and `(cause <kind>)` or `(reason <why>)` (CTL-61). */
+        private fun shown(
+            decision: DecisionView
+        ) = decision.decision + (decision.by?.let { " by ${it.policy}" } ?: "") +
+            (decision.cause?.let { " (cause $it)" } ?: "") + (decision.reason?.let { " (reason $it)" } ?: "")
 
         private fun simulatedRequest(request: JsonNode): SimulatedRequest {
             request.only("tenant", "principal", "roles", "app", "space", "action", "resource", "headers", "requestAttributes")
@@ -854,6 +905,9 @@ object ChangeRunner : ScenarioRunner {
 
     /** A REQUIRED change listener that records everything. */
     private val CREDENTIAL_STEPS = setOf("revoke", "revokeTokens", "provide", "unaudited")
+
+    /** The steps that read what the control plane holds or answers, and the instance statuses it reads. */
+    private val READS = setOf("diff", "staged", "listed", "samples", "rateLimits", "answer", "status", "propagation")
 
     /** The page size of a `changes` step: enough for a scenario's changes. */
     private const val LISTING_LIMIT = 100

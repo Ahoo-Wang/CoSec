@@ -18,6 +18,9 @@ package me.ahoo.cosec.control.api
 import kotlinx.coroutines.runBlocking
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.control.audit.ChangeEvent
+import me.ahoo.cosec.control.audit.ChangeListener
+import me.ahoo.cosec.control.audit.ChangeListeners
 import me.ahoo.cosec.control.authz.EngineAuthority
 import me.ahoo.cosec.control.authz.PipelineControlAuthorizer
 import me.ahoo.cosec.control.change.ChangeId
@@ -74,6 +77,7 @@ import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.cosec.spi.token.RevocationReader
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
+import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.atomic.AtomicInteger
 
 /**
@@ -133,6 +137,20 @@ class ControlPlaneTest {
     /** How many changes were made. */
     val ids = AtomicInteger()
     private val options = ChangeOptions(shadow = IMMEDIATE_WINDOW)
+
+    /** Every change event, in order: a best-effort listener, so nothing it does changes a step. */
+    val events = CopyOnWriteArrayList<ChangeEvent>()
+    val listeners = ChangeListeners(
+        listOf(
+            object : ChangeListener {
+                override val name = "recorder"
+
+                override suspend fun onChange(event: ChangeEvent) {
+                    events += event
+                }
+            },
+        ),
+    )
     val changes = Changes(
         store,
         revisions,
@@ -142,6 +160,7 @@ class ControlPlaneTest {
         options,
         revocations = RevocationReader.NONE,
         lockout = LockoutCheck.UNCHECKED,
+        listeners = listeners,
     )
     val maintenance = ControlMaintenance(store, revisions, changes, java.time.Duration.ofMinutes(1))
     val simulator = Simulator()

@@ -289,7 +289,7 @@ class ControlRoundTwoFixesTest {
             listOf(Operation.PutPolicy(writer.copyAs("more"))),
             "x"
         )
-        val window = changes.stage(pia, change.id).shadow!!.window
+        val window = changes.startShadow(pia, change.id).shadow!!.window
         written.write(report("pod-a", 0, window))
         written.write(report("pod-b", 0, window))
         // Not enough samples yet: the window stays open, and the control plane keeps who has reported.
@@ -329,7 +329,7 @@ class ControlRoundTwoFixesTest {
                 listOf(Operation.PutPolicy(writer.copyAs("more"))),
                 "x"
             )
-            val window = changes.stage(pia, change.id).shadow!!.window
+            val window = changes.startShadow(pia, change.id).shadow!!.window
             written.write(report("pod-a", 0, window))
             written.write(report("pod-b", 0, window))
             changes.shadowed(change.id).shadow!!.closed.assert().isNull()
@@ -383,7 +383,7 @@ class ControlRoundTwoFixesTest {
                 }
             }
             val change = proposed("more")
-            val window = changes.stage(pia, change.id).shadow!!.window
+            val window = changes.startShadow(pia, change.id).shadow!!.window
             written.write(report("pod-a", 50, window))
             unreadable += "pod-b"
             changes.shadowed(change.id).shadow!!.closed.assert().describedAs("waits for pod-b").isNull()
@@ -394,7 +394,7 @@ class ControlRoundTwoFixesTest {
             // A store outage: no look answers, and the window neither waits it out nor closes, past its longest too.
             changes.abandon(pia, change.id)
             val other = proposed("other")
-            changes.stage(pia, other.id)
+            changes.startShadow(pia, other.id)
             down = true
             refused { changes.shadowed(other.id) }.status.assert().isEqualTo(503)
             clock.now = clock.now.plus(Duration.ofHours(2))
@@ -418,7 +418,7 @@ class ControlRoundTwoFixesTest {
         val ada = engine.operator(TenantId.PLATFORM, "ada", attributes = attributes)
         val app = SnapshotKey.App("order")
         val change = changes.propose(walt, app, 0, listOf(Operation.PutPolicy(writer.copyAs("perm:order/read"))), "x")
-        changes.stage(walt, change.id)
+        changes.startShadow(walt, change.id)
         changes.shadowed(change.id).state.assert().isEqualTo(ChangeState.AWAITING_APPROVAL)
         val approved = changes.approve(ada, change.id, changes.get(change.id).candidate!!)
         approved.approval!!.attributes.assert().isEqualTo(attributes)
@@ -767,7 +767,7 @@ class ControlRoundTwoFixesTest {
         // Removing break-glass only narrows: a rollback to before it needs no cosec:breakglass, and no window.
         val before = changes.rollback(walt, SnapshotKey.Platform, 3, "revoke")
         before.state.assert().isEqualTo(ChangeState.CHECKED)
-        changes.stage(walt, before.id).state.assert().isEqualTo(ChangeState.READY)
+        changes.startShadow(walt, before.id).state.assert().isEqualTo(ChangeState.READY)
         changes.publish(walt, before.id).state.assert().isEqualTo(ChangeState.PUBLISHED)
         revisions.head(SnapshotKey.Platform)!!.document.bindings.none { it.breakGlass }.assert().isTrue()
     }

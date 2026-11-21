@@ -27,6 +27,21 @@ Which preview of the library may run behind which preview of the gateway image: 
 
 ## From 8.0.0-beta.4 {#from-8-0-0-beta-4}
 
+- **The control API answers from a response model of its own; a refused scope says why under `reason`; propagation
+  counts the instances that hold the document** (review round 2, `R2C-11`, `R2C-12`, `CTL-61`, `CTL-62`). Affected:
+  clients of the control API.
+  - A change answer (`GET /changes/{id}` and every route that answers a change) no longer holds `checkedWith`,
+    `checkedApps` or its window's `shadow.reporters`: they were the store's bookkeeping, not part of the API. Every
+    other member is as before ([What a change answers](../policies/testing.md#what-a-change-answers)).
+  - `simulate` and `explain`: a `Rejected` decision carries `APP_MISMATCH` or `SPACE_NOT_MEMBER` under `reason`, no
+    longer under `cause`. `cause` is an `Indeterminate` decision's only, with the values it had.
+  - `GET /documents/{key}/revisions/{n}/propagation` adds `holding` (the recent instances that hold the document) and
+    `asOf` (when the statuses were read; an answer may be up to 5 seconds old). `installed` and `recent` mean what
+    they meant. No instance is behind when `installed` equals `holding`: most instances never hold a given tenant, so
+    `installed` never reached `recent` for it. `holding: 0` means no instance holds the document, and the first
+    request loads it at the published revision. A status read that fails is now `503`, not `500`.
+  - `contract/control/` pins the members of these answers, the closed sets they write and the audit kind of each
+    route; a release that changes one says so.
 - **A host that takes its caller from the `CoSec-Identity` header is asked for the statement of what can reach it, however
   it got that gate** (`STA-6`, `STA-7`, `STA-9`). Affected: an application that declared its own `IdentityGate` bean
   beside `cosec.pipeline.mode=enforce`, which started without one. It now fails startup until

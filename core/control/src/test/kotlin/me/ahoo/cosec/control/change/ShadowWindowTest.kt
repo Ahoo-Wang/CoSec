@@ -24,6 +24,7 @@ import me.ahoo.cosec.control.authz.PipelineControlAuthorizer
 import me.ahoo.cosec.control.lifecycle.CandidateCompile
 import me.ahoo.cosec.control.lifecycle.ChangeOptions
 import me.ahoo.cosec.control.lifecycle.Changes
+import me.ahoo.cosec.control.lifecycle.InstanceStatuses
 import me.ahoo.cosec.control.lifecycle.LockoutCheck
 import me.ahoo.cosec.control.lifecycle.ShadowOptions
 import me.ahoo.cosec.control.store.InMemoryControlStore
@@ -233,7 +234,7 @@ class ShadowWindowTest {
             listOf(Operation.RemoveBinding(BindingId("everyone"))),
             "revoke"
         )
-        return changes.stage(ALICE_OP, change.id).also { it.state.assert().isEqualTo(ChangeState.SHADOWING) }
+        return changes.startShadow(ALICE_OP, change.id).also { it.state.assert().isEqualTo(ChangeState.SHADOWING) }
     }
 
     @Test
@@ -258,6 +259,10 @@ class ShadowWindowTest {
         summary.insufficient.assert().isFalse()
         store.candidate(StoreFixtures.ACME).assert().isNull()
 
+        // Each instance writes its status every few seconds: both report revision 1 now, a minute after the last time.
+        one.reporter.flush()
+        two.reporter.flush()
+
         // NARROWED is not zero: the publisher acknowledges exactly these numbers.
         refused { changes.publish(ALICE_OP, change.id) }.assert().isEqualTo(428)
         refused {
@@ -269,14 +274,19 @@ class ShadowWindowTest {
         val provenance = revisions.head(StoreFixtures.ACME)!!.document.provenance!!
         provenance.shadow!!.window.assert().isEqualTo(closed.shadow!!.window)
 
-        // Propagation: both instances last reported revision 1; each reports revision 2 on its next cycle.
-        changes.propagation(StoreFixtures.ACME, 2).assert().isEqualTo(Propagation(2, 0, 2))
+        // Propagation: both instances last reported revision 1; each reports revision 2 on its next cycle. The
+        // statuses are read at most every 5 seconds, so each look comes 5 seconds after the last.
+        suspend fun propagation(): Propagation {
+            clock.now = clock.now.plus(InstanceStatuses.MAX_AGE)
+            return changes.propagation(StoreFixtures.ACME, 2)
+        }
+        propagation().assert().isEqualTo(Propagation(2, 0, 2, 2, clock.now))
         one.reporter.flush()
-        changes.propagation(StoreFixtures.ACME, 2).assert().isEqualTo(Propagation(2, 1, 2))
+        propagation().assert().isEqualTo(Propagation(2, 1, 2, 2, clock.now))
         two.reporter.flush()
-        changes.propagation(StoreFixtures.ACME, 2).assert().isEqualTo(Propagation(2, 2, 2))
+        propagation().assert().isEqualTo(Propagation(2, 2, 2, 2, clock.now))
         clock.now = clock.now.plus(Duration.ofMinutes(2))
-        changes.propagation(StoreFixtures.ACME, 2).assert().isEqualTo(Propagation(2, 0, 0))
+        propagation().assert().isEqualTo(Propagation(2, 0, 0, 0, clock.now))
     }
 
     @Test
@@ -331,7 +341,7 @@ class ShadowWindowTest {
         )
         val change = withGeo.propose(ALICE_OP, StoreFixtures.ACME, 1, listOf(Operation.PutPolicy(geo)), "geo")
         change.state.assert().isEqualTo(ChangeState.CHECKED)
-        withGeo.stage(ALICE_OP, change.id).state.assert().isEqualTo(ChangeState.SHADOWING)
+        withGeo.startShadow(ALICE_OP, change.id).state.assert().isEqualTo(ChangeState.SHADOWING)
         // This instance compiles with no attribute providers.
         val instance = Instance("no-geo")
         instance.get("/orders/1").assert().isEqualTo(200)
@@ -373,7 +383,7 @@ class ShadowWindowTest {
         store.candidate(StoreFixtures.ACME).assert().isNull()
 
         val again = changes.rebase(ALICE_OP, change.id)
-        changes.stage(ALICE_OP, again.id)
+        changes.startShadow(ALICE_OP, again.id)
         store.candidate(StoreFixtures.ACME).assert().isNotNull()
         changes.abandon(ALICE_OP, again.id)
         store.candidate(StoreFixtures.ACME).assert().isNull()
@@ -429,7 +439,7 @@ class ShadowWindowTest {
             "incident",
             ProvenanceKind.BREAK_GLASS
         )
-        changes.stage(PLATO, request.id).state.assert().isEqualTo(ChangeState.AWAITING_APPROVAL)
+        changes.startShadow(PLATO, request.id).state.assert().isEqualTo(ChangeState.AWAITING_APPROVAL)
         store.candidate(SnapshotKey.Platform).assert().isNull()
     }
 

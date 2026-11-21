@@ -454,7 +454,7 @@ or a request that bypassed the gateway:
   keeping revision <n>` means Redis could not be read: the installed revision stays until a read succeeds.
   `Snapshot document [<key>] regressed from revision <a> to <b>` means the store lost a write (for example a
   failover); `cosec-migrate verify-chain` names every document whose revision chain lost a record.
-- The control plane's `GET /documents/{key}/revisions/{rev}/propagation` reports how many of the recently reporting instances (those with `cosec.authorization.shadow.enabled`) have installed it.
+- The control plane's `GET /documents/{key}/revisions/{rev}/propagation` reports, of the recently reporting instances (those with `cosec.authorization.shadow.enabled`, `recent`), how many hold the document (`holding`) and how many of those have installed it (`installed`), as read at `asOf` (at most 5 seconds ago). No instance is behind when `installed` equals `holding`; `holding: 0` means no instance holds the document, and the first request loads it at the published revision.
 
 ### Snapshot log lines missing / housekeeping summary
 
