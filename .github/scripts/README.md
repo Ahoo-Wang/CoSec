@@ -52,6 +52,11 @@ they are.
 - A pull request that changes `dependency-cache.yml`, its key script or its action runs it, and the cache it writes is that
   pull request's own (a pull request's cache is readable by it alone): how a change of the key, the paths or the workflow is
   tried before it is on main, with the pull request's own CodeQL job as the reader.
+- After writing, or finding, its entry the workflow empties the Gradle home, restores the entry alone and resolves every
+  configuration `--offline`. If that fails the job deletes the entry **of the ref it runs on** (the API call with `key` and
+  `ref=$GITHUB_REF`: a delete by key alone would remove main's entry from a pull request that shares main's key). After a
+  deletion on main the job is red, readers fall back to the older entry of the same `<repos>` or download, and the next run of
+  the workflow writes the entry again; to write it by hand: `gh workflow run dependency-cache.yml`.
 
 What it does not solve: the first run after a version bump downloads everything, once, in `dependency-cache.yml`, and the
 jobs that run before it is written (the pull request that bumps the version, which cannot write) download the difference

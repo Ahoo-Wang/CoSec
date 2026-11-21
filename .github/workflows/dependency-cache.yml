@@ -130,7 +130,13 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           KEY: ${{ steps.name.outputs.key }}
-        run: gh cache delete "$KEY" --repo "$GITHUB_REPOSITORY" || true
+        # Only the entry of the ref this run is on: on main that is main's entry, on a pull request its own or none. A
+        # delete by key alone removes the entry of every ref with that key, main's included, and a pull request that
+        # changes this workflow without a version has main's key. The API call and not `gh cache delete --ref`, so the
+        # runner's gh version does not matter.
+        run: |
+          gh api -X DELETE "repos/$GITHUB_REPOSITORY/actions/caches?key=$KEY&ref=$GITHUB_REF" \
+            || echo "::warning::could not delete $KEY on $GITHUB_REF"
 
       - name: Say what was written
         run: |
