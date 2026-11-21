@@ -57,6 +57,9 @@
 > 三种情形（`mode=gateway`、`caller=forwarded-identity`、应用自己声明的 `IdentityGate`）都必须写明谁能到达它（`only-gateway-can-reach` 或新增的 `only-trusted-callers-can-reach`），都拒绝隐藏方法过滤器。
 > 这种信任能拦住失误、保住审计，拦不住一个已被攻破、又能到达宿主的工作负载：网络才是边界。Spring Cloud Gateway 宿主拒绝 `caller=forwarded-identity`。
 
+> **2026-11-21 修订（#1815，`OBS-9`；#1811，`CTL-69`）**：§9.5：判定原因在线上的名字出自 `cosec-runtime` 里一张穷举的表（`CauseName`），绝不取类名：审计记录的理由（`INDETERMINATE: <name>`）、影子报告的样本与控制 API 的 `cause` 对每种原因写同一个名字；新增一种原因在表里没有名字就编译不过；名字保持 8.0 各预览版写过的拼法。
+> §7.3：相信声明身份的宿主（`STA-9`）上，CoSec 自己的路由（控制 API、refresh、logout）只在应用端口上应答，控制 API 另加服务端口；其他端口（包括 `management.server.port`）对这些路径答 404。应用自己的路由若在管理端口上被提供，那是 Spring Boot 的行为（`STA-4`），仍在 CoSec 的管线之后。详见 RFC 0007 的同日备注。
+
 ## 0. 结论先行
 
 第 4 阶段结束时，引擎已经是同步纯函数，策略数据都在内存快照里。剩下的问题在引擎**外面**：`SecurityPipeline` 是一条 Reactor 链，
