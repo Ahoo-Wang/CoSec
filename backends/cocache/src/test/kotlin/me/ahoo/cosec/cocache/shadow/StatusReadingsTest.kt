@@ -55,14 +55,21 @@ class StatusReadingsTest {
             reports.statusReadings().unreadable.assert().isEmpty()
             SnapshotNode(backend, keyPrefix).use { raw ->
                 raw.runtime.create(
-                    rawStore("RawStatus", keyPrefix, CoSecCacheSpecs.INSTANCE_STATUS_CACHE_NAME, KeyEncoder<String> { it })
+                    rawStore(
+                        "RawStatus",
+                        keyPrefix,
+                        CoSecCacheSpecs.INSTANCE_STATUS_CACHE_NAME,
+                        KeyEncoder<String> { it }
+                    )
                 ).async().put("i1", """{"format":9,"at":"x"}""".encodeToByteArray()).await()
             }
             val readings = reports.statusReadings()
             readings.statuses.map { it.instance }.assert().containsExactlyInAnyOrder("i0", "i2")
             readings.unreadable.assert().containsExactly("i1")
             // The call that reads every status still fails on it, as before.
-            runCatching { reports.statuses() }.exceptionOrNull().assert().isInstanceOf(SnapshotFormatException::class.java)
+            runCatching { reports.statuses() }.exceptionOrNull().assert().isInstanceOf(
+                SnapshotFormatException::class.java
+            )
         }
     }
 
@@ -77,7 +84,9 @@ class StatusReadingsTest {
                 other.runtime.create(ShadowCacheSpecs.statuses(keyPrefix)).async().put("i1", status("i1", of = "i0"))
                     .await()
             }
-            runCatching { reports.statusReadings() }.exceptionOrNull().assert().isInstanceOf(IllegalStateException::class.java)
+            runCatching { reports.statusReadings() }.exceptionOrNull().assert().isInstanceOf(
+                IllegalStateException::class.java
+            )
         }
     }
 

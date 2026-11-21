@@ -424,6 +424,13 @@ come from the reports. Two different waits, and what to do about each:
 
 At `max-duration` the window closes *insufficient* whatever the acknowledgements, as it does without the samples.
 
+**What "live" means.** A live instance is one with a status in the last minute. An instance cut off from Redis for
+longer writes none, so it is neither waited for nor counted as acknowledging, and when it reconnects it installs the
+published revision having compared nothing; a host with shadowing off writes no status at all. An instance whose
+status is stored but does not decode (a crash-looping version, a corrupt value, or a format this control host does not
+read during a rolling upgrade) is live and acknowledges nothing: the window waits for it and `shadow.waitingFor` names
+it, while every other status is read and `propagation` counts it as recent, holding no document (`CTL-72`).
+
 An instance that has reported on a window must keep reporting until it closes. One whose report is gone (it stopped
 serving, or its report was lost in a Redis failover) is missing evidence, never zero decisions: it may be the one that
 saw the narrowed requests. The window waits for it, logging `Shadow window <w> of change <c> is waiting for [<instances>]`,

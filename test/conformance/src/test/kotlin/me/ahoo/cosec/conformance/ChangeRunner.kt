@@ -325,6 +325,7 @@ object ChangeRunner : ScenarioRunner {
 
         /** Instances a `vanish` step took off the window's reporters, as an instance that can write them could. */
         private val vanished = HashSet<String>()
+
         /** Instances a `status` step with `"unreadable": true` wrote a status for that does not decode (`CTL-72`). */
         private val unreadable = HashSet<String>()
         private val reader = object : ShadowReportReader {
