@@ -74,17 +74,15 @@ class Revisions(
     private val repair = HistoryRepair(store, writes, ::decode)
     private val retained = Retention(store, writes, clock, retention, ::head, ::decode, ::historyAndHead)
 
-    /** The head of [key], read from the store of record. */
     /** Every document the store indexes revisions for ([ControlStore.documents]): it may name more than have a head. */
     suspend fun documents(): Set<SnapshotKey> = store.documents()
 
     /** Whether the store indexes revisions for [key]: one read of its index, never the whole list ([documents]). */
     suspend fun indexed(key: SnapshotKey): Boolean = store.index(requireDocumentKey(key)) != null
 
-    suspend fun head(key: SnapshotKey): Head? {
-        val stored = store.head(requireDocumentKey(key)) ?: return null
-        return Head(key, decode(key, stored.document), stored)
-    }
+    /** The head of [key], read from the store of record. */
+    suspend fun head(key: SnapshotKey): Head? =
+        store.head(requireDocumentKey(key))?.let { Head(key, decode(key, it.document), it) }
 
     /**
      * Publishes [candidate] over [base] (`null`: [key] has no document yet) for [publication]. The candidate's own
