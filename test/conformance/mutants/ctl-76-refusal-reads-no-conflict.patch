@@ -1,9 +1,8 @@
 # Rule: CTL-76
 # Mutant: a refusal does not read which conflict a 409 is, so a moved base is not told from a held slot
 # Tests: :control-sdk:test --tests me.ahoo.cosec.control.sdk.PublishWithoutShadowTest
-
 diff --git a/core/control-sdk/src/main/kotlin/me/ahoo/cosec/control/sdk/ControlRefusedException.kt b/core/control-sdk/src/main/kotlin/me/ahoo/cosec/control/sdk/ControlRefusedException.kt
-index 9c1dd4ca7..a54ff44e5 100644
+index 21289346e..795e1551f 100644
 --- a/core/control-sdk/src/main/kotlin/me/ahoo/cosec/control/sdk/ControlRefusedException.kt
 +++ b/core/control-sdk/src/main/kotlin/me/ahoo/cosec/control/sdk/ControlRefusedException.kt
 @@ -46,7 +46,7 @@ class ControlRefusedException(
@@ -13,5 +12,5 @@ index 9c1dd4ca7..a54ff44e5 100644
 -    val conflict: ConflictKind? get() = read(problem, "conflict")?.let(ConflictKind::of)
 +    val conflict: ConflictKind? get() = read(problem, "code")?.let(ConflictKind::of)
  
-     /** The problem's `requestId`, which the control host's log names with why it refused. */
-     val requestId: String? get() = read(problem, "requestId")
+     /**
+      * The change that holds the slot a [ConflictKind.SLOT_HELD] wanted (the problem's `heldBy`, `CTL-80`), where the
