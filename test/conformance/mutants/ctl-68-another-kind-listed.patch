@@ -1,0 +1,17 @@
+# Rule: CTL-68
+# Mutant: a kind other than tenant or app is listed as tenant instead of refused
+# Tests: :control:test --tests me.ahoo.cosec.control.api.DocumentListingTest
+
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/api/DocumentRoutes.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/api/DocumentRoutes.kt
+index c8dfa3a5e..de56f495d 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/api/DocumentRoutes.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/api/DocumentRoutes.kt
+@@ -124,7 +124,7 @@ internal class DocumentRoutes(private val plane: ControlPlane) : RouteHandler {
+         val kind = when (request.query["kind"]) {
+             "tenant" -> DocumentKind.TENANT
+             "app" -> DocumentKind.APP
+-            else -> throw InvalidControlRequestException("[kind] is tenant or app.")
++            else -> DocumentKind.TENANT
+         }
+         val limit = request.query["limit"]?.let { text ->
+             text.toIntOrNull() ?: throw InvalidControlRequestException("[limit] is a number from 1 to ${ControlPlane.MAX_LIMIT}.")

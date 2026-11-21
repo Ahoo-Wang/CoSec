@@ -200,7 +200,7 @@ management:
   `emptyDir` 卷：`logs/`（GC 日志）、`data/`（`OutOfMemoryError` 时的堆转储）和 `/tmp`（Netty 的原生传输、JVM 的性能数据）。
   AOT 缓存只读不写。
 - **探针。** 启动探针和存活探针读取 `/livez`，就绪探针读取 `/readyz`，都在容器的 `http` 端口上：这两个分组由 `application.yaml` 启用（`management.endpoint.health.probes.enabled`），并由网关的端口提供（`add-additional-paths`）。所以 pod 在 Redis 里还没有平台文档时就能启动，并在文档安装前留在 Service 之外。不要让探针指向 `/actuator/health`：在那之前它一直是 DOWN，启动探针指向它会让 pod 被重启。
-- **Actuator。** 在管理端口上（`management.server.port: 8081`，容器端口 `management`，Service 不发布它）暴露 `health` 和 `prometheus`；能读取和修改路由的 `gateway` 端点处于关闭状态（`management.endpoint.gateway.access: none`）。CoSec 授权的是网关的路由，不是它的 actuator 端点：production 的 NetworkPolicy 只放行来自 `monitoring` 命名空间的管理端口（改成你的 Prometheus 所在处），dev overlay 没有策略。
+- **Actuator。** 在管理端口上（`management.server.port: 8081`，容器端口 `management`，Service 不发布它）暴露 `health` 和 `prometheus`；能读取和修改路由的 `gateway` 端点处于关闭状态（`management.endpoint.gateway.access: none`）。在 WebFlux 宿主上，管理端口不只是 actuator：Spring Boot 的管理服务器也会在那里提供应用自己的 `RouterFunction`（CoSec 自己的路由，控制 API 和登录路由，在那里是 `404`，`CTL-69`）。CoSec 授权的是网关的路由，不是它的 actuator 端点：production 的 NetworkPolicy 只放行来自 `monitoring` 命名空间的管理端口（改成你的 Prometheus 所在处），dev overlay 没有策略。
 - **关闭。** `preStop` 先暂停 5 秒，让 Service 先摘掉这个 pod；`terminationGracePeriodSeconds: 45` 覆盖这段暂停、
   Spring 的优雅关闭（最多 30 秒）和决策监听器的排空（[关闭](#shutdown)）。
 - **JVM 参数**，通过 `JAVA_OPTS` 传入：下面的内存大小；`-XX:+ExitOnOutOfMemoryError`，让耗尽内存的 JVM 被重启；`-Djava.net.preferIPv4Stack=true`（因为

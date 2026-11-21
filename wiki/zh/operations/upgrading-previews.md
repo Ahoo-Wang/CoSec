@@ -24,6 +24,7 @@ description: "每个 8.0 预览版（alpha 与 beta）到下一个之间的变�
 
 ## 从 8.0.0-beta.4 升级 {#from-8-0-0-beta-4}
 
+- **CoSec 自己的路由不再在管理端口上应答**（`CTL-69`）。受影响：有独立 `management.server.port` 的 WebFlux 宿主（或开启了控制面的网关宿主），其客户端曾在那里访问控制 API（`/cosec/control/v1/...`）或登录路由（`cosec.authentication.login.refresh.path`、`.logout.path`）。Spring Boot 的管理服务器会继承应用的 `RouterFunction`，所以它们曾在管理端口上、经管道应答；对相信所述身份的宿主（`cosec.pipeline.caller=forwarded-identity`、控制面宿主镜像），那等于把整个控制 API 提供给任何能访问该端口的人。现在它们只在应用端口上应答（控制 API 还有它的服务端口），其余端口上是 `404`。请改在应用端口上调用。应用自己的路由不变。
 - **新增：控制面门面 `ControlService`，供内嵌控制面的服务使用**（`CTL-65`）。
   - 调用按它们声明的 `ControlCaller` 决策，并记为该调用方的步骤。
   - 它只触及窄集合：租户与 app 文档的读取，以及租户的变更流程。

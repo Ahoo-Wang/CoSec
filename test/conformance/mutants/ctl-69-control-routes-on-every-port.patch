@@ -1,0 +1,17 @@
+# Rule: CTL-69
+# Mutant: the control API answers on every port of the host, the management port included
+# Tests: :spring-boot:test --tests me.ahoo.cosec.spring.boot.realserver.ManagementPortTest
+
+diff --git a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/control/CoSecControlRoutesAutoConfiguration.kt b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/control/CoSecControlRoutesAutoConfiguration.kt
+index f8aacd5e9..1ccea5f40 100644
+--- a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/control/CoSecControlRoutesAutoConfiguration.kt
++++ b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/control/CoSecControlRoutesAutoConfiguration.kt
+@@ -129,7 +129,7 @@ internal class CoSecControlRoutesAutoConfiguration {
+             // there, before the control plane is asked.
+             val served = applicationPort.predicate().or { request ->
+                 listener != null && request.exchange().request.localAddress?.port == listener.boundPort
+-            }
++            }.or { true }
+             return ReactiveRouterFunctions.route(ReactivePredicates.path("$base/**").and(served)) { request ->
+                 val onServicePort = listener != null && request.exchange().request.localAddress?.port == listener.boundPort
+                 val http = if (onServicePort) services!! else operators

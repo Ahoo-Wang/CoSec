@@ -1,0 +1,13 @@
+# Matters once you run a second control replica (replicas: 2 in an overlay of yours; two are supported): a node drain then
+# evicts one at a time. A replica that is not ready (no platform document, or a store not yet converted) serves nothing, so
+# evicting it never blocks a drain.
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: cosec-control
+spec:
+  maxUnavailable: 1
+  unhealthyPodEvictionPolicy: AlwaysAllow
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: cosec-control

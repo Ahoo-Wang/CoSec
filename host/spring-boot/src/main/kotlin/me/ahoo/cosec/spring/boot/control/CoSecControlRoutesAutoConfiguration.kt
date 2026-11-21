@@ -30,6 +30,7 @@ import me.ahoo.cosec.runtime.event.BridgeContextContributor
 import me.ahoo.cosec.runtime.http.ProblemType
 import me.ahoo.cosec.runtime.http.RequestSecurity
 import me.ahoo.cosec.spring.boot.ConditionalOnCoSecEnabled
+import me.ahoo.cosec.spring.boot.pipeline.ApplicationPort
 import me.ahoo.cosec.spring.boot.pipeline.CoSecPipelineWebAutoConfiguration
 import me.ahoo.cosec.spring.boot.pipeline.GATEWAY_GLOBAL_FILTER
 import me.ahoo.cosec.spring.boot.pipeline.ReactiveClientIp
@@ -41,6 +42,7 @@ import org.springframework.beans.factory.ObjectProvider
 import org.springframework.boot.autoconfigure.AutoConfiguration
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass
+import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication
 import org.springframework.context.ApplicationContext
@@ -104,10 +106,16 @@ internal class CoSecControlRoutesAutoConfiguration {
             properties: ControlProperties,
         ): ServicePortFilter = ServicePortFilter(listener, basePathOf(properties))
 
+        /** Where the application's server bound (`CTL-69`); the login routes' configuration declares it too. */
+        @Bean
+        @ConditionalOnMissingBean
+        fun cosecApplicationPort(): ApplicationPort = ApplicationPort()
+
         @Bean
         fun cosecControlRoutes(
             operators: ControlHttp,
             properties: ControlProperties,
+            applicationPort: ApplicationPort,
             plane: ObjectProvider<ControlPlane>? = null,
             service: ObjectProvider<ControlServiceListener>? = null,
         ): ReactiveRouterFunction<ReactiveServerResponse> {
@@ -116,7 +124,13 @@ internal class CoSecControlRoutesAutoConfiguration {
             // The narrow profile answers on the service port only; the operators' port serves the whole API.
             val listener = service?.ifAvailable
             val services = listener?.let { ControlHttp(checkNotNull(plane).getObject(), ControlProfile.SERVICE) }
-            return ReactiveRouterFunctions.route(ReactivePredicates.path("$base/**")) { request ->
+            // The control API answers on the application's port (the operators' profile) and on the service port (the
+            // service profile), and on no other port the host listens on, the management port included (CTL-69): a 404
+            // there, before the control plane is asked.
+            val served = applicationPort.predicate().or { request ->
+                listener != null && request.exchange().request.localAddress?.port == listener.boundPort
+            }
+            return ReactiveRouterFunctions.route(ReactivePredicates.path("$base/**").and(served)) { request ->
                 val onServicePort = listener != null && request.exchange().request.localAddress?.port == listener.boundPort
                 val http = if (onServicePort) services!! else operators
                 val security = RequestSecurity.of(request.exchange().securityContextOrNull())

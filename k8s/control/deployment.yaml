@@ -1,0 +1,156 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cosec-control
+  labels:
+    app.kubernetes.io/name: cosec-control
+spec:
+  # One replica: operators make a few requests an hour and a restart takes seconds. Two replicas are supported (every
+  # maintenance pass holds a lease, a change advances by compare-and-set); the production overlay has the budget for them.
+  replicas: 1
+  # Never a rolling update. Across a change of the stored format an old and a new replica must not run together: stop the
+  # control server, upgrade the image, run `cosec-migrate repair-references`, start (the upgrade page says which release
+  # needs it). A rolling update is right most days and wrong on the day it matters.
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: cosec-control
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: cosec-control
+    spec:
+      # Service links would put COSEC_CONTROL_SERVICE_HOST, COSEC_CONTROL_PORT_80_TCP_* and the like, from the Service
+      # cosec-control, into the environment. Spring reads them as cosec.control.* properties (the check for keys CoSec does
+      # not read skips exactly these variables, and this keeps them out). Services are found by DNS instead.
+      enableServiceLinks: false
+      # The control host never calls the Kubernetes API.
+      automountServiceAccountToken: false
+      # preStop (5 s), then Spring's graceful shutdown (30 s at most) and the change listeners' drain (5 s).
+      terminationGracePeriodSeconds: 45
+      securityContext:
+        # The image's appuser:appgroup, by uid: the image names its user, so runAsNonRoot cannot check it without these.
+        runAsNonRoot: true
+        runAsUser: 999
+        runAsGroup: 999
+        fsGroup: 999
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: cosec-control
+          image: ghcr.io/ahoo-wang/cosec-control
+          ports:
+            # The operators' API: the gateway routes /cosec/control/** here and states who is calling. Admitted from the
+            # gateway's pods only (networkpolicy-operators.yaml).
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+            # The service API (cosec.control.http.service-port): the narrow profile for the services that call the control
+            # plane directly. Admitted from the services you name only (networkpolicy-services.yaml).
+            - name: service
+              containerPort: 8082
+              protocol: TCP
+            # The actuator: the probes, /actuator/prometheus. Admitted from monitoring only (networkpolicy-management.yaml),
+            # and in no Service.
+            - name: management
+              containerPort: 8081
+              protocol: TCP
+          env:
+            # The statement the image will not start without: nothing but the gateway and the services you name can reach this
+            # host, which believes the CoSec-Identity header of whoever can. It is true because of the three NetworkPolicies
+            # beside this file, which select these pods and admit one source per port. Keep them together: this variable
+            # without the policies is a false statement, and the policies without it are a host that does not start. It is
+            # not a defence: a workload that can reach the host can state any principal, a platform administrator included,
+            # and be both the author and the approver of a change. The network is the boundary.
+            - name: COSEC_PIPELINE_IDENTITY_ONLYTRUSTEDCALLERSCANREACH
+              value: "true"
+            # Heap, direct memory and metaspace, sized for the memory limit below. An overlay that changes the limit
+            # replaces this variable too.
+            - name: JVM_MEMORY_OPTS
+              value: -Xms768m -Xmx768m -XX:MaxDirectMemorySize=128m -XX:MaxMetaspaceSize=256m
+            # The image's start script puts JAVA_OPTS after its own defaults (-Xmx2048M, ZGC, ...), so these win.
+            # JAVA_TOOL_OPTIONS would not: the JVM reads it before the command line.
+            # - ExitOnOutOfMemoryError: a JVM that ran out of memory is restarted rather than left half-working.
+            # - preferIPv4Stack: https://github.com/netty/netty/issues/16082
+            - name: JAVA_OPTS
+              value: >-
+                $(JVM_MEMORY_OPTS)
+                -XX:+ExitOnOutOfMemoryError
+                -Djava.net.preferIPv4Stack=true
+          # spring.data.redis.* from the overlay's ConfigMap cosec-control-redis.
+          envFrom:
+            - configMapRef:
+                name: cosec-control-redis
+          resources:
+            requests:
+              cpu: 250m
+              memory: 1536Mi
+            limits:
+              # The JVM sizes its GC, JIT and Netty thread pools from the CPU limit.
+              cpu: "1"
+              memory: 1536Mi
+          # Spring Boot's probe groups on the management port: the application port is decided by the pipeline, so a
+          # kubelet would be refused there, and answered 503 until the platform document exists. Readiness is
+          # REFUSING_TRAFFIC until the platform document is installed, and while the control store is in an older format
+          # (the cosecControlStoreFormat indicator, run `cosec-migrate repair-references`): the pod runs, is live, and stays
+          # out of the Service. Never probe /actuator/health, which is DOWN until then as well.
+          startupProbe:
+            httpGet:
+              path: /actuator/health/liveness
+              port: management
+            periodSeconds: 2
+            failureThreshold: 90
+          livenessProbe:
+            httpGet:
+              path: /actuator/health/liveness
+              port: management
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /actuator/health/readiness
+              port: management
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 2
+          lifecycle:
+            # Lets the Service drop the pod before the host stops taking connections.
+            preStop:
+              sleep:
+                seconds: 5
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+          volumeMounts:
+            - name: config
+              mountPath: /opt/cosec-control-server/config
+              readOnly: true
+            # The root filesystem is read-only. The image writes only here: the GC log (logs/), a heap dump on
+            # OutOfMemoryError (data/), and Netty's native transport and the JVM's perf data (/tmp). The AOT cache
+            # is only read.
+            - name: logs
+              mountPath: /opt/cosec-control-server/logs
+            - name: data
+              mountPath: /opt/cosec-control-server/data
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: config
+          configMap:
+            name: cosec-control-config
+        # Ten GC log files of 32 MB at most.
+        - name: logs
+          emptyDir:
+            sizeLimit: 512Mi
+        # One heap dump, as large as the heap.
+        - name: data
+          emptyDir:
+            sizeLimit: 2Gi
+        - name: tmp
+          emptyDir:
+            sizeLimit: 64Mi
