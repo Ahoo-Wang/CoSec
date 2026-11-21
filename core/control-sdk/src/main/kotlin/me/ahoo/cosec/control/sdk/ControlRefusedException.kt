@@ -42,6 +42,12 @@ class ControlRefusedException(
     /** The problem's `detail`; null when the route gives none. */
     val detail: String? get() = read(problem, "detail")
 
+    /**
+     * Which conflict a 409 is (`CTL-80`): [ConflictKind.BASE_MOVED] is read again and retried, [ConflictKind.SLOT_HELD]
+     * waited out, the others stopped at. Null for any other status.
+     */
+    val conflict: ConflictKind? get() = read(problem, "conflict")?.let(ConflictKind::of)
+
     /** The problem's `requestId`, which the control host's log names with why it refused. */
     val requestId: String? get() = read(problem, "requestId")
 
