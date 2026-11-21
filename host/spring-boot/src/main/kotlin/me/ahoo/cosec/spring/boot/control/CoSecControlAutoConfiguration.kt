@@ -131,7 +131,7 @@ internal class CoSecControlAutoConfiguration {
     @ConditionalOnMissingBean
     fun cosecRevisions(store: ControlStore, properties: ControlProperties): Revisions = Revisions(
         store,
-        retention = with(properties.revisions) { RetentionPolicy(maxCount, minAge) },
+        retention = with(properties.revisions) { RetentionPolicy(maxCount, minAge, ControlDerived.ORPHAN_AGE) },
     )
 
     /**

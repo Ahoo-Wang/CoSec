@@ -14,6 +14,7 @@
 package me.ahoo.cosec.control.lifecycle
 
 import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.control.store.RetentionPolicy
 import java.time.Duration
 
 /**
@@ -29,7 +30,7 @@ object ControlDerived {
      * what is reclaimed is decided by the retention the operator states, and this only decides how soon after a record
      * becomes eligible it goes. A pass over documents with nothing to reclaim costs one index read and one head read each.
      */
-    val RECLAIM_INTERVAL: Duration = Duration.ofHours(1)
+    val RECLAIM_INTERVAL: Duration = RetentionPolicy.RECLAIM_PASS
 
     /**
      * How old a record not on a revision chain, or a change listed but never written, is before it is removed: one

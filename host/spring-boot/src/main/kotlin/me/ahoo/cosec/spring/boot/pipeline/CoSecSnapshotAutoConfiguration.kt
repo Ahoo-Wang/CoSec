@@ -15,7 +15,6 @@
 
 package me.ahoo.cosec.spring.boot.pipeline
 
-import io.github.oshai.kotlinlogging.KotlinLogging
 import me.ahoo.cocache.core.CoCacheFactory
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
@@ -76,14 +75,12 @@ import java.time.Instant
  * an in-memory store. An absent platform document fails requests closed until one is published (`cosec-migrate
  * publish`; the control plane's bootstrap writes only the platform tenant's document).
  */
-private val log = KotlinLogging.logger {}
-
 @AutoConfiguration(afterName = [COCACHE_AUTO_CONFIGURATION])
 @ConditionalOnCoSecEnabled
 @ConditionalOnEnforceMode
 @EnableConfigurationProperties(RuntimeAuthorizationProperties::class, CoSecProperties::class, PipelineProperties::class)
 @InternalCoSecApi
-@Import(StartupTaskExclusion::class)
+@Import(StartupTaskExclusion::class, DerivedSnapshotSettingsConfiguration::class)
 class CoSecSnapshotAutoConfiguration {
     /** Redis as the store of record (RFC 0003 §4.1). */
     @Configuration(proxyBeanMethods = false)
@@ -327,16 +324,6 @@ class CoSecSnapshotAutoConfiguration {
      * The snapshot source. It loads the platform first, so that no app or tenant document compiles against default
      * limits, then prewarms the platform and the configured apps and tenants: empty lists mean the platform only.
      */
-    /** One line for what the data plane computes where it used to be told, and from what (the snapshot group). */
-    @Bean
-    fun cosecDerivedSnapshotSettingsNotice(
-        properties: RuntimeAuthorizationProperties,
-        pipeline: PipelineProperties,
-        environment: Environment,
-    ): StartupTask = StartupTask.AfterSingletons {
-        log.info { DerivedSnapshotSettings.line(properties, pipeline.timeout, environment) }
-    }
-
     @Bean(destroyMethod = "close")
     @ConditionalOnMissingBean
     fun cosecSnapshotSource(
