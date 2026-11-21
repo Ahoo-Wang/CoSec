@@ -45,14 +45,27 @@ jobs:
       contents: read
       security-events: write
     steps:
+      # Two commits: on a pull request the checkout is the merge of the pull request into `main`, and the decision below reads
+      # what the pull request changes as the difference between that merge and its first parent (`main`'s commit).
       - name: Checkout
         uses: actions/checkout@v7
+        with:
+          fetch-depth: 2
+
+      # A required check that has nothing to analyse reports success at once, and says so (scripts/ci/codeql_needed.py): the
+      # analysis is a traced build of 8 to 9 minutes, and it sees Kotlin, Java and what the build reads. Every push to `main`,
+      # the scheduled run and a manual run analyse in full, always; a pull request that changes none of those files skips
+      # the steps below, which carry the decision. Its list errs wide and is held to the tree by scripts/ci/test_codeql_needed.py.
+      - name: Decide whether there is anything to analyse
+        id: decide
+        run: python3 -I scripts/ci/codeql_needed.py --event "$GITHUB_EVENT_NAME"
 
       # No Gradle cache, on purpose: the closest entry a pull request restores is another job's (the gateway image's), whose
       # index names jars it does not hold, and Gradle then answers "Could not find" for everything else without asking a
       # repository (what jmh-ab.yml found, #1490; this job's first run with a cache failed that way, four attempts in a row).
       # A cold resolution is protected by the retried step below instead.
       - name: Set up JDK 21
+        if: steps.decide.outputs.analyse == 'true'
         uses: actions/setup-java@v6
         with:
           java-version: '21'
@@ -62,9 +75,11 @@ jobs:
       # distribution, the plugins and every dependency, so that the traced build below finds them and the retry never wraps
       # a compilation. services.gradle.org answers 504 often enough to fail this required check; this covers it too.
       - name: Resolve the dependencies
+        if: steps.decide.outputs.analyse == 'true'
         run: .github/scripts/resolve-dependencies.sh
 
       - name: Initialize CodeQL
+        if: steps.decide.outputs.analyse == 'true'
         uses: github/codeql-action/init@v4
         with:
           languages: java-kotlin
@@ -76,6 +91,7 @@ jobs:
       # build: with defaults the Kotlin daemon fails with "GC overhead limit exceeded". Give it an explicit
       # heap and limit parallel compilations so concurrent extractions fit in the runner's memory.
       - name: Build
+        if: steps.decide.outputs.analyse == 'true'
         run: >-
           ./gradlew --no-daemon --no-build-cache --no-parallel --no-configuration-cache --max-workers=2
           -Dorg.gradle.jvmargs=-Xmx2g
@@ -83,6 +99,7 @@ jobs:
           clean classes testClasses -x detekt
 
       - name: Perform CodeQL Analysis
+        if: steps.decide.outputs.analyse == 'true'
         uses: github/codeql-action/analyze@v4
         with:
           category: /language:java-kotlin
