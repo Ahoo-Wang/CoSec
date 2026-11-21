@@ -53,7 +53,16 @@ Which preview of the library may run behind which preview of the gateway image: 
     request loads it at the published revision. A status read that fails is now `503`, not `500`.
   - `contract/control/` pins the members of these answers, the closed sets they write and the audit kind of each
     route; a release that changes one says so.
-
+- **A host that takes its caller from the `CoSec-Identity` header is asked for the statement of what can reach it, however
+  it got that gate** (`STA-6`, `STA-7`, `STA-9`). Affected: an application that declared its own `IdentityGate` bean
+  beside `cosec.pipeline.mode=enforce`, which started without one. It now fails startup until
+  `cosec.pipeline.identity.only-gateway-can-reach=true` (or `only-trusted-callers-can-reach=true`) says that nothing but the
+  gateway, and the services you name, can reach it, and until its hidden-method filter is off. A host in `gateway` mode is
+  unchanged.
+- **New: `cosec.pipeline.caller=forwarded-identity`.** A host in `enforce` mode, with the snapshot and the control plane
+  wired, can take its caller from the identity header instead of a credential: the shape of a control-plane host, or of
+  an IAM service that embeds the control plane. Nothing to change for a host that does not set it
+  ([Configuration](./configuration.md#pipeline)).
 - **Every stored record carries its format, and a reader ignores what it does not know of a known format**
   (review round 2, `R2C-10`, `R2C-28`, `CTL-53`, `IDN-31`). Affected: every deployment, once.
   - **Stop the control plane, upgrade it, start it.** The previews before this one refuse the `format` member the new

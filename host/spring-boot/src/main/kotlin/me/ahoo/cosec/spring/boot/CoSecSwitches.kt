@@ -60,6 +60,7 @@ internal object CoSecSwitches {
         "cosec.api-key.enabled",
     ) + listOf(
         Switch("cosec.pipeline.mode", listOf("enforce", "gateway")),
+        Switch("cosec.pipeline.caller", listOf("credential", "forwarded-identity")),
         Switch("cosec.api-key.store", listOf("memory", "redis")),
     )
 

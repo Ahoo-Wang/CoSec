@@ -1,17 +1,17 @@
 # Rule: STA-7
-# Mutant: a service in gateway mode starts without the statement that only the gateway can reach it
+# Mutant: a host that believes the identity starts without the statement of what can reach it
 # Tests: :spring-boot:test --tests me.ahoo.cosec.spring.boot.pipeline.GatewayModeTrustTest
 
 diff --git a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/pipeline/GatewayModeTrust.kt b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/pipeline/GatewayModeTrust.kt
-index fa8dc8e3c..b3a857d25 100644
+index 91a447d1e..eb8b56c77 100644
 --- a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/pipeline/GatewayModeTrust.kt
 +++ b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/pipeline/GatewayModeTrust.kt
-@@ -42,7 +42,7 @@ internal object GatewayModeTrust {
-     /** `STA-7`: fails unless [Environment] states the boundary, `true` exactly (any case, no spaces). */
-     fun requireBoundaryStated(environment: Environment) {
-         val written = environment.getProperty(PipelineProperties.ONLY_GATEWAY_CAN_REACH_KEY)
--        check(written != null && written.equals("true", ignoreCase = true)) {
+@@ -55,7 +55,7 @@ internal object GatewayModeTrust {
+             PipelineProperties.ONLY_GATEWAY_CAN_REACH_KEY to gateway,
+             PipelineProperties.ONLY_TRUSTED_CALLERS_CAN_REACH_KEY to trusted,
+         ).firstOrNull { (_, value) -> value != null && value.equals("true", ignoreCase = true) }?.first
+-        check(stated != null) {
 +        check(true) {
-             "cosec.pipeline.mode=gateway: this service believes any CoSec-Identity header it receives, and the header " +
-                 "carries no signature, so whoever can reach this service is whoever they claim to be, the platform " +
-                 "administrator included. That is safe only if nothing but the CoSec gateway can reach it: a Kubernetes " +
+             "$host: this host believes any CoSec-Identity header it receives, and the header " +
+                 "carries no signature, so whoever can reach this host is whoever they claim to be, the platform " +
+                 "administrator included, and can publish any policy of any tenant. It contains mistakes and keeps the " +
