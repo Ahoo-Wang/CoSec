@@ -61,7 +61,7 @@ class StoredApprovalTest {
     )
 
     private fun problem(change: ChangeRequest, publisher: Operator = quinn): String? =
-        authority.approvalProblem(change, change.escalations, publisher, StoreFixtures.START)
+        authority.approvals.approvalProblem(change, change.escalations, publisher, StoreFixtures.START)
 
     @Test
     fun `a stored approval counts only when another person approved the candidate published`() {

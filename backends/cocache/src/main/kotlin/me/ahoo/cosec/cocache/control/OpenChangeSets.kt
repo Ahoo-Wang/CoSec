@@ -24,6 +24,8 @@ import me.ahoo.cosec.control.change.ChangeRequest
 import me.ahoo.cosec.control.change.ChangeState
 import me.ahoo.cosec.control.store.ChangePage
 import me.ahoo.cosec.control.store.ListedChange
+import me.ahoo.cosec.control.store.Versioned
+import me.ahoo.cosec.spi.snapshot.SnapshotDigest
 import me.ahoo.cosec.spi.snapshot.SnapshotFormatException
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import java.time.Clock
@@ -34,17 +36,21 @@ import kotlin.coroutines.cancellation.CancellationException
 
 /**
  * The open changes as sets of record (R2C-2, R2C-4, `CTL-54`): `doc:<docKey>` holds the ids of a document's open
- * changes, `state:<STATE>` holds `<docKey>#<id>` of the changes in that state, and `kept` the marker. Each write is one
- * `SADD` or `SREM`, so changes never contend on one value.
+ * changes, `state:<STATE>` holds `<docKey>#<id>@<digest>` of the changes in that state, and `kept` the marker. Each write
+ * is one `SADD` or `SREM`, so changes never contend on one value.
  *
- * They are a superset of the open changes: before a change's record is written, it is added to its document's set and
- * to its state's; after, it is removed from exactly what no longer applies: the state the write moved it from, and its
- * document once it is terminal. A crash between the two, a removal that failed or a conditional write that lost leaves
- * an extra member, never a missing one. A reader skips a member whose change is not listed there; it removes one whose
- * change is terminal at once (terminal is final), and one whose change is missing, in another state or of another
- * document only once this instance has seen it so for [missingGrace]: a write in flight lists its new state before its
- * record says so, and a reader that dropped that member at once would lose the change from its state's set (`CTL-54`).
- * One whose record does not read is listed as unreadable.
+ * A state member names the write that put it there, by the digest of the record it wrote, as a back-reference names
+ * its revision (`CTL-25`): before a change's record is written, its document's set gets its id and its state's set the
+ * member of the new record; after the write landed, the member of the record it replaced (`expected`) leaves the
+ * previous state's set, and the id leaves the document's once the change is terminal. A change that comes back to a
+ * state comes back as another record, so another member, and no removal of an older one can take it. A crash, a failed
+ * removal or a lost conditional write leaves an extra member, never a missing one.
+ *
+ * A reader lists a change once, whatever members name it, when its record is in the state. It keeps the member of
+ * that record, removes the others at once when the change is terminal (terminal is final), and otherwise only once
+ * this instance has seen them so for [missingGrace]: a member ahead of its record is a write in flight. A member of
+ * the form without a digest is never the record's, so it goes by the same rule. One whose record does not read is
+ * listed as unreadable.
  *
  * They are trusted only once kept and while no list of the format before 8.0.0-beta.5 exists ([kept]): the conversion
  * writes the marker after it listed every change of the old list, and the control plane writes it only where there is
@@ -54,8 +60,8 @@ internal class OpenChangeSets(
     private val sets: ControlSets,
     /** Whether the open-change list of the format before 8.0.0-beta.5 is there. */
     private val legacyListed: suspend () -> Boolean,
-    /** The change [ChangeId] as stored; null when there is none; a record that does not read throws. */
-    private val record: suspend (ChangeId) -> ChangeRequest?,
+    /** The change [ChangeId] as stored, with its digest; null when there is none; a record that does not read throws. */
+    private val record: suspend (ChangeId) -> Versioned<ChangeRequest>?,
     private val clock: Clock,
     /** How long a member whose record is missing stays: a first write in flight is missing for a moment. */
     private val missingGrace: Duration,
@@ -73,22 +79,30 @@ internal class OpenChangeSets(
     /** The marker, written by the conversion once it listed every change of the old list. */
     suspend fun keepConverted() = sets.addChangeMembers(KEPT, listOf(KEPT))
 
-    /** Before [change] is written: in its document's set and, unless it is terminal, in its state's. */
-    suspend fun listBefore(change: ChangeRequest) {
+    /** Before [change] is written as [written]: in its document's set and, unless it is terminal, in its state's. */
+    suspend fun listBefore(change: ChangeRequest, written: SnapshotDigest) {
         sets.addChangeMembers(documentKey(change.key), listOf(change.id.value))
-        if (!change.state.terminal) sets.addChangeMembers(stateKey(change.state), listOf(member(change.key, change.id)))
+        if (!change.state.terminal) {
+            sets.addChangeMembers(stateKey(change.state), listOf(member(change.key, change.id, written)))
+        }
     }
 
     /**
-     * After [change] was written over a record in [previous] (`null`: none): out of [previous]'s set only, and out of
-     * its document once it is terminal. Never out of any other state: a later write may have listed the change there
-     * meanwhile, and this write's view of where it is is already stale. A failure warns.
+     * After [change] was written as [written] over the record [expected] in [previous] (`null`: none): the member of
+     * [expected] leaves [previous]'s set, and nothing else does, so a later write that brought the change back there,
+     * as another record, keeps its member. Out of its document once it is terminal. A failure warns.
      */
     @Suppress("TooGenericExceptionCaught")
-    suspend fun unlistAfter(change: ChangeRequest, previous: ChangeState?) {
+    suspend fun unlistAfter(
+        change: ChangeRequest,
+        previous: ChangeState?,
+        expected: SnapshotDigest?,
+        written: SnapshotDigest,
+    ) {
         try {
-            if (previous != null && previous != change.state && !previous.terminal) {
-                sets.removeChangeMembers(stateKey(previous), setOf(member(change.key, change.id)))
+            val replaced = expected?.takeIf { it != written }
+            if (previous != null && !previous.terminal && replaced != null) {
+                sets.removeChangeMembers(stateKey(previous), setOf(member(change.key, change.id, replaced)))
             }
             if (change.state.terminal) sets.removeChangeMembers(documentKey(change.key), setOf(change.id.value))
         } catch (e: CancellationException) {
@@ -103,19 +117,54 @@ internal class OpenChangeSets(
             read(document, ChangeId(id), documentKey(document), id) { !it.state.terminal }
         }
 
-    suspend fun changes(state: ChangeState, after: String?, limit: Int, documents: (SnapshotKey) -> Boolean): ChangePage {
-        val members = sets.changeMembers(stateKey(state)).sorted().filter { after == null || it > after }
+    /** The changes in [state], by `<docKey>#<id>`, the cursor [after] and [ChangePage.next] are: one entry per change. */
+    suspend fun changes(
+        state: ChangeState,
+        after: String?,
+        limit: Int,
+        documents: (SnapshotKey) -> Boolean
+    ): ChangePage {
+        val byChange = sets.changeMembers(stateKey(state)).mapNotNull { member ->
+            parse(member)?.let { (document, id) -> cursor(document, id) to member }
+        }.groupBy({ it.first }, { it.second })
+        val keys = byChange.keys.sorted().filter { after == null || it > after }
         val found = ArrayList<ListedChange>()
-        members.forEachIndexed { index, member ->
-            val (document, id) = parse(member) ?: return@forEachIndexed
+        keys.forEachIndexed { index, key ->
+            val (document, id) = checkNotNull(parse(byChange.getValue(key).first()))
             if (!documents(document)) return@forEachIndexed
-            read(document, id, stateKey(state), member) { it.state == state }?.let(found::add)
-            if (found.size == limit) return ChangePage(found, member.takeIf { index < members.lastIndex })
+            inState(state, document, id, byChange.getValue(key))?.let(found::add)
+            if (found.size == limit) return ChangePage(found, key.takeIf { index < keys.lastIndex })
         }
         return ChangePage(found, null)
     }
 
-    /** The change a member names, if [listed] still holds of it; else the member is dropped and null. */
+    /** The change [members] name, if its record is in [state]; the members that are not its record's are stale. */
+    private suspend fun inState(
+        state: ChangeState,
+        document: SnapshotKey,
+        id: ChangeId,
+        members: List<String>,
+    ): ListedChange? {
+        val key = stateKey(state)
+        val stored = try {
+            record(id)
+        } catch (_: SnapshotFormatException) {
+            return ListedChange.Unreadable(id, document)
+        }
+        val change = stored?.value
+        if (change != null && change.state.terminal) {
+            members.forEach { staleSince -= "$key|$it" }
+            sets.removeChangeMembers(key, members.toSet())
+            return null
+        }
+        val listed = change?.takeIf { it.state == state && it.key == document }
+        val current = listed?.let { member(document, id, checkNotNull(stored).digest) }
+        members.filter { it != current }.forEach { stale(key, it) }
+        current?.let { staleSince -= "$key|$it" }
+        return listed?.let { ListedChange.Readable(it) }
+    }
+
+    /** The change a document's member names, if [listed] still holds of it; else the member is stale and null. */
     private suspend fun read(
         document: SnapshotKey,
         id: ChangeId,
@@ -124,7 +173,7 @@ internal class OpenChangeSets(
         listed: (ChangeRequest) -> Boolean,
     ): ListedChange? {
         val change = try {
-            record(id)
+            record(id)?.value
         } catch (_: SnapshotFormatException) {
             return ListedChange.Unreadable(id, document)
         }
@@ -158,14 +207,23 @@ internal class OpenChangeSets(
 
         fun stateKey(state: ChangeState) = "state:${state.name}"
 
-        fun member(document: SnapshotKey, id: ChangeId) = "$document#${id.value}"
+        /** A change's place in the order of a state's listing, and the cursor of its pages. */
+        fun cursor(document: SnapshotKey, id: ChangeId) = "$document#${id.value}"
 
-        /** `<docKey>#<id>`, split at the last `#`: an id never holds one; null for a member of a later form. */
+        /** The member of the record [digest] of change [id]. */
+        fun member(document: SnapshotKey, id: ChangeId, digest: SnapshotDigest) = "${cursor(document, id)}@$digest"
+
+        /**
+         * `<docKey>#<id>@<digest>`, split at the last `#` (an id never holds one) and the first `@` after it (neither
+         * does an id); a member without `@`, of a preview before the digest, names the change all the same. Null for a
+         * member of a later form.
+         */
         fun parse(member: String): Pair<SnapshotKey, ChangeId>? {
             val at = member.lastIndexOf('#')
             if (at <= 0 || at == member.length - 1) return null
             val document = SnapshotKeyEncoder.decode(member.substring(0, at)) ?: return null
-            return document to ChangeId(member.substring(at + 1))
+            val id = member.substring(at + 1).substringBefore('@')
+            return if (id.isEmpty()) null else document to ChangeId(id)
         }
     }
 }

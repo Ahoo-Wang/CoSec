@@ -1,0 +1,18 @@
+# Rule: SCP-3
+# Mutant: an anonymous request whose scope is rejected is answered scope-rejected (403) as an authenticated one is, not 401
+# Tests: :runtime:test --tests me.ahoo.cosec.runtime.PipelineTest :conformance:test --tests me.ahoo.cosec.conformance.ConformanceTest
+
+diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/http/StatusMapping.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/http/StatusMapping.kt
+index 3449a6d1d..fb3042c47 100644
+--- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/http/StatusMapping.kt
++++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/http/StatusMapping.kt
+@@ -127,7 +127,8 @@ internal object StatusMapping {
+             if (decision.by is StatementRef.ScopeRejected) ProblemType.SCOPE_REJECTED else ProblemType.FORBIDDEN
+ 
+         // An anonymous principal has no memberships, so authenticating is all it can do, scope rejected or not.
+-        AuthnResult.Anonymous, is AuthnResult.Unavailable -> ProblemType.UNAUTHORIZED
++        AuthnResult.Anonymous, is AuthnResult.Unavailable ->
++            if (decision.by is StatementRef.ScopeRejected) ProblemType.SCOPE_REJECTED else ProblemType.UNAUTHORIZED
+     }
+ 
+     /** [outcome], forwarding [identity] to the services behind the gateway, or stripping the header when null. */

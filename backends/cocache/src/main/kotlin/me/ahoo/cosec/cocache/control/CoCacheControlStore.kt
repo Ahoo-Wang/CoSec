@@ -229,16 +229,17 @@ class CoCacheControlStore internal constructor(
     private val openChanges = OpenChangeSets(
         sets,
         { read(lists, OPEN_CHANGES) != null },
-        { id -> read(changes, id, "Change [${id.value}]")?.first },
+        { id -> change(id) },
         clock,
         missingGrace,
     )
 
-    /** Listed before the write, in its document's set and its state's, and unlisted after from what no longer applies. */
+    /** Listed before the write as the record it writes, and the record it replaced unlisted after (`CTL-54`). */
     override suspend fun putChange(expected: SnapshotDigest?, change: ChangeRequest, previous: ChangeState?): Boolean {
-        openChanges.listBefore(change)
-        val written = put(changes, change.id, expected, change, digest(ChangeRequestCacheCodec, change)) is Put.Written
-        if (written) openChanges.unlistAfter(change, previous)
+        val digest = digest(ChangeRequestCacheCodec, change)
+        openChanges.listBefore(change, digest)
+        val written = put(changes, change.id, expected, change, digest) is Put.Written
+        if (written) openChanges.unlistAfter(change, previous, expected, digest)
         return written
     }
 
@@ -261,7 +262,11 @@ class CoCacheControlStore internal constructor(
 
     /** Lists [change] in the open-change sets: the conversion of a change the old list names (`CTL-54`). */
     @InternalCoSecApi
-    suspend fun listOpenChange(change: ChangeRequest) = openChanges.listBefore(change)
+    suspend fun listOpenChange(change: ChangeRequest) {
+        // As stored: a record an earlier preview wrote may not encode to the bytes this version would write.
+        val stored = change(change.id) ?: return
+        openChanges.listBefore(stored.value, stored.digest)
+    }
 
     /** Keeps the open-change sets, then removes the old list: the conversion's last two writes (`CTL-54`). */
     @InternalCoSecApi

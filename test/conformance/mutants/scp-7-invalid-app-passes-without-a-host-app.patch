@@ -1,0 +1,17 @@
+# Rule: SCP-7
+# Mutant: a credential's app that cannot be an app id is rejected only on a host that has an app; without one it is carried into the scope
+# Tests: :model:test --tests me.ahoo.cosec.model.scope.ScopeResolverTest :conformance:test --tests me.ahoo.cosec.conformance.ConformanceTest
+
+diff --git a/core/model/src/main/kotlin/me/ahoo/cosec/model/scope/ScopeResolver.kt b/core/model/src/main/kotlin/me/ahoo/cosec/model/scope/ScopeResolver.kt
+index 772967381..fa120f563 100644
+--- a/core/model/src/main/kotlin/me/ahoo/cosec/model/scope/ScopeResolver.kt
++++ b/core/model/src/main/kotlin/me/ahoo/cosec/model/scope/ScopeResolver.kt
+@@ -71,7 +71,7 @@ object ScopeResolver {
+     /** [space] is what the client selects (`CoSec-Space-Id`), empty for none. */
+     fun resolve(subject: ScopeSubject, space: String, host: HostScope): ScopeResolution {
+         val credentialApp = subject.app
+-        if (credentialApp != null && !isValidAppId(credentialApp)) {
++        if (credentialApp != null && host.app != null && !isValidAppId(credentialApp)) {
+             return APP_MISMATCH
+         }
+         val hostApp = host.app

@@ -126,8 +126,7 @@ internal class Retention(
             return true
         }
         val stored = store.head(key) ?: return true
-        val entries = index.entries.filter { it.revision <= stored.document.revision }
-        return !HistoryRepair.agrees(entries, index.floor, stored)
+        return !HistoryRepair.agrees(index, stored)
     }
 
     @Suppress("TooGenericExceptionCaught")

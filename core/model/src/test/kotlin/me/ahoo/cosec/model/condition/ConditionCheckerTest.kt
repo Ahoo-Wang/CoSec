@@ -126,6 +126,9 @@ class ConditionCheckerTest {
         ).message.assert().isEqualTo("a Bool does not compare with subject.id (String)")
         single(Condition.Eq("subject.id", Operand.Attr("subject.authenticated"))).message
             .assert().isEqualTo("subject.authenticated (Bool) does not compare with subject.id (String)")
+        // The same, from the Bool side (CND-4): the left attribute's type is not exempt.
+        single(Condition.Eq("subject.authenticated", Operand.Attr("subject.id"))).message
+            .assert().isEqualTo("subject.id (String) does not compare with subject.authenticated (Bool)")
         single(
             Condition.Eq("scope.roles", Operand.Attr("subject.roles"))
         ).message.assert().isEqualTo("`eq` does not apply to scope.roles (Set<String>)")

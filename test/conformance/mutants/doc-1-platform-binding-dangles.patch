@@ -1,0 +1,18 @@
+# Rule: DOC-1
+# Mutant: a binding of the platform document may name a policy the platform does not define: it compiles and dangles
+# Tests: :engine:test --tests me.ahoo.cosec.engine.CompiledDocumentTest :conformance:test --tests me.ahoo.cosec.conformance.ConformanceTest
+
+diff --git a/core/engine/src/main/kotlin/me/ahoo/cosec/engine/BoundEntries.kt b/core/engine/src/main/kotlin/me/ahoo/cosec/engine/BoundEntries.kt
+index 27a460c91..42a8ac226 100644
+--- a/core/engine/src/main/kotlin/me/ahoo/cosec/engine/BoundEntries.kt
++++ b/core/engine/src/main/kotlin/me/ahoo/cosec/engine/BoundEntries.kt
+@@ -89,9 +89,6 @@ internal fun boundEntry(
+     requireReachable(kind, owner, binding)
+     val local = if (policyId == BuiltinPolicies.ROOT.value) BuiltinPolicies.root else policies[policyId]
+     require(policyId !in boundaries) { "Binding ${binding.id.value} binds boundary policy $policyId" }
+-    require(local != null || kind != DocumentKind.PLATFORM) {
+-        "Binding ${binding.id.value} of the platform document names policy $policyId, which it does not define"
+-    }
+     return BoundEntry(
+         via = BindingRef.Bound(binding.id, kind),
+         policyId = policyId,

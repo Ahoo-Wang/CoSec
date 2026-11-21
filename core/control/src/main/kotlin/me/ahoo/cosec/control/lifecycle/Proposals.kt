@@ -56,6 +56,7 @@ internal class Proposals(
     private val ids: () -> ChangeId,
     private val clock: Clock,
     private val authority: ChangeAuthority,
+    private val rules: ApprovalRules,
     private val candidates: CandidateChecks,
     private val listeners: ChangeListeners,
 ) {
@@ -241,7 +242,7 @@ internal class Proposals(
      */
     suspend fun rebase(author: Operator, id: ChangeId): ChangeRequest {
         val change = flow.visible(author, id)
-        authority.requireAuthor(author, change, "rebases")
+        rules.requireAuthor(author, change, "rebases")
         PublishRules.requireState(change, ChangeStep.REBASE.from)
         candidates.authorize(author, change)
         return flow.transition(id, ChangeStep.REBASE) { current ->

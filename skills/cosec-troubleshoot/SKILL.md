@@ -602,6 +602,12 @@ wrote it again, and the open-change sets are not trusted until `cosec-migrate re
 it and removes it (`CTL-54`). Stop every older control plane and run the command; a `FAILED change [<id>] does not read`
 line names a change record to remove or fix before the next run.
 
+A shadow window that does not close while the control plane logs `Shadow window <w> of change <c> is waiting for
+[<instances>]` lost the report of an instance that had reported on it (stopped, scaled down, a Redis failover). Its
+evidence is missing, so the window waits for it (`CTL-56`); an instance that still serves reports again within its
+report interval. Otherwise the window closes insufficient at `cosec.control.shadow.max-duration`, naming the instance in
+`vanished`: publish with the summary acknowledged, or abandon and stage again.
+
 A shadow window that stays blocked has a `CANDIDATE_ERROR`: one instance cannot compile the candidate, usually because
 it reads an `ext.*` attribute whose provider runs on the control host but not on that instance. Providers and their
 declared types must match on every instance and the control host; the change is never published while blocked.

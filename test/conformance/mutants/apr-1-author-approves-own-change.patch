@@ -3,14 +3,14 @@
 # Tests: :control:test --tests me.ahoo.cosec.control.authz.ControlAuthorizationTest :conformance:test --tests me.ahoo.cosec.conformance.ConformanceTest
 
 diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ApprovalRules.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ApprovalRules.kt
-index f162ed6b..7c06d9c6 100644
+index efb8f055b..535de54be 100644
 --- a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ApprovalRules.kt
 +++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ApprovalRules.kt
-@@ -83,7 +83,6 @@ internal class ApprovalRules(
+@@ -84,7 +84,6 @@ internal class ApprovalRules(
      /** That [operator] may approve [change]'s [candidate]: not its author, a person, and the digest it has now. */
      fun requireApprovable(operator: Operator, change: ChangeRequest, candidate: String) {
          val refusal = when {
--            operator.actor == change.author -> FORBIDDEN to "the author of change ${change.id.value} cannot approve it"
+-            isOwn(operator.actor, change) -> FORBIDDEN to "the author of change ${change.id.value} cannot approve it"
              else -> approvalRefusal(operator, change)?.let { FORBIDDEN to it }
                  ?: (CONFLICT to "change ${change.id.value} is not candidate $candidate").takeIf { change.candidate != candidate }
          }

@@ -24,16 +24,23 @@ import java.time.Instant
 internal object ShadowStateCodec {
     internal fun tree(shadow: ShadowState): ObjectNode {
         val node = factory.objectNode().put("window", shadow.window).put("startedAt", shadow.startedAt.toString())
-        shadow.closed?.let { closed ->
-            val summary = node.putObject("closed")
-                .put("closedAt", closed.closedAt.toString())
-                .put("insufficient", closed.insufficient)
-                .put("blocked", closed.blocked)
-            val counts = summary.putObject("counts")
-            closed.counts.toSortedMap().forEach { (outcome, count) -> counts.put(outcome, count) }
-        }
+        shadow.closed?.let { summary(node.putObject("closed"), it) }
         if (shadow.reporters.isNotEmpty()) {
             node.putArray("reporters").apply { shadow.reporters.sorted().forEach { add(it) } }
+        }
+        return node
+    }
+
+    /** A closed window's summary, as the change record and the audit event write it. */
+    internal fun summary(node: ObjectNode, closed: ShadowSummary): ObjectNode {
+        node.put("closedAt", closed.closedAt.toString())
+            .put("insufficient", closed.insufficient)
+            .put("blocked", closed.blocked)
+        val counts = node.putObject("counts")
+        closed.counts.toSortedMap().forEach { (outcome, count) -> counts.put(outcome, count) }
+        // Optional within the record's format: an older writer that drops it leaves the window insufficient all the same.
+        if (closed.vanished.isNotEmpty()) {
+            node.putArray("vanished").apply { closed.vanished.sorted().forEach { add(it) } }
         }
         return node
     }
@@ -48,6 +55,7 @@ internal object ShadowStateCodec {
                     Instant.parse(closed.need("closedAt").text()),
                     closed.need("insufficient").asBoolean(),
                     closed.need("blocked").asBoolean(),
+                    closed.get("vanished")?.values()?.mapTo(LinkedHashSet()) { it.text() }.orEmpty(),
                 )
             },
             node.get("reporters")?.values()?.mapTo(LinkedHashSet()) { it.text() }.orEmpty(),

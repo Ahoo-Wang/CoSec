@@ -1,0 +1,16 @@
+# Rule: RTE-3
+# Mutant: a route map with no routes loads, as if the host had no map
+# Tests: :document:test --tests me.ahoo.cosec.document.route.RouteMapTest :conformance:test --tests me.ahoo.cosec.conformance.ConformanceTest
+
+diff --git a/core/document/src/main/kotlin/me/ahoo/cosec/document/route/RouteMapCodec.kt b/core/document/src/main/kotlin/me/ahoo/cosec/document/route/RouteMapCodec.kt
+index 0fa750038..9bafe3945 100644
+--- a/core/document/src/main/kotlin/me/ahoo/cosec/document/route/RouteMapCodec.kt
++++ b/core/document/src/main/kotlin/me/ahoo/cosec/document/route/RouteMapCodec.kt
+@@ -52,7 +52,6 @@ object RouteMapCodec {
+         val service = text(root, "service", "$", ::fail)
+         val routes = root.get("routes")?.takeIf { it.isArray } ?: fail("$.routes", "is required, an array")
+         // It would load as if the host had no map, the failure RTE-3 exists to stop: a generator that saw nothing, a cut file.
+-        if (routes.isEmpty) fail("$.routes", "has no routes; a host without a route map sets no location for one")
+         return RouteMapDocument(
+             service,
+             routes.values().mapIndexed { i, node ->

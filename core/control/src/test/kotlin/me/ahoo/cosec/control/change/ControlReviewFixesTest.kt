@@ -296,25 +296,25 @@ class ControlReviewFixesTest {
             "x"
         )
         val needed = listOf(Escalation("document platform", Escalation.Reason.NOT_ANALYZED))
-        authority.approverProblem(change, emptyList(), walt).assert().isNull()
-        authority.approverProblem(change, needed, walt).assert().isEqualTo("it needs an approval")
+        authority.approvals.approverProblem(change, emptyList(), walt).assert().isNull()
+        authority.approvals.approverProblem(change, needed, walt).assert().isEqualTo("it needs an approval")
         val unrecorded = change.copy(
             approval = Approval(pia.actor, clock.now, change.candidate!!, listOf("document platform"))
         )
-        authority.approverProblem(
+        authority.approvals.approverProblem(
             unrecorded,
             needed,
             walt
         ).assert().isEqualTo("the approval does not say what its approver held")
         val credentialless = unrecorded.copy(approval = unrecorded.approval!!.copy(memberships = pia.memberships))
         // Review item 4: an approval that names no credential is one from before the upgrade, or an older instance's.
-        authority.approverProblem(credentialless, needed, walt).assert()
+        authority.approvals.approverProblem(credentialless, needed, walt).assert()
             .isEqualTo("the approval does not say what credential its approver approved with")
         val recorded = credentialless.copy(approval = credentialless.approval!!.copy(credentialId = "token-pia"))
-        authority.approverProblem(recorded, needed, walt).assert().isNull()
+        authority.approvals.approverProblem(recorded, needed, walt).assert().isNull()
         // A publisher without the request it came in through gives nothing to check the approver in.
         val detached = me.ahoo.cosec.control.authz.Operator(walt.actor, walt.memberships)
-        authority.approverProblem(recorded, needed, detached).assert()
+        authority.approvals.approverProblem(recorded, needed, detached).assert()
             .isEqualTo("the approver's right to approve cannot be checked again")
     }
 

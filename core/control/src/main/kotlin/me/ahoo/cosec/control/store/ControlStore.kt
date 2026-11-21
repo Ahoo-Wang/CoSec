@@ -106,9 +106,10 @@ interface ControlStore : CandidateStore {
     /**
      * Writes the change request if the store still holds [expected] (`null`: only if there is none): every state
      * transition is one such write (RFC 0007 §6.1). `false` when it changed in between. [previous] is the state of the
-     * record [expected] names (`null` with no record): a store that lists changes by state takes the change out of
+     * record [expected] names (`null` with no record): a store that lists changes by state takes that record out of
      * that state's listing alone (`CTL-54`), so a caller that leaves it out costs that store a stale member, which it
-     * reads and drops later, never a wrong listing.
+     * reads and drops later, never a wrong listing. A write never repeats an earlier record of the change: the
+     * lifecycle writes each one later (`updatedAt`) than the record it replaces.
      */
     suspend fun putChange(expected: SnapshotDigest?, change: ChangeRequest, previous: ChangeState? = null): Boolean
 
