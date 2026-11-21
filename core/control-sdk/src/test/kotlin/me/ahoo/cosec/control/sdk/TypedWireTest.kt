@@ -130,6 +130,7 @@ class TypedWireTest {
         ChangeKind.KNOWN.map { it.text }.assert().isEqualTo(wire("kind"))
         Severity.KNOWN.map { it.text }.assert().isEqualTo(wire("severity"))
         EscalationReason.KNOWN.map { it.text }.assert().isEqualTo(wire("escalationReason"))
+        ConflictKind.KNOWN.map { it.text }.assert().isEqualTo(wire("conflict"))
         val definitions = json("schema/8.0/definitions.schema.json").get("definitions")
         Effect.KNOWN.map { it.text }.assert().isEqualTo(
             definitions.get("effect").get("enum").values().map { it.asString() }

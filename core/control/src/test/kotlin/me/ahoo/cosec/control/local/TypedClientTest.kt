@@ -33,8 +33,10 @@ import me.ahoo.cosec.control.sdk.CatalogPermission
 import me.ahoo.cosec.control.sdk.ChangeRequest
 import me.ahoo.cosec.control.sdk.ChangeState
 import me.ahoo.cosec.control.sdk.Condition
+import me.ahoo.cosec.control.sdk.ConflictKind
 import me.ahoo.cosec.control.sdk.ControlCaller
 import me.ahoo.cosec.control.sdk.ControlClient
+import me.ahoo.cosec.control.sdk.ControlRefusedException
 import me.ahoo.cosec.control.sdk.ControlService
 import me.ahoo.cosec.control.sdk.DocumentContent
 import me.ahoo.cosec.control.sdk.Effect
@@ -50,6 +52,7 @@ import me.ahoo.cosec.document.json.CoSecJson
 import me.ahoo.cosec.runtime.identity.IdentityGate
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.test.asserts.assert
+import me.ahoo.test.asserts.assertThrownBy
 import org.junit.jupiter.api.Test
 import tools.jackson.databind.JsonNode
 import java.lang.reflect.Proxy
@@ -270,5 +273,12 @@ class TypedClientTest {
         val open = runBlocking { client.changes(alice, document = acme) }
         open.items.map { it.id }.assert().contains(applied.id)
         runBlocking { client.abandon(alice, applied.id) }.state.assert().isEqualTo(ChangeState.ABANDONED)
+
+        // A proposal on a revision that is no longer the head: a refusal that says to read again (CTL-80).
+        val stale = assertThrownBy<ControlRefusedException> {
+            runBlocking { client.propose(alice, ChangeRequest(acme, 1, listOf(Operation.PutPolicy(more)), "stale")) }
+        }.actual()
+        stale.status.assert().isEqualTo(409)
+        stale.conflict.assert().isEqualTo(ConflictKind.BASE_MOVED)
     }
 }
