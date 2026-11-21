@@ -47,6 +47,11 @@ class ChangeOriginTest {
         origin.via?.method.assert().isEqualTo("test")
         origin.via?.credentialId.assert().isEqualTo("token-alice")
         origin.via?.requestId.assert().isNotNull()
+        // Best-effort listeners hear it afterwards.
+        val deadline = System.nanoTime() + 5_000_000_000L
+        while (fixture.events.isEmpty() && System.nanoTime() < deadline) {
+            kotlinx.coroutines.delay(10)
+        }
         fixture.events.map { it.origin }.assert().isNotEmpty().doesNotContainNull()
         fixture.events.first().origin.assert().isEqualTo(origin)
     }

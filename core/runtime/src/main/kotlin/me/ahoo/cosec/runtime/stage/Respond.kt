@@ -38,7 +38,6 @@ internal object Respond : Stage {
                 request.memberships,
                 request.request,
                 request.attributes,
-                peer = state.facts.peerAddress,
             )
         }
         return StatusMapping.decided(

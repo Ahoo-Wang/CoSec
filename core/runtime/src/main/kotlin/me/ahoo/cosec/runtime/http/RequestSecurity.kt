@@ -53,8 +53,6 @@ class RequestSecurity internal constructor(
     internal val attributes: ConditionInput = AbsentAttributes,
     /** In a service behind a gateway (`cosec.pipeline.mode=gateway`), the identity the gateway forwarded. */
     val identity: Identity? = null,
-    /** The address of the connection the request arrived on ([HttpFacts.peerAddress]); null when the adapter has none. */
-    val peer: String? = null,
 ) {
     /**
      * Set once the adapter that bound this request has ended it ([end]). A field, not an object: it fits in the padding
@@ -115,7 +113,7 @@ class RequestSecurity internal constructor(
         val member = ScopeSubject(scope.tenant, true, memberships, authenticated.app?.value)
         val resolved = ScopeResolver.resolve(member, "", HostScope(app))
         val scope = (resolved as? ScopeResolution.Resolved)?.scope ?: return null
-        return RequestSecurity(requestId, authenticated, scope, memberships, request, attributes, peer = peer)
+        return RequestSecurity(requestId, authenticated, scope, memberships, request, attributes)
     }
 
     /**
@@ -143,7 +141,7 @@ class RequestSecurity internal constructor(
             breakGlass = principal.breakGlass,
         )
         val request = with(request) { AuthzRequest(subject, action, resource, environment) }
-        return RequestSecurity(requestId, principal, scope, memberships, request, attributes, peer = peer)
+        return RequestSecurity(requestId, principal, scope, memberships, request, attributes)
     }
 
     /**

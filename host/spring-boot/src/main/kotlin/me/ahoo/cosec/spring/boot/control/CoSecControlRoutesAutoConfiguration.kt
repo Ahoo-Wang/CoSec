@@ -134,7 +134,8 @@ internal class CoSecControlRoutesAutoConfiguration {
                                 request.method().name(),
                                 relative(request.path(), base),
                                 request.queryParams().toSingleValueMap(),
-                                bytes
+                                bytes,
+                                ControlPeer.of(request.exchange()),
                             ),
                             security,
                         )

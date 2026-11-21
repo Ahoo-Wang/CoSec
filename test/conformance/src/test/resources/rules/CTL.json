@@ -797,13 +797,14 @@
     {
       "id": "CTL-57",
       "source": "maintainer decision 2026-11-21 (the control-plane host's callers, \"按你推荐\"); control-server-design §0.2",
-      "statement": "A control-plane change records how its author was identified, and each change event how the operator of its step was (`origin`): `asserted` is true when the host believed the identity the caller stated (the `CoSec-Identity` header, `STA-9`) instead of verifying a credential itself; `via` is the credential as stated or verified (its method, its id, never its value, and the request's id); `peer` is the address of the connection the request arrived on, which the caller does not choose, where the client address a request states is the caller's. A step no request drives, a maintenance pass for one, records none. The member is additive: a stored change without it reads, and a reader that does not know it ignores it. An event written as JSON carries the member only when it has one.",
+      "statement": "A control-plane change records how its author was identified, and each change event how the operator of its step was (`origin`): `asserted` is true when the host believed the identity the caller stated (the `CoSec-Identity` header, `STA-9`) instead of verifying a credential itself; `via` is the credential as stated or verified (its method, its id, never its value, and the request's id); `peer` is the address of the connection the request arrived on, read from the Reactor Netty channel beneath any forwarded-header handling (`server.forward-headers-strategy`, a `ForwardedHeaderTransformer`), so that a caller cannot state it as it states its client address; a host that cannot read it that way, any but Reactor Netty, records none. It is read where the control routes are served, never on the request path of the others. A step no request drives, a maintenance pass for one, records none. The member is additive: a stored change without it reads, and a reader that does not know it ignores it. An event written as JSON carries the member only when it has one.",
       "level": "build",
       "pending": null,
       "guards": [
         "control:ChangeOriginTest#a change records how its author was identified, and each event how its step's operator was",
         "control:ChangeOriginTest#an origin is stored with its change and written with its event, with the members it has",
-        "spring-boot:ForwardedIdentityCallerTest#the operator of a request the identity gate decided is recorded as asserted, with the credential stated and the peer"
+        "spring-boot:ForwardedIdentityCallerTest#the operator of a request the identity gate decided is recorded as asserted, with the credential stated and the peer",
+        "spring-boot:ControlServicePortTest#the peer of a control request is the connection's, beneath the forwarded header handling"
       ]
     },
     {
@@ -826,11 +827,12 @@
     {
       "id": "CTL-59",
       "source": "maintainer decision 2026-11-21 (the control-plane host's replicas and embedders); control-server-design §0.6",
-      "statement": "`cosec.control.maintenance.enabled=false` runs none of the control plane's maintenance passes on the instance (reclaiming revisions, closing shadow windows, reconciling the app list and the staged list), for an instance that only serves, such as an IAM service that embeds the control plane beside a host that runs them; the default runs them, on every instance. The control plane itself stays wired either way.",
+      "statement": "`cosec.control.maintenance.enabled=false` runs none of the control plane's maintenance passes on the instance (reclaiming revisions, closing shadow windows, reconciling the app list and the staged list), for an instance that only serves, such as an IAM service that embeds the control plane beside a host that runs them; the default runs them, on every instance. The control plane itself stays wired either way. A host with it off says so once at startup, at INFO: no pass is run by it, and another control host must run them.",
       "level": "startup",
       "pending": null,
       "guards": [
-        "spring-boot:ControlServicePortTest#cosec control maintenance enabled false runs no maintenance pass, and the default runs them"
+        "spring-boot:ControlServicePortTest#cosec control maintenance enabled false runs no maintenance pass, and the default runs them",
+        "spring-boot:ControlServicePortTest#a host that runs no maintenance pass says so, and one that runs them says nothing"
       ]
     },
     {

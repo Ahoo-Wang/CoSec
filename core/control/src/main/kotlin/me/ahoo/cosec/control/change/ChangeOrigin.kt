@@ -53,13 +53,13 @@ class ChangeOrigin(
     @InternalCoSecApi
     companion object {
         /** The origin of a permitted request: asserted when the host's gate believed the identity it states. */
-        fun of(security: RequestSecurity): ChangeOrigin {
+        fun of(security: RequestSecurity, peer: String? = null): ChangeOrigin {
             val identity = security.identity
             val credential = identity?.credential ?: security.principal?.credential
             return ChangeOrigin(
                 asserted = identity != null,
                 via = credential?.let { Via(it.method.value, it.id, security.requestId) },
-                peer = security.peer,
+                peer = peer,
             )
         }
     }

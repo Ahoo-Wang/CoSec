@@ -268,7 +268,7 @@ class ForwardedIdentityCallerTest {
         documents.notifyChanged(SnapshotKey.Platform)
     }
 
-    private fun facts(header: String?, peer: String? = null) = HttpFacts(
+    private fun facts(header: String?) = HttpFacts(
         method = "GET",
         rawPath = "/cosec/control/v1/documents/platform",
         rawQuery = null,
@@ -276,7 +276,6 @@ class ForwardedIdentityCallerTest {
         cookies = Cookies.of(emptyMap()),
         remoteAddress = "10.0.0.1",
         host = HostScope(null),
-        peerAddress = peer,
     )
 
     /** The operator of a request that states [principal], as a gateway or a trusted service would. */
@@ -298,9 +297,9 @@ class ForwardedIdentityCallerTest {
             requestId = "req-$principal",
         )
         val outcome = runBlocking {
-            context.getBean(RequestGate::class.java).evaluate(facts(IdentityCodec.encode(identity), peer))
+            context.getBean(RequestGate::class.java).evaluate(facts(IdentityCodec.encode(identity)))
         }
-        return Operator.of(outcome.security!!)!!
+        return Operator.of(outcome.security!!, peer)!!
     }
 
     private companion object {

@@ -50,7 +50,6 @@ object ServletHttpFactsReader {
             cookies = Cookies.view { name -> cookies(request, name) },
             remoteAddress = remoteIpResolver.resolve(request),
             host = host,
-            peerAddress = request.remoteAddr,
         )
     }
 

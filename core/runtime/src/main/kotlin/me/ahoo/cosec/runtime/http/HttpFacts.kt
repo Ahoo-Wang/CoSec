@@ -53,13 +53,6 @@ class HttpFacts(
      * or cannot be an app id (RC1-6, RC1-15). Null elsewhere, and for a route without it.
      */
     val routeApp: Any? = null,
-    /**
-     * The address of the connection the request arrived on, as the server saw it, with no `X-Forwarded-For` and no
-     * resolver in between: null when the adapter did not read it. Not a decision input ([remoteAddress] is that): a
-     * service that calls a host directly states its own client address, so the control plane records the peer next to
-     * what the caller stated (`CTL-57`).
-     */
-    val peerAddress: String? = null,
 )
 
 /** Request headers. Names are case-insensitive (RFC 9110 §5.1). */

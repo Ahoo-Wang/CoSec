@@ -25,6 +25,7 @@ object GuardAllowlist {
     val GUARDS: Map<String, Set<String>> = mapOf(
         "build" to setOf(
             // CTL-57, CTL-58: how a step was identified, and the service profile of the control API.
+            "spring-boot:ControlServicePortTest#the peer of a control request is the connection's, beneath the forwarded header handling",
             "control:ChangeOriginTest#a change records how its author was identified, and each event how its step's operator was",
             "control:ChangeOriginTest#an origin is stored with its change and written with its event, with the members it has",
             "spring-boot:ForwardedIdentityCallerTest#the operator of a request the identity gate decided is recorded as asserted, with the credential stated and the peer",
@@ -289,6 +290,9 @@ object GuardAllowlist {
         ),
         "startup" to setOf(
             // CTL-59: an instance that only serves runs no maintenance pass.
+            "spring-boot:ControlServicePortTest#a host that runs no maintenance pass says so, and one that runs them says nothing",
+            // STA-9: the gateway's key is refused beside a service port.
+            "spring-boot:ControlServicePortTest#a service port beside the application's, the management port or a disabled control API is refused",
             "spring-boot:ControlServicePortTest#cosec control maintenance enabled false runs no maintenance pass, and the default runs them",
             // STA-6, STA-7: a service behind a gateway states its network boundary and runs no hidden-method filter.
             "spring-boot:GatewayModeTrustTest#a service in gateway mode does not start until the operator states the boundary, and the message says what to write",

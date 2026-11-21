@@ -67,6 +67,20 @@ internal object ControlServicePort {
         }
     }
 
+    /** What a host with the maintenance passes off says at startup (`CTL-59`), or null when it runs them. */
+    fun maintenanceNotice(environment: Environment): String? {
+        val enabled = Binder.get(
+            environment
+        ).bind(ControlProperties.MAINTENANCE_ENABLED_KEY, Boolean::class.javaObjectType)
+            .orElse(true)
+        if (enabled != false) {
+            return null
+        }
+        return "This host runs no control-plane maintenance pass (${ControlProperties.MAINTENANCE_ENABLED_KEY}=false): " +
+            "no shadow window is closed, no revision reclaimed and no staged list reconciled by it. Another control " +
+            "host must run them (CTL-59)."
+    }
+
     /** The refusal that needs the beans: a service port with no stack to serve it (Spring MVC). */
     fun requireListener(environment: Environment, beans: ListableBeanFactory) {
         if (Binder.get(environment).bind(KEY, Int::class.javaObjectType).isBound &&

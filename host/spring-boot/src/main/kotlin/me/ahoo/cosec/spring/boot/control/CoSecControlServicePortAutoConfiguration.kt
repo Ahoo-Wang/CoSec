@@ -15,6 +15,7 @@
 
 package me.ahoo.cosec.spring.boot.control
 
+import io.github.oshai.kotlinlogging.KotlinLogging
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.spring.boot.ConditionalOnCoSecEnabled
 import me.ahoo.cosec.spring.boot.StartupTask
@@ -26,10 +27,13 @@ import org.springframework.context.annotation.Conditional
 import org.springframework.context.annotation.Import
 import org.springframework.core.env.Environment
 
+private val log = KotlinLogging.logger {}
+
 /**
  * The service port's refusals (`CTL-58`, [ControlServicePort]), on every host that runs the control plane, whether or
  * not it serves the control API's routes: a port with the API off, or beside the gateway's statement, is a configuration
- * mistake either way.
+ * mistake either way. It also says, once, that this host runs no maintenance pass when `cosec.control.maintenance.enabled`
+ * is off.
  */
 @AutoConfiguration(after = [CoSecControlAutoConfiguration::class])
 @ConditionalOnCoSecEnabled
@@ -40,6 +44,12 @@ internal class CoSecControlServicePortAutoConfiguration {
     @Bean
     fun cosecControlServicePortCheck(environment: Environment, beans: ListableBeanFactory): StartupTask =
         StartupTask.AfterSingletons { ControlServicePort.requireListener(environment, beans) }
+
+    /** `CTL-59`: a host that runs no maintenance pass says so, once, where an operator reads it. */
+    @Bean
+    fun cosecControlMaintenanceNotice(environment: Environment): StartupTask = StartupTask.AfterSingletons {
+        ControlServicePort.maintenanceNotice(environment)?.let { log.info { it } }
+    }
 
     companion object {
         /** Static, so Spring runs it with the post-processors, before any bean: what the environment alone refuses. */

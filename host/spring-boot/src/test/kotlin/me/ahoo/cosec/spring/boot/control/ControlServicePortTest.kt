@@ -185,6 +185,68 @@ class ControlServicePortTest {
     }
 
     @Test
+    fun `a host that runs no maintenance pass says so, and one that runs them says nothing`() {
+        ControlServicePort.maintenanceNotice(MockEnvironment()).assert().isNull()
+        ControlServicePort.maintenanceNotice(
+            MockEnvironment().withProperty("cosec.control.maintenance.enabled", "true")
+        )
+            .assert().isNull()
+        ControlServicePort.maintenanceNotice(
+            MockEnvironment().withProperty("cosec.control.maintenance.enabled", "false")
+        )
+            .assert().contains("runs no control-plane maintenance pass").contains("Another control host must run them")
+    }
+
+    /**
+     * The peer is the connection's: a Reactor Netty server that reads `X-Forwarded-For` and `Forwarded`
+     * (`server.forward-headers-strategy=native` configures that on the application's) shows the caller's claim as the
+     * request's remote address, and the control routes still read the address the TCP stack saw.
+     */
+    @Test
+    fun `the peer of a control request is the connection's, beneath the forwarded header handling`() {
+        val seen = java.util.concurrent.atomic.AtomicReference<Pair<String?, String?>>()
+        // First of the chain: the pipeline's own filter answers a request nothing permitted before the later ones run.
+        val probe = object : org.springframework.web.server.WebFilter, org.springframework.core.Ordered {
+            override fun filter(
+                exchange: org.springframework.web.server.ServerWebExchange,
+                chain: org.springframework.web.server.WebFilterChain,
+            ): reactor.core.publisher.Mono<Void> {
+                seen.set(exchange.request.remoteAddress?.hostString to ControlPeer.of(exchange))
+                return chain.filter(exchange)
+            }
+
+            override fun getOrder(): Int = org.springframework.core.Ordered.HIGHEST_PRECEDENCE
+        }
+        runner.withBean("peerProbe", org.springframework.web.server.WebFilter::class.java, { probe }).run { context ->
+            val forwarding = reactor.netty.http.server.HttpServer.create().port(0).forwarded(true)
+                .handle(
+                    org.springframework.http.server.reactive.ReactorHttpHandlerAdapter(
+                        context.getBean(org.springframework.http.server.reactive.HttpHandler::class.java)
+                    )
+                ).bindNow()
+            try {
+                Socket("127.0.0.1", forwarding.port()).use { socket ->
+                    socket.soTimeout = SECONDS_5
+                    socket.getOutputStream().apply {
+                        write(
+                            ("GET /cosec/control/probe HTTP/1.1\r\nHost: localhost\r\nX-Forwarded-For: 203.0.113.9\r\n\r\n")
+                                .encodeToByteArray()
+                        )
+                        flush()
+                    }
+                    socket.getInputStream().read()
+                }
+            } finally {
+                forwarding.disposeNow()
+            }
+            val (rewritten, peer) = seen.get()
+            // The request's own address is what the caller said; the peer is what the connection was.
+            rewritten.assert().isEqualTo("203.0.113.9")
+            peer.assert().isEqualTo("127.0.0.1")
+        }
+    }
+
+    @Test
     fun `cosec control maintenance enabled false runs no maintenance pass, and the default runs them`() {
         runner.run { context -> context.containsBean("cosecControlMaintenanceScheduler").assert().isTrue() }
         runner.withPropertyValues("cosec.control.maintenance.enabled=false").run { context ->
