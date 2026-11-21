@@ -26,6 +26,7 @@ import me.ahoo.cosec.document.PolicyDocument
 import me.ahoo.cosec.model.decision.DocumentKind
 import me.ahoo.cosec.webflux.ServerWebExchanges.setSecurityContext
 import me.ahoo.cosec.webmvc.ServletRequests.setSecurityContext
+import me.ahoo.cosec.spring.boot.pipeline.ApplicationPort
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import org.springframework.core.io.buffer.DataBuffer
@@ -66,7 +67,7 @@ class ControlBodyLimitTest {
         )
         val request = MockServerRequest.builder().method(HttpMethod.GET).uri(URI.create(PATH)).exchange(exchange)
             .body(body)
-        val routes = CoSecControlRoutesAutoConfiguration.WebFlux().cosecControlRoutes(http, properties)
+        val routes = CoSecControlRoutesAutoConfiguration.WebFlux().cosecControlRoutes(http, properties, ApplicationPort())
         val response = routes.route(request).block()!!.handle(request).block()!!
         return response.statusCode().value() to response.toString()
     }
