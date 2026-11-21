@@ -140,9 +140,11 @@ the adapters, snapshots or the control plane. The parts that take several files 
   test asserts about CoSec's answers against a model is asserted there too, and `:client-host:check` keeps the host
   answering as those tests assume.
   `test/system-test` is the system test, the last gate before a release candidate: the gateway image built from the
-  commit, the services of `test/system-*` (a service behind the gateway, the login and control-plane host, a Spring MVC
-  enforcer), Redis and Kafka under Docker Compose, driven over the network only, by the `system-test.yml` workflow
-  ([`wiki/operations/deployment.md#the-system-test`](wiki/operations/deployment.md#the-system-test)). Its `check` runs
+  commit, the services of `test/system-*` (a service behind the gateway, the IAM that issues the tokens, a Spring MVC
+  enforcer), the control plane in each of its two deployments (two replicas of the control-plane host image built from
+  the commit, with an IAM that calls its service port; an IAM that embeds the control plane: the workflow runs the
+  suite once for each), Redis and Kafka under Docker Compose, driven over the network only, by the `system-test.yml`
+  workflow ([`wiki/operations/deployment.md#the-system-test`](wiki/operations/deployment.md#the-system-test)). Its `check` runs
   only the harness's own tests; the scenarios run in `systemTest` against a running stack. A scenario waits for a
   property within a bound named after it, never a fixed sleep or a retry.
   `test/architecture` holds the structural rules that scan several modules (RFC 0011 §5): `DependencyRulesTest`
