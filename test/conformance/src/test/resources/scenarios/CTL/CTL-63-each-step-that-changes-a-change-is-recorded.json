@@ -72,7 +72,7 @@
       "CHECKED",
       "READY",
       "audited CHECKED,REBASED,SHADOW_SKIPPED",
-      "audited CHECKED,PUBLISHED,PUBLISHING,SHADOW_SKIPPED"
+      "audited CHECKED,SHADOW_SKIPPED,PUBLISHING,PUBLISHED"
     ],
     "errors": {
       "c1": [],

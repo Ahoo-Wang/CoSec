@@ -127,6 +127,25 @@ class ControlPlaneSwitchTest {
     }
 
     @Test
+    fun `the change listeners' queues are metered, by listener - CTL-66`() {
+        runner.withBean(io.micrometer.core.instrument.MeterRegistry::class.java, {
+            io.micrometer.core.instrument.simple.SimpleMeterRegistry()
+        }).run { context ->
+            context.startupFailure.assert().isNull()
+            val registry = context.getBean(io.micrometer.core.instrument.MeterRegistry::class.java)
+            for (name in listOf(
+                me.ahoo.cosec.spring.boot.micrometer.ChangeListenerMeters.QUEUED,
+                me.ahoo.cosec.spring.boot.micrometer.ChangeListenerMeters.QUEUED_BYTES,
+                me.ahoo.cosec.spring.boot.micrometer.ChangeListenerMeters.OLDEST_AGE,
+                me.ahoo.cosec.spring.boot.micrometer.ChangeListenerMeters.DROPPED,
+                me.ahoo.cosec.spring.boot.micrometer.ChangeListenerMeters.LOST,
+            )) {
+                registry.find(name).meters().assert().describedAs(name).isNotEmpty()
+            }
+        }
+    }
+
+    @Test
     fun `cosec control enabled false wires nothing of the control plane, and the stores are read read-only`() {
         runner.withPropertyValues("${ControlPlaneCondition.ENABLED_KEY}=false").run { context ->
             context.startupFailure.assert().isNull()

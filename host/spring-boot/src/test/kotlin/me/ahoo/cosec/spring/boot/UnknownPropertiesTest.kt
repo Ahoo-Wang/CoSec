@@ -66,6 +66,13 @@ class UnknownPropertiesTest {
     }
 
     @Test
+    fun `a switch that was removed before it was released is not a property`() {
+        runner.withPropertyValues("cosec.control.maintenance.enabled=false").run { context ->
+            context.startupFailure!!.messages().assert().contains("cosec.control.maintenance.enabled")
+        }
+    }
+
+    @Test
     fun `keys CoSec reads pass, maps and lists included`() {
         runner.withPropertyValues(
             "cosec.enabled=true",

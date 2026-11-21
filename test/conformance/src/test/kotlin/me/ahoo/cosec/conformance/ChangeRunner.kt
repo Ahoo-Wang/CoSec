@@ -143,8 +143,8 @@ import java.time.Instant
  *            { "storeDown": true }, // every operation of the control store fails until false (CTL-52): a step it
  *                                   // stops is `unavailable`, never an empty answer
  *            { "vanish": "i1" },   // i1 is taken off the reporters of every window, its report left
- *            { "audited": "c1" },  // the kinds of the change events of c1 so far, sorted: best-effort listeners
- *                                  // receive them in any order (CTL-63):
+ *            { "audited": "c1" },  // the kinds of the change events of c1 so far, in the order the listener
+ *                                  // received them, which is the order they were written (CTL-63, CTL-66):
  *                                  // `audited CHECKED,SHADOW_SKIPPED`
  *            { "documents": { "by": "plato", "kind": "tenant" } },  // GET /documents?kind= (CTL-68):
  *                                  // `documents tenant:acme,tenant:globex`, `documents none` or `refused <status>`
@@ -679,13 +679,13 @@ object ChangeRunner : ScenarioRunner {
         }
 
         /**
-         * The kinds of a change's events so far (`CTL-63`), sorted: a best-effort listener receives a change's events in
-         * any order, so the step says which were written, not in which order they arrived.
+         * The kinds of a change's events so far (`CTL-63`), in the order the listener received them: the order they were
+         * written (`CTL-66`).
          */
         private suspend fun audited(argument: JsonNode): String {
             auditing.awaitDelivered()
             val id = argument.text()
-            return "audited " + audit.events.filter { it.change.value == id }.map { it.kind.name }.sorted().joinToString(",")
+            return "audited " + audit.events.filter { it.change.value == id }.joinToString(",") { it.kind.name }
         }
 
         /**

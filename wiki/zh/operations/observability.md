@@ -274,7 +274,7 @@ CoCache 会在同一个 registry 中为 CoSec 的缓存记录它自己的指标�
 - **控制存储的格式。** 在基于 CoCache 运行控制面的地方，存储仍是 8.0.0-beta.5 之前的格式时，`cosecControlStoreFormat` 健康指示器为
   `DOWN`，`format` 详情写明 `cosec-migrate repair-references`；该命令运行之后为 `UP`，`format: 8.0.0-beta.5`。它报告实例上一次读到的结果：
   每分钟在自己的线程上读一次，从不由探测触发；读不到时为 `UP`，`format: unknown`。实例发现旧格式时还会记录一条 `ERROR`。它和
-  `cosecSnapshotEviction` 一样是告警：数据面仍在决定每个请求，所以不要把它放进就绪组（[升级](./upgrading-previews.md#from-8-0-0-beta-4)）。
+  `cosecSnapshotEviction` 一样是告警：数据面仍在决定每个请求，所以不要把它放进就绪组（[升级](./upgrading-previews.md#from-8-0-0-beta-4)）。`cosec-control` 镜像是例外：它不决定数据面的任何请求，并把这个指示器放进它的就绪组，让未转换的存储使宿主处于未就绪且有名字（[控制面宿主](./deployment.md#control-plane-store)）。
 - **登录路由。** starter 提供刷新或登出路由时，`cosecLoginRoutes` 健康指示器总是 `UP`，以每个路由的属性为详情：`not refused`，或在文档拒绝匿名 `POST` 它之后为 `denied since <time>` 及是哪种拒绝（没有语句允许它、某条 DENY 语句匹配它、或租户的平台边界不覆盖它），直到之后有请求被允许。同样的拒绝每个路由每分钟记录一条 `WARN`，点名属性和路径。两者都来自真实请求的决策，所以从不出错，也都不会让实例变为未就绪（[构建客户端](../integration/clients.md#what-your-application-serves)）。
 - **滞后日志。** 文档超过 `lag-warn` 未被 Redis 确认时，实例以 `WARN` 记录，超过 `lag-escalate` 时以 `ERROR` 记录
   （[实例如何读取文档](./storage.md#how-instances-read-documents)）。其他值得告警的日志：
@@ -335,6 +335,26 @@ CoCache 会在同一个 registry 中为 CoSec 的缓存记录它自己的指标�
 break-glass 等待 broker 的确认（把生产者配置为 `acks=all`）。设为 `delivery=required` 时，如果 Kafka 变更监听器无法
 创建（没有 `cosec-kafka`、没有 `KafkaOperations` bean，或 `enabled=false`），启动失败，而不是在没有记录的情况下发布：
 `cosec.control.audit.kafka.delivery=required, but no Kafka change listener was created: ...`。
+
+### 顺序与队列 {#change-event-order}
+
+监听器**按本实例写入的顺序**接收一个变更的事件（`CTL-66`）：每个监听器有一个队列和一个消费者，一个步骤的事件排在它之前各步骤的事件之后。跨实例没有顺序可言（在一台控制面主机上提议、在另一台上发布，是两个进程）：消费方按每个事件的 `time` 和变更的记录排序。Kafka 变更监听器按文档作为 key，在其分区内保持这一顺序。
+
+- **受控的步骤**（`PUBLISHING`、break-glass）在 `cosec.control.audit.required-timeout` 内等待每个 `REQUIRED` 监听器记录它的事件，排在此前已入队的事件之后；否则返回 `503`，其事件此后也不会被记录。
+- **REQUIRED 监听器的队列已满**时，其他步骤的事件最多等待同样的时长以腾出空间：该步骤已经存储，因此从不为此失败。等不到空间的事件**丢失**：计入 `cosec.control.listener.lost`，并以 `ERROR` 记录（`Change event <kind> of change <id> on <doc> was not handed to REQUIRED change listener [<name>]: ...`）。这是 REQUIRED 监听器错过事件的唯一途径：**在 `cosec.control.listener.lost` 大于零时告警。**
+- **BEST_EFFORT 监听器的队列已满时丢弃新来的事件**，所以到达的是一个有序的前缀：消费方看到的是缺口，从不是乱序。丢弃计入 `cosec.control.listener.dropped`，并以 `WARN` 记录，每个 required timeout 至多一次。
+- **上限是推导出来的，不是配置的。** 所有队列合计至多占用堆的三十二分之一，由各监听器平分，每个事件按它所持有的内容计量。启动时一条 `INFO` 说明结果（`Change listeners [...]: their queues hold at most 64.0 MB (the heap's 2048.0 MB / 32), 32.0 MB each`）。健康的接收端即使经历涉及数千租户的批量变更，队列也几乎为空。
+- **停止应答的监听器只会被报告，从不被切断。** 在有事件等待、且它超过 required timeout 没有交付任何事件期间，一条 `WARN` 写明它、队列深度和最早事件的等待时长，每个 required timeout 至多一次。它恢复应答时，按顺序交付其份额内保留的一切。`REQUIRED` 监听器在超时内没有应答的调用视为失败，并交付下一个事件。
+- **关闭时监听器先排空队列**，时限是决策监听器的 `cosec.observability.listener.drain-timeout`。它们不再接收事件，交付已入队的事件；剩下的按监听器计数并记录（`Change listener [<name>] never records <n> change events: they were still queued when the drain of <timeout> ended.`，`REQUIRED` 监听器为 `ERROR`，其他为 `WARN`），之后才停止。排空期间到来的受控步骤在生效前以 `503` 拒绝，与 `REQUIRED` 监听器无法记录它时相同。其他步骤已经存储：其事件以同样方式记录，从不入队后丢失。
+
+指标，均带 `listener` 标签：
+
+| 指标 | 含义 |
+|---|---|
+| `cosec.control.listener.queued`、`cosec.control.listener.queued.bytes` | 已入队的事件数，以及它们在该监听器份额中所占的大小 |
+| `cosec.control.listener.oldest.age` | 最早入队的事件已等待多久（秒）：停止的接收端最先在这里显现 |
+| `cosec.control.listener.dropped` | 因队列已满而丢弃的 BEST_EFFORT 事件 |
+| `cosec.control.listener.lost` | REQUIRED 监听器错过的已存储步骤的事件：任何一个都应告警 |
 
 ## 日志 {#logs}
 

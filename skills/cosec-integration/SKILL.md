@@ -17,7 +17,8 @@ Determine:
   (gateway mode, below), and whether only the gateway can reach it.
 - The CoSec version already managed by a BOM, version catalog, parent, or lockfile. Never copy a version from this skill.
 - Whether the service has Redis (needed for shared policy storage, token revocation, cluster-wide rate limits and the
-  control plane), and whether this service should also host the control plane.
+  control plane), and whether this service should also host the control plane or the control plane runs as the
+  `cosec-control` image (below).
 - Whether OAuth login, IP regions, tracing, metrics, OpenAPI or Kafka audit are actually required.
 
 The starter, `me.ahoo.cosec:cosec-spring-boot`, brings `cosec-runtime`, `cosec-login` and `cosec-jwt`, and wires every
@@ -307,6 +308,19 @@ its action and typed resource (https://cosec.ahoo.me/integration/checks). To rec
 `Decision` in the process; never put it into a response. See https://cosec.ahoo.me/integration/checks.
 
 ## Hosting the control plane
+
+Two deployments, and these two only (https://cosec.ahoo.me/operations/topologies#the-control-plane): the `cosec-control`
+image beside the gateway (https://cosec.ahoo.me/operations/deployment#the-control-plane-host), with `k8s/control/` for
+Kubernetes; or `cosec-control` embedded in the IAM service. Both take their caller from the `CoSec-Identity` header
+(`cosec.pipeline.mode=enforce`, `cosec.pipeline.caller=forwarded-identity`; the image sets both), which carries no
+signature: the host does not start until `cosec.pipeline.identity.only-gateway-can-reach=true` (only the gateway reaches
+it) or `only-trusted-callers-can-reach=true` (services call it directly, as the image's service port 8082 allows) states
+that the network makes it so. The network is the boundary: a workload that reaches the host is whoever it claims, a
+platform administrator included. A service that was in `gateway` mode and now needs the control plane moves to `enforce`
+with `caller=forwarded-identity`. From code in the same process, `ControlService` with `ControlCaller.of(securityContext)`
+or `ControlCaller.service(...)`; `cosec.control.http.enabled=false` serves no routes. Every instance with the control plane runs
+its maintenance passes under their leases; no property turns them off. The service API has no client class of its own yet: a service writes `CoSec-Identity` with
+`IdentityHeader.write` (`cosec-document`).
 
 With `cosec-control` (and `cosec-cocache`), the host serves the control API under
 `{cosec.control.http.base-path}/v1` (default `/cosec/control/v1`): documents, changes, shadow windows, approval,

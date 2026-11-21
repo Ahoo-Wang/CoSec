@@ -27,6 +27,25 @@ Which preview of the library may run behind which preview of the gateway image: 
 
 ## From 8.0.0-beta.4 {#from-8-0-0-beta-4}
 
+- **New: the control plane has an image, `cosec-control`, and two named deployments** ([The control-plane
+  host](./deployment.md#the-control-plane-host), [Choosing a Deployment](./topologies.md#the-control-plane)). Nothing to
+  change for an application that embeds the control plane: it is the second deployment, unchanged. A deployment that
+  wants the control plane as a process of its own runs the image beside the gateway, under the statement
+  `cosec.pipeline.identity.only-trusted-callers-can-reach=true` (the image does not start without it) and the three
+  network policies that make it true (`k8s/control/`).
+- **An IAM service in `gateway` mode that now needs the control plane runs in `enforce` with
+  `cosec.pipeline.caller=forwarded-identity` instead.** Affected: a service that was in `cosec.pipeline.mode=gateway`
+  and adds `cosec-control`. `gateway` mode wires no documents, no Redis and no control plane, so the control plane cannot
+  be added to it.
+  - Change `cosec.pipeline.mode` to `enforce` and add `cosec.pipeline.caller=forwarded-identity`: the service still
+    believes the identity the gateway forwards, and still states what can reach it. The statement is the same
+    (`only-gateway-can-reach`, or `only-trusted-callers-can-reach` once a service port is on), and so is the refusal of a
+    hidden-method filter.
+  - It now needs `cosec-cocache`, `cosec-control` and a Redis user that writes the documents
+    ([Who may write which keys](./storage.md#who-may-write-which-keys)).
+  - Its own routes stay authorized at the gateway or not at all.
+    Set `cosec.control.http.enabled=false` when its code reaches the control plane in process only
+    ([Configuration](./configuration.md#control-plane)).
 - **CoSec's own routes no longer answer on the management port** (`CTL-69`). Affected: a WebFlux host (or a gateway host with
   the control plane on) with a `management.server.port` of its own, whose control API (`/cosec/control/v1/...`) or login
   routes (`cosec.authentication.login.refresh.path`, `.logout.path`) a client reached there. Spring Boot's management server
@@ -63,9 +82,9 @@ Which preview of the library may run behind which preview of the gateway image: 
   `CTL-58`, `CTL-59`). Affected: code compiled against `ChangeEvent`, `ChangeRequest` or `HttpFacts` (experimental), whose
   constructors gained a trailing parameter (`origin`, `origin`, `peerAddress`, each with a default): recompile. Change
   events written as JSON, and the stored change, gain an `origin` member (`asserted`, `via`, `peer`), which a reader
-  that does not know it ignores. New and unset by default: `cosec.control.http.enabled`, `cosec.control.http.service-port`
-  and `cosec.control.maintenance.enabled` ([Configuration](./configuration.md#control-plane)). Nothing to change for a
-  deployment that sets none of them.
+  that does not know it ignores. New and unset by default: `cosec.control.http.enabled` and `cosec.control.http.service-port`
+  ([Configuration](./configuration.md#control-plane)). Nothing to change for a deployment that sets neither. Every
+  control-plane instance runs the maintenance passes, kept apart by their leases, and no property turns them off.
 - **The control API answers from a response model of its own; a refused scope says why under `reason`; propagation
   counts the instances that hold the document** (review round 2, `R2C-11`, `R2C-12`, `CTL-61`, `CTL-62`). Affected:
   clients of the control API.

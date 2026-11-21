@@ -1,0 +1,81 @@
+{
+  "rules": [
+    "CTL-66"
+  ],
+  "polarity": "negative",
+  "level": "control",
+  "description": "c2 publishes, which moves acme's head under c1; c1 is rebased, then abandoned. Its listener never receives a later step before an earlier one: CHECKED, REBASED, ABANDONED, in that order.",
+  "steps": [
+    {
+      "propose": {
+        "change": "c1",
+        "document": "tenant:acme",
+        "operations": [
+          {
+            "putPolicy": {
+              "id": "read",
+              "statements": [
+                {
+                  "effect": "allow",
+                  "action": "order:read"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "propose": {
+        "change": "c2",
+        "document": "tenant:acme",
+        "operations": [
+          {
+            "putPolicy": {
+              "id": "more",
+              "statements": [
+                {
+                  "effect": "allow",
+                  "action": "order:read"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "skipShadow": "c2"
+    },
+    {
+      "publish": "c2"
+    },
+    {
+      "rebase": "c1"
+    },
+    {
+      "abandon": "c1"
+    },
+    {
+      "audited": "c1"
+    }
+  ],
+  "expect": {
+    "steps": [
+      "CHECKED",
+      "CHECKED",
+      "READY",
+      "PUBLISHED",
+      "CHECKED",
+      "ABANDONED",
+      "audited CHECKED,REBASED,ABANDONED"
+    ],
+    "errors": {
+      "c1": [],
+      "c2": []
+    },
+    "heads": {
+      "tenant:acme": 1
+    }
+  }
+}

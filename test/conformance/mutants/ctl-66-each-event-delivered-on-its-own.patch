@@ -1,0 +1,17 @@
+# Rule: CTL-66
+# Mutant: each queued event is delivered in a coroutine of its own: a listener receives a change's events in whatever order the calls finish
+# Tests: :control:test --tests me.ahoo.cosec.control.audit.ChangeEventOrderTest
+
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/audit/ChangeListenerLane.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/audit/ChangeListenerLane.kt
+index 2e886a7dc..e2d16dbb8 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/audit/ChangeListenerLane.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/audit/ChangeListenerLane.kt
+@@ -166,7 +166,7 @@ class ChangeListenerLane internal constructor(
+                 wake.receive()
+                 continue
+             }
+-            deliver(entry)
++            CoroutineScope(currentCoroutineContext()).launch { deliver(entry) }
+             queue.poll()
+             queuedBytes.addAndGet(-entry.bytes)
+             freed.update { it + 1 }

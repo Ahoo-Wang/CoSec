@@ -305,6 +305,8 @@ Redis may evict CoSec's policy snapshot: maxmemory-policy is {<node>=<policy>}, 
 
 这个指示器是告警：不要把它放进就绪组，就绪组只由 `cosecSnapshot` 承担。放进去的话，Redis 的一次改动会让所有实例同时退出轮转。
 
+**控制面宿主**还多一个原因：它的就绪组里有 `cosecControlStoreFormat`，所以处于 8.0.0-beta.5 之前格式的控制存储会让它未就绪，`format` 详情写明 `cosec-migrate repair-references`，启动时还有一条 `ERROR`。停掉宿主，运行该命令，再启动（[控制面宿主](./deployment.md#control-plane-store)）。它的探针在管理端口 8081 上：在 8080 上，管道会拒绝 kubelet。
+
 ## pod 内存耗尽 {#a-pod-runs-out-of-memory}
 
 先看是哪一块内存耗尽了；要调的旋钮不同：
@@ -402,6 +404,16 @@ cosec.pipeline.mode=gateway: this service believes any CoSec-Identity header it 
 ```
 
 `cosec.pipeline.mode=gateway` 的服务信任网络（`STA-7`）。先让它成真，再写下这一行：只放行网关 pod 的 `NetworkPolicy`（[`k8s/examples/gateway-mode-service-networkpolicy.yaml`](https://github.com/Ahoo-Wang/CoSec/blob/main/k8s/examples/gateway-mode-service-networkpolicy.yaml)）、双向 TLS，或只有网关所在的私有网络。`It is [false]`（或 `1`、`on`、空值）表示这个配置项写成了不是 `true` 的值。不要在网络还没有保证之前，为了绕过这条信息而写它。之后启动日志记录一行 `INFO`。
+
+在以策略决策、又从身份确定调用方的宿主上（如[控制面宿主](./deployment.md#the-control-plane-host)，或内嵌控制面的 IAM 服务，`STA-9`），同样的信息以 `cosec.pipeline.caller=forwarded-identity:` 开头；应用自己声明了网关时，则以 `the web gate of this host is an IdentityGate bean of the application` 开头。它点出两行：只有网关能连到宿主时写 `only-gateway-can-reach=true`；服务直接调用宿主时写 `cosec.pipeline.identity.only-trusted-callers-can-reach=true`（`COSEC_PIPELINE_IDENTITY_ONLYTRUSTEDCALLERSCANREACH`），`cosec-control` 镜像的服务端口默认开启，服务就是这样调用它的；在服务端口旁边，网关那一行会被拒绝，因为它不属实。先有网络，每个端口一条策略（[`k8s/control/`](https://github.com/Ahoo-Wang/CoSec/tree/main/k8s/control)），再写这一行。
+
+### 控制面镜像的设置导致启动失败 {#startup-fails-on-the-control-plane-images-settings}
+
+```text
+cosec-control-server verifies no credential and issues no token: it believes the CoSec-Identity header it is sent, under the statement that nothing but the gateway and the services you name can reach it. cosec.jwt.enabled=true would wire verification or a login that nothing here uses ... (STA-10)
+```
+
+`cosec-control` 镜像拒绝把 `cosec.jwt.enabled`、`cosec.api-key.enabled` 和 `cosec.authentication.login.enabled` 设为 `true`，也拒绝 `cosec.control.enabled=false`（`cosec-control-server runs the control plane`）：它不校验凭证，也不签发令牌；没有控制面，它会处于运行状态却什么都不提供。删掉这个键。会校验令牌或让人登录的控制面，是你自己的、带 `cosec-control` 的应用；网关镜像才是只读的那个。
 
 ### 网关之后的 hidden-method 过滤器导致启动失败 {#startup-fails-on-a-hidden-method-filter-behind-a-gateway}
 

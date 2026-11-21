@@ -34,7 +34,6 @@ class ControlProperties {
     /** The app control-plane actions are authorized in (RFC 0007 §7.2). */
     var appId: String = "cosec-control"
     val http = Http()
-    val maintenance = Maintenance()
     val revisions = Revisions()
     val changes = Changes()
     val approval = Approval()
@@ -51,16 +50,6 @@ class ControlProperties {
          * change says so. Each host's own WARN needs only its own route map, not this.
          */
         var routeMaps: String? = null
-    }
-
-    @InternalCoSecApi
-    class Maintenance {
-        /**
-         * Whether this instance runs the control plane's maintenance passes (revision reclamation, closing shadow
-         * windows, reconciling the app list and the staged list): `false` for an instance that only serves, such as an IAM
-         * service that embeds the control plane beside a control host that runs them (`CTL-59`). `true` or `false` only.
-         */
-        var enabled: Boolean = true
     }
 
     @InternalCoSecApi
@@ -170,6 +159,5 @@ class ControlProperties {
     companion object {
         const val PREFIX = CoSecProperties.PREFIX + ".control"
         const val KAFKA_AUDIT_PREFIX = "$PREFIX.audit.kafka"
-        const val MAINTENANCE_ENABLED_KEY = "$PREFIX.maintenance.enabled"
     }
 }

@@ -1,7 +1,7 @@
 {
   "POST /changes" : [ "CHECKED" ],
   "POST /changes/{id}:shadow" : [ "SHADOW_STARTED" ],
-  "POST /changes/{id}:publish" : [ "PUBLISHED", "PUBLISHING" ],
+  "POST /changes/{id}:publish" : [ "PUBLISHING", "PUBLISHED" ],
   "POST /changes/{id}:rebase" : [ "REBASED" ],
   "POST /changes/{id}:skip-shadow" : [ "SHADOW_SKIPPED" ],
   "POST /changes/{id}:abandon" : [ "ABANDONED" ],

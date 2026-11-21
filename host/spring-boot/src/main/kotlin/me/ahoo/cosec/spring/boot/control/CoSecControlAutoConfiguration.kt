@@ -26,7 +26,6 @@ import me.ahoo.cosec.control.api.ControlHttp
 import me.ahoo.cosec.control.api.ControlPlane
 import me.ahoo.cosec.control.api.DefaultControlPlane
 import me.ahoo.cosec.control.api.Simulator
-import me.ahoo.cosec.control.audit.ChangeListener
 import me.ahoo.cosec.control.audit.ChangeListeners
 import me.ahoo.cosec.control.audit.LoggingChangeListener
 import me.ahoo.cosec.control.authz.ControlAuthorizer
@@ -45,7 +44,6 @@ import me.ahoo.cosec.model.AppId
 import me.ahoo.cosec.runtime.AuthorizationChecker
 import me.ahoo.cosec.runtime.Pipeline
 import me.ahoo.cosec.runtime.attribute.AttributeProviders
-import me.ahoo.cosec.runtime.event.Delivery
 import me.ahoo.cosec.runtime.snapshot.DocumentSnapshotViews
 import me.ahoo.cosec.runtime.snapshot.DocumentSnapshots
 import me.ahoo.cosec.runtime.snapshot.PlatformCompiler
@@ -84,7 +82,6 @@ import org.springframework.core.env.Environment
 import org.springframework.core.io.ResourceLoader
 import org.springframework.kafka.core.KafkaOperations
 import java.time.Clock
-import kotlin.time.toKotlinDuration
 
 /**
  * The control plane (RFC 0007, with `cosec-control`): the only writer of the policy documents, on
@@ -100,7 +97,12 @@ import kotlin.time.toKotlinDuration
 @Conditional(ControlPlaneCondition::class)
 @ConditionalOnBean(PolicySnapshotCache::class)
 @EnableConfigurationProperties(ControlProperties::class, RevocationProperties::class, CoSecProperties::class)
-@Import(StartupTaskExclusion::class, ControlServiceConfiguration::class)
+@Import(
+    StartupTaskExclusion::class,
+    ControlServiceConfiguration::class,
+    ControlMetersConfiguration::class,
+    ChangeListenersConfiguration::class
+)
 internal class CoSecControlAutoConfiguration {
     @Bean
     @ConditionalOnMissingBean
@@ -236,26 +238,6 @@ internal class CoSecControlAutoConfiguration {
     }
 
     /**
-     * Every change listener, delivering until shutdown. `cosec.control.audit.kafka.delivery=required` asks for a REQUIRED
-     * Kafka record of every gated step: startup fails when that listener could not be created, rather than publishing
-     * without it.
-     */
-    @Bean(destroyMethod = "cancel")
-    @ConditionalOnMissingBean
-    fun cosecChangeListeners(
-        listeners: ObjectProvider<ChangeListener>,
-        properties: ControlProperties
-    ): ChangeListeners {
-        val all = listeners.orderedStream().toList()
-        val kafka = properties.audit.kafka
-        check(kafka.delivery != Delivery.REQUIRED || all.any { it.name == KAFKA_CHANGE_LISTENER }) {
-            "${ControlProperties.KAFKA_AUDIT_PREFIX}.delivery=required, but no Kafka change listener was created: it " +
-                "needs cosec-kafka, a KafkaOperations bean and ${ControlProperties.KAFKA_AUDIT_PREFIX}.enabled=true."
-        }
-        return ChangeListeners(all, properties.audit.requiredTimeout.toKotlinDuration())
-    }
-
-    /**
      * Not replaceable: the change flow, authorized at every step. Change ids come from the application's [IdGenerator],
      * else from [RandomIdGenerator].
      */
@@ -307,7 +289,6 @@ internal class CoSecControlAutoConfiguration {
     /** Runs [ControlMaintenance] at `cosec.control.revisions.reclaim-interval` and `cosec.control.shadow.check-interval`. */
     @Bean
     @ConditionalOnMissingBean
-    @ConditionalOnProperty(ControlProperties.MAINTENANCE_ENABLED_KEY, matchIfMissing = true)
     fun cosecControlMaintenanceScheduler(
         maintenance: ControlMaintenance,
         properties: ControlProperties,
