@@ -26,7 +26,6 @@ import me.ahoo.cosec.control.api.ControlHttp
 import me.ahoo.cosec.control.api.ControlPlane
 import me.ahoo.cosec.control.api.DefaultControlPlane
 import me.ahoo.cosec.control.api.Simulator
-import me.ahoo.cosec.control.audit.ChangeListener
 import me.ahoo.cosec.control.audit.ChangeListeners
 import me.ahoo.cosec.control.audit.LoggingChangeListener
 import me.ahoo.cosec.control.authz.ControlAuthorizer
@@ -45,7 +44,6 @@ import me.ahoo.cosec.model.AppId
 import me.ahoo.cosec.runtime.AuthorizationChecker
 import me.ahoo.cosec.runtime.Pipeline
 import me.ahoo.cosec.runtime.attribute.AttributeProviders
-import me.ahoo.cosec.runtime.event.Delivery
 import me.ahoo.cosec.runtime.snapshot.DocumentSnapshotViews
 import me.ahoo.cosec.runtime.snapshot.DocumentSnapshots
 import me.ahoo.cosec.runtime.snapshot.PlatformCompiler
@@ -84,7 +82,6 @@ import org.springframework.core.env.Environment
 import org.springframework.core.io.ResourceLoader
 import org.springframework.kafka.core.KafkaOperations
 import java.time.Clock
-import kotlin.time.toKotlinDuration
 
 /**
  * The control plane (RFC 0007, with `cosec-control`): the only writer of the policy documents, on
@@ -100,7 +97,12 @@ import kotlin.time.toKotlinDuration
 @Conditional(ControlPlaneCondition::class)
 @ConditionalOnBean(PolicySnapshotCache::class)
 @EnableConfigurationProperties(ControlProperties::class, RevocationProperties::class, CoSecProperties::class)
-@Import(StartupTaskExclusion::class, ControlServiceConfiguration::class, ControlMetersConfiguration::class, ChangeListenersConfiguration::class)
+@Import(
+    StartupTaskExclusion::class,
+    ControlServiceConfiguration::class,
+    ControlMetersConfiguration::class,
+    ChangeListenersConfiguration::class
+)
 internal class CoSecControlAutoConfiguration {
     @Bean
     @ConditionalOnMissingBean
