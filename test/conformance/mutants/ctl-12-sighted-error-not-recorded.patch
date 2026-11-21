@@ -3,14 +3,14 @@
 # Tests: :runtime:test --tests me.ahoo.cosec.runtime.shadow.CompileOnSightTest
 
 diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/shadow/CompileOnSight.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/shadow/CompileOnSight.kt
-index 3d018a856..8399d204a 100644
+index 4fb4f9d2d..5eadbbd16 100644
 --- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/shadow/CompileOnSight.kt
 +++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/shadow/CompileOnSight.kt
-@@ -54,7 +54,6 @@ internal class CompileOnSight(private val source: CachingCandidateSource, privat
-             return
+@@ -83,7 +83,6 @@ internal class CompileOnSight(
+             return false
          }
          if (candidate is Candidate.Failed) {
 -            recorder.record(key, window, ShadowOutcome.CANDIDATE_ERROR, null, null)
          }
+         return true
      }
- }
