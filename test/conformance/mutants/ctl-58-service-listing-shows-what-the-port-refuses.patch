@@ -1,0 +1,17 @@
+# Rule: CTL-58
+# Mutant: the service listing by state shows a change the port refuses by id: a platform document's change listed where reading it is a 404
+# Tests: :control:test --tests me.ahoo.cosec.control.sdk.ControlServiceTest
+
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/api/ChangeRoutes.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/api/ChangeRoutes.kt
+index d53ed3c40..c3b2b1699 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/api/ChangeRoutes.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/api/ChangeRoutes.kt
+@@ -136,7 +136,7 @@ internal class ChangeRoutes(
+             text.toIntOrNull()?.takeIf { it in 1..MAX_LIMIT }
+                 ?: throw InvalidControlRequestException("limit is a number from 1 to $MAX_LIMIT")
+         } ?: DEFAULT_LIMIT
+-        val page = plane.changes(operator, document, state, query["after"], limit, profile::admitsChange)
++        val page = plane.changes(operator, document, state, query["after"], limit) { true }
+         return json(ControlResponseJson.changes(page))
+     }
+ 
