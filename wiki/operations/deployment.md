@@ -296,12 +296,19 @@ docker run -d -p 127.0.0.1:8080:8080 \
 | **8082** | the service API (`cosec.control.http.service-port`), the narrow profile for a service that calls the control plane directly: which tenant and app documents there are ([`GET /documents?kind=`](../policies/testing.md#listing-documents), granted to a service by `cosec:read` on `doc/tenant` or `doc/app`), the tenant and app documents, and a tenant's change flow ([Changing policies from your code](../integration/checks.md#changing-policies-from-your-code)); every other route is a `404` there | exactly the services you name |
 | **8081** | the management port: `/actuator/health/liveness`, `/actuator/health/readiness`, `/actuator/prometheus`; outside CoSec. The control API is a `404` there, as on any port but 8080 and 8082 (`CTL-69`) | monitoring only |
 
-Nothing in CoSec authorizes the management port, and the application port is decided by the pipeline, so a kubelet is
-refused there: probe the management port. The management port is not only the actuator: Spring Boot's management server
+Nothing in CoSec authorizes the management port, and the actuator is not on the application port: probe the management
+port. The management port is not only the actuator: Spring Boot's management server
 also serves an application's own functional routes there, which the image has none of; CoSec's own routes, the control API
 included, answer on the application port and the service port only. The service port is the application's own server on
 another port, with its TLS, client authentication and bind address: if mutual TLS on the application port is what makes the
 statement true, it holds on 8082 too. Publish 8080 to the gateway and 8082 to the services you name, never 8081.
+
+**Nothing decides at the edge of this host.** Its web gate is the identity gate, which reads the stated identity and
+decides nothing else: no `http:` decision, no rate limit rule and no decision event run for a request on 8080 or on 8082.
+For an operator's request the gateway took the `http:` decision and ran the rate limits before it forwarded the request;
+for a request on the service port nothing did. Each control action is still decided by the policies for the principal
+the caller states, and recorded as its step. What limits how much a service asks of the service port is the network
+that admits it and the service itself: a rate limit rule on a control route holds behind the gateway only.
 
 **How a caller is identified.** An operator signs in at the IAM service, and the gateway verifies the token and forwards
 the identity to a route to the host. Give that route its app, so that an identity for another app is refused:
