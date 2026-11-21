@@ -53,7 +53,8 @@ private val log = KotlinLogging.logger {}
  * - Any other event is queued to every listener and not waited for. For a REQUIRED listener whose queue is full it
  *   waits up to [requiredTimeout] for room: the step is stored already, so it is never failed for this; an event that
  *   finds no room in time is lost, counted ([ChangeListenerLane.lost]) and logged at ERROR, naming the change, the kind
- *   and the listener. That is the one way a REQUIRED listener misses an event.
+ *   and the listener. So is one whose call fails or does not answer within [requiredTimeout], with the failure: those
+ *   are the two ways a REQUIRED listener misses an event.
  * - A BEST_EFFORT listener's full queue drops the incoming event: the queue keeps an ordered prefix, and a consumer
  *   sees a gap, never a reordering. Drops are counted and logged at most once per [requiredTimeout].
  *

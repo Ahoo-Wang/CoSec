@@ -1,0 +1,16 @@
+# Rule: CTL-66
+# Mutant: a REQUIRED listener's failed call on a stored step's event is logged and not counted as lost
+# Tests: :control:test --tests me.ahoo.cosec.control.audit.ChangeEventOrderTest --tests me.ahoo.cosec.control.audit.ChangeListenerTimeoutTest
+
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/audit/ChangeListenerLane.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/audit/ChangeListenerLane.kt
+index a521e5efb..dee009eca 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/audit/ChangeListenerLane.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/audit/ChangeListenerLane.kt
+@@ -215,7 +215,6 @@ class ChangeListenerLane internal constructor(
+     private fun failed(entry: Entry, cause: Exception) {
+         if (entry.done?.completeExceptionally(cause) == true) return
+         if (listener.delivery == Delivery.REQUIRED) {
+-            lostCount.incrementAndGet()
+             val event = entry.event
+             log.error(cause) {
+                 "Change event ${event.kind} of change ${event.change.value} on ${event.document} was not recorded by " +

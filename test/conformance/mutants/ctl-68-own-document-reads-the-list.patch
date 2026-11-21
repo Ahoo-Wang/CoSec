@@ -1,0 +1,17 @@
+# Rule: CTL-68
+# Mutant: a tenant's principal shown its own document has the whole document list read to find it
+# Tests: :control:test --tests me.ahoo.cosec.control.api.OwnDocumentListingTest
+
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/api/DocumentListing.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/api/DocumentListing.kt
+index 5c26e7fa6..9b88acc86 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/api/DocumentListing.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/api/DocumentListing.kt
+@@ -80,7 +80,7 @@ class DocumentListing internal constructor(
+      * the whole document list. It is the whole listing, so a cursor past it answers an empty page.
+      */
+     private suspend fun ownPage(own: SnapshotKey, after: String?): DocumentPage {
+-        val shown = (after == null || own.toString() > after) && revisions.indexed(own)
++        val shown = (after == null || own.toString() > after) && own in revisions.documents()
+         return DocumentPage(if (shown) listOf(own) else emptyList(), null, clock.instant())
+     }
+ 

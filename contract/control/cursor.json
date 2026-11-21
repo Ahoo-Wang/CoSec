@@ -1,0 +1,9 @@
+{
+  "listings" : [ "GET /changes?state=", "GET /changes?document=", "GET /documents?kind=" ],
+  "next" : "null|string: a token, null after the last page",
+  "after" : "the next of the page before, passed back unchanged",
+  "alphabet" : "A-Z a-z 0-9 - _ (no escaping in a query)",
+  "content" : "none a client may rely on",
+  "replicas" : "any: a token holds no server state and does not expire",
+  "invalid" : 400
+}

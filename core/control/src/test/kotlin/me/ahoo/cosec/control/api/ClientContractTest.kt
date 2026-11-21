@@ -112,6 +112,29 @@ class ClientContractTest {
         files.check("control/vocabularies.json", vocabularies)
     }
 
+    /**
+     * The listings' cursor convention (`CTL-55`, `CTL-68`): what a client may rely on of `next`, and nothing of what a
+     * token holds. Each fact is checked against [ListingCursor] before it is written.
+     */
+    @Test
+    fun `the listings' cursor follows the convention of its contract file`() {
+        val listings = mapOf(
+            "GET /changes?state=" to ListingCursor.CHANGES_BY_STATE.encode("tenant:acme#c1"),
+            "GET /changes?document=" to ListingCursor.CHANGES_OF_DOCUMENT.encode("c1"),
+            "GET /documents?kind=" to ListingCursor.DOCUMENTS.encode("tenant:acme"),
+        )
+        listings.values.forEach { it.assert().matches("[A-Za-z0-9_-]+") }
+        val cursor = files.objectNode()
+        cursor.putArray("listings").apply { listings.keys.forEach(::add) }
+        cursor.put("next", "null|string: a token, null after the last page")
+        cursor.put("after", "the next of the page before, passed back unchanged")
+        cursor.put("alphabet", "A-Z a-z 0-9 - _ (no escaping in a query)")
+        cursor.put("content", "none a client may rely on")
+        cursor.put("replicas", "any: a token holds no server state and does not expire")
+        cursor.put("invalid", 400)
+        files.check("control/cursor.json", cursor)
+    }
+
     @Test
     fun `each route that moves a change writes the change kinds of its contract file`() {
         files.check("control/routes.json", RouteKinds().record())
@@ -124,6 +147,7 @@ class ClientContractTest {
             setOf(
                 "change.json",
                 "change-summary.json",
+                "cursor.json",
                 "documents-page.json",
                 "propagation.json",
                 "vocabularies.json",

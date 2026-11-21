@@ -25,6 +25,8 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withTimeoutOrNull
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.runtime.event.Delivery
@@ -60,6 +62,9 @@ class ChangeListenerLane internal constructor(
     )
 
     private val queue = ConcurrentLinkedQueue<Entry>()
+
+    /** Who waits for room, served in the order they came: kotlinx's [Mutex] is fair. */
+    private val room = Mutex()
     private val wake = Channel<Unit>(Channel.CONFLATED)
     private val freed = MutableStateFlow(0L)
     private val pending = MutableStateFlow(0)
@@ -86,7 +91,10 @@ class ChangeListenerLane internal constructor(
     /** BEST_EFFORT events dropped because the budget was full. */
     val dropped: Long get() = droppedCount.get()
 
-    /** REQUIRED events of steps already stored that found no room in time: counted, logged at ERROR. */
+    /**
+     * REQUIRED events of steps already stored that this listener will never record: one that found no room in time, and
+     * one whose call failed or did not answer within its bound. Each is logged at ERROR.
+     */
     val lost: Long get() = lostCount.get()
 
     /** Events still queued when the listeners stopped after their drain, or that arrived during it: never delivered. */
@@ -109,6 +117,10 @@ class ChangeListenerLane internal constructor(
     /**
      * Queues [event], waiting up to [wait] for room; [done], when given, completes once the listener recorded it. False
      * when there was no room in time: nothing was queued.
+     *
+     * Those who wait for room are served in the order they came ([room] is a fair lock), and each queues its event
+     * before the next is served: a smaller event that would fit never takes room ahead of a larger one waiting before
+     * it, so the queue holds the events in the order they were put (R3-12).
      */
     internal suspend fun put(
         event: ChangeEvent,
@@ -116,17 +128,18 @@ class ChangeListenerLane internal constructor(
         wait: Duration,
         done: CompletableDeferred<Unit>? = null
     ): Boolean {
-        val queued = withTimeoutOrNull(wait) {
-            while (!reserve(bytes)) {
-                val seen = freed.value
-                if (reserve(bytes)) break
-                freed.first { it != seen }
+        return withTimeoutOrNull(wait) {
+            room.withLock {
+                while (!reserve(bytes)) {
+                    val seen = freed.value
+                    if (reserve(bytes)) break
+                    freed.first { it != seen }
+                }
+                // No suspension between the reservation and the queueing: a timeout cannot fall between them.
+                add(Entry(event, bytes, TimeSource.Monotonic.markNow(), done))
             }
             true
         } ?: false
-        if (!queued) return false
-        add(Entry(event, bytes, TimeSource.Monotonic.markNow(), done))
-        return true
     }
 
     /** Counts an event of a stored step that found no room in time. */
@@ -204,8 +217,22 @@ class ChangeListenerLane internal constructor(
         }
     }
 
+    /**
+     * A call that failed. A gated step that waits for it fails with it (503), so nothing is lost; the event of a step
+     * already stored is lost to a REQUIRED listener, counted with the full-queue losses, and only logged for a
+     * BEST_EFFORT one, which promises no record.
+     */
     private fun failed(entry: Entry, cause: Exception) {
-        if (entry.done?.completeExceptionally(cause) != true) {
+        if (entry.done?.completeExceptionally(cause) == true) return
+        if (listener.delivery == Delivery.REQUIRED) {
+            lostCount.incrementAndGet()
+            val event = entry.event
+            log.error(cause) {
+                "Change event ${event.kind} of change ${event.change.value} on ${event.document} was not recorded by " +
+                    "REQUIRED change listener [${listener.name}]: ${cause.message ?: cause.javaClass.simpleName}. " +
+                    "The step is stored; this listener misses the event."
+            }
+        } else {
             log.warn(cause) { "Change listener [${listener.name}] could not record ${entry.event}." }
         }
     }
