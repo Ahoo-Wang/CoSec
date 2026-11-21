@@ -23,6 +23,7 @@ import me.ahoo.cosec.control.api.ControlPlaneTest
 import me.ahoo.cosec.control.change.ChangeOrigin
 import me.ahoo.cosec.control.change.ChangeRequestCodec
 import me.ahoo.cosec.control.change.Operation
+import me.ahoo.cosec.control.change.OriginJson
 import me.ahoo.cosec.control.change.allow
 import me.ahoo.cosec.document.json.CoSecJson
 import me.ahoo.test.asserts.assert
@@ -76,6 +77,38 @@ class ChangeOriginTest {
         json.get("via").get("request").asString().assert().isEqualTo("req-1")
         json.get("peer").asString().assert().isEqualTo("10.0.0.7")
         CoSecJson.mapper.readTree(ChangeEventJson.write(event.withoutOrigin())).has("origin").assert().isFalse()
+    }
+
+    @Test
+    fun `an origin is a value, and one stored with less than it can hold reads as what it has`() {
+        val via = ChangeOrigin.Via("jwt", "j1", "r1")
+        ChangeOrigin(
+            true,
+            via,
+            "10.0.0.1"
+        ).assert().isEqualTo(ChangeOrigin(true, ChangeOrigin.Via("jwt", "j1", "r1"), "10.0.0.1"))
+        ChangeOrigin(
+            true,
+            via,
+            "10.0.0.1"
+        ).hashCode().assert().isEqualTo(ChangeOrigin(true, via, "10.0.0.1").hashCode())
+        ChangeOrigin(true, via).assert().isNotEqualTo(ChangeOrigin(false, via))
+        ChangeOrigin(true, via).assert().isNotEqualTo(ChangeOrigin(true, ChangeOrigin.Via("api-key", "j1", "r1")))
+        ChangeOrigin(true, via).assert().isNotEqualTo("origin")
+        via.assert().isNotEqualTo(ChangeOrigin.Via("jwt", "j2", "r1")).isNotEqualTo(ChangeOrigin.Via("jwt", "j1", "r2"))
+        via.hashCode().assert().isEqualTo(ChangeOrigin.Via("jwt", "j1", "r1").hashCode())
+        ChangeOrigin(
+            true,
+            via,
+            "10.0.0.1"
+        ).toString().assert().contains("asserted=true").contains("jwt").contains("10.0.0.1")
+        fun read(json: String) = OriginJson.read(CoSecJson.mapper.readTree(json))
+        read("""{"asserted":true}""").assert().isEqualTo(ChangeOrigin(true))
+        read("""{}""").assert().isEqualTo(ChangeOrigin(false))
+        read("""{"asserted":false,"via":{"method":"api-key"},"peer":"::1"}""")
+            .assert().isEqualTo(ChangeOrigin(false, ChangeOrigin.Via("api-key", null, null), "::1"))
+        read("""{"asserted":true,"via":"not an object"}""").via.assert().isNull()
+        read("""{"asserted":true,"via":{}}""").via?.method.assert().isEmpty()
     }
 
     private fun ChangeEvent.withoutOrigin() = ChangeEvent(id, time, kind, operator, change, document, base, candidate)

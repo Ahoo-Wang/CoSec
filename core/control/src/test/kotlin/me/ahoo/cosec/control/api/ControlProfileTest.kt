@@ -98,6 +98,54 @@ class ControlProfileTest {
     }
 
     @Test
+    fun `the shapes the profile serves are exactly these, by method and path`() {
+        val service = ControlProfile.SERVICE
+        fun admits(method: String, path: String) = service.admits(method, path.trim('/').split('/'))
+        // Reads of a tenant or app document, by their exact shapes.
+        for (path in listOf(
+            "documents/tenant:a",
+            "documents/app:a",
+            "documents/tenant:a/diff",
+            "documents/tenant:a/revisions",
+            "documents/tenant:a/revisions/3"
+        )) {
+            admits("GET", path).assert().describedAs("GET $path").isTrue()
+            admits("POST", path).assert().describedAs("POST $path").isFalse()
+        }
+        for (path in listOf(
+            "documents/tenant:a/other",
+            "documents/tenant:a/revisions/3/x",
+            "documents/tenant:a/diff/x",
+            "documents"
+        )) {
+            admits("GET", path).assert().describedAs("GET $path").isFalse()
+        }
+        // Only a tenant's document takes `:apply`, and a key the route cannot name is the route's own 400.
+        admits("POST", "documents/tenant:a:apply").assert().isTrue()
+        admits("POST", "documents/app:a:apply").assert().isFalse()
+        admits("GET", "documents/tenant:a:apply").assert().isFalse()
+        admits("POST", "documents/tenant:a:apply/x").assert().isFalse()
+        admits("GET", "documents/nonsense").assert().isTrue()
+        // The change flow: a listing and a proposal, one change, its verbs that need no person.
+        admits("GET", "changes").assert().isTrue()
+        admits("POST", "changes").assert().isTrue()
+        admits("DELETE", "changes").assert().isFalse()
+        admits("GET", "changes/c1").assert().isTrue()
+        admits("POST", "changes/c1").assert().isFalse()
+        admits("GET", "changes/c1:publish").assert().isFalse()
+        admits("POST", "changes/c1:publish").assert().isTrue()
+        admits("POST", "changes/c1:unknown").assert().isFalse()
+        admits("GET", "changes/c1/x").assert().isFalse()
+        // Anything else is not a route of the profile, and the operators' profile serves all of them.
+        admits("GET", "simulate").assert().isFalse()
+        ControlProfile.OPERATORS.admits("POST", listOf("break-glass")).assert().isTrue()
+        service.admitsWrite(me.ahoo.cosec.spi.snapshot.SnapshotKey.Tenant("a")).assert().isTrue()
+        service.admitsWrite(me.ahoo.cosec.spi.snapshot.SnapshotKey.App("a")).assert().isFalse()
+        service.admitsWrite(me.ahoo.cosec.spi.snapshot.SnapshotKey.Platform).assert().isFalse()
+        ControlProfile.OPERATORS.admitsWrite(me.ahoo.cosec.spi.snapshot.SnapshotKey.Platform).assert().isTrue()
+    }
+
+    @Test
     fun `no principal is a 401 on the service profile as on the operators' one, before any route is looked at`() {
         val anonymous = runBlocking {
             services.handle(ControlHttpRequest("GET", "/documents/platform", emptyMap(), null), null).status

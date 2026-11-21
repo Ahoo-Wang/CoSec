@@ -185,6 +185,28 @@ class ControlServicePortTest {
     }
 
     @Test
+    fun `a request with no server behind it has no peer, and the service port filter lets it through`() {
+        val exchange = org.springframework.mock.web.server.MockServerWebExchange.from(
+            org.springframework.mock.http.server.reactive.MockServerHttpRequest.get("/anything").build()
+        )
+        ControlPeer.of(exchange).assert().isNull()
+        runner.withPropertyValues("${ControlServicePort.KEY}=0").run { context ->
+            val listener = context.getBean(ControlServiceListener::class.java)
+            var passed = false
+            // A request that carries no local address is on no port of this listener: it is not the filter's to refuse.
+            ServicePortFilter(listener, "/cosec/control").filter(exchange) {
+                passed = true
+                reactor.core.publisher.Mono.empty()
+            }.block()
+            passed.assert().isTrue()
+            ServicePortFilter(
+                listener,
+                "/cosec/control"
+            ).order.assert().isEqualTo(org.springframework.core.Ordered.HIGHEST_PRECEDENCE)
+        }
+    }
+
+    @Test
     fun `a host that runs no maintenance pass says so, and one that runs them says nothing`() {
         ControlServicePort.maintenanceNotice(MockEnvironment()).assert().isNull()
         ControlServicePort.maintenanceNotice(
