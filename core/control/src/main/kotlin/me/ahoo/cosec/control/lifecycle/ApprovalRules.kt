@@ -30,6 +30,7 @@ import me.ahoo.cosec.control.change.ControlStatus.FORBIDDEN
 import me.ahoo.cosec.control.change.ControlStatus.UNAVAILABLE
 import me.ahoo.cosec.control.change.Escalation
 import me.ahoo.cosec.control.change.Operation
+import me.ahoo.cosec.document.Actor
 import me.ahoo.cosec.model.Action
 import me.ahoo.cosec.model.Memberships
 import me.ahoo.cosec.model.Resource
@@ -83,12 +84,20 @@ internal class ApprovalRules(
     /** That [operator] may approve [change]'s [candidate]: not its author, a person, and the digest it has now. */
     fun requireApprovable(operator: Operator, change: ChangeRequest, candidate: String) {
         val refusal = when {
-            operator.actor == change.author -> FORBIDDEN to "the author of change ${change.id.value} cannot approve it"
+            isOwn(operator.actor, change) -> FORBIDDEN to "the author of change ${change.id.value} cannot approve it"
             else -> approvalRefusal(operator, change)?.let { FORBIDDEN to it }
                 ?: (CONFLICT to "change ${change.id.value} is not candidate $candidate").takeIf { change.candidate != candidate }
         }
         refusal?.let { (status, message) -> throw ChangeRejectedException(status, message) }
     }
+
+    /**
+     * Whether [approver] is [change]'s author or, once it is being published, its [publisher]: neither approves it
+     * (RFC 0007 §7.5). The one rule both stages ask, at approval with its message and at publication, where a stored
+     * approval made some other way is checked again.
+     */
+    private fun isOwn(approver: Actor, change: ChangeRequest, publisher: Operator? = null): Boolean =
+        approver == change.author || approver == publisher?.actor
 
     /** That [operator] is [change]'s author, who alone [does] it (403). */
     fun requireAuthor(operator: Operator, change: ChangeRequest, does: String) {
@@ -145,8 +154,7 @@ internal class ApprovalRules(
         return when {
             approval.candidate != change.candidate -> "the approval is for another candidate"
             now.isAfter(approval.at.plus(options.approvalExpireAfter)) -> "the approval expired"
-            approval.approver == change.author || approval.approver == publisher.actor ->
-                "the approval is the author's or the publisher's own"
+            isOwn(approval.approver, change, publisher) -> "the approval is the author's or the publisher's own"
             !approval.covers.containsAll(required.map { it.subject }) -> "the approval does not cover what it now needs"
             else -> null
         }

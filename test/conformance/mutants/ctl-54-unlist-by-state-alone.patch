@@ -1,0 +1,21 @@
+# Rule: CTL-54
+# Mutant: a write unlists the change from the state it left by state alone, whatever record a member names: a late removal takes the member of a later write that brought the change back there
+# Tests: :cocache:test --tests me.ahoo.cosec.cocache.control.OpenChangeSetsRaceTest
+
+diff --git a/backends/cocache/src/main/kotlin/me/ahoo/cosec/cocache/control/OpenChangeSets.kt b/backends/cocache/src/main/kotlin/me/ahoo/cosec/cocache/control/OpenChangeSets.kt
+index f87fed1d5..db21f08b0 100644
+--- a/backends/cocache/src/main/kotlin/me/ahoo/cosec/cocache/control/OpenChangeSets.kt
++++ b/backends/cocache/src/main/kotlin/me/ahoo/cosec/cocache/control/OpenChangeSets.kt
+@@ -102,7 +102,11 @@ internal class OpenChangeSets(
+         try {
+             val replaced = expected?.takeIf { it != written }
+             if (previous != null && !previous.terminal && replaced != null) {
+-                sets.removeChangeMembers(stateKey(previous), setOf(member(change.key, change.id, replaced)))
++                val named = cursor(change.key, change.id)
++                sets.removeChangeMembers(
++                    stateKey(previous),
++                    sets.changeMembers(stateKey(previous)).filter { parse(it)?.let { (d, i) -> cursor(d, i) } == named }.toSet(),
++                )
+             }
+             if (change.state.terminal) sets.removeChangeMembers(documentKey(change.key), setOf(change.id.value))
+         } catch (e: CancellationException) {

@@ -1,19 +1,17 @@
 # Rule: CTL-54
-# Mutant: a reader drops at once a member whose change is in another state: a write that listed its new state and has not yet written its record loses the change from that state's set
+# Mutant: a reader of a state drops at once every member that is not its record's: a write in flight, which lists the record it writes before the record is there, loses the change from that state's set
 # Tests: :cocache:test --tests me.ahoo.cosec.cocache.control.OpenChangeSetsRaceTest
 
 diff --git a/backends/cocache/src/main/kotlin/me/ahoo/cosec/cocache/control/OpenChangeSets.kt b/backends/cocache/src/main/kotlin/me/ahoo/cosec/cocache/control/OpenChangeSets.kt
-index 5ad8e4806..d413782cf 100644
+index f87fed1d5..c6205986e 100644
 --- a/backends/cocache/src/main/kotlin/me/ahoo/cosec/cocache/control/OpenChangeSets.kt
 +++ b/backends/cocache/src/main/kotlin/me/ahoo/cosec/cocache/control/OpenChangeSets.kt
-@@ -133,6 +133,10 @@ internal class OpenChangeSets(
-             sets.removeChangeMembers(key, setOf(member))
-             return null
+@@ -159,7 +159,7 @@ internal class OpenChangeSets(
          }
-+        if (change != null && (!listed(change) || change.key != document)) {
-+            sets.removeChangeMembers(key, setOf(member))
-+            return null
-+        }
-         if (change == null || !listed(change) || change.key != document) {
-             stale(key, member)
-             return null
+         val listed = change?.takeIf { it.state == state && it.key == document }
+         val current = listed?.let { member(document, id, checkNotNull(stored).digest) }
+-        members.filter { it != current }.forEach { stale(key, it) }
++        sets.removeChangeMembers(key, members.filter { it != current }.toSet())
+         current?.let { staleSince -= "$key|$it" }
+         return listed?.let { ListedChange.Readable(it) }
+     }

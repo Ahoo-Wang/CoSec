@@ -3,15 +3,16 @@
 # Tests: :control:test --tests me.ahoo.cosec.control.change.ControlRoundTwoFixesTest :conformance:test --tests me.ahoo.cosec.conformance.ConformanceTest
 
 diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ShadowWindows.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ShadowWindows.kt
-index b31b37af..f135bc78 100644
+index ba598c774..f8e3de123 100644
 --- a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ShadowWindows.kt
 +++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ShadowWindows.kt
-@@ -59,7 +59,7 @@ class ShadowWindows(private val reports: ShadowReportReader, private val options
-         check(!negative) { "A report of window $window has a negative count" }
-         val reporters = read.map { it.instance }.toSet()
-         val vanished = state.reporters - reporters
--        check(vanished.isEmpty()) { "Instances ${vanished.sorted()} reported on window $window and have no report now" }
-+        check(vanished.isEmpty() || vanished.isNotEmpty()) { "Instances ${vanished.sorted()} reported on window $window and have no report now" }
-         val counts = ShadowOutcome.entries.associate { it.name to 0L }.toMutableMap()
-         for (report in read) {
-             report.counts.forEach { (outcome, count) -> counts.merge(outcome.name, count, Long::plus) }
+@@ -73,8 +73,7 @@ class ShadowWindows(private val reports: ShadowReportReader, private val options
+         val elapsed = java.time.Duration.between(state.startedAt, now)
+         val summary = when {
+             blocked -> ShadowSummary(counts, now, insufficient = false, blocked = true, vanished = vanished)
+-            vanished.isNotEmpty() && elapsed < options.maxDuration -> null
+-            vanished.isEmpty() && elapsed >= options.minDuration && effective >= options.minSamples ->
++            elapsed >= options.minDuration && effective >= options.minSamples ->
+                 ShadowSummary(counts, now, insufficient = false, blocked = false)
+             elapsed >= options.maxDuration -> ShadowSummary(counts, now, insufficient = true, blocked = false, vanished)
+             else -> null

@@ -361,19 +361,22 @@ public final class me/ahoo/cosec/control/change/ShadowState {
 }
 
 public final class me/ahoo/cosec/control/change/ShadowSummary {
-	public fun <init> (Ljava/util/Map;Ljava/time/Instant;ZZ)V
+	public fun <init> (Ljava/util/Map;Ljava/time/Instant;ZZLjava/util/Set;)V
+	public synthetic fun <init> (Ljava/util/Map;Ljava/time/Instant;ZZLjava/util/Set;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
 	public final fun component1 ()Ljava/util/Map;
 	public final fun component2 ()Ljava/time/Instant;
 	public final fun component3 ()Z
 	public final fun component4 ()Z
-	public final fun copy (Ljava/util/Map;Ljava/time/Instant;ZZ)Lme/ahoo/cosec/control/change/ShadowSummary;
-	public static synthetic fun copy$default (Lme/ahoo/cosec/control/change/ShadowSummary;Ljava/util/Map;Ljava/time/Instant;ZZILjava/lang/Object;)Lme/ahoo/cosec/control/change/ShadowSummary;
+	public final fun component5 ()Ljava/util/Set;
+	public final fun copy (Ljava/util/Map;Ljava/time/Instant;ZZLjava/util/Set;)Lme/ahoo/cosec/control/change/ShadowSummary;
+	public static synthetic fun copy$default (Lme/ahoo/cosec/control/change/ShadowSummary;Ljava/util/Map;Ljava/time/Instant;ZZLjava/util/Set;ILjava/lang/Object;)Lme/ahoo/cosec/control/change/ShadowSummary;
 	public fun equals (Ljava/lang/Object;)Z
 	public final fun getBlocked ()Z
 	public final fun getClosedAt ()Ljava/time/Instant;
 	public final fun getCounts ()Ljava/util/Map;
 	public final fun getInsufficient ()Z
 	public final fun getNeedsAck ()Z
+	public final fun getVanished ()Ljava/util/Set;
 	public fun hashCode ()I
 	public fun toString ()Ljava/lang/String;
 }

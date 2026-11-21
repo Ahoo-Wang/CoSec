@@ -3,16 +3,16 @@
 # Tests: :control:test --tests me.ahoo.cosec.control.change.ExpiryRaceTest :conformance:test --tests me.ahoo.cosec.conformance.ConformanceTest
 
 diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ChangeLifecycle.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ChangeLifecycle.kt
-index 2f534317..71e183e0 100644
+index 6f2cd6d9e..915aadc6e 100644
 --- a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ChangeLifecycle.kt
 +++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ChangeLifecycle.kt
-@@ -150,9 +150,6 @@ internal class ChangeLifecycle(
+@@ -151,9 +151,6 @@ internal class ChangeLifecycle(
          }
          repeat(MAX_ATTEMPTS) {
              val current = read(change.id)
 -            if (!due(current.value)) {
 -                return current.value
 -            }
-             val expired = current.value.copy(state = ChangeState.EXPIRED, updatedAt = clock.instant())
+             val expired = current.value.copy(state = ChangeState.EXPIRED, updatedAt = laterThan(current.value))
              // The table says where an expiry may end; anything else is a fault and nothing is written.
              check(expired.state in ChangeStep.EXPIRE.to)

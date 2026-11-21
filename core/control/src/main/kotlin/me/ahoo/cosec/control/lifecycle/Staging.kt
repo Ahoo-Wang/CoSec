@@ -147,6 +147,9 @@ internal class Staging(
         } catch (e: Exception) {
             throw ChangeRejectedException(UNAVAILABLE, "the shadow reports of ${state.window} could not be read", e)
         }
+        if (look.waiting.isNotEmpty() && look.summary == null) {
+            log.info { "Shadow window ${state.window} of change ${id.value} is waiting for ${look.waiting.sorted()}." }
+        }
         // Every instance seen is kept, so that one dropped from the window's reporters later still has to report.
         val seen = state.copy(reporters = look.reporters)
         val summary = look.summary ?: return if (seen == state) {

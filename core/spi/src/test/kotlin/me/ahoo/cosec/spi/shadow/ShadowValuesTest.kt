@@ -16,6 +16,7 @@
 
 package me.ahoo.cosec.spi.shadow
 
+import kotlinx.coroutines.runBlocking
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.spi.snapshot.SnapshotDocument
@@ -30,6 +31,28 @@ import java.time.Instant
 class ShadowValuesTest {
     private val at = Instant.parse("2026-11-01T00:00:00Z")
     private val document = SnapshotDocument(2, 5, at, """{"schema":2}""".encodeToByteArray())
+
+    /** The default keeps the meaning of [ShadowReportReader.reports]: it throws where that throws, and names none unreadable. */
+    @Test
+    fun `the default readings read the reports, and throw where they throw`() = runBlocking<Unit> {
+        val report = ShadowReport("c1@1", "i0", mapOf(ShadowOutcome.SAME to 1L), emptyMap(), emptySet(), null, null)
+        var failing = false
+        val reader = object : ShadowReportReader {
+            override suspend fun reports(window: String): List<ShadowReport> =
+                if (failing) error("[c1@1:i1] is listed as reported but has no report") else listOf(report)
+
+            override suspend fun statuses(): List<InstanceStatus> = emptyList()
+        }
+        reader.readings("c1@1").assert().isEqualTo(ShadowReadings(listOf(report), emptySet()))
+        reader.readings("c1@1").hashCode().assert().isEqualTo(ShadowReadings(listOf(report), emptySet()).hashCode())
+        reader.readings("c1@1").toString().assert().contains("unreadable=[]")
+        failing = true
+        runCatching {
+            reader.readings(
+                "c1@1"
+            )
+        }.exceptionOrNull().assert().isInstanceOf(IllegalStateException::class.java)
+    }
 
     @Test
     fun `an installed document is its revision and its lag`() {

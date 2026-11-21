@@ -15,6 +15,7 @@
 
 package me.ahoo.cosec.cocache.shadow
 
+import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
@@ -31,9 +32,11 @@ import me.ahoo.cosec.cocache.DEFAULT_KEY_PREFIX
 import me.ahoo.cosec.cocache.createLocked
 import me.ahoo.cosec.cocache.readRecord
 import me.ahoo.cosec.spi.shadow.InstanceStatus
+import me.ahoo.cosec.spi.shadow.ShadowReadings
 import me.ahoo.cosec.spi.shadow.ShadowReport
 import me.ahoo.cosec.spi.shadow.ShadowReportReader
 import me.ahoo.cosec.spi.shadow.ShadowReportSink
+import me.ahoo.cosec.spi.snapshot.SnapshotFormatException
 import java.time.Clock
 import java.time.Instant
 import java.util.concurrent.ConcurrentHashMap
@@ -143,6 +146,44 @@ class CoCacheShadowReports @InternalCoSecApi constructor(
         }
     }
 
+    /**
+     * Each listed instance's report, or that instance named unreadable when its report is missing, does not decode, or
+     * is another's (`CTL-56`). Anything else, a store that does not answer above all, fails the whole call.
+     */
+    override suspend fun readings(window: String): ShadowReadings {
+        val instances = read(reporters, window)?.first.orEmpty()
+        check(
+            instances.all(ShadowReport::isInstanceId)
+        ) { "The reporters of window $window name an invalid instance id" }
+        val read = coroutineScope {
+            instances.sorted().map { instance -> async { instance to reading(window, instance) } }.awaitAll()
+        }
+        return ShadowReadings(
+            read.mapNotNull { it.second },
+            read.filter { it.second == null }.mapTo(HashSet()) { it.first }
+        )
+    }
+
+    /** [instance]'s report of [window], or null when it is listed and cannot be read; a store failure is thrown. */
+    private suspend fun reading(window: String, instance: String): ShadowReport? {
+        val key = ShadowCacheSpecs.reportKey(window, instance)
+        val report = try {
+            read(reports, key)?.first
+        } catch (e: SnapshotFormatException) {
+            log.warn(e) { "[$key] does not read: instance $instance's evidence on window $window is missing." }
+            return null
+        }
+        if (report == null) {
+            log.warn { "[$key] is listed as reported but has no report: instance $instance's evidence is missing." }
+            return null
+        }
+        if (report.window != window || report.instance != instance) {
+            log.warn { "The report under [$key] is ${report.instance}'s of ${report.window}: missing evidence." }
+            return null
+        }
+        return report
+    }
+
     private fun checkOwner(report: ShadowReport, window: String, instance: String) {
         check(report.window == window && report.instance == instance) {
             "The report under [${ShadowCacheSpecs.reportKey(
@@ -187,6 +228,7 @@ class CoCacheShadowReports @InternalCoSecApi constructor(
 
     @InternalCoSecApi
     companion object {
+        private val log = KotlinLogging.logger {}
         private const val MAX_ATTEMPTS = 16
 
         /** How many statuses [statuses] reads at once. */

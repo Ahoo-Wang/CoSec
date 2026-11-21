@@ -124,6 +124,36 @@ class DocumentSnapshotViewsTest {
     }
 
     /**
+     * R2D-1: the view reads the tenant's and the app's entries by position, in the order it asked for them. A set that
+     * holds them in another order never makes one document decide as the other: both are unresolved, so the decision
+     * is indeterminate where the right order permits.
+     */
+    @Test
+    fun `a set in another order than asked is unresolved, never one document read as another`() {
+        publish(SnapshotKey.Platform, allowRead)
+        publish(
+            SnapshotKey.Tenant("acme"),
+            ""","bindings":[{"id":"t","subject":"*","app":"*","space":"*","policy":"read"}]"""
+        )
+        publish(SnapshotKey.App("order"), "")
+        source().use { source ->
+            val views = DocumentSnapshotViews(source)
+            val scope = scope("acme", listOf("clerk"))
+            val key = ViewKey.of(scope, blocked = false)
+            decide(views.load(key).join(), scope).assert().isInstanceOf(Decision.Permit::class.java)
+            val set = source.peekAll(listOf(SnapshotKey.Tenant("acme"), SnapshotKey.App("order")))!!
+            views.viewOf(key, set).unresolved.assert().isEmpty()
+
+            val swapped = views.viewOf(key, SnapshotSet(set.shared, set.scoped.reversed()))
+            swapped.unresolved.map { (it as Cause.SourceUnavailable).document }
+                .assert().containsExactly(DocumentKind.TENANT, DocumentKind.APP)
+            swapped.tenant.assert().isNull()
+            swapped.app.assert().isNull()
+            decide(swapped, scope).assert().isInstanceOf(Decision.Indeterminate::class.java)
+        }
+    }
+
+    /**
      * `TNT-1` (R1A-8): the source keys a tenant's document by its id exactly as written, so two tenants whose ids differ
      * only in case each decide on their own document and never on the other's. The engine refuses another tenant's
      * document, so a source that shared one entry between them would answer one tenant with a failure, not a decision:
