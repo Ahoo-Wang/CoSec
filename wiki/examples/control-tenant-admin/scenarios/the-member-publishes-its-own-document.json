@@ -1,0 +1,22 @@
+{
+  "description": "The member publishes its own document.",
+  "credential": {
+    "tenant": "acme",
+    "id": "bob",
+    "app": "cosec-control",
+    "roles": [
+      "tenant-admin"
+    ]
+  },
+  "request": {
+    "hostApp": "cosec-control",
+    "action": "cosec:publish",
+    "resource": {
+      "type": "doc",
+      "id": "tenant/acme"
+    }
+  },
+  "expect": {
+    "decision": "Permit"
+  }
+}

@@ -1,0 +1,22 @@
+{
+  "description": "Approving is not part of the role.",
+  "credential": {
+    "tenant": "acme",
+    "id": "bob",
+    "app": "cosec-control",
+    "roles": [
+      "tenant-admin"
+    ]
+  },
+  "request": {
+    "hostApp": "cosec-control",
+    "action": "cosec:approve",
+    "resource": {
+      "type": "doc",
+      "id": "tenant/acme"
+    }
+  },
+  "expect": {
+    "decision": "Deny"
+  }
+}

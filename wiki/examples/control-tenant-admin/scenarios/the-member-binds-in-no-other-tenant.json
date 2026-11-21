@@ -1,0 +1,22 @@
+{
+  "description": "The member binds in no other tenant.",
+  "credential": {
+    "tenant": "acme",
+    "id": "bob",
+    "app": "cosec-control",
+    "roles": [
+      "tenant-admin"
+    ]
+  },
+  "request": {
+    "hostApp": "cosec-control",
+    "action": "cosec:grant",
+    "resource": {
+      "type": "scope",
+      "id": "globex/orders/(default)"
+    }
+  },
+  "expect": {
+    "decision": "Deny"
+  }
+}

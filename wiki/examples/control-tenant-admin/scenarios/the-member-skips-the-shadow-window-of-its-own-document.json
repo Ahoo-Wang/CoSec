@@ -1,0 +1,22 @@
+{
+  "description": "The member skips the shadow window of its own document.",
+  "credential": {
+    "tenant": "acme",
+    "id": "bob",
+    "app": "cosec-control",
+    "roles": [
+      "tenant-admin"
+    ]
+  },
+  "request": {
+    "hostApp": "cosec-control",
+    "action": "cosec:skip-shadow",
+    "resource": {
+      "type": "doc",
+      "id": "tenant/acme"
+    }
+  },
+  "expect": {
+    "decision": "Permit"
+  }
+}
