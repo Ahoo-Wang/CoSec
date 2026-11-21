@@ -30,6 +30,7 @@ import me.ahoo.cosec.model.decision.Decision
 import me.ahoo.cosec.model.decision.DocumentKind
 import me.ahoo.cosec.model.decision.StatementRef
 import me.ahoo.cosec.model.scope.Scope
+import me.ahoo.cosec.runtime.event.CauseName
 import me.ahoo.cosec.runtime.event.DecisionEvent
 import me.ahoo.cosec.runtime.event.Delivery
 import me.ahoo.cosec.runtime.event.ReplayHandle
@@ -271,7 +272,7 @@ class ShadowListener(
 
     /** What differs, if anything, between two decisions that come to the same result but are not equal. */
     private fun sameResult(enforced: Decision, candidate: Decision): ShadowOutcome = when {
-        enforced::class == candidate::class && by(enforced) != by(candidate) -> ShadowOutcome.BY_CHANGED
+        enforced::class == candidate::class && sampledBy(enforced) != sampledBy(candidate) -> ShadowOutcome.BY_CHANGED
         enforced is Decision.Permit && candidate is Decision.Permit && enforced.obligations != candidate.obligations ->
             ShadowOutcome.OBLIGATIONS_CHANGED
         else -> ShadowOutcome.SAME
@@ -285,24 +286,25 @@ class ShadowListener(
         space = request.scope.space.value,
         action = "${request.request.action.namespace}:${request.request.action.verb}",
         resource = "${request.request.resource.type}/${request.request.resource.id}",
-        enforcedBy = by(enforced),
-        candidateBy = candidate?.let(::by),
+        enforcedBy = sampledBy(enforced),
+        candidateBy = candidate?.let(::sampledBy),
     )
 
-    private fun by(decision: Decision): String? {
-        val ref = when (decision) {
-            is Decision.Permit -> decision.by
-            is Decision.Deny -> decision.by
-            is Decision.Indeterminate -> return decision.cause::class.simpleName
-        }
-        return when (ref) {
-            is StatementRef.Policy -> "${ref.policy.value}[${ref.index}] via ${ref.via}"
-            null -> null
-            else -> ref.toString()
-        }
-    }
-
     override fun toString(): String = "ShadowListener($name, sampleRate=$sampleRate)"
+}
+
+/** What decided [decision], as a sample names it: the deciding statement, or the wire name of its cause (`OBS-9`). */
+internal fun sampledBy(decision: Decision): String? {
+    val ref = when (decision) {
+        is Decision.Permit -> decision.by
+        is Decision.Deny -> decision.by
+        is Decision.Indeterminate -> return CauseName.of(decision.cause).wire
+    }
+    return when (ref) {
+        is StatementRef.Policy -> "${ref.policy.value}[${ref.index}] via ${ref.via}"
+        null -> null
+        else -> ref.toString()
+    }
 }
 
 /** The document this cause says could not be read, or does not compile; null for any other cause. */

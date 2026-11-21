@@ -26,6 +26,7 @@ import me.ahoo.cosec.model.decision.BindingRef
 import me.ahoo.cosec.model.decision.Cause
 import me.ahoo.cosec.model.decision.DocumentKind
 import me.ahoo.cosec.model.decision.StatementRef
+import me.ahoo.cosec.runtime.event.CauseName
 import me.ahoo.cosec.runtime.event.DecisionEvent
 import me.ahoo.cosec.runtime.event.OutcomeSummary.Reason
 import me.ahoo.cosec.spi.authn.AuthnResult
@@ -151,7 +152,7 @@ object AuditEvents {
         event.subject.refused?.let { return "${event.outcome.reason.name}: ${event.subject.rejected} of $it" }
         (event.by as? StatementRef.Boundary)?.let { return "${event.outcome.reason.name}: ${it.boundary.value}" }
         val cause = event.outcome.cause ?: return event.outcome.reason.name
-        return "${event.outcome.reason.name}: ${cause::class.simpleName}"
+        return "${event.outcome.reason.name}: ${CauseName.of(cause).wire}"
     }
 
     private fun source(by: StatementRef?): AuditSourceData = when (by) {

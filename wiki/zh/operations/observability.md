@@ -87,7 +87,7 @@ starter 注册的监听器：
 | `principal` | `id`、`authenticated`、`roles`（解析出的作用域中的角色） |
 | `request` | `id`（即 `CoSec-Request-Id`）、`appId`、`spaceId`、`remoteIp`、`method`、`path`（规范化后）、`routeId`（请求经过的网关路由；其他适配器为 null）、`device.id` |
 | `authorization.decision`、`authorization.reasonCode` | 见下表 |
-| `authorization.reason` | 结果，`503` 时还有其原因，例如 `INDETERMINATE: SourceUnavailable` |
+| `authorization.reason` | 结果，`503` 时还有其原因，例如 `INDETERMINATE: SourceUnavailable`。一个原因在 CoSec 写出它的每一处都是同一个名字：这里、影子报告的样本和控制 API 的 `cause`，都取自同一张表，因此 CoSec 重命名某个类不会改变它（`OBS-9`） |
 | `authorization.elapsedNanos` | 整个管道，从请求开始到得出结果 |
 | `authorization.source` | 是什么做出了决定：`via`、`document`、`policy`（策略 id）和 `statement`（`index`、`name`）；见下面第二张表 |
 | `binding` | 给人看的标签，不要解析它：做出决定的语句通过什么生效，绑定 id（角色派生的绑定为 `role:<roleId>@<app>:<permission>`）、`attached:<policyId>`、`builtin`（黑名单）或 `boundary:<tenantId>` |

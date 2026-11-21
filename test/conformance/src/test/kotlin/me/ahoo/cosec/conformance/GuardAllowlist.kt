@@ -70,6 +70,11 @@ object GuardAllowlist {
             "runtime:AuditVocabularyTest#every reason has the audit decision of its own name",
             "micrometer:ResultVocabularyTest#every reason has the result of its own name",
             "runtime:SubjectMethodTest#the event names the credential as the identity header does",
+            // OBS-9: one table names a cause on the wire.
+            "runtime:CauseNameTest#the table names every kind of cause, each by its pinned name",
+            "runtime:CauseNameTest#the audit record names each cause by its pinned name",
+            "runtime:CauseNameTest#the shadow sample names each cause by its pinned name",
+            "runtime:CauseNameTest#the audit record and the shadow sample never name a cause by its class",
             // PIP-28: no request Principal for an anonymous request.
             "webflux:PipelineWebFilterTest#anAnonymousPermitHasNoRequestPrincipal",
             "webflux:PipelineWebFilterTest#anotherLayersPrincipalIsReplacedOnlyWhenCoSecAuthenticated",
