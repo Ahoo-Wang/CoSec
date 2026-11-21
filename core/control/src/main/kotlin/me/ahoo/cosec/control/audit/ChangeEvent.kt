@@ -18,6 +18,7 @@ package me.ahoo.cosec.control.audit
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.control.change.ChangeId
+import me.ahoo.cosec.control.change.ChangeOrigin
 import me.ahoo.cosec.control.change.Confirmation
 import me.ahoo.cosec.control.change.Escalation
 import me.ahoo.cosec.control.change.ShadowSummary
@@ -31,6 +32,8 @@ import java.time.Instant
  * [Kind.HEADS_MOVED] and [Kind.REVIEW_NEEDED], the heads that [moved] and the escalations the analysis finds now.
  */
 @ExperimentalCoSecApi
+// stays: a record of what happened in a step, one parameter per member of the event
+@Suppress("LongParameterList")
 class ChangeEvent(
     val id: String,
     val time: Instant,
@@ -45,6 +48,8 @@ class ChangeEvent(
     val shadow: ShadowSummary? = null,
     val note: String = "",
     val moved: List<MovedHead> = emptyList(),
+    /** How [operator] was identified for this step (`CTL-57`); null when no request drove it. */
+    val origin: ChangeOrigin? = null,
 ) {
     /**
      * A set that grows: a minor release may add a member (RFC 0010 Q6), so a `when` over it needs an `else`.

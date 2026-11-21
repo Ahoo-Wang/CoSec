@@ -3,14 +3,14 @@
 # Tests: :control:test --tests me.ahoo.cosec.control.api.StepEventsTest
 
 diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Proposals.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Proposals.kt
-index c4741674e..c6df22057 100644
+index edc7aee20..914997b9d 100644
 --- a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Proposals.kt
 +++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Proposals.kt
-@@ -254,7 +254,6 @@ internal class Proposals(
+@@ -256,7 +256,6 @@ internal class Proposals(
                  author
              )
          }
--        flow.audit(ChangeEvent.Kind.REBASED, rebased, author.actor)
+-        flow.audit(ChangeEvent.Kind.REBASED, rebased, author.actor, origin = author.origin)
          return rebased
      }
  

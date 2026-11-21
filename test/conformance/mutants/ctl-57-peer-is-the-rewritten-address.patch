@@ -1,0 +1,17 @@
+# Rule: CTL-57
+# Mutant: the peer is the request's own remote address, which forwarded-header handling rewrites to what the caller states
+# Tests: :spring-boot:test --tests me.ahoo.cosec.spring.boot.control.ControlServicePortTest
+
+diff --git a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/control/ControlPeer.kt b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/control/ControlPeer.kt
+index 01bc09c81..cc5bd4f46 100644
+--- a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/control/ControlPeer.kt
++++ b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/control/ControlPeer.kt
+@@ -38,7 +38,7 @@ internal object ControlPeer {
+             return null
+         }
+         return try {
+-            ReactorPeer.of(ServerHttpRequestDecorator.getNativeRequest<Any>(exchange.request))
++            exchange.request.remoteAddress?.hostString
+         } catch (e: IllegalArgumentException) {
+             // No native request beneath the decorators: nothing to read it from.
+             null.also { e.message }

@@ -3,7 +3,7 @@
 # Tests: :control:test --tests me.ahoo.cosec.control.change.PreemptionRaceTest :conformance:test
 
 diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Publishing.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Publishing.kt
-index 5dc90670..69b1fed3 100644
+index 8a1b58b7d..ab4b21713 100644
 --- a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Publishing.kt
 +++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Publishing.kt
 @@ -121,9 +121,6 @@ internal class Publishing(
@@ -13,7 +13,7 @@ index 5dc90670..69b1fed3 100644
 -        if (!slots.holds(change)) {
 -            return flow.settle(change, ChangeState.CONFLICTED, ChangeStep.PUBLISH)
 -        }
-         flow.audit(ChangeEvent.Kind.PUBLISHING, change.publishedAgain(publisher, again), publisher.actor)
+         recordPublishing(change, publisher, again)
          var published: ChangeRequest? = null
          var slotLost = false
 @@ -132,7 +129,6 @@ internal class Publishing(

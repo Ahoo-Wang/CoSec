@@ -357,7 +357,13 @@ The control plane emits a change event for every step of a change: `PROPOSED`, `
 `BREAK_GLASS_APPROVED`, `REVOKED`, `HEADS_MOVED`, `REVIEW_NEEDED`, `ABANDONED`, `SHADOW_SKIPPED`, `REBASED`. Every
 route that changes a change's record writes one when it does (`CTL-63`). An event names the change, the document, the operator, the base and candidate
 revisions, what needed approval, the confirmations, the shadow summary and the note; it never carries a document's
-content. Change listeners receive them.
+content. Change listeners receive them. An event also carries the **origin** of its step's operator (`CTL-57`), as the
+event's JSON writes it: `asserted` (the host believed the identity the caller stated instead of verifying a credential
+itself), `via` (the credential's `method`, its id as `credential` and the request's id as `request`, never its value)
+and `peer` (the address of the connection the request arrived on, read from the Reactor Netty channel beneath any
+forwarded-header handling, so that a caller cannot state it as it states its client address; a host that cannot read it
+that way, any but Reactor Netty, records none). A step no request drives, a maintenance pass for one, has none; the stored
+change records the origin of its author, and the log line ends with `origin=...` when there is one.
 
 - **The default listener** logs each event at `INFO` to the logger `me.ahoo.cosec.changelog`, as
   `Change <changeId> <kind> on <doc> by <principal>@<tenant>: base=..., candidate=..., escalations=<n>, confirmations=<n>`.

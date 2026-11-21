@@ -3,7 +3,7 @@
 # Tests: :control:test --tests me.ahoo.cosec.control.api.StepEventsTest
 
 diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Staging.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Staging.kt
-index 351d45db9..c631a06c9 100644
+index 3a0d4ead0..d400f142f 100644
 --- a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Staging.kt
 +++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Staging.kt
 @@ -212,8 +212,6 @@ internal class Staging(
@@ -11,7 +11,7 @@ index 351d45db9..c631a06c9 100644
              it.copy(state = PublishRules.afterWindow(it), skipShadow = reason)
          }
 -        // Recorded now (CTL-63): the revision's provenance records the skip only if the change is ever published.
--        flow.audit(ChangeEvent.Kind.SHADOW_SKIPPED, skipped.skipped(), operator.actor)
+-        flow.audit(ChangeEvent.Kind.SHADOW_SKIPPED, skipped.skipped(), operator.actor, origin = operator.origin)
          return skipped
      }
  

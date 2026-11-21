@@ -42,7 +42,10 @@ import me.ahoo.cosec.control.change.InvalidControlRequestException
 import me.ahoo.cosec.control.change.requireRequest
 
 /** The routes of `/changes` (RFC 0007 §10.2): proposing a change, reading one, and its transitions. */
-internal class ChangeRoutes(private val plane: ControlPlane) : RouteHandler {
+internal class ChangeRoutes(
+    private val plane: ControlPlane,
+    private val profile: ControlProfile = ControlProfile.OPERATORS,
+) : RouteHandler {
     override suspend fun handle(
         operator: Operator,
         request: ControlHttpRequest,
@@ -82,6 +85,9 @@ internal class ChangeRoutes(private val plane: ControlPlane) : RouteHandler {
         }
         return post(request) {
             val key = documentKey(it.text("document"))
+            if (!profile.admitsWrite(key)) {
+                return@post notFound()
+            }
             val operations = it.array("operations").map { op ->
                 decoded("operations") { ChangeRequestCodec.operation(key, op) }
             }

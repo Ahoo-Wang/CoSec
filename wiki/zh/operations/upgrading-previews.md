@@ -38,7 +38,7 @@ description: "每个 8.0 预览版（alpha 与 beta）到下一个之间的变�
   - `ChangeEvent.Kind` 新增 `SHADOW_SKIPPED` 和 `REBASED`。过去跳过只记在它所发布的修订的来源中，所以变更被放弃时跳过不留任何记录；现在
     `:skip-shadow` 以及 break-glass 变更免除的窗口会写 `SHADOW_SKIPPED`，备注写明原因，`:rebase` 写 `REBASED`。
   - 处理每一种类型的监听器要加上这两种；按类型文档的要求带 `else` 分支的监听器无需改动。
-
+- **控制面记录每一步的操作者是如何被识别的，并可增加服务端口**（`CTL-57`、`CTL-58`、`CTL-59`）。受影响的是针对 `ChangeEvent`、`ChangeRequest` 或 `HttpFacts`（实验性）编译的代码：它们的构造函数各在末尾增加了一个带默认值的参数（`origin`、`origin`、`peerAddress`），请重新编译。以 JSON 写出的变更事件和存储的变更增加了 `origin` 成员（`asserted`、`via`、`peer`），不认识它的读取方会忽略。新增且默认不设置：`cosec.control.http.enabled`、`cosec.control.http.service-port` 和 `cosec.control.maintenance.enabled`（[配置](./configuration.md#control-plane)）。没有设置它们的部署无需改动。
 - **控制 API 由自己的应答模型作答；被拒绝的作用域在 `reason` 下说明原因；传播只统计持有该文档的实例**（第二轮评审，
   `R2C-11`、`R2C-12`、`CTL-61`、`CTL-62`）。受影响的是控制 API 的客户端。
   - 变更的应答（`GET /changes/{id}` 以及每个应答变更的路由）不再包含 `checkedWith`、`checkedApps` 和窗口的

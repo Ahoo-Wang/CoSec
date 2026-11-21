@@ -16,10 +16,10 @@ spring:
 cosec:
   pipeline:
     # Policies are wired (the snapshot, the control plane) and the gate of the web adapter believes the CoSec-Identity
-    # header (STA-9). The host does not start until the operator states what can reach it: add
-    # cosec.pipeline.identity.only-gateway-can-reach (only the gateway can) or only-trusted-callers-can-reach (services
-    # call it too) = true, once a NetworkPolicy, mutual TLS or a private network makes it so. It is not in this file on
-    # purpose: it is the operator's statement, not a default.
+    # header (STA-9). The host does not start until the operator states what can reach it: with the service port below,
+    # cosec.pipeline.identity.only-trusted-callers-can-reach=true (the gateway and the services you name can); without
+    # it, only-gateway-can-reach (only the gateway can). Say it once a NetworkPolicy, mutual TLS or a private network
+    # makes it so. It is not in this file on purpose: it is the operator's statement, not a default.
     mode: enforce
     caller: forwarded-identity
   # No token is verified or issued here, so no COSEC_JWT_SECRET is needed and the host refuses to start with these on.
@@ -43,6 +43,11 @@ cosec:
     kafka:
       enabled: false
   control:
+    http:
+      # The service API, on a port of its own (CTL-58): the narrow profile for the services that call the control plane
+      # directly, not through the gateway. Reach it with a policy that admits those pods only; the operators' API stays on
+      # server.port, for the gateway. Unset it for a host only the gateway calls.
+      service-port: 8082
     audit:
       kafka:
         enabled: false

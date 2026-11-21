@@ -83,10 +83,7 @@ internal class Publishing(
         val change = flow.visible(publisher, id)
         authority.require(publisher, change.key, PublishRules.publishing(change))
         if (change.state == ChangeState.PUBLISHED && slots.holds(change)) {
-            val recorded = change.publishedAgain(publisher, again)
-            return afterHead(change, checkNotNull(change.publishedRevision)) {
-                slots.released(change) { flow.audit(PublishRules.outcomeOf(change, change), recorded, publisher.actor) }
-            }
+            return recordedAgain(change, publisher, again)
         }
         PublishRules.requireState(change, ChangeStep.PUBLISH.from)
         PublishRules.acknowledged(change, ack)
@@ -127,7 +124,7 @@ internal class Publishing(
         if (!slots.holds(change)) {
             return flow.settle(change, ChangeState.CONFLICTED, ChangeStep.PUBLISH)
         }
-        flow.audit(ChangeEvent.Kind.PUBLISHING, change.publishedAgain(publisher, again), publisher.actor)
+        recordPublishing(change, publisher, again)
         var published: ChangeRequest? = null
         var slotLost = false
         val outcome = revisions.publish(
@@ -142,6 +139,31 @@ internal class Publishing(
         return when (outcome) {
             is PublishOutcome.Published -> checkNotNull(published) { "[${change.key}] was written unsettled." }
             else -> unwritten(change, outcome, slotLost, publisher, again)
+        }
+    }
+
+    /** The PUBLISHING record, gated: written before the head is, so a REQUIRED listener that cannot record it stops the publish. */
+    private suspend fun recordPublishing(change: ChangeRequest, publisher: Operator, again: String?) {
+        flow.audit(
+            ChangeEvent.Kind.PUBLISHING,
+            change.publishedAgain(publisher, again),
+            publisher.actor,
+            origin = publisher.origin,
+        )
+    }
+
+    /** A publish of a change that already published, whose slot is still held: it records the publish again and releases the slot. */
+    private suspend fun recordedAgain(change: ChangeRequest, publisher: Operator, again: String?): ChangeRequest {
+        val recorded = change.publishedAgain(publisher, again)
+        return afterHead(change, checkNotNull(change.publishedRevision)) {
+            slots.released(change) {
+                flow.audit(
+                    PublishRules.outcomeOf(change, change),
+                    recorded,
+                    publisher.actor,
+                    origin = publisher.origin,
+                )
+            }
         }
     }
 
@@ -176,7 +198,7 @@ internal class Publishing(
         }
         val note = PublishRules.unwrittenNote(outcome, slotLost) ?: settled.note
         val recorded = settled.copy(note = note).publishedAgain(publisher, again)
-        flow.audit(PublishRules.outcomeOf(change, settled), recorded, publisher.actor)
+        flow.audit(PublishRules.outcomeOf(change, settled), recorded, publisher.actor, origin = publisher.origin)
         return settled
     }
 
@@ -187,7 +209,7 @@ internal class Publishing(
     private suspend fun movedOn(change: ChangeRequest, head: Head?, publisher: Operator): ChangeRequest {
         val settled = flow.settle(change, ChangeState.CONFLICTED, ChangeStep.PUBLISH)
         PublishRules.publishedFirst(change, head)?.let {
-            flow.audit(ChangeEvent.Kind.FAILED, settled.copy(note = it), publisher.actor)
+            flow.audit(ChangeEvent.Kind.FAILED, settled.copy(note = it), publisher.actor, origin = publisher.origin)
         }
         return settled
     }
@@ -220,7 +242,8 @@ internal class Publishing(
             flow.audit(
                 PublishRules.outcomeOf(change, settled),
                 settled.publishedAgain(publisher, again),
-                publisher.actor
+                publisher.actor,
+                origin = publisher.origin,
             )
             settled
         } finally {
@@ -280,7 +303,13 @@ internal class Publishing(
         unanalyzed: String? = null,
     ) = movedHeads.record(published, rechecked, base, candidate, publisher, unanalyzed) { found ->
         val change = published.copy(escalations = found.escalations, note = found.note)
-        flow.audit(found.kind, change, actor, found.moved)
+        flow.audit(
+            found.kind,
+            change,
+            actor,
+            found.moved,
+            origin = publisher.origin.takeIf { actor == publisher.actor }
+        )
     }
 
     /**

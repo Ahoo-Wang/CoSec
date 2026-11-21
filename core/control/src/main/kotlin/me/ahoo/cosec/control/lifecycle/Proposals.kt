@@ -131,6 +131,7 @@ internal class Proposals(
             base = head?.let { Base(it.revision, it.digest) } ?: Base.NONE,
             operations = operations,
             author = author.actor,
+            origin = author.origin,
             note = note,
             kind = kind,
             state = ChangeState.DRAFT,
@@ -147,7 +148,7 @@ internal class Proposals(
             author
         ).let { if (applying.notes.isEmpty()) it else it.copy(findings = it.findings + applying.notes) }
         if (breakGlass) {
-            flow.audit(ChangeEvent.Kind.BREAK_GLASS_REQUESTED, checked, author.actor)
+            flow.audit(ChangeEvent.Kind.BREAK_GLASS_REQUESTED, checked, author.actor, origin = author.origin)
         }
         if (!store.putChange(null, checked)) {
             throw ChangeRejectedException(CONFLICT, "change ${checked.id.value} already exists")
@@ -155,7 +156,8 @@ internal class Proposals(
         flow.audit(
             if (checked.state == ChangeState.CHECKED) ChangeEvent.Kind.CHECKED else ChangeEvent.Kind.PROPOSED,
             checked,
-            author.actor
+            author.actor,
+            origin = author.origin,
         )
         return checked
     }
@@ -254,7 +256,7 @@ internal class Proposals(
                 author
             )
         }
-        flow.audit(ChangeEvent.Kind.REBASED, rebased, author.actor)
+        flow.audit(ChangeEvent.Kind.REBASED, rebased, author.actor, origin = author.origin)
         return rebased
     }
 

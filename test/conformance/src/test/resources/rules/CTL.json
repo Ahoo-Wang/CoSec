@@ -807,6 +807,47 @@
       "pending": null
     },
     {
+      "id": "CTL-57",
+      "source": "maintainer decision 2026-11-21 (the control-plane host's callers, \"按你推荐\"); control-server-design §0.2",
+      "statement": "A control-plane change records how its author was identified, and each change event how the operator of its step was (`origin`): `asserted` is true when the host believed the identity the caller stated (the `CoSec-Identity` header, `STA-9`) instead of verifying a credential itself; `via` is the credential as stated or verified (its method, its id, never its value, and the request's id); `peer` is the address of the connection the request arrived on, read from the Reactor Netty channel beneath any forwarded-header handling (`server.forward-headers-strategy`, a `ForwardedHeaderTransformer`), so that a caller cannot state it as it states its client address; a host that cannot read it that way, any but Reactor Netty, records none. It is read where the control routes are served, never on the request path of the others. A step no request drives, a maintenance pass for one, records none. The member is additive: a stored change without it reads, and a reader that does not know it ignores it. An event written as JSON carries the member only when it has one.",
+      "level": "build",
+      "pending": null,
+      "guards": [
+        "control:ChangeOriginTest#a change records how its author was identified, and each event how its step's operator was",
+        "control:ChangeOriginTest#an origin is stored with its change and written with its event, with the members it has",
+        "spring-boot:ForwardedIdentityCallerTest#the operator of a request the identity gate decided is recorded as asserted, with the credential stated and the peer",
+        "spring-boot:ControlServicePortTest#the peer of a control request is the connection's, beneath the forwarded header handling"
+      ]
+    },
+    {
+      "id": "CTL-58",
+      "source": "maintainer decision 2026-11-21 (the control-plane host's service API); control-server-design §0.7, §0.8",
+      "statement": "The control API's service profile is the narrow set a service that calls the control plane directly may ask for, served on a port of its own (`cosec.control.http.service-port`, WebFlux only; the network, not a filter, says who may use it): the tenant and app documents (their reads, and `:apply` on a tenant's) and the change flow that needs no person (propose a tenant's document, read, rebase, abandon, run or skip the shadow window, publish). Every other route is a `404` before the control plane is asked, as if it did not exist: the platform document, approvals and rejections, rollback, break-glass, the queries and propagation. Nothing but the control API is served on that port. The profile narrows what is served and never widens what the caller may do: each route it serves is authorized for the stated principal by the policies. The service port is not the application's or the management port, and it is refused with the control API off (`cosec.control.http.enabled=false`, which serves no control route at all) or beside the gateway's statement (`only-gateway-can-reach`), since a service port admits services. The listener stops by unbinding, waiting for the requests in flight within the shutdown grace, and closing every connection still open, the idle keep-alive ones included.",
+      "level": "build",
+      "pending": null,
+      "guards": [
+        "control:ControlProfileTest#the service profile serves a tenant document and its history, and the change flow",
+        "control:ControlProfileTest#what is a person's or the platform's is a 404 on the service profile, and is served on the operators' one",
+        "control:ControlProfileTest#a proposal for the platform document is a 404 on the service profile, never reaching the control plane",
+        "control:ControlProfileTest#no principal is a 401 on the service profile as on the operators' one, before any route is looked at",
+        "spring-boot:ControlServicePortTest#the service port listens apart, serves nothing but the control API, and closes its connections when it stops",
+        "spring-boot:ControlServicePortTest#a service port beside the application's, the management port or a disabled control API is refused",
+        "spring-boot:ControlServicePortTest#a service port with no WebFlux server to serve it fails startup naming what to do",
+        "spring-boot:ControlServicePortTest#cosec control http enabled false serves no control route, and the control plane stays for what embeds it"
+      ]
+    },
+    {
+      "id": "CTL-59",
+      "source": "maintainer decision 2026-11-21 (the control-plane host's replicas and embedders); control-server-design §0.6",
+      "statement": "`cosec.control.maintenance.enabled=false` runs none of the control plane's maintenance passes on the instance (reclaiming revisions, closing shadow windows, reconciling the app list and the staged list), for an instance that only serves, such as an IAM service that embeds the control plane beside a host that runs them; the default runs them, on every instance. The control plane itself stays wired either way. A host with it off says so once at startup, at INFO: no pass is run by it, and another control host must run them.",
+      "level": "startup",
+      "pending": null,
+      "guards": [
+        "spring-boot:ControlServicePortTest#cosec control maintenance enabled false runs no maintenance pass, and the default runs them",
+        "spring-boot:ControlServicePortTest#a host that runs no maintenance pass says so, and one that runs them says nothing"
+      ]
+    },
+    {
       "id": "CTL-63",
       "source": "G2e finding (routes.json of #1792): :skip-shadow and :rebase wrote no change event; RFC 0007 §10.5",
       "statement": "A step that changes a change's record writes a change event when it does: skipping a shadow window writes `SHADOW_SKIPPED`, with why in its note, whether or not the change is ever published, and a rebase writes `REBASED`; a refused step changes nothing and writes nothing.",

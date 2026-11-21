@@ -24,4 +24,6 @@ class ControlHttpRequest(
     val path: String,
     val query: Map<String, String> = emptyMap(),
     val body: ByteArray? = null,
+    /** The peer of the connection ([me.ahoo.cosec.control.authz.Operator.peer]), read by the adapter that serves the routes. */
+    val peer: String? = null,
 )

@@ -21,6 +21,7 @@ import me.ahoo.cosec.control.audit.ChangeEvent
 import me.ahoo.cosec.control.audit.MovedHead
 import me.ahoo.cosec.control.audit.RevisionRef
 import me.ahoo.cosec.control.authz.Operator
+import me.ahoo.cosec.control.change.ChangeOrigin
 import me.ahoo.cosec.control.change.ChangeRequest
 import me.ahoo.cosec.document.Actor
 import java.time.Clock
@@ -31,6 +32,7 @@ internal fun ChangeRequest.event(
     operator: Actor,
     clock: Clock,
     moved: List<MovedHead>,
+    origin: ChangeOrigin? = null,
 ): ChangeEvent = ChangeEvent(
     id = "${id.value}:${kind.name}:${clock.millis()}",
     time = clock.instant(),
@@ -45,6 +47,7 @@ internal fun ChangeRequest.event(
     shadow = shadow?.closed,
     note = note,
     moved = moved,
+    origin = origin,
 )
 
 /** This change as its skipped window records it (`CTL-63`): the note leads with why the window was skipped. */

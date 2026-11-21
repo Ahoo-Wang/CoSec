@@ -1,0 +1,17 @@
+# Rule: CTL-58
+# Mutant: the service port serves paths outside the control API
+# Tests: :spring-boot:test --tests me.ahoo.cosec.spring.boot.control.ControlServicePortTest
+
+diff --git a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/control/ServicePortFilter.kt b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/control/ServicePortFilter.kt
+index a98196c4c..b1620aeb5 100644
+--- a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/control/ServicePortFilter.kt
++++ b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/control/ServicePortFilter.kt
+@@ -38,7 +38,7 @@ internal class ServicePortFilter(
+             return chain.filter(exchange)
+         }
+         val path = exchange.request.path.pathWithinApplication().value()
+-        if (path == basePath || path.startsWith("$basePath/")) {
++        if (path == basePath || path.startsWith("$basePath/") || true) {
+             return chain.filter(exchange)
+         }
+         exchange.response.statusCode = HttpStatus.NOT_FOUND

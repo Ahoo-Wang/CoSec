@@ -31,7 +31,8 @@ class LoggingChangeListener(override val name: String = "logging") : ChangeListe
         log.info {
             "Change ${event.change.value} ${event.kind} on ${event.document} by ${event.operator.principal.value}@" +
                 "${event.operator.tenant.value}: base=${event.base}, candidate=${event.candidate}, " +
-                "escalations=${event.escalations.size}, confirmations=${event.confirmations.size}"
+                "escalations=${event.escalations.size}, confirmations=${event.confirmations.size}" +
+                (event.origin?.let { ", origin=$it" } ?: "")
         }
     }
 

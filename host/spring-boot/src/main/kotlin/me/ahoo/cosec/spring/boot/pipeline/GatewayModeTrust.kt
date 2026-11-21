@@ -85,6 +85,12 @@ internal object GatewayModeTrust {
     private fun written(environment: Environment, key: String): String? =
         Binder.get(environment).bind(key, String::class.java).orElse(null)
 
+    /** Whether [key] is stated `true` (any letter case), read as [requireBoundaryStated] reads it. */
+    fun isStated(environment: Environment, key: String): Boolean = written(
+        environment,
+        key
+    ).equals("true", ignoreCase = true)
+
     /** Whether the properties wire the identity gate ([OnIdentityGate]), for the check that follows a gate wired another way. */
     fun wiredByProperty(environment: Environment): Boolean =
         environment.getProperty(PipelineProperties.MODE_KEY).equals("gateway", ignoreCase = true) ||

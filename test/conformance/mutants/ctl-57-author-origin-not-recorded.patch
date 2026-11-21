@@ -1,0 +1,16 @@
+# Rule: CTL-57
+# Mutant: a change does not record how its author was identified
+# Tests: :control:test --tests me.ahoo.cosec.control.audit.ChangeOriginTest
+
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Proposals.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Proposals.kt
+index b3e16fe3f..6bd678355 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Proposals.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Proposals.kt
+@@ -131,7 +131,6 @@ internal class Proposals(
+             base = head?.let { Base(it.revision, it.digest) } ?: Base.NONE,
+             operations = operations,
+             author = author.actor,
+-            origin = author.origin,
+             note = note,
+             kind = kind,
+             state = ChangeState.DRAFT,

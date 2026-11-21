@@ -79,7 +79,7 @@ internal class Staging(
             val skipped = reserved(operator, change, head, ChangeStep.STAGE) {
                 it.copy(state = PublishRules.afterWindow(it), skipShadow = BREAK_GLASS_EXEMPT)
             }
-            flow.audit(ChangeEvent.Kind.SHADOW_SKIPPED, skipped.skipped(), operator.actor)
+            flow.audit(ChangeEvent.Kind.SHADOW_SKIPPED, skipped.skipped(), operator.actor, origin = operator.origin)
             return skipped
         }
         val now = clock.instant()
@@ -89,7 +89,7 @@ internal class Staging(
             it.copy(state = ChangeState.SHADOWING, shadow = state)
         }
         slots.write(shadowing, candidate) { undo(shadowing) }
-        flow.audit(ChangeEvent.Kind.SHADOW_STARTED, shadowing, operator.actor)
+        flow.audit(ChangeEvent.Kind.SHADOW_STARTED, shadowing, operator.actor, origin = operator.origin)
         return shadowing
     }
 
@@ -233,7 +233,7 @@ internal class Staging(
             it.copy(state = PublishRules.afterWindow(it), skipShadow = reason)
         }
         // Recorded now (CTL-63): the revision's provenance records the skip only if the change is ever published.
-        flow.audit(ChangeEvent.Kind.SHADOW_SKIPPED, skipped.skipped(), operator.actor)
+        flow.audit(ChangeEvent.Kind.SHADOW_SKIPPED, skipped.skipped(), operator.actor, origin = operator.origin)
         return skipped
     }
 
@@ -312,7 +312,7 @@ internal class Staging(
         val note = if (taken) "preempted by ${by.id.value}" else "conflicted by ${by.id.value}, which did not take the slot"
         try {
             slots.withdraw(conflicted)
-            flow.audit(ChangeEvent.Kind.FAILED, conflicted.copy(note = note), operator.actor)
+            flow.audit(ChangeEvent.Kind.FAILED, conflicted.copy(note = note), operator.actor, origin = operator.origin)
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {

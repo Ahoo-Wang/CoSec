@@ -17,6 +17,7 @@ package me.ahoo.cosec.control.authz
 
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.control.change.ChangeOrigin
 import me.ahoo.cosec.document.Actor
 import me.ahoo.cosec.engine.SubjectAttributes
 import me.ahoo.cosec.model.Memberships
@@ -38,8 +39,16 @@ class Operator(
      */
     val attributes: Map<String, Any> = emptyMap(),
     val security: RequestSecurity? = null,
+    /**
+     * The address of the connection the request arrived on, when the adapter could read it beneath any forwarded-header
+     * rewrite (`CTL-57`); null otherwise. Read where the control routes are served, not on every request.
+     */
+    val peer: String? = null,
 ) {
     val tenant: TenantId get() = actor.tenant
+
+    /** How this operator was identified, for the record (`CTL-57`); null without a request. */
+    val origin: ChangeOrigin? get() = security?.let { ChangeOrigin.of(it, peer) }
 
     val platform: Boolean get() = actor.tenant == TenantId.PLATFORM
 
@@ -57,13 +66,14 @@ class Operator(
     @InternalCoSecApi
     companion object {
         /** The operator of a request the host pipeline permitted; null for an anonymous one. */
-        fun of(security: RequestSecurity): Operator? {
+        fun of(security: RequestSecurity, peer: String? = null): Operator? {
             val principal = security.principal ?: return null
             return Operator(
                 actor = Actor(principal.tenant, principal.id),
                 memberships = security.memberships,
                 attributes = principal.attributes,
                 security = security,
+                peer = peer,
             )
         }
     }

@@ -20,6 +20,7 @@
 # The application is the start script of <app-home>, bin/<basename of app-home>. Environment, all optional:
 #   AOT_TRAIN_PATHS    the request paths to run through the application port, after startup (default: the gateway's two)
 #   AOT_TRAIN_TIMEOUT  seconds to wait for startup (default 300)
+#   AOT_TRAIN_OPTS     more -D options for every training JVM (the control server's service port, ephemeral, say)
 # Anything else the application needs to start (the control server's statement of what can reach it) is set by the caller
 # in the environment of this script, for the build step only, never in the image.
 #
@@ -56,7 +57,7 @@ export SPRING_DATA_REDIS_URL=redis://127.0.0.1:1
 # Ephemeral HTTP and management ports: a multi-platform build trains every platform at once, and the training JVMs can
 # share one network namespace. On fixed ports the faster platform's JVM answers the slower one's health check.
 EPHEMERAL_PORTS="-Dserver.port=0 -Dmanagement.server.port=0"
-TRAIN_OPTS="-Dcocache.backend=memory $EPHEMERAL_PORTS"
+TRAIN_OPTS="-Dcocache.backend=memory $EPHEMERAL_PORTS ${AOT_TRAIN_OPTS:-}"
 
 JAVA_OPTS="-XX:AOTMode=record -XX:AOTConfiguration=$CONF $TRAIN_OPTS" bin/$APP >"$LOG" 2>&1 &
 PID=$!

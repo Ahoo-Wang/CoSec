@@ -24,6 +24,19 @@ package me.ahoo.cosec.conformance
 object GuardAllowlist {
     val GUARDS: Map<String, Set<String>> = mapOf(
         "build" to setOf(
+            // CTL-57, CTL-58: how a step was identified, and the service profile of the control API.
+            "spring-boot:ControlServicePortTest#the peer of a control request is the connection's, beneath the forwarded header handling",
+            "control:ChangeOriginTest#a change records how its author was identified, and each event how its step's operator was",
+            "control:ChangeOriginTest#an origin is stored with its change and written with its event, with the members it has",
+            "spring-boot:ForwardedIdentityCallerTest#the operator of a request the identity gate decided is recorded as asserted, with the credential stated and the peer",
+            "control:ControlProfileTest#the service profile serves a tenant document and its history, and the change flow",
+            "control:ControlProfileTest#what is a person's or the platform's is a 404 on the service profile, and is served on the operators' one",
+            "control:ControlProfileTest#a proposal for the platform document is a 404 on the service profile, never reaching the control plane",
+            "control:ControlProfileTest#no principal is a 401 on the service profile as on the operators' one, before any route is looked at",
+            "spring-boot:ControlServicePortTest#the service port listens apart, serves nothing but the control API, and closes its connections when it stops",
+            "spring-boot:ControlServicePortTest#a service port beside the application's, the management port or a disabled control API is refused",
+            "spring-boot:ControlServicePortTest#a service port with no WebFlux server to serve it fails startup naming what to do",
+            "spring-boot:ControlServicePortTest#cosec control http enabled false serves no control route, and the control plane stays for what embeds it",
             // CTL-53, IDN-31: the reader's rule for the stored records, and the session record's.
             "cocache:StoredRecordsTest#every stored codec is listed",
             "cocache:StoredRecordsTest#a wrong value of every stored record is a format error",
@@ -276,6 +289,11 @@ object GuardAllowlist {
             "cocache:RedisSocialStateStoreTest#aStateIsTakenOnce",
         ),
         "startup" to setOf(
+            // CTL-59: an instance that only serves runs no maintenance pass.
+            "spring-boot:ControlServicePortTest#a host that runs no maintenance pass says so, and one that runs them says nothing",
+            // STA-9: the gateway's key is refused beside a service port.
+            "spring-boot:ControlServicePortTest#a service port beside the application's, the management port or a disabled control API is refused",
+            "spring-boot:ControlServicePortTest#cosec control maintenance enabled false runs no maintenance pass, and the default runs them",
             // STA-6, STA-7: a service behind a gateway states its network boundary and runs no hidden-method filter.
             "spring-boot:GatewayModeTrustTest#a service in gateway mode does not start until the operator states the boundary, and the message says what to write",
             "spring-boot:GatewayModeTrustTest#false and every value but true fail like an absent one, and say what was written",

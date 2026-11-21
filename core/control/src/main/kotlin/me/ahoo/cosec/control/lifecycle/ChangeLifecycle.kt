@@ -26,6 +26,7 @@ import me.ahoo.cosec.control.authz.ControlDecision
 import me.ahoo.cosec.control.authz.Operator
 import me.ahoo.cosec.control.authz.TenantIsolation
 import me.ahoo.cosec.control.change.ChangeId
+import me.ahoo.cosec.control.change.ChangeOrigin
 import me.ahoo.cosec.control.change.ChangeRejectedException
 import me.ahoo.cosec.control.change.ChangeRequest
 import me.ahoo.cosec.control.change.ChangeState
@@ -114,9 +115,11 @@ internal class ChangeLifecycle(
         operator: Actor,
         moved: List<MovedHead> = emptyList(),
         gated: Boolean = kind.gated,
+        /** How the operator of this step was identified (`CTL-57`); null for a step no request drives. */
+        origin: ChangeOrigin? = null,
     ) {
         try {
-            listeners.publish(change.event(kind, operator, clock, moved), gated)
+            listeners.publish(change.event(kind, operator, clock, moved, origin), gated)
         } catch (e: ChangeAuditException) {
             throw ChangeRejectedException(UNAVAILABLE, e.message.orEmpty(), e)
         }

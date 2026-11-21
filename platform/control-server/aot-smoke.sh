@@ -21,6 +21,7 @@
 # - the image does not start without the statement of what can reach it, and says what to write;
 # - it starts under the statement, the liveness probe answers on the management port and the readiness probe is DOWN
 #   until the platform document is installed (published here through `cosec-migrate publish`), then UP;
+# - the service port (8082) serves the control API's narrow profile only: the platform document is a 404 there;
 # - a call to the operators' API with no identity is 401 with problem+json, a call stating the platform administrator is
 #   200 and one stating a principal nothing binds is 403; the scrape endpoint on the management port carries the snapshot
 #   meters while the application port serves no actuator;
@@ -33,6 +34,7 @@ MIGRATE=$2
 REDIS_URI=redis://localhost:6379
 PORT=8080
 MGMT=8081
+SERVICE=8082
 NAME=cosec-control-aot-smoke
 WORK=$(mktemp -d)
 trap 'docker rm -f "$NAME" >/dev/null 2>&1 || true; rm -rf "$WORK"' EXIT
@@ -69,7 +71,7 @@ printf '{"accepted":true,"outputSha256":{"platform.json":"%s"}}\n' "$SHA" >"$WOR
 # 3. The image, on its AOT cache, under the statement.
 docker run -d --name "$NAME" --network host --health-interval 2s \
   -e SPRING_DATA_REDIS_URL="$REDIS_URI" \
-  -e COSEC_PIPELINE_IDENTITY_ONLYGATEWAYCANREACH=true \
+  -e COSEC_PIPELINE_IDENTITY_ONLYTRUSTEDCALLERSCANREACH=true \
   -e JAVA_OPTS="-XX:AOTMode=on -Xlog:aot=info" \
   "$IMAGE" >/dev/null
 
@@ -149,6 +151,13 @@ for who in plato:200 mallory:403; do
     fail "a call stating $subject answered $got, not $want"
   fi
 done
+# The service port serves the narrow profile of the control API and nothing else (CTL-58): the platform document, which
+# plato may read on the operators' port, is a 404 here, and so is any other path.
+platon=$(identity plato)
+got=$(curl -s -o /dev/null -w '%{http_code}' -H "CoSec-Identity: $platon" "http://localhost:$SERVICE/cosec/control/v1/documents/platform")
+if [ "$got" = 404 ]; then echo "ok   the platform document is a 404 on the service port"; else fail "the service port answered $got for the platform document"; fi
+got=$(curl -s -o /dev/null -w '%{http_code}' -H "CoSec-Identity: $platon" "http://localhost:$SERVICE/actuator/health")
+if [ "$got" = 404 ]; then echo "ok   nothing but the control API is served on the service port"; else fail "the service port answered $got for another path"; fi
 scrape=$(curl -s "http://localhost:$MGMT/actuator/prometheus")
 case "$scrape" in
   *cosec_snapshot_installed*) echo "ok   the scrape endpoint carries cosec_snapshot_installed" ;;

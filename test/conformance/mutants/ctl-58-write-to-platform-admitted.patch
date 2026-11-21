@@ -1,0 +1,17 @@
+# Rule: CTL-58
+# Mutant: a proposal for the platform document passes the service profile
+# Tests: :control:test --tests me.ahoo.cosec.control.api.ControlProfileTest
+
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/api/ControlProfile.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/api/ControlProfile.kt
+index 7bbe05841..58f4c53c1 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/api/ControlProfile.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/api/ControlProfile.kt
+@@ -51,7 +51,7 @@ enum class ControlProfile {
+     }
+ 
+     /** Whether this profile serves a write to [key]: a service writes a tenant's document, never the platform's or an app's. */
+-    internal fun admitsWrite(key: SnapshotKey): Boolean = this == OPERATORS || key is SnapshotKey.Tenant
++    internal fun admitsWrite(key: SnapshotKey): Boolean = true
+ 
+     private fun documents(method: String, rest: List<String>): Boolean {
+         val first = rest.firstOrNull() ?: return false

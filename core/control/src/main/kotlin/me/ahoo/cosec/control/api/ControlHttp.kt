@@ -69,13 +69,13 @@ private val log = KotlinLogging.logger {}
  * (`BRK-11`).
  */
 @InternalCoSecApi
-class ControlHttp(plane: ControlPlane) {
-    private val routes = ControlRoutes(plane)
+class ControlHttp(plane: ControlPlane, profile: ControlProfile = ControlProfile.OPERATORS) {
+    private val routes = ControlRoutes(plane, profile)
 
     @Suppress("TooGenericExceptionCaught")
     suspend fun handle(request: ControlHttpRequest, security: RequestSecurity?): ControlHttpResponse {
         val requestId = security?.requestId ?: ANONYMOUS_REQUEST
-        val operator = security?.let(Operator::of) ?: return problem(Problem.UNAUTHORIZED, requestId, null)
+        val operator = security?.let { Operator.of(it, request.peer) } ?: return problem(Problem.UNAUTHORIZED, requestId, null)
         return try {
             routes.route(operator, request)
         } catch (e: CancellationException) {

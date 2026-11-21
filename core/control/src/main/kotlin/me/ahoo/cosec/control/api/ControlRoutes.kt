@@ -30,13 +30,13 @@ import me.ahoo.cosec.model.Identifiers
  * handler of its routes. [route] checks what every route needs first: no unpaired surrogate in the path or the query,
  * the path written the one way the routes are, a leaf route of one segment; a path that names no resource is a 404.
  */
-internal class ControlRoutes(plane: ControlPlane) {
+internal class ControlRoutes(plane: ControlPlane, private val profile: ControlProfile = ControlProfile.OPERATORS) {
     private val queries = QueryRoutes(plane)
 
     /** A path's first segment, and the handler of the routes under it. */
     private val resources: Map<String, RouteHandler> = mapOf(
         "documents" to DocumentRoutes(plane),
-        "changes" to ChangeRoutes(plane),
+        "changes" to ChangeRoutes(plane, profile),
         "break-glass" to BreakGlassRoutes(plane),
         "simulate" to RouteHandler { operator, request, _ -> queries.simulate(operator, request) },
         "explain" to RouteHandler { operator, request, _ -> queries.explain(operator, request) },
@@ -53,6 +53,9 @@ internal class ControlRoutes(plane: ControlPlane) {
         // A leaf route is its one segment: `/simulate/x` is no route, so a rule on `/simulate` covers what is served
         // (R2-M1 of #1240's review).
         if (segments.first() in LEAVES && segments.size != 1) {
+            return notFound()
+        }
+        if (!profile.admits(request.method, segments)) {
             return notFound()
         }
         return resources[segments.first()]?.handle(operator, request, segments.drop(1)) ?: notFound()
