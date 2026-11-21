@@ -46,7 +46,7 @@ rootProject.name = "CoSec"
  */
 val groups = linkedMapOf(
     "api" to listOf("annotations", "api"),
-    "core" to listOf("model", "engine", "spi", "document", "runtime", "control"),
+    "core" to listOf("model", "engine", "spi", "document", "runtime", "control", "control-sdk"),
     "backends" to listOf("cocache"),
     "edge" to listOf("webflux", "webmvc", "gateway", "openapi"),
     "extensions" to listOf("jwt", "social", "login", "ip2region", "micrometer", "opentelemetry", "cosid", "kafka"),

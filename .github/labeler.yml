@@ -81,6 +81,9 @@
 'module: control':
   - changed-files:
       - any-glob-to-any-file: 'core/control/**'
+'module: control-sdk':
+  - changed-files:
+      - any-glob-to-any-file: 'core/control-sdk/**'
 'module: testkit':
   - changed-files:
       - any-glob-to-any-file: 'test/testkit/**'

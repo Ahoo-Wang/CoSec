@@ -19,6 +19,9 @@ dependencies {
     api(project(":runtime"))
     // The documents it validates, compiles and publishes (RFC 0013 §3).
     api(project(":document"))
+    // The facade's interface, which LocalControlService implements in process (CTL-65): an application that embeds the
+    // control plane calls it through cosec-control-sdk's names.
+    api(project(":control-sdk"))
     // The control API and the change records are JSON (RFC 0007 §9); Jackson stays internal (RFC 0011 D3).
     implementation("tools.jackson.core:jackson-databind")
     // PIP-25: ContractFiles, which ClientContractTest checks contract/control/ with (CTL-61).
