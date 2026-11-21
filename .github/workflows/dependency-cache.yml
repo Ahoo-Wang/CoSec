@@ -1,0 +1,147 @@
+#
+# Copyright [2021-present] [ahoo wang <ahoowang@qq.com> (https://github.com/Ahoo-Wang)].
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#      http://www.apache.org/licenses/LICENSE-2.0
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+
+
+# The one writer of the dependency cache (.github/scripts/README.md, "The dependency cache"): Gradle's dependency files
+# (`caches/modules-2` and the wrapper distribution) for one set of versions and repositories, under the key
+# `.github/scripts/dependency-cache-key.sh` names. Every job that downloads reads it, read-only, with
+# `.github/actions/dependency-cache`, so that a pull request's jobs ask Maven Central for what changed and nothing else
+# (Central answers 429 to a runner that asks for too much, and a 429 fails the job).
+#
+# What it resolves is whatever the build's repositories say: the plugin groups only the portal has are asked of the portal
+# alone (`settings.gradle.kts`), which is part of the key's `<repos>`.
+#
+# Written on main, after a resolution of the whole build that succeeded, and only when the key is not there yet: a push that
+# changes no version or repository finds it and does nothing. A cache that is not used for seven days is evicted, so a weekly
+# run keeps it. A pull request that changes this workflow, its key script or its action runs it, and the cache it writes is that pull
+# request's own: how a change of them is tried before it is on main (a new workflow cannot be dispatched before it is).
+name: Dependency cache
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'gradle/libs.versions.toml'
+      - 'gradle/wrapper/gradle-wrapper.properties'
+      - 'settings.gradle.kts'
+      - '**/*.gradle.kts'
+      - '.github/scripts/dependency-cache-key.sh'
+      - '.github/scripts/resolve-dependencies.sh'
+      - '.github/gradle/**'
+      - '.github/workflows/dependency-cache.yml'
+  # A change of this workflow, its key script or the action that restores it is tried on the pull request that makes it: the
+  # cache it writes there is readable by that pull request alone (a pull request's cache is its own), never by main or another.
+  pull_request:
+    paths:
+      - '.github/scripts/dependency-cache-key.sh'
+      - '.github/actions/dependency-cache/**'
+      - '.github/workflows/dependency-cache.yml'
+  schedule:
+    - cron: '17 4 * * 0'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  # Only to delete an entry that failed its own check (below).
+  actions: write
+
+concurrency:
+  group: dependency-cache-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  write:
+    name: Write the dependency cache
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Name the cache
+        id: name
+        run: bash .github/scripts/dependency-cache-key.sh >> "$GITHUB_OUTPUT"
+
+      # Only its existence: nothing is downloaded or restored.
+      - name: Look for the cache
+        id: existing
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.gradle/caches/modules-2
+            ~/.gradle/wrapper/dists
+          key: ${{ steps.name.outputs.key }}
+          lookup-only: true
+
+      - name: Set up JDK
+        uses: actions/setup-java@v6
+        with:
+          java-version: '21'
+          distribution: temurin
+
+      # From nothing, on purpose: restoring an older cache first would carry every version it ever held into this one.
+      # Every configuration, not the compile and runtime classpaths alone: detekt, Dokka, the ABI check and the other
+      # tools download too, in the jobs that restore this. A configuration that is not a download is left alone.
+      - name: Resolve the dependencies of the whole build
+        if: steps.existing.outputs.cache-hit != 'true'
+        run: .github/scripts/resolve-dependencies.sh . -PresolveConfigurations='.*'
+
+      # Reached only when the resolution above succeeded: a job that failed saves nothing, and an entry is visible only
+      # once it is complete, so no reader restores a half-written one.
+      - name: Save the dependency cache
+        if: steps.existing.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.gradle/caches/modules-2
+            ~/.gradle/wrapper/dists
+          key: ${{ steps.name.outputs.key }}
+
+      # The entry as a reader gets it: into a Gradle home with nothing in it, then a resolution of every configuration that is
+      # not allowed the network. It passes only when nothing needs a download, which is what a job that restores the cache
+      # relies on; on a failure the entry is deleted, so that no reader restores one that is not complete. (A restore on a
+      # runner is not the one that wrote it: the files the writer downloaded are all here, and these are what was saved.)
+      - name: Empty the Gradle home
+        run: rm -rf ~/.gradle/caches ~/.gradle/wrapper
+
+      - name: Restore the entry
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.gradle/caches/modules-2
+            ~/.gradle/wrapper/dists
+          key: ${{ steps.name.outputs.key }}
+          fail-on-cache-miss: true
+
+      - name: Resolve from the entry alone, offline
+        run: RESOLVE_ATTEMPTS=1 .github/scripts/resolve-dependencies.sh . -PresolveConfigurations='.*' --offline
+
+      - name: Delete an entry that does not resolve offline
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          KEY: ${{ steps.name.outputs.key }}
+        # Only the entry of the ref this run is on: on main that is main's entry, on a pull request its own or none. A
+        # delete by key alone removes the entry of every ref with that key, main's included, and a pull request that
+        # changes this workflow without a version has main's key. The API call and not `gh cache delete --ref`, so the
+        # runner's gh version does not matter.
+        run: |
+          gh api -X DELETE "repos/$GITHUB_REPOSITORY/actions/caches?key=$KEY&ref=$GITHUB_REF" \
+            || echo "::warning::could not delete $KEY on $GITHUB_REF"
+
+      - name: Say what was written
+        run: |
+          if [ "${{ steps.existing.outputs.cache-hit }}" = true ]; then
+            echo "The dependency cache ${{ steps.name.outputs.key }} is there already: nothing to write, and it resolves offline."
+          else
+            echo "Wrote the dependency cache ${{ steps.name.outputs.key }}, and it resolves offline."
+          fi
