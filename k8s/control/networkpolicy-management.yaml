@@ -1,0 +1,26 @@
+# Port 8081, the management port (the probes, /actuator/health, /actuator/prometheus): monitoring only. No Service
+# publishes it. Nothing in CoSec authorizes it.
+#
+# The namespace is the one the production overlay of the gateway admits (a label every namespace has): change it to where
+# your Prometheus runs. The kubelet's probes come from the node, which most network plugins let through; one that does not
+# needs an ipBlock for the node addresses here. Needs a network plugin that enforces NetworkPolicy.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: cosec-control-management
+  labels:
+    app.kubernetes.io/name: cosec-control
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: cosec-control
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: monitoring
+      ports:
+        - port: management
+          protocol: TCP
