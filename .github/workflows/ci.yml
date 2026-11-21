@@ -12,7 +12,7 @@
 #
 
 # Tests, detekt and coverage: one job per project group, derived from settings.gradle.kts by scripts/ci/plan.py, so a
-# new project needs no change here. Each job uploads its own coverage to Codecov. The docs are checked and built in
+# new project needs no change here. A pull request runs the groups its change can reach, every other event all of them. Each job uploads its own coverage to Codecov. The docs are checked and built in
 # the `docs` job, the Kubernetes overlays in the `k8s` job, the TypeScript packages in the `typescript` job and against a real host in `typescript-host`. The `CI` job is the one required check: it passes only
 # when every other job here passed.
 name: CI
@@ -35,13 +35,20 @@ jobs:
     timeout-minutes: 5
     outputs:
       matrix: ${{ steps.plan.outputs.matrix }}
+      skipped: ${{ steps.plan.outputs.skipped }}
     steps:
+      # Two commits: a pull request is checked out as the merge of its head into the base, whose first parent is the
+      # base, so the plan can read what the pull request changes.
       - name: Checkout
         uses: actions/checkout@v7
+        with:
+          fetch-depth: 2
 
-      - name: Derive the test jobs from settings.gradle.kts
+      # The groups a pull request's change can reach, with every group it skips and why in the summary; everything
+      # for every other event and for what it cannot attribute (scripts/ci/plan.py).
+      - name: Derive the test jobs from settings.gradle.kts and the change
         id: plan
-        run: python3 -I scripts/ci/plan.py --github-output "$GITHUB_OUTPUT"
+        run: python3 -I scripts/ci/plan.py --event "$GITHUB_EVENT_NAME" --github-output "$GITHUB_OUTPUT"
 
       - name: Test the CI scripts
         run: |
@@ -392,10 +399,14 @@ jobs:
     timeout-minutes: 5
     steps:
       # A failed plan skips the tests: skipped and cancelled fail the gate like failed does.
+      # `test` is the planned groups: a group the plan left out is not a job here, and is named in the plan's summary.
+      # A `test` that is skipped or cancelled, or a `plan` that failed, still fails the gate.
       - name: Require every job to pass
         env:
           RESULTS: ${{ toJSON(needs) }}
+          SKIPPED: ${{ needs.plan.outputs.skipped }}
         run: |
+          echo "Groups the plan left out: ${SKIPPED:-none}"
           failed=$(jq -r 'to_entries[] | select(.value.result != "success") | "\(.key): \(.value.result)"' <<< "$RESULTS")
           if [ -n "$failed" ]; then
             echo "::error::not every job passed: $(paste -sd ',' <<< "$failed")"

@@ -18,12 +18,22 @@ One job per group (RFC 0011 §3), running `<project>:check` for each of its proj
 tested without touching CI. The only hand-kept facts are the sets below, and each names a property of a project,
 never the list of what is tested. test/architecture's ProjectListTest runs this script and holds it to the build.
 
-Prints the plan as JSON. With --github-output, also writes `matrix=` there for the workflow. Exits non-zero, with a
-`::error::` line, when settings.gradle.kts, the project directories, these sets or codecov.yml disagree.
+A pull request runs only the groups its change can affect (the rules below); every other event, and everything the plan
+cannot attribute to a project, runs every group. A group left out is reported, with its reason, never silently.
+
+Prints the plan as JSON. With --github-output, also writes `matrix=` (the jobs to run) and `skipped=` there for the
+workflow. Exits non-zero, with a `::error::` line, when settings.gradle.kts, the project directories, these sets or
+codecov.yml disagree.
+
+Usage: plan.py [--event <github event name>] [--base <rev> --head <rev>] [--changed <path> ...]
+`--event pull_request` selects by the files `git diff <base> <head>` lists (default `HEAD^1`, the commit the pull
+request is merged on, and `HEAD`, which is what actions/checkout fetches for a pull request); without it every group runs.
 """
 import argparse
 import json
+import os
 import re
+import subprocess
 import sys
 from pathlib import Path
 
@@ -40,8 +50,35 @@ UNCOVERED = {"conformance", "architecture", "e2e", "client-host", "system-test",
 # Projects run in a job of their own instead of their group's, to even out the jobs' wall time.
 SPLIT = set()
 
-# Uploads to Codecov that come from outside the Gradle matrix: the `typescript-coverage` job of ci.yml.
-EXTERNAL_UPLOADS = 1
+# What changes everything. A change to how the build runs, to what CI runs, or to the two projects that read every other
+# one (conformance reads every module's tests and applies every mutant to their sources; architecture reads every
+# module's dependencies and sources) can break any group. First match wins, and everything the plan cannot attribute
+# lands here too: the safe direction is the default.
+EVERYTHING = (
+    "build.gradle.kts", "settings.gradle.kts", "gradle.properties", "codecov.yml", "renovate.json",
+    "gradle/", "buildSrc/", "config/", "bom/", "scripts/", ".github/", "test/conformance/", "test/architecture/",
+)
+
+# Files outside any project that a project's tests read (through the repository root): a change to one runs that
+# project's group, and not its dependents', since they read nothing of it. ReadsTest holds this to the test sources: a
+# project that names one of these directories and is not listed here fails the build.
+READS = {
+    "wiki/": ("document", "runtime", "spring-boot"),
+    "skills/": ("document",),
+    "k8s/": ("spring-boot",),
+    "schema/": ("document",),
+    "contract/": ("runtime", "jwt"),
+}
+
+# Outside every project, read by no group's tests: the TypeScript jobs, `docs`, `k8s` and the project `test` (below) run
+# whatever changed, and cover these.
+NO_GROUP = ("docs/", "typescript/")
+
+# Root files that are documentation: RepositoryDocuments (document's tests) reads every one.
+ROOT_DOCUMENTS = re.compile(r"^[^/]+\.(md|txt)$|^LICENSE$")
+
+# The group `test` always runs (it holds conformance and architecture, whose rules read the whole tree).
+ALWAYS = ("conformance", "architecture")
 
 REPORT = "build/reports/jacoco/test/jacocoTestReport.xml"
 
@@ -102,27 +139,158 @@ def plan(root):
                 ),
             })
 
-    uploads = sum(1 for job in jobs if job["coverage"])
-    waits = [int(n) for n in re.findall(r"^\s*after_n_builds:\s*(\d+)\s*$", codecov, re.M)]
-    expected = uploads + EXTERNAL_UPLOADS
-    if len(waits) != 2 or set(waits) != {expected}:
-        fail(f"codecov.yml must wait for {expected} uploads ({uploads} Gradle jobs with coverage and "
-             f"{EXTERNAL_UPLOADS} from outside the matrix), in both codecov.notify.after_n_builds and "
-             f"comment.after_n_builds; found {waits}")
+    # A pull request skips the groups its change cannot reach, and a skipped group uploads nothing: Codecov takes its
+    # last report from the parent commit instead (`carryforward`), and no longer waits for a fixed number of uploads,
+    # which a skip would leave short for ever, so neither status would ever be sent (`wait_for_ci` holds notifications
+    # back until the commit's checks have finished).
+    uploading = [job["name"] for job in jobs if job["coverage"]]
+    carried = set(re.findall(r"^  ([a-z0-9-]+):\n    carryforward: true$", codecov, re.M))
+    if missing := sorted(set(uploading) - carried):
+        fail(f"codecov.yml must carry forward the report of every group that can be skipped: add `carryforward: true` "
+             f"under `flags:` for {missing}")
+    if re.search(r"^\s*after_n_builds:", codecov, re.M):
+        fail("codecov.yml must not wait for a number of uploads (`after_n_builds`): a pull request skips groups, which "
+             "upload nothing")
 
-    return {"jobs": jobs, "excluded": sorted(EXCLUDED), "uncovered": sorted(UNCOVERED), "uploads": uploads}
+    graph = read_graph(root, projects)
+    return {
+        "jobs": jobs, "excluded": sorted(EXCLUDED), "uncovered": sorted(UNCOVERED), "uploads": len(uploading),
+        "graph": {name: sorted(deps) for name, deps in graph.items()},
+        "projects": projects,
+    }
+
+
+def read_graph(root, projects):
+    """Each project's dependencies, from the `project(":x")` references of its build script.
+
+    Every reference counts, test and benchmark configurations included (a change to a project reaches the tests of what
+    uses it there too), and one that is not a dependency only adds an edge: the safe direction. test/architecture's
+    ProjectGraphTest holds it to the declarations the build itself reports."""
+    graph = {}
+    for name, directory in projects.items():
+        script = (root / directory / "build.gradle.kts").read_text()
+        graph[name] = {dep for dep in re.findall(r'project\("?:([a-z0-9-]+)"?\)', script) if dep != name}
+        if unknown := graph[name] - projects.keys():
+            fail(f"{directory}/build.gradle.kts depends on {sorted(unknown)}, which settings.gradle.kts does not include")
+    return graph
+
+
+def everything(reason):
+    return None, reason
+
+
+def affected(paths, plan_result):
+    """The projects whose group must run for [paths], and why; `None` and the reason when every group must.
+
+    The projects are those the change can reach: a project the paths are in, with everything that depends on it,
+    transitively; the projects whose tests read a path outside every project (READS); and ALWAYS."""
+    projects, graph = plan_result["projects"], plan_result["graph"]
+    directories = {directory: name for name, directory in projects.items()}
+    dependents = {name: {other for other, deps in graph.items() if name in deps} for name in projects}
+    hit, reasons = set(ALWAYS), {name: "its tests read the whole tree" for name in ALWAYS}
+
+    def reach(name, because):
+        pending = [name]
+        while pending:
+            current = pending.pop()
+            if current not in hit:
+                hit.add(current)
+                reasons[current] = because if current == name else f"it depends on {name}, which changed"
+                pending.extend(dependents[current])
+
+    for path in paths:
+        if path in EVERYTHING or path.startswith(EVERYTHING):
+            return everything(f"`{path}` changes how the build or CI runs, or is read by every project")
+        parts = path.split("/")
+        directory = "/".join(parts[:2])
+        if directory in directories:
+            reach(directories[directory], f"`{path}` changed")
+        elif any(path.startswith(prefix) for prefix in READS):
+            prefix = next(prefix for prefix in READS if path.startswith(prefix))
+            for name in READS[prefix]:
+                hit.add(name)
+                reasons.setdefault(name, f"its tests read `{prefix}` (`{path}` changed)")
+        elif path.startswith(NO_GROUP):
+            continue
+        elif ROOT_DOCUMENTS.match(path):
+            hit.add("document")
+            reasons.setdefault("document", f"its tests read the root documents (`{path}` changed)")
+        else:
+            return everything(f"`{path}` is in no project and is not a path the plan knows")
+    return hit, reasons
+
+
+def select(plan_result, paths):
+    """(jobs to run, skipped as {job, reason} pairs, and why every group runs, or None) for a change of [paths]."""
+    jobs = plan_result["jobs"]
+    if paths is None:
+        return jobs, [], "every group runs: this is not a pull request"
+    hit, reasons = affected(paths, plan_result)
+    if hit is None:
+        return jobs, [], f"every group runs: {reasons}"
+    run, skipped = [], []
+    for job in jobs:
+        members = job["projects"].split()
+        reason = next((reasons[name] for name in members if name in hit), None)
+        if reason is None:
+            skipped.append({"job": job["name"], "reason": f"none of its projects ({', '.join(members)}) is changed, "
+                                                          f"depends on a changed project, or reads a changed file"})
+        else:
+            run.append(job)
+    return run, skipped, None
+
+
+def changed_paths(event, base, head):
+    """The files the pull request changes against the commit it is merged on; None when this is not one, or when the
+    diff cannot be read: every group then runs."""
+    if event != "pull_request":
+        return None
+    try:
+        # A pull request's checkout is a merge commit (parent 1 the base, parent 2 the head): anything else is not
+        # what this is meant to read.
+        if base == "HEAD^1":
+            subprocess.run(["git", "rev-parse", "--verify", "-q", "HEAD^2"], check=True, capture_output=True)
+        out = subprocess.run(["git", "diff", "--name-only", "--no-renames", base, head], check=True,
+                             capture_output=True, text=True).stdout
+    except (OSError, subprocess.CalledProcessError):
+        return None
+    return [line for line in out.splitlines() if line] or None
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--root", type=Path, default=Path(__file__).resolve().parents[2])
     parser.add_argument("--github-output", type=Path)
+    parser.add_argument("--event", default="")
+    parser.add_argument("--base", default="HEAD^1")
+    parser.add_argument("--head", default="HEAD")
+    parser.add_argument("--changed", nargs="*", help="the changed paths, instead of reading them from git")
     args = parser.parse_args()
-    result = plan(args.root.resolve())
+    root = args.root.resolve()
+    result = plan(root)
+    if args.changed is not None:
+        paths = args.changed
+    else:
+        paths = changed_paths(args.event, args.base, args.head) if args.event else None
+    run, skipped, why = select(result, paths)
+    result.update({"run": [job["name"] for job in run], "skipped": skipped, "why": why})
     print(json.dumps(result, indent=2))
+    summary = [f"Test jobs: {len(run)} of {len(result['jobs'])} run."]
+    for item in skipped:
+        print(f"::notice title=Test {item['job']} skipped::{item['reason']}", file=sys.stderr)
+        summary.append(f"- skipped `{item['job']}`: {item['reason']}")
+    if why:
+        print(f"::notice::{why}", file=sys.stderr)
+        summary.append(why)
     if args.github_output:
         with args.github_output.open("a") as out:
-            out.write("matrix=" + json.dumps({"include": result["jobs"]}) + "\n")
+            out.write("matrix=" + json.dumps({"include": run}) + "\n")
+            out.write("skipped=" + json.dumps(skipped) + "\n")
+    if summary_file := os.environ.get("GITHUB_STEP_SUMMARY"):
+        with open(summary_file, "a") as out:
+            out.write("### Test jobs\n\n" + "\n".join(summary) + "\n")
+            if paths is not None:
+                out.write("\nChanged paths:\n\n" + "\n".join(f"- `{path}`" for path in paths[:200]) + "\n")
 
 
 if __name__ == "__main__":
