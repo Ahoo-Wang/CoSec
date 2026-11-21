@@ -25,6 +25,7 @@ import me.ahoo.cosec.runtime.http.Cookies
 import me.ahoo.cosec.runtime.http.Headers
 import me.ahoo.cosec.runtime.http.HttpFacts
 import me.ahoo.cosec.runtime.http.Outcome
+import me.ahoo.cosec.runtime.http.ProblemType
 import me.ahoo.cosec.spi.identity.Identity
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
@@ -66,6 +67,33 @@ class IdentityGateTest {
                 host = host,
             )
         )
+    }
+
+    /**
+     * `CTL-65`: [IdentityGate.admit] is the function the header path takes once it has read an identity, and the one the
+     * control plane's facade admits a stated caller with: the same expiry, age, tenant and scope for both.
+     */
+    @Test
+    fun `admit holds an identity to what a forwarded header is held to`() {
+        val facts = HttpFacts("POST", "/", null, Headers.EMPTY, Cookies.EMPTY, "in-process", HostScope(null))
+        val admitted = gate.admit(identity, "r2", facts) as IdentityGate.Admission.Admitted
+        admitted.security.principal!!.id.value.assert().isEqualTo("alice")
+        admitted.security.requestId.assert().isEqualTo("r2")
+        (gate.admit(identity.copy(issuedAt = now.minusSeconds(3600)), "r3", facts) as IdentityGate.Admission.Refused)
+            .type.assert().isEqualTo(ProblemType.TOKEN_EXPIRED)
+        (gate.admit(identity.copy(tenant = "a/b"), "r4", facts) as IdentityGate.Admission.Refused)
+            .type.assert().isEqualTo(ProblemType.INVALID_REQUEST)
+        val doubled = HttpFacts(
+            "POST",
+            "/",
+            null,
+            Headers.of(mapOf("CoSec-Space-Id" to listOf("a", "b"))),
+            Cookies.EMPTY,
+            "in-process",
+            HostScope(null),
+        )
+        (gate.admit(identity, "r5", doubled) as IdentityGate.Admission.Refused)
+            .type.assert().isEqualTo(ProblemType.INVALID_REQUEST)
     }
 
     /** `PIP-23`: a generator that throws does not take the answer: a random id names the request. */

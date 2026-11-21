@@ -27,6 +27,13 @@ Which preview of the library may run behind which preview of the gateway image: 
 
 ## From 8.0.0-beta.4 {#from-8-0-0-beta-4}
 
+- **New: the control plane's facade, `ControlService`, for a service that embeds the control plane** (`CTL-65`).
+  - Calls are decided as the `ControlCaller` they state, and recorded as that caller's.
+  - It reaches only the narrow set: tenant and app document reads, and a tenant's change flow.
+  - Requests and answers are the control API's bodies and JSON.
+  - `IdentityHeader` writes the `CoSec-Identity` header.
+  - Nothing to change for an application that does not use them
+    ([Changing policies from your code](../integration/checks.md#changing-policies-from-your-code)).
 - **A shadow window passes only when every live instance acknowledges it** (design D2, `CTL-10`). Affected: shadow
   windows during and after the upgrade, and clients that read a change's `shadow`.
   - Each data-plane instance now lists, in the status it writes every report interval, the windows whose candidate it

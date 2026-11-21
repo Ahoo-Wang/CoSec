@@ -367,4 +367,41 @@ the change applied (`candidate`), and whether they differ. It needs `cosec:simul
 the change's. Staging changes, shadow windows and access analysis (`/analyze`) are in
 [Testing policies](../policies/testing.md).
 
+## Changing policies from your code {#changing-policies-from-your-code}
+
+A service that embeds the control plane, such as an IAM service onboarding a tenant, calls it from its own code
+through `ControlService` (`cosec-control`, `@ExperimentalCoSecApi`). The starter provides a bean of it wherever
+the control plane is wired. Every call is decided by the policies for the principal its `ControlCaller` states, and
+recorded as that principal's step. It goes through the control API's own route: the same call over HTTP answers
+the same, records the same, and is refused the same (`CTL-65`).
+
+- **Who acts:**
+  - `ControlCaller.of(securityContext)` acts as the user whose request you are serving. It takes the
+    `SecurityContext` CoSec made for that request, and refuses one your code assembled.
+  - `ControlCaller.service("iam", roles)` acts as your service's own principal in the platform tenant, for work no
+    request stands behind. Your code states the principal and its roles, and the control plane believes them, as it
+    believes any code in its own process: that code holds the control store's write account anyway. What is believed
+    is who acts, never what that principal may do. The policies still decide each call for it, with the bindings the
+    platform document gives it, and the record names it.
+- **What it reaches:** reads of a tenant's or an app's document (`document`, `revisions`, `revision`, `diff`), and
+  the change flow of a tenant's document (`propose`, `apply`, `change`, `changes`, `rebase`, `startShadow`,
+  `skipShadow`, `abandon`, `publish`). An automated change can start its shadow window, read the change until the
+  window closes, and publish with the summary's acknowledgement, rather than skip the window. Nothing reaches the
+  platform document, approvals, rollback or break-glass: those stay a person's, on the operators' routes.
+- **What goes in and out:**
+  - Requests are the routes' bodies ([Changes](../policies/testing.md#changes)), and documents are in the
+    [document format](../policies/language.md).
+  - Answers are the control API's JSON ([What a change answers](../policies/testing.md#what-a-change-answers)),
+    as text.
+  - A refusal is a `ControlRefusedException` with the route's status and problem.
+
+<<< @/examples/control-sdk/kotlin/Onboarding.kt [Onboarding.kt]
+
+<<< @/examples/control-sdk/changes/auditors.json [auditors.json]
+
+A change that needs a second person's approval stops at `AWAITING_APPROVAL`, whoever proposed it: report its id to a
+person, who approves it on the operators' routes. To call another service behind the gateway as a principal of
+your own, `IdentityHeader.write(identity)` (`cosec-document`) writes the `CoSec-Identity` header the gateway would
+have forwarded.
+
 **Next:** every property and its default, in [Configuration](../operations/configuration.md); or, to write the rules themselves, [Policy language](../policies/language.md).

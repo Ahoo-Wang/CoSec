@@ -1,0 +1,20 @@
+# Rule: CTL-65
+# Mutant: ControlCaller.of accepts a security context CoSec's gate or pipeline did not make, instead of refusing it
+# Tests: :control:test --tests me.ahoo.cosec.control.sdk.ControlServiceTest
+
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/sdk/ControlCaller.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/sdk/ControlCaller.kt
+index d23c383b5..afeb20bd1 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/sdk/ControlCaller.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/sdk/ControlCaller.kt
+@@ -48,10 +48,7 @@ class ControlCaller private constructor(
+     companion object {
+         /** The principal of the request [context] belongs to; [IllegalArgumentException] for a context CoSec did not make. */
+         fun of(context: SecurityContext): ControlCaller {
+-            val security = requireNotNull(RequestSecurity.of(context)) {
+-                "This security context was not made by CoSec's gate or pipeline, so it names no principal the control " +
+-                    "plane may act as (PIP-29): pass the context of the request being served."
+-            }
++            val security = RequestSecurity.of(context)
+             return ControlCaller(security, null, emptySet())
+         }
+ 

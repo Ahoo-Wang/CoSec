@@ -100,7 +100,7 @@ import kotlin.time.toKotlinDuration
 @Conditional(ControlPlaneCondition::class)
 @ConditionalOnBean(PolicySnapshotCache::class)
 @EnableConfigurationProperties(ControlProperties::class, RevocationProperties::class, CoSecProperties::class)
-@Import(StartupTaskExclusion::class)
+@Import(StartupTaskExclusion::class, ControlServiceConfiguration::class)
 internal class CoSecControlAutoConfiguration {
     @Bean
     @ConditionalOnMissingBean

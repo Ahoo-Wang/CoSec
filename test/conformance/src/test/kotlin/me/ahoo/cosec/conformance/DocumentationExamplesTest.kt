@@ -15,10 +15,25 @@
 
 package me.ahoo.cosec.conformance
 
+import com.example.iam.Onboarding
+import kotlinx.coroutines.runBlocking
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.control.api.ControlHttp
+import me.ahoo.cosec.control.api.DefaultControlPlane
+import me.ahoo.cosec.control.change.ChangeId
 import me.ahoo.cosec.control.change.ChangeRequestCodec
+import me.ahoo.cosec.control.lifecycle.ChangeAuthority
+import me.ahoo.cosec.control.lifecycle.ChangeOptions
+import me.ahoo.cosec.control.lifecycle.Changes
+import me.ahoo.cosec.control.lifecycle.LockoutCheck
+import me.ahoo.cosec.control.sdk.LocalControlService
+import me.ahoo.cosec.control.store.InMemoryControlStore
+import me.ahoo.cosec.control.store.Revisions
 import me.ahoo.cosec.document.route.RouteMapCodec
+import me.ahoo.cosec.model.TenantId
+import me.ahoo.cosec.runtime.identity.IdentityGate
+import me.ahoo.cosec.spi.token.RevocationReader
 import me.ahoo.cosec.testkit.PolicyTestKit
 import me.ahoo.cosec.testkit.ScenarioJson
 import me.ahoo.cosec.testkit.strings
@@ -29,6 +44,7 @@ import org.junit.jupiter.api.TestFactory
 import tools.jackson.databind.JsonNode
 import java.nio.file.Files
 import java.nio.file.Path
+import java.time.Instant
 import kotlin.io.path.extension
 import kotlin.io.path.isDirectory
 import kotlin.io.path.listDirectoryEntries
@@ -109,6 +125,49 @@ class DocumentationExamplesTest {
                     routed.filterNot { it.startsWith("http:") || it in defined }.assert().isEmpty()
                 }
             }
+        }
+
+    /**
+     * `CTL-65`: the sample of the control plane's facade (`control-sdk/kotlin`, compiled with these tests and opting in
+     * to no internal API) proposes its change for the user whose request it serves, reads the answer and reads the
+     * document, against a control plane wired as a host wires it.
+     */
+    @Test
+    fun `the control plane's facade sample proposes a tenant change and reads the answer and the document`() =
+        runBlocking<Unit> {
+            val example = examples.resolve("control-sdk")
+            val clock = MutableClock(Instant.parse("2026-11-21T00:00:00Z"))
+            val store = InMemoryControlStore(clock)
+            val revisions = Revisions(store, clock)
+            ChangeRunner.bootstrap(revisions, ScenarioJson.read(example.resolve("bootstrap.json")))
+            val engine = ControlEngine(revisions)
+            val changes = Changes(
+                store,
+                revisions,
+                { ChangeId("c1") },
+                engine.authorizer,
+                clock,
+                ChangeOptions(),
+                revocations = RevocationReader.NONE,
+                lockout = LockoutCheck.UNCHECKED,
+            )
+            val plane = DefaultControlPlane(
+                changes,
+                revisions,
+                ChangeAuthority(engine.authorizer, revocations = RevocationReader.NONE)
+            )
+            val service = LocalControlService(ControlHttp(plane), IdentityGate(clock = clock))
+            val alice = engine.security(TenantId("acme"), "alice", roles = listOf("admin"))
+            val proposed = Onboarding(service).propose(
+                alice.securityContext,
+                "acme",
+                example.resolve("changes/auditors.json").readText(),
+            )
+            proposed.change.assert().isEqualTo("c1")
+            proposed.state.assert().isEqualTo("CHECKED")
+            proposed.revision.assert().isEqualTo(1L)
+            // Recorded as alice's own proposal.
+            changes.get(ChangeId("c1")).author.principal.value.assert().isEqualTo("alice")
         }
 
     private fun jsonFiles(directory: Path): List<Path> =

@@ -11,7 +11,7 @@
  * limitations under the License.
  */
 
-@file:OptIn(InternalCoSecApi::class)
+@file:OptIn(InternalCoSecApi::class, me.ahoo.cosec.annotations.ExperimentalCoSecApi::class)
 
 package me.ahoo.cosec.spring.boot.control
 
@@ -22,6 +22,7 @@ import me.ahoo.cocache.spring.boot.CoCacheAutoConfiguration
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.cocache.CoSecCacheSpecs
 import me.ahoo.cosec.control.api.ControlHttp
+import me.ahoo.cosec.control.sdk.ControlService
 import me.ahoo.cosec.runtime.shadow.CandidateSource
 import me.ahoo.cosec.spring.boot.jwt.CoSecJwtAutoConfiguration
 import me.ahoo.cosec.spring.boot.jwt.CoSecTokenRevocationCacheAutoConfiguration
@@ -116,8 +117,11 @@ class ControlPlaneSwitchTest {
         runner.run { context ->
             context.startupFailure.assert().isNull()
             context.getBeansOfType(ControlHttp::class.java).assert().hasSize(1)
+            // The facade an application's own code calls (CTL-65), wherever the control plane is.
+            context.getBeansOfType(ControlService::class.java).assert().hasSize(1)
             // The guard sees the control plane's beans, its routes among them, when it is on.
-            context.controlBeans().assert().contains("cosecControlStore", "cosecControlHttp", "cosecControlRoutes")
+            context.controlBeans().assert()
+                .contains("cosecControlStore", "cosecControlHttp", "cosecControlRoutes", "cosecControlService")
             context.readOnly().assert().containsOnly(false)
         }
     }

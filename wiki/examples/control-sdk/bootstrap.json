@@ -1,0 +1,43 @@
+{
+  "platform": {
+    "bindings": [
+      {
+        "id": "plato",
+        "subject": {
+          "principal": "plato",
+          "tenant": "(platform)"
+        },
+        "app": "cosec-control",
+        "space": "",
+        "policy": "cosec:platform-admin"
+      }
+    ]
+  },
+  "tenants": {
+    "acme": {
+      "policies": [
+        {
+          "id": "orders",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "order:*",
+              "resource": "order/**"
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "admins",
+          "subject": {
+            "role": "admin"
+          },
+          "app": "cosec-control",
+          "space": "",
+          "policy": "cosec:tenant-admin"
+        }
+      ]
+    }
+  }
+}
