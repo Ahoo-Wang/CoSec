@@ -1,0 +1,17 @@
+# Rule: CTL-10
+# Mutant: an instance whose status sends no windows (an older version) counts as acknowledging every window
+# Tests: :control:test --tests me.ahoo.cosec.control.lifecycle.ShadowAcknowledgementTest
+
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ShadowWindows.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ShadowWindows.kt
+index 43621f280..9ef09359a 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ShadowWindows.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ShadowWindows.kt
+@@ -107,7 +107,7 @@ class ShadowWindows(
+      */
+     suspend fun acknowledgement(window: String): Acknowledgement {
+         val live = statuses.read().statuses
+-        val waiting = live.filter { it.windows?.contains(window) != true }.map { it.instance }.sorted()
++        val waiting = live.filter { it.windows?.contains(window) == false }.map { it.instance }.sorted()
+         return Acknowledgement(live.size - waiting.size, waiting)
+     }
+ 
