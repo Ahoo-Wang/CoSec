@@ -26,6 +26,7 @@ import me.ahoo.cosec.spi.shadow.CandidateStore
 import me.ahoo.cosec.spi.shadow.StagedCandidates
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import java.time.Clock
+import java.time.Duration
 import java.time.Instant
 import kotlin.coroutines.cancellation.CancellationException
 
@@ -50,7 +51,12 @@ private val log = KotlinLogging.logger {}
 @InternalCoSecApi
 class StagedDocuments(private val store: CandidateStore, private val clock: Clock = Clock.systemUTC()) {
     /** The list read, as the strings a request names its documents by; null for no list. */
-    private class Listed(val platform: Boolean, val apps: Set<String>, val tenants: Set<String>) {
+    private class Listed(
+        val platform: Boolean,
+        val apps: Set<String>,
+        val tenants: Set<String>,
+        val windows: Map<SnapshotKey, Set<String>>,
+    ) {
         val empty: Boolean = !platform && apps.isEmpty() && tenants.isEmpty()
     }
 
@@ -61,6 +67,19 @@ class StagedDocuments(private val store: CandidateStore, private val clock: Cloc
     @Volatile
     var readAt: Instant? = null
         private set
+
+    /** When the store last answered, list or none; kept while it cannot be read, for its age (`OBS-8`). */
+    @Volatile
+    private var answeredAt: Instant? = null
+
+    /**
+     * How long ago the store last answered (`cosec.shadow.staged.age`, `OBS-8`): about one refresh interval while it
+     * answers, growing while it cannot be read; null before it first answered.
+     */
+    fun age(): Duration? = answeredAt?.let { Duration.between(it, clock.instant()) }
+
+    /** The windows the list read names, by document; null when no list gates (`CTL-12`'s compile on sight). */
+    val windows: Map<SnapshotKey, Set<String>>? get() = listed?.windows
 
     /** Whether a list is kept and was read: only then does it gate anything. */
     val gates: Boolean get() = listed != null
@@ -101,6 +120,7 @@ class StagedDocuments(private val store: CandidateStore, private val clock: Cloc
         }
         listed = read?.let(::listedOf)
         readAt = clock.instant()
+        answeredAt = readAt
     }
 
     private fun unreadable(error: Exception) {
@@ -125,6 +145,6 @@ class StagedDocuments(private val store: CandidateStore, private val clock: Cloc
                 is SnapshotKey.Tenant -> tenants += key.tenantId
             }
         }
-        return Listed(platform, apps, tenants)
+        return Listed(platform, apps, tenants, candidates.windows)
     }
 }

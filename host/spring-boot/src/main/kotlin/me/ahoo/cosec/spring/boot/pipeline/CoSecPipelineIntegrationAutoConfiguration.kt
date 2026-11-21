@@ -38,6 +38,8 @@ import me.ahoo.cosec.runtime.event.BridgeContextContributor
 import me.ahoo.cosec.runtime.event.DecisionListeners
 import me.ahoo.cosec.runtime.event.MdcContextContributor
 import me.ahoo.cosec.runtime.ratelimit.LocalRateLimiter
+import me.ahoo.cosec.runtime.shadow.CachingCandidateSource
+import me.ahoo.cosec.runtime.shadow.CandidateSource
 import me.ahoo.cosec.runtime.snapshot.SnapshotSource
 import me.ahoo.cosec.spi.ratelimit.RateLimiter
 import me.ahoo.cosec.spring.boot.CoSecProperties
@@ -185,7 +187,8 @@ class CoSecPipelineIntegrationAutoConfiguration {
 
         /**
          * The listeners' own counters: drops, failures and REQUIRED failures; the tokens accepted without a revocation
-         * check; with the local rate limiter, the buckets it could not admit; the verified-token cache's. Bound at startup whatever lazy
+         * check; with the local rate limiter, the buckets it could not admit; the verified-token cache's; the age of the
+         * staged list CoSec's candidate source samples by (`OBS-8`). Bound at startup whatever lazy
          * initialization says (`STA-3`): nothing asks for it.
          */
         @Bean
@@ -195,11 +198,13 @@ class CoSecPipelineIntegrationAutoConfiguration {
             unchecked: ObjectProvider<UncheckedRevocations>,
             limiter: ObjectProvider<RateLimiter>,
             tokenCache: ObjectProvider<VerifiedTokenCache>,
+            candidates: ObjectProvider<CandidateSource>,
         ): StartupTask = StartupTask.AfterSingletons {
             listeners.ifAvailable?.let { CoSecMeters.bind(registry, it) }
             unchecked.ifAvailable?.let { CoSecMeters.bind(registry, it) }
             (limiter.ifAvailable as? LocalRateLimiter)?.let { CoSecMeters.bind(registry, it) }
             tokenCache.ifAvailable?.let { TokenCacheMeters.bind(registry, it) }
+            (candidates.ifAvailable as? CachingCandidateSource)?.let { CoSecMeters.bind(registry, it.staged) }
         }
 
         /** The snapshot source's gauges, over the summary of its last lag pass: bound once every singleton exists. */

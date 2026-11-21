@@ -1,0 +1,16 @@
+# Rule: CTL-12
+# Mutant: the reporter never compiles a window on sight: a candidate that does not compile waits for a sampled request
+# Tests: :runtime:test --tests me.ahoo.cosec.runtime.shadow.CompileOnSightTest
+
+diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/shadow/ShadowReporter.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/shadow/ShadowReporter.kt
+index 2880c93ee..8e387ce82 100644
+--- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/shadow/ShadowReporter.kt
++++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/shadow/ShadowReporter.kt
+@@ -72,7 +72,6 @@ class ShadowReporter(
+      */
+     suspend fun flush() {
+         this.staged?.refresh()
+-        sight?.run()
+         val staged = HashMap<SnapshotKey, String?>()
+         for (window in recorder.windows()) {
+             // The reports were taken first, so a window among them was staged before this read and a candidate gone now
