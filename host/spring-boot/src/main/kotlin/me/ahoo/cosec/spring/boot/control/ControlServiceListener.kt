@@ -16,17 +16,13 @@
 package me.ahoo.cosec.spring.boot.control
 
 import io.github.oshai.kotlinlogging.KotlinLogging
-import io.netty.channel.group.DefaultChannelGroup
-import io.netty.util.concurrent.GlobalEventExecutor
 import me.ahoo.cosec.annotations.InternalCoSecApi
+import org.springframework.boot.web.server.WebServer
 import org.springframework.context.ApplicationContext
 import org.springframework.context.SmartLifecycle
 import org.springframework.core.env.ConfigurableEnvironment
 import org.springframework.core.env.MapPropertySource
 import org.springframework.http.server.reactive.HttpHandler
-import org.springframework.http.server.reactive.ReactorHttpHandlerAdapter
-import reactor.netty.DisposableServer
-import reactor.netty.http.server.HttpServer
 import java.time.Duration
 import java.util.concurrent.atomic.AtomicInteger
 
@@ -35,7 +31,8 @@ private val log = KotlinLogging.logger {}
 /**
  * The service port (`cosec.control.http.service-port`, `CTL-58`): a second Reactor Netty server over the same
  * [HttpHandler] as the application's, so the same filters and the same gate decide its requests, and a listener of its
- * own for the network to admit services to. WebFlux only. Which requests are the service profile's is told by the
+ * own for the network to admit services to. It is the application's own server on another port ([ControlServiceServer],
+ * `CTL-71`): its TLS, bind address, HTTP/2, limits and timeouts are the application's. WebFlux only. Which requests are the service profile's is told by the
  * local port ([boundPort]): see [ServicePortFilter] and the control routes.
  *
  * It stops as it started, on its own: unbinding first, so no new connection arrives; then waiting up to [grace] for the
@@ -47,11 +44,10 @@ internal class ControlServiceListener(
     private val port: Int,
     private val grace: Duration,
 ) : SmartLifecycle {
-    private val channels = DefaultChannelGroup(GlobalEventExecutor.INSTANCE)
     private val inFlight = AtomicInteger()
 
     @Volatile
-    private var server: DisposableServer? = null
+    private var server: WebServer? = null
 
     /** The port it listens on; 0 while it is not started. */
     @Volatile
@@ -59,32 +55,35 @@ internal class ControlServiceListener(
         private set
 
     override fun start() {
-        val adapter = ReactorHttpHandlerAdapter(context.getBean(HttpHandler::class.java))
-        val bound = HttpServer.create()
-            .port(port)
-            .doOnConnection { connection -> channels.add(connection.channel()) }
-            .handle { request, response ->
-                inFlight.incrementAndGet()
-                adapter.apply(request, response).doFinally { inFlight.decrementAndGet() }
-            }
-            .bindNow()
+        val handler = context.getBean(HttpHandler::class.java)
+        val counted = HttpHandler { request, response ->
+            inFlight.incrementAndGet()
+            handler.handle(request, response).doFinally { inFlight.decrementAndGet() }
+        }
+        val bound = ControlServiceServer.factory(context, port).getWebServer(counted)
+        bound.start()
         server = bound
-        boundPort = bound.port()
+        boundPort = bound.port
         // As the server and management ports are announced (`local.server.port`), for the tests and tools that bind to 0.
         (context.environment as? ConfigurableEnvironment)?.propertySources
-            ?.addFirst(MapPropertySource(PROPERTY_SOURCE, mapOf(LOCAL_PORT_KEY to bound.port())))
-        log.info { "The control plane's service port listens on ${bound.port()}: the service profile only (CTL-58)." }
+            ?.addFirst(MapPropertySource(PROPERTY_SOURCE, mapOf(LOCAL_PORT_KEY to bound.port)))
+        log.info {
+            "The control plane's service port listens on ${bound.port}: the service profile only (CTL-58), with the application's server settings (CTL-71)."
+        }
     }
 
     override fun stop() {
         val bound = server ?: return
         server = null
-        bound.disposeNow(grace)
+        // Unbinds first, so no new connection arrives; the requests in flight get the grace; stopping the server then closes every
+        // connection still open, the idle keep-alive ones included (a test holds it, on a real application, for each setting of
+        // `server.shutdown`).
+        bound.shutDownGracefully { }
         val deadline = System.nanoTime() + grace.toNanos()
         while (inFlight.get() > 0 && System.nanoTime() < deadline) {
             Thread.sleep(POLL_MILLIS)
         }
-        channels.close().awaitUninterruptibly(grace.toMillis().coerceAtLeast(1))
+        bound.stop()
         boundPort = 0
     }
 

@@ -837,6 +837,9 @@
       "level": "build",
       "pending": null,
       "guards": [
+        "spring-boot:ServicePortRoutesTest#a route that was served is never turned into a 404, whatever its write left behind",
+        "spring-boot:ServicePortRoutesTest#a path no control route answers is a 404 on the service port, and a request on another port goes on",
+        "spring-boot:ControlServicePortSettingsTest#the service port serves the control API's routes and no route of the application, under the base path or not",
         "control:ControlProfileTest#the service profile serves a tenant document and its history, and the change flow",
         "control:ControlProfileTest#what is a person's or the platform's is a 404 on the service profile, and is served on the operators' one",
         "control:ControlProfileTest#a proposal for the platform document is a 404 on the service profile, never reaching the control plane",
@@ -960,6 +963,18 @@
         "control:ChangeOriginAnswerTest#the origin is written member by member, whole or short, and absent for a change no request made - CTL-70"
       ],
       "pending": null
+    },
+    {
+      "id": "CTL-71",
+      "source": "maintainer review of 2026-11-21 (R3-1: the service listener was a bare second Netty server)",
+      "statement": "The control API's service port (`cosec.control.http.service-port`, `CTL-58`) is the application's own server on another port, not a second server of its own: it is built from a fresh server factory that Spring Boot's customizers have configured as they configure the application's (`server.ssl.*` with client authentication, `server.address`, HTTP/2, header and body limits, timeouts, forwarded-header handling, `server.netty.*`, the application's Netty server customizers and shared event loop), then given its port, and takes no property of its own. A host that makes `only-trusted-callers-can-reach` true by mutual TLS on the application's port serves the service port with mutual TLS: a request in clear text, or a client with no certificate, fails there as on the application port; one bound to an address binds the service port there and is not reachable on another. The application's own factory is read, never changed. Netty route providers of the application's server are not carried over: the service port serves the control API's service profile and nothing else. It stops as before: unbinding, the requests in flight within the grace, every connection still open closed.",
+      "level": "startup",
+      "pending": null,
+      "guards": [
+        "spring-boot:ControlServicePortSettingsTest#the service port of a running application closes an idle keep-alive connection when the application stops",
+        "spring-boot:ControlServicePortSettingsTest#with mutual TLS on the application port the service port is TLS with a client certificate too",
+        "spring-boot:ControlServicePortSettingsTest#with a bind address on the application port the service port listens there only"
+      ]
     }
   ]
 }
