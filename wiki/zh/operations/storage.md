@@ -439,7 +439,7 @@ app 的状态；以及 `repair-references` 读到的 `<s>:control:documents:all`
 | `GET /documents/<doc>/revisions?before=&limit=` | 历史，最新的在前（默认 20 条，最多 200 条） |
 | `GET /documents/<doc>/revisions/<n>` | 修订 `<n>`；未保留时为 `410` |
 | `GET /documents/<doc>/diff?from=&to=` | 两个修订之间的变化 |
-| `GET /documents/<doc>/revisions/<n>/propagation` | 最近一分钟内报告过状态的实例中，有多少已经装入修订 `<n>` 或更新的修订（需要实例开启[影子窗口](./configuration.md#shadow-windows)） |
+| `GET /documents/<doc>/revisions/<n>/propagation` | 最近一分钟内报告过状态的实例（`recent`）中，有多少持有该文档（`holding`），其中又有多少已经装入修订 `<n>` 或更新的修订（`installed`），至多每 5 秒读取一次（`asOf`）；租户文档在 `installed` 等于 `holding` 时即已传播完成（[传播](../policies/testing.md#propagation)；需要实例开启[影子窗口](./configuration.md#shadow-windows)） |
 | `POST /documents/<doc>:rollback`，请求体 `{"revision": <n>, "note": "..."}`，恢复 `nomatch` DENY 时带上 `confirmations` | 一个变更（`201`），把文档恢复为修订 `<n>` 时的样子 |
 
 回滚和其他变更一样：按内容需要经过检查、影子窗口和审批，发布后产生一个新修订，所以历史只增不减，并记录了谁做的回滚。

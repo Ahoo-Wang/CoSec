@@ -1,0 +1,17 @@
+# Rule: CTL-61
+# Mutant: the :shadow route writes another change kind to the audit stream than SHADOW_STARTED: a reader of the audit no longer finds the step the route names
+# Tests: :control:test --tests me.ahoo.cosec.control.api.ClientContractTest
+
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Staging.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Staging.kt
+index 892388197..45f1c8c39 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Staging.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Staging.kt
+@@ -86,7 +86,7 @@ internal class Staging(
+             it.copy(state = ChangeState.SHADOWING, shadow = state)
+         }
+         slots.write(shadowing, candidate) { undo(shadowing) }
+-        flow.audit(ChangeEvent.Kind.SHADOW_STARTED, shadowing, operator.actor)
++        flow.audit(ChangeEvent.Kind.SHADOWED, shadowing, operator.actor)
+         return shadowing
+     }
+ 

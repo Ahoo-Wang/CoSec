@@ -27,6 +27,21 @@ Which preview of the library may run behind which preview of the gateway image: 
 
 ## From 8.0.0-beta.4 {#from-8-0-0-beta-4}
 
+- **The control API answers from a response model of its own; a refused scope says why under `reason`; propagation
+  counts the instances that hold the document** (review round 2, `R2C-11`, `R2C-12`, `CTL-61`, `CTL-62`). Affected:
+  clients of the control API.
+  - A change answer (`GET /changes/{id}` and every route that answers a change) no longer holds `checkedWith`,
+    `checkedApps` or its window's `shadow.reporters`: they were the store's bookkeeping, not part of the API. Every
+    other member is as before ([What a change answers](../policies/testing.md#what-a-change-answers)).
+  - `simulate` and `explain`: a `Rejected` decision carries `APP_MISMATCH` or `SPACE_NOT_MEMBER` under `reason`, no
+    longer under `cause`. `cause` is an `Indeterminate` decision's only, with the values it had.
+  - `GET /documents/{key}/revisions/{n}/propagation` adds `holding` (the recent instances that hold the document) and
+    `asOf` (when the statuses were read; an answer may be up to 5 seconds old). `installed` and `recent` mean what
+    they meant. Read a tenant document as propagated when `installed` equals `holding`: most instances never hold a
+    given tenant, so `installed` never reached `recent` for it. A status read that fails is now `503`, not `500`.
+  - `contract/control/` pins the members of these answers, the closed sets they write and the audit kind of each
+    route; a release that changes one says so.
+
 - **Every stored record carries its format, and a reader ignores what it does not know of a known format**
   (review round 2, `R2C-10`, `R2C-28`, `CTL-53`, `IDN-31`). Affected: every deployment, once.
   - **Stop the control plane, upgrade it, start it.** The previews before this one refuse the `format` member the new

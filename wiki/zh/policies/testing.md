@@ -44,7 +44,7 @@ description: "通过控制面安全地修改策略：校验与编译错误、sim
 | `GET /documents/{key}/revisions?before=&limit=` | 修订历史，最新的在前（`limit` 为 1 到 200，默认 20）。 |
 | `GET /documents/{key}/revisions/{revision}` | 某个保留的修订；已不再保留时返回 `410`。 |
 | `GET /documents/{key}/diff?from=&to=` | 两个修订之间（[展开后](./role-permissions.md#roles)的文档）新增、删除和修改的策略与绑定，按原样的 `roles`，以及 `sections`：其余部分中不同的那些的名称，取自 `catalog`、`boundary`、`limits`、`attributes` 和 `rateLimits`，按此顺序，每个按其完整内容比较（都相同时为 `[]`）。 |
-| `GET /documents/{key}/revisions/{revision}/propagation` | 最近上报的实例中有多少已安装该修订。 |
+| `GET /documents/{key}/revisions/{revision}/propagation` | 该修订传播到了哪里（[传播](#propagation)）。 |
 | `POST /documents/{key}:apply`、`POST /documents/{key}:rollback` | 从整份文档提议变更，或提议回到旧修订。 |
 | `POST /changes`、`GET /changes/{id}` | 提议变更；读取变更。 |
 | `GET /changes?document=&state=&after=&limit=` | 一个文档、一个状态或两者共同限定的未完成变更（[查找未完成的变更](#finding-open-changes)）。 |
@@ -105,7 +105,7 @@ description: "通过控制面安全地修改策略：校验与编译错误、sim
 | `remoteIp`、`time` | 客户端地址，以及 ISO 时刻（默认：当前）。 |
 | `principalBindings`、`breakGlass` | 凭证能用到什么，默认都为 `true`（CoSec 自己的令牌）。模拟 API key 时把 `breakGlass` 设为 `false`；带角色上限的 key 还要把 `principalBindings` 设为 `false`：此时附加的策略和主体绑定不授予任何东西，它们的 DENY 照样生效。只接受布尔值。 |
 
-响应包含 `enforced`、要求时的 `candidate`，以及 `differs`。每个决策为 `Permit`、`Deny`、`Indeterminate`（带 `cause`）或 `Rejected`（作用域被拒绝），并给出做出决策的语句（`by`）和完整的候选追踪。其策略定义在你无权读取的文档中的语句会被省略并计入 `redacted`，即使应用它的绑定在你可以读取的文档里。`differs` 比较两个决策的内容，失败按其类型和消息比较，所以两侧相同的编译失败不算不同。
+响应包含 `enforced`、要求时的 `candidate`，以及 `differs`。每个决策为 `Permit`、`Deny`、`Indeterminate`（带 `cause`，即失败的种类）或 `Rejected`（作用域被拒绝，带 `reason`：`APP_MISMATCH` 或 `SPACE_NOT_MEMBER`），并给出做出决策的语句（`by`）和完整的候选追踪。其策略定义在你无权读取的文档中的语句会被省略并计入 `redacted`，即使应用它的绑定在你可以读取的文档里。`differs` 比较两个决策的内容，失败按其类型和消息比较，所以两侧相同的编译失败不算不同。
 
 模拟读取执行时读取的文档：平台文档、租户文档，以及在请求在其应用中有角色、或租户文档把该应用的某个权限策略绑定给 `Anyone` 或某个主体时的应用文档（[策略语言](./language.md)）。对租户文档的变更，由候选决定这一点：添加了这种绑定的变更会读取应用文档，移除了最后一个这种绑定的变更则不再读取。无法编译的租户文档按未解析处理，因此与数据面一样，它的绑定不会让请求读取应用文档；对请求没有读取的文档给出 `candidate` 时为 `400`。
 
@@ -195,6 +195,19 @@ flowchart LR
 
 一个文档至多有一个暂存的变更（`SHADOWING`、`AWAITING_APPROVAL` 或 `READY`）；在它发布、放弃、驳回或过期之前，暂存另一个变更返回 `409`。变更在占用暂存槽之前就已进入暂存状态，所以仍在写候选的调用也占着暂存槽；写不成或被取消的调用会归还暂存槽，变更回到 `CHECKED`。窗口开始一分钟后候选已不在的 `SHADOWING` 变更（两次写入之间崩溃，或候选之后丢失）也一样：维护任务释放它的暂存槽，记一条 `FAILED` 变更事件，由作者重新暂存。窗口不会接着进行，因为候选不在期间实例没有采样。未完成的变更在提议后 `cosec.control.changes.expire-after`（默认 7 天）过期：此后第一次被读取时即为 `EXPIRED`：控制面每隔 `cosec.control.revisions.reclaim-interval`（默认 1 小时）读取一次每个文档的未完成变更，每隔 `cosec.control.shadow.check-interval`（默认 1 分钟）读取一次 `SHADOWING` 的变更。作者可以对 `CONFLICTED`、`DRAFT` 或 `CHECKED` 的变更执行 `:rebase`，把它放到当前修订上，这会重新运行所有检查，并丢弃之前的审批和影子证据。作者或持有 `cosec:publish` 的人可以 `:abandon` 它；设置租户边界的变更只有平台主体能驳回或放弃，吊销仍在生效的 break-glass 绑定的变更只有其作者能放弃（`BRK-10`）。每次放弃都记一条 `ABANDONED` 变更事件，备注写明变更的作者；放弃 break-glass 变更需要一个 REQUIRED 变更监听器，由它先记下（没有时返回 `503`）。
 
+### 变更的应答 {#what-a-change-answers}
+
+每个应答一个变更的路由（`POST /changes`、`GET /changes/{id}`、推进变更的每一步、`:apply`、`:rollback`，以及 break-glass
+的申请与审批）应答相同的成员：`id`、`key`（它的文档）、`base`（`revision` 和 `digest`）、`operations`（与你发送的一致）、
+`author`、`note`、`kind`、`state`、`findings`、`candidate`（审批所针对的候选的摘要）、`createdAt`、`updatedAt`；有了之后还有
+`skipShadow`（原因）、`publishedRevision`、`escalations`、`approval`（`approver`、`at`、`candidate`、`covers`）、`shadow`
+（`window`，即发布者确认的窗口 id，`startedAt`，关闭后还有 `closed`）和 `confirmations`。存储为自身工作保留的内容不出现在
+任何应答中：候选检查时所依据的各文档头、在其窗口上报过的实例，以及审批人持有的内容（`CTL-61`）。
+
+成员、类型以及哪些始终存在，见 [`contract/control/`](https://github.com/Ahoo-Wang/CoSec/tree/main/contract/control)，
+连同应答写出的封闭取值集合：`state`、`kind`、`severity`、升级项的 `reason`、窗口统计的结果，以及决策的 `decision`、
+`cause`、`reason` 和追踪项的 `effect`、`outcome`。应答与文件不一致时 CoSec 的测试会失败，所以取值只会在声明了变化的版本中改变。
+
 ### 查找未完成的变更 {#finding-open-changes}
 
 `GET /changes` 列出尚未结束的变更：`document=<key>` 列出一个文档的，`state=<STATE>` 列出处于某个非终态（`DRAFT`、`CHECKED`、`SHADOWING`、`AWAITING_APPROVAL`、`READY`、`CONFLICTED`）的，也可以两者都给。两者至少要给一个；`limit` 为 1 到 200（默认 50），`after` 是上一页的 `next`，最后一页没有 `next`。
@@ -204,7 +217,7 @@ flowchart LR
   "changes": [
     {
       "id": "0SVoMJp7Q4G00",
-      "document": "tenant:acme",
+      "key": "tenant:acme",
       "state": "CHECKED",
       "kind": "PUBLISH",
       "author": { "tenant": "acme", "principal": "alice" },
@@ -217,7 +230,7 @@ flowchart LR
 }
 ```
 
-每一项是摘要：变更本身用 `GET /changes/{id}` 读取。存储的记录无法读取的变更以它的 `id`、`document` 和状态 `UNREADABLE` 列出，从不省略。只有 `GET /changes/{id}` 会向你展示的变更才会出现在列表中：你自己租户的文档（平台主体为任意文档）中，你写的或你可以读取其文档（`cosec:read`）的变更。列表不透露它省略了什么：一页只含你可见的变更，只有后面还有你可见的变更时才给出 `next`（`CTL-55`）。
+每一项是摘要：变更本身用 `GET /changes/{id}` 读取。存储的记录无法读取的变更以它的 `id`、`key` 和状态 `UNREADABLE` 列出，从不省略。每一项的成员就是[变更应答](#what-a-change-answers)中同名的成员。只有 `GET /changes/{id}` 会向你展示的变更才会出现在列表中：你自己租户的文档（平台主体为任意文档）中，你写的或你可以读取其文档（`cosec:read`）的变更。列表不透露它省略了什么：一页只含你可见的变更，只有后面还有你可见的变更时才给出 `next`（`CTL-55`）。
 
 未完成的变更保存在它们自己的集合中（[存储](../operations/storage.md#redis-keys)）。对更早预览版写入的存储，在 `cosec-migrate repair-references` 转换它之前，列表返回 `503`（`CTL-54`）。
 
@@ -333,6 +346,21 @@ API key 无论其主体持有什么，都不是信任根，也从不审批。CoS
 写入时只比较该文档自己的头。检查读过的其他文档（例如同一时刻落地的平台变更）可能在发布的最后一次检查与写入之间变化；这时控制面重新分析这次变更，记 `HEADS_MOVED`，分析发现了无人审批的升级项时记 `REVIEW_NEEDED`。变更保持已发布：为什么这是安全的、如何复核这类事件，见[一次发布比较什么](../operations/storage.md#what-a-publish-compares)。
 
 要吊销某个修订，用 `{"revision": 11, "note": "..."}` 调用 `POST /documents/{key}:rollback`，它会提议一个 `ROLLBACK` 变更，把文档恢复为该修订时的样子。它和其他变更一样经过检查、窗口、审批和发布，所以恢复带 `onMissing: "nomatch"` 的 DENY 时要像提议一样带上 `confirmations`：旧修订中的确认是为另一个变更给出的。保留哪些修订、保留多久，见[存储](../operations/storage.md)。
+
+### 传播 {#propagation}
+
+`GET /documents/{key}/revisions/{revision}/propagation` 根据实例每隔几秒写入的状态（需开启
+[影子窗口](../operations/configuration.md#shadow-windows)），说明一个已发布修订到达了哪些实例。发布从不等待它。
+
+```json
+{ "revision": 5, "installed": 3, "holding": 3, "recent": 50, "asOf": "2026-11-20T09:00:04Z" }
+```
+
+`recent` 统计最近一分钟内写过状态的实例，`holding` 是其中持有该文档（任意修订）的实例，`installed` 是其中已装入
+`revision` 或更新修订的实例。实例只常驻它所服务的租户，所以租户文档在 `installed` 等于 `holding`（而不是 `recent`）时
+即已传播完成；没有实例持有的租户文档（`holding: 0`）尚未传播，会在它的第一个请求时按当时的修订装入。平台文档和某个 app
+的文档由服务它们的每个实例持有。控制面主机至多每 5 秒读一次状态，所以应答最多可能是 5 秒前的：`asOf` 说明读取的时间。
+读取失败时应答 `503`，从不返回更早的结果（`CTL-62`）。
 
 ## 访问审查 {#access-reviews}
 

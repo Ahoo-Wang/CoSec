@@ -24,6 +24,17 @@ description: "每个 8.0 预览版（alpha 与 beta）到下一个之间的变�
 
 ## 从 8.0.0-beta.4 升级 {#from-8-0-0-beta-4}
 
+- **控制 API 由自己的应答模型作答；被拒绝的作用域在 `reason` 下说明原因；传播只统计持有该文档的实例**（第二轮评审，
+  `R2C-11`、`R2C-12`、`CTL-61`、`CTL-62`）。受影响的是控制 API 的客户端。
+  - 变更的应答（`GET /changes/{id}` 以及每个应答变更的路由）不再包含 `checkedWith`、`checkedApps` 和窗口的
+    `shadow.reporters`：它们是存储的簿记，不属于 API。其余成员不变（[变更的应答](../policies/testing.md#what-a-change-answers)）。
+  - `simulate` 与 `explain`：`Rejected` 决策的 `APP_MISMATCH` 或 `SPACE_NOT_MEMBER` 放在 `reason` 下，不再放在 `cause`
+    下。`cause` 只属于 `Indeterminate` 决策，取值不变。
+  - `GET /documents/{key}/revisions/{n}/propagation` 新增 `holding`（持有该文档的最近实例）和 `asOf`（读取状态的时间；
+    应答最多可能是 5 秒前的）。`installed` 与 `recent` 含义不变。租户文档在 `installed` 等于 `holding` 时即视为传播完成：
+    大多数实例从不持有某个租户，所以对它而言 `installed` 从来到不了 `recent`。状态读取失败现在是 `503`，不再是 `500`。
+  - `contract/control/` 固定了这些应答的成员、它们写出的封闭取值集合以及每个路由的审计种类；改变其中任何一项的版本会写明。
+
 - **每条存储的记录都带有格式，读取方忽略已知格式中不认识的内容**（第二轮评审，`R2C-10`、`R2C-28`、`CTL-53`、`IDN-31`）。受影响的是每个部署，一次。
   - **停止控制面，升级，再启动。** 此前的预览版拒绝新记录带有的 `format` 成员，所以两个版本的实例不能同时运行。从这个版本起读取方是容忍的，以后的版本可以原地升级。
   - **一起滚动升级登录主机。** 仍运行旧预览版的登录主机读不了新版本写入的会话：刷新落到那里的用户需要重新登录。
