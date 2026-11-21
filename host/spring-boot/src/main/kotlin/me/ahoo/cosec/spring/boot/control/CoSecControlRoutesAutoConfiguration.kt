@@ -39,6 +39,7 @@ import me.ahoo.cosec.webflux.PipelineWebFilter
 import me.ahoo.cosec.webflux.ServerWebExchanges.securityContextOrNull
 import me.ahoo.cosec.webmvc.ServletRequests.securityContextOrNull
 import org.springframework.beans.factory.ObjectProvider
+import org.springframework.beans.factory.annotation.Qualifier
 import org.springframework.boot.autoconfigure.AutoConfiguration
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass
@@ -105,6 +106,15 @@ internal class CoSecControlRoutesAutoConfiguration {
             listener: ControlServiceListener,
             properties: ControlProperties,
         ): ServicePortFilter = ServicePortFilter(listener, basePathOf(properties))
+
+        /** The service port's control routes, served by the filter and by no handler of the application (`R3-5`). */
+        @Bean
+        @ConditionalOnProperty(ControlServicePort.KEY)
+        @ConditionalOnClass(name = ["reactor.netty.http.server.HttpServer"])
+        fun cosecControlServicePortRoutes(
+            listener: ControlServiceListener,
+            @Qualifier("cosecControlRoutes") routes: ReactiveRouterFunction<ReactiveServerResponse>,
+        ): ServicePortRoutes = ServicePortRoutes(listener, routes)
 
         /** Where the application's server bound (`CTL-69`); the login routes' configuration declares it too. */
         @Bean

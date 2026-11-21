@@ -16,6 +16,15 @@
 package me.ahoo.cosec.spring.boot.realserver
 
 import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.control.store.Publication
+import me.ahoo.cosec.control.store.Revisions
+import me.ahoo.cosec.document.Actor
+import me.ahoo.cosec.document.PolicyDocumentCodec
+import me.ahoo.cosec.document.ProvenanceKind
+import me.ahoo.cosec.model.PrincipalId
+import me.ahoo.cosec.model.TenantId
+import me.ahoo.cosec.model.decision.DocumentKind
+import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.cosec.spring.boot.control.ControlServiceServer
 import me.ahoo.cosec.spring.boot.pipeline.GATEWAY_GLOBAL_FILTER
 import me.ahoo.test.asserts.assert
@@ -30,8 +39,14 @@ import org.springframework.boot.context.annotation.ImportCandidates
 import org.springframework.boot.reactor.netty.NettyReactiveWebServerFactory
 import org.springframework.boot.test.context.FilteredClassLoader
 import org.springframework.context.ConfigurableApplicationContext
+import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
+import org.springframework.core.Ordered
+import org.springframework.core.annotation.Order
 import org.springframework.core.io.DefaultResourceLoader
+import org.springframework.web.reactive.function.server.RouterFunction
+import org.springframework.web.reactive.function.server.RouterFunctions
+import org.springframework.web.reactive.function.server.ServerResponse
 import java.io.IOException
 import java.net.InetAddress
 import java.net.InetSocketAddress
@@ -62,7 +77,16 @@ import javax.net.ssl.TrustManagerFactory
 class ControlServicePortSettingsTest {
     @Configuration(proxyBeanMethods = false)
     @EnableAutoConfiguration
-    class Application
+    class Application {
+        /**
+         * An application's own route under the control API's base path, ordered before the control routes: the worst place
+         * it can be, since a request for it would reach it first wherever the control API is served.
+         */
+        @Bean
+        @Order(Ordered.HIGHEST_PRECEDENCE)
+        fun applicationRouteUnderTheBase(): RouterFunction<ServerResponse> = RouterFunctions.route()
+            .GET("$BASE/application-route") { ServerResponse.ok().bodyValue("application") }.build()
+    }
 
     @Test
     fun `with mutual TLS on the application port the service port is TLS with a client certificate too`(
@@ -146,6 +170,55 @@ class ControlServicePortSettingsTest {
             closed.assert().describedAs(
                 "the idle keep-alive connection was closed when the application stopped"
             ).isTrue()
+        }
+    }
+
+    @Test
+    fun `the service port serves the control API's routes and no route of the application, under the base path or not`() {
+        start().use { context ->
+            val applicationPort = context.environment.getRequiredProperty("local.server.port").toInt()
+            val service = context.environment.getRequiredProperty("local.control.service.port").toInt()
+            publish(context)
+            val route = "$BASE/application-route"
+            // The application's route is its own on the application's port, once the platform document permits it...
+            val deadline = System.nanoTime() + Duration.ofSeconds(DOCUMENT_SECONDS).toNanos()
+            while (status(applicationPort, route) != OK) {
+                check(System.nanoTime() < deadline) { "The platform document was not installed." }
+                Thread.sleep(POLL_MILLIS)
+            }
+            // ...and on the service port nothing of the application answers, though the same document permits the path there
+            // too: the control routes are what answers under the base path, and with no principal behind the request they say
+            // 401, never what the application's handler would say.
+            val served = get(service, route)
+            served.second.assert().describedAs(
+                "the application's route under the base path"
+            ).isNotEqualTo("application")
+            served.first.assert().isNotEqualTo(OK)
+            // A route of the control API itself is served there (the gate answers it, whatever it answers).
+            get(service, "$BASE/documents/tenant:acme").first.assert().isNotEqualTo(NOT_FOUND)
+        }
+    }
+
+    private fun status(port: Int, path: String): Int = get(port, path).first
+
+    /** The status and the body of a plain `GET`. */
+    private fun get(port: Int, path: String): Pair<Int, String> {
+        val request = HttpRequest.newBuilder(URI.create("http://127.0.0.1:$port$path"))
+            .timeout(Duration.ofSeconds(TIMEOUT_SECONDS)).GET().build()
+        val answer = CLIENT_PLAIN.send(request, HttpResponse.BodyHandlers.ofString())
+        return answer.statusCode() to answer.body()
+    }
+
+    /** The platform document of this test: the application's route under the base path is permitted to anyone, nothing else. */
+    private fun publish(context: ConfigurableApplicationContext) {
+        val revisions = context.getBean(Revisions::class.java)
+        kotlinx.coroutines.runBlocking {
+            revisions.publish(
+                SnapshotKey.Platform,
+                revisions.head(SnapshotKey.Platform),
+                PolicyDocumentCodec.decode(DocumentKind.PLATFORM, "", PLATFORM.encodeToByteArray()),
+                Publication("bootstrap", ProvenanceKind.BOOTSTRAP, Actor(TenantId.PLATFORM, PrincipalId("plato"))),
+            )
         }
     }
 
@@ -250,6 +323,18 @@ class ControlServicePortSettingsTest {
     private companion object {
         const val PASSWORD = "changeit"
         const val TIMEOUT_SECONDS = 10L
+        const val BASE = "/cosec/control/v1"
+        const val OK = 200
+        const val NOT_FOUND = 404
+        const val DOCUMENT_SECONDS = 30L
+        const val POLL_MILLIS = 50L
+        val CLIENT_PLAIN: HttpClient = HttpClient.newBuilder().connectTimeout(
+            Duration.ofSeconds(TIMEOUT_SECONDS)
+        ).build()
+        const val PLATFORM = """{"schema":2,"revision":1,"publishedAt":"2026-11-01T00:00:00Z",""" +
+            """"policies":[{"id":"open","statements":[{"effect":"allow","action":"http:GET",""" +
+            """"resource":"http:path:/cosec/control/v1/application-route"}]}],""" +
+            """"bindings":[{"id":"open","subject":"*","app":"*","space":"*","policy":"open"}]}"""
         const val CONNECT_MILLIS = 2_000
         const val SOCKET_MILLIS = 5_000
     }
