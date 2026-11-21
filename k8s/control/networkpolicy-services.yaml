@@ -1,0 +1,39 @@
+# Port 8082, the service API: exactly the services you name, and nothing else. As shipped it names a service that does not
+# exist, so it admits no one.
+#
+# A service that calls the control plane directly writes the CoSec-Identity header itself and states the principal it
+# acts as; the control plane decides for that principal and records that it was asserted. It does not verify the caller.
+# So a compromise of any workload this policy admits is a compromise of what that service may state: it can assert any
+# principal the service profile's routes accept, a platform administrator among them, and author and approve a tenant's
+# change. Admit the fewest services, each by its own label in its own namespace, and treat each as being as trusted as
+# the control plane itself.
+#
+# CHANGE both names below, or patch this policy in your overlay: the namespace the service runs in, and the service's own
+# label. One `from` entry per service; `namespaceSelector` and `podSelector` in the same entry are both required. Needs a
+# network plugin that enforces NetworkPolicy; without one it does nothing, so test that a pod of another label cannot
+# connect.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: cosec-control-services
+  labels:
+    app.kubernetes.io/name: cosec-control
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: cosec-control
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              # CHANGE: the namespace of the service that calls the control plane.
+              kubernetes.io/metadata.name: your-service-namespace
+          podSelector:
+            matchLabels:
+              # CHANGE: that service's label.
+              app.kubernetes.io/name: your-service
+      ports:
+        - port: service
+          protocol: TCP
