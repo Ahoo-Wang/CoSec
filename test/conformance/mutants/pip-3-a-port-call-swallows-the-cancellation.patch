@@ -1,6 +1,6 @@
 # Rule: PIP-3
 # Mutant: a call to a port answers a failure to an external cancellation instead of letting it propagate: the request goes on with no one waiting for it
-# Tests: :runtime:test --tests me.ahoo.cosec.runtime.PipelineCancellationTest :conformance:test --tests me.ahoo.cosec.conformance.ConformanceTest
+# Tests: :runtime:test --tests me.ahoo.cosec.runtime.PipelineCancellationTest --tests me.ahoo.cosec.runtime.AuthorizationCheckerTest :conformance:test --tests me.ahoo.cosec.conformance.ConformanceTest
 
 diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/call/PortCall.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/call/PortCall.kt
 index e7590e956..679f720f6 100644
