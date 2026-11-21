@@ -816,8 +816,7 @@
         "control:ChangeOriginTest#a change records how its author was identified, and each event how its step's operator was",
         "control:ChangeOriginTest#an origin is stored with its change and written with its event, with the members it has",
         "spring-boot:ForwardedIdentityCallerTest#the operator of a request the identity gate decided is recorded as asserted, with the credential stated and the peer",
-        "spring-boot:ControlServicePortTest#the peer of a control request is the connection's, beneath the forwarded header handling",
-        "control:ControlServiceTest#a call through the facade is recorded as made in process - CTL-57, CTL-65"
+        "spring-boot:ControlServicePortTest#the peer of a control request is the connection's, beneath the forwarded header handling"
       ]
     },
     {
@@ -834,8 +833,7 @@
         "spring-boot:ControlServicePortTest#the service port listens apart, serves nothing but the control API, and closes its connections when it stops",
         "spring-boot:ControlServicePortTest#a service port beside the application's, the management port or a disabled control API is refused",
         "spring-boot:ControlServicePortTest#a service port with no WebFlux server to serve it fails startup naming what to do",
-        "spring-boot:ControlServicePortTest#cosec control http enabled false serves no control route, and the control plane stays for what embeds it",
-        "control:ControlServiceTest#no route outside the narrow set is reachable through the facade, nor any on the platform document - CTL-65"
+        "spring-boot:ControlServicePortTest#cosec control http enabled false serves no control route, and the control plane stays for what embeds it"
       ]
     },
     {
