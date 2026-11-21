@@ -559,12 +559,13 @@
     {
       "id": "CTL-41",
       "source": "Review round 1 of beta.4 (R1B-4)",
-      "statement": "A change a client proposes carries at most the platform's limits.maxChangeOperations operations (20,000 by default): a larger one is refused 400, naming the count and the limit, before any operation is authorized or applied. An apply and a rollback are not held to it: their operations are derived from a document, which the entry budgets bound (CTL-40). The control routes read at most cosec.control.http.max-body-size of a request's body (10 MB by default) on WebMvc and WebFlux alike, and answer a larger one 400 without asking the control plane.",
+      "statement": "A change a client proposes carries at most the platform's limits.maxChangeOperations operations (20,000 by default): a larger one is refused 400, naming the count and the limit, before any operation is authorized or applied. An apply and a rollback are not held to it: their operations are derived from a document, which the entry budgets bound (CTL-40). The control routes read at most the document cap and 2 MB (10 MB) of a request's body on WebMvc and WebFlux alike, and answer a larger one 400 without asking the control plane (`CTL-70`).",
       "level": "control",
       "guards": [
         "control:EntryBudgetsTest#a client's change carries at most maxChangeOperations operations, an apply is not held to it",
         "spring-boot:ControlBodyLimitTest#a body within the limit reaches the control plane on both stacks, a larger one is a 400 that never does",
-        "spring-boot:ControlBodyLimitTest#the limit is 10 MB by default"
+        "spring-boot:ControlBodyLimitTest#the limit is the document cap and 2 MB, 10 MB, and follows the cap",
+        "control:ControlDerivedTest#the body limit is the document cap and two megabytes, so it follows the cap"
       ],
       "pending": null
     },
@@ -931,6 +932,20 @@
         "control:ChangeListenersDrainTest#during the drain a gated step is refused and another step's event is kept, never queued - CTL-66"
       ],
       "pending": null
+    },
+    {
+      "id": "CTL-70",
+      "source": "maintainer decision 2026-11-22 (what can be computed is not configured); the properties review, items 8-12",
+      "statement": "The control plane's cadences and limits are constants or computed, and no property sets them: every instance reclaims revisions every hour; a record not on a revision chain, or a change listed but never written, is removed once it is one reclaim pass old, never younger, since a record whose first write is in flight is not an orphan; the open shadow windows are looked at every fifteenth of `cosec.control.shadow.min-duration`, between a quarter of a second and a minute, so a window closes at most one pass after it could; an instance writes its shadow reports and status every sixth of the status's life (10 s), and no oftener than a fifth of the shortest life of a window nor than a second, so it is never older than the status that makes it counted; the control routes read a body of at most the document cap and 2 MB (10 MB), so raising the cap raises the limit. The starter says once at startup what it derived and from what.",
+      "level": "startup",
+      "pending": null,
+      "guards": [
+        "control:ControlDerivedTest#an orphan is removed only once it has outlived a whole reclaim pass",
+        "control:ControlDerivedTest#the shadow pass is a fifteenth of the least a window lives, within a quarter second and a minute",
+        "control:ControlDerivedTest#a window never closes later than one pass after it could",
+        "runtime:ShadowReporterDerivedIntervalTest#the interval is never longer than a sixth of the status's life, so an instance is never uncounted for it",
+        "spring-boot:ControlServicePortTest#a host that runs the control plane says once what it derived"
+      ]
     }
   ]
 }

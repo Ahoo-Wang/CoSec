@@ -255,6 +255,21 @@ class ControlServicePortTest {
         }
     }
 
+    /** `CTL-70`: one startup line says what the control plane computed and from what. */
+    @Test
+    fun `a host that runs the control plane says once what it derived`() {
+        runner.withConfiguration(
+            AutoConfigurations.of(CoSecControlServicePortAutoConfiguration::class.java)
+        ).run { context ->
+            context.containsBean("cosecDerivedControlSettingsNotice").assert().isTrue()
+        }
+        runner.withPropertyValues("cosec.control.shadow.min-duration=5s").run { context ->
+            context.getBean(
+                ControlProperties::class.java
+            ).shadow.minDuration.assert().isEqualTo(java.time.Duration.ofSeconds(5))
+        }
+    }
+
     /**
      * `CTL-59`: every instance with the control plane on runs the maintenance passes, whatever else is configured, and
      * nothing turns them off. Two instances over one store run each pass once per interval, by their leases:

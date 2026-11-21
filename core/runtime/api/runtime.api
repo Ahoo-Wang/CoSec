@@ -84,33 +84,23 @@ public final class me/ahoo/cosec/runtime/PipelineSettings {
 }
 
 public final class me/ahoo/cosec/runtime/SnapshotSettings {
-	public final fun getColdLoadTimeout ()Ljava/time/Duration;
-	public final fun getCompileThreads ()I
 	public final fun getFailClosedMaxLag ()Ljava/time/Duration;
 	public final fun getFailClosedTenants ()Ljava/util/Set;
-	public final fun getLagEscalate ()Ljava/time/Duration;
-	public final fun getLagWarn ()Ljava/time/Duration;
 	public final fun getMaxAbsentApps ()I
 	public final fun getMaxAbsentTenants ()I
 	public final fun getMaxApps ()I
 	public final fun getMaxTenants ()I
 	public final fun getPrewarmApps ()Ljava/util/Set;
 	public final fun getPrewarmTenants ()Ljava/util/Set;
-	public final fun getReloadConcurrency ()I
 	public final fun getRevalidateInterval ()Ljava/time/Duration;
-	public final fun setColdLoadTimeout (Ljava/time/Duration;)V
-	public final fun setCompileThreads (I)V
 	public final fun setFailClosedMaxLag (Ljava/time/Duration;)V
 	public final fun setFailClosedTenants (Ljava/util/Set;)V
-	public final fun setLagEscalate (Ljava/time/Duration;)V
-	public final fun setLagWarn (Ljava/time/Duration;)V
 	public final fun setMaxAbsentApps (I)V
 	public final fun setMaxAbsentTenants (I)V
 	public final fun setMaxApps (I)V
 	public final fun setMaxTenants (I)V
 	public final fun setPrewarmApps (Ljava/util/Set;)V
 	public final fun setPrewarmTenants (Ljava/util/Set;)V
-	public final fun setReloadConcurrency (I)V
 	public final fun setRevalidateInterval (Ljava/time/Duration;)V
 }
 

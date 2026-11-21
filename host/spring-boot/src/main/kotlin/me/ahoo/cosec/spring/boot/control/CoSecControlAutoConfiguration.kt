@@ -34,6 +34,7 @@ import me.ahoo.cosec.control.change.ChangeId
 import me.ahoo.cosec.control.lifecycle.ChangeAuthority
 import me.ahoo.cosec.control.lifecycle.ChangeOptions
 import me.ahoo.cosec.control.lifecycle.Changes
+import me.ahoo.cosec.control.lifecycle.ControlDerived
 import me.ahoo.cosec.control.lifecycle.ControlMaintenance
 import me.ahoo.cosec.control.lifecycle.ShadowOptions
 import me.ahoo.cosec.control.store.ControlStore
@@ -62,6 +63,7 @@ import me.ahoo.cosec.spring.boot.jwt.JwtProperties
 import me.ahoo.cosec.spring.boot.pipeline.CoCacheRevocation
 import me.ahoo.cosec.spring.boot.pipeline.CoSecPipelineAutoConfiguration
 import me.ahoo.cosec.spring.boot.pipeline.ListenerProperties
+import me.ahoo.cosec.spring.boot.pipeline.PipelineProperties
 import me.ahoo.cosec.spring.boot.pipeline.RevocationProperties
 import me.ahoo.cosec.spring.boot.pipeline.RuntimeAuthorizationProperties
 import me.ahoo.cosec.spring.boot.pipeline.credentialHeaders
@@ -96,7 +98,12 @@ import java.time.Clock
 @ConditionalOnCoSecEnabled
 @Conditional(ControlPlaneCondition::class)
 @ConditionalOnBean(PolicySnapshotCache::class)
-@EnableConfigurationProperties(ControlProperties::class, RevocationProperties::class, CoSecProperties::class)
+@EnableConfigurationProperties(
+    ControlProperties::class,
+    RevocationProperties::class,
+    CoSecProperties::class,
+    PipelineProperties::class,
+)
 @Import(
     StartupTaskExclusion::class,
     ControlServiceConfiguration::class,
@@ -111,21 +118,20 @@ internal class CoSecControlAutoConfiguration {
         heads: PolicySnapshotCache,
         documents: RedisSnapshotDocumentStore,
         cosec: CoSecProperties,
-        control: ControlProperties,
     ): ControlStore = CoCacheControlStore.create(
         factory,
         heads,
         cosec.keyPrefix,
         documents::notifyChanged,
-        // A change listed but missing this long had its first write fail.
-        missingGrace = control.revisions.orphanAge,
+        // A change listed but missing this long had its first write fail: one reclaim pass (ControlDerived.ORPHAN_AGE).
+        missingGrace = ControlDerived.ORPHAN_AGE,
     )
 
     @Bean
     @ConditionalOnMissingBean
     fun cosecRevisions(store: ControlStore, properties: ControlProperties): Revisions = Revisions(
         store,
-        retention = with(properties.revisions) { RetentionPolicy(maxCount, minAge, orphanAge) },
+        retention = with(properties.revisions) { RetentionPolicy(maxCount, minAge) },
     )
 
     /**
@@ -138,12 +144,18 @@ internal class CoSecControlAutoConfiguration {
         documents: RedisSnapshotDocumentStore,
         attributes: AttributeProviders,
         properties: RuntimeAuthorizationProperties,
+        pipeline: PipelineProperties,
         environment: Environment,
     ): ControlSnapshot {
         val compiler = PlatformCompiler(attributes.catalog, credentialHeaders = credentialHeaders(environment))
         val clock = Clock.systemUTC()
         return ControlSnapshot(
-            DocumentSnapshots.source(documents, compiler, properties.snapshot.toOptions(), clock).also(compiler::bind),
+            DocumentSnapshots.source(
+                documents,
+                compiler,
+                properties.snapshot.toOptions(pipeline.timeout),
+                clock
+            ).also(compiler::bind),
             clock,
         )
     }
@@ -284,9 +296,10 @@ internal class CoSecControlAutoConfiguration {
         revisions: Revisions,
         changes: Changes,
         properties: ControlProperties,
-    ): ControlMaintenance = ControlMaintenance(store, revisions, changes, properties.shadow.checkInterval)
+    ): ControlMaintenance =
+        ControlMaintenance(store, revisions, changes, ControlDerived.shadowCheckInterval(properties.shadow.minDuration))
 
-    /** Runs [ControlMaintenance] at `cosec.control.revisions.reclaim-interval` and `cosec.control.shadow.check-interval`. */
+    /** Runs [ControlMaintenance] every [ControlDerived.RECLAIM_INTERVAL] and [ControlDerived.shadowCheckInterval]. */
     @Bean
     @ConditionalOnMissingBean
     fun cosecControlMaintenanceScheduler(
@@ -294,8 +307,8 @@ internal class CoSecControlAutoConfiguration {
         properties: ControlProperties,
     ): ControlMaintenanceScheduler = ControlMaintenanceScheduler(
         maintenance,
-        reclaimInterval = properties.revisions.reclaimInterval,
-        shadowInterval = properties.shadow.checkInterval,
+        reclaimInterval = ControlDerived.RECLAIM_INTERVAL,
+        shadowInterval = ControlDerived.shadowCheckInterval(properties.shadow.minDuration),
     )
 
     /** Not replaceable: every call goes through [ChangeAuthority]. */

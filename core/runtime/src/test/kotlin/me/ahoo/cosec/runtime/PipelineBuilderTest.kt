@@ -130,10 +130,9 @@ class PipelineBuilderTest {
 
     private fun pipeline(store: SnapshotDocumentStore, listener: DecisionListener? = null) =
         Pipeline.builder(authenticator(authenticated()), store)
-            .snapshots {
-                coldLoadTimeout = Duration.ofMillis(50)
-                prewarmTenants = setOf(TENANT.value)
-            }
+            // The cold-load timeout is 40 % of the deadline (SnapshotOptions.derive): 50 ms.
+            .options { timeout = Duration.ofMillis(125) }
+            .snapshots { prewarmTenants = setOf(TENANT.value) }
             .apply { listener?.let(::listener) }
             .build()
 

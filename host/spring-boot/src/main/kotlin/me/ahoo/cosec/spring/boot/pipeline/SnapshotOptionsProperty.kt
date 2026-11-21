@@ -19,17 +19,34 @@ import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.runtime.snapshot.SnapshotOptions
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
+import java.time.Duration
 
 /**
  * The source's options. A `revalidate-interval` out of bounds fails startup naming the property (`SNP-6`, RC1-50): the
  * periodic pass is the only bound on a change whose invalidation was lost, so it cannot be turned off.
  */
-internal fun RuntimeAuthorizationProperties.Snapshot.toOptions(): SnapshotOptions {
-    SnapshotOptions.revalidateIntervalProblem(revalidateInterval, lagWarn, failClosed.tenants, failClosed.maxLag)?.let {
-        throw IllegalStateException("$REVALIDATE_INTERVAL_PROPERTY ($revalidateInterval) $it.")
-    }
-    return options()
+internal fun RuntimeAuthorizationProperties.Snapshot.toOptions(pipelineTimeout: Duration): SnapshotOptions {
+    val derived = derived(pipelineTimeout)
+    SnapshotOptions.revalidateIntervalProblem(
+        revalidateInterval,
+        derived.lagWarn,
+        failClosed.tenants,
+        failClosed.maxLag
+    )
+        ?.let { throw IllegalStateException("$REVALIDATE_INTERVAL_PROPERTY ($revalidateInterval) $it.") }
+    return options(derived)
 }
+
+/** Lag above which a document is logged at WARN: [SnapshotOptions.LAG_WARN_PASSES] passes of `revalidate-interval`. */
+internal fun RuntimeAuthorizationProperties.Snapshot.lagWarn(): Duration =
+    revalidateInterval.multipliedBy(SnapshotOptions.LAG_WARN_PASSES.toLong())
+
+/**
+ * What the starter no longer asks for, computed from `revalidate-interval`, the pipeline's timeout and the machine
+ * ([SnapshotOptions.derive]); the startup log says what it came to ([DerivedSettingsLog]).
+ */
+internal fun RuntimeAuthorizationProperties.Snapshot.derived(pipelineTimeout: Duration): SnapshotOptions.Derived =
+    SnapshotOptions.derive(revalidateInterval, pipelineTimeout)
 
 /**
  * The documents loaded before the instance takes traffic: the platform's, the configured apps, the host's own app
@@ -45,17 +62,18 @@ internal fun RuntimeAuthorizationProperties.prewarmKeys(): List<SnapshotKey> {
 
 internal const val REVALIDATE_INTERVAL_PROPERTY = "cosec.authorization.snapshot.revalidate-interval"
 
-private fun RuntimeAuthorizationProperties.Snapshot.options(): SnapshotOptions = SnapshotOptions(
-    revalidateInterval = revalidateInterval,
-    lagWarn = lagWarn,
-    lagEscalate = lagEscalate,
-    failClosedTenants = failClosed.tenants,
-    failClosedMaxLag = failClosed.maxLag,
-    coldLoadTimeout = coldLoadTimeout,
-    maxApps = maxApps,
-    maxTenants = maxTenants,
-    maxAbsentApps = maxAbsentApps,
-    maxAbsentTenants = maxAbsentTenants,
-    compileThreads = compileThreads,
-    reloadConcurrency = reloadConcurrency,
-)
+private fun RuntimeAuthorizationProperties.Snapshot.options(derived: SnapshotOptions.Derived): SnapshotOptions =
+    SnapshotOptions(
+        revalidateInterval = revalidateInterval,
+        lagWarn = derived.lagWarn,
+        lagEscalate = derived.lagEscalate,
+        failClosedTenants = failClosed.tenants,
+        failClosedMaxLag = failClosed.maxLag,
+        coldLoadTimeout = derived.coldLoadTimeout,
+        maxApps = maxApps,
+        maxTenants = maxTenants,
+        maxAbsentApps = maxAbsentApps,
+        maxAbsentTenants = maxAbsentTenants,
+        compileThreads = derived.compileThreads,
+        reloadConcurrency = derived.reloadConcurrency,
+    )

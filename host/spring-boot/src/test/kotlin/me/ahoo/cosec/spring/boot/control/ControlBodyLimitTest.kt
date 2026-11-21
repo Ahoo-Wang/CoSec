@@ -22,6 +22,8 @@ import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.control.api.ControlHttp
 import me.ahoo.cosec.control.api.ControlPlane
+import me.ahoo.cosec.control.lifecycle.ChangeOptions
+import me.ahoo.cosec.control.lifecycle.ControlDerived
 import me.ahoo.cosec.document.PolicyDocument
 import me.ahoo.cosec.model.decision.DocumentKind
 import me.ahoo.cosec.spring.boot.pipeline.ApplicationPort
@@ -37,15 +39,14 @@ import org.springframework.mock.http.server.reactive.MockServerHttpRequest
 import org.springframework.mock.web.MockHttpServletRequest
 import org.springframework.mock.web.reactive.function.server.MockServerRequest
 import org.springframework.mock.web.server.MockServerWebExchange
-import org.springframework.util.unit.DataSize
 import reactor.core.publisher.Flux
 import java.net.URI
 import java.time.Instant
 import org.springframework.web.servlet.function.ServerRequest as ServletServerRequest
 
 /**
- * `CTL-41`: on either stack, the control routes read at most `cosec.control.http.max-body-size` of a permitted
- * request's body (10 MB by default), and answer a larger one 400 without asking the control plane.
+ * `CTL-41`: on either stack, the control routes read at most the body limit of a permitted request's body (the 8 MB
+ * document cap and 2 MB, [ControlDerived.MAX_BODY_BYTES]), and answer a larger one 400 without asking the control plane.
  */
 class ControlBodyLimitTest {
     private val plane = mockk<ControlPlane>().also { plane ->
@@ -53,7 +54,7 @@ class ControlBodyLimitTest {
             PolicyDocument(DocumentKind.TENANT, "acme", 1, Instant.parse("2026-11-01T00:00:00Z"), emptyList(), emptyList())
     }
     private val http = ControlHttp(plane)
-    private val properties = ControlProperties().apply { http.maxBodySize = DataSize.ofBytes(LIMIT.toLong()) }
+    private val properties = ControlProperties()
     private val security = permittedSecurity(PATH)
 
     private fun onWebFlux(size: Int): Pair<Int, String> {
@@ -67,10 +68,13 @@ class ControlBodyLimitTest {
         )
         val request = MockServerRequest.builder().method(HttpMethod.GET).uri(URI.create(PATH)).exchange(exchange)
             .body(body)
-        val routes = CoSecControlRoutesAutoConfiguration.WebFlux().cosecControlRoutes(
+        val routes = CoSecControlRoutesAutoConfiguration.WebFlux().routesWithin(
             http,
             properties,
-            ApplicationPort()
+            ApplicationPort(),
+            null,
+            null,
+            LIMIT.toLong(),
         )
         val response = routes.route(request).block()!!.handle(request).block()!!
         return response.statusCode().value() to response.toString()
@@ -81,7 +85,7 @@ class ControlBodyLimitTest {
         servlet.setContent(ByteArray(size))
         servlet.setSecurityContext(security.securityContext)
         val request = ServletServerRequest.create(servlet, listOf(ByteArrayHttpMessageConverter()))
-        val routes = CoSecControlRoutesAutoConfiguration.WebMvc().cosecControlRoutes(http, properties)
+        val routes = CoSecControlRoutesAutoConfiguration.WebMvc().routesWithin(http, properties, LIMIT.toLong())
         return routes.route(request).get().handle(request).statusCode().value()
     }
 
@@ -94,12 +98,14 @@ class ControlBodyLimitTest {
         onWebMvc(LIMIT + 1).assert().isEqualTo(400)
         coVerify(exactly = 2) { plane.read(any(), any(), any()) }
         CoSecControlRoutesAutoConfiguration.tooLargeProblem(LIMIT.toLong())["detail"].toString().assert()
-            .contains("cosec.control.http.max-body-size (16 bytes)").contains("CTL-41")
+            .contains("(16 bytes)").contains("CTL-41")
     }
 
     @Test
-    fun `the limit is 10 MB by default`() {
-        ControlProperties().http.maxBodySize.toMegabytes().assert().isEqualTo(10)
+    fun `the limit is the document cap and 2 MB, 10 MB, and follows the cap`() {
+        ControlDerived.MAX_BODY_BYTES.assert().isEqualTo(ChangeOptions.DEFAULT_MAX_DOCUMENT_BYTES + 2L * 1024 * 1024)
+        (ControlDerived.MAX_BODY_BYTES / (1024 * 1024)).assert().isEqualTo(10L)
+        ControlDerived.MAX_BODY_BYTES.assert().isGreaterThan(ChangeOptions().maxDocumentBytes.toLong())
     }
 
     private companion object {

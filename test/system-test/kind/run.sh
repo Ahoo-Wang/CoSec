@@ -112,7 +112,7 @@ PIDS+=($!)
 wait_for "the Redis port-forward" 30 "kubectl port-forward" bash -c 'exec 3<>/dev/tcp/127.0.0.1/6379'
 "$MIGRATE" publish --to-redis redis://127.0.0.1:6379 --file "$ROOT/test/system-test/kind/platform.json" --document platform
 # The pod's readiness: the next /readyz probe (every 5 s, k8s/base) after the revalidation (SNP-6: 10 s) and a cold load (2 s).
-wait_for "the gateway to turn ready" 60 "readinessProbe 5 s + revalidate-interval 10 s (SNP-6) + cold-load-timeout 2 s" \
+wait_for "the gateway to turn ready" 60 "readinessProbe 5 s + revalidate-interval 10 s (SNP-6) + cold load 2 s (40 % of pipeline.timeout)" \
   kc wait --for=condition=Ready "pod/$GATEWAY_POD" --timeout=1s
 has_endpoint() { [ -n "$(kc get endpoints cosec-gateway -o jsonpath='{.subsets[*].addresses[*].ip}')" ]; }
 wait_for "the Service to have an endpoint" 30 "endpoints follow readiness" has_endpoint

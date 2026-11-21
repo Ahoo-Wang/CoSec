@@ -112,6 +112,32 @@ class SnapshotOptions(
         }
     }
 
+    /**
+     * What the starter and [me.ahoo.cosec.runtime.PipelineBuilder] no longer take as settings, derived from the two
+     * values an operator does state and from the machine (the rule of root `AGENTS.md`: what can be computed is not
+     * configured):
+     * - lag thresholds: [LAG_WARN_PASSES] and [LAG_ESCALATE_PASSES] passes of [revalidateInterval];
+     * - the cold-load timeout: [COLD_LOAD_PERCENT] percent of [pipelineTimeout], never below a millisecond;
+     * - the compile threads: [cores] / [CORES_PER_COMPILE_THREAD], within 1 and [MAX_COMPILE_THREADS];
+     * - the reload concurrency: [DEFAULT_RELOAD_CONCURRENCY], whatever the interval (a pass slower than the interval
+     *   runs back to back, and the reads per second over an interval do not change, only their burst).
+     */
+    @InternalCoSecApi
+    class Derived internal constructor(
+        val lagWarn: Duration,
+        val lagEscalate: Duration,
+        val coldLoadTimeout: Duration,
+        val compileThreads: Int,
+        val reloadConcurrency: Int,
+    ) {
+        override fun toString(): String =
+            "lag-warn=$lagWarn ($LAG_WARN_PASSES passes of the revalidation interval), " +
+                "lag-escalate=$lagEscalate ($LAG_ESCALATE_PASSES passes), " +
+                "cold-load-timeout=$coldLoadTimeout ($COLD_LOAD_PERCENT % of the pipeline timeout), " +
+                "compile-threads=$compileThreads (a thread per $CORES_PER_COMPILE_THREAD cores), " +
+                "reload-concurrency=$reloadConcurrency (constant)"
+    }
+
     @InternalCoSecApi
     companion object {
         /**
@@ -151,6 +177,40 @@ class SnapshotOptions(
          */
         /** In [failClosedTenants]: every tenant fails closed past [failClosedMaxLag] (R2D-5). */
         const val ALL_TENANTS = "*"
+
+        /** A lag report is a number of missed passes: a document unconfirmed for this many is logged at WARN. */
+        const val LAG_WARN_PASSES: Int = 6
+
+        /** ... and at ERROR, as stale, for this many. */
+        const val LAG_ESCALATE_PASSES: Int = 30
+
+        /**
+         * The share of a request's deadline ([me.ahoo.cosec.runtime.PipelineOptions.timeout]) a cold load may wait: the rest
+         * is the authenticator, the memberships, the evaluation and the listeners. The shipped defaults were this share of
+         * the default deadline (2 s of 5 s).
+         */
+        const val COLD_LOAD_PERCENT: Int = 40
+
+        /** A compile thread per this many cores, between 1 and [MAX_COMPILE_THREADS]: compiling is bursty CPU work. */
+        const val CORES_PER_COMPILE_THREAD: Int = 4
+
+        const val MAX_COMPILE_THREADS: Int = 4
+
+        @InternalCoSecApi
+        fun derive(
+            revalidateInterval: Duration,
+            pipelineTimeout: Duration,
+            cores: Int = Runtime.getRuntime().availableProcessors(),
+        ): Derived = Derived(
+            lagWarn = revalidateInterval.multipliedBy(LAG_WARN_PASSES.toLong()),
+            lagEscalate = revalidateInterval.multipliedBy(LAG_ESCALATE_PASSES.toLong()),
+            coldLoadTimeout = pipelineTimeout.multipliedBy(COLD_LOAD_PERCENT.toLong()).dividedBy(PERCENT)
+                .coerceAtLeast(Duration.ofMillis(1)),
+            compileThreads = (cores / CORES_PER_COMPILE_THREAD).coerceIn(1, MAX_COMPILE_THREADS),
+            reloadConcurrency = DEFAULT_RELOAD_CONCURRENCY,
+        )
+
+        private const val PERCENT = 100L
 
         @InternalCoSecApi
         fun revalidateIntervalProblem(

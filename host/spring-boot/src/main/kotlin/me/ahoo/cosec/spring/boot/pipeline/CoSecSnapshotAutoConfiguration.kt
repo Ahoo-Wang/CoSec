@@ -15,6 +15,7 @@
 
 package me.ahoo.cosec.spring.boot.pipeline
 
+import io.github.oshai.kotlinlogging.KotlinLogging
 import me.ahoo.cocache.core.CoCacheFactory
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
@@ -75,10 +76,12 @@ import java.time.Instant
  * an in-memory store. An absent platform document fails requests closed until one is published (`cosec-migrate
  * publish`; the control plane's bootstrap writes only the platform tenant's document).
  */
+private val log = KotlinLogging.logger {}
+
 @AutoConfiguration(afterName = [COCACHE_AUTO_CONFIGURATION])
 @ConditionalOnCoSecEnabled
 @ConditionalOnEnforceMode
-@EnableConfigurationProperties(RuntimeAuthorizationProperties::class, CoSecProperties::class)
+@EnableConfigurationProperties(RuntimeAuthorizationProperties::class, CoSecProperties::class, PipelineProperties::class)
 @InternalCoSecApi
 @Import(StartupTaskExclusion::class)
 class CoSecSnapshotAutoConfiguration {
@@ -278,16 +281,13 @@ class CoSecSnapshotAutoConfiguration {
             recorder: ShadowRecorder,
             sink: CoCacheShadowReports,
             source: SnapshotSource<CompiledDocument, CompiledDocument>,
-            properties: RuntimeAuthorizationProperties,
+            environment: Environment,
             candidates: CandidateSource,
             stores: ObjectProvider<CandidateStore>,
         ): ShadowReporting {
             val clock = Clock.systemUTC()
             val installed = { installedDocuments(source.entries(), clock.instant()) }
-            val interval = properties.shadow.reportInterval
-            require(interval >= ShadowReporter.MIN_INTERVAL) {
-                "cosec.authorization.shadow.report-interval is at least one millisecond, not $interval."
-            }
+            val interval = DerivedSnapshotSettings.reportInterval(environment)
             val caching = candidates as? CachingCandidateSource
             val store = caching?.store ?: stores.ifUnique
             return ShadowReporting(ShadowReporter(recorder, sink, installed, clock, interval, store, caching))
@@ -327,17 +327,28 @@ class CoSecSnapshotAutoConfiguration {
      * The snapshot source. It loads the platform first, so that no app or tenant document compiles against default
      * limits, then prewarms the platform and the configured apps and tenants: empty lists mean the platform only.
      */
+    /** One line for what the data plane computes where it used to be told, and from what (the snapshot group). */
+    @Bean
+    fun cosecDerivedSnapshotSettingsNotice(
+        properties: RuntimeAuthorizationProperties,
+        pipeline: PipelineProperties,
+        environment: Environment,
+    ): StartupTask = StartupTask.AfterSingletons {
+        log.info { DerivedSnapshotSettings.line(properties, pipeline.timeout, environment) }
+    }
+
     @Bean(destroyMethod = "close")
     @ConditionalOnMissingBean
     fun cosecSnapshotSource(
         store: SnapshotDocumentStore,
         compiler: PlatformCompiler,
         properties: RuntimeAuthorizationProperties,
+        pipeline: PipelineProperties,
         metrics: ObjectProvider<SnapshotMetrics>,
         routes: ObjectProvider<RouteMap>,
     ): SnapshotSource<CompiledDocument, CompiledDocument> {
         val snapshot = properties.snapshot
-        val options = snapshot.toOptions()
+        val options = snapshot.toOptions(pipeline.timeout)
         // The data plane's source only: the control plane's own would count its reads under the same names.
         val source = DocumentSnapshots.source(
             store,

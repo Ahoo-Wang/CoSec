@@ -17,6 +17,7 @@ package me.ahoo.cosec.control.store
 
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.control.lifecycle.ControlDerived
 import java.time.Duration
 
 /** How long revision records are kept (RFC 0007 §5.7). */
@@ -26,8 +27,8 @@ class RetentionPolicy(
     val maxCount: Int = 50,
     /** Revisions younger than this are always kept (`cosec.control.revisions.min-age`). */
     val minAge: Duration = Duration.ofDays(7),
-    /** Records not on the chain are removed once this old (`cosec.control.revisions.orphan-age`). */
-    val orphanAge: Duration = Duration.ofHours(1),
+    /** Records not on the chain are removed once this old ([ControlDerived.ORPHAN_AGE], one reclaim pass). */
+    val orphanAge: Duration = ControlDerived.ORPHAN_AGE,
     /** How long one instance holds the reclamation lease of a document. */
     val leaseDuration: Duration = Duration.ofMinutes(5),
 ) {

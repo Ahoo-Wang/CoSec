@@ -218,23 +218,13 @@ class PipelineStarterRedisTest {
         }
     }
 
-    /** A report interval under a millisecond would be a loop that never suspends: startup refuses it, naming it (#1397). */
-    @Test
-    fun `a report interval under a millisecond fails startup naming the property`() {
-        runner.withPropertyValues("cosec.authorization.shadow.report-interval=500us").run { context ->
-            val failure = context.startupFailure
-            failure.assert().isNotNull()
-            generateSequence<Throwable>(failure) { it.cause }.mapNotNull { it.message }.joinToString("\n").assert()
-                .contains("cosec.authorization.shadow.report-interval is at least one millisecond")
-        }
-    }
-
     /** S3: the data plane takes part in shadow windows, so a candidate one instance cannot compile blocks its window. */
     @Test
     fun `a candidate that does not compile on an instance blocks its window`() {
         runner.withPropertyValues(
             "cosec.authorization.shadow.sample-rate=1",
-            "cosec.authorization.shadow.report-interval=100ms",
+            // The report interval derives from the window's shortest life: a fifth of it, at least a second.
+            "cosec.control.shadow.min-duration=5s",
         ).run { context ->
             val client = client(context)
             publish(context, SnapshotKey.Platform, DocumentKind.PLATFORM, "", PLATFORM)
@@ -270,7 +260,7 @@ class PipelineStarterRedisTest {
     fun `a tenant candidate that makes a roleless request read an app document widens its window`() {
         runner.withPropertyValues(
             "cosec.authorization.shadow.sample-rate=1",
-            "cosec.authorization.shadow.report-interval=100ms",
+            "cosec.control.shadow.min-duration=5s",
         ).run { context ->
             val client = client(context)
             publish(context, SnapshotKey.Platform, DocumentKind.PLATFORM, "", ADMIN_ONLY)
