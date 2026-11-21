@@ -52,9 +52,9 @@ import java.time.Clock
  */
 @InternalCoSecApi
 class DocumentListing internal constructor(
-    revisions: Revisions,
+    private val revisions: Revisions,
     private val authority: ChangeAuthority,
-    clock: Clock = Clock.systemUTC(),
+    private val clock: Clock = Clock.systemUTC(),
 ) {
     private val documents = SharedRead(clock) { revisions.documents().sortedBy { it.toString() } }
 
@@ -66,16 +66,22 @@ class DocumentListing internal constructor(
         val shown: (SnapshotKey) -> Boolean = when (authority.decideLayer(operator, kind, ControlActions.READ)) {
             ControlDecision.PERMIT -> { key -> TenantIsolation.allows(operator, key) }
             ControlDecision.INDETERMINATE -> throw undecided(kind)
-            ControlDecision.DENY -> {
-                val own = ownDocument(operator, kind) ?: throw refused(kind)
-                ({ key -> key == own })
-            }
+            ControlDecision.DENY -> return ownPage(ownDocument(operator, kind) ?: throw refused(kind), after)
         }
         val read = documents.read()
         val listed = read.value
             .filter { ownerOf(it).first == kind && (after == null || it.toString() > after) && shown(it) }
         val page = listed.take(limit)
         return DocumentPage(page, if (listed.size > limit) page.last().toString() else null, read.asOf)
+    }
+
+    /**
+     * The page of a caller shown its own tenant's document only (R3-4): one read of whether the store indexes it, never
+     * the whole document list. It is the whole listing, so a cursor past it answers an empty page.
+     */
+    private suspend fun ownPage(own: SnapshotKey, after: String?): DocumentPage {
+        val shown = (after == null || own.toString() > after) && revisions.indexed(own)
+        return DocumentPage(if (shown) listOf(own) else emptyList(), null, clock.instant())
     }
 
     /** A tenant principal's own tenant document, when it asks for tenants and may read it; null otherwise. */

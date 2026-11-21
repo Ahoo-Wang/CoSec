@@ -78,6 +78,9 @@ class Revisions(
     /** Every document the store indexes revisions for ([ControlStore.documents]): it may name more than have a head. */
     suspend fun documents(): Set<SnapshotKey> = store.documents()
 
+    /** Whether the store indexes revisions for [key]: one read of its index, never the whole list ([documents]). */
+    suspend fun indexed(key: SnapshotKey): Boolean = store.index(requireDocumentKey(key)) != null
+
     suspend fun head(key: SnapshotKey): Head? {
         val stored = store.head(requireDocumentKey(key)) ?: return null
         return Head(key, decode(key, stored.document), stored)

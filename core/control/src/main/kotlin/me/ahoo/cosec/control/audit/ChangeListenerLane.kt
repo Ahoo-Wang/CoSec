@@ -23,6 +23,8 @@ import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
@@ -60,6 +62,9 @@ class ChangeListenerLane internal constructor(
     )
 
     private val queue = ConcurrentLinkedQueue<Entry>()
+
+    /** Who waits for room, served in the order they came: kotlinx's [Mutex] is fair. */
+    private val room = Mutex()
     private val wake = Channel<Unit>(Channel.CONFLATED)
     private val freed = MutableStateFlow(0L)
     private val pending = MutableStateFlow(0)
@@ -112,6 +117,10 @@ class ChangeListenerLane internal constructor(
     /**
      * Queues [event], waiting up to [wait] for room; [done], when given, completes once the listener recorded it. False
      * when there was no room in time: nothing was queued.
+     *
+     * Those who wait for room are served in the order they came ([room] is a fair lock), and each queues its event
+     * before the next is served: a smaller event that would fit never takes room ahead of a larger one waiting before
+     * it, so the queue holds the events in the order they were put (R3-12).
      */
     internal suspend fun put(
         event: ChangeEvent,
@@ -119,17 +128,18 @@ class ChangeListenerLane internal constructor(
         wait: Duration,
         done: CompletableDeferred<Unit>? = null
     ): Boolean {
-        val queued = withTimeoutOrNull(wait) {
-            while (!reserve(bytes)) {
-                val seen = freed.value
-                if (reserve(bytes)) break
-                freed.first { it != seen }
+        return withTimeoutOrNull(wait) {
+            room.withLock {
+                while (!reserve(bytes)) {
+                    val seen = freed.value
+                    if (reserve(bytes)) break
+                    freed.first { it != seen }
+                }
+                // No suspension between the reservation and the queueing: a timeout cannot fall between them.
+                add(Entry(event, bytes, TimeSource.Monotonic.markNow(), done))
             }
             true
         } ?: false
-        if (!queued) return false
-        add(Entry(event, bytes, TimeSource.Monotonic.markNow(), done))
-        return true
     }
 
     /** Counts an event of a stored step that found no room in time. */

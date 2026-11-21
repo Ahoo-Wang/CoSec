@@ -275,6 +275,36 @@ class ChangeEventOrderTest {
             audit.lost.assert().isEqualTo(2L)
         }
 
+    /**
+     * R3-12: the queue holds two small events, the first held. A larger event waits for room, then a smaller one
+     * behind it. When the first is delivered, the room freed fits the smaller one only; it still waits for the larger
+     * one, which was there first, so the queue keeps the order the events were put.
+     */
+    @Test
+    fun `those who wait for room are served in the order they came, a smaller event never ahead - R3-12`() =
+        runBlocking<Unit> {
+            val audit = Held("audit", Delivery.REQUIRED, cancellable = false)
+            val small = ChangeEventSize.of(event(ChangeEvent.Kind.CHECKED, "s1"))
+            val heap = ChangeListeners.HEAP_SHARE * 2 * small
+            val changes = listeners(audit, heap = heap)
+            changes.publish(event(ChangeEvent.Kind.CHECKED, "s1"))
+            changes.publish(event(ChangeEvent.Kind.CHECKED, "s2"))
+            // Half as large again as a small one: it fits only once both small ones are delivered.
+            val large = event(ChangeEvent.Kind.CHECKED, "big", note = "x".repeat((small / 4).toInt()))
+            ChangeEventSize.of(large).assert().isGreaterThan(small).isLessThanOrEqualTo(2 * small)
+            val first = async(Dispatchers.Default) { changes.publish(large) }
+            delay(100)
+            val second = async(Dispatchers.Default) { changes.publish(event(ChangeEvent.Kind.CHECKED, "s3")) }
+            delay(100)
+            first.isCompleted.assert().isFalse()
+            second.isCompleted.assert().isFalse()
+            audit.gate.complete(Unit)
+            first.await()
+            second.await()
+            changes.awaitDelivered()
+            audit.received.assert().containsExactly("s1 CHECKED", "s2 CHECKED", "big CHECKED", "s3 CHECKED")
+        }
+
     @Test
     fun `an event is measured from what it holds, never by encoding it - CTL-66`() {
         val small = ChangeEventSize.of(event(ChangeEvent.Kind.CHECKED))
