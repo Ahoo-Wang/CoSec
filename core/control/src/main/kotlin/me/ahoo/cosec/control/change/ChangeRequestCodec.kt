@@ -49,22 +49,9 @@ import java.time.Instant
  */
 @ExperimentalCoSecApi
 object ChangeRequestCodec {
-    private val SHOWN_APPROVAL_FIELDS = listOf("approver", "at", "candidate", "covers")
     private val reader = CoSecJson.mapper.reader().with(StreamReadFeature.STRICT_DUPLICATE_DETECTION)
 
     fun encode(change: ChangeRequest): ByteArray = CoSecJson.mapper.writeValueAsBytes(tree(change))
-
-    /**
-     * [change] as the control API shows it: the approval names its approver, when and what for, never what the approver
-     * held, its token's attributes, which token it was or what that credential could reach (reviews D5, N2). Only the
-     * change's record in the store keeps them; a change event carries none of them.
-     */
-    internal fun encodeShown(change: ChangeRequest): ByteArray {
-        val root = tree(change)
-        root.remove(StoredFormat.FIELD)
-        (root.get("approval") as? ObjectNode)?.retain(SHOWN_APPROVAL_FIELDS)
-        return CoSecJson.mapper.writeValueAsBytes(root)
-    }
 
     fun decode(bytes: ByteArray): ChangeRequest = guarded { change(read(bytes)) }
 

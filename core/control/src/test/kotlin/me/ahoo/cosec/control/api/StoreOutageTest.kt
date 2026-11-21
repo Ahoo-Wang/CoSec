@@ -107,7 +107,7 @@ class StoreOutageTest {
     @Test
     fun `both maintenance passes do nothing while the store cannot answer`() = runBlocking<Unit> {
         val id = ChangeId(proposed())
-        fixture.changes.stage(fixture.alice, id).state.assert().isEqualTo(ChangeState.SHADOWING)
+        fixture.changes.startShadow(fixture.alice, id).state.assert().isEqualTo(ChangeState.SHADOWING)
         val history = fixture.plane.history(fixture.alice, SnapshotKey.Tenant("acme")).size
         fixture.down = true
         fixture.maintenance.reclaim().assert().isEmpty()

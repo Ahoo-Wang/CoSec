@@ -206,7 +206,7 @@ class ChangesB2Test {
             listOf(Operation.PutPolicy(allow("slow"))),
             "slow"
         )
-        return changes.stage(PLATO, change.id).also { it.state.assert().isEqualTo(ChangeState.SHADOWING) }
+        return changes.startShadow(PLATO, change.id).also { it.state.assert().isEqualTo(ChangeState.SHADOWING) }
     }
 
     private suspend fun refused(block: suspend () -> Unit): Int = try {
@@ -251,7 +251,7 @@ class ChangesB2Test {
         )
         val ban = listOf(Operation.PutPolicy(deny("ban")), Operation.PutBinding(binding("ban", PolicyId("ban"))))
         val staged = unskippable.propose(PLATO, SnapshotKey.Platform, head, ban, "ban")
-        refused { unskippable.stage(PLATO, staged.id) }.assert().isEqualTo(409)
+        refused { unskippable.startShadow(PLATO, staged.id) }.assert().isEqualTo(409)
 
         val emergency = changes.propose(PLATO, SnapshotKey.Platform, head, ban, "ban")
         changes.skipShadow(PLATO, emergency.id, "incident").state.assert().isEqualTo(ChangeState.READY)
@@ -266,7 +266,7 @@ class ChangesB2Test {
     private suspend fun holdingAcme(changes: Changes = this.changes): ChangeRequest {
         val head = harness.revisions.head(ACME)!!.revision
         val change = changes.propose(PLATO, ACME, head, listOf(Operation.PutPolicy(allow("acme-slow"))), "slow")
-        return changes.stage(PLATO, change.id).also { it.state.assert().isEqualTo(ChangeState.SHADOWING) }
+        return changes.startShadow(PLATO, change.id).also { it.state.assert().isEqualTo(ChangeState.SHADOWING) }
     }
 
     /** RC1-12: removing a tenant's binding of the platform's or an app's policy of ALLOWs takes a busy slot. */

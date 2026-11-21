@@ -89,7 +89,7 @@ class ShadowPassTest {
             val key = SnapshotKey.Tenant(tenant)
             revisions.publish(key, null, StoreFixtures.candidate(key), StoreFixtures.publication())
             val proposed = changes.propose(PLATO, key, 1, listOf(Operation.PutPolicy(allow("p-$tenant"))), tenant)
-            changes.stage(PLATO, proposed.id).also { clock.now = clock.now.plusSeconds(1) }
+            changes.startShadow(PLATO, proposed.id).also { clock.now = clock.now.plusSeconds(1) }
         }
 
     @Test

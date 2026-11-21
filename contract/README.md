@@ -11,18 +11,22 @@ around it, what a client does with each answer, are in
 | `token/composite-token.json` | The token pair's body: its members, which are strings (the values are placeholders). The refresh route's 200 body has exactly these members | `jwt:ClientContractTest` |
 | `token/claims.json` | The claims of CoSec's access and refresh tokens, each with its JSON type, `client` (`read`, or `do-not-depend`) and `presence` (`always`, or `optional`) | `jwt:ClientContractTest` |
 | `routes/refresh.json`, `routes/logout.json` | What the served refresh and logout routes answer: `cacheControl`, and each case's status, media type and body (`pair`, a problem slug, or none) | `jwt:ClientContractTest` |
+| `control/change.json`, `control/change-summary.json`, `control/propagation.json` | What the control API answers for a change, a listed change and a revision's propagation: each member with its JSON type, its `presence` (`always` or `optional`), and the members of its objects (`CTL-61`, `CTL-62`) | `control:ClientContractTest` |
+| `control/vocabularies.json`, `control/routes.json` | The closed sets the control API writes (a change's `state`, `kind`, `severity`, an escalation's `reason`, a window's outcomes, a decision's `decision`, `cause` and `reason`, a trace entry's `effect` and `outcome`), and the change kinds each route that moves a change writes to the audit stream | `control:ClientContractTest` |
 
 **The code writes these files; nobody edits them by hand.** A test in each module compares what the code answers with
 the file and fails on a difference. After an intended change, rewrite the files and commit them with the change:
 
 ```bash
-./gradlew :runtime:updateClientContract :jwt:updateClientContract
+./gradlew :runtime:updateClientContract :jwt:updateClientContract :control:updateClientContract
 ```
 
 **The client is tested against the same files.** `typescript/cosec-fetcher/test/clientContract.test.ts` checks what the
 TypeScript client reads, sends and does against each file, its tests' fake server (`test/support/fakeCoSec.ts`) answers
 from them, and `wiki/scripts/check-contract.mjs` (`pnpm check:docs`) holds the claims table of `clients.md` to
-`token/claims.json`. So a change of a file that the client does not follow fails there, in the same pull request.
+`token/claims.json`. So a change of a file that the client does not follow fails there, in the same pull request. The files of `control/` are
+what a client of the control API relies on (an administration console, a script); the TypeScript client does not
+call the control API and does not read them.
 
 **What is compared:** parsed JSON. Every member name, type and value is as the file says, with no member missing and
 none extra; member order and whitespace are not part of the contract, and a client must not depend on them.

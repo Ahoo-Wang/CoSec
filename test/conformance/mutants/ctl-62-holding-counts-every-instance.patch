@@ -1,0 +1,17 @@
+# Rule: CTL-62
+# Mutant: holding counts every recent instance, so a tenant three of fifty replicas hold reads three of fifty however fully it propagated
+# Tests: :control:test --tests me.ahoo.cosec.control.lifecycle.PropagationTest
+
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ShadowWindows.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ShadowWindows.kt
+index f59a5816d..8b4cfb6a2 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ShadowWindows.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ShadowWindows.kt
+@@ -106,7 +106,7 @@ class ShadowWindows(
+         return Propagation(
+             revision,
+             holding.count { it.revision >= revision },
+-            holding.size,
++            read.statuses.size,
+             read.statuses.size,
+             read.asOf
+         )

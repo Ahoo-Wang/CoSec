@@ -244,7 +244,7 @@ class ControlReviewFixesTest {
             "approve" to { id -> changes.approve(caller, id, "x") },
             "reject" to { id -> changes.reject(caller, id, "x") },
             "publish" to { id -> changes.publish(caller, id) },
-            "stage" to { id -> changes.stage(caller, id) },
+            "stage" to { id -> changes.startShadow(caller, id) },
             "skipShadow" to { id -> changes.skipShadow(caller, id, "x") },
             "rebase" to { id -> changes.rebase(caller, id) },
             "abandon" to { id -> changes.abandon(caller, id) },
@@ -267,7 +267,7 @@ class ControlReviewFixesTest {
         // walt is not the trust root of the app document: what he puts there waits for a second person.
         val change = changes.propose(walt, app, 0, listOf(Operation.PutPolicy(writer.copyAs("perm:order/read"))), "x")
         change.state.assert().describedAs("${change.errors}").isEqualTo(ChangeState.CHECKED)
-        changes.stage(walt, change.id)
+        changes.startShadow(walt, change.id)
         changes.shadowed(change.id).state.assert().isEqualTo(ChangeState.AWAITING_APPROVAL)
         changes.approve(pia, change.id, changes.get(change.id).candidate!!).state.assert().isEqualTo(ChangeState.READY)
         // pia loses platform-admin; the app document's base does not move.

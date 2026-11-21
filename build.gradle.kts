@@ -152,7 +152,7 @@ configure(libraryProjects) {
 
 // PIP-25: the projects whose ClientContractTest checks contract/, with the helper of :runtime's test fixtures.
 val runtimeProjectPath = ":runtime"
-val contractProjects = listOf(runtimeProjectPath, ":jwt").map(::project)
+val contractProjects = listOf(runtimeProjectPath, ":jwt", ":control").map(::project)
 configure(contractProjects) {
     clientContractTests()
 }

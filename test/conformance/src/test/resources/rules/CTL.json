@@ -764,6 +764,35 @@
         "spi:ShadowValuesTest#the default readings read the reports, and throw where they throw"
       ],
       "pending": null
+    },
+    {
+      "id": "CTL-61",
+      "source": "Review round 2, R2C-11 and R2C-13 (review-r2-3-control-storage.md); RFC 0007 §10",
+      "statement": "The control API answers from a response model of its own: a change answer holds only the members its codec writes, never what the stored record keeps for the store's own work (the heads it was checked with, the instances that reported on its window, the record's format, what an approver held); a decision's closed sets come from one table each, an undecided decision naming the kind of its failure under `cause` and a refused scope its reason under `reason`, never a class's name; and `contract/control/` pins the members, the closed sets and the change kind each route writes to the audit stream.",
+      "level": "control",
+      "guards": [
+        "control:ControlAnswersTest#a change answer holds only what its codec writes, never the record's bookkeeping - CTL-61",
+        "control:ControlAnswersTest#a refused scope says why under reason, never under cause - CTL-61",
+        "control:ControlAnswersTest#an undecided decision names the kind of its cause from one table, never a class's name - CTL-61",
+        "control:ClientContractTest#a change answer holds exactly the members of its contract file",
+        "control:ClientContractTest#a listed change holds exactly the members of its contract file",
+        "control:ClientContractTest#the closed sets of the control API are those of their contract file",
+        "control:ClientContractTest#each route that moves a change writes the change kinds of its contract file"
+      ],
+      "pending": null
+    },
+    {
+      "id": "CTL-62",
+      "source": "Review round 2, R2C-12 (review-r2-3-control-storage.md); RFC 0007 §6.5",
+      "statement": "A revision's propagation counts, of the instances that reported a status in the last minute, those that hold the document at any revision and those of them that installed the revision or a later one, and says when it read the statuses: no instance is behind when every instance holding the document installed it, and when none holds it the first request that needs it loads it at the published revision. The statuses are read at most every five seconds, and a read that fails is answered 503, never from an older read.",
+      "level": "control",
+      "guards": [
+        "control:PropagationTest#propagation counts the instances that hold the document, and says when it read them - CTL-62",
+        "control:PropagationTest#the statuses are read at most every five seconds, and the answer is as old as that read",
+        "control:PropagationTest#a status read that fails is never kept nor answered from an older read - CTL-62",
+        "control:ClientContractTest#a propagation answer holds exactly the members of its contract file"
+      ],
+      "pending": null
     }
   ]
 }
