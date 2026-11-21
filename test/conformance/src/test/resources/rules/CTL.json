@@ -931,6 +931,20 @@
         "control:ChangeListenersDrainTest#during the drain a gated step is refused and another step's event is kept, never queued - CTL-66"
       ],
       "pending": null
+    },
+    {
+      "id": "CTL-72",
+      "source": "Review of 2026-11-21's merges, R3-9 (availability of the shadow flow); maintainer's coordinator, 2026-11-21",
+      "statement": "An instance status that is listed and does not decode never fails the control plane's read of the statuses: its instance counts as live and acknowledging no window, so no shadow window passes on it and the change's answer names it in `waitingFor`, while every other status is read and `propagation` answers, counting it as recent and holding no document. Each such status is logged with its instance and why, and counted (`cosec.control.shadow.status.unreadable`). A status under another instance's key, and a store that does not answer, still fail the read.",
+      "level": "control",
+      "pending": null,
+      "guards": [
+        "cocache:StatusReadingsTest#a status that does not decode names its instance, and every other status is read",
+        "cocache:StatusReadingsTest#a status under another instance's key fails the read",
+        "cocache:StatusReadingsTest#a store that does not answer fails the whole read, never reads as an unreadable status",
+        "control:ShadowAcknowledgementTest#a status that does not decode holds the window and is named, and propagation still answers",
+        "spring-boot:ControlPlaneSwitchTest#the instance statuses that do not decode are counted - CTL-72"
+      ]
     }
   ]
 }

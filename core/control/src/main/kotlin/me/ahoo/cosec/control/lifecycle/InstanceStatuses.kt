@@ -16,10 +16,12 @@ package me.ahoo.cosec.control.lifecycle
 import me.ahoo.cosec.control.store.ControlStoreException
 import me.ahoo.cosec.spi.shadow.InstanceStatus
 import me.ahoo.cosec.spi.shadow.ShadowReportReader
+import me.ahoo.cosec.spi.shadow.StatusReadings
 import me.ahoo.cosec.spi.snapshot.SnapshotFormatException
 import java.time.Clock
 import java.time.Duration
 import java.time.Instant
+import java.util.concurrent.atomic.AtomicLong
 import kotlin.coroutines.cancellation.CancellationException
 
 /**
@@ -27,28 +29,36 @@ import kotlin.coroutines.cancellation.CancellationException
  * control host, and one read shared by the calls that wait for it, since each read is every instance's status. A read
  * that fails is never kept and never answered from an older read: the call fails ([ControlStoreException], 503 by
  * `CTL-52`) and the next call reads again.
+ *
+ * A status that does not decode is not a failed read (`CTL-72`): its instance is in [Read.unreadable], and every other
+ * status is read. [unreadable] counts each such status a read found.
  */
 internal class InstanceStatuses(
     private val reports: ShadowReportReader,
     private val clock: Clock,
     private val maxAge: Duration = MAX_AGE,
 ) {
-    /** What one read answered, and when it was read. */
-    class Read(val statuses: List<InstanceStatus>, val asOf: Instant)
+    /** What one read answered: the statuses that read, the instances whose status does not, and when it was read. */
+    class Read(val statuses: List<InstanceStatus>, val unreadable: Set<String>, val asOf: Instant)
 
     private val shared = SharedRead(clock, maxAge) { load() }
+    private val unreadableCount = AtomicLong()
 
-    suspend fun read(): Read = shared.read().let { Read(it.value, it.asOf) }
+    /** The statuses that did not decode, of every read so far (`cosec.control.shadow.status.unreadable`). */
+    val unreadable: Long get() = unreadableCount.get()
+
+    suspend fun read(): Read = shared.read().let { Read(it.value.statuses, it.value.unreadable, it.asOf) }
 
     @Suppress("TooGenericExceptionCaught")
-    private suspend fun load(): List<InstanceStatus> {
+    private suspend fun load(): StatusReadings {
         val statuses = try {
-            reports.statuses()
+            reports.statusReadings()
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
             throw unavailable(e)
         }
+        unreadableCount.addAndGet(statuses.unreadable.size.toLong())
         return statuses
     }
 

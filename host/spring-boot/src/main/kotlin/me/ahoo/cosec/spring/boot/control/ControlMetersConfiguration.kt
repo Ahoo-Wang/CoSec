@@ -15,9 +15,11 @@
 
 package me.ahoo.cosec.spring.boot.control
 
+import io.micrometer.core.instrument.FunctionCounter
 import io.micrometer.core.instrument.MeterRegistry
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.control.audit.ChangeListeners
+import me.ahoo.cosec.control.lifecycle.Changes
 import me.ahoo.cosec.spring.boot.StartupTask
 import me.ahoo.cosec.spring.boot.micrometer.ChangeListenerMeters
 import org.springframework.beans.factory.ObjectProvider
@@ -37,5 +39,23 @@ internal class ControlMetersConfiguration {
     ): StartupTask = StartupTask.AfterSingletons {
         val meters = registry.ifAvailable ?: return@AfterSingletons
         listeners.ifAvailable?.let { ChangeListenerMeters.bind(meters, it) }
+    }
+
+    /** Instance statuses that did not decode (`CTL-72`): each holds every shadow window until it reads or expires. */
+    @Bean
+    fun cosecUnreadableStatusMeter(
+        registry: ObjectProvider<MeterRegistry>,
+        changes: ObjectProvider<Changes>,
+    ): StartupTask = StartupTask.AfterSingletons {
+        val meters = registry.ifAvailable ?: return@AfterSingletons
+        changes.ifAvailable?.let { bound ->
+            FunctionCounter.builder(UNREADABLE_STATUSES, bound) { it.unreadableStatuses.toDouble() }
+                .description("Instance statuses the control plane read that did not decode: alert on any")
+                .register(meters)
+        }
+    }
+
+    companion object {
+        const val UNREADABLE_STATUSES = "cosec.control.shadow.status.unreadable"
     }
 }

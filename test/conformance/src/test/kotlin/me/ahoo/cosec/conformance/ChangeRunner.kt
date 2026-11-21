@@ -92,6 +92,7 @@ import me.ahoo.cosec.spi.shadow.InstanceStatus
 import me.ahoo.cosec.spi.shadow.ShadowOutcome
 import me.ahoo.cosec.spi.shadow.ShadowReport
 import me.ahoo.cosec.spi.shadow.ShadowReportReader
+import me.ahoo.cosec.spi.shadow.StatusReadings
 import me.ahoo.cosec.spi.snapshot.SnapshotFormatException
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.cosec.spi.token.RevocationReader
@@ -154,7 +155,8 @@ import java.time.Instant
  *            { "status": { "instance": "i1", "documents": { "tenant:acme": 2 } } },  // an instance's status now
  *            { "status": { "instance": "i1", "documents": {}, "acknowledges": ["c1"] } },  // CTL-10: it lists c1's window
  *                                              // (without "acknowledges" it sends no windows, as an older version;
- *                                              // with "shadows": false it does not shadow, and is not waited for)
+ *                                              // with "shadows": false it does not shadow, and is not waited for;
+ *                                              // with "unreadable": true its status does not decode, CTL-72)
  *            { "acknowledgement": "c1" },      // CTL-10: `acknowledged 1 waiting i2`, or `waiting none`, as the answer
  *            { "propagation": { "document": "tenant:acme", "revision": 2 } },        // CTL-62:
  *                                              // `installed 1 holding 2 recent 3`
@@ -323,10 +325,15 @@ object ChangeRunner : ScenarioRunner {
 
         /** Instances a `vanish` step took off the window's reporters, as an instance that can write them could. */
         private val vanished = HashSet<String>()
+        /** Instances a `status` step with `"unreadable": true` wrote a status for that does not decode (`CTL-72`). */
+        private val unreadable = HashSet<String>()
         private val reader = object : ShadowReportReader {
             override suspend fun reports(window: String) = reports.reports(window).filter { it.instance !in vanished }
 
             override suspend fun statuses() = reports.statuses()
+
+            override suspend fun statusReadings() =
+                StatusReadings(reports.statuses().filter { it.instance !in unreadable }, unreadable.toSet())
         }
         private val authorizer =
             if (authorized) engine.authorizer else ControlAuthorizer { _, _, _ -> ControlDecision.PERMIT }
@@ -730,7 +737,13 @@ object ChangeRunner : ScenarioRunner {
 
         /** An instance's status, as its heartbeat writes it: the revision of each document it holds. */
         private suspend fun status(argument: JsonNode): String {
-            argument.only("instance", "documents", "acknowledges", "shadows")
+            argument.only("instance", "documents", "acknowledges", "shadows", "unreadable")
+            val instance = argument.required("instance").text()
+            if (argument.get("unreadable")?.bool() == true) {
+                unreadable += instance
+                return "status"
+            }
+            unreadable -= instance
             val documents = argument.required("documents").properties().associate { (key, revision) ->
                 documentKey(key) to InstalledDocument(revision.asLong(), Duration.ZERO)
             }
@@ -738,7 +751,6 @@ object ChangeRunner : ScenarioRunner {
                 changes.get(ChangeId(change)).shadow?.window
                     ?: throw ScenarioFormatException("An acknowledged change is staged: $change")
             }
-            val instance = argument.required("instance").text()
             val shadows = argument.get("shadows")?.bool() ?: true
             reports.write(InstanceStatus(instance, clock.now, documents, windows = windows, shadows = shadows))
             return "status"

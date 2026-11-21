@@ -36,6 +36,7 @@ import me.ahoo.cosec.spi.shadow.ShadowReadings
 import me.ahoo.cosec.spi.shadow.ShadowReport
 import me.ahoo.cosec.spi.shadow.ShadowReportReader
 import me.ahoo.cosec.spi.shadow.ShadowReportSink
+import me.ahoo.cosec.spi.shadow.StatusReadings
 import me.ahoo.cosec.spi.snapshot.SnapshotFormatException
 import java.time.Clock
 import java.time.Instant
@@ -58,7 +59,8 @@ import java.util.concurrent.ConcurrentHashMap
  * leaves: an instance lists itself with a conditional read of it that costs nothing while the list is unchanged, and
  * again every [ShadowCacheSpecs.INDEX_REFRESH]; whoever writes the list drops entries nobody refreshed for
  * [ShadowCacheSpecs.INDEX_EXPIRY]. [statuses] reads the list and each listed status, and skips a listed instance whose
- * status has expired (it is gone), as one older than a minute. A status or list that cannot be read fails it.
+ * status has expired (it is gone), as one older than a minute. A status or list that cannot be read fails it;
+ * [statusReadings] names a status that does not decode instead (`CTL-72`).
  */
 @ExperimentalCoSecApi
 class CoCacheShadowReports @InternalCoSecApi constructor(
@@ -193,22 +195,55 @@ class CoCacheShadowReports @InternalCoSecApi constructor(
         }
     }
 
-    override suspend fun statuses(): List<InstanceStatus> {
+    override suspend fun statuses(): List<InstanceStatus> = readStatuses(lenient = false).statuses
+
+    /**
+     * Every listed status that reads and is recent, and the instances whose status does not decode (`CTL-72`), each
+     * logged with why: such a status is still on the store, so it was written within [ShadowCacheSpecs.STATUS_TTL], and
+     * counts as recent. A status under another instance's key is the store's data being wrong, not a version the
+     * reader does not know, and fails the call as [statuses] does; so does a store that does not answer.
+     */
+    override suspend fun statusReadings(): StatusReadings = readStatuses(lenient = true)
+
+    private suspend fun readStatuses(lenient: Boolean): StatusReadings {
         val since = clock.instant().minus(ShadowReportReader.STATUS_TTL)
         val members = read(instances, ShadowCacheSpecs.INDEX_KEY)?.first?.keys.orEmpty()
         check(members.all(ShadowReport::isInstanceId)) { "The list of instances names an invalid instance id" }
         val found = members.sorted().chunked(READ_BATCH).flatMap { batch ->
             coroutineScope {
-                batch.map { instance ->
-                    async {
-                        read(statuses, instance, "The status of instance [$instance]")?.first?.also {
-                            check(it.instance == instance) { "The status under [$instance] is ${it.instance}'s" }
-                        }
-                    }
-                }.awaitAll()
+                batch.map { instance -> async { instance to status(instance, lenient) } }.awaitAll()
             }
         }
-        return found.filterNotNull().filter { !it.at.isBefore(since) }
+        val statuses = found.mapNotNull { (_, read) -> (read as? StatusRead.Read)?.status }
+        return StatusReadings(
+            statuses.filter { !it.at.isBefore(since) },
+            found.filter { (_, read) -> read is StatusRead.Unreadable }.mapTo(HashSet()) { it.first },
+        )
+    }
+
+    private sealed interface StatusRead {
+        class Read(val status: InstanceStatus) : StatusRead
+
+        data object Unreadable : StatusRead
+    }
+
+    /**
+     * [instance]'s status: null when it has none (it expired), [StatusRead.Unreadable] when [lenient] and it does not
+     * decode.
+     */
+    private suspend fun status(instance: String, lenient: Boolean): StatusRead? {
+        val status = try {
+            read(statuses, instance, "The status of instance [$instance]")?.first
+        } catch (e: SnapshotFormatException) {
+            if (!lenient) throw e
+            log.warn {
+                "The status of instance [$instance] does not read: it counts as live and acknowledging no shadow " +
+                    "window until it reads or expires (${e.message})."
+            }
+            return StatusRead.Unreadable
+        } ?: return null
+        check(status.instance == instance) { "The status under [$instance] is ${status.instance}'s" }
+        return StatusRead.Read(status)
     }
 
     /** Read, change, `putIfMatch`: retried while another instance wrote in between; the value written. */

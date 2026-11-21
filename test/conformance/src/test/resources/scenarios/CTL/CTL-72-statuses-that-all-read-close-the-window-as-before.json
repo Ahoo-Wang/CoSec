@@ -1,0 +1,100 @@
+{
+  "rules": [
+    "CTL-72"
+  ],
+  "polarity": "negative",
+  "level": "control",
+  "description": "Bounds 15 min, 3 samples, 1 h. Every live instance's status reads and acknowledges c1's window: nothing is unreadable, the window closes with its 3 samples after 15 minutes, and propagation counts the two instances as before.",
+  "options": {
+    "shadow": {
+      "minDuration": "PT15M",
+      "minSamples": 3,
+      "maxDuration": "PT1H"
+    }
+  },
+  "steps": [
+    {
+      "propose": {
+        "change": "c1",
+        "document": "tenant:acme",
+        "operations": [
+          {
+            "putPolicy": {
+              "id": "read",
+              "statements": [
+                {
+                  "effect": "allow",
+                  "action": "order:read"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "stage": "c1"
+    },
+    {
+      "report": {
+        "change": "c1",
+        "instance": "i1",
+        "counts": {
+          "NARROWED": 3
+        }
+      }
+    },
+    {
+      "advance": "PT15M"
+    },
+    {
+      "status": {
+        "instance": "i1",
+        "documents": {},
+        "acknowledges": [
+          "c1"
+        ]
+      }
+    },
+    {
+      "status": {
+        "instance": "i2",
+        "documents": {},
+        "acknowledges": [
+          "c1"
+        ]
+      }
+    },
+    {
+      "acknowledgement": "c1"
+    },
+    {
+      "propagation": {
+        "document": "tenant:acme",
+        "revision": 1
+      }
+    },
+    {
+      "shadowed": "c1"
+    }
+  ],
+  "expect": {
+    "steps": [
+      "CHECKED",
+      "SHADOWING",
+      "reported",
+      "advanced",
+      "status",
+      "status",
+      "acknowledged 2 waiting none",
+      "installed 0 holding 0 recent 2",
+      "READY"
+    ],
+    "errors": {
+      "c1": []
+    },
+    "heads": {
+      "tenant:acme": 0
+    }
+  }
+}

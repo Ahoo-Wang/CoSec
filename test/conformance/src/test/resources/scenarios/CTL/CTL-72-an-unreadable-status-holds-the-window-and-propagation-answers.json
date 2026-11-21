@@ -1,0 +1,129 @@
+{
+  "rules": [
+    "CTL-72"
+  ],
+  "polarity": "positive",
+  "level": "control",
+  "description": "Bounds 15 min, 3 samples, 1 h. c1 has its 3 samples once 15 minutes have passed and i1 acknowledges it, but the status of the live instance broken does not decode: broken counts as live and acknowledging nothing, so the window stays open and names it, while i1's status is read and propagation answers, counting broken as recent and holding nothing. Once broken's status reads and acknowledges the window, it closes.",
+  "options": {
+    "shadow": {
+      "minDuration": "PT15M",
+      "minSamples": 3,
+      "maxDuration": "PT1H"
+    }
+  },
+  "steps": [
+    {
+      "propose": {
+        "change": "c1",
+        "document": "tenant:acme",
+        "operations": [
+          {
+            "putPolicy": {
+              "id": "read",
+              "statements": [
+                {
+                  "effect": "allow",
+                  "action": "order:read"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "stage": "c1"
+    },
+    {
+      "report": {
+        "change": "c1",
+        "instance": "i1",
+        "counts": {
+          "NARROWED": 3
+        }
+      }
+    },
+    {
+      "advance": "PT15M"
+    },
+    {
+      "status": {
+        "instance": "i1",
+        "documents": {},
+        "acknowledges": [
+          "c1"
+        ]
+      }
+    },
+    {
+      "status": {
+        "instance": "broken",
+        "unreadable": true
+      }
+    },
+    {
+      "acknowledgement": "c1"
+    },
+    {
+      "shadowed": "c1"
+    },
+    {
+      "propagation": {
+        "document": "tenant:acme",
+        "revision": 1
+      }
+    },
+    {
+      "advance": "PT10S"
+    },
+    {
+      "status": {
+        "instance": "i1",
+        "documents": {},
+        "acknowledges": [
+          "c1"
+        ]
+      }
+    },
+    {
+      "status": {
+        "instance": "broken",
+        "documents": {},
+        "acknowledges": [
+          "c1"
+        ]
+      }
+    },
+    {
+      "acknowledgement": "c1"
+    },
+    {
+      "shadowed": "c1"
+    }
+  ],
+  "expect": {
+    "steps": [
+      "CHECKED",
+      "SHADOWING",
+      "reported",
+      "advanced",
+      "status",
+      "status",
+      "acknowledged 1 waiting broken",
+      "SHADOWING",
+      "installed 0 holding 0 recent 2",
+      "advanced",
+      "status",
+      "status",
+      "acknowledged 2 waiting none",
+      "READY"
+    ],
+    "errors": {
+      "c1": []
+    },
+    "heads": {
+      "tenant:acme": 0
+    }
+  }
+}
