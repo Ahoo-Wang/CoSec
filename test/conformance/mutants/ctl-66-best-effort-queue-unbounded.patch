@@ -1,0 +1,17 @@
+# Rule: CTL-66
+# Mutant: a BEST_EFFORT queue takes every event whatever it holds: the heap's share bounds nothing
+# Tests: :control:test --tests me.ahoo.cosec.control.audit.ChangeEventOrderTest
+
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/audit/ChangeListenerLane.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/audit/ChangeListenerLane.kt
+index 2e886a7dc..95a439293 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/audit/ChangeListenerLane.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/audit/ChangeListenerLane.kt
+@@ -94,7 +94,7 @@ class ChangeListenerLane internal constructor(
+ 
+     /** Queues [event] if [bytes] fit the budget now; false, and counted, if not. The incoming event is the one dropped. */
+     internal fun offer(event: ChangeEvent, bytes: Long): Boolean {
+-        if (!reserve(bytes)) {
++        if (!reserve(bytes) && bytes < 0) {
+             droppedCount.incrementAndGet()
+             return false
+         }

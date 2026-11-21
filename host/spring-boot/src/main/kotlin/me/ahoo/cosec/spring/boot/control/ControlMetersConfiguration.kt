@@ -1,0 +1,41 @@
+/*
+ * Copyright [2021-present] [ahoo wang <ahoowang@qq.com> (https://github.com/Ahoo-Wang)].
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+@file:OptIn(InternalCoSecApi::class)
+
+package me.ahoo.cosec.spring.boot.control
+
+import io.micrometer.core.instrument.MeterRegistry
+import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.control.audit.ChangeListeners
+import me.ahoo.cosec.spring.boot.StartupTask
+import me.ahoo.cosec.spring.boot.micrometer.ChangeListenerMeters
+import org.springframework.beans.factory.ObjectProvider
+import org.springframework.boot.autoconfigure.condition.ConditionalOnClass
+import org.springframework.context.annotation.Bean
+import org.springframework.context.annotation.Configuration
+
+/** The control plane's meters, with Micrometer and a `MeterRegistry` ([CoSecControlAutoConfiguration] imports it). */
+@Configuration(proxyBeanMethods = false)
+@ConditionalOnClass(MeterRegistry::class)
+internal class ControlMetersConfiguration {
+    /** The change listeners' queues (`CTL-66`): bound once every singleton exists. */
+    @Bean
+    fun cosecChangeListenerMeters(
+        registry: ObjectProvider<MeterRegistry>,
+        listeners: ObjectProvider<ChangeListeners>,
+    ): StartupTask = StartupTask.AfterSingletons {
+        val meters = registry.ifAvailable ?: return@AfterSingletons
+        listeners.ifAvailable?.let { ChangeListenerMeters.bind(meters, it) }
+    }
+}

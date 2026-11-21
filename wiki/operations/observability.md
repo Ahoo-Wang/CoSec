@@ -422,6 +422,48 @@ producer with `acks=all`). With `delivery=required`, startup fails when the Kafk
 (no `cosec-kafka`, no `KafkaOperations` bean, or `enabled=false`), rather than publishing without the record:
 `cosec.control.audit.kafka.delivery=required, but no Kafka change listener was created: ...`.
 
+### Order and queues {#change-event-order}
+
+A listener receives one change's events **in the order this instance wrote them** (`CTL-66`): each listener has one
+queue and one consumer, and a step's event is queued after its earlier steps'. Across instances there is no order to
+keep (a propose on one control host and a publish on another are two processes): a consumer orders by each event's
+`time` and the change's record. The Kafka change listener's per-document key then keeps that order in its partition.
+
+- **A gated step** (`PUBLISHING`, break-glass) waits for each `REQUIRED` listener to record its event, after what was
+  queued before it, within `cosec.control.audit.required-timeout`. Otherwise it fails with `503`, and its event is not
+  recorded afterwards.
+- **A REQUIRED listener's full queue** makes the event of any other step wait for room, for at most the same timeout.
+  The step is already stored, so it is never failed for this. An event that finds no room in time is **lost**: counted
+  in `cosec.control.listener.lost` and logged at `ERROR` (`Change event <kind> of change <id> on <doc> was not handed to
+  REQUIRED change listener [<name>]: ...`). That is the one way a REQUIRED listener misses an event: **alert on
+  `cosec.control.listener.lost` above zero.**
+- **A BEST_EFFORT listener's full queue drops the incoming event**, so what arrives is an ordered prefix: a consumer
+  sees a gap, never a reordering. Drops are counted in `cosec.control.listener.dropped` and logged at `WARN` at most
+  once per required timeout.
+- **The bound is derived, not configured.** The queues hold together at most a thirty-second of the heap, shared
+  equally by the listeners, each event measured from what it holds. One `INFO` line at startup says what that came to
+  (`Change listeners [...]: their queues hold at most 64.0 MB (the heap's 2048.0 MB / 32), 32.0 MB each`). A healthy
+  sink keeps its queue near empty, even through a bulk change of thousands of tenants.
+- **A listener that stops answering is reported, never cut off.** While events wait and it has delivered nothing for
+  longer than the required timeout, a `WARN` names it, its depth and the age of the oldest event, at most once per
+  required timeout. What its share held is delivered, in order, when it answers again. A `REQUIRED` listener's call
+  that does not answer within the timeout is a failure, and its next event is delivered.
+- **At shutdown the listeners drain** within `cosec.observability.listener.drain-timeout`, the decision listeners'
+  timeout. They stop taking events and deliver what is queued; what is left is counted and logged per listener
+  (`Change listener [<name>] never records <n> change events: they were still queued when the drain of <timeout>
+  ended.`, at `ERROR` for a `REQUIRED` listener, `WARN` otherwise), and only then are they stopped. A gated step that
+  arrives during the drain is refused with `503` before it takes effect, as when a `REQUIRED` listener cannot record
+  it. Any other step is already stored: its event is logged the same way, never queued to be lost.
+
+Meters, each tagged `listener`:
+
+| Meter | What |
+|---|---|
+| `cosec.control.listener.queued`, `cosec.control.listener.queued.bytes` | the events queued, and what they hold, of the listener's share |
+| `cosec.control.listener.oldest.age` | how long the oldest queued event has waited (seconds): a sink that stopped shows here first |
+| `cosec.control.listener.dropped` | BEST_EFFORT events dropped by a full queue |
+| `cosec.control.listener.lost` | events of stored steps a REQUIRED listener missed: alert on any |
+
 ## Logs
 
 | Logger | What it logs |
