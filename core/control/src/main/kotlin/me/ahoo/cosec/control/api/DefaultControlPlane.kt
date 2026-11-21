@@ -137,5 +137,6 @@ class DefaultControlPlane(
         state: ChangeState?,
         after: String?,
         limit: Int,
-    ): me.ahoo.cosec.control.store.ChangePage = changes.list(operator, document, state, after, limit)
+        documents: (SnapshotKey) -> Boolean,
+    ): me.ahoo.cosec.control.store.ChangePage = changes.list(operator, document, state, after, limit, documents)
 }

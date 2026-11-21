@@ -60,8 +60,13 @@ enum class ControlProfile {
      */
     internal fun admitsChange(key: SnapshotKey): Boolean = this == OPERATORS || key is SnapshotKey.Tenant
 
-    /** Whether this profile serves a listing of the open changes of [document] (all documents when null). */
-    internal fun admitsListing(document: SnapshotKey?): Boolean = this == OPERATORS || document != SnapshotKey.Platform
+    /**
+     * Whether this profile serves a listing of the open changes of [document] (of a state, across documents, when null):
+     * on the service profile only a tenant's document, as it serves a change by id; a listing by state shows only the
+     * changes it serves by id ([admitsChange]), the others left out before the page is cut.
+     */
+    internal fun admitsListing(document: SnapshotKey?): Boolean =
+        this == OPERATORS || document == null || document is SnapshotKey.Tenant
 
     private fun documents(method: String, rest: List<String>): Boolean {
         val first = rest.firstOrNull() ?: return false

@@ -215,6 +215,25 @@ class ControlServiceTest {
             security = plato,
             http = side.operators
         ).assert().startsWith("200")
+        side.route("GET", "/changes", mapOf("document" to "app:order"), security = plato).assert().startsWith("404")
+    }
+
+    @Test
+    fun `a listing by state shows on the service port only what it serves by id - CTL-58, CTL-65`() = runBlocking<Unit> {
+        val side = Side()
+        val plato = side.fixture.engine.security(TenantId.PLATFORM, "plato")
+        val platformChange = side.fixture.changes.propose(side.fixture.plato, SnapshotKey.Platform, 1, emptyList(), "p")
+            .id.value
+        val tenantChange = side.fixture.changes.propose(side.fixture.plato, acme, 1, emptyList(), "t").id.value
+        fun ids(answer: String): List<String> = CoSecJson.mapper.readTree(answer).get("changes").iterator().asSequence()
+            .map { it.get("id").asString() }.toList()
+        val byState = mapOf("state" to "CHECKED")
+        ids(ok(side.route("GET", "/changes", byState, security = plato, http = side.operators)))
+            .assert().contains(platformChange, tenantChange)
+        val served = ids(ok(side.route("GET", "/changes", byState, security = plato)))
+        served.assert().containsExactly(tenantChange)
+        ids(side.service.changes(ControlCaller.of(plato.securityContext), state = ChangeState.CHECKED))
+            .assert().isEqualTo(served)
     }
 
     @Test

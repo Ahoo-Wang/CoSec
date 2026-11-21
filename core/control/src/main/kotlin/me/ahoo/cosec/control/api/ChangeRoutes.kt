@@ -136,7 +136,7 @@ internal class ChangeRoutes(
             text.toIntOrNull()?.takeIf { it in 1..MAX_LIMIT }
                 ?: throw InvalidControlRequestException("limit is a number from 1 to $MAX_LIMIT")
         } ?: DEFAULT_LIMIT
-        val page = plane.changes(operator, document, state, query["after"], limit)
+        val page = plane.changes(operator, document, state, query["after"], limit, profile::admitsChange)
         return json(ControlResponseJson.changes(page))
     }
 
