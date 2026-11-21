@@ -18,6 +18,9 @@
 # `.github/actions/dependency-cache`, so that a pull request's jobs ask Maven Central for what changed and nothing else
 # (Central answers 429 to a runner that asks for too much, and a 429 fails the job).
 #
+# What it resolves is whatever the build's repositories say: the plugin groups only the portal has are asked of the portal
+# alone (`settings.gradle.kts`), which is part of the key's `<repos>`.
+#
 # Written on main, after a resolution of the whole build that succeeded, and only when the key is not there yet: a push that
 # changes no version or repository finds it and does nothing. A cache that is not used for seven days is evicted, so a weekly
 # run keeps it. A pull request that changes this workflow, its key script or its action runs it, and the cache it writes is that pull

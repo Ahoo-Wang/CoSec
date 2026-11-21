@@ -62,6 +62,22 @@ attempt neither refreshes every module the Gradle home holds (`--refresh-depende
 `Retry-After` the repository sends is waited for, up to `RESOLVE_MAX_RETRY_AFTER` seconds (default 300), in place of the fixed
 pause. Central's `429` of 2026-11-20 sent none.
 
+### Plugins only the portal has are not asked of Central
+
+Two plugins the build applies exist on the plugin portal and not on Central (checked 2026-11-20 against the versions of
+`gradle/libs.versions.toml`, `404` on Central and `200` on the portal, marker and jar of each): the Nexus publish plugin
+(`io.github.gradle-nexus.publish-plugin`, `io.github.gradle-nexus:publish-plugin`) and the JMH plugin (`me.champeau.jmh`,
+`me.champeau.jmh:jmh-gradle-plugin`). The Kotlin, Dokka and detekt plugins, and what the two bring, are on both. Central was
+the first repository for everything (#1730), so a Central that answered 429 failed the resolution of those two plugins, which
+it never had: `settings.gradle.kts` now excludes their three groups from Central (`portalOnly`), and the portal alone answers
+for them. Everything else is asked of Central first, as before. Tried against a cold Gradle home with `--debug`: 92 requests
+for those groups, all to the portal or its artifact host, none to `repo.maven.apache.org`.
+
+If one of them is later published to Central too, nothing changes silently: the portal is still asked and the Central copy is
+not used. If it leaves the portal, the build fails naming the portal as the repository that lacks it. A new plugin that only
+the portal has is added to `portalOnly` after the same check. The cache key's `<repos>` covers the change, so a cache
+written before it is never restored over it.
+
 ### Why the fallback host does not answer a 429
 
 A fallback repository placed last is asked only when the repositories before it said "not found". A `429` is not "not found":
