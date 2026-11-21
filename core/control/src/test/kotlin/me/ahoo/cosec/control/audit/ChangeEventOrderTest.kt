@@ -236,6 +236,46 @@ class ChangeEventOrderTest {
         }
 
     @Test
+    fun `a REQUIRED listener's failed call loses a stored step's event, counted, and a gated one fails its step - CTL-66`() =
+        runBlocking<Unit> {
+            val failing = object : ChangeListener {
+                override val name = "audit"
+                override val delivery = Delivery.REQUIRED
+                val received = CopyOnWriteArrayList<String>()
+
+                override suspend fun onChange(event: ChangeEvent) {
+                    if (event.note == "fail") error("the sink refused it")
+                    if (event.note == "hang") delay(1_000)
+                    received += "${event.change.value} ${event.kind}"
+                }
+            }
+            val sloppy = object : ChangeListener {
+                override val name = "kafka"
+                override val delivery = Delivery.BEST_EFFORT
+
+                override suspend fun onChange(event: ChangeEvent) {
+                    if (event.note == "fail") error("the sink refused it")
+                }
+            }
+            val changes = listeners(failing, sloppy, requiredTimeout = 200.milliseconds)
+            val (audit, kafka) = changes.queues
+            // A stored step's event that the REQUIRED listener refuses, then one it does not answer in time: both lost.
+            changes.publish(event(ChangeEvent.Kind.CHECKED, note = "fail"))
+            changes.publish(event(ChangeEvent.Kind.SHADOW_SKIPPED, note = "hang"))
+            changes.publish(event(ChangeEvent.Kind.SHADOWED))
+            changes.awaitDelivered()
+            audit.lost.assert().isEqualTo(2L)
+            failing.received.assert().containsExactly("c1 SHADOWED")
+            // A BEST_EFFORT listener's failure promises nothing and loses nothing it promised.
+            kafka.lost.assert().isEqualTo(0L)
+            // A gated step's failure fails the step: nothing stored, so nothing lost.
+            runCatching { changes.publish(event(ChangeEvent.Kind.PUBLISHING, note = "fail")) }.exceptionOrNull()
+                .assert().isInstanceOf(ChangeAuditException::class.java)
+            changes.awaitDelivered()
+            audit.lost.assert().isEqualTo(2L)
+        }
+
+    @Test
     fun `an event is measured from what it holds, never by encoding it - CTL-66`() {
         val small = ChangeEventSize.of(event(ChangeEvent.Kind.CHECKED))
         val noted = ChangeEventSize.of(event(ChangeEvent.Kind.CHECKED, note = "x".repeat(1000)))

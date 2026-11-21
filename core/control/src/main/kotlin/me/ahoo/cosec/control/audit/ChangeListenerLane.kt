@@ -86,7 +86,10 @@ class ChangeListenerLane internal constructor(
     /** BEST_EFFORT events dropped because the budget was full. */
     val dropped: Long get() = droppedCount.get()
 
-    /** REQUIRED events of steps already stored that found no room in time: counted, logged at ERROR. */
+    /**
+     * REQUIRED events of steps already stored that this listener will never record: one that found no room in time, and
+     * one whose call failed or did not answer within its bound. Each is logged at ERROR.
+     */
     val lost: Long get() = lostCount.get()
 
     /** Events still queued when the listeners stopped after their drain, or that arrived during it: never delivered. */
@@ -204,8 +207,22 @@ class ChangeListenerLane internal constructor(
         }
     }
 
+    /**
+     * A call that failed. A gated step that waits for it fails with it (503), so nothing is lost; the event of a step
+     * already stored is lost to a REQUIRED listener, counted with the full-queue losses, and only logged for a
+     * BEST_EFFORT one, which promises no record.
+     */
     private fun failed(entry: Entry, cause: Exception) {
-        if (entry.done?.completeExceptionally(cause) != true) {
+        if (entry.done?.completeExceptionally(cause) == true) return
+        if (listener.delivery == Delivery.REQUIRED) {
+            lostCount.incrementAndGet()
+            val event = entry.event
+            log.error(cause) {
+                "Change event ${event.kind} of change ${event.change.value} on ${event.document} was not recorded by " +
+                    "REQUIRED change listener [${listener.name}]: ${cause.message ?: cause.javaClass.simpleName}. " +
+                    "The step is stored; this listener misses the event."
+            }
+        } else {
             log.warn(cause) { "Change listener [${listener.name}] could not record ${entry.event}." }
         }
     }

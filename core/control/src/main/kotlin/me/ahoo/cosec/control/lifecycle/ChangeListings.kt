@@ -23,10 +23,13 @@ import me.ahoo.cosec.control.authz.Operator
 import me.ahoo.cosec.control.authz.TenantIsolation
 import me.ahoo.cosec.control.change.ChangeRejectedException
 import me.ahoo.cosec.control.change.ChangeState
+import me.ahoo.cosec.control.change.ControlStatus.FORBIDDEN
 import me.ahoo.cosec.control.change.ControlStatus.UNAVAILABLE
+import me.ahoo.cosec.control.change.ownerOf
 import me.ahoo.cosec.control.store.ChangePage
 import me.ahoo.cosec.control.store.ControlStore
 import me.ahoo.cosec.control.store.ListedChange
+import me.ahoo.cosec.model.decision.DocumentKind
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 
 /**
@@ -84,15 +87,49 @@ internal class ChangeListings(private val store: ControlStore, private val autho
         documents: (SnapshotKey) -> Boolean,
         visible: suspend (ListedChange) -> Boolean,
     ): ChangePage {
+        val layers = scannable(operator)
         val found = ArrayList<ListedChange>()
         var cursor = after
         while (found.size <= limit) {
-            val page = store.changes(state, cursor, limit) { TenantIsolation.allows(operator, it) && documents(it) }
+            val page = store.changes(state, cursor, limit) {
+                TenantIsolation.allows(operator, it) && documents(it) && ownerOf(it).first in layers
+            }
             page.changes.filterTo(found) { visible(it) }
             cursor = page.next ?: break
         }
         val shown = found.take(limit)
         return ChangePage(shown, if (found.size > limit) cursorOf(shown.last()) else null)
+    }
+
+    /**
+     * The layers whose changes [operator] may have the store scan by state, decided before anything is read (R3-3, as
+     * `CTL-68` decides a document listing):
+     * - a tenant's principal, its own tenant's document only, which the store's query keeps to (the hard rule);
+     * - a platform principal, each layer it holds `cosec:read` on as a layer: `doc/tenant`, `doc/app`, and the platform
+     *   document's own read for its changes;
+     * - anyone else is refused, 403 without detail, and nothing is scanned. A layer that cannot be decided is a 503.
+     *
+     * The layer read only admits the scan: each change is still shown only if `GET /changes/{id}` would show it.
+     */
+    private suspend fun scannable(operator: Operator): Set<DocumentKind> {
+        if (!operator.platform) return setOf(DocumentKind.TENANT)
+        val layers = DocumentKind.entries.filterTo(HashSet()) { kind ->
+            val decision = if (kind == DocumentKind.PLATFORM) {
+                authority.decide(operator, SnapshotKey.Platform, ControlActions.READ)
+            } else {
+                authority.decideLayer(operator, kind, ControlActions.READ)
+            }
+            when (decision) {
+                ControlDecision.PERMIT -> true
+                ControlDecision.DENY -> false
+                ControlDecision.INDETERMINATE -> throw ChangeRejectedException(
+                    UNAVAILABLE,
+                    "whether the ${kind.name.lowercase()} changes may be listed could not be decided",
+                )
+            }
+        }
+        if (layers.isEmpty()) throw ChangeRejectedException(FORBIDDEN, "may not list changes by state")
+        return layers
     }
 
     private suspend fun visible(
