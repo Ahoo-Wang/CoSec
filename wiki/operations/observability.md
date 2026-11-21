@@ -364,10 +364,10 @@ content. Change listeners receive them.
   did a step from the event's `operator`, never from its note.
 - **Break-glass needs a `REQUIRED` change listener:** without one, creating or changing a break-glass binding answers
   `503` (`break-glass needs a REQUIRED change listener, and none is configured`).
-- **`SHADOW_SKIPPED` is written when a window is skipped,** with why in its note (`shadow window skipped: <reason>;
-  <note>`): by `:skip-shadow`, whose operator holds `cosec:skip-shadow`, or by a break-glass change, which has no
-  window. It is written whether or not the change is ever published; the revision's provenance records the skip too,
-  once it publishes. A refused skip writes nothing.
+- **`SHADOW_SKIPPED` is written when a window is skipped,** with why in its note
+  (`shadow window skipped: <reason>; <note>`): by `:skip-shadow`, whose operator holds `cosec:skip-shadow`, or by a
+  break-glass change, which has no window. It is written whether or not the change is ever published; the revision's
+  provenance records the skip too, once it publishes. A refused skip writes nothing.
 - **`REBASED` is written when a change is rebased** on its document's current head and checked again.
 - **`ABANDONED` names who abandoned a change and, in its note, its author** (`author <tenant>/<principal>: <note>`).
   Abandoning a break-glass change is gated like `PUBLISHING`: it needs a `REQUIRED` change listener (`503` without
