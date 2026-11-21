@@ -40,7 +40,7 @@
       "CHECKED",
       "READY",
       "ABANDONED",
-      "audited CHECKED,SHADOW_SKIPPED,ABANDONED"
+      "audited ABANDONED,CHECKED,SHADOW_SKIPPED"
     ],
     "errors": {
       "c1": []

@@ -50,8 +50,12 @@ class StepEventsTest {
             val change = proposed("skip")
             fixture.changes.skipShadow(fixture.alice, change.id, "hotfix for incident 42")
             fixture.changes.abandon(fixture.alice, change.id)
-            kinds(change.id).assert()
-                .containsExactly(ChangeEvent.Kind.CHECKED, ChangeEvent.Kind.SHADOW_SKIPPED, ChangeEvent.Kind.ABANDONED)
+            // Best-effort listeners receive a change's events in any order: which were written, not in which order.
+            kinds(change.id).assert().containsExactlyInAnyOrder(
+                ChangeEvent.Kind.CHECKED,
+                ChangeEvent.Kind.SHADOW_SKIPPED,
+                ChangeEvent.Kind.ABANDONED,
+            )
             val skipped = fixture.events.single { it.change == change.id && it.kind == ChangeEvent.Kind.SHADOW_SKIPPED }
             skipped.note.assert().contains("hotfix for incident 42")
             skipped.operator.assert().isEqualTo(fixture.alice.actor)
@@ -64,7 +68,7 @@ class StepEventsTest {
         fixture.changes.skipShadow(fixture.alice, ahead.id, "move the head")
         fixture.changes.publish(fixture.alice, ahead.id)
         fixture.changes.rebase(fixture.alice, behind.id).base.revision.assert().isEqualTo(2L)
-        kinds(behind.id).assert().containsExactly(ChangeEvent.Kind.CHECKED, ChangeEvent.Kind.REBASED)
+        kinds(behind.id).assert().containsExactlyInAnyOrder(ChangeEvent.Kind.CHECKED, ChangeEvent.Kind.REBASED)
     }
 
     @Test

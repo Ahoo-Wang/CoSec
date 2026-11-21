@@ -139,7 +139,8 @@ import java.time.Instant
  *            { "storeDown": true }, // every operation of the control store fails until false (CTL-52): a step it
  *                                   // stops is `unavailable`, never an empty answer
  *            { "vanish": "i1" },   // i1 is taken off the reporters of every window, its report left
- *            { "audited": "c1" },  // the kinds of the change events of c1 so far, in order (CTL-63):
+ *            { "audited": "c1" },  // the kinds of the change events of c1 so far, sorted: best-effort listeners
+ *                                  // receive them in any order (CTL-63):
  *                                  // `audited CHECKED,SHADOW_SKIPPED`
  *            { "answer": "c1" },   // the members of the change's answer (CTL-61): `members a,b,...`, then
  *                                  // `; shadow a,b` and `; approval a,b` when it holds them
@@ -628,11 +629,14 @@ object ChangeRunner : ScenarioRunner {
             return "reported"
         }
 
-        /** The kinds of a change's events so far, in the order its listeners received them (`CTL-63`). */
+        /**
+         * The kinds of a change's events so far (`CTL-63`), sorted: a best-effort listener receives a change's events in
+         * any order, so the step says which were written, not in which order they arrived.
+         */
         private suspend fun audited(argument: JsonNode): String {
             auditing.awaitDelivered()
             val id = argument.text()
-            return "audited " + audit.events.filter { it.change.value == id }.joinToString(",") { it.kind.name }
+            return "audited " + audit.events.filter { it.change.value == id }.map { it.kind.name }.sorted().joinToString(",")
         }
 
         /** The steps of the control API's answers (`CTL-61`, `CTL-62`). */
