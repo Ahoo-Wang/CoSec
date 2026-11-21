@@ -344,6 +344,10 @@ Redis may evict CoSec's policy snapshot: maxmemory-policy is {<node>=<policy>}, 
 
 以 `ERROR` 记录 `Compiling snapshot document [<doc>] revision <n> did not end within <budget>; the load fails, and the revision is not compiled again while that compilation runs.`：编译器在该存储修订上用时超过加载的预算（尚未持有的文档为 `cold-load-timeout`，2 秒；重新加载为 30 秒）。需要它的请求在它未被持有时回答 `503`，或者按之前持有的修订决策。该编译在结束之前占用一个编译线程；同时有两个这样的修订会占满默认的两个线程，此时在其中一个结束之前没有其他文档能编译：每个加载都在其截止时间失败关闭。经过控制面校验的文档编译用时远低于一毫秒：查找绕过控制面写入 Redis 的修订，并发布一个改正的修订，它会像其他修订一样编译（[存储](./storage.md#how-instances-read-documents)）。
 
+## 影子窗口在等待某个实例 {#shadow-window-waiting-for-an-instance}
+
+控制面记录 `Shadow window <w> of change <c> is waiting for [<instances>]`，窗口不关闭，无论其他实例报告了什么：这些实例在窗口上报告过，而现在没有报告（已停止、已缩容，或者它们的报告在 Redis 故障切换中丢失）。它们的证据缺失，所以窗口等待它们（`CTL-56`）。仍在服务的实例会在 `cosec.authorization.shadow.report-interval` 内再次写入报告。永久离开的实例会让窗口一直保持打开，直到 `cosec.control.shadow.max-duration`，届时窗口以*证据不足*关闭，摘要的 `vanished` 点名该实例：确认摘要后发布它，或者放弃它并重新暂存，用现在在服务的实例开始新的窗口（[测试变更](../policies/testing.md#trying-changes-in-shadow-mode)）。
+
 ## 影子窗口被候选错误阻塞 {#shadow-window-blocked-by-a-candidate-error}
 
 只要有一个实例报告 `CANDIDATE_ERROR`，影子窗口就被阻塞：该实例编译不了候选，无法比较决策，变更永远不会被发布。常见原因是候选读取的

@@ -355,6 +355,15 @@ public final class me/ahoo/cosec/spi/shadow/ShadowOutcome : java/lang/Enum {
 	public static fun values ()[Lme/ahoo/cosec/spi/shadow/ShadowOutcome;
 }
 
+public final class me/ahoo/cosec/spi/shadow/ShadowReadings {
+	public fun <init> (Ljava/util/List;Ljava/util/Set;)V
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getReports ()Ljava/util/List;
+	public final fun getUnreadable ()Ljava/util/Set;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
 public final class me/ahoo/cosec/spi/shadow/ShadowReport {
 	public static final field Companion Lme/ahoo/cosec/spi/shadow/ShadowReport$Companion;
 	public static final field MAX_SAMPLES I
@@ -377,12 +386,17 @@ public final class me/ahoo/cosec/spi/shadow/ShadowReport$Companion {
 
 public abstract interface class me/ahoo/cosec/spi/shadow/ShadowReportReader {
 	public static final field Companion Lme/ahoo/cosec/spi/shadow/ShadowReportReader$Companion;
+	public fun readings (Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public abstract fun reports (Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public abstract fun statuses (Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 }
 
 public final class me/ahoo/cosec/spi/shadow/ShadowReportReader$Companion {
 	public final fun getSTATUS_TTL ()Ljava/time/Duration;
+}
+
+public final class me/ahoo/cosec/spi/shadow/ShadowReportReader$DefaultImpls {
+	public static fun readings (Lme/ahoo/cosec/spi/shadow/ShadowReportReader;Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 }
 
 public abstract interface class me/ahoo/cosec/spi/shadow/ShadowReportSink {

@@ -1,0 +1,17 @@
+# Rule: TNT-1
+# Mutant: the view reads the entry at a position as the document asked for there whatever its kind, so a set in another order makes an app's document decide as the tenant's
+# Tests: :runtime:test --tests me.ahoo.cosec.runtime.snapshot.DocumentSnapshotViewsTest
+
+diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/DocumentSnapshotViews.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/DocumentSnapshotViews.kt
+index 72befd88f..7754e3cae 100644
+--- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/DocumentSnapshotViews.kt
++++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/DocumentSnapshotViews.kt
+@@ -134,7 +134,7 @@ class DocumentSnapshotViews(
+         unresolved: MutableList<Cause>,
+     ): SnapshotEntry<*>? {
+         val entry = set.scoped.getOrNull(index)
+-        if (entry != null && entry.key.kind == kind) return entry
++        if (entry != null) return entry
+         val documentKind = if (kind == SnapshotKind.TENANT) DocumentKind.TENANT else DocumentKind.APP
+         val error = IllegalStateException("The snapshot set does not hold the $kind document where it was asked for.")
+         unresolved += Cause.SourceUnavailable(documentKind, error)
