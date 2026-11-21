@@ -71,11 +71,14 @@ internal class DocumentRoutes(private val plane: ControlPlane) : RouteHandler {
                 val mode = it.text("mode").let { mode ->
                     field("mode", "one of ${ApplyMode.entries.joinToString()}") { ApplyMode.valueOf(mode) }
                 }
-                changeResponse(plane.apply(operator, key, desired, mode, it.optText("note").orEmpty()), CREATED)
+                val change = plane.apply(operator, key, desired, mode, it.optText("note").orEmpty())
+                changeResponse(plane, operator, change, CREATED)
             }
 
             "rollback" -> post(request) {
                 changeResponse(
+                    plane,
+                    operator,
                     plane.rollback(operator, key, it.long("revision"), it.optText("note").orEmpty(), confirmations(it)),
                     CREATED
                 )

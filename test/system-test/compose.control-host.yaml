@@ -1,0 +1,90 @@
+#
+# Copyright [2021-present] [ahoo wang <ahoowang@qq.com> (https://github.com/Ahoo-Wang)].
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#      http://www.apache.org/licenses/LICENSE-2.0
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+
+# Leg 1 of the system test (test/system-test/README.md): the gateways, the control-plane host (two replicas of the image built
+# from the commit, behind the gateways' /cosec/control route through control-1) and the IAM, which calls the host's service
+# port as a service of its own and embeds no control plane. Read with compose.yaml. The control hosts believe the identity
+# they are stated (STA-9): the runner's loopback is this test's network boundary, as a NetworkPolicy is a deployment's.
+name: cosec-system
+
+# The control-plane host, two replicas of one image: the operators' API on 8080 (the gateways route to it), the service API on
+# 8082 (the narrow profile, for the services that call it directly), the management port on 8081. It trusts the identity
+# header of whoever reaches it and says so (cosec.pipeline.identity.only-trusted-callers-can-reach, spelled as the
+# environment variable of the binder); it runs the maintenance passes (shadow windows, revisions), so the shortened bounds
+# of profile/shortened-bounds.yaml are read here.
+x-control: &control
+  image: ${COSEC_SYSTEM_CONTROL_IMAGE:-cosec-control:system}
+  depends_on:
+    redis:
+      condition: service_healthy
+    kafka:
+      condition: service_healthy
+  environment:
+    SPRING_DATA_REDIS_URL: redis://redis:6379
+    SPRING_CONFIG_ADDITIONALLOCATION: optional:file:/opt/system/shortened-bounds.yaml
+    COSEC_PIPELINE_IDENTITY_ONLYTRUSTEDCALLERSCANREACH: "true"
+    # The change events: what a deployment that keeps an audit trail of its policy changes runs (topic cosec-control-audit).
+    COSEC_CONTROL_AUDIT_KAFKA_ENABLED: "true"
+    SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+    JAVA_OPTS: -Xms192m -Xmx384m -XX:MaxDirectMemorySize=128m -Djava.net.preferIPv4Stack=true
+  volumes:
+    - ./profile:/opt/system:ro
+  # The liveness group on the management port, as the image's own HEALTHCHECK, more often; readiness is a scenario's.
+  healthcheck:
+    test: [ CMD, curl, -fs, -o, /dev/null, http://localhost:8081/actuator/health/liveness ]
+    interval: 2s
+    timeout: 3s
+    retries: 90
+
+services:
+  control-1:
+    <<: *control
+    ports:
+      # The operators' API, the service API and the management port, each on its own: the scenarios call the replicas
+      # directly where a scenario is about one of them or about a port (the gateways route to control-1).
+      - "127.0.0.1:8095:8080"
+      - "127.0.0.1:8097:8082"
+      - "127.0.0.1:9095:8081"
+
+  control-2:
+    <<: *control
+    ports:
+      - "127.0.0.1:8096:8080"
+      - "127.0.0.1:8098:8082"
+      - "127.0.0.1:9096:8081"
+
+  # The gateways and the IAM start after control-1 is live: they route and call to it.
+  gw-1:
+    depends_on:
+      control-1:
+        condition: service_healthy
+
+  gw-2:
+    depends_on:
+      control-1:
+        condition: service_healthy
+
+  gw-strict:
+    depends_on:
+      control-1:
+        condition: service_healthy
+
+  auth:
+    depends_on:
+      control-1:
+        condition: service_healthy
+    environment:
+      # The control API is the hosts': this process embeds none, and calls the service port of control-1.
+      COSEC_CONTROL_ENABLED: "false"
+      SYSTEM_CONTROL_MODE: http
+      SYSTEM_CONTROL_SERVICE_URL: http://control-1:8082

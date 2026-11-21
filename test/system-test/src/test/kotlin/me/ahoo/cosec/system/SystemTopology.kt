@@ -50,6 +50,15 @@ object SystemTopology {
     val controlManagement1: URI get() = url("COSEC_SYSTEM_CONTROL1_MANAGEMENT_URL")
     val controlManagement2: URI get() = url("COSEC_SYSTEM_CONTROL2_MANAGEMENT_URL")
 
+    /**
+     * Whether this is the embedded deployment (leg 2): the IAM carries the control plane and no control host runs, so what
+     * the control hosts' ports and replicas are for is not there. `COSEC_SYSTEM_TOPOLOGY=embedded`; otherwise the control host's.
+     */
+    val embedded: Boolean get() = System.getenv("COSEC_SYSTEM_TOPOLOGY") == "embedded"
+
+    /** The second IAM of the embedded deployment: the same image, its control routes off (`cosec.control.http.enabled=false`). */
+    val authSdk: URI get() = url("COSEC_SYSTEM_AUTH_SDK_URL")
+
     /** The enforcing servlet service (`test/system-enforcer`), the host of the app `orders`. */
     val enforcer: URI get() = url("COSEC_SYSTEM_ENFORCER_URL")
 

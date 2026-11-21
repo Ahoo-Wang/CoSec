@@ -60,7 +60,12 @@ class ClientContractTest {
         val acknowledged = ChangeAnswer.tree(ChangeSamples.open, Acknowledgement(1, listOf("i-2")))
         files.check(
             "control/change.json",
-            Shapes.of(ChangeSamples.all.map { ChangeAnswer.tree(it) } + listOf(acknowledged), OPAQUE)
+            // Each sample as a reader given the author's whole origin reads it, and as any other reader (`CTL-70`).
+            Shapes.of(
+                ChangeSamples.all.flatMap { listOf(ChangeAnswer.tree(it, wholeOrigin = true), ChangeAnswer.tree(it)) } +
+                    listOf(acknowledged),
+                OPAQUE
+            )
         )
     }
 

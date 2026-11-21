@@ -20,6 +20,7 @@ import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.control.change.Approval
 import me.ahoo.cosec.control.change.Base
 import me.ahoo.cosec.control.change.ChangeId
+import me.ahoo.cosec.control.change.ChangeOrigin
 import me.ahoo.cosec.control.change.ChangeRequest
 import me.ahoo.cosec.control.change.ChangeState
 import me.ahoo.cosec.control.change.CheckedApps
@@ -79,6 +80,7 @@ internal object ChangeSamples {
         checkedWith = mapOf(SnapshotKey.Platform to digest, SnapshotKey.App("order") to null),
         skipShadow = "hurry",
         publishedRevision = 4,
+        origin = ChangeOrigin(false, ChangeOrigin.Via("jwt", "token-1", "req-1"), "10.0.0.7"),
         escalations = listOf(escalation),
         approval = Approval(
             pia,
@@ -104,6 +106,7 @@ internal object ChangeSamples {
     val open = minimal.copy(shadow = ShadowState("c1@1", at), approval = Approval(pia, at, "d", emptyList()))
     val closed = minimal.copy(
         shadow = ShadowState("c1@1", at, ShadowSummary(emptyMap(), at, insufficient = false, blocked = false)),
+        origin = ChangeOrigin(true),
     )
 
     val all = listOf(minimal, full, open, closed)

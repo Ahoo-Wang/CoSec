@@ -62,7 +62,7 @@ internal class ChangeRoutes(
         if (verb == null) {
             return get(request) {
                 val change = plane.get(operator, id)
-                changeResponse(change, OK, plane.acknowledgements.of(change))
+                changeResponse(plane, operator, change, OK, plane.acknowledgements.of(change))
             }
         }
         return post(request) {
@@ -76,7 +76,7 @@ internal class ChangeRoutes(
                 "publish" -> plane.publish(operator, id, it.get("ack")?.let(::ack), it.optBool("lockout") ?: false)
                 else -> return@post notFound()
             }
-            changeResponse(change, OK)
+            changeResponse(plane, operator, change, OK)
         }
     }
 
@@ -105,6 +105,8 @@ internal class ChangeRoutes(
                 !it.has("kind")
             ) { "a change has no kind: propose it here, or request break-glass at /break-glass" }
             changeResponse(
+                plane,
+                operator,
                 plane.propose(
                     operator,
                     key,

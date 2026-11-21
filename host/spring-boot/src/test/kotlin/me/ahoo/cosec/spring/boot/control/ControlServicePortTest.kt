@@ -47,7 +47,7 @@ import java.net.SocketTimeoutException
 /**
  * `CTL-58`, `CTL-59`: the control plane's service port (a listener of its own, serving the control API's service profile
  * and nothing else, closed with its connections when the application stops), the switch that serves no control route, and
- * the switch that runs no maintenance pass. The refusals are `STA-9`'s and `CTL-58`'s.
+ * the maintenance passes that every instance runs. The refusals are `STA-9`'s and `CTL-58`'s.
  */
 class ControlServicePortTest {
     private val runner = ReactiveWebApplicationContextRunner()
@@ -206,19 +206,6 @@ class ControlServicePortTest {
         }
     }
 
-    @Test
-    fun `a host that runs no maintenance pass says so, and one that runs them says nothing`() {
-        ControlServicePort.maintenanceNotice(MockEnvironment()).assert().isNull()
-        ControlServicePort.maintenanceNotice(
-            MockEnvironment().withProperty("cosec.control.maintenance.enabled", "true")
-        )
-            .assert().isNull()
-        ControlServicePort.maintenanceNotice(
-            MockEnvironment().withProperty("cosec.control.maintenance.enabled", "false")
-        )
-            .assert().contains("runs no control-plane maintenance pass").contains("Another control host must run them")
-    }
-
     /**
      * The peer is the connection's: a Reactor Netty server that reads `X-Forwarded-For` and `Forwarded`
      * (`server.forward-headers-strategy=native` configures that on the application's) shows the caller's claim as the
@@ -268,13 +255,21 @@ class ControlServicePortTest {
         }
     }
 
+    /**
+     * `CTL-59`: every instance with the control plane on runs the maintenance passes, whatever else is configured, and
+     * nothing turns them off. Two instances over one store run each pass once per interval, by their leases:
+     * `ControlMaintenanceTest` (the shadow lease, the reclamation lease) and `ControlReplicaScenario`, which stops the
+     * replica that started a window and sees it closed by the other.
+     */
     @Test
-    fun `cosec control maintenance enabled false runs no maintenance pass, and the default runs them`() {
+    fun `the maintenance passes run on every host that has the control plane, and no property turns them off`() {
         runner.run { context -> context.containsBean("cosecControlMaintenanceScheduler").assert().isTrue() }
-        runner.withPropertyValues("cosec.control.maintenance.enabled=false").run { context ->
-            context.startupFailure.assert().isNull()
-            context.containsBean("cosecControlMaintenanceScheduler").assert().isFalse()
+        runner.withPropertyValues("cosec.control.http.enabled=false").run { context ->
+            context.containsBean("cosecControlMaintenanceScheduler").assert().isTrue()
             context.containsBean("cosecControlPlane").assert().isTrue()
+        }
+        runner.withPropertyValues("${ControlServicePort.KEY}=0").run { context ->
+            context.containsBean("cosecControlMaintenanceScheduler").assert().isTrue()
         }
     }
 

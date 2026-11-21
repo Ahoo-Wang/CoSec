@@ -48,16 +48,25 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  # Two deployments, two runs of the same suite (test/system-test/README.md, "Two deployments"): the gateways with a control-plane
+  # host and an IAM that calls it, or the gateways with an IAM that embeds the control plane. The second runs only the
+  # scenarios of the control plane (tags `control` and `embedded`), on its own stack: two control planes on one store
+  # would share documents, leases and changes, and every assertion would hold for both or neither.
   system:
-    name: System test
+    name: System test (${{ matrix.leg }})
     runs-on: ubuntu-latest
     timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        leg: [ control-host, embedded ]
     env:
+      COSEC_SYSTEM_TOPOLOGY: ${{ matrix.leg }}
       # Inputs reach the scripts through the environment only, never interpolated into a command.
       GATEWAY_IMAGE_INPUT: ${{ inputs.image }}
-      ARTIFACT: system-test-${{ github.run_id }}-${{ github.run_attempt }}
+      ARTIFACT: system-test-${{ matrix.leg }}-${{ github.run_id }}-${{ github.run_attempt }}
       # Absolute: the scenarios' JVM runs in the module directory, and starts docker compose itself.
-      COMPOSE_FILE: ${{ github.workspace }}/test/system-test/compose.yaml
+      COMPOSE_FILE: ${{ github.workspace }}/test/system-test/compose.yaml:${{ github.workspace }}/test/system-test/compose.${{ matrix.leg }}.yaml
       COSEC_SYSTEM_BEHIND_IMAGE: cosec-system-behind:test
       COSEC_SYSTEM_AUTH_IMAGE: cosec-system-auth:test
       COSEC_SYSTEM_ENFORCER_IMAGE: cosec-system-enforcer:test
@@ -72,6 +81,7 @@ jobs:
       COSEC_SYSTEM_GATEWAY_MANAGEMENT_URL: http://127.0.0.1:9081
       COSEC_SYSTEM_GATEWAY2_MANAGEMENT_URL: http://127.0.0.1:9082
       COSEC_SYSTEM_AUTH_URL: http://127.0.0.1:8090
+      COSEC_SYSTEM_AUTH_SDK_URL: http://127.0.0.1:8093
       # The control-plane host's replicas: the operators' API, the service API and the management port of each.
       COSEC_SYSTEM_CONTROL1_URL: http://127.0.0.1:8095
       COSEC_SYSTEM_CONTROL2_URL: http://127.0.0.1:8096
@@ -128,7 +138,7 @@ jobs:
         run: ./.ci-actions/.github/scripts/resolve-dependencies.sh
 
       - name: Build the distributions
-        run: ./gradlew :gateway-server:installDist :control-server:installDist :system-behind:installDist :system-auth:installDist :system-enforcer:installDist :migrate:installDist :system-test:testClasses
+        run: ./gradlew :gateway-server:installDist :system-behind:installDist :system-auth:installDist :system-enforcer:installDist :migrate:installDist :system-test:testClasses
 
       # The image as the Dockerfile ships it, its AOT cache trained, for the runner's platform only.
       - name: Build or pull the gateway image
@@ -143,7 +153,10 @@ jobs:
 
       # The control-plane host's image, as its Dockerfile ships it, its AOT cache trained.
       - name: Build the control-plane host image
-        run: docker build --build-context shared=platform --tag cosec-control:system platform/control-server
+        if: ${{ matrix.leg == 'control-host' }}
+        run: |
+          ./gradlew :control-server:installDist
+          docker build --build-context shared=platform --tag cosec-control:system platform/control-server
 
       - name: Build the services' images
         run: |
@@ -159,18 +172,18 @@ jobs:
       - name: Run the scenarios
         env:
           COSEC_SYSTEM_MIGRATE: ${{ github.workspace }}/migration/migrate/build/install/cosec-migrate/bin/cosec-migrate
-        run: ./gradlew :system-test:systemTest
+        run: ./gradlew :system-test:systemTest -PsystemLeg=${{ matrix.leg }}
 
       # The TypeScript client through the gateway (cosec-fetcher): the same stack, a client that is not Kotlin. After the
       # scenarios whether or not they passed, so one run shows both; JUnit for the summary.
       - name: Set up pnpm
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && matrix.leg == 'control-host' }}
         uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
         with:
           version: 11.28.13
 
       - name: Set up Node
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && matrix.leg == 'control-host' }}
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 24.22.3
@@ -178,7 +191,7 @@ jobs:
           cache-dependency-path: typescript/pnpm-lock.yaml
 
       - name: Run the TypeScript client's scenarios
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && matrix.leg == 'control-host' }}
         working-directory: typescript
         env:
           COSEC_SYSTEM_JUNIT: ${{ runner.temp }}/typescript-junit/TEST-typescript.xml
