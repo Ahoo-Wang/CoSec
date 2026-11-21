@@ -18,8 +18,8 @@ package me.ahoo.cosec.spring.boot.control
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.control.api.ControlPlane
-import me.ahoo.cosec.control.sdk.ControlService
 import me.ahoo.cosec.control.local.LocalControlService
+import me.ahoo.cosec.control.sdk.ControlService
 import me.ahoo.cosec.model.AppId
 import me.ahoo.cosec.runtime.identity.IdentityGate
 import me.ahoo.cosec.spi.id.IdGenerator
