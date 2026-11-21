@@ -1,0 +1,17 @@
+# Rule: ACT-2
+# Mutant: a route may map to an action of the http namespace, so a mapped route and an unmapped request share their actions
+# Tests: :document:test --tests me.ahoo.cosec.document.route.RouteMapTest :conformance:test --tests me.ahoo.cosec.conformance.ConformanceTest
+
+diff --git a/core/document/src/main/kotlin/me/ahoo/cosec/document/route/RouteMap.kt b/core/document/src/main/kotlin/me/ahoo/cosec/document/route/RouteMap.kt
+index 87632dc5c..f29696247 100644
+--- a/core/document/src/main/kotlin/me/ahoo/cosec/document/route/RouteMap.kt
++++ b/core/document/src/main/kotlin/me/ahoo/cosec/document/route/RouteMap.kt
+@@ -241,7 +241,7 @@ class RouteMap private constructor(private val routes: Map<String, List<Compiled
+             }
+             val service = action.service
+             val verb = action.verb
+-            if (service == null || verb == null || service == ResourcePattern.HTTP_TYPE) {
++            if (service == null || verb == null) {
+                 fail("action [${route.action}] is not a service:verb outside the http namespace")
+             }
+             return Compiled(

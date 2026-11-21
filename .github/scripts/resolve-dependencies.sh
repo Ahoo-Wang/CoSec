@@ -83,12 +83,28 @@ if [ "${RESOLVE_CENTRAL_FALLBACK:-off}" = on ]; then
   echo "Installed the Maven Central fallback repository for this job's Gradle runs."
 fi
 
-# What each URL Gradle searched answers now, from this runner: the log of a failed resolution says "Could not find", never the
-# status, and a 404 for a file that exists, a 429 and a block are different failures with different remedies.
+# What each file Gradle searched for answers now, from this runner: the log of a failed resolution says "Could not find", never
+# the status, and a 404 for a file that exists, a 429 and a block are different failures with different remedies. Some
+# failures name no URL: a plugin that is "not found in any of the following sources" gives its marker's coordinates and the
+# names of its repositories (CodeQL, run 44827683777), and the resolve task's "Could not find <g>:<a>:<v>" the module's. For
+# those, the POM is asked of Maven Central and of the plugin portal, which are what the build's repositories are.
+files() {
+  grep -Eo 'https://[^ ]+\.(pom|module|jar)' "$log"
+  {
+    grep -Eo "plugin artifact '[^']+'" "$log" | sed "s/^plugin artifact '//; s/'\$//"
+    grep -Eo 'Could not find [^ ()]+:[^ ()]+:[0-9A-Za-z][^ ()]*' "$log" | sed 's/^Could not find //; s/\.$//'
+  } | sort -u | while IFS=: read -r group artifact version; do
+    path="${group//.//}/$artifact/$version/$artifact-$version.pom"
+    echo "https://repo.maven.apache.org/maven2/$path"
+    echo "https://plugins.gradle.org/m2/$path"
+  done
+}
+
+# The status, and the headers that say which edge of which CDN answered: `cf-ray` ends in the edge's airport code.
 diagnose() {
-  grep -Eo 'https://[^ ]+\.(pom|module|jar)' "$log" | sort -u | head -8 | while read -r url; do
+  files | sort -u | head -8 | while read -r url; do
     echo "  $(curl -sS -o /dev/null -I --max-time 20 -w '%{http_code}' "$url" 2>&1) $url"
-    curl -sSI --max-time 20 "$url" 2>/dev/null | grep -iE '^(server|via|x-served-by|x-cache|x-cache-hits|retry-after|age):' | sed 's/^/      /' | tr -d '\r'
+    curl -sSI --max-time 20 "$url" 2>/dev/null | grep -iE '^(server|via|x-served-by|x-cache|x-cache-hits|cf-ray|cf-cache-status|retry-after|age):' | sed 's/^/      /' | tr -d '\r'
   done
 }
 

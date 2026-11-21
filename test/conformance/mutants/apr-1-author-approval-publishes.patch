@@ -3,15 +3,15 @@
 # Tests: :control:test --tests me.ahoo.cosec.control.change.StoredApprovalTest --tests me.ahoo.cosec.control.authz.ControlAuthorizationTest :conformance:test --tests me.ahoo.cosec.conformance.ConformanceTest
 
 diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ApprovalRules.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ApprovalRules.kt
-index f162ed6b..02804808 100644
+index efb8f055b..9c023adc0 100644
 --- a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ApprovalRules.kt
 +++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ApprovalRules.kt
-@@ -145,7 +145,7 @@ internal class ApprovalRules(
+@@ -154,7 +154,7 @@ internal class ApprovalRules(
          return when {
              approval.candidate != change.candidate -> "the approval is for another candidate"
              now.isAfter(approval.at.plus(options.approvalExpireAfter)) -> "the approval expired"
--            approval.approver == change.author || approval.approver == publisher.actor ->
-+            approval.approver == publisher.actor ->
-                 "the approval is the author's or the publisher's own"
+-            isOwn(approval.approver, change, publisher) -> "the approval is the author's or the publisher's own"
++            approval.approver == publisher.actor -> "the approval is the author's or the publisher's own"
              !approval.covers.containsAll(required.map { it.subject }) -> "the approval does not cover what it now needs"
              else -> null
+         }

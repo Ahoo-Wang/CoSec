@@ -1,0 +1,17 @@
+# Rule: SCP-5
+# Mutant: Scope is a data class, so its copy builds a scope from another without the resolver
+# Tests: :architecture:test --tests me.ahoo.cosec.architecture.ScopeConstructionTest
+
+diff --git a/core/model/src/main/kotlin/me/ahoo/cosec/model/scope/Scope.kt b/core/model/src/main/kotlin/me/ahoo/cosec/model/scope/Scope.kt
+index e125f9fa7..22f80159b 100644
+--- a/core/model/src/main/kotlin/me/ahoo/cosec/model/scope/Scope.kt
++++ b/core/model/src/main/kotlin/me/ahoo/cosec/model/scope/Scope.kt
+@@ -22,7 +22,7 @@ import me.ahoo.cosec.model.TenantId
+  * A checked scope (RFC 0004 §4.1). Only [ScopeResolver] constructs one (RFC 0001 P4): the constructor is internal to
+  * this module, and `ScopeConstructionTest` checks that nothing else in it calls the constructor.
+  */
+-class Scope internal constructor(
++data class Scope internal constructor(
+     val tenant: TenantId,
+     val app: AppId,
+     val space: SpaceId,

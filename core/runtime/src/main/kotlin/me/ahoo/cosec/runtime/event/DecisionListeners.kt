@@ -65,7 +65,9 @@ private val log = KotlinLogging.logger {}
  *
  * The request's thread never logs (#1392): a drop only counts and signals a reporter, which logs on [dispatcher] how
  * many each listener dropped since its last line, at most once per [warnInterval]. A failure is counted and logged on
- * the listener's consumer, at most once per [warnInterval] per listener.
+ * the listener's consumer, at most once per [warnInterval] per listener; a REQUIRED listener's failure, and a REQUIRED
+ * failure on a non-permit, are counted on the request's thread and logged on [dispatcher], at most once per
+ * [warnInterval] each (R2D-2).
  */
 @InternalCoSecApi
 class DecisionListeners(
@@ -119,6 +121,7 @@ class DecisionListeners(
     private val scope = CoroutineScope(SupervisorJob() + dispatcher)
     private val consumers: List<Job>
     private val requiredFailureCount = AtomicLong()
+    private val requiredLog = RequiredFailureLog(scope, warnInterval)
 
     @Volatile
     private var closed = false
@@ -206,10 +209,7 @@ class DecisionListeners(
             e
         }
         if (failure != null) {
-            stats.failureCount.incrementAndGet()
-            log.error(
-                failure
-            ) { "REQUIRED decision listener [${listener.name}] failed on request [${event.requestId}]." }
+            requiredLog.failed(listener.name, stats, event.requestId, failure)
             return false
         }
         return true
@@ -217,8 +217,7 @@ class DecisionListeners(
 
     /** Records a REQUIRED failure on a decision that was not a permit: it keeps its status (§9.4.2, Q18). */
     internal fun requiredFailedOnNonPermit(event: DecisionEvent, failed: List<String>) {
-        requiredFailureCount.incrementAndGet()
-        log.error { "REQUIRED decision listeners $failed failed on request [${event.requestId}], answered ${event.outcome}." }
+        requiredLog.failedOnNonPermit(failed, requiredFailureCount.incrementAndGet(), event)
     }
 
     /**

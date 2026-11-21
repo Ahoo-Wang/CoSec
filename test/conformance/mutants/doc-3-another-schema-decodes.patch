@@ -1,0 +1,17 @@
+# Rule: DOC-3
+# Mutant: a document of a schema other than this version's decodes
+# Tests: :document:test --tests me.ahoo.cosec.document.PolicyDocumentCodecTest --tests me.ahoo.cosec.document.PolicyDocumentCompilerTest :conformance:test --tests me.ahoo.cosec.conformance.ConformanceTest
+
+diff --git a/core/document/src/main/kotlin/me/ahoo/cosec/document/PolicyDocumentCodec.kt b/core/document/src/main/kotlin/me/ahoo/cosec/document/PolicyDocumentCodec.kt
+index 8e90afec1..24e04afba 100644
+--- a/core/document/src/main/kotlin/me/ahoo/cosec/document/PolicyDocumentCodec.kt
++++ b/core/document/src/main/kotlin/me/ahoo/cosec/document/PolicyDocumentCodec.kt
+@@ -90,7 +90,7 @@ object PolicyDocumentCodec {
+         }
+         root.requireObject(*fields)
+         val schema = root.required("schema").long()
+-        if (schema != SCHEMA.toLong()) {
++        if (schema < 0L) {
+             root.required("schema").fail("schema $schema is not this version's document format, $SCHEMA")
+         }
+         val revision = root.required("revision").long()

@@ -88,7 +88,7 @@ order would not have been asked either, so the fallback (off, below) does nothin
 
 ### The fallback repository
 
-A `Could not find` for a file that exists is a 404 from the repository, and no pause helps one that lasts. On 2026-11-20 it
+A `Could not find` for a file that exists is a "not found" the log does not explain, and no pause helps one that lasts. (The first reading here was a 404 from the repository; the Nexus marker below shows Gradle also printing it when Central answered `429`, so these may be throttling too.) On 2026-11-20 it
 failed all six attempts, over 12 minutes, four times: CodeQL on two pull requests and two shards of one mutation run, for
 POMs Central serves (the BOMs of the Kotlin and Dokka plugins, `jmh-core`, the OpenTelemetry instrumentation BOM), from Central
 and from the plugin portal, while the other shards of the same run passed. A cache was not the cause: attempt 3 had removed
@@ -112,6 +112,29 @@ searched (`diagnose`), which is what that decision needs.
 What still fails, and why: a file only the plugin portal hosts (the marker and jar of the Nexus publish plugin
 `io.github.gradle-nexus.publish-plugin`, and the JMH plugin's) has no second host. The portal answered `Plugin ... was not found`
 for the Nexus marker for 12 minutes in CodeQL's run 44765167001, and that failure is only retried, as before.
+
+### The Nexus publish plugin's marker, three times (2026-11-20)
+
+The plugin `io.github.gradle-nexus.publish-plugin` 2.0.0 exists on the plugin portal and not on Maven Central. Three jobs
+failed on it in all six attempts, about 12 minutes of them: CodeQL run 44765167001 (15:37 UTC), CodeQL run 44827683777
+(22:17 UTC, head `ef06aeb83`; its re-run passed) and the `ctl-2` shard of mutation run 44835108385 (23:13 UTC). Each log says
+`Plugin [id: 'io.github.gradle-nexus.publish-plugin', version: '2.0.0'] was not found in any of the following sources`, with
+`MavenRepo` and `Gradle Central Plugin Repository` as the repositories searched.
+
+The third one printed what the repositories answered, for the first time (`diagnose`, from the same runner, after each
+attempt, six attempts, one edge: Cloudflare PDX): **the plugin portal answered `200` with the marker, and Maven Central
+answered `429`**, every time. Central is throttling that runner, for at least 12 minutes, and Gradle reports a `429` from
+the first repository as "not found in any of the following sources" without taking the marker from the portal, which has it.
+(An earlier version of this section read the message as a `404` from the portal: wrong.) So the earlier failures of this
+shape, which `diagnose` could not see, are likely the same: Central throttles a runner's address, and what a job loses is
+what that answer hides. The kind of artifact decides what can help:
+
+- **A file only the portal has** (this marker, the JMH plugin's): ask the portal first or only, so that Central's answer
+  does not matter. In `pluginManagement` that is `exclusiveContent` on the portal for the groups of those plugins.
+  `settings.gradle.kts` is where the build says where it resolves from, so that change is the maintainer's to decide
+  (`AGENTS.md`); it is the one that removes this failure.
+- **A file Central has** (the BOMs of the Kotlin and Dokka plugins, `jmh-core`, #1771): a second host for Central's files,
+  which is off, below.
 
 ### A change of repositories invalidates what restored caches say
 

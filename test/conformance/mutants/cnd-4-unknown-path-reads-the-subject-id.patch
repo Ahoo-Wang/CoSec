@@ -1,0 +1,17 @@
+# Rule: CND-4
+# Mutant: a path outside the catalog resolves to subject.id instead of failing to compile, so a typo reads another attribute
+# Tests: :model:test --tests me.ahoo.cosec.model.condition.ConditionCheckerTest :conformance:test --tests me.ahoo.cosec.conformance.ConformanceTest
+
+diff --git a/core/model/src/main/kotlin/me/ahoo/cosec/model/condition/ConditionChecker.kt b/core/model/src/main/kotlin/me/ahoo/cosec/model/condition/ConditionChecker.kt
+index b02ae2e1a..826837c46 100644
+--- a/core/model/src/main/kotlin/me/ahoo/cosec/model/condition/ConditionChecker.kt
++++ b/core/model/src/main/kotlin/me/ahoo/cosec/model/condition/ConditionChecker.kt
+@@ -47,7 +47,7 @@ class ConditionChecker(
+      */
+     fun attribute(path: String): Attribute? {
+         val attribute = Attribute.parse(path)
+-            ?: return if (Attribute.isExternalPath(path)) catalog.external(path) else null
++            ?: return if (Attribute.isExternalPath(path)) catalog.external(path) else Attribute.of(Attribute.Kind.SUBJECT_ID)
+         return attribute.takeUnless { isCredential(it) || it.kind == Attribute.Kind.RESOURCE_ATTRIBUTE }
+     }
+ 

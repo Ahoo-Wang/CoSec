@@ -729,6 +729,21 @@
         "control:OpenChangeListingTest#a member of the tenant who may not read its changes sees none, a viewer sees them - CTL-55"
       ],
       "pending": null
+    },
+    {
+      "id": "CTL-56",
+      "source": "Review round 2, R2C-17 (saas-open-changes-design.md §3); RFC 0007 §6.4",
+      "statement": "No shadow window passes on missing evidence: an instance that reported on a window and has no report is waited for, and at the longest window the window closes insufficient, naming it; it never closes passing on the others' reports.",
+      "level": "control",
+      "guards": [
+        "control:ControlRoundTwoFixesTest#a window whose reporter vanished closes insufficient at the longest window, naming it - CTL-56",
+        "control:ControlRoundTwoFixesTest#an instance seen reporting on a window must keep reporting until it closes",
+        "control:ControlRoundTwoFixesTest#an unreadable report waits then closes insufficient, a store outage does neither - CTL-56",
+        "cocache:ShadowReadingsTest#a listed report that is missing, does not decode, or is another's is that instance's reading",
+        "cocache:ShadowReadingsTest#a store that does not answer fails the whole call, never reads as an unreadable report",
+        "spi:ShadowValuesTest#the default readings read the reports, and throw where they throw"
+      ],
+      "pending": null
     }
   ]
 }

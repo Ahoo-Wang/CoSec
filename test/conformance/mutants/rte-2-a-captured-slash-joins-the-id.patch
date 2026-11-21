@@ -1,0 +1,17 @@
+# Rule: RTE-2
+# Mutant: a captured value that holds a slash (a decoded %2F) is accepted as part of the resource id, so it reads as another resource's id
+# Tests: :document:test --tests me.ahoo.cosec.document.route.RouteMapTest :runtime:test --tests me.ahoo.cosec.runtime.PipelineRoutesTest :conformance:test --tests me.ahoo.cosec.conformance.ConformanceTest
+
+diff --git a/core/document/src/main/kotlin/me/ahoo/cosec/document/route/RouteMap.kt b/core/document/src/main/kotlin/me/ahoo/cosec/document/route/RouteMap.kt
+index 87632dc5c..aec32bec3 100644
+--- a/core/document/src/main/kotlin/me/ahoo/cosec/document/route/RouteMap.kt
++++ b/core/document/src/main/kotlin/me/ahoo/cosec/document/route/RouteMap.kt
+@@ -138,7 +138,7 @@ class RouteMap private constructor(private val routes: Map<String, List<Compiled
+                 is Segment.Literal -> id.append(segment.text)
+                 is Segment.Variable -> {
+                     val value = captures[segment.name].orEmpty()
+-                    if (value.isEmpty() || ID_SEPARATOR in value) {
++                    if (value.isEmpty()) {
+                         return RouteResolution.Invalid(
+                             "route ${compiled.route.method} ${compiled.route.path} captured [$value] for " +
+                                 "{${segment.name}}, which cannot be a segment of a resource id",

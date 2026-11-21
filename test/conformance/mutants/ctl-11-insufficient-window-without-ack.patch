@@ -3,11 +3,11 @@
 # Tests: :control:test --tests me.ahoo.cosec.control.change.ShadowWindowTest :conformance:test
 
 diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/change/ShadowSummary.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/change/ShadowSummary.kt
-index 0e89111c..d3fd3bed 100644
+index 691693131..e94609cff 100644
 --- a/core/control/src/main/kotlin/me/ahoo/cosec/control/change/ShadowSummary.kt
 +++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/change/ShadowSummary.kt
-@@ -30,7 +30,7 @@ data class ShadowSummary(
-     val blocked: Boolean
+@@ -33,7 +33,7 @@ data class ShadowSummary(
+     val vanished: Set<String> = emptySet(),
  ) {
      /** Whether publishing needs the publisher to acknowledge these numbers: anything changed, or too few samples. */
 -    val needsAck: Boolean get() = insufficient || ACKNOWLEDGED.any { (counts[it] ?: 0) > 0 }

@@ -1,0 +1,17 @@
+# Rule: CND-2
+# Mutant: a condition may nest one level deeper than the depth limit
+# Tests: :model:test --tests me.ahoo.cosec.model.condition.ConditionCheckerTest :conformance:test --tests me.ahoo.cosec.conformance.ConformanceTest
+
+diff --git a/core/model/src/main/kotlin/me/ahoo/cosec/model/condition/ConditionChecker.kt b/core/model/src/main/kotlin/me/ahoo/cosec/model/condition/ConditionChecker.kt
+index b02ae2e1a..f620054ed 100644
+--- a/core/model/src/main/kotlin/me/ahoo/cosec/model/condition/ConditionChecker.kt
++++ b/core/model/src/main/kotlin/me/ahoo/cosec/model/condition/ConditionChecker.kt
+@@ -102,7 +102,7 @@ class ConditionChecker(
+                 return null
+             }
+             nodes++
+-            if (depth > limits.maxDepth) {
++            if (depth > limits.maxDepth + 1) {
+                 error(path, "is nested deeper than ${limits.maxDepth}")
+                 return null
+             }

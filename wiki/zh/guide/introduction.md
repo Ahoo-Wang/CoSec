@@ -53,6 +53,8 @@ decide(principal, scope, action, resource, environment) -> decision
 
 如果你的规则主要取决于返回的数据（请使用数据库的行级安全或领域代码中的规则），或你的服务不运行在 JVM 上，CoSec 就不太合适。
 
+8.0 的 API 是 Kotlin API。用 Java 编写的应用与其他应用一样配置 starter、编写文档，但 CoSec 的类型是为从 Kotlin 调用设计的（签名中的值类、挂起的 SPI），从 Java 调用它们不是 8.0 的目标。
+
 ## 它在应用中的位置 {#how-it-fits-into-your-application}
 
 CoSec 以过滤器的形式运行在你的处理器之前：WebFlux 中是 `WebFilter`，Spring MVC 中是 Servlet `Filter`，Spring Cloud Gateway 中是 `GlobalFilter`。对每个请求，过滤器把它交给同一条协程 Pipeline，Pipeline 会：

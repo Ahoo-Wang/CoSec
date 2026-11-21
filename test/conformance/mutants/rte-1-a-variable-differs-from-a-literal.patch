@@ -1,0 +1,17 @@
+# Rule: RTE-1
+# Mutant: a variable segment counts as different from a literal one, so /orders/{id} and /orders/new are judged disjoint although both match /orders/new
+# Tests: :document:test --tests me.ahoo.cosec.document.route.RouteMapTest :runtime:test --tests me.ahoo.cosec.runtime.PipelineRoutesTest :conformance:test --tests me.ahoo.cosec.conformance.ConformanceTest
+
+diff --git a/core/document/src/main/kotlin/me/ahoo/cosec/document/route/RouteMap.kt b/core/document/src/main/kotlin/me/ahoo/cosec/document/route/RouteMap.kt
+index 87632dc5c..f75660a0d 100644
+--- a/core/document/src/main/kotlin/me/ahoo/cosec/document/route/RouteMap.kt
++++ b/core/document/src/main/kotlin/me/ahoo/cosec/document/route/RouteMap.kt
+@@ -199,7 +199,7 @@ class RouteMap private constructor(private val routes: Map<String, List<Compiled
+             val second = simpleSegments(b)
+             if (first != null && second != null) {
+                 return first.size != second.size ||
+-                    first.indices.any { first[it] != null && second[it] != null && first[it] != second[it] }
++                    first.indices.any { first[it] != second[it] }
+             }
+             return PatternContainment.disjoint(ResourcePattern.parse(HTTP + a), ResourcePattern.parse(HTTP + b))
+         }

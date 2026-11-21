@@ -34,6 +34,9 @@ evaluated deny-first for every request.
 - **Fast and non-blocking.** About 2 µs of pipeline overhead per request, with no blocking on the event loop.
 - **Auditable.** A decision event for every request (audit log, Kafka, Micrometer, OpenTelemetry), naming the
   statement and binding that decided it.
+- **A Kotlin API.** An application written in Java configures the starter and writes its documents as any other does,
+  but CoSec's types are designed to be called from Kotlin (value classes in signatures, suspending SPIs); calling them
+  from Java is not a goal of 8.0.
 
 ## How a decision is made
 

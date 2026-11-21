@@ -1,0 +1,17 @@
+# Rule: DOC-3
+# Mutant: a stored revision that does not decode leaves the previous revision in force instead of failing the requests that need the document
+# Tests: :runtime:test --tests me.ahoo.cosec.runtime.snapshot.SnapshotSourceFailureTest :conformance:test --tests me.ahoo.cosec.conformance.ConformanceTest
+
+diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/KeyLoads.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/KeyLoads.kt
+index 6b92caad1..c8112260b 100644
+--- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/KeyLoads.kt
++++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/KeyLoads.kt
+@@ -288,7 +288,7 @@ internal class KeyLoads<T : Any>(private val config: KeyConfig) {
+         step.emit(KeyEffect.RecordSeen(seen, ifAbsent = true))
+         step.seen = step.seen ?: seen
+         val known = load.known
+-        if (known != null && known.origin == EntryOrigin.UNDECODABLE) {
++        if (known != null) {
+             keep(step, load, known)
+             return
+         }

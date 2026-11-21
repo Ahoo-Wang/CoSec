@@ -57,7 +57,7 @@ import kotlin.coroutines.cancellation.CancellationException
  * A failure after step 3 loses no decision and no content: the index is rebuilt from the chain ([history]), extra
  * references block at most a deletion. The records of conflicted publishes are reclaimed as orphans ([reclaim]).
  */
-// stays: the face its callers use; seven of its functions are one-line delegations to the part that does the work
+// stays: the face its callers use; ten of its functions are one-line delegations to the part that does the work
 @Suppress("TooManyFunctions")
 @InternalCoSecApi
 class Revisions(
@@ -220,10 +220,9 @@ class Revisions(
         // from it, not for every listing and every explain at a revision (L6 of #1240, up to 8 MB a call).
         val stored = store.head(requireDocumentKey(key)) ?: return store.index(key)?.value?.entries.orEmpty() to null
         val indexed = store.index(key)?.value ?: RevisionIndex.EMPTY
-        // Nothing above the head: what a head that moved back (a partial loss of data) left in the index is not on the
-        // chain. A revision published after the head was read is left out of this read alone, and what reclamation
-        // removes comes from this list, so it is never taken for one to remove.
-        val entries = indexed.entries.filter { it.revision <= stored.document.revision }
+        // What reclamation removes comes from this list, so a revision published after the head was read is never taken
+        // for one to remove.
+        val entries = HistoryRepair.entriesUpTo(indexed, stored)
         // The head is the authority (#1536): an index whose last entry is not the head's, by digest, is behind it or on
         // another branch, and is rebuilt from the chain.
         val history = if (HistoryRepair.agrees(entries, indexed.floor, stored)) {
@@ -373,7 +372,7 @@ class Revisions(
     suspend fun verifyIndex(key: SnapshotKey): IndexCheck {
         val stored = store.head(requireDocumentKey(key)) ?: return IndexCheck.Follows
         val indexed = store.index(key)?.value ?: RevisionIndex.EMPTY
-        val entries = indexed.entries.filter { it.revision <= stored.document.revision }
+        val entries = HistoryRepair.entriesUpTo(indexed, stored)
         // The head is decoded once, and only to tell a publication that is settling from a difference.
         return HistoryRepair.check(entries, indexed.floor, stored) {
             decode(key, stored.document).provenance?.parent?.digest?.let(SnapshotDigest::parse)

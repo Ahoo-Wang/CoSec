@@ -1,0 +1,18 @@
+# Rule: SCP-7
+# Mutant: a role of a tenant document may name an app that cannot be an app id: no document could ever hold its bindings
+# Tests: :document:test --tests me.ahoo.cosec.document.RoleExpansionTest :conformance:test --tests me.ahoo.cosec.conformance.ConformanceTest
+
+diff --git a/core/document/src/main/kotlin/me/ahoo/cosec/document/RoleExpansion.kt b/core/document/src/main/kotlin/me/ahoo/cosec/document/RoleExpansion.kt
+index f68b70639..4200469e6 100644
+--- a/core/document/src/main/kotlin/me/ahoo/cosec/document/RoleExpansion.kt
++++ b/core/document/src/main/kotlin/me/ahoo/cosec/document/RoleExpansion.kt
+@@ -248,9 +248,6 @@ object RoleExpansion {
+             if (!roles.add(role.id)) {
+                 errors += CompileError("$path.id", "role [${role.id.value}] is defined twice in this document")
+             }
+-            role.app?.value?.takeUnless(ScopeResolver::isValidAppId)?.let {
+-                errors += CompileError("$path.app", "[$it] cannot be an app id")
+-            }
+             role.space?.value?.takeIf(ScopeResolver::isReservedSpaceId)?.let {
+                 errors += CompileError(
+                     "$path.space",

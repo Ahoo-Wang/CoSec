@@ -1,0 +1,17 @@
+# Rule: CTL-56
+# Mutant: the CoCache reader takes a store that does not answer for an unreadable report: an outage would close a window insufficient instead of leaving it to wait
+# Tests: :cocache:test --tests me.ahoo.cosec.cocache.shadow.ShadowReadingsTest
+
+diff --git a/backends/cocache/src/main/kotlin/me/ahoo/cosec/cocache/shadow/CoCacheShadowReports.kt b/backends/cocache/src/main/kotlin/me/ahoo/cosec/cocache/shadow/CoCacheShadowReports.kt
+index ddf9b0a1e..afa29311f 100644
+--- a/backends/cocache/src/main/kotlin/me/ahoo/cosec/cocache/shadow/CoCacheShadowReports.kt
++++ b/backends/cocache/src/main/kotlin/me/ahoo/cosec/cocache/shadow/CoCacheShadowReports.kt
+@@ -169,7 +169,7 @@ class CoCacheShadowReports @InternalCoSecApi constructor(
+         val key = ShadowCacheSpecs.reportKey(window, instance)
+         val report = try {
+             read(reports, key)?.first
+-        } catch (e: SnapshotFormatException) {
++        } catch (e: RuntimeException) {
+             log.warn(e) { "[$key] does not read: instance $instance's evidence on window $window is missing." }
+             return null
+         }

@@ -78,6 +78,21 @@ class VerifyIndexTest {
         (revisions.verifyIndex(ACME) as IndexCheck.Differs).why.assert().contains("lists no revision")
     }
 
+    /** R2C-19: the history read, `verifyIndex` and the retention pre-check judge the index through one function. */
+    @Test
+    fun `an entry above the head is left out by every reader of the index alike`() = runBlocking<Unit> {
+        publish("a")
+        publish("b")
+        rewriteIndex { it.copy(entries = it.entries + it.entries.last().copy(revision = 9)) }
+        val head = memory.head(ACME)!!
+        val index = memory.index(ACME)!!.value
+
+        HistoryRepair.entriesUpTo(index, head).map { it.revision }.assert().containsExactly(1L, 2L)
+        HistoryRepair.agrees(index, head).assert().isTrue()
+        revisions.verifyIndex(ACME).assert().isSameAs(IndexCheck.Follows)
+        revisions.history(ACME).map { it.revision }.assert().containsExactly(1L, 2L)
+    }
+
     /** The latches of `LateSettlementTest`: a verification between a publication's head write and its index write. */
     @Test
     fun `a verification between a head write and its index write finds a note, not a finding`() = runBlocking<Unit> {

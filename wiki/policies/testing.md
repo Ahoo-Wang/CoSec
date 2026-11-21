@@ -355,8 +355,17 @@ The window closes:
   `cosec.control.shadow.min-samples` (1,000) samples other than `BASE_MISMATCH`;
 - at `cosec.control.shadow.max-duration` (24 hours) with fewer, as *insufficient*.
 
-The control plane looks at every open window each `cosec.control.shadow.check-interval` (default 1 minute), on one
-control-plane instance at a time. When a window closes, the change becomes `READY`, or `AWAITING_APPROVAL` when it needs
+An instance that has reported on a window must keep reporting until it closes. One whose report is gone (it stopped
+serving, or its report was lost in a Redis failover) is missing evidence, never zero decisions: it may be the one that
+saw the narrowed requests. The window waits for it, logging `Shadow window <w> of change <c> is waiting for [<instances>]`,
+whatever the others report; an instance rewrites its cumulative report every `cosec.authorization.shadow.report-interval`,
+so one that still serves comes back. At `max-duration` the window closes *insufficient*, its summary naming the vanished
+instances in `vanished`, and never passes (`CTL-56`).
+
+The control plane looks at the open windows each `cosec.control.shadow.check-interval` (default 1 minute), on one
+control-plane instance at a time, starting with the ones it looked at longest ago: a pass the interval cuts short logs
+`looked at <k> of <n> windows`, and the next pass starts behind the cut. A shadowing change whose record does not read is
+skipped, with a `WARN` naming it at most once an hour, and the other windows are looked at. When a window closes, the change becomes `READY`, or `AWAITING_APPROVAL` when it needs
 [approval](#approval). If the document's revision moved meanwhile, it becomes `CONFLICTED`. The data plane takes part
 with `cosec-cocache` and `cosec.authorization.shadow.*` (on by default, sampling 10 % of requests).
 

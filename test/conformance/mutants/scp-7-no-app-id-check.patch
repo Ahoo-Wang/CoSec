@@ -1,0 +1,18 @@
+# Rule: SCP-7
+# Mutant: a credential's app is never checked to be an app id: an app with ':', '*' or a control character reaches the scope
+# Tests: :model:test --tests me.ahoo.cosec.model.scope.ScopeResolverTest :conformance:test --tests me.ahoo.cosec.conformance.ConformanceTest
+
+diff --git a/core/model/src/main/kotlin/me/ahoo/cosec/model/scope/ScopeResolver.kt b/core/model/src/main/kotlin/me/ahoo/cosec/model/scope/ScopeResolver.kt
+index 772967381..363bc61e9 100644
+--- a/core/model/src/main/kotlin/me/ahoo/cosec/model/scope/ScopeResolver.kt
++++ b/core/model/src/main/kotlin/me/ahoo/cosec/model/scope/ScopeResolver.kt
+@@ -71,9 +71,6 @@ object ScopeResolver {
+     /** [space] is what the client selects (`CoSec-Space-Id`), empty for none. */
+     fun resolve(subject: ScopeSubject, space: String, host: HostScope): ScopeResolution {
+         val credentialApp = subject.app
+-        if (credentialApp != null && !isValidAppId(credentialApp)) {
+-            return APP_MISMATCH
+-        }
+         val hostApp = host.app
+         if (subject.authenticated && hostApp != null && credentialApp != hostApp.value) {
+             return APP_MISMATCH

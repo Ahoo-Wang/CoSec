@@ -36,6 +36,7 @@ import me.ahoo.cosec.control.lifecycle.LockoutCheck
 import me.ahoo.cosec.control.lifecycle.ShadowOptions
 import me.ahoo.cosec.control.lifecycle.ShadowWindows
 import me.ahoo.cosec.control.store.ControlStore
+import me.ahoo.cosec.control.store.ControlStoreException
 import me.ahoo.cosec.control.store.InMemoryControlStore
 import me.ahoo.cosec.control.store.MutableClock
 import me.ahoo.cosec.control.store.Publication
@@ -65,6 +66,7 @@ import me.ahoo.cosec.spi.membership.InMemoryMembershipProvider
 import me.ahoo.cosec.spi.shadow.InMemoryShadowReports
 import me.ahoo.cosec.spi.shadow.InstanceStatus
 import me.ahoo.cosec.spi.shadow.ShadowOutcome
+import me.ahoo.cosec.spi.shadow.ShadowReadings
 import me.ahoo.cosec.spi.shadow.ShadowReport
 import me.ahoo.cosec.spi.shadow.ShadowReportReader
 import me.ahoo.cosec.spi.snapshot.SnapshotFormatException
@@ -292,16 +294,114 @@ class ControlRoundTwoFixesTest {
         written.write(report("pod-b", 0, window))
         // Not enough samples yet: the window stays open, and the control plane keeps who has reported.
         changes.shadowed(change.id).shadow!!.reporters.assert().isEqualTo(setOf("pod-a", "pod-b"))
-        // pod-b vanishes from the window's reporters: enough samples or not, the window does not close without it.
+        // pod-b vanishes from the window's reporters: enough samples or not, the window waits for it (CTL-56).
         written.write(report("pod-a", 20, window))
         vanished += "pod-b"
-        refused { changes.shadowed(change.id) }.status.assert().isEqualTo(503)
+        changes.shadowed(change.id).shadow!!.closed.assert().isNull()
         changes.get(change.id).state.assert().isEqualTo(ChangeState.SHADOWING)
         // Back, with the error it saw: the window closes blocked.
         vanished.clear()
         written.write(report("pod-b", 0, window, errors = 1))
         changes.shadowed(change.id).shadow!!.closed!!.blocked.assert().isTrue()
     }
+
+    /**
+     * `CTL-56`: an instance that reported on a window and has no report at the longest window is missing evidence,
+     * never zero: the window closes insufficient, naming it, and does not pass however many samples the others have.
+     */
+    @Test
+    fun `a window whose reporter vanished closes insufficient at the longest window, naming it - CTL-56`() =
+        runBlocking<Unit> {
+            val written = InMemoryShadowReports(clock)
+            val vanished = HashSet<String>()
+            val reader = object : ShadowReportReader {
+                override suspend fun reports(
+                    window: String
+                ) = written.reports(window).filter { it.instance !in vanished }
+
+                override suspend fun statuses(): List<InstanceStatus> = emptyList()
+            }
+            val changes = changes(reports = reader, shadow = ShadowOptions(Duration.ZERO, 10, Duration.ofHours(1)))
+            val change = changes.propose(
+                pia,
+                SnapshotKey.Platform,
+                1,
+                listOf(Operation.PutPolicy(writer.copyAs("more"))),
+                "x"
+            )
+            val window = changes.stage(pia, change.id).shadow!!.window
+            written.write(report("pod-a", 0, window))
+            written.write(report("pod-b", 0, window))
+            changes.shadowed(change.id).shadow!!.closed.assert().isNull()
+            written.write(report("pod-a", 50, window))
+            vanished += "pod-b"
+            clock.now = clock.now.plus(Duration.ofMinutes(59))
+            changes.shadowed(change.id).shadow!!.closed.assert().describedAs("before the longest window").isNull()
+            clock.now = clock.now.plus(Duration.ofMinutes(2))
+            val closed = changes.shadowed(change.id).shadow!!.closed!!
+            closed.insufficient.assert().isTrue()
+            closed.blocked.assert().isFalse()
+            closed.vanished.assert().containsExactly("pod-b")
+            closed.needsAck.assert().isTrue()
+            changes.get(change.id).shadow!!.closed!!.vanished.assert().describedAs("as stored").containsExactly("pod-b")
+        }
+
+    /**
+     * `CTL-56`: a report the reader names unreadable (listed, missing or not decoding) is missing evidence, even from an
+     * instance the control plane never saw report: the window waits, then closes insufficient naming it. A store that
+     * does not answer is neither: every look fails (503) and the window stays shadowing, past its longest too.
+     */
+    @Test
+    fun `an unreadable report waits then closes insufficient, a store outage does neither - CTL-56`() =
+        runBlocking<Unit> {
+            val written = InMemoryShadowReports(clock)
+            val unreadable = HashSet<String>()
+            var down = false
+            val reader = object : ShadowReportReader {
+                override suspend fun reports(window: String) = error("the control plane reads readings")
+
+                override suspend fun readings(window: String): ShadowReadings {
+                    if (down) throw ControlStoreException("Redis did not answer")
+                    return ShadowReadings(
+                        written.reports(window).filter { it.instance !in unreadable },
+                        unreadable.toSet()
+                    )
+                }
+
+                override suspend fun statuses(): List<InstanceStatus> = emptyList()
+            }
+            val changes = changes(reports = reader, shadow = ShadowOptions(Duration.ZERO, 10, Duration.ofHours(1)))
+            val proposed = { note: String ->
+                runBlocking {
+                    changes.propose(
+                        pia,
+                        SnapshotKey.Platform,
+                        1,
+                        listOf(Operation.PutPolicy(writer.copyAs(note))),
+                        note
+                    )
+                }
+            }
+            val change = proposed("more")
+            val window = changes.stage(pia, change.id).shadow!!.window
+            written.write(report("pod-a", 50, window))
+            unreadable += "pod-b"
+            changes.shadowed(change.id).shadow!!.closed.assert().describedAs("waits for pod-b").isNull()
+            clock.now = clock.now.plus(Duration.ofMinutes(61))
+            val closed = changes.shadowed(change.id).shadow!!.closed!!
+            closed.insufficient.assert().isTrue()
+            closed.vanished.assert().containsExactly("pod-b")
+            // A store outage: no look answers, and the window neither waits it out nor closes, past its longest too.
+            changes.abandon(pia, change.id)
+            val other = proposed("other")
+            changes.stage(pia, other.id)
+            down = true
+            refused { changes.shadowed(other.id) }.status.assert().isEqualTo(503)
+            clock.now = clock.now.plus(Duration.ofHours(2))
+            refused { changes.shadowed(other.id) }.status.assert().isEqualTo(503)
+            changes.get(other.id).state.assert().isEqualTo(ChangeState.SHADOWING)
+            changes.get(other.id).shadow!!.closed.assert().isNull()
+        }
 
     @Test
     fun `an approval keeps every attribute of its approver, so that publishing checks what it was decided on`() = runBlocking<Unit> {
@@ -376,10 +476,10 @@ class ControlRoundTwoFixesTest {
                 credentialId = "token-pia",
             )
         )
-        authorityOf(engine.authorizer).approverProblem(approved, needed, walt).assert().isNull()
+        authorityOf(engine.authorizer).approvals.approverProblem(approved, needed, walt).assert().isNull()
         val noLonger = "the approver no longer holds cosec:approve on the document"
         // An authorizer that cannot check a recorded principal, or fails to, does not count it.
-        authorityOf(PERMIT_ALL).approverProblem(approved, needed, walt).assert().isEqualTo(noLonger)
+        authorityOf(PERMIT_ALL).approvals.approverProblem(approved, needed, walt).assert().isEqualTo(noLonger)
         val failing = object : me.ahoo.cosec.control.authz.ControlAuthorizer {
             override suspend fun decide(
                 operator: Operator,
@@ -396,12 +496,12 @@ class ControlRoundTwoFixesTest {
                 resource: me.ahoo.cosec.model.Resource,
             ): me.ahoo.cosec.control.authz.ControlDecision = error("down")
         }
-        authorityOf(failing).approverProblem(approved, needed, walt).assert().isEqualTo(noLonger)
+        authorityOf(failing).approvals.approverProblem(approved, needed, walt).assert().isEqualTo(noLonger)
         // An approver the hard rule keeps from the document never counts, whatever its policies say.
         val elsewhere = approved.copy(
             approval = approved.approval!!.copy(approver = alice.actor, memberships = alice.memberships)
         )
-        authorityOf(PERMIT_ALL).approverProblem(elsewhere, needed, walt).assert().isEqualTo(noLonger)
+        authorityOf(PERMIT_ALL).approvals.approverProblem(elsewhere, needed, walt).assert().isEqualTo(noLonger)
         // The pipeline's authorizer: no request, no decision; documents it cannot confirm, no decision either.
         val principal = me.ahoo.cosec.spi.authn.AuthenticatedPrincipal(
             pia.actor.principal,
@@ -454,15 +554,15 @@ class ControlRoundTwoFixesTest {
         )
         val noLonger = "the approver no longer holds cosec:approve on the document"
         directory.put(pia.actor.tenant, pia.actor.principal, provided)
-        authority.approverProblem(approved, needed, walt).assert().isNull()
+        authority.approvals.approverProblem(approved, needed, walt).assert().isNull()
         directory.put(
             pia.actor.tenant,
             pia.actor.principal,
             Memberships(Memberships.Source.PROVIDER, provided.roles, provided.attachments, active = false),
         )
-        authority.approverProblem(approved, needed, walt).assert().isEqualTo(noLonger)
+        authority.approvals.approverProblem(approved, needed, walt).assert().isEqualTo(noLonger)
         directory.remove(pia.actor.tenant, pia.actor.principal)
-        authority.approverProblem(approved, needed, walt).assert().isEqualTo(noLonger)
+        authority.approvals.approverProblem(approved, needed, walt).assert().isEqualTo(noLonger)
         val recordedInactive = approved.copy(
             approval = approved.approval!!.copy(
                 memberships = Memberships(
@@ -473,7 +573,11 @@ class ControlRoundTwoFixesTest {
                 )
             )
         )
-        authority.approverProblem(recordedInactive, needed, walt).assert().isEqualTo("the approver is deactivated")
+        authority.approvals.approverProblem(
+            recordedInactive,
+            needed,
+            walt
+        ).assert().isEqualTo("the approver is deactivated")
     }
 
     /**
@@ -499,9 +603,9 @@ class ControlRoundTwoFixesTest {
             credentialId = "token-pia",
         )
         val authority = ChangeAuthority(engine.authorizer, revocations = RevocationReader.NONE)
-        authority.approverProblem(change.copy(approval = approval), needed, walt).assert().isNull()
+        authority.approvals.approverProblem(change.copy(approval = approval), needed, walt).assert().isNull()
         val capped = approval.copy(principalBindings = false)
-        authority.approverProblem(change.copy(approval = capped), needed, walt)
+        authority.approvals.approverProblem(change.copy(approval = capped), needed, walt)
             .assert().isEqualTo("the approver no longer holds cosec:approve on the document")
         val stored = ChangeRequestCodec.decode(ChangeRequestCodec.encode(change.copy(approval = capped))).approval!!
         stored.principalBindings.assert().isFalse()

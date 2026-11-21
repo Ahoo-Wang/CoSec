@@ -1,0 +1,16 @@
+# Rule: RTE-3
+# Mutant: a route may carry a field the format does not have, which is read as written and its meaning dropped
+# Tests: :document:test --tests me.ahoo.cosec.document.route.RouteMapTest :conformance:test --tests me.ahoo.cosec.conformance.ConformanceTest
+
+diff --git a/core/document/src/main/kotlin/me/ahoo/cosec/document/route/RouteMapCodec.kt b/core/document/src/main/kotlin/me/ahoo/cosec/document/route/RouteMapCodec.kt
+index 0fa750038..0ca3c97a9 100644
+--- a/core/document/src/main/kotlin/me/ahoo/cosec/document/route/RouteMapCodec.kt
++++ b/core/document/src/main/kotlin/me/ahoo/cosec/document/route/RouteMapCodec.kt
+@@ -58,7 +58,6 @@ object RouteMapCodec {
+             routes.values().mapIndexed { i, node ->
+                 val path = "$.routes[$i]"
+                 if (!node.isObject) fail(path, "a route is an object")
+-                only(node, ROUTE_FIELDS.toSet(), path, ::fail)
+                 Route(
+                     text(node, "method", path, ::fail),
+                     text(node, "path", path, ::fail),
