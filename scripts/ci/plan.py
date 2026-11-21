@@ -50,14 +50,18 @@ UNCOVERED = {"conformance", "architecture", "e2e", "client-host", "system-test",
 # Projects run in a job of their own instead of their group's, to even out the jobs' wall time.
 SPLIT = set()
 
-# What changes everything. A change to how the build runs, to what CI runs, or to the two projects that read every other
-# one (conformance reads every module's tests and applies every mutant to their sources; architecture reads every
-# module's dependencies and sources) can break any group. First match wins, and everything the plan cannot attribute
-# lands here too: the safe direction is the default.
+# What changes everything: how the build runs, or what CI runs. First match wins, and everything the plan cannot
+# attribute lands here too: the safe direction is the default. `test/conformance/` and `test/architecture/` are not
+# here: they read the whole tree, but nothing depends on them and their rules, scenarios, ledgers and patches are
+# inputs of their own tests, so a change to one is a change of the group `test`, which always runs (ReadsTest).
 EVERYTHING = (
     "build.gradle.kts", "settings.gradle.kts", "gradle.properties", "codecov.yml", "renovate.json",
-    "gradle/", "buildSrc/", "config/", "bom/", "scripts/", ".github/", "test/conformance/", "test/architecture/",
+    "gradle/", "buildSrc/", "config/", "bom/", "scripts/", ".github/",
 )
+
+# A JSON resource of any project: document's tests walk the repository and check every one against its format
+# (RepositoryDocuments), so a change to one runs `document`, whichever project it is in.
+JSON_RESOURCE = re.compile(r"^[^/]+/[^/]+/src/[^/]+/resources/.*\.json$")
 
 # Files outside any project that a project's tests read (through the repository root): a change to one runs that
 # project's group, and not its dependents', since they read nothing of it. ReadsTest holds this to the test sources: a
@@ -70,8 +74,8 @@ READS = {
     "contract/": ("runtime", "jwt"),
 }
 
-# Outside every project, read by no group's tests: the TypeScript jobs, `docs`, `k8s` and the project `test` (below) run
-# whatever changed, and cover these.
+# Outside every project, read by the tests of no project outside the group `test` (ReadsTest holds the claim): the
+# TypeScript jobs and the group `test` run whatever changed, and cover these.
 NO_GROUP = ("docs/", "typescript/")
 
 # Root files that are documentation: RepositoryDocuments (document's tests) reads every one.
@@ -205,6 +209,9 @@ def affected(paths, plan_result):
         directory = "/".join(parts[:2])
         if directory in directories:
             reach(directories[directory], f"`{path}` changed")
+            if JSON_RESOURCE.match(path) and not path.startswith("test/conformance/"):
+                hit.add("document")
+                reasons.setdefault("document", f"its tests read every project's JSON resources (`{path}` changed)")
         elif any(path.startswith(prefix) for prefix in READS):
             prefix = next(prefix for prefix in READS if path.startswith(prefix))
             for name in READS[prefix]:

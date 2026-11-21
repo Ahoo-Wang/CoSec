@@ -51,8 +51,6 @@ class EverythingRuns(unittest.TestCase):
             "gradle/wrapper/gradle-wrapper.properties", "buildSrc/src/main/kotlin/A.kt", "config/detekt/detekt.yml",
             "codecov.yml", "renovate.json", ".github/workflows/ci.yml", ".github/labeler.yml", "scripts/ci/plan.py",
             "scripts/jmh-ab/compare.py", "bom/dependencies/build.gradle.kts", "bom/bom/build.gradle.kts",
-            "test/architecture/src/test/kotlin/A.kt", "test/conformance/src/test/resources/rules/ACT.json",
-            "test/conformance/mutants/a.patch",
         ):
             ran, skipped, why = run("docs/x.md", path)
             self.assertEqual(set(ALL), ran, path)
@@ -155,6 +153,25 @@ class FilesOutsideTheProjects(unittest.TestCase):
             self.assertEqual({"test"}, ran, path)
             self.assertEqual(set(ALL) - {"test"}, set(skipped), path)
 
+    def test_conformance_and_architecture_are_projects_of_the_group_test_like_the_others(self):
+        for path in (
+            "test/conformance/src/test/resources/rules/ACT.json", "test/conformance/mutants/a.patch",
+            "test/conformance/src/test/resources/scenarios/ACT/a.json", "test/architecture/src/test/kotlin/A.kt",
+            "test/architecture/src/test/kotlin/SourceSizeLedger.kt",
+        ):
+            ran, skipped, why = run(path)
+            self.assertEqual({"test"}, ran, path)
+            self.assertIsNone(why)
+            self.assertEqual(set(ALL) - {"test"}, set(skipped), path)
+
+    def test_a_json_resource_of_any_project_runs_document_which_checks_every_one(self):
+        ran, _, _ = run("edge/gateway/src/test/resources/x.json")
+        self.assertEqual({"core", "edge", "host", "test"}, ran)
+        # a Kotlin file of the same project does not
+        self.assertEqual({"edge", "host", "test"}, run("edge/gateway/src/test/kotlin/A.kt")[0])
+        # conformance's own data is skipped by RepositoryDocuments
+        self.assertEqual({"test"}, run("test/conformance/src/test/resources/rules/ACT.json")[0])
+
     def test_a_dependency_of_a_reader_does_not_run_through_a_file_it_does_not_read(self):
         # `document` reads wiki/; `runtime` depends on `document` and reads nothing of it, but is listed on its own
         self.assertNotIn("migration", run("wiki/policies/language.md")[0])
@@ -171,9 +188,13 @@ class TheReadsTableHoldsToTheTestSources(unittest.TestCase):
     """A project whose tests name a directory outside every project is in READS for it, or its group never runs on a
     change there. A test group project is covered: the group always runs."""
 
-    LITERAL = re.compile(r'"((?:wiki|skills|k8s|schema|contract|docs|typescript)/[^"\n]*|wiki|skills|k8s|contract|typescript)"')
+    LITERAL = re.compile(
+        r'"((?:wiki|skills|k8s|schema|contract|docs|typescript)/[^"\n]*|wiki|skills|k8s|contract|typescript|docs)"'
+    )
     # What a name in a test source is not a read of: a test that skips the directory, or a temporary file.
-    NOT_A_READ = {("document", "docs"), ("runtime", "contract")}
+    NOT_A_READ = {
+        ("document", "docs"),  # RepositoryDocuments skips it (SKIPPED_DIRECTORIES)
+    }
 
     def test_every_project_naming_a_directory_is_listed_for_it(self):
         tracked = subprocess.run(["git", "ls-files", "*/*/src/test/*", "*/*/src/testFixtures/*"], cwd=ROOT, check=True,
@@ -192,6 +213,33 @@ class TheReadsTableHoldsToTheTestSources(unittest.TestCase):
                 if name not in readers:
                     missing.append(f"{name} names `{literal[:60]}` ({tracked_file})")
         self.assertEqual([], sorted(set(missing)), "add the project to READS, or to NOT_A_READ with its reason")
+
+    def test_no_project_outside_the_group_test_depends_on_conformance_or_architecture_or_names_them(self):
+        """The narrowing rests on it: a change to either is a change of the group `test` and of nothing else."""
+        always = set(projects_of("test"))
+        for name, edges in RESULT["graph"].items():
+            if name not in always:
+                self.assertFalse({"conformance", "architecture"} & set(edges), f"{name} depends on one")
+        tracked = subprocess.run(
+            ["git", "ls-files", "api", "core", "backends", "edge", "extensions", "host", "migration", "platform"],
+            cwd=ROOT, check=True, capture_output=True, text=True).stdout.split("\n")
+        pattern = re.compile(r'test/(conformance|architecture)|":(conformance|architecture)"')
+        named = []
+        for tracked_file in tracked:
+            # build scripts and test sources: a comment in a main source names them without reading them
+            if not (tracked_file.endswith(".kts") or "/src/test" in tracked_file and tracked_file.endswith((".kt", ".java"))):
+                continue
+            if pattern.search((ROOT / tracked_file).read_text()) and tracked_file.split("/")[1] not in always:
+                named.append(tracked_file)
+        # RepositoryDocuments names test/conformance/ to skip it: the one reviewed mention
+        self.assertEqual(["core/document/src/test/kotlin/me/ahoo/cosec/document/format/RepositoryDocuments.kt"], named)
+        self.assertIn('startsWith("test/conformance/")',
+                      (ROOT / named[0]).read_text(), "it skips conformance's data, it does not read it")
+
+    def test_document_still_walks_every_projects_json_resources(self):
+        source = (ROOT / "core/document/src/test/kotlin/me/ahoo/cosec/document/format/RepositoryDocuments.kt").read_text()
+        self.assertIn("root.walkTopDown()", source)
+        self.assertIn('Regex("/src/[^/]+/resources/")', source)
 
     def test_the_names_in_reads_are_projects(self):
         for prefix, owners in plan.READS.items():
