@@ -143,7 +143,8 @@ the adapters, snapshots or the control plane. The parts that take several files 
   starter bring CosId, since CoSec owns its ids through `IdGenerator`), `SourceRulesTest`
   (Reactor only in edge and host, plus cocache's reactive Redis client, never in its public signatures; no Spring, Servlet or Redis client
   in `api/` and `core/`; no backend class references `runtime`; backends reach into `control` only through the listed ports and into
-  `document` only through the mapper and the codec of a format they store (`ShadowCodec`): a backend stores bytes and
+  `document` only through the mapper, the rule a stored record's format number is read by (`StoredFormat`) and the codec of a
+  format they store (`ShadowCodec`): a backend stores bytes and
   never reads what a document grants; `kafka` reaches into `control` only through the change listener port;
   opt-ins to `InternalCoSecApi` only in CoSec's own Kotlin sources, so never in a doc sample),
   `JacksonSignatureTest` (no Jackson type in a public signature of `api/` or `core/`, no Reactor type in one of
@@ -264,7 +265,7 @@ Each one exists for a reason, and each has tests guarding it. Never weaken a tes
 | Invariant | Why | Guard |
 |---|---|---|
 | **Deny-first**: no `ALLOW` wins over a matching `DENY`, whatever document either comes from | Otherwise adding a policy can widen access | `EnginePropertyTest` (ALG-1, `P1'`), the ALG conformance scenarios |
-| **Fail closed**: a failing `DENY`, an unreadable document, a failing or slow SPI never permit; Indeterminate is 503, an unmodelled error 500. Only exceptions: rate limit rules without `strictFailure`, and verifying a request's token while the revocation store cannot be read (documented; never refresh, `IDN-14`) | An outage must not open the gate | `FlatEnginePropertyTest` (`P9`), `PipelineTest` (PIP-2, PIP-4), `CoCacheRevocationReaderTest` (PIP-7) |
+| **Fail closed**: a failing `DENY`, an unreadable document, a failing or slow SPI never permit; Indeterminate is 503, an unmodelled error 500. Only exceptions: rate limit rules without `strictFailure`, verifying a request's token while the revocation store cannot be read (documented; never refresh, `IDN-14`), and deciding on the documents already installed while their reload fails (documented; a tenant in `fail-closed.tenants`, where `*` names every tenant, is refused past `max-lag`, `SNP-5`) | An outage must not open the gate | `FlatEnginePropertyTest` (`P9`), `PipelineTest` (PIP-2, PIP-4), `CoCacheRevocationReaderTest` (PIP-7) |
 | **One decision path**: outcomes and status codes come only from `StatusMapping`; adapters never see a `Decision` | Three adapters must answer identically | `OneDecisionPathTest`, `WebAdapterParityTest` |
 | **No blocking on the event loop**: the data plane's SPIs suspend, and implementations use non-blocking clients; `SnapshotSource.peek` does no I/O; a local cache hit answers on the caller's thread | Blocking a Netty thread stalls every request on it | `SnapshotStoreBlockHoundTest`, `PipelineBlockHoundTest`, `SuspendingRedisRateLimitingTest`, `RuntimeBoundaryTest` |
 | **Authorization is a pure decision**: the engine does no I/O and keeps no state; obligations run only after a permit, so denied requests never spend a rate-limit permit | Keeps evaluation fast, predictable and explainable | `EnginePurityTest`, `RateLimitObligationTest` (engine and runtime, OBL-1) |
