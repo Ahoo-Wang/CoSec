@@ -1,10 +1,11 @@
 codecov:
   notify:
-    # One upload per CI test job with coverage, and the TypeScript one (scripts/ci/plan.py fails CI when this count is wrong): the statuses
-    # wait for all of them, so a partial merge is never reported as the commit's coverage.
-    after_n_builds: 8
-comment:
-  after_n_builds: 8
+    # Statuses and the comment are sent once, by the `Codecov notify` job of ci.yml, after every upload of the run has
+    # landed. Without it Codecov reports after the first upload: a pull request skips the test jobs its change cannot
+    # reach (scripts/ci/plan.py), so no fixed number of uploads can be awaited (`after_n_builds`), and a report sent
+    # after the TypeScript upload alone says "covered" for lines whose group has not uploaded yet. The flags below carry
+    # a skipped job's last report forward instead.
+    manual_trigger: true
 coverage:
   range: 60..100
   round: down
@@ -26,6 +27,22 @@ ignore:
   # The measurement harnesses: `main`s in test sources (never a main source) that CI compiles and never runs (docs/reviews/2026-11/README.md).
   - "**/src/test/**/*Measurement.kt"
 flags:
+  # One flag per test job that uploads (scripts/ci/plan.py fails CI when one is missing): a job a pull request skips
+  # keeps the coverage of the commit it is based on, which its change cannot have altered.
+  backends:
+    carryforward: true
+  core:
+    carryforward: true
+  edge:
+    carryforward: true
+  extensions:
+    carryforward: true
+  host:
+    carryforward: true
+  migration:
+    carryforward: true
+  test:
+    carryforward: true
   typescript:
     paths:
       - typescript/
