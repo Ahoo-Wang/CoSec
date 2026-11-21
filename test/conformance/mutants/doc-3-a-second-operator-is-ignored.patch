@@ -1,0 +1,17 @@
+# Rule: DOC-3
+# Mutant: a condition with two operators decodes as the first, so the second is silently dropped
+# Tests: :document:test --tests me.ahoo.cosec.document.PolicyDocumentCodecTest --tests me.ahoo.cosec.document.PolicyDocumentCompilerTest :conformance:test --tests me.ahoo.cosec.conformance.ConformanceTest
+
+diff --git a/core/document/src/main/kotlin/me/ahoo/cosec/document/ConditionJson.kt b/core/document/src/main/kotlin/me/ahoo/cosec/document/ConditionJson.kt
+index fde9b6f35..005136798 100644
+--- a/core/document/src/main/kotlin/me/ahoo/cosec/document/ConditionJson.kt
++++ b/core/document/src/main/kotlin/me/ahoo/cosec/document/ConditionJson.kt
+@@ -36,7 +36,7 @@ internal object ConditionJson {
+ 
+     fun read(node: DocumentNode): Condition {
+         val names = node.names()
+-        val operator = (names - IGNORE_CASE).singleOrNull()
++        val operator = (names - IGNORE_CASE).firstOrNull()
+             ?: node.fail("a condition has exactly one operator, found ${names.ifEmpty { listOf("none") }.joinToString()}")
+         val ignoreCase = node.field(IGNORE_CASE)?.bool()
+         if (ignoreCase != null && operator != "eq" && operator != "prefix") {

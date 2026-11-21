@@ -1,0 +1,17 @@
+# Rule: DOC-3
+# Mutant: an object may carry a field its reader does not name: it decodes and its meaning is dropped
+# Tests: :document:test --tests me.ahoo.cosec.document.PolicyDocumentCodecTest --tests me.ahoo.cosec.document.PolicyDocumentCompilerTest :conformance:test --tests me.ahoo.cosec.conformance.ConformanceTest
+
+diff --git a/core/document/src/main/kotlin/me/ahoo/cosec/document/DocumentNode.kt b/core/document/src/main/kotlin/me/ahoo/cosec/document/DocumentNode.kt
+index c8cb71ed0..454b80ca4 100644
+--- a/core/document/src/main/kotlin/me/ahoo/cosec/document/DocumentNode.kt
++++ b/core/document/src/main/kotlin/me/ahoo/cosec/document/DocumentNode.kt
+@@ -30,7 +30,7 @@ internal class DocumentNode(val json: JsonNode, val path: String) {
+         if (!json.isObject) {
+             fail("expected an object, found ${kind(json)}")
+         }
+-        val unknown = names().filter { it !in allowed }
++        val unknown = names().filter { false }
+         if (unknown.isNotEmpty()) {
+             fail(
+                 "unknown field${if (unknown.size > 1) "s" else ""} ${unknown.joinToString()}; expected ${allowed.joinToString()}"

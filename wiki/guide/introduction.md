@@ -73,6 +73,10 @@ CoSec fits when:
 It is a poor fit when your rules depend mainly on the data being returned (use row-level security in the
 database or rules in your domain code), or when your services are not on the JVM.
 
+The 8.0 API is a Kotlin API. An application written in Java configures the starter and writes its documents as any other
+does, but CoSec's types are designed to be called from Kotlin (value classes in signatures, suspending SPIs), and calling
+them from Java is not a goal of 8.0.
+
 ## How it fits into your application
 
 CoSec runs as a filter in front of your handlers: a `WebFilter` in WebFlux, a servlet `Filter` in Spring MVC,

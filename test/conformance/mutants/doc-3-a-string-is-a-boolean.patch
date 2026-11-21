@@ -1,0 +1,17 @@
+# Rule: DOC-3
+# Mutant: a JSON string is read as a boolean where the format has one: the wrong JSON type decodes
+# Tests: :document:test --tests me.ahoo.cosec.document.PolicyDocumentCodecTest --tests me.ahoo.cosec.document.PolicyDocumentCompilerTest :conformance:test --tests me.ahoo.cosec.conformance.ConformanceTest
+
+diff --git a/core/document/src/main/kotlin/me/ahoo/cosec/document/DocumentNode.kt b/core/document/src/main/kotlin/me/ahoo/cosec/document/DocumentNode.kt
+index c8cb71ed0..1c1fd1353 100644
+--- a/core/document/src/main/kotlin/me/ahoo/cosec/document/DocumentNode.kt
++++ b/core/document/src/main/kotlin/me/ahoo/cosec/document/DocumentNode.kt
+@@ -74,7 +74,7 @@ internal class DocumentNode(val json: JsonNode, val path: String) {
+     }
+ 
+     fun bool(): Boolean {
+-        if (!json.isBoolean) {
++        if (!json.isBoolean && !json.isString) {
+             fail("expected a boolean, found ${kind(json)}")
+         }
+         return json.asBoolean()

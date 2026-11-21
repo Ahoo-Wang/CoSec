@@ -104,7 +104,8 @@ class Changes(
     private val slots = StagingSlots(store, clock, options)
 
     private val flow = ChangeLifecycle(store, clock, options, slots, listeners, authority)
-    private val publishing = Publishing(flow, revisions, clock, authority, candidates, slots, listeners, movedHeads)
+    private val publishing =
+        Publishing(flow, revisions, clock, authority, authority.approvals, candidates, slots, listeners, movedHeads)
     private val staging = Staging(
         flow,
         publishing,
@@ -117,9 +118,19 @@ class Changes(
         windows,
         preemption,
     )
-    private val approvals = Approvals(flow, revisions, clock, authority, slots, listeners, preemption)
+    private val approvals = Approvals(
+        flow,
+        revisions,
+        clock,
+        authority,
+        authority.approvals,
+        slots,
+        listeners,
+        preemption
+    )
 
-    private val proposals = Proposals(flow, store, revisions, ids, clock, authority, candidates, listeners)
+    private val proposals =
+        Proposals(flow, store, revisions, ids, clock, authority, authority.approvals, candidates, listeners)
 
     /** The change [id]; one past its expiry is `EXPIRED` from then on. */
     suspend fun get(id: ChangeId): ChangeRequest = flow.get(id)

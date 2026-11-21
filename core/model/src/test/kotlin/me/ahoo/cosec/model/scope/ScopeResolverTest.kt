@@ -230,6 +230,16 @@ class ScopeResolverTest {
     fun `the app is checked before the space`() {
         rejectedFor(ScopeResolver.resolve(credential("billing"), "team-c", HostScope(AppId("order"))))
             .assert().isEqualTo(ScopeResolution.Rejected.Reason.APP_MISMATCH)
+        // A space no principal can be a member of (the wildcard, a reserved one) is no exception to the order (SCP-8).
+        for (space in listOf("*", "${ScopeResolver.RESERVED_SPACE_PREFIX}default")) {
+            rejectedFor(ScopeResolver.resolve(credential("billing"), space, HostScope(AppId("order"))))
+                .assert().describedAs(
+                    "space [$space] with another app"
+                ).isEqualTo(ScopeResolution.Rejected.Reason.APP_MISMATCH)
+            rejectedFor(ScopeResolver.resolve(credential("a:b"), space, noHost))
+                .assert().describedAs("space [$space] with an app that is no app id")
+                .isEqualTo(ScopeResolution.Rejected.Reason.APP_MISMATCH)
+        }
     }
 
     /** An anonymous subject is always in the default tenant; the resolver does not trust any other it is given. */

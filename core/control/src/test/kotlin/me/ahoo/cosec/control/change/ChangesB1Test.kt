@@ -142,6 +142,25 @@ class ChangesB1Test {
         unbound.escalations.map { it.reason.name }.assert().containsExactly("NOT_ANALYZED")
     }
 
+    @Test
+    fun `widening an app permission policy counts and names every tenant document that binds it - APR-6`() =
+        runBlocking<Unit> {
+            val order = SnapshotKey.App("order")
+            val globex = SnapshotKey.Tenant("globex")
+            publish(order, Operation.PutPolicy(allow("perm:order/read", action = "order:read")))
+            publish(ACME, Operation.PutBinding(bind("readers", "perm:order/read", app = "order")))
+            publish(globex, Operation.PutBinding(bind("readers", "perm:order/read", app = "order")))
+            val widened = fourEyes().propose(
+                PLATO,
+                order,
+                1,
+                listOf(Operation.PutPolicy(allow("perm:order/read", action = "order:*"))),
+                "widen",
+            )
+            val entry = widened.escalations.single { it.reason == Escalation.Reason.TENANT_BINDINGS }
+            entry.detail.assert().contains("up to 2 tenant documents").contains("tenant:acme").contains("tenant:globex")
+        }
+
     /** Changes over [store] with four-eyes on, so that every operator's change is analyzed as far as it goes. */
     private fun fourEyes(
         store: ControlStore = harness.memory,

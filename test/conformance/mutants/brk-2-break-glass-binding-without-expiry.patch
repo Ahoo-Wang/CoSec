@@ -1,0 +1,16 @@
+# Rule: BRK-2
+# Mutant: a break-glass binding needs no expiresAt: it never lapses
+# Tests: :engine:test --tests me.ahoo.cosec.engine.CompiledDocumentTest :conformance:test --tests me.ahoo.cosec.conformance.ConformanceTest
+
+diff --git a/core/engine/src/main/kotlin/me/ahoo/cosec/engine/BoundEntries.kt b/core/engine/src/main/kotlin/me/ahoo/cosec/engine/BoundEntries.kt
+index 27a460c91..cf06051d8 100644
+--- a/core/engine/src/main/kotlin/me/ahoo/cosec/engine/BoundEntries.kt
++++ b/core/engine/src/main/kotlin/me/ahoo/cosec/engine/BoundEntries.kt
+@@ -80,7 +80,6 @@ internal fun boundEntry(
+         require(binding.subject is SubjectRef.Principal) {
+             "Break-glass binding ${binding.id.value} must bind a principal"
+         }
+-        requireNotNull(binding.expiresAt) { "Break-glass binding ${binding.id.value} has no expiry" }
+         // RFC 0004 §4.8, RFC 0007 §8: root is for the platform's own administrators, never a tenant's principal.
+         require((binding.subject as SubjectRef.Principal).tenant == TenantId.PLATFORM) {
+             "Break-glass binding ${binding.id.value} must bind a principal of the platform tenant"

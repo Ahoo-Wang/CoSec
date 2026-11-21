@@ -1,0 +1,19 @@
+# Rule: CND-2
+# Mutant: a condition may hold one node more than the limit (the checker stops counting at maxNodes + 1)
+# Tests: :model:test --tests me.ahoo.cosec.model.condition.ConditionCheckerTest :conformance:test --tests me.ahoo.cosec.conformance.ConformanceTest
+
+diff --git a/core/model/src/main/kotlin/me/ahoo/cosec/model/condition/ConditionChecker.kt b/core/model/src/main/kotlin/me/ahoo/cosec/model/condition/ConditionChecker.kt
+index b02ae2e1a..6034dbdcc 100644
+--- a/core/model/src/main/kotlin/me/ahoo/cosec/model/condition/ConditionChecker.kt
++++ b/core/model/src/main/kotlin/me/ahoo/cosec/model/condition/ConditionChecker.kt
+@@ -94,8 +94,8 @@ class ConditionChecker(
+         }
+ 
+         fun check(condition: Condition, path: String, depth: Int): CheckedCondition? {
+-            if (nodes >= limits.maxNodes) {
+-                if (nodes == limits.maxNodes) {
++            if (nodes > limits.maxNodes) {
++                if (nodes == limits.maxNodes + 1) {
+                     nodes++
+                     error(path, "has more than ${limits.maxNodes} nodes")
+                 }

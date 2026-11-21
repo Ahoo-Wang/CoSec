@@ -1,0 +1,43 @@
+# Rule: RTL-1
+# Mutant: the rules after an exhausted one still spend their permits, though the request is already refused
+# Tests: :runtime:test --tests me.ahoo.cosec.runtime.ratelimit.RateLimitObligationTest :conformance:test --tests me.ahoo.cosec.conformance.ConformanceTest
+
+diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/stage/RunObligations.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/stage/RunObligations.kt
+index be74a3e28..170e4fc8a 100644
+--- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/stage/RunObligations.kt
++++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/stage/RunObligations.kt
+@@ -41,6 +41,7 @@ internal class RunObligations(private val rateLimiter: RateLimiter?, private val
+     override suspend fun run(state: RequestState): Outcome? {
+         val permit = state.decision as? Decision.Permit ?: return null
+         var tightest: RateLimitResult? = null
++        var exhausted: Outcome? = null
+         for (next in permit.obligations) {
+             // Exhaustive, with no else (OBL-3): a new kind of obligation does not compile until it is handled here, and
+             // a newer model beside this pipeline throws NoWhenBranchMatchedException, which `evaluate` answers 500.
+@@ -52,16 +53,19 @@ internal class RunObligations(private val rateLimiter: RateLimiter?, private val
+                 result == null && obligation.strictFailure ->
+                     return state.unavailable(Cause.RateLimiterUnavailable(obligation.ruleId))
+                 result == null -> continue
+-                !result.allowed -> return StatusMapping.tooManyRequests(
+-                    state.requestId,
+-                    permit,
+-                    obligation.ruleId,
+-                    result,
+-                    state.traceId,
+-                )
++                !result.allowed -> if (exhausted == null) {
++                    exhausted = StatusMapping.tooManyRequests(
++                        state.requestId,
++                        permit,
++                        obligation.ruleId,
++                        result,
++                        state.traceId,
++                    )
++                }
+                 tightest == null || result.remaining < tightest.remaining -> tightest = result
+             }
+         }
++        exhausted?.let { return it }
+         state.tightest = tightest
+         return null
+     }

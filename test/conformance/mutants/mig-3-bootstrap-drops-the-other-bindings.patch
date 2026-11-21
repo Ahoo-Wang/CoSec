@@ -1,0 +1,17 @@
+# Rule: MIG-3
+# Mutant: bootstrap writes the platform tenant's document with its own binding only: every other binding is lost
+# Tests: :migrate:test --tests me.ahoo.cosec.migrate.BootstrapKeepsDocumentTest :conformance:test --tests me.ahoo.cosec.conformance.ConformanceTest
+
+diff --git a/migration/migrate/src/main/kotlin/me/ahoo/cosec/migrate/Bootstrap.kt b/migration/migrate/src/main/kotlin/me/ahoo/cosec/migrate/Bootstrap.kt
+index b3e120ca5..e9ba90176 100644
+--- a/migration/migrate/src/main/kotlin/me/ahoo/cosec/migrate/Bootstrap.kt
++++ b/migration/migrate/src/main/kotlin/me/ahoo/cosec/migrate/Bootstrap.kt
+@@ -80,7 +80,7 @@ class Bootstrap(
+         }
+         val current = head?.document
+         val revision = (current?.revision ?: 0) + 1
+-        val bindings = current?.bindings.orEmpty().filterNot { it.id == binding.id } + binding
++        val bindings = listOf(binding)
+         // The document with the binding added, and everything else it holds kept: its policies, rate limits and roles
+         // (MIG-3). Only a publish writes provenance.
+         val candidate = current?.copy(revision = revision, publishedAt = clock.instant(), bindings = bindings, provenance = null)

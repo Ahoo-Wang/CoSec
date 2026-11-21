@@ -1,0 +1,17 @@
+# Rule: RTE-1
+# Mutant: two routes of one method overlap only when their patterns are written alike: /orders/{id} and /orders/new load together
+# Tests: :document:test --tests me.ahoo.cosec.document.route.RouteMapTest :runtime:test --tests me.ahoo.cosec.runtime.PipelineRoutesTest :conformance:test --tests me.ahoo.cosec.conformance.ConformanceTest
+
+diff --git a/core/document/src/main/kotlin/me/ahoo/cosec/document/route/RouteMap.kt b/core/document/src/main/kotlin/me/ahoo/cosec/document/route/RouteMap.kt
+index 87632dc5c..f96bc2b89 100644
+--- a/core/document/src/main/kotlin/me/ahoo/cosec/document/route/RouteMap.kt
++++ b/core/document/src/main/kotlin/me/ahoo/cosec/document/route/RouteMap.kt
+@@ -173,7 +173,7 @@ class RouteMap private constructor(private val routes: Map<String, List<Compiled
+                 for (j in i + 1 until compiled.size) {
+                     val a = compiled[i]
+                     val b = compiled[j]
+-                    if (a.route.method == b.route.method && !disjoint(a.route.path, b.route.path)) {
++                    if (a.route.method == b.route.method && a.route.path == b.route.path) {
+                         throw RouteMapException(
+                             "${routes[j].location}: ${b.route.method} ${b.route.path} and ${routes[i].location}: " +
+                                 "${a.route.method} ${a.route.path} may match the same request; a request has one action " +

@@ -1,0 +1,27 @@
+# Rule: RTE-3
+# Mutant: a route map file that does not decode is left out and the others load: a route map loads in part
+# Tests: :document:test --tests me.ahoo.cosec.document.route.RouteMapTest :conformance:test --tests me.ahoo.cosec.conformance.ConformanceTest
+
+diff --git a/core/document/src/main/kotlin/me/ahoo/cosec/document/route/RouteMapCodec.kt b/core/document/src/main/kotlin/me/ahoo/cosec/document/route/RouteMapCodec.kt
+index 0fa750038..18b56b0da 100644
+--- a/core/document/src/main/kotlin/me/ahoo/cosec/document/route/RouteMapCodec.kt
++++ b/core/document/src/main/kotlin/me/ahoo/cosec/document/route/RouteMapCodec.kt
+@@ -77,7 +77,17 @@ object RouteMapCodec {
+ 
+     /** The route map of the files [sources] (location to bytes): decoded, checked together, all or nothing. */
+     fun load(sources: List<Pair<String, ByteArray>>): RouteMap =
+-        RouteMap.of(located(sources.map { (location, bytes) -> location to decode(bytes, location) }))
++        RouteMap.of(
++            located(
++                sources.mapNotNull { (location, bytes) ->
++                    try {
++                        location to decode(bytes, location)
++                    } catch (_: RouteMapException) {
++                        null
++                    }
++                },
++            ),
++        )
+ 
+     fun encode(document: RouteMapDocument): ByteArray = CoSecJson.mapper.writerWithDefaultPrettyPrinter().writeValueAsBytes(
+         tree(document)
