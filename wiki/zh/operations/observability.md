@@ -156,6 +156,8 @@ kind 为 `INTERNAL`）。span 在决策之后根据请求的开始时间和管�
 
 所有 bean 创建完毕后，starter 记录一行 INFO，说明 CoSec 被配置成什么样，例如 `CoSec 8.0.0-beta.4: mode=enforce, web=servlet-filter, jwt=on (JwtTokenVerifier), token-cache=on (max-entries=16384), revocation-reader=the CoCache token store's (CoCacheRevocationReader), login=on, api-keys=off, rate-limiter=ReactiveRedisRateLimiter, listeners=[tracing, logging-audit], route-map=12 routes`。每一项都是请求实际遇到的东西，按认证器解析的方式得出：吊销读取器是应用的 bean、CoCache 令牌存储的读取器，或 `RevocationReader.NONE`（这一行会明确写出，因为此时被吊销的令牌在过期前都会被接受）；没有令牌校验（`jwt=off`）时没有读取器可写。`token-cache` 说明请求令牌是否从[已校验令牌缓存](../integration/authentication.md#the-verified-token-cache)作答：配置关闭时，或使用你自己的 `TokenVerifier` Bean 时为 `off`。应用声明了 `Authenticator` bean 时，它会替换 starter 自带的（[扩展](../architecture/extending.md)）：这一行会写成 `authenticator=<类名> (replaces CoSec's: tokens, revocation and API keys are its own)`，并且不再列出 `jwt`、`revocation-reader` 和 `api-keys`，因为它们都没有生效。写成 `false` 的开关会以 `switched-off-by-configuration=[...]` 追加。名为 `LocalRateLimiter` 的限流器按实例计数：有多个实例时，限额按实例数倍增。`cosec.enabled=false` 时这一行换成一条 WARN：`CoSec is off ... nothing is protected by CoSec`（[故障排查](./troubleshooting.md#the-log-says-cosec-is-off)）。
 
+运行控制面的宿主在启动完成后再记录一行 INFO：控制面提供什么、它的调用方从哪里来，例如 `Control plane: HTTP routes on /cosec/control (port 8080; service port 8082), caller from the forwarded identity (statement: only-trusted-callers-can-reach)`；在只从进程内访问控制面的应用里则是 `Control plane: no HTTP routes (cosec.control.http.enabled=false), caller from the credential`。端口是服务器实际绑定的端口。
+
 ## 指标 {#metrics}
 
 有 `cosec-micrometer` 和一个 `MeterRegistry`（例如来自 Spring Boot Actuator）时，每个决策事件都由计时器
