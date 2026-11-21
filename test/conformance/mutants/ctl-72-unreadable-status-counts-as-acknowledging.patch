@@ -1,0 +1,17 @@
+# Rule: CTL-72
+# Mutant: an instance whose status does not decode counts as acknowledging, so a window passes without the instance anyone read
+# Tests: :control:test --tests me.ahoo.cosec.control.lifecycle.ShadowAcknowledgementTest
+
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ShadowWindows.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ShadowWindows.kt
+index 033af5505..a75b31716 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ShadowWindows.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ShadowWindows.kt
+@@ -112,7 +112,7 @@ class ShadowWindows(
+         val live = read.statuses.filter { it.shadows }
+         val acknowledging = live.count { it.windows?.contains(window) == true }
+         // One whose status does not decode may shadow and has acknowledged nothing anyone read: waited for (CTL-72).
+-        val waiting = live.filter { it.windows?.contains(window) != true }.map { it.instance } + read.unreadable
++        val waiting = live.filter { it.windows?.contains(window) != true }.map { it.instance }
+         return Acknowledgement(acknowledging, waiting.sorted())
+     }
+ 

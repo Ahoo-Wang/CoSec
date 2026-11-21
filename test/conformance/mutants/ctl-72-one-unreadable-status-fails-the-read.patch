@@ -1,0 +1,17 @@
+# Rule: CTL-72
+# Mutant: one status that does not decode fails the whole read again, so every shadow window and propagation answer 503 while it is stored
+# Tests: :cocache:test --tests me.ahoo.cosec.cocache.shadow.StatusReadingsTest
+
+diff --git a/backends/cocache/src/main/kotlin/me/ahoo/cosec/cocache/shadow/CoCacheShadowReports.kt b/backends/cocache/src/main/kotlin/me/ahoo/cosec/cocache/shadow/CoCacheShadowReports.kt
+index c0482cc5f..964bbadaa 100644
+--- a/backends/cocache/src/main/kotlin/me/ahoo/cosec/cocache/shadow/CoCacheShadowReports.kt
++++ b/backends/cocache/src/main/kotlin/me/ahoo/cosec/cocache/shadow/CoCacheShadowReports.kt
+@@ -235,7 +235,7 @@ class CoCacheShadowReports @InternalCoSecApi constructor(
+         val status = try {
+             read(statuses, instance, "The status of instance [$instance]")?.first
+         } catch (e: SnapshotFormatException) {
+-            if (!lenient) throw e
++            if (lenient || !lenient) throw e
+             log.warn {
+                 "The status of instance [$instance] does not read: it counts as live and acknowledging no shadow " +
+                     "window until it reads or expires (${e.message})."
