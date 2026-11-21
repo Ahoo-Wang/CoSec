@@ -29,7 +29,12 @@ import kotlin.time.Duration
  * caller (`cosec.listener.failures`, `cosec.audit.required.failures`). While an audit store is down, a gateway logs a
  * line every [interval], not two per request on its event loops.
  */
-internal class RequiredFailureLog(private val scope: CoroutineScope, private val interval: Duration) {
+internal class RequiredFailureLog(
+    private val scope: CoroutineScope,
+    private val interval: Duration,
+    /** The clock an interval is measured on; a test holds it. */
+    private val nanos: () -> Long = System::nanoTime,
+) {
     private val lastNonPermit = AtomicLong(Long.MIN_VALUE)
 
     /** REQUIRED listener [listener] failed on request [request]: counted in [stats], logged at most once per interval. */
@@ -40,10 +45,11 @@ internal class RequiredFailureLog(private val scope: CoroutineScope, private val
         }
     }
 
-    /** The REQUIRED listeners [failed] failed on [event], which was no permit: the [failures]th such request. */
-    fun failedOnNonPermit(failed: List<String>, failures: Long, event: DecisionEvent) {
-        val request = event.requestId
-        val outcome = event.outcome
+    /**
+     * The REQUIRED listeners [failed] failed on [request], which was answered [outcome], no permit: the [failures]th
+     * such request.
+     */
+    fun failedOnNonPermit(failed: List<String>, failures: Long, request: String, outcome: OutcomeSummary) {
         offThread(lastNonPermit, null) {
             "REQUIRED decision listeners $failed failed on request [$request], answered $outcome " +
                 "($failures such requests so far)."
@@ -51,7 +57,7 @@ internal class RequiredFailureLog(private val scope: CoroutineScope, private val
     }
 
     private fun offThread(last: AtomicLong, error: Throwable?, message: () -> String) {
-        val now = System.nanoTime()
+        val now = nanos()
         val previous = last.get()
         if (previous != Long.MIN_VALUE && now - previous < interval.inWholeNanoseconds) return
         if (!last.compareAndSet(previous, now)) return
