@@ -1008,6 +1008,37 @@
         "control:ShadowAcknowledgementTest#a status that does not decode holds the window and is named, and propagation still answers",
         "spring-boot:ControlPlaneSwitchTest#the instance statuses that do not decode are counted - CTL-73"
       ]
+    },
+    {
+      "id": "CTL-74",
+      "source": "Review of 2026-11-21's merges, R3-11 (the size of a status); maintainer's coordinator, 2026-11-22",
+      "statement": "An instance's status is small: its instance, when, its format level, whether it shadows and the windows it acknowledges, and no document it holds. Liveness, the acknowledgement of a shadow window and the window's closing path read only statuses and never an instance's resident documents, so what they read per instance does not grow with the documents it holds.",
+      "level": "build",
+      "pending": null,
+      "guards": [
+        "cocache:StatusSplitTest#what the acknowledgement reads does not grow with the documents an instance holds",
+        "control:ShadowAcknowledgementTest#the closing path reads no resident record",
+        "document:ShadowCodecTest#a status of 8_0_0-beta_5 reads, its documents ignored"
+      ]
+    },
+    {
+      "id": "CTL-75",
+      "source": "Review of 2026-11-21's merges, R3-11 (the size of a status); maintainer's coordinator, 2026-11-22",
+      "statement": "The documents an instance holds, with the revision of each, are its resident record, a record of its own written before its status: when what it holds differs from what its last successful resident write held, and in any case once half the record's life (exactly one hour, no jitter) has passed since then. A resident write that fails does not stop the status write and stays owed: every cycle tries it again. `propagation` reads, at most every five seconds, the resident records of the instances with a live status only, counts those that hold the document and those that installed the revision, and counts as `unknown` every live instance whose resident record is missing or does not decode; no instance is behind only when `installed` equals `holding` and `unknown` is 0.",
+      "level": "control",
+      "pending": null,
+      "guards": [
+        "runtime:ResidentWriteTest#the resident documents are written before the status, and again only when they change",
+        "runtime:ResidentWriteTest#an unchanged resident record is written again once half its life has passed",
+        "runtime:ResidentWriteTest#a resident write that fails does not stop the status, and is tried again every cycle until it succeeds",
+        "cocache:StatusSplitTest#a resident record lives exactly its life after its last write",
+        "cocache:StatusSplitTest#a missing or undecodable resident record is unreadable, another's fails the read",
+        "cocache:CacheTtlPolicyTest#shadowCachesLiveUnderTheirStoragePathsAndFailClosed",
+        "control:PropagationTest#a live instance without a resident record is unknown, and a gone one's is not read - CTL-75",
+        "control:ClientContractTest#a propagation answer holds exactly the members of its contract file",
+        "document:ShadowCodecTest#resident documents read back as written, and a wrong revision is a format error",
+        "spi:ShadowValuesTest#the in-memory residents answer what was written within its life and name the rest"
+      ]
     }
   ]
 }

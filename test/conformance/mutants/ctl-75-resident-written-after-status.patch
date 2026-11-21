@@ -1,0 +1,24 @@
+# Rule: CTL-75
+# Mutant: the resident record is written after the status, so an instance is live for a cycle with documents nobody can read
+# Tests: :runtime:test --tests me.ahoo.cosec.runtime.shadow.ResidentWriteTest
+
+diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/shadow/ShadowReporter.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/shadow/ShadowReporter.kt
+index e8b0ac1ff..4c2e0f2f4 100644
+--- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/shadow/ShadowReporter.kt
++++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/shadow/ShadowReporter.kt
+@@ -94,7 +94,6 @@ class ShadowReporter(
+                 recorder.forget(window.report.window, window.recorded)
+             }
+         }
+-        writeResident()
+         val acknowledged = sight?.acknowledged()
+         attempt("the instance status") {
+             // Without CoSec's own candidate source nothing is compiled on sight: this instance cannot acknowledge a window,
+@@ -108,6 +107,7 @@ class ShadowReporter(
+                 )
+             )
+         }
++        writeResident()
+     }
+ 
+     /** Writes the resident documents when they changed since the last write that succeeded, or that write is half its life old. */

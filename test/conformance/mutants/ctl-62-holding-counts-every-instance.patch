@@ -3,15 +3,15 @@
 # Tests: :control:test --tests me.ahoo.cosec.control.lifecycle.PropagationTest
 
 diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ShadowWindows.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ShadowWindows.kt
-index 23c7e4e78..0dc430e19 100644
+index 634f510aa..ef6add167 100644
 --- a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ShadowWindows.kt
 +++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ShadowWindows.kt
 @@ -135,7 +135,7 @@ class ShadowWindows(
          return Propagation(
              revision,
-             holding.count { it.revision >= revision },
+             holding.count { it >= revision },
 -            holding.size,
-+            read.statuses.size,
-             read.statuses.size + read.unreadable.size,
-             read.asOf
-         )
++            read.live.size,
+             read.live.size,
+             read.readings.unreadable.size,
+             read.asOf,

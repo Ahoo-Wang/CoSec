@@ -13,14 +13,31 @@ description: "每个 8.0 预览版（alpha 与 beta）到下一个之间的变�
 
 | 你运行的版本 | 阅读 |
 |---|---|
-| `8.0.0-beta.4` | [从 beta.4 升级](#from-8-0-0-beta-4) |
-| `8.0.0-beta.3` | [从 beta.3 升级](#from-8-0-0-beta-3)，然后是上面那一节 |
-| `8.0.0-beta.2` | [从 beta.2 升级](#from-8-0-0-beta-2)，然后是上面两节 |
-| `8.0.0-beta.1` | [从 beta.1 升级](#from-8-0-0-beta-1)，然后是上面三节 |
-| `8.0.0-alpha.4` | [从 alpha.4 升级](#from-8-0-0-alpha-4)，然后是上面四节 |
+| `8.0.0-beta.5` | [从 beta.5 升级](#from-8-0-0-beta-5) |
+| `8.0.0-beta.4` | [从 beta.4 升级](#from-8-0-0-beta-4)，然后是上面那一节 |
+| `8.0.0-beta.3` | [从 beta.3 升级](#from-8-0-0-beta-3)，然后是上面两节 |
+| `8.0.0-beta.2` | [从 beta.2 升级](#from-8-0-0-beta-2)，然后是上面三节 |
+| `8.0.0-beta.1` | [从 beta.1 升级](#from-8-0-0-beta-1)，然后是上面四节 |
+| `8.0.0-alpha.4` | [从 alpha.4 升级](#from-8-0-0-alpha-4)，然后是上面五节 |
 | `8.0.0-alpha.3`、`alpha.2`、`alpha.1` | [从 alpha.3](#from-8-0-0-alpha-3)、[alpha.2](#from-8-0-0-alpha-2) 或 [alpha.1](#from-8-0-0-alpha-1) 升级，然后是它上面的每一节 |
 
 库的哪个预览版可以运行在网关镜像的哪个预览版之后：见[升级运行中的部署](./upgrading.md#upgrading-a-running-deployment)。
+
+## 从 8.0.0-beta.5 升级 {#from-8-0-0-beta-5}
+
+- **实例的状态拆分为两条记录**（`CTL-74`、`CTL-75`）。`<s>:shadow:status:<instance>` 处的状态现在很小（存活信息、`shadows`、
+  已确认的窗口），没有 `documents` 成员。实例持有的文档是一条独立的记录 `<s>:shadow:resident:<instance>`，只有
+  `propagation` 读取它（[存储](./storage.md#redis-keys)）。`propagation` 的应答多了一个成员 `unknown`，总是写出。
+  - **按这个顺序升级：先升级所有控制面实例，再升级数据面。** beta.6 的控制面能读取 beta.5 实例的状态（其中的
+    `documents` 被忽略），在该实例升级之前把它计入 `unknown`，因为它不写常驻记录。
+  - **beta.5 的控制面读不了 beta.6 的状态**：它要求有 `documents`。按 `CTL-73`，它把每个 beta.6 实例当作存活但什么都
+    不确认，于是每个影子窗口都会等待，到 `max-duration` 时以证据不足关闭。没有窗口会通过，也没有变更会被错误地发布；
+    控制面升级完成后，窗口照常关闭。
+- **SPI（实验性）：新增抽象方法 `ShadowReportSink.write(ResidentDocuments)` 和 `ShadowReportReader.residents(instances)`；
+  移除 `InstanceStatus.documents` 和 `InstalledDocument`。** 自己实现的后端要为每个实例另存一条记录，生命期为
+  `ShadowReportReader.RESIDENT_TTL`，`residents` 应答能读取的记录，并在 `unreadable` 中列出记录缺失或无法解码的实例
+  （[扩展](../architecture/extending.md)）。没有默认实现：回答“什么都不持有”的默认实现会让 `installed == holding` 在
+  并不知情时声称没有实例落后。
 
 ## 从 8.0.0-beta.4 升级 {#from-8-0-0-beta-4}
 

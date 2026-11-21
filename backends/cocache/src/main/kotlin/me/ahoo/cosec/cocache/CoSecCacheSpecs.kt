@@ -112,9 +112,10 @@ object CoSecCacheSpecs {
     /** The staged list (`CTL-46`), beside the candidates: CoCache keeps two caches' storage keys apart. */
     const val CANDIDATE_STAGED_CACHE_NAME = "CandidateStagedCache"
 
-    /** What each instance saw of each shadow window, and each instance's installed revisions (RFC 0007 §6.4, §6.5). */
+    /** What each instance saw of each shadow window, its status, and the documents it holds (RFC 0007 §6.4, §6.5). */
     const val SHADOW_REPORT_CACHE_NAME = "ShadowReportCache"
     const val INSTANCE_STATUS_CACHE_NAME = "InstanceStatusCache"
+    const val INSTANCE_RESIDENT_CACHE_NAME = "InstanceResidentCache"
 
     /** Which instances have a status to read: a short list, changed when an instance joins or leaves (#1214). */
     const val INSTANCE_INDEX_CACHE_NAME = "InstanceIndexCache"
@@ -138,28 +139,15 @@ object CoSecCacheSpecs {
         CANDIDATE_STAGED_CACHE_NAME,
     )
 
-    /** Names of the caches whose only copy is Redis. */
-    val STORE_OF_RECORD_CACHE_NAMES: Set<String> = setOf(
-        POLICY_SNAPSHOT_CACHE_NAME,
-        REVISION_RECORD_CACHE_NAME,
-        REVISION_INDEX_CACHE_NAME,
-        REFERENCE_INDEX_CACHE_NAME,
-        CONTROL_DOCUMENT_SET_CACHE_NAME,
-        CONTROL_CHANGE_SET_CACHE_NAME,
-        CONTROL_LEASE_CACHE_NAME,
-        CONTROL_LIST_CACHE_NAME,
-        CONTROL_APP_LIST_CACHE_NAME,
-        CHANGE_REQUEST_CACHE_NAME,
-        STAGE_CACHE_NAME,
-        CANDIDATE_CACHE_NAME,
-        CANDIDATE_STAGED_CACHE_NAME,
-    )
+    /** Names of the caches whose only copy is Redis: the snapshot documents and every control-plane cache. */
+    val STORE_OF_RECORD_CACHE_NAMES: Set<String> = setOf(POLICY_SNAPSHOT_CACHE_NAME) + CONTROL_CACHE_NAMES
 
     /** The shadow window's observations: they expire, but a failed read still fails (RFC 0007 §6.4, §6.5). */
     val SHADOW_CACHE_NAMES: Set<String> = setOf(
         SHADOW_REPORT_CACHE_NAME,
         SHADOW_REPORTER_CACHE_NAME,
         INSTANCE_STATUS_CACHE_NAME,
+        INSTANCE_RESIDENT_CACHE_NAME,
         INSTANCE_INDEX_CACHE_NAME,
     )
 
@@ -185,6 +173,7 @@ object CoSecCacheSpecs {
         SHADOW_REPORT_CACHE_NAME to "shadow:report",
         SHADOW_REPORTER_CACHE_NAME to "shadow:reporters",
         INSTANCE_STATUS_CACHE_NAME to "shadow:status",
+        INSTANCE_RESIDENT_CACHE_NAME to "shadow:resident",
         INSTANCE_INDEX_CACHE_NAME to "shadow:instances",
     )
 

@@ -24,8 +24,10 @@ import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.test.asserts.assert
 import me.ahoo.test.asserts.assertThrownBy
 import org.junit.jupiter.api.Test
+import java.time.Clock
 import java.time.Duration
 import java.time.Instant
+import java.time.ZoneOffset
 
 /** RFC 0007 §6.4, §6.5: the shadow window's values are compared by value, and a candidate names its window. */
 class ShadowValuesTest {
@@ -42,6 +44,8 @@ class ShadowValuesTest {
                 if (failing) error("[c1@1:i1] is listed as reported but has no report") else listOf(report)
 
             override suspend fun statuses(): List<InstanceStatus> = emptyList()
+
+            override suspend fun residents(instances: Set<String>) = ResidentReadings(emptyMap(), instances)
         }
         reader.readings("c1@1").assert().isEqualTo(ShadowReadings(listOf(report), emptySet()))
         reader.readings("c1@1").hashCode().assert().isEqualTo(ShadowReadings(listOf(report), emptySet()).hashCode())
@@ -55,27 +59,51 @@ class ShadowValuesTest {
     }
 
     @Test
-    fun `an installed document is its revision and its lag`() {
-        val installed = InstalledDocument(4, Duration.ofMillis(250))
-        installed.assert().isEqualTo(InstalledDocument(4, Duration.ofMillis(250)))
-        installed.hashCode().assert().isEqualTo(InstalledDocument(4, Duration.ofMillis(250)).hashCode())
-        installed.assert().isNotEqualTo(InstalledDocument(5, Duration.ofMillis(250)))
-        installed.assert().isNotEqualTo(InstalledDocument(4, Duration.ZERO))
-        (installed as Any).assert().isNotEqualTo("InstalledDocument(4, PT0.25S)")
-        installed.toString().assert().isEqualTo("InstalledDocument(4, PT0.25S)")
+    fun `resident documents are their instance, time and revisions, and readings name the unreadable`() {
+        val documents = mapOf<SnapshotKey, Long>(SnapshotKey.Platform to 9, SnapshotKey.Tenant("acme") to 4)
+        val resident = ResidentDocuments("i1", at, documents)
+        resident.assert().isEqualTo(ResidentDocuments("i1", at, documents))
+        resident.hashCode().assert().isEqualTo(ResidentDocuments("i1", at, documents).hashCode())
+        resident.assert().isNotEqualTo(ResidentDocuments("i2", at, documents))
+        resident.assert().isNotEqualTo(ResidentDocuments("i1", at, mapOf(SnapshotKey.Platform to 9L)))
+        (resident as Any).assert().isNotEqualTo(documents)
+        resident.toString().assert().startsWith("ResidentDocuments(i1, 2026-11-01T00:00:00Z, ")
+        val readings = ResidentReadings(mapOf("i1" to resident), setOf("i2"))
+        readings.assert().isEqualTo(ResidentReadings(mapOf("i1" to resident), setOf("i2")))
+        readings.hashCode().assert().isEqualTo(ResidentReadings(mapOf("i1" to resident), setOf("i2")).hashCode())
+        readings.assert().isNotEqualTo(ResidentReadings(mapOf("i1" to resident), emptySet()))
+        readings.toString().assert().contains("unreadable=[i2]")
+    }
+
+    /** `CTL-75`, in memory: a resident record is read for the instances asked, until its life ends; any other is missing. */
+    @Test
+    fun `the in-memory residents answer what was written within its life and name the rest`() = runBlocking<Unit> {
+        var now = at
+        val clock = object : Clock() {
+            override fun getZone() = ZoneOffset.UTC
+
+            override fun withZone(zone: java.time.ZoneId?) = this
+
+            override fun instant() = now
+        }
+        val reports = InMemoryShadowReports(clock)
+        val resident = ResidentDocuments("i1", at, mapOf(SnapshotKey.Platform to 9L))
+        reports.write(resident)
+        reports.residents(setOf("i1", "i2")).assert()
+            .isEqualTo(ResidentReadings(mapOf("i1" to resident), setOf("i2")))
+        now = at.plus(ShadowReportReader.RESIDENT_TTL).plus(Duration.ofSeconds(1))
+        reports.residents(setOf("i1")).unreadable.assert().containsExactly("i1")
     }
 
     @Test
-    fun `an instance status is its instance, time, documents and format level`() {
-        val documents =
-            mapOf<SnapshotKey, InstalledDocument>(SnapshotKey.Platform to InstalledDocument(9, Duration.ZERO))
-        val status = InstanceStatus("i1", at, documents)
+    fun `an instance status is its instance, time and format level`() {
+        val status = InstanceStatus("i1", at)
         status.formatLevel.assert().isEqualTo(InstanceStatus.FORMAT_LEVEL)
-        status.assert().isEqualTo(InstanceStatus("i1", at, documents))
-        status.hashCode().assert().isEqualTo(InstanceStatus("i1", at, documents).hashCode())
-        status.assert().isNotEqualTo(InstanceStatus("i2", at, documents))
-        status.assert().isNotEqualTo(InstanceStatus("i1", at, documents, formatLevel = 2))
-        (status as Any).assert().isNotEqualTo(documents)
+        status.assert().isEqualTo(InstanceStatus("i1", at))
+        status.hashCode().assert().isEqualTo(InstanceStatus("i1", at).hashCode())
+        status.assert().isNotEqualTo(InstanceStatus("i2", at))
+        status.assert().isNotEqualTo(InstanceStatus("i1", at, formatLevel = 2))
+        (status as Any).assert().isNotEqualTo("i1")
         status.toString().assert().startsWith("InstanceStatus(i1, 2026-11-01T00:00:00Z, ")
     }
 

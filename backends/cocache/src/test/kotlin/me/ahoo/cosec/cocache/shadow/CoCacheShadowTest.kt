@@ -34,7 +34,6 @@ import me.ahoo.cosec.cocache.snapshot.SnapshotNode
 import me.ahoo.cosec.cocache.snapshot.newKeyPrefix
 import me.ahoo.cosec.document.SnapshotDocuments
 import me.ahoo.cosec.document.shadow.ShadowCodec
-import me.ahoo.cosec.spi.shadow.InstalledDocument
 import me.ahoo.cosec.spi.shadow.InstanceStatus
 import me.ahoo.cosec.spi.shadow.ShadowOutcome
 import me.ahoo.cosec.spi.shadow.ShadowReport
@@ -46,7 +45,6 @@ import me.ahoo.test.asserts.assertThrownBy
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Test
 import java.time.Clock
-import java.time.Duration
 import java.time.Instant
 import java.time.ZoneId
 import java.time.ZoneOffset
@@ -165,14 +163,12 @@ class CoCacheShadowTest {
     @Test
     fun `statuses older than a minute are not counted`() = runBlocking<Unit> {
         val sink = CoCacheShadowReports.create(node().factory, keyPrefix, clock)
-        val installed = mapOf(key to InstalledDocument(5, Duration.ofSeconds(2)))
-        sink.write(InstanceStatus("old", clock.now, installed))
+        sink.write(InstanceStatus("old", clock.now))
         clock.now = clock.now.plusSeconds(45)
-        sink.write(InstanceStatus("new", clock.now, installed))
+        sink.write(InstanceStatus("new", clock.now))
         sink.statuses().map { it.instance }.toSet().assert().isEqualTo(setOf("old", "new"))
         clock.now = clock.now.plusSeconds(30)
         sink.statuses().single().instance.assert().isEqualTo("new")
-        sink.statuses().single().documents.assert().isEqualTo(installed)
     }
 
     /** What reached Redis from the stores of a [Metered] sink: how many values were written and how many bytes. */
@@ -225,6 +221,7 @@ class CoCacheShadowTest {
             factory.createLocked(ShadowCacheSpecs.reporters(keyPrefix)),
             Metered(factory.createLocked(ShadowCacheSpecs.statuses(keyPrefix)), InstanceStatusCodec, meter),
             Metered(factory.createLocked(ShadowCacheSpecs.instances(keyPrefix)), InstanceIndexCodec, meter),
+            Metered(factory.createLocked(ShadowCacheSpecs.residents(keyPrefix)), ResidentDocumentsCodec, meter),
             clock,
         )
     }
@@ -232,23 +229,19 @@ class CoCacheShadowTest {
     /** Ids of one length, so that every status encodes to the same size. */
     private fun id(i: Int) = "i" + i.toString().padStart(2, '0')
 
-    private fun installed(documents: Int) =
-        (1..documents).associate { SnapshotKey.Tenant("t$it") as SnapshotKey to InstalledDocument(42, Duration.ZERO) }
-
     /**
      * #1214: a heartbeat writes the instance's own status and asks whether the list of instances changed, which costs
      * no value while it did not. Before, every heartbeat read and wrote every instance's status in one value.
      */
     @Test
     fun `a heartbeat writes one status however many instances there are - #1214`() = runBlocking<Unit> {
-        val documents = installed(DOCUMENTS)
-        val one = InstanceStatusCodec.encode(InstanceStatus(id(0), clock.now, documents)).size
+        val one = InstanceStatusCodec.encode(InstanceStatus(id(0), clock.now)).size
         val sizes = listOf(2, 16).map { instances ->
             val meter = Meter()
             val sinks = (0 until instances).map { metered(meter) }
             repeat(3) {
                 if (it == 2) meter.reset()
-                sinks.forEachIndexed { i, sink -> sink.write(InstanceStatus(id(i), clock.now, documents)) }
+                sinks.forEachIndexed { i, sink -> sink.write(InstanceStatus(id(i), clock.now)) }
             }
             // Steady state: one status written per heartbeat, and the list unchanged, so no value read.
             meter.writes.assert().isEqualTo(instances)
@@ -258,7 +251,7 @@ class CoCacheShadowTest {
                 (0 until instances).map(::id).toSet()
             )
             val shared = ShadowCodec.encodeStatuses(
-                (0 until instances).associate { id(it) to InstanceStatus(id(it), clock.now, documents) }
+                (0 until instances).associate { id(it) to InstanceStatus(id(it), clock.now) }
             ).size
             meter.written / instances to shared
         }
@@ -271,10 +264,9 @@ class CoCacheShadowTest {
     fun `an instance lists itself again when the list is lost, refreshes its entry, and drops the instances gone - #1214`() =
         runBlocking<Unit> {
             val raw = node().runtime.create(ShadowCacheSpecs.instances(keyPrefix))
-            val documents = installed(1)
             val live = CoCacheShadowReports.create(node().factory, keyPrefix, clock)
             val gone = CoCacheShadowReports.create(node().factory, keyPrefix, clock)
-            fun status(instance: String) = InstanceStatus(instance, clock.now, documents)
+            fun status(instance: String) = InstanceStatus(instance, clock.now)
 
             live.write(status("live"))
             gone.write(status("gone"))
@@ -306,18 +298,14 @@ class CoCacheShadowTest {
     fun `a status that is another instance's, or cannot be read, fails the read of statuses - #1214`() = runBlocking<Unit> {
         val sink = CoCacheShadowReports.create(node().factory, keyPrefix, clock)
         val statuses = node().runtime.create(ShadowCacheSpecs.statuses(keyPrefix))
-        sink.write(InstanceStatus("a", clock.now, installed(1)))
-        sink.write(InstanceStatus("b", clock.now, installed(1)))
-        statuses.async().put("b", InstanceStatus("a", clock.now, installed(1))).await()
+        sink.write(InstanceStatus("a", clock.now))
+        sink.write(InstanceStatus("b", clock.now))
+        statuses.async().put("b", InstanceStatus("a", clock.now)).await()
         assertThrownBy<IllegalStateException> { runBlocking { sink.statuses() } }
         // A listed instance whose status expired is gone, not an error.
         statuses.async().delete("b").await()
         sink.statuses().map { it.instance }.assert().containsExactly("a")
-        val ambiguous = InstanceStatus("x:y", clock.now, installed(1))
+        val ambiguous = InstanceStatus("x:y", clock.now)
         assertThrownBy<IllegalArgumentException> { runBlocking { sink.write(ambiguous) } }
-    }
-
-    private companion object {
-        const val DOCUMENTS = 50
     }
 }

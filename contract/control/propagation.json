@@ -18,5 +18,9 @@
   "revision" : {
     "type" : "integer",
     "presence" : "always"
+  },
+  "unknown" : {
+    "type" : "integer",
+    "presence" : "always"
   }
 }

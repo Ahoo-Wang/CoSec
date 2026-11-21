@@ -727,16 +727,20 @@ from the statuses they write every few seconds (with [shadow windows](../operati
 on). Publishing never waits for it.
 
 ```json
-{ "revision": 5, "installed": 3, "holding": 3, "recent": 50, "asOf": "2026-11-20T09:00:04Z" }
+{ "revision": 5, "installed": 3, "holding": 3, "recent": 50, "unknown": 0, "asOf": "2026-11-20T09:00:04Z" }
 ```
 
 `recent` counts the instances that wrote a status in the last minute, `holding` those of them that hold the document
-at any revision, and `installed` those of them that have installed `revision` or a later one. An instance keeps
-resident only the tenants it serves, so no instance is behind when `installed` equals `holding` (not `recent`);
-`holding: 0` means no instance holds the document, and the first request that needs it loads it at the published
-revision. The platform document and an app's are held by every instance that serves them. The statuses are read at
-most every 5 seconds on a control host, so an answer may be that old: `asOf` says when they were read. A read that
-fails is a `503`, never an older answer (`CTL-62`).
+at any revision, `installed` those of them that have installed `revision` or a later one, and `unknown` the recent ones
+whose resident record (the documents an instance holds, a record of its own beside its small status, `CTL-75`) is
+missing or does not decode. An instance keeps resident only the tenants it serves, so no instance is behind when
+`installed` equals `holding` (not `recent`) and `unknown` is 0; `holding: 0` with nothing unknown means no instance
+holds the document, and the first request that needs it loads it at the published revision. The platform document and
+an app's are held by every instance that serves them. An instance rewrites its resident record when what it holds
+changes, before its next status, so the answer is at most one report interval behind the instance. The statuses and
+the resident records are each read at most every 5 seconds on a control host, so an answer may be that old: `asOf`
+says when they were read. A read that fails is a `503`, never an older answer (`CTL-62`). Deciding whether a shadow
+window passes reads only the small statuses, never a resident record (`CTL-74`).
 
 ## Access reviews
 

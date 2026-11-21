@@ -87,7 +87,7 @@
       "status",
       "status",
       "acknowledged 2 waiting none",
-      "installed 0 holding 0 recent 2",
+      "installed 0 holding 0 recent 2 unknown 0",
       "READY"
     ],
     "errors": {

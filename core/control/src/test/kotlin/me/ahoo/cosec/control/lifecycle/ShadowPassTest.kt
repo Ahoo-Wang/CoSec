@@ -35,6 +35,7 @@ import me.ahoo.cosec.control.store.Revisions
 import me.ahoo.cosec.control.store.StoreFixtures
 import me.ahoo.cosec.spi.shadow.InMemoryShadowReports
 import me.ahoo.cosec.spi.shadow.InstanceStatus
+import me.ahoo.cosec.spi.shadow.ResidentReadings
 import me.ahoo.cosec.spi.shadow.ShadowReport
 import me.ahoo.cosec.spi.shadow.ShadowReportReader
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
@@ -67,6 +68,8 @@ class ShadowPassTest {
         }
 
         override suspend fun statuses(): List<InstanceStatus> = emptyList()
+
+        override suspend fun residents(instances: Set<String>) = ResidentReadings(emptyMap(), instances)
     }
 
     private fun changes(store: ControlStore, revisions: Revisions, shadow: ShadowOptions): Changes {

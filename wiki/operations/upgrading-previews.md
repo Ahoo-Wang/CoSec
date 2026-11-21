@@ -15,15 +15,36 @@ section above it:
 
 | You run | Read |
 |---|---|
-| `8.0.0-beta.4` | [From beta.4](#from-8-0-0-beta-4) |
-| `8.0.0-beta.3` | [From beta.3](#from-8-0-0-beta-3), then the one above |
-| `8.0.0-beta.2` | [From beta.2](#from-8-0-0-beta-2), then the two above |
-| `8.0.0-beta.1` | [From beta.1](#from-8-0-0-beta-1), then the three above |
-| `8.0.0-alpha.4` | [From alpha.4](#from-8-0-0-alpha-4), then the four above |
+| `8.0.0-beta.5` | [From beta.5](#from-8-0-0-beta-5) |
+| `8.0.0-beta.4` | [From beta.4](#from-8-0-0-beta-4), then the one above |
+| `8.0.0-beta.3` | [From beta.3](#from-8-0-0-beta-3), then the two above |
+| `8.0.0-beta.2` | [From beta.2](#from-8-0-0-beta-2), then the three above |
+| `8.0.0-beta.1` | [From beta.1](#from-8-0-0-beta-1), then the four above |
+| `8.0.0-alpha.4` | [From alpha.4](#from-8-0-0-alpha-4), then the five above |
 | `8.0.0-alpha.3`, `alpha.2`, `alpha.1` | [From alpha.3](#from-8-0-0-alpha-3), [alpha.2](#from-8-0-0-alpha-2) or [alpha.1](#from-8-0-0-alpha-1), then every section above it |
 
 Which preview of the library may run behind which preview of the gateway image: see
 [Upgrading a running deployment](./upgrading.md#upgrading-a-running-deployment).
+
+## From 8.0.0-beta.5 {#from-8-0-0-beta-5}
+
+- **An instance's status is split in two** (`CTL-74`, `CTL-75`). The status at `<s>:shadow:status:<instance>` is now
+  small (liveness, `shadows`, the acknowledged windows) and has no `documents` member. The documents an instance holds
+  are a record of their own, `<s>:shadow:resident:<instance>`, which only `propagation` reads
+  ([Storage](./storage.md#redis-keys)). The `propagation` answer has a new member, `unknown`, always written.
+  - **Upgrade in this order: every control-plane instance first, then the data plane.** A beta.6 control plane reads a
+    beta.5 instance's status (the `documents` it carries is ignored) and counts that instance in `unknown`, since it
+    writes no resident record, until it is upgraded.
+  - **A beta.5 control plane cannot read a beta.6 status**: it requires `documents`. Under `CTL-73` it takes each
+    beta.6 instance as live and acknowledging nothing, so every shadow window waits and closes as insufficient at
+    `max-duration`. No window passes and no change publishes wrongly; finish upgrading the control plane and the windows
+    close as usual.
+- **SPI (experimental): `ShadowReportSink.write(ResidentDocuments)` and `ShadowReportReader.residents(instances)` are
+  new and abstract; `InstanceStatus.documents` and `InstalledDocument` are removed.** A backend of your own stores a
+  second record per instance, with a life of `ShadowReportReader.RESIDENT_TTL`, and answers `residents` with the records
+  that read and, in `unreadable`, the instances whose record is missing or does not decode
+  ([Extending](../architecture/extending.md)). There is no default: one that answered "holds nothing" would make
+  `installed == holding` say that no instance is behind when it does not know.
 
 ## From 8.0.0-beta.4 {#from-8-0-0-beta-4}
 

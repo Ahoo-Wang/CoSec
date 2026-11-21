@@ -91,7 +91,7 @@ class ClientContractTest {
 
     @Test
     fun `a propagation answer holds exactly the members of its contract file`() {
-        val answer = ControlResponseJson.propagation(Propagation(2, 1, 2, 3, Instant.parse("2026-11-20T00:00:00Z")))
+        val answer = ControlResponseJson.propagation(Propagation(2, 1, 2, 3, 1, Instant.parse("2026-11-20T00:00:00Z")))
         files.check("control/propagation.json", Shapes.of(listOf(answer), emptySet()))
     }
 

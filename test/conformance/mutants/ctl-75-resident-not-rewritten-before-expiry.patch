@@ -1,0 +1,17 @@
+# Rule: CTL-75
+# Mutant: an unchanged resident record is never written again, so it expires an hour after the last change and a live instance reads as unknown
+# Tests: :runtime:test --tests me.ahoo.cosec.runtime.shadow.ResidentWriteTest
+
+diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/shadow/ShadowReporter.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/shadow/ShadowReporter.kt
+index e8b0ac1ff..273895805 100644
+--- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/shadow/ShadowReporter.kt
++++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/shadow/ShadowReporter.kt
+@@ -114,7 +114,7 @@ class ShadowReporter(
+     private suspend fun writeResident() {
+         val now = clock.instant()
+         val holding = installed()
+-        val due = residentAt?.let { !now.isBefore(it.plus(ShadowReportReader.RESIDENT_TTL.dividedBy(2))) } ?: true
++        val due = residentAt == null
+         if (holding == lastResident && !due) return
+         if (attempt("the resident documents") { sink.write(ResidentDocuments(recorder.instance, now, holding)) }) {
+             lastResident = holding

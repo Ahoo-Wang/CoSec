@@ -21,7 +21,15 @@ import java.time.Instant
 
 /**
  * How far [revision] of a document has propagated (`CTL-62`): of the [recent] instances, the [holding] ones report the
- * document at some revision, and the [installed] ones at [revision] or later. [asOf] is when the statuses were read.
+ * document at some revision, and the [installed] ones at [revision] or later; [unknown] are the recent ones whose
+ * resident documents are missing or do not decode (`CTL-75`). [asOf] is when the resident documents were read.
  */
 @InternalCoSecApi
-data class Propagation(val revision: Long, val installed: Int, val holding: Int, val recent: Int, val asOf: Instant)
+data class Propagation(
+    val revision: Long,
+    val installed: Int,
+    val holding: Int,
+    val recent: Int,
+    val unknown: Int,
+    val asOf: Instant,
+)

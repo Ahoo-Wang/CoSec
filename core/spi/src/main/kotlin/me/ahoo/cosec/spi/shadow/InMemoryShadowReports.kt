@@ -25,6 +25,7 @@ import java.util.concurrent.ConcurrentHashMap
 class InMemoryShadowReports(private val clock: Clock = Clock.systemUTC()) : ShadowReportSink, ShadowReportReader {
     private val reports = ConcurrentHashMap<String, ConcurrentHashMap<String, ShadowReport>>()
     private val statuses = ConcurrentHashMap<String, InstanceStatus>()
+    private val residents = ConcurrentHashMap<String, ResidentDocuments>()
 
     override suspend fun write(report: ShadowReport) {
         reports.computeIfAbsent(report.window) { ConcurrentHashMap() }[report.instance] = report
@@ -34,11 +35,22 @@ class InMemoryShadowReports(private val clock: Clock = Clock.systemUTC()) : Shad
         statuses[status.instance] = status
     }
 
+    override suspend fun write(resident: ResidentDocuments) {
+        residents[resident.instance] = resident
+    }
+
     override suspend fun reports(window: String): List<ShadowReport> = reports[window]?.values?.toList().orEmpty()
 
     override suspend fun statuses(): List<InstanceStatus> {
         val since = clock.instant().minus(ShadowReportReader.STATUS_TTL)
         return statuses.values.filter { !it.at.isBefore(since) }
+    }
+
+    /** The resident records of [instances] written within [ShadowReportReader.RESIDENT_TTL]; any other is missing. */
+    override suspend fun residents(instances: Set<String>): ResidentReadings {
+        val since = clock.instant().minus(ShadowReportReader.RESIDENT_TTL)
+        val found = instances.mapNotNull { residents[it] }.filter { !it.at.isBefore(since) }.associateBy { it.instance }
+        return ResidentReadings(found, instances - found.keys)
     }
 
     /** Every recent status: one kept in memory is never one that does not decode. */

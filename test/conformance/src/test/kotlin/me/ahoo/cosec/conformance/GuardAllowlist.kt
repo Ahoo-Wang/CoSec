@@ -73,6 +73,10 @@ object GuardAllowlist {
             "runtime:AuditVocabularyTest#every reason has the audit decision of its own name",
             "micrometer:ResultVocabularyTest#every reason has the result of its own name",
             "runtime:SubjectMethodTest#the event names the credential as the identity header does",
+            // CTL-74: the closing path reads small statuses only.
+            "cocache:StatusSplitTest#what the acknowledgement reads does not grow with the documents an instance holds",
+            "control:ShadowAcknowledgementTest#the closing path reads no resident record",
+            "document:ShadowCodecTest#a status of 8_0_0-beta_5 reads, its documents ignored",
             // OBS-9: one table names a cause on the wire.
             "runtime:CauseNameTest#the table names every kind of cause, each by its pinned name",
             "runtime:CauseNameTest#the audit record names each cause by its pinned name",
