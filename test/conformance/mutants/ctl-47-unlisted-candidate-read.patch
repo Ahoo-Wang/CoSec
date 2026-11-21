@@ -3,14 +3,15 @@
 # Tests: :runtime:test --tests me.ahoo.cosec.runtime.shadow.StagedDocumentsTest :conformance:test
 
 diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/shadow/CachingCandidateSource.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/shadow/CachingCandidateSource.kt
-index 27918835f..efc2a51f6 100644
+index f33b6c8db..45ee3aa2f 100644
 --- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/shadow/CachingCandidateSource.kt
 +++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/shadow/CachingCandidateSource.kt
-@@ -76,7 +76,6 @@ class CachingCandidateSource(
+@@ -75,7 +75,7 @@ class CachingCandidateSource(
+         require(maxEntries > 0 && !refreshAfter.isNegative) { "Invalid candidate source options." }
      }
  
-     override suspend fun candidate(key: SnapshotKey): Candidate? {
--        if (!staged.mayStage(key)) return null
-         val now = clock.instant()
-         synchronized(
-             entries
+-    override suspend fun candidate(key: SnapshotKey): Candidate? = if (staged.mayStage(key)) lookup(key, null) else null
++    override suspend fun candidate(key: SnapshotKey): Candidate? = lookup(key, null)
+ 
+     /**
+      * [key]'s candidate of [window], which the staged list names (`CTL-12`'s compile on sight): what is held answers only

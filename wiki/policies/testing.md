@@ -367,7 +367,14 @@ control-plane instance at a time, starting with the ones it looked at longest ag
 `looked at <k> of <n> windows`, and the next pass starts behind the cut. A shadowing change whose record does not read is
 skipped, with a `WARN` naming it at most once an hour, and the other windows are looked at. When a window closes, the change becomes `READY`, or `AWAITING_APPROVAL` when it needs
 [approval](#approval). If the document's revision moved meanwhile, it becomes `CONFLICTED`. The data plane takes part
-with `cosec-cocache` and `cosec.authorization.shadow.*` (on by default, sampling 10 % of requests).
+with `cosec-cocache` and `cosec.authorization.shadow.*` (on by default, sampling 10 % of the requests that read a staged
+document).
+
+Each instance compiles a staged candidate as soon as it sees its window in the staged list, within one
+`cosec.authorization.shadow.report-interval`, whether or not its traffic reads that document (`CTL-12`). An instance
+that cannot compile it reports `CANDIDATE_ERROR` then, and the window closes blocked without waiting for a request of
+that document. The compilation runs off the request path, one candidate at a time, and never holds up the documents the
+instance enforces.
 
 Attribute providers, and the types they declare, must be the same on every data-plane instance and on the control host.
 The control plane checks a candidate against its own providers; an instance without one of them cannot compile a
