@@ -168,6 +168,38 @@
       "type" : "object"
     }
   },
+  "origin" : {
+    "type" : "object",
+    "presence" : "optional",
+    "members" : {
+      "asserted" : {
+        "type" : "boolean",
+        "presence" : "always"
+      },
+      "peer" : {
+        "type" : "string",
+        "presence" : "optional"
+      },
+      "via" : {
+        "type" : "object",
+        "presence" : "optional",
+        "members" : {
+          "credential" : {
+            "type" : "string",
+            "presence" : "optional"
+          },
+          "method" : {
+            "type" : "string",
+            "presence" : "always"
+          },
+          "request" : {
+            "type" : "string",
+            "presence" : "optional"
+          }
+        }
+      }
+    }
+  },
   "publishedRevision" : {
     "type" : "integer",
     "presence" : "optional"

@@ -41,11 +41,14 @@ import tools.jackson.databind.node.ObjectNode
 object ChangeAnswer {
     private val factory = JsonNodeFactory.instance
 
-    /** [change], with which live instances acknowledge its open shadow window when [acknowledgement] is read. */
-    fun encode(change: ChangeRequest, acknowledgement: Acknowledgement? = null): ByteArray =
-        CoSecJson.mapper.writeValueAsBytes(tree(change, acknowledgement))
+    /**
+     * [change], with which live instances acknowledge its open shadow window when [acknowledgement] is read, and its
+     * author's origin, whole when [wholeOrigin] ([origin]).
+     */
+    fun encode(change: ChangeRequest, acknowledgement: Acknowledgement?, wholeOrigin: Boolean): ByteArray =
+        CoSecJson.mapper.writeValueAsBytes(tree(change, acknowledgement, wholeOrigin))
 
-    fun tree(change: ChangeRequest, acknowledgement: Acknowledgement? = null): ObjectNode {
+    fun tree(change: ChangeRequest, acknowledgement: Acknowledgement? = null, wholeOrigin: Boolean = false): ObjectNode {
         val (kind, owner) = ownerOf(change.key)
         val root = factory.objectNode().put("id", change.id.value).put("key", change.key.toString())
         root.putObject("base").put("revision", change.base.revision).apply {
@@ -53,6 +56,7 @@ object ChangeAnswer {
         }
         root.putArray("operations").apply { change.operations.forEach { add(OperationCodec.tree(it, kind, owner)) } }
         root.set("author", actorTree(change.author))
+        origin(root, change, wholeOrigin)
         root.put("note", change.note).put("kind", change.kind.name).put("state", change.state.name)
         root.putArray("findings").apply {
             change.findings.forEach {
@@ -97,6 +101,26 @@ object ChangeAnswer {
         val waiting = acknowledgement.waitingFor
         node.putObject("waitingFor").put("more", maxOf(0, waiting.size - Acknowledgement.SHOWN))
             .putArray("instances").apply { waiting.take(Acknowledgement.SHOWN).forEach(::add) }
+    }
+
+    /**
+     * How the author was identified (`CTL-70`, the record's `CTL-57`), absent for a change no request made. Every reader
+     * of the change is told whether the identity was only stated (`asserted`) and by what kind of credential
+     * (`via.method`): what a reviewer weighs a change by. The credential's id, the request's id and the connection's
+     * address (`peer`) say which key or token, from where: only a reader [wholeOrigin] admits ([ControlPlane.origins])
+     * is given them, and every other reader is told nothing of them, not even that they exist.
+     */
+    private fun origin(root: ObjectNode, change: ChangeRequest, wholeOrigin: Boolean) {
+        val origin = change.origin ?: return
+        val node = root.putObject("origin").put("asserted", origin.asserted)
+        origin.via?.let { via ->
+            val out = node.putObject("via").put("method", via.method)
+            if (wholeOrigin) {
+                via.credentialId?.let { out.put("credential", it) }
+                via.requestId?.let { out.put("request", it) }
+            }
+        }
+        if (wholeOrigin) origin.peer?.let { node.put("peer", it) }
     }
 
     /** The escalations, and the approval as far as it is shown: who approved, when, for which candidate and what. */

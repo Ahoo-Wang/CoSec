@@ -1,0 +1,20 @@
+# Rule: CTL-70
+# Mutant: every reader of a change is given its author's whole origin
+# Tests: :control:test --tests me.ahoo.cosec.control.api.ChangeOriginAnswerTest
+
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/api/DefaultControlPlane.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/api/DefaultControlPlane.kt
+index 4be7fb2eb..e32f8f0c3 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/api/DefaultControlPlane.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/api/DefaultControlPlane.kt
+@@ -137,10 +137,7 @@ class DefaultControlPlane(
+      * Who approves changes of the document, or reads the platform's: those who answer for which key or token wrote a
+      * change, and from where. Only a permit counts: a deny or an indeterminate decision shows the short origin.
+      */
+-    override val origins: OriginReaders = OriginReaders { operator, change ->
+-        authority.holds(operator, change.key, ControlActions.APPROVE) ||
+-            authority.holds(operator, SnapshotKey.Platform, ControlActions.READ)
+-    }
++    override val origins: OriginReaders = OriginReaders { _, _ -> true }
+ 
+     override suspend fun changes(
+         operator: Operator,

@@ -104,6 +104,12 @@ interface ControlPlane {
     val acknowledgements: AcknowledgementReader get() = AcknowledgementReader.NONE
 
     /**
+     * Who is given a change author's whole origin (`CTL-70`): nobody unless an implementation can tell who approves
+     * changes of its document or reads the platform's.
+     */
+    val origins: OriginReaders get() = OriginReaders.NONE
+
+    /**
      * `GET /changes` (R2C-4, `CTL-55`): the open changes of [document], or in [state], that [operator] may see, of the
      * documents [documents] admits (the route's profile, `CTL-58`).
      */

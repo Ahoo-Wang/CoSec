@@ -205,6 +205,13 @@ flowchart LR
 （`window`，即发布者确认的窗口 id，`startedAt`，关闭后还有 `closed`）和 `confirmations`。窗口未关闭时，`GET /changes/{id}` 在 `shadow` 中加上确认该窗口的存活实例数（`acknowledged`）以及尚未确认的实例（`waitingFor`：`instances`，最多 20 个 id，已排序，`more` 为其余的数目），读自各实例的状态（[在影子模式下试运行变更](#trying-changes-in-shadow-mode)）。存储为自身工作保留的内容不出现在
 任何应答中：候选检查时所依据的各文档头、在其窗口上报过的实例，以及审批人持有的内容（`CTL-61`）。
 
+由请求创建的变更还应答 `origin`，即其作者是如何被识别的（`CTL-70`）：
+- **变更的每个读者**都得到 `asserted` 和 `via.method`。`asserted` 为 true 表示主机相信了调用方声明的身份（`CoSec-Identity` 头），而不是自己验证凭证；`via.method` 是凭证的种类（`jwt`、`api-key`，经控制面门面的调用为 `in-process`）。
+- **对变更的文档持有 `cosec:approve`、或对平台文档持有 `cosec:read` 的读者**，还得到 `via.credential`（凭证的 id，从不是它的值）、`via.request`（请求的 id）和 `peer`（请求到达时连接的地址）。它们说明是哪个密钥或令牌、从哪里写了这个变更：这是为变更负责的人衡量它的依据。
+- **其他读者**（包括作者本人）完全得不到这些成员，连空成员也没有。无法作出决策的读者同样得不到：只有允许才算数。
+
+`GET /changes` 的列表不含来源。
+
 成员、类型以及哪些始终存在，见 [`contract/control/`](https://github.com/Ahoo-Wang/CoSec/tree/main/contract/control)，
 连同应答写出的封闭取值集合：`state`、`kind`、`severity`、升级项的 `reason`、窗口统计的结果，以及决策的 `decision`、
 `cause`、`reason` 和追踪项的 `effect`、`outcome`。应答与文件不一致时 CoSec 的测试会失败，所以取值只会在声明了变化的版本中改变。

@@ -131,7 +131,7 @@ class ControlPlaneTest {
             throw e.targetException
         }
     } as ControlStore
-    private val revisions = Revisions(store, clock)
+    val revisions = Revisions(store, clock)
     val engine = EngineAuthority(revisions)
 
     /** How many changes were made. */
