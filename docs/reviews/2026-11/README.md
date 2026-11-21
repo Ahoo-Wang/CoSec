@@ -59,3 +59,4 @@ Redis in all of them; the reports say which figures are measured and which are c
 | `saas-open-changes-design.md` | G2: the open changes as sets of record, store failures as 503, a tolerant shadow pass, a format number on every stored record with one reader's rule | Approved on 2026-11-20 with one correction (the sets are not kept while the old list exists); being built as #1764, #1766, #1769 and two more |
 | `system-e2e-design.md` | The system test before RC1 | Built (`test/system-*`) |
 | `issue-1679-testing-design.md` | Testing an application's code against CoSec (issue #1679) | Built (`PIP-29`, `cosec-testkit`) |
+
