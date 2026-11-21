@@ -54,7 +54,7 @@ val groups = linkedMapOf(
     "migration" to listOf("migrate"),
     "test" to listOf("testkit", "conformance", "architecture", "e2e", "client-host", "system-test", "system-behind", "system-auth", "system-enforcer", "code-coverage-report"),
     "bom" to listOf("bom", "dependencies"),
-    "platform" to listOf("gateway-server"),
+    "platform" to listOf("gateway-server", "control-server"),
 )
 
 for ((group, names) in groups) {
