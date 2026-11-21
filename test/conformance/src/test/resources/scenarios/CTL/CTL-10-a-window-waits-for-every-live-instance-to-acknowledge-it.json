@@ -1,0 +1,122 @@
+{
+  "rules": [
+    "CTL-10"
+  ],
+  "polarity": "positive",
+  "level": "control",
+  "description": "Bounds 15 min, 3 samples, 1 h. c1 has its 3 samples once 15 minutes have passed, but the live instance i2 sends a status that does not acknowledge its window (an older version): the window stays open, waiting for i2. Once i2 acknowledges it, it closes.",
+  "options": {
+    "shadow": {
+      "minDuration": "PT15M",
+      "minSamples": 3,
+      "maxDuration": "PT1H"
+    }
+  },
+  "steps": [
+    {
+      "propose": {
+        "change": "c1",
+        "document": "tenant:acme",
+        "operations": [
+          {
+            "putPolicy": {
+              "id": "read",
+              "statements": [
+                {
+                  "effect": "allow",
+                  "action": "order:read"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "stage": "c1"
+    },
+    {
+      "report": {
+        "change": "c1",
+        "instance": "i1",
+        "counts": {
+          "NARROWED": 3
+        }
+      }
+    },
+    {
+      "advance": "PT15M"
+    },
+    {
+      "status": {
+        "instance": "i1",
+        "documents": {},
+        "acknowledges": [
+          "c1"
+        ]
+      }
+    },
+    {
+      "status": {
+        "instance": "i2",
+        "documents": {}
+      }
+    },
+    {
+      "acknowledgement": "c1"
+    },
+    {
+      "shadowed": "c1"
+    },
+    {
+      "advance": "PT10S"
+    },
+    {
+      "status": {
+        "instance": "i1",
+        "documents": {},
+        "acknowledges": [
+          "c1"
+        ]
+      }
+    },
+    {
+      "status": {
+        "instance": "i2",
+        "documents": {},
+        "acknowledges": [
+          "c1"
+        ]
+      }
+    },
+    {
+      "acknowledgement": "c1"
+    },
+    {
+      "shadowed": "c1"
+    }
+  ],
+  "expect": {
+    "steps": [
+      "CHECKED",
+      "SHADOWING",
+      "reported",
+      "advanced",
+      "status",
+      "status",
+      "acknowledged 1 waiting i2",
+      "SHADOWING",
+      "advanced",
+      "status",
+      "status",
+      "acknowledged 2 waiting none",
+      "READY"
+    ],
+    "errors": {
+      "c1": []
+    },
+    "heads": {
+      "tenant:acme": 0
+    }
+  }
+}

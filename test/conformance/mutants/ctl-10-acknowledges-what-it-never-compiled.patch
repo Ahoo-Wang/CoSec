@@ -1,0 +1,17 @@
+# Rule: CTL-10
+# Mutant: an instance acknowledges every window of the list it holds, compiled or not
+# Tests: :runtime:test --tests me.ahoo.cosec.runtime.shadow.CompileOnSightTest
+
+diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/shadow/CompileOnSight.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/shadow/CompileOnSight.kt
+index 0aa1f6104..792e70bca 100644
+--- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/shadow/CompileOnSight.kt
++++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/shadow/CompileOnSight.kt
+@@ -80,7 +80,7 @@ internal class CompileOnSight(
+      * candidate it compiled, or recorded as failing. Null when it holds no list: it acknowledges nothing.
+      */
+     suspend fun acknowledged(): Set<String>? = mutex.withLock {
+-        if (source.staged.windows == null) null else seen.mapTo(HashSet()) { it.second }
++        source.staged.windows?.values?.flatten()?.toSet()
+     }
+ 
+     /** Whether [window] was compiled, or recorded as failing; false to try it again on a later cycle. */

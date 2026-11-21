@@ -70,7 +70,7 @@ class ShadowReporter(
 
     /**
      * One cycle: the staged list and, for at most one [interval], the windows first seen in it; then every window's report,
-     * then the status, whatever is left to compile. Failures are logged and skipped. A candidate compiled this cycle that
+     * then the status, with the windows compiled so far ([InstanceStatus.windows]), whatever is left to compile. Failures are logged and skipped. A candidate compiled this cycle that
      * does not compile is in this cycle's report.
      */
     suspend fun flush() {
@@ -86,7 +86,20 @@ class ShadowReporter(
                 recorder.forget(window.report.window, window.recorded)
             }
         }
-        attempt("the instance status") { sink.write(InstanceStatus(recorder.instance, clock.instant(), installed())) }
+        val acknowledged = sight?.acknowledged()
+        attempt("the instance status") {
+            // Without CoSec's own candidate source nothing is compiled on sight: this instance cannot acknowledge a window,
+            // and says it does not shadow, so that no window waits for it (CTL-10).
+            sink.write(
+                InstanceStatus(
+                    recorder.instance,
+                    clock.instant(),
+                    installed(),
+                    windows = acknowledged,
+                    shadows = sight != null
+                )
+            )
+        }
     }
 
     /**

@@ -18,6 +18,7 @@ package me.ahoo.cosec.control.api
 import kotlinx.coroutines.runBlocking
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.control.change.Acknowledgement
 import me.ahoo.cosec.control.change.ChangeRequestCodec
 import me.ahoo.cosec.document.json.CoSecJson
 import me.ahoo.cosec.model.PolicyId
@@ -67,6 +68,19 @@ class ControlAnswersTest {
         answered.get("shadow").has("reporters").assert().isFalse()
         answered.get("approval").properties().map { it.key }.assert()
             .containsExactlyInAnyOrder("approver", "at", "candidate", "covers")
+    }
+
+    @Test
+    fun `an open window's answer names at most twenty instances it waits for, and counts the rest - CTL-10`() {
+        val waiting = (1..25).map { "i-%02d".format(it) }
+        val open = ChangeAnswer.tree(ChangeSamples.open, Acknowledgement(3, waiting)).get("shadow")
+        open.get("acknowledged").asInt().assert().isEqualTo(3)
+        open.get("waitingFor").get("instances").values().map { it.asString() }.assert().isEqualTo(waiting.take(20))
+        open.get("waitingFor").get("more").asInt().assert().isEqualTo(5)
+        // A closed window, and an answer that read no statuses, say nothing of acknowledgements.
+        ChangeAnswer.tree(ChangeSamples.closed, Acknowledgement(3, waiting)).get("shadow").has("waitingFor")
+            .assert().isFalse()
+        ChangeAnswer.tree(ChangeSamples.open).get("shadow").has("acknowledged").assert().isFalse()
     }
 
     @Test

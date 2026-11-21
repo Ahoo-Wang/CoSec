@@ -1,7 +1,7 @@
 # Reviews, measurements and designs of November 2026 (8.0.0-beta.4 to beta.5)
 
 These files were written by the sessions that reviewed, measured and designed CoSec 8.0 between 2026-11-18 and
-2026-11-20, and are kept here as they were written. `docs/roadmap.md` (§8 and §9) refers to them by file name and says
+2026-11-21, and are kept here as they were written. `docs/roadmap.md` (§8 and §9) refers to them by file name and says
 what was decided about each. They are records of a moment: each one names the commit it read, and the code has moved
 since. A finding listed here may already be fixed; the roadmap and the PR it names say so, not this folder.
 
@@ -54,9 +54,10 @@ Redis in all of them; the reports say which figures are measured and which are c
 
 | File | What it is | Status |
 |---|---|---|
-| `saas-referrers-design.md` | Back-references and the document list as members, with the five conditions of its review (section 9) and the staged list's member structure (section 8) | Being implemented in #1729 (`CTL-42` to `CTL-44`, `MIG-4`) |
-| `saas-shadow-staged-design.md` | The staged list, the acknowledgement, and sampling only what can give a sample (Design D2) | Approved with four conditions, not started (`CTL-46`, `CTL-47`, `OBS-8`) |
-| `saas-open-changes-design.md` | G2: the open changes as sets of record, store failures as 503, a tolerant shadow pass, a format number on every stored record with one reader's rule | Approved on 2026-11-20 with one correction (the sets are not kept while the old list exists); being built as #1764, #1766, #1769 and two more |
+| `saas-referrers-design.md` | Back-references and the document list as members, with the five conditions of its review (section 9) and the staged list's member structure (section 8) | Built: #1729 (`CTL-42` to `CTL-44`, `MIG-4`), and the repair it relies on in #1745 |
+| `saas-shadow-staged-design.md` | The staged list, the acknowledgement, and sampling only what can give a sample (Design D2) | Approved with four conditions; the list (#1742, `CTL-46`) and its reader (#1785, `CTL-47`) are merged, `OBS-8` is the third PR |
+| `saas-open-changes-design.md` | G2: the open changes as sets of record, store failures as 503, a tolerant shadow pass, a format number on every stored record with one reader's rule | Approved on 2026-11-20 with one correction (the sets are not kept while the old list exists); built as #1764, #1766, #1769, #1779 and #1783 (`CTL-52` to `CTL-56`, `IDN-31`); the control API's answer shapes (R2C-11 to R2C-13) are its last piece |
 | `ci-affected-groups-proposal.md` | What bounds the merge queue (CodeQL at 8.9 min against CI's 4.7, one merge per run under strict branch protection) and how to make the run after a sync cost what the change can affect | Approved on 2026-11-21: CodeQL skips when nothing it sees changed (#1787), the dependency cache (#1784), then the path rule in `plan.py` |
+| `control-server-design.md` | The control plane as an image CoSec ships (`platform/control-server`) and as a library an IAM service embeds: the two deployments the maintainer named on 2026-11-21, callers trusted by reachability and still authorized and audited, the gate switch `cosec.pipeline.caller=forwarded-identity`, the service API on a listener of its own, the SDK as a narrow facade of `cosec-control`, and the PRs in order | Approved on 2026-11-21. Written as the content of 8.0.0-beta.6; the maintainer then moved it into 8.0.0-beta.5 the same day, so read its "beta.6" as beta.5 and ignore "after beta.5 is tagged" (`STA-9`, `STA-10`, `CTL-57` to `CTL-60`) |
 | `system-e2e-design.md` | The system test before RC1 | Built (`test/system-*`) |
 | `issue-1679-testing-design.md` | Testing an application's code against CoSec (issue #1679) | Built (`PIP-29`, `cosec-testkit`) |
