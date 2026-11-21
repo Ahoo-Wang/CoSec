@@ -1,9 +1,11 @@
 codecov:
   notify:
-    # Statuses and the comment are sent once the commit's checks have finished, so they never report a partial merge of
-    # the uploads. No fixed number of uploads is awaited: a pull request skips the test jobs its change cannot reach
-    # (scripts/ci/plan.py), which upload nothing, and the flags below carry their last report forward instead.
-    wait_for_ci: true
+    # Statuses and the comment are sent once, by the `Codecov notify` job of ci.yml, after every upload of the run has
+    # landed. Without it Codecov reports after the first upload: a pull request skips the test jobs its change cannot
+    # reach (scripts/ci/plan.py), so no fixed number of uploads can be awaited (`after_n_builds`), and a report sent
+    # after the TypeScript upload alone says "covered" for lines whose group has not uploaded yet. The flags below carry
+    # a skipped job's last report forward instead.
+    manual_trigger: true
 coverage:
   range: 60..100
   round: down

@@ -263,7 +263,14 @@ class Workflow(unittest.TestCase):
         for job in RESULT["jobs"]:
             if job["coverage"]:
                 self.assertIn(f"  {job['name']}:\n    carryforward: true", codecov)
-        self.assertNotIn("after_n_builds", codecov)
+        self.assertIsNone(re.search(r"^\s*after_n_builds:", codecov, re.M))
+        self.assertIn("    manual_trigger: true\n", codecov)
+
+    def test_the_notifications_are_sent_once_after_every_upload_whatever_their_result(self):
+        job = self.CI[self.CI.index("  codecov-notify:\n"):self.CI.index("  ci:\n")]
+        self.assertIn("needs: [ test, typescript-coverage ]", job)
+        self.assertIn("if: always()", job)
+        self.assertIn("run_command: send-notifications", job)
 
 
 class Output(unittest.TestCase):
