@@ -33,7 +33,9 @@ class EscalationReason private constructor(text: String, isUnknown: Boolean) : C
         val DETECTION_TIMED_OUT: EscalationReason = EscalationReason("DETECTION_TIMED_OUT", false)
         val UNKNOWN: EscalationReason = EscalationReason("UNKNOWN", false)
 
-        private val SET = ClosedSet(listOf(CROSS_TENANT, NOT_COVERED, DENY_OVERLAP, UNRESOLVED, UNREADABLE, ANONYMOUS, TOO_LARGE, NOT_ANALYZED, BREAK_GLASS, TENANT_BINDINGS, DETECTION_TIMED_OUT, UNKNOWN)) { EscalationReason(it, true) }
+        private val SET = ClosedSet(
+            listOf(CROSS_TENANT, NOT_COVERED, DENY_OVERLAP, UNRESOLVED, UNREADABLE, ANONYMOUS, TOO_LARGE, NOT_ANALYZED, BREAK_GLASS, TENANT_BINDINGS, DETECTION_TIMED_OUT, UNKNOWN)
+        ) { EscalationReason(it, true) }
 
         /** Every value this version knows. */
         val KNOWN: List<EscalationReason> get() = SET.known

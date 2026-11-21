@@ -45,21 +45,3 @@ class Role(
 
     private fun parts(): List<Any?> = listOf(id, permissions, app, space, name, description)
 }
-
-/** The catalog permissions a [Role] holds: every one of its app's (`"*"`, an app's role only), or the listed ids. */
-@ExperimentalCoSecApi
-sealed class Permissions {
-    /** Every permission of the app's catalog: `"*"`. */
-    @ExperimentalCoSecApi
-    data object All : Permissions()
-
-    /** The catalog permissions [ids]. */
-    @ExperimentalCoSecApi
-    class Of(val ids: List<String>) : Permissions() {
-        override fun equals(other: Any?): Boolean = other is Of && ids == other.ids
-
-        override fun hashCode(): Int = ids.hashCode()
-
-        override fun toString(): String = describe("Of", "ids" to ids)
-    }
-}

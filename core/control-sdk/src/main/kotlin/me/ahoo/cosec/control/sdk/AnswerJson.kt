@@ -16,18 +16,18 @@
 package me.ahoo.cosec.control.sdk
 
 import me.ahoo.cosec.annotations.InternalCoSecApi
-import me.ahoo.cosec.control.sdk.WireJson.array
-import me.ahoo.cosec.control.sdk.WireJson.bool
-import me.ahoo.cosec.control.sdk.WireJson.counts
-import me.ahoo.cosec.control.sdk.WireJson.instant
-import me.ahoo.cosec.control.sdk.WireJson.long
-import me.ahoo.cosec.control.sdk.WireJson.need
-import me.ahoo.cosec.control.sdk.WireJson.opt
-import me.ahoo.cosec.control.sdk.WireJson.optInstant
-import me.ahoo.cosec.control.sdk.WireJson.optLong
-import me.ahoo.cosec.control.sdk.WireJson.optText
-import me.ahoo.cosec.control.sdk.WireJson.text
-import me.ahoo.cosec.control.sdk.WireJson.texts
+import me.ahoo.cosec.control.sdk.WireRead.array
+import me.ahoo.cosec.control.sdk.WireRead.bool
+import me.ahoo.cosec.control.sdk.WireRead.counts
+import me.ahoo.cosec.control.sdk.WireRead.instant
+import me.ahoo.cosec.control.sdk.WireRead.long
+import me.ahoo.cosec.control.sdk.WireRead.need
+import me.ahoo.cosec.control.sdk.WireRead.opt
+import me.ahoo.cosec.control.sdk.WireRead.optInstant
+import me.ahoo.cosec.control.sdk.WireRead.optLong
+import me.ahoo.cosec.control.sdk.WireRead.optText
+import me.ahoo.cosec.control.sdk.WireRead.text
+import me.ahoo.cosec.control.sdk.WireRead.texts
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import tools.jackson.databind.JsonNode
 import tools.jackson.databind.node.ObjectNode
@@ -64,14 +64,22 @@ internal object AnswerJson {
      * needs, and which live instances an open window still waits for, which a person reads.
      */
     val CHANGE_UNREAD: Set<String> = setOf(
-        "confirmations", "confirmations.digest", "confirmations.kind", "confirmations.policy",
+        "confirmations",
+        "confirmations.digest",
+        "confirmations.kind",
+        "confirmations.policy",
         "confirmations.statement",
-        "shadow.waitingFor", "shadow.waitingFor.instances", "shadow.waitingFor.more",
+        "shadow.waitingFor",
+        "shadow.waitingFor.instances",
+        "shadow.waitingFor.more",
     )
 
     fun actor(node: JsonNode): Actor = Actor(node.text("tenant"), node.text("principal"))
 
-    fun actor(actor: Actor): ObjectNode = WireJson.objectNode().put("tenant", actor.tenant).put("principal", actor.principal)
+    fun actor(actor: Actor): ObjectNode = WireJson.objectNode().put(
+        "tenant",
+        actor.tenant
+    ).put("principal", actor.principal)
 
     fun head(key: SnapshotKey, answer: String): DocumentHead {
         val node = WireJson.parse(answer)

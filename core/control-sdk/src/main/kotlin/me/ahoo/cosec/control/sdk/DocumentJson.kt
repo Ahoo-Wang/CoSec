@@ -16,18 +16,18 @@
 package me.ahoo.cosec.control.sdk
 
 import me.ahoo.cosec.annotations.InternalCoSecApi
-import me.ahoo.cosec.control.sdk.WireJson.array
-import me.ahoo.cosec.control.sdk.WireJson.bool
-import me.ahoo.cosec.control.sdk.WireJson.need
-import me.ahoo.cosec.control.sdk.WireJson.oneOrMany
-import me.ahoo.cosec.control.sdk.WireJson.only
-import me.ahoo.cosec.control.sdk.WireJson.opt
-import me.ahoo.cosec.control.sdk.WireJson.optInstant
-import me.ahoo.cosec.control.sdk.WireJson.optText
 import me.ahoo.cosec.control.sdk.WireJson.putOneOrMany
 import me.ahoo.cosec.control.sdk.WireJson.putTexts
-import me.ahoo.cosec.control.sdk.WireJson.text
-import me.ahoo.cosec.control.sdk.WireJson.texts
+import me.ahoo.cosec.control.sdk.WireRead.array
+import me.ahoo.cosec.control.sdk.WireRead.bool
+import me.ahoo.cosec.control.sdk.WireRead.need
+import me.ahoo.cosec.control.sdk.WireRead.oneOrMany
+import me.ahoo.cosec.control.sdk.WireRead.only
+import me.ahoo.cosec.control.sdk.WireRead.opt
+import me.ahoo.cosec.control.sdk.WireRead.optInstant
+import me.ahoo.cosec.control.sdk.WireRead.optText
+import me.ahoo.cosec.control.sdk.WireRead.text
+import me.ahoo.cosec.control.sdk.WireRead.texts
 import tools.jackson.databind.JsonNode
 import tools.jackson.databind.node.ObjectNode
 import tools.jackson.databind.node.StringNode
@@ -76,13 +76,11 @@ internal object DocumentJson {
         put("revision", revision)
         // `:apply` reads the header's revision only; the time is the control plane's to write.
         put("publishedAt", "1970-01-01T00:00:00Z")
-        if (content.policies.isNotEmpty()) putArray("policies").apply { content.policies.forEach { add(policy(it)) } }
-        if (content.bindings.isNotEmpty()) putArray("bindings").apply { content.bindings.forEach { add(binding(it)) } }
-        if (content.roles.isNotEmpty()) putArray("roles").apply { content.roles.forEach { add(role(it)) } }
+        putEach("policies", content.policies, ::policy)
+        putEach("bindings", content.bindings, ::binding)
+        putEach("roles", content.roles, ::role)
         content.catalog?.let { set("catalog", catalog(it)) }
-        if (content.rateLimits.isNotEmpty()) {
-            putArray("rateLimits").apply { content.rateLimits.forEach { add(ValueJson.rateLimit(it)) } }
-        }
+        putEach("rateLimits", content.rateLimits, ValueJson::rateLimit)
         content.boundary?.let { put("boundary", it) }
     }
 
@@ -236,28 +234,27 @@ internal object DocumentJson {
     }
 
     fun catalog(catalog: Catalog): ObjectNode = WireJson.objectNode().apply {
-        putArray("groups").apply {
-            catalog.groups.forEach { group ->
-                addObject().apply {
-                    put("name", group.name)
-                    group.description?.let { put("description", it) }
-                    if (group.spaced) put("spaced", true)
-                    putArray("permissions").apply {
-                        group.permissions.forEach { permission ->
-                            addObject().apply {
-                                put("id", permission.id)
-                                permission.name?.let { put("name", it) }
-                                permission.description?.let { put("description", it) }
-                                putOneOrMany("action", permission.actions.map(StringNode::valueOf))
-                                putOneOrMany("resource", permission.resources.map(ValueJson::resource))
-                            }
-                        }
-                    }
-                }
-            }
-        }
+        putArray("groups").apply { catalog.groups.forEach { add(group(it)) } }
     }
 
+    private fun group(group: CatalogGroup): ObjectNode = WireJson.objectNode().apply {
+        put("name", group.name)
+        group.description?.let { put("description", it) }
+        if (group.spaced) put("spaced", true)
+        putArray("permissions").apply { group.permissions.forEach { add(permission(it)) } }
+    }
+
+    private fun permission(permission: CatalogPermission): ObjectNode = WireJson.objectNode().apply {
+        put("id", permission.id)
+        permission.name?.let { put("name", it) }
+        permission.description?.let { put("description", it) }
+        putOneOrMany("action", permission.actions.map(StringNode::valueOf))
+        putOneOrMany("resource", permission.resources.map(ValueJson::resource))
+    }
+
+    private fun <T> ObjectNode.putEach(name: String, items: List<T>, tree: (T) -> JsonNode) {
+        if (items.isNotEmpty()) putArray(name).apply { items.forEach { add(tree(it)) } }
+    }
 
     private const val ANYONE = "*"
     private const val SCHEMA = 2

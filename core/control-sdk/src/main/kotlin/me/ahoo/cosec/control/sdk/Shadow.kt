@@ -21,7 +21,12 @@ import java.time.Instant
  * has; [acknowledged], the number of differences a publish acknowledged.
  */
 @ExperimentalCoSecApi
-class Shadow(val window: String, val startedAt: Instant, val closed: ShadowClosed? = null, val acknowledged: Long? = null) {
+class Shadow(
+    val window: String,
+    val startedAt: Instant,
+    val closed: ShadowClosed? = null,
+    val acknowledged: Long? = null
+) {
     /** What a publish acknowledges of this window: its id and the counts it closed with; null while it is open. */
     fun ack(): ShadowAck? = closed?.let { ShadowAck(window, it.counts) }
 
@@ -38,32 +43,4 @@ class Shadow(val window: String, val startedAt: Instant, val closed: ShadowClose
     )
 
     private fun parts(): List<Any?> = listOf(window, startedAt, closed, acknowledged)
-}
-
-/**
- * How a [Shadow] window closed: when, the count of each outcome it saw ([counts], by the `shadowOutcome` closed set),
- * whether it saw too little to judge ([insufficient]) and whether what it saw blocks a publish ([blocked]).
- */
-@ExperimentalCoSecApi
-class ShadowClosed(
-    val closedAt: Instant,
-    val counts: Map<String, Long>,
-    val insufficient: Boolean,
-    val blocked: Boolean,
-    val vanished: List<String> = emptyList(),
-) {
-    override fun equals(other: Any?): Boolean = other is ShadowClosed && parts() == other.parts()
-
-    override fun hashCode(): Int = parts().hashCode()
-
-    override fun toString(): String = describe(
-        "ShadowClosed",
-        "closedAt" to closedAt,
-        "counts" to counts,
-        "insufficient" to insufficient,
-        "blocked" to blocked,
-        "vanished" to vanished,
-    )
-
-    private fun parts(): List<Any?> = listOf(closedAt, counts, insufficient, blocked, vanished)
 }

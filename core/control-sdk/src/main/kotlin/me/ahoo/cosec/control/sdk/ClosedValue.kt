@@ -36,10 +36,3 @@ abstract class ClosedValue protected constructor(
 
     final override fun toString(): String = text
 }
-
-/** The constants of one closed set, by their text, and how an unknown value of it is made. */
-internal class ClosedSet<T : ClosedValue>(val known: List<T>, private val unknown: (String) -> T) {
-    private val byText = known.associateBy { it.text }
-
-    fun of(text: String): T = byText[text] ?: unknown(text)
-}

@@ -16,11 +16,11 @@
 package me.ahoo.cosec.control.sdk
 
 import me.ahoo.cosec.annotations.InternalCoSecApi
-import me.ahoo.cosec.control.sdk.WireJson.need
-import me.ahoo.cosec.control.sdk.WireJson.only
-import me.ahoo.cosec.control.sdk.WireJson.opt
-import me.ahoo.cosec.control.sdk.WireJson.optText
-import me.ahoo.cosec.control.sdk.WireJson.text
+import me.ahoo.cosec.control.sdk.WireRead.need
+import me.ahoo.cosec.control.sdk.WireRead.only
+import me.ahoo.cosec.control.sdk.WireRead.opt
+import me.ahoo.cosec.control.sdk.WireRead.optText
+import me.ahoo.cosec.control.sdk.WireRead.text
 import tools.jackson.databind.JsonNode
 import tools.jackson.databind.node.ObjectNode
 

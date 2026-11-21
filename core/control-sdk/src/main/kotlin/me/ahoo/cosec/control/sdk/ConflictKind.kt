@@ -29,7 +29,11 @@ class ConflictKind private constructor(text: String, isUnknown: Boolean) : Close
         val CONTENDED: ConflictKind = ConflictKind("CONTENDED", false)
         val EXISTS: ConflictKind = ConflictKind("EXISTS", false)
 
-        private val SET = ClosedSet(listOf(BASE_MOVED, SLOT_HELD, STATE, CANDIDATE_MOVED, WINDOW_OPEN, WINDOW_BLOCKED, CONTENDED, EXISTS)) { ConflictKind(it, true) }
+        private val SET = ClosedSet(
+            listOf(BASE_MOVED, SLOT_HELD, STATE, CANDIDATE_MOVED, WINDOW_OPEN, WINDOW_BLOCKED, CONTENDED, EXISTS)
+        ) {
+            ConflictKind(it, true)
+        }
 
         /** Every value this version knows. */
         val KNOWN: List<ConflictKind> get() = SET.known

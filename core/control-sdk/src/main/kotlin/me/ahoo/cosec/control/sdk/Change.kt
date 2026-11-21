@@ -76,13 +76,3 @@ class Change(
         skipShadow, shadow, approval, origin, createdAt, updatedAt,
     )
 }
-
-/** The revision of the document a [Change] was proposed on, and its digest once the change was checked. */
-@ExperimentalCoSecApi
-class ChangeBase(val revision: Long, val digest: String? = null) {
-    override fun equals(other: Any?): Boolean = other is ChangeBase && revision == other.revision && digest == other.digest
-
-    override fun hashCode(): Int = listOf(revision, digest).hashCode()
-
-    override fun toString(): String = describe("ChangeBase", "revision" to revision, "digest" to digest)
-}

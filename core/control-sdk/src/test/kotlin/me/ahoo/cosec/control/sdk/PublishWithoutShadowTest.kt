@@ -43,7 +43,12 @@ class PublishWithoutShadowTest {
             call("documents")
 
         override suspend fun document(caller: ControlCaller, key: SnapshotKey) = call("document")
-        override suspend fun revisions(caller: ControlCaller, key: SnapshotKey, before: Long?, limit: Int?) = call("revisions")
+        override suspend fun revisions(
+            caller: ControlCaller,
+            key: SnapshotKey,
+            before: Long?,
+            limit: Int?
+        ) = call("revisions")
         override suspend fun revision(caller: ControlCaller, key: SnapshotKey, revision: Long) = call("revision")
         override suspend fun diff(caller: ControlCaller, key: SnapshotKey, from: Long, to: Long) = call("diff")
         override suspend fun apply(caller: ControlCaller, key: SnapshotKey, request: String) = call("apply")
@@ -64,10 +69,17 @@ class PublishWithoutShadowTest {
         override suspend fun publish(caller: ControlCaller, id: String, request: String?) = call("publish")
     }
 
-    private fun run(patience: Duration = Duration.ofSeconds(5), answer: (String, Int) -> String): Pair<Change, List<String>> {
+    private fun run(
+        patience: Duration = Duration.ofSeconds(
+            5
+        ),
+        answer: (String, Int) -> String
+    ): Pair<Change, List<String>> {
         val service = Scripted(answer)
         val change = runBlocking {
-            ControlClient(service).proposeAndPublishWithoutShadow(caller, acme, listOf(role), "night shift", "projected", patience)
+            ControlClient(
+                service
+            ).proposeAndPublishWithoutShadow(caller, acme, listOf(role), "night shift", "projected", patience)
         }
         return change to service.calls
     }
@@ -75,7 +87,9 @@ class PublishWithoutShadowTest {
     private fun refused(service: Scripted, patience: Duration = Duration.ofMillis(200)): ControlRefusedException =
         assertThrownBy<ControlRefusedException> {
             runBlocking {
-                ControlClient(service).proposeAndPublishWithoutShadow(caller, acme, listOf(role), "n", "projected", patience)
+                ControlClient(
+                    service
+                ).proposeAndPublishWithoutShadow(caller, acme, listOf(role), "n", "projected", patience)
             }
         }.actual()
 
@@ -116,7 +130,15 @@ class PublishWithoutShadowTest {
 
     @Test
     fun `a slot held past its patience abandons the change and throws the refusal`() {
-        val service = Scripted { call, _ -> if (call == "skipShadow") throw conflict(ConflictKind.SLOT_HELD) else usual(call) }
+        val service = Scripted { call, _ ->
+            if (call == "skipShadow") {
+                throw conflict(
+                    ConflictKind.SLOT_HELD
+                )
+            } else {
+                usual(call)
+            }
+        }
         refused(service).conflict.assert().isEqualTo(ConflictKind.SLOT_HELD)
         service.calls.last().assert().isEqualTo("abandon")
         service.calls.assert().doesNotContain("publish")

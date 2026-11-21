@@ -54,14 +54,3 @@ class Statement(
 
     private fun parts(): List<Any?> = listOf(effect, actions, resources, condition, name, onMissing, onMissingConfirmed)
 }
-
-/** Who confirmed a statement's `nomatch` (the document format's `onMissingConfirmed`): [by], in change [change]. */
-@ExperimentalCoSecApi
-class OnMissingConfirmation(val by: Actor, val change: String) {
-    override fun equals(other: Any?): Boolean =
-        other is OnMissingConfirmation && by == other.by && change == other.change
-
-    override fun hashCode(): Int = listOf(by, change).hashCode()
-
-    override fun toString(): String = describe("OnMissingConfirmation", "by" to by, "change" to change)
-}

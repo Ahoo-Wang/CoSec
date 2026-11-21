@@ -31,7 +31,10 @@ class ChangeState private constructor(text: String, isUnknown: Boolean) : Closed
         val ABANDONED: ChangeState = ChangeState("ABANDONED", false)
         val EXPIRED: ChangeState = ChangeState("EXPIRED", false)
 
-        private val SET = ClosedSet(listOf(DRAFT, CHECKED, SHADOWING, AWAITING_APPROVAL, READY, CONFLICTED, PUBLISHED, REJECTED, ABANDONED, EXPIRED)) { ChangeState(it, true) }
+        private val SET =
+            ClosedSet(
+                listOf(DRAFT, CHECKED, SHADOWING, AWAITING_APPROVAL, READY, CONFLICTED, PUBLISHED, REJECTED, ABANDONED, EXPIRED)
+            ) { ChangeState(it, true) }
 
         /** Every value this version knows. */
         val KNOWN: List<ChangeState> get() = SET.known

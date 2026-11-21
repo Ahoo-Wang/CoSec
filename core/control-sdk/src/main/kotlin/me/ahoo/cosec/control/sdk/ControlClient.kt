@@ -13,7 +13,6 @@
 
 package me.ahoo.cosec.control.sdk
 
-import kotlinx.coroutines.delay
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.model.decision.DocumentKind
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
@@ -108,26 +107,5 @@ class ControlClient(private val service: ControlService) {
 
     private companion object {
         val DEFAULT_PATIENCE: Duration = Duration.ofSeconds(30)
-    }
-}
-
-/** How long [ControlClient.proposeAndPublishWithoutShadow] keeps trying, and how long it waits between two tries. */
-internal class Patience(patience: Duration, private val clock: () -> Long = System::nanoTime) {
-    private val deadline = clock() + patience.toNanos()
-    private var pause = FIRST_PAUSE_MILLIS
-
-    /** Waits before the next try and answers true; false, without waiting, once the next try would come too late. */
-    suspend fun next(): Boolean {
-        val left = (deadline - clock()) / NANOS_PER_MILLI
-        if (left < pause) return false
-        delay(pause)
-        pause = (pause * 2).coerceAtMost(LAST_PAUSE_MILLIS)
-        return true
-    }
-
-    private companion object {
-        const val FIRST_PAUSE_MILLIS = 25L
-        const val LAST_PAUSE_MILLIS = 1_000L
-        const val NANOS_PER_MILLI = 1_000_000L
     }
 }

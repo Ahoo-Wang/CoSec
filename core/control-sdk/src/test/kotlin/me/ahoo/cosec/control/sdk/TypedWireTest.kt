@@ -86,8 +86,14 @@ class TypedWireTest {
             original.remove("provenance")
             val content = DocumentJson.content(original)
             val written = DocumentJson.document(content, original.get("revision").asLong())
-            val expected = PolicyDocumentCodec.decode(kind, owner, original).at(original.get("revision").asLong(), Instant.EPOCH)
-            PolicyDocumentCodec.tree(PolicyDocumentCodec.decode(kind, owner, written)).assert().describedAs(sample.toString())
+            val expected = PolicyDocumentCodec.decode(
+                kind,
+                owner,
+                original
+            ).at(original.get("revision").asLong(), Instant.EPOCH)
+            PolicyDocumentCodec.tree(
+                PolicyDocumentCodec.decode(kind, owner, written)
+            ).assert().describedAs(sample.toString())
                 .isEqualTo(PolicyDocumentCodec.tree(expected))
             DocumentJson.content(written).assert().describedAs(sample.toString()).isEqualTo(content)
         }
@@ -125,7 +131,9 @@ class TypedWireTest {
         Severity.KNOWN.map { it.text }.assert().isEqualTo(wire("severity"))
         EscalationReason.KNOWN.map { it.text }.assert().isEqualTo(wire("escalationReason"))
         val definitions = json("schema/8.0/definitions.schema.json").get("definitions")
-        Effect.KNOWN.map { it.text }.assert().isEqualTo(definitions.get("effect").get("enum").values().map { it.asString() })
+        Effect.KNOWN.map { it.text }.assert().isEqualTo(
+            definitions.get("effect").get("enum").values().map { it.asString() }
+        )
         val statement = json("schema/8.0/cosec-snapshot-document.schema.json").get("definitions").get("statement")
         OnMissing.KNOWN.map { it.text }
             .assert().isEqualTo(statement.get("properties").get("onMissing").get("enum").values().map { it.asString() })
@@ -134,8 +142,13 @@ class TypedWireTest {
     @Test
     fun `a value of a closed set this version does not know keeps its text`() {
         listOf(
-            ChangeKind.of("MERGE"), Severity.of("INFO"), EscalationReason.of("LATER"), ConflictKind.of("LATER"),
-            ApplyMode.of("PATCH"), Effect.of("audit"), OnMissing.of("permit"),
+            ChangeKind.of("MERGE"),
+            Severity.of("INFO"),
+            EscalationReason.of("LATER"),
+            ConflictKind.of("LATER"),
+            ApplyMode.of("PATCH"),
+            Effect.of("audit"),
+            OnMissing.of("permit"),
         ).forEach {
             it.isUnknown.assert().isTrue()
             it.toString().assert().isEqualTo(it.text)

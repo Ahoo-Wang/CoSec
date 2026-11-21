@@ -16,9 +16,9 @@
 package me.ahoo.cosec.control.sdk
 
 import me.ahoo.cosec.annotations.InternalCoSecApi
-import me.ahoo.cosec.control.sdk.WireJson.bool
-import me.ahoo.cosec.control.sdk.WireJson.only
-import me.ahoo.cosec.control.sdk.WireJson.text
+import me.ahoo.cosec.control.sdk.WireRead.bool
+import me.ahoo.cosec.control.sdk.WireRead.only
+import me.ahoo.cosec.control.sdk.WireRead.text
 import tools.jackson.databind.JsonNode
 import tools.jackson.databind.node.StringNode
 
@@ -49,5 +49,11 @@ internal object ValueJson {
 
     fun rateLimit(rule: RateLimitRule): JsonNode = WireJson.parse(rule.json)
 
-    fun action(node: JsonNode): String = if (node.isString) node.asString() else throw WireJson.format("[action] is not a string")
+    fun action(node: JsonNode): String = if (node.isString) {
+        node.asString()
+    } else {
+        throw WireJson.format(
+            "[action] is not a string"
+        )
+    }
 }

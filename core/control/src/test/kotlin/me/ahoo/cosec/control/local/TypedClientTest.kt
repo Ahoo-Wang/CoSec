@@ -237,7 +237,11 @@ class TypedClientTest {
         runBlocking { fixture.memory.keepOpenChanges() }
         val client = ControlClient(LocalControlService(fixture.plane, IdentityGate()))
         val alice = ControlCaller.of(
-            fixture.engine.security(ControlPlaneTest.ACME, "alice", roles = listOf("admin", "ops@team-a")).securityContext,
+            fixture.engine.security(
+                ControlPlaneTest.ACME,
+                "alice",
+                roles = listOf("admin", "ops@team-a")
+            ).securityContext,
         )
         val head = runBlocking { client.document(alice, acme) }
         head.revision.assert().isEqualTo(1L)
@@ -256,7 +260,10 @@ class TypedClientTest {
 
         val more = Policy("more", listOf(Statement(Effect.ALLOW, listOf("order:list"))))
         val applied = runBlocking {
-            client.apply(alice, ApplyRequest(acme, 2, DocumentContent(policies = listOf(more)), ApplyMode.MERGE, "more"))
+            client.apply(
+                alice,
+                ApplyRequest(acme, 2, DocumentContent(policies = listOf(more)), ApplyMode.MERGE, "more")
+            )
         }
         applied.state.assert().isEqualTo(ChangeState.CHECKED)
         applied.operations.assert().containsExactly(Operation.PutPolicy(more))

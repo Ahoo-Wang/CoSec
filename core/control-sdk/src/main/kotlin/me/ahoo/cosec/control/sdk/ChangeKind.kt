@@ -27,7 +27,9 @@ class ChangeKind private constructor(text: String, isUnknown: Boolean) : ClosedV
         val MIGRATE: ChangeKind = ChangeKind("MIGRATE", false)
         val BOOTSTRAP: ChangeKind = ChangeKind("BOOTSTRAP", false)
 
-        private val SET = ClosedSet(listOf(PUBLISH, ROLLBACK, BREAK_GLASS, EXPIRE, MIGRATE, BOOTSTRAP)) { ChangeKind(it, true) }
+        private val SET = ClosedSet(
+            listOf(PUBLISH, ROLLBACK, BREAK_GLASS, EXPIRE, MIGRATE, BOOTSTRAP)
+        ) { ChangeKind(it, true) }
 
         /** Every value this version knows. */
         val KNOWN: List<ChangeKind> get() = SET.known
