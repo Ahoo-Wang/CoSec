@@ -55,7 +55,9 @@ object ChangeListenerMeters {
             .description("BEST_EFFORT change events dropped because the listener's queue was full").register(registry)
         FunctionCounter.builder(LOST, queue) { it.lost.toDouble() }
             .tag(LISTENER_TAG, name)
-            .description("Change events of stored steps a REQUIRED listener missed: its queue stayed full, or its call failed")
+            .description(
+                "Change events of stored steps a REQUIRED listener missed: its queue stayed full, or its call failed"
+            )
             .register(registry)
     }
 
