@@ -19,6 +19,7 @@ import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.async
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -276,17 +277,26 @@ class ChangeEventOrderTest {
         }
 
     /**
-     * R3-12: the queue holds two small events, the first held. A larger event waits for room, then a smaller one
-     * behind it. When the first is delivered, the room freed fits the smaller one only; it still waits for the larger
-     * one, which was there first, so the queue keeps the order the events were put.
+     * R3-12: the queue holds two small events, its listener delivering one per permit. A larger event waits for room,
+     * then a smaller one behind it. One delivery frees room the smaller one fits and the larger does not; the smaller one
+     * still waits for the larger, which was there first, so the queue keeps the order the events were put.
      */
     @Test
     fun `those who wait for room are served in the order they came, a smaller event never ahead - R3-12`() =
         runBlocking<Unit> {
-            val audit = Held("audit", Delivery.REQUIRED, cancellable = false)
+            val permits = Channel<Unit>(Channel.UNLIMITED)
+            val received = CopyOnWriteArrayList<String>()
+            val audit = object : ChangeListener {
+                override val name = "audit"
+                override val delivery = Delivery.REQUIRED
+
+                override suspend fun onChange(event: ChangeEvent) {
+                    withContext(NonCancellable) { permits.receive() }
+                    received += event.change.value
+                }
+            }
             val small = ChangeEventSize.of(event(ChangeEvent.Kind.CHECKED, "s1"))
-            val heap = ChangeListeners.HEAP_SHARE * 2 * small
-            val changes = listeners(audit, heap = heap)
+            val changes = listeners(audit, heap = ChangeListeners.HEAP_SHARE * 2 * small)
             changes.publish(event(ChangeEvent.Kind.CHECKED, "s1"))
             changes.publish(event(ChangeEvent.Kind.CHECKED, "s2"))
             // Half as large again as a small one: it fits only once both small ones are delivered.
@@ -296,13 +306,16 @@ class ChangeEventOrderTest {
             delay(100)
             val second = async(Dispatchers.Default) { changes.publish(event(ChangeEvent.Kind.CHECKED, "s3")) }
             delay(100)
-            first.isCompleted.assert().isFalse()
-            second.isCompleted.assert().isFalse()
-            audit.gate.complete(Unit)
+            // One delivery: room for a small event, not for the large one. The small one waits its turn.
+            permits.send(Unit)
+            delay(200)
+            changes.queues.single().depth.assert().describedAs("s2 alone is queued").isEqualTo(1)
+            second.isCompleted.assert().describedAs("s3 waits behind the large event").isFalse()
+            repeat(3) { permits.send(Unit) }
             first.await()
             second.await()
             changes.awaitDelivered()
-            audit.received.assert().containsExactly("s1 CHECKED", "s2 CHECKED", "big CHECKED", "s3 CHECKED")
+            received.assert().containsExactly("s1", "s2", "big", "s3")
         }
 
     @Test
