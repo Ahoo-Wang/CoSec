@@ -189,7 +189,7 @@ Which preview of the library may run behind which preview of the gateway image: 
   `STA-6`, `PIP-31`). Affected: every service in `cosec.pipeline.mode=gateway`, and every gateway.
   - A service in `gateway` mode believes any `CoSec-Identity` header, which carries no signature, so the network is its
     boundary. It now **fails to start** unless you write `cosec.pipeline.identity.only-gateway-can-reach: true`
-    (`COSEC_PIPELINE_IDENTITY_ONLY_GATEWAY_CAN_REACH=true`), your statement that nothing but the gateway can reach it.
+    (`COSEC_PIPELINE_IDENTITY_ONLYGATEWAYCANREACH=true`), your statement that nothing but the gateway can reach it.
     Absent, empty, `false`, `1` and `on` fail alike, and the message says what to write. Make it true first (a
     `NetworkPolicy` that admits the gateway's pods only, mutual TLS, a private network;
     [`k8s/examples/gateway-mode-service-networkpolicy.yaml`](https://github.com/Ahoo-Wang/CoSec/blob/main/k8s/examples/gateway-mode-service-networkpolicy.yaml)).

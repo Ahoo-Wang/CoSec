@@ -35,16 +35,25 @@ concurrency:
   group: docker-deploy-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
+# Two images, one workflow: the gateway and the control server (a matrix, so every fix to the push, the mirror or the
+# smoke test is made once). `project` is the Gradle project and the directory under platform/ that holds the Dockerfile,
+# `name` the image's: ahoowang/cosec-<name> and ghcr.io/ahoo-wang/cosec-<name>.
 jobs:
   docker-deploy:
-    name: Push Docker image
+    name: Push Docker image (${{ matrix.name }})
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: gateway
+            project: gateway-server
+          - name: control
+            project: control-server
     permissions:
       contents: read
       packages: write
-    outputs:
-      image: ghcr.io/ahoo-wang/cosec-gateway:${{ steps.meta.outputs.version }}
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -57,7 +66,7 @@ jobs:
         run: .github/scripts/resolve-dependencies.sh
 
       - name: Build Dist
-        run: ./gradlew gateway-server:installDist
+        run: ./gradlew ${{ matrix.project }}:installDist
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v4
@@ -83,8 +92,8 @@ jobs:
         uses: docker/metadata-action@v6
         with:
           images: |
-            ahoowang/cosec-gateway
-            ghcr.io/ahoo-wang/cosec-gateway
+            ahoowang/cosec-${{ matrix.name }}
+            ghcr.io/ahoo-wang/cosec-${{ matrix.name }}
           tags: |
             type=ref,event=branch
             type=ref,event=pr
@@ -95,7 +104,9 @@ jobs:
         uses: docker/build-push-action@v7
         with:
           platforms: linux/amd64,linux/arm64
-          context: platform/gateway-server
+          context: platform/${{ matrix.project }}
+          # aot-train.sh, which both Dockerfiles copy with `COPY --from=shared`.
+          build-contexts: shared=platform
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
@@ -110,8 +121,14 @@ jobs:
   # `needs` it, and `continue-on-error` keeps a failed or timed out mirror from failing the workflow. Look for a red
   # step here when the Chinese mirror is behind.
   aliyun-sync:
-    name: Mirror Docker image to Aliyun
+    name: Mirror Docker image to Aliyun (${{ matrix.name }})
     needs: docker-deploy
+    strategy:
+      # In parallel, not in a loop: two cold copies in series would not fit the bound below. One image's mirror being
+      # behind is no reason to stop the other's.
+      fail-fast: false
+      matrix:
+        name: [ gateway, control ]
     runs-on: ubuntu-latest
     # Sized from measured runs: a cold copy of the whole image (about 800 MB for both platforms) took 5 min 25 s, a copy
     # of what Aliyun already holds about 5 s, and the old single-job push of only the changed layers about 20 s. A
@@ -133,7 +150,7 @@ jobs:
         id: meta
         uses: docker/metadata-action@v6
         with:
-          images: ${{ env.ALIYUN_REGISTRY }}/ahoo/cosec-gateway
+          images: ${{ env.ALIYUN_REGISTRY }}/ahoo/cosec-${{ matrix.name }}
           tags: |
             type=ref,event=branch
             type=ref,event=pr
@@ -151,7 +168,8 @@ jobs:
         env:
           ALIYUN_CR_USERNAME: ${{ secrets.ALIYUN_CR_USERNAME }}
           ALIYUN_CR_TOKEN: ${{ secrets.ALIYUN_CR_TOKEN }}
-          SOURCE: ${{ needs.docker-deploy.outputs.image }}
+          # What the job above pushed: the same tags, so the same version.
+          SOURCE: ghcr.io/ahoo-wang/cosec-${{ matrix.name }}:${{ steps.meta.outputs.version }}
           TAGS: ${{ steps.meta.outputs.tags }}
         run: |
           set -uo pipefail
@@ -178,8 +196,16 @@ jobs:
   # RFC 0008 §3.9, RC prerequisite 5: the image just pushed starts on its AOT cache (-XX:AOTMode=on fails instead of
   # falling back) against a real Redis, and answers the smoke requests on the 8.0 path.
   aot-smoke:
-    name: AOT smoke
+    name: AOT smoke (${{ matrix.name }})
     needs: docker-deploy
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: gateway
+            project: gateway-server
+          - name: control
+            project: control-server
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:
@@ -203,7 +229,18 @@ jobs:
           registry: ghcr.io
           username: ${{ github.repository_owner }}
           password: ${{ secrets.GITHUB_TOKEN }}
+      # The tags the push above made: the same configuration, so the same version.
+      - name: Docker meta
+        id: meta
+        uses: docker/metadata-action@v6
+        with:
+          images: ghcr.io/ahoo-wang/cosec-${{ matrix.name }}
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
       - name: Pull the image
-        run: docker pull "${{ needs.docker-deploy.outputs.image }}"
+        run: docker pull "ghcr.io/ahoo-wang/cosec-${{ matrix.name }}:${{ steps.meta.outputs.version }}"
       - name: Smoke requests
-        run: platform/gateway-server/aot-smoke.sh "${{ needs.docker-deploy.outputs.image }}" migration/migrate/build/install/cosec-migrate/bin/cosec-migrate
+        run: platform/${{ matrix.project }}/aot-smoke.sh "ghcr.io/ahoo-wang/cosec-${{ matrix.name }}:${{ steps.meta.outputs.version }}" migration/migrate/build/install/cosec-migrate/bin/cosec-migrate
