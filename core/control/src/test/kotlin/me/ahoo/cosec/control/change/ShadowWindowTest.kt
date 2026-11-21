@@ -203,8 +203,6 @@ class ShadowWindowTest {
     }
 
     private suspend fun bootstrap() {
-        // As the host does at startup (`CTL-46`): instances then read the list, and acknowledge what it names (`CTL-10`).
-        store.keepStagedList()
         val read = PolicyDefinition(
             PolicyId("read"),
             false,
@@ -233,7 +231,12 @@ class ShadowWindowTest {
             listOf(Operation.RemoveBinding(BindingId("everyone"))),
             "revoke"
         )
-        return changes.startShadow(ALICE_OP, change.id).also { it.state.assert().isEqualTo(ChangeState.SHADOWING) }
+        val shadowing = changes.startShadow(ALICE_OP, change.id)
+        shadowing.state.assert().isEqualTo(ChangeState.SHADOWING)
+        // No startup task or shadow pass ran on this store: the stage itself keeps the list and names the window, so
+        // the instances read it and acknowledge it (`CTL-10`).
+        store.staged()!!.windows[StoreFixtures.ACME].assert().containsExactly(shadowing.shadow!!.window)
+        return shadowing
     }
 
     @Test

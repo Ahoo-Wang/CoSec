@@ -89,10 +89,13 @@ internal class StagingSlots(
      * [shadowing]'s; nothing was written then.
      *
      * The candidate is listed first (`CTL-46`): a candidate is never written unlisted, so the staged list stays a superset
-     * of what is staged. A listing that fails throws, and the stage fails with nothing written.
+     * of what is staged. A listing that fails throws, and the stage fails with nothing written. Then the list is made kept,
+     * whatever startup or the shadow pass did: an instance acknowledges only a window a kept list names (`CTL-10`), so a
+     * stage on a store no reconciliation ran on, or where maintenance never runs, still gets acknowledged.
      */
     private suspend fun place(shadowing: ChangeRequest, candidate: StoredCandidate): Boolean {
         store.listStaged(shadowing.key, candidate.window)
+        store.keepStagedList()
         repeat(MAX_ATTEMPTS) {
             val staged = store.stagedCandidate(shadowing.key)
             if (!stillHolds(shadowing)) {

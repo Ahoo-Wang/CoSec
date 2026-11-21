@@ -508,6 +508,11 @@ live instance (one with a status in the last minute) does not list it in its sta
 - **An instance that started during the window** acknowledges it within a few report intervals, once it has compiled
   the candidate.
 
+If **no** instance acknowledges any window (each one's `waitingFor` names every live instance), the instances hold no
+staged list: they log `The staged list cannot be read`, or `<s>:candidate-staged:all` has no `.kept` marker (a store
+the control plane staged nothing on since it was emptied; the next stage, or the shadow pass, writes it). Fix that and
+they acknowledge within a few report intervals.
+
 Only instances that take part in shadowing are waited for. A host with `cosec.authorization.shadow.enabled=false` (the
 control-plane image sets it) writes no status at all, and one whose `CandidateSource` is your own writes a status that
 says it does not shadow: neither holds a window, and `propagation` still counts the latter.

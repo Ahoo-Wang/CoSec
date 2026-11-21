@@ -356,6 +356,8 @@ Redis may evict CoSec's policy snapshot: maxmemory-policy is {<node>=<policy>}, 
 - **读不到暂存列表的实例**记录 `The staged list cannot be read since it was at <instant>`，其 `cosec.shadow.staged.age` 持续上升。修复它对 Redis 的访问（数据面用户读取 `<s>:candidate-staged:all`，[存储](./storage.md#redis-keys)）。
 - **窗口期间启动的实例**编译了候选之后，会在几个上报间隔内确认它。
 
+如果**没有任何**实例确认任何窗口（每个窗口的 `waitingFor` 都列出全部存活实例），说明实例没有持有暂存列表：它们记录 `The staged list cannot be read`，或者 `<s>:candidate-staged:all` 没有 `.kept` 标记（存储被清空后控制面尚未在其上暂存过任何候选；下一次暂存或影子轮询会写入它）。修复之后，实例会在几个上报间隔内确认。
+
 只有参与影子比较的实例才会被等待。设置了 `cosec.authorization.shadow.enabled=false` 的宿主（控制面镜像就这样设置）根本不写状态；`CandidateSource` 是你自己的实现的宿主会写入一个声明它不参与影子比较的状态：两者都不会拖住窗口，`propagation` 仍会统计后者。
 
 如果 `waitingFor` 为空而窗口仍不关闭，它在等待样本：其文档的流量太少，到 `cosec.control.shadow.max-duration` 时以*证据不足*关闭（[测试变更](../policies/testing.md#trying-changes-in-shadow-mode)）。
