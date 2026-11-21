@@ -25,6 +25,9 @@ import java.nio.file.Files
 class Control(private val operator: SignedIn) {
     private val base: String = "${SystemTopology.gateway}/cosec/control/v1"
 
+    /** `GET /documents?kind=`: the tenant or app documents there are, as far as the caller may see them (`CTL-68`). */
+    fun documents(kind: String): Exchange = Http.get(at("/documents?kind=$kind"), operator.bearer)
+
     fun document(key: String): Exchange = Http.get(at("/documents/$key"), operator.bearer)
 
     /** The revision [key]'s head is at. */
