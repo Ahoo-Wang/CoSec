@@ -1,0 +1,17 @@
+# Rule: MIG-3
+# Mutant: bootstrap writes the platform tenant's document without its rate limits and roles
+# Tests: :migrate:test --tests me.ahoo.cosec.migrate.BootstrapKeepsDocumentTest :conformance:test --tests me.ahoo.cosec.conformance.ConformanceTest
+
+diff --git a/migration/migrate/src/main/kotlin/me/ahoo/cosec/migrate/Bootstrap.kt b/migration/migrate/src/main/kotlin/me/ahoo/cosec/migrate/Bootstrap.kt
+index b3e120ca5..0c4416b42 100644
+--- a/migration/migrate/src/main/kotlin/me/ahoo/cosec/migrate/Bootstrap.kt
++++ b/migration/migrate/src/main/kotlin/me/ahoo/cosec/migrate/Bootstrap.kt
+@@ -83,7 +83,7 @@ class Bootstrap(
+         val bindings = current?.bindings.orEmpty().filterNot { it.id == binding.id } + binding
+         // The document with the binding added, and everything else it holds kept: its policies, rate limits and roles
+         // (MIG-3). Only a publish writes provenance.
+-        val candidate = current?.copy(revision = revision, publishedAt = clock.instant(), bindings = bindings, provenance = null)
++        val candidate = current?.copy(revision = revision, publishedAt = clock.instant(), bindings = bindings, provenance = null, rateLimits = emptyList(), roles = emptyList())
+             ?: PolicyDocument(DocumentKind.TENANT, TenantId.PLATFORM.value, revision, clock.instant(), emptyList(), bindings)
+         // The document compiles as the data plane compiles it: against the platform's limits and the attributes it
+         // declares, so a policy that was legal when it was published does not make the recovery fail (#1264). A

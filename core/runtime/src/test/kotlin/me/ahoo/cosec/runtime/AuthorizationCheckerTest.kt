@@ -88,9 +88,17 @@ class AuthorizationCheckerTest {
     private inner class Views : SnapshotViews {
         var fail = false
 
-        override fun peek(key: ViewKey): SnapshotView? = if (fail) null else view(key)
+        /** When set, no view is installed and a load never answers; [loading] says it was asked. */
+        var hang: CompletableFuture<SnapshotView>? = null
+        val loading = kotlinx.coroutines.CompletableDeferred<Unit>()
+
+        override fun peek(key: ViewKey): SnapshotView? = if (fail || hang != null) null else view(key)
 
         override fun load(key: ViewKey): CompletableFuture<SnapshotView> {
+            hang?.let {
+                loading.complete(Unit)
+                return it
+            }
             if (fail) {
                 return CompletableFuture.failedFuture(IllegalStateException("down"))
             }
@@ -221,6 +229,29 @@ class AuthorizationCheckerTest {
         job.join()
         job.isCancelled.assert().isTrue()
         propagated.assert().isTrue()
+    }
+
+    /** `PIP-3`: the caller's cancellation while the check waits for its view is not a failure of the check. */
+    @Test
+    fun aCancellationWhileTheCheckLoadsItsViewPropagates() = runBlocking<Unit> {
+        val (checker, security) = failingChecker()
+        views.hang = CompletableFuture()
+        var decided: Decision? = null
+        var propagated = false
+        val job = launch {
+            try {
+                decided = checker.decide(security.securityContext, "order:read", "order/1")
+            } catch (e: CancellationException) {
+                propagated = true
+                throw e
+            }
+        }
+        views.loading.await()
+        job.cancel()
+        job.join()
+        job.isCancelled.assert().isTrue()
+        propagated.assert().isTrue()
+        decided.assert().isNull()
     }
 
     @Test

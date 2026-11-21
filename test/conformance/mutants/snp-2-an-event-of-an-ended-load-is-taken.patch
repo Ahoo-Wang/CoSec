@@ -1,0 +1,17 @@
+# Rule: SNP-2
+# Mutant: an answer of a load that has ended (a read that timed out, one of an aborted load) is taken for the load in flight: an older document is installed after a newer one
+# Tests: :runtime:test --tests me.ahoo.cosec.runtime.snapshot.SnapshotInstallOrderPropertyTest --tests me.ahoo.cosec.runtime.snapshot.SnapshotSourceModelPropertyTest --tests me.ahoo.cosec.runtime.snapshot.SnapshotSourceTest
+
+diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/KeyTransitions.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/KeyTransitions.kt
+index bbf0d3f6e..c9ea50545 100644
+--- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/KeyTransitions.kt
++++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/KeyTransitions.kt
+@@ -228,7 +228,7 @@ internal class KeyTransitions<T : Any>(private val config: KeyConfig) {
+ 
+     /** An event about a load: dropped when that load has ended, or when it has moved past what the event is about. */
+     private fun ofLoad(step: KeyStepBuilder<T>, event: KeyEvent<T>) {
+-        val load = step.load?.takeIf { it.id == event.loadId }
++        val load = step.load
+         if (load == null) {
+             if (event is KeyEvent.EffectFailed) {
+                 step.emit(
