@@ -12,7 +12,7 @@
 #
 
 # Leg 2 of the system test (test/system-test/README.md): the gateways and the IAM with the control plane embedded; no control
-# host. Read with compose.yaml. The gateways route /cosec/control to the IAM (COSEC_SYSTEM_CONTROL_TARGET). The IAM decides with
+# host. Read with compose.yaml. The gateways route /cosec/control to the IAM (SYSTEM_CONTROL_TARGET). The IAM decides with
 # policies like the control host does, and takes its caller from the identity the gateway forwarded
 # (cosec.pipeline.caller=forwarded-identity); its own calls to the control plane are in process, through the SDK. The
 # statement is the gateway's alone (STA-7): no other service calls the IAM's control path.
@@ -65,12 +65,12 @@ services:
   # The route /cosec/control/** leads to the IAM instead of a control host.
   gw-1:
     environment:
-      COSEC_SYSTEM_CONTROL_TARGET: auth
+      SYSTEM_CONTROL_TARGET: auth
 
   gw-2:
     environment:
-      COSEC_SYSTEM_CONTROL_TARGET: auth
+      SYSTEM_CONTROL_TARGET: auth
 
   gw-strict:
     environment:
-      COSEC_SYSTEM_CONTROL_TARGET: auth
+      SYSTEM_CONTROL_TARGET: auth

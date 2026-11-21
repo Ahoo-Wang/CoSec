@@ -13,7 +13,7 @@ spring:
             auth:
               - uri: http://auth:8080
             # The control plane's operators' API is served by one replica of the control-plane host (leg 1) or by the IAM that
-            # embeds it (leg 2, COSEC_SYSTEM_CONTROL_TARGET=auth, whose instance is the one above). Leg 1:
+            # embeds it (leg 2, SYSTEM_CONTROL_TARGET=auth, whose instance is the one above). Leg 1:
             # one replica of the control-plane host: the operators' scenarios read what they have written, which a second
             # replica serves a moment after its invalidation message (the scenarios that address both replicas do it by
             # port, ControlHostScenario).
@@ -42,7 +42,7 @@ spring:
             # The control plane's operators' API: the token verified and the route decided here, the identity forwarded, each
             # action decided again at the host. It names the control plane's app, which the tokens of its operators are for.
             - id: control
-              uri: lb://${COSEC_SYSTEM_CONTROL_TARGET:control}
+              uri: lb://${SYSTEM_CONTROL_TARGET:control}
               predicates:
                 - Path=/cosec/control/**
               metadata:
