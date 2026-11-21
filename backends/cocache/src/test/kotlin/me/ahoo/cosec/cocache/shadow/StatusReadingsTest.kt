@@ -142,16 +142,50 @@ class StatusReadingsTest {
                 // i1's last write does not decode; it is written as every status is, with the key's life.
                 putRaw(backend, keyPrefix, "i1", """{"format":9}""", ShadowCacheSpecs.STATUS_TTL)
                 reports.statusReadings().unreadable.assert().containsExactly("i1")
-                time.advance(Duration.ofMinutes(1))
+                // The held clock decides, to the millisecond: named until the key's life ends, and not from then on.
+                time.advance(ShadowCacheSpecs.STATUS_TTL.minusMillis(1))
                 reports.write(status("i0", time))
-                reports.statusReadings().unreadable.assert().describedAs("a minute on").containsExactly("i1")
-                time.advance(Duration.ofSeconds(61))
-                reports.write(status("i0", time))
+                reports.statusReadings().unreadable.assert().describedAs("a millisecond before").containsExactly("i1")
+                time.advance(Duration.ofMillis(1))
                 val readings = reports.statusReadings()
-                readings.unreadable.assert().describedAs("past the key's life").isEmpty()
+                readings.unreadable.assert().describedAs("at the end of the key's life").isEmpty()
                 readings.statuses.map { it.instance }.assert().containsExactly("i0")
             }
         }
+
+    /**
+     * What ends an undecodable status is its key's life, so that life is exact: a status written through the store
+     * CoSec creates is there a millisecond before [ShadowCacheSpecs.STATUS_TTL] after its last write and gone at it,
+     * with no jitter to stretch it (CoCache's default would make it anything from one minute to three).
+     */
+    @Test
+    fun `a status's key lives exactly two minutes after its last write`() = runBlocking<Unit> {
+        val time = Time()
+        val backend = InMemoryBackend(time)
+        val keyPrefix = newKeyPrefix()
+        SnapshotNode(backend, keyPrefix).use { node ->
+            val reports = CoCacheShadowReports.create(node.factory, keyPrefix, time.clock)
+            SnapshotNode(backend, keyPrefix).use { raw ->
+                val stored = raw.runtime.create(
+                    rawStore(
+                        "RawStatus",
+                        keyPrefix,
+                        CoSecCacheSpecs.INSTANCE_STATUS_CACHE_NAME,
+                        KeyEncoder<String> { it }
+                    )
+                )
+                suspend fun present() = stored.async().getIfChanged("i1", null).await() is ConditionalGet.Present
+                // Each write renews the life: the second one counts.
+                reports.write(status("i1", time))
+                time.advance(Duration.ofSeconds(30))
+                reports.write(status("i1", time))
+                time.advance(ShadowCacheSpecs.STATUS_TTL.minusMillis(1))
+                present().assert().describedAs("a millisecond before").isTrue()
+                time.advance(Duration.ofMillis(1))
+                present().assert().describedAs("at the end of its life").isFalse()
+            }
+        }
+    }
 
     /**
      * A value with no life, which CoSec never writes (one set by hand), counts only while its instance's entry in the
