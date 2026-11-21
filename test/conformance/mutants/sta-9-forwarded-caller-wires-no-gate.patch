@@ -3,10 +3,10 @@
 # Tests: :spring-boot:test --tests me.ahoo.cosec.spring.boot.pipeline.ForwardedIdentityCallerTest
 
 diff --git a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/pipeline/ConditionalOnIdentityGate.kt b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/pipeline/ConditionalOnIdentityGate.kt
-index 5545408b4..6de044c99 100644
+index e5f3451e4..328d7bf86 100644
 --- a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/pipeline/ConditionalOnIdentityGate.kt
 +++ b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/pipeline/ConditionalOnIdentityGate.kt
-@@ -35,7 +35,7 @@ internal class OnIdentityGate : AnyNestedCondition(ConfigurationCondition.Config
+@@ -34,6 +34,6 @@ internal class OnIdentityGate : AnyNestedCondition(ConfigurationCondition.Config
      @ConditionalOnProperty(value = [PipelineProperties.MODE_KEY], havingValue = "gateway")
      class GatewayMode
  
@@ -14,4 +14,3 @@ index 5545408b4..6de044c99 100644
 +    @ConditionalOnProperty(value = [PipelineProperties.CALLER_KEY], havingValue = "never")
      class ForwardedCaller
  }
- 

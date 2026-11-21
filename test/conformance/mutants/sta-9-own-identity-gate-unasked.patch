@@ -3,14 +3,14 @@
 # Tests: :spring-boot:test --tests me.ahoo.cosec.spring.boot.pipeline.ForwardedIdentityCallerTest
 
 diff --git a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/pipeline/CoSecPipelineWebAutoConfiguration.kt b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/pipeline/CoSecPipelineWebAutoConfiguration.kt
-index 96f3d9d31..e37f4aefe 100644
+index faaf27ea5..ddf39f02b 100644
 --- a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/pipeline/CoSecPipelineWebAutoConfiguration.kt
 +++ b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/pipeline/CoSecPipelineWebAutoConfiguration.kt
 @@ -89,7 +89,7 @@ internal class CoSecPipelineWebAutoConfiguration {
          environment: Environment,
          beans: ListableBeanFactory,
      ): StartupTask = StartupTask.AfterSingletons {
--        if (gate.getIfUnique() is IdentityGate && !IdentityGateWiring.byProperty(environment)) {
+-        if (gate.getIfUnique() is IdentityGate && !GatewayModeTrust.wiredByProperty(environment)) {
 +        if (false) {
              GatewayModeTrust.requireBoundaryStated(environment)
              GatewayModeTrust.requireNoHiddenMethod(environment, beans)
