@@ -345,6 +345,7 @@ break-glass 等待 broker 的确认（把生产者配置为 `acks=all`）。设�
 - **BEST_EFFORT 监听器的队列已满时丢弃新来的事件**，所以到达的是一个有序的前缀：消费方看到的是缺口，从不是乱序。丢弃计入 `cosec.control.listener.dropped`，并以 `WARN` 记录，每个 required timeout 至多一次。
 - **上限是推导出来的，不是配置的。** 所有队列合计至多占用堆的三十二分之一，由各监听器平分，每个事件按它所持有的内容计量。启动时一条 `INFO` 说明结果（`Change listeners [...]: their queues hold at most 64.0 MB (the heap's 2048.0 MB / 32), 32.0 MB each`）。健康的接收端即使经历涉及数千租户的批量变更，队列也几乎为空。
 - **停止应答的监听器只会被报告，从不被切断。** 在有事件等待、且它超过 required timeout 没有交付任何事件期间，一条 `WARN` 写明它、队列深度和最早事件的等待时长，每个 required timeout 至多一次。它恢复应答时，按顺序交付其份额内保留的一切。`REQUIRED` 监听器在超时内没有应答的调用视为失败，并交付下一个事件。
+- **关闭时监听器先排空队列**，时限是决策监听器的 `cosec.observability.listener.drain-timeout`。它们不再接收事件，交付已入队的事件；剩下的按监听器计数并记录（`Change listener [<name>] never records <n> change events: they were still queued when the drain of <timeout> ended.`，`REQUIRED` 监听器为 `ERROR`，其他为 `WARN`），之后才停止。排空期间到来的受控步骤在生效前以 `503` 拒绝，与 `REQUIRED` 监听器无法记录它时相同。其他步骤已经存储：其事件以同样方式记录，从不入队后丢失。
 
 指标，均带 `listener` 标签：
 

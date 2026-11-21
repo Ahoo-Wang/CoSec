@@ -446,6 +446,12 @@ keep (a propose on one control host and a publish on another are two processes):
   longer than the required timeout, a `WARN` names it, its depth and the age of the oldest event, at most once per
   required timeout. What its share held is delivered, in order, when it answers again. A `REQUIRED` listener's call
   that does not answer within the timeout is a failure, and its next event is delivered.
+- **At shutdown the listeners drain** within `cosec.observability.listener.drain-timeout`, the decision listeners'
+  timeout. They stop taking events and deliver what is queued; what is left is counted and logged per listener
+  (`Change listener [<name>] never records <n> change events: they were still queued when the drain of <timeout>
+  ended.`, at `ERROR` for a `REQUIRED` listener, `WARN` otherwise), and only then are they stopped. A gated step that
+  arrives during the drain is refused with `503` before it takes effect, as when a `REQUIRED` listener cannot record
+  it. Any other step is already stored: its event is logged the same way, never queued to be lost.
 
 Meters, each tagged `listener`:
 

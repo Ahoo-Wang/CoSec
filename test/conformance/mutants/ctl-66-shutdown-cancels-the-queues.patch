@@ -1,0 +1,16 @@
+# Rule: CTL-66
+# Mutant: shutdown cancels the queues at once, delivering nothing of the backlog
+# Tests: :control:test --tests me.ahoo.cosec.control.audit.ChangeListenersDrainTest
+
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/audit/ChangeListeners.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/audit/ChangeListeners.kt
+index 45f85ea84..564ec34e1 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/audit/ChangeListeners.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/audit/ChangeListeners.kt
+@@ -215,6 +215,7 @@ class ChangeListeners(
+      */
+     fun drain(): Boolean {
+         draining = true
++        cancel()
+         val drained = try {
+             scope.async { awaitDelivered() }.asCompletableFuture()
+                 .get(drainTimeout.inWholeMilliseconds, TimeUnit.MILLISECONDS)
