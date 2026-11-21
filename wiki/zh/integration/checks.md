@@ -267,7 +267,7 @@ curl -X POST localhost:8080/cosec/control/v1/explain \
 
 ## 在代码中修改策略 {#changing-policies-from-your-code}
 
-内嵌控制面的服务（例如为租户开通的 IAM 服务）在自己的代码中通过 `ControlService`（`cosec-control`，`@ExperimentalCoSecApi`）调用控制面。凡是装配了控制面的地方，starter 都会提供它的 bean。每次调用都由策略按 `ControlCaller` 所声明的主体作出决策，并记为该主体的步骤。调用经过控制 API 自己的路由：同样的调用经 HTTP 发出，应答相同、记录相同、被拒绝的方式也相同（`CTL-65`）。
+内嵌控制面的服务（例如为租户开通的 IAM 服务）在自己的代码中通过 `ControlService`（`cosec-control-sdk`，`cosec-control` 会带上它；`@ExperimentalCoSecApi`）调用控制面。凡是装配了控制面的地方，starter 都会提供它的 bean。每次调用都由策略按 `ControlCaller` 所声明的主体作出决策，并记为该主体的步骤。调用经过控制 API 自己的路由：同样的调用经 HTTP 发出，应答相同、记录相同、被拒绝的方式也相同（`CTL-65`）。
 
 - **谁在执行：**
   - `ControlCaller.of(securityContext)` 以你正在服务的请求的用户身份执行。它接受 CoSec 为该请求创建的 `SecurityContext`，拒绝你的代码自行组装的上下文。

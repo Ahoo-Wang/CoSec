@@ -370,7 +370,7 @@ the change's. Staging changes, shadow windows and access analysis (`/analyze`) a
 ## Changing policies from your code {#changing-policies-from-your-code}
 
 A service that embeds the control plane, such as an IAM service onboarding a tenant, calls it from its own code
-through `ControlService` (`cosec-control`, `@ExperimentalCoSecApi`). The starter provides a bean of it wherever
+through `ControlService` (`cosec-control-sdk`, which `cosec-control` brings; `@ExperimentalCoSecApi`). The starter provides a bean of it wherever
 the control plane is wired. Every call is decided by the policies for the principal its `ControlCaller` states, and
 recorded as that principal's step. It goes through the control API's own route: the same call over HTTP answers
 the same, records the same, and is refused the same (`CTL-65`).
