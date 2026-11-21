@@ -1,0 +1,17 @@
+# Rule: CTL-65
+# Mutant: a proposal is stored without deciding whether its caller may write and grant what it holds: a call through the facade by a principal the policies do not permit goes through
+# Tests: :control:test --tests me.ahoo.cosec.control.sdk.ControlServiceTest
+
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Proposals.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Proposals.kt
+index 1fa04793b..145968649 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Proposals.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Proposals.kt
+@@ -116,8 +116,6 @@ internal class Proposals(
+         val head = revisions.head(key)
+         // Keyed on what the change does, not on its kind (review K1).
+         val breakGlass = BreakGlassRules.touches(operations, head?.document, clock.instant())
+-        val glass = breakGlass || kind == ProvenanceKind.BREAK_GLASS
+-        authority.authorize(author, key, operations, kind, glass, head?.document)
+         PublishRules.requireAudit(breakGlass, listeners.hasRequired)
+         if ((head?.revision ?: 0) != base) {
+             val current = head?.revision ?: 0
