@@ -626,7 +626,11 @@ A shadow window that does not close while the control plane logs `Shadow window 
 acknowledgement of [<instances>]` (and `GET /changes/{id}` names them in `shadow.waitingFor`) waits for live instances
 that do not acknowledge it (`CTL-10`): an older version (finish the upgrade; its status expires within two minutes once
 it is gone) or an instance that cannot read the staged list (`The staged list cannot be read` in its log, a rising
-`cosec.shadow.staged.age`). With `waitingFor` empty it waits for samples: too little traffic on its documents; it closes
+`cosec.shadow.staged.age`), or one whose status does not decode (`CTL-73`: the control host logs `The status of instance
+[<instance>] does not read`, with why, and `cosec.control.shadow.status.unreadable` counts it; a later format is a
+newer version mid-upgrade, anything else a corrupt value or a crash-looping instance). A live instance has a status
+from the last minute; one cut off from Redis longer is not waited for, and a host with shadowing off writes none. With
+`waitingFor` empty it waits for samples: too little traffic on its documents; it closes
 insufficient at `max-duration`.
 
 A shadow window that stays blocked has a `CANDIDATE_ERROR`: one instance cannot compile the candidate, usually because

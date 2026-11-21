@@ -184,6 +184,12 @@ per instance: with several instances the limit is multiplied by their number. Wh
 one WARN instead: `CoSec is off ... nothing is protected by CoSec`
 ([troubleshooting](./troubleshooting.md#the-log-says-cosec-is-off)).
 
+A host that runs the control plane logs one more INFO line once it has started: what the control plane serves and where
+its callers come from, for example `Control plane: HTTP routes on /cosec/control (port 8080; service port 8082), caller
+from the forwarded identity (statement: only-trusted-callers-can-reach)`, or, in an application that reaches it in process
+only, `Control plane: no HTTP routes (cosec.control.http.enabled=false), caller from the credential`. The ports are the
+ones the servers bound.
+
 ## Metrics
 
 With `cosec-micrometer` and a `MeterRegistry` (for example from Spring Boot Actuator), every decision event is
@@ -481,6 +487,10 @@ Meters, each tagged `listener`:
 | `cosec.control.listener.oldest.age` | how long the oldest queued event has waited (seconds): a sink that stopped shows here first |
 | `cosec.control.listener.dropped` | BEST_EFFORT events dropped by a full queue |
 | `cosec.control.listener.lost` | events of stored steps a REQUIRED listener missed, its queue full or its call failed: alert on any |
+
+`cosec.control.shadow.status.unreadable` (no tags) counts the instance statuses a control host read that did not
+decode: each such instance holds every shadow window until its status reads or expires (`CTL-73`), and the log names it
+([Troubleshooting](./troubleshooting.md#shadow-window-waiting-for-an-acknowledgement)). Alert on any.
 
 ## Logs
 

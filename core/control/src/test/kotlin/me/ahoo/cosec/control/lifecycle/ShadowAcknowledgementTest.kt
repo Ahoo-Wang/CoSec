@@ -27,6 +27,7 @@ import me.ahoo.cosec.spi.shadow.InstanceStatus
 import me.ahoo.cosec.spi.shadow.ShadowOutcome
 import me.ahoo.cosec.spi.shadow.ShadowReport
 import me.ahoo.cosec.spi.shadow.ShadowReportReader
+import me.ahoo.cosec.spi.shadow.StatusReadings
 import me.ahoo.test.asserts.assert
 import me.ahoo.test.asserts.assertThrownBy
 import org.junit.jupiter.api.Test
@@ -45,11 +46,17 @@ class ShadowAcknowledgementTest {
     @Volatile
     private var statusesFail = false
 
+    /** Instances whose status is listed and does not decode, as a store would name them (`CTL-73`). */
+    @Volatile
+    private var unreadable = emptySet<String>()
+
     private val reader = object : ShadowReportReader by reports {
         override suspend fun statuses(): List<InstanceStatus> {
             if (statusesFail) throw IllegalStateException("timeout")
             return reports.statuses()
         }
+
+        override suspend fun statusReadings(): StatusReadings = StatusReadings(statuses(), unreadable)
     }
     private val options = ShadowOptions(Duration.ofMinutes(15), 10, Duration.ofHours(24))
     private val windows = ShadowWindows(reader, options, clock)
@@ -127,6 +134,41 @@ class ShadowAcknowledgementTest {
             it.summary.assert().isNotNull()
         }
     }
+
+    /**
+     * `CTL-73`: an instance whose status does not decode is live and acknowledges nothing, so the window waits for it
+     * and names it, while every other status is read and `propagation` answers, counting it as recent and holding
+     * nothing. Once its status reads again and lists the window, the window passes.
+     */
+    @Test
+    fun `a status that does not decode holds the window and is named, and propagation still answers`() =
+        runBlocking<Unit> {
+            later()
+            sampled("i-1")
+            status("i-1", setOf(WINDOW))
+            status("i-2", setOf(WINDOW, "another"))
+            unreadable = setOf("broken")
+            look().let {
+                it.summary.assert().isNull()
+                it.acknowledgement.assert().isEqualTo(Acknowledgement(2, listOf("broken")))
+            }
+            windows.acknowledgement("another").assert().isEqualTo(Acknowledgement(1, listOf("broken", "i-1")))
+            windows.propagation(me.ahoo.cosec.spi.snapshot.SnapshotKey.Platform, 1).let {
+                it.recent.assert().isEqualTo(3)
+                it.holding.assert().isEqualTo(0)
+            }
+            // One read, shared by the three calls, found one status that does not decode.
+            windows.unreadableStatuses.assert().isEqualTo(1L)
+            later(Duration.ofSeconds(10))
+            unreadable = emptySet()
+            status("i-1", setOf(WINDOW))
+            status("i-2", setOf(WINDOW))
+            status("broken", setOf(WINDOW))
+            look().let {
+                it.acknowledgement.assert().isEqualTo(Acknowledgement(3, emptyList()))
+                it.summary!!.insufficient.assert().isFalse()
+            }
+        }
 
     @Test
     fun `an instance whose status is older than a minute is not waited for`() = runBlocking<Unit> {

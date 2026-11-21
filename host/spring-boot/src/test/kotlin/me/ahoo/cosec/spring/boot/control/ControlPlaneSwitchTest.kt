@@ -146,6 +146,18 @@ class ControlPlaneSwitchTest {
     }
 
     @Test
+    fun `the instance statuses that do not decode are counted - CTL-73`() {
+        runner.withBean(io.micrometer.core.instrument.MeterRegistry::class.java, {
+            io.micrometer.core.instrument.simple.SimpleMeterRegistry()
+        }).run { context ->
+            context.startupFailure.assert().isNull()
+            val registry = context.getBean(io.micrometer.core.instrument.MeterRegistry::class.java)
+            registry.find(ControlMetersConfiguration.UNREADABLE_STATUSES).functionCounter()!!.count()
+                .assert().isEqualTo(0.0)
+        }
+    }
+
+    @Test
     fun `cosec control enabled false wires nothing of the control plane, and the stores are read read-only`() {
         runner.withPropertyValues("${ControlPlaneCondition.ENABLED_KEY}=false").run { context ->
             context.startupFailure.assert().isNull()

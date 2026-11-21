@@ -1,0 +1,17 @@
+# Rule: CTL-73
+# Mutant: an undecodable status written without a life counts as live for as long as it is stored, so one left by a gone instance holds every shadow window for ever
+# Tests: :cocache:test --tests me.ahoo.cosec.cocache.shadow.StatusReadingsTest
+
+diff --git a/backends/cocache/src/main/kotlin/me/ahoo/cosec/cocache/shadow/CoCacheShadowReports.kt b/backends/cocache/src/main/kotlin/me/ahoo/cosec/cocache/shadow/CoCacheShadowReports.kt
+index 10c741804..9c89b5a15 100644
+--- a/backends/cocache/src/main/kotlin/me/ahoo/cosec/cocache/shadow/CoCacheShadowReports.kt
++++ b/backends/cocache/src/main/kotlin/me/ahoo/cosec/cocache/shadow/CoCacheShadowReports.kt
+@@ -257,7 +257,7 @@ class CoCacheShadowReports @InternalCoSecApi constructor(
+ 
+     /** Whether an instance listed at [listedAt] still has a current entry in the list ([ShadowCacheSpecs.INDEX_EXPIRY]). */
+     private fun current(listedAt: Instant?, now: Instant): Boolean =
+-        listedAt != null && now.isBefore(listedAt.plus(ShadowCacheSpecs.INDEX_EXPIRY))
++        listedAt != null || now.isBefore(now)
+ 
+     /** Logs [instance]'s undecodable status at most once per [ShadowReportReader.STATUS_TTL]; the meter counts each. */
+     private fun warnUnreadable(instance: String, error: SnapshotFormatException) {

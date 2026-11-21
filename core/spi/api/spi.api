@@ -390,6 +390,7 @@ public abstract interface class me/ahoo/cosec/spi/shadow/ShadowReportReader {
 	public static final field Companion Lme/ahoo/cosec/spi/shadow/ShadowReportReader$Companion;
 	public fun readings (Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public abstract fun reports (Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun statusReadings (Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public abstract fun statuses (Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 }
 
@@ -399,6 +400,7 @@ public final class me/ahoo/cosec/spi/shadow/ShadowReportReader$Companion {
 
 public final class me/ahoo/cosec/spi/shadow/ShadowReportReader$DefaultImpls {
 	public static fun readings (Lme/ahoo/cosec/spi/shadow/ShadowReportReader;Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public static fun statusReadings (Lme/ahoo/cosec/spi/shadow/ShadowReportReader;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 }
 
 public abstract interface class me/ahoo/cosec/spi/shadow/ShadowReportSink {
@@ -433,6 +435,15 @@ public final class me/ahoo/cosec/spi/shadow/StagedCandidates {
 
 public final class me/ahoo/cosec/spi/shadow/StagedCandidates$Companion {
 	public final fun getNONE ()Lme/ahoo/cosec/spi/shadow/StagedCandidates;
+}
+
+public final class me/ahoo/cosec/spi/shadow/StatusReadings {
+	public fun <init> (Ljava/util/List;Ljava/util/Set;)V
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getStatuses ()Ljava/util/List;
+	public final fun getUnreadable ()Ljava/util/Set;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
 }
 
 public final class me/ahoo/cosec/spi/shadow/StoredCandidate {

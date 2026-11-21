@@ -11,7 +11,7 @@ index a2ed8f5a4..efa0373cf 100644
      private fun unreadable(error: Exception) {
          val was = readAt
 -        listed = null
-+        listed = Listed(false, emptySet(), emptySet())
++        listed = Listed(false, emptySet(), emptySet(), emptyMap())
          readAt = null
          // Once per outage: the line says the list was readable and is not, then the debug log has each failure.
          if (was != null) {

@@ -36,6 +36,7 @@ import me.ahoo.cosec.spi.shadow.ShadowReadings
 import me.ahoo.cosec.spi.shadow.ShadowReport
 import me.ahoo.cosec.spi.shadow.ShadowReportReader
 import me.ahoo.cosec.spi.shadow.ShadowReportSink
+import me.ahoo.cosec.spi.shadow.StatusReadings
 import me.ahoo.cosec.spi.snapshot.SnapshotFormatException
 import java.time.Clock
 import java.time.Instant
@@ -58,7 +59,8 @@ import java.util.concurrent.ConcurrentHashMap
  * leaves: an instance lists itself with a conditional read of it that costs nothing while the list is unchanged, and
  * again every [ShadowCacheSpecs.INDEX_REFRESH]; whoever writes the list drops entries nobody refreshed for
  * [ShadowCacheSpecs.INDEX_EXPIRY]. [statuses] reads the list and each listed status, and skips a listed instance whose
- * status has expired (it is gone), as one older than a minute. A status or list that cannot be read fails it.
+ * status has expired (it is gone), as one older than a minute. A status or list that cannot be read fails it;
+ * [statusReadings] names a status that does not decode instead (`CTL-73`).
  */
 @ExperimentalCoSecApi
 class CoCacheShadowReports @InternalCoSecApi constructor(
@@ -72,6 +74,9 @@ class CoCacheShadowReports @InternalCoSecApi constructor(
     private val listed = ConcurrentHashMap<String, Listed>()
 
     private class Listed(val digest: Digest, val until: Instant)
+
+    /** When each instance's undecodable status was last logged ([warnUnreadable]). */
+    private val warned = ConcurrentHashMap<String, Instant>()
 
     override suspend fun write(report: ShadowReport) {
         require(ShadowReport.isInstanceId(report.instance)) { "[${report.instance}] is not an instance id" }
@@ -193,22 +198,82 @@ class CoCacheShadowReports @InternalCoSecApi constructor(
         }
     }
 
-    override suspend fun statuses(): List<InstanceStatus> {
-        val since = clock.instant().minus(ShadowReportReader.STATUS_TTL)
-        val members = read(instances, ShadowCacheSpecs.INDEX_KEY)?.first?.keys.orEmpty()
+    override suspend fun statuses(): List<InstanceStatus> = readStatuses(lenient = false).statuses
+
+    /**
+     * Every listed status that reads and is recent, and the instances whose status does not decode (`CTL-73`). An
+     * undecodable status has no `at` anyone can read, so what ends it is the store: every status is written with the
+     * key's life, [ShadowCacheSpecs.STATUS_TTL] (two minutes, renewed by each write), and once an instance stops writing
+     * its value expires, readable or not, and the listed instance reads as having none. A value with no life (written
+     * by hand, never by CoSec) counts only while its instance's entry in the list is current
+     * ([ShadowCacheSpecs.INDEX_EXPIRY]), which a gone instance no longer refreshes. Each such status is logged with
+     * why, at most once a minute per instance. A status under another instance's key is the store's data being wrong,
+     * not a version the reader does not know, and fails the call as [statuses] does; so does a store that does not
+     * answer.
+     */
+    override suspend fun statusReadings(): StatusReadings = readStatuses(lenient = true)
+
+    private suspend fun readStatuses(lenient: Boolean): StatusReadings {
+        val now = clock.instant()
+        val since = now.minus(ShadowReportReader.STATUS_TTL)
+        val index = read(instances, ShadowCacheSpecs.INDEX_KEY)?.first.orEmpty()
+        val members = index.keys
         check(members.all(ShadowReport::isInstanceId)) { "The list of instances names an invalid instance id" }
         val found = members.sorted().chunked(READ_BATCH).flatMap { batch ->
             coroutineScope {
-                batch.map { instance ->
-                    async {
-                        read(statuses, instance, "The status of instance [$instance]")?.first?.also {
-                            check(it.instance == instance) { "The status under [$instance] is ${it.instance}'s" }
-                        }
-                    }
-                }.awaitAll()
+                batch.map { instance -> async { instance to status(instance, lenient) } }.awaitAll()
             }
         }
-        return found.filterNotNull().filter { !it.at.isBefore(since) }
+        val statuses = found.mapNotNull { (_, read) -> (read as? StatusRead.Read)?.status }
+        return StatusReadings(
+            statuses.filter { !it.at.isBefore(since) },
+            found.filter { (instance, read) -> read is StatusRead.Unreadable && current(index[instance], now) }
+                .mapTo(HashSet()) { it.first },
+        )
+    }
+
+    private sealed interface StatusRead {
+        class Read(val status: InstanceStatus) : StatusRead
+
+        data object Unreadable : StatusRead
+    }
+
+    /**
+     * [instance]'s status: null when it has none (it expired), [StatusRead.Unreadable] when [lenient] and it does not
+     * decode.
+     */
+    private suspend fun status(instance: String, lenient: Boolean): StatusRead? {
+        val status = try {
+            read(statuses, instance, "The status of instance [$instance]")?.first
+        } catch (e: SnapshotFormatException) {
+            if (!lenient) throw e
+            warnUnreadable(instance, e)
+            return StatusRead.Unreadable
+        } ?: return null
+        check(status.instance == instance) { "The status under [$instance] is ${status.instance}'s" }
+        if (warned.isNotEmpty()) warned.remove(instance)
+        return StatusRead.Read(status)
+    }
+
+    /** Whether an instance listed at [listedAt] still has a current entry in the list ([ShadowCacheSpecs.INDEX_EXPIRY]). */
+    private fun current(listedAt: Instant?, now: Instant): Boolean =
+        listedAt != null && now.isBefore(listedAt.plus(ShadowCacheSpecs.INDEX_EXPIRY))
+
+    /** Logs [instance]'s undecodable status at most once per [ShadowReportReader.STATUS_TTL]; the meter counts each. */
+    private fun warnUnreadable(instance: String, error: SnapshotFormatException) {
+        val now = clock.instant()
+        val last = warned[instance]
+        if (last != null && now.isBefore(last.plus(ShadowReportReader.STATUS_TTL))) return
+        val claimed = if (last == null) {
+            warned.putIfAbsent(instance, now) == null
+        } else {
+            warned.replace(instance, last, now)
+        }
+        if (!claimed) return
+        log.warn {
+            "The status of instance [$instance] does not read: it counts as live and acknowledging no shadow window " +
+                "until it reads or expires, at most two minutes after its last write (${error.message})."
+        }
     }
 
     /** Read, change, `putIfMatch`: retried while another instance wrote in between; the value written. */
