@@ -1,0 +1,16 @@
+# Rule: OBS-8
+# Mutant: a staged list that cannot be read keeps its age at zero, as if it had just been read
+# Tests: :micrometer:test --tests me.ahoo.cosec.micrometer.ShadowStagedAgeMetricTest
+
+diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/shadow/StagedDocuments.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/shadow/StagedDocuments.kt
+index ed5c96aad..0750e5a22 100644
+--- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/shadow/StagedDocuments.kt
++++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/shadow/StagedDocuments.kt
+@@ -127,6 +127,7 @@ class StagedDocuments(private val store: CandidateStore, private val clock: Cloc
+         val was = readAt
+         listed = null
+         readAt = null
++        answeredAt = clock.instant()
+         // Once per outage: the line says the list was readable and is not, then the debug log has each failure.
+         if (was != null) {
+             log.warn { "The staged list cannot be read since it was at $was: candidates are read by their keys until it can." }

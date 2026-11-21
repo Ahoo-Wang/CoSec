@@ -165,11 +165,17 @@
     },
     {
       "id": "CTL-12",
-      "source": "RFC 0007 §6.3, §6.4",
-      "statement": "A candidate that an instance cannot compile or evaluate (CANDIDATE_ERROR) closes the window at once, and the change never publishes.",
+      "source": "RFC 0007 §6.3, §6.4; Design D2 (saas-shadow-staged-design.md §4, §9 decision 2, condition 2)",
+      "statement": "A candidate that an instance cannot compile or evaluate (CANDIDATE_ERROR) closes the window at once, and the change never publishes. An instance that reads the staged list compiles each window's candidate when it first sees the window, whatever its traffic, and one that does not compile is CANDIDATE_ERROR in that cycle's report; it compiles on the reporter's coroutine, one candidate at a time, never on the snapshot source's compile pool, so windows staged while documents load cold make no load fail; and for at most one report interval per cycle, checked between candidates, the longest waiting first, so the reports and the status are written every cycle and every window is compiled within a few cycles of its staging.",
       "level": "control",
       "guards": [
-        "control:ShadowWindowTest#a candidate an instance cannot compile closes the window at once and never publishes"
+        "control:ShadowWindowTest#a candidate an instance cannot compile closes the window at once and never publishes",
+        "runtime:CompileOnSightTest#a window is compiled when the instance first sees it, once, with no request sampled",
+        "runtime:CompileOnSightTest#a candidate that does not compile is a CANDIDATE_ERROR in the same cycle's report, counted once",
+        "runtime:CompileOnSightTest#a window listed before its candidate is written is compiled on the next cycle",
+        "runtime:CompileOnSightTest#a new window of a document is compiled though the old one is still held",
+        "runtime:CompileOnSightTest#a hundred windows staged while documents load cold fail no load, and none compiles on the source's pool",
+        "runtime:CompileOnSightTest#a cycle compiles for one interval at most, the status is written every cycle, and every window in the end"
       ],
       "pending": null
     },
@@ -756,6 +762,35 @@
         "cocache:ShadowReadingsTest#a listed report that is missing, does not decode, or is another's is that instance's reading",
         "cocache:ShadowReadingsTest#a store that does not answer fails the whole call, never reads as an unreadable report",
         "spi:ShadowValuesTest#the default readings read the reports, and throw where they throw"
+      ],
+      "pending": null
+    },
+    {
+      "id": "CTL-61",
+      "source": "Review round 2, R2C-11 and R2C-13 (review-r2-3-control-storage.md); RFC 0007 §10",
+      "statement": "The control API answers from a response model of its own: a change answer holds only the members its codec writes, never what the stored record keeps for the store's own work (the heads it was checked with, the instances that reported on its window, the record's format, what an approver held); a decision's closed sets come from one table each, an undecided decision naming the kind of its failure under `cause` and a refused scope its reason under `reason`, never a class's name; and `contract/control/` pins the members, the closed sets and the change kind each route writes to the audit stream.",
+      "level": "control",
+      "guards": [
+        "control:ControlAnswersTest#a change answer holds only what its codec writes, never the record's bookkeeping - CTL-61",
+        "control:ControlAnswersTest#a refused scope says why under reason, never under cause - CTL-61",
+        "control:ControlAnswersTest#an undecided decision names the kind of its cause from one table, never a class's name - CTL-61",
+        "control:ClientContractTest#a change answer holds exactly the members of its contract file",
+        "control:ClientContractTest#a listed change holds exactly the members of its contract file",
+        "control:ClientContractTest#the closed sets of the control API are those of their contract file",
+        "control:ClientContractTest#each route that moves a change writes the change kinds of its contract file"
+      ],
+      "pending": null
+    },
+    {
+      "id": "CTL-62",
+      "source": "Review round 2, R2C-12 (review-r2-3-control-storage.md); RFC 0007 §6.5",
+      "statement": "A revision's propagation counts, of the instances that reported a status in the last minute, those that hold the document at any revision and those of them that installed the revision or a later one, and says when it read the statuses: no instance is behind when every instance holding the document installed it, and when none holds it the first request that needs it loads it at the published revision. The statuses are read at most every five seconds, and a read that fails is answered 503, never from an older read.",
+      "level": "control",
+      "guards": [
+        "control:PropagationTest#propagation counts the instances that hold the document, and says when it read them - CTL-62",
+        "control:PropagationTest#the statuses are read at most every five seconds, and the answer is as old as that read",
+        "control:PropagationTest#a status read that fails is never kept nor answered from an older read - CTL-62",
+        "control:ClientContractTest#a propagation answer holds exactly the members of its contract file"
       ],
       "pending": null
     }

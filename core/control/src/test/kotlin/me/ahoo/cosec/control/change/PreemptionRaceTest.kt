@@ -125,7 +125,7 @@ class PreemptionRaceTest {
             listOf(Operation.PutPolicy(allow("slow"))),
             "slow"
         )
-        return harness.changes.stage(PLATO, change.id).also { it.state.assert().isEqualTo(ChangeState.SHADOWING) }
+        return harness.changes.startShadow(PLATO, change.id).also { it.state.assert().isEqualTo(ChangeState.SHADOWING) }
     }
 
     private suspend fun refused(block: suspend () -> Unit): Int = try {
@@ -146,7 +146,7 @@ class PreemptionRaceTest {
             listOf(Operation.PutPolicy(allow("slow"))),
             "slow"
         )
-        val held = changes.stage(PLATO, proposed.id)
+        val held = changes.startShadow(PLATO, proposed.id)
         val waiting = changes.shadowed(held.id)
         waiting.state.assert().isEqualTo(ChangeState.AWAITING_APPROVAL)
         val emergency = changes.propose(PLATO, SnapshotKey.Platform, head(harness), ban, "ban")
@@ -355,7 +355,7 @@ class PreemptionRaceTest {
             listOf(Operation.PutPolicy(allow("slow"))),
             "slow"
         )
-        val held = changes.stage(PLATO, proposed.id)
+        val held = changes.startShadow(PLATO, proposed.id)
         val emergency = changes.propose(PLATO, SnapshotKey.Platform, head(harness), ban, "ban")
         racing.refuseStages = true
         refused { changes.skipShadow(PLATO, emergency.id, "incident") }.assert().isEqualTo(409)
@@ -505,7 +505,7 @@ class PreemptionRaceTest {
             listOf(Operation.PutPolicy(allow("slow"))),
             "slow"
         )
-        harness.changes.stage(PLATO, holder.id).state.assert().isEqualTo(ChangeState.SHADOWING)
+        harness.changes.startShadow(PLATO, holder.id).state.assert().isEqualTo(ChangeState.SHADOWING)
         // c2, the revoke, is first read by its stage: another writer publishes over the head right then.
         racing.afterChange(ChangeId("c2")) { publishOver(harness) }
         breakGlass.revoke(PLATO, BindingId("g1"), "compromised").state.assert().isEqualTo(ChangeState.PUBLISHED)

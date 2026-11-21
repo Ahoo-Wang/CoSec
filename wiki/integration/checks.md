@@ -333,9 +333,10 @@ heads; a revision no longer kept is `410`. Unknown fields are `400`.
 | Field | Meaning |
 |---|---|
 | `version` | The revisions of the documents decided on. |
-| `decision.decision` | `Permit`, `Deny`, `Indeterminate`, or `Rejected` when the scope is rejected (then `cause` is `APP_MISMATCH` or `SPACE_NOT_MEMBER`, and there is no trace). |
+| `decision.decision` | `Permit`, `Deny`, `Indeterminate`, or `Rejected` when the scope is rejected (then `reason` says why, and there is no trace). |
 | `decision.by` | The statement that decided: policy, statement index and name, the binding it applied through (`via`: a binding id, or `attached:<policy>`) and its document. Absent for the implicit deny and for Indeterminate. |
-| `decision.cause` | For Indeterminate, the type of the cause (such as `MissingPolicies`, `MatcherFailed`, `SourceUnavailable`, `DocumentInvalid`); never its message. |
+| `decision.cause` | For Indeterminate only, the kind of failure: `MatcherFailed`, `MissingPolicies`, `AmbiguousPolicy`, `SourceUnavailable`, `DocumentInvalid`, `NotLoaded`, `BoundaryUnavailable`, `AttributeUnavailable`, `CheckFailed`, `MembershipUnavailable`, `RequiredListenerFailed` or `RateLimiterUnavailable`; never its message (`CTL-61`). |
+| `decision.reason` | For Rejected only: `APP_MISMATCH` or `SPACE_NOT_MEMBER`. |
 | `decision.redacted` | `true` when a statement decided that you may not see. |
 | `trace.candidates` | Each statement evaluated: its effect, its statement, and its outcome: `MATCHED`, `ACTION_MISS`, `RESOURCE_MISS`, `CONDITION_MISS`, `GUARD_MISS` (its policy's condition did not hold), `GUARD_ERROR`, `ERROR` or `NOT_EVALUATED`. |
 | `trace.redacted` | How many candidates were left out because you may not see them. |

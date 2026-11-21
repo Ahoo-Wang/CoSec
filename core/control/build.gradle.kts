@@ -21,4 +21,6 @@ dependencies {
     api(project(":document"))
     // The control API and the change records are JSON (RFC 0007 §9); Jackson stays internal (RFC 0011 D3).
     implementation("tools.jackson.core:jackson-databind")
+    // PIP-25: ContractFiles, which ClientContractTest checks contract/control/ with (CTL-61).
+    testImplementation(testFixtures(project(":runtime")))
 }

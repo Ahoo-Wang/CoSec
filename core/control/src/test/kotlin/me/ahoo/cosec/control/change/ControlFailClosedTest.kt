@@ -136,10 +136,10 @@ class ControlFailClosedTest {
     fun `one staged change per document`() = runBlocking<Unit> {
         val first = ready(Operation.PutPolicy(allow("a")))
         val second = changes.propose(ALICE_OP, ACME, 0, listOf(Operation.PutPolicy(allow("b"))), "second")
-        assertThrownBy<ChangeRejectedException> { runBlocking { changes.stage(ALICE_OP, second.id) } }
+        assertThrownBy<ChangeRejectedException> { runBlocking { changes.startShadow(ALICE_OP, second.id) } }
             .extracting { (it as ChangeRejectedException).status }.isEqualTo(409)
         changes.abandon(ALICE_OP, first.id).state.assert().isEqualTo(ChangeState.ABANDONED)
-        changes.stage(ALICE_OP, second.id).state.assert().isEqualTo(ChangeState.SHADOWING)
+        changes.startShadow(ALICE_OP, second.id).state.assert().isEqualTo(ChangeState.SHADOWING)
         changes.shadowed(second.id).state.assert().isEqualTo(ChangeState.READY)
         changes.publish(ALICE_OP, second.id).state.assert().isEqualTo(ChangeState.PUBLISHED)
         memory.stage(ACME)!!.value.holder.assert().isNull()
@@ -152,7 +152,7 @@ class ControlFailClosedTest {
         changes.get(stale.id).state.assert().isEqualTo(ChangeState.EXPIRED)
         assertThrownBy<ChangeRejectedException> { runBlocking { changes.publish(ALICE_OP, stale.id) } }
         val next = changes.propose(ALICE_OP, ACME, 0, listOf(Operation.PutPolicy(allow("b"))), "next")
-        changes.stage(ALICE_OP, next.id).state.assert().isEqualTo(ChangeState.SHADOWING)
+        changes.startShadow(ALICE_OP, next.id).state.assert().isEqualTo(ChangeState.SHADOWING)
         head().assert().isNull()
     }
 }

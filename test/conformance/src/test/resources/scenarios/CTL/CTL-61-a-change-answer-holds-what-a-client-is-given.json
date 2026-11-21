@@ -1,0 +1,59 @@
+{
+  "rules": [
+    "CTL-61"
+  ],
+  "polarity": "positive",
+  "level": "control",
+  "description": "G2e (R2C-11): a change answer holds the members a client is given, under the names it had: what was proposed, its state and findings, and once staged its window (the id a publisher acknowledges, and when it started).",
+  "options": {
+    "shadow": {
+      "minDuration": "PT15M",
+      "minSamples": 1,
+      "maxDuration": "PT1H"
+    }
+  },
+  "steps": [
+    {
+      "propose": {
+        "change": "c1",
+        "document": "tenant:acme",
+        "operations": [
+          {
+            "putPolicy": {
+              "id": "read",
+              "statements": [
+                {
+                  "effect": "allow",
+                  "action": "order:read"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "answer": "c1"
+    },
+    {
+      "stage": "c1"
+    },
+    {
+      "answer": "c1"
+    }
+  ],
+  "expect": {
+    "steps": [
+      "CHECKED",
+      "members author,base,candidate,createdAt,findings,id,key,kind,note,operations,state,updatedAt",
+      "SHADOWING",
+      "members author,base,candidate,createdAt,findings,id,key,kind,note,operations,shadow,state,updatedAt; shadow startedAt,window"
+    ],
+    "errors": {
+      "c1": []
+    },
+    "heads": {
+      "tenant:acme": 0
+    }
+  }
+}

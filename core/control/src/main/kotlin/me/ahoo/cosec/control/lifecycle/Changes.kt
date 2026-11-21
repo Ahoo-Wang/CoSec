@@ -88,7 +88,7 @@ class Changes(
 ) {
     private val checks = ChangeChecks(options, compile)
 
-    private val windows = ShadowWindows(reports, options.shadow)
+    private val windows = ShadowWindows(reports, options.shadow, clock)
 
     private val context = StoreCurrentDocuments(store, revisions)
 
@@ -172,7 +172,7 @@ class Changes(
     ): PolicyDocument? = publishing.candidateOf(id)
 
     /** [Staging.stage]: takes the staging slot for a `CHECKED` change and starts its shadow window. */
-    suspend fun stage(operator: Operator, id: ChangeId): ChangeRequest = staging.stage(operator, id)
+    suspend fun startShadow(operator: Operator, id: ChangeId): ChangeRequest = staging.startShadow(operator, id)
 
     /** [Staging.shadowed]: looks at the window of a `SHADOWING` change, and closes it once it may. */
     suspend fun shadowed(id: ChangeId): ChangeRequest = staging.shadowed(id)

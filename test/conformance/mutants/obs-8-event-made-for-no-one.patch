@@ -1,0 +1,18 @@
+# Rule: OBS-8
+# Mutant: an event is made though only shadow listeners listen and none sampled the request
+# Tests: :runtime:test --tests me.ahoo.cosec.runtime.event.SampledOnlyEventsTest
+
+diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/stage/PublishBestEffort.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/stage/PublishBestEffort.kt
+index 68f56c1d8..e8f04e6c0 100644
+--- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/stage/PublishBestEffort.kt
++++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/stage/PublishBestEffort.kt
+@@ -39,9 +39,6 @@ internal class PublishBestEffort(private val listeners: DecisionListeners, priva
+             return
+         }
+         val replay = if (outcome == null) null else replay(state)
+-        if (replay == null && listeners.sampledOnly) {
+-            return
+-        }
+         listeners.publish(state.event(ids.generate(), outcome, replay))
+     }
+ 

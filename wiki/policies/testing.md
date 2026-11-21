@@ -64,7 +64,7 @@ Three built-in policies can be bound to operators: `cosec:platform-admin` (every
 | `GET /documents/{key}/revisions?before=&limit=` | Revision history, newest first (`limit` 1 to 200, default 20). |
 | `GET /documents/{key}/revisions/{revision}` | One kept revision; `410` when it is no longer kept. |
 | `GET /documents/{key}/diff?from=&to=` | Policies and bindings added, removed and changed between two revisions, of the [expanded](./role-permissions.md#roles) documents, the `roles` as written, and `sections`: the names of the other sections that differ, of `catalog`, `boundary`, `limits`, `attributes` and `rateLimits` in that order, each compared by its whole content (`[]` when none does). |
-| `GET /documents/{key}/revisions/{revision}/propagation` | How many recently reporting instances have installed that revision. |
+| `GET /documents/{key}/revisions/{revision}/propagation` | How far that revision has propagated ([Propagation](#propagation)). |
 | `POST /documents/{key}:apply`, `POST /documents/{key}:rollback` | Propose a change from a whole document, or back to an old revision. |
 | `POST /changes`, `GET /changes/{id}` | Propose a change; read one. |
 | `GET /changes?document=&state=&after=&limit=` | The open changes of a document, of a state, or of both ([Finding open changes](#finding-open-changes)). |
@@ -146,7 +146,8 @@ change's candidate too:
 | `principalBindings`, `breakGlass` | What the credential may use, both `true` by default (CoSec's own token). For an API key, set `breakGlass` to `false`; for a key with a role cap, set `principalBindings` to `false` too: then the attachments and principal bindings grant nothing, and their DENYs still apply. Only a boolean is accepted. |
 
 The answer has `enforced`, `candidate` when one was asked for, and `differs`. Each decision is `Permit`, `Deny`,
-`Indeterminate` (with its `cause`) or `Rejected` (the scope was refused), with the statement that decided (`by`) and the
+`Indeterminate` (with its `cause`, the kind of failure) or `Rejected` (the scope was refused, with its `reason`:
+`APP_MISMATCH` or `SPACE_NOT_MEMBER`), with the statement that decided (`by`) and the
 full trace of candidates. A statement whose policy is defined in a document you may not read is left out and counted as `redacted`, even when the binding that applied it is in a document you may read.
 `differs` compares what the two decisions say, a failure by its kind and message, so the same compile failure on both
 sides does not differ.
@@ -286,6 +287,23 @@ only a platform principal rejects or abandons, and a revoke of a break-glass bin
 abandons (`BRK-10`). Every abandon is recorded as an `ABANDONED` change event whose note names the change's author;
 abandoning a break-glass change needs a REQUIRED change listener, which records it first (`503` without one).
 
+### What a change answers {#what-a-change-answers}
+
+Every route that answers a change (`POST /changes`, `GET /changes/{id}`, each step that moves one, `:apply`, `:rollback`
+and the break-glass request and approval) answers the same members: `id`, `key` (its document), `base` (`revision` and
+`digest`), `operations` (as you sent them), `author`, `note`, `kind`, `state`, `findings`, `candidate` (the digest of the
+candidate an approval is given for), `createdAt`, `updatedAt`; and, once there is one, `skipShadow` (the reason),
+`publishedRevision`, `escalations`, `approval` (`approver`, `at`, `candidate`, `covers`), `shadow` (`window`, the id
+a publisher acknowledges, `startedAt`, and once closed `closed`) and `confirmations`. What the store keeps for its
+own work is in no answer: the heads the candidate was checked with, the instances that reported on its window, and
+what an approver held (`CTL-61`).
+
+The members, their types and which are always there are in
+[`contract/control/`](https://github.com/Ahoo-Wang/CoSec/tree/main/contract/control), with the closed sets an answer
+writes: `state`, `kind`, `severity`, an escalation's `reason`, the outcomes a window counts, and a decision's
+`decision`, `cause`, `reason`, and a trace entry's `effect` and `outcome`. A test of CoSec fails when an answer and
+its file disagree, so a value changes only in a release that says so.
+
 ### Finding open changes {#finding-open-changes}
 
 `GET /changes` lists the changes that are not finished: `document=<key>` those of one document, `state=<STATE>` those in
@@ -298,7 +316,7 @@ last page.
   "changes": [
     {
       "id": "0SVoMJp7Q4G00",
-      "document": "tenant:acme",
+      "key": "tenant:acme",
       "state": "CHECKED",
       "kind": "PUBLISH",
       "author": { "tenant": "acme", "principal": "alice" },
@@ -312,7 +330,8 @@ last page.
 ```
 
 Each entry is a summary: read the change itself with `GET /changes/{id}`. A change whose stored record does not read is
-listed with its `id`, its `document` and the state `UNREADABLE`, never left out. A listing shows a change only if
+listed with its `id`, its `key` and the state `UNREADABLE`, never left out. An entry's members are those of the same
+name in [the change's answer](#what-a-change-answers). A listing shows a change only if
 `GET /changes/{id}` would show it to you: changes of your own tenant's documents (any of them for a platform
 principal) that you wrote or whose document you may read (`cosec:read`). What it leaves out it does not tell: a page
 holds what you may see, and `next` is there only when more of it follows (`CTL-55`).
@@ -367,7 +386,16 @@ control-plane instance at a time, starting with the ones it looked at longest ag
 `looked at <k> of <n> windows`, and the next pass starts behind the cut. A shadowing change whose record does not read is
 skipped, with a `WARN` naming it at most once an hour, and the other windows are looked at. When a window closes, the change becomes `READY`, or `AWAITING_APPROVAL` when it needs
 [approval](#approval). If the document's revision moved meanwhile, it becomes `CONFLICTED`. The data plane takes part
-with `cosec-cocache` and `cosec.authorization.shadow.*` (on by default, sampling 10 % of requests).
+with `cosec-cocache` and `cosec.authorization.shadow.*` (on by default, sampling 10 % of the requests that read a staged
+document).
+
+Each instance compiles a staged candidate once it sees its window in the staged list, whether or not its traffic reads
+that document (`CTL-12`). An instance that cannot compile it reports `CANDIDATE_ERROR` then, and the window closes
+blocked without waiting for a request of that document. The compilation runs off the request path, one candidate at a
+time, and never holds up the documents the instance enforces. Each `cosec.authorization.shadow.report-interval` it
+spends at most one interval compiling, the windows staged longest ago first, so a change that stages thousands of
+windows at once delays no report: a candidate is compiled within a few report intervals of its staging, not always in
+the first.
 
 Attribute providers, and the types they declare, must be the same on every data-plane instance and on the control host.
 The control plane checks a candidate against its own providers; an instance without one of them cannot compile a
@@ -597,6 +625,24 @@ To undo a revision, `POST /documents/{key}:rollback` with `{"revision": 11, "not
 change that makes the document what it was at that revision. It goes through the same checks, window, approval and
 publish as any change, so one that brings back a DENY with `onMissing: "nomatch"` needs its `confirmations`, as a
 proposal does: the old revision's confirmation was given for another change. Which revisions are kept, and how long, is in [Storage](../operations/storage.md).
+
+### Propagation {#propagation}
+
+`GET /documents/{key}/revisions/{revision}/propagation` tells how far a published revision has reached the instances,
+from the statuses they write every few seconds (with [shadow windows](../operations/configuration.md#shadow-windows)
+on). Publishing never waits for it.
+
+```json
+{ "revision": 5, "installed": 3, "holding": 3, "recent": 50, "asOf": "2026-11-20T09:00:04Z" }
+```
+
+`recent` counts the instances that wrote a status in the last minute, `holding` those of them that hold the document
+at any revision, and `installed` those of them that have installed `revision` or a later one. An instance keeps
+resident only the tenants it serves, so no instance is behind when `installed` equals `holding` (not `recent`);
+`holding: 0` means no instance holds the document, and the first request that needs it loads it at the published
+revision. The platform document and an app's are held by every instance that serves them. The statuses are read at
+most every 5 seconds on a control host, so an answer may be that old: `asOf` says when they were read. A read that
+fails is a `503`, never an older answer (`CTL-62`).
 
 ## Access reviews
 

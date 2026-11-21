@@ -38,15 +38,15 @@ import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.context.annotation.Bean
 
 /**
- * The revoked token and subject caches, whenever `cosec-cocache` is present: the
- * pipeline's revocation reader and logout's [TokenStore] read and write them.
+ * The revoked token and subject caches, whenever `cosec-cocache` is present and JWT is on or the host takes its callers
+ * from the forwarded identity: the pipeline's revocation reader and logout's [TokenStore] read and write them.
  */
 @AutoConfiguration(
     before = [CoSecJwtAutoConfiguration::class],
     afterName = ["me.ahoo.cocache.spring.boot.CoCacheAutoConfiguration"]
 )
 @ConditionalOnCoSecEnabled
-@ConditionalOnJwtEnabled
+@ConditionalOnRevocationStores
 @ConditionalOnClass(name = ["me.ahoo.cosec.cocache.RevokedTokenCache"])
 @ConditionalOnBean(CoCacheFactory::class)
 @EnableConfigurationProperties(

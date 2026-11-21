@@ -282,6 +282,16 @@ object GuardAllowlist {
             "spring-boot:GatewayModeTrustTest#with the statement the service starts, in any letter case of true, and an enforcing host needs none",
             "spring-boot:GatewayModeTrustTest#a hidden-method filter in a service behind a gateway fails startup, by property and by bean",
             "spring-boot:GatewayModeTrustTest#a reactive service is held to the same two statements",
+            // STA-6, STA-7, STA-9: the guards follow the gate, so a host that decides with policies and believes the identity states what can reach it too.
+            "spring-boot:ForwardedIdentityCallerTest#the control plane starts on the forwarded identity with no JWT and no secret, and the gate is the identity gate",
+            "spring-boot:ForwardedIdentityCallerTest#it does not start until the operator states what can reach it, and either statement will do",
+            "spring-boot:ForwardedIdentityCallerTest#a hidden-method filter is refused here as in gateway mode",
+            "spring-boot:ForwardedIdentityCallerTest#a host that takes its callers from the credential is asked for none of it",
+            "spring-boot:ForwardedIdentityCallerTest#the control plane decides for the principal the identity states, by the documents",
+            "spring-boot:ForwardedIdentityCallerTest#no header is no principal",
+            "spring-boot:ForwardedIdentityCallerTest#an identity gate the application wires beside enforce is asked for the statement too",
+            "spring-boot:ForwardedIdentityCallerTest#an IAM service that issues tokens and embeds the control plane takes the forwarded caller beside its login",
+            "spring-boot:IdentityGuardAutoConfigurationTest#the forwarded-identity caller on a gateway host fails startup",
             // STA-8: a host that serves the refresh route says how a refreshed token gets its roles.
             "spring-boot:RefreshMembershipChoiceTest#no bean and no statement fails startup, and the message says what is at stake and the two ways out",
             "spring-boot:RefreshMembershipChoiceTest#the statement starts the host, in any letter case, with one INFO line that says the lifetime it implies",

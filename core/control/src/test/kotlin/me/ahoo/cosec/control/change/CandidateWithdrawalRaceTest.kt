@@ -61,14 +61,14 @@ class CandidateWithdrawalRaceTest {
             harness.revisions.publish(ACME, null, StoreFixtures.candidate(ACME), StoreFixtures.publication())
             val operations = listOf(Operation.PutPolicy(allow("read")))
             val first = changes.propose(ALICE_OP, ACME, 1, operations, "first")
-            changes.stage(ALICE_OP, first.id).state.assert().isEqualTo(ChangeState.SHADOWING)
+            changes.startShadow(ALICE_OP, first.id).state.assert().isEqualTo(ChangeState.SHADOWING)
             val second = changes.propose(ALICE_OP, ACME, 1, operations, "second")
 
             store.armed = true
             val abandoning = async { changes.abandon(ALICE_OP, first.id) }
             store.paused.await()
             changes.get(first.id).state.assert().isEqualTo(ChangeState.ABANDONED)
-            val staged = changes.stage(ALICE_OP, second.id)
+            val staged = changes.startShadow(ALICE_OP, second.id)
             staged.state.assert().isEqualTo(ChangeState.SHADOWING)
             store.resume.complete(Unit)
             abandoning.await().state.assert().isEqualTo(ChangeState.ABANDONED)
@@ -81,7 +81,7 @@ class CandidateWithdrawalRaceTest {
     fun `a withdrawal that is not late removes the change's own candidate`() = runBlocking<Unit> {
         harness.revisions.publish(ACME, null, StoreFixtures.candidate(ACME), StoreFixtures.publication())
         val change = changes.propose(ALICE_OP, ACME, 1, listOf(Operation.PutPolicy(allow("read"))), "only")
-        changes.stage(ALICE_OP, change.id)
+        changes.startShadow(ALICE_OP, change.id)
         memory.candidate(ACME).assert().isNotNull()
         changes.abandon(ALICE_OP, change.id)
         memory.candidate(ACME).assert().isNull()

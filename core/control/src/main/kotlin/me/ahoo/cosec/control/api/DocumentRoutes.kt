@@ -20,7 +20,6 @@ import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.control.api.ControlHttpSupport.CREATED
 import me.ahoo.cosec.control.api.ControlHttpSupport.changeResponse
 import me.ahoo.cosec.control.api.ControlHttpSupport.document
-import me.ahoo.cosec.control.api.ControlHttpSupport.factory
 import me.ahoo.cosec.control.api.ControlHttpSupport.get
 import me.ahoo.cosec.control.api.ControlHttpSupport.json
 import me.ahoo.cosec.control.api.ControlHttpSupport.notFound
@@ -110,12 +109,7 @@ internal class DocumentRoutes(private val plane: ControlPlane) : RouteHandler {
                 )
                 rest.size == 3 && rest[0] == "revisions" && rest[2] == "propagation" -> {
                     val propagation = plane.propagation(operator, key, revisionOf("revision", unescaped(rest[1])))
-                    json(
-                        factory.objectNode().put(
-                            "revision",
-                            propagation.revision
-                        ).put("installed", propagation.installed).put("recent", propagation.recent)
-                    )
+                    json(ControlResponseJson.propagation(propagation))
                 }
 
                 else -> notFound()

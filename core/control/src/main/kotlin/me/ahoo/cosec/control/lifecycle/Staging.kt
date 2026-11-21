@@ -69,7 +69,7 @@ internal class Staging(
      * Creating or revoking a break-glass binding has no window (RFC 0007 Q12): such a change goes on at once, as if
      * skipped, without `cosec:skip-shadow`.
      */
-    suspend fun stage(operator: Operator, id: ChangeId): ChangeRequest {
+    suspend fun startShadow(operator: Operator, id: ChangeId): ChangeRequest {
         val change = flow.visible(operator, id)
         authority.require(operator, change.key, PublishRules.publishing(change))
         PublishRules.requireState(change, ChangeStep.STAGE.from)

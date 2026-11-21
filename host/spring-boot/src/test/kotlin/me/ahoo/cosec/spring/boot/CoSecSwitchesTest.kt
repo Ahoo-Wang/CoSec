@@ -100,7 +100,10 @@ class CoSecSwitchesTest {
             } else {
                 values
             }
-        }
+        }.toMutableMap()
+        // The default's own name is written by whoever wants it explicit, and nothing compares it: a condition reads the
+        // other value, and the default is its absence (reviewed: `cosec.pipeline.caller=credential`).
+        derived.merge("cosec.pipeline.caller", setOf("credential")) { found, default -> found + default }
         val table = CoSecSwitches.ALL.associate { it.key to it.accepted.toSet() }
         table.assert().isEqualTo(derived)
     }
@@ -120,6 +123,10 @@ class CoSecSwitchesTest {
     fun `every condition class of the starter is composed of covered conditions, strict itself, or reviewed`() {
         val reviewed = mapOf(
             "me.ahoo.cosec.spring.boot.jwt.OnJwtEnabled" to "any-of two @ConditionalOnProperty on cosec.jwt.enabled: covered",
+            "me.ahoo.cosec.spring.boot.jwt.OnRevocationStores" to
+                "any-of OnJwtEnabled and cosec.pipeline.caller=forwarded-identity: both covered",
+            "me.ahoo.cosec.spring.boot.pipeline.OnIdentityGate" to
+                "any-of cosec.pipeline.mode=gateway and cosec.pipeline.caller=forwarded-identity: both covered",
             "me.ahoo.cosec.spring.boot.authentication.route.OnLoginRoute" to "presence of the two login paths: reviewed above",
             "me.ahoo.cosec.spring.boot.control.ControlPlaneCondition" to "reads cosec.control.enabled strictly: held by a test",
             "me.ahoo.cosec.spring.boot.OnCoCacheUsed" to "class presence only",
