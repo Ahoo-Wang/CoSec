@@ -64,7 +64,8 @@ class ColdStartScenario {
                     "auth-sdk",
                     SystemTopology.authSdk.resolve("/auth/login"),
                     SystemTopology.authSdk.resolve(READINESS),
-                    null
+                    null,
+                    states = true,
                 )
             )
         } else {
@@ -93,7 +94,15 @@ class ColdStartScenario {
             Process("gw-${index + 1}", gateway.resolve("/behind/orders/1"), gateway.resolve(GATEWAY_READINESS), gateway.resolve(GATEWAY_LIVENESS))
         } + listOf(
             // A WebFlux application's probes pass CoSec like any request: no liveness to ask before the document.
-            Process("auth", SystemTopology.auth.resolve("/auth/login"), SystemTopology.auth.resolve(READINESS), null),
+            // Where the IAM takes its caller from the forwarded identity (the embedded deployment) a request that states none is
+            // the gateway's to have decided, and is not decided here: the request states who asks, as a gateway forwards it.
+            Process(
+                "auth",
+                SystemTopology.auth.resolve("/auth/login"),
+                SystemTopology.auth.resolve(READINESS),
+                null,
+                states = SystemTopology.embedded,
+            ),
         ) + controlPlane + listOf(
             Process(
                 "enforcer",
