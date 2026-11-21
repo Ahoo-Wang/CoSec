@@ -48,6 +48,16 @@ Which preview of the library may run behind which preview of the gateway image: 
   that read and, in `unreadable`, the instances whose record is missing or does not decode
   ([Extending](../architecture/extending.md)). There is no default: one that answered "holds nothing" would make
   `installed == holding` say that no instance is behind when it does not know.
+- **The control plane's facade is a module of its own, `cosec-control-sdk`** (`CTL-65`). Affected: code that calls
+  `ControlService`. `ControlService`, `ControlCaller` and `ControlRefusedException` keep their names and package
+  (`me.ahoo.cosec.control.sdk`); `cosec-control` brings the module, so a build that has `cosec-control` changes nothing.
+  Code that only calls a control-plane host needs `cosec-control-sdk` alone (its HTTP implementation follows in a later
+  preview).
+  - `ControlService.changes` filters by `me.ahoo.cosec.control.sdk.ChangeState`, the wire's closed set, which keeps an
+    unknown value's text (`isUnknown`), instead of the control plane's internal enum: pass `ChangeState.READY` of the
+    new package, or `ChangeState.of("READY")`.
+  - `ControlCaller.of(context)` no longer throws for a security context CoSec did not make: the call it is passed to
+    does, with the same `IllegalArgumentException` (`PIP-29`).
 
 ## From 8.0.0-beta.4 {#from-8-0-0-beta-4}
 

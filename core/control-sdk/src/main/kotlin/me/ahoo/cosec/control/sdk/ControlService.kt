@@ -14,7 +14,6 @@
 package me.ahoo.cosec.control.sdk
 
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
-import me.ahoo.cosec.control.change.ChangeState
 import me.ahoo.cosec.model.decision.DocumentKind
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 

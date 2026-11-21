@@ -43,7 +43,8 @@ flowchart BT
     spi[cosec-spi] --> model & api
     document[cosec-document] --> engine & spi
     runtime[cosec-runtime] --> document & engine & spi & annotations
-    control[cosec-control] --> runtime & document
+    controlsdk[cosec-control-sdk] --> document & spi & api
+    control[cosec-control] --> runtime & document & controlsdk
     cocache[cosec-cocache] --> spi & document
     kafka[cosec-kafka] --> spi & runtime
     login[cosec-login] --> runtime
@@ -108,8 +109,13 @@ The rules behind the picture:
   `reactor.*`, when a data-plane SPI signature carries a Reactor type, when `runtime/` or `document/` references
   Spring, the Servlet API or a coroutine bridge (`kotlinx.coroutines.reactor`, `runBlocking`), `GlobalScope` or
   `Dispatchers.IO`, or when it calls `runCatching`, which swallows cancellation.
+- **`cosec-control-sdk`** (directory `core/control-sdk/`) is the control plane as an application calls it:
+  `ControlService`, the `ControlCaller` a call states and the `ControlRefusedException` it throws (`CTL-65`). It depends on
+  `cosec-document`, `cosec-spi` and `cosec-api` only, never on `cosec-runtime` or the control plane, so code that calls
+  a control-plane host does not bring the request path (`DependencyRules`).
 - **`cosec-control`** (directory `core/control/`) is the control plane: revisions, change requests, shadow windows,
-  approvals, break-glass, simulation and analysis. The starter wires it into a host; an application does not call it, it
+  approvals, break-glass, simulation and analysis, and the in-process implementation of `ControlService`
+  (`LocalControlService`). The starter wires it into a host; an application calls it only through `ControlService`, or
   writes through the control API. `ControlBoundaryTest`
   (ArchUnit) imports the module's own compiled classes and fails when one of them is outside `me.ahoo.cosec.control`,
   references Spring, `reactor.*`, the coroutine or Reactive Streams bridges or a Redis client, or calls `runBlocking`,

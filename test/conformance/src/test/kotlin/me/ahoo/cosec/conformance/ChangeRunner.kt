@@ -54,9 +54,9 @@ import me.ahoo.cosec.control.lifecycle.ChangeOptions
 import me.ahoo.cosec.control.lifecycle.Changes
 import me.ahoo.cosec.control.lifecycle.LockoutCheck
 import me.ahoo.cosec.control.lifecycle.ShadowOptions
+import me.ahoo.cosec.control.local.LocalControlService
 import me.ahoo.cosec.control.sdk.ControlCaller
 import me.ahoo.cosec.control.sdk.ControlRefusedException
-import me.ahoo.cosec.control.sdk.LocalControlService
 import me.ahoo.cosec.control.store.ControlStore
 import me.ahoo.cosec.control.store.ControlStoreException
 import me.ahoo.cosec.control.store.InMemoryControlStore
