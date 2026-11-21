@@ -25,6 +25,7 @@ import me.ahoo.cosec.runtime.shadow.Candidate
 import me.ahoo.cosec.runtime.shadow.CandidateSource
 import me.ahoo.cosec.runtime.shadow.ShadowListener
 import me.ahoo.cosec.runtime.shadow.ShadowRecorder
+import me.ahoo.cosec.spi.id.IdGenerator
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.AfterEach
@@ -92,6 +93,26 @@ class SampledOnlyEventsTest {
         evaluate(3, audit, unsampled).assert().isZero()
         audit.events.size.assert().isEqualTo(3)
         audit.events.forEach { it.replay.assert().isNull() }
+    }
+
+    /** The ids a request asks for: one per event made, beside whatever else the pipeline names. */
+    private fun ids(vararg listeners: DecisionListener): Int {
+        val registered = DecisionListeners(listeners.toList()).also { opened += it }
+        val asked = AtomicInteger()
+        val pipeline = PipelineFixtures.pipeline {
+            listeners(registered)
+            ids(IdGenerator { "id-${asked.incrementAndGet()}" })
+        }
+        runBlocking { pipeline.evaluate(PipelineFixtures.facts()) }.status.assert().isEqualTo(200)
+        return asked.get()
+    }
+
+    @Test
+    fun `no event is made when only shadow listeners listen and none samples`() {
+        val none = ids()
+        ids(ShadowListener("shadow", 0.0, { error("never asked") }, recorder)).assert().isEqualTo(none)
+        // A listener that is offered events costs the event's id.
+        ids(Recording("metrics", Delivery.BEST_EFFORT)).assert().isEqualTo(none + 1)
     }
 
     @Test

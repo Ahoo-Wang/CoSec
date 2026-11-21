@@ -47,6 +47,7 @@ import me.ahoo.cosec.model.condition.IpAddress
 import me.ahoo.cosec.model.decision.Cause
 import me.ahoo.cosec.model.decision.DocumentKind
 import me.ahoo.cosec.model.scope.HostScope
+import me.ahoo.cosec.model.scope.Scope
 import me.ahoo.cosec.runtime.AuthorizationChecker
 import me.ahoo.cosec.runtime.Pipeline
 import me.ahoo.cosec.runtime.PipelineBuilder
@@ -63,6 +64,7 @@ import me.ahoo.cosec.runtime.event.DecisionEvent
 import me.ahoo.cosec.runtime.event.DecisionListener
 import me.ahoo.cosec.runtime.event.DecisionListeners
 import me.ahoo.cosec.runtime.event.Delivery
+import me.ahoo.cosec.runtime.event.SampledOnlyListener
 import me.ahoo.cosec.runtime.http.Cookies
 import me.ahoo.cosec.runtime.http.Headers
 import me.ahoo.cosec.runtime.http.HttpFacts
@@ -135,6 +137,7 @@ import java.time.Instant
 import java.time.ZoneId
 import java.time.ZoneOffset
 import java.util.concurrent.CompletableFuture
+import java.util.concurrent.atomic.AtomicInteger
 import kotlin.coroutines.cancellation.CancellationException
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
@@ -212,6 +215,9 @@ import me.ahoo.cosec.runtime.http.Outcome as PipelineOutcome
  * // A rate limiter (RFC 0006 §8.4) that has permits for every rule but the exhausted ones, or that fails; absent: none
  * "rateLimiter":        { "exhausted": ["rule-id"] } | { "fails": "message" },
  * "listeners":          [{ "name": "audit", "delivery": "required" | "best-effort", "fails": "message" | "hangs": true }],
+ * // A listener that reads only the events it sampled, as the shadow listener does (`OBS-8`): BEST_EFFORT, sampling
+ * // every decided request or none. `expect.events` then says how many events each listener received, all delivered.
+ * "listeners":          [{ "name": "shadow", "samples": true | false }],
  * "cancel":             "authentication" | "memberships" | "snapshot"    // the caller goes away while it waits there
  * ```
  *
@@ -257,7 +263,8 @@ class PipelineRunner(private val compiler: SnapshotCompiler = DocumentSnapshotCo
             if (point == cancelAt) reached.complete(Unit)
         }
 
-        val listeners = listeners(node.get("listeners"), node.get("options") ?: EMPTY)
+        val received = LinkedHashMap<String, AtomicInteger>()
+        val listeners = listeners(node.get("listeners"), node.get("options") ?: EMPTY, received)
         val authentication = node.get("authentication") ?: EMPTY
         val provider = node.get("membershipProvider")?.let { provider(authentication, it) { reach("memberships") } }
             ?: keysWithoutProvider(authentication)
@@ -275,7 +282,13 @@ class PipelineRunner(private val compiler: SnapshotCompiler = DocumentSnapshotCo
             .named(provider, rateLimiter(node.get("rateLimiter")), node.get("identity")?.let(::issuer))
             .build()
         try {
-            return answer(node, pipeline, cancelAt, reached)
+            val outcome = answer(node, pipeline, cancelAt, reached)
+            if (outcome !is Outcome.Answered || node.get("expect")?.has("events") != true) {
+                return outcome
+            }
+            // Every event published is delivered before it is counted.
+            listeners.drain()
+            return outcome.withEvents(received.mapValues { it.value.get() })
         } finally {
             listeners.cancel()
         }
@@ -890,9 +903,16 @@ class PipelineRunner(private val compiler: SnapshotCompiler = DocumentSnapshotCo
         )
     }
 
-    private fun listeners(node: JsonNode?, options: JsonNode): DecisionListeners {
+    private fun listeners(
+        node: JsonNode?,
+        options: JsonNode,
+        received: MutableMap<String, AtomicInteger>
+    ): DecisionListeners {
         val listeners = node?.values().orEmpty().map { listener ->
-            listener.only("name", "delivery", "fails", "hangs")
+            listener.only("name", "delivery", "fails", "hangs", "samples")
+            val name = listener.required("name").text()
+            val count = AtomicInteger().also { received[name] = it }
+            listener.get("samples")?.let { samples -> return@map sampledOnly(name, samples.bool(), count) }
             val delivery = when (val delivery = listener.get("delivery")?.text() ?: "best-effort") {
                 "required" -> Delivery.REQUIRED
                 "best-effort" -> Delivery.BEST_EFFORT
@@ -901,10 +921,11 @@ class PipelineRunner(private val compiler: SnapshotCompiler = DocumentSnapshotCo
             val fails = listener.get("fails")?.text()
             val hangs = listener.get("hangs")?.bool() == true
             object : DecisionListener {
-                override val name = listener.required("name").text()
+                override val name = name
                 override val delivery = delivery
 
                 override suspend fun onDecision(event: DecisionEvent) {
+                    count.incrementAndGet()
                     fails?.let { throw IllegalStateException(it) }
                     if (hangs) awaitCancellation()
                 }
@@ -912,6 +933,17 @@ class PipelineRunner(private val compiler: SnapshotCompiler = DocumentSnapshotCo
         }
         val timeout = options.get("requiredTimeoutMillis")?.asLong()?.milliseconds ?: DEFAULT_REQUIRED_TIMEOUT
         return DecisionListeners(listeners, requiredTimeout = timeout)
+    }
+
+    /** A BEST_EFFORT listener that reads only the events it sampled (`OBS-8`): every decided request, or none. */
+    private fun sampledOnly(name: String, samples: Boolean, count: AtomicInteger) = object : SampledOnlyListener {
+        override val name = name
+
+        override fun sample(scope: Scope, view: SnapshotView): Boolean = samples
+
+        override suspend fun onDecision(event: DecisionEvent) {
+            count.incrementAndGet()
+        }
     }
 
     private fun rateLimiter(node: JsonNode?): RateLimiter? {

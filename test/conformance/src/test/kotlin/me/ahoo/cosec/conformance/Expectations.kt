@@ -41,6 +41,7 @@ import tools.jackson.databind.node.JsonNodeFactory
  * { "status": 200, "proceed": true, "credentials": ["authorization"] }  // through a gateway: credentials forwarded
  * { "status": 200, "proceed": true, "forwardedHeaders": ["x-trace"] }   // through a gateway: the X- headers forwarded
  * { "status": 200, "proceed": true, "check": "Deny" }                  // pipeline: a check of the permitted request
+ * { "status": 200, "proceed": true, "events": { "audit": 1 } }         // pipeline: the events each listener received
  * { "status": 400, "type": "invalid-request" }                         // pipeline, the problem's slug
  * { "outcome": "none" }                                                // pipeline, the caller cancelled
  * { "fragments": [ { "policy": "p", "statement": 0, "action": "a:b", "resource": "r", "verdict": "YES" } ],
@@ -179,6 +180,9 @@ object Expectations {
         if (outcome.proceed) put("proceed", true)
         outcome.type?.let { put("type", it) }
         outcome.check?.let { put("check", it) }
+        outcome.events?.let { events ->
+            set("events", json.objectNode().apply { events.forEach { (name, count) -> put(name, count) } })
+        }
         outcome.issued?.let { issued ->
             set("issued", json.objectNode().apply { issued.forEach { (name, value) -> put(name, value) } })
         }

@@ -89,7 +89,7 @@ class ShadowListener(
      * Whether a request in [scope] decided on [view] is evaluated again: only when its view reads a document that may
      * stage a candidate (`CTL-47`), then at [sampleRate]. With nothing staged, a request draws no random number.
      */
-    internal fun sample(scope: Scope, view: SnapshotView): Boolean =
+    override fun sample(scope: Scope, view: SnapshotView): Boolean =
         sampleRate > 0 && staged?.mayStage(scope, view) != false &&
             (sampleRate >= 1 || ThreadLocalRandom.current().nextDouble() < sampleRate)
 

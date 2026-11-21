@@ -15,6 +15,8 @@
 package me.ahoo.cosec.runtime.event
 
 import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.engine.SnapshotView
+import me.ahoo.cosec.model.scope.Scope
 
 /**
  * A BEST_EFFORT listener that reads only the events whose [ReplayHandle] names it (`OBS-8`): the shadow listener. The
@@ -22,4 +24,10 @@ import me.ahoo.cosec.annotations.InternalCoSecApi
  * event for that request at all. A REQUIRED listener's events are made and delivered whatever these sample.
  */
 @InternalCoSecApi
-interface SampledOnlyListener : DecisionListener
+interface SampledOnlyListener : DecisionListener {
+    /**
+     * Whether it samples the request in [scope] decided on [view]: asked on the request's thread before the event is made,
+     * so it must be cheap and never block. Only then does the event carry a [ReplayHandle] naming it.
+     */
+    fun sample(scope: Scope, view: SnapshotView): Boolean
+}
