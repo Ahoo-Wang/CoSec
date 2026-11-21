@@ -27,9 +27,11 @@ import me.ahoo.cosec.control.change.ControlStatus.UNAVAILABLE
 import me.ahoo.cosec.control.change.ownerOf
 import me.ahoo.cosec.control.change.requireRequest
 import me.ahoo.cosec.control.lifecycle.ChangeAuthority
+import me.ahoo.cosec.control.lifecycle.SharedRead
 import me.ahoo.cosec.control.store.Revisions
 import me.ahoo.cosec.model.decision.DocumentKind
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
+import java.time.Clock
 
 /**
  * `GET /documents?kind=` (`CTL-68`): which tenant or app documents exist, from the store's list of the documents it
@@ -43,10 +45,19 @@ import me.ahoo.cosec.spi.snapshot.SnapshotKey
  *   caller who may read a few documents knows their names already, and a scan of the whole list for them would be
  *   unbounded work on the control host.
  *
- * The page is cut after the filter, and a store that cannot answer is a 503.
+ * The list is read at most once per [SharedRead.MAX_AGE] on this control host, sorted once, one read shared by the
+ * calls that wait for it ([SharedRead]); the page says when it was read ([DocumentPage.asOf]), since a document created
+ * in the last seconds may be missing from it. A read that fails is never kept: a 503, and the next call reads again.
+ * The page is cut after the filter.
  */
 @InternalCoSecApi
-class DocumentListing internal constructor(private val revisions: Revisions, private val authority: ChangeAuthority) {
+class DocumentListing internal constructor(
+    revisions: Revisions,
+    private val authority: ChangeAuthority,
+    clock: Clock = Clock.systemUTC(),
+) {
+    private val documents = SharedRead(clock) { revisions.documents().sortedBy { it.toString() } }
+
     suspend fun list(operator: Operator, kind: DocumentKind, after: String?, limit: Int): DocumentPage {
         requireRequest(kind != DocumentKind.PLATFORM) { "A listing is of the tenant or the app documents." }
         requireRequest(
@@ -60,11 +71,11 @@ class DocumentListing internal constructor(private val revisions: Revisions, pri
                 ({ key -> key == own })
             }
         }
-        val listed = revisions.documents()
+        val read = documents.read()
+        val listed = read.value
             .filter { ownerOf(it).first == kind && (after == null || it.toString() > after) && shown(it) }
-            .sortedBy { it.toString() }
         val page = listed.take(limit)
-        return DocumentPage(page, if (listed.size > limit) page.last().toString() else null)
+        return DocumentPage(page, if (listed.size > limit) page.last().toString() else null, read.asOf)
     }
 
     /** A tenant principal's own tenant document, when it asks for tenants and may read it; null otherwise. */

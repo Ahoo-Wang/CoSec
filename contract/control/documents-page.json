@@ -1,4 +1,8 @@
 {
+  "asOf" : {
+    "type" : "string",
+    "presence" : "always"
+  },
   "documents" : {
     "type" : "array",
     "presence" : "always",

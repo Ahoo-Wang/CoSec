@@ -13,8 +13,6 @@
 
 package me.ahoo.cosec.control.lifecycle
 
-import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.withLock
 import me.ahoo.cosec.control.store.ControlStoreException
 import me.ahoo.cosec.spi.shadow.InstanceStatus
 import me.ahoo.cosec.spi.shadow.ShadowReportReader
@@ -38,18 +36,12 @@ internal class InstanceStatuses(
     /** What one read answered, and when it was read. */
     class Read(val statuses: List<InstanceStatus>, val asOf: Instant)
 
-    private val lock = Mutex()
+    private val shared = SharedRead(clock, maxAge) { load() }
 
-    @Volatile
-    private var last: Read? = null
-
-    suspend fun read(): Read = fresh() ?: lock.withLock { fresh() ?: load().also { last = it } }
-
-    private fun fresh(): Read? = last?.takeIf { Duration.between(it.asOf, clock.instant()) < maxAge }
+    suspend fun read(): Read = shared.read().let { Read(it.value, it.asOf) }
 
     @Suppress("TooGenericExceptionCaught")
-    private suspend fun load(): Read {
-        val asOf = clock.instant()
+    private suspend fun load(): List<InstanceStatus> {
         val statuses = try {
             reports.statuses()
         } catch (e: CancellationException) {
@@ -57,7 +49,7 @@ internal class InstanceStatuses(
         } catch (e: Exception) {
             throw unavailable(e)
         }
-        return Read(statuses, asOf)
+        return statuses
     }
 
     /**
@@ -70,7 +62,7 @@ internal class InstanceStatuses(
     }
 
     companion object {
-        /** How old an answer of `propagation` may be: well under the minute after which a status is ignored. */
-        val MAX_AGE: Duration = Duration.ofSeconds(5)
+        /** How old an answer of `propagation` may be ([SharedRead.MAX_AGE]). */
+        val MAX_AGE: Duration = SharedRead.MAX_AGE
     }
 }

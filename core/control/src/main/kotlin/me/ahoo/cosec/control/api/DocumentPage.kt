@@ -17,7 +17,11 @@ package me.ahoo.cosec.control.api
 
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
+import java.time.Instant
 
-/** A page of `GET /documents` (`CTL-68`): the documents listed, and [next], the cursor of the page after, or null. */
+/**
+ * A page of `GET /documents` (`CTL-68`): the documents listed, [next], the cursor of the page after, or null, and [asOf],
+ * when the document list was read.
+ */
 @InternalCoSecApi
-class DocumentPage(val documents: List<SnapshotKey>, val next: String?)
+class DocumentPage(val documents: List<SnapshotKey>, val next: String?, val asOf: Instant)

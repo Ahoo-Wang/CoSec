@@ -78,8 +78,8 @@ class ClientContractTest {
     @Test
     fun `a document listing holds exactly the members of its contract file - CTL-68`() {
         val pages = listOf(
-            DocumentPage(listOf(SnapshotKey.Tenant("acme")), "tenant:acme"),
-            DocumentPage(listOf(SnapshotKey.App("order")), null),
+            DocumentPage(listOf(SnapshotKey.Tenant("acme")), "tenant:acme", Instant.parse("2026-11-21T00:00:00Z")),
+            DocumentPage(listOf(SnapshotKey.App("order")), null, Instant.parse("2026-11-21T00:00:00Z")),
         ).map { ControlResponseJson.documents(it) }
         files.check("control/documents-page.json", Shapes.of(pages, emptySet()))
     }

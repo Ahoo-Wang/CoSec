@@ -61,12 +61,15 @@ internal object ControlResponseJson {
         .put("recent", propagation.recent)
         .put("asOf", propagation.asOf.toString())
 
-    /** A page of `GET /documents` (`CTL-68`): each document by its key, and `next`, the cursor of the next page or null. */
+    /**
+     * A page of `GET /documents` (`CTL-68`): each document by its key, `next`, the cursor of the next page or null, and
+     * `asOf`, when the document list was read.
+     */
     fun documents(page: DocumentPage): ObjectNode {
         val root = factory.objectNode()
         val documents = root.putArray("documents")
         page.documents.forEach { documents.addObject().put("key", it.toString()) }
-        return root.put("next", page.next)
+        return root.put("next", page.next).put("asOf", page.asOf.toString())
     }
 
     fun history(history: List<RevisionSummary>) = factory.arrayNode().apply {

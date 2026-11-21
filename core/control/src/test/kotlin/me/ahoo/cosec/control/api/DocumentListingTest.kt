@@ -124,6 +124,50 @@ class DocumentListingTest {
     }
 
     @Test
+    fun `a full paging reads the document list once, and a failed read is never kept - CTL-68`() = runBlocking<Unit> {
+        val reads = java.util.concurrent.atomic.AtomicInteger()
+        val failures = java.util.concurrent.atomic.AtomicInteger()
+        val tenants = (1..5).map { me.ahoo.cosec.spi.snapshot.SnapshotKey.Tenant("t$it") }.toSet()
+        val memory = me.ahoo.cosec.control.store.InMemoryControlStore()
+        val counting = object : me.ahoo.cosec.control.store.ControlStore by memory {
+            override suspend fun documents(): Set<me.ahoo.cosec.spi.snapshot.SnapshotKey> {
+                reads.incrementAndGet()
+                if (failures.getAndDecrement() > 0) {
+                    throw me.ahoo.cosec.control.store.ControlStoreException("the document list cannot be read")
+                }
+                return tenants
+            }
+        }
+        val clock = me.ahoo.cosec.control.store.MutableClock()
+        val listing = DocumentListing(
+            me.ahoo.cosec.control.store.Revisions(counting),
+            me.ahoo.cosec.control.lifecycle.ChangeAuthority(
+                me.ahoo.cosec.control.change.PERMIT_ALL,
+                revocations = me.ahoo.cosec.spi.token.RevocationReader.NONE,
+            ),
+            clock,
+        )
+        val tenant = me.ahoo.cosec.model.decision.DocumentKind.TENANT
+        val seen = ArrayList<String>()
+        var after: String? = null
+        do {
+            val page = listing.list(me.ahoo.cosec.control.change.PLATO, tenant, after, 2)
+            page.asOf.assert().isEqualTo(clock.now)
+            seen += page.documents.map { it.toString() }
+            after = page.next
+        } while (after != null)
+        seen.assert().isEqualTo(tenants.map { it.toString() }.sorted())
+        reads.get().assert().describedAs("one read for the whole paging").isEqualTo(1)
+        // Older than its age, the list is read again; a read that fails is the store's failure, and not kept.
+        clock.now = clock.now.plus(me.ahoo.cosec.control.lifecycle.SharedRead.MAX_AGE)
+        failures.set(1)
+        runCatching { listing.list(me.ahoo.cosec.control.change.PLATO, tenant, null, 2) }.exceptionOrNull()
+            .assert().isInstanceOf(me.ahoo.cosec.control.store.ControlStoreException::class.java)
+        listing.list(me.ahoo.cosec.control.change.PLATO, tenant, null, 2).documents.assert().hasSize(2)
+        reads.get().assert().isEqualTo(3)
+    }
+
+    @Test
     fun `a store that cannot answer is a 503, never an empty page - CTL-68`() {
         fixture.down = true
         list(plato, mapOf("kind" to "tenant")).first.assert().isEqualTo(503)
