@@ -1,0 +1,56 @@
+{
+  "rules": [
+    "CTL-66"
+  ],
+  "polarity": "positive",
+  "level": "control",
+  "description": "c1 is proposed, staged, its window closes and it publishes: its listener receives CHECKED, SHADOW_STARTED, SHADOWED, PUBLISHING and PUBLISHED in that order, each event after the one written before it.",
+  "steps": [
+    {
+      "propose": {
+        "change": "c1",
+        "document": "tenant:acme",
+        "operations": [
+          {
+            "putPolicy": {
+              "id": "read",
+              "statements": [
+                {
+                  "effect": "allow",
+                  "action": "order:read"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "stage": "c1"
+    },
+    {
+      "shadowed": "c1"
+    },
+    {
+      "publish": "c1"
+    },
+    {
+      "audited": "c1"
+    }
+  ],
+  "expect": {
+    "steps": [
+      "CHECKED",
+      "SHADOWING",
+      "READY",
+      "PUBLISHED",
+      "audited CHECKED,SHADOW_STARTED,SHADOWED,PUBLISHING,PUBLISHED"
+    ],
+    "errors": {
+      "c1": []
+    },
+    "heads": {
+      "tenant:acme": 1
+    }
+  }
+}

@@ -912,6 +912,25 @@
         "spring-boot:ManagementPortTest#a gateway on a random management port serves its routes there, under the gateway's filter",
         "spring-boot:ManagementPortTest#WebMvc leaves its management server outside CoSec and serves nothing of the application there"
       ]
+    },
+    {
+      "id": "CTL-66",
+      "source": "G2e finding (#1795); ctl-66-change-event-order.md, decided 2026-11-21",
+      "statement": "Within one control-plane instance, a change listener receives the events of one change in the order the instance wrote them: one queue and one consumer per listener. A gated step waits for its REQUIRED listeners to record its event after what was queued before it, within the required timeout, or fails (503); a REQUIRED listener's full queue loses, counted and logged at ERROR, the event of a step already stored, never failing it; a BEST_EFFORT listener's full queue drops the incoming event, so what arrives is an ordered prefix. The queues hold together at most a thirty-second of the heap; a listener that stops answering is reported, never cut off. At shutdown the listeners stop taking events and deliver what is queued within the drain timeout; what is left is counted and logged (ERROR for a REQUIRED listener) before they stop, and a gated step arriving meanwhile is refused (503). Across instances, a consumer orders by each event's time and the change's record.",
+      "level": "control",
+      "guards": [
+        "control:ChangeEventOrderTest#a listener receives a change's events in the order they were written, the first still held - CTL-66",
+        "control:ChangeEventOrderTest#a gated step waits for what its REQUIRED listener has queued before it, then is recorded after it - CTL-66",
+        "control:ChangeEventOrderTest#under concurrent changes and slow listeners, each change's events arrive in order - CTL-66",
+        "control:ChangeEventOrderTest#a full BEST_EFFORT queue drops the incoming event, so what arrives is an ordered prefix - CTL-66",
+        "control:ChangeEventOrderTest#a REQUIRED listener's full queue fails a gated step, and loses the event of a stored one - CTL-66",
+        "control:ChangeEventOrderTest#a gated event its step gave up on is not recorded afterwards - CTL-66",
+        "control:ChangeEventOrderTest#a listener that stops answering is reported, keeps its queue, and finds it when it answers again - CTL-66",
+        "control:ChangeListenersDrainTest#a backlog at shutdown is delivered within the drain timeout, then the consumers stop - CTL-66",
+        "control:ChangeListenersDrainTest#what a held listener cannot take within the drain timeout is counted as kept, then stopped - CTL-66",
+        "control:ChangeListenersDrainTest#during the drain a gated step is refused and another step's event is kept, never queued - CTL-66"
+      ],
+      "pending": null
     }
   ]
 }
