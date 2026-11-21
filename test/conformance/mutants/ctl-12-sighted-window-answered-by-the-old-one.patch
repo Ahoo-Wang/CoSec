@@ -1,0 +1,17 @@
+# Rule: CTL-12
+# Mutant: a window seen for the first time is answered by the candidate held of the window before it, and never compiled
+# Tests: :runtime:test --tests me.ahoo.cosec.runtime.shadow.CompileOnSightTest
+
+diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/shadow/CachingCandidateSource.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/shadow/CachingCandidateSource.kt
+index f33b6c8db..c7897f53d 100644
+--- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/shadow/CachingCandidateSource.kt
++++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/shadow/CachingCandidateSource.kt
+@@ -88,7 +88,7 @@ class CachingCandidateSource(
+     private suspend fun lookup(key: SnapshotKey, window: String?): Candidate? {
+         val now = clock.instant()
+         synchronized(entries) { entries[key] }
+-            ?.takeIf { now.isBefore(it.at.plus(refreshAfter)) && (window == null || it.candidate?.window == window) }
++            ?.takeIf { now.isBefore(it.at.plus(refreshAfter)) }
+             ?.let { return it.candidate }
+         val mine = CompletableDeferred<Candidate?>()
+         reading.putIfAbsent(key, mine)?.let { return it.await() }

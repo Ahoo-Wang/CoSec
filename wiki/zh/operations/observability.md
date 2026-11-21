@@ -54,6 +54,10 @@ starter 注册的监听器：
 （`AuditListener.of(sink, beanName)`），按它的 `@Order` 排在监听器之间。它总是 `BEST_EFFORT`，因为
 `AuditEventSink.publish` 无法确认写入。同时是两者的 bean 只注册一次，作为它本身的 `DecisionListener`。
 
+- **影子监听器只看到它采样的请求**（`OBS-8`）。它只采样读取了[暂存列表](./storage.md#redis-keys)所列文档的请求，再按
+  `cosec.authorization.shadow.sample-rate` 采样，其他事件都不会交给它。当它是唯一的 `BEST_EFFORT` 监听器时，它没有采样的
+  请求根本不生成决策事件，因此没有开启影子窗口时，没有指标、追踪或审计监听器的主机在请求上不会为它做任何事。
+  `REQUIRED` 监听器以及其他每个监听器都收到每一个事件。
 - **break-glass 需要 `REQUIRED` 监听器。** 通过 break-glass 绑定放行的请求是 `503`，除非至少注册了一个 `REQUIRED`
   监听器并且每一个都记录了它。开箱时没有任何监听器是 `REQUIRED`，所以 starter 在启动时记录
   `No REQUIRED decision listener is registered: break-glass bindings cannot permit (RFC 0006 §9.4.3).` 依赖
@@ -190,13 +194,20 @@ kind 为 `INTERNAL`）。span 在决策之后根据请求的开始时间和管�
 | `cosec.token.cache.evictions` | 无 | 为不超过 `cosec.authentication.token-cache.max-entries` 而移除的条目；持续的速率说明上限小于同时在用的令牌数 |
 | `cosec.token.cache.size` | 无 | 一个 gauge：持有的条目数 |
 
+开启影子窗口时，影子监听器据以采样的暂存列表也会计量（`OBS-8`）：
+
+| 指标 | 标签 | 计数 |
+|---|---|---|
+| `cosec.shadow.staged.age` | 无 | 一个 gauge，单位秒：本实例上次读取暂存列表距今多久，首次读取之前为 `NaN`。Redis 应答期间约为 `cosec.authorization.shadow.report-interval`（10 秒）；持续上升说明列表读不出来，实例按键读取每个候选，并记录一次 `The staged list cannot be read since it was at <instant>` |
+
 使用本地限流器时（没有 Redis 限流，[限流](../policies/rate-limiting.md#the-local-limiter-is-bounded)），它无法接纳的新桶也会计数：
 
 | 指标 | 标签 | 计数 |
 |---|---|---|
 | `cosec.ratelimit.local.refused` | `document`：`platform`、`app`、`tenant`、`other` | 因规则的、其文档的或总的上限已满而被拒绝的新桶：每一个都是严格规则回答 `503`、或宽松规则没有限制的请求；日志最多每 10 秒写一次 |
 
-按 `cause` 对 `result=indeterminate` 的速率、对 `explicit_deny`（被 DENY 语句拒绝的请求）、对 `cosec.listener.dropped` 设置告警，并对 `cosec.revocation.unchecked` 的任何上升告警：它上升期间，被吊销的令牌会被接受。
+按 `cause` 对 `result=indeterminate` 的速率、对 `explicit_deny`（被 DENY 语句拒绝的请求）、对 `cosec.listener.dropped` 设置告警，并对 `cosec.revocation.unchecked` 的任何上升告警：它上升期间，被吊销的令牌会被接受。`cosec.shadow.staged.age` 超过三个上报间隔，
+说明某个实例在按一份它已读不到的列表采样。
 `indeterminate` 伴随 `cause=source_unavailable` 上升，说明文档读不到；伴随 `cause=document_invalid` 上升，说明某个已存储的文档在本实例上无法编译（[故障排查](./troubleshooting.md#unavailable)）。
 CoCache 会在同一个 registry 中为 CoSec 的缓存记录它自己的指标（[CoCache 文档](https://cocache.ahoo.me)）。
 

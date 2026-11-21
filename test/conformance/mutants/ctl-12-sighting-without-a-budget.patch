@@ -1,0 +1,17 @@
+# Rule: CTL-12
+# Mutant: compile on sight has no budget: a cycle compiles every window first seen before it writes a report or the status
+# Tests: :runtime:test --tests me.ahoo.cosec.runtime.shadow.CompileOnSightTest
+
+diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/shadow/CompileOnSight.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/shadow/CompileOnSight.kt
+index 4fb4f9d2d..e9baa2a12 100644
+--- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/shadow/CompileOnSight.kt
++++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/shadow/CompileOnSight.kt
+@@ -61,7 +61,7 @@ internal class CompileOnSight(
+         seen.retainAll(named)
+         waiting.retainAll(named)
+         named.filterNot { it in seen }.forEach(waiting::add)
+-        val deadline = nanos() + budget.toNanos()
++        val deadline = nanos() + Long.MAX_VALUE / 2
+         for (next in waiting.toList()) {
+             if (nanos() - deadline >= 0) {
+                 break

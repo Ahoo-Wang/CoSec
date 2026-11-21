@@ -59,10 +59,6 @@ import me.ahoo.cosec.runtime.attribute.InMemoryBlacklistSource
 import me.ahoo.cosec.runtime.authn.ApiKeyAuthenticator
 import me.ahoo.cosec.runtime.authn.CompositeAuthenticator
 import me.ahoo.cosec.runtime.authn.TokenAuthenticator
-import me.ahoo.cosec.runtime.event.DecisionEvent
-import me.ahoo.cosec.runtime.event.DecisionListener
-import me.ahoo.cosec.runtime.event.DecisionListeners
-import me.ahoo.cosec.runtime.event.Delivery
 import me.ahoo.cosec.runtime.http.Cookies
 import me.ahoo.cosec.runtime.http.Headers
 import me.ahoo.cosec.runtime.http.HttpFacts
@@ -137,7 +133,6 @@ import java.time.ZoneOffset
 import java.util.concurrent.CompletableFuture
 import kotlin.coroutines.cancellation.CancellationException
 import kotlin.time.Duration.Companion.milliseconds
-import kotlin.time.Duration.Companion.seconds
 import me.ahoo.cosec.runtime.http.Outcome as PipelineOutcome
 
 /**
@@ -212,6 +207,9 @@ import me.ahoo.cosec.runtime.http.Outcome as PipelineOutcome
  * // A rate limiter (RFC 0006 §8.4) that has permits for every rule but the exhausted ones, or that fails; absent: none
  * "rateLimiter":        { "exhausted": ["rule-id"] } | { "fails": "message" },
  * "listeners":          [{ "name": "audit", "delivery": "required" | "best-effort", "fails": "message" | "hangs": true }],
+ * // A listener that reads only the events it sampled, as the shadow listener does (`OBS-8`): BEST_EFFORT, sampling
+ * // every decided request or none. `expect.events` then says how many events each listener received, all delivered.
+ * "listeners":          [{ "name": "shadow", "samples": true | false }],
  * "cancel":             "authentication" | "memberships" | "snapshot"    // the caller goes away while it waits there
  * ```
  *
@@ -257,7 +255,8 @@ class PipelineRunner(private val compiler: SnapshotCompiler = DocumentSnapshotCo
             if (point == cancelAt) reached.complete(Unit)
         }
 
-        val listeners = listeners(node.get("listeners"), node.get("options") ?: EMPTY)
+        val scenarioListeners = ScenarioListeners(node.get("listeners"), node.get("options") ?: EMPTY)
+        val listeners = scenarioListeners.listeners
         val authentication = node.get("authentication") ?: EMPTY
         val provider = node.get("membershipProvider")?.let { provider(authentication, it) { reach("memberships") } }
             ?: keysWithoutProvider(authentication)
@@ -275,11 +274,19 @@ class PipelineRunner(private val compiler: SnapshotCompiler = DocumentSnapshotCo
             .named(provider, rateLimiter(node.get("rateLimiter")), node.get("identity")?.let(::issuer))
             .build()
         try {
-            return answer(node, pipeline, cancelAt, reached)
+            return counted(node, answer(node, pipeline, cancelAt, reached), scenarioListeners)
         } finally {
             listeners.cancel()
         }
     }
+
+    /** [outcome] with the events each listener received, when the scenario expects them (`OBS-8`). */
+    private fun counted(node: JsonNode, outcome: Outcome, listeners: ScenarioListeners): Outcome =
+        if (outcome is Outcome.Answered && node.get("expect")?.has("events") == true) {
+            outcome.withEvents(listeners.events())
+        } else {
+            outcome
+        }
 
     /** The parts a scenario may leave out, each set only when the scenario names it. */
     private fun PipelineBuilder.named(provider: MembershipProvider?, limiter: RateLimiter?, issuer: IdentityIssuer?) =
@@ -890,30 +897,6 @@ class PipelineRunner(private val compiler: SnapshotCompiler = DocumentSnapshotCo
         )
     }
 
-    private fun listeners(node: JsonNode?, options: JsonNode): DecisionListeners {
-        val listeners = node?.values().orEmpty().map { listener ->
-            listener.only("name", "delivery", "fails", "hangs")
-            val delivery = when (val delivery = listener.get("delivery")?.text() ?: "best-effort") {
-                "required" -> Delivery.REQUIRED
-                "best-effort" -> Delivery.BEST_EFFORT
-                else -> throw ScenarioFormatException("A delivery is required or best-effort, not $delivery")
-            }
-            val fails = listener.get("fails")?.text()
-            val hangs = listener.get("hangs")?.bool() == true
-            object : DecisionListener {
-                override val name = listener.required("name").text()
-                override val delivery = delivery
-
-                override suspend fun onDecision(event: DecisionEvent) {
-                    fails?.let { throw IllegalStateException(it) }
-                    if (hangs) awaitCancellation()
-                }
-            }
-        }
-        val timeout = options.get("requiredTimeoutMillis")?.asLong()?.milliseconds ?: DEFAULT_REQUIRED_TIMEOUT
-        return DecisionListeners(listeners, requiredTimeout = timeout)
-    }
-
     private fun rateLimiter(node: JsonNode?): RateLimiter? {
         node ?: return null
         node.only("exhausted", "fails")
@@ -1013,7 +996,6 @@ class PipelineRunner(private val compiler: SnapshotCompiler = DocumentSnapshotCo
         const val AUTHORIZATION = "authorization"
         const val DEFAULT_API_KEY_HEADER = "X-API-Key"
         const val REMOTE_ADDRESS = "10.0.0.1"
-        val DEFAULT_REQUIRED_TIMEOUT = 1.seconds
 
         /** The device a `blacklist` that blocks `device` names; a request sends it as `CoSec-Device-Id`. */
         const val DEVICE_ID = "device-1"

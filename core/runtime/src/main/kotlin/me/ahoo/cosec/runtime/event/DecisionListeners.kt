@@ -99,6 +99,9 @@ class DecisionListeners(
     }
 
     private class Queued(val listener: DecisionListener, val stats: Stats, val capacity: Int) {
+        /** Reads only the events whose replay names it (`OBS-8`): no other is offered to it. */
+        val sampledOnly = listener is SampledOnlyListener
+
         val events = ConcurrentLinkedQueue<DecisionEvent>()
 
         /** Events in [events]: bounds the queue, which [ConcurrentLinkedQueue] does not. */
@@ -151,6 +154,12 @@ class DecisionListeners(
     /** Whether [publish] has anyone to hand an event to. */
     val hasBestEffort: Boolean get() = bestEffort.isNotEmpty()
 
+    /**
+     * Whether every BEST_EFFORT listener reads only the events it sampled (`OBS-8`): then an event no replay names would
+     * be offered to no one, and the pipeline does not make it.
+     */
+    internal val sampledOnly: Boolean
+
     /** REQUIRED failures on a decision they could not change (`cosec.audit.required.failures`, §9.4.2). */
     val requiredFailuresOnNonPermits: Long get() = requiredFailureCount.get()
 
@@ -172,6 +181,7 @@ class DecisionListeners(
             scope.launch { drops.run() }
         }
         bestEffortListeners = bestEffort.map { it.listener }
+        sampledOnly = bestEffort.isNotEmpty() && bestEffort.all { it.sampledOnly }
         stats = requiredStats + bestEffort.map { it.stats }
         if (required.isEmpty() && listeners.isNotEmpty()) {
             log.warn { "No REQUIRED decision listener is registered: break-glass bindings cannot permit (RFC 0006 §9.4.3)." }
@@ -222,7 +232,8 @@ class DecisionListeners(
 
     /**
      * Offers [event] to every BEST_EFFORT listener's queue without suspending, on the request's thread: a full or closed
-     * queue drops it, counts it and signals the reporter, and nothing here logs or locks.
+     * queue drops it, counts it and signals the reporter, and nothing here logs or locks. A listener that reads only the
+     * events it sampled is offered only those whose replay names it (`OBS-8`).
      *
      * A queue closed between the check and the offer may have lost its consumer already, so after the offer this call
      * takes its own event back out and counts it as dropped, unless a consumer took it first. That is a scan of at most
@@ -231,6 +242,9 @@ class DecisionListeners(
      */
     internal fun publish(event: DecisionEvent) {
         for (queued in bestEffort) {
+            if (queued.sampledOnly && event.replay?.sampledBy?.contains(queued.listener.name) != true) {
+                continue
+            }
             val size = queued.size.incrementAndGet()
             if (closed || size > queued.capacity) {
                 queued.size.decrementAndGet()

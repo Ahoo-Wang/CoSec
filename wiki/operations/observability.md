@@ -62,6 +62,11 @@ starter wraps it as a `BEST_EFFORT` listener named after the bean (`AuditListene
 `@Order` among the listeners. It is always `BEST_EFFORT`, because `AuditEventSink.publish` cannot acknowledge a write.
 A bean that is both is registered once, as the `DecisionListener` it is.
 
+- **The shadow listener sees only the requests it samples** (`OBS-8`). It samples only requests that read a document
+  the [staged list](./storage.md#redis-keys) names, then at `cosec.authorization.shadow.sample-rate`, and is offered no
+  other event. When it is the only `BEST_EFFORT` listener, a request it does not sample makes no decision event at all,
+  so with no shadow window open a host without metrics, tracing or audit listeners does nothing for it on a request.
+  `REQUIRED` listeners, and every other listener, receive every event.
 - **Break-glass needs a `REQUIRED` listener.** A request permitted through a break-glass binding is `503` unless at
   least one `REQUIRED` listener is registered and every one of them records it. Out of the box no listener is
   `REQUIRED`, so the starter logs at startup
@@ -220,6 +225,12 @@ So is [the verified-token cache](../integration/authentication.md#the-verified-t
 | `cosec.token.cache.evictions` | none | entries removed to stay within `cosec.authentication.token-cache.max-entries`; a steady rate means the bound is smaller than the tokens in use at once |
 | `cosec.token.cache.size` | none | a gauge: the entries held |
 
+So is the staged list the shadow listener samples by, with shadow windows on (`OBS-8`):
+
+| Meter | Tag | Counts |
+|---|---|---|
+| `cosec.shadow.staged.age` | none | a gauge, in seconds: how long ago this instance last read the staged list, `NaN` before its first read. About `cosec.authorization.shadow.report-interval` (10 s) while Redis answers; rising, the list cannot be read, the instance reads every candidate by its key and logs `The staged list cannot be read since it was at <instant>` once |
+
 With the local rate limiter (no Redis rate limiting, [Rate limiting](../policies/rate-limiting.md#the-local-limiter-is-bounded)),
 so are the new buckets it could not admit:
 
@@ -228,7 +239,8 @@ so are the new buckets it could not admit:
 | `cosec.ratelimit.local.refused` | `document`: `platform`, `app`, `tenant`, `other` | new buckets refused because the rule's, its document's or the whole bound was full: each is a request a strict rule answered `503` or a lenient one did not limit; the log line is written at most every 10 seconds |
 
 Alert on the rate of `result=indeterminate` by `cause`, on `explicit_deny` (requests a DENY statement refused), on `cosec.listener.dropped`, and on any
-rise of `cosec.revocation.unchecked`: while it rises, a revoked token is accepted. A rise of
+rise of `cosec.revocation.unchecked`: while it rises, a revoked token is accepted. A `cosec.shadow.staged.age` above
+three report intervals is an instance that samples by a list it no longer reads. A rise of
 `indeterminate` with `cause=source_unavailable` means documents cannot be read, and with `cause=document_invalid` that a
 stored document does not compile on this instance ([Troubleshooting](./troubleshooting.md#unavailable)). CoCache records its own meters for CoSec's caches in the same
 registry ([CoCache's documentation](https://cocache.ahoo.me)).
