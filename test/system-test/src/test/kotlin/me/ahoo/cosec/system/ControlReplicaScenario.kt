@@ -101,19 +101,23 @@ class ControlReplicaScenario {
             second.step(id, "publish").ok().json()["state"].assert().isEqualTo("PUBLISHED")
             second.revision(KEY).assert().isEqualTo(head + 1)
         } finally {
+            // Whatever happened above, the next scenarios need control-1 back: the gateways route to it.
             Compose.start("control-1")
+            eventually(Bounds.REPLICA_START, "control-1 to turn ready again", { readiness() }) { it == 200 }
         }
-        eventually(
-            Bounds.REPLICA_START,
-            "control-1 to turn ready again",
-            { Http.get(SystemTopology.controlManagement1.resolve("/actuator/health/readiness")) },
-        ) { it.status == 200 }
         // It reads what was published while it was down.
         eventually(
             Bounds.SNAPSHOT_PROPAGATION,
             "the head on the restarted replica",
             { first.revision(KEY) }
         ) { it == head + 1 }
+    }
+
+    /** The status of control-1's readiness probe; 0 while the starting server resets the connection (the poll asks again). */
+    private fun readiness(): Int = try {
+        Http.get(SystemTopology.controlManagement1.resolve("/actuator/health/readiness")).status
+    } catch (@Suppress("SwallowedException") e: IOException) {
+        0
     }
 
     private fun refusesConnections(base: URI): Boolean = try {
