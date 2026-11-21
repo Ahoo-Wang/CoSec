@@ -6,6 +6,11 @@ spring:
   application:
     name: system-auth
 cosec:
+  audit:
+    kafka:
+      # The decision audit is the gateways' here; this process audits nothing to Kafka (the control plane's change events are
+      # turned on by the deployment, cosec.control.audit.kafka.enabled, where it embeds the control plane).
+      enabled: false
   jwt:
     algorithm: hmac256
     secret: ${COSEC_JWT_SECRET}

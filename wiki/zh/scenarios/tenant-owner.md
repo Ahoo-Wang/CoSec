@@ -65,4 +65,18 @@ TokenSubject(id = "bob", app = "cosec-control", tenant = "acme", roles = setOf("
 - 附加策略写成应用的动作，不要写 `*`：附加策略在每个应用里生效，`*` 也会匹配控制面的 `cosec:` 动作；
 - 把 `cosec:approve` 和平台文档留给 `(platform)` 租户。
 
+## 成千上万个租户：一个角色，只定义一次 {#one-role-defined-once}
+
+像上面那样在每个租户的文档里绑定 `owner`，是按租户授权；平台租户的主体在租户文档里写下的授权，要等人批准。有一万个租户，没人批一万条绑定。
+所以不要按租户授予任何东西：**把角色只定义一次，放在控制面自己的应用文档里**，再用**成员身份**（令牌里的角色，或你的 `MembershipProvider`）
+把人放进角色，而不是用任何租户文档里的绑定。运营平台的人批准这一次变更。开通租户就成了身份系统的成员关系，加上一份不授予任何人任何东西的文档，
+由 IAM 以自己的主体创建，无需批准。
+
+<<< @/examples/control-tenant-admin/documents/apps/cosec-control.json [documents/apps/cosec-control.json]
+
+权限是一条手写的策略，写明成员自己的租户：它的路径变量 `{t}` 与 `subject.tenant` 比较，所以策略本身就不授予别的租户的文档。控制面还会在读取任何策略之前，
+拒绝租户的主体操作别的租户的文档；策略是第一道，这条规则是第二道。
+[`wiki/examples/control-tenant-admin`](https://github.com/Ahoo-Wang/CoSec/tree/main/wiki/examples/control-tenant-admin/scenarios) 的场景在每次构建中运行；
+系统测试用这种方式开通租户，既有 IAM 经控制面主机服务端口的调用，也有进程内的 SDK。
+
 **下一步：**让 CoSec 的角色与身份系统保持一致，见[外部事实源同步角色](./external-source.md)。

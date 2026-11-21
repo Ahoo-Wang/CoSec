@@ -31,6 +31,9 @@ dependencies {
     implementation(project(":webflux"))
     implementation(project(":cocache"))
     implementation(project(":control"))
+    // The change events of the embedded control plane (cosec.control.audit.kafka), when the deployment turns them on.
+    implementation(project(":kafka"))
+    implementation("org.springframework.boot:spring-boot-starter-kafka")
     implementation("me.ahoo.cocache:cocache-spring-boot-starter")
     implementation("org.springframework.boot:spring-boot-starter-webflux")
     implementation("org.springframework.boot:spring-boot-starter-data-redis")
