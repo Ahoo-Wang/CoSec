@@ -184,6 +184,12 @@ per instance: with several instances the limit is multiplied by their number. Wh
 one WARN instead: `CoSec is off ... nothing is protected by CoSec`
 ([troubleshooting](./troubleshooting.md#the-log-says-cosec-is-off)).
 
+A host that runs the control plane logs one more INFO line once it has started: what the control plane serves and where
+its callers come from, for example `Control plane: HTTP routes on /cosec/control (port 8080; service port 8082), caller
+from the forwarded identity (statement: only-trusted-callers-can-reach)`, or, in an application that reaches it in process
+only, `Control plane: no HTTP routes (cosec.control.http.enabled=false), caller from the credential`. The ports are the
+ones the servers bound.
+
 ## Metrics
 
 With `cosec-micrometer` and a `MeterRegistry` (for example from Spring Boot Actuator), every decision event is

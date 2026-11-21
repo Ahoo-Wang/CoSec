@@ -23,6 +23,8 @@ import me.ahoo.cosec.spring.boot.StartupTask
 import me.ahoo.cosec.spring.boot.StartupTaskExclusion
 import org.springframework.beans.factory.ListableBeanFactory
 import org.springframework.boot.autoconfigure.AutoConfiguration
+import org.springframework.boot.context.event.ApplicationReadyEvent
+import org.springframework.context.ApplicationListener
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Conditional
 import org.springframework.context.annotation.Import
@@ -49,6 +51,15 @@ internal class CoSecControlServicePortAutoConfiguration {
     @Bean
     fun cosecDerivedControlSettingsNotice(properties: ControlProperties): StartupTask = StartupTask.AfterSingletons {
         log.info { "CoSec derived, not configured: ${ControlDerived.describe(properties.shadow.minDuration)}." }
+    }
+
+    /** Once the host has started: what the control plane serves, on which ports, and where its callers come from. */
+    @Bean
+    fun cosecControlPlaneNotice(
+        environment: Environment,
+        properties: ControlProperties,
+    ): ApplicationListener<ApplicationReadyEvent> = ApplicationListener {
+        log.info { ControlPlaneNotice.line(environment, properties) }
     }
 
     companion object {
