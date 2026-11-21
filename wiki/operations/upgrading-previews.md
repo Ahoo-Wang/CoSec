@@ -15,18 +15,17 @@ section above it:
 
 | You run | Read |
 |---|---|
-| `8.0.0-beta.5` | [From beta.5](#from-8-0-0-beta-5) |
-| `8.0.0-beta.4` | [From beta.4](#from-8-0-0-beta-4), then the one above |
-| `8.0.0-beta.3` | [From beta.3](#from-8-0-0-beta-3), then the two above |
-| `8.0.0-beta.2` | [From beta.2](#from-8-0-0-beta-2), then the three above |
-| `8.0.0-beta.1` | [From beta.1](#from-8-0-0-beta-1), then the four above |
-| `8.0.0-alpha.4` | [From alpha.4](#from-8-0-0-alpha-4), then the five above |
+| `8.0.0-beta.4` | [From beta.4](#from-8-0-0-beta-4) |
+| `8.0.0-beta.3` | [From beta.3](#from-8-0-0-beta-3), then the one above |
+| `8.0.0-beta.2` | [From beta.2](#from-8-0-0-beta-2), then the two above |
+| `8.0.0-beta.1` | [From beta.1](#from-8-0-0-beta-1), then the three above |
+| `8.0.0-alpha.4` | [From alpha.4](#from-8-0-0-alpha-4), then the four above |
 | `8.0.0-alpha.3`, `alpha.2`, `alpha.1` | [From alpha.3](#from-8-0-0-alpha-3), [alpha.2](#from-8-0-0-alpha-2) or [alpha.1](#from-8-0-0-alpha-1), then every section above it |
 
 Which preview of the library may run behind which preview of the gateway image: see
 [Upgrading a running deployment](./upgrading.md#upgrading-a-running-deployment).
 
-## From 8.0.0-beta.5 {#from-8-0-0-beta-5}
+## From 8.0.0-beta.4 {#from-8-0-0-beta-4}
 
 - **A host that takes its caller from the `CoSec-Identity` header is asked for the statement of what can reach it, however
   it got that gate** (`STA-6`, `STA-7`, `STA-9`). Affected: an application that declared its own `IdentityGate` bean
@@ -38,9 +37,6 @@ Which preview of the library may run behind which preview of the gateway image: 
   wired, can take its caller from the identity header instead of a credential: the shape of a control-plane host, or of
   an IAM service that embeds the control plane. Nothing to change for a host that does not set it
   ([Configuration](./configuration.md#pipeline)).
-
-## From 8.0.0-beta.4 {#from-8-0-0-beta-4}
-
 - **Every stored record carries its format, and a reader ignores what it does not know of a known format**
   (review round 2, `R2C-10`, `R2C-28`, `CTL-53`, `IDN-31`). Affected: every deployment, once.
   - **Stop the control plane, upgrade it, start it.** The previews before this one refuse the `format` member the new

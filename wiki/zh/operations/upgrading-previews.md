@@ -13,23 +13,19 @@ description: "每个 8.0 预览版（alpha 与 beta）到下一个之间的变�
 
 | 你运行的版本 | 阅读 |
 |---|---|
-| `8.0.0-beta.5` | [从 beta.5 升级](#from-8-0-0-beta-5) |
-| `8.0.0-beta.4` | [从 beta.4 升级](#from-8-0-0-beta-4)，然后是上面那一节 |
-| `8.0.0-beta.3` | [从 beta.3 升级](#from-8-0-0-beta-3)，然后是上面两节 |
-| `8.0.0-beta.2` | [从 beta.2 升级](#from-8-0-0-beta-2)，然后是上面三节 |
-| `8.0.0-beta.1` | [从 beta.1 升级](#from-8-0-0-beta-1)，然后是上面四节 |
-| `8.0.0-alpha.4` | [从 alpha.4 升级](#from-8-0-0-alpha-4)，然后是上面五节 |
+| `8.0.0-beta.4` | [从 beta.4 升级](#from-8-0-0-beta-4) |
+| `8.0.0-beta.3` | [从 beta.3 升级](#from-8-0-0-beta-3)，然后是上面那一节 |
+| `8.0.0-beta.2` | [从 beta.2 升级](#from-8-0-0-beta-2)，然后是上面两节 |
+| `8.0.0-beta.1` | [从 beta.1 升级](#from-8-0-0-beta-1)，然后是上面三节 |
+| `8.0.0-alpha.4` | [从 alpha.4 升级](#from-8-0-0-alpha-4)，然后是上面四节 |
 | `8.0.0-alpha.3`、`alpha.2`、`alpha.1` | [从 alpha.3](#from-8-0-0-alpha-3)、[alpha.2](#from-8-0-0-alpha-2) 或 [alpha.1](#from-8-0-0-alpha-1) 升级，然后是它上面的每一节 |
 
 库的哪个预览版可以运行在网关镜像的哪个预览版之后：见[升级运行中的部署](./upgrading.md#upgrading-a-running-deployment)。
 
-## 从 8.0.0-beta.5 升级 {#from-8-0-0-beta-5}
+## 从 8.0.0-beta.4 升级 {#from-8-0-0-beta-4}
 
 - **从 `CoSec-Identity` 头取得调用方的宿主，无论怎样得到这个 gate，都要声明什么能访问它**（`STA-6`、`STA-7`、`STA-9`）。受影响的是：在 `cosec.pipeline.mode=enforce` 旁边自己声明了 `IdentityGate` bean 的应用，它此前没有任何声明也能启动。现在它启动失败，直到 `cosec.pipeline.identity.only-gateway-can-reach=true`（或 `only-trusted-callers-can-reach=true`）声明除网关和你指名的服务外没有任何东西能访问它，并且关闭 hidden-method 过滤器。`gateway` 模式的宿主不变。
 - **新增：`cosec.pipeline.caller=forwarded-identity`。** `enforce` 模式的宿主在装配了快照和控制面的情况下，可以从身份头而不是凭证取得调用方：控制面宿主，或内嵌控制面的 IAM 服务就是这种形态。没有设置它的宿主无需改动（[配置](./configuration.md#pipeline)）。
-
-## 从 8.0.0-beta.4 升级 {#from-8-0-0-beta-4}
-
 - **每条存储的记录都带有格式，读取方忽略已知格式中不认识的内容**（第二轮评审，`R2C-10`、`R2C-28`、`CTL-53`、`IDN-31`）。受影响的是每个部署，一次。
   - **停止控制面，升级，再启动。** 此前的预览版拒绝新记录带有的 `format` 成员，所以两个版本的实例不能同时运行。从这个版本起读取方是容忍的，以后的版本可以原地升级。
   - **一起滚动升级登录主机。** 仍运行旧预览版的登录主机读不了新版本写入的会话：刷新落到那里的用户需要重新登录。
