@@ -67,7 +67,7 @@ object PackageLedger {
             "control",
             "me.ahoo.cosec.control",
             mapOf(
-                "api" to setOf("audit", "authz", CHANGE, "grant", LIFECYCLE, "store"),
+                "api" to setOf("authz", CHANGE, LIFECYCLE, "store"),
                 LIFECYCLE to setOf("audit", "authz", CHANGE, "grant", "store"),
                 // The store's records, the change events and the authorizer's refusals are made of the change values.
                 "store" to setOf(CHANGE),

@@ -165,6 +165,19 @@ internal class HistoryRepair(
             check(entries, floor, head) { null } === IndexCheck.Follows
 
         /**
+         * The entries of [index] up to [head]'s revision: nothing above the head, since what a head that moved back (a
+         * partial loss of data) left in the index is not on its chain, and a revision published after the head was read
+         * is left out of this read alone. The one place the filter is written: [Revisions.history],
+         * [Revisions.verifyIndex] and [Retention]'s pre-check read the index through it, so they cannot disagree.
+         */
+        fun entriesUpTo(index: RevisionIndex, head: StoredDocument): List<RevisionEntry> =
+            index.entries.filter { it.revision <= head.document.revision }
+
+        /** [agrees] for all of [index], as [Revisions.history] and [Retention]'s pre-check ask it. */
+        fun agrees(index: RevisionIndex, head: StoredDocument): Boolean =
+            agrees(entriesUpTo(index, head), index.floor, head)
+
+        /**
          * Whether [entries], the index's entries up to the head's revision, are [head]'s chain from [floor] up, and why
          * not: the last is the head's own (revision and digest), and each entry's parent is the digest of the one below
          * it. What reclamation kept below the floor is not part of the chain that is left, and is not judged. Nothing is

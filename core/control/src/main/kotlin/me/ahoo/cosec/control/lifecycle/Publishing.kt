@@ -47,6 +47,7 @@ internal class Publishing(
     private val revisions: Revisions,
     private val clock: Clock,
     private val authority: ChangeAuthority,
+    private val rules: ApprovalRules,
     private val candidates: CandidateChecks,
     private val slots: StagingSlots,
     private val listeners: ChangeListeners,
@@ -101,8 +102,8 @@ internal class Publishing(
             return flow.settle(change, ChangeState.DRAFT, ChangeStep.PUBLISH, checked.findings)
         }
         val rechecked = PublishRules.lockoutAcknowledged(checked, publisher, lockout)
-        val problem = authority.approvalProblem(change, rechecked.escalations, publisher, clock.instant())
-            ?: authority.approverProblem(change, rechecked.escalations, publisher)
+        val problem = rules.approvalProblem(change, rechecked.escalations, publisher, clock.instant())
+            ?: rules.approverProblem(change, rechecked.escalations, publisher)
         problem?.let { problem ->
             return flow.transition(id, ChangeStep.PUBLISH) {
                 it.copy(
