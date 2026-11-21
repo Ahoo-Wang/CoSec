@@ -1,14 +1,13 @@
 # Rule: CTL-3
 # Mutant: a simulated tenant change is decided on the documents its head reads, not those the candidate makes the request read
 # Tests: :control:test --tests me.ahoo.cosec.control.api.AppDocumentDecisionsTest :conformance:test
-
 diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/api/DecisionQueries.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/api/DecisionQueries.kt
-index 72fdaffec..a02232eba 100644
+index eb6a87b5c..5630f4990 100644
 --- a/core/control/src/main/kotlin/me/ahoo/cosec/control/api/DecisionQueries.kt
 +++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/api/DecisionQueries.kt
 @@ -62,7 +62,7 @@ internal class DecisionQueries(
              }
-             val document = changes.candidateOf(id) ?: throw ChangeRejectedException(CONFLICT, "change ${id.value} no longer applies")
+             val document = changes.candidateOf(id) ?: throw ChangeRejectedException.conflict(ConflictKind.STATE, "change ${id.value} no longer applies")
              // A tenant change may make the request read another app document, or none (RC1-17): as once it publishes.
 -            val fetched = if (change.key == tenant) simulator.keys(scope, document) else keys
 +            val fetched = keys

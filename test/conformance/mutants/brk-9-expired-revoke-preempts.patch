@@ -1,17 +1,16 @@
 # Rule: BRK-9
 # Mutant: a revoke of an expired binding counts as a revoke of a live one when it comes for the slot, so it takes the slot of a live revoke from a holder of cosec:skip-shadow
 # Tests: :control:test --tests me.ahoo.cosec.control.change.BreakGlassControlTest :conformance:test
-
 diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Staging.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Staging.kt
-index 32458882..a16c9024 100644
+index 3406c7d86..1793fd568 100644
 --- a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Staging.kt
 +++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Staging.kt
-@@ -212,7 +212,7 @@ internal class Staging(
+@@ -270,7 +270,7 @@ internal class Staging(
                          return@repeat
                      }
                      // A revoke of a binding that still grants is taken only by another such revoke (review N1).
 -                    val guarded = preemption.revokesBreakGlass(held, head) && !preemption.revokesBreakGlass(change, head)
 +                    val guarded = preemption.revokesBreakGlass(held, head) && !PublishRules.revokes(change)
                      if (guarded || !preemption.preempts(operator, change, head)) {
-                         throw ChangeRejectedException(CONFLICT, "[${change.key}] is staged by change ${held.id.value}")
-                     }
+                         throw ChangeRejectedException.conflict(
+                             ConflictKind.SLOT_HELD,
