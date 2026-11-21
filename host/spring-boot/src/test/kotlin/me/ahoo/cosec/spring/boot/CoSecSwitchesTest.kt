@@ -115,6 +115,8 @@ class CoSecSwitchesTest {
         scan().presence.assert().containsExactly(
             "cosec.authentication.login.logout.path",
             "cosec.authentication.login.refresh.path",
+            // A port number: the service port is on where one is written, and nothing compares it with a value.
+            "cosec.control.http.service-port",
             "cosec.cosid.generator",
         )
     }

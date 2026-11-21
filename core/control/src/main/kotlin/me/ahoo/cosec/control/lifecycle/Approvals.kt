@@ -67,7 +67,7 @@ internal class Approvals(
         val breakGlass = change.escalations.any { it.reason == Escalation.Reason.BREAK_GLASS }
         if (breakGlass) {
             PublishRules.requireAudit(true, listeners.hasRequired)
-            flow.audit(ChangeEvent.Kind.BREAK_GLASS_APPROVED, change, operator.actor)
+            flow.audit(ChangeEvent.Kind.BREAK_GLASS_APPROVED, change, operator.actor, origin = operator.origin)
         }
         return flow.transition(id, ChangeStep.APPROVE) { current ->
             if (current.candidate != candidate) {
@@ -94,7 +94,7 @@ internal class Approvals(
                     it.check == APPROVAL
                 }
             )
-        }.also { if (!breakGlass) flow.audit(ChangeEvent.Kind.APPROVED, it, operator.actor) }
+        }.also { if (!breakGlass) flow.audit(ChangeEvent.Kind.APPROVED, it, operator.actor, origin = operator.origin) }
     }
 
     /**
@@ -111,7 +111,7 @@ internal class Approvals(
             it.copy(state = ChangeState.REJECTED, findings = it.findings + Finding(APPROVAL, "$", reason, FORBIDDEN))
         }
         slots.release(rejected)
-        flow.audit(ChangeEvent.Kind.REJECTED, rejected, operator.actor)
+        flow.audit(ChangeEvent.Kind.REJECTED, rejected, operator.actor, origin = operator.origin)
         return rejected
     }
 
@@ -139,12 +139,18 @@ internal class Approvals(
         if (breakGlass) {
             PublishRules.requireState(current, ChangeStep.ABANDON.from)
             PublishRules.requireAudit(true, listeners.hasRequired)
-            flow.audit(ChangeEvent.Kind.ABANDONED, current.abandoned(), operator.actor, gated = true)
+            flow.audit(
+                ChangeEvent.Kind.ABANDONED,
+                current.abandoned(),
+                operator.actor,
+                gated = true,
+                origin = operator.origin
+            )
         }
         val change = flow.transition(id, ChangeStep.ABANDON) { it.copy(state = ChangeState.ABANDONED) }
         slots.release(change)
         if (!breakGlass) {
-            flow.audit(ChangeEvent.Kind.ABANDONED, change.abandoned(), operator.actor)
+            flow.audit(ChangeEvent.Kind.ABANDONED, change.abandoned(), operator.actor, origin = operator.origin)
         }
         return change
     }

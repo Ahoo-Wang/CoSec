@@ -17,6 +17,7 @@ package me.ahoo.cosec.control.authz
 
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.control.change.ChangeOrigin
 import me.ahoo.cosec.document.Actor
 import me.ahoo.cosec.engine.SubjectAttributes
 import me.ahoo.cosec.model.Memberships
@@ -40,6 +41,9 @@ class Operator(
     val security: RequestSecurity? = null,
 ) {
     val tenant: TenantId get() = actor.tenant
+
+    /** How this operator was identified, for the record (`CTL-57`); null without a request. */
+    val origin: ChangeOrigin? get() = security?.let(ChangeOrigin::of)
 
     val platform: Boolean get() = actor.tenant == TenantId.PLATFORM
 

@@ -171,7 +171,14 @@ class IdentityGate(
         val subject = ScopeSubject(TenantId.DEFAULT, false, memberships)
         val resolution = ScopeResolver.resolve(subject, "", facts.host)
         val scope = (resolution as ScopeResolution.Resolved).scope
-        return RequestSecurity(requestId, null, scope, memberships, request(ANONYMOUS, requestId, facts, parameters))
+        return RequestSecurity(
+            requestId,
+            null,
+            scope,
+            memberships,
+            request(ANONYMOUS, requestId, facts, parameters),
+            peer = facts.peerAddress,
+        )
     }
 
     /** The principal the gateway verified, in the scope it decided in; null when that scope does not resolve here. */
@@ -214,7 +221,15 @@ class IdentityGate(
             principal.breakGlass,
         )
         val request = request(subject, requestId, facts, parameters)
-        return RequestSecurity(requestId, principal, scope, memberships, request, identity = identity)
+        return RequestSecurity(
+            requestId,
+            principal,
+            scope,
+            memberships,
+            request,
+            identity = identity,
+            peer = facts.peerAddress
+        )
     }
 
     private fun request(subject: Subject, requestId: String, facts: HttpFacts, parameters: CoSecParameters) =

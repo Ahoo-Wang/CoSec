@@ -233,6 +233,21 @@ class ForwardedIdentityCallerTest {
         }
     }
 
+    /** `CTL-57`: what the record keeps of a request the gate decided: it was asserted, by which credential, from which peer. */
+    @Test
+    fun `the operator of a request the identity gate decided is recorded as asserted, with the credential stated and the peer`() {
+        runner.withPropertyValues("$statement=true").run { context ->
+            val origin = operator(context, "plato", peer = "10.0.0.9").origin.assert().isNotNull().actual()
+            origin.asserted.assert().isTrue()
+            origin.via?.method.assert().isEqualTo("jwt")
+            origin.via?.credentialId.assert().isEqualTo("jti-plato")
+            origin.via?.requestId.assert().isNotNull()
+            // The peer is the connection's, whatever the request states of its client address.
+            origin.peer.assert().isEqualTo("10.0.0.9")
+            operator(context, "plato").origin?.peer.assert().isNull()
+        }
+    }
+
     @Test
     fun `no header is no principal`() {
         runner.withPropertyValues("$statement=true").run { context ->
@@ -253,7 +268,7 @@ class ForwardedIdentityCallerTest {
         documents.notifyChanged(SnapshotKey.Platform)
     }
 
-    private fun facts(header: String?) = HttpFacts(
+    private fun facts(header: String?, peer: String? = null) = HttpFacts(
         method = "GET",
         rawPath = "/cosec/control/v1/documents/platform",
         rawQuery = null,
@@ -261,10 +276,11 @@ class ForwardedIdentityCallerTest {
         cookies = Cookies.of(emptyMap()),
         remoteAddress = "10.0.0.1",
         host = HostScope(null),
+        peerAddress = peer,
     )
 
     /** The operator of a request that states [principal], as a gateway or a trusted service would. */
-    private fun operator(context: ApplicationContext, principal: String): Operator {
+    private fun operator(context: ApplicationContext, principal: String, peer: String? = null): Operator {
         val now = Instant.now()
         val identity = Identity(
             tenant = TenantId.PLATFORM.value,
@@ -282,7 +298,7 @@ class ForwardedIdentityCallerTest {
             requestId = "req-$principal",
         )
         val outcome = runBlocking {
-            context.getBean(RequestGate::class.java).evaluate(facts(IdentityCodec.encode(identity)))
+            context.getBean(RequestGate::class.java).evaluate(facts(IdentityCodec.encode(identity), peer))
         }
         return Operator.of(outcome.security!!)!!
     }

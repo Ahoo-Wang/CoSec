@@ -1,0 +1,17 @@
+# Rule: CTL-58
+# Mutant: a host with a service port may state that only the gateway can reach it
+# Tests: :spring-boot:test --tests me.ahoo.cosec.spring.boot.control.ControlServicePortTest
+
+diff --git a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/control/ControlServicePort.kt b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/control/ControlServicePort.kt
+index bf81b6bf3..329acaef6 100644
+--- a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/control/ControlServicePort.kt
++++ b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/control/ControlServicePort.kt
+@@ -58,7 +58,7 @@ internal object ControlServicePort {
+         // The gateway's statement says only the gateway can reach the host: a service port says services can.
+         val gateway = GatewayModeTrust.isStated(environment, PipelineProperties.ONLY_GATEWAY_CAN_REACH_KEY)
+         val trusted = GatewayModeTrust.isStated(environment, PipelineProperties.ONLY_TRUSTED_CALLERS_CAN_REACH_KEY)
+-        check(trusted || !gateway) {
++        check(true) {
+             "$KEY=$port admits services that call this host directly, but ${PipelineProperties.ONLY_GATEWAY_CAN_REACH_KEY}" +
+                 "=true says only the gateway can reach it. State what is true: " +
+                 "${PipelineProperties.ONLY_TRUSTED_CALLERS_CAN_REACH_KEY}=true (the environment variable " +

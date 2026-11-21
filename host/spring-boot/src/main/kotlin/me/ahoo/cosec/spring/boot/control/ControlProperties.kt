@@ -34,6 +34,7 @@ class ControlProperties {
     /** The app control-plane actions are authorized in (RFC 0007 §7.2). */
     var appId: String = "cosec-control"
     val http = Http()
+    val maintenance = Maintenance()
     val revisions = Revisions()
     val changes = Changes()
     val approval = Approval()
@@ -53,7 +54,31 @@ class ControlProperties {
     }
 
     @InternalCoSecApi
+    class Maintenance {
+        /**
+         * Whether this instance runs the control plane's maintenance passes (revision reclamation, closing shadow
+         * windows, reconciling the app list and the staged list): `false` for an instance that only serves, such as an IAM
+         * service that embeds the control plane beside a control host that runs them (`CTL-59`). `true` or `false` only.
+         */
+        var enabled: Boolean = true
+    }
+
+    @InternalCoSecApi
     class Http {
+        /**
+         * Whether the control API's routes are served on this instance (`CTL-58`): `false` serves none, for an
+         * application that embeds the control plane and reaches it in process only. `true` or `false` only.
+         */
+        var enabled: Boolean = true
+
+        /**
+         * A port of its own for services that call the control plane directly, serving the narrow service profile
+         * (`CTL-58`): tenant and app documents, and the change flow that needs no person. Unset, no such port.
+         * WebFlux only; it is not the application's port or the management port. Reaching it is a network decision (a
+         * policy that admits the labelled service pods), and the host then states `only-trusted-callers-can-reach`.
+         */
+        var servicePort: Int? = null
+
         /** Where the control API is served (RFC 0007 §10.2): its routes are under `{base-path}/v1`. */
         var basePath: String = "/cosec/control"
 
@@ -145,5 +170,6 @@ class ControlProperties {
     companion object {
         const val PREFIX = CoSecProperties.PREFIX + ".control"
         const val KAFKA_AUDIT_PREFIX = "$PREFIX.audit.kafka"
+        const val MAINTENANCE_ENABLED_KEY = "$PREFIX.maintenance.enabled"
     }
 }

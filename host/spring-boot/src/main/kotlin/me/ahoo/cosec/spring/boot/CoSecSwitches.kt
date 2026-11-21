@@ -57,6 +57,8 @@ internal object CoSecSwitches {
         "cosec.authorization.snapshot.prewarm-host-apps",
         "cosec.gateway.identity.enabled",
         "cosec.control.audit.kafka.enabled",
+        "cosec.control.http.enabled",
+        "cosec.control.maintenance.enabled",
         "cosec.api-key.enabled",
     ) + listOf(
         Switch("cosec.pipeline.mode", listOf("enforce", "gateway")),

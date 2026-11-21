@@ -16,6 +16,7 @@
 package me.ahoo.cosec.control.audit
 
 import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.control.change.OriginJson
 import me.ahoo.cosec.control.change.ShadowStateCodec
 
 /**
@@ -64,6 +65,7 @@ object ChangeEventJson {
             }
         }
         event.shadow?.let { ShadowStateCodec.summary(root.putObject("shadow"), it) }
+        event.origin?.let { OriginJson.write(root.putObject("origin"), it) }
         return me.ahoo.cosec.document.json.CoSecJson.mapper.writeValueAsString(root)
     }
 }

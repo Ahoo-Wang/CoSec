@@ -24,6 +24,7 @@ description: "每个 8.0 预览版（alpha 与 beta）到下一个之间的变�
 
 ## 从 8.0.0-beta.4 升级 {#from-8-0-0-beta-4}
 
+- **控制面记录每一步的操作者是如何被识别的，并可增加服务端口**（`CTL-57`、`CTL-58`、`CTL-59`）。受影响的是针对 `ChangeEvent`、`ChangeRequest` 或 `HttpFacts`（实验性）编译的代码：它们的构造函数各在末尾增加了一个带默认值的参数（`origin`、`origin`、`peerAddress`），请重新编译。以 JSON 写出的变更事件和存储的变更增加了 `origin` 成员（`asserted`、`via`、`peer`），不认识它的读取方会忽略。新增且默认不设置：`cosec.control.http.enabled`、`cosec.control.http.service-port` 和 `cosec.control.maintenance.enabled`（[配置](./configuration.md#control-plane)）。没有设置它们的部署无需改动。
 - **控制 API 由自己的应答模型作答；被拒绝的作用域在 `reason` 下说明原因；传播只统计持有该文档的实例**（第二轮评审，
   `R2C-11`、`R2C-12`、`CTL-61`、`CTL-62`）。受影响的是控制 API 的客户端。
   - 变更的应答（`GET /changes/{id}` 以及每个应答变更的路由）不再包含 `checkedWith`、`checkedApps` 和窗口的

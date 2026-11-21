@@ -307,6 +307,7 @@ internal class CoSecControlAutoConfiguration {
     /** Runs [ControlMaintenance] at `cosec.control.revisions.reclaim-interval` and `cosec.control.shadow.check-interval`. */
     @Bean
     @ConditionalOnMissingBean
+    @ConditionalOnProperty(ControlProperties.MAINTENANCE_ENABLED_KEY, matchIfMissing = true)
     fun cosecControlMaintenanceScheduler(
         maintenance: ControlMaintenance,
         properties: ControlProperties,

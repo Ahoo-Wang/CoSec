@@ -27,6 +27,13 @@ Which preview of the library may run behind which preview of the gateway image: 
 
 ## From 8.0.0-beta.4 {#from-8-0-0-beta-4}
 
+- **The control plane records how each step's operator was identified, and a service port can be added** (`CTL-57`,
+  `CTL-58`, `CTL-59`). Affected: code compiled against `ChangeEvent`, `ChangeRequest` or `HttpFacts` (experimental), whose
+  constructors gained a trailing parameter (`origin`, `origin`, `peerAddress`, each with a default): recompile. Change
+  events written as JSON, and the stored change, gain an `origin` member (`asserted`, `via`, `peer`), which a reader
+  that does not know it ignores. New and unset by default: `cosec.control.http.enabled`, `cosec.control.http.service-port`
+  and `cosec.control.maintenance.enabled` ([Configuration](./configuration.md#control-plane)). Nothing to change for a
+  deployment that sets none of them.
 - **The control API answers from a response model of its own; a refused scope says why under `reason`; propagation
   counts the instances that hold the document** (review round 2, `R2C-11`, `R2C-12`, `CTL-61`, `CTL-62`). Affected:
   clients of the control API.

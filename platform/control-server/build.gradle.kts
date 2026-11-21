@@ -78,6 +78,7 @@ dependencies {
     implementation("org.springframework.boot:spring-boot-starter-data-redis")
     implementation("org.springframework.boot:spring-boot-starter-actuator")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-reactor")
+    testImplementation(project(":testkit"))
     testImplementation(project(":jwt"))
     testImplementation(project(":login"))
     testImplementation("org.springframework.boot:spring-boot-starter-test")

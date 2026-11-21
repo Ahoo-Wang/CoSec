@@ -94,6 +94,7 @@ object ChangeRequestCodec {
         root.put("createdAt", change.createdAt.toString())
         root.put("updatedAt", change.updatedAt.toString())
         change.skipShadow?.let { root.put("skipShadow", it) }
+        change.origin?.let { OriginJson.write(root.putObject("origin"), it) }
         change.publishedRevision?.let { root.put("publishedRevision", it) }
         approvalTree(root, change)
         change.shadow?.let { root.set("shadow", ShadowStateCodec.tree(it)) }
@@ -162,6 +163,7 @@ object ChangeRequestCodec {
             createdAt = Instant.parse(node.need("createdAt").text()),
             updatedAt = Instant.parse(node.need("updatedAt").text()),
             skipShadow = node.get("skipShadow")?.text(),
+            origin = node.get("origin")?.takeIf { it.isObject }?.let(OriginJson::read),
             publishedRevision = node.get("publishedRevision")?.asLong(),
             escalations = node.get("escalations")?.values()?.map {
                 Escalation(

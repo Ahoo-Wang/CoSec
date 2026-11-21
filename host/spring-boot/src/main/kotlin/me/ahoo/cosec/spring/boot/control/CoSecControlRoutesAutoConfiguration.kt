@@ -23,6 +23,8 @@ import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.control.api.ControlHttp
 import me.ahoo.cosec.control.api.ControlHttpRequest
 import me.ahoo.cosec.control.api.ControlHttpResponse
+import me.ahoo.cosec.control.api.ControlPlane
+import me.ahoo.cosec.control.api.ControlProfile
 import me.ahoo.cosec.runtime.Pipeline
 import me.ahoo.cosec.runtime.event.BridgeContextContributor
 import me.ahoo.cosec.runtime.http.ProblemType
@@ -39,10 +41,12 @@ import org.springframework.beans.factory.ObjectProvider
 import org.springframework.boot.autoconfigure.AutoConfiguration
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication
 import org.springframework.context.ApplicationContext
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
+import org.springframework.core.env.Environment
 import org.springframework.core.io.buffer.DataBufferLimitException
 import org.springframework.core.io.buffer.DataBufferUtils
 import org.springframework.http.MediaType
@@ -69,19 +73,52 @@ import org.springframework.web.servlet.function.ServerResponse as ServletServerR
 @AutoConfiguration(after = [CoSecControlAutoConfiguration::class])
 @ConditionalOnCoSecEnabled
 @ConditionalOnBean(ControlHttp::class)
+@ConditionalOnProperty(prefix = ControlProperties.PREFIX + ".http", name = ["enabled"], matchIfMissing = true)
 internal class CoSecControlRoutesAutoConfiguration {
     @Configuration(proxyBeanMethods = false)
     @ConditionalOnWebApplication(type = ConditionalOnWebApplication.Type.REACTIVE)
     @ConditionalOnClass(name = ["me.ahoo.cosec.webflux.ServerWebExchanges"])
     class WebFlux {
+        /**
+         * The service port (`CTL-58`), when `cosec.control.http.service-port` is set: a second listener over the same
+         * handler, and the filter that serves nothing but the control API on it.
+         */
+        @Bean
+        @ConditionalOnProperty(ControlServicePort.KEY)
+        @ConditionalOnClass(name = ["reactor.netty.http.server.HttpServer"])
+        fun cosecControlServiceListener(
+            context: ApplicationContext,
+            properties: ControlProperties,
+            environment: Environment,
+        ): ControlServiceListener = ControlServiceListener(
+            context,
+            requireNotNull(properties.http.servicePort),
+            ControlServicePort.grace(environment),
+        )
+
+        @Bean
+        @ConditionalOnProperty(ControlServicePort.KEY)
+        @ConditionalOnClass(name = ["reactor.netty.http.server.HttpServer"])
+        fun cosecControlServicePortFilter(
+            listener: ControlServiceListener,
+            properties: ControlProperties,
+        ): ServicePortFilter = ServicePortFilter(listener, basePathOf(properties))
+
         @Bean
         fun cosecControlRoutes(
-            http: ControlHttp,
-            properties: ControlProperties
+            operators: ControlHttp,
+            properties: ControlProperties,
+            plane: ObjectProvider<ControlPlane>? = null,
+            service: ObjectProvider<ControlServiceListener>? = null,
         ): ReactiveRouterFunction<ReactiveServerResponse> {
             val base = apiRootOf(properties)
             val maxBodySize = properties.http.maxBodySize.toBytes()
+            // The narrow profile answers on the service port only; the operators' port serves the whole API.
+            val listener = service?.ifAvailable
+            val services = listener?.let { ControlHttp(checkNotNull(plane).getObject(), ControlProfile.SERVICE) }
             return ReactiveRouterFunctions.route(ReactivePredicates.path("$base/**")) { request ->
+                val onServicePort = listener != null && request.exchange().request.localAddress?.port == listener.boundPort
+                val http = if (onServicePort) services!! else operators
                 val security = RequestSecurity.of(request.exchange().securityContextOrNull())
                 // Nothing is read for a request no permitted principal stands behind, an anonymous permit included:
                 // ControlHttp answers it 401 (RC1-41, review L1 of #1240). Never more than max-body-size (CTL-41).

@@ -86,7 +86,7 @@ internal class Staging(
             it.copy(state = ChangeState.SHADOWING, shadow = state)
         }
         slots.write(shadowing, candidate) { undo(shadowing) }
-        flow.audit(ChangeEvent.Kind.SHADOW_STARTED, shadowing, operator.actor)
+        flow.audit(ChangeEvent.Kind.SHADOW_STARTED, shadowing, operator.actor, origin = operator.origin)
         return shadowing
     }
 
@@ -287,7 +287,7 @@ internal class Staging(
         val note = if (taken) "preempted by ${by.id.value}" else "conflicted by ${by.id.value}, which did not take the slot"
         try {
             slots.withdraw(conflicted)
-            flow.audit(ChangeEvent.Kind.FAILED, conflicted.copy(note = note), operator.actor)
+            flow.audit(ChangeEvent.Kind.FAILED, conflicted.copy(note = note), operator.actor, origin = operator.origin)
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {

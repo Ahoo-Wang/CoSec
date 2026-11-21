@@ -25,6 +25,8 @@ dependencies {
     compileOnly(project(":webmvc"))
     testImplementation(project(":webmvc"))
     compileOnly(project(":webflux"))
+    // The control plane's service port is a second Reactor Netty server (CTL-58); the application brings its own.
+    compileOnly(libs.spring.boot.reactor.netty)
     testImplementation(project(":webflux"))
     compileOnly("org.jetbrains.kotlinx:kotlinx-coroutines-reactor")
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-reactor")

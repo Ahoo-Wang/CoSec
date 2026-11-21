@@ -793,6 +793,45 @@
         "control:ClientContractTest#a propagation answer holds exactly the members of its contract file"
       ],
       "pending": null
+    },
+    {
+      "id": "CTL-57",
+      "source": "maintainer decision 2026-11-21 (the control-plane host's callers, \"按你推荐\"); control-server-design §0.2",
+      "statement": "A control-plane change records how its author was identified, and each change event how the operator of its step was (`origin`): `asserted` is true when the host believed the identity the caller stated (the `CoSec-Identity` header, `STA-9`) instead of verifying a credential itself; `via` is the credential as stated or verified (its method, its id, never its value, and the request's id); `peer` is the address of the connection the request arrived on, which the caller does not choose, where the client address a request states is the caller's. A step no request drives, a maintenance pass for one, records none. The member is additive: a stored change without it reads, and a reader that does not know it ignores it. An event written as JSON carries the member only when it has one.",
+      "level": "build",
+      "pending": null,
+      "guards": [
+        "control:ChangeOriginTest#a change records how its author was identified, and each event how its step's operator was",
+        "control:ChangeOriginTest#an origin is stored with its change and written with its event, with the members it has",
+        "spring-boot:ForwardedIdentityCallerTest#the operator of a request the identity gate decided is recorded as asserted, with the credential stated and the peer"
+      ]
+    },
+    {
+      "id": "CTL-58",
+      "source": "maintainer decision 2026-11-21 (the control-plane host's service API); control-server-design §0.7, §0.8",
+      "statement": "The control API's service profile is the narrow set a service that calls the control plane directly may ask for, served on a port of its own (`cosec.control.http.service-port`, WebFlux only; the network, not a filter, says who may use it): the tenant and app documents (their reads, and `:apply` on a tenant's) and the change flow that needs no person (propose a tenant's document, read, rebase, abandon, skip the shadow window, publish). Every other route is a `404` before the control plane is asked, as if it did not exist: the platform document, the shadow window, approvals and rejections, rollback, break-glass, the queries and propagation. Nothing but the control API is served on that port. The profile narrows what is served and never widens what the caller may do: each route it serves is authorized for the stated principal by the policies. The service port is not the application's or the management port, and it is refused with the control API off (`cosec.control.http.enabled=false`, which serves no control route at all) or beside the gateway's statement (`only-gateway-can-reach`), since a service port admits services. The listener stops by unbinding, waiting for the requests in flight within the shutdown grace, and closing every connection still open, the idle keep-alive ones included.",
+      "level": "build",
+      "pending": null,
+      "guards": [
+        "control:ControlProfileTest#the service profile serves a tenant document and its history, and the change flow",
+        "control:ControlProfileTest#what is a person's or the platform's is a 404 on the service profile, and is served on the operators' one",
+        "control:ControlProfileTest#a proposal for the platform document is a 404 on the service profile, never reaching the control plane",
+        "control:ControlProfileTest#no principal is a 401 on the service profile as on the operators' one, before any route is looked at",
+        "spring-boot:ControlServicePortTest#the service port listens apart, serves nothing but the control API, and closes its connections when it stops",
+        "spring-boot:ControlServicePortTest#a service port beside the application's, the management port or a disabled control API is refused",
+        "spring-boot:ControlServicePortTest#a service port with no WebFlux server to serve it fails startup naming what to do",
+        "spring-boot:ControlServicePortTest#cosec control http enabled false serves no control route, and the control plane stays for what embeds it"
+      ]
+    },
+    {
+      "id": "CTL-59",
+      "source": "maintainer decision 2026-11-21 (the control-plane host's replicas and embedders); control-server-design §0.6",
+      "statement": "`cosec.control.maintenance.enabled=false` runs none of the control plane's maintenance passes on the instance (reclaiming revisions, closing shadow windows, reconciling the app list and the staged list), for an instance that only serves, such as an IAM service that embeds the control plane beside a host that runs them; the default runs them, on every instance. The control plane itself stays wired either way.",
+      "level": "startup",
+      "pending": null,
+      "guards": [
+        "spring-boot:ControlServicePortTest#cosec control maintenance enabled false runs no maintenance pass, and the default runs them"
+      ]
     }
   ]
 }

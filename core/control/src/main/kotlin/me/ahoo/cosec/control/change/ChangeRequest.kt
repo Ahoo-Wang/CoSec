@@ -61,6 +61,8 @@ data class ChangeRequest(
     val confirmations: List<Confirmation> = emptyList(),
     /** The app list its last check read (RC1-4, RC1-33); `null` when that check did not read it. */
     val checkedApps: CheckedApps? = null,
+    /** How [author] was identified when they proposed it (`CTL-57`); `null` for a change recorded before it, or by no request. */
+    val origin: ChangeOrigin? = null,
 ) {
     val errors: List<Finding> get() = findings.filter { it.severity == Severity.ERROR }
 }

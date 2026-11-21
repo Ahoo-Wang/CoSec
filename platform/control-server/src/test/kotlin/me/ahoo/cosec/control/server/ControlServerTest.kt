@@ -17,6 +17,7 @@ import me.ahoo.cocache.api.spi.CoherenceBackend
 import me.ahoo.cocache.core.memory.InMemoryBackend
 import me.ahoo.cosec.jwt.JwtSigning
 import me.ahoo.cosec.login.token.TokenConverter
+import me.ahoo.cosec.testkit.IdentityHeader
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Test
@@ -35,6 +36,7 @@ import java.net.http.HttpResponse
  * will not start without (`STA-9`). A call with an identity header, the 200 and the 403, is `aot-smoke.sh`'s: it runs
  * on the image with a platform document published through `cosec-migrate`, which the in-memory backend cannot do.
  */
+@OptIn(me.ahoo.cosec.annotations.ExperimentalCoSecApi::class)
 class ControlServerTest {
     private val http = HttpClient.newHttpClient()
     private var context: ConfigurableApplicationContext? = null
@@ -58,6 +60,7 @@ class ControlServerTest {
             )
             .run(
                 "--server.port=0",
+                "--cosec.control.http.service-port=0",
                 "--management.server.port=0",
                 "--cocache.backend=memory",
                 "--cosec.authorization.snapshot.eviction-check=warn",
@@ -98,7 +101,7 @@ class ControlServerTest {
 
     @Test
     fun `a call with no identity is refused, and a credential is not an identity`() {
-        val context = start("--cosec.pipeline.identity.only-gateway-can-reach=true")
+        val context = start("--cosec.pipeline.identity.only-trusted-callers-can-reach=true")
         val path = "/cosec/control/v1/documents/platform"
         get(context, "local.server.port", path).statusCode().assert().isEqualTo(401)
         // A bearer token nobody verifies is no more than the missing header: the host believes the identity, not this.
@@ -126,6 +129,32 @@ class ControlServerTest {
      * Only the shadow reporter writes an instance's status (`InstanceStatus`), and it exists only with shadow on: a control
      * server writes none, so a shadow window never waits for it and `propagation` never counts it.
      */
+    @Test
+    fun `the service port serves the control API's service profile only, beside the operators' port`() {
+        val context = start("--cosec.pipeline.identity.only-trusted-callers-can-reach=true")
+        val header = IdentityHeader.forSubject("plato", tenant = "(platform)", app = "cosec-control")
+        fun status(port: String, path: String): Int {
+            val request = HttpRequest.newBuilder(URI("http://localhost:${context.environment.getProperty(port)}$path"))
+                .header(IdentityHeader.NAME, header).build()
+            return http.send(request, HttpResponse.BodyHandlers.ofString()).statusCode()
+        }
+        val platform = "/cosec/control/v1/documents/platform"
+        val tenant = "/cosec/control/v1/documents/tenant:acme"
+        // The platform document is the operators', whoever asks: a 404 on the service port, answered on the other.
+        status("local.control.service.port", platform).assert().isEqualTo(404)
+        status("local.server.port", platform).assert().isNotEqualTo(404)
+        // A tenant's document is in the service profile; what it answers is the control plane's own business.
+        status("local.control.service.port", tenant).assert().isNotEqualTo(404)
+        // Nothing but the control API is served on the service port.
+        status("local.control.service.port", "/anything").assert().isEqualTo(404)
+    }
+
+    @Test
+    fun `the gateway's statement beside the service port is refused, naming the one that says services can reach it`() {
+        failure("--cosec.pipeline.identity.only-gateway-can-reach=true").assert()
+            .contains("only-trusted-callers-can-reach=true").contains("cosec.control.http.service-port")
+    }
+
     @Test
     fun `a control server writes no instance status, and takes no part in a shadow window`() {
         val statement = "--cosec.pipeline.identity.only-trusted-callers-can-reach=true"

@@ -57,6 +57,7 @@ object HttpFactsReader {
             host = host,
             requestAttributes = requestAttributes,
             routeApp = routeApp,
+            peerAddress = request.remoteAddress?.hostString,
         )
     }
 

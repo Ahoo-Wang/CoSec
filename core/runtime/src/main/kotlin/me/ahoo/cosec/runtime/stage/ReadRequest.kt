@@ -93,6 +93,7 @@ internal class ReadRequest(private val routes: RouteMap) : Stage {
             facts.remoteAddress,
             HostScope(AppId(app)),
             facts.requestAttributes,
+            peerAddress = facts.peerAddress,
         )
     }
 

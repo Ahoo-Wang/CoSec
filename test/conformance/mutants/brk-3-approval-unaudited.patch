@@ -3,7 +3,7 @@
 # Tests: :control:test --tests me.ahoo.cosec.control.change.BreakGlassControlTest :conformance:test
 
 diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Approvals.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Approvals.kt
-index 41892ae86..ad4c4a8ab 100644
+index d1d0e002b..06e19143b 100644
 --- a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Approvals.kt
 +++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Approvals.kt
 @@ -66,7 +66,6 @@ internal class Approvals(
@@ -11,6 +11,6 @@ index 41892ae86..ad4c4a8ab 100644
          val breakGlass = change.escalations.any { it.reason == Escalation.Reason.BREAK_GLASS }
          if (breakGlass) {
 -            PublishRules.requireAudit(true, listeners.hasRequired)
-             flow.audit(ChangeEvent.Kind.BREAK_GLASS_APPROVED, change, operator.actor)
+             flow.audit(ChangeEvent.Kind.BREAK_GLASS_APPROVED, change, operator.actor, origin = operator.origin)
          }
          return flow.transition(id, ChangeStep.APPROVE) { current ->
