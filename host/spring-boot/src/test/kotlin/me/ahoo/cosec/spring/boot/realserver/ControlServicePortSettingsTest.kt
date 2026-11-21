@@ -115,6 +115,38 @@ class ControlServicePortSettingsTest {
         }
     }
 
+    @Test
+    fun `the service port of a running application closes an idle keep-alive connection when the application stops`() {
+        val context = start()
+        val service = context.environment.getRequiredProperty("local.control.service.port").toInt()
+        Socket("127.0.0.1", service).use { socket ->
+            socket.soTimeout = SOCKET_MILLIS
+            socket.getOutputStream().apply {
+                write("GET /anything HTTP/1.1\r\nHost: localhost\r\n\r\n".encodeToByteArray())
+                flush()
+            }
+            val head = StringBuilder()
+            while (!head.endsWith("\r\n\r\n")) {
+                val next = socket.getInputStream().read()
+                check(next >= 0) { "the connection closed before a response: [$head]" }
+                head.append(next.toChar())
+            }
+            repeat(Regex("(?i)content-length: *(\\d+)").find(head)?.groupValues?.get(1)?.toInt() ?: 0) {
+                socket.getInputStream().read()
+            }
+            // The connection is open and idle, as a service's pooled one is: stopping must not leave it standing.
+            context.close()
+            val closed = try {
+                socket.getInputStream().read() == -1
+            } catch (@Suppress("SwallowedException") e: java.net.SocketTimeoutException) {
+                false
+            }
+            closed.assert().describedAs(
+                "the idle keep-alive connection was closed when the application stopped"
+            ).isTrue()
+        }
+    }
+
     private fun start(vararg settings: String): ConfigurableApplicationContext {
         val hidden = listOf(
             GATEWAY_GLOBAL_FILTER,
@@ -217,5 +249,6 @@ class ControlServicePortSettingsTest {
         const val PASSWORD = "changeit"
         const val TIMEOUT_SECONDS = 10L
         const val CONNECT_MILLIS = 2_000
+        const val SOCKET_MILLIS = 5_000
     }
 }
