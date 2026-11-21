@@ -28,7 +28,11 @@ import me.ahoo.cosec.runtime.http.RequestSecurity
  *   request (its gate or its pipeline). A context CoSec did not make is refused (as `PIP-29`): a principal is never
  *   taken from what an application assembled.
  * - [service]: the application's own principal, in the platform tenant, for work no request stands behind (a job, an
- *   onboarding at start-up). It acts with the bindings the platform document gives that principal, and the roles named.
+ *   onboarding at start-up). The application states the principal and its roles, and the control plane believes them,
+ *   as it believes any code in its own process: that code holds the control store's write account anyway, so nothing
+ *   is gained by doubting it. What it is believed about is who acts, never what that principal may do: the policies
+ *   still decide each call for it, with the bindings the platform document gives it and the roles stated, and the
+ *   record names it.
  */
 @ExperimentalCoSecApi
 class ControlCaller private constructor(

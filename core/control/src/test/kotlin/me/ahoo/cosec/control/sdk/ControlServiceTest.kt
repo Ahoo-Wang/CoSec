@@ -129,6 +129,10 @@ class ControlServiceTest {
         val desired = """{"mode":"MERGE","note":"apply","document":{"schema":2,"revision":2,""" +
             """"publishedAt":"2026-11-01T00:00:00Z","policies":[],"bindings":[]}}"""
         same({ route("POST", "/documents/tenant:acme:apply", body = desired) }, { apply(it, acme, desired) })
+        // A service starts its change's window, reads it, and publishes with the window's evidence (CTL-65).
+        same({ route("POST", "/changes", body = proposal("windowed", 2)) }, { propose(it, proposal("windowed", 2)) })
+        same({ route("POST", "/changes/c4:shadow", body = "{}") }, { startShadow(it, "c4") })
+        same({ route("GET", "/changes/c4") }, { change(it, "c4") })
         viaFacade.events().assert().isEqualTo(viaRoute.events())
         viaFacade.events().assert().isNotEmpty()
     }
@@ -252,7 +256,22 @@ class ControlServiceTest {
             Call("POST", "/changes", body = """{"document":"app:order"}"""),
             Call("GET", "/changes", mapOf("state" to "CHECKED")),
             Call("GET", "/changes", mapOf("document" to "platform")),
-            Call("POST", "/changes/c1:shadow", body = "{}"),
+            Call("PUT", "/documents/tenant:acme"),
+            Call("DELETE", "/changes/c1"),
+            Call("GET", "/documents/tenant:acme/other"),
+            Call("GET", "/documents/tenant:acme/revisions/1/extra"),
+            Call("GET", "/documents/bogus:acme"),
+            Call("GET", "/documents/tenant%zz"),
+            Call("GET", "/changes/c1:abandon"),
+            Call("GET", "/changes/c1/events"),
+            Call("GET", "/changes", mapOf("document" to "nonsense")),
+            Call("GET", "/elsewhere"),
+            Call("POST", "/documents/tenant:acme/x"),
+            Call("POST", "/changes/c1/x", body = "{}"),
+            Call("POST", "/changes", body = "{not json"),
+            Call("POST", "/changes", body = """{"document":1}"""),
+            Call("POST", "/changes"),
+            Call("POST", "/elsewhere", body = "{}"),
             Call("POST", "/changes/c1:approve", body = "{}"),
             Call("POST", "/changes/c1:reject", body = "{}"),
             Call("POST", "/break-glass", body = "{}"),
@@ -272,6 +291,7 @@ class ControlServiceTest {
             Call("GET", "/changes/c1"),
             Call("GET", "/changes", mapOf("document" to "tenant:acme")),
             Call("POST", "/changes/c1:rebase", body = "{}"),
+            Call("POST", "/changes/c1:shadow", body = "{}"),
             Call("POST", "/changes/c1:skip-shadow", body = "{}"),
             Call("POST", "/changes/c1:abandon", body = "{}"),
             Call("POST", "/changes/c1:publish", body = "{}"),

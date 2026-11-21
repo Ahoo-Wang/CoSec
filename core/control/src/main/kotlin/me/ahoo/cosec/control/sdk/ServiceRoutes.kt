@@ -29,12 +29,13 @@ import tools.jackson.core.JacksonException
 
 /**
  * The routes a [ControlService] reaches (`CTL-65`, design §0.8): reads of a tenant's or an app's document, and the
- * change flow of a tenant's document. Every other route, and any of these on the platform document, is not reachable
+ * change flow of a tenant's document, its shadow window included, so an automated change publishes with the window's
+ * evidence rather than by skipping it. Every other route, and any of these on the platform document, is not reachable
  * through the service at all: the operators' routes are a person's. A second guard beside the service's own methods,
  * which build only these.
  */
 internal object ServiceRoutes {
-    private val TRANSITIONS = setOf("rebase", "skip-shadow", "abandon", "publish")
+    private val TRANSITIONS = setOf("rebase", "shadow", "skip-shadow", "abandon", "publish")
 
     fun allows(request: ControlHttpRequest): Boolean {
         val segments = request.path.removePrefix("/").split('/')

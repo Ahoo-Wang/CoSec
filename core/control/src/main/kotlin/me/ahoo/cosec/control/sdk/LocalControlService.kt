@@ -105,6 +105,8 @@ class LocalControlService(
 
     override suspend fun rebase(caller: ControlCaller, id: String): String = transition(caller, id, "rebase", "{}")
 
+    override suspend fun startShadow(caller: ControlCaller, id: String): String = transition(caller, id, "shadow", "{}")
+
     override suspend fun skipShadow(caller: ControlCaller, id: String, reason: String): String = transition(
         caller,
         id,

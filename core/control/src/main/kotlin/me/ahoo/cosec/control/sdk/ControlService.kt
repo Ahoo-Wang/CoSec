@@ -19,11 +19,11 @@ import me.ahoo.cosec.spi.snapshot.SnapshotKey
 
 /**
  * The control plane as a service calls it (`CTL-65`): the narrow first set of the control API (reads of a tenant's or an
- * app's document, and the change flow of a tenant's document), with the bodies and answers of its routes. A request is
+ * app's document, and the change flow of a tenant's document, its shadow window included), with the bodies and answers of its routes. A request is
  * the JSON a route takes (`POST /changes`, `:apply`, `:publish`), a document the document format
  * (`schema/8.0/cosec-snapshot-document.schema.json`), and an answer the JSON the route answers, pinned by `contract/control/`.
- * Nothing here is about the platform document, boundaries, approvals or break-glass: those stay a person's, on the
- * operators' routes.
+ * Nothing here is about the platform document, boundaries, approvals, rollback or break-glass: those stay a
+ * person's, on the operators' routes.
  *
  * The same calls, the same bodies and the same answers whichever implementation serves them, so an application moves
  * between embedding the control plane and calling a control-plane host by changing the implementation alone. Every call
@@ -64,6 +64,12 @@ interface ControlService {
 
     /** `POST /changes/{id}:rebase` of a change of a tenant's document. */
     suspend fun rebase(caller: ControlCaller, id: String): String
+
+    /**
+     * `POST /changes/{id}:shadow` of a change of a tenant's document: starts its shadow window. Read the change until the
+     * window closes, then [publish] it, acknowledging the summary's counts when the window saw differences.
+     */
+    suspend fun startShadow(caller: ControlCaller, id: String): String
 
     /** `POST /changes/{id}:skip-shadow` of a change of a tenant's document, for [reason]. */
     suspend fun skipShadow(caller: ControlCaller, id: String, reason: String): String

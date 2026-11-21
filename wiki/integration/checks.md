@@ -378,13 +378,16 @@ the same, records the same, and is refused the same (`CTL-65`).
 - **Who acts:**
   - `ControlCaller.of(securityContext)` acts as the user whose request you are serving. It takes the
     `SecurityContext` CoSec made for that request, and refuses one your code assembled.
-  - `ControlCaller.service("iam")` acts as your service's own principal in the platform tenant, for work no request
-    stands behind. It acts with the bindings the platform document gives that principal, through the same check
-    that admits a forwarded identity.
+  - `ControlCaller.service("iam", roles)` acts as your service's own principal in the platform tenant, for work no
+    request stands behind. Your code states the principal and its roles, and the control plane believes them, as it
+    believes any code in its own process: that code holds the control store's write account anyway. What is believed
+    is who acts, never what that principal may do. The policies still decide each call for it, with the bindings the
+    platform document gives it, and the record names it.
 - **What it reaches:** reads of a tenant's or an app's document (`document`, `revisions`, `revision`, `diff`), and
-  the change flow of a tenant's document (`propose`, `apply`, `change`, `changes`, `rebase`, `skipShadow`, `abandon`,
-  `publish`). Nothing reaches the platform document, `:shadow`, approvals or break-glass: those stay a person's, on
-  the operators' routes.
+  the change flow of a tenant's document (`propose`, `apply`, `change`, `changes`, `rebase`, `startShadow`,
+  `skipShadow`, `abandon`, `publish`). An automated change can start its shadow window, read the change until the
+  window closes, and publish with the summary's acknowledgement, rather than skip the window. Nothing reaches the
+  platform document, approvals, rollback or break-glass: those stay a person's, on the operators' routes.
 - **What goes in and out:**
   - Requests are the routes' bodies ([Changes](../policies/testing.md#changes)), and documents are in the
     [document format](../policies/language.md).
