@@ -1,0 +1,153 @@
+{
+  "rules": [
+    "CTL-10"
+  ],
+  "polarity": "negative",
+  "level": "control",
+  "description": "Bounds 15 min, 3 samples, 1 h. Every live instance acknowledges c1's window, and an instance whose status is older than a minute is not waited for: with its 3 samples after 15 minutes the window closes as it did before acknowledgements. Then c2's window, never acknowledged by the live i3, still closes at the hour, as insufficient: published without acknowledging its summary, it is refused.",
+  "options": {
+    "shadow": {
+      "minDuration": "PT15M",
+      "minSamples": 3,
+      "maxDuration": "PT1H"
+    }
+  },
+  "steps": [
+    {
+      "propose": {
+        "change": "c1",
+        "document": "tenant:acme",
+        "operations": [
+          {
+            "putPolicy": {
+              "id": "read",
+              "statements": [
+                {
+                  "effect": "allow",
+                  "action": "order:read"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "stage": "c1"
+    },
+    {
+      "status": {
+        "instance": "gone",
+        "documents": {}
+      }
+    },
+    {
+      "report": {
+        "change": "c1",
+        "instance": "i1",
+        "counts": {
+          "NARROWED": 3
+        }
+      }
+    },
+    {
+      "advance": "PT15M"
+    },
+    {
+      "status": {
+        "instance": "i1",
+        "documents": {},
+        "acknowledges": [
+          "c1"
+        ]
+      }
+    },
+    {
+      "status": {
+        "instance": "i2",
+        "documents": {},
+        "acknowledges": [
+          "c1"
+        ]
+      }
+    },
+    {
+      "acknowledgement": "c1"
+    },
+    {
+      "shadowed": "c1"
+    },
+    {
+      "publish": {
+        "change": "c1",
+        "ack": "summary"
+      }
+    },
+    {
+      "propose": {
+        "change": "c2",
+        "document": "tenant:acme",
+        "operations": [
+          {
+            "removePolicy": "read"
+          }
+        ]
+      }
+    },
+    {
+      "stage": "c2"
+    },
+    {
+      "report": {
+        "change": "c2",
+        "instance": "i1",
+        "counts": {
+          "SAME": 3
+        }
+      }
+    },
+    {
+      "advance": "PT1H"
+    },
+    {
+      "status": {
+        "instance": "i3",
+        "documents": {}
+      }
+    },
+    {
+      "shadowed": "c2"
+    },
+    {
+      "publish": "c2"
+    }
+  ],
+  "expect": {
+    "steps": [
+      "CHECKED",
+      "SHADOWING",
+      "status",
+      "reported",
+      "advanced",
+      "status",
+      "status",
+      "acknowledged 2 waiting none",
+      "READY",
+      "PUBLISHED",
+      "CHECKED",
+      "SHADOWING",
+      "reported",
+      "advanced",
+      "status",
+      "READY",
+      "refused 428"
+    ],
+    "errors": {
+      "c1": [],
+      "c2": []
+    },
+    "heads": {
+      "tenant:acme": 1
+    }
+  }
+}
