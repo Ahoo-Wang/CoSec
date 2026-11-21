@@ -52,6 +52,8 @@ class ShadowReporter(
     private val interval: Duration = Duration.ofSeconds(10),
     /** Where it reads whether a window's candidate is still staged; without it, every window is kept. */
     val candidates: CandidateStore? = null,
+    /** The staged list it reads again at the start of each cycle (`CTL-47`), off the request path. */
+    private val staged: StagedDocuments? = null,
 ) {
     init {
         // `delay` takes whole milliseconds: a shorter interval would be 0, a loop that never suspends (#1397).
@@ -60,6 +62,7 @@ class ShadowReporter(
 
     /** One cycle: every window's report, then the status. Failures are logged and skipped. */
     suspend fun flush() {
+        this.staged?.refresh()
         val staged = HashMap<SnapshotKey, String?>()
         for (window in recorder.windows()) {
             // The reports were taken first, so a window among them was staged before this read and a candidate gone now

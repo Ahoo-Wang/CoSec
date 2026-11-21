@@ -17,6 +17,7 @@ package me.ahoo.cosec.cocache.control
 
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.cocache.snapshot.SnapshotKeyEncoder
+import me.ahoo.cosec.spi.shadow.StagedCandidates
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 
 /**
@@ -41,6 +42,21 @@ internal object StagedMember {
     fun encode(key: SnapshotKey, window: String): String {
         require(window.isNotEmpty()) { "A staged candidate names its window." }
         return SnapshotKeyEncoder.encode(key) + SEPARATOR + window
+    }
+
+    /**
+     * The staged list [members] make (`CTL-46`), or null without the [KEPT] marker: a list nobody keeps, read as none
+     * (`CTL-47`). A member this form cannot read is skipped.
+     */
+    fun list(members: Set<String>): StagedCandidates? {
+        if (KEPT !in members) {
+            return null
+        }
+        val windows = HashMap<SnapshotKey, MutableSet<String>>()
+        for (member in members) {
+            decode(member)?.let { (key, window) -> windows.getOrPut(key) { HashSet() } += window }
+        }
+        return StagedCandidates(windows)
     }
 
     /** The document and window [member] names, or null for the marker and for a member that names no document. */
