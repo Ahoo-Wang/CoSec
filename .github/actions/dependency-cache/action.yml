@@ -1,0 +1,60 @@
+#
+# Copyright [2021-present] [ahoo wang <ahoowang@qq.com> (https://github.com/Ahoo-Wang)].
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#      http://www.apache.org/licenses/LICENSE-2.0
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+
+
+name: Restore the dependency cache
+description: >-
+  Restores Gradle's dependency files (caches/modules-2 and the wrapper distribution) that dependency-cache.yml wrote on main
+  for these versions and repositories, read-only: a job that restores it downloads only what changed. Never saves; see
+  .github/scripts/README.md, "The dependency cache". Run it after the job's Gradle setup, so that it is the last to write
+  the Gradle home.
+outputs:
+  key:
+    description: The key of the cache for this checkout
+    value: ${{ steps.key.outputs.key }}
+  hit:
+    description: "true when the key itself was restored, false when an older cache of the same repositories or none was"
+    value: ${{ steps.restore.outputs.cache-hit }}
+runs:
+  using: composite
+  steps:
+    - name: Name the cache
+      id: key
+      shell: bash
+      run: bash "$GITHUB_ACTION_PATH/../../scripts/dependency-cache-key.sh" >> "$GITHUB_OUTPUT"
+
+    # One cache per set of versions and repositories, written by one job on main after a resolution that succeeded
+    # (dependency-cache.yml): a restore never finds a half-written one, and a change of repositories finds none (#1730).
+    - name: Restore the dependency cache
+      id: restore
+      uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: |
+          ~/.gradle/caches/modules-2
+          ~/.gradle/wrapper/dists
+        key: ${{ steps.key.outputs.key }}
+        restore-keys: ${{ steps.key.outputs.restore-keys }}
+
+    - name: Say what was restored
+      shell: bash
+      env:
+        HIT: ${{ steps.restore.outputs.cache-hit }}
+        MATCHED: ${{ steps.restore.outputs.cache-matched-key }}
+      run: |
+        if [ "$HIT" = true ]; then
+          echo "Dependency cache: restored ${{ steps.key.outputs.key }}."
+        elif [ -n "$MATCHED" ]; then
+          echo "::notice::Dependency cache: ${{ steps.key.outputs.key }} is not written yet; restored the older $MATCHED, and the resolution downloads the difference."
+        else
+          echo "::notice::Dependency cache: none for these repositories yet; the resolution downloads everything."
+        fi
