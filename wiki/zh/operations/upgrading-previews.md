@@ -78,6 +78,12 @@ description: "每个 8.0 预览版（alpha 与 beta）到下一个之间的变�
   - `GET /changes?document=&state=&after=&limit=` 以摘要列出调用者可以读取的未完成变更（[查找未完成的变更](../policies/testing.md#finding-open-changes)）。
   - `ControlStore.openChanges()` 没有了。`ControlStore` 有 `openChangesKept()`、`keepOpenChanges()`、`openChanges(document)` 和 `changes(state, after, limit, documents)`，它们返回 `ListedChange`（`Readable` 或 `Unreadable`）和 `ChangePage`，都是 `@ExperimentalCoSecApi`。
   - `ControlChangeSetCache` 是权威集合：它的 `local-max-age` 和 `degraded-local-max-age` 锁定为 1 ns，与其他集合相同（[配置](./configuration.md#cocache-properties-that-affect-cosec)）。
+- **报告者消失的影子窗口先等待，再以证据不足关闭；影子任务跳过读不了的内容**（第二轮评审，`R2C-3`、`R2C-17`、`CTL-56`）。受影响的是处于影子模式的变更、读取已关闭窗口摘要的一方（`GET /changes/{id}`、`ChangeListener`、Kafka 上的审计 JSON），以及针对控制面日志的告警。
+  - 在窗口上报告过、而现在没有报告的实例，原来会让对该窗口的每次检查都失败（`POST /changes/{id}:shadow` 的调用者得到 `503`，每轮影子任务记一条 `WARN`），窗口永远不关闭。现在窗口等待它，并记录 `Shadow window <w> of change <c> is waiting for [<instances>]`；到达 `cosec.control.shadow.max-duration` 时，窗口像样本不足的窗口一样以*证据不足*关闭，摘要的 `vanished` 点名这些实例。它绝不会凭其他实例的报告通过：发布需要确认摘要（[测试变更](../policies/testing.md#trying-changes-in-shadow-mode)）。
+  - `ShadowSummary` 新增 `vanished`，没有实例消失时为空；存储的变更和审计事件的 `shadow` 只在它非空时以数组携带它。
+  - 影子任务读不了的某个影子中变更不再妨碍它检查其他窗口；每小时至多以一条 `WARN` 点名一次。任务先检查最久未检查的窗口，被间隔截断的一轮记录 `looked at <k> of <n> windows`。
+  - `ControlMaintenance` 接受一个 `Clock`（最后一个参数，默认系统时钟）。
+  - `ShadowReportReader` 新增 `readings(window)`，返回 `ShadowReadings`：能读取的报告，以及报告已列出却无法读取的实例，窗口把它们当作已消失。`CoCacheShadowReports` 覆盖了它。你自己的读取器也可以覆盖（[扩展](../architecture/extending.md#control-store)）；不覆盖时，`readings` 读取 `reports`，在它抛出的地方照样抛出。
 - **gateway 模式声明它所信任的网络边界，网关转发它所决策的方法**（`STA-7`、`STA-6`、`PIP-31`）。受影响的是每个 `cosec.pipeline.mode=gateway` 的服务和每个网关。
   - `gateway` 模式的服务相信任何 `CoSec-Identity` 头，而这个头没有签名，所以网络就是它的边界。现在除非你写下 `cosec.pipeline.identity.only-gateway-can-reach: true`（`COSEC_PIPELINE_IDENTITY_ONLY_GATEWAY_CAN_REACH=true`），声明只有网关能访问它，否则它**启动失败**。未设置、空、`false`、`1` 和 `on` 同样失败，信息会说明该写什么。先让它成真（只放行网关 pod 的 `NetworkPolicy`、双向 TLS、私有网络；[`k8s/examples/gateway-mode-service-networkpolicy.yaml`](https://github.com/Ahoo-Wang/CoSec/blob/main/k8s/examples/gateway-mode-service-networkpolicy.yaml)）。设置之后，beta.4 之前的 `WARN` 变为一行 `INFO`。
   - `gateway` 模式的服务只要有 hidden-method 过滤器就会**启动失败**：`spring.mvc.hiddenmethod.filter.enabled=true`、`spring.webflux.hiddenmethod.filter.enabled=true`，或它自己的 `HiddenHttpMethodFilter` bean。网关决策的是请求行的方法，而 `_method` 表单字段会让服务执行另一个方法。移除它。自己决策的宿主（`enforce`）不受影响。

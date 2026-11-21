@@ -20,9 +20,10 @@ import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
-import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.withTimeoutOrNull
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.control.change.ChangeId
 import me.ahoo.cosec.control.change.ChangeRejectedException
 import me.ahoo.cosec.control.change.ChangeRequest
 import me.ahoo.cosec.control.change.ChangeState
@@ -33,8 +34,11 @@ import me.ahoo.cosec.control.store.Reclaimed
 import me.ahoo.cosec.control.store.Revisions
 import me.ahoo.cosec.spi.snapshot.SnapshotDigest
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
+import java.time.Clock
 import java.time.Duration
+import java.time.Instant
 import java.util.UUID
+import java.util.concurrent.ConcurrentHashMap
 import kotlin.coroutines.cancellation.CancellationException
 import kotlin.time.toKotlinDuration
 
@@ -65,6 +69,8 @@ class ControlMaintenance(
     private val changes: Changes,
     /** The host's interval between shadow passes (`cosec.control.shadow.check-interval`). */
     private val shadowInterval: Duration,
+    /** Orders the shadow pass and spaces its warnings; never decides a window, which the changes' own clock does. */
+    private val clock: Clock = Clock.systemUTC(),
 ) {
     init {
         require(shadowInterval > Duration.ZERO) { "The shadow interval must be positive, not $shadowInterval." }
@@ -132,9 +138,20 @@ class ControlMaintenance(
      */
     suspend fun keepStagedList() = store.keepStagedList()
 
+    /** When this instance last looked at each shadowing change: the pass looks first at the one it looked at longest ago. */
+    private val lookedAt = ConcurrentHashMap<ChangeId, Instant>()
+
+    /** When this instance last warned of each shadowing change it could not read: at most once an hour each. */
+    private val warnedAt = ConcurrentHashMap<ChangeId, Instant>()
+
     /**
      * One pass over the shadowing changes; the changes whose window closed or conflicted. Nothing without the lease.
      * Each pass then reconciles the staged list with what is staged ([StagedListReconciliation]).
+     *
+     * One change it cannot read is skipped and counted, never the end of the pass (R2C-3): the others are looked at,
+     * and the reconciliation is told the read was incomplete. The pass looks first at the windows this instance looked
+     * at longest ago, never looked at first, so a pass its time cuts short reaches the rest on the next one; the cut
+     * says how many it looked at.
      */
     suspend fun closeShadowWindows(): List<ChangeRequest> {
         // A store that cannot answer is logged and the pass does nothing (CTL-52), as every other read of it here.
@@ -144,28 +161,63 @@ class ControlMaintenance(
         if (leased != true) {
             return emptyList()
         }
+        val pass = ShadowPass()
         try {
-            return withTimeout(shadowInterval.toKotlinDuration()) {
-                attempt("keep the open-change sets") { store.keepOpenChanges() }
-                val read = shadowingChanges().map { listed ->
-                    (listed as? ListedChange.Readable)?.let {
-                        attempt(
-                            "read change [${it.id.value}]"
-                        ) { listOfNotNull(current(it.change)) }
-                    }
-                }
-                val shadowing = read.flatMap { it.orEmpty() }.filter { it.state == ChangeState.SHADOWING }
-                val closed = shadowing.mapNotNull { change ->
-                    attempt("look at the shadow window of change [${change.id.value}]") { changes.shadowed(change.id) }
-                        ?.takeIf { it.state != ChangeState.SHADOWING }
-                }
-                attempt("reconcile the staged list") { stagedList.reconcile(shadowing, read.none { it == null }) }
-                closed
-            }
+            return withTimeoutOrNull(shadowInterval.toKotlinDuration()) { pass.run() } ?: pass.cut()
         } finally {
             withContext(NonCancellable) {
                 attempt("release the shadow lease") { store.releaseLease(SHADOW_LEASE, holder) }
             }
+        }
+    }
+
+    /** One shadow pass: what it found and how far it got, so a cut can say so. */
+    private inner class ShadowPass {
+        private val closed = ArrayList<ChangeRequest>()
+        private var windows = 0
+        private var looked = 0
+
+        suspend fun run(): List<ChangeRequest> {
+            attempt("keep the open-change sets") { store.keepOpenChanges() }
+            val read = shadowingChanges().map { listed ->
+                when (listed) {
+                    is ListedChange.Unreadable -> null.also { unreadable(listed) }
+                    is ListedChange.Readable -> attempt("read change [${listed.id.value}]") {
+                        listOfNotNull(current(listed.change))
+                    }
+                }
+            }
+            val skipped = read.count { it == null }
+            if (skipped > 0) log.info { "The shadow pass skipped $skipped change(s) it could not read." }
+            val shadowing = read.flatMap { it.orEmpty() }.filter { it.state == ChangeState.SHADOWING }
+            lookedAt.keys.retainAll(shadowing.mapTo(HashSet()) { it.id })
+            val order = shadowing.sortedWith(compareBy({ lookedAt[it.id] ?: Instant.MIN }, { it.shadow?.startedAt }))
+            windows = order.size
+            for (change in order) {
+                lookedAt[change.id] = clock.instant()
+                attempt("look at the shadow window of change [${change.id.value}]") { changes.shadowed(change.id) }
+                    ?.takeIf { it.state != ChangeState.SHADOWING }
+                    ?.let(closed::add)
+                looked++
+            }
+            attempt("reconcile the staged list") { stagedList.reconcile(shadowing, skipped == 0) }
+            return closed
+        }
+
+        /** The pass ran out of time: what it closed so far; the windows behind the cut come first next time. */
+        fun cut(): List<ChangeRequest> {
+            log.warn { "The shadow pass was cut short: it looked at $looked of $windows windows." }
+            return closed
+        }
+    }
+
+    /** Warns of a shadowing change whose record does not read, naming it, at most once an hour. */
+    private fun unreadable(listed: ListedChange) {
+        val now = clock.instant()
+        val last = warnedAt[listed.id]
+        if (last == null || !now.isBefore(last.plus(UNREADABLE_WARNING_EVERY))) {
+            warnedAt[listed.id] = now
+            log.warn { "Shadowing change [${listed.id.value}] of [${listed.document}] does not read; the pass skips it." }
         }
     }
 
@@ -215,5 +267,8 @@ class ControlMaintenance(
 
         /** How many shadowing changes the pass reads a page. */
         private const val SHADOW_PAGE = 200
+
+        /** How often the pass warns of one shadowing change it cannot read. */
+        private val UNREADABLE_WARNING_EVERY: Duration = Duration.ofHours(1)
     }
 }

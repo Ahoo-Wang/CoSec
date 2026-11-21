@@ -469,7 +469,11 @@ Spring) into `HttpFacts`, and runs the WebFlux filter, the servlet filter and wh
 4-vCPU CI runner the gateway's own code cost about twice the decision (#1759). Stripping `CoSec-Identity` only from a
 request that still holds it, deciding a route's facts once per route and handing headers on uncopied at the last hop
 took `gatewayFilters` from 36.2 to 27.8 kB a request (−23 %) and from 36.5 to 31.2 µs (85 %, a noisy runner;
-[44771587714](https://github.com/Ahoo-Wang/CoSec/actions/runs/44771587714), R2B-9).
+[44771587714](https://github.com/Ahoo-Wang/CoSec/actions/runs/44771587714), R2B-9). Reading headers and cookies as views
+over the server's request, copied only for what outlives it (R2B-8, `PIP-32`), then took the reader from 9.8 to 2.4 kB
+a request at 34 % of its time, the WebFlux filter from 17.7 to 10.0 kB (67 %), the servlet filter from 29.3 to 19.5 kB
+(77 %) and `gatewayFilters` from 27.6 to 19.9 kB (76 to 82 %), the decision unchanged
+([44804788518](https://github.com/Ahoo-Wang/CoSec/actions/runs/44804788518), `main` before and after #1772).
 
 8.0 must be at least as fast as 7.x in every comparable scenario. That gate is the manual CI workflow
 [`jmh-v7-v8.yml`](https://github.com/Ahoo-Wang/CoSec/blob/main/.github/workflows/jmh-v7-v8.yml): on one runner it

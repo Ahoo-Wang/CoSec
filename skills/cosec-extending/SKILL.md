@@ -55,6 +55,13 @@ The starter collects these beans:
 
 Declare them as ordinary `@Bean`s. There is no `META-INF/services` registration for these SPIs.
 
+The shadow window ports (`CandidateStore`, `ShadowReportSink`, `ShadowReportReader`, in `me.ahoo.cosec.spi.shadow`) go
+with a `ControlStore` of your own. A `ShadowReportReader` overrides `readings(window)`: the reports that read, and in
+`ShadowReadings.unreadable` the instances whose listed report is missing or does not decode, which the control plane
+treats as missing evidence (the window waits, then closes insufficient naming them, `CTL-56`). Throw when the store
+does not answer, never name an instance unreadable for it. Without the override, `readings` throws where `reports`
+does, and a window with an unreadable report stays open past its longest.
+
 Not an extension point: `RequestGate` (`me.ahoo.cosec.runtime.http`), what the web adapters call. `Pipeline` is one;
 `IdentityGate` is the other, for a service behind a CoSec gateway (`cosec.pipeline.mode=gateway`). Both build every
 outcome through `StatusMapping`; do not write a third.

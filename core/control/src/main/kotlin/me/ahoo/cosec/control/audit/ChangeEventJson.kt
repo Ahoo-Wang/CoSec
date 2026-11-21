@@ -16,6 +16,7 @@
 package me.ahoo.cosec.control.audit
 
 import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.control.change.ShadowStateCodec
 
 /**
  * A change event as JSON (RFC 0007 §10.5), as an audit sink stores it: no document content, only what the event
@@ -62,13 +63,7 @@ object ChangeEventJson {
                 }
             }
         }
-        event.shadow?.let { shadow ->
-            val node = root.putObject("shadow").put("closedAt", shadow.closedAt.toString())
-                .put("insufficient", shadow.insufficient).put("blocked", shadow.blocked)
-            node.putObject(
-                "counts"
-            ).apply { shadow.counts.toSortedMap().forEach { (outcome, count) -> put(outcome, count) } }
-        }
+        event.shadow?.let { ShadowStateCodec.summary(root.putObject("shadow"), it) }
         return me.ahoo.cosec.document.json.CoSecJson.mapper.writeValueAsString(root)
     }
 }
