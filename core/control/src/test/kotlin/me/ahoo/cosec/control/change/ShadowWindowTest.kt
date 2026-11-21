@@ -134,15 +134,9 @@ class ShadowWindowTest {
         compile: (SnapshotKey, me.ahoo.cosec.spi.snapshot.SnapshotDocument) -> CompiledDocument = COMPILER::compile
     ) {
         val recorder = ShadowRecorder(name, clock)
+        private val candidates = CachingCandidateSource(store, compile, refreshAfter = Duration.ZERO, clock = clock)
         private val listeners = DecisionListeners(
-            listOf(
-                ShadowListener(
-                    "shadow",
-                    1.0,
-                    CachingCandidateSource(store, compile, refreshAfter = Duration.ZERO, clock = clock),
-                    recorder
-                )
-            ),
+            listOf(ShadowListener("shadow", 1.0, candidates, recorder)),
         ).also { opened += it }
         private val pipeline = Pipeline.builder(
             Authenticator {
@@ -160,7 +154,8 @@ class ShadowWindowTest {
         )
             .listeners(listeners)
             .build()
-        val reporter = ShadowReporter(recorder, reports, { installed() }, clock)
+        /** Reads the staged list, compiles what it lists and acknowledges it in its status (`CTL-10`), as an instance does. */
+        val reporter = ShadowReporter(recorder, reports, { installed() }, clock, source = candidates)
 
         fun get(path: String): Int = runBlocking { pipeline.evaluate(facts(path)).status }
 
@@ -206,6 +201,8 @@ class ShadowWindowTest {
     }
 
     private suspend fun bootstrap() {
+        // As the host does at startup (`CTL-46`): instances then read the list, and acknowledge what it names (`CTL-10`).
+        store.keepStagedList()
         val read = PolicyDefinition(
             PolicyId("read"),
             false,
@@ -249,6 +246,8 @@ class ShadowWindowTest {
         two.sampled(3)
         one.reporter.flush()
         two.reporter.flush()
+        // Both instances compiled the candidate on sight and acknowledge the window (`CTL-10`).
+        changes.acknowledgement(change).assert().isEqualTo(Acknowledgement(2, emptyList()))
         // Enough samples, but not for long enough yet.
         changes.shadowed(change.id).state.assert().isEqualTo(ChangeState.SHADOWING)
         clock.now = clock.now.plus(Duration.ofMinutes(1))

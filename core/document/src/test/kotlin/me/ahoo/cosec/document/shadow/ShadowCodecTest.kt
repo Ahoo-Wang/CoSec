@@ -128,4 +128,22 @@ class ShadowCodecTest {
             """"document":{"schema":2,"revision":5,"publishedAt":"2026-11-01T00:00:00Z"}}"""
         assertThrownBy<SnapshotFormatException> { ShadowCodec.decodeCandidate(record.encodeToByteArray()) }
     }
+
+    /** `CTL-10`: the windows an instance acknowledges are an optional member; absent is an instance that sends none. */
+    @Test
+    fun `a status keeps the windows its instance acknowledges, and one without them decodes as none sent`() {
+        val at = Instant.parse("2026-11-21T00:00:00Z")
+        val acknowledging = InstanceStatus("i1", at, emptyMap(), windows = setOf("c2@1", "c1@1"))
+        val silent = InstanceStatus("i2", at, emptyMap())
+        val statuses = mapOf("i1" to acknowledging, "i2" to silent)
+        ShadowCodec.decodeStatuses(ShadowCodec.encodeStatuses(statuses)).assert().isEqualTo(statuses)
+        String(ShadowCodec.encodeStatuses(mapOf("i2" to silent))).assert().doesNotContain("windows")
+        // A status an older version wrote: no member, no acknowledgement.
+        val older = """{"i3":{"format":1,"at":"2026-11-21T00:00:00Z","formatLevel":1,"documents":{}}}"""
+        ShadowCodec.decodeStatuses(older.encodeToByteArray()).getValue("i3").windows.assert().isNull()
+        listOf(""""windows":"c1@1"""", """"windows":[1]""").forEach { member ->
+            val broken = """{"i4":{"format":1,"at":"2026-11-21T00:00:00Z","formatLevel":1,"documents":{},$member}}"""
+            assertThrownBy<SnapshotFormatException> { ShadowCodec.decodeStatuses(broken.encodeToByteArray()) }
+        }
+    }
 }

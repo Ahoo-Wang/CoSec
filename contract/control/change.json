@@ -176,6 +176,10 @@
     "type" : "object",
     "presence" : "optional",
     "members" : {
+      "acknowledged" : {
+        "type" : "integer",
+        "presence" : "optional"
+      },
       "closed" : {
         "type" : "object",
         "presence" : "optional",
@@ -208,6 +212,23 @@
       "startedAt" : {
         "type" : "string",
         "presence" : "always"
+      },
+      "waitingFor" : {
+        "type" : "object",
+        "presence" : "optional",
+        "members" : {
+          "instances" : {
+            "type" : "array",
+            "presence" : "always",
+            "items" : {
+              "type" : "string"
+            }
+          },
+          "more" : {
+            "type" : "integer",
+            "presence" : "always"
+          }
+        }
       },
       "window" : {
         "type" : "string",
