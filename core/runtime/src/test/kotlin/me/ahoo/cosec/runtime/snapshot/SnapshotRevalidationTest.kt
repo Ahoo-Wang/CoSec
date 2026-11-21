@@ -178,6 +178,70 @@ class SnapshotRevalidationTest {
     }
 
     /**
+     * `SNP-6`: a pass that has finished no document for `storeReadTimeout` and has no read in flight is abandoned at
+     * the next tick, even when the compilation that holds it is younger than that. Here the pass meets a load older than
+     * itself and waits for the load after it, which starts twenty seconds after the pass last finished a document and
+     * then never ends compiling. Its compile deadline (R2D-11) is `storeReadTimeout` after that load began, so the
+     * tick just past `storeReadTimeout` since the pass's last progress finds no compilation to sweep: only abandoning
+     * the pass lets the next one start, and read the documents again, at that tick.
+     */
+    @Test
+    fun aPassHeldByACompilationYoungerThanItsStallIsAbandonedBeforeThatCompilationsDeadline() {
+        val parked = CopyOnWriteArrayList<Runnable>()
+        val stuck = AtomicBoolean()
+        val compile = Executor { if (stuck.get()) parked += it else it.run() }
+        val elapsed = ManualNanoTime()
+        val options = SnapshotOptions(revalidateInterval = QUIET_PASS, reloadConcurrency = 1)
+        testSource(store, options = options, compileExecutor = compile).use { source ->
+            source.nanoTime = elapsed
+            source.load("app-a").join()
+            store.dropNotifications = true
+            store.hold = true
+            val earlier = source.reload(APP_A)
+            store.put(APP_A, document(2, "a2"))
+            elapsed.advance(Duration.ofSeconds(1))
+
+            val pass = source.tick()
+            // The shared document finishes now: the pass's last progress.
+            store.pending.single { it.key == SnapshotKey.Platform }.let { read ->
+                store.pending.remove(read)
+                read.release()
+            }
+            // Twenty seconds later the older load of app-a reads, and the load after it, the pass's, starts.
+            elapsed.advance(Duration.ofSeconds(20))
+            store.pending.single { it.key == APP_A }.let { read ->
+                store.pending.remove(read)
+                read.release()
+            }
+            earlier.join()
+            // The pass's read answers, and its compilation never ends.
+            stuck.set(true)
+            store.pending.single().let { read ->
+                read.key.assert().isEqualTo(APP_A)
+                store.pending.remove(read)
+                read.release()
+            }
+            parked.assert().hasSize(1)
+            val platformReads = store.readLog.count { it == SnapshotKey.Platform }
+
+            // 31 s since the last progress (at 1 s), past storeReadTimeout; 11 s since that load began (at 21 s), so
+            // its compile deadline is 19 s away.
+            elapsed.advance(options.storeReadTimeout.minusSeconds(19))
+            source.tick()
+            store.readLog.count { it == SnapshotKey.Platform }.assert()
+                .describedAs("the next pass reads the shared document again").isEqualTo(platformReads + 1)
+            pass.isDone.assert().isFalse()
+
+            store.hold = false
+            store.releaseAll()
+            stuck.set(false)
+            parked.forEach { it.run() }
+            pass.isDone.assert().isTrue()
+            source.peek("app-a")!!.appCompiled.revision.assert().isEqualTo(2)
+        }
+    }
+
+    /**
      * `SNP-6`: a pass does not wait for a load stuck compiling past `storeReadTimeout`. That load read revision 1 before
      * the pass started, so it confirms nothing for the pass: one more load still follows it, and revision 2, written
      * before the pass with its invalidation lost, is installed with no later pass. Since R2D-11 the stuck load ends at
