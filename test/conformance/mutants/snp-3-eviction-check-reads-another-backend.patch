@@ -3,18 +3,18 @@
 # Tests: :spring-boot:test --tests me.ahoo.cosec.spring.boot.pipeline.SnapshotEvictionHealthIndicatorTest
 
 diff --git a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/pipeline/CoSecSnapshotAutoConfiguration.kt b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/pipeline/CoSecSnapshotAutoConfiguration.kt
-index 0338680e..c035ab92 100644
+index 2b5244b..8d46cf8 100644
 --- a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/pipeline/CoSecSnapshotAutoConfiguration.kt
 +++ b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/pipeline/CoSecSnapshotAutoConfiguration.kt
-@@ -15,6 +15,7 @@
- 
+@@ -16,6 +16,7 @@
  package me.ahoo.cosec.spring.boot.pipeline
  
+ import io.github.oshai.kotlinlogging.KotlinLogging
 +import me.ahoo.cocache.api.spi.CoherenceBackend
  import me.ahoo.cocache.core.CoCacheFactory
  import me.ahoo.cosec.annotations.ExperimentalCoSecApi
  import me.ahoo.cosec.annotations.InternalCoSecApi
-@@ -120,10 +121,11 @@ class CoSecSnapshotAutoConfiguration {
+@@ -131,10 +132,11 @@ class CoSecSnapshotAutoConfiguration {
          @Bean
          fun cosecEvictionPolicyCheck(
              factory: CoCacheFactory,
