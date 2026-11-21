@@ -18,7 +18,6 @@ package me.ahoo.cosec.runtime.event
 import kotlinx.coroutines.runBlocking
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
-import me.ahoo.cosec.document.json.CoSecJson
 import me.ahoo.cosec.model.PolicyId
 import me.ahoo.cosec.model.decision.BindingRef
 import me.ahoo.cosec.model.decision.Cause
@@ -38,7 +37,7 @@ import java.io.File
 
 /**
  * OBS-9: a cause is named on the wire by one table, [CauseName], never by its class: the audit record's reason and
- * the shadow report's sample carry the names `vocabulary/causes.json` pins, whatever the classes are called.
+ * the shadow report's sample carry the names `vocabulary/causes.txt` pins, whatever the classes are called.
  */
 class CauseNameTest {
     private val error = IllegalStateException("x")
@@ -60,9 +59,8 @@ class CauseNameTest {
         Cause.RateLimiterUnavailable("platform/strict"),
     )
 
-    private val pinned: List<String> = javaClass.getResourceAsStream("/vocabulary/causes.json").use {
-        CoSecJson.mapper.readTree(it).get("causes").values().map { name -> name.asString() }
-    }
+    private val pinned: List<String> = javaClass.getResource("/vocabulary/causes.txt")!!.readText().lines()
+        .filter { it.isNotBlank() && !it.startsWith("#") }
 
     private class Capture : DecisionListener {
         override val name = "capture"
