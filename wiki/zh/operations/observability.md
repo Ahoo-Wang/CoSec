@@ -298,7 +298,9 @@ CoCache 会在同一个 registry 中为 CoSec 的缓存记录它自己的指标�
 
 控制面为变更的每一步发出一个变更事件：`PROPOSED`、`CHECKED`、`SHADOW_STARTED`、`SHADOWED`、`APPROVED`、`REJECTED`、
 `PUBLISHING`、`PUBLISHED`、`FAILED`、`BREAK_GLASS_REQUESTED`、`BREAK_GLASS_APPROVED`、`REVOKED`、`HEADS_MOVED`、`REVIEW_NEEDED`、`ABANDONED`、`SHADOW_SKIPPED`、`REBASED`。每个改变变更记录的路由都会在改变时写一条（`CTL-63`）。事件指明变更、文档、
-操作者、基准修订和候选修订、需要审批的内容、确认、影子窗口摘要和备注；它从不携带文档内容。变更监听器接收这些事件。事件还带有该步骤操作者的**来源**（`origin`，`CTL-57`），写成事件 JSON 时是：`asserted`（宿主相信了调用方声明的身份，而不是自己校验凭证）、`via`（凭证的 `method`、作为 `credential` 的凭证 id 和作为 `request` 的请求 id，从不含凭证的值）和 `peer`（请求所用连接的地址，从 Reactor Netty 的 channel 读取，位于任何转发头处理之下，所以调用方不能像声明客户端地址那样声明它；读不到的宿主，即 Reactor Netty 之外的，不记录它）。经控制面门面在宿主自身进程内作出的步骤（[在代码中修改策略](../integration/checks.md#changing-policies-from-your-code)）记为 `via.method: in-process`，有凭证时带凭证 id，没有 `peer`，因为没有连接承载它。没有请求驱动的步骤（例如维护任务）没有来源；存储的变更记录其作者的来源，有来源时日志行以 `origin=...` 结尾。
+操作者、基准修订和候选修订、需要审批的内容、确认、影子窗口摘要和备注；它从不携带文档内容。变更监听器接收这些事件。事件还带有该步骤操作者的**来源**（`origin`，`CTL-57`），写成事件 JSON 时是：`asserted`（宿主相信了调用方声明的身份，而不是自己校验凭证）、`via`（凭证的 `method`、作为 `credential` 的凭证 id 和作为 `request` 的请求 id，从不含凭证的值）和 `peer`（请求所用连接的地址，从 Reactor Netty 的 channel 读取，位于任何转发头处理之下，所以调用方不能像声明客户端地址那样声明它；读不到的宿主，即 Reactor Netty 之外的，不记录它，所以 Servlet 宿主（WebMvc）的控制 API 不记录 `peer`）。经控制面门面在宿主自身进程内作出的步骤（[在代码中修改策略](../integration/checks.md#changing-policies-from-your-code)）记为 `via.method: in-process`，有凭证时带凭证 id，没有 `peer`，因为没有连接承载它。没有请求驱动的步骤（例如维护任务）没有来源；存储的变更记录其作者的来源，有来源时日志行以 `origin=...` 结尾。
+
+**`asserted: true` 说明 `via` 的其余部分是调用方自己的话。** 在相信所声明身份的宿主上（控制面宿主、内嵌控制面的 IAM 服务），整个身份都由调用方写出：凭证的方式（包括 `jwt`，它让所声明的主体像经过校验的令牌一样可以使用 break-glass）、凭证 id，以及请求 id，即它发送的 `CoSec-Request-Id`。记录保留所声明的内容并标记为 `asserted`：这种来源的 `via.method`、`via.credential` 和 `via.request` 要读作调用方所说的，而不是宿主所校验的。只有不带 `asserted` 的来源，才指宿主自己校验过的凭证。
 
 - **默认监听器**以 `INFO` 把每个事件记录到 logger `me.ahoo.cosec.changelog`，格式为
   `Change <changeId> <kind> on <doc> by <principal>@<tenant>: base=..., candidate=..., escalations=<n>, confirmations=<n>`。
@@ -309,6 +311,7 @@ CoCache 会在同一个 registry 中为 CoSec 的缓存记录它自己的指标�
   所有事件，都在之后投递；失败记录为 `Change listener [<name>] could not record <event>.` 修订记录是已发布内容的持久
   记录。受控事件说明这一步即将发生，而不是已经发生：它之后的检查仍可能拒绝这一步（变更在此期间变化了时返回 `409`），
   `BREAK_GLASS_APPROVED` 或 `ABANDONED` 之后都可能如此。发生了什么以变更的状态为准，发布则另以修订历史为准。
+- **事件流只会多报，不会漏报已生效的步骤。** 事件可能为一个随后并未生效的步骤而记录：有两个 `REQUIRED` 监听器时，第一个记录了受控事件而第二个超时，这一步返回 `503`；事件之后的检查拒绝了这一步（比较并交换失败）；一次已超时的发送随后才完成。使用者在把一步当作已完成之前，要用变更的记录（`GET /changes/{id}`，发布还有修订历史）核对每个事件。
 - **备注是自由文本**，其中一部分出自变更的作者（提议、申请或吊销的原因）：某一步是谁做的，看事件的 `operator`，不要看备注。
 - **break-glass 需要 `REQUIRED` 变更监听器：** 没有时，创建或修改 break-glass 绑定得到 `503`
   （`break-glass needs a REQUIRED change listener, and none is configured`）。
