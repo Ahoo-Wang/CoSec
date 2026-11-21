@@ -104,12 +104,12 @@ cosec:
 （[最初的文档](./storage.md#the-first-documents)），在此期间报告自己未就绪（[就绪](#readiness)）。每个环境都需要：
 
 1. **`maxmemory-policy noeviction`、持久化、副本和备份。** Redis 是文档和吊销记录的唯一一份：没有持久化，重启之后每个请求都是 `503`，已吊销的令牌又会生效（[Redis 要求](./storage.md#redis-requirements)）。关于 `noeviction`：每个实例在启动时用 `INFO memory` 检查，否则不启动。在拒绝 `INFO` 的 Redis 上，自行设置 `noeviction`，
-   并设置 `COSEC_AUTHORIZATION_SNAPSHOT_EVICTION_CHECK=warn`。
+   并设置 `COSEC_AUTHORIZATION_SNAPSHOT_EVICTIONCHECK=warn`。
 2. **文档。** 用 `cosec-migrate publish --to-redis <uri> --in <dir>` 发布它们；如果将由控制面管理，再用
    `cosec-migrate bootstrap` 指定第一个管理员。网关、控制面和 `cosec-migrate` 必须使用同一个 Redis 和同一个
    `cosec.key-prefix`（`--key-prefix`）。
 3. **实例 id（如果按实例收紧 Redis 权限）。** 网关默认参与影子窗口，使用随机的实例 id。要给每个 pod 独立的 Redis 用户，
-   为每个 pod 设置 `COSEC_AUTHORIZATION_SHADOW_INSTANCE_ID`（[谁可以写哪些 key](./storage.md#who-may-write-which-keys)）。
+   为每个 pod 设置 `COSEC_AUTHORIZATION_SHADOW_INSTANCEID`（[谁可以写哪些 key](./storage.md#who-may-write-which-keys)）。
 4. **各处相同的属性提供者。** 每个网关实例、其他每个数据面实例和控制面所在的主机，都必须注册相同的
    `AttributeProvider`，以相同的类型声明相同的 `ext.*` 属性。文档按平台的声明和主机的提供者编译，所以控制面主机接受的
    变更，在缺少该提供者的实例上可能编译失败：在影子窗口中，该实例报告 `CANDIDATE_ERROR`，窗口无法正常关闭，变更不会

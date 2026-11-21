@@ -36,7 +36,12 @@ Keys are compared as Spring's binder compares them, so every spelling it documen
 `local-max-age`, `localMaxAge` or `local_max_age` in a properties file, and `COSEC_AUTHORIZATION_SNAPSHOT_LOCALMAXAGE`
 as an environment variable (upper case, dots as underscores, dashes dropped). A variable that is not that spelling of a
 key CoSec reads stays unknown, a typo (`COSEC_PIPELINE_TIMEUOT`) and the legacy `COSEC_AUTHORIZATION_SNAPSHOT_LOCAL_MAX_AGE`
-alike: the message names it as `cosec.authorization.snapshot.local.max.age`.
+alike: the message names it as `cosec.authorization.snapshot.local.max.age`, and, when one key CoSec reads is near it,
+what to write instead: the key and the variable when only its separators differ (`..._LOCAL_MAX_AGE` is
+`COSEC_AUTHORIZATION_SNAPSHOT_LOCALMAXAGE`), or the one key a typo is within two edits of (`COSEC_PIPELINE_TIMEUOT` is
+`COSEC_PIPELINE_TIMEOUT`). The words of a key are joined in its variable, whatever the dashes: `eviction-check` is
+`COSEC_AUTHORIZATION_SNAPSHOT_EVICTIONCHECK`, and `memberships-on-refresh` is `COSEC_JWT_SESSION_MEMBERSHIPSONREFRESH`.
+Every variable these docs, `k8s/` and the images' files show is held to this check.
 
 One thing is never an unknown key: the variables Kubernetes injects for a Service named `cosec` or `cosec-*` (service
 links), which Spring reads as `cosec.*` keys (`COSEC_GATEWAY_SERVICE_HOST` as `cosec.gateway.service.host`). The check

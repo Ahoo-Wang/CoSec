@@ -33,7 +33,8 @@ import tools.jackson.core.StreamReadFeature
  * would leave token revocations where nothing reads them, and the tokens they revoked accepted again (`SNP-9`).
  * Keys are compared as Spring's binder compares them ([ConfigurationPropertyName]: case and dashes do not count), so
  * `COSEC_AUTHORIZATION_SNAPSHOT_LOCALMAXAGE`, which Spring binds to `local-max-age`, is that key. A typo, or a spelling
- * Spring's documentation does not offer (`COSEC_AUTHORIZATION_SNAPSHOT_LOCAL_MAX_AGE`), is still unknown.
+ * Spring's documentation does not offer (`COSEC_AUTHORIZATION_SNAPSHOT_LOCAL_MAX_AGE`), is still unknown; the message
+ * names the key and variable to write instead when one is near ([PropertySpelling]).
  * The variables Kubernetes injects for a Service named `cosec-*` ([KubernetesServiceLinks]) are not keys: they are
  * no mistake of the application's, and refusing them would crash-loop every pod in that namespace.
  */
@@ -62,6 +63,11 @@ internal class UnknownProperties(
             .distinct()
             .sorted()
 
+    private val spelling = PropertySpelling(known)
+
+    /** What to write instead of [key], when one key CoSec reads is near it. */
+    fun suggestion(key: String): String? = spelling.suggest(key)?.toString()
+
     private fun isKnown(name: ConfigurationPropertyName): Boolean {
         val plain = ConfigurationPropertyName.ofIfValid(name.toString().replace(INDEX, ""))
         return plain in knownNames || containerNames.any { it.isAncestorOf(name) }
@@ -75,7 +81,9 @@ internal class UnknownProperties(
         }
         error(
             "CoSec does not read ${unknown.size} cosec.* propert${if (unknown.size == 1) "y" else "ies"}, " +
-                "which would do nothing:\n" + unknown.joinToString("\n") { "  $it" } +
+                "which would do nothing:\n" + unknown.joinToString("\n") { key ->
+                    "  $key" + (suggestion(key)?.let { " ($it)" } ?: "")
+                } +
                 "\nRemove or rename them: $DOCUMENTATION"
         )
     }
