@@ -20,15 +20,19 @@ import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.future.asCompletableFuture
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.runtime.event.Delivery
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.TimeoutException
 import kotlin.coroutines.cancellation.CancellationException
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.seconds
@@ -56,6 +60,12 @@ private val log = KotlinLogging.logger {}
  * The queues hold, together, at most [budget] bytes: a [HEAP_SHARE]th of the heap, shared equally by the listeners.
  * A listener that delivers nothing while events wait for longer than [requiredTimeout] is reported (WARN, at most once
  * per [requiredTimeout], naming it and its depth), never cut off: when it answers again it finds what its share held.
+ *
+ * [drain], at the host's shutdown, stops taking events and lets the consumers deliver what is queued within
+ * [drainTimeout]; what is left is counted ([ChangeListenerLane.kept]) and logged, at ERROR for a REQUIRED listener, and
+ * only then are the consumers stopped. A gated step that arrives during the drain is refused before it takes effect
+ * ([ChangeAuditException], 503); any other step is stored already, so its event is counted as kept and logged, never
+ * queued to be lost and never reported as a failure of the step.
  */
 @InternalCoSecApi
 class ChangeListeners(
@@ -63,7 +73,12 @@ class ChangeListeners(
     val requiredTimeout: Duration = 5.seconds,
     /** The heap the queues are a share of: the JVM's maximum. */
     heap: Long = Runtime.getRuntime().maxMemory(),
+    /** `cosec.observability.listener.drain-timeout`: how long [drain] lets the consumers deliver what is queued. */
+    val drainTimeout: Duration = 5.seconds,
 ) {
+    @Volatile
+    private var draining = false
+
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
     /** The bytes every queue together may hold ([HEAP_SHARE]). */
@@ -96,6 +111,9 @@ class ChangeListeners(
 
     /** As [publish], [gated] by the step rather than by the event's kind alone (a break-glass change's abandon). */
     internal suspend fun publish(event: ChangeEvent, gated: Boolean) {
+        if (queues.isEmpty()) return
+        if (draining) return refuse(event, gated)
+        // Measured only once some queue may take it.
         val bytes = ChangeEventSize.of(event)
         if (gated && required.isNotEmpty()) {
             recordRequired(event, bytes)
@@ -177,6 +195,50 @@ class ChangeListeners(
                 }
             }
         }
+    }
+
+    /** An event published while the listeners drain: a gated step is refused, any other's event is kept, never queued. */
+    private fun refuse(event: ChangeEvent, gated: Boolean) {
+        if (gated && required.isNotEmpty()) {
+            throw ChangeAuditException("The control plane is stopping: no REQUIRED change listener can record $event.")
+        }
+        val why = "arrived while the change listeners drained at shutdown: ${event.kind} of change ${event.change.value}"
+        queues.forEach { queue ->
+            queue.keep(1)
+            kept(queue, 1, why)
+        }
+    }
+
+    /**
+     * Stops taking events, lets the consumers deliver what is queued within [drainTimeout], then counts and logs what is
+     * left and stops them. True when everything queued was delivered. For the host's shutdown.
+     */
+    fun drain(): Boolean {
+        draining = true
+        val drained = try {
+            scope.async { awaitDelivered() }.asCompletableFuture()
+                .get(drainTimeout.inWholeMilliseconds, TimeUnit.MILLISECONDS)
+            true
+        } catch (_: TimeoutException) {
+            false
+        } catch (_: InterruptedException) {
+            Thread.currentThread().interrupt()
+            false
+        }
+        queues.forEach { queue ->
+            val left = queue.depth.toLong()
+            if (left > 0) {
+                queue.keep(left)
+                kept(queue, left, "were still queued when the drain of $drainTimeout ended")
+            }
+        }
+        cancel()
+        return drained
+    }
+
+    private fun kept(queue: ChangeListenerLane, events: Long, why: String) {
+        val message = "Change listener [${queue.listener.name}] never records $events change events: they $why."
+        if (queue.listener.delivery == Delivery.REQUIRED) log.error { message } else log.warn { message }
     }
 
     /** Waits until every event queued so far has reached its listener, or failed to: for tests. */

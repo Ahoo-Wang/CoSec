@@ -100,7 +100,7 @@ import kotlin.time.toKotlinDuration
 @Conditional(ControlPlaneCondition::class)
 @ConditionalOnBean(PolicySnapshotCache::class)
 @EnableConfigurationProperties(ControlProperties::class, RevocationProperties::class, CoSecProperties::class)
-@Import(StartupTaskExclusion::class, ControlServiceConfiguration::class, ControlMetersConfiguration::class)
+@Import(StartupTaskExclusion::class, ControlServiceConfiguration::class, ControlMetersConfiguration::class, ChangeListenersConfiguration::class)
 internal class CoSecControlAutoConfiguration {
     @Bean
     @ConditionalOnMissingBean
@@ -233,26 +233,6 @@ internal class CoSecControlAutoConfiguration {
             val drainTimeout = listenerProperties.getIfAvailable { ListenerProperties() }.drainTimeout
             KafkaChangeListener(kafkaOperations, topic, delivery, drainTimeout = drainTimeout)
         }
-    }
-
-    /**
-     * Every change listener, delivering until shutdown. `cosec.control.audit.kafka.delivery=required` asks for a REQUIRED
-     * Kafka record of every gated step: startup fails when that listener could not be created, rather than publishing
-     * without it.
-     */
-    @Bean(destroyMethod = "cancel")
-    @ConditionalOnMissingBean
-    fun cosecChangeListeners(
-        listeners: ObjectProvider<ChangeListener>,
-        properties: ControlProperties
-    ): ChangeListeners {
-        val all = listeners.orderedStream().toList()
-        val kafka = properties.audit.kafka
-        check(kafka.delivery != Delivery.REQUIRED || all.any { it.name == KAFKA_CHANGE_LISTENER }) {
-            "${ControlProperties.KAFKA_AUDIT_PREFIX}.delivery=required, but no Kafka change listener was created: it " +
-                "needs cosec-kafka, a KafkaOperations bean and ${ControlProperties.KAFKA_AUDIT_PREFIX}.enabled=true."
-        }
-        return ChangeListeners(all, properties.audit.requiredTimeout.toKotlinDuration())
     }
 
     /**

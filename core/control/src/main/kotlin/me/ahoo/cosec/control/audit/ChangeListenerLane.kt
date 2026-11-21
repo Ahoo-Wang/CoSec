@@ -66,6 +66,7 @@ class ChangeListenerLane internal constructor(
     private val queuedBytes = AtomicLong()
     private val droppedCount = AtomicLong()
     private val lostCount = AtomicLong()
+    private val keptCount = AtomicLong()
 
     @Volatile
     private var progress = TimeSource.Monotonic.markNow()
@@ -87,6 +88,9 @@ class ChangeListenerLane internal constructor(
 
     /** REQUIRED events of steps already stored that found no room in time: counted, logged at ERROR. */
     val lost: Long get() = lostCount.get()
+
+    /** Events still queued when the listeners stopped after their drain, or that arrived during it: never delivered. */
+    val kept: Long get() = keptCount.get()
 
     init {
         scope.launch { consume() }
@@ -128,6 +132,11 @@ class ChangeListenerLane internal constructor(
     /** Counts an event of a stored step that found no room in time. */
     internal fun lose() {
         lostCount.incrementAndGet()
+    }
+
+    /** Counts [events] this listener will never deliver: left at the end of the drain, or arriving during it. */
+    internal fun keep(events: Long) {
+        keptCount.addAndGet(events)
     }
 
     /** Waits until every event queued so far was delivered, or failed to be. */
