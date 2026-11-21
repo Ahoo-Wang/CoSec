@@ -48,8 +48,8 @@ internal object DocumentJson {
         "roleSubject" to setOf("role", "tenant"),
         "role" to setOf("id", "app", "space", "name", "description", "permissions"),
         "catalog" to setOf("groups"),
-        "group" to setOf("name", "permissions", "spaced"),
-        "permission" to setOf("id", "name", "action", "resource"),
+        "group" to setOf("name", "description", "permissions", "spaced"),
+        "permission" to setOf("id", "name", "description", "action", "resource"),
         "document" to setOf(
             "schema", "revision", "publishedAt", "provenance",
             "policies", "bindings", "roles", "catalog", "rateLimits", "boundary",
@@ -225,9 +225,11 @@ internal object DocumentJson {
                             permission.optText("name"),
                             permission.oneOrMany("action").map(ValueJson::action),
                             permission.oneOrMany("resource").map(ValueJson::resource),
+                            permission.optText("description"),
                         )
                     },
                     group.bool("spaced", false),
+                    group.optText("description"),
                 )
             },
         )
@@ -238,12 +240,14 @@ internal object DocumentJson {
             catalog.groups.forEach { group ->
                 addObject().apply {
                     put("name", group.name)
+                    group.description?.let { put("description", it) }
                     if (group.spaced) put("spaced", true)
                     putArray("permissions").apply {
                         group.permissions.forEach { permission ->
                             addObject().apply {
                                 put("id", permission.id)
                                 permission.name?.let { put("name", it) }
+                                permission.description?.let { put("description", it) }
                                 putOneOrMany("action", permission.actions.map(StringNode::valueOf))
                                 putOneOrMany("resource", permission.resources.map(ValueJson::resource))
                             }

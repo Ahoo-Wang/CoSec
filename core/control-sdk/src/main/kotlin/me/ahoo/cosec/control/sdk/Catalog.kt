@@ -27,14 +27,25 @@ class Catalog(val groups: List<CatalogGroup>) {
 
 /** A group of a [Catalog]: its [permissions], and whether they are held per space ([spaced]). */
 @ExperimentalCoSecApi
-class CatalogGroup(val name: String, val permissions: List<CatalogPermission>, val spaced: Boolean = false) {
-    override fun equals(other: Any?): Boolean =
-        other is CatalogGroup && name == other.name && permissions == other.permissions && spaced == other.spaced
+class CatalogGroup(
+    val name: String,
+    val permissions: List<CatalogPermission>,
+    val spaced: Boolean = false,
+    val description: String? = null,
+) {
+    override fun equals(other: Any?): Boolean = other is CatalogGroup && parts() == other.parts()
 
-    override fun hashCode(): Int = listOf(name, permissions, spaced).hashCode()
+    override fun hashCode(): Int = parts().hashCode()
 
-    override fun toString(): String =
-        describe("CatalogGroup", "name" to name, "permissions" to permissions, "spaced" to spaced)
+    override fun toString(): String = describe(
+        "CatalogGroup",
+        "name" to name,
+        "permissions" to permissions,
+        "spaced" to spaced,
+        "description" to description,
+    )
+
+    private fun parts(): List<Any?> = listOf(name, permissions, spaced, description)
 }
 
 /**
@@ -47,13 +58,21 @@ class CatalogPermission(
     val name: String? = null,
     val actions: List<String> = emptyList(),
     val resources: List<Resource> = emptyList(),
+    val description: String? = null,
 ) {
     override fun equals(other: Any?): Boolean = other is CatalogPermission && parts() == other.parts()
 
     override fun hashCode(): Int = parts().hashCode()
 
     override fun toString(): String =
-        describe("CatalogPermission", "id" to id, "name" to name, "actions" to actions, "resources" to resources)
+        describe(
+            "CatalogPermission",
+            "id" to id,
+            "name" to name,
+            "actions" to actions,
+            "resources" to resources,
+            "description" to description,
+        )
 
-    private fun parts(): List<Any?> = listOf(id, name, actions, resources)
+    private fun parts(): List<Any?> = listOf(id, name, actions, resources, description)
 }
