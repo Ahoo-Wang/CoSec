@@ -367,4 +367,38 @@ the change applied (`candidate`), and whether they differ. It needs `cosec:simul
 the change's. Staging changes, shadow windows and access analysis (`/analyze`) are in
 [Testing policies](../policies/testing.md).
 
+## Changing policies from your code {#changing-policies-from-your-code}
+
+A service that embeds the control plane, such as an IAM service onboarding a tenant, calls it from its own code
+through `ControlService` (`cosec-control`, `@ExperimentalCoSecApi`). The starter provides a bean of it wherever
+the control plane is wired. Every call is decided by the policies for the principal its `ControlCaller` states, and
+recorded as that principal's step. It goes through the control API's own route: the same call over HTTP answers
+the same, records the same, and is refused the same (`CTL-65`).
+
+- **Who acts:**
+  - `ControlCaller.of(securityContext)` acts as the user whose request you are serving. It takes the
+    `SecurityContext` CoSec made for that request, and refuses one your code assembled.
+  - `ControlCaller.service("iam")` acts as your service's own principal in the platform tenant, for work no request
+    stands behind. It acts with the bindings the platform document gives that principal, through the same check
+    that admits a forwarded identity.
+- **What it reaches:** reads of a tenant's or an app's document (`document`, `revisions`, `revision`, `diff`), and
+  the change flow of a tenant's document (`propose`, `apply`, `change`, `changes`, `rebase`, `skipShadow`, `abandon`,
+  `publish`). Nothing reaches the platform document, `:shadow`, approvals or break-glass: those stay a person's, on
+  the operators' routes.
+- **What goes in and out:**
+  - Requests are the routes' bodies ([Changes](../policies/testing.md#changes)), and documents are in the
+    [document format](../policies/language.md).
+  - Answers are the control API's JSON ([What a change answers](../policies/testing.md#what-a-change-answers)),
+    as text.
+  - A refusal is a `ControlRefusedException` with the route's status and problem.
+
+<<< @/examples/control-sdk/kotlin/Onboarding.kt [Onboarding.kt]
+
+<<< @/examples/control-sdk/changes/auditors.json [auditors.json]
+
+A change that needs a second person's approval stops at `AWAITING_APPROVAL`, whoever proposed it: report its id to a
+person, who approves it on the operators' routes. To call another service behind the gateway as a principal of
+your own, `IdentityHeader.write(identity)` (`cosec-document`) writes the `CoSec-Identity` header the gateway would
+have forwarded.
+
 **Next:** every property and its default, in [Configuration](../operations/configuration.md); or, to write the rules themselves, [Policy language](../policies/language.md).

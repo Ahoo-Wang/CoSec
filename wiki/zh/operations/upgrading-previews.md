@@ -24,6 +24,13 @@ description: "每个 8.0 预览版（alpha 与 beta）到下一个之间的变�
 
 ## 从 8.0.0-beta.4 升级 {#from-8-0-0-beta-4}
 
+- **新增：控制面门面 `ControlService`，供内嵌控制面的服务使用**（`CTL-65`）。
+  - 调用按它们声明的 `ControlCaller` 决策，并记为该调用方的步骤。
+  - 它只触及窄集合：租户与 app 文档的读取，以及租户的变更流程。
+  - 请求与应答是控制 API 的请求体和 JSON。
+  - `IdentityHeader` 写出 `CoSec-Identity` 头。
+  - 不使用它们的应用无需改动（[在代码中修改策略](../integration/checks.md#changing-policies-from-your-code)）。
+
 - **控制 API 由自己的应答模型作答；被拒绝的作用域在 `reason` 下说明原因；传播只统计持有该文档的实例**（第二轮评审，
   `R2C-11`、`R2C-12`、`CTL-61`、`CTL-62`）。受影响的是控制 API 的客户端。
   - 变更的应答（`GET /changes/{id}` 以及每个应答变更的路由）不再包含 `checkedWith`、`checkedApps` 和窗口的

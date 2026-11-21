@@ -27,6 +27,14 @@ Which preview of the library may run behind which preview of the gateway image: 
 
 ## From 8.0.0-beta.4 {#from-8-0-0-beta-4}
 
+- **New: the control plane's facade, `ControlService`, for a service that embeds the control plane** (`CTL-65`).
+  - Calls are decided as the `ControlCaller` they state, and recorded as that caller's.
+  - It reaches only the narrow set: tenant and app document reads, and a tenant's change flow.
+  - Requests and answers are the control API's bodies and JSON.
+  - `IdentityHeader` writes the `CoSec-Identity` header.
+  - Nothing to change for an application that does not use them
+    ([Changing policies from your code](../integration/checks.md#changing-policies-from-your-code)).
+
 - **The control API answers from a response model of its own; a refused scope says why under `reason`; propagation
   counts the instances that hold the document** (review round 2, `R2C-11`, `R2C-12`, `CTL-61`, `CTL-62`). Affected:
   clients of the control API.
