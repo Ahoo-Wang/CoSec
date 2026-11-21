@@ -100,7 +100,8 @@ class EverythingRuns(unittest.TestCase):
 class GroupsFollowTheGraph(unittest.TestCase):
     def test_a_project_runs_its_own_group_and_that_of_every_project_that_depends_on_it(self):
         ran, skipped, _ = run("edge/webmvc/src/main/kotlin/me/ahoo/A.kt")
-        self.assertEqual({"edge", "host", "test"}, ran)
+        # `platform`: the control server depends on spring-boot
+        self.assertEqual({"edge", "host", "test", "platform"}, ran)
         self.assertEqual({"api", "core", "backends", "extensions", "migration"}, set(skipped))
 
     def test_a_test_source_counts_as_the_project(self):
@@ -110,7 +111,7 @@ class GroupsFollowTheGraph(unittest.TestCase):
     def test_the_closure_is_transitive(self):
         # runtime <- control <- cocache (compileOnlyApi) and runtime <- jwt, webflux, webmvc <- spring-boot
         ran, _, _ = run("core/runtime/src/main/kotlin/A.kt")
-        self.assertEqual({"core", "backends", "edge", "extensions", "host", "migration", "test"}, ran)
+        self.assertEqual({"core", "backends", "edge", "extensions", "host", "migration", "test", "platform"}, ran)
 
     def test_what_everything_depends_on_runs_every_group(self):
         self.assertEqual(set(ALL), run("api/annotations/src/main/kotlin/A.kt")[0])
@@ -119,7 +120,7 @@ class GroupsFollowTheGraph(unittest.TestCase):
 
     def test_a_group_whose_projects_are_all_untouched_is_skipped_with_its_reason(self):
         ran, skipped, why = run("extensions/ip2region/src/main/kotlin/A.kt")
-        self.assertEqual({"extensions", "host", "test"}, ran)
+        self.assertEqual({"extensions", "host", "test", "platform"}, ran)
         self.assertIsNone(why)
         for reason in skipped.values():
             self.assertIn("none of its projects (", reason)
@@ -166,9 +167,9 @@ class FilesOutsideTheProjects(unittest.TestCase):
 
     def test_a_json_resource_of_any_project_runs_document_which_checks_every_one(self):
         ran, _, _ = run("edge/gateway/src/test/resources/x.json")
-        self.assertEqual({"core", "edge", "host", "test"}, ran)
+        self.assertEqual({"core", "edge", "host", "test", "platform"}, ran)
         # a Kotlin file of the same project does not
-        self.assertEqual({"edge", "host", "test"}, run("edge/gateway/src/test/kotlin/A.kt")[0])
+        self.assertEqual({"edge", "host", "test", "platform"}, run("edge/gateway/src/test/kotlin/A.kt")[0])
         # conformance's own data is skipped by RepositoryDocuments
         self.assertEqual({"test"}, run("test/conformance/src/test/resources/rules/ACT.json")[0])
 
@@ -284,7 +285,7 @@ class Output(unittest.TestCase):
                 capture_output=True, text=True, env={**os.environ, "GITHUB_STEP_SUMMARY": str(summary)})
             self.assertEqual(0, done.returncode, done.stderr)
             fields = dict(line.split("=", 1) for line in out.read_text().splitlines())
-            self.assertEqual({"extensions", "host", "test"}, {job["name"] for job in json.loads(fields["matrix"])["include"]})
+            self.assertEqual({"extensions", "host", "test", "platform"}, {job["name"] for job in json.loads(fields["matrix"])["include"]})
             self.assertEqual({"api", "core", "backends", "edge", "migration"}, {item["job"] for item in json.loads(fields["skipped"])})
             self.assertIn("skipped `api`", summary.read_text())
             self.assertIn("::notice title=Test api skipped::", done.stderr)
