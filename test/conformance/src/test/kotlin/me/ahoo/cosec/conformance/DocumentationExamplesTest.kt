@@ -26,7 +26,7 @@ import me.ahoo.cosec.control.lifecycle.ChangeAuthority
 import me.ahoo.cosec.control.lifecycle.ChangeOptions
 import me.ahoo.cosec.control.lifecycle.Changes
 import me.ahoo.cosec.control.lifecycle.LockoutCheck
-import me.ahoo.cosec.control.sdk.LocalControlService
+import me.ahoo.cosec.control.local.LocalControlService
 import me.ahoo.cosec.control.store.InMemoryControlStore
 import me.ahoo.cosec.control.store.Revisions
 import me.ahoo.cosec.document.route.RouteMapCodec

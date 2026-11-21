@@ -13,7 +13,7 @@
 
 @file:OptIn(InternalCoSecApi::class, ExperimentalCoSecApi::class)
 
-package me.ahoo.cosec.control.sdk
+package me.ahoo.cosec.control.local
 
 import kotlinx.coroutines.runBlocking
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
@@ -27,6 +27,9 @@ import me.ahoo.cosec.control.api.ControlPlaneTest
 import me.ahoo.cosec.control.api.ControlProfile
 import me.ahoo.cosec.control.change.ChangeOrigin
 import me.ahoo.cosec.control.change.ChangeState
+import me.ahoo.cosec.control.sdk.ControlCaller
+import me.ahoo.cosec.control.sdk.ControlRefusedException
+import me.ahoo.cosec.control.sdk.ControlService
 import me.ahoo.cosec.document.json.CoSecJson
 import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.model.decision.DocumentKind
@@ -136,7 +139,7 @@ class ControlServiceTest {
         same({ route("POST", "/changes", body = proposal("behind", 1)) }, { propose(it, proposal("behind", 1)) })
         same({ route("GET", "/changes/c1") }, { change(it, "c1") })
         same({ route("GET", "/changes", mapOf("document" to "tenant:acme", "state" to "CHECKED")) }, {
-            changes(it, acme, ChangeState.CHECKED)
+            changes(it, acme, me.ahoo.cosec.control.sdk.ChangeState.CHECKED)
         })
         same(
             { route("POST", "/changes/c1:skip-shadow", body = """{"reason":"hotfix"}""") },
@@ -245,7 +248,12 @@ class ControlServiceTest {
             .assert().contains(platformChange, tenantChange)
         val served = ids(ok(side.route("GET", "/changes", byState, security = plato)))
         served.assert().containsExactly(tenantChange)
-        ids(side.service.changes(ControlCaller.of(plato.securityContext), state = ChangeState.CHECKED))
+        ids(
+            side.service.changes(
+                ControlCaller.of(plato.securityContext),
+                state = me.ahoo.cosec.control.sdk.ChangeState.CHECKED
+            )
+        )
             .assert().isEqualTo(served)
     }
 
@@ -327,6 +335,13 @@ class ControlServiceTest {
     }
 
     @Test
+    fun `the facade's change states are the control plane's, in its order - CTL-65`() {
+        me.ahoo.cosec.control.sdk.ChangeState.KNOWN.map { it.text }.assert().isEqualTo(
+            ChangeState.entries.map { it.name }
+        )
+    }
+
+    @Test
     fun `a caller is taken only from a context CoSec made - CTL-65`() {
         val assembled = object : SecurityContext {
             override val tenantId = "acme"
@@ -334,9 +349,13 @@ class ControlServiceTest {
             override val scope: SecurityScope get() = error("not read")
             override val forwardedIdentity = null
         }
-        assertThrownBy<IllegalArgumentException> { ControlCaller.of(assembled) }
         val side = Side()
-        RequestSecurity.of(ControlCaller.of(side.alice.securityContext).security!!.securityContext).assert().isNotNull()
+        // The caller holds the context as it is; the implementation refuses it when the call is made, before the control
+        // plane is asked, and a context CoSec made is served.
+        assertThrownBy<IllegalArgumentException> {
+            runBlocking { side.service.document(ControlCaller.of(assembled), acme) }
+        }.hasMessageContaining("PIP-29")
+        ok(runBlocking { "200 " + side.service.document(ControlCaller.of(side.alice.securityContext), acme) })
     }
 
     @Test

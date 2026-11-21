@@ -31,6 +31,7 @@ other CoSec module it finds on the classpath. Add each integration as a dependen
 | Spring Cloud Gateway | `cosec-gateway` | |
 | Redis: policy snapshot, revocation, API keys, cluster-wide rate limits, shadow | `cosec-cocache` | `org.springframework.boot:spring-boot-data-redis`, `me.ahoo.cocache:cocache-spring-boot-starter` |
 | Control plane (change, simulate, explain, publish) | `cosec-control` | `cosec-cocache` |
+| Code that calls the control plane (`ControlService`, `ControlCaller`) | `cosec-control-sdk` (brought by `cosec-control`, the in-process implementation) | |
 | Social OAuth login | `cosec-social` | |
 | IP region attributes (`ext.ip2region.*`) | `cosec-ip2region` | |
 | Ids from CosId 5 | `cosec-cosid` | `me.ahoo.cosid:cosid-spring-boot-starter` 5.x |

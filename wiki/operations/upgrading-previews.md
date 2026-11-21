@@ -15,15 +15,29 @@ section above it:
 
 | You run | Read |
 |---|---|
-| `8.0.0-beta.4` | [From beta.4](#from-8-0-0-beta-4) |
-| `8.0.0-beta.3` | [From beta.3](#from-8-0-0-beta-3), then the one above |
-| `8.0.0-beta.2` | [From beta.2](#from-8-0-0-beta-2), then the two above |
-| `8.0.0-beta.1` | [From beta.1](#from-8-0-0-beta-1), then the three above |
-| `8.0.0-alpha.4` | [From alpha.4](#from-8-0-0-alpha-4), then the four above |
+| `8.0.0-beta.5` | [From beta.5](#from-8-0-0-beta-5) |
+| `8.0.0-beta.4` | [From beta.4](#from-8-0-0-beta-4), then the one above |
+| `8.0.0-beta.3` | [From beta.3](#from-8-0-0-beta-3), then the two above |
+| `8.0.0-beta.2` | [From beta.2](#from-8-0-0-beta-2), then the three above |
+| `8.0.0-beta.1` | [From beta.1](#from-8-0-0-beta-1), then the four above |
+| `8.0.0-alpha.4` | [From alpha.4](#from-8-0-0-alpha-4), then the five above |
 | `8.0.0-alpha.3`, `alpha.2`, `alpha.1` | [From alpha.3](#from-8-0-0-alpha-3), [alpha.2](#from-8-0-0-alpha-2) or [alpha.1](#from-8-0-0-alpha-1), then every section above it |
 
 Which preview of the library may run behind which preview of the gateway image: see
 [Upgrading a running deployment](./upgrading.md#upgrading-a-running-deployment).
+
+## From 8.0.0-beta.5 {#from-8-0-0-beta-5}
+
+- **The control plane's facade is a module of its own, `cosec-control-sdk`** (`CTL-65`). Affected: code that calls
+  `ControlService`. `ControlService`, `ControlCaller` and `ControlRefusedException` keep their names and package
+  (`me.ahoo.cosec.control.sdk`); `cosec-control` brings the module, so a build that has `cosec-control` changes nothing.
+  Code that only calls a control-plane host needs `cosec-control-sdk` alone (its HTTP implementation follows in a later
+  preview).
+  - `ControlService.changes` filters by `me.ahoo.cosec.control.sdk.ChangeState`, the wire's closed set, which keeps an
+    unknown value's text (`isUnknown`), instead of the control plane's internal enum: pass `ChangeState.READY` of the
+    new package, or `ChangeState.of("READY")`.
+  - `ControlCaller.of(context)` no longer throws for a security context CoSec did not make: the call it is passed to
+    does, with the same `IllegalArgumentException` (`PIP-29`).
 
 ## From 8.0.0-beta.4 {#from-8-0-0-beta-4}
 

@@ -20,7 +20,7 @@ package me.ahoo.cosec.architecture
  */
 object DependencyRules {
     private val PURE = setOf("annotations", "api")
-    private val CORE = PURE + setOf("model", "engine", "spi", "document", "runtime", "control")
+    private val CORE = PURE + setOf("model", "engine", "spi", "document", "runtime", "control", "control-sdk")
 
     /** The project edges each project may declare; a project not listed (host, migration, test) may use any library project. */
     val ALLOWED: Map<String, Set<String>> = mapOf(
@@ -33,6 +33,9 @@ object DependencyRules {
         "document" to setOf("engine", "spi", "model", "api", "annotations"),
         "runtime" to setOf("document", "engine", "spi", "model", "api", "annotations"),
         "control" to CORE - "control",
+        // The facade an application calls (CTL-65): the documents' format and the ports, never the request path or the
+        // control plane, so an application that calls a control host over HTTP brings neither.
+        "control-sdk" to setOf("document", "engine", "spi", "model", "api", "annotations"),
         // A backend implements store ports of cosec-spi and writes its formats with cosec-document (RFC 0013 §3).
         "cocache" to setOf("spi", "document", "model", "api", "annotations"),
         // The adapters translate a host's request for the pipeline and never decide: the model and the request path,
@@ -76,9 +79,10 @@ object DependencyRules {
 
     /**
      * The outer projects that only read or write documents, so `cosec-runtime` is not on their run-time class path
-     * either (RFC 0013 §3): the OpenAPI generator.
+     * either (RFC 0013 §3): the OpenAPI generator, and the control plane's facade (CTL-65), which an application calls
+     * without the request path.
      */
-    val DOCUMENT_ONLY: Set<String> = setOf("openapi")
+    val DOCUMENT_ONLY: Set<String> = setOf("openapi", "control-sdk")
 
     /**
      * The control server (`platform/control-server`) is the starter with the control plane and nothing else: it is no
