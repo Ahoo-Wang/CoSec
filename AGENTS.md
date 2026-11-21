@@ -40,6 +40,12 @@ gh workflow run system-test.yml --ref main -f ref=<sha>   # the system test on a
   never come from the build cache. A `docs` job runs `pnpm check:docs` and `pnpm build` in `wiki/`. The `CI` job passes
   only when every other job passed; it is the required check. A project whose tests need Redis goes in the script's
   `REDIS`.
+- Dependency downloads on CI are read from one cache written on `main` (`dependency-cache.yml`, key
+  `gradle-dependencies-v1-<repos>-<versions>`, restored read-only by `.github/actions/dependency-cache`): Maven Central
+  answers 429 to a runner that asks for too much, and Gradle fails on a 429 without asking the next repository. A job
+  that downloads and restores no Gradle cache of its own calls the action. A change of where anything is resolved from
+  changes the key's `<repos>`: try it on a pull request, whose runs then resolve cold
+  (`.github/scripts/README.md`, "The dependency cache").
 - A module's `jmh` task runs 1 fork × 1 iteration: a smoke run. The benchmarks are the engine's
   (`EngineAuthorizationBenchmark`, `EngineBenchmark`, `CompiledEngineBenchmark`), the whole pipeline's
   (`:e2e` `PipelineBenchmark`) and a token's verification (`:jwt:jmh -PjmhIncludes=JwtVerificationBenchmark`). To compare versions, pass `-PjmhFork`, `-PjmhIterations`,
@@ -344,7 +350,7 @@ lives) are in [`wiki/AGENTS.md`](wiki/AGENTS.md).
   races these tests exist to catch.
 - Dependency versions live only in `gradle/libs.versions.toml`. The build resolves dependencies from Maven Central
   only, and plugins from Maven Central first, then the Gradle Plugin Portal (the Nexus publish plugin and the JMH
-  plugin are only there); `-Pcosec.mavenLocal` adds `mavenLocal()` first, to test against a locally published library
+  plugin are only there, and Central is not asked for their groups: `portalOnly` in `settings.gradle.kts`); `-Pcosec.mavenLocal` adds `mavenLocal()` first, to test against a locally published library
   (`MavenLocalGuardTest`). A change of where something is resolved from invalidates what restored CI caches say
   about it: try it against the workflows that restore a Gradle cache (`ci.yml`), not only against cold ones.
 - PR titles follow Conventional Commits (CI-enforced; they drive labels, release notes and the version).
