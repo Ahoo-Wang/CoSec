@@ -280,7 +280,7 @@ the keys and takes every command away; the second grants the commands and channe
 `+spublish +ssubscribe +sunsubscribe` in `sharded` mode):
 
 ```text
-ACL SETUSER cosec-pod-a on >change-me resetkeys resetchannels -@all %R~cosec:snapshot:* %R~cosec:candidate:* %R~cosec:candidate-staged:* ~cosec:shadow:report: ~cosec:shadow:report:*:pod-a.* ~cosec:shadow:reporters:* ~cosec:shadow:status: ~cosec:shadow:status:pod-a.* ~cosec:shadow:instances:* ~cocache:!probe:*
+ACL SETUSER cosec-pod-a on >change-me resetkeys resetchannels -@all %R~cosec:snapshot:* %R~cosec:candidate:* %R~cosec:candidate-staged:* ~cosec:shadow:report: ~cosec:shadow:report:*:pod-a.* ~cosec:shadow:reporters:* ~cosec:shadow:status: ~cosec:shadow:status:pod-a.* ~cosec:shadow:resident: ~cosec:shadow:resident:pod-a.* ~cosec:shadow:instances:* ~cocache:!probe:*
 ACL SETUSER cosec-pod-a +@connection +evalsha +eval +evalsha_ro +eval_ro +publish +subscribe +unsubscribe +info +get +getrange +strlen +set +del +pttl +type +hgetall +hkeys +hmget +hset +hdel +hlen +pexpire +persist +setrange +time &cosec:* &cocache:!probe:*
 ```
 
@@ -289,8 +289,8 @@ instance's own name. A data-plane instance needs `snapshot`, `candidate`, `candi
 tested here; the token, membership, API key, rate limit and OAuth families only for the feature that uses them, and
 those were not tried with an ACL.
 
-`~cosec:shadow:report:` and `~cosec:shadow:status:`, without a `*`, are the keys CoCache names when it creates those
-caches: without them the instance fails at startup with `NOPERM`, though its own keys are allowed. A test runs exactly
+`~cosec:shadow:report:`, `~cosec:shadow:status:` and `~cosec:shadow:resident:`, without a `*`, are the keys CoCache
+names when it creates those caches: without them the instance fails at startup with `NOPERM`, though its own keys are allowed. A test runs exactly
 these two lines on real Redis (`DataPlaneAclTest`, on every CI run): an instance without the control plane creates its
 caches, reads the documents, hears a publish by a control-plane user, and writes its report, with an empty `ACL LOG`;
 a `SET` of a document or a candidate as this user is refused (`NOPERM`).

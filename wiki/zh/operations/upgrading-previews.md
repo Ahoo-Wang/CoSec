@@ -33,6 +33,9 @@ description: "每个 8.0 预览版（alpha 与 beta）到下一个之间的变�
   - **beta.5 的控制面读不了 beta.6 的状态**：它要求有 `documents`。按 `CTL-73`，它把每个 beta.6 实例当作存活但什么都
     不确认，于是每个影子窗口都会等待，到 `max-duration` 时以证据不足关闭。没有窗口会通过，也没有变更会被错误地发布；
     控制面升级完成后，窗口照常关闭。
+- **数据面的 Redis 用户需要常驻记录的 key。** 如果你照抄了[存储](./storage.md#redis-keys)中的数据面用户，在它的
+  `shadow:status` key 旁边加上 `~cosec:shadow:resident: ~cosec:shadow:resident:<instance>.*`（换成你的前缀和实例 id）；
+  没有它们，beta.6 实例启动时会因 `NOPERM` 失败。
 - **SPI（实验性）：新增抽象方法 `ShadowReportSink.write(ResidentDocuments)` 和 `ShadowReportReader.residents(instances)`；
   移除 `InstanceStatus.documents` 和 `InstalledDocument`。** 自己实现的后端要为每个实例另存一条记录，生命期为
   `ShadowReportReader.RESIDENT_TTL`，`residents` 应答能读取的记录，并在 `unreadable` 中列出记录缺失或无法解码的实例

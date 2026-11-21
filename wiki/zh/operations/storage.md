@@ -201,7 +201,7 @@ key 上。对 `<s>:shadow:reporters:*` 有写权限的实例可以删掉另一�
 （`sharded` 模式再加 `+spublish +ssubscribe +sunsubscribe`）：
 
 ```text
-ACL SETUSER cosec-pod-a on >change-me resetkeys resetchannels -@all %R~cosec:snapshot:* %R~cosec:candidate:* %R~cosec:candidate-staged:* ~cosec:shadow:report: ~cosec:shadow:report:*:pod-a.* ~cosec:shadow:reporters:* ~cosec:shadow:status: ~cosec:shadow:status:pod-a.* ~cosec:shadow:instances:* ~cocache:!probe:*
+ACL SETUSER cosec-pod-a on >change-me resetkeys resetchannels -@all %R~cosec:snapshot:* %R~cosec:candidate:* %R~cosec:candidate-staged:* ~cosec:shadow:report: ~cosec:shadow:report:*:pod-a.* ~cosec:shadow:reporters:* ~cosec:shadow:status: ~cosec:shadow:status:pod-a.* ~cosec:shadow:resident: ~cosec:shadow:resident:pod-a.* ~cosec:shadow:instances:* ~cocache:!probe:*
 ACL SETUSER cosec-pod-a +@connection +evalsha +eval +evalsha_ro +eval_ro +publish +subscribe +unsubscribe +info +get +getrange +strlen +set +del +pttl +type +hgetall +hkeys +hmget +hset +hdel +hlen +pexpire +persist +setrange +time &cosec:* &cocache:!probe:*
 ```
 
@@ -209,7 +209,7 @@ ACL SETUSER cosec-pod-a +@connection +evalsha +eval +evalsha_ro +eval_ro +publis
 `snapshot`、`candidate`、`candidate-staged` 和 `shadow` 几组 key，这几组是这里测试过的；令牌、成员关系、API key、限流和 OAuth 这几组只有用到
 对应功能时才需要，它们没有用 ACL 试过。
 
-`~cosec:shadow:report:` 和 `~cosec:shadow:status:`（不带 `*`）是 CoCache 创建这两个缓存时用到的 key：没有它们，即使
+`~cosec:shadow:report:`、`~cosec:shadow:status:` 和 `~cosec:shadow:resident:`（不带 `*`）是 CoCache 创建这些缓存时用到的 key：没有它们，即使
 实例自己的 key 都允许，启动也会因 `NOPERM` 失败。一个测试在真实 Redis 上原样运行这两行（`DataPlaneAclTest`，每次 CI 都运行）：
 不运行控制面的实例创建缓存、读取文档、收到控制面用户的发布、写入自己的报告，`ACL LOG` 为空；以这个用户 `SET` 文档或候选
 会被拒绝（`NOPERM`）。

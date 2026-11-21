@@ -39,6 +39,9 @@ Which preview of the library may run behind which preview of the gateway image: 
     beta.6 instance as live and acknowledging nothing, so every shadow window waits and closes as insufficient at
     `max-duration`. No window passes and no change publishes wrongly; finish upgrading the control plane and the windows
     close as usual.
+- **A data-plane Redis user needs the resident keys.** If you copied the data-plane user of
+  [Storage](./storage.md#redis-keys), add `~cosec:shadow:resident: ~cosec:shadow:resident:<instance>.*` (your prefix and
+  instance id) beside its `shadow:status` keys; without them a beta.6 instance fails at startup with `NOPERM`.
 - **SPI (experimental): `ShadowReportSink.write(ResidentDocuments)` and `ShadowReportReader.residents(instances)` are
   new and abstract; `InstanceStatus.documents` and `InstalledDocument` are removed.** A backend of your own stores a
   second record per instance, with a life of `ShadowReportReader.RESIDENT_TTL`, and answers `residents` with the records
