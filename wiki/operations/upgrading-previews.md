@@ -389,7 +389,7 @@ Which preview of the library may run behind which preview of the gateway image: 
   `cosec.jwt.session.lifetime` (30 days), as long as they refreshed within the refresh token's lifetime. It now **fails
   to start**, and the message says what the choice costs. Choose one:
   - to keep what the host did, write `cosec.jwt.session.memberships-on-refresh: from-token`
-    (`COSEC_JWT_SESSION_MEMBERSHIPS_ON_REFRESH=from-token`). Any other value fails like an absent one. Startup logs one
+    (`COSEC_JWT_SESSION_MEMBERSHIPSONREFRESH=from-token`). Any other value fails like an absent one. Startup logs one
     `INFO` line with the session lifetime it implies;
   - or declare a `MembershipRefresh<RefreshTokenCredentials>` bean that reads the member's roles and attached policies again, so a removal
     applies within `cosec.jwt.token-validity.access` (10 minutes).

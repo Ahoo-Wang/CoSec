@@ -32,7 +32,7 @@ configMapGenerator:
       - SPRING_DATA_REDIS_PORT=6379
       # - SPRING_DATA_REDIS_SSL_ENABLED=true
       # Only for a Redis that denies INFO, once you have set noeviction on it yourself:
-      # - COSEC_AUTHORIZATION_SNAPSHOT_EVICTION_CHECK=warn
+      # - COSEC_AUTHORIZATION_SNAPSHOT_EVICTIONCHECK=warn
 
 patches:
   - path: deployment-patch.yaml
