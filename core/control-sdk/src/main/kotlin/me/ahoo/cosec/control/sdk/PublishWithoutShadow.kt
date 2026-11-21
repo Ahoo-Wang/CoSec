@@ -56,7 +56,7 @@ internal class PublishWithoutShadow(
             try {
                 return client.skipShadow(caller, proposed.id, skipReason)
             } catch (e: ControlRefusedException) {
-                if (e.conflict in WAITED && (released(proposed, e.heldBy) || patience.next())) continue
+                if (waited(proposed, e)) continue
                 givenUp(proposed, e)
                 return null
             }
@@ -64,23 +64,28 @@ internal class PublishWithoutShadow(
     }
 
     /**
-     * Whether the slot was held by a change this one may abandon, and now is not: one of the same author, left before
-     * it published (`CHECKED`, `SHADOWING`, `READY`), as a writer that stopped halfway leaves it. Anything else (another
-     * author's change, one waiting for a person, one this caller may not read) is waited for.
+     * Whether staging [proposed] is tried again after [e]: a slot that is held, or contended, is waited for within the
+     * patience. A holder this write may abandon is abandoned first, and the next try still waits its turn, so a slot
+     * that stays held never makes it loop.
      */
-    private suspend fun released(proposed: Change, heldBy: String?): Boolean {
-        if (heldBy == null || heldBy == proposed.id) return false
-        val holder = try {
-            client.change(caller, heldBy)
+    private suspend fun waited(proposed: Change, e: ControlRefusedException): Boolean {
+        if (e.conflict !in WAITED) return false
+        releaseLeftHalfway(proposed, e.heldBy)
+        return patience.next()
+    }
+
+    /**
+     * Abandons the holder [heldBy] when this write may: a change of the same author as [proposed], left before it
+     * published (`CHECKED`, `SHADOWING`, `READY`), as a writer that stopped halfway leaves it. Anything else (another
+     * author's change, one waiting for a person, one this caller may not read) is left as it is, and waited for.
+     */
+    private suspend fun releaseLeftHalfway(proposed: Change, heldBy: String?) {
+        if (heldBy == null || heldBy == proposed.id) return
+        try {
+            val holder = client.change(caller, heldBy)
+            if (holder.author == proposed.author && holder.state in LEFT_HALFWAY) client.abandon(caller, holder.id)
         } catch (_: ControlRefusedException) {
-            return false
-        }
-        if (holder.author != proposed.author || holder.state !in LEFT_HALFWAY) return false
-        return try {
-            client.abandon(caller, holder.id)
-            true
-        } catch (_: ControlRefusedException) {
-            false
+            // Not readable, or no longer abandonable: waited for like any other holder.
         }
     }
 
