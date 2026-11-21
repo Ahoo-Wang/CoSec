@@ -227,7 +227,7 @@ class DecisionListeners(
 
     /** Records a REQUIRED failure on a decision that was not a permit: it keeps its status (§9.4.2, Q18). */
     internal fun requiredFailedOnNonPermit(event: DecisionEvent, failed: List<String>) {
-        requiredLog.failedOnNonPermit(failed, requiredFailureCount.incrementAndGet(), event)
+        requiredLog.failedOnNonPermit(failed, requiredFailureCount.incrementAndGet(), event.requestId, event.outcome)
     }
 
     /**
