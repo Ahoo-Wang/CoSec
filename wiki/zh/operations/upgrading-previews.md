@@ -24,7 +24,7 @@ description: "每个 8.0 预览版（alpha 与 beta）到下一个之间的变�
 
 ## 从 8.0.0-beta.4 升级 {#from-8-0-0-beta-4}
 
-- **十二个配置项改为计算得出，不再有 key**（`SNP-23`、`CTL-71`；规则是：能计算出来的就不配置）。受影响：设置了其中某一项的配置。启动会失败并列出 CoSec 不读取的 key，对每个都说明它已不再是配置项以及由什么取代。删掉这个 key；如果你原来移动过这个值，就移动它所依据的值（[由计算得出，而非配置](./configuration.md#computed-not-configured)）。`snapshot.reload-concurrency` 是其中没有出现在任何发布版本里的一个。
+- **十二个配置项改为计算得出，不再有 key**（`SNP-23`、`CTL-72`；规则是：能计算出来的就不配置）。受影响：设置了其中某一项的配置。启动会失败并列出 CoSec 不读取的 key，对每个都说明它已不再是配置项以及由什么取代。删掉这个 key；如果你原来移动过这个值，就移动它所依据的值（[由计算得出，而非配置](./configuration.md#computed-not-configured)）。`snapshot.reload-concurrency` 是其中没有出现在任何发布版本里的一个。
 
   | 已删除 | 现在 |
   |---|---|

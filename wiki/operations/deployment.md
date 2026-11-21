@@ -299,8 +299,9 @@ docker run -d -p 127.0.0.1:8080:8080 \
 Nothing in CoSec authorizes the management port, and the application port is decided by the pipeline, so a kubelet is
 refused there: probe the management port. The management port is not only the actuator: Spring Boot's management server
 also serves an application's own functional routes there, which the image has none of; CoSec's own routes, the control API
-included, answer on the application port and the service port only. Publish 8080 to the gateway and 8082 to the services
-you name, never 8081.
+included, answer on the application port and the service port only. The service port is the application's own server on
+another port, with its TLS, client authentication and bind address: if mutual TLS on the application port is what makes the
+statement true, it holds on 8082 too. Publish 8080 to the gateway and 8082 to the services you name, never 8081.
 
 **How a caller is identified.** An operator signs in at the IAM service, and the gateway verifies the token and forwards
 the identity to a route to the host. Give that route its app, so that an identity for another app is refused:

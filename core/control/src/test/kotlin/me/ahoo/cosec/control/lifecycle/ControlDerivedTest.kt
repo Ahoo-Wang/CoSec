@@ -21,7 +21,7 @@ import org.junit.jupiter.api.Test
 import java.time.Duration
 
 /**
- * `CTL-71`, `CTL-41`: the control plane's cadences and limits are constants or computed, and each is held to what makes it
+ * `CTL-72`, `CTL-41`: the control plane's cadences and limits are constants or computed, and each is held to what makes it
  * safe: a record is an orphan only once it has outlived a whole reclaim pass, and the shadow pass is a fifteenth of the
  * least a window lives.
  */
