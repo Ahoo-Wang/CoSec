@@ -33,7 +33,7 @@ import me.ahoo.cosec.control.api.JsonFields.optText
 import me.ahoo.cosec.control.api.JsonFields.text
 import me.ahoo.cosec.control.authz.Operator
 import me.ahoo.cosec.control.change.ChangeRejectedException
-import me.ahoo.cosec.control.change.ControlStatus.CONFLICT
+import me.ahoo.cosec.control.change.ConflictKind
 import me.ahoo.cosec.control.change.InvalidControlRequestException
 import me.ahoo.cosec.model.BindingId
 import me.ahoo.cosec.model.PolicyId
@@ -64,8 +64,8 @@ internal class BreakGlassRoutes(private val plane: ControlPlane) : RouteHandler 
             val change = plane.breakGlass.revoke(operator, binding, reason)
             // An emergency revoke that did not take effect never answers as one that did (R4-1), whoever removed it.
             if (plane.breakGlass.grants(binding)) {
-                throw ChangeRejectedException(
-                    CONFLICT,
+                throw ChangeRejectedException.conflict(
+                    ConflictKind.STATE,
                     "binding [${binding.value}] still grants: change ${change.id.value} is ${change.state}"
                 )
             }

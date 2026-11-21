@@ -476,7 +476,7 @@ object ChangeRunner : ScenarioRunner {
             else -> try {
                 step(action, argument).also { named[it.id.value] = it }.state.name
             } catch (error: ChangeRejectedException) {
-                "refused ${error.status}"
+                refused(error)
             } catch (_: SnapshotFormatException) {
                 "malformed"
             } catch (_: ControlStoreException) {
@@ -543,7 +543,7 @@ object ChangeRunner : ScenarioRunner {
             ) { true }
             "changes " + (page.changes.map { it.id.value }.ifEmpty { listOf("none") }.joinToString(","))
         } catch (error: ChangeRejectedException) {
-            "refused ${error.status}"
+            refused(error)
         }
 
         private fun environment(action: String, argument: JsonNode): String = when (action) {
@@ -687,7 +687,8 @@ object ChangeRunner : ScenarioRunner {
                 "read"
             }
         } catch (error: ControlRefusedException) {
-            "refused ${error.status}"
+            "refused ${error.status}" +
+                (CoSecJson.mapper.readTree(error.problem).get("conflict")?.let { " ${it.asString()}" } ?: "")
         }
 
         /**
@@ -710,7 +711,7 @@ object ChangeRunner : ScenarioRunner {
             val page = plane.listing.list(by(argument), kind, null, LISTING_LIMIT)
             "documents " + page.documents.map { it.toString() }.ifEmpty { listOf("none") }.joinToString(",")
         } catch (error: ChangeRejectedException) {
-            "refused ${error.status}"
+            refused(error)
         } catch (_: IllegalArgumentException) {
             "refused 400"
         }
@@ -734,7 +735,7 @@ object ChangeRunner : ScenarioRunner {
                     "members ${members.joinToString(",")}"
             }
         } catch (error: ChangeRejectedException) {
-            "refused ${error.status}"
+            refused(error)
         }
 
         /** `GET /documents/{key}` as `by`: `read`, or `refused <status>`. */
@@ -743,7 +744,7 @@ object ChangeRunner : ScenarioRunner {
             plane.read(by(argument), documentKey(argument.required("document").text()))
             "read"
         } catch (error: ChangeRejectedException) {
-            "refused ${error.status}"
+            refused(error)
         }
 
         /** The steps of the control API's answers (`CTL-61`, `CTL-62`). */
@@ -799,7 +800,7 @@ object ChangeRunner : ScenarioRunner {
             )
             "installed ${propagation.installed} holding ${propagation.holding} recent ${propagation.recent}"
         } catch (error: ChangeRejectedException) {
-            "refused ${error.status}"
+            refused(error)
         }
 
         /**
@@ -816,7 +817,7 @@ object ChangeRunner : ScenarioRunner {
             )
             shown(result.enforced) + (result.candidate?.let { "; candidate ${shown(it)}" } ?: "")
         } catch (error: ChangeRejectedException) {
-            "refused ${error.status}"
+            refused(error)
         }
 
         /**
@@ -838,7 +839,7 @@ object ChangeRunner : ScenarioRunner {
             val version = result.version
             shown(result.decision) + " at ${version.platform}/${version.app ?: "-"}/${version.tenant}"
         } catch (error: ChangeRejectedException) {
-            "refused ${error.status}"
+            refused(error)
         }
 
         /** The decision, `by <policy>` when the caller may see it, and `(cause <kind>)` or `(reason <why>)` (CTL-61). */
@@ -1071,3 +1072,7 @@ object ChangeRunner : ScenarioRunner {
         }
     }
 }
+
+/** A refusal as a scenario writes it: its status, and a `409`'s conflict (`CTL-80`), `refused 409 SLOT_HELD`. */
+private fun refused(error: ChangeRejectedException): String =
+    "refused ${error.status}" + (error.conflict?.let { " ${it.name}" } ?: "")

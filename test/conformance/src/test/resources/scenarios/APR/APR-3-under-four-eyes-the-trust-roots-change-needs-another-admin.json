@@ -168,7 +168,7 @@
       "SHADOWING",
       "AWAITING_APPROVAL",
       "refused 403",
-      "refused 409"
+      "refused 409 STATE"
     ],
     "errors": {
       "c1": []

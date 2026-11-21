@@ -18,10 +18,28 @@ package me.ahoo.cosec.control.change
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 
-/** A change operation the control API refuses, with the HTTP [status] it answers (RFC 0007 §10.2). */
+/**
+ * A change operation the control API refuses, with the HTTP [status] it answers (RFC 0007 §10.2). A `409` names its
+ * [conflict], and only a `409` does (`CTL-80`): use [conflict] to make one.
+ */
 @InternalCoSecApi
 class ChangeRejectedException(
     val status: Int,
     message: String,
-    cause: Throwable? = null
-) : RuntimeException(message, cause)
+    cause: Throwable? = null,
+    /** Which conflict a `409` is; null for any other status. */
+    val conflict: ConflictKind? = null,
+) : RuntimeException(message, cause) {
+    init {
+        require((status == ControlStatus.CONFLICT) == (conflict != null)) {
+            "A 409 of the control API names its conflict, and only a 409 does (CTL-80): status $status, conflict $conflict."
+        }
+    }
+
+    @InternalCoSecApi
+    companion object {
+        /** A `409` of [kind]. */
+        fun conflict(kind: ConflictKind, message: String, cause: Throwable? = null): ChangeRejectedException =
+            ChangeRejectedException(ControlStatus.CONFLICT, message, cause, kind)
+    }
+}

@@ -1,12 +1,11 @@
 # Rule: BRK-11
 # Mutant: a revoke of an ordinary binding is proposed anyway, and answers 200 with its DRAFT when that binding has expired
 # Tests: :control:test --tests me.ahoo.cosec.control.change.BreakGlassControlTest --tests me.ahoo.cosec.control.change.PreemptionRaceTest --tests me.ahoo.cosec.control.api.ControlHttpTest :conformance:test
-
 diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/BreakGlass.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/BreakGlass.kt
-index b8cf7b78..6e25bdf6 100644
+index 185b872fd..0ed8cb33c 100644
 --- a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/BreakGlass.kt
 +++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/BreakGlass.kt
-@@ -122,11 +122,8 @@ class BreakGlass(private val changes: Changes, private val revisions: Revisions)
+@@ -126,11 +126,8 @@ class BreakGlass(private val changes: Changes, private val revisions: Revisions)
          val operations = listOf(Operation.RemoveBinding(binding))
          changes.authority.authorize(operator, SnapshotKey.Platform, operations, ProvenanceKind.BREAK_GLASS)
          var attempt = stalled(operator, binding, reason)?.let(::Attempt) ?: run {
@@ -14,7 +13,7 @@ index b8cf7b78..6e25bdf6 100644
 +            revisions.head(SnapshotKey.Platform)?.document?.bindings?.firstOrNull { it.id == binding }
                  ?: throw ChangeRejectedException(NOT_FOUND, "the platform document has no binding [${binding.value}]")
 -            if (!existing.breakGlass) {
--                throw ChangeRejectedException(CONFLICT, "binding [${binding.value}] is not a break-glass binding")
+-                throw ChangeRejectedException.conflict(ConflictKind.EXISTS, "binding [${binding.value}] is not a break-glass binding")
 -            }
              revokeOnce(operator, operations, reason)
          }
