@@ -31,7 +31,7 @@ other CoSec module it finds on the classpath. Add each integration as a dependen
 | Spring Cloud Gateway | `cosec-gateway` | |
 | Redis: policy snapshot, revocation, API keys, cluster-wide rate limits, shadow | `cosec-cocache` | `org.springframework.boot:spring-boot-data-redis`, `me.ahoo.cocache:cocache-spring-boot-starter` |
 | Control plane (change, simulate, explain, publish) | `cosec-control` | `cosec-cocache` |
-| Code that calls the control plane (`ControlService`, `ControlCaller`) | `cosec-control-sdk` (brought by `cosec-control`, the in-process implementation) | |
+| Code that calls the control plane (`ControlService`, `ControlCaller`, the typed `ControlClient`) | `cosec-control-sdk` (brought by `cosec-control`, the in-process implementation) | |
 | Social OAuth login | `cosec-social` | |
 | IP region attributes (`ext.ip2region.*`) | `cosec-ip2region` | |
 | Ids from CosId 5 | `cosec-cosid` | `me.ahoo.cosid:cosid-spring-boot-starter` 5.x |
@@ -319,7 +319,8 @@ it) or `only-trusted-callers-can-reach=true` (services call it directly, as the 
 that the network makes it so. The network is the boundary: a workload that reaches the host is whoever it claims, a
 platform administrator included. A service that was in `gateway` mode and now needs the control plane moves to `enforce`
 with `caller=forwarded-identity`. From code in the same process, `ControlService` with `ControlCaller.of(securityContext)`
-or `ControlCaller.service(...)`; `cosec.control.http.enabled=false` serves no routes. Every instance with the control plane runs
+or `ControlCaller.service(...)`, or the typed `ControlClient(service)` over it (`proposeAndPublishWithoutShadow` for a
+service that writes what it already decided: it needs `cosec:skip-shadow`); `cosec.control.http.enabled=false` serves no routes. Every instance with the control plane runs
 its maintenance passes under their leases; no property turns them off. The service API has no client class of its own yet: a service writes `CoSec-Identity` with
 `IdentityHeader.write` (`cosec-document`).
 

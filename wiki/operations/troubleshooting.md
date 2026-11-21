@@ -548,6 +548,16 @@ attribute whose provider runs on the control host but not on that instance. Attr
 declare, must be the same on every data-plane instance and on the control host. Deploy the provider everywhere before such a
 change is shadowed ([Testing changes](../policies/testing.md)).
 
+## The typed control client does not read a document {#the-typed-control-client-does-not-read-a-document}
+
+`ControlClient` throws `SnapshotFormatException` with `The control plane's answer does not read: a <entry> has members
+this version does not know`: the control-plane host is a later version than the `cosec-control-sdk` the application
+runs, and the document holds a member only the later one knows. The typed client refuses it rather than drop it, since
+an `:apply` of what it read would remove that member from the document. Upgrade `cosec-control-sdk` to the host's
+version; until then, read that document through `ControlService`, as JSON ([Changing policies from your
+code](../integration/checks.md#changing-policies-from-your-code)). A value of a closed set the client does not know
+(a change state, a conflict) is not this error: it reads as unknown, with its text.
+
 ## Startup failures
 
 ### Startup fails on an unknown property
