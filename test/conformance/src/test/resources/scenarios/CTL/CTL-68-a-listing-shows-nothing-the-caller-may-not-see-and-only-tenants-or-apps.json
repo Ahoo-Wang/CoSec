@@ -1,0 +1,111 @@
+{
+  "rules": [
+    "CTL-68"
+  ],
+  "polarity": "negative",
+  "level": "control",
+  "description": "eve may read no document: her page is empty, and tells nothing of the documents left out. A listing of the platform document's kind is refused 400: the listing is of tenant or app documents only.",
+  "documents": {
+    "platform": {
+      "bindings": [
+        {
+          "id": "plato",
+          "subject": {
+            "principal": "plato",
+            "tenant": "(platform)"
+          },
+          "app": "cosec-control",
+          "space": "",
+          "policy": "cosec:platform-admin"
+        }
+      ]
+    },
+    "tenants": {
+      "acme": {
+        "policies": [
+          {
+            "id": "orders",
+            "statements": [
+              {
+                "effect": "allow",
+                "action": "order:*",
+                "resource": "order/**"
+              }
+            ]
+          }
+        ],
+        "bindings": [
+          {
+            "id": "admins",
+            "subject": {
+              "role": "admin"
+            },
+            "app": "cosec-control",
+            "space": "",
+            "policy": "cosec:tenant-admin"
+          },
+          {
+            "id": "ops",
+            "subject": {
+              "role": "ops"
+            },
+            "app": "order",
+            "space": "*",
+            "policy": "orders"
+          }
+        ]
+      },
+      "globex": {
+        "policies": [
+          {
+            "id": "orders",
+            "statements": [
+              {
+                "effect": "allow",
+                "action": "order:read",
+                "resource": "order/**"
+              }
+            ]
+          }
+        ]
+      }
+    }
+  },
+  "operators": {
+    "alice": {
+      "tenant": "acme",
+      "roles": [
+        "admin",
+        "ops@team-a"
+      ]
+    },
+    "eve": {
+      "tenant": "acme"
+    },
+    "plato": {
+      "tenant": "(platform)"
+    }
+  },
+  "steps": [
+    {
+      "documents": {
+        "by": "eve",
+        "kind": "tenant"
+      }
+    },
+    {
+      "documents": {
+        "by": "plato",
+        "kind": "platform"
+      }
+    }
+  ],
+  "expect": {
+    "steps": [
+      "documents none",
+      "refused 400"
+    ],
+    "errors": {},
+    "heads": {}
+  }
+}
