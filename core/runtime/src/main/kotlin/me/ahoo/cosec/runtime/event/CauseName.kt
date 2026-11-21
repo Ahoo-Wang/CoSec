@@ -39,6 +39,7 @@ enum class CauseName(val wire: String) {
     RATE_LIMITER_UNAVAILABLE("RateLimiterUnavailable"),
     ;
 
+    @InternalCoSecApi
     companion object {
         fun of(cause: Cause): CauseName = when (cause) {
             is Cause.MatcherFailed -> MATCHER_FAILED
