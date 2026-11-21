@@ -816,7 +816,8 @@
         "control:ChangeOriginTest#a change records how its author was identified, and each event how its step's operator was",
         "control:ChangeOriginTest#an origin is stored with its change and written with its event, with the members it has",
         "spring-boot:ForwardedIdentityCallerTest#the operator of a request the identity gate decided is recorded as asserted, with the credential stated and the peer",
-        "spring-boot:ControlServicePortTest#the peer of a control request is the connection's, beneath the forwarded header handling"
+        "spring-boot:ControlServicePortTest#the peer of a control request is the connection's, beneath the forwarded header handling",
+        "control:ControlServiceTest#a call through the facade is recorded as made in process - CTL-57, CTL-65"
       ]
     },
     {
@@ -833,7 +834,8 @@
         "spring-boot:ControlServicePortTest#the service port listens apart, serves nothing but the control API, and closes its connections when it stops",
         "spring-boot:ControlServicePortTest#a service port beside the application's, the management port or a disabled control API is refused",
         "spring-boot:ControlServicePortTest#a service port with no WebFlux server to serve it fails startup naming what to do",
-        "spring-boot:ControlServicePortTest#cosec control http enabled false serves no control route, and the control plane stays for what embeds it"
+        "spring-boot:ControlServicePortTest#cosec control http enabled false serves no control route, and the control plane stays for what embeds it",
+        "control:ControlServiceTest#no route outside the narrow set is reachable through the facade, nor any on the platform document - CTL-65"
       ]
     },
     {
@@ -863,7 +865,7 @@
     {
       "id": "CTL-65",
       "source": "control-server-design.md §0.10, PR 3 (the control-plane SDK)",
-      "statement": "Every call through the control plane's facade is decided by the pipeline for the principal its ControlCaller states, by the policies, and recorded as that principal's step, by the route's own code path, with no path around it: the same call through the route and through the facade answers the same and records the same; a route outside the facade's narrow set, and any route on the platform document, is not reachable through it; and ControlCaller.of refuses a security context CoSec's gate or pipeline did not make (as PIP-29).",
+      "statement": "Every call through the control plane's facade is decided by the pipeline for the principal its ControlCaller states, by the policies, and recorded as that principal's step, by the route's own code path, with no path around it: the same call through the route and through the facade answers the same and records the same; the facade reaches exactly the routes the service profile serves (CTL-58), one definition for the facade and the service port, and no route on the platform document or of a platform document's change; a call through it is recorded via.method: in-process (CTL-57); and ControlCaller.of refuses a security context CoSec's gate or pipeline did not make (as PIP-29).",
       "level": "control",
       "guards": [
         "control:ControlServiceTest#each call of the narrow set answers and records through the facade as through its route - CTL-65",
@@ -871,7 +873,9 @@
         "control:ControlServiceTest#no route outside the narrow set is reachable through the facade, nor any on the platform document - CTL-65",
         "control:ControlServiceTest#a caller is taken only from a context CoSec made - CTL-65",
         "control:ControlServiceTest#a service caller acts as its platform principal, admitted as the gate admits a forwarded identity - CTL-65",
-        "runtime:IdentityGateTest#admit holds an identity to what a forwarded header is held to"
+        "runtime:IdentityGateTest#admit holds an identity to what a forwarded header is held to",
+        "control:ControlServiceTest#the facade reaches exactly the routes the service port serves, route by route - CTL-65",
+        "control:ControlServiceTest#a call through the facade is recorded as made in process - CTL-57, CTL-65"
       ],
       "pending": null
     }

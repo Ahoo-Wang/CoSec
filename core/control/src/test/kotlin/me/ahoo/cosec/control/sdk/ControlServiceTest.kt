@@ -209,7 +209,12 @@ class ControlServiceTest {
         side.route("GET", "/changes/$platformChange", security = plato).assert().startsWith("404")
         side.route("POST", "/changes/$platformChange:publish", body = "{}", security = plato).assert().startsWith("404")
         side.route("GET", "/changes", mapOf("document" to "platform"), security = plato).assert().startsWith("404")
-        side.route("GET", "/changes/$platformChange", security = plato, http = side.operators).assert().startsWith("200")
+        side.route(
+            "GET",
+            "/changes/$platformChange",
+            security = plato,
+            http = side.operators
+        ).assert().startsWith("200")
     }
 
     @Test

@@ -362,7 +362,9 @@ event's JSON writes it: `asserted` (the host believed the identity the caller st
 itself), `via` (the credential's `method`, its id as `credential` and the request's id as `request`, never its value)
 and `peer` (the address of the connection the request arrived on, read from the Reactor Netty channel beneath any
 forwarded-header handling, so that a caller cannot state it as it states its client address; a host that cannot read it
-that way, any but Reactor Netty, records none). A step no request drives, a maintenance pass for one, has none; the stored
+that way, any but Reactor Netty, records none). A step made through the control plane's facade, in the host's own process
+([Changing policies from your code](../integration/checks.md#changing-policies-from-your-code)), is `via.method:
+in-process`, with the credential's id when there is one and no `peer`, since no connection carried it. A step no request drives, a maintenance pass for one, has none; the stored
 change records the origin of its author, and the log line ends with `origin=...` when there is one.
 
 - **The default listener** logs each event at `INFO` to the logger `me.ahoo.cosec.changelog`, as
