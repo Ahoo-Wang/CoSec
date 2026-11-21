@@ -1,0 +1,17 @@
+# Rule: CTL-76
+# Mutant: a document entry with a member this version does not know reads, the member dropped, so the apply of what was read would drop it
+# Tests: :control-sdk:test --tests me.ahoo.cosec.control.sdk.TypedWireTest
+
+diff --git a/core/control-sdk/src/main/kotlin/me/ahoo/cosec/control/sdk/WireRead.kt b/core/control-sdk/src/main/kotlin/me/ahoo/cosec/control/sdk/WireRead.kt
+index b0424b3ee..c14838673 100644
+--- a/core/control-sdk/src/main/kotlin/me/ahoo/cosec/control/sdk/WireRead.kt
++++ b/core/control-sdk/src/main/kotlin/me/ahoo/cosec/control/sdk/WireRead.kt
+@@ -78,7 +78,7 @@ internal object WireRead {
+     fun JsonNode.only(entry: String, members: Set<String>) {
+         if (!isObject) throw format("a $entry is not an object")
+         val unknown = properties().map { it.key }.filterNot { it in members }
+-        if (unknown.isNotEmpty()) {
++        if (unknown.isNotEmpty() && false) {
+             throw format(
+                 "a $entry has members this version does not know (${unknown.size}); read it with a later version"
+             )
