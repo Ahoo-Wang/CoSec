@@ -296,7 +296,7 @@ Every fact has one home; update it in the same PR. Every English page in `wiki/`
 |---|---|
 | Document format: a field, condition operator, attribute or pattern syntax | the codec and compiler in `cosec-document` (`document/`), the format descriptor (`PolicyDocumentFormats`) and `generateSchemas`, `wiki/policies/language.md`, `skills/cosec-policy-author` |
 | App catalogs, role bindings, space scoping | `wiki/policies/role-permissions.md` |
-| `cosec.*` property or default | `wiki/operations/configuration.md` |
+| `cosec.*` property or default | `wiki/operations/configuration.md`; a new property says in its PR why the value cannot be computed (Conventions) |
 | Status codes, adapters, security-context access, request attributes | `wiki/integration/web.md` |
 | Checking permissions in code, explaining decisions | `wiki/integration/checks.md` |
 | What a test of an application uses: the kit's contexts and identity headers, the kit's test bindings | `wiki/policies/testing.md#testing-your-application`, whose samples are the kit's `TestingYourWebFluxApplicationTest` and `TestingYourWebMvcApplicationTest`; `skills/cosec-integration` |
@@ -339,6 +339,12 @@ lives) are in [`wiki/AGENTS.md`](wiki/AGENTS.md).
 - Kotlin with `-Xjsr305=strict`. Data-plane SPIs are `suspend` functions; `Mono<T>` appears only at the WebFlux and
   Gateway bridges and in their convenience extensions.
 - Comments explain *why*, only where it isn't obvious.
+- What can be computed is not configured: a property is a burden on every operator. Before adding a `cosec.*` property
+  for a size, a capacity, an interval or a threshold, derive the value from what the process can observe (the heap it
+  has, the measured size of what it holds, whether a consumer makes progress, an interval that already exists, what the
+  store reports). A property is for what only the operator knows: a deployment choice, a trust statement, an address.
+  A derived value is visible (a startup line or a meter says what was derived and from what), and a PR that adds a
+  property says why the value cannot be computed.
 - A value an application reads and never makes (`Decision` with its `Cause` and `Obligation` cases, `ViewVersion`,
   `RateLimitResult`, `VerifiedToken`, `ApiKey`) is a plain final class with `equals`, `hashCode` and `toString`
   written out: no `copy`, no `componentN`, so a field can be added without breaking a caller (RFC 0010 C4). A public
