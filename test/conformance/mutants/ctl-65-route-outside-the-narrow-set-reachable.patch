@@ -1,12 +1,12 @@
 # Rule: CTL-65
 # Mutant: the facade dispatches through the operators' profile instead of the service profile: a route outside the narrow set, the platform document's among them, is reachable through it
-# Tests: :control:test --tests me.ahoo.cosec.control.sdk.ControlServiceTest
+# Tests: :control:test --tests me.ahoo.cosec.control.local.ControlServiceTest
 
-diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/sdk/LocalControlService.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/sdk/LocalControlService.kt
-index 0505b7a6e..8add2b909 100644
---- a/core/control/src/main/kotlin/me/ahoo/cosec/control/sdk/LocalControlService.kt
-+++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/sdk/LocalControlService.kt
-@@ -60,7 +60,7 @@ class LocalControlService(
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/local/LocalControlService.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/local/LocalControlService.kt
+index 7c59a9892..e6a4afeb5 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/local/LocalControlService.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/local/LocalControlService.kt
+@@ -63,7 +63,7 @@ class LocalControlService(
      private val clock: Clock = Clock.systemUTC(),
      private val ids: IdGenerator = RandomIdGenerator,
  ) : ControlService {
