@@ -3,7 +3,7 @@
 # Tests: :spring-boot:test --tests me.ahoo.cosec.spring.boot.control.ControlServicePortTest
 
 diff --git a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/control/ServicePortFilter.kt b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/control/ServicePortFilter.kt
-index a98196c4c..79f5f2728 100644
+index a98196c4c..b1620aeb5 100644
 --- a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/control/ServicePortFilter.kt
 +++ b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/control/ServicePortFilter.kt
 @@ -38,7 +38,7 @@ internal class ServicePortFilter(
@@ -11,7 +11,7 @@ index a98196c4c..79f5f2728 100644
          }
          val path = exchange.request.path.pathWithinApplication().value()
 -        if (path == basePath || path.startsWith("$basePath/")) {
-+        if (true) {
++        if (path == basePath || path.startsWith("$basePath/") || true) {
              return chain.filter(exchange)
          }
          exchange.response.statusCode = HttpStatus.NOT_FOUND
