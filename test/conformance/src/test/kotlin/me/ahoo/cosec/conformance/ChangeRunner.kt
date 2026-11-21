@@ -651,10 +651,9 @@ object ChangeRunner : ScenarioRunner {
                 changes.get(ChangeId(change)).shadow?.window
                     ?: throw ScenarioFormatException("An acknowledged change is staged: $change")
             }
+            val instance = argument.required("instance").text()
             val shadows = argument.get("shadows")?.bool() ?: true
-            reports.write(
-                InstanceStatus(argument.required("instance").text(), clock.now, documents, windows = windows, shadows = shadows)
-            )
+            reports.write(InstanceStatus(instance, clock.now, documents, windows = windows, shadows = shadows))
             return "status"
         }
 
