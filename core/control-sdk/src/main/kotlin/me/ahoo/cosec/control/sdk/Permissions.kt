@@ -20,7 +20,9 @@ import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 sealed class Permissions {
     /** Every permission of the app's catalog: `"*"`. */
     @ExperimentalCoSecApi
-    data object All : Permissions()
+    object All : Permissions() {
+        override fun toString(): String = "All"
+    }
 
     /** The catalog permissions [ids]. */
     @ExperimentalCoSecApi

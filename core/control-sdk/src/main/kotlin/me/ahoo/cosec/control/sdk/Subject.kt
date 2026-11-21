@@ -23,7 +23,9 @@ import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 sealed class Subject {
     /** Every caller, signed in or not: `"*"`. */
     @ExperimentalCoSecApi
-    data object Anyone : Subject()
+    object Anyone : Subject() {
+        override fun toString(): String = "Anyone"
+    }
 
     /** One principal: `{"principal": id}`. */
     @ExperimentalCoSecApi
