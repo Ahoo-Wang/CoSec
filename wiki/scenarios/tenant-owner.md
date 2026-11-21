@@ -79,4 +79,22 @@ So that the owner's reach stays what you intend:
   match the control plane's `cosec:` actions as well;
 - keep `cosec:approve` and the platform document with the `(platform)` tenant.
 
+## With thousands of tenants: one role, defined once {#one-role-defined-once}
+
+Binding `owner` in each tenant's document, as above, is a grant per tenant, and a grant written by a principal of the
+platform tenant in a tenant's document waits for a person to approve it. With ten thousand tenants nobody approves ten
+thousand bindings. So grant nothing per tenant: **define the role once, in the control plane's own app document**, and put a
+person in it by **membership** (the role in their token, or from your `MembershipProvider`), not by a binding in any
+tenant's document. The people who run the platform approve that one change. Onboarding a tenant is then the identity system's
+membership plus a document that grants no one anything, which the IAM creates as its own principal with no approval.
+
+<<< @/examples/control-tenant-admin/documents/apps/cosec-control.json [documents/apps/cosec-control.json]
+
+The permission is a hand-written policy that names the member's own tenant: its path variable `{t}` is compared with
+`subject.tenant`, so the policy itself grants no other tenant's document. The control plane also refuses, before it reads any
+policy, a tenant's principal that acts on another tenant's document; the policy is the first line and that rule the second.
+The scenarios of [`wiki/examples/control-tenant-admin`](https://github.com/Ahoo-Wang/CoSec/tree/main/wiki/examples/control-tenant-admin/scenarios)
+run on every build; the system test onboards a tenant this way, with the IAM over the control host's service port and with the
+SDK in process.
+
 **Next:** keep CoSec's roles in step with an identity system, in [Roles from an external source](./external-source.md).
