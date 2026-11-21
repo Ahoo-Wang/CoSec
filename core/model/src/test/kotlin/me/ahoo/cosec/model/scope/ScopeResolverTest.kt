@@ -233,7 +233,9 @@ class ScopeResolverTest {
         // A space no principal can be a member of (the wildcard, a reserved one) is no exception to the order (SCP-8).
         for (space in listOf("*", "${ScopeResolver.RESERVED_SPACE_PREFIX}default")) {
             rejectedFor(ScopeResolver.resolve(credential("billing"), space, HostScope(AppId("order"))))
-                .assert().describedAs("space [$space] with another app").isEqualTo(ScopeResolution.Rejected.Reason.APP_MISMATCH)
+                .assert().describedAs(
+                    "space [$space] with another app"
+                ).isEqualTo(ScopeResolution.Rejected.Reason.APP_MISMATCH)
             rejectedFor(ScopeResolver.resolve(credential("a:b"), space, noHost))
                 .assert().describedAs("space [$space] with an app that is no app id")
                 .isEqualTo(ScopeResolution.Rejected.Reason.APP_MISMATCH)
