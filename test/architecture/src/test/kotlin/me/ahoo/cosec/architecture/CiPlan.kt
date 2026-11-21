@@ -16,13 +16,23 @@ package me.ahoo.cosec.architecture
 import me.ahoo.test.asserts.assert
 import tools.jackson.databind.JsonNode
 import tools.jackson.databind.json.JsonMapper
+import java.io.File
+import java.nio.file.Path
 import java.util.concurrent.TimeUnit
+import kotlin.io.path.isExecutable
+import kotlin.io.path.isRegularFile
 
 /** The plan CI runs, from the script itself, which also fails when the groups and `codecov.yml` disagree. */
 object CiPlan {
     /** The plan of a push: every group, and the project graph the script reads from the build scripts. */
     val plan: JsonNode by lazy {
-        val process = ProcessBuilder("python3", "-I", "scripts/ci/plan.py", "--root", Projects.root.toString())
+        val process = ProcessBuilder(
+            python().toString(),
+            "-I",
+            "scripts/ci/plan.py",
+            "--root",
+            Projects.root.toString()
+        )
             .directory(Projects.root.toFile())
             .redirectError(ProcessBuilder.Redirect.INHERIT)
             .start()
@@ -31,4 +41,11 @@ object CiPlan {
         process.exitValue().assert().describedAs(output).isZero()
         JsonMapper.builder().build().readTree(output)
     }
+
+    /** The interpreter as an absolute path, found on PATH once: a command named by a relative path is whatever the directory has. */
+    private fun python(): Path = System.getenv("PATH").orEmpty().split(File.pathSeparatorChar)
+        .filter { it.isNotBlank() }
+        .map { Path.of(it).toAbsolutePath().resolve("python3") }
+        .firstOrNull { it.isRegularFile() && it.isExecutable() }
+        ?: error("python3 is not on PATH: CI's plan is a Python script")
 }
