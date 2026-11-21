@@ -120,9 +120,10 @@ Read [`wiki/architecture/overview.md`](wiki/architecture/overview.md) before tou
 the adapters, snapshots or the control plane. The parts that take several files to see:
 
 - **Layers.** `model ← engine ← document ← runtime ← {edge, extensions, host}`, with `spi` (the ports) between `model`
-  and `document`, `backends` implementing the store ports of `spi` and never depending on `runtime`, and `control` on
-  top of `runtime`. Projects sit in group directories
-  (RFC 0011 §3): `api/` (`annotations`, `api`), `core/` (`model`, `engine`, `spi`, `document`, `runtime`, `control`), `backends/`
+  and `document`, `backends` implementing the store ports of `spi` and never depending on `runtime`, `control` on
+  top of `runtime`, and `control-sdk`, the facade an application calls the control plane through, on `document` and
+  never on `runtime`. Projects sit in group directories
+  (RFC 0011 §3): `api/` (`annotations`, `api`), `core/` (`model`, `engine`, `spi`, `document`, `runtime`, `control`, `control-sdk`), `backends/`
   (`cocache`), `edge/` (`webflux`, `webmvc`, `gateway`, `openapi`), `extensions/` (`jwt`, `social`, `login`,
   `ip2region`, `micrometer`, `opentelemetry`, `cosid`, `kafka`), `host/` (`spring-boot`), `migration/` (`migrate`), `test/` (`testkit`,
   `conformance`, `architecture`, `e2e`, `client-host`, `system-test`, `system-behind`, `system-auth`, `system-enforcer`,
@@ -150,7 +151,7 @@ the adapters, snapshots or the control plane. The parts that take several files 
   `test/architecture` holds the structural rules that scan several modules (RFC 0011 §5): `DependencyRulesTest`
   (declared main dependencies point inwards, with the reviewed exceptions in `DependencyRules.EXCEPTIONS`;
   `annotations`, `api`, `model` and `engine` resolve only the Kotlin standard library, `spi` adds coroutines and `document` Jackson;
-  `runtime` and `control` never resolve Reactor, Spring, the Servlet API or a Redis client; no backend declares
+  `runtime`, `control` and `control-sdk` never resolve Reactor, Spring, the Servlet API or a Redis client; no backend declares
   `runtime` or resolves it at run time (the compile classpath is left out: `cocache` implements `ControlStore` through
   `compileOnlyApi(:control)`), and neither does `openapi`, a generator of documents; only `cosid` and the
   starter bring CosId, since CoSec owns its ids through `IdGenerator`), `SourceRulesTest`
@@ -221,6 +222,13 @@ the adapters, snapshots or the control plane. The parts that take several files 
   - `cosec-control` (`core/control/`) is the control plane: the only writer of policy documents. `ControlBoundaryTest`
     fails when one of its classes is outside `me.ahoo.cosec.control`, references Spring, `reactor.*`, the coroutine
     or Reactive Streams bridges or a Redis client, or calls `runBlocking`, `Dispatchers.IO` or `GlobalScope`.
+    It implements the facade in process (`LocalControlService`, `control/local/`, `@InternalCoSecApi`).
+  - `cosec-control-sdk` (`core/control-sdk/`, `me.ahoo.cosec.control.sdk`) is the control plane as an application
+    calls it (`CTL-65`): `ControlService`, one interface with an implementation in process (`cosec-control`) and one
+    over HTTP to a control-plane host's service port, `ControlCaller` and `ControlRefusedException`. It depends on
+    `api`, `spi` and `document`, never on `runtime` or `control` (`DependencyRules.DOCUMENT_ONLY`): an application
+    that only calls a host brings neither. A caller states who acts and is never trusted for what it may do: every
+    call is decided by the policies and recorded, by the route's own code path.
   - Every other module adapts one technology: `cosec-webflux`, `cosec-webmvc`, `cosec-gateway` (HTTP bridges),
     `cosec-cocache` (Redis: snapshots, control store, shadow reports, tokens, memberships, API keys, rate limits; on
     `cosec-spi` and `cosec-document`, never `cosec-runtime`),

@@ -21,8 +21,8 @@ import me.ahoo.cosec.control.authz.ControlActions
 import me.ahoo.cosec.control.authz.Operator
 import me.ahoo.cosec.control.change.ChangeId
 import me.ahoo.cosec.control.change.ChangeRejectedException
+import me.ahoo.cosec.control.change.ConflictKind
 import me.ahoo.cosec.control.change.ControlStatus.BAD_REQUEST
-import me.ahoo.cosec.control.change.ControlStatus.CONFLICT
 import me.ahoo.cosec.control.lifecycle.ChangeAuthority
 import me.ahoo.cosec.control.lifecycle.Changes
 import me.ahoo.cosec.engine.ViewVersion
@@ -60,7 +60,7 @@ internal class DecisionQueries(
                     "change ${id.value} is of [${change.key}], which this request does not read"
                 )
             }
-            val document = changes.candidateOf(id) ?: throw ChangeRejectedException(CONFLICT, "change ${id.value} no longer applies")
+            val document = changes.candidateOf(id) ?: throw ChangeRejectedException.conflict(ConflictKind.STATE, "change ${id.value} no longer applies")
             // A tenant change may make the request read another app document, or none (RC1-17): as once it publishes.
             val fetched = if (change.key == tenant) simulator.keys(scope, document) else keys
             // The candidate is no stored content: compiled once, here; the heads come from the cache.

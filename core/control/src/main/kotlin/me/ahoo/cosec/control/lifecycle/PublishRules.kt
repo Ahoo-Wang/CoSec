@@ -23,7 +23,7 @@ import me.ahoo.cosec.control.authz.Operator
 import me.ahoo.cosec.control.change.ChangeRejectedException
 import me.ahoo.cosec.control.change.ChangeRequest
 import me.ahoo.cosec.control.change.ChangeState
-import me.ahoo.cosec.control.change.ControlStatus.CONFLICT
+import me.ahoo.cosec.control.change.ConflictKind
 import me.ahoo.cosec.control.change.ControlStatus.PRECONDITION_REQUIRED
 import me.ahoo.cosec.control.change.ControlStatus.UNAVAILABLE
 import me.ahoo.cosec.control.change.ControlStatus.UNPROCESSABLE
@@ -66,7 +66,10 @@ internal object PublishRules {
     /** That [change] is in one of [allowed]: a 409 otherwise. */
     fun requireState(change: ChangeRequest, allowed: Set<ChangeState>) {
         if (change.state !in allowed) {
-            throw ChangeRejectedException(CONFLICT, "change ${change.id.value} is ${change.state}, not one of $allowed")
+            throw ChangeRejectedException.conflict(
+                ConflictKind.STATE,
+                "change ${change.id.value} is ${change.state}, not one of $allowed"
+            )
         }
     }
 
@@ -157,14 +160,23 @@ internal object PublishRules {
      */
     fun acknowledged(change: ChangeRequest, ack: ShadowAck?) {
         val state = change.shadow ?: return
-        val problem = when {
-            state.closed == null -> CONFLICT to "the window of change ${change.id.value} is open"
-            state.closed.blocked -> CONFLICT to "an instance could not compile or evaluate the candidate of change ${change.id.value}"
-            state.closed.needsAck && !matches(ack, state.window, state.closed) ->
-                PRECONDITION_REQUIRED to "publishing change ${change.id.value} needs an acknowledgement of window ${state.window}: ${state.closed.counts}"
+        val refusal = when {
+            state.closed == null ->
+                ChangeRejectedException.conflict(
+                    ConflictKind.WINDOW_OPEN,
+                    "the window of change ${change.id.value} is open"
+                )
+            state.closed.blocked -> ChangeRejectedException.conflict(
+                ConflictKind.WINDOW_BLOCKED,
+                "an instance could not compile or evaluate the candidate of change ${change.id.value}",
+            )
+            state.closed.needsAck && !matches(ack, state.window, state.closed) -> ChangeRejectedException(
+                PRECONDITION_REQUIRED,
+                "publishing change ${change.id.value} needs an acknowledgement of window ${state.window}: ${state.closed.counts}",
+            )
             else -> null
         }
-        problem?.let { (status, message) -> throw ChangeRejectedException(status, message) }
+        refusal?.let { throw it }
     }
 
     /**

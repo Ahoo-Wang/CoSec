@@ -1,0 +1,165 @@
+{
+  "rules": [
+    "CTL-80"
+  ],
+  "polarity": "negative",
+  "level": "control",
+  "description": "A refusal of another status names no conflict: another tenant's principal is answered 404 at every step of a platform change, with no conflict member, as for a change that does not exist.",
+  "documents": {
+    "platform": {
+      "policies": [
+        {
+          "id": "writer",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": [
+                "cosec:read",
+                "cosec:write",
+                "cosec:grant",
+                "cosec:publish"
+              ],
+              "resource": [
+                "doc/**",
+                "scope/**"
+              ]
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "plato",
+          "subject": {
+            "principal": "plato",
+            "tenant": "(platform)"
+          },
+          "app": "cosec-control",
+          "space": "",
+          "policy": "cosec:platform-admin"
+        },
+        {
+          "id": "walt",
+          "subject": {
+            "principal": "walt",
+            "tenant": "(platform)"
+          },
+          "app": "cosec-control",
+          "space": "",
+          "policy": "writer"
+        },
+        {
+          "id": "gil",
+          "subject": {
+            "principal": "gil",
+            "tenant": "globex"
+          },
+          "app": "cosec-control",
+          "space": "",
+          "policy": "cosec:platform-admin"
+        }
+      ]
+    }
+  },
+  "operators": {
+    "plato": {
+      "tenant": "(platform)"
+    },
+    "walt": {
+      "tenant": "(platform)"
+    },
+    "gil": {
+      "tenant": "globex"
+    }
+  },
+  "steps": [
+    {
+      "propose": {
+        "change": "c1",
+        "by": "plato",
+        "document": "platform",
+        "operations": [
+          {
+            "putBinding": {
+              "id": "readers",
+              "subject": {
+                "principal": "walt",
+                "tenant": "(platform)"
+              },
+              "app": "cosec-control",
+              "space": "",
+              "policy": "writer"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "approve": {
+        "change": "c1",
+        "by": "gil"
+      }
+    },
+    {
+      "reject": {
+        "change": "c1",
+        "by": "gil"
+      }
+    },
+    {
+      "stage": {
+        "change": "c1",
+        "by": "gil"
+      }
+    },
+    {
+      "skipShadow": {
+        "change": "c1",
+        "by": "gil"
+      }
+    },
+    {
+      "publish": {
+        "change": "c1",
+        "by": "gil"
+      }
+    },
+    {
+      "rebase": {
+        "change": "c1",
+        "by": "gil"
+      }
+    },
+    {
+      "abandon": {
+        "change": "c1",
+        "by": "gil"
+      }
+    },
+    {
+      "approve": {
+        "change": "c9",
+        "by": "gil"
+      }
+    }
+  ],
+  "expect": {
+    "steps": [
+      "CHECKED",
+      "refused 404",
+      "refused 404",
+      "refused 404",
+      "refused 404",
+      "refused 404",
+      "refused 404",
+      "refused 404",
+      "refused 404"
+    ],
+    "errors": {
+      "c1": []
+    },
+    "heads": {
+      "platform": 1
+    }
+  }
+}

@@ -1,12 +1,11 @@
 # Rule: BRK-12
 # Mutant: a break-glass request reads the platform document before it is authorized, so a refusal tells whether a binding exists
 # Tests: :control:test --tests me.ahoo.cosec.control.change.BreakGlassAuthorityTest :conformance:test
-
 diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/BreakGlass.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/BreakGlass.kt
-index 3c3037ad..6ea27084 100644
+index 185b872fd..983d5f9c7 100644
 --- a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/BreakGlass.kt
 +++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/BreakGlass.kt
-@@ -75,12 +75,6 @@ class BreakGlass(private val changes: Changes, private val revisions: Revisions)
+@@ -78,12 +78,6 @@ class BreakGlass(private val changes: Changes, private val revisions: Revisions)
              expiresAt = expiresAt.toEpochMilli(),
              breakGlass = true,
          )
@@ -17,5 +16,5 @@ index 3c3037ad..6ea27084 100644
 -            ProvenanceKind.BREAK_GLASS
 -        )
          if (revisions.head(SnapshotKey.Platform)?.document?.bindings?.any { it.id == binding } == true) {
-             throw ChangeRejectedException(CONFLICT, "the platform document already has a binding [${binding.value}]")
-         }
+             throw ChangeRejectedException.conflict(
+                 ConflictKind.EXISTS,
