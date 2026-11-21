@@ -213,7 +213,15 @@ flowchart LR
 
 `GET /documents?kind=tenant`（或 `kind=app`）列出该类型有哪些文档：`{"documents": [{"key": "tenant:acme"}, ...], "next": "tenant:acme"}`，按 key 排序。`limit` 为 1 到 200（默认 20），`after` 是上一页的 `next`，最后一页没有 `next`。它读取控制存储所索引的文档清单，从不读取文档本身，所以首次发布未完成的文档也可能被列出，读取它则返回 `404`。
 
-一页只显示你能看到的文档：你自己租户的（平台主体为任意租户的），并且你对平台文档持有 `cosec:read`（可列出全部），或对该文档持有它。列表不透露它省略了什么：一页只含你可见的文档，只有后面还有你可见的文档时才给出 `next`（`CTL-68`）。其他 `kind` 返回 `400`，存储无法应答时返回 `503`。服务端口同样提供它，控制面门面也是（[`ControlService.documents`](../integration/checks.md#changing-policies-from-your-code)）。
+谁可以列出（`CTL-68`）：
+- **该类型的全部文档：** 对该层持有 `cosec:read` 的调用方，`kind=tenant` 为 `doc/tenant`，`kind=app` 为 `doc/app`。
+  - 这项读取权限只让你知道有哪些文档，不涉及任何文档的内容。它不授予任何文档的读取（包括平台文档），任何文档的读取也不授予它。
+  - `cosec:platform-admin` 通过 `doc/**` 授予它。针对 `doc/tenant/**` 的策略同样授予它（该模式的 `**` 覆盖该层）：能读取每个租户文档的人，列出它们也无妨。
+  - 只给服务主体列出权限：在 app `cosec-control` 中给它绑定一条带有 `{"effect": "allow", "action": "cosec:read", "resource": "doc/tenant"}` 语句的策略。
+- **只看到自己的文档：** 请求 `kind=tenant` 且可以读取自己租户文档的租户主体（`cosec:tenant-admin`、`cosec:tenant-viewer`）。
+- **其他调用方**得到不带详情的 `403`，与任何路由拒绝策略不允许的调用方一样：对每个这样的调用方答案相同，不透露存在哪些文档。
+
+其他 `kind` 返回 `400`，存储无法应答时返回 `503`。服务端口同样提供它，控制面门面也是（[`ControlService.documents`](../integration/checks.md#changing-policies-from-your-code)）。
 
 ### 查找未完成的变更 {#finding-open-changes}
 

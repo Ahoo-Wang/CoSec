@@ -315,10 +315,21 @@ its file disagree, so a value changes only in a release that says so.
 `next` of the page before, absent after the last page. It reads the control store's list of the documents it indexes,
 never a document, so a document whose first publish never completed may be listed, and reading it is a `404`.
 
-A page shows a document only if you could see it: one of your own tenant's (any for a platform principal), and you hold
-`cosec:read` on the platform document, which lets you list them all, or on that document. What it leaves out it does
-not tell: a page holds what you may see, and `next` is there only when more of it follows (`CTL-68`). Any other `kind`
-is a `400`, and a store that cannot answer is a `503`. The service port serves it too, and so does the control plane's
+Who may list (`CTL-68`):
+- **Every document of the kind:** a caller holding `cosec:read` on the layer, `doc/tenant` for `kind=tenant` and
+  `doc/app` for `kind=app`.
+  - That read lets you know which documents exist, and nothing of what any of them holds. It grants no document's
+    read, the platform's included, and no document's read grants it.
+  - `cosec:platform-admin` grants it through `doc/**`. So does a policy on `doc/tenant/**` (the pattern's `**` covers
+    the layer): one who may read every tenant document may as well list them.
+  - To grant a service principal the listing alone, bind it a policy with the statement
+    `{"effect": "allow", "action": "cosec:read", "resource": "doc/tenant"}` in the app `cosec-control`.
+- **Its own document only:** a tenant's principal asking for `kind=tenant` that may read its tenant's document
+  (`cosec:tenant-admin`, `cosec:tenant-viewer`).
+- **Anyone else** is refused `403` without detail, as any route refuses a caller the policies do not permit: the same
+  answer for every such caller, which tells nothing of which documents exist.
+
+Any other `kind` is a `400`, and a store that cannot answer is a `503`. The service port serves it too, and so does the control plane's
 facade ([`ControlService.documents`](../integration/checks.md#changing-policies-from-your-code)).
 
 ### Finding open changes {#finding-open-changes}

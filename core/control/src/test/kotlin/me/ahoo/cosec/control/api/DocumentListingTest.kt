@@ -105,6 +105,25 @@ class DocumentListingTest {
     }
 
     @Test
+    fun `a document list the store cannot read is the store's failure, never an empty page - CTL-68`() = runBlocking<Unit> {
+        val memory = me.ahoo.cosec.control.store.InMemoryControlStore()
+        val failing = object : me.ahoo.cosec.control.store.ControlStore by memory {
+            override suspend fun documents(): Set<me.ahoo.cosec.spi.snapshot.SnapshotKey> =
+                throw me.ahoo.cosec.control.store.ControlStoreException("the document list cannot be read")
+        }
+        val listing = DocumentListing(
+            me.ahoo.cosec.control.store.Revisions(failing),
+            me.ahoo.cosec.control.lifecycle.ChangeAuthority(
+                me.ahoo.cosec.control.change.PERMIT_ALL,
+                revocations = me.ahoo.cosec.spi.token.RevocationReader.NONE,
+            ),
+        )
+        runCatching {
+            listing.list(me.ahoo.cosec.control.change.PLATO, me.ahoo.cosec.model.decision.DocumentKind.TENANT, null, 20)
+        }.exceptionOrNull().assert().isInstanceOf(me.ahoo.cosec.control.store.ControlStoreException::class.java)
+    }
+
+    @Test
     fun `a store that cannot answer is a 503, never an empty page - CTL-68`() {
         fixture.down = true
         list(plato, mapOf("kind" to "tenant")).first.assert().isEqualTo(503)
