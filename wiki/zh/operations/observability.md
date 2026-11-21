@@ -362,6 +362,8 @@ break-glass 等待 broker 的确认（把生产者配置为 `acks=all`）。设�
 | `cosec.control.listener.dropped` | 因队列已满而丢弃的 BEST_EFFORT 事件 |
 | `cosec.control.listener.lost` | REQUIRED 监听器错过的已存储步骤的事件，因队列已满或调用失败：任何一个都应告警 |
 
+`cosec.control.shadow.status.unreadable`（无标签）统计控制面主机读到的、无法解码的实例状态：每个这样的实例在其状态能读取或过期之前，都会挡住所有影子窗口（`CTL-73`），日志会点名它（[故障排查](./troubleshooting.md#shadow-window-waiting-for-an-acknowledgement)）。任何一个都应告警。
+
 ## 日志 {#logs}
 
 | Logger | 记录内容 |

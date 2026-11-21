@@ -488,6 +488,10 @@ Meters, each tagged `listener`:
 | `cosec.control.listener.dropped` | BEST_EFFORT events dropped by a full queue |
 | `cosec.control.listener.lost` | events of stored steps a REQUIRED listener missed, its queue full or its call failed: alert on any |
 
+`cosec.control.shadow.status.unreadable` (no tags) counts the instance statuses a control host read that did not
+decode: each such instance holds every shadow window until its status reads or expires (`CTL-73`), and the log names it
+([Troubleshooting](./troubleshooting.md#shadow-window-waiting-for-an-acknowledgement)). Alert on any.
+
 ## Logs
 
 | Logger | What it logs |

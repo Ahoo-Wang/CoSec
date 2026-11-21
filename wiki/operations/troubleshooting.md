@@ -508,7 +508,9 @@ to start a window with the instances serving now ([Testing changes](../policies/
 
 The control plane logs `Shadow window <w> of change <c> is waiting for the acknowledgement of [<instances>]`, and
 `GET /changes/{id}` names them in `shadow.waitingFor`: the window has its samples, or not yet, but cannot pass while a
-live instance (one with a status in the last minute) does not list it in its status (`CTL-10`).
+live instance (one with a status in the last minute) does not list it in its status (`CTL-10`). An instance cut off
+from Redis for longer than that writes no status: it is neither waited for nor acknowledging, and installs the
+published revision having compared nothing. A host with shadowing off writes no status at all.
 
 - **An instance of an older version** sends no acknowledgements. Finish the rolling upgrade: once the old instances are
   gone, their statuses expire within two minutes and the window no longer waits for them.
@@ -517,6 +519,13 @@ live instance (one with a status in the last minute) does not list it in its sta
   [Storage](./storage.md#redis-keys)).
 - **An instance that started during the window** acknowledges it within a few report intervals, once it has compiled
   the candidate.
+- **An instance whose status does not decode** counts as live and acknowledging nothing (`CTL-73`): the control host
+  logs `The status of instance [<instance>] does not read: it counts as live and acknowledging no shadow window until
+  it reads or expires, at most two minutes after its last write (<why>).` at `WARN`, at most once a minute per
+  instance, and `cosec.control.shadow.status.unreadable` counts each read of it. An instance that stops writing
+  stops holding the windows two minutes later, when its status expires. A later format in `<why>` is a newer version during a rolling
+  upgrade: finish the upgrade of the control hosts, or roll that instance back. Anything else is a corrupt value or a
+  crash-looping instance: stop or fix the instance by its id; its status expires two minutes after its last write.
 
 If **no** instance acknowledges any window (each one's `waitingFor` names every live instance), the instances hold no
 staged list: they log `The staged list cannot be read`, or `<s>:candidate-staged:all` has no `.kept` marker (a store

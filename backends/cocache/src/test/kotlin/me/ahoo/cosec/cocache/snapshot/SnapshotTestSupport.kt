@@ -272,13 +272,22 @@ class DocumentWriter(private val cache: PolicySnapshotCache, private val store: 
     }
 }
 
-/** A store under [cacheName]'s layout that writes any bytes, as a buggy or earlier writer would. */
-fun <K : Any> rawStore(name: String, keyPrefix: String, cacheName: String, keyEncoder: KeyEncoder<K>) =
-    CoSecCacheSpecs.layout(keyPrefix, cacheName).let { layout ->
-        StoreSpec.builder<K, ByteArray>(name)
-            .keyPrefix(layout.keyPrefix)
-            .namespace(layout.namespace)
-            .keyEncoder(keyEncoder)
-            .codec(RawCodec)
-            .build()
-    }
+/**
+ * A store under [cacheName]'s layout that writes any bytes, as a buggy or earlier writer would; with [ttl], each entry
+ * expires that long after its last write, as the store it stands in for writes them.
+ */
+fun <K : Any> rawStore(
+    name: String,
+    keyPrefix: String,
+    cacheName: String,
+    keyEncoder: KeyEncoder<K>,
+    ttl: java.time.Duration? = null,
+) = CoSecCacheSpecs.layout(keyPrefix, cacheName).let { layout ->
+    StoreSpec.builder<K, ByteArray>(name)
+        .keyPrefix(layout.keyPrefix)
+        .namespace(layout.namespace)
+        .keyEncoder(keyEncoder)
+        .codec(RawCodec)
+        .let { builder -> if (ttl != null) builder.policy { this.ttl = ttl } else builder }
+        .build()
+}
