@@ -52,13 +52,19 @@ class ChangeOrigin(
 
     @InternalCoSecApi
     companion object {
+        /** The `via.method` of a call through the SDK facade: no listener, no header, no peer, whatever the credential was. */
+        const val IN_PROCESS = "in-process"
+
         /** The origin of a permitted request: asserted when the host's gate believed the identity it states. */
-        fun of(security: RequestSecurity, peer: String? = null): ChangeOrigin {
+        fun of(security: RequestSecurity, peer: String? = null, inProcess: Boolean = false): ChangeOrigin {
             val identity = security.identity
             val credential = identity?.credential ?: security.principal?.credential
             return ChangeOrigin(
                 asserted = identity != null,
-                via = credential?.let { Via(it.method.value, it.id, security.requestId) },
+                via = when {
+                    inProcess -> Via(IN_PROCESS, credential?.id, security.requestId)
+                    else -> credential?.let { Via(it.method.value, it.id, security.requestId) }
+                },
                 peer = peer,
             )
         }

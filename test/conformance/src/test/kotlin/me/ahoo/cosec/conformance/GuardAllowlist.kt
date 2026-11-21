@@ -25,6 +25,7 @@ object GuardAllowlist {
     val GUARDS: Map<String, Set<String>> = mapOf(
         "build" to setOf(
             // CTL-57, CTL-58: how a step was identified, and the service profile of the control API.
+            "control:ControlServiceTest#a change proposed through the facade is recorded as an in-process call, one over its route is not - CTL-57",
             "spring-boot:ControlServicePortTest#the peer of a control request is the connection's, beneath the forwarded header handling",
             "control:ChangeOriginTest#a change records how its author was identified, and each event how its step's operator was",
             "control:ChangeOriginTest#an origin is stored with its change and written with its event, with the members it has",

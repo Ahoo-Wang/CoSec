@@ -26,4 +26,6 @@ class ControlHttpRequest(
     val body: ByteArray? = null,
     /** The peer of the connection ([me.ahoo.cosec.control.authz.Operator.peer]), read by the adapter that serves the routes. */
     val peer: String? = null,
+    /** Whether the application called the control plane in process, through the SDK facade, not over HTTP (`CTL-57`). */
+    val inProcess: Boolean = false,
 )

@@ -44,11 +44,13 @@ class Operator(
      * rewrite (`CTL-57`); null otherwise. Read where the control routes are served, not on every request.
      */
     val peer: String? = null,
+    /** Whether the application called the control plane in process, through the SDK facade (`CTL-57`). */
+    val inProcess: Boolean = false,
 ) {
     val tenant: TenantId get() = actor.tenant
 
     /** How this operator was identified, for the record (`CTL-57`); null without a request. */
-    val origin: ChangeOrigin? get() = security?.let { ChangeOrigin.of(it, peer) }
+    val origin: ChangeOrigin? get() = security?.let { ChangeOrigin.of(it, peer, inProcess) }
 
     val platform: Boolean get() = actor.tenant == TenantId.PLATFORM
 
@@ -66,7 +68,7 @@ class Operator(
     @InternalCoSecApi
     companion object {
         /** The operator of a request the host pipeline permitted; null for an anonymous one. */
-        fun of(security: RequestSecurity, peer: String? = null): Operator? {
+        fun of(security: RequestSecurity, peer: String? = null, inProcess: Boolean = false): Operator? {
             val principal = security.principal ?: return null
             return Operator(
                 actor = Actor(principal.tenant, principal.id),
@@ -74,6 +76,7 @@ class Operator(
                 attributes = principal.attributes,
                 security = security,
                 peer = peer,
+                inProcess = inProcess,
             )
         }
     }

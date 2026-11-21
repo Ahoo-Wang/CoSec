@@ -1,0 +1,17 @@
+# Rule: CTL-57
+# Mutant: a call through the SDK facade is recorded as a call over HTTP, not in process
+# Tests: :control:test --tests me.ahoo.cosec.control.sdk.ControlServiceTest
+
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/sdk/LocalControlService.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/sdk/LocalControlService.kt
+index 3c27d50dc..4f8846d4a 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/sdk/LocalControlService.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/sdk/LocalControlService.kt
+@@ -143,7 +143,7 @@ class LocalControlService(
+     private suspend fun send(security: RequestSecurity, request: ControlHttpRequest): String {
+         if (!ServiceRoutes.allows(request)) throw refusal(http.refused(NOT_FOUND, security.requestId))
+         val response = http.handle(
+-            ControlHttpRequest(request.method, request.path, request.query, request.body, null, true),
++            ControlHttpRequest(request.method, request.path, request.query, request.body, null, false),
+             security
+         )
+         if (response.status >= BAD_REQUEST) throw refusal(response)

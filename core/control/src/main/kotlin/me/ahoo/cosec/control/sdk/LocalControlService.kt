@@ -142,7 +142,10 @@ class LocalControlService(
     /** [request] as its route answers it, unless it is outside [ServiceRoutes]: that is a 404, as no route. */
     private suspend fun send(security: RequestSecurity, request: ControlHttpRequest): String {
         if (!ServiceRoutes.allows(request)) throw refusal(http.refused(NOT_FOUND, security.requestId))
-        val response = http.handle(request, security)
+        val response = http.handle(
+            ControlHttpRequest(request.method, request.path, request.query, request.body, null, true),
+            security
+        )
         if (response.status >= BAD_REQUEST) throw refusal(response)
         return response.body.decodeToString()
     }

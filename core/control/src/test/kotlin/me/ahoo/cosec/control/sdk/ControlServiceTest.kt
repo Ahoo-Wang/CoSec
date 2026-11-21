@@ -137,6 +137,27 @@ class ControlServiceTest {
         viaFacade.events().assert().isNotEmpty()
     }
 
+    /** `CTL-57`: what the record says of a call through the facade: in process, with no peer, whatever the credential was. */
+    @Test
+    fun `a change proposed through the facade is recorded as an in-process call, one over its route is not - CTL-57`() {
+        val viaRoute = Side()
+        val viaFacade = Side()
+        viaRoute.route("POST", "/changes", body = proposal("first", 1))
+        viaFacade.facade { propose(it, proposal("first", 1)) }
+        runBlocking {
+            viaRoute.fixture.listeners.awaitDelivered()
+            viaFacade.fixture.listeners.awaitDelivered()
+        }
+        viaRoute.fixture.events.map { it.origin?.via?.method }.assert().isNotEmpty().containsOnly("test")
+        val origins = viaFacade.fixture.events.mapNotNull { it.origin }
+        origins.assert().isNotEmpty()
+        origins.forEach {
+            it.via?.method.assert().isEqualTo("in-process")
+            it.via?.credentialId.assert().isEqualTo("token-alice")
+            it.peer.assert().isNull()
+        }
+    }
+
     @Test
     fun `a refusal through the facade is the route's problem, and records nothing - CTL-65`() {
         val viaRoute = Side()
