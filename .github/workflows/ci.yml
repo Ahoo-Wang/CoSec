@@ -12,7 +12,7 @@
 #
 
 # Tests, detekt and coverage: one job per project group, derived from settings.gradle.kts by scripts/ci/plan.py, so a
-# new project needs no change here. Each job uploads its own coverage to Codecov. The docs are checked and built in
+# new project needs no change here. A pull request runs the groups its change can reach, every other event all of them. Each job uploads its own coverage to Codecov. The docs are checked and built in
 # the `docs` job, the Kubernetes overlays in the `k8s` job, the TypeScript packages in the `typescript` job and against a real host in `typescript-host`. The `CI` job is the one required check: it passes only
 # when every other job here passed.
 name: CI
@@ -35,13 +35,20 @@ jobs:
     timeout-minutes: 5
     outputs:
       matrix: ${{ steps.plan.outputs.matrix }}
+      skipped: ${{ steps.plan.outputs.skipped }}
     steps:
+      # Two commits: a pull request is checked out as the merge of its head into the base, whose first parent is the
+      # base, so the plan can read what the pull request changes.
       - name: Checkout
         uses: actions/checkout@v7
+        with:
+          fetch-depth: 2
 
-      - name: Derive the test jobs from settings.gradle.kts
+      # The groups a pull request's change can reach, with every group it skips and why in the summary; everything
+      # for every other event and for what it cannot attribute (scripts/ci/plan.py).
+      - name: Derive the test jobs from settings.gradle.kts and the change
         id: plan
-        run: python3 -I scripts/ci/plan.py --github-output "$GITHUB_OUTPUT"
+        run: python3 -I scripts/ci/plan.py --event "$GITHUB_EVENT_NAME" --github-output "$GITHUB_OUTPUT"
 
       - name: Test the CI scripts
         run: |
@@ -352,6 +359,29 @@ jobs:
           files: coverage-artifact/typescript-cosec-fetcher.json,coverage-artifact/typescript-cosec-react.json
           fail_ci_if_error: true
 
+  # Codecov sends nothing by itself (codecov.yml, `manual_trigger`): this job asks it to once every upload of the run is in,
+  # the groups' and TypeScript's, whatever their result, so a status never reports a partial merge. A pull request skips
+  # groups, which upload nothing, so no number of uploads could be awaited instead. Not a needed check: a failure here
+  # only leaves Codecov silent.
+  codecov-notify:
+    name: Codecov notify
+    needs: [ test, typescript-coverage ]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Send the notifications
+        uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          run_command: send-notifications
+          fail_ci_if_error: false
+
   # Every overlay in k8s/overlays builds, and what it builds is valid for the oldest Kubernetes minor still supported
   # upstream and for the newest; -strict refuses fields the schema does not have. No path filter, like `docs`.
   k8s:
@@ -392,10 +422,14 @@ jobs:
     timeout-minutes: 5
     steps:
       # A failed plan skips the tests: skipped and cancelled fail the gate like failed does.
+      # `test` is the planned groups: a group the plan left out is not a job here, and is named in the plan's summary.
+      # A `test` that is skipped or cancelled, or a `plan` that failed, still fails the gate.
       - name: Require every job to pass
         env:
           RESULTS: ${{ toJSON(needs) }}
+          SKIPPED: ${{ needs.plan.outputs.skipped }}
         run: |
+          echo "Groups the plan left out: ${SKIPPED:-none}"
           failed=$(jq -r 'to_entries[] | select(.value.result != "success") | "\(.key): \(.value.result)"' <<< "$RESULTS")
           if [ -n "$failed" ]; then
             echo "::error::not every job passed: $(paste -sd ',' <<< "$failed")"
