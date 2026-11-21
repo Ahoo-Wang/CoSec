@@ -25,9 +25,10 @@ import org.junit.jupiter.api.Test
 import tools.jackson.databind.JsonNode
 
 /**
- * `CTL-68`: `GET /documents?kind=` lists which tenant or app documents there are, from the store's document list, those
- * the caller may see, cut after they are filtered and telling nothing of the others; on the operators' port and the
- * service port alike. A kind other than tenant or app is a 400, a store that cannot answer a 503.
+ * `CTL-68`: `GET /documents?kind=` lists which tenant or app documents there are, from the store's document list: all of
+ * them to a caller holding `cosec:read` on the layer (`doc/tenant`, `doc/app`), its own to a tenant's principal that may
+ * read it, and to anyone else a 403 that tells nothing; on the operators' port and the service port alike. A kind other
+ * than tenant or app is a 400, a store that cannot answer a 503.
  */
 class DocumentListingTest {
     private val fixture = ControlPlaneTest()
@@ -36,8 +37,12 @@ class DocumentListingTest {
     private val plato = fixture.engine.security(TenantId.PLATFORM, "plato")
     private val alice = fixture.engine.security(ControlPlaneTest.ACME, "alice", roles = listOf("admin", "ops@team-a"))
 
-    /** A platform principal bound to nothing: no `cosec:read` on any document. */
+    /** A platform principal bound to nothing: no `cosec:read` on any document or layer. */
     private val pia = fixture.engine.security(TenantId.PLATFORM, "pia")
+
+    /** An acme principal with no role: it may not read its own tenant's document. */
+    private val eve = fixture.engine.security(ControlPlaneTest.ACME, "eve")
+    private val vera = fixture.engine.security(ControlPlaneTest.ACME, "vera", roles = listOf("viewer"))
 
     private fun list(
         security: RequestSecurity,
@@ -62,13 +67,19 @@ class DocumentListingTest {
     }
 
     @Test
-    fun `a page shows only the documents the caller may see, and tells nothing of the others - CTL-68`() {
+    fun `a tenant's principal sees its own tenant's document if it may read it, and nothing else - CTL-68`() {
         keys(list(alice, mapOf("kind" to "tenant")).second).assert().containsExactly("tenant:acme")
-        val (status, nothing) = list(pia, mapOf("kind" to "tenant"))
-        status.assert().isEqualTo(200)
-        keys(nothing).assert().isEmpty()
-        nothing.get("next").isNull.assert().isTrue()
-        nothing.properties().map { it.key }.toSet().assert().isEqualTo(setOf("documents", "next"))
+        keys(list(vera, mapOf("kind" to "tenant")).second).assert().containsExactly("tenant:acme")
+        keys(list(alice, mapOf("kind" to "tenant"), services).second).assert().containsExactly("tenant:acme")
+    }
+
+    @Test
+    fun `anyone else is refused as the policies refuse, telling nothing of which documents exist - CTL-68`() {
+        for ((caller, kind) in listOf(pia to "tenant", pia to "app", eve to "tenant", alice to "app")) {
+            val (status, problem) = list(caller, mapOf("kind" to kind))
+            status.assert().describedAs("$kind").isEqualTo(403)
+            problem.has("detail").assert().isFalse()
+        }
     }
 
     @Test

@@ -42,6 +42,7 @@ import me.ahoo.cosec.control.lifecycle.ControlTargets.section
 import me.ahoo.cosec.document.PolicyDocument
 import me.ahoo.cosec.document.ProvenanceKind
 import me.ahoo.cosec.document.RoleExpansion
+import me.ahoo.cosec.model.decision.DocumentKind
 import me.ahoo.cosec.model.Action
 import me.ahoo.cosec.model.AppId
 import me.ahoo.cosec.model.Binding
@@ -113,6 +114,10 @@ class ChangeAuthority(
         }
         return decide(operator, action, ControlResources.document(key))
     }
+
+    /** The decision on [action] over the layer of [kind] documents ([ControlResources.layer], `CTL-68`). */
+    suspend fun decideLayer(operator: Operator, kind: DocumentKind, action: Action): ControlDecision =
+        decide(operator, action, ControlResources.layer(kind))
 
     /** Whether [operator] holds [action] on [key]; only a permit is true, and the hard rule comes first. */
     suspend fun holds(operator: Operator, key: SnapshotKey, action: Action): Boolean =
