@@ -15,6 +15,7 @@
 
 package me.ahoo.cosec.control.lifecycle
 
+import me.ahoo.cosec.control.change.Acknowledgement
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.control.audit.ChangeListeners
@@ -176,6 +177,9 @@ class Changes(
 
     /** [Staging.shadowed]: looks at the window of a `SHADOWING` change, and closes it once it may. */
     suspend fun shadowed(id: ChangeId): ChangeRequest = staging.shadowed(id)
+
+    /** [Staging.acknowledgement]: which live instances acknowledge the open window of [change]. */
+    suspend fun acknowledgement(change: ChangeRequest): Acknowledgement? = staging.acknowledgement(change)
 
     /** [Staging.propagation]: the propagation of [revision] of [key] to the instances. */
     suspend fun propagation(key: SnapshotKey, revision: Long): Propagation = staging.propagation(key, revision)

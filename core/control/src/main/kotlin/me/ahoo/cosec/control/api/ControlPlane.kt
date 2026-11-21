@@ -15,6 +15,7 @@
 
 package me.ahoo.cosec.control.api
 
+import me.ahoo.cosec.control.change.Acknowledgement
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.control.authz.Operator
@@ -92,6 +93,12 @@ interface ControlPlane {
     ): ChangeRequest
 
     suspend fun get(operator: Operator, change: ChangeId): ChangeRequest
+
+    /**
+     * Which live instances acknowledge the open shadow window of [change], one [get] answered (`CTL-10`); null when it
+     * has no open window, or when this plane does not read the instances' statuses.
+     */
+    suspend fun acknowledgement(change: ChangeRequest): Acknowledgement? = null
 
     /** `GET /changes` (R2C-4, `CTL-55`): the open changes of [document], or in [state], that [operator] may see. */
     suspend fun changes(

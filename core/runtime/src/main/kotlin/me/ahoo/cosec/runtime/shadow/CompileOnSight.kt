@@ -75,6 +75,14 @@ internal class CompileOnSight(
         }
     }
 
+    /**
+     * The windows this instance acknowledges (`InstanceStatus.windows`, `CTL-10`): those of the list it holds whose
+     * candidate it compiled, or recorded as failing. Null when it holds no list: it acknowledges nothing.
+     */
+    suspend fun acknowledged(): Set<String>? = mutex.withLock {
+        if (source.staged.windows == null) null else seen.mapTo(HashSet()) { it.second }
+    }
+
     /** Whether [window] was compiled, or recorded as failing; false to try it again on a later cycle. */
     private suspend fun sight(key: SnapshotKey, window: String): Boolean {
         val candidate = source.sighted(key, window) ?: return false

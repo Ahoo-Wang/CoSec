@@ -15,6 +15,7 @@
 
 package me.ahoo.cosec.control.api
 
+import me.ahoo.cosec.control.change.Acknowledgement
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.control.api.ControlHttp.Companion.JSON
@@ -58,8 +59,8 @@ internal object ControlHttpSupport {
     inline fun get(request: ControlHttpRequest, block: () -> ControlHttpResponse): ControlHttpResponse =
         if (request.method == GET) block() else methodNotAllowed()
 
-    fun changeResponse(change: ChangeRequest, status: Int) =
-        ControlHttpResponse(status, JSON, ChangeAnswer.encode(change))
+    fun changeResponse(change: ChangeRequest, status: Int, acknowledgement: Acknowledgement? = null) =
+        ControlHttpResponse(status, JSON, ChangeAnswer.encode(change, acknowledgement))
 
     fun document(document: me.ahoo.cosec.document.PolicyDocument) = ControlHttpResponse(
         OK,

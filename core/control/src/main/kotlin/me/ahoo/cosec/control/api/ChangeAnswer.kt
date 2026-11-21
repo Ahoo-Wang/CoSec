@@ -15,6 +15,7 @@
 
 package me.ahoo.cosec.control.api
 
+import me.ahoo.cosec.control.change.Acknowledgement
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.control.change.ChangeJson.actorTree
@@ -40,9 +41,11 @@ import tools.jackson.databind.node.ObjectNode
 object ChangeAnswer {
     private val factory = JsonNodeFactory.instance
 
-    fun encode(change: ChangeRequest): ByteArray = CoSecJson.mapper.writeValueAsBytes(tree(change))
+    /** [change], with which live instances acknowledge its open shadow window when [acknowledgement] is read. */
+    fun encode(change: ChangeRequest, acknowledgement: Acknowledgement? = null): ByteArray =
+        CoSecJson.mapper.writeValueAsBytes(tree(change, acknowledgement))
 
-    fun tree(change: ChangeRequest): ObjectNode {
+    fun tree(change: ChangeRequest, acknowledgement: Acknowledgement? = null): ObjectNode {
         val (kind, owner) = ownerOf(change.key)
         val root = factory.objectNode().put("id", change.id.value).put("key", change.key.toString())
         root.putObject("base").put("revision", change.base.revision).apply {
@@ -62,17 +65,22 @@ object ChangeAnswer {
         change.skipShadow?.let { root.put("skipShadow", it) }
         change.publishedRevision?.let { root.put("publishedRevision", it) }
         approval(root, change)
-        shadowAndConfirmations(root, change)
+        shadowAndConfirmations(root, change, acknowledgement)
         return root
     }
 
-    /** Its shadow window as a client reads it, without the instances that reported, and what its author confirmed. */
-    private fun shadowAndConfirmations(root: ObjectNode, change: ChangeRequest) {
+    /**
+     * Its shadow window as a client reads it, without the instances that reported, and what its author confirmed. While
+     * the window is open, `GET /changes/{id}` adds how many live instances acknowledge it and which do not
+     * (`waitingFor`: at most [Acknowledgement.SHOWN] ids, sorted, and how many `more`), `CTL-10`.
+     */
+    private fun shadowAndConfirmations(root: ObjectNode, change: ChangeRequest, acknowledgement: Acknowledgement?) {
         change.shadow?.let { shadow ->
             val node = root.putObject("shadow")
                 .put("window", shadow.window)
                 .put("startedAt", shadow.startedAt.toString())
             shadow.closed?.let { ShadowStateCodec.summary(node.putObject("closed"), it) }
+            acknowledgement?.takeIf { shadow.closed == null }?.let { acknowledged(node, it) }
         }
         if (change.confirmations.isNotEmpty()) {
             root.putArray("confirmations").apply {
@@ -82,6 +90,13 @@ object ChangeAnswer {
                 }
             }
         }
+    }
+
+    private fun acknowledged(node: ObjectNode, acknowledgement: Acknowledgement) {
+        node.put("acknowledged", acknowledgement.acknowledged)
+        val waiting = acknowledgement.waitingFor
+        node.putObject("waitingFor").put("more", maxOf(0, waiting.size - Acknowledgement.SHOWN))
+            .putArray("instances").apply { waiting.take(Acknowledgement.SHOWN).forEach(::add) }
     }
 
     /** The escalations, and the approval as far as it is shown: who approved, when, for which candidate and what. */

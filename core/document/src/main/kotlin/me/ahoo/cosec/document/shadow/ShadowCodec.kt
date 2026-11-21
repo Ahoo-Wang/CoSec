@@ -95,6 +95,8 @@ object ShadowCodec {
                         key.toString()
                     ).put("revision", installed.revision).put("lagMillis", installed.lag.toMillis())
                 }
+                // Optional (CTL-53): absent is an instance that acknowledges no window, as an older one does.
+                status.windows?.let { windows -> node.putArray("windows").apply { windows.sorted().forEach(::add) } }
             }
         },
     )
@@ -113,8 +115,15 @@ object ShadowCodec {
                 node.need("formatLevel").long().takeIf {
                     it in 1..Int.MAX_VALUE
                 }?.toInt() ?: throw malformed("formatLevel is not a positive integer"),
+                node.get("windows")?.let(::windows),
             )
         }
+    }
+
+    /** A status's acknowledged windows: an array of window ids, each a string. */
+    private fun windows(node: JsonNode): Set<String> {
+        if (!node.isArray) throw malformed("windows is not an array")
+        return node.values().mapTo(LinkedHashSet()) { it.text() }
     }
 
     private fun report(report: ShadowReport): ObjectNode = StoredFormat.write(factory.objectNode()).apply {

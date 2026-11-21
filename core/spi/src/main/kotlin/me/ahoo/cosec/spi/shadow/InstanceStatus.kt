@@ -45,8 +45,15 @@ class InstanceStatus(
      * one (8.1); until then it is carried and not read.
      */
     val formatLevel: Int = FORMAT_LEVEL,
+    /**
+     * The shadow windows of the staged list this instance holds and has compiled the candidate of, or reported it as
+     * failing to (design D2 §5, `CTL-10`): its acknowledgement that it compares their candidates. A window closes as
+     * passed only when every instance with a recent status lists it. Null when the instance does not send it: a version
+     * before it, or an instance that holds no staged list; such an instance acknowledges nothing.
+     */
+    val windows: Set<String>? = null,
 ) {
-    private fun fields(): List<Any?> = listOf(instance, at, documents, formatLevel)
+    private fun fields(): List<Any?> = listOf(instance, at, documents, formatLevel, windows)
 
     override fun equals(other: Any?): Boolean = other is InstanceStatus && other.fields() == fields()
 

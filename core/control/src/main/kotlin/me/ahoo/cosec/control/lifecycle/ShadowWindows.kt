@@ -17,6 +17,7 @@ package me.ahoo.cosec.control.lifecycle
 
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.control.change.Acknowledgement
 import me.ahoo.cosec.control.change.Propagation
 import me.ahoo.cosec.control.change.ShadowState
 import me.ahoo.cosec.control.change.ShadowSummary
@@ -60,6 +61,10 @@ class ShadowWindows(
      * requests (`CTL-56`). The window waits for it; an instance rewrites its cumulative report every few seconds, so a
      * report lost in a failover comes back while the instance serves. At the longest window it closes insufficient,
      * naming the vanished instances, and never passes.
+     *
+     * A window passes only when every live instance acknowledges it ([acknowledgement], `CTL-10`): one that never saw the
+     * window, or never compiled its candidate, holds it open whatever the samples say, and at the longest window it
+     * closes insufficient. An acknowledgement adds no sample. A `CANDIDATE_ERROR` still blocks it at once.
      */
     suspend fun look(state: ShadowState, now: Instant): ShadowLook {
         val window = state.window
@@ -81,15 +86,29 @@ class ShadowWindows(
         val blocked = read.any { (it.counts[ShadowOutcome.CANDIDATE_ERROR] ?: 0) > 0 }
         val effective = ShadowOutcome.entries.filter { it.effective }.sumOf { counts.getValue(it.name) }
         val elapsed = java.time.Duration.between(state.startedAt, now)
+        val acknowledgement = acknowledgement(window)
+        val acknowledged = acknowledgement.waitingFor.isEmpty()
         val summary = when {
             blocked -> ShadowSummary(counts, now, insufficient = false, blocked = true, vanished = vanished)
             vanished.isNotEmpty() && elapsed < options.maxDuration -> null
-            vanished.isEmpty() && elapsed >= options.minDuration && effective >= options.minSamples ->
+            vanished.isEmpty() && acknowledged && elapsed >= options.minDuration && effective >= options.minSamples ->
                 ShadowSummary(counts, now, insufficient = false, blocked = false)
             elapsed >= options.maxDuration -> ShadowSummary(counts, now, insufficient = true, blocked = false, vanished)
             else -> null
         }
-        return ShadowLook(state.reporters + reporters + readings.unreadable, summary, vanished)
+        return ShadowLook(state.reporters + reporters + readings.unreadable, summary, vanished, acknowledgement)
+    }
+
+    /**
+     * Which live instances acknowledge [window] (design D2 §5, `CTL-10`): of those with a status in the last minute, read
+     * as `propagation` reads them (one read shared, at most every [InstanceStatuses.MAX_AGE]), those whose status lists
+     * it. One whose status has no `windows` (an older version, or one holding no staged list) acknowledges nothing. A
+     * status read that fails fails the call: a window is never taken as acknowledged by statuses nobody read.
+     */
+    suspend fun acknowledgement(window: String): Acknowledgement {
+        val live = statuses.read().statuses
+        val waiting = live.filter { it.windows?.contains(window) != true }.map { it.instance }.sorted()
+        return Acknowledgement(live.size - waiting.size, waiting)
     }
 
     /**
