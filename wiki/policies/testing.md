@@ -629,9 +629,9 @@ on). Publishing never waits for it.
 
 `recent` counts the instances that wrote a status in the last minute, `holding` those of them that hold the document
 at any revision, and `installed` those of them that have installed `revision` or a later one. An instance keeps
-resident only the tenants it serves, so a tenant document is propagated when `installed` equals `holding`, not
-`recent`; one no instance holds (`holding: 0`) is not propagated yet, and is loaded at the revision then current on its
-first request. The platform document and an app's are held by every instance that serves them. The statuses are read at
+resident only the tenants it serves, so no instance is behind when `installed` equals `holding` (not `recent`);
+`holding: 0` means no instance holds the document, and the first request that needs it loads it at the published
+revision. The platform document and an app's are held by every instance that serves them. The statuses are read at
 most every 5 seconds on a control host, so an answer may be that old: `asOf` says when they were read. A read that
 fails is a `503`, never an older answer (`CTL-62`).
 

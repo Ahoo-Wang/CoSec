@@ -96,9 +96,10 @@ class ShadowWindows(
      * Read-only propagation (RFC 0007 §6.5, Q29, `CTL-62`): of the instances that wrote a status in the last minute
      * ([Propagation.recent]), those that hold [key] at any revision ([Propagation.holding]) and those of them that have
      * installed [revision] or a later one ([Propagation.installed]). An instance keeps resident only the tenants it
-     * serves, so a tenant document is propagated when every instance holding it has installed it, and one that none
-     * holds is not propagated yet. The statuses are read at most every [InstanceStatuses.MAX_AGE], and the answer says
-     * when ([Propagation.asOf]). Publishing never waits for it.
+     * serves, so no instance is behind when [Propagation.installed] equals [Propagation.holding]; `holding: 0` means no
+     * instance holds the document, and the first request that needs it loads it at the published revision. The
+     * statuses are read at most every [InstanceStatuses.MAX_AGE], and the answer says when ([Propagation.asOf]).
+     * Publishing never waits for it.
      */
     suspend fun propagation(key: SnapshotKey, revision: Long): Propagation {
         val read = statuses.read()

@@ -31,8 +31,8 @@ description: "每个 8.0 预览版（alpha 与 beta）到下一个之间的变�
   - `simulate` 与 `explain`：`Rejected` 决策的 `APP_MISMATCH` 或 `SPACE_NOT_MEMBER` 放在 `reason` 下，不再放在 `cause`
     下。`cause` 只属于 `Indeterminate` 决策，取值不变。
   - `GET /documents/{key}/revisions/{n}/propagation` 新增 `holding`（持有该文档的最近实例）和 `asOf`（读取状态的时间；
-    应答最多可能是 5 秒前的）。`installed` 与 `recent` 含义不变。租户文档在 `installed` 等于 `holding` 时即视为传播完成：
-    大多数实例从不持有某个租户，所以对它而言 `installed` 从来到不了 `recent`。状态读取失败现在是 `503`，不再是 `500`。
+    应答最多可能是 5 秒前的）。`installed` 与 `recent` 含义不变。`installed` 等于 `holding` 时没有任何实例落后：
+    大多数实例从不持有某个租户，所以对它而言 `installed` 从来到不了 `recent`。`holding: 0` 表示没有实例持有该文档，第一个请求会按已发布的修订装入它。状态读取失败现在是 `503`，不再是 `500`。
   - `contract/control/` 固定了这些应答的成员、它们写出的封闭取值集合以及每个路由的审计种类；改变其中任何一项的版本会写明。
 
 - **每条存储的记录都带有格式，读取方忽略已知格式中不认识的内容**（第二轮评审，`R2C-10`、`R2C-28`、`CTL-53`、`IDN-31`）。受影响的是每个部署，一次。

@@ -4,7 +4,7 @@
   ],
   "polarity": "negative",
   "level": "control",
-  "description": "G2e (R2C-12): i2 still holds acme's revision 1 and i3 holds no acme at all: revision 2 is installed by 1 of the 2 instances holding it, and i3 counts only among the recent. A tenant no instance holds is not propagated yet: 0 of 0. A status written within five seconds of the last read is not read yet; after five seconds it is.",
+  "description": "G2e (R2C-12): i2 still holds acme's revision 1 and i3 holds no acme at all: revision 2 is installed by 1 of the 2 instances holding it, and i3 counts only among the recent. A tenant no instance holds reads 0 of 0: none is behind, and the first request that needs it loads the published revision. A status written within five seconds of the last read is not read yet; after five seconds it is.",
   "steps": [
     {
       "propose": {

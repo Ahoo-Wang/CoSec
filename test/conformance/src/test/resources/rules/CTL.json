@@ -778,7 +778,7 @@
     {
       "id": "CTL-62",
       "source": "Review round 2, R2C-12 (review-r2-3-control-storage.md); RFC 0007 §6.5",
-      "statement": "A revision's propagation counts, of the instances that reported a status in the last minute, those that hold the document at any revision and those of them that installed the revision or a later one, and says when it read the statuses: a tenant document is propagated when every instance holding it installed it, and one no instance holds is not propagated yet. The statuses are read at most every five seconds, and a read that fails is answered 503, never from an older read.",
+      "statement": "A revision's propagation counts, of the instances that reported a status in the last minute, those that hold the document at any revision and those of them that installed the revision or a later one, and says when it read the statuses: no instance is behind when every instance holding the document installed it, and when none holds it the first request that needs it loads it at the published revision. The statuses are read at most every five seconds, and a read that fails is answered 503, never from an older read.",
       "level": "control",
       "guards": [
         "control:PropagationTest#propagation counts the instances that hold the document, and says when it read them - CTL-62",

@@ -73,7 +73,7 @@ class PropagationTest {
         windows.propagation(T1, 2).assert().isEqualTo(Propagation(2, 1, 2, 3, clock.now))
         // The platform document is held by every instance: holding is every recent instance.
         windows.propagation(SnapshotKey.Platform, 5).assert().isEqualTo(Propagation(5, 3, 3, 3, clock.now))
-        // A tenant no instance holds is not propagated yet, whatever the instances that do not hold it report.
+        // A tenant no instance holds: none is behind, and the first request that needs it loads the published revision.
         windows.propagation(SnapshotKey.Tenant("t2"), 1).assert().isEqualTo(Propagation(1, 0, 0, 3, clock.now))
     }
 

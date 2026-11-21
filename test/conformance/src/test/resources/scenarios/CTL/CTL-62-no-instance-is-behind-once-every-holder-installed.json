@@ -4,7 +4,7 @@
   ],
   "polarity": "positive",
   "level": "control",
-  "description": "G2e (R2C-12): of three instances reporting, two hold acme's document and both installed revision 1; the third serves other tenants. The propagation reads installed 2 of the 2 holding it, of 3 recent, not 2 of 3.",
+  "description": "G2e (R2C-12): of three instances reporting, two hold acme's document and both installed revision 1; the third serves other tenants. The propagation reads installed 2 of the 2 holding it, of 3 recent, not 2 of 3: no instance is behind.",
   "steps": [
     {
       "propose": {

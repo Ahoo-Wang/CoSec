@@ -37,8 +37,9 @@ Which preview of the library may run behind which preview of the gateway image: 
     longer under `cause`. `cause` is an `Indeterminate` decision's only, with the values it had.
   - `GET /documents/{key}/revisions/{n}/propagation` adds `holding` (the recent instances that hold the document) and
     `asOf` (when the statuses were read; an answer may be up to 5 seconds old). `installed` and `recent` mean what
-    they meant. Read a tenant document as propagated when `installed` equals `holding`: most instances never hold a
-    given tenant, so `installed` never reached `recent` for it. A status read that fails is now `503`, not `500`.
+    they meant. No instance is behind when `installed` equals `holding`: most instances never hold a given tenant, so
+    `installed` never reached `recent` for it. `holding: 0` means no instance holds the document, and the first
+    request loads it at the published revision. A status read that fails is now `503`, not `500`.
   - `contract/control/` pins the members of these answers, the closed sets they write and the audit kind of each
     route; a release that changes one says so.
 
