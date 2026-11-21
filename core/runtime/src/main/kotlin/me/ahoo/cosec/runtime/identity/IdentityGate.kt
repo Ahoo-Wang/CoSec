@@ -203,7 +203,9 @@ class IdentityGate(
         val tenant = TenantId(identity.tenant)
         val roles = identity.roles.mapTo(LinkedHashSet(), ::RoleId)
         val memberships = Memberships(Memberships.Source.CLAIMS, mapOf(SpaceId(identity.space) to roles), emptyList())
-        // The gateway names a credential `jwt` only for CoSec's own token, the one that may use break-glass (RC1-26).
+        // A `jwt` credential is the one that may use break-glass (RC1-26). The gateway names it only for CoSec's own token;
+        // a service that states its identity directly (a control host's service port, IdentityHeader.write) writes the
+        // method itself, and the record marks such an identity as asserted.
         val principal = AuthenticatedPrincipal(
             PrincipalId(identity.subject),
             tenant,

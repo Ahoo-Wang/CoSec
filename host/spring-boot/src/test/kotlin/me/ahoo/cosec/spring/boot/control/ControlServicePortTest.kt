@@ -262,6 +262,7 @@ class ControlServicePortTest {
             AutoConfigurations.of(CoSecControlServicePortAutoConfiguration::class.java)
         ).run { context ->
             context.containsBean("cosecDerivedControlSettingsNotice").assert().isTrue()
+            context.containsBean("cosecControlPlaneNotice").assert().isTrue()
         }
         runner.withPropertyValues("cosec.control.shadow.min-duration=5s").run { context ->
             context.getBean(
