@@ -1,0 +1,85 @@
+{
+  "rules": [
+    "CTL-63"
+  ],
+  "polarity": "positive",
+  "level": "control",
+  "description": "c2 publishes, which moves acme's head under c1; c1 is rebased and its window skipped: each step that changed a record wrote its own event, in order.",
+  "steps": [
+    {
+      "propose": {
+        "change": "c1",
+        "document": "tenant:acme",
+        "operations": [
+          {
+            "putPolicy": {
+              "id": "read",
+              "statements": [
+                {
+                  "effect": "allow",
+                  "action": "order:read"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "propose": {
+        "change": "c2",
+        "document": "tenant:acme",
+        "operations": [
+          {
+            "putPolicy": {
+              "id": "more",
+              "statements": [
+                {
+                  "effect": "allow",
+                  "action": "order:read"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "skipShadow": "c2"
+    },
+    {
+      "publish": "c2"
+    },
+    {
+      "rebase": "c1"
+    },
+    {
+      "skipShadow": "c1"
+    },
+    {
+      "audited": "c1"
+    },
+    {
+      "audited": "c2"
+    }
+  ],
+  "expect": {
+    "steps": [
+      "CHECKED",
+      "CHECKED",
+      "READY",
+      "PUBLISHED",
+      "CHECKED",
+      "READY",
+      "audited CHECKED,REBASED,SHADOW_SKIPPED",
+      "audited CHECKED,SHADOW_SKIPPED,PUBLISHING,PUBLISHED"
+    ],
+    "errors": {
+      "c1": [],
+      "c2": []
+    },
+    "heads": {
+      "tenant:acme": 1
+    }
+  }
+}

@@ -1,0 +1,52 @@
+{
+  "rules": [
+    "CTL-63"
+  ],
+  "polarity": "negative",
+  "level": "control",
+  "description": "A change's window is skipped, then the change is abandoned: it never publishes, so no revision's provenance records the skip. The skip is recorded all the same, as SHADOW_SKIPPED when it happened.",
+  "steps": [
+    {
+      "propose": {
+        "change": "c1",
+        "document": "tenant:acme",
+        "operations": [
+          {
+            "putPolicy": {
+              "id": "read",
+              "statements": [
+                {
+                  "effect": "allow",
+                  "action": "order:read"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "skipShadow": "c1"
+    },
+    {
+      "abandon": "c1"
+    },
+    {
+      "audited": "c1"
+    }
+  ],
+  "expect": {
+    "steps": [
+      "CHECKED",
+      "READY",
+      "ABANDONED",
+      "audited CHECKED,SHADOW_SKIPPED,ABANDONED"
+    ],
+    "errors": {
+      "c1": []
+    },
+    "heads": {
+      "tenant:acme": 0
+    }
+  }
+}
