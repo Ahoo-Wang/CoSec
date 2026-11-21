@@ -119,7 +119,8 @@ internal class ChangeRoutes(
     }
 
     /**
-     * `GET /changes?document=<key>` or `?state=<STATE>`, with `after` (the `next` of the page before) and `limit` (1 to
+     * `GET /changes?document=<key>` or `?state=<STATE>`, with `after` (the `next` of the page before, a [ListingCursor]
+     * token passed back unchanged) and `limit` (1 to
      * [MAX_LIMIT], [DEFAULT_LIMIT] by default): the open changes the caller may see (R2C-4, `CTL-55`), each as a summary
      * of its own, not the stored record (R2C-11).
      */
@@ -136,8 +137,20 @@ internal class ChangeRoutes(
             text.toIntOrNull()?.takeIf { it in 1..MAX_LIMIT }
                 ?: throw InvalidControlRequestException("limit is a number from 1 to $MAX_LIMIT")
         } ?: DEFAULT_LIMIT
-        val page = plane.changes(operator, document, state, query["after"], limit, profile::admitsChange)
-        return json(ControlResponseJson.changes(page))
+        val cursor = if (document != null) ListingCursor.CHANGES_OF_DOCUMENT else ListingCursor.CHANGES_BY_STATE
+        val page = plane.changes(
+            operator,
+            document,
+            state,
+            query["after"]?.let(cursor::decode),
+            limit,
+            profile::admitsChange
+        )
+        return json(
+            ControlResponseJson.changes(
+                me.ahoo.cosec.control.store.ChangePage(page.changes, page.next?.let(cursor::encode))
+            )
+        )
     }
 
     private companion object {

@@ -75,9 +75,15 @@ internal class ChangeListings(private val store: ControlStore, private val autho
     }
 
     /**
-     * The page is cut after the filter, never before (`CTL-55`): the store skips, unread, the documents the caller's
-     * tenant does not reach, and the rest are read page by page until [limit] visible ones and one more are found, so
-     * [ChangePage.next] is the cursor of a change the caller sees, and there only when a visible one follows it.
+     * The page is cut after the filter, never before (`CTL-55`): the store skips, unread, the documents the caller may
+     * not have scanned ([scannable]), and the rest are read page by page until [limit] visible ones and one more are
+     * found, so [ChangePage.next] is then the position of a change the caller sees.
+     *
+     * The scan is bounded per request (R3-3): it reads at most [SCAN_PAGES] × [limit] changes, whatever the caller may
+     * see. When the bound stops it first, the page holds what was found, short or empty, and [ChangePage.next] is the
+     * position where the scan stopped, so the next request continues from it rather than reading the same entries
+     * again. That position may be a change the caller may not see; it is given only to a caller admitted to scan that
+     * layer, and the change still answers by id as to anyone who may not read it.
      */
     private suspend fun byState(
         operator: Operator,
@@ -88,12 +94,20 @@ internal class ChangeListings(private val store: ControlStore, private val autho
         visible: suspend (ListedChange) -> Boolean,
     ): ChangePage {
         val layers = scannable(operator)
+        val bound = SCAN_PAGES * limit
         val found = ArrayList<ListedChange>()
         var cursor = after
+        var read = 0
         while (found.size <= limit) {
-            val page = store.changes(state, cursor, limit) {
+            if (read >= bound) {
+                // Stopped by the bound: the page so far, and where the scan stopped.
+                return ChangePage(found, cursor)
+            }
+            val page = store.changes(state, cursor, minOf(limit, bound - read)) {
                 TenantIsolation.allows(operator, it) && documents(it) && ownerOf(it).first in layers
             }
+            // A page of none still counts, so a store that answers empty pages cannot keep a request going.
+            read += maxOf(1, page.changes.size)
             page.changes.filterTo(found) { visible(it) }
             cursor = page.next ?: break
         }
@@ -152,6 +166,14 @@ internal class ChangeListings(private val store: ControlStore, private val autho
     }
 
     private companion object {
+        /**
+         * How many pages of changes a listing by state reads at most per request: four. A caller who may read the
+         * documents it scans fills its page from the first one; four leave room for one who sees about one change in
+         * four before a short page asks it to continue, and cap the costliest request at 800 changes read (a limit of
+         * 200), whatever the caller may see.
+         */
+        const val SCAN_PAGES = 4
+
         /** As the stores order a state's members: `<docKey>#<id>`. */
         fun cursorOf(listed: ListedChange): String = "${listed.document}#${listed.id.value}"
     }

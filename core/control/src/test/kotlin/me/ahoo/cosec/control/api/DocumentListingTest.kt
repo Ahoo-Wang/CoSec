@@ -86,8 +86,9 @@ class DocumentListingTest {
     fun `a page is cut after the filter, and its cursor names the last document shown - CTL-68`() {
         val (_, first) = list(plato, mapOf("kind" to "tenant", "limit" to "1"))
         keys(first).assert().containsExactly("tenant:acme")
-        first.get("next").asString().assert().isEqualTo("tenant:acme")
-        val (_, second) = list(plato, mapOf("kind" to "tenant", "limit" to "1", "after" to "tenant:acme"))
+        val next = first.get("next").asString()
+        ListingCursor.DOCUMENTS.decode(next).assert().isEqualTo("tenant:acme")
+        val (_, second) = list(plato, mapOf("kind" to "tenant", "limit" to "1", "after" to next))
         keys(second).assert().containsExactly("tenant:globex")
         second.get("next").isNull.assert().isTrue()
         // A caller who sees one document gets it on one page, whatever the others are.

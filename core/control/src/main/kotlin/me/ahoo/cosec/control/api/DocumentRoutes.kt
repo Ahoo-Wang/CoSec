@@ -41,8 +41,10 @@ import me.ahoo.cosec.control.api.JsonFields.optText
 import me.ahoo.cosec.control.api.JsonFields.text
 import me.ahoo.cosec.control.authz.Operator
 import me.ahoo.cosec.control.change.ApplyMode
+import me.ahoo.cosec.control.change.ChangeRequestCodec
 import me.ahoo.cosec.control.change.InvalidControlRequestException
 import me.ahoo.cosec.control.change.ownerOf
+import me.ahoo.cosec.control.change.requireRequest
 import me.ahoo.cosec.document.PolicyDocumentCodec
 import me.ahoo.cosec.model.decision.DocumentKind
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
@@ -129,6 +131,19 @@ internal class DocumentRoutes(private val plane: ControlPlane) : RouteHandler {
         val limit = request.query["limit"]?.let { text ->
             text.toIntOrNull() ?: throw InvalidControlRequestException("[limit] is a number from 1 to ${ControlPlane.MAX_LIMIT}.")
         } ?: ControlPlane.DEFAULT_LIMIT
-        return json(ControlResponseJson.documents(plane.listing.list(operator, kind, request.query["after"], limit)))
+        // The key of the page before's last document, of this kind: a token of another listing or kind is a 400.
+        val after = request.query["after"]?.let { token ->
+            ListingCursor.DOCUMENTS.decode(token).also {
+                requireRequest(ownerOf(ChangeRequestCodec.documentKeyOf(it)).first == kind) {
+                    "[after] is not a cursor of this listing: pass back its `next` unchanged."
+                }
+            }
+        }
+        val page = plane.listing.list(operator, kind, after, limit)
+        return json(
+            ControlResponseJson.documents(
+                DocumentPage(page.documents, page.next?.let(ListingCursor.DOCUMENTS::encode), page.asOf)
+            )
+        )
     }
 }
