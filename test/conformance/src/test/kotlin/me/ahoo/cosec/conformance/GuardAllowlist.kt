@@ -25,6 +25,8 @@ object GuardAllowlist {
     val GUARDS: Map<String, Set<String>> = mapOf(
         "build" to setOf(
             // CTL-57, CTL-58: how a step was identified, and the service profile of the control API.
+            "spring-boot:ServicePortRoutesTest#a route that was served is never turned into a 404, whatever its write left behind",
+            "spring-boot:ServicePortRoutesTest#a path no control route answers is a 404 on the service port, and a request on another port goes on",
             "spring-boot:ControlServicePortSettingsTest#the service port serves the control API's routes and no route of the application, under the base path or not",
             "spring-boot:ControlServicePortTest#the peer of a control request is the connection's, beneath the forwarded header handling",
             "control:ChangeOriginTest#a change records how its author was identified, and each event how its step's operator was",

@@ -826,6 +826,8 @@
       "level": "build",
       "pending": null,
       "guards": [
+        "spring-boot:ServicePortRoutesTest#a route that was served is never turned into a 404, whatever its write left behind",
+        "spring-boot:ServicePortRoutesTest#a path no control route answers is a 404 on the service port, and a request on another port goes on",
         "spring-boot:ControlServicePortSettingsTest#the service port serves the control API's routes and no route of the application, under the base path or not",
         "control:ControlProfileTest#the service profile serves a tenant document and its history, and the change flow",
         "control:ControlProfileTest#what is a person's or the platform's is a 404 on the service profile, and is served on the operators' one",
