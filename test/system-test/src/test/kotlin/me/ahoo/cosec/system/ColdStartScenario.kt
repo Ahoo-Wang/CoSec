@@ -44,14 +44,12 @@ class ColdStartScenario {
         /** What the process is told about who asks: the control API answers 401 to nobody, documents or not. */
         val states: Boolean = false,
     ) {
-        fun headers(): Array<Pair<String, String>> =
-            if (states) {
-                arrayOf(
-                    "CoSec-Identity" to StatedIdentity.header(SignIn.ROOT, method = "jwt")
-                )
-            } else {
-                emptyArray()
+        fun headers(): Array<Pair<String, String>> {
+            if (!states) {
+                return emptyArray()
             }
+            return arrayOf("CoSec-Identity" to StatedIdentity.header(SignIn.ROOT, method = "jwt"))
+        }
     }
 
     private val processes: List<Process>
