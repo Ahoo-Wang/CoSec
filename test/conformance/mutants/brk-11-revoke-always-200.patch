@@ -3,7 +3,7 @@
 # Tests: :control:test --tests me.ahoo.cosec.control.api.ControlHttpTest --tests me.ahoo.cosec.control.change.PreemptionRaceTest :conformance:test
 
 diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/api/BreakGlassRoutes.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/api/BreakGlassRoutes.kt
-index f6821693..2e1feccc 100644
+index 47e2b580b..8901f86b0 100644
 --- a/core/control/src/main/kotlin/me/ahoo/cosec/control/api/BreakGlassRoutes.kt
 +++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/api/BreakGlassRoutes.kt
 @@ -63,12 +63,6 @@ internal class BreakGlassRoutes(private val plane: ControlPlane) : RouteHandler
@@ -16,6 +16,6 @@ index f6821693..2e1feccc 100644
 -                    "binding [${binding.value}] still grants: change ${change.id.value} is ${change.state}"
 -                )
 -            }
-             changeResponse(change, OK)
+             changeResponse(plane, operator, change, OK)
          }
  
