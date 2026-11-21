@@ -60,17 +60,19 @@ interface IamControl {
 class ServicePortControl(@Value("\${system.control.service.url}") private val service: String) : IamControl {
     private val client = WebClient.builder().baseUrl("$service/cosec/control/v1").build()
 
-    override suspend fun document(key: String): ControlAnswer = call("GET", "/documents/$key", null)
+    override suspend fun document(key: String): ControlAnswer = call("GET", "/documents/{key}", null, key)
 
     override suspend fun propose(request: String): ControlAnswer = call("POST", "/changes", request)
 
     override suspend fun skipShadow(id: String, reason: String): ControlAnswer =
-        call("POST", "/changes/$id:skip-shadow", """{"reason":"$reason"}""")
+        call("POST", "/changes/{id}:skip-shadow", """{"reason":"$reason"}""", id)
 
-    override suspend fun publish(id: String): ControlAnswer = call("POST", "/changes/$id:publish", "{}")
+    override suspend fun publish(id: String): ControlAnswer = call("POST", "/changes/{id}:publish", "{}", id)
 
-    private suspend fun call(method: String, path: String, body: String?): ControlAnswer {
-        val request = client.method(org.springframework.http.HttpMethod.valueOf(method)).uri(path)
+    /** [path] is a template: its one variable, [variable], is encoded as a path segment, so no value names another route. */
+    private suspend fun call(method: String, path: String, body: String?, variable: String? = null): ControlAnswer {
+        val request = client.method(org.springframework.http.HttpMethod.valueOf(method))
+            .uri(path, *listOfNotNull(variable).toTypedArray())
             .header(IdentityHeader.NAME, identity())
             .accept(MediaType.APPLICATION_JSON)
         val spec = if (body == null) request else request.contentType(MediaType.APPLICATION_JSON).bodyValue(body)

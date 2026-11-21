@@ -34,6 +34,9 @@ class Onboarding(private val control: IamControl) {
     @PostMapping("/admin/onboard")
     suspend fun onboard(@RequestBody body: Map<String, String>): ResponseEntity<String> {
         val tenant = body.getValue("tenant")
+        val policy = body.getValue("policy")
+        // Ids of this test host's own scenarios: nothing that could name another document or route.
+        require(ID.matches(tenant) && ID.matches(policy)) { "A tenant and a policy id are letters, digits and dashes." }
         val key = "tenant:$tenant"
         val head = control.document(key).also { if (it.status != OK) return refused(it) }
         val revision = json.readTree(head.body).get("revision").asLong()
@@ -72,6 +75,7 @@ class Onboarding(private val control: IamControl) {
         ).header("Content-Type", "application/json").body(answer.body)
 
     private companion object {
+        val ID = Regex("[A-Za-z0-9-]{1,64}")
         const val OK = 200
         const val CREATED = 201
     }
