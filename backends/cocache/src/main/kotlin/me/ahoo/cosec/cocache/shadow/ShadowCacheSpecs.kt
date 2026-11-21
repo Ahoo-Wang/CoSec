@@ -37,7 +37,7 @@ import java.time.Instant
  * | candidates | `<p>:candidate:<docKey>` | store of record: the control plane's only copy while a change stages |
  * | reports | `<p>:shadow:report:<window>:<instance>` | one instance's report of one window; expires [REPORT_TTL] after its last write |
  * | reporters | `<p>:shadow:reporters:<window>` | the instances that reported on one window, only ever added to; expires as the reports |
- * | statuses | `<p>:shadow:status:<instance>` | one instance's last status; expires [STATUS_TTL] after its last write |
+ * | statuses | `<p>:shadow:status:<instance>` | one instance's last status; expires exactly [STATUS_TTL] after its last write, no jitter |
  * | instances | `<p>:shadow:instances:all` | the instances that have a status, each with when it listed itself; expires as the reports |
  *
  * All five are `Store`s. Reports and statuses are observations, so they expire; a failed read still throws, so that an
@@ -88,19 +88,28 @@ internal object ShadowCacheSpecs {
     fun reportKey(window: String, instance: String): String = "$window:$instance"
 
     /** One instance's status under its id ([ShadowReport.isInstanceId]). */
-    fun statuses(keyPrefix: String = DEFAULT_KEY_PREFIX): StoreSpec<String, InstanceStatus> =
-        observation(CoSecCacheSpecs.INSTANCE_STATUS_CACHE_NAME, keyPrefix, InstanceStatusCodec, STATUS_TTL)
+    fun statuses(keyPrefix: String = DEFAULT_KEY_PREFIX): StoreSpec<String, InstanceStatus> = observation(
+        CoSecCacheSpecs.INSTANCE_STATUS_CACHE_NAME,
+        keyPrefix,
+        InstanceStatusCodec,
+        STATUS_TTL,
+        exact = true,
+    )
 
     /** The instances that have a status to read, by when each last listed itself, under [INDEX_KEY]. */
     fun instances(keyPrefix: String = DEFAULT_KEY_PREFIX): StoreSpec<String, Map<String, Instant>> =
         observation(CoSecCacheSpecs.INSTANCE_INDEX_CACHE_NAME, keyPrefix, InstanceIndexCodec, REPORT_TTL)
 
-    /** A `Store` whose entries expire [ttl] after their last write; a failed read throws ([CoSecCacheSpecs.locks]). */
+    /**
+     * A `Store` whose entries expire [ttl] after their last write; a failed read throws ([CoSecCacheSpecs.locks]). With
+     * [exact], no jitter: the entry lives exactly [ttl], where that life is a bound something else relies on.
+     */
     private fun <V : Any> observation(
         cacheName: String,
         keyPrefix: String,
         codec: Codec<V>,
-        ttl: Duration
+        ttl: Duration,
+        exact: Boolean = false,
     ): StoreSpec<String, V> {
         val layout = CoSecCacheSpecs.layout(keyPrefix, cacheName)
         return StoreSpec.builder<String, V>(cacheName)
@@ -108,7 +117,10 @@ internal object ShadowCacheSpecs {
             .namespace(layout.namespace)
             .keyEncoder { it }
             .codec(codec)
-            .policy { this.ttl = ttl }
+            .policy {
+                this.ttl = ttl
+                if (exact) ttlJitter = Duration.ZERO
+            }
             .build()
     }
 }

@@ -210,6 +210,7 @@ class CacheTtlPolicyTest {
         ShadowCacheSpecs.instances().policy.ttl.assert().isEqualTo(ShadowCacheSpecs.REPORT_TTL)
         ShadowCacheSpecs.reports().policy.ttl.assert().isEqualTo(ShadowCacheSpecs.REPORT_TTL)
         ShadowCacheSpecs.statuses().policy.ttl.assert().isEqualTo(ShadowCacheSpecs.STATUS_TTL)
+        ShadowCacheSpecs.statuses().policy.ttlJitter.assert().isEqualTo(Duration.ZERO)
         weakened { factory ->
             listOf(
                 ShadowCacheSpecs.reports(),
@@ -226,6 +227,9 @@ class CacheTtlPolicyTest {
                 factory.runtime.policy(spec.name)!!.ttl.assert().describedAs(spec.name).isEqualTo(spec.policy.ttl)
                 CoSecCacheSpecs.locks(spec.name).isLocked(PolicyField.TTL).assert().isTrue()
             }
+            // CTL-73: a status's key lives exactly its life, whatever jitter a customizer asks for (it asks a minute).
+            factory.runtime.policy(ShadowCacheSpecs.statuses().name)!!.ttlJitter.assert().isEqualTo(Duration.ZERO)
+            CoSecCacheSpecs.locks(ShadowCacheSpecs.statuses().name).isLocked(PolicyField.TTL_JITTER).assert().isTrue()
         }
     }
 

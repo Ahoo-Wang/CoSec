@@ -274,7 +274,7 @@ class DocumentWriter(private val cache: PolicySnapshotCache, private val store: 
 
 /**
  * A store under [cacheName]'s layout that writes any bytes, as a buggy or earlier writer would; with [ttl], each entry
- * expires that long after its last write, as the store it stands in for writes them.
+ * expires exactly that long after its last write (no jitter), as the store it stands in for writes them.
  */
 fun <K : Any> rawStore(
     name: String,
@@ -288,6 +288,15 @@ fun <K : Any> rawStore(
         .namespace(layout.namespace)
         .keyEncoder(keyEncoder)
         .codec(RawCodec)
-        .let { builder -> if (ttl != null) builder.policy { this.ttl = ttl } else builder }
+        .let { builder ->
+            if (ttl == null) {
+                builder
+            } else {
+                builder.policy {
+                    this.ttl = ttl
+                    ttlJitter = java.time.Duration.ZERO
+                }
+            }
+        }
         .build()
 }
