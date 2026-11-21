@@ -27,6 +27,23 @@ Which preview of the library may run behind which preview of the gateway image: 
 
 ## From 8.0.0-beta.4 {#from-8-0-0-beta-4}
 
+- **New: the control plane's facade, `ControlService`, for a service that embeds the control plane** (`CTL-65`).
+  - Calls are decided as the `ControlCaller` they state, and recorded as that caller's.
+  - It reaches only the narrow set: tenant and app document reads, and a tenant's change flow.
+  - Requests and answers are the control API's bodies and JSON.
+  - `IdentityHeader` writes the `CoSec-Identity` header.
+  - Nothing to change for an application that does not use them
+    ([Changing policies from your code](../integration/checks.md#changing-policies-from-your-code)).
+- **A shadow window passes only when every live instance acknowledges it** (design D2, `CTL-10`). Affected: shadow
+  windows during and after the upgrade, and clients that read a change's `shadow`.
+  - Each data-plane instance now lists, in the status it writes every report interval, the windows whose candidate it
+    has compiled. A window with enough samples still waits until every instance with a status in the last minute lists
+    it; at `cosec.control.shadow.max-duration` it closes insufficient as before.
+  - **During a rolling upgrade**, instances of the previous preview send no acknowledgements, so a window opened then
+    closes no earlier than the upgrade's end (their statuses expire within two minutes of their stopping), or at
+    `max-duration` as insufficient. Upgrade the data plane before you stage changes you need closed soon.
+  - `GET /changes/{id}` adds `shadow.acknowledged` and `shadow.waitingFor` while the window is open
+    ([What a change answers](../policies/testing.md#what-a-change-answers)); `contract/control/change.json` pins them.
 - **Skipping a shadow window and rebasing a change are recorded as change events** (`CTL-63`). Affected: change
   listeners, and consumers of the change log or the audit stream.
   - `ChangeEvent.Kind` gains `SHADOW_SKIPPED` and `REBASED`. A skip used to be recorded only in the provenance of the

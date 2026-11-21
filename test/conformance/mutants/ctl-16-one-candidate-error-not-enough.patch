@@ -3,10 +3,10 @@
 # Tests: :control:test --tests me.ahoo.cosec.control.change.ControlRoundTwoFixesTest :conformance:test --tests me.ahoo.cosec.conformance.ConformanceTest
 
 diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ShadowWindows.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ShadowWindows.kt
-index b31b37af..4bea1619 100644
+index 43621f280..4a20f14f5 100644
 --- a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ShadowWindows.kt
 +++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ShadowWindows.kt
-@@ -64,7 +64,7 @@ class ShadowWindows(private val reports: ShadowReportReader, private val options
+@@ -83,7 +83,7 @@ class ShadowWindows(
          for (report in read) {
              report.counts.forEach { (outcome, count) -> counts.merge(outcome.name, count, Long::plus) }
          }
@@ -14,4 +14,4 @@ index b31b37af..4bea1619 100644
 +        val blocked = read.isNotEmpty() && read.all { (it.counts[ShadowOutcome.CANDIDATE_ERROR] ?: 0) > 0 }
          val effective = ShadowOutcome.entries.filter { it.effective }.sumOf { counts.getValue(it.name) }
          val elapsed = java.time.Duration.between(state.startedAt, now)
-         val summary = when {
+         val acknowledgement = acknowledgement(window)

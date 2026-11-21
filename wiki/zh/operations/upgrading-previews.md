@@ -24,6 +24,16 @@ description: "每个 8.0 预览版（alpha 与 beta）到下一个之间的变�
 
 ## 从 8.0.0-beta.4 升级 {#from-8-0-0-beta-4}
 
+- **新增：控制面门面 `ControlService`，供内嵌控制面的服务使用**（`CTL-65`）。
+  - 调用按它们声明的 `ControlCaller` 决策，并记为该调用方的步骤。
+  - 它只触及窄集合：租户与 app 文档的读取，以及租户的变更流程。
+  - 请求与应答是控制 API 的请求体和 JSON。
+  - `IdentityHeader` 写出 `CoSec-Identity` 头。
+  - 不使用它们的应用无需改动（[在代码中修改策略](../integration/checks.md#changing-policies-from-your-code)）。
+- **只有每个存活实例都确认了影子窗口，它才会通过**（设计 D2，`CTL-10`）。受影响：升级期间及之后的影子窗口，以及读取变更 `shadow` 的客户端。
+  - 每个数据面实例现在在每个上报间隔写入的状态中，列出它已编译其候选的窗口。样本已够的窗口仍要等到最近一分钟内写过状态的每个实例都列出它；到达 `cosec.control.shadow.max-duration` 时与以前一样以证据不足关闭。
+  - **滚动升级期间**，上一个预览版的实例不发送确认，因此这期间开启的窗口不会早于升级结束时关闭（这些实例停止后，其状态在两分钟内过期），或在 `max-duration` 时以证据不足关闭。需要尽快关闭的变更，请先升级数据面再暂存。
+  - 窗口未关闭时，`GET /changes/{id}` 增加 `shadow.acknowledged` 和 `shadow.waitingFor`（[变更的应答](../policies/testing.md#what-a-change-answers)）；`contract/control/change.json` 固定了它们。
 - **跳过影子窗口和 rebase 变更都记为变更事件**（`CTL-63`）。受影响的是变更监听器，以及变更日志或审计流的消费方。
   - `ChangeEvent.Kind` 新增 `SHADOW_SKIPPED` 和 `REBASED`。过去跳过只记在它所发布的修订的来源中，所以变更被放弃时跳过不留任何记录；现在
     `:skip-shadow` 以及 break-glass 变更免除的窗口会写 `SHADOW_SKIPPED`，备注写明原因，`:rebase` 写 `REBASED`。

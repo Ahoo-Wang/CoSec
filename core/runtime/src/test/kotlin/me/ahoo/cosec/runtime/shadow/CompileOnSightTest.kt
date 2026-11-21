@@ -149,6 +149,35 @@ class CompileOnSightTest {
         runBlocking { source.candidate(acme) }!!.window.assert().isEqualTo("w-2")
     }
 
+    /** `CTL-10`: the status acknowledges the windows compiled, or recorded as failing, and only those. */
+    @Test
+    fun `the status acknowledges the windows the instance compiled, and none without a list`() {
+        flush()
+        runBlocking { reports.statuses() }.single().windows.assert().isNull()
+        stage(acme, "w-1", written = false)
+        flush()
+        runBlocking { reports.statuses() }.single().windows.assert().isEmpty()
+        store.candidates[acme] = StoredCandidate("w-1", 1, document())
+        flush()
+        runBlocking { reports.statuses() }.single().windows.assert().containsExactly("w-1")
+        failing = true
+        stage(acme, "w-2")
+        flush()
+        runBlocking { reports.statuses() }.single().windows.assert().containsExactly("w-2")
+    }
+
+    /** `CTL-10`: an instance without CoSec's candidate source compiles nothing on sight, and says it does not shadow. */
+    @Test
+    fun `a reporter without CoSec's candidate source says its instance does not shadow`() {
+        runBlocking { ShadowReporter(recorder, reports, { emptyMap() }, Clock.systemUTC()).flush() }
+        runBlocking { reports.statuses() }.single().let {
+            it.shadows.assert().isFalse()
+            it.windows.assert().isNull()
+        }
+        flush()
+        runBlocking { reports.statuses() }.single().shadows.assert().isTrue()
+    }
+
     @Test
     fun `without a list nothing is compiled on sight`() {
         store.candidates[acme] = StoredCandidate("w-1", 1, document())

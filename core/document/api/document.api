@@ -56,6 +56,13 @@ public final class me/ahoo/cosec/document/SnapshotDocuments {
 	public final fun read ([B)Lme/ahoo/cosec/spi/snapshot/SnapshotDocument;
 }
 
+public final class me/ahoo/cosec/document/identity/IdentityHeader {
+	public static final field INSTANCE Lme/ahoo/cosec/document/identity/IdentityHeader;
+	public static final field NAME Ljava/lang/String;
+	public final fun write (Lme/ahoo/cosec/spi/identity/Identity;I)Ljava/lang/String;
+	public static synthetic fun write$default (Lme/ahoo/cosec/document/identity/IdentityHeader;Lme/ahoo/cosec/spi/identity/Identity;IILjava/lang/Object;)Ljava/lang/String;
+}
+
 public final class me/ahoo/cosec/document/route/Route {
 	public fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)V
 	public final fun getAction ()Ljava/lang/String;

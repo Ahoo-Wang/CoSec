@@ -21,6 +21,7 @@ import me.ahoo.cosec.control.api.ControlHttp.Companion.JSON
 import me.ahoo.cosec.control.api.ControlRequestJson.query
 import me.ahoo.cosec.control.api.ControlRequestJson.revisionOf
 import me.ahoo.cosec.control.api.JsonFields.wellFormed
+import me.ahoo.cosec.control.change.Acknowledgement
 import me.ahoo.cosec.control.change.ChangeRejectedException
 import me.ahoo.cosec.control.change.ChangeRequest
 import me.ahoo.cosec.control.change.ControlStatus.NOT_FOUND
@@ -58,8 +59,8 @@ internal object ControlHttpSupport {
     inline fun get(request: ControlHttpRequest, block: () -> ControlHttpResponse): ControlHttpResponse =
         if (request.method == GET) block() else methodNotAllowed()
 
-    fun changeResponse(change: ChangeRequest, status: Int) =
-        ControlHttpResponse(status, JSON, ChangeAnswer.encode(change))
+    fun changeResponse(change: ChangeRequest, status: Int, acknowledgement: Acknowledgement? = null) =
+        ControlHttpResponse(status, JSON, ChangeAnswer.encode(change, acknowledgement))
 
     fun document(document: me.ahoo.cosec.document.PolicyDocument) = ControlHttpResponse(
         OK,

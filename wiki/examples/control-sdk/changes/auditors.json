@@ -1,0 +1,32 @@
+{
+  "document": "tenant:acme",
+  "base": 1,
+  "note": "auditors read orders",
+  "operations": [
+    {
+      "op": "putPolicy",
+      "policy": {
+        "id": "audit-read",
+        "statements": [
+          {
+            "effect": "allow",
+            "action": "order:read",
+            "resource": "order/**"
+          }
+        ]
+      }
+    },
+    {
+      "op": "putBinding",
+      "binding": {
+        "id": "auditors",
+        "subject": {
+          "role": "auditor"
+        },
+        "app": "order",
+        "space": "*",
+        "policy": "audit-read"
+      }
+    }
+  ]
+}

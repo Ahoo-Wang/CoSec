@@ -152,6 +152,13 @@ class ControlHttp(plane: ControlPlane, profile: ControlProfile = ControlProfile.
         }
     }
 
+    /**
+     * The problem the routes answer for [status], without detail, for a refusal made before a route is reached: a route
+     * outside the service's narrow set (404), or a caller whose stated identity may not act (401) (`CTL-65`).
+     */
+    internal fun refused(status: Int, requestId: String): ControlHttpResponse =
+        problem(Problem.of(status), requestId, null)
+
     private fun problem(problem: Problem, requestId: String, detail: String?): ControlHttpResponse {
         val node = factory.objectNode()
             .put("type", ProblemType.TYPE_PREFIX + problem.slug)

@@ -20,6 +20,7 @@ import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.control.audit.ChangeListeners
 import me.ahoo.cosec.control.authz.ControlAuthorizer
 import me.ahoo.cosec.control.authz.Operator
+import me.ahoo.cosec.control.change.AcknowledgementReader
 import me.ahoo.cosec.control.change.ApplyMode
 import me.ahoo.cosec.control.change.ChangeId
 import me.ahoo.cosec.control.change.ChangeRequest
@@ -176,6 +177,9 @@ class Changes(
 
     /** [Staging.shadowed]: looks at the window of a `SHADOWING` change, and closes it once it may. */
     suspend fun shadowed(id: ChangeId): ChangeRequest = staging.shadowed(id)
+
+    /** [Staging.acknowledgement]: which live instances acknowledge the open window of a change. */
+    val acknowledgements: AcknowledgementReader = AcknowledgementReader { staging.acknowledgement(it) }
 
     /** [Staging.propagation]: the propagation of [revision] of [key] to the instances. */
     suspend fun propagation(key: SnapshotKey, revision: Long): Propagation = staging.propagation(key, revision)

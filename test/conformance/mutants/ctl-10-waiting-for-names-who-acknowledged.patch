@@ -1,0 +1,17 @@
+# Rule: CTL-10
+# Mutant: waitingFor names the instances that acknowledged the window instead of those that did not
+# Tests: :control:test --tests me.ahoo.cosec.control.lifecycle.ShadowAcknowledgementTest :conformance:test
+
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ShadowWindows.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ShadowWindows.kt
+index 0ac01f8aa..1b7d4946c 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ShadowWindows.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ShadowWindows.kt
+@@ -108,7 +108,7 @@ class ShadowWindows(
+     suspend fun acknowledgement(window: String): Acknowledgement {
+         // An instance that does not shadow (its candidate source is not CoSec's) is not waited for; propagation counts it.
+         val live = statuses.read().statuses.filter { it.shadows }
+-        val waiting = live.filter { it.windows?.contains(window) != true }.map { it.instance }.sorted()
++        val waiting = live.filter { it.windows?.contains(window) == true }.map { it.instance }.sorted()
+         return Acknowledgement(live.size - waiting.size, waiting)
+     }
+ 

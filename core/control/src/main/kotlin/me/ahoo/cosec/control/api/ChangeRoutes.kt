@@ -58,7 +58,10 @@ internal class ChangeRoutes(
         val (idText, verb) = verbOf(segments[0])
         val id = changeIdOf(idText)
         if (verb == null) {
-            return get(request) { changeResponse(plane.get(operator, id), OK) }
+            return get(request) {
+                val change = plane.get(operator, id)
+                changeResponse(change, OK, plane.acknowledgements.of(change))
+            }
         }
         return post(request) {
             val change = when (verb) {

@@ -265,4 +265,23 @@ curl -X POST localhost:8080/cosec/control/v1/explain \
 
 **模拟一个变更。** `POST <base-path>/simulate` 接受同样的 `request`，以及可选的已暂存变更（`"candidate": "<change id>"`）：它给出当前文档上的决策（`enforced`）、应用该变更后的决策（`candidate`），以及两者是否不同。它需要对租户文档和该变更所属文档拥有 `cosec:simulate`。暂存变更、影子窗口和访问分析（`/analyze`）见[策略测试](../policies/testing.md)。
 
+## 在代码中修改策略 {#changing-policies-from-your-code}
+
+内嵌控制面的服务（例如为租户开通的 IAM 服务）在自己的代码中通过 `ControlService`（`cosec-control`，`@ExperimentalCoSecApi`）调用控制面。凡是装配了控制面的地方，starter 都会提供它的 bean。每次调用都由策略按 `ControlCaller` 所声明的主体作出决策，并记为该主体的步骤。调用经过控制 API 自己的路由：同样的调用经 HTTP 发出，应答相同、记录相同、被拒绝的方式也相同（`CTL-65`）。
+
+- **谁在执行：**
+  - `ControlCaller.of(securityContext)` 以你正在服务的请求的用户身份执行。它接受 CoSec 为该请求创建的 `SecurityContext`，拒绝你的代码自行组装的上下文。
+  - `ControlCaller.service("iam", roles)` 以你的服务在平台租户中的主体身份执行，用于没有请求在背后的工作。由你的代码声明主体及其角色，控制面相信它们，就像相信自己进程内的任何代码一样：那些代码本来就持有控制存储的写账号。被相信的只是谁在执行，从来不是该主体可以做什么：每次调用仍由策略按平台文档给该主体的绑定作出决策，记录也会写明该主体。
+- **能触及什么：** 读取租户或 app 的文档（`document`、`revisions`、`revision`、`diff`），以及租户文档的变更流程（`propose`、`apply`、`change`、`changes`、`rebase`、`startShadow`、`skipShadow`、`abandon`、`publish`）。自动化的变更可以开启它的影子窗口，读取变更直到窗口关闭，再带着摘要的确认发布，而不是跳过窗口。平台文档、审批、回滚和 break-glass 都不可触及：它们属于人，在运维人员的路由上进行。
+- **输入与输出：**
+  - 请求是路由的请求体（[变更](../policies/testing.md#changes)），文档采用[文档格式](../policies/language.md)。
+  - 应答是控制 API 的 JSON（[变更的应答](../policies/testing.md#what-a-change-answers)），以文本形式给出。
+  - 拒绝是带有路由状态码和问题详情的 `ControlRefusedException`。
+
+<<< @/examples/control-sdk/kotlin/Onboarding.kt [Onboarding.kt]
+
+<<< @/examples/control-sdk/changes/auditors.json [auditors.json]
+
+需要第二个人审批的变更，无论由谁提议，都会停在 `AWAITING_APPROVAL`：把它的 id 报告给一个人，由他在运维人员的路由上审批。要以你自己的主体调用网关后面的另一个服务，`IdentityHeader.write(identity)`（`cosec-document`）写出网关本会转发的 `CoSec-Identity` 头。
+
 **下一步：** 每个属性及其默认值，见[配置](../operations/configuration.md)；要编写规则本身，见[策略语言](../policies/language.md)。

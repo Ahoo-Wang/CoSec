@@ -1,0 +1,17 @@
+# Rule: CTL-65
+# Mutant: the facade lets a read of the platform document through: a route outside its narrow set is reachable
+# Tests: :control:test --tests me.ahoo.cosec.control.sdk.ControlServiceTest
+
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/sdk/ServiceRoutes.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/sdk/ServiceRoutes.kt
+index c052d5c53..91d277e05 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/sdk/ServiceRoutes.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/sdk/ServiceRoutes.kt
+@@ -71,7 +71,7 @@ internal object ServiceRoutes {
+         else -> false
+     }
+ 
+-    private fun readable(key: SnapshotKey?): Boolean = key is SnapshotKey.Tenant || key is SnapshotKey.App
++    private fun readable(key: SnapshotKey?): Boolean = key != null
+ 
+     private fun key(segment: String): SnapshotKey? = try {
+         keyOf(unescaped(segment))

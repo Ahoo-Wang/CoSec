@@ -3,14 +3,14 @@
 # Tests: :control:test --tests me.ahoo.cosec.control.api.ControlAnswersTest
 
 diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/api/ControlHttpSupport.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/api/ControlHttpSupport.kt
-index 2dd8a93b5..cbdeab4c8 100644
+index 2a4cac54b..1dff824b3 100644
 --- a/core/control/src/main/kotlin/me/ahoo/cosec/control/api/ControlHttpSupport.kt
 +++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/api/ControlHttpSupport.kt
-@@ -59,7 +59,7 @@ internal object ControlHttpSupport {
+@@ -60,7 +60,7 @@ internal object ControlHttpSupport {
          if (request.method == GET) block() else methodNotAllowed()
  
-     fun changeResponse(change: ChangeRequest, status: Int) =
--        ControlHttpResponse(status, JSON, ChangeAnswer.encode(change))
+     fun changeResponse(change: ChangeRequest, status: Int, acknowledgement: Acknowledgement? = null) =
+-        ControlHttpResponse(status, JSON, ChangeAnswer.encode(change, acknowledgement))
 +        ControlHttpResponse(status, JSON, me.ahoo.cosec.control.change.ChangeRequestCodec.encode(change))
  
      fun document(document: me.ahoo.cosec.document.PolicyDocument) = ControlHttpResponse(

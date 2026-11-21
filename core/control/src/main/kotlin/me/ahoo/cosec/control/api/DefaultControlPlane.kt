@@ -19,6 +19,7 @@ import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.control.authz.ControlActions
 import me.ahoo.cosec.control.authz.Operator
+import me.ahoo.cosec.control.change.AcknowledgementReader
 import me.ahoo.cosec.control.change.ApplyMode
 import me.ahoo.cosec.control.change.ChangeId
 import me.ahoo.cosec.control.change.ChangeRequest
@@ -127,6 +128,8 @@ class DefaultControlPlane(
 
     /** A change is read like its document: one the caller may not read is not there (404), so its id tells nothing. */
     override suspend fun get(operator: Operator, change: ChangeId): ChangeRequest = changes.visible(operator, change)
+
+    override val acknowledgements: AcknowledgementReader get() = changes.acknowledgements
 
     override suspend fun changes(
         operator: Operator,

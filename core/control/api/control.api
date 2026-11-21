@@ -425,6 +425,52 @@ public final class me/ahoo/cosec/control/change/StageSlot$Companion {
 	public final fun getFREE ()Lme/ahoo/cosec/control/change/StageSlot;
 }
 
+public final class me/ahoo/cosec/control/sdk/ControlCaller {
+	public static final field Companion Lme/ahoo/cosec/control/sdk/ControlCaller$Companion;
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class me/ahoo/cosec/control/sdk/ControlCaller$Companion {
+	public final fun of (Lme/ahoo/cosec/api/context/SecurityContext;)Lme/ahoo/cosec/control/sdk/ControlCaller;
+	public final fun service (Ljava/lang/String;Ljava/util/Set;)Lme/ahoo/cosec/control/sdk/ControlCaller;
+	public static synthetic fun service$default (Lme/ahoo/cosec/control/sdk/ControlCaller$Companion;Ljava/lang/String;Ljava/util/Set;ILjava/lang/Object;)Lme/ahoo/cosec/control/sdk/ControlCaller;
+}
+
+public final class me/ahoo/cosec/control/sdk/ControlRefusedException : java/lang/RuntimeException {
+	public fun <init> (ILjava/lang/String;)V
+	public final fun getCode ()Ljava/lang/String;
+	public final fun getDetail ()Ljava/lang/String;
+	public final fun getProblem ()Ljava/lang/String;
+	public final fun getRequestId ()Ljava/lang/String;
+	public final fun getStatus ()I
+	public final fun getType ()Ljava/lang/String;
+}
+
+public abstract interface class me/ahoo/cosec/control/sdk/ControlService {
+	public abstract fun abandon (Lme/ahoo/cosec/control/sdk/ControlCaller;Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public abstract fun apply (Lme/ahoo/cosec/control/sdk/ControlCaller;Lme/ahoo/cosec/spi/snapshot/SnapshotKey;Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public abstract fun change (Lme/ahoo/cosec/control/sdk/ControlCaller;Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public abstract fun changes (Lme/ahoo/cosec/control/sdk/ControlCaller;Lme/ahoo/cosec/spi/snapshot/SnapshotKey;Lme/ahoo/cosec/control/change/ChangeState;Ljava/lang/String;Ljava/lang/Integer;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public static synthetic fun changes$default (Lme/ahoo/cosec/control/sdk/ControlService;Lme/ahoo/cosec/control/sdk/ControlCaller;Lme/ahoo/cosec/spi/snapshot/SnapshotKey;Lme/ahoo/cosec/control/change/ChangeState;Ljava/lang/String;Ljava/lang/Integer;Lkotlin/coroutines/Continuation;ILjava/lang/Object;)Ljava/lang/Object;
+	public abstract fun diff (Lme/ahoo/cosec/control/sdk/ControlCaller;Lme/ahoo/cosec/spi/snapshot/SnapshotKey;JJLkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public abstract fun document (Lme/ahoo/cosec/control/sdk/ControlCaller;Lme/ahoo/cosec/spi/snapshot/SnapshotKey;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public abstract fun propose (Lme/ahoo/cosec/control/sdk/ControlCaller;Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public abstract fun publish (Lme/ahoo/cosec/control/sdk/ControlCaller;Ljava/lang/String;Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public static synthetic fun publish$default (Lme/ahoo/cosec/control/sdk/ControlService;Lme/ahoo/cosec/control/sdk/ControlCaller;Ljava/lang/String;Ljava/lang/String;Lkotlin/coroutines/Continuation;ILjava/lang/Object;)Ljava/lang/Object;
+	public abstract fun rebase (Lme/ahoo/cosec/control/sdk/ControlCaller;Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public abstract fun revision (Lme/ahoo/cosec/control/sdk/ControlCaller;Lme/ahoo/cosec/spi/snapshot/SnapshotKey;JLkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public abstract fun revisions (Lme/ahoo/cosec/control/sdk/ControlCaller;Lme/ahoo/cosec/spi/snapshot/SnapshotKey;Ljava/lang/Long;Ljava/lang/Integer;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public static synthetic fun revisions$default (Lme/ahoo/cosec/control/sdk/ControlService;Lme/ahoo/cosec/control/sdk/ControlCaller;Lme/ahoo/cosec/spi/snapshot/SnapshotKey;Ljava/lang/Long;Ljava/lang/Integer;Lkotlin/coroutines/Continuation;ILjava/lang/Object;)Ljava/lang/Object;
+	public abstract fun skipShadow (Lme/ahoo/cosec/control/sdk/ControlCaller;Ljava/lang/String;Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public abstract fun startShadow (Lme/ahoo/cosec/control/sdk/ControlCaller;Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+}
+
+public final class me/ahoo/cosec/control/sdk/ControlService$DefaultImpls {
+	public static synthetic fun changes$default (Lme/ahoo/cosec/control/sdk/ControlService;Lme/ahoo/cosec/control/sdk/ControlCaller;Lme/ahoo/cosec/spi/snapshot/SnapshotKey;Lme/ahoo/cosec/control/change/ChangeState;Ljava/lang/String;Ljava/lang/Integer;Lkotlin/coroutines/Continuation;ILjava/lang/Object;)Ljava/lang/Object;
+	public static synthetic fun publish$default (Lme/ahoo/cosec/control/sdk/ControlService;Lme/ahoo/cosec/control/sdk/ControlCaller;Ljava/lang/String;Ljava/lang/String;Lkotlin/coroutines/Continuation;ILjava/lang/Object;)Ljava/lang/Object;
+	public static synthetic fun revisions$default (Lme/ahoo/cosec/control/sdk/ControlService;Lme/ahoo/cosec/control/sdk/ControlCaller;Lme/ahoo/cosec/spi/snapshot/SnapshotKey;Ljava/lang/Long;Ljava/lang/Integer;Lkotlin/coroutines/Continuation;ILjava/lang/Object;)Ljava/lang/Object;
+}
+
 public final class me/ahoo/cosec/control/store/AppList {
 	public static final field Companion Lme/ahoo/cosec/control/store/AppList$Companion;
 	public fun <init> (Ljava/util/Set;Z)V
