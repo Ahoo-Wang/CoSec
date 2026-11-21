@@ -62,7 +62,8 @@ import kotlin.coroutines.cancellation.CancellationException
 @InternalCoSecApi
 class Revisions(
     private val store: ControlStore,
-    private val clock: Clock = Clock.systemUTC(),
+    /** The control plane's clock: what its revisions are stamped with, and what its shared reads are aged by. */
+    internal val clock: Clock = Clock.systemUTC(),
     val retention: RetentionPolicy = RetentionPolicy(),
     /** Attempts of a conditional replace of the index or the back-references before it gives up. */
     private val maxAttempts: Int = DEFAULT_MAX_ATTEMPTS,

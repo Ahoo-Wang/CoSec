@@ -54,7 +54,7 @@ class DefaultControlPlane(
     private val retained = RetainedDocuments(revisions, simulator.cache)
     private val reads = DocumentReads(authority, revisions, changes, retained)
 
-    override val listing: DocumentListing = DocumentListing(revisions, authority)
+    override val listing: DocumentListing = DocumentListing(revisions, authority, revisions.clock)
     private val decisions = DecisionQueries(changes, authority, simulator, retained)
     private val analysis = AccessAnalysis(authority, retained)
 
