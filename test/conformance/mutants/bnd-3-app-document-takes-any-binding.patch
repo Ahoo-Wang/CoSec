@@ -1,0 +1,19 @@
+# Rule: BND-3
+# Mutant: an app document accepts a binding of anyone or of a principal, which the candidate order never reads from it: its DENY is lost
+# Tests: :engine:test --tests me.ahoo.cosec.engine.CompiledDocumentTest :conformance:test --tests me.ahoo.cosec.conformance.ConformanceTest
+
+diff --git a/core/engine/src/main/kotlin/me/ahoo/cosec/engine/BoundEntries.kt b/core/engine/src/main/kotlin/me/ahoo/cosec/engine/BoundEntries.kt
+index 27a460c91..0171e12e7 100644
+--- a/core/engine/src/main/kotlin/me/ahoo/cosec/engine/BoundEntries.kt
++++ b/core/engine/src/main/kotlin/me/ahoo/cosec/engine/BoundEntries.kt
+@@ -64,9 +64,7 @@ internal fun boundEntry(
+             "Role binding ${binding.id.value} in the platform document: role grants belong in app documents"
+         }
+ 
+-        DocumentKind.APP -> require(binding.subject is SubjectRef.Role) {
+-            "Binding ${binding.id.value} of the app document $owner does not bind a role"
+-        }
++        DocumentKind.APP -> Unit
+ 
+         DocumentKind.TENANT -> Unit
+     }

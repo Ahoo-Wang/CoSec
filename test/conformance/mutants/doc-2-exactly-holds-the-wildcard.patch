@@ -1,0 +1,18 @@
+# Rule: DOC-2
+# Mutant: Match.Exactly may hold the wildcard, so a literal * is a value and not every app or space
+# Tests: :document:test --tests me.ahoo.cosec.document.PolicyDocumentCodecTest :model:test :conformance:test --tests me.ahoo.cosec.conformance.ConformanceTest
+
+diff --git a/core/model/src/main/kotlin/me/ahoo/cosec/model/Binding.kt b/core/model/src/main/kotlin/me/ahoo/cosec/model/Binding.kt
+index f0b91b486..b3df89941 100644
+--- a/core/model/src/main/kotlin/me/ahoo/cosec/model/Binding.kt
++++ b/core/model/src/main/kotlin/me/ahoo/cosec/model/Binding.kt
+@@ -60,9 +60,6 @@ sealed interface Match<out T> {
+     /** [value] is never [WILDCARD]; [AppId] and [SpaceId] already refuse it. */
+     @InternalCoSecApi
+     data class Exactly<T>(val value: T) : Match<T> {
+-        init {
+-            require(value != WILDCARD) { "Match.Exactly must not hold the wildcard [$WILDCARD]; use Match.Any." }
+-        }
+     }
+ 
+     @InternalCoSecApi

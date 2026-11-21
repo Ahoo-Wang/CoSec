@@ -1,0 +1,17 @@
+# Rule: CND-2
+# Mutant: a cidr condition may hold one block more than the limit
+# Tests: :model:test --tests me.ahoo.cosec.model.condition.ConditionCheckerTest :conformance:test --tests me.ahoo.cosec.conformance.ConformanceTest
+
+diff --git a/core/model/src/main/kotlin/me/ahoo/cosec/model/condition/ConditionChecker.kt b/core/model/src/main/kotlin/me/ahoo/cosec/model/condition/ConditionChecker.kt
+index b02ae2e1a..fd802e3cf 100644
+--- a/core/model/src/main/kotlin/me/ahoo/cosec/model/condition/ConditionChecker.kt
++++ b/core/model/src/main/kotlin/me/ahoo/cosec/model/condition/ConditionChecker.kt
+@@ -290,7 +290,7 @@ class ConditionChecker(
+                 error(blocksPath, "needs at least one block")
+                 return null
+             }
+-            if (blocks.size > limits.maxCidrBlocks) {
++            if (blocks.size > limits.maxCidrBlocks + 1) {
+                 error(blocksPath, "has ${blocks.size} blocks, more than ${limits.maxCidrBlocks}")
+                 return null
+             }

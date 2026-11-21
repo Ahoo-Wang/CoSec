@@ -1,0 +1,19 @@
+# Rule: BND-3
+# Mutant: the platform document accepts a role binding, which the candidate order never reads from it: a role's DENY is lost
+# Tests: :engine:test --tests me.ahoo.cosec.engine.CompiledDocumentTest :conformance:test --tests me.ahoo.cosec.conformance.ConformanceTest
+
+diff --git a/core/engine/src/main/kotlin/me/ahoo/cosec/engine/BoundEntries.kt b/core/engine/src/main/kotlin/me/ahoo/cosec/engine/BoundEntries.kt
+index 27a460c91..de0bdf1cb 100644
+--- a/core/engine/src/main/kotlin/me/ahoo/cosec/engine/BoundEntries.kt
++++ b/core/engine/src/main/kotlin/me/ahoo/cosec/engine/BoundEntries.kt
+@@ -60,9 +60,7 @@ internal fun boundEntry(
+     // The candidate order reads role bindings from app and tenant documents and everything else from platform and
+     // tenant documents (RFC 0004 §4.3, §6.3). A binding anywhere else would never be a candidate: a DENY lost.
+     when (kind) {
+-        DocumentKind.PLATFORM -> require(binding.subject !is SubjectRef.Role) {
+-            "Role binding ${binding.id.value} in the platform document: role grants belong in app documents"
+-        }
++        DocumentKind.PLATFORM -> Unit
+ 
+         DocumentKind.APP -> require(binding.subject is SubjectRef.Role) {
+             "Binding ${binding.id.value} of the app document $owner does not bind a role"
