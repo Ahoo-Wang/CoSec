@@ -1,0 +1,17 @@
+# Rule: CTL-55
+# Mutant: a scan stopped by its bound answers the last change the caller sees as its cursor, so the next request reads the same entries again and stalls
+# Tests: :control:test --tests me.ahoo.cosec.control.lifecycle.StateListingBoundTest
+
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ChangeListings.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ChangeListings.kt
+index aa5575434..de6175d43 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ChangeListings.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ChangeListings.kt
+@@ -101,7 +101,7 @@ internal class ChangeListings(private val store: ControlStore, private val autho
+         while (found.size <= limit) {
+             if (read >= bound) {
+                 // Stopped by the bound: the page so far, and where the scan stopped.
+-                return ChangePage(found, cursor)
++                return ChangePage(found, found.lastOrNull()?.let(::cursorOf) ?: after)
+             }
+             val page = store.changes(state, cursor, minOf(limit, bound - read)) {
+                 TenantIsolation.allows(operator, it) && documents(it) && ownerOf(it).first in layers

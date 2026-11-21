@@ -311,8 +311,9 @@ its file disagree, so a value changes only in a release that says so.
 ### Listing documents {#listing-documents}
 
 `GET /documents?kind=tenant` (or `kind=app`) lists which documents of that kind exist: `{"documents": [{"key":
-"tenant:acme"}, ...], "next": "tenant:acme", "asOf": "..."}`, sorted by key. `limit` is 1 to 200 (default 20), and
-`after` is the `next` of the page before, absent after the last page. It reads the control store's list of the
+"tenant:acme"}, ...], "next": "ZG9jdW1lbnRzfHRlbmFudDphY21l", "asOf": "..."}`, sorted by key. `limit` is 1 to 200
+(default 20), and `after` is the `next` of the page before, absent after the last page: a token
+([Listing cursors](#listing-cursors)). It reads the control store's list of the
 documents it indexes, never a document, so a document whose first publish never completed may be listed, and reading
 it is a `404`. That list is the whole of the store's member set (about 2 MB at 50,000 tenants), so a control host reads
 it at most every 5 seconds, one read shared by every caller, and pages from that: `asOf` says when it was read, and a
@@ -340,7 +341,7 @@ facade ([`ControlService.documents`](../integration/checks.md#changing-policies-
 `GET /changes` lists the changes that are not finished: `document=<key>` those of one document, `state=<STATE>` those in
 one state that is not final (`DRAFT`, `CHECKED`, `SHADOWING`, `AWAITING_APPROVAL`, `READY`, `CONFLICTED`), or both. It
 needs one of the two; `limit` is 1 to 200 (default 50), and `after` is the `next` of the page before, absent after the
-last page.
+last page: a token ([Listing cursors](#listing-cursors)).
 
 ```json
 {
@@ -365,7 +366,30 @@ listed with its `id`, its `key` and the state `UNREADABLE`, never left out. An e
 name in [the change's answer](#what-a-change-answers). A listing shows a change only if
 `GET /changes/{id}` would show it to you: changes of your own tenant's documents (any of them for a platform
 principal) that you wrote or whose document you may read (`cosec:read`). What it leaves out it does not tell: a page
-holds what you may see, and `next` is there only when more of it follows (`CTL-55`).
+holds only what you may see (`CTL-55`).
+
+A listing by state is decided before anything is read, as [listing documents](#listing-documents) is:
+- **A tenant's principal** lists its own tenant's document's changes.
+- **A platform principal** lists the layers it holds `cosec:read` on as a layer: `doc/tenant` for the tenant documents'
+  changes, `doc/app` for the apps', and `doc/platform`, the platform document's own read, for its changes.
+  `cosec:platform-admin` holds all three. The layer read only lets the listing look: each change is still shown only if
+  `GET /changes/{id}` would show it to you.
+- **Anyone else** is refused `403` without detail, and nothing is read.
+
+Each request reads at most four pages of changes, whatever you may see. When it reaches that bound first, it answers
+the changes it found, a short or empty page, with a `next` to go on from where it stopped. So an empty page with a
+`next` is not the end: follow `next` until it is `null`. That `next` may point at a change you may not see. It tells you
+only that some document of a layer you may list has an open change in that state, and that change is still a `404` by
+id. A listing by document reads that document's open changes only, and its `next` is always a change you see.
+
+### Listing cursors {#listing-cursors}
+
+Every listing's `next` is a token: pass it back as `after` unchanged, on any control host. It holds no server state,
+does not expire, and needs no escaping in a query (`A-Z a-z 0-9 - _`). Its content is no contract: read nothing out of
+it. It is an encoding and not encrypted, so it hides nothing from someone who decodes it. A token that does not decode,
+or that belongs to another listing (or, for `GET /documents`, to the other kind), is a `400`, never a listing from the
+start. The convention is in
+[`contract/control/cursor.json`](https://github.com/Ahoo-Wang/CoSec/tree/main/contract/control/cursor.json).
 
 The open changes are kept in sets of their own ([Storage](../operations/storage.md#redis-keys)). On a store an earlier
 preview wrote, the listing answers `503` until `cosec-migrate repair-references` has converted it (`CTL-54`).
