@@ -288,10 +288,9 @@ class CoSecSnapshotAutoConfiguration {
             require(interval >= ShadowReporter.MIN_INTERVAL) {
                 "cosec.authorization.shadow.report-interval is at least one millisecond, not $interval."
             }
-            val store = (candidates as? CachingCandidateSource)?.store ?: stores.ifUnique
-            return ShadowReporting(
-                ShadowReporter(recorder, sink, installed, clock, interval, candidates = store)
-            )
+            val caching = candidates as? CachingCandidateSource
+            val store = caching?.store ?: stores.ifUnique
+            return ShadowReporting(ShadowReporter(recorder, sink, installed, clock, interval, store, caching?.staged))
         }
 
         @InternalCoSecApi

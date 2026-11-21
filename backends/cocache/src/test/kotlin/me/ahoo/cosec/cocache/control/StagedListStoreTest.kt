@@ -24,6 +24,7 @@ import me.ahoo.cocache.core.memory.InMemoryBackend
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.cocache.createLocked
+import me.ahoo.cosec.cocache.shadow.CoCacheCandidateStore
 import me.ahoo.cosec.cocache.snapshot.SnapshotNode
 import me.ahoo.cosec.cocache.snapshot.newKeyPrefix
 import me.ahoo.cosec.document.SnapshotDocuments
@@ -70,6 +71,29 @@ class StagedListStoreTest {
             store.unlistStaged(acme, "c9@9")
             store.staged()!!.isStaged(SnapshotKey.Platform).assert().isFalse()
             store.staged()!!.isStaged(acme).assert().isTrue()
+        }
+    }
+
+    /**
+     * `CTL-47` on CoCache: a data-plane instance's read-only reader reads the list the control plane writes, from Redis
+     * at each read: none until the control plane keeps it, then what it lists.
+     */
+    @Test
+    fun `a data-plane reader reads the list the control plane keeps, and none before`() = runBlocking<Unit> {
+        val backend = InMemoryBackend()
+        val prefix = newKeyPrefix()
+        SnapshotNode(backend, prefix).use { control ->
+            SnapshotNode(backend, prefix).use { data ->
+                val writer = CoCacheControlStore.create(control.factory, control.cache, control.keyPrefix)
+                val reader = CoCacheCandidateStore.create(data.factory, data.keyPrefix, readOnly = true)
+                reader.staged().assert().isNull()
+                writer.keepStagedList()
+                reader.staged().assert().isEqualTo(StagedCandidates.NONE)
+                writer.listStaged(SnapshotKey.Tenant("acme"), "c1@1")
+                reader.staged()!!.isStaged(SnapshotKey.Tenant("acme")).assert().isTrue()
+                writer.unlistStaged(SnapshotKey.Tenant("acme"), "c1@1")
+                reader.staged().assert().isEqualTo(StagedCandidates.NONE)
+            }
         }
     }
 

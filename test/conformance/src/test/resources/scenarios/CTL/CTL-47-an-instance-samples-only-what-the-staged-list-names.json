@@ -1,0 +1,60 @@
+{
+  "rules": [
+    "CTL-47"
+  ],
+  "polarity": "positive",
+  "level": "control",
+  "description": "c1 shadows tenant acme: an instance that has read the staged list reads acme's candidate and samples its requests; before any stage, and for tenant beta, which stages nothing, it does neither.",
+  "steps": [
+    {
+      "samples": "tenant:acme"
+    },
+    {
+      "propose": {
+        "change": "c1",
+        "document": "tenant:acme",
+        "operations": [
+          {
+            "putPolicy": {
+              "id": "read",
+              "statements": [
+                {
+                  "effect": "allow",
+                  "action": "order:read"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "stage": "c1"
+    },
+    {
+      "samples": "tenant:acme"
+    },
+    {
+      "samples": "tenant:beta"
+    },
+    {
+      "samples": "platform"
+    }
+  ],
+  "expect": {
+    "steps": [
+      "not sampled",
+      "CHECKED",
+      "SHADOWING",
+      "sampled",
+      "not sampled",
+      "not sampled"
+    ],
+    "errors": {
+      "c1": []
+    },
+    "heads": {
+      "tenant:acme": 0
+    }
+  }
+}

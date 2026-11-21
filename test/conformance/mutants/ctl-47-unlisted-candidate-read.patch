@@ -1,0 +1,16 @@
+# Rule: CTL-47
+# Mutant: the candidate source reads the candidate of a document the staged list does not name
+# Tests: :runtime:test --tests me.ahoo.cosec.runtime.shadow.StagedDocumentsTest :conformance:test
+
+diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/shadow/CachingCandidateSource.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/shadow/CachingCandidateSource.kt
+index 27918835f..efc2a51f6 100644
+--- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/shadow/CachingCandidateSource.kt
++++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/shadow/CachingCandidateSource.kt
+@@ -76,7 +76,6 @@ class CachingCandidateSource(
+     }
+ 
+     override suspend fun candidate(key: SnapshotKey): Candidate? {
+-        if (!staged.mayStage(key)) return null
+         val now = clock.instant()
+         synchronized(
+             entries

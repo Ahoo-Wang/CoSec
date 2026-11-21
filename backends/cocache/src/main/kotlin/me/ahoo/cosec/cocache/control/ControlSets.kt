@@ -82,15 +82,7 @@ internal class ControlSets(
 
     /** The staged list (`CTL-46`), or null when it holds no [StagedMember.KEPT] marker: a list nobody keeps. */
     suspend fun staged(): StagedCandidates? {
-        val members = failClosed(STAGED_WHAT) { staged.suspending().get(STAGED_SET) }
-        if (StagedMember.KEPT !in members) {
-            return null
-        }
-        val windows = HashMap<SnapshotKey, MutableSet<String>>()
-        for (member in members) {
-            StagedMember.decode(member)?.let { (key, window) -> windows.getOrPut(key) { HashSet() } += window }
-        }
-        return StagedCandidates(windows)
+        return StagedMember.list(failClosed(STAGED_WHAT) { staged.suspending().get(STAGED_SET) })
     }
 
     suspend fun listStaged(key: SnapshotKey, window: String) {

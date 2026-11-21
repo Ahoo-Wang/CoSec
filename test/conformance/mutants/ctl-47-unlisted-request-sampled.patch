@@ -1,0 +1,17 @@
+# Rule: CTL-47
+# Mutant: a request whose view reads no listed document is sampled anyway
+# Tests: :runtime:test --tests me.ahoo.cosec.runtime.shadow.StagedDocumentsTest :conformance:test
+
+diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/shadow/ShadowListener.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/shadow/ShadowListener.kt
+index e00421a18..b99784e8a 100644
+--- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/shadow/ShadowListener.kt
++++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/shadow/ShadowListener.kt
+@@ -89,7 +89,7 @@ class ShadowListener(
+      * stage a candidate (`CTL-47`), then at [sampleRate]. With nothing staged, a request draws no random number.
+      */
+     internal fun sample(scope: Scope, view: SnapshotView): Boolean =
+-        sampleRate > 0 && staged?.mayStage(scope, view) != false &&
++        sampleRate > 0 &&
+             (sampleRate >= 1 || ThreadLocalRandom.current().nextDouble() < sampleRate)
+ 
+     override suspend fun onDecision(event: DecisionEvent) {

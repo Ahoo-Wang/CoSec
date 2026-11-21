@@ -29,6 +29,7 @@ import me.ahoo.cosec.model.decision.Cause
 import me.ahoo.cosec.model.decision.Decision
 import me.ahoo.cosec.model.decision.DocumentKind
 import me.ahoo.cosec.model.decision.StatementRef
+import me.ahoo.cosec.model.scope.Scope
 import me.ahoo.cosec.runtime.event.DecisionEvent
 import me.ahoo.cosec.runtime.event.DecisionListener
 import me.ahoo.cosec.runtime.event.Delivery
@@ -57,7 +58,8 @@ private val log = KotlinLogging.logger {}
  * requests only, and the platform's on every request.
  *
  * Whether a request is sampled is decided before its event is made ([sample]); only then does the event carry the
- * [ReplayHandle] that keeps its view reachable.
+ * [ReplayHandle] that keeps its view reachable. With a staged list, only a request whose view reads a listed document is
+ * sampled at all (`CTL-47`).
  */
 @InternalCoSecApi
 class ShadowListener(
@@ -79,7 +81,16 @@ class ShadowListener(
 
     override val delivery: Delivery get() = Delivery.BEST_EFFORT
 
-    internal fun sample(): Boolean = sampleRate > 0 && (sampleRate >= 1 || ThreadLocalRandom.current().nextDouble() < sampleRate)
+    /** The staged list of CoSec's own candidate source (`CTL-47`); another source's requests are sampled as before. */
+    private val staged: StagedDocuments? = (candidates as? CachingCandidateSource)?.staged
+
+    /**
+     * Whether a request in [scope] decided on [view] is evaluated again: only when its view reads a document that may
+     * stage a candidate (`CTL-47`), then at [sampleRate]. With nothing staged, a request draws no random number.
+     */
+    internal fun sample(scope: Scope, view: SnapshotView): Boolean =
+        sampleRate > 0 && staged?.mayStage(scope, view) != false &&
+            (sampleRate >= 1 || ThreadLocalRandom.current().nextDouble() < sampleRate)
 
     override suspend fun onDecision(event: DecisionEvent) {
         val replay = event.replay ?: return

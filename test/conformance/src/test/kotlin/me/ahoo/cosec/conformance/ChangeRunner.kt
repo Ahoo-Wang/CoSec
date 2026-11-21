@@ -76,6 +76,7 @@ import me.ahoo.cosec.model.condition.Attribute
 import me.ahoo.cosec.model.condition.AttributeCatalog
 import me.ahoo.cosec.model.decision.DocumentKind
 import me.ahoo.cosec.runtime.event.Delivery
+import me.ahoo.cosec.runtime.shadow.StagedDocuments
 import me.ahoo.cosec.spi.identity.Identity
 import me.ahoo.cosec.spi.membership.MembershipAnswer
 import me.ahoo.cosec.spi.membership.MembershipClaims
@@ -143,6 +144,9 @@ import java.time.Instant
  *            { "staged": "tenant:acme" },      // the change whose candidate the document stages: `staged c2`, `staged none`
  *            { "listed": "tenant:acme" },      // the changes whose windows the staged list names for it (CTL-46):
  *                                              // `listed c1,c2`, `listed none`; the list is kept from the start
+ *            { "samples": "tenant:acme" },     // whether a data-plane instance, having read the staged list, reads
+ *                                              // the document's candidate and samples its requests (CTL-47):
+ *                                              // `sampled` or `not sampled`
  *            { "revokeBreakGlass": { "change": "c2", "by": "rita", "binding": "glass" } },  // DELETE /break-glass/glass
  *            { "revoke": "t1" },               // that token is revoked; { "revokeTokens": "pia" }: every token of pia's
  *            { "provide": { "operator": "dave", "roles": [] } },   // what the provider answers for dave from now on
@@ -426,7 +430,7 @@ object ChangeRunner : ScenarioRunner {
             "explain" -> explain(argument)
             in CREDENTIAL_STEPS -> credentials(action, argument)
             "revokeBreakGlass" -> revoke(argument)
-            "diff", "staged", "listed", "rateLimits" -> read(action, argument)
+            "diff", "staged", "listed", "samples", "rateLimits" -> read(action, argument)
             else -> try {
                 step(action, argument).also { named[it.id.value] = it }.state.name
             } catch (error: ChangeRejectedException) {
@@ -442,6 +446,10 @@ object ChangeRunner : ScenarioRunner {
         private suspend fun read(action: String, argument: JsonNode): String = when (action) {
             "diff" -> diff(argument)
             "staged" -> "staged " + (memory.candidate(documentKey(argument.text()))?.window?.substringBefore('@') ?: "none")
+            "samples" -> StagedDocuments(memory).let { instance ->
+                instance.refresh()
+                if (instance.mayStage(documentKey(argument.text()))) "sampled" else "not sampled"
+            }
             "listed" -> "listed " + (
                 memory.staged()!!.windows[documentKey(argument.text())].orEmpty()
                     .map { it.substringBefore('@') }.sorted().joinToString(",").ifEmpty { "none" }
