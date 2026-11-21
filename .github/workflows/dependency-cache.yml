@@ -51,6 +51,8 @@ on:
 
 permissions:
   contents: read
+  # Only to delete an entry that failed its own check (below).
+  actions: write
 
 concurrency:
   group: dependency-cache-${{ github.ref }}
@@ -81,7 +83,6 @@ jobs:
           lookup-only: true
 
       - name: Set up JDK
-        if: steps.existing.outputs.cache-hit != 'true'
         uses: actions/setup-java@v6
         with:
           java-version: '21'
@@ -105,10 +106,36 @@ jobs:
             ~/.gradle/wrapper/dists
           key: ${{ steps.name.outputs.key }}
 
+      # The entry as a reader gets it: into a Gradle home with nothing in it, then a resolution of every configuration that is
+      # not allowed the network. It passes only when nothing needs a download, which is what a job that restores the cache
+      # relies on; on a failure the entry is deleted, so that no reader restores one that is not complete. (A restore on a
+      # runner is not the one that wrote it: the files the writer downloaded are all here, and these are what was saved.)
+      - name: Empty the Gradle home
+        run: rm -rf ~/.gradle/caches ~/.gradle/wrapper
+
+      - name: Restore the entry
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.gradle/caches/modules-2
+            ~/.gradle/wrapper/dists
+          key: ${{ steps.name.outputs.key }}
+          fail-on-cache-miss: true
+
+      - name: Resolve from the entry alone, offline
+        run: RESOLVE_ATTEMPTS=1 .github/scripts/resolve-dependencies.sh . -PresolveConfigurations='.*' --offline
+
+      - name: Delete an entry that does not resolve offline
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          KEY: ${{ steps.name.outputs.key }}
+        run: gh cache delete "$KEY" --repo "$GITHUB_REPOSITORY" || true
+
       - name: Say what was written
         run: |
           if [ "${{ steps.existing.outputs.cache-hit }}" = true ]; then
-            echo "The dependency cache ${{ steps.name.outputs.key }} is there already: nothing to write."
+            echo "The dependency cache ${{ steps.name.outputs.key }} is there already: nothing to write, and it resolves offline."
           else
-            echo "Wrote the dependency cache ${{ steps.name.outputs.key }}."
+            echo "Wrote the dependency cache ${{ steps.name.outputs.key }}, and it resolves offline."
           fi
