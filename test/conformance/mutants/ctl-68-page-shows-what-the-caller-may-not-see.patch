@@ -3,10 +3,10 @@
 # Tests: :control:test --tests me.ahoo.cosec.control.api.DocumentListingTest
 
 diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/api/DocumentListing.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/api/DocumentListing.kt
-index e11fb39ce..ba9ae1bb1 100644
+index 54893077b..0d7ce8b72 100644
 --- a/core/control/src/main/kotlin/me/ahoo/cosec/control/api/DocumentListing.kt
 +++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/api/DocumentListing.kt
-@@ -55,7 +55,7 @@ class DocumentListing internal constructor(private val revisions: Revisions, pri
+@@ -68,7 +68,7 @@ class DocumentListing internal constructor(
              ControlDecision.INDETERMINATE -> throw undecided(kind)
              ControlDecision.DENY -> {
                  val own = ownDocument(operator, kind) ?: throw refused(kind)
@@ -14,4 +14,4 @@ index e11fb39ce..ba9ae1bb1 100644
 +                ({ key -> key == own || ownerOf(key).first == kind })
              }
          }
-         val listed = revisions.documents()
+         val read = documents.read()

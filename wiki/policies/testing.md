@@ -311,9 +311,12 @@ its file disagree, so a value changes only in a release that says so.
 ### Listing documents {#listing-documents}
 
 `GET /documents?kind=tenant` (or `kind=app`) lists which documents of that kind exist: `{"documents": [{"key":
-"tenant:acme"}, ...], "next": "tenant:acme"}`, sorted by key. `limit` is 1 to 200 (default 20), and `after` is the
-`next` of the page before, absent after the last page. It reads the control store's list of the documents it indexes,
-never a document, so a document whose first publish never completed may be listed, and reading it is a `404`.
+"tenant:acme"}, ...], "next": "tenant:acme", "asOf": "..."}`, sorted by key. `limit` is 1 to 200 (default 20), and
+`after` is the `next` of the page before, absent after the last page. It reads the control store's list of the
+documents it indexes, never a document, so a document whose first publish never completed may be listed, and reading
+it is a `404`. That list is the whole of the store's member set (about 2 MB at 50,000 tenants), so a control host reads
+it at most every 5 seconds, one read shared by every caller, and pages from that: `asOf` says when it was read, and a
+document created since may be missing until the next read.
 
 Who may list (`CTL-68`):
 - **Every document of the kind:** a caller holding `cosec:read` on the layer, `doc/tenant` for `kind=tenant` and
