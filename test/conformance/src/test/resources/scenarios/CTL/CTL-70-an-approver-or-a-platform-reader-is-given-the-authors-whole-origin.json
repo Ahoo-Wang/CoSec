@@ -1,0 +1,140 @@
+{
+  "rules": [
+    "CTL-70"
+  ],
+  "polarity": "positive",
+  "level": "control",
+  "description": "alice, a tenant-admin of acme, proposes a change with her token. plato, a platform administrator who reads the platform's document, reads the change and is given its author's whole origin: that the identity was verified, the method, the credential's id and the request's id.",
+  "documents": {
+    "platform": {
+      "bindings": [
+        {
+          "id": "plato",
+          "subject": {
+            "principal": "plato",
+            "tenant": "(platform)"
+          },
+          "app": "cosec-control",
+          "space": "",
+          "policy": "cosec:platform-admin"
+        }
+      ]
+    },
+    "tenants": {
+      "acme": {
+        "policies": [
+          {
+            "id": "orders",
+            "statements": [
+              {
+                "effect": "allow",
+                "action": "order:*",
+                "resource": "order/**"
+              }
+            ]
+          }
+        ],
+        "bindings": [
+          {
+            "id": "admins",
+            "subject": {
+              "role": "admin"
+            },
+            "app": "cosec-control",
+            "space": "",
+            "policy": "cosec:tenant-admin"
+          },
+          {
+            "id": "viewers",
+            "subject": {
+              "role": "viewer"
+            },
+            "app": "cosec-control",
+            "space": "",
+            "policy": "cosec:tenant-viewer"
+          },
+          {
+            "id": "ops",
+            "subject": {
+              "role": "ops"
+            },
+            "app": "order",
+            "space": "*",
+            "policy": "orders"
+          }
+        ]
+      },
+      "globex": {
+        "policies": [
+          {
+            "id": "orders",
+            "statements": [
+              {
+                "effect": "allow",
+                "action": "order:read",
+                "resource": "order/**"
+              }
+            ]
+          }
+        ]
+      }
+    }
+  },
+  "operators": {
+    "alice": {
+      "tenant": "acme",
+      "roles": [
+        "admin",
+        "ops@team-a"
+      ]
+    },
+    "vera": {
+      "tenant": "acme",
+      "roles": [
+        "viewer"
+      ]
+    },
+    "plato": {
+      "tenant": "(platform)"
+    }
+  },
+  "steps": [
+    {
+      "propose": {
+        "by": "alice",
+        "change": "c1",
+        "document": "tenant:acme",
+        "operations": [
+          {
+            "putPolicy": {
+              "id": "more",
+              "statements": [
+                {
+                  "effect": "allow",
+                  "action": "order:read",
+                  "resource": "order/**"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "origin": {
+        "by": "plato",
+        "change": "c1"
+      }
+    }
+  ],
+  "expect": {
+    "steps": [
+      "CHECKED",
+      "origin asserted false via oidc; members asserted,via.credential,via.method,via.request"
+    ],
+    "errors": {
+      "c1": []
+    },
+    "heads": {}
+  }
+}

@@ -930,6 +930,19 @@
         "control:ChangeListenersDrainTest#during the drain a gated step is refused and another step's event is kept, never queued - CTL-66"
       ],
       "pending": null
+    },
+    {
+      "id": "CTL-70",
+      "source": "CTL-57 follow-up: the change answer carries its author's origin; visibility decided 2026-11-21",
+      "statement": "A change's answer carries how its author was identified, when a request made the change. Every reader of the change is told whether the identity was only stated (asserted) and by which kind of credential (via.method). The credential's id, the request's id and the address of the connection (peer) are given only to a reader who holds cosec:approve on the change's document or cosec:read on the platform's, on a permit: a deny or an indeterminate decision gives the short origin, and the short origin holds no member for what it leaves out.",
+      "level": "control",
+      "guards": [
+        "control:ChangeOriginAnswerTest#a reader of the platform's document is given the author's whole origin - CTL-70",
+        "control:ChangeOriginAnswerTest#a reader who neither approves nor reads the platform is told only asserted and the method - CTL-70",
+        "control:ChangeOriginAnswerTest#an approver of the document is given the whole origin, and only a permit counts - CTL-70",
+        "control:ChangeOriginAnswerTest#the origin is written member by member, whole or short, and absent for a change no request made - CTL-70"
+      ],
+      "pending": null
     }
   ]
 }

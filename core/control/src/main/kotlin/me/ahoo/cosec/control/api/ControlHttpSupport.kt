@@ -26,6 +26,7 @@ import me.ahoo.cosec.control.change.ChangeRejectedException
 import me.ahoo.cosec.control.change.ChangeRequest
 import me.ahoo.cosec.control.change.ControlStatus.NOT_FOUND
 import me.ahoo.cosec.control.change.InvalidControlRequestException
+import me.ahoo.cosec.control.authz.Operator
 import me.ahoo.cosec.control.change.requireRequest
 import me.ahoo.cosec.document.PolicyDocumentCodec
 import me.ahoo.cosec.document.json.CoSecJson
@@ -59,8 +60,18 @@ internal object ControlHttpSupport {
     inline fun get(request: ControlHttpRequest, block: () -> ControlHttpResponse): ControlHttpResponse =
         if (request.method == GET) block() else methodNotAllowed()
 
-    fun changeResponse(change: ChangeRequest, status: Int, acknowledgement: Acknowledgement? = null) =
-        ControlHttpResponse(status, JSON, ChangeAnswer.encode(change, acknowledgement))
+    /** [change] as [operator] reads it: its author's whole origin only when [plane] says they may (`CTL-70`). */
+    suspend fun changeResponse(
+        plane: ControlPlane,
+        operator: Operator,
+        change: ChangeRequest,
+        status: Int,
+        acknowledgement: Acknowledgement? = null,
+    ) = ControlHttpResponse(
+        status,
+        JSON,
+        ChangeAnswer.encode(change, acknowledgement, wholeOrigin = plane.readsWholeOrigin(operator, change))
+    )
 
     fun document(document: me.ahoo.cosec.document.PolicyDocument) = ControlHttpResponse(
         OK,

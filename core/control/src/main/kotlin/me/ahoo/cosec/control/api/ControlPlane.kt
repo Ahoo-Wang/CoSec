@@ -104,6 +104,14 @@ interface ControlPlane {
     val acknowledgements: AcknowledgementReader get() = AcknowledgementReader.NONE
 
     /**
+     * Whether [operator], who may read [change], is given its author's whole origin (`CTL-70`): the credential's id, the
+     * request's id and the connection's address, besides `asserted` and `via.method`, which every reader of the change
+     * gets. False unless an implementation can tell that [operator] approves changes of its document or reads the
+     * platform's.
+     */
+    suspend fun readsWholeOrigin(operator: Operator, change: ChangeRequest): Boolean = false
+
+    /**
      * `GET /changes` (R2C-4, `CTL-55`): the open changes of [document], or in [state], that [operator] may see, of the
      * documents [documents] admits (the route's profile, `CTL-58`).
      */

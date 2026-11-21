@@ -149,6 +149,9 @@ import java.time.Instant
  *            { "documents": { "by": "plato", "kind": "tenant" } },  // GET /documents?kind= (CTL-68):
  *                                  // `documents tenant:acme,tenant:globex`, `documents none` or `refused <status>`
  *            { "read": { "by": "lena", "document": "tenant:acme" } },  // GET /documents/{key}: `read` or `refused <status>`
+ *            { "origin": { "by": "alice", "change": "c1" } },  // the author's origin in the change's answer as
+ *                                  // `by` reads it (CTL-70): `origin asserted false via oidc; members
+ *                                  // asserted,via.credential,via.method,via.request`, `origin none` or `refused <status>`
  *            { "answer": "c1" },   // the members of the change's answer (CTL-61): `members a,b,...`, then
  *                                  // `; shadow a,b` and `; approval a,b` when it holds them
  *            { "status": { "instance": "i1", "documents": { "tenant:acme": 2 } } },  // an instance's status now
@@ -479,6 +482,7 @@ object ChangeRunner : ScenarioRunner {
             "answer", "status", "propagation", "acknowledgement" -> answers(action, argument)
             "audited" -> audited(argument)
             "documents" -> documents(argument)
+            "origin" -> origin(argument)
             "read" -> readDocument(argument)
             "staged" -> "staged " + (memory.candidate(documentKey(argument.text()))?.window?.substringBefore('@') ?: "none")
             "samples" -> StagedDocuments(memory).let { instance ->
@@ -701,6 +705,28 @@ object ChangeRunner : ScenarioRunner {
             "refused ${error.status}"
         } catch (_: IllegalArgumentException) {
             "refused 400"
+        }
+
+        /**
+         * The author's origin in `GET /changes/{id}` as `by` reads it (`CTL-70`): whether it was asserted, by which method,
+         * and the members `by` is given; `origin none` for a change no request made, or `refused <status>`.
+         */
+        private suspend fun origin(argument: JsonNode): String = try {
+            argument.only("by", "change")
+            val reader = by(argument)
+            val change = plane.get(reader, ChangeId(argument.required("change").text()))
+            val origin = ChangeAnswer.tree(change, wholeOrigin = plane.readsWholeOrigin(reader, change)).get("origin")
+            if (origin == null) {
+                "origin none"
+            } else {
+                val members = origin.properties().flatMap { (name, value) ->
+                    if (value.isObject) value.properties().map { "$name.${it.key}" } else listOf(name)
+                }.sorted()
+                "origin asserted ${origin.required("asserted").bool()} via ${origin.get("via")?.get("method")?.text()}; " +
+                    "members ${members.joinToString(",")}"
+            }
+        } catch (error: ChangeRejectedException) {
+            "refused ${error.status}"
         }
 
         /** `GET /documents/{key}` as `by`: `read`, or `refused <status>`. */
@@ -1016,6 +1042,7 @@ object ChangeRunner : ScenarioRunner {
     /** The steps that read what the control plane holds or answers, and the instance statuses it reads. */
     private val READS = setOf(
         "diff", "staged", "listed", "samples", "rateLimits", "answer", "status", "propagation", "audited", "documents", "read", "acknowledgement",
+        "origin",
     )
 
     /** The page size of a `changes` step: enough for a scenario's changes. */
