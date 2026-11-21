@@ -908,8 +908,6 @@
         "spring-boot:ManagementPortTest#a gateway on a random management port serves its routes there, under the gateway's filter",
         "spring-boot:ManagementPortTest#WebMvc leaves its management server outside CoSec and serves nothing of the application there"
       ]
-      ],
-      "pending": null
     },
     {
       "id": "CTL-66",
