@@ -15,6 +15,10 @@
 
 package me.ahoo.cosec.control.lifecycle
 
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
@@ -26,6 +30,7 @@ import me.ahoo.cosec.spi.shadow.InstalledDocument
 import me.ahoo.cosec.spi.shadow.InstanceStatus
 import me.ahoo.cosec.spi.shadow.ShadowReport
 import me.ahoo.cosec.spi.shadow.ShadowReportReader
+import me.ahoo.cosec.spi.snapshot.SnapshotFormatException
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
@@ -43,15 +48,20 @@ class PropagationTest {
     private val written = InMemoryShadowReports(clock)
     private val reads = AtomicInteger()
 
-    /** Fails each read while positive, as a store that does not answer. */
+    /** Fails each read while positive, with [failure], as a store that does not answer. */
     private val failures = AtomicInteger()
+    private var failure: () -> Exception = { IllegalStateException("timeout") }
+
+    /** How long each read takes. */
+    private var readTakes = 0L
 
     private val reader = object : ShadowReportReader {
         override suspend fun reports(window: String): List<ShadowReport> = emptyList()
 
         override suspend fun statuses(): List<InstanceStatus> {
             reads.incrementAndGet()
-            if (failures.getAndDecrement() > 0) throw IllegalStateException("timeout")
+            if (readTakes > 0) delay(readTakes)
+            if (failures.getAndDecrement() > 0) throw failure()
             return written.statuses()
         }
     }
@@ -107,6 +117,27 @@ class PropagationTest {
         // The next call reads again, at once.
         windows.propagation(T1, 2).assert().isEqualTo(Propagation(2, 1, 1, 1, clock.now))
         reads.get().assert().isEqualTo(3)
+    }
+
+    @Test
+    fun `a status that does not decode stays a stored value's error, and the store's own failure stays its own`() =
+        runBlocking<Unit> {
+            failures.set(2)
+            failure = { SnapshotFormatException("The status of instance [i1] is malformed.") }
+            runCatching { windows.propagation(T1, 1) }.exceptionOrNull()
+                .assert().isInstanceOf(SnapshotFormatException::class.java)
+            failure = { ControlStoreException("down") }
+            runCatching { windows.propagation(T1, 1) }.exceptionOrNull()
+                .assert().isInstanceOf(ControlStoreException::class.java).hasMessage("down")
+        }
+
+    @Test
+    fun `calls that wait for one read share it`() = runBlocking<Unit> {
+        status("i1", T1 to 1)
+        readTakes = 50
+        val answers = (1..5).map { async(Dispatchers.Default) { windows.propagation(T1, 1) } }.awaitAll()
+        reads.get().assert().isEqualTo(1)
+        answers.toSet().assert().hasSize(1)
     }
 
     private companion object {
