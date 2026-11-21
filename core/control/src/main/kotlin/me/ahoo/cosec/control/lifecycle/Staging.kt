@@ -23,6 +23,7 @@ import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.control.audit.ChangeEvent
 import me.ahoo.cosec.control.authz.ControlActions
 import me.ahoo.cosec.control.authz.Operator
+import me.ahoo.cosec.control.change.Acknowledgement
 import me.ahoo.cosec.control.change.ChangeId
 import me.ahoo.cosec.control.change.ChangeRejectedException
 import me.ahoo.cosec.control.change.ChangeRequest
@@ -152,6 +153,13 @@ internal class Staging(
         if (look.waiting.isNotEmpty() && look.summary == null) {
             log.info { "Shadow window ${state.window} of change ${id.value} is waiting for ${look.waiting.sorted()}." }
         }
+        val unacknowledged = look.acknowledgement.waitingFor
+        if (unacknowledged.isNotEmpty() && look.summary == null) {
+            log.info {
+                "Shadow window ${state.window} of change ${id.value} is waiting for the acknowledgement of " +
+                    "${unacknowledged.take(Acknowledgement.SHOWN)}${more(unacknowledged)}."
+            }
+        }
         // Every instance seen is kept, so that one dropped from the window's reporters later still has to report.
         val seen = state.copy(reporters = look.reporters)
         val summary = look.summary ?: return if (seen == state) {
@@ -190,6 +198,18 @@ internal class Staging(
         flow.audit(ChangeEvent.Kind.FAILED, checked.copy(note = note), checked.author)
         return checked
     }
+
+    /**
+     * Which live instances acknowledge the window of [change] while it is open (`CTL-10`); null for a change with no open
+     * window. Read-only: it reads the statuses `propagation` reads.
+     */
+    suspend fun acknowledgement(change: ChangeRequest): Acknowledgement? {
+        val shadow = change.shadow?.takeIf { change.state == ChangeState.SHADOWING && it.closed == null } ?: return null
+        return windows.acknowledgement(shadow.window)
+    }
+
+    private fun more(ids: List<String>): String =
+        if (ids.size > Acknowledgement.SHOWN) " and ${ids.size - Acknowledgement.SHOWN} more" else ""
 
     /** The propagation of [revision] of [key] to the instances (RFC 0007 §6.5): read-only, nothing waits for it. */
     suspend fun propagation(key: SnapshotKey, revision: Long): Propagation = windows.propagation(key, revision)

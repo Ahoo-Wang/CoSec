@@ -73,6 +73,7 @@ import me.ahoo.cosec.spi.authn.AuthnResult
 import me.ahoo.cosec.spi.identity.Identity
 import me.ahoo.cosec.spi.shadow.InMemoryShadowReports
 import me.ahoo.cosec.spi.shadow.InstalledDocument
+import me.ahoo.cosec.spi.shadow.InstanceStatus
 import me.ahoo.cosec.spi.shadow.ShadowOutcome
 import me.ahoo.cosec.spi.shadow.StoredCandidate
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
@@ -134,15 +135,9 @@ class ShadowWindowTest {
         compile: (SnapshotKey, me.ahoo.cosec.spi.snapshot.SnapshotDocument) -> CompiledDocument = COMPILER::compile
     ) {
         val recorder = ShadowRecorder(name, clock)
+        private val candidates = CachingCandidateSource(store, compile, refreshAfter = Duration.ZERO, clock = clock)
         private val listeners = DecisionListeners(
-            listOf(
-                ShadowListener(
-                    "shadow",
-                    1.0,
-                    CachingCandidateSource(store, compile, refreshAfter = Duration.ZERO, clock = clock),
-                    recorder
-                )
-            ),
+            listOf(ShadowListener("shadow", 1.0, candidates, recorder)),
         ).also { opened += it }
         private val pipeline = Pipeline.builder(
             Authenticator {
@@ -160,7 +155,9 @@ class ShadowWindowTest {
         )
             .listeners(listeners)
             .build()
-        val reporter = ShadowReporter(recorder, reports, { installed() }, clock)
+
+        /** Reads the staged list, compiles what it lists and acknowledges it in its status (`CTL-10`), as an instance does. */
+        val reporter = ShadowReporter(recorder, reports, { installed() }, clock, source = candidates)
 
         fun get(path: String): Int = runBlocking { pipeline.evaluate(facts(path)).status }
 
@@ -234,7 +231,12 @@ class ShadowWindowTest {
             listOf(Operation.RemoveBinding(BindingId("everyone"))),
             "revoke"
         )
-        return changes.startShadow(ALICE_OP, change.id).also { it.state.assert().isEqualTo(ChangeState.SHADOWING) }
+        val shadowing = changes.startShadow(ALICE_OP, change.id)
+        shadowing.state.assert().isEqualTo(ChangeState.SHADOWING)
+        // No startup task or shadow pass ran on this store: the stage itself keeps the list and names the window, so
+        // the instances read it and acknowledge it (`CTL-10`).
+        store.staged()!!.windows[StoreFixtures.ACME].assert().containsExactly(shadowing.shadow!!.window)
+        return shadowing
     }
 
     @Test
@@ -249,6 +251,8 @@ class ShadowWindowTest {
         two.sampled(3)
         one.reporter.flush()
         two.reporter.flush()
+        // Both instances compiled the candidate on sight and acknowledge the window (`CTL-10`).
+        changes.acknowledgements.of(change).assert().isEqualTo(Acknowledgement(2, emptyList()))
         // Enough samples, but not for long enough yet.
         changes.shadowed(change.id).state.assert().isEqualTo(ChangeState.SHADOWING)
         clock.now = clock.now.plus(Duration.ofMinutes(1))
@@ -462,5 +466,34 @@ class ShadowWindowTest {
             remoteAddress = "10.0.0.1",
             host = HostScope(null),
         )
+    }
+
+    /**
+     * `CTL-10` through the change flow: a change with an open window reads which live instances acknowledge it, one with
+     * no open window reads none, and the shadow pass keeps a window that more than twenty instances have not acknowledged
+     * open, naming twenty of them in its log line.
+     */
+    @Test
+    fun `a window more than twenty live instances have not acknowledged stays open`() = runBlocking<Unit> {
+        val proposed = changes.propose(ALICE_OP, StoreFixtures.ACME, 0, emptyList(), "nothing staged")
+        changes.acknowledgements.of(proposed).assert().isNull()
+        AcknowledgementReader.NONE.of(proposed).assert().isNull()
+        val change = staged()
+        repeat(21) { reports.write(InstanceStatus("old-%02d".format(it), clock.instant(), emptyMap())) }
+        val read = changes.acknowledgements.of(change)!!
+        read.acknowledged.assert().isZero()
+        read.waitingFor.size.assert().isEqualTo(21)
+        // Past the shortest window, before the longest (10 minutes here): the window is open, waiting.
+        clock.now = clock.now.plus(Duration.ofMinutes(2))
+        repeat(21) { reports.write(InstanceStatus("old-%02d".format(it), clock.instant(), emptyMap())) }
+        changes.shadowed(change.id).state.assert().isEqualTo(ChangeState.SHADOWING)
+    }
+
+    @Test
+    fun `an acknowledgement is a value`() {
+        val one = Acknowledgement(1, listOf("i-2"))
+        one.assert().isEqualTo(Acknowledgement(1, listOf("i-2"))).isNotEqualTo(Acknowledgement(2, listOf("i-2")))
+        one.hashCode().assert().isEqualTo(Acknowledgement(1, listOf("i-2")).hashCode())
+        one.toString().assert().isEqualTo("Acknowledgement(acknowledged=1, waitingFor=[i-2])")
     }
 }

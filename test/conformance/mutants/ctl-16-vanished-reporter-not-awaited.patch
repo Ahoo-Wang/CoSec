@@ -3,16 +3,16 @@
 # Tests: :control:test --tests me.ahoo.cosec.control.change.ControlRoundTwoFixesTest :conformance:test --tests me.ahoo.cosec.conformance.ConformanceTest
 
 diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ShadowWindows.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ShadowWindows.kt
-index ba598c774..f8e3de123 100644
+index 43621f280..d3f1dc37c 100644
 --- a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ShadowWindows.kt
 +++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ShadowWindows.kt
-@@ -73,8 +73,7 @@ class ShadowWindows(private val reports: ShadowReportReader, private val options
-         val elapsed = java.time.Duration.between(state.startedAt, now)
+@@ -90,8 +90,7 @@ class ShadowWindows(
+         val acknowledged = acknowledgement.waitingFor.isEmpty()
          val summary = when {
              blocked -> ShadowSummary(counts, now, insufficient = false, blocked = true, vanished = vanished)
 -            vanished.isNotEmpty() && elapsed < options.maxDuration -> null
--            vanished.isEmpty() && elapsed >= options.minDuration && effective >= options.minSamples ->
-+            elapsed >= options.minDuration && effective >= options.minSamples ->
+-            vanished.isEmpty() && acknowledged && elapsed >= options.minDuration && effective >= options.minSamples ->
++            acknowledged && elapsed >= options.minDuration && effective >= options.minSamples ->
                  ShadowSummary(counts, now, insufficient = false, blocked = false)
              elapsed >= options.maxDuration -> ShadowSummary(counts, now, insufficient = true, blocked = false, vanished)
              else -> null

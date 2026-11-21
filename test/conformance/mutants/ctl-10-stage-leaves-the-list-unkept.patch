@@ -1,0 +1,16 @@
+# Rule: CTL-10
+# Mutant: a stage lists its candidate but leaves the staged list unkept: on a store no startup task or shadow pass ran on, no instance acknowledges the window
+# Tests: :control:test --tests me.ahoo.cosec.control.change.ShadowWindowTest
+
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/StagingSlots.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/StagingSlots.kt
+index e6f67e771..ebebc8d62 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/StagingSlots.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/StagingSlots.kt
+@@ -95,7 +95,6 @@ internal class StagingSlots(
+      */
+     private suspend fun place(shadowing: ChangeRequest, candidate: StoredCandidate): Boolean {
+         store.listStaged(shadowing.key, candidate.window)
+-        store.keepStagedList()
+         repeat(MAX_ATTEMPTS) {
+             val staged = store.stagedCandidate(shadowing.key)
+             if (!stillHolds(shadowing)) {

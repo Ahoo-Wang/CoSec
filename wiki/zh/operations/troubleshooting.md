@@ -348,6 +348,20 @@ Redis may evict CoSec's policy snapshot: maxmemory-policy is {<node>=<policy>}, 
 
 控制面记录 `Shadow window <w> of change <c> is waiting for [<instances>]`，窗口不关闭，无论其他实例报告了什么：这些实例在窗口上报告过，而现在没有报告（已停止、已缩容，或者它们的报告在 Redis 故障切换中丢失）。它们的证据缺失，所以窗口等待它们（`CTL-56`）。仍在服务的实例会在 `cosec.authorization.shadow.report-interval` 内再次写入报告。永久离开的实例会让窗口一直保持打开，直到 `cosec.control.shadow.max-duration`，届时窗口以*证据不足*关闭，摘要的 `vanished` 点名该实例：确认摘要后发布它，或者放弃它并重新暂存，用现在在服务的实例开始新的窗口（[测试变更](../policies/testing.md#trying-changes-in-shadow-mode)）。
 
+## 影子窗口在等待确认 {#shadow-window-waiting-for-an-acknowledgement}
+
+控制面记录 `Shadow window <w> of change <c> is waiting for the acknowledgement of [<instances>]`，`GET /changes/{id}` 在 `shadow.waitingFor` 中点名这些实例：无论窗口的样本是否已够，只要某个存活实例（最近一分钟内写过状态的实例）没有在其状态中列出该窗口，窗口就不能通过（`CTL-10`）。
+
+- **旧版本的实例**不发送确认。完成滚动升级：旧实例下线后，它们的状态在两分钟内过期，窗口不再等待它们。
+- **读不到暂存列表的实例**记录 `The staged list cannot be read since it was at <instant>`，其 `cosec.shadow.staged.age` 持续上升。修复它对 Redis 的访问（数据面用户读取 `<s>:candidate-staged:all`，[存储](./storage.md#redis-keys)）。
+- **窗口期间启动的实例**编译了候选之后，会在几个上报间隔内确认它。
+
+如果**没有任何**实例确认任何窗口（每个窗口的 `waitingFor` 都列出全部存活实例），说明实例没有持有暂存列表：它们记录 `The staged list cannot be read`，或者 `<s>:candidate-staged:all` 没有 `.kept` 标记（存储被清空后控制面尚未在其上暂存过任何候选；下一次暂存或影子轮询会写入它）。修复之后，实例会在几个上报间隔内确认。
+
+只有参与影子比较的实例才会被等待。设置了 `cosec.authorization.shadow.enabled=false` 的宿主（控制面镜像就这样设置）根本不写状态；`CandidateSource` 是你自己的实现的宿主会写入一个声明它不参与影子比较的状态：两者都不会拖住窗口，`propagation` 仍会统计后者。
+
+如果 `waitingFor` 为空而窗口仍不关闭，它在等待样本：其文档的流量太少，到 `cosec.control.shadow.max-duration` 时以*证据不足*关闭（[测试变更](../policies/testing.md#trying-changes-in-shadow-mode)）。
+
 ## 影子窗口被候选错误阻塞 {#shadow-window-blocked-by-a-candidate-error}
 
 只要有一个实例报告 `CANDIDATE_ERROR`，影子窗口就被阻塞：该实例编译不了候选，无法比较决策，变更永远不会被发布。常见原因是候选读取的

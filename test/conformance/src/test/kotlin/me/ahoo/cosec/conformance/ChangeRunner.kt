@@ -145,6 +145,10 @@ import java.time.Instant
  *            { "answer": "c1" },   // the members of the change's answer (CTL-61): `members a,b,...`, then
  *                                  // `; shadow a,b` and `; approval a,b` when it holds them
  *            { "status": { "instance": "i1", "documents": { "tenant:acme": 2 } } },  // an instance's status now
+ *            { "status": { "instance": "i1", "documents": {}, "acknowledges": ["c1"] } },  // CTL-10: it lists c1's window
+ *                                              // (without "acknowledges" it sends no windows, as an older version;
+ *                                              // with "shadows": false it does not shadow, and is not waited for)
+ *            { "acknowledgement": "c1" },      // CTL-10: `acknowledged 1 waiting i2`, or `waiting none`, as the answer
  *            { "propagation": { "document": "tenant:acme", "revision": 2 } },        // CTL-62:
  *                                              // `installed 1 holding 2 recent 3`
  *            { "simulate": { "by": "alice", "request": { ... }, "candidate": "c1" } },
@@ -460,7 +464,7 @@ object ChangeRunner : ScenarioRunner {
         /** What a step reads of the documents, without changing them. */
         private suspend fun read(action: String, argument: JsonNode): String = when (action) {
             "diff" -> diff(argument)
-            "answer", "status", "propagation" -> answers(action, argument)
+            "answer", "status", "propagation", "acknowledgement" -> answers(action, argument)
             "audited" -> audited(argument)
             "staged" -> "staged " + (memory.candidate(documentKey(argument.text()))?.window?.substringBefore('@') ?: "none")
             "samples" -> StagedDocuments(memory).let { instance ->
@@ -643,6 +647,7 @@ object ChangeRunner : ScenarioRunner {
         private suspend fun answers(action: String, argument: JsonNode): String = when (action) {
             "answer" -> answer(argument)
             "status" -> status(argument)
+            "acknowledgement" -> acknowledgement(argument)
             else -> propagation(argument)
         }
 
@@ -656,12 +661,24 @@ object ChangeRunner : ScenarioRunner {
 
         /** An instance's status, as its heartbeat writes it: the revision of each document it holds. */
         private suspend fun status(argument: JsonNode): String {
-            argument.only("instance", "documents")
+            argument.only("instance", "documents", "acknowledges", "shadows")
             val documents = argument.required("documents").properties().associate { (key, revision) ->
                 documentKey(key) to InstalledDocument(revision.asLong(), Duration.ZERO)
             }
-            reports.write(InstanceStatus(argument.required("instance").text(), clock.now, documents))
+            val windows = argument.get("acknowledges")?.strings()?.mapTo(HashSet()) { change ->
+                changes.get(ChangeId(change)).shadow?.window
+                    ?: throw ScenarioFormatException("An acknowledged change is staged: $change")
+            }
+            val instance = argument.required("instance").text()
+            val shadows = argument.get("shadows")?.bool() ?: true
+            reports.write(InstanceStatus(instance, clock.now, documents, windows = windows, shadows = shadows))
             return "status"
+        }
+
+        /** Which live instances acknowledge a change's open window (`CTL-10`), as `GET /changes/{id}` answers it. */
+        private suspend fun acknowledgement(argument: JsonNode): String {
+            val read = changes.acknowledgements.of(changes.get(ChangeId(argument.text()))) ?: return "no open window"
+            return "acknowledged ${read.acknowledged} waiting " + read.waitingFor.joinToString(",").ifEmpty { "none" }
         }
 
         /** A revision's propagation (`CTL-62`): `installed <n> holding <n> recent <n>`, or `refused <status>`. */
@@ -926,7 +943,7 @@ object ChangeRunner : ScenarioRunner {
 
     /** The steps that read what the control plane holds or answers, and the instance statuses it reads. */
     private val READS = setOf(
-        "diff", "staged", "listed", "samples", "rateLimits", "answer", "status", "propagation", "audited",
+        "diff", "staged", "listed", "samples", "rateLimits", "answer", "status", "propagation", "audited", "acknowledgement",
     )
 
     /** The page size of a `changes` step: enough for a scenario's changes. */
