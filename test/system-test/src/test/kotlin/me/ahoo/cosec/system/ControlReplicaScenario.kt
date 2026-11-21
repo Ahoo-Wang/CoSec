@@ -55,7 +55,11 @@ class ControlReplicaScenario {
 
         val id = first.propose(KEY, head, listOf(putPolicy("svc-replica-a")), "proposed on one replica").created().id()
         // The other replica reads the same change: a change is the store's, not a replica's.
-        eventually(Bounds.SNAPSHOT_PROPAGATION, "the change on the other replica", { second.change(id) }) { it.status == 200 }
+        eventually(
+            Bounds.SNAPSHOT_PROPAGATION,
+            "the change on the other replica",
+            { second.change(id) }
+        ) { it.status == 200 }
         second.step(id, "shadow").ok().json()["state"].assert().isEqualTo("SHADOWING")
 
         val closed = eventually(Bounds.SHADOW_CLOSE, "the window to close", {
@@ -64,14 +68,21 @@ class ControlReplicaScenario {
         }) { it["state"] != "SHADOWING" }
         closed["state"].assert().describedAs("after the window: $closed").isEqualTo("READY")
         first.step(id, "publish").ok().json()["state"].assert().isEqualTo("PUBLISHED")
-        eventually(Bounds.SNAPSHOT_PROPAGATION, "the published head on the other replica", { second.revision(KEY) }) { it == head + 1 }
+        eventually(Bounds.SNAPSHOT_PROPAGATION, "the published head on the other replica", {
+            second.revision(KEY)
+        }) { it == head + 1 }
     }
 
     @Test
     @Order(2)
     fun `a window still closes and publishes when the replica that started it is stopped`() {
         val head = second.revision(KEY)
-        val id = first.propose(KEY, head, listOf(putPolicy("svc-replica-b")), "its replica is stopped mid-window").created().id()
+        val id = first.propose(
+            KEY,
+            head,
+            listOf(putPolicy("svc-replica-b")),
+            "its replica is stopped mid-window"
+        ).created().id()
         first.step(id, "shadow").ok().json()["state"].assert().isEqualTo("SHADOWING")
 
         Compose.stop("control-1")
@@ -96,7 +107,11 @@ class ControlReplicaScenario {
             { Http.get(SystemTopology.controlManagement1.resolve("/actuator/health/readiness")) },
         ) { it.status == 200 }
         // It reads what was published while it was down.
-        eventually(Bounds.SNAPSHOT_PROPAGATION, "the head on the restarted replica", { first.revision(KEY) }) { it == head + 1 }
+        eventually(
+            Bounds.SNAPSHOT_PROPAGATION,
+            "the head on the restarted replica",
+            { first.revision(KEY) }
+        ) { it == head + 1 }
     }
 
     private fun refusesConnections(base: URI): Boolean = try {

@@ -31,7 +31,12 @@ import java.time.Instant
 @Order(26)
 @ExtendWith(TranscriptExtension::class)
 class ControlHostScenario {
-    private val platformAdministrator get() = ServiceControl(SystemTopology.control1, SignIn.ROOT, method = "jwt", jti = "stated-token")
+    private val platformAdministrator get() = ServiceControl(
+        SystemTopology.control1,
+        SignIn.ROOT,
+        method = "jwt",
+        jti = "stated-token"
+    )
 
     @Test
     fun `the operators' port, the service port and the management port each serve what they are for`() {
@@ -87,7 +92,11 @@ class ControlHostScenario {
         )
         Contract.assertProblem(Http.get(uri, "CoSec-Identity" to expired), "token-expired")
         // An identity made long ago: replaying a captured header is limited to the maximum age (60 s by default).
-        val old = StatedIdentity.header(SignIn.ROOT, method = "jwt", issuedAt = Instant.now().minus(Duration.ofMinutes(5)))
+        val old = StatedIdentity.header(
+            SignIn.ROOT,
+            method = "jwt",
+            issuedAt = Instant.now().minus(Duration.ofMinutes(5))
+        )
         Contract.assertProblem(Http.get(uri, "CoSec-Identity" to old), "token-expired")
         // The same call with a fresh header is served: it was the header that was refused.
         Http.get(uri, "CoSec-Identity" to fresh).status.assert().isEqualTo(200)
@@ -101,6 +110,8 @@ class ControlHostScenario {
             mapOf("COSEC_PIPELINE_IDENTITY_ONLYTRUSTEDCALLERSCANREACH" to "false"),
         )
         exit.assert().describedAs("the host started without the statement: $output").isNotEqualTo(0)
-        output.assert().contains("only-trusted-callers-can-reach").contains("COSEC_PIPELINE_IDENTITY_ONLYTRUSTEDCALLERSCANREACH")
+        output.assert().contains(
+            "only-trusted-callers-can-reach"
+        ).contains("COSEC_PIPELINE_IDENTITY_ONLYTRUSTEDCALLERSCANREACH")
     }
 }

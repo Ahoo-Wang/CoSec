@@ -67,7 +67,9 @@ class Onboarding(private val control: IamControl) {
     }
 
     private fun refused(answer: ControlAnswer): ResponseEntity<String> =
-        ResponseEntity.status(HttpStatusCode.valueOf(answer.status)).header("Content-Type", "application/json").body(answer.body)
+        ResponseEntity.status(
+            HttpStatusCode.valueOf(answer.status)
+        ).header("Content-Type", "application/json").body(answer.body)
 
     private companion object {
         const val OK = 200

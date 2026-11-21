@@ -95,7 +95,12 @@ class ControlServiceScenario {
             "svc-iam",
             extra = listOf("X-Forwarded-For" to FORGED_PEER, "Forwarded" to "for=$FORGED_PEER"),
         )
-        val proposed = caller.propose(KEY, head, listOf(putPolicy("svc-skipped")), "a service skips its window").created().json()
+        val proposed = caller.propose(
+            KEY,
+            head,
+            listOf(putPolicy("svc-skipped")),
+            "a service skips its window"
+        ).created().json()
         val id = proposed.getValue("id") as String
         proposed["state"].assert().describedAs("$proposed").isEqualTo("CHECKED")
         caller.step(id, "skip-shadow", mapOf("reason" to "system test: a service's own change"))
@@ -105,7 +110,9 @@ class ControlServiceScenario {
         root.revision(KEY).assert().isEqualTo(head + 1)
         reports.document(KEY).ok().body.assert().contains("svc-skipped")
 
-        val published = eventually(Bounds.AUDIT_DELIVERY, "the PUBLISHED event of $id", { Audit.changeEventsOf(id) }) { events ->
+        val published = eventually(Bounds.AUDIT_DELIVERY, "the PUBLISHED event of $id", {
+            Audit.changeEventsOf(id)
+        }) { events ->
             events.any { it["kind"] == "PUBLISHED" }
         }.first { it["kind"] == "PUBLISHED" }
         (published["operator"] as Map<*, *>).let {
@@ -117,7 +124,9 @@ class ControlServiceScenario {
         val via = origin["via"] as Map<*, *>
         via["method"].assert().describedAs("the credential as it was stated: $origin").isEqualTo("api-key")
         via["credential"].assert().isEqualTo("svc-iam")
-        (origin["peer"] as String?).assert().describedAs("the connection's address: $origin").isNotBlank().isNotEqualTo(FORGED_PEER)
+        (origin["peer"] as String?).assert().describedAs(
+            "the connection's address: $origin"
+        ).isNotBlank().isNotEqualTo(FORGED_PEER)
     }
 
     @Test
@@ -127,7 +136,9 @@ class ControlServiceScenario {
         val grant = listOf(putPolicy("svc-grant"), bindRole("svc-grant", "analyst"))
         val proposed = iam.propose(KEY, head, grant, "a service grants").created().json()
         val id = proposed.getValue("id") as String
-        (proposed["escalations"] as List<*>?).orEmpty().assert().describedAs("what the change grants waits for a person: $proposed").isNotEmpty()
+        (proposed["escalations"] as List<*>?).orEmpty().assert().describedAs(
+            "what the change grants waits for a person: $proposed"
+        ).isNotEmpty()
         val waiting = iam.step(id, "skip-shadow", mapOf("reason" to "system test: a grant to approve")).ok().json()
         waiting["state"].assert().describedAs("$waiting").isEqualTo("AWAITING_APPROVAL")
         val approve = mapOf("candidate" to waiting["candidate"])
@@ -143,7 +154,11 @@ class ControlServiceScenario {
         asToken.step(id, "approve", approve).ok().json()["state"].assert().isEqualTo("READY")
         iam.step(id, "publish").ok().json()["state"].assert().isEqualTo("PUBLISHED")
 
-        val approved = eventually(Bounds.AUDIT_DELIVERY, "the APPROVED event of $id", { Audit.changeEventsOf(id) }) { events ->
+        val approved = eventually(
+            Bounds.AUDIT_DELIVERY,
+            "the APPROVED event of $id",
+            { Audit.changeEventsOf(id) }
+        ) { events ->
             events.any { it["kind"] == "APPROVED" }
         }.first { it["kind"] == "APPROVED" }
         (approved["operator"] as Map<*, *>)["principal"].assert().isEqualTo(SignIn.ROOT)
@@ -163,7 +178,9 @@ class ControlServiceScenario {
         reports.document(KEY).ok().body.assert().contains("svc-onboarded")
 
         val id = answer.getValue("id") as String
-        val published = eventually(Bounds.AUDIT_DELIVERY, "the PUBLISHED event of $id", { Audit.changeEventsOf(id) }) { events ->
+        val published = eventually(Bounds.AUDIT_DELIVERY, "the PUBLISHED event of $id", {
+            Audit.changeEventsOf(id)
+        }) { events ->
             events.any { it["kind"] == "PUBLISHED" }
         }.first { it["kind"] == "PUBLISHED" }
         (published["operator"] as Map<*, *>)["principal"].assert().isEqualTo("svc-iam")

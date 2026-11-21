@@ -82,7 +82,12 @@ class ServiceControl(
     fun get(path: String): Exchange = Http.send("GET", uri(path), headers(), null)
 
     fun post(path: String, body: Any = emptyMap<String, Any?>()): Exchange =
-        Http.send("POST", uri(path), headers() + ("Content-Type" to "application/json"), Json.mapper.writeValueAsString(body))
+        Http.send(
+            "POST",
+            uri(path),
+            headers() + ("Content-Type" to "application/json"),
+            Json.mapper.writeValueAsString(body)
+        )
 
     fun document(key: String): Exchange = get("/documents/$key")
 
@@ -95,7 +100,11 @@ class ServiceControl(
     fun change(id: String): Exchange = get("/changes/$id")
 
     /** A step of a change: `shadow`, `skip-shadow`, `approve`, `publish`, ... */
-    fun step(id: String, verb: String, body: Map<String, Any?> = emptyMap()): Exchange = post("/changes/$id:$verb", body)
+    fun step(
+        id: String,
+        verb: String,
+        body: Map<String, Any?> = emptyMap()
+    ): Exchange = post("/changes/$id:$verb", body)
 
     /** The same principal as another that states the same: this one on [other]'s port. */
     fun on(other: URI): ServiceControl = ServiceControl(other, subject, tenant, method, jti, extra)

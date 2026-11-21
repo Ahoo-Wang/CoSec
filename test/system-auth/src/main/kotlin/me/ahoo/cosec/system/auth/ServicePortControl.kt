@@ -89,7 +89,11 @@ class ServicePortControl(@Value("\${system.control.service.url}") private val se
                 app = CONTROL_APP,
                 space = "",
                 roles = emptySet(),
-                credential = Identity.Credential(Identity.Method.API_KEY, SERVICE_PRINCIPAL, now.plus(Duration.ofMinutes(1))),
+                credential = Identity.Credential(
+                    Identity.Method.API_KEY,
+                    SERVICE_PRINCIPAL,
+                    now.plus(Duration.ofMinutes(1))
+                ),
                 issuedAt = now,
                 requestId = UUID.randomUUID().toString().replace("-", ""),
             ),
