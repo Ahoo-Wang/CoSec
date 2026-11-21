@@ -36,7 +36,8 @@ import reactor.core.publisher.Mono
  * pass untouched.
  */
 internal class ServicePortRoutes(
-    private val listener: ControlServiceListener,
+    /** The service port, as the listener bound it (0 while it is not started). */
+    private val servicePort: () -> Int,
     private val routes: RouterFunction<ServerResponse>,
 ) : WebFilter, Ordered {
     private val strategies = HandlerStrategies.withDefaults()
@@ -47,14 +48,20 @@ internal class ServicePortRoutes(
 
     override fun filter(exchange: ServerWebExchange, chain: WebFilterChain): Mono<Void> {
         val local = exchange.request.localAddress?.port
-        if (local == null || local != listener.boundPort) {
+        if (local == null || local != servicePort()) {
             return chain.filter(exchange)
         }
         val request = ServerRequest.create(exchange, strategies.messageReaders())
+        // "No route matched" is decided on the lookup, never on the write: writing a response completes empty whether or not
+        // it committed one, and a route that was served must not be turned into a 404 because its write left nothing to emit.
         return routes.route(request)
-            .flatMap { handler -> handler.handle(request) }
-            .flatMap { response -> response.writeTo(exchange, context) }
-            .switchIfEmpty(Mono.defer { notFound(exchange) })
+            .flatMap { handler ->
+                handler.handle(
+                    request
+                ).flatMap { response -> response.writeTo(exchange, context) }.thenReturn(true)
+            }
+            .switchIfEmpty(Mono.defer { notFound(exchange).thenReturn(false) })
+            .then()
     }
 
     private fun notFound(exchange: ServerWebExchange): Mono<Void> {

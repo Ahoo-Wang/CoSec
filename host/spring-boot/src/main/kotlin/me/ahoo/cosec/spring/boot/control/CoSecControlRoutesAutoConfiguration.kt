@@ -114,7 +114,7 @@ internal class CoSecControlRoutesAutoConfiguration {
         fun cosecControlServicePortRoutes(
             listener: ControlServiceListener,
             @Qualifier("cosecControlRoutes") routes: ReactiveRouterFunction<ReactiveServerResponse>,
-        ): ServicePortRoutes = ServicePortRoutes(listener, routes)
+        ): ServicePortRoutes = ServicePortRoutes({ listener.boundPort }, routes)
 
         /** Where the application's server bound (`CTL-69`); the login routes' configuration declares it too. */
         @Bean
