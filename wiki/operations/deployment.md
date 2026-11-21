@@ -278,8 +278,11 @@ that carries it is the release after `8.0.0-beta.4`. Like the gateway, it is an 
   ([Startup fails because the network boundary is not stated](./troubleshooting.md#startup-fails-because-the-network-boundary-is-not-stated)).
   A hidden-method filter is refused, as in `gateway` mode (`STA-6`).
 
+This is for trying it on your own machine: the port is bound to the loopback interface, so that the statement is true.
+State it on a shared network only once a policy per port makes it so.
+
 ```bash
-docker run -d -p 8080:8080 \
+docker run -d -p 127.0.0.1:8080:8080 \
   -e SPRING_DATA_REDIS_URL=redis://redis:6379 \
   -e COSEC_PIPELINE_IDENTITY_ONLYTRUSTEDCALLERSCANREACH=true \
   ahoowang/cosec-control
@@ -290,11 +293,14 @@ docker run -d -p 8080:8080 \
 | Port | What | Who should reach it |
 |---|---|---|
 | **8080** | the operators' API, `/cosec/control/**` (`cosec.control.http.base-path`), every route of [the control API](../policies/testing.md#the-control-plane) | the gateway's pods |
-| **8082** | the service API (`cosec.control.http.service-port`), the narrow profile for a service that calls the control plane directly: the tenant and app documents, and a tenant's change flow ([Changing policies from your code](../integration/checks.md#changing-policies-from-your-code)); every other route is a `404` there | exactly the services you name |
-| **8081** | the management port: `/actuator/health/liveness`, `/actuator/health/readiness`, `/actuator/prometheus`; outside CoSec | monitoring only |
+| **8082** | the service API (`cosec.control.http.service-port`), the narrow profile for a service that calls the control plane directly: which tenant and app documents there are ([`GET /documents?kind=`](../policies/testing.md#listing-documents), granted to a service by `cosec:read` on `doc/tenant` or `doc/app`), the tenant and app documents, and a tenant's change flow ([Changing policies from your code](../integration/checks.md#changing-policies-from-your-code)); every other route is a `404` there | exactly the services you name |
+| **8081** | the management port: `/actuator/health/liveness`, `/actuator/health/readiness`, `/actuator/prometheus`; outside CoSec. The control API is a `404` there, as on any port but 8080 and 8082 (`CTL-69`) | monitoring only |
 
 Nothing in CoSec authorizes the management port, and the application port is decided by the pipeline, so a kubelet is
-refused there: probe the management port. Publish 8080 to the gateway and 8082 to the services you name, never 8081.
+refused there: probe the management port. The management port is not only the actuator: Spring Boot's management server
+also serves an application's own functional routes there, which the image has none of; CoSec's own routes, the control API
+included, answer on the application port and the service port only. Publish 8080 to the gateway and 8082 to the services
+you name, never 8081.
 
 **How a caller is identified.** An operator signs in at the IAM service, and the gateway verifies the token and forwards
 the identity to a route to the host. Give that route its app, so that an identity for another app is refused:
@@ -417,7 +423,9 @@ on its own.
   probe on it restarts the pod.
 - **Actuator.** On the management port (`management.server.port: 8081`, the container port `management`, which the Service
   does not publish), `health` and `prometheus` are exposed, and the `gateway` endpoint, which reads and changes routes, is
-  off (`management.endpoint.gateway.access: none`). CoSec authorizes the gateway's routes, not its actuator endpoints:
+  off (`management.endpoint.gateway.access: none`). The management port is not only the actuator on a WebFlux host: Spring
+  Boot's management server also serves the application's own `RouterFunction`s there (CoSec's own routes, the control API
+  and the login routes, are a `404` there, `CTL-69`). CoSec authorizes the gateway's routes, not its actuator endpoints:
   the production NetworkPolicy admits the management port only from the `monitoring` namespace (change it to your
   Prometheus's), and the dev overlay has no policy.
 - **Shutdown.** A `preStop` pause of 5 seconds lets the Service drop the pod first; `terminationGracePeriodSeconds: 45`

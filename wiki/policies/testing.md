@@ -60,6 +60,7 @@ Three built-in policies can be bound to operators: `cosec:platform-admin` (every
 
 | Method and path | Does |
 |---|---|
+| `GET /documents?kind=tenant\|app&after=&limit=` | Which tenant or app documents there are, a page at a time ([Listing documents](#listing-documents)). |
 | `GET /documents/{key}` | The current revision. `{key}` is `platform`, `app:<appId>` or `tenant:<tenantId>`. |
 | `GET /documents/{key}/revisions?before=&limit=` | Revision history, newest first (`limit` 1 to 200, default 20). |
 | `GET /documents/{key}/revisions/{revision}` | One kept revision; `410` when it is no longer kept. |
@@ -306,6 +307,33 @@ The members, their types and which are always there are in
 writes: `state`, `kind`, `severity`, an escalation's `reason`, the outcomes a window counts, and a decision's
 `decision`, `cause`, `reason`, and a trace entry's `effect` and `outcome`. A test of CoSec fails when an answer and
 its file disagree, so a value changes only in a release that says so.
+
+### Listing documents {#listing-documents}
+
+`GET /documents?kind=tenant` (or `kind=app`) lists which documents of that kind exist: `{"documents": [{"key":
+"tenant:acme"}, ...], "next": "tenant:acme", "asOf": "..."}`, sorted by key. `limit` is 1 to 200 (default 20), and
+`after` is the `next` of the page before, absent after the last page. It reads the control store's list of the
+documents it indexes, never a document, so a document whose first publish never completed may be listed, and reading
+it is a `404`. That list is the whole of the store's member set (about 2 MB at 50,000 tenants), so a control host reads
+it at most every 5 seconds, one read shared by every caller, and pages from that: `asOf` says when it was read, and a
+document created since may be missing until the next read.
+
+Who may list (`CTL-68`):
+- **Every document of the kind:** a caller holding `cosec:read` on the layer, `doc/tenant` for `kind=tenant` and
+  `doc/app` for `kind=app`.
+  - That read lets you know which documents exist, and nothing of what any of them holds. It grants no document's
+    read, the platform's included, and no document's read grants it.
+  - `cosec:platform-admin` grants it through `doc/**`. So does a policy on `doc/tenant/**` (the pattern's `**` covers
+    the layer): one who may read every tenant document may as well list them.
+  - To grant a service principal the listing alone, bind it a policy with the statement
+    `{"effect": "allow", "action": "cosec:read", "resource": "doc/tenant"}` in the app `cosec-control`.
+- **Its own document only:** a tenant's principal asking for `kind=tenant` that may read its tenant's document
+  (`cosec:tenant-admin`, `cosec:tenant-viewer`).
+- **Anyone else** is refused `403` without detail, as any route refuses a caller the policies do not permit: the same
+  answer for every such caller, which tells nothing of which documents exist.
+
+Any other `kind` is a `400`, and a store that cannot answer is a `503`. The service port serves it too, and so does the control plane's
+facade ([`ControlService.documents`](../integration/checks.md#changing-policies-from-your-code)).
 
 ### Finding open changes {#finding-open-changes}
 

@@ -157,8 +157,10 @@ management:
 - **它拒绝启动的情形**（`STA-10`），并说明原因：`cosec.control.enabled=false`，那样它就没有东西可提供（网关镜像才是只读的那个），以及 `cosec.jwt.enabled`、`cosec.api-key.enabled` 或 `cosec.authentication.login.enabled` 设为 `true`，那会接入一个这里没有任何东西使用的校验或登录。会校验令牌或让人登录的控制面，是你自己的应用。
 - **没有它就不启动的声明。** 与 `gateway` 模式的服务一样，宿主相信它收到的任何 `CoSec-Identity`，所以由你声明什么能连到它。它默认带有服务端口，所以声明是 `COSEC_PIPELINE_IDENTITY_ONLYTRUSTEDCALLERSCANREACH=true`：除网关和你点名的服务之外，没有任何东西能连到它。网关自己的声明 `only-gateway-can-reach` 在服务端口旁边会启动失败，因为它不属实。等网络做到之后再声明：撑起它的是策略，而不是那一行（[启动失败，因为没有声明网络边界](./troubleshooting.md#startup-fails-because-the-network-boundary-is-not-stated)）。隐藏方法过滤器同样被拒绝，与 `gateway` 模式一样（`STA-6`）。
 
+这是在你自己的机器上试用：端口绑定到回环接口，所以声明属实。在共享网络上，要等每个端口一条策略使它属实之后，才写这个声明。
+
 ```bash
-docker run -d -p 8080:8080 \
+docker run -d -p 127.0.0.1:8080:8080 \
   -e SPRING_DATA_REDIS_URL=redis://redis:6379 \
   -e COSEC_PIPELINE_IDENTITY_ONLYTRUSTEDCALLERSCANREACH=true \
   ahoowang/cosec-control
@@ -169,10 +171,10 @@ docker run -d -p 8080:8080 \
 | 端口 | 是什么 | 谁应该连到它 |
 |---|---|---|
 | **8080** | 运维人员的 API，`/cosec/control/**`（`cosec.control.http.base-path`），[控制 API](../policies/testing.md#the-control-plane)的每条路由 | 网关的 pod |
-| **8082** | 服务 API（`cosec.control.http.service-port`），为直接调用控制面的服务准备的窄档：租户文档和应用文档，以及租户的变更流程（[从代码修改策略](../integration/checks.md#changing-policies-from-your-code)）；其他每条路由在这里都是 `404` | 恰好是你点名的服务 |
-| **8081** | 管理端口：`/actuator/health/liveness`、`/actuator/health/readiness`、`/actuator/prometheus`；在 CoSec 之外 | 只有监控 |
+| **8082** | 服务 API（`cosec.control.http.service-port`），为直接调用控制面的服务准备的窄档：有哪些租户文档和应用文档（[`GET /documents?kind=`](../policies/testing.md#listing-documents)，授予服务的方式是在 `doc/tenant` 或 `doc/app` 上的 `cosec:read`）、租户文档和应用文档，以及租户的变更流程（[从代码修改策略](../integration/checks.md#changing-policies-from-your-code)）；其他每条路由在这里都是 `404` | 恰好是你点名的服务 |
+| **8081** | 管理端口：`/actuator/health/liveness`、`/actuator/health/readiness`、`/actuator/prometheus`；在 CoSec 之外。控制 API 在这里是 `404`，除 8080 和 8082 之外的任何端口都是（`CTL-69`） | 只有监控 |
 
-CoSec 不对管理端口做授权，而应用端口由管道决策，kubelet 在那里会被拒绝：探针探测管理端口。把 8080 发布给网关，把 8082 发布给你点名的服务，永远不要发布 8081。
+CoSec 不对管理端口做授权，而应用端口由管道决策，kubelet 在那里会被拒绝：探针探测管理端口。管理端口不只是 actuator：Spring Boot 的管理服务器还会在那里提供应用自己的函数式路由，镜像没有这样的路由；CoSec 自己的路由，控制 API 在内，只在应用端口和服务端口上应答。把 8080 发布给网关，把 8082 发布给你点名的服务，永远不要发布 8081。
 
 **调用方如何被识别。** 运维人员在 IAM 服务登录，网关校验令牌，并把身份转发到通往宿主的路由。给这条路由指定它的应用，这样为其他应用声明的身份会被拒绝：
 
@@ -255,7 +257,7 @@ spring:
   `emptyDir` 卷：`logs/`（GC 日志）、`data/`（`OutOfMemoryError` 时的堆转储）和 `/tmp`（Netty 的原生传输、JVM 的性能数据）。
   AOT 缓存只读不写。
 - **探针。** 启动探针和存活探针读取 `/livez`，就绪探针读取 `/readyz`，都在容器的 `http` 端口上：这两个分组由 `application.yaml` 启用（`management.endpoint.health.probes.enabled`），并由网关的端口提供（`add-additional-paths`）。所以 pod 在 Redis 里还没有平台文档时就能启动，并在文档安装前留在 Service 之外。不要让探针指向 `/actuator/health`：在那之前它一直是 DOWN，启动探针指向它会让 pod 被重启。
-- **Actuator。** 在管理端口上（`management.server.port: 8081`，容器端口 `management`，Service 不发布它）暴露 `health` 和 `prometheus`；能读取和修改路由的 `gateway` 端点处于关闭状态（`management.endpoint.gateway.access: none`）。CoSec 授权的是网关的路由，不是它的 actuator 端点：production 的 NetworkPolicy 只放行来自 `monitoring` 命名空间的管理端口（改成你的 Prometheus 所在处），dev overlay 没有策略。
+- **Actuator。** 在管理端口上（`management.server.port: 8081`，容器端口 `management`，Service 不发布它）暴露 `health` 和 `prometheus`；能读取和修改路由的 `gateway` 端点处于关闭状态（`management.endpoint.gateway.access: none`）。在 WebFlux 宿主上，管理端口不只是 actuator：Spring Boot 的管理服务器也会在那里提供应用自己的 `RouterFunction`（CoSec 自己的路由，控制 API 和登录路由，在那里是 `404`，`CTL-69`）。CoSec 授权的是网关的路由，不是它的 actuator 端点：production 的 NetworkPolicy 只放行来自 `monitoring` 命名空间的管理端口（改成你的 Prometheus 所在处），dev overlay 没有策略。
 - **关闭。** `preStop` 先暂停 5 秒，让 Service 先摘掉这个 pod；`terminationGracePeriodSeconds: 45` 覆盖这段暂停、
   Spring 的优雅关闭（最多 30 秒）和决策监听器的排空（[关闭](#shutdown)）。
 - **控制面宿主的网络策略。** 三条，每个端口一条，选中它的 pod（`cosec-control-operators`、`cosec-control-services`、`cosec-control-management`），让每个端口只放行一个来源，其他连接一律拒绝：网关的 pod（`app.kubernetes.io/name: cosec-gateway`，在该策略所在的命名空间里；网关在别的命名空间时，需要上面示例中的 `namespaceSelector`）到 8080；你点名的服务到 8082；`monitoring` 命名空间到 8081。**按出厂配置，服务策略点名的是一个不存在的命名空间和标签，所以它不放行任何人**：把两者都改成调用控制面的每个服务，在它自己的命名空间里，每个服务一个 `from` 条目，并把每个服务都视为与控制面本身同等可信。它们需要一个会强制执行 `NetworkPolicy` 的网络插件，而 kind 的不会：在会强制执行的集群上测试，别的标签的 pod 连不上这三个端口中的任何一个。清单没有设置出站策略。

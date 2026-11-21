@@ -60,19 +60,18 @@ import java.time.Duration
  *
  * Spring Boot decides what a management server serves: its child context inherits beans from the application's, and
  * CoSec decides nothing about it. That is why these tests exist. On WebFlux the child collects the application's
- * `WebFilter`s, so CoSec's pipeline stands in front of it, and it also collects the application's `RouterFunction`s
- * (the application's functional routes and the control API are served there, behind CoSec). On WebMvc the filter
+ * `WebFilter`s, so CoSec's pipeline stands in front of it, and it also collects the application's `RouterFunction`s: an
+ * application's own functional routes are served there, behind CoSec. CoSec's own routes (the control API and the login
+ * routes) are `RouterFunction`s too, and answer on the application's port only (and the control API on its service
+ * port): on the management port they are a 404 (`CTL-69`), because a host that believes the identity it is stated
+ * (`STA-9`) would otherwise serve the whole control API to whoever can reach the management port. On WebMvc the filter
  * registration never reaches the management server, and the child serves actuator's endpoints and nothing of the
- * application's (a controller, a functional route and the control API are Spring's 404). On a gateway host Spring
- * Cloud Gateway itself leaves a request on a different, fixed management port alone, so the gateway's routes are not
- * served there; the control API is, behind the pipeline's filter limited to its base path. On a random port (`0`) the
- * gateway cannot tell the port apart and serves its routes there, under its filter: pinned too. A route a statement
- * permits to anyone tells "served behind CoSec" from "not served": the premise of `STA-4` is that WebFlux's management
- * child serves the application's functional routes; so does the control API read with a platform token (200 on WebFlux's
- * management port, 404 on WebMvc's): the starter's routes are `RouterFunction` beans of the parent like an application's,
- * and that cell pins the inheritance too. **A Spring Boot upgrade that
- * changes what a child context inherits shows up here first**: a cell that moves is either an application route that
- * became reachable outside CoSec, or a pipeline that no longer fronts the management server.
+ * application's (a controller, a functional route, the control API and the login routes are Spring's 404). On a gateway
+ * host Spring Cloud Gateway itself leaves a request on a different, fixed management port alone, so the gateway's routes
+ * are not served there. On a random port (`0`) the gateway cannot tell the port apart and serves its routes there, under
+ * its filter: pinned too. A route a statement permits to anyone tells "served behind CoSec" from "not served". **A
+ * Spring Boot upgrade that changes what a child context inherits shows up here first**: a cell that moves is either an
+ * application route that became reachable outside CoSec, or a pipeline that no longer fronts the management server.
  */
 class ManagementPortTest {
     @Test
@@ -81,9 +80,10 @@ class ManagementPortTest {
         // The application port.
         cells.before.app.assert().isEqualTo(GATED_BEFORE)
         cells.after.app.assert().isEqualTo(GATED_AFTER)
-        // The management port: CoSec's pipeline too, the actuator probes and the application's functional route alike.
+        // The management port: CoSec's pipeline too, the actuator probes and the application's functional route alike; the
+        // control API is a 404 even for a platform administrator (CTL-69), as are the login routes (below).
         cells.before.management.assert().isEqualTo(GATED_BEFORE)
-        cells.after.management.assert().isEqualTo(GATED_AFTER)
+        cells.after.management.assert().isEqualTo(GATED_AFTER_ON_MANAGEMENT)
         // A controller is served nowhere but the application's server (Spring's 404 behind the pipeline).
         cells.managementController.assert().isEqualTo(404)
     }
@@ -107,9 +107,9 @@ class ManagementPortTest {
         cells.before.app.assert().isEqualTo(Probes(404, 404, 503, 503, 503, 503))
         cells.after.app.assert().isEqualTo(Probes(404, 404, 401, 200, 401, 200))
         // The management port: actuator's endpoints are Spring's, the gateway's route is not served, and the control
-        // API, which the pipeline's filter limited to its base path fronts, is CoSec's.
+        // API, which the pipeline's filter limited to its base path fronts, is not served (CTL-69).
         cells.before.management.assert().isEqualTo(Probes(200, 503, 404, 404, 503, 503))
-        cells.after.management.assert().isEqualTo(Probes(200, 200, 404, 404, 401, 200))
+        cells.after.management.assert().isEqualTo(Probes(200, 200, 404, 404, 401, 404))
     }
 
     @Test
@@ -120,7 +120,7 @@ class ManagementPortTest {
         cells.before.app.assert().isEqualTo(Probes(404, 404, 503, 503, 503, 503))
         cells.after.app.assert().isEqualTo(Probes(404, 404, 401, 200, 401, 200))
         cells.before.management.assert().isEqualTo(Probes(200, 503, 503, 503, 503, 503))
-        cells.after.management.assert().isEqualTo(Probes(200, 200, 401, 200, 401, 200))
+        cells.after.management.assert().isEqualTo(Probes(200, 200, 401, 200, 401, 404))
     }
 
     @Test
@@ -134,6 +134,24 @@ class ManagementPortTest {
         servlet.after.app.openRoute.assert().isEqualTo(200)
         reactive.after.management.openRoute.assert().isEqualTo(200)
         servlet.after.management.openRoute.assert().isEqualTo(404)
+    }
+
+    @Test
+    fun `CoSec's own routes answer on the application's port and never on the management port (CTL-69)`() {
+        for (stack in listOf(Stack.REACTIVE, Stack.SERVLET)) {
+            val cells = run(stack, separate = true)
+            // The control API, read with a platform token: served on the application's port, a 404 on the management port.
+            cells.after.app.controlApiWithToken.assert().describedAs(
+                "${stack.name} control API on the application port"
+            ).isEqualTo(200)
+            cells.after.management.controlApiWithToken.assert().describedAs(
+                "${stack.name} control API on the management port"
+            ).isEqualTo(404)
+            // The login route: served (its answer to an empty body, not Spring's 404) on the application's port only.
+            val login = checkNotNull(cells.login)
+            login.app.assert().describedAs("${stack.name} logout route on the application port").isNotEqualTo(404)
+            login.management.assert().describedAs("${stack.name} logout route on the management port").isEqualTo(404)
+        }
     }
 
     @Test
@@ -199,10 +217,13 @@ class ManagementPortTest {
                 Thread.sleep(50)
             }
             val after = Observation(probes(app, stack, token), probes(management, stack, token))
+            // The starter's login route (a logout, which needs only the token revoker): not on a gateway host.
+            val login = if (stack.gateway) null else Ports(post(app, LOGOUT), post(management, LOGOUT))
             return Cells(
                 Phase(before.app, before.management),
                 Phase(after.app, after.management),
                 get(management, "/hello"),
+                login,
             )
         }
     }
@@ -245,6 +266,7 @@ class ManagementPortTest {
                 add("spring.cloud.gateway.server.webflux.routes[1].uri=http://localhost:$backendPort")
                 add("spring.cloud.gateway.server.webflux.routes[1].predicates[0]=Path=/closed")
             } else {
+                add("cosec.authentication.login.logout.path=$LOGOUT")
                 // Spring Cloud Gateway is on the test classpath for other tests: none of its configurations is wanted.
                 add("spring.autoconfigure.exclude=" + gatewayConfigurations().joinToString(","))
             }
@@ -287,6 +309,13 @@ class ManagementPortTest {
         get(port, "$CONTROL/documents/platform", token),
     )
 
+    private fun post(port: Int, path: String): Int =
+        CLIENT.send(
+            HttpRequest.newBuilder(URI.create("http://localhost:$port$path")).timeout(Duration.ofSeconds(10))
+                .header("Content-Type", "application/json").POST(HttpRequest.BodyPublishers.noBody()).build(),
+            HttpResponse.BodyHandlers.discarding(),
+        ).statusCode()
+
     private fun get(port: Int, path: String, token: String? = null): Int =
         CLIENT.send(
             HttpRequest.newBuilder(URI.create("http://localhost:$port$path")).timeout(Duration.ofSeconds(10))
@@ -310,7 +339,10 @@ class ManagementPortTest {
 
     private data class Phase(val app: Probes, val management: Probes)
 
-    private data class Cells(val before: Phase, val after: Phase, val managementController: Int)
+    /** A status on the application's port and on the management port. */
+    private data class Ports(val app: Int, val management: Int)
+
+    private data class Cells(val before: Phase, val after: Phase, val managementController: Int, val login: Ports? = null)
 
     /** [closed] is a route of the application no statement permits, [open] one the document permits to anyone. */
     private enum class Stack(
@@ -380,6 +412,7 @@ class ManagementPortTest {
 
     private companion object {
         const val CONTROL = "/cosec/control/v1"
+        const val LOGOUT = "/auth/logout"
         val CLIENT: HttpClient = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(5)).build()
 
         /**
@@ -387,7 +420,8 @@ class ManagementPortTest {
          * platform tenant is the platform administrator. Nothing else is permitted.
          */
         const val PLATFORM = """{"schema":2,"revision":1,"publishedAt":"2026-11-01T00:00:00Z",""" +
-            """"policies":[{"id":"public","statements":[{"effect":"allow","action":"http:GET","resource":["http:path:/hello","http:path:/token","http:path:/public/**"]}]},""" +
+            """"policies":[{"id":"public","statements":[{"effect":"allow","action":"http:GET","resource":["http:path:/hello","http:path:/token","http:path:/public/**"]},""" +
+            """{"effect":"allow","action":"http:POST","resource":"http:path:/auth/logout"}]},""" +
             """{"id":"members","statements":[{"effect":"allow","action":"http:*","resource":"http:path:/cosec/control/**",""" +
             """"condition":{"eq":["subject.authenticated",true]}}]}],""" +
             """"bindings":[{"id":"public","subject":"*","app":"*","space":"*","policy":"public"},""" +
@@ -400,5 +434,8 @@ class ManagementPortTest {
 
         /** After it: anonymous callers are 401 wherever no statement permits the path; a platform token reaches the control API. */
         val GATED_AFTER = Probes(401, 401, 401, 200, 401, 200)
+
+        /** The same on the management port: the control API is not served there, a platform token or not (`CTL-69`). */
+        val GATED_AFTER_ON_MANAGEMENT = Probes(401, 401, 401, 200, 401, 404)
     }
 }

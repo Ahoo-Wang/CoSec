@@ -3,15 +3,15 @@
 # Tests: :control:test --tests me.ahoo.cosec.control.sdk.ControlServiceTest
 
 diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/sdk/LocalControlService.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/sdk/LocalControlService.kt
-index 32ad57af2..cc1532ec9 100644
+index 0505b7a6e..8add2b909 100644
 --- a/core/control/src/main/kotlin/me/ahoo/cosec/control/sdk/LocalControlService.kt
 +++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/sdk/LocalControlService.kt
-@@ -59,7 +59,7 @@ class LocalControlService(
+@@ -60,7 +60,7 @@ class LocalControlService(
      private val clock: Clock = Clock.systemUTC(),
      private val ids: IdGenerator = RandomIdGenerator,
  ) : ControlService {
 -    private val http = ControlHttp(plane, ControlProfile.SERVICE)
 +    private val http = ControlHttp(plane, ControlProfile.OPERATORS)
  
-     override suspend fun document(caller: ControlCaller, key: SnapshotKey): String =
-         call(caller, GET, "/documents/${key(key)}")
+     override suspend fun documents(caller: ControlCaller, kind: DocumentKind, after: String?, limit: Int?): String = call(
+         caller,

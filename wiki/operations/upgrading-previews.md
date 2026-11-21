@@ -47,6 +47,14 @@ Which preview of the library may run behind which preview of the gateway image: 
     Set `cosec.control.http.enabled=false` when its code reaches the control plane in process only, and
     `cosec.control.maintenance.enabled=false` beside a host that runs the maintenance passes
     ([Configuration](./configuration.md#control-plane)).
+- **CoSec's own routes no longer answer on the management port** (`CTL-69`). Affected: a WebFlux host (or a gateway host with
+  the control plane on) with a `management.server.port` of its own, whose control API (`/cosec/control/v1/...`) or login
+  routes (`cosec.authentication.login.refresh.path`, `.logout.path`) a client reached there. Spring Boot's management server
+  inherits the application's `RouterFunction`s, so they answered on the management port behind the pipeline; on a host that
+  believes the identity it is stated (`cosec.pipeline.caller=forwarded-identity`, the control-plane host image) that was the
+  whole control API for whoever could reach the port. They answer on the application's port (and the control API on its
+  service port) only, and are a `404` elsewhere. Call them on the application's port. An application's own routes are
+  unchanged.
 - **New: the control plane's facade, `ControlService`, for a service that embeds the control plane** (`CTL-65`).
   - Calls are decided as the `ControlCaller` they state, and recorded as that caller's.
   - It reaches only the narrow set: tenant and app document reads, and a tenant's change flow.

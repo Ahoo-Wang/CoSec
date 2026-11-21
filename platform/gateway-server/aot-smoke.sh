@@ -146,6 +146,13 @@ for meter in cosec_authorization_seconds_count cosec_snapshot_installed; do
     *) echo "FAIL the scrape endpoint has no $meter" >&2; failed=1 ;;
   esac
 done
+# The management port serves no route of CoSec's own, the control API included (CTL-69).
+if [ "$(curl -s -o /dev/null -w '%{http_code}' "http://localhost:$MGMT/cosec/control/v1/documents/platform")" = 404 ]; then
+  echo "ok   the control API is a 404 on the management port"
+else
+  echo "FAIL the management port serves a control API path" >&2
+  failed=1
+fi
 if [ "$(curl -s -o /dev/null -w '%{http_code}' "http://localhost:$PORT/actuator/prometheus")" = 404 ]; then
   echo "ok   no actuator endpoint on the application port"
 else
