@@ -11,7 +11,6 @@
  * limitations under the License.
  */
 
-
 package me.ahoo.cosec.runtime.event
 
 import me.ahoo.cosec.annotations.InternalCoSecApi

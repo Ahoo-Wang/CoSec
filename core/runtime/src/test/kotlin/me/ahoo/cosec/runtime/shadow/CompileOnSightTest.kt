@@ -24,6 +24,7 @@ import me.ahoo.cosec.document.SnapshotDocuments
 import me.ahoo.cosec.model.Memberships
 import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.model.scope.HostScope
+import me.ahoo.cosec.model.scope.Scope
 import me.ahoo.cosec.model.scope.ScopeResolution
 import me.ahoo.cosec.model.scope.ScopeResolver
 import me.ahoo.cosec.model.scope.ScopeSubject
@@ -84,7 +85,8 @@ class CompileOnSightTest {
         PlatformCompiler().compileCandidate(key, document)
     })
 
-    private val reporter = ShadowReporter(recorder, reports, { emptyMap() }, Clock.systemUTC(), candidates = store, source = source)
+    private val reporter =
+        ShadowReporter(recorder, reports, { emptyMap() }, Clock.systemUTC(), candidates = store, source = source)
 
     private fun document(revision: Long = 2): SnapshotDocument = SnapshotDocuments.read(
         """{"schema":2,"revision":$revision,"publishedAt":"2026-11-20T00:00:00Z"}""".encodeToByteArray()
@@ -180,10 +182,14 @@ class CompileOnSightTest {
             threads += Thread.currentThread().name
             compiler.compileCandidate(key, document)
         })
-        store.list = StagedCandidates(tenants.take(WINDOWS).associate { SnapshotKey.Tenant(it) to setOf("w-$it") })
-        tenants.take(WINDOWS).forEach { store.candidates[SnapshotKey.Tenant(it)] = StoredCandidate("w-$it", 1, document()) }
+        val windows = tenants.take(WINDOWS).associate { SnapshotKey.Tenant(it) to "w-$it" }
+        val staged = windows.keys.toList()
+        store.list = StagedCandidates(windows.mapValues { setOf(it.value) })
+        windows.forEach { (key, window) -> store.candidates[key] = StoredCandidate(window, 1, document()) }
         val reporter = ShadowReporter(recorder, reports, { emptyMap() }, candidates = store, source = candidates)
-        DocumentSnapshots.source(documents, compiler, options, Clock.systemUTC(), loads).also(compiler::bind).use { source ->
+        val source = DocumentSnapshots.source(documents, compiler, options, Clock.systemUTC(), loads)
+        compiler.bind(source)
+        source.use {
             source.load().join()
             val views = DocumentSnapshotViews(source, platformRequired = true)
             runBlocking(Dispatchers.Default) {
@@ -196,19 +202,16 @@ class CompileOnSightTest {
         loads.failed.get().assert().isZero()
         loads.refused.get().assert().isZero()
         threads.filter { it.startsWith("cosec-snapshot") }.assert().isEmpty()
-        tenants.take(WINDOWS).forEach { tenant ->
-            runBlocking { candidates.candidate(SnapshotKey.Tenant(tenant)) }.assert().isInstanceOf(Candidate.Ready::class.java)
-        }
+        val held = runBlocking { staged.map { candidates.candidate(it) } }
+        held.forEach { it.assert().isInstanceOf(Candidate.Ready::class.java) }
         recorder.reports().assert().isEmpty()
     }
 
-    private fun scope(tenant: String) = (
-        ScopeResolver.resolve(
-            ScopeSubject(TenantId(tenant), true, Memberships(Memberships.Source.CLAIMS, emptyMap(), emptyList())),
-            "",
-            HostScope(null),
-        ) as ScopeResolution.Resolved
-        ).scope
+    private fun scope(tenant: String): Scope {
+        val memberships = Memberships(Memberships.Source.CLAIMS, emptyMap(), emptyList())
+        val subject = ScopeSubject(TenantId(tenant), true, memberships)
+        return (ScopeResolver.resolve(subject, "", HostScope(null)) as ScopeResolution.Resolved).scope
+    }
 
     private companion object {
         const val TENANTS = 300

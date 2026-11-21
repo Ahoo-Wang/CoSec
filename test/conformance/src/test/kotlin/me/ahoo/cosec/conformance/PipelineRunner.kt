@@ -47,7 +47,6 @@ import me.ahoo.cosec.model.condition.IpAddress
 import me.ahoo.cosec.model.decision.Cause
 import me.ahoo.cosec.model.decision.DocumentKind
 import me.ahoo.cosec.model.scope.HostScope
-import me.ahoo.cosec.model.scope.Scope
 import me.ahoo.cosec.runtime.AuthorizationChecker
 import me.ahoo.cosec.runtime.Pipeline
 import me.ahoo.cosec.runtime.PipelineBuilder
@@ -60,11 +59,6 @@ import me.ahoo.cosec.runtime.attribute.InMemoryBlacklistSource
 import me.ahoo.cosec.runtime.authn.ApiKeyAuthenticator
 import me.ahoo.cosec.runtime.authn.CompositeAuthenticator
 import me.ahoo.cosec.runtime.authn.TokenAuthenticator
-import me.ahoo.cosec.runtime.event.DecisionEvent
-import me.ahoo.cosec.runtime.event.DecisionListener
-import me.ahoo.cosec.runtime.event.DecisionListeners
-import me.ahoo.cosec.runtime.event.Delivery
-import me.ahoo.cosec.runtime.event.SampledOnlyListener
 import me.ahoo.cosec.runtime.http.Cookies
 import me.ahoo.cosec.runtime.http.Headers
 import me.ahoo.cosec.runtime.http.HttpFacts
@@ -137,10 +131,8 @@ import java.time.Instant
 import java.time.ZoneId
 import java.time.ZoneOffset
 import java.util.concurrent.CompletableFuture
-import java.util.concurrent.atomic.AtomicInteger
 import kotlin.coroutines.cancellation.CancellationException
 import kotlin.time.Duration.Companion.milliseconds
-import kotlin.time.Duration.Companion.seconds
 import me.ahoo.cosec.runtime.http.Outcome as PipelineOutcome
 
 /**
@@ -263,8 +255,8 @@ class PipelineRunner(private val compiler: SnapshotCompiler = DocumentSnapshotCo
             if (point == cancelAt) reached.complete(Unit)
         }
 
-        val received = LinkedHashMap<String, AtomicInteger>()
-        val listeners = listeners(node.get("listeners"), node.get("options") ?: EMPTY, received)
+        val scenarioListeners = ScenarioListeners(node.get("listeners"), node.get("options") ?: EMPTY)
+        val listeners = scenarioListeners.listeners
         val authentication = node.get("authentication") ?: EMPTY
         val provider = node.get("membershipProvider")?.let { provider(authentication, it) { reach("memberships") } }
             ?: keysWithoutProvider(authentication)
@@ -282,17 +274,19 @@ class PipelineRunner(private val compiler: SnapshotCompiler = DocumentSnapshotCo
             .named(provider, rateLimiter(node.get("rateLimiter")), node.get("identity")?.let(::issuer))
             .build()
         try {
-            val outcome = answer(node, pipeline, cancelAt, reached)
-            if (outcome !is Outcome.Answered || node.get("expect")?.has("events") != true) {
-                return outcome
-            }
-            // Every event published is delivered before it is counted.
-            listeners.drain()
-            return outcome.withEvents(received.mapValues { it.value.get() })
+            return counted(node, answer(node, pipeline, cancelAt, reached), scenarioListeners)
         } finally {
             listeners.cancel()
         }
     }
+
+    /** [outcome] with the events each listener received, when the scenario expects them (`OBS-8`). */
+    private fun counted(node: JsonNode, outcome: Outcome, listeners: ScenarioListeners): Outcome =
+        if (outcome is Outcome.Answered && node.get("expect")?.has("events") == true) {
+            outcome.withEvents(listeners.events())
+        } else {
+            outcome
+        }
 
     /** The parts a scenario may leave out, each set only when the scenario names it. */
     private fun PipelineBuilder.named(provider: MembershipProvider?, limiter: RateLimiter?, issuer: IdentityIssuer?) =
@@ -903,49 +897,6 @@ class PipelineRunner(private val compiler: SnapshotCompiler = DocumentSnapshotCo
         )
     }
 
-    private fun listeners(
-        node: JsonNode?,
-        options: JsonNode,
-        received: MutableMap<String, AtomicInteger>
-    ): DecisionListeners {
-        val listeners = node?.values().orEmpty().map { listener ->
-            listener.only("name", "delivery", "fails", "hangs", "samples")
-            val name = listener.required("name").text()
-            val count = AtomicInteger().also { received[name] = it }
-            listener.get("samples")?.let { samples -> return@map sampledOnly(name, samples.bool(), count) }
-            val delivery = when (val delivery = listener.get("delivery")?.text() ?: "best-effort") {
-                "required" -> Delivery.REQUIRED
-                "best-effort" -> Delivery.BEST_EFFORT
-                else -> throw ScenarioFormatException("A delivery is required or best-effort, not $delivery")
-            }
-            val fails = listener.get("fails")?.text()
-            val hangs = listener.get("hangs")?.bool() == true
-            object : DecisionListener {
-                override val name = name
-                override val delivery = delivery
-
-                override suspend fun onDecision(event: DecisionEvent) {
-                    count.incrementAndGet()
-                    fails?.let { throw IllegalStateException(it) }
-                    if (hangs) awaitCancellation()
-                }
-            }
-        }
-        val timeout = options.get("requiredTimeoutMillis")?.asLong()?.milliseconds ?: DEFAULT_REQUIRED_TIMEOUT
-        return DecisionListeners(listeners, requiredTimeout = timeout)
-    }
-
-    /** A BEST_EFFORT listener that reads only the events it sampled (`OBS-8`): every decided request, or none. */
-    private fun sampledOnly(name: String, samples: Boolean, count: AtomicInteger) = object : SampledOnlyListener {
-        override val name = name
-
-        override fun sample(scope: Scope, view: SnapshotView): Boolean = samples
-
-        override suspend fun onDecision(event: DecisionEvent) {
-            count.incrementAndGet()
-        }
-    }
-
     private fun rateLimiter(node: JsonNode?): RateLimiter? {
         node ?: return null
         node.only("exhausted", "fails")
@@ -1045,7 +996,6 @@ class PipelineRunner(private val compiler: SnapshotCompiler = DocumentSnapshotCo
         const val AUTHORIZATION = "authorization"
         const val DEFAULT_API_KEY_HEADER = "X-API-Key"
         const val REMOTE_ADDRESS = "10.0.0.1"
-        val DEFAULT_REQUIRED_TIMEOUT = 1.seconds
 
         /** The device a `blacklist` that blocks `device` names; a request sends it as `CoSec-Device-Id`. */
         const val DEVICE_ID = "device-1"
