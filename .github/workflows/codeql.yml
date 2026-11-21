@@ -25,7 +25,7 @@ on:
       - 'skills/**'
   pull_request:
     # No path filter here: "Analyze (java-kotlin)" is a required check, so a skipped run would block docs-only PRs.
-    branches: [ main ]
+    branches: [ main, 'tmp/**' ]
   schedule:
     - cron: '23 3 * * 1'
 
