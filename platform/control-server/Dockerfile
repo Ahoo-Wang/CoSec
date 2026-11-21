@@ -1,7 +1,7 @@
 # Build: ./gradlew :control-server:installDist, then docker build --build-context shared=platform platform/control-server
 #   (the shared context holds aot-train.sh, which this image and the gateway's both train their AOT cache with).
 # docker run --name cosec-control-server -d -p 8080:8080 --link redis -e SPRING_DATA_REDIS_URL=redis://redis:6379 \
-#   -e COSEC_PIPELINE_IDENTITY_ONLY_GATEWAY_CAN_REACH=true ahoowang/cosec-control
+#   -e COSEC_PIPELINE_IDENTITY_ONLYGATEWAYCANREACH=true ahoowang/cosec-control
 # It starts only under that statement: it believes the CoSec-Identity header of whoever can reach it.
 
 ARG APP_NAME=cosec-control-server
@@ -36,7 +36,7 @@ USER appuser
 # reach the host is the one thing the application will not start without, so the training run states it, for this step
 # only (it is not in the image's environment); the requests are the ones a kubelet or a client would make, answered 401.
 RUN AOT_TRAIN_PATHS="/cosec/control/v1/documents/platform /aot-training" \
-    COSEC_PIPELINE_IDENTITY_ONLY_GATEWAY_CAN_REACH=true \
+    COSEC_PIPELINE_IDENTITY_ONLYGATEWAYCANREACH=true \
     aot-train.sh ${WORK_HOME} ${WORK_HOME}/aot/${APP_NAME}.aot
 
 # JDK_JAVA_OPTIONS (read by the java launcher) rather than JAVA_OPTS, so a deployment that sets JAVA_OPTS keeps

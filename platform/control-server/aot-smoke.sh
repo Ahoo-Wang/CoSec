@@ -69,7 +69,7 @@ printf '{"accepted":true,"outputSha256":{"platform.json":"%s"}}\n' "$SHA" >"$WOR
 # 3. The image, on its AOT cache, under the statement.
 docker run -d --name "$NAME" --network host --health-interval 2s \
   -e SPRING_DATA_REDIS_URL="$REDIS_URI" \
-  -e COSEC_PIPELINE_IDENTITY_ONLY_GATEWAY_CAN_REACH=true \
+  -e COSEC_PIPELINE_IDENTITY_ONLYGATEWAYCANREACH=true \
   -e JAVA_OPTS="-XX:AOTMode=on -Xlog:aot=info" \
   "$IMAGE" >/dev/null
 
