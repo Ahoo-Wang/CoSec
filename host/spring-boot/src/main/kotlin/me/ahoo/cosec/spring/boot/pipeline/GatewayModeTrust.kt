@@ -74,6 +74,11 @@ internal object GatewayModeTrust {
         return stated
     }
 
+    /** Whether the properties wire the identity gate ([OnIdentityGate]), for the check that follows a gate wired another way. */
+    fun wiredByProperty(environment: Environment): Boolean =
+        environment.getProperty(PipelineProperties.MODE_KEY).equals("gateway", ignoreCase = true) ||
+            environment.getProperty(PipelineProperties.CALLER_KEY).equals("forwarded-identity", ignoreCase = true)
+
     /** What the host is, for a message: its mode, or the identity it believes on `enforce`. */
     fun describe(environment: Environment): String =
         if (environment.getProperty(PipelineProperties.MODE_KEY).equals("gateway", ignoreCase = true)) {

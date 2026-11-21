@@ -89,7 +89,7 @@ internal class CoSecPipelineWebAutoConfiguration {
         environment: Environment,
         beans: ListableBeanFactory,
     ): StartupTask = StartupTask.AfterSingletons {
-        if (gate.getIfUnique() is IdentityGate && !IdentityGateWiring.byProperty(environment)) {
+        if (gate.getIfUnique() is IdentityGate && !GatewayModeTrust.wiredByProperty(environment)) {
             GatewayModeTrust.requireBoundaryStated(environment)
             GatewayModeTrust.requireNoHiddenMethod(environment, beans)
         }

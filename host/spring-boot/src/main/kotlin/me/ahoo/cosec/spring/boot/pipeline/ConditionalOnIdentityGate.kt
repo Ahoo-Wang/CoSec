@@ -37,10 +37,3 @@ internal class OnIdentityGate : AnyNestedCondition(ConfigurationCondition.Config
     @ConditionalOnProperty(value = [PipelineProperties.CALLER_KEY], havingValue = "forwarded-identity")
     class ForwardedCaller
 }
-
-/** Whether the properties wire the identity gate ([OnIdentityGate]), for the check that follows a gate wired another way. */
-internal object IdentityGateWiring {
-    fun byProperty(environment: org.springframework.core.env.Environment): Boolean =
-        environment.getProperty(PipelineProperties.MODE_KEY).equals("gateway", ignoreCase = true) ||
-            environment.getProperty(PipelineProperties.CALLER_KEY).equals("forwarded-identity", ignoreCase = true)
-}

@@ -95,6 +95,8 @@ object TypeLedger {
         "extensions/ip2region/src/main/kotlin/me/ahoo/cosec/ip2region/Ip2RegionAttributeProvider.kt" to family(OWN_EXCEPTION, "the region provider"),
         "host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/CoSecModuleCheckAutoConfiguration.kt" to family(OWN_EXCEPTION, "the module check and the Spring condition only it uses"),
         "host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/jwt/ConditionalOnJwtEnabled.kt" to family(OWN_EXCEPTION, "the annotation and the Spring condition only it uses"),
+        "host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/jwt/ConditionalOnRevocationStores.kt" to family(OWN_EXCEPTION, "the annotation and the Spring condition only it uses"),
+        "host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/pipeline/ConditionalOnIdentityGate.kt" to family(OWN_EXCEPTION, "the annotation and the Spring condition only it uses"),
         "host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/pipeline/ClientIp.kt" to family(OWN_EXCEPTION, "the client IP readings and the configuration exception only they throw"),
         "host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/pipeline/PipelineProperties.kt" to family(RECORD, "one cosec.* property tree, bound by Spring"),
         "migration/migrate/src/main/kotlin/me/ahoo/cosec/migrate/Bootstrap.kt" to family(OWN_EXCEPTION, "the bootstrap"),
