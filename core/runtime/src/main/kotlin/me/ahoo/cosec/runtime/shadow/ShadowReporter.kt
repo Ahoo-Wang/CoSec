@@ -52,17 +52,30 @@ class ShadowReporter(
     private val interval: Duration = Duration.ofSeconds(10),
     /** Where it reads whether a window's candidate is still staged; without it, every window is kept. */
     val candidates: CandidateStore? = null,
-    /** The staged list it reads again at the start of each cycle (`CTL-47`), off the request path. */
-    private val staged: StagedDocuments? = null,
+    /**
+     * CoSec's own candidate source: the staged list it reads again at the start of each cycle (`CTL-47`), off the request
+     * path, then the windows it names for the first time, read and compiled on this coroutine (`CTL-12`).
+     */
+    source: CachingCandidateSource? = null,
+    /** Tests only: the clock compile on sight measures its budget, one [interval] per cycle, with. */
+    nanos: () -> Long = System::nanoTime,
 ) {
+    private val staged = source?.staged
+    private val sight = source?.let { CompileOnSight(it, recorder, interval, nanos) }
+
     init {
         // `delay` takes whole milliseconds: a shorter interval would be 0, a loop that never suspends (#1397).
         require(interval >= MIN_INTERVAL) { "The report interval is at least one millisecond, not $interval." }
     }
 
-    /** One cycle: every window's report, then the status. Failures are logged and skipped. */
+    /**
+     * One cycle: the staged list and, for at most one [interval], the windows first seen in it; then every window's report,
+     * then the status, whatever is left to compile. Failures are logged and skipped. A candidate compiled this cycle that
+     * does not compile is in this cycle's report.
+     */
     suspend fun flush() {
         this.staged?.refresh()
+        sight?.run()
         val staged = HashMap<SnapshotKey, String?>()
         for (window in recorder.windows()) {
             // The reports were taken first, so a window among them was staged before this read and a candidate gone now

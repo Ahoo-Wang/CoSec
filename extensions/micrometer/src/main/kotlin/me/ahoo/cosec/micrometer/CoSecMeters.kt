@@ -16,17 +16,19 @@
 package me.ahoo.cosec.micrometer
 
 import io.micrometer.core.instrument.FunctionCounter
+import io.micrometer.core.instrument.Gauge
 import io.micrometer.core.instrument.MeterRegistry
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.runtime.authn.UncheckedRevocations
 import me.ahoo.cosec.runtime.event.DecisionListeners
 import me.ahoo.cosec.runtime.identity.IdentityRefusals
 import me.ahoo.cosec.runtime.ratelimit.LocalRateLimiter
+import me.ahoo.cosec.runtime.shadow.StagedDocuments
 
 /**
  * The counters the starter registers beside the decision timer ([MetricsListener]): what the decision listeners did with
  * their events, the tokens accepted unchecked while revocations were unreadable, and the forwarded identities a service
- * in gateway mode refused. One place for them, as [MicrometerSnapshotMetrics] is the one for the snapshot source's: each
+ * in gateway mode refused, and how old the staged list this instance samples by is. One place for them, as [MicrometerSnapshotMetrics] is the one for the snapshot source's: each
  * counter reads a source the starter holds, so none is a listener, and none is for an application to register.
  */
 @InternalCoSecApi
@@ -39,6 +41,7 @@ object CoSecMeters {
     const val IDENTITY_REFUSED = "cosec.identity.refused"
     const val LOCAL_RATE_LIMIT_REFUSED = "cosec.ratelimit.local.refused"
     const val DOCUMENT_TAG = "document"
+    const val SHADOW_STAGED_AGE = "cosec.shadow.staged.age"
 
     /**
      * Registers what [listeners] count (§9.5.2): `cosec.listener.dropped` and `cosec.listener.failures` by listener,
@@ -100,4 +103,18 @@ object CoSecMeters {
                 .register(registry)
         }
     }
+
+    /**
+     * Registers `cosec.shadow.staged.age`, in seconds (`OBS-8`): how long ago this instance last read the staged list it
+     * samples by, NaN before the first read. About `report-interval` while the store answers; rising, the list cannot be
+     * read, so the instance reads candidates by their keys and its windows are not acknowledged.
+     */
+    fun bind(registry: MeterRegistry, staged: StagedDocuments) {
+        Gauge.builder(SHADOW_STAGED_AGE, staged) { it.age()?.toNanos()?.div(NANOS_PER_SECOND) ?: Double.NaN }
+            .description("Seconds since this instance last read the staged candidate list")
+            .baseUnit("seconds")
+            .register(registry)
+    }
+
+    private const val NANOS_PER_SECOND = 1e9
 }

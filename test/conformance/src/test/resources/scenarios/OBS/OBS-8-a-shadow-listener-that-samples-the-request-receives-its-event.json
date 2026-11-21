@@ -1,0 +1,50 @@
+{
+  "rules": [
+    "OBS-8"
+  ],
+  "polarity": "negative",
+  "level": "pipeline",
+  "description": "An ALLOW matches; the only BEST_EFFORT listener samples the request: its event is made and offered to it, and the REQUIRED audit receives it too.",
+  "documents": {
+    "platform": {
+      "policies": [
+        {
+          "id": "allow-all",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "*"
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "g:allow-all",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "allow-all"
+        }
+      ]
+    }
+  },
+  "listeners": [
+    {
+      "name": "audit",
+      "delivery": "required"
+    },
+    {
+      "name": "shadow",
+      "samples": true
+    }
+  ],
+  "expect": {
+    "status": 200,
+    "proceed": true,
+    "events": {
+      "audit": 1,
+      "shadow": 1
+    }
+  }
+}

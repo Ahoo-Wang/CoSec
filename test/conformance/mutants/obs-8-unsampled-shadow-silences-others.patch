@@ -1,0 +1,17 @@
+# Rule: OBS-8
+# Mutant: a BEST_EFFORT listener beside an unsampled shadow listener gets no event
+# Tests: :runtime:test --tests me.ahoo.cosec.runtime.event.SampledOnlyEventsTest :conformance:test
+
+diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/event/DecisionListeners.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/event/DecisionListeners.kt
+index e81f5f4d9..f5357257b 100644
+--- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/event/DecisionListeners.kt
++++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/event/DecisionListeners.kt
+@@ -181,7 +181,7 @@ class DecisionListeners(
+             scope.launch { drops.run() }
+         }
+         bestEffortListeners = bestEffort.map { it.listener }
+-        sampledOnly = bestEffort.isNotEmpty() && bestEffort.all { it.sampledOnly }
++        sampledOnly = bestEffort.any { it.sampledOnly }
+         stats = requiredStats + bestEffort.map { it.stats }
+         if (required.isEmpty() && listeners.isNotEmpty()) {
+             log.warn { "No REQUIRED decision listener is registered: break-glass bindings cannot permit (RFC 0006 §9.4.3)." }
