@@ -1,0 +1,17 @@
+# Rule: STA-9
+# Mutant: an IdentityGate the application wires beside enforce believes the header and is asked for no statement
+# Tests: :spring-boot:test --tests me.ahoo.cosec.spring.boot.pipeline.ForwardedIdentityCallerTest
+
+diff --git a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/pipeline/CoSecPipelineWebAutoConfiguration.kt b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/pipeline/CoSecPipelineWebAutoConfiguration.kt
+index a655d87f4..7085e79c6 100644
+--- a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/pipeline/CoSecPipelineWebAutoConfiguration.kt
++++ b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/pipeline/CoSecPipelineWebAutoConfiguration.kt
+@@ -89,7 +89,7 @@ internal class CoSecPipelineWebAutoConfiguration {
+         environment: Environment,
+         beans: ListableBeanFactory,
+     ): StartupTask = StartupTask.AfterSingletons {
+-        if (gate.getIfUnique() is IdentityGate && !GatewayModeTrust.wiredByProperty(environment)) {
++        if (false) {
+             val host = GatewayModeTrust.describeOwnGate(beans)
+             GatewayModeTrust.requireBoundaryStated(environment, host)
+             GatewayModeTrust.requireNoHiddenMethod(environment, beans, host)

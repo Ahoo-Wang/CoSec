@@ -1,0 +1,16 @@
+# Rule: STA-9
+# Mutant: a host that takes its callers from the identity wires no token tables, so its control plane has no revocation reader and does not start
+# Tests: :spring-boot:test --tests me.ahoo.cosec.spring.boot.pipeline.ForwardedIdentityCallerTest
+
+diff --git a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/jwt/ConditionalOnRevocationStores.kt b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/jwt/ConditionalOnRevocationStores.kt
+index 2735a0021..0de359518 100644
+--- a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/jwt/ConditionalOnRevocationStores.kt
++++ b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/jwt/ConditionalOnRevocationStores.kt
+@@ -36,6 +36,6 @@ internal class OnRevocationStores : AnyNestedCondition(ConfigurationCondition.Co
+     @ConditionalOnJwtEnabled
+     class Jwt
+ 
+-    @ConditionalOnProperty(value = [PipelineProperties.CALLER_KEY], havingValue = "forwarded-identity")
++    @ConditionalOnProperty(value = [PipelineProperties.CALLER_KEY], havingValue = "never")
+     class ForwardedCaller
+ }

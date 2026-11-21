@@ -1,0 +1,17 @@
+# Rule: STA-9
+# Mutant: a Spring Cloud Gateway host with the forwarded-identity caller starts, though a gateway decides on the credentials it verifies
+# Tests: :spring-boot:test --tests me.ahoo.cosec.spring.boot.pipeline.IdentityGuardAutoConfigurationTest
+
+diff --git a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/pipeline/CoSecIdentityGuardAutoConfiguration.kt b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/pipeline/CoSecIdentityGuardAutoConfiguration.kt
+index 97d250e1b..59ba5a14c 100644
+--- a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/pipeline/CoSecIdentityGuardAutoConfiguration.kt
++++ b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/pipeline/CoSecIdentityGuardAutoConfiguration.kt
+@@ -46,7 +46,7 @@ internal class CoSecIdentityGuardAutoConfiguration {
+     @Bean
+     fun cosecPipelineModeCheck(properties: PipelineProperties): StartupTask = StartupTask.OnCreation {
+         val believes = properties.mode == PipelineProperties.Mode.GATEWAY ||
+-            properties.caller == PipelineProperties.Caller.FORWARDED_IDENTITY
++            false
+         check(!believes || !ClassUtils.isPresent(GATEWAY_GLOBAL_FILTER, null)) {
+             "${PipelineProperties.MODE_KEY}=gateway or ${PipelineProperties.CALLER_KEY}=forwarded-identity on a " +
+                 "Spring Cloud Gateway host: a gateway decides with policies on the credentials it verifies " +
