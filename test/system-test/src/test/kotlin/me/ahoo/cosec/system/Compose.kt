@@ -39,6 +39,32 @@ object Compose {
         vararg command: String
     ): String = run("exec", "-T", service, *command, check = false)
 
+    /**
+     * A one-off container of [service] (`docker compose run`) with [environment] over the service's own, no ports published
+     * and no dependency started: what it ended with, the exit code and everything it printed. It is named [name] and
+     * removed at the end, whether it ended or was still running at the timeout.
+     */
+    fun runOnce(service: String, name: String, environment: Map<String, String>): Pair<Int, String> {
+        val command = listOf("docker", "compose", "run", "--rm", "--no-deps", "-T", "--name", name) +
+            environment.flatMap { (key, value) -> listOf("-e", "$key=$value") } + service
+        Transcript.note("$ ${command.joinToString(" ")}")
+        val process = ProcessBuilder(command).redirectErrorStream(true).start()
+        val output = StringBuilder()
+        val reader = Thread { output.append(process.inputStream.bufferedReader().readText()) }.apply { start() }
+        try {
+            val finished = process.waitFor(TIMEOUT_SECONDS, TimeUnit.SECONDS)
+            if (!finished) {
+                process.destroyForcibly()
+            }
+            reader.join(10_000)
+            Transcript.note(output.toString())
+            finished.assert().describedAs("$service ($name) did not end in $TIMEOUT_SECONDS s: $output").isTrue()
+            return process.exitValue() to output.toString()
+        } finally {
+            ProcessBuilder("docker", "rm", "--force", name).redirectErrorStream(true).start().waitFor(60, TimeUnit.SECONDS)
+        }
+    }
+
     private fun run(verb: String, vararg arguments: String, check: Boolean = true): String {
         val service = arguments.joinToString(" ")
         val command = listOf("docker", "compose", verb) + arguments

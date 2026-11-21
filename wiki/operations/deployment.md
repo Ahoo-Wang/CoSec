@@ -539,8 +539,9 @@ your own deployment.
 [`system-test.yml`](https://github.com/Ahoo-Wang/CoSec/blob/main/.github/workflows/system-test.yml) runs CoSec as a
 deployment, which no unit, slice or embedded-server test does: the gateway image built from the commit (its own
 Dockerfile, the AOT cache trained), two replicas of it and a third that refuses a token while revocations cannot be read,
-a service behind them in `cosec.pipeline.mode=gateway`, a login and control-plane host, a Spring MVC service that
-enforces on its own, and a Redis with `maxmemory-policy noeviction`, started with Docker Compose on a GitHub-hosted runner.
+a service behind them in `cosec.pipeline.mode=gateway`, two replicas of the control-plane host image (also built from the
+commit, behind the gateway's `/cosec/control` route), the IAM that issues the tokens and calls the host's service port, a
+Spring MVC service that enforces on its own, and a Redis with `maxmemory-policy noeviction`, started with Docker Compose on a GitHub-hosted runner.
 The scenarios drive it over the network only, with `cosec-migrate` and `docker compose stop`, `start` and `restart` as the
 operator would. It is not part of `check`; it runs nightly on `main`, on the pull requests that change it, and on demand.
 
@@ -569,7 +570,14 @@ What it covers, each as an observable over the network:
   token there; where memberships come from a provider, a role held once applies in every app that defines its id, which the
   stack does not exercise (it has no provider);
 - a **policy change** through the control plane, from its refusals and its shadow window on live traffic to approval, publish
-  and rollback, taking effect at every process without a restart;
+  and rollback, taking effect at every process without a restart, through the gateway to the control-plane host;
+- the **service path** of the control-plane host: a service principal bound to a read-only policy reads and is refused a
+  write by the action; the service port serves no platform document and no change of one, by its document or by its id;
+  a stated principal proposes a tenant change, skips or runs its window and publishes, and the change event in Kafka says
+  who was stated and which connection carried it, whatever forwarding headers the caller wrote; a stated API key never
+  approves where a stated token does (the cost of the network boundary); an identity that is doubled, expired or too old is
+  refused; the host does not start without the statement of what can reach it; and with two replicas on one store a change
+  proposed on one is shadowed on the other, and a window still closes when the replica that started it is stopped;
 - **revocation** (logout, a subject), refresh rotation and reuse, a **rate limit** one bucket of which both gateways count,
   and an **API key**;
 - a **Redis outage**: installed documents keep deciding, a tenant never read is `503`, a tenant that fails closed stops at

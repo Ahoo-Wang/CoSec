@@ -50,6 +50,18 @@ object Bounds {
     )
 
     /**
+     * A shadow window closes although the replica that started it was stopped: the check of the open windows is done by
+     * the holder of the lease `shadow-windows` (RFC 0007 §5.7), which lasts twice `cosec.control.shadow.check-interval` (2 s, the
+     * shortened 1 s) and is released when the pass ends, so another replica takes it at the latest 2 s later, plus
+     * [SHADOW_CLOSE].
+     */
+    val SHADOW_CLOSE_AFTER_FAILOVER = Bound(
+        "SHADOW_CLOSE_AFTER_FAILOVER",
+        Duration.ofSeconds(27),
+        "SHADOW_CLOSE 22 s + the shadow lease, twice the check-interval (2 s, RFC 0007 §5.7) + 3 s margin",
+    )
+
+    /**
      * A revocation reaches every process: at once through the invalidation message CoCache sends, and at the latest when a
      * local "not revoked" answer ages out, `cosec.authentication.revocation.cache.local-max-age` (30 s, IDN-26), plus 3 s.
      */

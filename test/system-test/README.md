@@ -1,23 +1,23 @@
 # The system test
 
-A deployed CoSec, driven over the network only: two replicas of the gateway image built from the commit under test (and a third that refuses a token while revocations cannot be read), a single-node Kafka the gateways audit to
-(`platform/gateway-server/Dockerfile`, its AOT cache trained), the services of `test/system-*`, and Redis with
+A deployed CoSec, driven over the network only: two replicas of the gateway image built from the commit under test (and a third that refuses a token while revocations cannot be read), two replicas of the control-plane host image built from it, a single-node Kafka the gateways and the hosts audit to
+(`platform/gateway-server/Dockerfile` and `platform/control-server/Dockerfile`, their AOT caches trained), the services of `test/system-*`, and Redis with
 `maxmemory-policy noeviction`, started by [`compose.yaml`](compose.yaml). It proves the wiring between processes, which no
 lower test can see; what a unit, slice or embedded-server test already proves is not proved again here.
 
 | Path | What it is |
 |---|---|
 | `compose.yaml` | The topology. |
-| `gateway/application.yaml` | The gateways' configuration, mounted over the image's `config/`: the routes, two of which (`/shop`, `/ledger`) name an app. |
+| `gateway/application.yaml` | The gateways' configuration, mounted over the image's `config/`: the routes, two of which (`/shop`, `/ledger`) name an app, and `/cosec/control` to `control-1`. |
 | `documents/` | The documents the scenarios publish: the platform's with `cosec-migrate`, the apps' and the tenants' through the control plane. |
 | `profile/shortened-bounds.yaml` | Test configuration only: the bounds the suite shortens (shadow windows), each with the default it replaces. |
 | `../../typescript/cosec-fetcher/test-system/` | The TypeScript client's scenarios against the gateway, run by `pnpm test:system` in `typescript/` after the Kotlin ones. |
 | `kind/` | The kind leg: the manifests of `k8s/` on a real cluster (`run.sh`, its platform document). A second job of the same workflow. |
 | `docker/app.Dockerfile` | The image of each `test/system-*` service, from its `installDist`. |
-| `src/test/kotlin/` | The harness and the scenarios (`@Tag("system")`), Kotlin over the JDK's HTTP client. |
+| `src/test/kotlin/` | The harness and the scenarios (`@Tag("system")`; the control plane's service path is also `@Tag("service-path")`), Kotlin over the JDK's HTTP client. |
 | `scripts/summary.py` | The run summary: each failed scenario, the bound it waited for, the evidence artifact. |
 | `../system-behind/` | A service behind the gateway in `cosec.pipeline.mode=gateway`: it echoes what reached it. |
-| `../system-auth/` | The login and control-plane host (WebFlux, `enforce`): a test login, the starter's refresh and logout routes, the control API. |
+| `../system-auth/` | The IAM (WebFlux, `enforce`, no control plane of its own in this deployment): a test login, the starter's refresh and logout routes, and `POST /admin/onboard`, which calls the control-plane host's service port as the IAM's own principal `svc-iam` with CoSec's public `CoSec-Identity` writer. |
 | `../system-enforcer/` | A service that enforces on its own, on Spring MVC and Tomcat, for the app `orders`. |
 
 ## Running it

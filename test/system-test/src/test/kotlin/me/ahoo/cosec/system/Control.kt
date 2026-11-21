@@ -18,11 +18,12 @@ import java.net.URI
 import java.nio.file.Files
 
 /**
- * The control API of the login and control-plane host, as [operator] calls it (`wiki/policies/testing.md`): every call is
- * an ordinary request to that host first, decided by its own pipeline, then authorized again by the control plane.
+ * The control API as [operator] calls it (`wiki/policies/testing.md`): through the gateway, whose route for the paths under
+ * `/cosec/control/` goes to the control-plane host. Every call is an ordinary request to the gateway first, with the operator's token
+ * verified and the route decided there, then authorized again for the identity the gateway forwards, by the host's policies.
  */
 class Control(private val operator: SignedIn) {
-    private val base: String = "${SystemTopology.auth}/cosec/control/v1"
+    private val base: String = "${SystemTopology.gateway}/cosec/control/v1"
 
     fun document(key: String): Exchange = Http.get(at("/documents/$key"), operator.bearer)
 

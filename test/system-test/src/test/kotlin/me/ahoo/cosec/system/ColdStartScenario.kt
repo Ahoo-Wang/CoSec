@@ -24,7 +24,7 @@ import java.net.URI
 
 /**
  * Scenario 0, the cold start, on the empty Redis of a fresh stack: until the platform document is published, both
- * gateways, the login and control-plane host and the enforcing service answer every request `503` and refuse readiness,
+ * gateways, the IAM, both control-plane hosts and the enforcing service answer every request `503` and refuse readiness,
  * while they stay live; once `cosec-migrate` publishes it, which is the documented way (the control plane cannot write
  * the document that authorizes it), and names the first administrator, every one turns ready and decides. It runs first:
  * every other scenario needs the platform document.
@@ -48,7 +48,21 @@ class ColdStartScenario {
             Process("gw-${index + 1}", gateway.resolve("/behind/orders/1"), gateway.resolve(GATEWAY_READINESS), gateway.resolve(GATEWAY_LIVENESS))
         } + listOf(
             // A WebFlux application's probes pass CoSec like any request: no liveness to ask before the document.
-            Process("auth", SystemTopology.auth.resolve("/cosec/control/v1/documents/platform"), SystemTopology.auth.resolve(READINESS), null),
+            Process("auth", SystemTopology.auth.resolve("/auth/login"), SystemTopology.auth.resolve(READINESS), null),
+            // The control-plane host's replicas: the control API on the application port is decided like any request, the
+            // probes are on the management port, outside CoSec, so the host is live before it has a document.
+            Process(
+                "control-1",
+                SystemTopology.control1.resolve("/cosec/control/v1/documents/platform"),
+                SystemTopology.controlManagement1.resolve(READINESS),
+                SystemTopology.controlManagement1.resolve(LIVENESS),
+            ),
+            Process(
+                "control-2",
+                SystemTopology.control2.resolve("/cosec/control/v1/documents/platform"),
+                SystemTopology.controlManagement2.resolve(READINESS),
+                SystemTopology.controlManagement2.resolve(LIVENESS),
+            ),
             Process(
                 "enforcer",
                 SystemTopology.enforcer.resolve("/orders/1"),
@@ -98,7 +112,7 @@ class ColdStartScenario {
             ).status.assert().isEqualTo(200)
         }
         Contract.assertProblem(Http.get(SystemTopology.enforcer.resolve("/orders/1")), "unauthorized")
-        // The first administrator reaches the control plane with a token CoSec's own login issued.
+        // The first administrator reaches the control plane through the gateway, with a token CoSec's own login issued.
         Control(SignIn.root()).revision("platform").assert().isEqualTo(1L)
     }
 
