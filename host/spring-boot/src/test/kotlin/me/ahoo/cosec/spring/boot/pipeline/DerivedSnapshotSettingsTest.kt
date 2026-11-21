@@ -41,6 +41,15 @@ class DerivedSnapshotSettingsTest {
             .contains("cosec.authorization.snapshot.revalidate-interval PT10S")
             .contains("cosec.pipeline.timeout PT5S")
             .contains("shadow report interval=PT10S")
+            .contains("cores (Runtime.availableProcessors(): the container's CPU limit)")
+            .contains("this instance's configuration has no cosec.control.shadow.min-duration")
+        DerivedSnapshotSettings.line(
+            RuntimeAuthorizationProperties(),
+            Duration.ofSeconds(5),
+            MockEnvironment().withProperty("cosec.control.shadow.min-duration", "5s"),
+        ).assert()
+            .contains("shadow report interval=PT1S")
+            .contains("cosec.control.shadow.min-duration PT5S, as this instance's configuration states it")
     }
 
     @Test

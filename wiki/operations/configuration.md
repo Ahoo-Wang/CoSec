@@ -71,7 +71,7 @@ limit CoSec owns, and has no key. Each is logged once at startup, in a line that
 | A document unconfirmed for this long is logged at `WARN` | 6 passes: `60s` at the default | [`cosec.authorization.snapshot.revalidate-interval`](#snapshot) |
 | ... and at `ERROR`, as stale | 30 passes: `5m` at the default | the same |
 | How long a request waits for a document that is not installed | 40 % of the pipeline timeout, at least `1ms`: `2s` at the default | [`cosec.pipeline.timeout`](#pipeline) |
-| Threads that compile documents | one per 4 cores, at least 1 and at most 4 | the cores of the process |
+| Threads that compile documents | one per 2 cores, at least 1 and at most 4 | the cores of the process |
 | Documents a revalidation pass confirms at once | 16, a constant: a pass slower than the interval runs back to back, and only the burst depends on it | |
 | How often an instance writes its shadow reports and status | a sixth of the status's life (`10s`), and no oftener than a fifth of the shortest life of a window or a second | [`cosec.control.shadow.min-duration`](#control-plane), read where it is set |
 | How often each control-plane instance reclaims revisions | 1 hour, a constant: what is reclaimed is decided by `min-age` and `max-count` | |
@@ -348,7 +348,7 @@ credential is ever revoked.
 | `cosec.control.approval.expire-after` | duration | `72h` | How long an approval stays valid. Startup fails when it is longer than `cosec.jwt.token-validity.refresh`, how long a token revocation is kept: an approval would outlive the revocation of its token. |
 | `cosec.control.approval.four-eyes` | boolean | `false` | Whether the changes of a platform principal holding `cosec:approve` on the document (the trust root) are analyzed too: what the analysis cannot prove contained then needs another platform principal's approval. A change that escalates needs one either way. |
 | `cosec.control.break-glass.max-duration` | duration | `4h` | The longest a break-glass binding may last. More than `24h`, or not positive, fails startup. |
-| `cosec.control.shadow.min-duration` | duration | `15m` | A shadow window closes no earlier than this, once it also has `min-samples`. |
+| `cosec.control.shadow.min-duration` | duration | `15m` | A shadow window closes no earlier than this, once it also has `min-samples`. The control plane looks at the open windows every fifteenth of it. A data-plane instance reads it too, as a cadence only: one whose configuration has it writes its shadow reports every fifth of it (at least a second, at most 10 s), and one whose configuration does not reports every 10 seconds. The data plane's startup line says which ([Computed, not configured](#computed-not-configured)). |
 | `cosec.control.shadow.min-samples` | long | `1000` | Compared samples a window needs to close before `max-duration`. `0` lets a window close on time alone, with no sample at all if no request came: the shadow step then proves nothing, and startup logs a `WARN` saying so. |
 | `cosec.control.shadow.max-duration` | duration | `24h` | A window closes at this age with fewer samples, as insufficient evidence the publisher must acknowledge. Must not be less than `min-duration`. |
 | `cosec.control.audit.required-timeout` | duration | `5s` | How long every `REQUIRED` change listener together may take to record a gated step (publish, break-glass) before the step fails with `503`. |

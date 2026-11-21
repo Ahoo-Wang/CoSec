@@ -36,8 +36,11 @@ internal object DerivedSnapshotSettings {
      * does the default cadence it gives.
      */
     fun windowMinDuration(environment: Environment): Duration =
-        Binder.get(environment).bind(MIN_DURATION_KEY, Duration::class.java)
-            .orElseGet { ControlProperties.Shadow().minDuration }
+        stated(environment) ?: ControlProperties.Shadow().minDuration
+
+    /** `cosec.control.shadow.min-duration` as this instance's configuration states it, or null when it does not. */
+    private fun stated(environment: Environment): Duration? =
+        Binder.get(environment).bind(MIN_DURATION_KEY, Duration::class.java).orElse(null)
 
     /** How often this instance writes its reports and its status ([ShadowReporter.derivedInterval]). */
     fun reportInterval(environment: Environment): Duration =
@@ -52,13 +55,16 @@ internal object DerivedSnapshotSettings {
         val snapshot = properties.snapshot
         val derived = snapshot.derived(pipelineTimeout)
         val report = if (properties.shadow.enabled) {
+            val window = stated(environment)?.let { "$MIN_DURATION_KEY $it, as this instance's configuration states it" }
+                ?: "the default window of ${windowMinDuration(environment)}: this instance's configuration has no $MIN_DURATION_KEY"
             "; shadow report interval=${reportInterval(environment)} (the status's life ÷ ${ShadowReporter.REPORTS_PER_STATUS}, " +
-                "and a ${ShadowReporter.REPORTS_PER_WINDOW}th of the window's shortest life ${windowMinDuration(environment)})"
+                "and a ${ShadowReporter.REPORTS_PER_WINDOW}th of $window)"
         } else {
             ""
         }
         return "CoSec derived, not configured: $derived, from cosec.authorization.snapshot.revalidate-interval " +
             "${snapshot.revalidateInterval}, cosec.pipeline.timeout $pipelineTimeout and " +
-            "${Runtime.getRuntime().availableProcessors()} cores$report."
+            "${Runtime.getRuntime().availableProcessors()} cores (Runtime.availableProcessors(): the container's CPU limit)" +
+            "$report."
     }
 }

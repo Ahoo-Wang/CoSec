@@ -55,7 +55,7 @@ CoSec 没有哪个配置项叫这些名字，而已知的 key 无论来源都不
 | 文档超过这个时长未被确认时以 `WARN` 记录 | 6 轮：默认 `60s` | [`cosec.authorization.snapshot.revalidate-interval`](#snapshot) |
 | ……以 `ERROR` 记录为陈旧 | 30 轮：默认 `5m` | 同上 |
 | 请求等待一个未装入的文档多久 | 管道超时的 40 %，至少 `1ms`：默认 `2s` | [`cosec.pipeline.timeout`](#pipeline) |
-| 编译文档的线程数 | 每 4 个核心一个，至少 1 个、至多 4 个 | 进程的核心数 |
+| 编译文档的线程数 | 每 2 个核心一个，至少 1 个、至多 4 个 | 进程的核心数 |
 | 一次重新确认并发确认的文档数 | 16，常量：一轮超过间隔时各轮首尾相接，只有突发量取决于它 | |
 | 实例多久写一次影子报告和状态 | 状态存活期的六分之一（`10s`），且不比窗口最短存活期的五分之一或一秒更频繁 | [`cosec.control.shadow.min-duration`](#control-plane)，在它被设置的地方读取 |
 | 每个控制面实例多久回收一次修订 | 1 小时，常量：回收什么由 `min-age` 和 `max-count` 决定 | |
@@ -312,7 +312,7 @@ CoSec 没有哪个配置项叫这些名字，而已知的 key 无论来源都不
 | `cosec.control.approval.expire-after` | duration | `72h` | 一次审批的有效期。长于令牌吊销的保留时长 `cosec.jwt.token-validity.refresh` 时启动失败：审批会比其令牌的吊销记录活得更久。 |
 | `cosec.control.approval.four-eyes` | boolean | `false` | 是否也分析在该文档上持有 `cosec:approve` 的平台主体（信任根）的变更：分析无法证明受限的部分随之需要另一位平台主体审批。升级权限的变更无论如何都需要。 |
 | `cosec.control.break-glass.max-duration` | duration | `4h` | 一个 break-glass 绑定最长持续多久。超过 `24h`，或不为正，启动失败。 |
-| `cosec.control.shadow.min-duration` | duration | `15m` | 影子窗口最早在这之后、并且有了 `min-samples` 时关闭。 |
+| `cosec.control.shadow.min-duration` | duration | `15m` | 影子窗口最早在这之后、并且有了 `min-samples` 时关闭。控制面每隔它的十五分之一查看一次未关闭的窗口。数据面实例也读取它，但只作为节奏：配置里有它的实例每隔它的五分之一写一次影子报告（至少一秒、至多 10 秒），配置里没有它的实例每 10 秒报告一次。数据面的启动日志会说明是哪一种（[由计算得出，而非配置](#computed-not-configured)）。 |
 | `cosec.control.shadow.min-samples` | long | `1000` | 窗口在 `max-duration` 之前关闭所需的已比较样本数。`0` 让窗口只按时间关闭，没有任何请求时也没有任何样本：此时影子步骤什么也证明不了，启动时会以 `WARN` 说明。 |
 | `cosec.control.shadow.max-duration` | duration | `24h` | 窗口到这个年龄时即使样本不足也关闭，作为发布者必须确认的证据不足。不得小于 `min-duration`。 |
 | `cosec.control.audit.required-timeout` | duration | `5s` | 所有 `REQUIRED` 变更监听器合计最多用多久记录一个受控步骤（发布、break-glass），超过后该步骤以 `503` 失败。 |

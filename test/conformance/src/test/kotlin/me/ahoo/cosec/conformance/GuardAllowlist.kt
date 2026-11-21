@@ -300,7 +300,7 @@ object GuardAllowlist {
             // SNP-23: what a snapshot source's options once took as settings is computed.
             "runtime:SnapshotOptionsDeriveTest#a lag threshold is a count of missed passes, always above the interval",
             "runtime:SnapshotOptionsDeriveTest#a cold load waits less than the request it serves, for every deadline",
-            "runtime:SnapshotOptionsDeriveTest#the compile threads follow the cores, between one and four",
+            "runtime:SnapshotOptionsDeriveTest#the compile threads follow the cores, between one and four, and a four-core pod keeps the two measured",
             "spring-boot:UnknownPropertiesTest#a removed key is said to be no longer a property, with what replaced it",
             "spring-boot:DerivedSnapshotSettingsTest#the line says what was derived, from the interval, the deadline and the cores",
             // CTL-72: the control plane's cadences and limits are constants or computed.

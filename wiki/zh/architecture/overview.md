@@ -164,7 +164,7 @@ sequenceDiagram
 [`SnapshotSource`](https://github.com/Ahoo-Wang/CoSec/blob/main/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/SnapshotSource.kt) 持有它们：
 
 - **热路径。** `peek` 是内存中的同步查找，没有 future、没有 I/O，可以在事件循环上调用。只有未命中才会走 `load`。
-- **单飞。** 同一个键的并发加载共享一次读取和一次编译。编译在一个小的有界线程池上运行（每 4 个核心一个线程，至多 4 个）。队列满时，重新加载保留已装入的文档并重试；冷加载保留已读到的内容，每隔几毫秒重新编译，直到冷加载超时，然后失败即拒绝，因此新副本收到的一批冷租户会排队，而不是回答 `503`（[新副本的代价](../operations/deployment.md#what-a-new-replica-costs)）。同一个键按加载开始的顺序安装（`SNP-2`，`SnapshotInstallOrderPropertyTest`）。
+- **单飞。** 同一个键的并发加载共享一次读取和一次编译。编译在一个小的有界线程池上运行（每 2 个核心一个线程，至多 4 个）。队列满时，重新加载保留已装入的文档并重试；冷加载保留已读到的内容，每隔几毫秒重新编译，直到冷加载超时，然后失败即拒绝，因此新副本收到的一批冷租户会排队，而不是回答 `503`（[新副本的代价](../operations/deployment.md#what-a-new-replica-costs)）。同一个键按加载开始的顺序安装（`SNP-2`，`SnapshotInstallOrderPropertyTest`）。
 - **有界内存。** 平台文档在启动时加载，从不淘汰。应用文档和租户文档按需加载，超过 `max-apps`、`max-tenants` 后按最近最少使用淘汰；可以预热指定的文档。存储中没有文档的 id 分开保存，最多 `max-absent-apps` 和 `max-absent-tenants` 个，只相互淘汰（`SNP-7`）。
 - **重新验证。** 每个已安装的文档每隔 `revalidate-interval`（默认 10 秒）对权威存储做一次条件读取，摘要未变时不传输内容。它是变更通知丢失时唯一的界，因此不能关闭，最长 5 分钟（`SNP-6`）。存储发来的变更通知会让重新加载更早发生。冷键先读一次（可能来自本地副本），随即用条件读取确认。
 - **失败即拒绝。** 已安装文档期间读取失败时保留已安装的修订，并报告延迟。存在但无法解码或编译的文档被安装为*失败*。冷读取失败或未在冷加载超时内完成时，按失败应答。一个曾经有文档的键读到“不存在”是失败，而不是“没有策略”。失败的文档作为*未解析*排除在视图之外，除非有 DENY 匹配，否则决策为 `Indeterminate`。使用 starter 时，缺失的平台文档也视为未解析，所以在发布平台文档之前，所有请求都按失败即拒绝处理。

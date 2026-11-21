@@ -37,7 +37,7 @@ Which preview of the library may run behind which preview of the gateway image: 
   |---|---|
   | `cosec.authorization.snapshot.lag-warn`, `lag-escalate` | 6 and 30 passes of `revalidate-interval`: set that to move them |
   | `cosec.authorization.snapshot.cold-load-timeout` | 40 % of `cosec.pipeline.timeout`: set that to move it |
-  | `cosec.authorization.snapshot.compile-threads` | one per 4 cores, at least 1 and at most 4 |
+  | `cosec.authorization.snapshot.compile-threads` | one per 2 cores, at least 1 and at most 4 |
   | `cosec.authorization.snapshot.reload-concurrency` | 16, a constant |
   | `cosec.authorization.shadow.report-interval` | a sixth of the status's life (10 s), and no oftener than a fifth of `cosec.control.shadow.min-duration` or a second |
   | `cosec.authentication.revocation.cache.initial-capacity`, `expire-after-access` | none: the cache sizes itself, and `local-max-age` expires every entry |

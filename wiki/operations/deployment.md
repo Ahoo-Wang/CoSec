@@ -600,7 +600,7 @@ distinct tenants in the same instant) is refused at the deadline, never later an
 refused tenant is loaded by its next request. Larger documents compile more slowly and lower the rate.
 
 The compile threads are what bounds that rate, not the queue in front of them. With two threads on four shared vCPUs a
-replica takes about 3,500 cold documents a second, and the compile threads (one per 4 cores, at most 4) are what raises it on a host with the cores to
+replica takes about 3,500 cold documents a second, and the compile threads (one per 2 cores, at most 4) are what raises it on a host with the cores to
 spare. A deeper queue (`compileQueueCapacity`, 64) matters only for a burst beyond what the pool compiles within
 the cold-load timeout, and each queued compile holds its document, about 15 KB for these tenant documents. Measured with
 the same benchmark:

@@ -28,7 +28,7 @@ import java.time.Duration
 class SnapshotOptionsDeriveTest {
     @Test
     fun `the defaults derive the values the settings used to have`() {
-        val derived = SnapshotOptions.derive(Duration.ofSeconds(10), Duration.ofSeconds(5), cores = 8)
+        val derived = SnapshotOptions.derive(Duration.ofSeconds(10), Duration.ofSeconds(5), cores = 4)
         derived.lagWarn.assert().isEqualTo(Duration.ofSeconds(60))
         derived.lagEscalate.assert().isEqualTo(Duration.ofMinutes(5))
         derived.coldLoadTimeout.assert().isEqualTo(Duration.ofSeconds(2))
@@ -75,8 +75,8 @@ class SnapshotOptionsDeriveTest {
     }
 
     @Test
-    fun `the compile threads follow the cores, between one and four`() {
-        mapOf(1 to 1, 2 to 1, 3 to 1, 4 to 1, 8 to 2, 12 to 3, 16 to 4, 64 to 4).forEach { (cores, threads) ->
+    fun `the compile threads follow the cores, between one and four, and a four-core pod keeps the two measured`() {
+        mapOf(1 to 1, 2 to 1, 3 to 1, 4 to 2, 6 to 3, 8 to 4, 16 to 4, 64 to 4).forEach { (cores, threads) ->
             SnapshotOptions.derive(Duration.ofSeconds(10), Duration.ofSeconds(5), cores).compileThreads
                 .assert().describedAs("$cores cores").isEqualTo(threads)
         }
@@ -84,11 +84,11 @@ class SnapshotOptionsDeriveTest {
 
     @Test
     fun `what was derived is said in the words of the formulas`() {
-        SnapshotOptions.derive(Duration.ofSeconds(10), Duration.ofSeconds(5), cores = 8).toString().assert()
+        SnapshotOptions.derive(Duration.ofSeconds(10), Duration.ofSeconds(5), cores = 4).toString().assert()
             .contains("lag-warn=PT1M (6 passes")
             .contains("lag-escalate=PT5M (30 passes")
             .contains("cold-load-timeout=PT2S (40 % of the pipeline timeout)")
-            .contains("compile-threads=2")
+            .contains("compile-threads=2 (a thread per 2 cores)")
             .contains("reload-concurrency=16 (constant)")
     }
 }

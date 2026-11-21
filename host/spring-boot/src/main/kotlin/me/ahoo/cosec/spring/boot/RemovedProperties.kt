@@ -31,7 +31,7 @@ internal object RemovedProperties {
         "cosec.authorization.snapshot.cold-load-timeout" to
             "computed: 40 % of cosec.pipeline.timeout",
         "cosec.authorization.snapshot.compile-threads" to
-            "computed from the cores: one thread per 4 cores, at least 1 and at most 4",
+            "computed from the cores: one thread per 2 cores, at least 1 and at most 4",
         "cosec.authorization.snapshot.reload-concurrency" to
             "a constant, 16: only the burst of a revalidation pass depends on it",
         "cosec.authorization.shadow.report-interval" to

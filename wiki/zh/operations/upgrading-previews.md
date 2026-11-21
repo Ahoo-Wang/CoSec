@@ -30,7 +30,7 @@ description: "每个 8.0 预览版（alpha 与 beta）到下一个之间的变�
   |---|---|
   | `cosec.authorization.snapshot.lag-warn`、`lag-escalate` | `revalidate-interval` 的 6 轮和 30 轮：要移动它们就设置 `revalidate-interval` |
   | `cosec.authorization.snapshot.cold-load-timeout` | `cosec.pipeline.timeout` 的 40 %：要移动它就设置后者 |
-  | `cosec.authorization.snapshot.compile-threads` | 每 4 个核心一个，至少 1 个、至多 4 个 |
+  | `cosec.authorization.snapshot.compile-threads` | 每 2 个核心一个，至少 1 个、至多 4 个 |
   | `cosec.authorization.snapshot.reload-concurrency` | 16，常量 |
   | `cosec.authorization.shadow.report-interval` | 状态存活期的六分之一（10 秒），且不比 `cosec.control.shadow.min-duration` 的五分之一或一秒更频繁 |
   | `cosec.authentication.revocation.cache.initial-capacity`、`expire-after-access` | 没有：缓存自己决定大小，`local-max-age` 让每个条目过期 |

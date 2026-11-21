@@ -341,7 +341,7 @@ holds them:
 - **Hot path.** `peek` is a synchronous lookup in memory, with no future and no I/O, safe on an event loop. Only a miss
   goes to `load`.
 - **Single flight.** Concurrent loads of one key share one read and one compilation. Compilation runs on a small
-  bounded pool (a thread per 4 cores, at most 4). When its queue is full, a reload keeps the installed document and retries; a cold
+  bounded pool (a thread per 2 cores, at most 4). When its queue is full, a reload keeps the installed document and retries; a cold
   load keeps what it read and compiles again every few milliseconds until the cold-load timeout, then fails closed, so a
   new replica's burst of cold tenants queues rather than answering `503` ([What a new replica costs](../operations/deployment.md#what-a-new-replica-costs)).
   Installs of one key happen in the order their loads started (`SNP-2`, `SnapshotInstallOrderPropertyTest`).

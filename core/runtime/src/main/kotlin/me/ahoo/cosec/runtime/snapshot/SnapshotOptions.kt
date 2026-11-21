@@ -191,8 +191,14 @@ class SnapshotOptions(
          */
         const val COLD_LOAD_PERCENT: Int = 40
 
-        /** A compile thread per this many cores, between 1 and [MAX_COMPILE_THREADS]: compiling is bursty CPU work. */
-        const val CORES_PER_COMPILE_THREAD: Int = 4
+        /**
+         * A compile thread per this many cores, between 1 and [MAX_COMPILE_THREADS]: compiling is bursty CPU work beside the
+         * request threads. It rests on `ColdBurstBenchmark` (#1767): two threads on four shared vCPUs took about 3,500 cold
+         * tenant documents a second, and the compile pool, not its queue, bounds a cold burst after a restart; so a
+         * four-core pod keeps the two threads that were measured, a two-core pod gets one, eight cores and more get four.
+         * The cores are `Runtime.availableProcessors()`, which a current JVM reads from the container's CPU limit.
+         */
+        const val CORES_PER_COMPILE_THREAD: Int = 2
 
         const val MAX_COMPILE_THREADS: Int = 4
 
