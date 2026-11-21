@@ -1,0 +1,56 @@
+{
+  "rules": [
+    "CTL-47"
+  ],
+  "polarity": "negative",
+  "level": "control",
+  "description": "c1 shadows tenant acme and is abandoned: once its window is unlisted, no instance that reads the list reads acme's candidate or samples its requests, so a candidate gone gives no sample.",
+  "steps": [
+    {
+      "propose": {
+        "change": "c1",
+        "document": "tenant:acme",
+        "operations": [
+          {
+            "putPolicy": {
+              "id": "read",
+              "statements": [
+                {
+                  "effect": "allow",
+                  "action": "order:read"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "stage": "c1"
+    },
+    {
+      "samples": "tenant:acme"
+    },
+    {
+      "abandon": "c1"
+    },
+    {
+      "samples": "tenant:acme"
+    }
+  ],
+  "expect": {
+    "steps": [
+      "CHECKED",
+      "SHADOWING",
+      "sampled",
+      "ABANDONED",
+      "not sampled"
+    ],
+    "errors": {
+      "c1": []
+    },
+    "heads": {
+      "tenant:acme": 0
+    }
+  }
+}

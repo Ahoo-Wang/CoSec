@@ -1,0 +1,17 @@
+# Rule: RTL-1
+# Mutant: the response reports the rule with the most permits left, not the fewest
+# Tests: :runtime:test --tests me.ahoo.cosec.runtime.ratelimit.RateLimitObligationTest :conformance:test --tests me.ahoo.cosec.conformance.ConformanceTest
+
+diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/stage/RunObligations.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/stage/RunObligations.kt
+index be74a3e28..90abce751 100644
+--- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/stage/RunObligations.kt
++++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/stage/RunObligations.kt
+@@ -59,7 +59,7 @@ internal class RunObligations(private val rateLimiter: RateLimiter?, private val
+                     result,
+                     state.traceId,
+                 )
+-                tightest == null || result.remaining < tightest.remaining -> tightest = result
++                tightest == null || result.remaining > tightest.remaining -> tightest = result
+             }
+         }
+         state.tightest = tightest

@@ -186,6 +186,22 @@ class RateLimitObligationTest {
         ).attributes.assert().containsExactly(geo)
     }
 
+    /**
+     * `RTL-2`: a key that fails with anything but a missing attribute cannot be counted, so its rule refuses the request
+     * (strict), whatever its `strictFailure` says: only a value that is not there is the lenient case.
+     */
+    @Test
+    fun `a key that fails with an error of its own makes the rule strict`() {
+        val key = "obligation-key-error"
+        Probes.register(
+            key,
+            Probes.Probe(me.ahoo.cosec.engine.CallLog(), key) { throw IllegalStateException("host attribute broke") }
+        )
+        val platform = permitting(rule("by-key", key = "request.attributes.$key", strict = false))
+        obligations(SnapshotView(platform, null, tenant())).assert()
+            .isEqualTo(listOf(Obligation.RateLimit("platform/by-key", null, limit, true)))
+    }
+
     @Test
     fun `rules that would not count what they say do not compile`() {
         assertThrownBy<CompileException> { rule("bad id") }

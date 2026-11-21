@@ -64,6 +64,8 @@ object SetsOfRecord {
         keyPrefix: String,
         keyEncoder: KeyEncoder<K>,
         codec: Codec<E>,
+        /** On an instance that only reads it, as the data plane reads the staged list (`CTL-47`). */
+        readOnly: Boolean = false,
     ): SetStoreSpec<K, E> {
         require(cacheName in CACHE_NAMES) { "[$cacheName] is not a set of record." }
         val layout = CoSecCacheSpecs.layout(keyPrefix, cacheName)
@@ -76,6 +78,7 @@ object SetsOfRecord {
                 localMaxAge = LOCAL_MAX_AGE
                 degradedLocalMaxAge = LOCAL_MAX_AGE
             }
+            .apply { this.readOnly = readOnly }
             .build()
     }
 }

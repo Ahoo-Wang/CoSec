@@ -1,0 +1,17 @@
+# Rule: APR-6
+# Mutant: an app change that widens a permission policy names none of the tenant documents that bind it
+# Tests: :control:test --tests me.ahoo.cosec.control.change.ChangesB1Test :conformance:test --tests me.ahoo.cosec.conformance.ConformanceTest
+
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/EscalationAnalysis.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/EscalationAnalysis.kt
+index 91def63a6..9a5d61e7b 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/EscalationAnalysis.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/EscalationAnalysis.kt
+@@ -254,7 +254,7 @@ internal class EscalationAnalysis(private val analyzer: GrantAnalyzer, private v
+         documents: CurrentDocuments,
+     ): List<Escalation> = try {
+         val widened = analyzer.widened(GrantDocuments.of(base), GrantDocuments.of(candidate))
+-        widened.mapNotNull { (policy, statements) -> referringTenants(key, policy, statements, documents) }
++        widened.mapNotNull { (policy, statements) -> referringTenants(key, policy, statements, documents)?.takeIf { false } }
+     } catch (e: CancellationException) {
+         throw e
+     } catch (e: Exception) {

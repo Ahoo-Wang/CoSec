@@ -1,0 +1,18 @@
+# Rule: BRK-2
+# Mutant: a break-glass binding may bind a principal of an ordinary tenant, not only of the platform tenant
+# Tests: :engine:test --tests me.ahoo.cosec.engine.CompiledDocumentTest :conformance:test --tests me.ahoo.cosec.conformance.ConformanceTest
+
+diff --git a/core/engine/src/main/kotlin/me/ahoo/cosec/engine/BoundEntries.kt b/core/engine/src/main/kotlin/me/ahoo/cosec/engine/BoundEntries.kt
+index 27a460c91..a078331ed 100644
+--- a/core/engine/src/main/kotlin/me/ahoo/cosec/engine/BoundEntries.kt
++++ b/core/engine/src/main/kotlin/me/ahoo/cosec/engine/BoundEntries.kt
+@@ -82,9 +82,6 @@ internal fun boundEntry(
+         }
+         requireNotNull(binding.expiresAt) { "Break-glass binding ${binding.id.value} has no expiry" }
+         // RFC 0004 §4.8, RFC 0007 §8: root is for the platform's own administrators, never a tenant's principal.
+-        require((binding.subject as SubjectRef.Principal).tenant == TenantId.PLATFORM) {
+-            "Break-glass binding ${binding.id.value} must bind a principal of the platform tenant"
+-        }
+     }
+     requireReachable(kind, owner, binding)
+     val local = if (policyId == BuiltinPolicies.ROOT.value) BuiltinPolicies.root else policies[policyId]
