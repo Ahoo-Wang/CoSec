@@ -27,6 +27,31 @@ Which preview of the library may run behind which preview of the gateway image: 
 
 ## From 8.0.0-beta.4 {#from-8-0-0-beta-4}
 
+- **The control API answers from a response model of its own; a refused scope says why under `reason`; propagation
+  counts the instances that hold the document** (review round 2, `R2C-11`, `R2C-12`, `CTL-61`, `CTL-62`). Affected:
+  clients of the control API.
+  - A change answer (`GET /changes/{id}` and every route that answers a change) no longer holds `checkedWith`,
+    `checkedApps` or its window's `shadow.reporters`: they were the store's bookkeeping, not part of the API. Every
+    other member is as before ([What a change answers](../policies/testing.md#what-a-change-answers)).
+  - `simulate` and `explain`: a `Rejected` decision carries `APP_MISMATCH` or `SPACE_NOT_MEMBER` under `reason`, no
+    longer under `cause`. `cause` is an `Indeterminate` decision's only, with the values it had.
+  - `GET /documents/{key}/revisions/{n}/propagation` adds `holding` (the recent instances that hold the document) and
+    `asOf` (when the statuses were read; an answer may be up to 5 seconds old). `installed` and `recent` mean what
+    they meant. No instance is behind when `installed` equals `holding`: most instances never hold a given tenant, so
+    `installed` never reached `recent` for it. `holding: 0` means no instance holds the document, and the first
+    request loads it at the published revision. A status read that fails is now `503`, not `500`.
+  - `contract/control/` pins the members of these answers, the closed sets they write and the audit kind of each
+    route; a release that changes one says so.
+- **A host that takes its caller from the `CoSec-Identity` header is asked for the statement of what can reach it, however
+  it got that gate** (`STA-6`, `STA-7`, `STA-9`). Affected: an application that declared its own `IdentityGate` bean
+  beside `cosec.pipeline.mode=enforce`, which started without one. It now fails startup until
+  `cosec.pipeline.identity.only-gateway-can-reach=true` (or `only-trusted-callers-can-reach=true`) says that nothing but the
+  gateway, and the services you name, can reach it, and until its hidden-method filter is off. A host in `gateway` mode is
+  unchanged.
+- **New: `cosec.pipeline.caller=forwarded-identity`.** A host in `enforce` mode, with the snapshot and the control plane
+  wired, can take its caller from the identity header instead of a credential: the shape of a control-plane host, or of
+  an IAM service that embeds the control plane. Nothing to change for a host that does not set it
+  ([Configuration](./configuration.md#pipeline)).
 - **Every stored record carries its format, and a reader ignores what it does not know of a known format**
   (review round 2, `R2C-10`, `R2C-28`, `CTL-53`, `IDN-31`). Affected: every deployment, once.
   - **Stop the control plane, upgrade it, start it.** The previews before this one refuse the `format` member the new
@@ -156,7 +181,7 @@ Which preview of the library may run behind which preview of the gateway image: 
   `STA-6`, `PIP-31`). Affected: every service in `cosec.pipeline.mode=gateway`, and every gateway.
   - A service in `gateway` mode believes any `CoSec-Identity` header, which carries no signature, so the network is its
     boundary. It now **fails to start** unless you write `cosec.pipeline.identity.only-gateway-can-reach: true`
-    (`COSEC_PIPELINE_IDENTITY_ONLY_GATEWAY_CAN_REACH=true`), your statement that nothing but the gateway can reach it.
+    (`COSEC_PIPELINE_IDENTITY_ONLYGATEWAYCANREACH=true`), your statement that nothing but the gateway can reach it.
     Absent, empty, `false`, `1` and `on` fail alike, and the message says what to write. Make it true first (a
     `NetworkPolicy` that admits the gateway's pods only, mutual TLS, a private network;
     [`k8s/examples/gateway-mode-service-networkpolicy.yaml`](https://github.com/Ahoo-Wang/CoSec/blob/main/k8s/examples/gateway-mode-service-networkpolicy.yaml)).

@@ -1,0 +1,20 @@
+# Rule: CTL-61
+# Mutant: a refused scope's reason is written under cause again, one member holding two vocabularies
+# Tests: :control:test --tests me.ahoo.cosec.control.api.ControlAnswersTest
+
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/api/DecisionQueries.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/api/DecisionQueries.kt
+index c04d52db2..0343ca6ff 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/api/DecisionQueries.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/api/DecisionQueries.kt
+@@ -151,9 +151,9 @@ internal class DecisionQueries(
+         val view = DecisionView(
+             ControlVocabulary.REJECTED,
+             null,
+-            cause = null,
++            cause = ControlVocabulary.reason(reason),
+             redacted = false,
+-            reason = ControlVocabulary.reason(reason),
++            reason = null,
+         )
+         return Simulation(view, null, null, null, differs = false)
+     }

@@ -617,7 +617,7 @@ it, the shadow window and the change it came from. The control API reads them (`
 | `GET /documents/<doc>/revisions?before=&limit=` | the history, newest first (20 by default, at most 200) |
 | `GET /documents/<doc>/revisions/<n>` | revision `<n>`; `410` when it is not kept |
 | `GET /documents/<doc>/diff?from=&to=` | what changed between two revisions |
-| `GET /documents/<doc>/revisions/<n>/propagation` | how many of the instances that reported a status in the last minute have installed revision `<n>` or later (needs instances with [shadow windows](./configuration.md#shadow-windows) on) |
+| `GET /documents/<doc>/revisions/<n>/propagation` | of the instances that reported a status in the last minute (`recent`), how many hold the document (`holding`) and how many of those have installed revision `<n>` or later (`installed`), read at most every 5 seconds (`asOf`); no instance is behind when `installed` equals `holding`, and `holding: 0` means no instance holds the document, so the first request loads it at the published revision ([Propagation](../policies/testing.md#propagation); needs instances with [shadow windows](./configuration.md#shadow-windows) on) |
 | `POST /documents/<doc>:rollback` with `{"revision": <n>, "note": "..."}`, and `confirmations` when it brings back a `nomatch` DENY | a change (`201`) that makes the document what it was at revision `<n>` |
 
 A rollback is a change like any other: it is checked, shadowed and approved as its content requires, and publishing

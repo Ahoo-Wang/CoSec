@@ -158,6 +158,6 @@ class LiveBreakGlassChangeTest {
         change.state.assert().describedAs("${change.findings}").isEqualTo(ChangeState.CHECKED)
         change.escalations.map { it.subject }.assert().contains("break-glass binding ${live.id.value}")
         // Break-glass has no shadow window: staging it goes straight to the second person.
-        changes.stage(rita, change.id).state.assert().isEqualTo(ChangeState.AWAITING_APPROVAL)
+        changes.startShadow(rita, change.id).state.assert().isEqualTo(ChangeState.AWAITING_APPROVAL)
     }
 }

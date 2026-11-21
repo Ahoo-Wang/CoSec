@@ -323,7 +323,7 @@ class ControlMaintenanceTest {
 
     private suspend fun staged(policy: String, base: Long = 1): ChangeId {
         val change = changes.propose(ALICE_OP, ACME, base, listOf(Operation.PutPolicy(allow(policy))), policy)
-        return changes.stage(ALICE_OP, change.id).also { it.state.assert().isEqualTo(ChangeState.SHADOWING) }.id
+        return changes.startShadow(ALICE_OP, change.id).also { it.state.assert().isEqualTo(ChangeState.SHADOWING) }.id
     }
 
     /** A store that counts how often each change is read, and how often the open changes are listed. */

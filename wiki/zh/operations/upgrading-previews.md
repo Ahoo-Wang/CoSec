@@ -24,6 +24,18 @@ description: "每个 8.0 预览版（alpha 与 beta）到下一个之间的变�
 
 ## 从 8.0.0-beta.4 升级 {#from-8-0-0-beta-4}
 
+- **控制 API 由自己的应答模型作答；被拒绝的作用域在 `reason` 下说明原因；传播只统计持有该文档的实例**（第二轮评审，
+  `R2C-11`、`R2C-12`、`CTL-61`、`CTL-62`）。受影响的是控制 API 的客户端。
+  - 变更的应答（`GET /changes/{id}` 以及每个应答变更的路由）不再包含 `checkedWith`、`checkedApps` 和窗口的
+    `shadow.reporters`：它们是存储的簿记，不属于 API。其余成员不变（[变更的应答](../policies/testing.md#what-a-change-answers)）。
+  - `simulate` 与 `explain`：`Rejected` 决策的 `APP_MISMATCH` 或 `SPACE_NOT_MEMBER` 放在 `reason` 下，不再放在 `cause`
+    下。`cause` 只属于 `Indeterminate` 决策，取值不变。
+  - `GET /documents/{key}/revisions/{n}/propagation` 新增 `holding`（持有该文档的最近实例）和 `asOf`（读取状态的时间；
+    应答最多可能是 5 秒前的）。`installed` 与 `recent` 含义不变。`installed` 等于 `holding` 时没有任何实例落后：
+    大多数实例从不持有某个租户，所以对它而言 `installed` 从来到不了 `recent`。`holding: 0` 表示没有实例持有该文档，第一个请求会按已发布的修订装入它。状态读取失败现在是 `503`，不再是 `500`。
+  - `contract/control/` 固定了这些应答的成员、它们写出的封闭取值集合以及每个路由的审计种类；改变其中任何一项的版本会写明。
+- **从 `CoSec-Identity` 头取得调用方的宿主，无论怎样得到这个 gate，都要声明什么能访问它**（`STA-6`、`STA-7`、`STA-9`）。受影响的是：在 `cosec.pipeline.mode=enforce` 旁边自己声明了 `IdentityGate` bean 的应用，它此前没有任何声明也能启动。现在它启动失败，直到 `cosec.pipeline.identity.only-gateway-can-reach=true`（或 `only-trusted-callers-can-reach=true`）声明除网关和你指名的服务外没有任何东西能访问它，并且关闭 hidden-method 过滤器。`gateway` 模式的宿主不变。
+- **新增：`cosec.pipeline.caller=forwarded-identity`。** `enforce` 模式的宿主在装配了快照和控制面的情况下，可以从身份头而不是凭证取得调用方：控制面宿主，或内嵌控制面的 IAM 服务就是这种形态。没有设置它的宿主无需改动（[配置](./configuration.md#pipeline)）。
 - **每条存储的记录都带有格式，读取方忽略已知格式中不认识的内容**（第二轮评审，`R2C-10`、`R2C-28`、`CTL-53`、`IDN-31`）。受影响的是每个部署，一次。
   - **停止控制面，升级，再启动。** 此前的预览版拒绝新记录带有的 `format` 成员，所以两个版本的实例不能同时运行。从这个版本起读取方是容忍的，以后的版本可以原地升级。
   - **一起滚动升级登录主机。** 仍运行旧预览版的登录主机读不了新版本写入的会话：刷新落到那里的用户需要重新登录。
@@ -85,7 +97,7 @@ description: "每个 8.0 预览版（alpha 与 beta）到下一个之间的变�
   - `ControlMaintenance` 接受一个 `Clock`（最后一个参数，默认系统时钟）。
   - `ShadowReportReader` 新增 `readings(window)`，返回 `ShadowReadings`：能读取的报告，以及报告已列出却无法读取的实例，窗口把它们当作已消失。`CoCacheShadowReports` 覆盖了它。你自己的读取器也可以覆盖（[扩展](../architecture/extending.md#control-store)）；不覆盖时，`readings` 读取 `reports`，在它抛出的地方照样抛出。
 - **gateway 模式声明它所信任的网络边界，网关转发它所决策的方法**（`STA-7`、`STA-6`、`PIP-31`）。受影响的是每个 `cosec.pipeline.mode=gateway` 的服务和每个网关。
-  - `gateway` 模式的服务相信任何 `CoSec-Identity` 头，而这个头没有签名，所以网络就是它的边界。现在除非你写下 `cosec.pipeline.identity.only-gateway-can-reach: true`（`COSEC_PIPELINE_IDENTITY_ONLY_GATEWAY_CAN_REACH=true`），声明只有网关能访问它，否则它**启动失败**。未设置、空、`false`、`1` 和 `on` 同样失败，信息会说明该写什么。先让它成真（只放行网关 pod 的 `NetworkPolicy`、双向 TLS、私有网络；[`k8s/examples/gateway-mode-service-networkpolicy.yaml`](https://github.com/Ahoo-Wang/CoSec/blob/main/k8s/examples/gateway-mode-service-networkpolicy.yaml)）。设置之后，beta.4 之前的 `WARN` 变为一行 `INFO`。
+  - `gateway` 模式的服务相信任何 `CoSec-Identity` 头，而这个头没有签名，所以网络就是它的边界。现在除非你写下 `cosec.pipeline.identity.only-gateway-can-reach: true`（`COSEC_PIPELINE_IDENTITY_ONLYGATEWAYCANREACH=true`），声明只有网关能访问它，否则它**启动失败**。未设置、空、`false`、`1` 和 `on` 同样失败，信息会说明该写什么。先让它成真（只放行网关 pod 的 `NetworkPolicy`、双向 TLS、私有网络；[`k8s/examples/gateway-mode-service-networkpolicy.yaml`](https://github.com/Ahoo-Wang/CoSec/blob/main/k8s/examples/gateway-mode-service-networkpolicy.yaml)）。设置之后，beta.4 之前的 `WARN` 变为一行 `INFO`。
   - `gateway` 模式的服务只要有 hidden-method 过滤器就会**启动失败**：`spring.mvc.hiddenmethod.filter.enabled=true`、`spring.webflux.hiddenmethod.filter.enabled=true`，或它自己的 `HiddenHttpMethodFilter` bean。网关决策的是请求行的方法，而 `_method` 表单字段会让服务执行另一个方法。移除它。自己决策的宿主（`enforce`）不受影响。
   - 网关从它转发的每个请求、每条路由上移除 `X-HTTP-Method-Override`、`X-HTTP-Method` 和 `X-Method-Override`（不区分大小写）。不可配置。以前会遵从这些头的后端，对经过网关的请求不再遵从：把方法写在请求行里。
 - **路径含有编码后的 `;` 或控制字符时答 `400`**（R1A-3，`PIP-30`）。受影响的是在路径任何位置发送 `%3B` 或 `%00` 到 `%1F`、`%7F`（大小写均可）的客户端。直到 beta.4，它们被当作某一段里的文本来决定，Spring 也这样读；但网关之后先解码、再去掉路径参数的后端会把 `/admin%3Bx/users` 当作 `/admin/users` 提供服务，绕过 `/admin/**` 上的 `DENY`。现在它们在认证之前被拒绝，无论是否映射了路由，答管道不予解释的路径所用的 `400` `invalid-request`；网关在转发任何东西之前就拒绝它们。未编码的控制字符也一样，CoSec 运行的服务器本来就会自己拒绝它。含有这类字符的值放到查询参数或请求体里，或者把它的 `%` 再编码一次（`%253B`）：管道解码一次，得到文本 `%3B`。`%25`、结尾的 `.` 和结尾的空格不变。检查方法：在访问日志或审计记录的 `request.path` 里搜索请求路径中的 `%3B`、`%00` 到 `%1F` 和 `%7F`（[故障排查](./troubleshooting.md#invalid-request)）。没有开关可以接受它们。

@@ -74,7 +74,10 @@ class StagingSlotsTest {
     /** A change of acme's document in its shadow window: it holds the slot, and its candidate is staged. */
     private suspend fun shadowing(): ChangeRequest {
         val change = harness.changes.propose(ALICE_OP, ACME, 0, listOf(Operation.PutPolicy(allow("a"))), "a")
-        return harness.changes.stage(ALICE_OP, change.id).also { it.state.assert().isEqualTo(ChangeState.SHADOWING) }
+        return harness.changes.startShadow(
+            ALICE_OP,
+            change.id
+        ).also { it.state.assert().isEqualTo(ChangeState.SHADOWING) }
     }
 
     @Test

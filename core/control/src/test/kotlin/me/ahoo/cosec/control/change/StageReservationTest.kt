@@ -140,10 +140,10 @@ class StageReservationTest {
         val first = proposed("first")
         val second = proposed("second")
         store.holdCandidate = true
-        val staging = async(start = CoroutineStart.UNDISPATCHED) { changes.stage(ALICE_OP, first.id) }
+        val staging = async(start = CoroutineStart.UNDISPATCHED) { changes.startShadow(ALICE_OP, first.id) }
         store.paused.await()
 
-        refused { changes.stage(ALICE_OP, second.id) }.assert().isEqualTo(409)
+        refused { changes.startShadow(ALICE_OP, second.id) }.assert().isEqualTo(409)
         changes.get(second.id).state.assert().isEqualTo(ChangeState.CHECKED)
 
         store.resume.complete(Unit)
@@ -159,9 +159,9 @@ class StageReservationTest {
         val first = proposed("first")
         val second = proposed("second")
         var refusal = 0
-        store.afterSlot = { refusal = refused { changes.stage(ALICE_OP, second.id) } }
+        store.afterSlot = { refusal = refused { changes.startShadow(ALICE_OP, second.id) } }
 
-        changes.stage(ALICE_OP, first.id).state.assert().isEqualTo(ChangeState.SHADOWING)
+        changes.startShadow(ALICE_OP, first.id).state.assert().isEqualTo(ChangeState.SHADOWING)
 
         refusal.assert().isEqualTo(409)
         holder().assert().isEqualTo(first.id)
@@ -172,11 +172,11 @@ class StageReservationTest {
         published()
         val change = proposed("only")
         store.holdCandidate = true
-        val staging = async(start = CoroutineStart.UNDISPATCHED) { changes.stage(ALICE_OP, change.id) }
+        val staging = async(start = CoroutineStart.UNDISPATCHED) { changes.startShadow(ALICE_OP, change.id) }
         store.paused.await()
         clock.now = clock.now.plusMillis(1)
 
-        refused { changes.stage(ALICE_OP, change.id) }.assert().isEqualTo(409)
+        refused { changes.startShadow(ALICE_OP, change.id) }.assert().isEqualTo(409)
 
         store.resume.complete(Unit)
         val staged = staging.await()
@@ -198,7 +198,7 @@ class StageReservationTest {
             val answers = ids.map { id ->
                 async(Dispatchers.Default) {
                     try {
-                        harness.changes.stage(ALICE_OP, id)
+                        harness.changes.startShadow(ALICE_OP, id)
                     } catch (_: ChangeRejectedException) {
                         null
                     }
@@ -220,9 +220,9 @@ class StageReservationTest {
         val first = proposed("first")
         val second = proposed("second")
         var other: ChangeRequest? = null
-        store.beforeSlot = { other = changes.stage(ALICE_OP, second.id) }
+        store.beforeSlot = { other = changes.startShadow(ALICE_OP, second.id) }
 
-        refused { changes.stage(ALICE_OP, first.id) }.assert().isEqualTo(409)
+        refused { changes.startShadow(ALICE_OP, first.id) }.assert().isEqualTo(409)
 
         val lost = changes.get(first.id)
         lost.state.assert().isEqualTo(ChangeState.CHECKED)
@@ -236,7 +236,7 @@ class StageReservationTest {
         published()
         val first = proposed("first")
         val second = proposed("second")
-        changes.stage(ALICE_OP, second.id)
+        changes.startShadow(ALICE_OP, second.id)
 
         refused { changes.skipShadow(ALICE_OP, first.id, "hurry") }.assert().isEqualTo(409)
 
@@ -251,7 +251,7 @@ class StageReservationTest {
         val first = proposed("first")
         store.failCandidate = IllegalStateException("the store is down")
 
-        refused { changes.stage(ALICE_OP, first.id) }.assert().isEqualTo(503)
+        refused { changes.startShadow(ALICE_OP, first.id) }.assert().isEqualTo(503)
 
         store.failCandidate = null
         changes.get(first.id).let {
@@ -260,7 +260,7 @@ class StageReservationTest {
         }
         holder().assert().isNull()
         candidate().assert().isNull()
-        changes.stage(ALICE_OP, proposed("second").id).state.assert().isEqualTo(ChangeState.SHADOWING)
+        changes.startShadow(ALICE_OP, proposed("second").id).state.assert().isEqualTo(ChangeState.SHADOWING)
     }
 
     @Test
@@ -269,7 +269,7 @@ class StageReservationTest {
         val first = proposed("first")
         store.loseCandidateReply = true
 
-        refused { changes.stage(ALICE_OP, first.id) }.assert().isEqualTo(503)
+        refused { changes.startShadow(ALICE_OP, first.id) }.assert().isEqualTo(503)
 
         changes.get(first.id).state.assert().isEqualTo(ChangeState.CHECKED)
         holder().assert().isNull()
@@ -282,7 +282,7 @@ class StageReservationTest {
             published()
             val first = proposed("first")
             store.holdCandidate = true
-            val staging = async(start = CoroutineStart.UNDISPATCHED) { changes.stage(ALICE_OP, first.id) }
+            val staging = async(start = CoroutineStart.UNDISPATCHED) { changes.startShadow(ALICE_OP, first.id) }
             store.paused.await()
 
             staging.cancelAndJoin()
@@ -294,7 +294,7 @@ class StageReservationTest {
             }
             holder().assert().isNull()
             candidate().assert().isNull()
-            changes.stage(ALICE_OP, proposed("second").id).state.assert().isEqualTo(ChangeState.SHADOWING)
+            changes.startShadow(ALICE_OP, proposed("second").id).state.assert().isEqualTo(ChangeState.SHADOWING)
         }
 
     @Test
@@ -304,7 +304,7 @@ class StageReservationTest {
         store.holdCandidate = true
         val staging = async(start = CoroutineStart.UNDISPATCHED) {
             try {
-                changes.stage(ALICE_OP, first.id)
+                changes.startShadow(ALICE_OP, first.id)
             } catch (e: ChangeRejectedException) {
                 e
             }
@@ -345,7 +345,7 @@ class StageReservationTest {
             store.holdCandidate = true
             val staging = async(start = CoroutineStart.UNDISPATCHED) {
                 try {
-                    changes.stage(ALICE_OP, first.id)
+                    changes.startShadow(ALICE_OP, first.id)
                 } catch (e: ChangeRejectedException) {
                     e
                 }
@@ -353,7 +353,7 @@ class StageReservationTest {
             store.paused.await()
             val window = changes.get(first.id).shadow!!.window
 
-            val preempting = changes.stage(ALICE_OP, narrowing.id)
+            val preempting = changes.startShadow(ALICE_OP, narrowing.id)
             preempting.state.assert().isEqualTo(ChangeState.SHADOWING)
             store.resume.complete(Unit)
 
@@ -381,7 +381,7 @@ class StageReservationTest {
         store.holdCandidate = true
         val staging = async(start = CoroutineStart.UNDISPATCHED) {
             try {
-                changes.stage(ALICE_OP, first.id)
+                changes.startShadow(ALICE_OP, first.id)
             } catch (e: ChangeRejectedException) {
                 e
             }
@@ -393,7 +393,7 @@ class StageReservationTest {
             staging.await()
         }
 
-        val preempting = changes.stage(ALICE_OP, narrowing.id)
+        val preempting = changes.startShadow(ALICE_OP, narrowing.id)
 
         (staging.await() as ChangeRejectedException).status.assert().isEqualTo(409)
         holder().assert().isEqualTo(narrowing.id)

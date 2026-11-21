@@ -23,7 +23,6 @@ import me.ahoo.cosec.control.api.ControlRequestJson.revisionOf
 import me.ahoo.cosec.control.api.JsonFields.wellFormed
 import me.ahoo.cosec.control.change.ChangeRejectedException
 import me.ahoo.cosec.control.change.ChangeRequest
-import me.ahoo.cosec.control.change.ChangeRequestCodec
 import me.ahoo.cosec.control.change.ControlStatus.NOT_FOUND
 import me.ahoo.cosec.control.change.InvalidControlRequestException
 import me.ahoo.cosec.control.change.requireRequest
@@ -60,7 +59,7 @@ internal object ControlHttpSupport {
         if (request.method == GET) block() else methodNotAllowed()
 
     fun changeResponse(change: ChangeRequest, status: Int) =
-        ControlHttpResponse(status, JSON, ChangeRequestCodec.encodeShown(change))
+        ControlHttpResponse(status, JSON, ChangeAnswer.encode(change))
 
     fun document(document: me.ahoo.cosec.document.PolicyDocument) = ControlHttpResponse(
         OK,

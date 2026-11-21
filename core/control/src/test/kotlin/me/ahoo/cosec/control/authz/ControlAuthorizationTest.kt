@@ -183,7 +183,7 @@ class ControlAuthorizationTest {
     }
 
     private suspend fun windowClosed(change: ChangeRequest, by: Operator = alice): ChangeRequest {
-        changes.stage(by, change.id)
+        changes.startShadow(by, change.id)
         return changes.shadowed(change.id)
     }
 
@@ -447,7 +447,7 @@ class ControlAuthorizationTest {
         val fourEyes = changes(ChangeOptions(fourEyes = true, shadow = IMMEDIATE_WINDOW))
         val change = fourEyes.propose(plato, TENANT, 2, grant("team-a", "deleter", "order:delete"), "more")
         change.escalations.assert().isNotEmpty()
-        fourEyes.stage(plato, change.id)
+        fourEyes.startShadow(plato, change.id)
         fourEyes.shadowed(change.id).state.assert().isEqualTo(ChangeState.AWAITING_APPROVAL)
         refused { fourEyes.approve(plato, change.id, change.candidate!!) }.assert().isEqualTo(403)
         fourEyes.approve(pia, change.id, change.candidate!!)

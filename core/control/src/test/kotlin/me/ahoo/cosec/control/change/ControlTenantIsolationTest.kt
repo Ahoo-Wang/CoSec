@@ -168,7 +168,7 @@ class ControlTenantIsolationTest {
         }.assert().isEqualTo(403)
         // A change of another tenant's document is not there for gil: 404 at every step, before its state (CTL-15).
         val change = changes.propose(ALICE_OP, acme, 1, put, "mine")
-        refused { changes.stage(gil, change.id) }.assert().isEqualTo(404)
+        refused { changes.startShadow(gil, change.id) }.assert().isEqualTo(404)
         refused { changes.skipShadow(gil, change.id, "hurry") }.assert().isEqualTo(404)
         refused { changes.abandon(gil, change.id) }.assert().isEqualTo(404)
         refused { changes.rebase(gil, change.id) }.assert().isEqualTo(404)

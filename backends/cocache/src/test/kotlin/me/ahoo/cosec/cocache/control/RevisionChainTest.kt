@@ -204,10 +204,10 @@ class RevisionChainTest {
             listOf(me.ahoo.cosec.control.change.Operation.PutPolicy(candidate("b").policies.single())),
             "b"
         )
-        one.stage(author, a.id)
+        one.startShadow(author, a.id)
         org.junit.jupiter.api.assertThrows<me.ahoo.cosec.control.change.ChangeRejectedException> {
             runBlocking {
-                two.stage(
+                two.startShadow(
                     author,
                     b.id
                 )

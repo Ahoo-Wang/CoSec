@@ -103,7 +103,7 @@ class DefaultControlPlane(
 
     override suspend fun rebase(operator: Operator, change: ChangeId): ChangeRequest = changes.rebase(operator, change)
 
-    override suspend fun startShadow(operator: Operator, change: ChangeId): ChangeRequest = changes.stage(
+    override suspend fun startShadow(operator: Operator, change: ChangeId): ChangeRequest = changes.startShadow(
         operator,
         change
     )

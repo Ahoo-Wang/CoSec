@@ -1,0 +1,23 @@
+# Rule: CTL-62
+# Mutant: a status read that fails answers the last read instead of 503: an outage reads as a propagation that stopped
+# Tests: :control:test --tests me.ahoo.cosec.control.lifecycle.PropagationTest
+
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/InstanceStatuses.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/InstanceStatuses.kt
+index 4634ef238..d2fe75056 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/InstanceStatuses.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/InstanceStatuses.kt
+@@ -43,7 +43,13 @@ internal class InstanceStatuses(
+     @Volatile
+     private var last: Read? = null
+ 
+-    suspend fun read(): Read = fresh() ?: lock.withLock { fresh() ?: load().also { last = it } }
++    suspend fun read(): Read = fresh() ?: lock.withLock {
++        fresh() ?: try {
++            load().also { last = it }
++        } catch (e: ControlStoreException) {
++            last ?: throw e
++        }
++    }
+ 
+     private fun fresh(): Read? = last?.takeIf { Duration.between(it.asOf, clock.instant()) < maxAge }
+ 

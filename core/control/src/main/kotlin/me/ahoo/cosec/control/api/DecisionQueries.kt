@@ -148,7 +148,13 @@ internal class DecisionQueries(
 
     private fun rejected(request: SimulatedRequest): Simulation {
         val reason = (simulator.scope(request) as ScopeResolution.Rejected).reason
-        val view = DecisionView("Rejected", null, reason.name, redacted = false)
+        val view = DecisionView(
+            ControlVocabulary.REJECTED,
+            null,
+            cause = null,
+            redacted = false,
+            reason = ControlVocabulary.reason(reason),
+        )
         return Simulation(view, null, null, null, differs = false)
     }
 

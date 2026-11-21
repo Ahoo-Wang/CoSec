@@ -51,6 +51,20 @@ class IdentityGuardAutoConfigurationTest {
             .run { context -> context.startupFailure.assert().isNull() }
     }
 
+    /** `STA-9`: a gateway decides on the credentials it verifies, so it never takes its caller from an identity either. */
+    @Test
+    fun `the forwarded-identity caller on a gateway host fails startup`() {
+        runner.withPropertyValues(
+            "cosec.pipeline.caller=forwarded-identity",
+            "cosec.pipeline.identity.only-trusted-callers-can-reach=true"
+        ).run { context ->
+            context.startupFailure!!.messages().assert().contains("Spring Cloud Gateway host")
+        }
+        runner.withClassLoader(FilteredClassLoader(GATEWAY_GLOBAL_FILTER))
+            .withPropertyValues("cosec.pipeline.caller=forwarded-identity")
+            .run { context -> context.startupFailure.assert().isNull() }
+    }
+
     @Test
     fun `a gateway strips identities even with CoSec turned off`() {
         runner.withPropertyValues("cosec.enabled=false").run { context ->

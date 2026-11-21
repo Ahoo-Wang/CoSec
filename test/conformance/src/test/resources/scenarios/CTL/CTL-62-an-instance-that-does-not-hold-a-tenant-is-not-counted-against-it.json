@@ -1,0 +1,145 @@
+{
+  "rules": [
+    "CTL-62"
+  ],
+  "polarity": "negative",
+  "level": "control",
+  "description": "G2e (R2C-12): i2 still holds acme's revision 1 and i3 holds no acme at all: revision 2 is installed by 1 of the 2 instances holding it, and i3 counts only among the recent. A tenant no instance holds reads 0 of 0: none is behind, and the first request that needs it loads the published revision. A status written within five seconds of the last read is not read yet; after five seconds it is.",
+  "steps": [
+    {
+      "propose": {
+        "change": "c1",
+        "document": "tenant:acme",
+        "operations": [
+          {
+            "putPolicy": {
+              "id": "read",
+              "statements": [
+                {
+                  "effect": "allow",
+                  "action": "order:read"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "skipShadow": "c1"
+    },
+    {
+      "publish": "c1"
+    },
+    {
+      "propose": {
+        "change": "c2",
+        "document": "tenant:acme",
+        "operations": [
+          {
+            "putPolicy": {
+              "id": "more",
+              "statements": [
+                {
+                  "effect": "allow",
+                  "action": "order:read"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "skipShadow": "c2"
+    },
+    {
+      "publish": "c2"
+    },
+    {
+      "status": {
+        "instance": "i1",
+        "documents": {
+          "tenant:acme": 2
+        }
+      }
+    },
+    {
+      "status": {
+        "instance": "i2",
+        "documents": {
+          "tenant:acme": 1
+        }
+      }
+    },
+    {
+      "status": {
+        "instance": "i3",
+        "documents": {
+          "tenant:globex": 4
+        }
+      }
+    },
+    {
+      "propagation": {
+        "document": "tenant:acme",
+        "revision": 2
+      }
+    },
+    {
+      "propagation": {
+        "document": "tenant:initech",
+        "revision": 1
+      }
+    },
+    {
+      "status": {
+        "instance": "i2",
+        "documents": {
+          "tenant:acme": 2
+        }
+      }
+    },
+    {
+      "propagation": {
+        "document": "tenant:acme",
+        "revision": 2
+      }
+    },
+    {
+      "advance": "PT5S"
+    },
+    {
+      "propagation": {
+        "document": "tenant:acme",
+        "revision": 2
+      }
+    }
+  ],
+  "expect": {
+    "steps": [
+      "CHECKED",
+      "READY",
+      "PUBLISHED",
+      "CHECKED",
+      "READY",
+      "PUBLISHED",
+      "status",
+      "status",
+      "status",
+      "installed 1 holding 2 recent 3",
+      "installed 0 holding 0 recent 3",
+      "status",
+      "installed 1 holding 2 recent 3",
+      "advanced",
+      "installed 2 holding 2 recent 3"
+    ],
+    "errors": {
+      "c1": [],
+      "c2": []
+    },
+    "heads": {
+      "tenant:acme": 2
+    }
+  }
+}

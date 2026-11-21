@@ -45,6 +45,7 @@ body:
         - cosec-cosid
         - cosec-migrate
         - cosec-gateway-server
+        - cosec-control-server
         - cosec-fetcher
         - cosec-react
         - Not sure

@@ -114,6 +114,13 @@ decision listeners. How a service is set up for it is in
 [`k8s/examples/gateway-mode-service-networkpolicy.yaml`](https://github.com/Ahoo-Wang/CoSec/blob/main/k8s/examples/gateway-mode-service-networkpolicy.yaml)
 is a `NetworkPolicy` for such a service that admits its port from the gateway's pods only.
 
+The same trust is also available to a host that decides with policies:
+[`cosec.pipeline.caller=forwarded-identity`](./configuration.md#pipeline) makes the `CoSec-Identity` header the caller of
+a host in `enforce` mode, with the snapshot and the control plane wired. That is how a control-plane host, or an IAM
+service that embeds the control plane, runs: it verifies no credential, so it states what can reach it, with the same
+statement (`only-gateway-can-reach`, or `only-trusted-callers-can-reach` when services call it directly), and the host
+does not start without it. A hidden-method filter is refused there too. On such a host the web adapter does not decide a request, as in `gateway` mode: the gateway decided what came through it, and for a call that did not come through the gateway only the control plane's own authorization of each operation, as the principal the caller states, decides. A route of the application's own on such a host (the IAM service of the embedded deployment) is authorized at the gateway or not at all.
+
 ```mermaid
 flowchart LR
     C([Client]) -->|token or API key| G[cosec-gateway-server<br>decides with the documents]
@@ -132,7 +139,7 @@ cosec:
   pipeline:
     mode: gateway
     identity:
-      only-gateway-can-reach: true   # or COSEC_PIPELINE_IDENTITY_ONLY_GATEWAY_CAN_REACH=true
+      only-gateway-can-reach: true   # or COSEC_PIPELINE_IDENTITY_ONLYGATEWAYCANREACH=true
 ```
 
 There is no default. Without the line, with `false`, or with any value but `true`, the service fails to start and the

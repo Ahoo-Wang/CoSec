@@ -308,7 +308,7 @@ class BreakGlassControlTest {
             listOf(Operation.PutPolicy(allowAll("widen"))),
             "slow"
         )
-        changes.stage(plato, holding.id).state.assert().isEqualTo(ChangeState.SHADOWING)
+        changes.startShadow(plato, holding.id).state.assert().isEqualTo(ChangeState.SHADOWING)
         refused { breakGlass.revoke(rita, binding, "tidy") }.assert().isEqualTo(409)
         changes.get(holding.id).state.assert().isEqualTo(ChangeState.SHADOWING)
     }
@@ -426,7 +426,7 @@ class BreakGlassControlTest {
             listOf(Operation.PutPolicy(allowAll("widen"))),
             "slow"
         )
-        changes.stage(plato, holding.id).state.assert().isEqualTo(ChangeState.SHADOWING)
+        changes.startShadow(plato, holding.id).state.assert().isEqualTo(ChangeState.SHADOWING)
         store.candidate(SnapshotKey.Platform).assert().isNotNull()
 
         breakGlass.revoke(rita, binding, "compromised").state.assert().isEqualTo(ChangeState.PUBLISHED)
@@ -569,7 +569,7 @@ class BreakGlassControlTest {
             "tidy",
             ProvenanceKind.BREAK_GLASS
         )
-        changes.stage(rita, stale.id).state.assert().isEqualTo(ChangeState.READY)
+        changes.startShadow(rita, stale.id).state.assert().isEqualTo(ChangeState.READY)
         breakGlass.revoke(rhea, live, "compromised").state.assert().isEqualTo(ChangeState.PUBLISHED)
         changes.get(stale.id).state.assert().isEqualTo(ChangeState.CONFLICTED)
         revisions.head(SnapshotKey.Platform)!!.document.bindings.none { it.id == live }.assert().isTrue()
@@ -605,7 +605,7 @@ class BreakGlassControlTest {
             "tidy",
             ProvenanceKind.BREAK_GLASS
         )
-        changes.stage(rita, stale.id).state.assert().isEqualTo(ChangeState.READY)
+        changes.startShadow(rita, stale.id).state.assert().isEqualTo(ChangeState.READY)
         val ban = changes.propose(
             plato,
             SnapshotKey.Platform,
@@ -813,7 +813,7 @@ class BreakGlassControlTest {
             listOf(Operation.PutPolicy(allowAll("b"))),
             "b"
         )
-        changes.stage(plato, recorded.id).state.assert().isEqualTo(ChangeState.SHADOWING)
+        changes.startShadow(plato, recorded.id).state.assert().isEqualTo(ChangeState.SHADOWING)
         changes.abandon(pia, recorded.id).state.assert().isEqualTo(ChangeState.ABANDONED)
         store.stage(SnapshotKey.Platform)?.value?.holder.assert().isNull()
         delivered(recorded.id, ChangeEvent.Kind.ABANDONED).let {

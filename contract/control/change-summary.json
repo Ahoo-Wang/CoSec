@@ -1,0 +1,44 @@
+{
+  "author" : {
+    "type" : "object",
+    "presence" : "optional",
+    "members" : {
+      "principal" : {
+        "type" : "string",
+        "presence" : "always"
+      },
+      "tenant" : {
+        "type" : "string",
+        "presence" : "always"
+      }
+    }
+  },
+  "createdAt" : {
+    "type" : "string",
+    "presence" : "optional"
+  },
+  "id" : {
+    "type" : "string",
+    "presence" : "always"
+  },
+  "key" : {
+    "type" : "string",
+    "presence" : "always"
+  },
+  "kind" : {
+    "type" : "string",
+    "presence" : "optional"
+  },
+  "note" : {
+    "type" : "string",
+    "presence" : "optional"
+  },
+  "state" : {
+    "type" : "string",
+    "presence" : "always"
+  },
+  "updatedAt" : {
+    "type" : "string",
+    "presence" : "optional"
+  }
+}

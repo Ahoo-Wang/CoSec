@@ -1,0 +1,230 @@
+{
+  "approval" : {
+    "type" : "object",
+    "presence" : "optional",
+    "members" : {
+      "approver" : {
+        "type" : "object",
+        "presence" : "always",
+        "members" : {
+          "principal" : {
+            "type" : "string",
+            "presence" : "always"
+          },
+          "tenant" : {
+            "type" : "string",
+            "presence" : "always"
+          }
+        }
+      },
+      "at" : {
+        "type" : "string",
+        "presence" : "always"
+      },
+      "candidate" : {
+        "type" : "string",
+        "presence" : "always"
+      },
+      "covers" : {
+        "type" : "array",
+        "presence" : "always",
+        "items" : {
+          "type" : "string"
+        }
+      }
+    }
+  },
+  "author" : {
+    "type" : "object",
+    "presence" : "always",
+    "members" : {
+      "principal" : {
+        "type" : "string",
+        "presence" : "always"
+      },
+      "tenant" : {
+        "type" : "string",
+        "presence" : "always"
+      }
+    }
+  },
+  "base" : {
+    "type" : "object",
+    "presence" : "always",
+    "members" : {
+      "digest" : {
+        "type" : "string",
+        "presence" : "optional"
+      },
+      "revision" : {
+        "type" : "integer",
+        "presence" : "always"
+      }
+    }
+  },
+  "candidate" : {
+    "type" : "string",
+    "presence" : "optional"
+  },
+  "confirmations" : {
+    "type" : "array",
+    "presence" : "optional",
+    "items" : {
+      "type" : "object",
+      "members" : {
+        "digest" : {
+          "type" : "string",
+          "presence" : "always"
+        },
+        "kind" : {
+          "type" : "string",
+          "presence" : "always"
+        },
+        "policy" : {
+          "type" : "string",
+          "presence" : "always"
+        },
+        "statement" : {
+          "type" : "integer",
+          "presence" : "always"
+        }
+      }
+    }
+  },
+  "createdAt" : {
+    "type" : "string",
+    "presence" : "always"
+  },
+  "escalations" : {
+    "type" : "array",
+    "presence" : "optional",
+    "items" : {
+      "type" : "object",
+      "members" : {
+        "detail" : {
+          "type" : "string",
+          "presence" : "always"
+        },
+        "reason" : {
+          "type" : "string",
+          "presence" : "always"
+        },
+        "subject" : {
+          "type" : "string",
+          "presence" : "always"
+        }
+      }
+    }
+  },
+  "findings" : {
+    "type" : "array",
+    "presence" : "always",
+    "items" : {
+      "type" : "object",
+      "members" : {
+        "check" : {
+          "type" : "string",
+          "presence" : "always"
+        },
+        "message" : {
+          "type" : "string",
+          "presence" : "always"
+        },
+        "path" : {
+          "type" : "string",
+          "presence" : "always"
+        },
+        "severity" : {
+          "type" : "string",
+          "presence" : "always"
+        },
+        "status" : {
+          "type" : "integer",
+          "presence" : "always"
+        }
+      }
+    }
+  },
+  "id" : {
+    "type" : "string",
+    "presence" : "always"
+  },
+  "key" : {
+    "type" : "string",
+    "presence" : "always"
+  },
+  "kind" : {
+    "type" : "string",
+    "presence" : "always"
+  },
+  "note" : {
+    "type" : "string",
+    "presence" : "always"
+  },
+  "operations" : {
+    "type" : "array",
+    "presence" : "always",
+    "items" : {
+      "type" : "object"
+    }
+  },
+  "publishedRevision" : {
+    "type" : "integer",
+    "presence" : "optional"
+  },
+  "shadow" : {
+    "type" : "object",
+    "presence" : "optional",
+    "members" : {
+      "closed" : {
+        "type" : "object",
+        "presence" : "optional",
+        "members" : {
+          "blocked" : {
+            "type" : "boolean",
+            "presence" : "always"
+          },
+          "closedAt" : {
+            "type" : "string",
+            "presence" : "always"
+          },
+          "counts" : {
+            "type" : "object",
+            "presence" : "always"
+          },
+          "insufficient" : {
+            "type" : "boolean",
+            "presence" : "always"
+          },
+          "vanished" : {
+            "type" : "array",
+            "presence" : "optional",
+            "items" : {
+              "type" : "string"
+            }
+          }
+        }
+      },
+      "startedAt" : {
+        "type" : "string",
+        "presence" : "always"
+      },
+      "window" : {
+        "type" : "string",
+        "presence" : "always"
+      }
+    }
+  },
+  "skipShadow" : {
+    "type" : "string",
+    "presence" : "optional"
+  },
+  "state" : {
+    "type" : "string",
+    "presence" : "always"
+  },
+  "updatedAt" : {
+    "type" : "string",
+    "presence" : "always"
+  }
+}
