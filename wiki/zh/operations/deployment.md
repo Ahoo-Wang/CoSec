@@ -174,7 +174,7 @@ docker run -d -p 127.0.0.1:8080:8080 \
 | **8082** | 服务 API（`cosec.control.http.service-port`），为直接调用控制面的服务准备的窄档：有哪些租户文档和应用文档（[`GET /documents?kind=`](../policies/testing.md#listing-documents)，授予服务的方式是在 `doc/tenant` 或 `doc/app` 上的 `cosec:read`）、租户文档和应用文档，以及租户的变更流程（[从代码修改策略](../integration/checks.md#changing-policies-from-your-code)）；其他每条路由在这里都是 `404` | 恰好是你点名的服务 |
 | **8081** | 管理端口：`/actuator/health/liveness`、`/actuator/health/readiness`、`/actuator/prometheus`；在 CoSec 之外。控制 API 在这里是 `404`，除 8080 和 8082 之外的任何端口都是（`CTL-69`） | 只有监控 |
 
-CoSec 不对管理端口做授权，而应用端口由管道决策，kubelet 在那里会被拒绝：探针探测管理端口。管理端口不只是 actuator：Spring Boot 的管理服务器还会在那里提供应用自己的函数式路由，镜像没有这样的路由；CoSec 自己的路由，控制 API 在内，只在应用端口和服务端口上应答。把 8080 发布给网关，把 8082 发布给你点名的服务，永远不要发布 8081。
+CoSec 不对管理端口做授权，而应用端口由管道决策，kubelet 在那里会被拒绝：探针探测管理端口。管理端口不只是 actuator：Spring Boot 的管理服务器还会在那里提供应用自己的函数式路由，镜像没有这样的路由；CoSec 自己的路由，控制 API 在内，只在应用端口和服务端口上应答。服务端口就是应用自己的服务器换一个端口，带着它的 TLS、客户端认证和绑定地址：如果声明是靠应用端口上的双向 TLS 成立的，8082 上同样成立。把 8080 发布给网关，把 8082 发布给你点名的服务，永远不要发布 8081。
 
 **调用方如何被识别。** 运维人员在 IAM 服务登录，网关校验令牌，并把身份转发到通往宿主的路由。给这条路由指定它的应用，这样为其他应用声明的身份会被拒绝：
 

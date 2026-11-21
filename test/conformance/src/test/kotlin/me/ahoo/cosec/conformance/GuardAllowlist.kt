@@ -363,6 +363,9 @@ object GuardAllowlist {
             "spring-boot:DataPlaneAclTest#the lines of 8_0_0-beta_1's page fail startup, naming what is missing",
             "spring-boot:DataPlaneAclTest#a process that runs the control plane with the read-only user fails at startup",
             "spring-boot:DataPlaneAclTest#the operations page shows the lines this test runs, and upgrading says what to add",
+            // CTL-71: the service port is the application's own server on another port.
+            "spring-boot:ControlServicePortSettingsTest#with mutual TLS on the application port the service port is TLS with a client certificate too",
+            "spring-boot:ControlServicePortSettingsTest#with a bind address on the application port the service port listens there only",
             // CTL-69: CoSec's own routes answer on the application's port, never on the management port.
             "spring-boot:ApplicationPortTest#a request over a connection carries the port the server bound, on Reactor Netty",
             "spring-boot:ApplicationPortTest#a request over a connection carries the port the server bound, on reactive Tomcat",

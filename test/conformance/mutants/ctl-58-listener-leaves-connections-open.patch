@@ -3,13 +3,13 @@
 # Tests: :spring-boot:test --tests me.ahoo.cosec.spring.boot.control.ControlServicePortTest
 
 diff --git a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/control/ControlServiceListener.kt b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/control/ControlServiceListener.kt
-index 214e08024..be5d0dabc 100644
+index 8c5e5dd9c..c009d3494 100644
 --- a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/control/ControlServiceListener.kt
 +++ b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/control/ControlServiceListener.kt
-@@ -84,7 +84,6 @@ internal class ControlServiceListener(
-         while (inFlight.get() > 0 && System.nanoTime() < deadline) {
+@@ -86,7 +86,6 @@ internal class ControlServiceListener(
              Thread.sleep(POLL_MILLIS)
          }
+         bound.stop()
 -        channels.close().awaitUninterruptibly(grace.toMillis().coerceAtLeast(1))
          boundPort = 0
      }
