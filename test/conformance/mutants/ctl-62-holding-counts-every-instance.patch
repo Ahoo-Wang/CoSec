@@ -3,14 +3,15 @@
 # Tests: :control:test --tests me.ahoo.cosec.control.lifecycle.PropagationTest
 
 diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ShadowWindows.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ShadowWindows.kt
-index 7df847487..d54ae17e4 100644
+index f59a5816d..8b4cfb6a2 100644
 --- a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ShadowWindows.kt
 +++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ShadowWindows.kt
-@@ -103,6 +103,6 @@ class ShadowWindows(
-     suspend fun propagation(key: SnapshotKey, revision: Long): Propagation {
-         val read = statuses.read()
-         val holding = read.statuses.mapNotNull { it.documents[key] }
--        return Propagation(revision, holding.count { it.revision >= revision }, holding.size, read.statuses.size, read.asOf)
-+        return Propagation(revision, holding.count { it.revision >= revision }, read.statuses.size, read.statuses.size, read.asOf)
-     }
- }
+@@ -106,7 +106,7 @@ class ShadowWindows(
+         return Propagation(
+             revision,
+             holding.count { it.revision >= revision },
+-            holding.size,
++            read.statuses.size,
+             read.statuses.size,
+             read.asOf
+         )
