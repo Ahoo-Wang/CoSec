@@ -145,8 +145,8 @@ def plan(root):
 
     # A pull request skips the groups its change cannot reach, and a skipped group uploads nothing: Codecov takes its
     # last report from the parent commit instead (`carryforward`), and no longer waits for a fixed number of uploads,
-    # which a skip would leave short for ever, so neither status would ever be sent (`wait_for_ci` holds notifications
-    # back until the commit's checks have finished).
+    # which a skip would leave short for ever, so neither status would ever be sent. The notifications are sent by the
+    # job of ci.yml that runs after the uploads (`manual_trigger`).
     uploading = [job["name"] for job in jobs if job["coverage"]]
     carried = set(re.findall(r"^  ([a-z0-9-]+):\n    carryforward: true$", codecov, re.M))
     if missing := sorted(set(uploading) - carried):
@@ -155,6 +155,9 @@ def plan(root):
     if re.search(r"^\s*after_n_builds:", codecov, re.M):
         fail("codecov.yml must not wait for a number of uploads (`after_n_builds`): a pull request skips groups, which "
              "upload nothing")
+    if not re.search(r"^    manual_trigger: true$", codecov, re.M):
+        fail("codecov.yml must set `codecov.notify.manual_trigger: true`: without it Codecov reports after the first "
+             "upload, and the job `Codecov notify` of ci.yml sends the notifications after the last")
 
     graph = read_graph(root, projects)
     return {
