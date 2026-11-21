@@ -75,9 +75,11 @@ internal class Staging(
         PublishRules.requireState(change, ChangeStep.STAGE.from)
         val head = revisions.head(change.key)
         if (PublishRules.exempt(change, head)) {
-            return reserved(operator, change, head, ChangeStep.STAGE) {
+            val skipped = reserved(operator, change, head, ChangeStep.STAGE) {
                 it.copy(state = PublishRules.afterWindow(it), skipShadow = BREAK_GLASS_EXEMPT)
             }
+            flow.audit(ChangeEvent.Kind.SHADOW_SKIPPED, skipped.skipped(), operator.actor, origin = operator.origin)
+            return skipped
         }
         val now = clock.instant()
         val state = ShadowState("${id.value}@${now.toEpochMilli()}", now)
@@ -207,9 +209,12 @@ internal class Staging(
             authority.require(operator, change.key, ControlActions.SKIP_SHADOW)
         }
         PublishRules.requireState(change, ChangeStep.SKIP_SHADOW.from)
-        return reserved(operator, change, revisions.head(change.key), ChangeStep.SKIP_SHADOW) {
+        val skipped = reserved(operator, change, revisions.head(change.key), ChangeStep.SKIP_SHADOW) {
             it.copy(state = PublishRules.afterWindow(it), skipShadow = reason)
         }
+        // Recorded now (CTL-63): the revision's provenance records the skip only if the change is ever published.
+        flow.audit(ChangeEvent.Kind.SHADOW_SKIPPED, skipped.skipped(), operator.actor, origin = operator.origin)
+        return skipped
     }
 
     /**

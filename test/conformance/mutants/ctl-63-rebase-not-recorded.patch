@@ -1,0 +1,16 @@
+# Rule: CTL-63
+# Mutant: a :rebase writes no change event: the change's base and checks move with nothing in the change log
+# Tests: :control:test --tests me.ahoo.cosec.control.api.StepEventsTest
+
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Proposals.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Proposals.kt
+index edc7aee20..914997b9d 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Proposals.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Proposals.kt
+@@ -256,7 +256,6 @@ internal class Proposals(
+                 author
+             )
+         }
+-        flow.audit(ChangeEvent.Kind.REBASED, rebased, author.actor, origin = author.origin)
+         return rebased
+     }
+ 

@@ -50,6 +50,9 @@ internal fun ChangeRequest.event(
     origin = origin,
 )
 
+/** This change as its skipped window records it (`CTL-63`): the note leads with why the window was skipped. */
+internal fun ChangeRequest.skipped(): ChangeRequest = copy(note = "shadow window skipped: $skipShadow; $note")
+
 /** This change as its abandon records it (RC1-51): the note names its author, as the event's operator names who abandoned it. */
 internal fun ChangeRequest.abandoned(): ChangeRequest = copy(
     note = "author ${author.tenant.value}/${author.principal.value}: $note"

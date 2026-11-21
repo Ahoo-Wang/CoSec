@@ -295,7 +295,7 @@ CoCache 会在同一个 registry 中为 CoSec 的缓存记录它自己的指标�
 ## 控制面变更日志 {#control-plane-change-log}
 
 控制面为变更的每一步发出一个变更事件：`PROPOSED`、`CHECKED`、`SHADOW_STARTED`、`SHADOWED`、`APPROVED`、`REJECTED`、
-`PUBLISHING`、`PUBLISHED`、`FAILED`、`BREAK_GLASS_REQUESTED`、`BREAK_GLASS_APPROVED`、`REVOKED`、`HEADS_MOVED`、`REVIEW_NEEDED`、`ABANDONED`。事件指明变更、文档、
+`PUBLISHING`、`PUBLISHED`、`FAILED`、`BREAK_GLASS_REQUESTED`、`BREAK_GLASS_APPROVED`、`REVOKED`、`HEADS_MOVED`、`REVIEW_NEEDED`、`ABANDONED`、`SHADOW_SKIPPED`、`REBASED`。每个改变变更记录的路由都会在改变时写一条（`CTL-63`）。事件指明变更、文档、
 操作者、基准修订和候选修订、需要审批的内容、确认、影子窗口摘要和备注；它从不携带文档内容。变更监听器接收这些事件。事件还带有该步骤操作者的**来源**（`origin`，`CTL-57`），写成事件 JSON 时是：`asserted`（宿主相信了调用方声明的身份，而不是自己校验凭证）、`via`（凭证的 `method`、作为 `credential` 的凭证 id 和作为 `request` 的请求 id，从不含凭证的值）和 `peer`（请求所用连接的地址，调用方无法选择；而请求声明的客户端地址是调用方的）。没有请求驱动的步骤（例如维护任务）没有来源；存储的变更记录其作者的来源，有来源时日志行以 `origin=...` 结尾。
 
 - **默认监听器**以 `INFO` 把每个事件记录到 logger `me.ahoo.cosec.changelog`，格式为
@@ -310,6 +310,9 @@ CoCache 会在同一个 registry 中为 CoSec 的缓存记录它自己的指标�
 - **备注是自由文本**，其中一部分出自变更的作者（提议、申请或吊销的原因）：某一步是谁做的，看事件的 `operator`，不要看备注。
 - **break-glass 需要 `REQUIRED` 变更监听器：** 没有时，创建或修改 break-glass 绑定得到 `503`
   （`break-glass needs a REQUIRED change listener, and none is configured`）。
+- **跳过窗口时写 `SHADOW_SKIPPED`**，备注写明原因（`shadow window skipped: <reason>; <note>`）：由 `:skip-shadow` 跳过（操作者持有
+  `cosec:skip-shadow`），或由没有窗口的 break-glass 变更跳过。无论变更之后是否发布都会写；变更发布后，修订的来源也会记下这次跳过。被拒绝的跳过不写任何事件。
+- **变更被 rebase 到文档当前修订并重新检查时写 `REBASED`。**
 - **`ABANDONED` 指明是谁放弃了变更，并在备注中写明变更的作者**（`author <tenant>/<principal>: <note>`）。放弃
   break-glass 变更像 `PUBLISHING` 一样受控：它需要一个 `REQUIRED` 变更监听器（没有时返回 `503`），由它在变更存为已放弃之前
   记下。放弃其他变更在之后记录。
