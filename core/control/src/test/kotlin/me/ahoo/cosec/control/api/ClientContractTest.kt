@@ -130,7 +130,8 @@ class ClientContractTest {
                 )
                 response.status.assert().describedAs(route).isIn(200, 201)
                 fixture.listeners.awaitDelivered()
-                routes[route] = fixture.events.map { it.kind.name }
+                // Sorted: a best-effort listener receives a step's events in any order.
+                routes[route] = fixture.events.map { it.kind.name }.sorted()
                 CoSecJson.mapper.readTree(response.body)
             }
 

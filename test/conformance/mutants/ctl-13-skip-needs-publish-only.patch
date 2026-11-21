@@ -3,10 +3,10 @@
 # Tests: :control:test --tests me.ahoo.cosec.control.authz.ControlAuthorizationTest
 
 diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Staging.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Staging.kt
-index c37bd11d..eb6d9842 100644
+index 351d45db9..6362aa3f6 100644
 --- a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Staging.kt
 +++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Staging.kt
-@@ -173,7 +173,7 @@ internal class Staging(
+@@ -206,7 +206,7 @@ internal class Staging(
          if (PublishRules.exempt(change, revisions.head(change.key))) {
              authority.require(operator, change.key, PublishRules.publishing(change))
          } else {
@@ -14,4 +14,4 @@ index c37bd11d..eb6d9842 100644
 +            authority.require(operator, change.key, ControlActions.PUBLISH)
          }
          PublishRules.requireState(change, ChangeStep.SKIP_SHADOW.from)
-         return reserved(operator, change, revisions.head(change.key), ChangeStep.SKIP_SHADOW) {
+         val skipped = reserved(operator, change, revisions.head(change.key), ChangeStep.SKIP_SHADOW) {

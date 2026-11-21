@@ -36,6 +36,9 @@
 'module: gateway-server':
   - changed-files:
       - any-glob-to-any-file: 'platform/gateway-server/**'
+'module: control-server':
+  - changed-files:
+      - any-glob-to-any-file: 'platform/control-server/**'
 'module: opentelemetry':
   - changed-files:
       - any-glob-to-any-file: 'extensions/opentelemetry/**'

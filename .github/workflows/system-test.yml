@@ -35,6 +35,7 @@ on:
     paths:
       - 'test/system-*/**'
       - 'platform/gateway-server/**'
+      - 'platform/aot-train.sh'
       - 'k8s/**'
       - '.github/workflows/system-test.yml'
 
@@ -125,7 +126,7 @@ jobs:
             docker pull "$GATEWAY_IMAGE_INPUT"
             echo "COSEC_SYSTEM_GATEWAY_IMAGE=$GATEWAY_IMAGE_INPUT" >> "$GITHUB_ENV"
           else
-            docker build --tag cosec-gateway:system platform/gateway-server
+            docker build --build-context shared=platform --tag cosec-gateway:system platform/gateway-server
             echo "COSEC_SYSTEM_GATEWAY_IMAGE=cosec-gateway:system" >> "$GITHUB_ENV"
           fi
 
@@ -269,7 +270,7 @@ jobs:
             docker pull "$GATEWAY_IMAGE_INPUT"
             docker tag "$GATEWAY_IMAGE_INPUT" cosec-gateway:system
           else
-            docker build --tag cosec-gateway:system platform/gateway-server
+            docker build --build-context shared=platform --tag cosec-gateway:system platform/gateway-server
           fi
 
       # kind and kubectl come with the runner image; the script says so when they do not.

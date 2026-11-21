@@ -795,6 +795,19 @@
       "pending": null
     },
     {
+      "id": "CTL-63",
+      "source": "G2e finding (routes.json of #1792): :skip-shadow and :rebase wrote no change event; RFC 0007 §10.5",
+      "statement": "A step that changes a change's record writes a change event when it does: skipping a shadow window writes `SHADOW_SKIPPED`, with why in its note, whether or not the change is ever published, and a rebase writes `REBASED`; a refused step changes nothing and writes nothing.",
+      "level": "control",
+      "guards": [
+        "control:StepEventsTest#a skipped window is recorded when it is skipped, with its reason, whether or not the change publishes - CTL-63",
+        "control:StepEventsTest#a rebase is recorded when it rebases - CTL-63",
+        "control:StepEventsTest#a refused skip records nothing - CTL-63",
+        "control:ClientContractTest#each route that moves a change writes the change kinds of its contract file"
+      ],
+      "pending": null
+    },
+    {
       "id": "CTL-65",
       "source": "control-server-design.md §0.10, PR 3 (the control-plane SDK)",
       "statement": "Every call through the control plane's facade is decided by the pipeline for the principal its ControlCaller states, by the policies, and recorded as that principal's step, by the route's own code path, with no path around it: the same call through the route and through the facade answers the same and records the same; a route outside the facade's narrow set, and any route on the platform document, is not reachable through it; and ControlCaller.of refuses a security context CoSec's gate or pipeline did not make (as PIP-29).",

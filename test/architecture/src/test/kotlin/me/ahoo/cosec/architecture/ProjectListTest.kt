@@ -16,8 +16,6 @@ package me.ahoo.cosec.architecture
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import tools.jackson.databind.JsonNode
-import tools.jackson.databind.json.JsonMapper
-import java.util.concurrent.TimeUnit
 import kotlin.io.path.readText
 
 /**
@@ -38,7 +36,7 @@ class ProjectListTest {
             "migration" to listOf("migrate"),
             "test" to listOf("testkit", "conformance", "architecture", "e2e", "client-host", "system-test", "system-behind", "system-auth", "system-enforcer", "code-coverage-report"),
             "bom" to listOf("bom", "dependencies"),
-            "platform" to listOf("gateway-server"),
+            "platform" to listOf("gateway-server", "control-server"),
         )
 
         val PROJECTS: List<String> = GROUPS.values.flatten()
@@ -113,17 +111,7 @@ class ProjectListTest {
             .containsExactlyInAnyOrderElementsOf(PROJECTS.filterNot { it in UNTESTED || it in COVERED })
     }
 
-    /** The plan CI runs, from the script itself, which also fails when the groups and `codecov.yml` disagree. */
-    private fun ciPlan(): JsonNode {
-        val process = ProcessBuilder("python3", "-I", "scripts/ci/plan.py", "--root", Projects.root.toString())
-            .directory(Projects.root.toFile())
-            .redirectErrorStream(true)
-            .start()
-        val output = process.inputStream.bufferedReader().readText()
-        process.waitFor(1, TimeUnit.MINUTES).assert().isTrue()
-        process.exitValue().assert().describedAs(output).isZero()
-        return JsonMapper.builder().build().readTree(output)
-    }
+    private fun ciPlan(): JsonNode = CiPlan.plan
 
     private fun JsonNode.items(): List<JsonNode> = (0 until size()).map { get(it) }
 

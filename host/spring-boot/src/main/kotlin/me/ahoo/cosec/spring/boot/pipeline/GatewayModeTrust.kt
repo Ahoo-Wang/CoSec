@@ -18,6 +18,7 @@ package me.ahoo.cosec.spring.boot.pipeline
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.runtime.identity.IdentityGate
 import org.springframework.beans.factory.ListableBeanFactory
+import org.springframework.boot.context.properties.bind.Binder
 import org.springframework.core.env.Environment
 import org.springframework.util.ClassUtils
 
@@ -51,8 +52,8 @@ internal object GatewayModeTrust {
      * message: the property that wired the gate, or the application's own gate bean ([describe] by default).
      */
     fun requireBoundaryStated(environment: Environment, host: String = describe(environment)): String {
-        val gateway = environment.getProperty(PipelineProperties.ONLY_GATEWAY_CAN_REACH_KEY)
-        val trusted = environment.getProperty(PipelineProperties.ONLY_TRUSTED_CALLERS_CAN_REACH_KEY)
+        val gateway = written(environment, PipelineProperties.ONLY_GATEWAY_CAN_REACH_KEY)
+        val trusted = written(environment, PipelineProperties.ONLY_TRUSTED_CALLERS_CAN_REACH_KEY)
         val stated = listOf(
             PipelineProperties.ONLY_GATEWAY_CAN_REACH_KEY to gateway,
             PipelineProperties.ONLY_TRUSTED_CALLERS_CAN_REACH_KEY to trusted,
@@ -66,15 +67,23 @@ internal object GatewayModeTrust {
                 "(or, for a host that services call directly, the gateway and the services you name) can reach it: a " +
                 "Kubernetes NetworkPolicy that admits those pods only, mutual TLS, or a private network. State it once " +
                 "it is true: ${PipelineProperties.ONLY_GATEWAY_CAN_REACH_KEY}=true (the environment variable " +
-                "COSEC_PIPELINE_IDENTITY_ONLY_GATEWAY_CAN_REACH=true) when only the gateway can reach it, or " +
+                "COSEC_PIPELINE_IDENTITY_ONLYGATEWAYCANREACH=true) when only the gateway can reach it, or " +
                 "${PipelineProperties.ONLY_TRUSTED_CALLERS_CAN_REACH_KEY}=true (the environment variable " +
-                "COSEC_PIPELINE_IDENTITY_ONLY_TRUSTED_CALLERS_CAN_REACH=true) when services reach it too. " +
+                "COSEC_PIPELINE_IDENTITY_ONLYTRUSTEDCALLERSCANREACH=true) when services reach it too. " +
                 (if (gateway == null) "It is not set" else "It is [$gateway]") +
                 (if (trusted == null) "" else ", and ${PipelineProperties.ONLY_TRUSTED_CALLERS_CAN_REACH_KEY} is [$trusted]") +
                 " (STA-7, STA-9, https://cosec.ahoo.me/operations/deployment#services-behind-the-gateway)."
         }
         return stated
     }
+
+    /**
+     * [key] as Spring's binder reads it, which is how the starter's own property check ([me.ahoo.cosec.spring.boot.UnknownProperties])
+     * reads an environment variable: `COSEC_PIPELINE_IDENTITY_ONLYGATEWAYCANREACH`, the words joined, since each `_` is a
+     * `.`. `Environment.getProperty` would answer to `ONLY_GATEWAY_CAN_REACH` instead, a spelling the property check refuses.
+     */
+    private fun written(environment: Environment, key: String): String? =
+        Binder.get(environment).bind(key, String::class.java).orElse(null)
 
     /** Whether the properties wire the identity gate ([OnIdentityGate]), for the check that follows a gate wired another way. */
     fun wiredByProperty(environment: Environment): Boolean =

@@ -7,7 +7,7 @@ index 91a447d1e..db97168fc 100644
 --- a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/pipeline/GatewayModeTrust.kt
 +++ b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/pipeline/GatewayModeTrust.kt
 @@ -53,7 +53,7 @@ internal object GatewayModeTrust {
-         val trusted = environment.getProperty(PipelineProperties.ONLY_TRUSTED_CALLERS_CAN_REACH_KEY)
+         val trusted = written(environment, PipelineProperties.ONLY_TRUSTED_CALLERS_CAN_REACH_KEY)
          val stated = listOf(
              PipelineProperties.ONLY_GATEWAY_CAN_REACH_KEY to gateway,
 -            PipelineProperties.ONLY_TRUSTED_CALLERS_CAN_REACH_KEY to trusted,

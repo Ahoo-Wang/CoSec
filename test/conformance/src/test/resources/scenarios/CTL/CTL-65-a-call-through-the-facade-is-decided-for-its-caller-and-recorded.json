@@ -4,7 +4,7 @@
   ],
   "polarity": "positive",
   "level": "control",
-  "description": "alice's own code calls the control plane's facade as alice, a tenant-admin of acme: the change is proposed and decided for alice by the policies, as its route decides it; plato, a platform administrator, reads acme's document through it.",
+  "description": "alice's own code calls the control plane's facade as alice, a tenant-admin of acme: the change is proposed, decided for alice by the policies as its route decides it, and recorded; plato, a platform administrator, reads acme's document through it.",
   "documents": {
     "platform": {
       "bindings": [
@@ -120,6 +120,9 @@
       }
     },
     {
+      "audited": "c1"
+    },
+    {
       "viaFacade": {
         "by": "plato",
         "document": "tenant:acme"
@@ -129,6 +132,7 @@
   "expect": {
     "steps": [
       "CHECKED",
+      "audited CHECKED",
       "read"
     ],
     "errors": {

@@ -21,12 +21,15 @@ import jakarta.servlet.ServletRequest
 import jakarta.servlet.ServletResponse
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.spring.boot.UnknownProperties
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import org.springframework.boot.autoconfigure.AutoConfigurations
 import org.springframework.boot.test.context.runner.ReactiveWebApplicationContextRunner
 import org.springframework.boot.test.context.runner.WebApplicationContextRunner
 import org.springframework.boot.web.servlet.FilterRegistrationBean
+import org.springframework.core.env.StandardEnvironment
+import org.springframework.core.env.SystemEnvironmentPropertySource
 import org.springframework.web.filter.HiddenHttpMethodFilter
 
 /**
@@ -57,6 +60,32 @@ class GatewayModeTrustTest {
         return message
     }
 
+    /** The variable the refusal names must be one the starter itself accepts: Spring maps each `_` to a `.`, so the words of a key are joined. */
+    @Test
+    fun `the environment variable the refusal names is read by the statement and accepted by the property check`() {
+        fun environment(variable: String) = StandardEnvironment().apply {
+            propertySources.replace(
+                StandardEnvironment.SYSTEM_ENVIRONMENT_PROPERTY_SOURCE_NAME,
+                SystemEnvironmentPropertySource(
+                    StandardEnvironment.SYSTEM_ENVIRONMENT_PROPERTY_SOURCE_NAME,
+                    mapOf(variable to "true")
+                )
+            )
+        }
+        val check = UnknownProperties.load(javaClass.classLoader)
+        for ((variable, key) in mapOf(
+            "COSEC_PIPELINE_IDENTITY_ONLYGATEWAYCANREACH" to statement,
+            "COSEC_PIPELINE_IDENTITY_ONLYTRUSTEDCALLERSCANREACH" to "cosec.pipeline.identity.only-trusted-callers-can-reach",
+        )) {
+            val environment = environment(variable)
+            GatewayModeTrust.requireBoundaryStated(environment).assert().isEqualTo(key)
+            check.of(environment).assert().isEmpty()
+        }
+        // With every word apart it is another key, which the property check refuses.
+        check.of(environment("COSEC_PIPELINE_IDENTITY_ONLY_GATEWAY_CAN_REACH")).assert()
+            .containsExactly("cosec.pipeline.identity.only.gateway.can.reach")
+    }
+
     @Test
     fun `a service in gateway mode does not start until the operator states the boundary, and the message says what to write`() {
         val message = failure(gateway)
@@ -65,7 +94,7 @@ class GatewayModeTrustTest {
             .contains("NetworkPolicy")
             .contains("mutual TLS")
             .contains("$statement=true")
-            .contains("COSEC_PIPELINE_IDENTITY_ONLY_GATEWAY_CAN_REACH=true")
+            .contains("COSEC_PIPELINE_IDENTITY_ONLYGATEWAYCANREACH=true")
             .contains("It is not set")
             .contains("STA-7")
     }
