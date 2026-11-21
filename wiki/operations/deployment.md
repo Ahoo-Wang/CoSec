@@ -705,8 +705,8 @@ What it covers, each as an observable over the network:
   and is refused another tenant's, by its key and in the listing; a binding written per tenant by a principal of the platform
   tenant still waits for a person;
 - the **embedded control plane** (its own stack): the IAM's own calls are the SDK's and the record says `in-process`; with
-  its control routes off (`cosec.control.http.enabled=false`) it serves none and still calls the SDK; an instance with the
-  maintenance passes off says so at startup;
+  its control routes off (`cosec.control.http.enabled=false`) it serves none, still calls the SDK, and is a second instance over the same store, whose
+  publishes the first reads;
 - the **service path** of the control-plane host: a service principal bound to a read-only policy reads and is refused a
   write by the action; the service port serves no platform document and no change of one, by its document or by its id;
   a stated principal proposes a tenant change, skips or runs its window and publishes, and the change event in Kafka says

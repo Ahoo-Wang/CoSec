@@ -22,10 +22,10 @@ import org.junit.jupiter.api.TestMethodOrder
 import org.junit.jupiter.api.extension.ExtendWith
 
 /**
- * What only the embedded deployment has (`CTL-65`, `CTL-57`, `CTL-59`, `CTL-69`): the IAM carries the control plane, so its
- * own calls are the SDK's, in process, and the record says so; an IAM that embeds the control plane with its control
- * routes off (`cosec.control.http.enabled=false`) serves none and still calls the SDK; and an instance that runs no
- * maintenance pass (`cosec.control.maintenance.enabled=false`) says so at startup.
+ * What only the embedded deployment has (`CTL-65`, `CTL-57`, `CTL-69`): the IAM carries the control plane, so its own
+ * calls are the SDK's, in process, and the record says so; and an IAM that embeds the control plane with its control routes
+ * off (`cosec.control.http.enabled=false`) serves none, still calls the SDK, and is a second instance of the control plane
+ * over the same store: what it publishes, the instance that serves the control API reads.
  */
 @Tag("system")
 @Tag("embedded")
@@ -78,12 +78,5 @@ class EmbeddedControlScenario {
         eventually(Bounds.SNAPSHOT_PROPAGATION, "the tenant on the instance that serves the control API", {
             root.document("tenant:em-two")
         }) { it.status == 200 }
-    }
-
-    @Test
-    @Order(3)
-    fun `an instance that runs no maintenance pass says so at startup, and one that runs them says nothing`() {
-        Compose.logs("auth-sdk").assert().contains("runs no control-plane maintenance pass")
-        Compose.logs("auth").assert().doesNotContain("runs no control-plane maintenance pass")
     }
 }
