@@ -112,26 +112,29 @@
     {
       "id": "STA-6",
       "source": "R1A-6 (2026-11-19); RFC 0006 §7.3",
-      "statement": "A host in `cosec.pipeline.mode=gateway` fails to start when a hidden-method filter is on: `spring.mvc.hiddenmethod.filter.enabled=true`, `spring.webflux.hiddenmethod.filter.enabled=true`, or a `HiddenHttpMethodFilter` bean of the application's own, since the gateway decided the method of the request line and the service would run the one a form field `_method` names, which the gateway cannot remove from a body. The failure names the property or the bean and why. A host in `enforce` mode is not affected: CoSec's filter runs after the hidden-method filter there (`PIP-19`).",
+      "statement": "A host whose web adapter takes its caller from the `CoSec-Identity` header, which is a host in `cosec.pipeline.mode=gateway`, a host with `cosec.pipeline.caller=forwarded-identity`, or one whose web gate is an `IdentityGate` its application declared, fails to start when a hidden-method filter is on: `spring.mvc.hiddenmethod.filter.enabled=true`, `spring.webflux.hiddenmethod.filter.enabled=true`, or a `HiddenHttpMethodFilter` bean of the application's own, since the gateway decided the method of the request line and the host would run the one a form field `_method` names, which the gateway cannot remove from a body. The failure names the property or the bean and why. A host that decides on the credentials it verifies (`enforce`, `caller=credential`) is not affected: CoSec's filter runs after the hidden-method filter there (`PIP-19`).",
       "level": "startup",
       "pending": null,
       "guards": [
         "spring-boot:GatewayModeTrustTest#a hidden-method filter in a service behind a gateway fails startup, by property and by bean",
         "spring-boot:GatewayModeTrustTest#a reactive service is held to the same two statements",
-        "spring-boot:GatewayModeTrustTest#with the statement the service starts, in any letter case of true, and an enforcing host needs none"
+        "spring-boot:GatewayModeTrustTest#with the statement the service starts, in any letter case of true, and an enforcing host needs none",
+        "spring-boot:ForwardedIdentityCallerTest#a hidden-method filter is refused here as in gateway mode"
       ]
     },
     {
       "id": "STA-7",
       "source": "R1B-5 (2026-11-19); RFC 0006 §7.3",
-      "statement": "A host in `cosec.pipeline.mode=gateway` believes any `CoSec-Identity` header it receives, and the header carries no signature, so the network is the boundary. It fails to start unless `cosec.pipeline.identity.only-gateway-can-reach` is written `true` (any letter case, nothing else: absent, empty, `false`, `1` and `on` fail alike), with a message that says what the mode trusts, what must be true of the network (only the gateway can reach the service: a NetworkPolicy, mutual TLS or a private network) and the exact line to add. When it is set the startup logs one INFO line, not a warning. A host in `enforce` mode needs none.",
+      "statement": "A host whose web adapter takes its caller from the `CoSec-Identity` header (the three cases of `STA-6`) believes any such header it receives, and the header carries no signature, so the network is the boundary. It fails to start unless the operator states what can reach it, `cosec.pipeline.identity.only-gateway-can-reach` or `cosec.pipeline.identity.only-trusted-callers-can-reach` (`STA-9`) written `true` (any letter case, nothing else: absent, empty, `false`, `1` and `on` fail alike), with a message that says what the host trusts and that it contains mistakes and keeps the audit but does not defend against a compromised workload that can reach it, what must be true of the network (a NetworkPolicy, mutual TLS or a private network) and the exact lines to add. When it is set the startup logs one INFO line, not a warning. A host that takes its callers from the credentials it verifies needs none.",
       "level": "startup",
       "pending": null,
       "guards": [
         "spring-boot:GatewayModeTrustTest#a service in gateway mode does not start until the operator states the boundary, and the message says what to write",
         "spring-boot:GatewayModeTrustTest#false and every value but true fail like an absent one, and say what was written",
         "spring-boot:GatewayModeTrustTest#with the statement the service starts, in any letter case of true, and an enforcing host needs none",
-        "spring-boot:GatewayModeTrustTest#a reactive service is held to the same two statements"
+        "spring-boot:GatewayModeTrustTest#a reactive service is held to the same two statements",
+        "spring-boot:ForwardedIdentityCallerTest#it does not start until the operator states what can reach it, and either statement will do",
+        "spring-boot:ForwardedIdentityCallerTest#an identity gate the application wires beside enforce is asked for the statement too"
       ]
     },
     {
@@ -150,6 +153,22 @@
         "spring-boot:RefreshMembershipChoiceTest#a gateway host with the path set is told about the gateway, not asked for the choice",
         "spring-boot:RefreshMembershipChoiceTest#a service in gateway mode serves no refresh and is not asked",
         "spring-boot:RefreshMembershipChoiceTest#the link of the message reaches a heading of the page, in both languages"
+      ]
+    },
+    {
+      "id": "STA-9",
+      "source": "maintainer decision 2026-11-21 (the control-plane host's callers, \"按你推荐\"); RFC 0006 §7.3",
+      "statement": "`cosec.pipeline.caller=forwarded-identity` on a host that decides with policies (`cosec.pipeline.mode=enforce`) makes the web adapters' gate the `IdentityGate`: the caller is the principal the `CoSec-Identity` header states, believed under the operator's statement of what can reach the host, and the control plane, the snapshot and every other part of `enforce` are wired. The host verifies no credential: with `cosec.jwt.enabled=false` it holds no signing secret, issues no token and wires no token authenticator, yet its control plane still reads the revocations of an approver's token (`RC1-11`) from the token tables, which it wires for this caller. The two statement keys of `STA-7` are `cosec.pipeline.identity.only-gateway-can-reach` (only the gateway can reach the host) and `cosec.pipeline.identity.only-trusted-callers-can-reach` (the gateway and the services the operator names can); either satisfies the check, and the message names both. A host whose caller is the credential (`caller=credential`, the default) wires no `IdentityGate` and is asked for neither. Neither property is read on a Spring Cloud Gateway host: it fails to start with `mode=gateway` or with this caller, since a gateway decides on the credentials it verifies.",
+      "level": "startup",
+      "pending": null,
+      "guards": [
+        "spring-boot:ForwardedIdentityCallerTest#the control plane starts on the forwarded identity with no JWT and no secret, and the gate is the identity gate",
+        "spring-boot:ForwardedIdentityCallerTest#it does not start until the operator states what can reach it, and either statement will do",
+        "spring-boot:ForwardedIdentityCallerTest#a host that takes its callers from the credential is asked for none of it",
+        "spring-boot:ForwardedIdentityCallerTest#the control plane decides for the principal the identity states, by the documents",
+        "spring-boot:ForwardedIdentityCallerTest#no header is no principal",
+        "spring-boot:ForwardedIdentityCallerTest#an identity gate the application wires beside enforce is asked for the statement too",
+        "spring-boot:IdentityGuardAutoConfigurationTest#the forwarded-identity caller on a gateway host fails startup"
       ]
     }
   ]

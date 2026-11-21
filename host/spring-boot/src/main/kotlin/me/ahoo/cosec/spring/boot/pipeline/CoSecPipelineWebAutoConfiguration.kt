@@ -25,6 +25,7 @@ import me.ahoo.cosec.model.scope.HostScope
 import me.ahoo.cosec.runtime.Pipeline
 import me.ahoo.cosec.runtime.event.BridgeContextContributor
 import me.ahoo.cosec.runtime.http.RequestGate
+import me.ahoo.cosec.runtime.identity.IdentityGate
 import me.ahoo.cosec.runtime.snapshot.DocumentReadiness
 import me.ahoo.cosec.runtime.snapshot.SnapshotSource
 import me.ahoo.cosec.spring.boot.ConditionalOnCoSecEnabled
@@ -38,6 +39,7 @@ import me.ahoo.cosec.webmvc.ServletXForwardedRemoteIpResolver
 import me.ahoo.cosec.webmvc.SuspendingHandlerHolderInterceptor
 import org.springframework.beans.factory.ListableBeanFactory
 import org.springframework.beans.factory.ObjectProvider
+import org.springframework.core.env.Environment
 import org.springframework.boot.autoconfigure.AutoConfiguration
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass
@@ -76,6 +78,23 @@ import org.springframework.web.cors.reactive.CorsConfigurationSource as Reactive
 @ConditionalOnCoSecEnabled
 @Import(StartupTaskExclusion::class)
 internal class CoSecPipelineWebAutoConfiguration {
+    /**
+     * `STA-6`, `STA-7`, `STA-9` follow the gate, not the properties: a web adapter over an `IdentityGate` that the
+     * properties did not wire (an application's own, declared `@Primary` beside `enforce`) believes the header as much as
+     * the one they did, so it is asked for the same statement and refused the same hidden-method filter.
+     */
+    @Bean
+    fun cosecWebGateTrustCheck(
+        gate: ObjectProvider<RequestGate>,
+        environment: Environment,
+        beans: ListableBeanFactory,
+    ): StartupTask = StartupTask.AfterSingletons {
+        if (gate.getIfUnique() is IdentityGate && !IdentityGateWiring.byProperty(environment)) {
+            GatewayModeTrust.requireBoundaryStated(environment)
+            GatewayModeTrust.requireNoHiddenMethod(environment, beans)
+        }
+    }
+
     @Configuration(proxyBeanMethods = false)
     @ConditionalOnWebApplication(type = ConditionalOnWebApplication.Type.SERVLET)
     @ConditionalOnClass(name = ["me.ahoo.cosec.webmvc.PipelineServletFilter"])
