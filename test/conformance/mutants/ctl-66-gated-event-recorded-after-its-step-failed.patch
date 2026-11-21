@@ -1,0 +1,16 @@
+# Rule: CTL-66
+# Mutant: a gated event whose step already answered 503 is recorded when the listener reaches it
+# Tests: :control:test --tests me.ahoo.cosec.control.audit.ChangeEventOrderTest
+
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/audit/ChangeListenerLane.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/audit/ChangeListenerLane.kt
+index 2e886a7dc..12f70b54b 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/audit/ChangeListenerLane.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/audit/ChangeListenerLane.kt
+@@ -178,7 +178,6 @@ class ChangeListenerLane internal constructor(
+     @Suppress("TooGenericExceptionCaught")
+     private suspend fun deliver(entry: Entry) {
+         // A gated step that already answered 503 does not have its event recorded after all.
+-        if (entry.done?.isCancelled == true) return
+         try {
+             if (listener.delivery == Delivery.REQUIRED) {
+                 withTimeoutOrNull(callTimeout) { listener.onChange(entry.event) }

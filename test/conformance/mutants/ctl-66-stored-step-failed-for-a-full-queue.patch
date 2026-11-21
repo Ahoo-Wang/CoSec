@@ -1,0 +1,17 @@
+# Rule: CTL-66
+# Mutant: a REQUIRED listener's full queue fails a step that is already stored, instead of losing its event, counted
+# Tests: :control:test --tests me.ahoo.cosec.control.audit.ChangeEventOrderTest
+
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/audit/ChangeListeners.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/audit/ChangeListeners.kt
+index 77568cf79..56186f170 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/audit/ChangeListeners.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/audit/ChangeListeners.kt
+@@ -106,7 +106,7 @@ class ChangeListeners(
+             if (queue.listener.delivery != Delivery.REQUIRED) {
+                 queue.offer(event, bytes)
+             } else if (!queue.put(event, bytes, requiredTimeout)) {
+-                queue.lose()
++                throw ChangeAuditException("no room")
+                 log.error {
+                     "Change event ${event.kind} of change ${event.change.value} on ${event.document} was not handed to " +
+                         "REQUIRED change listener [${queue.listener.name}]: its queue stayed full for $requiredTimeout " +
