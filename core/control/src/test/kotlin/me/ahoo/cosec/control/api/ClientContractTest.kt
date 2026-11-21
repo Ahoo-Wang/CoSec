@@ -109,7 +109,11 @@ class ClientContractTest {
     private class RouteKinds {
         private val fixture = ControlPlaneTest()
         private val http = ControlHttp(fixture.plane)
-        private val alice = fixture.engine.security(ControlPlaneTest.ACME, "alice", roles = listOf("admin", "ops@team-a"))
+        private val alice = fixture.engine.security(
+            ControlPlaneTest.ACME,
+            "alice",
+            roles = listOf("admin", "ops@team-a")
+        )
         private val plato = fixture.engine.security(TenantId.PLATFORM, "plato")
         private val routes = linkedMapOf<String, List<String>>()
 
@@ -120,7 +124,10 @@ class ClientContractTest {
             runBlocking {
                 fixture.listeners.awaitDelivered()
                 fixture.events.clear()
-                val response = http.handle(ControlHttpRequest("POST", path, emptyMap(), body?.encodeToByteArray()), security)
+                val response = http.handle(
+                    ControlHttpRequest("POST", path, emptyMap(), body?.encodeToByteArray()),
+                    security
+                )
                 response.status.assert().describedAs(route).isIn(200, 201)
                 fixture.listeners.awaitDelivered()
                 routes[route] = fixture.events.map { it.kind.name }
@@ -128,7 +135,12 @@ class ClientContractTest {
             }
 
         private fun propose(note: String, operations: String = policy(note)): String =
-            runBlocking { http.handle(ControlHttpRequest("POST", "/changes", emptyMap(), proposal(note, operations).encodeToByteArray()), alice) }
+            runBlocking {
+                http.handle(
+                    ControlHttpRequest("POST", "/changes", emptyMap(), proposal(note, operations).encodeToByteArray()),
+                    alice
+                )
+            }
                 .let { CoSecJson.mapper.readTree(it.body) }
                 .let { it.get("id")?.asString() ?: error("$note: $it") }
 
@@ -149,15 +161,30 @@ class ClientContractTest {
             val rejected = waiting("reject")
             call("POST /changes/{id}:reject", "/changes/$rejected:reject", """{"reason":"no"}""", plato)
             val approved = waiting("approve")
-            call("POST /changes/{id}:approve", "/changes/$approved:approve", """{"candidate":"${candidate(approved)}"}""", plato)
+            call(
+                "POST /changes/{id}:approve",
+                "/changes/$approved:approve",
+                """{"candidate":"${candidate(approved)}"}""",
+                plato
+            )
             call(
                 "POST /documents/{key}:apply",
                 "/documents/tenant:acme:apply",
                 """{"mode":"MERGE","note":"apply","document":{"schema":2,"revision":$base,""" +
                     """"publishedAt":"2026-11-01T00:00:00Z","policies":[],"bindings":[]}}""",
             )
-            call("POST /documents/{key}:rollback", "/documents/tenant:acme:rollback", """{"revision":1,"note":"back"}""")
-            return files().also { node -> routes.forEach { (route, kinds) -> node.putArray(route).apply { kinds.forEach(::add) } } }
+            call(
+                "POST /documents/{key}:rollback",
+                "/documents/tenant:acme:rollback",
+                """{"revision":1,"note":"back"}"""
+            )
+            return files().also { node ->
+                routes.forEach { (route, kinds) ->
+                    node.putArray(
+                        route
+                    ).apply { kinds.forEach(::add) }
+                }
+            }
         }
 
         /** A change that needs a second person's approval, its window closed. */

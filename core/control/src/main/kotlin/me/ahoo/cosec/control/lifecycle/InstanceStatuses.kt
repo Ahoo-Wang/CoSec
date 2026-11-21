@@ -54,15 +54,19 @@ internal class InstanceStatuses(
             reports.statuses()
         } catch (e: CancellationException) {
             throw e
-        } catch (e: SnapshotFormatException) {
-            // A status that does not decode is a stored value, a 500, as every such read of the control plane.
-            throw e
-        } catch (e: ControlStoreException) {
-            throw e
         } catch (e: Exception) {
-            throw ControlStoreException("The instances' statuses cannot be read", e)
+            throw unavailable(e)
         }
         return Read(statuses, asOf)
+    }
+
+    /**
+     * What a failed read is answered with: a status that does not decode stays what it is (a stored value, 500, as every
+     * such read of the control plane), and anything else is the store not answering (503).
+     */
+    private fun unavailable(e: Exception): Exception = when (e) {
+        is SnapshotFormatException, is ControlStoreException -> e
+        else -> ControlStoreException("The instances' statuses cannot be read", e)
     }
 
     companion object {

@@ -44,11 +44,13 @@ internal class Redaction(private val readable: Set<DocumentKind>) {
         val trace = evaluation.trace ?: return null
         val visible = trace.candidates.filter { visible(it.ref, homes) }
         return TraceView(
-            visible.map { TraceEntryView(
+            visible.map {
+                TraceEntryView(
                     statement(it.ref),
                     ControlVocabulary.effect(it.effect),
                     ControlVocabulary.outcome(it.outcome)
-                ) },
+                )
+            },
             trace.candidates.size - visible.size,
         )
     }

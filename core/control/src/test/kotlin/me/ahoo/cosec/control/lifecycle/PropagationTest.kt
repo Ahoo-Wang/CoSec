@@ -58,7 +58,11 @@ class PropagationTest {
     private val windows = ShadowWindows(reader, clock = clock)
 
     private suspend fun status(instance: String, vararg documents: Pair<SnapshotKey, Long>) = written.write(
-        InstanceStatus(instance, clock.instant(), documents.associate { (key, revision) -> key to InstalledDocument(revision, Duration.ZERO) }),
+        InstanceStatus(
+            instance,
+            clock.instant(),
+            documents.associate { (key, revision) -> key to InstalledDocument(revision, Duration.ZERO) }
+        ),
     )
 
     @Test
@@ -94,7 +98,12 @@ class PropagationTest {
         clock.now = clock.now.plus(InstanceStatuses.MAX_AGE)
         failures.set(1)
         // An outage is 503 (CTL-52), never the answer read five seconds ago.
-        runCatching { windows.propagation(T1, 2) }.exceptionOrNull().assert().isInstanceOf(ControlStoreException::class.java)
+        runCatching {
+            windows.propagation(
+                T1,
+                2
+            )
+        }.exceptionOrNull().assert().isInstanceOf(ControlStoreException::class.java)
         // The next call reads again, at once.
         windows.propagation(T1, 2).assert().isEqualTo(Propagation(2, 1, 1, 1, clock.now))
         reads.get().assert().isEqualTo(3)

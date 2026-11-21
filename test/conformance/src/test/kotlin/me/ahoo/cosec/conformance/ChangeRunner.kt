@@ -434,14 +434,11 @@ object ChangeRunner : ScenarioRunner {
             "advance", "vanish", "outage", "storeDown", "oldOpenList" -> environment(action, argument)
             "changes" -> listing(argument)
             "report" -> report(argument)
-            "answer" -> answer(argument)
-            "status" -> status(argument)
-            "propagation" -> propagation(argument)
             "simulate" -> simulate(argument)
             "explain" -> explain(argument)
             in CREDENTIAL_STEPS -> credentials(action, argument)
             "revokeBreakGlass" -> revoke(argument)
-            "diff", "staged", "listed", "samples", "rateLimits" -> read(action, argument)
+            in READS -> read(action, argument)
             else -> try {
                 step(action, argument).also { named[it.id.value] = it }.state.name
             } catch (error: ChangeRejectedException) {
@@ -456,6 +453,7 @@ object ChangeRunner : ScenarioRunner {
         /** What a step reads of the documents, without changing them. */
         private suspend fun read(action: String, argument: JsonNode): String = when (action) {
             "diff" -> diff(argument)
+            "answer", "status", "propagation" -> answers(action, argument)
             "staged" -> "staged " + (memory.candidate(documentKey(argument.text()))?.window?.substringBefore('@') ?: "none")
             "samples" -> StagedDocuments(memory).let { instance ->
                 instance.refresh()
@@ -623,6 +621,13 @@ object ChangeRunner : ScenarioRunner {
             return "reported"
         }
 
+        /** The steps of the control API's answers (`CTL-61`, `CTL-62`). */
+        private suspend fun answers(action: String, argument: JsonNode): String = when (action) {
+            "answer" -> answer(argument)
+            "status" -> status(argument)
+            else -> propagation(argument)
+        }
+
         /** The members of a change's answer (`CTL-61`), as `GET /changes/{id}` writes them. */
         private suspend fun answer(argument: JsonNode): String {
             val answer = ChangeAnswer.tree(changes.get(ChangeId(argument.text())))
@@ -694,7 +699,9 @@ object ChangeRunner : ScenarioRunner {
         }
 
         /** The decision, `by <policy>` when the caller may see it, and `(cause <kind>)` or `(reason <why>)` (CTL-61). */
-        private fun shown(decision: DecisionView) = decision.decision + (decision.by?.let { " by ${it.policy}" } ?: "") +
+        private fun shown(
+            decision: DecisionView
+        ) = decision.decision + (decision.by?.let { " by ${it.policy}" } ?: "") +
             (decision.cause?.let { " (cause $it)" } ?: "") + (decision.reason?.let { " (reason $it)" } ?: "")
 
         private fun simulatedRequest(request: JsonNode): SimulatedRequest {
@@ -898,6 +905,9 @@ object ChangeRunner : ScenarioRunner {
 
     /** A REQUIRED change listener that records everything. */
     private val CREDENTIAL_STEPS = setOf("revoke", "revokeTokens", "provide", "unaudited")
+
+    /** The steps that read what the control plane holds or answers, and the instance statuses it reads. */
+    private val READS = setOf("diff", "staged", "listed", "samples", "rateLimits", "answer", "status", "propagation")
 
     /** The page size of a `changes` step: enough for a scenario's changes. */
     private const val LISTING_LIMIT = 100

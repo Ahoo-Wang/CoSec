@@ -26,6 +26,9 @@
       }
     },
     {
+      "skipShadow": "c1"
+    },
+    {
       "publish": "c1"
     },
     {
@@ -46,6 +49,9 @@
           }
         ]
       }
+    },
+    {
+      "skipShadow": "c2"
     },
     {
       "publish": "c2"
@@ -113,8 +119,10 @@
   "expect": {
     "steps": [
       "CHECKED",
+      "READY",
       "PUBLISHED",
       "CHECKED",
+      "READY",
       "PUBLISHED",
       "status",
       "status",

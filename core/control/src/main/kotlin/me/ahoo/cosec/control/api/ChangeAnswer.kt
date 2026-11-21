@@ -62,8 +62,16 @@ object ChangeAnswer {
         change.skipShadow?.let { root.put("skipShadow", it) }
         change.publishedRevision?.let { root.put("publishedRevision", it) }
         approval(root, change)
+        shadowAndConfirmations(root, change)
+        return root
+    }
+
+    /** Its shadow window as a client reads it, without the instances that reported, and what its author confirmed. */
+    private fun shadowAndConfirmations(root: ObjectNode, change: ChangeRequest) {
         change.shadow?.let { shadow ->
-            val node = root.putObject("shadow").put("window", shadow.window).put("startedAt", shadow.startedAt.toString())
+            val node = root.putObject("shadow")
+                .put("window", shadow.window)
+                .put("startedAt", shadow.startedAt.toString())
             shadow.closed?.let { ShadowStateCodec.summary(node.putObject("closed"), it) }
         }
         if (change.confirmations.isNotEmpty()) {
@@ -74,7 +82,6 @@ object ChangeAnswer {
                 }
             }
         }
-        return root
     }
 
     /** The escalations, and the approval as far as it is shown: who approved, when, for which candidate and what. */

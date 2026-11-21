@@ -103,6 +103,12 @@ class ShadowWindows(
     suspend fun propagation(key: SnapshotKey, revision: Long): Propagation {
         val read = statuses.read()
         val holding = read.statuses.mapNotNull { it.documents[key] }
-        return Propagation(revision, holding.count { it.revision >= revision }, holding.size, read.statuses.size, read.asOf)
+        return Propagation(
+            revision,
+            holding.count { it.revision >= revision },
+            holding.size,
+            read.statuses.size,
+            read.asOf
+        )
     }
 }
