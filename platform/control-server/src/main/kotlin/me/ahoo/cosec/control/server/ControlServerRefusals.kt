@@ -25,8 +25,8 @@ import org.springframework.core.env.Environment
  * image into something it is not:
  *
  * - `cosec.control.enabled=false`: an application that is up and serves nothing. The gateway image is the read-only one.
- * - `cosec.jwt.enabled=true` or `cosec.api-key.enabled=true`: credential verification that no request of this host
- *   uses, since the host believes the identity it is sent. Two ways to authenticate on one host is how an adopter ends up
+ * - `cosec.jwt.enabled=true`, `cosec.api-key.enabled=true` or `cosec.authentication.login.enabled=true`: credential
+ *   verification, or a login, that no request of this host uses, since the host believes the identity it is sent. Two ways to authenticate on one host is how an adopter ends up
  *   thinking requests are verified when they are not. An application of its own is the host for a control plane that
  *   verifies.
  */
@@ -38,6 +38,7 @@ internal class ControlServerRefusals {
         const val CONTROL_KEY = "cosec.control.enabled"
         const val JWT_KEY = "cosec.jwt.enabled"
         const val API_KEY_KEY = "cosec.api-key.enabled"
+        const val LOGIN_KEY = "cosec.authentication.login.enabled"
 
         /** Static, so Spring runs it with the post-processors, before it instantiates any configuration or bean. */
         @JvmStatic
@@ -51,12 +52,12 @@ internal class ControlServerRefusals {
                 "cosec-control-server runs the control plane; $CONTROL_KEY=false would leave it with nothing to serve. " +
                     "Use the gateway image for a read-only instance (STA-10)."
             }
-            for (key in listOf(JWT_KEY, API_KEY_KEY)) {
+            for (key in listOf(JWT_KEY, API_KEY_KEY, LOGIN_KEY)) {
                 check(written(environment, key) != true) {
-                    "cosec-control-server verifies no credential: it believes the CoSec-Identity header it is sent, under " +
-                        "the statement that nothing but the gateway and the services you name can reach it. $key=true " +
-                        "would wire verification that no request uses; leave it off, or run an application of your own " +
-                        "for a control plane that verifies (STA-10)."
+                    "cosec-control-server verifies no credential and issues no token: it believes the CoSec-Identity " +
+                        "header it is sent, under the statement that nothing but the gateway and the services you name can " +
+                        "reach it. $key=true would wire verification or a login that nothing here uses; leave it off, or " +
+                        "run an application of your own for a control plane that verifies or signs in (STA-10)."
                 }
             }
         }

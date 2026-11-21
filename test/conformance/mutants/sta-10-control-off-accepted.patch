@@ -3,10 +3,10 @@
 # Tests: :control-server:test --tests me.ahoo.cosec.control.server.ControlServerRefusalsTest
 
 diff --git a/platform/control-server/src/main/kotlin/me/ahoo/cosec/control/server/ControlServerRefusals.kt b/platform/control-server/src/main/kotlin/me/ahoo/cosec/control/server/ControlServerRefusals.kt
-index 8d8b8a93b..c7da428bd 100644
+index 79974f681..559c4be31 100644
 --- a/platform/control-server/src/main/kotlin/me/ahoo/cosec/control/server/ControlServerRefusals.kt
 +++ b/platform/control-server/src/main/kotlin/me/ahoo/cosec/control/server/ControlServerRefusals.kt
-@@ -52,7 +52,7 @@ internal class ControlServerRefusals {
+@@ -48,7 +48,7 @@ internal class ControlServerRefusals {
  
          /** Fails with the message that says what to change; a value neither `true` nor `false` is the starter's to refuse. */
          fun check(environment: Environment) {

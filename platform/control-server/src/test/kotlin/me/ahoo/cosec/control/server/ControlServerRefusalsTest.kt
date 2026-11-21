@@ -40,7 +40,7 @@ class ControlServerRefusalsTest {
 
     @Test
     fun `credential verification is refused because the host believes the identity it is sent`() {
-        for (key in listOf("cosec.jwt.enabled", "cosec.api-key.enabled")) {
+        for (key in listOf("cosec.jwt.enabled", "cosec.api-key.enabled", "cosec.authentication.login.enabled")) {
             for (value in listOf("true", "TRUE", " true ")) {
                 assertThrownBy<IllegalStateException> {
                     ControlServerRefusals.check(MockEnvironment().withProperty(key, value))

@@ -300,6 +300,7 @@ object GuardAllowlist {
             "control-server:ControlServerTest#it starts under the statement, with the control plane wired and nothing that verifies a credential",
             "control-server:ControlServerTest#a call with no identity is refused, and a credential is not an identity",
             "control-server:ControlServerTest#the probes are on the management port, and the control store's format joins the readiness group",
+            "control-server:ControlServerTest#a control server writes no instance status, and takes no part in a shadow window",
             "control-server:ControlServerTest#credential verification is refused whichever way it is asked for",
             // STA-8: a host that serves the refresh route says how a refreshed token gets its roles.
             "spring-boot:RefreshMembershipChoiceTest#no bean and no statement fails startup, and the message says what is at stake and the two ways out",

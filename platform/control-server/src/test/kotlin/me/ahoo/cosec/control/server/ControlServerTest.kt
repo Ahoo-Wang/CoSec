@@ -122,9 +122,26 @@ class ControlServerTest {
         get(context, "local.server.port", "/actuator/prometheus").statusCode().assert().isNotEqualTo(200)
     }
 
+    /**
+     * Only the shadow reporter writes an instance's status (`InstanceStatus`), and it exists only with shadow on: a control
+     * server writes none, so a shadow window never waits for it and `propagation` never counts it.
+     */
+    @Test
+    fun `a control server writes no instance status, and takes no part in a shadow window`() {
+        val statement = "--cosec.pipeline.identity.only-trusted-callers-can-reach=true"
+        val server = start(statement)
+        server.containsBean("cosecShadowReporting").assert().isFalse()
+        server.containsBean("cosecShadowListener").assert().isFalse()
+        server.close()
+        // The same names are there when shadow is switched on, so the absence above is the switch's and not a rename's.
+        val shadowed = start(statement, "--cosec.authorization.shadow.enabled=true")
+        shadowed.containsBean("cosecShadowReporting").assert().isTrue()
+        shadowed.containsBean("cosecShadowListener").assert().isTrue()
+    }
+
     @Test
     fun `credential verification is refused whichever way it is asked for`() {
-        for (key in listOf("cosec.jwt.enabled", "cosec.api-key.enabled")) {
+        for (key in listOf("cosec.jwt.enabled", "cosec.api-key.enabled", "cosec.authentication.login.enabled")) {
             failure("--cosec.pipeline.identity.only-trusted-callers-can-reach=true", "--$key=true").assert()
                 .contains("verifies no credential").contains(key)
         }
