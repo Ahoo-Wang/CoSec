@@ -50,9 +50,12 @@ import me.ahoo.cosec.spring.boot.pipeline.GATEWAY_GLOBAL_FILTER
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import org.springframework.boot.autoconfigure.AutoConfigurations
+import org.springframework.boot.context.properties.source.ConfigurationPropertySources
 import org.springframework.boot.test.context.FilteredClassLoader
 import org.springframework.boot.test.context.runner.ApplicationContextRunner
 import org.springframework.context.ApplicationContext
+import org.springframework.core.env.StandardEnvironment
+import org.springframework.core.env.SystemEnvironmentPropertySource
 
 /**
  * UB-5: each entry of the summary is what a request will meet, resolved as the authenticator resolves it, never a list of
@@ -175,6 +178,58 @@ class StartupSummaryResolutionTest {
                 context.startupFailure.assert().isNull()
                 context.getBeanNamesForType(VerifiedTokenCache::class.java).assert().isEmpty()
                 line(context).assert().contains("token-cache=off,")
+            }
+    }
+
+    /**
+     * The one dashed switch of `CoSecSwitches` through an environment variable: Spring drops the dash, so the variable is
+     * `COSEC_AUTHENTICATION_TOKENCACHE_ENABLED`. The condition, the switch check and the property check each read it
+     * through the same environment, and agree; the spelling with the word apart is another key, and is refused.
+     * (`SpringApplication` attaches the configuration property sources to every environment it prepares: here the
+     * initializer does.)
+     */
+    private fun ApplicationContextRunner.withVariable(name: String, value: String) = withInitializer { context ->
+        context.environment.propertySources.addFirst(
+            SystemEnvironmentPropertySource(
+                StandardEnvironment.SYSTEM_ENVIRONMENT_PROPERTY_SOURCE_NAME,
+                mapOf(name to value)
+            )
+        )
+        ConfigurationPropertySources.attach(context.environment)
+    }
+
+    @Test
+    fun `the token cache is off by the variable of its dashed key`() {
+        withTokens.withBean(RevocationReader::class.java, { RevocationReader.NONE })
+            .withVariable("COSEC_AUTHENTICATION_TOKENCACHE_ENABLED", "false").run { context ->
+                context.startupFailure.assert().isNull()
+                context.getBeanNamesForType(VerifiedTokenCache::class.java).assert().isEmpty()
+                line(context).assert().contains("token-cache=off,")
+            }
+    }
+
+    @Test
+    fun `a value the switch cannot read fails startup naming its key when it comes from the variable`() {
+        withTokens.withBean(RevocationReader::class.java, { RevocationReader.NONE })
+            .withVariable("COSEC_AUTHENTICATION_TOKENCACHE_ENABLED", "1").run { context ->
+                generateSequence<Throwable>(
+                    context.startupFailure
+                ) { it.cause }.joinToString(" | ") { it.message.orEmpty() }
+                    .assert().contains("cosec.authentication.token-cache.enabled=[1]: write true or false")
+            }
+    }
+
+    @Test
+    fun `the variable with the words apart is another key and fails startup with the spelling to write`() {
+        withTokens.withBean(RevocationReader::class.java, { RevocationReader.NONE })
+            .withVariable("COSEC_AUTHENTICATION_TOKEN_CACHE_ENABLED", "false").run { context ->
+                generateSequence<Throwable>(
+                    context.startupFailure
+                ) { it.cause }.joinToString(" | ") { it.message.orEmpty() }
+                    .assert().contains(
+                        "cosec.authentication.token.cache.enabled (write cosec.authentication.token-cache.enabled, " +
+                            "or the variable COSEC_AUTHENTICATION_TOKENCACHE_ENABLED)"
+                    )
             }
     }
 

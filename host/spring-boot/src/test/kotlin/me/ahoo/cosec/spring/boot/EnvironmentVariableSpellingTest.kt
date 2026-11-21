@@ -49,7 +49,10 @@ class EnvironmentVariableSpellingTest {
     private fun environment(variable: String) = StandardEnvironment().apply {
         propertySources.replace(
             StandardEnvironment.SYSTEM_ENVIRONMENT_PROPERTY_SOURCE_NAME,
-            SystemEnvironmentPropertySource(StandardEnvironment.SYSTEM_ENVIRONMENT_PROPERTY_SOURCE_NAME, mapOf(variable to "x"))
+            SystemEnvironmentPropertySource(
+                StandardEnvironment.SYSTEM_ENVIRONMENT_PROPERTY_SOURCE_NAME,
+                mapOf(variable to "x")
+            )
         )
     }
 
@@ -128,7 +131,9 @@ class EnvironmentVariableSpellingTest {
         }
         val texts = scannedFiles().associateWith { it.readText() }
         val seen = texts.flatMap { (file, text) -> variables(file, text) }.toSet()
-        seen.assert().describedAs("a wrong spelling nothing shows any more is dropped from the list").containsAll(WRONG_ON_PURPOSE)
+        seen.assert().describedAs(
+            "a wrong spelling nothing shows any more is dropped from the list"
+        ).containsAll(WRONG_ON_PURPOSE)
     }
 
     private companion object {

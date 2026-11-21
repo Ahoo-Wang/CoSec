@@ -27,7 +27,12 @@ map、list 类型配置项之下的 key，算作已知。错误信息列出每�
 key 的比较方式与 Spring 的 binder 一致，所以 Spring 文档给出的各种写法对已知 key 都算已知：properties 文件里的 `local-max-age`、
 `localMaxAge` 或 `local_max_age`，以及环境变量 `COSEC_AUTHORIZATION_SNAPSHOT_LOCALMAXAGE`（大写、点换成下划线、去掉连字符）。
 不是已知 key 的这种写法的变量仍算未知：拼错的 `COSEC_PIPELINE_TIMEUOT`，以及遗留写法
-`COSEC_AUTHORIZATION_SNAPSHOT_LOCAL_MAX_AGE` 都一样，错误信息会把它列为 `cosec.authorization.snapshot.local.max.age`。
+`COSEC_AUTHORIZATION_SNAPSHOT_LOCAL_MAX_AGE` 都一样，错误信息会把它列为 `cosec.authorization.snapshot.local.max.age`；
+并且当 CoSec 读取的某个 key 与它相近时，还会给出应该写的拼写：只有分隔符不同时给出 key 和变量
+（`..._LOCAL_MAX_AGE` 应写成 `COSEC_AUTHORIZATION_SNAPSHOT_LOCALMAXAGE`），或者给出笔误只差两次编辑的那个唯一的 key
+（`COSEC_PIPELINE_TIMEUOT` 应写成 `COSEC_PIPELINE_TIMEOUT`）。key 的各个单词在变量里是连在一起的，不管 key 里有没有连字符：
+`eviction-check` 是 `COSEC_AUTHORIZATION_SNAPSHOT_EVICTIONCHECK`，`memberships-on-refresh` 是
+`COSEC_JWT_SESSION_MEMBERSHIPSONREFRESH`。本文档、`k8s/` 和镜像文件里出现的每个变量都受这项检查约束。
 
 有一类变量永远不算未知 key：Kubernetes 为名为 `cosec` 或 `cosec-*` 的 Service 注入的环境变量（Service 链接），Spring 会把它们读作
 `cosec.*` key（`COSEC_GATEWAY_SERVICE_HOST` 读作 `cosec.gateway.service.host`）。检查只跳过它们的确切形状，按变量名匹配，

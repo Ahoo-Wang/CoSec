@@ -69,18 +69,26 @@ JSON_RESOURCE = re.compile(r"^[^/]+/[^/]+/src/[^/]+/resources/.*\.json$")
 # project that names one of these directories and is not listed here fails the build.
 READS = {
     "wiki/": ("document", "runtime", "spring-boot"),
-    "skills/": ("document",),
+    "skills/": ("document", "spring-boot"),
     "k8s/": ("spring-boot",),
     "schema/": ("document",),
     "contract/": ("runtime", "jwt"),
+    # EnvironmentVariableSpellingTest: every COSEC_* variable the images' files and the system test's compose files
+    # show. A READS entry applies on top of the project a path is in: `platform/control-server/` is also a project.
+    "platform/": ("spring-boot",),
+    "test/system-": ("spring-boot",),
 }
+# The READS entries that are the directories of projects too: a path under one that is no project's stays unknown.
+READS_OF_PROJECTS = ("platform/", "test/system-")
 
 # Outside every project, read by the tests of no project outside the group `test` (ReadsTest holds the claim): the
 # TypeScript jobs and the group `test` run whatever changed, and cover these.
 NO_GROUP = ("docs/", "typescript/")
 
-# Root files that are documentation: RepositoryDocuments (document's tests) reads every one.
+# Root files that are documentation: RepositoryDocuments (document's tests) reads every one, and the starter's
+# EnvironmentVariableSpellingTest the variables of the `.md` files and `llms.txt`.
 ROOT_DOCUMENTS = re.compile(r"^[^/]+\.(md|txt)$|^LICENSE$")
+ROOT_DOCUMENT_READERS = ("document", "spring-boot")
 
 # The group `test` always runs (it holds conformance and architecture, whose rules read the whole tree).
 ALWAYS = ("conformance", "architecture")
@@ -211,21 +219,22 @@ def affected(paths, plan_result):
             return everything(f"`{path}` changes how the build or CI runs, or is read by every project")
         parts = path.split("/")
         directory = "/".join(parts[:2])
+        read = [prefix for prefix in READS if path.startswith(prefix)]
+        for prefix in read:
+            for name in READS[prefix]:
+                hit.add(name)
+                reasons.setdefault(name, f"its tests read `{prefix}` (`{path}` changed)")
         if directory in directories:
             reach(directories[directory], f"`{path}` changed")
             if JSON_RESOURCE.match(path) and not path.startswith("test/conformance/"):
                 hit.add("document")
                 reasons.setdefault("document", f"its tests read every project's JSON resources (`{path}` changed)")
-        elif any(path.startswith(prefix) for prefix in READS):
-            prefix = next(prefix for prefix in READS if path.startswith(prefix))
-            for name in READS[prefix]:
-                hit.add(name)
-                reasons.setdefault(name, f"its tests read `{prefix}` (`{path}` changed)")
-        elif path.startswith(NO_GROUP):
+        elif path.startswith(NO_GROUP) or any(prefix not in READS_OF_PROJECTS for prefix in read):
             continue
         elif ROOT_DOCUMENTS.match(path):
-            hit.add("document")
-            reasons.setdefault("document", f"its tests read the root documents (`{path}` changed)")
+            for name in ROOT_DOCUMENT_READERS:
+                hit.add(name)
+                reasons.setdefault(name, f"its tests read the root documents (`{path}` changed)")
         else:
             return everything(f"`{path}` is in no project and is not a path the plan knows")
     return hit, reasons
