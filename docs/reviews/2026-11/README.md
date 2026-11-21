@@ -54,7 +54,7 @@ Redis in all of them; the reports say which figures are measured and which are c
 
 | File | What it is | Status |
 |---|---|---|
-| `saas-referrers-design.md` | Back-references and the document list as members, with the five conditions of its review (section 9) and the staged list's member structure (section 8) | Being implemented in #1729 (`CTL-42` to `CTL-44`, `MIG-4`) |
+| `saas-referrers-design.md` | Back-references and the document list as members, with the five conditions of its review (section 9) and the staged list's member structure (section 8) | Built: #1729 (`CTL-42` to `CTL-44`, `MIG-4`), and the repair it relies on in #1745 |
 | `saas-shadow-staged-design.md` | The staged list, the acknowledgement, and sampling only what can give a sample (Design D2) | Approved with four conditions; the list (#1742, `CTL-46`) and its reader (#1785, `CTL-47`) are merged, `OBS-8` is the third PR |
 | `saas-open-changes-design.md` | G2: the open changes as sets of record, store failures as 503, a tolerant shadow pass, a format number on every stored record with one reader's rule | Approved on 2026-11-20 with one correction (the sets are not kept while the old list exists); built as #1764, #1766, #1769, #1779 and #1783 (`CTL-52` to `CTL-56`, `IDN-31`); the control API's answer shapes (R2C-11 to R2C-13) are its last piece |
 | `ci-affected-groups-proposal.md` | What bounds the merge queue (CodeQL at 8.9 min against CI's 4.7, one merge per run under strict branch protection) and how to make the run after a sync cost what the change can affect | Approved on 2026-11-21: CodeQL skips when nothing it sees changed (#1787), the dependency cache (#1784), then the path rule in `plan.py` |
