@@ -47,6 +47,16 @@
 > - **网关**：凭据只剥离一次，路由事实每条路由算一次，最后一跳不再复制；凭据剥离有自己的类。
 > - **视图的键只造一次、按位置读**，读的时候核对条目的种类（按位置读到另一种文档的条目是 `TNT-1` 的变异体守着的）；失败的 REQUIRED 监听器在请求线程之外记日志，每个间隔一次。
 
+> **2026-11-21 修订（#1790，`OBS-8`）**：§9.3、§9.5.4：只读自己采样到的事件的 BEST_EFFORT 监听器（影子监听器，内部标记 `SampledOnlyListener`）只被递交回放句柄点了它名字的事件；
+> 当每个 BEST_EFFORT 监听器都是这一种、并且没有一个采样了这个请求时，pipeline 根本不造事件。REQUIRED 监听器不受影响：它们在自己的阶段拿到事件，先于这一步；其余 BEST_EFFORT 监听器照旧拿到每个事件。
+> 实测（`jmh-ab.yml`，`PipelineBenchmark`）：没有窗口开着时，影子监听器对一个请求的开销相对另一个 BEST_EFFORT 监听器已测不出来（此前在 `main` 上是 57 ns 与 139 B）。新增 `cosec.shadow.staged.age`：距存储上一次答复暂存清单的读有多久。
+
+> **2026-11-21 修订（控制面宿主的第一步，#1789，`STA-6`、`STA-7` 修订，`STA-9`；设计见 `docs/reviews/2026-11/control-server-design.md`）**：§7.3 的信任从“`gateway` 模式”推广到“网关（gate）是 `IdentityGate` 的宿主”。
+> `cosec.pipeline.caller=forwarded-identity`（默认 `credential`）让 `enforce` 宿主的 Web 适配器以 `CoSec-Identity` 头声明的主体为调用方，快照、控制面等 `enforce` 装配的一切照常装配；这是控制面宿主与内嵌控制面的 IAM 服务的形态。
+> 这样的宿主的 Web 适配器不对请求做判定（与 `gateway` 模式相同）：经网关来的由网关判定，没经网关来的只由控制面对每个操作、按所声明的主体做的授权判定。守卫跟着 gate 走，不跟着属性走：
+> 三种情形（`mode=gateway`、`caller=forwarded-identity`、应用自己声明的 `IdentityGate`）都必须写明谁能到达它（`only-gateway-can-reach` 或新增的 `only-trusted-callers-can-reach`），都拒绝隐藏方法过滤器。
+> 这种信任能拦住失误、保住审计，拦不住一个已被攻破、又能到达宿主的工作负载：网络才是边界。Spring Cloud Gateway 宿主拒绝 `caller=forwarded-identity`。
+
 ## 0. 结论先行
 
 第 4 阶段结束时，引擎已经是同步纯函数，策略数据都在内存快照里。剩下的问题在引擎**外面**：`SecurityPipeline` 是一条 Reactor 链，
