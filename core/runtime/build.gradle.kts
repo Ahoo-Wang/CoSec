@@ -55,3 +55,8 @@ configurations.matching { it.name == "testFixturesCompileClasspath" || it.name =
 detekt {
     source.from("src/testFixtures/kotlin")
 }
+// DocumentWeightTest walks a live snapshot source with JOL, whose objects include classes JOL cannot read field offsets
+// of without this (it says so); the measuring tests read nothing else from it.
+tasks.withType<Test>().configureEach {
+    systemProperty("jol.magicFieldOffset", "true")
+}
