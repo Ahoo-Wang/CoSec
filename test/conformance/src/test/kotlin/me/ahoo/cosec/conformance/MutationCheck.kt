@@ -100,13 +100,15 @@ class Mutant(
 }
 
 /**
- * What happened to one mutant. Only [KILLED] passes. [BUILD_FAILED] is a build that failed without a compiler error or a
- * failing test (a dependency that could not be resolved, say), twice: it says nothing about the mutant.
+ * What happened to one mutant. Only [KILLED] passes: its tests failed with the patch and passed without it, in the same
+ * tree. [FAILS_WITHOUT_PATCH] is a mutant whose tests failed with the patch and again once it was reverted (a flaky test,
+ * or something the patch left behind): no kill. [BUILD_FAILED] is a build that failed without a compiler error or a
+ * failing test (a dependency that could not be resolved, say), twice, or that timed out: it says nothing about the mutant.
  */
-enum class MutantResult { KILLED, SURVIVED, DOES_NOT_APPLY, DOES_NOT_COMPILE, BUILD_FAILED }
+enum class MutantResult { KILLED, SURVIVED, DOES_NOT_APPLY, DOES_NOT_COMPILE, BUILD_FAILED, FAILS_WITHOUT_PATCH }
 
-/** One Gradle build of a mutant's worktree: its exit code and what it printed. */
-class Build(val exit: Int, val log: String) {
+/** One Gradle build of a mutant's worktree: its exit code, what it printed, and whether it was stopped for taking too long. */
+class Build(val exit: Int, val log: String, val timedOut: Boolean = false) {
     /** Whether the build failed because Kotlin or Java code did not compile, rather than for another reason. */
     val hasCompilerErrors: Boolean get() = log.lineSequence().any { it.startsWith("e: ") || ": error: " in it }
 }
@@ -119,18 +121,39 @@ class Build(val exit: Int, val log: String) {
  * failed test is [MutantResult.BUILD_FAILED]: run it again, do not write a test for it.
  */
 fun verdict(compile: Build, tests: Build?, failedTests: Int): MutantResult = when {
+    compile.timedOut -> MutantResult.BUILD_FAILED
     compile.exit != 0 -> if (compile.hasCompilerErrors) MutantResult.DOES_NOT_COMPILE else MutantResult.BUILD_FAILED
+    // Results a build wrote before it was stopped are no verdict.
+    tests?.timedOut == true -> MutantResult.BUILD_FAILED
     failedTests > 0 -> MutantResult.KILLED
     requireNotNull(tests).exit == 0 -> MutantResult.SURVIVED
     else -> MutantResult.BUILD_FAILED
 }
 
 /**
+ * The verdict on a [MutantResult.KILLED] mutant once its tests ran again on the reverted tree (the control): they must
+ * pass there, or the failures were not the patch's. [failedTests] is read from the control's own result files.
+ */
+fun controlled(control: Build, failedTests: Int): MutantResult = when {
+    control.timedOut -> MutantResult.BUILD_FAILED
+    failedTests > 0 -> MutantResult.FAILS_WITHOUT_PATCH
+    control.exit == 0 -> MutantResult.KILLED
+    else -> MutantResult.BUILD_FAILED
+}
+
+/** The verdicts after which a mutant's tree is reverted and reused; after any other, it is replaced by a fresh one. */
+private val REUSABLE = setOf(MutantResult.KILLED, MutantResult.SURVIVED, MutantResult.DOES_NOT_APPLY)
+
+/**
  * `./gradlew :conformance:mutationCheck` (RFC 0008 §3.7): applies each mutant of this module's `mutants` to the commit
- * checked out (`HEAD`, in one temporary `git worktree` the mutants share one after another, so the working copy is
- * untouched; [MutantTree] keeps each mutant from deciding the next), checks it compiles, and runs its tests: at least
- * one must fail. A mutant that no longer applies or compiles fails the check too: the code moved,
- * so the mutant must follow it. `-Pmutants=<name,...>` runs only those. Not part of `check`: each mutant rebuilds.
+ * checked out (`HEAD`, in a temporary `git worktree`, so the working copy is untouched), checks it compiles, and runs
+ * its tests: at least one must fail, and the same tests must pass once the patch is reverted (the control). A mutant
+ * that no longer applies or compiles fails the check too: the code moved, so the mutant must follow it.
+ * `-Pmutants=<name,...>` runs only those. Not part of `check`: each mutant rebuilds.
+ *
+ * The mutants share one worktree and one Gradle daemon, one after another ([MutantTree] says how none decides the
+ * next); after a mutant that did not compile, whose build failed or timed out, or whose control failed, the worktree is
+ * replaced by a fresh one. A run leaves that daemon alive for two minutes after its last build, locally too.
  */
 object MutationCheck {
     private const val BUILD_TIMEOUT_MINUTES = 30L
@@ -139,6 +162,16 @@ object MutationCheck {
     fun run(root: Path, directory: Path, only: Set<String>): Map<Mutant, MutantResult> {
         val mutants = Mutant.all(directory).filter { only.isEmpty() || it.name in only }
         require(mutants.isNotEmpty()) { "No mutant to run${if (only.isEmpty()) "" else " among $only"}." }
+        return inOrder(mutants, { addTree(root) }, { removeTree(root, it) }, ::check)
+    }
+
+    /** Controls run, and controls that passed, in this process: `mutationCheck` prints them, the workflow's summary shows them. */
+    var controlsRun = 0
+        private set
+    var controlsPassed = 0
+        private set
+
+    private fun addTree(root: Path): MutantTree {
         val worktree = Files.createTempDirectory("cosec-mutants-")
         Files.delete(worktree)
         command(
@@ -150,30 +183,44 @@ object MutationCheck {
             worktree.toString(),
             "HEAD"
         ).requireSuccess("git worktree add")
-        try {
-            val tree = MutantTree(worktree, git)
-            return inOrder(mutants, tree) { mutant -> check(tree, mutant) }
-        } finally {
-            command(root, git, "worktree", "remove", "--force", worktree.toString())
-        }
+        return MutantTree(worktree, git)
+    }
+
+    private fun removeTree(root: Path, tree: MutantTree) {
+        command(root, git, "worktree", "remove", "--force", tree.directory.toString())
     }
 
     /**
-     * Checks [mutants] one after another in [tree]: each starts from a tree at `HEAD` with no test results
-     * ([MutantTree.prepare]) and is reverted after ([MutantTree.revert], which also removes the build outputs after a
-     * mutant that did not compile or whose build failed). A revert that fails throws, and the run stops there.
+     * Checks [mutants] one after another: each starts from a tree at `HEAD` with no test results ([MutantTree.prepare]).
+     * After a verdict in [REUSABLE] the tree is reverted ([MutantTree.revert]: one that fails throws, and the run stops
+     * there) and the next mutant uses it; after any other ([MutantResult.DOES_NOT_COMPILE], [MutantResult.BUILD_FAILED],
+     * a timeout among them, [MutantResult.FAILS_WITHOUT_PATCH]) it is removed and the next mutant gets a fresh one, so
+     * nothing a failed or abandoned build left or still writes can reach it.
      */
     internal fun inOrder(
         mutants: List<Mutant>,
-        tree: MutantTree,
-        check: (Mutant) -> MutantResult
-    ): Map<Mutant, MutantResult> = mutants.associateWith { mutant ->
-        println("== ${mutant.name} (${mutant.rules.joinToString()}): ${mutant.description}")
-        tree.prepare()
-        val result = check(mutant)
-        tree.revert(clean = result == MutantResult.DOES_NOT_COMPILE || result == MutantResult.BUILD_FAILED)
-        println("   -> $result")
-        result
+        newTree: () -> MutantTree,
+        removeTree: (MutantTree) -> Unit,
+        check: (MutantTree, Mutant) -> MutantResult
+    ): Map<Mutant, MutantResult> {
+        var tree = newTree()
+        try {
+            return mutants.associateWith { mutant ->
+                println("== ${mutant.name} (${mutant.rules.joinToString()}): ${mutant.description}")
+                tree.prepare()
+                val result = check(tree, mutant)
+                if (result in REUSABLE) {
+                    tree.revert()
+                } else {
+                    removeTree(tree)
+                    tree = newTree()
+                }
+                println("   -> $result")
+                result
+            }
+        } finally {
+            removeTree(tree)
+        }
     }
 
     private fun check(tree: MutantTree, mutant: Mutant): MutantResult {
@@ -184,7 +231,19 @@ object MutationCheck {
         val tests = retried(unless = { failedTests(worktree) > 0 }) {
             gradle(worktree, listOf("--continue") + rerun(mutant.tests))
         }
-        return verdict(compile, tests, failedTests(worktree))
+        val result = verdict(compile, tests, failedTests(worktree))
+        if (result != MutantResult.KILLED) return result
+        // The control: the same tests on the same tree without the patch must pass.
+        tree.revert()
+        tree.prepare()
+        controlsRun++
+        val control = retried(unless = { failedTests(worktree) > 0 }) {
+            gradle(worktree, listOf("--continue") + rerun(mutant.tests))
+        }
+        return controlled(control, failedTests(worktree)).also {
+            if (it == MutantResult.KILLED) controlsPassed++
+            println("   control: ${if (it == MutantResult.KILLED) "passed" else "FAILED ($it)"}")
+        }
     }
 
     /** [tests] with `--rerun` after each task path: a test task is never up to date or restored, it runs. */
@@ -206,32 +265,31 @@ object MutationCheck {
      * a dependency that cannot be resolved for a moment is not a verdict. A compiler error, and a build that fails
      * twice, are.
      */
-    private fun retried(unless: () -> Boolean = { false }, build: () -> Build): Build {
+    internal fun retried(unless: () -> Boolean = { false }, build: () -> Build): Build {
         val first = build()
-        return if (first.exit == 0 || first.hasCompilerErrors || unless()) first else build()
+        // A build that timed out may still run in the daemon: no second build beside it.
+        val settled = first.exit == 0 || first.timedOut || first.hasCompilerErrors
+        return if (settled || unless()) first else build()
     }
 
     /**
      * One build in the mutants' worktree, through a daemon the whole run shares (its cold start is most of what a
      * mutant cost when each build had its own JVM), which stops itself two minutes after the last build. File-system
-     * watching is off, so every build reads the files as they are after a patch or a revert.
+     * watching is off, so every build reads the files as they are after a patch or a revert. The log is written outside
+     * the tree, where no test that reads the repository can see it.
      */
     private fun gradle(directory: Path, tasks: List<String>): Build {
-        val log = Files.createTempFile(directory, "mutation-gradle-", ".log")
+        val log = Files.createTempFile("mutation-gradle-", ".log")
         val process = ProcessBuilder(
             listOf(Executables.gradleWrapper(directory), "-D$DAEMON_IDLE_TIMEOUT", "--no-watch-fs", "--build-cache", "-q") +
                 tasks
         ).directory(directory.toFile()).redirectErrorStream(true).redirectOutput(log.toFile()).start()
-        val exit = if (process.waitFor(BUILD_TIMEOUT_MINUTES, TimeUnit.MINUTES)) {
-            process.exitValue()
-        } else {
-            process.destroyForcibly()
-            -1
-        }
+        val finished = process.waitFor(BUILD_TIMEOUT_MINUTES, TimeUnit.MINUTES)
+        if (!finished) process.destroyForcibly()
         val output = log.readText()
         print(output)
         Files.delete(log)
-        return Build(exit, output)
+        return if (finished) Build(process.exitValue(), output) else Build(-1, output, timedOut = true)
     }
 
     private fun command(directory: Path, vararg command: String): Int = command(directory, command.toList())
@@ -248,7 +306,7 @@ object MutationCheck {
     private fun Int.requireSuccess(what: String) = check(this == 0) { "$what failed with exit code $this" }
 }
 
-private const val RESULT_WIDTH = 16
+private const val RESULT_WIDTH = 20
 
 /**
  * `mutationCheck`: the arguments are the repository root, the mutants' directory (the build passes this module's, so
@@ -264,6 +322,7 @@ fun main(args: Array<String>) {
     for ((mutant, result) in results) {
         println("${result.name.padEnd(RESULT_WIDTH)} ${mutant.name} (${mutant.rules.joinToString()})")
     }
+    println("Controls: ${MutationCheck.controlsRun} run, ${MutationCheck.controlsPassed} passed.")
     val failed = results.filterValues { it != MutantResult.KILLED }
     if (failed.isNotEmpty()) {
         println("${failed.size} of ${results.size} mutant(s) not killed.")

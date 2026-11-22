@@ -26,10 +26,12 @@ import kotlin.io.path.name
  *
  * - [prepare] refuses a tree whose tracked or untracked files differ from `HEAD`, and deletes every JUnit result
  *   directory, so a verdict is read only from results the mutant's own build wrote;
- * - [revert] puts the tracked files back to `HEAD` and removes the files the patch added. After a mutant that did not
- *   compile, or whose build failed, it also removes every ignored file (the build outputs, the incremental compiler's
- *   state), so the next mutant builds from a clean tree. When the tree is still not `HEAD` afterwards, it throws: the
- *   run stops there, and the mutants after it are reported as not checked instead of being checked on a wrong tree.
+ * - [revert] puts the tracked files back to `HEAD` and removes the untracked files the patch added; the ignored ones
+ *   (the build outputs) stay, so the next mutant rebuilds only what changed. When the tree is still not `HEAD`
+ *   afterwards, it throws: the run stops there, and the mutants after it are reported as not checked instead of being
+ *   checked on a wrong tree.
+ *
+ * A tree is reused only after a clean verdict: [MutationCheck.inOrder] replaces it after anything else.
  */
 class MutantTree(val directory: Path, private val git: String) {
     /** Applies [patch]; false when it does not apply (`git apply` changes nothing then). */
@@ -44,9 +46,9 @@ class MutantTree(val directory: Path, private val git: String) {
         }.forEach { it.toFile().deleteRecursively() }
     }
 
-    fun revert(clean: Boolean) {
+    fun revert() {
         run("reset", "--hard", "--quiet", "HEAD")
-        run("clean", if (clean) "-fdxq" else "-fdq")
+        run("clean", "-fdq")
         val changed = changes()
         check(changed.isEmpty()) { "The patch could not be reverted; stopping before the next mutant:\n$changed" }
     }

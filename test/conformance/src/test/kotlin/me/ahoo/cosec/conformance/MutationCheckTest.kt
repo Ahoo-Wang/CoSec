@@ -158,9 +158,9 @@ class MutationCheckTest {
         MutationCheck.failedTests(stray).assert().isEqualTo(0)
     }
 
-    /** A repository with one committed source file, `src/A.kt`, and `build/` ignored, as the mutants' worktree. */
+    /** A repository with one committed source file, `src/A.kt`, and `build/` ignored, as a mutants' worktree. */
     private fun repository(): MutantTree {
-        val directory = Files.createDirectories(temp.resolve("repository"))
+        val directory = Files.createTempDirectory(temp, "tree")
         fun git(vararg arguments: String) {
             val command = listOf(GIT) + arguments
             val process = ProcessBuilder(command).directory(directory.toFile()).redirectErrorStream(true).start()
@@ -175,7 +175,14 @@ class MutationCheckTest {
         return MutantTree(directory, GIT)
     }
 
-    private fun patch(name: String, from: String, to: String): Mutant {
+    /** The trees a run used, in order, and the ones it removed. */
+    private val made = mutableListOf<MutantTree>()
+    private val removed = mutableListOf<MutantTree>()
+
+    private fun run(mutants: List<Mutant>, check: (MutantTree, Mutant) -> MutantResult) =
+        MutationCheck.inOrder(mutants, { repository().also { made += it } }, { removed += it }, check)
+
+    private fun patch(name: String, from: String = "val a = 1", to: String = "val a = 2"): Mutant {
         val file = Files.writeString(
             temp.resolve("$name.patch"),
             "# Rule: X-1\n# Mutant: m\n# Tests: :a:test\n\n" +
@@ -186,84 +193,103 @@ class MutationCheckTest {
 
     private val failing = """<testsuite tests="1" failures="1"><testcase name="a"><failure message="x"/></testcase></testsuite>"""
 
-    /** The results of one mutant, as its test build would write them. */
-    private fun writeResults(tree: MutantTree, xml: String) {
-        val directory = Files.createDirectories(tree.directory.resolve("core/x/build/test-results/test"))
-        Files.writeString(directory.resolve("TEST-a.xml"), xml)
+    /** The results of one build of a mutant's tests, as Gradle writes them. */
+    private fun writeResults(directory: Path, xml: String) {
+        val results = Files.createDirectories(directory.resolve("core/x/build/test-results/test"))
+        Files.writeString(results.resolve("TEST-a.xml"), xml)
     }
 
     @Test
     fun `a mutant after a killed one is not reported killed by the earlier mutant's result files`() {
-        val tree = repository()
-        val first = patch("first", "val a = 1", "val a = 2")
-        val second = patch("second", "val a = 1", "val a = 3")
-        val results = MutationCheck.inOrder(listOf(first, second), tree) { mutant ->
+        val first = patch("first")
+        val second = patch("second", to = "val a = 3")
+        val results = run(listOf(first, second)) { tree, mutant ->
             tree.apply(mutant.patch).assert().isTrue()
-            if (mutant == first) writeResults(tree, failing)
+            if (mutant == first) writeResults(tree.directory, failing)
             verdict(Build(0, ""), Build(0, ""), MutationCheck.failedTests(tree.directory))
         }
         results[first].assert().isEqualTo(MutantResult.KILLED)
         results[second].assert().isEqualTo(MutantResult.SURVIVED)
+        made.assert().hasSize(1)
     }
 
     @Test
-    fun `a mutant after one that did not compile is checked on a clean tree`() {
-        val tree = repository()
-        val broken = patch("broken", "val a = 1", "val a = ")
-        val next = patch("next", "val a = 1", "val a = 2")
-        val seen = mutableListOf<String>()
-        MutationCheck.inOrder(listOf(broken, next), tree) { mutant ->
-            seen += Files.readString(tree.directory.resolve("src/A.kt")).trim()
-            seen += Files.exists(tree.directory.resolve("build/stale.class")).toString()
-            tree.apply(mutant.patch).assert().isTrue()
-            if (mutant == broken) {
-                // What a failed compilation leaves behind: an untracked source and a stale build output.
-                Files.writeString(tree.directory.resolve("src/Generated.kt"), "x")
-                Files.writeString(Files.createDirectories(tree.directory.resolve("build")).resolve("stale.class"), "x")
-                MutantResult.DOES_NOT_COMPILE
+    fun `build outputs stay after a clean verdict, and test results never do`() {
+        val mutant = patch("m")
+        run(listOf(mutant, patch("next", to = "val a = 3"))) { tree, checked ->
+            if (checked == mutant) {
+                tree.apply(checked.patch)
+                Files.writeString(Files.createDirectories(tree.directory.resolve("build")).resolve("kept.class"), "x")
+                writeResults(tree.directory, failing)
+                MutantResult.KILLED
             } else {
+                Files.exists(tree.directory.resolve("build/kept.class")).assert().isTrue()
+                MutationCheck.failedTests(tree.directory).assert().isEqualTo(0)
                 MutantResult.SURVIVED
             }
         }
-        seen.assert().containsExactly("val a = 1", "false", "val a = 1", "false")
-        Files.exists(tree.directory.resolve("src/Generated.kt")).assert().isFalse()
     }
 
+    /**
+     * After a mutant that did not compile, whose build failed or timed out, or whose control failed, the next mutant runs
+     * in a fresh tree at another path: what the earlier build left, or an abandoned build still writes, cannot reach it.
+     */
     @Test
-    fun `build outputs stay after a mutant that compiled, and test results never do`() {
-        val tree = repository()
-        val mutant = patch("m", "val a = 1", "val a = 2")
-        MutationCheck.inOrder(listOf(mutant), tree) {
-            tree.apply(it.patch)
-            Files.writeString(Files.createDirectories(tree.directory.resolve("build")).resolve("kept.class"), "x")
-            writeResults(tree, failing)
-            MutantResult.KILLED
+    fun `after a verdict that is not clean the next mutant gets a fresh tree`() {
+        for (unclean in listOf(
+            MutantResult.DOES_NOT_COMPILE,
+            MutantResult.BUILD_FAILED,
+            MutantResult.FAILS_WITHOUT_PATCH
+        )) {
+            made.clear()
+            removed.clear()
+            val broken = patch("broken-$unclean", to = "val a = ")
+            val next = patch("next-$unclean")
+            lateinit var old: Path
+            val results = run(listOf(broken, next)) { tree, mutant ->
+                if (mutant == broken) {
+                    old = tree.directory
+                    tree.apply(mutant.patch)
+                    Files.writeString(
+                        Files.createDirectories(tree.directory.resolve("build")).resolve("stale.class"),
+                        "x"
+                    )
+                    unclean
+                } else {
+                    // A build abandoned in the old tree writes a failure there after the switch.
+                    writeResults(old, failing)
+                    tree.directory.assert().isNotEqualTo(old)
+                    Files.readString(tree.directory.resolve("src/A.kt")).trim().assert().isEqualTo("val a = 1")
+                    Files.exists(tree.directory.resolve("build/stale.class")).assert().isFalse()
+                    verdict(Build(0, ""), Build(0, ""), MutationCheck.failedTests(tree.directory))
+                }
+            }
+            results[next].assert().describedAs("after $unclean").isEqualTo(MutantResult.SURVIVED)
+            made.assert().describedAs("after $unclean").hasSize(2)
+            removed.first().directory.assert().isEqualTo(old)
         }
-        Files.exists(tree.directory.resolve("build/kept.class")).assert().isTrue()
-        tree.prepare()
-        MutationCheck.failedTests(tree.directory).assert().isEqualTo(0)
     }
 
     @Test
     fun `a patch that fails to revert stops the run before the next mutant`() {
-        val tree = repository()
-        val first = patch("first", "val a = 1", "val a = 2")
-        val second = patch("second", "val a = 1", "val a = 3")
+        val first = patch("first")
+        val second = patch("second", to = "val a = 3")
         val checked = mutableListOf<String>()
-        val source = tree.directory.resolve("src")
+        var source: Path? = null
         try {
             assertThrows<IllegalStateException> {
-                MutationCheck.inOrder(listOf(first, second), tree) { mutant ->
+                run(listOf(first, second)) { tree, mutant ->
                     checked += mutant.name
                     tree.apply(mutant.patch)
                     // A file git can no longer write back: the revert leaves the tree changed.
-                    Files.writeString(source.resolve("B.kt"), "x")
-                    source.toFile().setWritable(false)
+                    source = tree.directory.resolve("src")
+                    Files.writeString(source!!.resolve("B.kt"), "x")
+                    source!!.toFile().setWritable(false)
                     MutantResult.KILLED
                 }
             }.message.assert().contains("could not be reverted")
         } finally {
-            source.toFile().setWritable(true)
+            source?.toFile()?.setWritable(true)
         }
         checked.assert().containsExactly("first")
     }
@@ -273,6 +299,58 @@ class MutationCheckTest {
         val tree = repository()
         Files.writeString(tree.directory.resolve("src/A.kt"), "val a = 9\n")
         assertThrows<IllegalStateException> { tree.prepare() }.message.assert().contains("not at HEAD")
+    }
+
+    /** A timed-out build may still be running in the daemon: what it wrote is no verdict, and it is not built again beside. */
+    @Test
+    fun `a build that times out is a failed build, never retried, never a kill`() {
+        val ok = Build(0, "")
+        val stopped = Build(-1, "", timedOut = true)
+        verdict(stopped, null, 0).assert().isEqualTo(MutantResult.BUILD_FAILED)
+        verdict(ok, stopped, 3).assert().isEqualTo(MutantResult.BUILD_FAILED)
+        controlled(stopped, 0).assert().isEqualTo(MutantResult.BUILD_FAILED)
+        var builds = 0
+        MutationCheck.retried {
+            builds++
+            stopped
+        }.timedOut.assert().isTrue()
+        builds.assert().isEqualTo(1)
+        builds = 0
+        MutationCheck.retried {
+            builds++
+            Build(1, "Received status code 429")
+        }
+        builds.assert().isEqualTo(2)
+    }
+
+    /** A kill is proved by its control: the same tests on the reverted tree pass. */
+    @Test
+    fun `a control that fails is not a kill`() {
+        controlled(Build(0, ""), 0).assert().isEqualTo(MutantResult.KILLED)
+        controlled(Build(1, "1 test failed"), 1).assert().isEqualTo(MutantResult.FAILS_WITHOUT_PATCH)
+        controlled(Build(1, "Received status code 429"), 0).assert().isEqualTo(MutantResult.BUILD_FAILED)
+    }
+
+    @Test
+    fun `the control's result files are not read as the next mutant's`() {
+        val first = patch("first")
+        val second = patch("second", to = "val a = 3")
+        val results = run(listOf(first, second)) { tree, mutant ->
+            tree.apply(mutant.patch)
+            if (mutant == first) {
+                writeResults(tree.directory, failing)
+                tree.revert()
+                tree.prepare()
+                // The control's results, passing, stay in the tree when the mutant is done.
+                writeResults(tree.directory, """<testsuite tests="1" failures="0"><testcase name="a"/></testsuite>""")
+                controlled(Build(0, ""), MutationCheck.failedTests(tree.directory))
+            } else {
+                verdict(Build(0, ""), Build(0, ""), MutationCheck.failedTests(tree.directory))
+            }
+        }
+        results[first].assert().isEqualTo(MutantResult.KILLED)
+        results[second].assert().isEqualTo(MutantResult.SURVIVED)
+        Files.list(made.single().directory.resolve("core/x/build")).use { it.toList() }.assert().isEmpty()
     }
 
     @Test
