@@ -143,9 +143,13 @@ class RoleClassTest {
     }
 
     @Test
-    fun `cosec write and cosec grant are still decided for a holder - CTL-79`() {
+    fun `cosec grant is still decided for a holder - CTL-79`() {
         rights(holder, grant = false)
         call("POST", "/changes", request("tenant:acme", head(), role)).first.assert().isEqualTo(403)
+    }
+
+    @Test
+    fun `cosec write is still decided for a holder - CTL-79`() {
         rights(listOf("cosec:read", "cosec:manage-roles"))
         call("POST", "/changes", request("tenant:acme", head(), role)).first.assert().isEqualTo(403)
     }
@@ -154,20 +158,27 @@ class RoleClassTest {
     fun `an app document's roles are outside the class - CTL-79`() {
         rights(holder, documents = "doc/**")
         val appRole = """{"op":"putRole","role":{"id":"viewer","permissions":["read"]}}"""
-        val (proposed, state) = stage(request("app:orders", head("orders").let { 1L }, appRole))
+        val base = runBlocking { fixture.revisions.head(SnapshotKey.App("orders")) }!!.revision
+        val (proposed, state) = stage(request("app:orders", base, appRole))
         reasons(proposed).assert().contains("NOT_ANALYZED").doesNotContain("ROLE_CLASS")
         state.assert().isEqualTo("AWAITING_APPROVAL")
     }
 
     @Test
-    fun `a check tells a holder there is no person to wait for, and anyone else that there is - CTL-79`() {
+    fun `a holder's check answers what its proposal would, with no person to wait for - CTL-79`() {
         rights(holder)
         val body = request("tenant:acme", head(), role)
-        val checked = call("POST", "/changes:check", body).also { println("CHECKED=" + it) }.second
+        val checked = call("POST", "/changes:check", body).second
         reasons(checked).assert().containsExactly("ROLE_CLASS")
         reasons(checked).assert().isEqualTo(reasons(call("POST", "/changes", body).second))
+    }
+
+    @Test
+    fun `anyone else's check answers the escalation the proposal would wait on - CTL-79`() {
         rights(projector)
-        val waiting = call("POST", "/changes:check", request("tenant:acme", head(), role)).second
-        reasons(waiting).assert().contains("CROSS_TENANT").doesNotContain("ROLE_CLASS")
+        val body = request("tenant:acme", head(), role)
+        val checked = call("POST", "/changes:check", body).second
+        reasons(checked).assert().contains("CROSS_TENANT").doesNotContain("ROLE_CLASS")
+        reasons(checked).assert().isEqualTo(reasons(call("POST", "/changes", body).second))
     }
 }
