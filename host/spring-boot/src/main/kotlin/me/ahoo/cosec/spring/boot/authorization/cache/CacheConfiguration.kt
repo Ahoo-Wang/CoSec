@@ -21,18 +21,23 @@ import java.time.temporal.ChronoUnit
 /**
  * Local (in-process) cache settings of the revocation caches, which they declare: `cocache.defaults.store.*` does not
  * change them, `cocache.overrides.store.*` may tighten `local-max-age`, and `cocache.caches.[name].*` sets either. The
- * defaults are on the fields, not on the property that holds them: constructor binding builds this from its own defaults
- * as soon as one key is set, so `maximum-size` alone must not drop `local-max-age` to CoCache's default. A null value
- * keeps CoCache's default.
+ * defaults are on the fields, not on the property that holds them: the binder builds this from its own defaults as soon
+ * as one key is set, so `maximum-size` alone must not drop `local-max-age` to CoCache's default. A null value keeps
+ * CoCache's default.
+ *
+ * A JavaBean (a constructor without parameters, then setters), as the starter's other properties: Spring Boot 4.2's
+ * configuration processor takes a constructor-bound property's description from the constructor's `@param`, which
+ * kapt does not write, so a `var` documented here is what keeps the description in the metadata.
  */
 @InternalCoSecApi
-data class CacheConfiguration(
+class CacheConfiguration {
     /** How long a local copy lives at most (CoCache's `localMaxAge`): the bound on staleness when an invalidation is lost. */
-    @param:DurationUnit(ChronoUnit.SECONDS) @field:DurationUnit(ChronoUnit.SECONDS)
-    var localMaxAge: Duration? = DEFAULT_LOCAL_MAX_AGE,
+    @DurationUnit(ChronoUnit.SECONDS)
+    var localMaxAge: Duration? = DEFAULT_LOCAL_MAX_AGE
+
     /** The most entries the local copy holds. */
-    var maximumSize: Long? = DEFAULT_MAXIMUM_SIZE,
-) {
+    var maximumSize: Long? = DEFAULT_MAXIMUM_SIZE
+
     @InternalCoSecApi
     companion object {
         /** How stale a revocation may be on an instance that missed its invalidation message. */
