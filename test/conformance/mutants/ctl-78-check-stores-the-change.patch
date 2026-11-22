@@ -1,0 +1,16 @@
+# Rule: CTL-78
+# Mutant: a check goes on to the last step: the change is stored and its event written, as a proposal
+# Tests: :control:test --tests me.ahoo.cosec.control.api.ChangeCheckTest
+
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Proposals.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Proposals.kt
+index ec9c231d7..963d34ce5 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Proposals.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Proposals.kt
+@@ -159,7 +159,6 @@ internal class Proposals(
+             author
+         ).let { if (applying.notes.isEmpty()) it else it.copy(findings = it.findings + applying.notes) }
+         // A check ends here: what follows writes, and only a proposal writes (CTL-78).
+-        if (!commit) return checked
+         if (breakGlass) {
+             flow.audit(ChangeEvent.Kind.BREAK_GLASS_REQUESTED, checked, author.actor, origin = author.origin)
+         }

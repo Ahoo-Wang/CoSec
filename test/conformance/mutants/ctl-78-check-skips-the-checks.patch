@@ -1,0 +1,17 @@
+# Rule: CTL-78
+# Mutant: a check answers the draft without running the candidate's checks: not what the proposal would find
+# Tests: :control:test --tests me.ahoo.cosec.control.api.ChangeCheckTest
+
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Proposals.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Proposals.kt
+index ec9c231d7..d5d973209 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Proposals.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Proposals.kt
+@@ -153,7 +153,7 @@ internal class Proposals(
+             updatedAt = now,
+             confirmations = applying.confirmations,
+         )
+-        val checked = candidates.checked(
++        val checked = if (!commit) draft else candidates.checked(
+             draft,
+             head,
+             author
