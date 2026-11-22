@@ -94,6 +94,24 @@ class SnapshotDerivedBoundsTest {
 
     private fun SnapshotSource<*, *>.loadEach(keys: List<SnapshotKey>) = keys.forEach { loadAll(listOf(it)).join() }
 
+    /**
+     * The tenant bound once every tenant of [keys] is resident. The first bound counts documents of the typical weight,
+     * heavier than these, so the first loads evict; the pass that raises it evicts off the caller's thread. So load again
+     * until all are held, then read the bound of a pass that finds them all and nothing to evict.
+     */
+    private fun SnapshotSource<*, *>.settledBound(keys: List<SnapshotKey>): Int {
+        val tenants = keys.count { it is SnapshotKey.Tenant }
+        repeat(SETTLE_ROUNDS) {
+            loadEach(keys)
+            tick().join()
+            if (heldCounts(SnapshotKind.TENANT).first == tenants) {
+                tick().join()
+                return bound(SnapshotKind.TENANT, absent = false)
+            }
+        }
+        error("Not every one of the $tenants tenants is resident after $SETTLE_ROUNDS rounds.")
+    }
+
     private fun apps() = (0 until APPS).map { SnapshotKey.App("app-$it") }
 
     @Test
@@ -182,22 +200,19 @@ class SnapshotDerivedBoundsTest {
         val budget = 128L shl 20
         val without = source(store(smalls), budget).use { source ->
             source.load().join()
-            source.loadEach(apps() + smalls.keys.map { SnapshotKey.Tenant("t-$it") })
-            source.tick().join()
-            source.bound(SnapshotKind.TENANT, absent = false) to
+            source.settledBound(apps() + smalls.keys.map { SnapshotKey.Tenant("t-$it") }) to
                 source.residentWeight(SnapshotKind.TENANT) / source.heldCounts(SnapshotKind.TENANT).first
         }
         val large = tenant(0, 40, 50, 200)
         source(store(smalls + (0 to large)), budget).use { source ->
             source.load().join()
-            source.loadEach(apps() + (smalls.keys + 0).map { SnapshotKey.Tenant("t-$it") })
-            source.tick().join()
-            val with = source.bound(SnapshotKind.TENANT, absent = false)
+            val with = source.settledBound(apps() + (smalls.keys + 0).map { SnapshotKey.Tenant("t-$it") })
             val largeWeight = source.residentWeight(SnapshotKind.TENANT) -
                 without.second * (source.heldCounts(SnapshotKind.TENANT).first - 1)
             val itsOwnWeight = largeWeight / without.second + 1
             println(
-                "SNP-24 noisy neighbour: bound ${without.first} without the large tenant, $with with it ($largeWeight B)"
+                "SNP-24 noisy neighbour: bound ${without.first} without the large tenant, $with with it ($largeWeight B), " +
+                    "${source.heldCounts(SnapshotKind.TENANT).first} tenants resident"
             )
             with.assert().isLessThan(without.first).isGreaterThanOrEqualTo((without.first - itsOwnWeight).toInt())
         }
@@ -217,5 +232,6 @@ class SnapshotDerivedBoundsTest {
     private companion object {
         const val APPS = 12
         const val TWO_GIB = 2L shl 30
+        const val SETTLE_ROUNDS = 4
     }
 }
