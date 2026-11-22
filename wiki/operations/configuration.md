@@ -74,6 +74,10 @@ limit CoSec owns, and has no key. Each is logged once at startup, in a line that
 | How long a request waits for a document that is not installed | 40 % of the pipeline timeout, at least `1ms`: `2s` at the default | [`cosec.pipeline.timeout`](#pipeline) |
 | Threads that compile documents | one per 2 cores, at least 1 and at most 4 | the cores of the process |
 | Documents a revalidation pass confirms at once | 16, a constant: a pass slower than the interval runs back to back, and only the burst depends on it | |
+| Each revocation table's local copy (`RevokedTokenCache`, `RevokedSubjectCache`) holds | an 8th of the heap counted at 290 + 230 bytes an entry of each: 516,222 entries each at 2 GiB, where the bound was 500,000. Too small for your traffic shows as `cocache.misses` with the tag `cache=RevokedTokenCache` (or `RevokedSubjectCache`), `cocache_misses_total` in Prometheus: the reads the local copy did not answer, rising while the gauge `cocache.local.size` with the same tag stays at the count (`IDN-33`) | the heap (`Runtime.maxMemory()`) |
+| What the verified-token cache holds | a 16th of the heap, each entry weighed by its token's length × 5 bytes: 128 MiB at 2 GiB, more than the 16,384 large tokens (about 115 MB) the bound was. Too small shows as `cosec.token.cache.evictions` (`IDN-32`) | the same |
+| Events one `BEST_EFFORT` decision listener may have waiting | a 64th of the heap, shared equally by the `BEST_EFFORT` listeners and counted at the size of an event of `cosec.pipeline.trace-level`: 1 KB untraced, 8 KB traced (`full`, `exhaustive`), since a trace carries every candidate statement. At 2 GiB, four listeners hold 8,192 untraced events each, or 1,024 traced ones, where each had 1,024 whatever the level. Too small shows as `cosec.listener.dropped` (`OBS-11`) | the same, and the listeners |
+| What the change listeners' queues hold | a 32nd of the heap, as before: 64 MiB at 2 GiB. Too small shows as `cosec.control.listener.lost` | the same |
 | How long CoCache's local copy of a document serves a cold load before Redis is asked again | 3 revalidation intervals: `30s` at the default; whatever a cache customizer or `cocache.*` property sets | [`cosec.authorization.snapshot.revalidate-interval`](#snapshot) |
 | One call of the `Authenticator`; past it, `503` | 20 % of the pipeline timeout: `1s` at the default | [`cosec.pipeline.timeout`](#pipeline) |
 | One call of the `MembershipProvider`, and a fill of the membership cache; past it, or when it fails, `503` | 10 %: `500ms` | the same |
@@ -84,6 +88,12 @@ limit CoSec owns, and has no key. Each is logged once at startup, in a line that
 | Every `REQUIRED` change listener together, recording a gated step (publish, break-glass); past it the step fails with `503` | the pipeline timeout, the bound of the control request's own authorization: `5s` | the same |
 | On shutdown, how long each set of listeners still delivers what is queued (the decision listeners, the change listeners); the rest is then dropped. The Kafka audit and change listeners get as long again for the sends they hold | a sixth of the shutdown phase: `5s` at Spring's default `30s`. The six drains together fit in one phase | `spring.lifecycle.timeout-per-shutdown-phase` |
 | How long an instance remembers that the `MembershipLoader` did not know a principal (a removed member's token, still valid) | 5 s, a constant: a principal you add is known by every instance when it ends, and at once where `invalidate` ran; a failed load is never remembered ([Memberships](../integration/authentication.md#memberships)) | |
+| How often an instance writes its shadow reports and status | a sixth of the status's life (`10s`), and no oftener than a fifth of the shortest life of a window or a second | [`cosec.control.shadow.min-duration`](#control-plane), read where it is set |
+| How often each control-plane instance reclaims revisions | 1 hour, a constant: what is reclaimed is decided by `min-age` and `max-count` | |
+| When a record outside a revision chain, or a change listed and never written, is removed | one reclaim pass old: 1 hour | the reclaim interval |
+| How often shadowing changes are looked at | a fifteenth of `min-duration`, between 250 ms and 1 minute: `1m` at the default | [`cosec.control.shadow.min-duration`](#control-plane) |
+| The largest request body the control API reads | the document cap (8 MB) and 2 MB for the operations around it: 10 MB | the document cap |
+| The initial size and an idle expiry of the revocation caches' local copy | none: the cache sizes itself, and `local-max-age` expires every entry | |
 
 Each share of the pipeline timeout is at least `1ms`; below a `cosec.pipeline.timeout` of 20 ms a token's two revocation
 reads may no longer end inside the authentication timeout.
@@ -93,12 +103,14 @@ reads may no longer end inside the authentication timeout.
 revocations cannot be read, and verification then accepts the request's token unless
 `cosec.authentication.revocation.fail-closed=true` ([the documented exception](../guide/security-model.md#the-two-documented-exceptions)).
 With a deadline below the default, set `fail-closed`, or check that Redis answers well within the read budget.
-| How often an instance writes its shadow reports and status | a sixth of the status's life (`10s`), and no oftener than a fifth of the shortest life of a window or a second | [`cosec.control.shadow.min-duration`](#control-plane), read where it is set |
-| How often each control-plane instance reclaims revisions | 1 hour, a constant: what is reclaimed is decided by `min-age` and `max-count` | |
-| When a record outside a revision chain, or a change listed and never written, is removed | one reclaim pass old: 1 hour | the reclaim interval |
-| How often shadowing changes are looked at | a fifteenth of `min-duration`, between 250 ms and 1 minute: `1m` at the default | [`cosec.control.shadow.min-duration`](#control-plane) |
-| The largest request body the control API reads | the document cap (8 MB) and 2 MB for the operations around it: 10 MB | the document cap |
-| The initial size and an idle expiry of the revocation caches' local copy | none: the cache sizes itself, and `local-max-age` expires every entry | |
+
+**The heap's shares are one table** (`HeapBudget`, `STA-12`): the four bounds above and a quarter reserved for the
+snapshot documents, whose own bound is a later design, take 31/64 of the heap together, under half, which leaves the
+rest of the gateway and ZGC their room. A smaller heap gets less, visibly: a 512 MiB heap gets 64 MiB of revocation
+tables (129,055 entries each), a 32 MiB token cache (about 4,150 large tokens) and 8 MiB of decision-listener queues
+(2,048 events each for four listeners). The startup line says what each came to, and the heap it read: `heap <n> MiB (Runtime.maxMemory())`. A container
+without `-Xmx` gets a quarter of its memory limit by the JVM's default, so a small bound there comes from a small
+heap: give the JVM an explicit `-Xmx` ([Memory](./deployment.md#memory)).
 
 A key that once set one of these fails startup with the keys CoSec does not read, and says that it is no longer a
 property and what replaced it ([Unknown properties](#unknown-properties)).
@@ -259,7 +271,6 @@ How windows work: [Testing changes](../policies/testing.md).
 | `cosec.authentication.revocation.skew` | duration | `5s` | How far an issuer's clock may run ahead of this instance's. A token issued up to this long after a subject revocation is still revoked by it, and a token's issue time (`iat`) and not-before time (`nbf`) may be this much later than this instance's clock (`IDN-29`); a token's expiry gets no such room. |
 | `cosec.authentication.revocation.fail-closed` | boolean | `false` | Whether a request's token is refused (`503`) while the revocations cannot be read, instead of accepted ([the documented exception](../guide/security-model.md#the-two-documented-exceptions)). A refresh fails then either way. |
 | `cosec.authentication.token-cache.enabled` | boolean | `true` | Whether a request's token, once CoSec's own `JwtTokenVerifier` verified it, is answered from memory until it expires instead of having its signature checked again ([the verified-token cache](../integration/authentication.md#the-verified-token-cache), `IDN-32`). The revocation and reserved-attribute checks run on every request either way. Never for a `TokenVerifier` bean of your own. |
-| `cosec.authentication.token-cache.max-entries` | integer | `16384` | The most verified tokens kept; one more evicts one, which costs one verification when it comes again, never another answer. An entry of a large token (a dozen roles in four spaces, eight policies) retains about 7.3 KB, so the default holds at most about 115 MB, under a tenth of a 2 GB heap: size it to the tokens in use at once on one instance. |
 | `cosec.authentication.login.refresh.path` | string | unset | Where the starter serves the refresh route, `POST` of the pair (`IDN-23`, [Building a client](../integration/clients.md#what-your-application-serves)). Unset, none is served. A document must permit an anonymous `POST` of it. Set on a gateway, on a host that serves no HTTP, with login or JWT off, or to anything but one plain absolute path, startup fails. |
 | `cosec.authentication.login.logout.path` | string | unset | Where the starter serves the logout route, `POST` of the pair, `204` (`IDN-24`); as `refresh.path` otherwise, and not the same path. |
 
@@ -310,16 +321,15 @@ Snapshot documents have their own properties ([Snapshot](#snapshot)).
 
 | Property | Type | Default | Effect |
 |---|---|---|---|
-| `cosec.authentication.revocation.cache.*` | [local cache settings](#local-cache-settings) | `local-max-age: 30s`, `maximum-size: 500000` | Local copy of revocation lookups (`RevokedTokenCache` and `RevokedSubjectCache`). An entry exists only for a token or principal the instance saw in the last 30 seconds, and a miss is a Redis read on the request path. One retains about 290 bytes (a token, its id included) or 230 bytes (a principal): both tables full take about 260 MB ([Sizing a SaaS gateway](./deployment.md#what-a-replica-holds)). |
+| `cosec.authentication.revocation.cache.*` | [local cache settings](#local-cache-settings) | `local-max-age: 30s` | Local copy of revocation lookups (`RevokedTokenCache` and `RevokedSubjectCache`). An entry exists only for a token or principal the instance saw in the last 30 seconds, and a miss is a Redis read on the request path. How many entries each holds is not a setting: an 8th of the heap, counted at 290 bytes a token and 230 bytes a principal ([Computed, not configured](#computed-not-configured), [Sizing a SaaS gateway](./deployment.md#what-a-replica-holds)). |
 
 ### Local cache settings
 
 | Property | Type | Default | Effect |
 |---|---|---|---|
-| `maximum-size` | long | `500000` | Maximum entries in the local copy. |
 | `local-max-age` | duration (a bare number is seconds) | `30s` | How long a local copy lives at most: the bound on staleness when an invalidation message is lost. |
 
-These size and age the local copy only. A revocation's lifetime in Redis is set when it is written.
+This ages the local copy only. A revocation's lifetime in Redis is set when it is written.
 
 ## Audit
 
@@ -334,9 +344,8 @@ These size and age the local copy only. A revocation's lifetime in Redis is set 
 the drain at shutdown, are [computed](#computed-not-configured)
 ([Decision listeners](./observability.md#decision-listeners)).
 
-| Property | Type | Default | Effect |
-|---|---|---|---|
-| `cosec.observability.listener.queue-capacity` | int | `1024` | Events one `BEST_EFFORT` listener may have waiting. A full queue drops the next event and counts it (`cosec.listener.dropped`). |
+Nothing about them is a property: each `BEST_EFFORT` listener's queue holds its part of a 64th of the heap, a `REQUIRED`
+one has 20 % of `cosec.pipeline.timeout`, and the queues drain at shutdown for a sixth of the shutdown phase.
 
 ## Control plane
 
@@ -439,7 +448,7 @@ Every CoSec cache is assembled by CoCache's layers, field by field; a later step
 7. CoSec's constraints, applied last, after `unlock` too.
 
 A value CoSec declares wins over `cocache.defaults.*` whatever it is, one equal to CoCache's own default (a
-`maximum-size` of `10000`) included. So a `cocache.caches.[<CacheName>].*` property wins over the matching `cosec.authentication.revocation.cache.*` one. CoSec
+`local-max-age` of `30s`) included. So a `cocache.caches.[<CacheName>].*` property wins over the matching `cosec.authentication.revocation.cache.*` one. CoSec
 locks some fields (CoCache's `lock`): the global layers skip them, a `cocache.caches` entry that sets one fails startup
 (unless the entry lists it in `unlock`, CoCache's break glass), and a customizer that changes one throws. Some are also
 constrained (step 7), so even `unlock` cannot change them:
@@ -451,7 +460,7 @@ constrained (step 7), so even `unlock` cannot change them:
 | `ShadowReportCache`, `ShadowReporterCache`, `InstanceStatusCache`, `InstanceIndexCache` | `unknown-read`, `ttl` | `unknown-read: throw`; `ttl` the declared 8 days (reports, reporters) or 2 minutes (statuses; the list of instances keeps the 8 days) | An outage must not read as "no samples" or "no instance", and an instance's samples must not expire from a window it reported in. |
 | `MembershipCache` | `read-failure`, `unknown-read` | `ttl` finite (one minute when `forever`), `ttl-jitter: 0s`, `read-failure` and `unknown-read: throw` | A failed read must never become "no memberships", and a lost invalidation must expire. |
 | `TokenFamilyCache` | `unknown-read` | `unknown-read: throw` | A session that cannot be read refuses a refresh (`503`), never reads as absent. Each entry carries its session's remaining lifetime, written with it. |
-| `RevokedTokenCache`, `RevokedSubjectCache` | `read-timeout`, `unknown-read`, `absent-ttl` | `read-timeout`: the store's command timeout; `unknown-read: throw`; `absent-ttl: 30s` | A "not revoked" answer is kept locally for 30 seconds at most: a longer `absent-ttl` would accept a revoked token for that long after a lost invalidation, and `local-max-age` can only shorten it. As `Store`s they never reclaim an unreadable revocation, which would make its tokens valid again. A failed read is unknown, never "not revoked": absent would let a refresh issue a token on a read that failed (`IDN-14`). A read that times out is unavailable, which the pipeline's verification accepts, so no layer, `cocache.defaults.store.read-timeout` included, may time it out sooner. Whether verification accepts it is `cosec.authentication.revocation.fail-closed`. |
+| `RevokedTokenCache`, `RevokedSubjectCache` | `read-timeout`, `unknown-read`, `absent-ttl`, `local-maximum-size` | `read-timeout`: the store's command timeout; `unknown-read: throw`; `absent-ttl: 30s`; `local-maximum-size`: the revocation tables' share of the heap (`IDN-33`) | A "not revoked" answer is kept locally for 30 seconds at most: a longer `absent-ttl` would accept a revoked token for that long after a lost invalidation, and `local-max-age` can only shorten it. As `Store`s they never reclaim an unreadable revocation, which would make its tokens valid again. A failed read is unknown, never "not revoked": absent would let a refresh issue a token on a read that failed (`IDN-14`). A read that times out is unavailable, which the pipeline's verification accepts, so no layer, `cocache.defaults.store.read-timeout` included, may time it out sooner. Whether verification accepts it is `cosec.authentication.revocation.fail-closed`. |
 | every CoSec cache | key prefix, namespace, key encoder, codec, key filter, `ttl` function, data source | — | The storage layout is CoSec's, where every instance and the control plane look for it. |
 
 **Next:** where the documents live and how instances read them, in [Storage and caching](./storage.md).

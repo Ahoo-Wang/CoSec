@@ -24,11 +24,6 @@ public final class me/ahoo/cosec/runtime/IdentityForwardingSettings {
 	public final fun setMaxBytes (I)V
 }
 
-public final class me/ahoo/cosec/runtime/ListenerSettings {
-	public final fun getQueueCapacity ()I
-	public final fun setQueueCapacity (I)V
-}
-
 public final class me/ahoo/cosec/runtime/Pipeline : java/lang/AutoCloseable, me/ahoo/cosec/runtime/http/RequestGate {
 	public static final field Companion Lme/ahoo/cosec/runtime/Pipeline$Companion;
 	public final fun awaitDocuments (Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
@@ -50,7 +45,6 @@ public final class me/ahoo/cosec/runtime/PipelineBuilder {
 	public static synthetic fun forwardIdentity$default (Lme/ahoo/cosec/runtime/PipelineBuilder;Lkotlin/jvm/functions/Function1;ILjava/lang/Object;)Lme/ahoo/cosec/runtime/PipelineBuilder;
 	public final fun ids (Lme/ahoo/cosec/spi/id/IdGenerator;)Lme/ahoo/cosec/runtime/PipelineBuilder;
 	public final fun listener (Lme/ahoo/cosec/runtime/event/DecisionListener;)Lme/ahoo/cosec/runtime/PipelineBuilder;
-	public final fun listeners (Lkotlin/jvm/functions/Function1;)Lme/ahoo/cosec/runtime/PipelineBuilder;
 	public final fun memberships (Lme/ahoo/cosec/spi/membership/MembershipProvider;)Lme/ahoo/cosec/runtime/PipelineBuilder;
 	public final fun options (Lkotlin/jvm/functions/Function1;)Lme/ahoo/cosec/runtime/PipelineBuilder;
 	public final fun rateLimiter (Lme/ahoo/cosec/spi/ratelimit/RateLimiter;)Lme/ahoo/cosec/runtime/PipelineBuilder;

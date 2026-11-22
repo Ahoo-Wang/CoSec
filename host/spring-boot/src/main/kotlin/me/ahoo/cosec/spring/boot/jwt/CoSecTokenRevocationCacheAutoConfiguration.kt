@@ -28,6 +28,7 @@ import me.ahoo.cosec.spi.token.TokenStore
 import me.ahoo.cosec.spring.boot.CoSecProperties
 import me.ahoo.cosec.spring.boot.ConditionalOnCoSecEnabled
 import me.ahoo.cosec.spring.boot.authorization.cache.createCoSecCache
+import me.ahoo.cosec.spring.boot.pipeline.DerivedHeap
 import me.ahoo.cosec.spring.boot.pipeline.DerivedTimeouts
 import me.ahoo.cosec.spring.boot.pipeline.RevocationProperties
 import org.springframework.boot.autoconfigure.AutoConfiguration
@@ -84,7 +85,8 @@ internal class CoSecTokenRevocationCacheAutoConfiguration(
     }
 
     /**
-     * The local tier comes from `cosec.authentication.revocation.cache.*`; "not revoked" lookups are cached locally for
+     * The local tier comes from `cosec.authentication.revocation.cache.*` and holds the revocation tables' share of the heap
+     * (`IDN-33`); "not revoked" lookups are cached locally for
      * [RevokedTokenCache.MISSING_TTL_SECONDS].
      */
     @Bean(REVOKED_TOKEN_CACHE_BEAN_NAME)
@@ -93,7 +95,11 @@ internal class CoSecTokenRevocationCacheAutoConfiguration(
         val spec = CoSecCacheSpecs.revokedToken(
             cosecProperties.keyPrefix
         )
-        return factory.createCoSecCache(RevokedTokenCache::class.java, revocationProperties.cache.applyTo(spec))
+        val entries = DerivedHeap.revocationEntries(DerivedHeap.budget())
+        return factory.createCoSecCache(
+            RevokedTokenCache::class.java,
+            revocationProperties.cache.applyTo(spec, entries)
+        )
     }
 
     /**
@@ -105,6 +111,10 @@ internal class CoSecTokenRevocationCacheAutoConfiguration(
         val spec = CoSecCacheSpecs.revokedSubject(
             cosecProperties.keyPrefix
         )
-        return factory.createCoSecCache(RevokedSubjectCache::class.java, revocationProperties.cache.applyTo(spec))
+        val entries = DerivedHeap.revocationEntries(DerivedHeap.budget())
+        return factory.createCoSecCache(
+            RevokedSubjectCache::class.java,
+            revocationProperties.cache.applyTo(spec, entries)
+        )
     }
 }

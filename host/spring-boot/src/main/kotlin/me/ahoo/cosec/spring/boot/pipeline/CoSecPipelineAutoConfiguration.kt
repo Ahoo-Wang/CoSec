@@ -86,7 +86,6 @@ private val log = KotlinLogging.logger {}
     RuntimeAuthorizationProperties::class,
     RevocationProperties::class,
     TokenCacheProperties::class,
-    ListenerProperties::class,
 )
 @InternalCoSecApi
 class CoSecPipelineAutoConfiguration {
@@ -113,7 +112,6 @@ class CoSecPipelineAutoConfiguration {
         listeners: ObjectProvider<DecisionListener>,
         sinks: ObjectProvider<AuditEventSink>,
         beans: ListableBeanFactory,
-        listenerProperties: ListenerProperties,
         environment: Environment,
     ): DecisionListeners {
         val names = IdentityHashMap<AuditEventSink, String>()
@@ -132,10 +130,12 @@ class CoSecPipelineAutoConfiguration {
                 "KafkaOperations bean (spring-boot-starter-kafka), cosec.audit.enabled=true and " +
                 "cosec.audit.kafka.enabled=true (STA-1)."
         }
+        // The decision listeners' share of the heap, counted in events and divided by the BEST_EFFORT ones (OBS-11).
+        val bestEffort = ordered.count { it.second.delivery == Delivery.BEST_EFFORT }
         return DecisionListeners(
             ordered.map { it.second },
             DerivedTimeouts.budgets(environment).requiredListener,
-            queueCapacity = listenerProperties.queueCapacity,
+            queueCapacity = DerivedHeap.budget().decisionQueueCapacity(bestEffort, DerivedHeap.traceLevel(environment)),
             drainTimeout = DerivedTimeouts.drain(environment).toKotlinDuration(),
         )
     }
@@ -152,8 +152,7 @@ class CoSecPipelineAutoConfiguration {
     @Bean
     @ConditionalOnMissingBean
     @ConditionalOnProperty(value = [TokenCacheProperties.ENABLED_KEY], havingValue = "true", matchIfMissing = true)
-    fun cosecVerifiedTokenCache(properties: TokenCacheProperties): VerifiedTokenCache =
-        VerifiedTokenCache(properties.maxEntries)
+    fun cosecVerifiedTokenCache(): VerifiedTokenCache = VerifiedTokenCache(DerivedHeap.budget().tokenCache)
 
     /**
      * Token and API-key authentication. A token is verified by the application's [TokenVerifier] bean, the one refresh

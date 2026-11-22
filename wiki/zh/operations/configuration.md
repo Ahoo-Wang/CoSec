@@ -57,6 +57,10 @@ CoSec 没有哪个配置项叫这些名字，而已知的 key 无论来源都不
 | 请求等待一个未装入的文档多久 | 管道超时的 40 %，至少 `1ms`：默认 `2s` | [`cosec.pipeline.timeout`](#pipeline) |
 | 编译文档的线程数 | 每 2 个核心一个，至少 1 个、至多 4 个 | 进程的核心数 |
 | 一次重新确认并发确认的文档数 | 16，常量：一轮超过间隔时各轮首尾相接，只有突发量取决于它 | |
+| 每个吊销表的本地副本（`RevokedTokenCache`、`RevokedSubjectCache`）容纳 | 堆的八分之一，按每表每条 290 + 230 字节计数：2 GiB 时每表 516,222 条，原来的上限是 500,000。对你的流量太小时表现为带标签 `cache=RevokedTokenCache`（或 `RevokedSubjectCache`）的 `cocache.misses`（Prometheus 中为 `cocache_misses_total`，即本地副本没有应答的读取）持续上升，而同标签的 gauge `cocache.local.size` 停在该数（`IDN-33`） | 堆（`Runtime.maxMemory()`） |
+| 已校验令牌缓存容纳的量 | 堆的十六分之一，每个条目按其令牌长度 × 5 字节计重：2 GiB 时 128 MiB，多于原上限的 16,384 个大令牌（约 115 MB）。太小时表现为 `cosec.token.cache.evictions`（`IDN-32`） | 同上 |
+| 一个 `BEST_EFFORT` 决策监听器最多可以有多少个待处理的事件 | 堆的六十四分之一，由各 `BEST_EFFORT` 监听器均分，按 `cosec.pipeline.trace-level` 下一个事件的大小计数：不追踪时 1 KB，追踪时（`full`、`exhaustive`）8 KB，因为追踪带着每条候选语句。2 GiB、四个监听器时，每个容纳 8,192 个不追踪的事件或 1,024 个追踪的事件，原来不论级别都是每个 1,024 个。太小时表现为 `cosec.listener.dropped`（`OBS-11`） | 同上，以及监听器数 |
+| 变更监听器的队列容纳的量 | 堆的三十二分之一，与以前相同：2 GiB 时 64 MiB。太小时表现为 `cosec.control.listener.lost` | 同上 |
 | CoCache 中文档的本地副本为冷加载提供多久，之后重新询问 Redis | 3 个重新确认间隔：默认 `30s`；无论缓存定制器或 `cocache.*` 配置项设置了什么 | [`cosec.authorization.snapshot.revalidate-interval`](#snapshot) |
 | 一次 `Authenticator` 调用；超过后得到 `503` | 管道超时的 20 %：默认 `1s` | [`cosec.pipeline.timeout`](#pipeline) |
 | 一次 `MembershipProvider` 调用，以及成员关系缓存的一次填充；超时或失败时得到 `503` | 10 %：`500ms` | 同上 |
@@ -67,16 +71,18 @@ CoSec 没有哪个配置项叫这些名字，而已知的 key 无论来源都不
 | 所有 `REQUIRED` 变更监听器合计记录一个受控步骤（发布、break-glass）；超过后该步骤以 `503` 失败 | 管道超时，即控制请求自身授权的上限：`5s` | 同上 |
 | 关闭时，每组监听器（决策监听器、变更监听器）还能继续投递排队事件多久；之后剩下的被丢弃。Kafka 审计监听器和 Kafka 变更监听器还会再用同样长的时间等待它们手中的发送 | 关闭阶段的六分之一：Spring 默认 `30s` 时为 `5s`。六次排空合计不超过一个阶段 | `spring.lifecycle.timeout-per-shutdown-phase` |
 | 一个实例记住 `MembershipLoader` 不认识某个主体（被移除成员仍有效的令牌）多久 | 5 秒，常量：你新增的主体在它结束时被每个实例认识，在执行 `invalidate` 的实例上立即被认识；失败的加载从不被记住（[成员关系](../integration/authentication.md#memberships)） | |
-
-管道超时的每一份至少为 `1ms`；`cosec.pipeline.timeout` 低于 20 ms 时，一个令牌的两次吊销读取可能不再在认证超时之内结束。
-
-**更低的期限会缩短唯一一个失败即放行的阶段。** 吊销读取的预算随期限缩放：`cosec.pipeline.timeout=1s` 时每次读取只有 60 ms，而原来固定为 300 ms。超过预算的读取意味着吊销无法读取，此时校验会接受请求的令牌，除非设置了 `cosec.authentication.revocation.fail-closed=true`（[已写明的例外](../guide/security-model.md#the-two-documented-exceptions)）。期限低于默认值时，请设置 `fail-closed`，或确认 Redis 的应答远在读取预算之内。
 | 实例多久写一次影子报告和状态 | 状态存活期的六分之一（`10s`），且不比窗口最短存活期的五分之一或一秒更频繁 | [`cosec.control.shadow.min-duration`](#control-plane)，在它被设置的地方读取 |
 | 每个控制面实例多久回收一次修订 | 1 小时，常量：回收什么由 `min-age` 和 `max-count` 决定 | |
 | 修订链之外的记录、或登记了却从未写入的变更何时删除 | 满一轮回收的年龄：1 小时 | 回收间隔 |
 | 多久查看一次处于影子阶段的变更 | `min-duration` 的十五分之一，在 250 ms 到 1 分钟之间：默认 `1m` | [`cosec.control.shadow.min-duration`](#control-plane) |
 | 控制 API 读取的最大请求体 | 文档上限（8 MB）再加操作外层 JSON 的 2 MB：10 MB | 文档上限 |
 | 吊销缓存本地副本的初始容量和空闲过期 | 没有：缓存自己决定大小，`local-max-age` 让每个条目过期 | |
+
+管道超时的每一份至少为 `1ms`；`cosec.pipeline.timeout` 低于 20 ms 时，一个令牌的两次吊销读取可能不再在认证超时之内结束。
+
+**更低的期限会缩短唯一一个失败即放行的阶段。** 吊销读取的预算随期限缩放：`cosec.pipeline.timeout=1s` 时每次读取只有 60 ms，而原来固定为 300 ms。超过预算的读取意味着吊销无法读取，此时校验会接受请求的令牌，除非设置了 `cosec.authentication.revocation.fail-closed=true`（[已写明的例外](../guide/security-model.md#the-two-documented-exceptions)）。期限低于默认值时，请设置 `fail-closed`，或确认 Redis 的应答远在读取预算之内。
+
+**堆的各份额在一张表里**（`HeapBudget`，`STA-12`）：上面四个上限，加上为快照文档预留的四分之一（它自己的上限留待后续设计），合计占堆的 31/64，不到一半，给网关的其余部分和 ZGC 留出空间。堆越小得到的越少，而且可见：512 MiB 的堆得到 64 MiB 的吊销表（每表 129,055 条）、32 MiB 的令牌缓存（约 4,150 个大令牌）和 8 MiB 的决策监听器队列（四个监听器时每个 2,048 个事件）。启动日志行写明每一项得到多少，以及它读到的堆：`heap <n> MiB (Runtime.maxMemory())`。没有 `-Xmx` 的容器按 JVM 的默认只得到内存限制的四分之一，所以那里的上限偏小来自堆偏小：给 JVM 明确的 `-Xmx`（[内存](./deployment.md#memory)）。
 
 曾经设置过其中某一项的 key 会让启动失败（作为 CoSec 不读取的 key），并说明它已不再是配置项，以及由什么取代（[未知配置项](#unknown-properties)）。
 
@@ -224,7 +230,6 @@ CoSec 没有哪个配置项叫这些名字，而已知的 key 无论来源都不
 | `cosec.authentication.revocation.skew` | duration | `5s` | 签发方的时钟可以比本实例快多少。签发时间比主体吊销晚不超过这个时长的令牌仍被该吊销覆盖；令牌的签发时间（`iat`）和生效时间（`nbf`）可以比本实例的时钟晚这么多（`IDN-29`）；令牌的过期时间没有这样的余量。 |
 | `cosec.authentication.revocation.fail-closed` | boolean | `false` | 吊销无法读取时，是否拒绝请求的令牌（`503`）而不是接受它（[已写明的例外](../guide/security-model.md#the-two-documented-exceptions)）。无论如何，此时刷新都会失败。 |
 | `cosec.authentication.token-cache.enabled` | boolean | `true` | CoSec 自己的 `JwtTokenVerifier` 校验过一次的请求令牌，是否在过期前直接从内存作答，而不再校验签名（[已校验令牌缓存](../integration/authentication.md#the-verified-token-cache)，`IDN-32`）。无论哪种方式，吊销检查和保留属性检查在每个请求上都会运行。从不用于你自己的 `TokenVerifier` Bean。 |
-| `cosec.authentication.token-cache.max-entries` | integer | `16384` | 最多保留的已校验令牌数；再多一个就淘汰一个，被淘汰的令牌再来时多花一次校验，答案从不改变。一个大令牌（四个空间里十几个角色、八个策略）的条目约占 7.3 KB，因此默认值最多约 115 MB，低于 2 GB 堆的十分之一：按一个实例上同时在用的令牌数设置。 |
 | `cosec.authentication.login.refresh.path` | string | 未设置 | starter 提供刷新路由的位置：`POST` 令牌对（`IDN-23`，[构建客户端](../integration/clients.md#what-your-application-serves)）。未设置时不提供。文档必须允许匿名 `POST` 它。在网关上、在不提供 HTTP 的宿主上、登录或 JWT 关闭时设置，或设置为一个普通绝对路径以外的值，启动失败。 |
 | `cosec.authentication.login.logout.path` | string | 未设置 | starter 提供登出路由的位置：`POST` 令牌对，应答 `204`（`IDN-24`）；其余同 `refresh.path`，且不能是同一路径。 |
 
@@ -271,16 +276,15 @@ CoSec 没有哪个配置项叫这些名字，而已知的 key 无论来源都不
 
 | 配置项 | 类型 | 默认值 | 作用 |
 |---|---|---|---|
-| `cosec.authentication.revocation.cache.*` | [本地缓存设置](#local-cache-settings) | `local-max-age: 30s`、`maximum-size: 500000` | 吊销查询的本地副本（`RevokedTokenCache` 和 `RevokedSubjectCache`）。只有实例在最近 30 秒内见过的令牌或主体才有条目，未命中就是请求路径上的一次 Redis 读取。每个条目约占 290 字节（令牌，含其 id）或 230 字节（主体）：两张表全部用满约 260 MB（[为 SaaS 网关定容量](./deployment.md#what-a-replica-holds)）。 |
+| `cosec.authentication.revocation.cache.*` | [本地缓存设置](#local-cache-settings) | `local-max-age: 30s` | 吊销查询的本地副本（`RevokedTokenCache` 和 `RevokedSubjectCache`）。只有实例在最近 30 秒内见过的令牌或主体才有条目，未命中就是请求路径上的一次 Redis 读取。每张表容纳多少条不是配置项：堆的八分之一，按每个令牌 290 字节、每个主体 230 字节计数（[由计算得出，而非配置](#computed-not-configured)、[为 SaaS 网关定容量](./deployment.md#what-a-replica-holds)）。 |
 
 ### 本地缓存设置 {#local-cache-settings}
 
 | 配置项 | 类型 | 默认值 | 作用 |
 |---|---|---|---|
-| `maximum-size` | long | `500000` | 本地副本的最大条目数。 |
 | `local-max-age` | duration（不带单位的数字表示秒） | `30s` | 本地副本最多存活多久：失效消息丢失时陈旧程度的上限。 |
 
-这些设置只决定本地副本的大小和寿命。吊销记录在 Redis 中的寿命在写入时确定。
+这项设置只决定本地副本的寿命。吊销记录在 Redis 中的寿命在写入时确定。
 
 ## 审计 {#audit}
 
@@ -293,9 +297,7 @@ CoSec 没有哪个配置项叫这些名字，而已知的 key 无论来源都不
 
 `cosec.observability.listener.*`：`BEST_EFFORT` 决策监听器的队列。`REQUIRED` 决策监听器的时限和关闭时的排空时间都是[计算](#computed-not-configured)得出的（[决策监听器](./observability.md#decision-listeners)）。
 
-| 配置项 | 类型 | 默认值 | 作用 |
-|---|---|---|---|
-| `cosec.observability.listener.queue-capacity` | int | `1024` | 一个 `BEST_EFFORT` 监听器最多可以有多少个待处理的事件。队列满时丢弃下一个事件并计数（`cosec.listener.dropped`）。 |
+它们都不是配置项：每个 `BEST_EFFORT` 监听器的队列容纳堆的六十四分之一中属于它的一份，`REQUIRED` 监听器有 `cosec.pipeline.timeout` 的 20 %，关闭时队列在关闭阶段的六分之一内排空。
 
 ## 控制面 {#control-plane}
 
@@ -393,7 +395,7 @@ cosec:
 6. `cocache.caches.[<CacheName>].*`；
 7. CoSec 的约束，最后执行，在 `unlock` 之后也执行。
 
-CoSec 声明的值无论取何值都优先于 `cocache.defaults.*`，与 CoCache 自身默认值相等的值（如 `10000` 的 `maximum-size`）也一样。
+CoSec 声明的值无论取何值都优先于 `cocache.defaults.*`，与 CoCache 自身默认值相等的值（如 `30s` 的 `local-max-age`）也一样。
 因此 `cocache.caches.[<CacheName>].*` 配置项优先于对应的 `cosec.authentication.revocation.cache.*` 配置项。CoSec 锁定部分字段
 （CoCache 的 `lock`）：全局层跳过它们，设置了它们的 `cocache.caches` 条目使启动失败（除非该条目在 `unlock` 中列出它，
 即 CoCache 的破窗开关），修改它们的定制器抛出异常。其中一些还受到约束（第 7 步），连 `unlock` 也改变不了：
@@ -405,7 +407,7 @@ CoSec 声明的值无论取何值都优先于 `cocache.defaults.*`，与 CoCache
 | `ShadowReportCache`、`ShadowReporterCache`、`InstanceStatusCache`、`InstanceIndexCache` | `unknown-read`、`ttl` | `unknown-read: throw`；`ttl` 为声明的 8 天（报告、报告者）或 2 分钟（状态；实例列表仍是 8 天） | 故障不能读成“没有样本”或“没有实例”，实例的样本也不能从它报告过的窗口中过期。 |
 | `MembershipCache` | `read-failure`、`unknown-read` | `ttl` 有限（`forever` 时为一分钟），`ttl-jitter: 0s`，`read-failure` 与 `unknown-read: throw` | 读取失败绝不能变成“没有成员关系”，丢失的失效必须到期。 |
 | `TokenFamilyCache` | `unknown-read` | `unknown-read: throw` | 无法读取的会话会拒绝刷新（`503`），绝不读成不存在。每个条目都带着它所属会话的剩余寿命写入。 |
-| `RevokedTokenCache`、`RevokedSubjectCache` | `read-timeout`、`unknown-read`、`absent-ttl` | `read-timeout`：存储的命令超时；`unknown-read: throw`；`absent-ttl: 30s` | “未吊销”的答案在本地最多保留 30 秒：更长的 `absent-ttl` 会在失效消息丢失之后的那么长时间里接受已吊销的令牌，`local-max-age` 只能缩短它。作为 `Store`，它们从不回收读不懂的吊销记录，否则其令牌会重新有效。读取失败是“未知”，绝不是“未吊销”：读成不存在会让刷新在一次失败的读取上签发令牌（`IDN-14`）。超时的读取是“无法读取”，流水线校验令牌时会接受它，所以任何一层，包括 `cocache.defaults.store.read-timeout`，都不能让它更早超时。校验时是否接受由 `cosec.authentication.revocation.fail-closed` 决定。 |
+| `RevokedTokenCache`、`RevokedSubjectCache` | `read-timeout`、`unknown-read`、`absent-ttl`、`local-maximum-size` | `read-timeout`：存储的命令超时；`unknown-read: throw`；`absent-ttl: 30s`；`local-maximum-size`：吊销表在堆中的份额（`IDN-33`） | “未吊销”的答案在本地最多保留 30 秒：更长的 `absent-ttl` 会在失效消息丢失之后的那么长时间里接受已吊销的令牌，`local-max-age` 只能缩短它。作为 `Store`，它们从不回收读不懂的吊销记录，否则其令牌会重新有效。读取失败是“未知”，绝不是“未吊销”：读成不存在会让刷新在一次失败的读取上签发令牌（`IDN-14`）。超时的读取是“无法读取”，流水线校验令牌时会接受它，所以任何一层，包括 `cocache.defaults.store.read-timeout`，都不能让它更早超时。校验时是否接受由 `cosec.authentication.revocation.fail-closed` 决定。 |
 | 每个 CoSec 缓存 | key 前缀、命名空间、key 编码器、编解码器、key 过滤器、`ttl` 函数、数据来源 | — | 存储布局由 CoSec 决定，每个实例与控制面都在那里找它。 |
 
 **下一步：** 文档存在哪里、实例如何读取它们，见[存储与缓存](./storage.md)。

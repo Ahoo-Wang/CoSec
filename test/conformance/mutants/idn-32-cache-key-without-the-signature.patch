@@ -3,11 +3,11 @@
 # Tests: :jwt:test --tests me.ahoo.cosec.jwt.VerifiedTokenCachePropertyTest
 
 diff --git a/extensions/jwt/src/main/kotlin/me/ahoo/cosec/jwt/VerifiedTokenCache.kt b/extensions/jwt/src/main/kotlin/me/ahoo/cosec/jwt/VerifiedTokenCache.kt
-index 9cc8031fe..9f81d38ef 100644
+index 07e6f3c..a35e935 100644
 --- a/extensions/jwt/src/main/kotlin/me/ahoo/cosec/jwt/VerifiedTokenCache.kt
 +++ b/extensions/jwt/src/main/kotlin/me/ahoo/cosec/jwt/VerifiedTokenCache.kt
-@@ -80,7 +80,7 @@ class VerifiedTokenCache(val maxEntries: Int = DEFAULT_MAX_ENTRIES) {
-     val size: Int get() = entries.size
+@@ -87,7 +87,7 @@ class VerifiedTokenCache(val maxBytes: Long) {
+     val held: Long get() = heldBytes.get()
  
      internal fun key(token: String): Key {
 -        val digest = SHA_256.get().digest(token.toByteArray(Charsets.UTF_8))

@@ -83,7 +83,7 @@ class VerifiedTokenCachePropertyTest {
         repeat(maxOf(TOKENS, Integer.getInteger("cosec.property.iterations", 0) / INSTANTS)) { n ->
             val token = token(random, n)
             val uncached = JwtTokenVerifier(JwtFixture.ALGORITHM, SKEW, clock)
-            val cached = uncached.cached(VerifiedTokenCache())
+            val cached = uncached.cached(VerifiedTokenCache(UNBOUNDED))
             repeat(INSTANTS) {
                 clock.now = BASE.plusMillis(random.nextLong(-SPAN * 1_500, SPAN * 2_500))
                 val expected = outcome { uncached.verify(token) }
@@ -96,7 +96,7 @@ class VerifiedTokenCachePropertyTest {
     @Test
     fun `a token that differs from a cached one only in its signature is refused`() {
         val clock = MovingClock(BASE)
-        val verifier = JwtTokenVerifier(JwtFixture.ALGORITHM, SKEW, clock).cached(VerifiedTokenCache())
+        val verifier = JwtTokenVerifier(JwtFixture.ALGORITHM, SKEW, clock).cached(VerifiedTokenCache(UNBOUNDED))
         val token = JWT.create().withJWTId("t1").withSubject("alice").withExpiresAt(BASE.plusSeconds(SPAN))
             .sign(JwtFixture.ALGORITHM)
         verifier.verify(token).principal.assert().isEqualTo("alice")
@@ -105,26 +105,34 @@ class VerifiedTokenCachePropertyTest {
         refused.assert().isEqualTo(TokenVerificationException::class.java)
     }
 
-    /** Within its bound, and counted: a hit, a miss, an eviction. */
+    /**
+     * Within its bound, and counted: a hit, a miss, an eviction. An entry weighs its token's length times the measured
+     * factor, reckoned as it is put: a hit leaves what the cache holds as it was.
+     */
     @Test
     fun `the cache keeps within its bound and counts what it does`() {
         val clock = MovingClock(BASE)
-        val cache = VerifiedTokenCache(maxEntries = 2)
-        val verifier = JwtTokenVerifier(JwtFixture.ALGORITHM, SKEW, clock).cached(cache)
         val tokens = (1..3).map {
             JWT.create().withJWTId("t$it").withSubject("alice").withExpiresAt(BASE.plusSeconds(SPAN))
                 .sign(JwtFixture.ALGORITHM)
         }
+        val weight = VerifiedTokenCache.weigh(tokens[0])
+        weight.assert().isEqualTo(tokens[0].length * VerifiedTokenCache.BYTES_PER_TOKEN_CHAR)
+        val cache = VerifiedTokenCache(maxBytes = 2 * weight)
+        val verifier = JwtTokenVerifier(JwtFixture.ALGORITHM, SKEW, clock).cached(cache)
         tokens.forEach { verifier.verify(it) }
-        verifier.verify(tokens[2])
+        cache.held.assert().isEqualTo(2 * weight)
+        repeat(3) { verifier.verify(tokens[2]) }
+        cache.held.assert().describedAs("a hit weighs nothing again").isEqualTo(2 * weight)
         cache.size.assert().isEqualTo(2)
         cache.misses.assert().isEqualTo(3L)
-        cache.hits.assert().isEqualTo(1L)
+        cache.hits.assert().isEqualTo(3L)
         cache.evictions.assert().isEqualTo(1L)
         assertThrows<IllegalArgumentException> { VerifiedTokenCache(0) }
     }
 
     private companion object {
+        const val UNBOUNDED = Long.MAX_VALUE
         val BASE: Instant = Instant.parse("2026-11-20T00:00:00Z")
         val SKEW: Duration = Duration.ofSeconds(5)
         const val SPAN = 60L

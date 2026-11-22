@@ -149,6 +149,7 @@ object GuardAllowlist {
             "jwt:VerifiedTokenCachePropertyTest#a cached verification is what verifying again answers, at every instant",
             "jwt:VerifiedTokenCachePropertyTest#a token that differs from a cached one only in its signature is refused",
             "jwt:VerifiedTokenCachePropertyTest#the cache keeps within its bound and counts what it does",
+            "jwt:VerifiedTokenCacheSizeTest#an entry weighs what it retains, and the share of a 2 GiB heap holds the large tokens the old bound did",
             "spring-boot:OneVerifierTest#CoSec's own verifier answers a request's token from the cache, and a logout still refuses it next",
             "spring-boot:OneVerifierTest#an application's own verifier is never given the cache",
             // PIP-32: nothing reads the server's request after the response.
@@ -263,7 +264,6 @@ object GuardAllowlist {
             "spring-boot:SnapshotMetricsWiringTest#with a registry the source counts into it and its gauges are bound",
             "runtime:PipelineBuilderFailureTest#an invalid prewarmed id is refused before the source subscribes",
             "runtime:PipelineBuilderFailureTest#an invalid snapshot option is refused before anything is acquired",
-            "runtime:PipelineBuilderFailureTest#an invalid listener setting is refused before the source subscribes",
             "runtime:PipelineBuilderFailureTest#a subscription that fails releases the listeners, and the caller sees its own exception",
             "runtime:SnapshotSourceConstructionTest#a periodic pass that cannot be scheduled releases the subscription the source took",
             "migrate:ConditionTranslatorTest#no row widens access against what enforcement fills",
@@ -357,6 +357,18 @@ object GuardAllowlist {
             "cocache:RedisSocialStateStoreTest#aStateIsTakenOnce",
         ),
         "startup" to setOf(
+            // STA-12, OBS-11, IDN-33: memory bounds are a share of the heap, in one table.
+            "spring-boot:SnapshotReadinessTest#a traced pipeline's listener queues count events at their traced size",
+            "cocache:CacheTtlPolicyTest#revocationTablesKeepTheirDeclaredCount",
+            "runtime:DecisionEventSizeTest#the constant a queue counts with is what a decision event retains at its trace level, within a factor of two",
+            "runtime:HeapBudgetTest#a 512 MiB heap gets a quarter of each, and never nothing",
+            "runtime:HeapBudgetTest#at the production overlay's 2 GiB heap no bound is below the count it replaced",
+            "runtime:HeapBudgetTest#the shares together take at most the bound, leaving the documents their reserved quarter",
+            "runtime:HeapBudgetTest#the startup line names each budget and its share",
+            "runtime:PipelineBuilderTest#a built pipeline's listener queues are one BEST_EFFORT listener's part of the heap share",
+            "spring-boot:DerivedHeapTest#the startup line names each bound, what it came to and from what",
+            "spring-boot:RevocationCachePrecedenceTest#a per-cache property cannot set the count",
+            "spring-boot:RevocationCachePrecedenceTest#each table holds the revocation tables' share of the heap, over cocache defaults",
             // STA-11: an application has one ControlService.
             "spring-boot:ControlServiceChoiceTest#an instance that runs the control plane gets the in-process ControlService - STA-11",
             "spring-boot:ControlServiceChoiceTest#an instance that names a control-plane host gets the HTTP ControlService - STA-11",
@@ -372,7 +384,7 @@ object GuardAllowlist {
             "spring-boot:DerivedTimeoutsTest#the startup line names each value and what it came from",
             "spring-boot:DerivedTimeoutsTest#the values follow the deadlines an operator states",
             "spring-boot:DerivedTimeoutsTest#without either deadline stated, every value is the default it replaced",
-            "spring-boot:SnapshotReadinessTest#listener queues take their property, and the drain a sixth of the shutdown phase",
+            "spring-boot:SnapshotReadinessTest#listener queues are a share of the heap, and the drain a sixth of the shutdown phase",
             "spring-boot:StarterWiringTest#change listeners take the pipeline timeout as their required timeout and stop with the context",
             "spring-boot:StarterWiringTest#the Kafka audit waits at shutdown for the listeners' drain timeout",
             // SNP-23: what a snapshot source's options once took as settings is computed.

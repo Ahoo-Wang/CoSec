@@ -86,14 +86,32 @@ Which preview of the library may run behind which preview of the gateway image: 
   | `cosec.authorization.membership.unknown-ttl` | a constant, 5 s |
 
   - `PipelineSettings` (in `options { }`) keeps `timeout` and loses `authenticationTimeout`, `membershipTimeout`,
-    `attributeTimeout` and `rateLimitTimeout`; `ListenerSettings` (in `listeners { }`) keeps `queueCapacity` and loses
-    `requiredTimeout` and `drainTimeout`. Set `timeout` instead, or delete the line.
+    `attributeTimeout` and `rateLimitTimeout`; `ListenerSettings` (in `listeners { }`) loses `requiredTimeout` and
+    `drainTimeout`, and with the next entry the class itself. Set `timeout` instead, or delete the line.
   - An `AttributeProvider` with a timeout of its own, and a `RevocationReader` of your own, keep their own bounds.
   - With a `cosec.pipeline.timeout` below 20 ms, the shares are floored at 1 ms, and a token's two revocation reads may no
     longer end inside the authentication timeout.
   - **A deployment with a `cosec.pipeline.timeout` below the default** also shortens the revocation read, the one stage
     that fails open: at `1s` each read gets 60 ms where it had 300 ms, and a read past it accepts the request's token
     unless `cosec.authentication.revocation.fail-closed=true`. Set `fail-closed`, or keep the default deadline.
+- **Memory bounds are a share of the heap, and three keys are gone** (`STA-12`, `OBS-11`, `IDN-32`, `IDN-33`; what can
+  be computed is not configured). Affected: a configuration that sets one of them, and code that called
+  `Pipeline.builder`'s `listeners { }`. Startup fails listing the keys CoSec does not read, saying what replaced each.
+  Remove the key; to hold more, give the instance more heap. At the production overlay's 2 GiB heap no bound is below
+  the count it replaced; a smaller heap gets less, and the startup line says what each came to
+  ([Computed, not configured](./configuration.md#computed-not-configured)).
+
+  | Removed | Now | At 2 GiB | Too tight shows as |
+  |---|---|---|---|
+  | `cosec.authentication.revocation.cache.maximum-size` (500,000) | an 8th of the heap, counted at 290 + 230 bytes an entry of each table; CoSec locks the count | 516,222 per table | `cocache.misses` (`cocache_misses_total`) with the tag `cache=RevokedTokenCache` or `RevokedSubjectCache` |
+  | `cosec.authentication.token-cache.max-entries` (16,384) | a 16th of the heap, each entry weighed by its token's length × 5 bytes | 128 MiB, more than 16,384 large tokens | `cosec.token.cache.evictions` |
+  | `cosec.observability.listener.queue-capacity` (1,024) | a 64th of the heap, shared by the `BEST_EFFORT` listeners, counted at 1 KB an event, 8 KB with `cosec.pipeline.trace-level` `full` or `exhaustive` | 8,192 events each for four listeners, 1,024 traced | `cosec.listener.dropped` |
+
+  - `ListenerSettings` and `PipelineBuilder.listeners { }` are removed: nothing about how the listeners run is set.
+    Delete the block.
+  - A `cocache.caches.[RevokedTokenCache].local-maximum-size` (or `RevokedSubjectCache`) now fails startup: the count
+    is locked.
+  - The change listeners' 1/32 of the heap is unchanged, and now in the same table.
 
 ## From 8.0.0-beta.4 {#from-8-0-0-beta-4}
 

@@ -250,9 +250,7 @@ class UnknownPropertiesTest {
         runner.withPropertyValues(
             "cosec.pipeline.identity.max-age=30s",
             "cosec.pipeline.identity.max-size=4KB",
-            "cosec.observability.listener.queue-capacity=16",
             "cosec.authentication.revocation.cache.local-max-age=10s",
-            "cosec.authentication.revocation.cache.maximum-size=10",
         ).run { context -> context.startupFailure.assert().isNull() }
     }
 

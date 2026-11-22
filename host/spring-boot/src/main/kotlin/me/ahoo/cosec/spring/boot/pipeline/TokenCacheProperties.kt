@@ -16,13 +16,13 @@
 package me.ahoo.cosec.spring.boot.pipeline
 
 import me.ahoo.cosec.annotations.InternalCoSecApi
-import me.ahoo.cosec.jwt.VerifiedTokenCache
 import me.ahoo.cosec.spring.boot.CoSecProperties
 import org.springframework.boot.context.properties.ConfigurationProperties
 
 /**
  * `cosec.authentication.token-cache.*`: the tokens CoSec's own verifier verified, kept for the requests that carry them
- * again (R2B-22, `IDN-32`). Never for an application's own `TokenVerifier`.
+ * again (R2B-22, `IDN-32`). Never for an application's own `TokenVerifier`. It holds the token cache's share of the heap
+ * (`HeapBudget`, `STA-12`), each entry weighed by its token's length.
  */
 @ConfigurationProperties(prefix = TokenCacheProperties.PREFIX)
 @InternalCoSecApi
@@ -32,12 +32,6 @@ class TokenCacheProperties {
      * of verified again. The revocation and reserved-attribute checks run on every request either way.
      */
     var enabled: Boolean = true
-
-    /**
-     * The most verified tokens kept: one more evicts one, which then costs a verification when it comes again. An entry
-     * of a large token (a dozen roles in four spaces) retains about 7 KB, so the default holds at most about 115 MB.
-     */
-    var maxEntries: Int = VerifiedTokenCache.DEFAULT_MAX_ENTRIES
 
     @InternalCoSecApi
     companion object {

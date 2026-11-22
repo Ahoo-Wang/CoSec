@@ -201,11 +201,6 @@
       "type": "me.ahoo.cosec.spring.boot.micrometer.MetricsProperties"
     },
     {
-      "name": "cosec.observability.listener",
-      "sourceType": "me.ahoo.cosec.spring.boot.pipeline.ListenerProperties",
-      "type": "me.ahoo.cosec.spring.boot.pipeline.ListenerProperties"
-    },
-    {
       "name": "cosec.openapi",
       "sourceType": "me.ahoo.cosec.spring.boot.openapi.OpenAPIProperties",
       "type": "me.ahoo.cosec.spring.boot.openapi.OpenAPIProperties"
@@ -307,12 +302,6 @@
       "type": "java.time.Duration"
     },
     {
-      "description": "The most entries the local copy holds.",
-      "name": "cosec.authentication.revocation.cache.maximum-size",
-      "sourceType": "me.ahoo.cosec.spring.boot.authorization.cache.CacheConfiguration",
-      "type": "java.lang.Long"
-    },
-    {
       "description": "Whether a request's token is refused (503) while the revocations cannot be read, instead of accepted: the documented exception to failing closed, which applies to verifying a token only. Refresh always fails then.",
       "name": "cosec.authentication.revocation.fail-closed",
       "sourceType": "me.ahoo.cosec.spring.boot.pipeline.RevocationProperties",
@@ -329,12 +318,6 @@
       "name": "cosec.authentication.token-cache.enabled",
       "sourceType": "me.ahoo.cosec.spring.boot.pipeline.TokenCacheProperties",
       "type": "java.lang.Boolean"
-    },
-    {
-      "description": "The most verified tokens kept: one more evicts one, which then costs a verification when it comes again. An entry of a large token (a dozen roles in four spaces) retains about 7 KB, so the default holds at most about 115 MB.",
-      "name": "cosec.authentication.token-cache.max-entries",
-      "sourceType": "me.ahoo.cosec.spring.boot.pipeline.TokenCacheProperties",
-      "type": "java.lang.Integer"
     },
     {
       "description": "How many proxy hops of `X-Forwarded-For` to trust: `0` ignores the header (a directly exposed host), `N` takes the entry the closest of N trusted proxies appended.",
@@ -665,12 +648,6 @@
       "name": "cosec.metrics.enabled",
       "sourceType": "me.ahoo.cosec.spring.boot.micrometer.MetricsProperties",
       "type": "java.lang.Boolean"
-    },
-    {
-      "description": "The events one BEST_EFFORT listener may have waiting; a full queue drops the next and counts it.",
-      "name": "cosec.observability.listener.queue-capacity",
-      "sourceType": "me.ahoo.cosec.spring.boot.pipeline.ListenerProperties",
-      "type": "java.lang.Integer"
     },
     {
       "description": "Whether the bearer-auth customizer of the OpenAPI document is on (`cosec-openapi`).",

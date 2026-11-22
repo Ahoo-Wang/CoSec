@@ -19,7 +19,6 @@ import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.document.identity.IdentityCodec
 import me.ahoo.cosec.engine.TraceLevel
-import me.ahoo.cosec.runtime.event.DecisionListeners
 import me.ahoo.cosec.runtime.snapshot.SnapshotOptions
 import me.ahoo.cosec.spring.boot.CoSecProperties
 import org.springframework.boot.context.properties.ConfigurationProperties
@@ -316,22 +315,5 @@ class RuntimeAuthorizationProperties {
     @InternalCoSecApi
     companion object {
         const val PREFIX = CoSecProperties.PREFIX + ".authorization"
-    }
-}
-
-/**
- * `cosec.observability.listener.*` (RFC 0006 X8): the queues of BEST_EFFORT decision listeners. A REQUIRED listener may
- * take 20 % of `cosec.pipeline.timeout`, and the queues drain at shutdown for a sixth of
- * `spring.lifecycle.timeout-per-shutdown-phase` (`OBS-10`).
- */
-@ConfigurationProperties(prefix = ListenerProperties.PREFIX)
-@InternalCoSecApi
-class ListenerProperties {
-    /** The events one BEST_EFFORT listener may have waiting; a full queue drops the next and counts it. */
-    var queueCapacity: Int = DecisionListeners.DEFAULT_QUEUE_CAPACITY
-
-    @InternalCoSecApi
-    companion object {
-        const val PREFIX = CoSecProperties.PREFIX + ".observability.listener"
     }
 }

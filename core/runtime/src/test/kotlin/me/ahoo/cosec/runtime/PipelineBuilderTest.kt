@@ -23,6 +23,7 @@ import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.document.SnapshotDocuments
 import me.ahoo.cosec.document.identity.IdentityCodec
+import me.ahoo.cosec.engine.TraceLevel
 import me.ahoo.cosec.model.scope.HostScope
 import me.ahoo.cosec.runtime.PipelineFixtures.InstalledViews
 import me.ahoo.cosec.runtime.PipelineFixtures.TENANT
@@ -35,6 +36,7 @@ import me.ahoo.cosec.runtime.authn.CompositeAuthenticator
 import me.ahoo.cosec.runtime.event.DecisionEvent
 import me.ahoo.cosec.runtime.event.DecisionListener
 import me.ahoo.cosec.runtime.event.DecisionListeners
+import me.ahoo.cosec.runtime.event.Delivery
 import me.ahoo.cosec.runtime.http.Cookies
 import me.ahoo.cosec.runtime.http.Headers
 import me.ahoo.cosec.runtime.http.HttpFacts
@@ -239,14 +241,33 @@ class PipelineBuilderTest {
         fun builder() = Pipeline.builder(authenticator(authenticated()), SuspendingSnapshotSource(InstalledViews()))
         listOf(
             builder().listener(listener).listeners(DecisionListeners.NONE),
-            builder().listeners { queueCapacity = 1 }.listeners(DecisionListeners.NONE),
             builder().attributes(provider).attributes(AttributeProviders.NONE),
             builder().options { allowQueryToken = true }.options(PipelineOptions()),
             builder().forwardIdentity { }.identity(IdentityIssuer(emptySet())),
         ).forEach { contradicting ->
             assertThrows<IllegalStateException> { contradicting.build() }
         }
-        builder().listener(listener).listeners { queueCapacity = 1 }.build().close()
+        builder().listener(listener).build().close()
+    }
+
+    /** `OBS-11`: the queues share the decision listeners' part of the heap among the BEST_EFFORT listeners only. */
+    @Test
+    fun `a built pipeline's listener queues are one BEST_EFFORT listener's part of the heap share`() {
+        fun listener(name: String, delivery: Delivery) = object : DecisionListener {
+            override val name = name
+            override val delivery = delivery
+
+            override suspend fun onDecision(event: DecisionEvent) = Unit
+        }
+        val builder = Pipeline.builder(authenticator(authenticated()), SuspendingSnapshotSource(InstalledViews()))
+            .listener(listener("a", Delivery.BEST_EFFORT))
+            .listener(listener("b", Delivery.BEST_EFFORT))
+            .listener(listener("c", Delivery.REQUIRED))
+        val budget = HeapBudget.of()
+        for (level in TraceLevel.entries) {
+            builder.queueCapacity(level).assert().isEqualTo(budget.decisionQueueCapacity(2, level))
+        }
+        builder.build().close()
     }
 
     /** UA-12: a pipeline that answers API keys without a membership provider would answer every key 503: refused. */
