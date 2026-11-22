@@ -68,6 +68,8 @@
 > **2026-11-22 修订（#1860，`PIP-5` 修订；#1849，`PIP-16`）**：路径的上限：整条路径按收到的样子（百分号编码）至多 2,048 个字符；一个段在去掉路径参数并解码之后至多 256 个 UTF-16 单元，所以上限不随文字而变（29 个中文字符编码后是 261 个字符，现在可以通过）。只有按收到的样子超过上限的段才会为此解码，正常请求的快路径不变；编码的分隔符、点段与控制字符照旧拒绝，藏在长段里也一样。按原样匹配路径的模式（`decodeAndParseSegments: false`，只允许用在 ALLOW 上，`DOC-14`）读到的是编码后的段，实测一个 2,043 字符的原样段比原来的最坏情形贵 3.5 至 9.5 倍，所以这种模式不匹配任何含有超过 256 个原样字符段的路径：少匹配是失败关闭。控制面不经请求而判定的类型化资源 id 仍按写出来的样子计。
 > 客户端地址（`PIP-16`）：Spring Boot 4.2 把转发头策略的属性改为 `server.request.header.forwarded.strategy`（取值 `web-server`、`framework`、`none`，`web-server` 即原来的 `native`），旧键 `server.forward-headers-strategy` 已弃用但仍被读取。CoSec 先读新键、再读旧键，本版本不认识的取值按服务器自己处理（最严格的读法）对待。
 
+> **2026-11-22 修订（#1864，`PIP-34`）**：§6.2、§6.3：拒绝的响应体可以由宿主渲染。扩展点 `ProblemRenderer`（`@CoSecSpi`、`@ExperimentalCoSecApi`）的输入是 CoSec 的 `Problem`（类型、状态码、请求 id、trace id），输出只是 body 的字节；默认实现是原来的编码器。状态码与响应头（`WWW-Authenticate`、`Retry-After`、请求 id）仍只来自 `StatusMapping`，渲染器拿不到判定（适配器不见 `Decision` 的不变量不动）。三个适配器与 CoSec 自己的登录路由经同一处（`ProblemBodies`）取 body，由对等测试守住；渲染器抛异常或给出空 body 时退回默认编码并计数（`cosec.problem.render.failed`），拒绝照常生效。代价：宿主换掉 `type` 与 `code` 之后，CoSec 自己的 TypeScript 客户端在那台宿主上认不出这些错误；文档建议把 CoSec 的 code 留在扩展成员里。
+
 ## 0. 结论先行
 
 第 4 阶段结束时，引擎已经是同步纯函数，策略数据都在内存快照里。剩下的问题在引擎**外面**：`SecurityPipeline` 是一条 Reactor 链，
