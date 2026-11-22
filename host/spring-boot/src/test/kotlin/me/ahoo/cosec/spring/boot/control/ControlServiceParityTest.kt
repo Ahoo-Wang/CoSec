@@ -136,6 +136,11 @@ class ControlServiceParityTest {
         }
         val copy = node.deepCopy()
         strip(copy)
+        // A listing is in the order of its changes' ids, which are random: compared as the set it lists.
+        (copy as? ObjectNode)?.get("changes")?.takeIf { it.isArray }?.let { changes ->
+            val sorted = changes.values().sortedBy { CoSecJson.mapper.writeValueAsString(it) }
+            copy.putArray("changes").addAll(sorted)
+        }
         return CoSecJson.mapper.writeValueAsString(copy)
     }
 
@@ -177,11 +182,28 @@ class ControlServiceParityTest {
         // A page of one, and the page its cursor leads to, over three open changes.
         record { service.propose(iam, proposal("page-a", 2)) }
         record { service.propose(iam, proposal("page-b", 2)) }
-        val page = service.changes(iam, key, limit = 1)
-        record { page }
-        val next = checkNotNull(CoSecJson.mapper.readTree(page).get("next")?.asString()) { "a page of one has a next" }
-        record { service.changes(iam, key, after = next, limit = 1) }
-        record { service.changes(iam, state = ChangeState.CHECKED) }
+        // Which change a page of one shows follows the random ids: the pages are compared for what they list together.
+        val pageOne = service.changes(iam, key, limit = 2)
+        val next = checkNotNull(
+            CoSecJson.mapper.readTree(pageOne).get("next")?.asString()
+        ) { "a page of two has a next" }
+        val pageTwo = service.changes(iam, key, after = next, limit = 2)
+        record {
+            val pages = listOf(pageOne, pageTwo).map { CoSecJson.mapper.readTree(it) }
+            val merged = CoSecJson.mapper.createObjectNode()
+            merged.putArray("changes").addAll(pages.flatMap { it.get("changes").values() })
+            merged.putArray("sizes").apply { pages.forEach { add(it.get("changes").size()) } }
+            merged.putArray("next").apply { pages.forEach { add(it.get("next")?.isString == true) } }
+            CoSecJson.mapper.writeValueAsString(merged)
+        }
+        // By state, the listing spans every tenant, the other run's included: compared for this tenant's changes.
+        record {
+            val listed = CoSecJson.mapper.readTree(service.changes(iam, state = ChangeState.CHECKED))
+            val own = listed.get("changes").values().filter { it.get("key").asString() == "tenant:$tenant" }
+            CoSecJson.mapper.writeValueAsString(
+                CoSecJson.mapper.createObjectNode().apply { putArray("changes").addAll(own) }
+            )
+        }
         record { service.rebase(iam, second) }
         record { service.abandon(iam, second) }
         record { service.startShadow(iam, second) }
@@ -265,7 +287,8 @@ class ControlServiceParityTest {
             inProcess.count { it.startsWith("40") }.assert().isGreaterThanOrEqualTo(4)
             // The listings answer, with a cursor to follow: nothing compared as two unavailable stores.
             inProcess.filter { it.startsWith("503") }.assert().isEmpty()
-            inProcess.joinToString("\n").assert().contains("\"next\":\"<cursor>\"").contains("\"changes\":[{")
+            inProcess.joinToString("\n").assert().contains("\"sizes\":[2,1]").contains("\"next\":[true,false]")
+                .contains("\"changes\":[{")
         }
     }
 
