@@ -1033,7 +1033,7 @@
         "runtime:ResidentWriteTest#an unchanged resident record is written again once half its life has passed",
         "runtime:ResidentWriteTest#a resident write that fails does not stop the status, and is tried again every cycle until it succeeds",
         "cocache:StatusSplitTest#a resident record lives exactly its life after its last write",
-        "cocache:StatusSplitTest#a missing or undecodable resident record is unreadable, another's fails the read",
+        "cocache:StatusSplitTest#a missing or undecodable resident record is unreadable, the undecodable one logged, another's fails the read",
         "cocache:CacheTtlPolicyTest#shadowCachesLiveUnderTheirStoragePathsAndFailClosed",
         "control:PropagationTest#a live instance without a resident record is unknown, and a gone one's is not read - CTL-75",
         "control:ClientContractTest#a propagation answer holds exactly the members of its contract file",

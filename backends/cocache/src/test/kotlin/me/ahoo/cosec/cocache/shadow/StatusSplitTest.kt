@@ -15,6 +15,10 @@
 
 package me.ahoo.cosec.cocache.shadow
 
+import ch.qos.logback.classic.Level
+import ch.qos.logback.classic.Logger
+import ch.qos.logback.classic.spi.ILoggingEvent
+import ch.qos.logback.core.AppenderBase
 import kotlinx.coroutines.future.await
 import kotlinx.coroutines.runBlocking
 import me.ahoo.cocache.api.AsyncStore
@@ -38,12 +42,14 @@ import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.test.asserts.assert
 import me.ahoo.test.asserts.assertThrownBy
 import org.junit.jupiter.api.Test
+import org.slf4j.LoggerFactory
 import java.time.Clock
 import java.time.Duration
 import java.time.Instant
 import java.time.ZoneId
 import java.time.ZoneOffset
 import java.util.concurrent.CompletableFuture
+import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicLong
 
@@ -165,7 +171,7 @@ class StatusSplitTest {
      * are read; one under another instance's key is the store's data being wrong and fails the read.
      */
     @Test
-    fun `a missing or undecodable resident record is unreadable, another's fails the read`() = runBlocking<Unit> {
+    fun `a missing or undecodable resident record is unreadable, the undecodable one logged, another's fails the read`() = runBlocking<Unit> {
         val backend = InMemoryBackend()
         val keyPrefix = newKeyPrefix()
         SnapshotNode(backend, keyPrefix).use { node ->
@@ -183,9 +189,24 @@ class StatusSplitTest {
                     )
                 ).async().put("i1", """{"format":9}""".encodeToByteArray()).await()
             }
-            val readings = reports.residents(setOf("i0", "i1", "i2"))
+            val lines = CopyOnWriteArrayList<ILoggingEvent>()
+            val appender = object : AppenderBase<ILoggingEvent>() {
+                override fun append(event: ILoggingEvent) {
+                    if ("resident documents" in event.formattedMessage) lines += event
+                }
+            }.also { it.start() }
+            val logger = LoggerFactory.getLogger(CoCacheShadowReports::class.java) as Logger
+            logger.addAppender(appender)
+            val readings = try {
+                reports.residents(setOf("i0", "i1", "i2"))
+            } finally {
+                logger.detachAppender(appender)
+            }
             readings.residents.keys.assert().containsExactly("i0")
             readings.unreadable.assert().containsExactlyInAnyOrder("i1", "i2")
+            // The record that does not decode is named at WARN, with why; the missing one (i2) is expected, and quiet.
+            lines.single().level.assert().isEqualTo(Level.WARN)
+            lines.single().formattedMessage.assert().contains("instance [i1]").contains("format").doesNotContain("[i2]")
             SnapshotNode(backend, keyPrefix).use { other ->
                 other.runtime.create(ShadowCacheSpecs.residents(keyPrefix)).async()
                     .put("i0", ResidentDocuments("i9", at, documents(1))).await()

@@ -30,6 +30,7 @@ import me.ahoo.cosec.spi.shadow.ShadowReportSink
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import java.time.Clock
 import java.time.Duration
+import java.time.Instant
 import kotlin.coroutines.cancellation.CancellationException
 
 private val log = KotlinLogging.logger {}
@@ -68,7 +69,7 @@ class ShadowReporter(
 
     /** What the last resident write that succeeded held, and when; null until one has. */
     private var lastResident: Map<SnapshotKey, Long>? = null
-    private var residentAt: java.time.Instant? = null
+    private var residentAt: Instant? = null
     private val sight = source?.let { CompileOnSight(it, recorder, interval, nanos) }
 
     init {

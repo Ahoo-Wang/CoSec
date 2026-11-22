@@ -112,12 +112,17 @@ class CoCacheShadowReports @InternalCoSecApi constructor(
         )
     }
 
-    /** [instance]'s resident record, or null when it has none or it does not decode. */
+    /** [instance]'s resident record, or null when it has none (quietly) or it does not decode (logged at WARN). */
     private suspend fun resident(instance: String): ResidentDocuments? {
         val resident = try {
             read(residents, instance, "The resident documents of instance [$instance]")?.first
         } catch (e: SnapshotFormatException) {
-            log.debug(e) { "The resident documents of instance [$instance] do not read: counted as unknown." }
+            // Abnormal, unlike a missing record (an instance of the previous preview writes none): named, with why. The
+            // read is shared for five seconds on a control host, which bounds the line to that.
+            log.warn {
+                "The resident documents of instance [$instance] do not read: propagation counts it unknown " +
+                    "(${e.message})."
+            }
             return null
         } ?: return null
         check(resident.instance == instance) { "The resident documents under [$instance] are ${resident.instance}'s" }
