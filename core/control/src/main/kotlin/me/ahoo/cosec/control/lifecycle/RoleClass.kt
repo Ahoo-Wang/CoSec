@@ -21,7 +21,9 @@ import me.ahoo.cosec.control.change.Escalation
 import me.ahoo.cosec.control.change.Operation
 import me.ahoo.cosec.document.Actor
 import me.ahoo.cosec.document.PolicyDocument
+import me.ahoo.cosec.document.RoleDefinition
 import me.ahoo.cosec.model.AppId
+import me.ahoo.cosec.model.RoleId
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 
 /**
@@ -52,16 +54,20 @@ internal object RoleClass {
 
     /**
      * Whether [operations] of [key] are the class's: a tenant document's, and only roles written or removed, none of
-     * [controlApp]. A removed role's app is the one [base] gives it; one [base] does not hold is not the class's.
+     * [controlApp] and none without an app. A role written over one [base] holds under its id removes that one, so both
+     * are held to the rule. A removed role's app is the one [base] gives it; one [base] does not hold is not the class's.
      */
     fun covers(key: SnapshotKey, operations: List<Operation>, base: PolicyDocument?, controlApp: AppId): Boolean =
         key is SnapshotKey.Tenant && operations.isNotEmpty() && operations.all { operation ->
             when (operation) {
-                is Operation.PutRole -> operation.role.app != controlApp
-                is Operation.RemoveRole -> base?.roles?.firstOrNull { it.id == operation.id }?.app.notIn(controlApp)
+                is Operation.PutRole -> operation.role.app.notIn(controlApp) &&
+                    base.held(operation.role.id)?.let { it.app.notIn(controlApp) } != false
+                is Operation.RemoveRole -> base.held(operation.id)?.app.notIn(controlApp)
                 else -> false
             }
         }
+
+    private fun PolicyDocument?.held(id: RoleId): RoleDefinition? = this?.roles?.firstOrNull { it.id == id }
 
     /**
      * [escalations] as the class leaves them: one record naming [author], the grant and what it lifted, in place of
@@ -94,7 +100,7 @@ internal object RoleClass {
         )
     }
 
-    /** Whether a removed role's app is known and is not [controlApp]: a role the head does not hold is not the class's. */
+    /** Whether a role's app is known and is not [controlApp]: a role with no app, or none at all, is not the class's. */
     private fun AppId?.notIn(controlApp: AppId): Boolean = this != null && this != controlApp
 
     /** What [apply] reads of a change: its document, its operations, the head they apply to, the control plane's app. */

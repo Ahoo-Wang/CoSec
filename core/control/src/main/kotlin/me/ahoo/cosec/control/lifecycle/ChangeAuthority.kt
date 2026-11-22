@@ -273,8 +273,10 @@ class ChangeAuthority(
             (verdict as? GrantVerdict.Unknown)
                 ?.let { Escalation(fragment.toString(), Escalation.Reason.of(it.reason.name), it.toString()) }
         }
-        // The role class lifts who-grants doubts of a roles-only change of a tenant's document, for a holder (CTL-79).
-        return escalations + RoleClass.apply(unknown, RoleClass.Proposed(key, operations, base, controlApp), operator.actor) {
+        // The role class lifts who-grants doubts of a roles-only change of a tenant's document, for a holder (CTL-79). It
+        // sees every escalation of the change, so its record never stands beside one it may not lift.
+        val change = RoleClass.Proposed(key, operations, base, controlApp)
+        return RoleClass.apply(escalations + unknown, change, operator.actor) {
             holds(operator, key, ControlActions.MANAGE_ROLES)
         }
     }

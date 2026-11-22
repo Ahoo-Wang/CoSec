@@ -121,6 +121,17 @@ class RoleClassUnitTest {
     }
 
     @Test
+    fun `a role with no app is never the class's - CTL-79`() {
+        val held = escalations(Reason.CROSS_TENANT)
+        val appless = listOf(Operation.PutRole(RoleDefinition(RoleId("loose"), RolePermissions.Listed(listOf("read")))))
+        covers(acme, appless).assert().isFalse()
+        apply(acme, appless, held).assert().isEqualTo(held to false)
+        // Over a role of an app the head holds, too.
+        val over = listOf(Operation.PutRole(RoleDefinition(RoleId("night"), RolePermissions.Listed(listOf("read")))))
+        covers(acme, over).assert().isFalse()
+    }
+
+    @Test
     fun `a role of the control plane's own app is never the class's, put or removed - CTL-79`() {
         val held = escalations(Reason.CROSS_TENANT)
         val governors = Operation.PutRole(
@@ -132,6 +143,12 @@ class RoleClassUnitTest {
             listOf(Operation.RemoveRole(RoleId("governors"))),
             // A role the head does not hold: its app is not known, so it is not the class's.
             listOf(Operation.RemoveRole(RoleId("unknown"))),
+            // A role of another app written over the control plane's role of that id removes the control plane's.
+            listOf(
+                Operation.PutRole(
+                    RoleDefinition(RoleId("governors"), RolePermissions.Listed(listOf("read")), app = AppId("orders")),
+                ),
+            ),
         ).forEach { operations ->
             covers(acme, operations).assert().describedAs("$operations").isFalse()
             apply(acme, operations, held).assert().isEqualTo(held to false)

@@ -17,15 +17,31 @@ package me.ahoo.cosec.control.api
 
 import kotlinx.coroutines.runBlocking
 import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.control.change.Escalation
+import me.ahoo.cosec.control.change.Operation
+import me.ahoo.cosec.control.lifecycle.ChangeAuthority
+import me.ahoo.cosec.control.lifecycle.Operations
+import me.ahoo.cosec.control.lifecycle.StoreCurrentDocuments
 import me.ahoo.cosec.control.store.Publication
 import me.ahoo.cosec.document.Actor
 import me.ahoo.cosec.document.PolicyDocumentCodec
 import me.ahoo.cosec.document.ProvenanceKind
+import me.ahoo.cosec.document.RoleDefinition
+import me.ahoo.cosec.document.RolePermissions
 import me.ahoo.cosec.document.json.CoSecJson
+import me.ahoo.cosec.model.AppId
+import me.ahoo.cosec.model.Binding
+import me.ahoo.cosec.model.BindingId
+import me.ahoo.cosec.model.BindingScope
+import me.ahoo.cosec.model.Match
+import me.ahoo.cosec.model.PolicyId
 import me.ahoo.cosec.model.PrincipalId
+import me.ahoo.cosec.model.RoleId
+import me.ahoo.cosec.model.SubjectRef
 import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.model.decision.DocumentKind
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
+import me.ahoo.cosec.spi.token.RevocationReader
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import tools.jackson.databind.JsonNode
@@ -221,5 +237,100 @@ class RoleClassTest {
         // A role of another app, by the same holder, is still the class's (once the waiting change gives up the slot).
         call("POST", "/changes/${proposed.get("id").asString()}:abandon", "{}").first.assert().isEqualTo(200)
         stage(request("tenant:acme", head(), role)).second.assert().isEqualTo("READY")
+    }
+
+    /** The platform withdraws `cosec:manage-roles` from svc-iam, leaving it a projector. */
+    private fun withdraw() = runBlocking {
+        val head = fixture.revisions.head(SnapshotKey.Platform)!!
+        val actions = projector.joinToString(",") { "\"$it\"" }
+        val narrowed = PolicyDocumentCodec.decodePolicy(
+            CoSecJson.mapper.readTree(
+                """{"id":"iam","statements":[{"effect":"allow","action":[$actions],"resource":["doc/tenant/**"]},""" +
+                    """{"effect":"allow","action":"cosec:grant","resource":"scope/**"}]}""",
+            ),
+        )
+        val document = head.document
+        fixture.revisions.publish(
+            SnapshotKey.Platform,
+            head,
+            document.copy(policies = document.policies.map { if (it.id.value == "iam") narrowed else it })
+                .at(head.revision + 1, Instant.now()),
+            publication,
+        )
+    }
+
+    @Test
+    fun `a grant withdrawn once the change is ready is decided again at publish, and the change waits - CTL-79`() {
+        rights(holder)
+        val (proposed, state) = stage(request("tenant:acme", head(), role))
+        state.assert().isEqualTo("READY")
+        val before = head()
+        withdraw()
+        // Publish runs the grant analysis again, as the publisher, on the current heads: the class with it.
+        val (status, published) = call("POST", "/changes/${proposed.get("id").asString()}:publish", "{}")
+        status.assert().isEqualTo(200)
+        published.get("state").asString().assert().describedAs("$published").isEqualTo("AWAITING_APPROVAL")
+        reasons(published).assert().contains("CROSS_TENANT").doesNotContain("ROLE_CLASS")
+        head().assert().isEqualTo(before)
+    }
+
+    @Test
+    fun `a grant withdrawn while the change is only checked lets it stage, and publish still decides it again - CTL-79`() {
+        rights(holder)
+        val (status, proposed) = call("POST", "/changes", request("tenant:acme", head(), role))
+        status.assert().isEqualTo(201)
+        proposed.get("state").asString().assert().isEqualTo("CHECKED")
+        withdraw()
+        val id = proposed.get("id").asString()
+        // Staging keeps what the check found: the record of the class it was granted by.
+        val staged = call("POST", "/changes/$id:skip-shadow", """{"reason":"projected"}""").second
+        staged.get("state").asString().assert().isEqualTo("READY")
+        reasons(staged).assert().containsExactly("ROLE_CLASS")
+        val before = head()
+        val published = call("POST", "/changes/$id:publish", "{}").second
+        published.get("state").asString().assert().describedAs("$published").isEqualTo("AWAITING_APPROVAL")
+        reasons(published).assert().contains("CROSS_TENANT").doesNotContain("ROLE_CLASS")
+        head().assert().isEqualTo(before)
+    }
+
+    @Test
+    fun `the class sees every escalation of the change, the analysis's and the others' - CTL-79`() = runBlocking<Unit> {
+        rights(holder)
+        val authority = ChangeAuthority(fixture.engine.authorizer, revocations = RevocationReader.NONE)
+        val key = SnapshotKey.Tenant("acme")
+        val base = fixture.revisions.head(key)!!.document
+        val operations = listOf(
+            Operation.PutRole(
+                RoleDefinition(RoleId("night"), RolePermissions.Listed(listOf("read")), app = AppId("orders"))
+            ),
+        )
+        val roled = Operations.apply(key, base, operations).candidate!!
+        val operator = fixture.engine.operator(TenantId.PLATFORM, "svc-iam")
+        val documents = StoreCurrentDocuments(fixture.store, fixture.revisions)
+        val now = Instant.now()
+        // The analysis alone: what the class lifts, so it lifts it.
+        authority.escalations(operator, key, operations, base, roled, documents, now).map { it.reason }
+            .assert().containsExactly(Escalation.Reason.ROLE_CLASS)
+        // One escalation from outside the analysis beside it (a break-glass binding): the class lifts nothing.
+        val glass = Binding(
+            BindingId("glass"),
+            SubjectRef.Principal(TenantId("acme"), PrincipalId("dora")),
+            BindingScope(Match.Any, Match.Any),
+            PolicyId("orders"),
+            expiresAt = now.plusSeconds(3600).toEpochMilli(),
+            breakGlass = true,
+        )
+        authority.escalations(
+            operator,
+            key,
+            operations,
+            base,
+            roled.copy(bindings = roled.bindings + glass),
+            documents,
+            now
+        )
+            .map { it.reason }.assert()
+            .contains(Escalation.Reason.BREAK_GLASS, Escalation.Reason.CROSS_TENANT)
+            .doesNotContain(Escalation.Reason.ROLE_CLASS)
     }
 }
