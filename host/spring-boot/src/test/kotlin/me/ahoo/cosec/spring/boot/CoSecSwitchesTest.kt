@@ -134,8 +134,6 @@ class CoSecSwitchesTest {
             "me.ahoo.cosec.spring.boot.authentication.route.OnLoginRoute" to "presence of the two login paths: reviewed above",
             "me.ahoo.cosec.spring.boot.control.ControlPlaneCondition" to "reads cosec.control.enabled strictly: held by a test",
             "me.ahoo.cosec.spring.boot.OnCoCacheUsed" to "class presence only",
-            "me.ahoo.cosec.spring.boot.pipeline.CoSecPipelineWebAutoConfiguration\$WebMvc\$DeclaredCorsSource" to
-                "bean presence only",
         )
         val found = scan().conditions
         val unreviewed = found - reviewed.keys

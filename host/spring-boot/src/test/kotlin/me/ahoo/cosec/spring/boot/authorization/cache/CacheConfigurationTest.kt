@@ -31,14 +31,14 @@ class CacheConfigurationTest {
 
     @Test
     fun aNullLocalMaxAgeKeepsCoCachesDefault() {
-        val policy = CacheConfiguration(localMaxAge = null).applyTo(spec, 100).policy
+        val policy = CacheConfiguration().apply { localMaxAge = null }.applyTo(spec, 100).policy
         policy.localMaxAge.assert().isEqualTo(DefaultPolicies.STORE.localMaxAge)
         policy.local.maximumSize.assert().isEqualTo(100L)
     }
 
     @Test
     fun applyToWithAllOptions() {
-        val policy = CacheConfiguration(localMaxAge = Duration.ofMinutes(10)).applyTo(spec, 100).policy
+        val policy = CacheConfiguration().apply { localMaxAge = Duration.ofMinutes(10) }.applyTo(spec, 100).policy
         policy.local.maximumSize.assert().isEqualTo(100L)
         policy.localMaxAge.assert().isEqualTo(Duration.ofMinutes(10))
     }

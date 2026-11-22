@@ -411,16 +411,17 @@ still reads the context, and every check of it there is `false`.
 
 Policies, rate limit keys, the blacklist and audit events see the client IP as `environment.ip`. CoSec reads it once,
 from one party it trusts (`PIP-16`), and how depends on whether your server already resolves forwarded headers:
-`server.forward-headers-strategy`, which Spring Boot sets to `native` by itself on Kubernetes, Cloud Foundry, Heroku and
-the other cloud platforms it detects. The startup log names the reading in a line that ends with `(PIP-16)`.
+`server.request.header.forwarded.strategy` (or its deprecated predecessor `server.forward-headers-strategy`, whose
+`native` is `web-server`), which Spring Boot sets to `web-server` by itself on Kubernetes, Cloud Foundry, Heroku and the
+other cloud platforms it detects. The startup log names the reading in a line that ends with `(PIP-16)`.
 
 | Server and strategy | Where the client IP comes from | `cosec.authorization.remote-ip.max-trusted-index` |
 |---|---|---|
 | Any server, no strategy (`none`, the default off a cloud platform) | The `X-Forwarded-For` entry that many places from the right; the connection's peer without the header | The number of proxies in front of the host (default `1`); `0` reads the peer only |
-| Tomcat, `native` (also when `server.tomcat.remoteip.remote-ip-header` or `protocol-header` is set) | The address Tomcat's `RemoteIpValve` resolved; CoSec does not read the header again | Leave it unset: the proxies Tomcat trusts are `server.tomcat.remoteip.internal-proxies` and `trusted-proxies`. Setting it fails startup |
-| Reactor Netty or Jetty, `native` | The `X-Forwarded-For` entry that many places from the right, never the address the server took from a header the client writes; unknown without the header | At least `1`; `0` fails startup |
+| Tomcat, `web-server` (also when `server.tomcat.remoteip.remote-ip-header` or `protocol-header` is set) | The address Tomcat's `RemoteIpValve` resolved; CoSec does not read the header again | Leave it unset: the proxies Tomcat trusts are `server.tomcat.remoteip.internal-proxies` and `trusted-proxies`. Setting it fails startup |
+| Reactor Netty or Jetty, `web-server` | The `X-Forwarded-For` entry that many places from the right, never the address the server took from a header the client writes; unknown without the header | At least `1`; `0` fails startup |
 | `framework`, or a `ForwardedHeaderFilter` or `ForwardedHeaderTransformer` bean that rewrites | Startup fails: Spring's filter makes the leftmost entry, which the client writes, the remote address | |
-| `native` on a server CoSec cannot tell, such as a war in an external container | Startup fails: set `server.forward-headers-strategy=none` and the index | |
+| `web-server` on a server CoSec cannot tell, such as a war in an external container | Startup fails: set `server.request.header.forwarded.strategy=none` and the index | |
 
 The entry counted from the right is the one the outermost of your proxies appended, so a value the client put at the
 left of the header is never used. When the header has fewer entries than that, the leftmost one is used. Several
