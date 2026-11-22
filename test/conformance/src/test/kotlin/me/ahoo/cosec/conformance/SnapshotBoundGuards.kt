@@ -28,7 +28,7 @@ internal object SnapshotBoundGuards {
         "runtime:SnapshotDerivedBoundsTest#a document heavier than the whole share leaves its family at the floor, and is served",
         "runtime:SnapshotDerivedBoundsTest#one very large tenant lowers the others' bound by its own weight, no more",
         "runtime:SnapshotDerivedBoundsTest#a small pod's budget turns ready",
-        "runtime:DocumentWeightTest#the estimate is never below what a resident document retains, and at most one and a half times it",
+        "runtime:DocumentWeightTest#the estimate is above what a resident document retains, and at most 1·6 times it",
         "runtime:DocumentReadinessSmallBoundTest#a host whose bound is smaller than its prewarm set turns ready, and holds no more than its cap",
         "spring-boot:DerivedHeapTest#the startup line names each bound, what it came to and from what",
     )
