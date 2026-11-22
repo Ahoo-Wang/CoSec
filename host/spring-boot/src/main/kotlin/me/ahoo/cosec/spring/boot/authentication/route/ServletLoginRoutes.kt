@@ -20,6 +20,7 @@ import kotlinx.coroutines.runBlocking
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.login.route.LoginRouteAnswer
+import me.ahoo.cosec.runtime.http.ProblemBodies
 import me.ahoo.cosec.runtime.http.RequestSecurity
 import me.ahoo.cosec.webmvc.ServletRequests.securityContextOrNull
 import org.springframework.http.HttpHeaders
@@ -36,17 +37,17 @@ import org.springframework.web.servlet.function.ServerResponse
  * being read.
  */
 internal object ServletLoginRoutes {
-    fun of(routes: Map<String, LoginRouteHandler>): RouterFunction<ServerResponse> = routes.entries
-        .map { (path, handler) -> RouterFunctions.route(RequestPredicates.POST(path)) { answer(it, handler) } }
+    fun of(routes: Map<String, LoginRouteHandler>, bodies: ProblemBodies): RouterFunction<ServerResponse> = routes.entries
+        .map { (path, handler) -> RouterFunctions.route(RequestPredicates.POST(path)) { answer(it, handler, bodies) } }
         .reduce(RouterFunction<ServerResponse>::and)
 
-    private fun answer(request: ServerRequest, handler: LoginRouteHandler): ServerResponse {
+    private fun answer(request: ServerRequest, handler: LoginRouteHandler, bodies: ProblemBodies): ServerResponse {
         val servlet = request.servletRequest()
         val security = RequestSecurity.of(servlet.securityContextOrNull())
             ?: return write(LoginRouteAnswer.NOT_UNDER_COSEC)
         val body = servlet.inputStream.use { it.readNBytes(LoginRouteAnswer.MAX_BODY_BYTES + 1) }
         if (body.size > LoginRouteAnswer.MAX_BODY_BYTES) {
-            return write(LoginRouteAnswer.tooLarge(security.requestId))
+            return write(LoginRouteAnswer.tooLarge(security.requestId, bodies))
         }
         // A servlet thread is the caller's own: waiting on it blocks no event loop. The handler runs on the default
         // dispatcher, as the control API's servlet routes run theirs.

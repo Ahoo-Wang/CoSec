@@ -29,7 +29,7 @@ import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.model.scope.HostScope
 import me.ahoo.cosec.runtime.event.BridgeContextContributor
 import me.ahoo.cosec.runtime.http.Outcome
-import me.ahoo.cosec.runtime.http.ProblemEncoder
+import me.ahoo.cosec.runtime.http.ProblemBodies
 import me.ahoo.cosec.runtime.http.RemoteIpResolver
 import me.ahoo.cosec.runtime.http.RequestGate
 import me.ahoo.cosec.runtime.http.RequestSecurity
@@ -54,6 +54,8 @@ class PipelineServletFilter @InternalCoSecApi constructor(
     private val remoteIpResolver: RemoteIpResolver<HttpServletRequest> = ServletRemoteIpResolver,
     /** The app this host serves (RFC 0004 §4.6); [ServletHttpFactsReader.NO_HOST] when the request declares it. */
     private val host: HostScope = ServletHttpFactsReader.NO_HOST,
+    /** The body of a refusal (`PIP-34`): the host's renderer, or CoSec's own. */
+    private val bodies: ProblemBodies = ProblemBodies.DEFAULT,
 ) : Filter {
     override fun doFilter(request: ServletRequest, response: ServletResponse, chain: FilterChain) {
         val servletRequest = request as HttpServletRequest
@@ -101,7 +103,7 @@ class PipelineServletFilter @InternalCoSecApi constructor(
         val problem = outcome.problem
         if (problem != null) {
             response.status = outcome.status
-            val body = ProblemEncoder.encode(problem)
+            val body = bodies.body(problem)
             // As the reactive stacks frame it: with its length, not chunked (round 2 L2).
             response.setContentLength(body.size)
             response.outputStream.write(body)

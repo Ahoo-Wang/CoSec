@@ -20,6 +20,7 @@ import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.login.token.RefreshTokenAuthentication
 import me.ahoo.cosec.login.token.RefreshTokenCredentials
 import me.ahoo.cosec.login.token.TokenConverter
+import me.ahoo.cosec.runtime.http.ProblemBodies
 import me.ahoo.cosec.runtime.http.ProblemType
 import kotlin.coroutines.cancellation.CancellationException
 
@@ -33,6 +34,8 @@ import kotlin.coroutines.cancellation.CancellationException
 class RefreshRoute(
     private val refresh: RefreshTokenAuthentication<RefreshTokenCredentials>,
     private val converter: TokenConverter,
+    /** The body of a refusal (`PIP-34`): the host's renderer, or CoSec's own. */
+    private val bodies: ProblemBodies = ProblemBodies.DEFAULT,
 ) {
     private class Presented(
         override val accessToken: String,
@@ -44,13 +47,13 @@ class RefreshRoute(
     @Suppress("TooGenericExceptionCaught")
     suspend fun answer(contentType: String?, body: ByteArray, requestId: String): LoginRouteAnswer {
         val pair = TokenPairBody.read(contentType, body)
-            ?: return LoginRouteAnswer.problem(ProblemType.INVALID_REQUEST, requestId)
+            ?: return LoginRouteAnswer.problem(ProblemType.INVALID_REQUEST, requestId, bodies)
         val token = try {
             converter.toToken(refresh.authenticate(Presented(pair.accessToken, pair.refreshToken)))
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
-            return RouteFailure.answer(ROUTE, e, requestId)
+            return RouteFailure.answer(ROUTE, e, requestId, bodies)
         }
         return LoginRouteAnswer.token(token)
     }
