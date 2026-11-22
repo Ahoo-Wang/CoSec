@@ -149,7 +149,11 @@ class ControlServiceParityTest {
             """"operations":[{"op":"putPolicy","policy":{"id":"$id","statements":[{"effect":"allow","action":"order:read"}]}}]}"""
         val answers = mutableListOf<String>()
         suspend fun record(call: suspend () -> String) = answers.add(answer(call))
-        suspend fun id(call: suspend () -> String): String = call().let { CoSecJson.mapper.readTree(it).get("id").asString() }
+        suspend fun id(call: suspend () -> String): String = call().let {
+            CoSecJson.mapper.readTree(
+                it
+            ).get("id").asString()
+        }
 
         record { service.document(iam, key) }
         record { service.documents(iam, DocumentKind.TENANT) }
@@ -256,7 +260,7 @@ class ControlServiceParityTest {
         )
 
         /** Anyone authenticated reaches the control API; svc-iam has the service's rights over tenants' documents. */
-        val PLATFORM = ""","policies":[{"id":"control-api","statements":[{"effect":"allow",""" +
+        const val PLATFORM = ""","policies":[{"id":"control-api","statements":[{"effect":"allow",""" +
             """"action":["http:GET","http:POST"],"resource":"http:path:/cosec/control/v1/**",""" +
             """"condition":{"eq":["subject.authenticated",true]}}]},""" +
             """{"id":"control-service","statements":[{"effect":"allow","action":["cosec:read","cosec:shadow-read",""" +

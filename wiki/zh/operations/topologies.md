@@ -115,7 +115,7 @@ Spring Cloud Gateway 用文档决策；每个服务设置 `cosec.pipeline.mode=g
 | CoSec 会检查 | 声明已写；声明写对了（有服务端口时只写网关那条会启动失败）；镜像没有开启凭证校验、登录或 API key；每个控制动作，由策略针对调用方声称的主体决策 |
 | CoSec 不检查 | 声明是否属实；被放行到服务端口的服务是否只声明它自己所代表的主体 |
 
-第一份平台文档仍然来自 `cosec-migrate publish`；它安装之前宿主不就绪。运维人员的调用经网关到达，网关已校验他们的令牌并转发身份。服务用自己写的 `CoSec-Identity` 请求头调用服务端口（`IdentityHeader.write`，`cosec-document`）：服务 API 目前还没有自己的客户端类。
+第一份平台文档仍然来自 `cosec-migrate publish`；它安装之前宿主不就绪。运维人员的调用经网关到达，网关已校验他们的令牌并转发身份。服务通过 `HttpControlService`（`cosec-control-http`，`cosec.control.service-url`）调用服务端口，它为每次调用写出 `CoSec-Identity` 请求头（[从代码中修改策略](../integration/checks.md#changing-policies-from-your-code)）。
 
 ### 网关和内嵌控制面的 IAM {#control-plane-embedded}
 

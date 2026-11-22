@@ -369,11 +369,24 @@ the change's. Staging changes, shadow windows and access analysis (`/analyze`) a
 
 ## Changing policies from your code {#changing-policies-from-your-code}
 
-A service that embeds the control plane, such as an IAM service onboarding a tenant, calls it from its own code
-through `ControlService` (`cosec-control-sdk`, which `cosec-control` brings; `@ExperimentalCoSecApi`). The starter provides a bean of it wherever
-the control plane is wired. Every call is decided by the policies for the principal its `ControlCaller` states, and
-recorded as that principal's step. It goes through the control API's own route: the same call over HTTP answers
-the same, records the same, and is refused the same (`CTL-65`).
+A service that changes policies from its own code, such as an IAM service onboarding a tenant, calls the control plane
+through `ControlService` (`cosec-control-sdk`; `@ExperimentalCoSecApi`), whether it embeds the control plane or calls a
+control-plane host. The starter provides one bean of it (`STA-11`):
+
+- where the instance runs the control plane, the in-process implementation (`cosec-control` brings `cosec-control-sdk`);
+- where `cosec.control.service-url` names a control-plane host's control API (such as
+  `http://control:8082/cosec/control/v1`, its service port), `HttpControlService` (`cosec-control-http`, which brings
+  `cosec-runtime`), which calls that port;
+- both at once fails startup: remove one.
+
+Every call is decided by the policies for the principal its `ControlCaller` states, and recorded as that principal's
+step. It goes through the control API's own route: the same call answers the same, records the same, and is refused
+the same in process and over the network (`CTL-65`, `CTL-77`). Over the network, the caller is stated in `CoSec-Identity`,
+written for each call. A request's principal is written as the gateway forwards it, and the application's own principal
+as the identity the in-process implementation admits. The host believes the header because only the services you name
+reach its service port. A request's principal whose authenticator named no credential cannot be stated over the network,
+and is refused before anything is sent. `HttpControlService(baseUri, client)` takes the application's `HttpClient`, with
+its TLS and timeouts; a call has no timeout of its own.
 
 - **Who acts:**
   - `ControlCaller.of(securityContext)` acts as the user whose request you are serving. It takes the

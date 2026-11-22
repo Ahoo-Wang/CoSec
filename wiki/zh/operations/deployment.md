@@ -195,7 +195,7 @@ spring:
                 cosec-app-id: cosec-control   # cosec.control.app-id，即镜像的 cosec.authorization.scope.app-id
 ```
 
-服务用自己写的 `CoSec-Identity` 请求头（`IdentityHeader.write`，`cosec-document`）调用 8082 端口，在其中写明它所代表的主体。控制面针对该主体决策，使用平台文档给它的绑定，变更会记录这个身份是被声明的。没有身份的请求是 `401`，而 bearer 令牌不是身份：宿主不校验任何令牌。服务 API 目前还没有自己的客户端类。
+服务通过 `HttpControlService`（`cosec-control-http`；当 `cosec.control.service-url` 为 `http://<host>:8082/cosec/control/v1` 时它就是 starter 的 `ControlService`）调用 8082 端口，它为每次调用写出 `CoSec-Identity` 请求头，写明它所代表的主体。控制面针对该主体决策，使用平台文档给它的绑定，变更会记录这个身份是被声明的。没有身份的请求是 `401`，而 bearer 令牌不是身份：宿主不校验任何令牌。
 
 **声明与策略是一件事。** 声明之所以属实，是因为网络，每个端口一条策略：网关的 pod 到 8080，点名的服务到 8082，监控到 8081。[`k8s/control/`](#kubernetes) 的清单把这个变量和三条策略一起设置，绝不只有其一。它们是控制手段，不是纵深防御：能连到宿主的工作负载可以声明任何主体，平台管理员也不例外，并且既是变更的作者又是批准者（[控制面信任什么](./topologies.md#what-the-control-plane-trusts)）。
 

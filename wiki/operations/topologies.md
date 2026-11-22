@@ -152,8 +152,8 @@ it, like any other service you admit.
 
 The first platform document still comes from `cosec-migrate publish`; until it is installed the host is not ready.
 The operators' calls arrive through the gateway, which verified their token and forwards the identity. A service calls
-the service port with a `CoSec-Identity` header it writes itself (`IdentityHeader.write`, `cosec-document`): the service
-API has no client class of its own yet.
+the service port through `HttpControlService` (`cosec-control-http`, `cosec.control.service-url`), which writes the
+`CoSec-Identity` header for each call ([Changing policies from your code](../integration/checks.md#changing-policies-from-your-code)).
 
 ### Gateway and an IAM that embeds the control plane {#control-plane-embedded}
 

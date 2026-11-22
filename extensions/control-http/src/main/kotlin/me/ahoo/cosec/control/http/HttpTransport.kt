@@ -83,7 +83,13 @@ internal class HttpTransport(
             require(security.principal == null || security.principal?.credential != null) { NO_CREDENTIAL }
             return issuer.issue(security)
         }
-        val identity = ServiceIdentity.of(checkNotNull(caller.principal), caller.roles, app, clock.instant(), ids.generate())
+        val identity = ServiceIdentity.of(
+            checkNotNull(caller.principal),
+            caller.roles,
+            app,
+            clock.instant(),
+            ids.generate()
+        )
         return IdentityHeader.write(identity)
     }
 

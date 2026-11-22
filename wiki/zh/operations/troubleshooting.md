@@ -421,6 +421,14 @@ cosec-control-server verifies no credential and issues no token: it believes the
 
 `cosec-control` 镜像拒绝把 `cosec.jwt.enabled`、`cosec.api-key.enabled` 和 `cosec.authentication.login.enabled` 设为 `true`，也拒绝 `cosec.control.enabled=false`（`cosec-control-server runs the control plane`）：它不校验凭证，也不签发令牌；没有控制面，它会处于运行状态却什么都不提供。删掉这个键。会校验令牌或让人登录的控制面，是你自己的、带 `cosec-control` 的应用；网关镜像才是只读的那个。
 
+### 两个控制服务导致启动失败 {#startup-fails-on-two-control-services}
+
+```text
+This instance runs the control plane, and cosec.control.service-url names a control-plane host as well: an application has one ControlService. ... (STA-11)
+```
+
+实例带有 `cosec-control`（和 `cosec-cocache`）且控制面开启，同时又设置了 `cosec.control.service-url`。一个应用只有一个 `ControlService`：运行控制面时是进程内实现，调用控制面宿主时是 HTTP 实现。要内嵌控制面，删掉 `cosec.control.service-url`；要调用宿主，设置 `cosec.control.enabled=false`（或不引入 `cosec-control`）。`cosec.control.service-url needs cosec-control-http` 表示已指定宿主却缺少调用它的模块：添加 `me.ahoo.cosec:cosec-control-http`。
+
 ### 网关之后的 hidden-method 过滤器导致启动失败 {#startup-fails-on-a-hidden-method-filter-behind-a-gateway}
 
 ```text

@@ -59,7 +59,13 @@ class LocalControlService(
     private val http = ControlHttp(plane, ControlProfile.SERVICE)
 
     override suspend fun call(caller: ControlCaller, call: ServiceCall): String {
-        val request = ControlHttpRequest(call.method, call.path, call.query, call.body?.encodeToByteArray(), inProcess = true)
+        val request = ControlHttpRequest(
+            call.method,
+            call.path,
+            call.query,
+            call.body?.encodeToByteArray(),
+            inProcess = true
+        )
         val response = http.handle(request, security(caller))
         if (response.status >= BAD_REQUEST) throw refusal(response)
         return response.body.decodeToString()
@@ -71,7 +77,13 @@ class LocalControlService(
             return requireNotNull(RequestSecurity.of(context)) { ControlCaller.NOT_COSEC_CONTEXT }
         }
         val requestId = ids.generate()
-        val identity = ServiceIdentity.of(checkNotNull(caller.principal), caller.roles, app.value, clock.instant(), requestId)
+        val identity = ServiceIdentity.of(
+            checkNotNull(caller.principal),
+            caller.roles,
+            app.value,
+            clock.instant(),
+            requestId
+        )
         return when (val admission = gate.admit(identity, requestId, FACTS)) {
             is IdentityGate.Admission.Admitted -> admission.security
             is IdentityGate.Admission.Refused -> throw refusal(http.refused(UNAUTHORIZED, requestId))

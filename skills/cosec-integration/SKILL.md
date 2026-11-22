@@ -31,7 +31,7 @@ other CoSec module it finds on the classpath. Add each integration as a dependen
 | Spring Cloud Gateway | `cosec-gateway` | |
 | Redis: policy snapshot, revocation, API keys, cluster-wide rate limits, shadow | `cosec-cocache` | `org.springframework.boot:spring-boot-data-redis`, `me.ahoo.cocache:cocache-spring-boot-starter` |
 | Control plane (change, simulate, explain, publish) | `cosec-control` | `cosec-cocache` |
-| Code that calls the control plane (`ControlService`, `ControlCaller`, the typed `ControlClient`) | `cosec-control-sdk` (brought by `cosec-control`, the in-process implementation) | |
+| Code that calls the control plane (`ControlService`, `ControlCaller`, the typed `ControlClient`) | `cosec-control-sdk` (brought by `cosec-control`, the in-process implementation), or `cosec-control-http` to call a control-plane host (`cosec.control.service-url`; it brings `cosec-runtime`) | |
 | Social OAuth login | `cosec-social` | |
 | IP region attributes (`ext.ip2region.*`) | `cosec-ip2region` | |
 | Ids from CosId 5 | `cosec-cosid` | `me.ahoo.cosid:cosid-spring-boot-starter` 5.x |
@@ -321,8 +321,10 @@ platform administrator included. A service that was in `gateway` mode and now ne
 with `caller=forwarded-identity`. From code in the same process, `ControlService` with `ControlCaller.of(securityContext)`
 or `ControlCaller.service(...)`, or the typed `ControlClient(service)` over it (`proposeAndPublishWithoutShadow` for a
 service that writes what it already decided: it needs `cosec:skip-shadow`); `cosec.control.http.enabled=false` serves no routes. Every instance with the control plane runs
-its maintenance passes under their leases; no property turns them off. The service API has no client class of its own yet: a service writes `CoSec-Identity` with
-`IdentityHeader.write` (`cosec-document`).
+its maintenance passes under their leases; no property turns them off. A service calls the service port through
+`HttpControlService` (`cosec-control-http`): set `cosec.control.service-url=http://<host>:8082/cosec/control/v1` and the
+starter's `ControlService` is it, writing `CoSec-Identity` for each call. One `ControlService` per application: naming a host on
+an instance that runs the control plane fails startup (`STA-11`).
 
 With `cosec-control` (and `cosec-cocache`), the host serves the control API under
 `{cosec.control.http.base-path}/v1` (default `/cosec/control/v1`): documents, changes, shadow windows, approval,
