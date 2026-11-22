@@ -84,9 +84,9 @@ CoSec 没有哪个配置项叫这些名字，而已知的 key 无论来源都不
 
 **更低的期限会缩短唯一一个失败即放行的阶段。** 吊销读取的预算随期限缩放：`cosec.pipeline.timeout=1s` 时每次读取只有 60 ms，而原来固定为 300 ms。超过预算的读取意味着吊销无法读取，此时校验会接受请求的令牌，除非设置了 `cosec.authentication.revocation.fail-closed=true`（[已写明的例外](../guide/security-model.md#the-two-documented-exceptions)）。期限低于默认值时，请设置 `fail-closed`，或确认 Redis 的应答远在读取预算之内。
 
-**堆的各份额在一张表里**（`HeapBudget`，`STA-12`）：上面四个上限，加上快照文档的四分之一（各族的上限由它推出，`SNP-24`），合计占堆的 31/64，不到一半，给网关的其余部分和 ZGC 留出空间。堆越小得到的越少，而且可见：512 MiB 的堆得到 64 MiB 的吊销表（每表 129,055 条）、32 MiB 的令牌缓存（约 4,150 个大令牌）、8 MiB 的决策监听器队列（四个监听器时每个 2,048 个事件），以及约 3,400 个典型租户的文档。启动日志行写明每一项得到多少，以及它读到的堆：`heap <n> MiB (Runtime.maxMemory())`。没有 `-Xmx` 的容器按 JVM 的默认只得到内存限制的四分之一，所以那里的上限偏小来自堆偏小：给 JVM 明确的 `-Xmx`（[内存](./deployment.md#memory)）。
+**堆的各份额在一张表里**（`HeapBudget`，`STA-12`）：上面四个上限，加上快照文档的四分之一（各族的上限由它推出，`SNP-24`），合计占堆的 31/64，不到一半，给网关的其余部分和 ZGC 留出空间。堆越小得到的越少，而且可见：512 MiB 的堆得到 64 MiB 的吊销表（每表 129,055 条）、32 MiB 的令牌缓存（约 4,150 个大令牌）、8 MiB 的决策监听器队列（四个监听器时每个 2,048 个事件），以及约 3,600 个典型租户的文档。启动日志行写明每一项得到多少，以及它读到的堆：`heap <n> MiB (Runtime.maxMemory())`。没有 `-Xmx` 的容器按 JVM 的默认只得到内存限制的四分之一，所以那里的上限偏小来自堆偏小：给 JVM 明确的 `-Xmx`（[内存](./deployment.md#memory)）。
 
-曾经设置过其中某一项的 key 会让启动失败（作为 CoSec 不读取的 key），并说明它已不再是配置项，以及由什么取代（[未知配置项](#unknown-properties)）。
+曾经设置过其中某一项的 key 会让启动失败（作为 CoSec 不读取的 key），并说明它已不再是配置项，以及由什么取代（[未知配置项](#unknown-properties)）。其中包括 8.0 预览版的四个快照上限：`cosec.authorization.snapshot.max-apps`、`max-tenants`、`max-absent-apps` 和 `max-absent-tenants`，现在由文档的那四分之一推出（[从预览版升级](./upgrading-previews.md)）。
 
 ## 功能开关 {#feature-switches}
 

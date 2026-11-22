@@ -110,12 +110,14 @@ With a deadline below the default, set `fail-closed`, or check that Redis answer
 quarter, from which their families' bounds are derived (`SNP-24`), take 31/64 of the heap together, under half, which leaves the
 rest of the gateway and ZGC their room. A smaller heap gets less, visibly: a 512 MiB heap gets 64 MiB of revocation
 tables (129,055 entries each), a 32 MiB token cache (about 4,150 large tokens), 8 MiB of decision-listener queues
-(2,048 events each for four listeners) and documents for about 3,400 typical tenants. The startup line says what each came to, and the heap it read: `heap <n> MiB (Runtime.maxMemory())`. A container
+(2,048 events each for four listeners) and documents for about 3,600 typical tenants. The startup line says what each came to, and the heap it read: `heap <n> MiB (Runtime.maxMemory())`. A container
 without `-Xmx` gets a quarter of its memory limit by the JVM's default, so a small bound there comes from a small
 heap: give the JVM an explicit `-Xmx` ([Memory](./deployment.md#memory)).
 
 A key that once set one of these fails startup with the keys CoSec does not read, and says that it is no longer a
-property and what replaced it ([Unknown properties](#unknown-properties)).
+property and what replaced it ([Unknown properties](#unknown-properties)). Among them are the four snapshot bounds of
+the 8.0 previews: `cosec.authorization.snapshot.max-apps`, `max-tenants`, `max-absent-apps` and `max-absent-tenants`,
+now derived from the documents' quarter ([Upgrading from a preview](./upgrading-previews.md)).
 
 ## Feature switches
 
