@@ -99,9 +99,10 @@ class ControlClient(private val service: ControlService) {
      * found what stops it (its findings say what), or when other writes kept taking its place (`CONFLICTED`) until the
      * patience was spent.
      *
-     * When it gives up (patience spent, or a refusal it does not retry) it throws that refusal, having abandoned the
-     * change it proposed, if any: what it leaves behind is an abandoned change in the log, never a staged one, and
-     * nothing published.
+     * When it gives up on a refusal (patience spent, or a refusal it does not retry) it throws that refusal, having
+     * abandoned the change it proposed, if any: what it leaves behind is an abandoned change in the log, and nothing
+     * published. When the caller's coroutine is cancelled, or the transport fails between two steps, the change may be
+     * left staged instead: the next write of the same principal takes it over once it is one patience old.
      */
     suspend fun proposeAndPublishWithoutShadow(
         caller: ControlCaller,

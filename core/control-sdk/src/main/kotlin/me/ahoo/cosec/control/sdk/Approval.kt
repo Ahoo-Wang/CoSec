@@ -18,7 +18,9 @@ import java.time.Instant
 
 /** Who approved a change, when, which [candidate] the approval is of, and which escalations it [covers]. */
 @ExperimentalCoSecApi
-class Approval(val approver: Actor, val at: Instant, val candidate: String, val covers: List<String>) {
+class Approval(val approver: Actor, val at: Instant, val candidate: String, covers: List<String>) {
+    val covers: List<String> = covers.toList()
+
     override fun equals(other: Any?): Boolean = other is Approval && parts() == other.parts()
 
     override fun hashCode(): Int = parts().hashCode()

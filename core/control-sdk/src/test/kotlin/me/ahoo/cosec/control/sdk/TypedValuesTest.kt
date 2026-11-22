@@ -184,6 +184,22 @@ class TypedValuesTest {
     }
 
     @Test
+    fun `a value keeps its own copy of the lists and maps it is made from`() {
+        val actions = mutableListOf("order:read")
+        val counts = mutableMapOf("SAME" to 1L)
+        val statement = Statement(Effect.ALLOW, actions)
+        val ack = ShadowAck("w", counts)
+        val page = Page(actions, null)
+        val before = listOf(statement.hashCode(), ack.hashCode(), page.hashCode())
+        actions += "order:delete"
+        counts["WIDENED"] = 1L
+        statement.actions.assert().containsExactly("order:read")
+        ack.counts.assert().containsOnlyKeys("SAME")
+        page.items.assert().containsExactly("order:read")
+        listOf(statement.hashCode(), ack.hashCode(), page.hashCode()).assert().isEqualTo(before)
+    }
+
+    @Test
     fun `a value that cannot be is refused when it is made`() {
         assertThrownBy<IllegalArgumentException> { Statement(Effect.ALLOW, emptyList()) }
         assertThrownBy<IllegalArgumentException> { Cursor.of("a b") }

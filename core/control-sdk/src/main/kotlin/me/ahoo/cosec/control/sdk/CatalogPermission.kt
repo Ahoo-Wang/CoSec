@@ -23,10 +23,14 @@ import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 class CatalogPermission(
     val id: String,
     val name: String? = null,
-    val actions: List<String> = emptyList(),
-    val resources: List<Resource> = emptyList(),
+    actions: List<String> = emptyList(),
+    resources: List<Resource> = emptyList(),
     val description: String? = null,
 ) {
+    val actions: List<String> = actions.toList()
+
+    val resources: List<Resource> = resources.toList()
+
     override fun equals(other: Any?): Boolean = other is CatalogPermission && parts() == other.parts()
 
     override fun hashCode(): Int = parts().hashCode()

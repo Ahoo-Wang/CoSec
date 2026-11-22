@@ -103,7 +103,10 @@ class TypedWireTest {
     fun `a document entry with a member this version does not know does not read - CTL-76`() {
         val later = """{"id":"p","statements":[{"effect":"deny","action":"order:delete","unless":{}}]}"""
         assertThrownBy<SnapshotFormatException> { DocumentJson.policy(CoSecJson.mapper.readTree(later)) }
-            .hasMessageContaining("a statement").hasMessageNotContaining("unless")
+            .hasMessageContaining("a statement").hasMessageContaining("[unless]")
+        val many = """{"id":"p","statements":[],"a":1,"b":2,"c":3,"d":4,"e":5,"f":6,"g":7}"""
+        assertThrownBy<SnapshotFormatException> { DocumentJson.policy(CoSecJson.mapper.readTree(many)) }
+            .hasMessageContaining("[a], [b], [c], [d], [e] and 2 more")
         val known = """{"id":"p","statements":[{"effect":"deny","action":"order:delete"}]}"""
         DocumentJson.policy(CoSecJson.mapper.readTree(known)).statements.single().effect.assert().isEqualTo(Effect.DENY)
     }

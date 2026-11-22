@@ -23,13 +23,21 @@ import me.ahoo.cosec.annotations.ExperimentalCoSecApi
  */
 @ExperimentalCoSecApi
 class DocumentContent(
-    val policies: List<Policy> = emptyList(),
-    val bindings: List<Binding> = emptyList(),
-    val roles: List<Role> = emptyList(),
+    policies: List<Policy> = emptyList(),
+    bindings: List<Binding> = emptyList(),
+    roles: List<Role> = emptyList(),
     val catalog: Catalog? = null,
-    val rateLimits: List<RateLimitRule> = emptyList(),
+    rateLimits: List<RateLimitRule> = emptyList(),
     val boundary: String? = null,
 ) {
+    val policies: List<Policy> = policies.toList()
+
+    val bindings: List<Binding> = bindings.toList()
+
+    val roles: List<Role> = roles.toList()
+
+    val rateLimits: List<RateLimitRule> = rateLimits.toList()
+
     override fun equals(other: Any?): Boolean = other is DocumentContent && parts() == other.parts()
 
     override fun hashCode(): Int = parts().hashCode()

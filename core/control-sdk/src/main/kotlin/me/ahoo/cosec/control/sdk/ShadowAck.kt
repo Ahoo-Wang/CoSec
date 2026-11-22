@@ -20,7 +20,9 @@ import me.ahoo.cosec.annotations.ExperimentalCoSecApi
  * [counts] it closed with, so a publish never acknowledges a window it did not read. [Shadow.ack] makes one.
  */
 @ExperimentalCoSecApi
-class ShadowAck(val window: String, val counts: Map<String, Long>) {
+class ShadowAck(val window: String, counts: Map<String, Long>) {
+    val counts: Map<String, Long> = counts.toMap()
+
     override fun equals(other: Any?): Boolean = other is ShadowAck && window == other.window && counts == other.counts
 
     override fun hashCode(): Int = listOf(window, counts).hashCode()

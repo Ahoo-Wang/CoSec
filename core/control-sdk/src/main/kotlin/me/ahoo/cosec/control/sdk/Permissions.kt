@@ -26,7 +26,9 @@ sealed class Permissions {
 
     /** The catalog permissions [ids]. */
     @ExperimentalCoSecApi
-    class Of(val ids: List<String>) : Permissions() {
+    class Of(ids: List<String>) : Permissions() {
+        val ids: List<String> = ids.toList()
+
         override fun equals(other: Any?): Boolean = other is Of && ids == other.ids
 
         override fun hashCode(): Int = ids.hashCode()
