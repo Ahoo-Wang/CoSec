@@ -320,7 +320,8 @@ that the network makes it so. The network is the boundary: a workload that reach
 platform administrator included. A service that was in `gateway` mode and now needs the control plane moves to `enforce`
 with `caller=forwarded-identity`. From code in the same process, `ControlService` with `ControlCaller.of(securityContext)`
 or `ControlCaller.service(...)`, or the typed `ControlClient(service)` over it (`proposeAndPublishWithoutShadow` for a
-service that writes what it already decided: it needs `cosec:skip-shadow`); `cosec.control.http.enabled=false` serves no routes. Every instance with the control plane runs
+service that writes what it already decided: it needs `cosec:skip-shadow`; `check` to validate a change before storing
+something of its own: the proposal's answer, nothing stored, `CTL-78`); `cosec.control.http.enabled=false` serves no routes. Every instance with the control plane runs
 its maintenance passes under their leases; no property turns them off. A service calls the service port through
 `HttpControlService` (`cosec-control-http`): set `cosec.control.service-url=http://<host>:8082/cosec/control/v1` and the
 starter's `ControlService` is it, writing `CoSec-Identity` for each call. One `ControlService` per application: naming a host on

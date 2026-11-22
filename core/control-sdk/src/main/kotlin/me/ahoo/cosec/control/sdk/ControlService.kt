@@ -57,6 +57,17 @@ interface ControlService {
     /** `POST /changes` of a tenant's document: [request] is the route's body; answers the change. */
     suspend fun propose(caller: ControlCaller, request: String): String
 
+    /**
+     * `POST /changes:check` (`CTL-78`): what [propose] would answer for [request], the same body, without proposing:
+     * the change's state, findings, escalations and base (`contract/control/change-check.json`). Nothing is
+     * stored, no slot is taken and no change event is written, and the call is decided as the proposal would be: a
+     * caller who may not propose may not check.
+     */
+    suspend fun check(caller: ControlCaller, request: String): String
+
+    /** `POST /documents/{key}:check` (`CTL-78`): what [apply] would answer for [request], the same body, stored nowhere. */
+    suspend fun checkApply(caller: ControlCaller, key: SnapshotKey, request: String): String
+
     /** `GET /changes/{id}`. */
     suspend fun change(caller: ControlCaller, id: String): String
 

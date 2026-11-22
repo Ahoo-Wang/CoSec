@@ -1,0 +1,16 @@
+# Rule: CTL-78
+# Mutant: a check is not decided as the proposal would be: a caller who may not propose learns what the proposal would find
+# Tests: :control:test --tests me.ahoo.cosec.control.api.ChangeCheckTest
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Proposals.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Proposals.kt
+index 26e557fb6..4b8962a8b 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Proposals.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Proposals.kt
+@@ -145,7 +145,7 @@ internal class Proposals(
+         // Keyed on what the change does, not on its kind (review K1).
+         val breakGlass = BreakGlassRules.touches(operations, head?.document, clock.instant())
+         val glass = breakGlass || kind == ProvenanceKind.BREAK_GLASS
+-        authority.authorize(author, key, operations, kind, glass, head?.document)
++        if (applying.commit) authority.authorize(author, key, operations, kind, glass, head?.document)
+         PublishRules.requireAudit(breakGlass, listeners.hasRequired)
+         if ((head?.revision ?: 0) != base) {
+             val current = head?.revision ?: 0
