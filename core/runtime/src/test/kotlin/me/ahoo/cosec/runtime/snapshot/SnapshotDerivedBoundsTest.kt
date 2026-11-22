@@ -19,6 +19,7 @@ import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.document.PolicyDocumentCompiler
 import me.ahoo.cosec.document.SnapshotDocuments
+import me.ahoo.cosec.engine.CompiledDocument
 import me.ahoo.cosec.runtime.HeapBudget
 import me.ahoo.cosec.runtime.snapshot.SnapshotSourceTest.Companion.await
 import me.ahoo.cosec.spi.snapshot.InMemorySnapshotDocumentStore
@@ -94,23 +95,15 @@ class SnapshotDerivedBoundsTest {
 
     private fun SnapshotSource<*, *>.loadEach(keys: List<SnapshotKey>) = keys.forEach { loadAll(listOf(it)).join() }
 
-    /**
-     * The tenant bound once every tenant of [keys] is resident. The first bound counts documents of the typical weight,
-     * heavier than these, so the first loads evict; the pass that raises it evicts off the caller's thread. So load again
-     * until all are held, then read the bound of a pass that finds them all and nothing to evict.
-     */
-    private fun SnapshotSource<*, *>.settledBound(keys: List<SnapshotKey>): Int {
-        val tenants = keys.count { it is SnapshotKey.Tenant }
-        repeat(SETTLE_ROUNDS) {
-            loadEach(keys)
-            tick().join()
-            if (heldCounts(SnapshotKind.TENANT).first == tenants) {
-                tick().join()
-                return bound(SnapshotKind.TENANT, absent = false)
-            }
-        }
-        error("Not every one of the $tenants tenants is resident after $SETTLE_ROUNDS rounds.")
-    }
+    private fun tenants(ids: Iterable<Int>) = ids.map { SnapshotKey.Tenant("t-$it") }
+
+    private fun held(source: SnapshotSource<*, *>) = source.heldCounts(SnapshotKind.TENANT).first
+
+    private fun weightOf(t: Int, json: String): Long =
+        DocumentWeight.of(
+            PolicyDocumentCompiler().compile(SnapshotKey.Tenant("t-$t"), doc(json)) as CompiledDocument,
+            json.length
+        )
 
     private fun apps() = (0 until APPS).map { SnapshotKey.App("app-$it") }
 
@@ -190,31 +183,89 @@ class SnapshotDerivedBoundsTest {
     }
 
     /**
-     * The target's shape: a dozen apps, 10,000 small tenants and one very large one. The large tenant's weight comes out of
-     * what the others get, as its own weight in documents of theirs, and no more: the mean is taken over what is resident,
-     * so its pull on everyone else's bound is the memory it really holds.
+     * A pass recomputes the bounds even when nothing is evicted, so `cosec.snapshot.bound` follows what is resident: a
+     * thousand small tenants, fewer than the first estimate, are held at the first estimate until a pass.
      */
     @Test
-    fun `one very large tenant lowers the others' bound by its own weight, no more`() {
+    fun `each pass recomputes the bound from what is resident, with nothing to evict`() {
+        val smalls = (1..1_000).associateWith { small(it) }
+        val budget = 128L shl 20
+        source(store(smalls), budget).use { source ->
+            source.load().join()
+            source.loadEach(apps() + tenants(smalls.keys))
+            held(source).assert().isEqualTo(1_000)
+            val first = DocumentBudget(budget).firstBound(SnapshotKind.TENANT)
+            source.bound(SnapshotKind.TENANT, absent = false).assert().isEqualTo(first)
+            source.tick().join()
+            source.bound(SnapshotKind.TENANT, absent = false).assert().isGreaterThan(first)
+        }
+    }
+
+    /**
+     * The target's shape, a dozen apps, 10,000 small tenants and one very large one, loaded cold. The first estimate
+     * (3,641 tenants of the deployment page's weight in this share) and a pass that runs while the large tenant is alone
+     * (whose mean is its own weight: 214) are both far below 10,000; neither evicts anything, since an eviction pass
+     * recomputes the bound first and the share has room. Once all are resident, the large tenant takes its own weight
+     * in documents of the others from their bound, no more: the mean leaves it out.
+     */
+    @Test
+    fun `a cold start evicts nothing while the share has room, and one very large tenant costs the others its own weight`() {
         val smalls = (1..10_000).associateWith { small(it) }
         val budget = 128L shl 20
         val without = source(store(smalls), budget).use { source ->
             source.load().join()
-            source.settledBound(apps() + smalls.keys.map { SnapshotKey.Tenant("t-$it") }) to
-                source.residentWeight(SnapshotKind.TENANT) / source.heldCounts(SnapshotKind.TENANT).first
+            source.loadEach(apps() + tenants(smalls.keys))
+            held(source).assert().describedAs("held right after the cold loads").isEqualTo(10_000)
+            source.tick().join()
+            held(source).assert().isEqualTo(10_000)
+            source.bound(SnapshotKind.TENANT, absent = false) to source.residentWeight(SnapshotKind.TENANT) / 10_000
         }
         val large = tenant(0, 40, 50, 200)
         source(store(smalls + (0 to large)), budget).use { source ->
             source.load().join()
-            val with = source.settledBound(apps() + (smalls.keys + 0).map { SnapshotKey.Tenant("t-$it") })
-            val largeWeight = source.residentWeight(SnapshotKind.TENANT) -
-                without.second * (source.heldCounts(SnapshotKind.TENANT).first - 1)
-            val itsOwnWeight = largeWeight / without.second + 1
+            source.loadEach(apps() + tenants(listOf(0)))
+            source.tick().join()
+            val alone = source.bound(SnapshotKind.TENANT, absent = false)
+            alone.assert().describedAs("the bound of a pass that finds the large tenant alone").isLessThan(1_000)
+            source.loadEach(tenants(smalls.keys))
+            held(source).assert().describedAs("held right after the cold loads").isEqualTo(10_001)
+            source.tick().join()
+            held(source).assert().isEqualTo(10_001)
+            val with = source.bound(SnapshotKind.TENANT, absent = false)
+            val itsOwnWeight = weightOf(0, large) / without.second + 1
             println(
-                "SNP-24 noisy neighbour: bound ${without.first} without the large tenant, $with with it ($largeWeight B), " +
-                    "${source.heldCounts(SnapshotKind.TENANT).first} tenants resident"
+                "SNP-24 noisy neighbour: bound ${without.first} without the large tenant, $with with it " +
+                    "(its own weight ${itsOwnWeight - 1} typical documents); $alone while it was alone"
             )
             with.assert().isLessThan(without.first).isGreaterThanOrEqualTo((without.first - itsOwnWeight).toInt())
+        }
+    }
+
+    /**
+     * The worst one very large tenant does to the others: arriving into a share already full of small tenants, it evicts
+     * what its own weight makes room for, in documents of the typical weight (the trimmed mean, which leaves it out), and
+     * no more; and it is held.
+     */
+    @Test
+    fun `one very large tenant arriving into a full share evicts at most its own weight in documents of the others`() {
+        val smalls = (1..10_000).associateWith { small(it) }
+        val large = tenant(0, 40, 50, 200)
+        // Room for about 7,500 of the small tenants beside the apps.
+        source(store(smalls + (0 to large)), 32L shl 20).use { source ->
+            source.load().join()
+            source.loadEach(apps() + tenants(smalls.keys))
+            source.evictionPass(SnapshotKind.TENANT, Int.MAX_VALUE)
+            val before = held(source)
+            before.assert().isLessThan(10_000)
+            val typical = source.residentWeight(SnapshotKind.TENANT) / before
+            source.loadEach(tenants(listOf(0)))
+            source.evictionPass(SnapshotKind.TENANT, Int.MAX_VALUE)
+            val evicted = before + 1 - held(source)
+            val atMost = (weightOf(0, large) + typical - 1) / typical
+            println("SNP-24 a full share: $before small tenants held; the large one evicted $evicted (at most $atMost)")
+            evicted.toLong().assert().isGreaterThan(0).isLessThanOrEqualTo(atMost)
+            source.loadAll(tenants(listOf(0))).join().entry(SnapshotKey.Tenant("t-0"))!!.state
+                .assert().isInstanceOf(DocumentState.Present::class.java)
         }
     }
 
@@ -232,6 +283,5 @@ class SnapshotDerivedBoundsTest {
     private companion object {
         const val APPS = 12
         const val TWO_GIB = 2L shl 30
-        const val SETTLE_ROUNDS = 4
     }
 }

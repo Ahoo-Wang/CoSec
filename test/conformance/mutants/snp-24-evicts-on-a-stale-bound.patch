@@ -1,0 +1,16 @@
+# Rule: SNP-24
+# Mutant: an eviction pass evicts against the bound of the last pass (a first estimate, or a mean over a few documents) without recomputing it
+# Tests: :runtime:test --tests me.ahoo.cosec.runtime.snapshot.SnapshotDerivedBoundsTest
+
+diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/SnapshotFamilies.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/SnapshotFamilies.kt
+index 1fb4a29..0950109 100644
+--- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/SnapshotFamilies.kt
++++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/SnapshotFamilies.kt
+@@ -81,7 +81,6 @@ internal class SnapshotFamilies<A : Any>(
+      * victim two passes chose is removed once (`SNP-14`).
+      */
+     fun evictBeyond(family: Family<*>, limit: Int = Int.MAX_VALUE) {
+-        rebound()
+         evictBeyond(family, absent = false, limit)
+         evictBeyond(family, absent = true, limit)
+     }

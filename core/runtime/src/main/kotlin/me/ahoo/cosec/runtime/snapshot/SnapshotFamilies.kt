@@ -81,6 +81,7 @@ internal class SnapshotFamilies<A : Any>(
      * victim two passes chose is removed once (`SNP-14`).
      */
     fun evictBeyond(family: Family<*>, limit: Int = Int.MAX_VALUE) {
+        rebound()
         evictBeyond(family, absent = false, limit)
         evictBeyond(family, absent = true, limit)
     }
@@ -168,9 +169,10 @@ internal class SnapshotFamilies<A : Any>(
 
     /**
      * Derives each family's bound for documents from [budget] and what the families hold now (`SNP-24`), and answers the
-     * families now above their bound, for housekeeping to evict. Nothing when the bounds are fixed. Housekeeping calls
-     * it once per pass, so a bound moves at most once per revalidation interval, and between two passes the burst rule
-     * holds the family (`SNP-14`).
+     * families now above their bound, for housekeeping to evict. Nothing when the bounds are fixed. Each revalidation
+     * pass calls it, and so does every eviction pass before it evicts ([evictBeyond]): a bound is never older than the
+     * eviction it allows, so a document is evicted only when what is resident weighs more than the share, never because
+     * of what was resident at the last pass (a first estimate, or a mean taken over a few documents).
      */
     fun rebound(): List<Family<A>> {
         val budget = budget ?: return emptyList()
