@@ -267,7 +267,7 @@ curl -X POST localhost:8080/cosec/control/v1/explain \
 
 ## 在代码中修改策略 {#changing-policies-from-your-code}
 
-在自己的代码中修改策略的服务（例如为租户开通的 IAM 服务），无论内嵌控制面还是调用控制面宿主，都通过 `ControlService`（`cosec-control-sdk`；`@ExperimentalCoSecApi`）调用控制面。starter 只提供它的一个 bean（`STA-11`）：
+在自己的代码中修改策略的服务（例如为租户开通或投影自己角色的 IAM 服务），无论内嵌控制面还是调用控制面宿主，都通过 `ControlService`（`cosec-control-sdk`；`@ExperimentalCoSecApi`）调用控制面，并用 `ControlClient(service)` 以类型化的值读写它。starter 只提供一个 `ControlService` bean（`STA-11`）：
 
 - 实例运行控制面时，是进程内实现（`cosec-control` 会带上 `cosec-control-sdk`）；
 - `cosec.control.service-url` 指定控制面宿主的控制 API（例如 `http://control:8082/cosec/control/v1`，即它的服务端口）时，是调用该端口的 `HttpControlService`（`cosec-control-http`，它会带上 `cosec-runtime`）；
@@ -288,6 +288,7 @@ fun controlService(sslContext: SSLContext): ControlService = HttpControlService(
 - **谁在执行：**
   - `ControlCaller.of(securityContext)` 以你正在服务的请求的用户身份执行。它接受 CoSec 为该请求创建的 `SecurityContext`，拒绝你的代码自行组装的上下文。
   - `ControlCaller.service("iam", roles)` 以你的服务在平台租户中的主体身份执行，用于没有请求在背后的工作。由你的代码声明主体及其角色，控制面相信它们，就像相信自己进程内的任何代码一样：那些代码本来就持有控制存储的写账号。被相信的只是谁在执行，从来不是该主体可以做什么：每次调用仍由策略按平台文档给该主体的绑定作出决策，记录也会写明该主体。
+  - 无论哪种方式，声明平台管理员身份都不会让调用成为信任根的调用（`CTL-81`）：通过 `ControlService` 的每个变更都要经过分析。写入自己已做出决定的服务，从策略获得所需的权限，例如为投影进租户的角色持有[角色类](../policies/testing.md#the-role-class)；分析无法证明的内容要等人审批。
 - **能触及什么：** 有哪些租户与 app 文档（`documents`），读取租户或 app 的文档（`document`、`revisions`、`revision`、`diff`），以及租户或 app 文档的变更流程（`check`、`propose`、`change`、`changes`、`rebase`、`startShadow`、`skipShadow`、`abandon`、`publish`；租户文档还有 `apply` 和 `checkApply`）。自动化的变更可以开启它的影子窗口，读取变更直到窗口关闭，再带着摘要的确认发布，而不是跳过窗口。通过它做出的每个变更都要经过分析，不论调用者声明的是谁：这里没有人是信任根，平台管理员也不是（`CTL-81`）。不新授予任何东西的变更（删除角色、策略或绑定）可以单独发布，持有[角色类](../policies/testing.md#the-role-class)的服务可以独自把角色投影进租户，其他任何变更（例如目录）都要等人审批，审批在运维人员的路由上进行。平台文档、审批、回滚和 break-glass 都不可触及：它们属于人，在运维人员的路由上进行。
 - **输入与输出：**
   - 请求是路由的请求体（[变更](../policies/testing.md#changes)），文档采用[文档格式](../policies/language.md)。
@@ -296,15 +297,19 @@ fun controlService(sslContext: SSLContext): ControlService = HttpControlService(
 - **确切能触及的范围：** 与控制面宿主服务端口相同的路由，两者共用一个定义（`cosec.control.http.service-port`）。按 id 指定的变更，只有在它修改的是租户或 app 文档时才可触及，列表也只显示这样的变更：按状态列出时平台文档的变更被省略，且不透露任何关于它们的信息。
 - **记录什么：** 每一步都记为所声明主体的步骤，来源中带 `via.method: in-process`（[控制面变更日志](../operations/observability.md#control-plane-change-log)）。
 
+用类型化的值时，`ControlClient(service)` 按路由接受和应答的格式写出每个请求、读取每个应答（`CTL-76`），适用于 `ControlService` 的任一实现。文档是 `DocumentContent`，包含 `Policy`、`Binding`、`Role` 和 `Catalog`；变更是 `ChangeRequest` 中的 `Operation`（`PutPolicy`、`PutRole` 等），`:apply` 则用 `ApplyRequest`；应答是 `Change`、`DocumentHead` 或 `Page`。条件和限流规则仍是 JSON（`Condition.of`、`RateLimitRule.of`）：控制面在提议变更时检查它们。封闭集合（`ChangeState`、`Effect`、`ConflictKind` 等）把较新宿主新增的值读作未知值并保留其文本；而文档条目中含有本版本不认识的成员时根本不会被读取，因为把读到的内容再 apply 回去会丢掉它。`ControlRefusedException.conflict` 说明一个 409 是哪种冲突。
+
+`proposeAndPublishWithoutShadow` 是一个写入自己已做出的决定的服务每次写入时要做的事：在文档的 head 上提议、跳过影子窗口并发布。除 `cosec:write` 外它还需要 `cosec:skip-shadow`。head 移动了就重新读取并重新提议；另一个变更占着槽位就在给定的耐心时间内等待；以同一主体身份并发写入的写入方（例如一个服务的多个副本）也这样互相等待。死掉的写入方会留下一个占着槽位的变更（`ControlRefusedException.heldBy` 给出它）：同一作者的、停在 `CHECKED`、`SHADOWING` 或 `READY` 且至少一个耐心时间未更新（按控制面的时间）的变更会被放弃，槽位随之被取得。因此死掉的写入方最多占用文档一个耐心时间，之后下一次写入接管它；同一主体的所有写入方应使用同一个耐心时间。它返回已发布的变更，或等待人工审批的变更；提议时就被控制面拒绝的变更（例如带 `REFERENCES` 发现）会被立即放弃，并以 `ABANDONED` 和它的发现应答；放弃时它会先放弃（abandon）自己提议的变更，再抛出那次拒绝。
+
+<<< @/examples/control-sdk/kotlin/AuditorsProjection.kt [AuditorsProjection.kt]
+
+`check` 应答 `propose` 对同一请求会给出的结果（状态、发现、升级和基线），不存储任何东西、不占暂存槽、不写变更事件（`CTL-78`）：在你的服务存储自己的东西之前，用它得知一个变更会发布、等人审批还是被拒绝。它与提议一样被决策：不能提议的调用者也不能检查。投影身份系统角色的服务（角色类、试运行和要等待的内容）见[外部事实源同步角色](../scenarios/external-source.md)。
+
+同样的调用也可以写成 JSON，通过 `ControlService` 本身以文本形式收发路由的请求体和应答：
+
 <<< @/examples/control-sdk/kotlin/Onboarding.kt [Onboarding.kt]
 
 <<< @/examples/control-sdk/changes/auditors.json [auditors.json]
-
-同样的调用也可以用类型化的值来写：`ControlClient(service)` 按路由接受和应答的格式写出每个请求、读取每个应答（`CTL-76`），适用于 `ControlService` 的任一实现。文档是 `DocumentContent`，包含 `Policy`、`Binding`、`Role` 和 `Catalog`；变更是 `ChangeRequest` 中的 `Operation`（`PutPolicy`、`PutRole` 等），`:apply` 则用 `ApplyRequest`；应答是 `Change`、`DocumentHead` 或 `Page`。条件和限流规则仍是 JSON（`Condition.of`、`RateLimitRule.of`）：控制面在提议变更时检查它们。封闭集合（`ChangeState`、`Effect`、`ConflictKind` 等）把较新宿主新增的值读作未知值并保留其文本；而文档条目中含有本版本不认识的成员时根本不会被读取，因为把读到的内容再 apply 回去会丢掉它。`ControlRefusedException.conflict` 说明一个 409 是哪种冲突。
-
-`proposeAndPublishWithoutShadow` 是一个写入自己已做出的决定的服务每次写入时要做的事：在文档的 head 上提议、跳过影子窗口并发布。除 `cosec:write` 外它还需要 `cosec:skip-shadow`。head 移动了就重新读取并重新提议；另一个变更占着槽位就在给定的耐心时间内等待；以同一主体身份并发写入的写入方（例如一个服务的多个副本）也这样互相等待。死掉的写入方会留下一个占着槽位的变更（`ControlRefusedException.heldBy` 给出它）：同一作者的、停在 `CHECKED`、`SHADOWING` 或 `READY` 且至少一个耐心时间未更新（按控制面的时间）的变更会被放弃，槽位随之被取得。因此死掉的写入方最多占用文档一个耐心时间，之后下一次写入接管它；同一主体的所有写入方应使用同一个耐心时间。它返回已发布的变更，或等待人工审批的变更；放弃时它会先放弃（abandon）自己提议的变更，再抛出那次拒绝。
-
-<<< @/examples/control-sdk/kotlin/AuditorsProjection.kt [AuditorsProjection.kt]
 
 需要第二个人审批的变更，无论由谁提议，都会停在 `AWAITING_APPROVAL`：把它的 id 报告给一个人，由他在运维人员的路由上审批。要以你自己的主体调用网关后面的另一个服务，`IdentityHeader.write(identity)`（`cosec-document`）写出网关本会转发的 `CoSec-Identity` 头。
 

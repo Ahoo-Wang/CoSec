@@ -574,7 +574,12 @@ the approver's token was revoked since, the provider no longer gives the approve
 tenant principal approved a boundary change or (under four-eyes) a platform principal's change, or the approval names
 no credential (`the approval does not say what credential its approver approved with`: from before the upgrade, an
 older instance, or a credential without an id), so approve again. A 403 on `:approve` with `an API key cannot approve`
-in the log: approvals are a person's, so approve with a token; an API key is never the trust root either. A tenant
+in the log: approvals are a person's, so approve with a token; an API key is never the trust root either. A change a
+service makes through `ControlService` or the service port that waits for a person (`NOT_ANALYZED` on an app's catalog,
+`CROSS_TENANT` on a tenant's grant) although it states a platform administrator: no one is the trust root there
+(`CTL-81`); give a role projection the role class (`cosec:manage-roles`), or have a person approve on the operators'
+routes. A role change of such a service that waits with no `ROLE_CLASS`: the principal lacks `cosec:manage-roles` on
+the tenant's document, or the role is of the control plane's own app or has no app, never the class's. A tenant
 principal's `SetBoundary`, its `REPLACE` or rollback that would drop the platform's boundary, and its reject or abandon
 of a boundary change are 403: a tenant's boundary is the platform's. A 409 on staging means another change holds the
 document's slot; only a break-glass revoke of a live binding, or a change that only narrows by a holder of

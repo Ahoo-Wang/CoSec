@@ -1151,6 +1151,13 @@ for a check, `412` for an `ifMatch` that does not hold).
   id). Ask for a new approval. A `403` on `:approve` with `an API key cannot approve` in the log: approve with a
   person's token; with `an approval names the approver's credential, and this one names none`: approve with a
   credential that has an id, such as CoSec's token.
+- **A service's change waits for a person although it states a platform administrator**: the change came through
+  `ControlService` or the control-plane host's service port, where no one is the trust root (`CTL-81`), so it is
+  analyzed: `NOT_ANALYZED` on an app's catalog, `CROSS_TENANT` on a grant in a tenant's document. Have a person approve
+  it on the operators' routes, or, for roles projected into tenants, give the service the
+  [role class](../policies/testing.md#the-role-class). A role change that waits with no `ROLE_CLASS`: the principal does
+  not hold `cosec:manage-roles` on the tenant's document, or the role is of the control plane's own app or has no app,
+  which are never the class's.
 - **A `FAILED` change event on a publish that met another change at the slot**: `another change took the staging
   slot before the head write` (the change was preempted while it published; nothing was written), `the document moved
   before the head write` (the head moved after the change's last slot check, by the change that took its slot, a
