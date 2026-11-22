@@ -3,15 +3,15 @@
 # Tests: :control:test --tests me.ahoo.cosec.control.api.RoleClassTest --tests me.ahoo.cosec.control.lifecycle.RoleClassUnitTest
 
 diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/RoleClass.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/RoleClass.kt
-index 7b0dbe274..3ef77324a 100644
+index eacfbc8ae..78185d9fb 100644
 --- a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/RoleClass.kt
 +++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/RoleClass.kt
-@@ -43,7 +43,7 @@ internal object RoleClass {
- 
-     /** Whether [operations] of [key] are the class's: a tenant document's, and only roles written or removed. */
-     fun covers(key: SnapshotKey, operations: List<Operation>): Boolean =
--        key is SnapshotKey.Tenant && operations.isNotEmpty() &&
-+        operations.isNotEmpty() &&
-             operations.all { it is Operation.PutRole || it is Operation.RemoveRole }
- 
-     /**
+@@ -55,7 +55,7 @@ internal object RoleClass {
+      * [controlApp]. A removed role's app is the one [base] gives it; one [base] does not hold is not the class's.
+      */
+     fun covers(key: SnapshotKey, operations: List<Operation>, base: PolicyDocument?, controlApp: AppId): Boolean =
+-        key is SnapshotKey.Tenant && operations.isNotEmpty() && operations.all { operation ->
++        operations.isNotEmpty() && operations.all { operation ->
+             when (operation) {
+                 is Operation.PutRole -> operation.role.app != controlApp
+                 is Operation.RemoveRole -> base?.roles?.firstOrNull { it.id == operation.id }?.app.let { it != null && it != controlApp }

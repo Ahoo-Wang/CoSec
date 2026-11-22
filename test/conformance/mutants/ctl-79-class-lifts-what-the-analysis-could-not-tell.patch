@@ -3,15 +3,15 @@
 # Tests: :control:test --tests me.ahoo.cosec.control.api.RoleClassTest --tests me.ahoo.cosec.control.lifecycle.RoleClassUnitTest
 
 diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/RoleClass.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/RoleClass.kt
-index 7b0dbe274..25ab07e30 100644
+index eacfbc8ae..a4a0b2916 100644
 --- a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/RoleClass.kt
 +++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/RoleClass.kt
-@@ -58,7 +58,7 @@ internal object RoleClass {
-         author: Actor,
-         holds: suspend () -> Boolean,
+@@ -76,7 +76,7 @@ internal object RoleClass {
      ): List<Escalation> {
--        if (escalations.isEmpty() || !covers(key, operations) || escalations.any { it.reason !in LIFTED }) {
-+        if (escalations.isEmpty() || !covers(key, operations)) {
+         val key = change.key
+         val covered = covers(key, change.operations, change.base, change.controlApp)
+-        if (escalations.isEmpty() || !covered || escalations.any { it.reason !in LIFTED }) {
++        if (escalations.isEmpty() || !covered) {
              return escalations
          }
          if (!holds()) {
