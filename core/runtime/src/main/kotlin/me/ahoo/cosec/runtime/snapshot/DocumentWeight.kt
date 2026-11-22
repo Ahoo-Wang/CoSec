@@ -22,25 +22,25 @@ import me.ahoo.cosec.engine.CompiledDocument
  * bound is the documents' share of the heap divided by these weights, so each is reckoned once, as the document is
  * compiled, never on a request.
  *
- * Fitted on measured documents (JOL, `DocumentWeightTest`, twelve shapes: tenants of roles only, of many role or
+ * Fitted on measured documents (the live heap a class histogram counts, `DocumentWeightTest`, twelve shapes: tenants of roles only, of many role or
  * principal bindings, of policies with and without conditions, and apps of small to large catalogs): what a document
  * retains grows with the bindings its roles expand to, with its explicit statements, and with its stored size. The stored
- * size alone does not predict it (3.6 to 19.6 times, by shape); this estimate is never below what was
- * measured and at most 1.45 times it, which errs on the side of holding fewer documents than the share could.
+ * size alone does not predict it (2.6 to 18.2 times, by shape); this estimate is at least 1.08 times what
+ * was measured and at most 1.6 times it, which errs on the side of holding fewer documents than the share could.
  */
 @InternalCoSecApi
 object DocumentWeight {
     /** What any resident document retains, whatever it holds: its slot, its entry, its revision kept. */
-    const val FIXED_BYTES: Long = 2_560
+    const val FIXED_BYTES: Long = 1_500
 
     /** Each binding, a role's grants expanded to bindings included (a typical tenant's 20 bindings of 5 roles are 120). */
-    const val BINDING_BYTES: Long = 212
+    const val BINDING_BYTES: Long = 232
 
     /** Each explicit statement, with its patterns and its condition. */
-    const val STATEMENT_BYTES: Long = 1_275
+    const val STATEMENT_BYTES: Long = 1_350
 
-    /** Two and a half bytes per stored byte, as halves: the document the slot keeps for a recompile, and its strings. */
-    const val STORED_HALF_BYTES: Long = 5
+    /** One and a half bytes per stored byte, as halves: the document the slot keeps for a recompile, and its strings. */
+    const val STORED_HALF_BYTES: Long = 3
 
     /** What an entry for a document the store does not hold retains: 460 bytes measured, a fixed size (`SNP-7`). */
     const val ABSENT_ENTRY_BYTES: Long = 512

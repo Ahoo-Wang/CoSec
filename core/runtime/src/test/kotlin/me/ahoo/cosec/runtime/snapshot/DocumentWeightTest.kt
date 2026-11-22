@@ -25,18 +25,21 @@ import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.cosec.spi.snapshot.SnapshotKind
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
-import org.openjdk.jol.info.GraphLayout
 import java.io.File
+import java.lang.management.ManagementFactory
 import java.time.Clock
 import java.time.Duration
+import javax.management.ObjectName
 
 /**
- * `SNP-24`: [DocumentWeight] against what a resident document retains in a live [SnapshotSource], measured with JOL: its
- * slot, its entry and its revision kept, as the difference between N and 2N documents held, so what they share (the
- * platform's and the apps' documents, the source) cancels out. Twelve shapes: tenants of roles only, of many role or
- * principal bindings, of explicit policies with and without conditions, the deployment page's typical tenant and the
- * largest the compiler admits, and apps of small to large catalogs. The estimate is never below what was measured and at
- * most [AT_MOST] times it; and the stored size alone could not do that, which is why it is not the estimate.
+ * `SNP-24`: [DocumentWeight] against what a resident document retains in a live [SnapshotSource]: its slot, its entry
+ * and its revision kept, measured as the live heap a class histogram counts after a full collection, before and after N
+ * documents are loaded into one source whose store already holds them, once a first N warmed the code. What the source
+ * shares with every document, and what the JVM holds besides, cancels out (a graph walk from a slot reaches the source's
+ * threads and, through them, classes a busy JVM keeps loading: `HeldKeyBytesTest` measures a held key this way too).
+ * Twelve shapes: tenants of roles only, of many role or principal bindings, of explicit policies with and without conditions, the deployment page's typical tenant and the
+ * largest the compiler admits, and apps of small to large catalogs. The estimate is at least [AT_LEAST] times what was
+ * measured, a margin over a measure that moves a few percent from run to run, and at most [AT_MOST] times it; and the stored size alone could not do that, which is why it is not the estimate.
  */
 class DocumentWeightTest {
     private val published = "2026-11-19T00:00:00Z"
@@ -97,37 +100,54 @@ class DocumentWeightTest {
 
     private fun doc(json: String) = SnapshotDocuments.read(json.encodeToByteArray())
 
-    /** What one resident document of [document]'s shape retains in [kind]'s family, over [n] and 2 × [n] held. */
-    private fun held(kind: SnapshotKind, n: Int, document: (Int) -> String): Long {
-        val sizes = listOf(n, 2 * n).map { count ->
-            val store = InMemorySnapshotDocumentStore()
-            store.put(SnapshotKey.Platform, doc(platform()))
-            repeat(apps) { store.put(SnapshotKey.App("app-$it"), doc(app(it, 5, 20, 12))) }
-            val keys = (0 until count).map {
-                if (kind == SnapshotKind.TENANT) SnapshotKey.Tenant("t-$it") else SnapshotKey.App("x-$it")
-            }
-            keys.forEachIndexed { i, key -> store.put(key, doc(document(i))) }
-            val compiler = PolicyDocumentCompiler()
-            val options = SnapshotOptions(
-                revalidateInterval = Duration.ofMinutes(4),
-                lagWarn = Duration.ofMinutes(5),
-                lagEscalate = Duration.ofMinutes(10),
-                maxApps = 1_000,
-                maxTenants = 1_000,
-            )
-            SnapshotSource(
-                store, SnapshotKey.Platform, compiler, DocumentSnapshots.families(compiler, options), options,
-                Clock.systemUTC(), SnapshotMetrics.NOOP, null, null, System::nanoTime, null,
-            ).use { source ->
-                source.load().join()
-                keys.forEach { source.loadAll(listOf(it)).join() }
-                val family = checkNotNull(source.families.of(kind))
-                val slots = keys.map { checkNotNull(family.slots[family.spec.idOf(it)]) }
-                val seen = keys.map { checkNotNull(source.families.seen[it]) }
-                GraphLayout.parseInstance(slots, seen).totalSize()
-            }
+    /** Live bytes on the heap, summed over every class, after the full collection a class histogram makes. */
+    private fun liveBytes(): Long {
+        val text = ManagementFactory.getPlatformMBeanServer().invoke(
+            ObjectName("com.sun.management:type=DiagnosticCommand"),
+            "gcClassHistogram",
+            arrayOf<Any?>(null),
+            arrayOf(Array<String>::class.java.name),
+        ) as String
+        return text.lines().sumOf { line ->
+            val parts = line.trim().split(Regex("\\s+"))
+            if (parts.size >= 4 && parts[0].endsWith(":")) parts[2].toLong() else 0L
         }
-        return (sizes[1] - sizes[0]) / n
+    }
+
+    /**
+     * What one resident document of [document]'s shape retains in [kind]'s family: the live heap after [n] of them are
+     * loaded into a source, less before, over [n]. The store holds them before the first count, and a first run warms the
+     * classes and the code, so what the source shares with every document, and what the JVM holds besides, cancels out.
+     */
+    private fun held(kind: SnapshotKind, n: Int, document: (Int) -> String): Long {
+        val store = InMemorySnapshotDocumentStore()
+        store.put(SnapshotKey.Platform, doc(platform()))
+        repeat(apps) { store.put(SnapshotKey.App("app-$it"), doc(app(it, 5, 20, 12))) }
+        val keys = (0 until 2 * n).map {
+            if (kind == SnapshotKind.TENANT) SnapshotKey.Tenant("t-$it") else SnapshotKey.App("x-$it")
+        }
+        keys.forEachIndexed { i, key -> store.put(key, doc(document(i))) }
+        val compiler = PolicyDocumentCompiler()
+        val options = SnapshotOptions(
+            revalidateInterval = Duration.ofMinutes(4),
+            lagWarn = Duration.ofMinutes(5),
+            lagEscalate = Duration.ofMinutes(10),
+            maxApps = 1_000,
+            maxTenants = 1_000,
+        )
+        return SnapshotSource(
+            store, SnapshotKey.Platform, compiler, DocumentSnapshots.families(compiler, options), options,
+            Clock.systemUTC(), SnapshotMetrics.NOOP, null, null, System::nanoTime, null,
+        ).use { source ->
+            source.load().join()
+            // The first half warms what loading a document touches the first time; the second half is measured.
+            keys.take(n).forEach { source.loadAll(listOf(it)).join() }
+            val before = liveBytes()
+            keys.drop(n).forEach { source.loadAll(listOf(it)).join() }
+            val after = liveBytes()
+            check(source.entries().size == 1 + 2 * n) { "Every document is resident." }
+            (after - before) / n
+        }
     }
 
     private fun platform(): String =
@@ -158,7 +178,7 @@ class DocumentWeightTest {
     )
 
     @Test
-    fun `the estimate is never below what a resident document retains, and at most one and a half times it`() {
+    fun `the estimate is above what a resident document retains, and at most 1·6 times it`() {
         val compiler = PolicyDocumentCompiler()
         val storedOnly = ArrayList<Double>()
         val results = ArrayList<Triple<String, Long, Long>>()
@@ -176,14 +196,24 @@ class DocumentWeightTest {
             results += Triple(shape.name, estimate, measured)
         }
         for ((name, estimate, measured) in results) {
-            estimate.assert().describedAs(name).isGreaterThanOrEqualTo(measured)
+            (estimate.toDouble() / measured).assert().describedAs(name).isGreaterThanOrEqualTo(AT_LEAST)
             (estimate.toDouble() / measured).assert().describedAs(name).isLessThanOrEqualTo(AT_MOST)
         }
         // One factor of the stored size could not hold every shape within the band the estimate holds.
         (storedOnly.max() / storedOnly.min()).assert().isGreaterThan(AT_MOST)
     }
 
+    @Test
+    fun `a document that did not compile weighs what the slot keeps of it, and less than one that did`() {
+        val json = shapes.first().document(0)
+        val compiled = PolicyDocumentCompiler().compile(SnapshotKey.Tenant("t-0"), doc(json)) as CompiledDocument
+        DocumentWeight.ofUncompiled(json.length).assert()
+            .isEqualTo(DocumentWeight.FIXED_BYTES + json.length * DocumentWeight.STORED_HALF_BYTES / 2)
+            .isLessThan(DocumentWeight.of(compiled, json.length))
+    }
+
     private companion object {
-        const val AT_MOST = 1.5
+        const val AT_LEAST = 1.03
+        const val AT_MOST = 1.6
     }
 }
