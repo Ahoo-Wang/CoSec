@@ -149,7 +149,7 @@ class CoSecSnapshotAutoConfiguration {
             factory: CoCacheFactory,
             properties: RuntimeAuthorizationProperties,
         ): EvictionPolicyMonitor = EvictionPolicyMonitor(
-            { EvictionPolicyCheck.read(factory.runtime.backend) },
+            { EvictionPolicyCheck.monitorRead(factory.runtime.backend) },
             properties.snapshot.revalidateInterval,
             properties.snapshot.evictionCheck,
         ).start()

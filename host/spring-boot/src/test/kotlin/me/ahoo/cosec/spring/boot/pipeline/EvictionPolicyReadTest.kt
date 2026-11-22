@@ -19,6 +19,10 @@ import io.lettuce.core.RedisCommandExecutionException
 import io.lettuce.core.RedisCommandTimeoutException
 import io.lettuce.core.RedisConnectionException
 import io.lettuce.core.RedisException
+import io.mockk.every
+import io.mockk.mockk
+import io.mockk.verify
+import me.ahoo.cocache.redis.RedisBackend
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.test.asserts.assert
@@ -34,14 +38,17 @@ class EvictionPolicyReadTest {
     private val pauses = mutableListOf<Duration>()
 
     /** Reads answering [answers] in turn: a map is a reading, an exception a failed read. */
-    private fun read(vararg answers: Any): Pair<EvictionPolicyCheck.Reading, Int> {
+    private fun read(vararg answers: Any): Pair<EvictionPolicyCheck.Reading, Int> =
+        readWith(EvictionPolicyCheck.ATTEMPTS, *answers)
+
+    private fun readWith(attempts: Int, vararg answers: Any): Pair<EvictionPolicyCheck.Reading, Int> {
         var calls = 0
         val reading = EvictionPolicyCheck.readPolicies({
             val answer = answers[minOf(calls, answers.size - 1)]
             calls++
             @Suppress("UNCHECKED_CAST")
             if (answer is RuntimeException) throw answer else answer as Map<String, String>
-        }) { pauses += it }
+        }, attempts) { pauses += it }
         return reading to calls
     }
 
@@ -107,5 +114,25 @@ class EvictionPolicyReadTest {
         // A reply naming a passing state is worth another read.
         read(RedisCommandExecutionException("LOADING Redis is loading the dataset in memory"), safe).second
             .assert().isEqualTo(2)
+    }
+
+    @Test
+    fun `the periodic re-check reads once, with no pause, and names a timeout as a timeout - SNP-3`() {
+        val redis = mockk<RedisBackend> { every { readMaxmemoryPolicies() } throws timeout }
+        val reading = EvictionPolicyCheck.monitorRead(redis)
+        verify(exactly = 1) { redis.readMaxmemoryPolicies() }
+        val problem = EvictionPolicyCheck.problem(reading)
+        problem.assert().contains("did not answer INFO memory").contains("Command timed out").doesNotContain("attempts")
+        // Its retry is the next interval: the monitor's status names the same timeout.
+        val monitor = EvictionPolicyMonitor({ EvictionPolicyCheck.monitorRead(redis) }, Duration.ofHours(1))
+        monitor.refresh()
+        monitor.status().down.assert().isTrue()
+        monitor.status().detail.toString().assert().contains("Command timed out")
+        verify(exactly = 2) { redis.readMaxmemoryPolicies() }
+        // One attempt, as the startup read's arithmetic would have it: no pause.
+        val (once, calls) = readWith(1, timeout)
+        calls.assert().isEqualTo(1)
+        pauses.assert().isEmpty()
+        once.assert().isInstanceOf(EvictionPolicyCheck.Reading.Unreadable::class.java)
     }
 }

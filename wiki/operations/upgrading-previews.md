@@ -46,8 +46,11 @@ Which preview of the library may run behind which preview of the gateway image: 
   the primaries first. Two behaviours change with it:
   - The startup eviction check of CoCache's `Store`s retries a read that times out (up to five attempts), and its
     failure says why: Redis refused `INFO`, or did not answer
-    ([Troubleshooting](./troubleshooting.md#startup-fails-on-the-eviction-check)). CoSec's own check (`SNP-3`) is
-    unchanged.
+    ([Troubleshooting](./troubleshooting.md#startup-fails-on-the-eviction-check)). CoSec's own check (`SNP-3`) reads
+    the same way at startup: a slow Redis is asked up to five times before the start fails, and the message names a
+    timeout (`Redis did not answer INFO memory ...`) or a refusal (`Redis refused INFO ...`). The old reason
+    `INFO memory failed or is not allowed` is gone: an alert on that text matches nothing now. The periodic re-check
+    still reads once per interval, with the same reasons.
   - Stored content that decodes to `null` fails the read instead of reading as absent. CoSec writes no such content;
     an entry another writer left as a JSON `null` in a revocation table now fails the request as foreign content where
     it used to read as "not revoked".

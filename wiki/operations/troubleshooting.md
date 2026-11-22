@@ -823,7 +823,8 @@ instance could not read the policy, and the parentheses say why.
   knows no node to ask (`no Redis node answered INFO memory`).
 
 A policy the check could not read is never taken as safe ([Redis requirements](./storage.md#redis-requirements)). The
-periodic re-check reads the same way, and its `ERROR` line names the same reason.
+periodic re-check names the same reasons in its `ERROR` line, but reads once per interval: its retry is the next
+interval, so a timeout there reads `Redis did not answer INFO memory (...)`, with no count of attempts.
 
 With `warn` the instance starts and logs the same text at `WARN`, starting with `!!!` and ending with
 `Starting anyway (eviction-check=warn).` and what eviction would do. That line is expected with `warn`; if Redis really

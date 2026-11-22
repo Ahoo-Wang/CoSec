@@ -192,8 +192,9 @@ decision inputs stay strict: they carry no such tolerance.
   `INFO memory`, which managed Redis services usually allow where they block `CONFIG`. Two checks read it:
   - CoSec's own (`SNP-3`), of the Redis behind the CoCache runtime the snapshot store is created on: a node that is
     not `noeviction`, an `INFO` that fails or is denied, or a CoCache backend the check cannot see into (a wrapper, a
-    custom backend) fails startup by default. A read that times out or loses its connection is tried again, up to
-    five times, as CoCache's own check does; a refused `INFO` is not. A Redis that denies `INFO` while you have set `noeviction` yourself needs
+    custom backend) fails startup by default. At startup a read that times out or loses its connection is tried
+    again, up to five times, as CoCache's own check does; a refused `INFO` is not. The re-check below reads once per
+    interval and names the same reasons. A Redis that denies `INFO` while you have set `noeviction` yourself needs
     [`cosec.authorization.snapshot.eviction-check=warn`](./configuration.md#snapshot): the instance starts and logs a
     `WARN` that begins with `!!!` ([Troubleshooting](./troubleshooting.md#startup-fails-on-the-eviction-check)).
   - CoCache's, for its `Store`s, which CoSec's documents and records are: an `allkeys-*` policy always fails startup,

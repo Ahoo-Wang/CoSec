@@ -43,11 +43,12 @@ import java.util.concurrent.TimeoutException
  * of their own, which `volatile-*` may evict before it ends, and an evicted revocation accepts its token again. CoCache
  * counts such a lifetime only once the instance has written or read one.
  *
- * The policy is read as CoCache 8.2.0's own check reads it (CoCache#1009): a read that times out, loses its connection
- * or gets a transient reply is tried again, up to [ATTEMPTS] times with pauses from [FIRST_RETRY_PAUSE] doubling to
- * [MAX_RETRY_PAUSE]; a refused `INFO` is not. One behaviour for both checks, and a starved process starting among many
- * is not failed for a slow answer. What could not be read after that is still not safe, and the reason says what
- * happened: a timeout as a timeout, a refusal as a permission.
+ * At startup the policy is read as CoCache 8.2.0's own check reads it (CoCache#1009): a read that times out, loses its
+ * connection or gets a transient reply is tried again, up to [ATTEMPTS] times with pauses from [FIRST_RETRY_PAUSE]
+ * doubling to [MAX_RETRY_PAUSE]; a refused `INFO` is not. One behaviour for both checks, and a starved process starting
+ * among many is not failed for a slow answer. The periodic re-check ([monitorRead]) reads once, as CoCache's does: its
+ * retry is the next interval. What could not be read is still not safe, and the reason says what happened: a timeout
+ * as a timeout, a refusal as a permission.
  */
 internal object EvictionPolicyCheck {
     private val log = KotlinLogging.logger {}
@@ -64,10 +65,11 @@ internal object EvictionPolicyCheck {
         data class Unreadable(val reason: String) : Reading
     }
 
-    fun read(backend: CoherenceBackend, pause: (Duration) -> Unit = Thread::sleep): Reading {
+    /** Startup's reading of [backend]: up to [attempts] reads of a Redis backend, [pause] between them. */
+    fun read(backend: CoherenceBackend, attempts: Int = ATTEMPTS, pause: (Duration) -> Unit = Thread::sleep): Reading {
         val redis = backend as? RedisBackend ?: backend.unwrap(RedisBackend::class.java)
         if (redis != null) {
-            return readPolicies(redis::readMaxmemoryPolicies, pause)
+            return readPolicies(redis::readMaxmemoryPolicies, attempts, pause)
         }
         if (backend is InMemoryBackend || backend.unwrap(InMemoryBackend::class.java) != null) {
             return Reading.NotRedis
@@ -76,6 +78,12 @@ internal object EvictionPolicyCheck {
     }
 
     private const val NO_NODE = "no Redis node answered INFO memory"
+
+    /**
+     * The periodic re-check's reading of [backend]: one read, no pause and no line of its own. A pass that waited out
+     * pauses would log on every pass of an outage and hold its thread, and a `close` during a pause would interrupt it.
+     */
+    fun monitorRead(backend: CoherenceBackend): Reading = read(backend, attempts = 1) { }
 
     /** CoCache 8.2.0's bounds for its own startup check (`StoreEvictionCheck`), so the two checks behave alike. */
     const val ATTEMPTS = 5
@@ -86,8 +94,12 @@ internal object EvictionPolicyCheck {
     private val TRANSIENT_REPLIES = listOf("LOADING", "BUSY", "TRYAGAIN", "MASTERDOWN", "CLUSTERDOWN")
     private const val MAX_CAUSE_DEPTH = 8
 
-    /** [policies] read, a transient failure tried again up to [ATTEMPTS] times; what it could not read, and why. */
-    internal fun readPolicies(policies: () -> Map<String, String>, pause: (Duration) -> Unit): Reading {
+    /** [policies] read, a transient failure tried again up to [attempts] times; what it could not read, and why. */
+    internal fun readPolicies(
+        policies: () -> Map<String, String>,
+        attempts: Int,
+        pause: (Duration) -> Unit,
+    ): Reading {
         var attempt = 0
         while (true) {
             attempt++
@@ -105,14 +117,14 @@ internal object EvictionPolicyCheck {
                     "Redis refused INFO ($failure): grant the Redis user +info"
                 )
                 !transient(failure) -> return Reading.Unreadable("INFO memory failed ($failure)")
-                attempt >= ATTEMPTS -> return Reading.Unreadable(
-                    "Redis did not answer INFO memory in $ATTEMPTS attempts (last: $failure): a timeout or a " +
-                        "connection failure, not a missing permission; check that Redis is reachable and that this " +
-                        "process is not starved of CPU while it starts"
+                attempt >= attempts -> return Reading.Unreadable(
+                    "Redis did not answer INFO memory ${if (attempts == 1) "($failure)" else "in $attempts attempts (last: $failure)"}: " +
+                        "a timeout or a connection failure, not a missing permission; check that Redis is reachable " +
+                        "and that this process is not starved of CPU"
                 )
             }
             val wait = retryPause(attempt)
-            log.warn { "Cannot read maxmemory-policy (INFO memory), attempt $attempt of $ATTEMPTS - retry in $wait: $failure" }
+            log.warn { "Cannot read maxmemory-policy (INFO memory), attempt $attempt of $attempts - retry in $wait: $failure" }
             pause(wait)
         }
     }

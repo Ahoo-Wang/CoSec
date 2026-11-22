@@ -563,7 +563,7 @@ Cannot tell whether Redis may evict CoSec's policy snapshot (Redis did not answe
 - `INFO memory failed (...)`：其他任何失败，写明原因。
 - 它也会指出检查无法读取的 CoCache 后端（包装过的或自定义的后端），以及不知道该问哪个节点的集群连接（`no Redis node answered INFO memory`）。
 
-检查读不到的策略永远不会被当作安全的（[Redis 要求](./storage.md#redis-requirements)）。周期性的复查以同样的方式读取，它的 `ERROR` 日志写明同样的原因。
+检查读不到的策略永远不会被当作安全的（[Redis 要求](./storage.md#redis-requirements)）。周期性的复查在 `ERROR` 日志中写明同样的原因，但每个间隔只读一次：它的重试就是下一个间隔，所以那里的超时写作 `Redis did not answer INFO memory (...)`，不带尝试次数。
 
 使用 `warn` 时，实例照常启动，并以 `WARN` 记录同样的文本，以 `!!!` 开头，以 `Starting anyway (eviction-check=warn).`
 和驱逐会造成的后果结尾。使用 `warn` 时这一行是预期的；如果 Redis 真的驱逐了数据，被驱逐之后才加载的应用文档或租户文档
