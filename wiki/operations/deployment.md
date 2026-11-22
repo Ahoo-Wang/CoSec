@@ -413,6 +413,10 @@ on its own.
    kubectl apply -k k8s/overlays/dev
    ```
 
+   Everything is applied at once, so a gateway can start before Redis answers: it exits, since startup fails closed
+   without its store of record, and the kubelet starts it again; a restart count of `1` on a new deployment is that
+   ([Troubleshooting](./troubleshooting.md#a-gateway-restarts-once-right-after-it-is-deployed)).
+
 4. **Publish the platform document.** Until it is installed, every gateway runs but reports itself not ready and stays
    out of the Service ([Readiness](#readiness)), and `kubectl rollout status` waits. That is by design: it would answer
    every routed request `503`. With the dev overlay, reach its Redis with

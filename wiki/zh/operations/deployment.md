@@ -243,6 +243,8 @@ spring:
    kubectl apply -k k8s/overlays/dev
    ```
 
+   所有资源是一起应用的，所以网关可能在 Redis 应答之前启动：它会退出，因为没有权威存储时启动失败即拒绝，然后 kubelet 再次启动它；新部署上重启次数为 `1` 就是这种情况（[故障排查](./troubleshooting.md#a-gateway-restarts-once-right-after-it-is-deployed)）。
+
 4. **发布平台文档。** 在它安装之前，每个网关都在运行，但报告自己未就绪，不在 Service 中（[就绪](#readiness)），
    `kubectl rollout status` 会一直等待。这是有意的设计：否则它会对每个被路由的请求回答 `503`。使用 dev overlay 时，用
    `kubectl -n cosec-dev port-forward svc/redis 6379` 连到它的 Redis，再用
