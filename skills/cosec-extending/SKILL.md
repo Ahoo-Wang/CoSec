@@ -80,7 +80,7 @@ their values when a request's statements need them:
 ```kotlin
 class RiskAttributeProvider(private val risk: RiskClient) : AttributeProvider {
     override val attributes = listOf(AttributeDeclaration("ext.risk.level", AttributeType.STRING))
-    override val timeout: Duration? = Duration.ofMillis(200) // java.time; null uses cosec.authorization.attributes.timeout
+    override val timeout: Duration? = Duration.ofMillis(200) // java.time; null uses the attribute timeout (6 % of cosec.pipeline.timeout)
 
     override suspend fun fetch(request: AttributeRequest, names: Set<String>): Map<String, Any> {
         val level = risk.level(request.subject.id, request.remoteIp) ?: return emptyMap() // absent, not failed
@@ -146,7 +146,7 @@ provider-marked tokens are then refused as `token-invalid` (IDN-3). Never answer
 principal: that is a known principal with no roles, whose keys keep working. Answer the principal's memberships, not a
 key's: the pipeline narrows them to the key's `roles` cap itself. With `cosec-cocache`, a `MembershipLoader` bean
 following the same contract gets `CoCacheMembershipProvider` from the starter. A thrown
-exception or a late answer (`cosec.authorization.membership.timeout`, default 500ms) fails the request with 503; it
+exception or a late answer (the membership timeout, 10 % of `cosec.pipeline.timeout`: 500ms at the default) fails the request with 503; it
 never counts as "no memberships"; so does an answer whose source is not `PROVIDER`. The default space's key is
 `SpaceId.DEFAULT` (`""`).
 `InMemoryMembershipProvider` exists for tests.
@@ -164,7 +164,7 @@ fun denyAlerts(alerts: Alerts): DecisionListener = object : DecisionListener {
 ```
 
 - `BEST_EFFORT` (default): queued off the request path into a bounded queue; a full queue drops the event.
-- `Delivery.REQUIRED`: runs before the response, within `cosec.observability.listener.required-timeout` (1s); a failure or timeout turns
+- `Delivery.REQUIRED`: runs before the response, within 20 % of `cosec.pipeline.timeout` (1s at the default); a failure or timeout turns
   a permit into 503. Make it idempotent by `event.id`. Use it only for an audit that must not be lost.
 - Events carry the decision, deciding statement (`by`) and binding (`via`), break-glass flag, snapshot revisions,
   subject, scope, action, resource, request summary, attribute statuses (never values), trace ids. They carry no
@@ -173,7 +173,7 @@ fun denyAlerts(alerts: Alerts): DecisionListener = object : DecisionListener {
 - Built-in listeners: the audit log (`cosec.audit.enabled`), Kafka (`cosec-kafka`), Micrometer, OpenTelemetry,
   shadow. An `AuditEventSink` bean is picked up as is: the starter wraps it (`AuditListener.of(sink, beanName)`).
 - BEST_EFFORT queues hold `cosec.observability.listener.queue-capacity` (1024) events each; on shutdown they drain for
-  up to `cosec.observability.listener.drain-timeout` (5s). A service in gateway mode registers no listeners.
+  up to a sixth of `spring.lifecycle.timeout-per-shutdown-phase` (5s at the default). A service in gateway mode registers no listeners.
 
 ## RateLimiter: where permits are counted
 

@@ -24,12 +24,12 @@ map、list 类型配置项之下的 key，算作已知。错误信息列出每�
 
 这项检查以及 starter 的其他启动检查（缺少模块、网关上暴露的 actuator 端点、Redis 的逐出策略、从副本读取、没有 `MembershipProvider` 的 API key），在设置 `spring.main.lazy-initialization=true` 时同样运行（`STA-3`）：没有 bean 依赖这些检查，延迟初始化的应用否则会把它们全部跳过。
 
-key 的比较方式与 Spring 的 binder 一致，所以 Spring 文档给出的各种写法对已知 key 都算已知：properties 文件里的 `local-max-age`、
-`localMaxAge` 或 `local_max_age`，以及环境变量 `COSEC_AUTHORIZATION_SNAPSHOT_LOCALMAXAGE`（大写、点换成下划线、去掉连字符）。
+key 的比较方式与 Spring 的 binder 一致，所以 Spring 文档给出的各种写法对已知 key 都算已知：properties 文件里的 `revalidate-interval`、
+`revalidateInterval` 或 `revalidate_interval`，以及环境变量 `COSEC_AUTHORIZATION_SNAPSHOT_REVALIDATEINTERVAL`（大写、点换成下划线、去掉连字符）。
 不是已知 key 的这种写法的变量仍算未知：拼错的 `COSEC_PIPELINE_TIMEUOT`，以及遗留写法
-`COSEC_AUTHORIZATION_SNAPSHOT_LOCAL_MAX_AGE` 都一样，错误信息会把它列为 `cosec.authorization.snapshot.local.max.age`；
+`COSEC_AUTHORIZATION_SNAPSHOT_REVALIDATE_INTERVAL` 都一样，错误信息会把它列为 `cosec.authorization.snapshot.revalidate.interval`；
 并且当 CoSec 读取的某个 key 与它相近时，还会给出应该写的拼写：只有分隔符不同时给出 key 和变量
-（`..._LOCAL_MAX_AGE` 应写成 `COSEC_AUTHORIZATION_SNAPSHOT_LOCALMAXAGE`），或者给出笔误只差两次编辑的那个唯一的 key
+（`..._REVALIDATE_INTERVAL` 应写成 `COSEC_AUTHORIZATION_SNAPSHOT_REVALIDATEINTERVAL`），或者给出笔误只差两次编辑的那个唯一的 key
 （`COSEC_PIPELINE_TIMEUOT` 应写成 `COSEC_PIPELINE_TIMEOUT`）。key 的各个单词在变量里是连在一起的，不管 key 里有没有连字符：
 `eviction-check` 是 `COSEC_AUTHORIZATION_SNAPSHOT_EVICTIONCHECK`，`memberships-on-refresh` 是
 `COSEC_JWT_SESSION_MEMBERSHIPSONREFRESH`。本文档、`k8s/` 和镜像文件里出现的每个变量都受这项检查约束。
@@ -48,7 +48,7 @@ CoSec 没有哪个配置项叫这些名字，而已知的 key 无论来源都不
 
 ## 由计算得出，而非配置 {#computed-not-configured}
 
-能计算出来的就不是配置项：下面每个值都由你设置的某个值、机器本身，或 CoSec 自己拥有的某个上限推出，没有对应的 key。每个值在启动时记录一次，那一行以 `CoSec derived, not configured:` 开头（数据面的快照值一行，控制面的一行），并写明它由什么推出。
+能计算出来的就不是配置项：下面每个值都由你设置的某个值、机器本身，或 CoSec 自己拥有的某个上限推出，没有对应的 key。每个值在启动时记录一次，那一行以 `CoSec derived, not configured:` 开头（数据面的值一行，控制面的一行），并写明它由什么推出。
 
 | 值 | 计算方式 | 依据 |
 |---|---|---|
@@ -57,6 +57,20 @@ CoSec 没有哪个配置项叫这些名字，而已知的 key 无论来源都不
 | 请求等待一个未装入的文档多久 | 管道超时的 40 %，至少 `1ms`：默认 `2s` | [`cosec.pipeline.timeout`](#pipeline) |
 | 编译文档的线程数 | 每 2 个核心一个，至少 1 个、至多 4 个 | 进程的核心数 |
 | 一次重新确认并发确认的文档数 | 16，常量：一轮超过间隔时各轮首尾相接，只有突发量取决于它 | |
+| CoCache 中文档的本地副本为冷加载提供多久，之后重新询问 Redis | 3 个重新确认间隔：默认 `30s`；无论缓存定制器或 `cocache.*` 配置项设置了什么 | [`cosec.authorization.snapshot.revalidate-interval`](#snapshot) |
+| 一次 `Authenticator` 调用；超过后得到 `503` | 管道超时的 20 %：默认 `1s` | [`cosec.pipeline.timeout`](#pipeline) |
+| 一次 `MembershipProvider` 调用，以及成员关系缓存的一次填充；超时或失败时得到 `503` | 10 %：`500ms` | 同上 |
+| 一次没有自行设置超时的 `AttributeProvider` 调用；超时后它的属性不可用，需要这些属性的语句使决策成为 Indeterminate | 6 %：`300ms` | 同上 |
+| 一次 `RateLimiter` 调用；超时后由规则的 `strictFailure` 决定：`503`，或跳过该规则 | 10 %：`500ms` | 同上 |
+| CoSec 自己的吊销读取器的每次读取（先读令牌，再读它的主体）；超过后 Redis 算作无法读取：令牌被接受（使用 `fail-closed` 时被拒绝），刷新失败 | 认证超时的 30 %：`300ms`。它的两倍，即一个令牌的两次读取，在认证超时之内结束，所以挂起的 Redis 绝不会让每个经过认证的请求都返回 `503`。应用自己的 `RevocationReader` 自行限定它的读取（[扩展](../architecture/extending.md)） | 同上 |
+| 一个 `REQUIRED` 决策监听器；失败或超时会把放行变成 `503` | 20 %：`1s`，所以它的等待在请求之内结束 | 同上 |
+| 所有 `REQUIRED` 变更监听器合计记录一个受控步骤（发布、break-glass）；超过后该步骤以 `503` 失败 | 管道超时，即控制请求自身授权的上限：`5s` | 同上 |
+| 关闭时，每组监听器（决策监听器、变更监听器）还能继续投递排队事件多久；之后剩下的被丢弃。Kafka 审计监听器和 Kafka 变更监听器还会再用同样长的时间等待它们手中的发送 | 关闭阶段的六分之一：Spring 默认 `30s` 时为 `5s`。六次排空合计不超过一个阶段 | `spring.lifecycle.timeout-per-shutdown-phase` |
+| 一个实例记住 `MembershipLoader` 不认识某个主体（被移除成员仍有效的令牌）多久 | 5 秒，常量：你新增的主体在它结束时被每个实例认识，在执行 `invalidate` 的实例上立即被认识；失败的加载从不被记住（[成员关系](../integration/authentication.md#memberships)） | |
+
+管道超时的每一份至少为 `1ms`；`cosec.pipeline.timeout` 低于 20 ms 时，一个令牌的两次吊销读取可能不再在认证超时之内结束。
+
+**更低的期限会缩短唯一一个失败即放行的阶段。** 吊销读取的预算随期限缩放：`cosec.pipeline.timeout=1s` 时每次读取只有 60 ms，而原来固定为 300 ms。超过预算的读取意味着吊销无法读取，此时校验会接受请求的令牌，除非设置了 `cosec.authentication.revocation.fail-closed=true`（[已写明的例外](../guide/security-model.md#the-two-documented-exceptions)）。期限低于默认值时，请设置 `fail-closed`，或确认 Redis 的应答远在读取预算之内。
 | 实例多久写一次影子报告和状态 | 状态存活期的六分之一（`10s`），且不比窗口最短存活期的五分之一或一秒更频繁 | [`cosec.control.shadow.min-duration`](#control-plane)，在它被设置的地方读取 |
 | 每个控制面实例多久回收一次修订 | 1 小时，常量：回收什么由 `min-age` 和 `max-count` 决定 | |
 | 修订链之外的记录、或登记了却从未写入的变更何时删除 | 满一轮回收的年龄：1 小时 | 回收间隔 |
@@ -117,8 +131,7 @@ CoSec 没有哪个配置项叫这些名字，而已知的 key 无论来源都不
 
 | 配置项 | 类型 | 默认值 | 作用 |
 |---|---|---|---|
-| `cosec.pipeline.timeout` | duration | `5s` | 一个请求的整个求值过程。超过后请求得到 `503` `unavailable`。 |
-| `cosec.pipeline.authentication-timeout` | duration | `1s` | 一次 `Authenticator` 调用。超过后得到 `503`。 |
+| `cosec.pipeline.timeout` | duration | `5s` | 一个请求的整个求值过程。超过后请求得到 `503` `unavailable`。每个阶段自己的超时都是它的一份（[由计算得出，而非配置](#computed-not-configured)）。 |
 | `cosec.pipeline.allow-query-token` | boolean | `false` | 也从 `authorization` 查询参数读取访问令牌。默认关闭，因为 URL 会进入访问日志、浏览器历史和 `Referer` 头。 |
 | `cosec.pipeline.allow-cookie-token` | boolean | `false` | 也从 `authorization` cookie 读取访问令牌。默认关闭，因为浏览器会自动带上 cookie，跨站请求也不例外：只有自己做好 CSRF 防护时才打开（[认证](../integration/authentication.md)）。 |
 | `cosec.pipeline.api-key-header` | string | `X-API-Key` | 携带 API key 的请求头。任何文档都不能读取它：宿主的每个编译器都像拒绝其他携带凭证的请求头一样拒绝对它的引用（[请求头](../policies/language.md#headers)）。 |
@@ -132,15 +145,12 @@ CoSec 没有哪个配置项叫这些名字，而已知的 key 无论来源都不
 
 ## 授权 {#authorization}
 
-`cosec.authorization.*`：宿主的作用域和各阶段的超时。
+`cosec.authorization.*`：宿主的作用域和路由映射。
 
 | 配置项 | 类型 | 默认值 | 作用 |
 |---|---|---|---|
 | `cosec.authorization.scope.app-id` | string | 无 | 本宿主服务的应用。声明了其他应用或未声明应用的凭证被拒绝（`403` `scope-rejected`）。不设置时取凭证的应用（[应用](../integration/authentication.md#apps)）。在网关上，路由元数据 `cosec-app-id` 对该路由的请求优先（[网关](../integration/web.md#gateway)）。 |
 | `cosec.authorization.remote-ip.max-trusted-index` | int | `1` | 解析客户端 IP 时信任 `X-Forwarded-For` 中的几跳代理。`0` 忽略该请求头（宿主直接对外）；`N` 取第 N 近的代理追加的那一项。在 `native` 转发头策略下，于 Tomcat 上显式设置，或在 Reactor Netty、Jetty 上设为 `0`，都会导致启动失败，其他服务器或没有服务器（外部容器里的 war）也一样；`framework` 总是导致启动失败（[代理后的客户端 IP](../integration/web.md#client-ip-behind-proxies)，`PIP-16`）。 |
-| `cosec.authorization.membership.timeout` | duration | `500ms` | 一次 `MembershipProvider` 调用。超时或失败时得到 `503`。 |
-| `cosec.authorization.membership.unknown-ttl` | duration | `5s` | 一个实例记住 `MembershipLoader` 不认识某个主体（被移除成员仍有效的令牌）多久，使它的请求不必每次都到达 loader。`0s` 表示不记；最长 `1m`（缓存的成员关系的默认存活时间），更长的值使启动失败。你新增的主体在这段时间结束时被所有实例知道，在调用了 `invalidate` 的实例上立即知道。失败或超时的加载从不被记住（[成员关系](../integration/authentication.md#memberships)）。 |
-| `cosec.authorization.attributes.timeout` | duration | `300ms` | 一次没有自行设置超时的 `AttributeProvider` 调用。超时后它的属性不可用，需要这些属性的语句使决策成为 Indeterminate。 |
 | `cosec.authorization.routes.location` | 逗号分隔的资源位置 | 未设置 | WebFlux 或 WebMvc 宿主在启动时加载的路由映射，日志会写明每份映射的服务和路由条数。位置不存在、映射无法解析或映射没有路由，启动失败。未设置时不加载路由映射，每个请求都在 `http` 命名空间中授权；但 `classpath:cosec-routes.json` 存在时启动失败，直到配置项指明它或设为空。设置为空表示明确不使用路由映射。Spring Cloud Gateway 宿主忽略它，不加载路由映射。 |
 
 ## 网关 {#gateway}
@@ -170,9 +180,8 @@ CoSec 没有哪个配置项叫这些名字，而已知的 key 无论来源都不
 
 ## 限流 {#rate-limiting}
 
-| 配置项 | 类型 | 默认值 | 作用 |
-|---|---|---|---|
-| `cosec.authorization.rate-limit.timeout` | duration | `500ms` | 一次 `RateLimiter` 调用。超时后由规则的 `strictFailure` 决定：`503`，或跳过该规则。 |
+限流器每次调用有 `cosec.pipeline.timeout` 的 10 %；超时后由规则的 `strictFailure` 决定
+（[由计算得出，而非配置](#computed-not-configured)）。
 
 限流规则是文档的一部分（[限流](../policies/rate-limiting.md)）。有 `ReactiveStringRedisTemplate` bean 时限流器是
 `ReactiveRedisRateLimiter`，否则是按实例计数的 `LocalRateLimiter`。Redis 计数器的 key 前缀是固定的
@@ -185,7 +194,6 @@ CoSec 没有哪个配置项叫这些名字，而已知的 key 无论来源都不
 
 | 配置项 | 类型 | 默认值 | 作用 |
 |---|---|---|---|
-| `cosec.authorization.snapshot.local-max-age` | duration | `30s` | CoCache 中文档的本地副本可以为冷加载提供多久，之后重新询问 Redis。无论缓存定制器或 `cocache.*` 配置项设置了什么，都以它为准。 |
 | `cosec.authorization.snapshot.revalidate-interval` | duration | `10s` | 多久开始一轮，用条件读向 Redis 确认每个已装入的文档；上一轮还在进行时，下一轮在它结束后立即开始，两轮从不重叠。失效消息丢失的变化，由它可读之后第一个到达该文档的一轮装上（`SNP-6`）。至少为 `1s`、不超过 `5m`，配置了 `fail-closed.tenants` 时还要小于 `fail-closed.max-lag`；否则启动失败。文档超过 6 个间隔未被确认时以 `WARN` 记录，超过 30 个时以 `ERROR` 记录为陈旧（[由计算得出，而非配置](#computed-not-configured)）。每一轮在 Redis 上每份文档只花几微秒，与文档大小无关（[存储](./storage.md#what-revalidation-costs-redis)）。 |
 | `cosec.authorization.snapshot.fail-closed.tenants` | 租户 id 集合 | 空 | 不得基于旧文档决策的租户：这类租户的请求读取的最旧文档，若上次确认距今超过 `max-lag`，请求得到 `503`（`SourceUnavailable`），除非有 DENY 匹配。`*` 表示所有租户：租户多到无法一一列出的宿主，可以借此为所有租户选择新鲜度而非可用性。其他租户继续基于已装入的文档决策。 |
 | `cosec.authorization.snapshot.fail-closed.max-lag` | duration | `30m` | 上述租户超过这个滞后即失败即拒绝。不能为负。 |
@@ -215,7 +223,6 @@ CoSec 没有哪个配置项叫这些名字，而已知的 key 无论来源都不
 |---|---|---|---|
 | `cosec.authentication.revocation.skew` | duration | `5s` | 签发方的时钟可以比本实例快多少。签发时间比主体吊销晚不超过这个时长的令牌仍被该吊销覆盖；令牌的签发时间（`iat`）和生效时间（`nbf`）可以比本实例的时钟晚这么多（`IDN-29`）；令牌的过期时间没有这样的余量。 |
 | `cosec.authentication.revocation.fail-closed` | boolean | `false` | 吊销无法读取时，是否拒绝请求的令牌（`503`）而不是接受它（[已写明的例外](../guide/security-model.md#the-two-documented-exceptions)）。无论如何，此时刷新都会失败。 |
-| `cosec.authentication.revocation.read-timeout` | duration | `300ms` | CoSec 自己的吊销读取器（基于已吊销令牌与已吊销主体缓存的 CoCache 读取器）每次读取可用的时间。超过后 Redis 算作无法读取：请求的令牌被接受（设置 `fail-closed` 时被拒绝），刷新失败。必须为正，且它的两倍（一个令牌的两次读取）小于 `cosec.pipeline.authentication-timeout`，否则启动失败并点名两者：不然挂起的 Redis 会让每个已认证请求都返回 `503`。应用自己的 `RevocationReader` 自行限制它的读取时间（[扩展](../architecture/extending.md)）。 |
 | `cosec.authentication.token-cache.enabled` | boolean | `true` | CoSec 自己的 `JwtTokenVerifier` 校验过一次的请求令牌，是否在过期前直接从内存作答，而不再校验签名（[已校验令牌缓存](../integration/authentication.md#the-verified-token-cache)，`IDN-32`）。无论哪种方式，吊销检查和保留属性检查在每个请求上都会运行。从不用于你自己的 `TokenVerifier` Bean。 |
 | `cosec.authentication.token-cache.max-entries` | integer | `16384` | 最多保留的已校验令牌数；再多一个就淘汰一个，被淘汰的令牌再来时多花一次校验，答案从不改变。一个大令牌（四个空间里十几个角色、八个策略）的条目约占 7.3 KB，因此默认值最多约 115 MB，低于 2 GB 堆的十分之一：按一个实例上同时在用的令牌数设置。 |
 | `cosec.authentication.login.refresh.path` | string | 未设置 | starter 提供刷新路由的位置：`POST` 令牌对（`IDN-23`，[构建客户端](../integration/clients.md#what-your-application-serves)）。未设置时不提供。文档必须允许匿名 `POST` 它。在网关上、在不提供 HTTP 的宿主上、登录或 JWT 关闭时设置，或设置为一个普通绝对路径以外的值，启动失败。 |
@@ -284,13 +291,11 @@ CoSec 没有哪个配置项叫这些名字，而已知的 key 无论来源都不
 
 ## 决策监听器 {#decision-listeners}
 
-`cosec.observability.listener.*`：`REQUIRED` 决策监听器的时限，以及 `BEST_EFFORT` 决策监听器的队列（[决策监听器](./observability.md#decision-listeners)）。
+`cosec.observability.listener.*`：`BEST_EFFORT` 决策监听器的队列。`REQUIRED` 决策监听器的时限和关闭时的排空时间都是[计算](#computed-not-configured)得出的（[决策监听器](./observability.md#decision-listeners)）。
 
 | 配置项 | 类型 | 默认值 | 作用 |
 |---|---|---|---|
-| `cosec.observability.listener.required-timeout` | duration | `1s` | 一个 `REQUIRED` 决策监听器最多用多久。失败或超时会把放行变成 `503`。 |
 | `cosec.observability.listener.queue-capacity` | int | `1024` | 一个 `BEST_EFFORT` 监听器最多可以有多少个待处理的事件。队列满时丢弃下一个事件并计数（`cosec.listener.dropped`）。 |
-| `cosec.observability.listener.drain-timeout` | duration | `5s` | 关闭时，排队的事件还能继续发出多久；之后剩下的被丢弃。控制面的变更监听器也在此时限内排空（[顺序与队列](./observability.md#change-event-order)）。Kafka 审计监听器以及控制面的 Kafka 变更监听器，还会再用同样长的时间等待它们手中的发送。 |
 
 ## 控制面 {#control-plane}
 
@@ -315,7 +320,6 @@ CoSec 没有哪个配置项叫这些名字，而已知的 key 无论来源都不
 | `cosec.control.shadow.min-duration` | duration | `15m` | 影子窗口最早在这之后、并且有了 `min-samples` 时关闭。控制面每隔它的十五分之一查看一次未关闭的窗口。数据面实例也读取它，但只作为节奏：配置里有它的实例每隔它的五分之一写一次影子报告（至少一秒、至多 10 秒），配置里没有它的实例每 10 秒报告一次。数据面的启动日志会说明是哪一种（[由计算得出，而非配置](#computed-not-configured)）。 |
 | `cosec.control.shadow.min-samples` | long | `1000` | 窗口在 `max-duration` 之前关闭所需的已比较样本数。`0` 让窗口只按时间关闭，没有任何请求时也没有任何样本：此时影子步骤什么也证明不了，启动时会以 `WARN` 说明。 |
 | `cosec.control.shadow.max-duration` | duration | `24h` | 窗口到这个年龄时即使样本不足也关闭，作为发布者必须确认的证据不足。不得小于 `min-duration`。 |
-| `cosec.control.audit.required-timeout` | duration | `5s` | 所有 `REQUIRED` 变更监听器合计最多用多久记录一个受控步骤（发布、break-glass），超过后该步骤以 `503` 失败。 |
 | `cosec.control.audit.kafka.enabled` | boolean | `true` | Kafka 变更监听器（需要 `cosec-kafka` 和一个 `KafkaOperations` bean）。 |
 | `cosec.control.audit.kafka.topic` | string | `cosec-control-audit` | 变更事件的 Kafka topic。 |
 | `cosec.control.audit.kafka.delivery` | `best-effort`、`required` | `best-effort` | `required` 使发布和 break-glass 等待 broker 确认。设为 `required` 却无法创建 Kafka 变更监听器时，启动失败。 |
@@ -381,7 +385,7 @@ cosec:
 
 1. CoCache 的类型默认值（`store`：没有 `ttl`，`local-max-age` 30 s；`cache`：`ttl` 1 h）；
 2. `cocache.defaults.cache.*` 或 `cocache.defaults.store.*`，只作用于 CoSec 的声明没有写出的字段；
-3. CoSec 的声明：快照存储取 `cosec.authorization.snapshot.local-max-age`，吊销表取
+3. CoSec 的声明：快照存储的本地最长存活期取 3 × `cosec.authorization.snapshot.revalidate-interval`，吊销表取
    `cosec.authentication.revocation.cache.*`；
 4. 应用的 CoCache `CacheSpecCustomizer` bean；
 5. `cocache.overrides.*`，只能收紧；

@@ -32,11 +32,13 @@ import java.time.Duration
 @ConfigurationProperties(prefix = PipelineProperties.PREFIX)
 @InternalCoSecApi
 class PipelineProperties {
-    /** The whole evaluation of one request; past it the request is answered 503. */
+    /**
+     * The whole evaluation of one request; past it the request is answered 503. Every stage's own timeout is a share
+     * of it (`PIP-33`): authentication 20 %, memberships 10 %, an attribute provider without its own 6 %, a rate limit
+     * 10 %, each of CoSec's revocation reads 30 % of the authentication's, a REQUIRED decision listener 20 %, a
+     * REQUIRED change listener all of it. Startup logs what they came to.
+     */
     var timeout: Duration = Duration.ofSeconds(5)
-
-    /** Authenticating the request's credentials. */
-    var authenticationTimeout: Duration = Duration.ofSeconds(1)
 
     /** Whether a token may come in the query string; off, since URLs end up in logs. */
     var allowQueryToken: Boolean = false
@@ -170,16 +172,13 @@ class GatewayIdentityProperties {
 
 /**
  * The 8.0 path's `cosec.authorization.*` properties (RFC 0004 §14.3, RFC 0005 §5.3, RFC 0006 X8, RFC 0003 §4.1): the
- * host's app, the per-stage timeouts, the route map and the policy snapshot.
+ * host's app, the route map and the policy snapshot. The stages' timeouts are shares of `cosec.pipeline.timeout`.
  */
 @ConfigurationProperties(prefix = RuntimeAuthorizationProperties.PREFIX)
 @InternalCoSecApi
 class RuntimeAuthorizationProperties {
     val scope = Scope()
     val remoteIp = RemoteIp()
-    val membership = Membership()
-    val attributes = Timed(Duration.ofMillis(300))
-    val rateLimit = Timed(Duration.ofMillis(500))
     val routes = Routes()
     val snapshot = Snapshot()
     val shadow = Shadow()
@@ -197,33 +196,6 @@ class RuntimeAuthorizationProperties {
          * the entry the closest of N trusted proxies appended.
          */
         var maxTrustedIndex: Int = 1
-    }
-
-    @InternalCoSecApi
-    class Timed(
-        /**
-         * How long one call of the stage's collaborator may take, the stage being the group this property is under:
-         * `attributes` (an `AttributeProvider` that sets no timeout of its own; past it its attributes are unavailable)
-         * and `rate-limit` (the `RateLimiter`; past it the rule's `strictFailure` decides).
-         */
-        var timeout: Duration,
-    )
-
-    @InternalCoSecApi
-    class Membership {
-        /**
-         * How long one call of the `MembershipProvider` may take; past it, or when it fails, the request is 503. The
-         * fill of the membership cache takes no longer than this.
-         */
-        var timeout: Duration = Duration.ofMillis(500)
-
-        /**
-         * How long an instance remembers that the loader did not know a principal (a removed member's token still
-         * valid), so that its requests do not reach the loader each time. Zero remembers nothing; at most one minute,
-         * the default life of a cached membership. A principal added meanwhile is known when it ends, or at once on the
-         * instance that invalidated it. A failed load is never remembered.
-         */
-        var unknownTtl: Duration = Duration.ofSeconds(5)
     }
 
     @InternalCoSecApi
@@ -245,17 +217,12 @@ class RuntimeAuthorizationProperties {
     @InternalCoSecApi
     class Snapshot {
         /**
-         * How long an instance serves its local copy of a document before it asks Redis again; the one value for the
-         * snapshot cache's local tier, whatever a cache customizer or `cocache.*` property sets.
-         */
-        var localMaxAge: Duration = Duration.ofSeconds(30)
-
-        /**
          * How often a pass starts that confirms every installed document against Redis; while a pass is still in
          * flight, the next starts as soon as it ends. A change whose invalidation was lost is installed by the first
          * pass that reaches its document (`SNP-6`). At least 1 second, at most 5 minutes and, with fail-closed tenants,
          * less than `fail-closed.max-lag`; anything else fails startup. A document unconfirmed for 6 intervals is logged
-         * at WARN, for 30 at ERROR as stale ([SnapshotOptions.derive]).
+         * at WARN, for 30 at ERROR as stale ([SnapshotOptions.derive]). An instance serves its local copy of a document
+         * for 3 intervals before it asks Redis again ([DerivedTimeouts.SNAPSHOT_LOCAL_COPY_INTERVALS]).
          */
         var revalidateInterval: Duration = Duration.ofSeconds(10)
 
@@ -352,18 +319,16 @@ class RuntimeAuthorizationProperties {
     }
 }
 
-/** `cosec.observability.listener.*` (RFC 0006 X8): the bound on REQUIRED decision listeners, the queues of BEST_EFFORT ones. */
+/**
+ * `cosec.observability.listener.*` (RFC 0006 X8): the queues of BEST_EFFORT decision listeners. A REQUIRED listener may
+ * take 20 % of `cosec.pipeline.timeout`, and the queues drain at shutdown for a sixth of
+ * `spring.lifecycle.timeout-per-shutdown-phase` (`OBS-10`).
+ */
 @ConfigurationProperties(prefix = ListenerProperties.PREFIX)
 @InternalCoSecApi
 class ListenerProperties {
-    /** How long one REQUIRED listener may take; past it a permit becomes 503. */
-    var requiredTimeout: Duration = Duration.ofSeconds(1)
-
     /** The events one BEST_EFFORT listener may have waiting; a full queue drops the next and counts it. */
     var queueCapacity: Int = DecisionListeners.DEFAULT_QUEUE_CAPACITY
-
-    /** On shutdown, how long queued events still go out before the rest is dropped. */
-    var drainTimeout: Duration = Duration.ofSeconds(5)
 
     @InternalCoSecApi
     companion object {

@@ -72,7 +72,7 @@ internal object CacheLocks {
                 constrain(PolicyField.TTL) { Ttl.Forever }
                 constrain(PolicyField.UNKNOWN_READ) { UnknownReadMode.THROW }
                 if (cacheName == POLICY_SNAPSHOT_CACHE_NAME) {
-                    // One local max age, cosec.authorization.snapshot.local-max-age (RFC 0008 §4.4).
+                    // One local max age, 3 × cosec.authorization.snapshot.revalidate-interval (RFC 0008 §4.4).
                     lock(PolicyField.LOCAL_MAX_AGE)
                 }
             }

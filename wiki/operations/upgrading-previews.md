@@ -57,6 +57,35 @@ Which preview of the library may run behind which preview of the gateway image: 
     new package, or `ChangeState.of("READY")`.
   - `ControlCaller.of(context)` no longer throws for a security context CoSec did not make: the call it is passed to
     does, with the same `IllegalArgumentException` (`PIP-29`).
+- **Every stage's timeout is a share of `cosec.pipeline.timeout`, and ten keys are gone** (`PIP-33`, `OBS-10`; what can
+  be computed is not configured). Affected: a configuration that sets one of them, and code that set a timeout in
+  `Pipeline.builder`'s `options { }` or `listeners { }`. Startup fails listing the keys CoSec does not read, saying of
+  each that it is no longer a property and what replaced it. Remove the key; if you moved the value, move
+  `cosec.pipeline.timeout` (or the value named below) instead. At the default deadline of 5 s every value is the default
+  it had, so a deployment that set none answers as before ([Computed, not configured](./configuration.md#computed-not-configured)).
+
+  | Removed | Now |
+  |---|---|
+  | `cosec.pipeline.authentication-timeout` | 20 % of `cosec.pipeline.timeout` |
+  | `cosec.authorization.membership.timeout` | 10 % of it, also the membership cache's fill |
+  | `cosec.authorization.attributes.timeout` | 6 % of it, for an `AttributeProvider` that sets no timeout of its own |
+  | `cosec.authorization.rate-limit.timeout` | 10 % of it |
+  | `cosec.authentication.revocation.read-timeout` | 30 % of the authentication timeout: a token's two reads end inside it by construction, and the startup check that compared the two is gone |
+  | `cosec.observability.listener.required-timeout` | 20 % of `cosec.pipeline.timeout` |
+  | `cosec.control.audit.required-timeout` | `cosec.pipeline.timeout` itself, the bound of the control request's own authorization |
+  | `cosec.observability.listener.drain-timeout` | a sixth of `spring.lifecycle.timeout-per-shutdown-phase`, for the change listeners and the Kafka listeners too |
+  | `cosec.authorization.snapshot.local-max-age` | 3 × `cosec.authorization.snapshot.revalidate-interval` |
+  | `cosec.authorization.membership.unknown-ttl` | a constant, 5 s |
+
+  - `PipelineSettings` (in `options { }`) keeps `timeout` and loses `authenticationTimeout`, `membershipTimeout`,
+    `attributeTimeout` and `rateLimitTimeout`; `ListenerSettings` (in `listeners { }`) keeps `queueCapacity` and loses
+    `requiredTimeout` and `drainTimeout`. Set `timeout` instead, or delete the line.
+  - An `AttributeProvider` with a timeout of its own, and a `RevocationReader` of your own, keep their own bounds.
+  - With a `cosec.pipeline.timeout` below 20 ms, the shares are floored at 1 ms, and a token's two revocation reads may no
+    longer end inside the authentication timeout.
+  - **A deployment with a `cosec.pipeline.timeout` below the default** also shortens the revocation read, the one stage
+    that fails open: at `1s` each read gets 60 ms where it had 300 ms, and a read past it accepts the request's token
+    unless `cosec.authentication.revocation.fail-closed=true`. Set `fail-closed`, or keep the default deadline.
 
 ## From 8.0.0-beta.4 {#from-8-0-0-beta-4}
 

@@ -20,7 +20,7 @@ except that a `REQUIRED` one that fails turns a permit into `503`.
 
 | Delivery | When the listener runs | What a failure does |
 |---|---|---|
-| `REQUIRED` | Before the response, together with the other `REQUIRED` listeners, each within [`cosec.observability.listener.required-timeout`](./configuration.md#decision-listeners) (1 second) and within what is left of `cosec.pipeline.timeout`. It sees the outcome as decided so far. | A permit becomes `503` `unavailable`; the request does not proceed. Any other outcome keeps its status; the failure is logged at `ERROR` and counted. |
+| `REQUIRED` | Before the response, together with the other `REQUIRED` listeners, each within 20 % of `cosec.pipeline.timeout` (1 second at the default) and within what is left of `cosec.pipeline.timeout`. It sees the outcome as decided so far. | A permit becomes `503` `unavailable`; the request does not proceed. Any other outcome keeps its status; the failure is logged at `ERROR` and counted. |
 | `BEST_EFFORT` (the default) | After the response is decided, off the request path. Each listener has its own queue of [`cosec.observability.listener.queue-capacity`](./configuration.md) events (1,024) and its own consumer, so a slow listener never costs another its events. It sees the final outcome. | Nothing for the request. A full queue drops the event and counts it, and the request never waits on a log line for it: a reporter logs `Dropping decision events: the queue of listener [<name>] is full; <n> dropped since the last report.` at `WARN`, at most every 10 seconds, off the request's thread. A listener that throws is logged at `WARN` at most every 10 seconds, and counted. |
 
 ### What decided, in every output {#what-decided-in-every-output}
@@ -74,7 +74,7 @@ A bean that is both is registered once, as the `DecisionListener` it is.
   `cosec.audit.kafka.delivery=required`, or register a `REQUIRED` listener of your own, before you rely on break-glass.
 - **A `REQUIRED` listener should be idempotent** by the event's `id`: a write that timed out may still have succeeded.
 - **On shutdown**, the listeners stop taking events, and the events already queued are still delivered for up to
-  [`cosec.observability.listener.drain-timeout`](./configuration.md) (5 seconds). Then no listener call starts any
+  a sixth of `spring.lifecycle.timeout-per-shutdown-phase` (5 seconds at the default). Then no listener call starts any
   more: a call in progress is not interrupted, and what is left is dropped and counted in `cosec.listener.dropped`, with
   `Decision listeners did not deliver every queued event within <timeout>; <n> were dropped, and no listener call starts any more.`
   at `WARN`. The Kafka
@@ -389,7 +389,7 @@ itself.
   application declares a `LoggingChangeListener` bean of its own. The change log is written at `INFO`: a configuration
   that sets `me.ahoo.cosec` above `INFO` sets `me.ahoo.cosec.changelog` to `INFO` by name, as for any record you keep.
 - **`PUBLISHING`, `BREAK_GLASS_REQUESTED` and `BREAK_GLASS_APPROVED` are gated:** every `REQUIRED` change listener must
-  record the event within [`cosec.control.audit.required-timeout`](./configuration.md#control-plane) (5 seconds, for
+  record the event within `cosec.pipeline.timeout` (5 seconds at the default, for
   all of them together) before the step takes effect, or the step does not happen and the control API
   answers `503`. Every other event, and every event to a `BEST_EFFORT` listener, is delivered afterwards; a failure is
   logged as `Change listener [<name>] could not record <event>.` The revision record is the durable record of what was
@@ -449,7 +449,7 @@ keep (a propose on one control host and a publish on another are two processes):
 `time` and the change's record. The Kafka change listener's per-document key then keeps that order in its partition.
 
 - **A gated step** (`PUBLISHING`, break-glass) waits for each `REQUIRED` listener to record its event, after what was
-  queued before it, within `cosec.control.audit.required-timeout`. Otherwise it fails with `503`, and its event is not
+  queued before it, within `cosec.pipeline.timeout`. Otherwise it fails with `503`, and its event is not
   recorded afterwards.
 - **A REQUIRED listener's full queue** makes the event of any other step wait for room, for at most the same timeout,
   in the order the events came: a smaller one never takes room ahead of a larger one waiting before it.
@@ -472,7 +472,7 @@ keep (a propose on one control host and a publish on another are two processes):
   longer than the required timeout, a `WARN` names it, its depth and the age of the oldest event, at most once per
   required timeout. What its share held is delivered, in order, when it answers again. A `REQUIRED` listener's call
   that does not answer within the timeout is a failed call (above), and its next event is delivered.
-- **At shutdown the listeners drain** within `cosec.observability.listener.drain-timeout`, the decision listeners'
+- **At shutdown the listeners drain** within a sixth of `spring.lifecycle.timeout-per-shutdown-phase`, the decision listeners'
   timeout. They stop taking events and deliver what is queued; what is left is counted and logged per listener
   (`Change listener [<name>] never records <n> change events: they were still queued when the drain of <timeout>
   ended.`, at `ERROR` for a `REQUIRED` listener, `WARN` otherwise), and only then are they stopped. A gated step that

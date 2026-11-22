@@ -32,8 +32,8 @@ import tools.jackson.core.StreamReadFeature
  * lie under a map- or list-valued one; there is no switch that lets startup continue, since a key prefix ignored that way
  * would leave token revocations where nothing reads them, and the tokens they revoked accepted again (`SNP-9`).
  * Keys are compared as Spring's binder compares them ([ConfigurationPropertyName]: case and dashes do not count), so
- * `COSEC_AUTHORIZATION_SNAPSHOT_LOCALMAXAGE`, which Spring binds to `local-max-age`, is that key. A typo, or a spelling
- * Spring's documentation does not offer (`COSEC_AUTHORIZATION_SNAPSHOT_LOCAL_MAX_AGE`), is still unknown; the message
+ * `COSEC_AUTHORIZATION_SNAPSHOT_REVALIDATEINTERVAL`, which Spring binds to `revalidate-interval`, is that key. A typo, or a spelling
+ * Spring's documentation does not offer (`COSEC_AUTHORIZATION_SNAPSHOT_REVALIDATE_INTERVAL`), is still unknown; the message
  * names the key and variable to write instead when one is near ([PropertySpelling]). A key a preview had and a later one
  * removed, because its value is computed or constant, is said to be no longer a property, with what replaced it
  * ([RemovedProperties]).

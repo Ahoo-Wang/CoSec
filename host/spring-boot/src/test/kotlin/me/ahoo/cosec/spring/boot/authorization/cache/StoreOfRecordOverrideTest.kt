@@ -174,22 +174,22 @@ class StoreOfRecordOverrideTest {
         }
     }
 
-    /** The global layers skip what CoSec locks: one local max age, `cosec.authorization.snapshot.local-max-age`. */
+    /** The global layers skip what CoSec locks: one local max age, 3 × `cosec.authorization.snapshot.revalidate-interval`. */
     @Test
     fun globalLayersSkipLockedFields() {
         contextRunner
             .withPropertyValues(
-                "cosec.authorization.snapshot.local-max-age=7s",
+                "cosec.authorization.snapshot.revalidate-interval=7s",
                 "cocache.defaults.store.local-max-age=1h",
                 "cocache.overrides.store.local-max-age=1s",
             )
             .run { context ->
                 assertThat(context).hasNotFailed()
                 val runtime = context.getBean(CacheRuntime::class.java)
-                runtime.policy(snapshot)!!.localMaxAge.assert().isEqualTo(Duration.ofSeconds(7))
+                runtime.policy(snapshot)!!.localMaxAge.assert().isEqualTo(Duration.ofSeconds(21))
                 context.getBean(
                     PolicySnapshotCache::class.java
-                ).localCopyMaxAge.assert().isEqualTo(Duration.ofSeconds(7))
+                ).localCopyMaxAge.assert().isEqualTo(Duration.ofSeconds(21))
                 // A revocation table is not locked there: the override tightens it.
                 runtime.policy(
                     CoSecCacheSpecs.REVOKED_TOKEN_CACHE_NAME

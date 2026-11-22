@@ -77,8 +77,8 @@ object CoSecCacheSpecs {
     const val POLICY_SNAPSHOT_CACHE_NAME = "PolicySnapshotCache"
 
     /**
-     * How long a local copy of a snapshot document lives (RFC 0003 §4.5, Q7). The copy serves cold loads and writers
-     * only: installed snapshots are confirmed against Redis with conditional reads, so this does not bound their lag.
+     * How long a local copy of a snapshot document lives (RFC 0003 §4.5, Q7): the starter's 3 revalidate intervals at
+     * the default 10 s. It serves cold loads and writers only: installed snapshots are confirmed by conditional reads.
      */
     val DEFAULT_SNAPSHOT_LOCAL_MAX_AGE: Duration = Duration.ofSeconds(30)
 

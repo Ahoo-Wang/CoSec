@@ -158,7 +158,7 @@ WebFlux, WebMvc and Gateway adapters answer identically. Only a Permit lets a re
 |---|---|
 | The path or a `CoSec-*` parameter cannot be read without ambiguity | `400`, before authentication |
 | The credential is invalid, expired or revoked | Evaluated as anonymous: a Permit proceeds, a Deny is `401` naming the reason |
-| The authenticator fails or does not answer in `cosec.pipeline.authentication-timeout`; the API key store cannot be read | `503` |
+| The authenticator fails or does not answer in the authentication timeout (20 % of `cosec.pipeline.timeout`); the API key store cannot be read | `503` |
 | The revocation store reports an error | `503` (but see [the exceptions](#the-two-documented-exceptions)) |
 | The memberships cannot be resolved (no provider, provider failure or timeout, a token that both carries the provider marker and claims roles) | `503`, never "no memberships" |
 | The snapshot source fails | `503` |
@@ -190,6 +190,8 @@ full outage while protecting little:
   fails the request with `503`, and a revocation entry that cannot be decoded fails the read too
   ([Logout and revocation](../integration/authentication.md#logout-and-revocation)).
   `cosec.authentication.revocation.fail-closed: true` turns the exception off: the request is `503` instead.
+  CoSec's own reader gives each read 30 % of the authentication timeout, a share of `cosec.pipeline.timeout`: a lower
+  deadline makes this exception easier to reach (60 ms per read at `1s`, 300 ms at the default `5s`).
 - **Rate limit rules without `strictFailure`.** When a rule cannot be counted (its limiter fails, times out or is
   missing), it is skipped. A rule with `"strictFailure": true` refuses the request with `503` instead. Rate limits
   only apply to requests the policies already permitted, so skipping one never grants what the policies did not

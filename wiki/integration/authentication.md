@@ -114,7 +114,7 @@ Blank values are skipped. The API key comes from the header `cosec.pipeline.api-
 only.
 
 **Failures.** An authenticator that throws (such as one whose API key store cannot be read), answers
-`AuthnResult.Unavailable`, or does not answer within `cosec.pipeline.authentication-timeout` (1 second) makes the
+`AuthnResult.Unavailable`, or does not answer within the authentication timeout (20 % of `cosec.pipeline.timeout`, 1 second at the default) makes the
 request `503`: an unreadable store never makes a credential valid or invalid, with one documented exception. While the
 revocation store cannot be read, a verified token is accepted without a revocation check, unless
 `cosec.authentication.revocation.fail-closed=true` ([Logout and revocation](#logout-and-revocation)).
@@ -196,9 +196,8 @@ development, and answers `Unknown` for a principal it was not given. `cosec-coca
 Redis, shared by every instance, and drops them on `invalidate(tenant, principal)` when the principal's memberships
 change; entries also expire after the cache's TTL. The starter declares it as the `MembershipProvider` when the
 application has a `MembershipLoader` bean and no `MembershipProvider` of its own, and bounds each load by
-`cosec.authorization.membership.timeout`: a load that hangs fails, and the next request starts another. An unknown
-principal is remembered for `cosec.authorization.membership.unknown-ttl` (5 seconds by default, at most one minute, `0s`
-remembers nothing) on the instance that asked: a token of a removed member stays valid until it expires, and every
+the membership timeout (10 % of `cosec.pipeline.timeout`): a load that hangs fails, and the next request starts another. An unknown
+principal is remembered for 5 seconds, a constant, on the instance that asked: a token of a removed member stays valid until it expires, and every
 request of it would otherwise reach the loader. A principal you add is known by every instance within that time, and at
 once on the instance where `invalidate(tenant, principal)` ran. A failed or timed-out load is never remembered. A principal has one source: claims or the
 provider, never both.
@@ -215,7 +214,7 @@ provider: it stays valid until it expires or is [revoked](#revoking-every-token-
 
 - the credential asks for the provider and there is none;
 - the provider throws, answers memberships whose source is not `PROVIDER`, or does not answer within
-  `cosec.authorization.membership.timeout` (500 ms);
+  the membership timeout (10 % of `cosec.pipeline.timeout`, 500 ms at the default);
 - the marker is anything but `"provider"`, or the token carries the marker together with `roles` or `policies`.
 
 No memberships would mean no roles, so a DENY bound to a role would no longer apply.
@@ -514,10 +513,10 @@ Every request with a token checks revocation, without blocking. Four properties 
   revocation is written to Redis some other way, an instance may accept the token for up to 30 seconds more.
 - **While Redis cannot be read, a request's token is accepted.** The revocation reader says it cannot read
   (`RevocationUnavailableException`), which CoSec's own reader also does for a read that does not end within
-  `cosec.authentication.revocation.read-timeout` (300 ms, a Redis that hangs), and the pipeline, verifying the token,
+  the revocation read timeout (30 % of the authentication timeout, 300 ms at the default: a Redis that hangs), and the pipeline, verifying the token,
   lets it through. A `RevocationReader` of your own must answer or fail within its own bound: CoSec gives it none but
   the authenticator's, and a reader that never answers makes the request `503` at
-  `cosec.pipeline.authentication-timeout`, whatever `fail-closed` says ([Extending](../architecture/extending.md)). This is one of
+  the authentication timeout (20 % of `cosec.pipeline.timeout`), whatever `fail-closed` says ([Extending](../architecture/extending.md)). This is one of
   [the two documented exceptions](../guide/security-model.md#the-two-documented-exceptions) to failing closed: the
   signature and expiry are still checked, and rejecting every authenticated request during a Redis outage would be
   worse. Keep access tokens short-lived so this window stays small, or set

@@ -38,7 +38,7 @@ import java.time.Instant
 /**
  * R2D-8: CoSec bounds the reads of its own revocation reader (`CoCacheRevocationReader`'s read timeout); an
  * application's own [RevocationReader] bounds its own, or the authenticator's timeout does it: a reader that never
- * answers makes the request 503 at `cosec.pipeline.authentication-timeout`, accepted or not by `fail-closed`, since the
+ * answers makes the request 503 at the authentication timeout (20 % of `cosec.pipeline.timeout`), accepted or not by `fail-closed`, since the
  * check never reached an answer. What `extending.md` tells a reader's author, held here.
  */
 class RevocationHangPipelineTest {
@@ -65,7 +65,8 @@ class RevocationHangPipelineTest {
     ) {
         for (failClosed in listOf(false, true)) {
             val authenticator = TokenAuthenticator(Verifier, Hanging(hung), acceptUnavailableRevocations = !failClosed)
-            val pipeline = pipeline(authenticator) { options { authenticationTimeout = AUTHENTICATION_TIMEOUT } }
+            // The authentication budget is 20 % of the pipeline timeout (PIP-33): 200 ms of 1 s.
+            val pipeline = pipeline(authenticator) { options { timeout = PIPELINE_TIMEOUT } }
             val started = System.nanoTime()
             val outcome = runBlocking { pipeline.evaluate(request) }
             val took = Duration.ofNanos(System.nanoTime() - started)
@@ -79,6 +80,7 @@ class RevocationHangPipelineTest {
     private companion object {
         const val TOKEN = "token"
         const val SUBJECT = "subject"
+        val PIPELINE_TIMEOUT: Duration = Duration.ofSeconds(1)
         val AUTHENTICATION_TIMEOUT: Duration = Duration.ofMillis(200)
 
         /** What a loaded CI runner may add past the timeout: never as much again several times over. */

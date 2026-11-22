@@ -59,12 +59,12 @@ class CoCacheMembershipProvider @InternalCoSecApi constructor(
      * How long one fill may take. Requests on this instance that miss the same key wait for the same fill, which no
      * single request owns: without its own bound, a loader that never answers would make that principal unavailable
      * here until a restart. When it passes, the fill fails, and the next request starts a new one. No longer than
-     * `cosec.authorization.membership.timeout`, which each request still waits at most.
+     * the membership's share of `cosec.pipeline.timeout`, which each request still waits at most.
      */
     private val fillTimeout: Duration = DEFAULT_FILL_TIMEOUT,
     /**
      * How long this instance remembers that [loader] did not know a principal, so that its requests do not reach the
-     * loader each time (`cosec.authorization.membership.unknown-ttl`). Zero remembers nothing. At most
+     * loader each time ([DEFAULT_UNKNOWN_LIFE] in the starter). Zero remembers nothing. At most
      * [CoSecCacheSpecs.DEFAULT_MEMBERSHIP_TTL], the longest a positive entry lives by default.
      */
     private val unknownLife: Duration = DEFAULT_UNKNOWN_LIFE,
@@ -141,10 +141,13 @@ class CoCacheMembershipProvider @InternalCoSecApi constructor(
     }
 
     companion object {
-        /** The default of `cosec.authorization.membership.timeout`, which a request waits at most. */
+        /** The membership's share of the default `cosec.pipeline.timeout`, which a request waits at most. */
         val DEFAULT_FILL_TIMEOUT: Duration = Duration.ofMillis(500)
 
-        /** The default of `cosec.authorization.membership.unknown-ttl`. */
+        /**
+         * How long the starter's provider remembers a principal the loader did not know: a constant, as no state of the
+         * process says how soon a removed member's token is used again, and the loader answers the next ask anyway.
+         */
         val DEFAULT_UNKNOWN_LIFE: Duration = Duration.ofSeconds(5)
     }
 }

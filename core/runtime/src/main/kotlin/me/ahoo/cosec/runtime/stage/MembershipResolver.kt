@@ -55,7 +55,7 @@ import kotlin.time.Duration.Companion.milliseconds
 @InternalCoSecApi
 class MembershipResolver(
     private val provider: MembershipProvider?,
-    /** `cosec.authorization.membership.timeout` (RFC 0004 §4.5.2, RFC 0006 Q25). */
+    /** 10 % of `cosec.pipeline.timeout` (RFC 0004 §4.5.2, RFC 0006 Q25, `PIP-33`). */
     private val timeout: Duration = DEFAULT_TIMEOUT,
 ) {
     init {
