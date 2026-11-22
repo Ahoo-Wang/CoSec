@@ -288,6 +288,14 @@ Request [<id>]: the forwarded identity is refused (<status> <problem>), <reason>
 
 **每个请求都是匿名的。** 网关只把身份转发给接收身份的路由：指向已注册服务的路由（`uri: lb://...`），或元数据为 `cosec-identity: true` 的路由。指向 `http://` 或 `https://` 又没有该元数据的路由，或元数据为 `cosec-identity: false` 的路由，不发送身份，所以其后的服务看到的是匿名请求。路由指向你自己的服务时，给它标上 `cosec-identity: true`（[转发身份](../integration/web.md#forwarding-the-identity)）。自己校验令牌、而不再收到令牌的服务，需要 `cosec.gateway.identity.forward-authorization=true` 以及这样的路由。
 
+## 声明了渲染器，拒绝却得到 CoSec 的响应体 {#a-refusal-is-answered-with-cosecs-body-though-a-renderer-is-declared}
+
+```text
+Request [<id>]: the ProblemRenderer [<class>] failed with <exception>, so the <status> <slug> refusal is answered with CoSec's own body (PIP-34). ...
+```
+
+应用的 `ProblemRenderer` 在那次拒绝时抛出了异常，或者没有返回任何字节，于是 CoSec 用自己的响应体回答了它（[Problem 渲染器](../architecture/extending.md#problem-renderer)）。请求仍被拒绝，状态码和头是 CoSec 的。这一行每分钟最多以 `WARN` 记录一次，带异常的堆栈，每次都以 `DEBUG` 记录；`cosec.problem.render.failed` 计入每一次。修复渲染器：它必须为每个 `ProblemType` 返回字节，包括以后的版本新增的类型，所以给它一个默认分支。响应体从来不是渲染器的、又没有这一行，说明渲染器没有接入：它必须是一个 bean，而且只能有一个。
+
 ## 实例未就绪 {#instance-is-not-ready}
 
 在平台文档以及 [`prewarm-apps` 和 `prewarm-tenants`](./configuration.md#snapshot) 中的每个文档都装入之前，就绪状态拒绝流量；存活状态不受
@@ -443,6 +451,14 @@ This instance runs the control plane, and cosec.control.service-url names a cont
 ```
 
 实例带有 `cosec-control`（和 `cosec-cocache`）且控制面开启，同时又设置了 `cosec.control.service-url`。一个应用只有一个 `ControlService`：运行控制面时是进程内实现，调用控制面宿主时是 HTTP 实现。要内嵌控制面，删掉 `cosec.control.service-url`；要调用宿主，设置 `cosec.control.enabled=false`（或不引入 `cosec-control`）。`cosec.control.service-url needs cosec-control-http` 表示已指定宿主却缺少调用它的模块：添加 `me.ahoo.cosec:cosec-control-http`。
+
+### 两个 problem 渲染器导致启动失败 {#startup-fails-on-two-problem-renderers}
+
+```text
+PIP-34: 2 ProblemRenderer beans of the application, [first, second]: a refusal has one body, so CoSec takes one renderer. Declare one.
+```
+
+一个拒绝只有一个响应体，所以 starter 只取一个 `ProblemRenderer` bean，不在两个之间选择。保留一个，或者声明一个委托给其他渲染器的渲染器（[Problem 渲染器](../architecture/extending.md#problem-renderer)）。
 
 ### 网关之后的 hidden-method 过滤器导致启动失败 {#startup-fails-on-a-hidden-method-filter-behind-a-gateway}
 

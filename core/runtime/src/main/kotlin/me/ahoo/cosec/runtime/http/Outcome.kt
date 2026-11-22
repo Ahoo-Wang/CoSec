@@ -39,7 +39,7 @@ class Outcome internal constructor(
     /** Whether the request goes on to the handler. True only for a permit. */
     val proceed: Boolean,
     val requestId: String,
-    /** The body to write with [ProblemEncoder]; null exactly when [proceed]. */
+    /** The problem whose body [ProblemBodies] makes; null exactly when [proceed]. */
     val problem: Problem?,
     /** Response headers, `CoSec-Request-Id` among them, on every outcome. */
     val headers: Map<String, String>,

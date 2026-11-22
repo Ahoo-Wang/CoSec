@@ -47,6 +47,7 @@ writes its implementations of CoSec's ports in Kotlin. Durations, instants and c
 | `BlacklistSource` | `cosec-runtime`, `runtime.attribute` | Say which principals, addresses and devices are blocked. | one bean, wrapped in `BlacklistAttributeProvider` |
 | `DecisionListener` | `cosec-runtime`, `runtime.event` | Observe every decision: audit, alerting, analytics. | every bean |
 | `BridgeContextContributor` | `cosec-runtime`, `runtime.event` | Carry a thread-local context (logging, tracing) into the pipeline. | every bean |
+| `ProblemRenderer` | `cosec-runtime`, `runtime.http` | Write the body of a refusal in your framework's own problem catalog ([Problem renderer](#problem-renderer)). Experimental. | one bean, replacing CoSec's own body; two fail startup |
 | `ChangeListener` | `cosec-control`, `control.audit` | Observe or gate control-plane changes. | every bean, with `cosec-control` |
 | `ControlStore` | `cosec-control`, `control.store` | Keep the control plane's records (revisions, change requests, staging slots) somewhere other than in `CoCacheControlStore`. The control plane itself starts only with `cosec-cocache`, whose Redis stores keep the published documents: this port does not change that. Experimental, with its records and the shadow window ports. | one bean, with `cosec-control` and `cosec-cocache` |
 | Route maps | `cosec-document`, `document.route` | Give requests `service:verb` actions on typed resources. | `cosec.authorization.routes.location` |
@@ -120,7 +121,7 @@ Every public declaration of a published module is in one of four levels. The mar
 |---|---|---|
 | none | Stable. From 8.0 GA on, removing or changing it is a breaking change, made only in a major release. | Use it. |
 | `@CoSecSpi` | An interface applications implement, not only call: the extension points above. Stable like the rest, and a member added in a minor release comes with a default body, so an implementation keeps compiling. | Implement it. |
-| `@ExperimentalCoSecApi` | Public, but it may change or go away in a minor release; the release notes say so. Today: the public API of `cosec-testkit` (`PolicyTestKit`, `PipelineFixture`, `AttributeRequests`, `EngineOutcome` and their exceptions); assembling a pipeline without Spring (`Pipeline.builder`, `PipelineBuilder` and its settings `PipelineSettings`, `SnapshotSettings` and `IdentityForwardingSettings`, `Pipeline.behindGateway` with `GatewayIdentitySettings`, `Pipeline.evaluate` and `awaitDocuments`, `RequestGate`, `HttpFacts`, `Headers`, `Cookies`, `Outcome`, `Problem`, `ProblemEncoder`, `RequestSecurity`); the evaluation trace (`DecisionEvent.evaluationTrace`, `me.ahoo.cosec.engine.trace`); and the control plane's store and shadow window ports with their records ([Control store](#control-store)). | Opt in with `@OptIn(ExperimentalCoSecApi::class)`, or the compiler warns. |
+| `@ExperimentalCoSecApi` | Public, but it may change or go away in a minor release; the release notes say so. Today: the public API of `cosec-testkit` (`PolicyTestKit`, `PipelineFixture`, `AttributeRequests`, `EngineOutcome` and their exceptions); assembling a pipeline without Spring (`Pipeline.builder`, `PipelineBuilder` and its settings `PipelineSettings`, `SnapshotSettings` and `IdentityForwardingSettings`, `Pipeline.behindGateway` with `GatewayIdentitySettings`, `Pipeline.evaluate` and `awaitDocuments`, `RequestGate`, `HttpFacts`, `Headers`, `Cookies`, `Outcome`, `Problem`, `ProblemEncoder`, `ProblemRenderer`, `RequestSecurity`); the evaluation trace (`DecisionEvent.evaluationTrace`, `me.ahoo.cosec.engine.trace`); and the control plane's store and shadow window ports with their records ([Control store](#control-store)). | Opt in with `@OptIn(ExperimentalCoSecApi::class)`, or the compiler warns. |
 | `@InternalCoSecApi` | Public only so that CoSec's own modules can call each other. No promise: it may change in any release. | Never use it. Opting in is required at error level, and only CoSec's own sources do. |
 
 The build keeps these promises. Every published library module stores its public ABI in a dump file,
@@ -569,6 +570,64 @@ fun interface BridgeContextContributor {
 
 The starter registers `MdcContextContributor` (the SLF4J MDC) and, with `cosec-opentelemetry`, the OpenTelemetry
 context. Every `BridgeContextContributor` bean is used, in `@Order` order. `capture` runs once per request: keep it cheap.
+
+## Problem renderer
+
+A host framework that answers its own errors as RFC 9457 problems can answer CoSec's refusals in the same catalog, so its
+clients meet one (`PIP-34`). A `ProblemRenderer` bean renders the **body** of every refusal: the three adapters' and the
+served login routes', alike.
+
+```kotlin
+fun interface ProblemRenderer {
+    fun render(problem: Problem): ByteArray
+}
+```
+
+- **What it is given:** the `Problem` only: its `type` (a `ProblemType`, with `status`, `slug`, `code`, `uri` and
+  `title`), the `requestId` the `CoSec-Request-Id` header carries, and the `traceId`. Never the decision, the policy
+  that decided, the principal or the request: what a client may learn of a refusal is what CoSec's own body says.
+- **What stays CoSec's:** the status and every header: `Content-Type: application/problem+json`, `CoSec-Request-Id`,
+  `Retry-After` and `RateLimit-*`. The adapter writes them, then the bytes `render` returns, as they are; a renderer
+  cannot set a status or add a header (`WWW-Authenticate` included, which CoSec does not set). Write an
+  `application/problem+json` document whose `status` is `problem.status`.
+- **When it runs:** on a refusal only, on the thread that writes the response, an event loop on WebFlux and the
+  gateway. Do not block, and escape every value: `requestId` may come from the client.
+- **When it fails:** a renderer that throws or answers no bytes is replaced by CoSec's own body for that response. The
+  request stays refused, with CoSec's status. Each failure counts in `cosec.problem.render.failed` and is logged at
+  `WARN` at most once a minute ([Troubleshooting](../operations/troubleshooting.md#a-refusal-is-answered-with-cosecs-body-though-a-renderer-is-declared)).
+- **Without one:** the body is CoSec's own, `ProblemEncoder`'s bytes (`ProblemRenderer.DEFAULT`). The control API's
+  problems are another catalog and are not rendered by it.
+
+**Keep CoSec's `type` and `code`.** CoSec's TypeScript client recognizes a refusal by its `type` alone
+(`https://cosec.ahoo.me/problems/<slug>`) and acts on the slug: it refreshes an expired token, ends the session for a
+revoked or invalid one, and hands the problem to your callbacks. A renderer that replaces `type` makes the client blind
+to those refusals on that host ([Clients](../integration/clients.md#a-host-that-renders-its-own-problems)). Put your
+catalog's identifiers in extension members beside CoSec's:
+
+```kotlin
+@Bean
+fun problemRenderer(): ProblemRenderer {
+    val json = JsonMapper.builder().build()
+    return ProblemRenderer { problem ->
+        val code = when (problem.type) {
+            ProblemType.UNAUTHORIZED, ProblemType.TOKEN_INVALID, ProblemType.TOKEN_EXPIRED,
+            ProblemType.TOKEN_REVOKED -> "app.auth.unauthenticated"
+            ProblemType.FORBIDDEN, ProblemType.SCOPE_REJECTED -> "app.auth.forbidden"
+            else -> "app.error.${problem.type.slug}"
+        }
+        json.writeValueAsBytes(
+            linkedMapOf(
+                "type" to problem.type.uri,          // CoSec's: its clients act on it
+                "title" to problem.type.title,
+                "status" to problem.status,
+                "code" to problem.type.code,         // CoSec's
+                "requestId" to problem.requestId,
+                "appCode" to code,                   // your catalog's, as an extension member
+            ),
+        )
+    }
+}
+```
 
 ## Change listeners
 

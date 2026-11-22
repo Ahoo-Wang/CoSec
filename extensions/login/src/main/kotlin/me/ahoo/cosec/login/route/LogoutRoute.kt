@@ -17,6 +17,7 @@ package me.ahoo.cosec.login.route
 
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.runtime.http.ProblemBodies
 import me.ahoo.cosec.runtime.http.ProblemType
 import me.ahoo.cosec.spi.token.TokenRevokedException
 import me.ahoo.cosec.spi.token.TokenRevoker
@@ -30,13 +31,17 @@ import kotlin.coroutines.cancellation.CancellationException
  * `503`, an error `500`.
  */
 @InternalCoSecApi
-class LogoutRoute(private val revoker: TokenRevoker) {
+class LogoutRoute(
+    private val revoker: TokenRevoker,
+    /** The body of a refusal (`PIP-34`): the host's renderer, or CoSec's own. */
+    private val bodies: ProblemBodies = ProblemBodies.DEFAULT,
+) {
     /** Answers a request whose body is [body] and whose `Content-Type` is [contentType]. */
     // stays: every failure of a logout is answered, typed by RouteFailure; only cancellation propagates
     @Suppress("TooGenericExceptionCaught")
     suspend fun answer(contentType: String?, body: ByteArray, requestId: String): LoginRouteAnswer {
         val pair = TokenPairBody.read(contentType, body)
-            ?: return LoginRouteAnswer.problem(ProblemType.INVALID_REQUEST, requestId)
+            ?: return LoginRouteAnswer.problem(ProblemType.INVALID_REQUEST, requestId, bodies)
         try {
             revoker.revoke(pair)
         } catch (e: CancellationException) {
@@ -44,7 +49,7 @@ class LogoutRoute(private val revoker: TokenRevoker) {
         } catch (_: TokenRevokedException) {
             // Already ended: the caller's request is answered as done.
         } catch (e: Exception) {
-            return RouteFailure.answer(ROUTE, e, requestId)
+            return RouteFailure.answer(ROUTE, e, requestId, bodies)
         }
         return LoginRouteAnswer.NO_CONTENT
     }

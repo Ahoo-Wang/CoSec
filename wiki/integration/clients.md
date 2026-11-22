@@ -119,6 +119,23 @@ Headers that come with them:
 nothing about it: the caller was anonymous. A client that wants to know its token is about to expire reads `exp` and
 refreshes before the request; it does not wait for a `401`.
 
+## A host that renders its own problems
+
+A host may render the body of CoSec's refusals in its own problem catalog (`ProblemRenderer`, `PIP-34`,
+[Problem renderer](../architecture/extending.md#problem-renderer)). The status and the headers stay CoSec's; the body is
+the host's. **This client recognizes a refusal by its `type` alone** (`https://cosec.ahoo.me/problems/<slug>`), and
+reads `code` only from a body whose `type` is CoSec's. On a host that replaces `type`, every refusal is one it does not
+know:
+
+- a `401` is refreshed once, whatever it was: an expired token is still refreshed, but a revoked or invalid one does not
+  end the session, and a request without a credential is refreshed for nothing;
+- the `onUnauthorized` and `onForbidden` callbacks receive no problem, so the application cannot tell an expired token
+  from a revoked one, or `FORBIDDEN` from `SCOPE_REJECTED`.
+
+So that it is not blind: the host keeps CoSec's `type` and `code` and adds its own catalog's identifiers as extension
+members beside them (the sample in [Problem renderer](../architecture/extending.md#problem-renderer) does). A host that
+must replace `type` gives its clients its own handling of these statuses instead of this client's.
+
 ## Refreshing under rotation
 
 A session is a family of pairs, and only the newest pair refreshes ([Sessions](./authentication.md#sessions)). What

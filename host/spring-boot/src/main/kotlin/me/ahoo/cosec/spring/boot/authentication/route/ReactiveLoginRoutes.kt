@@ -20,6 +20,7 @@ import kotlinx.coroutines.reactor.mono
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.login.route.LoginRouteAnswer
+import me.ahoo.cosec.runtime.http.ProblemBodies
 import me.ahoo.cosec.runtime.http.RequestSecurity
 import me.ahoo.cosec.webflux.ServerWebExchanges.securityContextOrNull
 import org.springframework.core.io.buffer.DataBufferLimitException
@@ -42,14 +43,15 @@ internal object ReactiveLoginRoutes {
     /** [served] says which requests the routes answer: the application's port only, never the management port (`CTL-69`). */
     fun of(
         routes: Map<String, LoginRouteHandler>,
-        served: RequestPredicate
+        served: RequestPredicate,
+        bodies: ProblemBodies,
     ): RouterFunction<ServerResponse> = routes.entries
         .map { (path, handler) ->
-            RouterFunctions.route(RequestPredicates.POST(path).and(served)) { answer(it, handler) }
+            RouterFunctions.route(RequestPredicates.POST(path).and(served)) { answer(it, handler, bodies) }
         }
         .reduce(RouterFunction<ServerResponse>::and)
 
-    private fun answer(request: ServerRequest, handler: LoginRouteHandler): Mono<ServerResponse> {
+    private fun answer(request: ServerRequest, handler: LoginRouteHandler, bodies: ProblemBodies): Mono<ServerResponse> {
         val security = RequestSecurity.of(request.exchange().securityContextOrNull())
             ?: return write(LoginRouteAnswer.NOT_UNDER_COSEC)
         val contentType = request.headers().firstHeader(HttpHeaders.CONTENT_TYPE)
@@ -63,7 +65,7 @@ internal object ReactiveLoginRoutes {
             .defaultIfEmpty(EMPTY)
             .flatMap { body -> mono(Dispatchers.Default) { handler.answer(contentType, body, security.requestId) } }
             .onErrorResume(DataBufferLimitException::class.java) {
-                Mono.just(LoginRouteAnswer.tooLarge(security.requestId))
+                Mono.just(LoginRouteAnswer.tooLarge(security.requestId, bodies))
             }
             .flatMap(::write)
     }

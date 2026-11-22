@@ -165,6 +165,8 @@ Spring Cloud Gateway 宿主不加载路由映射：每个网关请求都位于 `
 
 成员总是按这个顺序出现，响应体不含任何其他内容：没有策略、语句、绑定、原因或异常信息。它由一个手写的编码器（`ProblemEncoder`）写出，因此无论宿主的 JSON 配置如何，三个适配器写出的字节都相同。响应体是 ASCII：请求 id 中的所有非 ASCII 字符和控制字符都会被转义。这套词汇也以 `schema/8.0/problem.schema.json` 发布。
 
+有自己的 problem 目录的宿主框架，可以用一个 `ProblemRenderer` bean 改为渲染这个响应体（`PIP-34`，[Problem 渲染器](../architecture/extending.md#problem-renderer)）：在三个适配器和 starter 提供的登录路由后面都一样。状态码和头仍是 CoSec 的，失败的渲染器会被这个响应体替代。请保留这里的 `type` 和 `code`，否则 CoSec 自己的客户端读不懂这些拒绝（[客户端](./clients.md#a-host-that-renders-its-own-problems)）。
+
 ### 响应头 {#response-headers}
 
 - **`CoSec-Request-Id`**，出现在每个结果上，包括 `400`：如果调用方自己发送的 `CoSec-Request-Id` 请求头是一个普通 id（1 到 64 个 `A-Z a-z 0-9 . _ -` 字符），就用它，否则生成一个。网关会把它转发给下游。

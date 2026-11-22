@@ -19,6 +19,7 @@ import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.api.token.CompositeToken
 import me.ahoo.cosec.document.json.CoSecJson
+import me.ahoo.cosec.runtime.http.ProblemBodies
 import me.ahoo.cosec.runtime.http.ProblemEncoder
 import me.ahoo.cosec.runtime.http.ProblemType
 import me.ahoo.cosec.runtime.http.routeProblem
@@ -26,8 +27,8 @@ import me.ahoo.cosec.runtime.http.routeProblem
 /**
  * What a login route the starter serves answers ([RefreshRoute], [LogoutRoute]): a status, the body's media type and the
  * body, which every web stack writes as it is, with `Cache-Control: [CACHE_CONTROL]` on every answer (`IDN-23`,
- * `IDN-24`). A body is a composite token, a problem of [ProblemEncoder] or nothing: never anything the request carried
- * but its request id.
+ * `IDN-24`). A body is a composite token, a problem's body ([ProblemBodies], the host's renderer or CoSec's own,
+ * `PIP-34`) or nothing: never anything the request carried but its request id.
  */
 @InternalCoSecApi
 class LoginRouteAnswer private constructor(
@@ -48,7 +49,8 @@ class LoginRouteAnswer private constructor(
         const val MAX_BODY_BYTES = 32 * 1024
 
         /** A larger body than [MAX_BODY_BYTES]: the route answers it without reading it. */
-        fun tooLarge(requestId: String): LoginRouteAnswer = problem(ProblemType.INVALID_REQUEST, requestId)
+        fun tooLarge(requestId: String, bodies: ProblemBodies): LoginRouteAnswer =
+            problem(ProblemType.INVALID_REQUEST, requestId, bodies)
 
         /**
          * A route mounted where CoSec does not decide its requests: there is no request id to answer with, and nothing
@@ -71,11 +73,8 @@ class LoginRouteAnswer private constructor(
             ),
         )
 
-        internal fun problem(type: ProblemType, requestId: String): LoginRouteAnswer = LoginRouteAnswer(
-            type.status,
-            ProblemEncoder.MEDIA_TYPE,
-            ProblemEncoder.encode(routeProblem(type, requestId)),
-        )
+        internal fun problem(type: ProblemType, requestId: String, bodies: ProblemBodies): LoginRouteAnswer =
+            LoginRouteAnswer(type.status, ProblemEncoder.MEDIA_TYPE, bodies.body(routeProblem(type, requestId)))
 
         private const val OK_STATUS = 200
         private const val NO_CONTENT_STATUS = 204
