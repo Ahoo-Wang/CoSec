@@ -46,7 +46,9 @@ import java.net.URI
 import java.net.http.HttpTimeoutException
 import java.time.Duration
 import java.time.Instant
+import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicBoolean
 
 /**
  * [HttpControlService] on the wire (`CTL-77`): each call is the route's request, the caller stated in `CoSec-Identity`
@@ -62,9 +64,13 @@ class HttpControlServiceTest {
     private val contentTypes = mutableListOf<String?>()
     private var answer: Pair<Int, String> = 200 to "{}"
 
-    /** How long the server waits before it answers. */
+    /** Whether the server holds each request until [release] opens, instead of answering at once. */
     @Volatile
-    private var delay: Duration = Duration.ZERO
+    private var hold = false
+    private val release = CountDownLatch(1)
+
+    /** Set as the server sends a response: what proves that a call ended before the server answered it. */
+    private val answered = AtomicBoolean(false)
 
     private val server = HttpServer.create(InetSocketAddress("127.0.0.1", 0), 0).apply {
         createContext("/") { exchange ->
@@ -75,7 +81,8 @@ class HttpControlServiceTest {
                 identities += exchange.requestHeaders.getFirst(IdentityHeader.NAME)
                 contentTypes += exchange.requestHeaders.getFirst("Content-Type")
             }
-            Thread.sleep(delay.toMillis())
+            if (hold) release.await(HELD_AT_MOST.toMillis(), TimeUnit.MILLISECONDS)
+            answered.set(true)
             val (status, text) = answer
             val bytes = text.encodeToByteArray()
             exchange.responseHeaders.add("Content-Type", "application/json")
@@ -91,7 +98,11 @@ class HttpControlServiceTest {
     private val acme = SnapshotKey.Tenant("acme")
 
     @AfterEach
-    fun stop() = server.stop(0)
+    fun stop() {
+        // A held request is let go first: the server's one handler thread is then free, and stop is prompt.
+        release.countDown()
+        server.stop(0)
+    }
 
     @Test
     fun `each call is the route's request`() {
@@ -231,16 +242,23 @@ class HttpControlServiceTest {
         refused.conflict.assert().isNull()
     }
 
+    /**
+     * The call ends because of its own timeout, before the server answered: no bound in seconds around it, which would
+     * measure the first call's warm-up of a cold JVM (the identity's codec, the client's selector thread, coroutines)
+     * on a loaded runner as much as the timeout. Without a timeout the call waits until the server lets the request go
+     * ([HELD_AT_MOST]) and is answered, so no `HttpTimeoutException` comes (the mutant `ctl-77-http-call-waits-forever`);
+     * a call that never ended would meet the class's `@Timeout`.
+     */
     @Test
     fun `a call that is not answered within its timeout ends`() {
-        delay = Duration.ofSeconds(3)
+        hold = true
         val quick = HttpControlService(
             URI("http://127.0.0.1:${server.address.port}/cosec/control/v1"),
             timeout = Duration.ofMillis(200),
         )
-        val started = System.nanoTime()
         assertThrownBy<HttpTimeoutException> { runBlocking { quick.document(iam, acme) } }
-        Duration.ofNanos(System.nanoTime() - started).assert().isLessThan(Duration.ofSeconds(2))
+        answered.get().assert().describedAs("the server had answered before the call ended").isFalse()
+        synchronized(received) { received.size.assert().isEqualTo(1) }
         HttpControlService.DEFAULT_TIMEOUT.assert().isEqualTo(Duration.ofSeconds(30))
         assertThrownBy<IllegalArgumentException> { HttpControlService(URI("http://host/x"), timeout = Duration.ZERO) }
     }
@@ -259,5 +277,10 @@ class HttpControlServiceTest {
         listOf("relative/path", "ftp://host/x", "http://host/x?a=1").forEach {
             assertThrownBy<IllegalArgumentException> { HttpControlService(URI(it)) }
         }
+    }
+
+    private companion object {
+        /** The longest the server holds a request: longer than any test's call, shorter than the class's timeout. */
+        val HELD_AT_MOST: Duration = Duration.ofSeconds(15)
     }
 }
