@@ -1,0 +1,17 @@
+# Rule: CTL-81
+# Mutant: the service profile's requests are not told apart from the operators': the trust root's exemption reaches the service port and the facade
+# Tests: :control:test --tests me.ahoo.cosec.control.api.ServiceTrustRootTest --tests me.ahoo.cosec.control.api.AppDocumentServiceTest
+
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/api/ControlHttp.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/api/ControlHttp.kt
+index 6e68062f0..78e859f13 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/api/ControlHttp.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/api/ControlHttp.kt
+@@ -77,7 +77,7 @@ class ControlHttp(plane: ControlPlane, private val profile: ControlProfile = Con
+     suspend fun handle(request: ControlHttpRequest, security: RequestSecurity?): ControlHttpResponse {
+         val requestId = security?.requestId ?: ANONYMOUS_REQUEST
+         val operator = security?.let {
+-            Operator.of(it, request.peer, request.inProcess, serviceProfile = profile == ControlProfile.SERVICE)
++            Operator.of(it, request.peer, request.inProcess, serviceProfile = false)
+         } ?: return problem(Problem.UNAUTHORIZED, requestId, null)
+         return try {
+             routes.route(operator, request)

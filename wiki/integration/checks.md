@@ -416,10 +416,15 @@ fun controlService(sslContext: SSLContext): ControlService = HttpControlService(
     platform document gives it, and the record names it.
 - **What it reaches:** which tenant and app documents there are (`documents`), reads of a tenant's or an app's
   document (`document`, `revisions`, `revision`, `diff`), and
-  the change flow of a tenant's document (`check`, `checkApply`, `propose`, `apply`, `change`, `changes`, `rebase`, `startShadow`,
-  `skipShadow`, `abandon`, `publish`). An automated change can start its shadow window, read the change until the
-  window closes, and publish with the summary's acknowledgement, rather than skip the window. Nothing reaches the
-  platform document, approvals, rollback or break-glass: those stay a person's, on the operators' routes.
+  the change flow of a tenant's or an app's document (`check`, `propose`, `change`, `changes`, `rebase`, `startShadow`,
+  `skipShadow`, `abandon`, `publish`; `apply` and `checkApply` of a tenant's). An automated change can start its
+  shadow window, read the change until the window closes, and publish with the summary's acknowledgement, rather than
+  skip the window. Every change made through it is analyzed, whoever the caller states: no one is the trust root
+  here, not even a platform administrator (`CTL-81`). What grants nothing anew (removing a role, a policy or a
+  binding) publishes alone, a holder of the [role class](../policies/testing.md#the-role-class) projects roles into
+  tenants alone, and anything else, a catalog for one, waits for a person, who approves on the operators' routes.
+  Nothing reaches the platform document, approvals, rollback or break-glass: those stay a person's, on the operators'
+  routes.
 - **What goes in and out:**
   - Requests are the routes' bodies ([Changes](../policies/testing.md#changes)), and documents are in the
     [document format](../policies/language.md).
@@ -427,8 +432,9 @@ fun controlService(sslContext: SSLContext): ControlService = HttpControlService(
     as text.
   - A refusal is a `ControlRefusedException` with the route's status and problem.
 - **What it reaches, exactly:** the routes of the control host's service port, one definition for both
-  (`cosec.control.http.service-port`). A change named by its id is reachable only when it changes a tenant's document, and a listing shows only such
-  changes: one by state leaves the others out, and says nothing of them.
+  (`cosec.control.http.service-port`). A change named by its id is reachable only when it changes a tenant's or an
+  app's document, and a listing shows only such changes: one by state leaves the platform document's out, and says
+  nothing of them.
 - **What is recorded:** each step as the stated principal's, with `via.method: in-process` in its origin
   ([Control-plane change log](../operations/observability.md#control-plane-change-log)).
 

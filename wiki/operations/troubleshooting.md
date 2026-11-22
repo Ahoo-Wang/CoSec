@@ -1051,6 +1051,16 @@ random one.
   principal its roles through the provider and narrow the key with `roles`
   ([API keys narrow, and memberships decide](./upgrading.md#api-keys-narrow-and-memberships-decide)).
 
+### A gateway restarts once right after it is deployed {#a-gateway-restarts-once-right-after-it-is-deployed}
+
+The pod's restart count is `1` (or a few) right after `kubectl apply -k`, and `kubectl logs <pod> --previous` ends with
+`RedisConnectionException: Unable to connect to redis/<unresolved>:6379` (or your Redis's address). The overlay is
+applied whole, so the gateway can start before Redis is reachable or before its Service's name resolves. CoSec does
+not start without its store of record: startup fails closed, the container exits, and the kubelet starts it again until
+Redis answers. The container that then starts is the gateway; nothing needs fixing. A restart count that keeps growing
+is Redis that stays unreachable: its address in the `cosec-gateway-redis` ConfigMap, its credentials, or a network policy
+between them. A restart after the gateway was live is something else ([Probes](#probes-answer-401-or-503)).
+
 ### Other startup failures
 
 | Message | Fix |

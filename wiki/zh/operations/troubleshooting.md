@@ -755,6 +755,11 @@ Tokens are verified against RevocationReader.NONE: a revoked token (logout, revo
 - 绑定错误提到 `cosec.api-key.keys[n].policies` 或 `.attributes`：key 不再携带它们。通过提供者授予主体角色，再用
   `roles` 收窄 key（[API key 只收窄，成员关系决定](./upgrading.md#api-keys-narrow-and-memberships-decide)）。
 
+### 网关刚部署后重启一次 {#a-gateway-restarts-once-right-after-it-is-deployed}
+
+`kubectl apply -k` 之后 pod 的重启次数是 `1`（或几次），`kubectl logs <pod> --previous` 的最后是
+`RedisConnectionException: Unable to connect to redis/<unresolved>:6379`（或你的 Redis 地址）。overlay 是整体应用的，所以网关可能在 Redis 可达、或它的 Service 名字能解析之前就启动。CoSec 没有它的权威存储就不启动：启动失败即拒绝，容器退出，kubelet 再次启动它，直到 Redis 应答。随后启动的容器就是网关；无需修复。重启次数持续增长，说明 Redis 一直不可达：检查 `cosec-gateway-redis` ConfigMap 中它的地址、它的凭证，或两者之间的网络策略。网关已存活之后的重启是另一回事（[探针](#probes-answer-401-or-503)）。
+
 ### 其他启动失败 {#other-startup-failures}
 
 | 消息 | 修复 |

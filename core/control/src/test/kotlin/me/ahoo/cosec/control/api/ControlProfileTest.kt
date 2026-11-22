@@ -143,8 +143,14 @@ class ControlProfileTest {
         admits("GET", "simulate").assert().isFalse()
         ControlProfile.OPERATORS.admits("POST", listOf("break-glass")).assert().isTrue()
         service.admitsWrite(me.ahoo.cosec.spi.snapshot.SnapshotKey.Tenant("a")).assert().isTrue()
-        service.admitsWrite(me.ahoo.cosec.spi.snapshot.SnapshotKey.App("a")).assert().isFalse()
+        // A proposal, a check, a change and a listing of a tenant's or an app's document; never the platform's.
+        service.admitsWrite(me.ahoo.cosec.spi.snapshot.SnapshotKey.App("a")).assert().isTrue()
         service.admitsWrite(me.ahoo.cosec.spi.snapshot.SnapshotKey.Platform).assert().isFalse()
+        service.admitsChange(me.ahoo.cosec.spi.snapshot.SnapshotKey.App("a")).assert().isTrue()
+        service.admitsChange(me.ahoo.cosec.spi.snapshot.SnapshotKey.Platform).assert().isFalse()
+        service.admitsListing(me.ahoo.cosec.spi.snapshot.SnapshotKey.App("a")).assert().isTrue()
+        service.admitsListing(me.ahoo.cosec.spi.snapshot.SnapshotKey.Platform).assert().isFalse()
+        service.admitsListing(null).assert().isTrue()
         ControlProfile.OPERATORS.admitsWrite(me.ahoo.cosec.spi.snapshot.SnapshotKey.Platform).assert().isTrue()
     }
 

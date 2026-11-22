@@ -20,7 +20,8 @@
 # Needs docker, kind, kubectl and python3. It creates the cluster `cosec-system`, loads <image>, applies `k8s/overlays/dev`
 # with that image, and checks, in order:
 #   1. the dev overlay starts WITHOUT the Service its demo route names (cosec-auth, which no overlay provides): the gateway
-#      runs, is live, and stays out of the Service (not ready) while no platform document is published;
+#      runs, is live, and stays out of the Service (not ready) while no platform document is published, and is not restarted
+#      in one liveness window without documents (a restart before it was live, Redis not yet reachable, is reported only);
 #   2. after `cosec-migrate publish` through a port-forward, the pod turns ready and the Service has an endpoint;
 #   3. a decision: anonymous 401, a signed-in caller on a denied path 403, both problem+json; a permitted request is decided
 #      by CoSec and fails only at the missing backend (the gateway's 500 for a host it cannot resolve), and is counted;
@@ -98,13 +99,30 @@ started() { [ "$(kc get pod -l app.kubernetes.io/name=cosec-gateway -o jsonpath=
 wait_for "the gateway container to start" 180 "startupProbe: 90 x 2 s" started
 GATEWAY_POD=$(kc get pod -l app.kubernetes.io/name=cosec-gateway -o jsonpath='{.items[0].metadata.name}')
 kc exec "$GATEWAY_POD" -- curl -fs -o /dev/null http://localhost:8080/livez || fail "the gateway is not live on /livez"
+restarts() { kc get pod "$GATEWAY_POD" -o jsonpath='{.status.containerStatuses[0].restartCount}'; }
+# Counted from here, once the gateway is live: the overlay is applied whole, as an operator applies it, so a gateway that
+# reaches Redis before its Service resolves exits (startup fails closed) and the kubelet starts it again. That restart is
+# the store's absence, not this step's property.
+LIVE_RESTARTS=$(restarts)
+LIVE_AT=$SECONDS
+[ "$LIVE_RESTARTS" = 0 ] || echo "note the gateway was started $((LIVE_RESTARTS + 1)) times before it was live (it started before Redis answered)"
+# The liveness probe restarts a container after failureThreshold failures periodSeconds apart: the documents stay missing for
+# that long, read from the applied Deployment, before the count is read again.
+WINDOW=$(kc get deployment cosec-gateway -o jsonpath='{.spec.template.spec.containers[0].livenessProbe.periodSeconds} {.spec.template.spec.containers[0].livenessProbe.failureThreshold}' |
+  awk '{ print $1 * $2 }')
 if kc exec "$GATEWAY_POD" -- curl -fs -o /dev/null http://localhost:8080/readyz; then
   fail "the gateway is ready with no platform document: /readyz must refuse"
 fi
 [ "$(kc get pod "$GATEWAY_POD" -o jsonpath='{.status.containerStatuses[0].ready}')" = false ] || fail "the pod is Ready with no platform document"
-[ "$(kc get pod "$GATEWAY_POD" -o jsonpath='{.status.containerStatuses[0].restartCount}')" = 0 ] || fail "the gateway restarted: a liveness probe must not follow the documents"
 [ -z "$(kc get endpoints cosec-gateway -o jsonpath='{.subsets[*].addresses[*].ip}')" ] || fail "the Service has an endpoint for a gateway that has no documents"
-ok "the dev overlay starts without the Service cosec-auth; /livez 200, /readyz refuses, the pod is out of the Service, no restart"
+window_passed() { [ $((SECONDS - LIVE_AT)) -ge "$WINDOW" ]; }
+wait_for "one liveness window (${WINDOW} s) with no platform document" $((WINDOW + 10)) "livenessProbe: periodSeconds x failureThreshold" window_passed
+if [ "$(restarts)" != "$LIVE_RESTARTS" ]; then
+  echo "the previous container's last lines:" >&2
+  kc logs "$GATEWAY_POD" --previous --tail=40 >&2 || true
+  fail "the gateway restarted while the documents were missing ($LIVE_RESTARTS, then $(restarts)): a liveness probe must not follow the documents"
+fi
+ok "the dev overlay starts without the Service cosec-auth; /livez 200, /readyz refuses, the pod is out of the Service, no restart in ${WINDOW} s without documents"
 
 # --- 2. publish, and the pod turns ready --------------------------------------------------------------------------
 kubectl -n "$NS" port-forward svc/redis 6379:6379 >"$WORK/redis-forward.log" 2>&1 &

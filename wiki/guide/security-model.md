@@ -281,6 +281,12 @@ tells its own API keys by where they were verified, and takes any credential nam
 identity's included, for one. A credential your own authenticator accepts is a person's to CoSec, so give an
 authenticator of workloads neither `cosec:approve` nor `cosec:platform-admin`.
 
+No one is the trust root through the control API's service profile, on the control-plane host's service port or
+through `ControlService` in process (`CTL-81`). There the identity is only stated, by whatever workload the network
+admitted, so a change made or published there is analyzed whoever is stated, and what the analysis cannot prove waits
+for a person, who approves on the operators' routes behind the gateway. The same principal on the operators' routes,
+a forwarded identity included, keeps the trust root's exemption.
+
 ## Platform boundary
 
 A boundary limits what a whole tenant can be permitted, whatever its own document grants. The platform document

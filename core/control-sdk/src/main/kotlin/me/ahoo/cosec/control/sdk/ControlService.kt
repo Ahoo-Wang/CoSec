@@ -18,8 +18,10 @@ import me.ahoo.cosec.model.decision.DocumentKind
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 
 /**
- * The control plane as a service calls it (`CTL-65`): the narrow first set of the control API (reads of a tenant's or an
- * app's document, and the change flow of a tenant's document, its shadow window included), with the bodies and answers of its routes. A request is
+ * The control plane as a service calls it (`CTL-65`): the narrow set of the control API (reads of a tenant's or an app's
+ * document, and the change flow of either, its shadow window included), with the bodies and answers of its routes. A
+ * change of an app document is analyzed as anyone's: what widens a grant waits for a person, unless the caller is the
+ * trust root. A request is
  * the JSON a route takes (`POST /changes`, `:apply`, `:publish`), a document the document format
  * (`schema/8.0/cosec-snapshot-document.schema.json`), and an answer the JSON the route answers, pinned by `contract/control/`.
  * Nothing here is about the platform document, boundaries, approvals, rollback or break-glass: those stay a
@@ -54,7 +56,7 @@ interface ControlService {
     /** `POST /documents/{key}:apply` of a tenant's document: [request] is the route's body; answers the change. */
     suspend fun apply(caller: ControlCaller, key: SnapshotKey, request: String): String
 
-    /** `POST /changes` of a tenant's document: [request] is the route's body; answers the change. */
+    /** `POST /changes` of a tenant's or an app's document: [request] is the route's body; answers the change. */
     suspend fun propose(caller: ControlCaller, request: String): String
 
     /**
@@ -72,9 +74,10 @@ interface ControlService {
     suspend fun change(caller: ControlCaller, id: String): String
 
     /**
-     * `GET /changes?document=&state=&after=&limit=`: the open changes of a tenant's document, of a state, or both; those
-     * the caller may see, and only changes of tenants' documents, as [change] reaches them by id. [after] is the `next`
-     * of the page before, a token passed back unchanged; a page may be empty with a `next` still to follow.
+     * `GET /changes?document=&state=&after=&limit=`: the open changes of a tenant's or an app's document, of a state, or
+     * both; those the caller may see, and never a change of the platform document, as [change] reaches them by id.
+     * [after] is the `next` of the page before, a token passed back unchanged; a page may be empty with a `next` still
+     * to follow.
      */
     suspend fun changes(
         caller: ControlCaller,
@@ -84,21 +87,25 @@ interface ControlService {
         limit: Int? = null,
     ): String
 
-    /** `POST /changes/{id}:rebase` of a change of a tenant's document. */
+    /** `POST /changes/{id}:rebase` of a change of a tenant's or an app's document. */
     suspend fun rebase(caller: ControlCaller, id: String): String
 
     /**
-     * `POST /changes/{id}:shadow` of a change of a tenant's document: starts its shadow window. Read the change until the
-     * window closes, then [publish] it, acknowledging the summary's counts when the window saw differences.
+     * `POST /changes/{id}:shadow` of a change of a tenant's or an app's document: starts its shadow window. Read the
+     * change until the window closes, then [publish] it, acknowledging the summary's counts when the window saw
+     * differences.
      */
     suspend fun startShadow(caller: ControlCaller, id: String): String
 
-    /** `POST /changes/{id}:skip-shadow` of a change of a tenant's document, for [reason]. */
+    /** `POST /changes/{id}:skip-shadow` of a change of a tenant's or an app's document, for [reason]. */
     suspend fun skipShadow(caller: ControlCaller, id: String, reason: String): String
 
-    /** `POST /changes/{id}:abandon` of a change of a tenant's document. */
+    /** `POST /changes/{id}:abandon` of a change of a tenant's or an app's document. */
     suspend fun abandon(caller: ControlCaller, id: String): String
 
-    /** `POST /changes/{id}:publish` of a change of a tenant's document; [request] is the route's body (`ack`), if any. */
+    /**
+     * `POST /changes/{id}:publish` of a change of a tenant's or an app's document; [request] is the route's body
+     * (`ack`), if any.
+     */
     suspend fun publish(caller: ControlCaller, id: String, request: String? = null): String
 }

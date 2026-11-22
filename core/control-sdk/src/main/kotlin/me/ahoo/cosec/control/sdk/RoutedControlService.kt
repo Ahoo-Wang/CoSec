@@ -113,7 +113,7 @@ abstract class RoutedControlService : ControlService {
     override suspend fun publish(caller: ControlCaller, id: String, request: String?): String =
         step(caller, id, "publish", request ?: EMPTY)
 
-    /** A step of change [id]: the service profile serves it only for a tenant document's change. */
+    /** A step of change [id]: the service profile serves it for a tenant's or an app's document, never the platform's. */
     private suspend fun step(caller: ControlCaller, id: String, verb: String, body: String): String =
         call(caller, ServiceCall(POST, "/changes/${segment(id)}:$verb", body = body))
 
