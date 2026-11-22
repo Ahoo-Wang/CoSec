@@ -18,7 +18,7 @@ springdoc = "3.2.1"
 # testing
 junit = "6.1.3"
 fluent-assert = "1.2.1"
-mockk = "1.14.11"
+mockk = "1.14.12"
 jmh = "1.37"
 archunit = "1.5.1"
 blockhound = "1.0.18.RELEASE"
