@@ -196,6 +196,7 @@ object StartupGuards {
         "spring-boot:EvictionPolicyReadTest#a refused INFO is not tried again, and says it is a permission - SNP-3",
         "spring-boot:EvictionPolicyReadTest#an evicting policy read on a retry still fails startup - SNP-3",
         "spring-boot:EvictionPolicyReadTest#a failure no retry would change is not tried again, and is still not safe - SNP-3",
+        "spring-boot:EvictionPolicyReadTest#the periodic re-check reads once, with no pause, and names a timeout as a timeout - SNP-3",
         "spring-boot:CoSecGatewayEndpointCheckAutoConfigurationTest#the gateway endpoint on the application port fails startup",
         "spring-boot:CoSecGatewayEndpointCheckAutoConfigurationTest#controller endpoints are checked as every other endpoint is",
         "spring-boot:CoSecGatewayEndpointCheckAutoConfigurationTest#endpoints on a separate management port start",

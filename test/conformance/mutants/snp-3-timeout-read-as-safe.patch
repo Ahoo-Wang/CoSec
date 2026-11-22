@@ -3,19 +3,19 @@
 # Tests: :spring-boot:test --tests me.ahoo.cosec.spring.boot.pipeline.EvictionPolicyReadTest
 
 diff --git a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/pipeline/EvictionPolicyCheck.kt b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/pipeline/EvictionPolicyCheck.kt
-index cbb21bf7f..bb443b1c1 100644
+index 24237f6c7..d87826101 100644
 --- a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/pipeline/EvictionPolicyCheck.kt
 +++ b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/pipeline/EvictionPolicyCheck.kt
-@@ -105,11 +105,7 @@ internal object EvictionPolicyCheck {
+@@ -117,11 +117,7 @@ internal object EvictionPolicyCheck {
                      "Redis refused INFO ($failure): grant the Redis user +info"
                  )
                  !transient(failure) -> return Reading.Unreadable("INFO memory failed ($failure)")
--                attempt >= ATTEMPTS -> return Reading.Unreadable(
--                    "Redis did not answer INFO memory in $ATTEMPTS attempts (last: $failure): a timeout or a " +
--                        "connection failure, not a missing permission; check that Redis is reachable and that this " +
--                        "process is not starved of CPU while it starts"
+-                attempt >= attempts -> return Reading.Unreadable(
+-                    "Redis did not answer INFO memory ${if (attempts == 1) "($failure)" else "in $attempts attempts (last: $failure)"}: " +
+-                        "a timeout or a connection failure, not a missing permission; check that Redis is reachable " +
+-                        "and that this process is not starved of CPU"
 -                )
-+                attempt >= ATTEMPTS -> return Reading.NotRedis
++                attempt >= attempts -> return Reading.NotRedis
              }
              val wait = retryPause(attempt)
-             log.warn { "Cannot read maxmemory-policy (INFO memory), attempt $attempt of $ATTEMPTS - retry in $wait: $failure" }
+             log.warn { "Cannot read maxmemory-policy (INFO memory), attempt $attempt of $attempts - retry in $wait: $failure" }
