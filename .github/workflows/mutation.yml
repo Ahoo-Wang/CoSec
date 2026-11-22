@@ -24,6 +24,10 @@ on:
         description: 'Optional comma-separated mutant names (a patch file name without .patch); empty = all'
         required: false
         default: ''
+      variant:
+        description: 'wip: measurement variant (baseline or daemon)'
+        required: false
+        default: 'baseline'
       parallel:
         description: 'Shards at once (1 to 20). 8 leaves runners for pull requests; 16 is for a release gate only'
         required: false
@@ -96,6 +100,7 @@ jobs:
       matrix: ${{ fromJSON(needs.plan.outputs.matrix) }}
     env:
       MUTANTS: ${{ matrix.mutants }}
+      COSEC_MUTATION_VARIANT: ${{ inputs.variant }}
     steps:
       - name: Checkout
         uses: actions/checkout@v7

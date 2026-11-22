@@ -146,7 +146,17 @@ object MutationCheck {
     /** `git` as found on the `PATH` (`git.exe` on Windows). */
     private val git: String by lazy { Executables.find("git")?.toString() ?: error("git is not on the PATH") }
 
+    // wip: measurement only (variant and phase timings), removed before review.
+    private val keepDaemon = System.getenv("COSEC_MUTATION_VARIANT") == "daemon"
+    private var mark = System.nanoTime()
+    private fun lap(mutant: Mutant, phase: String) {
+        val now = System.nanoTime()
+        println("TIMING ${mutant.name} $phase ${(now - mark) / 1_000_000}")
+        mark = now
+    }
+
     private fun check(root: Path, mutant: Mutant): MutantResult {
+        mark = System.nanoTime()
         val worktree = Files.createTempDirectory("cosec-mutant-${mutant.name}-")
         Files.delete(worktree)
         command(
@@ -158,20 +168,24 @@ object MutationCheck {
             worktree.toString(),
             "HEAD"
         ).requireSuccess("git worktree add")
+        lap(mutant, "worktree")
         try {
             if (command(worktree, git, "apply", "--whitespace=nowarn", mutant.patch.toAbsolutePath().toString()) != 0) {
                 return MutantResult.DOES_NOT_APPLY
             }
             val compile = retried { gradle(worktree, mutant.compileTasks) }
+            lap(mutant, "compile")
             if (compile.exit != 0) {
                 return verdict(compile, null, 0)
             }
             val tests = retried(
                 unless = { failedTests(worktree) > 0 }
             ) { gradle(worktree, listOf("--continue") + mutant.tests) }
+            lap(mutant, "tests")
             return verdict(compile, tests, failedTests(worktree))
         } finally {
             command(root, git, "worktree", "remove", "--force", worktree.toString())
+            lap(mutant, "remove")
         }
     }
 
@@ -195,7 +209,9 @@ object MutationCheck {
     private fun gradle(directory: Path, tasks: List<String>): Build {
         val log = Files.createTempFile(directory, "mutation-gradle-", ".log")
         val process = ProcessBuilder(
-            listOf(Executables.gradleWrapper(directory), "--no-daemon", "--build-cache", "-q") + tasks
+            listOf(Executables.gradleWrapper(directory)) +
+                (if (keepDaemon) listOf("-Dorg.gradle.daemon.idletimeout=120000") else listOf("--no-daemon")) +
+                listOf("--build-cache", "-q") + tasks
         ).directory(directory.toFile()).redirectErrorStream(true).redirectOutput(log.toFile()).start()
         val exit = if (process.waitFor(BUILD_TIMEOUT_MINUTES, TimeUnit.MINUTES)) {
             process.exitValue()
