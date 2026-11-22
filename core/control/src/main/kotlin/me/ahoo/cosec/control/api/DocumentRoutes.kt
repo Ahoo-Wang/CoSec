@@ -76,7 +76,9 @@ internal class DocumentRoutes(private val plane: ControlPlane) : RouteHandler {
             // `CTL-78`: the check of an `:apply`, the same body, stored nowhere.
             "check" -> post(request) {
                 val (desired, mode) = desired(key, it)
-                ChangeCheckAnswer.response(plane.checkApply(operator, key, desired, mode, it.optText("note").orEmpty()))
+                ChangeCheckAnswer.response(
+                    plane.apply(operator, key, desired, mode, it.optText("note").orEmpty(), commit = false)
+                )
             }
 
             "rollback" -> post(request) {

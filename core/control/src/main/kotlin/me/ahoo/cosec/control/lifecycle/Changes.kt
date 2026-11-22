@@ -133,7 +133,8 @@ class Changes(
         preemption
     )
 
-    private val proposals =
+    /** Proposing a change, and checking one without proposing it (`CTL-78`, [Proposals.check]). */
+    internal val proposals =
         Proposals(flow, store, revisions, ids, clock, authority, authority.approvals, candidates, listeners)
 
     /** The change [id]; one past its expiry is `EXPIRED` from then on. */
@@ -222,33 +223,18 @@ class Changes(
     ): ChangeRequest = proposals.propose(author, key, base, operations, note, kind, confirmations)
 
     /**
-     * `CTL-78`: what [propose] would answer for the same request (its state, findings and escalations), by
-     * [Proposals.propose]'s own steps, the authorization included, stopped before the last: nothing is stored, no slot
-     * is taken, no change event is written.
+     * [Proposals.apply]: proposes the operations that make the head of [key] into [desired]; with [commit] false, answers
+     * what it would, as [Proposals.check] is to [propose] (`CTL-78`).
      */
-    suspend fun check(
-        author: Operator,
-        key: SnapshotKey,
-        base: Long,
-        operations: List<Operation>,
-        note: String,
-        confirmations: List<Confirmation> = emptyList(),
-    ): ChangeRequest =
-        proposals.check(author, key, base, operations, note, confirmations)
-
-    /** `CTL-78`: what [apply] would answer, as [check] is to [propose]. */
-    suspend fun checkApply(author: Operator, key: SnapshotKey, desired: PolicyDocument, mode: ApplyMode, note: String) =
-        proposals.apply(author, key, desired, mode, note, commit = false)
-
-    /** [Proposals.apply]: proposes the operations that make the head of [key] into [desired]. */
     suspend fun apply(
         author: Operator,
         key: SnapshotKey,
         desired: PolicyDocument,
         mode: ApplyMode,
-        note: String
+        note: String,
+        commit: Boolean = true,
     ): ChangeRequest =
-        proposals.apply(author, key, desired, mode, note)
+        proposals.apply(author, key, desired, mode, note, commit)
 
     /** [Proposals.rollback]: a change that makes [key] what it was at [revision]. */
     suspend fun rollback(

@@ -181,6 +181,12 @@ internal class Proposals(
         ).let { if (applying.notes.isEmpty()) it else it.copy(findings = it.findings + applying.notes) }
         // A check ends here: what follows writes, and only a proposal writes (CTL-78).
         if (!applying.commit) return checked
+        commitChange(checked, breakGlass, author)
+        return checked
+    }
+
+    /** The last step of a proposal, which a check never takes (`CTL-78`): its events, and the change stored. */
+    private suspend fun commitChange(checked: ChangeRequest, breakGlass: Boolean, author: Operator) {
         if (breakGlass) {
             flow.audit(ChangeEvent.Kind.BREAK_GLASS_REQUESTED, checked, author.actor, origin = author.origin)
         }
@@ -193,7 +199,6 @@ internal class Proposals(
             author.actor,
             origin = author.origin,
         )
-        return checked
     }
 
     /**

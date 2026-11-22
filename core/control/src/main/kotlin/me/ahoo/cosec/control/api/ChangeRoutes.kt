@@ -110,7 +110,7 @@ internal class ChangeRoutes(
     suspend fun check(operator: Operator, request: ControlHttpRequest): ControlHttpResponse = post(request) {
         val proposal = proposal(it) ?: return@post notFound()
         ChangeCheckAnswer.response(
-            with(proposal) { plane.check(operator, key, base, operations, note, confirmations) },
+            with(proposal) { plane.propose(operator, key, base, operations, note, confirmations, commit = false) },
         )
     }
 
