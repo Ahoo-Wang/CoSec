@@ -20,8 +20,8 @@ import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.document.SnapshotDocuments
 import me.ahoo.cosec.document.json.CoSecJson
 import me.ahoo.cosec.document.json.StoredFormat
-import me.ahoo.cosec.spi.shadow.InstalledDocument
 import me.ahoo.cosec.spi.shadow.InstanceStatus
+import me.ahoo.cosec.spi.shadow.ResidentDocuments
 import me.ahoo.cosec.spi.shadow.ShadowOutcome
 import me.ahoo.cosec.spi.shadow.ShadowReport
 import me.ahoo.cosec.spi.shadow.ShadowSample
@@ -34,7 +34,6 @@ import tools.jackson.core.StreamReadFeature
 import tools.jackson.databind.JsonNode
 import tools.jackson.databind.node.JsonNodeFactory
 import tools.jackson.databind.node.ObjectNode
-import java.time.Duration
 import java.time.Instant
 
 /**
@@ -63,7 +62,7 @@ object ShadowCodec {
         val node = StoredFormat.write(factory.objectNode())
         node.put("window", candidate.window).put("baseRevision", candidate.baseRevision)
         node.set("document", read(candidate.document.bodyBytes()))
-        return write(node)
+        return CoSecJson.mapper.writeValueAsBytes(node)
     }
 
     fun decodeCandidate(bytes: ByteArray): StoredCandidate = guarded {
@@ -79,22 +78,16 @@ object ShadowCodec {
     }
 
     /** One instance's report of one window: each is kept apart, so that no instance writes another's (review R1). */
-    fun encodeReport(report: ShadowReport): ByteArray = write(report(report))
+    fun encodeReport(report: ShadowReport): ByteArray = CoSecJson.mapper.writeValueAsBytes(report(report))
 
     fun decodeReport(bytes: ByteArray): ShadowReport = guarded { report(read(bytes)) }
 
     /** Every instance's last status, by instance. */
-    fun encodeStatuses(statuses: Map<String, InstanceStatus>): ByteArray = write(
+    fun encodeStatuses(statuses: Map<String, InstanceStatus>): ByteArray = CoSecJson.mapper.writeValueAsBytes(
         factory.objectNode().apply {
             statuses.toSortedMap().forEach { (instance, status) ->
                 val node = StoredFormat.write(putObject(instance)).put("at", status.at.toString())
                     .put("formatLevel", status.formatLevel)
-                val documents = node.putObject("documents")
-                status.documents.forEach { (key, installed) ->
-                    documents.putObject(
-                        key.toString()
-                    ).put("revision", installed.revision).put("lagMillis", installed.lag.toMillis())
-                }
                 // Optional (CTL-53): absent is an instance that acknowledges no window, as an older one does.
                 status.windows?.let { windows -> node.putArray("windows").apply { windows.sorted().forEach(::add) } }
                 // Only when false (CTL-10): absent is an instance that shadows, as an older one does.
@@ -108,10 +101,8 @@ object ShadowCodec {
             StoredFormat.of(node, "instance status")
             instance to InstanceStatus(
                 instance,
+                // A status of 8.0.0-beta.5 also carries its documents: a member this version does not read (CTL-53).
                 Instant.parse(node.need("at").text()),
-                node.need("documents").properties().associate { (key, document) ->
-                    documentKey(key) to InstalledDocument(document.need("revision").long(), Duration.ofMillis(document.need("lagMillis").long()))
-                },
                 // Required (RFC 0010 C5): a status that does not say which format its instance reads is refused, so a
                 // later version can gate a publish on it; a later member added to a status is ignored (CTL-53).
                 node.need("formatLevel").long().takeIf {
@@ -122,6 +113,34 @@ object ShadowCodec {
                     ?: true,
             )
         }
+    }
+
+    /**
+     * One instance's resident documents (`CTL-75`): `{"format": 1, "instance": ..., "at": ..., "documents": {"<key>":
+     * <revision>}}`, the revision of each document it holds and nothing else, so that the record changes only when what
+     * the instance holds does.
+     */
+    fun encodeResident(resident: ResidentDocuments): ByteArray = CoSecJson.mapper.writeValueAsBytes(
+        StoredFormat.write(factory.objectNode()).apply {
+            put("instance", resident.instance)
+            put("at", resident.at.toString())
+            val documents = putObject("documents")
+            resident.documents.toSortedMap(compareBy { it.toString() }).forEach { (key, revision) ->
+                documents.put(key.toString(), revision)
+            }
+        },
+    )
+
+    fun decodeResident(bytes: ByteArray): ResidentDocuments = guarded {
+        val node = read(bytes)
+        StoredFormat.of(node, "resident documents")
+        ResidentDocuments(
+            node.need("instance").text(),
+            Instant.parse(node.need("at").text()),
+            node.need("documents").properties().associate { (key, revision) ->
+                documentKey(key) to (revision.long().takeIf { it > 0 } ?: throw malformed("a revision is not positive"))
+            },
+        )
     }
 
     /** A status's acknowledged windows: an array of window ids, each a string. */
@@ -175,17 +194,12 @@ object ShadowCodec {
         )
     }
 
-    /** [text], stored content quoted in a message or a log line, with its control characters escaped (RC1-15). */
-    private fun printable(text: String?): String = SnapshotKeyText.printable(text.orEmpty())
-
     private fun documentKey(text: String): SnapshotKey = when {
         text == "platform" -> SnapshotKey.Platform
         text.startsWith("app:") -> SnapshotKey.App(text.removePrefix("app:"))
         text.startsWith("tenant:") -> SnapshotKey.Tenant(text.removePrefix("tenant:"))
         else -> throw malformed("[${SnapshotKeyText.quoted(text)}] is not a document key")
     }
-
-    private fun write(node: JsonNode): ByteArray = CoSecJson.mapper.writeValueAsBytes(node)
 
     // stays: Jackson's exception quotes the stored bytes; only where it failed is kept.
     @Suppress("SwallowedException")
@@ -233,7 +247,8 @@ object ShadowCodec {
 
     /** The error of [reason], thrown where it is found (`throw malformed(…)`), so coverage sees the refusal run. */
     private fun malformed(reason: String): SnapshotFormatException = SnapshotFormatException(
-        "A shadow value is malformed: ${printable(reason)}."
+        // The reason quotes stored content: its control characters are escaped (RC1-15).
+        "A shadow value is malformed: ${SnapshotKeyText.printable(reason)}."
     )
 }
 

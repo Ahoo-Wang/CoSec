@@ -87,8 +87,8 @@ import me.ahoo.cosec.spi.membership.MembershipAnswer
 import me.ahoo.cosec.spi.membership.MembershipClaims
 import me.ahoo.cosec.spi.membership.MembershipProvider
 import me.ahoo.cosec.spi.shadow.InMemoryShadowReports
-import me.ahoo.cosec.spi.shadow.InstalledDocument
 import me.ahoo.cosec.spi.shadow.InstanceStatus
+import me.ahoo.cosec.spi.shadow.ResidentDocuments
 import me.ahoo.cosec.spi.shadow.ShadowOutcome
 import me.ahoo.cosec.spi.shadow.ShadowReport
 import me.ahoo.cosec.spi.shadow.ShadowReportReader
@@ -335,6 +335,8 @@ object ChangeRunner : ScenarioRunner {
             override suspend fun reports(window: String) = reports.reports(window).filter { it.instance !in vanished }
 
             override suspend fun statuses() = reports.statuses()
+
+            override suspend fun residents(instances: Set<String>) = reports.residents(instances)
 
             override suspend fun statusReadings() =
                 StatusReadings(reports.statuses().filter { it.instance !in unreadable }, unreadable.toSet())
@@ -763,9 +765,12 @@ object ChangeRunner : ScenarioRunner {
                 .mapNotNull { name -> answer.get(name)?.let { "; $name ${names(it)}" } }.joinToString("")
         }
 
-        /** An instance's status, as its heartbeat writes it: the revision of each document it holds. */
+        /**
+         * An instance's status and its resident record, as its heartbeat writes them: the revision of each document it
+         * holds; with `"resident": false` its resident record is not written (`CTL-75`: `propagation` counts it unknown).
+         */
         private suspend fun status(argument: JsonNode): String {
-            argument.only("instance", "documents", "acknowledges", "shadows", "unreadable")
+            argument.only("instance", "documents", "acknowledges", "shadows", "unreadable", "resident")
             val instance = argument.required("instance").text()
             if (argument.get("unreadable")?.bool() == true) {
                 unreadable += instance
@@ -773,14 +778,17 @@ object ChangeRunner : ScenarioRunner {
             }
             unreadable -= instance
             val documents = argument.required("documents").properties().associate { (key, revision) ->
-                documentKey(key) to InstalledDocument(revision.asLong(), Duration.ZERO)
+                documentKey(key) to revision.asLong()
+            }
+            if (argument.get("resident")?.bool() != false) {
+                reports.write(ResidentDocuments(instance, clock.now, documents))
             }
             val windows = argument.get("acknowledges")?.strings()?.mapTo(HashSet()) { change ->
                 changes.get(ChangeId(change)).shadow?.window
                     ?: throw ScenarioFormatException("An acknowledged change is staged: $change")
             }
             val shadows = argument.get("shadows")?.bool() ?: true
-            reports.write(InstanceStatus(instance, clock.now, documents, windows = windows, shadows = shadows))
+            reports.write(InstanceStatus(instance, clock.now, windows = windows, shadows = shadows))
             return "status"
         }
 
@@ -790,7 +798,10 @@ object ChangeRunner : ScenarioRunner {
             return "acknowledged ${read.acknowledged} waiting " + read.waitingFor.joinToString(",").ifEmpty { "none" }
         }
 
-        /** A revision's propagation (`CTL-62`): `installed <n> holding <n> recent <n>`, or `refused <status>`. */
+        /**
+         * A revision's propagation (`CTL-62`, `CTL-75`): `installed <n> holding <n> recent <n> unknown <n>`, or
+         * `refused <status>`.
+         */
         private suspend fun propagation(argument: JsonNode): String = try {
             argument.only("by", "document", "revision")
             val propagation = plane.propagation(
@@ -798,7 +809,8 @@ object ChangeRunner : ScenarioRunner {
                 documentKey(argument.required("document").text()),
                 argument.required("revision").asLong(),
             )
-            "installed ${propagation.installed} holding ${propagation.holding} recent ${propagation.recent}"
+            "installed ${propagation.installed} holding ${propagation.holding} recent ${propagation.recent}" +
+                " unknown ${propagation.unknown}"
         } catch (error: ChangeRejectedException) {
             refused(error)
         }

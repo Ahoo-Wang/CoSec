@@ -633,6 +633,12 @@ from the last minute; one cut off from Redis longer is not waited for, and a hos
 `waitingFor` empty it waits for samples: too little traffic on its documents; it closes
 insufficient at `max-duration`.
 
+`propagation` answering `unknown` above 0 means some live instances have no resident record anyone can read
+(`CTL-75`), so "no instance is behind" cannot be said yet: instances still on 8.0.0-beta.5 (expected mid-upgrade, no
+log line), an instance whose resident write keeps failing (`Writing the resident documents failed` at `WARN` on it,
+usually a Redis user without the `shadow:resident` keys), or a record that does not decode (`The resident documents of
+instance [<instance>] do not read` at `WARN` on the control host: a newer version, or a corrupt value).
+
 A shadow window that stays blocked has a `CANDIDATE_ERROR`: one instance cannot compile the candidate, usually because
 it reads an `ext.*` attribute whose provider runs on the control host but not on that instance. Providers and their
 declared types must match on every instance and the control host; the change is never published while blocked.

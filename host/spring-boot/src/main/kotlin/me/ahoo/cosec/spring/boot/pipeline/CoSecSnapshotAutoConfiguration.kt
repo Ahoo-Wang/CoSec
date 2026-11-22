@@ -42,7 +42,6 @@ import me.ahoo.cosec.runtime.snapshot.SnapshotMetrics
 import me.ahoo.cosec.runtime.snapshot.SnapshotSource
 import me.ahoo.cosec.runtime.snapshot.SuspendingSnapshotSource
 import me.ahoo.cosec.spi.shadow.CandidateStore
-import me.ahoo.cosec.spi.shadow.InstalledDocument
 import me.ahoo.cosec.spi.snapshot.InMemorySnapshotDocumentStore
 import me.ahoo.cosec.spi.snapshot.SnapshotDocumentStore
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
@@ -67,7 +66,6 @@ import org.springframework.context.annotation.Import
 import org.springframework.core.env.Environment
 import org.springframework.core.io.ResourceLoader
 import java.time.Clock
-import java.time.Instant
 
 /**
  * The policy snapshot the pipeline decides on (RFC 0004 §7.4): the platform, app and tenant documents, compiled against
@@ -283,7 +281,7 @@ class CoSecSnapshotAutoConfiguration {
             stores: ObjectProvider<CandidateStore>,
         ): ShadowReporting {
             val clock = Clock.systemUTC()
-            val installed = { installedDocuments(source.entries(), clock.instant()) }
+            val installed = { installedDocuments(source.entries()) }
             val interval = DerivedSnapshotSettings.reportInterval(environment)
             val caching = candidates as? CachingCandidateSource
             val store = caching?.store ?: stores.ifUnique
@@ -300,12 +298,9 @@ class CoSecSnapshotAutoConfiguration {
              * a rollout as complete on an instance that cannot use it. That instance still reports, so it stays among the
              * ones the propagation query counts, without the document.
              */
-            internal fun installedDocuments(
-                entries: List<SnapshotEntry<*>>,
-                now: Instant,
-            ): Map<SnapshotKey, InstalledDocument> = entries
+            internal fun installedDocuments(entries: List<SnapshotEntry<*>>): Map<SnapshotKey, Long> = entries
                 .filter { it.revision > 0 && it.state is DocumentState.Present }
-                .associate { it.key to InstalledDocument(it.revision, it.lagAt(now)) }
+                .associate { it.key to it.revision }
         }
     }
 

@@ -335,8 +335,8 @@ class DataPlaneAclTest {
         const val KEYS_LINE = "ACL SETUSER cosec-pod-a on >change-me resetkeys resetchannels -@all " +
             "%R~cosec:snapshot:* %R~cosec:candidate:* %R~cosec:candidate-staged:* ~cosec:shadow:report: " +
             "~cosec:shadow:report:*:pod-a.* " +
-            "~cosec:shadow:reporters:* ~cosec:shadow:status: ~cosec:shadow:status:pod-a.* ~cosec:shadow:instances:* " +
-            "~cocache:!probe:*"
+            "~cosec:shadow:reporters:* ~cosec:shadow:status: ~cosec:shadow:status:pod-a.* " +
+            "~cosec:shadow:resident: ~cosec:shadow:resident:pod-a.* ~cosec:shadow:instances:* ~cocache:!probe:*"
 
         /** Its commands and channels, as `storage.md` shows them (`channel-mode: pubsub`). */
         const val COMMANDS_LINE = "ACL SETUSER cosec-pod-a +@connection +evalsha +eval +evalsha_ro +eval_ro " +

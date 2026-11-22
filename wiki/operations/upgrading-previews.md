@@ -28,6 +28,26 @@ Which preview of the library may run behind which preview of the gateway image: 
 
 ## From 8.0.0-beta.5 {#from-8-0-0-beta-5}
 
+- **An instance's status is split in two** (`CTL-74`, `CTL-75`). The status at `<s>:shadow:status:<instance>` is now
+  small (liveness, `shadows`, the acknowledged windows) and has no `documents` member. The documents an instance holds
+  are a record of their own, `<s>:shadow:resident:<instance>`, which only `propagation` reads
+  ([Storage](./storage.md#redis-keys)). The `propagation` answer has a new member, `unknown`, always written.
+  - **Upgrade in this order: every control-plane instance first, then the data plane.** A beta.6 control plane reads a
+    beta.5 instance's status (the `documents` it carries is ignored) and counts that instance in `unknown`, since it
+    writes no resident record, until it is upgraded.
+  - **A beta.5 control plane cannot read a beta.6 status**: it requires `documents`. Under `CTL-73` it takes each
+    beta.6 instance as live and acknowledging nothing, so every shadow window waits and closes as insufficient at
+    `max-duration`. No window passes and no change publishes wrongly; finish upgrading the control plane and the windows
+    close as usual.
+- **A data-plane Redis user needs the resident keys.** If you copied the data-plane user of
+  [Storage](./storage.md#redis-keys), add `~cosec:shadow:resident: ~cosec:shadow:resident:<instance>.*` (your prefix and
+  instance id) beside its `shadow:status` keys; without them a beta.6 instance fails at startup with `NOPERM`.
+- **SPI (experimental): `ShadowReportSink.write(ResidentDocuments)` and `ShadowReportReader.residents(instances)` are
+  new and abstract; `InstanceStatus.documents` and `InstalledDocument` are removed.** A backend of your own stores a
+  second record per instance, with a life of `ShadowReportReader.RESIDENT_TTL`, and answers `residents` with the records
+  that read and, in `unreadable`, the instances whose record is missing or does not decode
+  ([Extending](../architecture/extending.md)). There is no default: one that answered "holds nothing" would make
+  `installed == holding` say that no instance is behind when it does not know.
 - **The control plane's facade is a module of its own, `cosec-control-sdk`** (`CTL-65`). Affected: code that calls
   `ControlService`. `ControlService`, `ControlCaller` and `ControlRefusedException` keep their names and package
   (`me.ahoo.cosec.control.sdk`); `cosec-control` brings the module, so a build that has `cosec-control` changes nothing.

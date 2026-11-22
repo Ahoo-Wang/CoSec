@@ -59,6 +59,7 @@ internal object ControlResponseJson {
         .put("installed", propagation.installed)
         .put("holding", propagation.holding)
         .put("recent", propagation.recent)
+        .put("unknown", propagation.unknown)
         .put("asOf", propagation.asOf.toString())
 
     /**

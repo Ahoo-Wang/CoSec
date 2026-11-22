@@ -120,24 +120,25 @@ class ShadowWindows(
     val unreadableStatuses: Long get() = statuses.unreadable
 
     /**
-     * Read-only propagation (RFC 0007 §6.5, Q29, `CTL-62`): of the instances that wrote a status in the last minute
-     * ([Propagation.recent]), those that hold [key] at any revision ([Propagation.holding]) and those of them that have
-     * installed [revision] or a later one ([Propagation.installed]). An instance keeps resident only the tenants it
-     * serves, so no instance is behind when [Propagation.installed] equals [Propagation.holding]; `holding: 0` means no
-     * instance holds the document, and the first request that needs it loads it at the published revision. The
-     * statuses are read at most every [InstanceStatuses.MAX_AGE], and the answer says when ([Propagation.asOf]).
-     * Publishing never waits for it.
+     * Read-only propagation (RFC 0007 §6.5, Q29, `CTL-62`): of the instances with a status in the last minute
+     * ([Propagation.recent]), those whose resident record holds [key] at any revision ([Propagation.holding]) and those
+     * of them that have installed [revision] or a later one ([Propagation.installed]), and the live ones whose resident
+     * record is missing or does not decode ([Propagation.unknown], `CTL-75`). An instance keeps resident only the tenants
+     * it serves, so no instance is behind when [Propagation.installed] equals [Propagation.holding] and
+     * [Propagation.unknown] is 0; `holding: 0` with nothing unknown means no instance holds the document, and the first
+     * request that needs it loads it at the published revision. Statuses and resident records are each read at most every
+     * [InstanceStatuses.MAX_AGE], and the answer says when ([Propagation.asOf]). Publishing never waits for it.
      */
     suspend fun propagation(key: SnapshotKey, revision: Long): Propagation {
-        val read = statuses.read()
-        val holding = read.statuses.mapNotNull { it.documents[key] }
-        // A status that does not decode is recent, and says of no document that its instance holds it (CTL-73).
+        val read = statuses.residents()
+        val holding = read.readings.residents.values.mapNotNull { it.documents[key] }
         return Propagation(
             revision,
-            holding.count { it.revision >= revision },
+            holding.count { it >= revision },
             holding.size,
-            read.statuses.size + read.unreadable.size,
-            read.asOf
+            read.live.size,
+            read.readings.unreadable.size,
+            read.asOf,
         )
     }
 }

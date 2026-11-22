@@ -225,7 +225,10 @@ the adapters, snapshots or the control plane. The parts that take several files 
     It implements the facade in process (`LocalControlService`, `control/local/`, `@InternalCoSecApi`).
   - `cosec-control-sdk` (`core/control-sdk/`, `me.ahoo.cosec.control.sdk`) is the control plane as an application
     calls it (`CTL-65`): `ControlService`, one interface with an implementation in process (`cosec-control`) and one
-    over HTTP to a control-plane host's service port, `ControlCaller` and `ControlRefusedException`. It depends on
+    over HTTP to a control-plane host's service port, `ControlCaller` and `ControlRefusedException`, and the typed
+    layer written once over it, `ControlClient` with its values (`CTL-76`): held to `schema/<line>/` and
+    `contract/control/` by `TypedWireTest`, strict on a document's entries (an unknown member does not read, since
+    applying back what was read would drop it), lenient on answers (the reader's rule). It depends on
     `api`, `spi` and `document`, never on `runtime` or `control` (`DependencyRules.DOCUMENT_ONLY`): an application
     that only calls a host brings neither. A caller states who acts and is never trusted for what it may do: every
     call is decided by the policies and recorded, by the route's own code path.
@@ -304,7 +307,7 @@ Every fact has one home; update it in the same PR. Every English page in `wiki/`
 
 | Change | Also update |
 |---|---|
-| Document format: a field, condition operator, attribute or pattern syntax | the codec and compiler in `cosec-document` (`document/`), the format descriptor (`PolicyDocumentFormats`) and `generateSchemas`, `wiki/policies/language.md`, `skills/cosec-policy-author` |
+| Document format: a field, condition operator, attribute or pattern syntax | the codec and compiler in `cosec-document` (`document/`), the format descriptor (`PolicyDocumentFormats`) and `generateSchemas`, `wiki/policies/language.md`, `skills/cosec-policy-author`; `cosec-control-sdk`'s typed entries (`DocumentJson.MEMBERS` and the classes): `TypedWireTest` fails otherwise |
 | App catalogs, role bindings, space scoping | `wiki/policies/role-permissions.md` |
 | `cosec.*` property or default | `wiki/operations/configuration.md`; a new property says in its PR why the value cannot be computed (Conventions) |
 | Status codes, adapters, security-context access, request attributes | `wiki/integration/web.md` |
@@ -327,7 +330,7 @@ Every fact has one home; update it in the same PR. Every English page in `wiki/`
 | What a published module brings into a build (a library dependency, `compileOnlyApi`, the BOM) | nothing to register: `PublishedMetadataTest` reads the generated metadata; `:dependencies` is CoSec's internal platform and is not published; `wiki/guide/introduction.md#what-cosec-needs-from-your-build` when a minimum moves (`CatalogTest`) |
 | A public signature of a TypeScript package (a line of its API report) | the report, `wiki/integration/clients.md`, the client's skill; after GA, `!` in the PR title when a line is removed or changed |
 | What a client receives: a problem type, its status, headers or body; a `CoSec-*` header; the token pair; a claim of CoSec's tokens; what the served refresh and logout routes answer | `contract/` (`./gradlew :runtime:updateClientContract :jwt:updateClientContract`, `PIP-25`), `wiki/integration/clients.md` (its claims table is held to `contract/token/claims.json` by `pnpm check:docs`), and `typescript/cosec-fetcher` in the same PR: its tests against `contract/` and the real host fail otherwise. From GA, `!` in the PR title when a file's member, value, status or header is removed or changed |
-| What the control API answers: a change's members, the listing's, a revision's propagation, a closed set it writes (state, kind, severity, escalation reason, decision, cause, reason, effect, outcome), the audit kind of a route | `contract/control/` (`./gradlew :control:updateClientContract`, `CTL-61`), `wiki/policies/testing.md#what-a-change-answers`: an answer is written member by member by its codec in `control/api/`, never copied from the stored record. From GA, `!` in the PR title when a member or value is removed or changed |
+| What the control API answers: a change's members, the listing's, a revision's propagation, a closed set it writes (state, kind, severity, escalation reason, decision, cause, reason, effect, outcome, conflict), a problem's members (`conflict`, `heldBy`: `conflict.json`, `CTL-80`), the audit kind of a route | `contract/control/` (`./gradlew :control:updateClientContract`, `CTL-61`), `wiki/policies/testing.md#what-a-change-answers`: an answer is written member by member by its codec in `control/api/`, never copied from the stored record; `cosec-control-sdk`'s typed answers (`AnswerJson.CHANGE_READ`/`CHANGE_UNREAD` name every member of the change answer as read or left out, and its closed sets equal the vocabularies). From GA, `!` in the PR title when a member or value is removed or changed |
 | The gateway image, the control-plane image, `k8s/`, or what a system-test scenario asserts (`platform/**`, `k8s/**`, `test/system-*/**`) | the system test runs on the PR and must be green; a changed value a scenario reads (a metric tag, an audit field, a port, a probe path) changes its scenario in the same PR |
 | A new TypeScript package | `typescript/AGENTS.md`, `TypeScriptWorkspaceTest`'s `published`, the labeler, `llms.txt`, the publish workflow's package list |
 | An npm dependency of `typescript/` | the catalog of `typescript/pnpm-workspace.yaml` (packages reference `catalog:`) and its lockfile; nothing else |

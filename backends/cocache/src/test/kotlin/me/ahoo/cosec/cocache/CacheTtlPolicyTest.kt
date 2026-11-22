@@ -211,11 +211,15 @@ class CacheTtlPolicyTest {
         ShadowCacheSpecs.reports().policy.ttl.assert().isEqualTo(ShadowCacheSpecs.REPORT_TTL)
         ShadowCacheSpecs.statuses().policy.ttl.assert().isEqualTo(ShadowCacheSpecs.STATUS_TTL)
         ShadowCacheSpecs.statuses().policy.ttlJitter.assert().isEqualTo(Duration.ZERO)
+        ShadowCacheSpecs.residents().path().assert().isEqualTo("cosec:shadow:resident")
+        ShadowCacheSpecs.residents().policy.ttl.assert().isEqualTo(ShadowCacheSpecs.RESIDENT_TTL)
+        ShadowCacheSpecs.residents().policy.ttlJitter.assert().isEqualTo(Duration.ZERO)
         weakened { factory ->
             listOf(
                 ShadowCacheSpecs.reports(),
                 ShadowCacheSpecs.reporters(),
                 ShadowCacheSpecs.statuses(),
+                ShadowCacheSpecs.residents(),
                 ShadowCacheSpecs.instances()
             ).forEach { spec ->
                 factory.create(spec, CoSecCacheSpecs.locks(spec.name))
@@ -227,9 +231,12 @@ class CacheTtlPolicyTest {
                 factory.runtime.policy(spec.name)!!.ttl.assert().describedAs(spec.name).isEqualTo(spec.policy.ttl)
                 CoSecCacheSpecs.locks(spec.name).isLocked(PolicyField.TTL).assert().isTrue()
             }
-            // CTL-73: a status's key lives exactly its life, whatever jitter a customizer asks for (it asks a minute).
-            factory.runtime.policy(ShadowCacheSpecs.statuses().name)!!.ttlJitter.assert().isEqualTo(Duration.ZERO)
-            CoSecCacheSpecs.locks(ShadowCacheSpecs.statuses().name).isLocked(PolicyField.TTL_JITTER).assert().isTrue()
+            // CTL-73, CTL-75: a status's and a resident record's key live exactly their life, whatever jitter a customizer
+            // asks for (it asks a minute).
+            for (spec in listOf(ShadowCacheSpecs.statuses(), ShadowCacheSpecs.residents())) {
+                factory.runtime.policy(spec.name)!!.ttlJitter.assert().describedAs(spec.name).isEqualTo(Duration.ZERO)
+                CoSecCacheSpecs.locks(spec.name).isLocked(PolicyField.TTL_JITTER).assert().isTrue()
+            }
         }
     }
 

@@ -1,0 +1,75 @@
+{
+  "rules": [
+    "CTL-75"
+  ],
+  "polarity": "negative",
+  "level": "control",
+  "description": "Both live instances write their resident records: nothing is unknown, and propagation reads as it did when the documents were in the status: installed 2 of the 2 holding, of 2 recent, 0 unknown: no instance is behind.",
+  "steps": [
+    {
+      "propose": {
+        "change": "c1",
+        "document": "tenant:acme",
+        "operations": [
+          {
+            "putPolicy": {
+              "id": "read",
+              "statements": [
+                {
+                  "effect": "allow",
+                  "action": "order:read"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "skipShadow": "c1"
+    },
+    {
+      "publish": "c1"
+    },
+    {
+      "status": {
+        "instance": "i1",
+        "documents": {
+          "platform": 1,
+          "tenant:acme": 1
+        }
+      }
+    },
+    {
+      "status": {
+        "instance": "i2",
+        "documents": {
+          "platform": 1,
+          "tenant:acme": 1
+        }
+      }
+    },
+    {
+      "propagation": {
+        "document": "tenant:acme",
+        "revision": 1
+      }
+    }
+  ],
+  "expect": {
+    "steps": [
+      "CHECKED",
+      "READY",
+      "PUBLISHED",
+      "status",
+      "status",
+      "installed 2 holding 2 recent 2 unknown 0"
+    ],
+    "errors": {
+      "c1": []
+    },
+    "heads": {
+      "tenant:acme": 1
+    }
+  }
+}

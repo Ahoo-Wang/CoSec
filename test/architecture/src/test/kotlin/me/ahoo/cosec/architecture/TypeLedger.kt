@@ -83,7 +83,6 @@ object TypeLedger {
         "core/spi/src/main/kotlin/me/ahoo/cosec/spi/attribute/AttributeProvider.kt" to family(PORT, "AttributeProvider"),
         "core/spi/src/main/kotlin/me/ahoo/cosec/spi/authn/Authenticator.kt" to family(PORT, "Authenticator"),
         "core/spi/src/main/kotlin/me/ahoo/cosec/spi/identity/Identity.kt" to family(OWN_EXCEPTION, "the forwarded identity"),
-        "core/spi/src/main/kotlin/me/ahoo/cosec/spi/shadow/InstanceStatus.kt" to family(RECORD, "an instance status and its documents"),
         "core/spi/src/main/kotlin/me/ahoo/cosec/spi/shadow/ShadowReport.kt" to family(RECORD, "a shadow report, its samples and outcomes"),
         "core/spi/src/main/kotlin/me/ahoo/cosec/spi/shadow/ShadowReportReader.kt" to family(PORT, "the report reader and the readings it returns"),
         "core/spi/src/main/kotlin/me/ahoo/cosec/spi/snapshot/SnapshotDocument.kt" to family(RECORD, "a stored document and its digest"),

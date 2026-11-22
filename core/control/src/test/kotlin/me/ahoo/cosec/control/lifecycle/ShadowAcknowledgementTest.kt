@@ -24,6 +24,7 @@ import me.ahoo.cosec.control.store.ControlStoreException
 import me.ahoo.cosec.control.store.MutableClock
 import me.ahoo.cosec.spi.shadow.InMemoryShadowReports
 import me.ahoo.cosec.spi.shadow.InstanceStatus
+import me.ahoo.cosec.spi.shadow.ResidentReadings
 import me.ahoo.cosec.spi.shadow.ShadowOutcome
 import me.ahoo.cosec.spi.shadow.ShadowReport
 import me.ahoo.cosec.spi.shadow.ShadowReportReader
@@ -46,6 +47,9 @@ class ShadowAcknowledgementTest {
     @Volatile
     private var statusesFail = false
 
+    @Volatile
+    private var residentsFail = false
+
     /** Instances whose status is listed and does not decode, as a store would name them (`CTL-73`). */
     @Volatile
     private var unreadable = emptySet<String>()
@@ -57,6 +61,12 @@ class ShadowAcknowledgementTest {
         }
 
         override suspend fun statusReadings(): StatusReadings = StatusReadings(statuses(), unreadable)
+
+        // CTL-74: a window's closing path never reads a resident record; only propagation does.
+        override suspend fun residents(instances: Set<String>): ResidentReadings {
+            if (residentsFail) throw IllegalStateException("the resident documents of $instances were read")
+            return reports.residents(instances)
+        }
     }
     private val options = ShadowOptions(Duration.ofMinutes(15), 10, Duration.ofHours(24))
     private val windows = ShadowWindows(reader, options, clock)
@@ -66,7 +76,7 @@ class ShadowAcknowledgementTest {
         reports.write(ShadowReport(WINDOW, instance, mapOf(outcome to count), emptyMap(), setOf(1), null, null))
 
     private suspend fun status(instance: String, windows: Set<String>?, shadows: Boolean = true) =
-        reports.write(InstanceStatus(instance, clock.instant(), emptyMap(), windows = windows, shadows = shadows))
+        reports.write(InstanceStatus(instance, clock.instant(), windows = windows, shadows = shadows))
 
     /** Moves past the statuses' shared read, which is at most five seconds old. */
     private fun later(by: Duration = Duration.ofMinutes(15)) {
@@ -74,6 +84,31 @@ class ShadowAcknowledgementTest {
     }
 
     private fun look() = runBlocking { windows.look(state, clock.instant()) }
+
+    /**
+     * `CTL-74`: whether a window passes depends on the instances' small statuses only. Here every resident read throws:
+     * the window still waits for an instance that has not acknowledged it and passes once it has, while `propagation`,
+     * which reads the resident documents, fails as a store that does not answer.
+     */
+    @Test
+    fun `the closing path reads no resident record`() = runBlocking<Unit> {
+        residentsFail = true
+        later()
+        sampled("i-1")
+        status("i-1", setOf(WINDOW))
+        status("i-2", null)
+        look().summary.assert().isNull()
+        later(Duration.ofSeconds(10))
+        status("i-1", setOf(WINDOW))
+        status("i-2", setOf(WINDOW))
+        look().summary!!.insufficient.assert().isFalse()
+        runCatching {
+            windows.propagation(
+                me.ahoo.cosec.spi.snapshot.SnapshotKey.Platform,
+                1
+            )
+        }.isFailure.assert().isTrue()
+    }
 
     @Test
     fun `a window with enough samples stays open while a live instance has not acknowledged it`() = runBlocking<Unit> {

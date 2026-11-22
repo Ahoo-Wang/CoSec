@@ -341,6 +341,25 @@ The control plane's propagation view shows how many instances have a revision in
 `cosec.snapshot.lagging` show how far behind it is, and `cosec.snapshot.regressions` counts lost writes
 ([Snapshot metrics](./observability.md#snapshot-metrics)).
 
+## `propagation` answers `unknown` above 0
+
+`GET /documents/{key}/revisions/{rev}/propagation` counts in `unknown` the live instances (a status in the last minute)
+whose resident record, the documents an instance holds, cannot be read (`CTL-75`). Until `unknown` is 0, the answer
+cannot say that no instance is behind, even when `installed` equals `holding`: an unknown instance may hold the
+document at an older revision. The causes, in the order to check them:
+
+- **Instances still on 8.0.0-beta.5** write no resident record. Expected while the data plane is upgraded after the
+  control plane ([Upgrading between previews](./upgrading-previews.md#from-8-0-0-beta-5)); `unknown` falls as they are
+  replaced. No log line names them: a missing record is not an error.
+- **An instance whose resident write keeps failing** logs `Writing the resident documents failed; the next cycle writes
+  it again.` at `WARN` every report interval, with the cause (a Redis user without `~<s>:shadow:resident:<instance>*`
+  is the usual one: [Storage](./storage.md#redis-keys)). Its status still writes, so it stays live and unknown until a
+  write succeeds; the write is retried every cycle.
+- **A resident record that does not decode** makes the control host log `The resident documents of instance
+  [<instance>] do not read: propagation counts it unknown (<why>).` at `WARN`, at most once every 5 seconds. A later
+  format in `<why>` is an instance on a newer version than the control host (upgrade the control plane); anything else
+  is a corrupt value: restart or stop that instance, whose next write replaces it.
+
 ## A service behind the gateway refuses requests
 
 A service in [`cosec.pipeline.mode=gateway`](./configuration.md#pipeline) reads the caller from the `CoSec-Identity`

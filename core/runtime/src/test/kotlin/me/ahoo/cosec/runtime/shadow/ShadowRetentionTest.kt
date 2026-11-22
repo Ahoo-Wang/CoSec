@@ -24,6 +24,7 @@ import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.document.SnapshotDocuments
 import me.ahoo.cosec.spi.shadow.CandidateStore
 import me.ahoo.cosec.spi.shadow.InstanceStatus
+import me.ahoo.cosec.spi.shadow.ResidentDocuments
 import me.ahoo.cosec.spi.shadow.ShadowOutcome
 import me.ahoo.cosec.spi.shadow.ShadowReport
 import me.ahoo.cosec.spi.shadow.ShadowReportSink
@@ -85,6 +86,8 @@ class ShadowRetentionTest {
         }
 
         override suspend fun write(status: InstanceStatus) = Unit
+
+        override suspend fun write(resident: ResidentDocuments) = Unit
     }
 
     private val recorder = ShadowRecorder("i1", clock)

@@ -52,9 +52,24 @@ interface ShadowReportReader {
      */
     suspend fun statusReadings(): StatusReadings = StatusReadings(statuses(), emptySet())
 
+    /**
+     * The resident documents of [instances] (`CTL-75`): each one's record that reads, and in
+     * [ResidentReadings.unreadable] those whose record is missing or does not decode. Only `propagation` calls it, for
+     * the instances its status read found live; a window's closing path never does (`CTL-74`). A store that does not
+     * answer throws, for the whole call.
+     */
+    suspend fun residents(instances: Set<String>): ResidentReadings
+
     companion object {
         /** An instance that has not written its status for this long is not counted (RFC 0007 §6.5). */
         val STATUS_TTL: Duration = Duration.ofMinutes(1)
+
+        /**
+         * How long a resident record lives after its last write (`CTL-75`). An instance writes it again before half of
+         * that has passed, so a live instance always has one; a gone one's is ignored at once (it has no live status)
+         * and expires within this.
+         */
+        val RESIDENT_TTL: Duration = Duration.ofHours(1)
     }
 }
 
@@ -84,4 +99,18 @@ class StatusReadings(val statuses: List<InstanceStatus>, val unreadable: Set<Str
     override fun hashCode(): Int = 31 * statuses.hashCode() + unreadable.hashCode()
 
     override fun toString(): String = "StatusReadings(statuses=$statuses, unreadable=$unreadable)"
+}
+
+/**
+ * What [ShadowReportReader.residents] read: the [residents] that read, by instance, and the ids of the instances whose
+ * record is missing or does not decode ([unreadable]), which `propagation` counts as `unknown`.
+ */
+@ExperimentalCoSecApi
+class ResidentReadings(val residents: Map<String, ResidentDocuments>, val unreadable: Set<String>) {
+    override fun equals(other: Any?): Boolean =
+        this === other || other is ResidentReadings && residents == other.residents && unreadable == other.unreadable
+
+    override fun hashCode(): Int = 31 * residents.hashCode() + unreadable.hashCode()
+
+    override fun toString(): String = "ResidentReadings(residents=$residents, unreadable=$unreadable)"
 }
