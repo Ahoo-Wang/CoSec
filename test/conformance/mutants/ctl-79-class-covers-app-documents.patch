@@ -1,0 +1,17 @@
+# Rule: CTL-79
+# Mutant: the role class covers an app's or the platform's document, not only a tenant's
+# Tests: :control:test --tests me.ahoo.cosec.control.api.RoleClassTest --tests me.ahoo.cosec.control.lifecycle.RoleClassUnitTest
+
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/RoleClass.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/RoleClass.kt
+index 7b0dbe274..3ef77324a 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/RoleClass.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/RoleClass.kt
+@@ -43,7 +43,7 @@ internal object RoleClass {
+ 
+     /** Whether [operations] of [key] are the class's: a tenant document's, and only roles written or removed. */
+     fun covers(key: SnapshotKey, operations: List<Operation>): Boolean =
+-        key is SnapshotKey.Tenant && operations.isNotEmpty() &&
++        operations.isNotEmpty() &&
+             operations.all { it is Operation.PutRole || it is Operation.RemoveRole }
+ 
+     /**

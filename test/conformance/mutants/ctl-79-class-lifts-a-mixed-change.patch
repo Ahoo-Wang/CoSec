@@ -1,0 +1,17 @@
+# Rule: CTL-79
+# Mutant: a change that writes roles and anything else is the role class's, its other operations granted with no person
+# Tests: :control:test --tests me.ahoo.cosec.control.api.RoleClassTest --tests me.ahoo.cosec.control.lifecycle.RoleClassUnitTest
+
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/RoleClass.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/RoleClass.kt
+index 7b0dbe274..c5ed21ba5 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/RoleClass.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/RoleClass.kt
+@@ -44,7 +44,7 @@ internal object RoleClass {
+     /** Whether [operations] of [key] are the class's: a tenant document's, and only roles written or removed. */
+     fun covers(key: SnapshotKey, operations: List<Operation>): Boolean =
+         key is SnapshotKey.Tenant && operations.isNotEmpty() &&
+-            operations.all { it is Operation.PutRole || it is Operation.RemoveRole }
++            operations.any { it is Operation.PutRole || it is Operation.RemoveRole }
+ 
+     /**
+      * [escalations] as the class leaves them: one record naming [author], the grant and what it lifted, in place of

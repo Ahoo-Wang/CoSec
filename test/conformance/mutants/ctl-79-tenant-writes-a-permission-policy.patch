@@ -1,0 +1,17 @@
+# Rule: CTL-79
+# Mutant: a tenant's document holds a policy named as an app's permission, which a role's binding would resolve to, so the role class could bind what no analysis saw
+# Tests: :control:test --tests me.ahoo.cosec.control.api.RoleClassBoundsTest
+
+diff --git a/core/document/src/main/kotlin/me/ahoo/cosec/document/PolicyDocumentCompiler.kt b/core/document/src/main/kotlin/me/ahoo/cosec/document/PolicyDocumentCompiler.kt
+index 55b080cc9..f5b4cc04f 100644
+--- a/core/document/src/main/kotlin/me/ahoo/cosec/document/PolicyDocumentCompiler.kt
++++ b/core/document/src/main/kotlin/me/ahoo/cosec/document/PolicyDocumentCompiler.kt
+@@ -213,7 +213,7 @@ class PolicyDocumentCompiler @InternalCoSecApi constructor(
+             }
+ 
+             else -> if (permission) {
+-                errors += CompileError("$path.id", "[$PERMISSION_PREFIX] names an app's permission policy, defined only in that app's document")
++                Unit
+             }
+         }
+         return try {
