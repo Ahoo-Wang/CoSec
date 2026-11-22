@@ -133,7 +133,8 @@
             "cosec:shadow-read",
             "cosec:write",
             "cosec:publish",
-            "cosec:skip-shadow"
+            "cosec:skip-shadow",
+            "cosec:manage-roles"
           ],
           "resource": "doc/tenant/**"
         },

@@ -296,6 +296,7 @@ public final class me/ahoo/cosec/control/change/Escalation$Reason : java/lang/En
 	public static final field DETECTION_TIMED_OUT Lme/ahoo/cosec/control/change/Escalation$Reason;
 	public static final field NOT_ANALYZED Lme/ahoo/cosec/control/change/Escalation$Reason;
 	public static final field NOT_COVERED Lme/ahoo/cosec/control/change/Escalation$Reason;
+	public static final field ROLE_CLASS Lme/ahoo/cosec/control/change/Escalation$Reason;
 	public static final field TENANT_BINDINGS Lme/ahoo/cosec/control/change/Escalation$Reason;
 	public static final field TOO_LARGE Lme/ahoo/cosec/control/change/Escalation$Reason;
 	public static final field UNKNOWN Lme/ahoo/cosec/control/change/Escalation$Reason;

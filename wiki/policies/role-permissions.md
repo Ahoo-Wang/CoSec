@@ -323,9 +323,14 @@ validation, compilation and audit.
 | An app's permissions | `putCatalog` |
 | Periodic reconciliation | `apply` with `REPLACE` when the source is the only writer; `MERGE` adds and changes but never removes: an entry the source deleted stays, and the change names it in a `WARNING` |
 
-- Each change goes `propose`, `skip-shadow`, `publish`. The caller is a platform service principal holding
-  `cosec:approve`, `cosec:skip-shadow` and `cosec:publish`: the trust root ([Testing policies](./testing.md)). The source
-  decides who may grant, and CoSec records the audit.
+- Each change goes `propose`, `skip-shadow`, `publish` (`ControlClient.proposeAndPublishWithoutShadow`). For a tenant's
+  roles, the caller is a service principal holding the [role class](./testing.md#the-role-class): `cosec:manage-roles`,
+  `cosec:write` and `cosec:skip-shadow` on tenants' documents, and `cosec:grant` on their scopes. Its roles-only
+  changes need no person, and each records the class it was granted by. A role of the control plane's own app
+  (`cosec.control.app-id`) is outside the class: its members govern their tenant's document, which is for a person to
+  appoint, so putting or removing one waits. Any other change, an app's catalog for one,
+  is analyzed as anyone's, and its grants wait for a person unless the caller is the trust root (a platform principal
+  holding `cosec:approve`, [Testing policies](./testing.md)).
 - `putRole` replaces a role whole, so replaying one is idempotent. A conflict (`409`) is the projection's to retry.
 - `skip-shadow` takes the document's staging slot, and a change someone else is shadowing holds it: do not have people
   and a sync change the same document.

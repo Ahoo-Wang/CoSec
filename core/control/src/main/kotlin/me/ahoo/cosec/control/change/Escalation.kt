@@ -24,10 +24,10 @@ import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 class Escalation(val subject: String, val reason: Reason, val detail: String = "") {
     /**
      * Shown to the approver, never itself a reason to approve: the tenants an app change reaches ([Reason.TENANT_BINDINGS],
-     * RC1-34). Their own change after an approval does not send the change back, since what was approved is widening
-     * the policy. Nothing else is: an aggregated entry never stands in for one that needs an approval (`CTL-48`).
+     * RC1-34), and the role class a change was granted by ([Reason.ROLE_CLASS], `CTL-79`). Their own change after an
+     * approval does not send the change back, since what was approved is widening the policy. Nothing else is: an aggregated entry never stands in for one that needs an approval (`CTL-48`).
      */
-    val informational: Boolean get() = reason == Reason.TENANT_BINDINGS
+    val informational: Boolean get() = reason == Reason.TENANT_BINDINGS || reason == Reason.ROLE_CLASS
 
     // A plain class, not a `data class`: a `ChangeEvent` carries it, so it is stable, and a field it gains is a new
     // constructor (RFC 0010 C4). It compares by value, as the change records it is part of do.
@@ -82,6 +82,13 @@ class Escalation(val subject: String, val reason: Reason, val detail: String = "
          * did not finish in time, so whether anything moved is not known (RC1-33).
          */
         DETECTION_TIMED_OUT,
+
+        /**
+         * The role class (`CTL-79`): a change of a tenant's document that only writes or removes roles, by a holder of
+         * `cosec:manage-roles` on it, needs no second person on account of who grants. Recorded in place of the
+         * escalations it lifted, naming the holder and what was lifted. Informational.
+         */
+        ROLE_CLASS,
 
         /** A name this version does not know, read from a record a later one wrote: never informational. */
         UNKNOWN,

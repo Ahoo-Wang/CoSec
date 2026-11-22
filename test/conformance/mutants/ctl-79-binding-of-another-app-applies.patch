@@ -1,0 +1,17 @@
+# Rule: CTL-79
+# Mutant: a binding applies in any app, so a role of another app whose catalog names control actions permits control calls
+# Tests: :control:test --tests me.ahoo.cosec.control.api.RoleClassBoundsTest
+
+diff --git a/core/engine/src/main/kotlin/me/ahoo/cosec/engine/CandidateOrder.kt b/core/engine/src/main/kotlin/me/ahoo/cosec/engine/CandidateOrder.kt
+index 8229a502d..4f0ce607d 100644
+--- a/core/engine/src/main/kotlin/me/ahoo/cosec/engine/CandidateOrder.kt
++++ b/core/engine/src/main/kotlin/me/ahoo/cosec/engine/CandidateOrder.kt
+@@ -240,7 +240,7 @@ internal object CandidateOrder {
+     }
+ 
+     private fun inScope(entry: BoundEntry, tenant: String, app: String, space: String): Boolean =
+-        (entry.app == null || entry.app == app) &&
++        true &&
+             (entry.space == null || entry.space == space) &&
+             (entry.roleTenant == null || entry.roleTenant == tenant)
+ }

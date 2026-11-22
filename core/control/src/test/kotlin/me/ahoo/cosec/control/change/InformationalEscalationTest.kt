@@ -104,9 +104,11 @@ class InformationalEscalationTest {
     }
 
     @Test
-    fun `only the tenants' entry is informational`() {
+    fun `only the tenants' entry and the role class's record are informational`() {
+        // The role class's record (CTL-79) replaces escalations only when it lifts every one of them, so it never stands
+        // beside, or in for, one that needs an approval (RoleClassUnitTest): CTL-48 still holds.
         Escalation.Reason.entries.filter { Escalation("x", it).informational }
-            .assert().containsExactly(Escalation.Reason.TENANT_BINDINGS)
+            .assert().containsExactly(Escalation.Reason.TENANT_BINDINGS, Escalation.Reason.ROLE_CLASS)
         // A name this version does not know needs an approval, as anything not known does.
         Escalation.Reason.of("TENANT_BINDING").assert().isEqualTo(Escalation.Reason.UNKNOWN)
     }
