@@ -166,8 +166,10 @@ jobs:
           done
 
       # Waits on each container's health check (liveness), never on a sleep.
+      # A service that exits while the stack starts is started again, at most three starts, within the same 240 s, and
+      # reported in the summary with its last lines (Ahoo-Wang/CoCache#1009); once healthy, nothing restarts anything.
       - name: Start the stack
-        run: docker compose up --detach --wait --wait-timeout 240
+        run: test/system-test/scripts/start-stack.sh
 
       - name: Run the scenarios
         env:

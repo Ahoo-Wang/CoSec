@@ -21,6 +21,7 @@ import io.micrometer.core.instrument.MeterRegistry
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.runtime.authn.UncheckedRevocations
 import me.ahoo.cosec.runtime.event.DecisionListeners
+import me.ahoo.cosec.runtime.http.ProblemBodies
 import me.ahoo.cosec.runtime.identity.IdentityRefusals
 import me.ahoo.cosec.runtime.ratelimit.LocalRateLimiter
 import me.ahoo.cosec.runtime.shadow.StagedDocuments
@@ -39,6 +40,10 @@ object CoSecMeters {
     const val AUDIT_REQUIRED_FAILURES = "cosec.audit.required.failures"
     const val UNCHECKED_REVOCATIONS = "cosec.revocation.unchecked"
     const val IDENTITY_REFUSED = "cosec.identity.refused"
+
+    /** The refusals answered with CoSec's own body because the `ProblemRenderer` failed (`PIP-34`). */
+    const val PROBLEM_RENDER_FAILED = "cosec.problem.render.failed"
+
     const val LOCAL_RATE_LIMIT_REFUSED = "cosec.ratelimit.local.refused"
     const val DOCUMENT_TAG = "document"
     const val SHADOW_STAGED_AGE = "cosec.shadow.staged.age"
@@ -102,6 +107,17 @@ object CoSecMeters {
                 .description("Forwarded identities a service in gateway mode refused, by problem")
                 .register(registry)
         }
+    }
+
+    /**
+     * Registers `cosec.problem.render.failed` (`PIP-34`): the refusals answered with CoSec's own body because the
+     * application's `ProblemRenderer` threw or answered no bytes. Any non-zero rate is a renderer to fix; each of those
+     * requests was still refused, with CoSec's status.
+     */
+    fun bind(registry: MeterRegistry, bodies: ProblemBodies) {
+        FunctionCounter.builder(PROBLEM_RENDER_FAILED, bodies) { it.failures().toDouble() }
+            .description("Refusals answered with CoSec's own body because the ProblemRenderer failed")
+            .register(registry)
     }
 
     /**

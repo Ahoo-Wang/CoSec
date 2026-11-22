@@ -52,6 +52,7 @@ The starter collects these beans:
 | `AuditEventSink` | `me.ahoo.cosec.spi.audit` | any number; each becomes a BEST_EFFORT listener named after its bean | the flat audit record of each decision |
 | `ControlStore` | `me.ahoo.cosec.control.store` | one, with `cosec-control`; replaces `CoCacheControlStore` | where the control plane keeps its records |
 | `IdGenerator` | `me.ahoo.cosec.spi.id` | one; replaces `RandomIdGenerator` | request, decision event, token (`jti`) and change ids |
+| `ProblemRenderer` | `me.ahoo.cosec.runtime.http` | at most one; two fail startup (`PIP-34`) | the body of every refusal (adapters and login routes); experimental |
 
 Declare them as ordinary `@Bean`s. There is no `META-INF/services` registration for these SPIs.
 
@@ -230,6 +231,37 @@ format is one bean, `IdGenerator { … }`. `generate` runs on every
 request, on the event loop: never block (prefer a Snowflake generator to one that waits for its store) and never
 throw. Ids must be unique across instances and 1 to 64 characters of `A-Z a-z 0-9 . _ -`. They are not secrets: never
 rely on one being unpredictable. The OAuth `state` of social login and API key secrets never come from this bean.
+
+## ProblemRenderer: the body of a refusal
+
+For a host framework with its own problem catalog: one `ProblemRenderer` bean writes the body of every refusal, behind
+the three adapters and the served login routes alike (`PIP-34`). It gets the `Problem` only (`type`: a `ProblemType`
+with `status`, `slug`, `code`, `uri`, `title`; `requestId`; `traceId`), never the decision or the principal. The
+status and every header (`Content-Type: application/problem+json`, `CoSec-Request-Id`, `Retry-After`,
+`RateLimit-*`) stay CoSec's, and a renderer cannot add one; return an `application/problem+json` document whose `status` is
+`problem.status`. It runs on the event loop: never block, and escape every value (write it with a JSON library):
+`requestId` may come from the client. A renderer that throws or returns no bytes is replaced by CoSec's own body for
+that response and counted in `cosec.problem.render.failed`; the request stays refused.
+
+**Keep CoSec's `type` and `code`** and add your catalog's identifiers as extension members. CoSec's TypeScript client
+recognizes a refusal by `type` alone: replace it and the client stops refreshing expired tokens correctly, stops ending
+revoked sessions and hands your callbacks no problem on that host.
+
+```kotlin
+@Bean
+fun problemRenderer(): ProblemRenderer {
+    val json = JsonMapper.builder().build()
+    return ProblemRenderer { problem ->
+        json.writeValueAsBytes(
+            linkedMapOf(
+                "type" to problem.type.uri, "title" to problem.type.title, "status" to problem.status,
+                "code" to problem.type.code, "requestId" to problem.requestId,
+                "appCode" to if (problem.status == 401) "app.auth.unauthenticated" else "app.error.${problem.type.slug}",
+            ),
+        )
+    }
+}
+```
 
 ## Verification
 

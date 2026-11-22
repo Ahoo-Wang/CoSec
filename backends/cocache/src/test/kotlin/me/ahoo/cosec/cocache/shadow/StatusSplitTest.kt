@@ -109,45 +109,53 @@ class StatusSplitTest {
      */
     @Test
     fun `what the acknowledgement reads does not grow with the documents an instance holds`() = runBlocking<Unit> {
-        val read = listOf(100, 16_384).map { tenants ->
-            val keyPrefix = newKeyPrefix()
-            SnapshotNode(InMemoryBackend(), keyPrefix).use { node ->
-                val acknowledgement = AtomicLong()
-                val residentReads = AtomicInteger()
-                val factory = node.factory
-                val reports = CoCacheShadowReports(
-                    factory.createLocked(ShadowCacheSpecs.reports(keyPrefix)),
-                    factory.createLocked(ShadowCacheSpecs.reporters(keyPrefix)),
-                    Metered(
-                        factory.createLocked(ShadowCacheSpecs.statuses(keyPrefix)),
-                        InstanceStatusCodec,
-                        acknowledgement
-                    ),
-                    Metered(
-                        factory.createLocked(ShadowCacheSpecs.instances(keyPrefix)),
-                        InstanceIndexCodec,
-                        acknowledgement
-                    ),
-                    Metered(
-                        factory.createLocked(ShadowCacheSpecs.residents(keyPrefix)),
-                        ResidentDocumentsCodec,
-                        AtomicLong(),
-                        residentReads,
-                    ),
-                )
-                val at = Instant.now()
-                reports.write(ResidentDocuments("gw-1", at, documents(tenants)))
-                reports.write(InstanceStatus("gw-1", at, windows = windows))
-                reports.statusReadings().statuses.single().windows.assert().isEqualTo(windows)
-                residentReads.get().assert().describedAs("resident reads by the acknowledgement").isZero()
-                // Propagation reads it, and it holds what was written.
-                reports.residents(
-                    setOf("gw-1")
-                ).residents.getValue("gw-1").documents.size.assert().isEqualTo(tenants + 1)
-                acknowledgement.get()
-            }
+        acknowledgementBytes(100, Time()).assert().isEqualTo(acknowledgementBytes(16_384, Time()))
+    }
+
+    /**
+     * What the acknowledgement path reads of one instance holding [tenants] tenants: its status and the list of
+     * instances. Both hold an instant as text, which is shorter when its fraction ends in zeros, so the status is written
+     * at [time]'s instant and the store and the list read the same clock: the counts compare what the instance holds.
+     */
+    private suspend fun acknowledgementBytes(tenants: Int, time: Time): Long {
+        val keyPrefix = newKeyPrefix()
+        val clock = time.clock
+        return SnapshotNode(InMemoryBackend(time), keyPrefix).use { node ->
+            val acknowledgement = AtomicLong()
+            val residentReads = AtomicInteger()
+            val factory = node.factory
+            val reports = CoCacheShadowReports(
+                factory.createLocked(ShadowCacheSpecs.reports(keyPrefix)),
+                factory.createLocked(ShadowCacheSpecs.reporters(keyPrefix)),
+                Metered(
+                    factory.createLocked(ShadowCacheSpecs.statuses(keyPrefix)),
+                    InstanceStatusCodec,
+                    acknowledgement
+                ),
+                Metered(
+                    factory.createLocked(ShadowCacheSpecs.instances(keyPrefix)),
+                    InstanceIndexCodec,
+                    acknowledgement
+                ),
+                Metered(
+                    factory.createLocked(ShadowCacheSpecs.residents(keyPrefix)),
+                    ResidentDocumentsCodec,
+                    AtomicLong(),
+                    residentReads,
+                ),
+                clock,
+            )
+            val at = clock.instant()
+            reports.write(ResidentDocuments("gw-1", at, documents(tenants)))
+            reports.write(InstanceStatus("gw-1", at, windows = windows))
+            reports.statusReadings().statuses.single().windows.assert().isEqualTo(windows)
+            residentReads.get().assert().describedAs("resident reads by the acknowledgement").isZero()
+            // Propagation reads it, and it holds what was written.
+            reports.residents(
+                setOf("gw-1")
+            ).residents.getValue("gw-1").documents.size.assert().isEqualTo(tenants + 1)
+            acknowledgement.get()
         }
-        read[0].assert().isEqualTo(read[1])
     }
 
     /** `CTL-75`: a resident record lives exactly its hour after its last write, no jitter. */

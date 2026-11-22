@@ -16,14 +16,18 @@
 package me.ahoo.cosec.spring.boot.pipeline
 
 import io.github.oshai.kotlinlogging.KotlinLogging
+import io.micrometer.core.instrument.MeterRegistry
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.engine.CompiledDocument
 import me.ahoo.cosec.gateway.PipelineGatewayFilter
+import me.ahoo.cosec.micrometer.CoSecMeters
 import me.ahoo.cosec.model.AppId
 import me.ahoo.cosec.model.scope.HostScope
 import me.ahoo.cosec.runtime.Pipeline
 import me.ahoo.cosec.runtime.event.BridgeContextContributor
+import me.ahoo.cosec.runtime.http.ProblemBodies
+import me.ahoo.cosec.runtime.http.ProblemRenderer
 import me.ahoo.cosec.runtime.http.RequestGate
 import me.ahoo.cosec.runtime.identity.IdentityGate
 import me.ahoo.cosec.runtime.snapshot.DocumentReadiness
@@ -31,6 +35,7 @@ import me.ahoo.cosec.runtime.snapshot.SnapshotSource
 import me.ahoo.cosec.spring.boot.ConditionalOnCoSecEnabled
 import me.ahoo.cosec.spring.boot.StartupTask
 import me.ahoo.cosec.spring.boot.StartupTaskExclusion
+import me.ahoo.cosec.spring.boot.micrometer.MetricsProperties
 import me.ahoo.cosec.webflux.OrderedCorsWebFilter
 import me.ahoo.cosec.webflux.PipelineWebFilter
 import me.ahoo.cosec.webmvc.PipelineServletFilter
@@ -51,21 +56,16 @@ import org.springframework.boot.web.servlet.FilterRegistrationBean
 import org.springframework.cloud.gateway.route.RouteLocator
 import org.springframework.context.ApplicationContext
 import org.springframework.context.annotation.Bean
-import org.springframework.context.annotation.Condition
-import org.springframework.context.annotation.ConditionContext
-import org.springframework.context.annotation.Conditional
 import org.springframework.context.annotation.Configuration
 import org.springframework.context.annotation.Import
 import org.springframework.core.Ordered
 import org.springframework.core.env.Environment
-import org.springframework.core.type.AnnotatedTypeMetadata
 import org.springframework.web.cors.CorsConfigurationSource
 import org.springframework.web.cors.reactive.CorsWebFilter
 import org.springframework.web.filter.CorsFilter
 import org.springframework.web.method.support.HandlerMethodArgumentResolver
 import org.springframework.web.servlet.config.annotation.InterceptorRegistry
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer
-import org.springframework.web.servlet.handler.HandlerMappingIntrospector
 import org.springframework.web.cors.reactive.CorsConfigurationSource as ReactiveCorsConfigurationSource
 
 /**
@@ -96,6 +96,34 @@ internal class CoSecPipelineWebAutoConfiguration {
         }
     }
 
+    /**
+     * `PIP-34`: the body of every refusal, the three adapters' and the login routes': the application's
+     * [ProblemRenderer] bean, or CoSec's own. A refusal has one body, so two renderers fail startup and name both.
+     */
+    @Bean
+    @ConditionalOnMissingBean
+    fun cosecProblemBodies(beans: ListableBeanFactory): ProblemBodies {
+        val names = beans.getBeanNamesForType(ProblemRenderer::class.java)
+        check(names.size <= 1) {
+            "PIP-34: ${names.size} ProblemRenderer beans of the application, [${names.joinToString()}]: a refusal has " +
+                "one body, so CoSec takes one renderer. Declare one."
+        }
+        val renderer = names.singleOrNull()?.let { beans.getBean(it, ProblemRenderer::class.java) }
+        return ProblemBodies(renderer ?: ProblemRenderer.DEFAULT)
+    }
+
+    /** `cosec.problem.render.failed`, with `cosec-micrometer` and a `MeterRegistry`: the refusals a renderer failed. */
+    @Configuration(proxyBeanMethods = false)
+    @ConditionalOnClass(name = ["me.ahoo.cosec.micrometer.MetricsListener"])
+    @ConditionalOnBean(MeterRegistry::class)
+    @ConditionalOnProperty(value = [MetricsProperties.ENABLED_KEY], havingValue = "true", matchIfMissing = true)
+    @InternalCoSecApi
+    class ProblemRenderMetrics {
+        @Bean
+        fun cosecProblemRenderMetrics(registry: MeterRegistry, bodies: ProblemBodies): StartupTask =
+            StartupTask.AfterSingletons { CoSecMeters.bind(registry, bodies) }
+    }
+
     @Configuration(proxyBeanMethods = false)
     @ConditionalOnWebApplication(type = ConditionalOnWebApplication.Type.SERVLET)
     @ConditionalOnClass(name = ["me.ahoo.cosec.webmvc.PipelineServletFilter"])
@@ -107,6 +135,7 @@ internal class CoSecPipelineWebAutoConfiguration {
             contributors: ObjectProvider<BridgeContextContributor>,
             properties: RuntimeAuthorizationProperties,
             context: ApplicationContext,
+            bodies: ProblemBodies,
         ): FilterRegistrationBean<PipelineServletFilter> =
             FilterRegistrationBean(
                 PipelineServletFilter(
@@ -116,6 +145,7 @@ internal class CoSecPipelineWebAutoConfiguration {
                         ServletXForwardedRemoteIpResolver(it.maxTrustedIndex, it.peerIsConnection)
                     },
                     hostOf(properties),
+                    bodies,
                 )
             ).apply { order = SERVLET_FILTER_ORDER }
 
@@ -123,32 +153,19 @@ internal class CoSecPipelineWebAutoConfiguration {
          * `STA-5`: the application declared a [CorsConfigurationSource], so a CORS filter runs right before the pipeline's:
          * a preflight is answered by it and never decided, and every response, a refusal included, carries the headers.
          * Without the bean nothing is registered, and a preflight is decided as `http:OPTIONS` for an anonymous caller.
-         *
-         * Spring MVC always has a [CorsConfigurationSource] of its own, the `HandlerMappingIntrospector`, which reads the
-         * handlers' `@CrossOrigin` and `addCorsMappings`: it is not the application's declaration and is ignored, or
-         * every MVC application would have the filter.
+         * Since Spring Framework 7.1, Spring MVC declares no [CorsConfigurationSource] of its own (its
+         * `HandlerMappingIntrospector` was one), so every one is the application's.
          */
         @Bean
-        @Conditional(DeclaredCorsSource::class)
+        @ConditionalOnBean(CorsConfigurationSource::class)
         @ConditionalOnMissingBean(CorsFilter::class)
         fun cosecCorsFilter(sources: ObjectProvider<CorsConfigurationSource>): FilterRegistrationBean<CorsFilter> {
-            val declared = sources.orderedStream().filter { it !is HandlerMappingIntrospector }.toList()
+            val declared = sources.orderedStream().toList()
             check(declared.size == 1) {
                 "STA-5: ${declared.size} CorsConfigurationSource beans of the application: the CORS filter before CoSec " +
                     "takes one. Declare a CorsFilter of your own to say which."
             }
             return FilterRegistrationBean(CorsFilter(declared.single())).apply { order = CORS_SERVLET_FILTER_ORDER }
-        }
-
-        /** True when the application declared a [CorsConfigurationSource] other than Spring MVC's own introspector. */
-        internal class DeclaredCorsSource : Condition {
-            override fun matches(context: ConditionContext, metadata: AnnotatedTypeMetadata): Boolean {
-                val factory = context.beanFactory ?: return false
-                return factory.getBeanNamesForType(CorsConfigurationSource::class.java, true, false).any {
-                    val type = factory.getType(it, false)
-                    type == null || !HandlerMappingIntrospector::class.java.isAssignableFrom(type)
-                }
-            }
         }
 
         /** A handler's `SecurityContext` parameter, read from the request (round 2 M4). */
@@ -198,11 +215,13 @@ internal class CoSecPipelineWebAutoConfiguration {
             contributors: ObjectProvider<BridgeContextContributor>,
             properties: RuntimeAuthorizationProperties,
             context: ApplicationContext,
+            bodies: ProblemBodies,
         ): PipelineWebFilter = PipelineWebFilter(
             pipeline,
             contributors.orderedStream().toList(),
             ReactiveClientIp.of(clientIpOf(context, properties)),
             hostOf(properties),
+            bodies,
         )
 
         /** `STA-5`, as on WebFlux's sibling: the application's reactive [CorsConfigurationSource] answers before the pipeline. */
@@ -227,6 +246,7 @@ internal class CoSecPipelineWebAutoConfiguration {
             properties: RuntimeAuthorizationProperties,
             identity: GatewayIdentityProperties,
             context: ApplicationContext,
+            bodies: ProblemBodies,
         ): PipelineGatewayFilter =
             PipelineGatewayFilter(
                 pipeline,
@@ -234,6 +254,7 @@ internal class CoSecPipelineWebAutoConfiguration {
                 ReactiveClientIp.of(clientIpOf(context, properties)),
                 hostOf(properties),
                 identity.forwardAuthorization,
+                bodies,
             )
 
         /**

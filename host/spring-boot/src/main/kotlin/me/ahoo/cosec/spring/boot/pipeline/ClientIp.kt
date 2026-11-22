@@ -32,18 +32,22 @@ private val log = KotlinLogging.logger {}
 internal class ClientIpConfigurationException(message: String) : IllegalStateException(message)
 
 /**
- * Decides [ClientIpReading] from the server Spring Boot builds and its effective forward-headers strategy: the one
- * configured (`server.forward-headers-strategy`, or on Tomcat `server.tomcat.remoteip.*`), or the one Spring Boot
- * infers from the cloud platform it detects (`native` on Kubernetes, Cloud Foundry, Heroku and the others).
+ * Decides [ClientIpReading] from the server Spring Boot builds and its effective forwarded-header strategy: the one
+ * configured (`server.request.header.forwarded.strategy`, or its deprecated predecessor `server.forward-headers-strategy`,
+ * or on Tomcat `server.tomcat.remoteip.*`), or the one Spring Boot infers from the cloud platform it detects (`web-server`
+ * on Kubernetes, Cloud Foundry, Heroku and the others), as Spring Boot 4.2 resolves it (`ForwardedHeaderStrategy`).
  */
 internal object ClientIpReadings {
     const val MAX_TRUSTED_INDEX = RuntimeAuthorizationProperties.PREFIX + ".remote-ip.max-trusted-index"
-    private const val STRATEGY = "server.forward-headers-strategy"
+    private const val STRATEGY = "server.request.header.forwarded.strategy"
+
+    /** Deprecated by Spring Boot 4.2 and still honoured by it; setting both fails Boot's startup. */
+    private const val DEPRECATED_STRATEGY = "server.forward-headers-strategy"
     private const val TOMCAT_REMOTE_IP_HEADER = "server.tomcat.remoteip.remote-ip-header"
     private const val TOMCAT_PROTOCOL_HEADER = "server.tomcat.remoteip.protocol-header"
     private const val TROUBLESHOOTING = "https://cosec.ahoo.me/operations/troubleshooting#startup-fails-on-the-client-address"
 
-    /** The strategies of `server.forward-headers-strategy`. */
+    /** The strategies: [NATIVE] is the server's own handling (`web-server`, formerly `native`). */
     enum class Strategy { NONE, NATIVE, FRAMEWORK }
 
     /** The embedded servers whose forward-headers handling is known; [NONE] when Spring Boot builds none here. */
@@ -119,7 +123,7 @@ internal object ClientIpReadings {
             if (explicit) {
                 throw ClientIpConfigurationException(
                     "$MAX_TRUSTED_INDEX is set, but Tomcat's RemoteIpValve resolves the client address on this host " +
-                        "(the native forward-headers strategy, configured or inferred from the cloud platform): CoSec " +
+                        "(the web-server forwarded-header strategy, configured or inferred from the cloud platform): CoSec " +
                         "takes the address the valve resolved, and the proxies it trusts are configured in " +
                         "server.tomcat.remoteip.internal-proxies and server.tomcat.remoteip.trusted-proxies. Remove " +
                         "$MAX_TRUSTED_INDEX, or set $STRATEGY=none to have CoSec read X-Forwarded-For itself " +
@@ -133,7 +137,7 @@ internal object ClientIpReadings {
         Server.NETTY, Server.JETTY -> {
             if (maxTrustedIndex == 0) {
                 throw ClientIpConfigurationException(
-                    "$MAX_TRUSTED_INDEX=0 reads the connection's peer, but with the native forward-headers strategy " +
+                    "$MAX_TRUSTED_INDEX=0 reads the connection's peer, but with the web-server forwarded-header strategy " +
                         "(configured or inferred from the cloud platform) ${server.name.lowercase()} reports as the " +
                         "remote address what a client wrote in X-Forwarded-For or Forwarded, and the peer cannot be " +
                         "read. Set $MAX_TRUSTED_INDEX to the number of proxies in front of the host, or $STRATEGY=none " +
@@ -148,7 +152,7 @@ internal object ClientIpReadings {
             )
         }
         Server.OTHER, Server.NONE -> throw ClientIpConfigurationException(
-            "The native forward-headers strategy is on (configured or inferred from the cloud platform), but CoSec " +
+            "The web-server forwarded-header strategy is on (configured or inferred from the cloud platform), but CoSec " +
                 "cannot tell how this host's server resolves the client address (${server.name.lowercase()} server " +
                 "factory), so it cannot tell which address to trust. Set $STRATEGY=none and $MAX_TRUSTED_INDEX to the " +
                 "number of proxies in front of the host ($TROUBLESHOOTING).",
@@ -158,14 +162,21 @@ internal object ClientIpReadings {
     private fun framework(what: String) = ClientIpConfigurationException(
         "$what: Spring's ForwardedHeaderFilter and ForwardedHeaderTransformer make the leftmost X-Forwarded-For " +
             "entry, which the client writes, the remote address and remove the header, so the client address cannot be " +
-            "read safely. Use $STRATEGY=native on Tomcat, Jetty or Reactor Netty with the proxies configured there, or " +
+            "read safely. Use $STRATEGY=web-server on Tomcat, Jetty or Reactor Netty with the proxies configured there, or " +
             "$STRATEGY=none and $MAX_TRUSTED_INDEX ($TROUBLESHOOTING).",
     )
 
     private fun strategyOf(environment: Environment, binder: Binder, server: Server): Strategy {
-        val configured = binder.bind(STRATEGY, String::class.java).orElse(null)?.trim()?.uppercase()
+        val configured = configuredStrategy(binder)
         if (configured != null) {
-            val strategy = Strategy.entries.firstOrNull { it.name == configured } ?: Strategy.NATIVE
+            // A value this version does not know is taken as the server's own handling (`web-server`), the reading CoSec
+            // checks most strictly: it never takes the connection's peer for the client, and refuses to start where the
+            // server's resolution cannot be told. Taken as `none` instead, a value that does turn on a server's handling
+            // would let CoSec read as the peer an address the server took from a header the client writes.
+            val strategy = when (configured) {
+                "WEB_SERVER" -> Strategy.NATIVE
+                else -> Strategy.entries.firstOrNull { it.name == configured } ?: Strategy.NATIVE
+            }
             // Tomcat adds its valve for these alone, whatever the strategy says (TomcatWebServerFactoryCustomizer).
             return if (strategy == Strategy.NONE && server == Server.TOMCAT && tomcatValve(binder)) Strategy.NATIVE else strategy
         }
@@ -174,6 +185,11 @@ internal object ClientIpReadings {
         }
         return if (server == Server.TOMCAT && tomcatValve(binder)) Strategy.NATIVE else Strategy.NONE
     }
+
+    /** The configured strategy, normalized (`web-server` is `WEB_SERVER`): the current key first, then the deprecated one. */
+    private fun configuredStrategy(binder: Binder): String? =
+        (binder.bind(STRATEGY, String::class.java).orElse(null) ?: binder.bind(DEPRECATED_STRATEGY, String::class.java).orElse(null))
+            ?.trim()?.uppercase()?.replace('-', '_')
 
     private fun tomcatValve(binder: Binder): Boolean =
         listOf(TOMCAT_REMOTE_IP_HEADER, TOMCAT_PROTOCOL_HEADER).any {

@@ -58,6 +58,18 @@ object IdentityHeader {
     /** The header's name, `CoSec-Identity`. */
     const val NAME: String = IdentityCodec.HEADER
 
+    /**
+     * The statement a Spring Boot test of a service in `gateway` mode makes, as a property assignment:
+     * `cosec.pipeline.identity.only-gateway-can-reach=true`, for `@SpringBootTest(properties = [...])` or
+     * `@TestPropertySource(properties = [...])`. Without it the service does not start (`STA-7`): it believes any
+     * header it receives, and the operator must state that nothing but the gateway can reach it.
+     *
+     * For tests only. A test's service is reached by the test's own client alone, so the statement is true there. In a
+     * deployment it is the operator's to make once the network makes it true (a NetworkPolicy, mutual TLS, a private
+     * network), never copied from a test.
+     */
+    const val ONLY_GATEWAY_CAN_REACH: String = "cosec.pipeline.identity.only-gateway-can-reach=true"
+
     /** How long [forSubject]'s credential is valid by default. */
     private val DEFAULT_VALIDITY: Duration = Duration.ofHours(1)
 

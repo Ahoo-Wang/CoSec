@@ -211,6 +211,7 @@ class ControlServiceParityTest {
         record { service.abandon(iam, second) }
         record { service.startShadow(iam, second) }
         record { service.apply(iam, key, APPLY) }
+        answers += appScript(service, tenant, iam)
         // Outside the narrow set, or outside what the platform document grants: refused alike.
         record { service.document(iam, SnapshotKey.Platform) }
         record { service.document(ControlCaller.service("svc-nobody"), key) }
@@ -220,6 +221,29 @@ class ControlServiceParityTest {
         record { service.propose(person, proposal("person", 2)) }
         record { service.document(ControlCaller.of(ASSEMBLED), key) }
         answers.map { it.replace(LOCAL, "<tenant>").replace(REMOTE, "<tenant>") }
+    }
+
+    /**
+     * An app document's change as [iam] (`CTL-58`): checked and proposed alike, a catalog waiting for a person, a role
+     * removed publishing alone, and the platform document outside.
+     */
+    private suspend fun appScript(service: ControlService, tenant: String, iam: ControlCaller): List<String> {
+        val answers = mutableListOf<String>()
+        suspend fun record(call: suspend () -> String) = answers.add(answer(call))
+        suspend fun id(call: suspend () -> String): String = CoSecJson.mapper.readTree(call()).get("id").asString()
+        fun proposal(
+            operation: String
+        ) = """{"document":"app:$tenant","base":1,"note":"app","operations":[$operation]}"""
+        record { service.check(iam, proposal(CATALOG)) }
+        val catalog = id { service.propose(iam, proposal(CATALOG)) }
+        record { service.skipShadow(iam, catalog, "parity") }
+        record { service.changes(iam, SnapshotKey.App(tenant)) }
+        record { service.abandon(iam, catalog) }
+        val removal = id { service.propose(iam, proposal("""{"op":"removeRole","id":"$tenant-viewer"}""")) }
+        record { service.skipShadow(iam, removal, "parity") }
+        record { service.publish(iam, removal) }
+        record { service.propose(iam, """{"document":"platform","base":1,"note":"p","operations":[]}""") }
+        return answers
     }
 
     private fun publish(context: ApplicationContext, key: SnapshotKey, kind: DocumentKind, owner: String, body: String) {
@@ -256,7 +280,10 @@ class ControlServiceParityTest {
         runner.run { context ->
             context.startupFailure.assert().isNull()
             publish(context, SnapshotKey.Platform, DocumentKind.PLATFORM, "", PLATFORM)
-            listOf(LOCAL, REMOTE).forEach { publish(context, SnapshotKey.Tenant(it), DocumentKind.TENANT, it, TENANT) }
+            listOf(LOCAL, REMOTE).forEach {
+                publish(context, SnapshotKey.Tenant(it), DocumentKind.TENANT, it, TENANT)
+                publish(context, SnapshotKey.App(it), DocumentKind.APP, it, app(it))
+            }
             // What the control plane's first maintenance pass does on a new store, done now rather than waited for: the
             // open-change sets are kept from the start (CTL-54), so a listing answers instead of 503.
             val store = context.getBean(ControlStore::class.java)
@@ -285,6 +312,7 @@ class ControlServiceParityTest {
             // The script is no empty agreement: it publishes, conflicts and refuses.
             inProcess.joinToString("\n").assert()
                 .contains("\"state\":\"PUBLISHED\"")
+                .contains("\"state\":\"AWAITING_APPROVAL\"")
                 .contains("409 CONFLICT conflict=BASE_MOVED heldBy=false")
                 .contains("409 CONFLICT conflict=SLOT_HELD heldBy=true")
                 .contains("refused before the call")
@@ -306,12 +334,12 @@ class ControlServiceParityTest {
             "change", "publishedBy", "provenance",
         )
 
-        /** Anyone authenticated reaches the control API; svc-iam has the service's rights over tenants' documents. */
+        /** Anyone authenticated reaches the control API; svc-iam has the service's rights over tenants' and apps' documents. */
         const val PLATFORM = ""","policies":[{"id":"control-api","statements":[{"effect":"allow",""" +
             """"action":["http:GET","http:POST"],"resource":"http:path:/cosec/control/v1/**",""" +
             """"condition":{"eq":["subject.authenticated",true]}}]},""" +
             """{"id":"control-service","statements":[{"effect":"allow","action":["cosec:read","cosec:shadow-read",""" +
-            """"cosec:write","cosec:publish","cosec:skip-shadow"],"resource":"doc/tenant/**"}]}],""" +
+            """"cosec:write","cosec:publish","cosec:skip-shadow"],"resource":["doc/tenant/**","doc/app/**"]}]}],""" +
             """"bindings":[{"id":"control-api","subject":"*","app":"*","space":"*","policy":"control-api"},""" +
             """{"id":"svc-iam","subject":{"principal":"svc-iam","tenant":"(platform)"},"app":"cosec-control",""" +
             """"space":"","policy":"control-service"}]"""
@@ -320,6 +348,19 @@ class ControlServiceParityTest {
         const val TENANT = ""","policies":[{"id":"orders","statements":[{"effect":"allow","action":"order:*"}]}],""" +
             """"bindings":[{"id":"admins","subject":{"role":"admin"},"app":"cosec-control",""" +
             """"space":"","policy":"cosec:tenant-admin"}]"""
+
+        /**
+         * [owner]'s app document: one permission, and a role that lists it, named after the app so that the two runs' apps
+         * share no system role id, which a check warns about (and the other run removes meanwhile).
+         */
+        fun app(owner: String) = ""","catalog":{"groups":[{"name":"orders","permissions":[""" +
+            """{"id":"read","action":"order:read","resource":"order/**"}]}]},""" +
+            """"roles":[{"id":"$owner-viewer","permissions":["read"]}]"""
+
+        /** The app's catalog widened by a permission: analyzed as anyone's, it waits for a person. */
+        const val CATALOG = """{"op":"putCatalog","catalog":{"groups":[{"name":"orders","permissions":[""" +
+            """{"id":"read","action":"order:read","resource":"order/**"},""" +
+            """{"id":"cancel","action":"order:cancel","resource":"order/**"}]}]}}"""
 
         const val APPLY = """{"mode":"MERGE","note":"apply","document":{"schema":2,"revision":2,""" +
             """"publishedAt":"2026-11-01T00:00:00Z","policies":[{"id":"applied","statements":""" +

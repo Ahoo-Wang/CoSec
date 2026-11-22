@@ -24,6 +24,7 @@ import me.ahoo.cosec.runtime.Pipeline
 import me.ahoo.cosec.runtime.event.BridgeContextContributor
 import me.ahoo.cosec.runtime.http.CoSecParameters
 import me.ahoo.cosec.runtime.http.HttpFacts
+import me.ahoo.cosec.runtime.http.ProblemBodies
 import me.ahoo.cosec.runtime.http.RemoteIpResolver
 import me.ahoo.cosec.runtime.identity.IdentityIssuer
 import me.ahoo.cosec.webflux.HttpFactsReader
@@ -69,7 +70,9 @@ class PipelineGatewayFilter @InternalCoSecApi constructor(
      * API key header, `authorization` in the query and the `authorization` cookie (RC1-5, R1-4 of #1194's review).
      */
     private val forwardAuthorization: Boolean = false,
-) : ReactivePipelineBridge(pipeline, contributors, remoteIpResolver, host),
+    /** The body of a refusal (`PIP-34`): the host's renderer, or CoSec's own. */
+    bodies: ProblemBodies = ProblemBodies.DEFAULT,
+) : ReactivePipelineBridge(pipeline, contributors, remoteIpResolver, host, bodies),
     GlobalFilter,
     Ordered {
     private val credentials = CredentialStripping(pipeline)

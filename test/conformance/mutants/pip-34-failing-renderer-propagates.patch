@@ -1,0 +1,17 @@
+# Rule: PIP-34
+# Mutant: a renderer that throws fails the response instead of falling back to CoSec's body
+# Tests: :runtime:test --tests me.ahoo.cosec.runtime.http.ProblemBodiesTest :conformance:test
+
+diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/http/ProblemBodies.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/http/ProblemBodies.kt
+index 87c36e97b..908b00f6e 100644
+--- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/http/ProblemBodies.kt
++++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/http/ProblemBodies.kt
+@@ -52,7 +52,7 @@ class ProblemBodies(
+             renderer.render(problem).also { check(it.isNotEmpty()) { "The renderer answered no bytes." } }
+         } catch (e: Exception) {
+             failed(problem, e)
+-            ProblemEncoder.encode(problem)
++            throw e
+         }
+     }
+ 

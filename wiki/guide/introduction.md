@@ -163,13 +163,14 @@ change in a minor release. To test your code against a real pipeline, use `Pipel
 This is the one place that says what an application's build has to provide for CoSec, and what adding CoSec changes in it.
 
 - **JDK 21 or later.**
-- **Spring Boot 4.1.** CoSec is built and tested on one patch release of 4.1. Each module that uses Spring or Spring
+- **Spring Boot 4.2.** CoSec is built and tested on one patch release of 4.2. Each module that uses Spring or Spring
   Boot names the versions of that release in its own metadata, as the minimum it needs (a `requires` in its Gradle module
   metadata, a plain version in its POM); the exact numbers are there, not on this page. Use that release or a newer one.
-  An application on an older 4.1.x gets, with Gradle's own platform support (a `platform(...)` of the Spring Boot BOM),
+  An application on an older 4.2.x gets, with Gradle's own platform support (a `platform(...)` of the Spring Boot BOM),
   the Spring and Spring Boot modules CoSec uses raised to that release, and the others left as they are. With Maven, and
   with Spring's dependency management plugin, the Spring Boot BOM the application imports sets the versions, so it
-  keeps its own.
+  keeps its own. With `cosec-gateway`, Spring Cloud 2026.0 (Spring Cloud Gateway 5.1), the release train built on
+  Spring Boot 4.2.
 - **Kotlin 2.** CoSec is written in Kotlin 2, and `kotlin-stdlib` is raised to the version it was built with, as with
   every library.
 - **CoCache 8, only with `cosec-cocache`.** CoCache 8 has the Maven coordinates of CoCache 4

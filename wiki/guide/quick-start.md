@@ -9,7 +9,7 @@ For developers adding CoSec to a Spring Boot service for the first time. Follow 
 
 ## Prerequisites
 
-- JDK 21 or later, and a Spring Boot 4.1 project built with Gradle. `cosec-cocache`, which this quick start uses, needs CoCache 8:
+- JDK 21 or later, and a Spring Boot 4.2 project built with Gradle. `cosec-cocache`, which this quick start uses, needs CoCache 8:
   see [what CoSec needs from your build](./introduction.md#what-cosec-needs-from-your-build) before you add it to a project that
   is on CoCache 4.
 - A Redis server on `localhost:6379` whose `maxmemory-policy` is `noeviction`, Redis's default. CoSec keeps its
