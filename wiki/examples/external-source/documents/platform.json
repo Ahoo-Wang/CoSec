@@ -34,6 +34,45 @@
           }
         }
       ]
+    },
+    {
+      "id": "role-sync",
+      "statements": [
+        {
+          "name": "project-tenant-roles",
+          "effect": "allow",
+          "action": [
+            "cosec:read",
+            "cosec:write",
+            "cosec:skip-shadow",
+            "cosec:publish",
+            "cosec:manage-roles"
+          ],
+          "resource": [
+            "doc/tenant/**"
+          ]
+        },
+        {
+          "name": "propose-the-catalog",
+          "effect": "allow",
+          "action": [
+            "cosec:read",
+            "cosec:write",
+            "cosec:skip-shadow",
+            "cosec:publish"
+          ],
+          "resource": [
+            "doc/app/wms",
+            "doc/app/wms/**"
+          ]
+        },
+        {
+          "name": "grant-in-its-scopes",
+          "effect": "allow",
+          "action": "cosec:grant",
+          "resource": "scope/**"
+        }
+      ]
     }
   ],
   "bindings": [
@@ -50,6 +89,16 @@
       "app": "*",
       "space": "*",
       "policy": "control-api"
+    },
+    {
+      "id": "role-sync",
+      "subject": {
+        "principal": "sync-service",
+        "tenant": "(platform)"
+      },
+      "app": "cosec-control",
+      "space": "",
+      "policy": "role-sync"
     }
   ]
 }
