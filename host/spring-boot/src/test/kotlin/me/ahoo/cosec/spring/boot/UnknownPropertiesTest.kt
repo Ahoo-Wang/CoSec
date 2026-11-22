@@ -271,7 +271,7 @@ class UnknownPropertiesTest {
         )
         runner.withEnvironment(variables).run { context ->
             context.startupFailure.assert().isNull()
-            Binder.get(context.environment).bind("cosec.authorization.snapshot.revalidate-interval", Duration::class.java)
+            Binder.get(context.environment).bind(REVALIDATE_INTERVAL, Duration::class.java)
                 .get().assert().isEqualTo(Duration.ofSeconds(30))
             Binder.get(context.environment).bind("cosec.pipeline.allow-query-token", Boolean::class.javaObjectType)
                 .get().assert().isTrue()
@@ -286,7 +286,7 @@ class UnknownPropertiesTest {
             "cosec.authorization.snapshot.failClosed.tenants[0]=acme",
         ).run { context ->
             context.startupFailure.assert().isNull()
-            Binder.get(context.environment).bind("cosec.authorization.snapshot.revalidate-interval", Duration::class.java)
+            Binder.get(context.environment).bind(REVALIDATE_INTERVAL, Duration::class.java)
                 .get().assert().isEqualTo(Duration.ofSeconds(30))
         }
     }
@@ -529,4 +529,8 @@ class UnknownPropertiesTest {
     @org.springframework.context.annotation.Configuration(proxyBeanMethods = false)
     @org.springframework.boot.autoconfigure.ImportAutoConfiguration(CoSecPropertyCheckAutoConfiguration::class)
     class Checked
+
+    private companion object {
+        const val REVALIDATE_INTERVAL = "cosec.authorization.snapshot.revalidate-interval"
+    }
 }

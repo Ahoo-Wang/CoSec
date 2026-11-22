@@ -65,8 +65,7 @@ internal object RemovedProperties {
         "cosec.control.audit.required-timeout" to
             "computed: cosec.pipeline.timeout, the bound of the control request's authorization",
         "cosec.observability.listener.drain-timeout" to
-            "computed: a sixth of spring.lifecycle.timeout-per-shutdown-phase, for the change listeners and the Kafka " +
-                "listeners too",
+            "computed: a sixth of spring.lifecycle.timeout-per-shutdown-phase, for the change and Kafka listeners too",
         "cosec.authorization.snapshot.local-max-age" to
             "computed: 3 × cosec.authorization.snapshot.revalidate-interval",
         "cosec.authorization.membership.unknown-ttl" to
