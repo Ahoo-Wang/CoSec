@@ -3,12 +3,12 @@
 # Tests: :control:test --tests me.ahoo.cosec.control.api.RoleClassTest --tests me.ahoo.cosec.control.lifecycle.RoleClassUnitTest
 
 diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/change/Escalation.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/change/Escalation.kt
-index 130e438fc..f715e7174 100644
+index 0f8cc24f3..625c6100c 100644
 --- a/core/control/src/main/kotlin/me/ahoo/cosec/control/change/Escalation.kt
 +++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/change/Escalation.kt
 @@ -27,7 +27,7 @@ class Escalation(val subject: String, val reason: Reason, val detail: String = "
-      * RC1-34), and the role class a change was granted by ([Reason.ROLE_CLASS], `CTL-79`). Their own change after an approval does not send the change back, since what was approved is widening
-      * the policy. Nothing else is: an aggregated entry never stands in for one that needs an approval (`CTL-48`).
+      * RC1-34), and the role class a change was granted by ([Reason.ROLE_CLASS], `CTL-79`). Their own change after an
+      * approval does not send the change back, since what was approved is widening the policy. Nothing else is: an aggregated entry never stands in for one that needs an approval (`CTL-48`).
       */
 -    val informational: Boolean get() = reason == Reason.TENANT_BINDINGS || reason == Reason.ROLE_CLASS
 +    val informational: Boolean get() = reason == Reason.TENANT_BINDINGS
