@@ -2,7 +2,7 @@
 # Mutant: the facade dispatches through the operators' profile instead of the service profile: a route outside the narrow set, the platform document's among them, is reachable through it
 # Tests: :control:test --tests me.ahoo.cosec.control.local.ControlServiceTest
 diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/local/LocalControlService.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/local/LocalControlService.kt
-index b27b13f95..5e167e801 100644
+index 1b6c860a4..d2e23b1a5 100644
 --- a/core/control/src/main/kotlin/me/ahoo/cosec/control/local/LocalControlService.kt
 +++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/local/LocalControlService.kt
 @@ -56,7 +56,7 @@ class LocalControlService(
@@ -13,4 +13,4 @@ index b27b13f95..5e167e801 100644
 +    private val http = ControlHttp(plane, ControlProfile.OPERATORS)
  
      override suspend fun call(caller: ControlCaller, call: ServiceCall): String {
-         val request = ControlHttpRequest(call.method, call.path, call.query, call.body?.encodeToByteArray(), inProcess = true)
+         val request = ControlHttpRequest(
