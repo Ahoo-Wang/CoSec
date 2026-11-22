@@ -18,8 +18,9 @@ import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 /**
  * What a check answers (`CTL-78`, `contract/control/change-check.json`): what the proposal it stands for would find,
  * without making it. The [state] it would be in ([ChangeState.CHECKED] when every check passes, [ChangeState.DRAFT]
- * with [findings] otherwise), the [base] it would be proposed on, what it grants that would wait for a person
- * ([escalations]), and the digest of the document it would publish ([candidate], once checked).
+ * with [findings] otherwise), the [base] it would be proposed on, and what it grants that would wait for a person
+ * ([escalations]). No candidate digest: the document a proposal would publish names the change that makes it (who
+ * confirmed a lapsing DENY, in which change), which a check does not make.
  */
 @ExperimentalCoSecApi
 class ChangeCheck(
@@ -27,7 +28,6 @@ class ChangeCheck(
     val base: ChangeBase,
     findings: List<Finding>,
     escalations: List<Escalation>,
-    val candidate: String?,
 ) {
     val findings: List<Finding> = findings.toList()
 
@@ -43,8 +43,7 @@ class ChangeCheck(
         "base" to base,
         "findings" to findings,
         "escalations" to escalations,
-        "candidate" to candidate,
     )
 
-    private fun parts(): List<Any?> = listOf(state, base, findings, escalations, candidate)
+    private fun parts(): List<Any?> = listOf(state, base, findings, escalations)
 }

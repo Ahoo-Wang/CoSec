@@ -124,7 +124,8 @@ candidate again against the documents current at that moment.
 
 `POST /changes:check` takes the body of `POST /changes`, and `POST /documents/{key}:check` the body of `:apply`, and
 answers what the proposal would (`CTL-78`): its `state` (`CHECKED` or `DRAFT`), `findings`, `escalations` (what would
-wait for a person), `base` and `candidate` (`contract/control/change-check.json`). It runs the proposal's own steps, all
+wait for a person) and `base` (`contract/control/change-check.json`). It answers no `candidate`: the document a proposal
+would publish names the change that confirms a lapsing DENY, which a check does not make. It runs the proposal's own steps, all
 but the last. It stores nothing, takes no staging slot, uses no change id and writes no change event. Use it to validate
 before you store something of your own, such as an IAM's event, that a later proposal will carry.
 

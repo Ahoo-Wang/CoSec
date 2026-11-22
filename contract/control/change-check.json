@@ -13,10 +13,6 @@
       }
     }
   },
-  "candidate" : {
-    "type" : "string",
-    "presence" : "optional"
-  },
   "escalations" : {
     "type" : "array",
     "presence" : "optional",

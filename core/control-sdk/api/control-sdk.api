@@ -126,10 +126,9 @@ public final class me/ahoo/cosec/control/sdk/ChangeBase {
 }
 
 public final class me/ahoo/cosec/control/sdk/ChangeCheck {
-	public fun <init> (Lme/ahoo/cosec/control/sdk/ChangeState;Lme/ahoo/cosec/control/sdk/ChangeBase;Ljava/util/List;Ljava/util/List;Ljava/lang/String;)V
+	public fun <init> (Lme/ahoo/cosec/control/sdk/ChangeState;Lme/ahoo/cosec/control/sdk/ChangeBase;Ljava/util/List;Ljava/util/List;)V
 	public fun equals (Ljava/lang/Object;)Z
 	public final fun getBase ()Lme/ahoo/cosec/control/sdk/ChangeBase;
-	public final fun getCandidate ()Ljava/lang/String;
 	public final fun getEscalations ()Ljava/util/List;
 	public final fun getFindings ()Ljava/util/List;
 	public final fun getState ()Lme/ahoo/cosec/control/sdk/ChangeState;

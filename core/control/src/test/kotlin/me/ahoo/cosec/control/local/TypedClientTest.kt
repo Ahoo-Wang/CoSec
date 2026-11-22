@@ -259,7 +259,6 @@ class TypedClientTest {
         val checked = runBlocking { client.check(alice, ChangeRequest(acme, 1, listOf(Operation.PutPolicy(typed)))) }
         checked.state.assert().isEqualTo(ChangeState.CHECKED)
         checked.base.revision.assert().isEqualTo(1L)
-        checked.candidate.assert().isNotNull()
         runBlocking {
             client.checkApply(alice, ApplyRequest(acme, 1, DocumentContent(policies = listOf(typed)), ApplyMode.MERGE))
         }.state.assert().isEqualTo(ChangeState.CHECKED)

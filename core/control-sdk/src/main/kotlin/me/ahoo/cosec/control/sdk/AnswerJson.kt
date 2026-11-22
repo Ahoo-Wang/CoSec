@@ -116,7 +116,7 @@ internal object AnswerJson {
 
     /** The members of a check's answer the typed [ChangeCheck] reads: every member of `contract/control/change-check.json`. */
     val CHECK_READ: Set<String> = setOf(
-        "state", "base", "base.revision", "base.digest", "candidate",
+        "state", "base", "base.revision", "base.digest",
         "findings", "findings.check", "findings.message", "findings.path", "findings.severity", "findings.status",
         "escalations", "escalations.detail", "escalations.reason", "escalations.subject",
     )
@@ -128,7 +128,6 @@ internal object AnswerJson {
             base = base(node.need("base")),
             findings = findings(node),
             escalations = escalations(node),
-            candidate = node.optText("candidate"),
         )
     }
 

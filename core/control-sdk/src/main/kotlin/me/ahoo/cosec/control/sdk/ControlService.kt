@@ -59,7 +59,7 @@ interface ControlService {
 
     /**
      * `POST /changes:check` (`CTL-78`): what [propose] would answer for [request], the same body, without proposing:
-     * the change's state, findings, escalations, base and candidate (`contract/control/change-check.json`). Nothing is
+     * the change's state, findings, escalations and base (`contract/control/change-check.json`). Nothing is
      * stored, no slot is taken and no change event is written, and the call is decided as the proposal would be: a
      * caller who may not propose may not check.
      */
