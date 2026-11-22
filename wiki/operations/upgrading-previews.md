@@ -45,6 +45,16 @@ Which preview of the library may run behind which preview of the gateway image: 
   (`cosec.control.app-id`) is never the class's**: a member of it holds control calls on its tenant's document, and who
   governs a tenant's policies is for a person to appoint. A sync that projects such roles keeps waiting for approval;
   project only roles of business apps through the class.
+- **New: a service changes an app's document through the service port and `ControlService`** (`CTL-58`, `CTL-65`):
+  `propose`, `check` and the change flow of an app document, which were a `404` there. Such a change is analyzed as on
+  the operators' port: removing a role, a policy or a binding publishes alone, and anything else (a catalog, a role
+  put) waits for a person. The platform document stays outside. Nothing changes for a service that does not hold
+  `cosec:write` on `doc/app/...`.
+- **No trust root through the service port or `ControlService`** (`CTL-81`). A service that stated a platform
+  administrator there to publish a tenant's (or an app's) document unanalyzed now waits for a person: the change is
+  analyzed whoever is stated, and a grant the analysis cannot prove is `AWAITING_APPROVAL`. Project roles into tenants
+  through the [role class](../policies/testing.md#the-role-class) (`cosec:manage-roles`), or have a person approve on
+  the operators' routes. The same principal on the operators' routes is unchanged.
 - **An instance's status is split in two** (`CTL-74`, `CTL-75`). The status at `<s>:shadow:status:<instance>` is now
   small (liveness, `shadows`, the acknowledged windows) and has no `documents` member. The documents an instance holds
   are a record of their own, `<s>:shadow:resident:<instance>`, which only `propagation` reads
@@ -408,7 +418,10 @@ Which preview of the library may run behind which preview of the gateway image: 
     Absent, empty, `false`, `1` and `on` fail alike, and the message says what to write. Make it true first (a
     `NetworkPolicy` that admits the gateway's pods only, mutual TLS, a private network;
     [`k8s/examples/gateway-mode-service-networkpolicy.yaml`](https://github.com/Ahoo-Wang/CoSec/blob/main/k8s/examples/gateway-mode-service-networkpolicy.yaml)).
-    Once it is set, the `WARN` through beta.4 is one `INFO` line.
+    Once it is set, the `WARN` through beta.4 is one `INFO` line. A Spring Boot test that starts such a service states
+    it too: the test is reached by its own client alone, so the statement is true there. From beta.6 the kit has the
+    line: `@SpringBootTest(properties = [IdentityHeader.ONLY_GATEWAY_CAN_REACH])`, for tests only
+    ([Testing your application](../policies/testing.md#testing-your-application)).
   - A service in `gateway` mode **fails to start** with a hidden-method filter:
     `spring.mvc.hiddenmethod.filter.enabled=true`, `spring.webflux.hiddenmethod.filter.enabled=true`, or a
     `HiddenHttpMethodFilter` bean of its own. The gateway decided the method of the request line, and a `_method` form

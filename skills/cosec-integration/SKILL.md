@@ -225,7 +225,9 @@ cosec:
 - Tests of such a service, without a gateway: `IdentityHeader` (`cosec-testkit`, experimental) writes the header a
   gateway sends: `forSubject(subject, tenant, app, space, roles)`, `of(identity)`, or `withToken(token, verifier,
   revocations)` for a real token's session. A header is refused after 60s: make one per request. Never hand-write the
-  JSON, and never use it in production.
+  JSON, and never use it in production. A Spring Boot test that starts the service states the boundary too, or the
+  context fails to start: `@SpringBootTest(properties = [IdentityHeader.ONLY_GATEWAY_CAN_REACH])` (true in a test,
+  which only its own client reaches; never copied into a deployment).
 
 Details: https://cosec.ahoo.me/integration/web#services-behind-the-gateway and
 https://cosec.ahoo.me/guide/security-model#trust-boundaries.
@@ -325,7 +327,14 @@ something of its own: the proposal's answer, nothing stored, `CTL-78`); `cosec.c
 its maintenance passes under their leases; no property turns them off. A service calls the service port through
 `HttpControlService` (`cosec-control-http`): set `cosec.control.service-url=http://<host>:8082/cosec/control/v1` and the
 starter's `ControlService` is it, writing `CoSec-Identity` for each call. One `ControlService` per application: naming a host on
-an instance that runs the control plane fails startup (`STA-11`).
+an instance that runs the control plane fails startup (`STA-11`). Through `ControlService`, in process or over the
+service port, no one is the trust root, whoever the caller states, a platform administrator included (`CTL-81`): every
+change is analyzed, and what the analysis cannot prove waits for a person, who approves on the operators' routes. It
+reaches the tenant and app documents and their change flow, never the platform document. A service that projects roles
+into tenants holds the role class instead: `cosec:manage-roles` with `cosec:write`, `cosec:skip-shadow` and
+`cosec:publish` on `doc/tenant/**`, and `cosec:grant` on `scope/**`; its `putRole`/`removeRole` of a business app's roles
+publish with no person (a `ROLE_CLASS` record), a role of the control plane's own app or with no app waits, and a
+catalog (`putCatalog`) always waits (https://cosec.ahoo.me/policies/testing#the-role-class).
 
 With `cosec-control` (and `cosec-cocache`), the host serves the control API under
 `{cosec.control.http.base-path}/v1` (default `/cosec/control/v1`): documents, changes, shadow windows, approval,
@@ -341,8 +350,10 @@ The control plane's token is issued for tenant `(platform)` (an administrator) o
 `cosec.control.app-id`: `TokenSubject(id = "alice", app = "cosec-control", tenant = "(platform)")`. A change is
 `POST /changes` (document, base revision, operations), then `:skip-shadow` with a `reason` (the trust root, and a
 tenant's administrator on its own document) or `:shadow`, then `:publish`. A console that edits roles sends one `putRole`
-per save; a service that mirrors an identity system's roles sends `putRole`, `removeRole` and `putCatalog` the same way
-and never writes Redis (https://cosec.ahoo.me/scenarios/roles, https://cosec.ahoo.me/scenarios/external-source).
+per save. A service that mirrors an identity system's roles calls `ControlClient.proposeAndPublishWithoutShadow` per
+event as `ControlCaller.service("<its principal>")`, holding the role class: `putRole` and `removeRole` publish alone,
+`putCatalog` answers the change `AWAITING_APPROVAL` for a person; it never writes Redis
+(https://cosec.ahoo.me/scenarios/roles, https://cosec.ahoo.me/scenarios/external-source).
 
 ## Scenarios
 

@@ -1,0 +1,17 @@
+# Rule: CTL-81
+# Mutant: a platform administrator stated through the service profile is the trust root: anyone admitted to the service port publishes unanalyzed by naming one
+# Tests: :control:test --tests me.ahoo.cosec.control.api.ServiceTrustRootTest --tests me.ahoo.cosec.control.api.AppDocumentServiceTest
+
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ChangeAuthority.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ChangeAuthority.kt
+index 1a3c26cb1..36794f649 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ChangeAuthority.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ChangeAuthority.kt
+@@ -245,7 +245,7 @@ class ChangeAuthority(
+         // The trust root is the platform's administrators (RFC 0007 §7.3): a tenant principal holding cosec:approve on
+         // its own document approves others' changes, and its own are analyzed (RC1-10). A person, never an API key, and
+         // never through the service profile, where whoever reaches the port states who it is (CTL-81).
+-        val trustRoot = !operator.serviceProfile && operator.platform && !approvals.apiKey(operator) &&
++        val trustRoot = operator.platform && !approvals.apiKey(operator) &&
+             holds(operator, key, ControlActions.APPROVE)
+         if (trustRoot && !options.fourEyes) {
+             return escalations
