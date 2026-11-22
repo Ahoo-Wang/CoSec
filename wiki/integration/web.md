@@ -140,8 +140,12 @@ Before anything else, `PathNormalizer` checks it. On every adapter the path is:
   patterns match encoded paths is in [Policy language](../policies/language.md);
 - **rejected with `400` `invalid-request`**, before authentication, when after removing path parameters and
   decoding once it has a `.` or `..` segment (also with an encoded `;`), when
-  it has a malformed percent-escape, when it is longer than 2048 characters, or when a segment is longer than 256
-  characters. So `/public/..;/admin`, which a servlet container resolves to `/admin`, is rejected;
+  it has a malformed percent-escape, when it is longer than 2048 characters as received (percent-encoded), or when a
+  segment is longer than 256 characters once decoded (UTF-16 units, as the matchers see it). So
+  `/public/..;/admin`, which a servlet container resolves to `/admin`, is rejected, and a segment of 29 CJK characters
+  (261 encoded) is not: the segment bound is the same in every script, while the path bound counts what arrives, so a
+  single segment of CJK text holds at most 227 characters. A pattern with `decodeAndParseSegments: false` reads the
+  segments as received, so it matches no path with a segment longer than 256 characters as received;
 - **rejected the same way** when it has an empty segment before its end (`//admin`, `/admin//x`, or `/;x/admin`, which
   removing the path parameter makes `//admin`), an encoded separator (`%2F` or `%2f`), or a backslash (`\`, `%5C` or
   `%5c`). A pattern reads these as segments of their own or as part of one, so a `DENY` under `/admin` would not match
