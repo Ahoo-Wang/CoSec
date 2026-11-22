@@ -1099,6 +1099,20 @@ mvc.get("/orders/1") { header(IdentityHeader.NAME, IdentityHeader.forSubject("al
     .andExpect { status { isOk() } }
 ```
 
+**A Spring Boot test of a service in `gateway` mode states the boundary.** Such a service does not start until
+`cosec.pipeline.identity.only-gateway-can-reach=true` states that nothing but the gateway can reach it (`STA-7`), and a
+test's context is no exception. In a test the statement is true: the service is reached by the test's own client alone.
+`IdentityHeader.ONLY_GATEWAY_CAN_REACH` is that property assignment, for tests only:
+
+```kotlin
+@SpringBootTest(properties = [IdentityHeader.ONLY_GATEWAY_CAN_REACH])   // or @TestPropertySource(properties = [...])
+class OrdersServiceTest
+```
+
+In a deployment the statement is the operator's to make once the network makes it true
+([Services behind the gateway](../integration/web.md#services-behind-the-gateway)); never copy it from a test. A test
+that only runs CoSec's filter, as above, starts no CoSec auto-configuration and needs none.
+
 **A function that reads the caller**, bound by hand:
 
 ```kotlin
