@@ -25,7 +25,7 @@ description: "每个 8.0 预览版（alpha 与 beta）到下一个之间的变�
 
 ## 从 8.0.0-beta.5 升级 {#from-8-0-0-beta-5}
 
-- **控制面门面成为独立模块 `cosec-control-sdk`**（`CTL-65`）。受影响：调用 `ControlService` 的代码。`ControlService`、`ControlCaller` 和 `ControlRefusedException` 的名称和包（`me.ahoo.cosec.control.sdk`）不变；`cosec-control` 会带上这个模块，所以已依赖 `cosec-control` 的构建无需改动。只调用控制面宿主的代码只需要 `cosec-control-sdk`（它的 HTTP 实现在后续预览版中提供）。
+- **控制面门面成为独立模块 `cosec-control-sdk`**（`CTL-65`）。受影响：调用 `ControlService` 的代码。`ControlService`、`ControlCaller` 和 `ControlRefusedException` 的名称和包（`me.ahoo.cosec.control.sdk`）不变；`cosec-control` 会带上这个模块，所以已依赖 `cosec-control` 的构建无需改动。只调用控制面宿主的代码只需要 `cosec-control-sdk`，加上它的一个实现。
   - `ControlService.changes` 按 `me.ahoo.cosec.control.sdk.ChangeState` 过滤，这是线上格式的封闭集合，未知值保留其文本（`isUnknown`），不再是控制面内部的枚举：请传入新包的 `ChangeState.READY`，或 `ChangeState.of("READY")`。
   - `ControlCaller.of(context)` 不再对 CoSec 未创建的安全上下文抛出异常：改由接收它的调用抛出同样的 `IllegalArgumentException`（`PIP-29`）。
 

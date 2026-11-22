@@ -112,7 +112,7 @@ record for policy snapshots and revoked tokens.
 | Authorization in Spring Cloud Gateway | `cosec-gateway` | |
 | Policy snapshots, revoked tokens, API keys, shadow windows and cluster-wide rate limits in Redis | `cosec-cocache` | `org.springframework.boot:spring-boot-data-redis`, `me.ahoo.cocache:cocache-spring-boot-starter` |
 | The control plane: publishing, history, rollback, shadow windows, approvals, simulation | `cosec-control` (it brings `cosec-control-sdk`) | `cosec-cocache` |
-| Code that calls the control plane: `ControlService`, `ControlCaller` | `cosec-control-sdk`, with an implementation: `cosec-control` in process | |
+| Code that calls the control plane: `ControlService`, `ControlCaller`, the typed `ControlClient` | `cosec-control-sdk`, with an implementation: `cosec-control` in process | |
 | Social login through OAuth | `cosec-social` | `cosec-cocache` for its OAuth states, or your own `SocialStateStore` |
 | A tracing span per decision | `cosec-opentelemetry` | |
 | A timer per decision, by result, and the snapshot source's meters | `cosec-micrometer` | a `MeterRegistry` (for example `spring-boot-starter-actuator`) |

@@ -31,8 +31,7 @@ Which preview of the library may run behind which preview of the gateway image: 
 - **The control plane's facade is a module of its own, `cosec-control-sdk`** (`CTL-65`). Affected: code that calls
   `ControlService`. `ControlService`, `ControlCaller` and `ControlRefusedException` keep their names and package
   (`me.ahoo.cosec.control.sdk`); `cosec-control` brings the module, so a build that has `cosec-control` changes nothing.
-  Code that only calls a control-plane host needs `cosec-control-sdk` alone (its HTTP implementation follows in a later
-  preview).
+  Code that only calls a control-plane host needs `cosec-control-sdk` alone, with an implementation of it.
   - `ControlService.changes` filters by `me.ahoo.cosec.control.sdk.ChangeState`, the wire's closed set, which keeps an
     unknown value's text (`isUnknown`), instead of the control plane's internal enum: pass `ChangeState.READY` of the
     new package, or `ChangeState.of("READY")`.

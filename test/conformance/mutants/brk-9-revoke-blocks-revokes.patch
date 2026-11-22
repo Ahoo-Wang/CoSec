@@ -2,7 +2,7 @@
 # Mutant: a revoke holding the slot holds off every change, another revoke of a live binding included, so a revoke that stalled blocks the next
 # Tests: :control:test --tests me.ahoo.cosec.control.change.BreakGlassControlTest :conformance:test
 diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Staging.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Staging.kt
-index 3406c7d86..087730b2c 100644
+index 3c865ef02..bc1c89dac 100644
 --- a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Staging.kt
 +++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Staging.kt
 @@ -270,7 +270,7 @@ internal class Staging(
@@ -12,5 +12,5 @@ index 3406c7d86..087730b2c 100644
 -                    val guarded = preemption.revokesBreakGlass(held, head) && !preemption.revokesBreakGlass(change, head)
 +                    val guarded = preemption.revokesBreakGlass(held, head)
                      if (guarded || !preemption.preempts(operator, change, head)) {
-                         throw ChangeRejectedException.conflict(
-                             ConflictKind.SLOT_HELD,
+                         throw ChangeRejectedException.slotHeld(
+                             held.id,

@@ -20,7 +20,8 @@ import me.ahoo.cosec.annotations.InternalCoSecApi
 
 /**
  * A change operation the control API refuses, with the HTTP [status] it answers (RFC 0007 §10.2). A `409` names its
- * [conflict], and only a `409` does (`CTL-80`): use [conflict] to make one.
+ * [conflict], and only a `409` does (`CTL-80`): use [conflict] to make one. A [ConflictKind.SLOT_HELD] names the change
+ * that holds the slot, [heldBy], where the refusal knows it: use [slotHeld].
  */
 @InternalCoSecApi
 class ChangeRejectedException(
@@ -29,10 +30,15 @@ class ChangeRejectedException(
     cause: Throwable? = null,
     /** Which conflict a `409` is; null for any other status. */
     val conflict: ConflictKind? = null,
+    /** The change that holds the slot a [ConflictKind.SLOT_HELD] wanted; null for any other refusal. */
+    val heldBy: ChangeId? = null,
 ) : RuntimeException(message, cause) {
     init {
         require((status == ControlStatus.CONFLICT) == (conflict != null)) {
             "A 409 of the control API names its conflict, and only a 409 does (CTL-80): status $status, conflict $conflict."
+        }
+        require(heldBy == null || conflict == ConflictKind.SLOT_HELD) {
+            "Only a SLOT_HELD names the change that holds the slot (CTL-80): conflict $conflict."
         }
     }
 
@@ -41,5 +47,9 @@ class ChangeRejectedException(
         /** A `409` of [kind]. */
         fun conflict(kind: ConflictKind, message: String, cause: Throwable? = null): ChangeRejectedException =
             ChangeRejectedException(ControlStatus.CONFLICT, message, cause, kind)
+
+        /** A `409` [ConflictKind.SLOT_HELD]: the slot is held by change [heldBy], which [message] names too. */
+        fun slotHeld(heldBy: ChangeId, message: String, cause: Throwable? = null): ChangeRejectedException =
+            ChangeRejectedException(ControlStatus.CONFLICT, message, cause, ConflictKind.SLOT_HELD, heldBy)
     }
 }

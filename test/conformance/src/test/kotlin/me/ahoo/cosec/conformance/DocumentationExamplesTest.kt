@@ -15,6 +15,7 @@
 
 package me.ahoo.cosec.conformance
 
+import com.example.iam.AuditorsProjection
 import com.example.iam.Onboarding
 import kotlinx.coroutines.runBlocking
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
@@ -22,15 +23,20 @@ import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.control.api.DefaultControlPlane
 import me.ahoo.cosec.control.change.ChangeId
 import me.ahoo.cosec.control.change.ChangeRequestCodec
+import me.ahoo.cosec.control.change.Operation
 import me.ahoo.cosec.control.lifecycle.ChangeAuthority
 import me.ahoo.cosec.control.lifecycle.ChangeOptions
 import me.ahoo.cosec.control.lifecycle.Changes
 import me.ahoo.cosec.control.lifecycle.LockoutCheck
 import me.ahoo.cosec.control.local.LocalControlService
+import me.ahoo.cosec.control.sdk.ChangeState
+import me.ahoo.cosec.control.sdk.ControlClient
 import me.ahoo.cosec.control.store.InMemoryControlStore
 import me.ahoo.cosec.control.store.Revisions
+import me.ahoo.cosec.document.PolicyDocumentCodec
 import me.ahoo.cosec.document.route.RouteMapCodec
 import me.ahoo.cosec.model.TenantId
+import me.ahoo.cosec.model.decision.DocumentKind
 import me.ahoo.cosec.runtime.identity.IdentityGate
 import me.ahoo.cosec.spi.token.RevocationReader
 import me.ahoo.cosec.testkit.PolicyTestKit
@@ -168,6 +174,56 @@ class DocumentationExamplesTest {
             // Recorded as alice's own proposal.
             changes.get(ChangeId("c1")).author.principal.value.assert().isEqualTo("alice")
         }
+
+    /**
+     * `CTL-76`: the typed sample (`control-sdk/kotlin/AuditorsProjection.kt`) writes the same change in typed values and
+     * stages it without a shadow window, against the same control plane. What it grants waits for a person, as the
+     * page says: the call answers the waiting change, and publishes nothing.
+     */
+    @Test
+    fun `the typed control sample writes the same change, which waits for a person`() = runBlocking<Unit> {
+        val example = examples.resolve("control-sdk")
+        val clock = MutableClock(Instant.parse("2026-11-21T00:00:00Z"))
+        val store = InMemoryControlStore(clock)
+        val revisions = Revisions(store, clock)
+        ChangeRunner.bootstrap(revisions, ScenarioJson.read(example.resolve("bootstrap.json")))
+        val engine = ControlEngine(revisions)
+        val changes = Changes(
+            store,
+            revisions,
+            { ChangeId("c1") },
+            engine.authorizer,
+            clock,
+            ChangeOptions(),
+            revocations = RevocationReader.NONE,
+            lockout = LockoutCheck.UNCHECKED,
+        )
+        val plane =
+            DefaultControlPlane(
+                changes,
+                revisions,
+                ChangeAuthority(engine.authorizer, revocations = RevocationReader.NONE)
+            )
+        val client = ControlClient(LocalControlService(plane, IdentityGate(clock = clock)))
+        val alice = engine.security(TenantId("acme"), "alice", roles = listOf("admin"))
+        val waiting = AuditorsProjection(client).auditorsReadOrders(alice.securityContext, "acme")
+        waiting.state.assert().isEqualTo(ChangeState.AWAITING_APPROVAL)
+        waiting.escalations.assert().isNotEmpty()
+        waiting.skipShadow.assert().isEqualTo("decided in the IAM, which keeps its own approval")
+        waiting.author.principal.assert().isEqualTo("alice")
+        // The same operations as the JSON sample's, as the control plane reads them.
+        val acme = me.ahoo.cosec.spi.snapshot.SnapshotKey.Tenant("acme")
+        val sample = ScenarioJson.read(example.resolve("changes/auditors.json")).get("operations").values()
+            .map { ChangeRequestCodec.operation(acme, it) }
+        changes.get(ChangeId("c1")).operations.map(::entryTree).assert().isEqualTo(sample.map(::entryTree))
+    }
+
+    /** The entry a put of a tenant's document writes, as the document format writes it. */
+    private fun entryTree(operation: Operation): JsonNode = when (operation) {
+        is Operation.PutPolicy -> PolicyDocumentCodec.policyTree(operation.policy)
+        is Operation.PutBinding -> PolicyDocumentCodec.bindingTree(operation.binding, DocumentKind.TENANT, "acme")
+        else -> error("not in the sample: $operation")
+    }
 
     private fun jsonFiles(directory: Path): List<Path> =
         if (directory.isDirectory()) directory.listDirectoryEntries("*.json").sortedBy { it.name } else emptyList()

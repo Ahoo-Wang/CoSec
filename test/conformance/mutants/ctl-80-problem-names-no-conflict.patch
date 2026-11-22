@@ -1,17 +1,16 @@
 # Rule: CTL-80
 # Mutant: a 409 of the control API answers without its conflict member
 # Tests: :control:test --tests me.ahoo.cosec.control.api.ConflictKindTest
-
 diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/api/ControlHttp.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/api/ControlHttp.kt
-index c08086bbf..e000bc24e 100644
+index 4b719d417..e39f3a2ff 100644
 --- a/core/control/src/main/kotlin/me/ahoo/cosec/control/api/ControlHttp.kt
 +++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/api/ControlHttp.kt
-@@ -176,7 +176,7 @@ class ControlHttp(plane: ControlPlane, profile: ControlProfile = ControlProfile.
+@@ -180,7 +180,7 @@ class ControlHttp(plane: ControlPlane, profile: ControlProfile = ControlProfile.
              .put("code", problem.name)
              .put("requestId", requestId)
          if (problem.detailed && !detail.isNullOrBlank()) node.put("detail", detail)
 -        conflict?.let { node.put("conflict", it.name) }
 +        conflict?.takeIf { it.ordinal < 0 }?.let { node.put("conflict", it.name) }
+         heldBy?.let { node.put("heldBy", it) }
          return ControlHttpResponse(problem.status, PROBLEM_JSON, CoSecJson.mapper.writeValueAsBytes(node))
      }
- 

@@ -1,0 +1,16 @@
+# Rule: CTL-76
+# Mutant: an operation is written without its ifMatch, so it overwrites an entry someone else changed since
+# Tests: :control:test --tests me.ahoo.cosec.control.local.TypedClientTest
+
+diff --git a/core/control-sdk/src/main/kotlin/me/ahoo/cosec/control/sdk/OperationJson.kt b/core/control-sdk/src/main/kotlin/me/ahoo/cosec/control/sdk/OperationJson.kt
+index 130347d52..70bef678b 100644
+--- a/core/control-sdk/src/main/kotlin/me/ahoo/cosec/control/sdk/OperationJson.kt
++++ b/core/control-sdk/src/main/kotlin/me/ahoo/cosec/control/sdk/OperationJson.kt
+@@ -54,7 +54,6 @@ internal object OperationJson {
+             is Operation.PutCatalog -> operation.catalog?.let { node.set("catalog", DocumentJson.catalog(it)) }
+             is Operation.Other -> error("written above")
+         }
+-        operation.ifMatch?.let { node.put("ifMatch", it) }
+         return node
+     }
+ 

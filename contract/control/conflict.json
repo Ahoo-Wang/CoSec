@@ -1,0 +1,34 @@
+{
+  "code" : {
+    "type" : "string",
+    "presence" : "always"
+  },
+  "conflict" : {
+    "type" : "string",
+    "presence" : "always"
+  },
+  "detail" : {
+    "type" : "string",
+    "presence" : "always"
+  },
+  "heldBy" : {
+    "type" : "string",
+    "presence" : "optional"
+  },
+  "requestId" : {
+    "type" : "string",
+    "presence" : "always"
+  },
+  "status" : {
+    "type" : "integer",
+    "presence" : "always"
+  },
+  "title" : {
+    "type" : "string",
+    "presence" : "always"
+  },
+  "type" : {
+    "type" : "string",
+    "presence" : "always"
+  }
+}

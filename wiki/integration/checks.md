@@ -405,6 +405,27 @@ the same, records the same, and is refused the same (`CTL-65`).
 
 <<< @/examples/control-sdk/changes/auditors.json [auditors.json]
 
+The same calls in typed values: `ControlClient(service)` writes each request and reads each answer as the route takes
+and answers it (`CTL-76`), over either implementation of `ControlService`. Documents are `DocumentContent` with
+`Policy`, `Binding`, `Role` and `Catalog`; a change is `Operation`s (`PutPolicy`, `PutRole`, ...) in a `ChangeRequest`,
+or `ApplyRequest` for `:apply`; an answer is a `Change`, a `DocumentHead` or a `Page`. Conditions and rate limit rules
+stay JSON (`Condition.of`, `RateLimitRule.of`): the control plane checks them when the change is proposed. A closed set
+(`ChangeState`, `Effect`, `ConflictKind`, ...) keeps a value a later host adds as unknown, with its text; a document
+entry with a member this version does not know does not read at all, since applying what was read would drop it.
+`ControlRefusedException.conflict` says which conflict a 409 is.
+
+`proposeAndPublishWithoutShadow` is what a service that writes what it already decided does for each write: it
+proposes on the document's head, skips the shadow window and publishes. It needs `cosec:skip-shadow` beside
+`cosec:write`. A head that moved is read again and the change proposed again; a slot another change holds is waited
+out, within the patience it is given; concurrent writers acting as one principal, such as a service's replicas, wait
+for each other the same way. A writer that died leaves its change holding the slot (`ControlRefusedException.heldBy`
+names it): a change of the same author, left `CHECKED`, `SHADOWING` or `READY` and not updated for at least the patience
+(by the control plane's times), is abandoned and the slot taken. A dead writer so holds the document for one patience,
+and the next write takes it over; give every writer of one principal the same patience. It answers the published change, or one that waits for a
+person; when it gives up it throws the refusal, having abandoned the change it proposed.
+
+<<< @/examples/control-sdk/kotlin/AuditorsProjection.kt [AuditorsProjection.kt]
+
 A change that needs a second person's approval stops at `AWAITING_APPROVAL`, whoever proposed it: report its id to a
 person, who approves it on the operators' routes. To call another service behind the gateway as a principal of
 your own, `IdentityHeader.write(identity)` (`cosec-document`) writes the `CoSec-Identity` header the gateway would

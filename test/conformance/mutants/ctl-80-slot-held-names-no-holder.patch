@@ -1,0 +1,16 @@
+# Rule: CTL-80
+# Mutant: a SLOT_HELD's problem does not name the change that holds the slot, so a writer cannot tell its own stale change from another's
+# Tests: :control:test --tests me.ahoo.cosec.control.api.ConflictKindTest
+
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/api/ControlHttp.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/api/ControlHttp.kt
+index 4b719d417..d2d0135da 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/api/ControlHttp.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/api/ControlHttp.kt
+@@ -181,7 +181,6 @@ class ControlHttp(plane: ControlPlane, profile: ControlProfile = ControlProfile.
+             .put("requestId", requestId)
+         if (problem.detailed && !detail.isNullOrBlank()) node.put("detail", detail)
+         conflict?.let { node.put("conflict", it.name) }
+-        heldBy?.let { node.put("heldBy", it) }
+         return ControlHttpResponse(problem.status, PROBLEM_JSON, CoSecJson.mapper.writeValueAsBytes(node))
+     }
+ 

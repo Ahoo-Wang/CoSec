@@ -1,0 +1,16 @@
+# Rule: CTL-76
+# Mutant: a resource is written without its caseSensitive option, so it matches what it was written not to
+# Tests: :control:test --tests me.ahoo.cosec.control.local.TypedClientTest
+
+diff --git a/core/control-sdk/src/main/kotlin/me/ahoo/cosec/control/sdk/ValueJson.kt b/core/control-sdk/src/main/kotlin/me/ahoo/cosec/control/sdk/ValueJson.kt
+index b80b5ec80..4d7f28f0e 100644
+--- a/core/control-sdk/src/main/kotlin/me/ahoo/cosec/control/sdk/ValueJson.kt
++++ b/core/control-sdk/src/main/kotlin/me/ahoo/cosec/control/sdk/ValueJson.kt
+@@ -38,7 +38,6 @@ internal object ValueJson {
+         if (resource.caseSensitive && resource.decodeAndParseSegments) return StringNode.valueOf(resource.pattern)
+         return WireJson.objectNode().apply {
+             put("pattern", resource.pattern)
+-            if (!resource.caseSensitive) put("caseSensitive", false)
+             if (!resource.decodeAndParseSegments) put("decodeAndParseSegments", false)
+         }
+     }

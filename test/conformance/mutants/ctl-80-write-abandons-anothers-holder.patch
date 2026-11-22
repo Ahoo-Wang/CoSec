@@ -1,0 +1,17 @@
+# Rule: CTL-80
+# Mutant: the typed write abandons a slot's holder of another author, taking a change that is not its own
+# Tests: :control-sdk:test --tests me.ahoo.cosec.control.sdk.PublishWithoutShadowTest
+
+diff --git a/core/control-sdk/src/main/kotlin/me/ahoo/cosec/control/sdk/PublishWithoutShadow.kt b/core/control-sdk/src/main/kotlin/me/ahoo/cosec/control/sdk/PublishWithoutShadow.kt
+index cbc6315ca..b833d0acb 100644
+--- a/core/control-sdk/src/main/kotlin/me/ahoo/cosec/control/sdk/PublishWithoutShadow.kt
++++ b/core/control-sdk/src/main/kotlin/me/ahoo/cosec/control/sdk/PublishWithoutShadow.kt
+@@ -100,7 +100,7 @@ internal class PublishWithoutShadow(
+         if (heldBy == null || heldBy == proposed.id) return
+         try {
+             val holder = client.change(caller, heldBy)
+-            if (holder.author == proposed.author && holder.state in LEFT_HALFWAY && abandonedBy(holder, proposed)) {
++            if (holder.state in LEFT_HALFWAY && abandonedBy(holder, proposed)) {
+                 client.abandon(caller, holder.id)
+             }
+         } catch (_: ControlRefusedException) {
