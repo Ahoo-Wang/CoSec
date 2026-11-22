@@ -78,12 +78,14 @@ internal class Proposals(
         kind: ProvenanceKind = ProvenanceKind.PUBLISH,
         /** `deny-nomatch` confirmations of the statements that need them (RFC 0007 §9.5). */
         confirmations: List<Confirmation> = emptyList(),
+        /** False for a check (`CTL-78`): every step but the last, which stores the change and writes its event. */
+        commit: Boolean = true,
     ): ChangeRequest {
         if (kind != ProvenanceKind.PUBLISH && kind != ProvenanceKind.BREAK_GLASS) {
             throw ChangeRejectedException(BAD_REQUEST, "a change is proposed as PUBLISH or BREAK_GLASS, not $kind")
         }
         requireOperationBudget(operations)
-        return proposeAs(author, key, base, operations, note, kind, Applying(confirmations))
+        return proposeAs(author, key, base, operations, note, kind, Applying(confirmations), commit)
     }
 
     /**
@@ -112,6 +114,11 @@ internal class Proposals(
         kind: ProvenanceKind,
         /** The confirmations it carries, and what an `apply` adds: notes beside the checks' findings, what a stale base says. */
         applying: Applying,
+        /**
+         * False for a check (`CTL-78`): the same steps, the authorization, the base and every check of the candidate
+         * included, and none of what follows them. Nothing is stored, no slot is taken, no change event is written.
+         */
+        commit: Boolean = true,
     ): ChangeRequest {
         val head = revisions.head(key)
         // Keyed on what the change does, not on its kind (review K1).
@@ -150,6 +157,8 @@ internal class Proposals(
             head,
             author
         ).let { if (applying.notes.isEmpty()) it else it.copy(findings = it.findings + applying.notes) }
+        // A check ends here: what follows writes, and only a proposal writes (CTL-78).
+        if (!commit) return checked
         if (breakGlass) {
             flow.audit(ChangeEvent.Kind.BREAK_GLASS_REQUESTED, checked, author.actor, origin = author.origin)
         }
@@ -179,7 +188,9 @@ internal class Proposals(
         key: SnapshotKey,
         desired: PolicyDocument,
         mode: ApplyMode,
-        note: String
+        note: String,
+        /** False for a check (`CTL-78`), as [propose]'s. */
+        commit: Boolean = true,
     ): ChangeRequest {
         val head = revisions.head(key)
         val (kind, owner) = ownerOf(key)
@@ -197,10 +208,11 @@ internal class Proposals(
                 note,
                 ProvenanceKind.PUBLISH,
                 Applying(notes = kept),
+                commit,
             )
         }
         if (head == null) {
-            return proposeAs(author, key, 0, operations, note, ProvenanceKind.PUBLISH, Applying())
+            return proposeAs(author, key, 0, operations, note, ProvenanceKind.PUBLISH, Applying(), commit)
         }
         return proposeAs(
             author,
@@ -214,6 +226,7 @@ internal class Proposals(
                     "Read the head (GET /documents/{key}), bring what changed since into the file, set its revision " +
                     "to $current and apply again"
             }),
+            commit,
         )
     }
 

@@ -56,6 +56,8 @@ class PublishWithoutShadowTest {
         override suspend fun diff(caller: ControlCaller, key: SnapshotKey, from: Long, to: Long) = call("diff")
         override suspend fun apply(caller: ControlCaller, key: SnapshotKey, request: String) = call("apply")
         override suspend fun propose(caller: ControlCaller, request: String) = call("propose")
+        override suspend fun check(caller: ControlCaller, request: String) = call("check")
+        override suspend fun checkApply(caller: ControlCaller, key: SnapshotKey, request: String) = call("checkApply")
         override suspend fun change(caller: ControlCaller, id: String) = call("change").also { named += "change $id" }
         override suspend fun changes(
             caller: ControlCaller,

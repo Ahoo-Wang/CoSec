@@ -93,6 +93,26 @@ class DefaultControlPlane(
         return changes.apply(operator, key, desired, mode, note)
     }
 
+    override suspend fun check(
+        operator: Operator,
+        key: SnapshotKey,
+        base: Long,
+        operations: List<Operation>,
+        note: String,
+        confirmations: List<Confirmation>,
+    ): ChangeRequest = changes.check(operator, key, base, operations, note, confirmations)
+
+    override suspend fun checkApply(
+        operator: Operator,
+        key: SnapshotKey,
+        desired: PolicyDocument,
+        mode: ApplyMode,
+        note: String,
+    ): ChangeRequest {
+        authority.require(operator, key, ControlActions.READ)
+        return changes.checkApply(operator, key, desired, mode, note)
+    }
+
     override suspend fun rollback(
         operator: Operator,
         key: SnapshotKey,

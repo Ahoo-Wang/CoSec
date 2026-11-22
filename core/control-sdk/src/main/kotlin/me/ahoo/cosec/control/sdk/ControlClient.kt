@@ -47,6 +47,17 @@ class ControlClient(private val service: ControlService) {
     suspend fun propose(caller: ControlCaller, request: ChangeRequest): Change =
         AnswerJson.change(service.propose(caller, OperationJson.request(request)))
 
+    /**
+     * `POST /changes:check` (`CTL-78`): what [propose] would answer for [request], without proposing. It stores nothing,
+     * takes no slot and writes no change event; a caller who may not propose [request] may not check it either.
+     */
+    suspend fun check(caller: ControlCaller, request: ChangeRequest): ChangeCheck =
+        AnswerJson.check(service.check(caller, OperationJson.request(request)))
+
+    /** `POST /documents/{key}:check` (`CTL-78`): what [apply] would answer for [request], stored nowhere. */
+    suspend fun checkApply(caller: ControlCaller, request: ApplyRequest): ChangeCheck =
+        AnswerJson.check(service.checkApply(caller, request.document, OperationJson.request(request)))
+
     /** `GET /changes/{id}`. */
     suspend fun change(caller: ControlCaller, id: String): Change = AnswerJson.change(service.change(caller, id))
 

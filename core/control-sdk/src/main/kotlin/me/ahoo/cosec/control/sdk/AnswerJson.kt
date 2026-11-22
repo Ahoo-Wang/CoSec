@@ -114,27 +114,45 @@ internal object AnswerJson {
 
     fun change(answer: String): Change = change(WireJson.parse(answer))
 
+    /** The members of a check's answer the typed [ChangeCheck] reads: every member of `contract/control/change-check.json`. */
+    val CHECK_READ: Set<String> = setOf(
+        "state", "base", "base.revision", "base.digest", "candidate",
+        "findings", "findings.check", "findings.message", "findings.path", "findings.severity", "findings.status",
+        "escalations", "escalations.detail", "escalations.reason", "escalations.subject",
+    )
+
+    fun check(answer: String): ChangeCheck {
+        val node = WireJson.parse(answer)
+        return ChangeCheck(
+            state = ChangeState.of(node.text("state")),
+            base = base(node.need("base")),
+            findings = findings(node),
+            escalations = escalations(node),
+            candidate = node.optText("candidate"),
+        )
+    }
+
+    private fun base(node: JsonNode) = ChangeBase(node.long("revision"), node.optText("digest"))
+
+    private fun findings(node: JsonNode) = node.array("findings").map {
+        Finding(it.text("check"), it.text("path"), it.text("message"), it.long("status").toInt(), Severity.of(it.text("severity")))
+    }
+
+    private fun escalations(node: JsonNode) = node.array("escalations").map {
+        Escalation(it.text("subject"), EscalationReason.of(it.text("reason")), it.text("detail"))
+    }
+
     private fun change(node: JsonNode): Change = Change(
         id = node.text("id"),
         key = WireJson.key(node.text("key")),
         kind = ChangeKind.of(node.text("kind")),
         state = ChangeState.of(node.text("state")),
-        base = node.need("base").let { ChangeBase(it.long("revision"), it.optText("digest")) },
+        base = base(node.need("base")),
         note = node.text("note"),
         author = actor(node.need("author")),
         operations = node.array("operations").map(OperationJson::operation),
-        findings = node.array("findings").map {
-            Finding(
-                it.text("check"),
-                it.text("path"),
-                it.text("message"),
-                it.long("status").toInt(),
-                Severity.of(it.text("severity")),
-            )
-        },
-        escalations = node.array("escalations").map {
-            Escalation(it.text("subject"), EscalationReason.of(it.text("reason")), it.text("detail"))
-        },
+        findings = findings(node),
+        escalations = escalations(node),
         candidate = node.optText("candidate"),
         publishedRevision = node.optLong("publishedRevision"),
         skipShadow = node.optText("skipShadow"),

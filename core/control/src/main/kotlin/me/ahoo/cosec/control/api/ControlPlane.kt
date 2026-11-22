@@ -64,6 +64,28 @@ interface ControlPlane {
 
     suspend fun apply(operator: Operator, key: SnapshotKey, desired: PolicyDocument, mode: ApplyMode, note: String): ChangeRequest
 
+    /**
+     * `CTL-78`: what [propose] would answer for the same request, stored nowhere: the change as it would be checked, its
+     * state, findings and escalations, decided for [operator] as the proposal would be.
+     */
+    suspend fun check(
+        operator: Operator,
+        key: SnapshotKey,
+        base: Long,
+        operations: List<Operation>,
+        note: String,
+        confirmations: List<Confirmation> = emptyList(),
+    ): ChangeRequest
+
+    /** `CTL-78`: what [apply] would answer for the same request, stored nowhere. */
+    suspend fun checkApply(
+        operator: Operator,
+        key: SnapshotKey,
+        desired: PolicyDocument,
+        mode: ApplyMode,
+        note: String,
+    ): ChangeRequest
+
     suspend fun rollback(
         operator: Operator,
         key: SnapshotKey,

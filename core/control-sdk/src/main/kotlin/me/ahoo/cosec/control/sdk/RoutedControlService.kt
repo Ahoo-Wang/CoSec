@@ -68,6 +68,12 @@ abstract class RoutedControlService : ControlService {
     override suspend fun propose(caller: ControlCaller, request: String): String =
         call(caller, ServiceCall(POST, "/changes", body = request))
 
+    override suspend fun check(caller: ControlCaller, request: String): String =
+        call(caller, ServiceCall(POST, "/changes:check", body = request))
+
+    override suspend fun checkApply(caller: ControlCaller, key: SnapshotKey, request: String): String =
+        call(caller, ServiceCall(POST, "/documents/${key(key)}:check", body = request))
+
     override suspend fun change(caller: ControlCaller, id: String): String =
         call(caller, ServiceCall(GET, "/changes/${segment(id)}"))
 

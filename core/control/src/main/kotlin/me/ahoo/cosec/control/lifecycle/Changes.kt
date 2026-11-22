@@ -221,6 +221,25 @@ class Changes(
         confirmations: List<Confirmation> = emptyList(),
     ): ChangeRequest = proposals.propose(author, key, base, operations, note, kind, confirmations)
 
+    /**
+     * `CTL-78`: what [propose] would answer for the same request (its state, findings and escalations), by
+     * [Proposals.propose]'s own steps, the authorization included, stopped before the last: nothing is stored, no slot
+     * is taken, no change event is written.
+     */
+    suspend fun check(
+        author: Operator,
+        key: SnapshotKey,
+        base: Long,
+        operations: List<Operation>,
+        note: String,
+        confirmations: List<Confirmation> = emptyList(),
+    ): ChangeRequest =
+        proposals.propose(author, key, base, operations, note, ProvenanceKind.PUBLISH, confirmations, commit = false)
+
+    /** `CTL-78`: what [apply] would answer, as [check] is to [propose]. */
+    suspend fun checkApply(author: Operator, key: SnapshotKey, desired: PolicyDocument, mode: ApplyMode, note: String) =
+        proposals.apply(author, key, desired, mode, note, commit = false)
+
     /** [Proposals.apply]: proposes the operations that make the head of [key] into [desired]. */
     suspend fun apply(
         author: Operator,
