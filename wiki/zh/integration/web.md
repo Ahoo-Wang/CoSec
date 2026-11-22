@@ -95,7 +95,7 @@ CoSec 授权的路径是应用内的请求路径：
 
 - **去掉 `;` 路径参数**，与 Spring 的路由方式一致：`/orders;jsessionid=1/42` 按 `/orders/42` 授权；
 - **不解码**：未映射请求的资源就是收到的路径，包括百分号转义。模式如何匹配编码后的路径，见[策略语言](../policies/language.md)；
-- **在认证之前以 `400` `invalid-request` 拒绝**的情况：去掉路径参数并解码一次之后，含有 `.` 或 `..` 段（包括编码后的 `;`）；含有格式错误的百分号转义；长度超过 2048 个字符；或某一段超过 256 个字符。因此 Servlet 容器会解析成 `/admin` 的 `/public/..;/admin` 会被拒绝；
+- **在认证之前以 `400` `invalid-request` 拒绝**的情况：去掉路径参数并解码一次之后，含有 `.` 或 `..` 段（包括编码后的 `;`）；含有格式错误的百分号转义；按收到时（百分号编码后）的长度超过 2048 个字符；或某一段解码后超过 256 个字符（按 UTF-16 单元计，即匹配器看到的样子）。因此 Servlet 容器会解析成 `/admin` 的 `/public/..;/admin` 会被拒绝，而 29 个汉字组成的段（编码后 261 个字符）不会：段的上限在任何文字下都相同，而路径的上限按收到的内容计，所以单个由汉字组成的段最多 227 个字符。`decodeAndParseSegments: false` 的模式按收到的原文读取各段，所以它不匹配任何按收到时含有超过 256 个字符的段的路径；
 - **同样被拒绝**的情况：结尾之前含有空段（`//admin`、`/admin//x`，或去掉路径参数后变成 `//admin` 的 `/;x/admin`），含有编码后的分隔符（`%2F` 或 `%2f`），或者含有反斜杠（`\`、`%5C` 或 `%5c`）。模式把它们读成单独的段或某一段的一部分，所以 `/admin` 之下的 `DENY` 匹配不到它们，而会合并斜杠、解码分隔符或把 `\` 当作 `/` 的后端却按 `/admin/...` 提供服务。编码两次的分隔符（`%252F`、`%255C`）只解码一次，成为文本，照常决定；
 - **同样被拒绝**的情况：含有编码后的 `;`（`%3B`）或编码后的控制字符（`%00` 到 `%1F`、`%7F`），十六进制数字大小写均可，出现在路径任何位置，包括路径参数之内（`PIP-30`）。CoSec 把它们读成某一段里的文本，但网关之后先解码、再去掉路径参数的后端会把 `/admin%3Bx/users` 当作 `/admin/users` 提供服务，在 NUL 处截断或丢掉控制字符之后内容的后端又会提供另一个路径。`%25` 是段里的数据：`%253B` 只解码一次，成为文本 `%3B`，照常决定；结尾的 `.` 或空格也一样。未编码的控制字符同样被拒绝，尽管 CoSec 运行的服务器已经会在任何过滤器之前拒绝它。有的服务器自己也会拒绝其中一部分编码写法：Jetty 拒绝所有编码后的控制字符（以及 `%25`），Tomcat 拒绝 `%00`；
 - **保留末尾的 `/`**：`/admin/` 是一条独立的路径，与 Spring 的路由一致。写成 `/admin` 的模式不匹配它，`/admin/**` 匹配它。
@@ -263,16 +263,17 @@ val securityContext = CoSecSecurityContextHolder.requireSecurityContext()
 ## 代理后的客户端 IP {#client-ip-behind-proxies}
 
 策略、限流键、黑名单和审计事件看到的客户端 IP 是 `environment.ip`。CoSec 只读取它一次，且只从它信任的一方读取（`PIP-16`）；
-读取方式取决于服务器是否已经解析了转发头：`server.forward-headers-strategy`，Spring Boot 在 Kubernetes、Cloud Foundry、Heroku
-以及它识别出的其他云平台上会自行设为 `native`。启动日志中以 `(PIP-16)` 结尾的一行说明了采用的读取方式。
+读取方式取决于服务器是否已经解析了转发头：`server.request.header.forwarded.strategy`（或已弃用的前身
+`server.forward-headers-strategy`，其 `native` 即 `web-server`），Spring Boot 在 Kubernetes、Cloud Foundry、Heroku
+以及它识别出的其他云平台上会自行设为 `web-server`。启动日志中以 `(PIP-16)` 结尾的一行说明了采用的读取方式。
 
 | 服务器与策略 | 客户端 IP 的来源 | `cosec.authorization.remote-ip.max-trusted-index` |
 |---|---|---|
 | 任意服务器，没有策略（`none`，云平台之外的默认值） | `X-Forwarded-For` 右侧数起该位置的条目；没有该请求头时用连接的对端 | 宿主前面的代理数量（默认 `1`）；`0` 只读取对端 |
-| Tomcat，`native`（设置了 `server.tomcat.remoteip.remote-ip-header` 或 `protocol-header` 时也是） | Tomcat 的 `RemoteIpValve` 解析出的地址；CoSec 不再读取该请求头 | 不要设置：Tomcat 信任的代理由 `server.tomcat.remoteip.internal-proxies` 和 `trusted-proxies` 配置。设置它会导致启动失败 |
-| Reactor Netty 或 Jetty，`native` | `X-Forwarded-For` 右侧数起该位置的条目，绝不使用服务器从客户端可写的请求头里取出的地址；没有该请求头时地址未知 | 至少为 `1`；`0` 会导致启动失败 |
+| Tomcat，`web-server`（设置了 `server.tomcat.remoteip.remote-ip-header` 或 `protocol-header` 时也是） | Tomcat 的 `RemoteIpValve` 解析出的地址；CoSec 不再读取该请求头 | 不要设置：Tomcat 信任的代理由 `server.tomcat.remoteip.internal-proxies` 和 `trusted-proxies` 配置。设置它会导致启动失败 |
+| Reactor Netty 或 Jetty，`web-server` | `X-Forwarded-For` 右侧数起该位置的条目，绝不使用服务器从客户端可写的请求头里取出的地址；没有该请求头时地址未知 | 至少为 `1`；`0` 会导致启动失败 |
 | `framework`，或会改写请求的 `ForwardedHeaderFilter`、`ForwardedHeaderTransformer` bean | 启动失败：Spring 的过滤器把客户端所写的最左侧条目作为远端地址 | |
-| CoSec 无法判断的服务器上的 `native`，例如部署在外部容器中的 war | 启动失败：设置 `server.forward-headers-strategy=none` 和该索引 | |
+| CoSec 无法判断的服务器上的 `web-server`，例如部署在外部容器中的 war | 启动失败：设置 `server.request.header.forwarded.strategy=none` 和该索引 | |
 
 从右侧数起的那一条是你最外层代理追加的，因此客户端写在该请求头左侧的值永远不会被使用。条目数少于该值时，使用最左侧的条目。
 多行 `X-Forwarded-For` 按收到的顺序视为一个列表，因此客户端自己写的那一行位于你的代理那一行的左侧。没有该请求头的请求使用连接的对端；在 `native` 下的 Reactor Netty 或 Jetty 上则没有地址。

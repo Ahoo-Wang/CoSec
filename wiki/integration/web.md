@@ -140,8 +140,12 @@ Before anything else, `PathNormalizer` checks it. On every adapter the path is:
   patterns match encoded paths is in [Policy language](../policies/language.md);
 - **rejected with `400` `invalid-request`**, before authentication, when after removing path parameters and
   decoding once it has a `.` or `..` segment (also with an encoded `;`), when
-  it has a malformed percent-escape, when it is longer than 2048 characters, or when a segment is longer than 256
-  characters. So `/public/..;/admin`, which a servlet container resolves to `/admin`, is rejected;
+  it has a malformed percent-escape, when it is longer than 2048 characters as received (percent-encoded), or when a
+  segment is longer than 256 characters once decoded (UTF-16 units, as the matchers see it). So
+  `/public/..;/admin`, which a servlet container resolves to `/admin`, is rejected, and a segment of 29 CJK characters
+  (261 encoded) is not: the segment bound is the same in every script, while the path bound counts what arrives, so a
+  single segment of CJK text holds at most 227 characters. A pattern with `decodeAndParseSegments: false` reads the
+  segments as received, so it matches no path with a segment longer than 256 characters as received;
 - **rejected the same way** when it has an empty segment before its end (`//admin`, `/admin//x`, or `/;x/admin`, which
   removing the path parameter makes `//admin`), an encoded separator (`%2F` or `%2f`), or a backslash (`\`, `%5C` or
   `%5c`). A pattern reads these as segments of their own or as part of one, so a `DENY` under `/admin` would not match
@@ -407,16 +411,17 @@ still reads the context, and every check of it there is `false`.
 
 Policies, rate limit keys, the blacklist and audit events see the client IP as `environment.ip`. CoSec reads it once,
 from one party it trusts (`PIP-16`), and how depends on whether your server already resolves forwarded headers:
-`server.forward-headers-strategy`, which Spring Boot sets to `native` by itself on Kubernetes, Cloud Foundry, Heroku and
-the other cloud platforms it detects. The startup log names the reading in a line that ends with `(PIP-16)`.
+`server.request.header.forwarded.strategy` (or its deprecated predecessor `server.forward-headers-strategy`, whose
+`native` is `web-server`), which Spring Boot sets to `web-server` by itself on Kubernetes, Cloud Foundry, Heroku and the
+other cloud platforms it detects. The startup log names the reading in a line that ends with `(PIP-16)`.
 
 | Server and strategy | Where the client IP comes from | `cosec.authorization.remote-ip.max-trusted-index` |
 |---|---|---|
 | Any server, no strategy (`none`, the default off a cloud platform) | The `X-Forwarded-For` entry that many places from the right; the connection's peer without the header | The number of proxies in front of the host (default `1`); `0` reads the peer only |
-| Tomcat, `native` (also when `server.tomcat.remoteip.remote-ip-header` or `protocol-header` is set) | The address Tomcat's `RemoteIpValve` resolved; CoSec does not read the header again | Leave it unset: the proxies Tomcat trusts are `server.tomcat.remoteip.internal-proxies` and `trusted-proxies`. Setting it fails startup |
-| Reactor Netty or Jetty, `native` | The `X-Forwarded-For` entry that many places from the right, never the address the server took from a header the client writes; unknown without the header | At least `1`; `0` fails startup |
+| Tomcat, `web-server` (also when `server.tomcat.remoteip.remote-ip-header` or `protocol-header` is set) | The address Tomcat's `RemoteIpValve` resolved; CoSec does not read the header again | Leave it unset: the proxies Tomcat trusts are `server.tomcat.remoteip.internal-proxies` and `trusted-proxies`. Setting it fails startup |
+| Reactor Netty or Jetty, `web-server` | The `X-Forwarded-For` entry that many places from the right, never the address the server took from a header the client writes; unknown without the header | At least `1`; `0` fails startup |
 | `framework`, or a `ForwardedHeaderFilter` or `ForwardedHeaderTransformer` bean that rewrites | Startup fails: Spring's filter makes the leftmost entry, which the client writes, the remote address | |
-| `native` on a server CoSec cannot tell, such as a war in an external container | Startup fails: set `server.forward-headers-strategy=none` and the index | |
+| `web-server` on a server CoSec cannot tell, such as a war in an external container | Startup fails: set `server.request.header.forwarded.strategy=none` and the index | |
 
 The entry counted from the right is the one the outermost of your proxies appended, so a value the client put at the
 left of the header is never used. When the header has fewer entries than that, the leftmost one is used. Several

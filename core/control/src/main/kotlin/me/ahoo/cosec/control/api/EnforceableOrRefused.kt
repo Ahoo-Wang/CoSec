@@ -41,8 +41,9 @@ internal object EnforceableOrRefused {
         ?: throw ChangeRejectedException(
             BAD_REQUEST,
             "The resource is not one enforcement decides: an http path is refused as a request's is (a dot segment, " +
-                "an empty segment, an encoded separator, a backslash, a malformed escape or its length), and any " +
-                "resource is at most ${PathNormalizer.MAX_PATH_LENGTH} characters, " +
-                "${PathNormalizer.MAX_SEGMENT_LENGTH} per segment."
+                "an empty segment, an encoded separator, a backslash, a malformed escape, more than " +
+                "${PathNormalizer.MAX_PATH_LENGTH} characters as written or ${PathNormalizer.MAX_SEGMENT_LENGTH} in a " +
+                "segment once decoded), and a typed id is at most ${PathNormalizer.MAX_PATH_LENGTH} characters, " +
+                "${PathNormalizer.MAX_SEGMENT_LENGTH} per segment, as written."
         )
 }

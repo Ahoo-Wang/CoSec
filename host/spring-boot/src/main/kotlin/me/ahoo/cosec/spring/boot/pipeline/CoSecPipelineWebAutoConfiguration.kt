@@ -51,21 +51,16 @@ import org.springframework.boot.web.servlet.FilterRegistrationBean
 import org.springframework.cloud.gateway.route.RouteLocator
 import org.springframework.context.ApplicationContext
 import org.springframework.context.annotation.Bean
-import org.springframework.context.annotation.Condition
-import org.springframework.context.annotation.ConditionContext
-import org.springframework.context.annotation.Conditional
 import org.springframework.context.annotation.Configuration
 import org.springframework.context.annotation.Import
 import org.springframework.core.Ordered
 import org.springframework.core.env.Environment
-import org.springframework.core.type.AnnotatedTypeMetadata
 import org.springframework.web.cors.CorsConfigurationSource
 import org.springframework.web.cors.reactive.CorsWebFilter
 import org.springframework.web.filter.CorsFilter
 import org.springframework.web.method.support.HandlerMethodArgumentResolver
 import org.springframework.web.servlet.config.annotation.InterceptorRegistry
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer
-import org.springframework.web.servlet.handler.HandlerMappingIntrospector
 import org.springframework.web.cors.reactive.CorsConfigurationSource as ReactiveCorsConfigurationSource
 
 /**
@@ -123,32 +118,19 @@ internal class CoSecPipelineWebAutoConfiguration {
          * `STA-5`: the application declared a [CorsConfigurationSource], so a CORS filter runs right before the pipeline's:
          * a preflight is answered by it and never decided, and every response, a refusal included, carries the headers.
          * Without the bean nothing is registered, and a preflight is decided as `http:OPTIONS` for an anonymous caller.
-         *
-         * Spring MVC always has a [CorsConfigurationSource] of its own, the `HandlerMappingIntrospector`, which reads the
-         * handlers' `@CrossOrigin` and `addCorsMappings`: it is not the application's declaration and is ignored, or
-         * every MVC application would have the filter.
+         * Since Spring Framework 7.1, Spring MVC declares no [CorsConfigurationSource] of its own (its
+         * `HandlerMappingIntrospector` was one), so every one is the application's.
          */
         @Bean
-        @Conditional(DeclaredCorsSource::class)
+        @ConditionalOnBean(CorsConfigurationSource::class)
         @ConditionalOnMissingBean(CorsFilter::class)
         fun cosecCorsFilter(sources: ObjectProvider<CorsConfigurationSource>): FilterRegistrationBean<CorsFilter> {
-            val declared = sources.orderedStream().filter { it !is HandlerMappingIntrospector }.toList()
+            val declared = sources.orderedStream().toList()
             check(declared.size == 1) {
                 "STA-5: ${declared.size} CorsConfigurationSource beans of the application: the CORS filter before CoSec " +
                     "takes one. Declare a CorsFilter of your own to say which."
             }
             return FilterRegistrationBean(CorsFilter(declared.single())).apply { order = CORS_SERVLET_FILTER_ORDER }
-        }
-
-        /** True when the application declared a [CorsConfigurationSource] other than Spring MVC's own introspector. */
-        internal class DeclaredCorsSource : Condition {
-            override fun matches(context: ConditionContext, metadata: AnnotatedTypeMetadata): Boolean {
-                val factory = context.beanFactory ?: return false
-                return factory.getBeanNamesForType(CorsConfigurationSource::class.java, true, false).any {
-                    val type = factory.getType(it, false)
-                    type == null || !HandlerMappingIntrospector::class.java.isAssignableFrom(type)
-                }
-            }
         }
 
         /** A handler's `SecurityContext` parameter, read from the request (round 2 M4). */

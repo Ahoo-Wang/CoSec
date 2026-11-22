@@ -548,6 +548,36 @@ class HttpPathPatternTest {
             }
     }
 
+    /**
+     * `PIP-5` (#1860): a pattern that matches the path as received reads each segment as written, so it matches no path
+     * with a segment longer than 256 characters as written; one that decodes reads it decoded, which the pipeline
+     * bounds. Both with the evaluation's table and without it.
+     */
+    @Test
+    fun `a pattern that matches the path as received matches no segment longer than the bound as written`() {
+        val bound = "a".repeat(HttpPath.MAX_SEGMENT_LENGTH)
+        val cjk = java.net.URLEncoder.encode("标".repeat(29), Charsets.UTF_8)
+        for (pattern in listOf("/orders/*", "/orders/{id}", "/orders/**", "/**", "/orders/?*")) {
+            val raw = HttpPathPattern.compile(pattern, decodeAndParseSegments = false)
+            val decoded = HttpPathPattern.compile(pattern)
+            fun rawMatches(path: String): Boolean {
+                val parsed = HttpPath.parse(path, false)
+                val withTable = raw.match(parsed, EvaluationScratch()) != null
+                withTable.assert().describedAs(
+                    "$pattern on $path: with and without the table"
+                ).isEqualTo(raw.matches(parsed))
+                return withTable
+            }
+            rawMatches("/orders/$bound").assert().describedAs(pattern).isTrue()
+            rawMatches("/orders/${bound}a").assert().describedAs(pattern).isFalse()
+            rawMatches("/orders/$cjk").assert().describedAs(pattern).isFalse()
+            // Any segment of the path, not only one a glob reads: `/**` and `/orders/**` would match it otherwise.
+            rawMatches("/orders/1/${bound}a").assert().describedAs(pattern).isFalse()
+            decoded.matches(HttpPath.parse("/orders/$cjk")).assert().describedAs(pattern).isTrue()
+            decoded.matches(HttpPath.parse("/orders/${bound}a")).assert().describedAs(pattern).isTrue()
+        }
+    }
+
     private companion object {
         const val CASES = 50_000
         const val SEGMENTS = 40

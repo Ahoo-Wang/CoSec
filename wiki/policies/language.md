@@ -237,7 +237,7 @@ A resource may be a pattern object with options, for `http:path:` patterns only:
 | Option | Default | Meaning |
 |---|---|---|
 | `caseSensitive` | `true` | `false` compares literals ignoring ASCII case. |
-| `decodeAndParseSegments` | `true` | `true` matches each segment by its percent-decoded value without `;` parameters; `false` by its text as received, except that `%2F` reads as `/`. Only an ALLOW may set it `false` (`DOC-14`). |
+| `decodeAndParseSegments` | `true` | `true` matches each segment by its percent-decoded value without `;` parameters; `false` by its text as received, except that `%2F` reads as `/`, and then it matches no path with a segment longer than 256 characters as received (`PIP-5`: the pipeline bounds a segment once decoded, and reading the encoded text costs its length). Only an ALLOW may set it `false` (`DOC-14`). |
 
 A DENY statement or a rate limit rule whose pattern sets `decodeAndParseSegments` to `false` does not compile (`DOC-14`).
 Such a pattern matches the path still percent-encoded, so it misses every encoded spelling of the path it names: a DENY

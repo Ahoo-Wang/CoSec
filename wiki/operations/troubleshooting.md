@@ -772,25 +772,25 @@ at all ([Actuator on a gateway](../integration/web.md#actuator-on-a-gateway)).
 ### Startup fails on the client address
 
 ```text
-server.forward-headers-strategy=framework: Spring's ForwardedHeaderFilter and ForwardedHeaderTransformer make the leftmost X-Forwarded-For entry, which the client writes, the remote address ... (https://cosec.ahoo.me/operations/troubleshooting#startup-fails-on-the-client-address).
+server.request.header.forwarded.strategy=framework: Spring's ForwardedHeaderFilter and ForwardedHeaderTransformer make the leftmost X-Forwarded-For entry, which the client writes, the remote address ... (https://cosec.ahoo.me/operations/troubleshooting#startup-fails-on-the-client-address).
 cosec.authorization.remote-ip.max-trusted-index is set, but Tomcat's RemoteIpValve resolves the client address on this host ...
-cosec.authorization.remote-ip.max-trusted-index=0 reads the connection's peer, but with the native forward-headers strategy ... the peer cannot be read. ...
-The native forward-headers strategy is on (configured or inferred from the cloud platform), but CoSec cannot tell how this host's server resolves the client address ...
+cosec.authorization.remote-ip.max-trusted-index=0 reads the connection's peer, but with the web-server forwarded-header strategy ... the peer cannot be read. ...
+The web-server forwarded-header strategy is on (configured or inferred from the cloud platform), but CoSec cannot tell how this host's server resolves the client address ...
 ```
 
 CoSec reads the client address once, from one party it trusts (`PIP-16`), and refuses to start where it cannot tell
-which. The native strategy may be on without your setting it: Spring Boot turns it on by itself on Kubernetes and the
+which. The web-server strategy may be on without your setting it: Spring Boot turns it on by itself on Kubernetes and the
 other cloud platforms it detects. Per message:
 
 - `framework`, or a `ForwardedHeaderFilter` or `ForwardedHeaderTransformer` bean that rewrites the request: use
-  `server.forward-headers-strategy=native` and configure the proxies on the server, or `none` and set
+  `server.request.header.forwarded.strategy=web-server` and configure the proxies on the server, or `none` and set
   `cosec.authorization.remote-ip.max-trusted-index`. A filter that only removes the headers (`removeOnly`) is accepted.
-- Tomcat with `native`: remove `max-trusted-index`; Tomcat's `server.tomcat.remoteip.internal-proxies` and
-  `trusted-proxies` say which proxies it trusts. Or set `server.forward-headers-strategy=none` to have CoSec read
+- Tomcat with `web-server`: remove `max-trusted-index`; Tomcat's `server.tomcat.remoteip.internal-proxies` and
+  `trusted-proxies` say which proxies it trusts. Or set `server.request.header.forwarded.strategy=none` to have CoSec read
   `X-Forwarded-For` itself.
-- Reactor Netty or Jetty with `native` and `max-trusted-index: 0`: set the index to the number of proxies in front of
-  the host, or `server.forward-headers-strategy=none` on a host clients reach directly.
-- A server CoSec cannot tell, such as a war in an external container: set `server.forward-headers-strategy=none` and the
+- Reactor Netty or Jetty with `web-server` and `max-trusted-index: 0`: set the index to the number of proxies in front of
+  the host, or `server.request.header.forwarded.strategy=none` on a host clients reach directly.
+- A server CoSec cannot tell, such as a war in an external container: set `server.request.header.forwarded.strategy=none` and the
   index.
 
 The table is in [Client IP behind proxies](../integration/web.md#client-ip-behind-proxies).
@@ -1093,7 +1093,7 @@ principal sets a tenant's boundary`.
 |---|---|---|
 | `401` | No principal the pipeline permitted stands behind the request: anonymous, or the route is not served behind the pipeline. Nothing of its body is read. | Send a credential. The documents must permit the HTTP request to `cosec.control.http.base-path` for this principal. |
 | `403` | The operator may not take this action on this document (for `simulate` and `explain`, on the tenant the request is decided in: `(0)` for one without a `principal`), or the hard rules forbid it: the author approving their own change, someone else rebasing it, or anyone but its author abandoning a revoke of a live break-glass binding (`BRK-10`). | Bind the operator a control-plane policy (`cosec:platform-admin`, `cosec:tenant-admin`, ...) for that document ([Testing changes](../policies/testing.md)). |
-| `400` | The body is not a JSON object, a field is missing or unknown, a value has the wrong type or does not parse (a time, a mode, a number), or (WebMvc) the body is larger than 10 MB (the document cap and 2 MB, [computed](./configuration.md#computed-not-configured)). `simulate` and `explain` also refuse a request without a `principal` that names a tenant other than `(0)`, which enforcement would decide on `(0)`; one that repeats, with different values, a header a document of its view reads, as enforcement refuses it; and an `http` path enforcement refuses (a dot segment, a malformed escape, over 2,048 characters or 256 per segment) or a typed id over those lengths, which `analyze` refuses too. Any request whose path, query or body holds a string with an unpaired UTF-16 surrogate (a JSON escape such as `"\uD800"`) is refused before its route reads it: `The request holds a string with an unpaired UTF-16 surrogate, which no id may hold (IDN-10).` | Fix the request; `detail` says what, in the control plane's own words or by the field's name, never an exception's message. A `400` without `detail` is logged at `INFO`: `Control API <method> <path> (request <requestId>) is 400: <reason>`. On WebFlux a large body is bounded by `spring.codec.max-in-memory-size`. |
+| `400` | The body is not a JSON object, a field is missing or unknown, a value has the wrong type or does not parse (a time, a mode, a number), or (WebMvc) the body is larger than 10 MB (the document cap and 2 MB, [computed](./configuration.md#computed-not-configured)). `simulate` and `explain` also refuse a request without a `principal` that names a tenant other than `(0)`, which enforcement would decide on `(0)`; one that repeats, with different values, a header a document of its view reads, as enforcement refuses it; and an `http` path enforcement refuses (a dot segment, a malformed escape, over 2,048 characters as received or 256 per segment once decoded) or a typed id over those lengths as written, which `analyze` refuses too. Any request whose path, query or body holds a string with an unpaired UTF-16 surrogate (a JSON escape such as `"\uD800"`) is refused before its route reads it: `The request holds a string with an unpaired UTF-16 surrogate, which no id may hold (IDN-10).` | Fix the request; `detail` says what, in the control plane's own words or by the field's name, never an exception's message. A `400` without `detail` is logged at `INFO`: `Control API <method> <path> (request <requestId>) is 400: <reason>`. On WebFlux a large body is bounded by `spring.codec.max-in-memory-size`. |
 | `404` | No such route, document or change, or one the operator may not see. A path with a trailing `/` or an empty segment (`//`) is no route. | Use the route's exact path. |
 | `409` | The base moved (`[<doc>] is at revision <n>, not <m>`), the change is in another state, another change holds the document's staging slot (only a break-glass revoke, or a change that only narrows by a holder of `cosec:skip-shadow`, takes it, and only another revoke of a live binding takes a revoke of a live binding's: [Taking a busy slot](../policies/testing.md#taking-a-busy-slot)), the shadow window is open or blocked, or a break-glass revoke did not take effect (`binding [<id>] still grants: change <id> is <state>`, below). | Rebase, wait for the other change, read the window's summary, or revoke again. |
 | `409` from `:apply` with `REPLACE`: `[<doc>] is at revision <n>, not <m>: REPLACE removes what the file leaves out, and the file was read at revision <m>` | The file's header names the revision it was read at, and the head moved since: applying it would remove what was published in between. | Read the head (`GET /documents/<doc>`), bring what changed into the file, set its `revision` to the head's and apply again ([Changes](../policies/testing.md#changes)). |
