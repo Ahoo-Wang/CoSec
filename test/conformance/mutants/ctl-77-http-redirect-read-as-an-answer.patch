@@ -1,0 +1,17 @@
+# Rule: CTL-77
+# Mutant: a redirect the client did not follow is read as the route's answer
+# Tests: :control-http:test --tests me.ahoo.cosec.control.http.HttpControlServiceTest
+
+diff --git a/extensions/control-http/src/main/kotlin/me/ahoo/cosec/control/http/HttpTransport.kt b/extensions/control-http/src/main/kotlin/me/ahoo/cosec/control/http/HttpTransport.kt
+index a9b7ada63..429fd6d61 100644
+--- a/extensions/control-http/src/main/kotlin/me/ahoo/cosec/control/http/HttpTransport.kt
++++ b/extensions/control-http/src/main/kotlin/me/ahoo/cosec/control/http/HttpTransport.kt
+@@ -104,7 +104,7 @@ internal class HttpTransport(
+     }
+ 
+     private companion object {
+-        val SUCCESS = 200..299
++        val SUCCESS = 200..399
+         const val ACCEPT = "Accept"
+         const val CONTENT_TYPE = "Content-Type"
+         const val JSON = "application/json"

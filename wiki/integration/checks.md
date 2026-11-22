@@ -385,8 +385,26 @@ the same in process and over the network (`CTL-65`, `CTL-77`). Over the network,
 written for each call. A request's principal is written as the gateway forwards it, and the application's own principal
 as the identity the in-process implementation admits. The host believes the header because only the services you name
 reach its service port. A request's principal whose authenticator named no credential cannot be stated over the network,
-and is refused before anything is sent. `HttpControlService(baseUri, client)` takes the application's `HttpClient`, with
-its TLS and timeouts; a call has no timeout of its own.
+and is refused before anything is sent.
+
+Over the network, only a `2xx` is an answer: any other status, a redirect or a proxy's error page included, is a
+`ControlRefusedException` with that status and body. A call waits for its answer 30 seconds by default (the `timeout` of
+`HttpControlService`) and then throws `HttpTimeoutException`. The outcome of a write that timed out is unknown, so read
+the change or the document again before retrying. A change it left staged is taken over by the next
+`proposeAndPublishWithoutShadow` of the same principal after one patience. Any other failure of the connection is the
+`IOException` the client throws: the one thing the in-process implementation never answers.
+
+The starter's `HttpControlService` uses the JDK's default `HttpClient`, which presents no client certificate. For a host
+whose service port asks for one (mutual TLS), declare the application's own `ControlService` bean with its client; the
+starter then makes none:
+
+```kotlin
+@Bean
+fun controlService(sslContext: SSLContext): ControlService = HttpControlService(
+    URI("https://control:8082/cosec/control/v1"),
+    HttpClient.newBuilder().sslContext(sslContext).build(),
+)
+```
 
 - **Who acts:**
   - `ControlCaller.of(securityContext)` acts as the user whose request you are serving. It takes the

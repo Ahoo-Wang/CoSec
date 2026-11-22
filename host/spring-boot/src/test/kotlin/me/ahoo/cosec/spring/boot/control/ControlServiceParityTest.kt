@@ -16,8 +16,6 @@
 package me.ahoo.cosec.spring.boot.control
 
 import kotlinx.coroutines.runBlocking
-import me.ahoo.cocache.api.spi.CoherenceBackend
-import me.ahoo.cocache.core.memory.InMemoryBackend
 import me.ahoo.cocache.spring.boot.CoCacheAutoConfiguration
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
@@ -30,6 +28,7 @@ import me.ahoo.cosec.control.sdk.ChangeState
 import me.ahoo.cosec.control.sdk.ControlCaller
 import me.ahoo.cosec.control.sdk.ControlRefusedException
 import me.ahoo.cosec.control.sdk.ControlService
+import me.ahoo.cosec.control.store.ControlStore
 import me.ahoo.cosec.control.store.Publication
 import me.ahoo.cosec.control.store.Revisions
 import me.ahoo.cosec.document.Actor
@@ -54,6 +53,8 @@ import me.ahoo.cosec.testkit.PermittedRequest
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import org.springframework.boot.autoconfigure.AutoConfigurations
+import org.springframework.boot.data.redis.autoconfigure.DataRedisAutoConfiguration
+import org.springframework.boot.data.redis.autoconfigure.DataRedisReactiveAutoConfiguration
 import org.springframework.boot.jackson.autoconfigure.JacksonAutoConfiguration
 import org.springframework.boot.test.context.FilteredClassLoader
 import org.springframework.boot.test.context.runner.ReactiveWebApplicationContextRunner
@@ -65,6 +66,7 @@ import tools.jackson.databind.node.ObjectNode
 import java.net.URI
 import java.time.Duration
 import java.time.Instant
+import java.util.UUID
 
 /**
  * `CTL-77`: the two implementations of `ControlService` answer alike. One host runs the control plane and its service port
@@ -73,7 +75,8 @@ import java.time.Instant
  * published alike. Every answer and every refusal is compared, less what names the call itself (a change's id and times,
  * its digests, how its author was identified, the request id): the same state, operations, findings, conflicts and statuses.
  * Both kinds of caller are run: the application's own principal (`ControlCaller.service`) and the principal of a request
- * the application serves (`ControlCaller.of`), a context CoSec made.
+ * the application serves (`ControlCaller.of`), a context CoSec made. The store is the starter's CoCache over real Redis,
+ * one that keeps its open-change sets (`CTL-54`), so the listings are compared for what they answer, a cursor followed.
  */
 class ControlServiceParityTest {
     private val runner = ReactiveWebApplicationContextRunner()
@@ -81,6 +84,8 @@ class ControlServiceParityTest {
         .withConfiguration(
             AutoConfigurations.of(
                 JacksonAutoConfiguration::class.java,
+                DataRedisAutoConfiguration::class.java,
+                DataRedisReactiveAutoConfiguration::class.java,
                 CoCacheAutoConfiguration::class.java,
                 HttpHandlerAutoConfiguration::class.java,
                 WebFluxAutoConfiguration::class.java,
@@ -97,7 +102,7 @@ class ControlServiceParityTest {
             ),
         )
         .withPropertyValues(
-            "cocache.backend=memory",
+            "cosec.key-prefix=parity-${UUID.randomUUID()}",
             "cosec.ip2region.enabled=false",
             "cosec.authorization.snapshot.eviction-check=warn",
             "cosec.authorization.routes.location=",
@@ -106,7 +111,6 @@ class ControlServiceParityTest {
             "cosec.jwt.enabled=false",
             "${ControlServicePort.KEY}=0",
         )
-        .withBean(CoherenceBackend::class.java, { InMemoryBackend() })
 
     /** One call's answer, or its refusal, as text: what the two implementations are compared on. */
     private suspend fun answer(call: suspend () -> String): String = try {
@@ -119,11 +123,12 @@ class ControlServiceParityTest {
         "refused before the call: ${refused.message}"
     }
 
-    /** [node] without what names the call itself rather than what it did. */
+    /** [node] without what names the call itself rather than what it did; a cursor is compared for being there. */
     private fun normalized(node: JsonNode): String {
         fun strip(node: JsonNode) {
             if (node is ObjectNode) {
                 VOLATILE.forEach(node::remove)
+                node.get("next")?.takeIf { it.isString }?.let { node.put("next", "<cursor>") }
                 node.values().forEach(::strip)
             } else if (node.isArray) {
                 node.values().forEach(::strip)
@@ -169,6 +174,13 @@ class ControlServiceParityTest {
         record { service.skipShadow(iam, second, "parity") }
         record { service.publish(iam, first) }
         record { service.changes(iam, key) }
+        // A page of one, and the page its cursor leads to, over three open changes.
+        record { service.propose(iam, proposal("page-a", 2)) }
+        record { service.propose(iam, proposal("page-b", 2)) }
+        val page = service.changes(iam, key, limit = 1)
+        record { page }
+        val next = checkNotNull(CoSecJson.mapper.readTree(page).get("next")?.asString()) { "a page of one has a next" }
+        record { service.changes(iam, key, after = next, limit = 1) }
         record { service.changes(iam, state = ChangeState.CHECKED) }
         record { service.rebase(iam, second) }
         record { service.abandon(iam, second) }
@@ -219,6 +231,11 @@ class ControlServiceParityTest {
             context.startupFailure.assert().isNull()
             publish(context, SnapshotKey.Platform, DocumentKind.PLATFORM, "", PLATFORM)
             listOf(LOCAL, REMOTE).forEach { publish(context, SnapshotKey.Tenant(it), DocumentKind.TENANT, it, TENANT) }
+            // What the control plane's first maintenance pass does on a new store, done now rather than waited for: the
+            // open-change sets are kept from the start (CTL-54), so a listing answers instead of 503.
+            val store = context.getBean(ControlStore::class.java)
+            runBlocking { store.keepOpenChanges() }
+            runBlocking { store.openChangesKept() }.assert().isTrue()
             val local = context.getBean(ControlService::class.java)
             local.assert().isInstanceOf(LocalControlService::class.java)
             val port = context.getBean(ControlServiceListener::class.java).boundPort
@@ -246,6 +263,9 @@ class ControlServiceParityTest {
                 .contains("409 CONFLICT conflict=SLOT_HELD heldBy=true")
                 .contains("refused before the call")
             inProcess.count { it.startsWith("40") }.assert().isGreaterThanOrEqualTo(4)
+            // The listings answer, with a cursor to follow: nothing compared as two unavailable stores.
+            inProcess.filter { it.startsWith("503") }.assert().isEmpty()
+            inProcess.joinToString("\n").assert().contains("\"next\":\"<cursor>\"").contains("\"changes\":[{")
         }
     }
 
@@ -256,7 +276,7 @@ class ControlServiceParityTest {
         /** What names the call rather than what it did: its ids and times, digests, its author's origin, its request. */
         val VOLATILE = listOf(
             "id", "createdAt", "updatedAt", "publishedAt", "asOf", "at", "origin", "digest", "candidate", "requestId",
-            "next", "change", "publishedBy", "provenance",
+            "change", "publishedBy", "provenance",
         )
 
         /** Anyone authenticated reaches the control API; svc-iam has the service's rights over tenants' documents. */
