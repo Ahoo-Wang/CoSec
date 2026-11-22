@@ -234,7 +234,7 @@ class Changes(
         note: String,
         confirmations: List<Confirmation> = emptyList(),
     ): ChangeRequest =
-        proposals.propose(author, key, base, operations, note, ProvenanceKind.PUBLISH, confirmations, commit = false)
+        proposals.check(author, key, base, operations, note, confirmations)
 
     /** `CTL-78`: what [apply] would answer, as [check] is to [propose]. */
     suspend fun checkApply(author: Operator, key: SnapshotKey, desired: PolicyDocument, mode: ApplyMode, note: String) =

@@ -78,14 +78,36 @@ internal class Proposals(
         kind: ProvenanceKind = ProvenanceKind.PUBLISH,
         /** `deny-nomatch` confirmations of the statements that need them (RFC 0007 §9.5). */
         confirmations: List<Confirmation> = emptyList(),
-        /** False for a check (`CTL-78`): every step but the last, which stores the change and writes its event. */
-        commit: Boolean = true,
     ): ChangeRequest {
         if (kind != ProvenanceKind.PUBLISH && kind != ProvenanceKind.BREAK_GLASS) {
             throw ChangeRejectedException(BAD_REQUEST, "a change is proposed as PUBLISH or BREAK_GLASS, not $kind")
         }
         requireOperationBudget(operations)
-        return proposeAs(author, key, base, operations, note, kind, Applying(confirmations), commit)
+        return proposeAs(author, key, base, operations, note, kind, Applying(confirmations))
+    }
+
+    /**
+     * `CTL-78`: what [propose] would answer for the same `PUBLISH` request, by its own steps ([proposeAs]) stopped
+     * before the last: nothing is stored, no slot is taken, no change event is written.
+     */
+    suspend fun check(
+        author: Operator,
+        key: SnapshotKey,
+        base: Long,
+        operations: List<Operation>,
+        note: String,
+        confirmations: List<Confirmation> = emptyList(),
+    ): ChangeRequest {
+        requireOperationBudget(operations)
+        return proposeAs(
+            author,
+            key,
+            base,
+            operations,
+            note,
+            ProvenanceKind.PUBLISH,
+            Applying(confirmations, commit = false)
+        )
     }
 
     /**
@@ -112,13 +134,12 @@ internal class Proposals(
         operations: List<Operation>,
         note: String,
         kind: ProvenanceKind,
-        /** The confirmations it carries, and what an `apply` adds: notes beside the checks' findings, what a stale base says. */
-        applying: Applying,
         /**
-         * False for a check (`CTL-78`): the same steps, the authorization, the base and every check of the candidate
-         * included, and none of what follows them. Nothing is stored, no slot is taken, no change event is written.
+         * The confirmations it carries, what an `apply` adds (notes beside the checks' findings, what a stale base says),
+         * and whether it is committed: a check (`CTL-78`) runs the same steps, the authorization, the base and every check
+         * of the candidate included, and none of what follows them.
          */
-        commit: Boolean = true,
+        applying: Applying,
     ): ChangeRequest {
         val head = revisions.head(key)
         // Keyed on what the change does, not on its kind (review K1).
@@ -137,7 +158,7 @@ internal class Proposals(
         val now = clock.instant()
         val draft = ChangeRequest(
             // A check makes no change, so it takes no id: the next proposal's is the one it would have had (CTL-78).
-            id = if (commit) ids() else CHECKED_ONLY,
+            id = if (applying.commit) ids() else CHECKED_ONLY,
             key = key,
             base = head?.let { Base(it.revision, it.digest) } ?: Base.NONE,
             operations = operations,
@@ -159,7 +180,7 @@ internal class Proposals(
             author
         ).let { if (applying.notes.isEmpty()) it else it.copy(findings = it.findings + applying.notes) }
         // A check ends here: what follows writes, and only a proposal writes (CTL-78).
-        if (!commit) return checked
+        if (!applying.commit) return checked
         if (breakGlass) {
             flow.audit(ChangeEvent.Kind.BREAK_GLASS_REQUESTED, checked, author.actor, origin = author.origin)
         }
@@ -208,12 +229,11 @@ internal class Proposals(
                 operations,
                 note,
                 ProvenanceKind.PUBLISH,
-                Applying(notes = kept),
-                commit,
+                Applying(notes = kept, commit = commit),
             )
         }
         if (head == null) {
-            return proposeAs(author, key, 0, operations, note, ProvenanceKind.PUBLISH, Applying(), commit)
+            return proposeAs(author, key, 0, operations, note, ProvenanceKind.PUBLISH, Applying(commit = commit))
         }
         return proposeAs(
             author,
@@ -226,8 +246,7 @@ internal class Proposals(
                 "REPLACE removes what the file leaves out, and the file was read at revision ${desired.revision}. " +
                     "Read the head (GET /documents/{key}), bring what changed since into the file, set its revision " +
                     "to $current and apply again"
-            }),
-            commit,
+            }, commit = commit),
         )
     }
 
@@ -278,13 +297,15 @@ internal class Proposals(
     }
 
     /**
-     * What a proposal carries beside its operations: its [confirmations] (RFC 0007 §9.5), and what an `apply` adds,
-     * [notes] beside its checks' findings (UC-2) and what a stale base says to do next (UC-5).
+     * What a proposal carries beside its operations: its [confirmations] (RFC 0007 §9.5), what an `apply` adds,
+     * [notes] beside its checks' findings (UC-2) and what a stale base says to do next (UC-5), and whether it is
+     * [commit]ted: false for a check (`CTL-78`), which stops before the last step.
      */
     private class Applying(
         val confirmations: List<Confirmation> = emptyList(),
         val notes: List<Finding> = emptyList(),
         val stale: ((Long) -> String)? = null,
+        val commit: Boolean = true,
     )
 
     private companion object {
