@@ -17,8 +17,12 @@ import kotlinx.coroutines.delay
 import java.time.Duration
 
 /** How long [ControlClient.proposeAndPublishWithoutShadow] keeps trying, and how long it waits between two tries. */
-internal class Patience(patience: Duration, private val clock: () -> Long = System::nanoTime) {
-    private val deadline = clock() + patience.toNanos()
+internal class Patience(
+    /** How long the write keeps trying, and so how long a change it gave up on stays before it abandons it. */
+    val duration: Duration,
+    private val clock: () -> Long = System::nanoTime,
+) {
+    private val deadline = clock() + duration.toNanos()
     private var pause = FIRST_PAUSE_MILLIS
 
     /** Waits before the next try and answers true; false, without waiting, once the next try would come too late. */

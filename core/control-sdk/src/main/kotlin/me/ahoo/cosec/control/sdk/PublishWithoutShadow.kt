@@ -38,16 +38,30 @@ internal class PublishWithoutShadow(
         }
     }
 
-    /** The published change, or one that waits for a person; null when the head moved and the whole is to be made again. */
+    /**
+     * The published change, or one that waits for a person; null when the whole is to be made again: the head moved, or
+     * another write took the change's place.
+     */
     private suspend fun publish(proposed: Change): Change? {
         val staged = stage(proposed) ?: return null
+        if (staged.state == ChangeState.CONFLICTED) return remade(staged)
         if (staged.state != ChangeState.READY) return staged
-        return try {
+        val published = try {
             client.publish(caller, staged.id)
         } catch (e: ControlRefusedException) {
             givenUp(staged, e)
-            null
+            return null
         }
+        return if (published.state == ChangeState.CONFLICTED) remade(published) else published
+    }
+
+    /**
+     * [conflicted], whose place another write took (`CONFLICTED`), abandoned: null to make the whole again within the
+     * patience, or the abandoned change once the patience is spent.
+     */
+    private suspend fun remade(conflicted: Change): Change? {
+        val abandoned = client.abandon(caller, conflicted.id)
+        return if (patience.next()) null else abandoned
     }
 
     /** [proposed] staged; null when it was abandoned to be made again on a moved head. */
@@ -75,19 +89,28 @@ internal class PublishWithoutShadow(
     }
 
     /**
-     * Abandons the holder [heldBy] when this write may: a change of the same author as [proposed], left before it
-     * published (`CHECKED`, `SHADOWING`, `READY`), as a writer that stopped halfway leaves it. Anything else (another
-     * author's change, one waiting for a person, one this caller may not read) is left as it is, and waited for.
+     * Abandons the holder [heldBy] when it was left by a writer that died: a change of the same author as [proposed],
+     * left before it published (`CHECKED`, `SHADOWING`, `READY`), and not updated for at least the patience. Every
+     * writer of this kind abandons its own change once its patience is spent, so a holder that old has no writer left;
+     * a younger one may be a live writer's, another replica acting as the same principal, and is waited for. Both times
+     * are the control plane's (the holder's `updatedAt`, [proposed]'s `createdAt`), never this process's clock. Anything
+     * else (another author's change, one waiting for a person, one this caller may not read) is waited for too.
      */
     private suspend fun releaseLeftHalfway(proposed: Change, heldBy: String?) {
         if (heldBy == null || heldBy == proposed.id) return
         try {
             val holder = client.change(caller, heldBy)
-            if (holder.author == proposed.author && holder.state in LEFT_HALFWAY) client.abandon(caller, holder.id)
+            if (holder.author == proposed.author && holder.state in LEFT_HALFWAY && abandonedBy(holder, proposed)) {
+                client.abandon(caller, holder.id)
+            }
         } catch (_: ControlRefusedException) {
             // Not readable, or no longer abandonable: waited for like any other holder.
         }
     }
+
+    /** Whether [holder] has not been updated for a whole patience before [proposed] was made: its writer gave up or died. */
+    private fun abandonedBy(holder: Change, proposed: Change): Boolean =
+        !holder.updatedAt.plus(patience.duration).isAfter(proposed.createdAt)
 
     /** Abandons [change] after [e]; throws [e] unless the whole is to be made again on the moved head. */
     private suspend fun givenUp(change: Change, e: ControlRefusedException) {

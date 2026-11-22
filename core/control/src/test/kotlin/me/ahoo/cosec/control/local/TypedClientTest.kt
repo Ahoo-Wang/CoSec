@@ -15,6 +15,9 @@
 
 package me.ahoo.cosec.control.local
 
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.runBlocking
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
@@ -309,16 +312,67 @@ class TypedClientTest {
     }
 
     @Test
-    fun `a write takes the slot a change of its own author left halfway - CTL-80`() {
+    fun `a write takes the slot a change of its own author left a patience ago - CTL-80`() {
         val plane = Plane()
         val alice = plane.caller("alice")
         val halfway = plane.leftHalfway(alice, "halfway")
+        // A minute later by the control plane's clock: longer than the write's patience of 30 seconds.
+        plane.fixture.clock.now = plane.fixture.clock.now.plusSeconds(60)
         val typed = Operation.PutPolicy(Policy("typed", listOf(Statement(Effect.ALLOW, listOf("order:list")))))
         val published = runBlocking {
             plane.client.proposeAndPublishWithoutShadow(alice, acme, listOf(typed), "typed", "projected")
         }
         published.state.assert().isEqualTo(ChangeState.PUBLISHED)
         runBlocking { plane.client.change(alice, halfway) }.state.assert().isEqualTo(ChangeState.ABANDONED)
+    }
+
+    @Test
+    fun `a write waits for a slot its own author holds within the patience, never abandoning it - CTL-80`() {
+        val plane = Plane()
+        val alice = plane.caller("alice")
+        // Another replica acting as alice, staged a moment ago and still writing.
+        val live = plane.leftHalfway(alice, "live")
+        val typed = Operation.PutPolicy(Policy("typed", listOf(Statement(Effect.ALLOW, listOf("order:list")))))
+        val refused = assertThrownBy<ControlRefusedException> {
+            runBlocking {
+                plane.client.proposeAndPublishWithoutShadow(
+                    alice,
+                    acme,
+                    listOf(typed),
+                    "typed",
+                    "projected",
+                    Duration.ofMillis(300),
+                )
+            }
+        }.actual()
+        refused.conflict.assert().isEqualTo(ConflictKind.SLOT_HELD)
+        refused.heldBy.assert().isEqualTo(live)
+        runBlocking { plane.client.change(alice, live) }.state.assert().isEqualTo(ChangeState.READY)
+    }
+
+    @Test
+    fun `two writes of one principal on one document at once both publish - CTL-80`() {
+        val plane = Plane()
+        val alice = plane.caller("alice")
+        fun write(id: String) = Operation.PutPolicy(Policy(id, listOf(Statement(Effect.ALLOW, listOf("order:list")))))
+        val published = runBlocking(Dispatchers.Default) {
+            listOf("first", "second").map { id ->
+                async {
+                    plane.client.proposeAndPublishWithoutShadow(
+                        alice,
+                        acme,
+                        listOf(write(id)),
+                        id,
+                        "projected",
+                        Duration.ofSeconds(20),
+                    )
+                }
+            }.awaitAll()
+        }
+        published.map { it.state }.assert().containsExactly(ChangeState.PUBLISHED, ChangeState.PUBLISHED)
+        val head = runBlocking { plane.client.document(alice, acme) }
+        head.revision.assert().isEqualTo(3L)
+        head.content.policies.map { it.id }.assert().contains("first", "second")
     }
 
     @Test

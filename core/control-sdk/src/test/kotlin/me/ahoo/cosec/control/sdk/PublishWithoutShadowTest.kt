@@ -151,11 +151,12 @@ class PublishWithoutShadowTest {
     }
 
     @Test
-    fun `a slot its own author left halfway is abandoned and taken`() {
+    fun `a slot its own author left a patience ago is abandoned and taken`() {
         val service = Scripted { call, count ->
             when {
                 call == "skipShadow" && count == 1 -> throw conflict(ConflictKind.SLOT_HELD, heldBy = "c0")
-                call == "change" -> change("READY", id = "c0")
+                // Not updated for a day before this write's change was made: its writer is gone.
+                call == "change" -> change("READY", id = "c0", updatedAt = "2026-11-20T00:00:00Z")
                 else -> usual(call)
             }
         }
@@ -176,10 +177,13 @@ class PublishWithoutShadowTest {
     }
 
     @Test
-    fun `a slot another author holds, or one waiting for a person holds, is waited for and never abandoned`() {
+    fun `a slot another author holds, one waiting for a person, or a live writer of its own author, is waited for`() {
+        val dayOld = "2026-11-20T00:00:00Z"
         listOf(
-            change("READY", id = "c0", author = "service:svc-other"),
-            change("AWAITING_APPROVAL", id = "c0"),
+            change("READY", id = "c0", author = "service:svc-other", updatedAt = dayOld),
+            change("AWAITING_APPROVAL", id = "c0", updatedAt = dayOld),
+            // Its own author's, updated within the patience: another replica, still writing.
+            change("READY", id = "c0", updatedAt = "2026-11-20T23:59:59.900Z"),
         ).forEach { holder ->
             val service = Scripted { call, _ ->
                 when (call) {
@@ -193,6 +197,33 @@ class PublishWithoutShadowTest {
             service.named.filter { it.startsWith("abandon") }.assert().containsExactly("abandon c1")
             service.calls.assert().doesNotContain("publish")
         }
+    }
+
+    @Test
+    fun `a change whose place another write took is abandoned and made again`() {
+        val (change, calls) = run { call, count ->
+            when {
+                call == "skipShadow" && count == 1 -> change("CONFLICTED")
+                call == "publish" && count == 1 -> change("CONFLICTED")
+                else -> usual(call)
+            }
+        }
+        change.state.assert().isEqualTo(ChangeState.PUBLISHED)
+        calls.assert().containsExactly(
+            "document", "propose", "skipShadow", "abandon",
+            "document", "propose", "skipShadow", "publish", "abandon",
+            "document", "propose", "skipShadow", "publish",
+        )
+    }
+
+    @Test
+    fun `a change whose place other writes keep taking is answered abandoned once the patience is spent`() {
+        val (change, calls) = run(Duration.ofMillis(100)) { call, _ ->
+            if (call == "skipShadow") change("CONFLICTED") else usual(call)
+        }
+        change.state.assert().isEqualTo(ChangeState.ABANDONED)
+        calls.last().assert().isEqualTo("abandon")
+        calls.assert().doesNotContain("publish")
     }
 
     @Test
@@ -263,10 +294,16 @@ class PublishWithoutShadowTest {
     private companion object {
         const val HEAD = """{"schema":2,"revision":3,"publishedAt":"2026-11-21T00:00:00Z"}"""
 
-        fun change(state: String, base: Long = 3, id: String = "c1", author: String = "service:svc-iam") =
+        fun change(
+            state: String,
+            base: Long = 3,
+            id: String = "c1",
+            author: String = "service:svc-iam",
+            updatedAt: String = "2026-11-21T00:00:01Z",
+        ) =
             """{"id":"$id","key":"tenant:acme","kind":"PUBLISH","state":"$state",""" +
                 """"base":{"revision":$base},"note":"n","author":{"tenant":"acme","principal":"$author"},""" +
-                """"operations":[],"findings":[],"createdAt":"2026-11-21T00:00:00Z","updatedAt":"2026-11-21T00:00:01Z"}"""
+                """"operations":[],"findings":[],"createdAt":"2026-11-21T00:00:00Z","updatedAt":"$updatedAt"}"""
 
         fun conflict(kind: ConflictKind, heldBy: String? = null) = ControlRefusedException(
             409,
