@@ -227,7 +227,7 @@ class ControlServicePortTest {
             override fun getOrder(): Int = org.springframework.core.Ordered.HIGHEST_PRECEDENCE
         }
         runner.withBean("peerProbe", org.springframework.web.server.WebFilter::class.java, { probe }).run { context ->
-            val forwarding = reactor.netty.http.server.HttpServer.create().port(0).forwarded(true)
+            val forwarding = reactor.netty.http.server.HttpServer.create().port(0).forwarded(false, false)
                 .handle(
                     org.springframework.http.server.reactive.ReactorHttpHandlerAdapter(
                         context.getBean(org.springframework.http.server.reactive.HttpHandler::class.java)
