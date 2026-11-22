@@ -24,6 +24,11 @@ on:
         description: 'Optional comma-separated mutant names (a patch file name without .patch); empty = all'
         required: false
         default: ''
+      parallel:
+        description: 'Shards at once (1 to 20). 8 leaves runners for pull requests; 16 is for a release gate only'
+        required: false
+        type: number
+        default: 8
   schedule:
     - cron: '23 3 * * 1'
 
@@ -47,12 +52,26 @@ jobs:
     timeout-minutes: 5
     outputs:
       matrix: ${{ steps.plan.outputs.matrix }}
+      parallel: ${{ steps.parallel.outputs.parallel }}
     steps:
       - name: Checkout
         uses: actions/checkout@v7
 
       - name: Test the CI scripts
         run: python3 -I -m unittest discover -s scripts/ci
+
+      # The schedule has no inputs: it runs at 8.
+      # The input reaches `strategy` as a string, which `max-parallel` refuses: the checked number goes through an output
+      # and fromJSON.
+      - name: Check the number of shards at once
+        id: parallel
+        env:
+          PARALLEL: ${{ inputs.parallel || 8 }}
+        run: |
+          case "$PARALLEL" in ''|*[!0-9]*) echo "::error::parallel must be a whole number, got '$PARALLEL'"; exit 1;; esac
+          if [ "$PARALLEL" -lt 1 ] || [ "$PARALLEL" -gt 20 ]; then echo "::error::parallel must be 1 to 20, got $PARALLEL"; exit 1; fi
+          echo "parallel=$PARALLEL" >> "$GITHUB_OUTPUT"
+          echo "### Mutation check: $PARALLEL shards at once" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Derive the shards from test/conformance/mutants
         id: plan
@@ -68,8 +87,12 @@ jobs:
     strategy:
       # One shard failing must not hide the others.
       fail-fast: false
-      # 36 shards at once would take every runner a pull request's CI needs: eight leave room for it.
-      max-parallel: 8
+      # Every shard at once would take every runner a pull request's CI needs: eight leave room for it, and the weekly
+      # schedule runs at eight. A release gate may ask for more (`-f parallel=16`: run 45037155842 took 76 minutes against
+      # about two hours at eight, for the same 16 runner-hours), but while it runs a pull request's CI waits for runners:
+      # every PR run that waited more than five minutes on 2026-11-22 overlapped a manual dispatch
+      # (docs/reviews/2026-11/ci-efficiency.md). So more than eight is for a release gate, not for routine runs.
+      max-parallel: ${{ fromJSON(needs.plan.outputs.parallel) }}
       matrix: ${{ fromJSON(needs.plan.outputs.matrix) }}
     env:
       MUTANTS: ${{ matrix.mutants }}
