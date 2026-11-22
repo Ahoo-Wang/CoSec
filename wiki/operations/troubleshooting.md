@@ -821,13 +821,17 @@ evicts, an app or tenant document loaded after it was evicted is read as absent,
 CoCache 8 checks its `Store`s too, and `eviction-check=warn` does not reach that check:
 
 ```text
-Cannot read maxmemory-policy (INFO memory) to check that the authoritative caches [...] keep their only copy in Redis. Grant the Redis user +info, or set cocache.redis.assume-maxmemory-policy to the policy of your deployment.
+Cannot read maxmemory-policy (INFO memory) to check that the authoritative caches [...] keep their only copy in Redis: Redis refused INFO (...). Grant the Redis user +info, or assume the policy of your deployment. Set it with cocache.redis.assume-maxmemory-policy.
+Cannot read maxmemory-policy (INFO memory) to check that the authoritative caches [...] keep their only copy in Redis: Redis did not answer in 5 attempts (last: ...). This is a timeout or a connection failure, not a missing permission: check that Redis is reachable and that this process is not starved of CPU while it starts. Or assume the policy of your deployment with cocache.redis.assume-maxmemory-policy.
 Authoritative caches [...] keep their only copy in Redis, but maxmemory-policy {...} can evict them when memory is full. Use noeviction, or a volatile-* policy when they have no ttl.
 ```
 
-The first: allow `INFO`, or set `cocache.redis.assume-maxmemory-policy: noeviction` once you have set `noeviction`
-yourself. The second: an `allkeys-*` policy, which no setting accepts; set `noeviction`
-([Redis requirements](./storage.md#redis-requirements)).
+The first: Redis refused `INFO`. Allow it (`+info`), or set `cocache.redis.assume-maxmemory-policy: noeviction` once
+you have set `noeviction` yourself. The second: Redis did not answer, though CoCache asked up to five times, waiting
+longer each time: the instance could not reach Redis, or was starved of CPU while it started (many JVMs starting on one
+host). Make Redis reachable, or give the instance room to start; this is not a permission to grant. A third form,
+`INFO memory failed (...)`, names any other failure. The last: an `allkeys-*` policy, which no setting accepts; set
+`noeviction` ([Redis requirements](./storage.md#redis-requirements)).
 
 ### Startup fails on a locked cache setting
 
@@ -1059,7 +1063,10 @@ applied whole, so the gateway can start before Redis is reachable or before its 
 not start without its store of record: startup fails closed, the container exits, and the kubelet starts it again until
 Redis answers. The container that then starts is the gateway; nothing needs fixing. A restart count that keeps growing
 is Redis that stays unreachable: its address in the `cosec-gateway-redis` ConfigMap, its credentials, or a network policy
-between them. A restart after the gateway was live is something else ([Probes](#probes-answer-401-or-503)).
+between them. A restart after the gateway was live is something else ([Probes](#probes-answer-401-or-503)). CoCache
+connects to Redis when its backend is created and does not start without it; to avoid the one restart, start the
+gateway after Redis is ready, as [CoCache's operations guide](https://cocache.ahoo.me/operations/) describes (an init
+container that waits for the Redis port, or a separate deploy step).
 
 ### Other startup failures
 

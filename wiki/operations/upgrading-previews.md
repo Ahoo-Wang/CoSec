@@ -40,6 +40,17 @@ Which preview of the library may run behind which preview of the gateway image: 
     startup.
   - Nothing to do for CORS: Spring MVC no longer declares a `CorsConfigurationSource` of its own (Spring Framework 7.1),
     so CoSec's CORS filter (`STA-5`) still runs exactly when the application declares one.
+- **`cosec-cocache` needs CoCache 8.2.0** (its POM and module metadata name it as the minimum). Affected: an
+  application that pins CoCache 8.1.x. On Spring Boot 4.2, whose Lettuce 7.8 CoCache 8.1.0 was not built for, a Redis
+  Cluster connection rejects its first commands (`Currently not connected. Commands are rejected.`); 8.2.0 connects
+  the primaries first. Two behaviours change with it:
+  - The startup eviction check of CoCache's `Store`s retries a read that times out (up to five attempts), and its
+    failure says why: Redis refused `INFO`, or did not answer
+    ([Troubleshooting](./troubleshooting.md#startup-fails-on-the-eviction-check)). CoSec's own check (`SNP-3`) is
+    unchanged.
+  - Stored content that decodes to `null` fails the read instead of reading as absent. CoSec writes no such content;
+    an entry another writer left as a JSON `null` in a revocation table now fails the request as foreign content where
+    it used to read as "not revoked".
 - **A path segment is bounded once decoded** (`PIP-5`, #1853). Affected: clients whose path segments are long only
   percent-encoded, typically identifiers in a script other than Latin. Through beta.5 a segment over 256 characters as
   received was `400` `invalid-request`, so 29 CJK characters (261 encoded) were refused while 256 ASCII ones passed. A
