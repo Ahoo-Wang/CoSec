@@ -3,13 +3,13 @@
 # Tests: :spring-boot:test --tests me.ahoo.cosec.spring.boot.realserver.OneVerifierTest
 
 diff --git a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/authentication/route/CoSecLoginRoutesAutoConfiguration.kt b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/authentication/route/CoSecLoginRoutesAutoConfiguration.kt
-index c460384f..06b35ece 100644
+index e926aa15d..75e18f542 100644
 --- a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/authentication/route/CoSecLoginRoutesAutoConfiguration.kt
 +++ b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/authentication/route/CoSecLoginRoutesAutoConfiguration.kt
-@@ -88,7 +88,13 @@ internal class CoSecLoginRoutesAutoConfiguration {
-     fun cosecRefreshRoute(
+@@ -96,7 +96,13 @@ internal class CoSecLoginRoutesAutoConfiguration {
          refresh: RefreshTokenAuthentication<*>,
          converter: TokenConverter,
+         bodies: ObjectProvider<ProblemBodies>,
 +        verifier: TokenVerifier,
 +        revocation: TokenRevocation,
 +        families: TokenFamilies,

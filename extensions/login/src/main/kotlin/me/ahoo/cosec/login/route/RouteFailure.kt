@@ -19,6 +19,7 @@ import io.github.oshai.kotlinlogging.KotlinLogging
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.login.token.SessionStoreUnavailableException
+import me.ahoo.cosec.runtime.http.ProblemBodies
 import me.ahoo.cosec.runtime.http.ProblemType
 import me.ahoo.cosec.spi.token.RevocationUnavailableException
 import me.ahoo.cosec.spi.token.TokenExpiredException
@@ -35,7 +36,7 @@ private val log = KotlinLogging.logger {}
  * log line names its class and where it was thrown, never its message, which may hold a token.
  */
 internal object RouteFailure {
-    fun answer(route: String, failure: Exception, requestId: String): LoginRouteAnswer {
+    fun answer(route: String, failure: Exception, requestId: String, bodies: ProblemBodies): LoginRouteAnswer {
         val type = typeOf(failure)
         when (type) {
             ProblemType.UNAVAILABLE -> log.warn {
@@ -48,7 +49,7 @@ internal object RouteFailure {
             }
             else -> log.debug { "The $route route refused the pair (request $requestId): ${type.slug}." }
         }
-        return LoginRouteAnswer.problem(type, requestId)
+        return LoginRouteAnswer.problem(type, requestId, bodies)
     }
 
     fun typeOf(failure: Exception): ProblemType = when (failure) {

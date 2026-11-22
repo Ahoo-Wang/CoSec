@@ -25,6 +25,7 @@ description: "每个 8.0 预览版（alpha 与 beta）到下一个之间的变�
 
 ## 从 8.0.0-beta.5 升级 {#from-8-0-0-beta-5}
 
+- **新增：宿主渲染拒绝的响应体**（`ProblemRenderer`，`PIP-34`，#1840）。受影响的：除非你声明一个，否则没有。有自己的 problem 目录的宿主框架声明一个 `ProblemRenderer` bean，三个适配器和 starter 提供的登录路由后面的每个拒绝都使用它的响应体；状态码和头仍是 CoSec 的，失败的渲染器会被 CoSec 的响应体替代（`cosec.problem.render.failed`）。两个渲染器导致启动失败。请在响应体中保留 CoSec 的 `type` 和 `code`，否则 CoSec 的 TypeScript 客户端读不懂这些拒绝（[Problem 渲染器](../architecture/extending.md#problem-renderer)）。
 - **CoSec 基于 Spring Boot 4.2 和 Spring Cloud 2026.0 构建。** 受影响：使用 Spring Boot 4.1 的应用，或使用 `cosec-gateway`
   且在 Spring Cloud 2025.1 上的应用。CoSec 的模块把构建所用的版本写作最低版本
   （[CoSec 对构建的要求](../guide/introduction.md#what-cosec-needs-from-your-build)）：按 Spring Boot 4.2 的发布说明把应用升级到

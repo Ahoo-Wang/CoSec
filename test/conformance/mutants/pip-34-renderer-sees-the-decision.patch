@@ -1,0 +1,18 @@
+# Rule: PIP-34
+# Mutant: the one place a refusal is rendered is handed the decision that refused it
+# Tests: :architecture:test --tests me.ahoo.cosec.architecture.OneDecisionPathTest :conformance:test
+
+diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/http/ProblemBodies.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/http/ProblemBodies.kt
+index 87c36e97b..c952a5e20 100644
+--- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/http/ProblemBodies.kt
++++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/http/ProblemBodies.kt
+@@ -43,7 +43,8 @@ class ProblemBodies(
+     /** The body of the response that refuses a request with [problem]. */
+     // stays: a renderer is the application's code, and every failure of it falls back to CoSec's body (PIP-34)
+     @Suppress("TooGenericExceptionCaught")
+-    fun body(problem: Problem): ByteArray {
++    fun body(problem: Problem, decision: me.ahoo.cosec.model.decision.Decision? = null): ByteArray {
++        log.trace { "Rendering a refusal decided as $decision" }
+         if (renderer === ProblemRenderer.DEFAULT) {
+             return ProblemEncoder.encode(problem)
+         }

@@ -28,6 +28,12 @@ Which preview of the library may run behind which preview of the gateway image: 
 
 ## From 8.0.0-beta.5 {#from-8-0-0-beta-5}
 
+- **New: a host renders the body of a refusal** (`ProblemRenderer`, `PIP-34`, #1840). Affected: nothing unless you
+  declare one. A host framework with its own problem catalog declares one `ProblemRenderer` bean, and every refusal
+  behind the three adapters and the served login routes has its body; the status and the headers stay CoSec's, and a
+  renderer that fails is replaced by CoSec's body (`cosec.problem.render.failed`). Two renderers fail startup. Keep
+  CoSec's `type` and `code` in the body, or CoSec's TypeScript client cannot read those refusals
+  ([Problem renderer](../architecture/extending.md#problem-renderer)).
 - **CoSec is built on Spring Boot 4.2 and Spring Cloud 2026.0.** Affected: an application on Spring Boot 4.1, or with
   `cosec-gateway` on Spring Cloud 2025.1. CoSec's modules name the versions they are built on as minimums
   ([What CoSec needs from your build](../guide/introduction.md#what-cosec-needs-from-your-build)): upgrade the application

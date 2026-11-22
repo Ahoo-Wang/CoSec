@@ -20,6 +20,7 @@ import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.model.scope.HostScope
 import me.ahoo.cosec.runtime.event.BridgeContextContributor
 import me.ahoo.cosec.runtime.http.Outcome
+import me.ahoo.cosec.runtime.http.ProblemBodies
 import me.ahoo.cosec.runtime.http.RemoteIpResolver
 import me.ahoo.cosec.runtime.http.RequestGate
 import org.springframework.core.Ordered
@@ -59,7 +60,8 @@ class PipelineWebFilter @InternalCoSecApi constructor(
     contributors: List<BridgeContextContributor> = emptyList(),
     remoteIpResolver: RemoteIpResolver<ServerWebExchange> = ReactiveRemoteIpResolver,
     host: HostScope = HttpFactsReader.NO_HOST,
-) : ReactivePipelineBridge(pipeline, contributors, remoteIpResolver, host),
+    bodies: ProblemBodies = ProblemBodies.DEFAULT,
+) : ReactivePipelineBridge(pipeline, contributors, remoteIpResolver, host, bodies),
     WebFilter,
     Ordered {
     override fun filter(exchange: ServerWebExchange, chain: WebFilterChain): Mono<Void> =

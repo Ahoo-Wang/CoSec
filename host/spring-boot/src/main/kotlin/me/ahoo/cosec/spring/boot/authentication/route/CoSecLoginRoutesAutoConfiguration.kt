@@ -23,6 +23,7 @@ import me.ahoo.cosec.login.token.RefreshTokenAuthentication
 import me.ahoo.cosec.login.token.RefreshTokenCredentials
 import me.ahoo.cosec.login.token.TokenConverter
 import me.ahoo.cosec.login.token.TokenFamilies
+import me.ahoo.cosec.runtime.http.ProblemBodies
 import me.ahoo.cosec.runtime.token.TokenRevocation
 import me.ahoo.cosec.spi.token.TokenRevoker
 import me.ahoo.cosec.spi.token.TokenVerifier
@@ -94,6 +95,7 @@ internal class CoSecLoginRoutesAutoConfiguration {
     fun cosecRefreshRoute(
         refresh: RefreshTokenAuthentication<*>,
         converter: TokenConverter,
+        bodies: ObjectProvider<ProblemBodies>,
     ): RefreshRoute {
         check(refresh.credentialsType == RefreshTokenCredentials::class.java) {
             "${LoginProperties.REFRESH_PATH_KEY} is set, but the RefreshTokenAuthentication bean refreshes " +
@@ -102,12 +104,17 @@ internal class CoSecLoginRoutesAutoConfiguration {
                 "RefreshTokenCredentials (IDN-25)."
         }
         @Suppress("UNCHECKED_CAST")
-        return RefreshRoute(refresh as RefreshTokenAuthentication<RefreshTokenCredentials>, converter)
+        return RefreshRoute(
+            refresh as RefreshTokenAuthentication<RefreshTokenCredentials>,
+            converter,
+            bodies.getIfAvailable { ProblemBodies.DEFAULT },
+        )
     }
 
     @Bean
     @ConditionalOnProperty(LoginProperties.LOGOUT_PATH_KEY)
-    fun cosecLogoutRoute(revoker: TokenRevoker): LogoutRoute = LogoutRoute(revoker)
+    fun cosecLogoutRoute(revoker: TokenRevoker, bodies: ObjectProvider<ProblemBodies>): LogoutRoute =
+        LogoutRoute(revoker, bodies.getIfAvailable { ProblemBodies.DEFAULT })
 
     @Bean
     fun cosecLoginRouteDenials(properties: LoginProperties): LoginRouteDenials = LoginRouteDenials(routesOf(properties))
@@ -128,9 +135,11 @@ internal class CoSecLoginRoutesAutoConfiguration {
             refresh: ObjectProvider<RefreshRoute>,
             logout: ObjectProvider<LogoutRoute>,
             applicationPort: ApplicationPort,
+            bodies: ObjectProvider<ProblemBodies>,
         ): ReactiveRouterFunction<ReactiveServerResponse> = ReactiveLoginRoutes.of(
             handlersOf(properties, refresh, logout),
             applicationPort.predicate(),
+            bodies.getIfAvailable { ProblemBodies.DEFAULT },
         )
     }
 
@@ -143,7 +152,12 @@ internal class CoSecLoginRoutesAutoConfiguration {
             properties: LoginProperties,
             refresh: ObjectProvider<RefreshRoute>,
             logout: ObjectProvider<LogoutRoute>,
-        ): ServletRouterFunction<ServletServerResponse> = ServletLoginRoutes.of(handlersOf(properties, refresh, logout))
+            bodies: ObjectProvider<ProblemBodies>,
+        ): ServletRouterFunction<ServletServerResponse> =
+            ServletLoginRoutes.of(
+                handlersOf(properties, refresh, logout),
+                bodies.getIfAvailable { ProblemBodies.DEFAULT }
+            )
     }
 
     @Configuration(proxyBeanMethods = false)

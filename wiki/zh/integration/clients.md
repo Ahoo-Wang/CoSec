@@ -94,6 +94,15 @@ CoSec 不提供登录和租户切换：它们属于应用，用 CoSec 的类编�
 **被拒绝的令牌不是错误。** 公开路由对令牌已过期的请求返回 `200`，并且不说明这件事：调用方是匿名的。想知道令牌快过期的客户端读取 `exp`，
 在请求之前刷新；不要等 `401`。
 
+## 自己渲染 problem 的宿主 {#a-host-that-renders-its-own-problems}
+
+宿主可以用自己的 problem 目录渲染 CoSec 拒绝的响应体（`ProblemRenderer`，`PIP-34`，[Problem 渲染器](../architecture/extending.md#problem-renderer)）。状态码和头仍是 CoSec 的；响应体是宿主的。**这个客户端只凭 `type`（`https://cosec.ahoo.me/problems/<slug>`）识别拒绝**，并且只在 `type` 属于 CoSec 时读取 `code`。在替换了 `type` 的宿主上，每个拒绝都是它不认识的：
+
+- 任何 `401` 都会刷新一次：过期的令牌仍会被刷新，但被吊销或无效的令牌不会结束会话，没有凭证的请求也会白白刷新；
+- `onUnauthorized` 和 `onForbidden` 回调得不到 problem，所以应用分不清过期的令牌和被吊销的令牌，也分不清 `FORBIDDEN` 和 `SCOPE_REJECTED`。
+
+要让它不失明：宿主保留 CoSec 的 `type` 和 `code`，并在它们旁边把自己目录的标识加为扩展成员（[Problem 渲染器](../architecture/extending.md#problem-renderer) 中的示例就是这样做的）。必须替换 `type` 的宿主，要给它的客户端提供对这些状态码的自己的处理，而不是用这个客户端的处理。
+
 ## 轮换下的刷新 {#refreshing-under-rotation}
 
 会话是一族令牌对，只有最新的一对可以刷新（[会话](./authentication.md#sessions)）。这对客户端意味着：

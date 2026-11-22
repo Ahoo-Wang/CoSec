@@ -253,6 +253,12 @@ exception message. One hand-written encoder (`ProblemEncoder`) writes it, so the
 bytes whatever the host's JSON configuration. The body is ASCII: every non-ASCII and control character of the
 request id is escaped. The vocabulary is also published as `schema/8.0/problem.schema.json`.
 
+A host framework with its own problem catalog can render this body instead, with one `ProblemRenderer` bean
+(`PIP-34`, [Problem renderer](../architecture/extending.md#problem-renderer)): behind all three adapters and the served
+login routes alike. The status and the headers stay CoSec's, and a renderer that fails is replaced by this body. Keep
+`type` and `code` as they are here, or CoSec's own clients cannot read those refusals
+([Clients](./clients.md#a-host-that-renders-its-own-problems)).
+
 ### Response headers
 
 - **`CoSec-Request-Id`**, on every outcome, the `400`s included: the caller's own `CoSec-Request-Id` header when it
