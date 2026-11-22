@@ -3,7 +3,7 @@
 # Tests: :control:test --tests me.ahoo.cosec.control.api.RoleClassTest --tests me.ahoo.cosec.control.lifecycle.RoleClassUnitTest
 
 diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/RoleClass.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/RoleClass.kt
-index 7b0dbe274..232a2b908 100644
+index 317382f01..5da5be669 100644
 --- a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/RoleClass.kt
 +++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/RoleClass.kt
 @@ -61,9 +61,6 @@ internal object RoleClass {
@@ -13,6 +13,6 @@ index 7b0dbe274..232a2b908 100644
 -        if (!holds()) {
 -            return escalations
 -        }
-         val lifted = escalations.groupingBy { it.reason }.eachCount().entries.joinToString { (reason, count) -> "$reason x$count" }
-         return listOf(
-             Escalation(
+         val lifted = escalations.groupingBy {
+             it.reason
+         }.eachCount().entries.joinToString { (reason, count) -> "$reason x$count" }
