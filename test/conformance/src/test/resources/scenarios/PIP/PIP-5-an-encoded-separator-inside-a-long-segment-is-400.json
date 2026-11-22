@@ -1,0 +1,42 @@
+{
+  "rules": [
+    "PIP-5"
+  ],
+  "polarity": "positive",
+  "level": "pipeline",
+  "description": "An encoded separator inside a segment that is long only encoded is still 400: the decoded bound admits nothing else.",
+  "documents": {
+    "platform": {
+      "policies": [
+        {
+          "id": "open",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "http:GET"
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "g:open",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "open"
+        }
+      ]
+    }
+  },
+  "authentication": {
+    "result": "anonymous"
+  },
+  "http": {
+    "path": "/orders/%E6%A0%87%E8%AF%86%E7%AC%A6%E6%A0%87%E8%AF%86%E7%AC%A6%E6%A0%87%E8%AF%86%E7%AC%A6%E6%A0%87%E8%AF%86%E7%AC%A6%E6%A0%87%E8%AF%86%E7%AC%A6%E6%A0%87%E8%AF%86%E7%AC%A6%E6%A0%87%E8%AF%86%E7%AC%A6%E6%A0%87%E8%AF%86%E7%AC%A6%E6%A0%87%E8%AF%86%E7%AC%A6%E6%A0%87%E8%AF%86%E7%AC%A6%E6%A0%87%E8%AF%86%E7%AC%A6%E6%A0%87%E8%AF%86%E7%AC%A6%E6%A0%87%E8%AF%86%E7%AC%A6%E6%A0%87%E8%AF%86%E7%AC%A6%E6%A0%87%E8%AF%86%E7%AC%A6%E6%A0%87%E8%AF%86%E7%AC%A6%E6%A0%87%E8%AF%86%E7%AC%A6%E6%A0%87%E8%AF%86%E7%AC%A6%E6%A0%87%E8%AF%86%E7%AC%A6%E6%A0%87%E8%AF%86%E7%AC%A6%2F%E6%A0%87%E8%AF%86%E7%AC%A6%E6%A0%87%E8%AF%86%E7%AC%A6%E6%A0%87%E8%AF%86%E7%AC%A6%E6%A0%87%E8%AF%86%E7%AC%A6%E6%A0%87%E8%AF%86%E7%AC%A6%E6%A0%87%E8%AF%86%E7%AC%A6%E6%A0%87%E8%AF%86%E7%AC%A6%E6%A0%87%E8%AF%86%E7%AC%A6%E6%A0%87%E8%AF%86%E7%AC%A6%E6%A0%87%E8%AF%86%E7%AC%A6%E6%A0%87%E8%AF%86%E7%AC%A6%E6%A0%87%E8%AF%86%E7%AC%A6%E6%A0%87%E8%AF%86%E7%AC%A6%E6%A0%87%E8%AF%86%E7%AC%A6%E6%A0%87%E8%AF%86%E7%AC%A6%E6%A0%87%E8%AF%86%E7%AC%A6%E6%A0%87%E8%AF%86%E7%AC%A6%E6%A0%87%E8%AF%86%E7%AC%A6%E6%A0%87%E8%AF%86%E7%AC%A6%E6%A0%87%E8%AF%86%E7%AC%A6"
+  },
+  "expect": {
+    "status": 400,
+    "type": "invalid-request"
+  }
+}

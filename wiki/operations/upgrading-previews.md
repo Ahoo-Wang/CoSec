@@ -28,6 +28,28 @@ Which preview of the library may run behind which preview of the gateway image: 
 
 ## From 8.0.0-beta.5 {#from-8-0-0-beta-5}
 
+- **CoSec is built on Spring Boot 4.2 and Spring Cloud 2026.0.** Affected: an application on Spring Boot 4.1, or with
+  `cosec-gateway` on Spring Cloud 2025.1. CoSec's modules name the versions they are built on as minimums
+  ([What CoSec needs from your build](../guide/introduction.md#what-cosec-needs-from-your-build)): upgrade the application
+  to Spring Boot 4.2 (and Spring Cloud 2026.0.0 with `cosec-gateway`) as Spring Boot's 4.2 release notes describe; a
+  mixed classpath of Spring Boot 4.1 and 4.2 modules is not supported.
+  - **The forwarded-header strategy is `server.request.header.forwarded.strategy`** (`web-server`, `framework`, `none`),
+    as Spring Boot 4.2 names it. CoSec reads it, and still reads the deprecated `server.forward-headers-strategy`
+    (`native` is `web-server`), to decide how to read the client address; its startup messages name the new key
+    ([Client IP behind proxies](../integration/web.md#client-ip-behind-proxies)). Setting both fails Spring Boot's
+    startup.
+  - Nothing to do for CORS: Spring MVC no longer declares a `CorsConfigurationSource` of its own (Spring Framework 7.1),
+    so CoSec's CORS filter (`STA-5`) still runs exactly when the application declares one.
+- **A path segment is bounded once decoded** (`PIP-5`, #1853). Affected: clients whose path segments are long only
+  percent-encoded, typically identifiers in a script other than Latin. Through beta.5 a segment over 256 characters as
+  received was `400` `invalid-request`, so 29 CJK characters (261 encoded) were refused while 256 ASCII ones passed. A
+  segment is now counted as the matchers see it, decoded, in UTF-16 units: such a request that was refused is now
+  carried and decided. The whole path is still bounded at 2,048 characters as received, so one segment of CJK text
+  holds at most 227. Every other refusal is unchanged, inside a long segment too: an encoded `/`, `;` or `\`, a control
+  character, a malformed escape, a dot or empty segment. A typed id that the control plane simulates, explains or
+  analyzes is still bounded as written, and so is a path for an ALLOW whose pattern sets `decodeAndParseSegments:
+  false`: it reads the segments as received, so it matches no path with a segment longer than 256 characters as
+  received, and such a request is decided by the other statements. Nothing to change unless you relied on the refusal.
 - **New: the role class, `cosec:manage-roles`** (`CTL-79`). A holder's change of a tenant's document that only puts or
   removes roles no longer waits for a person on account of who grants; it records a `ROLE_CLASS` escalation, a new
   value of the closed set, which a client that maps escalation reasons reads ([The role class](../policies/testing.md#the-role-class)).

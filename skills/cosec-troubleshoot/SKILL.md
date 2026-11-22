@@ -120,10 +120,10 @@ Full model: https://cosec.ahoo.me/guide/security-model.
 - **`STA-5: <n> CorsConfigurationSource beans of the application`**: the starter's CORS filter takes one source. Keep one,
   or declare a `CorsFilter` bean of your own.
 - **`cosec.audit.kafka.delivery=[<value>] is neither required nor best-effort.`**: write one of the two.
-- **A message that names `server.forward-headers-strategy`, `RemoteIpValve` or `max-trusted-index`**: the host cannot say
+- **A message that names `server.request.header.forwarded.strategy` (or the deprecated `server.forward-headers-strategy`), `RemoteIpValve` or `max-trusted-index`**: the host cannot say
   which party writes the client address. `framework`, or a `ForwardedHeaderFilter` bean that rewrites the request: use
-  `native` and configure the proxies on the server, or `none` and set `cosec.authorization.remote-ip.max-trusted-index`;
-  Tomcat with `native`: remove `max-trusted-index`; Reactor Netty or Jetty with `native` and index `0`: set the number of
+  `web-server` and configure the proxies on the server, or `none` and set `cosec.authorization.remote-ip.max-trusted-index`;
+  Tomcat with `web-server`: remove `max-trusted-index`; Reactor Netty or Jetty with `web-server` and index `0`: set the number of
   proxies, or `none`.
   https://cosec.ahoo.me/operations/troubleshooting#startup-fails-on-the-client-address
 - **`Social sign-in, whose states are kept in Redis ..., needs cosec-cocache`** (STA-1): add `cosec-cocache`, declare

@@ -122,7 +122,7 @@ class HttpPathPattern private constructor(
             "Path [$path] was parsed with decodeAndParseSegments=${path.decodeAndParseSegments}, pattern [$pattern] " +
                 "needs $decodeAndParseSegments."
         }
-        if (path.value.isEmpty() && !matchesEmptyPath) {
+        if ((path.value.isEmpty() && !matchesEmptyPath) || !path.readableBy(decodeAndParseSegments)) {
             return false
         }
         if (!leadingRest) {
@@ -168,7 +168,7 @@ class HttpPathPattern private constructor(
             "Path [$path] was parsed with decodeAndParseSegments=${path.decodeAndParseSegments}, pattern [$pattern] " +
                 "needs $decodeAndParseSegments."
         }
-        if (path.value.isEmpty() && !matchesEmptyPath) {
+        if ((path.value.isEmpty() && !matchesEmptyPath) || !path.readableBy(decodeAndParseSegments)) {
             return false
         }
         if (!leadingRest) {

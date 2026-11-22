@@ -25,6 +25,17 @@ description: "每个 8.0 预览版（alpha 与 beta）到下一个之间的变�
 
 ## 从 8.0.0-beta.5 升级 {#from-8-0-0-beta-5}
 
+- **CoSec 基于 Spring Boot 4.2 和 Spring Cloud 2026.0 构建。** 受影响：使用 Spring Boot 4.1 的应用，或使用 `cosec-gateway`
+  且在 Spring Cloud 2025.1 上的应用。CoSec 的模块把构建所用的版本写作最低版本
+  （[CoSec 对构建的要求](../guide/introduction.md#what-cosec-needs-from-your-build)）：按 Spring Boot 4.2 的发布说明把应用升级到
+  Spring Boot 4.2（使用 `cosec-gateway` 时还要升级到 Spring Cloud 2026.0.0）；不支持 Spring Boot 4.1 与 4.2 模块混合的类路径。
+  - **转发头策略改为 `server.request.header.forwarded.strategy`**（`web-server`、`framework`、`none`），这是 Spring Boot 4.2 的
+    名称。CoSec 读取它，也仍读取已弃用的 `server.forward-headers-strategy`（其 `native` 即 `web-server`），以决定如何读取客户端
+    地址；它的启动消息使用新的 key（[代理后的客户端 IP](../integration/web.md#client-ip-behind-proxies)）。两者都设置时 Spring
+    Boot 启动失败。
+  - CORS 无需处理：Spring MVC 不再自带 `CorsConfigurationSource`（Spring Framework 7.1），所以 CoSec 的 CORS 过滤器（`STA-5`）
+    仍然只在应用声明了一个时才运行。
+- **路径段的上限按解码后计**（`PIP-5`，#1853）。受影响的是路径段只在百分号编码后才变长的客户端，典型的是非拉丁文字的标识符。直到 beta.5，按收到时超过 256 个字符的段答 `400` `invalid-request`，所以 29 个汉字（编码后 261 个字符）被拒绝，而 256 个 ASCII 字符可以通过。现在段按匹配器看到的样子计数，即解码后的 UTF-16 单元：此前被拒绝的这类请求现在会被承载并决策。整个路径仍按收到时限制在 2,048 个字符，所以单个由汉字组成的段最多 227 个。其他所有拒绝都不变，长段内部也一样：编码后的 `/`、`;` 或 `\`、控制字符、格式错误的转义、点号段或空段。控制面模拟、解释或分析的类型化 id 仍按书写计；模式设置了 `decodeAndParseSegments: false` 的 ALLOW 也一样：它按收到的原文读取各段，所以不匹配任何按收到时含有超过 256 个字符的段的路径，这样的请求由其他语句决策。除非你依赖这种拒绝，否则无需改动。
 - **新增：角色类 `cosec:manage-roles`**（`CTL-79`）。持有者对租户文档只写入或删除角色的变更，不再因“由谁授予”而等人审批；它记下一条 `ROLE_CLASS` 升级，这是封闭集合的一个新值，映射升级原因的客户端会读到它（[角色类](../policies/testing.md#the-role-class)）。不持有它的主体一切照旧。**控制面自身应用（`cosec.control.app-id`）的角色从不属于这个类**：它的成员持有对本租户文档的控制调用，而由谁治理租户的策略应由人来任命。投影这类角色的同步仍然要等审批；只通过这个类投影业务应用的角色。
 - **新增：服务通过服务端口和 `ControlService` 修改应用文档**（`CTL-58`、`CTL-65`）：应用文档的 `propose`、`check` 和变更流程，此前在那里是 `404`。这样的变更与在运维人员端口上一样被分析：删除角色、策略或绑定可以单独发布，其他任何变更（目录、写入角色）都要等人审批。平台文档仍不可触及。不在 `doc/app/...` 上持有 `cosec:write` 的服务一切照旧。
 - **服务端口和 `ControlService` 上没有信任根**（`CTL-81`）。在那里声明平台管理员身份、以便不经分析发布租户（或应用）文档的服务，现在要等人审批：不论声明的是谁，变更都要经过分析，分析无法证明的授予是 `AWAITING_APPROVAL`。通过[角色类](../policies/testing.md#the-role-class)（`cosec:manage-roles`）把角色投影进租户，或在运维人员的路由上由人审批。同一个主体在运维人员的路由上一切照旧。

@@ -1,0 +1,54 @@
+{
+  "rules": [
+    "PIP-5"
+  ],
+  "polarity": "negative",
+  "level": "engine",
+  "description": "The near miss: a segment of 256 characters as written is matched by a pattern that matches the path as received.",
+  "documents": {
+    "platform": {
+      "policies": [
+        {
+          "id": "raw",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "http:*",
+              "resource": {
+                "pattern": "http:path:/orders/**",
+                "decodeAndParseSegments": false
+              }
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "raw",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "raw"
+        }
+      ]
+    }
+  },
+  "request": {
+    "action": "http:GET",
+    "resource": {
+      "type": "http",
+      "id": "/orders/%61%61%61%61%61%61%61%61%61%61%61%61%61%61%61%61%61%61%61%61%61%61%61%61%61%61%61%61%61%61%61%61%61%61%61%61%61%61%61%61%61%61%61%61%61%61%61%61%61%61%61%61%61%61%61%61%61%61%61%61%61%61%61%61%61%61%61%61%61%61%61%61%61%61%61%61%61%61%61%61%61%61%61%61%61a"
+    }
+  },
+  "expect": {
+    "decision": "Permit",
+    "by": {
+      "policy": "raw",
+      "statement": 0,
+      "via": {
+        "binding": "raw",
+        "document": "platform"
+      }
+    }
+  }
+}

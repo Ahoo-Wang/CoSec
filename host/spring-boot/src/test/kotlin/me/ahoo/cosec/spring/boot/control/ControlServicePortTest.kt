@@ -208,7 +208,7 @@ class ControlServicePortTest {
 
     /**
      * The peer is the connection's: a Reactor Netty server that reads `X-Forwarded-For` and `Forwarded`
-     * (`server.forward-headers-strategy=native` configures that on the application's) shows the caller's claim as the
+     * (`server.request.header.forwarded.strategy=web-server` configures that on the application's) shows the caller's claim as the
      * request's remote address, and the control routes still read the address the TCP stack saw.
      */
     @Test
@@ -227,7 +227,7 @@ class ControlServicePortTest {
             override fun getOrder(): Int = org.springframework.core.Ordered.HIGHEST_PRECEDENCE
         }
         runner.withBean("peerProbe", org.springframework.web.server.WebFilter::class.java, { probe }).run { context ->
-            val forwarding = reactor.netty.http.server.HttpServer.create().port(0).forwarded(true)
+            val forwarding = reactor.netty.http.server.HttpServer.create().port(0).forwarded(false, false)
                 .handle(
                     org.springframework.http.server.reactive.ReactorHttpHandlerAdapter(
                         context.getBean(org.springframework.http.server.reactive.HttpHandler::class.java)
