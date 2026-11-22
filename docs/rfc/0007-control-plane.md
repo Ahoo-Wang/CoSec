@@ -200,6 +200,7 @@
 > - §10，类型化层（`CTL-76`，#1836）：`ControlClient` 在 `ControlService` 之上把服务操作集写成类型化的请求与应答，只写一份，两种实现共用。类型跟随线上格式并由测试钉住：每种条目的成员是 `schema/8.0` 的；变更应答的成员是 `contract/control/change.json` 的，每个成员要么被读、要么被点名为不读；封闭集合等于词汇表与 schema 的枚举。读文档条目是严格的：有本版本不认识的成员就拒绝，因为读了再写回会丢掉它，而文档是判定的输入；读应答是宽松的：未知成员忽略，未知取值保留原文。便捷调用“提出、跳过影子窗口、发布”需要 `cosec:skip-shadow`；基线移动则重读重做，暂存位被占则等待，都在一个等待期之内；同一主体的并发写入互相等待，死掉的写入方留下的变更占一个等待期，之后由下一次写入接管。
 > - §10.2，冲突的类型（`CTL-80`，#1834、#1836）：控制 API 的每个 409 在 problem 体里用 `conflict` 写明是哪一种：`BASE_MOVED`、`SLOT_HELD`、`STATE`、`CANDIDATE_MOVED`、`WINDOW_OPEN`、`WINDOW_BLOCKED`、`CONTENDED`、`EXISTS`；别的状态不带这个成员，没有不带它的 409。`SLOT_HELD` 另带 `heldBy`（占位变更的 id），只在 `detail` 本来就写出它的地方。`detail` 仍然是给人看的，不是契约。
 > - §10，门面的两种实现答得一样（`CTL-77`，#1837）：进程内的 `LocalControlService` 与经控制面宿主服务端口的 `HttpControlService`（`cosec-control-http`）把服务操作集的每个调用做成同一个请求（一张路由表），并各用一套映射声明调用方：请求的主体按网关转发身份的方式写，应用自己的主体写成同一个服务身份。同一套调用脚本、两种调用方，在两种实现里对控制面的每个应答与拒绝都答得一样（列表与游标在内）。经 HTTP 时只有 2xx 是应答；一次调用至多等它的超时（默认 30 秒），之后以 `HttpTimeoutException` 失败，写操作的结果未知；其余传输失败原样抛出，这是唯一的差别。starter 只装配一个 `ControlService`（`STA-11`）：本实例跑控制面时是进程内的，`cosec.control.service-url` 指明宿主时是 HTTP 的，两者同时出现则拒绝启动。
+> - §10.2，只校验、不提出（`CTL-78`，#1845）：`POST /changes:check` 与 `POST /documents/{key}:check` 取 `POST /changes` 与 `:apply` 的请求体，走提出的同一个函数直到最后一步之前：授权、基线、草稿、候选的各项检查及其 findings 与 escalations 都照做，但不存储、不占暂存位、不写变更事件、不取变更 id。应答是 `state`、`base`、`findings`、`escalations`（`contract/control/change-check.json`），不含 `candidate`：候选里可能写入变更的 id，校验答不出与正式提出相同的值。不能提出的调用方也不能校验。它只是建议：基线之后仍可能移动。
 
 > **实现说明（2026-11-03，#1194，RC 修复批次 C）**：网关与租户隔离的边缘。控制面受到的影响：
 >
