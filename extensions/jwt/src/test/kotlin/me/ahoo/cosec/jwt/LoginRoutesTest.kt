@@ -15,9 +15,6 @@
 
 package me.ahoo.cosec.jwt
 
-import java.time.Duration
-import java.time.Instant
-import java.util.concurrent.ConcurrentHashMap
 import kotlinx.coroutines.runBlocking
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
@@ -51,6 +48,9 @@ import org.junit.jupiter.api.Test
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
 import tools.jackson.databind.json.JsonMapper
+import java.time.Duration
+import java.time.Instant
+import java.util.concurrent.ConcurrentHashMap
 
 /**
  * `IDN-23` and `IDN-24` below the web stacks: what the served refresh and logout routes answer for each body and each
@@ -299,7 +299,11 @@ class LoginRoutesTest {
     fun `the login routes render a refusal as the adapters do`() {
         val rendered = ProblemBodies(ProblemRenderer { """{"type":"urn:host:error:${it.type.code}"}""".toByteArray() })
         val refreshing = RefreshRoute(
-            RefreshTokenAuthentication(verifier, TokenRevocation(RevocationReader.NONE), families) { token, credentials ->
+            RefreshTokenAuthentication(
+                verifier,
+                TokenRevocation(RevocationReader.NONE),
+                families
+            ) { token, credentials ->
                 MembershipRefresh.CLAIMS.refresh(token, credentials)
             },
             converter,

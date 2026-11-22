@@ -15,8 +15,6 @@
 
 package me.ahoo.cosec.gateway
 
-import java.util.Locale
-import java.util.concurrent.ConcurrentHashMap
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.api.audit.AuditRequest
@@ -40,6 +38,8 @@ import org.springframework.core.Ordered
 import org.springframework.http.HttpHeaders
 import org.springframework.web.server.ServerWebExchange
 import reactor.core.publisher.Mono
+import java.util.Locale
+import java.util.concurrent.ConcurrentHashMap
 
 /**
  * The gateway filter over the coroutine pipeline (RFC 0006 §7.3): the same bridge as the WebFlux filter, so the two

@@ -20,9 +20,9 @@ import me.ahoo.cosec.annotations.ExperimentalCoSecApi
  * The body of the response that refuses a request (`PIP-34`): a host framework that answers its own errors as problems
  * renders CoSec's refusals in its own catalog, so its clients meet one catalog (#1840).
  *
- * It renders the body only. The status, `Content-Type: application/problem+json`, `CoSec-Request-Id`,
- * `WWW-Authenticate`, `Retry-After` and the `RateLimit-*` headers stay CoSec's: the adapter writes them, then writes
- * the bytes [render] returns as they are, whatever the renderer would have liked. So the body must be an
+ * It renders the body only. The status and every header stay CoSec's (`Content-Type: application/problem+json`,
+ * `CoSec-Request-Id`, `Retry-After`, the `RateLimit-*` headers; CoSec sets no `WWW-Authenticate`, and a renderer cannot
+ * add one): the adapter writes them, then writes the bytes [render] returns as they are. So the body must be an
  * `application/problem+json` document (RFC 9457) whose `status` is [Problem.status].
  *
  * It is given the [Problem] and nothing more: its [ProblemType] (with `status`, `slug`, `code` and `uri`), the request

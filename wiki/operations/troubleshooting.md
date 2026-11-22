@@ -396,6 +396,19 @@ anonymous requests. Mark the route `cosec-identity: true` when it leads to your 
 ([Forwarding the identity](../integration/web.md#forwarding-the-identity)). A service that verifies the token itself
 and stopped receiving it needs `cosec.gateway.identity.forward-authorization=true` and such a route.
 
+## A refusal is answered with CoSec's body though a renderer is declared {#a-refusal-is-answered-with-cosecs-body-though-a-renderer-is-declared}
+
+```text
+Request [<id>]: the ProblemRenderer [<class>] failed with <exception>, so the <status> <slug> refusal is answered with CoSec's own body (PIP-34). ...
+```
+
+The application's `ProblemRenderer` threw, or answered no bytes, for that refusal, and CoSec answered it with its own
+body ([Problem renderer](../architecture/extending.md#problem-renderer)). The request was still refused, with CoSec's
+status and headers. The line comes at `WARN` at most once a minute, with the exception's stack, and at `DEBUG` every
+time; `cosec.problem.render.failed` counts every one. Fix the renderer: it must answer bytes for every `ProblemType`,
+the ones a later release adds included, so give it a default branch. A body that is never the renderer's, and no such
+line, means the renderer is not wired: it must be a bean, and there must be one.
+
 ## Instance is not ready
 
 Readiness refuses traffic until the platform document and every document in
@@ -653,6 +666,15 @@ An application has one `ControlService`: the in-process one where it runs the co
 host. To embed the control plane, remove `cosec.control.service-url`. To call the host, set `cosec.control.enabled=false`
 (or leave `cosec-control` out). `cosec.control.service-url needs cosec-control-http` means the host is named and the
 module that calls it is missing: add `me.ahoo.cosec:cosec-control-http`.
+
+### Startup fails on two problem renderers {#startup-fails-on-two-problem-renderers}
+
+```text
+PIP-34: 2 ProblemRenderer beans of the application, [first, second]: a refusal has one body, so CoSec takes one renderer. Declare one.
+```
+
+A refusal has one body, so the starter takes one `ProblemRenderer` bean and does not choose between two. Keep one, or
+declare one that delegates to the others ([Problem renderer](../architecture/extending.md#problem-renderer)).
 
 ### Startup fails on a hidden-method filter behind a gateway {#startup-fails-on-a-hidden-method-filter-behind-a-gateway}
 

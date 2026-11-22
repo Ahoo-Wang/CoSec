@@ -40,11 +40,13 @@ class ProblemBodiesTest {
     @Test
     fun `a renderer's bytes are the body, and it is given the problem only`() {
         var seen: Problem? = null
-        val bodies = ProblemBodies(ProblemRenderer { given ->
-            seen = given
-            """{"type":"urn:host:error:${given.type.code}","status":${given.status},"cosec":"${given.type.slug}"}"""
-                .toByteArray()
-        })
+        val bodies = ProblemBodies(
+            ProblemRenderer { given ->
+                seen = given
+                """{"type":"urn:host:error:${given.type.code}","status":${given.status},"cosec":"${given.type.slug}"}"""
+                    .toByteArray()
+            }
+        )
         String(bodies.body(problem)).assert()
             .isEqualTo("""{"type":"urn:host:error:TOKEN_EXPIRED","status":401,"cosec":"token-expired"}""")
         seen.assert().isSameAs(problem)
@@ -53,7 +55,10 @@ class ProblemBodiesTest {
 
     @Test
     fun `a renderer that throws, answers no bytes or answers null is replaced by CoSec's body, and counted`() {
-        val nullAnswer = Proxy.newProxyInstance(javaClass.classLoader, arrayOf(ProblemRenderer::class.java)) { _, _, _ ->
+        val nullAnswer = Proxy.newProxyInstance(
+            javaClass.classLoader,
+            arrayOf(ProblemRenderer::class.java)
+        ) { _, _, _ ->
             null
         } as ProblemRenderer
         val failing = listOf(

@@ -34,6 +34,7 @@ description: "把自己的认证器、成员关系来源、属性提供者、决
 | `BlacklistSource` | `cosec-runtime`，`runtime.attribute` | 说明哪些主体、地址和设备被拦截。 | 一个 bean，包装进 `BlacklistAttributeProvider` |
 | `DecisionListener` | `cosec-runtime`，`runtime.event` | 观察每一个决策：审计、告警、分析。 | 所有 bean |
 | `BridgeContextContributor` | `cosec-runtime`，`runtime.event` | 把线程本地上下文（日志、追踪）带进 Pipeline。 | 所有 bean |
+| `ProblemRenderer` | `cosec-runtime`，`runtime.http` | 用你的框架自己的 problem 目录写出拒绝的响应体（[Problem 渲染器](#problem-renderer)）。实验性。 | 一个 bean，替换 CoSec 自己的响应体；两个则启动失败 |
 | `ChangeListener` | `cosec-control`，`control.audit` | 观察或把关控制面变更。 | 所有 bean，使用 `cosec-control` 时 |
 | `ControlStore` | `cosec-control`，`control.store` | 把控制面的记录（修订、变更请求、暂存槽）保存在 `CoCacheControlStore` 以外的地方。控制面本身只在有 `cosec-cocache` 时启动，已发布的文档保存在它的 Redis 存储里：这个端口不改变这一点。实验性的，连同它的记录和影子窗口端口。 | 一个 bean，使用 `cosec-control` 和 `cosec-cocache` 时 |
 | 路由映射 | `cosec-document`，`document.route` | 让请求得到作用于类型化资源的 `service:verb` 动作。 | `cosec.authorization.routes.location` |
@@ -82,7 +83,7 @@ connection.onClose { outcome.close() } // 完成、失败和取消都一样
 |---|---|---|
 | 无 | 稳定。从 8.0 GA 起，删除或修改它是破坏性变更，只在主版本中发生。 | 直接使用。 |
 | `@CoSecSpi` | 应用要实现、而不只是调用的接口：上面的扩展点。与其余部分同样稳定；次版本新增的成员带默认实现，已有的实现照常编译。 | 实现它。 |
-| `@ExperimentalCoSecApi` | 公开，但可能在次版本中改变或移除，发布说明会写明。目前包括：`cosec-testkit` 的公共 API（`PolicyTestKit`、`PipelineFixture`、`AttributeRequests`、`EngineOutcome` 及其异常）；不使用 Spring 组装管道（`Pipeline.builder`、`PipelineBuilder` 及其设置 `PipelineSettings`、`SnapshotSettings` 和 `IdentityForwardingSettings`、`Pipeline.behindGateway` 与 `GatewayIdentitySettings`、`Pipeline.evaluate` 和 `awaitDocuments`、`RequestGate`、`HttpFacts`、`Headers`、`Cookies`、`Outcome`、`Problem`、`ProblemEncoder`、`RequestSecurity`）；评估轨迹（`DecisionEvent.evaluationTrace`、`me.ahoo.cosec.engine.trace`）；以及控制面的存储和影子窗口端口及其记录（[控制面存储](#control-store)）。 | 用 `@OptIn(ExperimentalCoSecApi::class)` 选择加入，否则编译器给出警告。 |
+| `@ExperimentalCoSecApi` | 公开，但可能在次版本中改变或移除，发布说明会写明。目前包括：`cosec-testkit` 的公共 API（`PolicyTestKit`、`PipelineFixture`、`AttributeRequests`、`EngineOutcome` 及其异常）；不使用 Spring 组装管道（`Pipeline.builder`、`PipelineBuilder` 及其设置 `PipelineSettings`、`SnapshotSettings` 和 `IdentityForwardingSettings`、`Pipeline.behindGateway` 与 `GatewayIdentitySettings`、`Pipeline.evaluate` 和 `awaitDocuments`、`RequestGate`、`HttpFacts`、`Headers`、`Cookies`、`Outcome`、`Problem`、`ProblemEncoder`、`ProblemRenderer`、`RequestSecurity`）；评估轨迹（`DecisionEvent.evaluationTrace`、`me.ahoo.cosec.engine.trace`）；以及控制面的存储和影子窗口端口及其记录（[控制面存储](#control-store)）。 | 用 `@OptIn(ExperimentalCoSecApi::class)` 选择加入，否则编译器给出警告。 |
 | `@InternalCoSecApi` | 公开只是为了让 CoSec 自己的模块互相调用。没有任何承诺：任何版本都可能改变。 | 不要使用。它要求 error 级别的 opt-in，只有 CoSec 自己的源码这样做。 |
 
 这些承诺由构建守住。每个发布的库模块把自己的公共 ABI 存在一个转储文件里，即模块目录下的 `api/<project>.api`
@@ -367,6 +368,49 @@ fun interface BridgeContextContributor {
 ```
 
 starter 注册 `MdcContextContributor`（SLF4J MDC），使用 `cosec-opentelemetry` 时还注册 OpenTelemetry 上下文。所有 `BridgeContextContributor` bean 都会按 `@Order` 顺序使用。`capture` 每个请求运行一次：保持廉价。
+
+## Problem 渲染器 {#problem-renderer}
+
+以 RFC 9457 problem 回答自身错误的宿主框架，可以用同一个目录回答 CoSec 的拒绝，让它的客户端只面对一个目录（`PIP-34`）。`ProblemRenderer` bean 渲染每个拒绝的**响应体**：三个适配器的和 starter 提供的登录路由的，都一样。
+
+```kotlin
+fun interface ProblemRenderer {
+    fun render(problem: Problem): ByteArray
+}
+```
+
+- **它得到什么：** 只有 `Problem`：它的 `type`（`ProblemType`，带 `status`、`slug`、`code`、`uri` 和 `title`）、`CoSec-Request-Id` 头携带的 `requestId`，以及 `traceId`。从不包括决策、做出决策的策略、主体或请求：客户端能知道的拒绝信息就是 CoSec 自己的响应体所说的。
+- **仍属于 CoSec 的：** 状态码和每一个头：`Content-Type: application/problem+json`、`CoSec-Request-Id`、`Retry-After` 和 `RateLimit-*`。适配器先写它们，再原样写出 `render` 返回的字节；渲染器不能设置状态码，也不能添加头（包括 CoSec 不设置的 `WWW-Authenticate`）。请写出 `status` 等于 `problem.status` 的 `application/problem+json` 文档。
+- **何时运行：** 只在拒绝时，在写响应的线程上运行，在 WebFlux 和网关上是事件循环。不要阻塞，并转义每个值：`requestId` 可能来自客户端。
+- **失败时：** 抛出异常或不返回任何字节的渲染器，在那次响应中被 CoSec 自己的响应体替代。请求仍被拒绝，状态码是 CoSec 的。每次失败计入 `cosec.problem.render.failed`，并且每分钟最多以 `WARN` 记录一次（[故障排查](../operations/troubleshooting.md#a-refusal-is-answered-with-cosecs-body-though-a-renderer-is-declared)）。
+- **没有渲染器时：** 响应体是 CoSec 自己的，即 `ProblemEncoder` 的字节（`ProblemRenderer.DEFAULT`）。控制 API 的 problem 是另一个目录，不经过它渲染。
+
+**保留 CoSec 的 `type` 和 `code`。** CoSec 的 TypeScript 客户端只凭 `type`（`https://cosec.ahoo.me/problems/<slug>`）识别拒绝，并按 slug 行动：刷新过期的令牌、为被吊销或无效的令牌结束会话、把 problem 交给你的回调。替换了 `type` 的渲染器会让客户端在那个宿主上看不见这些拒绝（[客户端](../integration/clients.md#a-host-that-renders-its-own-problems)）。把你的目录的标识放在 CoSec 的成员旁边的扩展成员里：
+
+```kotlin
+@Bean
+fun problemRenderer(): ProblemRenderer {
+    val json = JsonMapper.builder().build()
+    return ProblemRenderer { problem ->
+        val code = when (problem.type) {
+            ProblemType.UNAUTHORIZED, ProblemType.TOKEN_INVALID, ProblemType.TOKEN_EXPIRED,
+            ProblemType.TOKEN_REVOKED -> "app.auth.unauthenticated"
+            ProblemType.FORBIDDEN, ProblemType.SCOPE_REJECTED -> "app.auth.forbidden"
+            else -> "app.error.${problem.type.slug}"
+        }
+        json.writeValueAsBytes(
+            linkedMapOf(
+                "type" to problem.type.uri,          // CoSec 的：它的客户端据此行动
+                "title" to problem.type.title,
+                "status" to problem.status,
+                "code" to problem.type.code,         // CoSec 的
+                "requestId" to problem.requestId,
+                "appCode" to code,                   // 你的目录的，作为扩展成员
+            ),
+        )
+    }
+}
+```
 
 ## 变更监听器 {#change-listeners}
 
