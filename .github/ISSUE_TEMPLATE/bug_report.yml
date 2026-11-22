@@ -28,6 +28,7 @@ body:
         - cosec-runtime
         - cosec-control
         - cosec-control-sdk
+        - cosec-control-http
         - cosec-testkit
         - cosec-spi
         - cosec-jwt

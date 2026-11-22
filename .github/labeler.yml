@@ -69,6 +69,9 @@
 'module: kafka':
   - changed-files:
       - any-glob-to-any-file: 'extensions/kafka/**'
+'module: control-http':
+  - changed-files:
+      - any-glob-to-any-file: 'extensions/control-http/**'
 'module: engine':
   - changed-files:
       - any-glob-to-any-file: ['core/model/**', 'core/engine/**']
