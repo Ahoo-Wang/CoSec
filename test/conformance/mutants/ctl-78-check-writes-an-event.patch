@@ -2,7 +2,7 @@
 # Mutant: a check writes a change event, as if a change had been proposed
 # Tests: :control:test --tests me.ahoo.cosec.control.api.ChangeCheckTest
 diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Proposals.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Proposals.kt
-index 26e557fb6..bdfc0e711 100644
+index bd29928bd..2c392d0cb 100644
 --- a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Proposals.kt
 +++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Proposals.kt
 @@ -180,7 +180,7 @@ internal class Proposals(
@@ -11,6 +11,6 @@ index 26e557fb6..bdfc0e711 100644
          // A check ends here: what follows writes, and only a proposal writes (CTL-78).
 -        if (!applying.commit) return checked
 +        if (!applying.commit) return checked.also { flow.audit(ChangeEvent.Kind.PROPOSED, it, author.actor, origin = author.origin) }
-         if (breakGlass) {
-             flow.audit(ChangeEvent.Kind.BREAK_GLASS_REQUESTED, checked, author.actor, origin = author.origin)
-         }
+         commitChange(checked, breakGlass, author)
+         return checked
+     }
