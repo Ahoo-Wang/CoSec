@@ -19,6 +19,7 @@ import io.github.oshai.kotlinlogging.KotlinLogging
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.document.json.CoSecJson
+import me.ahoo.cosec.engine.TraceLevel
 import me.ahoo.cosec.runtime.HeapBudget
 import me.ahoo.cosec.runtime.audit.AuditEvents
 import me.ahoo.cosec.runtime.event.DecisionEvent
@@ -41,10 +42,11 @@ import kotlin.time.toKotlinDuration
  * - [Delivery.REQUIRED] (`cosec.audit.kafka.delivery=required`): the call waits for the broker's acknowledgement, so
  *   a permit that cannot be audited is a 503 (§9.4). Configure the producer with `acks=all`.
  *
- * Sends run on this listener's own [BoundedSender]: at most [queueCapacity] waiting (by default the decision listeners'
- * share of the heap counted in events, [HeapBudget]; the starter passes one listener's part of it, `OBS-11`), a full
- * queue fails the send at
- * once (a REQUIRED delivery that fails is a 503 for a permit), and a send whose delivery was cancelled (it timed out)
+ * Sends run on this listener's own [BoundedSender]: at most [queueCapacity] waiting, a full queue failing the send at
+ * once. By default it is the decision listeners' whole share of the heap counted in untraced events ([HeapBudget]),
+ * which fits one listener built by hand: an application that builds several, or traces its events, passes each its part
+ * of the share at its trace level (`HeapBudget.decisionQueueCapacity`), as the starter does (`OBS-11`). A REQUIRED
+ * delivery that fails is a 503 for a permit, and a send whose delivery was cancelled (it timed out)
  * before its turn is dropped, not sent.
  *
  * [destroy] waits up to [drainTimeout] for what this listener still holds, so Spring destroys [kafkaOperations] only
@@ -55,7 +57,7 @@ class KafkaAuditListener(
     private val topic: String,
     override val delivery: Delivery = Delivery.BEST_EFFORT,
     override val name: String = NAME,
-    queueCapacity: Int = HeapBudget.of().decisionQueueCapacity(1),
+    queueCapacity: Int = HeapBudget.of().decisionQueueCapacity(1, TraceLevel.OFF),
     /** How long [destroy] waits for the sends this listener holds: the starter's sixth of the shutdown phase (`OBS-10`). */
     private val drainTimeout: Duration = DecisionListeners.DEFAULT_DRAIN_TIMEOUT.toJavaDuration(),
 ) : DecisionListener,

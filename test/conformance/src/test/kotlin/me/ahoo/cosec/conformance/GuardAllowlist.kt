@@ -324,8 +324,9 @@ object GuardAllowlist {
         ),
         "startup" to setOf(
             // STA-12, OBS-11, IDN-33: memory bounds are a share of the heap, in one table.
+            "spring-boot:SnapshotReadinessTest#a traced pipeline's listener queues count events at their traced size",
             "cocache:CacheTtlPolicyTest#revocationTablesKeepTheirDeclaredCount",
-            "runtime:DecisionEventSizeTest#the constant a queue counts with is what a decision event retains, within a factor of two",
+            "runtime:DecisionEventSizeTest#the constant a queue counts with is what a decision event retains at its trace level, within a factor of two",
             "runtime:HeapBudgetTest#a 512 MiB heap gets a quarter of each, and never nothing",
             "runtime:HeapBudgetTest#at the production overlay's 2 GiB heap no bound is below the count it replaced",
             "runtime:HeapBudgetTest#the shares together take at most the bound, leaving the documents their reserved quarter",

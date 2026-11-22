@@ -23,6 +23,7 @@ import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.document.SnapshotDocuments
 import me.ahoo.cosec.document.identity.IdentityCodec
+import me.ahoo.cosec.engine.TraceLevel
 import me.ahoo.cosec.model.scope.HostScope
 import me.ahoo.cosec.runtime.PipelineFixtures.InstalledViews
 import me.ahoo.cosec.runtime.PipelineFixtures.TENANT
@@ -262,7 +263,10 @@ class PipelineBuilderTest {
             .listener(listener("a", Delivery.BEST_EFFORT))
             .listener(listener("b", Delivery.BEST_EFFORT))
             .listener(listener("c", Delivery.REQUIRED))
-        builder.queueCapacity().assert().isEqualTo(HeapBudget.of().decisionQueueCapacity(2))
+        val budget = HeapBudget.of()
+        for (level in TraceLevel.entries) {
+            builder.queueCapacity(level).assert().isEqualTo(budget.decisionQueueCapacity(2, level))
+        }
         builder.build().close()
     }
 

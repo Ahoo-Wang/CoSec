@@ -20,6 +20,7 @@ import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.document.route.RouteMap
 import me.ahoo.cosec.engine.CoSecEngine
 import me.ahoo.cosec.engine.Engine
+import me.ahoo.cosec.engine.TraceLevel
 import me.ahoo.cosec.runtime.attribute.AttributeProviders
 import me.ahoo.cosec.runtime.authn.answersApiKeys
 import me.ahoo.cosec.runtime.event.DecisionListener
@@ -193,7 +194,7 @@ class PipelineBuilder internal constructor(
         val created = DecisionListeners(
             listeners.toList(),
             requiredTimeout = StageBudgets.of(options.timeout).requiredListener,
-            queueCapacity = queueCapacity(),
+            queueCapacity = queueCapacity(options.traceLevel),
         )
         // Drained before the source closes: the queued events are delivered while their documents are still there.
         owned += AutoCloseable { created.drain() }
@@ -201,8 +202,8 @@ class PipelineBuilder internal constructor(
     }
 
     /** Each BEST_EFFORT listener's queue: its part of the decision listeners' share of the heap (`OBS-11`). */
-    internal fun queueCapacity(): Int =
-        HeapBudget.of().decisionQueueCapacity(listeners.count { it.delivery == Delivery.BEST_EFFORT })
+    internal fun queueCapacity(traceLevel: TraceLevel): Int =
+        HeapBudget.of().decisionQueueCapacity(listeners.count { it.delivery == Delivery.BEST_EFFORT }, traceLevel)
 
     /** Both forms end here, so no default can differ between them. */
     private fun assemble(

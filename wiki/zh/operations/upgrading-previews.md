@@ -69,7 +69,7 @@ description: "每个 8.0 预览版（alpha 与 beta）到下一个之间的变�
   |---|---|---|---|
   | `cosec.authentication.revocation.cache.maximum-size`（500,000） | 堆的八分之一，按每表每条 290 + 230 字节计数；CoSec 锁定这个数 | 每表 516,222 条 | 带标签 `cache=RevokedTokenCache` 或 `RevokedSubjectCache` 的 `cocache.misses`（`cocache_misses_total`） |
   | `cosec.authentication.token-cache.max-entries`（16,384） | 堆的十六分之一，每个条目按令牌长度 × 5 字节计重 | 128 MiB，多于 16,384 个大令牌 | `cosec.token.cache.evictions` |
-  | `cosec.observability.listener.queue-capacity`（1,024） | 堆的六十四分之一，由各 `BEST_EFFORT` 监听器均分，按每个事件 1 KB 计数 | 四个监听器时每个 8,192 个事件 | `cosec.listener.dropped` |
+  | `cosec.observability.listener.queue-capacity`（1,024） | 堆的六十四分之一，由各 `BEST_EFFORT` 监听器均分，按每个事件 1 KB 计数，`cosec.pipeline.trace-level` 为 `full` 或 `exhaustive` 时按 8 KB | 四个监听器时每个 8,192 个事件，追踪时 1,024 个 | `cosec.listener.dropped` |
 
   - `ListenerSettings` 和 `PipelineBuilder.listeners { }` 被删除：监听器如何运行不再有任何设置。删掉这个代码块。
   - `cocache.caches.[RevokedTokenCache].local-maximum-size`（或 `RevokedSubjectCache`）现在会让启动失败：这个数被锁定。

@@ -16,6 +16,7 @@
 package me.ahoo.cosec.runtime
 
 import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.engine.TraceLevel
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 
@@ -39,8 +40,11 @@ class HeapBudgetTest {
             .isGreaterThanOrEqualTo(500_000)
         budget.tokenCache.assert().isGreaterThanOrEqualTo(16_384L * LARGE_TOKEN_ENTRY)
         // The starter's default listeners: metrics, audit log, Kafka audit, shadow, all BEST_EFFORT.
-        budget.decisionQueueCapacity(4).assert().isEqualTo(8_192).isGreaterThanOrEqualTo(1_024)
-        budget.decisionQueueCapacity(32).assert().isGreaterThanOrEqualTo(1_024)
+        budget.decisionQueueCapacity(4, TraceLevel.OFF).assert().isEqualTo(8_192).isGreaterThanOrEqualTo(1_024)
+        budget.decisionQueueCapacity(32, TraceLevel.OFF).assert().isGreaterThanOrEqualTo(1_024)
+        // Traced, an event carries every candidate statement: four listeners hold the 1,024 each had at any level.
+        budget.decisionQueueCapacity(4, TraceLevel.FULL).assert().isEqualTo(1_024)
+        budget.decisionQueueCapacity(4, TraceLevel.EXHAUSTIVE).assert().isEqualTo(1_024)
         budget.changeListeners.assert().isEqualTo(64L shl 20)
     }
 
@@ -50,8 +54,8 @@ class HeapBudgetTest {
         budget.revocationTables.assert().isEqualTo(64L shl 20)
         HeapBudget.count(budget.revocationTables, TOKEN_ENTRY + SUBJECT_ENTRY).assert().isEqualTo(129_055)
         budget.tokenCache.assert().isEqualTo(32L shl 20)
-        budget.decisionQueueCapacity(4).assert().isEqualTo(2_048)
-        HeapBudget.of(1).decisionQueueCapacity(0).assert().isEqualTo(1)
+        budget.decisionQueueCapacity(4, TraceLevel.OFF).assert().isEqualTo(2_048)
+        HeapBudget.of(1).decisionQueueCapacity(0, TraceLevel.OFF).assert().isEqualTo(1)
         HeapBudget.count(Long.MAX_VALUE, 1).assert().isEqualTo(Int.MAX_VALUE)
     }
 

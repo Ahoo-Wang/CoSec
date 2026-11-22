@@ -135,7 +135,7 @@ class CoSecPipelineAutoConfiguration {
         return DecisionListeners(
             ordered.map { it.second },
             DerivedTimeouts.budgets(environment).requiredListener,
-            queueCapacity = DerivedHeap.budget().decisionQueueCapacity(bestEffort),
+            queueCapacity = DerivedHeap.budget().decisionQueueCapacity(bestEffort, DerivedHeap.traceLevel(environment)),
             drainTimeout = DerivedTimeouts.drain(environment).toKotlinDuration(),
         )
     }

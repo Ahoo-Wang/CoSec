@@ -67,6 +67,6 @@ internal object DerivedSnapshotSettings {
             "${snapshot.revalidateInterval}, cosec.pipeline.timeout $pipelineTimeout and " +
             "${Runtime.getRuntime().availableProcessors()} cores (Runtime.availableProcessors(): the container's CPU limit)" +
             "$report; ${DerivedTimeouts.line(environment, snapshot.revalidateInterval)}; " +
-            "${DerivedHeap.line(DerivedHeap.budget(), queueCapacity)}."
+            "${DerivedHeap.line(DerivedHeap.budget(), queueCapacity, DerivedHeap.traceLevel(environment))}."
     }
 }

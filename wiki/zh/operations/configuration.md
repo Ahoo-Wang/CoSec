@@ -59,7 +59,7 @@ CoSec 没有哪个配置项叫这些名字，而已知的 key 无论来源都不
 | 一次重新确认并发确认的文档数 | 16，常量：一轮超过间隔时各轮首尾相接，只有突发量取决于它 | |
 | 每个吊销表的本地副本（`RevokedTokenCache`、`RevokedSubjectCache`）容纳 | 堆的八分之一，按每表每条 290 + 230 字节计数：2 GiB 时每表 516,222 条，原来的上限是 500,000。对你的流量太小时表现为带标签 `cache=RevokedTokenCache`（或 `RevokedSubjectCache`）的 `cocache.misses`（Prometheus 中为 `cocache_misses_total`，即本地副本没有应答的读取）持续上升，而同标签的 gauge `cocache.local.size` 停在该数（`IDN-33`） | 堆（`Runtime.maxMemory()`） |
 | 已校验令牌缓存容纳的量 | 堆的十六分之一，每个条目按其令牌长度 × 5 字节计重：2 GiB 时 128 MiB，多于原上限的 16,384 个大令牌（约 115 MB）。太小时表现为 `cosec.token.cache.evictions`（`IDN-32`） | 同上 |
-| 一个 `BEST_EFFORT` 决策监听器最多可以有多少个待处理的事件 | 堆的六十四分之一，由各 `BEST_EFFORT` 监听器均分，按每个事件 1 KB 计数：2 GiB、四个监听器时每个 8,192 个，原来每个 1,024 个。太小时表现为 `cosec.listener.dropped`（`OBS-11`） | 同上，以及监听器数 |
+| 一个 `BEST_EFFORT` 决策监听器最多可以有多少个待处理的事件 | 堆的六十四分之一，由各 `BEST_EFFORT` 监听器均分，按 `cosec.pipeline.trace-level` 下一个事件的大小计数：不追踪时 1 KB，追踪时（`full`、`exhaustive`）8 KB，因为追踪带着每条候选语句。2 GiB、四个监听器时，每个容纳 8,192 个不追踪的事件或 1,024 个追踪的事件，原来不论级别都是每个 1,024 个。太小时表现为 `cosec.listener.dropped`（`OBS-11`） | 同上，以及监听器数 |
 | 变更监听器的队列容纳的量 | 堆的三十二分之一，与以前相同：2 GiB 时 64 MiB。太小时表现为 `cosec.control.listener.lost` | 同上 |
 | CoCache 中文档的本地副本为冷加载提供多久，之后重新询问 Redis | 3 个重新确认间隔：默认 `30s`；无论缓存定制器或 `cocache.*` 配置项设置了什么 | [`cosec.authorization.snapshot.revalidate-interval`](#snapshot) |
 | 一次 `Authenticator` 调用；超过后得到 `503` | 管道超时的 20 %：默认 `1s` | [`cosec.pipeline.timeout`](#pipeline) |

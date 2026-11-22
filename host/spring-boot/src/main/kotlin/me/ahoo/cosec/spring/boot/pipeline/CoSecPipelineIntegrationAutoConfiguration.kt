@@ -171,7 +171,8 @@ class CoSecPipelineIntegrationAutoConfiguration {
                 (
                     beans.getBeanNamesForType(DecisionListener::class.java, false, false).toSet() +
                         beans.getBeanNamesForType(AuditEventSink::class.java, false, false)
-                    ).size
+                    ).size,
+                DerivedHeap.traceLevel(environment),
             ),
             drainTimeout = DerivedTimeouts.drain(environment),
         )

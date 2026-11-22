@@ -16,6 +16,7 @@
 package me.ahoo.cosec.spring.boot.pipeline
 
 import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.engine.TraceLevel
 import me.ahoo.cosec.runtime.HeapBudget
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
@@ -28,12 +29,14 @@ class DerivedHeapTest {
     fun `the startup line names each bound, what it came to and from what`() {
         val budget = HeapBudget.of(2L shl 30)
         DerivedHeap.revocationEntries(budget).assert().isEqualTo(516_222L)
-        DerivedHeap.line(budget, 8_192).assert()
+        DerivedHeap.line(budget, 8_192, TraceLevel.OFF).assert()
             .contains("heap budget (heap 2048 MiB (Runtime.maxMemory())")
             .contains("revocation tables=516222 entries each (290 + 230 B a pair)")
             .contains("token cache weighed at 5 B a token character")
-            .contains("decision listener queues=8192 events each (1024 B an event)")
-        DerivedHeap.line(budget, null).assert().doesNotContain("decision listener queues=8192")
+            .contains("decision listener queues=8192 events each (1024 B an event at trace-level off)")
+        DerivedHeap.line(budget, null, TraceLevel.OFF).assert().doesNotContain("decision listener queues=8192")
+        DerivedHeap.line(budget, 1_024, TraceLevel.FULL).assert()
+            .contains("decision listener queues=1024 events each (8192 B an event at trace-level full)")
         DerivedSnapshotSettings.line(RuntimeAuthorizationProperties(), Duration.ofSeconds(5), MockEnvironment(), 64)
             .assert().contains("heap budget (heap ").contains("decision listener queues=64 events each")
     }

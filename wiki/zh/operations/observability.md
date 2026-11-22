@@ -18,7 +18,7 @@ description: "看清 CoSec 做出的每个决策以及文档的每次变更：�
 | 投递方式 | 监听器何时运行 | 失败的后果 |
 |---|---|---|
 | `REQUIRED` | 在响应之前，与其他 `REQUIRED` 监听器一起运行，每个都在 `cosec.pipeline.timeout` 的 20 %（默认 1 秒）之内，并且在 `cosec.pipeline.timeout` 剩余的时间之内。它看到的是到此为止决定的结果。 | 放行变成 `503` `unavailable`，请求不会继续。其他结果保持原状态；失败以 `ERROR` 记录并计数。 |
-| `BEST_EFFORT`（默认） | 结果确定之后，在请求路径之外运行。每个监听器有自己的队列，即堆的六十四分之一中属于它的一份，按每个事件 1 KB 计数（[由计算得出，而非配置](./configuration.md#computed-not-configured)，2 GiB 堆、四个监听器时每个 8,192 个事件），还有自己的消费者，所以慢的监听器绝不会让别的监听器丢事件。它看到的是最终结果。 | 对请求没有影响。队列满时丢弃事件并计数，请求从不等待与之相关的日志：由一个报告者在请求线程之外，最多每 10 秒以 `WARN` 记录一次 `Dropping decision events: the queue of listener [<name>] is full; <n> dropped since the last report.`。抛异常的监听器最多每 10 秒以 `WARN` 记录一次，并会计数。 |
+| `BEST_EFFORT`（默认） | 结果确定之后，在请求路径之外运行。每个监听器有自己的队列，即堆的六十四分之一中属于它的一份，按每个事件 1 KB 计数，`cosec.pipeline.trace-level` 追踪时按 8 KB（[由计算得出，而非配置](./configuration.md#computed-not-configured)，2 GiB 堆、四个监听器时每个 8,192 个事件，追踪时 1,024 个），还有自己的消费者，所以慢的监听器绝不会让别的监听器丢事件。它看到的是最终结果。 | 对请求没有影响。队列满时丢弃事件并计数，请求从不等待与之相关的日志：由一个报告者在请求线程之外，最多每 10 秒以 `WARN` 记录一次 `Dropping decision events: the queue of listener [<name>] is full; <n> dropped since the last report.`。抛异常的监听器最多每 10 秒以 `WARN` 记录一次，并会计数。 |
 
 ### 每个输出中的“什么做出了决定” {#what-decided-in-every-output}
 

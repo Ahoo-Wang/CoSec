@@ -14,6 +14,7 @@
 package me.ahoo.cosec.runtime
 
 import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.engine.TraceLevel
 
 /**
  * Every share of the heap CoSec takes, in one place (`STA-12`; the rule of root `AGENTS.md`: what can be computed is not
@@ -25,7 +26,7 @@ import me.ahoo.cosec.annotations.InternalCoSecApi
  * |---|---|---|
  * | [revocationTables]: the local copies of the revocation tables (`IDN-33`) | 1/[REVOCATION_TABLES_SHARE] | 256 MiB |
  * | [tokenCache]: the verified-token cache (`IDN-32`) | 1/[TOKEN_CACHE_SHARE] | 128 MiB |
- * | [decisionListeners]: the BEST_EFFORT decision listeners' queues (`OBS-11`) | 1/[DECISION_LISTENERS_SHARE] | 32 MiB |
+ * | [decisionListeners]: the BEST_EFFORT decision listeners' queues, counted by trace level (`OBS-11`) | 1/[DECISION_LISTENERS_SHARE] | 32 MiB |
  * | [changeListeners]: the change listeners' queues (`CTL-66`) | 1/[CHANGE_LISTENERS_SHARE] | 64 MiB |
  * | [documents]: reserved for the snapshot documents, whose own bound is a later design | 1/[DOCUMENTS_SHARE] | 512 MiB |
  *
@@ -39,9 +40,12 @@ class HeapBudget private constructor(val heap: Long) {
     val changeListeners: Long get() = heap / CHANGE_LISTENERS_SHARE
     val documents: Long get() = heap / DOCUMENTS_SHARE
 
-    /** How many events one of [listeners] BEST_EFFORT decision listeners may have waiting: at least one. */
-    fun decisionQueueCapacity(listeners: Int): Int =
-        count(decisionListeners / listeners.coerceAtLeast(1), DECISION_EVENT_BYTES)
+    /**
+     * How many events one of [listeners] BEST_EFFORT decision listeners may have waiting, each counted at what an event
+     * of [traceLevel] retains ([decisionEventBytes]): at least one.
+     */
+    fun decisionQueueCapacity(listeners: Int, traceLevel: TraceLevel): Int =
+        count(decisionListeners / listeners.coerceAtLeast(1), decisionEventBytes(traceLevel))
 
     override fun toString(): String =
         "heap ${mib(heap)} (Runtime.maxMemory()): revocation tables=${mib(revocationTables)} " +
@@ -84,10 +88,29 @@ class HeapBudget private constructor(val heap: Long) {
         )
 
         /**
-         * What one queued decision event retains, measured with JOL (`DecisionEventSizeTest` holds it, never below the
-         * measurement and at most twice it): the queues count events with it, so nothing is measured per request.
+         * What one queued decision event retains at `trace-level=off`, measured with JOL (`DecisionEventSizeTest` holds
+         * each of these constants, never below its measurement and at most twice it): 696 bytes measured. The queues
+         * count events with the constant of the pipeline's trace level, so nothing is measured per request.
          */
         const val DECISION_EVENT_BYTES: Long = 1_024
+
+        /**
+         * What a traced event retains (`full` and `exhaustive`): its evaluation trace holds every candidate statement it
+         * looked at, about 70 bytes each, so its size follows the documents. Measured on a representative deployment (the
+         * platform document of `wiki/examples/app`, an app of 100 permissions and twelve roles, a tenant of twelve roles
+         * and twenty bindings) at its upper case, a denied request, which traces all 97 candidates: 7,464 bytes, at both
+         * levels. A deployment whose requests meet many more candidates holds more than its share in traced queues; a
+         * queue that holds fewer events than it could is the safe side, and tracing is a diagnosis setting.
+         */
+        const val FULL_TRACE_EVENT_BYTES: Long = 8_192
+        const val EXHAUSTIVE_TRACE_EVENT_BYTES: Long = 8_192
+
+        /** What one queued decision event of [traceLevel] retains. */
+        fun decisionEventBytes(traceLevel: TraceLevel): Long = when (traceLevel) {
+            TraceLevel.OFF -> DECISION_EVENT_BYTES
+            TraceLevel.FULL -> FULL_TRACE_EVENT_BYTES
+            TraceLevel.EXHAUSTIVE -> EXHAUSTIVE_TRACE_EVENT_BYTES
+        }
 
         private const val MIB = 1L shl 20
 

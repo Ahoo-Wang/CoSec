@@ -19,6 +19,7 @@ import kotlinx.coroutines.runBlocking
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.document.SnapshotDocuments
+import me.ahoo.cosec.engine.TraceLevel
 import me.ahoo.cosec.model.scope.HostScope
 import me.ahoo.cosec.runtime.HeapBudget
 import me.ahoo.cosec.runtime.Pipeline
@@ -125,7 +126,17 @@ class SnapshotReadinessTest {
             ReflectionTestUtils.getField(listeners, "drainTimeout").assert()
                 .isEqualTo(ReflectionTestUtils.getField(twoSeconds, "drainTimeout"))
             // One BEST_EFFORT listener's part of the decision listeners' share of the heap (OBS-11).
-            val parts = (1..16).map { HeapBudget.of().decisionQueueCapacity(it) }
+            val parts = (1..16).map { HeapBudget.of().decisionQueueCapacity(it, TraceLevel.OFF) }
+            parts.assert().contains(listeners.queueCapacity)
+        }
+    }
+
+    /** `OBS-11`: a traced event is counted at its traced size, so a traced pipeline's queues hold fewer of them. */
+    @Test
+    fun `a traced pipeline's listener queues count events at their traced size`() {
+        runner.withPropertyValues("cosec.pipeline.trace-level=full").run { context ->
+            val listeners = context.getBean(DecisionListeners::class.java)
+            val parts = (1..16).map { HeapBudget.of().decisionQueueCapacity(it, TraceLevel.FULL) }
             parts.assert().contains(listeners.queueCapacity)
         }
     }

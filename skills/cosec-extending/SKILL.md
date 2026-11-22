@@ -172,7 +172,7 @@ fun denyAlerts(alerts: Alerts): DecisionListener = object : DecisionListener {
   `cosec.pipeline.trace-level` (null at `off`, the default).
 - Built-in listeners: the audit log (`cosec.audit.enabled`), Kafka (`cosec-kafka`), Micrometer, OpenTelemetry,
   shadow. An `AuditEventSink` bean is picked up as is: the starter wraps it (`AuditListener.of(sink, beanName)`).
-- BEST_EFFORT queues share a 64th of the heap, counted at 1 KB an event (8,192 each for four listeners on a 2 GiB heap); on shutdown they drain for
+- BEST_EFFORT queues share a 64th of the heap, counted at 1 KB an event, 8 KB when traced (8,192 each for four listeners on a 2 GiB heap, 1,024 traced); on shutdown they drain for
   up to a sixth of `spring.lifecycle.timeout-per-shutdown-phase` (5s at the default). A service in gateway mode registers no listeners.
 
 ## RateLimiter: where permits are counted
