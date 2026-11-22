@@ -17,6 +17,7 @@ import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.runtime.event.Delivery
 import me.ahoo.cosec.spring.boot.CoSecProperties
 import org.springframework.boot.context.properties.ConfigurationProperties
+import java.net.URI
 import java.time.Duration
 
 /** `cosec.control.*` (RFC 0007 X5): the control plane, with `cosec-control`. */
@@ -32,6 +33,15 @@ class ControlProperties {
 
     /** The app control-plane actions are authorized in (RFC 0007 §7.2). */
     var appId: String = "cosec-control"
+
+    /**
+     * The control API's base on a control-plane host's service port, such as `http://control:8082/cosec/control/v1`,
+     * for an application that calls the control plane rather than embedding it: the starter's `ControlService` is then
+     * `HttpControlService` (`cosec-control-http`), which states each caller in `CoSec-Identity`. Only the operator knows
+     * where the host is. Startup fails when it is set on an instance that runs the control plane itself (`STA-11`): an
+     * application has one `ControlService`.
+     */
+    var serviceUrl: URI? = null
     val http = Http()
     val revisions = Revisions()
     val changes = Changes()

@@ -63,6 +63,9 @@ dependencies {
     testImplementation("org.springdoc:springdoc-openapi-starter-webflux-api")
     compileOnly(project(":control"))
     testImplementation(project(":control"))
+    // The control plane on a control-plane host (CTL-77, STA-11): HttpControlService, where cosec.control.service-url names one.
+    compileOnly(project(":control-http"))
+    testImplementation(project(":control-http"))
     compileOnly(project(":kafka"))
     testImplementation(project(":kafka"))
     compileOnly("org.springframework.boot:spring-boot-starter-kafka")
