@@ -239,7 +239,7 @@ class ControlServiceParityTest {
         record { service.skipShadow(iam, catalog, "parity") }
         record { service.changes(iam, SnapshotKey.App(tenant)) }
         record { service.abandon(iam, catalog) }
-        val removal = id { service.propose(iam, proposal("""{"op":"removeRole","id":"viewer"}""")) }
+        val removal = id { service.propose(iam, proposal("""{"op":"removeRole","id":"$tenant-viewer"}""")) }
         record { service.skipShadow(iam, removal, "parity") }
         record { service.publish(iam, removal) }
         record { service.propose(iam, """{"document":"platform","base":1,"note":"p","operations":[]}""") }
@@ -282,7 +282,7 @@ class ControlServiceParityTest {
             publish(context, SnapshotKey.Platform, DocumentKind.PLATFORM, "", PLATFORM)
             listOf(LOCAL, REMOTE).forEach {
                 publish(context, SnapshotKey.Tenant(it), DocumentKind.TENANT, it, TENANT)
-                publish(context, SnapshotKey.App(it), DocumentKind.APP, it, APP)
+                publish(context, SnapshotKey.App(it), DocumentKind.APP, it, app(it))
             }
             // What the control plane's first maintenance pass does on a new store, done now rather than waited for: the
             // open-change sets are kept from the start (CTL-54), so a listing answers instead of 503.
@@ -349,10 +349,13 @@ class ControlServiceParityTest {
             """"bindings":[{"id":"admins","subject":{"role":"admin"},"app":"cosec-control",""" +
             """"space":"","policy":"cosec:tenant-admin"}]"""
 
-        /** An app's document: one permission, and a role that lists it. */
-        const val APP = ""","catalog":{"groups":[{"name":"orders","permissions":[""" +
+        /**
+         * [owner]'s app document: one permission, and a role that lists it, named after the app so that the two runs' apps
+         * share no system role id, which a check warns about (and the other run removes meanwhile).
+         */
+        fun app(owner: String) = ""","catalog":{"groups":[{"name":"orders","permissions":[""" +
             """{"id":"read","action":"order:read","resource":"order/**"}]}]},""" +
-            """"roles":[{"id":"viewer","permissions":["read"]}]"""
+            """"roles":[{"id":"$owner-viewer","permissions":["read"]}]"""
 
         /** The app's catalog widened by a permission: analyzed as anyone's, it waits for a person. */
         const val CATALOG = """{"op":"putCatalog","catalog":{"groups":[{"name":"orders","permissions":[""" +
