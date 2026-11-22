@@ -369,9 +369,10 @@ the change's. Staging changes, shadow windows and access analysis (`/analyze`) a
 
 ## Changing policies from your code {#changing-policies-from-your-code}
 
-A service that changes policies from its own code, such as an IAM service onboarding a tenant, calls the control plane
-through `ControlService` (`cosec-control-sdk`; `@ExperimentalCoSecApi`), whether it embeds the control plane or calls a
-control-plane host. The starter provides one bean of it (`STA-11`):
+A service that changes policies from its own code, such as an IAM service onboarding a tenant or projecting its roles,
+calls the control plane through `ControlService` (`cosec-control-sdk`; `@ExperimentalCoSecApi`), whether it embeds the
+control plane or calls a control-plane host, and writes and reads it in typed values with `ControlClient(service)`.
+The starter provides one bean of `ControlService` (`STA-11`):
 
 - where the instance runs the control plane, the in-process implementation (`cosec-control` brings `cosec-control-sdk`);
 - where `cosec.control.service-url` names a control-plane host's control API (such as
@@ -414,6 +415,10 @@ fun controlService(sslContext: SSLContext): ControlService = HttpControlService(
     believes any code in its own process: that code holds the control store's write account anyway. What is believed
     is who acts, never what that principal may do. The policies still decide each call for it, with the bindings the
     platform document gives it, and the record names it.
+  - Stating a platform administrator, either way, does not make the call the trust root's (`CTL-81`): through
+    `ControlService` every change is analyzed. A service that writes what it already decided gets the authority it
+    needs from the policies, such as the [role class](../policies/testing.md#the-role-class) for roles it projects into
+    tenants, and what the analysis cannot prove waits for a person.
 - **What it reaches:** which tenant and app documents there are (`documents`), reads of a tenant's or an app's
   document (`document`, `revisions`, `revision`, `diff`), and
   the change flow of a tenant's or an app's document (`check`, `propose`, `change`, `changes`, `rebase`, `startShadow`,
@@ -438,11 +443,7 @@ fun controlService(sslContext: SSLContext): ControlService = HttpControlService(
 - **What is recorded:** each step as the stated principal's, with `via.method: in-process` in its origin
   ([Control-plane change log](../operations/observability.md#control-plane-change-log)).
 
-<<< @/examples/control-sdk/kotlin/Onboarding.kt [Onboarding.kt]
-
-<<< @/examples/control-sdk/changes/auditors.json [auditors.json]
-
-The same calls in typed values: `ControlClient(service)` writes each request and reads each answer as the route takes
+In typed values, `ControlClient(service)` writes each request and reads each answer as the route takes
 and answers it (`CTL-76`), over either implementation of `ControlService`. Documents are `DocumentContent` with
 `Policy`, `Binding`, `Role` and `Catalog`; a change is `Operation`s (`PutPolicy`, `PutRole`, ...) in a `ChangeRequest`,
 or `ApplyRequest` for `:apply`; an answer is a `Change`, a `DocumentHead` or a `Page`. Conditions and rate limit rules
@@ -459,9 +460,22 @@ for each other the same way. A writer that died leaves its change holding the sl
 names it): a change of the same author, left `CHECKED`, `SHADOWING` or `READY` and not updated for at least the patience
 (by the control plane's times), is abandoned and the slot taken. A dead writer so holds the document for one patience,
 and the next write takes it over; give every writer of one principal the same patience. It answers the published change, or one that waits for a
-person; when it gives up it throws the refusal, having abandoned the change it proposed.
+person; a change the control plane refuses when it is proposed (a finding such as `REFERENCES`) is abandoned at once and
+answered `ABANDONED` with its findings; when it gives up it throws the refusal, having abandoned the change it proposed.
 
 <<< @/examples/control-sdk/kotlin/AuditorsProjection.kt [AuditorsProjection.kt]
+
+`check` answers what `propose` would answer for the same request (its state, findings, escalations and base) and stores
+nothing, takes no slot and writes no change event (`CTL-78`): call it to know whether a change would publish, wait for a
+person or be refused before your service stores something of its own. It is decided as the proposal would be: a caller
+who may not propose may not check. A service that projects an identity system's roles, with the role class, a dry run
+and what waits, is [Roles from an external source](../scenarios/external-source.md).
+
+The same calls as JSON, the routes' bodies and answers as text, through `ControlService` itself:
+
+<<< @/examples/control-sdk/kotlin/Onboarding.kt [Onboarding.kt]
+
+<<< @/examples/control-sdk/changes/auditors.json [auditors.json]
 
 A change that needs a second person's approval stops at `AWAITING_APPROVAL`, whoever proposed it: report its id to a
 person, who approves it on the operators' routes. To call another service behind the gateway as a principal of

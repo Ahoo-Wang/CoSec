@@ -1,65 +1,82 @@
 ---
 title: "外部事实源同步角色"
-description: "让 CoSec 的角色和权限与拥有它们的身份系统保持一致：必须先有什么、同步服务的主体和令牌、每种变化变成哪些调用，以及冲突、重放和发布的行为。"
+description: "让 CoSec 的角色和权限与拥有它们的身份系统保持一致：必须先有什么、同步服务的主体、每种变化变成的类型化调用、哪些单独发布哪些要等人审批，以及冲突、重放和发布的行为。"
 ---
 
 # 外部事实源同步角色 {#roles-from-an-external-source}
 
-面向角色和权限由另一个系统拥有的团队，例如负责签发令牌的事件溯源身份系统，并希望 CoSec 执行该系统所说的内容。CoSec 的文档此时是事实源的**投影**：由同步服务写入，并且只经过控制面。本页给出必须先有的东西、同步服务运行时的主体和令牌、调用，以及冲突时的行为。
+面向角色和权限由另一个系统拥有的团队，例如负责签发令牌的事件溯源身份系统，并希望 CoSec 执行该系统所说的内容。CoSec 的文档此时是事实源的**投影**：由同步服务写入，并且只经过控制面。本页给出必须先有的东西、同步服务所代表的主体、每个事件变成的调用，以及哪些变更单独发布、哪些要等人审批。
 
 ## 你需要什么 {#what-you-need}
 
 | | 外部事实源 |
 |---|---|
-| 事实源 | 你的身份系统：角色、角色的权限、应用的权限列表 |
-| 同步服务 | 消费事实源事件的服务，它是**控制 API 的客户端**：发送 HTTP 请求 |
-| 它的主体 | `(platform)` 租户的主体，持有 `cosec:write`、`cosec:approve`、`cosec:skip-shadow` 和 `cosec:publish`：信任根（`cosec:platform-admin` 即具备） |
+| 事实源 | 你的身份系统：角色、角色的权限，以及应用的权限列表 |
+| 同步服务 | 消费事实源事件、通过 `ControlClient`（`cosec-control-sdk`）调用控制面的服务 |
+| 它的主体 | `(platform)` 租户的 `sync-service`，由平台文档绑定到租户文档上的[角色类](../policies/testing.md#the-role-class)（见下文）。它不是信任根 |
+| 人 | 在运维人员的路由上审批应用目录的平台管理员 |
 | 文档 | 租户文档保存 `roles`；应用文档保存 `catalog` |
-| 令牌 | 由身份系统签发，`roles` 里是它的角色 id |
+| 令牌 | 由身份系统签发，`roles` 中是它的角色 id |
 
-**控制面不是应用可以调用的库。**`ControlPlane` 和它每个方法都要的 `Operator` 都是 `@InternalCoSecApi`，写入的权限来自宿主管道已经放行的请求，且身份是 `(platform)` 的主体：后台任务在发出一个请求之前没有这样的请求。同步服务，即使与带控制面的宿主在同一个进程里，也通过控制 API 写入，如下面的例子。
+**同步服务调用 `ControlService`，从不直接写 Redis，也不调用 `ControlPlane`。** 直接写缓存会跳过校验、编译和审计记录；绕过控制面的任何东西都不会在执行前被检查。`ControlPlane` 是 `@InternalCoSecApi`。`ControlService` 是服务所调用的控制面，在同一进程内或经网络，应答都相同（[从代码修改策略](../integration/checks.md#changing-policies-from-your-code)）。
 
-也不要直接写 Redis。写缓存会跳过校验、编译和审计记录；绕过控制面的东西，在被执行之前没有被检查过。控制面是唯一的写入者。
+## 哪些单独发布，哪些要等人审批 {#what-publishes-alone-and-what-waits}
+
+同步服务做出的每个变更都要经过分析：通过 `ControlService`，不论调用者声明的是谁（包括平台管理员），都没有人是信任根（`CTL-81`）。它能独自做的事以角色类为界：
+
+| 事实源的变化 | 变更 | 结果 |
+|---|---|---|
+| 新建角色或其权限变化 | 租户文档上的 `putRole` | 凭角色类单独发布，并记下一条点名持有者的 `ROLE_CLASS` 升级 |
+| 删除角色 | `removeRole` | 单独发布：删除不授予任何东西 |
+| 应用的权限 | 应用文档上的 `putCatalog` | 等人审批（`AWAITING_APPROVAL`、`NOT_ANALYZED`）：目录是每个租户的角色可以持有的东西 |
+| 控制面自身应用（`cosec.control.app-id`）的角色，或没有应用的角色 | `putRole` | 等人审批：由谁治理租户的策略应由人来任命 |
+
+角色类是租户文档上的 `cosec:manage-roles`：只写入或删除业务应用角色的变更，不因“由谁授予”而需要第二个人。这样的角色能授予什么，由格式而不是同步服务限定：它只把本租户的成员，在其应用中，绑定到该应用目录所定义的权限策略，而这些是人审批过的；租户的边界限定它（[角色类](../policies/testing.md#the-role-class)）。
 
 ## 必须先有什么 {#what-must-exist-first}
 
-每个部署一次，按这个顺序：
+按这个顺序，每个部署做一次：
 
-1. **一个提供控制 API 的宿主**：类路径上有 `cosec-control` 和 `cosec-cocache`，Redis 的 `maxmemory-policy` 为 `noeviction`（[快速开始](../guide/quick-start.md#prerequisites)）。两者都在时控制 API 就是开启的。它的宿主没有自己的应用（没有 `cosec.authorization.scope.app-id`），或者就是控制面的应用 `cosec.control.app-id`（默认 `cosec-control`）：在应用不同的宿主上，为控制面应用发来的请求得到 `403` `scope-rejected`，同步服务到不了它。
-2. **第一份平台文档**，来自 `cosec-migrate publish`。它必须已经让已认证的调用方访问 `/cosec/control/v1/**`，否则之后没有东西能修改它：
+1. **同步服务能触及的控制面。** 要么同步服务所在的宿主运行它（classpath 上有 `cosec-control` 和 `cosec-cocache`，Redis 设为 `maxmemory-policy noeviction`，[快速开始](../guide/quick-start.md#prerequisites)），要么由[控制面宿主](../operations/deployment.md#the-control-plane-host)运行，同步服务在 `cosec.control.service-url` 中写明它的服务端口（并带上 `cosec-control-http`）。两种情况下 starter 都只提供一个 `ControlService`（`STA-11`）；`ControlClient(service)` 以类型化的值读写它。
+2. **第一份平台文档**，由 `cosec-migrate publish` 发布。它把 `sync-service` 绑定到租户文档上的角色类，允许它提议应用的目录，并允许已认证的人在网关之后访问 `/cosec/control/v1/**` 以便审批：
 
    <<< @/examples/external-source/documents/platform.json [documents/platform.json]
 
-3. **一个信任根**：`cosec-migrate bootstrap --to-redis redis://localhost:6379 --platform-admin sync-service` 把同步服务的主体绑定到 `cosec:platform-admin`。
-4. **给它的令牌**，见下。
-5. **先有带目录的应用文档，再有列出其权限的租户角色**：角色引用了目录没有定义的权限时，提出的变更是带 `REFERENCES` 发现的 `DRAFT`，无法发布。尚不存在的文档从修订 `0` 起修改：应用和租户的第一次变更是下面的 `first-catalog.json` 和 `first-role.json`。
-
-## 同步服务的令牌 {#the-sync-service-s-token}
-
-控制面的令牌属于租户 `(platform)` 和应用 `cosec-control`（`cosec.control.app-id`），并带有同步服务的主体 id。为其他租户或应用签发的令牌会被拒绝。令牌由身份系统自己签发：它就是签发方，所以同步服务在代码里用 `TokenConverter` 构造令牌，来自任何用户请求都影响不到的服务，绝不能来自某个请求的输入。`(platform)` 的主体可以修改每一份文档。
-
-访问令牌的有效期是 `cosec.jwt.token-validity.access`（默认 10 分钟）。带着过期令牌的请求得到 `401`，问题类型为 `token-expired`；控制面没有会因此丢失的状态：像示例那样每次调用都取一个令牌。不是签发方的同步服务，像身份系统的任何客户端一样登录，看到 `token-expired` 时重新登录或刷新（[认证](../integration/authentication.md#refreshing-tokens)）。控制面所在的宿主像校验任何令牌一样校验它，所以与签发方共用 `cosec.jwt` 设置。
+   范围上的 `cosec:grant` 是角色的绑定所需要的：每个角色把其应用的权限授予它的成员。控制面对角色派生的每个绑定都要求它，与任何人一样。
+3. **负责审批的人**：`cosec-migrate bootstrap --to-redis redis://localhost:6379 --platform-admin <person>` 把一个人的主体绑定到 `cosec:platform-admin`。他们在运维人员的路由上审批，所用的令牌由网关校验。
+4. **带目录的应用文档，先于列出其权限的任何租户角色。** 列出目录未定义权限的角色不能发布（`REFERENCES`）。目录由同步服务提议、由人审批，或由人自己变更。
 
 ## 同步产生什么 {#what-the-sync-produces}
 
-作为事实源投影的租户文档，对事实源的每个角色有一个角色条目，以事实源的 id 命名：
+作为事实源投影的租户文档，为事实源的每个角色保存一个角色条目，以事实源的 id 命名：
 
 <<< @/examples/external-source/documents/tenants/acme.json [documents/tenants/acme.json]
 
-名称和说明由事实源拥有时可以不写；CoSec 需要的是 `id`、`app` 和 `permissions`。应用文档的目录以简写条目列出事实源知道的权限（[角色权限](../policies/role-permissions.md#short-form-permissions)）。
+当事实源拥有名称和描述时可以省略它们；CoSec 需要的是 `id`、`app` 和 `permissions`。应用文档的目录以简写条目列出事实源知道的权限（[角色权限](../policies/role-permissions.md#short-form-permissions)）。
 
-## 事实源的变化对应的控制面调用 {#source-change-to-control-plane-call}
+## Kotlin 同步服务 {#the-sync-service-in-kotlin}
 
-| 事实源的变化 | 控制面调用 |
-|---|---|
-| 角色的权限变化 | `putRole`，不带 `ifMatch` |
-| 角色被删除 | `removeRole` |
-| 应用的权限变化 | `putCatalog` |
-| 定期对账 | 事实源是该文档唯一写入者时用 `apply` 的 `REPLACE`；`MERGE` 从不删除，并在 `WARNING` 中点名它保留的内容 |
+每个事件变成以 `sync-service` 身份对 `ControlClient.proposeAndPublishWithoutShadow` 的一次调用：它在文档头上提议、跳过影子窗口并发布，或者应答等人审批的变更：
 
-## 一次变更变成的调用 {#the-calls-a-change-becomes}
+<<< @/examples/external-source/kotlin/RoleSync.kt [RoleSync.kt]
 
-对一份文档的第一次变更基于修订 `0`，之后每次基于同步服务最近读到的修订：
+把它接到 starter 的 `ControlService` 上：
+
+```kotlin
+@Bean
+fun roleSync(service: ControlService): RoleSync = RoleSync(ControlClient(service))
+```
+
+- **谁在行事。** `ControlCaller.service("sync-service")` 声明服务自己在平台租户中的主体：在进程内，控制面相信它自己进程中的代码；经网络时，starter 的 `HttpControlService` 把它写进 `CoSec-Identity`，控制面宿主之所以相信，是因为只有你点名的服务能连到它的服务端口。被相信的是谁在行事，而不是该主体可以做什么：每次调用都由策略决策，记录写明 `sync-service`。
+- **`proposeAndPublishWithoutShadow` 如何处理冲突。** 文档头移动了就重新读取并重新提议；另一个变更占着暂存槽，就在给定的耐心内等它让出，同步服务的多个副本也以同样的方式互相等待。死掉的副本会让它的变更占着暂存槽；同一主体的下一次写入在一个耐心之后接管它。控制面拒绝的变更（例如带 `REFERENCES` 发现）会以 `ABANDONED` 和它的发现应答，不留下任何未完成的东西：这是投影的缺陷，要修复而不是重试。
+- **试运行。** `check` 应答提议会得到的结果（状态、发现和升级），不存储任何东西、不占暂存槽、不写变更事件（`CTL-78`）：上面的 `wouldWrite` 在同步服务写入之前告诉你一个角色能否单独发布。
+- **目录。** `catalogChanged` 应答一个 `AWAITING_APPROVAL` 的变更：把它的 id 报告给一个人，由他在运维人员的路由上审批（[审批](../policies/testing.md#approval)）。审批之后，两者中任一方都可以发布它（`ControlClient.publish`）；发布会被再次分析，审批覆盖它所审批的内容。
+
+这个示例随测试一起编译，并在本页的文档之上针对一个控制面运行（`ExternalSourceExampleTest`）：写入的角色带 `ROLE_CLASS` 发布，删除的角色单独发布，目录等人审批，试运行不存储任何东西。`SourceRole` 类型、事件和装配由你提供。
+
+## 作为控制 API 请求体的同样变更 {#the-same-changes-as-the-control-api-s-bodies}
+
+`ControlClient` 按控制 API 路由接收的样子写出每次调用。对其他语言的客户端，这些就是请求体，文档的第一次变更基于修订 `0`，之后每次基于上次读到的修订：
 
 <<< @/examples/external-source/changes/first-catalog.json [first-catalog.json]
 
@@ -71,137 +88,26 @@ description: "让 CoSec 的角色和权限与拥有它们的身份系统保持�
 
 <<< @/examples/external-source/changes/catalog-changed.json [catalog-changed.json]
 
-`base` 是同步服务最近读到的该文档的修订（对尚不存在的文档，`GET $CONTROL/documents/{key}` 返回 `404`）；`note` 用于审计，请在其中写明事实源的事件。每次变更都走同样的三次调用，同步服务对每个事件重复这三次：
-
-1. 带上面的请求体 `POST $CONTROL/changes`。它返回 `201` 和这次变更：成立时 `state` 为 `CHECKED`，不成立时为带 `findings` 的 `DRAFT`（常见的是 `REFERENCES`），`DRAFT` 不能继续。`409` 表示文档已经不在 `base` 上。
-2. 带 `{"reason": …}` 调用 `POST $CONTROL/changes/{id}:skip-shadow`。事实源是信任根，所以跳过影子窗口。`409` 表示另一个变更占着该文档的暂存槽。
-3. `POST $CONTROL/changes/{id}:publish`。它返回 `200`，`state` 为 `PUBLISHED`，并带 `publishedRevision`。
-
-对账时，把事实源所对应的整份文档发给 `POST $CONTROL/documents/tenant:acme:apply`，请求体为 `{"document": …, "mode": "MERGE", "note": …}`；`REPLACE` 还会删除文档里没有列出的角色。
-
-### Kotlin 客户端 {#a-client-in-kotlin}
-
-示例是一个很小的、带重试的三次调用的客户端。它在自己的进程里把同一份文档的写入串行化；遇到 `409` 就重新读取修订再试，所以同步服务的多个实例只要这样就能相互让开。控制面拒绝的变更（`DRAFT`）是投影自己的错误，要修正而不是重试，所以抛出异常：
-
-```kotlin
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.withLock
-import me.ahoo.cosec.login.token.TokenConverter
-import me.ahoo.cosec.login.token.TokenSubject
-import org.springframework.beans.factory.annotation.Value
-import org.springframework.context.annotation.Bean
-import org.springframework.context.annotation.Configuration
-import org.springframework.http.HttpMethod
-import org.springframework.http.MediaType
-import org.springframework.web.reactive.function.client.WebClient
-import org.springframework.web.reactive.function.client.awaitBodyOrNull
-import org.springframework.web.reactive.function.client.awaitExchange
-import tools.jackson.databind.JsonNode
-import java.util.concurrent.ConcurrentHashMap
-
-class ChangeRejected(val findings: JsonNode) : RuntimeException("the control plane rejected the change: $findings")
-
-class ControlWriter(
-    private val control: WebClient,            // baseUrl: <control host>/cosec/control/v1
-    private val token: suspend () -> String,   // a token of the sync principal that has not expired
-) {
-    private val documents = ConcurrentHashMap<String, Mutex>()
-
-    /** Applies [operations] to [document]; the revision it published. */
-    suspend fun write(document: String, note: String, operations: List<Map<String, Any?>>): Long =
-        documents.computeIfAbsent(document) { Mutex() }.withLock {
-            repeat(ATTEMPTS) { attempt ->
-                attempt(document, note, operations)?.let { return it }
-                delay(100L shl attempt)
-            }
-            error("[$document] was busy for $ATTEMPTS attempts")
-        }
-
-    /** The published revision, or null when the document moved or another change holds it. */
-    private suspend fun attempt(document: String, note: String, operations: List<Map<String, Any?>>): Long? {
-        val read = send(HttpMethod.GET, "/documents/$document")
-        val base = if (read.status == 404) 0 else read.ok(200)["revision"].asLong()
-        val proposed = send(
-            HttpMethod.POST, "/changes",
-            mapOf("document" to document, "base" to base, "note" to note, "operations" to operations),
-        )
-        if (proposed.status == 409) return null
-        val change = proposed.ok(201)
-        if (change["state"].asString() != "CHECKED") throw ChangeRejected(change["findings"])
-        val id = change["id"].asString()
-        val skipped = send(HttpMethod.POST, "/changes/$id:skip-shadow", mapOf("reason" to note))
-        val published = if (skipped.status == 200) send(HttpMethod.POST, "/changes/$id:publish") else skipped
-        if (published.status == 409) {
-            send(HttpMethod.POST, "/changes/$id:abandon")   // frees the staging slot
-            return null
-        }
-        return published.ok(200)["publishedRevision"].asLong()
-    }
-
-    private suspend fun send(method: HttpMethod, path: String, body: Any? = null): Reply {
-        val bearer = token()
-        val request = control.method(method).uri(path).headers { it.setBearerAuth(bearer) }
-        return (if (body == null) request else request.contentType(MediaType.APPLICATION_JSON).bodyValue(body))
-            .awaitExchange { Reply(it.statusCode().value(), it.awaitBodyOrNull<JsonNode>()) }
-    }
-
-    private class Reply(val status: Int, val body: JsonNode?) {
-        fun ok(expected: Int): JsonNode {
-            check(status == expected) { "the control API answered $status: ${body?.get("detail")?.asString() ?: body?.get("code")?.asString()}" }
-            return body!!
-        }
-    }
-
-    private companion object {
-        const val ATTEMPTS = 6
-    }
-}
-
-@Configuration
-class SyncConfiguration {
-    @Bean
-    fun controlWriter(tokenConverter: TokenConverter, @Value("\${sync.control-url}") controlUrl: String) =
-        ControlWriter(WebClient.create(controlUrl)) {
-            tokenConverter.toToken(TokenSubject(id = "sync-service", app = "cosec-control", tenant = "(platform)")).accessToken
-        }
-}
-
-// One event of the source (your Role type), the body of role-changed.json:
-suspend fun ControlWriter.roleChanged(tenant: String, role: Role, event: Long) = write(
-    document = "tenant:$tenant",
-    note = "${role.id} changed in the identity system (event $event)",
-    operations = listOf(
-        mapOf(
-            "op" to "putRole",
-            "role" to mapOf("id" to role.id, "app" to role.app, "name" to role.name, "permissions" to role.permissions),
-        ),
-    ),
-)
-```
-
-### 检查了什么，没有检查什么 {#what-is-checked-and-what-is-not}
-
-本页的文档在每次构建时编译，它的场景在每次构建时运行，上面的变更请求体也按控制 API 的方式解码（[`wiki/examples/external-source`](https://github.com/Ahoo-Wang/CoSec/tree/main/wiki/examples/external-source)）：`(platform)` 租户的令牌在这份平台文档下能到达控制 API 的路径，匿名调用方不能；持有 `role-01HQ7Z` 的令牌可以发出入库单，持有已删除的 `role-01HQ7Y` 的令牌什么也得不到。**Kotlin 代码没有被任何测试编译。**它的作者用这个版本的源码构建了一个宿主（starter，`cosec-control` 和 `cosec-cocache`，Redis），把它跑过一次：第一份目录、第一个角色、一个所列权限不在目录里的角色（`ChangeRejected`）、一个过期的令牌，以及多个写入者写同一份文档；上面写的状态码和状态就是那次运行的返回。`Role` 类型、事件和装配由你来写。
+每个都在控制面宿主的服务端口上依次走 `POST /changes`、`POST /changes/{id}:skip-shadow` 和 `POST /changes/{id}:publish`，调用者以 `IdentityHeader.write` 写出的形式声明在 `CoSec-Identity` 中。对账时，把事实源所对应的整份文档以 `{"document": …, "mode": "REPLACE", "note": …}` 发到 `POST /documents/tenant:acme:apply`（`ControlClient.apply`）：它提议差异所对应的操作，并像这些操作一样被分析。
 
 ## 它怎么知道变更已发布 {#how-it-knows-a-change-is-published}
 
-`:publish` 返回 `200`，`state` 为 `PUBLISHED`，并带 `publishedRevision`，此时该修订是文档的 head：此后 `GET $CONTROL/documents/{key}` 返回这个修订。数据面的其他实例在 `cosec.authorization.snapshot.revalidate-interval`（默认 10 秒，[存储](../operations/storage.md#how-instances-read-documents)）内安装它。实例上报状态时，`GET $CONTROL/documents/{key}/revisions/{revision}/propagation` 统计已安装它的实例（[存储](../operations/storage.md#revisions-history-and-rollback)）。已经签发的令牌，其中的角色在用户下次登录时才生效，无论文档怎么写（见下）。
+一旦该修订成为文档头，`proposeAndPublishWithoutShadow` 就以 `PUBLISHED` 和它的 `publishedRevision` 应答变更。数据面的其他实例会在 `cosec.authorization.snapshot.revalidate-interval`（默认 10 秒，[存储](../operations/storage.md#how-instances-read-documents)）内安装它。对于会上报状态的实例，运维人员路由上的 `GET /documents/{key}/revisions/{revision}/propagation` 统计已经安装它的实例（[存储](../operations/storage.md#revisions-history-and-rollback)）。已经签发的令牌在用户下次登录时才应用其角色，不论文档怎么说（见下文）。
 
 ## 行为 {#how-it-behaves}
 
-- **谁能授权**由事实源决定。同步服务是信任根，所以 CoSec 不会质疑它投影的内容，只在审计里记录每次变更。设了 `cosec.control.approval.four-eyes: true` 时，分析无法证明被包含的内容要等第二位平台主体批准：自动投影请不要开启。
-- **重放是安全的。**`putRole` 整体替换角色，同一事件应用两次得到同一份文档。
-- **冲突由投影方重试。**`base` 不再是文档当前修订的变更，在提出时得到 `409`；读取文档，把待处理事件在新的 base 上重新应用，再提出变更。示例就是这样做的。
-- **每份文档一个写入者。**变更在发布前占用文档的暂存槽。如果别人占着，`skip-shadow` 返回 `409`，只有收窄的变更可以抢占；放弃你提出的变更再重试，示例就是这样。不要让人和同步服务修改同一份文档：人维护放自定义角色的租户文档，事实源维护其他文档。
-- **顺序。**同一份文档的事件按事实源的顺序处理。不同文档可以并行同步。
-- **令牌决定何时生效。**令牌里的角色在用户下次登录时才生效，无论文档怎么写。需要立即生效的变更，用 `MembershipProvider` 提供成员关系，或吊销主体的令牌（[成员关系](../integration/authentication.md#memberships)）。
+- **谁可以授予。** 事实源决定它的哪些用户持有哪个角色。同步服务凭角色类独自写入角色；角色可以持有什么，也就是目录，由人审批。每个变更都以 `sync-service` 的名义记入审计。
+- **声明管理员身份不改变任何事。** 通过 `ControlService` 声明平台管理员身份的同步服务，像任何调用者一样被分析（`CTL-81`）：它自由形式的授予要等人审批。改为给它角色类。
+- **重放是安全的。** `putRole` 整体替换角色，所以同一事件应用两次得到的文档相同。
+- **每份文档一个写入者。** 变更在发布之前占着文档的暂存槽。不要让人和同步服务修改同一份文档：人保留他们自定义角色所在的租户文档，事实源保留其他文档。
+- **顺序。** 同一份文档的事实源事件按顺序处理。不同的文档可以并行同步。
+- **令牌决定何时生效。** 令牌中的角色在用户下次登录时生效，不论文档怎么说。对于必须立即生效的变化，从 `MembershipProvider` 提供成员关系，或吊销该主体的令牌（[成员关系](../integration/authentication.md#memberships)）。
 
 ## 出问题时 {#if-it-fails}
 
-- 控制 API 返回 `403`：同步主体缺少其中一个动作，或它的令牌不是为控制面的应用签发的（[之后修改文档](../guide/quick-start.md#change-a-document-later)）。`403` `scope-rejected`：宿主有自己的应用。
-- `401` `token-expired`：取一个新令牌。
-- 变更处于 `DRAFT` 状态并带 `REFERENCES` 发现（状态 `422`）：角色列出了应用目录没有定义的权限。先发布目录变更。
-- 应用删除了某个租户角色仍然列出的权限：在这些角色不再列出它之前，发布会被拒绝（[角色权限](../policies/role-permissions.md#roles)）。
+- `ControlRefusedException` 带 `403`：`sync-service` 缺少调用所需的某个动作（角色上的 `cosec:write`、它派生的绑定上的 `cosec:grant`、`cosec:skip-shadow`）。带 `404`：调用超出了 `ControlService` 能触及的范围，例如平台文档。
+- 角色变更以 `AWAITING_APPROVAL` 和 `CROSS_TENANT` 应答：该主体在租户文档上不持有 `cosec:manage-roles`。没有 `ROLE_CLASS` 且是控制面自身应用的角色：这个角色永远不属于角色类。
+- 变更以 `ABANDONED` 和 `REFERENCES` 发现应答：某个角色列出了应用目录未定义的权限。先发布目录变更。
+- 应用删除了某个租户角色仍列出的权限：在这些角色不再列出它之前，目录变更不能发布（[角色权限](../policies/role-permissions.md#roles)）。
 
-**下一步：**路由映射改变了哪些语句适用，见[按业务动作授权](./route-maps.md)。
+**下一步：** 路由映射如何改变适用的语句，见[授权业务动作](./route-maps.md)。
