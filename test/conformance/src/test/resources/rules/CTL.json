@@ -1096,6 +1096,32 @@
       ]
     },
     {
+      "id": "CTL-79",
+      "source": "control-typed-api decisions of 2026-11-21 (writer model B: the role class cosec:manage-roles)",
+      "statement": "The role class: a change of a tenant's document that only writes or removes roles (putRole, removeRole), by an author who holds cosec:manage-roles on that document, needs no second person on account of who grants. It lifts only those escalations (CROSS_TENANT, NOT_COVERED, DENY_OVERLAP) and records one informational ROLE_CLASS escalation in their place, naming the holder and what it lifted; anything the analysis could not tell (an unreadable app document, an unresolved policy, a spent budget) still waits. cosec:write on each role and cosec:grant on each binding a role derives are decided as before; a change that writes anything else is analyzed whole; an app's or the platform's document is never the class's. A check answers the same: a holder learns the change will not wait, anyone else the escalation it would wait on. Its bounds are the format's: a tenant's document holds no \"*\" role and the platform's none at all; a tenant's role derives only bindings of its own tenant's members, in its app, to the permission policies that app's document defines (a tenant cannot write a perm: policy, and a permission its app does not define does not publish); a member reaches nothing outside its own tenant's document, whatever the app's catalog grants (TenantIsolation); the tenant's boundary caps what such a role permits.",
+      "level": "build",
+      "pending": null,
+      "guards": [
+        "control:RoleClassBoundsTest#a tenant's role cannot be every permission of its app - CTL-79",
+        "control:RoleClassBoundsTest#the platform document has no roles - CTL-79",
+        "control:RoleClassBoundsTest#a tenant's role derives bindings of its own tenant to its app's permission policies, and nothing else - CTL-79",
+        "control:RoleClassBoundsTest#a projected role of the control app reaches nothing beyond its own tenant, however wide its permission - CTL-79",
+        "control:RoleClassBoundsTest#the tenant's boundary still caps what a projected role grants - CTL-79",
+        "control:RoleClassBoundsTest#a tenant's role binds only what its app's document defines - CTL-79",
+        "control:RoleClassTest#a holder's roles-only change of a tenant's document publishes with no person, and names the class - CTL-79",
+        "control:RoleClassTest#without the grant, the same change waits for a person - CTL-79",
+        "control:RoleClassTest#a change mixing roles with anything else is analyzed whole, and waits - CTL-79",
+        "control:RoleClassTest#cosec grant is still decided for a holder - CTL-79",
+        "control:RoleClassTest#cosec write is still decided for a holder - CTL-79",
+        "control:RoleClassTest#an app document's roles are outside the class - CTL-79",
+        "control:RoleClassTest#a holder's check answers what its proposal would, with no person to wait for - CTL-79",
+        "control:RoleClassTest#anyone else's check answers the escalation the proposal would wait on - CTL-79",
+        "control:RoleClassUnitTest#it lifts every doubt about who grants, into one record that names the holder and what it lifted - CTL-79",
+        "control:RoleClassUnitTest#what the analysis could not tell still waits, whoever holds what - CTL-79",
+        "control:RoleClassUnitTest#only a tenant's document, and only roles - CTL-79"
+      ]
+    },
+    {
       "id": "CTL-80",
       "source": "control-typed-api decisions of 2026-11-21 (a service that calls the control plane tells read-again from wait from stop without reading a message)",
       "statement": "Every 409 the control API answers names which conflict it is, in the problem's `conflict` member, one of a closed set (`contract/control/vocabularies.json`): BASE_MOVED (the document's head is not the change's base: read it again, propose again or rebase), SLOT_HELD (another change holds the document's staging slot, which the problem's `heldBy` names wherever `detail` names it, so nothing more is told: wait for it, or abandon it), STATE (the change's state does not admit the step), CANDIDATE_MOVED (the candidate named is not the change's), WINDOW_OPEN (the shadow window is still open), WINDOW_BLOCKED (the window closed blocked: the change never publishes), CONTENDED (concurrent writes kept changing the record: the same call may succeed), EXISTS (something of that id already stands where the step needs something else: a change of that id, a binding break-glass would create, or a binding a break-glass revoke names that break-glass did not write). No other status carries the member, and no 409 is answered without it; `detail` still explains the case to a person and is no contract. No conflict but SLOT_HELD carries `heldBy` (`contract/control/conflict.json`). The typed write call (`proposeAndPublishWithoutShadow`) abandons the holder only when it is a change of the same author left CHECKED, SHADOWING or READY and not updated for at least the write's patience, by the control plane's times (the holder's updatedAt against the createdAt of the change the write just proposed): a writer that died holds the document for one patience. It waits for any other holder, so concurrent writers of one principal wait for each other and both publish.",
