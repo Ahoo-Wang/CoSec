@@ -1,0 +1,17 @@
+# Rule: CTL-79
+# Mutant: a role with no app is the role class's, since no app is not the control plane's
+# Tests: :control:test --tests me.ahoo.cosec.control.api.RoleClassTest --tests me.ahoo.cosec.control.lifecycle.RoleClassUnitTest
+
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/RoleClass.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/RoleClass.kt
+index a9583d488..8eea16b96 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/RoleClass.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/RoleClass.kt
+@@ -101,7 +101,7 @@ internal object RoleClass {
+     }
+ 
+     /** Whether a role's app is known and is not [controlApp]: a role with no app, or none at all, is not the class's. */
+-    private fun AppId?.notIn(controlApp: AppId): Boolean = this != null && this != controlApp
++    private fun AppId?.notIn(controlApp: AppId): Boolean = this != controlApp
+ 
+     /** What [apply] reads of a change: its document, its operations, the head they apply to, the control plane's app. */
+     class Proposed(

@@ -60,6 +60,10 @@ object GuardAllowlist {
             "control:RoleClassUnitTest#only a tenant's document, and only roles - CTL-79",
             "control:RoleClassBoundsTest#a role of another app permits no control call, whatever its catalog says - CTL-79",
             "control:RoleClassBoundsTest#a tenant's DENY still denies a member of a role the class lifted its overlap for - CTL-79",
+            "control:RoleClassUnitTest#a role with no app is never the class's - CTL-79",
+            "control:RoleClassTest#the class sees every escalation of the change, the analysis's and the others' - CTL-79",
+            "control:RoleClassTest#a grant withdrawn once the change is ready is decided again at publish, and the change waits - CTL-79",
+            "control:RoleClassTest#a grant withdrawn while the change is only checked lets it stage, and publish still decides it again - CTL-79",
             "control:RoleClassTest#a role of the control plane's own app is outside the class, and waits for a person - CTL-79",
             "control:RoleClassUnitTest#a role of the control plane's own app is never the class's, put or removed - CTL-79",
             // CTL-78: a check answers what the proposal would, and writes nothing.

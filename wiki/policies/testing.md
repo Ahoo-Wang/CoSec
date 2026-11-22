@@ -696,9 +696,10 @@ grants (`CTL-79`):
 - **Only roles, only a tenant's document.** The change writes or removes roles (`putRole`, `removeRole`) and nothing
   else; a change that writes anything else is analyzed whole. An app's and the platform's documents are never the
   class's.
-- **Never a role of the control plane's own app** (`cosec.control.app-id`). A member of such a role holds control
-  calls on its tenant's document, and who governs a tenant's policies is for a person to appoint: a change that puts or
-  removes one is analyzed as anyone's and waits. The rule is the role's app, not its actions' names, and that is
+- **Never a role of the control plane's own app** (`cosec.control.app-id`), nor one with no app. A member of such a
+  role holds control calls on its tenant's document, and who governs a tenant's policies is for a person to appoint: a
+  change that puts or removes one is analyzed as anyone's and waits. A `putRole` replaces the role the document holds
+  under its id, so both the role written and the one it replaces are held to this. The rule is the role's app, not its actions' names, and that is
   enough: a role's bindings are scoped to its app and a control request is decided in the control app, so a role of
   another app permits no control call, whatever its catalog's actions say.
 - **Only doubts about who grants.** The class lifts `CROSS_TENANT`, `NOT_COVERED` and `DENY_OVERLAP`, and records one
@@ -708,7 +709,11 @@ grants (`CTL-79`):
   lifting it grants nothing a DENY forbids. Anything the analysis could not tell (`UNREADABLE`, `UNRESOLVED`,
   `TOO_LARGE`) still waits for a person.
 - **Everything else as before.** `cosec:write` on each role and `cosec:grant` on each binding a role derives are
-  decided as for anyone.
+  decided as for anyone. The class sees every escalation of the change, and an escalation it does not lift (a
+  break-glass binding's, say) keeps the whole change waiting.
+- **Decided again at publish.** Publishing runs the grant analysis again as the publisher, on the current heads, and
+  the class with it: a grant withdrawn after the check sends the change back to `AWAITING_APPROVAL`, even when it was
+  staged meanwhile.
 
 What such a change can grant is bounded by the format, not by its author. A tenant's role derives only bindings of its
 own tenant's members, in its app, to the permission policies that app's document defines, which people approve there.
