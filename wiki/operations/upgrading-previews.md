@@ -83,6 +83,9 @@ Which preview of the library may run behind which preview of the gateway image: 
   - An `AttributeProvider` with a timeout of its own, and a `RevocationReader` of your own, keep their own bounds.
   - With a `cosec.pipeline.timeout` below 20 ms, the shares are floored at 1 ms, and a token's two revocation reads may no
     longer end inside the authentication timeout.
+  - **A deployment with a `cosec.pipeline.timeout` below the default** also shortens the revocation read, the one stage
+    that fails open: at `1s` each read gets 60 ms where it had 300 ms, and a read past it accepts the request's token
+    unless `cosec.authentication.revocation.fail-closed=true`. Set `fail-closed`, or keep the default deadline.
 
 ## From 8.0.0-beta.4 {#from-8-0-0-beta-4}
 

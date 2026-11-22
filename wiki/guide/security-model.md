@@ -190,6 +190,8 @@ full outage while protecting little:
   fails the request with `503`, and a revocation entry that cannot be decoded fails the read too
   ([Logout and revocation](../integration/authentication.md#logout-and-revocation)).
   `cosec.authentication.revocation.fail-closed: true` turns the exception off: the request is `503` instead.
+  CoSec's own reader gives each read 30 % of the authentication timeout, a share of `cosec.pipeline.timeout`: a lower
+  deadline makes this exception easier to reach (60 ms per read at `1s`, 300 ms at the default `5s`).
 - **Rate limit rules without `strictFailure`.** When a rule cannot be counted (its limiter fails, times out or is
   missing), it is skipped. A rule with `"strictFailure": true` refuses the request with `503` instead. Rate limits
   only apply to requests the policies already permitted, so skipping one never grants what the policies did not

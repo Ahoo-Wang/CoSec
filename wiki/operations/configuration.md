@@ -87,6 +87,12 @@ limit CoSec owns, and has no key. Each is logged once at startup, in a line that
 
 Each share of the pipeline timeout is at least `1ms`; below a `cosec.pipeline.timeout` of 20 ms a token's two revocation
 reads may no longer end inside the authentication timeout.
+
+**A lower deadline shortens the one stage that fails open.** The revocation read budget scales with the deadline: at
+`cosec.pipeline.timeout=1s` each read gets 60 ms, where it had a fixed 300 ms. A read past its budget means the
+revocations cannot be read, and verification then accepts the request's token unless
+`cosec.authentication.revocation.fail-closed=true` ([the documented exception](../guide/security-model.md#the-two-documented-exceptions)).
+With a deadline below the default, set `fail-closed`, or check that Redis answers well within the read budget.
 | How often an instance writes its shadow reports and status | a sixth of the status's life (`10s`), and no oftener than a fifth of the shortest life of a window or a second | [`cosec.control.shadow.min-duration`](#control-plane), read where it is set |
 | How often each control-plane instance reclaims revisions | 1 hour, a constant: what is reclaimed is decided by `min-age` and `max-count` | |
 | When a record outside a revision chain, or a change listed and never written, is removed | one reclaim pass old: 1 hour | the reclaim interval |

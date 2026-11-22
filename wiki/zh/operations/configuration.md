@@ -69,6 +69,8 @@ CoSec 没有哪个配置项叫这些名字，而已知的 key 无论来源都不
 | 一个实例记住 `MembershipLoader` 不认识某个主体（被移除成员仍有效的令牌）多久 | 5 秒，常量：你新增的主体在它结束时被每个实例认识，在执行 `invalidate` 的实例上立即被认识；失败的加载从不被记住（[成员关系](../integration/authentication.md#memberships)） | |
 
 管道超时的每一份至少为 `1ms`；`cosec.pipeline.timeout` 低于 20 ms 时，一个令牌的两次吊销读取可能不再在认证超时之内结束。
+
+**更低的期限会缩短唯一一个失败即放行的阶段。** 吊销读取的预算随期限缩放：`cosec.pipeline.timeout=1s` 时每次读取只有 60 ms，而原来固定为 300 ms。超过预算的读取意味着吊销无法读取，此时校验会接受请求的令牌，除非设置了 `cosec.authentication.revocation.fail-closed=true`（[已写明的例外](../guide/security-model.md#the-two-documented-exceptions)）。期限低于默认值时，请设置 `fail-closed`，或确认 Redis 的应答远在读取预算之内。
 | 实例多久写一次影子报告和状态 | 状态存活期的六分之一（`10s`），且不比窗口最短存活期的五分之一或一秒更频繁 | [`cosec.control.shadow.min-duration`](#control-plane)，在它被设置的地方读取 |
 | 每个控制面实例多久回收一次修订 | 1 小时，常量：回收什么由 `min-age` 和 `max-count` 决定 | |
 | 修订链之外的记录、或登记了却从未写入的变更何时删除 | 满一轮回收的年龄：1 小时 | 回收间隔 |

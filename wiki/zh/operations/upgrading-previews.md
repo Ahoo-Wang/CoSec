@@ -62,6 +62,7 @@ description: "每个 8.0 预览版（alpha 与 beta）到下一个之间的变�
   - `PipelineSettings`（在 `options { }` 中）保留 `timeout`，去掉 `authenticationTimeout`、`membershipTimeout`、`attributeTimeout` 和 `rateLimitTimeout`；`ListenerSettings`（在 `listeners { }` 中）保留 `queueCapacity`，去掉 `requiredTimeout` 和 `drainTimeout`。改为设置 `timeout`，或删掉这一行。
   - 自带超时的 `AttributeProvider`，以及你自己的 `RevocationReader`，保留它们自己的时限。
   - `cosec.pipeline.timeout` 低于 20 ms 时，每一份以 1 ms 为下限，一个令牌的两次吊销读取可能不再在认证超时之内结束。
+  - **`cosec.pipeline.timeout` 低于默认值的部署**同时缩短了吊销读取，这是唯一一个失败即放行的阶段：`1s` 时每次读取只有 60 ms，而原来是 300 ms，超过它的读取会接受请求的令牌，除非设置了 `cosec.authentication.revocation.fail-closed=true`。请设置 `fail-closed`，或保留默认期限。
 
 ## 从 8.0.0-beta.4 升级 {#from-8-0-0-beta-4}
 
