@@ -193,4 +193,31 @@ class RoleClassTest {
         reasons(checked).assert().contains("CROSS_TENANT").doesNotContain("ROLE_CLASS")
         reasons(checked).assert().isEqualTo(reasons(call("POST", "/changes", body).second))
     }
+
+    @Test
+    fun `a role of the control plane's own app is outside the class, and waits for a person - CTL-79`() {
+        rights(holder)
+        val control = SnapshotKey.App("cosec-control")
+        runBlocking {
+            fixture.revisions.publish(
+                control,
+                fixture.revisions.head(control),
+                PolicyDocumentCodec.decode(
+                    DocumentKind.APP,
+                    "cosec-control",
+                    ("""{"schema":2,"revision":1,"publishedAt":"2026-11-01T00:00:00Z","catalog":{"groups":[{"name":"own",""" +
+                        """"permissions":[{"id":"govern","action":["cosec:read","cosec:write","cosec:approve"],""" +
+                        """"resource":"doc/tenant/**"}]}]}}""").encodeToByteArray(),
+                ),
+                publication,
+            )
+        }
+        val governors = """{"op":"putRole","role":{"id":"governors","app":"cosec-control","permissions":["govern"]}}"""
+        val (proposed, state) = stage(request("tenant:acme", head(), governors))
+        reasons(proposed).assert().describedAs("$proposed").contains("CROSS_TENANT").doesNotContain("ROLE_CLASS")
+        state.assert().isEqualTo("AWAITING_APPROVAL")
+        // A role of another app, by the same holder, is still the class's (once the waiting change gives up the slot).
+        call("POST", "/changes/${proposed.get("id").asString()}:abandon", "{}").first.assert().isEqualTo(200)
+        stage(request("tenant:acme", head(), role)).second.assert().isEqualTo("READY")
+    }
 }

@@ -23,6 +23,8 @@ import me.ahoo.cosec.control.change.Escalation.Reason
 import me.ahoo.cosec.control.change.Operation
 import me.ahoo.cosec.document.Actor
 import me.ahoo.cosec.document.RoleDefinition
+import me.ahoo.cosec.model.decision.DocumentKind
+import me.ahoo.cosec.document.PolicyDocument
 import me.ahoo.cosec.document.RolePermissions
 import me.ahoo.cosec.model.AppId
 import me.ahoo.cosec.model.PrincipalId
@@ -31,6 +33,7 @@ import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
+import java.time.Instant
 
 /** `CTL-79`: what the role class lifts, of which changes, and when it asks whether the author holds the grant. */
 class RoleClassUnitTest {
@@ -42,15 +45,28 @@ class RoleClassUnitTest {
 
     private fun escalations(vararg reasons: Reason) = reasons.map { Escalation("f-$it", it) }
 
+    private val control = AppId("cosec-control")
+
+    /** A head holding the role night of orders and the role governors of the control plane's app. */
+    private val base = PolicyDocument(
+        kind = DocumentKind.TENANT,
+        owner = "acme",
+        revision = 1,
+        publishedAt = Instant.EPOCH,
+        policies = emptyList(),
+        bindings = emptyList(),
+        roles = listOf(
+            RoleDefinition(RoleId("night"), RolePermissions.Listed(listOf("read")), app = AppId("orders")),
+            RoleDefinition(RoleId("governors"), RolePermissions.Listed(listOf("govern")), app = control),
+        ),
+    )
+
+    private fun covers(key: SnapshotKey, operations: List<Operation>) = RoleClass.covers(key, operations, base, control)
+
     private fun apply(key: SnapshotKey, operations: List<Operation>, escalations: List<Escalation>): Pair<List<Escalation>, Boolean> {
         var asked = false
         val answer = runBlocking {
-            RoleClass.apply(
-                escalations,
-                key,
-                operations,
-                author
-            ) { true.also { asked = true } }
+            RoleClass.apply(escalations, RoleClass.Proposed(key, operations, base, control), author) { true.also { asked = true } }
         }
         return answer to asked
     }
@@ -88,15 +104,33 @@ class RoleClassUnitTest {
     fun `only a tenant's document, and only roles - CTL-79`() {
         val held = escalations(Reason.CROSS_TENANT)
         listOf(SnapshotKey.App("orders"), SnapshotKey.Platform).forEach { key ->
-            RoleClass.covers(key, listOf(putRole)).assert().isFalse()
+            covers(key, listOf(putRole)).assert().isFalse()
             apply(key, listOf(putRole), held).first.assert().isEqualTo(held)
         }
-        RoleClass.covers(acme, emptyList()).assert().isFalse()
-        RoleClass.covers(acme, listOf(putRole, Operation.RemoveRole(RoleId("old")))).assert().isTrue()
+        covers(acme, emptyList()).assert().isFalse()
+        covers(acme, listOf(putRole, Operation.RemoveRole(RoleId("night")))).assert().isTrue()
         val mixed = listOf(putRole, Operation.RemovePolicy(me.ahoo.cosec.model.PolicyId("p")))
-        RoleClass.covers(acme, mixed).assert().isFalse()
+        covers(acme, mixed).assert().isFalse()
         apply(acme, mixed, held).first.assert().isEqualTo(held)
         // Nothing to lift: nothing recorded, and the grant never asked about.
         apply(acme, listOf(putRole), emptyList()).assert().isEqualTo(emptyList<Escalation>() to false)
+    }
+
+    @Test
+    fun `a role of the control plane's own app is never the class's, put or removed - CTL-79`() {
+        val held = escalations(Reason.CROSS_TENANT)
+        val governors = Operation.PutRole(
+            RoleDefinition(RoleId("governors"), RolePermissions.Listed(listOf("govern")), app = control),
+        )
+        listOf(
+            listOf(governors),
+            listOf(putRole, governors),
+            listOf(Operation.RemoveRole(RoleId("governors"))),
+            // A role the head does not hold: its app is not known, so it is not the class's.
+            listOf(Operation.RemoveRole(RoleId("unknown"))),
+        ).forEach { operations ->
+            covers(acme, operations).assert().describedAs("$operations").isFalse()
+            apply(acme, operations, held).assert().isEqualTo(held to false)
+        }
     }
 }

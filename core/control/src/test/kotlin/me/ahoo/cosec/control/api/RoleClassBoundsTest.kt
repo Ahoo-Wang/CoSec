@@ -216,4 +216,32 @@ class RoleClassBoundsTest {
         invented.get("state").asString().assert().isEqualTo("DRAFT")
         invented.get("findings").values().map { it.get("check").asString() }.assert().contains("REFERENCES")
     }
+
+    @Test
+    fun `a role of another app permits no control call, whatever its catalog says - CTL-79`() {
+        // An app's catalog as hostile as it can be about the control plane: its permission names control actions.
+        publish(
+            SnapshotKey.App("orders"),
+            DocumentKind.APP,
+            "orders",
+            ""","catalog":{"groups":[{"name":"govern","permissions":[{"id":"govern","action":""" +
+                """["cosec:approve","cosec:read","cosec:write","cosec:grant","cosec:publish"],""" +
+                """"resource":["doc/**","scope/**"]}]}]}""",
+        )
+        publish(
+            acme,
+            DocumentKind.TENANT,
+            "acme",
+            ""","policies":[{"id":"orders","statements":[{"effect":"allow","action":"order:*"}]}],""" +
+                """"roles":[{"id":"governors","app":"orders","permissions":["govern"]}]""",
+        )
+        val dora = fixture.engine.security(ControlPlaneTest.ACME, "dora", roles = listOf("governors"))
+        // A control request is decided in the control plane's app: a binding of another app does not apply there.
+        call("GET", "/documents/tenant:acme", dora).first.assert().isEqualTo(403)
+        val head = runBlocking { fixture.revisions.head(acme) }!!.revision
+        val body = """{"document":"tenant:acme","base":$head,"note":"n","operations":[{"op":"putPolicy","policy":""" +
+            """{"id":"x","statements":[{"effect":"allow","action":"order:read"}]}}]}"""
+        call("POST", "/changes", dora, body).first.assert().isEqualTo(403)
+        call("POST", "/changes:check", dora, body).first.assert().isEqualTo(403)
+    }
 }

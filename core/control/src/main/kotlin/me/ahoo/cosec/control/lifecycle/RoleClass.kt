@@ -20,6 +20,8 @@ import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.control.change.Escalation
 import me.ahoo.cosec.control.change.Operation
 import me.ahoo.cosec.document.Actor
+import me.ahoo.cosec.document.PolicyDocument
+import me.ahoo.cosec.model.AppId
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 
 /**
@@ -32,6 +34,13 @@ import me.ahoo.cosec.spi.snapshot.SnapshotKey
  * It lifts only the doubts about who grants ([LIFTED]). An escalation that says the analysis could not tell (an app
  * document it could not read, a policy nothing defines, a budget spent) still waits, and so does a change that writes
  * anything but roles: it is analyzed whole. `cosec:write` and `cosec:grant` are decided for every change as before.
+ *
+ * A role of the control plane's own app (`cosec.control.app-id`) is never the class's, put or removed, whatever its
+ * permissions: who governs a tenant's policies is not a business permission. A role that carried `cosec:approve`,
+ * `cosec:write` and `cosec:grant` on the tenant's document would make two of its members the tenant's governors, who
+ * then propose and approve between them what the class never would. A role of any other app permits no control call
+ * at all, whatever its catalog names: a control request is decided in the control plane's app, where another app's
+ * binding does not apply.
  */
 internal object RoleClass {
     /** What the class lifts: the doubts about the author's own reach, never what the analysis could not tell. */
@@ -41,10 +50,18 @@ internal object RoleClass {
         Escalation.Reason.DENY_OVERLAP,
     )
 
-    /** Whether [operations] of [key] are the class's: a tenant document's, and only roles written or removed. */
-    fun covers(key: SnapshotKey, operations: List<Operation>): Boolean =
-        key is SnapshotKey.Tenant && operations.isNotEmpty() &&
-            operations.all { it is Operation.PutRole || it is Operation.RemoveRole }
+    /**
+     * Whether [operations] of [key] are the class's: a tenant document's, and only roles written or removed, none of
+     * [controlApp]. A removed role's app is the one [base] gives it; one [base] does not hold is not the class's.
+     */
+    fun covers(key: SnapshotKey, operations: List<Operation>, base: PolicyDocument?, controlApp: AppId): Boolean =
+        key is SnapshotKey.Tenant && operations.isNotEmpty() && operations.all { operation ->
+            when (operation) {
+                is Operation.PutRole -> operation.role.app != controlApp
+                is Operation.RemoveRole -> base?.roles?.firstOrNull { it.id == operation.id }?.app.let { it != null && it != controlApp }
+                else -> false
+            }
+        }
 
     /**
      * [escalations] as the class leaves them: one record naming [author], the grant and what it lifted, in place of
@@ -53,12 +70,13 @@ internal object RoleClass {
      */
     suspend fun apply(
         escalations: List<Escalation>,
-        key: SnapshotKey,
-        operations: List<Operation>,
+        change: Proposed,
         author: Actor,
         holds: suspend () -> Boolean,
     ): List<Escalation> {
-        if (escalations.isEmpty() || !covers(key, operations) || escalations.any { it.reason !in LIFTED }) {
+        val key = change.key
+        val covered = covers(key, change.operations, change.base, change.controlApp)
+        if (escalations.isEmpty() || !covered || escalations.any { it.reason !in LIFTED }) {
             return escalations
         }
         if (!holds()) {
@@ -75,4 +93,7 @@ internal object RoleClass {
             ),
         )
     }
+
+    /** What [apply] reads of a change: its document, its operations, the head they apply to, the control plane's app. */
+    class Proposed(val key: SnapshotKey, val operations: List<Operation>, val base: PolicyDocument?, val controlApp: AppId)
 }

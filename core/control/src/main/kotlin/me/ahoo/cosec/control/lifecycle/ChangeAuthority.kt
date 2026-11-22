@@ -274,7 +274,7 @@ class ChangeAuthority(
                 ?.let { Escalation(fragment.toString(), Escalation.Reason.of(it.reason.name), it.toString()) }
         }
         // The role class lifts who-grants doubts of a roles-only change of a tenant's document, for a holder (CTL-79).
-        return escalations + RoleClass.apply(unknown, key, operations, operator.actor) {
+        return escalations + RoleClass.apply(unknown, RoleClass.Proposed(key, operations, base, controlApp), operator.actor) {
             holds(operator, key, ControlActions.MANAGE_ROLES)
         }
     }
