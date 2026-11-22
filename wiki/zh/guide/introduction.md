@@ -110,7 +110,7 @@ starter 始终引入 `cosec-runtime`（协程请求 Pipeline、快照与令牌�
 这里是唯一说明应用的构建要为 CoSec 提供什么、加入 CoSec 会改变构建中什么的地方。
 
 - **JDK 21 或更高版本。**
-- **Spring Boot 4.1。** CoSec 在 4.1 的某一个补丁版本上构建和测试。每个使用 Spring 或 Spring Boot 的模块都在自己的元数据里写明该版本的各个版本号，作为它需要的最低版本（Gradle 模块元数据里是 `requires`，POM 里是普通版本）；确切的数字在那里，不在本页。请使用该版本或更新的版本。使用较旧 4.1.x 的应用，在 Gradle 自带的 platform 支持下（Spring Boot BOM 的 `platform(...)`），CoSec 用到的 Spring 和 Spring Boot 模块会被提升到该版本，其余的保持不变。使用 Maven，或 Spring 的依赖管理插件时，由应用导入的 Spring Boot BOM 决定版本，所以保持应用自己的版本。
+- **Spring Boot 4.2。** CoSec 在 4.2 的某一个补丁版本上构建和测试。每个使用 Spring 或 Spring Boot 的模块都在自己的元数据里写明该版本的各个版本号，作为它需要的最低版本（Gradle 模块元数据里是 `requires`，POM 里是普通版本）；确切的数字在那里，不在本页。请使用该版本或更新的版本。使用较旧 4.2.x 的应用，在 Gradle 自带的 platform 支持下（Spring Boot BOM 的 `platform(...)`），CoSec 用到的 Spring 和 Spring Boot 模块会被提升到该版本，其余的保持不变。使用 Maven，或 Spring 的依赖管理插件时，由应用导入的 Spring Boot BOM 决定版本，所以保持应用自己的版本。使用 `cosec-gateway` 时，需要 Spring Cloud 2026.0（Spring Cloud Gateway 5.1），即基于 Spring Boot 4.2 构建的发布列车。
 - **Kotlin 2。** CoSec 用 Kotlin 2 编写，`kotlin-stdlib` 会像任何库一样被提升到它构建时的版本。
 - **CoCache 8，仅在使用 `cosec-cocache` 时。** CoCache 8 与 CoCache 4 的 Maven 坐标相同（`me.ahoo.cocache:cocache-core`），包名却不同（`me.ahoo.cocache`，而不是 `me.ahoo.cache`），所以两者不能共存于同一个类路径。应用自身代码或所用框架基于 CoCache 4 时，不能添加 `cosec-cocache`。其他模块不需要 CoCache。
 

@@ -25,6 +25,16 @@ description: "每个 8.0 预览版（alpha 与 beta）到下一个之间的变�
 
 ## 从 8.0.0-beta.5 升级 {#from-8-0-0-beta-5}
 
+- **CoSec 基于 Spring Boot 4.2 和 Spring Cloud 2026.0 构建。** 受影响：使用 Spring Boot 4.1 的应用，或使用 `cosec-gateway`
+  且在 Spring Cloud 2025.1 上的应用。CoSec 的模块把构建所用的版本写作最低版本
+  （[CoSec 对构建的要求](../guide/introduction.md#what-cosec-needs-from-your-build)）：按 Spring Boot 4.2 的发布说明把应用升级到
+  Spring Boot 4.2（使用 `cosec-gateway` 时还要升级到 Spring Cloud 2026.0.0）；不支持 Spring Boot 4.1 与 4.2 模块混合的类路径。
+  - **转发头策略改为 `server.request.header.forwarded.strategy`**（`web-server`、`framework`、`none`），这是 Spring Boot 4.2 的
+    名称。CoSec 读取它，也仍读取已弃用的 `server.forward-headers-strategy`（其 `native` 即 `web-server`），以决定如何读取客户端
+    地址；它的启动消息使用新的 key（[代理后的客户端 IP](../integration/web.md#client-ip-behind-proxies)）。两者都设置时 Spring
+    Boot 启动失败。
+  - CORS 无需处理：Spring MVC 不再自带 `CorsConfigurationSource`（Spring Framework 7.1），所以 CoSec 的 CORS 过滤器（`STA-5`）
+    仍然只在应用声明了一个时才运行。
 - **实例的状态拆分为两条记录**（`CTL-74`、`CTL-75`）。`<s>:shadow:status:<instance>` 处的状态现在很小（存活信息、`shadows`、
   已确认的窗口），没有 `documents` 成员。实例持有的文档是一条独立的记录 `<s>:shadow:resident:<instance>`，只有
   `propagation` 读取它（[存储](./storage.md#redis-keys)）。`propagation` 的应答多了一个成员 `unknown`，总是写出。
