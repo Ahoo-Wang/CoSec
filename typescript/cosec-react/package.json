@@ -1,6 +1,6 @@
 {
   "name": "@ahoo-wang/cosec-react",
-  "version": "8.0.0-beta.5",
+  "version": "8.0.0-beta.6",
   "description": "React hooks and components for a CoSec application: the security context, the signed-in state and route guards, on top of @ahoo-wang/cosec-fetcher.",
   "keywords": [
     "react",
