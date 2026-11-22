@@ -1,0 +1,18 @@
+# Rule: CTL-79
+# Mutant: the role class lifts the escalations of a roles-only change whoever writes it, holder of cosec:manage-roles or not
+# Tests: :control:test --tests me.ahoo.cosec.control.api.RoleClassTest --tests me.ahoo.cosec.control.lifecycle.RoleClassUnitTest
+
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/RoleClass.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/RoleClass.kt
+index eacfbc8ae..0ebd795de 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/RoleClass.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/RoleClass.kt
+@@ -79,9 +79,6 @@ internal object RoleClass {
+         if (escalations.isEmpty() || !covered || escalations.any { it.reason !in LIFTED }) {
+             return escalations
+         }
+-        if (!holds()) {
+-            return escalations
+-        }
+         val lifted = escalations.groupingBy {
+             it.reason
+         }.eachCount().entries.joinToString { (reason, count) -> "$reason x$count" }

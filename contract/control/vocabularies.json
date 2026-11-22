@@ -2,7 +2,7 @@
   "state" : [ "DRAFT", "CHECKED", "SHADOWING", "AWAITING_APPROVAL", "READY", "CONFLICTED", "PUBLISHED", "REJECTED", "ABANDONED", "EXPIRED" ],
   "kind" : [ "PUBLISH", "ROLLBACK", "BREAK_GLASS", "EXPIRE", "MIGRATE", "BOOTSTRAP" ],
   "severity" : [ "ERROR", "WARNING" ],
-  "escalationReason" : [ "CROSS_TENANT", "NOT_COVERED", "DENY_OVERLAP", "UNRESOLVED", "UNREADABLE", "ANONYMOUS", "TOO_LARGE", "NOT_ANALYZED", "BREAK_GLASS", "TENANT_BINDINGS", "DETECTION_TIMED_OUT", "UNKNOWN" ],
+  "escalationReason" : [ "CROSS_TENANT", "NOT_COVERED", "DENY_OVERLAP", "UNRESOLVED", "UNREADABLE", "ANONYMOUS", "TOO_LARGE", "NOT_ANALYZED", "BREAK_GLASS", "TENANT_BINDINGS", "DETECTION_TIMED_OUT", "ROLE_CLASS", "UNKNOWN" ],
   "shadowOutcome" : [ "SAME", "WIDENED", "NARROWED", "BECAME_INDETERMINATE", "CANDIDATE_INDETERMINATE", "CANDIDATE_ERROR", "BY_CHANGED", "BECAME_DENIED", "OBLIGATIONS_CHANGED", "BASE_MISMATCH" ],
   "decision" : [ "Permit", "Deny", "Indeterminate", "Rejected" ],
   "cause" : [ "MatcherFailed", "MissingPolicies", "AmbiguousPolicy", "SourceUnavailable", "DocumentInvalid", "NotLoaded", "BoundaryUnavailable", "AttributeUnavailable", "CheckFailed", "MembershipUnavailable", "RequiredListenerFailed", "RateLimiterUnavailable" ],

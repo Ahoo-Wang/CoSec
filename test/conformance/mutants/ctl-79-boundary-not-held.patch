@@ -1,0 +1,16 @@
+# Rule: CTL-79
+# Mutant: a Permit is not held to the tenant's boundary, so a role projected into the tenant permits what the boundary does not
+# Tests: :control:test --tests me.ahoo.cosec.control.api.RoleClassBoundsTest :engine:test --tests me.ahoo.cosec.engine.BoundaryTest
+
+diff --git a/core/engine/src/main/kotlin/me/ahoo/cosec/engine/Evaluator.kt b/core/engine/src/main/kotlin/me/ahoo/cosec/engine/Evaluator.kt
+index 45cf2a2c1..1f3a4316f 100644
+--- a/core/engine/src/main/kotlin/me/ahoo/cosec/engine/Evaluator.kt
++++ b/core/engine/src/main/kotlin/me/ahoo/cosec/engine/Evaluator.kt
+@@ -185,6 +185,7 @@ internal open class Evaluator(
+         if (decision !is Decision.Permit) {
+             return decision
+         }
++        if (decision is Decision.Permit) return decision
+         val id = view.boundaryOf(request.scope) ?: return decision
+         val boundary = view.platform.boundaryPolicy(id)
+             ?: return Decision.Indeterminate(Cause.MissingPolicies(setOf(PolicyId(id))))

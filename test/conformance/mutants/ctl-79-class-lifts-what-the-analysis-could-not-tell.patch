@@ -1,0 +1,17 @@
+# Rule: CTL-79
+# Mutant: the role class lifts what the analysis could not tell (an unreadable app document, an unresolved policy, a spent budget), not only who grants
+# Tests: :control:test --tests me.ahoo.cosec.control.api.RoleClassTest --tests me.ahoo.cosec.control.lifecycle.RoleClassUnitTest
+
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/RoleClass.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/RoleClass.kt
+index eacfbc8ae..a4a0b2916 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/RoleClass.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/RoleClass.kt
+@@ -76,7 +76,7 @@ internal object RoleClass {
+     ): List<Escalation> {
+         val key = change.key
+         val covered = covers(key, change.operations, change.base, change.controlApp)
+-        if (escalations.isEmpty() || !covered || escalations.any { it.reason !in LIFTED }) {
++        if (escalations.isEmpty() || !covered) {
+             return escalations
+         }
+         if (!holds()) {

@@ -28,6 +28,13 @@ Which preview of the library may run behind which preview of the gateway image: 
 
 ## From 8.0.0-beta.5 {#from-8-0-0-beta-5}
 
+- **New: the role class, `cosec:manage-roles`** (`CTL-79`). A holder's change of a tenant's document that only puts or
+  removes roles no longer waits for a person on account of who grants; it records a `ROLE_CLASS` escalation, a new
+  value of the closed set, which a client that maps escalation reasons reads ([The role class](../policies/testing.md#the-role-class)).
+  Nothing changes for a principal that does not hold it. **A role of the control plane's own app
+  (`cosec.control.app-id`) is never the class's**: a member of it holds control calls on its tenant's document, and who
+  governs a tenant's policies is for a person to appoint. A sync that projects such roles keeps waiting for approval;
+  project only roles of business apps through the class.
 - **New: a service changes an app's document through the service port and `ControlService`** (`CTL-58`, `CTL-65`):
   `propose`, `check` and the change flow of an app document, which were a `404` there. Such a change is analyzed as on
   the operators' port: removing a role, a policy or a binding publishes alone, and anything else (a catalog, a role
