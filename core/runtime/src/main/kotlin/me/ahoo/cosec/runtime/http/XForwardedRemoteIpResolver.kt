@@ -27,7 +27,7 @@ import me.ahoo.cosec.annotations.InternalCoSecApi
  *   (`[2001:db8::1]:443`) or a zone (`fe80::1%en0`). One that is no address (`unknown`, an RFC 7239 obfuscated
  *   identifier) stays as written: `environment.ip` is then unavailable, and a statement that reads it errs (`PIP-17`).
  * - [peerIsConnection] false: the host's own remote address is not the connection's peer but what the server took from
- *   a header a client writes (Reactor Netty's and Jetty's forwarded handling, `server.request.header.forwarded.strategy=native`).
+ *   a header a client writes (Reactor Netty's and Jetty's forwarded handling, `server.request.header.forwarded.strategy=web-server`).
  *   The address then comes from `X-Forwarded-For` alone, never from the host, and is [UNKNOWN] without the header.
  *
  * Which of these a host gets is the starter's to decide, from the server and its forward-headers strategy; never

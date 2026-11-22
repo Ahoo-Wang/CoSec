@@ -113,6 +113,24 @@ class ClientIpReadingsTest {
         }
     }
 
+    /**
+     * A strategy this version does not know is read as the server's own handling, the strictest reading: on Reactor Netty
+     * the connection's peer is never taken for the client, and `max-trusted-index=0`, which would read it, refuses to
+     * start; on Tomcat it is the valve's address.
+     */
+    @Test
+    fun `an unknown strategy is read as the server's own handling`() {
+        for (key in listOf("server.request.header.forwarded.strategy", "server.forward-headers-strategy")) {
+            val netty = reading(mapOf(key to "proxy-protocol"), beans = netty)
+            netty.peerIsConnection.assert().describedAs(key).isFalse()
+            netty.maxTrustedIndex.assert().isEqualTo(1)
+            assertThrownBy<ClientIpConfigurationException> {
+                reading(mapOf(key to "proxy-protocol", ClientIpReadings.MAX_TRUSTED_INDEX to "0"), beans = this.netty)
+            }.hasMessageContaining("cannot be read")
+            reading(mapOf(key to "proxy-protocol"), beans = tomcat).maxTrustedIndex.assert().isZero()
+        }
+    }
+
     @Test
     fun `the framework strategy fails startup`() {
         for (key in listOf("server.request.header.forwarded.strategy", "server.forward-headers-strategy")) {

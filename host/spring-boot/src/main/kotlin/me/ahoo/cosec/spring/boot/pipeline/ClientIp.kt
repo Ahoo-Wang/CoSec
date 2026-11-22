@@ -169,7 +169,10 @@ internal object ClientIpReadings {
     private fun strategyOf(environment: Environment, binder: Binder, server: Server): Strategy {
         val configured = configuredStrategy(binder)
         if (configured != null) {
-            // An unknown value is taken as the server's own handling, the case CoSec checks most strictly.
+            // A value this version does not know is taken as the server's own handling (`web-server`), the reading CoSec
+            // checks most strictly: it never takes the connection's peer for the client, and refuses to start where the
+            // server's resolution cannot be told. Taken as `none` instead, a value that does turn on a server's handling
+            // would let CoSec read as the peer an address the server took from a header the client writes.
             val strategy = when (configured) {
                 "WEB_SERVER" -> Strategy.NATIVE
                 else -> Strategy.entries.firstOrNull { it.name == configured } ?: Strategy.NATIVE
