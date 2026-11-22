@@ -1,6 +1,6 @@
 # Rule: CTL-58
 # Mutant: the service profile moves a change named by its id without checking whose document it changes: a change of the platform document is published through the service port and the facade
-# Tests: :control:test --tests me.ahoo.cosec.control.sdk.ControlServiceTest
+# Tests: :control:test --tests me.ahoo.cosec.control.local.ControlServiceTest
 
 diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/api/ChangeRoutes.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/api/ChangeRoutes.kt
 index 5df722e6f..2cf0f0a26 100644
