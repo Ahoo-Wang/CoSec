@@ -52,6 +52,7 @@ jobs:
     timeout-minutes: 5
     outputs:
       matrix: ${{ steps.plan.outputs.matrix }}
+      parallel: ${{ steps.parallel.outputs.parallel }}
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -60,12 +61,16 @@ jobs:
         run: python3 -I -m unittest discover -s scripts/ci
 
       # The schedule has no inputs: it runs at 8.
+      # The input reaches `strategy` as a string, which `max-parallel` refuses: the checked number goes through an output
+      # and fromJSON.
       - name: Check the number of shards at once
+        id: parallel
         env:
           PARALLEL: ${{ inputs.parallel || 8 }}
         run: |
           case "$PARALLEL" in ''|*[!0-9]*) echo "::error::parallel must be a whole number, got '$PARALLEL'"; exit 1;; esac
           if [ "$PARALLEL" -lt 1 ] || [ "$PARALLEL" -gt 20 ]; then echo "::error::parallel must be 1 to 20, got $PARALLEL"; exit 1; fi
+          echo "parallel=$PARALLEL" >> "$GITHUB_OUTPUT"
           echo "### Mutation check: $PARALLEL shards at once" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Derive the shards from test/conformance/mutants
@@ -87,7 +92,7 @@ jobs:
       # about two hours at eight, for the same 16 runner-hours), but while it runs a pull request's CI waits for runners:
       # every PR run that waited more than five minutes on 2026-11-22 overlapped a manual dispatch
       # (docs/reviews/2026-11/ci-efficiency.md). So more than eight is for a release gate, not for routine runs.
-      max-parallel: ${{ inputs.parallel || 8 }}
+      max-parallel: ${{ fromJSON(needs.plan.outputs.parallel) }}
       matrix: ${{ fromJSON(needs.plan.outputs.matrix) }}
     env:
       MUTANTS: ${{ matrix.mutants }}
