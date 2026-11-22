@@ -21,16 +21,16 @@ import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
 
 /**
- * The matcher's worst case stays linear in a segment's length (#1853, review M2 of #1200): `PathNormalizer` bounds a
- * request's segment decoded, so a pattern that matches the path as received (`decodeAndParseSegments: false`) can see
- * a segment of up to 2,048 characters, eight times the 256 a decoded one is held to, and that costs eight times as much
- * only while matching a fixed glob costs its units times the value's length. A matcher that went quadratic (the
- * backtracking review F4 of #1040 replaced took 0.2–0.4 s on one 8 KB segment) would cost 64 times as much.
+ * The matcher's worst case stays linear in a segment's length (#1853, review M2 of #1200). The segment bound (`PIP-5`,
+ * 256 characters as the pattern reads it) keeps a request's matching at the cost `SegmentBoundBenchmark` measures only
+ * while matching a fixed glob costs its units times the value's length: a matcher that went quadratic (the
+ * backtracking review F4 of #1040 replaced took 0.2–0.4 s on one 8 KB segment) would make every segment cost more than
+ * the bound was chosen for, and a longer one, as a 2,048-character path is, 64 times as much as one of 256.
  *
  * Each glob is a worst case of `GlobBoundBenchmark` or `SegmentBoundBenchmark`, matched with the evaluation's table and
  * without it (the two-pointer match). The ratio of the best of [BATCHES] timed batches at 2,048 and at 256 characters
- * must stay under [MAX_RATIO]: linear is 8 (the long literal, which skips its own length, about 13), quadratic 64.
- * Measured on CI with `SegmentBoundBenchmark` (#1860).
+ * must stay under [MAX_RATIO]: linear is 8 (the long literal, which skips its own length, about 12), quadratic 64.
+ * Measured: 5 to 8, and 12 for the long literal (#1860).
  */
 class SegmentGlobCostTest {
     @ParameterizedTest
