@@ -1,6 +1,6 @@
 {
   "name": "@ahoo-wang/cosec-fetcher",
-  "version": "8.0.0-beta.5",
+  "version": "8.0.0-beta.6",
   "description": "Enterprise-grade CoSec authentication integration for the Fetcher HTTP client with comprehensive security features including automatic token management, device tracking, and request attribution.",
   "keywords": [
     "fetch",
