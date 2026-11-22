@@ -234,7 +234,8 @@ class ControlServiceTest {
             security = plato,
             http = side.operators
         ).assert().startsWith("200")
-        side.route("GET", "/changes", mapOf("document" to "app:order"), security = plato).assert().startsWith("404")
+        // An app document's changes are served, as a tenant's are.
+        side.route("GET", "/changes", mapOf("document" to "app:order"), security = plato).assert().startsWith("200")
     }
 
     @Test

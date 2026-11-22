@@ -293,7 +293,7 @@ docker run -d -p 127.0.0.1:8080:8080 \
 | Port | What | Who should reach it |
 |---|---|---|
 | **8080** | the operators' API, `/cosec/control/**` (`cosec.control.http.base-path`), every route of [the control API](../policies/testing.md#the-control-plane) | the gateway's pods |
-| **8082** | the service API (`cosec.control.http.service-port`), the narrow profile for a service that calls the control plane directly: which tenant and app documents there are ([`GET /documents?kind=`](../policies/testing.md#listing-documents), granted to a service by `cosec:read` on `doc/tenant` or `doc/app`), the tenant and app documents, and a tenant's change flow ([Changing policies from your code](../integration/checks.md#changing-policies-from-your-code)); every other route is a `404` there | exactly the services you name |
+| **8082** | the service API (`cosec.control.http.service-port`), the narrow profile for a service that calls the control plane directly: which tenant and app documents there are ([`GET /documents?kind=`](../policies/testing.md#listing-documents), granted to a service by `cosec:read` on `doc/tenant` or `doc/app`), the tenant and app documents, and their change flow ([Changing policies from your code](../integration/checks.md#changing-policies-from-your-code)); every other route is a `404` there | exactly the services you name |
 | **8081** | the management port: `/actuator/health/liveness`, `/actuator/health/readiness`, `/actuator/prometheus`; outside CoSec. The control API is a `404` there, as on any port but 8080 and 8082 (`CTL-69`) | monitoring only |
 
 Nothing in CoSec authorizes the management port, and the actuator is not on the application port: probe the management

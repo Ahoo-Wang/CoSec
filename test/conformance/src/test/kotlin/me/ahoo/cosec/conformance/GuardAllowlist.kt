@@ -36,6 +36,8 @@ object GuardAllowlist {
             "control:ControlProfileTest#what is a person's or the platform's is a 404 on the service profile, and is served on the operators' one",
             "control:ControlProfileTest#a proposal for the platform document is a 404 on the service profile, never reaching the control plane",
             "control:ControlProfileTest#no principal is a 401 on the service profile as on the operators' one, before any route is looked at",
+            "control:AppDocumentServiceTest#what a service publishes alone in an app document, and what waits for a person - CTL-58",
+            "control:AppDocumentServiceTest#the platform document stays outside the service profile, proposed or checked - CTL-58, CTL-65",
             "spring-boot:ControlServicePortTest#the service port listens apart, serves nothing but the control API, and closes its connections when it stops",
             "spring-boot:ControlServicePortTest#a service port beside the application's, the management port or a disabled control API is refused",
             "spring-boot:ControlServicePortTest#a service port with no WebFlux server to serve it fails startup naming what to do",

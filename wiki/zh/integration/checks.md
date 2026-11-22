@@ -288,12 +288,12 @@ fun controlService(sslContext: SSLContext): ControlService = HttpControlService(
 - **谁在执行：**
   - `ControlCaller.of(securityContext)` 以你正在服务的请求的用户身份执行。它接受 CoSec 为该请求创建的 `SecurityContext`，拒绝你的代码自行组装的上下文。
   - `ControlCaller.service("iam", roles)` 以你的服务在平台租户中的主体身份执行，用于没有请求在背后的工作。由你的代码声明主体及其角色，控制面相信它们，就像相信自己进程内的任何代码一样：那些代码本来就持有控制存储的写账号。被相信的只是谁在执行，从来不是该主体可以做什么：每次调用仍由策略按平台文档给该主体的绑定作出决策，记录也会写明该主体。
-- **能触及什么：** 有哪些租户与 app 文档（`documents`），读取租户或 app 的文档（`document`、`revisions`、`revision`、`diff`），以及租户文档的变更流程（`check`、`checkApply`、`propose`、`apply`、`change`、`changes`、`rebase`、`startShadow`、`skipShadow`、`abandon`、`publish`）。自动化的变更可以开启它的影子窗口，读取变更直到窗口关闭，再带着摘要的确认发布，而不是跳过窗口。平台文档、审批、回滚和 break-glass 都不可触及：它们属于人，在运维人员的路由上进行。
+- **能触及什么：** 有哪些租户与 app 文档（`documents`），读取租户或 app 的文档（`document`、`revisions`、`revision`、`diff`），以及租户或 app 文档的变更流程（`check`、`propose`、`change`、`changes`、`rebase`、`startShadow`、`skipShadow`、`abandon`、`publish`；租户文档还有 `apply` 和 `checkApply`）。自动化的变更可以开启它的影子窗口，读取变更直到窗口关闭，再带着摘要的确认发布，而不是跳过窗口。app 文档的变更（例如目录）像任何人的变更一样被分析：只有删除条目（角色、策略、绑定）能单独发布，其他任何变更都要等人审批，除非调用者是信任根（[测试策略](../policies/testing.md)）。平台文档、审批、回滚和 break-glass 都不可触及：它们属于人，在运维人员的路由上进行。
 - **输入与输出：**
   - 请求是路由的请求体（[变更](../policies/testing.md#changes)），文档采用[文档格式](../policies/language.md)。
   - 应答是控制 API 的 JSON（[变更的应答](../policies/testing.md#what-a-change-answers)），以文本形式给出。
   - 拒绝是带有路由状态码和问题详情的 `ControlRefusedException`。
-- **确切能触及的范围：** 与控制面宿主服务端口相同的路由，两者共用一个定义（`cosec.control.http.service-port`）。按 id 指定的变更，只有在它修改的是租户文档时才可触及，列表也只显示这样的变更：按状态列出时其余的被省略，且不透露任何关于它们的信息。
+- **确切能触及的范围：** 与控制面宿主服务端口相同的路由，两者共用一个定义（`cosec.control.http.service-port`）。按 id 指定的变更，只有在它修改的是租户或 app 文档时才可触及，列表也只显示这样的变更：按状态列出时平台文档的变更被省略，且不透露任何关于它们的信息。
 - **记录什么：** 每一步都记为所声明主体的步骤，来源中带 `via.method: in-process`（[控制面变更日志](../operations/observability.md#control-plane-change-log)）。
 
 <<< @/examples/control-sdk/kotlin/Onboarding.kt [Onboarding.kt]

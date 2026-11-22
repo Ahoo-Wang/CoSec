@@ -28,6 +28,11 @@ Which preview of the library may run behind which preview of the gateway image: 
 
 ## From 8.0.0-beta.5 {#from-8-0-0-beta-5}
 
+- **New: a service changes an app's document through the service port and `ControlService`** (`CTL-58`, `CTL-65`):
+  `propose`, `check` and the change flow of an app document, which were a `404` there. Such a change is analyzed as on
+  the operators' port: removing a role, a policy or a binding publishes alone, and anything else (a catalog, a role
+  put) waits for a person unless the caller is the trust root. The platform document stays outside. Nothing changes for
+  a service that does not hold `cosec:write` on `doc/app/...`.
 - **An instance's status is split in two** (`CTL-74`, `CTL-75`). The status at `<s>:shadow:status:<instance>` is now
   small (liveness, `shadows`, the acknowledged windows) and has no `documents` member. The documents an instance holds
   are a record of their own, `<s>:shadow:resident:<instance>`, which only `propagation` reads

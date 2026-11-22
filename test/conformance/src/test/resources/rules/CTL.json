@@ -834,7 +834,7 @@
     {
       "id": "CTL-58",
       "source": "maintainer decision 2026-11-21 (the control-plane host's service API); control-server-design §0.7, §0.8",
-      "statement": "The control API's service profile is the narrow set a service that calls the control plane directly may ask for, served on a port of its own (`cosec.control.http.service-port`, WebFlux only; the network, not a filter, says who may use it): the tenant and app documents (their reads, and `:apply` on a tenant's) and the change flow that needs no person (propose a tenant's document, read, rebase, abandon, run or skip the shadow window, publish). Every other route is a `404` before the control plane is asked, as if it did not exist: the platform document, approvals and rejections, rollback, break-glass, the queries and propagation. Nothing but the control API is served on that port. The profile narrows what is served and never widens what the caller may do: each route it serves is authorized for the stated principal by the policies. The service port is not the application's or the management port, and it is refused with the control API off (`cosec.control.http.enabled=false`, which serves no control route at all) or beside the gateway's statement (`only-gateway-can-reach`), since a service port admits services. The listener stops by unbinding, waiting for the requests in flight within the shutdown grace, and closing every connection still open, the idle keep-alive ones included.",
+      "statement": "The control API's service profile is the narrow set a service that calls the control plane directly may ask for, served on a port of its own (`cosec.control.http.service-port`, WebFlux only; the network, not a filter, says who may use it): the tenant and app documents (their reads, and `:apply` on a tenant's) and the change flow that needs no person, of a tenant's or an app's document (propose and check, read, list, rebase, abandon, run or skip the shadow window, publish); a change of an app document is analyzed as anyone's, so only a removal of an entry publishes alone and anything else waits for a person unless the caller is the trust root. Every other route is a `404` before the control plane is asked, as if it did not exist: the platform document, approvals and rejections, rollback, break-glass, the queries and propagation. Nothing but the control API is served on that port. The profile narrows what is served and never widens what the caller may do: each route it serves is authorized for the stated principal by the policies. The service port is not the application's or the management port, and it is refused with the control API off (`cosec.control.http.enabled=false`, which serves no control route at all) or beside the gateway's statement (`only-gateway-can-reach`), since a service port admits services. The listener stops by unbinding, waiting for the requests in flight within the shutdown grace, and closing every connection still open, the idle keep-alive ones included.",
       "level": "build",
       "pending": null,
       "guards": [
@@ -848,7 +848,9 @@
         "spring-boot:ControlServicePortTest#the service port listens apart, serves nothing but the control API, and closes its connections when it stops",
         "spring-boot:ControlServicePortTest#a service port beside the application's, the management port or a disabled control API is refused",
         "spring-boot:ControlServicePortTest#a service port with no WebFlux server to serve it fails startup naming what to do",
-        "spring-boot:ControlServicePortTest#cosec control http enabled false serves no control route, and the control plane stays for what embeds it"
+        "spring-boot:ControlServicePortTest#cosec control http enabled false serves no control route, and the control plane stays for what embeds it",
+        "control:AppDocumentServiceTest#what a service publishes alone in an app document, and what waits for a person - CTL-58",
+        "control:AppDocumentServiceTest#the platform document stays outside the service profile, proposed or checked - CTL-58, CTL-65"
       ]
     },
     {
@@ -879,7 +881,7 @@
     {
       "id": "CTL-65",
       "source": "control-server-design.md §0.10, PR 3 (the control-plane SDK)",
-      "statement": "Every call through the control plane's facade is decided by the pipeline for the principal its ControlCaller states, by the policies, and recorded as that principal's step, by the route's own code path, with no path around it: the same call through the route and through the facade answers the same and records the same; the facade reaches exactly the routes the service profile serves (CTL-58), one definition for the facade and the service port, and no route on the platform document or of a platform document's change; a call through it is recorded via.method: in-process (CTL-57); and a ControlCaller made of a security context CoSec's gate or pipeline did not make is refused when the call is made, by the implementation, before the control plane is asked (as PIP-29). The facade's interface, ControlCaller and ControlRefusedException are cosec-control-sdk's, a module with no runtime and no control plane; the in-process implementation is cosec-control's.",
+      "statement": "Every call through the control plane's facade is decided by the pipeline for the principal its ControlCaller states, by the policies, and recorded as that principal's step, by the route's own code path, with no path around it: the same call through the route and through the facade answers the same and records the same; the facade reaches exactly the routes the service profile serves (CTL-58), one definition for the facade and the service port, and the change flow of a tenant's or an app's document, and no route on the platform document or of a platform document's change; a call through it is recorded via.method: in-process (CTL-57); and a ControlCaller made of a security context CoSec's gate or pipeline did not make is refused when the call is made, by the implementation, before the control plane is asked (as PIP-29). The facade's interface, ControlCaller and ControlRefusedException are cosec-control-sdk's, a module with no runtime and no control plane; the in-process implementation is cosec-control's.",
       "level": "control",
       "guards": [
         "control:ControlServiceTest#each call of the narrow set answers and records through the facade as through its route - CTL-65",
@@ -890,7 +892,8 @@
         "control:ControlServiceTest#a service caller acts as its platform principal, admitted as the gate admits a forwarded identity - CTL-65",
         "runtime:IdentityGateTest#admit holds an identity to what a forwarded header is held to",
         "control:ControlServiceTest#the facade reaches exactly the routes the service port serves, route by route - CTL-65",
-        "control:ControlServiceTest#a call through the facade is recorded as made in process - CTL-57, CTL-65"
+        "control:ControlServiceTest#a call through the facade is recorded as made in process - CTL-57, CTL-65",
+        "control:AppDocumentServiceTest#a service proposes and checks an app document's change, on the port and through the facade - CTL-58, CTL-65"
       ],
       "pending": null
     },
