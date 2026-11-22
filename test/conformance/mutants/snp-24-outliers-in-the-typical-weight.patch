@@ -1,0 +1,17 @@
+# Rule: SNP-24
+# Mutant: the typical weight counts every document, so one very heavy tenant makes every document to come count as heavy
+# Tests: :runtime:test --tests me.ahoo.cosec.runtime.snapshot.SnapshotDerivedBoundsTest
+
+diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/SnapshotFamilies.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/SnapshotFamilies.kt
+index e6994ee..3388bb5 100644
+--- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/SnapshotFamilies.kt
++++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/SnapshotFamilies.kt
+@@ -224,7 +224,7 @@ internal class SnapshotFamilies<A : Any>(
+             var seen = 0L
+             var median = 0
+             while (seen + counts[median] <= held / 2) seen += counts[median++]
+-            val last = (median + OUTLIER_BUCKETS).coerceAtMost(BUCKETS - 1)
++            val last = BUCKETS - 1
+             var count = 0L
+             var weight = 0L
+             for (bucket in 0..last) {

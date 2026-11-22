@@ -3,13 +3,13 @@
 # Tests: :runtime:test --tests me.ahoo.cosec.runtime.snapshot.*
 
 diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/KeyLoads.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/KeyLoads.kt
-index 270a9a56..6b32c6ee 100644
+index 1d8ad3e..d0c9e7a 100644
 --- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/KeyLoads.kt
 +++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/KeyLoads.kt
-@@ -132,7 +132,7 @@ internal class KeyLoads<T : Any>(private val config: KeyConfig) {
-                 confirmedAt,
-                 EntryOrigin.UNCOMPILABLE
-             )
+@@ -125,7 +125,7 @@ internal class KeyLoads<T : Any>(private val config: KeyConfig) {
+         val confirmedAt = load.confirmedAt(config.localCopyMaxAge)
+         val revision = read.document.revision
+         val entry = SnapshotEntry(step.key, DocumentState.Failed(failure), revision, read.digest, confirmedAt, EntryOrigin.UNCOMPILABLE, read.document.bodySize)
 -        finish(step, load, entry, install = true)
 +        onTransientFailure(step, load, (entry.state as DocumentState.Failed).error)
      }

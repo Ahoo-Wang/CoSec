@@ -1,0 +1,17 @@
+# Rule: SNP-24
+# Mutant: a pass never recomputes the bounds, which stay at the first estimate whatever is resident
+# Tests: :runtime:test --tests me.ahoo.cosec.runtime.snapshot.SnapshotDerivedBoundsTest
+
+diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/Passes.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/Passes.kt
+index c4df4ec..7947f1c 100644
+--- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/Passes.kt
++++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/Passes.kt
+@@ -176,7 +176,7 @@ internal class Passes(
+         lagReports.queue()
+         // The derived bounds follow what is resident (SNP-24), once per pass; a family now above its bound is taken back to
+         // it by housekeeping, as after an install.
+-        for (family in families.rebound()) {
++        for (family in emptyList<SnapshotFamilies.Family<*>>()) {
+             context.threads.offHousekeeping(HousekeepingTask.EVICT, { "The eviction pass of the ${family.spec.kind} family." }) {
+                 families.evictBeyond(family)
+             }

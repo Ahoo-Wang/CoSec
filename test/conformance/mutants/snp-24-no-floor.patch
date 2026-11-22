@@ -1,0 +1,17 @@
+# Rule: SNP-24
+# Mutant: a bound has no floor, so a document heavier than the share evicts its family to nothing
+# Tests: :runtime:test --tests me.ahoo.cosec.runtime.snapshot.SnapshotDerivedBoundsTest
+
+diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/DocumentBudget.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/DocumentBudget.kt
+index ae1de40..7ac0241 100644
+--- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/DocumentBudget.kt
++++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/DocumentBudget.kt
+@@ -47,7 +47,7 @@ class DocumentBudget(val total: Long) {
+     fun bound(kind: SnapshotKind, count: Int, weight: Long, typicalWeight: Long, others: Long): Int {
+         val room = resident - others - weight
+         val each = (if (count > 0 && typicalWeight > 0) typicalWeight else typical(kind)).coerceAtLeast(1)
+-        return (count + Math.floorDiv(room, each)).coerceIn(FLOOR.toLong(), Int.MAX_VALUE.toLong()).toInt()
++        return (count + Math.floorDiv(room, each)).coerceIn(0L, Int.MAX_VALUE.toLong()).toInt()
+     }
+ 
+     /** The bound before a family holds any document: the first estimate the startup line names. */

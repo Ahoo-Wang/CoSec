@@ -1,0 +1,17 @@
+# Rule: SNP-24
+# Mutant: a document's weight leaves out its bindings, so a tenant of many roles weighs far less than it retains
+# Tests: :runtime:test --tests me.ahoo.cosec.runtime.snapshot.DocumentWeightTest
+
+diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/DocumentWeight.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/DocumentWeight.kt
+index 28f4ad7..088ab11 100644
+--- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/DocumentWeight.kt
++++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/DocumentWeight.kt
+@@ -47,7 +47,7 @@ object DocumentWeight {
+ 
+     /** The weight of a resident document compiled to [compiled] from [storedBytes] stored bytes. */
+     fun of(compiled: CompiledDocument, storedBytes: Int): Long =
+-        FIXED_BYTES + BINDING_BYTES * compiled.bindingCount + STATEMENT_BYTES * compiled.statementCount +
++        FIXED_BYTES + STATEMENT_BYTES * compiled.statementCount +
+             stored(storedBytes)
+ 
+     /** The weight of a stored document that did not compile: it holds its failure and what the slot keeps of it. */

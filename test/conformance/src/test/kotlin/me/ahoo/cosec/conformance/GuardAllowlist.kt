@@ -24,6 +24,17 @@ package me.ahoo.cosec.conformance
 object GuardAllowlist {
     val GUARDS: Map<String, Set<String>> = mapOf(
         "build" to setOf(
+            // SNP-24: the snapshot families' bounds derived from the documents' share of the heap.
+            "spring-boot:UnknownPropertiesTest#a removed key is said to be no longer a property, with what replaced it",
+            "runtime:SnapshotDerivedBoundsTest#the budget's parts at the production overlay's heap and a small pod's",
+            "runtime:SnapshotDerivedBoundsTest#the bound follows what is resident, and housekeeping takes a family back to it",
+            "runtime:SnapshotDerivedBoundsTest#ids nobody owns never shrink what the documents get",
+            "runtime:SnapshotDerivedBoundsTest#a document heavier than the whole share leaves its family at the floor, and is served",
+            "runtime:SnapshotDerivedBoundsTest#one very large tenant lowers the others' bound by its own weight, no more",
+            "runtime:SnapshotDerivedBoundsTest#a small pod's budget turns ready",
+            "runtime:DocumentWeightTest#the estimate is never below what a resident document retains, and at most one and a half times it",
+            "runtime:DocumentReadinessSmallBoundTest#a host whose bound is smaller than its prewarm set turns ready, and holds no more than its cap",
+            "spring-boot:DerivedHeapTest#the startup line names each bound, what it came to and from what",
             // CTL-57, CTL-58: how a step was identified, and the service profile of the control API.
             "spring-boot:ServicePortRoutesTest#a route that was served is never turned into a 404, whatever its write left behind",
             "spring-boot:ServicePortRoutesTest#a path no control route answers is a 404 on the service port, and a request on another port goes on",
