@@ -387,6 +387,11 @@ Redis may evict CoSec's policy snapshot: maxmemory-policy is {<node>=<policy>}, 
 `ext.*` 属性，其提供者运行在控制面宿主上，却不在那个实例上。属性提供者及其声明的类型，在每个数据面实例和控制面宿主上必须相同。在这类变更
 进入影子阶段之前，把提供者部署到所有地方（[测试变更](../policies/testing.md)）。
 
+## 类型化控制客户端读不了文档 {#the-typed-control-client-does-not-read-a-document}
+
+`ControlClient` 抛出 `SnapshotFormatException`，消息为 `The control plane's answer does not read: a <entry> has members
+this version does not know`：控制面宿主的版本比应用使用的 `cosec-control-sdk` 新，而文档中有只有新版本才认识的成员。类型化客户端拒绝读取它而不是丢掉它，因为把读到的内容再 `:apply` 回去会从文档中删除这个成员。把 `cosec-control-sdk` 升级到宿主的版本；在此之前，通过 `ControlService` 以 JSON 读取该文档（[从代码中修改策略](../integration/checks.md#changing-policies-from-your-code)）。客户端不认识的封闭集合值（变更状态、冲突类型）不属于这个错误：它们被读作未知值，并保留其文本。
+
 ## 启动失败 {#startup-failures}
 
 ### 未知配置项导致启动失败 {#startup-fails-on-an-unknown-property}

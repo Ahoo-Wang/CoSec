@@ -68,11 +68,11 @@ JSON_RESOURCE = re.compile(r"^[^/]+/[^/]+/src/[^/]+/resources/.*\.json$")
 # project's group, and not its dependents', since they read nothing of it. ReadsTest holds this to the test sources: a
 # project that names one of these directories and is not listed here fails the build.
 READS = {
-    "wiki/": ("document", "runtime", "spring-boot"),
+    "wiki/": ("document", "runtime", "spring-boot", "control", "control-sdk"),
     "skills/": ("document", "spring-boot"),
     "k8s/": ("spring-boot",),
-    "schema/": ("document",),
-    "contract/": ("runtime", "jwt"),
+    "schema/": ("document", "control-sdk"),
+    "contract/": ("runtime", "jwt", "control-sdk"),
     # EnvironmentVariableSpellingTest: every COSEC_* variable the images' files and the system test's compose files
     # show. A READS entry applies on top of the project a path is in: `platform/control-server/` is also a project.
     "platform/": ("spring-boot",),

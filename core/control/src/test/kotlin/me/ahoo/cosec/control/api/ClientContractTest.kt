@@ -154,8 +154,35 @@ class ClientContractTest {
                 "propagation.json",
                 "vocabularies.json",
                 "routes.json",
+                "conflict.json",
             ),
         )
+    }
+
+    /**
+     * `CTL-80`: the problem of a `409` as a caller reads it: its `conflict` always, and a `SLOT_HELD`'s `heldBy`, the
+     * change that holds the slot. Each conflict is made through [ControlHttp], as a route answers it.
+     */
+    @Test
+    fun `a conflict's problem holds exactly the members of its contract file - CTL-80`() {
+        val fixture = ControlPlaneTest()
+        val http = ControlHttp(fixture.plane)
+        val alice = fixture.engine.security(ControlPlaneTest.ACME, "alice", roles = listOf("admin", "ops@team-a"))
+        fun call(path: String, body: String): JsonNode = runBlocking {
+            val response = http.handle(ControlHttpRequest("POST", path, emptyMap(), body.encodeToByteArray()), alice)
+            CoSecJson.mapper.readTree(response.body)
+        }
+        fun proposal(id: String, base: Int) = """{"document":"tenant:acme","base":$base,"note":"$id",""" +
+            """"operations":[{"op":"putPolicy","policy":{"id":"$id","statements":[{"effect":"allow","action":"order:read"}]}}]}"""
+        val moved = call("/changes", proposal("stale", 0))
+        val first = call("/changes", proposal("first", 1)).get("id").asString()
+        val second = call("/changes", proposal("second", 1)).get("id").asString()
+        call("/changes/$first:skip-shadow", """{"reason":"hotfix"}""")
+        val held = call("/changes/$second:skip-shadow", """{"reason":"hotfix"}""")
+        val state = call("/changes/$second:publish", "{}")
+        listOf(moved, held, state).map { it.get("conflict").asString() }
+            .assert().containsExactly("BASE_MOVED", "SLOT_HELD", "STATE")
+        files.check("control/conflict.json", Shapes.of(listOf(moved, held, state), emptySet()))
     }
 
     /** Drives every route that moves a change through [ControlHttp] and records the change kinds each one audits. */

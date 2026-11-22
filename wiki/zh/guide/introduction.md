@@ -78,7 +78,7 @@ CoSec 以过滤器的形式运行在你的处理器之前：WebFlux 中是 `WebF
 | 在 Spring Cloud Gateway 中做授权 | `cosec-gateway` | |
 | 在 Redis 中存放策略快照、已吊销令牌、API key、影子窗口，以及集群范围的限流 | `cosec-cocache` | `org.springframework.boot:spring-boot-data-redis`、`me.ahoo.cocache:cocache-spring-boot-starter` |
 | 控制面：发布、历史、回滚、影子窗口、审批、模拟 | `cosec-control`（会带上 `cosec-control-sdk`） | `cosec-cocache` |
-| 调用控制面的代码：`ControlService`、`ControlCaller` | `cosec-control-sdk`，加一个实现：进程内的是 `cosec-control` | |
+| 调用控制面的代码：`ControlService`、`ControlCaller`、类型化的 `ControlClient` | `cosec-control-sdk`，加一个实现：进程内的是 `cosec-control` | |
 | 通过 OAuth 社交登录 | `cosec-social` | 保存其 OAuth state 的 `cosec-cocache`，或你自己的 `SocialStateStore` |
 | 每次决策一个追踪 span | `cosec-opentelemetry` | |
 | 按结果统计的每次决策计时器，以及快照源的指标 | `cosec-micrometer` | 一个 `MeterRegistry`（例如 `spring-boot-starter-actuator`） |

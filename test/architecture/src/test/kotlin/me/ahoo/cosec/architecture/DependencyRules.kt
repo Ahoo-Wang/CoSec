@@ -35,7 +35,7 @@ object DependencyRules {
         "control" to CORE - "control",
         // The facade an application calls (CTL-65): the documents' format and the ports, never the request path or the
         // control plane, so an application that calls a control host over HTTP brings neither.
-        "control-sdk" to setOf("document", "engine", "spi", "model", "api", "annotations"),
+        "control-sdk" to setOf("document", "spi", "api", "annotations"),
         // A backend implements store ports of cosec-spi and writes its formats with cosec-document (RFC 0013 §3).
         "cocache" to setOf("spi", "document", "model", "api", "annotations"),
         // The adapters translate a host's request for the pipeline and never decide: the model and the request path,

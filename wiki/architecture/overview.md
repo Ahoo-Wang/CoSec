@@ -110,7 +110,9 @@ The rules behind the picture:
   Spring, the Servlet API or a coroutine bridge (`kotlinx.coroutines.reactor`, `runBlocking`), `GlobalScope` or
   `Dispatchers.IO`, or when it calls `runCatching`, which swallows cancellation.
 - **`cosec-control-sdk`** (directory `core/control-sdk/`) is the control plane as an application calls it:
-  `ControlService`, the `ControlCaller` a call states and the `ControlRefusedException` it throws (`CTL-65`). It depends on
+  `ControlService`, the `ControlCaller` a call states and the `ControlRefusedException` it throws (`CTL-65`), and the
+  typed layer over it, `ControlClient` with the typed documents, operations and answers, held to the wire (`CTL-76`).
+  It depends on
   `cosec-document`, `cosec-spi` and `cosec-api` only, never on `cosec-runtime` or the control plane, so code that calls
   a control-plane host does not bring the request path (`DependencyRules`).
 - **`cosec-control`** (directory `core/control/`) is the control plane: revisions, change requests, shadow windows,

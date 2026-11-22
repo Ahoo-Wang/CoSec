@@ -284,6 +284,12 @@ curl -X POST localhost:8080/cosec/control/v1/explain \
 
 <<< @/examples/control-sdk/changes/auditors.json [auditors.json]
 
+同样的调用也可以用类型化的值来写：`ControlClient(service)` 按路由接受和应答的格式写出每个请求、读取每个应答（`CTL-76`），适用于 `ControlService` 的任一实现。文档是 `DocumentContent`，包含 `Policy`、`Binding`、`Role` 和 `Catalog`；变更是 `ChangeRequest` 中的 `Operation`（`PutPolicy`、`PutRole` 等），`:apply` 则用 `ApplyRequest`；应答是 `Change`、`DocumentHead` 或 `Page`。条件和限流规则仍是 JSON（`Condition.of`、`RateLimitRule.of`）：控制面在提议变更时检查它们。封闭集合（`ChangeState`、`Effect`、`ConflictKind` 等）把较新宿主新增的值读作未知值并保留其文本；而文档条目中含有本版本不认识的成员时根本不会被读取，因为把读到的内容再 apply 回去会丢掉它。`ControlRefusedException.conflict` 说明一个 409 是哪种冲突。
+
+`proposeAndPublishWithoutShadow` 是一个写入自己已做出的决定的服务每次写入时要做的事：在文档的 head 上提议、跳过影子窗口并发布。除 `cosec:write` 外它还需要 `cosec:skip-shadow`。head 移动了就重新读取并重新提议；另一个变更占着槽位就在给定的耐心时间内等待；以同一主体身份并发写入的写入方（例如一个服务的多个副本）也这样互相等待。死掉的写入方会留下一个占着槽位的变更（`ControlRefusedException.heldBy` 给出它）：同一作者的、停在 `CHECKED`、`SHADOWING` 或 `READY` 且至少一个耐心时间未更新（按控制面的时间）的变更会被放弃，槽位随之被取得。因此死掉的写入方最多占用文档一个耐心时间，之后下一次写入接管它；同一主体的所有写入方应使用同一个耐心时间。它返回已发布的变更，或等待人工审批的变更；放弃时它会先放弃（abandon）自己提议的变更，再抛出那次拒绝。
+
+<<< @/examples/control-sdk/kotlin/AuditorsProjection.kt [AuditorsProjection.kt]
+
 需要第二个人审批的变更，无论由谁提议，都会停在 `AWAITING_APPROVAL`：把它的 id 报告给一个人，由他在运维人员的路由上审批。要以你自己的主体调用网关后面的另一个服务，`IdentityHeader.write(identity)`（`cosec-document`）写出网关本会转发的 `CoSec-Identity` 头。
 
 **下一步：** 每个属性及其默认值，见[配置](../operations/configuration.md)；要编写规则本身，见[策略语言](../policies/language.md)。

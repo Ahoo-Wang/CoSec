@@ -643,6 +643,15 @@ A shadow window that stays blocked has a `CANDIDATE_ERROR`: one instance cannot 
 it reads an `ext.*` attribute whose provider runs on the control host but not on that instance. Providers and their
 declared types must match on every instance and the control host; the change is never published while blocked.
 
+### The typed control client does not read a document
+
+- `ControlClient` throws `SnapshotFormatException` (`a <entry> has members this version does not know`): the control
+  host is newer than the application's `cosec-control-sdk` and the document holds a member only it knows. The client
+  refuses rather than drop it (an `:apply` of what it read would remove the member, `CTL-76`). Upgrade
+  `cosec-control-sdk`; meanwhile read the document through `ControlService` as JSON. An unknown closed-set value (a
+  state, a conflict) is not this error: it reads as unknown, with its text.
+  https://cosec.ahoo.me/operations/troubleshooting#the-typed-control-client-does-not-read-a-document
+
 ## Reproduce narrowly
 
 - Document problems: decode and compile the exact document
