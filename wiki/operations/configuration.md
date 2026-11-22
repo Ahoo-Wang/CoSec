@@ -74,7 +74,7 @@ limit CoSec owns, and has no key. Each is logged once at startup, in a line that
 | How long a request waits for a document that is not installed | 40 % of the pipeline timeout, at least `1ms`: `2s` at the default | [`cosec.pipeline.timeout`](#pipeline) |
 | Threads that compile documents | one per 2 cores, at least 1 and at most 4 | the cores of the process |
 | Documents a revalidation pass confirms at once | 16, a constant: a pass slower than the interval runs back to back, and only the burst depends on it | |
-| Each revocation table's local copy (`RevokedTokenCache`, `RevokedSubjectCache`) holds | an 8th of the heap counted at 290 + 230 bytes an entry of each: 516,222 entries each at 2 GiB, where the bound was 500,000. Too small for your traffic shows as `cocache.misses` on those caches, with `cocache.local.size` at the count (`IDN-33`) | the heap (`Runtime.maxMemory()`) |
+| Each revocation table's local copy (`RevokedTokenCache`, `RevokedSubjectCache`) holds | an 8th of the heap counted at 290 + 230 bytes an entry of each: 516,222 entries each at 2 GiB, where the bound was 500,000. Too small for your traffic shows as `cocache.misses` with the tag `cache=RevokedTokenCache` (or `RevokedSubjectCache`), `cocache_misses_total` in Prometheus: the reads the local copy did not answer, rising while the gauge `cocache.local.size` with the same tag stays at the count (`IDN-33`) | the heap (`Runtime.maxMemory()`) |
 | What the verified-token cache holds | a 16th of the heap, each entry weighed by its token's length × 5 bytes: 128 MiB at 2 GiB, more than the 16,384 large tokens (about 115 MB) the bound was. Too small shows as `cosec.token.cache.evictions` (`IDN-32`) | the same |
 | Events one `BEST_EFFORT` decision listener may have waiting | a 64th of the heap, shared equally by the `BEST_EFFORT` listeners and counted at 1 KB an event: 8,192 each for four listeners at 2 GiB, where each had 1,024. Too small shows as `cosec.listener.dropped` (`OBS-11`) | the same, and the listeners |
 | What the change listeners' queues hold | a 32nd of the heap, as before: 64 MiB at 2 GiB. Too small shows as `cosec.control.listener.lost` | the same |
@@ -108,7 +108,9 @@ With a deadline below the default, set `fail-closed`, or check that Redis answer
 snapshot documents, whose own bound is a later design, take 31/64 of the heap together, under half, which leaves the
 rest of the gateway and ZGC their room. A smaller heap gets less, visibly: a 512 MiB heap gets 64 MiB of revocation
 tables (129,055 entries each), a 32 MiB token cache (about 4,150 large tokens) and 8 MiB of decision-listener queues
-(2,048 events each for four listeners). The startup line says what each came to.
+(2,048 events each for four listeners). The startup line says what each came to, and the heap it read: `heap <n> MiB (Runtime.maxMemory())`. A container
+without `-Xmx` gets a quarter of its memory limit by the JVM's default, so a small bound there comes from a small
+heap: give the JVM an explicit `-Xmx` ([Memory](./deployment.md#memory)).
 
 A key that once set one of these fails startup with the keys CoSec does not read, and says that it is no longer a
 property and what replaced it ([Unknown properties](#unknown-properties)).

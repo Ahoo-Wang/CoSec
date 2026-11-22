@@ -57,7 +57,7 @@ CoSec 没有哪个配置项叫这些名字，而已知的 key 无论来源都不
 | 请求等待一个未装入的文档多久 | 管道超时的 40 %，至少 `1ms`：默认 `2s` | [`cosec.pipeline.timeout`](#pipeline) |
 | 编译文档的线程数 | 每 2 个核心一个，至少 1 个、至多 4 个 | 进程的核心数 |
 | 一次重新确认并发确认的文档数 | 16，常量：一轮超过间隔时各轮首尾相接，只有突发量取决于它 | |
-| 每个吊销表的本地副本（`RevokedTokenCache`、`RevokedSubjectCache`）容纳 | 堆的八分之一，按每表每条 290 + 230 字节计数：2 GiB 时每表 516,222 条，原来的上限是 500,000。对你的流量太小时表现为这两个缓存上的 `cocache.misses`，同时 `cocache.local.size` 达到该数（`IDN-33`） | 堆（`Runtime.maxMemory()`） |
+| 每个吊销表的本地副本（`RevokedTokenCache`、`RevokedSubjectCache`）容纳 | 堆的八分之一，按每表每条 290 + 230 字节计数：2 GiB 时每表 516,222 条，原来的上限是 500,000。对你的流量太小时表现为带标签 `cache=RevokedTokenCache`（或 `RevokedSubjectCache`）的 `cocache.misses`（Prometheus 中为 `cocache_misses_total`，即本地副本没有应答的读取）持续上升，而同标签的 gauge `cocache.local.size` 停在该数（`IDN-33`） | 堆（`Runtime.maxMemory()`） |
 | 已校验令牌缓存容纳的量 | 堆的十六分之一，每个条目按其令牌长度 × 5 字节计重：2 GiB 时 128 MiB，多于原上限的 16,384 个大令牌（约 115 MB）。太小时表现为 `cosec.token.cache.evictions`（`IDN-32`） | 同上 |
 | 一个 `BEST_EFFORT` 决策监听器最多可以有多少个待处理的事件 | 堆的六十四分之一，由各 `BEST_EFFORT` 监听器均分，按每个事件 1 KB 计数：2 GiB、四个监听器时每个 8,192 个，原来每个 1,024 个。太小时表现为 `cosec.listener.dropped`（`OBS-11`） | 同上，以及监听器数 |
 | 变更监听器的队列容纳的量 | 堆的三十二分之一，与以前相同：2 GiB 时 64 MiB。太小时表现为 `cosec.control.listener.lost` | 同上 |
@@ -82,7 +82,7 @@ CoSec 没有哪个配置项叫这些名字，而已知的 key 无论来源都不
 
 **更低的期限会缩短唯一一个失败即放行的阶段。** 吊销读取的预算随期限缩放：`cosec.pipeline.timeout=1s` 时每次读取只有 60 ms，而原来固定为 300 ms。超过预算的读取意味着吊销无法读取，此时校验会接受请求的令牌，除非设置了 `cosec.authentication.revocation.fail-closed=true`（[已写明的例外](../guide/security-model.md#the-two-documented-exceptions)）。期限低于默认值时，请设置 `fail-closed`，或确认 Redis 的应答远在读取预算之内。
 
-**堆的各份额在一张表里**（`HeapBudget`，`STA-12`）：上面四个上限，加上为快照文档预留的四分之一（它自己的上限留待后续设计），合计占堆的 31/64，不到一半，给网关的其余部分和 ZGC 留出空间。堆越小得到的越少，而且可见：512 MiB 的堆得到 64 MiB 的吊销表（每表 129,055 条）、32 MiB 的令牌缓存（约 4,150 个大令牌）和 8 MiB 的决策监听器队列（四个监听器时每个 2,048 个事件）。启动日志行写明每一项得到多少。
+**堆的各份额在一张表里**（`HeapBudget`，`STA-12`）：上面四个上限，加上为快照文档预留的四分之一（它自己的上限留待后续设计），合计占堆的 31/64，不到一半，给网关的其余部分和 ZGC 留出空间。堆越小得到的越少，而且可见：512 MiB 的堆得到 64 MiB 的吊销表（每表 129,055 条）、32 MiB 的令牌缓存（约 4,150 个大令牌）和 8 MiB 的决策监听器队列（四个监听器时每个 2,048 个事件）。启动日志行写明每一项得到多少，以及它读到的堆：`heap <n> MiB (Runtime.maxMemory())`。没有 `-Xmx` 的容器按 JVM 的默认只得到内存限制的四分之一，所以那里的上限偏小来自堆偏小：给 JVM 明确的 `-Xmx`（[内存](./deployment.md#memory)）。
 
 曾经设置过其中某一项的 key 会让启动失败（作为 CoSec 不读取的 key），并说明它已不再是配置项，以及由什么取代（[未知配置项](#unknown-properties)）。
 

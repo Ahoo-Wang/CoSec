@@ -280,6 +280,7 @@ spring:
 | CPU 请求与限制 | 250m，1 | 1，2 |
 
 - **ZGC 在启动时提交整个堆**，以共享内存的形式立即计入容器。容不下堆的限制会让 pod 在几秒内失败，而不是在承载流量几小时后。
+- **CoSec 的缓存和队列是 JVM 报告的堆的份额**（`Runtime.maxMemory()`），数据面的启动日志行会打印它（`heap <n> MiB (Runtime.maxMemory())`）。没有 `-Xmx` 时 JVM 取容器内存限制的四分之一，所以 3200Mi 的限制而不设堆大小只得到 800 MiB，每一份都只有生产 overlay 的 2 GiB 所给的 40 %：像 base 和 overlay 那样明确设置堆（[由计算得出，而非配置](./configuration.md#computed-not-configured)）。
 - **堆需要空闲空间。** ZGC 在网关分配内存的同时回收；堆中大部分是存活数据时，请求线程要等它。编译后的文档在堆上：按你的文档和
   流量确定堆的大小，再把限制设为堆，加上直接内存，加上约 250 MiB，再加四分之一。
 - **镜像自己的默认值放不进小集群。** 它的启动脚本设置 `-Xms2048M -Xmx2048M -XX:MaxMetaspaceSize=256M
@@ -406,7 +407,7 @@ cosec:
 
 没有哪项按请求的开销取决于一个租户有多少成员。网关验证令牌、解析它携带的角色，并查两次撤销（令牌的和它的主体的），都按调用者为键；租户文档
 不列出它的成员。撤销查询为每个"未撤销"的回答在本地保留 30 秒，每个副本最多占堆的八分之一，按每个条目 290 和 230 字节计数
-（2 GiB 堆上每张表 516,222 个条目）：30 秒内见到的不同令牌多于这个数的副本，对其余令牌要在请求路径上读 Redis，`RevokedTokenCache` 上的 `cocache.misses` 会显示出来
+（2 GiB 堆上每张表 516,222 个条目）：30 秒内见到的不同令牌多于这个数的副本，对其余令牌要在请求路径上读 Redis，带标签 `cache=RevokedTokenCache` 的 `cocache.misses`（Prometheus 中为 `cocache_misses_total`）会显示出来
 （[配置](./configuration.md#computed-not-configured)）。给这样的副本更多的堆。
 
 从成员身上移除的角色还能用多久：

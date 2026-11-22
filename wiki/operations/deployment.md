@@ -468,6 +468,11 @@ overlay size them for their limits:
 
 - **ZGC commits the whole heap at startup**, as shared memory the container is charged for at once. A limit too small
   for the heap fails the pod within seconds, not after hours of traffic.
+- **CoSec's caches and queues are shares of the heap the JVM reports** (`Runtime.maxMemory()`), and the data plane's
+  startup line prints it (`heap <n> MiB (Runtime.maxMemory())`). Without `-Xmx` the JVM takes a quarter of the
+  container's memory limit, so a 3200Mi limit with no heap size gives 800 MiB, and every share is 40 % of what the
+  production overlay's 2 GiB gives: set the heap explicitly, as the base and the overlay do
+  ([Computed, not configured](./configuration.md#computed-not-configured)).
 - **The heap needs free space.** ZGC collects while the gateway allocates; a heap that is mostly live data makes
   request threads wait for it. The compiled documents live on the heap: size it for your documents and traffic, then
   set the limit to the heap, plus the direct memory, plus about 250 MiB, plus a quarter.
@@ -641,8 +646,7 @@ carries and looks up two revocations, of the token and of its principal, keyed b
 does not list its members. The revocation lookups keep a local copy of each "not revoked" answer for 30 seconds,
 at most an 8th of the heap per replica, counted at 290 and 230 bytes an entry (516,222 entries per table on a 2 GiB
 heap): a replica that sees more distinct tokens than that within 30 seconds reads Redis on the request path for the
-rest, which `cocache.misses` on `RevokedTokenCache` shows ([Configuration](./configuration.md#computed-not-configured)).
-Give such a replica more heap.
+rest, which `cocache.misses` with the tag `cache=RevokedTokenCache` (or `RevokedSubjectCache`), `cocache_misses_total` in Prometheus: the reads the local copy did not answer, shows ([Configuration](./configuration.md#computed-not-configured)). Give such a replica more heap.
 
 How long a role removed from a member keeps working:
 

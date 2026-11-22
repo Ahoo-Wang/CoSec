@@ -96,7 +96,7 @@ Which preview of the library may run behind which preview of the gateway image: 
 
   | Removed | Now | At 2 GiB | Too tight shows as |
   |---|---|---|---|
-  | `cosec.authentication.revocation.cache.maximum-size` (500,000) | an 8th of the heap, counted at 290 + 230 bytes an entry of each table; CoSec locks the count | 516,222 per table | `cocache.misses` on `RevokedTokenCache`, `RevokedSubjectCache` |
+  | `cosec.authentication.revocation.cache.maximum-size` (500,000) | an 8th of the heap, counted at 290 + 230 bytes an entry of each table; CoSec locks the count | 516,222 per table | `cocache.misses` (`cocache_misses_total`) with the tag `cache=RevokedTokenCache` or `RevokedSubjectCache` |
   | `cosec.authentication.token-cache.max-entries` (16,384) | a 16th of the heap, each entry weighed by its token's length × 5 bytes | 128 MiB, more than 16,384 large tokens | `cosec.token.cache.evictions` |
   | `cosec.observability.listener.queue-capacity` (1,024) | a 64th of the heap, shared by the `BEST_EFFORT` listeners, counted at 1 KB an event | 8,192 events each for four listeners | `cosec.listener.dropped` |
 
