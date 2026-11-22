@@ -25,7 +25,7 @@ import me.ahoo.cosec.engine.CompiledDocument
  * Fitted on measured documents (the live heap a class histogram counts, `DocumentWeightTest`, twelve shapes: tenants of roles only, of many role or
  * principal bindings, of policies with and without conditions, and apps of small to large catalogs): what a document
  * retains grows with the bindings its roles expand to, with its explicit statements, and with its stored size. The stored
- * size alone does not predict it (2.6 to 18.2 times, by shape); this estimate is at least 1.08 times what
+ * size alone does not predict it (2.6 to 18.7 times, by shape); this estimate is at least 1.08 times what
  * was measured and at most 1.6 times it, which errs on the side of holding fewer documents than the share could.
  */
 @InternalCoSecApi
