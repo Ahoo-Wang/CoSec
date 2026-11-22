@@ -81,13 +81,14 @@ class ProblemBodies(
 
     @InternalCoSecApi
     companion object {
-        /** CoSec's own body, and nothing to count: what an adapter answers with unless the host renders its own. */
-        @JvmField
-        val DEFAULT: ProblemBodies = ProblemBodies()
-
+        // Before DEFAULT, which is built with them: a companion initializes in declaration order.
         val DEFAULT_INTERVAL: Duration = Duration.ofMinutes(1)
         const val PAGE = "https://cosec.ahoo.me/architecture/extending#problem-renderer"
         private const val NEVER = Long.MIN_VALUE
         private val log = KotlinLogging.logger {}
+
+        /** CoSec's own body, and nothing to count: what an adapter answers with unless the host renders its own. */
+        @JvmField
+        val DEFAULT: ProblemBodies = ProblemBodies()
     }
 }

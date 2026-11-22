@@ -15,6 +15,9 @@
 
 package me.ahoo.cosec.jwt
 
+import java.time.Duration
+import java.time.Instant
+import java.util.concurrent.ConcurrentHashMap
 import kotlinx.coroutines.runBlocking
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
@@ -31,6 +34,8 @@ import me.ahoo.cosec.login.token.TokenFamilies
 import me.ahoo.cosec.login.token.TokenSubject
 import me.ahoo.cosec.model.PrincipalId
 import me.ahoo.cosec.model.TenantId
+import me.ahoo.cosec.runtime.http.ProblemBodies
+import me.ahoo.cosec.runtime.http.ProblemRenderer
 import me.ahoo.cosec.runtime.token.TokenRevocation
 import me.ahoo.cosec.spi.token.InMemoryTokenFamilyStore
 import me.ahoo.cosec.spi.token.RevocationReader
@@ -46,9 +51,6 @@ import org.junit.jupiter.api.Test
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
 import tools.jackson.databind.json.JsonMapper
-import java.time.Duration
-import java.time.Instant
-import java.util.concurrent.ConcurrentHashMap
 
 /**
  * `IDN-23` and `IDN-24` below the web stacks: what the served refresh and logout routes answer for each body and each
@@ -285,8 +287,46 @@ class LoginRoutesTest {
 
     @Test
     fun `an oversized body is answered without a body of its own`() {
-        LoginRouteAnswer.tooLarge(REQUEST_ID).status.assert().isEqualTo(400)
+        LoginRouteAnswer.tooLarge(REQUEST_ID, ProblemBodies.DEFAULT).status.assert().isEqualTo(400)
         LoginRouteAnswer.CACHE_CONTROL.assert().isEqualTo("no-store")
+    }
+
+    /**
+     * `PIP-34`: the login routes answer a refusal with the body the adapters would, the host's renderer's under CoSec's
+     * status and media type, and CoSec's own when the renderer fails.
+     */
+    @Test
+    fun `the login routes render a refusal as the adapters do`() {
+        val rendered = ProblemBodies(ProblemRenderer { """{"type":"urn:host:error:${it.type.code}"}""".toByteArray() })
+        val refreshing = RefreshRoute(
+            RefreshTokenAuthentication(verifier, TokenRevocation(RevocationReader.NONE), families) { token, credentials ->
+                MembershipRefresh.CLAIMS.refresh(token, credentials)
+            },
+            converter,
+            rendered,
+        )
+        val loggingOut = LogoutRoute(
+            StoreTokenRevoker(verifier, tokenStore, TokenRevocation(tokenStore), families, Duration.ofDays(8)),
+            rendered,
+        )
+        val answers = runBlocking {
+            listOf(
+                refreshing.answer("text/plain", ByteArray(0), REQUEST_ID),
+                loggingOut.answer("text/plain", ByteArray(0), REQUEST_ID),
+            )
+        }
+        for (answer in answers) {
+            answer.status.assert().isEqualTo(400)
+            answer.contentType.assert().isEqualTo("application/problem+json")
+            String(answer.body).assert().isEqualTo("""{"type":"urn:host:error:INVALID_REQUEST"}""")
+        }
+        String(LoginRouteAnswer.tooLarge(REQUEST_ID, rendered).body).assert()
+            .isEqualTo("""{"type":"urn:host:error:INVALID_REQUEST"}""")
+        val broken = ProblemBodies(ProblemRenderer { error("The renderer is broken") })
+        val answer = LoginRouteAnswer.tooLarge(REQUEST_ID, broken)
+        answer.status.assert().isEqualTo(400)
+        answer.problemType().assert().isEqualTo("https://cosec.ahoo.me/problems/invalid-request")
+        broken.failures().assert().isEqualTo(1)
     }
 
     private companion object {

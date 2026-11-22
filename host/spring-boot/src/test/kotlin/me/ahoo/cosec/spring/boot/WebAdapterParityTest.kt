@@ -16,6 +16,16 @@
 package me.ahoo.cosec.spring.boot
 
 import jakarta.servlet.http.HttpServletRequest
+import java.net.InetSocketAddress
+import java.net.URI
+import java.time.Duration
+import java.time.Instant
+import java.util.Collections
+import java.util.concurrent.CompletableFuture
+import java.util.concurrent.CopyOnWriteArrayList
+import kotlin.coroutines.CoroutineContext
+import kotlin.time.Duration.Companion.milliseconds
+import kotlin.time.Duration.Companion.seconds
 import kotlinx.coroutines.awaitCancellation
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
@@ -52,6 +62,9 @@ import me.ahoo.cosec.runtime.event.DecisionEvent
 import me.ahoo.cosec.runtime.event.DecisionListener
 import me.ahoo.cosec.runtime.event.DecisionListeners
 import me.ahoo.cosec.runtime.event.Delivery
+import me.ahoo.cosec.runtime.http.ProblemBodies
+import me.ahoo.cosec.runtime.http.ProblemRenderer
+import me.ahoo.cosec.runtime.http.ProblemType
 import me.ahoo.cosec.runtime.http.RequestGate
 import me.ahoo.cosec.runtime.http.TraceContext
 import me.ahoo.cosec.runtime.identity.IdentityGate
@@ -94,16 +107,6 @@ import org.springframework.mock.web.server.MockServerWebExchange
 import org.springframework.web.server.ServerWebExchange
 import org.springframework.web.server.WebFilterChain
 import reactor.core.publisher.Mono
-import java.net.InetSocketAddress
-import java.net.URI
-import java.time.Duration
-import java.time.Instant
-import java.util.Collections
-import java.util.concurrent.CompletableFuture
-import java.util.concurrent.CopyOnWriteArrayList
-import kotlin.coroutines.CoroutineContext
-import kotlin.time.Duration.Companion.milliseconds
-import kotlin.time.Duration.Companion.seconds
 
 /**
  * One decision path (RFC 0006 §6.3, `PIP-1`): the WebFlux filter, the gateway filter and the servlet filter, over the
@@ -317,15 +320,17 @@ class WebAdapterParityTest {
 
     // --- the adapters --------------------------------------------------------------------------------------------
 
-    private fun webflux(scenario: Scenario): Written = reactive(scenario) { exchange, record ->
-        PipelineWebFilter(gates.getValue(scenario.pipeline), contributors)
-            .filter(exchange, WebFilterChain { record(it) })
-    }
+    private fun webflux(scenario: Scenario, bodies: ProblemBodies = ProblemBodies.DEFAULT): Written =
+        reactive(scenario) { exchange, record ->
+            PipelineWebFilter(gates.getValue(scenario.pipeline), contributors, bodies = bodies)
+                .filter(exchange, WebFilterChain { record(it) })
+        }
 
-    private fun gateway(scenario: Scenario): Written = reactive(scenario) { exchange, record ->
-        PipelineGatewayFilter(pipelines.getValue(scenario.pipeline), contributors)
-            .filter(exchange, GatewayFilterChain { record(it) })
-    }
+    private fun gateway(scenario: Scenario, bodies: ProblemBodies = ProblemBodies.DEFAULT): Written =
+        reactive(scenario) { exchange, record ->
+            PipelineGatewayFilter(pipelines.getValue(scenario.pipeline), contributors, bodies = bodies)
+                .filter(exchange, GatewayFilterChain { record(it) })
+        }
 
     private fun reactive(
         scenario: Scenario,
@@ -370,8 +375,10 @@ class WebAdapterParityTest {
 
     private fun servlet(
         scenario: Scenario,
-        filter: jakarta.servlet.Filter = PipelineServletFilter(gates.getValue(scenario.pipeline), contributors),
+        filter: jakarta.servlet.Filter? = null,
+        bodies: ProblemBodies = ProblemBodies.DEFAULT,
     ): Written {
+        val filter = filter ?: PipelineServletFilter(gates.getValue(scenario.pipeline), contributors, bodies = bodies)
         val request = MockHttpServletRequest(scenario.method, scenario.path.substringBefore('?'))
         request.queryString = scenario.path.substringAfter('?', "").ifEmpty { null }
         request.remoteAddr = "127.0.0.1"
@@ -576,6 +583,50 @@ class WebAdapterParityTest {
         reactiveTest.assert().isEqualTo(reactive)
         servlet(scenario, me.ahoo.cosec.testkit.webmvc.CoSecTestBindings.filter(gate))
             .assert().isEqualTo(servlet(scenario, PipelineServletFilter(gate)))
+    }
+
+    /** A host framework's renderer (`PIP-34`): its own `type`, CoSec's slug kept in an extension member. */
+    private val hostRenderer = ProblemRenderer { problem ->
+        (
+            """{"type":"urn:host:error:${problem.type.code}","status":${problem.status},""" +
+                """"cosec":"${problem.type.slug}","requestId":"${problem.requestId}"}"""
+            ).toByteArray()
+    }
+
+    /**
+     * `PIP-34`: one renderer gives the same bytes behind the three adapters, under CoSec's status and headers, which a
+     * renderer cannot change; a permitted request never reaches it; and a renderer that fails leaves CoSec's own answer.
+     */
+    @ParameterizedTest
+    @MethodSource("scenarios")
+    fun `a host's renderer writes the same body behind the three adapters, under CoSec's status and headers`(
+        scenario: Scenario
+    ) {
+        val rendered = ProblemBodies(hostRenderer)
+        val webflux = webflux(scenario, rendered)
+        gateway(scenario, rendered).assert().isEqualTo(webflux)
+        servlet(scenario, bodies = rendered).assert().isEqualTo(webflux)
+        val plain = webflux(scenario)
+        webflux.status.assert().isEqualTo(plain.status)
+        webflux.headers.filterKeys { it != "content-length" }.assert()
+            .isEqualTo(plain.headers.filterKeys { it != "content-length" })
+        if (scenario.type == null) {
+            webflux.assert().isEqualTo(plain)
+        } else {
+            val type = ProblemType.entries.single { it.slug == scenario.type }
+            webflux.body.assert().isEqualTo(
+                """{"type":"urn:host:error:${type.code}","status":${type.status},""" +
+                    """"cosec":"${type.slug}","requestId":"${plain.requestId}"}"""
+            )
+            webflux.headers["content-length"].assert().isEqualTo(listOf(webflux.bytes.size.toString()))
+            webflux.contentType.assert().isEqualTo("application/problem+json")
+        }
+        rendered.failures().assert().isZero()
+        val broken = ProblemBodies(ProblemRenderer { error("The renderer is broken") })
+        webflux(scenario, broken).assert().isEqualTo(plain)
+        gateway(scenario, broken).assert().isEqualTo(gateway(scenario))
+        servlet(scenario, bodies = broken).assert().isEqualTo(servlet(scenario))
+        broken.failures().assert().isEqualTo(if (scenario.type == null) 0L else 3L)
     }
 
     @ParameterizedTest
