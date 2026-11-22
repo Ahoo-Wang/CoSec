@@ -22,6 +22,7 @@ import jakarta.servlet.ServletResponse
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.spring.boot.UnknownProperties
+import me.ahoo.cosec.testkit.IdentityHeader
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import org.springframework.boot.autoconfigure.AutoConfigurations
@@ -97,6 +98,73 @@ class GatewayModeTrustTest {
             .contains("COSEC_PIPELINE_IDENTITY_ONLYGATEWAYCANREACH=true")
             .contains("It is not set")
             .contains("STA-7")
+    }
+
+    /** `cosec-testkit`'s statement for a test (#1841) is the starter's own key, set to `true`: a test that makes it starts. */
+    @Test
+    fun `the kit's statement for a test is the key the starter reads, and a service in gateway mode starts with it`() {
+        IdentityHeader.ONLY_GATEWAY_CAN_REACH.assert().isEqualTo(
+            "${PipelineProperties.ONLY_GATEWAY_CAN_REACH_KEY}=true"
+        )
+        gateway.withPropertyValues(IdentityHeader.ONLY_GATEWAY_CAN_REACH).run { it.startupFailure.assert().isNull() }
+    }
+
+    /**
+     * The message describes the host it is about (#1842): a service in `gateway` mode wires no documents and no control
+     * plane, so a caller who claims any principal reaches its routes and nothing more; publishing and approving are named
+     * only where the control plane runs.
+     */
+    @Test
+    fun `a service in gateway mode is told what a claimed principal reaches there, and never of publishing or approving`() {
+        val message = failure(gateway)
+        message.assert().contains("cosec.pipeline.mode=gateway: this host believes any CoSec-Identity header")
+            .contains("whoever they claim to be to this service's routes, any user of any tenant")
+            .doesNotContain("publish")
+            .doesNotContain("approve")
+            .doesNotContain("audit")
+            .doesNotContain("contains mistakes")
+            .doesNotContain("compromised workload")
+        // Even where the control plane's classes are on the classpath, as in this test, gateway mode has none.
+        GatewayModeTrust.controlPlaneWired(environment("cosec.pipeline.mode" to "gateway")).assert().isFalse()
+    }
+
+    @Test
+    fun `a host that runs the control plane is told a claimed principal can publish and approve its own changes`() {
+        val environment = environment("cosec.pipeline.caller" to "forwarded-identity")
+        GatewayModeTrust.controlPlaneWired(environment).assert().isTrue()
+        val message = runCatching { GatewayModeTrust.requireBoundaryStated(environment) }.exceptionOrNull()!!.message!!
+        message.assert().startsWith(
+            "cosec.pipeline.caller=forwarded-identity: this host believes any CoSec-Identity header"
+        )
+            .contains("the platform administrator included, and can publish any policy of any tenant")
+            .contains(
+                "It still refuses an invalid change and records every change in the audit under the principal claimed"
+            )
+            .contains("a compromised workload that can reach this host, which can also approve its own changes")
+            .doesNotContain("contains mistakes")
+            .contains("$statement=true")
+        // Switched off, the control plane is not there to publish through.
+        GatewayModeTrust.controlPlaneWired(
+            environment("cosec.pipeline.caller" to "forwarded-identity", "cosec.control.enabled" to "false")
+        ).assert().isFalse()
+    }
+
+    @Test
+    fun `a host without the control plane, such as one with its own gate, is never told of publishing or approving`() {
+        val environment = environment("cosec.pipeline.mode" to "enforce", "cosec.control.enabled" to "false")
+        val host = "the web gate of this host is an IdentityGate bean of the application, [ownGate]"
+        val message = runCatching {
+            GatewayModeTrust.requireBoundaryStated(environment, host)
+        }.exceptionOrNull()!!.message!!
+        message.assert().startsWith("$host: this host believes any CoSec-Identity header")
+            .contains("whoever they claim to be to this host's routes, the platform administrator included")
+            .doesNotContain("publish")
+            .doesNotContain("approve")
+            .doesNotContain("contains mistakes")
+    }
+
+    private fun environment(vararg properties: Pair<String, String>) = StandardEnvironment().apply {
+        propertySources.addFirst(org.springframework.core.env.MapPropertySource("test", mapOf(*properties)))
     }
 
     @Test

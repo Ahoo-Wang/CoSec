@@ -640,6 +640,18 @@ mvc.get("/orders/1") { header(IdentityHeader.NAME, IdentityHeader.forSubject("al
     .andExpect { status { isOk() } }
 ```
 
+**`gateway` 模式服务的 Spring Boot 测试要声明边界。** 这样的服务在 `cosec.pipeline.identity.only-gateway-can-reach=true`
+声明除网关外没有任何东西能访问它之前不会启动（`STA-7`），测试的上下文也不例外。在测试中这个声明是真的：只有测试自己的客户端访问服务。
+`IdentityHeader.ONLY_GATEWAY_CAN_REACH` 就是这条属性赋值，只用于测试：
+
+```kotlin
+@SpringBootTest(properties = [IdentityHeader.ONLY_GATEWAY_CAN_REACH])   // 或 @TestPropertySource(properties = [...])
+class OrdersServiceTest
+```
+
+在部署中，这个声明由运维人员在网络使它成真之后做出（[网关之后的服务](../integration/web.md#services-behind-the-gateway)）；
+永远不要从测试里照抄。像上面那样只运行 CoSec 过滤器的测试，不启动 CoSec 的任何自动配置，也就不需要它。
+
 **读取调用方的函数**，手工绑定：
 
 ```kotlin
