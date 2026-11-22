@@ -281,6 +281,8 @@ the adapters, snapshots or the control plane. The parts that take several files 
 - **Snapshots.** Redis is the store of record for the documents (`cosec-cocache`, CoCache 8 `Store`s). `SnapshotSource` keeps
   compiled documents in memory: one load per key at a time, installs in load order, conditional revalidation, bounded
   lag, fail closed on what it cannot read. `peek` is the hot path and never does I/O.
+  How many documents each family keeps is derived from the documents' share of the heap and from what is resident
+  (`DocumentBudget`, `SNP-24`), recomputed by each revalidation pass and before each eviction; nothing sets it.
 - **Control plane.** Only `cosec-control` writes documents: changes are validated, compiled, shadowed against live
   traffic and approved before they publish, and every write is itself authorized through the pipeline.
 
@@ -340,7 +342,7 @@ Every fact has one home; update it in the same PR. Every English page in `wiki/`
 | A module the starter wires (a new one, or a feature that needs one) | `CoSecModuleCheckAutoConfiguration` (STA-1), `wiki/guide/introduction.md#modules` |
 | A call of `ControlService` (a new one, or what one asks) | `RoutedControlService`, the one route table both implementations carry; `ControlClient`'s typed call; `ControlServiceParityTest`'s script (`CTL-77`), which runs it through both; the service profile it must be in (`CTL-58`, `CTL-65`) |
 | A stage's timeout, or another value derived from `cosec.pipeline.timeout` | `StageBudgets` (a named fraction, `PIP-33`), the startup line, `wiki/operations/configuration.md#computed-not-configured`; never a new property |
-| A bound on memory held for performance (a cache's size, a queue's capacity) | a share in `HeapBudget`, the one table (`STA-12`: the sum stays at or under half the heap), a measured entry size held by a size test, the startup line, `wiki/operations/configuration.md#computed-not-configured`; never a count property, and nothing measured on the request path |
+| A bound on memory held for performance (a cache's size, a queue's capacity) | a share in `HeapBudget`, the one table (`STA-12`: the sum stays at or under half the heap; the snapshot documents' quarter is divided by `DocumentBudget`, `SNP-24`), a measured entry size held by a size test, the startup line, `wiki/operations/configuration.md#computed-not-configured`; never a count property, and nothing measured on the request path |
 | Who may write a document without a person (the trust root, the role class `cosec:manage-roles`, anything later) | `CTL-79` and its bounds tests (`RoleClassBoundsTest`): prove the bound by tests before the path admits anything; `wiki/policies/role-permissions.md`, `wiki/policies/testing.md`, `wiki/guide/security-model.md`; ask first |
 | Integration steps | `wiki/guide/quick-start.md`, `skills/cosec-integration` |
 | A normative rule (an RFC "must / must not / always", RFC 0008 §3.2) | `test/conformance/src/test/resources/rules/<FAMILY>.json` and its scenarios: a positive and a negative one for each rule that is not `pending` (`verifyRuleCoverage`) |
