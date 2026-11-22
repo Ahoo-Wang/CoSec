@@ -39,6 +39,7 @@ val repositoryRoot = rootProject.layout.projectDirectory
 // The Kotlin samples of the wiki (wiki/examples/<example>/kotlin), compiled with the tests and run by
 // DocumentationExamplesTest, so a page's code compiles against what CoSec publishes, with no opt-in to its internal API.
 sourceSets["test"].java.srcDir(repositoryRoot.dir("wiki/examples/control-sdk/kotlin"))
+sourceSets["test"].java.srcDir(repositoryRoot.dir("wiki/examples/external-source/kotlin"))
 
 /*
  * RFC 0011: the projects by name, `name=directory;…`, for the rule guards (`project:Class#test`). Computed here, so no

@@ -1,12 +1,12 @@
 {
-  "description": "The sync service's principal, a principal of (platform) holding a token for the control app, reaches the control API's path: the control plane then authorizes each step itself.",
+  "description": "A person of (platform) with a token for the control app reaches the control API's path behind the gateway, where the catalog's change waits for them: the control plane then authorizes each step itself.",
   "withoutDocument": [
     "tenant",
     "app"
   ],
   "credential": {
     "tenant": "(platform)",
-    "id": "sync-service",
+    "id": "plato",
     "app": "cosec-control"
   },
   "request": {
