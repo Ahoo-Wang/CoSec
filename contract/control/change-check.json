@@ -1,0 +1,70 @@
+{
+  "base" : {
+    "type" : "object",
+    "presence" : "always",
+    "members" : {
+      "digest" : {
+        "type" : "string",
+        "presence" : "optional"
+      },
+      "revision" : {
+        "type" : "integer",
+        "presence" : "always"
+      }
+    }
+  },
+  "escalations" : {
+    "type" : "array",
+    "presence" : "optional",
+    "items" : {
+      "type" : "object",
+      "members" : {
+        "detail" : {
+          "type" : "string",
+          "presence" : "always"
+        },
+        "reason" : {
+          "type" : "string",
+          "presence" : "always"
+        },
+        "subject" : {
+          "type" : "string",
+          "presence" : "always"
+        }
+      }
+    }
+  },
+  "findings" : {
+    "type" : "array",
+    "presence" : "always",
+    "items" : {
+      "type" : "object",
+      "members" : {
+        "check" : {
+          "type" : "string",
+          "presence" : "always"
+        },
+        "message" : {
+          "type" : "string",
+          "presence" : "always"
+        },
+        "path" : {
+          "type" : "string",
+          "presence" : "always"
+        },
+        "severity" : {
+          "type" : "string",
+          "presence" : "always"
+        },
+        "status" : {
+          "type" : "integer",
+          "presence" : "always"
+        }
+      }
+    }
+  },
+  "state" : {
+    "type" : "string",
+    "presence" : "always"
+  }
+}

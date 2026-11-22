@@ -133,7 +133,8 @@ class Changes(
         preemption
     )
 
-    private val proposals =
+    /** Proposing a change, and checking one without proposing it (`CTL-78`, [Proposals.check]). */
+    internal val proposals =
         Proposals(flow, store, revisions, ids, clock, authority, authority.approvals, candidates, listeners)
 
     /** The change [id]; one past its expiry is `EXPIRED` from then on. */
@@ -221,15 +222,19 @@ class Changes(
         confirmations: List<Confirmation> = emptyList(),
     ): ChangeRequest = proposals.propose(author, key, base, operations, note, kind, confirmations)
 
-    /** [Proposals.apply]: proposes the operations that make the head of [key] into [desired]. */
+    /**
+     * [Proposals.apply]: proposes the operations that make the head of [key] into [desired]; with [commit] false, answers
+     * what it would, as [Proposals.check] is to [propose] (`CTL-78`).
+     */
     suspend fun apply(
         author: Operator,
         key: SnapshotKey,
         desired: PolicyDocument,
         mode: ApplyMode,
-        note: String
+        note: String,
+        commit: Boolean = true,
     ): ChangeRequest =
-        proposals.apply(author, key, desired, mode, note)
+        proposals.apply(author, key, desired, mode, note, commit)
 
     /** [Proposals.rollback]: a change that makes [key] what it was at [revision]. */
     suspend fun rollback(

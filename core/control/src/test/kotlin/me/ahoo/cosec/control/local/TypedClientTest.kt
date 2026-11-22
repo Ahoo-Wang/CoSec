@@ -255,6 +255,13 @@ class TypedClientTest {
         head.content.policies.map { it.id }.assert().contains("orders")
 
         val typed = Policy("typed", listOf(Statement(Effect.ALLOW, listOf("order:read"))))
+        // What the proposal would answer, without proposing it (CTL-78).
+        val checked = runBlocking { client.check(alice, ChangeRequest(acme, 1, listOf(Operation.PutPolicy(typed)))) }
+        checked.state.assert().isEqualTo(ChangeState.CHECKED)
+        checked.base.revision.assert().isEqualTo(1L)
+        runBlocking {
+            client.checkApply(alice, ApplyRequest(acme, 1, DocumentContent(policies = listOf(typed)), ApplyMode.MERGE))
+        }.state.assert().isEqualTo(ChangeState.CHECKED)
         val published = runBlocking {
             client.proposeAndPublishWithoutShadow(alice, acme, listOf(Operation.PutPolicy(typed)), "typed", "projected")
         }

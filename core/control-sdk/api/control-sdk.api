@@ -125,6 +125,17 @@ public final class me/ahoo/cosec/control/sdk/ChangeBase {
 	public fun toString ()Ljava/lang/String;
 }
 
+public final class me/ahoo/cosec/control/sdk/ChangeCheck {
+	public fun <init> (Lme/ahoo/cosec/control/sdk/ChangeState;Lme/ahoo/cosec/control/sdk/ChangeBase;Ljava/util/List;Ljava/util/List;)V
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getBase ()Lme/ahoo/cosec/control/sdk/ChangeBase;
+	public final fun getEscalations ()Ljava/util/List;
+	public final fun getFindings ()Ljava/util/List;
+	public final fun getState ()Lme/ahoo/cosec/control/sdk/ChangeState;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
 public final class me/ahoo/cosec/control/sdk/ChangeKind : me/ahoo/cosec/control/sdk/ClosedValue {
 	public static final field Companion Lme/ahoo/cosec/control/sdk/ChangeKind$Companion;
 }
@@ -243,6 +254,8 @@ public final class me/ahoo/cosec/control/sdk/ControlClient {
 	public final fun change (Lme/ahoo/cosec/control/sdk/ControlCaller;Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public final fun changes (Lme/ahoo/cosec/control/sdk/ControlCaller;Lme/ahoo/cosec/spi/snapshot/SnapshotKey;Lme/ahoo/cosec/control/sdk/ChangeState;Lme/ahoo/cosec/control/sdk/Cursor;Ljava/lang/Integer;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public static synthetic fun changes$default (Lme/ahoo/cosec/control/sdk/ControlClient;Lme/ahoo/cosec/control/sdk/ControlCaller;Lme/ahoo/cosec/spi/snapshot/SnapshotKey;Lme/ahoo/cosec/control/sdk/ChangeState;Lme/ahoo/cosec/control/sdk/Cursor;Ljava/lang/Integer;Lkotlin/coroutines/Continuation;ILjava/lang/Object;)Ljava/lang/Object;
+	public final fun check (Lme/ahoo/cosec/control/sdk/ControlCaller;Lme/ahoo/cosec/control/sdk/ChangeRequest;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public final fun checkApply (Lme/ahoo/cosec/control/sdk/ControlCaller;Lme/ahoo/cosec/control/sdk/ApplyRequest;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public final fun document (Lme/ahoo/cosec/control/sdk/ControlCaller;Lme/ahoo/cosec/spi/snapshot/SnapshotKey;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public final fun documents (Lme/ahoo/cosec/control/sdk/ControlCaller;Lme/ahoo/cosec/model/decision/DocumentKind;Lme/ahoo/cosec/control/sdk/Cursor;Ljava/lang/Integer;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public static synthetic fun documents$default (Lme/ahoo/cosec/control/sdk/ControlClient;Lme/ahoo/cosec/control/sdk/ControlCaller;Lme/ahoo/cosec/model/decision/DocumentKind;Lme/ahoo/cosec/control/sdk/Cursor;Ljava/lang/Integer;Lkotlin/coroutines/Continuation;ILjava/lang/Object;)Ljava/lang/Object;
@@ -274,6 +287,8 @@ public abstract interface class me/ahoo/cosec/control/sdk/ControlService {
 	public abstract fun change (Lme/ahoo/cosec/control/sdk/ControlCaller;Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public abstract fun changes (Lme/ahoo/cosec/control/sdk/ControlCaller;Lme/ahoo/cosec/spi/snapshot/SnapshotKey;Lme/ahoo/cosec/control/sdk/ChangeState;Ljava/lang/String;Ljava/lang/Integer;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public static synthetic fun changes$default (Lme/ahoo/cosec/control/sdk/ControlService;Lme/ahoo/cosec/control/sdk/ControlCaller;Lme/ahoo/cosec/spi/snapshot/SnapshotKey;Lme/ahoo/cosec/control/sdk/ChangeState;Ljava/lang/String;Ljava/lang/Integer;Lkotlin/coroutines/Continuation;ILjava/lang/Object;)Ljava/lang/Object;
+	public abstract fun check (Lme/ahoo/cosec/control/sdk/ControlCaller;Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public abstract fun checkApply (Lme/ahoo/cosec/control/sdk/ControlCaller;Lme/ahoo/cosec/spi/snapshot/SnapshotKey;Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public abstract fun diff (Lme/ahoo/cosec/control/sdk/ControlCaller;Lme/ahoo/cosec/spi/snapshot/SnapshotKey;JJLkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public abstract fun document (Lme/ahoo/cosec/control/sdk/ControlCaller;Lme/ahoo/cosec/spi/snapshot/SnapshotKey;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public abstract fun documents (Lme/ahoo/cosec/control/sdk/ControlCaller;Lme/ahoo/cosec/model/decision/DocumentKind;Ljava/lang/String;Ljava/lang/Integer;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;

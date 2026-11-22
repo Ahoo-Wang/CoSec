@@ -170,7 +170,10 @@ class ControlServiceParityTest {
         record { service.revisions(iam, key) }
         record { service.revision(iam, key, 1) }
         record { service.diff(iam, key, 1, 1) }
-        // Read and write as the service: propose, a stale base, skip the window, a held slot, publish.
+        // A check, then read and write as the service: propose, a stale base, skip the window, a held slot, publish.
+        record { service.check(iam, proposal("first", 1)) }
+        record { service.check(iam, proposal("stale", 0)) }
+        record { service.checkApply(iam, key, APPLY.replace("\"revision\":2", "\"revision\":1")) }
         val first = id { service.propose(iam, proposal("first", 1)) }
         record { service.change(iam, first) }
         record { service.propose(iam, proposal("stale", 0)) }
@@ -213,6 +216,7 @@ class ControlServiceParityTest {
         record { service.document(ControlCaller.service("svc-nobody"), key) }
         // The person whose request the application serves: read, and a proposal of their own.
         record { service.document(person, key) }
+        record { service.check(person, proposal("person", 2)) }
         record { service.propose(person, proposal("person", 2)) }
         record { service.document(ControlCaller.of(ASSEMBLED), key) }
         answers.map { it.replace(LOCAL, "<tenant>").replace(REMOTE, "<tenant>") }

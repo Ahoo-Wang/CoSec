@@ -60,9 +60,22 @@ interface ControlPlane {
         operations: List<Operation>,
         note: String,
         confirmations: List<Confirmation> = emptyList(),
+        /**
+         * False for a check (`CTL-78`): what the proposal would answer, its state, findings and escalations, decided for
+         * [operator] as the proposal would be, and stored nowhere.
+         */
+        commit: Boolean = true,
     ): ChangeRequest
 
-    suspend fun apply(operator: Operator, key: SnapshotKey, desired: PolicyDocument, mode: ApplyMode, note: String): ChangeRequest
+    /** `:apply`; with [commit] false, what it would answer, stored nowhere (`CTL-78`, as a check is to [propose]). */
+    suspend fun apply(
+        operator: Operator,
+        key: SnapshotKey,
+        desired: PolicyDocument,
+        mode: ApplyMode,
+        note: String,
+        commit: Boolean = true,
+    ): ChangeRequest
 
     suspend fun rollback(
         operator: Operator,

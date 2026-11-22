@@ -39,8 +39,12 @@ import me.ahoo.cosec.control.authz.Operator
 import me.ahoo.cosec.control.change.ChangeId
 import me.ahoo.cosec.control.change.ChangeRequestCodec
 import me.ahoo.cosec.control.change.ChangeState
+import me.ahoo.cosec.control.change.Confirmation
 import me.ahoo.cosec.control.change.InvalidControlRequestException
+import me.ahoo.cosec.control.change.Operation
 import me.ahoo.cosec.control.change.requireRequest
+import me.ahoo.cosec.spi.snapshot.SnapshotKey
+import tools.jackson.databind.JsonNode
 
 /** The routes of `/changes` (RFC 0007 §10.2): proposing a change, reading one, and its transitions. */
 internal class ChangeRoutes(
@@ -93,32 +97,47 @@ internal class ChangeRoutes(
             return listing(operator, request)
         }
         return post(request) {
-            val key = documentKey(it.text("document"))
-            if (!profile.admitsWrite(key)) {
-                return@post notFound()
-            }
-            val operations = it.array("operations").map { op ->
-                decoded("operations") { ChangeRequestCodec.operation(key, op) }
-            }
-            // A change's kind is its entry point's, never the request's (review K1): break-glass is /break-glass.
-            requireRequest(
-                !it.has("kind")
-            ) { "a change has no kind: propose it here, or request break-glass at /break-glass" }
-            changeResponse(
-                plane,
-                operator,
-                plane.propose(
-                    operator,
-                    key,
-                    it.long("base"),
-                    operations,
-                    it.optText("note").orEmpty(),
-                    confirmations(it),
-                ),
-                CREATED
-            )
+            val proposal = proposal(it) ?: return@post notFound()
+            val change = with(proposal) { plane.propose(operator, key, base, operations, note, confirmations) }
+            changeResponse(plane, operator, change, CREATED)
         }
     }
+
+    /**
+     * `POST /changes:check` (`CTL-78`): the body of `POST /changes`, read the same way, answered with what the proposal
+     * would find, and stored nowhere.
+     */
+    suspend fun check(operator: Operator, request: ControlHttpRequest): ControlHttpResponse = post(request) {
+        val proposal = proposal(it) ?: return@post notFound()
+        ChangeCheckAnswer.response(
+            with(proposal) { plane.propose(operator, key, base, operations, note, confirmations, commit = false) },
+        )
+    }
+
+    /** A proposal's body; null for a document this profile serves no write to. */
+    private fun proposal(body: JsonNode): Proposal? {
+        val key = documentKey(body.text("document"))
+        if (!profile.admitsWrite(key)) {
+            return null
+        }
+        val operations = body.array("operations").map { op ->
+            decoded("operations") { ChangeRequestCodec.operation(key, op) }
+        }
+        // A change's kind is its entry point's, never the request's (review K1): break-glass is /break-glass.
+        requireRequest(
+            !body.has("kind")
+        ) { "a change has no kind: propose it here, or request break-glass at /break-glass" }
+        return Proposal(key, body.long("base"), operations, body.optText("note").orEmpty(), confirmations(body))
+    }
+
+    /** What a proposal's body says: the same for `POST /changes` and its check. */
+    private class Proposal(
+        val key: SnapshotKey,
+        val base: Long,
+        val operations: List<Operation>,
+        val note: String,
+        val confirmations: List<Confirmation>,
+    )
 
     /**
      * `GET /changes?document=<key>` or `?state=<STATE>`, with `after` (the `next` of the page before, a [ListingCursor]

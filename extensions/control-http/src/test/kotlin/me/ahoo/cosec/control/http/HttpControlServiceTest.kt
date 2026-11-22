@@ -103,6 +103,8 @@ class HttpControlServiceTest {
             service.diff(iam, acme, 1, 2)
             service.apply(iam, acme, """{"mode":"MERGE"}""")
             service.propose(iam, """{"document":"tenant:acme"}""")
+            service.check(iam, """{"document":"tenant:acme"}""")
+            service.checkApply(iam, acme, """{"mode":"MERGE"}""")
             service.change(iam, "c 1")
             service.changes(iam, acme, ChangeState.READY, "a-b", 10)
             service.rebase(iam, "c1")
@@ -120,6 +122,8 @@ class HttpControlServiceTest {
             "GET /cosec/control/v1/documents/tenant:acme/diff?from=1&to=2",
             """POST /cosec/control/v1/documents/tenant:acme:apply {"mode":"MERGE"}""",
             """POST /cosec/control/v1/changes {"document":"tenant:acme"}""",
+            """POST /cosec/control/v1/changes:check {"document":"tenant:acme"}""",
+            """POST /cosec/control/v1/documents/tenant:acme:check {"mode":"MERGE"}""",
             "GET /cosec/control/v1/changes/c%201",
             "GET /cosec/control/v1/changes?document=tenant%3Aacme&state=READY&after=a-b&limit=10",
             "POST /cosec/control/v1/changes/c1:rebase {}",

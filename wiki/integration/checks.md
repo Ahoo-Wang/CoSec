@@ -416,7 +416,7 @@ fun controlService(sslContext: SSLContext): ControlService = HttpControlService(
     platform document gives it, and the record names it.
 - **What it reaches:** which tenant and app documents there are (`documents`), reads of a tenant's or an app's
   document (`document`, `revisions`, `revision`, `diff`), and
-  the change flow of a tenant's document (`propose`, `apply`, `change`, `changes`, `rebase`, `startShadow`,
+  the change flow of a tenant's document (`check`, `checkApply`, `propose`, `apply`, `change`, `changes`, `rebase`, `startShadow`,
   `skipShadow`, `abandon`, `publish`). An automated change can start its shadow window, read the change until the
   window closes, and publish with the summary's acknowledgement, rather than skip the window. Nothing reaches the
   platform document, approvals, rollback or break-glass: those stay a person's, on the operators' routes.

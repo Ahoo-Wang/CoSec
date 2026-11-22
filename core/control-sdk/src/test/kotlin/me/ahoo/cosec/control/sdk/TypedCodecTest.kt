@@ -59,6 +59,9 @@ class TypedCodecTest {
             request
         )
         override suspend fun propose(caller: ControlCaller, request: String) = call("propose", request)
+        override suspend fun check(caller: ControlCaller, request: String) = call("check", request)
+        override suspend fun checkApply(caller: ControlCaller, key: SnapshotKey, request: String) =
+            call("checkApply", key, request)
         override suspend fun change(caller: ControlCaller, id: String) = call("change", id)
         override suspend fun changes(
             caller: ControlCaller,

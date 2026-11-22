@@ -52,6 +52,10 @@ import tools.jackson.databind.json.JsonMapper
  *   tenant, and skips the window. A grant by a principal of the platform tenant in a tenant's document is a person's to
  *   approve (`CROSS_TENANT`), so it answers the change waiting for one (`AWAITING_APPROVAL`) and publishes nothing.
  *
+ * - `POST /admin/check` with `{"tenant", "policy", "role"}`: what the grant would find, checked before the IAM stores
+ *   anything of its own (`CTL-78`). A binding to a policy the document does not hold is a finding; nothing is stored, no
+ *   slot is taken. It answers the check's `state`, `findings` and `escalations`.
+ *
  * An answer is the change's `id`, `state`, `candidate` and `escalations`; a step the control plane refuses is answered as
  * the control plane answered it. The platform document permits both routes to the platform administrator `root` only,
  * and the gateways route them: a scenario calls them as `root`.
@@ -91,6 +95,30 @@ class Onboarding(service: ControlService) {
             val proposed = control.propose(iam, ChangeRequest(key, head.revision, operations, "onboarding of $tenant"))
             control.skipShadow(iam, proposed.id, "a grant for $role in $tenant")
         }
+    }
+
+    @PostMapping("/admin/check")
+    suspend fun check(@RequestBody body: Map<String, String>): ResponseEntity<String> {
+        val (tenant, policy) = ids(body)
+        val role = body.getValue("role")
+        require(ID.matches(role)) { "A role id is letters, digits and dashes." }
+        val key = SnapshotKey.Tenant(tenant)
+        val checked = try {
+            val head = control.document(iam, key)
+            // Only the binding: the policy it names is not in the change, which is what the check is to find.
+            val operations =
+                listOf(Operation.PutBinding(Binding("$role-$policy", Subject.Role(role), "*", "*", policy)))
+            control.check(iam, ChangeRequest(key, head.revision, operations, "a check for $role in $tenant"))
+        } catch (refused: ControlRefusedException) {
+            return ResponseEntity.status(HttpStatusCode.valueOf(refused.status))
+                .header("Content-Type", "application/problem+json").body(refused.problem)
+        }
+        val answer = mapOf(
+            "state" to checked.state.text,
+            "findings" to checked.findings.map { mapOf("check" to it.check, "path" to it.path, "status" to it.status) },
+            "escalations" to checked.escalations.map { mapOf("subject" to it.subject, "reason" to it.reason.text) },
+        )
+        return ResponseEntity.ok().header("Content-Type", "application/json").body(json.writeValueAsString(answer))
     }
 
     private suspend fun answer(call: suspend () -> Change): ResponseEntity<String> {

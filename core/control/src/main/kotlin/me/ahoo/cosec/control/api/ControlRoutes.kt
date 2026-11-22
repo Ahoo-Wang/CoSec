@@ -32,11 +32,14 @@ import me.ahoo.cosec.model.Identifiers
  */
 internal class ControlRoutes(plane: ControlPlane, private val profile: ControlProfile = ControlProfile.OPERATORS) {
     private val queries = QueryRoutes(plane)
+    private val changes = ChangeRoutes(plane, profile)
 
     /** A path's first segment, and the handler of the routes under it. */
     private val resources: Map<String, RouteHandler> = mapOf(
         "documents" to DocumentRoutes(plane),
-        "changes" to ChangeRoutes(plane, profile),
+        "changes" to changes,
+        // `CTL-78`: the check of a proposal, a leaf beside `/changes`: no change is named, and none is made.
+        "changes:check" to RouteHandler { operator, request, _ -> changes.check(operator, request) },
         "break-glass" to BreakGlassRoutes(plane),
         "simulate" to RouteHandler { operator, request, _ -> queries.simulate(operator, request) },
         "explain" to RouteHandler { operator, request, _ -> queries.explain(operator, request) },
@@ -76,6 +79,6 @@ internal class ControlRoutes(plane: ControlPlane, private val profile: ControlPr
 
     private companion object {
         /** The routes of one segment, whose verb is the whole path. */
-        val LEAVES = setOf("simulate", "explain", "analyze")
+        val LEAVES = setOf("simulate", "explain", "analyze", "changes:check")
     }
 }

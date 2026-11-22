@@ -48,6 +48,7 @@ description: "通过控制面安全地修改策略：校验与编译错误、sim
 | `GET /documents/{key}/revisions/{revision}/propagation` | 该修订传播到了哪里（[传播](#propagation)）。 |
 | `POST /documents/{key}:apply`、`POST /documents/{key}:rollback` | 从整份文档提议变更，或提议回到旧修订。 |
 | `POST /changes`、`GET /changes/{id}` | 提议变更；读取变更。 |
+| `POST /changes:check`、`POST /documents/{key}:check` | 不真正提议，得到一次提议或 `:apply` 会发现的结果（[只检查不提议](#checking-without-proposing)）。 |
 | `GET /changes?document=&state=&after=&limit=` | 一个文档、一个状态或两者共同限定的未完成变更（[查找未完成的变更](#finding-open-changes)）。 |
 | `POST /changes/{id}:rebase`、`:shadow`、`:skip-shadow`、`:approve`、`:reject`、`:abandon`、`:publish` | 推进变更。 |
 | `POST /break-glass`、`POST /break-glass/{change}:approve`、`DELETE /break-glass/{bindingId}?reason=` | 申请 break-glass、审批申请、吊销绑定（[安全模型](../guide/security-model.md#break-glass)）。吊销只在该绑定不再生效之后才返回 `200`，平台文档中没有该 id 的绑定时返回 `404`，其他情况（包括该 id 是普通绑定）返回 `409`（[抢占被占用的暂存槽](#taking-a-busy-slot)）。 |
@@ -74,6 +75,12 @@ description: "通过控制面安全地修改策略：校验与编译错误、sim
 | `ROUTES`（警告） | | 候选中含有被各服务已映射路由绕开的 `http:` DENY 语句或限流规则：这些路由的请求按其 `service:verb` 判定，不会遇到它们（[路由映射](../scenarios/route-maps.md)）。一个检查结果，给出数量和前五条。只有设置了 [`cosec.control.analysis.route-maps`](../operations/configuration.md#control-plane) 才会比较；未设置时，含有这类语句的候选会说明没有给出路由映射。 |
 
 有任何错误的变更停留在 `DRAFT`，不能暂存或发布；请提议一个新变更来修正。干净的变更为 `CHECKED`。变更在发布之前不会影响执行，而发布时会针对当时的文档重新编译候选。
+
+### 只检查不提议 {#checking-without-proposing}
+
+`POST /changes:check` 接受 `POST /changes` 的请求体，`POST /documents/{key}:check` 接受 `:apply` 的请求体，应答提议会得到的结果（`CTL-78`）：它的 `state`（`CHECKED` 或 `DRAFT`）、`findings`、`escalations`（需要等人审批的内容）和 `base`（`contract/control/change-check.json`）。它不应答 `candidate`：提议将要发布的文档中会写明确认某条失效 DENY 的变更，而检查并不产生变更。它执行提议自己的步骤，除最后一步外全部执行。它不存储任何东西，不占用暂存槽位，不使用变更 id，也不写变更事件。在你存储自己的某样东西（例如 IAM 的事件）之前，用它来校验之后的提议会带上的内容。
+
+检查需要的权限与提议完全相同，被拒绝的方式也相同：不能提议的调用方也不能检查，因此检查不会比提议透露更多关于文档的信息；过期的 `base` 同样是 `409 BASE_MOVED`。服务端口和控制面门面为租户文档提供它（`ControlService.check`、`checkApply`；`ControlClient.check`、`checkApply`）。请求本身仍像控制 API 的任何调用一样被决策和记录。检查不是承诺：在你提议之前文档头可能已经移动。
 
 ## 模拟请求 {#simulating-a-request}
 
