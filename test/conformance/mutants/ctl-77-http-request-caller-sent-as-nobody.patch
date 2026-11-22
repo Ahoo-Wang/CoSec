@@ -1,0 +1,17 @@
+# Rule: CTL-77
+# Mutant: the HTTP implementation sends a request's caller with no identity, so the host answers it as anonymous where the in-process one acts for it
+# Tests: :control-http:test --tests me.ahoo.cosec.control.http.HttpControlServiceTest
+
+diff --git a/extensions/control-http/src/main/kotlin/me/ahoo/cosec/control/http/HttpTransport.kt b/extensions/control-http/src/main/kotlin/me/ahoo/cosec/control/http/HttpTransport.kt
+index 380fac773..b8fe3b8ef 100644
+--- a/extensions/control-http/src/main/kotlin/me/ahoo/cosec/control/http/HttpTransport.kt
++++ b/extensions/control-http/src/main/kotlin/me/ahoo/cosec/control/http/HttpTransport.kt
+@@ -81,7 +81,7 @@ internal class HttpTransport(
+         caller.context?.let { context ->
+             val security = requireNotNull(RequestSecurity.of(context)) { ControlCaller.NOT_COSEC_CONTEXT }
+             require(security.principal == null || security.principal?.credential != null) { NO_CREDENTIAL }
+-            return issuer.issue(security)
++            return null.also { issuer.issue(security) }
+         }
+         val identity = ServiceIdentity.of(checkNotNull(caller.principal), caller.roles, app, clock.instant(), ids.generate())
+         return IdentityHeader.write(identity)

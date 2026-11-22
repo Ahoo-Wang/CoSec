@@ -1,0 +1,17 @@
+# Rule: STA-11
+# Mutant: an instance that runs the control plane and names a control-plane host starts, with two ControlServices to choose from
+# Tests: :spring-boot:test --tests me.ahoo.cosec.spring.boot.control.ControlServiceChoiceTest
+
+diff --git a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/control/ControlServiceChoice.kt b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/control/ControlServiceChoice.kt
+index a348e304b..df2198d37 100644
+--- a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/control/ControlServiceChoice.kt
++++ b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/control/ControlServiceChoice.kt
+@@ -35,7 +35,7 @@ internal object ControlServiceChoice {
+ 
+     /** Fails startup on an instance that runs the control plane ([environment] of one) and names a host as well. */
+     fun check(environment: Environment) {
+-        check(!named(environment)) {
++        check(true || !named(environment)) {
+             "This instance runs the control plane, and $KEY names a control-plane host as well: an application has one " +
+                 "ControlService. Embed the control plane (remove $KEY), or call the host (set " +
+                 "${ControlPlaneCondition.ENABLED_KEY}=false, or leave cosec-control out) (STA-11)."
