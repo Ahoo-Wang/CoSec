@@ -40,6 +40,13 @@ object GuardAllowlist {
             "spring-boot:ControlServicePortTest#a service port beside the application's, the management port or a disabled control API is refused",
             "spring-boot:ControlServicePortTest#a service port with no WebFlux server to serve it fails startup naming what to do",
             "spring-boot:ControlServicePortTest#cosec control http enabled false serves no control route, and the control plane stays for what embeds it",
+            // CTL-78: a check answers what the proposal would, and writes nothing.
+            "control:ChangeCheckTest#a check answers what the proposal would, clean, failing and escalating alike - CTL-78",
+            "control:ChangeCheckTest#a check of an apply answers what the apply would - CTL-78",
+            "control:ChangeCheckTest#a check stores nothing, takes no slot and writes no change event - CTL-78",
+            "control:ChangeCheckTest#a caller who may not propose may not check, and is refused alike - CTL-78",
+            "control:ClientContractTest#a check's answer holds exactly the members of its contract file - CTL-78",
+            "control-sdk:TypedWireTest#a check's answer reads every member of its contract file - CTL-78",
             // CTL-77: the facade's two implementations answer alike.
             "spring-boot:ControlServiceParityTest#the in-process and the HTTP implementation answer every call alike - CTL-77",
             "control-http:HttpControlServiceTest#each call is the route's request",
