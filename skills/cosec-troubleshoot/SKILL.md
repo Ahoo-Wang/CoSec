@@ -64,6 +64,11 @@ Full model: https://cosec.ahoo.me/guide/security-model.
 
 ## Startup failures
 
+- **A gateway restarts once right after `kubectl apply`**, and `kubectl logs --previous` ends with
+  `RedisConnectionException: Unable to connect to redis/...`: it started before Redis was reachable (the overlay is
+  applied whole). Startup fails closed without the store of record, and the kubelet restarts it until Redis answers: no
+  fix. A count that keeps growing is Redis unreachable (address, credentials, network policy).
+  https://cosec.ahoo.me/operations/troubleshooting#a-gateway-restarts-once-right-after-it-is-deployed
 - **`cosec.authorization.snapshot.revalidate-interval (<value>) must be ...`**: the periodic revalidation is the only
   bound on a lost invalidation (SNP-6), so the interval must be at least 1 second, at most 5 minutes, and,
   with `fail-closed.tenants`, less than `fail-closed.max-lag`. Use a value within the bounds; never
