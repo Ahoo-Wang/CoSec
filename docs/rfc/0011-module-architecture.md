@@ -102,6 +102,7 @@ flowchart BT
 | `core/document/` | `:document` | `cosec-document` | CoSec 存储和交换的格式：策略文档及其编解码器与编译器、格式描述符（生成 `schema/`）、路由映射、`CoSec-Identity` 与影子窗口的编解码、唯一的 Jackson mapper（RFC 0013 §3） |
 | `core/runtime/` | `:runtime` | `cosec-runtime` | 请求路径：Pipeline、快照源与视图、令牌校验、身份传递、限流义务、决策事件与审计、影子记录 |
 | `core/control/` | `:control` | `cosec-control` | 控制面 |
+| `core/control-sdk/` | `:control-sdk` | `cosec-control-sdk` | （2026-11-21，#1832、#1836，`CTL-65`、`CTL-76`）应用调用控制面的门面：`ControlService` 一个接口两种实现（进程内的在 `cosec-control`，HTTP 的在 `cosec-control-http`）、`ControlCaller`、`ControlRefusedException`，以及类型化层 `ControlClient` 与它的类型。依赖 `api`、`spi`、`document`，绝不依赖 `runtime` 与 `control` |
 | `backends/cocache/` | `:cocache` | `cosec-cocache` | Redis 上的 `spi` 实现 |
 | `edge/webflux/`、`edge/webmvc/`、`edge/gateway/` | `:webflux` 等 | `cosec-webflux` 等 | 驱动适配器，只翻译 |
 | `edge/openapi/` | `:openapi` | `cosec-openapi` | 由 OpenAPI 生成路由映射；只依赖 `cosec-document` |
