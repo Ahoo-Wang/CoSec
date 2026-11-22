@@ -78,6 +78,7 @@ class ClientIpReadingsTest {
     @Test
     fun `on Tomcat with the native strategy CoSec takes the valve's address`() {
         for (properties in listOf(
+            mapOf("server.request.header.forwarded.strategy" to "web-server"),
             mapOf("server.forward-headers-strategy" to "native"),
             mapOf("server.tomcat.remoteip.remote-ip-header" to "x-real-ip"),
         )) {
@@ -104,6 +105,8 @@ class ClientIpReadingsTest {
             val reading = reading(mapOf("server.forward-headers-strategy" to "NATIVE"), beans = server)
             reading.maxTrustedIndex.assert().isEqualTo(1)
             reading.peerIsConnection.assert().isFalse()
+            reading(mapOf("server.request.header.forwarded.strategy" to "WEB_SERVER"), beans = server)
+                .peerIsConnection.assert().isFalse()
             assertThrownBy<ClientIpConfigurationException> {
                 reading(mapOf(ClientIpReadings.MAX_TRUSTED_INDEX to "0"), kubernetes, server)
             }.hasMessageContaining("cannot be read")
@@ -112,9 +115,31 @@ class ClientIpReadingsTest {
 
     @Test
     fun `the framework strategy fails startup`() {
+        for (key in listOf("server.request.header.forwarded.strategy", "server.forward-headers-strategy")) {
+            assertThrownBy<ClientIpConfigurationException> {
+                reading(mapOf(key to "framework"), beans = tomcat)
+            }.hasMessageContaining("leftmost")
+        }
+    }
+
+    /**
+     * Spring Boot 4.2's key for the strategy, `server.request.header.forwarded.strategy`, is read before its deprecated
+     * predecessor: `web-server` on Reactor Netty is the server's own handling, so the connection's peer is never taken
+     * for the client (a client could write it), and `none` lets CoSec read the peer.
+     */
+    @Test
+    fun `the strategy of Spring Boot 4_2's key is read, web-server as the server's own handling`() {
         assertThrownBy<ClientIpConfigurationException> {
-            reading(mapOf("server.forward-headers-strategy" to "framework"), beans = tomcat)
-        }.hasMessageContaining("leftmost")
+            reading(
+                mapOf(
+                    "server.request.header.forwarded.strategy" to "web-server",
+                    ClientIpReadings.MAX_TRUSTED_INDEX to "0"
+                ),
+                beans = netty,
+            )
+        }.hasMessageContaining("cannot be read").hasMessageContaining("server.request.header.forwarded.strategy=none")
+        reading(mapOf("server.request.header.forwarded.strategy" to "none"), kubernetes, netty).peerIsConnection
+            .assert().isTrue()
     }
 
     @Test
@@ -182,7 +207,7 @@ class ClientIpReadingsTest {
     fun `the native strategy on a server CoSec cannot tell fails startup`() {
         assertThrownBy<ClientIpConfigurationException> {
             reading(environment = kubernetes)
-        }.hasMessageContaining("server.forward-headers-strategy=none")
+        }.hasMessageContaining("server.request.header.forwarded.strategy=none")
         reading(mapOf("server.forward-headers-strategy" to "none"), kubernetes).peerIsConnection.assert().isTrue()
     }
 

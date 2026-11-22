@@ -42,6 +42,8 @@ import org.springframework.boot.tomcat.reactive.TomcatReactiveWebServerFactory
 import org.springframework.boot.tomcat.servlet.TomcatServletWebServerFactory
 import org.springframework.boot.web.server.WebServer
 import org.springframework.boot.web.server.autoconfigure.ServerProperties
+import org.springframework.boot.web.server.autoconfigure.reactive.ReactiveWebServerFactoryCustomizer
+import org.springframework.boot.web.server.autoconfigure.servlet.ServletWebServerFactoryCustomizer
 import org.springframework.boot.web.server.reactive.ConfigurableReactiveWebServerFactory
 import org.springframework.boot.web.server.servlet.ConfigurableServletWebServerFactory
 import org.springframework.cloud.gateway.filter.GatewayFilterChain
@@ -62,7 +64,7 @@ import java.util.EnumSet
 
 /**
  * The servers CoSec runs on, each built by Spring Boot's own factory and customized by Spring Boot's own customizer for
- * the given properties (`server.forward-headers-strategy`, `server.tomcat.remoteip.*`, ...), so a request reaches the
+ * the given properties (`server.request.header.forwarded.strategy`, `server.tomcat.remoteip.*`, ...), so a request reaches the
  * adapter exactly as it would in an application: what the server decoded, rewrote or kept is what the adapter reads.
  */
 enum class Stack(val servlet: Boolean) {
@@ -116,19 +118,38 @@ internal class RealServer(
             serverProperties: ServerProperties,
             contextPath: String,
         ): WebServer {
+            // As an application context does: the generic customizer of the stack first (since Spring Boot 4.2 it sets
+            // the forwarded request headers the server-specific one installs, Tomcat's RemoteIpValve among them), then
+            // the server's own.
+            val servlet = ServletWebServerFactoryCustomizer(
+                environment,
+                serverProperties,
+                emptyList(),
+                emptyList(),
+                null
+            )
+            val reactive = ReactiveWebServerFactoryCustomizer(environment, serverProperties, null)
             val factory: Any = when (stack) {
-                Stack.TOMCAT -> TomcatServletWebServerFactory(
-                    0
-                ).also { tomcat(environment, serverProperties).customize(it) }
-                Stack.JETTY -> JettyServletWebServerFactory(
-                    0
-                ).also { jetty(environment, serverProperties).customize(it) }
-                Stack.NETTY, Stack.GATEWAY ->
-                    NettyReactiveWebServerFactory(0).also { netty(environment, serverProperties).customize(it) }
-                Stack.TOMCAT_REACTIVE ->
-                    TomcatReactiveWebServerFactory(0).also { tomcat(environment, serverProperties).customize(it) }
-                Stack.JETTY_REACTIVE ->
-                    JettyReactiveWebServerFactory(0).also { jetty(environment, serverProperties).customize(it) }
+                Stack.TOMCAT -> TomcatServletWebServerFactory(0).also {
+                    servlet.customize(it)
+                    tomcat(environment, serverProperties).customize(it)
+                }
+                Stack.JETTY -> JettyServletWebServerFactory(0).also {
+                    servlet.customize(it)
+                    jetty(environment, serverProperties).customize(it)
+                }
+                Stack.NETTY, Stack.GATEWAY -> NettyReactiveWebServerFactory(0).also {
+                    reactive.customize(it)
+                    netty(environment, serverProperties).customize(it)
+                }
+                Stack.TOMCAT_REACTIVE -> TomcatReactiveWebServerFactory(0).also {
+                    reactive.customize(it)
+                    tomcat(environment, serverProperties).customize(it)
+                }
+                Stack.JETTY_REACTIVE -> JettyReactiveWebServerFactory(0).also {
+                    reactive.customize(it)
+                    jetty(environment, serverProperties).customize(it)
+                }
             }
             val server = if (factory is ConfigurableServletWebServerFactory) {
                 factory.setContextPath(contextPath)

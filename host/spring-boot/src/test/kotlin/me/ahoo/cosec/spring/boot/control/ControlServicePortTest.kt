@@ -208,7 +208,7 @@ class ControlServicePortTest {
 
     /**
      * The peer is the connection's: a Reactor Netty server that reads `X-Forwarded-For` and `Forwarded`
-     * (`server.forward-headers-strategy=native` configures that on the application's) shows the caller's claim as the
+     * (`server.request.header.forwarded.strategy=web-server` configures that on the application's) shows the caller's claim as the
      * request's remote address, and the control routes still read the address the TCP stack saw.
      */
     @Test
