@@ -98,7 +98,7 @@ class ControlPlaneTest {
     @Volatile
     var down = false
 
-    private val store: ControlStore = outage(object : ControlStore by memory {
+    val store: ControlStore = outage(object : ControlStore by memory {
         override suspend fun change(id: ChangeId): Versioned<ChangeRequest>? = if (id in unreadable) {
             // Wrapped, as a store's cache may wrap what its codec threw.
             throw IllegalStateException("decoding", SnapshotFormatException("A change request is malformed."))

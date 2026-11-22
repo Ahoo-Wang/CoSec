@@ -25,8 +25,10 @@ import me.ahoo.cosec.control.sdk.ControlRefusedException
 import me.ahoo.cosec.control.sdk.ControlService
 import me.ahoo.cosec.control.sdk.Effect
 import me.ahoo.cosec.control.sdk.Operation
+import me.ahoo.cosec.control.sdk.Permissions
 import me.ahoo.cosec.control.sdk.Policy
 import me.ahoo.cosec.control.sdk.Resource
+import me.ahoo.cosec.control.sdk.Role
 import me.ahoo.cosec.control.sdk.Statement
 import me.ahoo.cosec.control.sdk.Subject
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
@@ -52,6 +54,11 @@ import tools.jackson.databind.json.JsonMapper
  *   tenant, and skips the window. A grant by a principal of the platform tenant in a tenant's document is a person's to
  *   approve (`CROSS_TENANT`), so it answers the change waiting for one (`AWAITING_APPROVAL`) and publishes nothing.
  *
+ * - `POST /admin/role` with `{"tenant", "role", "app", "permission"}`: a custom role of the tenant, projected from the
+ *   IAM's own data with no person behind it (`CTL-79`): its members hold [permission] of [app]. The IAM holds the role
+ *   class, `cosec:manage-roles` on tenants' documents, so a role of a business app publishes with no approval and records
+ *   the class it was granted by; a role of the control plane's own app is outside the class and waits for a person. It
+ *   answers the change, published or waiting.
  * - `POST /admin/check` with `{"tenant", "policy", "role"}`: what the grant would find, checked before the IAM stores
  *   anything of its own (`CTL-78`). A binding to a policy the document does not hold is a finding; nothing is stored, no
  *   slot is taken. It answers the check's `state`, `findings` and `escalations`.
@@ -94,6 +101,27 @@ class Onboarding(service: ControlService) {
             )
             val proposed = control.propose(iam, ChangeRequest(key, head.revision, operations, "onboarding of $tenant"))
             control.skipShadow(iam, proposed.id, "a grant for $role in $tenant")
+        }
+    }
+
+    @PostMapping("/admin/role")
+    suspend fun role(@RequestBody body: Map<String, String>): ResponseEntity<String> {
+        val tenant = body.getValue("tenant")
+        val role = body.getValue("role")
+        val app = body.getValue("app")
+        val permission = body.getValue("permission")
+        require(listOf(tenant, role, app).all(ID::matches) && PERMISSION.matches(permission)) {
+            "A tenant, a role and an app id are letters, digits and dashes; a permission adds dots."
+        }
+        val projected = Role(role, Permissions.Of(listOf(permission)), app = app, name = "Projected $role")
+        return answer {
+            control.proposeAndPublishWithoutShadow(
+                iam,
+                SnapshotKey.Tenant(tenant),
+                listOf(Operation.PutRole(projected)),
+                "the role $role of $tenant, projected",
+                "projected from the IAM's own data",
+            )
         }
     }
 
@@ -162,5 +190,6 @@ class Onboarding(service: ControlService) {
     private companion object {
         val ID = Regex("[A-Za-z0-9-]{1,64}")
         const val SERVICE_PRINCIPAL = "svc-iam"
+        val PERMISSION = Regex("[A-Za-z0-9.-]{1,64}")
     }
 }

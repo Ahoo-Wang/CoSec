@@ -391,6 +391,7 @@ public final class me/ahoo/cosec/control/sdk/EscalationReason$Companion {
 	public final fun getKNOWN ()Ljava/util/List;
 	public final fun getNOT_ANALYZED ()Lme/ahoo/cosec/control/sdk/EscalationReason;
 	public final fun getNOT_COVERED ()Lme/ahoo/cosec/control/sdk/EscalationReason;
+	public final fun getROLE_CLASS ()Lme/ahoo/cosec/control/sdk/EscalationReason;
 	public final fun getTENANT_BINDINGS ()Lme/ahoo/cosec/control/sdk/EscalationReason;
 	public final fun getTOO_LARGE ()Lme/ahoo/cosec/control/sdk/EscalationReason;
 	public final fun getUNKNOWN ()Lme/ahoo/cosec/control/sdk/EscalationReason;

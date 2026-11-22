@@ -40,6 +40,13 @@ Which preview of the library may run behind which preview of the gateway image: 
     startup.
   - Nothing to do for CORS: Spring MVC no longer declares a `CorsConfigurationSource` of its own (Spring Framework 7.1),
     so CoSec's CORS filter (`STA-5`) still runs exactly when the application declares one.
+- **New: the role class, `cosec:manage-roles`** (`CTL-79`). A holder's change of a tenant's document that only puts or
+  removes roles no longer waits for a person on account of who grants; it records a `ROLE_CLASS` escalation, a new
+  value of the closed set, which a client that maps escalation reasons reads ([The role class](../policies/testing.md#the-role-class)).
+  Nothing changes for a principal that does not hold it. **A role of the control plane's own app
+  (`cosec.control.app-id`) is never the class's**: a member of it holds control calls on its tenant's document, and who
+  governs a tenant's policies is for a person to appoint. A sync that projects such roles keeps waiting for approval;
+  project only roles of business apps through the class.
 - **An instance's status is split in two** (`CTL-74`, `CTL-75`). The status at `<s>:shadow:status:<instance>` is now
   small (liveness, `shadows`, the acknowledged windows) and has no `documents` member. The documents an instance holds
   are a record of their own, `<s>:shadow:resident:<instance>`, which only `propagation` reads
