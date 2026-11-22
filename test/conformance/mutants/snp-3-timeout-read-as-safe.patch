@@ -1,0 +1,21 @@
+# Rule: SNP-3
+# Mutant: the startup eviction check reads a policy that timed out on every attempt as safe: a starved or cut-off Redis that may evict passes startup
+# Tests: :spring-boot:test --tests me.ahoo.cosec.spring.boot.pipeline.EvictionPolicyReadTest
+
+diff --git a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/pipeline/EvictionPolicyCheck.kt b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/pipeline/EvictionPolicyCheck.kt
+index 24237f6c7..d87826101 100644
+--- a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/pipeline/EvictionPolicyCheck.kt
++++ b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/pipeline/EvictionPolicyCheck.kt
+@@ -117,11 +117,7 @@ internal object EvictionPolicyCheck {
+                     "Redis refused INFO ($failure): grant the Redis user +info"
+                 )
+                 !transient(failure) -> return Reading.Unreadable("INFO memory failed ($failure)")
+-                attempt >= attempts -> return Reading.Unreadable(
+-                    "Redis did not answer INFO memory ${if (attempts == 1) "($failure)" else "in $attempts attempts (last: $failure)"}: " +
+-                        "a timeout or a connection failure, not a missing permission; check that Redis is reachable " +
+-                        "and that this process is not starved of CPU"
+-                )
++                attempt >= attempts -> return Reading.NotRedis
+             }
+             val wait = retryPause(attempt)
+             log.warn { "Cannot read maxmemory-policy (INFO memory), attempt $attempt of $attempts - retry in $wait: $failure" }

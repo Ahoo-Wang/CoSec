@@ -70,7 +70,8 @@ Full model: https://cosec.ahoo.me/guide/security-model.
 - **A gateway restarts once right after `kubectl apply`**, and `kubectl logs --previous` ends with
   `RedisConnectionException: Unable to connect to redis/...`: it started before Redis was reachable (the overlay is
   applied whole). Startup fails closed without the store of record, and the kubelet restarts it until Redis answers: no
-  fix. A count that keeps growing is Redis unreachable (address, credentials, network policy).
+  fix. A count that keeps growing is Redis unreachable (address, credentials, network policy). To avoid the one restart,
+  start it after Redis is ready (https://cocache.ahoo.me/operations/).
   https://cosec.ahoo.me/operations/troubleshooting#a-gateway-restarts-once-right-after-it-is-deployed
 - **`cosec.authorization.snapshot.revalidate-interval (<value>) must be ...`**: the periodic revalidation is the only
   bound on a lost invalidation (SNP-6), so the interval must be at least 1 second, at most 5 minutes, and,
@@ -173,16 +174,20 @@ Full model: https://cosec.ahoo.me/guide/security-model.
   credential is ever revoked). **`cosec.jwt.token-validity.refresh (...), how long a token revocation is kept, is
   shorter than cosec.control.approval.expire-after`**: raise the first or lower the second.
 - **`Redis may evict CoSec's policy snapshot: maxmemory-policy is {...}, not noeviction`**: set
-  `maxmemory-policy noeviction` on every node. **`Cannot tell whether Redis may evict CoSec's policy snapshot (INFO
-  memory failed or is not allowed)`** or `(the CoCache backend ... is not one this check can read)`: a Redis user
-  without `+info`, a Redis that denies `INFO`, or a wrapped CoCache backend. If the operator has set `noeviction`, set
+  `maxmemory-policy noeviction` on every node. **`Cannot tell whether Redis may evict CoSec's policy snapshot (Redis
+  refused INFO ...)`** or `(the CoCache backend ... is not one this check can read)`: a Redis user without `+info`, a
+  Redis that denies `INFO`, or a wrapped CoCache backend. `(Redis did not answer INFO memory in 5 attempts ...)` is not
+  a permission: each read timed out or lost its connection though the check retried as CoCache's does; Redis is
+  unreachable, or the process was starved of CPU while it started. If the operator has set `noeviction`, set
   `cosec.authorization.snapshot.eviction-check=warn`; the instance then logs `!!! ... Starting anyway
   (eviction-check=warn)` at every start. Never suggest `warn` to silence a Redis that really evicts: an evicted app or
   tenant document reads as absent, and its DENYs silently stop applying.
 - **`Cannot read maxmemory-policy (INFO memory) to check that the authoritative caches [...]`** or **`Authoritative
   caches [...] keep their only copy in Redis, but maxmemory-policy {...} can evict them`**: CoCache 8's own check of
-  its `Store`s, which `eviction-check=warn` does not reach. Allow `INFO`, or, once `noeviction` is set, set
-  `cocache.redis.assume-maxmemory-policy=noeviction`; `allkeys-*` is never accepted.
+  its `Store`s, which `eviction-check=warn` does not reach. Since CoCache 8.2.0 the message says why: `Redis refused
+  INFO`: allow `INFO`, or, once `noeviction` is set, set `cocache.redis.assume-maxmemory-policy=noeviction`; `Redis did
+  not answer in 5 attempts`: a timeout or a connection failure after retries, not a permission: Redis unreachable, or
+  the process starved of CPU while it starts. `allkeys-*` is never accepted.
 - **`cosec.authentication.login.refresh.path is set, but the RefreshTokenAuthentication bean refreshes <class> ... (IDN-25)`**:
   the application's `RefreshTokenAuthentication` takes credentials of its own class, which the served refresh route
   cannot present; serve that refresh from the application's own route and unset the path, or declare it over

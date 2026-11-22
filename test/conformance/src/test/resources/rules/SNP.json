@@ -29,7 +29,7 @@
     {
       "id": "SNP-3",
       "source": "RFC 0003 §4.1; RFC 0008 §4.4 (review of #1006); RC1-45",
-      "statement": "Snapshot caches have ttl = null and throw on failed reads, whoever creates them (a snapshot cache built outside the starter is pinned all the same), and no customizer replaces a CoSec cache's codec, loaders, key filter or per-entry lifetime; an instance refuses to start when Redis's maxmemory-policy is not noeviction.",
+      "statement": "Snapshot caches have ttl = null and throw on failed reads, whoever creates them (a snapshot cache built outside the starter is pinned all the same), and no customizer replaces a CoSec cache's codec, loaders, key filter or per-entry lifetime; an instance refuses to start when Redis's maxmemory-policy is not noeviction, or cannot be read: a read that times out, loses its connection or gets a transient reply is tried again within CoCache's own bounds (5 attempts, pauses from 500 ms doubling to 2 s), a refused INFO is not, and a policy still unread is never safe; the reason names what happened, a timeout as a timeout and a refusal as a permission.",
       "level": "startup",
       "guards": [
         "cocache:CacheTtlPolicyTest#snapshotCacheIsStoreOfRecordAndKeepsItsLocalCopiesShort",
@@ -39,7 +39,13 @@
         "spring-boot:CoSecPipelineAutoConfigurationTest#a maxmemory-policy that cannot be read fails startup unless told to warn",
         "cocache:CacheTtlPolicyTest#aSnapshotCacheBuiltOutsideTheStarterIsPinned",
         "spring-boot:StoreOfRecordOverrideTest#customizersCannotReplaceWhatDecidesACachesContent",
-        "spring-boot:SnapshotEvictionHealthIndicatorTest#the checks read the snapshot runtime's backend, not another backend bean"
+        "spring-boot:SnapshotEvictionHealthIndicatorTest#the checks read the snapshot runtime's backend, not another backend bean",
+        "spring-boot:EvictionPolicyReadTest#a read that times out is tried again, and the next answer decides - SNP-3",
+        "spring-boot:EvictionPolicyReadTest#five reads that time out are a timeout, never a safe policy, and fail startup - SNP-3",
+        "spring-boot:EvictionPolicyReadTest#a refused INFO is not tried again, and says it is a permission - SNP-3",
+        "spring-boot:EvictionPolicyReadTest#an evicting policy read on a retry still fails startup - SNP-3",
+        "spring-boot:EvictionPolicyReadTest#a failure no retry would change is not tried again, and is still not safe - SNP-3",
+        "spring-boot:EvictionPolicyReadTest#the periodic re-check reads once, with no pause, and names a timeout as a timeout - SNP-3"
       ],
       "pending": null
     },

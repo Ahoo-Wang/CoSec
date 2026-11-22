@@ -568,13 +568,18 @@ CoSec 只读取一次客户端地址，且只从它信任的一方读取（`PIP-
 
 ```text
 Redis may evict CoSec's policy snapshot: maxmemory-policy is {<node>=<policy>}, not noeviction, so a global DENY could silently vanish (cosec.authorization.snapshot.eviction-check).
-Cannot tell whether Redis may evict CoSec's policy snapshot (INFO memory failed or is not allowed), so a global DENY could silently vanish (cosec.authorization.snapshot.eviction-check).
+Cannot tell whether Redis may evict CoSec's policy snapshot (Redis refused INFO (...): grant the Redis user +info), so a global DENY could silently vanish (cosec.authorization.snapshot.eviction-check).
+Cannot tell whether Redis may evict CoSec's policy snapshot (Redis did not answer INFO memory in 5 attempts (last: ...): a timeout or a connection failure, not a missing permission; ...), so a global DENY could silently vanish (cosec.authorization.snapshot.eviction-check).
 ```
 
-第一条：某个 Redis 节点不是 `noeviction`。在每个节点上设置 `maxmemory-policy noeviction`。第二条：实例读不到该策略，
-通常是因为 Redis 用户无权执行 `INFO`，或托管 Redis 拒绝了它；它也会指出检查无法读取的 CoCache 后端（包装过的或
-自定义的后端），以及不知道该问哪个节点的集群连接（`no Redis node answered INFO memory`）。允许 `INFO`（`+info`），或者在你已自行设置 `noeviction` 时，设置
-[`cosec.authorization.snapshot.eviction-check=warn`](./configuration.md#snapshot)（[Redis 要求](./storage.md#redis-requirements)）。
+第一条：某个 Redis 节点不是 `noeviction`。在每个节点上设置 `maxmemory-policy noeviction`。其余几条：实例读不到该策略，括号里写明原因。
+
+- `Redis refused INFO`：Redis 用户无权执行 `INFO`，或托管 Redis 禁用、改名了它。允许 `INFO`（`+info`），或者在你已自行设置 `noeviction` 时，设置 [`cosec.authorization.snapshot.eviction-check=warn`](./configuration.md#snapshot)。被拒绝的读取不会再问。
+- `Redis did not answer INFO memory in 5 attempts`：每次读取都超时、断开连接或得到暂时的应答（`LOADING`、`BUSY`、故障切换），尽管检查问了五次，中间分别等待 0.5、1、2、2 秒，与 CoCache 自己的检查相同。Redis 不可达，或者实例启动时 CPU 不够（一台主机上同时启动许多 JVM）。这不是要授予的权限。
+- `INFO memory failed (...)`：其他任何失败，写明原因。
+- 它也会指出检查无法读取的 CoCache 后端（包装过的或自定义的后端），以及不知道该问哪个节点的集群连接（`no Redis node answered INFO memory`）。
+
+检查读不到的策略永远不会被当作安全的（[Redis 要求](./storage.md#redis-requirements)）。周期性的复查在 `ERROR` 日志中写明同样的原因，但每个间隔只读一次：它的重试就是下一个间隔，所以那里的超时写作 `Redis did not answer INFO memory (...)`，不带尝试次数。
 
 使用 `warn` 时，实例照常启动，并以 `WARN` 记录同样的文本，以 `!!!` 开头，以 `Starting anyway (eviction-check=warn).`
 和驱逐会造成的后果结尾。使用 `warn` 时这一行是预期的；如果 Redis 真的驱逐了数据，被驱逐之后才加载的应用文档或租户文档
@@ -583,12 +588,14 @@ Cannot tell whether Redis may evict CoSec's policy snapshot (INFO memory failed 
 CoCache 8 也检查它的 `Store`，而 `eviction-check=warn` 管不到这个检查：
 
 ```text
-Cannot read maxmemory-policy (INFO memory) to check that the authoritative caches [...] keep their only copy in Redis. Grant the Redis user +info, or set cocache.redis.assume-maxmemory-policy to the policy of your deployment.
+Cannot read maxmemory-policy (INFO memory) to check that the authoritative caches [...] keep their only copy in Redis: Redis refused INFO (...). Grant the Redis user +info, or assume the policy of your deployment. Set it with cocache.redis.assume-maxmemory-policy.
+Cannot read maxmemory-policy (INFO memory) to check that the authoritative caches [...] keep their only copy in Redis: Redis did not answer in 5 attempts (last: ...). This is a timeout or a connection failure, not a missing permission: check that Redis is reachable and that this process is not starved of CPU while it starts. Or assume the policy of your deployment with cocache.redis.assume-maxmemory-policy.
 Authoritative caches [...] keep their only copy in Redis, but maxmemory-policy {...} can evict them when memory is full. Use noeviction, or a volatile-* policy when they have no ttl.
 ```
 
-第一条：允许 `INFO`，或者在你已自行设置 `noeviction` 之后设置 `cocache.redis.assume-maxmemory-policy: noeviction`。
-第二条：`allkeys-*` 策略，任何设置都不接受；设置 `noeviction`（[Redis 要求](./storage.md#redis-requirements)）。
+第一条：Redis 拒绝了 `INFO`。允许它（`+info`），或者在你已自行设置 `noeviction` 之后设置 `cocache.redis.assume-maxmemory-policy: noeviction`。
+第二条：Redis 没有应答，尽管 CoCache 最多问了五次、每次等得更久：实例连不到 Redis，或者启动时 CPU 不够（一台主机上同时启动许多 JVM）。让 Redis 可达，或给实例留出启动的余地；这不是要授予的权限。第三种形式 `INFO memory failed (...)` 写出其他任何失败。
+最后一条：`allkeys-*` 策略，任何设置都不接受；设置 `noeviction`（[Redis 要求](./storage.md#redis-requirements)）。
 
 ### 锁定的缓存设置导致启动失败 {#startup-fails-on-a-locked-cache-setting}
 
@@ -774,7 +781,7 @@ Tokens are verified against RevocationReader.NONE: a revoked token (logout, revo
 ### 网关刚部署后重启一次 {#a-gateway-restarts-once-right-after-it-is-deployed}
 
 `kubectl apply -k` 之后 pod 的重启次数是 `1`（或几次），`kubectl logs <pod> --previous` 的最后是
-`RedisConnectionException: Unable to connect to redis/<unresolved>:6379`（或你的 Redis 地址）。overlay 是整体应用的，所以网关可能在 Redis 可达、或它的 Service 名字能解析之前就启动。CoSec 没有它的权威存储就不启动：启动失败即拒绝，容器退出，kubelet 再次启动它，直到 Redis 应答。随后启动的容器就是网关；无需修复。重启次数持续增长，说明 Redis 一直不可达：检查 `cosec-gateway-redis` ConfigMap 中它的地址、它的凭证，或两者之间的网络策略。网关已存活之后的重启是另一回事（[探针](#probes-answer-401-or-503)）。
+`RedisConnectionException: Unable to connect to redis/<unresolved>:6379`（或你的 Redis 地址）。overlay 是整体应用的，所以网关可能在 Redis 可达、或它的 Service 名字能解析之前就启动。CoSec 没有它的权威存储就不启动：启动失败即拒绝，容器退出，kubelet 再次启动它，直到 Redis 应答。随后启动的容器就是网关；无需修复。重启次数持续增长，说明 Redis 一直不可达：检查 `cosec-gateway-redis` ConfigMap 中它的地址、它的凭证，或两者之间的网络策略。网关已存活之后的重启是另一回事（[探针](#probes-answer-401-or-503)）。CoCache 在创建后端时就连接 Redis，连不上就不启动；要避免这一次重启，在 Redis 就绪之后再启动网关，做法见 [CoCache 的运维指南](https://cocache.ahoo.me/operations/)（等待 Redis 端口的 init 容器，或单独的部署步骤）。
 
 ### 其他启动失败 {#other-startup-failures}
 

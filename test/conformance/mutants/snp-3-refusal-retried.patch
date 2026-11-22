@@ -1,0 +1,21 @@
+# Rule: SNP-3
+# Mutant: the startup eviction check tries a refused INFO again: a permission problem waits out every pause before it is reported
+# Tests: :spring-boot:test --tests me.ahoo.cosec.spring.boot.pipeline.EvictionPolicyReadTest
+
+diff --git a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/pipeline/EvictionPolicyCheck.kt b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/pipeline/EvictionPolicyCheck.kt
+index 24237f6c7..1526771d0 100644
+--- a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/pipeline/EvictionPolicyCheck.kt
++++ b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/pipeline/EvictionPolicyCheck.kt
+@@ -113,10 +113,10 @@ internal object EvictionPolicyCheck {
+                 e
+             }
+             when {
+-                refused(failure) -> return Reading.Unreadable(
++                refused(failure) && attempt >= attempts -> return Reading.Unreadable(
+                     "Redis refused INFO ($failure): grant the Redis user +info"
+                 )
+-                !transient(failure) -> return Reading.Unreadable("INFO memory failed ($failure)")
++                !transient(failure) && !refused(failure) -> return Reading.Unreadable("INFO memory failed ($failure)")
+                 attempt >= attempts -> return Reading.Unreadable(
+                     "Redis did not answer INFO memory ${if (attempts == 1) "($failure)" else "in $attempts attempts (last: $failure)"}: " +
+                         "a timeout or a connection failure, not a missing permission; check that Redis is reachable " +
