@@ -64,7 +64,9 @@ internal object RoleClass {
         if (!holds()) {
             return escalations
         }
-        val lifted = escalations.groupingBy { it.reason }.eachCount().entries.joinToString { (reason, count) -> "$reason x$count" }
+        val lifted = escalations.groupingBy {
+            it.reason
+        }.eachCount().entries.joinToString { (reason, count) -> "$reason x$count" }
         return listOf(
             Escalation(
                 "roles of $key",

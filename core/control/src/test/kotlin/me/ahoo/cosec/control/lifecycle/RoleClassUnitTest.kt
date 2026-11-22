@@ -36,19 +36,32 @@ import org.junit.jupiter.api.Test
 class RoleClassUnitTest {
     private val acme = SnapshotKey.Tenant("acme")
     private val author = Actor(TenantId.PLATFORM, PrincipalId("svc-iam"))
-    private val putRole = Operation.PutRole(RoleDefinition(RoleId("night"), RolePermissions.Listed(listOf("read")), app = AppId("orders")))
+    private val putRole = Operation.PutRole(
+        RoleDefinition(RoleId("night"), RolePermissions.Listed(listOf("read")), app = AppId("orders"))
+    )
 
     private fun escalations(vararg reasons: Reason) = reasons.map { Escalation("f-$it", it) }
 
     private fun apply(key: SnapshotKey, operations: List<Operation>, escalations: List<Escalation>): Pair<List<Escalation>, Boolean> {
         var asked = false
-        val answer = runBlocking { RoleClass.apply(escalations, key, operations, author) { true.also { asked = true } } }
+        val answer = runBlocking {
+            RoleClass.apply(
+                escalations,
+                key,
+                operations,
+                author
+            ) { true.also { asked = true } }
+        }
         return answer to asked
     }
 
     @Test
     fun `it lifts every doubt about who grants, into one record that names the holder and what it lifted - CTL-79`() {
-        val (lifted, asked) = apply(acme, listOf(putRole), escalations(Reason.CROSS_TENANT, Reason.NOT_COVERED, Reason.DENY_OVERLAP))
+        val (lifted, asked) = apply(
+            acme,
+            listOf(putRole),
+            escalations(Reason.CROSS_TENANT, Reason.NOT_COVERED, Reason.DENY_OVERLAP)
+        )
         asked.assert().isTrue()
         lifted.single().reason.assert().isEqualTo(Reason.ROLE_CLASS)
         lifted.single().informational.assert().isTrue()
@@ -57,7 +70,13 @@ class RoleClassUnitTest {
 
     @Test
     fun `what the analysis could not tell still waits, whoever holds what - CTL-79`() {
-        listOf(Reason.UNREADABLE, Reason.UNRESOLVED, Reason.TOO_LARGE, Reason.ANONYMOUS, Reason.NOT_ANALYZED).forEach { reason ->
+        listOf(
+            Reason.UNREADABLE,
+            Reason.UNRESOLVED,
+            Reason.TOO_LARGE,
+            Reason.ANONYMOUS,
+            Reason.NOT_ANALYZED
+        ).forEach { reason ->
             val held = escalations(Reason.CROSS_TENANT, reason)
             val (answer, asked) = apply(acme, listOf(putRole), held)
             answer.assert().describedAs("$reason").isEqualTo(held)

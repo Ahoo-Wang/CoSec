@@ -31,6 +31,7 @@ class EscalationReason private constructor(text: String, isUnknown: Boolean) : C
         val BREAK_GLASS: EscalationReason = EscalationReason("BREAK_GLASS", false)
         val TENANT_BINDINGS: EscalationReason = EscalationReason("TENANT_BINDINGS", false)
         val DETECTION_TIMED_OUT: EscalationReason = EscalationReason("DETECTION_TIMED_OUT", false)
+
         /**
          * The role class (`CTL-79`): recorded in place of the escalations it lifted from a roles-only change of a
          * tenant's document by a holder of `cosec:manage-roles`. Informational: it never holds a change.

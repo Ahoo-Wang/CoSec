@@ -41,17 +41,27 @@ class RoleClassTest {
     private val fixture = ControlPlaneTest()
     private val http = ControlHttp(fixture.plane)
     private val iam = fixture.engine.security(TenantId.PLATFORM, "svc-iam")
-    private val publication = Publication("bootstrap", ProvenanceKind.BOOTSTRAP, Actor(TenantId.PLATFORM, PrincipalId("plato")))
+    private val publication = Publication(
+        "bootstrap",
+        ProvenanceKind.BOOTSTRAP,
+        Actor(TenantId.PLATFORM, PrincipalId("plato"))
+    )
 
     /** The platform's grants to svc-iam: [actions] on tenants' (or [documents]) documents, and [grant] on their scopes. */
-    private fun rights(actions: List<String>, grant: Boolean = true, documents: String = "doc/tenant/**") = runBlocking {
+    private fun rights(
+        actions: List<String>,
+        grant: Boolean = true,
+        documents: String = "doc/tenant/**"
+    ) = runBlocking {
         val head = fixture.revisions.head(SnapshotKey.Platform)!!
         val actionList = actions.joinToString(",") { "\"$it\"" }
         val statements = buildList {
             add("""{"effect":"allow","action":[$actionList],"resource":["$documents"]}""")
             if (grant) add("""{"effect":"allow","action":"cosec:grant","resource":"scope/**"}""")
         }.joinToString(",")
-        val policy = PolicyDocumentCodec.decodePolicy(CoSecJson.mapper.readTree("""{"id":"iam","statements":[$statements]}"""))
+        val policy = PolicyDocumentCodec.decodePolicy(
+            CoSecJson.mapper.readTree("""{"id":"iam","statements":[$statements]}""")
+        )
         val binding = PolicyDocumentCodec.decodeBinding(
             CoSecJson.mapper.readTree(
                 """{"id":"svc-iam","subject":{"principal":"svc-iam","tenant":"(platform)"},"app":"cosec-control",""" +
@@ -76,8 +86,10 @@ class RoleClassTest {
             PolicyDocumentCodec.decode(
                 DocumentKind.APP,
                 "orders",
-                ("""{"schema":2,"revision":1,"publishedAt":"2026-11-01T00:00:00Z","catalog":{"groups":[{"name":"orders",""" +
-                    """"permissions":[{"id":"read","action":"order:read","resource":"order/**"}]}]}}""").encodeToByteArray(),
+                (
+                    """{"schema":2,"revision":1,"publishedAt":"2026-11-01T00:00:00Z","catalog":{"groups":[{"name":"orders",""" +
+                        """"permissions":[{"id":"read","action":"order:read","resource":"order/**"}]}]}}"""
+                    ).encodeToByteArray(),
             ),
             publication,
         )

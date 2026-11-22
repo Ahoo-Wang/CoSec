@@ -24,8 +24,8 @@ import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 class Escalation(val subject: String, val reason: Reason, val detail: String = "") {
     /**
      * Shown to the approver, never itself a reason to approve: the tenants an app change reaches ([Reason.TENANT_BINDINGS],
-     * RC1-34), and the role class a change was granted by ([Reason.ROLE_CLASS], `CTL-79`). Their own change after an approval does not send the change back, since what was approved is widening
-     * the policy. Nothing else is: an aggregated entry never stands in for one that needs an approval (`CTL-48`).
+     * RC1-34), and the role class a change was granted by ([Reason.ROLE_CLASS], `CTL-79`). Their own change after an
+     * approval does not send the change back, since what was approved is widening the policy. Nothing else is: an aggregated entry never stands in for one that needs an approval (`CTL-48`).
      */
     val informational: Boolean get() = reason == Reason.TENANT_BINDINGS || reason == Reason.ROLE_CLASS
 
