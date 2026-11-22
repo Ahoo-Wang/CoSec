@@ -3,15 +3,15 @@
 # Tests: :control-sdk:test --tests me.ahoo.cosec.control.sdk.PublishWithoutShadowTest
 
 diff --git a/core/control-sdk/src/main/kotlin/me/ahoo/cosec/control/sdk/PublishWithoutShadow.kt b/core/control-sdk/src/main/kotlin/me/ahoo/cosec/control/sdk/PublishWithoutShadow.kt
-index 84a899e5f..6cb5e7f08 100644
+index cbc6315ca..b833d0acb 100644
 --- a/core/control-sdk/src/main/kotlin/me/ahoo/cosec/control/sdk/PublishWithoutShadow.kt
 +++ b/core/control-sdk/src/main/kotlin/me/ahoo/cosec/control/sdk/PublishWithoutShadow.kt
-@@ -83,7 +83,7 @@ internal class PublishWithoutShadow(
+@@ -100,7 +100,7 @@ internal class PublishWithoutShadow(
          if (heldBy == null || heldBy == proposed.id) return
          try {
              val holder = client.change(caller, heldBy)
--            if (holder.author == proposed.author && holder.state in LEFT_HALFWAY) client.abandon(caller, holder.id)
-+            if (holder.state in LEFT_HALFWAY) client.abandon(caller, holder.id)
+-            if (holder.author == proposed.author && holder.state in LEFT_HALFWAY && abandonedBy(holder, proposed)) {
++            if (holder.state in LEFT_HALFWAY && abandonedBy(holder, proposed)) {
+                 client.abandon(caller, holder.id)
+             }
          } catch (_: ControlRefusedException) {
-             // Not readable, or no longer abandonable: waited for like any other holder.
-         }
