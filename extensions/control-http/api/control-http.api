@@ -1,8 +1,8 @@
 public final class me/ahoo/cosec/control/http/HttpControlService : me/ahoo/cosec/control/sdk/ControlService {
 	public static final field CONTROL_APP Ljava/lang/String;
 	public static final field Companion Lme/ahoo/cosec/control/http/HttpControlService$Companion;
-	public fun <init> (Ljava/net/URI;Ljava/net/http/HttpClient;Ljava/lang/String;)V
-	public synthetic fun <init> (Ljava/net/URI;Ljava/net/http/HttpClient;Ljava/lang/String;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun <init> (Ljava/net/URI;Ljava/net/http/HttpClient;Ljava/time/Duration;Ljava/lang/String;)V
+	public synthetic fun <init> (Ljava/net/URI;Ljava/net/http/HttpClient;Ljava/time/Duration;Ljava/lang/String;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
 	public fun abandon (Lme/ahoo/cosec/control/sdk/ControlCaller;Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun apply (Lme/ahoo/cosec/control/sdk/ControlCaller;Lme/ahoo/cosec/spi/snapshot/SnapshotKey;Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun change (Lme/ahoo/cosec/control/sdk/ControlCaller;Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
@@ -20,5 +20,6 @@ public final class me/ahoo/cosec/control/http/HttpControlService : me/ahoo/cosec
 }
 
 public final class me/ahoo/cosec/control/http/HttpControlService$Companion {
+	public final fun getDEFAULT_TIMEOUT ()Ljava/time/Duration;
 }
 
