@@ -205,9 +205,11 @@ class RoleClassTest {
                 PolicyDocumentCodec.decode(
                     DocumentKind.APP,
                     "cosec-control",
-                    ("""{"schema":2,"revision":1,"publishedAt":"2026-11-01T00:00:00Z","catalog":{"groups":[{"name":"own",""" +
-                        """"permissions":[{"id":"govern","action":["cosec:read","cosec:write","cosec:approve"],""" +
-                        """"resource":"doc/tenant/**"}]}]}}""").encodeToByteArray(),
+                    (
+                        """{"schema":2,"revision":1,"publishedAt":"2026-11-01T00:00:00Z","catalog":{"groups":[{"name":"own",""" +
+                            """"permissions":[{"id":"govern","action":["cosec:read","cosec:write","cosec:approve"],""" +
+                            """"resource":"doc/tenant/**"}]}]}}"""
+                        ).encodeToByteArray(),
                 ),
                 publication,
             )

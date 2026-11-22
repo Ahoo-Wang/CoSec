@@ -702,8 +702,11 @@ grants (`CTL-79`):
   enough: a role's bindings are scoped to its app and a control request is decided in the control app, so a role of
   another app permits no control call, whatever its catalog's actions say.
 - **Only doubts about who grants.** The class lifts `CROSS_TENANT`, `NOT_COVERED` and `DENY_OVERLAP`, and records one
-  `ROLE_CLASS` entry in their place. Anything the analysis could not tell (`UNREADABLE`, `UNRESOLVED`, `TOO_LARGE`)
-  still waits for a person.
+  `ROLE_CLASS` entry in their place. `CROSS_TENANT` is a service outside the tenant projecting its roles;
+  `NOT_COVERED` is a holder handing out catalog permissions it does not hold itself, which is what managing roles means;
+  `DENY_OVERLAP` is a DENY that binds the author, and it still binds whomever it binds when a request is decided, so
+  lifting it grants nothing a DENY forbids. Anything the analysis could not tell (`UNREADABLE`, `UNRESOLVED`,
+  `TOO_LARGE`) still waits for a person.
 - **Everything else as before.** `cosec:write` on each role and `cosec:grant` on each binding a role derives are
   decided as for anyone.
 

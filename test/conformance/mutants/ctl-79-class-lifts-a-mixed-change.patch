@@ -3,13 +3,13 @@
 # Tests: :control:test --tests me.ahoo.cosec.control.api.RoleClassTest --tests me.ahoo.cosec.control.lifecycle.RoleClassUnitTest
 
 diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/RoleClass.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/RoleClass.kt
-index eacfbc8ae..cd48b9485 100644
+index 66f0ac473..84a7d9f74 100644
 --- a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/RoleClass.kt
 +++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/RoleClass.kt
 @@ -59,7 +59,7 @@ internal object RoleClass {
              when (operation) {
                  is Operation.PutRole -> operation.role.app != controlApp
-                 is Operation.RemoveRole -> base?.roles?.firstOrNull { it.id == operation.id }?.app.let { it != null && it != controlApp }
+                 is Operation.RemoveRole -> base?.roles?.firstOrNull { it.id == operation.id }?.app.notIn(controlApp)
 -                else -> false
 +                else -> true
              }

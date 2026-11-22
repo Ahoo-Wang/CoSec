@@ -244,4 +244,64 @@ class RoleClassBoundsTest {
         call("POST", "/changes", dora, body).first.assert().isEqualTo(403)
         call("POST", "/changes:check", dora, body).first.assert().isEqualTo(403)
     }
+
+    @Test
+    fun `a tenant's DENY still denies a member of a role the class lifted its overlap for - CTL-79`() {
+        publish(
+            SnapshotKey.App("orders"),
+            DocumentKind.APP,
+            "orders",
+            ""","catalog":{"groups":[{"name":"orders","permissions":[""" +
+                """{"id":"read","action":"order:read","resource":"order/**"}]}]}""",
+        )
+        // ivy manages acme's roles from inside acme and holds what the role grants. A DENY binds the keepers (her overlap,
+        // which the class lifts) and another binds the whole tenant (it binds every grantee alike, so it is no overlap).
+        publish(
+            acme,
+            DocumentKind.TENANT,
+            "acme",
+            ""","policies":[""" +
+                """{"id":"keep","statements":[{"effect":"allow","action":["cosec:read","cosec:write","cosec:publish",""" +
+                """"cosec:skip-shadow","cosec:manage-roles"],"resource":["doc/tenant/acme","doc/tenant/acme/**"]},""" +
+                """{"effect":"allow","action":"cosec:grant","resource":"scope/**"}]},""" +
+                """{"id":"reads","statements":[{"effect":"allow","action":"order:read","resource":"order/**"}]},""" +
+                """{"id":"no-secrets","statements":[{"effect":"deny","action":"order:read","resource":"order/secret/**"}]},""" +
+                """{"id":"no-drafts","statements":[{"effect":"deny","action":"order:read","resource":"order/draft/**"}]}],""" +
+                """"bindings":[""" +
+                """{"id":"keepers","subject":{"role":"keepers"},"app":"cosec-control","space":"","policy":"keep"},""" +
+                """{"id":"keepers-read","subject":{"role":"keepers"},"app":"orders","space":"*","policy":"reads"},""" +
+                """{"id":"no-secrets","subject":{"role":"keepers"},"app":"orders","space":"*","policy":"no-secrets"},""" +
+                """{"id":"no-drafts","subject":"*","app":"orders","space":"*","policy":"no-drafts"}]""",
+        )
+        val ivy = fixture.engine.security(ControlPlaneTest.ACME, "ivy", roles = listOf("keepers"))
+        val head = runBlocking { fixture.revisions.head(acme) }!!.revision
+        val role = """{"op":"putRole","role":{"id":"night","app":"orders","permissions":["read"]}}"""
+        val (status, proposed) = call(
+            "POST",
+            "/changes",
+            ivy,
+            """{"document":"tenant:acme","base":$head,"note":"n","operations":[$role]}""",
+        )
+        status.assert().describedAs("$proposed").isEqualTo(201)
+        // The overlap with the DENY is what the class lifted, for a holder inside the tenant.
+        val record = proposed.get("escalations").single()
+        record.get("reason").asString().assert().describedAs("$proposed").isEqualTo("ROLE_CLASS")
+        record.get("detail").asString().assert().contains("DENY_OVERLAP")
+        val id = proposed.get("id").asString()
+        call("POST", "/changes/$id:skip-shadow", ivy, """{"reason":"projected"}""").second.get("state").asString()
+            .assert().isEqualTo("READY")
+        call("POST", "/changes/$id:publish", ivy, "{}").second.get("state").asString().assert().isEqualTo("PUBLISHED")
+        fun simulate(resource: String, roles: String = "\"night\""): String {
+            val body = """{"request":{"tenant":"acme","principal":"dora","roles":[$roles],"app":"orders",""" +
+                """"action":"order:read","resource":"$resource"}}"""
+            val (code, answer) = call("POST", "/simulate", fixture.engine.security(TenantId.PLATFORM, "plato"), body)
+            code.assert().describedAs("$answer").isEqualTo(200)
+            return answer.get("enforced").get("decision").asString()
+        }
+        // The role grants what its permission names, and each DENY still binds whom it binds at decision time
+        // (deny-first): the tenant-wide one denies the role's member, the keepers' one a member who is a keeper too.
+        simulate("order/1").assert().isEqualTo("Permit")
+        simulate("order/draft/1").assert().isEqualTo("Deny")
+        simulate("order/secret/1", "\"night\",\"keepers\"").assert().isEqualTo("Deny")
+    }
 }

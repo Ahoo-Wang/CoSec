@@ -58,7 +58,7 @@ internal object RoleClass {
         key is SnapshotKey.Tenant && operations.isNotEmpty() && operations.all { operation ->
             when (operation) {
                 is Operation.PutRole -> operation.role.app != controlApp
-                is Operation.RemoveRole -> base?.roles?.firstOrNull { it.id == operation.id }?.app.let { it != null && it != controlApp }
+                is Operation.RemoveRole -> base?.roles?.firstOrNull { it.id == operation.id }?.app.notIn(controlApp)
                 else -> false
             }
         }
@@ -94,6 +94,14 @@ internal object RoleClass {
         )
     }
 
+    /** Whether a removed role's app is known and is not [controlApp]: a role the head does not hold is not the class's. */
+    private fun AppId?.notIn(controlApp: AppId): Boolean = this != null && this != controlApp
+
     /** What [apply] reads of a change: its document, its operations, the head they apply to, the control plane's app. */
-    class Proposed(val key: SnapshotKey, val operations: List<Operation>, val base: PolicyDocument?, val controlApp: AppId)
+    class Proposed(
+        val key: SnapshotKey,
+        val operations: List<Operation>,
+        val base: PolicyDocument?,
+        val controlApp: AppId
+    )
 }

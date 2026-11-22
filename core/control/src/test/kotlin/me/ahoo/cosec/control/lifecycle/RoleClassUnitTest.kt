@@ -22,14 +22,14 @@ import me.ahoo.cosec.control.change.Escalation
 import me.ahoo.cosec.control.change.Escalation.Reason
 import me.ahoo.cosec.control.change.Operation
 import me.ahoo.cosec.document.Actor
-import me.ahoo.cosec.document.RoleDefinition
-import me.ahoo.cosec.model.decision.DocumentKind
 import me.ahoo.cosec.document.PolicyDocument
+import me.ahoo.cosec.document.RoleDefinition
 import me.ahoo.cosec.document.RolePermissions
 import me.ahoo.cosec.model.AppId
 import me.ahoo.cosec.model.PrincipalId
 import me.ahoo.cosec.model.RoleId
 import me.ahoo.cosec.model.TenantId
+import me.ahoo.cosec.model.decision.DocumentKind
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
@@ -66,7 +66,11 @@ class RoleClassUnitTest {
     private fun apply(key: SnapshotKey, operations: List<Operation>, escalations: List<Escalation>): Pair<List<Escalation>, Boolean> {
         var asked = false
         val answer = runBlocking {
-            RoleClass.apply(escalations, RoleClass.Proposed(key, operations, base, control), author) { true.also { asked = true } }
+            RoleClass.apply(
+                escalations,
+                RoleClass.Proposed(key, operations, base, control),
+                author
+            ) { true.also { asked = true } }
         }
         return answer to asked
     }
