@@ -68,6 +68,7 @@ Three built-in policies can be bound to operators: `cosec:platform-admin` (every
 | `GET /documents/{key}/revisions/{revision}/propagation` | How far that revision has propagated ([Propagation](#propagation)). |
 | `POST /documents/{key}:apply`, `POST /documents/{key}:rollback` | Propose a change from a whole document, or back to an old revision. |
 | `POST /changes`, `GET /changes/{id}` | Propose a change; read one. |
+| `POST /changes:check`, `POST /documents/{key}:check` | What a proposal or an `:apply` would find, without making it ([Checking without proposing](#checking-without-proposing)). |
 | `GET /changes?document=&state=&after=&limit=` | The open changes of a document, of a state, or of both ([Finding open changes](#finding-open-changes)). |
 | `POST /changes/{id}:rebase`, `:shadow`, `:skip-shadow`, `:approve`, `:reject`, `:abandon`, `:publish` | Move a change on. |
 | `POST /break-glass`, `POST /break-glass/{change}:approve`, `DELETE /break-glass/{bindingId}?reason=` | Request break-glass, approve a request, revoke a binding ([Security model](../guide/security-model.md#break-glass)). A revoke answers `200` only once the binding no longer grants, `404` when the platform document has no binding of that id, and `409` otherwise, an ordinary binding of that id included ([Taking a busy slot](#taking-a-busy-slot)). |
@@ -118,6 +119,21 @@ the HTTP `status` it stands for and a `severity`:
 A change with any error stays `DRAFT` and cannot be staged or published; fix it by proposing a new change. A clean
 change is `CHECKED`. Nothing a change does reaches enforcement before it is published, and publishing compiles the
 candidate again against the documents current at that moment.
+
+### Checking without proposing {#checking-without-proposing}
+
+`POST /changes:check` takes the body of `POST /changes`, and `POST /documents/{key}:check` the body of `:apply`, and
+answers what the proposal would (`CTL-78`): its `state` (`CHECKED` or `DRAFT`), `findings`, `escalations` (what would
+wait for a person) and `base` (`contract/control/change-check.json`). It answers no `candidate`: the document a proposal
+would publish names the change that confirms a lapsing DENY, which a check does not make. It runs the proposal's own steps, all
+but the last. It stores nothing, takes no staging slot, uses no change id and writes no change event. Use it to validate
+before you store something of your own, such as an IAM's event, that a later proposal will carry.
+
+A check needs exactly what the proposal needs, and is refused alike: a caller who may not propose may not check, so a
+check tells you no more about a document than the proposal would; a stale `base` is the same `409 BASE_MOVED`. The
+service port and the control plane's facade serve it for a tenant's document (`ControlService.check`, `checkApply`;
+`ControlClient.check`, `checkApply`). The request is still decided and recorded as any call of the control API. A check
+is not a promise: the head may move before you propose.
 
 ## Simulating a request
 

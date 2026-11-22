@@ -46,6 +46,8 @@ enum class ControlProfile {
         return when (segments.first()) {
             "documents" -> documents(method, segments.drop(1))
             "changes" -> changes(method, segments.drop(1))
+            // `CTL-78`: the check of a proposal; the route serves it only for a document the profile serves a write to.
+            "changes:check" -> method == "POST"
             else -> false
         }
     }
@@ -83,7 +85,7 @@ enum class ControlProfile {
         }
         return when (verb) {
             null -> method == "GET" && reads(rest)
-            "apply" -> method == "POST" && rest.size == 1 && key is SnapshotKey.Tenant
+            "apply", "check" -> method == "POST" && rest.size == 1 && key is SnapshotKey.Tenant
             else -> false
         }
     }

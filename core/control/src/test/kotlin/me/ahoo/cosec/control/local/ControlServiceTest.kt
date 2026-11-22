@@ -150,6 +150,9 @@ class ControlServiceTest {
         same({ route("POST", "/changes/c2:abandon", body = "{}") }, { abandon(it, "c2") })
         val desired = """{"mode":"MERGE","note":"apply","document":{"schema":2,"revision":2,""" +
             """"publishedAt":"2026-11-01T00:00:00Z","policies":[],"bindings":[]}}"""
+        // A check answers through the facade as through its route, and records nothing (CTL-78).
+        same({ route("POST", "/documents/tenant:acme:check", body = desired) }, { checkApply(it, acme, desired) })
+        same({ route("POST", "/changes:check", body = proposal("checked", 2)) }, { check(it, proposal("checked", 2)) })
         same({ route("POST", "/documents/tenant:acme:apply", body = desired) }, { apply(it, acme, desired) })
         // A service starts its change's window, reads it, and publishes with the window's evidence (CTL-65).
         same({ route("POST", "/changes", body = proposal("windowed", 2)) }, { propose(it, proposal("windowed", 2)) })
@@ -398,8 +401,11 @@ class ControlServiceTest {
             "GET" to "/documents/tenant:a/revisions/1/propagation",
             "POST" to "/documents/tenant:a:apply",
             "POST" to "/documents/app:a:apply",
+            "POST" to "/documents/tenant:a:check",
+            "POST" to "/documents/app:a:check",
             "POST" to "/documents/tenant:a:rollback",
             "POST" to "/changes",
+            "POST" to "/changes:check",
             "GET" to "/changes",
             "GET" to "/changes/c1",
             "POST" to "/changes/c1:rebase",
@@ -426,6 +432,8 @@ class ControlServiceTest {
             "diff" to listOf("GET" to "/documents/tenant:a/diff"),
             "apply" to listOf("POST" to "/documents/tenant:a:apply"),
             "propose" to listOf("POST" to "/changes"),
+            "check" to listOf("POST" to "/changes:check"),
+            "checkApply" to listOf("POST" to "/documents/tenant:a:check"),
             "changes" to listOf("GET" to "/changes"),
             "change" to listOf("GET" to "/changes/c1"),
             "rebase" to listOf("POST" to "/changes/c1:rebase"),

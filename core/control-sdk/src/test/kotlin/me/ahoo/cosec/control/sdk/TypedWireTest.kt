@@ -118,6 +118,11 @@ class TypedWireTest {
         (AnswerJson.CHANGE_READ + AnswerJson.CHANGE_UNREAD).assert().isEqualTo(contract)
     }
 
+    @Test
+    fun `a check's answer reads every member of its contract file - CTL-78`() {
+        AnswerJson.CHECK_READ.assert().isEqualTo(paths(json("contract/control/change-check.json"), ""))
+    }
+
     /** The dotted paths of a contract file's members: an array's items' members under the array's name. */
     private fun paths(members: JsonNode, prefix: String): Set<String> = members.properties().flatMap { (name, member) ->
         val path = prefix + name

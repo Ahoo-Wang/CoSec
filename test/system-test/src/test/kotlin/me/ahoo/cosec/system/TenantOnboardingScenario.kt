@@ -115,6 +115,17 @@ class TenantOnboardingScenario {
             .status.assert().isEqualTo(403)
     }
 
+    @Test
+    @Order(5)
+    fun `the IAM checks a change before storing anything, and the check stores nothing - CTL-78`() {
+        val head = root.revision(KEY)
+        val checked = Operator.check("tn-one", "tn-one-nowhere", "analyst").ok().json()
+        checked["state"].assert().describedAs("$checked").isEqualTo("DRAFT")
+        (checked["findings"] as List<*>).assert().describedAs("$checked").isNotEmpty()
+        // Nothing stored: the document is where it was.
+        root.revision(KEY).assert().isEqualTo(head)
+    }
+
     private companion object {
         const val KEY = "tenant:tn-one"
         const val OTHER = "tenant:tn-two"

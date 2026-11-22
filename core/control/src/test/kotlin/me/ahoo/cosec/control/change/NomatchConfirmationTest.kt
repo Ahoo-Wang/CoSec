@@ -75,6 +75,41 @@ class NomatchConfirmationTest {
 
     private suspend fun statement() = harness.revisions.head(ACME)!!.document.policies.single().statements.single()
 
+    /**
+     * `CTL-78`: the control plane writes into the candidate which change confirmed a lapsing DENY, so the candidate's
+     * digest names the change. A check makes no change: it answers what the proposal finds (state, findings, escalations,
+     * base), never a candidate, which would be another document than the proposal's.
+     */
+    @Test
+    fun `a check answers what the proposal finds, never its candidate, which names the confirming change - CTL-78`() =
+        runBlocking<Unit> {
+            publish(
+                SnapshotKey.Platform,
+                listOf(Operation.SetAttributes(listOf(Attribute.external("ext.geo.inFence", AttributeType.BOOL))))
+            )
+            val head = harness.revisions.head(ACME)?.revision ?: 0
+            val operations = listOf(Operation.PutPolicy(lapsing()))
+            val confirmations =
+                listOf(Confirmation(PolicyId("fence"), 0, StatementDigest.of(lapsing().statements.single())))
+            val checked = changes.proposals.check(operatorFor(ACME), ACME, head, operations, "test", confirmations)
+            val proposed = changes.propose(
+                operatorFor(ACME),
+                ACME,
+                head,
+                operations,
+                "test",
+                confirmations = confirmations
+            )
+            proposed.state.assert().isEqualTo(ChangeState.CHECKED)
+            checked.state.assert().isEqualTo(proposed.state)
+            checked.findings.assert().isEqualTo(proposed.findings)
+            checked.escalations.assert().isEqualTo(proposed.escalations)
+            checked.base.assert().isEqualTo(proposed.base)
+            // The candidates differ by the change each names as the confirming one: not a value a check can answer.
+            checked.candidate.assert().isNotEqualTo(proposed.candidate)
+            me.ahoo.cosec.control.api.ChangeCheckAnswer.MEMBERS.assert().doesNotContain("candidate")
+        }
+
     @Test
     fun `a lapsing deny publishes only with a confirmation of its content, recorded by the control plane`() = runBlocking<Unit> {
         publish(

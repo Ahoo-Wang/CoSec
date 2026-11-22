@@ -86,11 +86,23 @@ class DefaultControlPlane(
         operations: List<Operation>,
         note: String,
         confirmations: List<Confirmation>,
-    ): ChangeRequest = changes.propose(operator, key, base, operations, note, ProvenanceKind.PUBLISH, confirmations)
+        commit: Boolean,
+    ): ChangeRequest = if (commit) {
+        changes.propose(operator, key, base, operations, note, ProvenanceKind.PUBLISH, confirmations)
+    } else {
+        changes.proposals.check(operator, key, base, operations, note, confirmations)
+    }
 
-    override suspend fun apply(operator: Operator, key: SnapshotKey, desired: PolicyDocument, mode: ApplyMode, note: String): ChangeRequest {
+    override suspend fun apply(
+        operator: Operator,
+        key: SnapshotKey,
+        desired: PolicyDocument,
+        mode: ApplyMode,
+        note: String,
+        commit: Boolean,
+    ): ChangeRequest {
         authority.require(operator, key, ControlActions.READ)
-        return changes.apply(operator, key, desired, mode, note)
+        return changes.apply(operator, key, desired, mode, note, commit)
     }
 
     override suspend fun rollback(

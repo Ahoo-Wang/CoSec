@@ -7,6 +7,8 @@ public final class me/ahoo/cosec/control/http/HttpControlService : me/ahoo/cosec
 	public fun apply (Lme/ahoo/cosec/control/sdk/ControlCaller;Lme/ahoo/cosec/spi/snapshot/SnapshotKey;Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun change (Lme/ahoo/cosec/control/sdk/ControlCaller;Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun changes (Lme/ahoo/cosec/control/sdk/ControlCaller;Lme/ahoo/cosec/spi/snapshot/SnapshotKey;Lme/ahoo/cosec/control/sdk/ChangeState;Ljava/lang/String;Ljava/lang/Integer;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun check (Lme/ahoo/cosec/control/sdk/ControlCaller;Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun checkApply (Lme/ahoo/cosec/control/sdk/ControlCaller;Lme/ahoo/cosec/spi/snapshot/SnapshotKey;Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun diff (Lme/ahoo/cosec/control/sdk/ControlCaller;Lme/ahoo/cosec/spi/snapshot/SnapshotKey;JJLkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun document (Lme/ahoo/cosec/control/sdk/ControlCaller;Lme/ahoo/cosec/spi/snapshot/SnapshotKey;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun documents (Lme/ahoo/cosec/control/sdk/ControlCaller;Lme/ahoo/cosec/model/decision/DocumentKind;Ljava/lang/String;Ljava/lang/Integer;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;

@@ -45,9 +45,11 @@ import me.ahoo.cosec.control.change.ChangeRequestCodec
 import me.ahoo.cosec.control.change.InvalidControlRequestException
 import me.ahoo.cosec.control.change.ownerOf
 import me.ahoo.cosec.control.change.requireRequest
+import me.ahoo.cosec.document.PolicyDocument
 import me.ahoo.cosec.document.PolicyDocumentCodec
 import me.ahoo.cosec.model.decision.DocumentKind
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
+import tools.jackson.databind.JsonNode
 
 /** The routes of `/documents` (`CTL-68`, the listing) and `/documents/{key}` (RFC 0007 §10.2): its reads, `:apply` and `:rollback`. */
 internal class DocumentRoutes(private val plane: ControlPlane) : RouteHandler {
@@ -66,13 +68,17 @@ internal class DocumentRoutes(private val plane: ControlPlane) : RouteHandler {
         return when (verb) {
             null -> revisions(operator, request, key, segments.drop(1))
             "apply" -> post(request) {
-                val (kind, owner) = ownerOf(key)
-                val desired = decoded("document") { PolicyDocumentCodec.decode(kind, owner, it.need("document")) }
-                val mode = it.text("mode").let { mode ->
-                    field("mode", "one of ${ApplyMode.entries.joinToString()}") { ApplyMode.valueOf(mode) }
-                }
+                val (desired, mode) = desired(key, it)
                 val change = plane.apply(operator, key, desired, mode, it.optText("note").orEmpty())
                 changeResponse(plane, operator, change, CREATED)
+            }
+
+            // `CTL-78`: the check of an `:apply`, the same body, stored nowhere.
+            "check" -> post(request) {
+                val (desired, mode) = desired(key, it)
+                ChangeCheckAnswer.response(
+                    plane.apply(operator, key, desired, mode, it.optText("note").orEmpty(), commit = false)
+                )
             }
 
             "rollback" -> post(request) {
@@ -86,6 +92,16 @@ internal class DocumentRoutes(private val plane: ControlPlane) : RouteHandler {
 
             else -> notFound()
         }
+    }
+
+    /** The document and the mode an `:apply` body states, for [key]. */
+    private fun desired(key: SnapshotKey, body: JsonNode): Pair<PolicyDocument, ApplyMode> {
+        val (kind, owner) = ownerOf(key)
+        val desired = decoded("document") { PolicyDocumentCodec.decode(kind, owner, body.need("document")) }
+        val mode = body.text("mode").let { mode ->
+            field("mode", "one of ${ApplyMode.entries.joinToString()}") { ApplyMode.valueOf(mode) }
+        }
+        return desired to mode
     }
 
     /** The reads of document [key]: its head, its history, a revision, a diff, a revision's propagation. */
