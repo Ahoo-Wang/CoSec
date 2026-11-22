@@ -31,9 +31,15 @@ import me.ahoo.cosec.webflux.ReactiveSecurityContexts.requireSecurityContext
 import me.ahoo.cosec.webflux.ServerWebExchanges.securityContextOrNull
 import me.ahoo.test.asserts.assert
 import me.ahoo.test.asserts.assertThrownBy
+import org.junit.jupiter.api.Nested
 import org.junit.jupiter.api.Test
+import org.springframework.beans.factory.annotation.Autowired
+import org.springframework.context.annotation.Configuration
+import org.springframework.core.env.Environment
 import org.springframework.mock.http.server.reactive.MockServerHttpRequest
 import org.springframework.mock.web.server.MockServerWebExchange
+import org.springframework.test.context.TestPropertySource
+import org.springframework.test.context.junit.jupiter.SpringJUnitConfig
 import org.springframework.test.web.reactive.server.WebTestClient
 import org.springframework.web.reactive.function.server.RouterFunctions
 import org.springframework.web.reactive.function.server.ServerResponse
@@ -122,4 +128,24 @@ class TestingYourWebFluxApplicationTest {
             CoSecTestBindings.bind(MockServerWebExchange.from(MockServerHttpRequest.get("/")), forged)
         }.hasMessageContaining("PIP-27")
     }
+
+    /**
+     * A Spring test of a service in `gateway` mode states the boundary the service trusts (`STA-7`), or the service does
+     * not start: the kit's statement, in `@SpringBootTest(properties = [...])` or, as here, `@TestPropertySource`.
+     */
+    @Nested
+    @SpringJUnitConfig(TestingYourWebFluxApplicationTest.Empty::class)
+    @TestPropertySource(properties = [IdentityHeader.ONLY_GATEWAY_CAN_REACH])
+    inner class StatingTheBoundary {
+        @Autowired
+        lateinit var environment: Environment
+
+        @Test
+        fun `the test's context states that only the gateway can reach the service`() {
+            environment.getProperty("cosec.pipeline.identity.only-gateway-can-reach").assert().isEqualTo("true")
+        }
+    }
+
+    @Configuration(proxyBeanMethods = false)
+    class Empty
 }

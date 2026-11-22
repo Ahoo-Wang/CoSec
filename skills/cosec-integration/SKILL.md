@@ -225,7 +225,9 @@ cosec:
 - Tests of such a service, without a gateway: `IdentityHeader` (`cosec-testkit`, experimental) writes the header a
   gateway sends: `forSubject(subject, tenant, app, space, roles)`, `of(identity)`, or `withToken(token, verifier,
   revocations)` for a real token's session. A header is refused after 60s: make one per request. Never hand-write the
-  JSON, and never use it in production.
+  JSON, and never use it in production. A Spring Boot test that starts the service states the boundary too, or the
+  context fails to start: `@SpringBootTest(properties = [IdentityHeader.ONLY_GATEWAY_CAN_REACH])` (true in a test,
+  which only its own client reaches; never copied into a deployment).
 
 Details: https://cosec.ahoo.me/integration/web#services-behind-the-gateway and
 https://cosec.ahoo.me/guide/security-model#trust-boundaries.

@@ -398,7 +398,10 @@ Which preview of the library may run behind which preview of the gateway image: 
     Absent, empty, `false`, `1` and `on` fail alike, and the message says what to write. Make it true first (a
     `NetworkPolicy` that admits the gateway's pods only, mutual TLS, a private network;
     [`k8s/examples/gateway-mode-service-networkpolicy.yaml`](https://github.com/Ahoo-Wang/CoSec/blob/main/k8s/examples/gateway-mode-service-networkpolicy.yaml)).
-    Once it is set, the `WARN` through beta.4 is one `INFO` line.
+    Once it is set, the `WARN` through beta.4 is one `INFO` line. A Spring Boot test that starts such a service states
+    it too: the test is reached by its own client alone, so the statement is true there. From beta.6 the kit has the
+    line: `@SpringBootTest(properties = [IdentityHeader.ONLY_GATEWAY_CAN_REACH])`, for tests only
+    ([Testing your application](../policies/testing.md#testing-your-application)).
   - A service in `gateway` mode **fails to start** with a hidden-method filter:
     `spring.mvc.hiddenmethod.filter.enabled=true`, `spring.webflux.hiddenmethod.filter.enabled=true`, or a
     `HiddenHttpMethodFilter` bean of its own. The gateway decided the method of the request line, and a `_method` form

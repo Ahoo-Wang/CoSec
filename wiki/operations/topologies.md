@@ -178,7 +178,7 @@ a control host's are: any number of instances may, and one does each at a time.
 
 Both deployments believe the `CoSec-Identity` header they receive, and the header carries no signature (`STA-9`). So
 whoever can reach the host, or the IAM service, is whoever they claim to be, a platform administrator included, and can
-publish any policy of any tenant. The control plane contains mistakes and keeps the audit: every call is decided by the
+publish any policy of any tenant. The control plane still decides and records every call: each is decided by the
 policies for the principal it states, and each step records that the identity was asserted, with the credential's method
 and id, the request's id and the address of the connection it arrived on
 ([Control-plane change log](./observability.md#control-plane-change-log)). It is not a defence against a

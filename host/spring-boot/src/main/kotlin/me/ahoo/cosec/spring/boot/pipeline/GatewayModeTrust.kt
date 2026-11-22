@@ -17,6 +17,7 @@ package me.ahoo.cosec.spring.boot.pipeline
 
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.runtime.identity.IdentityGate
+import me.ahoo.cosec.spring.boot.control.ControlPlaneCondition
 import org.springframework.beans.factory.ListableBeanFactory
 import org.springframework.boot.context.properties.bind.Binder
 import org.springframework.core.env.Environment
@@ -50,8 +51,14 @@ internal object GatewayModeTrust {
      * [PipelineProperties.ONLY_TRUSTED_CALLERS_CAN_REACH_KEY] (the gateway and the services the operator names can).
      * Answers the key that was stated, the gateway's first. [host] says what makes this host believe the header, for the
      * message: the property that wired the gate, or the application's own gate bean ([describe] by default).
+     * [controlPlane] says whether this host also runs the control plane, where a claimed principal can publish and approve
+     * changes ([controlPlaneWired] by default); the message names that only there.
      */
-    fun requireBoundaryStated(environment: Environment, host: String = describe(environment)): String {
+    fun requireBoundaryStated(
+        environment: Environment,
+        host: String = describe(environment),
+        controlPlane: Boolean = controlPlaneWired(environment),
+    ): String {
         val gateway = written(environment, PipelineProperties.ONLY_GATEWAY_CAN_REACH_KEY)
         val trusted = written(environment, PipelineProperties.ONLY_TRUSTED_CALLERS_CAN_REACH_KEY)
         val stated = listOf(
@@ -59,11 +66,9 @@ internal object GatewayModeTrust {
             PipelineProperties.ONLY_TRUSTED_CALLERS_CAN_REACH_KEY to trusted,
         ).firstOrNull { (_, value) -> value != null && value.equals("true", ignoreCase = true) }?.first
         check(stated != null) {
-            "$host: this host believes any CoSec-Identity header it receives, and the header " +
-                "carries no signature, so whoever can reach this host is whoever they claim to be, the platform " +
-                "administrator included, and can publish any policy of any tenant. It contains mistakes and keeps the " +
-                "audit; it does not defend against a compromised workload that can reach it, which can also approve " +
-                "its own changes. The network is the boundary. That is safe only if nothing but the CoSec gateway " +
+            "$host: this host believes any CoSec-Identity header it receives, and the header carries no signature, so " +
+                "whoever can reach this host is whoever they claim to be" + exposure(environment, controlPlane) +
+                " The network is the boundary. That is safe only if nothing but the CoSec gateway " +
                 "(or, for a host that services call directly, the gateway and the services you name) can reach it: a " +
                 "Kubernetes NetworkPolicy that admits those pods only, mutual TLS, or a private network. State it once " +
                 "it is true: ${PipelineProperties.ONLY_GATEWAY_CAN_REACH_KEY}=true (the environment variable " +
@@ -76,6 +81,36 @@ internal object GatewayModeTrust {
         }
         return stated
     }
+
+    /**
+     * What a caller that claims any principal reaches on this host: a service in `gateway` mode holds no documents and
+     * no control plane, so only its own routes; another host, its routes as that principal; and where the control plane
+     * runs, every tenant's policies, with their approval.
+     */
+    private fun exposure(environment: Environment, controlPlane: Boolean): String = when {
+        controlPlane ->
+            ", the platform administrator included, and can publish any policy of any tenant: the control plane " +
+                "decides each change by the policies, for the principal the header names. It still refuses an invalid " +
+                "change and records every change in the audit under the principal claimed, but neither defends against " +
+                "a compromised workload that can reach this host, which can also approve its own changes by claiming " +
+                "a second principal."
+        isGatewayMode(environment) ->
+            " to this service's routes, any user of any tenant: the service serves each request as the principal and " +
+                "tenant the header names, and nothing here decides it again."
+        else -> " to this host's routes, the platform administrator included, and is served as the principal the header names."
+    }
+
+    /**
+     * Whether this host runs the control plane: never in `gateway` mode, which wires no documents for it to write; else
+     * the control plane's own condition ([ControlPlaneCondition.wired]).
+     */
+    fun controlPlaneWired(
+        environment: Environment,
+        classLoader: ClassLoader? = GatewayModeTrust::class.java.classLoader,
+    ): Boolean = !isGatewayMode(environment) && ControlPlaneCondition.wired(classLoader, environment)
+
+    private fun isGatewayMode(environment: Environment): Boolean =
+        environment.getProperty(PipelineProperties.MODE_KEY).equals("gateway", ignoreCase = true)
 
     /**
      * [key] as Spring's binder reads it, which is how the starter's own property check ([me.ahoo.cosec.spring.boot.UnknownProperties])
@@ -93,12 +128,12 @@ internal object GatewayModeTrust {
 
     /** Whether the properties wire the identity gate ([OnIdentityGate]), for the check that follows a gate wired another way. */
     fun wiredByProperty(environment: Environment): Boolean =
-        environment.getProperty(PipelineProperties.MODE_KEY).equals("gateway", ignoreCase = true) ||
+        isGatewayMode(environment) ||
             environment.getProperty(PipelineProperties.CALLER_KEY).equals("forwarded-identity", ignoreCase = true)
 
     /** What makes the host believe the identity, for a message: its mode, or the caller it was told to take. */
     fun describe(environment: Environment): String =
-        if (environment.getProperty(PipelineProperties.MODE_KEY).equals("gateway", ignoreCase = true)) {
+        if (isGatewayMode(environment)) {
             "${PipelineProperties.MODE_KEY}=gateway"
         } else {
             "${PipelineProperties.CALLER_KEY}=forwarded-identity"
