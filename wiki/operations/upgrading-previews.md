@@ -157,7 +157,7 @@ Which preview of the library may run behind which preview of the gateway image: 
 
   | Removed | Now |
   |---|---|
-  | `cosec.authorization.snapshot.max-apps`, `max-tenants` | what each family holds plus the room left of a quarter of the heap, less the absent entries' part, counted at the typical weight of its resident documents (an estimate never below what one retains), recomputed each revalidation pass, never below 64 |
+  | `cosec.authorization.snapshot.max-apps`, `max-tenants` | what each family holds plus the room left of a quarter of the heap, less the absent entries' part, counted at the typical weight of its resident documents (an estimate never below what one retains), recomputed each revalidation pass and before each eviction, never below 64 |
   | `cosec.authorization.snapshot.max-absent-apps`, `max-absent-tenants` | a fixed sixteenth of the documents' quarter at 512 bytes an entry: 256 app ids and 65,280 tenant ids at 2 GiB |
 
   - **A gateway that relied on 16,384 resident tenants at 2 GiB holds about 14,500** of the deployment page's typical

@@ -504,7 +504,10 @@ overlay size them for their limits:
 **How many documents fit.** The compiled documents live on the heap, in a quarter of it (`SNP-24`). A sixteenth of that
 quarter is the ids an instance knows have no document, at 512 bytes each (65,280 tenant ids and 256 app ids at 2 GiB);
 the rest holds the documents, each weighed by an estimate never below what it retains: a family holds what it holds plus
-the room left, counted at the typical weight of its documents, recomputed every revalidation pass. The platform document
+the room left, counted at the typical weight of its documents, recomputed every revalidation pass and before every eviction: a
+document is evicted only when what is resident weighs more than the share, so a cold start evicts nothing while the
+share has room, whatever the first estimate. One very large tenant arriving into a full share evicts its own weight in
+documents of the typical weight, no more. The platform document
 is never dropped ([How instances read documents](./storage.md#how-instances-read-documents)), and for a moment, during a
 burst of cold loads, a family may hold up to twice its bound. **A 2 GiB heap holds about 14,500 tenants of the shape
 below** (34.6 KB estimated each, 29.5 KB retained): a gateway that relied on 16,384 resident tenants at 2 GiB holds about

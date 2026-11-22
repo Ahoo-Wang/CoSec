@@ -34,7 +34,9 @@ class DerivedHeapTest {
             .contains(
                 "documents=512 MiB (absent entries 32 MiB: 65280 tenants, 256 apps; resident 480 MiB: 14566 tenants"
             )
-            .contains("recomputed each revalidation pass from what is resident (cosec.snapshot.bound)")
+            .contains(
+                "recomputed from what is resident each revalidation pass and before each eviction (cosec.snapshot.bound)"
+            )
             .contains("revocation tables=516222 entries each (290 + 230 B a pair)")
             .contains("token cache weighed at 5 B a token character")
             .contains("decision listener queues=8192 events each (1024 B an event at trace-level off)")

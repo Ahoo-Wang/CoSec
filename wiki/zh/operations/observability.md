@@ -242,7 +242,7 @@ CoCache 会在同一个 registry 中为 CoSec 的缓存记录它自己的指标�
 | `cosec.snapshot.regressions` | counter | `kind` | 存储返回了比已安装修订更旧的修订 |
 | `cosec.snapshot.lost` | counter | `kind` | 之前见过的文档现在不存在；它的键失败关闭 |
 | `cosec.snapshot.evictions` | counter | `kind`、`state` = `document`、`absent` | 应用或租户族在达到上限（`cosec.snapshot.bound`）时丢弃的条目 |
-| `cosec.snapshot.bound` | gauge | `kind`、`state` = `document`、`absent` | 每个族当前受到的上限，由堆的四分之一推出，每轮重新确认时按常驻的内容重新计算（`SNP-24`）；与 `cosec.snapshot.installed` 并列 |
+| `cosec.snapshot.bound` | gauge | `kind`、`state` = `document`、`absent` | 每个族当前受到的上限，由堆的四分之一推出，每轮重新确认时以及每次淘汰之前按常驻的内容重新计算（`SNP-24`）；与 `cosec.snapshot.installed` 并列 |
 | `cosec.snapshot.handoffs.refused` | counter | `to` = `housekeeping`、`caller` | 编译池拒绝的工作：`caller` 表示由请求线程执行 |
 | `cosec.snapshot.housekeeping.refused` | counter | `task` = `load-log`、`compile-log`、`install-review`、`effect-log`、`crash-log`、`transition-log`、`prewarm-log`、`pass-log`、`reset-log`、`evict`、`drop`、`lag-report` | 快照源的维护线程因队列（4,096）已满而拒绝的任务。除 `drop`（移除一个空条目，在原线程执行）外，每个都被丢弃。`*-log` 是一条没有写出的日志；`evict` 是族在上限以下的一次驱逐，下一次加载会再次请求它；`install-review` 是宿主对已安装文档的一次检查（[路由映射警告](../scenarios/route-maps.md#what-cosec-warns-about)），在之后的读取发现该修订仍在安装时再次提交 |
 

@@ -31,10 +31,11 @@ import java.time.Duration
 
 /**
  * `SNP-24`: the families' bounds derived from the documents' share of the heap ([DocumentBudget]), on real documents and
- * a real compiler. The bound follows what is resident, recomputed by a pass; the absent entries' part is fixed, so ids
- * nobody owns never shrink what the documents get; a document heavier than the whole share leaves a family at its floor,
- * never empty; one very heavy tenant among many small ones lowers the others' bound by its own weight, no more; and a
- * small pod's budget still turns ready.
+ * a real compiler. The bound follows what is resident, recomputed by each pass and before each eviction, so nothing is
+ * evicted while the share has room; the absent entries' part is fixed, so ids nobody owns never shrink what the
+ * documents get; a document heavier than the whole share leaves a family at its floor, never empty; one very heavy
+ * tenant among many small ones costs the others its own weight in documents, no more; and a small pod's budget still
+ * turns ready.
  */
 class SnapshotDerivedBoundsTest {
     private val published = "2026-11-19T00:00:00Z"

@@ -362,7 +362,8 @@ holds them:
   Installs of one key happen in the order their loads started (`SNP-2`, `SnapshotInstallOrderPropertyTest`).
 - **Bounded memory.** The platform document is loaded at startup and never evicted. App and tenant documents are loaded on
   demand and evicted least recently used beyond each family's bound, derived from a quarter of the heap and recomputed
-  each pass from what is resident (`SNP-24`); selected ones can be prewarmed. Ids the store holds no document for are
+  from what is resident each pass and before each eviction, so a document is evicted only when the share is full
+  (`SNP-24`); selected ones can be prewarmed. Ids the store holds no document for are
   kept apart, in a fixed part of that quarter, and evict only
   each other (`SNP-7`).
 - **Revalidation.** Every installed document is revalidated every `revalidate-interval` (10 s by default) with a
