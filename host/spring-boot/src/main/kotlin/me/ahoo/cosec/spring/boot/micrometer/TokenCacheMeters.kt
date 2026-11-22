@@ -38,7 +38,7 @@ object TokenCacheMeters {
             .description("Request tokens verified because the cache held no usable entry")
             .register(registry)
         FunctionCounter.builder(EVICTIONS, cache) { it.evictions.toDouble() }
-            .description("Verified tokens evicted to keep within cosec.authentication.token-cache.max-entries")
+            .description("Verified tokens evicted to keep within the token cache's share of the heap")
             .register(registry)
         Gauge.builder(SIZE, cache) { it.size.toDouble() }
             .description("Verified tokens the cache holds")

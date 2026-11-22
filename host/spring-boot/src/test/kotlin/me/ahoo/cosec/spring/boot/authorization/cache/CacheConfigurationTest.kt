@@ -30,53 +30,33 @@ class CacheConfigurationTest {
     private val spec = StoreSpec.builder<String, String>("Revocations").codec(StringCodec).build()
 
     @Test
-    fun nullsKeepCoCacheDefaults() {
-        CacheConfiguration().apply {
-            localMaxAge = null
-            maximumSize = null
-        }.applyTo(spec).policy.toString()
-            .assert().isEqualTo(DefaultPolicies.STORE.toString())
+    fun aNullLocalMaxAgeKeepsCoCachesDefault() {
+        val policy = CacheConfiguration().apply { localMaxAge = null }.applyTo(spec, 100).policy
+        policy.localMaxAge.assert().isEqualTo(DefaultPolicies.STORE.localMaxAge)
+        policy.local.maximumSize.assert().isEqualTo(100L)
     }
 
     @Test
     fun applyToWithAllOptions() {
-        val policy = CacheConfiguration().apply {
-            maximumSize = 100
-            localMaxAge = Duration.ofMinutes(10)
-        }.applyTo(spec).policy
+        val policy = CacheConfiguration().apply { localMaxAge = Duration.ofMinutes(10) }.applyTo(spec, 100).policy
         policy.local.maximumSize.assert().isEqualTo(100L)
         policy.localMaxAge.assert().isEqualTo(Duration.ofMinutes(10))
     }
 
+    /** The count is the starter's, a share of the heap (`IDN-33`): 10000, CoCache's own default, is declared too. */
     @Test
     fun tokenDefaults() {
-        val policy = RevocationProperties().cache.applyTo(spec).policy
+        val policy = RevocationProperties().cache.applyTo(spec, 10_000).policy
         policy.localMaxAge.assert().isEqualTo(Duration.ofSeconds(30))
-        policy.local.maximumSize.assert().isEqualTo(500_000L)
+        policy.local.maximumSize.assert().isEqualTo(10_000L)
     }
 
     /** A number without a unit is seconds, as `expire-after-write` read it with `expire-unit`. */
     @Test
     fun bareNumbersAreSeconds() {
-        val source = MapConfigurationPropertySource(
-            mapOf(
-                "cosec.authentication.revocation.cache.local-max-age" to "10",
-                "cosec.authentication.revocation.cache.maximum-size" to "7",
-            )
-        )
+        val source =
+            MapConfigurationPropertySource(mapOf("cosec.authentication.revocation.cache.local-max-age" to "10"))
         val token = Binder(source).bind(RevocationProperties.PREFIX, RevocationProperties::class.java).get().cache
         token.localMaxAge.assert().isEqualTo(Duration.ofSeconds(10))
-        token.maximumSize.assert().isEqualTo(7L)
-    }
-
-    /** One key set must leave the other settings at their defaults. */
-    @Test
-    fun oneKeyKeepsTheOtherDefaults() {
-        val source = MapConfigurationPropertySource(
-            mapOf("cosec.authentication.revocation.cache.maximum-size" to "500")
-        )
-        val token = Binder(source).bind(RevocationProperties.PREFIX, RevocationProperties::class.java).get().cache
-        token.maximumSize.assert().isEqualTo(500L)
-        token.localMaxAge.assert().isEqualTo(Duration.ofSeconds(30))
     }
 }

@@ -35,12 +35,14 @@ import me.ahoo.cosec.runtime.attribute.BlacklistSource
 import me.ahoo.cosec.runtime.audit.LoggingAuditListener
 import me.ahoo.cosec.runtime.authn.UncheckedRevocations
 import me.ahoo.cosec.runtime.event.BridgeContextContributor
+import me.ahoo.cosec.runtime.event.DecisionListener
 import me.ahoo.cosec.runtime.event.DecisionListeners
 import me.ahoo.cosec.runtime.event.MdcContextContributor
 import me.ahoo.cosec.runtime.ratelimit.LocalRateLimiter
 import me.ahoo.cosec.runtime.shadow.CachingCandidateSource
 import me.ahoo.cosec.runtime.shadow.CandidateSource
 import me.ahoo.cosec.runtime.snapshot.SnapshotSource
+import me.ahoo.cosec.spi.audit.AuditEventSink
 import me.ahoo.cosec.spi.ratelimit.RateLimiter
 import me.ahoo.cosec.spring.boot.CoSecProperties
 import me.ahoo.cosec.spring.boot.ConditionalOnCoSecEnabled
@@ -91,7 +93,6 @@ private val log = KotlinLogging.logger {}
     CoSecProperties::class,
     AuditProperties::class,
     KafkaAuditProperties::class,
-    ListenerProperties::class,
     MetricsProperties::class,
     Ip2RegionProperties::class,
 )
@@ -159,10 +160,20 @@ class CoSecPipelineIntegrationAutoConfiguration {
         fun cosecKafkaAuditListener(
             kafkaOperations: KafkaOperations<String, String>,
             environment: org.springframework.core.env.Environment,
+            beans: org.springframework.beans.factory.ListableBeanFactory,
         ): KafkaAuditListener = KafkaAuditListener(
             kafkaOperations,
             environment.getProperty(KafkaAuditProperties.PREFIX + ".topic", KafkaAuditProperties.DEFAULT_TOPIC),
             kafkaAuditDelivery(environment),
+            // One listener's part of the decision listeners' share (OBS-11), over every listener and sink the context
+            // declares: at most what its decision queue holds, since the BEST_EFFORT ones are fewer.
+            queueCapacity = DerivedHeap.budget().decisionQueueCapacity(
+                (
+                    beans.getBeanNamesForType(DecisionListener::class.java, false, false).toSet() +
+                        beans.getBeanNamesForType(AuditEventSink::class.java, false, false)
+                    ).size,
+                DerivedHeap.traceLevel(environment),
+            ),
             drainTimeout = DerivedTimeouts.drain(environment),
         )
     }

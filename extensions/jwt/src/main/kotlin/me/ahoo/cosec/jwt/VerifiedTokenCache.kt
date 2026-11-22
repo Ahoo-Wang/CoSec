@@ -35,23 +35,26 @@ import java.util.concurrent.atomic.AtomicLong
  * - **Key:** SHA-256 of the whole token as `verify` reads it: no raw token is kept, and a token that differs in any
  *   byte, its signature included, is another key.
  * - **Value:** the immutable [VerifiedToken]; only a successful verification is kept.
- * - **Bound:** at most [maxEntries] entries; one more evicts one, whichever the map yields first. An evicted or absent
- *   token costs one verification, never a different answer.
+ * - **Bound:** at most [maxBytes], each entry weighed by its token's length times [BYTES_PER_TOKEN_CHAR], what an entry
+ *   measurably retains for each character of its token; one over it evicts entries, whichever the map yields first. The
+ *   weight is reckoned in [put], on a miss, never in [get]: a hit costs what it cost. An evicted or absent token costs
+ *   one verification, never a different answer. The starter's [maxBytes] is the token cache's share of the heap
+ *   (`HeapBudget`, `STA-12`).
  * - **Never on refresh, switch or logout:** only the pipeline's authenticator gets a verifier with a cache
  *   ([JwtTokenVerifier.cached]); and the revocation and reserved-attribute checks run after it on every request, hit
  *   or miss (`TokenAuthenticator`).
  */
 @InternalCoSecApi
-class VerifiedTokenCache(val maxEntries: Int = DEFAULT_MAX_ENTRIES) {
+class VerifiedTokenCache(val maxBytes: Long) {
     init {
-        require(maxEntries > 0) { "maxEntries must be positive, not $maxEntries." }
+        require(maxBytes > 0) { "maxBytes must be positive, not $maxBytes." }
     }
 
     /**
      * A verified token, with the instants its verification compared the clock with, in epoch seconds (java-jwt
      * truncates the clock to whole seconds): valid while `validFrom <= now + skew` and `now < expires`.
      */
-    internal class Entry(val token: VerifiedToken, val validFrom: Long, val expires: Long)
+    internal class Entry(val token: VerifiedToken, val validFrom: Long, val expires: Long, val weight: Long)
 
     /** A token's SHA-256, as four longs: equality and a hash without an array. */
     internal class Key(private val a: Long, private val b: Long, private val c: Long, private val d: Long) {
@@ -66,6 +69,7 @@ class VerifiedTokenCache(val maxEntries: Int = DEFAULT_MAX_ENTRIES) {
     private val hitCount = AtomicLong()
     private val missCount = AtomicLong()
     private val evictionCount = AtomicLong()
+    private val heldBytes = AtomicLong()
 
     /** Requests answered from the cache (`cosec.token.cache.hits`). */
     val hits: Long get() = hitCount.get()
@@ -73,11 +77,14 @@ class VerifiedTokenCache(val maxEntries: Int = DEFAULT_MAX_ENTRIES) {
     /** Requests verified because no usable entry was there (`cosec.token.cache.misses`). */
     val misses: Long get() = missCount.get()
 
-    /** Entries removed to keep within [maxEntries] (`cosec.token.cache.evictions`). */
+    /** Entries removed to keep within [maxBytes] (`cosec.token.cache.evictions`). */
     val evictions: Long get() = evictionCount.get()
 
     /** The entries held now. */
     val size: Int get() = entries.size
+
+    /** What the entries held now weigh, in bytes. */
+    val held: Long get() = heldBytes.get()
 
     internal fun key(token: String): Key {
         val digest = SHA_256.get().digest(token.toByteArray(Charsets.UTF_8))
@@ -95,23 +102,36 @@ class VerifiedTokenCache(val maxEntries: Int = DEFAULT_MAX_ENTRIES) {
             hitCount.incrementAndGet()
             return entry.token
         }
-        if (entry != null && now >= entry.expires) entries.remove(key, entry)
+        if (entry != null && now >= entry.expires && entries.remove(key, entry)) heldBytes.addAndGet(-entry.weight)
         missCount.incrementAndGet()
         return null
     }
 
+    /** Keeps [entry], whose weight [weigh] reckoned on this miss, and evicts others while the cache is over [maxBytes]. */
     internal fun put(key: Key, entry: Entry) {
-        if (entries.size >= maxEntries && !entries.containsKey(key)) {
-            val victim = entries.keys.iterator()
-            if (victim.hasNext() && entries.remove(victim.next()) != null) evictionCount.incrementAndGet()
+        val previous = entries.put(key, entry)
+        heldBytes.addAndGet(entry.weight - (previous?.weight ?: 0))
+        val victims = entries.entries.iterator()
+        while (heldBytes.get() > maxBytes && victims.hasNext()) {
+            val victim = victims.next()
+            if (victim.key != key && entries.remove(victim.key, victim.value)) {
+                heldBytes.addAndGet(-victim.value.weight)
+                evictionCount.incrementAndGet()
+            }
         }
-        entries[key] = entry
     }
 
     @InternalCoSecApi
     companion object {
-        /** See `wiki/operations/configuration.md` for how it is sized. */
-        const val DEFAULT_MAX_ENTRIES = 16_384
+        /**
+         * What an entry retains for each character of its token: its key, the map's node, the [VerifiedToken] and its
+         * claims, measured with JOL (`VerifiedTokenCacheSizeTest` holds it, never below the larger of a large and a
+         * small token's measurement, and at most twice it).
+         */
+        const val BYTES_PER_TOKEN_CHAR: Long = 5
+
+        /** What an entry of [token] weighs: reckoned once, as it is put. */
+        fun weigh(token: String): Long = token.length * BYTES_PER_TOKEN_CHAR
 
         private val SHA_256: ThreadLocal<MessageDigest> = ThreadLocal.withInitial { digest() }
 

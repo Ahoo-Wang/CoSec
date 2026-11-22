@@ -35,6 +35,8 @@ dependencies {
     testImplementation("org.springframework:spring-web")
     // ProblemSchemaTest validates encoded problems against the generated schema.
     testImplementation("com.networknt:json-schema-validator")
+    // DecisionEventSizeTest holds the measured size of a queued decision event (OBS-11).
+    testImplementation("org.openjdk.jol:jol-core")
 }
 
 // PIP-25: ContractFiles, the one helper of every project's ClientContractTest (the root build registers their

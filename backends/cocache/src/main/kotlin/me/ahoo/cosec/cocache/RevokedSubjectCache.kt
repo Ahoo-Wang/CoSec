@@ -35,6 +35,9 @@ import me.ahoo.cosec.model.TenantId
 interface RevokedSubjectCache : Store<String, Long> {
     @InternalCoSecApi
     companion object {
+        /** What one local entry retains (measured, beta.5, `SaasScaleRevocationMeasurement`; `IDN-33`). */
+        const val ENTRY_BYTES = 230L
+
         /**
          * `{length of tenant}:{tenant}:{principal}`. The length keeps the key unambiguous whatever characters the ids
          * contain, and neither id may hold an unpaired UTF-16 surrogate, which the Redis key would write as `?`

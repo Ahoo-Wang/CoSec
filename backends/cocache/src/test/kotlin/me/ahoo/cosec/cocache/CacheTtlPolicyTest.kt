@@ -298,6 +298,15 @@ class CacheTtlPolicyTest {
         }
     }
 
+    @Test
+    fun revocationTablesKeepTheirDeclaredCount() {
+        listOf(CoSecCacheSpecs.revokedToken(), CoSecCacheSpecs.revokedSubject()).forEach { spec ->
+            CoSecCacheSpecs.locks(
+                spec.name
+            ).isLocked(PolicyField.LOCAL_MAXIMUM_SIZE).assert().describedAs(spec.name).isTrue()
+        }
+    }
+
     /** Review requirement: the snapshot store is a store of record like the others, with one local max age. */
     @Test
     fun snapshotCacheIsStoreOfRecordAndKeepsItsLocalCopiesShort() {

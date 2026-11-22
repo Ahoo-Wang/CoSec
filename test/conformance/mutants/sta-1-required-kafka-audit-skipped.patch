@@ -3,10 +3,10 @@
 # Tests: :spring-boot:test --tests me.ahoo.cosec.spring.boot.pipeline.StarterWiringTest
 
 diff --git a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/pipeline/CoSecPipelineAutoConfiguration.kt b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/pipeline/CoSecPipelineAutoConfiguration.kt
-index 6c05c05..de257ac 100644
+index 1799d4f..82f67a7 100644
 --- a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/pipeline/CoSecPipelineAutoConfiguration.kt
 +++ b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/pipeline/CoSecPipelineAutoConfiguration.kt
-@@ -123,15 +123,6 @@ class CoSecPipelineAutoConfiguration {
+@@ -121,15 +121,6 @@ class CoSecPipelineAutoConfiguration {
              sinks.orderedStream().toList().filter { it !is DecisionListener }
                  .map { it to AuditListener.of(it, names.getValue(it)) }
          val ordered = all.sortedWith { a, b -> AnnotationAwareOrderComparator.INSTANCE.compare(a.first, b.first) }
@@ -19,6 +19,6 @@ index 6c05c05..de257ac 100644
 -                "KafkaOperations bean (spring-boot-starter-kafka), cosec.audit.enabled=true and " +
 -                "cosec.audit.kafka.enabled=true (STA-1)."
 -        }
+         // The decision listeners' share of the heap, counted in events and divided by the BEST_EFFORT ones (OBS-11).
+         val bestEffort = ordered.count { it.second.delivery == Delivery.BEST_EFFORT }
          return DecisionListeners(
-             ordered.map { it.second },
-             DerivedTimeouts.budgets(environment).requiredListener,

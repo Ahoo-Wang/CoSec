@@ -20,12 +20,12 @@ import java.time.temporal.ChronoUnit
 
 /**
  * Local (in-process) cache settings of the revocation caches, which they declare: `cocache.defaults.store.*` does not
- * change them, `cocache.overrides.store.*` may tighten `local-max-age`, and `cocache.caches.[name].*` sets either. The
- * defaults are on the fields, not on the property that holds them: the binder builds this from its own defaults as soon
- * as one key is set, so `maximum-size` alone must not drop `local-max-age` to CoCache's default. A null value keeps
- * CoCache's default.
+ * change them, `cocache.overrides.store.*` may tighten `local-max-age`, and `cocache.caches.[name].*` sets it. The
+ * default is on the field, not on the property that holds it: the binder builds this from its own defaults as soon as
+ * one key is set. A null value keeps CoCache's default. How many entries the local copy holds is not a setting: it is
+ * the revocation tables' share of the heap (`IDN-33`), which the starter declares and CoSec locks.
  *
- * A JavaBean (a constructor without parameters, then setters), as the starter's other properties: Spring Boot 4.2's
+ * A JavaBean (a constructor without parameters, then a setter), as the starter's other properties: Spring Boot 4.2's
  * configuration processor takes a constructor-bound property's description from the constructor's `@param`, which
  * kapt does not write, so a `var` documented here is what keeps the description in the metadata.
  */
@@ -35,27 +35,20 @@ class CacheConfiguration {
     @DurationUnit(ChronoUnit.SECONDS)
     var localMaxAge: Duration? = DEFAULT_LOCAL_MAX_AGE
 
-    /** The most entries the local copy holds. */
-    var maximumSize: Long? = DEFAULT_MAXIMUM_SIZE
-
     @InternalCoSecApi
     companion object {
         /** How stale a revocation may be on an instance that missed its invalidation message. */
         val DEFAULT_LOCAL_MAX_AGE: Duration = Duration.ofSeconds(30)
-
-        /**
-         * An entry exists only for a token or a principal this replica saw in the last 30 seconds, and a miss is a Redis
-         * round trip on the request path: memory for performance. One entry retains about 290 bytes (token, its id
-         * included) or 230 bytes (principal), so both tables full take about 260 MB (measured, beta.5).
-         */
-        const val DEFAULT_MAXIMUM_SIZE: Long = 500_000
     }
 
-    /** [spec] declaring these settings. */
-    fun <K : Any, V : Any> applyTo(spec: StoreSpec<K, V>): StoreSpec<K, V> = spec.toBuilder().policy {
+    /** [spec] declaring these settings, and a local copy of at most [localMaximumSize] entries. */
+    fun <K : Any, V : Any> applyTo(
+        spec: StoreSpec<K, V>,
+        localMaximumSize: Long
+    ): StoreSpec<K, V> = spec.toBuilder().policy {
         // Not through `local`: that setter records a field as declared only when it differs from CoCache's default, so a
         // capacity equal to the default (10000) would read as unset and lose to `cocache.defaults.store.*`.
-        this@CacheConfiguration.maximumSize?.let { localMaximumSize = it }
+        this.localMaximumSize = localMaximumSize
         this@CacheConfiguration.localMaxAge?.let { localMaxAge = it }
     }.build()
 }

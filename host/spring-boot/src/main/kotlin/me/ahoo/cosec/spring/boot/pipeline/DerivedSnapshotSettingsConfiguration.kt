@@ -17,7 +17,9 @@ package me.ahoo.cosec.spring.boot.pipeline
 
 import io.github.oshai.kotlinlogging.KotlinLogging
 import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.runtime.event.DecisionListeners
 import me.ahoo.cosec.spring.boot.StartupTask
+import org.springframework.beans.factory.ObjectProvider
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
 import org.springframework.core.env.Environment
@@ -32,7 +34,9 @@ internal class DerivedSnapshotSettingsConfiguration {
         properties: RuntimeAuthorizationProperties,
         pipeline: PipelineProperties,
         environment: Environment,
+        listeners: ObjectProvider<DecisionListeners>,
     ): StartupTask = StartupTask.AfterSingletons {
-        log.info { DerivedSnapshotSettings.line(properties, pipeline.timeout, environment) }
+        val queues = listeners.ifAvailable?.takeIf { it !== DecisionListeners.NONE }?.queueCapacity
+        log.info { DerivedSnapshotSettings.line(properties, pipeline.timeout, environment, queues) }
     }
 }

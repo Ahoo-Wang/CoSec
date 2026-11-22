@@ -70,6 +70,12 @@ internal object RemovedProperties {
             "computed: 3 × cosec.authorization.snapshot.revalidate-interval",
         "cosec.authorization.membership.unknown-ttl" to
             "a constant, 5 s: a principal the loader did not know is asked again after it",
+        "cosec.observability.listener.queue-capacity" to
+            "computed: a 64th of the heap shared by the BEST_EFFORT listeners, counted at 1 KB an event, 8 KB traced",
+        "cosec.authentication.token-cache.max-entries" to
+            "computed: a 16th of the heap, each entry weighed by its token's length",
+        "cosec.authentication.revocation.cache.maximum-size" to
+            "computed: an 8th of the heap, counted at 290 + 230 bytes an entry of each table",
     )
 
     private val byName: Map<ConfigurationPropertyName, String> =

@@ -1,0 +1,17 @@
+# Rule: IDN-32
+# Mutant: the verified-token cache weighs every entry at nothing, so it grows past its share of the heap
+# Tests: :jwt:test --tests me.ahoo.cosec.jwt.VerifiedTokenCachePropertyTest
+
+diff --git a/extensions/jwt/src/main/kotlin/me/ahoo/cosec/jwt/VerifiedTokenCache.kt b/extensions/jwt/src/main/kotlin/me/ahoo/cosec/jwt/VerifiedTokenCache.kt
+index 07e6f3c..eaccb00 100644
+--- a/extensions/jwt/src/main/kotlin/me/ahoo/cosec/jwt/VerifiedTokenCache.kt
++++ b/extensions/jwt/src/main/kotlin/me/ahoo/cosec/jwt/VerifiedTokenCache.kt
+@@ -131,7 +131,7 @@ class VerifiedTokenCache(val maxBytes: Long) {
+         const val BYTES_PER_TOKEN_CHAR: Long = 5
+ 
+         /** What an entry of [token] weighs: reckoned once, as it is put. */
+-        fun weigh(token: String): Long = token.length * BYTES_PER_TOKEN_CHAR
++        fun weigh(token: String): Long = 0
+ 
+         private val SHA_256: ThreadLocal<MessageDigest> = ThreadLocal.withInitial { digest() }
+ 

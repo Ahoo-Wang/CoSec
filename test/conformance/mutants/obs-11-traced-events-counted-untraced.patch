@@ -1,0 +1,17 @@
+# Rule: OBS-11
+# Mutant: a pipeline traced at full counts its queued events at the untraced size, so its queues hold eight times their share
+# Tests: :runtime:test --tests me.ahoo.cosec.runtime.event.DecisionEventSizeTest
+
+diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/HeapBudget.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/HeapBudget.kt
+index 602ced3..6438b4b 100644
+--- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/HeapBudget.kt
++++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/HeapBudget.kt
+@@ -108,7 +108,7 @@ class HeapBudget private constructor(val heap: Long) {
+         /** What one queued decision event of [traceLevel] retains. */
+         fun decisionEventBytes(traceLevel: TraceLevel): Long = when (traceLevel) {
+             TraceLevel.OFF -> DECISION_EVENT_BYTES
+-            TraceLevel.FULL -> FULL_TRACE_EVENT_BYTES
++            TraceLevel.FULL -> DECISION_EVENT_BYTES
+             TraceLevel.EXHAUSTIVE -> EXHAUSTIVE_TRACE_EVENT_BYTES
+         }
+ 

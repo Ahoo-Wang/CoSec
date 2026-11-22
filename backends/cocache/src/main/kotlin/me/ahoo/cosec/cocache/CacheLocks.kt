@@ -107,6 +107,8 @@ internal object CacheLocks {
                 // own, which neither ttl nor ttl-jitter shortens in Redis; local-maximum-size only evicts.
                 lock(PolicyField.ABSENT_TTL)
                 constrain(PolicyField.ABSENT_TTL) { NOT_REVOKED_FOR }
+                // The local copy holds the revocation tables' share of the heap (IDN-33): the declaration's count, kept.
+                lock(PolicyField.LOCAL_MAXIMUM_SIZE)
             }
 
             TOKEN_FAMILY_CACHE_NAME -> {
