@@ -1,0 +1,17 @@
+# Rule: PIP-33
+# Mutant: each revocation read may take 60 % of the authentication budget, so a token's two reads outlast it and a hanging Redis is a 503 before fail-closed can decide
+# Tests: :runtime:test --tests me.ahoo.cosec.runtime.StageBudgetsTest
+
+diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/StageBudgets.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/StageBudgets.kt
+index 8e24187..68865bf 100644
+--- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/StageBudgets.kt
++++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/StageBudgets.kt
+@@ -56,7 +56,7 @@ class StageBudgets private constructor(
+         const val MEMBERSHIP_PERCENT: Int = 10
+         const val ATTRIBUTE_PERCENT: Int = 6
+         const val RATE_LIMIT_PERCENT: Int = 10
+-        const val REVOCATION_READ_PERCENT: Int = 30
++        const val REVOCATION_READ_PERCENT: Int = 60
+         const val REQUIRED_LISTENER_PERCENT: Int = 20
+ 
+         /** The least a stage gets: a share of a very small deadline is never zero. */

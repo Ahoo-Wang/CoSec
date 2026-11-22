@@ -29,20 +29,12 @@ import kotlin.time.toKotlinDuration
  */
 @ExperimentalCoSecApi
 class PipelineSettings internal constructor() {
-    /** The whole request, from the facts to the outcome (`cosec.pipeline.timeout`): past it, 503. */
+    /**
+     * The whole request, from the facts to the outcome (`cosec.pipeline.timeout`): past it, 503. Every stage's own
+     * timeout is a share of it (`PIP-33`): the authenticator 20 %, the membership provider 10 %, an attribute provider
+     * that sets none of its own 6 %, the rate limiter 10 %, a REQUIRED decision listener 20 %.
+     */
     var timeout: Duration = DEFAULTS.timeout.toJavaDuration()
-
-    /** The authenticator's answer (`cosec.pipeline.authentication-timeout`): past it, 503. */
-    var authenticationTimeout: Duration = DEFAULTS.authenticationTimeout.toJavaDuration()
-
-    /** The membership provider's answer (`cosec.authorization.membership.timeout`): past it, 503. */
-    var membershipTimeout: Duration = DEFAULTS.membershipTimeout.toJavaDuration()
-
-    /** One attribute provider's answer, unless it sets its own (`cosec.authorization.attributes.timeout`). */
-    var attributeTimeout: Duration = DEFAULTS.attributeTimeout.toJavaDuration()
-
-    /** The rate limiter's answer (`cosec.authorization.rate-limit.timeout`). */
-    var rateLimitTimeout: Duration = DEFAULTS.rateLimitTimeout.toJavaDuration()
 
     /** Whether a token is read from the `authorization` query parameter (`cosec.pipeline.allow-query-token`). */
     var allowQueryToken: Boolean = DEFAULTS.allowQueryToken
@@ -58,10 +50,6 @@ class PipelineSettings internal constructor() {
 
     internal fun toOptions(): PipelineOptions = PipelineOptions(
         timeout = timeout.toKotlinDuration(),
-        authenticationTimeout = authenticationTimeout.toKotlinDuration(),
-        membershipTimeout = membershipTimeout.toKotlinDuration(),
-        attributeTimeout = attributeTimeout.toKotlinDuration(),
-        rateLimitTimeout = rateLimitTimeout.toKotlinDuration(),
         allowQueryToken = allowQueryToken,
         allowCookieToken = allowCookieToken,
         apiKeyHeader = apiKeyHeader,

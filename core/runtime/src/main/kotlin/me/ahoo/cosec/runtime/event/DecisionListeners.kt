@@ -60,7 +60,7 @@ private val log = KotlinLogging.logger {}
  *
  * [close] stops taking events; the consumers finish what is queued. [drain] does that for at most [drainTimeout], then
  * stops: no listener call starts any more, and what is left is dropped and counted. [cancel] stops at once. That is
- * what a host calls on shutdown (`cosec.observability.listener.drain-timeout`). Every published event is delivered,
+ * what a host calls on shutdown (a sixth of the shutdown phase, `OBS-10`). Every published event is delivered,
  * dropped or still queued, and counted once.
  *
  * The request's thread never logs (#1392): a drop only counts and signals a reporter, which logs on [dispatcher] how
@@ -72,13 +72,13 @@ private val log = KotlinLogging.logger {}
 @InternalCoSecApi
 class DecisionListeners(
     listeners: List<DecisionListener>,
-    /** `cosec.observability.listener.required-timeout`: how long one REQUIRED listener may take. */
+    /** How long one REQUIRED listener may take: 20 % of the pipeline timeout ([me.ahoo.cosec.runtime.StageBudgets]). */
     val requiredTimeout: Duration = 1.seconds,
     /** `cosec.observability.listener.queue-capacity`: the events one BEST_EFFORT listener may have waiting. */
     queueCapacity: Int = DEFAULT_QUEUE_CAPACITY,
     dispatcher: CoroutineDispatcher = Dispatchers.Default,
     private val warnInterval: Duration = 10.seconds,
-    /** `cosec.observability.listener.drain-timeout`: how long [drain] lets the consumers deliver what is queued. */
+    /** How long [drain] lets the consumers deliver what is queued: a sixth of the shutdown phase (`OBS-10`). */
     private val drainTimeout: Duration = DEFAULT_DRAIN_TIMEOUT,
 ) : AutoCloseable {
     /** What happened to one listener's events. */

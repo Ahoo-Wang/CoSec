@@ -38,8 +38,8 @@ interface AttributeProvider {
     val attributes: List<AttributeDeclaration>
 
     /**
-     * How long one [fetch] may take; null for the pipeline's attribute timeout (`cosec.authorization.attributes.timeout`).
-     * Past it, its attributes are unavailable.
+     * How long one [fetch] may take; null for the pipeline's attribute timeout, 6 % of `cosec.pipeline.timeout`
+     * (`PIP-33`). Past it, its attributes are unavailable.
      */
     val timeout: Duration? get() = null
 

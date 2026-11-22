@@ -62,7 +62,7 @@ import me.ahoo.cosec.spring.boot.StartupTaskExclusion
 import me.ahoo.cosec.spring.boot.jwt.JwtProperties
 import me.ahoo.cosec.spring.boot.pipeline.CoCacheRevocation
 import me.ahoo.cosec.spring.boot.pipeline.CoSecPipelineAutoConfiguration
-import me.ahoo.cosec.spring.boot.pipeline.ListenerProperties
+import me.ahoo.cosec.spring.boot.pipeline.DerivedTimeouts
 import me.ahoo.cosec.spring.boot.pipeline.PipelineProperties
 import me.ahoo.cosec.spring.boot.pipeline.RevocationProperties
 import me.ahoo.cosec.spring.boot.pipeline.RuntimeAuthorizationProperties
@@ -241,11 +241,10 @@ internal class CoSecControlAutoConfiguration {
         fun cosecKafkaChangeListener(
             kafkaOperations: KafkaOperations<String, String>,
             properties: ControlProperties,
-            listenerProperties: ObjectProvider<ListenerProperties>,
+            environment: Environment,
         ): KafkaChangeListener = with(properties.audit.kafka) {
-            // Drains on shutdown as the decision listeners do (cosec.observability.listener.drain-timeout).
-            val drainTimeout = listenerProperties.getIfAvailable { ListenerProperties() }.drainTimeout
-            KafkaChangeListener(kafkaOperations, topic, delivery, drainTimeout = drainTimeout)
+            // Drains on shutdown as the decision listeners do (OBS-10).
+            KafkaChangeListener(kafkaOperations, topic, delivery, drainTimeout = DerivedTimeouts.drain(environment))
         }
     }
 

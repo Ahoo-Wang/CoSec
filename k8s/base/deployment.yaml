@@ -21,7 +21,8 @@ spec:
       enableServiceLinks: false
       # The gateway never calls the Kubernetes API.
       automountServiceAccountToken: false
-      # preStop (5 s), then Spring's graceful shutdown (30 s at most) and the decision listeners' drain (5 s).
+      # preStop (5 s), then Spring's graceful shutdown (30 s at most) and the decision listeners' drain (5 s: a sixth of
+      # spring.lifecycle.timeout-per-shutdown-phase, which raises it with the phase).
       terminationGracePeriodSeconds: 45
       securityContext:
         # The image's appuser:appgroup. The image names its user instead of giving a uid, so runAsNonRoot cannot

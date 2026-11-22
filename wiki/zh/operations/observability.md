@@ -17,7 +17,7 @@ description: "看清 CoSec 做出的每个决策以及文档的每次变更：�
 
 | 投递方式 | 监听器何时运行 | 失败的后果 |
 |---|---|---|
-| `REQUIRED` | 在响应之前，与其他 `REQUIRED` 监听器一起运行，每个都在 [`cosec.observability.listener.required-timeout`](./configuration.md#decision-listeners)（1 秒）之内，并且在 `cosec.pipeline.timeout` 剩余的时间之内。它看到的是到此为止决定的结果。 | 放行变成 `503` `unavailable`，请求不会继续。其他结果保持原状态；失败以 `ERROR` 记录并计数。 |
+| `REQUIRED` | 在响应之前，与其他 `REQUIRED` 监听器一起运行，每个都在 `cosec.pipeline.timeout` 的 20 %（默认 1 秒）之内，并且在 `cosec.pipeline.timeout` 剩余的时间之内。它看到的是到此为止决定的结果。 | 放行变成 `503` `unavailable`，请求不会继续。其他结果保持原状态；失败以 `ERROR` 记录并计数。 |
 | `BEST_EFFORT`（默认） | 结果确定之后，在请求路径之外运行。每个监听器有自己容量为 [`cosec.observability.listener.queue-capacity`](./configuration.md)（1,024）个事件的队列和自己的消费者，所以慢的监听器绝不会让别的监听器丢事件。它看到的是最终结果。 | 对请求没有影响。队列满时丢弃事件并计数，请求从不等待与之相关的日志：由一个报告者在请求线程之外，最多每 10 秒以 `WARN` 记录一次 `Dropping decision events: the queue of listener [<name>] is full; <n> dropped since the last report.`。抛异常的监听器最多每 10 秒以 `WARN` 记录一次，并会计数。 |
 
 ### 每个输出中的“什么做出了决定” {#what-decided-in-every-output}
@@ -64,7 +64,7 @@ starter 注册的监听器：
   break-glass 之前，设置 `cosec.audit.kafka.delivery=required`，或者注册你自己的 `REQUIRED` 监听器。
 - **`REQUIRED` 监听器应按事件的 `id` 保持幂等**：超时的写入可能其实已经成功。
 - **关闭时**，监听器停止接收事件，已在队列中的事件仍会继续投递，最多
-  [`cosec.observability.listener.drain-timeout`](./configuration.md)（5 秒）。之后不再开始任何监听器调用：进行中的调用不会被中断，剩下的事件被丢弃并计入 `cosec.listener.dropped`，并以 `WARN` 记录
+  `spring.lifecycle.timeout-per-shutdown-phase` 的六分之一（默认 5 秒）。之后不再开始任何监听器调用：进行中的调用不会被中断，剩下的事件被丢弃并计入 `cosec.listener.dropped`，并以 `WARN` 记录
   `Decision listeners did not deliver every queued event within <timeout>; <n> were dropped, and no listener call starts any more.`。随后 Kafka 审计监听器
   最多再用同样长的时间，等待它手中的发送以及 broker 对这些发送的应答，然后才关闭 producer。到达这个上限时，排队的发送
   被丢弃，进行中的发送被中断，并以 `WARN` 记录 `The Kafka audit queue of [<topic>] did not drain within <timeout>: <n> queued records are dropped and <n> sends are unanswered.`
@@ -307,7 +307,7 @@ CoCache 会在同一个 registry 中为 CoSec 的缓存记录它自己的指标�
   变更监听器是累加的：每个 `ChangeListener` bean 都会注册，只有应用自己声明了 `LoggingChangeListener` bean 时才不再
   注册默认的日志监听器。变更日志以 `INFO` 写出：把 `me.ahoo.cosec` 设得高于 `INFO` 的配置，要按名字把 `me.ahoo.cosec.changelog` 设为 `INFO`，与任何你要保留的记录一样。
 - **`PUBLISHING`、`BREAK_GLASS_REQUESTED` 和 `BREAK_GLASS_APPROVED` 是受控的：** 每个 `REQUIRED` 变更监听器都必须在
-  [`cosec.control.audit.required-timeout`](./configuration.md#control-plane)（5 秒，所有监听器合计）内记录该事件，这一步才会生效，否则这一步不会发生，控制 API 返回 `503`。其他事件，以及发给 `BEST_EFFORT` 监听器的
+  `cosec.pipeline.timeout`（默认 5 秒，所有监听器合计）内记录该事件，这一步才会生效，否则这一步不会发生，控制 API 返回 `503`。其他事件，以及发给 `BEST_EFFORT` 监听器的
   所有事件，都在之后投递；失败记录为 `Change listener [<name>] could not record <event>.` 修订记录是已发布内容的持久
   记录。受控事件说明这一步即将发生，而不是已经发生：它之后的检查仍可能拒绝这一步（变更在此期间变化了时返回 `409`），
   `BREAK_GLASS_APPROVED` 或 `ABANDONED` 之后都可能如此。发生了什么以变更的状态为准，发布则另以修订历史为准。
@@ -345,13 +345,13 @@ break-glass 等待 broker 的确认（把生产者配置为 `acks=all`）。设�
 
 监听器**按本实例写入的顺序**接收一个变更的事件（`CTL-66`）：每个监听器有一个队列和一个消费者，一个步骤的事件排在它之前各步骤的事件之后。跨实例没有顺序可言（在一台控制面主机上提议、在另一台上发布，是两个进程）：消费方按每个事件的 `time` 和变更的记录排序。Kafka 变更监听器按文档作为 key，在其分区内保持这一顺序。
 
-- **受控的步骤**（`PUBLISHING`、break-glass）在 `cosec.control.audit.required-timeout` 内等待每个 `REQUIRED` 监听器记录它的事件，排在此前已入队的事件之后；否则返回 `503`，其事件此后也不会被记录。
+- **受控的步骤**（`PUBLISHING`、break-glass）在 `cosec.pipeline.timeout` 内等待每个 `REQUIRED` 监听器记录它的事件，排在此前已入队的事件之后；否则返回 `503`，其事件此后也不会被记录。
 - **REQUIRED 监听器的队列已满**时，其他步骤的事件最多等待同样的时长以腾出空间，并按到达的顺序：较小的事件从不抢在先到的较大事件之前占用空间。该步骤已经存储，因此从不为此失败。等不到空间的事件**丢失**：计入 `cosec.control.listener.lost`，并以 `ERROR` 记录（`Change event <kind> of change <id> on <doc> was not handed to REQUIRED change listener [<name>]: ...`）。
 - **REQUIRED 监听器的调用失败**同样使其他步骤的事件丢失：调用抛出异常，或在超时内没有应答。它计入同一个 `cosec.control.listener.lost`，并连同失败原因以 `ERROR` 记录（`Change event <kind> of change <id> on <doc> was not recorded by REQUIRED change listener [<name>]: <failure>.`），然后交付下一个事件。队列已满和调用失败是 REQUIRED 监听器错过事件的两种途径：**在 `cosec.control.listener.lost` 大于零时告警。**
 - **BEST_EFFORT 监听器的队列已满时丢弃新来的事件**，所以到达的是一个有序的前缀：消费方看到的是缺口，从不是乱序。丢弃计入 `cosec.control.listener.dropped`，并以 `WARN` 记录，每个 required timeout 至多一次。
 - **上限是推导出来的，不是配置的。** 所有队列合计至多占用堆的三十二分之一，由各监听器平分，每个事件按它所持有的内容计量。启动时一条 `INFO` 说明结果（`Change listeners [...]: their queues hold at most 64.0 MB (the heap's 2048.0 MB / 32), 32.0 MB each`）。健康的接收端即使经历涉及数千租户的批量变更，队列也几乎为空。
 - **停止应答的监听器只会被报告，从不被切断。** 在有事件等待、且它超过 required timeout 没有交付任何事件期间，一条 `WARN` 写明它、队列深度和最早事件的等待时长，每个 required timeout 至多一次。它恢复应答时，按顺序交付其份额内保留的一切。`REQUIRED` 监听器在超时内没有应答的调用视为失败，并交付下一个事件。
-- **关闭时监听器先排空队列**，时限是决策监听器的 `cosec.observability.listener.drain-timeout`。它们不再接收事件，交付已入队的事件；剩下的按监听器计数并记录（`Change listener [<name>] never records <n> change events: they were still queued when the drain of <timeout> ended.`，`REQUIRED` 监听器为 `ERROR`，其他为 `WARN`），之后才停止。排空期间到来的受控步骤在生效前以 `503` 拒绝，与 `REQUIRED` 监听器无法记录它时相同。其他步骤已经存储：其事件以同样方式记录，从不入队后丢失。
+- **关闭时监听器先排空队列**，时限是决策监听器的 `spring.lifecycle.timeout-per-shutdown-phase` 的六分之一。它们不再接收事件，交付已入队的事件；剩下的按监听器计数并记录（`Change listener [<name>] never records <n> change events: they were still queued when the drain of <timeout> ended.`，`REQUIRED` 监听器为 `ERROR`，其他为 `WARN`），之后才停止。排空期间到来的受控步骤在生效前以 `503` 拒绝，与 `REQUIRED` 监听器无法记录它时相同。其他步骤已经存储：其事件以同样方式记录，从不入队后丢失。
 
 指标，均带 `listener` 标签：
 

@@ -50,6 +50,27 @@ internal object RemovedProperties {
             "computed: the 8 MB document cap and 2 MB for the operations around it",
         "cosec.control.maintenance.enabled" to
             "every control-plane instance runs the maintenance passes, kept apart by their leases",
+        "cosec.pipeline.authentication-timeout" to
+            "computed: 20 % of cosec.pipeline.timeout",
+        "cosec.authorization.membership.timeout" to
+            "computed: 10 % of cosec.pipeline.timeout",
+        "cosec.authorization.attributes.timeout" to
+            "computed: 6 % of cosec.pipeline.timeout, for an AttributeProvider that sets no timeout of its own",
+        "cosec.authorization.rate-limit.timeout" to
+            "computed: 10 % of cosec.pipeline.timeout",
+        "cosec.authentication.revocation.read-timeout" to
+            "computed: 30 % of the authentication timeout, so that a token's two reads end inside it",
+        "cosec.observability.listener.required-timeout" to
+            "computed: 20 % of cosec.pipeline.timeout",
+        "cosec.control.audit.required-timeout" to
+            "computed: cosec.pipeline.timeout, the bound of the control request's authorization",
+        "cosec.observability.listener.drain-timeout" to
+            "computed: a sixth of spring.lifecycle.timeout-per-shutdown-phase, for the change listeners and the Kafka " +
+                "listeners too",
+        "cosec.authorization.snapshot.local-max-age" to
+            "computed: 3 × cosec.authorization.snapshot.revalidate-interval",
+        "cosec.authorization.membership.unknown-ttl" to
+            "a constant, 5 s: a principal the loader did not know is asked again after it",
     )
 
     private val byName: Map<ConfigurationPropertyName, String> =

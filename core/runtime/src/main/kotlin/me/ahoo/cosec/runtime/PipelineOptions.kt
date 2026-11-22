@@ -16,28 +16,28 @@ package me.ahoo.cosec.runtime
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.engine.TraceLevel
 import kotlin.time.Duration
-import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
 
 /**
  * How the [Pipeline] bounds and reads a request. The defaults are RFC 0006 Q25's; the starter sets them from the
- * `cosec.pipeline.*` properties.
+ * `cosec.pipeline.*` properties. Each stage's timeout defaults to its share of [timeout] ([StageBudgets], `PIP-33`):
+ * the starter and the builder set the deadline only, and only CoSec's own tests set a stage apart from it.
  */
 @InternalCoSecApi
 class PipelineOptions(
     /** The whole evaluation (`cosec.pipeline.timeout`): an upper bound, not the sum of the stages. Then 503. */
     val timeout: Duration = 5.seconds,
-    /** One [me.ahoo.cosec.spi.authn.Authenticator] call. Then 503. */
-    val authenticationTimeout: Duration = 1.seconds,
-    /** One `MembershipProvider` call (`cosec.authorization.membership.timeout`, RFC 0004). Then 503. */
-    val membershipTimeout: Duration = 500.milliseconds,
+    /** One [me.ahoo.cosec.spi.authn.Authenticator] call ([StageBudgets.authentication]). Then 503. */
+    val authenticationTimeout: Duration = StageBudgets.of(timeout).authentication,
+    /** One `MembershipProvider` call ([StageBudgets.membership], RFC 0004). Then 503. */
+    val membershipTimeout: Duration = StageBudgets.of(timeout).membership,
     /**
-     * One `AttributeProvider` call that sets no timeout of its own (`cosec.authorization.attributes.timeout`, RFC 0006
-     * §5.4.2). Then its attributes are unavailable.
+     * One `AttributeProvider` call that sets no timeout of its own ([StageBudgets.attribute], RFC 0006 §5.4.2). Then
+     * its attributes are unavailable.
      */
-    val attributeTimeout: Duration = 300.milliseconds,
-    /** One `RateLimiter` call (`cosec.authorization.rate-limit.timeout`, RFC 0006 §8.3); then the rule's `strictFailure` decides. */
-    val rateLimitTimeout: Duration = 500.milliseconds,
+    val attributeTimeout: Duration = StageBudgets.of(timeout).attribute,
+    /** One `RateLimiter` call ([StageBudgets.rateLimit], RFC 0006 §8.3); then the rule's `strictFailure` decides. */
+    val rateLimitTimeout: Duration = StageBudgets.of(timeout).rateLimit,
     /** Whether the token may come from the `authorization` query parameter; off, as tokens in URLs leak into logs. */
     val allowQueryToken: Boolean = false,
     /**

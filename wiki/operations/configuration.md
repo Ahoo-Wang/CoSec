@@ -35,12 +35,13 @@ Redis's eviction policy, replica reads, API keys without a `MembershipProvider`)
 application would otherwise skip them all.
 
 Keys are compared as Spring's binder compares them, so every spelling it documents for a known key is known:
-`local-max-age`, `localMaxAge` or `local_max_age` in a properties file, and `COSEC_AUTHORIZATION_SNAPSHOT_LOCALMAXAGE`
-as an environment variable (upper case, dots as underscores, dashes dropped). A variable that is not that spelling of a
-key CoSec reads stays unknown, a typo (`COSEC_PIPELINE_TIMEUOT`) and the legacy `COSEC_AUTHORIZATION_SNAPSHOT_LOCAL_MAX_AGE`
-alike: the message names it as `cosec.authorization.snapshot.local.max.age`, and, when one key CoSec reads is near it,
-what to write instead: the key and the variable when only its separators differ (`..._LOCAL_MAX_AGE` is
-`COSEC_AUTHORIZATION_SNAPSHOT_LOCALMAXAGE`), or the one key a typo is within two edits of (`COSEC_PIPELINE_TIMEUOT` is
+`revalidate-interval`, `revalidateInterval` or `revalidate_interval` in a properties file, and
+`COSEC_AUTHORIZATION_SNAPSHOT_REVALIDATEINTERVAL` as an environment variable (upper case, dots as underscores, dashes
+dropped). A variable that is not that spelling of a key CoSec reads stays unknown, a typo (`COSEC_PIPELINE_TIMEUOT`) and
+the legacy `COSEC_AUTHORIZATION_SNAPSHOT_REVALIDATE_INTERVAL` alike: the message names it as
+`cosec.authorization.snapshot.revalidate.interval`, and, when one key CoSec reads is near it, what to write instead: the
+key and the variable when only its separators differ (`..._REVALIDATE_INTERVAL` is
+`COSEC_AUTHORIZATION_SNAPSHOT_REVALIDATEINTERVAL`), or the one key a typo is within two edits of (`COSEC_PIPELINE_TIMEUOT` is
 `COSEC_PIPELINE_TIMEOUT`). The words of a key are joined in its variable, whatever the dashes: `eviction-check` is
 `COSEC_AUTHORIZATION_SNAPSHOT_EVICTIONCHECK`, and `memberships-on-refresh` is `COSEC_JWT_SESSION_MEMBERSHIPSONREFRESH`.
 Every variable these docs, `k8s/` and the images' files show is held to this check.
@@ -64,7 +65,7 @@ never unknown whatever its source, so the exemption cannot hide a property CoSec
 
 What can be computed is not a property: each value below follows from a value you do set, from the machine, or from a
 limit CoSec owns, and has no key. Each is logged once at startup, in a line that begins `CoSec derived, not configured:`
-(one for the data plane's snapshot values, one for the control plane's), with what it was derived from.
+(one for the data plane's values, one for the control plane's), with what it was derived from.
 
 | Value | Computed as | From |
 |---|---|---|
@@ -73,6 +74,19 @@ limit CoSec owns, and has no key. Each is logged once at startup, in a line that
 | How long a request waits for a document that is not installed | 40 % of the pipeline timeout, at least `1ms`: `2s` at the default | [`cosec.pipeline.timeout`](#pipeline) |
 | Threads that compile documents | one per 2 cores, at least 1 and at most 4 | the cores of the process |
 | Documents a revalidation pass confirms at once | 16, a constant: a pass slower than the interval runs back to back, and only the burst depends on it | |
+| How long CoCache's local copy of a document serves a cold load before Redis is asked again | 3 revalidation intervals: `30s` at the default; whatever a cache customizer or `cocache.*` property sets | [`cosec.authorization.snapshot.revalidate-interval`](#snapshot) |
+| One call of the `Authenticator`; past it, `503` | 20 % of the pipeline timeout: `1s` at the default | [`cosec.pipeline.timeout`](#pipeline) |
+| One call of the `MembershipProvider`, and a fill of the membership cache; past it, or when it fails, `503` | 10 %: `500ms` | the same |
+| One call of an `AttributeProvider` that sets no timeout of its own; past it its attributes are unavailable, and a statement that needs them makes the decision Indeterminate | 6 %: `300ms` | the same |
+| One call of the `RateLimiter`; past it the rule's `strictFailure` decides: `503`, or the rule is skipped | 10 %: `500ms` | the same |
+| Each read of CoSec's own revocation reader (the token's, then its principal's); past it Redis counts as unreadable: the token is accepted (or refused, with `fail-closed`) and a refresh fails | 30 % of the authentication timeout: `300ms`. Twice it, a token's two reads, ends inside the authentication timeout, so a Redis that hangs never makes every authenticated request `503`. An application's own `RevocationReader` bounds its reads itself ([Extending](../architecture/extending.md)) | the same |
+| One `REQUIRED` decision listener; a failure or timeout turns a permit into `503` | 20 %: `1s`, so its wait ends inside the request | the same |
+| Every `REQUIRED` change listener together, recording a gated step (publish, break-glass); past it the step fails with `503` | the pipeline timeout, the bound of the control request's own authorization: `5s` | the same |
+| On shutdown, how long each set of listeners still delivers what is queued (the decision listeners, the change listeners); the rest is then dropped. The Kafka audit and change listeners get as long again for the sends they hold | a sixth of the shutdown phase: `5s` at Spring's default `30s`. The six drains together fit in one phase | `spring.lifecycle.timeout-per-shutdown-phase` |
+| How long an instance remembers that the `MembershipLoader` did not know a principal (a removed member's token, still valid) | 5 s, a constant: a principal you add is known by every instance when it ends, and at once where `invalidate` ran; a failed load is never remembered ([Memberships](../integration/authentication.md#memberships)) | |
+
+Each share of the pipeline timeout is at least `1ms`; below a `cosec.pipeline.timeout` of 20 ms a token's two revocation
+reads may no longer end inside the authentication timeout.
 | How often an instance writes its shadow reports and status | a sixth of the status's life (`10s`), and no oftener than a fifth of the shortest life of a window or a second | [`cosec.control.shadow.min-duration`](#control-plane), read where it is set |
 | How often each control-plane instance reclaims revisions | 1 hour, a constant: what is reclaimed is decided by `min-age` and `max-count` | |
 | When a record outside a revision chain, or a change listed and never written, is removed | one reclaim pass old: 1 hour | the reclaim interval |
@@ -143,8 +157,7 @@ It replaced `cosec.authorization.snapshot.key-prefix`, `cosec.authorization.cach
 
 | Property | Type | Default | Effect |
 |---|---|---|---|
-| `cosec.pipeline.timeout` | duration | `5s` | The whole evaluation of one request. Past it the request is answered `503` `unavailable`. |
-| `cosec.pipeline.authentication-timeout` | duration | `1s` | One call of the `Authenticator`. Past it, `503`. |
+| `cosec.pipeline.timeout` | duration | `5s` | The whole evaluation of one request. Past it the request is answered `503` `unavailable`. Every stage's own timeout is a share of it ([Computed, not configured](#computed-not-configured)). |
 | `cosec.pipeline.allow-query-token` | boolean | `false` | Also read the access token from the `authorization` query parameter. Off because URLs end up in access logs, browser history and `Referer` headers. |
 | `cosec.pipeline.allow-cookie-token` | boolean | `false` | Also read the access token from the `authorization` cookie. Off because a browser sends a cookie on its own, on a cross-site request too: turn it on only with your own CSRF defense ([Authentication](../integration/authentication.md)). |
 | `cosec.pipeline.api-key-header` | string | `X-API-Key` | The request header an API key comes in. No document may read it: every compiler of the host refuses a reference to it, as to the other credential headers ([Headers](../policies/language.md#headers)). |
@@ -158,15 +171,12 @@ It replaced `cosec.authorization.snapshot.key-prefix`, `cosec.authorization.cach
 
 ## Authorization
 
-`cosec.authorization.*`: the host's scope and the per-stage timeouts.
+`cosec.authorization.*`: the host's scope and route maps.
 
 | Property | Type | Default | Effect |
 |---|---|---|---|
 | `cosec.authorization.scope.app-id` | string | none | The app this host serves. A credential that declares another app, or none, is rejected (`403` `scope-rejected`). Unset, the credential's app applies ([Apps](../integration/authentication.md#apps)). On a gateway, a route's metadata `cosec-app-id` takes precedence for that route's requests ([Gateway](../integration/web.md#gateway)). |
 | `cosec.authorization.remote-ip.max-trusted-index` | int | `1` | How many proxy hops of `X-Forwarded-For` to trust when resolving the client IP. `0` ignores the header (the host is exposed directly); `N` takes the entry the N-th closest proxy appended. Under the `native` forward-headers strategy, set explicitly on Tomcat or `0` on Reactor Netty or Jetty, startup fails, and so does any other server or none (a war in an external container); `framework` always fails startup ([Client IP behind proxies](../integration/web.md#client-ip-behind-proxies), `PIP-16`). |
-| `cosec.authorization.membership.timeout` | duration | `500ms` | One call of the `MembershipProvider`. Past it, or when it fails, `503`. |
-| `cosec.authorization.membership.unknown-ttl` | duration | `5s` | How long an instance remembers that the `MembershipLoader` did not know a principal (the token of a removed member, still valid), so that its requests do not reach the loader each time. `0s` remembers nothing; at most `1m`, the default life of a cached membership, and a longer value fails startup. A principal you add is known by every instance when it ends, and at once on the instance where `invalidate` ran. A failed or timed-out load is never remembered ([Memberships](../integration/authentication.md#memberships)). |
-| `cosec.authorization.attributes.timeout` | duration | `300ms` | One call of an `AttributeProvider` that sets no timeout of its own. Past it, its attributes are unavailable, and a statement that needs them makes the decision Indeterminate. |
 | `cosec.authorization.routes.location` | comma-separated resource locations | unset | The route maps a WebFlux or WebMvc host loads at startup, each logged with its service and route count. A location that does not exist, a map that does not parse, or a map with no routes fails startup. Unset, no route map is loaded and every request is authorized in the `http` namespace, unless `classpath:cosec-routes.json` exists: startup then fails until the property names it or is set empty. Empty runs without a route map on purpose. A Spring Cloud Gateway host ignores it and loads no route map. |
 
 ## Gateway
@@ -198,9 +208,8 @@ A credential that never expires (an API key without `expires-at`) cannot be forw
 
 ## Rate limiting
 
-| Property | Type | Default | Effect |
-|---|---|---|---|
-| `cosec.authorization.rate-limit.timeout` | duration | `500ms` | One call of the `RateLimiter`. Past it, the rule's `strictFailure` decides: `503`, or the rule is skipped. |
+The limiter has 10 % of `cosec.pipeline.timeout` for each call; past it, the rule's `strictFailure` decides
+([Computed, not configured](#computed-not-configured)).
 
 Rate limit rules are part of the documents ([Rate limiting](../policies/rate-limiting.md)). The limiter is
 `ReactiveRedisRateLimiter` when a `ReactiveStringRedisTemplate` bean exists, otherwise `LocalRateLimiter`, which counts
@@ -214,7 +223,6 @@ of your own replaces both.
 
 | Property | Type | Default | Effect |
 |---|---|---|---|
-| `cosec.authorization.snapshot.local-max-age` | duration | `30s` | How long CoCache's local copy of a document may serve a cold load before Redis is asked again. It applies whatever a cache customizer or `cocache.*` property sets. |
 | `cosec.authorization.snapshot.revalidate-interval` | duration | `10s` | How often a pass starts that confirms every installed document against Redis with a conditional read; while a pass is still in flight, the next starts as soon as it ends, never overlapped. A change whose invalidation message was lost is installed by the first pass that reaches its document after the change is readable (`SNP-6`). At least `1s`, at most `5m` and, with `fail-closed.tenants`, less than `fail-closed.max-lag`; anything else fails startup. A document not confirmed for 6 intervals is logged at `WARN`, for 30 at `ERROR` as stale ([Computed, not configured](#computed-not-configured)). Each pass costs Redis a few microseconds per document, whatever its size ([Storage](./storage.md#what-revalidation-costs-redis)). |
 | `cosec.authorization.snapshot.fail-closed.tenants` | set of tenant ids | empty | Tenants that must not be decided on old documents: when the oldest document a request of such a tenant reads was confirmed longer ago than `max-lag`, the request is `503` (`SourceUnavailable`) unless a DENY matches. `*` names every tenant: a host with more tenants than anyone lists chooses freshness over availability for all of them. Other tenants keep deciding on what is installed. |
 | `cosec.authorization.snapshot.fail-closed.max-lag` | duration | `30m` | The lag beyond which the tenants above fail closed. Not negative. |
@@ -244,7 +252,6 @@ How windows work: [Testing changes](../policies/testing.md).
 |---|---|---|---|
 | `cosec.authentication.revocation.skew` | duration | `5s` | How far an issuer's clock may run ahead of this instance's. A token issued up to this long after a subject revocation is still revoked by it, and a token's issue time (`iat`) and not-before time (`nbf`) may be this much later than this instance's clock (`IDN-29`); a token's expiry gets no such room. |
 | `cosec.authentication.revocation.fail-closed` | boolean | `false` | Whether a request's token is refused (`503`) while the revocations cannot be read, instead of accepted ([the documented exception](../guide/security-model.md#the-two-documented-exceptions)). A refresh fails then either way. |
-| `cosec.authentication.revocation.read-timeout` | duration | `300ms` | How long each read of CoSec's own revocation reader (the CoCache one, over the revoked-token and revoked-subject caches) may take. Past it Redis counts as unreadable: a request's token is accepted (or refused, with `fail-closed`) and a refresh fails. Positive, and twice it (a token's two reads) less than `cosec.pipeline.authentication-timeout`, or startup fails naming both: otherwise a Redis that hangs makes every authenticated request `503`. An application's own `RevocationReader` bounds its reads itself ([Extending](../architecture/extending.md)). |
 | `cosec.authentication.token-cache.enabled` | boolean | `true` | Whether a request's token, once CoSec's own `JwtTokenVerifier` verified it, is answered from memory until it expires instead of having its signature checked again ([the verified-token cache](../integration/authentication.md#the-verified-token-cache), `IDN-32`). The revocation and reserved-attribute checks run on every request either way. Never for a `TokenVerifier` bean of your own. |
 | `cosec.authentication.token-cache.max-entries` | integer | `16384` | The most verified tokens kept; one more evicts one, which costs one verification when it comes again, never another answer. An entry of a large token (a dozen roles in four spaces, eight policies) retains about 7.3 KB, so the default holds at most about 115 MB, under a tenth of a 2 GB heap: size it to the tokens in use at once on one instance. |
 | `cosec.authentication.login.refresh.path` | string | unset | Where the starter serves the refresh route, `POST` of the pair (`IDN-23`, [Building a client](../integration/clients.md#what-your-application-serves)). Unset, none is served. A document must permit an anonymous `POST` of it. Set on a gateway, on a host that serves no HTTP, with login or JWT off, or to anything but one plain absolute path, startup fails. |
@@ -317,14 +324,13 @@ These size and age the local copy only. A revocation's lifetime in Redis is set 
 
 ## Decision listeners
 
-`cosec.observability.listener.*`: the time a `REQUIRED` decision listener has, and the queues of the `BEST_EFFORT` ones
+`cosec.observability.listener.*`: the queues of the `BEST_EFFORT` decision listeners. The time a `REQUIRED` one has, and
+the drain at shutdown, are [computed](#computed-not-configured)
 ([Decision listeners](./observability.md#decision-listeners)).
 
 | Property | Type | Default | Effect |
 |---|---|---|---|
-| `cosec.observability.listener.required-timeout` | duration | `1s` | How long one `REQUIRED` decision listener may take. A failure or timeout turns a permit into `503`. |
 | `cosec.observability.listener.queue-capacity` | int | `1024` | Events one `BEST_EFFORT` listener may have waiting. A full queue drops the next event and counts it (`cosec.listener.dropped`). |
-| `cosec.observability.listener.drain-timeout` | duration | `5s` | On shutdown, how long queued events still go out; the rest is then dropped. The control plane's change listeners drain within it too ([order and queues](./observability.md#change-event-order)). The Kafka audit listener, and the control plane's Kafka change listener, get as long again for the sends they still hold. |
 
 ## Control plane
 
@@ -351,7 +357,6 @@ credential is ever revoked.
 | `cosec.control.shadow.min-duration` | duration | `15m` | A shadow window closes no earlier than this, once it also has `min-samples`. The control plane looks at the open windows every fifteenth of it. A data-plane instance reads it too, as a cadence only: one whose configuration has it writes its shadow reports every fifth of it (at least a second, at most 10 s), and one whose configuration does not reports every 10 seconds. The data plane's startup line says which ([Computed, not configured](#computed-not-configured)). |
 | `cosec.control.shadow.min-samples` | long | `1000` | Compared samples a window needs to close before `max-duration`. `0` lets a window close on time alone, with no sample at all if no request came: the shadow step then proves nothing, and startup logs a `WARN` saying so. |
 | `cosec.control.shadow.max-duration` | duration | `24h` | A window closes at this age with fewer samples, as insufficient evidence the publisher must acknowledge. Must not be less than `min-duration`. |
-| `cosec.control.audit.required-timeout` | duration | `5s` | How long every `REQUIRED` change listener together may take to record a gated step (publish, break-glass) before the step fails with `503`. |
 | `cosec.control.audit.kafka.enabled` | boolean | `true` | The Kafka change listener (`cosec-kafka` and a `KafkaOperations` bean). |
 | `cosec.control.audit.kafka.topic` | string | `cosec-control-audit` | Kafka topic of the change events. |
 | `cosec.control.audit.kafka.delivery` | `best-effort`, `required` | `best-effort` | `required` makes publishing and break-glass wait for the broker. Startup fails when it is `required` and no Kafka change listener could be created. |
@@ -419,7 +424,7 @@ Every CoSec cache is assembled by CoCache's layers, field by field; a later step
 
 1. CoCache's type default (`store`: no `ttl`, `local-max-age` 30 s; `cache`: `ttl` 1 h);
 2. `cocache.defaults.cache.*` or `cocache.defaults.store.*`, for the fields CoSec's declaration leaves unwritten;
-3. CoSec's declaration: `cosec.authorization.snapshot.local-max-age` for the snapshot store,
+3. CoSec's declaration: 3 × `cosec.authorization.snapshot.revalidate-interval` as the snapshot store's local max age,
    `cosec.authentication.revocation.cache.*` for the revocation tables;
 4. the application's CoCache `CacheSpecCustomizer` beans;
 5. `cocache.overrides.*`, which only tighten;

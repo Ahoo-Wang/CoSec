@@ -297,13 +297,13 @@ with the host stopped. Its probes are on the management port 8081, never on 8080
 ### One principal, tenant or route gets 503
 
 - **Memberships unavailable**: the token carries `cosec.membership: "provider"` and no `MembershipProvider` bean
-  exists, or it failed or exceeded `cosec.authorization.membership.timeout`; or the token has the marker together with
+  exists, or it failed or exceeded the membership timeout (10 % of `cosec.pipeline.timeout`); or the token has the marker together with
   `roles`/`policies` claims, or an unknown marker.
 - **Missing or ambiguous policy**: the token's `policies` claim names a policy that does not exist or is not
   `attachable`; a tenant binding names a platform policy that was removed; or a tenant defines a policy id the platform
   also defines.
 - **External attribute unavailable**: a statement reads `ext.<provider>.<name>` with `onMissing: indeterminate`
-  (default) and the provider failed, timed out (`cosec.authorization.attributes.timeout`) or is not registered on this
+  (default) and the provider failed, timed out (the attribute timeout, 6 % of `cosec.pipeline.timeout`) or is not registered on this
   instance. A blacklist source failure makes every request 503 unless a DENY matches.
 - **Only IPv6 clients get 503, on a statement reading `ext.ip2region.*`**: the host has only the bundled IPv4 ip2region
   database, and an address no loaded database covers is unavailable, not absent (`ATR-9`). Confirm with the startup
@@ -315,7 +315,7 @@ with the host stopped. Its probes are on the management port 8081, never on 8080
   values`); an ALLOW on it then does not match. One value repeated reads as that value.
 - **Rate limiter cannot count** and the matching rule has `strictFailure: true` (on a Redis Cluster, `CROSSSLOT` in
   the log: see Rate limiting; without Redis, a full `LocalRateLimiter`: see Rate limiting).
-- **A REQUIRED decision listener failed or timed out** (`cosec.observability.listener.required-timeout`): it turns a permit into 503.
+- **A REQUIRED decision listener failed or timed out** (20 % of `cosec.pipeline.timeout`): it turns a permit into 503.
 - **The authenticator's dependency failed** (for example the API key or revocation store); a revocation store that
   cannot be read lets the request's token through instead (the documented exception to fail closed), unless
   `cosec.authentication.revocation.fail-closed` is on. A refresh fails then (`RevocationUnavailableException`, `IDN-14`):

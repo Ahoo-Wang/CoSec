@@ -885,10 +885,11 @@ class PipelineRunner(private val compiler: SnapshotCompiler = DocumentSnapshotCo
             "apiKeyHeader",
             "allowCookieToken",
         )
-        val defaults = PipelineOptions()
         fun millis(field: String) = node.get(field)?.let { it.asLong().milliseconds }
+        // A stage left out gets its share of the scenario's timeout, as in a host (PIP-33).
+        val defaults = millis("timeoutMillis")?.let { PipelineOptions(timeout = it) } ?: PipelineOptions()
         return PipelineOptions(
-            timeout = millis("timeoutMillis") ?: defaults.timeout,
+            timeout = defaults.timeout,
             authenticationTimeout = millis("authenticationTimeoutMillis") ?: defaults.authenticationTimeout,
             membershipTimeout = millis("membershipTimeoutMillis") ?: defaults.membershipTimeout,
             attributeTimeout = millis("attributeTimeoutMillis") ?: defaults.attributeTimeout,

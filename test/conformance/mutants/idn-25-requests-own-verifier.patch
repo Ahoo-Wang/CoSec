@@ -3,13 +3,13 @@
 # Tests: :spring-boot:test --tests me.ahoo.cosec.spring.boot.realserver.OneVerifierTest
 
 diff --git a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/pipeline/CoSecPipelineAutoConfiguration.kt b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/pipeline/CoSecPipelineAutoConfiguration.kt
-index dfdc5fbd6..7fc76af95 100644
+index 6c05c05..de757ed 100644
 --- a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/pipeline/CoSecPipelineAutoConfiguration.kt
 +++ b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/pipeline/CoSecPipelineAutoConfiguration.kt
-@@ -182,8 +182,8 @@ class CoSecPipelineAutoConfiguration {
+@@ -180,8 +180,8 @@ class CoSecPipelineAutoConfiguration {
+         beans: ListableBeanFactory,
          tokenCache: ObjectProvider<VerifiedTokenCache>,
      ): Authenticator {
-         checkRevocationReadTimeout(revocationProperties.readTimeout, pipelineProperties.authenticationTimeout)
 -        val tokenVerifier = verifier.ifAvailable
 -            ?: signing.ifAvailable?.let { JwtTokenVerifier(it, revocationProperties.skew) }
 +        val tokenVerifier = signing.ifAvailable?.let { JwtTokenVerifier(it, revocationProperties.skew) }

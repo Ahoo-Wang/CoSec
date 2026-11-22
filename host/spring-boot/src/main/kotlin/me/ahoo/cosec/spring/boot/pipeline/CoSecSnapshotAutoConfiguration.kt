@@ -91,8 +91,8 @@ class CoSecSnapshotAutoConfiguration {
     class Redis {
         /**
          * The snapshot store, created through CoCache's factory like every CoSec cache: the `cocache.*` properties and
-         * customizers apply to it, except for what [CoSecCacheSpecs.locks] keeps, such as its one local max age, from
-         * `cosec.authorization.snapshot.local-max-age`.
+         * customizers apply to it, except for what [CoSecCacheSpecs.locks] keeps, such as its one local max age, 3 ×
+         * `cosec.authorization.snapshot.revalidate-interval`.
          */
         @Bean
         @ConditionalOnMissingBean
@@ -107,7 +107,11 @@ class CoSecSnapshotAutoConfiguration {
             // Read-only unless this process runs the control plane, the only writer of documents (SNP-18).
             val readOnly = !ControlPlaneCondition.wired(resources.classLoader, environment)
             return factory.createPolicySnapshotCache(
-                CoSecCacheSpecs.policySnapshot(cosec.keyPrefix, snapshot.localMaxAge, readOnly)
+                CoSecCacheSpecs.policySnapshot(
+                    cosec.keyPrefix,
+                    DerivedTimeouts.snapshotLocalMaxAge(snapshot.revalidateInterval),
+                    readOnly,
+                )
             )
         }
 

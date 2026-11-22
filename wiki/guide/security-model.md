@@ -158,7 +158,7 @@ WebFlux, WebMvc and Gateway adapters answer identically. Only a Permit lets a re
 |---|---|
 | The path or a `CoSec-*` parameter cannot be read without ambiguity | `400`, before authentication |
 | The credential is invalid, expired or revoked | Evaluated as anonymous: a Permit proceeds, a Deny is `401` naming the reason |
-| The authenticator fails or does not answer in `cosec.pipeline.authentication-timeout`; the API key store cannot be read | `503` |
+| The authenticator fails or does not answer in the authentication timeout (20 % of `cosec.pipeline.timeout`); the API key store cannot be read | `503` |
 | The revocation store reports an error | `503` (but see [the exceptions](#the-two-documented-exceptions)) |
 | The memberships cannot be resolved (no provider, provider failure or timeout, a token that both carries the provider marker and claims roles) | `503`, never "no memberships" |
 | The snapshot source fails | `503` |

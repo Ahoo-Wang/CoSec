@@ -47,6 +47,7 @@ import org.springframework.boot.test.context.FilteredClassLoader
 import org.springframework.boot.test.context.runner.ApplicationContextRunner
 import org.springframework.context.ApplicationContext
 import org.springframework.test.util.ReflectionTestUtils
+import kotlin.time.Duration.Companion.seconds
 
 /** RFC 0003 X6 and RFC 0006 X8: readiness follows the snapshot, and listeners drain on shutdown. */
 class SnapshotReadinessTest {
@@ -113,13 +114,16 @@ class SnapshotReadinessTest {
     }
 
     @Test
-    fun `listener queues and drain take their properties`() {
+    fun `listener queues take their property, and the drain a sixth of the shutdown phase`() {
         runner.withPropertyValues(
             "cosec.observability.listener.queue-capacity=16",
-            "cosec.observability.listener.drain-timeout=2s",
+            "spring.lifecycle.timeout-per-shutdown-phase=12s",
         ).run { context ->
             val listeners = context.getBean(DecisionListeners::class.java)
-            ReflectionTestUtils.getField(listeners, "drainTimeout").assert().isNotNull()
+            // A kotlin.time.Duration field reads back as its raw value: compare it with one built from 2 s.
+            val twoSeconds = DecisionListeners(emptyList(), drainTimeout = 2.seconds)
+            ReflectionTestUtils.getField(listeners, "drainTimeout").assert()
+                .isEqualTo(ReflectionTestUtils.getField(twoSeconds, "drainTimeout"))
             context.getBean(ListenerProperties::class.java).queueCapacity.assert().isEqualTo(16)
         }
     }

@@ -159,12 +159,11 @@ class CoSecPipelineIntegrationAutoConfiguration {
         fun cosecKafkaAuditListener(
             kafkaOperations: KafkaOperations<String, String>,
             environment: org.springframework.core.env.Environment,
-            listenerProperties: ListenerProperties,
         ): KafkaAuditListener = KafkaAuditListener(
             kafkaOperations,
             environment.getProperty(KafkaAuditProperties.PREFIX + ".topic", KafkaAuditProperties.DEFAULT_TOPIC),
             kafkaAuditDelivery(environment),
-            drainTimeout = listenerProperties.drainTimeout,
+            drainTimeout = DerivedTimeouts.drain(environment),
         )
     }
 

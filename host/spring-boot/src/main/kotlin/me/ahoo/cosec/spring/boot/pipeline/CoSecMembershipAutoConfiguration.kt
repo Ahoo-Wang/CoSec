@@ -32,6 +32,8 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnClass
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean
 import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.context.annotation.Bean
+import org.springframework.core.env.Environment
+import kotlin.time.toJavaDuration
 
 /**
  * Memberships from the application's [MembershipLoader], cached in Redis for every instance (RFC 0006 §5.5.2), whenever
@@ -58,8 +60,13 @@ class CoSecMembershipAutoConfiguration {
     fun cosecMembershipProvider(
         cache: MembershipCache,
         loader: MembershipLoader,
-        authorization: RuntimeAuthorizationProperties,
+        environment: Environment,
     ): CoCacheMembershipProvider =
-        // A fill takes no longer than a request waits for it (cosec.authorization.membership.timeout).
-        CoCacheMembershipProvider(cache, authorization.membership.timeout, authorization.membership.unknownTtl, loader)
+        // A fill takes no longer than a request waits for it, the membership's share of the pipeline timeout (PIP-33).
+        CoCacheMembershipProvider(
+            cache,
+            DerivedTimeouts.budgets(environment).membership.toJavaDuration(),
+            CoCacheMembershipProvider.DEFAULT_UNKNOWN_LIFE,
+            loader,
+        )
 }

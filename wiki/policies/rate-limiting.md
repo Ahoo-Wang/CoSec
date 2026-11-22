@@ -161,7 +161,7 @@ rule limits nothing, though: each new value is a fresh bucket, and once its shar
 bound defaults to half the total, the per-document bound to a quarter.
 
 Your own `RateLimiter` bean replaces both ([Extending](../architecture/extending.md)). Each call has
-`cosec.authorization.rate-limit.timeout` (default `500ms`, [Configuration](../operations/configuration.md)); a call
+the rate limit timeout (10 % of `cosec.pipeline.timeout`, `500ms` at the default, [Configuration](../operations/configuration.md#computed-not-configured)); a call
 that takes longer counts as a failure.
 
 ## Responses and headers

@@ -82,7 +82,7 @@
     {
       "id": "PIP-7",
       "source": "AGENTS.md (Fail closed); RFC 0006 §5.3.2",
-      "statement": "Only verifying a request's token may count it as not revoked while the revocation store cannot be read (the reader throws RevocationUnavailableException; CoSec's own reader does so for each read that does not end within cosec.authentication.revocation.read-timeout, twice which is less than the authentication timeout, and an application's reader that never answers is cut at the authentication timeout and is a 503: the documented exception to failing closed, which cosec.authentication.revocation.fail-closed turns off); a reader never answers \"not revoked\" for a read that failed, and any other error the revocation check reports fails the request with 503, never accepts the token.",
+      "statement": "Only verifying a request's token may count it as not revoked while the revocation store cannot be read (the reader throws RevocationUnavailableException; CoSec's own reader does so for each read that does not end within 30 % of the authentication timeout (`PIP-33`), so that twice it is less than the authentication timeout for every `cosec.pipeline.timeout` of 20 ms or more, and an application's reader that never answers is cut at the authentication timeout and is a 503: the documented exception to failing closed, which cosec.authentication.revocation.fail-closed turns off); a reader never answers \"not revoked\" for a read that failed, and any other error the revocation check reports fails the request with 503, never accepts the token.",
       "level": "pipeline",
       "guards": [
         "cocache:CoCacheRevocationReaderTest#anUnreadableStoreIsUnavailable",
@@ -95,7 +95,8 @@
         "spring-boot:RevocationReadBudgetTest#with fail-closed a hanging Redis fails the check within the reader's budget",
         "cocache:CacheTtlPolicyTest#revocationTablesReadForTheWholeCommandTimeout",
         "cocache:CacheTtlPolicyTest#revokedSubjectCacheIsConfiguredLikeRevokedTokens",
-        "cocache:CoCache6ValuesTest#aRevocationCoCache6WroteIsAnErrorNeverNotRevoked"
+        "cocache:CoCache6ValuesTest#aRevocationCoCache6WroteIsAnErrorNeverNotRevoked",
+        "runtime:StageBudgetsTest#a token's two revocation reads end inside the authentication budget"
       ],
       "pending": null
     },
@@ -433,6 +434,22 @@
         "spring-boot:RealServerAfterResponseTest#a listener and the audit record read after the response what the request carried",
         "spring-boot:RealServerAfterResponseTest#a security context kept after the response answers what the request carried, and admits no check",
         "spring-boot:RealServerFactsParityTest#Tomcat refuses its request after the response"
+      ]
+    },
+    {
+      "id": "PIP-33",
+      "source": "Coordinator's brief for 8.0.0-beta.6, 2026-11-21 (the properties review, items 13 to 21 and 28; what can be computed is not configured)",
+      "statement": "Every stage's timeout is a share of the one deadline an operator states, `cosec.pipeline.timeout`, and the starter has no property for any of them: the authenticator 20 %, the membership provider (and the fill of the membership cache) 10 %, an attribute provider that sets no timeout of its own 6 %, the rate limiter 10 %, each read of CoSec's own revocation reader 30 % of the authentication's, a REQUIRED decision listener 20 % (`OBS-10`); each share is a named constant and never below a millisecond, and at the default deadline of 5 s each is the default its property had. A provider's or a reader's own bound (an `AttributeProvider` with its own timeout, an application's `RevocationReader`) stays its own. A key that once set one (`cosec.pipeline.authentication-timeout`, `cosec.authorization.membership.timeout`, `cosec.authorization.attributes.timeout`, `cosec.authorization.rate-limit.timeout`, `cosec.authentication.revocation.read-timeout`) fails startup as a key CoSec does not read, saying it is no longer a property and what replaced it, as do `cosec.authorization.snapshot.local-max-age` (3 revalidate intervals) and `cosec.authorization.membership.unknown-ttl` (a constant, 5 s). The starter says once at startup what each came to and from what.",
+      "level": "startup",
+      "pending": null,
+      "guards": [
+        "runtime:StageBudgetsTest#at the default deadline every share is the default it replaced",
+        "runtime:StageBudgetsTest#the pipeline's options default to the shares of their timeout",
+        "runtime:StageBudgetsTest#a token's two revocation reads end inside the authentication budget",
+        "runtime:StageBudgetsTest#a share of a tiny deadline is never zero",
+        "spring-boot:DerivedTimeoutsTest#the values follow the deadlines an operator states",
+        "spring-boot:DerivedTimeoutsTest#the startup line names each value and what it came from",
+        "spring-boot:UnknownPropertiesTest#a removed key is said to be no longer a property, with what replaced it"
       ]
     }
   ]

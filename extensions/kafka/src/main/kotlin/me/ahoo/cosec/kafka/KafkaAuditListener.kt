@@ -53,7 +53,7 @@ class KafkaAuditListener(
     override val delivery: Delivery = Delivery.BEST_EFFORT,
     override val name: String = NAME,
     queueCapacity: Int = DEFAULT_QUEUE_CAPACITY,
-    /** `cosec.observability.listener.drain-timeout`: how long [destroy] waits for the sends this listener holds. */
+    /** How long [destroy] waits for the sends this listener holds: the starter's sixth of the shutdown phase (`OBS-10`). */
     private val drainTimeout: Duration = DecisionListeners.DEFAULT_DRAIN_TIMEOUT.toJavaDuration(),
 ) : DecisionListener,
     DisposableBean {

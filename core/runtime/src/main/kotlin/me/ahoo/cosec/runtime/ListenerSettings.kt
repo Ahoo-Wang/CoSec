@@ -18,21 +18,16 @@ package me.ahoo.cosec.runtime
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.runtime.event.DecisionListeners
-import java.time.Duration
-import kotlin.time.toJavaDuration
 
 /**
- * How the decision listeners of a pipeline are run (RFC 0006 §9), set in [PipelineBuilder.listeners]. The properties
- * are the starter's `cosec.observability.listener.*`, with the same defaults.
+ * How the decision listeners of a pipeline are run (RFC 0006 §9), set in [PipelineBuilder.listeners]. The property is
+ * the starter's `cosec.observability.listener.queue-capacity`, with the same default. Neither timeout is set (`OBS-10`):
+ * a REQUIRED listener may take [StageBudgets.REQUIRED_LISTENER_PERCENT] % of [PipelineSettings.timeout], and
+ * [Pipeline.close] lets the BEST_EFFORT listeners deliver what is queued for
+ * [DecisionListeners.DEFAULT_DRAIN_TIMEOUT], the starter's derived drain at Spring's default shutdown phase.
  */
 @ExperimentalCoSecApi
 class ListenerSettings internal constructor() {
-    /** How long one REQUIRED listener may take (`required-timeout`). */
-    var requiredTimeout: Duration = Duration.ofSeconds(1)
-
     /** The events one BEST_EFFORT listener may have waiting (`queue-capacity`); beyond it, events are dropped. */
     var queueCapacity: Int = DecisionListeners.DEFAULT_QUEUE_CAPACITY
-
-    /** How long [Pipeline.close] lets the BEST_EFFORT listeners deliver what is queued (`drain-timeout`). */
-    var drainTimeout: Duration = DecisionListeners.DEFAULT_DRAIN_TIMEOUT.toJavaDuration()
 }
