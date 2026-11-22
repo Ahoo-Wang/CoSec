@@ -3,15 +3,15 @@
 # Tests: :jwt:test --tests me.ahoo.cosec.jwt.LoginRoutesTest :spring-boot:test --tests me.ahoo.cosec.spring.boot.realserver.ServedLoginRoutesTest
 
 diff --git a/extensions/login/src/main/kotlin/me/ahoo/cosec/login/route/LogoutRoute.kt b/extensions/login/src/main/kotlin/me/ahoo/cosec/login/route/LogoutRoute.kt
-index 09df279f..4e5f498d 100644
+index 5a66f689e..9f2ff09de 100644
 --- a/extensions/login/src/main/kotlin/me/ahoo/cosec/login/route/LogoutRoute.kt
 +++ b/extensions/login/src/main/kotlin/me/ahoo/cosec/login/route/LogoutRoute.kt
-@@ -41,8 +41,6 @@ class LogoutRoute(private val revoker: TokenRevoker) {
+@@ -46,8 +46,6 @@ class LogoutRoute(
              revoker.revoke(pair)
          } catch (e: CancellationException) {
              throw e
 -        } catch (_: TokenRevokedException) {
 -            // Already ended: the caller's request is answered as done.
          } catch (e: Exception) {
-             return RouteFailure.answer(ROUTE, e, requestId)
+             return RouteFailure.answer(ROUTE, e, requestId, bodies)
          }
