@@ -51,6 +51,7 @@ internal object DerivedSnapshotSettings {
         properties: RuntimeAuthorizationProperties,
         pipelineTimeout: Duration,
         environment: Environment,
+        queueCapacity: Int? = null,
     ): String {
         val snapshot = properties.snapshot
         val derived = snapshot.derived(pipelineTimeout)
@@ -65,6 +66,7 @@ internal object DerivedSnapshotSettings {
         return "CoSec derived, not configured: $derived, from cosec.authorization.snapshot.revalidate-interval " +
             "${snapshot.revalidateInterval}, cosec.pipeline.timeout $pipelineTimeout and " +
             "${Runtime.getRuntime().availableProcessors()} cores (Runtime.availableProcessors(): the container's CPU limit)" +
-            "$report; ${DerivedTimeouts.line(environment, snapshot.revalidateInterval)}."
+            "$report; ${DerivedTimeouts.line(environment, snapshot.revalidateInterval)}; " +
+            "${DerivedHeap.line(DerivedHeap.budget(), queueCapacity, DerivedHeap.traceLevel(environment))}."
     }
 }

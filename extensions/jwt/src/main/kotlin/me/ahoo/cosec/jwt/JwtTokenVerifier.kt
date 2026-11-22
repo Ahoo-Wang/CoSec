@@ -123,7 +123,15 @@ class JwtTokenVerifier @InternalCoSecApi constructor(
             decoded.issuedAtAsInstant?.epochSecond ?: Long.MIN_VALUE,
             decoded.notBeforeAsInstant?.epochSecond ?: Long.MIN_VALUE,
         )
-        cache.put(key, VerifiedTokenCache.Entry(verified, validFrom, decoded.expiresAtAsInstant.epochSecond))
+        cache.put(
+            key,
+            VerifiedTokenCache.Entry(
+                verified,
+                validFrom,
+                decoded.expiresAtAsInstant.epochSecond,
+                VerifiedTokenCache.weigh(token)
+            ),
+        )
         return verified
     }
 

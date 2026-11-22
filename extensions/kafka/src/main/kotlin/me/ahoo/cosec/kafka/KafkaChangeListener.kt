@@ -47,7 +47,7 @@ class KafkaChangeListener(
     private val topic: String = DEFAULT_TOPIC,
     override val delivery: Delivery = Delivery.BEST_EFFORT,
     override val name: String = NAME,
-    queueCapacity: Int = KafkaAuditListener.DEFAULT_QUEUE_CAPACITY,
+    queueCapacity: Int = DEFAULT_QUEUE_CAPACITY,
     /** How long [destroy] waits for the sends this listener holds: the starter's sixth of the shutdown phase (`OBS-10`). */
     drainTimeout: Duration = DecisionListeners.DEFAULT_DRAIN_TIMEOUT.toJavaDuration(),
 ) : ChangeListener,
@@ -77,6 +77,8 @@ class KafkaChangeListener(
     override fun toString(): String = "KafkaChangeListener($topic, $delivery)"
 
     companion object {
+        /** Change events are few, and each listener's change queue is bounded in bytes already (`CTL-66`). */
+        const val DEFAULT_QUEUE_CAPACITY = 1024
         const val NAME = "kafka-change-audit"
         const val DEFAULT_TOPIC = "cosec-control-audit"
         private const val THREAD_NAME = "cosec-kafka-change-audit"

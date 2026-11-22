@@ -19,6 +19,7 @@ import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.login.token.TokenSubject
 import me.ahoo.cosec.model.PrincipalId
 import me.ahoo.cosec.model.TenantId
+import me.ahoo.cosec.runtime.HeapBudget
 import me.ahoo.cosec.runtime.authn.TokenAuthenticator
 import me.ahoo.cosec.spi.authn.AuthnResult
 import me.ahoo.cosec.spi.authn.Credentials
@@ -121,7 +122,7 @@ open class JwtVerificationBenchmark {
         accessToken = JwtTokenConverter(RandomIdGenerator, signing).toToken(subject).accessToken
         verifier = JwtTokenVerifier(signing)
         authenticator = TokenAuthenticator(verifier, LocalRevocations)
-        cachedVerifier = verifier.cached(VerifiedTokenCache())
+        cachedVerifier = verifier.cached(VerifiedTokenCache(HeapBudget.of().tokenCache))
         cachedAuthenticator = TokenAuthenticator(cachedVerifier, LocalRevocations)
         credentials = Credentials("Bearer $accessToken", null)
         check(authenticate() is AuthnResult.Authenticated) { "The benchmark's token does not authenticate." }

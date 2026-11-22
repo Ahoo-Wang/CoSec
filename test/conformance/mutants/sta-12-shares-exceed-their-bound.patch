@@ -1,0 +1,17 @@
+# Rule: STA-12
+# Mutant: the decision listeners' queues take an 8th of the heap, so the shares together take more than half of it
+# Tests: :runtime:test --tests me.ahoo.cosec.runtime.HeapBudgetTest
+
+diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/HeapBudget.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/HeapBudget.kt
+index 7072d01..4218600 100644
+--- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/HeapBudget.kt
++++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/HeapBudget.kt
+@@ -59,7 +59,7 @@ class HeapBudget private constructor(val heap: Long) {
+         const val TOKEN_CACHE_SHARE: Long = 16
+ 
+         /** 2 GiB / 64 = 32 MiB, shared by the BEST_EFFORT listeners, where each had 1,024 events. */
+-        const val DECISION_LISTENERS_SHARE: Long = 64
++        const val DECISION_LISTENERS_SHARE: Long = 8
+ 
+         /**
+          * 2 GiB / 32 = 64 MiB (`CTL-66`, about 3 %). A control host's heap holds, besides, the compiled documents it

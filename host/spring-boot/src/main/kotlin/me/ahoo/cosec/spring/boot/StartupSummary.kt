@@ -115,7 +115,7 @@ internal object StartupSummary {
         return when {
             cache == null -> "off"
             verifier != null && verifier !is JwtTokenVerifier -> "off (the application's own verifier)"
-            else -> "on (max-entries=${cache.maxEntries})"
+            else -> "on (max-bytes=${cache.maxBytes})"
         }
     }
 

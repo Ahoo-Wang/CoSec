@@ -30,6 +30,7 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.runtime.HeapBudget
 import me.ahoo.cosec.runtime.event.Delivery
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.TimeoutException
@@ -58,7 +59,8 @@ private val log = KotlinLogging.logger {}
  * - A BEST_EFFORT listener's full queue drops the incoming event: the queue keeps an ordered prefix, and a consumer
  *   sees a gap, never a reordering. Drops are counted and logged at most once per [requiredTimeout].
  *
- * The queues hold, together, at most [budget] bytes: a [HEAP_SHARE]th of the heap, shared equally by the listeners.
+ * The queues hold, together, at most [budget] bytes: the change listeners' share of the heap ([HeapBudget], `STA-12`),
+ * shared equally by the listeners.
  * A listener that delivers nothing while events wait for longer than [requiredTimeout] is reported (WARN, at most once
  * per [requiredTimeout], naming it and its depth), never cut off: when it answers again it finds what its share held.
  *
@@ -82,8 +84,8 @@ class ChangeListeners(
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
-    /** The bytes every queue together may hold ([HEAP_SHARE]). */
-    val budget: Long = heap / HEAP_SHARE
+    /** The bytes every queue together may hold ([HeapBudget.changeListeners]). */
+    val budget: Long = HeapBudget.of(heap).changeListeners
 
     /** Each listener's queue, in registration order: what the meters read. */
     val queues: List<ChangeListenerLane> = listeners.map {
@@ -98,7 +100,7 @@ class ChangeListeners(
         if (listeners.isNotEmpty()) {
             log.info {
                 "Change listeners ${listeners.map { it.name }}: their queues hold at most ${mib(budget)} " +
-                    "(the heap's ${mib(heap)} / $HEAP_SHARE), ${mib(budget / listeners.size)} each; a listener " +
+                    "(the heap's ${mib(heap)} / ${HeapBudget.CHANGE_LISTENERS_SHARE}), ${mib(budget / listeners.size)} each; a listener " +
                     "delivering nothing for $requiredTimeout (the pipeline timeout) is reported."
             }
             scope.launch { watch() }
@@ -256,15 +258,6 @@ class ChangeListeners(
     @InternalCoSecApi
     companion object {
         val NONE: ChangeListeners = ChangeListeners(emptyList())
-
-        /**
-         * The share of the heap the queues may hold: 1/32, about 3 %, derived rather than configured. A control host's
-         * heap holds, besides, the compiled snapshot documents it decides with (the platform's, the apps', the
-         * resident tenants'), the CoCache local copies of the control store, the candidates of open shadow windows and
-         * the requests in flight; a thirty-second leaves those their room, and still holds tens of thousands of events
-         * on a 2 GB heap, more than a healthy sink ever lets queue in a bulk change.
-         */
-        const val HEAP_SHARE: Long = 32
 
         private fun mib(bytes: Long): String = "%.1f MB".format(bytes / (1024.0 * 1024.0))
     }

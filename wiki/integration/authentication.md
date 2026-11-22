@@ -140,10 +140,13 @@ A cached verification is what verifying the token again would answer (`IDN-32`):
 - Refresh, tenant switch and logout verify without it. A `TokenVerifier` bean of your own never gets it: nothing says
   what yours reads besides the token.
 
-At most `max-entries` tokens (16,384) are kept; one more evicts one. An entry of a large token, a dozen roles in four
-spaces and eight policies, retains about 7.3 KB, so the default costs at most about 115 MB of heap. Its hits, misses and
-evictions are metrics ([Observability](../operations/observability.md)), and the startup summary says whether it is on
-(`token-cache=on (max-entries=16384)`).
+It holds a 16th of the heap, each entry weighed by its token's length times 5 bytes, what an entry measurably retains
+for each character of its token; one over it evicts entries, which cost one verification when they come again, never
+another answer. The weight is reckoned when an entry is put, on a miss, never on a hit. At the production overlay's
+2 GiB heap that is 128 MiB, more than the 16,384 tokens of a dozen roles in four spaces and eight policies (about
+7.3 KB each) the old fixed bound held ([Computed, not configured](../operations/configuration.md#computed-not-configured)).
+Its hits, misses and evictions are metrics ([Observability](../operations/observability.md)), and the startup summary
+says whether it is on (`token-cache=on (max-bytes=134217728)`).
 
 ## Roles and spaces
 

@@ -59,10 +59,21 @@ description: "每个 8.0 预览版（alpha 与 beta）到下一个之间的变�
   | `cosec.authorization.snapshot.local-max-age` | 3 × `cosec.authorization.snapshot.revalidate-interval` |
   | `cosec.authorization.membership.unknown-ttl` | 常量，5 秒 |
 
-  - `PipelineSettings`（在 `options { }` 中）保留 `timeout`，去掉 `authenticationTimeout`、`membershipTimeout`、`attributeTimeout` 和 `rateLimitTimeout`；`ListenerSettings`（在 `listeners { }` 中）保留 `queueCapacity`，去掉 `requiredTimeout` 和 `drainTimeout`。改为设置 `timeout`，或删掉这一行。
+  - `PipelineSettings`（在 `options { }` 中）保留 `timeout`，去掉 `authenticationTimeout`、`membershipTimeout`、`attributeTimeout` 和 `rateLimitTimeout`；`ListenerSettings`（在 `listeners { }` 中）去掉 `requiredTimeout` 和 `drainTimeout`，下一项连同这个类本身一起删除。改为设置 `timeout`，或删掉这一行。
   - 自带超时的 `AttributeProvider`，以及你自己的 `RevocationReader`，保留它们自己的时限。
   - `cosec.pipeline.timeout` 低于 20 ms 时，每一份以 1 ms 为下限，一个令牌的两次吊销读取可能不再在认证超时之内结束。
   - **`cosec.pipeline.timeout` 低于默认值的部署**同时缩短了吊销读取，这是唯一一个失败即放行的阶段：`1s` 时每次读取只有 60 ms，而原来是 300 ms，超过它的读取会接受请求的令牌，除非设置了 `cosec.authentication.revocation.fail-closed=true`。请设置 `fail-closed`，或保留默认期限。
+- **内存上限是堆的一份，三个 key 被删除**（`STA-12`、`OBS-11`、`IDN-32`、`IDN-33`；能计算出来的就不配置）。受影响：设置了其中某一项的配置，以及调用过 `Pipeline.builder` 的 `listeners { }` 的代码。启动会失败并列出 CoSec 不读取的 key，说明每个由什么取代。删掉这个 key；要容纳更多，就给实例更多的堆。在生产 overlay 的 2 GiB 堆上，没有哪个上限低于它所取代的数；堆越小得到的越少，启动日志行写明每一项得到多少（[由计算得出，而非配置](./configuration.md#computed-not-configured)）。
+
+  | 已删除 | 现在 | 2 GiB 时 | 太紧的表现 |
+  |---|---|---|---|
+  | `cosec.authentication.revocation.cache.maximum-size`（500,000） | 堆的八分之一，按每表每条 290 + 230 字节计数；CoSec 锁定这个数 | 每表 516,222 条 | 带标签 `cache=RevokedTokenCache` 或 `RevokedSubjectCache` 的 `cocache.misses`（`cocache_misses_total`） |
+  | `cosec.authentication.token-cache.max-entries`（16,384） | 堆的十六分之一，每个条目按令牌长度 × 5 字节计重 | 128 MiB，多于 16,384 个大令牌 | `cosec.token.cache.evictions` |
+  | `cosec.observability.listener.queue-capacity`（1,024） | 堆的六十四分之一，由各 `BEST_EFFORT` 监听器均分，按每个事件 1 KB 计数，`cosec.pipeline.trace-level` 为 `full` 或 `exhaustive` 时按 8 KB | 四个监听器时每个 8,192 个事件，追踪时 1,024 个 | `cosec.listener.dropped` |
+
+  - `ListenerSettings` 和 `PipelineBuilder.listeners { }` 被删除：监听器如何运行不再有任何设置。删掉这个代码块。
+  - `cocache.caches.[RevokedTokenCache].local-maximum-size`（或 `RevokedSubjectCache`）现在会让启动失败：这个数被锁定。
+  - 变更监听器占堆的三十二分之一不变，现在也在同一张表里。
 
 ## 从 8.0.0-beta.4 升级 {#from-8-0-0-beta-4}
 
