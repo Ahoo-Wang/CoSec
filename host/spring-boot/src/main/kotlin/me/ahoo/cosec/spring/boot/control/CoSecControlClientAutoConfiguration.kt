@@ -44,5 +44,5 @@ internal class CoSecControlClientAutoConfiguration {
     @Bean
     @ConditionalOnMissingBean
     fun cosecControlService(properties: ControlProperties): ControlService =
-        HttpControlService(checkNotNull(properties.serviceUrl), HttpClient.newHttpClient(), properties.appId)
+        HttpControlService(checkNotNull(properties.serviceUrl), HttpClient.newHttpClient(), app = properties.appId)
 }

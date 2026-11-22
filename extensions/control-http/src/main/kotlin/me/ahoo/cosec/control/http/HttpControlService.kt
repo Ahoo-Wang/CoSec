@@ -17,6 +17,7 @@ import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.control.sdk.ControlService
 import java.net.URI
 import java.net.http.HttpClient
+import java.time.Duration
 
 /**
  * [ControlService] over the network (`CTL-77`): each call is the control API's route on a control-plane host's service
@@ -30,20 +31,40 @@ import java.net.http.HttpClient
  * (`cosec.pipeline.identity.only-trusted-callers-can-reach`). It still authorizes and records every call as the principal
  * the header names.
  *
- * [client] carries every call: its TLS, proxy, connect timeout and executor are the application's to choose. A call has
- * no timeout of its own; cancel the caller's coroutine to stop waiting.
+ * [client] carries every call: its TLS (a client certificate for a service port that asks for one), proxy, connect
+ * timeout and executor are the application's to choose.
+ *
+ * What a call answers:
+ * - a `2xx`: the route's answer;
+ * - any other status, a redirect included (the default client follows none): a
+ *   [me.ahoo.cosec.control.sdk.ControlRefusedException] carrying that status and the body as it came, a problem or not;
+ * - no answer within [timeout]: [java.net.http.HttpTimeoutException]. The host may have done what was asked: the outcome
+ *   of a write that timed out is unknown, so read the change or the document again before retrying. A change it left
+ *   staged is taken over by the next [me.ahoo.cosec.control.sdk.ControlClient.proposeAndPublishWithoutShadow] of the same
+ *   principal once it is one patience old;
+ * - any other failure of the transport (a refused connection, a reset): the [java.io.IOException] as the client throws
+ *   it. This is the one way the two implementations differ: in process, the control plane is not behind a connection
+ *   (`CTL-77`).
  */
 @ExperimentalCoSecApi
 class HttpControlService(
     /** The control API's base on the host's service port, such as `http://control:8082/cosec/control/v1`. */
     baseUri: URI,
     client: HttpClient = HttpClient.newHttpClient(),
+    /**
+     * How long a call waits for its answer: a host that stops answering without closing the connection never holds a
+     * caller longer. The same as the write call's patience by default.
+     */
+    timeout: Duration = DEFAULT_TIMEOUT,
     /** The host's `cosec.control.app-id`: a service caller's identity is in the control plane's app. */
     app: String = CONTROL_APP,
-) : ControlService by HttpTransport(baseUri, client, app) {
+) : ControlService by HttpTransport(baseUri, client, timeout, app) {
     @ExperimentalCoSecApi
     companion object {
         /** The control plane's app by default (`cosec.control.app-id`). */
         const val CONTROL_APP: String = "cosec-control"
+
+        /** How long a call waits for its answer by default. */
+        val DEFAULT_TIMEOUT: Duration = Duration.ofSeconds(30)
     }
 }

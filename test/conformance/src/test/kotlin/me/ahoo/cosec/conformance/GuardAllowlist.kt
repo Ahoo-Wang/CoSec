@@ -47,6 +47,9 @@ object GuardAllowlist {
             "control-http:HttpControlServiceTest#a request's caller is stated as the gateway forwards it",
             "control-http:HttpControlServiceTest#a caller that cannot be stated is refused before anything is sent",
             "control-http:HttpControlServiceTest#a refusal is the route's problem",
+            "control-http:HttpControlServiceTest#only a 2xx is an answer",
+            "control-http:HttpControlServiceTest#a call that is not answered within its timeout ends",
+            "control-http:HttpControlServiceTest#a transport failure is the client's own exception",
             // CTL-76: the typed control objects say what the wire says.
             "control-sdk:TypedWireTest#each document entry reads exactly the members of the document format - CTL-76",
             "control-sdk:TypedWireTest#every tenant and app document of the wiki reads and writes back as the same document - CTL-76",

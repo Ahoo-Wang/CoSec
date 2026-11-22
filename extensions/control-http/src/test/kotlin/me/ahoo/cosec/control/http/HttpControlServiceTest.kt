@@ -36,8 +36,10 @@ import me.ahoo.test.asserts.assert
 import me.ahoo.test.asserts.assertThrownBy
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Test
+import java.io.IOException
 import java.net.InetSocketAddress
 import java.net.URI
+import java.net.http.HttpTimeoutException
 import java.time.Duration
 import java.time.Instant
 
@@ -53,6 +55,10 @@ class HttpControlServiceTest {
     private val contentTypes = mutableListOf<String?>()
     private var answer: Pair<Int, String> = 200 to "{}"
 
+    /** How long the server waits before it answers. */
+    @Volatile
+    private var delay: Duration = Duration.ZERO
+
     private val server = HttpServer.create(InetSocketAddress("127.0.0.1", 0), 0).apply {
         createContext("/") { exchange ->
             val body = exchange.requestBody.readBytes().decodeToString()
@@ -62,9 +68,11 @@ class HttpControlServiceTest {
                 identities += exchange.requestHeaders.getFirst(IdentityHeader.NAME)
                 contentTypes += exchange.requestHeaders.getFirst("Content-Type")
             }
+            Thread.sleep(delay.toMillis())
             val (status, text) = answer
             val bytes = text.encodeToByteArray()
             exchange.responseHeaders.add("Content-Type", "application/json")
+            if (status in 300..399) exchange.responseHeaders.add("Location", "http://elsewhere.example/")
             exchange.sendResponseHeaders(status, bytes.size.toLong())
             exchange.responseBody.use { it.write(bytes) }
         }
@@ -195,6 +203,44 @@ class HttpControlServiceTest {
         refused.heldBy.assert().isEqualTo("c0")
         answer = 201 to """{"id":"c2"}"""
         runBlocking { service.propose(iam, "{}") }.assert().isEqualTo("""{"id":"c2"}""")
+    }
+
+    @Test
+    fun `only a 2xx is an answer`() {
+        // A redirect the client does not follow is no answer of the route's.
+        answer = 302 to ""
+        assertThrownBy<ControlRefusedException> { runBlocking { service.document(iam, acme) } }.actual()
+            .status.assert().isEqualTo(302)
+        // A proxy's error page: the status and the body as they came, with no problem member to read.
+        answer = 502 to "<html>bad gateway</html>"
+        val refused = assertThrownBy<ControlRefusedException> { runBlocking { service.document(iam, acme) } }.actual()
+        refused.status.assert().isEqualTo(502)
+        refused.problem.assert().isEqualTo("<html>bad gateway</html>")
+        refused.code.assert().isNull()
+        refused.conflict.assert().isNull()
+    }
+
+    @Test
+    fun `a call that is not answered within its timeout ends`() {
+        delay = Duration.ofSeconds(3)
+        val quick = HttpControlService(
+            URI("http://127.0.0.1:${server.address.port}/cosec/control/v1"),
+            timeout = Duration.ofMillis(200),
+        )
+        val started = System.nanoTime()
+        assertThrownBy<HttpTimeoutException> { runBlocking { quick.document(iam, acme) } }
+        Duration.ofNanos(System.nanoTime() - started).assert().isLessThan(Duration.ofSeconds(2))
+        HttpControlService.DEFAULT_TIMEOUT.assert().isEqualTo(Duration.ofSeconds(30))
+        assertThrownBy<IllegalArgumentException> { HttpControlService(URI("http://host/x"), timeout = Duration.ZERO) }
+    }
+
+    @Test
+    fun `a transport failure is the client's own exception`() {
+        val closed = HttpServer.create(InetSocketAddress("127.0.0.1", 0), 0)
+        val port = closed.address.port
+        closed.stop(0)
+        val nowhere = HttpControlService(URI("http://127.0.0.1:$port/cosec/control/v1"))
+        assertThrownBy<IOException> { runBlocking { nowhere.document(iam, acme) } }
     }
 
     @Test

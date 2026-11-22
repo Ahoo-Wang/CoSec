@@ -34,11 +34,13 @@ import java.net.http.HttpClient
 import java.net.http.HttpRequest
 import java.net.http.HttpResponse
 import java.time.Clock
+import java.time.Duration
 
 /** How [HttpControlService] carries a call: one request to the service port, its caller in `CoSec-Identity`. */
 internal class HttpTransport(
     baseUri: URI,
     private val client: HttpClient,
+    private val timeout: Duration,
     private val app: String,
     private val clock: Clock = Clock.systemUTC(),
     private val ids: IdGenerator = RandomIdGenerator,
@@ -51,10 +53,12 @@ internal class HttpTransport(
     init {
         require(baseUri.isAbsolute && baseUri.scheme in SCHEMES) { "The control API's base is an http or https URI." }
         require(baseUri.rawQuery == null && baseUri.rawFragment == null) { "The control API's base has no query." }
+        require(timeout > Duration.ZERO) { "A call's timeout is positive, not $timeout." }
     }
 
     override suspend fun call(caller: ControlCaller, call: ServiceCall): String {
         val request = HttpRequest.newBuilder(uri(call))
+            .timeout(timeout)
             .header(ACCEPT, MEDIA_TYPES)
             .apply { identity(caller)?.let { header(IdentityHeader.NAME, it) } }
             .apply {
@@ -67,7 +71,8 @@ internal class HttpTransport(
             }
             .build()
         val response = client.sendAsync(request, HttpResponse.BodyHandlers.ofString()).await()
-        if (response.statusCode() >= BAD_REQUEST) throw ControlRefusedException(response.statusCode(), response.body())
+        // Only a 2xx is the route's answer: a redirect the client did not follow, or a proxy's error page, is not.
+        if (response.statusCode() !in SUCCESS) throw ControlRefusedException(response.statusCode(), response.body())
         return response.body()
     }
 
@@ -99,7 +104,7 @@ internal class HttpTransport(
     }
 
     private companion object {
-        const val BAD_REQUEST = 400
+        val SUCCESS = 200..299
         const val ACCEPT = "Accept"
         const val CONTENT_TYPE = "Content-Type"
         const val JSON = "application/json"
