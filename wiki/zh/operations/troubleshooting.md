@@ -288,6 +288,14 @@ Request [<id>]: the forwarded identity is refused (<status> <problem>), <reason>
 
 **每个请求都是匿名的。** 网关只把身份转发给接收身份的路由：指向已注册服务的路由（`uri: lb://...`），或元数据为 `cosec-identity: true` 的路由。指向 `http://` 或 `https://` 又没有该元数据的路由，或元数据为 `cosec-identity: false` 的路由，不发送身份，所以其后的服务看到的是匿名请求。路由指向你自己的服务时，给它标上 `cosec-identity: true`（[转发身份](../integration/web.md#forwarding-the-identity)）。自己校验令牌、而不再收到令牌的服务，需要 `cosec.gateway.identity.forward-authorization=true` 以及这样的路由。
 
+## 声明了渲染器，拒绝却得到 CoSec 的响应体 {#a-refusal-is-answered-with-cosecs-body-though-a-renderer-is-declared}
+
+```text
+Request [<id>]: the ProblemRenderer [<class>] failed with <exception>, so the <status> <slug> refusal is answered with CoSec's own body (PIP-34). ...
+```
+
+应用的 `ProblemRenderer` 在那次拒绝时抛出了异常，或者没有返回任何字节，于是 CoSec 用自己的响应体回答了它（[Problem 渲染器](../architecture/extending.md#problem-renderer)）。请求仍被拒绝，状态码和头是 CoSec 的。这一行每分钟最多以 `WARN` 记录一次，带异常的堆栈，每次都以 `DEBUG` 记录；`cosec.problem.render.failed` 计入每一次。修复渲染器：它必须为每个 `ProblemType` 返回字节，包括以后的版本新增的类型，所以给它一个默认分支。响应体从来不是渲染器的、又没有这一行，说明渲染器没有接入：它必须是一个 bean，而且只能有一个。
+
 ## 实例未就绪 {#instance-is-not-ready}
 
 在平台文档以及 [`prewarm-apps` 和 `prewarm-tenants`](./configuration.md#snapshot) 中的每个文档都装入之前，就绪状态拒绝流量；存活状态不受
@@ -444,6 +452,14 @@ This instance runs the control plane, and cosec.control.service-url names a cont
 
 实例带有 `cosec-control`（和 `cosec-cocache`）且控制面开启，同时又设置了 `cosec.control.service-url`。一个应用只有一个 `ControlService`：运行控制面时是进程内实现，调用控制面宿主时是 HTTP 实现。要内嵌控制面，删掉 `cosec.control.service-url`；要调用宿主，设置 `cosec.control.enabled=false`（或不引入 `cosec-control`）。`cosec.control.service-url needs cosec-control-http` 表示已指定宿主却缺少调用它的模块：添加 `me.ahoo.cosec:cosec-control-http`。
 
+### 两个 problem 渲染器导致启动失败 {#startup-fails-on-two-problem-renderers}
+
+```text
+PIP-34: 2 ProblemRenderer beans of the application, [first, second]: a refusal has one body, so CoSec takes one renderer. Declare one.
+```
+
+一个拒绝只有一个响应体，所以 starter 只取一个 `ProblemRenderer` bean，不在两个之间选择。保留一个，或者声明一个委托给其他渲染器的渲染器（[Problem 渲染器](../architecture/extending.md#problem-renderer)）。
+
 ### 网关之后的 hidden-method 过滤器导致启动失败 {#startup-fails-on-a-hidden-method-filter-behind-a-gateway}
 
 ```text
@@ -531,18 +547,18 @@ cosec.gateway.unprotected-endpoints lists [gateway], which it never accepts: tha
 ### 客户端地址导致启动失败 {#startup-fails-on-the-client-address}
 
 ```text
-server.forward-headers-strategy=framework: Spring's ForwardedHeaderFilter and ForwardedHeaderTransformer make the leftmost X-Forwarded-For entry, which the client writes, the remote address ... (https://cosec.ahoo.me/operations/troubleshooting#startup-fails-on-the-client-address).
+server.request.header.forwarded.strategy=framework: Spring's ForwardedHeaderFilter and ForwardedHeaderTransformer make the leftmost X-Forwarded-For entry, which the client writes, the remote address ... (https://cosec.ahoo.me/operations/troubleshooting#startup-fails-on-the-client-address).
 cosec.authorization.remote-ip.max-trusted-index is set, but Tomcat's RemoteIpValve resolves the client address on this host ...
-cosec.authorization.remote-ip.max-trusted-index=0 reads the connection's peer, but with the native forward-headers strategy ... the peer cannot be read. ...
-The native forward-headers strategy is on (configured or inferred from the cloud platform), but CoSec cannot tell how this host's server resolves the client address ...
+cosec.authorization.remote-ip.max-trusted-index=0 reads the connection's peer, but with the web-server forwarded-header strategy ... the peer cannot be read. ...
+The web-server forwarded-header strategy is on (configured or inferred from the cloud platform), but CoSec cannot tell how this host's server resolves the client address ...
 ```
 
-CoSec 只读取一次客户端地址，且只从它信任的一方读取（`PIP-16`）；无法判断该信任哪一方时，拒绝启动。即使你没有设置，native 策略也可能已开启：Spring Boot 在 Kubernetes 以及它识别出的其他云平台上会自行开启。按消息处理：
+CoSec 只读取一次客户端地址，且只从它信任的一方读取（`PIP-16`）；无法判断该信任哪一方时，拒绝启动。即使你没有设置，web-server 策略也可能已开启：Spring Boot 在 Kubernetes 以及它识别出的其他云平台上会自行开启。按消息处理：
 
-- `framework`，或会改写请求的 `ForwardedHeaderFilter`、`ForwardedHeaderTransformer` bean：改用 `server.forward-headers-strategy=native` 并在服务器上配置代理，或者用 `none` 并设置 `cosec.authorization.remote-ip.max-trusted-index`。只删除这些请求头的过滤器（`removeOnly`）是可以的。
-- Tomcat 上的 `native`：删除 `max-trusted-index`；Tomcat 信任哪些代理由 `server.tomcat.remoteip.internal-proxies` 和 `trusted-proxies` 决定。或者设置 `server.forward-headers-strategy=none`，让 CoSec 自己读取 `X-Forwarded-For`。
-- Reactor Netty 或 Jetty 上的 `native` 且 `max-trusted-index: 0`：把该索引设为宿主前面的代理数量；客户端直接访问的宿主则设置 `server.forward-headers-strategy=none`。
-- CoSec 无法判断的服务器，例如部署在外部容器中的 war：设置 `server.forward-headers-strategy=none` 和该索引。
+- `framework`，或会改写请求的 `ForwardedHeaderFilter`、`ForwardedHeaderTransformer` bean：改用 `server.request.header.forwarded.strategy=web-server` 并在服务器上配置代理，或者用 `none` 并设置 `cosec.authorization.remote-ip.max-trusted-index`。只删除这些请求头的过滤器（`removeOnly`）是可以的。
+- Tomcat 上的 `web-server`：删除 `max-trusted-index`；Tomcat 信任哪些代理由 `server.tomcat.remoteip.internal-proxies` 和 `trusted-proxies` 决定。或者设置 `server.request.header.forwarded.strategy=none`，让 CoSec 自己读取 `X-Forwarded-For`。
+- Reactor Netty 或 Jetty 上的 `web-server` 且 `max-trusted-index: 0`：把该索引设为宿主前面的代理数量；客户端直接访问的宿主则设置 `server.request.header.forwarded.strategy=none`。
+- CoSec 无法判断的服务器，例如部署在外部容器中的 war：设置 `server.request.header.forwarded.strategy=none` 和该索引。
 
 对照表见[代理后的客户端 IP](../integration/web.md#client-ip-behind-proxies)。
 
@@ -791,7 +807,7 @@ Tokens are verified against RevocationReader.NONE: a revoked token (logout, revo
 |---|---|---|
 | `401` | 请求背后没有管道放行的主体：匿名，或者该路由没有部署在管道之后。请求体一个字节也不读。 | 发送凭证。文档必须为这个主体放行发往 `cosec.control.http.base-path` 的 HTTP 请求。 |
 | `403` | 操作者无权对这个文档执行这个动作（对 `simulate` 与 `explain`，是请求在其中决策的租户：没有 `principal` 时是 `(0)`），或者硬性规则禁止：作者审批自己的变更、其他人变基该变更，或作者以外的人放弃吊销仍在生效的 break-glass 绑定的变更（`BRK-10`）。 | 为操作者绑定该文档的控制面策略（`cosec:platform-admin`、`cosec:tenant-admin` 等）（[测试变更](../policies/testing.md)）。 |
-| `400` | 请求体不是 JSON 对象、字段缺失或未知、值类型错误或解析不了（时间、模式、数字），或者（WebMvc 上）请求体超过 10 MB（文档上限再加 2 MB，[由计算得出](./configuration.md#computed-not-configured)）。`simulate` 与 `explain` 还会拒绝：没有 `principal` 却指定 `(0)` 以外租户的请求（执法会在 `(0)` 上决策它）；以不同的值重复发送视图中某份文档读取的头的请求（与执法一样拒绝）；执法会拒绝的 `http` 路径（点号段、格式错误的转义、超过 2,048 个字符或每段 256 个），或者超过这些长度的类型化 id，`analyze` 也拒绝这种资源。路径、查询或请求体中任何字符串带有落单 UTF-16 代理项（如 JSON 转义 `"\uD800"`）的请求，在路由读取它之前就被拒绝：`The request holds a string with an unpaired UTF-16 surrogate, which no id may hold (IDN-10).` | 修正请求；`detail` 用控制面自己的话或字段名说明问题，从不带异常消息。没有 `detail` 的 `400` 以 `INFO` 记录：`Control API <method> <path> (request <requestId>) is 400: <reason>`。WebFlux 上的大请求体受 `spring.codec.max-in-memory-size` 限制。 |
+| `400` | 请求体不是 JSON 对象、字段缺失或未知、值类型错误或解析不了（时间、模式、数字），或者（WebMvc 上）请求体超过 10 MB（文档上限再加 2 MB，[由计算得出](./configuration.md#computed-not-configured)）。`simulate` 与 `explain` 还会拒绝：没有 `principal` 却指定 `(0)` 以外租户的请求（执法会在 `(0)` 上决策它）；以不同的值重复发送视图中某份文档读取的头的请求（与执法一样拒绝）；执法会拒绝的 `http` 路径（点号段、格式错误的转义、按收到时超过 2,048 个字符，或解码后每段超过 256 个），或者按书写超过这些长度的类型化 id，`analyze` 也拒绝这种资源。路径、查询或请求体中任何字符串带有落单 UTF-16 代理项（如 JSON 转义 `"\uD800"`）的请求，在路由读取它之前就被拒绝：`The request holds a string with an unpaired UTF-16 surrogate, which no id may hold (IDN-10).` | 修正请求；`detail` 用控制面自己的话或字段名说明问题，从不带异常消息。没有 `detail` 的 `400` 以 `INFO` 记录：`Control API <method> <path> (request <requestId>) is 400: <reason>`。WebFlux 上的大请求体受 `spring.codec.max-in-memory-size` 限制。 |
 | `404` | 没有这个路由、文档或变更，或者操作者看不到它。末尾带 `/` 或含空段（`//`）的路径不是路由。 | 使用路由的确切路径。 |
 | `409` | 基准已变化（`[<doc>] is at revision <n>, not <m>`）、变更处于其他状态、另一个变更占用了文档的暂存槽（只有吊销 break-glass，或持有 `cosec:skip-shadow` 的人提交的只收窄变更能抢占，而吊销仍在生效的绑定的变更持有的暂存槽，只有另一个这样的吊销能抢走：[抢占被占用的暂存槽](../policies/testing.md#taking-a-busy-slot)）、影子窗口仍打开或被阻塞，或者 break-glass 吊销没有生效（`binding [<id>] still grants: change <id> is <state>`，见下文）。 | 变基、等待另一个变更、查看窗口的摘要，或再吊销一次。 |
 | `:apply` 的 `REPLACE` 返回 `409`：`[<doc>] is at revision <n>, not <m>: REPLACE removes what the file leaves out, and the file was read at revision <m>` | 文件头写明了读取时的修订，而头修订之后已变化：应用它会删掉期间发布的内容。 | 读取头修订（`GET /documents/<doc>`），把变化合并进文件，把 `revision` 设为头修订，再应用一次（[变更](../policies/testing.md#changes)）。 |
@@ -822,6 +838,7 @@ Tokens are verified against RevocationReader.NONE: a revoked token (logout, revo
 - **以 `WARN` 记录 `[<doc>] revision <n> is published; its index or the references it dropped could not be updated`**，来自控制面的修订存储（`me.ahoo.cosec.control.store`）：写头之后的某一步失败了，即修订索引或反向引用索引的更新，而不是写入本身。这个修订已经生效，无需处理：`history` 会沿修订链重建索引，残留的引用最多误拦一次删除。如果变更本身没能结算，发布会返回错误，尽管修订已经生效；再次发布它会报 `PUBLISHED`，补做写入之后的步骤，并以原发布人的身份记录事件。
 - **只删除条目的平台或应用变更停在 `AWAITING_APPROVAL`**，带一项 `NOT_ANALYZED` 升级 `policy <id> of <doc>` 或 `binding <id> of <doc>`（`it removes a DENY: only the trust root does it alone`）：这个变更拿掉了一条 DENY，而平台和应用之上没有别的约束还在（`CTL-31`）。删除角色按角色派生的每条绑定计，即 `role:<role>@<app>:<permission>`。请另一位持有 `cosec:approve` 的平台主体审批它（[审批](../policies/testing.md#approval)）。
 - **发布时审批不再算数**：变更回到 `AWAITING_APPROVAL`，`APPROVAL` 发现写着 `the token the approver approved with is revoked`、`the approver's tokens are revoked`、`the approver no longer holds cosec:approve on the document`、`only a platform principal approves a boundary change`、`under four-eyes, only a platform principal approves a platform principal's change`，或 `the approval does not say what credential its approver approved with`（升级前的审批、旧实例接受的审批，或用不带 id 的凭证给出的审批）。请重新申请审批。`:approve` 返回 `403` 而日志中写着 `an API key cannot approve`：请用人的令牌审批；写着 `an approval names the approver's credential, and this one names none`：请用带 id 的凭证审批，例如 CoSec 的令牌。
+- **服务声明了平台管理员身份，它的变更仍要等人审批**：变更来自 `ControlService` 或控制面宿主的服务端口，那里没有人是信任根（`CTL-81`），所以它要经过分析：应用目录上是 `NOT_ANALYZED`，租户文档中的授予是 `CROSS_TENANT`。请由人在运维人员的路由上审批；对于投影进租户的角色，给服务[角色类](../policies/testing.md#the-role-class)。角色变更在等待且没有 `ROLE_CLASS`：该主体在租户文档上不持有 `cosec:manage-roles`，或者这个角色属于控制面自身的应用或没有应用，它们永远不属于角色类。
 - **发布在暂存槽上遇到另一个变更时出现 `FAILED` 变更事件**：`another change took the staging slot before the head write`（变更在发布期间被抢占，没有写入任何内容）、`the document moved before the head write`（变更最后一次检查暂存槽之后头变化了：取走其暂存槽的变更、bootstrap、迁移，或旧实例写了头，旧实例可能正在发布同一个变更；没有写入任何内容）、`revision <n> was published over the same base first, by <id>`（同一基准上另有一次发布先到：被它抢占、仍在一次存储往返之内发布的变更，或 bootstrap、迁移、旧实例的发布；请变基），或 `conflicted by <id>, which did not take the slot`（一次抢占在标记持有者之后放弃了；请变基持有者）。这个版本的发布写头时遇到的若是本变更自己的修订（同一变更的并发发布写下的），不记失败。
 - **吊销返回 `503`，break-glass 绑定仍在**：吊销的发布停住了（REQUIRED 变更监听器没有记录 `PUBLISHING`），它以 `READY` 留在平台文档的暂存槽中。等监听器的存储恢复后再吊销一次该绑定，即会把它发布出去；看不到它的吊销人用自己的吊销变更抢走它的槽。在此期间，吊销该主体的令牌照样有效。只有吊销的作者能放弃它（其他人得到 `403`，`BRK-10`），放弃同样需要这个监听器（`503`）。
 - **`DELETE /break-glass/{bindingId}` 返回 `409` `binding [<id>] still grants: change <id> is <state>`**：吊销没有生效，该绑定仍在生效。`CONFLICTED`：其他吊销或写入不断改变平台文档，吊销又试了三次后放弃；请再吊销一次，并在此期间吊销该主体的令牌。`DRAFT`：查看变更的 `findings`。

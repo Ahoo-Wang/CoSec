@@ -64,6 +64,9 @@ Full model: https://cosec.ahoo.me/guide/security-model.
 
 ## Startup failures
 
+- **`PIP-34: 2 ProblemRenderer beans of the application, [...]`**: a refusal has one body, so the starter takes one
+  `ProblemRenderer`. Keep one, or one that delegates.
+  https://cosec.ahoo.me/operations/troubleshooting#startup-fails-on-two-problem-renderers
 - **A gateway restarts once right after `kubectl apply`**, and `kubectl logs --previous` ends with
   `RedisConnectionException: Unable to connect to redis/...`: it started before Redis was reachable (the overlay is
   applied whole). Startup fails closed without the store of record, and the kubelet restarts it until Redis answers: no
@@ -120,10 +123,10 @@ Full model: https://cosec.ahoo.me/guide/security-model.
 - **`STA-5: <n> CorsConfigurationSource beans of the application`**: the starter's CORS filter takes one source. Keep one,
   or declare a `CorsFilter` bean of your own.
 - **`cosec.audit.kafka.delivery=[<value>] is neither required nor best-effort.`**: write one of the two.
-- **A message that names `server.forward-headers-strategy`, `RemoteIpValve` or `max-trusted-index`**: the host cannot say
+- **A message that names `server.request.header.forwarded.strategy` (or the deprecated `server.forward-headers-strategy`), `RemoteIpValve` or `max-trusted-index`**: the host cannot say
   which party writes the client address. `framework`, or a `ForwardedHeaderFilter` bean that rewrites the request: use
-  `native` and configure the proxies on the server, or `none` and set `cosec.authorization.remote-ip.max-trusted-index`;
-  Tomcat with `native`: remove `max-trusted-index`; Reactor Netty or Jetty with `native` and index `0`: set the number of
+  `web-server` and configure the proxies on the server, or `none` and set `cosec.authorization.remote-ip.max-trusted-index`;
+  Tomcat with `web-server`: remove `max-trusted-index`; Reactor Netty or Jetty with `web-server` and index `0`: set the number of
   proxies, or `none`.
   https://cosec.ahoo.me/operations/troubleshooting#startup-fails-on-the-client-address
 - **`Social sign-in, whose states are kept in Redis ..., needs cosec-cocache`** (STA-1): add `cosec-cocache`, declare
@@ -423,6 +426,15 @@ the route's `uri` does not resolve (a Kubernetes Service missing from the gatewa
 it: fix the route's `uri`, or create the Service or the DNS name.
 https://cosec.ahoo.me/operations/troubleshooting#a-permitted-request-answers-500-with-the-gateways-own-error-body
 
+### A refusal has CoSec's body though a `ProblemRenderer` is declared
+
+`WARN` `Request [<id>]: the ProblemRenderer [<class>] failed with <exception>, so the <status> <slug> refusal is
+answered with CoSec's own body (PIP-34)`, and `cosec.problem.render.failed` rising: the application's renderer threw or
+returned no bytes, and CoSec answered with its own body. The request was refused anyway, with CoSec's status: nothing
+was let through. Fix the renderer (a default branch for every `ProblemType`, a later one included). No such line and
+never the renderer's body: it is not wired (not a bean, or not the only one).
+https://cosec.ahoo.me/operations/troubleshooting#a-refusal-is-answered-with-cosecs-body-though-a-renderer-is-declared
+
 ### Request allowed unexpectedly
 
 - Find the deciding statement in the audit event or with `explain`. Any matching DENY would have won, so the expected
@@ -574,7 +586,12 @@ the approver's token was revoked since, the provider no longer gives the approve
 tenant principal approved a boundary change or (under four-eyes) a platform principal's change, or the approval names
 no credential (`the approval does not say what credential its approver approved with`: from before the upgrade, an
 older instance, or a credential without an id), so approve again. A 403 on `:approve` with `an API key cannot approve`
-in the log: approvals are a person's, so approve with a token; an API key is never the trust root either. A tenant
+in the log: approvals are a person's, so approve with a token; an API key is never the trust root either. A change a
+service makes through `ControlService` or the service port that waits for a person (`NOT_ANALYZED` on an app's catalog,
+`CROSS_TENANT` on a tenant's grant) although it states a platform administrator: no one is the trust root there
+(`CTL-81`); give a role projection the role class (`cosec:manage-roles`), or have a person approve on the operators'
+routes. A role change of such a service that waits with no `ROLE_CLASS`: the principal lacks `cosec:manage-roles` on
+the tenant's document, or the role is of the control plane's own app or has no app, never the class's. A tenant
 principal's `SetBoundary`, its `REPLACE` or rollback that would drop the platform's boundary, and its reject or abandon
 of a boundary change are 403: a tenant's boundary is the platform's. A 409 on staging means another change holds the
 document's slot; only a break-glass revoke of a live binding, or a change that only narrows by a holder of

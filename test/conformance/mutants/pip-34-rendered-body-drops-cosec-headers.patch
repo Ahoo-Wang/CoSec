@@ -1,0 +1,19 @@
+# Rule: PIP-34
+# Mutant: a rendered body comes without CoSec's headers: the renderer, not CoSec, decides what a refusal carries
+# Tests: :spring-boot:test --tests me.ahoo.cosec.spring.boot.WebAdapterParityTest :conformance:test
+
+diff --git a/edge/webflux/src/main/kotlin/me/ahoo/cosec/webflux/ReactivePipelineBridge.kt b/edge/webflux/src/main/kotlin/me/ahoo/cosec/webflux/ReactivePipelineBridge.kt
+index 48c69af9d..e40623679 100644
+--- a/edge/webflux/src/main/kotlin/me/ahoo/cosec/webflux/ReactivePipelineBridge.kt
++++ b/edge/webflux/src/main/kotlin/me/ahoo/cosec/webflux/ReactivePipelineBridge.kt
+@@ -76,7 +76,9 @@ abstract class ReactivePipelineBridge(
+         chain: (ServerWebExchange, Outcome) -> Mono<Void>,
+     ): Mono<Void> {
+         val response = exchange.response
+-        outcome.headers.forEach { (name, value) -> response.headers.set(name, value) }
++        if (outcome.problem == null || bodies.renderer === me.ahoo.cosec.runtime.http.ProblemRenderer.DEFAULT) {
++            outcome.headers.forEach { (name, value) -> response.headers.set(name, value) }
++        }
+         val problem = outcome.problem
+         if (problem != null) {
+             response.statusCode = HttpStatusCode.valueOf(outcome.status)

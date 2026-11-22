@@ -1,27 +1,18 @@
 # Rule: STA-5
-# Mutant: Spring MVC registers the CORS filter whether or not the application declared a source, over its own introspector, so a preflight is never decided
+# Mutant: Spring MVC registers the CORS filter only when the application declared no source, so a declared source never answers a preflight before CoSec, and a host without one fails at startup
 # Tests: :spring-boot:test --tests me.ahoo.cosec.spring.boot.realserver.CorsWiringTest
 
 diff --git a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/pipeline/CoSecPipelineWebAutoConfiguration.kt b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/pipeline/CoSecPipelineWebAutoConfiguration.kt
-index 740830db..6755e714 100644
+index 420a34671..5dd846c40 100644
 --- a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/pipeline/CoSecPipelineWebAutoConfiguration.kt
 +++ b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/pipeline/CoSecPipelineWebAutoConfiguration.kt
-@@ -106,7 +106,7 @@ internal class CoSecPipelineWebAutoConfiguration {
-         @Conditional(DeclaredCorsSource::class)
-         @ConditionalOnMissingBean(CorsFilter::class)
+@@ -122,8 +122,7 @@ internal class CoSecPipelineWebAutoConfiguration {
+          * `HandlerMappingIntrospector` was one), so every one is the application's.
+          */
+         @Bean
+-        @ConditionalOnBean(CorsConfigurationSource::class)
+-        @ConditionalOnMissingBean(CorsFilter::class)
++        @ConditionalOnMissingBean(CorsConfigurationSource::class, CorsFilter::class)
          fun cosecCorsFilter(sources: ObjectProvider<CorsConfigurationSource>): FilterRegistrationBean<CorsFilter> {
--            val declared = sources.orderedStream().filter { it !is HandlerMappingIntrospector }.toList()
-+            val declared = sources.orderedStream().toList()
+             val declared = sources.orderedStream().toList()
              check(declared.size == 1) {
-                 "STA-5: ${declared.size} CorsConfigurationSource beans of the application: the CORS filter before CoSec " +
-                     "takes one. Declare a CorsFilter of your own to say which."
-@@ -117,7 +117,8 @@ internal class CoSecPipelineWebAutoConfiguration {
-         /** True when the application declared a [CorsConfigurationSource] other than Spring MVC's own introspector. */
-         internal class DeclaredCorsSource : Condition {
-             override fun matches(context: ConditionContext, metadata: AnnotatedTypeMetadata): Boolean {
--                val factory = context.beanFactory ?: return false
-+                return true
-+                val factory = checkNotNull(context.beanFactory)
-                 return factory.getBeanNamesForType(CorsConfigurationSource::class.java, true, false).any {
-                     val type = factory.getType(it, false)
-                     type == null || !HandlerMappingIntrospector::class.java.isAssignableFrom(type)

@@ -28,6 +28,34 @@ Which preview of the library may run behind which preview of the gateway image: 
 
 ## From 8.0.0-beta.5 {#from-8-0-0-beta-5}
 
+- **New: a host renders the body of a refusal** (`ProblemRenderer`, `PIP-34`, #1840). Affected: nothing unless you
+  declare one. A host framework with its own problem catalog declares one `ProblemRenderer` bean, and every refusal
+  behind the three adapters and the served login routes has its body; the status and the headers stay CoSec's, and a
+  renderer that fails is replaced by CoSec's body (`cosec.problem.render.failed`). Two renderers fail startup. Keep
+  CoSec's `type` and `code` in the body, or CoSec's TypeScript client cannot read those refusals
+  ([Problem renderer](../architecture/extending.md#problem-renderer)).
+- **CoSec is built on Spring Boot 4.2 and Spring Cloud 2026.0.** Affected: an application on Spring Boot 4.1, or with
+  `cosec-gateway` on Spring Cloud 2025.1. CoSec's modules name the versions they are built on as minimums
+  ([What CoSec needs from your build](../guide/introduction.md#what-cosec-needs-from-your-build)): upgrade the application
+  to Spring Boot 4.2 (and Spring Cloud 2026.0.0 with `cosec-gateway`) as Spring Boot's 4.2 release notes describe; a
+  mixed classpath of Spring Boot 4.1 and 4.2 modules is not supported.
+  - **The forwarded-header strategy is `server.request.header.forwarded.strategy`** (`web-server`, `framework`, `none`),
+    as Spring Boot 4.2 names it. CoSec reads it, and still reads the deprecated `server.forward-headers-strategy`
+    (`native` is `web-server`), to decide how to read the client address; its startup messages name the new key
+    ([Client IP behind proxies](../integration/web.md#client-ip-behind-proxies)). Setting both fails Spring Boot's
+    startup.
+  - Nothing to do for CORS: Spring MVC no longer declares a `CorsConfigurationSource` of its own (Spring Framework 7.1),
+    so CoSec's CORS filter (`STA-5`) still runs exactly when the application declares one.
+- **A path segment is bounded once decoded** (`PIP-5`, #1853). Affected: clients whose path segments are long only
+  percent-encoded, typically identifiers in a script other than Latin. Through beta.5 a segment over 256 characters as
+  received was `400` `invalid-request`, so 29 CJK characters (261 encoded) were refused while 256 ASCII ones passed. A
+  segment is now counted as the matchers see it, decoded, in UTF-16 units: such a request that was refused is now
+  carried and decided. The whole path is still bounded at 2,048 characters as received, so one segment of CJK text
+  holds at most 227. Every other refusal is unchanged, inside a long segment too: an encoded `/`, `;` or `\`, a control
+  character, a malformed escape, a dot or empty segment. A typed id that the control plane simulates, explains or
+  analyzes is still bounded as written, and so is a path for an ALLOW whose pattern sets `decodeAndParseSegments:
+  false`: it reads the segments as received, so it matches no path with a segment longer than 256 characters as
+  received, and such a request is decided by the other statements. Nothing to change unless you relied on the refusal.
 - **New: the role class, `cosec:manage-roles`** (`CTL-79`). A holder's change of a tenant's document that only puts or
   removes roles no longer waits for a person on account of who grants; it records a `ROLE_CLASS` escalation, a new
   value of the closed set, which a client that maps escalation reasons reads ([The role class](../policies/testing.md#the-role-class)).
@@ -35,6 +63,16 @@ Which preview of the library may run behind which preview of the gateway image: 
   (`cosec.control.app-id`) is never the class's**: a member of it holds control calls on its tenant's document, and who
   governs a tenant's policies is for a person to appoint. A sync that projects such roles keeps waiting for approval;
   project only roles of business apps through the class.
+- **New: a service changes an app's document through the service port and `ControlService`** (`CTL-58`, `CTL-65`):
+  `propose`, `check` and the change flow of an app document, which were a `404` there. Such a change is analyzed as on
+  the operators' port: removing a role, a policy or a binding publishes alone, and anything else (a catalog, a role
+  put) waits for a person. The platform document stays outside. Nothing changes for a service that does not hold
+  `cosec:write` on `doc/app/...`.
+- **No trust root through the service port or `ControlService`** (`CTL-81`). A service that stated a platform
+  administrator there to publish a tenant's (or an app's) document unanalyzed now waits for a person: the change is
+  analyzed whoever is stated, and a grant the analysis cannot prove is `AWAITING_APPROVAL`. Project roles into tenants
+  through the [role class](../policies/testing.md#the-role-class) (`cosec:manage-roles`), or have a person approve on
+  the operators' routes. The same principal on the operators' routes is unchanged.
 - **An instance's status is split in two** (`CTL-74`, `CTL-75`). The status at `<s>:shadow:status:<instance>` is now
   small (liveness, `shadows`, the acknowledged windows) and has no `documents` member. The documents an instance holds
   are a record of their own, `<s>:shadow:resident:<instance>`, which only `propagation` reads
@@ -415,7 +453,10 @@ Which preview of the library may run behind which preview of the gateway image: 
     Absent, empty, `false`, `1` and `on` fail alike, and the message says what to write. Make it true first (a
     `NetworkPolicy` that admits the gateway's pods only, mutual TLS, a private network;
     [`k8s/examples/gateway-mode-service-networkpolicy.yaml`](https://github.com/Ahoo-Wang/CoSec/blob/main/k8s/examples/gateway-mode-service-networkpolicy.yaml)).
-    Once it is set, the `WARN` through beta.4 is one `INFO` line.
+    Once it is set, the `WARN` through beta.4 is one `INFO` line. A Spring Boot test that starts such a service states
+    it too: the test is reached by its own client alone, so the statement is true there. From beta.6 the kit has the
+    line: `@SpringBootTest(properties = [IdentityHeader.ONLY_GATEWAY_CAN_REACH])`, for tests only
+    ([Testing your application](../policies/testing.md#testing-your-application)).
   - A service in `gateway` mode **fails to start** with a hidden-method filter:
     `spring.mvc.hiddenmethod.filter.enabled=true`, `spring.webflux.hiddenmethod.filter.enabled=true`, or a
     `HiddenHttpMethodFilter` bean of its own. The gateway decided the method of the request line, and a `_method` form

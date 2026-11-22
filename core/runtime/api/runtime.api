@@ -381,6 +381,15 @@ public final class me/ahoo/cosec/runtime/http/ProblemEncoder {
 	public final fun encode (Lme/ahoo/cosec/runtime/http/Problem;)[B
 }
 
+public abstract interface class me/ahoo/cosec/runtime/http/ProblemRenderer {
+	public static final field Companion Lme/ahoo/cosec/runtime/http/ProblemRenderer$Companion;
+	public abstract fun render (Lme/ahoo/cosec/runtime/http/Problem;)[B
+}
+
+public final class me/ahoo/cosec/runtime/http/ProblemRenderer$Companion {
+	public final fun getDEFAULT ()Lme/ahoo/cosec/runtime/http/ProblemRenderer;
+}
+
 public final class me/ahoo/cosec/runtime/http/ProblemType : java/lang/Enum {
 	public static final field Companion Lme/ahoo/cosec/runtime/http/ProblemType$Companion;
 	public static final field FORBIDDEN Lme/ahoo/cosec/runtime/http/ProblemType;

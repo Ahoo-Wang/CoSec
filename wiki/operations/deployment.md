@@ -293,7 +293,7 @@ docker run -d -p 127.0.0.1:8080:8080 \
 | Port | What | Who should reach it |
 |---|---|---|
 | **8080** | the operators' API, `/cosec/control/**` (`cosec.control.http.base-path`), every route of [the control API](../policies/testing.md#the-control-plane) | the gateway's pods |
-| **8082** | the service API (`cosec.control.http.service-port`), the narrow profile for a service that calls the control plane directly: which tenant and app documents there are ([`GET /documents?kind=`](../policies/testing.md#listing-documents), granted to a service by `cosec:read` on `doc/tenant` or `doc/app`), the tenant and app documents, and a tenant's change flow ([Changing policies from your code](../integration/checks.md#changing-policies-from-your-code)); every other route is a `404` there | exactly the services you name |
+| **8082** | the service API (`cosec.control.http.service-port`), the narrow profile for a service that calls the control plane directly: which tenant and app documents there are ([`GET /documents?kind=`](../policies/testing.md#listing-documents), granted to a service by `cosec:read` on `doc/tenant` or `doc/app`), the tenant and app documents, and their change flow ([Changing policies from your code](../integration/checks.md#changing-policies-from-your-code)); every other route is a `404` there | exactly the services you name |
 | **8081** | the management port: `/actuator/health/liveness`, `/actuator/health/readiness`, `/actuator/prometheus`; outside CoSec. The control API is a `404` there, as on any port but 8080 and 8082 (`CTL-69`) | monitoring only |
 
 Nothing in CoSec authorizes the management port, and the actuator is not on the application port: probe the management
@@ -309,6 +309,14 @@ For an operator's request the gateway took the `http:` decision and ran the rate
 for a request on the service port nothing did. Each control action is still decided by the policies for the principal
 the caller states, and recorded as its step. What limits how much a service asks of the service port is the network
 that admits it and the service itself: a rate limit rule on a control route holds behind the gateway only.
+
+**Stating an identity on the service port never makes the trust root** (`CTL-81`). A workload the network admits to
+8082 can state any principal, a platform administrator included, and acts with what the policies grant that principal:
+it reads, proposes, stages and publishes what that principal may. But every change it makes there is analyzed: what
+grants nothing anew publishes alone, a holder of `cosec:manage-roles` projects roles into tenants alone, and anything
+else waits for a person, who approves on 8080 behind the gateway. A change readied on 8080 is analyzed again when it is
+published on 8082. Admit to 8082 only the services you would let propose; none of them can publish a grant alone by
+naming an administrator.
 
 **How a caller is identified.** An operator signs in at the IAM service, and the gateway verifies the token and forwards
 the identity to a route to the host. Give that route its app, so that an identity for another app is refused:

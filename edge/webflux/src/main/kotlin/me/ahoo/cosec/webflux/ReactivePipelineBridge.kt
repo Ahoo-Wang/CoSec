@@ -24,7 +24,7 @@ import me.ahoo.cosec.runtime.call.ResumeDispatcher
 import me.ahoo.cosec.runtime.event.BridgeContextContributor
 import me.ahoo.cosec.runtime.http.HttpFacts
 import me.ahoo.cosec.runtime.http.Outcome
-import me.ahoo.cosec.runtime.http.ProblemEncoder
+import me.ahoo.cosec.runtime.http.ProblemBodies
 import me.ahoo.cosec.runtime.http.RemoteIpResolver
 import me.ahoo.cosec.runtime.http.RequestGate
 import me.ahoo.cosec.webflux.ReactiveSecurityContexts.writeSecurityContext
@@ -53,6 +53,8 @@ abstract class ReactivePipelineBridge(
     private val remoteIpResolver: RemoteIpResolver<ServerWebExchange> = ReactiveRemoteIpResolver,
     /** The app this host serves (RFC 0004 §4.6); [HttpFactsReader.NO_HOST] when the request declares it. */
     private val host: HostScope = HttpFactsReader.NO_HOST,
+    /** The body of a refusal (`PIP-34`): the host's renderer, or CoSec's own. */
+    private val bodies: ProblemBodies = ProblemBodies.DEFAULT,
 ) {
     /** The host and request attributes of [exchange]; the gateway adds its route's. */
     protected open fun read(exchange: ServerWebExchange): HttpFacts =
@@ -78,7 +80,7 @@ abstract class ReactivePipelineBridge(
         val problem = outcome.problem
         if (problem != null) {
             response.statusCode = HttpStatusCode.valueOf(outcome.status)
-            val body = ProblemEncoder.encode(problem)
+            val body = bodies.body(problem)
             // With its length on every server: Reactor Netty sets it for one buffer, the servlet containers would chunk.
             response.headers.contentLength = body.size.toLong()
             return response.writeWith(response.bufferFactory().wrap(body).toMono())

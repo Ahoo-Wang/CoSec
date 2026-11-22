@@ -3,15 +3,15 @@
 # Tests: :spring-boot:test --tests me.ahoo.cosec.spring.boot.pipeline.GatewayModeTrustTest
 
 diff --git a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/pipeline/GatewayModeTrust.kt b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/pipeline/GatewayModeTrust.kt
-index 91a447d1e..11ffab016 100644
+index 9dc10b8b9..5d9fb4a82 100644
 --- a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/pipeline/GatewayModeTrust.kt
 +++ b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/pipeline/GatewayModeTrust.kt
-@@ -54,7 +54,7 @@ internal object GatewayModeTrust {
+@@ -64,7 +64,7 @@ internal object GatewayModeTrust {
          val stated = listOf(
              PipelineProperties.ONLY_GATEWAY_CAN_REACH_KEY to gateway,
              PipelineProperties.ONLY_TRUSTED_CALLERS_CAN_REACH_KEY to trusted,
 -        ).firstOrNull { (_, value) -> value != null && value.equals("true", ignoreCase = true) }?.first
 +        ).firstOrNull { (_, value) -> value != null }?.first
          check(stated != null) {
-             "$host: this host believes any CoSec-Identity header it receives, and the header " +
-                 "carries no signature, so whoever can reach this host is whoever they claim to be, the platform " +
+             "$host: this host believes any CoSec-Identity header it receives, and the header carries no signature, so " +
+                 "whoever can reach this host is whoever they claim to be" + exposure(environment, controlPlane) +
