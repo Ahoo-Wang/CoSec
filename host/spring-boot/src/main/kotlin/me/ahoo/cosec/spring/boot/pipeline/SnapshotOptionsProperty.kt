@@ -24,9 +24,14 @@ import java.time.Duration
 
 /**
  * The source's options. A `revalidate-interval` out of bounds fails startup naming the property (`SNP-6`, RC1-50): the
- * periodic pass is the only bound on a change whose invalidation was lost, so it cannot be turned off.
+ * periodic pass is the only bound on a change whose invalidation was lost, so it cannot be turned off. [sources] is how
+ * many snapshot sources this process holds (two where the control plane runs: its own and the pipeline's): they share
+ * the documents' quarter of the heap equally (`SNP-24`).
  */
-internal fun RuntimeAuthorizationProperties.Snapshot.toOptions(pipelineTimeout: Duration): SnapshotOptions {
+internal fun RuntimeAuthorizationProperties.Snapshot.toOptions(
+    pipelineTimeout: Duration,
+    sources: Int
+): SnapshotOptions {
     val derived = derived(pipelineTimeout)
     SnapshotOptions.revalidateIntervalProblem(
         revalidateInterval,
@@ -35,7 +40,7 @@ internal fun RuntimeAuthorizationProperties.Snapshot.toOptions(pipelineTimeout: 
         failClosed.maxLag
     )
         ?.let { throw IllegalStateException("$REVALIDATE_INTERVAL_PROPERTY ($revalidateInterval) $it.") }
-    return options(derived)
+    return options(derived, HeapBudget.of().documents / sources.coerceAtLeast(1))
 }
 
 /** Lag above which a document is logged at WARN: [SnapshotOptions.LAG_WARN_PASSES] passes of `revalidate-interval`. */
@@ -63,7 +68,7 @@ internal fun RuntimeAuthorizationProperties.prewarmKeys(): List<SnapshotKey> {
 
 internal const val REVALIDATE_INTERVAL_PROPERTY = "cosec.authorization.snapshot.revalidate-interval"
 
-private fun RuntimeAuthorizationProperties.Snapshot.options(derived: SnapshotOptions.Derived): SnapshotOptions =
+private fun RuntimeAuthorizationProperties.Snapshot.options(derived: SnapshotOptions.Derived, documents: Long): SnapshotOptions =
     SnapshotOptions(
         revalidateInterval = revalidateInterval,
         lagWarn = derived.lagWarn,
@@ -71,7 +76,7 @@ private fun RuntimeAuthorizationProperties.Snapshot.options(derived: SnapshotOpt
         failClosedTenants = failClosed.tenants,
         failClosedMaxLag = failClosed.maxLag,
         coldLoadTimeout = derived.coldLoadTimeout,
-        documentsBudget = HeapBudget.of().documents,
+        documentsBudget = documents,
         compileThreads = derived.compileThreads,
         reloadConcurrency = derived.reloadConcurrency,
     )

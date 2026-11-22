@@ -177,7 +177,10 @@ internal class Passes(
         // The derived bounds follow what is resident (SNP-24), once per pass; a family now above its bound is taken back to
         // it by housekeeping, as after an install.
         for (family in families.rebound()) {
-            context.threads.offHousekeeping(HousekeepingTask.EVICT, { "The eviction pass of the ${family.spec.kind} family." }) {
+            context.threads.offHousekeeping(
+                HousekeepingTask.EVICT,
+                { "The eviction pass of the ${family.spec.kind} family." }
+            ) {
                 families.evictBeyond(family)
             }
         }

@@ -153,7 +153,8 @@ internal class CoSecControlAutoConfiguration {
             DocumentSnapshots.source(
                 documents,
                 compiler,
-                properties.snapshot.toOptions(pipeline.timeout),
+                // Half the documents' share: the pipeline's source beside it holds the other half (SNP-24).
+                properties.snapshot.toOptions(pipeline.timeout, sources = 2),
                 clock
             ).also(compiler::bind),
             clock,

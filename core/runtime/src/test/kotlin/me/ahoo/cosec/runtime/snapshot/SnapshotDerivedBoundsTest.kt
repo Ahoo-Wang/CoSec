@@ -84,7 +84,12 @@ class SnapshotDerivedBoundsTest {
     private fun source(store: InMemorySnapshotDocumentStore, budget: Long) = DocumentSnapshots.source(
         store,
         PolicyDocumentCompiler(),
-        SnapshotOptions(revalidateInterval = Duration.ofMinutes(4), lagWarn = Duration.ofMinutes(5), lagEscalate = Duration.ofMinutes(10), documentsBudget = budget),
+        SnapshotOptions(
+            revalidateInterval = Duration.ofMinutes(4),
+            lagWarn = Duration.ofMinutes(5),
+            lagEscalate = Duration.ofMinutes(10),
+            documentsBudget = budget
+        ),
     )
 
     private fun SnapshotSource<*, *>.loadEach(keys: List<SnapshotKey>) = keys.forEach { loadAll(listOf(it)).join() }
@@ -103,7 +108,13 @@ class SnapshotDerivedBoundsTest {
         pod.absentTenants.assert().isEqualTo(16_320)
         pod.firstBound(SnapshotKind.TENANT).assert().isEqualTo(3_429)
         // A family keeps documents however heavy they are.
-        pod.bound(SnapshotKind.TENANT, count = 1, weight = Long.MAX_VALUE / 4, typicalWeight = Long.MAX_VALUE / 4, others = 0).assert().isEqualTo(DocumentBudget.FLOOR)
+        pod.bound(
+            SnapshotKind.TENANT,
+            count = 1,
+            weight = Long.MAX_VALUE / 4,
+            typicalWeight = Long.MAX_VALUE / 4,
+            others = 0
+        ).assert().isEqualTo(DocumentBudget.FLOOR)
     }
 
     @Test
@@ -185,7 +196,9 @@ class SnapshotDerivedBoundsTest {
             val largeWeight = source.residentWeight(SnapshotKind.TENANT) -
                 without.second * (source.heldCounts(SnapshotKind.TENANT).first - 1)
             val itsOwnWeight = largeWeight / without.second + 1
-            println("SNP-24 noisy neighbour: bound ${without.first} without the large tenant, $with with it ($largeWeight B)")
+            println(
+                "SNP-24 noisy neighbour: bound ${without.first} without the large tenant, $with with it ($largeWeight B)"
+            )
             with.assert().isLessThan(without.first).isGreaterThanOrEqualTo((without.first - itsOwnWeight).toInt())
         }
     }

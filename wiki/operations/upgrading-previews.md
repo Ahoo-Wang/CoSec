@@ -112,6 +112,23 @@ Which preview of the library may run behind which preview of the gateway image: 
   - A `cocache.caches.[RevokedTokenCache].local-maximum-size` (or `RevokedSubjectCache`) now fails startup: the count
     is locked.
   - The change listeners' 1/32 of the heap is unchanged, and now in the same table.
+- **The snapshot families' bounds are derived from a quarter of the heap, and four keys are gone** (`SNP-24`,
+  `STA-12`). Affected: a configuration that sets one of them, and code that set them in `Pipeline.builder`'s
+  `snapshots { }`. Startup fails listing the keys CoSec does not read, saying what replaced each. Remove the key; to hold
+  more documents, give the instance more heap ([Computed, not configured](./configuration.md#computed-not-configured)).
+
+  | Removed | Now |
+  |---|---|
+  | `cosec.authorization.snapshot.max-apps`, `max-tenants` | what each family holds plus the room left of a quarter of the heap, less the absent entries' part, counted at the typical weight of its resident documents (an estimate never below what one retains), recomputed each revalidation pass, never below 64 |
+  | `cosec.authorization.snapshot.max-absent-apps`, `max-absent-tenants` | a fixed sixteenth of the documents' quarter at 512 bytes an entry: 256 app ids and 65,280 tenant ids at 2 GiB |
+
+  - **A gateway that relied on 16,384 resident tenants at 2 GiB holds about 13,700** of the deployment page's typical
+    tenants now (36.7 KB estimated each, 33.3 KB retained). Give it a 2.5 GiB heap (`-Xmx2560m`, about 17,000) to hold
+    them all; `cosec.snapshot.bound` and the startup line say what it holds.
+  - Where the control plane runs beside the pipeline, the two snapshot sources share the quarter, half each.
+  - `SnapshotSettings` (in `snapshots { }`) loses `maxApps`, `maxTenants`, `maxAbsentApps` and `maxAbsentTenants`:
+    delete the lines.
+  - A small pod gets fewer documents and turns ready as before; a document heavier than the whole share is still served.
 
 ## From 8.0.0-beta.4 {#from-8-0-0-beta-4}
 

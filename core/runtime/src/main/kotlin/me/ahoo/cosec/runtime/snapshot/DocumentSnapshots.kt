@@ -71,7 +71,13 @@ object DocumentSnapshots {
             )
         return listOf(
             SnapshotFamily(SnapshotKind.APP, compiler, budget.firstBound(SnapshotKind.APP), budget.absentApps, ::weigh),
-            SnapshotFamily(SnapshotKind.TENANT, compiler, budget.firstBound(SnapshotKind.TENANT), budget.absentTenants, ::weigh),
+            SnapshotFamily(
+                SnapshotKind.TENANT,
+                compiler,
+                budget.firstBound(SnapshotKind.TENANT),
+                budget.absentTenants,
+                ::weigh
+            ),
         )
     }
 

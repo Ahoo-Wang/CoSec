@@ -452,7 +452,7 @@ Read which memory ran out; the knob differs:
 
 | What you see | Cause | What to change |
 |---|---|---|
-| `java.lang.OutOfMemoryError: Java heap space` in the log, a heap dump in `data/` (the image's own options write it), and the pod restarts | The compiled documents and the gateway's own allocation do not fit the heap | Lower [`max-apps` and `max-tenants`](./configuration.md#snapshot) to what the heap holds ([How many documents fit](./deployment.md#memory)), or raise the heap together with the container's limit |
+| `java.lang.OutOfMemoryError: Java heap space` in the log, a heap dump in `data/` (the image's own options write it), and the pod restarts | The compiled documents and the gateway's own allocation do not fit the heap | The documents keep within a quarter of the heap (`SNP-24`): check that the heap the startup line names (`heap <n> MiB (Runtime.maxMemory())`) is the one you set, and raise the heap together with the container's limit ([How many documents fit](./deployment.md#memory)) |
 | `java.lang.OutOfMemoryError: Direct buffer memory` | Netty's buffers reached `-XX:MaxDirectMemorySize` under load | Raise the direct memory with the limit; read `jvm_buffer_memory_used_bytes{id="direct"}` |
 | The pod is `OOMKilled` (exit code `137`) with no Java error | The container's limit is below the heap plus the direct memory plus about 250 MiB for the JVM's native part | Raise the limit, or lower `-Xmx` and `MaxDirectMemorySize`: the limit is the sum of the three, plus a quarter ([Memory](./deployment.md#memory)) |
 
@@ -1069,7 +1069,7 @@ between them. A restart after the gateway was live is something else ([Probes](#
 | `cosec.audit.kafka.delivery=[<value>] is neither required nor best-effort.` | Write `required` or `best-effort` ([`delivery`](./configuration.md#audit)); case, spaces and `-` for `_` do not matter. |
 | `Decision listener <name> is registered twice.` | Give each `DecisionListener` its own `name`. |
 | `CoSec's <CacheName> is the store of record: a Store.` | Something replaced the spec of one of CoSec's caches; CoSec creates them itself. |
-| `maxApps must be positive.` and the other snapshot option checks | Fix [`cosec.authorization.snapshot.*`](./configuration.md#snapshot). |
+| `revalidateInterval ...` and the other snapshot option checks | Fix [`cosec.authorization.snapshot.*`](./configuration.md#snapshot). |
 | `Invalid change options.`, `Invalid shadow window options.` | Fix [`cosec.control.*`](./configuration.md#control-plane): `break-glass.max-duration` above `24h`, or `shadow.max-duration` below `shadow.min-duration`. |
 | `cosec.control.audit.kafka.delivery=required, but no Kafka change listener was created: it needs cosec-kafka, a KafkaOperations bean and cosec.control.audit.kafka.enabled=true.` | Add what it names, or set [`delivery`](./configuration.md#control-plane) to `best-effort`. |
 | `The control plane checks its approvers' revocations, but no revocation reader is available: ...` | Enable CoSec's tokens with `cosec-cocache`, or declare a `RevocationReader` bean; `RevocationReader.NONE` only when no approver's credential is ever revoked ([Control plane](./configuration.md#control-plane)). |

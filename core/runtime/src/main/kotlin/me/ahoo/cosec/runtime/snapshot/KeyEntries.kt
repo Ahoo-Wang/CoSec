@@ -17,6 +17,7 @@ package me.ahoo.cosec.runtime.snapshot
 
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
+import me.ahoo.cosec.spi.snapshot.SnapshotRead
 import me.ahoo.cosec.spi.snapshot.SnapshotUnavailableException
 import java.time.Instant
 
@@ -48,3 +49,17 @@ internal fun <T : Any> KeyConfig.entryOf(
     origin: EntryOrigin
 ): SnapshotEntry<T> =
     SnapshotEntry(key, state, 0, null, load.confirmedAt(localCopyMaxAge), origin)
+
+/** An entry of what [read] answered, as of [confirmedAt]: its revision, digest and stored size (`SNP-24`). */
+internal fun <T : Any> readEntry(
+    key: SnapshotKey,
+    state: DocumentState<T>,
+    read: SnapshotRead.Present,
+    confirmedAt: Instant,
+    origin: EntryOrigin,
+): SnapshotEntry<T> =
+    SnapshotEntry(key, state, read.document.revision, read.digest, confirmedAt, origin, read.document.bodySize)
+
+/** This entry failed as [error], keeping the document it was read from: its revision, digest, confirmation and size. */
+internal fun <T : Any> SnapshotEntry<T>.failedAs(error: Throwable, origin: EntryOrigin): SnapshotEntry<T> =
+    SnapshotEntry(key, DocumentState.Failed(error), revision, digest, confirmedAt, origin, storedBytes)

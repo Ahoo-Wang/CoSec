@@ -206,7 +206,10 @@ internal class SnapshotFamilies<A : Any>(
         fun unweigh(bytes: Long) = account(bytes, -1)
 
         private fun account(bytes: Long, sign: Int) {
-            val bucket = (Long.SIZE_BITS - 1 - java.lang.Long.numberOfLeadingZeros(bytes.coerceAtLeast(1))).coerceIn(0, BUCKETS - 1)
+            val bucket = (Long.SIZE_BITS - 1 - java.lang.Long.numberOfLeadingZeros(bytes.coerceAtLeast(1))).coerceIn(
+                0,
+                BUCKETS - 1
+            )
             weighedBytes.addAndGet(sign * bytes)
             bucketCounts.addAndGet(bucket, sign.toLong())
             bucketWeights.addAndGet(bucket, sign * bytes)
