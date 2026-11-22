@@ -336,7 +336,7 @@ Redis may evict CoSec's policy snapshot: maxmemory-policy is {<node>=<policy>}, 
 
 | 你看到的 | 原因 | 要改什么 |
 |---|---|---|
-| 日志里有 `java.lang.OutOfMemoryError: Java heap space`，`data/` 里有堆转储（镜像自己的选项会写它），pod 重启 | 编译后的文档加上网关自己的分配放不进堆 | 把 [`max-apps` 和 `max-tenants`](./configuration.md#snapshot) 降到堆能放下的数量（[能放下多少文档](./deployment.md#memory)），或把堆连同容器限制一起调大 |
+| 日志里有 `java.lang.OutOfMemoryError: Java heap space`，`data/` 里有堆转储（镜像自己的选项会写它），pod 重启 | 编译后的文档加上网关自己的分配放不进堆 | 文档保持在堆的四分之一以内（`SNP-24`）：确认启动日志行写的堆（`heap <n> MiB (Runtime.maxMemory())`）是你设置的那个，并把堆连同容器限制一起调大（[能放下多少文档](./deployment.md#memory)） |
 | `java.lang.OutOfMemoryError: Direct buffer memory` | 负载下 Netty 的缓冲区达到了 `-XX:MaxDirectMemorySize` | 连同限制一起调大直接内存；读取 `jvm_buffer_memory_used_bytes{id="direct"}` |
 | pod 被 `OOMKilled`（退出码 `137`），没有 Java 错误 | 容器限制低于堆加直接内存再加 JVM 原生部分约 250 MiB | 调大限制，或降低 `-Xmx` 和 `MaxDirectMemorySize`：限制是这三者之和，再加四分之一（[内存](./deployment.md#memory)） |
 

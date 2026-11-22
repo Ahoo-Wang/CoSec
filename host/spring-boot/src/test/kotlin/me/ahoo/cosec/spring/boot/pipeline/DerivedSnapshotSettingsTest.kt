@@ -16,6 +16,7 @@
 package me.ahoo.cosec.spring.boot.pipeline
 
 import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.runtime.HeapBudget
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import org.springframework.mock.env.MockEnvironment
@@ -72,7 +73,19 @@ class DerivedSnapshotSettingsTest {
     fun `the revalidation interval moves the lag thresholds with it`() {
         val properties = RuntimeAuthorizationProperties().apply { snapshot.revalidateInterval = Duration.ofSeconds(20) }
         properties.snapshot.lagWarn().assert().isEqualTo(Duration.ofMinutes(2))
-        properties.snapshot.toOptions(Duration.ofSeconds(5)).lagEscalate.assert().isEqualTo(Duration.ofMinutes(10))
-        properties.snapshot.toOptions(Duration.ofSeconds(5)).coldLoadTimeout.assert().isEqualTo(Duration.ofSeconds(2))
+        properties.snapshot.toOptions(Duration.ofSeconds(5), 1).lagEscalate.assert().isEqualTo(Duration.ofMinutes(10))
+        properties.snapshot.toOptions(
+            Duration.ofSeconds(5),
+            1
+        ).coldLoadTimeout.assert().isEqualTo(Duration.ofSeconds(2))
+    }
+
+    /** `SNP-24`: the documents' share of the heap, all of it for one source, half each where the control plane runs. */
+    @Test
+    fun `the snapshot sources of a process share the documents' quarter of the heap`() {
+        val snapshot = RuntimeAuthorizationProperties().snapshot
+        val share = HeapBudget.of().documents
+        snapshot.toOptions(Duration.ofSeconds(5), 1).documentsBudget.assert().isEqualTo(share)
+        snapshot.toOptions(Duration.ofSeconds(5), 2).documentsBudget.assert().isEqualTo(share / 2)
     }
 }

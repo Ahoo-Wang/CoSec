@@ -17,6 +17,7 @@ package me.ahoo.cosec.runtime.snapshot
 
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.engine.CompiledDocument
 import me.ahoo.cosec.spi.snapshot.SnapshotCompiler
 import me.ahoo.cosec.spi.snapshot.SnapshotDocumentStore
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
@@ -25,7 +26,8 @@ import java.time.Clock
 
 /**
  * The 8.0 snapshot source (RFC 0004 §7.4): the platform document, shared and never evicted, and the app and tenant
- * families, each bounded by [SnapshotOptions.maxApps] and [SnapshotOptions.maxTenants]. All three compile with
+ * families, each bounded by its share of [SnapshotOptions.documentBudget] (`SNP-24`), or by [SnapshotOptions.maxApps]
+ * and [SnapshotOptions.maxTenants] when no budget is given (CoSec's own tests). All three compile with
  * [compiler], whose result the engine composes into one view per evaluation.
  */
 @InternalCoSecApi
@@ -61,9 +63,28 @@ object DocumentSnapshots {
             reviews = reviews,
         )
 
-    internal fun <T : Any> families(compiler: SnapshotCompiler<T>, options: SnapshotOptions): List<SnapshotFamily<T>> =
-        listOf(
-            SnapshotFamily(SnapshotKind.APP, compiler, options.maxApps, options.maxAbsentApps),
-            SnapshotFamily(SnapshotKind.TENANT, compiler, options.maxTenants, options.maxAbsentTenants),
+    internal fun <T : Any> families(compiler: SnapshotCompiler<T>, options: SnapshotOptions): List<SnapshotFamily<T>> {
+        val budget = options.documentBudget
+            ?: return listOf(
+                SnapshotFamily(SnapshotKind.APP, compiler, options.maxApps, options.maxAbsentApps),
+                SnapshotFamily(SnapshotKind.TENANT, compiler, options.maxTenants, options.maxAbsentTenants),
+            )
+        return listOf(
+            SnapshotFamily(SnapshotKind.APP, compiler, budget.firstBound(SnapshotKind.APP), budget.absentApps, ::weigh),
+            SnapshotFamily(
+                SnapshotKind.TENANT,
+                compiler,
+                budget.firstBound(SnapshotKind.TENANT),
+                budget.absentTenants,
+                ::weigh
+            ),
         )
+    }
+
+    /** What a resident document weighs ([DocumentWeight]): its compiled form's, or a failure's with its stored size. */
+    private fun weigh(entry: SnapshotEntry<*>): Long =
+        when (val compiled = (entry.state as? DocumentState.Present<*>)?.compiled) {
+            is CompiledDocument -> DocumentWeight.of(compiled, entry.storedBytes)
+            else -> DocumentWeight.ofUncompiled(entry.storedBytes)
+        }
 }

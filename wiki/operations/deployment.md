@@ -370,11 +370,12 @@ author and the approver of a change ([What the control plane trusts](./topologie
   drain, not for load, with a disruption budget. Upgrade by stopping the host and starting the new image, never by a
   rolling update: across a change of the stored format an old and a new replica must not run together
   ([Upgrading between previews](./upgrading-previews.md#from-8-0-0-beta-4)).
-- **Memory.** The host holds the compiled documents of every tenant it decides for, up to
-  `cosec.authorization.snapshot.max-tenants`, in two snapshot sources, its pipeline's and the control plane's own. The
+- **Memory.** The host holds the compiled documents of every tenant it decides for in two snapshot sources, its
+  pipeline's and the control plane's own, which share the documents' quarter of the heap, half each (`SNP-24`). The
   image defaults to the gateway's JVM options; [`k8s/control/`](#kubernetes) sets 768 MiB of heap in a 1536Mi limit for a
   trial and the production overlay 2 GiB in 3200Mi, by the rule of [Memory](#memory) (heap, plus direct memory, plus about
-  250 MiB, plus a quarter): change the heap and the limit together, and with `max-tenants`.
+  250 MiB, plus a quarter): change the heap and the limit together. A 2 GiB host holds about 7,200 typical tenants in
+  each source; give it more heap for more.
 
 ## Kubernetes
 
@@ -500,11 +501,19 @@ overlay size them for their limits:
 - **CPU.** The JVM sizes its GC, JIT and Netty threads from the CPU limit, and the autoscaler measures against the
   request.
 
-**How many documents fit.** The compiled documents live on the heap, and CoSec holds at most `max-apps` app documents
-(1,024), `max-tenants` tenant documents (16,384) and, apart from them, the ids it knows have no document
-(`max-absent-apps` 256, `max-absent-tenants` 65,536), plus the platform document, which is never dropped
-([How instances read documents](./storage.md#how-instances-read-documents)). For a moment, during a burst of cold loads,
-a family may hold up to twice its bound. What one document costs depends on its policies, statements and bindings;
+**How many documents fit.** The compiled documents live on the heap, in a quarter of it (`SNP-24`). A sixteenth of that
+quarter is the ids an instance knows have no document, at 512 bytes each (65,280 tenant ids and 256 app ids at 2 GiB);
+the rest holds the documents, each weighed by an estimate never below what it retains: a family holds what it holds plus
+the room left, counted at the typical weight of its documents, recomputed every revalidation pass and before every eviction: a
+document is evicted only when what is resident weighs more than the share, so a cold start evicts nothing while the
+share has room, whatever the first estimate. One very large tenant arriving into a full share evicts its own weight in
+documents of the typical weight, no more. The platform document
+is never dropped ([How instances read documents](./storage.md#how-instances-read-documents)), and for a moment, during a
+burst of cold loads, a family may hold up to twice its bound. **A 2 GiB heap holds about 14,500 tenants of the shape
+below** (34.6 KB estimated each, 29.5 KB retained): a gateway that relied on 16,384 resident tenants at 2 GiB holds about
+14,500 now, and needs a 2.5 GiB heap (`-Xmx2560m`, about 18,200) to hold them all. The startup line names the share and
+the first estimate; `cosec.snapshot.bound` carries each bound as it moves, beside `cosec.snapshot.installed`. What one
+document costs depends on its policies, statements and bindings;
 [Sizing a SaaS gateway](#sizing-a-saas-gateway) gives measured figures and the heap they lead to. To measure your own
 documents, start an instance with the platform document and one tenant, request a path that needs each tenant's
 document in turn, and read `jvm_memory_used_bytes{area="heap"}` after a full collection, or `jcmd <pid> GC.heap_info`, at
@@ -536,20 +545,20 @@ store standing in for Redis.
 | A token's "not revoked" answer, kept 30 seconds | about 290 bytes |
 | A principal's "not revoked" answer, kept 30 seconds | about 230 bytes |
 
-With the defaults full (16,384 tenant documents and 65,536 tenants without one), the tenant entries take about 520 MB.
-The revocation copies hold only the tokens and principals a replica saw in the last 30 seconds, at most an 8th of the
+A 2 GiB heap's documents' quarter (512 MiB) holds about 14,500 tenant documents of that shape and 65,280 tenants without
+one: its whole share, about 510 MB, when every place is used. The revocation copies hold only the tokens and principals a replica saw in the last 30 seconds, at most an 8th of the
 heap between them (516,222 of each on a 2 GiB heap, about 260 MB when both are full). Size the heap at
 twice what these hold, plus 256 MiB for the rest of the gateway, so that ZGC has room to collect; then set the memory
 limit to the heap, plus the direct memory, plus about 250 MiB, plus a quarter ([Memory](#memory)). The production
-overlay follows that rule with every default at its bound: tenant documents (about 490 MB), tenants without one
-(about 30 MB) and both revocation copies (about 260 MB) are about 780 MB live, so a 2 GiB heap and a 3200Mi limit. A
-replica that cannot reach those bounds needs less: the settings below size the heap from what it holds.
+overlay follows that rule with every share full: the documents' quarter (512 MiB) and both revocation copies (about
+260 MB) are about 780 MB live, so a 2 GiB heap and a 3200Mi limit. The shares follow the heap, so a replica that needs
+fewer documents needs less heap: the settings below size it from what it holds.
 
 A request of a tenant whose entry is held reads nothing from Redis. A tenant beyond the bounds is read again on its
 next request: a tenant document from Redis and compiled again (about 55 µs of CPU), a tenant without one from Redis
 alone. With requests spread evenly over the tenants, a replica whose bounds are smaller than its tenants reads Redis on
-about 1 − bound ÷ tenants of them: over 50,000 tenants that all have a document, `max-tenants` at 16,384 reads on 670
-of every 1,000 requests.
+about 1 − bound ÷ tenants of them: over 50,000 tenants that all have a document, a bound of 16,384 (a 2.5 GiB heap holds
+about 18,200) reads on 670 of every 1,000 requests.
 
 ### How long a revalidation pass takes {#how-long-a-revalidation-pass-takes}
 
@@ -577,25 +586,25 @@ grows the same way. The lag thresholds, 6 and 30 intervals, follow it. A Redis C
 
 ### Settings to copy {#settings-to-copy}
 
-| Tenants | Tenants with a tenant document | Active tokens in 30 s | `max-tenants` | `max-absent-tenants` | `revalidate-interval` | Tenant entries + revocation copies on the heap | `-Xms` = `-Xmx` | Memory limit |
-|---|---|---|---|---|---|---|---|---|
-| 10,000 | 10 % | up to 150,000 | default (16,384) | default (65,536) | `10s` | 34 + 80 MB | `1536m` | `2560Mi` |
-| 10,000 | 100 % | up to 150,000 | default | default | `10s` | 300 + 80 MB | `1536m` | `2560Mi` |
-| 50,000 | 10 % | up to 500,000 | default | default | `10s` | 170 + 200 MB (the revocation copies' 8th of the heap: 387,166 entries each) | `1536m` | `2560Mi` |
-| 50,000 | 100 % | up to 500,000 | `60000` | default | `30s` | 1.49 GB + 260 MB | `4g` | `6Gi` |
+| Tenants | Tenants with a tenant document | Active tokens in 30 s | Documents + ids without one it holds (derived) | `revalidate-interval` | Tenant entries + revocation copies on the heap | `-Xms` = `-Xmx` | Memory limit |
+|---|---|---|---|---|---|---|---|
+| 10,000 | 10 % | up to 150,000 | 10,924 + 48,960 | `10s` | 34 + 80 MB | `1536m` | `2560Mi` |
+| 10,000 | 100 % | up to 150,000 | 10,924 + 48,960 | `10s` | 300 + 80 MB | `1536m` | `2560Mi` |
+| 50,000 | 10 % | up to 500,000 | 10,924 + 48,960 | `10s` | 170 + 200 MB (the revocation copies' 8th of the heap: 387,166 entries each) | `1536m` | `2560Mi` |
+| 50,000 | 100 % | up to 500,000 | 58,264 + 261,120 | `30s` | 1.49 GB + 260 MB | `8g` | `11Gi` |
 
-For 50,000 tenants that all have a tenant document:
+The derived column is each family's first estimate at that heap, for tenant documents of the shape above: a heap holds
+what its quarter holds, so the last row needs 8 GiB to keep all 50,000 documents resident. For it:
 
 ```yaml
 cosec:
   authorization:
     snapshot:
-      max-tenants: 60000
       revalidate-interval: 30s
 ```
 
-with `JVM_MEMORY_OPTS` set to `-Xms4g -Xmx4g -XX:MaxDirectMemorySize=256m -XX:MaxMetaspaceSize=256m` and the memory
-request and limit to `6Gi`. Your own documents may be larger or smaller: measure them as [Memory](#memory) says, and
+with `JVM_MEMORY_OPTS` set to `-Xms8g -Xmx8g -XX:MaxDirectMemorySize=256m -XX:MaxMetaspaceSize=256m` and the memory
+request and limit to `11Gi`. A 4 GiB heap holds about 29,100 of them, and reads Redis on 417 of every 1,000 requests. Your own documents may be larger or smaller: measure them as [Memory](#memory) says, and
 scale the heap with them.
 
 ### What a new replica costs {#what-a-new-replica-costs}

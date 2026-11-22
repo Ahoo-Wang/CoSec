@@ -1,0 +1,17 @@
+# Rule: SNP-24
+# Mutant: entries for ids nobody owns are weighed against the documents, so a flood of made-up tenant ids shrinks what the real documents get
+# Tests: :runtime:test --tests me.ahoo.cosec.runtime.snapshot.SnapshotDerivedBoundsTest
+
+diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/SnapshotFamilies.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/SnapshotFamilies.kt
+index e6994ee..18ba85e 100644
+--- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/SnapshotFamilies.kt
++++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/SnapshotFamilies.kt
+@@ -157,7 +157,7 @@ internal class SnapshotFamilies<A : Any>(
+         // An entry installed in place of another: the weights of the documents among them move here; a removal's in removed.
+         if (new != null) {
+             old?.takeUnless(::isAbsent)?.let { family.unweigh(family.spec.weigh(it)) }
+-            new.takeUnless(::isAbsent)?.let { family.weigh(family.spec.weigh(it)) }
++            family.weigh(if (isAbsent(new)) DocumentWeight.ABSENT_ENTRY_BYTES else family.spec.weigh(new))
+         }
+         if (from == to) {
+             return

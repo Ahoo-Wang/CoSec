@@ -361,8 +361,10 @@ holds them:
   new replica's burst of cold tenants queues rather than answering `503` ([What a new replica costs](../operations/deployment.md#what-a-new-replica-costs)).
   Installs of one key happen in the order their loads started (`SNP-2`, `SnapshotInstallOrderPropertyTest`).
 - **Bounded memory.** The platform document is loaded at startup and never evicted. App and tenant documents are loaded on
-  demand and evicted least recently used beyond `max-apps` and `max-tenants`; selected ones can be prewarmed. Ids the
-  store holds no document for are kept apart, at most `max-absent-apps` and `max-absent-tenants` of them, and evict only
+  demand and evicted least recently used beyond each family's bound, derived from a quarter of the heap and recomputed
+  from what is resident each pass and before each eviction, so a document is evicted only when the share is full
+  (`SNP-24`); selected ones can be prewarmed. Ids the store holds no document for are
+  kept apart, in a fixed part of that quarter, and evict only
   each other (`SNP-7`).
 - **Revalidation.** Every installed document is revalidated every `revalidate-interval` (10 s by default) with a
   conditional read of the store of record, which transfers no body when the digest is unchanged. It is the only bound on

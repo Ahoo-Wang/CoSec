@@ -15,12 +15,12 @@ spec:
       containers:
         - name: cosec-gateway
           env:
-            # A 2 GiB heap for a 3200Mi limit: room for every default at its bound, 16,384 tenant documents (about
-            # 490 MB at 30 KB each), 65,536 tenants without one (about 30 MB) and the two revocation copies, an 8th of
-            # the heap (516,222 entries each, about 260 MB): about 780 MB live, twice that for ZGC plus 256 MiB for the
-            # rest of the gateway ("Sizing a SaaS gateway" in the deployment docs, which also has the memory model). The
-            # revocation copies, the token cache and the listener queues are shares of this heap: change heap and limit
-            # together, and with max-tenants.
+            # A 2 GiB heap for a 3200Mi limit: the documents' quarter (512 MiB: about 14,500 typical tenant documents and
+            # 65,280 tenants without one) and the two revocation copies, an 8th of the heap (516,222 entries each, about
+            # 260 MB): about 780 MB live, twice that for ZGC plus 256 MiB for the rest of the gateway ("Sizing a SaaS
+            # gateway" in the deployment docs, which also has the memory model). The documents, the revocation copies, the
+            # token cache and the listener queues are shares of this heap: change heap and limit together, and give a
+            # gateway that must hold 16,384 typical tenants a 2.5 GiB heap.
             - name: JVM_MEMORY_OPTS
               value: -Xms2g -Xmx2g -XX:MaxDirectMemorySize=256m -XX:MaxMetaspaceSize=256m
             # From the Secret cosec-redis-secret, which you create: password is required, username is for a Redis

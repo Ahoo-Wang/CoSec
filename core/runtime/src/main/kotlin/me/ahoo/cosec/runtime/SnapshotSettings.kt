@@ -44,21 +44,6 @@ class SnapshotSettings internal constructor(private val pipelineTimeout: () -> D
 
     var failClosedMaxLag: Duration = DEFAULTS.failClosedMaxLag
 
-    /** The most app documents held at once; the least recently used one is evicted beyond it. */
-    var maxApps: Int = DEFAULTS.maxApps
-
-    /** The most tenant documents held at once; the least recently used one is evicted beyond it. */
-    var maxTenants: Int = DEFAULTS.maxTenants
-
-    /**
-     * The most app ids held as having no document, apart from [maxApps] (`SNP-7`): app ids come from requests, so this
-     * bounds what a client naming made-up apps can make an instance remember.
-     */
-    var maxAbsentApps: Int = DEFAULTS.maxAbsentApps
-
-    /** The most tenant ids held as having no document, apart from [maxTenants] (`SNP-7`). */
-    var maxAbsentTenants: Int = DEFAULTS.maxAbsentTenants
-
     /** The apps whose documents are loaded at build, after the platform's; [Pipeline.awaitDocuments] waits for them. */
     var prewarmApps: Set<String> = emptySet()
 
@@ -78,10 +63,8 @@ class SnapshotSettings internal constructor(private val pipelineTimeout: () -> D
             failClosedTenants = failClosedTenants,
             failClosedMaxLag = failClosedMaxLag,
             coldLoadTimeout = derived.coldLoadTimeout,
-            maxApps = maxApps,
-            maxTenants = maxTenants,
-            maxAbsentApps = maxAbsentApps,
-            maxAbsentTenants = maxAbsentTenants,
+            // How many documents each family holds is the documents' share of the heap (SNP-24), not a setting.
+            documentsBudget = HeapBudget.of().documents,
             compileThreads = derived.compileThreads,
             reloadConcurrency = derived.reloadConcurrency,
         )

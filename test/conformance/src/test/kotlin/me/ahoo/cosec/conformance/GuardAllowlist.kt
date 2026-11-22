@@ -23,7 +23,7 @@ package me.ahoo.cosec.conformance
  */
 object GuardAllowlist {
     val GUARDS: Map<String, Set<String>> = mapOf(
-        "build" to setOf(
+        "build" to SnapshotBoundGuards.BUILD + setOf(
             // PIP-34: a host renders the body of a refusal, from the problem alone, alike behind every adapter.
             "runtime:ProblemBodiesTest#without a renderer the body is CoSec's own, byte for byte",
             "runtime:ProblemBodiesTest#a renderer's bytes are the body, and it is given the problem only",

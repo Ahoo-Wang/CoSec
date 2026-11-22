@@ -39,7 +39,7 @@ private val log = KotlinLogging.logger {}
  * gateway reports ready, it reads its routes and adds their apps to what readiness waits for, as `prewarm-apps` are
  * ([DocumentReadiness.prewarmAlso]). When the routes are refreshed, an app a route names for the first time is loaded
  * then, off the request path; a request for it before that load ends takes the ordinary cold load. An app whose routes
- * went away stays held, like any document within `max-apps`.
+ * went away stays held, like any document within its family's bound.
  *
  * A route whose app cannot name a document is left out: its requests are refused (500) on the request path, as they
  * are without this. Routes that cannot be read in [READ_ROUTES] leave the gateway as it was before `SNP-20`: their apps
