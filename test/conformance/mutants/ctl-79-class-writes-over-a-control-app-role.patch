@@ -1,0 +1,17 @@
+# Rule: CTL-79
+# Mutant: a putRole of another app over the control plane's role of that id is the role class's: it removes a control-app role with no person
+# Tests: :control:test --tests me.ahoo.cosec.control.api.RoleClassTest --tests me.ahoo.cosec.control.lifecycle.RoleClassUnitTest
+
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/RoleClass.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/RoleClass.kt
+index a9583d488..810c094e4 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/RoleClass.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/RoleClass.kt
+@@ -61,7 +61,7 @@ internal object RoleClass {
+         key is SnapshotKey.Tenant && operations.isNotEmpty() && operations.all { operation ->
+             when (operation) {
+                 is Operation.PutRole -> operation.role.app.notIn(controlApp) &&
+-                    base.held(operation.role.id)?.let { it.app.notIn(controlApp) } != false
++                    true
+                 is Operation.RemoveRole -> base.held(operation.id)?.app.notIn(controlApp)
+                 else -> false
+             }

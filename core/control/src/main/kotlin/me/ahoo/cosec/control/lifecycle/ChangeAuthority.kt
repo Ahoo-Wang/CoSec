@@ -269,12 +269,16 @@ class ChangeAuthority(
                 require(via, operator, ControlActions.UNPROTECT, resource)
             }
         }
-        analysis.verdicts.forEach { (fragment, verdict) ->
-            if (verdict is GrantVerdict.Unknown) {
-                escalations += Escalation(fragment.toString(), Escalation.Reason.of(verdict.reason.name), verdict.toString())
-            }
+        val unknown = analysis.verdicts.mapNotNull { (fragment, verdict) ->
+            (verdict as? GrantVerdict.Unknown)
+                ?.let { Escalation(fragment.toString(), Escalation.Reason.of(it.reason.name), it.toString()) }
         }
-        return escalations
+        // The role class lifts who-grants doubts of a roles-only change of a tenant's document, for a holder (CTL-79). It
+        // sees every escalation of the change, so its record never stands beside one it may not lift.
+        val change = RoleClass.Proposed(key, operations, base, controlApp)
+        return RoleClass.apply(escalations + unknown, change, operator.actor) {
+            holds(operator, key, ControlActions.MANAGE_ROLES)
+        }
     }
 
     @Suppress("TooGenericExceptionCaught")

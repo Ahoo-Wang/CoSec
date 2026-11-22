@@ -76,6 +76,17 @@ object Operator {
         SignIn.root().bearer,
     )
 
+    /**
+     * The IAM projects the custom role [role] of [app], holding [permission], into [tenant] (`POST /admin/role`,
+     * `CTL-79`): no person behind it. The role class lets a business app's role publish with no approval; a role of the
+     * control plane's own app waits for a person.
+     */
+    fun projectRole(tenant: String, role: String, app: String, permission: String): Exchange = Http.post(
+        admin("/admin/role"),
+        mapOf("tenant" to tenant, "role" to role, "app" to app, "permission" to permission),
+        SignIn.root().bearer,
+    )
+
     fun issueKey(id: String, principal: String, tenant: String, roles: List<String>?, expiresAt: String): IssuedKey {
         val body = mapOf(
             "id" to id,
