@@ -4,7 +4,7 @@
   ],
   "polarity": "positive",
   "level": "pipeline",
-  "description": "A segment longer than 256 characters is 400: wildcard matching costs about its square.",
+  "description": "A segment longer than 256 characters is 400: the bound keeps one request's matching short.",
   "documents": {
     "platform": {
       "policies": [

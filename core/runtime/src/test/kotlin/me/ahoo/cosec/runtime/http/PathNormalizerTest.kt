@@ -239,6 +239,61 @@ class PathNormalizerTest {
         PathNormalizer.normalize(path + "aa").assert().isNull()
     }
 
+    /**
+     * `PIP-5`, #1853: a segment is bounded as the matchers see it, decoded, in UTF-16 units, so the bound does not
+     * depend on the script; the whole path is bounded as it arrives, encoded.
+     */
+    @Test
+    fun aSegmentIsBoundedDecodedAndThePathEncoded() {
+        // 29 CJK characters are 261 encoded: a segment, not a refusal.
+        val short = "/orders/${cjk(29)}"
+        short.length.assert().isGreaterThan(PathNormalizer.MAX_SEGMENT_LENGTH)
+        PathNormalizer.normalize(short).assert().isEqualTo(short)
+        // 227 is what the path's bound leaves room for in one segment; one more is a path over 2,048 as received.
+        PathNormalizer.normalize("/${cjk(227)}").assert().isEqualTo("/${cjk(227)}")
+        PathNormalizer.normalize("/${cjk(228)}").assert().isNull()
+        // Escapes of ASCII: 256 decoded characters pass, 257 do not, however they are written.
+        PathNormalizer.normalize("/${"%61".repeat(256)}").assert().isEqualTo("/${"%61".repeat(256)}")
+        PathNormalizer.normalize("/${"%61".repeat(257)}").assert().isNull()
+        PathNormalizer.normalize("/${"%61".repeat(128)}${"a".repeat(129)}").assert().isNull()
+        // UTF-16 units: a character outside the BMP is two, as the matchers count it.
+        val emoji = "%F0%9F%98%80"
+        PathNormalizer.normalize("/${emoji.repeat(128)}").assert().isEqualTo("/${emoji.repeat(128)}")
+        PathNormalizer.normalize("/${emoji.repeat(129)}").assert().isNull()
+        // Path parameters are removed before a segment is decoded and measured.
+        PathNormalizer.normalize("/${cjk(29)};${"p".repeat(300)}").assert().isEqualTo("/${cjk(29)}")
+    }
+
+    /**
+     * #1853 admits longer encoded segments and nothing else: every hazard the normalizer refuses is refused inside a
+     * segment that is long only encoded, and the same path without it is carried.
+     */
+    @ParameterizedTest
+    @ValueSource(
+        strings = [
+            "%2F", "%2f", "%5C", "%5c", "\\", "%3B", "%3b", "%00", "%1F", "%7F", "%zz", "%2", "\u0001",
+        ]
+    )
+    fun aHazardInsideALongSegmentIsStillRefused(hazard: String) {
+        val carried = "/orders/${cjk(60)}${cjk(60)}"
+        PathNormalizer.normalize(carried).assert().isEqualTo(carried)
+        PathNormalizer.normalize("/orders/${cjk(60)}$hazard${cjk(60)}").assert().describedAs(hazard).isNull()
+    }
+
+    @Test
+    fun aDotOrEmptySegmentBesideALongSegmentIsStillRefused() {
+        val long = cjk(100)
+        PathNormalizer.normalize("/public/$long/../admin").assert().isNull()
+        PathNormalizer.normalize("/public/$long/%2e%2e/admin").assert().isNull()
+        PathNormalizer.normalize("/public/..;$long/admin").assert().isNull()
+        PathNormalizer.normalize("/public/%2E%2E;$long/admin").assert().isNull()
+        PathNormalizer.normalize("/public/$long/%2e/admin").assert().isNull()
+        PathNormalizer.normalize("/public//$long").assert().isNull()
+        PathNormalizer.normalize("/public/;$long/a").assert().isNull()
+        // Dots inside a long segment are text, as in a short one.
+        PathNormalizer.normalize("/public/..$long").assert().isEqualTo("/public/..$long")
+    }
+
     /** Review L5 of #1200: what the control plane decides without a request is held to the same bounds, as written. */
     @OptIn(InternalCoSecApi::class)
     @Test
@@ -254,6 +309,14 @@ class PathNormalizerTest {
         PathNormalizer.withinBounds("").assert().isTrue()
     }
 
+    /** A typed id is matched as written, so it is bounded as written: an escape counts as the three characters it is. */
+    @Test
+    fun boundsOfATypedIdAreAsWrittenNotDecoded() {
+        PathNormalizer.withinBounds("order/${"%61".repeat(86)}").assert().isFalse()
+        PathNormalizer.withinBounds("order/${"标".repeat(256)}").assert().isTrue()
+        PathNormalizer.withinBounds("order/${cjk(29)}").assert().isFalse()
+    }
+
     @Test
     fun emptyPathIsKept() {
         PathNormalizer.normalize("").assert().isEqualTo("")
@@ -267,4 +330,7 @@ class PathNormalizerTest {
         PercentDecoder.decode("%G0", plusIsSpace = false).assert().isNull()
         PercentDecoder.decode("%0g", plusIsSpace = false).assert().isNull()
     }
+
+    /** [n] CJK characters, percent-encoded as a client sends them: nine characters each. */
+    private fun cjk(n: Int): String = java.net.URLEncoder.encode("标".repeat(n), Charsets.UTF_8)
 }

@@ -56,12 +56,15 @@
     },
     {
       "id": "PIP-5",
-      "source": "RFC 0006 §5.3.1 (amended 2026-10-27, review of #1044)",
-      "statement": "A path with a dot segment after one decoding, in any encoding (including after removing path parameters, with an encoded ';' and with '\\' as a separator), or longer than 2048 characters, or with a segment longer than 256 characters, is answered 400 before authentication.",
+      "source": "RFC 0006 §5.3.1 (amended 2026-10-27, review of #1044; amended 2026-11-22, #1853)",
+      "statement": "A path with a dot segment after one decoding, in any encoding (including after removing path parameters, with an encoded ';' and with '\\' as a separator), or longer than 2048 characters as received, or with a segment longer than 256 UTF-16 units once decoded (after removing path parameters), is answered 400 before authentication. A segment longer than 256 characters only encoded is refused for every other reason a shorter one is.",
       "level": "pipeline",
       "guards": [
         "runtime:PathNormalizerTest#ambiguousPathsAreRejected",
         "runtime:PathNormalizerTest#longPathsAndSegmentsAreRejected",
+        "runtime:PathNormalizerTest#aSegmentIsBoundedDecodedAndThePathEncoded",
+        "runtime:PathNormalizerTest#aHazardInsideALongSegmentIsStillRefused",
+        "runtime:PathNormalizerTest#aDotOrEmptySegmentBesideALongSegmentIsStillRefused",
         "runtime:PipelineTest#ambiguousPathIsInvalidRequestBeforeAuthentication"
       ],
       "pending": null

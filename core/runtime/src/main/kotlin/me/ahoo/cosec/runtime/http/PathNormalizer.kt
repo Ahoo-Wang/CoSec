@@ -39,10 +39,16 @@ import me.ahoo.cosec.annotations.InternalCoSecApi
  *   gateway fronts backends of any kind. A double-encoded one (`%253B`, `%2500`) decodes to text and is kept. A raw
  *   control character is rejected too: the servers CoSec runs on refuse one before any filter, and the rule does not
  *   depend on which server hands the path over. A raw `;` is a path parameter, removed as above.
- * - A path longer than [MAX_PATH_LENGTH] characters, or with a segment longer than [MAX_SEGMENT_LENGTH] after removing
- *   path parameters, is rejected (both counted encoded, which bounds the decoded length). Wildcard matching in the
- *   engine costs about the square of a segment's length: an 8 KB segment takes hundreds of milliseconds per statement,
- *   so the bound keeps one request from occupying an event loop.
+ * - A path longer than [MAX_PATH_LENGTH] characters as received, or with a segment longer than [MAX_SEGMENT_LENGTH]
+ *   once decoded, after removing path parameters, is rejected (`PIP-5`). The path is counted as it arrives: that is
+ *   what a request carries, and it bounds every length below. A segment is counted as the matchers see it, decoded, in
+ *   UTF-16 units, so its bound does not depend on the script: a CJK character is nine characters encoded, and a
+ *   segment of 29 of them, 261 encoded, is carried (#1853). The path's bound still applies to what arrives, so one
+ *   segment of CJK text holds at most 227 of them. A pattern that matches the path as received
+ *   (`decodeAndParseSegments: false`, an ALLOW only, `DOC-14`) sees the encoded segment, which is within the path's
+ *   bound: matching a segment costs its glob's units times the value's length, so one long segment costs no more than
+ *   the short ones of a path as long. The bounds keep one request from occupying an event loop. A path whose segments
+ *   are all within the bound as received is never decoded for it, since decoding only shortens a segment.
  *
  * The engine's `HttpPath` does not resolve `.` or `..` itself: a wildcard under `/public` matches `/public/../admin`.
  * Rejecting dot segments here is what keeps such a path from reaching a public wildcard.
@@ -51,10 +57,16 @@ import me.ahoo.cosec.annotations.InternalCoSecApi
  */
 @InternalCoSecApi
 object PathNormalizer {
-    /** The longest path accepted, in characters as received. Common proxies and servers limit the whole URI to 8 KB. */
+    /**
+     * The longest path accepted, in characters as received, percent-encoded: it bounds what arrives, and so every segment
+     * decoded too. Common proxies and servers limit the whole URI to 8 KB.
+     */
     const val MAX_PATH_LENGTH = 2048
 
-    /** The longest segment accepted, in characters as received: room for an id, a slug or a file name. */
+    /**
+     * The longest segment of a request's path accepted, in UTF-16 units once decoded, after path parameters are removed:
+     * room for an id, a slug or a file name, in any script. [withinBounds] counts a text's segments as written.
+     */
     const val MAX_SEGMENT_LENGTH = 256
 
     private const val ENCODED_SEPARATOR = "%2F"
@@ -70,7 +82,7 @@ object PathNormalizer {
             return null
         }
         val path = withoutPathParameters(rawPath)
-        return if (hasLongSegment(path) || isAmbiguous(path)) null else path
+        return if (hasLongSegment(path, decoded = true) || isAmbiguous(path)) null else path
     }
 
     /**
@@ -133,26 +145,35 @@ object PathNormalizer {
     /**
      * Whether [text] is within the bounds a request's path is held to, [MAX_PATH_LENGTH] in all and [MAX_SEGMENT_LENGTH]
      * per segment, counted as written, path parameters included: for what the control plane decides without a request
-     * (review L5 of #1200, RC1-41), a simulated, explained or analyzed resource, whose glob segments would otherwise
-     * cost the evaluation more than any request can.
+     * (review L5 of #1200, RC1-41), a simulated, explained or analyzed typed id, whose glob segments would otherwise
+     * cost the evaluation more than any request can. As written, not decoded as a request's segment is: a typed id is
+     * matched as written, so what is written is what the matchers see. (An `http` path is read by [normalize].)
      */
     @InternalCoSecApi
-    fun withinBounds(text: String): Boolean = text.length <= MAX_PATH_LENGTH && !hasLongSegment(text)
+    fun withinBounds(text: String): Boolean = text.length <= MAX_PATH_LENGTH && !hasLongSegment(text, decoded = false)
 
-    private fun hasLongSegment(path: String): Boolean {
+    /**
+     * Whether a segment of [path] is longer than [MAX_SEGMENT_LENGTH]: as written, or with [decoded] as the matchers see
+     * it. Only a segment longer than the bound as written is decoded: decoding never lengthens one.
+     */
+    private fun hasLongSegment(path: String, decoded: Boolean): Boolean {
         if (path.length <= MAX_SEGMENT_LENGTH) {
             return false
         }
         var start = 0
         while (start <= path.length) {
             val end = path.indexOf('/', start).let { if (it < 0) path.length else it }
-            if (end - start > MAX_SEGMENT_LENGTH) {
+            if (end - start > MAX_SEGMENT_LENGTH && (!decoded || decodedLength(path, start, end) > MAX_SEGMENT_LENGTH)) {
                 return true
             }
             start = end + 1
         }
         return false
     }
+
+    /** The length of [path]'s segment from [start] to [end] decoded, in UTF-16 units; unbounded when it cannot be decoded. */
+    private fun decodedLength(path: String, start: Int, end: Int): Int =
+        PercentDecoder.decode(path.substring(start, end), plusIsSpace = false)?.length ?: Int.MAX_VALUE
 
     private fun withoutPathParameters(path: String): String {
         if (';' !in path) {
