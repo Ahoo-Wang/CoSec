@@ -1,4 +1,6 @@
 {
+  "POST /changes:check" : [ ],
+  "POST /documents/{key}:check" : [ ],
   "POST /changes" : [ "CHECKED" ],
   "POST /changes/{id}:shadow" : [ "SHADOW_STARTED" ],
   "POST /changes/{id}:publish" : [ "PUBLISHING", "PUBLISHED" ],

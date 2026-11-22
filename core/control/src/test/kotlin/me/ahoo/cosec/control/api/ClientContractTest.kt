@@ -71,6 +71,11 @@ class ClientContractTest {
     }
 
     @Test
+    fun `a check's answer holds exactly the members of its contract file - CTL-78`() {
+        files.check("control/change-check.json", Shapes.of(ChangeSamples.all.map(ChangeCheckAnswer::tree), emptySet()))
+    }
+
+    @Test
     fun `a listed change holds exactly the members of its contract file`() {
         val page = ChangePage(
             ChangeSamples.all.map { ListedChange.Readable(it) } +
@@ -155,6 +160,7 @@ class ClientContractTest {
                 "vocabularies.json",
                 "routes.json",
                 "conflict.json",
+                "change-check.json",
             ),
         )
     }
@@ -229,6 +235,14 @@ class ClientContractTest {
 
         fun record(): ObjectNode {
             val behind = propose("behind")
+            // A check moves no change: its routes write no change kind (CTL-78).
+            call("POST /changes:check", "/changes:check", proposal("checked", policy("checked")))
+            call(
+                "POST /documents/{key}:check",
+                "/documents/tenant:acme:check",
+                """{"mode":"MERGE","note":"check","document":{"schema":2,"revision":$base,""" +
+                    """"publishedAt":"2026-11-01T00:00:00Z","policies":[],"bindings":[]}}""",
+            )
             val id = call("POST /changes", "/changes", proposal("more", policy("more"))).get("id").asString()
             call("POST /changes/{id}:shadow", "/changes/$id:shadow")
             shadowed(id)

@@ -136,7 +136,8 @@ internal class Proposals(
         }
         val now = clock.instant()
         val draft = ChangeRequest(
-            id = ids(),
+            // A check makes no change, so it takes no id: the next proposal's is the one it would have had (CTL-78).
+            id = if (commit) ids() else CHECKED_ONLY,
             key = key,
             base = head?.let { Base(it.revision, it.digest) } ?: Base.NONE,
             operations = operations,
@@ -285,4 +286,9 @@ internal class Proposals(
         val notes: List<Finding> = emptyList(),
         val stale: ((Long) -> String)? = null,
     )
+
+    private companion object {
+        /** The id of the change a check would make: never stored, never answered (`CTL-78`). */
+        val CHECKED_ONLY = ChangeId("check")
+    }
 }
