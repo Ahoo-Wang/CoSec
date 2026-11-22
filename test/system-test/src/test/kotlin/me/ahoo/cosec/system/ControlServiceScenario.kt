@@ -30,7 +30,8 @@ import org.junit.jupiter.api.extension.ExtendWith
  * by its document or by a change's id (404); a stated principal proposes, skips the shadow window and publishes; the
  * record of each step says who was stated and which connection carried it, and the peer is never what the caller wrote;
  * and a credential stated as an API key never approves, where the same principal stated as a token does, which is what
- * the network boundary costs (`STA-9`).
+ * the network boundary costs (`STA-9`); and a platform administrator stated on the service port is no trust root: its
+ * grant waits for a person (`CTL-81`).
  */
 @Tag("system")
 @Tag("service-path")
@@ -188,6 +189,22 @@ class ControlServiceScenario {
         origin["asserted"].assert().isEqualTo(true)
         (origin["via"] as Map<*, *>)["method"].assert().describedAs("$origin").isEqualTo("api-key")
         (origin["peer"] as String?).assert().describedAs("the IAM's address, not the runner's: $origin").isNotBlank()
+    }
+
+    @Test
+    @Order(6)
+    fun `a platform administrator stated on the service port is no trust root, and its grant waits for a person - CTL-81`() {
+        val head = root.revision(KEY)
+        // Whoever reaches the service port may state the platform administrator: the change is analyzed all the same.
+        val stated = ServiceControl(SystemTopology.controlService1, SignIn.ROOT, method = "jwt", jti = "stated-root")
+        val grant = listOf(putPolicy("svc-root-grant"), bindRole("svc-root-grant", "analyst"))
+        val proposed = stated.propose(KEY, head, grant, "a stated administrator grants").created().json()
+        val id = proposed.getValue("id") as String
+        (proposed["escalations"] as List<*>?).orEmpty().assert().describedAs("$proposed").isNotEmpty()
+        stated.step(id, "skip-shadow", mapOf("reason" to "system test: a stated administrator"))
+            .ok().json()["state"].assert().isEqualTo("AWAITING_APPROVAL")
+        root.revision(KEY).assert().isEqualTo(head)
+        stated.step(id, "abandon").ok()
     }
 
     private companion object {

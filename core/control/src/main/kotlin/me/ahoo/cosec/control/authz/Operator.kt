@@ -46,6 +46,13 @@ class Operator(
     val peer: String? = null,
     /** Whether the request came through the control plane's facade, in the host's own process (`CTL-65`). */
     val inProcess: Boolean = false,
+    /**
+     * Whether the request came through the control API's service profile, the service port or the facade (`CTL-81`). A
+     * fact of the request, not of the identity: there the identity is only stated, by whatever workload the network
+     * admitted, so no one is the trust root through it and every change it makes is analyzed. A forwarded identity on
+     * the operators' port is stated too, behind the gateway that verified its credential, and stays eligible.
+     */
+    val serviceProfile: Boolean = false,
 ) {
     val tenant: TenantId get() = actor.tenant
 
@@ -68,7 +75,12 @@ class Operator(
     @InternalCoSecApi
     companion object {
         /** The operator of a request the host pipeline permitted; null for an anonymous one. */
-        fun of(security: RequestSecurity, peer: String? = null, inProcess: Boolean = false): Operator? {
+        fun of(
+            security: RequestSecurity,
+            peer: String? = null,
+            inProcess: Boolean = false,
+            serviceProfile: Boolean = false,
+        ): Operator? {
             val principal = security.principal ?: return null
             return Operator(
                 actor = Actor(principal.tenant, principal.id),
@@ -77,6 +89,7 @@ class Operator(
                 security = security,
                 peer = peer,
                 inProcess = inProcess,
+                serviceProfile = serviceProfile,
             )
         }
     }
