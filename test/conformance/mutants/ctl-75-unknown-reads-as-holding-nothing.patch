@@ -1,0 +1,17 @@
+# Rule: CTL-75
+# Mutant: a live instance whose resident record cannot be read counts as holding nothing, so installed == holding says no instance is behind while one may be
+# Tests: :control:test --tests me.ahoo.cosec.control.lifecycle.PropagationTest :conformance:test
+
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ShadowWindows.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ShadowWindows.kt
+index 634f510aa..5a7e6bddf 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ShadowWindows.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ShadowWindows.kt
+@@ -137,7 +137,7 @@ class ShadowWindows(
+             holding.count { it >= revision },
+             holding.size,
+             read.live.size,
+-            read.readings.unreadable.size,
++            0,
+             read.asOf,
+         )
+     }

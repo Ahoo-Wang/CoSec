@@ -110,6 +110,7 @@ class ShadowReadingsTest {
                 node.runtime.create(ShadowCacheSpecs.reporters(node.keyPrefix)),
                 node.runtime.create(ShadowCacheSpecs.statuses(node.keyPrefix)),
                 node.runtime.create(ShadowCacheSpecs.instances(node.keyPrefix)),
+                node.runtime.create(ShadowCacheSpecs.residents(node.keyPrefix)),
             )
             sink.write(report("i0", 1))
             val failed = runCatching { sink.readings(WINDOW) }.exceptionOrNull()

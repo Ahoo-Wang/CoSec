@@ -1,0 +1,34 @@
+# Instance status split (R3-11, CTL-74, CTL-75): stored sizes
+
+Measured with the codecs as stored, by `backends/cocache/src/test/kotlin/me/ahoo/cosec/cocache/shadow/SaasScaleStatusMeasurement.kt`
+on branch `feat/status-split` (base `v8.0.0-beta.5`, `b6debb9ea`). One instance, id `gw-0123456789`.
+
+## Before (8.0.0-beta.5): one record, read for every acknowledgement and every propagation call
+
+The status held every resident document as `{"<key>": {"revision": n, "lagMillis": n}}` (measured with beta.5's codec,
+20 windows):
+
+  t-<n>:    N=2000 108237  N=10000 540737  N=16384 891857
+  16 chars: N=2000 129347  N=10000 641847  N=16384 1050423
+  UUID:     N=2000 169347  N=10000 841847  N=16384 1378103
+  (encode + decode of one: about 25 ms at N = 16,384)
+
+## After: two records
+
+status (what liveness and the acknowledgement read), bytes:
+  0 windows: 87
+  20 windows: 706
+  1000 windows: 31086
+resident record (what propagation reads), bytes, platform + 12 apps + N tenants, revisions ~1e6:
+  t-<n>: N=2000 47220  N=10000 239220  N=16384 398820
+  16 chars: N=2000 68330  N=10000 340330  N=16384 557386
+  UUID: N=2000 108330  N=10000 540330  N=16384 885066
+
+The acknowledgement (a shadow window's closing path, every `GET /changes/{id}` of a shadowing change) reads only the
+status: 0.7 KB for 20 windows, whatever the instance holds (asserted by `StatusSplitTest`). With 20 instances that is
+about 14 KB per read, against 18 to 28 MB before. The status still grows with the windows an instance acknowledges
+(31 KB for 1,000), which is what a batch stages, not with the documents.
+
+`propagation` reads the resident records of the live instances, at most every 5 s per control host and only when asked:
+with 20 instances at 16,384 tenants, 8 MB (short ids) to 18 MB (UUIDs) per read. An instance writes its resident
+record when what it holds changes, and every 30 minutes; before, it wrote the whole status every report interval.

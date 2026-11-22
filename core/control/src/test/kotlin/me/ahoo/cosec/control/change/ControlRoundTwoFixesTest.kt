@@ -65,6 +65,7 @@ import me.ahoo.cosec.runtime.event.Delivery
 import me.ahoo.cosec.spi.membership.InMemoryMembershipProvider
 import me.ahoo.cosec.spi.shadow.InMemoryShadowReports
 import me.ahoo.cosec.spi.shadow.InstanceStatus
+import me.ahoo.cosec.spi.shadow.ResidentReadings
 import me.ahoo.cosec.spi.shadow.ShadowOutcome
 import me.ahoo.cosec.spi.shadow.ShadowReadings
 import me.ahoo.cosec.spi.shadow.ShadowReport
@@ -255,6 +256,8 @@ class ControlRoundTwoFixesTest {
                 override suspend fun reports(window: String): List<ShadowReport> = read
 
                 override suspend fun statuses(): List<InstanceStatus> = emptyList()
+
+                override suspend fun residents(instances: Set<String>) = ResidentReadings(emptyMap(), instances)
             }
             assertThrownBy<IllegalStateException> {
                 runBlocking {
@@ -280,6 +283,8 @@ class ControlRoundTwoFixesTest {
             override suspend fun reports(window: String) = written.reports(window).filter { it.instance !in vanished }
 
             override suspend fun statuses(): List<InstanceStatus> = emptyList()
+
+            override suspend fun residents(instances: Set<String>) = ResidentReadings(emptyMap(), instances)
         }
         val changes = changes(reports = reader, shadow = ShadowOptions(Duration.ZERO, 10, Duration.ofHours(1)))
         val change = changes.propose(
@@ -320,6 +325,8 @@ class ControlRoundTwoFixesTest {
                 ) = written.reports(window).filter { it.instance !in vanished }
 
                 override suspend fun statuses(): List<InstanceStatus> = emptyList()
+
+                override suspend fun residents(instances: Set<String>) = ResidentReadings(emptyMap(), instances)
             }
             val changes = changes(reports = reader, shadow = ShadowOptions(Duration.ZERO, 10, Duration.ofHours(1)))
             val change = changes.propose(
@@ -369,6 +376,8 @@ class ControlRoundTwoFixesTest {
                 }
 
                 override suspend fun statuses(): List<InstanceStatus> = emptyList()
+
+                override suspend fun residents(instances: Set<String>) = ResidentReadings(emptyMap(), instances)
             }
             val changes = changes(reports = reader, shadow = ShadowOptions(Duration.ZERO, 10, Duration.ofHours(1)))
             val proposed = { note: String ->

@@ -1,0 +1,22 @@
+# Rule: CTL-75
+# Mutant: a resident write that failed is taken as written, so the record stays missing or stale until the next change
+# Tests: :runtime:test --tests me.ahoo.cosec.runtime.shadow.ResidentWriteTest
+
+diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/shadow/ShadowReporter.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/shadow/ShadowReporter.kt
+index e8b0ac1ff..041a6e4c8 100644
+--- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/shadow/ShadowReporter.kt
++++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/shadow/ShadowReporter.kt
+@@ -116,10 +116,9 @@ class ShadowReporter(
+         val holding = installed()
+         val due = residentAt?.let { !now.isBefore(it.plus(ShadowReportReader.RESIDENT_TTL.dividedBy(2))) } ?: true
+         if (holding == lastResident && !due) return
+-        if (attempt("the resident documents") { sink.write(ResidentDocuments(recorder.instance, now, holding)) }) {
+-            lastResident = holding
+-            residentAt = now
+-        }
++        attempt("the resident documents") { sink.write(ResidentDocuments(recorder.instance, now, holding)) }
++        lastResident = holding
++        residentAt = now
+     }
+ 
+     /**

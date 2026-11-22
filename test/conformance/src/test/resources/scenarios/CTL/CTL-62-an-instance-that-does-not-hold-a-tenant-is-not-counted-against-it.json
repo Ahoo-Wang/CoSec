@@ -127,12 +127,12 @@
       "status",
       "status",
       "status",
-      "installed 1 holding 2 recent 3",
-      "installed 0 holding 0 recent 3",
+      "installed 1 holding 2 recent 3 unknown 0",
+      "installed 0 holding 0 recent 3 unknown 0",
       "status",
-      "installed 1 holding 2 recent 3",
+      "installed 1 holding 2 recent 3 unknown 0",
       "advanced",
-      "installed 2 holding 2 recent 3"
+      "installed 2 holding 2 recent 3 unknown 0"
     ],
     "errors": {
       "c1": [],

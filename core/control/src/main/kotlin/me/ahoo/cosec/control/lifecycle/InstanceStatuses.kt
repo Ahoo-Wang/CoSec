@@ -15,6 +15,7 @@ package me.ahoo.cosec.control.lifecycle
 
 import me.ahoo.cosec.control.store.ControlStoreException
 import me.ahoo.cosec.spi.shadow.InstanceStatus
+import me.ahoo.cosec.spi.shadow.ResidentReadings
 import me.ahoo.cosec.spi.shadow.ShadowReportReader
 import me.ahoo.cosec.spi.shadow.StatusReadings
 import me.ahoo.cosec.spi.snapshot.SnapshotFormatException
@@ -32,6 +33,11 @@ import kotlin.coroutines.cancellation.CancellationException
  *
  * A status that does not decode is not a failed read (`CTL-73`): its instance is in [Read.unreadable], and every other
  * status is read. [unreadable] counts each such status a read found.
+ *
+ * The statuses are small: liveness, `shadows` and the acknowledged windows. The documents each instance holds are its
+ * resident record, read only by [residents], for `propagation` (`CTL-74`, `CTL-75`): never by the acknowledgement, and
+ * so never on a shadow window's closing path. They too are read at most once per [maxAge], for the instances the
+ * statuses found live.
  */
 internal class InstanceStatuses(
     private val reports: ShadowReportReader,
@@ -41,13 +47,40 @@ internal class InstanceStatuses(
     /** What one read answered: the statuses that read, the instances whose status does not, and when it was read. */
     class Read(val statuses: List<InstanceStatus>, val unreadable: Set<String>, val asOf: Instant)
 
+    /** The resident records of the instances a status read found live, and when they were read. */
+    class Residents(val live: Set<String>, val readings: ResidentReadings, val asOf: Instant)
+
     private val shared = SharedRead(clock, maxAge) { load() }
+    private val residentsShared = SharedRead(clock, maxAge) { loadResidents() }
     private val unreadableCount = AtomicLong()
 
     /** The statuses that did not decode, of every read so far (`cosec.control.shadow.status.unreadable`). */
     val unreadable: Long get() = unreadableCount.get()
 
     suspend fun read(): Read = shared.read().let { Read(it.value.statuses, it.value.unreadable, it.asOf) }
+
+    /** The resident records of every live instance, one whose status does not decode included (`CTL-75`). */
+    suspend fun residents(): Residents = residentsShared.read().let {
+        Residents(
+            it.value.first,
+            it.value.second,
+            it.asOf
+        )
+    }
+
+    @Suppress("TooGenericExceptionCaught")
+    private suspend fun loadResidents(): Pair<Set<String>, ResidentReadings> {
+        val statuses = read()
+        val live = statuses.statuses.mapTo(HashSet()) { it.instance } + statuses.unreadable
+        val readings = try {
+            reports.residents(live)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            throw unavailable(e)
+        }
+        return live to readings
+    }
 
     @Suppress("TooGenericExceptionCaught")
     private suspend fun load(): StatusReadings {
@@ -68,7 +101,7 @@ internal class InstanceStatuses(
      */
     private fun unavailable(e: Exception): Exception = when (e) {
         is SnapshotFormatException, is ControlStoreException -> e
-        else -> ControlStoreException("The instances' statuses cannot be read", e)
+        else -> ControlStoreException("The instances' statuses or resident documents cannot be read", e)
     }
 
     companion object {

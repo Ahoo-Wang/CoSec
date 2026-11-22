@@ -23,13 +23,14 @@ import kotlinx.coroutines.isActive
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.spi.shadow.CandidateStore
-import me.ahoo.cosec.spi.shadow.InstalledDocument
 import me.ahoo.cosec.spi.shadow.InstanceStatus
+import me.ahoo.cosec.spi.shadow.ResidentDocuments
 import me.ahoo.cosec.spi.shadow.ShadowReportReader
 import me.ahoo.cosec.spi.shadow.ShadowReportSink
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import java.time.Clock
 import java.time.Duration
+import java.time.Instant
 import kotlin.coroutines.cancellation.CancellationException
 
 private val log = KotlinLogging.logger {}
@@ -37,7 +38,10 @@ private val log = KotlinLogging.logger {}
 /**
  * Writes this instance's shadow reports and its status every [interval] (RFC 0007 §6.4, §6.5): BEST_EFFORT, so a
  * failing [sink] costs one cycle of reports and never reaches a request. [installed] names the documents the instance
- * has installed, with their revisions and lag.
+ * holds, with the revision of each: its [ResidentDocuments], a record of their own (`CTL-75`). That record is written
+ * before the status, only when what the instance holds differs from what the last write that succeeded held, and in
+ * any case once half of [ShadowReportReader.RESIDENT_TTL] has passed since then; a write that fails leaves it owed, and
+ * every cycle tries it again. The status is written whatever became of it.
  *
  * With [candidates], the store of record the candidates are read from, a window whose document no longer stages its
  * candidate has ended: its report is written once more, with every sample so far, and the window is forgotten
@@ -48,7 +52,7 @@ private val log = KotlinLogging.logger {}
 class ShadowReporter(
     private val recorder: ShadowRecorder,
     private val sink: ShadowReportSink,
-    private val installed: () -> Map<SnapshotKey, InstalledDocument>,
+    private val installed: () -> Map<SnapshotKey, Long>,
     private val clock: Clock = Clock.systemUTC(),
     private val interval: Duration = Duration.ofSeconds(10),
     /** Where it reads whether a window's candidate is still staged; without it, every window is kept. */
@@ -62,6 +66,10 @@ class ShadowReporter(
     nanos: () -> Long = System::nanoTime,
 ) {
     private val staged = source?.staged
+
+    /** What the last resident write that succeeded held, and when; null until one has. */
+    private var lastResident: Map<SnapshotKey, Long>? = null
+    private var residentAt: Instant? = null
     private val sight = source?.let { CompileOnSight(it, recorder, interval, nanos) }
 
     init {
@@ -87,6 +95,7 @@ class ShadowReporter(
                 recorder.forget(window.report.window, window.recorded)
             }
         }
+        writeResident()
         val acknowledged = sight?.acknowledged()
         attempt("the instance status") {
             // Without CoSec's own candidate source nothing is compiled on sight: this instance cannot acknowledge a window,
@@ -95,11 +104,22 @@ class ShadowReporter(
                 InstanceStatus(
                     recorder.instance,
                     clock.instant(),
-                    installed(),
                     windows = acknowledged,
                     shadows = sight != null
                 )
             )
+        }
+    }
+
+    /** Writes the resident documents when they changed since the last write that succeeded, or that write is half its life old. */
+    private suspend fun writeResident() {
+        val now = clock.instant()
+        val holding = installed()
+        val due = residentAt?.let { !now.isBefore(it.plus(ShadowReportReader.RESIDENT_TTL.dividedBy(2))) } ?: true
+        if (holding == lastResident && !due) return
+        if (attempt("the resident documents") { sink.write(ResidentDocuments(recorder.instance, now, holding)) }) {
+            lastResident = holding
+            residentAt = now
         }
     }
 

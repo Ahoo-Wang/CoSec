@@ -26,6 +26,7 @@ import me.ahoo.cosec.cocache.control.StageSlotCodec
 import me.ahoo.cosec.cocache.shadow.InstanceIndexCodec
 import me.ahoo.cosec.cocache.shadow.InstanceStatusCodec
 import me.ahoo.cosec.cocache.shadow.ReportersCodec
+import me.ahoo.cosec.cocache.shadow.ResidentDocumentsCodec
 import me.ahoo.cosec.cocache.shadow.ShadowReportCodec
 import me.ahoo.cosec.cocache.shadow.StoredCandidateCodec
 import me.ahoo.cosec.cocache.snapshot.SnapshotDocumentCodec
@@ -43,8 +44,8 @@ import me.ahoo.cosec.document.SnapshotDocuments
 import me.ahoo.cosec.document.json.CoSecJson
 import me.ahoo.cosec.model.PrincipalId
 import me.ahoo.cosec.model.TenantId
-import me.ahoo.cosec.spi.shadow.InstalledDocument
 import me.ahoo.cosec.spi.shadow.InstanceStatus
+import me.ahoo.cosec.spi.shadow.ResidentDocuments
 import me.ahoo.cosec.spi.shadow.ShadowOutcome
 import me.ahoo.cosec.spi.shadow.ShadowReport
 import me.ahoo.cosec.spi.shadow.StoredCandidate
@@ -56,7 +57,6 @@ import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import tools.jackson.databind.node.ObjectNode
 import java.io.File
-import java.time.Duration
 import java.time.Instant
 
 /**
@@ -130,10 +130,16 @@ class StoredRecordsTest {
         ),
         record(
             "InstanceStatusCodec",
-            InstanceStatus("i1", at, mapOf(SnapshotKey.Platform to InstalledDocument(3, Duration.ofMillis(5))), 1),
+            InstanceStatus("i1", at, 1),
             InstanceStatusCodec::encode,
             InstanceStatusCodec::decode,
             formatAt = { root -> root.properties().single().value as ObjectNode },
+        ),
+        record(
+            "ResidentDocumentsCodec",
+            ResidentDocuments("i1", at, mapOf(SnapshotKey.Platform to 3L)),
+            ResidentDocumentsCodec::encode,
+            ResidentDocumentsCodec::decode,
         ),
         record("ReportersCodec", setOf("i1", "i2"), ReportersCodec::encode, ReportersCodec::decode),
         record("InstanceIndexCodec", mapOf("i1" to at), InstanceIndexCodec::encode, InstanceIndexCodec::decode),

@@ -44,15 +44,13 @@ import me.ahoo.cosec.document.shadow.ShadowCodec
 import me.ahoo.cosec.model.PolicyId
 import me.ahoo.cosec.model.PrincipalId
 import me.ahoo.cosec.model.TenantId
-import me.ahoo.cosec.spi.shadow.InstalledDocument
-import me.ahoo.cosec.spi.shadow.InstanceStatus
+import me.ahoo.cosec.spi.shadow.ResidentDocuments
 import me.ahoo.cosec.spi.snapshot.SnapshotFormatException
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import org.slf4j.LoggerFactory
 import java.time.Clock
-import java.time.Duration
 import java.time.Instant
 import java.util.concurrent.CopyOnWriteArrayList
 
@@ -136,27 +134,27 @@ class SlashIdRecordsTest {
     }
 
     @Test
-    fun `an instance status of a slash id fails the statuses, naming the instance and the id`() = runBlocking<Unit> {
+    fun `a resident record of a slash id reads as that instance's unknown documents`() = runBlocking<Unit> {
         SnapshotNode(backend, newKeyPrefix()).use { node ->
             val sink = CoCacheShadowReports.create(node.factory, node.keyPrefix, Clock.systemUTC())
-            val installed =
-                mapOf<SnapshotKey, InstalledDocument>(SnapshotKey.Tenant("acme") to InstalledDocument(1, Duration.ZERO))
-            sink.write(InstanceStatus("i1", Instant.now(), installed))
-            val written = ShadowCodec.encodeStatuses(
-                mapOf("i1" to InstanceStatus("i1", Instant.now(), installed))
+            val resident = ResidentDocuments("i1", Instant.now(), mapOf(SnapshotKey.Tenant("acme") to 1L))
+            sink.write(resident)
+            sink.residents(setOf("i1")).residents.assert().containsKey("i1")
+            val written = ShadowCodec.encodeResident(
+                resident
             ).decodeToString().replace("tenant:acme", "tenant:acme/west")
             CacheRuntime.builder().backend(backend).build().use { raw ->
                 raw.create(
                     rawStore(
-                        "RawStatus",
+                        "RawResident",
                         node.keyPrefix,
-                        CoSecCacheSpecs.INSTANCE_STATUS_CACHE_NAME,
+                        CoSecCacheSpecs.INSTANCE_RESIDENT_CACHE_NAME,
                         KeyEncoder<String> { it }
                     )
                 ).async().put("i1", written.encodeToByteArray()).await()
             }
-            formatError { sink.statuses() }.message.assert()
-                .contains("The status of instance [i1]").contains("[acme/west]")
+            // A document key no build writes is a format error of that record, never of the whole read (CTL-75).
+            sink.residents(setOf("i1")).unreadable.assert().containsExactly("i1")
         }
     }
 

@@ -27,6 +27,7 @@ import me.ahoo.cocache.core.policy.Ttl
 import me.ahoo.cocache.core.policy.UnknownReadMode
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.cocache.CoSecCacheSpecs.DEFAULT_MEMBERSHIP_TTL
+import me.ahoo.cosec.cocache.CoSecCacheSpecs.INSTANCE_RESIDENT_CACHE_NAME
 import me.ahoo.cosec.cocache.CoSecCacheSpecs.INSTANCE_STATUS_CACHE_NAME
 import me.ahoo.cosec.cocache.CoSecCacheSpecs.LOCKED_BY
 import me.ahoo.cosec.cocache.CoSecCacheSpecs.MEMBERSHIP_CACHE_NAME
@@ -47,6 +48,12 @@ internal object CacheLocks {
      * (`PolicyField.READ_TIMEOUT`).
      */
     private val COMMAND_TIMEOUT: Duration = ChronoUnit.FOREVER.duration
+
+    /** The shadow caches whose life is a bound something relies on (`CTL-73`, `CTL-75`): exactly this, no jitter. */
+    private val EXACT_LIVES: Map<String, Duration> = mapOf(
+        INSTANCE_STATUS_CACHE_NAME to ShadowCacheSpecs.STATUS_TTL,
+        INSTANCE_RESIDENT_CACHE_NAME to ShadowCacheSpecs.RESIDENT_TTL,
+    )
 
     /** How long a revocation table keeps "not revoked" locally ([RevokedTokenCache.MISSING_TTL_SECONDS]). */
     private val NOT_REVOKED_FOR: Duration = Duration.ofSeconds(RevokedTokenCache.MISSING_TTL_SECONDS)
@@ -75,11 +82,12 @@ internal object CacheLocks {
                 lock(PolicyField.UNKNOWN_READ, PolicyField.TTL)
                 constrain(PolicyField.UNKNOWN_READ) { UnknownReadMode.THROW }
                 // The reports outlive any window, and a status counts for a minute (RFC 0007 §6.5): fixed, as on main.
-                val ttl = if (cacheName == INSTANCE_STATUS_CACHE_NAME) ShadowCacheSpecs.STATUS_TTL else ShadowCacheSpecs.REPORT_TTL
-                constrain(PolicyField.TTL) { Ttl.of(ttl) }
-                if (cacheName == INSTANCE_STATUS_CACHE_NAME) {
+                val exact = EXACT_LIVES[cacheName]
+                constrain(PolicyField.TTL) { Ttl.of(exact ?: ShadowCacheSpecs.REPORT_TTL) }
+                if (exact != null) {
                     // A status's life is a liveness bound (CTL-73): an undecodable one counts until its key expires,
-                    // so the key lives exactly STATUS_TTL. CoCache's default jitter would make it 1 to 3 minutes.
+                    // so the key lives exactly STATUS_TTL. CoCache's default jitter would make it 1 to 3 minutes. A
+                    // resident record is rewritten at half its life (CTL-75), which a jittered life could undercut.
                     lock(PolicyField.TTL_JITTER)
                     constrain(PolicyField.TTL_JITTER) { Duration.ZERO }
                 }

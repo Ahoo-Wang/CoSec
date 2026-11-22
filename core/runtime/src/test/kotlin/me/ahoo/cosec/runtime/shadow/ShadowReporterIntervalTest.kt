@@ -24,6 +24,7 @@ import kotlinx.coroutines.runBlocking
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.spi.shadow.InstanceStatus
+import me.ahoo.cosec.spi.shadow.ResidentDocuments
 import me.ahoo.cosec.spi.shadow.ShadowReport
 import me.ahoo.cosec.spi.shadow.ShadowReportSink
 import me.ahoo.test.asserts.assert
@@ -40,6 +41,8 @@ class ShadowReporterIntervalTest {
         override suspend fun write(report: ShadowReport) = Unit
 
         override suspend fun write(status: InstanceStatus) = Unit
+
+        override suspend fun write(resident: ResidentDocuments) = Unit
     }
 
     private fun reporter(interval: Duration, sink: ShadowReportSink = Discarding) =
@@ -66,6 +69,8 @@ class ShadowReporterIntervalTest {
         var writes = 0
         val sink = object : ShadowReportSink {
             override suspend fun write(report: ShadowReport) = Unit
+
+            override suspend fun write(resident: ResidentDocuments) = Unit
 
             override suspend fun write(status: InstanceStatus) {
                 writes++

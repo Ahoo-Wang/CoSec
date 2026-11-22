@@ -179,7 +179,7 @@
         "migrate:MigrationRecoveryTest#partition plan on the command line refuses a tenant id with a slash and writes nothing",
         "migrate:ApiKeyMigrationTest#a key that cannot be converted exactly is refused",
         "cocache:SlashIdRecordsTest#a back-reference set or a change of a slash id fails whole, naming the record and the id",
-        "cocache:SlashIdRecordsTest#an instance status of a slash id fails the statuses, naming the instance and the id",
+        "cocache:SlashIdRecordsTest#a resident record of a slash id reads as that instance's unknown documents",
         "spi:ApiKeyReaderTest#aKeyOfASlashIdNamesTheKeyAndTheId"
       ],
       "pending": null

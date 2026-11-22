@@ -32,6 +32,8 @@ import me.ahoo.cosec.cocache.DEFAULT_KEY_PREFIX
 import me.ahoo.cosec.cocache.createLocked
 import me.ahoo.cosec.cocache.readRecord
 import me.ahoo.cosec.spi.shadow.InstanceStatus
+import me.ahoo.cosec.spi.shadow.ResidentDocuments
+import me.ahoo.cosec.spi.shadow.ResidentReadings
 import me.ahoo.cosec.spi.shadow.ShadowReadings
 import me.ahoo.cosec.spi.shadow.ShadowReport
 import me.ahoo.cosec.spi.shadow.ShadowReportReader
@@ -68,6 +70,7 @@ class CoCacheShadowReports @InternalCoSecApi constructor(
     private val reporters: Store<String, Set<String>>,
     private val statuses: Store<String, InstanceStatus>,
     private val instances: Store<String, Map<String, Instant>>,
+    private val residents: Store<String, ResidentDocuments>,
     private val clock: Clock = Clock.systemUTC(),
 ) : ShadowReportSink, ShadowReportReader {
     /** For each instance this object writes for: the list as it was read when its entry was current, and until when. */
@@ -86,6 +89,44 @@ class CoCacheShadowReports @InternalCoSecApi constructor(
         if (read(reporters, report.window)?.first?.contains(report.instance) != true) {
             update(reporters, report.window, { it + report.instance }, emptySet())
         }
+    }
+
+    override suspend fun write(resident: ResidentDocuments) {
+        require(ShadowReport.isInstanceId(resident.instance)) { "[${resident.instance}] is not an instance id" }
+        residents.async().put(resident.instance, resident).await()
+    }
+
+    /**
+     * The resident records of [instances], read in batches of [READ_BATCH] (`CTL-75`). One that is missing (it expired,
+     * or was never written) or does not decode is named unreadable, and `propagation` counts its instance as unknown;
+     * one under another instance's key is the store's data being wrong, and fails the call, as a store that does not
+     * answer does.
+     */
+    override suspend fun residents(instances: Set<String>): ResidentReadings {
+        val found = instances.sorted().chunked(READ_BATCH).flatMap { batch ->
+            coroutineScope { batch.map { instance -> async { instance to resident(instance) } }.awaitAll() }
+        }
+        return ResidentReadings(
+            found.mapNotNull { (instance, read) -> read?.let { instance to it } }.toMap(),
+            found.filter { it.second == null }.mapTo(HashSet()) { it.first },
+        )
+    }
+
+    /** [instance]'s resident record, or null when it has none (quietly) or it does not decode (logged at WARN). */
+    private suspend fun resident(instance: String): ResidentDocuments? {
+        val resident = try {
+            read(residents, instance, "The resident documents of instance [$instance]")?.first
+        } catch (e: SnapshotFormatException) {
+            // Abnormal, unlike a missing record (an instance of the previous preview writes none): named, with why. The
+            // read is shared for five seconds on a control host, which bounds the line to that.
+            log.warn {
+                "The resident documents of instance [$instance] do not read: propagation counts it unknown " +
+                    "(${e.message})."
+            }
+            return null
+        } ?: return null
+        check(resident.instance == instance) { "The resident documents under [$instance] are ${resident.instance}'s" }
+        return resident
     }
 
     override suspend fun write(status: InstanceStatus) {
@@ -311,6 +352,7 @@ class CoCacheShadowReports @InternalCoSecApi constructor(
                 factory.createLocked(ShadowCacheSpecs.reporters(keyPrefix)),
                 factory.createLocked(ShadowCacheSpecs.statuses(keyPrefix)),
                 factory.createLocked(ShadowCacheSpecs.instances(keyPrefix)),
+                factory.createLocked(ShadowCacheSpecs.residents(keyPrefix)),
                 clock
             )
     }

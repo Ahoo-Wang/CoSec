@@ -4,7 +4,7 @@
   ],
   "polarity": "positive",
   "level": "control",
-  "description": "Bounds 15 min, 3 samples, 1 h. c1 has its 3 samples once 15 minutes have passed and i1 acknowledges it, but the status of the live instance broken does not decode: broken counts as live and acknowledging nothing, so the window stays open and names it, while i1's status is read and propagation answers, counting broken as recent and holding nothing. Once broken's status reads and acknowledges the window, it closes.",
+  "description": "Bounds 15 min, 3 samples, 1 h. c1 has its 3 samples once 15 minutes have passed and i1 acknowledges it, but the status of the live instance broken does not decode: broken counts as live and acknowledging nothing, so the window stays open and names it, while i1's status is read and propagation answers, counting broken as recent and unknown (it has no resident record anyone can read). Once broken's status reads and acknowledges the window, it closes.",
   "options": {
     "shadow": {
       "minDuration": "PT15M",
@@ -112,7 +112,7 @@
       "status",
       "acknowledged 1 waiting broken",
       "SHADOWING",
-      "installed 0 holding 0 recent 2",
+      "installed 0 holding 0 recent 2 unknown 1",
       "advanced",
       "status",
       "status",

@@ -72,7 +72,6 @@ import me.ahoo.cosec.spi.authn.Authenticator
 import me.ahoo.cosec.spi.authn.AuthnResult
 import me.ahoo.cosec.spi.identity.Identity
 import me.ahoo.cosec.spi.shadow.InMemoryShadowReports
-import me.ahoo.cosec.spi.shadow.InstalledDocument
 import me.ahoo.cosec.spi.shadow.InstanceStatus
 import me.ahoo.cosec.spi.shadow.ShadowOutcome
 import me.ahoo.cosec.spi.shadow.StoredCandidate
@@ -170,15 +169,8 @@ class ShadowWindowTest {
             }
         }
 
-        private fun installed(): Map<SnapshotKey, InstalledDocument> =
-            mapOf(
-                StoreFixtures.ACME to InstalledDocument(
-                    runBlocking {
-                        revisions.head(StoreFixtures.ACME)?.revision ?: 0
-                    },
-                    Duration.ZERO
-                )
-            )
+        private fun installed(): Map<SnapshotKey, Long> =
+            mapOf(StoreFixtures.ACME to runBlocking { revisions.head(StoreFixtures.ACME)?.revision ?: 0 })
     }
 
     /** The current heads, compiled, with their revisions: what a confirmed source installs. */
@@ -284,13 +276,13 @@ class ShadowWindowTest {
             clock.now = clock.now.plus(InstanceStatuses.MAX_AGE)
             return changes.propagation(StoreFixtures.ACME, 2)
         }
-        propagation().assert().isEqualTo(Propagation(2, 0, 2, 2, clock.now))
+        propagation().assert().isEqualTo(Propagation(2, 0, 2, 2, 0, clock.now))
         one.reporter.flush()
-        propagation().assert().isEqualTo(Propagation(2, 1, 2, 2, clock.now))
+        propagation().assert().isEqualTo(Propagation(2, 1, 2, 2, 0, clock.now))
         two.reporter.flush()
-        propagation().assert().isEqualTo(Propagation(2, 2, 2, 2, clock.now))
+        propagation().assert().isEqualTo(Propagation(2, 2, 2, 2, 0, clock.now))
         clock.now = clock.now.plus(Duration.ofMinutes(2))
-        propagation().assert().isEqualTo(Propagation(2, 0, 0, 0, clock.now))
+        propagation().assert().isEqualTo(Propagation(2, 0, 0, 0, 0, clock.now))
     }
 
     @Test
@@ -479,13 +471,13 @@ class ShadowWindowTest {
         changes.acknowledgements.of(proposed).assert().isNull()
         AcknowledgementReader.NONE.of(proposed).assert().isNull()
         val change = staged()
-        repeat(21) { reports.write(InstanceStatus("old-%02d".format(it), clock.instant(), emptyMap())) }
+        repeat(21) { reports.write(InstanceStatus("old-%02d".format(it), clock.instant())) }
         val read = changes.acknowledgements.of(change)!!
         read.acknowledged.assert().isZero()
         read.waitingFor.size.assert().isEqualTo(21)
         // Past the shortest window, before the longest (10 minutes here): the window is open, waiting.
         clock.now = clock.now.plus(Duration.ofMinutes(2))
-        repeat(21) { reports.write(InstanceStatus("old-%02d".format(it), clock.instant(), emptyMap())) }
+        repeat(21) { reports.write(InstanceStatus("old-%02d".format(it), clock.instant())) }
         changes.shadowed(change.id).state.assert().isEqualTo(ChangeState.SHADOWING)
     }
 
