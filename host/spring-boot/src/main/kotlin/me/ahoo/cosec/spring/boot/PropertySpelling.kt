@@ -17,9 +17,9 @@ package me.ahoo.cosec.spring.boot
  * What to write instead of a `cosec.*` key CoSec does not read, for [UnknownProperties]' message: an operator who
  * mistyped an environment variable should hear the spelling that works, not only that theirs does not.
  *
- * Spring binds `COSEC_AUTHORIZATION_SNAPSHOT_LOCALMAXAGE` to `local-max-age`: each `_` is a `.`, so the words of a key
- * are joined. The mistakes that come up are the underscores of a word (`..._LOCAL_MAX_AGE`, read as the keys
- * `local.max.age`) and a letter dropped or swapped, so a key is suggested when only its separators differ from a known
+ * Spring binds `COSEC_AUTHORIZATION_SNAPSHOT_REVALIDATEINTERVAL` to `revalidate-interval`: each `_` is a `.`, so the words of a key
+ * are joined. The mistakes that come up are the underscores of a word (`..._REVALIDATE_INTERVAL`, read as the keys
+ * `revalidate.interval`) and a letter dropped or swapped, so a key is suggested when only its separators differ from a known
  * one, or when one known key is within two edits of it.
  */
 internal class PropertySpelling(known: Collection<String>) {

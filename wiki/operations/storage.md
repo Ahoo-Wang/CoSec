@@ -51,8 +51,8 @@ Unreadable revocations fail the read, and memberships always expire, without jit
 The shadow caches keep their declared lifetimes, and the revocation tables read for the store's whole command timeout
 (`cocache.redis.command-timeout`): a read that times out is unavailable, which the pipeline's verification accepts, so
 no `read-timeout` may shorten it. CoSec's revocation reader has a shorter budget of its own: each of its two reads ends
-within `cosec.authentication.revocation.read-timeout` (300 ms), both well within the authenticator's
-(`cosec.pipeline.authentication-timeout`, 1 s), so a Redis that hangs is answered as one that refuses, and the token is
+within the revocation read timeout (30 % of the authentication timeout, 300 ms at the default), both well within the authenticator's
+(the authentication timeout, 20 % of `cosec.pipeline.timeout`: 1 s at the default), so a Redis that hangs is answered as one that refuses, and the token is
 accepted rather than every authenticated request answered `503`.
 
 **What a timed-out revocation read leaves behind.** The command stays pending on CoCache's Redis client until
@@ -420,7 +420,7 @@ revalidating 10 documents every 10 seconds take about 0.1 % of it.
 | A document that disappeared from Redis after it was seen | Failed until a document returns (`Snapshot document [<doc>] disappeared from the store; failing closed.` at `ERROR`). Requests that need it are **`503`**, unless a DENY matches first. |
 | A tenant listed in `fail-closed.tenants`, once its documents lag past `fail-closed.max-lag` | **`503`**, unless a DENY matches first ([How instances read documents](#how-instances-read-documents)). |
 | No platform document published | Every request is **`503`** ([The first documents](#the-first-documents)). |
-| Revoked tokens and principals | Verifying a request's token, the pipeline **accepts** it, so an outage does not reject every authenticated request (**`503`** with `cosec.authentication.revocation.fail-closed`). Tokens are still signature-verified and expire on their own. A failed read is not cached: each check asks Redis again, and a revocation applies as soon as Redis answers. A Redis that hangs counts as unreadable after `cosec.authentication.revocation.read-timeout` (300 ms). A **refresh fails** instead (`IDN-14`): a token issued then would escape every revocation. |
+| Revoked tokens and principals | Verifying a request's token, the pipeline **accepts** it, so an outage does not reject every authenticated request (**`503`** with `cosec.authentication.revocation.fail-closed`). Tokens are still signature-verified and expire on their own. A failed read is not cached: each check asks Redis again, and a revocation applies as soon as Redis answers. A Redis that hangs counts as unreadable after the revocation read timeout (30 % of the authentication timeout, 300 ms at the default). A **refresh fails** instead (`IDN-14`): a token issued then would escape every revocation. |
 | Memberships from a `MembershipProvider` on Redis | **`503`**. Memberships carried in the token are not affected. |
 | API keys in Redis (`cosec.api-key.store=redis`) | **`503`**. |
 | Rate-limit counters | A rule with `strictFailure: true` answers **`503`**; any other rule is skipped and the request goes on ([Rate limiting](../policies/rate-limiting.md)). |

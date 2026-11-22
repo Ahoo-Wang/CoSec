@@ -27,7 +27,8 @@ spec:
       enableServiceLinks: false
       # The control host never calls the Kubernetes API.
       automountServiceAccountToken: false
-      # preStop (5 s), then Spring's graceful shutdown (30 s at most) and the change listeners' drain (5 s).
+      # preStop (5 s), then Spring's graceful shutdown (30 s at most) and the change listeners' drain (5 s: a sixth of
+      # spring.lifecycle.timeout-per-shutdown-phase, which raises it with the phase).
       terminationGracePeriodSeconds: 45
       securityContext:
         # The image's appuser:appgroup, by uid: the image names its user, so runAsNonRoot cannot check it without these.

@@ -44,6 +44,25 @@ description: "每个 8.0 预览版（alpha 与 beta）到下一个之间的变�
 - **控制面门面成为独立模块 `cosec-control-sdk`**（`CTL-65`）。受影响：调用 `ControlService` 的代码。`ControlService`、`ControlCaller` 和 `ControlRefusedException` 的名称和包（`me.ahoo.cosec.control.sdk`）不变；`cosec-control` 会带上这个模块，所以已依赖 `cosec-control` 的构建无需改动。只调用控制面宿主的代码需要 `cosec-control-sdk` 及其 HTTP 实现 `cosec-control-http`（`cosec.control.service-url`），不必再自己写 `CoSec-Identity`。
   - `ControlService.changes` 按 `me.ahoo.cosec.control.sdk.ChangeState` 过滤，这是线上格式的封闭集合，未知值保留其文本（`isUnknown`），不再是控制面内部的枚举：请传入新包的 `ChangeState.READY`，或 `ChangeState.of("READY")`。
   - `ControlCaller.of(context)` 不再对 CoSec 未创建的安全上下文抛出异常：改由接收它的调用抛出同样的 `IllegalArgumentException`（`PIP-29`）。
+- **每个阶段的超时都是 `cosec.pipeline.timeout` 的一份，十个 key 被删除**（`PIP-33`、`OBS-10`；能计算出来的就不配置）。受影响：设置了其中某一项的配置，以及在 `Pipeline.builder` 的 `options { }` 或 `listeners { }` 中设置过超时的代码。启动会失败并列出 CoSec 不读取的 key，对每个都说明它已不再是配置项以及由什么取代。删掉这个 key；如果你原来移动过这个值，就改为移动 `cosec.pipeline.timeout`（或下表所列的值）。在默认的 5 秒期限下，每个值都等于它原来的默认值，所以什么都没设置的部署照旧应答（[由计算得出，而非配置](./configuration.md#computed-not-configured)）。
+
+  | 已删除 | 现在 |
+  |---|---|
+  | `cosec.pipeline.authentication-timeout` | `cosec.pipeline.timeout` 的 20 % |
+  | `cosec.authorization.membership.timeout` | 它的 10 %，也是成员关系缓存一次填充的时限 |
+  | `cosec.authorization.attributes.timeout` | 它的 6 %，用于没有自行设置超时的 `AttributeProvider` |
+  | `cosec.authorization.rate-limit.timeout` | 它的 10 % |
+  | `cosec.authentication.revocation.read-timeout` | 认证超时的 30 %：一个令牌的两次读取按构造就在认证超时之内结束，比较两者的启动检查随之删除 |
+  | `cosec.observability.listener.required-timeout` | `cosec.pipeline.timeout` 的 20 % |
+  | `cosec.control.audit.required-timeout` | `cosec.pipeline.timeout` 本身，即控制请求自身授权的上限 |
+  | `cosec.observability.listener.drain-timeout` | `spring.lifecycle.timeout-per-shutdown-phase` 的六分之一，变更监听器和 Kafka 监听器也一样 |
+  | `cosec.authorization.snapshot.local-max-age` | 3 × `cosec.authorization.snapshot.revalidate-interval` |
+  | `cosec.authorization.membership.unknown-ttl` | 常量，5 秒 |
+
+  - `PipelineSettings`（在 `options { }` 中）保留 `timeout`，去掉 `authenticationTimeout`、`membershipTimeout`、`attributeTimeout` 和 `rateLimitTimeout`；`ListenerSettings`（在 `listeners { }` 中）保留 `queueCapacity`，去掉 `requiredTimeout` 和 `drainTimeout`。改为设置 `timeout`，或删掉这一行。
+  - 自带超时的 `AttributeProvider`，以及你自己的 `RevocationReader`，保留它们自己的时限。
+  - `cosec.pipeline.timeout` 低于 20 ms 时，每一份以 1 ms 为下限，一个令牌的两次吊销读取可能不再在认证超时之内结束。
+  - **`cosec.pipeline.timeout` 低于默认值的部署**同时缩短了吊销读取，这是唯一一个失败即放行的阶段：`1s` 时每次读取只有 60 ms，而原来是 300 ms，超过它的读取会接受请求的令牌，除非设置了 `cosec.authentication.revocation.fail-closed=true`。请设置 `fail-closed`，或保留默认期限。
 
 ## 从 8.0.0-beta.4 升级 {#from-8-0-0-beta-4}
 

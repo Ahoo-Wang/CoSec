@@ -100,7 +100,7 @@ flowchart LR
 
 `key` 读取客户端可以变化的内容的规则，只会占满它自己的份额，一个租户或一个应用的规则只会占满它们那份文档的份额：一个租户的两条这样的规则合计最多占四分之一的桶，其他文档的规则仍能接纳新桶。要四份规则键由客户端变化的文档才能占满限流器。但这样的规则什么也限制不了：每个新值都是一个新桶，份额满了之后，每个新值要么被跳过（宽松），要么被拒绝（严格）。与 Redis 一样，请让本地规则的键取客户端无法成倍制造的内容。其他上限需要你自己的 `RateLimiter` bean，`LocalRateLimiter(maximumBuckets = ..., maximumBucketsPerRule = ..., maximumBucketsPerOwner = ...)`；单条规则的上限默认是总数的一半，单份文档的上限默认是四分之一。
 
-自定义的 `RateLimiter` bean 会替换两者（[扩展](../architecture/extending.md)）。每次调用受 `cosec.authorization.rate-limit.timeout`（默认 `500ms`，[配置](../operations/configuration.md)）约束；超时视为失败。
+自定义的 `RateLimiter` bean 会替换两者（[扩展](../architecture/extending.md)）。每次调用受限流超时（`cosec.pipeline.timeout` 的 10 %，默认 `500ms`，[配置](../operations/configuration.md#computed-not-configured)）约束；超时视为失败。
 
 ## 响应与响应头 {#responses-and-headers}
 

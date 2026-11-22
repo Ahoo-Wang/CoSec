@@ -250,20 +250,20 @@ class UnknownPropertiesTest {
         runner.withPropertyValues(
             "cosec.pipeline.identity.max-age=30s",
             "cosec.pipeline.identity.max-size=4KB",
-            "cosec.observability.listener.required-timeout=2s",
+            "cosec.observability.listener.queue-capacity=16",
             "cosec.authentication.revocation.cache.local-max-age=10s",
             "cosec.authentication.revocation.cache.maximum-size=10",
         ).run { context -> context.startupFailure.assert().isNull() }
     }
 
     /**
-     * #1234: Spring binds `COSEC_AUTHORIZATION_SNAPSHOT_LOCALMAXAGE` to `cosec.authorization.snapshot.local-max-age` (dots
+     * #1234: Spring binds `COSEC_AUTHORIZATION_SNAPSHOT_REVALIDATEINTERVAL` to `cosec.authorization.snapshot.revalidate-interval` (dots
      * become underscores, dashes are dropped, upper case), so a deployment that sets its keys that way made no mistake.
      */
     @Test
     fun `an environment variable Spring binds to a key CoSec reads passes`() {
         val variables = mapOf(
-            "COSEC_AUTHORIZATION_SNAPSHOT_LOCALMAXAGE" to "30s",
+            "COSEC_AUTHORIZATION_SNAPSHOT_REVALIDATEINTERVAL" to "30s",
             "COSEC_PIPELINE_ALLOWQUERYTOKEN" to "true",
             "COSEC_PIPELINE_TIMEOUT" to "3s",
             // A list element: the container's name is dashed in the metadata, the variable's is not.
@@ -271,7 +271,7 @@ class UnknownPropertiesTest {
         )
         runner.withEnvironment(variables).run { context ->
             context.startupFailure.assert().isNull()
-            Binder.get(context.environment).bind("cosec.authorization.snapshot.local-max-age", Duration::class.java)
+            Binder.get(context.environment).bind(REVALIDATE_INTERVAL, Duration::class.java)
                 .get().assert().isEqualTo(Duration.ofSeconds(30))
             Binder.get(context.environment).bind("cosec.pipeline.allow-query-token", Boolean::class.javaObjectType)
                 .get().assert().isTrue()
@@ -281,41 +281,41 @@ class UnknownPropertiesTest {
     @Test
     fun `the spellings Spring binds in application properties pass`() {
         runner.withPropertyValues(
-            "cosec.authorization.snapshot.localMaxAge=30s",
+            "cosec.authorization.snapshot.revalidateInterval=30s",
             "cosec.pipeline.allow_query_token=true",
             "cosec.authorization.snapshot.failClosed.tenants[0]=acme",
         ).run { context ->
             context.startupFailure.assert().isNull()
-            Binder.get(context.environment).bind("cosec.authorization.snapshot.local-max-age", Duration::class.java)
+            Binder.get(context.environment).bind(REVALIDATE_INTERVAL, Duration::class.java)
                 .get().assert().isEqualTo(Duration.ofSeconds(30))
         }
     }
 
     /**
      * The relaxed spelling is no way in for a misspelling: only what Spring's documented conversion makes of a key CoSec
-     * reads is known. Spring's binder also tolerates `COSEC_..._LOCAL_MAX_AGE` for `local-max-age`, a legacy spelling its
-     * documentation does not offer; the check refuses it and names the key it read (`local.max.age`).
+     * reads is known. Spring's binder also tolerates `COSEC_..._REVALIDATE_INTERVAL` for `revalidate-interval`, a legacy spelling its
+     * documentation does not offer; the check refuses it and names the key it read (`revalidate.interval`).
      */
     @Test
     fun `a variable that is not the documented spelling of a key CoSec reads still fails`() {
         val typos = mapOf(
-            "COSEC_AUTHORIZATION_SNAPSHOT_LOCALMAXAG" to "30s",
+            "COSEC_AUTHORIZATION_SNAPSHOT_REVALIDATEINTERVA" to "30s",
             "COSEC_PIPELINE_TIMEUOT" to "3s",
             "COSEC_PIPELINE_ALLOWQUERYTOKENS" to "true",
             // A known key is no container: nothing is below it.
             "COSEC_PIPELINE_TIMEOUT_EXTRA" to "1",
         )
-        runner.withEnvironment(typos + ("COSEC_AUTHORIZATION_SNAPSHOT_LOCAL_MAX_AGE" to "30s")).run { context ->
+        runner.withEnvironment(typos + ("COSEC_AUTHORIZATION_SNAPSHOT_REVALIDATE_INTERVAL" to "30s")).run { context ->
             val message = context.startupFailure!!.messages()
             message.assert().contains("CoSec does not read 5 cosec.* properties,")
-            message.assert().contains("cosec.authorization.snapshot.local.max.age")
+            message.assert().contains("cosec.authorization.snapshot.revalidate.interval")
         }
         // Spring agrees about the typos: none of them reaches the key it was meant for.
         val environment = StandardEnvironment()
         environment.propertySources.addFirst(
             SystemEnvironmentPropertySource(StandardEnvironment.SYSTEM_ENVIRONMENT_PROPERTY_SOURCE_NAME, typos)
         )
-        Binder.get(environment).bind("cosec.authorization.snapshot.local-max-age", Duration::class.java)
+        Binder.get(environment).bind("cosec.authorization.snapshot.revalidate-interval", Duration::class.java)
             .isBound.assert().isFalse()
     }
 
@@ -485,9 +485,9 @@ class UnknownPropertiesTest {
     @Test
     fun `the message names the spelling to write`() {
         val failures = mapOf(
-            "COSEC_AUTHORIZATION_SNAPSHOT_LOCAL_MAX_AGE" to
-                "  cosec.authorization.snapshot.local.max.age (write cosec.authorization.snapshot.local-max-age, " +
-                "or the variable COSEC_AUTHORIZATION_SNAPSHOT_LOCALMAXAGE)",
+            "COSEC_AUTHORIZATION_SNAPSHOT_REVALIDATE_INTERVAL" to
+                "  cosec.authorization.snapshot.revalidate.interval (write cosec.authorization.snapshot.revalidate-interval, " +
+                "or the variable COSEC_AUTHORIZATION_SNAPSHOT_REVALIDATEINTERVAL)",
             "COSEC_PIPELINE_IDENTITY_ONLY_GATEWAY_CAN_REACH" to
                 "  cosec.pipeline.identity.only.gateway.can.reach (write cosec.pipeline.identity.only-gateway-can-reach, " +
                 "or the variable COSEC_PIPELINE_IDENTITY_ONLYGATEWAYCANREACH)",
@@ -529,4 +529,8 @@ class UnknownPropertiesTest {
     @org.springframework.context.annotation.Configuration(proxyBeanMethods = false)
     @org.springframework.boot.autoconfigure.ImportAutoConfiguration(CoSecPropertyCheckAutoConfiguration::class)
     class Checked
+
+    private companion object {
+        const val REVALIDATE_INTERVAL = "cosec.authorization.snapshot.revalidate-interval"
+    }
 }

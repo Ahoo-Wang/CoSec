@@ -194,7 +194,7 @@ fun cosecAuthenticator(
 |---|---|
 | `TokenStore` | 吊销的写入侧，由 CoSec 自己的 `TokenRevoker` 调用，你的代码从不直接调用：`revoke(tokenId, ttl)` 接收令牌的 `jti`（`VerifiedToken.id`），不是令牌本身，所以 `revoke(accessToken, ttl)` 会写入一个以有效凭证命名的键，却什么也没吊销。应用通过 `TokenRevoker` 登出用户或吊销主体（[登出与吊销](../integration/authentication.md#logout-and-revocation)）。存储的方法是 `revoke(tokenId, ttl)`、`revokeSubject(tenant, principal, issuedBefore, ttl)`，两者都是挂起函数，不阻塞。条目必须比它吊销的刷新令牌存活得更久。无法吊销某主体全部令牌的存储从 `revokeSubject` 抛出异常，紧急吊销因此绝不会悄悄失效。 |
 | `TokenFamilyStore` | 刷新令牌的会话（[会话](../integration/authentication.md#sessions)）：`create`、`read`，以及只在读到的版本之上 `replace` 一个令牌族，跨实例原子。读取失败或写入无法确认时抛出异常。只在登录、刷新和登出时读写。 |
-| `RevocationReader` | 吊销的读取侧，每个已认证请求都会调用：`isRevoked(tokenId)`、`subjectRevokedBefore(tenant, principal)`。两者都是挂起函数，不得阻塞。每次读取都必须在它自己的时限内应答或失败，存储无法及时读取时抛出 `RevocationUnavailableException`：CoSec 除认证器的时限外不给你的读取器任何时限，一次永不结束的读取会让请求在 `cosec.pipeline.authentication-timeout` 时返回 `503`，无论 `cosec.authentication.revocation.fail-closed` 如何。CoSec 自己的读取器用 `cosec.authentication.revocation.read-timeout` 限制每次读取。 |
+| `RevocationReader` | 吊销的读取侧，每个已认证请求都会调用：`isRevoked(tokenId)`、`subjectRevokedBefore(tenant, principal)`。两者都是挂起函数，不得阻塞。每次读取都必须在它自己的时限内应答或失败，存储无法及时读取时抛出 `RevocationUnavailableException`：CoSec 除认证器的时限外不给你的读取器任何时限，一次永不结束的读取会让请求在认证超时（`cosec.pipeline.timeout` 的 20 %）时返回 `503`，无论 `cosec.authentication.revocation.fail-closed` 如何。CoSec 自己的读取器用吊销读取超时（认证超时的 30 %）限制每次读取。 |
 | `ApiKeyReader` | `findByHash(hash): ApiKey?`，挂起函数。未知的 key 返回 null；查找失败时抛出异常（请求应答 `503`）。 |
 
 使用 `cosec-cocache` 时，starter 装配 `CoCacheTokenStore` 及其读取器。不使用时，除非你注册了 `TokenStore` 和 `RevocationReader`（或设置 `cosec.jwt.enabled=false`），JWT 会让启动失败。注册 `RevocationReader.NONE` 是明确选择不吊销任何令牌。
@@ -213,10 +213,10 @@ fun interface MembershipProvider {
 
 - 返回 `MembershipAnswer.Known(Memberships(Memberships.Source.PROVIDER, roles, attachments))`：按空间组织的角色（默认空间用 `SpaceId.DEFAULT`）和附加策略 id，保持顺序。其他来源会被拒绝。
 - 不认识的主体返回 `MembershipAnswer.Unknown`，已停用的主体返回 `active = false` 的成员关系：此时凭证被拒绝（`token-invalid`），如同其认证器拒绝了它（`IDN-3`）。不要对未知主体返回空的成员关系：那表示一个没有角色的已知主体，它的 API key 会继续有效。答案是密封类型，所以提供者必须说明它指的是哪一种。
-- 查找失败时抛出异常。失败、超时（`cosec.authorization.membership.timeout`）或没有提供者，都让请求得到 `503`，绝不当作“未知”，也绝不当作“没有角色”：没有角色也就意味着绑定到角色的 DENY 都不适用。
+- 查找失败时抛出异常。失败、超时（成员关系超时，即 `cosec.pipeline.timeout` 的 10 %）或没有提供者，都让请求得到 `503`，绝不当作“未知”，也绝不当作“没有角色”：没有角色也就意味着绑定到角色的 DENY 都不适用。
 - API key 的上限（`MembershipSource.Provider.cap`）由 Pipeline 的 `MembershipResolver` 在你的应答之后应用：返回主体的成员关系，而不是某个 key 的。
 
-`InMemoryMembershipProvider`（`cosec-spi`）用于测试；对没有放入的主体返回 `Unknown`。`CoCacheMembershipProvider`（`cosec-cocache`）把你的 `MembershipLoader` 的应答缓存在 Redis 中，所有实例共享；`MembershipLoader.load` 遵守同样的约定，`Unknown` 不会被缓存，耗时超过填充超时（在 starter 中为 `cosec.authorization.membership.timeout`）的加载会失败，以便下一个请求重试。主体的成员关系变化时调用它的 `invalidate`。你声明了 `MembershipLoader` bean 且没有 `MembershipProvider` 时，starter 注册 `CoCacheMembershipProvider`；否则把你需要的那个声明为 bean。启用 API key 时必须有一个（`IDN-6`）。
+`InMemoryMembershipProvider`（`cosec-spi`）用于测试；对没有放入的主体返回 `Unknown`。`CoCacheMembershipProvider`（`cosec-cocache`）把你的 `MembershipLoader` 的应答缓存在 Redis 中，所有实例共享；`MembershipLoader.load` 遵守同样的约定，`Unknown` 不会被缓存，耗时超过填充超时（在 starter 中为成员关系超时，即 `cosec.pipeline.timeout` 的 10 %）的加载会失败，以便下一个请求重试。主体的成员关系变化时调用它的 `invalidate`。你声明了 `MembershipLoader` bean 且没有 `MembershipProvider` 时，starter 注册 `CoCacheMembershipProvider`；否则把你需要的那个声明为 bean。启用 API key 时必须有一个（`IDN-6`）。
 
 ## 外部属性 {#external-attributes}
 
@@ -227,7 +227,7 @@ fun interface MembershipProvider {
 class DirectoryAttributeProvider(private val directory: DirectoryClient) : AttributeProvider {
     override val attributes = listOf(AttributeDeclaration("ext.directory.department", AttributeType.STRING))
 
-    override val timeout: Duration = Duration.ofMillis(200) // java.time；null 表示使用 cosec.authorization.attributes.timeout
+    override val timeout: Duration = Duration.ofMillis(200) // java.time；null 表示使用属性超时（cosec.pipeline.timeout 的 6 %）
 
     override suspend fun fetch(request: AttributeRequest, names: Set<String>): Map<String, Any> {
         if (!request.subject.authenticated) {
@@ -293,13 +293,13 @@ class BreakGlassAlerts(private val pager: PagerClient) : DecisionListener {
 | `delivery` | 投递方式 | 失败时 |
 |---|---|---|
 | `BEST_EFFORT`（默认） | 不挂起地放入监听器自己的有界队列，在请求路径之外处理。队列满时丢弃事件。 | 记录日志并计数；响应不变。 |
-| `REQUIRED` | 在响应之前，与其他 REQUIRED 监听器一起，在 `cosec.observability.listener.required-timeout` 内投递。 | 把 Permit 变成 `503`；其他结果保持原状态码。 |
+| `REQUIRED` | 在响应之前，与其他 REQUIRED 监听器一起，在 `cosec.pipeline.timeout` 的 20 % 内投递。 | 把 Permit 变成 `503`；其他结果保持原状态码。 |
 
 - 经由 break-glass 绑定得到的 Permit 至少需要一个 REQUIRED 监听器，否则得到 `503`。
 - REQUIRED 监听器应按 `event.id` 保持幂等：超时的写入可能其实已经成功。
 - 所有 `DecisionListener` bean 都会按 `@Order` 顺序注册，不同时是监听器的每个 `AuditEventSink` bean 也会注册，作为以 bean 名命名的 `BEST_EFFORT` 监听器。starter 会加入审计日志（`LoggingAuditListener`，除非 `cosec.audit.enabled=false`），并在启用相应 feature 时加入 `MetricsListener`、`TracingListener`、`KafkaAuditListener` 和影子监听器。事件、指标和 span 见[可观测性](../operations/observability.md)。
 - `event.evaluationTrace` 是引擎按 `cosec.pipeline.trace-level` 记录的追踪；在默认的 `off` 时为 null。
-- 关闭时，队列中的事件仍会在 `cosec.observability.listener.drain-timeout` 内继续投递。
+- 关闭时，队列中的事件仍会在 `spring.lifecycle.timeout-per-shutdown-phase` 的六分之一内继续投递。
 - **测试监听器**：`PipelineFixture`（`cosec-testkit`）接受 `listeners`，把管道产生的事件投递给它们，所以测试读到的是真实事件，而不是手工构造的事件：REQUIRED 监听器在 `evaluate` 返回前收到事件，BEST_EFFORT 监听器在夹具关闭时收到（[用真实管道测试代码](../policies/testing.md#testing-your-code-against-a-real-pipeline)）。
 
 ## 限流器 {#rate-limiters}
@@ -372,7 +372,7 @@ starter 注册 `MdcContextContributor`（SLF4J MDC），使用 `cosec-openteleme
 
 使用 `cosec-control` 时，`ChangeListener` 会在变更的每一步收到 `ChangeEvent`：提出、检查、影子完成、批准、发布中、已发布、break-glass 申请或批准，等等。事件从不携带文档内容。
 
-- `REQUIRED` 监听器为发布和创建 break-glass 的每一步把关：只有每个 REQUIRED 监听器都在 `cosec.control.audit.required-timeout`（5 秒）内记录了该步骤，它才会发生，否则以 `503` 失败且不写入任何内容。创建 break-glass 至少需要一个 REQUIRED 监听器。
+- `REQUIRED` 监听器为发布和创建 break-glass 的每一步把关：只有每个 REQUIRED 监听器都在 `cosec.pipeline.timeout`（默认 5 秒）内记录了该步骤，它才会发生，否则以 `503` 失败且不写入任何内容。创建 break-glass 至少需要一个 REQUIRED 监听器。
 - 其他事件，以及发给 `BEST_EFFORT` 监听器的每个事件，都不在调用方上投递；失败只记录日志。
 - 监听器是累加的：每个 `ChangeListener` bean 都与 starter 的 `LoggingChangeListener` 一起注册，后者只在你声明了自己的 `LoggingChangeListener` bean 时才不注册。
 

@@ -64,24 +64,6 @@
       "type": "me.ahoo.cosec.spring.boot.pipeline.RuntimeAuthorizationProperties"
     },
     {
-      "name": "cosec.authorization.attributes",
-      "sourceMethod": "getAttributes()",
-      "sourceType": "me.ahoo.cosec.spring.boot.pipeline.RuntimeAuthorizationProperties",
-      "type": "me.ahoo.cosec.spring.boot.pipeline.RuntimeAuthorizationProperties$Timed"
-    },
-    {
-      "name": "cosec.authorization.membership",
-      "sourceMethod": "getMembership()",
-      "sourceType": "me.ahoo.cosec.spring.boot.pipeline.RuntimeAuthorizationProperties",
-      "type": "me.ahoo.cosec.spring.boot.pipeline.RuntimeAuthorizationProperties$Membership"
-    },
-    {
-      "name": "cosec.authorization.rate-limit",
-      "sourceMethod": "getRateLimit()",
-      "sourceType": "me.ahoo.cosec.spring.boot.pipeline.RuntimeAuthorizationProperties",
-      "type": "me.ahoo.cosec.spring.boot.pipeline.RuntimeAuthorizationProperties$Timed"
-    },
-    {
       "name": "cosec.authorization.remote-ip",
       "sourceMethod": "getRemoteIp()",
       "sourceType": "me.ahoo.cosec.spring.boot.pipeline.RuntimeAuthorizationProperties",
@@ -337,12 +319,6 @@
       "type": "java.lang.Boolean"
     },
     {
-      "description": "How long each read of the CoCache revocation reader (the token's, then its principal's) may take: past it Redis is unavailable, so a request's token is accepted (or refused, with `fail-closed`) and a refresh fails. Positive, and twice it less than `cosec.pipeline.authentication-timeout`, or a hanging Redis would make every authenticated request 503. An application's own `RevocationReader` bounds its reads itself.",
-      "name": "cosec.authentication.revocation.read-timeout",
-      "sourceType": "me.ahoo.cosec.spring.boot.pipeline.RevocationProperties",
-      "type": "java.time.Duration"
-    },
-    {
       "description": "How much later than a subject revocation a token may have been issued and still be revoked by it: room for an issuer whose clock runs ahead of the revoking one.",
       "name": "cosec.authentication.revocation.skew",
       "sourceType": "me.ahoo.cosec.spring.boot.pipeline.RevocationProperties",
@@ -359,30 +335,6 @@
       "name": "cosec.authentication.token-cache.max-entries",
       "sourceType": "me.ahoo.cosec.spring.boot.pipeline.TokenCacheProperties",
       "type": "java.lang.Integer"
-    },
-    {
-      "description": "How long one call of the stage's collaborator may take, the stage being the group this property is under: `attributes` (an `AttributeProvider` that sets no timeout of its own; past it its attributes are unavailable) and `rate-limit` (the `RateLimiter`; past it the rule's `strictFailure` decides).",
-      "name": "cosec.authorization.attributes.timeout",
-      "sourceType": "me.ahoo.cosec.spring.boot.pipeline.RuntimeAuthorizationProperties$Timed",
-      "type": "java.time.Duration"
-    },
-    {
-      "description": "How long one call of the `MembershipProvider` may take; past it, or when it fails, the request is 503. The fill of the membership cache takes no longer than this.",
-      "name": "cosec.authorization.membership.timeout",
-      "sourceType": "me.ahoo.cosec.spring.boot.pipeline.RuntimeAuthorizationProperties$Membership",
-      "type": "java.time.Duration"
-    },
-    {
-      "description": "How long an instance remembers that the loader did not know a principal (a removed member's token still valid), so that its requests do not reach the loader each time. Zero remembers nothing; at most one minute, the default life of a cached membership. A principal added meanwhile is known when it ends, or at once on the instance that invalidated it. A failed load is never remembered.",
-      "name": "cosec.authorization.membership.unknown-ttl",
-      "sourceType": "me.ahoo.cosec.spring.boot.pipeline.RuntimeAuthorizationProperties$Membership",
-      "type": "java.time.Duration"
-    },
-    {
-      "description": "How long one call of the stage's collaborator may take, the stage being the group this property is under: `attributes` (an `AttributeProvider` that sets no timeout of its own; past it its attributes are unavailable) and `rate-limit` (the `RateLimiter`; past it the rule's `strictFailure` decides).",
-      "name": "cosec.authorization.rate-limit.timeout",
-      "sourceType": "me.ahoo.cosec.spring.boot.pipeline.RuntimeAuthorizationProperties$Timed",
-      "type": "java.time.Duration"
     },
     {
       "description": "How many proxy hops of `X-Forwarded-For` to trust: `0` ignores the header (a directly exposed host), `N` takes the entry the closest of N trusted proxies appended.",
@@ -439,12 +391,6 @@
       "type": "java.util.Set<java.lang.String>"
     },
     {
-      "description": "How long an instance serves its local copy of a document before it asks Redis again; the one value for the snapshot cache's local tier, whatever a cache customizer or `cocache.*` property sets.",
-      "name": "cosec.authorization.snapshot.local-max-age",
-      "sourceType": "me.ahoo.cosec.spring.boot.pipeline.RuntimeAuthorizationProperties$Snapshot",
-      "type": "java.time.Duration"
-    },
-    {
       "description": "The most app ids held as having no app document (positive, `SNP-7`). App ids come from requests, so this bounds what a client naming made-up apps makes an instance remember.",
       "name": "cosec.authorization.snapshot.max-absent-apps",
       "sourceType": "me.ahoo.cosec.spring.boot.pipeline.RuntimeAuthorizationProperties$Snapshot",
@@ -487,7 +433,7 @@
       "type": "java.util.List<java.lang.String>"
     },
     {
-      "description": "How often a pass starts that confirms every installed document against Redis; while a pass is still in flight, the next starts as soon as it ends. A change whose invalidation was lost is installed by the first pass that reaches its document (`SNP-6`). At least 1 second, at most 5 minutes and, with fail-closed tenants, less than `fail-closed.max-lag`; anything else fails startup. A document unconfirmed for 6 intervals is logged at WARN, for 30 at ERROR as stale ([SnapshotOptions.derive]).",
+      "description": "How often a pass starts that confirms every installed document against Redis; while a pass is still in flight, the next starts as soon as it ends. A change whose invalidation was lost is installed by the first pass that reaches its document (`SNP-6`). At least 1 second, at most 5 minutes and, with fail-closed tenants, less than `fail-closed.max-lag`; anything else fails startup. A document unconfirmed for 6 intervals is logged at WARN, for 30 at ERROR as stale ([SnapshotOptions.derive]). An instance serves its local copy of a document for 3 intervals before it asks Redis again ([DerivedTimeouts.SNAPSHOT_LOCAL_COPY_INTERVALS]).",
       "name": "cosec.authorization.snapshot.revalidate-interval",
       "sourceType": "me.ahoo.cosec.spring.boot.pipeline.RuntimeAuthorizationProperties$Snapshot",
       "type": "java.time.Duration"
@@ -533,12 +479,6 @@
       "name": "cosec.control.audit.kafka.topic",
       "sourceType": "me.ahoo.cosec.spring.boot.control.ControlProperties$Audit$Kafka",
       "type": "java.lang.String"
-    },
-    {
-      "description": "How long every REQUIRED change listener together may take to record a gated step before it fails (503).",
-      "name": "cosec.control.audit.required-timeout",
-      "sourceType": "me.ahoo.cosec.spring.boot.control.ControlProperties$Audit",
-      "type": "java.time.Duration"
     },
     {
       "description": "The longest a break-glass binding may last; at most 24 hours.",
@@ -721,22 +661,10 @@
       "type": "java.lang.Boolean"
     },
     {
-      "description": "On shutdown, how long queued events still go out before the rest is dropped.",
-      "name": "cosec.observability.listener.drain-timeout",
-      "sourceType": "me.ahoo.cosec.spring.boot.pipeline.ListenerProperties",
-      "type": "java.time.Duration"
-    },
-    {
       "description": "The events one BEST_EFFORT listener may have waiting; a full queue drops the next and counts it.",
       "name": "cosec.observability.listener.queue-capacity",
       "sourceType": "me.ahoo.cosec.spring.boot.pipeline.ListenerProperties",
       "type": "java.lang.Integer"
-    },
-    {
-      "description": "How long one REQUIRED listener may take; past it a permit becomes 503.",
-      "name": "cosec.observability.listener.required-timeout",
-      "sourceType": "me.ahoo.cosec.spring.boot.pipeline.ListenerProperties",
-      "type": "java.time.Duration"
     },
     {
       "description": "Whether the bearer-auth customizer of the OpenAPI document is on (`cosec-openapi`).",
@@ -761,12 +689,6 @@
       "name": "cosec.pipeline.api-key-header",
       "sourceType": "me.ahoo.cosec.spring.boot.pipeline.PipelineProperties",
       "type": "java.lang.String"
-    },
-    {
-      "description": "Authenticating the request's credentials.",
-      "name": "cosec.pipeline.authentication-timeout",
-      "sourceType": "me.ahoo.cosec.spring.boot.pipeline.PipelineProperties",
-      "type": "java.time.Duration"
     },
     {
       "description": "Where the caller of a request comes from on a host that decides with policies (`enforce`): `credential`, the token or API key the request carries, verified here; or `forwarded-identity`, the `CoSec-Identity` a gateway or a trusted service states, believed under the operator's statement that only trusted callers can reach the host ([Identity.onlyTrustedCallersCanReach], [Identity.onlyGatewayCanReach]). The control plane is wired in `enforce`, and a control host or an IAM service that embeds it takes its callers from the identity.",
@@ -805,7 +727,7 @@
       "type": "me.ahoo.cosec.spring.boot.pipeline.PipelineProperties$Mode"
     },
     {
-      "description": "The whole evaluation of one request; past it the request is answered 503.",
+      "description": "The whole evaluation of one request; past it the request is answered 503. Every stage's own timeout is a share of it (`PIP-33`): authentication 20 %, memberships 10 %, an attribute provider without its own 6 %, a rate limit 10 %, each of CoSec's revocation reads 30 % of the authentication's, a REQUIRED decision listener 20 %, a REQUIRED change listener all of it. Startup logs what they came to.",
       "name": "cosec.pipeline.timeout",
       "sourceType": "me.ahoo.cosec.spring.boot.pipeline.PipelineProperties",
       "type": "java.time.Duration"

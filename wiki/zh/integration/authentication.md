@@ -59,7 +59,7 @@ CoSec 不为它通过 cookie 认证的请求提供 CSRF 防护，打开这个选
 
 空值会被跳过。API key 只从请求头 `cosec.pipeline.api-key-header`（默认 `X-API-Key`）读取。
 
-**失败。** 认证器抛出异常（例如它的 API key 存储无法读取）、返回 `AuthnResult.Unavailable`，或未在 `cosec.pipeline.authentication-timeout`（1 秒）内应答时，请求返回 `503`：无法读取的存储绝不会让凭证变得有效或无效，只有一个已写明的例外：吊销存储无法读取期间，已校验的令牌不经吊销检查即被接受，除非设置 `cosec.authentication.revocation.fail-closed=true`（[登出与吊销](#logout-and-revocation)）。
+**失败。** 认证器抛出异常（例如它的 API key 存储无法读取）、返回 `AuthnResult.Unavailable`，或未在认证超时（`cosec.pipeline.timeout` 的 20 %，默认 1 秒）内应答时，请求返回 `503`：无法读取的存储绝不会让凭证变得有效或无效，只有一个已写明的例外：吊销存储无法读取期间，已校验的令牌不经吊销检查即被接受，除非设置 `cosec.authentication.revocation.fail-closed=true`（[登出与吊销](#logout-and-revocation)）。
 
 **自定义。** 声明一个 `Authenticator` Bean 即可替换 starter 的认证器。它是一个 `suspend` 函数，不能阻塞调用线程（可能是事件循环）；见[扩展 CoSec](../architecture/extending.md)。
 
@@ -105,14 +105,14 @@ CoSec 把 `roles` 和 `policies` 声明读作主体的**成员关系**：它在�
 
 **数量大或变化快的成员关系。** 声明了很多角色或策略的令牌会随每个请求整个发送，而从用户身上移除的角色在令牌过期之前一直留在令牌里。这样的令牌可以携带 `cosec.membership: "provider"` 来代替 `roles` 和 `policies`：此时它的成员关系来自应用的 `MembershipProvider` Bean，每个请求都会以主体的租户和 id 询问它。当两个声明合计超过 `membershipClaimLimit` 字节时，`JwtTokenConverter` 会自己写入这个标记；starter 的转换器没有设置上限，因此请用你自己的转换器或签发方签发这类令牌。从带标记的令牌刷新得到的令牌保留该标记，除非 `MembershipRefresh` 另有应答。
 
-**提供者。** `MembershipProvider` 是一个 `suspend` 函数，不能阻塞调用线程。它返回 `MembershipAnswer.Known`，携带来源为 `PROVIDER` 的 `Memberships`，主体已停用时其中 `active = false`；不认识该主体时返回 `MembershipAnswer.Unknown`，这与认识它但它没有任何成员关系不同。查找失败时抛出异常。`InMemoryMembershipProvider` 用于测试和本地开发，对没有放入的主体返回 `Unknown`。`cosec-cocache` 提供 `CoCacheMembershipProvider`，它把你的 `MembershipLoader` 的结果缓存在 Redis 中供所有实例共享，并在主体的成员关系变化时通过 `invalidate(tenant, principal)` 丢弃缓存；缓存项也会在缓存的 TTL 之后过期。应用有 `MembershipLoader` Bean、且没有自己的 `MembershipProvider` 时，starter 把它声明为 `MembershipProvider`，并以 `cosec.authorization.membership.timeout` 限定每次加载：卡住的加载会失败，下一个请求重新加载。未知主体在询问它的那个实例上被记住 `cosec.authorization.membership.unknown-ttl`（默认 5 秒，最长一分钟，`0s` 表示不记）：被移除成员的令牌在过期前一直有效，否则它的每个请求都会到达 loader。你新增的主体在这段时间内被所有实例知道，在调用了 `invalidate(tenant, principal)` 的实例上立即知道。失败或超时的加载从不被记住。一个主体只有一个来源：声明或提供者，绝不会两者兼有。
+**提供者。** `MembershipProvider` 是一个 `suspend` 函数，不能阻塞调用线程。它返回 `MembershipAnswer.Known`，携带来源为 `PROVIDER` 的 `Memberships`，主体已停用时其中 `active = false`；不认识该主体时返回 `MembershipAnswer.Unknown`，这与认识它但它没有任何成员关系不同。查找失败时抛出异常。`InMemoryMembershipProvider` 用于测试和本地开发，对没有放入的主体返回 `Unknown`。`cosec-cocache` 提供 `CoCacheMembershipProvider`，它把你的 `MembershipLoader` 的结果缓存在 Redis 中供所有实例共享，并在主体的成员关系变化时通过 `invalidate(tenant, principal)` 丢弃缓存；缓存项也会在缓存的 TTL 之后过期。应用有 `MembershipLoader` Bean、且没有自己的 `MembershipProvider` 时，starter 把它声明为 `MembershipProvider`，并以成员关系超时（`cosec.pipeline.timeout` 的 10 %）限定每次加载：卡住的加载会失败，下一个请求重新加载。未知主体在询问它的那个实例上被记住 5 秒（常量）：被移除成员的令牌在过期前一直有效，否则它的每个请求都会到达 loader。你新增的主体在这段时间内被所有实例知道，在调用了 `invalidate(tenant, principal)` 的实例上立即知道。失败或超时的加载从不被记住。一个主体只有一个来源：声明或提供者，绝不会两者兼有。
 
 **未知或已停用即拒绝。** 提供者返回 `Unknown` 或 `active = false` 时，请求它的凭证（带标记的令牌，或 [API key](#api-keys)）被拒绝：请求按匿名求值，被拒绝时返回 `401` `token-invalid`。决策事件的 `subject.rejected` 对 key 是 `API_KEY_INVALID`，对令牌是 `TOKEN_INVALID`，`subject.refused` 指明主体和凭证（`IDN-3`）。因此停用一个主体，会在提供者如此应答之后停用它的全部 key：使用 `CoCacheMembershipProvider` 时，调用 `invalidate`，或等待缓存的 TTL 过去。以声明携带成员关系的令牌不询问提供者：它在过期或被[吊销](#revoking-every-token-of-a-principal)之前一直有效。
 
 **失败即 `503`。** 以下情况请求不可用，绝不会以“没有成员关系”来决策：
 
 - 凭证要求询问提供者，但没有提供者；
-- 提供者抛出异常、返回来源不是 `PROVIDER` 的成员关系，或未在 `cosec.authorization.membership.timeout`（500 毫秒）内应答；
+- 提供者抛出异常、返回来源不是 `PROVIDER` 的成员关系，或未在成员关系超时（`cosec.pipeline.timeout` 的 10 %，默认 500 毫秒）内应答；
 - 标记不是 `"provider"`，或令牌同时携带标记和 `roles` 或 `policies`。
 
 没有成员关系就意味着没有角色，绑定到角色的 DENY 将不再生效。
@@ -284,7 +284,7 @@ JWT 是无状态的：不做额外处理，令牌在过期之前一直有效。�
 每个带令牌的请求都会以非阻塞方式检查吊销。这个检查有四点值得注意：
 
 - **“未吊销”在本地最多缓存 30 秒**：这是固定的，`cosec.authentication.revocation.cache.local-max-age` 只能缩短它。通过 `TokenRevoker` 吊销会让所有实例上的这个答案立即失效。如果失效消息丢失，或吊销记录通过其他方式写入 Redis，某个实例可能在之后最多 30 秒内仍接受该令牌。
-- **Redis 无法读取时，请求的令牌被接受。** 吊销读取器报告无法读取（`RevocationUnavailableException`；CoSec 自己的读取器在某次读取未在 `cosec.authentication.revocation.read-timeout`（300 毫秒，挂起的 Redis）内结束时也这样报告），流水线在校验令牌时放行它。你自己的 `RevocationReader` 必须在它自己的时限内应答或失败：CoSec 除认证器的时限外不给它任何时限，一个从不应答的读取器会让请求在 `cosec.pipeline.authentication-timeout` 时返回 `503`，无论 `fail-closed` 如何（[扩展](../architecture/extending.md)）。这是失败即拒绝的[两个已写明的例外](../guide/security-model.md#the-two-documented-exceptions)之一：签名和有效期仍会校验，而在 Redis 故障期间拒绝所有已认证请求会更糟。请让访问令牌保持较短的有效期，使这个窗口尽量小，或设置 `cosec.authentication.revocation.fail-closed: true` 改为应答 `503`。每个这样被接受的令牌都会计数（`cosec.revocation.unchecked`，[指标](../operations/observability.md#metrics)），并以 `WARN` 记录日志，最多每 10 秒一次。
+- **Redis 无法读取时，请求的令牌被接受。** 吊销读取器报告无法读取（`RevocationUnavailableException`；CoSec 自己的读取器在某次读取未在吊销读取超时（认证超时的 30 %，默认 300 毫秒：挂起的 Redis）内结束时也这样报告），流水线在校验令牌时放行它。你自己的 `RevocationReader` 必须在它自己的时限内应答或失败：CoSec 除认证器的时限外不给它任何时限，一个从不应答的读取器会让请求在认证超时（`cosec.pipeline.timeout` 的 20 %）时返回 `503`，无论 `fail-closed` 如何（[扩展](../architecture/extending.md)）。这是失败即拒绝的[两个已写明的例外](../guide/security-model.md#the-two-documented-exceptions)之一：签名和有效期仍会校验，而在 Redis 故障期间拒绝所有已认证请求会更糟。请让访问令牌保持较短的有效期，使这个窗口尽量小，或设置 `cosec.authentication.revocation.fail-closed: true` 改为应答 `503`。每个这样被接受的令牌都会计数（`cosec.revocation.unchecked`，[指标](../operations/observability.md#metrics)），并以 `WARN` 记录日志，最多每 10 秒一次。
 - **Redis 无法读取时，刷新失败。** 绝不在一次失败的吊销读取上签发令牌（`IDN-14`）：此时签发的令牌不在任何吊销记录中，既不受旧令牌的吊销约束，也不受其主体的吊销约束，会比两者都活得久。`RefreshTokenAuthentication` 抛出 `RevocationUnavailableException`，请以 `503` 应答，提供的路由正是如此。
 - **其他任何错误都会让请求失败。** Redis 返回但 CoSec 无法解码的吊销记录，或自定义 `RevocationReader` 抛出的错误，结果都是 `503`，绝不会接受令牌。
 

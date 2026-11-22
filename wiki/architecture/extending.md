@@ -299,7 +299,7 @@ users is in [Authentication](../integration/authentication.md).
 |---|---|
 | `TokenStore` | The write side of revocation, called by CoSec's own `TokenRevoker`, never by your code: `revoke(tokenId, ttl)` takes a token's `jti` (`VerifiedToken.id`), never the token, so `revoke(accessToken, ttl)` writes a key named after a live credential and revokes nothing. An application logs a user out, or revokes a principal, through `TokenRevoker` ([Logout and revocation](../integration/authentication.md#logout-and-revocation)). The store's methods are `revoke(tokenId, ttl)`, `revokeSubject(tenant, principal, issuedBefore, ttl)`, both suspending and non-blocking. An entry must outlive the refresh token it revokes. A store that cannot revoke every token of a principal throws from `revokeSubject`, so an emergency revocation never silently does nothing. |
 | `TokenFamilyStore` | The sessions of refresh tokens ([Sessions](../integration/authentication.md#sessions)): `create`, `read`, and `replace` a family only over the version read, atomically across instances. A failed read or an unconfirmed write throws. Read and written on login, refresh and logout only. |
-| `RevocationReader` | The read side, called on every authenticated request: `isRevoked(tokenId)`, `subjectRevokedBefore(tenant, principal)`. Both suspend and must not block. Each must answer or fail within its own bound, throwing `RevocationUnavailableException` when the store cannot be read in time: CoSec gives your reader no budget but the authenticator's, and a read that never ends makes the request `503` at `cosec.pipeline.authentication-timeout`, whatever `cosec.authentication.revocation.fail-closed` says. CoSec's own reader bounds each read with `cosec.authentication.revocation.read-timeout`. |
+| `RevocationReader` | The read side, called on every authenticated request: `isRevoked(tokenId)`, `subjectRevokedBefore(tenant, principal)`. Both suspend and must not block. Each must answer or fail within its own bound, throwing `RevocationUnavailableException` when the store cannot be read in time: CoSec gives your reader no budget but the authenticator's, and a read that never ends makes the request `503` at the authentication timeout (20 % of `cosec.pipeline.timeout`), whatever `cosec.authentication.revocation.fail-closed` says. CoSec's own reader bounds each read with the revocation read timeout (30 % of the authentication timeout). |
 | `ApiKeyReader` | `findByHash(hash): ApiKey?`, suspending. Return null for an unknown key; throw when the lookup fails (the request answers `503`). |
 
 With `cosec-cocache`, the starter wires `CoCacheTokenStore` and its reader. Without it, JWT fails startup unless you
@@ -330,7 +330,7 @@ fun interface MembershipProvider {
   is deactivated: the credential is then refused (`token-invalid`), as if its authenticator had rejected it (`IDN-3`).
   Do not answer empty memberships for an unknown principal: that is a known principal with no roles, and its API keys
   would keep working. A sealed answer, so that a provider has to say which it means.
-- Throw when the lookup fails. A failure, a timeout (`cosec.authorization.membership.timeout`) or a missing provider
+- Throw when the lookup fails. A failure, a timeout (the membership timeout, 10 % of `cosec.pipeline.timeout`) or a missing provider
   makes the request `503`, never "unknown" and never "no roles": no roles would also mean that no DENY bound to a role
   applies.
 - An API key's cap (`MembershipSource.Provider.cap`) is applied by the pipeline's `MembershipResolver`, after your
@@ -339,7 +339,7 @@ fun interface MembershipProvider {
 `InMemoryMembershipProvider` (`cosec-spi`) is for tests; it answers `Unknown` for a principal it was not given.
 `CoCacheMembershipProvider` (`cosec-cocache`) caches what your `MembershipLoader` answers in Redis, shared by every
 instance; `MembershipLoader.load` follows the same contract, `Unknown` is not cached, and a load that takes longer
-than its fill timeout (`cosec.authorization.membership.timeout` in the starter) fails, so that the next request
+than its fill timeout (in the starter the membership timeout, 10 % of `cosec.pipeline.timeout`) fails, so that the next request
 retries. Call its `invalidate`
 when a principal's memberships change. The starter registers `CoCacheMembershipProvider` when you declare a
 `MembershipLoader` bean and no `MembershipProvider`; otherwise declare the one you want as a bean. With API keys on,
@@ -355,7 +355,7 @@ score, the client's region) comes from an `AttributeProvider`:
 class DirectoryAttributeProvider(private val directory: DirectoryClient) : AttributeProvider {
     override val attributes = listOf(AttributeDeclaration("ext.directory.department", AttributeType.STRING))
 
-    override val timeout: Duration = Duration.ofMillis(200) // java.time; null uses cosec.authorization.attributes.timeout
+    override val timeout: Duration = Duration.ofMillis(200) // java.time; null uses the attribute timeout (6 % of cosec.pipeline.timeout)
 
     override suspend fun fetch(request: AttributeRequest, names: Set<String>): Map<String, Any> {
         if (!request.subject.authenticated) {
@@ -449,7 +449,7 @@ class BreakGlassAlerts(private val pager: PagerClient) : DecisionListener {
 | `delivery` | Delivered | A failure |
 |---|---|---|
 | `BEST_EFFORT` (default) | Queued without suspending into the listener's own bounded queue, handled off the request path. A full queue drops the event. | Logged and counted; the response is unchanged. |
-| `REQUIRED` | Before the response, together with the other REQUIRED listeners, within `cosec.observability.listener.required-timeout`. | Turns a permit into `503`; any other outcome keeps its status. |
+| `REQUIRED` | Before the response, together with the other REQUIRED listeners, within 20 % of `cosec.pipeline.timeout`. | Turns a permit into `503`; any other outcome keeps its status. |
 
 - A permit through a break-glass binding needs at least one REQUIRED listener, or it is a `503`.
 - A REQUIRED listener should be idempotent by `event.id`: a write that timed out may still have succeeded.
@@ -459,7 +459,7 @@ class BreakGlassAlerts(private val pager: PagerClient) : DecisionListener {
   `TracingListener`, `KafkaAuditListener` and the shadow listener. Events, metrics and spans are described in
   [Observability](../operations/observability.md).
 - `event.evaluationTrace` holds the engine's trace at `cosec.pipeline.trace-level`; it is null at `off`, the default.
-- On shutdown, queued events are still delivered for up to `cosec.observability.listener.drain-timeout`.
+- On shutdown, queued events are still delivered for up to a sixth of `spring.lifecycle.timeout-per-shutdown-phase`.
 - **Testing a listener**: `PipelineFixture` (`cosec-testkit`) takes `listeners` and delivers them the events the
   pipeline makes, so a test reads real events, never hand-built ones: a REQUIRED listener has the event before
   `evaluate` returns, a BEST_EFFORT one once the fixture is closed
@@ -577,7 +577,7 @@ shadowed, approved, publishing, published, break-glass requested or approved, an
 content.
 
 - A `REQUIRED` listener gates publishing and every step of creating break-glass: the step happens only after every
-  REQUIRED listener recorded it within `cosec.control.audit.required-timeout` (5 s), otherwise it fails with `503` and
+  REQUIRED listener recorded it within `cosec.pipeline.timeout` (5 s at the default), otherwise it fails with `503` and
   writes nothing. Creating break-glass needs at least one REQUIRED listener.
 - Other events, and every event to a `BEST_EFFORT` listener, are delivered off the caller; a failure is logged.
 - Listeners add up: every `ChangeListener` bean is registered next to the starter's `LoggingChangeListener`, which

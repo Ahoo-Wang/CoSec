@@ -104,7 +104,7 @@ CoSec 无法决策时，不会放行。每种失败都在 `StatusMapping` 这一
 |---|---|
 | 路径或某个 `CoSec-*` 参数无法无歧义地读取 | `400`，在认证之前 |
 | 凭证无效、过期或已吊销 | 按匿名主体求值：Permit 照常继续，Deny 返回 `401` 并给出原因 |
-| 认证器失败或未在 `cosec.pipeline.authentication-timeout` 内应答；API key 存储无法读取 | `503` |
+| 认证器失败或未在认证超时（`cosec.pipeline.timeout` 的 20 %）内应答；API key 存储无法读取 | `503` |
 | 吊销存储报告错误 | `503`（但见[两个已写明的例外](#the-two-documented-exceptions)） |
 | 无法解析成员关系（没有提供者、提供者失败或超时、令牌同时带有提供者标记并声明了角色） | `503`，绝不当作“没有成员关系” |
 | 快照源失败 | `503` |
@@ -124,7 +124,7 @@ CoSec 无法决策时，不会放行。每种失败都在 `StatusMapping` 这一
 
 有两项检查在其后端失败时让请求通过，因为在这两处失败即拒绝会把一次 Redis 故障变成全面故障，而换来的保护很少：
 
-- **校验请求令牌时的令牌吊销。** 吊销存储无法读取时，读取器如实报告（`RevocationUnavailableException`），流水线在校验请求的令牌时接受它。令牌的签名和有效期仍会校验，因此暴露窗口受访问令牌有效期限制。这个例外只适用于校验：会签发令牌的刷新在读不到吊销时失败（`IDN-14`），因为此时签发的令牌不在任何吊销记录中，会比故障活得更久；控制面检查审批人时什么都不发布（`503`，[测试策略](../policies/testing.md#approval)）。吊销检查报告的其他错误会让请求以 `503` 失败，无法解码的吊销记录同样会让读取失败（[登出与吊销](../integration/authentication.md#logout-and-revocation)）。设置 `cosec.authentication.revocation.fail-closed: true` 可关闭这个例外，请求改为 `503`。
+- **校验请求令牌时的令牌吊销。** 吊销存储无法读取时，读取器如实报告（`RevocationUnavailableException`），流水线在校验请求的令牌时接受它。令牌的签名和有效期仍会校验，因此暴露窗口受访问令牌有效期限制。这个例外只适用于校验：会签发令牌的刷新在读不到吊销时失败（`IDN-14`），因为此时签发的令牌不在任何吊销记录中，会比故障活得更久；控制面检查审批人时什么都不发布（`503`，[测试策略](../policies/testing.md#approval)）。吊销检查报告的其他错误会让请求以 `503` 失败，无法解码的吊销记录同样会让读取失败（[登出与吊销](../integration/authentication.md#logout-and-revocation)）。设置 `cosec.authentication.revocation.fail-closed: true` 可关闭这个例外，请求改为 `503`。CoSec 自己的读取器给每次读取认证超时的 30 %，它是 `cosec.pipeline.timeout` 的一份：期限越低，越容易落入这个例外（`1s` 时每次读取 60 ms，默认 `5s` 时 300 ms）。
 - **未设置 `strictFailure` 的限流规则。** 规则无法计数时（限流器失败、超时或缺失），该规则被跳过。设置了 `"strictFailure": true` 的规则则以 `503` 拒绝请求。限流只作用于策略已经放行的请求，跳过一条规则不会授予策略没有授予的权限（[限流](../policies/rate-limiting.md)）。
 
 默认情况下没有其他失败即放行的地方。还有一种失效只在你有意写出时存在：带 `onMissing: nomatch` 的 DENY，见下文。

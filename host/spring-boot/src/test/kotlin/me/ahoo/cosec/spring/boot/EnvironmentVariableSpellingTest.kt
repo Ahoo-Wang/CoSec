@@ -152,7 +152,7 @@ class EnvironmentVariableSpellingTest {
         val WRONG_ON_PURPOSE = setOf(
             "COSEC_JWT_SECRT",
             "COSEC_PIPELINE_TIMEUOT",
-            "COSEC_AUTHORIZATION_SNAPSHOT_LOCAL_MAX_AGE",
+            "COSEC_AUTHORIZATION_SNAPSHOT_REVALIDATE_INTERVAL",
         )
     }
 }

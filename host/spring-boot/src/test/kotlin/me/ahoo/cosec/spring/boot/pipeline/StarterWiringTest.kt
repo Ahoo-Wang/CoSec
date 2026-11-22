@@ -276,7 +276,8 @@ class StarterWiringTest {
             }
         }
         pipelineRunner.withBean(KafkaOperations::class.java, { kafka })
-            .withPropertyValues("cosec.observability.listener.drain-timeout=100ms")
+            // The drain is a sixth of the shutdown phase (OBS-10): 100 ms of 600 ms.
+            .withPropertyValues("spring.lifecycle.timeout-per-shutdown-phase=600ms")
             .run { context ->
                 status(context, token(context, "bob")).assert().isEqualTo(200)
                 asked.await(5, TimeUnit.SECONDS).assert().isTrue()
@@ -488,9 +489,9 @@ class StarterWiringTest {
     }
 
     @Test
-    fun `change listeners take the required timeout and stop with the context`() {
+    fun `change listeners take the pipeline timeout as their required timeout and stop with the context`() {
         lateinit var listeners: ChangeListeners
-        controlRunner.withPropertyValues("cosec.control.audit.required-timeout=7s").run { context ->
+        controlRunner.withPropertyValues("cosec.pipeline.timeout=7s").run { context ->
             context.startupFailure.assert().isNull()
             listeners = context.getBean(ChangeListeners::class.java)
             listeners.requiredTimeout.assert().isEqualTo(7.seconds)

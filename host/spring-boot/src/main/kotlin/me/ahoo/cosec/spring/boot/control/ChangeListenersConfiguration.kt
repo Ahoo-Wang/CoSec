@@ -19,11 +19,12 @@ import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.control.audit.ChangeListener
 import me.ahoo.cosec.control.audit.ChangeListeners
 import me.ahoo.cosec.runtime.event.Delivery
-import me.ahoo.cosec.spring.boot.pipeline.ListenerProperties
+import me.ahoo.cosec.spring.boot.pipeline.DerivedTimeouts
 import org.springframework.beans.factory.ObjectProvider
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
+import org.springframework.core.env.Environment
 import kotlin.time.toKotlinDuration
 
 /** The change listeners (`CTL-66`), wherever the control plane is wired ([CoSecControlAutoConfiguration] imports it). */
@@ -39,7 +40,7 @@ internal class ChangeListenersConfiguration {
     fun cosecChangeListeners(
         listeners: ObjectProvider<ChangeListener>,
         properties: ControlProperties,
-        listenerProperties: ObjectProvider<ListenerProperties>,
+        environment: Environment,
     ): ChangeListeners {
         val all = listeners.orderedStream().toList()
         val kafka = properties.audit.kafka
@@ -47,8 +48,12 @@ internal class ChangeListenersConfiguration {
             "${ControlProperties.KAFKA_AUDIT_PREFIX}.delivery=required, but no Kafka change listener was created: it " +
                 "needs cosec-kafka, a KafkaOperations bean and ${ControlProperties.KAFKA_AUDIT_PREFIX}.enabled=true."
         }
-        // Drains what is queued at shutdown as the decision listeners do (cosec.observability.listener.drain-timeout).
-        val drainTimeout = listenerProperties.getIfAvailable { ListenerProperties() }.drainTimeout.toKotlinDuration()
-        return ChangeListeners(all, properties.audit.requiredTimeout.toKotlinDuration(), drainTimeout = drainTimeout)
+        // Every REQUIRED listener together within the control request's bound, the pipeline timeout (OBS-10); drains what
+        // is queued at shutdown as the decision listeners do.
+        return ChangeListeners(
+            all,
+            DerivedTimeouts.controlRequiredListener(environment).toKotlinDuration(),
+            drainTimeout = DerivedTimeouts.drain(environment).toKotlinDuration(),
+        )
     }
 }

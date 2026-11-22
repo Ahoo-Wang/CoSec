@@ -357,7 +357,7 @@ tokens and decides in its own code). Tokens are issued for one app (`TokenSubjec
 - Audit: decisions are logged under `me.ahoo.cosec.audit` (denies WARN, allows DEBUG) unless
   `cosec.audit.enabled=false`; `cosec-kafka` adds a Kafka listener (`cosec.audit.kafka.*`). Existing
   `AuditEventSink` beans are picked up as BEST_EFFORT listeners. Queued events drain on shutdown for up to
-  `cosec.observability.listener.drain-timeout` (5s). Metrics and tracing
+  a sixth of `spring.lifecycle.timeout-per-shutdown-phase` (5s at the default). Metrics and tracing
   listeners come with their features. https://cosec.ahoo.me/operations/observability.
 - Rate limits are rules in the documents. The limiter is Redis when a `ReactiveStringRedisTemplate` is present,
   otherwise per JVM.

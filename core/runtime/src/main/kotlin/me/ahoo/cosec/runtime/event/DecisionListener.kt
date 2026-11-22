@@ -36,8 +36,8 @@ interface DecisionListener {
 /** How the pipeline delivers events to a listener (RFC 0006 §9.3). */
 enum class Delivery {
     /**
-     * Before `evaluate` returns, together with the other REQUIRED listeners, within `cosec.observability.listener.required-timeout`. A
-     * failure turns a permit into 503; it sees the outcome before that.
+     * Before `evaluate` returns, together with the other REQUIRED listeners, each within 20 % of `cosec.pipeline.timeout`
+     * (`OBS-10`). A failure turns a permit into 503; it sees the outcome before that.
      */
     REQUIRED,
 

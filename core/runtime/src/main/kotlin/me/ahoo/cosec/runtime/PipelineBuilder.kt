@@ -40,7 +40,6 @@ import me.ahoo.cosec.spi.ratelimit.RateLimiter
 import me.ahoo.cosec.spi.snapshot.SnapshotDocumentStore
 import java.time.Clock
 import kotlin.time.toJavaDuration
-import kotlin.time.toKotlinDuration
 
 /**
  * Assembles a [Pipeline] (RFC 0013 §4.3), from [Pipeline.builder]. Every part has a default but the authenticator and
@@ -172,7 +171,7 @@ class PipelineBuilder internal constructor(
         val owned = ArrayList<AutoCloseable>()
         try {
             // Its own checks run before it starts a consumer.
-            val listeners = decisionListeners ?: ownedListeners(owned)
+            val listeners = decisionListeners ?: ownedListeners(owned, options)
             if (store == null) {
                 return assemble(checkNotNull(snapshots), options, attributes, listeners, issuer, owned, null)
             }
@@ -190,15 +189,14 @@ class PipelineBuilder internal constructor(
         }
     }
 
-    private fun ownedListeners(owned: MutableList<AutoCloseable>): DecisionListeners {
+    private fun ownedListeners(owned: MutableList<AutoCloseable>, options: PipelineOptions): DecisionListeners {
         if (listeners.isEmpty()) {
             return DecisionListeners.NONE
         }
         val created = DecisionListeners(
             listeners.toList(),
-            requiredTimeout = listenerSettings.requiredTimeout.toKotlinDuration(),
+            requiredTimeout = StageBudgets.of(options.timeout).requiredListener,
             queueCapacity = listenerSettings.queueCapacity,
-            drainTimeout = listenerSettings.drainTimeout.toKotlinDuration(),
         )
         // Drained before the source closes: the queued events are delivered while their documents are still there.
         owned += AutoCloseable { created.drain() }

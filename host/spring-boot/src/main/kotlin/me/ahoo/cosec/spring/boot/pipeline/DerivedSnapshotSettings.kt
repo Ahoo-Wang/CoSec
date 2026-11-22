@@ -65,6 +65,6 @@ internal object DerivedSnapshotSettings {
         return "CoSec derived, not configured: $derived, from cosec.authorization.snapshot.revalidate-interval " +
             "${snapshot.revalidateInterval}, cosec.pipeline.timeout $pipelineTimeout and " +
             "${Runtime.getRuntime().availableProcessors()} cores (Runtime.availableProcessors(): the container's CPU limit)" +
-            "$report."
+            "$report; ${DerivedTimeouts.line(environment, snapshot.revalidateInterval)}."
     }
 }

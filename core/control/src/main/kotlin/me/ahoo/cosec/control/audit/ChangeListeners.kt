@@ -74,7 +74,7 @@ class ChangeListeners(
     val requiredTimeout: Duration = 5.seconds,
     /** The heap the queues are a share of: the JVM's maximum. */
     heap: Long = Runtime.getRuntime().maxMemory(),
-    /** `cosec.observability.listener.drain-timeout`: how long [drain] lets the consumers deliver what is queued. */
+    /** How long [drain] lets the consumers deliver what is queued: the starter's sixth of the shutdown phase (`OBS-10`). */
     val drainTimeout: Duration = 5.seconds,
 ) {
     @Volatile
@@ -99,7 +99,7 @@ class ChangeListeners(
             log.info {
                 "Change listeners ${listeners.map { it.name }}: their queues hold at most ${mib(budget)} " +
                     "(the heap's ${mib(heap)} / $HEAP_SHARE), ${mib(budget / listeners.size)} each; a listener " +
-                    "delivering nothing for $requiredTimeout (cosec.control.audit.required-timeout) is reported."
+                    "delivering nothing for $requiredTimeout (the pipeline timeout) is reported."
             }
             scope.launch { watch() }
         }

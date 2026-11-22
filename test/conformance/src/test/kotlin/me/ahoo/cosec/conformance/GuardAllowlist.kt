@@ -326,6 +326,18 @@ object GuardAllowlist {
             "spring-boot:ControlServiceChoiceTest#an instance that neither runs the control plane nor names a host has no ControlService - STA-11",
             "spring-boot:ControlServiceChoiceTest#an instance that runs the control plane and names a host does not start - STA-11",
             "spring-boot:ControlServiceChoiceTest#a host named without cosec-control-http fails naming the artifact - STA-1",
+            // PIP-33, OBS-10: every stage's and listener's timeout is a share of a deadline the operator states.
+            "runtime:StageBudgetsTest#a required listener's wait ends inside the request",
+            "runtime:StageBudgetsTest#a share of a tiny deadline is never zero",
+            "runtime:StageBudgetsTest#a token's two revocation reads end inside the authentication budget",
+            "runtime:StageBudgetsTest#at the default deadline every share is the default it replaced",
+            "runtime:StageBudgetsTest#the pipeline's options default to the shares of their timeout",
+            "spring-boot:DerivedTimeoutsTest#the startup line names each value and what it came from",
+            "spring-boot:DerivedTimeoutsTest#the values follow the deadlines an operator states",
+            "spring-boot:DerivedTimeoutsTest#without either deadline stated, every value is the default it replaced",
+            "spring-boot:SnapshotReadinessTest#listener queues take their property, and the drain a sixth of the shutdown phase",
+            "spring-boot:StarterWiringTest#change listeners take the pipeline timeout as their required timeout and stop with the context",
+            "spring-boot:StarterWiringTest#the Kafka audit waits at shutdown for the listeners' drain timeout",
             // SNP-23: what a snapshot source's options once took as settings is computed.
             "runtime:SnapshotOptionsDeriveTest#a lag threshold is a count of missed passes, always above the interval",
             "runtime:SnapshotOptionsDeriveTest#a cold load waits less than the request it serves, for every deadline",

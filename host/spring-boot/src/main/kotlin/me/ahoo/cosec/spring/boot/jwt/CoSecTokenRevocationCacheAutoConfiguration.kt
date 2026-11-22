@@ -28,7 +28,7 @@ import me.ahoo.cosec.spi.token.TokenStore
 import me.ahoo.cosec.spring.boot.CoSecProperties
 import me.ahoo.cosec.spring.boot.ConditionalOnCoSecEnabled
 import me.ahoo.cosec.spring.boot.authorization.cache.createCoSecCache
-import me.ahoo.cosec.spring.boot.pipeline.CoSecPipelineAutoConfiguration
+import me.ahoo.cosec.spring.boot.pipeline.DerivedTimeouts
 import me.ahoo.cosec.spring.boot.pipeline.RevocationProperties
 import org.springframework.boot.autoconfigure.AutoConfiguration
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean
@@ -36,6 +36,8 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnClass
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean
 import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.context.annotation.Bean
+import org.springframework.core.env.Environment
+import kotlin.time.toJavaDuration
 
 /**
  * The revoked token and subject caches, whenever `cosec-cocache` is present and JWT is on or the host takes its callers
@@ -73,10 +75,12 @@ internal class CoSecTokenRevocationCacheAutoConfiguration(
     @ConditionalOnMissingBean
     fun coCacheTokenStore(
         revokedTokenCache: RevokedTokenCache,
-        revokedSubjectCache: RevokedSubjectCache
+        revokedSubjectCache: RevokedSubjectCache,
+        environment: Environment,
     ): TokenStore {
-        CoSecPipelineAutoConfiguration.checkRevocationReadTimeout(revocationProperties.readTimeout)
-        return CoCacheTokenStore(revokedTokenCache, revokedSubjectCache, revocationProperties.readTimeout)
+        // Each read within its share of the authentication budget, so that a token's two reads end inside it (PIP-7).
+        val readTimeout = DerivedTimeouts.budgets(environment).revocationRead.toJavaDuration()
+        return CoCacheTokenStore(revokedTokenCache, revokedSubjectCache, readTimeout)
     }
 
     /**
