@@ -261,7 +261,7 @@ description: "在应用文档中描述应用的权限，并按应用和空间把
 | 应用的权限变化 | `putCatalog` |
 | 定期对账 | 来源是唯一写入者时用 `apply` 的 `REPLACE`；`MERGE` 只新增和修改，从不删除：来源删掉的条目仍然存在，变更会在 `WARNING` 中点名它 |
 
-- 每次变更走 `propose`、`skip-shadow`、`publish`（`ControlClient.proposeAndPublishWithoutShadow`）。对租户的角色，调用者是持有[角色类](./testing.md#the-role-class)的服务主体：在租户文档上持有 `cosec:manage-roles`、`cosec:write` 和 `cosec:skip-shadow`，在其范围上持有 `cosec:grant`。它只写角色的变更不需要人，每次都记下授予它的类。其他任何变更（例如应用的目录）都像任何人的变更一样被分析，其授予要等人审批，除非调用者是信任根（持有 `cosec:approve` 的平台主体，[测试策略](./testing.md)）。
+- 每次变更走 `propose`、`skip-shadow`、`publish`（`ControlClient.proposeAndPublishWithoutShadow`）。对租户的角色，调用者是持有[角色类](./testing.md#the-role-class)的服务主体：在租户文档上持有 `cosec:manage-roles`、`cosec:write` 和 `cosec:skip-shadow`，在其范围上持有 `cosec:grant`。它只写角色的变更不需要人，每次都记下授予它的类。控制面自身应用（`cosec.control.app-id`）的角色不属于这个类：它的成员治理本租户的文档，这应由人来任命，所以写入或删除这种角色要等人审批。其他任何变更（例如应用的目录）都像任何人的变更一样被分析，其授予要等人审批，除非调用者是信任根（持有 `cosec:approve` 的平台主体，[测试策略](./testing.md)）。
 - `putRole` 整体替换角色，重放是幂等的。冲突（`409`）由投影重试。
 - `skip-shadow` 要占用文档的暂存槽，而别人正在影子运行的变更占着它：同一份文档不要同时有人工变更和同步。
 

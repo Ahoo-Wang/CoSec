@@ -58,6 +58,9 @@ object GuardAllowlist {
             "control:RoleClassUnitTest#it lifts every doubt about who grants, into one record that names the holder and what it lifted - CTL-79",
             "control:RoleClassUnitTest#what the analysis could not tell still waits, whoever holds what - CTL-79",
             "control:RoleClassUnitTest#only a tenant's document, and only roles - CTL-79",
+            "control:RoleClassBoundsTest#a role of another app permits no control call, whatever its catalog says - CTL-79",
+            "control:RoleClassTest#a role of the control plane's own app is outside the class, and waits for a person - CTL-79",
+            "control:RoleClassUnitTest#a role of the control plane's own app is never the class's, put or removed - CTL-79",
             // CTL-78: a check answers what the proposal would, and writes nothing.
             "control:ChangeCheckTest#a check answers what the proposal would, clean, failing and escalating alike - CTL-78",
             "control:ChangeCheckTest#a check of an apply answers what the apply would - CTL-78",

@@ -77,12 +77,13 @@ object Operator {
     )
 
     /**
-     * The IAM projects the custom role [role] into [tenant] (`POST /admin/role`, `CTL-79`): no person behind it, the role
-     * class lets it publish with no approval.
+     * The IAM projects the custom role [role] of [app], holding [permission], into [tenant] (`POST /admin/role`,
+     * `CTL-79`): no person behind it. The role class lets a business app's role publish with no approval; a role of the
+     * control plane's own app waits for a person.
      */
-    fun projectRole(tenant: String, role: String): Exchange = Http.post(
+    fun projectRole(tenant: String, role: String, app: String, permission: String): Exchange = Http.post(
         admin("/admin/role"),
-        mapOf("tenant" to tenant, "role" to role),
+        mapOf("tenant" to tenant, "role" to role, "app" to app, "permission" to permission),
         SignIn.root().bearer,
     )
 

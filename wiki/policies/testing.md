@@ -696,6 +696,11 @@ grants (`CTL-79`):
 - **Only roles, only a tenant's document.** The change writes or removes roles (`putRole`, `removeRole`) and nothing
   else; a change that writes anything else is analyzed whole. An app's and the platform's documents are never the
   class's.
+- **Never a role of the control plane's own app** (`cosec.control.app-id`). A member of such a role holds control
+  calls on its tenant's document, and who governs a tenant's policies is for a person to appoint: a change that puts or
+  removes one is analyzed as anyone's and waits. The rule is the role's app, not its actions' names, and that is
+  enough: a role's bindings are scoped to its app and a control request is decided in the control app, so a role of
+  another app permits no control call, whatever its catalog's actions say.
 - **Only doubts about who grants.** The class lifts `CROSS_TENANT`, `NOT_COVERED` and `DENY_OVERLAP`, and records one
   `ROLE_CLASS` entry in their place. Anything the analysis could not tell (`UNREADABLE`, `UNRESOLVED`, `TOO_LARGE`)
   still waits for a person.

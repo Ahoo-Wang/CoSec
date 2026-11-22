@@ -1,0 +1,20 @@
+{
+  "schema": 2,
+  "revision": 1,
+  "publishedAt": "2026-11-21T00:00:00Z",
+  "catalog": {
+    "groups": [
+      {
+        "name": "Reports",
+        "permissions": [
+          {
+            "id": "reports.read",
+            "name": "Read reports",
+            "action": "http:GET",
+            "resource": "http:path:/projected/reports/**"
+          }
+        ]
+      }
+    ]
+  }
+}

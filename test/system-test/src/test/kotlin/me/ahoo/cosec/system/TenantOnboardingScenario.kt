@@ -113,6 +113,8 @@ class TenantOnboardingScenario {
             "tn-one"
         ).step(waiting.getValue("id") as String, "approve", mapOf("candidate" to waiting["candidate"]))
             .status.assert().isEqualTo(403)
+        // It holds the document's slot while it waits: given up, so the changes after it stage.
+        root.step(waiting.getValue("id") as String, "abandon").ok()
     }
 
     @Test
@@ -128,30 +130,48 @@ class TenantOnboardingScenario {
 
     @Test
     @Order(6)
-    fun `the IAM projects a custom role into a tenant with no person, by the role class - CTL-79`() {
+    fun `the IAM projects a custom role of a business app into a tenant with no person, by the role class - CTL-79`() {
+        root.seed("app:projected", "apps/projected.json")
         val head = root.revision(KEY)
-        val projected = Operator.projectRole("tn-one", "auditors").ok().json()
+        val projected = Operator.projectRole("tn-one", "auditors", "projected", "reports.read").ok().json()
         projected["state"].assert().describedAs("$projected").isEqualTo("PUBLISHED")
         // The record names the class it was granted by, and nothing that waited for a person.
-        (projected["escalations"] as List<*>).map { (it as Map<*, *>)["reason"] }.assert()
-            .describedAs("$projected").containsExactly("ROLE_CLASS")
+        reasons(projected).assert().describedAs("$projected").containsExactly("ROLE_CLASS")
         root.revision(KEY).assert().isEqualTo(head + 1)
         root.document(KEY).ok().body.assert().contains("auditors")
     }
 
     @Test
     @Order(7)
+    fun `a custom role of the control plane's own app, by the IAM, waits for a person - CTL-79`() {
+        val head = root.revision(KEY)
+        val waiting = Operator.projectRole(
+            "tn-one",
+            "governors",
+            "cosec-control",
+            "tenant-document.administer"
+        ).ok().json()
+        waiting["state"].assert().describedAs("$waiting").isEqualTo("AWAITING_APPROVAL")
+        reasons(waiting).assert().describedAs("$waiting").isNotEmpty().doesNotContain("ROLE_CLASS")
+        root.revision(KEY).assert().isEqualTo(head)
+        root.step(waiting.getValue("id") as String, "abandon").ok()
+    }
+
+    @Test
+    @Order(8)
     fun `a person's change of the tenant's roles is analyzed as before, never by the role class - CTL-79`() {
         val admin = administrator("tn-one")
         val head = admin.revision(KEY)
         val role = mapOf(
             "op" to "putRole",
-            "role" to mapOf("id" to "readers", "app" to "cosec-control", "permissions" to listOf("tenant-document.administer")),
+            "role" to mapOf("id" to "readers", "app" to "projected", "permissions" to listOf("reports.read")),
         )
         val proposed = admin.propose(KEY, head, listOf(role), "a person writes a role").created().json()
-        (proposed["escalations"] as List<*>?).orEmpty().map { (it as Map<*, *>)["reason"] }.assert()
-            .describedAs("$proposed").doesNotContain("ROLE_CLASS")
+        reasons(proposed).assert().describedAs("$proposed").doesNotContain("ROLE_CLASS")
     }
+
+    private fun reasons(change: Map<*, *>): List<Any?> =
+        (change["escalations"] as List<*>?).orEmpty().map { (it as Map<*, *>)["reason"] }
 
     private companion object {
         const val KEY = "tenant:tn-one"

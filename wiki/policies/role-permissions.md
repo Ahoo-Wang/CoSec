@@ -326,7 +326,9 @@ validation, compilation and audit.
 - Each change goes `propose`, `skip-shadow`, `publish` (`ControlClient.proposeAndPublishWithoutShadow`). For a tenant's
   roles, the caller is a service principal holding the [role class](./testing.md#the-role-class): `cosec:manage-roles`,
   `cosec:write` and `cosec:skip-shadow` on tenants' documents, and `cosec:grant` on their scopes. Its roles-only
-  changes need no person, and each records the class it was granted by. Any other change, an app's catalog for one,
+  changes need no person, and each records the class it was granted by. A role of the control plane's own app
+  (`cosec.control.app-id`) is outside the class: its members govern their tenant's document, which is for a person to
+  appoint, so putting or removing one waits. Any other change, an app's catalog for one,
   is analyzed as anyone's, and its grants wait for a person unless the caller is the trust root (a platform principal
   holding `cosec:approve`, [Testing policies](./testing.md)).
 - `putRole` replaces a role whole, so replaying one is idempotent. A conflict (`409`) is the projection's to retry.

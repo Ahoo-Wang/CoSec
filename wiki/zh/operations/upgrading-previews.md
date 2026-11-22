@@ -25,6 +25,7 @@ description: "每个 8.0 预览版（alpha 与 beta）到下一个之间的变�
 
 ## 从 8.0.0-beta.5 升级 {#from-8-0-0-beta-5}
 
+- **新增：角色类 `cosec:manage-roles`**（`CTL-79`）。持有者对租户文档只写入或删除角色的变更，不再因“由谁授予”而等人审批；它记下一条 `ROLE_CLASS` 升级，这是封闭集合的一个新值，映射升级原因的客户端会读到它（[角色类](../policies/testing.md#the-role-class)）。不持有它的主体一切照旧。**控制面自身应用（`cosec.control.app-id`）的角色从不属于这个类**：它的成员持有对本租户文档的控制调用，而由谁治理租户的策略应由人来任命。投影这类角色的同步仍然要等审批；只通过这个类投影业务应用的角色。
 - **实例的状态拆分为两条记录**（`CTL-74`、`CTL-75`）。`<s>:shadow:status:<instance>` 处的状态现在很小（存活信息、`shadows`、
   已确认的窗口），没有 `documents` 成员。实例持有的文档是一条独立的记录 `<s>:shadow:resident:<instance>`，只有
   `propagation` 读取它（[存储](./storage.md#redis-keys)）。`propagation` 的应答多了一个成员 `unknown`，总是写出。
