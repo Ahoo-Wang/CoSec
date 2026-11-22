@@ -258,7 +258,10 @@ class HttpControlServiceTest {
         )
         assertThrownBy<HttpTimeoutException> { runBlocking { quick.document(iam, acme) } }
         answered.get().assert().describedAs("the server had answered before the call ended").isFalse()
-        synchronized(received) { received.size.assert().isEqualTo(1) }
+        // Whether the request had reached the server when the timeout fired is not part of the property, and a loaded
+        // runner does not promise it: the call may end before the server records it. What holds whatever the timing is
+        // that the one call was never sent twice.
+        synchronized(received) { received.size.assert().isLessThanOrEqualTo(1) }
         HttpControlService.DEFAULT_TIMEOUT.assert().isEqualTo(Duration.ofSeconds(30))
         assertThrownBy<IllegalArgumentException> { HttpControlService(URI("http://host/x"), timeout = Duration.ZERO) }
     }
