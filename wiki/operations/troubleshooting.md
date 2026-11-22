@@ -341,6 +341,25 @@ The control plane's propagation view shows how many instances have a revision in
 `cosec.snapshot.lagging` show how far behind it is, and `cosec.snapshot.regressions` counts lost writes
 ([Snapshot metrics](./observability.md#snapshot-metrics)).
 
+## `propagation` answers `unknown` above 0
+
+`GET /documents/{key}/revisions/{rev}/propagation` counts in `unknown` the live instances (a status in the last minute)
+whose resident record, the documents an instance holds, cannot be read (`CTL-75`). Until `unknown` is 0, the answer
+cannot say that no instance is behind, even when `installed` equals `holding`: an unknown instance may hold the
+document at an older revision. The causes, in the order to check them:
+
+- **Instances still on 8.0.0-beta.5** write no resident record. Expected while the data plane is upgraded after the
+  control plane ([Upgrading between previews](./upgrading-previews.md#from-8-0-0-beta-5)); `unknown` falls as they are
+  replaced. No log line names them: a missing record is not an error.
+- **An instance whose resident write keeps failing** logs `Writing the resident documents failed; the next cycle writes
+  it again.` at `WARN` every report interval, with the cause (a Redis user without `~<s>:shadow:resident:<instance>*`
+  is the usual one: [Storage](./storage.md#redis-keys)). Its status still writes, so it stays live and unknown until a
+  write succeeds; the write is retried every cycle.
+- **A resident record that does not decode** makes the control host log `The resident documents of instance
+  [<instance>] do not read: propagation counts it unknown (<why>).` at `WARN`, at most once every 5 seconds. A later
+  format in `<why>` is an instance on a newer version than the control host (upgrade the control plane); anything else
+  is a corrupt value: restart or stop that instance, whose next write replaces it.
+
 ## A service behind the gateway refuses requests
 
 A service in [`cosec.pipeline.mode=gateway`](./configuration.md#pipeline) reads the caller from the `CoSec-Identity`
@@ -547,6 +566,16 @@ cannot compare decisions, and the change is never published. The usual cause is 
 attribute whose provider runs on the control host but not on that instance. Attribute providers, and the types they
 declare, must be the same on every data-plane instance and on the control host. Deploy the provider everywhere before such a
 change is shadowed ([Testing changes](../policies/testing.md)).
+
+## The typed control client does not read a document {#the-typed-control-client-does-not-read-a-document}
+
+`ControlClient` throws `SnapshotFormatException` with `The control plane's answer does not read: a <entry> has members
+this version does not know`: the control-plane host is a later version than the `cosec-control-sdk` the application
+runs, and the document holds a member only the later one knows. The typed client refuses it rather than drop it, since
+an `:apply` of what it read would remove that member from the document. Upgrade `cosec-control-sdk` to the host's
+version; until then, read that document through `ControlService`, as JSON ([Changing policies from your
+code](../integration/checks.md#changing-policies-from-your-code)). A value of a closed set the client does not know
+(a change state, a conflict) is not this error: it reads as unknown, with its text.
 
 ## Startup failures
 

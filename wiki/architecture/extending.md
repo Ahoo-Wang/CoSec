@@ -621,6 +621,14 @@ visit:
   (`CTL-56`). A store that does not answer is still thrown, for the whole call: the window then waits as for any read
   that failed. The default reads `reports(window)`, which throws for an unreadable report, so a reader that does not
   override `readings` keeps such a window open past its longest.
+- `ShadowReportSink.write(ResidentDocuments)` and `ShadowReportReader.residents(instances)`: the documents each
+  instance holds, with the revision of each, as a record of its own beside its status, which stays small (`CTL-74`,
+  `CTL-75`). Store it per instance with a life of `ShadowReportReader.RESIDENT_TTL` (exactly, no jitter: an instance
+  writes it again at half that life). `residents` answers the records of the instances asked that read, and in
+  `ResidentReadings.unreadable` those whose record is missing or does not decode, which `propagation` counts as
+  `unknown`; a record under another instance's key, and a store that does not answer, are thrown. Both are abstract:
+  there is no default, since one that answered "holds nothing" would make `installed == holding` claim that no
+  instance is behind.
 - `ShadowReportReader.statusReadings()`: the recent statuses that read, and in `StatusReadings.unreadable` the
   instances whose listed status does not decode. The control plane takes those as live and acknowledging no window, so
   no window passes on them, while it reads every other status and `propagation` answers (`CTL-73`). A status under

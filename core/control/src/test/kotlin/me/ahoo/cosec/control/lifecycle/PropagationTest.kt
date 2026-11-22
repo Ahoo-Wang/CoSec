@@ -26,15 +26,15 @@ import me.ahoo.cosec.control.change.Propagation
 import me.ahoo.cosec.control.store.ControlStoreException
 import me.ahoo.cosec.control.store.MutableClock
 import me.ahoo.cosec.spi.shadow.InMemoryShadowReports
-import me.ahoo.cosec.spi.shadow.InstalledDocument
 import me.ahoo.cosec.spi.shadow.InstanceStatus
+import me.ahoo.cosec.spi.shadow.ResidentDocuments
+import me.ahoo.cosec.spi.shadow.ResidentReadings
 import me.ahoo.cosec.spi.shadow.ShadowReport
 import me.ahoo.cosec.spi.shadow.ShadowReportReader
 import me.ahoo.cosec.spi.snapshot.SnapshotFormatException
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
-import java.time.Duration
 import java.util.concurrent.atomic.AtomicInteger
 
 /**
@@ -47,6 +47,10 @@ class PropagationTest {
     private val clock = MutableClock()
     private val written = InMemoryShadowReports(clock)
     private val reads = AtomicInteger()
+    private val residentReads = AtomicInteger()
+
+    /** Every instance whose resident record was asked for. */
+    private val asked = java.util.concurrent.CopyOnWriteArrayList<String>()
 
     /** Fails each read while positive, with [failure], as a store that does not answer. */
     private val failures = AtomicInteger()
@@ -64,28 +68,51 @@ class PropagationTest {
             if (failures.getAndDecrement() > 0) throw failure()
             return written.statuses()
         }
+
+        override suspend fun residents(instances: Set<String>): ResidentReadings {
+            residentReads.incrementAndGet()
+            asked += instances
+            return written.residents(instances)
+        }
     }
     private val windows = ShadowWindows(reader, clock = clock)
 
-    private suspend fun status(instance: String, vararg documents: Pair<SnapshotKey, Long>) = written.write(
-        InstanceStatus(
-            instance,
-            clock.instant(),
-            documents.associate { (key, revision) -> key to InstalledDocument(revision, Duration.ZERO) }
-        ),
-    )
+    /** [instance]'s status and, unless [resident] is false, its resident record holding [documents]. */
+    private suspend fun status(instance: String, vararg documents: Pair<SnapshotKey, Long>, resident: Boolean = true) {
+        if (resident) written.write(ResidentDocuments(instance, clock.instant(), documents.toMap()))
+        written.write(InstanceStatus(instance, clock.instant()))
+    }
 
     @Test
     fun `propagation counts the instances that hold the document, and says when it read them - CTL-62`() = runBlocking<Unit> {
         status("i1", T1 to 2, SnapshotKey.Platform to 5)
         status("i2", T1 to 1, SnapshotKey.Platform to 5)
         status("i3", SnapshotKey.Platform to 5)
-        windows.propagation(T1, 2).assert().isEqualTo(Propagation(2, 1, 2, 3, clock.now))
+        windows.propagation(T1, 2).assert().isEqualTo(Propagation(2, 1, 2, 3, 0, clock.now))
         // The platform document is held by every instance: holding is every recent instance.
-        windows.propagation(SnapshotKey.Platform, 5).assert().isEqualTo(Propagation(5, 3, 3, 3, clock.now))
+        windows.propagation(SnapshotKey.Platform, 5).assert().isEqualTo(Propagation(5, 3, 3, 3, 0, clock.now))
         // A tenant no instance holds: none is behind, and the first request that needs it loads the published revision.
-        windows.propagation(SnapshotKey.Tenant("t2"), 1).assert().isEqualTo(Propagation(1, 0, 0, 3, clock.now))
+        windows.propagation(SnapshotKey.Tenant("t2"), 1).assert().isEqualTo(Propagation(1, 0, 0, 3, 0, clock.now))
     }
+
+    /**
+     * `CTL-75`: a live instance whose resident record is missing (an instance of 8.0.0-beta.5, which writes none, or one
+     * whose write failed) is counted as unknown, never as holding nothing; and only the live instances' resident
+     * records are read: one whose status has expired is gone, and its record is not asked for.
+     */
+    @Test
+    fun `a live instance without a resident record is unknown, and a gone one's is not read - CTL-75`() =
+        runBlocking<Unit> {
+            status("gone", T1 to 1)
+            clock.now = clock.now.plus(ShadowReportReader.STATUS_TTL).plusSeconds(1)
+            status("i1", T1 to 2)
+            status("beta5", resident = false)
+            windows.propagation(T1, 2).assert().isEqualTo(Propagation(2, 1, 1, 2, 1, clock.now))
+            asked.toSet().assert().isEqualTo(setOf("i1", "beta5"))
+            // The resident records are read once per five seconds, as the statuses are.
+            windows.propagation(T1, 1)
+            residentReads.get().assert().isEqualTo(1)
+        }
 
     @Test
     fun `the statuses are read at most every five seconds, and the answer is as old as that read`() = runBlocking<Unit> {
@@ -96,7 +123,7 @@ class PropagationTest {
         windows.propagation(T1, 2).assert().isEqualTo(first)
         reads.get().assert().isEqualTo(1)
         clock.now = clock.now.plusMillis(1)
-        windows.propagation(T1, 2).assert().isEqualTo(Propagation(2, 1, 1, 1, clock.now))
+        windows.propagation(T1, 2).assert().isEqualTo(Propagation(2, 1, 1, 1, 0, clock.now))
         reads.get().assert().isEqualTo(2)
     }
 
@@ -115,7 +142,7 @@ class PropagationTest {
             )
         }.exceptionOrNull().assert().isInstanceOf(ControlStoreException::class.java)
         // The next call reads again, at once.
-        windows.propagation(T1, 2).assert().isEqualTo(Propagation(2, 1, 1, 1, clock.now))
+        windows.propagation(T1, 2).assert().isEqualTo(Propagation(2, 1, 1, 1, 0, clock.now))
         reads.get().assert().isEqualTo(3)
     }
 

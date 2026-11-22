@@ -53,7 +53,7 @@ import java.util.concurrent.CopyOnWriteArrayList
  */
 class StatusReadingsTest {
     private fun status(instance: String, of: String = instance) =
-        InstanceStatus(of, Clock.systemUTC().instant(), emptyMap(), windows = setOf("c1@1"))
+        InstanceStatus(of, Clock.systemUTC().instant(), windows = setOf("c1@1"))
 
     @Test
     fun `a status that does not decode names its instance, and every other status is read`() = runBlocking<Unit> {
@@ -122,7 +122,7 @@ class StatusReadingsTest {
     }
 
     private fun status(instance: String, time: Time) =
-        InstanceStatus(instance, time.clock.instant(), emptyMap(), windows = setOf("c1@1"))
+        InstanceStatus(instance, time.clock.instant(), windows = setOf("c1@1"))
 
     /**
      * An undecodable status has no `at` to age by: the store ends it. A status is written with the key's life, two
@@ -284,6 +284,7 @@ class StatusReadingsTest {
                 node.runtime.create(ShadowCacheSpecs.reporters(node.keyPrefix)),
                 down,
                 node.runtime.create(ShadowCacheSpecs.instances(node.keyPrefix)),
+                node.runtime.create(ShadowCacheSpecs.residents(node.keyPrefix)),
             )
             reports.write(status("i0"))
             val failed = runCatching { reports.statusReadings() }.exceptionOrNull()

@@ -51,8 +51,7 @@ class InstalledDocumentsTest {
         )
     }
 
-    private fun installed() = CoSecSnapshotAutoConfiguration.Shadow.installedDocuments(source.entries(), now)
-        .mapValues { it.value.revision }
+    private fun installed() = CoSecSnapshotAutoConfiguration.Shadow.installedDocuments(source.entries())
 
     @Test
     fun `a document that compiles is installed, one that failed or is absent is not`() {

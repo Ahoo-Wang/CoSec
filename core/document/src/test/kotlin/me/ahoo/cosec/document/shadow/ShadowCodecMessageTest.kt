@@ -17,8 +17,8 @@ package me.ahoo.cosec.document.shadow
 
 import me.ahoo.cosec.document.SnapshotDocuments
 import me.ahoo.cosec.document.json.CoSecJson
-import me.ahoo.cosec.spi.shadow.InstalledDocument
 import me.ahoo.cosec.spi.shadow.InstanceStatus
+import me.ahoo.cosec.spi.shadow.ResidentDocuments
 import me.ahoo.cosec.spi.shadow.ShadowOutcome
 import me.ahoo.cosec.spi.shadow.ShadowReport
 import me.ahoo.cosec.spi.shadow.ShadowSample
@@ -33,7 +33,6 @@ import tools.jackson.databind.JsonNode
 import tools.jackson.databind.node.ArrayNode
 import tools.jackson.databind.node.JsonNodeFactory
 import tools.jackson.databind.node.ObjectNode
-import java.time.Duration
 import java.time.Instant
 
 /**
@@ -99,13 +98,13 @@ class ShadowCodecMessageTest {
         )
         val status = InstanceStatus(
             "i1",
-            now,
-            mapOf(SnapshotKey.Tenant("acme") to InstalledDocument(4, Duration.ofMillis(250)))
+            now
         )
         val decoders: List<Pair<ByteArray, (ByteArray) -> Any>> = listOf(
             ShadowCodec.encode(StoredCandidate("w", 4, document)) to ShadowCodec::decodeCandidate,
             ShadowCodec.encodeReport(report) to ShadowCodec::decodeReport,
             ShadowCodec.encodeStatuses(mapOf("i1" to status)) to ShadowCodec::decodeStatuses,
+            ShadowCodec.encodeResident(ResidentDocuments("i1", now, mapOf(SnapshotKey.Tenant("acme") to 4L))) to ShadowCodec::decodeResident,
         )
         var refusals = 0
         for ((valid, decode) in decoders) {

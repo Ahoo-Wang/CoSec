@@ -40,6 +40,18 @@ object GuardAllowlist {
             "spring-boot:ControlServicePortTest#a service port beside the application's, the management port or a disabled control API is refused",
             "spring-boot:ControlServicePortTest#a service port with no WebFlux server to serve it fails startup naming what to do",
             "spring-boot:ControlServicePortTest#cosec control http enabled false serves no control route, and the control plane stays for what embeds it",
+            // CTL-76: the typed control objects say what the wire says.
+            "control-sdk:TypedWireTest#each document entry reads exactly the members of the document format - CTL-76",
+            "control-sdk:TypedWireTest#every tenant and app document of the wiki reads and writes back as the same document - CTL-76",
+            "control-sdk:TypedWireTest#a document entry with a member this version does not know does not read - CTL-76",
+            "control-sdk:TypedWireTest#a change answer reads the members of its contract file, each read or named as left out - CTL-76",
+            "control-sdk:TypedWireTest#the closed sets are the wire's - CTL-76",
+            "control-sdk:PublishWithoutShadowTest#a refusal reads which conflict it is, and none for another status",
+            "control-sdk:TypedCodecTest#what does not read is a format error naming the member",
+            "control:TypedClientTest#each kind of operation reaches the control plane and comes back as it was written - CTL-76",
+            "control:TypedClientTest#every change body of the wiki reads and is written back as the control plane reads it - CTL-76",
+            "control:TypedClientTest#every change the control plane answers reads into a typed change - CTL-76",
+            "control:TypedClientTest#the typed calls read, propose, apply and publish over the in-process control plane - CTL-76",
             // CTL-53, IDN-31: the reader's rule for the stored records, and the session record's.
             "cocache:StoredRecordsTest#every stored codec is listed",
             "cocache:StoredRecordsTest#a wrong value of every stored record is a format error",
@@ -73,6 +85,10 @@ object GuardAllowlist {
             "runtime:AuditVocabularyTest#every reason has the audit decision of its own name",
             "micrometer:ResultVocabularyTest#every reason has the result of its own name",
             "runtime:SubjectMethodTest#the event names the credential as the identity header does",
+            // CTL-74: the closing path reads small statuses only.
+            "cocache:StatusSplitTest#what the acknowledgement reads does not grow with the documents an instance holds",
+            "control:ShadowAcknowledgementTest#the closing path reads no resident record",
+            "document:ShadowCodecTest#a status of 8_0_0-beta_5 reads, its documents ignored",
             // OBS-9: one table names a cause on the wire.
             "runtime:CauseNameTest#the table names every kind of cause, each by its pinned name",
             "runtime:CauseNameTest#the audit record names each cause by its pinned name",

@@ -1,0 +1,97 @@
+{
+  "rules": [
+    "CTL-75"
+  ],
+  "polarity": "positive",
+  "level": "control",
+  "description": "i1 holds acme's revision 1; i2 is live but has no resident record anyone can read (an instance of 8.0.0-beta.5 writes none). Propagation counts i2 recent and unknown, never as holding nothing: installed 1 of the 1 holding, of 2 recent, 1 unknown, so it does not say that no instance is behind. Once i2 writes its resident record, it is counted as it holds.",
+  "steps": [
+    {
+      "propose": {
+        "change": "c1",
+        "document": "tenant:acme",
+        "operations": [
+          {
+            "putPolicy": {
+              "id": "read",
+              "statements": [
+                {
+                  "effect": "allow",
+                  "action": "order:read"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "skipShadow": "c1"
+    },
+    {
+      "publish": "c1"
+    },
+    {
+      "status": {
+        "instance": "i1",
+        "documents": {
+          "platform": 1,
+          "tenant:acme": 1
+        }
+      }
+    },
+    {
+      "status": {
+        "instance": "i2",
+        "documents": {
+          "platform": 1,
+          "tenant:acme": 0
+        },
+        "resident": false
+      }
+    },
+    {
+      "propagation": {
+        "document": "tenant:acme",
+        "revision": 1
+      }
+    },
+    {
+      "advance": "PT6S"
+    },
+    {
+      "status": {
+        "instance": "i2",
+        "documents": {
+          "platform": 1,
+          "tenant:acme": 1
+        }
+      }
+    },
+    {
+      "propagation": {
+        "document": "tenant:acme",
+        "revision": 1
+      }
+    }
+  ],
+  "expect": {
+    "steps": [
+      "CHECKED",
+      "READY",
+      "PUBLISHED",
+      "status",
+      "status",
+      "installed 1 holding 1 recent 2 unknown 1",
+      "advanced",
+      "status",
+      "installed 2 holding 2 recent 2 unknown 0"
+    ],
+    "errors": {
+      "c1": []
+    },
+    "heads": {
+      "tenant:acme": 1
+    }
+  }
+}

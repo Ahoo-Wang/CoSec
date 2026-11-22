@@ -25,7 +25,7 @@ enum class ConflictKind {
     /** The document's head is not the change's base: read the head again, and propose again or rebase. */
     BASE_MOVED,
 
-    /** Another change holds the document's staging slot: wait for it, or abandon it. */
+    /** Another change holds the document's staging slot, which the problem's `heldBy` names: wait for it, or abandon it. */
     SLOT_HELD,
 
     /** The change's state does not admit the step: read the change again; the step is not for it now. */
@@ -43,6 +43,10 @@ enum class ConflictKind {
     /** Concurrent writes kept changing the record: the same call, made again, may succeed. */
     CONTENDED,
 
-    /** Something of that id exists already: a change, or a binding the request would create. */
+    /**
+     * Something of that id already stands where the step needs something else: a change of that id, a binding that
+     * break-glass would create, or a binding a break-glass revoke names that break-glass did not write. Stop: the id
+     * names something else; choose another id, or act on what stands there through its own route.
+     */
     EXISTS,
 }

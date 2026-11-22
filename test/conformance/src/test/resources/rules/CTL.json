@@ -1011,17 +1011,75 @@
       ]
     },
     {
+      "id": "CTL-74",
+      "source": "Review of 2026-11-21's merges, R3-11 (the size of a status); maintainer's coordinator, 2026-11-22",
+      "statement": "An instance's status is small: its instance, when, its format level, whether it shadows and the windows it acknowledges, and no document it holds. Liveness, the acknowledgement of a shadow window and the window's closing path read only statuses and never an instance's resident documents, so what they read per instance does not grow with the documents it holds.",
+      "level": "build",
+      "pending": null,
+      "guards": [
+        "cocache:StatusSplitTest#what the acknowledgement reads does not grow with the documents an instance holds",
+        "control:ShadowAcknowledgementTest#the closing path reads no resident record",
+        "document:ShadowCodecTest#a status of 8_0_0-beta_5 reads, its documents ignored"
+      ]
+    },
+    {
+      "id": "CTL-75",
+      "source": "Review of 2026-11-21's merges, R3-11 (the size of a status); maintainer's coordinator, 2026-11-22",
+      "statement": "The documents an instance holds, with the revision of each, are its resident record, a record of its own written before its status: when what it holds differs from what its last successful resident write held, and in any case once half the record's life (exactly one hour, no jitter) has passed since then. A resident write that fails does not stop the status write and stays owed: every cycle tries it again. `propagation` reads, at most every five seconds, the resident records of the instances with a live status only, counts those that hold the document and those that installed the revision, and counts as `unknown` every live instance whose resident record is missing or does not decode; no instance is behind only when `installed` equals `holding` and `unknown` is 0.",
+      "level": "control",
+      "pending": null,
+      "guards": [
+        "runtime:ResidentWriteTest#the resident documents are written before the status, and again only when they change",
+        "runtime:ResidentWriteTest#an unchanged resident record is written again once half its life has passed",
+        "runtime:ResidentWriteTest#a resident write that fails does not stop the status, and is tried again every cycle until it succeeds",
+        "cocache:StatusSplitTest#a resident record lives exactly its life after its last write",
+        "cocache:StatusSplitTest#a missing or undecodable resident record is unreadable, the undecodable one logged, another's fails the read",
+        "cocache:CacheTtlPolicyTest#shadowCachesLiveUnderTheirStoragePathsAndFailClosed",
+        "control:PropagationTest#a live instance without a resident record is unknown, and a gone one's is not read - CTL-75",
+        "control:ClientContractTest#a propagation answer holds exactly the members of its contract file",
+        "document:ShadowCodecTest#resident documents read back as written, and a wrong revision is a format error",
+        "spi:ShadowValuesTest#the in-memory residents answer what was written within its life and name the rest"
+      ]
+    },
+    {
+      "id": "CTL-76",
+      "source": "control-typed-api-design.md §4, PR 2 (the typed control API)",
+      "statement": "The control plane's typed objects say what the wire says. Each document entry the typed layer reads has exactly the document format's members (schema/), and an entry with a member it does not know does not read, since re-sending what was read would drop it; every tenant and app document of the wiki's samples reads and writes back as the same document; each kind of operation the typed layer writes is the operation the control plane reads, and reads back as written, as does every change body of the wiki's samples; every change the control plane's answer codec writes reads, its members those of contract/control/change.json, each read or named as left out; the closed sets are the wire's, and a value a later host adds keeps its text; and a refusal names which conflict a 409 is.",
+      "level": "build",
+      "guards": [
+        "control-sdk:TypedWireTest#each document entry reads exactly the members of the document format - CTL-76",
+        "control-sdk:TypedWireTest#every tenant and app document of the wiki reads and writes back as the same document - CTL-76",
+        "control-sdk:TypedWireTest#a document entry with a member this version does not know does not read - CTL-76",
+        "control-sdk:TypedWireTest#a change answer reads the members of its contract file, each read or named as left out - CTL-76",
+        "control-sdk:TypedWireTest#the closed sets are the wire's - CTL-76",
+        "control-sdk:TypedCodecTest#what does not read is a format error naming the member",
+        "control-sdk:PublishWithoutShadowTest#a refusal reads which conflict it is, and none for another status",
+        "control:TypedClientTest#each kind of operation reaches the control plane and comes back as it was written - CTL-76",
+        "control:TypedClientTest#every change body of the wiki reads and is written back as the control plane reads it - CTL-76",
+        "control:TypedClientTest#every change the control plane answers reads into a typed change - CTL-76",
+        "control:TypedClientTest#the typed calls read, propose, apply and publish over the in-process control plane - CTL-76"
+      ],
+      "pending": null
+    },
+    {
       "id": "CTL-80",
       "source": "control-typed-api decisions of 2026-11-21 (a service that calls the control plane tells read-again from wait from stop without reading a message)",
-      "statement": "Every 409 the control API answers names which conflict it is, in the problem's `conflict` member, one of a closed set (`contract/control/vocabularies.json`): BASE_MOVED (the document's head is not the change's base: read it again, propose again or rebase), SLOT_HELD (another change holds the document's staging slot: wait for it, or abandon it), STATE (the change's state does not admit the step), CANDIDATE_MOVED (the candidate named is not the change's), WINDOW_OPEN (the shadow window is still open), WINDOW_BLOCKED (the window closed blocked: the change never publishes), CONTENDED (concurrent writes kept changing the record: the same call may succeed), EXISTS (something of that id exists already). No other status carries the member, and no 409 is answered without it; `detail` still explains the case to a person and is no contract.",
+      "statement": "Every 409 the control API answers names which conflict it is, in the problem's `conflict` member, one of a closed set (`contract/control/vocabularies.json`): BASE_MOVED (the document's head is not the change's base: read it again, propose again or rebase), SLOT_HELD (another change holds the document's staging slot, which the problem's `heldBy` names wherever `detail` names it, so nothing more is told: wait for it, or abandon it), STATE (the change's state does not admit the step), CANDIDATE_MOVED (the candidate named is not the change's), WINDOW_OPEN (the shadow window is still open), WINDOW_BLOCKED (the window closed blocked: the change never publishes), CONTENDED (concurrent writes kept changing the record: the same call may succeed), EXISTS (something of that id already stands where the step needs something else: a change of that id, a binding break-glass would create, or a binding a break-glass revoke names that break-glass did not write). No other status carries the member, and no 409 is answered without it; `detail` still explains the case to a person and is no contract. No conflict but SLOT_HELD carries `heldBy` (`contract/control/conflict.json`). The typed write call (`proposeAndPublishWithoutShadow`) abandons the holder only when it is a change of the same author left CHECKED, SHADOWING or READY and not updated for at least the write's patience, by the control plane's times (the holder's updatedAt against the createdAt of the change the write just proposed): a writer that died holds the document for one patience. It waits for any other holder, so concurrent writers of one principal wait for each other and both publish.",
       "level": "control",
       "pending": null,
       "guards": [
         "control:ConflictKindTest#a 409 names its conflict, and only a 409 does",
         "control:ConflictKindTest#a proposal on a base that is not the head is BASE_MOVED",
-        "control:ConflictKindTest#a change that wants the slot another holds is SLOT_HELD, and a step its state does not admit is STATE",
+        "control:ConflictKindTest#a change that wants a held slot is SLOT_HELD naming its holder, and a step its state does not admit is STATE",
         "control:ConflictKindTest#no other status carries a conflict",
-        "control:ClientContractTest#the closed sets of the control API are those of their contract file"
+        "control:ClientContractTest#the closed sets of the control API are those of their contract file",
+        "control:ClientContractTest#a conflict's problem holds exactly the members of its contract file - CTL-80",
+        "control:TypedClientTest#a write takes the slot a change of its own author left a patience ago - CTL-80",
+        "control:TypedClientTest#a write waits for a slot another author holds, and abandons only its own change - CTL-80",
+        "control-sdk:PublishWithoutShadowTest#a slot its own author left a patience ago is abandoned and taken",
+        "control-sdk:PublishWithoutShadowTest#a slot another author holds, one waiting for a person, or a live writer of its own author, is waited for",
+        "control:TypedClientTest#a write waits for a slot its own author holds within the patience, never abandoning it - CTL-80",
+        "control:TypedClientTest#two writes of one principal on one document at once both publish - CTL-80"
       ]
     }
   ]

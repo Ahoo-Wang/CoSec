@@ -23,8 +23,8 @@ import me.ahoo.cosec.engine.CompiledDocument
 import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.spi.shadow.CandidateStore
 import me.ahoo.cosec.spi.shadow.InMemoryShadowReports
-import me.ahoo.cosec.spi.shadow.InstalledDocument
 import me.ahoo.cosec.spi.shadow.InstanceStatus
+import me.ahoo.cosec.spi.shadow.ResidentDocuments
 import me.ahoo.cosec.spi.shadow.ShadowOutcome
 import me.ahoo.cosec.spi.shadow.ShadowReport
 import me.ahoo.cosec.spi.shadow.ShadowReportReader
@@ -145,16 +145,19 @@ class ShadowSupportTest {
         val recorder = ShadowRecorder("i1", clock)
         recorder.record(acme, "w", ShadowOutcome.WIDENED, 4, null)
         val reports = InMemoryShadowReports(clock)
-        val installed = mapOf(acme to InstalledDocument(4, Duration.ofSeconds(1)))
+        val installed = mapOf<SnapshotKey, Long>(acme to 4)
         ShadowReporter(recorder, reports, { installed }, clock).flush()
         reports.reports("w").single().counts.assert().isEqualTo(mapOf(ShadowOutcome.WIDENED to 1L))
-        reports.statuses().single().documents.assert().isEqualTo(installed)
+        reports.statuses().single().instance.assert().isEqualTo("i1")
+        reports.residents(setOf("i1")).residents.getValue("i1").documents.assert().isEqualTo(installed)
         clock.now = clock.now.plus(ShadowReportReader.STATUS_TTL).plusSeconds(1)
         reports.statuses().assert().isEmpty()
         val failing = object : ShadowReportSink {
             override suspend fun write(report: ShadowReport) = error("down")
 
             override suspend fun write(status: InstanceStatus) = error("down")
+
+            override suspend fun write(resident: ResidentDocuments) = error("down")
         }
         ShadowReporter(recorder, failing, { installed }, clock).flush()
         assertThrownBy<IllegalArgumentException> {

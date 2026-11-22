@@ -250,6 +250,21 @@ CoSec 自己的拒绝很容易区分：它们总是 `application/problem+json`�
 `cosec.snapshot.lag` 和 `cosec.snapshot.lagging` 显示它落后多少，`cosec.snapshot.regressions` 计数丢失的写入
 （[快照指标](./observability.md#snapshot-metrics)）。
 
+## `propagation` 应答的 `unknown` 大于 0 {#propagation-answers-unknown-above-0}
+
+`GET /documents/{key}/revisions/{rev}/propagation` 把常驻记录（实例持有的文档）无法读取的存活实例（最近一分钟内有状态）
+计入 `unknown`（`CTL-75`）。在 `unknown` 降到 0 之前，即使 `installed` 等于 `holding`，应答也不能说没有实例落后：未知的
+实例可能以较旧的修订持有该文档。按以下顺序检查原因：
+
+- **仍在 8.0.0-beta.5 上的实例**不写常驻记录。在控制面升级之后、数据面升级期间这是预期的
+  （[预览版之间的升级](./upgrading-previews.md#from-8-0-0-beta-5)）；随着这些实例被替换，`unknown` 会下降。没有日志点名
+  它们：缺失的记录不是错误。
+- **常驻记录写入一直失败的实例**每个上报间隔都会以 `WARN` 记录 `Writing the resident documents failed; the next cycle
+  writes it again.`，并附上原因（常见的是 Redis 用户没有 `~<s>:shadow:resident:<instance>*`：[存储](./storage.md#redis-keys)）。
+  它的状态仍在写入，所以它保持存活且未知，直到某次写入成功；每个周期都会重试。
+- **无法解码的常驻记录**会让控制面主机以 `WARN` 记录 `The resident documents of instance [<instance>] do not read:
+  propagation counts it unknown (<why>).`，至多每 5 秒一次。`<why>` 中是更晚的格式时，说明该实例的版本比控制面主机新
+  （升级控制面）；其他情况是损坏的值：重启或停止那个实例，它的下一次写入会替换掉它。
 ## 网关之后的服务拒绝请求 {#a-service-behind-the-gateway-refuses-requests}
 
 [`cosec.pipeline.mode=gateway`](./configuration.md#pipeline) 的服务从网关转发的 `CoSec-Identity` 头读取调用方。没有该头的请求按匿名
@@ -371,6 +386,11 @@ Redis may evict CoSec's policy snapshot: maxmemory-policy is {<node>=<policy>}, 
 只要有一个实例报告 `CANDIDATE_ERROR`，影子窗口就被阻塞：该实例编译不了候选，无法比较决策，变更永远不会被发布。常见原因是候选读取的
 `ext.*` 属性，其提供者运行在控制面宿主上，却不在那个实例上。属性提供者及其声明的类型，在每个数据面实例和控制面宿主上必须相同。在这类变更
 进入影子阶段之前，把提供者部署到所有地方（[测试变更](../policies/testing.md)）。
+
+## 类型化控制客户端读不了文档 {#the-typed-control-client-does-not-read-a-document}
+
+`ControlClient` 抛出 `SnapshotFormatException`，消息为 `The control plane's answer does not read: a <entry> has members
+this version does not know`：控制面宿主的版本比应用使用的 `cosec-control-sdk` 新，而文档中有只有新版本才认识的成员。类型化客户端拒绝读取它而不是丢掉它，因为把读到的内容再 `:apply` 回去会从文档中删除这个成员。把 `cosec-control-sdk` 升级到宿主的版本；在此之前，通过 `ControlService` 以 JSON 读取该文档（[从代码中修改策略](../integration/checks.md#changing-policies-from-your-code)）。客户端不认识的封闭集合值（变更状态、冲突类型）不属于这个错误：它们被读作未知值，并保留其文本。
 
 ## 启动失败 {#startup-failures}
 

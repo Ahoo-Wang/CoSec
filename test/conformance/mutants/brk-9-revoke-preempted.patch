@@ -2,7 +2,7 @@
 # Mutant: a change that only narrows takes the slot of a break-glass revoke, so the principal it revokes can hold it off
 # Tests: :control:test --tests me.ahoo.cosec.control.change.BreakGlassControlTest :conformance:test
 diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Staging.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Staging.kt
-index 3406c7d86..8b0d33a72 100644
+index 3c865ef02..2a42bbc6f 100644
 --- a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Staging.kt
 +++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Staging.kt
 @@ -270,7 +270,7 @@ internal class Staging(
@@ -12,5 +12,5 @@ index 3406c7d86..8b0d33a72 100644
 -                    val guarded = preemption.revokesBreakGlass(held, head) && !preemption.revokesBreakGlass(change, head)
 +                    val guarded = false
                      if (guarded || !preemption.preempts(operator, change, head)) {
-                         throw ChangeRejectedException.conflict(
-                             ConflictKind.SLOT_HELD,
+                         throw ChangeRejectedException.slotHeld(
+                             held.id,

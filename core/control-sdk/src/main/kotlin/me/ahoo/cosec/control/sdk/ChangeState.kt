@@ -15,24 +15,9 @@ package me.ahoo.cosec.control.sdk
 
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 
-/**
- * The state of a change, as the control API writes it (`contract/control/vocabularies.json`): a closed set that a later
- * host may add to. A value this version does not know is still a [ChangeState], [isUnknown], with its [text] readable,
- * never a failure to read the answer (the reader's rule, `CTL-53`).
- */
+/** The state of a change (`contract/control/vocabularies.json`, `state`). A value this version does not know keeps its text ([ClosedValue]). */
 @ExperimentalCoSecApi
-class ChangeState private constructor(
-    /** The value as the wire writes it: `READY`, `PUBLISHED`, ... */
-    val text: String,
-    /** Whether this version does not know the value. */
-    val isUnknown: Boolean,
-) {
-    override fun equals(other: Any?): Boolean = other is ChangeState && other.text == text
-
-    override fun hashCode(): Int = text.hashCode()
-
-    override fun toString(): String = text
-
+class ChangeState private constructor(text: String, isUnknown: Boolean) : ClosedValue(text, isUnknown) {
     @ExperimentalCoSecApi
     companion object {
         val DRAFT: ChangeState = ChangeState("DRAFT", false)
@@ -46,13 +31,15 @@ class ChangeState private constructor(
         val ABANDONED: ChangeState = ChangeState("ABANDONED", false)
         val EXPIRED: ChangeState = ChangeState("EXPIRED", false)
 
-        /** Every state this version knows, in the order of the control plane's lifecycle. */
-        val KNOWN: List<ChangeState> =
-            listOf(DRAFT, CHECKED, SHADOWING, AWAITING_APPROVAL, READY, CONFLICTED, PUBLISHED, REJECTED, ABANDONED, EXPIRED)
+        private val SET =
+            ClosedSet(
+                listOf(DRAFT, CHECKED, SHADOWING, AWAITING_APPROVAL, READY, CONFLICTED, PUBLISHED, REJECTED, ABANDONED, EXPIRED)
+            ) { ChangeState(it, true) }
 
-        private val BY_TEXT = KNOWN.associateBy { it.text }
+        /** Every value this version knows. */
+        val KNOWN: List<ChangeState> get() = SET.known
 
-        /** The state [text] names: a known one, or an unknown one that keeps the text. */
-        fun of(text: String): ChangeState = BY_TEXT[text] ?: ChangeState(text, true)
+        /** The value [text] names: a known one, or an unknown one that keeps the text. */
+        fun of(text: String): ChangeState = SET.of(text)
     }
 }

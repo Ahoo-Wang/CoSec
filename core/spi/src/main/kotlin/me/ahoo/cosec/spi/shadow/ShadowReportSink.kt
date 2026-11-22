@@ -26,4 +26,11 @@ interface ShadowReportSink {
     suspend fun write(report: ShadowReport)
 
     suspend fun write(status: InstanceStatus)
+
+    /**
+     * Writes [resident], the documents its instance holds, as a record of its own beside the status (`CTL-75`), with a
+     * life of [ShadowReportReader.RESIDENT_TTL]. An instance writes it before its status when it changed, and in any case
+     * before half that life has passed.
+     */
+    suspend fun write(resident: ResidentDocuments)
 }

@@ -3,22 +3,22 @@
 # Tests: :cocache:test --tests me.ahoo.cosec.cocache.shadow.StatusReadingsTest --tests me.ahoo.cosec.cocache.CacheTtlPolicyTest
 
 diff --git a/backends/cocache/src/main/kotlin/me/ahoo/cosec/cocache/CacheLocks.kt b/backends/cocache/src/main/kotlin/me/ahoo/cosec/cocache/CacheLocks.kt
-index a01aaa0e9..2563648d3 100644
+index 8c30fb627..abe83389c 100644
 --- a/backends/cocache/src/main/kotlin/me/ahoo/cosec/cocache/CacheLocks.kt
 +++ b/backends/cocache/src/main/kotlin/me/ahoo/cosec/cocache/CacheLocks.kt
-@@ -81,7 +81,6 @@ internal object CacheLocks {
-                     // A status's life is a liveness bound (CTL-73): an undecodable one counts until its key expires,
-                     // so the key lives exactly STATUS_TTL. CoCache's default jitter would make it 1 to 3 minutes.
+@@ -87,7 +87,6 @@ internal object CacheLocks {
+                     // so the key lives exactly STATUS_TTL. CoCache's default jitter would make it 1 to 3 minutes. A
+                     // resident record is rewritten at half its life (CTL-75), which a jittered life could undercut.
                      lock(PolicyField.TTL_JITTER)
 -                    constrain(PolicyField.TTL_JITTER) { Duration.ZERO }
                  }
              }
  
 diff --git a/backends/cocache/src/main/kotlin/me/ahoo/cosec/cocache/shadow/ShadowCacheSpecs.kt b/backends/cocache/src/main/kotlin/me/ahoo/cosec/cocache/shadow/ShadowCacheSpecs.kt
-index 2bac9b53a..528db43ef 100644
+index 9961b3621..995050756 100644
 --- a/backends/cocache/src/main/kotlin/me/ahoo/cosec/cocache/shadow/ShadowCacheSpecs.kt
 +++ b/backends/cocache/src/main/kotlin/me/ahoo/cosec/cocache/shadow/ShadowCacheSpecs.kt
-@@ -119,7 +119,7 @@ internal object ShadowCacheSpecs {
+@@ -134,7 +134,7 @@ internal object ShadowCacheSpecs {
              .codec(codec)
              .policy {
                  this.ttl = ttl

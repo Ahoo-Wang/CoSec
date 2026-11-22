@@ -18,8 +18,8 @@ package me.ahoo.cosec.document.shadow
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.document.SnapshotDocuments
-import me.ahoo.cosec.spi.shadow.InstalledDocument
 import me.ahoo.cosec.spi.shadow.InstanceStatus
+import me.ahoo.cosec.spi.shadow.ResidentDocuments
 import me.ahoo.cosec.spi.shadow.ShadowOutcome
 import me.ahoo.cosec.spi.shadow.ShadowReport
 import me.ahoo.cosec.spi.shadow.ShadowSample
@@ -29,13 +29,11 @@ import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.test.asserts.assert
 import me.ahoo.test.asserts.assertThrownBy
 import org.junit.jupiter.api.Test
-import java.time.Duration
 import java.time.Instant
 
 /** RFC 0007 §6.4, §6.5: candidates, shadow reports and instance statuses as JSON, read back strictly. */
 class ShadowCodecTest {
     private val now: Instant = Instant.parse("2026-11-01T00:00:00Z")
-    private val acme: SnapshotKey = SnapshotKey.Tenant("acme")
     private val document = SnapshotDocuments.read(
         """{"schema":2,"revision":5,"publishedAt":"2026-11-01T00:00:00Z","policies":[],"bindings":[]}""".encodeToByteArray()
     )
@@ -60,11 +58,7 @@ class ShadowCodecTest {
         ShadowCodec.decodeReport(ShadowCodec.encodeReport(report)).assert().isEqualTo(report)
         val status = InstanceStatus(
             "i1",
-            now,
-            mapOf(
-                acme to InstalledDocument(4, Duration.ofMillis(250)),
-                SnapshotKey.Platform to InstalledDocument(9, Duration.ZERO)
-            )
+            now
         )
         ShadowCodec.decodeStatuses(
             ShadowCodec.encodeStatuses(mapOf("i1" to status))
@@ -90,23 +84,69 @@ class ShadowCodecTest {
                 """{"i1":{"at":"x","documents":{}}}""".encodeToByteArray()
             )
         }
-        // SCP-10: an app no key can name is a format error, as a key no build ever wrote is.
-        val encoded = String(ShadowCodec.encodeStatuses(mapOf("i1" to status)))
-        val odd = encoded.replace(
-            "\"documents\":{",
-            "\"documents\":{\"app:a\\u0001b\":{\"revision\":1,\"lagMillis\":0},"
-        )
+        // SCP-10: in a resident record, an app no key can name is a format error, as a key no build ever wrote is.
+        val resident = ResidentDocuments("i1", Instant.parse("2026-11-08T00:00:00Z"), mapOf(SnapshotKey.Platform to 3L))
+        val encoded = String(ShadowCodec.encodeResident(resident))
+        val odd = encoded.replace("\"documents\":{", "\"documents\":{\"app:a\\u0001b\":1,")
         odd.assert().isNotEqualTo(encoded)
-        assertThrownBy<SnapshotFormatException> { ShadowCodec.decodeStatuses(odd.encodeToByteArray()) }
+        assertThrownBy<SnapshotFormatException> { ShadowCodec.decodeResident(odd.encodeToByteArray()) }
         assertThrownBy<SnapshotFormatException> {
-            ShadowCodec.decodeStatuses(odd.replace("app:a\\u0001b", "app:a:b").encodeToByteArray())
+            ShadowCodec.decodeResident(odd.replace("app:a\\u0001b", "app:a:b").encodeToByteArray())
         }
+    }
+
+    /**
+     * `CTL-75`: a resident record is the revision of each document its instance holds, and reads back as written; a
+     * revision that is not a positive integer, or a record of a later format, is a format error (`CTL-53`).
+     */
+    @Test
+    fun `resident documents read back as written, and a wrong revision is a format error`() {
+        val resident = ResidentDocuments(
+            "i1",
+            Instant.parse("2026-11-08T00:00:00Z"),
+            mapOf(SnapshotKey.Platform to 9L, SnapshotKey.App("orders") to 4L, SnapshotKey.Tenant("acme") to 12L),
+        )
+        val encoded = ShadowCodec.encodeResident(resident)
+        ShadowCodec.decodeResident(encoded).assert().isEqualTo(resident)
+        val text = String(encoded)
+        text.assert().contains("\"tenant:acme\":12").doesNotContain("lag")
+        for (wrong in listOf("0", "-1", "\"12\"", "1.5")) {
+            assertThrownBy<SnapshotFormatException> {
+                ShadowCodec.decodeResident(
+                    text.replace("\"tenant:acme\":12", "\"tenant:acme\":$wrong").encodeToByteArray()
+                )
+            }
+        }
+        assertThrownBy<SnapshotFormatException> {
+            ShadowCodec.decodeResident(text.replace("\"format\":1", "\"format\":2").encodeToByteArray())
+        }
+        // A member a later version adds is ignored (CTL-53).
+        ShadowCodec.decodeResident(
+            text.replaceFirst("{", "{\"later\":true,").encodeToByteArray()
+        ).assert().isEqualTo(resident)
+    }
+
+    /**
+     * From 8.0.0-beta.6 a status carries no documents. A status of 8.0.0-beta.5, which does, still reads: the member is
+     * one this version does not know, and is ignored (`CTL-53`). Its instance has no resident record, so `propagation`
+     * counts it unknown (`CTL-75`).
+     */
+    @Test
+    fun `a status of 8_0_0-beta_5 reads, its documents ignored`() {
+        val beta5 = """{"gw-1":{"format":1,"at":"2026-11-21T00:00:00Z","formatLevel":1,""" +
+            """"documents":{"platform":{"revision":9,"lagMillis":1234},"tenant:acme":{"revision":4,"lagMillis":0}},""" +
+            """"windows":["c1@1"]}}"""
+        val status = ShadowCodec.decodeStatuses(beta5.encodeToByteArray()).getValue("gw-1")
+        status.assert().isEqualTo(
+            InstanceStatus("gw-1", Instant.parse("2026-11-21T00:00:00Z"), windows = setOf("c1@1"))
+        )
+        String(ShadowCodec.encodeStatuses(mapOf("gw-1" to status))).assert().doesNotContain("documents")
     }
 
     /** RFC 0010 C5: a status says which document format level its instance reads, and one that does not is refused. */
     @Test
     fun `an instance status carries its document format level`() {
-        val status = InstanceStatus("a", Instant.parse("2026-11-08T00:00:00Z"), emptyMap())
+        val status = InstanceStatus("a", Instant.parse("2026-11-08T00:00:00Z"))
         status.formatLevel.assert().isEqualTo(1)
         val encoded = ShadowCodec.encodeStatuses(mapOf("a" to status))
         encoded.toString(Charsets.UTF_8).assert().contains(""""formatLevel":1""")
@@ -133,8 +173,8 @@ class ShadowCodecTest {
     @Test
     fun `a status keeps the windows its instance acknowledges, and one without them decodes as none sent`() {
         val at = Instant.parse("2026-11-21T00:00:00Z")
-        val acknowledging = InstanceStatus("i1", at, emptyMap(), windows = setOf("c2@1", "c1@1"))
-        val silent = InstanceStatus("i2", at, emptyMap())
+        val acknowledging = InstanceStatus("i1", at, windows = setOf("c2@1", "c1@1"))
+        val silent = InstanceStatus("i2", at)
         val statuses = mapOf("i1" to acknowledging, "i2" to silent)
         ShadowCodec.decodeStatuses(ShadowCodec.encodeStatuses(statuses)).assert().isEqualTo(statuses)
         String(ShadowCodec.encodeStatuses(mapOf("i2" to silent))).assert().doesNotContain("windows")
@@ -142,7 +182,7 @@ class ShadowCodecTest {
         val older = """{"i3":{"format":1,"at":"2026-11-21T00:00:00Z","formatLevel":1,"documents":{}}}"""
         ShadowCodec.decodeStatuses(older.encodeToByteArray()).getValue("i3").windows.assert().isNull()
         // One that does not shadow says so; one that shadows writes nothing for it, as an older version.
-        val notShadowing = InstanceStatus("i5", at, emptyMap(), shadows = false)
+        val notShadowing = InstanceStatus("i5", at, shadows = false)
         ShadowCodec.decodeStatuses(ShadowCodec.encodeStatuses(mapOf("i5" to notShadowing))).getValue("i5")
             .assert().isEqualTo(notShadowing)
         String(ShadowCodec.encodeStatuses(mapOf("i2" to silent))).assert().doesNotContain("shadows")

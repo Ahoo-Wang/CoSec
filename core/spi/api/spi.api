@@ -312,23 +312,13 @@ public final class me/ahoo/cosec/spi/shadow/CandidateStore$DefaultImpls {
 	public static fun staged (Lme/ahoo/cosec/spi/shadow/CandidateStore;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 }
 
-public final class me/ahoo/cosec/spi/shadow/InstalledDocument {
-	public fun <init> (JLjava/time/Duration;)V
-	public fun equals (Ljava/lang/Object;)Z
-	public final fun getLag ()Ljava/time/Duration;
-	public final fun getRevision ()J
-	public fun hashCode ()I
-	public fun toString ()Ljava/lang/String;
-}
-
 public final class me/ahoo/cosec/spi/shadow/InstanceStatus {
 	public static final field Companion Lme/ahoo/cosec/spi/shadow/InstanceStatus$Companion;
 	public static final field FORMAT_LEVEL I
-	public fun <init> (Ljava/lang/String;Ljava/time/Instant;Ljava/util/Map;ILjava/util/Set;Z)V
-	public synthetic fun <init> (Ljava/lang/String;Ljava/time/Instant;Ljava/util/Map;ILjava/util/Set;ZILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun <init> (Ljava/lang/String;Ljava/time/Instant;ILjava/util/Set;Z)V
+	public synthetic fun <init> (Ljava/lang/String;Ljava/time/Instant;ILjava/util/Set;ZILkotlin/jvm/internal/DefaultConstructorMarker;)V
 	public fun equals (Ljava/lang/Object;)Z
 	public final fun getAt ()Ljava/time/Instant;
-	public final fun getDocuments ()Ljava/util/Map;
 	public final fun getFormatLevel ()I
 	public final fun getInstance ()Ljava/lang/String;
 	public final fun getShadows ()Z
@@ -338,6 +328,25 @@ public final class me/ahoo/cosec/spi/shadow/InstanceStatus {
 }
 
 public final class me/ahoo/cosec/spi/shadow/InstanceStatus$Companion {
+}
+
+public final class me/ahoo/cosec/spi/shadow/ResidentDocuments {
+	public fun <init> (Ljava/lang/String;Ljava/time/Instant;Ljava/util/Map;)V
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getAt ()Ljava/time/Instant;
+	public final fun getDocuments ()Ljava/util/Map;
+	public final fun getInstance ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class me/ahoo/cosec/spi/shadow/ResidentReadings {
+	public fun <init> (Ljava/util/Map;Ljava/util/Set;)V
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getResidents ()Ljava/util/Map;
+	public final fun getUnreadable ()Ljava/util/Set;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
 }
 
 public final class me/ahoo/cosec/spi/shadow/ShadowOutcome : java/lang/Enum {
@@ -390,11 +399,13 @@ public abstract interface class me/ahoo/cosec/spi/shadow/ShadowReportReader {
 	public static final field Companion Lme/ahoo/cosec/spi/shadow/ShadowReportReader$Companion;
 	public fun readings (Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public abstract fun reports (Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public abstract fun residents (Ljava/util/Set;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun statusReadings (Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public abstract fun statuses (Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 }
 
 public final class me/ahoo/cosec/spi/shadow/ShadowReportReader$Companion {
+	public final fun getRESIDENT_TTL ()Ljava/time/Duration;
 	public final fun getSTATUS_TTL ()Ljava/time/Duration;
 }
 
@@ -405,6 +416,7 @@ public final class me/ahoo/cosec/spi/shadow/ShadowReportReader$DefaultImpls {
 
 public abstract interface class me/ahoo/cosec/spi/shadow/ShadowReportSink {
 	public abstract fun write (Lme/ahoo/cosec/spi/shadow/InstanceStatus;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public abstract fun write (Lme/ahoo/cosec/spi/shadow/ResidentDocuments;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public abstract fun write (Lme/ahoo/cosec/spi/shadow/ShadowReport;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 }
 

@@ -23,7 +23,9 @@ import me.ahoo.cosec.cocache.CoSecCacheSpecs
 import me.ahoo.cosec.cocache.DEFAULT_KEY_PREFIX
 import me.ahoo.cosec.cocache.snapshot.SnapshotKeyEncoder
 import me.ahoo.cosec.spi.shadow.InstanceStatus
+import me.ahoo.cosec.spi.shadow.ResidentDocuments
 import me.ahoo.cosec.spi.shadow.ShadowReport
+import me.ahoo.cosec.spi.shadow.ShadowReportReader
 import me.ahoo.cosec.spi.shadow.StoredCandidate
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import java.time.Duration
@@ -38,9 +40,10 @@ import java.time.Instant
  * | reports | `<p>:shadow:report:<window>:<instance>` | one instance's report of one window; expires [REPORT_TTL] after its last write |
  * | reporters | `<p>:shadow:reporters:<window>` | the instances that reported on one window, only ever added to; expires as the reports |
  * | statuses | `<p>:shadow:status:<instance>` | one instance's last status; expires exactly [STATUS_TTL] after its last write, no jitter |
+ * | residents | `<p>:shadow:resident:<instance>` | the documents one instance holds, with their revisions; expires exactly [RESIDENT_TTL] after its last write, no jitter |
  * | instances | `<p>:shadow:instances:all` | the instances that have a status, each with when it listed itself; expires as the reports |
  *
- * All five are `Store`s. Reports and statuses are observations, so they expire; a failed read still throws, so that an
+ * All six are `Store`s. Reports, statuses and residents are observations, so they expire; a failed read still throws, so that an
  * outage is never read as "no samples" or "no instance". Each instance writes only its own report and status keys
  * (round-2 review R1, #1214), so that one instance can never replace another's numbers, an ACL can confine each
  * instance to its own keys, and a heartbeat costs the size of one status, not of the cluster's.
@@ -51,6 +54,9 @@ internal object ShadowCacheSpecs {
 
     /** Statuses older than a minute are not counted (RFC 0007 §6.5); the key outlives that only to be read. */
     val STATUS_TTL: Duration = Duration.ofMinutes(2)
+
+    /** A resident record's life ([ShadowReportReader.RESIDENT_TTL]): an instance writes it again at half of it. */
+    val RESIDENT_TTL: Duration = ShadowReportReader.RESIDENT_TTL
 
     /** The key of the one list of instances. */
     const val INDEX_KEY: String = "all"
@@ -93,6 +99,15 @@ internal object ShadowCacheSpecs {
         keyPrefix,
         InstanceStatusCodec,
         STATUS_TTL,
+        exact = true,
+    )
+
+    /** Each instance's resident documents (`CTL-75`), under its instance id: what `propagation` reads. */
+    fun residents(keyPrefix: String = DEFAULT_KEY_PREFIX): StoreSpec<String, ResidentDocuments> = observation(
+        CoSecCacheSpecs.INSTANCE_RESIDENT_CACHE_NAME,
+        keyPrefix,
+        ResidentDocumentsCodec,
+        RESIDENT_TTL,
         exact = true,
     )
 

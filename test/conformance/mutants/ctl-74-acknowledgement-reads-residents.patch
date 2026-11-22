@@ -1,0 +1,17 @@
+# Rule: CTL-74
+# Mutant: the acknowledgement reads every live instance's resident documents too, so a window's closing path moves megabytes per instance and waits on the large records
+# Tests: :control:test --tests me.ahoo.cosec.control.lifecycle.ShadowAcknowledgementTest
+
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ShadowWindows.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ShadowWindows.kt
+index 634f510aa..51b925848 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ShadowWindows.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ShadowWindows.kt
+@@ -107,7 +107,7 @@ class ShadowWindows(
+      * window is never taken as acknowledged by statuses nobody read.
+      */
+     suspend fun acknowledgement(window: String): Acknowledgement {
+-        val read = statuses.read()
++        val read = statuses.read().also { statuses.residents() }
+         // An instance that does not shadow (its candidate source is not CoSec's) is not waited for; propagation counts it.
+         val live = read.statuses.filter { it.shadows }
+         val acknowledging = live.count { it.windows?.contains(window) == true }

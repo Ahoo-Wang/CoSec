@@ -85,7 +85,7 @@ import java.util.concurrent.atomic.AtomicInteger
  * `simulate`, `explain` and `analyze` decide with the enforcing flow while showing only what the caller may read.
  */
 class ControlPlaneTest {
-    private val clock = MutableClock()
+    val clock = MutableClock()
     val memory = InMemoryControlStore(clock)
 
     /** Changes whose stored record does not decode, as one of an app no document key can name (SCP-10). */
