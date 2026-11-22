@@ -20,7 +20,9 @@ import me.ahoo.cosec.annotations.ExperimentalCoSecApi
  * [next] still to follow.
  */
 @ExperimentalCoSecApi
-class Page<T>(val items: List<T>, val next: Cursor?) {
+class Page<T>(items: List<T>, val next: Cursor?) {
+    val items: List<T> = items.toList()
+
     override fun equals(other: Any?): Boolean = other is Page<*> && items == other.items && next == other.next
 
     override fun hashCode(): Int = listOf(items, next).hashCode()

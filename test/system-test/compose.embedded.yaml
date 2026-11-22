@@ -14,7 +14,8 @@
 # Leg 2 of the system test (test/system-test/README.md): the gateways and the IAM with the control plane embedded; no control
 # host. Read with compose.yaml. The gateways route /cosec/control to the IAM (SYSTEM_CONTROL_TARGET). The IAM decides with
 # policies like the control host does, and takes its caller from the identity the gateway forwarded
-# (cosec.pipeline.caller=forwarded-identity); its own calls to the control plane are in process, through the SDK. The
+# (cosec.pipeline.caller=forwarded-identity); its own calls to the control plane are in process, through the SDK the starter
+# makes for an instance that runs the control plane (STA-11). The
 # statement is the gateway's alone (STA-7): no other service calls the IAM's control path.
 name: cosec-system
 
@@ -27,7 +28,6 @@ x-embedded: &embedded
   # The change events, as the control hosts send them (topic cosec-control-audit).
   COSEC_CONTROL_AUDIT_KAFKA_ENABLED: "true"
   SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:9092
-  SYSTEM_CONTROL_MODE: embedded
   JAVA_OPTS: -Xms192m -Xmx384m
 
 services:

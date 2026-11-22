@@ -1,6 +1,6 @@
 # Rule: CTL-58
 # Mutant: the listing by document ignores the profile's filter: a document the route's profile does not serve is listed
-# Tests: :control:test --tests me.ahoo.cosec.control.sdk.ControlServiceTest
+# Tests: :control:test --tests me.ahoo.cosec.control.local.ControlServiceTest
 
 diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ChangeListings.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ChangeListings.kt
 index 5764e18ac..9835d6947 100644

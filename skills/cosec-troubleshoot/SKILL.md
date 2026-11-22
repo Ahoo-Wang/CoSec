@@ -643,6 +643,13 @@ A shadow window that stays blocked has a `CANDIDATE_ERROR`: one instance cannot 
 it reads an `ext.*` attribute whose provider runs on the control host but not on that instance. Providers and their
 declared types must match on every instance and the control host; the change is never published while blocked.
 
+### Startup fails on two control services
+
+- `This instance runs the control plane, and cosec.control.service-url names a control-plane host as well` (`STA-11`):
+  one `ControlService` per application. Remove `cosec.control.service-url` to embed, or set `cosec.control.enabled=false`
+  to call the host. `cosec.control.service-url needs cosec-control-http`: add `me.ahoo.cosec:cosec-control-http`.
+  https://cosec.ahoo.me/operations/troubleshooting#startup-fails-on-two-control-services
+
 ### The typed control client does not read a document
 
 - `ControlClient` throws `SnapshotFormatException` (`a <entry> has members this version does not know`): the control

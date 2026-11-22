@@ -23,11 +23,15 @@ import java.time.Instant
 @ExperimentalCoSecApi
 class ShadowClosed(
     val closedAt: Instant,
-    val counts: Map<String, Long>,
+    counts: Map<String, Long>,
     val insufficient: Boolean,
     val blocked: Boolean,
-    val vanished: List<String> = emptyList(),
+    vanished: List<String> = emptyList(),
 ) {
+    val counts: Map<String, Long> = counts.toMap()
+
+    val vanished: List<String> = vanished.toList()
+
     override fun equals(other: Any?): Boolean = other is ShadowClosed && parts() == other.parts()
 
     override fun hashCode(): Int = parts().hashCode()

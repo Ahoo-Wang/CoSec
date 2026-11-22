@@ -1062,6 +1062,24 @@
       "pending": null
     },
     {
+      "id": "CTL-77",
+      "source": "control-typed-api decisions of 2026-11-21 (the facade over HTTP; both kinds of caller in both implementations, a parity suite)",
+      "statement": "The control plane's facade has two implementations that answer alike: in process (`LocalControlService`) and over a control-plane host's service port (`HttpControlService`). Both make each call of the narrow set into the same request (one route table, `RoutedControlService`), and state a caller with one mapping each: a request's principal as the gateway forwards it (`IdentityIssuer`), the application's own principal as one service identity (`ServiceIdentity`), which the HTTP implementation writes into `CoSec-Identity` and the in-process one hands to the gate. A context CoSec did not make is refused by either before anything is asked, and a request's principal with no credential is refused by the HTTP implementation rather than sent as anonymous. The same script of calls, as both kinds of caller, answers the same in both for every answer and refusal of the control plane (state, operations, findings, conflicts, statuses and listings with their cursors, less what names the call itself). Over HTTP only a 2xx is an answer: any other status, a redirect or a proxy's error page included, is a refusal carrying that status and body; a call waits for its answer no longer than its timeout (30 s by default) and then fails with HttpTimeoutException, the outcome of a write unknown; and any other failure of the transport propagates as the client's IOException. That is the one difference: in process, the control plane is behind no connection.",
+      "level": "build",
+      "pending": null,
+      "guards": [
+        "spring-boot:ControlServiceParityTest#the in-process and the HTTP implementation answer every call alike - CTL-77",
+        "control-http:HttpControlServiceTest#each call is the route's request",
+        "control-http:HttpControlServiceTest#a service caller is stated as the identity the in-process implementation admits",
+        "control-http:HttpControlServiceTest#a request's caller is stated as the gateway forwards it",
+        "control-http:HttpControlServiceTest#a caller that cannot be stated is refused before anything is sent",
+        "control-http:HttpControlServiceTest#a refusal is the route's problem",
+        "control-http:HttpControlServiceTest#only a 2xx is an answer",
+        "control-http:HttpControlServiceTest#a call that is not answered within its timeout ends",
+        "control-http:HttpControlServiceTest#a transport failure is the client's own exception"
+      ]
+    },
+    {
       "id": "CTL-80",
       "source": "control-typed-api decisions of 2026-11-21 (a service that calls the control plane tells read-again from wait from stop without reading a message)",
       "statement": "Every 409 the control API answers names which conflict it is, in the problem's `conflict` member, one of a closed set (`contract/control/vocabularies.json`): BASE_MOVED (the document's head is not the change's base: read it again, propose again or rebase), SLOT_HELD (another change holds the document's staging slot, which the problem's `heldBy` names wherever `detail` names it, so nothing more is told: wait for it, or abandon it), STATE (the change's state does not admit the step), CANDIDATE_MOVED (the candidate named is not the change's), WINDOW_OPEN (the shadow window is still open), WINDOW_BLOCKED (the window closed blocked: the change never publishes), CONTENDED (concurrent writes kept changing the record: the same call may succeed), EXISTS (something of that id already stands where the step needs something else: a change of that id, a binding break-glass would create, or a binding a break-glass revoke names that break-glass did not write). No other status carries the member, and no 409 is answered without it; `detail` still explains the case to a person and is no contract. No conflict but SLOT_HELD carries `heldBy` (`contract/control/conflict.json`). The typed write call (`proposeAndPublishWithoutShadow`) abandons the holder only when it is a change of the same author left CHECKED, SHADOWING or READY and not updated for at least the write's patience, by the control plane's times (the holder's updatedAt against the createdAt of the change the write just proposed): a writer that died holds the document for one patience. It waits for any other holder, so concurrent writers of one principal wait for each other and both publish.",

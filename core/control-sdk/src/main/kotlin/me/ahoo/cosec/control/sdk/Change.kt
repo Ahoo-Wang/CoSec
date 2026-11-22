@@ -33,9 +33,9 @@ class Change(
     val base: ChangeBase,
     val note: String,
     val author: Actor,
-    val operations: List<Operation>,
-    val findings: List<Finding>,
-    val escalations: List<Escalation>,
+    operations: List<Operation>,
+    findings: List<Finding>,
+    escalations: List<Escalation>,
     val candidate: String?,
     val publishedRevision: Long?,
     val skipShadow: String?,
@@ -45,6 +45,12 @@ class Change(
     val createdAt: Instant,
     val updatedAt: Instant,
 ) {
+    val operations: List<Operation> = operations.toList()
+
+    val findings: List<Finding> = findings.toList()
+
+    val escalations: List<Escalation> = escalations.toList()
+
     override fun equals(other: Any?): Boolean = other is Change && parts() == other.parts()
 
     override fun hashCode(): Int = parts().hashCode()

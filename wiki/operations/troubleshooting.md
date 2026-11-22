@@ -642,6 +642,18 @@ issues no token, and without the control plane it would be up and serve nothing.
 verifies tokens or signs people in is an application of your own, with `cosec-control`; the gateway image is the
 read-only one.
 
+### Startup fails on two control services {#startup-fails-on-two-control-services}
+
+```text
+This instance runs the control plane, and cosec.control.service-url names a control-plane host as well: an application has one ControlService. ... (STA-11)
+```
+
+The instance has `cosec-control` (and `cosec-cocache`) with the control plane on, and `cosec.control.service-url` set too.
+An application has one `ControlService`: the in-process one where it runs the control plane, the HTTP one where it calls a
+host. To embed the control plane, remove `cosec.control.service-url`. To call the host, set `cosec.control.enabled=false`
+(or leave `cosec-control` out). `cosec.control.service-url needs cosec-control-http` means the host is named and the
+module that calls it is missing: add `me.ahoo.cosec:cosec-control-http`.
+
 ### Startup fails on a hidden-method filter behind a gateway {#startup-fails-on-a-hidden-method-filter-behind-a-gateway}
 
 ```text

@@ -267,7 +267,23 @@ curl -X POST localhost:8080/cosec/control/v1/explain \
 
 ## 在代码中修改策略 {#changing-policies-from-your-code}
 
-内嵌控制面的服务（例如为租户开通的 IAM 服务）在自己的代码中通过 `ControlService`（`cosec-control-sdk`，`cosec-control` 会带上它；`@ExperimentalCoSecApi`）调用控制面。凡是装配了控制面的地方，starter 都会提供它的 bean。每次调用都由策略按 `ControlCaller` 所声明的主体作出决策，并记为该主体的步骤。调用经过控制 API 自己的路由：同样的调用经 HTTP 发出，应答相同、记录相同、被拒绝的方式也相同（`CTL-65`）。
+在自己的代码中修改策略的服务（例如为租户开通的 IAM 服务），无论内嵌控制面还是调用控制面宿主，都通过 `ControlService`（`cosec-control-sdk`；`@ExperimentalCoSecApi`）调用控制面。starter 只提供它的一个 bean（`STA-11`）：
+
+- 实例运行控制面时，是进程内实现（`cosec-control` 会带上 `cosec-control-sdk`）；
+- `cosec.control.service-url` 指定控制面宿主的控制 API（例如 `http://control:8082/cosec/control/v1`，即它的服务端口）时，是调用该端口的 `HttpControlService`（`cosec-control-http`，它会带上 `cosec-runtime`）；
+- 两者同时出现会导致启动失败：去掉其中一个。
+
+每次调用都由策略按 `ControlCaller` 所声明的主体作出决策，并记为该主体的步骤。调用经过控制 API 自己的路由：同样的调用无论在进程内还是经网络发出，应答相同、记录相同、被拒绝的方式也相同（`CTL-65`、`CTL-77`）。经网络时，调用方在每次调用写出的 `CoSec-Identity` 中声明：请求的主体按网关转发的方式写，应用自己的主体按进程内实现接纳的身份写。宿主相信这个请求头，是因为只有你指定的服务能到达它的服务端口。认证器没有给出凭证的请求主体无法经网络声明，在发出任何请求之前就被拒绝。经网络时，只有 `2xx` 是应答：任何其他状态（包括重定向和代理的错误页）都是带有该状态和响应体的 `ControlRefusedException`。调用默认等待应答 30 秒（`HttpControlService` 的 `timeout`），之后抛出 `HttpTimeoutException`。超时的写操作结果未知：重试前请重新读取变更或文档。它留下的暂存变更，会在一个耐心时间之后被同一主体的下一次 `proposeAndPublishWithoutShadow` 接管。连接的其他任何失败都是客户端抛出的 `IOException`：这是进程内实现永远不会给出的唯一一种结果。
+
+starter 的 `HttpControlService` 使用 JDK 默认的 `HttpClient`，不出示客户端证书。对于服务端口要求客户端证书（双向 TLS）的宿主，声明应用自己的 `ControlService` bean 并使用它自己的客户端；此时 starter 不再创建：
+
+```kotlin
+@Bean
+fun controlService(sslContext: SSLContext): ControlService = HttpControlService(
+    URI("https://control:8082/cosec/control/v1"),
+    HttpClient.newBuilder().sslContext(sslContext).build(),
+)
+```
 
 - **谁在执行：**
   - `ControlCaller.of(securityContext)` 以你正在服务的请求的用户身份执行。它接受 CoSec 为该请求创建的 `SecurityContext`，拒绝你的代码自行组装的上下文。

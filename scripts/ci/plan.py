@@ -72,7 +72,7 @@ READS = {
     "skills/": ("document", "spring-boot"),
     "k8s/": ("spring-boot",),
     "schema/": ("document", "control-sdk"),
-    "contract/": ("runtime", "jwt", "control-sdk"),
+    "contract/": ("runtime", "jwt", "control", "control-sdk"),
     # EnvironmentVariableSpellingTest: every COSEC_* variable the images' files and the system test's compose files
     # show. A READS entry applies on top of the project a path is in: `platform/control-server/` is also a project.
     "platform/": ("spring-boot",),

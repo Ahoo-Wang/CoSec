@@ -1,0 +1,16 @@
+# Rule: CTL-77
+# Mutant: the HTTP implementation states a service caller without the roles it was given, so it acts with less than the in-process one
+# Tests: :control-http:test --tests me.ahoo.cosec.control.http.HttpControlServiceTest
+diff --git a/extensions/control-http/src/main/kotlin/me/ahoo/cosec/control/http/HttpTransport.kt b/extensions/control-http/src/main/kotlin/me/ahoo/cosec/control/http/HttpTransport.kt
+index d375025a0..21e9e6981 100644
+--- a/extensions/control-http/src/main/kotlin/me/ahoo/cosec/control/http/HttpTransport.kt
++++ b/extensions/control-http/src/main/kotlin/me/ahoo/cosec/control/http/HttpTransport.kt
+@@ -85,7 +85,7 @@ internal class HttpTransport(
+         }
+         val identity = ServiceIdentity.of(
+             checkNotNull(caller.principal),
+-            caller.roles,
++            emptySet(),
+             app,
+             clock.instant(),
+             ids.generate()

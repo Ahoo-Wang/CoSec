@@ -328,10 +328,11 @@ spring:
                 cosec-app-id: cosec-control   # cosec.control.app-id, the image's cosec.authorization.scope.app-id
 ```
 
-A service calls port 8082 with a `CoSec-Identity` header it writes (`IdentityHeader.write`, `cosec-document`), naming the
-principal it acts as. The control plane decides for that principal, with the bindings the platform document gives it, and
-the change records that the identity was asserted. A request with no identity is `401`, and a bearer token is not an
-identity: the host verifies none. The service API has no client class of its own yet.
+A service calls port 8082 through `HttpControlService` (`cosec-control-http`; the starter's `ControlService` where
+`cosec.control.service-url` is `http://<host>:8082/cosec/control/v1`), which writes a `CoSec-Identity` header for each call,
+naming the principal it acts as. The control plane decides for that principal, with the bindings the platform document
+gives it, and the change records that the identity was asserted. A request with no identity is `401`, and a bearer token
+is not an identity: the host verifies none.
 
 **The statement and the policies are one thing.** The statement is true because of the network, one policy per port: the
 gateway's pods to 8080, the named services to 8082, monitoring to 8081. The manifests in [`k8s/control/`](#kubernetes)

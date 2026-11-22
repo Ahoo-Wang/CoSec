@@ -40,6 +40,16 @@ object GuardAllowlist {
             "spring-boot:ControlServicePortTest#a service port beside the application's, the management port or a disabled control API is refused",
             "spring-boot:ControlServicePortTest#a service port with no WebFlux server to serve it fails startup naming what to do",
             "spring-boot:ControlServicePortTest#cosec control http enabled false serves no control route, and the control plane stays for what embeds it",
+            // CTL-77: the facade's two implementations answer alike.
+            "spring-boot:ControlServiceParityTest#the in-process and the HTTP implementation answer every call alike - CTL-77",
+            "control-http:HttpControlServiceTest#each call is the route's request",
+            "control-http:HttpControlServiceTest#a service caller is stated as the identity the in-process implementation admits",
+            "control-http:HttpControlServiceTest#a request's caller is stated as the gateway forwards it",
+            "control-http:HttpControlServiceTest#a caller that cannot be stated is refused before anything is sent",
+            "control-http:HttpControlServiceTest#a refusal is the route's problem",
+            "control-http:HttpControlServiceTest#only a 2xx is an answer",
+            "control-http:HttpControlServiceTest#a call that is not answered within its timeout ends",
+            "control-http:HttpControlServiceTest#a transport failure is the client's own exception",
             // CTL-76: the typed control objects say what the wire says.
             "control-sdk:TypedWireTest#each document entry reads exactly the members of the document format - CTL-76",
             "control-sdk:TypedWireTest#every tenant and app document of the wiki reads and writes back as the same document - CTL-76",
@@ -313,6 +323,12 @@ object GuardAllowlist {
             "cocache:RedisSocialStateStoreTest#aStateIsTakenOnce",
         ),
         "startup" to setOf(
+            // STA-11: an application has one ControlService.
+            "spring-boot:ControlServiceChoiceTest#an instance that runs the control plane gets the in-process ControlService - STA-11",
+            "spring-boot:ControlServiceChoiceTest#an instance that names a control-plane host gets the HTTP ControlService - STA-11",
+            "spring-boot:ControlServiceChoiceTest#an instance that neither runs the control plane nor names a host has no ControlService - STA-11",
+            "spring-boot:ControlServiceChoiceTest#an instance that runs the control plane and names a host does not start - STA-11",
+            "spring-boot:ControlServiceChoiceTest#a host named without cosec-control-http fails naming the artifact - STA-1",
             // PIP-33, OBS-10: every stage's and listener's timeout is a share of a deadline the operator states.
             "runtime:StageBudgetsTest#a required listener's wait ends inside the request",
             "runtime:StageBudgetsTest#a share of a tiny deadline is never zero",

@@ -100,9 +100,10 @@ class EverythingRuns(unittest.TestCase):
 class GroupsFollowTheGraph(unittest.TestCase):
     def test_a_project_runs_its_own_group_and_that_of_every_project_that_depends_on_it(self):
         ran, skipped, _ = run("edge/webmvc/src/main/kotlin/me/ahoo/A.kt")
-        # `platform`: the control server depends on spring-boot
-        self.assertEqual({"edge", "host", "test", "platform"}, ran)
-        self.assertEqual({"api", "core", "backends", "extensions", "migration"}, set(skipped))
+        # `platform`: the control server depends on spring-boot; `extensions`: cosec-control-http's tests use the test kit,
+        # which compiles against webmvc's bindings
+        self.assertEqual({"edge", "host", "test", "platform", "extensions"}, ran)
+        self.assertEqual({"api", "core", "backends", "migration"}, set(skipped))
 
     def test_a_test_source_counts_as_the_project(self):
         self.assertEqual(run("extensions/kafka/src/main/kotlin/A.kt")[0], run("extensions/kafka/src/test/kotlin/A.kt")[0])

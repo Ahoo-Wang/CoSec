@@ -26,13 +26,17 @@ import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 @ExperimentalCoSecApi
 class Statement(
     val effect: Effect,
-    val actions: List<String>,
-    val resources: List<Resource> = emptyList(),
+    actions: List<String>,
+    resources: List<Resource> = emptyList(),
     val condition: Condition? = null,
     val name: String? = null,
     val onMissing: OnMissing? = null,
     val onMissingConfirmed: OnMissingConfirmation? = null,
 ) {
+    val actions: List<String> = actions.toList()
+
+    val resources: List<Resource> = resources.toList()
+
     init {
         require(actions.isNotEmpty()) { "A statement names at least one action." }
     }

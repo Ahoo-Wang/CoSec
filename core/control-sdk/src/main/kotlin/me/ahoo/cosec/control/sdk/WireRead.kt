@@ -11,16 +11,23 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.control.sdk
 
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.control.sdk.WireJson.format
 import me.ahoo.cosec.spi.snapshot.SnapshotFormatException
+import me.ahoo.cosec.spi.snapshot.SnapshotKeyText
 import tools.jackson.databind.JsonNode
 import java.time.Instant
 import java.time.format.DateTimeParseException
 
 /** How the typed layer reads a member of the control API's JSON: a value that does not read is a format error. */
 internal object WireRead {
+    /** How many unknown members a refusal names. */
+    private const val NAMED = 5
+
     fun JsonNode.need(
         name: String
     ): JsonNode = get(name)?.takeUnless { it.isNull } ?: throw format("[$name] is missing")
@@ -79,9 +86,10 @@ internal object WireRead {
         if (!isObject) throw format("a $entry is not an object")
         val unknown = properties().map { it.key }.filterNot { it in members }
         if (unknown.isNotEmpty()) {
-            throw format(
-                "a $entry has members this version does not know (${unknown.size}); read it with a later version"
-            )
+            // Member names are the format's, never values: they say what to upgrade for.
+            val named = unknown.take(NAMED).joinToString { "[${SnapshotKeyText.printable(it)}]" } +
+                if (unknown.size > NAMED) " and ${unknown.size - NAMED} more" else ""
+            throw format("a $entry has members this version does not know: $named; read it with a later version")
         }
     }
 }

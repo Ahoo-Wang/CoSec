@@ -1,17 +1,16 @@
 # Rule: CTL-57
 # Mutant: a call through the control plane's facade is recorded as if a connection carried it, with the credential's method, not via.method: in-process
 # Tests: :control:test --tests me.ahoo.cosec.control.local.ControlServiceTest
-
 diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/local/LocalControlService.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/local/LocalControlService.kt
-index 7c59a9892..3ad6354da 100644
+index 1b6c860a4..4cf1be18c 100644
 --- a/core/control/src/main/kotlin/me/ahoo/cosec/control/local/LocalControlService.kt
 +++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/local/LocalControlService.kt
-@@ -150,7 +150,7 @@ class LocalControlService(
-         query: Map<String, String> = emptyMap(),
-         body: String? = null,
-     ): String {
--        val request = ControlHttpRequest(method, path, query, body?.encodeToByteArray(), inProcess = true)
-+        val request = ControlHttpRequest(method, path, query, body?.encodeToByteArray(), inProcess = false)
+@@ -64,7 +64,7 @@ class LocalControlService(
+             call.path,
+             call.query,
+             call.body?.encodeToByteArray(),
+-            inProcess = true
++            inProcess = false
+         )
          val response = http.handle(request, security(caller))
          if (response.status >= BAD_REQUEST) throw refusal(response)
-         return response.body.decodeToString()

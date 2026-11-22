@@ -53,6 +53,10 @@ object DependencyRules {
         "micrometer" to PURE + setOf("model", "spi", "runtime"),
         "opentelemetry" to PURE + setOf("model", "runtime"),
         "kafka" to PURE + setOf("model", "spi", "document", "runtime"),
+        // The control plane's facade over HTTP (CTL-77). It brings the request path: a request's caller is written as the
+        // gateway forwards it (IdentityIssuer), and a service caller as the in-process implementation admits it
+        // (ServiceIdentity), so both implementations state a caller with one mapping, never a copy of it.
+        "control-http" to setOf("control-sdk", "runtime"),
         // An implementation of the IdGenerator port, and nothing more of CoSec.
         "cosid" to setOf("spi", "model", "api", "annotations"),
     )

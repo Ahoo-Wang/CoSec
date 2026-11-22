@@ -26,6 +26,7 @@ import me.ahoo.cosec.spring.boot.authentication.ConditionalOnLoginEnabled
 import me.ahoo.cosec.spring.boot.authentication.route.LoginRoutesCheck
 import me.ahoo.cosec.spring.boot.authentication.social.ConditionalOnSocialAuthenticationEnabled
 import me.ahoo.cosec.spring.boot.control.ControlPlaneCondition
+import me.ahoo.cosec.spring.boot.control.ControlServiceChoice
 import me.ahoo.cosec.spring.boot.cosid.CosIdGeneratorProperties
 import me.ahoo.cosec.spring.boot.jwt.ConditionalOnJwtEnabled
 import me.ahoo.cosec.spring.boot.micrometer.MetricsProperties
@@ -200,6 +201,18 @@ internal class CoSecModuleCheckAutoConfiguration {
                     "Control plane off on this instance: ${ControlPlaneCondition.ENABLED_KEY}=false; policy documents " +
                         "and candidates are read read-only."
                 }
+            }
+        }
+    }
+
+    /** A control-plane host named (`cosec.control.service-url`), and the module that calls it missing (`STA-11`). */
+    @Configuration(proxyBeanMethods = false)
+    @ConditionalOnCoSecEnabled
+    class ControlClient {
+        @Bean
+        fun cosecControlClientModuleCheck(context: ApplicationContext): StartupTask = StartupTask.OnCreation {
+            if (ControlServiceChoice.named(context.environment)) {
+                checkModule(context, ControlServiceChoice.HTTP_SERVICE, "cosec-control-http", ControlServiceChoice.KEY)
             }
         }
     }

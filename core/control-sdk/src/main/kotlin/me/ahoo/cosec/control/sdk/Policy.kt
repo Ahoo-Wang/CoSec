@@ -23,11 +23,13 @@ import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 @ExperimentalCoSecApi
 class Policy(
     val id: String,
-    val statements: List<Statement>,
+    statements: List<Statement>,
     val attachable: Boolean = false,
     val condition: Condition? = null,
     val boundary: Boolean = false,
 ) {
+    val statements: List<Statement> = statements.toList()
+
     override fun equals(other: Any?): Boolean = other is Policy && parts() == other.parts()
 
     override fun hashCode(): Int = parts().hashCode()

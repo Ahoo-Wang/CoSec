@@ -45,6 +45,7 @@ flowchart BT
     runtime[cosec-runtime] --> document & engine & spi & annotations
     controlsdk[cosec-control-sdk] --> document & spi & api
     control[cosec-control] --> runtime & document & controlsdk
+    controlhttp[cosec-control-http] --> controlsdk & runtime
     cocache[cosec-cocache] --> spi & document
     kafka[cosec-kafka] --> spi & runtime
     login[cosec-login] --> runtime
@@ -115,6 +116,12 @@ The rules behind the picture:
   It depends on
   `cosec-document`, `cosec-spi` and `cosec-api` only, never on `cosec-runtime` or the control plane, so code that calls
   a control-plane host does not bring the request path (`DependencyRules`).
+- **`cosec-control-http`** (directory `extensions/control-http/`) is `ControlService` on a control-plane host: `HttpControlService`
+  calls the host's service port with the JDK's `HttpClient`, the same requests the in-process implementation makes (one
+  route table in `cosec-control-sdk`), and states each caller in `CoSec-Identity`: a request's principal as the gateway
+  forwards it (`IdentityIssuer`), the application's own as the identity the in-process implementation admits
+  (`ServiceIdentity`). That is why it brings `cosec-runtime`: one mapping for both implementations, never a copy
+  (`CTL-77`). The starter wires one `ControlService`, this one where `cosec.control.service-url` names a host (`STA-11`).
 - **`cosec-control`** (directory `core/control/`) is the control plane: revisions, change requests, shadow windows,
   approvals, break-glass, simulation and analysis, and the in-process implementation of `ControlService`
   (`LocalControlService`). The starter wires it into a host; an application calls it only through `ControlService`, or

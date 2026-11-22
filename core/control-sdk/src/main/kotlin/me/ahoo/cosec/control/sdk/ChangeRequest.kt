@@ -25,9 +25,11 @@ import me.ahoo.cosec.spi.snapshot.SnapshotKey
 class ChangeRequest(
     val document: SnapshotKey,
     val base: Long,
-    val operations: List<Operation>,
+    operations: List<Operation>,
     val note: String = "",
 ) {
+    val operations: List<Operation> = operations.toList()
+
     override fun equals(other: Any?): Boolean = other is ChangeRequest && parts() == other.parts()
 
     override fun hashCode(): Int = parts().hashCode()

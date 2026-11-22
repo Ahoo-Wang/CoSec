@@ -86,5 +86,5 @@ services:
     environment:
       # The control API is the hosts': this process embeds none, and calls the service port of control-1.
       COSEC_CONTROL_ENABLED: "false"
-      SYSTEM_CONTROL_MODE: http
-      SYSTEM_CONTROL_SERVICE_URL: http://control-1:8082
+      # Its ControlService is the HTTP one, over control-1's service port (STA-11): the IAM's code is leg 2's.
+      COSEC_CONTROL_SERVICEURL: http://control-1:8082/cosec/control/v1

@@ -117,6 +117,8 @@ class CoSecSwitchesTest {
             "cosec.authentication.login.refresh.path",
             // A port number: the service port is on where one is written, and nothing compares it with a value.
             "cosec.control.http.service-port",
+            // An address: the HTTP ControlService where one is written (STA-11); HttpControlService refuses one it cannot use.
+            "cosec.control.service-url",
             "cosec.cosid.generator",
         )
     }

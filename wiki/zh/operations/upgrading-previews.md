@@ -41,7 +41,7 @@ description: "每个 8.0 预览版（alpha 与 beta）到下一个之间的变�
   `ShadowReportReader.RESIDENT_TTL`，`residents` 应答能读取的记录，并在 `unreadable` 中列出记录缺失或无法解码的实例
   （[扩展](../architecture/extending.md)）。没有默认实现：回答“什么都不持有”的默认实现会让 `installed == holding` 在
   并不知情时声称没有实例落后。
-- **控制面门面成为独立模块 `cosec-control-sdk`**（`CTL-65`）。受影响：调用 `ControlService` 的代码。`ControlService`、`ControlCaller` 和 `ControlRefusedException` 的名称和包（`me.ahoo.cosec.control.sdk`）不变；`cosec-control` 会带上这个模块，所以已依赖 `cosec-control` 的构建无需改动。只调用控制面宿主的代码只需要 `cosec-control-sdk`，加上它的一个实现。
+- **控制面门面成为独立模块 `cosec-control-sdk`**（`CTL-65`）。受影响：调用 `ControlService` 的代码。`ControlService`、`ControlCaller` 和 `ControlRefusedException` 的名称和包（`me.ahoo.cosec.control.sdk`）不变；`cosec-control` 会带上这个模块，所以已依赖 `cosec-control` 的构建无需改动。只调用控制面宿主的代码需要 `cosec-control-sdk` 及其 HTTP 实现 `cosec-control-http`（`cosec.control.service-url`），不必再自己写 `CoSec-Identity`。
   - `ControlService.changes` 按 `me.ahoo.cosec.control.sdk.ChangeState` 过滤，这是线上格式的封闭集合，未知值保留其文本（`isUnknown`），不再是控制面内部的枚举：请传入新包的 `ChangeState.READY`，或 `ChangeState.of("READY")`。
   - `ControlCaller.of(context)` 不再对 CoSec 未创建的安全上下文抛出异常：改由接收它的调用抛出同样的 `IllegalArgumentException`（`PIP-29`）。
 - **每个阶段的超时都是 `cosec.pipeline.timeout` 的一份，十个 key 被删除**（`PIP-33`、`OBS-10`；能计算出来的就不配置）。受影响：设置了其中某一项的配置，以及在 `Pipeline.builder` 的 `options { }` 或 `listeners { }` 中设置过超时的代码。启动会失败并列出 CoSec 不读取的 key，对每个都说明它已不再是配置项以及由什么取代。删掉这个 key；如果你原来移动过这个值，就改为移动 `cosec.pipeline.timeout`（或下表所列的值）。在默认的 5 秒期限下，每个值都等于它原来的默认值，所以什么都没设置的部署照旧应答（[由计算得出，而非配置](./configuration.md#computed-not-configured)）。

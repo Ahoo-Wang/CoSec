@@ -20,5 +20,6 @@ me.ahoo.cosec.spring.boot.control.CoSecControlAutoConfiguration
 me.ahoo.cosec.spring.boot.control.CoSecControlStoreFormatAutoConfiguration
 me.ahoo.cosec.spring.boot.control.CoSecControlRoutesAutoConfiguration
 me.ahoo.cosec.spring.boot.control.CoSecControlServicePortAutoConfiguration
+me.ahoo.cosec.spring.boot.control.CoSecControlClientAutoConfiguration
 me.ahoo.cosec.spring.boot.actuate.CoSecServiceGeneratorEndpointAutoConfiguration
 me.ahoo.cosec.spring.boot.openapi.CoSecOpenAPIAutoConfiguration

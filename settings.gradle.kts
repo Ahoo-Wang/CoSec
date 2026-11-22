@@ -49,7 +49,7 @@ val groups = linkedMapOf(
     "core" to listOf("model", "engine", "spi", "document", "runtime", "control", "control-sdk"),
     "backends" to listOf("cocache"),
     "edge" to listOf("webflux", "webmvc", "gateway", "openapi"),
-    "extensions" to listOf("jwt", "social", "login", "ip2region", "micrometer", "opentelemetry", "cosid", "kafka"),
+    "extensions" to listOf("jwt", "social", "login", "ip2region", "micrometer", "opentelemetry", "cosid", "kafka", "control-http"),
     "host" to listOf("spring-boot"),
     "migration" to listOf("migrate"),
     "test" to listOf("testkit", "conformance", "architecture", "e2e", "client-host", "system-test", "system-behind", "system-auth", "system-enforcer", "code-coverage-report"),

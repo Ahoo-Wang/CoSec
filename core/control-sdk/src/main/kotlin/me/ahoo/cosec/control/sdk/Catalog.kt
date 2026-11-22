@@ -17,7 +17,9 @@ import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 
 /** An app's catalog (the document format's `catalog`, RFC 0012): the permissions its roles are made of, in groups. */
 @ExperimentalCoSecApi
-class Catalog(val groups: List<CatalogGroup>) {
+class Catalog(groups: List<CatalogGroup>) {
+    val groups: List<CatalogGroup> = groups.toList()
+
     override fun equals(other: Any?): Boolean = other is Catalog && groups == other.groups
 
     override fun hashCode(): Int = groups.hashCode()

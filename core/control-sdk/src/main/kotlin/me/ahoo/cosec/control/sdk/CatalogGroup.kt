@@ -19,10 +19,12 @@ import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 @ExperimentalCoSecApi
 class CatalogGroup(
     val name: String,
-    val permissions: List<CatalogPermission>,
+    permissions: List<CatalogPermission>,
     val spaced: Boolean = false,
     val description: String? = null,
 ) {
+    val permissions: List<CatalogPermission> = permissions.toList()
+
     override fun equals(other: Any?): Boolean = other is CatalogGroup && parts() == other.parts()
 
     override fun hashCode(): Int = parts().hashCode()

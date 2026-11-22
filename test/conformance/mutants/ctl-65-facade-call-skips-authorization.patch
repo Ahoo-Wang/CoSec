@@ -1,6 +1,6 @@
 # Rule: CTL-65
 # Mutant: a proposal is stored without deciding whether its caller may write and grant what it holds: a call through the facade by a principal the policies do not permit goes through
-# Tests: :control:test --tests me.ahoo.cosec.control.sdk.ControlServiceTest
+# Tests: :control:test --tests me.ahoo.cosec.control.local.ControlServiceTest
 
 diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Proposals.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Proposals.kt
 index 1fa04793b..145968649 100644

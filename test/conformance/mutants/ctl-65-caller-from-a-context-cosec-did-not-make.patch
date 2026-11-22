@@ -1,17 +1,16 @@
 # Rule: CTL-65
 # Mutant: a ControlCaller made of a security context CoSec's gate or pipeline did not make is not refused as such by the implementation
 # Tests: :control:test --tests me.ahoo.cosec.control.local.ControlServiceTest
-
 diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/local/LocalControlService.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/local/LocalControlService.kt
-index 7c59a9892..5b45945d3 100644
+index 1b6c860a4..4272cec2a 100644
 --- a/core/control/src/main/kotlin/me/ahoo/cosec/control/local/LocalControlService.kt
 +++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/local/LocalControlService.kt
-@@ -159,7 +159,7 @@ class LocalControlService(
+@@ -74,7 +74,7 @@ class LocalControlService(
      /** The request security [caller] acts with: its request's, or a service identity the gate admits now. */
      private fun security(caller: ControlCaller): RequestSecurity {
          caller.context?.let { context ->
 -            return requireNotNull(RequestSecurity.of(context)) { ControlCaller.NOT_COSEC_CONTEXT }
 +            RequestSecurity.of(context)?.let { return it }
          }
-         val principal = checkNotNull(caller.principal)
-         val now = clock.instant()
+         val requestId = ids.generate()
+         val identity = ServiceIdentity.of(

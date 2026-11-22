@@ -68,5 +68,11 @@ internal class CoSecControlServicePortAutoConfiguration {
         @Bean
         fun cosecControlServicePortEnvironmentCheck(environment: Environment): StartupTask.BeforeBeans =
             StartupTask.BeforeBeans { ControlServicePort.check(environment) }
+
+        /** `STA-11`: this instance runs the control plane, so it names no control-plane host as well. */
+        @JvmStatic
+        @Bean
+        fun cosecControlServiceChoiceCheck(environment: Environment): StartupTask.BeforeBeans =
+            StartupTask.BeforeBeans { ControlServiceChoice.check(environment) }
     }
 }
