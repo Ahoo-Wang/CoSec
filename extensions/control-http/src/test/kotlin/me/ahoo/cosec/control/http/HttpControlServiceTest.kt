@@ -36,18 +36,22 @@ import me.ahoo.test.asserts.assert
 import me.ahoo.test.asserts.assertThrownBy
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.Timeout
 import java.io.IOException
 import java.net.InetSocketAddress
 import java.net.URI
 import java.net.http.HttpTimeoutException
 import java.time.Duration
 import java.time.Instant
+import java.util.concurrent.TimeUnit
 
 /**
  * [HttpControlService] on the wire (`CTL-77`): each call is the route's request, the caller stated in `CoSec-Identity`
  * as the gateway forwards a request's principal or as the in-process implementation admits a service, and a refusal is
  * the route's problem. What a host answers is held to the in-process implementation's by the starter's parity suite.
+ * A call that never ends fails its test rather than holding the build (a mutant without the timeout is killed so).
  */
+@Timeout(value = 20, unit = TimeUnit.SECONDS)
 class HttpControlServiceTest {
     /** What the server received, one line per request: method, raw path and query, body. */
     private val received = mutableListOf<String>()
