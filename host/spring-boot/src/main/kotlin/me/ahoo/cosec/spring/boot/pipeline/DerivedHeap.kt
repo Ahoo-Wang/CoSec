@@ -37,11 +37,12 @@ internal object DerivedHeap {
         HeapBudget.count(budget.revocationTables, REVOCATION_ENTRY_BYTES).toLong()
 
     /** The heap's part of the startup line; [queueCapacity] is each BEST_EFFORT decision listener's, when there are any. */
-    fun line(budget: HeapBudget, queueCapacity: Int?): String =
-        "heap budget ($budget): revocation tables=${revocationEntries(budget)} entries each " +
+    fun line(budget: HeapBudget, queueCapacity: Int?): String {
+        val queues = queueCapacity?.let {
+            ", decision listener queues=$it events each (${HeapBudget.DECISION_EVENT_BYTES} B an event)"
+        }
+        return "heap budget ($budget): revocation tables=${revocationEntries(budget)} entries each " +
             "(${RevokedTokenCache.ENTRY_BYTES} + ${RevokedSubjectCache.ENTRY_BYTES} B a pair), token cache weighed at " +
-            "${VerifiedTokenCache.BYTES_PER_TOKEN_CHAR} B a token character" +
-            (queueCapacity?.let {
-                ", decision listener queues=$it events each (${HeapBudget.DECISION_EVENT_BYTES} B an event)"
-            } ?: "")
+            "${VerifiedTokenCache.BYTES_PER_TOKEN_CHAR} B a token character${queues.orEmpty()}"
+    }
 }

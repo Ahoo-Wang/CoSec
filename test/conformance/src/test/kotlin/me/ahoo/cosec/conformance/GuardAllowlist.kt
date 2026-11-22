@@ -230,7 +230,6 @@ object GuardAllowlist {
             "spring-boot:SnapshotMetricsWiringTest#with a registry the source counts into it and its gauges are bound",
             "runtime:PipelineBuilderFailureTest#an invalid prewarmed id is refused before the source subscribes",
             "runtime:PipelineBuilderFailureTest#an invalid snapshot option is refused before anything is acquired",
-            "runtime:PipelineBuilderFailureTest#an invalid listener setting is refused before the source subscribes",
             "runtime:PipelineBuilderFailureTest#a subscription that fails releases the listeners, and the caller sees its own exception",
             "runtime:SnapshotSourceConstructionTest#a periodic pass that cannot be scheduled releases the subscription the source took",
             "migrate:ConditionTranslatorTest#no row widens access against what enforcement fills",

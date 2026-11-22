@@ -63,9 +63,8 @@ class RevocationCachePrecedenceTest {
         runner.run { context ->
             context.startupFailure.assert().isNull()
             val runtime = context.getBean(CacheRuntime::class.java)
-            caches.map { checkNotNull(
-                runtime.policy(it)
-            ).local.maximumSize }.assert().isEqualTo(listOf(expected, expected))
+            val counts = caches.map { checkNotNull(runtime.policy(it)).local.maximumSize }
+            counts.assert().isEqualTo(listOf(expected, expected))
         }
     }
 
