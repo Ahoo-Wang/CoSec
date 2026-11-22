@@ -48,7 +48,7 @@ class MutantTree(val directory: Path, private val git: String) {
         run("reset", "--hard", "--quiet", "HEAD")
         run("clean", if (clean) "-fdxq" else "-fdq")
         val changed = changes()
-        check(changed.isEmpty()) { "The mutant's patch could not be reverted; stopping before the next mutant:\n$changed" }
+        check(changed.isEmpty()) { "The patch could not be reverted; stopping before the next mutant:\n$changed" }
     }
 
     /** `git status --porcelain` of tracked and untracked files (ignored ones are build outputs); empty when at `HEAD`. */
@@ -61,7 +61,8 @@ class MutantTree(val directory: Path, private val git: String) {
     private class Result(val exit: Int, val output: String)
 
     private fun run(vararg arguments: String): Result {
-        val process = ProcessBuilder(listOf(git) + arguments).directory(directory.toFile()).redirectErrorStream(true).start()
+        val command = listOf(git) + arguments
+        val process = ProcessBuilder(command).directory(directory.toFile()).redirectErrorStream(true).start()
         val output = process.inputStream.bufferedReader().readText()
         if (!process.waitFor(GIT_TIMEOUT_MINUTES, TimeUnit.MINUTES)) {
             process.destroyForcibly()

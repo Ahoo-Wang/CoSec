@@ -162,8 +162,8 @@ class MutationCheckTest {
     private fun repository(): MutantTree {
         val directory = Files.createDirectories(temp.resolve("repository"))
         fun git(vararg arguments: String) {
-            val process = ProcessBuilder(listOf(GIT) + arguments).directory(directory.toFile()).redirectErrorStream(true)
-                .start()
+            val command = listOf(GIT) + arguments
+            val process = ProcessBuilder(command).directory(directory.toFile()).redirectErrorStream(true).start()
             val output = process.inputStream.bufferedReader().readText()
             check(process.waitFor(APPLY_TIMEOUT_SECONDS, TimeUnit.SECONDS) && process.exitValue() == 0) { output }
         }

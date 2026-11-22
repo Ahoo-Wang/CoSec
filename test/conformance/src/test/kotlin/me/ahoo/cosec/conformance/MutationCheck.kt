@@ -127,25 +127,29 @@ fun verdict(compile: Build, tests: Build?, failedTests: Int): MutantResult = whe
 
 /**
  * `./gradlew :conformance:mutationCheck` (RFC 0008 §3.7): applies each mutant of this module's `mutants` to the commit
- * checked out (`HEAD`, in a temporary `git worktree`, so the working copy is untouched), checks it compiles, and runs
- * its tests: at least one must fail. A mutant that no longer applies or compiles fails the check too: the code moved,
+ * checked out (`HEAD`, in one temporary `git worktree` the mutants share one after another, so the working copy is
+ * untouched; [MutantTree] keeps each mutant from deciding the next), checks it compiles, and runs its tests: at least
+ * one must fail. A mutant that no longer applies or compiles fails the check too: the code moved,
  * so the mutant must follow it. `-Pmutants=<name,...>` runs only those. Not part of `check`: each mutant rebuilds.
  */
 object MutationCheck {
     private const val BUILD_TIMEOUT_MINUTES = 30L
+    private const val DAEMON_IDLE_TIMEOUT = "org.gradle.daemon.idletimeout=120000"
 
     fun run(root: Path, directory: Path, only: Set<String>): Map<Mutant, MutantResult> {
         val mutants = Mutant.all(directory).filter { only.isEmpty() || it.name in only }
         require(mutants.isNotEmpty()) { "No mutant to run${if (only.isEmpty()) "" else " among $only"}." }
-        if (System.getenv("COSEC_MUTATION_VARIANT") != "reuse") {
-            return mutants.associateWith { mutant ->
-                println("== ${mutant.name} (${mutant.rules.joinToString()}): ${mutant.description}")
-                check(root, mutant).also { println("   -> $it") }
-            }
-        }
         val worktree = Files.createTempDirectory("cosec-mutants-")
         Files.delete(worktree)
-        command(root, git, "worktree", "add", "--detach", worktree.toString(), "HEAD").requireSuccess("git worktree add")
+        command(
+            root,
+            git,
+            "worktree",
+            "add",
+            "--detach",
+            worktree.toString(),
+            "HEAD"
+        ).requireSuccess("git worktree add")
         try {
             val tree = MutantTree(worktree, git)
             return inOrder(mutants, tree) { mutant -> check(tree, mutant) }
@@ -173,16 +177,13 @@ object MutationCheck {
     }
 
     private fun check(tree: MutantTree, mutant: Mutant): MutantResult {
-        mark = System.nanoTime()
         if (!tree.apply(mutant.patch)) return MutantResult.DOES_NOT_APPLY
         val worktree = tree.directory
-        val compile = retried { gradle(worktree, mutant.compileTasks, daemon = true) }
-        lap(mutant, "compile")
+        val compile = retried { gradle(worktree, mutant.compileTasks) }
         if (compile.exit != 0) return verdict(compile, null, 0)
         val tests = retried(unless = { failedTests(worktree) > 0 }) {
-            gradle(worktree, listOf("--continue") + rerun(mutant.tests), daemon = true)
+            gradle(worktree, listOf("--continue") + rerun(mutant.tests))
         }
-        lap(mutant, "tests")
         return verdict(compile, tests, failedTests(worktree))
     }
 
@@ -192,49 +193,6 @@ object MutationCheck {
 
     /** `git` as found on the `PATH` (`git.exe` on Windows). */
     private val git: String by lazy { Executables.find("git")?.toString() ?: error("git is not on the PATH") }
-
-    // wip: measurement only (variant and phase timings), removed before review.
-    private val keepDaemon = System.getenv("COSEC_MUTATION_VARIANT") == "daemon"
-    private var mark = System.nanoTime()
-    private fun lap(mutant: Mutant, phase: String) {
-        val now = System.nanoTime()
-        println("TIMING ${mutant.name} $phase ${(now - mark) / 1_000_000}")
-        mark = now
-    }
-
-    private fun check(root: Path, mutant: Mutant): MutantResult {
-        mark = System.nanoTime()
-        val worktree = Files.createTempDirectory("cosec-mutant-${mutant.name}-")
-        Files.delete(worktree)
-        command(
-            root,
-            git,
-            "worktree",
-            "add",
-            "--detach",
-            worktree.toString(),
-            "HEAD"
-        ).requireSuccess("git worktree add")
-        lap(mutant, "worktree")
-        try {
-            if (command(worktree, git, "apply", "--whitespace=nowarn", mutant.patch.toAbsolutePath().toString()) != 0) {
-                return MutantResult.DOES_NOT_APPLY
-            }
-            val compile = retried { gradle(worktree, mutant.compileTasks) }
-            lap(mutant, "compile")
-            if (compile.exit != 0) {
-                return verdict(compile, null, 0)
-            }
-            val tests = retried(
-                unless = { failedTests(worktree) > 0 }
-            ) { gradle(worktree, listOf("--continue") + mutant.tests) }
-            lap(mutant, "tests")
-            return verdict(compile, tests, failedTests(worktree))
-        } finally {
-            command(root, git, "worktree", "remove", "--force", worktree.toString())
-            lap(mutant, "remove")
-        }
-    }
 
     /** Test failures recorded in the worktree's JUnit reports. */
     internal fun failedTests(worktree: Path): Int = Files.walk(worktree).use { paths ->
@@ -253,12 +211,16 @@ object MutationCheck {
         return if (first.exit == 0 || first.hasCompilerErrors || unless()) first else build()
     }
 
-    private fun gradle(directory: Path, tasks: List<String>, daemon: Boolean = keepDaemon): Build {
+    /**
+     * One build in the mutants' worktree, through a daemon the whole run shares (its cold start is most of what a
+     * mutant cost when each build had its own JVM), which stops itself two minutes after the last build. File-system
+     * watching is off, so every build reads the files as they are after a patch or a revert.
+     */
+    private fun gradle(directory: Path, tasks: List<String>): Build {
         val log = Files.createTempFile(directory, "mutation-gradle-", ".log")
         val process = ProcessBuilder(
-            listOf(Executables.gradleWrapper(directory)) +
-                (if (daemon) listOf("-Dorg.gradle.daemon.idletimeout=120000") else listOf("--no-daemon")) +
-                listOf("--build-cache", "-q") + tasks
+            listOf(Executables.gradleWrapper(directory), "-D$DAEMON_IDLE_TIMEOUT", "--no-watch-fs", "--build-cache", "-q") +
+                tasks
         ).directory(directory.toFile()).redirectErrorStream(true).redirectOutput(log.toFile()).start()
         val exit = if (process.waitFor(BUILD_TIMEOUT_MINUTES, TimeUnit.MINUTES)) {
             process.exitValue()

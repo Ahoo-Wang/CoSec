@@ -24,10 +24,6 @@ on:
         description: 'Optional comma-separated mutant names (a patch file name without .patch); empty = all'
         required: false
         default: ''
-      variant:
-        description: 'wip: measurement variant (baseline, daemon or reuse)'
-        required: false
-        default: 'baseline'
       parallel:
         description: 'Shards at once (1 to 20). 8 leaves runners for pull requests; 16 is for a release gate only'
         required: false
@@ -100,7 +96,6 @@ jobs:
       matrix: ${{ fromJSON(needs.plan.outputs.matrix) }}
     env:
       MUTANTS: ${{ matrix.mutants }}
-      COSEC_MUTATION_VARIANT: ${{ inputs.variant }}
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -126,9 +121,9 @@ jobs:
       - name: Resolve the dependencies
         run: .github/scripts/resolve-dependencies.sh
 
-      # Each mutant builds in a worktree of its own: with the dependencies and the unchanged modules already built, a
-      # mutant rebuilds only what it changes, and 36 shards do not all ask Maven Central for everything at once (it
-      # answers 429 to that).
+      # The shard's mutants build one after another in one worktree, through one Gradle daemon: with the dependencies and
+      # the unchanged modules already built, a mutant rebuilds only what it changes, and the shards do not all ask Maven
+      # Central for everything at once (it answers 429 to that).
       - name: Warm the dependency and build caches
         run: ./gradlew testClasses --no-daemon --build-cache --stacktrace
 
