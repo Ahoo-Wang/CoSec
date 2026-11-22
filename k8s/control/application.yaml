@@ -10,7 +10,7 @@
 # Nothing else is needed to start. To keep an audit trail in Kafka, set cosec.audit.kafka.enabled,
 # cosec.control.audit.kafka.enabled and spring.kafka.bootstrap-servers (a control plane without Kafka cannot grant
 # break-glass). The control host holds two copies of the documents of every tenant it decides for, in a quarter of its
-# heap, half each (SNP-24: about 6,700 typical tenants per copy at a 2 GiB heap): size the heap in the Deployment for the
+# heap, half each (SNP-24: about 7,200 typical tenants per copy at a 2 GiB heap): size the heap in the Deployment for the
 # tenants it decides for.
 logging:
   level:

@@ -82,7 +82,7 @@ description: "每个 8.0 预览版（alpha 与 beta）到下一个之间的变�
   | `cosec.authorization.snapshot.max-apps`、`max-tenants` | 每个族已持有的，加上堆的四分之一（减去"不存在"条目那一份）剩下的空间，按其常驻文档的典型重量计数（一个从不低于实际保留量的估计），每轮重新确认时重新计算，从不低于 64 |
   | `cosec.authorization.snapshot.max-absent-apps`、`max-absent-tenants` | 文档那四分之一中固定的十六分之一，每个条目 512 字节：2 GiB 时 256 个应用 id 和 65,280 个租户 id |
 
-  - **原先在 2 GiB 上依赖 16,384 个常驻租户的网关现在约持有 13,700 个**部署页面那种典型租户（每个估计 36.7 KB，实际保留 33.3 KB）。要全部持有，给它 2.5 GiB 的堆（`-Xmx2560m`，约 17,000 个）；`cosec.snapshot.bound` 和启动日志行写明它持有多少。
+  - **原先在 2 GiB 上依赖 16,384 个常驻租户的网关现在约持有 14,500 个**部署页面那种典型租户（每个估计 34.6 KB，实际保留 29.5 KB）。要全部持有，给它 2.5 GiB 的堆（`-Xmx2560m`，约 18,200 个）；`cosec.snapshot.bound` 和启动日志行写明它持有多少。
   - 控制面与管道同在一个进程时，两个快照源各占那四分之一的一半。
   - `SnapshotSettings`（在 `snapshots { }` 中）去掉 `maxApps`、`maxTenants`、`maxAbsentApps` 和 `maxAbsentTenants`：删掉这些行。
   - 小 pod 得到的文档较少，照旧变为就绪；比整个份额还重的文档仍然会被提供。

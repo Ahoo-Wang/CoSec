@@ -32,7 +32,7 @@ class DerivedHeapTest {
         DerivedHeap.line(budget, 8_192, TraceLevel.OFF).assert()
             .contains("heap budget (heap 2048 MiB (Runtime.maxMemory())")
             .contains(
-                "documents=512 MiB (absent entries 32 MiB: 65280 tenants, 256 apps; resident 480 MiB: 13718 tenants"
+                "documents=512 MiB (absent entries 32 MiB: 65280 tenants, 256 apps; resident 480 MiB: 14566 tenants"
             )
             .contains("recomputed each revalidation pass from what is resident (cosec.snapshot.bound)")
             .contains("revocation tables=516222 entries each (290 + 230 B a pair)")

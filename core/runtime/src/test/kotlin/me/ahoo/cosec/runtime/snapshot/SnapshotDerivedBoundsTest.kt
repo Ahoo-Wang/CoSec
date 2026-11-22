@@ -103,10 +103,10 @@ class SnapshotDerivedBoundsTest {
         gateway.absentShare.assert().isEqualTo(32L shl 20)
         gateway.absentTenants.assert().isEqualTo(65_280)
         gateway.absentApps.assert().isEqualTo(256)
-        gateway.firstBound(SnapshotKind.TENANT).assert().isEqualTo(13_718)
+        gateway.firstBound(SnapshotKind.TENANT).assert().isEqualTo(14_566)
         val pod = DocumentBudget(HeapBudget.of(TWO_GIB / 4).documents)
         pod.absentTenants.assert().isEqualTo(16_320)
-        pod.firstBound(SnapshotKind.TENANT).assert().isEqualTo(3_429)
+        pod.firstBound(SnapshotKind.TENANT).assert().isEqualTo(3_641)
         // A family keeps documents however heavy they are.
         pod.bound(
             SnapshotKind.TENANT,
@@ -161,7 +161,7 @@ class SnapshotDerivedBoundsTest {
     fun `a document heavier than the whole share leaves its family at the floor, and is served`() {
         val tenants = mapOf(0 to tenant(0, 40, 50, 200)) + (1..100).associateWith { small(it) }
         // A share smaller than that one document.
-        source(store(tenants), 256L shl 10).use { source ->
+        source(store(tenants), 64L shl 10).use { source ->
             source.load().join()
             source.loadEach(tenants.keys.map { SnapshotKey.Tenant("t-$it") })
             source.tick().join()

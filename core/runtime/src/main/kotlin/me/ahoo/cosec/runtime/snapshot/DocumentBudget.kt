@@ -73,7 +73,7 @@ class DocumentBudget(val total: Long) {
         const val FLOOR: Int = 64
 
         /** The weight assumed before a family holds any: the deployment page's tenant, and the harness's app. */
-        val TYPICAL: Map<SnapshotKind, Long> = mapOf(SnapshotKind.TENANT to 36_690L, SnapshotKind.APP to 312_695L)
+        val TYPICAL: Map<SnapshotKind, Long> = mapOf(SnapshotKind.TENANT to 34_554L, SnapshotKind.APP to 318_812L)
 
         private const val MIB = 1L shl 20
 
