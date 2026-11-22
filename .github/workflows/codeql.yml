@@ -96,13 +96,15 @@ jobs:
       # The CodeQL Kotlin extractor runs inside the Kotlin compiler and needs far more heap than a normal
       # build: with defaults the Kotlin daemon fails with "GC overhead limit exceeded". Give it an explicit
       # heap and limit parallel compilations so concurrent extractions fit in the runner's memory.
+      # Main sources only (the maintainer's decision, 2026-11-22): the analysis covers the code that ships, not the tests
+      # and test fixtures, whose compilation was most of this step and whose alerts were test-only notes.
       - name: Build
         if: steps.decide.outputs.analyse == 'true'
         run: >-
           ./gradlew --no-daemon --no-build-cache --no-parallel --no-configuration-cache --max-workers=2
           -Dorg.gradle.jvmargs=-Xmx2g
           -Pkotlin.daemon.jvmargs=-Xmx6g
-          clean classes testClasses -x detekt
+          clean classes -x detekt
 
       - name: Perform CodeQL Analysis
         if: steps.decide.outputs.analyse == 'true'
