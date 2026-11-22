@@ -35,6 +35,16 @@ Which preview of the library may run behind which preview of the gateway image: 
   (`cosec.control.app-id`) is never the class's**: a member of it holds control calls on its tenant's document, and who
   governs a tenant's policies is for a person to appoint. A sync that projects such roles keeps waiting for approval;
   project only roles of business apps through the class.
+- **New: a service changes an app's document through the service port and `ControlService`** (`CTL-58`, `CTL-65`):
+  `propose`, `check` and the change flow of an app document, which were a `404` there. Such a change is analyzed as on
+  the operators' port: removing a role, a policy or a binding publishes alone, and anything else (a catalog, a role
+  put) waits for a person. The platform document stays outside. Nothing changes for a service that does not hold
+  `cosec:write` on `doc/app/...`.
+- **No trust root through the service port or `ControlService`** (`CTL-81`). A service that stated a platform
+  administrator there to publish a tenant's (or an app's) document unanalyzed now waits for a person: the change is
+  analyzed whoever is stated, and a grant the analysis cannot prove is `AWAITING_APPROVAL`. Project roles into tenants
+  through the [role class](../policies/testing.md#the-role-class) (`cosec:manage-roles`), or have a person approve on
+  the operators' routes. The same principal on the operators' routes is unchanged.
 - **An instance's status is split in two** (`CTL-74`, `CTL-75`). The status at `<s>:shadow:status:<instance>` is now
   small (liveness, `shadows`, the acknowledged windows) and has no `documents` member. The documents an instance holds
   are a record of their own, `<s>:shadow:resident:<instance>`, which only `propagation` reads

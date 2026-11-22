@@ -1,16 +1,16 @@
 # Rule: CTL-58
-# Mutant: a proposal for the platform document passes the service profile
-# Tests: :control:test --tests me.ahoo.cosec.control.api.ControlProfileTest
+# Mutant: a proposal or a check for the platform document passes the service profile
+# Tests: :control:test --tests me.ahoo.cosec.control.api.ControlProfileTest --tests me.ahoo.cosec.control.api.AppDocumentServiceTest --tests me.ahoo.cosec.control.local.ControlServiceTest
 
 diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/api/ControlProfile.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/api/ControlProfile.kt
-index 4b9fd6da3..addd98fba 100644
+index 61e62590a..6318af443 100644
 --- a/core/control/src/main/kotlin/me/ahoo/cosec/control/api/ControlProfile.kt
 +++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/api/ControlProfile.kt
-@@ -51,7 +51,7 @@ enum class ControlProfile {
-     }
- 
-     /** Whether this profile serves a write to [key]: a service writes a tenant's document, never the platform's or an app's. */
--    internal fun admitsWrite(key: SnapshotKey): Boolean = this == OPERATORS || key is SnapshotKey.Tenant
+@@ -58,7 +58,7 @@ enum class ControlProfile {
+      * Whether this profile serves a proposal or a check of a change of [key]: a service proposes a tenant's or an app's
+      * document, never the platform's. `:apply` stays a tenant's ([documents]).
+      */
+-    internal fun admitsWrite(key: SnapshotKey): Boolean = this == OPERATORS || serves(key)
 +    internal fun admitsWrite(key: SnapshotKey): Boolean = true
  
      /**

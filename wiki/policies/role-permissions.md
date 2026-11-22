@@ -329,8 +329,8 @@ validation, compilation and audit.
   changes need no person, and each records the class it was granted by. A role of the control plane's own app
   (`cosec.control.app-id`) is outside the class: its members govern their tenant's document, which is for a person to
   appoint, so putting or removing one waits. Any other change, an app's catalog for one,
-  is analyzed as anyone's, and its grants wait for a person unless the caller is the trust root (a platform principal
-  holding `cosec:approve`, [Testing policies](./testing.md)).
+  is analyzed, and its grants wait for a person: through `ControlService` or the service port no one is the trust root,
+  whoever the caller states (`CTL-81`, [Testing policies](./testing.md)).
 - `putRole` replaces a role whole, so replaying one is idempotent. A conflict (`409`) is the projection's to retry.
 - `skip-shadow` takes the document's staging slot, and a change someone else is shadowing holds it: do not have people
   and a sync change the same document.
