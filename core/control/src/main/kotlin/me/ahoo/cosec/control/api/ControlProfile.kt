@@ -25,8 +25,9 @@ import me.ahoo.cosec.spi.snapshot.SnapshotKey
  * routes to, for people. [SERVICE] is the narrow set a service that calls the control plane directly may ask for, on a
  * port of its own, so that the network, not a filter, says who may ask for what: the tenant and app documents (their
  * reads, and `:apply` on a tenant's), and the change flow of either that needs no person (propose and check, read,
- * rebase, abandon, run or skip the shadow window, publish). A change of an app document is analyzed as anyone's: what
- * widens a grant waits for a person unless the caller is the trust root. Whatever is outside it is a `404`, as if it did
+ * rebase, abandon, run or skip the shadow window, publish). A change made through it is always analyzed, whoever is
+ * stated: no one is the trust root here (`CTL-81`), and what the analysis cannot prove waits for a person, who approves
+ * on the operators' port. Whatever is outside it is a `404`, as if it did
  * not exist, before the control plane is asked: the platform document, approvals and rejections, rollback, break-glass,
  * and the queries (`simulate`, `explain`, `analyze`, propagation) are people's, or the platform's.
  *
@@ -57,14 +58,14 @@ enum class ControlProfile {
      * Whether this profile serves a proposal or a check of a change of [key]: a service proposes a tenant's or an app's
      * document, never the platform's. `:apply` stays a tenant's ([documents]).
      */
-    internal fun admitsWrite(key: SnapshotKey): Boolean = this == OPERATORS || key != SnapshotKey.Platform
+    internal fun admitsWrite(key: SnapshotKey): Boolean = this == OPERATORS || serves(key)
 
     /**
      * Whether this profile serves a route of a change of [key], read or step (`CTL-58`, `CTL-65`): on the service
      * profile, a tenant's or an app document's change. A change named by its id is checked here, once its record is
      * read, so a change of the platform document is no more reachable by its id than by its document.
      */
-    internal fun admitsChange(key: SnapshotKey): Boolean = this == OPERATORS || key != SnapshotKey.Platform
+    internal fun admitsChange(key: SnapshotKey): Boolean = this == OPERATORS || serves(key)
 
     /**
      * Whether this profile serves a listing of the open changes of [document] (of a state, across documents, when null):
@@ -72,7 +73,13 @@ enum class ControlProfile {
      * the changes it serves by id ([admitsChange]), the others left out before the page is cut.
      */
     internal fun admitsListing(document: SnapshotKey?): Boolean =
-        this == OPERATORS || document != SnapshotKey.Platform
+        this == OPERATORS || document == null || serves(document)
+
+    /**
+     * The documents whose changes the service profile serves, named: a tenant's and an app's. Anything else, the
+     * platform's or a kind of document added later, is outside until someone decides it is not.
+     */
+    private fun serves(key: SnapshotKey): Boolean = key is SnapshotKey.Tenant || key is SnapshotKey.App
 
     private fun documents(method: String, rest: List<String>): Boolean {
         // `GET /documents?kind=`: which tenant and app documents there are (`CTL-68`).

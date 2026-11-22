@@ -182,9 +182,8 @@ class AppDocumentServiceTest {
         val before = head()
         through(request("""{"op":"removeRole","id":"viewer"}""")).assert().isEqualTo("PUBLISHED" to emptyList<String>())
         head().assert().isEqualTo(before + 1)
-        // The trust root, a platform principal holding cosec:approve, publishes a widened catalog alone, as on the
-        // operators' port: the profile narrows what is served, never what a caller may do.
-        through(request(wider), plato).assert().isEqualTo("PUBLISHED" to emptyList<String>())
+        // No one is the trust root through the service profile (CTL-81): a stated platform administrator's waits too.
+        through(request(wider), plato).assert().isEqualTo("AWAITING_APPROVAL" to listOf("NOT_ANALYZED"))
     }
 
     @Test
