@@ -125,7 +125,7 @@ the adapters, snapshots or the control plane. The parts that take several files 
   never on `runtime`. Projects sit in group directories
   (RFC 0011 §3): `api/` (`annotations`, `api`), `core/` (`model`, `engine`, `spi`, `document`, `runtime`, `control`, `control-sdk`), `backends/`
   (`cocache`), `edge/` (`webflux`, `webmvc`, `gateway`, `openapi`), `extensions/` (`jwt`, `social`, `login`,
-  `ip2region`, `micrometer`, `opentelemetry`, `cosid`, `kafka`), `host/` (`spring-boot`), `migration/` (`migrate`), `test/` (`testkit`,
+  `ip2region`, `micrometer`, `opentelemetry`, `cosid`, `kafka`, `control-http`), `host/` (`spring-boot`), `migration/` (`migrate`), `test/` (`testkit`,
   `conformance`, `architecture`, `e2e`, `client-host`, `system-test`, `system-behind`, `system-auth`, `system-enforcer`,
   `code-coverage-report`), `bom/` and `platform/` (`gateway-server`, `control-server`). A project
   is named after its directory, without the group or a `cosec-` prefix (`:runtime:check`, `:spring-boot:check`);
@@ -237,6 +237,8 @@ the adapters, snapshots or the control plane. The parts that take several files 
     `cosec-spi` and `cosec-document`, never `cosec-runtime`),
     `cosec-login` (login and token issuing: `Authentication`, `TokenConverter`), `cosec-jwt` (on `cosec-login`), `cosec-social`, `cosec-opentelemetry`, `cosec-micrometer`,
     `cosec-kafka` (decision and change listeners), `cosec-ip2region` (an `AttributeProvider`), `cosec-openapi` (route maps; on `cosec-document` only),
+    `cosec-control-http` (`ControlService` over HTTP to a control-plane host's service port, `CTL-77`; on `cosec-control-sdk`, and on
+    `cosec-runtime` for the one mapping that writes a request's principal into `CoSec-Identity`),
     `cosec-cosid` (an `IdGenerator` over CosId 5). Only `cosec-cosid` and the starter, which wires it, may reference
     or bring CosId (`DependencyRules.COSID_OWNERS`).
     `cosec-migrate` (`migration/migrate/`) converts 7.x data, and holds the only copy of the 7.x model
@@ -336,6 +338,8 @@ Every fact has one home; update it in the same PR. Every English page in `wiki/`
 | An npm dependency of `typescript/` | the catalog of `typescript/pnpm-workspace.yaml` (packages reference `catalog:`) and its lockfile; nothing else |
 | A new module, or a dependency between modules | `test/architecture` (`ProjectListTest`, `DependencyRules`, `SourceRulesTest`) and RFC 0011 §5; `wiki/architecture/overview.md` |
 | A module the starter wires (a new one, or a feature that needs one) | `CoSecModuleCheckAutoConfiguration` (STA-1), `wiki/guide/introduction.md#modules` |
+| A call of `ControlService` (a new one, or what one asks) | `RoutedControlService`, the one route table both implementations carry; `ControlClient`'s typed call; `ControlServiceParityTest`'s script (`CTL-77`), which runs it through both; the service profile it must be in (`CTL-58`, `CTL-65`) |
+| A stage's timeout, or another value derived from `cosec.pipeline.timeout` | `StageBudgets` (a named fraction, `PIP-33`), the startup line, `wiki/operations/configuration.md#computed-not-configured`; never a new property |
 | Integration steps | `wiki/guide/quick-start.md`, `skills/cosec-integration` |
 | A normative rule (an RFC "must / must not / always", RFC 0008 §3.2) | `test/conformance/src/test/resources/rules/<FAMILY>.json` and its scenarios: a positive and a negative one for each rule that is not `pending` (`verifyRuleCoverage`) |
 | Breaking change (public API, `cosec.*` property, authorization semantics) | `wiki/operations/upgrading.md`: what breaks and how to migrate from 7.x; a change between two 8.0 previews goes in `wiki/operations/upgrading-previews.md`, under the preview it comes after |
