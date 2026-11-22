@@ -82,7 +82,7 @@ connection.onClose { outcome.close() } // 完成、失败和取消都一样
 |---|---|---|
 | 无 | 稳定。从 8.0 GA 起，删除或修改它是破坏性变更，只在主版本中发生。 | 直接使用。 |
 | `@CoSecSpi` | 应用要实现、而不只是调用的接口：上面的扩展点。与其余部分同样稳定；次版本新增的成员带默认实现，已有的实现照常编译。 | 实现它。 |
-| `@ExperimentalCoSecApi` | 公开，但可能在次版本中改变或移除，发布说明会写明。目前包括：`cosec-testkit` 的公共 API（`PolicyTestKit`、`PipelineFixture`、`AttributeRequests`、`EngineOutcome` 及其异常）；不使用 Spring 组装管道（`Pipeline.builder`、`PipelineBuilder` 及其设置 `PipelineSettings`、`SnapshotSettings`、`ListenerSettings` 和 `IdentityForwardingSettings`、`Pipeline.behindGateway` 与 `GatewayIdentitySettings`、`Pipeline.evaluate` 和 `awaitDocuments`、`RequestGate`、`HttpFacts`、`Headers`、`Cookies`、`Outcome`、`Problem`、`ProblemEncoder`、`RequestSecurity`）；评估轨迹（`DecisionEvent.evaluationTrace`、`me.ahoo.cosec.engine.trace`）；以及控制面的存储和影子窗口端口及其记录（[控制面存储](#control-store)）。 | 用 `@OptIn(ExperimentalCoSecApi::class)` 选择加入，否则编译器给出警告。 |
+| `@ExperimentalCoSecApi` | 公开，但可能在次版本中改变或移除，发布说明会写明。目前包括：`cosec-testkit` 的公共 API（`PolicyTestKit`、`PipelineFixture`、`AttributeRequests`、`EngineOutcome` 及其异常）；不使用 Spring 组装管道（`Pipeline.builder`、`PipelineBuilder` 及其设置 `PipelineSettings`、`SnapshotSettings` 和 `IdentityForwardingSettings`、`Pipeline.behindGateway` 与 `GatewayIdentitySettings`、`Pipeline.evaluate` 和 `awaitDocuments`、`RequestGate`、`HttpFacts`、`Headers`、`Cookies`、`Outcome`、`Problem`、`ProblemEncoder`、`RequestSecurity`）；评估轨迹（`DecisionEvent.evaluationTrace`、`me.ahoo.cosec.engine.trace`）；以及控制面的存储和影子窗口端口及其记录（[控制面存储](#control-store)）。 | 用 `@OptIn(ExperimentalCoSecApi::class)` 选择加入，否则编译器给出警告。 |
 | `@InternalCoSecApi` | 公开只是为了让 CoSec 自己的模块互相调用。没有任何承诺：任何版本都可能改变。 | 不要使用。它要求 error 级别的 opt-in，只有 CoSec 自己的源码这样做。 |
 
 这些承诺由构建守住。每个发布的库模块把自己的公共 ABI 存在一个转储文件里，即模块目录下的 `api/<project>.api`

@@ -80,14 +80,6 @@ class PipelineBuilderFailureTest {
     }
 
     @Test
-    fun `an invalid listener setting is refused before the source subscribes`() {
-        assertThrows<IllegalArgumentException> {
-            Pipeline.builder(authenticator, store).listener(listener).listeners { queueCapacity = 0 }.build()
-        }
-        subscribed.assert().isEqualTo(0)
-    }
-
-    @Test
     fun `a subscription that fails releases the listeners, and the caller sees its own exception`() {
         val down = IllegalStateException("the store is down")
         failSubscribe = down

@@ -24,6 +24,7 @@ import me.ahoo.cosec.runtime.attribute.AttributeProviders
 import me.ahoo.cosec.runtime.authn.answersApiKeys
 import me.ahoo.cosec.runtime.event.DecisionListener
 import me.ahoo.cosec.runtime.event.DecisionListeners
+import me.ahoo.cosec.runtime.event.Delivery
 import me.ahoo.cosec.runtime.identity.IdentityIssuer
 import me.ahoo.cosec.runtime.ratelimit.LocalRateLimiter
 import me.ahoo.cosec.runtime.snapshot.DocumentReadiness
@@ -56,8 +57,6 @@ class PipelineBuilder internal constructor(
     private var settingsSet = false
     private var options: PipelineOptions? = null
     private val snapshotSettings = SnapshotSettings { options?.timeout?.toJavaDuration() ?: settings.timeout }
-    private val listenerSettings = ListenerSettings()
-    private var listenerSettingsSet = false
     private var membershipProvider: MembershipProvider? = null
     private val providers = ArrayList<AttributeProvider>()
     private var attributeProviders: AttributeProviders? = null
@@ -89,14 +88,12 @@ class PipelineBuilder internal constructor(
     /** External attribute providers (`ext.*`); the store's documents compile against what they declare. */
     fun attributes(vararg providers: AttributeProvider): PipelineBuilder = apply { this.providers += providers }
 
-    /** A decision listener (RFC 0006 §9); its [DecisionListener.delivery] says whether it is REQUIRED. */
+    /**
+     * A decision listener (RFC 0006 §9); its [DecisionListener.delivery] says whether it is REQUIRED. The BEST_EFFORT
+     * listeners' queues share the decision listeners' share of the heap ([HeapBudget], `OBS-11`), and a REQUIRED one has
+     * a share of the pipeline's timeout ([StageBudgets]): nothing about how they run is set.
+     */
     fun listener(listener: DecisionListener): PipelineBuilder = apply { listeners += listener }
-
-    /** How the listeners given with [listener] are run. */
-    fun listeners(block: ListenerSettings.() -> Unit): PipelineBuilder = apply {
-        listenerSettings.block()
-        listenerSettingsSet = true
-    }
 
     /**
      * Counts the permits of rate limit rules. By default a [LocalRateLimiter] of this pipeline's own, as the starter's
@@ -157,8 +154,8 @@ class PipelineBuilder internal constructor(
         check(attributeProviders == null || providers.isEmpty()) {
             "Give the attribute providers either one by one or as AttributeProviders."
         }
-        check(decisionListeners == null || (listeners.isEmpty() && !listenerSettingsSet)) {
-            "Give the decision listeners either with listener and listeners { } or as DecisionListeners."
+        check(decisionListeners == null || listeners.isEmpty()) {
+            "Give the decision listeners either with listener or as DecisionListeners."
         }
         check(
             identity == null || forwarding == null
@@ -196,12 +193,16 @@ class PipelineBuilder internal constructor(
         val created = DecisionListeners(
             listeners.toList(),
             requiredTimeout = StageBudgets.of(options.timeout).requiredListener,
-            queueCapacity = listenerSettings.queueCapacity,
+            queueCapacity = queueCapacity(),
         )
         // Drained before the source closes: the queued events are delivered while their documents are still there.
         owned += AutoCloseable { created.drain() }
         return created
     }
+
+    /** Each BEST_EFFORT listener's queue: its part of the decision listeners' share of the heap (`OBS-11`). */
+    internal fun queueCapacity(): Int =
+        HeapBudget.of().decisionQueueCapacity(listeners.count { it.delivery == Delivery.BEST_EFFORT })
 
     /** Both forms end here, so no default can differ between them. */
     private fun assemble(

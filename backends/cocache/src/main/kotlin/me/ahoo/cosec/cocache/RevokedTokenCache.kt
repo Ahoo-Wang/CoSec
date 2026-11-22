@@ -40,6 +40,12 @@ interface RevokedTokenCache : Store<String, Boolean> {
         const val MISSING_TTL_SECONDS = 30L
 
         /**
+         * What one local entry retains, a token id's "not revoked" included (measured, beta.5, `SaasScaleRevocationMeasurement`):
+         * the local copy holds the revocation tables' share of the heap counted in entries of this size (`IDN-33`).
+         */
+        const val ENTRY_BYTES = 290L
+
+        /**
          * The key of the token [tokenId]: the id itself, which may not hold an unpaired UTF-16 surrogate, since the Redis
          * key would write it as `?` (RC1-52, `IDN-10`): revoking `jti\uD800` would revoke `jti?`.
          *

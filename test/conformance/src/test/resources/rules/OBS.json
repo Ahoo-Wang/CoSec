@@ -135,7 +135,19 @@
         "spring-boot:DerivedTimeoutsTest#without either deadline stated, every value is the default it replaced",
         "spring-boot:StarterWiringTest#change listeners take the pipeline timeout as their required timeout and stop with the context",
         "spring-boot:StarterWiringTest#the Kafka audit waits at shutdown for the listeners' drain timeout",
-        "spring-boot:SnapshotReadinessTest#listener queues take their property, and the drain a sixth of the shutdown phase"
+        "spring-boot:SnapshotReadinessTest#listener queues are a share of the heap, and the drain a sixth of the shutdown phase"
+      ]
+    },
+    {
+      "id": "OBS-11",
+      "source": "Coordinator's brief for 8.0.0-beta.6, 2026-11-21 (the properties review, items 22, 23 and 26; memory by heap share)",
+      "statement": "A BEST_EFFORT decision listener's queue holds its part of the decision listeners' share of the heap (`STA-12`), divided equally by the BEST_EFFORT listeners and counted in events at a measured size (`HeapBudget.DECISION_EVENT_BYTES`, held by a test never below what an event retains and at most twice it). The count is reckoned once, when the listeners are built: nothing is measured on the request path. A full queue drops the next event and counts it (`cosec.listener.dropped`).",
+      "level": "startup",
+      "pending": null,
+      "guards": [
+        "runtime:DecisionEventSizeTest#the constant a queue counts with is what a decision event retains, within a factor of two",
+        "runtime:PipelineBuilderTest#a built pipeline's listener queues are one BEST_EFFORT listener's part of the heap share",
+        "spring-boot:SnapshotReadinessTest#listener queues are a share of the heap, and the drain a sixth of the shutdown phase"
       ]
     }
   ]

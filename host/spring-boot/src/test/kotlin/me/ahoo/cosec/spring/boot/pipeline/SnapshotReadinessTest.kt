@@ -20,6 +20,7 @@ import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.document.SnapshotDocuments
 import me.ahoo.cosec.model.scope.HostScope
+import me.ahoo.cosec.runtime.HeapBudget
 import me.ahoo.cosec.runtime.Pipeline
 import me.ahoo.cosec.runtime.event.DecisionListeners
 import me.ahoo.cosec.runtime.http.Cookies
@@ -114,9 +115,8 @@ class SnapshotReadinessTest {
     }
 
     @Test
-    fun `listener queues take their property, and the drain a sixth of the shutdown phase`() {
+    fun `listener queues are a share of the heap, and the drain a sixth of the shutdown phase`() {
         runner.withPropertyValues(
-            "cosec.observability.listener.queue-capacity=16",
             "spring.lifecycle.timeout-per-shutdown-phase=12s",
         ).run { context ->
             val listeners = context.getBean(DecisionListeners::class.java)
@@ -124,7 +124,9 @@ class SnapshotReadinessTest {
             val twoSeconds = DecisionListeners(emptyList(), drainTimeout = 2.seconds)
             ReflectionTestUtils.getField(listeners, "drainTimeout").assert()
                 .isEqualTo(ReflectionTestUtils.getField(twoSeconds, "drainTimeout"))
-            context.getBean(ListenerProperties::class.java).queueCapacity.assert().isEqualTo(16)
+            // One BEST_EFFORT listener's part of the decision listeners' share of the heap (OBS-11).
+            val parts = (1..16).map { HeapBudget.of().decisionQueueCapacity(it) }
+            parts.assert().contains(listeners.queueCapacity)
         }
     }
 }

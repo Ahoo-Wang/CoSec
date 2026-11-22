@@ -30,6 +30,7 @@ import me.ahoo.cosec.control.change.ChangeId
 import me.ahoo.cosec.document.Actor
 import me.ahoo.cosec.model.PrincipalId
 import me.ahoo.cosec.model.TenantId
+import me.ahoo.cosec.runtime.HeapBudget
 import me.ahoo.cosec.runtime.event.Delivery
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.test.asserts.assert
@@ -98,7 +99,7 @@ class ChangeEventOrderTest {
 
     /** A heap whose share holds [events] events, for one listener, sized as the largest event these tests write. */
     private fun heapFor(events: Int) =
-        ChangeListeners.HEAP_SHARE * events * ChangeEventSize.of(event(ChangeEvent.Kind.SHADOW_STARTED))
+        HeapBudget.CHANGE_LISTENERS_SHARE * events * ChangeEventSize.of(event(ChangeEvent.Kind.SHADOW_STARTED))
 
     @Test
     fun `a listener receives a change's events in the order they were written, the first still held - CTL-66`() =
@@ -296,7 +297,7 @@ class ChangeEventOrderTest {
                 }
             }
             val small = ChangeEventSize.of(event(ChangeEvent.Kind.CHECKED, "s1"))
-            val changes = listeners(audit, heap = ChangeListeners.HEAP_SHARE * 2 * small)
+            val changes = listeners(audit, heap = HeapBudget.CHANGE_LISTENERS_SHARE * 2 * small)
             changes.publish(event(ChangeEvent.Kind.CHECKED, "s1"))
             changes.publish(event(ChangeEvent.Kind.CHECKED, "s2"))
             // Half as large again as a small one: it fits only once both small ones are delivered.

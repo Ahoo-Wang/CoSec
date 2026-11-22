@@ -18,7 +18,7 @@ description: "看清 CoSec 做出的每个决策以及文档的每次变更：�
 | 投递方式 | 监听器何时运行 | 失败的后果 |
 |---|---|---|
 | `REQUIRED` | 在响应之前，与其他 `REQUIRED` 监听器一起运行，每个都在 `cosec.pipeline.timeout` 的 20 %（默认 1 秒）之内，并且在 `cosec.pipeline.timeout` 剩余的时间之内。它看到的是到此为止决定的结果。 | 放行变成 `503` `unavailable`，请求不会继续。其他结果保持原状态；失败以 `ERROR` 记录并计数。 |
-| `BEST_EFFORT`（默认） | 结果确定之后，在请求路径之外运行。每个监听器有自己容量为 [`cosec.observability.listener.queue-capacity`](./configuration.md)（1,024）个事件的队列和自己的消费者，所以慢的监听器绝不会让别的监听器丢事件。它看到的是最终结果。 | 对请求没有影响。队列满时丢弃事件并计数，请求从不等待与之相关的日志：由一个报告者在请求线程之外，最多每 10 秒以 `WARN` 记录一次 `Dropping decision events: the queue of listener [<name>] is full; <n> dropped since the last report.`。抛异常的监听器最多每 10 秒以 `WARN` 记录一次，并会计数。 |
+| `BEST_EFFORT`（默认） | 结果确定之后，在请求路径之外运行。每个监听器有自己的队列，即堆的六十四分之一中属于它的一份，按每个事件 1 KB 计数（[由计算得出，而非配置](./configuration.md#computed-not-configured)，2 GiB 堆、四个监听器时每个 8,192 个事件），还有自己的消费者，所以慢的监听器绝不会让别的监听器丢事件。它看到的是最终结果。 | 对请求没有影响。队列满时丢弃事件并计数，请求从不等待与之相关的日志：由一个报告者在请求线程之外，最多每 10 秒以 `WARN` 记录一次 `Dropping decision events: the queue of listener [<name>] is full; <n> dropped since the last report.`。抛异常的监听器最多每 10 秒以 `WARN` 记录一次，并会计数。 |
 
 ### 每个输出中的“什么做出了决定” {#what-decided-in-every-output}
 
@@ -154,7 +154,7 @@ kind 为 `INTERNAL`）。span 在决策之后根据请求的开始时间和管�
 
 ## 启动摘要 {#startup-summary}
 
-所有 bean 创建完毕后，starter 记录一行 INFO，说明 CoSec 被配置成什么样，例如 `CoSec 8.0.0-beta.5: mode=enforce, web=servlet-filter, jwt=on (JwtTokenVerifier), token-cache=on (max-entries=16384), revocation-reader=the CoCache token store's (CoCacheRevocationReader), login=on, api-keys=off, rate-limiter=ReactiveRedisRateLimiter, listeners=[tracing, logging-audit], route-map=12 routes`。每一项都是请求实际遇到的东西，按认证器解析的方式得出：吊销读取器是应用的 bean、CoCache 令牌存储的读取器，或 `RevocationReader.NONE`（这一行会明确写出，因为此时被吊销的令牌在过期前都会被接受）；没有令牌校验（`jwt=off`）时没有读取器可写。`token-cache` 说明请求令牌是否从[已校验令牌缓存](../integration/authentication.md#the-verified-token-cache)作答：配置关闭时，或使用你自己的 `TokenVerifier` Bean 时为 `off`。应用声明了 `Authenticator` bean 时，它会替换 starter 自带的（[扩展](../architecture/extending.md)）：这一行会写成 `authenticator=<类名> (replaces CoSec's: tokens, revocation and API keys are its own)`，并且不再列出 `jwt`、`revocation-reader` 和 `api-keys`，因为它们都没有生效。写成 `false` 的开关会以 `switched-off-by-configuration=[...]` 追加。名为 `LocalRateLimiter` 的限流器按实例计数：有多个实例时，限额按实例数倍增。`cosec.enabled=false` 时这一行换成一条 WARN：`CoSec is off ... nothing is protected by CoSec`（[故障排查](./troubleshooting.md#the-log-says-cosec-is-off)）。
+所有 bean 创建完毕后，starter 记录一行 INFO，说明 CoSec 被配置成什么样，例如 `CoSec 8.0.0-beta.5: mode=enforce, web=servlet-filter, jwt=on (JwtTokenVerifier), token-cache=on (max-bytes=134217728), revocation-reader=the CoCache token store's (CoCacheRevocationReader), login=on, api-keys=off, rate-limiter=ReactiveRedisRateLimiter, listeners=[tracing, logging-audit], route-map=12 routes`。每一项都是请求实际遇到的东西，按认证器解析的方式得出：吊销读取器是应用的 bean、CoCache 令牌存储的读取器，或 `RevocationReader.NONE`（这一行会明确写出，因为此时被吊销的令牌在过期前都会被接受）；没有令牌校验（`jwt=off`）时没有读取器可写。`token-cache` 说明请求令牌是否从[已校验令牌缓存](../integration/authentication.md#the-verified-token-cache)作答：配置关闭时，或使用你自己的 `TokenVerifier` Bean 时为 `off`。应用声明了 `Authenticator` bean 时，它会替换 starter 自带的（[扩展](../architecture/extending.md)）：这一行会写成 `authenticator=<类名> (replaces CoSec's: tokens, revocation and API keys are its own)`，并且不再列出 `jwt`、`revocation-reader` 和 `api-keys`，因为它们都没有生效。写成 `false` 的开关会以 `switched-off-by-configuration=[...]` 追加。名为 `LocalRateLimiter` 的限流器按实例计数：有多个实例时，限额按实例数倍增。`cosec.enabled=false` 时这一行换成一条 WARN：`CoSec is off ... nothing is protected by CoSec`（[故障排查](./troubleshooting.md#the-log-says-cosec-is-off)）。
 
 运行控制面的宿主在启动完成后再记录一行 INFO：控制面提供什么、它的调用方从哪里来，例如 `Control plane: HTTP routes on /cosec/control (port 8080; service port 8082), caller from the forwarded identity (statement: only-trusted-callers-can-reach)`；在只从进程内访问控制面的应用里则是 `Control plane: no HTTP routes (cosec.control.http.enabled=false), caller from the credential`。端口是服务器实际绑定的端口。
 
@@ -193,7 +193,7 @@ kind 为 `INTERNAL`）。span 在决策之后根据请求的开始时间和管�
 |---|---|---|
 | `cosec.token.cache.hits` | 无 | 从缓存作答的请求令牌 |
 | `cosec.token.cache.misses` | 无 | 因没有可用条目而校验的请求令牌：首次出现、已被淘汰、被拒绝，或不在它有效的时刻内 |
-| `cosec.token.cache.evictions` | 无 | 为不超过 `cosec.authentication.token-cache.max-entries` 而移除的条目；持续的速率说明上限小于同时在用的令牌数 |
+| `cosec.token.cache.evictions` | 无 | 为不超过令牌缓存在堆中的份额而移除的条目；持续的速率说明这份额小于同时在用的令牌数：给实例更多的堆 |
 | `cosec.token.cache.size` | 无 | 一个 gauge：持有的条目数 |
 
 开启影子窗口时，影子监听器据以采样的暂存列表也会计量（`OBS-8`）：

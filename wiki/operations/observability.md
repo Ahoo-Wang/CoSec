@@ -21,7 +21,7 @@ except that a `REQUIRED` one that fails turns a permit into `503`.
 | Delivery | When the listener runs | What a failure does |
 |---|---|---|
 | `REQUIRED` | Before the response, together with the other `REQUIRED` listeners, each within 20 % of `cosec.pipeline.timeout` (1 second at the default) and within what is left of `cosec.pipeline.timeout`. It sees the outcome as decided so far. | A permit becomes `503` `unavailable`; the request does not proceed. Any other outcome keeps its status; the failure is logged at `ERROR` and counted. |
-| `BEST_EFFORT` (the default) | After the response is decided, off the request path. Each listener has its own queue of [`cosec.observability.listener.queue-capacity`](./configuration.md) events (1,024) and its own consumer, so a slow listener never costs another its events. It sees the final outcome. | Nothing for the request. A full queue drops the event and counts it, and the request never waits on a log line for it: a reporter logs `Dropping decision events: the queue of listener [<name>] is full; <n> dropped since the last report.` at `WARN`, at most every 10 seconds, off the request's thread. A listener that throws is logged at `WARN` at most every 10 seconds, and counted. |
+| `BEST_EFFORT` (the default) | After the response is decided, off the request path. Each listener has its own queue, its part of a 64th of the heap counted at 1 KB an event ([Computed, not configured](./configuration.md#computed-not-configured), 8,192 events each for four listeners on a 2 GiB heap), and its own consumer, so a slow listener never costs another its events. It sees the final outcome. | Nothing for the request. A full queue drops the event and counts it, and the request never waits on a log line for it: a reporter logs `Dropping decision events: the queue of listener [<name>] is full; <n> dropped since the last report.` at `WARN`, at most every 10 seconds, off the request's thread. A listener that throws is logged at `WARN` at most every 10 seconds, and counted. |
 
 ### What decided, in every output {#what-decided-in-every-output}
 
@@ -177,7 +177,7 @@ which ties a response to its trace.
 ## Startup summary
 
 Once every bean exists, the starter logs one INFO line of what CoSec is configured as, for example
-`CoSec 8.0.0-beta.5: mode=enforce, web=servlet-filter, jwt=on (JwtTokenVerifier), token-cache=on (max-entries=16384), revocation-reader=the CoCache token store's (CoCacheRevocationReader), login=on, api-keys=off, rate-limiter=ReactiveRedisRateLimiter, listeners=[tracing, logging-audit], route-map=12 routes`.
+`CoSec 8.0.0-beta.5: mode=enforce, web=servlet-filter, jwt=on (JwtTokenVerifier), token-cache=on (max-bytes=134217728), revocation-reader=the CoCache token store's (CoCacheRevocationReader), login=on, api-keys=off, rate-limiter=ReactiveRedisRateLimiter, listeners=[tracing, logging-audit], route-map=12 routes`.
 Each entry is what a request meets, resolved as the authenticator resolves it: the revocation reader is the application's bean, the CoCache token store's, or `RevocationReader.NONE`, which the line spells out because revoked tokens are then accepted until they expire; with no token verification (`jwt=off`) there is no reader to name. `token-cache` says whether a request's token is answered from [the verified-token cache](../integration/authentication.md#the-verified-token-cache): `off` when configured off, or for a `TokenVerifier` bean of your own. When the application declares an `Authenticator` bean, it replaces the starter's ([extending](../architecture/extending.md)): the line then says `authenticator=<class> (replaces CoSec's: tokens, revocation and API keys are its own)` and lists no `jwt`, `revocation-reader` or `api-keys`, since none of them is in force.
 A switch written `false` is added as `switched-off-by-configuration=[...]`. A rate limiter named `LocalRateLimiter` counts
 per instance: with several instances the limit is multiplied by their number. When `cosec.enabled=false` the line is
@@ -228,7 +228,7 @@ So is [the verified-token cache](../integration/authentication.md#the-verified-t
 |---|---|---|
 | `cosec.token.cache.hits` | none | request tokens answered from the cache |
 | `cosec.token.cache.misses` | none | request tokens verified because no usable entry was there: first seen, evicted, refused, or outside the instants it is valid at |
-| `cosec.token.cache.evictions` | none | entries removed to stay within `cosec.authentication.token-cache.max-entries`; a steady rate means the bound is smaller than the tokens in use at once |
+| `cosec.token.cache.evictions` | none | entries removed to stay within the token cache's share of the heap; a steady rate means the share is smaller than the tokens in use at once: give the instance more heap |
 | `cosec.token.cache.size` | none | a gauge: the entries held |
 
 So is the staged list the shadow listener samples by, with shadow windows on (`OBS-8`):

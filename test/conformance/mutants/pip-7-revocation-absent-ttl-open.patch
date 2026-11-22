@@ -3,15 +3,15 @@
 # Tests: :cocache:test --tests me.ahoo.cosec.cocache.CacheTtlPolicyTest
 
 diff --git a/backends/cocache/src/main/kotlin/me/ahoo/cosec/cocache/CacheLocks.kt b/backends/cocache/src/main/kotlin/me/ahoo/cosec/cocache/CacheLocks.kt
-index 2ac7b55e..9a758511 100644
+index 098910d..31dc25c 100644
 --- a/backends/cocache/src/main/kotlin/me/ahoo/cosec/cocache/CacheLocks.kt
 +++ b/backends/cocache/src/main/kotlin/me/ahoo/cosec/cocache/CacheLocks.kt
-@@ -88,8 +88,6 @@ internal object CacheLocks {
+@@ -105,8 +105,6 @@ internal object CacheLocks {
                  // absent-ttl would accept a revoked token for that long. Of the other fields of a Store, none can lengthen
                  // it: a missing entry lives min(absent-ttl, local-max-age); a revocation is written with a lifetime of its
                  // own, which neither ttl nor ttl-jitter shortens in Redis; local-maximum-size only evicts.
 -                lock(PolicyField.ABSENT_TTL)
 -                constrain(PolicyField.ABSENT_TTL) { NOT_REVOKED_FOR }
+                 // The local copy holds the revocation tables' share of the heap (IDN-33): the declaration's count, kept.
+                 lock(PolicyField.LOCAL_MAXIMUM_SIZE)
              }
- 
-             TOKEN_FAMILY_CACHE_NAME -> {

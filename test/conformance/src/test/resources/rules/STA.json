@@ -205,6 +205,21 @@
         "spring-boot:ControlServiceChoiceTest#an instance that runs the control plane and names a host does not start - STA-11",
         "spring-boot:ControlServiceChoiceTest#a host named without cosec-control-http fails naming the artifact - STA-1"
       ]
+    },
+    {
+      "id": "STA-12",
+      "source": "Coordinator's brief for 8.0.0-beta.6, 2026-11-21 (the properties review, items 22, 23 and 26; memory by heap share)",
+      "statement": "Every share of the heap CoSec takes is in one table (`HeapBudget`, `cosec-runtime`): the revocation tables 1/8, the verified-token cache 1/16, the BEST_EFFORT decision listeners' queues 1/64, the change listeners' queues 1/32, and a quarter reserved for the snapshot documents, whose own bound is a later design. Together they take at most half of `Runtime.maxMemory()`. Each share is chosen so that at the production overlay's 2 GiB heap its bound is not below the count it replaced, and a smaller heap gets less, never nothing. No property sets any of them: `cosec.observability.listener.queue-capacity`, `cosec.authentication.token-cache.max-entries` and `cosec.authentication.revocation.cache.maximum-size` fail startup as keys CoSec does not read, saying what replaced them. The starter says once at startup what each budget came to and from what.",
+      "level": "startup",
+      "pending": null,
+      "guards": [
+        "runtime:HeapBudgetTest#the shares together take at most the bound, leaving the documents their reserved quarter",
+        "runtime:HeapBudgetTest#at the production overlay's 2 GiB heap no bound is below the count it replaced",
+        "runtime:HeapBudgetTest#a 512 MiB heap gets a quarter of each, and never nothing",
+        "runtime:HeapBudgetTest#the startup line names each budget and its share",
+        "spring-boot:DerivedHeapTest#the startup line names each bound, what it came to and from what",
+        "spring-boot:UnknownPropertiesTest#a removed key is said to be no longer a property, with what replaced it"
+      ]
     }
   ]
 }

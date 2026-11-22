@@ -520,8 +520,8 @@ store standing in for Redis.
 | A principal's "not revoked" answer, kept 30 seconds | about 230 bytes |
 
 With the defaults full (16,384 tenant documents and 65,536 tenants without one), the tenant entries take about 520 MB.
-The revocation copies hold only the tokens and principals a replica saw in the last 30 seconds, at most
-`cosec.authentication.revocation.cache.maximum-size` (500,000) of each, about 260 MB when both are full. Size the heap at
+The revocation copies hold only the tokens and principals a replica saw in the last 30 seconds, at most an 8th of the
+heap between them (516,222 of each on a 2 GiB heap, about 260 MB when both are full). Size the heap at
 twice what these hold, plus 256 MiB for the rest of the gateway, so that ZGC has room to collect; then set the memory
 limit to the heap, plus the direct memory, plus about 250 MiB, plus a quarter ([Memory](#memory)). The production
 overlay follows that rule with every default at its bound: tenant documents (about 490 MB), tenants without one
@@ -564,7 +564,7 @@ grows the same way. The lag thresholds, 6 and 30 intervals, follow it. A Redis C
 |---|---|---|---|---|---|---|---|---|
 | 10,000 | 10 % | up to 150,000 | default (16,384) | default (65,536) | `10s` | 34 + 80 MB | `1536m` | `2560Mi` |
 | 10,000 | 100 % | up to 150,000 | default | default | `10s` | 300 + 80 MB | `1536m` | `2560Mi` |
-| 50,000 | 10 % | up to 500,000 | default | default | `10s` | 170 + 260 MB | `1536m` | `2560Mi` |
+| 50,000 | 10 % | up to 500,000 | default | default | `10s` | 170 + 200 MB (the revocation copies' 8th of the heap: 387,166 entries each) | `1536m` | `2560Mi` |
 | 50,000 | 100 % | up to 500,000 | `60000` | default | `30s` | 1.49 GB + 260 MB | `4g` | `6Gi` |
 
 For 50,000 tenants that all have a tenant document:
@@ -639,9 +639,10 @@ exceed `server.max-http-request-header-size` (8 KB by default): about 100 long `
 No per-request cost depends on how many members a tenant has. The gateway verifies the token, parses the roles it
 carries and looks up two revocations, of the token and of its principal, keyed by the caller; the tenant's document
 does not list its members. The revocation lookups keep a local copy of each "not revoked" answer for 30 seconds,
-at most `cosec.authentication.revocation.cache.maximum-size` (500,000) entries per table and replica, about 300 bytes
-each: a replica that sees more distinct tokens than that within 30 seconds reads Redis on the request path for the
-rest ([Configuration](./configuration.md#local-cache-settings)).
+at most an 8th of the heap per replica, counted at 290 and 230 bytes an entry (516,222 entries per table on a 2 GiB
+heap): a replica that sees more distinct tokens than that within 30 seconds reads Redis on the request path for the
+rest, which `cocache.misses` on `RevokedTokenCache` shows ([Configuration](./configuration.md#computed-not-configured)).
+Give such a replica more heap.
 
 How long a role removed from a member keeps working:
 

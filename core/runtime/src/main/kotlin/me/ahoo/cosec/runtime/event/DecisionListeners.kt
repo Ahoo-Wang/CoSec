@@ -75,7 +75,7 @@ class DecisionListeners(
     /** How long one REQUIRED listener may take: 20 % of the pipeline timeout ([me.ahoo.cosec.runtime.StageBudgets]). */
     val requiredTimeout: Duration = 1.seconds,
     /** `cosec.observability.listener.queue-capacity`: the events one BEST_EFFORT listener may have waiting. */
-    queueCapacity: Int = DEFAULT_QUEUE_CAPACITY,
+    val queueCapacity: Int = DEFAULT_QUEUE_CAPACITY,
     dispatcher: CoroutineDispatcher = Dispatchers.Default,
     private val warnInterval: Duration = 10.seconds,
     /** How long [drain] lets the consumers deliver what is queued: a sixth of the shutdown phase (`OBS-10`). */

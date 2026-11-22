@@ -21,19 +21,21 @@ import me.ahoo.cocache.core.memory.InMemoryBackend
 import me.ahoo.cocache.spring.boot.CoCacheAutoConfiguration
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.cocache.CoSecCacheSpecs
+import me.ahoo.cosec.cocache.RevokedSubjectCache
+import me.ahoo.cosec.cocache.RevokedTokenCache
+import me.ahoo.cosec.runtime.HeapBudget
 import me.ahoo.cosec.spring.boot.jwt.CoSecTokenRevocationCacheAutoConfiguration
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
-import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.ValueSource
 import org.springframework.boot.autoconfigure.AutoConfigurations
 import org.springframework.boot.jackson.autoconfigure.JacksonAutoConfiguration
 import org.springframework.boot.test.context.runner.ApplicationContextRunner
 
 /**
- * #1271: the capacity an application sets for the revocation caches wins over `cocache.defaults.store.*`, whatever its
- * value. CoCache records a field as declared only when it differs from CoCache's own default, so a capacity equal to
- * that default (10000) was taken for "not set" and replaced by the global default below it.
+ * `IDN-33`: each revocation table's local copy holds the revocation tables' share of the heap, counted in entries of
+ * their measured size, and nothing changes that count: it wins over `cocache.defaults.store.*` (#1271: CoCache records
+ * a field as declared only when it differs from its own default, so the starter declares it through the policy), and a
+ * `cocache.caches.[name]` property that sets it fails startup, the field being locked.
  */
 class RevocationCachePrecedenceTest {
     private val runner = ApplicationContextRunner()
@@ -54,35 +56,26 @@ class RevocationCachePrecedenceTest {
 
     private val caches = listOf(CoSecCacheSpecs.REVOKED_TOKEN_CACHE_NAME, CoSecCacheSpecs.REVOKED_SUBJECT_CACHE_NAME)
 
-    /** The local capacity of each revocation cache's policy as CoCache's runtime resolved it. */
-    private fun ApplicationContextRunner.capacitiesOf(vararg properties: String): List<Long> {
-        var capacities = emptyList<Long>()
-        withPropertyValues(*properties).run { context ->
+    @Test
+    fun `each table holds the revocation tables' share of the heap, over cocache defaults`() {
+        val budget = HeapBudget.of()
+        val expected = budget.revocationTables / (RevokedTokenCache.ENTRY_BYTES + RevokedSubjectCache.ENTRY_BYTES)
+        runner.run { context ->
             context.startupFailure.assert().isNull()
             val runtime = context.getBean(CacheRuntime::class.java)
-            capacities = caches.map { checkNotNull(runtime.policy(it)).local.maximumSize }
+            caches.map { checkNotNull(
+                runtime.policy(it)
+            ).local.maximumSize }.assert().isEqualTo(listOf(expected, expected))
         }
-        return capacities
-    }
-
-    /** 10000 is CoCache's default and 10001 is not: both must win, as must any other number. */
-    @ParameterizedTest
-    @ValueSource(longs = [10_000, 10_001, 100_000, 500, 7])
-    fun `an explicit capacity wins over cocache defaults, whatever its value`(size: Long) {
-        runner.capacitiesOf("cosec.authentication.revocation.cache.maximum-size=$size")
-            .assert().isEqualTo(listOf(size, size))
     }
 
     @Test
-    fun `without one, CoSec's own capacity wins over cocache defaults`() {
-        runner.capacitiesOf().assert().isEqualTo(listOf(500_000L, 500_000L))
-    }
-
-    @Test
-    fun `cocache caches settings for one cache still win over an explicit capacity`() {
-        runner.capacitiesOf(
-            "cosec.authentication.revocation.cache.maximum-size=10000",
-            "cocache.caches.[${CoSecCacheSpecs.REVOKED_TOKEN_CACHE_NAME}].local-maximum-size=42",
-        ).assert().isEqualTo(listOf(42L, 10_000L))
+    fun `a per-cache property cannot set the count`() {
+        runner.withPropertyValues("cocache.caches.[${CoSecCacheSpecs.REVOKED_TOKEN_CACHE_NAME}].local-maximum-size=42")
+            .run { context ->
+                context.startupFailure.assert().isNotNull()
+                generateSequence(context.startupFailure) { it.cause }.map { it.message.orEmpty() }
+                    .any { "locked by ${CoSecCacheSpecs.LOCKED_BY}" in it }.assert().isTrue()
+            }
     }
 }
