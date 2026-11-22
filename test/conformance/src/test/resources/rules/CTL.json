@@ -1159,7 +1159,7 @@
       "id": "CTL-81",
       "source": "control-typed-api decisions of 2026-11-22 (no trust root through the service profile)",
       "statement": "No one is the trust root through the control API's service profile, on the service port or through the facade (CTL-58, CTL-65), for a tenant's document as for an app's: a change made or published through it is always analyzed, whoever is stated, and what the analysis cannot prove waits for a person, who approves on the operators' port. On that profile the caller's identity is only stated, by whatever workload the network admitted, so a trust root there would be anyone who names a platform administrator, and an app's catalog reaches every tenant at once. The trust root's exemption is a person's authority and belongs to the operators' port, where the gateway verified the credential. It is a fact of the request, the profile it came through, not of the identity: a forwarded identity on the operators' port stays eligible, and a change readied there is analyzed again when it is published through the service profile. The role class (CTL-79) still applies, and a removal that grants nothing still publishes alone.",
-      "level": "control",
+      "level": "build",
       "pending": null,
       "guards": [
         "control:ServiceTrustRootTest#a stated platform administrator's widened catalog waits through the service port and the facade - CTL-81",

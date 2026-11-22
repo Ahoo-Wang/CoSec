@@ -310,6 +310,14 @@ for a request on the service port nothing did. Each control action is still deci
 the caller states, and recorded as its step. What limits how much a service asks of the service port is the network
 that admits it and the service itself: a rate limit rule on a control route holds behind the gateway only.
 
+**Stating an identity on the service port never makes the trust root** (`CTL-81`). A workload the network admits to
+8082 can state any principal, a platform administrator included, and acts with what the policies grant that principal:
+it reads, proposes, stages and publishes what that principal may. But every change it makes there is analyzed: what
+grants nothing anew publishes alone, a holder of `cosec:manage-roles` projects roles into tenants alone, and anything
+else waits for a person, who approves on 8080 behind the gateway. A change readied on 8080 is analyzed again when it is
+published on 8082. Admit to 8082 only the services you would let propose; none of them can publish a grant alone by
+naming an administrator.
+
 **How a caller is identified.** An operator signs in at the IAM service, and the gateway verifies the token and forwards
 the identity to a route to the host. Give that route its app, so that an identity for another app is refused:
 

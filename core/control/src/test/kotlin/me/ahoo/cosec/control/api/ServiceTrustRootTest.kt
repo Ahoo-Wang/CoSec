@@ -54,7 +54,11 @@ class ServiceTrustRootTest {
     private val plato = fixture.engine.security(TenantId.PLATFORM, "plato")
     private val orders = SnapshotKey.App("orders")
     private val acme = SnapshotKey.Tenant("acme")
-    private val publication = Publication("bootstrap", ProvenanceKind.BOOTSTRAP, Actor(TenantId.PLATFORM, PrincipalId("plato")))
+    private val publication = Publication(
+        "bootstrap",
+        ProvenanceKind.BOOTSTRAP,
+        Actor(TenantId.PLATFORM, PrincipalId("plato"))
+    )
 
     init {
         runBlocking {
@@ -156,7 +160,11 @@ class ServiceTrustRootTest {
 
     @Test
     fun `a stated platform administrator's widened catalog waits through the service port and the facade - CTL-81`() {
-        through(service, request(orders, widened), plato).assert().isEqualTo("AWAITING_APPROVAL" to listOf("NOT_ANALYZED"))
+        through(
+            service,
+            request(orders, widened),
+            plato
+        ).assert().isEqualTo("AWAITING_APPROVAL" to listOf("NOT_ANALYZED"))
         throughFacade(request(orders, widened), plato).assert().isEqualTo("AWAITING_APPROVAL" to listOf("NOT_ANALYZED"))
         // The same request through the operators' port: the trust root publishes it alone, as before.
         val before = head(orders)

@@ -42,6 +42,12 @@ object GuardAllowlist {
             "spring-boot:ControlServicePortTest#a service port beside the application's, the management port or a disabled control API is refused",
             "spring-boot:ControlServicePortTest#a service port with no WebFlux server to serve it fails startup naming what to do",
             "spring-boot:ControlServicePortTest#cosec control http enabled false serves no control route, and the control plane stays for what embeds it",
+            // CTL-81: no trust root through the service profile.
+            "control:ServiceTrustRootTest#a stated platform administrator's widened catalog waits through the service port and the facade - CTL-81",
+            "control:ServiceTrustRootTest#a stated platform administrator's grant on a tenant's document waits through the service port - CTL-81",
+            "control:ServiceTrustRootTest#a holder's roles-only change still publishes through the service port, by the role class - CTL-81",
+            "control:ServiceTrustRootTest#a removal that grants nothing still publishes alone through the service port - CTL-81",
+            "control:ServiceTrustRootTest#the profile is the request's, not the change's, one readied on the operators' port waits when published on the service port - CTL-81",
             // CTL-79: the role class, and the bounds of a tenant's role.
             "control:RoleClassBoundsTest#a tenant's role cannot be every permission of its app - CTL-79",
             "control:RoleClassBoundsTest#the platform document has no roles - CTL-79",

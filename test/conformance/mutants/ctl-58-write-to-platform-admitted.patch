@@ -3,14 +3,14 @@
 # Tests: :control:test --tests me.ahoo.cosec.control.api.ControlProfileTest --tests me.ahoo.cosec.control.api.AppDocumentServiceTest --tests me.ahoo.cosec.control.local.ControlServiceTest
 
 diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/api/ControlProfile.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/api/ControlProfile.kt
-index 8e094ea51..9bf4f27af 100644
+index 61e62590a..6318af443 100644
 --- a/core/control/src/main/kotlin/me/ahoo/cosec/control/api/ControlProfile.kt
 +++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/api/ControlProfile.kt
-@@ -57,7 +57,7 @@ enum class ControlProfile {
+@@ -58,7 +58,7 @@ enum class ControlProfile {
       * Whether this profile serves a proposal or a check of a change of [key]: a service proposes a tenant's or an app's
       * document, never the platform's. `:apply` stays a tenant's ([documents]).
       */
--    internal fun admitsWrite(key: SnapshotKey): Boolean = this == OPERATORS || key != SnapshotKey.Platform
+-    internal fun admitsWrite(key: SnapshotKey): Boolean = this == OPERATORS || serves(key)
 +    internal fun admitsWrite(key: SnapshotKey): Boolean = true
  
      /**

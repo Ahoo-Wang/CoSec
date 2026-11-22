@@ -419,10 +419,12 @@ fun controlService(sslContext: SSLContext): ControlService = HttpControlService(
   the change flow of a tenant's or an app's document (`check`, `propose`, `change`, `changes`, `rebase`, `startShadow`,
   `skipShadow`, `abandon`, `publish`; `apply` and `checkApply` of a tenant's). An automated change can start its
   shadow window, read the change until the window closes, and publish with the summary's acknowledgement, rather than
-  skip the window. A change of an app document, a catalog for one, is analyzed as anyone's: only removing an entry
-  (a role, a policy, a binding) publishes alone, and anything else waits for a person unless the caller is the trust
-  root ([Testing policies](../policies/testing.md)). Nothing reaches the platform document, approvals, rollback or
-  break-glass: those stay a person's, on the operators' routes.
+  skip the window. Every change made through it is analyzed, whoever the caller states: no one is the trust root
+  here, not even a platform administrator (`CTL-81`). What grants nothing anew (removing a role, a policy or a
+  binding) publishes alone, a holder of the [role class](../policies/testing.md#the-role-class) projects roles into
+  tenants alone, and anything else, a catalog for one, waits for a person, who approves on the operators' routes.
+  Nothing reaches the platform document, approvals, rollback or break-glass: those stay a person's, on the operators'
+  routes.
 - **What goes in and out:**
   - Requests are the routes' bodies ([Changes](../policies/testing.md#changes)), and documents are in the
     [document format](../policies/language.md).
