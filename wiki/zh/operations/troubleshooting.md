@@ -552,13 +552,18 @@ CoSec 只读取一次客户端地址，且只从它信任的一方读取（`PIP-
 
 ```text
 Redis may evict CoSec's policy snapshot: maxmemory-policy is {<node>=<policy>}, not noeviction, so a global DENY could silently vanish (cosec.authorization.snapshot.eviction-check).
-Cannot tell whether Redis may evict CoSec's policy snapshot (INFO memory failed or is not allowed), so a global DENY could silently vanish (cosec.authorization.snapshot.eviction-check).
+Cannot tell whether Redis may evict CoSec's policy snapshot (Redis refused INFO (...): grant the Redis user +info), so a global DENY could silently vanish (cosec.authorization.snapshot.eviction-check).
+Cannot tell whether Redis may evict CoSec's policy snapshot (Redis did not answer INFO memory in 5 attempts (last: ...): a timeout or a connection failure, not a missing permission; ...), so a global DENY could silently vanish (cosec.authorization.snapshot.eviction-check).
 ```
 
-第一条：某个 Redis 节点不是 `noeviction`。在每个节点上设置 `maxmemory-policy noeviction`。第二条：实例读不到该策略，
-通常是因为 Redis 用户无权执行 `INFO`，或托管 Redis 拒绝了它；它也会指出检查无法读取的 CoCache 后端（包装过的或
-自定义的后端），以及不知道该问哪个节点的集群连接（`no Redis node answered INFO memory`）。允许 `INFO`（`+info`），或者在你已自行设置 `noeviction` 时，设置
-[`cosec.authorization.snapshot.eviction-check=warn`](./configuration.md#snapshot)（[Redis 要求](./storage.md#redis-requirements)）。
+第一条：某个 Redis 节点不是 `noeviction`。在每个节点上设置 `maxmemory-policy noeviction`。其余几条：实例读不到该策略，括号里写明原因。
+
+- `Redis refused INFO`：Redis 用户无权执行 `INFO`，或托管 Redis 禁用、改名了它。允许 `INFO`（`+info`），或者在你已自行设置 `noeviction` 时，设置 [`cosec.authorization.snapshot.eviction-check=warn`](./configuration.md#snapshot)。被拒绝的读取不会再问。
+- `Redis did not answer INFO memory in 5 attempts`：每次读取都超时、断开连接或得到暂时的应答（`LOADING`、`BUSY`、故障切换），尽管检查问了五次，中间分别等待 0.5、1、2、2 秒，与 CoCache 自己的检查相同。Redis 不可达，或者实例启动时 CPU 不够（一台主机上同时启动许多 JVM）。这不是要授予的权限。
+- `INFO memory failed (...)`：其他任何失败，写明原因。
+- 它也会指出检查无法读取的 CoCache 后端（包装过的或自定义的后端），以及不知道该问哪个节点的集群连接（`no Redis node answered INFO memory`）。
+
+检查读不到的策略永远不会被当作安全的（[Redis 要求](./storage.md#redis-requirements)）。周期性的复查以同样的方式读取，它的 `ERROR` 日志写明同样的原因。
 
 使用 `warn` 时，实例照常启动，并以 `WARN` 记录同样的文本，以 `!!!` 开头，以 `Starting anyway (eviction-check=warn).`
 和驱逐会造成的后果结尾。使用 `warn` 时这一行是预期的；如果 Redis 真的驱逐了数据，被驱逐之后才加载的应用文档或租户文档

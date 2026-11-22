@@ -171,9 +171,11 @@ Full model: https://cosec.ahoo.me/guide/security-model.
   credential is ever revoked). **`cosec.jwt.token-validity.refresh (...), how long a token revocation is kept, is
   shorter than cosec.control.approval.expire-after`**: raise the first or lower the second.
 - **`Redis may evict CoSec's policy snapshot: maxmemory-policy is {...}, not noeviction`**: set
-  `maxmemory-policy noeviction` on every node. **`Cannot tell whether Redis may evict CoSec's policy snapshot (INFO
-  memory failed or is not allowed)`** or `(the CoCache backend ... is not one this check can read)`: a Redis user
-  without `+info`, a Redis that denies `INFO`, or a wrapped CoCache backend. If the operator has set `noeviction`, set
+  `maxmemory-policy noeviction` on every node. **`Cannot tell whether Redis may evict CoSec's policy snapshot (Redis
+  refused INFO ...)`** or `(the CoCache backend ... is not one this check can read)`: a Redis user without `+info`, a
+  Redis that denies `INFO`, or a wrapped CoCache backend. `(Redis did not answer INFO memory in 5 attempts ...)` is not
+  a permission: each read timed out or lost its connection though the check retried as CoCache's does; Redis is
+  unreachable, or the process was starved of CPU while it started. If the operator has set `noeviction`, set
   `cosec.authorization.snapshot.eviction-check=warn`; the instance then logs `!!! ... Starting anyway
   (eviction-check=warn)` at every start. Never suggest `warn` to silence a Redis that really evicts: an evicted app or
   tenant document reads as absent, and its DENYs silently stop applying.

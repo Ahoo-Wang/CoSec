@@ -804,15 +804,26 @@ that names the reading says so, and what it risks: a host that clients reach dir
 
 ```text
 Redis may evict CoSec's policy snapshot: maxmemory-policy is {<node>=<policy>}, not noeviction, so a global DENY could silently vanish (cosec.authorization.snapshot.eviction-check).
-Cannot tell whether Redis may evict CoSec's policy snapshot (INFO memory failed or is not allowed), so a global DENY could silently vanish (cosec.authorization.snapshot.eviction-check).
+Cannot tell whether Redis may evict CoSec's policy snapshot (Redis refused INFO (...): grant the Redis user +info), so a global DENY could silently vanish (cosec.authorization.snapshot.eviction-check).
+Cannot tell whether Redis may evict CoSec's policy snapshot (Redis did not answer INFO memory in 5 attempts (last: ...): a timeout or a connection failure, not a missing permission; ...), so a global DENY could silently vanish (cosec.authorization.snapshot.eviction-check).
 ```
 
-The first: a Redis node is not `noeviction`. Set `maxmemory-policy noeviction` on every node. The second: the instance
-could not read the policy, usually because the Redis user may not run `INFO`, or a managed Redis denies it; it
-also names a CoCache backend the check cannot read (a wrapper or a custom backend), and a cluster connection that
-knows no node to ask (`no Redis node answered INFO memory`). Allow `INFO` (`+info`), or, when
-you have set `noeviction` yourself, set
-[`cosec.authorization.snapshot.eviction-check=warn`](./configuration.md#snapshot) ([Redis requirements](./storage.md#redis-requirements)).
+The first: a Redis node is not `noeviction`. Set `maxmemory-policy noeviction` on every node. The others: the
+instance could not read the policy, and the parentheses say why.
+
+- `Redis refused INFO`: the Redis user may not run `INFO`, or a managed Redis denies or renames it. Allow `INFO`
+  (`+info`), or, when you have set `noeviction` yourself, set
+  [`cosec.authorization.snapshot.eviction-check=warn`](./configuration.md#snapshot). A refusal is not asked again.
+- `Redis did not answer INFO memory in 5 attempts`: each read timed out, lost its connection or got a passing reply
+  (`LOADING`, `BUSY`, a failover), though the check asked five times, waiting 0.5, 1, 2 and 2 seconds in between, as
+  CoCache's own check does. Redis is unreachable, or the instance was starved of CPU while it started (many JVMs
+  starting on one host). This is not a permission to grant.
+- `INFO memory failed (...)`: any other failure, named.
+- It also names a CoCache backend the check cannot read (a wrapper or a custom backend), and a cluster connection that
+  knows no node to ask (`no Redis node answered INFO memory`).
+
+A policy the check could not read is never taken as safe ([Redis requirements](./storage.md#redis-requirements)). The
+periodic re-check reads the same way, and its `ERROR` line names the same reason.
 
 With `warn` the instance starts and logs the same text at `WARN`, starting with `!!!` and ending with
 `Starting anyway (eviction-check=warn).` and what eviction would do. That line is expected with `warn`; if Redis really
