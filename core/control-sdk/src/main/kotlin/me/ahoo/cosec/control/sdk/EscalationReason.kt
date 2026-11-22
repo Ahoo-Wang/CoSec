@@ -31,10 +31,15 @@ class EscalationReason private constructor(text: String, isUnknown: Boolean) : C
         val BREAK_GLASS: EscalationReason = EscalationReason("BREAK_GLASS", false)
         val TENANT_BINDINGS: EscalationReason = EscalationReason("TENANT_BINDINGS", false)
         val DETECTION_TIMED_OUT: EscalationReason = EscalationReason("DETECTION_TIMED_OUT", false)
+        /**
+         * The role class (`CTL-79`): recorded in place of the escalations it lifted from a roles-only change of a
+         * tenant's document by a holder of `cosec:manage-roles`. Informational: it never holds a change.
+         */
+        val ROLE_CLASS: EscalationReason = EscalationReason("ROLE_CLASS", false)
         val UNKNOWN: EscalationReason = EscalationReason("UNKNOWN", false)
 
         private val SET = ClosedSet(
-            listOf(CROSS_TENANT, NOT_COVERED, DENY_OVERLAP, UNRESOLVED, UNREADABLE, ANONYMOUS, TOO_LARGE, NOT_ANALYZED, BREAK_GLASS, TENANT_BINDINGS, DETECTION_TIMED_OUT, UNKNOWN)
+            listOf(CROSS_TENANT, NOT_COVERED, DENY_OVERLAP, UNRESOLVED, UNREADABLE, ANONYMOUS, TOO_LARGE, NOT_ANALYZED, BREAK_GLASS, TENANT_BINDINGS, DETECTION_TIMED_OUT, ROLE_CLASS, UNKNOWN)
         ) { EscalationReason(it, true) }
 
         /** Every value this version knows. */
