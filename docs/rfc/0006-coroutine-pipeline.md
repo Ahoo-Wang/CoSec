@@ -60,6 +60,9 @@
 > **2026-11-21 修订（#1815，`OBS-9`；#1811，`CTL-69`）**：§9.5：判定原因在线上的名字出自 `cosec-runtime` 里一张穷举的表（`CauseName`），绝不取类名：审计记录的理由（`INDETERMINATE: <name>`）、影子报告的样本与控制 API 的 `cause` 对每种原因写同一个名字；新增一种原因在表里没有名字就编译不过；名字保持 8.0 各预览版写过的拼法。
 > §7.3：相信声明身份的宿主（`STA-9`）上，CoSec 自己的路由（控制 API、refresh、logout）只在应用端口上应答，控制 API 另加服务端口；其他端口（包括 `management.server.port`）对这些路径答 404。应用自己的路由若在管理端口上被提供，那是 Spring Boot 的行为（`STA-4`），仍在 CoSec 的管线之后。详见 RFC 0007 的同日备注。
 
+> **2026-11-22 修订（#1839，`PIP-33`、`OBS-10`，`PIP-7` 修订；维护者的原则“能算出来的就不要配置”）**：各阶段的超时不再是属性，而是运维唯一知道的那个期限 `cosec.pipeline.timeout` 的份额，分数是具名常量（`StageBudgets`）：认证 20 %，成员关系 10 %（也是成员关系缓存的填充期限），没有自带超时的 `AttributeProvider` 6 %，限流 10 %，CoSec 自己的吊销读取是认证超时的 30 %（所以一个令牌的两次读取必然落在认证超时之内，原来比较两者的启动检查删除），必达的判定监听器 20 %。每个份额不低于 1 毫秒；期限低于 20 毫秒时两次吊销读取不再保证落在认证超时之内。必达的变更监听器合计等 `cosec.pipeline.timeout` 本身（控制请求没有自己的期限，见 roadmap §8）。监听器停机时的排空期限是 `spring.lifecycle.timeout-per-shutdown-phase` 的六分之一（停机时六次排空依次进行）。默认期限 5 秒下，每个值都等于原来的默认值。
+> 被删除的键：`cosec.pipeline.authentication-timeout`、`cosec.authorization.membership.timeout`、`cosec.authorization.attributes.timeout`、`cosec.authorization.rate-limit.timeout`、`cosec.authentication.revocation.read-timeout`、`cosec.observability.listener.required-timeout`、`cosec.observability.listener.drain-timeout`、`cosec.control.audit.required-timeout`、`cosec.authorization.snapshot.local-max-age`（现在是三个再验证间隔）、`cosec.authorization.membership.unknown-ttl`（现在是常量 5 秒）；设置其中任何一个都让启动失败并说明由什么取代。本 RFC（§5.4.2、§9、Q25）以及 RFC 0004、0007、0008、0009 里提到这些键的地方，按上面的份额读。期限调低时份额随之缩小：吊销读取超时等于读不到吊销，按已登记的例外放行令牌，除非 `cosec.authentication.revocation.fail-closed=true`。
+
 ## 0. 结论先行
 
 第 4 阶段结束时，引擎已经是同步纯函数，策略数据都在内存快照里。剩下的问题在引擎**外面**：`SecurityPipeline` 是一条 Reactor 链，

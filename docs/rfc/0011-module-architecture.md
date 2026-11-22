@@ -109,6 +109,7 @@ flowchart BT
 | `extensions/jwt/`、`social/`、`login/` | `:jwt` 等 | `cosec-jwt` 等 | 凭据；`login` 是登录与 token 签发（从 `core/authentication`、`core/token` 的签发部分、`api/authentication` 移来，保留 Reactor） |
 | `extensions/ip2region/`、`micrometer/`、`opentelemetry/` | | | 属性提供者、指标、追踪 |
 | `extensions/kafka/` | `:kafka` | `cosec-kafka` | 审计与变更通知：`DecisionListener` 与 `ChangeListener` 的实现 |
+| `extensions/control-http/` | `:control-http` | `cosec-control-http` | （2026-11-22，#1837，`CTL-77`）`ControlService` 的 HTTP 实现，调控制面宿主的服务端口，用 JDK 的 HTTP 客户端。依赖 `control-sdk` 与 `runtime`：以请求主体的身份调用时，身份头要用网关转发身份的那一套映射来写，而它在 `runtime` 里 |
 | `extensions/cosid/` | `:cosid` | `cosec-cosid` | 基于 CosId 5 的 `IdGenerator`，由 starter 按类路径装配；只有它与 `host/spring-boot` 可以引用 `me.ahoo.cosid`（2026-10-29，#1170） |
 | `host/spring-boot/` | `:spring-boot` | `cosec-spring-boot` | 自动配置，只做装配（D2） |
 | `migration/migrate/` | `:migrate` | `cosec-migrate` | 7.x 数据迁移 |
