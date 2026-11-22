@@ -47,6 +47,7 @@ object GuardAllowlist {
             "control:ChangeCheckTest#a caller who may not propose may not check, and is refused alike - CTL-78",
             "control:ClientContractTest#a check's answer holds exactly the members of its contract file - CTL-78",
             "control-sdk:TypedWireTest#a check's answer reads every member of its contract file - CTL-78",
+            "control:NomatchConfirmationTest#a check answers what the proposal finds, never its candidate, which names the confirming change - CTL-78",
             // CTL-77: the facade's two implementations answer alike.
             "spring-boot:ControlServiceParityTest#the in-process and the HTTP implementation answer every call alike - CTL-77",
             "control-http:HttpControlServiceTest#each call is the route's request",
