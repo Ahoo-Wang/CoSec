@@ -31,6 +31,8 @@ dependencies {
     implementation(project(":webflux"))
     implementation(project(":cocache"))
     implementation(project(":control"))
+    // The control plane on a control-plane host, where the deployment names one (cosec.control.service-url, STA-11).
+    implementation(project(":control-http"))
     // The change events of the embedded control plane (cosec.control.audit.kafka), when the deployment turns them on.
     implementation(project(":kafka"))
     implementation("org.springframework.boot:spring-boot-starter-kafka")
