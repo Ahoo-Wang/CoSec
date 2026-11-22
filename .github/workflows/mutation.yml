@@ -25,7 +25,7 @@ on:
         required: false
         default: ''
       variant:
-        description: 'wip: measurement variant (baseline or daemon)'
+        description: 'wip: measurement variant (baseline, daemon or reuse)'
         required: false
         default: 'baseline'
       parallel:

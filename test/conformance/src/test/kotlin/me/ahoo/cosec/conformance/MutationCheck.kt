@@ -137,11 +137,58 @@ object MutationCheck {
     fun run(root: Path, directory: Path, only: Set<String>): Map<Mutant, MutantResult> {
         val mutants = Mutant.all(directory).filter { only.isEmpty() || it.name in only }
         require(mutants.isNotEmpty()) { "No mutant to run${if (only.isEmpty()) "" else " among $only"}." }
-        return mutants.associateWith { mutant ->
-            println("== ${mutant.name} (${mutant.rules.joinToString()}): ${mutant.description}")
-            check(root, mutant).also { println("   -> $it") }
+        if (System.getenv("COSEC_MUTATION_VARIANT") != "reuse") {
+            return mutants.associateWith { mutant ->
+                println("== ${mutant.name} (${mutant.rules.joinToString()}): ${mutant.description}")
+                check(root, mutant).also { println("   -> $it") }
+            }
+        }
+        val worktree = Files.createTempDirectory("cosec-mutants-")
+        Files.delete(worktree)
+        command(root, git, "worktree", "add", "--detach", worktree.toString(), "HEAD").requireSuccess("git worktree add")
+        try {
+            val tree = MutantTree(worktree, git)
+            return inOrder(mutants, tree) { mutant -> check(tree, mutant) }
+        } finally {
+            command(root, git, "worktree", "remove", "--force", worktree.toString())
         }
     }
+
+    /**
+     * Checks [mutants] one after another in [tree]: each starts from a tree at `HEAD` with no test results
+     * ([MutantTree.prepare]) and is reverted after ([MutantTree.revert], which also removes the build outputs after a
+     * mutant that did not compile or whose build failed). A revert that fails throws, and the run stops there.
+     */
+    internal fun inOrder(
+        mutants: List<Mutant>,
+        tree: MutantTree,
+        check: (Mutant) -> MutantResult
+    ): Map<Mutant, MutantResult> = mutants.associateWith { mutant ->
+        println("== ${mutant.name} (${mutant.rules.joinToString()}): ${mutant.description}")
+        tree.prepare()
+        val result = check(mutant)
+        tree.revert(clean = result == MutantResult.DOES_NOT_COMPILE || result == MutantResult.BUILD_FAILED)
+        println("   -> $result")
+        result
+    }
+
+    private fun check(tree: MutantTree, mutant: Mutant): MutantResult {
+        mark = System.nanoTime()
+        if (!tree.apply(mutant.patch)) return MutantResult.DOES_NOT_APPLY
+        val worktree = tree.directory
+        val compile = retried { gradle(worktree, mutant.compileTasks, daemon = true) }
+        lap(mutant, "compile")
+        if (compile.exit != 0) return verdict(compile, null, 0)
+        val tests = retried(unless = { failedTests(worktree) > 0 }) {
+            gradle(worktree, listOf("--continue") + rerun(mutant.tests), daemon = true)
+        }
+        lap(mutant, "tests")
+        return verdict(compile, tests, failedTests(worktree))
+    }
+
+    /** [tests] with `--rerun` after each task path: a test task is never up to date or restored, it runs. */
+    internal fun rerun(tests: List<String>): List<String> =
+        tests.flatMap { if (it.startsWith(":")) listOf(it, "--rerun") else listOf(it) }
 
     /** `git` as found on the `PATH` (`git.exe` on Windows). */
     private val git: String by lazy { Executables.find("git")?.toString() ?: error("git is not on the PATH") }
@@ -206,11 +253,11 @@ object MutationCheck {
         return if (first.exit == 0 || first.hasCompilerErrors || unless()) first else build()
     }
 
-    private fun gradle(directory: Path, tasks: List<String>): Build {
+    private fun gradle(directory: Path, tasks: List<String>, daemon: Boolean = keepDaemon): Build {
         val log = Files.createTempFile(directory, "mutation-gradle-", ".log")
         val process = ProcessBuilder(
             listOf(Executables.gradleWrapper(directory)) +
-                (if (keepDaemon) listOf("-Dorg.gradle.daemon.idletimeout=120000") else listOf("--no-daemon")) +
+                (if (daemon) listOf("-Dorg.gradle.daemon.idletimeout=120000") else listOf("--no-daemon")) +
                 listOf("--build-cache", "-q") + tasks
         ).directory(directory.toFile()).redirectErrorStream(true).redirectOutput(log.toFile()).start()
         val exit = if (process.waitFor(BUILD_TIMEOUT_MINUTES, TimeUnit.MINUTES)) {

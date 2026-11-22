@@ -158,6 +158,129 @@ class MutationCheckTest {
         MutationCheck.failedTests(stray).assert().isEqualTo(0)
     }
 
+    /** A repository with one committed source file, `src/A.kt`, and `build/` ignored, as the mutants' worktree. */
+    private fun repository(): MutantTree {
+        val directory = Files.createDirectories(temp.resolve("repository"))
+        fun git(vararg arguments: String) {
+            val process = ProcessBuilder(listOf(GIT) + arguments).directory(directory.toFile()).redirectErrorStream(true)
+                .start()
+            val output = process.inputStream.bufferedReader().readText()
+            check(process.waitFor(APPLY_TIMEOUT_SECONDS, TimeUnit.SECONDS) && process.exitValue() == 0) { output }
+        }
+        git("init", "--quiet")
+        Files.writeString(directory.resolve(".gitignore"), "build/\n")
+        Files.writeString(Files.createDirectories(directory.resolve("src")).resolve("A.kt"), "val a = 1\n")
+        git("add", ".")
+        git("-c", "user.name=t", "-c", "user.email=t@t", "commit", "--quiet", "-m", "base")
+        return MutantTree(directory, GIT)
+    }
+
+    private fun patch(name: String, from: String, to: String): Mutant {
+        val file = Files.writeString(
+            temp.resolve("$name.patch"),
+            "# Rule: X-1\n# Mutant: m\n# Tests: :a:test\n\n" +
+                "diff --git a/src/A.kt b/src/A.kt\n--- a/src/A.kt\n+++ b/src/A.kt\n@@ -1 +1 @@\n-$from\n+$to\n",
+        )
+        return Mutant.read(file)
+    }
+
+    private val failing = """<testsuite tests="1" failures="1"><testcase name="a"><failure message="x"/></testcase></testsuite>"""
+
+    /** The results of one mutant, as its test build would write them. */
+    private fun writeResults(tree: MutantTree, xml: String) {
+        val directory = Files.createDirectories(tree.directory.resolve("core/x/build/test-results/test"))
+        Files.writeString(directory.resolve("TEST-a.xml"), xml)
+    }
+
+    @Test
+    fun `a mutant after a killed one is not reported killed by the earlier mutant's result files`() {
+        val tree = repository()
+        val first = patch("first", "val a = 1", "val a = 2")
+        val second = patch("second", "val a = 1", "val a = 3")
+        val results = MutationCheck.inOrder(listOf(first, second), tree) { mutant ->
+            tree.apply(mutant.patch).assert().isTrue()
+            if (mutant == first) writeResults(tree, failing)
+            verdict(Build(0, ""), Build(0, ""), MutationCheck.failedTests(tree.directory))
+        }
+        results[first].assert().isEqualTo(MutantResult.KILLED)
+        results[second].assert().isEqualTo(MutantResult.SURVIVED)
+    }
+
+    @Test
+    fun `a mutant after one that did not compile is checked on a clean tree`() {
+        val tree = repository()
+        val broken = patch("broken", "val a = 1", "val a = ")
+        val next = patch("next", "val a = 1", "val a = 2")
+        val seen = mutableListOf<String>()
+        MutationCheck.inOrder(listOf(broken, next), tree) { mutant ->
+            seen += Files.readString(tree.directory.resolve("src/A.kt")).trim()
+            seen += Files.exists(tree.directory.resolve("build/stale.class")).toString()
+            tree.apply(mutant.patch).assert().isTrue()
+            if (mutant == broken) {
+                // What a failed compilation leaves behind: an untracked source and a stale build output.
+                Files.writeString(tree.directory.resolve("src/Generated.kt"), "x")
+                Files.writeString(Files.createDirectories(tree.directory.resolve("build")).resolve("stale.class"), "x")
+                MutantResult.DOES_NOT_COMPILE
+            } else {
+                MutantResult.SURVIVED
+            }
+        }
+        seen.assert().containsExactly("val a = 1", "false", "val a = 1", "false")
+        Files.exists(tree.directory.resolve("src/Generated.kt")).assert().isFalse()
+    }
+
+    @Test
+    fun `build outputs stay after a mutant that compiled, and test results never do`() {
+        val tree = repository()
+        val mutant = patch("m", "val a = 1", "val a = 2")
+        MutationCheck.inOrder(listOf(mutant), tree) {
+            tree.apply(it.patch)
+            Files.writeString(Files.createDirectories(tree.directory.resolve("build")).resolve("kept.class"), "x")
+            writeResults(tree, failing)
+            MutantResult.KILLED
+        }
+        Files.exists(tree.directory.resolve("build/kept.class")).assert().isTrue()
+        tree.prepare()
+        MutationCheck.failedTests(tree.directory).assert().isEqualTo(0)
+    }
+
+    @Test
+    fun `a patch that fails to revert stops the run before the next mutant`() {
+        val tree = repository()
+        val first = patch("first", "val a = 1", "val a = 2")
+        val second = patch("second", "val a = 1", "val a = 3")
+        val checked = mutableListOf<String>()
+        val source = tree.directory.resolve("src")
+        try {
+            assertThrows<IllegalStateException> {
+                MutationCheck.inOrder(listOf(first, second), tree) { mutant ->
+                    checked += mutant.name
+                    tree.apply(mutant.patch)
+                    // A file git can no longer write back: the revert leaves the tree changed.
+                    Files.writeString(source.resolve("B.kt"), "x")
+                    source.toFile().setWritable(false)
+                    MutantResult.KILLED
+                }
+            }.message.assert().contains("could not be reverted")
+        } finally {
+            source.toFile().setWritable(true)
+        }
+        checked.assert().containsExactly("first")
+    }
+
+    @Test
+    fun `a tree that is not at HEAD is refused before a mutant is checked`() {
+        val tree = repository()
+        Files.writeString(tree.directory.resolve("src/A.kt"), "val a = 9\n")
+        assertThrows<IllegalStateException> { tree.prepare() }.message.assert().contains("not at HEAD")
+    }
+
+    @Test
+    fun `every task of a Tests line reruns`() {
+        MutationCheck.rerun(listOf(":a:test", "--tests", "X", ":conformance:test"))
+            .assert().containsExactly(":a:test", "--rerun", "--tests", "X", ":conformance:test", "--rerun")
+    }
+
     @Test
     fun `the header is read before the diff`() {
         val patch = Files.writeString(
