@@ -642,7 +642,7 @@
       "statement": "An app change lists the tenants a widened permission policy reaches as one informational entry per policy, counted from the back-reference index, without reading a tenant document; that entry never stands in for an escalation that needs approval: only TENANT_BINDINGS is informational, and an approval must still cover every other escalation.",
       "level": "control",
       "guards": [
-        "control:InformationalEscalationTest#only the tenants' entry is informational",
+        "control:InformationalEscalationTest#only the tenants' entry and the role class's record are informational",
         "control:InformationalEscalationTest#an aggregated tenant entry never stands in for the approval the widening needs",
         "control:ChangesB1Test#widening an app permission policy lists the tenant bindings it widens - RC1-34"
       ],

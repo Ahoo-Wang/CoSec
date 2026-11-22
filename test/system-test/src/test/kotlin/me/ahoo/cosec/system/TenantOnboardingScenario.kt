@@ -126,6 +126,33 @@ class TenantOnboardingScenario {
         root.revision(KEY).assert().isEqualTo(head)
     }
 
+    @Test
+    @Order(6)
+    fun `the IAM projects a custom role into a tenant with no person, by the role class - CTL-79`() {
+        val head = root.revision(KEY)
+        val projected = Operator.projectRole("tn-one", "auditors").ok().json()
+        projected["state"].assert().describedAs("$projected").isEqualTo("PUBLISHED")
+        // The record names the class it was granted by, and nothing that waited for a person.
+        (projected["escalations"] as List<*>).map { (it as Map<*, *>)["reason"] }.assert()
+            .describedAs("$projected").containsExactly("ROLE_CLASS")
+        root.revision(KEY).assert().isEqualTo(head + 1)
+        root.document(KEY).ok().body.assert().contains("auditors")
+    }
+
+    @Test
+    @Order(7)
+    fun `a person's change of the tenant's roles is analyzed as before, never by the role class - CTL-79`() {
+        val admin = administrator("tn-one")
+        val head = admin.revision(KEY)
+        val role = mapOf(
+            "op" to "putRole",
+            "role" to mapOf("id" to "readers", "app" to "cosec-control", "permissions" to listOf("tenant-document.administer")),
+        )
+        val proposed = admin.propose(KEY, head, listOf(role), "a person writes a role").created().json()
+        (proposed["escalations"] as List<*>?).orEmpty().map { (it as Map<*, *>)["reason"] }.assert()
+            .describedAs("$proposed").doesNotContain("ROLE_CLASS")
+    }
+
     private companion object {
         const val KEY = "tenant:tn-one"
         const val OTHER = "tenant:tn-two"
