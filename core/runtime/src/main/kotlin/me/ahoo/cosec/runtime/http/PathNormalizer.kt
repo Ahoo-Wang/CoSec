@@ -14,6 +14,7 @@
 package me.ahoo.cosec.runtime.http
 
 import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.engine.pattern.HttpPath
 
 /**
  * The path every request is authorized on (RFC 0006 §5.3.1), by the rules below and without Spring's `UriUtils`.
@@ -44,11 +45,14 @@ import me.ahoo.cosec.annotations.InternalCoSecApi
  *   what a request carries, and it bounds every length below. A segment is counted as the matchers see it, decoded, in
  *   UTF-16 units, so its bound does not depend on the script: a CJK character is nine characters encoded, and a
  *   segment of 29 of them, 261 encoded, is carried (#1853). The path's bound still applies to what arrives, so one
- *   segment of CJK text holds at most 227 of them. A pattern that matches the path as received
- *   (`decodeAndParseSegments: false`, an ALLOW only, `DOC-14`) sees the encoded segment, which is within the path's
- *   bound: matching a segment costs its glob's units times the value's length, so one long segment costs no more than
- *   the short ones of a path as long. The bounds keep one request from occupying an event loop. A path whose segments
- *   are all within the bound as received is never decoded for it, since decoding only shortens a segment.
+ *   segment of CJK text holds at most 227 of them. Matching a segment costs a glob's units times the segment's length
+ *   as the pattern reads it. A pattern that matches the path as received (`decodeAndParseSegments: false`, an ALLOW
+ *   only, `DOC-14`) reads it encoded, up to the path's 2,048 characters: measured at a document's whole glob budget,
+ *   about ten times what a segment of 256 costs (`SegmentBoundBenchmark`, #1860). So such a pattern matches no path
+ *   with a segment longer than [MAX_SEGMENT_LENGTH] as written ([HttpPath.MAX_SEGMENT_LENGTH]): a long segment costs
+ *   it nothing, and the request is decided by the patterns that decode. The bounds keep one request from occupying an
+ *   event loop. A path whose segments are all within the bound as received is never decoded for it, since decoding
+ *   only shortens a segment.
  *
  * The engine's `HttpPath` does not resolve `.` or `..` itself: a wildcard under `/public` matches `/public/../admin`.
  * Rejecting dot segments here is what keeps such a path from reaching a public wildcard.
@@ -67,7 +71,7 @@ object PathNormalizer {
      * The longest segment of a request's path accepted, in UTF-16 units once decoded, after path parameters are removed:
      * room for an id, a slug or a file name, in any script. [withinBounds] counts a text's segments as written.
      */
-    const val MAX_SEGMENT_LENGTH = 256
+    const val MAX_SEGMENT_LENGTH = HttpPath.MAX_SEGMENT_LENGTH
 
     private const val ENCODED_SEPARATOR = "%2F"
     private const val PATH = "path"

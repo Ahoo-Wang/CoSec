@@ -32,6 +32,8 @@ class HttpPath private constructor(
     val decodeAndParseSegments: Boolean,
     /** The value each segment is matched by, or `null` for a separator. */
     private val elements: Array<String?>,
+    /** The length of its longest segment as written, before anything is decoded or removed. */
+    internal val longestSegment: Int,
 ) {
     internal val size: Int get() = elements.size
 
@@ -54,6 +56,15 @@ class HttpPath private constructor(
     @InternalCoSecApi
     companion object {
         const val SEPARATOR: Char = '/'
+
+        /**
+         * The longest segment a request's path holds (`PIP-5`), in UTF-16 units: once decoded for every pattern that
+         * decodes (`PathNormalizer` refuses a longer one), as written for one that matches the path as received
+         * ([HttpPathPattern.decodeAndParseSegments] false), which matches no path with a longer segment. Matching costs
+         * a glob's units times the segment's length as the pattern reads it, so either way no segment costs more than
+         * one of 256 characters.
+         */
+        const val MAX_SEGMENT_LENGTH: Int = 256
         private const val SEPARATOR_TEXT = "/"
 
         /** Spring decodes an encoded separator even when it decodes nothing else; only in upper case. */
@@ -72,9 +83,11 @@ class HttpPath private constructor(
                 (!decodeAndParseSegments || path.indexOf(PercentDecoding.PARAMETER) < 0)
             var count = 0
             var begin = 0
+            var longest = 0
             while (begin < path.length) {
                 val end = path.indexOf(SEPARATOR, begin).let { if (it < 0) path.length else it }
                 if (end > begin) {
+                    longest = maxOf(longest, end - begin)
                     val segment = path.substring(begin, end)
                     elements[count++] = if (plain) segment else valueToMatch(segment, decodeAndParseSegments)
                 }
@@ -85,7 +98,7 @@ class HttpPath private constructor(
                 count++
                 begin = end + 1
             }
-            return HttpPath(path, decodeAndParseSegments, elements)
+            return HttpPath(path, decodeAndParseSegments, elements, longest)
         }
 
         /** One element per `/`, and one per non-empty text between them. */
