@@ -17,6 +17,7 @@ package me.ahoo.cosec.spring.boot.pipeline
 
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.runtime.HeapBudget
 import me.ahoo.cosec.runtime.snapshot.SnapshotOptions
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import java.time.Duration
@@ -70,10 +71,7 @@ private fun RuntimeAuthorizationProperties.Snapshot.options(derived: SnapshotOpt
         failClosedTenants = failClosed.tenants,
         failClosedMaxLag = failClosed.maxLag,
         coldLoadTimeout = derived.coldLoadTimeout,
-        maxApps = maxApps,
-        maxTenants = maxTenants,
-        maxAbsentApps = maxAbsentApps,
-        maxAbsentTenants = maxAbsentTenants,
+        documentsBudget = HeapBudget.of().documents,
         compileThreads = derived.compileThreads,
         reloadConcurrency = derived.reloadConcurrency,
     )

@@ -100,7 +100,7 @@ internal class RouteEscapeReview(
                 emptyList()
             } else {
                 listOf(
-                    RouteEscapeReview(routes, options.maxApps + options.maxTenants + 1)
+                    RouteEscapeReview(routes, options.documentsHeld + 1)
                 )
             }
 

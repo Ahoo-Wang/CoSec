@@ -73,7 +73,7 @@ class PipelineBuilderFailureTest {
     @Test
     fun `an invalid snapshot option is refused before anything is acquired`() {
         assertThrows<IllegalArgumentException> {
-            Pipeline.builder(authenticator, store).listener(listener).snapshots { maxApps = 0 }
+            Pipeline.builder(authenticator, store).listener(listener).snapshots { revalidateInterval = java.time.Duration.ZERO }
                 .build()
         }
         subscribed.assert().isEqualTo(0)
