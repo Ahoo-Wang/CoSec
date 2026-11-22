@@ -21,6 +21,17 @@ import me.ahoo.cosec.spi.snapshot.SnapshotKind
 
 // What tests and benchmarks read and drive of a source's family bound (`SNP-14`), beside it rather than in it.
 
+/**
+ * The bound of the family of [kind] for the kind [absent] names, as it is now (`SNP-24`): derived from the documents'
+ * share of the heap and recomputed by housekeeping, or fixed. What the starter's gauge and startup line read.
+ */
+@InternalCoSecApi
+fun SnapshotSource<*, *>.bound(kind: SnapshotKind, absent: Boolean): Int = familyOfKind(kind).bound(absent)
+
+/** What the resident documents of the family of [kind] weigh together now (`SNP-24`). */
+@InternalCoSecApi
+fun SnapshotSource<*, *>.residentWeight(kind: SnapshotKind): Long = familyOfKind(kind).weight
+
 /** Tests only: what the family of [kind] counts it holds, documents then absent entries. */
 internal fun SnapshotSource<*, *>.heldCounts(kind: SnapshotKind): Pair<Int, Int> =
     familyOfKind(kind).let { it.count(absent = false).get() to it.count(absent = true).get() }

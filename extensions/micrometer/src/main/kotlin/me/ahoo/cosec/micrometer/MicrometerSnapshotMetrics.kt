@@ -26,6 +26,7 @@ import me.ahoo.cosec.runtime.snapshot.SnapshotEntry
 import me.ahoo.cosec.runtime.snapshot.SnapshotMetrics
 import me.ahoo.cosec.runtime.snapshot.SnapshotSource
 import me.ahoo.cosec.runtime.snapshot.SnapshotSummary
+import me.ahoo.cosec.runtime.snapshot.bound
 import me.ahoo.cosec.runtime.snapshot.summary
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.cosec.spi.snapshot.SnapshotKind
@@ -110,6 +111,10 @@ class MicrometerSnapshotMetrics(
                     it.summary().of(kind).held(state).toDouble()
                 }
             }
+            // Beside what is installed: the bound each kind is held to now, derived from the heap and moving with what is
+            // resident (SNP-24). A family whose installed count stays at its bound while it evicts needs more heap.
+            gauge(BOUND, source, KIND, tag(kind), STATE, "document") { it.bound(kind, absent = false).toDouble() }
+            gauge(BOUND, source, KIND, tag(kind), STATE, "absent") { it.bound(kind, absent = true).toDouble() }
             gauge(LAG, source, KIND, tag(kind), unit = SECONDS) { seconds(it.summary().of(kind).maxLag) }
             gauge(LAGGING, source, KIND, tag(kind), LEVEL, WARN) { it.summary().of(kind).lagging.toDouble() }
             gauge(LAGGING, source, KIND, tag(kind), LEVEL, ESCALATE) { it.summary().of(kind).escalated.toDouble() }
@@ -139,6 +144,7 @@ class MicrometerSnapshotMetrics(
         const val COMPILE_DURATION = "cosec.snapshot.compile.duration"
         const val INSTALLS = "cosec.snapshot.installs"
         const val INSTALLED = "cosec.snapshot.installed"
+        const val BOUND = "cosec.snapshot.bound"
         const val LAG = "cosec.snapshot.lag"
         const val LAGGING = "cosec.snapshot.lagging"
         const val LAG_EXCEEDED = "cosec.snapshot.lag.exceeded"

@@ -76,6 +76,14 @@ internal object RemovedProperties {
             "computed: a 16th of the heap, each entry weighed by its token's length",
         "cosec.authentication.revocation.cache.maximum-size" to
             "computed: an 8th of the heap, counted at 290 + 230 bytes an entry of each table",
+        "cosec.authorization.snapshot.max-apps" to
+            "computed: the app documents' part of a quarter of the heap, each weighed by what it holds",
+        "cosec.authorization.snapshot.max-tenants" to
+            "computed: what is left of a quarter of the heap, divided by the mean weight of the resident tenant documents",
+        "cosec.authorization.snapshot.max-absent-apps" to
+            "computed: a 256th of the absent entries' fixed part of the documents' share (a 64th of the heap), 512 bytes each",
+        "cosec.authorization.snapshot.max-absent-tenants" to
+            "computed: the absent entries' fixed part of the documents' share (a 64th of the heap), 512 bytes each",
     )
 
     private val byName: Map<ConfigurationPropertyName, String> =

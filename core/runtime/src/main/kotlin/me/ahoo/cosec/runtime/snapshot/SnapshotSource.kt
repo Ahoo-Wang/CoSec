@@ -121,7 +121,7 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
 
     internal val threads = SnapshotThreads(options, compileExecutor, scheduler, housekeeping, this.metrics, refusals)
     internal val lagReports = LagReports(options, clock, this.metrics, threads, ::entries)
-    internal val families = SnapshotFamilies(families, sharedKey.kind, lagReports, this.metrics)
+    internal val families = SnapshotFamilies(families, sharedKey.kind, lagReports, this.metrics, options.documentBudget)
     internal val context = KeyContext(
         store, sharedKey, options, clock, ticker, this.metrics, threads, this.families, runners, reviews,
     )

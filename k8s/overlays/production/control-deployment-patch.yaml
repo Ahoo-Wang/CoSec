@@ -9,10 +9,9 @@ spec:
         - name: cosec-control
           env:
             # A 2 GiB heap for a 3200Mi limit, by the gateway's rule (the heap, plus the direct memory, plus about 250 MiB,
-            # plus a quarter). The control host holds two snapshot sources, each an entry per tenant it decides for, up to
-            # max-tenants (16,384 by default, about 490 MB at 30 KB each): size the heap as 2 x (max-tenants x 30 KB) +
-            # 256 MiB + three times the largest change record, then the limit by the rule. Change heap and limit together,
-            # and with cosec.authorization.snapshot.max-tenants.
+            # plus a quarter). The control host holds two snapshot sources, which share a quarter of the heap, half each
+            # (SNP-24: about 7,200 typical tenants each at 2 GiB): size the heap for the tenants it decides for, plus 256 MiB
+            # and three times the largest change record, then the limit by the rule. Change heap and limit together.
             - name: JVM_MEMORY_OPTS
               value: -Xms2g -Xmx2g -XX:MaxDirectMemorySize=256m -XX:MaxMetaspaceSize=256m
             # The control host's own Redis account, from the Secret cosec-control-redis-credentials, which you create: password

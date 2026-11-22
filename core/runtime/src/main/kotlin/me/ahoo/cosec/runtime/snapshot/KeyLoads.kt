@@ -104,12 +104,7 @@ internal class KeyLoads<T : Any>(private val config: KeyConfig) {
         val present = compiled.state is DocumentState.Present
         val origin = if (present) EntryOrigin.DOCUMENT else EntryOrigin.UNCOMPILABLE
         val confirmedAt = load.confirmedAt(config.localCopyMaxAge)
-        finish(
-            step,
-            load,
-            SnapshotEntry(step.key, compiled.state, read.document.revision, read.digest, confirmedAt, origin),
-            install = true
-        )
+        finish(step, load, readEntry(step.key, compiled.state, read, confirmedAt, origin), install = true)
     }
 
     /**
@@ -123,16 +118,8 @@ internal class KeyLoads<T : Any>(private val config: KeyConfig) {
         failure: SnapshotUnavailableException
     ) {
         val confirmedAt = load.confirmedAt(config.localCopyMaxAge)
-        val entry =
-            SnapshotEntry(
-                step.key,
-                DocumentState.Failed(failure),
-                read.document.revision,
-                read.digest,
-                confirmedAt,
-                EntryOrigin.UNCOMPILABLE
-            )
-        finish(step, load, entry, install = true)
+        val failed = DocumentState.Failed(failure)
+        finish(step, load, readEntry(step.key, failed, read, confirmedAt, EntryOrigin.UNCOMPILABLE), install = true)
     }
 
     /**
@@ -156,16 +143,7 @@ internal class KeyLoads<T : Any>(private val config: KeyConfig) {
                     "compiled with inputs that changed, and not compiled again",
                     cause
                 )
-            val failed =
-                SnapshotEntry(
-                    step.key,
-                    DocumentState.Failed(error),
-                    known.revision,
-                    known.digest,
-                    known.confirmedAt,
-                    EntryOrigin.RECOMPILE_PENDING
-                )
-            finish(step, load, failed, install = true)
+            finish(step, load, known.failedAs(error, EntryOrigin.RECOMPILE_PENDING), install = true)
             retryLater(step)
             return
         }

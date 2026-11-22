@@ -16,6 +16,7 @@
 package me.ahoo.cosec.runtime.snapshot
 
 import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.spi.snapshot.SnapshotKind
 import java.time.Duration
 
 /**
@@ -46,6 +47,12 @@ class SnapshotOptions(
     val failClosedMaxLag: Duration = Duration.ofMinutes(30),
     /** How long [SnapshotSource.load] waits for a cold document before it answers with a failed one. */
     val coldLoadTimeout: Duration = Duration.ofSeconds(2),
+    /**
+     * The snapshot documents' share of the heap, in bytes (`HeapBudget.documents`, `SNP-24`): each family's bounds are
+     * derived from it ([DocumentBudget]), and [maxApps], [maxTenants], [maxAbsentApps] and [maxAbsentTenants] are not
+     * read. Null: those four fixed bounds, which only CoSec's own tests and benchmarks set.
+     */
+    val documentsBudget: Long? = null,
     /** The most app documents held at once; the least recently used one is evicted beyond it. */
     val maxApps: Int = DEFAULT_MAX_APPS,
     /**
@@ -93,6 +100,7 @@ class SnapshotOptions(
         require(lagWarn <= lagEscalate) { "lagWarn must not exceed lagEscalate." }
         require(!failClosedMaxLag.isNegative) { "failClosedMaxLag must not be negative." }
         require((!coldLoadTimeout.isNegative && !coldLoadTimeout.isZero)) { "coldLoadTimeout must be positive." }
+        require(documentsBudget == null || documentsBudget > 0) { "documentsBudget must be positive." }
         require(maxApps > 0) { "maxApps must be positive." }
         require(maxTenants > 0) { "maxTenants must be positive." }
         require(maxAbsentApps > 0) { "maxAbsentApps must be positive." }
@@ -111,6 +119,14 @@ class SnapshotOptions(
             "prewarmInitialBackoff must be positive and must not exceed prewarmMaxBackoff."
         }
     }
+
+    /** How [documentsBudget] bounds the families; null when their bounds are fixed. */
+    val documentBudget: DocumentBudget? = documentsBudget?.let(::DocumentBudget)
+
+    /** How many documents the families hold at first, both together: their first derived bounds, or the fixed ones. */
+    val documentsHeld: Int
+        get() = documentBudget?.let { it.firstBound(SnapshotKind.APP) + it.firstBound(SnapshotKind.TENANT) }
+            ?: (maxApps + maxTenants)
 
     /**
      * What the starter and [me.ahoo.cosec.runtime.PipelineBuilder] no longer take as settings, derived from the two

@@ -21,6 +21,7 @@ import me.ahoo.cosec.cocache.RevokedTokenCache
 import me.ahoo.cosec.engine.TraceLevel
 import me.ahoo.cosec.jwt.VerifiedTokenCache
 import me.ahoo.cosec.runtime.HeapBudget
+import me.ahoo.cosec.runtime.snapshot.DocumentBudget
 import org.springframework.boot.context.properties.bind.Binder
 import org.springframework.core.env.Environment
 
@@ -53,7 +54,8 @@ internal object DerivedHeap {
             ", decision listener queues=$it events each (${HeapBudget.decisionEventBytes(traceLevel)} B an event " +
                 "at trace-level ${traceLevel.name.lowercase()})"
         }
-        return "heap budget ($budget): revocation tables=${revocationEntries(budget)} entries each " +
+        return "heap budget ($budget): ${DocumentBudget(budget.documents)}, recomputed from what is resident each " +
+            "revalidation pass and before each eviction (cosec.snapshot.bound); revocation tables=${revocationEntries(budget)} entries each " +
             "(${RevokedTokenCache.ENTRY_BYTES} + ${RevokedSubjectCache.ENTRY_BYTES} B a pair), token cache weighed at " +
             "${VerifiedTokenCache.BYTES_PER_TOKEN_CHAR} B a token character${queues.orEmpty()}"
     }

@@ -100,6 +100,13 @@ class CompiledDocument private constructor(
      */
     internal val repeats: Int
 
+    /**
+     * Its statements, in its policies and boundaries, and its bindings: what a resident copy of it retains grows with these
+     * (`SNP-24`), so a holder can weigh it without measuring it. Counted once, here.
+     */
+    val statementCount: Int = policies.values.sumOf { it.statements.size } + boundaries.values.sumOf { it.statements.size }
+    val bindingCount: Int = bindings.size
+
     init {
         require(rateLimits.size <= MAX_RATE_LIMIT_RULES) {
             "The $kind document holds ${rateLimits.size} rate limit rules, more than $MAX_RATE_LIMIT_RULES"

@@ -35,6 +35,8 @@ class SnapshotEntry<out T : Any> internal constructor(
     internal val digest: SnapshotDigest?,
     confirmedAt: Instant,
     internal val origin: EntryOrigin,
+    /** The stored document's size, what its weight is reckoned from (`SNP-24`); 0 when no document is behind it. */
+    internal val storedBytes: Int = 0,
 ) {
     @Volatile
     var confirmedAt: Instant = confirmedAt

@@ -23,7 +23,18 @@ package me.ahoo.cosec.conformance
  */
 object GuardAllowlist {
     val GUARDS: Map<String, Set<String>> = mapOf(
-        "build" to setOf(
+        "build" to SnapshotBoundGuards.BUILD + setOf(
+            // PIP-34: a host renders the body of a refusal, from the problem alone, alike behind every adapter.
+            "runtime:ProblemBodiesTest#without a renderer the body is CoSec's own, byte for byte",
+            "runtime:ProblemBodiesTest#a renderer's bytes are the body, and it is given the problem only",
+            "runtime:ProblemBodiesTest#a renderer that throws, answers no bytes or answers null is replaced by CoSec's body, and counted",
+            "spring-boot:WebAdapterParityTest#a host's renderer writes the same body behind the three adapters, under CoSec's status and headers",
+            "jwt:LoginRoutesTest#the login routes render a refusal as the adapters do",
+            "spring-boot:ProblemRendererWiringTest#the application's renderer writes the body, under CoSec's status and media type",
+            "spring-boot:ProblemRendererWiringTest#two renderers fail startup and name both",
+            "architecture:OneDecisionPathTest#renderersNeverSeeDecisions",
+            "architecture:OneDecisionPathTest#refusalBodiesComeFromProblemBodies",
+            "micrometer:ProblemRenderFailedMetricTest#each refusal a renderer failed is counted, and a rendered one is not",
             // CTL-57, CTL-58: how a step was identified, and the service profile of the control API.
             "spring-boot:ServicePortRoutesTest#a route that was served is never turned into a 404, whatever its write left behind",
             "spring-boot:ServicePortRoutesTest#a path no control route answers is a 404 on the service port, and a request on another port goes on",

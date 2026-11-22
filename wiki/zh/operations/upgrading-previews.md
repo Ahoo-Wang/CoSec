@@ -25,6 +25,7 @@ description: "每个 8.0 预览版（alpha 与 beta）到下一个之间的变�
 
 ## 从 8.0.0-beta.5 升级 {#from-8-0-0-beta-5}
 
+- **新增：宿主渲染拒绝的响应体**（`ProblemRenderer`，`PIP-34`，#1840）。受影响的：除非你声明一个，否则没有。有自己的 problem 目录的宿主框架声明一个 `ProblemRenderer` bean，三个适配器和 starter 提供的登录路由后面的每个拒绝都使用它的响应体；状态码和头仍是 CoSec 的，失败的渲染器会被 CoSec 的响应体替代（`cosec.problem.render.failed`）。两个渲染器导致启动失败。请在响应体中保留 CoSec 的 `type` 和 `code`，否则 CoSec 的 TypeScript 客户端读不懂这些拒绝（[Problem 渲染器](../architecture/extending.md#problem-renderer)）。
 - **CoSec 基于 Spring Boot 4.2 和 Spring Cloud 2026.0 构建。** 受影响：使用 Spring Boot 4.1 的应用，或使用 `cosec-gateway`
   且在 Spring Cloud 2025.1 上的应用。CoSec 的模块把构建所用的版本写作最低版本
   （[CoSec 对构建的要求](../guide/introduction.md#what-cosec-needs-from-your-build)）：按 Spring Boot 4.2 的发布说明把应用升级到
@@ -91,6 +92,17 @@ description: "每个 8.0 预览版（alpha 与 beta）到下一个之间的变�
   - `ListenerSettings` 和 `PipelineBuilder.listeners { }` 被删除：监听器如何运行不再有任何设置。删掉这个代码块。
   - `cocache.caches.[RevokedTokenCache].local-maximum-size`（或 `RevokedSubjectCache`）现在会让启动失败：这个数被锁定。
   - 变更监听器占堆的三十二分之一不变，现在也在同一张表里。
+- **快照族的上限由堆的四分之一推出，四个 key 被删除**（`SNP-24`、`STA-12`）。受影响：设置了其中某一项的配置，以及在 `Pipeline.builder` 的 `snapshots { }` 中设置过它们的代码。启动会失败并列出 CoSec 不读取的 key，说明每个由什么取代。删掉这个 key；要持有更多文档，就给实例更多的堆（[由计算得出，而非配置](./configuration.md#computed-not-configured)）。
+
+  | 已删除 | 现在 |
+  |---|---|
+  | `cosec.authorization.snapshot.max-apps`、`max-tenants` | 每个族已持有的，加上堆的四分之一（减去"不存在"条目那一份）剩下的空间，按其常驻文档的典型重量计数（一个从不低于实际保留量的估计），每轮重新确认时以及每次淘汰之前重新计算，从不低于 64 |
+  | `cosec.authorization.snapshot.max-absent-apps`、`max-absent-tenants` | 文档那四分之一中固定的十六分之一，每个条目 512 字节：2 GiB 时 256 个应用 id 和 65,280 个租户 id |
+
+  - **原先在 2 GiB 上依赖 16,384 个常驻租户的网关现在约持有 14,500 个**部署页面那种典型租户（每个估计 34.6 KB，实际保留 29.5 KB）。要全部持有，给它 2.5 GiB 的堆（`-Xmx2560m`，约 18,200 个）；`cosec.snapshot.bound` 和启动日志行写明它持有多少。
+  - 控制面与管道同在一个进程时，两个快照源各占那四分之一的一半。
+  - `SnapshotSettings`（在 `snapshots { }` 中）去掉 `maxApps`、`maxTenants`、`maxAbsentApps` 和 `maxAbsentTenants`：删掉这些行。
+  - 小 pod 得到的文档较少，照旧变为就绪；比整个份额还重的文档仍然会被提供。
 
 ## 从 8.0.0-beta.4 升级 {#from-8-0-0-beta-4}
 

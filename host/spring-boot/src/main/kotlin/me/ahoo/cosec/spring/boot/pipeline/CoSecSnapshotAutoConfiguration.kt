@@ -332,9 +332,13 @@ class CoSecSnapshotAutoConfiguration {
         pipeline: PipelineProperties,
         metrics: ObjectProvider<SnapshotMetrics>,
         routes: ObjectProvider<RouteMap>,
+        resources: ResourceLoader,
+        environment: Environment,
     ): SnapshotSource<CompiledDocument, CompiledDocument> {
         val snapshot = properties.snapshot
-        val options = snapshot.toOptions(pipeline.timeout)
+        // Where the control plane runs, its own source holds the other half of the documents' share (SNP-24).
+        val sources = if (ControlPlaneCondition.wired(resources.classLoader, environment)) 2 else 1
+        val options = snapshot.toOptions(pipeline.timeout, sources)
         // The data plane's source only: the control plane's own would count its reads under the same names.
         val source = DocumentSnapshots.source(
             store,

@@ -64,6 +64,9 @@ Full model: https://cosec.ahoo.me/guide/security-model.
 
 ## Startup failures
 
+- **`PIP-34: 2 ProblemRenderer beans of the application, [...]`**: a refusal has one body, so the starter takes one
+  `ProblemRenderer`. Keep one, or one that delegates.
+  https://cosec.ahoo.me/operations/troubleshooting#startup-fails-on-two-problem-renderers
 - **A gateway restarts once right after `kubectl apply`**, and `kubectl logs --previous` ends with
   `RedisConnectionException: Unable to connect to redis/...`: it started before Redis was reachable (the overlay is
   applied whole). Startup fails closed without the store of record, and the kubelet restarts it until Redis answers: no
@@ -427,6 +430,15 @@ the route's `uri` does not resolve (a Kubernetes Service missing from the gatewa
 `cosec-auth` of `k8s/` points at one it does not create). CoSec permitted the request, so nothing in the documents caused
 it: fix the route's `uri`, or create the Service or the DNS name.
 https://cosec.ahoo.me/operations/troubleshooting#a-permitted-request-answers-500-with-the-gateways-own-error-body
+
+### A refusal has CoSec's body though a `ProblemRenderer` is declared
+
+`WARN` `Request [<id>]: the ProblemRenderer [<class>] failed with <exception>, so the <status> <slug> refusal is
+answered with CoSec's own body (PIP-34)`, and `cosec.problem.render.failed` rising: the application's renderer threw or
+returned no bytes, and CoSec answered with its own body. The request was refused anyway, with CoSec's status: nothing
+was let through. Fix the renderer (a default branch for every `ProblemType`, a later one included). No such line and
+never the renderer's body: it is not wired (not a bean, or not the only one).
+https://cosec.ahoo.me/operations/troubleshooting#a-refusal-is-answered-with-cosecs-body-though-a-renderer-is-declared
 
 ### Request allowed unexpectedly
 

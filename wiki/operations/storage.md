@@ -305,7 +305,7 @@ Check the user with `ACL DRYRUN` before production: CoCache writes through Lua s
 Each instance holds the compiled documents in memory and decides from them without touching Redis. The platform
 document is loaded at startup and never dropped; app and tenant documents are loaded when a request first needs them,
 and the least recently used are dropped beyond
-[`max-apps` and `max-tenants`](./configuration.md#snapshot). Prewarmed apps and tenants load at startup, after the
+the family's bound, derived from a quarter of the heap ([Computed, not configured](./configuration.md#computed-not-configured), `SNP-24`). Prewarmed apps and tenants load at startup, after the
 platform document.
 
 ```mermaid
@@ -347,7 +347,7 @@ sequenceDiagram
   before the pass, one more load follows at once, so a change the pass would have read is installed then, not at a
   later pass.
 - **Ids without a document** are remembered apart from the documents, at most
-  [`max-absent-apps`](./configuration.md#snapshot) (256) app ids and `max-absent-tenants` (65,536) tenant ids, and
+  256 app ids and 65,280 tenant ids at a 2 GiB heap (a fixed sixteenth of the documents' quarter, [`SNP-24`](./configuration.md#computed-not-configured)), and
   confirmed by every pass like a document. Credentials issued for many app ids that have no document make the instance
   read Redis for each (a client never declares its app), but never push an installed document out (`SNP-7`). Every
   request of a tenant without a tenant document reads its entry, so that bound is sized for every such tenant an
@@ -385,8 +385,8 @@ sequenceDiagram
   queue keeps its read and compiles again until the cold-load timeout from its start; meanwhile its requests are decided
   on the compilation made against the previous platform document, as they are while its read runs. Only after that
   does it fail closed, as a document that cannot be compiled again does (`SNP-4`).
-- **Held documents are bounded.** Each family keeps at most [`max-apps`/`max-tenants`](./configuration.md#snapshot)
-  documents and `max-absent-apps`/`max-absent-tenants` absent entries, and drops the least recently used ones on a
+- **Held documents are bounded.** Each family keeps at most [its bound](./configuration.md#computed-not-configured) of documents,
+  derived from a quarter of the heap, and its fixed number of absent entries, and drops the least recently used ones on a
   housekeeping thread. During a burst of cold loads it may for a moment hold up to twice the bound, and never more than
   4,096 above it, plus the documents being loaded; past that, the thread that loaded a document evicts up to 64 of that
   kind before it answers the request, which takes the family back within that, and housekeeping evicts the rest
@@ -439,14 +439,14 @@ customizer reaches only that client, behind the Redis templates (API keys, the r
 builds its own client for the documents, the control-plane records and the revocations ([Redis client](#redis-requirements)),
 and configures it itself.
 
-**Loads in flight are bounded by time, not by number.** A document being loaded counts toward neither `max-apps`,
-`max-tenants` nor the ids without a document until its load ends: it fails after the store read timeout (30 seconds)
+**Loads in flight are bounded by time, not by number.** A document being loaded counts toward neither its family's bound
+for documents nor the one for ids without a document until its load ends: it fails after the store read timeout (30 seconds)
 while Redis hangs, though the request waiting for it answers `503` after the cold-load timeout. So credentials for new app ids
 used at a high rate keep up to that rate × 30 seconds of loads, and their pending Lettuce commands, in memory
 during such an outage; `requestQueueSize` bounds the commands. None of them ever pushes out an installed document.
 
 **Apps without a document share 256 places.** The app ids an instance remembers as having no document, at most
-`max-absent-apps` (256, `SNP-7`), are shared by every tenant. Credentials issued for many apps that have no app document push out the real apps
+the app family's absent entries (256 at 2 GiB, `SNP-7`), are shared by every tenant. Credentials issued for many apps that have no app document push out the real apps
 that have no app document, so a request in one of them reads Redis again, without compiling anything, until it is
 remembered again. That fails closed, but for a tenant in `fail-closed.tenants` such an app's entry loaded from the
 local copy counts as `local-max-age` old: with `fail-closed.max-lag` below `local-max-age`, its requests answer `503`

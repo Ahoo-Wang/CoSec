@@ -24,6 +24,8 @@ import java.util.PriorityQueue
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.atomic.AtomicLong
+import java.util.concurrent.atomic.AtomicLongArray
 
 // The source's logger: moving the code did not move the name operators configure.
 private val log = KotlinLogging.logger(SnapshotSource::class.java.name)
@@ -38,6 +40,8 @@ internal class SnapshotFamilies<A : Any>(
     sharedKind: SnapshotKind,
     private val lagReports: LagReports,
     private val metrics: SnapshotMetrics,
+    /** The documents' share of the heap the families' bounds are derived from (`SNP-24`); null: their bounds are fixed. */
+    private val budget: DocumentBudget? = null,
 ) : Iterable<SnapshotFamilies.Family<A>> {
     private val families: List<Family<A>> = specs.map { Family(it) }
 
@@ -77,6 +81,7 @@ internal class SnapshotFamilies<A : Any>(
      * victim two passes chose is removed once (`SNP-14`).
      */
     fun evictBeyond(family: Family<*>, limit: Int = Int.MAX_VALUE) {
+        rebound()
         evictBeyond(family, absent = false, limit)
         evictBeyond(family, absent = true, limit)
     }
@@ -105,6 +110,8 @@ internal class SnapshotFamilies<A : Any>(
 
     /** [key] left its family, holding [entry]: what a removal does besides leaving the map. */
     fun removed(key: SnapshotKey, entry: SnapshotEntry<*>?) {
+        // Every removal ends here, its count claimed or not: the entry's weight leaves with it (SNP-24).
+        if (entry != null && !isAbsent(entry)) of(key.kind)?.let { it.unweigh(it.spec.weigh(entry)) }
         lagReports.forget(key)
         // Only an installed entry that leaves is an eviction. A key dropped empty, after a cold load that failed or
         // timed out, held nothing: counting it would put noise in the meter that says the bound is too small.
@@ -148,6 +155,11 @@ internal class SnapshotFamilies<A : Any>(
     fun move(family: Family<*>, slot: KeyRunner<*>, old: SnapshotEntry<*>?, new: SnapshotEntry<*>?) {
         val from = old?.let(::isAbsent)
         val to = new?.let(::isAbsent)
+        // An entry installed in place of another: the weights of the documents among them move here; a removal's in removed.
+        if (new != null) {
+            old?.takeUnless(::isAbsent)?.let { family.unweigh(family.spec.weigh(it)) }
+            new.takeUnless(::isAbsent)?.let { family.weigh(family.spec.weigh(it)) }
+        }
         if (from == to) {
             return
         }
@@ -155,9 +167,77 @@ internal class SnapshotFamilies<A : Any>(
         to?.let { family.join(slot, it) }
     }
 
+    /**
+     * Derives each family's bound for documents from [budget] and what the families hold now (`SNP-24`), and answers the
+     * families now above their bound, for housekeeping to evict. Nothing when the bounds are fixed. Each revalidation
+     * pass calls it, and so does every eviction pass before it evicts ([evictBeyond]): a bound is never older than the
+     * eviction it allows, so a document is evicted only when what is resident weighs more than the share, never because
+     * of what was resident at the last pass (a first estimate, or a mean taken over a few documents).
+     */
+    fun rebound(): List<Family<A>> {
+        val budget = budget ?: return emptyList()
+        val total = families.sumOf { it.weight }
+        for (family in families) {
+            val count = family.count(absent = false).get()
+            val others = total - family.weight
+            family.documentBound = budget.bound(family.spec.kind, count, family.weight, family.typicalWeight(), others)
+        }
+        return families.filter { it.count(absent = false).get() > it.documentBound }
+    }
+
     /** One family's documents, by id, and how many of each kind it holds (`SNP-14`). */
     class Family<A : Any>(val spec: SnapshotFamily<A>) {
         val slots = ConcurrentHashMap<String, KeyRunner<A>>()
+
+        /** Its bound for documents: [SnapshotFamily.maxEntries], or derived from the documents' share ([rebound]). */
+        @Volatile
+        var documentBound: Int = spec.maxEntries
+            internal set
+
+        private val weighedBytes = AtomicLong()
+
+        /** Its resident documents by the power of two of their weight: how many, and what they weigh (`SNP-24`). */
+        private val bucketCounts = AtomicLongArray(BUCKETS)
+        private val bucketWeights = AtomicLongArray(BUCKETS)
+
+        /** What its resident documents weigh together (`SNP-24`). */
+        val weight: Long get() = weighedBytes.get()
+
+        fun weigh(bytes: Long) = account(bytes, 1)
+
+        fun unweigh(bytes: Long) = account(bytes, -1)
+
+        private fun account(bytes: Long, sign: Int) {
+            val bucket = (Long.SIZE_BITS - 1 - java.lang.Long.numberOfLeadingZeros(bytes.coerceAtLeast(1))).coerceIn(
+                0,
+                BUCKETS - 1
+            )
+            weighedBytes.addAndGet(sign * bytes)
+            bucketCounts.addAndGet(bucket, sign.toLong())
+            bucketWeights.addAndGet(bucket, sign * bytes)
+        }
+
+        /**
+         * The mean weight of its resident documents, leaving out those more than [OUTLIER_FACTOR] times the median: what
+         * the documents it does not hold yet are expected to weigh. One very heavy document takes its own weight from
+         * the room left, which [weight] counts, and does not make every document to come count as heavy. 0 with none.
+         */
+        fun typicalWeight(): Long {
+            val counts = LongArray(BUCKETS) { bucketCounts.get(it).coerceAtLeast(0) }
+            val held = counts.sum()
+            if (held == 0L) return 0
+            var seen = 0L
+            var median = 0
+            while (seen + counts[median] <= held / 2) seen += counts[median++]
+            val last = (median + OUTLIER_BUCKETS).coerceAtMost(BUCKETS - 1)
+            var count = 0L
+            var weight = 0L
+            for (bucket in 0..last) {
+                count += counts[bucket]
+                weight += bucketWeights.get(bucket).coerceAtLeast(0)
+            }
+            return if (count == 0L) 0 else weight / count
+        }
 
         /** The documents held (every failed entry is one) and the entries for documents the store does not hold. */
         private val documents = AtomicInteger()
@@ -186,7 +266,7 @@ internal class SnapshotFamilies<A : Any>(
             count(absent).decrementAndGet()
         }
 
-        fun bound(absent: Boolean): Int = if (absent) spec.maxAbsent else spec.maxEntries
+        fun bound(absent: Boolean): Int = if (absent) spec.maxAbsent else documentBound
 
         /** The most a kind may hold before its installer evicts in place: twice the bound, at most [MAX_SLACK] above it. */
         fun cap(absent: Boolean): Int = bound(absent).let { it + minOf(it, MAX_SLACK) }
@@ -250,6 +330,15 @@ internal class SnapshotFamilies<A : Any>(
          * cap is the bound plus the smaller of the bound and this. A rule of its own, not the housekeeping queue's size.
          */
         const val MAX_SLACK = 4096
+
+        /** One bucket per power of two of a document's weight in bytes. */
+        private const val BUCKETS = 48
+
+        /** A document more than 2^this times the median weight is left out of the typical one: 8 times. */
+        private const val OUTLIER_BUCKETS = 3
+
+        /** What [Family.typicalWeight] leaves out, in multiples of the median: documents more than this heavy. */
+        const val OUTLIER_FACTOR = 1 shl OUTLIER_BUCKETS
 
         /**
          * The most entries of a kind an install evicts on its own thread when it finds the family over its cap

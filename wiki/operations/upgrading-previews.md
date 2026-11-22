@@ -28,6 +28,12 @@ Which preview of the library may run behind which preview of the gateway image: 
 
 ## From 8.0.0-beta.5 {#from-8-0-0-beta-5}
 
+- **New: a host renders the body of a refusal** (`ProblemRenderer`, `PIP-34`, #1840). Affected: nothing unless you
+  declare one. A host framework with its own problem catalog declares one `ProblemRenderer` bean, and every refusal
+  behind the three adapters and the served login routes has its body; the status and the headers stay CoSec's, and a
+  renderer that fails is replaced by CoSec's body (`cosec.problem.render.failed`). Two renderers fail startup. Keep
+  CoSec's `type` and `code` in the body, or CoSec's TypeScript client cannot read those refusals
+  ([Problem renderer](../architecture/extending.md#problem-renderer)).
 - **CoSec is built on Spring Boot 4.2 and Spring Cloud 2026.0.** Affected: an application on Spring Boot 4.1, or with
   `cosec-gateway` on Spring Cloud 2025.1. CoSec's modules name the versions they are built on as minimums
   ([What CoSec needs from your build](../guide/introduction.md#what-cosec-needs-from-your-build)): upgrade the application
@@ -158,6 +164,23 @@ Which preview of the library may run behind which preview of the gateway image: 
   - A `cocache.caches.[RevokedTokenCache].local-maximum-size` (or `RevokedSubjectCache`) now fails startup: the count
     is locked.
   - The change listeners' 1/32 of the heap is unchanged, and now in the same table.
+- **The snapshot families' bounds are derived from a quarter of the heap, and four keys are gone** (`SNP-24`,
+  `STA-12`). Affected: a configuration that sets one of them, and code that set them in `Pipeline.builder`'s
+  `snapshots { }`. Startup fails listing the keys CoSec does not read, saying what replaced each. Remove the key; to hold
+  more documents, give the instance more heap ([Computed, not configured](./configuration.md#computed-not-configured)).
+
+  | Removed | Now |
+  |---|---|
+  | `cosec.authorization.snapshot.max-apps`, `max-tenants` | what each family holds plus the room left of a quarter of the heap, less the absent entries' part, counted at the typical weight of its resident documents (an estimate never below what one retains), recomputed each revalidation pass and before each eviction, never below 64 |
+  | `cosec.authorization.snapshot.max-absent-apps`, `max-absent-tenants` | a fixed sixteenth of the documents' quarter at 512 bytes an entry: 256 app ids and 65,280 tenant ids at 2 GiB |
+
+  - **A gateway that relied on 16,384 resident tenants at 2 GiB holds about 14,500** of the deployment page's typical
+    tenants now (34.6 KB estimated each, 29.5 KB retained). Give it a 2.5 GiB heap (`-Xmx2560m`, about 18,200) to hold
+    them all; `cosec.snapshot.bound` and the startup line say what it holds.
+  - Where the control plane runs beside the pipeline, the two snapshot sources share the quarter, half each.
+  - `SnapshotSettings` (in `snapshots { }`) loses `maxApps`, `maxTenants`, `maxAbsentApps` and `maxAbsentTenants`:
+    delete the lines.
+  - A small pod gets fewer documents and turns ready as before; a document heavier than the whole share is still served.
 
 ## From 8.0.0-beta.4 {#from-8-0-0-beta-4}
 

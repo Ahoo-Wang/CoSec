@@ -60,6 +60,8 @@ CoSec 没有哪个配置项叫这些名字，而已知的 key 无论来源都不
 | 每个吊销表的本地副本（`RevokedTokenCache`、`RevokedSubjectCache`）容纳 | 堆的八分之一，按每表每条 290 + 230 字节计数：2 GiB 时每表 516,222 条，原来的上限是 500,000。对你的流量太小时表现为带标签 `cache=RevokedTokenCache`（或 `RevokedSubjectCache`）的 `cocache.misses`（Prometheus 中为 `cocache_misses_total`，即本地副本没有应答的读取）持续上升，而同标签的 gauge `cocache.local.size` 停在该数（`IDN-33`） | 堆（`Runtime.maxMemory()`） |
 | 已校验令牌缓存容纳的量 | 堆的十六分之一，每个条目按其令牌长度 × 5 字节计重：2 GiB 时 128 MiB，多于原上限的 16,384 个大令牌（约 115 MB）。太小时表现为 `cosec.token.cache.evictions`（`IDN-32`） | 同上 |
 | 一个 `BEST_EFFORT` 决策监听器最多可以有多少个待处理的事件 | 堆的六十四分之一，由各 `BEST_EFFORT` 监听器均分，按 `cosec.pipeline.trace-level` 下一个事件的大小计数：不追踪时 1 KB，追踪时（`full`、`exhaustive`）8 KB，因为追踪带着每条候选语句。2 GiB、四个监听器时，每个容纳 8,192 个不追踪的事件或 1,024 个追踪的事件，原来不论级别都是每个 1,024 个。太小时表现为 `cosec.listener.dropped`（`OBS-11`） | 同上，以及监听器数 |
+| 一个实例持有多少租户文档和应用文档 | 每个族已持有的，加上堆的四分之一（减去“不存在”条目那一份）剩下的空间，按其常驻文档的典型重量计数；重量是一个从不低于一个文档实际保留量的估计（`DocumentWeight`）：2 GiB 时约 14,500 个部署页面那种形状的租户（估计 34.6 KB，实际保留 29.5 KB）。每轮重新确认时以及每次淘汰之前重新计算，因此只在常驻内容的重量超过份额时才淘汰文档，从不低于 64 个；控制面与管道同在一个进程时各得一半；一个很重的文档只从空间里拿走它自己的重量。冷加载突发时一个族可能短暂地持有至多其上限的两倍，且绝不超出上限 4,096 个以上。太小时表现为 `cosec.snapshot.evictions` 上升而 `cosec.snapshot.installed` 停在 `cosec.snapshot.bound`（`SNP-24`） | 堆（`Runtime.maxMemory()`） |
+| 一个实例记住多少个没有文档的租户 id 和应用 id | 文档那四分之一中固定的十六分之一，每个 512 字节：2 GiB 时 65,280 个租户 id 和 256 个应用 id。固定不变，所以没有主人的 id 绝不会缩小文档所得（`SNP-7`） | 同上 |
 | 变更监听器的队列容纳的量 | 堆的三十二分之一，与以前相同：2 GiB 时 64 MiB。太小时表现为 `cosec.control.listener.lost` | 同上 |
 | CoCache 中文档的本地副本为冷加载提供多久，之后重新询问 Redis | 3 个重新确认间隔：默认 `30s`；无论缓存定制器或 `cocache.*` 配置项设置了什么 | [`cosec.authorization.snapshot.revalidate-interval`](#snapshot) |
 | 一次 `Authenticator` 调用；超过后得到 `503` | 管道超时的 20 %：默认 `1s` | [`cosec.pipeline.timeout`](#pipeline) |
@@ -82,9 +84,9 @@ CoSec 没有哪个配置项叫这些名字，而已知的 key 无论来源都不
 
 **更低的期限会缩短唯一一个失败即放行的阶段。** 吊销读取的预算随期限缩放：`cosec.pipeline.timeout=1s` 时每次读取只有 60 ms，而原来固定为 300 ms。超过预算的读取意味着吊销无法读取，此时校验会接受请求的令牌，除非设置了 `cosec.authentication.revocation.fail-closed=true`（[已写明的例外](../guide/security-model.md#the-two-documented-exceptions)）。期限低于默认值时，请设置 `fail-closed`，或确认 Redis 的应答远在读取预算之内。
 
-**堆的各份额在一张表里**（`HeapBudget`，`STA-12`）：上面四个上限，加上为快照文档预留的四分之一（它自己的上限留待后续设计），合计占堆的 31/64，不到一半，给网关的其余部分和 ZGC 留出空间。堆越小得到的越少，而且可见：512 MiB 的堆得到 64 MiB 的吊销表（每表 129,055 条）、32 MiB 的令牌缓存（约 4,150 个大令牌）和 8 MiB 的决策监听器队列（四个监听器时每个 2,048 个事件）。启动日志行写明每一项得到多少，以及它读到的堆：`heap <n> MiB (Runtime.maxMemory())`。没有 `-Xmx` 的容器按 JVM 的默认只得到内存限制的四分之一，所以那里的上限偏小来自堆偏小：给 JVM 明确的 `-Xmx`（[内存](./deployment.md#memory)）。
+**堆的各份额在一张表里**（`HeapBudget`，`STA-12`）：上面四个上限，加上快照文档的四分之一（各族的上限由它推出，`SNP-24`），合计占堆的 31/64，不到一半，给网关的其余部分和 ZGC 留出空间。堆越小得到的越少，而且可见：512 MiB 的堆得到 64 MiB 的吊销表（每表 129,055 条）、32 MiB 的令牌缓存（约 4,150 个大令牌）、8 MiB 的决策监听器队列（四个监听器时每个 2,048 个事件），以及约 3,600 个典型租户的文档。启动日志行写明每一项得到多少，以及它读到的堆：`heap <n> MiB (Runtime.maxMemory())`。没有 `-Xmx` 的容器按 JVM 的默认只得到内存限制的四分之一，所以那里的上限偏小来自堆偏小：给 JVM 明确的 `-Xmx`（[内存](./deployment.md#memory)）。
 
-曾经设置过其中某一项的 key 会让启动失败（作为 CoSec 不读取的 key），并说明它已不再是配置项，以及由什么取代（[未知配置项](#unknown-properties)）。
+曾经设置过其中某一项的 key 会让启动失败（作为 CoSec 不读取的 key），并说明它已不再是配置项，以及由什么取代（[未知配置项](#unknown-properties)）。其中包括 8.0 预览版的四个快照上限：`cosec.authorization.snapshot.max-apps`、`max-tenants`、`max-absent-apps` 和 `max-absent-tenants`，现在由文档的那四分之一推出（[从预览版升级](./upgrading-previews.md)）。
 
 ## 功能开关 {#feature-switches}
 
@@ -203,10 +205,6 @@ CoSec 没有哪个配置项叫这些名字，而已知的 key 无论来源都不
 | `cosec.authorization.snapshot.revalidate-interval` | duration | `10s` | 多久开始一轮，用条件读向 Redis 确认每个已装入的文档；上一轮还在进行时，下一轮在它结束后立即开始，两轮从不重叠。失效消息丢失的变化，由它可读之后第一个到达该文档的一轮装上（`SNP-6`）。至少为 `1s`、不超过 `5m`，配置了 `fail-closed.tenants` 时还要小于 `fail-closed.max-lag`；否则启动失败。文档超过 6 个间隔未被确认时以 `WARN` 记录，超过 30 个时以 `ERROR` 记录为陈旧（[由计算得出，而非配置](#computed-not-configured)）。每一轮在 Redis 上每份文档只花几微秒，与文档大小无关（[存储](./storage.md#what-revalidation-costs-redis)）。 |
 | `cosec.authorization.snapshot.fail-closed.tenants` | 租户 id 集合 | 空 | 不得基于旧文档决策的租户：这类租户的请求读取的最旧文档，若上次确认距今超过 `max-lag`，请求得到 `503`（`SourceUnavailable`），除非有 DENY 匹配。`*` 表示所有租户：租户多到无法一一列出的宿主，可以借此为所有租户选择新鲜度而非可用性。其他租户继续基于已装入的文档决策。 |
 | `cosec.authorization.snapshot.fail-closed.max-lag` | duration | `30m` | 上述租户超过这个滞后即失败即拒绝。不能为负。 |
-| `cosec.authorization.snapshot.max-apps` | int | `1024` | 内存中最多持有的应用文档数（为正）；超过后丢弃最久未用的一个，需要时再加载。冷加载突发时，一个族可能短暂地持有更多：最多为该上限的两倍，且绝不超出上限 4,096 个以上，另加此刻正在加载的文档；超过这个数时，加载该文档的线程在回答之前最多驱逐其中 64 个，其余由后勤线程驱逐（[存储](./storage.md#how-instances-read-documents)）。 |
-| `cosec.authorization.snapshot.max-tenants` | int | `16384` | 租户文档的同一上限（为正）。平台文档从不被丢弃。按实例持有它所服务的租户来定：一个含 5 个各 20 项权限的角色和 20 条绑定的租户文档约占 30 KB，16,384 个位置全部用满约占 490 MB 堆（[为 SaaS 网关定容量](./deployment.md#sizing-a-saas-gateway)）。 |
-| `cosec.authorization.snapshot.max-absent-apps` | int | `256` | 最多记住多少个没有应用文档的应用 id（为正），与 `max-apps` 分开计（`SNP-7`）：应用 id 来自请求，所以客户端编造的应用挤不掉真实的应用，超出部分的每个 id 都会再读一次 Redis。 |
-| `cosec.authorization.snapshot.max-absent-tenants` | int | `65536` | 最多记住多少个没有租户文档的租户 id（为正），与 `max-tenants` 分开计（`SNP-7`）。这类租户的每个请求都读这个条目；被丢弃的条目在该租户下一个请求时再从 Redis 读。每个约 470 字节：全部用满约 30 MB。 |
 | `cosec.authorization.snapshot.prewarm-apps` | 应用 id 列表 | 空 | 启动时在平台文档（总会加载）之后加载的应用文档。在平台文档和列出的每个文档都装入之前，就绪状态拒绝流量；存活状态不受影响。 |
 | `cosec.authorization.snapshot.prewarm-host-apps` | boolean | `true` | 启动时像 `prewarm-apps` 一样加载本主机指定的应用并持有它们（`SNP-20`）：它的 `cosec.authorization.scope.app-id`，网关上还有每条路由的 `cosec-app-id`。就绪等待每一个，直到 Redis 回答有文档或没有文档。网关的路由刷新时，路由第一次指定的应用在那时加载，不在请求路径上。被持有的应用文档在发布后几秒内被替换（失效消息或下一轮重新确认），与平台文档相同。关闭时，这些应用在第一个请求时加载；`prewarm-apps` 两种情况下都照常工作。 |
 | `cosec.authorization.snapshot.prewarm-tenants` | 租户 id 列表 | 空 | 启动时加载的租户文档，同上。 |

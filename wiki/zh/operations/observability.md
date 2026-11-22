@@ -217,6 +217,7 @@ CoCache 会在同一个 registry 中为 CoSec 的缓存记录它自己的指标�
 
 | 指标 | 标签 | 计数 |
 |---|---|---|
+| `cosec.problem.render.failed` | 无 | 因应用的 `ProblemRenderer` 抛出异常或没有返回字节、而用 CoSec 自己的响应体回答的每个拒绝（`PIP-34`）；请求仍被拒绝，状态码是 CoSec 的。任何非零速率都说明渲染器需要修复（[故障排查](./troubleshooting.md#a-refusal-is-answered-with-cosecs-body-though-a-renderer-is-declared)） |
 | `cosec.identity.refused` | `problem`：`invalid-request`、`token-invalid`、`token-expired` | 服务拒绝的每个 `CoSec-Identity` 头，包括日志没有打印的那些；原因以 `WARN` 记录，每种问题最多每分钟一次（[故障排查](./troubleshooting.md#a-service-behind-the-gateway-refuses-requests)），从不出现在响应中 |
 
 在网关模式下，任何非零速率都意味着某一跳配置错误，或者有请求没有经过网关；请对它告警。
@@ -240,7 +241,8 @@ CoCache 会在同一个 registry 中为 CoSec 的缓存记录它自己的指标�
 | `cosec.snapshot.lag.exceeded` | counter | `kind`、`level` | 实例每记录一次延迟日志 |
 | `cosec.snapshot.regressions` | counter | `kind` | 存储返回了比已安装修订更旧的修订 |
 | `cosec.snapshot.lost` | counter | `kind` | 之前见过的文档现在不存在；它的键失败关闭 |
-| `cosec.snapshot.evictions` | counter | `kind`、`state` = `document`、`absent` | 应用或租户族在达到上限（`max-apps`、`max-tenants`、`max-absent-apps`、`max-absent-tenants`）时丢弃的条目 |
+| `cosec.snapshot.evictions` | counter | `kind`、`state` = `document`、`absent` | 应用或租户族在达到上限（`cosec.snapshot.bound`）时丢弃的条目 |
+| `cosec.snapshot.bound` | gauge | `kind`、`state` = `document`、`absent` | 每个族当前受到的上限，由堆的四分之一推出，每轮重新确认时以及每次淘汰之前按常驻的内容重新计算（`SNP-24`）；与 `cosec.snapshot.installed` 并列 |
 | `cosec.snapshot.handoffs.refused` | counter | `to` = `housekeeping`、`caller` | 编译池拒绝的工作：`caller` 表示由请求线程执行 |
 | `cosec.snapshot.housekeeping.refused` | counter | `task` = `load-log`、`compile-log`、`install-review`、`effect-log`、`crash-log`、`transition-log`、`prewarm-log`、`pass-log`、`reset-log`、`evict`、`drop`、`lag-report` | 快照源的维护线程因队列（4,096）已满而拒绝的任务。除 `drop`（移除一个空条目，在原线程执行）外，每个都被丢弃。`*-log` 是一条没有写出的日志；`evict` 是族在上限以下的一次驱逐，下一次加载会再次请求它；`install-review` 是宿主对已安装文档的一次检查（[路由映射警告](../scenarios/route-maps.md#what-cosec-warns-about)），在之后的读取发现该修订仍在安装时再次提交 |
 
@@ -258,7 +260,7 @@ CoCache 会在同一个 registry 中为 CoSec 的缓存记录它自己的指标�
 | `installed{state=invalid}` 大于零 | 某个已存储文档在本实例上无法编译（版本比控制平面旧？） |
 | `handoffs.refused{to=caller}` 持续有速率 | 编译池饱和，请求线程在编译 |
 | `housekeeping.refused` 有任何上升 | 实例在丢弃自己的日志：日志 appender 跟不上负载（[快照日志缺失](./troubleshooting.md#snapshot-log-lines-are-missing)） |
-| `evictions` 持续有速率，且 `loads{result=cold}` 上升 | 族对流量来说太小：调大 `max-apps` / `max-tenants`，`state=absent` 时调大 `max-absent-tenants`（[为 SaaS 网关定容量](./deployment.md#sizing-a-saas-gateway)） |
+| `evictions` 持续有速率，且 `loads{result=cold}` 上升 | 族对流量来说太小：`installed` 停在 `bound`；给实例更多的堆，因为上限是它的四分之一（[为 SaaS 网关定容量](./deployment.md#sizing-a-saas-gateway)） |
 
 ## 快照健康状况 {#snapshot-health}
 

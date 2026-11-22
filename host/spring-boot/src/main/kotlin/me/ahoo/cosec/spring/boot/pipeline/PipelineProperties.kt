@@ -227,27 +227,6 @@ class RuntimeAuthorizationProperties {
 
         val failClosed = FailClosed()
 
-        /** The most app documents held in memory (positive); the least recently used one is dropped beyond it. */
-        var maxApps: Int = SnapshotOptions.DEFAULT_MAX_APPS
-
-        /**
-         * The most tenant documents held in memory (positive); the platform document is never dropped. About 30 KB each
-         * for a tenant document of 5 roles of 20 permissions and 20 bindings: size the heap for it.
-         */
-        var maxTenants: Int = SnapshotOptions.DEFAULT_MAX_TENANTS
-
-        /**
-         * The most app ids held as having no app document (positive, `SNP-7`). App ids come from requests, so this
-         * bounds what a client naming made-up apps makes an instance remember.
-         */
-        var maxAbsentApps: Int = SnapshotOptions.DEFAULT_MAX_ABSENT_APPS
-
-        /**
-         * The most tenant ids held as having no tenant document (positive, `SNP-7`), about 470 bytes each. Each request of
-         * such a tenant reads its entry: one dropped is read from Redis again on the tenant's next request.
-         */
-        var maxAbsentTenants: Int = SnapshotOptions.DEFAULT_MAX_ABSENT_TENANTS
-
         /** App documents loaded at startup, after the platform document; readiness waits for them. */
         var prewarmApps: List<String> = emptyList()
 

@@ -174,6 +174,16 @@ internal class Passes(
      */
     fun periodic(): CompletableFuture<Void> {
         lagReports.queue()
+        // The derived bounds follow what is resident (SNP-24), once per pass; a family now above its bound is taken back to
+        // it by housekeeping, as after an install.
+        for (family in families.rebound()) {
+            context.threads.offHousekeeping(
+                HousekeepingTask.EVICT,
+                { "The eviction pass of the ${family.spec.kind} family." }
+            ) {
+                families.evictBeyond(family)
+            }
+        }
         // After the tick, which abandons a pass held only by compilations (SNP-6), the loads of those compilations end.
         return tick().also { CompileDeadlines.sweep(context, context.nanoTime.get().asLong) }
     }

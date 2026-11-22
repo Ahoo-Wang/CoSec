@@ -256,6 +256,7 @@ meters above. It counts the forwarded identities it refuses:
 
 | Meter | Tag | Counts |
 |---|---|---|
+| `cosec.problem.render.failed` | none | every refusal answered with CoSec's own body because the application's `ProblemRenderer` threw or answered no bytes (`PIP-34`); the request was still refused, with CoSec's status. Any non-zero rate is a renderer to fix ([Troubleshooting](./troubleshooting.md#a-refusal-is-answered-with-cosecs-body-though-a-renderer-is-declared)) |
 | `cosec.identity.refused` | `problem`: `invalid-request`, `token-invalid`, `token-expired` | every `CoSec-Identity` header the service refused, including those its log does not print; the reason is logged at `WARN`, at most once a minute for each problem ([Troubleshooting](./troubleshooting.md#a-service-behind-the-gateway-refuses-requests)), never in the response |
 
 In gateway mode any non-zero rate means a hop that is misconfigured or a request that did not come through the gateway;
@@ -281,7 +282,8 @@ there are 80 series whatever the number of documents. `kind` is `platform`, `app
 | `cosec.snapshot.lag.exceeded` | counter | `kind`, `level` | each lag the instance logs |
 | `cosec.snapshot.regressions` | counter | `kind` | the store answered an older revision than the one installed |
 | `cosec.snapshot.lost` | counter | `kind` | a document seen before is absent now; its key fails closed |
-| `cosec.snapshot.evictions` | counter | `kind`, `state` = `document`, `absent` | entries an app or tenant family dropped at its bound (`max-apps`, `max-tenants`, `max-absent-apps`, `max-absent-tenants`) |
+| `cosec.snapshot.evictions` | counter | `kind`, `state` = `document`, `absent` | entries an app or tenant family dropped at its bound (`cosec.snapshot.bound`) |
+| `cosec.snapshot.bound` | gauge | `kind`, `state` = `document`, `absent` | the bound each family is held to now, derived from a quarter of the heap and recomputed from what is resident each revalidation pass and before each eviction (`SNP-24`); beside `cosec.snapshot.installed` |
 | `cosec.snapshot.handoffs.refused` | counter | `to` = `housekeeping`, `caller` | work the compile pool refused: `caller` means a request's thread ran it |
 | `cosec.snapshot.housekeeping.refused` | counter | `task` = `load-log`, `compile-log`, `install-review`, `effect-log`, `crash-log`, `transition-log`, `prewarm-log`, `pass-log`, `reset-log`, `evict`, `drop`, `lag-report` | tasks the source's housekeeping thread refused because its queue (4,096) was full. Each was dropped, except `drop` (an empty entry's removal), which ran in place. A `*-log` is a log line that was not written; `evict` an eviction pass under the family's cap, which the next load asks for again; `install-review` a host's review of an installed document ([the route map warning](../scenarios/route-maps.md#what-cosec-warns-about)), offered again when a later read finds that revision still installed |
 
@@ -300,7 +302,7 @@ The share of requests that waited for a document is `loads{result=cold}` over th
 | `installed{state=invalid}` above zero | a stored document does not compile on this instance (an older version than the control plane?) |
 | a sustained rate of `handoffs.refused{to=caller}` | the compile pool is saturated, and requests' threads compile |
 | any rise of `housekeeping.refused` | the instance is dropping its own log lines: a log appender too slow for the load ([Snapshot log lines are missing](./troubleshooting.md#snapshot-log-lines-are-missing)) |
-| a sustained rate of `evictions`, with `loads{result=cold}` rising | the families are too small for the traffic: raise `max-apps` / `max-tenants`, or `max-absent-tenants` when `state=absent` ([Sizing a SaaS gateway](./deployment.md#sizing-a-saas-gateway)) |
+| a sustained rate of `evictions`, with `loads{result=cold}` rising | the families are too small for the traffic: `installed` stays at `bound`; give the instance more heap, since the bounds are a quarter of it ([Sizing a SaaS gateway](./deployment.md#sizing-a-saas-gateway)) |
 
 ## Snapshot health
 
