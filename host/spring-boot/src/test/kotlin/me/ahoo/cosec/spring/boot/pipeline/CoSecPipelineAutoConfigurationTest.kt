@@ -388,7 +388,9 @@ class CoSecPipelineAutoConfigurationTest {
 
     @Test
     fun `a maxmemory-policy that cannot be read fails startup unless told to warn`() {
-        val redis = mockk<RedisBackend> { every { maxmemoryPolicies() } returns null }
+        val redis = mockk<RedisBackend> {
+            every { readMaxmemoryPolicies() } throws io.lettuce.core.RedisCommandExecutionException("NOPERM no INFO")
+        }
         val unreadable = EvictionPolicyCheck.read(redis)
         unreadable.assert().isInstanceOf(EvictionPolicyCheck.Reading.Unreadable::class.java)
         assertThrows<IllegalStateException> {
@@ -397,7 +399,7 @@ class CoSecPipelineAutoConfigurationTest {
         EvictionPolicyCheck.check(unreadable, RuntimeAuthorizationProperties.EvictionCheck.WARN)
         // Review L3 of #1240: a cluster connection that knows no upstream node reads no policy either.
         val nodeless = EvictionPolicyCheck.read(
-            mockk<RedisBackend> { every { maxmemoryPolicies() } returns emptyMap() }
+            mockk<RedisBackend> { every { readMaxmemoryPolicies() } returns emptyMap() }
         )
         nodeless.assert().isEqualTo(EvictionPolicyCheck.Reading.Unreadable("no Redis node answered INFO memory"))
         assertThrows<IllegalStateException> {
@@ -422,7 +424,7 @@ class CoSecPipelineAutoConfigurationTest {
             InMemoryBackend()
         ).assert().isEqualTo(EvictionPolicyCheck.Reading.NotRedis)
         EvictionPolicyCheck.read(
-            mockk<RedisBackend> { every { maxmemoryPolicies() } returns mapOf("n" to "noeviction") }
+            mockk<RedisBackend> { every { readMaxmemoryPolicies() } returns mapOf("n" to "noeviction") }
         )
             .assert().isEqualTo(EvictionPolicyCheck.Reading.Policies(mapOf("n" to "noeviction")))
     }
