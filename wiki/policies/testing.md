@@ -599,6 +599,7 @@ author, and anything it cannot prove contained in the author's own permissions b
 | `NOT_ANALYZED` | By someone who is not the trust root: a platform or app document change that puts anything, or that removes a DENY (`CTL-31`, one per policy or binding, below), or a tenant boundary change. |
 | `TENANT_BINDINGS` | With `NOT_ANALYZED` on an app document: the tenants a permission policy reaches whose ALLOWs the change adds or widens, one entry per policy (`tenants binding [<policy>] in app <app>`), with the statements and how many tenant documents bind it in the app, the first 20 named. It is counted from the back-reference index without reading a tenant document, so it is an upper bound (a document that dropped its binding may still be counted until its publish removed it). Informational: the approval is for `NOT_ANALYZED`, which this entry never replaces (`CTL-48`), and a change in it alone never sends an approved change back to `AWAITING_APPROVAL`. |
 | `BREAK_GLASS` | A new or changed break-glass binding: always needs a second person. |
+| `ROLE_CLASS` | Recorded in place of the escalations the [role class](#the-role-class) lifted: who holds the grant, and what it lifted. Informational: the change needs no approval for it. |
 
 The author's rights are those of the credential the request came with. With a role cap (an API key with `roles`), the
 ALLOWs bound to the author by name or attached do not count, only the capped roles and `Anyone` bindings, as on the
@@ -685,6 +686,28 @@ it, when and for what, not the approver's credential, memberships, attributes or
 only the change's record in the store keeps them, and no change event carries them. A break-glass approval is recorded by a
 REQUIRED change listener before it is stored: when storing it fails after that, the record shows an approval the change
 does not have, and the approver approves again.
+
+### The role class {#the-role-class}
+
+A service that projects the roles it owns into tenants' documents, such as an IAM, writes them with no person behind
+each write. `cosec:manage-roles` on a tenant's document makes such a change need no second person on account of who
+grants (`CTL-79`):
+
+- **Only roles, only a tenant's document.** The change writes or removes roles (`putRole`, `removeRole`) and nothing
+  else; a change that writes anything else is analyzed whole. An app's and the platform's documents are never the
+  class's.
+- **Only doubts about who grants.** The class lifts `CROSS_TENANT`, `NOT_COVERED` and `DENY_OVERLAP`, and records one
+  `ROLE_CLASS` entry in their place. Anything the analysis could not tell (`UNREADABLE`, `UNRESOLVED`, `TOO_LARGE`)
+  still waits for a person.
+- **Everything else as before.** `cosec:write` on each role and `cosec:grant` on each binding a role derives are
+  decided as for anyone.
+
+What such a change can grant is bounded by the format, not by its author. A tenant's role derives only bindings of its
+own tenant's members, in its app, to the permission policies that app's document defines, which people approve there.
+A tenant cannot write a `perm:` policy itself, and a role cannot be `"*"`. The hard rule keeps those members to their
+own tenant's document, whatever the app's catalog grants, and the tenant's [boundary](./language.md) caps what they
+are permitted. A [check](#checking-without-proposing) answers the same: a holder learns the write will not wait, anyone
+else what it would wait on.
 
 ## Publishing and rolling back
 
