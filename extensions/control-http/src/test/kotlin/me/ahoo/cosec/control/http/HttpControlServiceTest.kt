@@ -38,7 +38,10 @@ import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.Timeout
 import java.io.IOException
+import java.net.ConnectException
+import java.net.InetAddress
 import java.net.InetSocketAddress
+import java.net.ServerSocket
 import java.net.URI
 import java.net.http.HttpTimeoutException
 import java.time.Duration
@@ -240,11 +243,11 @@ class HttpControlServiceTest {
 
     @Test
     fun `a transport failure is the client's own exception`() {
-        val closed = HttpServer.create(InetSocketAddress("127.0.0.1", 0), 0)
-        val port = closed.address.port
-        closed.stop(0)
+        // A port nothing listens on: the connection is refused at once, never waited out.
+        val port = ServerSocket(0, 0, InetAddress.getLoopbackAddress()).use { it.localPort }
         val nowhere = HttpControlService(URI("http://127.0.0.1:$port/cosec/control/v1"))
-        assertThrownBy<IOException> { runBlocking { nowhere.document(iam, acme) } }
+        val failure = assertThrownBy<IOException> { runBlocking { nowhere.document(iam, acme) } }.actual()
+        failure.assert().isInstanceOf(ConnectException::class.java)
     }
 
     @Test
