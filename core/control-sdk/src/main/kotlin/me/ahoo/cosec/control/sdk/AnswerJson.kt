@@ -135,7 +135,13 @@ internal object AnswerJson {
     private fun base(node: JsonNode) = ChangeBase(node.long("revision"), node.optText("digest"))
 
     private fun findings(node: JsonNode) = node.array("findings").map {
-        Finding(it.text("check"), it.text("path"), it.text("message"), it.long("status").toInt(), Severity.of(it.text("severity")))
+        Finding(
+            it.text("check"),
+            it.text("path"),
+            it.text("message"),
+            it.long("status").toInt(),
+            Severity.of(it.text("severity"))
+        )
     }
 
     private fun escalations(node: JsonNode) = node.array("escalations").map {

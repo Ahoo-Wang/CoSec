@@ -45,11 +45,11 @@ import me.ahoo.cosec.control.change.ChangeRequestCodec
 import me.ahoo.cosec.control.change.InvalidControlRequestException
 import me.ahoo.cosec.control.change.ownerOf
 import me.ahoo.cosec.control.change.requireRequest
-import me.ahoo.cosec.document.PolicyDocumentCodec
-import tools.jackson.databind.JsonNode
 import me.ahoo.cosec.document.PolicyDocument
+import me.ahoo.cosec.document.PolicyDocumentCodec
 import me.ahoo.cosec.model.decision.DocumentKind
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
+import tools.jackson.databind.JsonNode
 
 /** The routes of `/documents` (`CTL-68`, the listing) and `/documents/{key}` (RFC 0007 §10.2): its reads, `:apply` and `:rollback`. */
 internal class DocumentRoutes(private val plane: ControlPlane) : RouteHandler {

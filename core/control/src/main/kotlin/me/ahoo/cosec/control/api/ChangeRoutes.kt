@@ -37,14 +37,14 @@ import me.ahoo.cosec.control.api.JsonFields.optText
 import me.ahoo.cosec.control.api.JsonFields.text
 import me.ahoo.cosec.control.authz.Operator
 import me.ahoo.cosec.control.change.ChangeId
-import tools.jackson.databind.JsonNode
-import me.ahoo.cosec.control.change.Confirmation
-import me.ahoo.cosec.control.change.Operation
-import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.cosec.control.change.ChangeRequestCodec
 import me.ahoo.cosec.control.change.ChangeState
+import me.ahoo.cosec.control.change.Confirmation
 import me.ahoo.cosec.control.change.InvalidControlRequestException
+import me.ahoo.cosec.control.change.Operation
 import me.ahoo.cosec.control.change.requireRequest
+import me.ahoo.cosec.spi.snapshot.SnapshotKey
+import tools.jackson.databind.JsonNode
 
 /** The routes of `/changes` (RFC 0007 §10.2): proposing a change, reading one, and its transitions. */
 internal class ChangeRoutes(

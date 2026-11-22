@@ -66,6 +66,16 @@ object Operator {
         SignIn.root().bearer,
     )
 
+    /**
+     * What the IAM's grant of [role] would find (`POST /admin/check`, `CTL-78`), here a binding to [policy], which the
+     * tenant's document does not hold: checked through the control plane, nothing stored.
+     */
+    fun check(tenant: String, policy: String, role: String): Exchange = Http.post(
+        admin("/admin/check"),
+        mapOf("tenant" to tenant, "policy" to policy, "role" to role),
+        SignIn.root().bearer,
+    )
+
     fun issueKey(id: String, principal: String, tenant: String, roles: List<String>?, expiresAt: String): IssuedKey {
         val body = mapOf(
             "id" to id,

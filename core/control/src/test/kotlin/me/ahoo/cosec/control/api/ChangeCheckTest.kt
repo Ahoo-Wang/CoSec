@@ -98,7 +98,10 @@ class ChangeCheckTest {
             checked.has("id").assert().isFalse()
         }
         // The three are what they stand for: clean, with findings, with escalations.
-        call("/changes:check", proposal(head, policy("clean"))).second.get("state").asString().assert().isEqualTo("CHECKED")
+        call(
+            "/changes:check",
+            proposal(head, policy("clean"))
+        ).second.get("state").asString().assert().isEqualTo("CHECKED")
         val failing = call("/changes:check", proposal(head, binding("dangling", "viewer"))).second
         failing.get("state").asString().assert().isEqualTo("DRAFT")
         failing.get("findings").isEmpty.assert().isFalse()
