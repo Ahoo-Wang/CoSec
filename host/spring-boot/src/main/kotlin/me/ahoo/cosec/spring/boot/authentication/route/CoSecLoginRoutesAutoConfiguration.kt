@@ -154,7 +154,10 @@ internal class CoSecLoginRoutesAutoConfiguration {
             logout: ObjectProvider<LogoutRoute>,
             bodies: ObjectProvider<ProblemBodies>,
         ): ServletRouterFunction<ServletServerResponse> =
-            ServletLoginRoutes.of(handlersOf(properties, refresh, logout), bodies.getIfAvailable { ProblemBodies.DEFAULT })
+            ServletLoginRoutes.of(
+                handlersOf(properties, refresh, logout),
+                bodies.getIfAvailable { ProblemBodies.DEFAULT }
+            )
     }
 
     @Configuration(proxyBeanMethods = false)

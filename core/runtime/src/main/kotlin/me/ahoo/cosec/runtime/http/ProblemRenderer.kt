@@ -45,7 +45,6 @@ fun interface ProblemRenderer {
     @ExperimentalCoSecApi
     companion object {
         /** CoSec's own body, [ProblemEncoder]'s bytes: what every refusal is answered with unless a host renders its own. */
-        @JvmField
         val DEFAULT: ProblemRenderer = ProblemRenderer(ProblemEncoder::encode)
     }
 }

@@ -37,7 +37,10 @@ import org.springframework.web.servlet.function.ServerResponse
  * being read.
  */
 internal object ServletLoginRoutes {
-    fun of(routes: Map<String, LoginRouteHandler>, bodies: ProblemBodies): RouterFunction<ServerResponse> = routes.entries
+    fun of(
+        routes: Map<String, LoginRouteHandler>,
+        bodies: ProblemBodies
+    ): RouterFunction<ServerResponse> = routes.entries
         .map { (path, handler) -> RouterFunctions.route(RequestPredicates.POST(path)) { answer(it, handler, bodies) } }
         .reduce(RouterFunction<ServerResponse>::and)
 

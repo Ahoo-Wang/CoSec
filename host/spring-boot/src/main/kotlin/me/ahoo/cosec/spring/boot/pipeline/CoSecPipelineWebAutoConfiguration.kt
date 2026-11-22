@@ -61,12 +61,12 @@ import org.springframework.context.annotation.Import
 import org.springframework.core.Ordered
 import org.springframework.core.env.Environment
 import org.springframework.web.cors.CorsConfigurationSource
-import org.springframework.web.cors.reactive.CorsConfigurationSource as ReactiveCorsConfigurationSource
 import org.springframework.web.cors.reactive.CorsWebFilter
 import org.springframework.web.filter.CorsFilter
 import org.springframework.web.method.support.HandlerMethodArgumentResolver
 import org.springframework.web.servlet.config.annotation.InterceptorRegistry
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer
+import org.springframework.web.cors.reactive.CorsConfigurationSource as ReactiveCorsConfigurationSource
 
 /**
  * The web adapters over the [RequestGate]: the [Pipeline], or a service behind a gateway's `IdentityGate` (RFC 0006 §7.3): they translate the pipeline's outcome and never decide. A

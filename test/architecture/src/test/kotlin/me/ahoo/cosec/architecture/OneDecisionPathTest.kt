@@ -60,7 +60,9 @@ class OneDecisionPathTest {
         .should().dependOnClassesThat().resideInAnyPackage("tools.jackson..", "com.fasterxml.jackson..")
         .orShould().dependOnClassesThat().haveFullyQualifiedName("org.springframework.http.ProblemDetail")
         .orShould().dependOnClassesThat().haveFullyQualifiedName("me.ahoo.cosec.document.json.CoSecJson.mapper")
-        .because("the problem body has one encoder, ProblemEncoder, or the host's renderer (RFC 0006 §6.2, §6.3; PIP-34)")
+        .because(
+            "the problem body has one encoder, ProblemEncoder, or the host's renderer (RFC 0006 §6.2, §6.3; PIP-34)"
+        )
 
     /**
      * `PIP-34`: a refusal's body is rendered from its [Problem] alone. Neither the host's [ProblemRenderer] nor
