@@ -26,6 +26,7 @@ import org.junit.jupiter.api.TestInstance
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.Arguments
 import org.junit.jupiter.params.provider.MethodSource
+import org.springframework.boot.web.server.autoconfigure.ForwardedHeaderStrategy
 import org.springframework.boot.web.server.autoconfigure.ServerProperties
 
 /**
@@ -40,17 +41,17 @@ import org.springframework.boot.web.server.autoconfigure.ServerProperties
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 class RealServerClientIpTest {
     private val fixture = ParityFixture()
-    private val servers = HashMap<Pair<Stack, ServerProperties.ForwardHeadersStrategy>, RealServer>()
+    private val servers = HashMap<Pair<Stack, ForwardedHeaderStrategy>, RealServer>()
 
     @AfterAll
     fun close() {
         servers.values.forEach { it.close() }
     }
 
-    private fun server(stack: Stack, strategy: ServerProperties.ForwardHeadersStrategy): RealServer =
+    private fun server(stack: Stack, strategy: ForwardedHeaderStrategy): RealServer =
         servers.getOrPut(stack to strategy) {
             val reading = ClientIpReadings.decide(
-                ClientIpReadings.Strategy.valueOf(strategy.name),
+                if (strategy == ForwardedHeaderStrategy.WEB_SERVER) ClientIpReadings.Strategy.NATIVE else ClientIpReadings.Strategy.NONE,
                 serverOf(stack),
                 maxTrustedIndex = 1,
                 explicit = false,
@@ -62,18 +63,18 @@ class RealServerClientIpTest {
                     ServletXForwardedRemoteIpResolver(reading.maxTrustedIndex, reading.peerIsConnection),
                     ReactiveXForwardedRemoteIpResolver(reading.maxTrustedIndex, reading.peerIsConnection),
                 ),
-                serverProperties = ServerProperties().apply { forwardHeadersStrategy = strategy },
+                serverProperties = ServerProperties().apply { request.header.forwarded.strategy = strategy },
             )
         }
 
     fun stacks(): List<Arguments> = Stack.entries.flatMap { stack ->
-        listOf(ServerProperties.ForwardHeadersStrategy.NONE, ServerProperties.ForwardHeadersStrategy.NATIVE)
+        listOf(ForwardedHeaderStrategy.NONE, ForwardedHeaderStrategy.WEB_SERVER)
             .map { Arguments.of(stack, it) }
     }
 
     @ParameterizedTest(name = "{0} with {1}")
     @MethodSource("stacks")
-    fun `a client cannot claim an internal address`(stack: Stack, strategy: ServerProperties.ForwardHeadersStrategy) {
+    fun `a client cannot claim an internal address`(stack: Stack, strategy: ForwardedHeaderStrategy) {
         val server = server(stack, strategy)
         // The client 203.0.113.7 wrote 10.6.6.6; the proxy appended the address it saw.
         val forged = server.send(get("/internal/x", "X-Forwarded-For: 10.6.6.6, 203.0.113.7"))
@@ -88,7 +89,7 @@ class RealServerClientIpTest {
     @MethodSource("stacks")
     fun `a denied client cannot claim another address`(
         stack: Stack,
-        strategy: ServerProperties.ForwardHeadersStrategy
+        strategy: ForwardedHeaderStrategy
     ) {
         val server = server(stack, strategy)
         val denied = server.send(get("/guarded/x", "X-Forwarded-For: 192.0.2.5"))

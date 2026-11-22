@@ -25,7 +25,7 @@ import java.net.SocketAddress
 /**
  * The address of the connection a control request arrived on (`CTL-57`), as the TCP stack saw it: read from the
  * Reactor Netty channel beneath whatever rewrites the request's own remote address, `Forwarded` and `X-Forwarded-For`
- * handling (`server.forward-headers-strategy`, a `ForwardedHeaderTransformer`) included, because the peer is evidence
+ * handling (`server.request.header.forwarded.strategy`, a `ForwardedHeaderTransformer`) included, because the peer is evidence
  * beside the identity a caller states and a caller must not be able to state it. Null where it cannot be read that way, on
  * any server but Reactor Netty: the record then says nothing, rather than a value the caller chose. Read only where the
  * control routes are served, never on the request path of the other routes.
