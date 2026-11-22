@@ -2,16 +2,16 @@
 # Mutant: a pattern that matches the path as received is bounded only by the path, so it reads a segment of up to 2,048 characters as written
 # Tests: :engine:test --tests me.ahoo.cosec.engine.pattern.HttpPathPatternTest :conformance:test
 
-diff --git a/core/engine/src/main/kotlin/me/ahoo/cosec/engine/pattern/HttpPathPattern.kt b/core/engine/src/main/kotlin/me/ahoo/cosec/engine/pattern/HttpPathPattern.kt
-index 310f12127..7fe2deddc 100644
---- a/core/engine/src/main/kotlin/me/ahoo/cosec/engine/pattern/HttpPathPattern.kt
-+++ b/core/engine/src/main/kotlin/me/ahoo/cosec/engine/pattern/HttpPathPattern.kt
-@@ -151,7 +151,7 @@ class HttpPathPattern private constructor(
-      * (`DOC-14`): matching less fails closed.
+diff --git a/core/engine/src/main/kotlin/me/ahoo/cosec/engine/pattern/HttpPath.kt b/core/engine/src/main/kotlin/me/ahoo/cosec/engine/pattern/HttpPath.kt
+index fa36f6ab0..456d5eb63 100644
+--- a/core/engine/src/main/kotlin/me/ahoo/cosec/engine/pattern/HttpPath.kt
++++ b/core/engine/src/main/kotlin/me/ahoo/cosec/engine/pattern/HttpPath.kt
+@@ -41,7 +41,7 @@ class HttpPath private constructor(
+      * [MAX_SEGMENT_LENGTH] as written: a longer one would cost it up to ten times as much (`SegmentBoundBenchmark`).
+      * It is an ALLOW (`DOC-14`), so matching less fails closed. It is where CoSec matches less than Spring does.
       */
-     private fun isOverLong(path: HttpPath): Boolean =
--        !decodeAndParseSegments && path.longestSegment > HttpPath.MAX_SEGMENT_LENGTH
-+        !decodeAndParseSegments && path.longestSegment > HttpPath.MAX_SEGMENT_LENGTH * 8
+-    internal fun readableBy(decodes: Boolean): Boolean = decodes || longestSegment <= MAX_SEGMENT_LENGTH
++    internal fun readableBy(decodes: Boolean): Boolean = decodes || longestSegment <= MAX_SEGMENT_LENGTH * 8
  
-     private fun matchFrom(first: Int, start: Int, path: HttpPath, captures: Array<String?>?): Boolean {
-         var index = start
+     internal val size: Int get() = elements.size
+ 

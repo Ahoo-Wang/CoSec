@@ -23,9 +23,7 @@ import me.ahoo.cosec.annotations.InternalCoSecApi
  * It matches what Spring's `PathPattern` (the `spring-web` version `main` uses) matches and captures the same values,
  * on this subset: literal segments, `?` (one character), `*` within a segment, `*` as a segment, `{name}` (one segment,
  * captured), `**` and `{*name}` (any number of segments, at the start or the end of the pattern), and the options
- * [caseSensitive] and [decodeAndParseSegments]. `HttpPathPatternParityTest` in `cosec-runtime` compares the two. One
- * difference is CoSec's own bound (`PIP-5`): without [decodeAndParseSegments], a pattern matches no path that holds a
- * segment longer than [HttpPath.MAX_SEGMENT_LENGTH] characters as written.
+ * [caseSensitive] and [decodeAndParseSegments]. `HttpPathPatternParityTest` in `cosec-runtime` compares the two.
  *
  * These compile in Spring but not here, so a policy that uses them fails to convert instead of matching differently:
  * - `{name:regex}`: a regular expression has no static cost bound, and `java.util.regex` is not available here.
@@ -124,7 +122,7 @@ class HttpPathPattern private constructor(
             "Path [$path] was parsed with decodeAndParseSegments=${path.decodeAndParseSegments}, pattern [$pattern] " +
                 "needs $decodeAndParseSegments."
         }
-        if ((path.value.isEmpty() && !matchesEmptyPath) || isOverLong(path)) {
+        if ((path.value.isEmpty() && !matchesEmptyPath) || !path.readableBy(decodeAndParseSegments)) {
             return false
         }
         if (!leadingRest) {
@@ -143,15 +141,6 @@ class HttpPathPattern private constructor(
         }
         return false
     }
-
-    /**
-     * `PIP-5`: a pattern that matches the path as received sees each segment as written, which the pipeline bounds
-     * only once decoded; it matches no path with a segment longer than [HttpPath.MAX_SEGMENT_LENGTH] as written, so no
-     * segment costs it more than one the pipeline lets through decoded (`SegmentBoundBenchmark`, #1860). It is an ALLOW
-     * (`DOC-14`): matching less fails closed.
-     */
-    private fun isOverLong(path: HttpPath): Boolean =
-        !decodeAndParseSegments && path.longestSegment > HttpPath.MAX_SEGMENT_LENGTH
 
     private fun matchFrom(first: Int, start: Int, path: HttpPath, captures: Array<String?>?): Boolean {
         var index = start
@@ -179,7 +168,7 @@ class HttpPathPattern private constructor(
             "Path [$path] was parsed with decodeAndParseSegments=${path.decodeAndParseSegments}, pattern [$pattern] " +
                 "needs $decodeAndParseSegments."
         }
-        if ((path.value.isEmpty() && !matchesEmptyPath) || isOverLong(path)) {
+        if ((path.value.isEmpty() && !matchesEmptyPath) || !path.readableBy(decodeAndParseSegments)) {
             return false
         }
         if (!leadingRest) {

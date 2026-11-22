@@ -33,8 +33,16 @@ class HttpPath private constructor(
     /** The value each segment is matched by, or `null` for a separator. */
     private val elements: Array<String?>,
     /** The length of its longest segment as written, before anything is decoded or removed. */
-    internal val longestSegment: Int,
+    private val longestSegment: Int,
 ) {
+    /**
+     * `PIP-5`: whether a pattern that decodes ([decodes]) or not may read it. One that does not reads segments as
+     * written, which the pipeline bounds only decoded, so it reads only a path whose segments are within
+     * [MAX_SEGMENT_LENGTH] as written: a longer one would cost it up to ten times as much (`SegmentBoundBenchmark`).
+     * It is an ALLOW (`DOC-14`), so matching less fails closed. It is where CoSec matches less than Spring does.
+     */
+    internal fun readableBy(decodes: Boolean): Boolean = decodes || longestSegment <= MAX_SEGMENT_LENGTH
+
     internal val size: Int get() = elements.size
 
     internal fun isSeparator(index: Int): Boolean = elements[index] == null
