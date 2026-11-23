@@ -657,13 +657,15 @@ defaults; the platform raises or lowers them like any other limit.
 
 | Budget | Default | Bounds |
 |---|---|---|
-| `maxPolicies` | 10,000 | Policies one document writes. |
-| `maxStatements` | 20,000 | Statements of all the policies one document writes. |
-| `maxRoleBindings` | 10,000 | Bindings to a role in one document. |
+| `maxPolicies` | 10,000 | Policies one document holds: those it writes, and one for each catalog permission with an `action`. |
+| `maxStatements` | 20,000 | Statements of all those policies: a catalog permission with an `action` is one. |
+| `maxRoleBindings` | 10,000 | Bindings to a role in one document: those it writes, and one for each permission each of its roles lists (all the catalog's for `"*"`). |
 | `maxAnyoneBindings` | 1,000 | Bindings to `*` (`Anyone`) in one document. Each is a candidate on every request in its scope. |
 | `maxChangeOperations` | 20,000 | Operations of one change a client proposes. An `apply` and a rollback are not held to it: their operations come from a document, which the other budgets bound. |
 
-Entries are counted as the document writes them: a role's short form is not written out, and principal bindings have
+Entries are counted as the document grants them, short forms written out (`CTL-40`): a role of 100 permissions is 100
+bindings to a role, an app's catalog of 5,000 permissions with an `action` is 5,000 policies of one statement. What
+checking a change costs and what an instance holds grow with them as with the written ones. Principal bindings have
 their own limit of 1,000 ([Bindings](#bindings)).
 
 They bound what checking a change costs the control plane, not what a host does. A host compiles a document in time
