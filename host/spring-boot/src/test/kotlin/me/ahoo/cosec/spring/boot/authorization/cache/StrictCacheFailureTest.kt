@@ -140,8 +140,8 @@ class StrictCacheFailureTest {
 
     /**
      * DR1-D-3: a revocation held locally lives at most 30 seconds too, so a raised subject revocation is never read as
-     * the older one for longer: the declared local max age above it fails startup, naming the property, and no layer
-     * sets it, a global one included.
+     * the older one for longer: a local max age above it fails startup, declared (naming the property) or set by a
+     * per-cache property; a global default leaves CoSec's declared value, and an override may tighten it.
      */
     @Test
     fun aRevocationTablesLocalMaxAgeIsAtMost30Seconds() {

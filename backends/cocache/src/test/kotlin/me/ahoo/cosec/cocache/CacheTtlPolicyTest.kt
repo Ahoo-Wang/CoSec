@@ -306,7 +306,6 @@ class CacheTtlPolicyTest {
         CacheRuntime.builder().backend(InMemoryBackend()).build().use { runtime ->
             val factory = CoCacheFactory(runtime, LongAbsence(Duration.ofHours(1)))
             listOf(CoSecCacheSpecs.revokedToken(), CoSecCacheSpecs.revokedSubject()).forEach { spec ->
-                CoSecCacheSpecs.locks(spec.name).isLocked(PolicyField.LOCAL_MAX_AGE).assert().isTrue()
                 assertThrows<IllegalArgumentException> { factory.create(spec, CoSecCacheSpecs.locks(spec.name)) }
                     .message.assert().describedAs(spec.name).contains("local-max-age").contains("IDN-26")
             }

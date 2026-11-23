@@ -67,8 +67,9 @@ The rest of the cache policy stays the application's, through customizers and `c
 revocation tables `read-timeout`, after which a store of record's read fails closed.
 None of these replaces what a cache holds, but some lengthen how long an instance acts on what it read. The revocation
 tables are bounded whatever they say: past a lost invalidation, a "not revoked" answer and a revocation held locally (a
-subject's revocation raised since included) both live at most 30 seconds. Their `absent-ttl` and `local-max-age` are
-locked, and `cosec.authentication.revocation.cache.local-max-age` above 30 seconds fails startup (`IDN-26`). Memberships are not a CoCache cache: each instance holds what its `MembershipLoader` answered in its
+subject's revocation raised since included) both live at most 30 seconds. Their `absent-ttl` is
+locked, and a `local-max-age` above 30 seconds, from `cosec.authentication.revocation.cache.local-max-age` or any
+`cocache.*` property or customizer, fails startup; one may tighten it (`IDN-26`). Memberships are not a CoCache cache: each instance holds what its `MembershipLoader` answered in its
 own memory, for [`cosec.authorization.membership.ttl`](./configuration.md#authorization), and a longer one keeps a removed
 role applied that long on an instance an invalidation did not reach.
 

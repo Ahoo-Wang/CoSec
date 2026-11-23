@@ -46,8 +46,8 @@ Which preview of the library may run behind which preview of the gateway image: 
   deployment that set `cosec.authentication.revocation.cache.local-max-age` above `30s`, or a `cocache.*` property or
   customizer that set the local max age of `RevokedTokenCache` or `RevokedSubjectCache`.
   - A revocation held locally used to live that long past a lost invalidation, so a subject's revocation raised since
-    was read as the older one. Now the declared value above 30 seconds fails startup, naming the property, and no layer
-    sets it.
+    was read as the older one. Now a value above 30 seconds fails startup, naming the property when it is
+    `cosec.authentication.revocation.cache.local-max-age`; a layer may still tighten it.
   - Migrate by removing the setting, or writing `30s` or less. The default, `30s`, is unchanged.
 - **A document holds at most `cosec.control.revisions.max-count` open changes** (50 by default, `CTL-83`, DR1-E-2).
   Affected: a client that leaves many changes open on one document. A proposal, an `:apply` or a rollback past the

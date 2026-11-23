@@ -39,8 +39,8 @@ description: "每个 8.0 预览版（alpha 与 beta）到下一个之间的变�
 - **破坏性变更：吊销表的 `local-max-age` 最多 30 秒**（`IDN-26`，DR1-D-3）。受影响的是把
   `cosec.authentication.revocation.cache.local-max-age` 设得超过 `30s` 的部署，以及设置了 `RevokedTokenCache` 或
   `RevokedSubjectCache` 本地最长寿命的 `cocache.*` 配置项或定制器。
-  - 原来本地持有的吊销在失效消息丢失后能活那么久，于是之后被提高的主体吊销会被读成旧的那个。现在声明的值超过 30 秒时启动失败，
-    信息里点名这个配置项，任何层都不能设置它。
+  - 原来本地持有的吊销在失效消息丢失后能活那么久，于是之后被提高的主体吊销会被读成旧的那个。现在超过 30 秒的值会让启动失败，
+    值来自 `cosec.authentication.revocation.cache.local-max-age` 时信息里点名它；任何层仍可以把它调小。
   - 迁移方式：删掉这个设置，或者写 `30s` 及以下。默认值 `30s` 不变。
 - **一份文档至多有 `cosec.control.revisions.max-count` 个未结束变更**（默认 50，`CTL-83`，DR1-E-2）。受影响的：在同一份文档上
   留着很多未结束变更的客户端。超过上限的提议、`:apply` 或回滚，先放弃其作者自己最老的、检查失败的变更，否则以 `409` 拒绝，
