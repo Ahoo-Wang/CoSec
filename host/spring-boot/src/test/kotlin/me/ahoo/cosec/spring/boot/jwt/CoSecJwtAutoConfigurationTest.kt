@@ -203,7 +203,40 @@ class CoSecJwtAutoConfigurationTest {
                     .isInstanceOf(JwtTokenVerifier::class.java)
                 val revoker = context.getBean(TokenRevoker::class.java)
                 revoker.assert().isInstanceOf(StoreTokenRevoker::class.java)
-                ReflectionTestUtils.getField(revoker, "revocationTtl").assert().isEqualTo(refreshValidity)
+                // The refresh validity is the longer here; the skew covers an issuer whose clock runs ahead.
+                ReflectionTestUtils.getField(revoker, "revocationTtl").assert()
+                    .isEqualTo(refreshValidity + Duration.ofSeconds(5))
+            }
+    }
+
+    /**
+     * A revocation is kept past the end of the token it names: an access token valid longer than the refresh token
+     * would otherwise be valid again once its record expired.
+     */
+    @Test
+    fun aRevocationOutlivesAnAccessTokenValidLongerThanTheRefreshToken() {
+        val store = RecordingTokenStore()
+        contextRunner
+            .withPropertyValues(
+                "${JwtProperties.PREFIX}.secret=FyN0Igd80Gas8stTavArGKOYnS9uLwGA_",
+                "${JwtProperties.PREFIX}.token-validity.access=30d",
+                "${JwtProperties.PREFIX}.token-validity.refresh=7d",
+                "cosec.authentication.revocation.skew=10s",
+            )
+            .withBean(TokenStore::class.java, { store })
+            .withBean(TokenFamilyStore::class.java, { InMemoryTokenFamilyStore() })
+            .withBean(RevocationReader::class.java, { RevocationReader.NONE })
+            .withUserConfiguration(CoSecJwtAutoConfiguration::class.java)
+            .run { context: AssertableApplicationContext ->
+                val token = context.getBean(TokenConverter::class.java)
+                    .toToken(TokenSubject("alice", tenant = "acme", roles = emptySet()))
+                val revoked = kotlinx.coroutines.runBlocking {
+                    context.getBean(TokenRevoker::class.java).revoke(token.accessToken)
+                }
+                val kept = store.revoked.getValue(revoked.id)
+                kept.assert().isEqualTo(Duration.ofDays(30) + Duration.ofSeconds(10))
+                val expiresAt = JWT.decode(token.accessToken).expiresAtAsInstant
+                java.time.Instant.now().plus(kept).assert().isAfter(expiresAt)
             }
     }
 
@@ -315,9 +348,10 @@ class CoSecJwtAutoConfigurationTest {
 }
 
 private class RecordingTokenStore : TokenStore {
-    private val revoked = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
+    /** Each revoked token id, with how long its record is kept. */
+    val revoked = java.util.concurrent.ConcurrentHashMap<String, Duration>()
 
     override suspend fun revoke(tokenId: String, ttl: Duration) {
-        revoked += tokenId
+        revoked[tokenId] = ttl
     }
 }
