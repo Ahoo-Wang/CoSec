@@ -291,7 +291,7 @@
     },
     {
       "id": "IDN-23",
-      "source": "RFC 0009, docs/roadmap.md §9 (the starter serves the refresh route)",
+      "source": "RFC 0009, docs/roadmap.md §9 as of commit 8b881ed3 (the starter serves the refresh route)",
       "statement": "When cosec.authentication.login.refresh.path is set, the starter serves POST on it, on Spring MVC and on WebFlux, under the pipeline like every route (STA-4: a document must permit an anonymous POST of it; nothing is exempted from the filter), and never on a gateway. Its body is exactly {\"accessToken\",\"refreshToken\"} as application/json, at most 32 KiB; anything else is 400 invalid-request. It answers 200 application/json, the CompositeToken written by CoSec's one mapper; 401 token-expired, token-revoked or token-invalid for a refusal of the pair; 503 unavailable when the revocations or the session store cannot answer (nothing issued, nothing spent: IDN-14, IDN-19); 500 internal-error for any other error, never 401. Every answer carries Cache-Control: no-store, a problem body is ProblemEncoder's and carries nothing of the request but its request id, and no log line of CoSec carries a token. A path set where the route cannot be served fails startup (STA-1).",
       "level": "pipeline",
       "pending": null,
@@ -315,7 +315,7 @@
     },
     {
       "id": "IDN-24",
-      "source": "RFC 0009, docs/roadmap.md §9 (the starter serves the refresh route)",
+      "source": "RFC 0009, docs/roadmap.md §9 as of commit 8b881ed3 (the starter serves the refresh route)",
       "statement": "When cosec.authentication.login.logout.path is set, the starter serves POST on it as it serves the refresh route (IDN-23): the pair in the body, TokenRevoker.revoke of the pair, whether or not the access token has expired. It answers 204 when the session is ended, and when it already was (token-revoked), so a logout whose answer was lost can be sent again; 401 for a pair that is not one; 503 when the store cannot record it; 500 for any other error; 400 for a body that is not the pair; Cache-Control: no-store on every answer.",
       "level": "pipeline",
       "pending": null,

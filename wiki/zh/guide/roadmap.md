@@ -5,7 +5,7 @@ description: "CoSec 8.0 改变什么、发布前处于什么状态，以及 7.x 
 
 # 路线图 {#roadmap}
 
-面向正在使用 CoSec 7.x 或正在评估 CoSec、想知道 8.0 是什么以及何时可以发布的团队。本页只写你可以依赖什么。按 PR 的进度见贡献者用的
+面向正在使用 CoSec 7.x 或正在评估 CoSec、想知道 8.0 是什么以及何时可以发布的团队。本页只写你可以依赖什么。工作的现状、候选发布版之前还差什么、哪些事留到 8.1，见贡献者用的
 [`docs/roadmap.md`](https://github.com/Ahoo-Wang/CoSec/blob/main/docs/roadmap.md)，每一项设计决定见
 [RFC](https://github.com/Ahoo-Wang/CoSec/tree/main/docs/rfc)。本页与 RFC 不一致时，以 RFC 为准。
 
@@ -36,7 +36,7 @@ description: "CoSec 8.0 改变什么、发布前处于什么状态，以及 7.x 
 
 ## 8.0 的现状 {#where-8-0-stands}
 
-上述架构已经合入 `main`，7.x 的代码已经移除。当前的预览版是 `8.0.0-beta.7`。最近两个 beta 为控制面带来类型化的 Kotlin API，进程内与经 HTTP 的用法相同（[外部事实源同步角色](../scenarios/external-source.md)）；并去掉了 CoSec 自己能算出的设置：各阶段的超时是管线期限的份额，缓存与快照的上限是堆的份额（[由计算得出，而非配置](../operations/configuration.md#computed-not-configured)）。它们基于 Spring Boot 4.2 与 CoCache 8.2 构建。接下来再做两轮审查并修复其发现，然后是候选发布版。按 PR 的状态见 [`docs/roadmap.md`](https://github.com/Ahoo-Wang/CoSec/blob/main/docs/roadmap.md)，由它负责跟踪；本页只写你可以依赖什么。
+上述架构已经合入 `main`，7.x 的代码已经移除。当前的预览版是 `8.0.0-beta.7`。最近两个 beta 为控制面带来类型化的 Kotlin API，进程内与经 HTTP 的用法相同（[外部事实源同步角色](../scenarios/external-source.md)）；并去掉了 CoSec 自己能算出的设置：各阶段的超时是管线期限的份额，缓存与快照的上限是堆的份额（[由计算得出，而非配置](../operations/configuration.md#computed-not-configured)）。它们基于 Spring Boot 4.2 与 CoCache 8.2 构建。接下来再做两轮审查并修复其发现，然后是候选发布版。候选发布版之前还差什么，见 [`docs/roadmap.md`](https://github.com/Ahoo-Wang/CoSec/blob/main/docs/roadmap.md)，由它负责跟踪；本页只写你可以依赖什么。
 
 ## 发布策略 {#release-policy}
 
@@ -60,5 +60,5 @@ description: "CoSec 8.0 改变什么、发布前处于什么状态，以及 7.x 
 ## 如何跟进 {#how-to-follow}
 
 - [RFC 索引](https://github.com/Ahoo-Wang/CoSec/tree/main/docs/rfc)：设计、决定与待决问题。
-- [`docs/roadmap.md`](https://github.com/Ahoo-Wang/CoSec/blob/main/docs/roadmap.md)：按 PR 的进度与审查轮次。
+- [`docs/roadmap.md`](https://github.com/Ahoo-Wang/CoSec/blob/main/docs/roadmap.md)：工作的现状、候选发布版的门槛，以及留到 8.1 的事项。
 - GitHub 上的 [Issues](https://github.com/Ahoo-Wang/CoSec/issues) 与 [Pull Requests](https://github.com/Ahoo-Wang/CoSec/pulls)。

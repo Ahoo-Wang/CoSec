@@ -141,7 +141,7 @@ RFC 0006 PR-4 (#1066) added the blacklist in stage A, and PR-6 (#1068) added dec
   queue.
 
 They were measured with the same benchmarks and settings, from `main` at #1070 (`dd0e7f27`), in three alternating rounds of
-7.0.1 and 8.0. The JSON files are in [`listeners/`](listeners).
+7.0.1 and 8.0. The JSON files were in `listeners/` (removed since; `git show 8b881ed3:docs/perf/e2e-slice/listeners/`).
 
 **The machine was not idle.** The load average was 1.7 at the start, then 2.6 to 6 during the rounds, from other work.
 Round 3 is visibly disturbed: its errors are 5 to 25 % of the score on both sides. Read rounds 1 and 2, and compare
