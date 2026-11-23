@@ -1,0 +1,17 @@
+# Rule: RTE-4
+# Mutant: the routes sit at the path of the server springdoc generated from the last request for the API docs (DR1-C-2)
+# Tests: :spring-boot:test --tests me.ahoo.cosec.spring.boot.actuate.CoSecServiceGeneratorEndpointTest
+
+diff --git a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/actuate/CoSecServiceGeneratorEndpoint.kt b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/actuate/CoSecServiceGeneratorEndpoint.kt
+index 0dfae83bb..575090f7c 100644
+--- a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/actuate/CoSecServiceGeneratorEndpoint.kt
++++ b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/actuate/CoSecServiceGeneratorEndpoint.kt
+@@ -65,7 +65,7 @@ internal class CoSecServiceGeneratorEndpoint(
+      * that reaches the docs chooses (DR1-C-2). The routes sit at the path of the servers an operator wrote (`RTE-4`),
+      * so a generated one is left out, and the routes sit at the root of the application.
+      */
+-    private fun scanned(): OpenAPI = withoutGeneratedServers(cached())
++    private fun scanned(): OpenAPI = cached()
+ 
+     private fun cached(): OpenAPI {
+         val resource = checkNotNull(springDoc.getIfUnique()) {
