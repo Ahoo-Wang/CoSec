@@ -158,6 +158,19 @@ class ControlPlaneSwitchTest {
     }
 
     @Test
+    fun `the work budget is one per host, and metered - CTL-85`() {
+        runner.withBean(io.micrometer.core.instrument.MeterRegistry::class.java, {
+            io.micrometer.core.instrument.simple.SimpleMeterRegistry()
+        }).run { context ->
+            context.startupFailure.assert().isNull()
+            context.getBeansOfType(me.ahoo.cosec.control.lifecycle.WorkBudget::class.java).size.assert().isEqualTo(1)
+            val registry = context.getBean(io.micrometer.core.instrument.MeterRegistry::class.java)
+            registry.find(ControlMetersConfiguration.WORK_HELD).gauge()!!.value().assert().isEqualTo(0.0)
+            registry.find(ControlMetersConfiguration.WORK_REFUSED).functionCounter()!!.count().assert().isEqualTo(0.0)
+        }
+    }
+
+    @Test
     fun `cosec control enabled false wires nothing of the control plane, and the stores are read read-only`() {
         runner.withPropertyValues("${ControlPlaneCondition.ENABLED_KEY}=false").run { context ->
             context.startupFailure.assert().isNull()
