@@ -42,7 +42,9 @@
         "openapi:OpenAPIServiceGeneratorTest#the servers path prefixes every route",
         "openapi:OpenAPIServiceGeneratorTest#servers whose path cannot be told fail generation",
         "openapi:OpenAPIServiceGeneratorTest#a path with several variables names all of them in its resource, in order",
-        "spring-boot:CoSecServiceGeneratorEndpointTest#the routes sit at the servers path within the application"
+        "spring-boot:CoSecServiceGeneratorEndpointTest#the routes sit at the servers path within the application",
+        "spring-boot:CoSecServiceGeneratorEndpointTest#a request for the API docs does not move the routes",
+        "spring-boot:CoSecServiceGeneratorEndpointTest#a request for the API docs leaves the servers an operator wrote"
       ],
       "pending": null
     },

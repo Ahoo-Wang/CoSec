@@ -25,6 +25,7 @@ import org.springdoc.webflux.core.configuration.SpringDocWebFluxConfiguration
 import org.springframework.boot.autoconfigure.AutoConfigurations
 import org.springframework.boot.test.context.runner.ReactiveWebApplicationContextRunner
 import org.springframework.boot.webflux.autoconfigure.WebFluxAutoConfiguration
+import org.springframework.test.web.reactive.server.WebTestClient
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PathVariable
 import org.springframework.web.bind.annotation.RestController
@@ -84,6 +85,39 @@ class CoSecServiceGeneratorEndpointTest {
                     .generate(CoSecServiceGeneratorEndpoint.ROUTES)!!
                 routes.get("routes").single().get("path").asString().assert().isEqualTo("/api/orders/{id}")
             }
+    }
+
+    /**
+     * DR1-C-2: springdoc rewrites the server of the document it caches from each request for the API docs (its URL, on
+     * WebFlux with the query string still on it, and the forwarded headers), so the routes never come from a server
+     * springdoc generated: only from servers an operator wrote, as `RTE-4` has them.
+     */
+    @Test
+    fun `a request for the API docs does not move the routes`() {
+        runner.withUserConfiguration(Orders::class.java).withBean(OpenAPI::class.java, titled).run { context ->
+            val client = WebTestClient.bindToApplicationContext(context).build()
+            val endpoint = context.getBean(CoSecServiceGeneratorEndpoint::class.java)
+            for (query in listOf("", "?a", "?abcdefghijk", "?" + "q".repeat(64))) {
+                client.get().uri("/v3/api-docs$query").header("X-Forwarded-Prefix", "/elsewhere")
+                    .exchange().expectStatus().isOk
+                val routes = endpoint.generate(CoSecServiceGeneratorEndpoint.ROUTES)!!
+                val path = routes.get("routes").single().get("path").asString()
+                path.assert().describedAs(query).isEqualTo("/orders/{id}")
+            }
+        }
+    }
+
+    /** DR1-C-2: servers an operator wrote stay the routes' prefix, whatever a request for the API docs was. */
+    @Test
+    fun `a request for the API docs leaves the servers an operator wrote`() {
+        val served = { titled().addServersItem(Server().url("http://localhost:8080/api")) }
+        runner.withUserConfiguration(Orders::class.java).withBean(OpenAPI::class.java, served).run { context ->
+            WebTestClient.bindToApplicationContext(context).build()
+                .get().uri("/v3/api-docs?abcdefghijk").exchange().expectStatus().isOk
+            val routes = context.getBean(CoSecServiceGeneratorEndpoint::class.java)
+                .generate(CoSecServiceGeneratorEndpoint.ROUTES)!!
+            routes.get("routes").single().get("path").asString().assert().isEqualTo("/api/orders/{id}")
+        }
     }
 
     @Test
