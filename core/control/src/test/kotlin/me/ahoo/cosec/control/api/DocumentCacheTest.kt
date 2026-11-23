@@ -151,6 +151,8 @@ class DocumentCacheTest {
      */
     @Test
     fun `the smallest documents hold no more heap than they are estimated at`() {
+        // An entry holds lambdas, hidden classes whose field offsets JOL reads only so (before its first use here).
+        System.setProperty("jol.magicFieldOffset", "true")
         val stored = PolicyDocumentCodec.encode(document)
         val decoded = PolicyDocumentCodec.decode(DocumentKind.TENANT, "acme", stored)
         val cache = DocumentCache(maxHeap = 1L shl 30)
