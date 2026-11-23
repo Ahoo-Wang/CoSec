@@ -24,16 +24,18 @@ import kotlin.io.path.readText
 
 /**
  * The manifests of the control plane's host (`k8s/control/`) are held to the image they run. The image will not start
- * without the statement that nothing but the gateway and the services the operator names can reach it, and the manifests
- * set that statement: it is true only if three things hold, and each is checked here against the files, not against a
- * cluster (kind's network plugin does not enforce a NetworkPolicy):
+ * without the statement that nothing but the gateway and the services the operator names can reach it. That is true only
+ * if the cluster's network plugin enforces the policies, which no file can say, so `k8s/control/` does not state it: the
+ * overlay does, and the Job `boundary-check.yaml` checks it on the cluster (DR1-G-1). What files can hold is checked here,
+ * not against a cluster (the kind leg of the system test runs the check both ways):
  *
  * - the three ports of the Deployment are the image's (`platform/control-server`'s `application.yaml`), and the probes and
  *   the Services use them by name;
  * - there is one NetworkPolicy per port, each selects the Deployment's pods, and each admits a named source: the gateway's
  *   pods to the operators' port, the services the operator names to the service port, a monitoring namespace to the
  *   management port. No rule admits every source or every port, and no Service publishes the management port;
- * - the statement is set where the policies are, and the policies are resources of the kustomization every overlay builds.
+ * - the policies and the check are resources of the kustomization every overlay builds, the check comes from a pod no policy
+ *   admits and tries every port of every pod, ready or not, and an overlay states the boundary only beside it.
  */
 class ControlManifestsTest {
     private val repository: Path = generateSequence(Path.of("").toAbsolutePath()) { it.parent }
@@ -62,6 +64,7 @@ class ControlManifestsTest {
         return ControlManifests(
             deployment = documents(control.resolve("deployment.yaml")).single(),
             services = documents(control.resolve("service.yaml")),
+            check = documents(control.resolve("boundary-check.yaml")).single(),
             policies = listOf("operators", "services", "management")
                 .map { documents(control.resolve("networkpolicy-$it.yaml")).single() },
             gatewayLabels = gateway.at("spec", "template", "metadata", "labels").strings(),
@@ -147,14 +150,48 @@ class ControlManifestsTest {
     }
 
     @Test
-    fun `a host without its statement, or with the gateway's, is reported`() {
-        val without = load()
-        without.container().env().removeIf { it["name"] == STATEMENT }
-        without.problems().assert().anyMatch { it.contains(STATEMENT) }
+    fun `the control directory does not state the boundary, and either statement there is reported`() {
+        for (statement in listOf(STATEMENT, "COSEC_PIPELINE_IDENTITY_ONLYGATEWAYCANREACH")) {
+            val stated = load()
+            stated.container().env().add(mutableMapOf("name" to statement, "value" to "true"))
+            stated.problems().assert().anyMatch { it.contains(statement) }
+        }
+    }
 
-        val gateways = load()
-        gateways.container().env().first { it["name"] == STATEMENT }["name"] = "COSEC_PIPELINE_IDENTITY_ONLYGATEWAYCANREACH"
-        gateways.problems().assert().anyMatch { it.contains(STATEMENT) }
+    @Test
+    fun `an overlay states the boundary beside the check, and the dev overlay says first that it is unsafe on a shared cluster`() {
+        // The check is a resource of k8s/control, which every overlay builds (the test above): an overlay that states the
+        // boundary states it beside the check.
+        val production = documents(repository.resolve("k8s/overlays/production/control-deployment-patch.yaml")).single()
+        val env = production.at("spec", "template", "spec", "containers").arr().single().obj().env()
+        env.single { it["name"] == STATEMENT }["value"].assert().isEqualTo("true")
+        env.none { it["name"] == "COSEC_PIPELINE_IDENTITY_ONLYGATEWAYCANREACH" }.assert().isTrue()
+        val dev = repository.resolve("k8s/overlays/dev/kustomization.yaml").readText()
+        dev.lineSequence().first().assert().startsWith("# UNSAFE ON A SHARED CLUSTER.")
+        dev.assert().contains(STATEMENT).contains("cosec-control-boundary-check")
+        for (overlay in listOf("dev", "production")) {
+            documents(repository.resolve("k8s/overlays/$overlay/kustomization.yaml")).single()["resources"].arr()
+                .assert().describedAs("$overlay's resources").contains("../../control")
+        }
+    }
+
+    @Test
+    fun `a check that a policy admits, that leaves out a port, or that cannot find a pod that is not ready is reported`() {
+        val admitted = load()
+        admitted.checkLabels()["app.kubernetes.io/name"] = "cosec-gateway"
+        admitted.problems().assert().anyMatch { it.contains("admits the boundary check") }
+
+        val port = load()
+        port.checkScript(port.checkScript().replace("8081", "8090"))
+        port.problems().assert().anyMatch { it.contains("does not try port management") }
+
+        val ready = load()
+        ready.services.last().at("spec").obj()["publishNotReadyAddresses"] = false
+        ready.problems().assert().anyMatch { it.contains("publishNotReadyAddresses") }
+
+        val proxied = load()
+        proxied.services.last().obj().remove("spec")
+        proxied.problems().assert().anyMatch { it.contains("cosec-control-pods") }
     }
 
     @Test
@@ -219,6 +256,7 @@ class ControlManifestsTest {
 private class ControlManifests(
     val deployment: Map<String, Any?>,
     val services: List<Map<String, Any?>>,
+    val check: Map<String, Any?>,
     val policies: List<Map<String, Any?>>,
     private val gatewayLabels: Map<String, String>,
     private val image: Map<String, Int>
@@ -246,7 +284,53 @@ private class ControlManifests(
 
     private fun name(manifest: Map<String, Any?>) = manifest.at("metadata", "name").toString()
 
-    fun problems(): List<String> = containerProblems() + serviceProblems() + policyProblems() + portProblems()
+    fun problems(): List<String> =
+        containerProblems() + serviceProblems() + policyProblems() + portProblems() + checkProblems()
+
+    fun checkLabels(): MutableMap<String, Any?> = check.at("spec", "template", "metadata", "labels").obj()
+
+    private fun checkContainer() = check.at("spec", "template", "spec", "containers").arr().single().obj()
+
+    fun checkScript(): String = checkContainer()["command"].arr().last().toString()
+
+    fun checkScript(script: String) {
+        @Suppress("UNCHECKED_CAST")
+        val command = checkContainer()["command"] as MutableList<Any?>
+        command[command.lastIndex] = script
+    }
+
+    /**
+     * The Job that checks the boundary on the cluster: from a pod no policy admits, to every port of every pod, by the
+     * addresses of a Service that publishes nothing and answers pods that are not ready (the host is not ready until the
+     * platform document is installed).
+     */
+    private fun checkProblems(): List<String> = buildList {
+        val labels = checkLabels().strings()
+        if (policies.flatMap { sources(it) }.any { selects(it["podSelector"], labels) }) {
+            add("a NetworkPolicy admits the boundary check's pods: it must come from a pod no policy admits")
+        }
+        val script = checkScript()
+        for ((name, number) in portNumbers()) {
+            if (!Regex(
+                    "\\b$number\\b"
+                ).containsMatchIn(script)
+            ) {
+                add("the boundary check does not try port $name ($number)")
+            }
+        }
+        val headless = services.firstOrNull { name(it) == PODS }
+        val resolved = headless != null && script.contains(PODS)
+        if (!resolved) add("the boundary check does not find the pods by the Service $PODS")
+        if (headless != null) {
+            if (headless.at("spec", "clusterIP") != "None") add("Service $PODS is not headless: it would proxy")
+            if (headless.at("spec", "publishNotReadyAddresses") != true) {
+                add(
+                    "Service $PODS does not set publishNotReadyAddresses: the check would not find a host that is not ready"
+                )
+            }
+            if (headless.at("spec", "ports") != null) add("Service $PODS publishes a port")
+        }
+    }
 
     private fun containerProblems(): List<String> = buildList {
         for ((name, expected) in image) {
@@ -257,16 +341,18 @@ private class ControlManifests(
             val port = container()[probe].obj().getValue("httpGet").obj()["port"]
             if (port != "management") add("$probe is on port $port, the probes run on the management port")
         }
-        val env = container().env().associate { it["name"].toString() to it["value"] }
-        if (env[STATEMENT] != "true") add("the Deployment does not state $STATEMENT=true")
+        for (statement in container().env().map { it["name"].toString() }.filter { it.startsWith(STATEMENT_PREFIX) }) {
+            add("the Deployment of k8s/control states $statement: the overlay states it, beside the boundary check")
+        }
     }
 
     private fun serviceProblems(): List<String> = buildList {
         for (service in services) {
-            if (!podLabels().entries.containsAll(service.at("spec", "selector").strings().entries)) {
+            val selector = service.at("spec", "selector") as? Map<*, *>
+            if (selector == null || !podLabels().entries.containsAll(selector.obj().strings().entries)) {
                 add("Service ${name(service)} does not select the Deployment's pods")
             }
-            for (port in service.at("spec", "ports").arr()) {
+            for (port in (service.at("spec", "ports") as? List<*>).orEmpty()) {
                 if (portOf(port.obj()["targetPort"]) == "management") {
                     add("Service ${name(service)} publishes the management port")
                 }
@@ -351,7 +437,8 @@ private class ControlManifests(
     }
 
     private companion object {
-        const val STATEMENT = "COSEC_PIPELINE_IDENTITY_ONLYTRUSTEDCALLERSCANREACH"
+        const val STATEMENT_PREFIX = "COSEC_PIPELINE_IDENTITY_ONLY"
+        const val PODS = "cosec-control-pods"
     }
 }
 

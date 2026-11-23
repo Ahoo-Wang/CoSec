@@ -1,0 +1,17 @@
+# Rule: IDN-35
+# Mutant: a session record is kept to the end of its lifetime, so one nobody refreshes stays in Redis for 30 days
+# Tests: :cocache:test --tests me.ahoo.cosec.cocache.SessionBoundTest
+
+diff --git a/backends/cocache/src/main/kotlin/me/ahoo/cosec/cocache/CoCacheTokenFamilyStore.kt b/backends/cocache/src/main/kotlin/me/ahoo/cosec/cocache/CoCacheTokenFamilyStore.kt
+index 8dd5c8993..5880ed931 100644
+--- a/backends/cocache/src/main/kotlin/me/ahoo/cosec/cocache/CoCacheTokenFamilyStore.kt
++++ b/backends/cocache/src/main/kotlin/me/ahoo/cosec/cocache/CoCacheTokenFamilyStore.kt
+@@ -101,7 +101,7 @@ class CoCacheTokenFamilyStore @InternalCoSecApi constructor(
+      */
+     private fun lifetime(family: TokenFamily): Duration {
+         val left = Duration.between(clock.instant(), family.expiresAt)
+-        val kept = refreshValidity?.let { minOf(left, it) } ?: left
++        val kept = left
+         return kept.coerceAtLeast(Duration.ofSeconds(1))
+     }
+ 

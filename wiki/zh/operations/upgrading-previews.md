@@ -31,6 +31,15 @@ description: "每个 8.0 预览版（alpha 与 beta）到下一个之间的变�
   break-glass 发送超过 64 KB 请求体的客户端。这样的请求体现在在解析之前即返回 `400`；此前它会在任何授权之前被读取并解析，
   最多 10 MB。提议、`:apply` 及其校验仍读取至多 10 MB。超过 64 KB 的模拟请求带的头与属性比真实请求能带的还多：请删减。
 - **在保留修订上的 `explain` 像头一样被缓存**（DR1-F-4）。无需改动。重复它不再编译，此前每次调用都重新编译它的文档。
+- **会话记录保留得不比它的刷新令牌更久，每个主体 64 个**（`IDN-35`，DR1-G-2）。受影响的是所有签发 CoSec 令牌的部署，
+  以及你自己的 `TokenFamilyStore`。
+  - 会话记录（`<s>:token:family:<sid>`）原来在 Redis 中保留整个会话有效期（30 天），即使一周后就没人再刷新它。
+    现在每次写入只把它保留会话剩余时间与 `cosec.jwt.token-validity.refresh` 中较短的那个。
+  - 一个主体在一个租户里保留开始时间最近的 64 个会话，计在新 key `<s>:token:sessions:...` 中。超过它们的登录或切换
+    会删除最早的那个，它下一次刷新得到 `401 token-invalid`：那台设备重新登录。
+  - 之前写下的记录保持原来的寿命，也不被计入，照旧离开 Redis。
+  - **你自己的 `TokenFamilyStore`** 可以像以前那样把令牌族保留到 `expiresAt`，契约现在称之为上界。它应当像 CoSec 的存储那样，
+    每个主体在每个租户保留 `TokenFamilyStore.SESSIONS_PER_PRINCIPAL` 个会话（[扩展](../architecture/extending.md)）。
 - **`analyze` 只向能读租户文档的调用者列出它的绑定**（`CTL-51`，DR1-F-8）。受影响的：对本租户文档有 `cosec:analyze`
   却没有 `cosec:read` 的主体（没有内置角色是这样）。它此前会得到该文档中所有匹配的绑定，现在一个也得不到，该文档计入 `hidden`。
   请把 `cosec:read` 与 `cosec:analyze` 一起授予，就像 `cosec:tenant-viewer` 那样。

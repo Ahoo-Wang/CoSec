@@ -667,7 +667,26 @@ application declared its own gate. It names two lines: `only-gateway-can-reach=t
 host, `cosec.pipeline.identity.only-trusted-callers-can-reach=true` (`COSEC_PIPELINE_IDENTITY_ONLYTRUSTEDCALLERSCANREACH`)
 when services call it directly, as they do the service port of the `cosec-control` image, which is on by default; beside a
 service port the gateway's line is refused, because it would be false. The network first, one policy per port
-([`k8s/control/`](https://github.com/Ahoo-Wang/CoSec/tree/main/k8s/control)), then the line.
+([`k8s/control/`](https://github.com/Ahoo-Wang/CoSec/tree/main/k8s/control)), then the line, which on Kubernetes the
+overlay writes, beside the [boundary check](#the-control-hosts-boundary-check-fails).
+
+### The control host's boundary check fails {#the-control-hosts-boundary-check-fails}
+
+```text
+FAIL reached the control host at 10.244.0.7:8080 from a pod no NetworkPolicy admits (curl exit 0): the cluster does not enforce the policies, and COSEC_PIPELINE_IDENTITY_ONLYTRUSTEDCALLERSCANREACH=true is false. Whoever reaches the host can state any principal.
+```
+
+The Job `cosec-control-boundary-check` of [`k8s/control/`](https://github.com/Ahoo-Wang/CoSec/tree/main/k8s/control)
+connects to every port of every control-host pod from a pod no policy admits ([Deploying](./deployment.md#kubernetes)). A
+connection that is answered means the cluster's network plugin does not enforce the three NetworkPolicies, so the overlay's
+statement of the boundary is false, and any workload of the cluster can state a platform administrator to the host. Take
+the statement out of your overlay (the host stops) until the plugin enforces the policies, then delete the Job and apply
+again (always delete it before an apply: a Job's pod template cannot change, and one that finished does not run again).
+Never delete the Job to make the failure go away; `k8s/overlays/dev` is for a cluster nothing else runs on.
+
+`FAIL could not tell` means the host refused every connection, or had no address, for ten minutes: it never listened
+(see why with `kubectl logs deploy/cosec-control`), or the plugin refuses a connection instead of dropping it. In the
+second case, check by hand that a pod of another label cannot connect.
 
 ### Startup fails on the control-plane image's settings {#startup-fails-on-the-control-plane-images-settings}
 
