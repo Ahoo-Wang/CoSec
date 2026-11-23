@@ -27,7 +27,7 @@ description: "每个 8.0 预览版（alpha 与 beta）到下一个之间的变�
 
 ## 从 8.0.0-beta.7 升级 {#from-8-0-0-beta-7}
 
-- **令牌吊销记录比它指向的令牌活得长**（`IDN-35`）。受影响的是 `cosec.jwt.token-validity.access` 长于
+- **令牌吊销记录比它指向的令牌活得长**（`IDN-37`）。受影响的是 `cosec.jwt.token-validity.access` 长于
   `cosec.jwt.token-validity.refresh` 的部署。原来吊销记录只保留刷新令牌有效期，所以有效期更长的访问令牌在记录过期后会重新被接受。
   现在保留两者中较长的那个，再加 `cosec.authentication.revocation.skew`（签发方的时钟可能超前这么多），启动时会记录这个值。
   之前写下的记录保持原来的寿命。控制面检查吊销记录比审批（`cosec.control.approval.expire-after`）活得长时使用同一个值，

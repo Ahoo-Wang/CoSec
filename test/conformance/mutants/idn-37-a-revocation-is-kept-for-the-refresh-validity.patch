@@ -1,4 +1,4 @@
-# Rule: IDN-35
+# Rule: IDN-37
 # Mutant: a revocation is kept for the refresh validity only, so an access token valid longer is accepted again once its record expires
 # Tests: :spring-boot:test --tests me.ahoo.cosec.spring.boot.jwt.CoSecJwtAutoConfigurationTest
 

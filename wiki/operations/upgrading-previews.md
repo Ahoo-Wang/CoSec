@@ -30,7 +30,7 @@ Which preview of the library may run behind which preview of the gateway image: 
 
 ## From 8.0.0-beta.7 {#from-8-0-0-beta-7}
 
-- **A token revocation outlives the token it names** (`IDN-35`). Affected: a deployment whose
+- **A token revocation outlives the token it names** (`IDN-37`). Affected: a deployment whose
   `cosec.jwt.token-validity.access` is longer than `cosec.jwt.token-validity.refresh`. A revocation was kept for the
   refresh token's lifetime, so an access token valid longer was accepted again once its record expired. It is now kept
   for the longer of the two, plus `cosec.authentication.revocation.skew` (an issuer's clock may run that far ahead), and
