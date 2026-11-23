@@ -203,7 +203,8 @@ missing and follows its `onMissing`, so it is usually Indeterminate here.
 
 The control plane decodes and compiles each stored document once for its content: a repeated `simulate`, `explain` or
 `analyze` on the same heads compiles nothing again, and a head that moves is compiled when it is next read. A
-`candidate` is compiled once per call, and so is a retained revision `explain` decides at. What is kept is bounded by
+`candidate` is compiled once per call; a retained revision `explain` decides at is kept like a head, by its digest, so
+explaining at it again compiles nothing. What is kept is bounded by
 an estimate of its heap, 64 MB: a document weighs its stored size times 4 decoded, and times 8 more for each compiled
 form (one per platform document it compiled with, at most two), so a tenant document of 1 MB stored weighs 12 MB. A
 document that would weigh more than half of that, over about 2.7 MB stored, is never kept: it is decoded and compiled

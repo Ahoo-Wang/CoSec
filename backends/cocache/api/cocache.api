@@ -42,6 +42,9 @@ public final class me/ahoo/cosec/cocache/RedisApiKeyStore$Companion {
 }
 
 public final class me/ahoo/cosec/cocache/RedisSocialStateStore : me/ahoo/cosec/spi/social/SocialStateStore {
+	public static final field COUNT_SUFFIX Ljava/lang/String;
+	public static final field DEFAULT_MAX_STATES J
+	public static final field STATE_BYTES J
 	public fun put (Ljava/lang/String;Ljava/lang/String;Ljava/time/Duration;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun take (Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 }

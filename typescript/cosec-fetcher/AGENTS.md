@@ -49,7 +49,7 @@ src/
   requestTrust.ts                           — Which request URLs may carry credentials (isTrusted, sameOriginTrust)
   types.ts                                  — Type definitions
   constants.ts                              — Shared attribute/name/order constants (re-exported from their original modules)
-  errors.ts                                 — RefreshTokenError, RefreshUnavailableError, RefreshSessionChangedError (re-exported from jwtTokenManager); the first two carry the CoSec problem
+  errors.ts                                 — RefreshTokenError, RefreshUnavailableError, RefreshSessionChangedError (re-exported from jwtTokenManager), LogoutUnconfirmedError; the first two carry the CoSec problem and status. None keeps the error of a refresh or logout request, whose body is the pair: a cause is copied by name and message only
   problem.ts                                — CoSec 8.0 problem+json: CoSecProblemType, readCoSecProblem, getCoSecProblem, retryAfterSeconds (resolveCoSecProblem is internal)
   refreshAttempt.ts                         — The time of the first unresolved refresh attempt of a pair, stored next to the pair (internal)
   refreshSession.ts                         — Token-session checks shared by the interceptors (internal)

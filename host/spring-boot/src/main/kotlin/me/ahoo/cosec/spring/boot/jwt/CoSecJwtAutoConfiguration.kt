@@ -160,14 +160,16 @@ internal class CoSecJwtAutoConfiguration {
         tokenStore: TokenStore,
         tokenRevocation: TokenRevocation,
         tokenFamilies: TokenFamilies,
-        jwtProperties: JwtProperties
+        jwtProperties: JwtProperties,
+        revocationProperties: RevocationProperties,
     ): TokenRevoker {
+        // Past every token a revocation can name, an access token outliving the refresh token included.
         return StoreTokenRevoker(
             tokenVerifier,
             tokenStore,
             tokenRevocation,
             tokenFamilies,
-            jwtProperties.tokenValidity.refresh
+            RevocationRetention.logged(jwtProperties, revocationProperties)
         )
     }
 

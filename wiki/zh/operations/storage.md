@@ -76,6 +76,9 @@ key 都在它之下（`SNP-9`）。
 | `<s>:rate-limiter:<ruleId>:<bucket>` | Redis 限流器 | 一条规则一个桶的 hash：它所计数的窗口，以及该窗口与上一个窗口的计数；最后一次计数两个窗口后过期。每个桶值一个 key：`key` 取客户端可以选择的内容且窗口很长的规则，就是客户端可以控制的内存（[限流](../policies/rate-limiting.md#counting-and-backends)） |
 | `<s>:oauth:state:<state>` | 社交登录 | 进行中的登录的 OAuth `state`，由 JustAuth 保存（JustAuth 的缓存会阻塞：`cosec-social` 通过 `StringRedisTemplate` 写入）；3 分钟后过期 |
 | `<s>:oauth:binding:<state>` | 社交登录 | 签发该 state 的浏览器的绑定值的 SHA-256；由 `cosec-cocache` 的非阻塞客户端写入，回调以 `GETDEL` 取走，因此一个 state 只能用一次；3 分钟后过期 |
+| `<s>:oauth:binding:!count` | 社交登录 | 部署在最近两个 3 分钟窗口里开始的登录数，按窗口存成一个哈希，由脚本按 Redis 的时钟计数；最后一次开始后两个窗口过期（DR1-D-9） |
+
+**社交登录的 state 是匿名调用方能驱动的内存。** 任何人都能开始登录，每次开始都会在不允许淘汰的 Redis 中写下两把 `oauth` 键并保留 3 分钟。所以一个部署最多持有 Redis 报告的内存（`maxmemory`，没有时用 `total_system_memory`，启动时用 `INFO memory` 读一次，提供社交登录的进程与 `SNP-3` 一样需要这个权限）的六十四分之一，每个登录按 512 字节计：1 GiB 的 `maxmemory` 可容纳 32,768 个进行中的登录。超过时开始登录被拒绝，什么都不写。Redis 两者都不报告时上界为 100,000（约 50 MB），并记一条 WARN。启动日志会写明是哪一种。同时请在边缘对开始登录的路由限流。
 
 - 多个部署共用一个 Redis 时，给每个部署各自的 `cosec.key-prefix`：前缀不同，就不共享任何 key，一个部署签发的 API key
   不会被另一个接受，限流计数器也互不相干。

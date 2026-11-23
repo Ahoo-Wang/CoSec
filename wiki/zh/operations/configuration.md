@@ -59,6 +59,7 @@ CoSec 没有哪个配置项叫这些名字，而已知的 key 无论来源都不
 | 一次重新确认并发确认的文档数 | 16，常量：一轮超过间隔时各轮首尾相接，只有突发量取决于它 | |
 | 每个吊销表的本地副本（`RevokedTokenCache`、`RevokedSubjectCache`）容纳 | 堆的八分之一，按每表每条 290 + 230 字节计数：2 GiB 时每表 516,222 条，原来的上限是 500,000。对你的流量太小时表现为带标签 `cache=RevokedTokenCache`（或 `RevokedSubjectCache`）的 `cocache.misses`（Prometheus 中为 `cocache_misses_total`，即本地副本没有应答的读取）持续上升，而同标签的 gauge `cocache.local.size` 停在该数（`IDN-33`） | 堆（`Runtime.maxMemory()`） |
 | 已校验令牌缓存容纳的量 | 堆的十六分之一，每个条目按其令牌长度 × 5 字节计重：2 GiB 时 128 MiB，多于原上限的 16,384 个大令牌（约 115 MB）。太小时表现为 `cosec.token.cache.evictions`（`IDN-32`） | 同上 |
+| 部署在 Redis 中最多持有多少个进行中的社交登录 | Redis 报告的内存（`maxmemory`，否则 `total_system_memory`，启动时读一次）的六十四分之一，每个登录按 512 字节计（两把键实测 352 字节）；Redis 两者都不报告时为 100,000，并记 WARN | 相同 |
 | 实例持有多少个主体的成员关系 | 堆的六十四分之一，按每个主体 3,072 字节计（十个角色分布在两个空间、五个附加策略时实测 2,293 字节）：2 GiB 时约 10,900 个。多出的一个会重新加载，从不被拒绝 | 相同 |
 | 一个 `BEST_EFFORT` 决策监听器最多可以有多少个待处理的事件 | 堆的六十四分之一，由各 `BEST_EFFORT` 监听器均分，按 `cosec.pipeline.trace-level` 下一个事件的大小计数：不追踪时 1 KB，追踪时（`full`、`exhaustive`）8 KB，因为追踪带着每条候选语句。2 GiB、四个监听器时，每个容纳 8,192 个不追踪的事件或 1,024 个追踪的事件，原来不论级别都是每个 1,024 个。太小时表现为 `cosec.listener.dropped`（`OBS-11`） | 同上，以及监听器数 |
 | 一个实例持有多少租户文档和应用文档 | 每个族已持有的，加上堆的四分之一（减去“不存在”条目那一份）剩下的空间，按其常驻文档的典型重量计数；重量是一个从不低于一个文档实际保留量的估计（`DocumentWeight`）：2 GiB 时约 14,500 个部署页面那种形状的租户（估计 34.6 KB，实际保留 29.5 KB）。每轮重新确认时以及每次淘汰之前重新计算，因此只在常驻内容的重量超过份额时才淘汰文档，从不低于 64 个；控制面与管道同在一个进程时各得一半；一个很重的文档只从空间里拿走它自己的重量。冷加载突发时一个族可能短暂地持有至多其上限的两倍，且绝不超出上限 4,096 个以上。太小时表现为 `cosec.snapshot.evictions` 上升而 `cosec.snapshot.installed` 停在 `cosec.snapshot.bound`（`SNP-24`） | 堆（`Runtime.maxMemory()`） |
@@ -241,7 +242,7 @@ CoSec 没有哪个配置项叫这些名字，而已知的 key 无论来源都不
 | `cosec.jwt.secret` | string | 无 | 启用 JWT 时 **必填**；为空或短于算法所需长度时启动失败：`hmac256` 需要 32 字节（按 UTF-8 计），`hmac384` 需要 48 字节，`hmac512` 需要 64 字节（RFC 7518 §3.2）。使用来自密钥存储的长随机值。HMAC 是对称的：**每个持有该密钥的进程都能为任意租户、主体和角色签发令牌**，包括 `(platform)` 管理员，所以只把它交给你愿意让它签发令牌的进程。轮换会让用旧密钥签发的每个令牌失效：滚动重启结束之前，仍用旧密钥的实例和已用新密钥的实例对彼此的令牌各自返回 `401` `token-invalid`，所有会话都要重新登录（[选择部署方式](./topologies.md#what-every-topology-shares)）。 |
 | `cosec.jwt.algorithm` | `hmac256`、`hmac384`、`hmac512` | `hmac256` | 签名算法。签发方和校验方必须一致。 |
 | `cosec.jwt.token-validity.access` | duration | `10m` | 访问令牌有效期。 |
-| `cosec.jwt.token-validity.refresh` | duration | `7d` | 刷新令牌有效期；吊销记录在 Redis 中保留这么久再加一秒。 |
+| `cosec.jwt.token-validity.refresh` | duration | `7d` | 刷新令牌有效期。吊销记录在 Redis 中保留它与 `token-validity.access` 中较长的那个，再加 `cosec.authentication.revocation.skew` 和一秒：比它能指向的每个令牌都活得长。这是算出来的，不是配置的，启动时会记录。 |
 | `cosec.jwt.session.lifetime` | duration | `30d` | 会话从登录起持续多久，无论刷新多少次（[会话](../integration/authentication.md#sessions)）；之后用户需要重新登录。也是令牌中携带的角色变更最迟生效的时间。 |
 | `cosec.jwt.session.rotation-leeway` | duration | `30s` | 刷新之后，被它替换的那一对在多长时间内会得到一对当前一代的令牌，而不是结束会话：客户端重试响应丢失的刷新的窗口，两个标签页同时刷新时也都能保留一对令牌。请覆盖客户端的超时加一次重试。在窗口内得到应答的副本会在窗口之后的下一次刷新时被发现。 |
 | `cosec.jwt.session.memberships-on-refresh` | string | 未设置 | 没有声明 `MembershipRefresh<RefreshTokenCredentials>` Bean 时，starter 的刷新路由怎样给刷新出的令牌成员关系（角色和附加策略）。没有默认值：提供刷新路由（`cosec.authentication.login.refresh.path`）时，启动失败，直到它写成 `from-token`（不区分大小写；未设置、空值、`true` 和其他任何值都失败），即你声明刷新出的令牌保留旧令牌的成员关系，所以被移除的角色最迟在成员下一次登录时、即 `cosec.jwt.session.lifetime` 之内生效。声明 `MembershipRefresh` Bean 则每次刷新重新读取角色，不会被问到（[被移除的角色还能用多久](../integration/authentication.md#how-long-a-removed-role-lives)，`STA-8`）。 |
@@ -318,7 +319,7 @@ CoSec 没有哪个配置项叫这些名字，而已知的 key 无论来源都不
 | `cosec.control.revisions.max-count` | int | `50` | 每个文档总是保留的修订数；更早的修订在同时超过 `min-age` 后被回收。未关闭变更所依赖的修订会被保留。 它同时限定一份文档的未结束变更数（`CTL-83`）：未结束变更会保住它所依赖的修订，所以一份文档的未结束变更不多于你保留的修订数。 |
 | `cosec.control.revisions.min-age` | duration | `7d` | 比这年轻的修订总是保留。 |
 | `cosec.control.changes.expire-after` | duration | `7d` | 未关闭的变更请求在提出后这么久过期，并离开未关闭变更列表。 |
-| `cosec.control.approval.expire-after` | duration | `72h` | 一次审批的有效期。长于令牌吊销的保留时长 `cosec.jwt.token-validity.refresh` 时启动失败：审批会比其令牌的吊销记录活得更久。 |
+| `cosec.control.approval.expire-after` | duration | `72h` | 一次审批的有效期。长于令牌吊销的保留时长（`cosec.jwt.token-validity.access` 与 `.refresh` 中较长的那个，再加 `cosec.authentication.revocation.skew`）时启动失败：审批会比其令牌的吊销记录活得更久。 |
 | `cosec.control.approval.four-eyes` | boolean | `false` | 是否也分析在该文档上持有 `cosec:approve` 的平台主体（信任根）的变更：分析无法证明受限的部分随之需要另一位平台主体审批。升级权限的变更无论如何都需要。 |
 | `cosec.control.break-glass.max-duration` | duration | `4h` | 一个 break-glass 绑定最长持续多久。超过 `24h`，或不为正，启动失败。 |
 | `cosec.control.shadow.min-duration` | duration | `15m` | 影子窗口最早在这之后、并且有了 `min-samples` 时关闭。控制面每隔它的十五分之一查看一次未关闭的窗口。数据面实例也读取它，但只作为节奏：配置里有它的实例每隔它的五分之一写一次影子报告（至少一秒、至多 10 秒），配置里没有它的实例每 10 秒报告一次。数据面的启动日志会说明是哪一种（[由计算得出，而非配置](#computed-not-configured)）。 |

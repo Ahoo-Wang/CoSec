@@ -605,6 +605,17 @@ version; until then, read that document through `ControlService`, as JSON ([Chan
 code](../integration/checks.md#changing-policies-from-your-code)). A value of a closed set the client does not know
 (a change state, a conflict) is not this error: it reads as unknown, with its text.
 
+## Social sign-in is refused: too many sign-ins in progress {#social-sign-in-is-refused-too-many-sign-ins-in-progress}
+
+`authorize` throws `SocialAuthenticationException`
+`The [<provider>] provider has too many sign-ins in progress: try again shortly.`, and an instance logs at most once a minute `Refused <n> [<provider>] sign-in start(s) since the last
+such line: <n> social sign-ins are in progress ...` at `WARN`. The deployment holds as many sign-ins in progress as it
+may: a 64th of the memory Redis reports, at 512 bytes a sign-in, or 100,000 when Redis reports none (the startup line
+`Social sign-in states: ...` says which; [Storage](./storage.md#redis-keys)). Starting a sign-in is anonymous, so a
+steady stream of these lines is something starting sign-ins in a flood: rate limit the start route at your edge. A
+start refused writes nothing, and a sign-in already in progress is not affected. With the in-memory store
+(`InMemorySocialStateStore`, tests and a single instance) the bound is 10,000.
+
 ## Startup failures
 
 ### Startup fails on an unknown property
@@ -1129,7 +1140,7 @@ container that waits for the Redis port, or a separate deploy step).
 | `Invalid change options.`, `Invalid shadow window options.` | Fix [`cosec.control.*`](./configuration.md#control-plane): `break-glass.max-duration` above `24h`, or `shadow.max-duration` below `shadow.min-duration`. |
 | `cosec.control.audit.kafka.delivery=required, but no Kafka change listener was created: it needs cosec-kafka, a KafkaOperations bean and cosec.control.audit.kafka.enabled=true.` | Add what it names, or set [`delivery`](./configuration.md#control-plane) to `best-effort`. |
 | `The control plane checks its approvers' revocations, but no revocation reader is available: ...` | Enable CoSec's tokens with `cosec-cocache`, or declare a `RevocationReader` bean; `RevocationReader.NONE` only when no approver's credential is ever revoked ([Control plane](./configuration.md#control-plane)). |
-| `cosec.jwt.token-validity.refresh (<d>), how long a token revocation is kept, is shorter than cosec.control.approval.expire-after (<d>): ...` | Raise the first or lower the second: a revocation must outlive every approval its token gave. |
+| `A token revocation is kept for <d>: the longer of cosec.jwt.token-validity.access (<d>) and cosec.jwt.token-validity.refresh (<d>), plus cosec.authentication.revocation.skew (<d>), shorter than cosec.control.approval.expire-after (<d>): ...` | Raise a token validity or lower the approvals' expiry: a revocation must outlive every approval its token gave. |
 | `cosec.authentication.login.refresh.path is set on a Spring Cloud Gateway host. ...` | A gateway issues no sessions: unset it there, and set it on the service that issues them, behind the gateway. |
 | `... is set, but this application serves no HTTP ...`, `... is set, but login or JWT is off ...`, `... is not one plain absolute path ...`, `... name one path ...` | Unset the [login route path](./configuration.md#authentication), or give the host what it names: a web stack, `cosec.authentication.login.enabled` and `cosec.jwt.enabled`, one plain path per route. |
 
