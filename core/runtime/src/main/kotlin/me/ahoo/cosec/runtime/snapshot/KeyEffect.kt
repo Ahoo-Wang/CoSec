@@ -130,6 +130,9 @@ internal sealed interface KeyEffect<out T : Any> {
     /** The metrics a transition reports beside installs. */
     sealed interface Metric {
         data class DocumentLost(val revision: Long) : Metric
+
+        /** A compilation that did not answer within its load's budget, [elapsed] after the load began (DR1-D-1). */
+        data class CompileTimedOut(val elapsed: Duration) : Metric
     }
 
     enum class Level { DEBUG, WARN, ERROR }

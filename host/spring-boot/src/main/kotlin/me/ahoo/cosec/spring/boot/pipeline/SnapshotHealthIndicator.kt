@@ -19,6 +19,7 @@ import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.runtime.snapshot.DocumentReadiness
 import me.ahoo.cosec.runtime.snapshot.DocumentState
 import me.ahoo.cosec.runtime.snapshot.SnapshotSource
+import me.ahoo.cosec.runtime.snapshot.compileTimedOut
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import org.springframework.boot.health.contributor.Health
 import org.springframework.boot.health.contributor.HealthIndicator
@@ -27,6 +28,11 @@ import org.springframework.boot.health.contributor.HealthIndicator
  * `cosecSnapshot`: UP once the platform document and the prewarmed apps and tenants are installed ([SnapshotReadiness]
  * gates readiness on the same [DocumentReadiness]), DOWN before, with what is missing. Add it to the readiness group for
  * its details.
+ *
+ * It names, as `compileTimedOut`, the revisions this instance read and could not compile within their load's budget,
+ * whose compilation still runs (DR1-D-1): until it returns, the instance decides on the revision it holds of that
+ * document (`SNP-22`), bounded only by the lag alerts and `fail-closed.tenants`. That does not change the status: the
+ * instance still decides, and taking it out of service would not compile the revision sooner.
  */
 @InternalCoSecApi
 class SnapshotHealthIndicator(
@@ -55,11 +61,18 @@ class SnapshotHealthIndicator(
                 .map { "${it.key}@${it.revision}" }
             builder.withDetail("invalid", invalid.size).withDetail("invalidFirst", named)
         }
+        val timedOut = source.compileTimedOut()
+        if (timedOut.isNotEmpty()) {
+            val named = timedOut.sortedWith(compareBy({ it.first != SnapshotKey.Platform }, { it.first.toString() }))
+                .take(NAMED_INVALID)
+                .map { (key, revision) -> "$key@$revision" }
+            builder.withDetail("compileTimedOut", timedOut.size).withDetail("compileTimedOutFirst", named)
+        }
         return builder.build()
     }
 
     private companion object {
-        /** How many documents that do not compile the health body names. */
+        /** How many documents that do not compile, or did not in time, the health body names. */
         const val NAMED_INVALID = 10
     }
 }
