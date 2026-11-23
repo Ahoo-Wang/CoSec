@@ -32,9 +32,9 @@ import me.ahoo.cosec.model.PrincipalId
 import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.runtime.token.TokenRevocation
 import me.ahoo.cosec.spi.token.InMemoryTokenFamilyStore
-import me.ahoo.cosec.spi.token.TokenFamily
 import me.ahoo.cosec.spi.token.RefreshTokenMismatchException
 import me.ahoo.cosec.spi.token.RevocationReader
+import me.ahoo.cosec.spi.token.TokenFamily
 import me.ahoo.cosec.spi.token.TokenRevokedException
 import me.ahoo.cosec.spi.token.TokenStore
 import me.ahoo.cosec.spi.token.TokenVerificationException
@@ -123,7 +123,16 @@ class RefreshTokenFamiliesJwtTest {
         val subject = TokenSubject("alice", tenant = "acme")
         val signedIn = Instant.now().minus(Duration.ofDays(30)).plus(Duration.ofHours(1))
         // A tenant switch's session, from a login that signed in near the end of its lifetime.
-        val root = TokenFamily("root", TenantId("home"), PrincipalId("alice"), signedIn, signedIn.plus(Duration.ofDays(30)), 1, null, false)
+        val root = TokenFamily(
+            "root",
+            TenantId("home"),
+            PrincipalId("alice"),
+            signedIn,
+            signedIn.plus(Duration.ofDays(30)),
+            1,
+            null,
+            false
+        )
         runBlocking { store.create(root) }
         val issue = runBlocking { families.startAt(TenantId("acme"), PrincipalId("alice"), signedIn, root.id) }
         val pair = converter.toToken(subject.inSession(issue))

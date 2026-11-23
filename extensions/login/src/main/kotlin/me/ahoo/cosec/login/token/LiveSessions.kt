@@ -81,6 +81,11 @@ internal class LiveSessions(private val revocation: TokenRevocation, private val
          * A session of its own in [tenant], which ends when this one would (`IDN-17`) and lives only while the login's
          * session does (`IDN-36`): its root is this session's root, or this session when it is the login's.
          */
-        suspend fun fork(tenant: TenantId): TokenFamilies.Issue = families.startAt(tenant, principal, session.authTime, root)
+        suspend fun fork(tenant: TenantId): TokenFamilies.Issue = families.startAt(
+            tenant,
+            principal,
+            session.authTime,
+            root
+        )
     }
 }

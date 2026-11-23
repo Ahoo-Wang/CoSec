@@ -62,7 +62,13 @@ class TokenFamilyFormatTest {
      */
     @Test
     fun `a switched session is format 2, with its root`() {
-        val switched = TokenFamily("f2", TenantId("beta"), PrincipalId("alice"), at, at.plusSeconds(60), 1, null, false, "f1")
+        val switched = TokenFamily(
+            "f2",
+            TenantId(
+                "beta"
+            ),
+            PrincipalId("alice"), at, at.plusSeconds(60), 1, null, false, "f1"
+        )
         val text = TokenFamilyCodec.encode(switched).decodeToString()
         text.assert().startsWith("""{"format":2,""").contains(""""root":"f1"""")
         read(text).assert().isEqualTo(switched)
