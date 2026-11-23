@@ -35,10 +35,11 @@ import java.util.concurrent.ExecutorService
 import java.util.concurrent.TimeUnit
 
 /**
- * The absent kind's eviction scan (RFC 0013 B2b §4c), warmed: a family holding [documents] documents and `max-absent`
- * absent entries, and the scan an absent entry's install over its cap runs, choosing one victim. It walks the absent
- * entries alone, so it must cost the same at either [documents]. Apart from [EvictionPassBenchmark], whose family holds
- * no absent entry, so that its rows compare with the runs before it. Housekeeping never runs.
+ * The absent kind's eviction scan (RFC 0013 §5.4, the absent kind's member set), warmed: a family holding [documents]
+ * documents and `max-absent` absent entries, and the scan an absent entry's install over its cap runs, choosing one
+ * victim. It walks the absent entries alone, so it must cost the same at either [documents]. Apart from
+ * [EvictionPassBenchmark], whose family holds no absent entry, so that its rows compare with the runs before it.
+ * Housekeeping never runs.
  */
 @State(org.openjdk.jmh.annotations.Scope.Benchmark)
 @BenchmarkMode(Mode.AverageTime)

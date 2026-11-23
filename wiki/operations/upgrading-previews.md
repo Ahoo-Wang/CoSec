@@ -50,6 +50,13 @@ Which preview of the library may run behind which preview of the gateway image: 
   approve a change or be the trust root, as for `api-key`. Affected: only an authenticator that used that name. Rename
   its method if its principals are people; otherwise nothing to do
   ([Extending CoSec](../architecture/extending.md)).
+- **A request whose server reports no peer address reads its client address as unavailable** (`PIP-17`, DR1-C-8).
+  Affected: a host whose server reports no peer, Reactor Netty listening on a Unix domain socket for one, with a
+  statement or the blacklist on `environment.ip`. Before, the address was empty, read as absent: a DENY on it did not
+  match and the IP blacklist was not asked. It is now `unknown`, as a trusted proxy's `unknown` entry is: such a DENY,
+  and the blacklist, answer `503`, alike behind the three adapters. Put a proxy that writes `X-Forwarded-For` in front
+  of such a host and set the index to `1` or more ([Web integration](../integration/web.md)); a host whose server
+  reports its peers is unchanged.
 - **A rate limit key value longer than 256 characters names its bucket by its hash** (`OBL-6`, DR1-C-1). Affected:
   rules whose `key` reads values that long, nearly always a header a client chooses. Such a bucket is now
   `h:<sha-256>` where it was `k:<value>` ([Rate limiting](../policies/rate-limiting.md#keys)), so its count starts

@@ -435,7 +435,11 @@ left of the header is never used. When the header has fewer entries than that, t
 request without the header uses the connection's peer, and has no address on Reactor Netty or Jetty under `native`.
 An entry written with a port, brackets or a zone (`192.0.2.1:8080`, `[2001:db8::1]:443`, `fe80::1%en0`) is read as its
 address. One that is no address (`unknown`) makes `environment.ip` unavailable: a DENY that reads it is `503`, and the
-blacklist cannot be read for it (`PIP-17`). The IP is never resolved through reverse DNS.
+blacklist cannot be read for it (`PIP-17`). A server that reports no peer (Reactor Netty listening on a Unix domain
+socket, for one) gives the same `unknown`, never an empty address: every request has a peer, so one the server does not
+report could not be read, and a DENY or the blacklist on the address answers `503` rather than being skipped, alike
+behind the three adapters. Such a host decides on the address only behind a proxy that writes `X-Forwarded-For`, with the
+index at `1` or more. The IP is never resolved through reverse DNS.
 
 CoSec reads `X-Forwarded-For` only. A proxy in front of it must append to that header, or overwrite it; one that writes
 only `Forwarded` (RFC 7239) and passes a client's `X-Forwarded-For` on lets the client choose the address, so configure

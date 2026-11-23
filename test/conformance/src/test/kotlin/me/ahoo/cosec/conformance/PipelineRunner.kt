@@ -125,6 +125,7 @@ import reactor.core.publisher.Mono
 import tools.jackson.databind.JsonNode
 import tools.jackson.databind.node.JsonNodeFactory
 import tools.jackson.databind.node.ObjectNode
+import java.net.InetSocketAddress
 import java.net.URI
 import java.net.URLDecoder
 import java.time.Clock
@@ -149,7 +150,8 @@ import me.ahoo.cosec.runtime.http.Outcome as PipelineOutcome
  * "documents":          { "platform": {...}, "apps": {...}, "tenants": {...}, "unavailable": ["tenant", ...] },
  * "http":               { "method": "GET", "path": "/orders", "query": "a=b", "headers": { "<name>": "v" | ["v", ...] },
  *                         "hostApp": null, "requestAttributes": { "<name>": "v" },
- *                         "remoteAddress": "10.0.0.1" (the client address the adapter read; "unknown" when it could not) },
+ *                         "remoteAddress": "10.0.0.1" (the client address the adapter read; "unknown" when it could not;
+ *                         through "gateway", the peer the server reports, and null when it reports none) },
  * "authentication":     { "result": "token" | "anonymous" | "authenticated" | "rejected" | "unavailable" | "throws" | "hangs",
  *                         "reason": "TOKEN_EXPIRED", "tenant": "acme", "id": "alice", "roles": [...], "policies": [...],
  *                         "membership": "provider" },
@@ -307,6 +309,9 @@ class PipelineRunner(private val compiler: SnapshotCompiler = DocumentSnapshotCo
         reached: CompletableDeferred<Unit>
     ): Outcome {
         val http = node.get("http") ?: EMPTY
+        if (http.get("remoteAddress")?.isNull == true && node.get("gateway") == null) {
+            throw ScenarioFormatException("\"remoteAddress\": null (no peer) is read by an adapter: give \"gateway\".")
+        }
         val facts = facts(http)
         if (cancelAt != null) {
             return cancelled(pipeline, facts, reached)
@@ -445,13 +450,20 @@ class PipelineRunner(private val compiler: SnapshotCompiler = DocumentSnapshotCo
         else -> throw ScenarioFormatException("A route metadata value is a string, number, boolean, list or map: $node")
     }
 
-    /** The scenario's request as a client sends it to the gateway. */
+    /**
+     * The scenario's request as a client sends it to the gateway, from the peer `http.remoteAddress` names (unresolved:
+     * the adapter reads it as written), [REMOTE_ADDRESS] when absent, or from no peer the server reports when null.
+     */
     private fun gatewayRequest(http: JsonNode): MockServerHttpRequest.BaseBuilder<*> {
         val query = http.get("query")?.textOrNull()?.let { "?$it" }.orEmpty()
         val request = MockServerHttpRequest.method(
             HttpMethod.valueOf(http.get("method")?.text() ?: "GET"),
             URI.create((http.get("path")?.text() ?: "/orders") + query),
         )
+        val peer = http.get("remoteAddress")
+        if (peer == null || !peer.isNull) {
+            request.remoteAddress(InetSocketAddress.createUnresolved(peer?.text() ?: REMOTE_ADDRESS, PEER_PORT))
+        }
         http.get("headers")?.fields().orEmpty().forEach { (name, value) ->
             request.header(name, *(if (value.isArray) value.strings() else listOf(value.text())).toTypedArray())
         }
@@ -984,7 +996,7 @@ class PipelineRunner(private val compiler: SnapshotCompiler = DocumentSnapshotCo
             rawQuery = node.get("query")?.textOrNull(),
             headers = Headers.of(headers),
             cookies = Cookies.of(cookies(node)),
-            remoteAddress = node.get("remoteAddress")?.text() ?: REMOTE_ADDRESS,
+            remoteAddress = node.get("remoteAddress")?.textOrNull() ?: REMOTE_ADDRESS,
             host = HostScope(node.get("hostApp")?.textOrNull()?.let(::AppId)),
             requestAttributes = node.get(
                 "requestAttributes"
@@ -1003,6 +1015,7 @@ class PipelineRunner(private val compiler: SnapshotCompiler = DocumentSnapshotCo
         const val AUTHORIZATION = "authorization"
         const val DEFAULT_API_KEY_HEADER = "X-API-Key"
         const val REMOTE_ADDRESS = "10.0.0.1"
+        const val PEER_PORT = 50000
 
         /** The device a `blacklist` that blocks `device` names; a request sends it as `CoSec-Device-Id`. */
         const val DEVICE_ID = "device-1"

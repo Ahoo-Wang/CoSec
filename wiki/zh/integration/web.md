@@ -279,7 +279,7 @@ val securityContext = CoSecSecurityContextHolder.requireSecurityContext()
 
 从右侧数起的那一条是你最外层代理追加的，因此客户端写在该请求头左侧的值永远不会被使用。条目数少于该值时，使用最左侧的条目。
 多行 `X-Forwarded-For` 按收到的顺序视为一个列表，因此客户端自己写的那一行位于你的代理那一行的左侧。没有该请求头的请求使用连接的对端；在 `native` 下的 Reactor Netty 或 Jetty 上则没有地址。
-带端口、方括号或 zone 的条目（`192.0.2.1:8080`、`[2001:db8::1]:443`、`fe80::1%en0`）按其中的地址读取。不是地址的条目（`unknown`）使 `environment.ip` 取不到：读取它的 DENY 返回 `503`，黑名单也无法为它查询（`PIP-17`）。IP 永远不会通过反向 DNS 解析。
+带端口、方括号或 zone 的条目（`192.0.2.1:8080`、`[2001:db8::1]:443`、`fe80::1%en0`）按其中的地址读取。不是地址的条目（`unknown`）使 `environment.ip` 取不到：读取它的 DENY 返回 `503`，黑名单也无法为它查询（`PIP-17`）。服务器不报告对端时（例如监听 Unix 域套接字的 Reactor Netty），读到的同样是 `unknown`，而不是空地址：每个请求都有对端，服务器不报告就是读不到，因此按地址的 DENY 或黑名单返回 `503`，而不是被跳过，三个适配器一致。这样的主机只有在写 `X-Forwarded-For` 的代理之后、并把该索引设为 `1` 或更大时，才能按地址决策。IP 永远不会通过反向 DNS 解析。
 
 CoSec 只读取 `X-Forwarded-For`。它前面的代理必须向该请求头追加，或覆盖它；只写 `Forwarded`（RFC 7239）、却把客户端的
 `X-Forwarded-For` 原样转发的代理，会让客户端自选地址，所以要把它配置为覆盖或删除 `X-Forwarded-For`。在客户端可直接访问的宿主上，
