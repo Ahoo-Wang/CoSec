@@ -1,29 +1,14 @@
 # RFC 0004：统一模型——绑定、租户分层与数据转换（RFC 0001 迁移第 4 阶段，上篇）
 
-> 状态：已确认（第 2 版，§15 / §11 的决定已于 2026-10-22 由维护者确认）· 上位文档：[RFC 0001](0001-target-architecture.md) §3.2、§3.3、§6 第 4 阶段、§7.1 ·
-> 前置：[RFC 0002](0002-pure-engine.md)（第 2 阶段，PR-1 到 PR-5 已合入并完成审查）、[RFC 0003](0003-policy-snapshot.md)（第 3 阶段，已确认，PR-1 到 PR-3 已合入）·
+> 状态：已确认（第 2 版，§15 的决定已于 2026-10-22 由维护者确认）· 上位文档：[RFC 0001](0001-target-architecture.md) §3.2、§3.3、§6 第 4 阶段、§7.1 ·
+> 前置：[RFC 0002](0002-pure-engine.md)（第 2 阶段）、[RFC 0003](0003-policy-snapshot.md)（第 3 阶段）·
 > 姊妹篇：[RFC 0005](0005-condition-ast.md)（第 4 阶段下篇：条件 AST、动作词汇、编译执行）·
-> 基线：`main` @ `a361084d`（第 1 版写于 `334da022`） · 交付：全部合入 `main`（8.0 线）；8.0 在 RFC 0001 第 2–6 阶段全部完成、各做完两轮审查之前不发布任何版本 ·
-> 范围：`model/`、`engine/`、`cosec-core`、`cosec-cocache`、`cosec-jwt`、`cosec-spring-boot-starter`，新增 `migrate/`（`cosec-migrate`）
+> 交付：全部合入 `main`（8.0 线），随 8.0 发布；§14 的 PR-1 至 PR-5 已合入，PR-6 取消，PR-7、PR-8 并入 RFC 0008 的切换 PR ·
+> 范围（今天的项目）：`model`、`engine`、`spi`、`document`、`runtime`、`cocache`、`jwt`、`spring-boot`、`migrate`
 >
-> **2026-11-19 修订（易用性审查，#1665，`DOC-11`）**：§4.2 在 BND-4 之后增加一条：主体 id 以 `(` 开头的主体绑定不得编译，以 `(` 开头的 `subject.id` 字面量也不得编译。匿名主体在文档里没有 `subject.id`，不匹配任何主体绑定；已登录的主体不会有保留 id（`IDN-12`）。要区分匿名与已登录，用 `subject.authenticated`。
->
-> **2026-10-26 修订（[RFC 0008](0008-conformance-and-direct-build.md)）**：8.0 不考虑兼容性。门槛 A（§9 整节）、PR-6（分类器）取消；PR-7、PR-8 并入 RFC 0008 的切换 PR；PR-4 的文档直接使用
-> RFC 0005 的 AST，不再有"绑定模型 + 7.x 匹配器"的中间格式，也不做 `UnifiedAuthorization`；PR-5 不做 `verify`（RFC 0008 §4.1、§6 Q3）。
-> §5.3 的 C1–C6 不再是差异类别，而是登记在一致性套件中的规则；P1′、P8–P12 作为规范性质保留（RFC 0008 §3.5）。下文保留原样以便追溯。
->
-> **2026-11-19 修订（第一轮整体审查的加固，#1712，`DOC-13`）**：§4.1 增加一条：文档写下的任何 id 都不含控制字符或落单的代理项，与租户、应用 id 是同一个定义（`Identifiers.isUnprintableAt`）；显示用的文本（名称、描述）不是 id。id 会进入日志行、指标标签、审计事件与 problem 响应体，带换行的 id 能伪造一行。格式描述里每个标成 id 的字段都由一个从描述出发的测试守住；打印处的转义（`DOC-12`）保留，存量文档可能早于这条规则。
-
-> **2026-11-08 修订（#1284，`IDN-11`）**：§4.5.1 的租户声明：缺失是默认租户，空字符串让令牌无效（401）。
->
-> **2026-11-13 修订（#1318，`IDN-11`）**：令牌的租户声明与 API Key 的租户必须是一个租户 id（`SnapshotKey.Tenant` 的规则：非空白、不是 `*`、不含 `:` 与控制字符、
-> 至多 128 个字符），否则凭据无效：令牌 401（此前 503，空白为 500），签发端不签发；API Key 记录读取失败，配置的 key 使启动失败。每个入口用同一条规则。
-
-> **2026-11-08 修订（#1286）**：读取早期构建写下的“无名 app”记录不再容错，一律是格式错误并失败即拒绝；`SCP-7` 由 `SCP-10` 取代，拒绝的一半全部保留。
-
-> **2026-11-08 修订（#1297）**：审计记录用 `AuditVia` 与 `AuditDocument`，正文提到的 `AuditSourceType` 已删除。
-
-> **2026-11-09 修订（#1302）**：§4.6 的“声明的 app”路径已删除，App 来自宿主或凭证（RFC 0012 §3.5，`SCP-11`）。
+> **2026-11-23 合订**：此前的修订说明与实现说明（2026-10-25 至 2026-11-19）已并入正文，被取代的说法已删去；章节号与 I1–I17、C1a–C9、X1–X6、P1′、P8–P12、
+> PR-1–PR-8、Q1–Q21 的编号不变。§3 的表记录的是与合订前的 RFC 0001 的不一致，表的内容不动。门槛（§9）由 RFC 0008 的规范一致性套件取代，它定义的性质保留。
+> 合订前的全文见 git 历史：`git show 7f9de337:docs/rfc/0004-unified-model.md`。修订沿革见文末。
 
 ## 0. 结论先行
 
@@ -41,19 +26,18 @@ Binding(谁, 在哪个作用域) → Policy
   各有一次切换。
 - **转换后的数据不改变租户归属**（§4.3、§5）。7.x 的数据没有租户维度：全局策略对所有租户生效，主体可以引用任何策略，角色授予按
   `(app, role, space)` 存放、对所有租户生效（RFC 0003 §2 I1）。转换工具把这些数据原样放进**平台层**，租户层起初为空。租户自己的数据
-  从第 6 阶段的控制面开始写入。这样本阶段的决策差异只来自刻意的语义修订，而不来自数据搬家。
+  经控制面写入（RFC 0007）。这样转换带来的决策差异只来自刻意的语义修订，而不来自数据搬家。
 - **快照由三份文档组合而成**：`Platform`、`App(appId)`、`Tenant(tenantId)`，版本号是三元组（§7）。RFC 0001 写的二元组
   `(platform, tenant)` 与 RFC 0003 已确认的按应用分区矛盾，本文指出并取三元组（§3 I4）。三份文档各自编译、各自缓存，一次评估持有它们的
   不可变组合；平台层更新不触发租户层重新编译（§3 I5）。
-- **组合算法改为扁平顺序**（§6）：先对全部候选语句检查 DENY，再检查 ALLOW。比 RFC 0001 §3.3 的伪代码多两条规则：任何一条 DENY 命中
-  都优先于别处的错误、缺失和不可用；DENY 出错不再与迭代顺序有关（§3 I6）。候选语句按"黑名单 → root → 全局 → 主体 → 角色"排序，
-  所以没有错误时，连做出决策的那一条都与 7.x 相同（§6.3）。
-- **语义变化逐条列出**（§5.3 C1–C6）。门槛（§9）沿用 RFC 0002 §8.2.1 的离线回放，比较器从"差异为零"改为"每一条差异都能被机械地
-  归入一个已列出的类别，并且带有引擎 trace 提供的证据"。归不了类的差异就是失败。让结果变宽（放行原本拒绝的请求）的类别只有一个（C1a），
-  它的每一条样本都要单独列出，由维护者逐条确认。
+- **组合算法改为扁平顺序**（§6）：先对全部候选语句检查 DENY，再检查 ALLOW。任何一条 DENY 命中都优先于别处的错误、缺失和不可用；
+  DENY 出错不与迭代顺序有关（§3 I6）。候选语句按"黑名单 → 全局（`Anyone`）→ 主体（附加与主体绑定）→ 角色 → break-glass"排序，
+  所以没有错误时，做出决策的那一条与 7.x 相同（§6.3）。
+- **语义变化逐条列出**（§5.3 C1–C9）：每一条是登记在一致性套件中的 8.0 规则，写进 `upgrading.md`。原定的门槛 A（与 7.x 回放比较）由
+  RFC 0008 的规范一致性套件取代（§9），§9 定义的性质 P1′、P8–P12 保留。
 - **转换工具**（§8）是一个随 8.0 发布的模块 `cosec-migrate`：输入 7.x 的 Redis 数据或导出文件，输出 8.0 的快照文档、来源映射和报告。
-  它拒绝在 7.x 中本来就会失败的数据，而不是替运维猜。用户用自己的审计日志验证转换结果，复用同一个回放器和同一个分类器。
-- 拆成 8 个 PR（§14）。前 6 个只做加法，大部分可以在 RFC 0002 PR-6、RFC 0003 PR-5 之前开工；切换（PR-7）和删除（PR-8）在两者和本阶段门槛之后。
+  它拒绝在 7.x 中本来就会失败的数据，而不是替运维猜；报告列出受语义改动影响的每一处 7.x 配置形态。
+- 实现拆成 PR-1 至 PR-8（§14），都已合入或并入 RFC 0008 的切换 PR。
 
 ---
 
@@ -67,28 +51,24 @@ RFC 0002、0003 的粒度。按"改的是什么"分成两篇：
 |---|---|---|
 | 回答的问题 | 一条语句**对谁、在哪里**生效；多条语句怎么组合 | 一条语句**匹配什么**；怎么快速找到可能匹配的语句 |
 | 主要内容 | `Binding`、平台层 / 租户层、成员关系、`ScopeResolver`、黑名单、root、扁平算法、`evaluate(request, snapshot)`、快照三元组、转换工具、门槛方法 | 条件 AST（类型、成本、可分析性）、`service:verb` 与类型化资源、`http` 命名空间、OpenAPI 路由映射、编译执行、索引及其完整性 |
-| 匹配器 | 原样使用 7.x 的动作与条件匹配器（经 RFC 0002 PR-3 的适配层） | 以 AST 取代全部内置匹配器、OGNL、SpEL |
-| 切换 | PR-7：在 7.x 匹配器之上切换到绑定模型（门槛 A） | 它的切换 PR：匹配器换成 AST，线性扫描换成索引（门槛 B） |
-
-> **2026-10-26**：下面"两次切换各有一道门槛"的理由随门槛 A、B 一并取消（[RFC 0008](0008-conformance-and-direct-build.md)）。两篇仍按"模型 / 语言"分工，但只有一次切换（RFC 0008 §4.4），
-> 中间格式不再实现。
+| 匹配器 | 语句用 RFC 0005 的条件 AST | 以 AST 取代全部内置匹配器、OGNL、SpEL |
+| 切换 | 两篇共一次切换：RFC 0008 的切换 PR（RFC 0008 §4.4） | 同左 |
 
 **为什么先做模型、后做语言**：
 
 - 扁平算法的前提之一是"没有层"（RFC 0002 §4.3），层的消失来自 `Binding`，所以扁平算法属于本文。另外两个前提（条件 AST 不抛任意异常、
   `onMissing`）只影响出错路径；扁平算法把 ALLOW 出错按未命中处理，即使匹配器还会抛任意异常，结果也只会更严（§6.2）。
-- 两次切换各有一道门槛，每次的差异只来自一类改动：门槛 A 的差异只可能来自组合顺序、作用域和 root；门槛 B 的差异只可能来自匹配器的翻译。
-  合成一次，一条差异就很难判断是哪一部分造成的。
 - 条件 AST 的设计（运算符、类型、包含判断）可以与本文并行，`model/` 中的 AST 类型不依赖绑定模型；RFC 0005 的前两个 PR 可以和本文的 PR 同时开工。
 
-两篇共用：§9 的门槛方法（分类器、证据、判定规则）、§8 的转换工具（RFC 0005 往里加匹配器翻译）、§12 的 JMH 方法。RFC 0005 只写它增加的部分。
+两篇共用：§8 的转换工具（RFC 0005 往里加匹配器翻译）、§12 的 JMH 方法。RFC 0005 只写它增加的部分。
 
-**8.0 GA 时用户只做一次转换**。门槛 A 与门槛 B 之间的中间格式（绑定模型 + 7.x 匹配器 JSON）只存在于 `main` 上，从未发布；GA 版本的
-转换工具一次完成两篇的全部转换（§8.6）。
+**8.0 GA 时用户只做一次转换**。"绑定模型 + 7.x 匹配器"的中间格式不实现（RFC 0008）；转换工具一次完成两篇的全部转换（§8.6）。
 
 ---
 
 ## 2. 范围与非目标
+
+本节是本 RFC 写成时（第 4 阶段）的范围。非目标表里留到后面阶段的各项都已落地，“留到”一栏写明在哪里。
 
 ### 2.1 本阶段（上篇）要做的
 
@@ -100,21 +80,21 @@ RFC 0002、0003 的粒度。按"改的是什么"分成两篇：
 5. 黑名单拆分（§4.7）、root 改为 break-glass 绑定（§4.8）。
 6. 引擎：扁平组合算法、绑定的适用性查找、`Engine.evaluate(request, snapshot)`、trace（§6）。
 7. 一次性转换工具 `cosec-migrate`（§8）。
-8. 门槛 A：差异分类器、改动目录、合成语料、离线回放（§9）。
-9. 删除层、`RolePermission`/`AppRolePermission`、`PolicyType.GLOBAL` 的评估语义、`RootPrincipalMatcher`、`RoleScope` 在授权路径上的使用（§14 PR-8）。
+8. 门槛 A：差异分类器、改动目录、合成语料、离线回放（§9；由 RFC 0008 的一致性套件取代）。
+9. 删除层、`RolePermission`/`AppRolePermission`、`PolicyType.GLOBAL` 的评估语义、`RootPrincipalMatcher`、`RoleScope` 在授权路径上的使用（§14 PR-8，并入 RFC 0008 的切换 PR）。
 
 ### 2.2 非目标
 
 | 内容 | 处理 | 留到 |
 |---|---|---|
-| 条件 AST、`service:verb`、索引、编译执行（RFC 0001 §3.3、P10） | 不在本文。本阶段的语句仍由 7.x 匹配器执行，引擎在适用的绑定内线性扫描 | [RFC 0005](0005-condition-ast.md) |
-| `onMissing`、`AttributeProvider`（RFC 0001 §3.3、§3.5） | 本阶段没有外部属性来源（§3 I7）；黑名单名单仍由 `BlacklistChecker` 提供 | 第 5 阶段 |
-| 503、`Decision` 直接进入 Pipeline、`DecisionListener`、`REQUIRED` 审计 | `Indeterminate` 仍映射为 500（RFC 0002 Q3、RFC 0003 Q16） | 第 5 阶段 |
-| 协程、挂起的 `MembershipProvider` | 本阶段的 SPI 返回 `CompletableFuture`（与 RFC 0003 Q10 相同） | 第 5 阶段 |
-| 平台边界策略、`withinBoundary`（RFC 0001 §3.7） | 只在算法里预留位置，本阶段恒为通过 | 第 6 阶段 |
-| 控制面、不能越权授权、租户自己写入数据 | 本阶段只有 RFC 0003 的 `SnapshotPublisher`，扩展到绑定（§7.4）；"谁能写"不做检查 | 第 6 阶段 |
-| 从模型生成 `schema/*.json` | 本阶段手工更新 schema | 第 6 阶段 |
-| 把租户自己的数据从平台层拆出来 | 转换工具提供可选的 `--partition=by-owner`（§8.3），默认不拆 | 运维自行决定；第 6 阶段之后 |
+| 条件 AST、`service:verb`、索引、编译执行（RFC 0001 §3.3、P10） | 不在本文 | [RFC 0005](0005-condition-ast.md) |
+| `onMissing`、`AttributeProvider`（RFC 0001 §3.3、§3.5） | 本文没有外部属性来源（§3 I7） | 第 5 阶段：RFC 0006 §5.4（黑名单名单见 §5.4.4） |
+| 503、`Decision` 直接进入 Pipeline、`DecisionListener`、`REQUIRED` 审计 | — | 第 5 阶段：RFC 0006 |
+| 协程、挂起的 `MembershipProvider` | — | 第 5 阶段：RFC 0006（数据面的 SPI 都是 `suspend`） |
+| 平台边界策略、`withinBoundary`（RFC 0001 §3.7） | 算法里预留位置（§6.1） | 第 6 阶段：RFC 0007 §7.6 |
+| 控制面、不能越权授权、租户自己写入数据 | — | 第 6 阶段：RFC 0007 |
+| 从模型生成 `schema/*.json` | — | 已落地：`schema/<line>/` 由 `cosec-document` 的格式描述符生成（`generateSchemas`） |
+| 把租户自己的数据从平台层拆出来 | 转换工具提供可选的 `--partition by-owner`（§8.3）与 `partition plan`，默认不拆 | 运维自行决定 |
 
 ---
 
@@ -122,7 +102,7 @@ RFC 0002、0003 的粒度。按"改的是什么"分成两篇：
 
 与 RFC 0003 §2 一样，不悄悄选边，逐条列出，每条对应 §15 的一个决定。
 
-| # | RFC 0001 原文 | 问题 | 本文的处理 |
+| # | 合订前的 RFC 0001（`git show b164f273:docs/rfc/0001-target-architecture.md`） | 问题 | 本文的处理 |
 |---|---|---|---|
 | I1 | §3.2：`Binding` 的主体是 `principal \| role \| group \| *` | `group` 在 RFC 0001 和现有代码里都没有定义。CoSec 从来没有"组"，身份源里的组到了 CoSec 就是角色 | 不引入 `group`；身份源的组以角色的形式写进 token。Q1 |
 | I2 | §3.2：`Binding` 取代 `principal.policies`；P11：主体级的高基数数据不进快照 | 主体直接引用策略（`principal.policies`）是**每个用户**一份的数据。把它们变成快照里的绑定，快照就要装下所有用户，违反 P11；而且这些数据在 token 签发方手里，转换工具根本拿不到 | 主体直接引用的策略属于成员关系，叫**附加**（attachment），与角色一样来自 token 声明（§4.4）。快照里的主体绑定只用于少量、低基数的情形（break-glass root、服务账号）。Q2 |
@@ -193,35 +173,39 @@ class Memberships(
     val attachments: List<PolicyId>,
     /** 声明里写了、但不合法的条目（如 `a@b@c`），只用于 trace；它们不在任何作用域生效，与 RoleScope 相同。 */
     val malformed: List<String> = emptyList(),
+    /** provider 认识这个主体、但它已停用时为 false：凭据被拒绝（RFC 0009 §4.2，IDN-3）。声明总是 true。 */
+    val active: Boolean = true,
 ) { enum class Source { CLAIMS, PROVIDER } }
 
-/** 经过校验的作用域。构造器是 internal 的，只有 cosec-core 的 ScopeResolver 能构造（RFC 0001 P4、§5"作用域可信"）。 */
+/** 经过校验的作用域。构造器是 internal 的，只有同一模块里的 ScopeResolver 能构造（RFC 0001 P4、§10"作用域可信"）。 */
 class Scope internal constructor(
     val tenant: TenantId,
+    /** 请求所在的 App；不在任何 App 时是空 id，不读 App 文档（RFC 0012 §3.5）。 */
     val app: AppId,
-    val appSource: AppSource,
     val space: SpaceId,
     /** 该空间里生效的角色，按声明顺序。 */
     val roles: List<RoleId>,
-) { enum class AppSource { HOST, DECLARED } }
+)
 ```
 
 - RFC 0002 §3.1 推迟的值类型在这里引入。它们只出现在 API 边界上；编译后的结构内部用 `String`，因为 `Set<RoleId>` 之类的集合会给每个
   元素装箱，热路径上不能接受（§12 的分配目标守护）。
 - `Scope` 的构造器是 `internal`，Kotlin 的 `internal` 以模块为界，所以 `ScopeResolver` 必须与 `Scope` 在同一个模块里。它是不做 I/O 的纯函数
-  （§4.6），放在 `model/` 的 `me.ahoo.cosec.model.scope` 包中，满足 `model/` 的纯净约束。RFC 0001 §3.5 把它列在 `cosec-runtime` 里，那时 `Scope`
-  也要一起搬走；第 5 阶段再定。一个 ArchUnit 规则另外守护：`Scope` 的构造器只被 `ScopeResolver` 调用。
-- `AuthzRequest` 变化：`subject` 增加 `memberships`，删除 `roles`、`policies`、`root`；`scope` 改为上面的 `Scope`；`environment` 增加
-  `time`（epoch 毫秒，由调用方提供，引擎不读时钟，`EnginePurityTest` 已禁止）。`HostFacts` 保留到 RFC 0005 的切换，承载 7.x 匹配器需要的
-  `Request`/`SecurityContext`。
-- **包的位置（PR-1，2026-10-25）**：`model/` 里已有 RFC 0002 的 `me.ahoo.cosec.model.Scope`（声明的作用域）、`StatementRef` 和 `Subject`，
-  引擎和 `cosec-core` 都在用，到 PR-7/PR-8 才删除。为了不与它们同名，新的 `Scope` 与 `ScopeResolver`、`DeclaredScope`、`HostScope`、
-  `ScopeResolution` 一起放在 `me.ahoo.cosec.model.scope`；`ScopeResolver` 的主体参数是同一包里的 `ScopeSubject(tenant, authenticated, memberships)`，
-  不是 `Subject`。新的 `StatementRef`（含 `ScopeRejected`）推迟到 PR-2，引擎第一次用到它的时候。其余类型按上面的代码放在 `me.ahoo.cosec.model`。
-- **`*` 是保留值（第一轮审查，2026-10-26）**：文档用 `*` 表示 `Match.Any`（§7.1），所以 `AppId`、`SpaceId` 和 `Match.Exactly` 都不接受 `*`
+  （§4.6），放在 `model` 的 `me.ahoo.cosec.model.scope` 包中，满足 `model` 的纯净约束。`ScopeConstructionTest` 守护：`Scope` 的构造器只被
+  `ScopeResolver` 调用（`SCP-5`：也没有任何解码路径构造它）。
+- `AuthzRequest`：`subject` 是 `Subject(id, authenticated, attributes, principalBindings, breakGlass)`（后两个标志见 RFC 0009 §4.2）；成员关系、
+  `Scope` 与请求时间（epoch 毫秒，由调用方提供，引擎不读时钟，`EnginePurityTest` 禁止）在引擎的输入 `EngineRequest` 里，与 `AuthzRequest` 并列。
+- **包的位置**：`Scope`、`ScopeResolver`、`HostScope`、`ScopeResolution` 与 `ScopeSubject(tenant, authenticated, memberships, app)` 在
+  `me.ahoo.cosec.model.scope`；`StatementRef`（含 `ScopeRejected`）在 `me.ahoo.cosec.model.decision`；其余类型按上面的代码放在 `me.ahoo.cosec.model`。
+- **`*` 是保留值**：文档用 `*` 表示 `Match.Any`（§7.1），所以 `AppId`、`SpaceId` 和 `Match.Exactly` 都不接受 `*`
   （`Match.WILDCARD`），否则一条授予给字面空间 `*` 的数据解码回来就成了"所有空间"。`ScopeResolver` 把声明为 `*` 的应用按 `APP_MISMATCH`、
   空间按 `SPACE_NOT_MEMBER` 拒绝。
-- **id 不含落单的 UTF-16 代理项（2026-11-07，#1254，RC1-52，`IDN-10`）**：每种 id 的文本规则都由 `me.ahoo.cosec.model.Identifiers` 判定：落单的高位或低位代理项不是字符，含它的 id 在进入 CoSec 处被拒绝。原因是 Redis 的 key 按 UTF-8 写，落单的代理项被写成 `?`，于是 `beta\uD800` 与 `beta?` 共用一个 key。成对的代理项照常。`ScopeResolver.isValidAppId` 在同一个循环里检查它与控制字符（RC1-15），所以 app、租户 id 与 `SnapshotKey` 都遵守它。
+- **id 不含落单的 UTF-16 代理项**（RC1-52，`IDN-10`）：每种 id 的文本规则都由 `me.ahoo.cosec.model.Identifiers` 判定：落单的高位或低位代理项不是字符，
+  含它的 id 在进入 CoSec 处被拒绝。原因是 Redis 的 key 按 UTF-8 写，落单的代理项被写成 `?`，于是 `beta\uD800` 与 `beta?` 共用一个 key。成对的代理项照常。
+  `ScopeResolver.isValidAppId` 在同一个循环里检查它与控制字符（RC1-15），所以 app、租户 id 与 `SnapshotKey` 都遵守它；租户 id 与 app id 也不含 `/`（`SCP-13`）。
+- **文档写下的任何 id 都不含控制字符或落单的代理项**（`DOC-13`），与租户、应用 id 是同一个定义（`Identifiers.isUnprintableAt`）；显示用的文本（名称、描述）不是 id。
+  id 会进入日志行、指标标签、审计事件与 problem 响应体，带换行的 id 能伪造一行。格式描述里每个标成 id 的字段都由一个从描述出发的测试守住；
+  打印处的转义（`DOC-12`）保留，因为存量文档可能早于这条规则。
 
 ### 4.2 `Binding`
 
@@ -245,30 +229,34 @@ subjectMatches(Role(t, r), s, scope)         = (t == null || t == s.tenant) && r
   `editor@team-a` 只在 team-a 生效（§5.1）。
 - 绑定的空间维度与成员关系的空间维度是两回事：成员关系决定"主体在这个空间里是什么角色"，绑定的 `space` 决定"这个角色在哪个空间里
   得到这条策略"。7.x 的 `RolePermissionCache` 按 `(app, role, space)` 存放授予，两者恰好一一对应（§5.1）。
-- 匿名主体不匹配任何 `Principal` 绑定，也没有角色，只能匹配 `Anyone`。
+- 匿名主体不匹配任何 `Principal` 绑定，也没有角色或附加，只能匹配 `Anyone`（`BND-4`）。
+- 主体 id 以 `(` 开头的主体绑定不能编译，以 `(` 开头的 `subject.id` 字面量也不能编译（`DOC-11`）：匿名主体在文档里没有 `subject.id`，不匹配任何主体绑定；
+  已登录的主体不会有保留 id（`IDN-12`）。要区分匿名与已登录，用 `subject.authenticated`。
+- 凭据带角色上限时（`Subject.principalBindings` 为 false），主体绑定与附加只贡献 DENY，不贡献 ALLOW；break-glass 绑定只对 `Subject.breakGlass` 为真的主体适用
+  （RFC 0009 §4.2，`BND-9`、`BRK-8`）。
 - 作用域的比较是精确的、区分大小写的，不做去空白（`Match.matches`）。`*` 只表示 `Any`，不能作为具体的应用或空间 id（§4.1）。
 
-**引用完整性**：绑定指向的策略在同一个组合快照（§7.3）里找不到，就是**编译错误**：文档不能发布（发布者在写入前编译检查），已经在
+**引用完整性**：绑定指向的策略在同一个组合快照（§7.3）里找不到，就是**编译错误**：文档不能发布（控制面在写入前编译检查，`DOC-1`），已经在
 Redis 里的文档编译失败时按 RFC 0003 §4.4 F4 处理（读到它的请求失败）。这与 RFC 0001 §3.3 一致，D2 在发布前就被拦住。
 
 ### 4.3 平台层与租户层
 
 | 层 | 文档 | 内容 | 谁写（本阶段） | 对谁生效 |
 |---|---|---|---|---|
-| 平台 | `Platform` | 平台策略（含共享策略库）、`Anyone` 绑定（7.x 全局策略）、break-glass 绑定、内置的黑名单规则（编译时注入，§4.7） | 转换工具；`SnapshotPublisher` | 所有租户 |
-| 平台（按应用） | `App(appId)` | 该应用的 `Catalog`、由应用权限转换来的权限策略、该应用的角色绑定（7.x 的角色授予） | 转换工具；`SnapshotPublisher` | 所有租户（角色绑定的 `tenant == null`，§5.2） |
-| 租户 | `Tenant(tenantId)` | 该租户自己的策略与绑定 | 本阶段只有 `SnapshotPublisher`（以及 `--partition=by-owner` 的转换） | 只对该租户的主体 |
+| 平台 | `Platform` | 平台策略（含共享策略库）、`Anyone` 绑定（7.x 全局策略）、主体绑定、break-glass 绑定、内置的黑名单规则（编译时注入，§4.7）；没有角色绑定（`BND-3`） | 转换工具（`cosec-migrate publish`）；控制面（RFC 0007） | 所有租户 |
+| 平台（按应用） | `App(appId)` | 该应用的 `Catalog`、由应用权限转换来的权限策略、该应用的角色绑定（7.x 的角色授予）；只有角色绑定（`BND-3`） | 转换工具；控制面 | 所有租户（角色绑定的 `tenant == null`，§5.2） |
+| 租户 | `Tenant(tenantId)` | 该租户自己的策略与绑定 | 控制面（以及 `--partition by-owner` 的转换） | 只对该租户的主体 |
 
 **边界**：
 
 - 租户层的绑定只能指向本租户或平台层的策略；平台层的绑定只能指向平台层的策略。一个租户的数据因此不可能影响另一个租户的主体，
   这是"租户隔离"在模型里的落点（RFC 0001 §3.2）。编译时检查，违反即编译错误。
 - 租户层不能削弱平台层：组合是 deny-first，平台层的 DENY 对每个租户都有效，租户层只能再加 DENY 或 ALLOW。平台层"必须包住租户层的
-  ALLOW"（边界策略）在第 6 阶段。
+  ALLOW"是平台边界（RFC 0007 §7.6，`BDY-1`）。
 - 平台租户 `(platform)` 自己也有一份 `Tenant((platform))` 文档，放平台管理员自己的策略。不要把它与平台层混淆：平台层对所有租户生效，
   平台租户的文档只对平台租户的主体生效。
-- 主体评估时只读**自己租户**的租户文档。跨租户管理（平台管理员操作某个租户的资源）是第 6 阶段控制面的问题，本阶段不支持，与 7.x 相同：
-  7.x 也只按主体自己的 `context.tenant` 评估。
+- 主体评估时只读**自己租户**的租户文档，与 7.x 相同：7.x 也只按主体自己的 `context.tenant` 评估。跨租户管理（平台管理员操作某个租户的文档）
+  属于控制面（RFC 0007 §7.2，`TNT-3`）。
 
 ### 4.4 附加：主体直接引用的策略
 
@@ -279,15 +267,15 @@ Redis 里的文档编译失败时按 RFC 0003 §4.4 F4 处理（读到它的请�
   非全局策略放进平台层并标为可附加（§5.2），所以转换后的语义与 7.x 相同：任何主体都能附加任何策略。由应用权限转换来的权限策略
   不可附加：7.x 里权限 id 也不是策略 id，主体没法直接引用它们。
 - 附加的策略作用域是 `(app = *, space = *)`，与 7.x 主体层相同（主体策略对任何应用、任何空间的请求都参与评估）。
-- **缺失**：附加了找不到（或不可附加）的策略时，评估结果是 `Indeterminate(MissingPolicies)`，除非某条 DENY 已经命中（§6.1）。7.x 是
+- **只能附加可附加的策略**（`BND-2`，改动 C5）。**缺失**：附加了找不到（或不可附加）的策略时，评估结果是 `Indeterminate(MissingPolicies)`，除非某条 DENY 已经命中（§6.1）。7.x 是
   到达主体层时抛 `MissingPolicyException`（D2）。差别只在"另一层有 DENY 命中"的情形，属于改动 C1b。
-- **两层同名（PR-2 第一轮审查，2026-10-26）**：租户文档与平台层定义了同一个策略 id 时，附加和租户层绑定都不解析它，评估结果是
+- **两层同名**：租户文档与平台层定义了同一个策略 id 时，附加和租户层绑定都不解析它，评估结果是
   `Indeterminate(AmbiguousPolicy)`，除非某条 DENY 已经命中（RFC 0007 §3.1 N2、Q15）。租户层优先会让租户定义一条同名策略，使 token 附加的
   平台 DENY 失效。在 PR-4 能比较编译结果之前，任何同名都按歧义处理。同一轮审查还让引擎在编译文档时拒绝：break-glass 绑定的主体不是平台
   租户的主体（§4.8）；租户文档绑定其他租户的主体或角色；应用文档的绑定作用于其他应用。这些绑定永远不会成为候选，写在那里的 DENY 会悄悄失效。
 
-快照里的 `Principal` 绑定只用于数量很少、需要由策略管理员（而不是 token 签发方）控制的主体：break-glass root（§4.8）、服务账号。
-转换工具只为 root 生成这种绑定。每个文档的主体绑定数设一个上限（默认 1,000，Q2），超过即编译错误，防止有人把用户级数据塞进快照。
+快照里的 `Principal` 绑定只用于数量很少、需要由策略管理员（而不是 token 签发方）控制的主体：break-glass（§4.8）、服务账号。
+转换工具不生成这种绑定。每个文档的主体绑定数设一个上限（1,000，Q2，`PolicyDocumentCompiler.DEFAULT_PRINCIPAL_BINDING_LIMIT`），超过即编译错误，防止有人把用户级数据塞进快照。
 
 ### 4.5 成员关系
 
@@ -299,65 +287,64 @@ Redis 里的文档编译失败时按 RFC 0003 §4.4 F4 处理（读到它的请�
 |---|---|---|
 | `roles: ["admin", "editor@team-a"]` | 裸角色只在默认空间生效；`role@space` 只在该空间生效；格式不对的（空角色、空空间、多于一个 `@`）哪里都不生效（`RoleScope`） | `roles = {"": [admin], "team-a": [editor]}`；格式不对的进 `malformed` |
 | `policies: ["p1"]` | 主体层的策略 | `attachments = [p1]` |
-| `tenantId` | 主体的租户 | `Subject.tenant` |
+| `tenantId` | 主体的租户 | 主体的租户（缺失是默认租户 `(0)`，规则见下） |
 | （新增）`cosec.membership: "provider"` | — | 声明里没有成员关系，必须问 `MembershipProvider`（§4.5.2） |
 
 **不需要重新签发 token**：解析规则与 `RoleScope.parse` 完全相同，同一份 token 在 7.x 与 8.0 中得到同样的角色作用域。这是选择沿用列表格式、
 而不是 RFC 0001 示例里的对象格式的主要理由（Q12）。
 
-**token 体积阈值**：CoSec 自己的签发方（[`JwtTokenConverter`](../../jwt/src/main/kotlin/me/ahoo/cosec/jwt/JwtTokenConverter.kt)）
-在 `roles` 与 `policies` 序列化后超过 `cosec.jwt.membership-claim-limit`（默认 4 KB，RFC 0001 §7.1）时，不写这两个声明，改写
-`cosec.membership: "provider"`。第三方签发方可以照做。
+**租户声明**（`IDN-11`）：缺失是默认租户 `(0)`；空字符串让令牌无效（401 `token-invalid`），因为读成"没有租户"会把主体连同令牌的角色放进默认租户。
+令牌的租户声明与 API Key 的租户必须能作为租户文档的 key（`SnapshotKey.Tenant` 的规则：非空白、不是 `*`、不含 `:` 与控制字符、至多 128 个字符），否则凭据无效：
+令牌 401，在管道与刷新的每条验证路径上一样；API Key 记录读取失败（503），配置的 key 使启动失败（`ApiKey` 的构造检查）。每个入口用同一条规则，CoSec 的签发方不签发这样的令牌。
 
-**撤销延迟**：等于 access token 的寿命。默认 10 分钟（[`JwtProperties`](../../spring-boot-starter/src/main/kotlin/me/ahoo/cosec/spring/boot/jwt/JwtProperties.kt)），
-满足 RFC 0001 §7.1 的"不超过 15 分钟"。`wiki/integration/authentication.md` 和 `wiki/operations/configuration.md` 写明这个上限。
+**token 体积阈值**：CoSec 自己的签发方 `JwtTokenConverter`（`cosec-jwt`）可以设一个 `membershipClaimLimit`：`roles` 与 `policies` 序列化后超过它时，
+不写这两个声明，改写 `cosec.membership: "provider"`。默认不设上限（`null`，从不搬走声明）；4 KB 是建议值（`DEFAULT_MEMBERSHIP_CLAIM_LIMIT`，RFC 0001 §7.1），
+只应与一个认识这些成员关系的 `MembershipProvider` 一起设置，否则带标记的令牌的请求失败即拒绝（503）。starter 装配的签发方不设上限。第三方签发方可以照做。
+
+**撤销延迟**：等于 access token 的寿命。默认 10 分钟（`cosec.jwt.token-validity.access`），满足 RFC 0001 §7.1 的"不超过 15 分钟"。
+`wiki/integration/authentication.md` 和 `wiki/operations/configuration.md` 写明这个上限。
 
 #### 4.5.2 `MembershipProvider`
 
 ```kotlin
-/** SPI。成员关系变化频繁、需要即时撤销，或 token 装不下时使用。 */
-interface MembershipProvider {
-    /** 不阻塞，不同步抛出。主体不存在时以 Memberships(PROVIDER, emptyMap(), emptyList()) 完成；查询失败时异常完成。 */
-    fun memberships(tenant: TenantId, principal: PrincipalId): CompletableFuture<Memberships>
+/** SPI（cosec-spi）。成员关系变化频繁、需要即时撤销，或 token 装不下时使用；每个 API key 也经它（RFC 0009 §4.2）。 */
+fun interface MembershipProvider {
+    /** 不阻塞调用线程。Known(memberships) 或 Unknown（未知主体，与"认识但没有成员关系"不同）；查询失败时抛出。 */
+    suspend fun memberships(tenant: TenantId, principal: PrincipalId): MembershipAnswer
 }
 ```
 
-- **何时调用**：只在 token 带 `cosec.membership: "provider"` 时调用；声明和 provider 不混用（一个主体的成员关系只有一个来源，否则撤销时
-  要想清楚"哪个来源说了算"）。
-- **失败即拒绝**：标记为 provider 而没有配置 provider，或 provider 失败、超时（`cosec.authorization.membership.timeout`，默认 500 ms），
-  请求得到 `Indeterminate(MembershipUnavailable)` → 500（第 5 阶段 503）。不退回"没有角色"：没有角色只会让 ALLOW 不命中，但同样会让
-  `inRole` DENY 不命中，那是放行方向。
-- **缓存**：本阶段只提供 SPI 和一个内存实现（测试与本地开发）。基于 CoCache 的实现（按 `(tenant, principal)` 缓存，带 TTL，变更事件到达时
-  失效，撤销延迟 = TTL）在第 5 阶段随 `cosec-store-redis` 一起提供（RFC 0001 §4）。理由：7.x 没有任何用户在用 provider，它不在门槛 A 的
-  比较之内，先把契约定下来即可（Q14）。
-- 返回 `CompletableFuture` 而不是 `suspend`，理由同 RFC 0003 Q10；第 5 阶段在 `cosec-runtime` 里加挂起包装。
+- **何时调用**：token 带 `cosec.membership: "provider"` 时，以及每个 API key；声明和 provider 不混用（一个主体的成员关系只有一个来源，否则撤销时
+  要想清楚"哪个来源说了算"）：带标记又带 `roles` 或 `policies` 声明的 token 失败即拒绝（`MEM-1`）。
+- **失败即拒绝**（`MEM-2`）：标记为 provider 而没有配置 provider，或 provider 失败、超时（时限是 `cosec.pipeline.timeout` 的 10 %，`StageBudgets.membership`），
+  请求得到 `Indeterminate(MembershipUnavailable)` → 503。不退回 token 声明或"没有角色"：没有角色只会让 ALLOW 不命中，但同样会让
+  `inRole` DENY 不命中，那是放行方向。未知主体与停用的主体，凭据被拒绝（RFC 0009 §4.2，`IDN-3`）。
+- **实现**：`cosec-spi` 带一个内存实现（测试与本地开发）；`cosec-cocache` 的 `CoCacheMembershipProvider` 按 `(tenant, principal)` 缓存，带 TTL，
+  变更时失效，撤销延迟 = TTL。管道经 `cosec-runtime` 的 `MembershipResolver` 调用它，由它执行失败即拒绝的契约。
+- `suspend`，与数据面的每个 SPI 一样（RFC 0006 Q11）。
 
 #### 4.5.3 按主体吊销
 
-增加 `TokenRevoker.revokeSubject(tenant, principal, issuedBefore = now)`：在吊销表里写一条 `(tenant, principal) → issuedBefore`，
-`RevocableTokenVerifier` 拒绝 `iat < issuedBefore` 的 token。条目保留到 refresh token 的最长寿命（与现在按 token 吊销的 TTL 规则相同）。
-吊销检查的降级行为不变（AGENTS.md 记录的两个例外之一）。这是 RFC 0001 §7.1"紧急撤销"依赖的手段（§3 I17，Q13）。
+`TokenRevoker.revokeSubject(tenant, principal, issuedBefore = now)`（挂起函数）在吊销表里写一条 `(tenant, principal) → issuedBefore`。
+吊销的判断只有一处，`TokenRevocation`（`cosec-runtime`），管道、刷新与登出共用：拒绝 `iat` 早于 `issuedBefore`（再加上时钟偏差
+`cosec.authentication.revocation.skew`）的 token，管道与刷新用同一个偏差，所以管道拒绝的 token 不会被刷新（`MEM-4`）。条目保留到 refresh token
+的最长寿命。一次吊销让每个实例本地的"未吊销"答案立即失效；错过失效通知的实例至多保留 30 秒（`IDN-26`）。这是 RFC 0001 §7.1"紧急撤销"依赖的手段
+（§3 I17，Q13）。
 
-> **实现说明（2026-11-02，#1188）**：CoCache 6.9 起，没有加载器的缓存读失败默认抛出，所以降级读改由 CoSec 在两个吊销缓存上显式设为
-> `read-failure: degrade`；customizer 或属性仍可改为 `throw`，吊销检查随之 fail closed（503）。降级读不再缓存"未吊销"，Redis 恢复后吊销立即生效。
->
-> **实现说明（2026-11-08，#1203，CoCache 8.0.0）**：两个吊销表是 CoCache 8 的 `Store`，读失败按 `unknown-read: absent` 读作"没有吊销"（仍是 `PIP-7` 文档化的例外），但只在 Redis 读失败时：CoCache 6 写的值（包括缓存缺失标记）抛出格式错误，答 503，从不读成"没有吊销"（`CoCache6ValuesTest`）。吊销表的 `read-timeout` 固定为命令超时，`cocache.defaults.store.read-timeout` 一类的全局默认值不能把它缩短，否则更多的读会超时并读作"没有吊销"。
-
-> **实现说明（2026-11-14，#1321，第 2 轮审查后端与登录组的 H1、L5）**：取代上面两条关于 `read-failure: degrade` 与 `unknown-read: absent` 的说明，以及本节的
-> `RevocableTokenVerifier`。吊销的判断只有一处，`TokenRevocation`（`cosec-runtime`），管道、刷新与登出共用，拒绝 `iat < issuedBefore` 的 token。两个吊销表的
-> `unknown-read` 锁定为 `throw`：`RevocationReader` 读不到时抛出 `RevocationUnavailableException`，从不回答“未吊销”。只有 `TokenAuthenticator` 验证请求令牌时放行并计数
-> （`cosec.revocation.unchecked`，`PIP-7`；`cosec.authentication.revocation.fail-closed=true` 改为 503），签发令牌的刷新失败（`IDN-14`）。`TokenVerifier` 是纯计算；
-> `TokenStore` 只剩写入并改为挂起，`TokenRevoker` 是挂起函数。刷新槽必须是与访问令牌同时签发的刷新令牌（`IDN-13` 双向）。
+**读不到吊销表时**：两个吊销表是 CoCache 8 的 `Store`，读失败一律抛出：`RevocationReader` 抛出 `RevocationUnavailableException`，从不回答"未吊销"。
+只有 `TokenAuthenticator` 验证请求令牌时放行并计数（`cosec.revocation.unchecked`，`PIP-7`；`cosec.authentication.revocation.fail-closed=true` 改为 503），
+这是 AGENTS.md 记录的失败关闭的例外之一；凭旧令牌签发新令牌的刷新与租户切换失败（`IDN-14`）。读吊销表的时限与其余细节见 RFC 0009 §11.2。
+`TokenVerifier` 是纯计算；`TokenStore` 只剩写入、是挂起函数；刷新槽必须是与访问令牌同时签发的刷新令牌（`IDN-13`）。
 
 ### 4.6 `ScopeResolver`
 
 ```kotlin
-/** model/ 中的纯函数（§4.1 说明了为什么放在 model）。 */
+/** model 中的纯函数（§4.1 说明了为什么放在 model）。 */
 object ScopeResolver {
-    fun resolve(subject: Subject, declared: DeclaredScope, host: HostScope): ScopeResolution
+    fun resolve(subject: ScopeSubject, space: String, host: HostScope): ScopeResolution
 }
-class DeclaredScope(val app: String, val space: String)            // 来自 CoSec-App-Id / CoSec-Space-Id
-class HostScope(val app: AppId?)                                   // 宿主配置的应用；Gateway 来自路由
+class ScopeSubject(val tenant: TenantId, val authenticated: Boolean, val memberships: Memberships, val app: String? = null)   // app：凭证声明的 App
+class HostScope(val app: AppId?)                                   // 宿主的 App：Gateway 来自路由，否则来自配置
 sealed interface ScopeResolution {
     class Resolved(val scope: Scope) : ScopeResolution
     class Rejected(val reason: Reason) : ScopeResolution { enum class Reason { APP_MISMATCH, SPACE_NOT_MEMBER } }
@@ -368,47 +355,35 @@ sealed interface ScopeResolution {
 
 | 维度 | 来源 | 规则 |
 |---|---|---|
-| 租户 | 凭证 | `subject.tenant`；匿名主体是默认租户 `(0)`。客户端无法声明，与 7.x 相同 |
-| 应用 | 宿主优先 | 宿主配置了应用（`cosec.authorization.scope.app-id`，Gateway 由路由元数据 `cosec-app-id` 给出）时：声明为空或与之相同 → 宿主的应用，`appSource = HOST`；不同 → `Rejected(APP_MISMATCH)`。宿主没有配置时：用声明的值，`appSource = DECLARED`，与 7.x 相同 |
-| 空间 | 声明，由成员关系确认 | 声明为空 → 默认空间。否则主体在该空间有至少一个角色（`memberships.roles[space]` 非空）→ 该空间；没有 → `Rejected(SPACE_NOT_MEMBER)` |
+| 租户 | 凭证 | 主体的租户；匿名主体是默认租户 `(0)`。客户端无法声明，与 7.x 相同 |
+| 应用 | 宿主与凭证 | token 与 API key 用 `aud` 声明所属 App（RFC 0012 §3.5，`SCP-11`）。宿主有 App（Gateway 由路由元数据 `cosec-app-id` 给出，先于 `cosec.authorization.scope.app-id`；`SCP-2`）时，只接受声明了这个 App 的凭证，声明别的或未声明 → `Rejected(APP_MISMATCH)`；宿主没有 App 时取凭证的 App，凭证未声明则不在任何 App、不读 App 文档。匿名请求没有凭证，App 取宿主的。请求不能声明 App：不读 `CoSec-App-Id` |
+| 空间 | 声明，由成员关系确认 | `CoSec-Space-Id` 为空 → 默认空间。否则主体在该空间有至少一个角色（`memberships.roles[space]` 非空）→ 该空间；没有 → `Rejected(SPACE_NOT_MEMBER)`（`SCP-1`）。`*` 与 `(` 开头的保留空间 id 一律 `SPACE_NOT_MEMBER`（`SCP-9`） |
 
-- **为什么应用默认仍取声明值**：7.x 的应用来自 Header，服务内嵌和网关部署都依赖它；改成必须配置会让每个现有部署在切换时失败。宿主配置
-  是可选的加固：服务知道自己是哪个应用，网关知道路由属于哪个应用，客户端声明的值没有理由比它们更可信。`wiki/guide/security-model.md`
-  的"信任边界"一节建议生产环境配置它（Q11）。配置后多出的差异（无 Header 的请求现在能得到该应用的角色授予）不在门槛 A 的数据里，
-  因为回放按 7.x 的配置运行（§9.3）。
 - **为什么声明了非成员空间要拒绝，而不是退回默认空间**：后端自己也读 `CoSec-Space-Id`。如果 CoSec 把请求当作默认空间评估、放行，后端
   却在客户端声明的空间里执行，就是一个绕过：主体用默认空间的角色操作了它不属于的空间。只有拒绝是安全的，所以不提供开关。这是改动 C3。
 - 应用不要求成员关系：7.x 没有"应用成员"的概念，主体在应用里有什么权限完全由绑定决定。
-- **检查顺序与匿名主体（PR-1，2026-10-25）**：先检查应用，再检查空间，所以既不一致又声明了非成员空间的请求总是 `APP_MISMATCH`。两者都是拒绝，
-  只有原因不同。未认证的主体一律是默认租户 `(0)`，并且不看传入的成员关系（没有角色，见 §4.2）：7.x 的匿名上下文
-  （`SimpleSecurityContext.anonymous()`、`SimpleTenantPrincipal.ANONYMOUS`）本来就在默认租户，所以与 7.x 相同。`ScopeResolverTest` 守护这两条。
-- **声明的应用必须是合法的 id（第一轮审查，2026-10-26）**：非空的声明应用若为空白、为 `*`、含 `:`（`SnapshotKey.App` 的 key 分隔符）或超过 128 个字符，
-  无论宿主是否配置了应用，都按 `APP_MISMATCH` 拒绝，而不是之后在读文档时变成 500。`ScopeSubject.tenant` 不能为空白（适配层把没有租户的凭证映射为
-  `(0)`），`HostScope.app` 必须是合法的应用 id。
-- `Rejected` 的映射：`Deny(StatementRef.ScopeRejected(reason))`，匿名主体 401、已认证主体 403，经 `SecurityPipeline` 现有的映射。
-  2026-10-26 修订（RFC 0006 Q27）：响应体是 problem+json，匿名主体（包括带 `CoSec-Space-Id` 的匿名请求）得到 `unauthorized`（凭证被拒绝时是 `token-*`），
-  已认证主体得到 `scope-rejected`；`APP_MISMATCH` 与 `SPACE_NOT_MEMBER` 的区别只进审计（RFC 0006 §6.1）。
-
-> **实现说明（2026-11-03，#1194，RC 修复批次 C）**：
-> - **路由 app（SCP-2，RC1-6）。** 路由的 `cosec-app-id` 是宿主 app，先于 `cosec.authorization.scope.app-id`，按本节的设计实现；客户端声明的 `CoSec-App-Id` 只在两者都没有时生效。适配器只传原值，由管道判断。不是字符串，或不符合 app id 规则时，请求是 500，由管道判定，日志记录路由 id 与值的类型。
-> - **app id 规则（SCP-7，RC1-15）。**
->   - `ScopeResolver.isValidAppId` 也拒绝控制字符，一次扫描完成；租户 id 用同一规则。
->   - `SnapshotKey.App` 只接受合法的 app id。
->   - 控制面校验拒绝文档里命名非法 app 的绑定：`V2`，400，检查整个候选。
->   - 早期版本写下的这类 app，在存量数据里一律跳过：引用、检查、授出分析、反向引用集合、app 列表、变更记录。
->   - 读不出的变更记录答 `409 change-unreadable`，只对能读平台文档的平台主体；对其他人和不存在的变更一样。
-> - **`CoSec-*` 参数（SCP-4，RC1-16）。** 空白值与非空值并存是二义的，答 400；只有全部空白才算没发送。空白只指 ASCII 空白，Unicode 空格算一个值。
+- **检查顺序与匿名主体**：先检查应用，再检查空间，所以两者都不成立的请求总是 `APP_MISMATCH`（`SCP-8`）。两者都是拒绝，只有原因不同。
+  未认证的主体一律是默认租户 `(0)`，并且不看传入的成员关系（没有角色，见 §4.2；`SCP-6`）：7.x 的匿名上下文本来就在默认租户，所以与 7.x 相同。
+- **凭证声明的应用必须是合法的 id**（`SCP-10`）：声明的 App 若为空白、为 `*`、含 `:`（`SnapshotKey.App` 的 key 分隔符）、`/`（`SCP-13`）或控制字符，或超过 128 个字符
+  （租户 id 的同一条规则，`ScopeResolver.isValidAppId`），无论宿主是否有 App，都按 `APP_MISMATCH` 拒绝，而不是之后在读文档时变成 500。
+  控制面同样不接受数据面读不到的 App：存储的记录里出现这样的 App 是格式错误，读它的地方失败即拒绝，不跳过（`SCP-10`，RFC 0007）。
+  `ScopeSubject.tenant` 不能为空白（适配层把没有租户的凭证映射为 `(0)`），`HostScope.app` 必须是合法的应用 id。路由的 `cosec-app-id` 不是字符串或不是合法的 App id 时，
+  请求是 500，日志记录路由 id 与值的类型，从不让请求变成没有宿主 App（`SCP-2`）。
+- **`CoSec-*` 参数**（`SCP-4`）：只从请求头读，不读查询串；同一参数的多个值不一致是二义的，答 400，空白值与非空值并存也算不一致；只有全部空白才算没发送，
+  空白只指 ASCII 空白。
+- `Rejected` 的映射：`Deny(StatementRef.ScopeRejected(reason))`。响应体是 problem+json：匿名主体（包括带 `CoSec-Space-Id` 的匿名请求，`SCP-3`）得到 401 `unauthorized`
+  （凭证被拒绝时是 `token-*`），已认证主体得到 403 `scope-rejected`；`APP_MISMATCH` 与 `SPACE_NOT_MEMBER` 的区别只进审计（RFC 0006 §6.1）。
 
 ### 4.7 黑名单：规则加名单
 
-| 部分 | 7.x | 8.0（本阶段） |
+| 部分 | 7.x | 8.0 |
 |---|---|---|
-| 名单 | 用户实现的 [`BlacklistChecker`](../../core/src/main/kotlin/me/ahoo/cosec/blacklist/BlacklistChecker.kt)（`Mono<Boolean>`，CoSec 自身没有实现），在 `SimpleAuthorization` 里最先调用 | 不变：仍最先调用，结果写进 `environment.blocked`（RFC 0002 已经这样做）。第 5 阶段改为 `AttributeProvider`，并拆成主体、IP、设备三个集合 |
-| 规则 | `SimpleAuthorization` 里的一行 `if`，先于 root | 平台层的一条 DENY 语句 `cosec:blacklist#0`：动作 `*`、条件"`environment.blocked` 为真"。**编译时注入**每个 `Platform` 组合，不存进 Redis 的文档，所以不可能被误删；排在所有候选语句的最前面（§6.3） |
-| 出错 | 检查器的错误信号 → 500 | 检查器失败时 `environment.blocked` 为"未知"，这条 DENY 的匹配结果是 `ERROR`：没有别的 DENY 命中就是 `Indeterminate` → 500；有别的 DENY 命中就是 403（改动 C1b） |
+| 名单 | 用户实现的 `BlacklistChecker`（`Mono<Boolean>`，CoSec 自身没有实现），在 `SimpleAuthorization` 里最先调用 | 名单来源是窄 SPI `BlacklistSource`，按主体、IP、设备三个集合查询（RFC 0006 §5.4.4），结果写进 `environment.blocked` |
+| 规则 | `SimpleAuthorization` 里的一行 `if`，先于 root | 平台层的内置策略 `cosec:blacklist`：一条 DENY 语句，动作 `*`、条件"`environment.blocked` 为真"。**编译时注入**每个 `Platform` 组合，不存进 Redis 的文档，所以不可能被误删；排在所有候选语句的最前面（§6.3） |
+| 出错 | 检查器的错误信号 → 500 | 名单读不出时从不算"未拉黑"：没有别的 DENY 命中就是 `Indeterminate` → 503；有别的 DENY 命中就是 403（`BLK-2`，改动 C1b） |
 
 被拉黑的请求在 7.x 中不读任何策略。8.0 中这条 DENY 必然命中，而 DENY 命中优先于不可用的输入（§6.1），所以 Pipeline 对被拉黑的请求只需要
-常驻的 `Platform` 文档，不加载 `App`、`Tenant`：I/O 与 7.x 相同，租户文档读失败也不影响结果。
+常驻的 `Platform` 文档，不加载 `App`、`Tenant`：I/O 与 7.x 相同，租户文档读失败也不影响结果（`BLK-1`）。
 
 ### 4.8 root：break-glass 绑定
 
@@ -416,19 +391,22 @@ sealed interface ScopeResolution {
 被判定为 root 的主体跳过全部策略，但不跳过黑名单。8.0：
 
 - 平台层内置一条策略 `cosec:root`：一条 ALLOW 语句，动作 `*`，条件恒真。
-- root 是一条 `Principal((platform), <id>) → cosec:root` 的绑定，`breakGlass = true`，**必须**有 `expiresAt`。转换工具在 7.x 部署开启了
-  root 时生成它，过期时间由转换参数 `--root-expires-at` 给出，不给就拒绝转换（§8.4）。之后由 `SnapshotPublisher.setBinding` 续期或删除。
-- 它受全部 DENY 约束（§3 I8，改动 C2）。理由：deny-first 因此对所有主体无条件成立，性质测试 P1 不再需要排除 root（RFC 0002 §8.4 P1
+- root 是一条 `Principal((platform), <id>) → cosec:root` 的绑定，`breakGlass = true`，**必须**有 `expiresAt`，只在平台文档里、只绑定主体（`BRK-2`），
+  且只对平台租户的主体适用（`BRK-4`）。它只经控制面创建：两个人、有限的期限、先写下 `REQUIRED` 审计（RFC 0007 §8，`BRK-3`）。转换工具不写 break-glass 绑定，
+  7.x 的 root 不转换（§8.4）。
+- 它受全部 DENY 约束（§3 I8，改动 C2，`BRK-1`）。理由：deny-first 因此对所有主体无条件成立，性质测试 P1 不再需要排除 root（RFC 0002 §8.4 P1
   现在要排除它）；一条命中的 DENY 是策略作者写下的明确意图，break-glass 用来绕过缺失的 ALLOW，不是绕过 DENY。真正需要绕过某条 DENY
   时，平台管理员改那条 DENY，修改本身留下记录。
-- `RootPrincipalMatcher`、`cosec.authorization.root-enabled`、`CoSecPrincipal.ROOT_ID`/`isRoot`、`cosec.root` 系统属性在 PR-8 删除。
-- 使用 root 绑定做出的决策：本阶段写一条 WARN 日志，审计事件的 `source` 指向这条绑定；第 5 阶段改为 `REQUIRED` 审计（§3 I9）。
+- break-glass 只给 CoSec 自己验证过的令牌的主体，按来源判断（RFC 0009 §4.2，`BRK-8`）：API key 与其他认证器接受的主体都没有。
+- `RootPrincipalMatcher`、`cosec.authorization.root-enabled`、`CoSecPrincipal.ROOT_ID`/`isRoot`、`cosec.root` 系统属性已删除（PR-8，并入 RFC 0008 的切换 PR）。
+- 使用 break-glass 绑定做出的决策需要 `REQUIRED` 审计（RFC 0006 §9.4.3，§3 I9）。
 
 ### 4.9 `Catalog`
 
 7.x 的 `AppPermission` 同时承担两件事：权限目录（分组、名称、描述，供 UI 和生成器使用）和评估（应用条件、权限语句）。8.0 拆开：
 
-- `Catalog(appId)`：分组、权限 id、名称、描述、`spaced` 标志。不参与评估（`PermissionGroup.spaced` 在 7.x 里本来就不参与评估）。
+- `Catalog(appId)`：分组、权限 id、名称、描述、`spaced` 标志。不参与评估（`PermissionGroup.spaced` 在 7.x 里本来就不参与评估）。目录条目写了 `action`
+  就是简写权限，展开成权限策略（RFC 0012 §4）。
 - 评估的部分变成 `App(appId)` 文档里的权限策略（§5.1）。
 
 ---
