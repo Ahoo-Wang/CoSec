@@ -220,6 +220,36 @@ describe('a signed-in session against a real host', () => {
   );
 });
 
+// DR1-H-2: a login may answer members besides the pair, and the refresh and
+// logout routes accept exactly the pair: only the pair is sent back.
+describe('a sign-in answer with members besides the pair', () => {
+  const withExtras = <T extends object>(pair: T) => ({
+    ...pair,
+    expiresIn: 600,
+    user: { name: 'alice' },
+  });
+
+  it('refreshes against a real host', async () => {
+    const { client, tokens } = createHostClient();
+    const pair = await loginExpired('alice');
+    tokens.signIn(withExtras(pair));
+    const wire = recordWire();
+    expect((await client.get('/orders/1')).status).toBe(200);
+    expect(wire).toEqual(['/auth/refresh 200', '/orders/1 200']);
+    expect(tokens.get()?.token.accessToken).not.toBe(pair.accessToken);
+  });
+
+  it('logs out against a real host, which ends the session', async () => {
+    const { configurer, tokens } = createHostClient();
+    const pair = await login('alice');
+    tokens.signIn(withExtras(pair));
+    const wire = recordWire();
+    await configurer.tokenManager!.logout();
+    expect(wire).toEqual(['/auth/logout 204']);
+    expect((await refreshAt(pair)).status).toBe(401);
+  });
+});
+
 describe('logout against a real host', () => {
   it('ends the session at the host, then here', async () => {
     const { client, configurer, tokens } = createHostClient();
