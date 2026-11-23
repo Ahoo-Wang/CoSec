@@ -119,7 +119,7 @@ internal class ApprovalRules(
      * trust root is the trust root's.
      */
     fun approvalRefusal(operator: Operator, change: ChangeRequest): String? = when {
-        workload(operator) -> "a workload's credential (an API key, a service) cannot approve: an approval is a person's"
+        workload(operator) -> WORKLOAD_REFUSAL
 
         // Publishing would not count it: its revocation could not be checked (review D3).
         operator.security?.principal?.credential?.id == null ->
@@ -230,6 +230,9 @@ internal class ApprovalRules(
     private companion object {
         /** The id of the credential a recorded approver is checked with again: not a credential anyone presented. */
         const val RECORDED_APPROVAL = "recorded-approval"
+
+        /** Why a workload's credential does not approve, as the refusal and the log say. */
+        const val WORKLOAD_REFUSAL = "a workload's credential (an API key, a service) cannot approve: an approval is a person's"
         private val RECORDED_METHOD = Identity.Method(RECORDED_APPROVAL)
     }
 }

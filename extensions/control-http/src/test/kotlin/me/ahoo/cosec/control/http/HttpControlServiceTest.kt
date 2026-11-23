@@ -158,7 +158,7 @@ class HttpControlServiceTest {
         identity.subject.assert().isEqualTo("svc-iam")
         identity.app.assert().isEqualTo(HttpControlService.CONTROL_APP)
         identity.roles.assert().containsExactly("projector")
-        identity.credential.method.assert().isEqualTo(Identity.Method.API_KEY)
+        identity.credential.method.assert().isEqualTo(Identity.Method.SERVICE)
         identity.credential.id.assert().isEqualTo("service:svc-iam")
         identity.issuedAt.assert().isAfterOrEqualTo(before.minusSeconds(1))
         checkNotNull(identity.credential.expiresAt).assert().isBefore(Instant.now().plus(Duration.ofMinutes(1)))

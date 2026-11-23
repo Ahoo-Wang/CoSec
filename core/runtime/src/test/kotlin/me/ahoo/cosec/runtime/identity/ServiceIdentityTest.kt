@@ -44,7 +44,8 @@ class ServiceIdentityTest {
         identity.credential.id.assert().isEqualTo("service:svc-iam")
         identity.credential.session.assert().isNull()
         identity.tenant.assert().isEqualTo(TenantId.PLATFORM.value)
-        IdentityCodec.decode(IdentityCodec.encode(identity)).credential.method.assert().isEqualTo(Identity.Method.SERVICE)
+        val header = IdentityCodec.encode(identity)
+        IdentityCodec.decode(header).credential.method.assert().isEqualTo(Identity.Method.SERVICE)
     }
 
     @Test
