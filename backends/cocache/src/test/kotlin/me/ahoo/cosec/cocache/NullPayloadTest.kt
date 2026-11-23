@@ -69,7 +69,6 @@ class NullPayloadTest {
         "resident documents" to ResidentDocumentsCodec,
         "instance index" to InstanceIndexCodec,
         "token family" to TokenFamilyCodec,
-        "memberships" to MembershipsCodec,
     )
 
     @Test

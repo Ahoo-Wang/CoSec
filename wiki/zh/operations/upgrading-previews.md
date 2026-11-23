@@ -35,6 +35,10 @@ description: "每个 8.0 预览版（alpha 与 beta）到下一个之间的变�
 - **服务器不报告对端地址的请求，其客户端地址读作取不到**（`PIP-17`，DR1-C-8）。受影响的：服务器不报告对端（例如监听 Unix 域套接字的 Reactor Netty）、且有语句或黑名单读 `environment.ip` 的主机。此前地址为空，读作不存在：按它的 DENY 不匹配，IP 黑名单也不被查询。现在它是 `unknown`，与可信代理写的 `unknown` 条目一样：这样的 DENY 与黑名单返回 `503`，三个适配器一致。在这样的主机前放一个写 `X-Forwarded-For` 的代理，并把该索引设为 `1` 或更大（[Web 集成](../integration/web.md)）；服务器报告对端的主机不受影响。
 - **生成的路由映射不再取决于最后是谁访问了 API 文档**（`RTE-4`，DR1-C-2）。受影响的：在 OpenAPI 文档没有写 `servers` 的宿主上，用 `cosecServiceGenerator/routes` 生成的路由映射。这时 springdoc 会在它缓存的文档里放一个自己的服务器，取自最近一次请求 API 文档的请求（含查询串），路由就生成在它的路径下。现在这个服务器被排除，路由位于应用的根路径。若曾在 `/v3/api-docs` 之类的路径下生成过路由映射，请重新生成；服务部署在宿主不会去掉的路径下时，在文档里写上 `servers`（[角色权限](../policies/role-permissions.md#generating-a-catalog-from-openapi)）。
 - **被取消的 `HttpControlService` 调用现在会结束它在宿主上的请求**（`CTL-82`，#1893）。受影响的：无需改动。经 `HttpControlService` 的调用所在的协程被取消时，调用会关闭它的 HTTP 交换，控制面宿主（WebFlux）随之取消该请求。此前，请求会留在宿主上，直到调用自己的超时（默认 30 秒）结束它。控制调用没有自己的期限，由你决定：包住调用的 `withTimeout`，或 `HttpControlService` 的 `timeout`（[在代码中修改策略](../integration/checks.md#changing-policies-from-your-code)）。
+- **成员关系由每个实例自己持有，从不放进 Redis**（`MEM-5`，DR1-D-2）。受影响的：有 `MembershipLoader` 的应用。此前每个实例都读写 `<s>:membership:*` 下的共享缓存，并把那里的任何东西读作加载器的回答，所以任何数据面 Redis 凭据都能借此授予角色。现在每个实例把它自己的加载器的回答放在自己的内存中，不从 Redis 读取任何东西：
+  - **行为。** 原来第二个实例的未命中是一次 Redis 读取，现在是一次加载器调用：N 个实例在一个寿命内对同一主体最多加载 N 次，请按此评估加载器的容量。`invalidate(tenant, principal)` 仍会经 Redis 的失效通道（`<s>:inv:membership`）在所有实例上丢弃该主体，这不需要任何键权限。
+  - **配置。** 寿命是 `cosec.authorization.membership.ttl`（一分钟，与之前相同）。任何 `cocache.caches.MembershipCache.*` 设置，尤其是它的 `ttl`，都会使启动失败并指出该属性：请迁移过去。成员关系占用堆的六十四分之一，见启动日志。
+  - **Redis。** `<s>:membership:*` 键不再被读写：所有实例都运行此版本后可以删除（`redis-cli --scan --pattern '<s>:membership:*' | xargs redis-cli del`），并从数据面的 ACL 中去掉 `~<s>:membership:*`（[谁可以写哪些 key](./storage.md#who-may-write-which-keys)）。新旧实例并存期间，旧实例的 `invalidate` 仍能到达新实例（同一通道、同样的帧）。
 
 ## 从 8.0.0-beta.6 升级 {#from-8-0-0-beta-6}
 

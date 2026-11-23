@@ -20,7 +20,6 @@ import io.mockk.mockk
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.runBlocking
-import me.ahoo.cocache.api.AsyncCache
 import me.ahoo.cocache.api.spi.CoherenceBackend
 import me.ahoo.cocache.core.memory.InMemoryBackend
 import me.ahoo.cocache.spring.boot.CoCacheAutoConfiguration
@@ -28,7 +27,6 @@ import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.api.audit.AuditEvent
 import me.ahoo.cosec.cocache.CoCacheMembershipProvider
-import me.ahoo.cosec.cocache.MembershipCache
 import me.ahoo.cosec.cocache.MembershipLoader
 import me.ahoo.cosec.cocache.snapshot.PolicySnapshotCache
 import me.ahoo.cosec.cocache.snapshot.RedisSnapshotDocumentStore
@@ -324,7 +322,7 @@ class StarterWiringTest {
         .withBean(CoherenceBackend::class.java, { InMemoryBackend() })
 
     @Test
-    fun `a membership loader is cached for every instance`() {
+    fun `a membership loader's answers are held by this instance, never in a shared cache`() {
         val loads = AtomicInteger()
         val loader = MembershipLoader { _, _ ->
             loads.incrementAndGet()
@@ -332,7 +330,8 @@ class StarterWiringTest {
         }
         membershipRunner.withBean(MembershipLoader::class.java, { loader }).run { context ->
             context.startupFailure.assert().isNull()
-            context.getBean(MembershipCache::class.java).assert().isNotNull()
+            context.getBeansOfType(me.ahoo.cocache.api.Cache::class.java).keys
+                .assert().doesNotContain(me.ahoo.cosec.cocache.CoSecCacheSpecs.MEMBERSHIP_CACHE_NAME)
             val provider = context.getBean(MembershipProvider::class.java)
             provider.assert().isInstanceOf(CoCacheMembershipProvider::class.java)
             runBlocking {
@@ -369,6 +368,7 @@ class StarterWiringTest {
         .withBean(CoherenceBackend::class.java, { InMemoryBackend() })
         .withBean(MembershipLoader::class.java, {
             MembershipLoader { _, principal ->
+                check(principal.value != "carol") { "The directory is down" }
                 val roles = if (principal.value == "alice") setOf(RoleId("clerk")) else emptySet()
                 MembershipAnswer.Known(
                     Memberships(Memberships.Source.PROVIDER, mapOf(SpaceId("") to roles), emptyList())
@@ -409,16 +409,11 @@ class StarterWiringTest {
     }
 
     @Test
-    fun `memberships that cannot be read make the request a 503`() {
-        val async = mockk<AsyncCache<String, Memberships>>()
-        every { async.get(any()) } returns
-            CompletableFuture.failedFuture<Memberships>(IllegalStateException("Redis is down"))
-        val failing = mockk<MembershipCache>()
-        every { failing.async() } returns async
-        cachedPipelineRunner.withBean(MembershipCache::class.java, { failing }).run { context ->
+    fun `memberships that cannot be loaded make the request a 503`() {
+        cachedPipelineRunner.run { context ->
             context.startupFailure.assert().isNull()
             published(context)
-            status(context, token(context, "alice", provider = true)).assert().isEqualTo(503)
+            status(context, token(context, "carol", provider = true)).assert().isEqualTo(503)
         }
     }
 

@@ -29,7 +29,6 @@ import me.ahoo.cocache.core.SetStoreSpec
 import me.ahoo.cocache.core.Spec
 import me.ahoo.cocache.core.StoreSpec
 import me.ahoo.cocache.core.memory.InMemoryBackend
-import me.ahoo.cocache.core.policy.InvalidateFailureMode
 import me.ahoo.cocache.core.policy.PolicyField
 import me.ahoo.cocache.core.policy.ReadFailureMode
 import me.ahoo.cocache.core.policy.UnknownReadMode
@@ -389,36 +388,5 @@ class CacheTtlPolicyTest {
                 factory.effective(it.name, PolicyField.UNKNOWN_READ).assert().describedAs(it.name).isEqualTo("throw")
             }
         }
-    }
-
-    /**
-     * RFC 0006 §5.5.2: the memberships cache expires by design, but never degrades a failed read into "no memberships",
-     * and it can never be made to live forever: a lost invalidation would then never apply.
-     */
-    @Test
-    fun membershipCacheExpiresButFailsClosed() {
-        val spec = CoSecCacheSpecs.membership(ttl = Duration.ofSeconds(5))
-        spec.externallySourced.assert().isTrue()
-        spec.policy.ttl.assert().isEqualTo(Duration.ofSeconds(5))
-        spec.policy.ttlJitter.assert().isEqualTo(Duration.ZERO)
-        spec.policy.readFailure.assert().isEqualTo(ReadFailureMode.THROW)
-        (spec.keyPrefix + spec.namespace).assert().isEqualTo("cosec:membership")
-
-        weakened { factory ->
-            factory.create(spec, CoSecCacheSpecs.locks(spec.name))
-            factory.runtime.policy(spec.name)!!.let {
-                it.ttl.assert().isEqualTo(CoSecCacheSpecs.DEFAULT_MEMBERSHIP_TTL)
-                it.ttlJitter.assert().isEqualTo(Duration.ZERO)
-                it.readFailure.assert().isEqualTo(ReadFailureMode.THROW)
-            }
-            factory.effective(spec.name, PolicyField.UNKNOWN_READ).assert().isEqualTo("throw")
-        }
-        CoSecCacheSpecs.STORE_OF_RECORD_CACHE_NAMES.assert().doesNotContain(CoSecCacheSpecs.MEMBERSHIP_CACHE_NAME)
-    }
-
-    /** Every membership read passes the provider's loader, so a failed invalidation is retried in the background. */
-    @Test
-    fun membershipCacheRetriesFailedInvalidations() {
-        CoSecCacheSpecs.membership().policy.invalidateFailure.assert().isEqualTo(InvalidateFailureMode.RETRY)
     }
 }

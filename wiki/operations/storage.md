@@ -64,14 +64,13 @@ revocation reads that miss the local copy times the command timeout. A "not revo
 The rest of the cache policy stays the application's, through customizers and `cocache.*` properties
 ([Precedence](./configuration.md#precedence) lists every field CoSec locks): on every cache the local cache's size and
 `expireAfterAccess`, and but for the snapshot store `local-max-age`; on every cache but the revocation tables
-`read-timeout`, after which a store of record's read fails closed; on the two revocation tables `absent-ttl`; on
-memberships `ttl` (never forever), `absent-ttl`, `degraded-local-max-age`, `lease-*`, `load-*` and `invalidate-failure`.
+`read-timeout`, after which a store of record's read fails closed; on the two revocation tables `absent-ttl`.
 None of these replaces what a cache holds, but some lengthen how long an instance acts on what it read. A longer
 `local-max-age` or `absent-ttl` on the revocation tables keeps a revoked token accepted that much longer
 when the revocation's invalidation message is lost (`cosec.authentication.revocation.cache.local-max-age`, 30 seconds, is the
-default bound). On memberships, a longer `ttl` keeps a removed role applied that long; so does a longer `local-max-age`
-on an instance that missed the invalidation, and a longer `degraded-local-max-age` for memberships an instance loaded
-while Redis could not store them, which only it holds and no invalidation reaches.
+default bound). Memberships are not a CoCache cache: each instance holds what its `MembershipLoader` answered in its
+own memory, for [`cosec.authorization.membership.ttl`](./configuration.md#authorization), and a longer one keeps a removed
+role applied that long on an instance an invalidation did not reach.
 
 ### Redis keys
 
@@ -102,7 +101,7 @@ contain `:` or `/`, so a key names one document only.
 | `<s>:token:revoked:<tokenId>` | `TokenRevoker` (logout), through `TokenStore.revoke`, which takes the token's `jti`: an application logs out through `TokenRevoker`, never through the store | `true` for a revoked token id; expires one second after the refresh token lifetime |
 | `<s>:token:family:<sid>` | login, refresh and logout | one session's token family: its principal, login time, end, current generation and whether it was revoked. One key per live session, written at login and at each refresh, a few hundred bytes; it expires at the session's end (`cosec.jwt.session.lifetime` after the login), and a revoked one stays, marked, until then. Read only on refresh and logout, never on a request |
 | `<s>:token:subject:revoked:<n>:<tenantId>:<principalId>` | `TokenStore.revokeSubject` | `issuedBefore` in epoch milliseconds; `<n>` is the length of `<tenantId>`; expires one second after the refresh token lifetime past `issuedBefore` |
-| `<s>:membership:<n>:<tenantId>:<principalId>` | `CoCacheMembershipProvider`, when the application registers one | a principal's memberships; expires (one minute by default) |
+| `<s>:inv:membership` (a channel, no key) | `CoCacheMembershipProvider.invalidate` | frames naming the principals whose memberships changed, which every instance drops from its own memory. No membership is stored in Redis (DR1-D-2): an 8.0 preview stored them under `<s>:membership:*`, which nothing reads now and which you may delete |
 | `<s>:api-key:<sha256>` | `RedisApiKeyStore` | one API key as JSON (`"format":3`), by the SHA-256 of the key; a key in the format before 8.0 is refused until `cosec-migrate api-keys` converts it, and one an 8.0 pre-release stored in another format until it is issued again |
 | `<s>:rate-limiter:<ruleId>:<bucket>` | the Redis rate limiter | a hash of one rule's bucket: the window it counts in and that window's and the previous window's counts; expires two windows after its last count. One key per bucket value: a rule keyed on what a client chooses, with a long window, is memory the client controls ([Rate limiting](../policies/rate-limiting.md#counting-and-backends)) |
 | `<s>:oauth:state:<state>` | social login | the OAuth `state` of a login in progress, as JustAuth keeps it (JustAuth's cache blocks: `cosec-social` writes it through a `StringRedisTemplate`); expires after 3 minutes |
@@ -149,13 +148,12 @@ decision inputs stay strict: they carry no such tolerance.
 | Instance status and its index (`shadow:status:*`) | `format: 1`, with `formatLevel` | ignored | the propagation of a revision cannot be read (`GET .../propagation`); publishing does not wait for it; no shadow window passes until it can be read (`CTL-10`) |
 | Session (`token:family:<id>`) | `format: 1` | ignored | the session ends: its refresh is refused and the user signs in again |
 | API key (`apikey:*`) | `format: 3` | refused | the key is refused |
-| Cached memberships | none (cache) | refused | a miss: loaded from the provider again |
 | Revocations, leases, rate-limit counters | none (scalar) | not applicable | as each says above |
 
 ### Redis requirements
 
 - **Persistence.** Redis holds the only copy of the documents, their revision history, the revocations, the sessions
-  (refresh token families), the API keys with `cosec.api-key.store=redis`, and the memberships and shadow reports of a
+  (refresh token families), the API keys with `cosec.api-key.store=redis`, and the shadow reports of a
   deployment. A Redis that restarts without persistence comes back empty: every document is gone and every request is
   `503` until someone publishes the platform document again (the history is gone with it); every revocation is gone, so
   a revoked token is accepted again until it expires (an access token lives `cosec.jwt.token-validity.access`, 10
@@ -235,7 +233,25 @@ decision inputs stay strict: they carry no such tolerance.
 ### Who may write which keys
 
 Only the control plane (and `cosec-migrate`) writes documents and control-plane records. Data-plane instances read
-the documents and the candidates, and write only shadow reports and statuses. A Redis ACL can hold each side to that:
+the documents and the candidates, write their shadow reports and statuses, and write the keys of the features they
+run. Some key families are decision inputs: whoever can write them can change what a request is granted, so their
+write permission is an authorization capability and belongs only to the process that owns them.
+
+| Keys | A data-plane instance needs | Who writes them | What write permission can do |
+|---|---|---|---|
+| `<s>:snapshot:*`, `<s>:candidate:*`, `<s>:candidate-staged:*` | read (`%R~`) | the control plane | change every decision: never a data-plane credential |
+| `<s>:control:*` | none | the control plane | change documents and their history: never a data-plane credential |
+| `<s>:shadow:*` | its own report, status and resident keys, and the shared lists ([below](#who-may-write-which-keys)) | each instance | misreport a shadow window, which keeps it open, never passes it |
+| `<s>:api-key:*` | read (`%R~`), unless the process issues keys | the process that issues API keys (`RedisApiKeyStore`) | **grants**: a key record names its principal, tenant, app and roles, so a writer can mint a key with any of them |
+| `<s>:token:*` | read and write where JWT is on: an application can revoke from any endpoint (`TokenRevoker`), and refresh writes the session families | login, refresh, logout, `TokenRevoker` | **grants**: deleting a revocation accepts a revoked token again; rewriting a family keeps a session alive |
+| `<s>:rate-limiter:*` | read and write, with the Redis rate limiter | each instance (Lua) | reset or exhaust counters: lift a limit or answer `429`, never grant access |
+| `<s>:oauth:state:*`, `<s>:oauth:binding:*` | read and write, only where social login is served; none elsewhere | social login | forge or drop a login in progress (the browser binding is still checked) |
+| `&<s>:*` (channels) | publish and subscribe | every instance | make instances read again what they hold (an invalidation carries keys, never values) |
+
+An 8.0 preview also kept the memberships a `MembershipLoader` answered under `<s>:membership:*`, which every instance
+read as the loader's answer, so a data-plane credential could grant roles through it. Memberships are now held by each
+instance only (`MEM-5`, DR1-D-2); nothing reads those keys, and you may delete them. A Redis ACL can hold each side
+to the table:
 
 - Data-plane credentials: read-only on `<s>:snapshot:*` and `<s>:candidate:*` (`%R~`), write on `<s>:shadow:*`, and
   no access to `<s>:control:*`. An instance that does not run the control plane (no `cosec-control` on its classpath,
@@ -288,7 +304,7 @@ ACL SETUSER cosec-pod-a +@connection +evalsha +eval +evalsha_ro +eval_ro +publis
 
 What the example still gives an operator: no key under `<s>:control:*`, and a report and status only under the
 instance's own name. A data-plane instance needs `snapshot`, `candidate`, `candidate-staged` and the `shadow` families, which are the ones
-tested here; the token, membership, API key, rate limit and OAuth families only for the feature that uses them, and
+tested here; the token, API key, rate limit and OAuth families only for the feature that uses them, and
 those were not tried with an ACL.
 
 `~cosec:shadow:report:`, `~cosec:shadow:status:` and `~cosec:shadow:resident:`, without a `*`, are the keys CoCache
@@ -297,7 +313,9 @@ these two lines on real Redis (`DataPlaneAclTest`, on every CI run): an instance
 caches, reads the documents, hears a publish by a control-plane user, and writes its report, with an empty `ACL LOG`;
 a `SET` of a document or a candidate as this user is refused (`NOPERM`).
 
-Add the keys the instance's other features use (revocations, API keys, rate limits; see [Redis keys](#redis-keys)).
+Add the keys the instance's other features use, as the table above says: `%R~<s>:api-key:*` for API keys (write only
+where keys are issued), `~<s>:token:*` with JWT, `~<s>:rate-limiter:*` with the Redis rate limiter, and the
+`oauth` keys only where social login is served ([Redis keys](#redis-keys)). Memberships need no key.
 Check the user with `ACL DRYRUN` before production: CoCache writes through Lua scripts, which Redis checks key by key.
 
 ## How instances read documents
@@ -423,7 +441,7 @@ revalidating 10 documents every 10 seconds take about 0.1 % of it.
 | A tenant listed in `fail-closed.tenants`, once its documents lag past `fail-closed.max-lag` | **`503`**, unless a DENY matches first ([How instances read documents](#how-instances-read-documents)). |
 | No platform document published | Every request is **`503`** ([The first documents](#the-first-documents)). |
 | Revoked tokens and principals | Verifying a request's token, the pipeline **accepts** it, so an outage does not reject every authenticated request (**`503`** with `cosec.authentication.revocation.fail-closed`). Tokens are still signature-verified and expire on their own. A failed read is not cached: each check asks Redis again, and a revocation applies as soon as Redis answers. A Redis that hangs counts as unreadable after the revocation read timeout (30 % of the authentication timeout, 300 ms at the default). A **refresh fails** instead (`IDN-14`): a token issued then would escape every revocation. |
-| Memberships from a `MembershipProvider` on Redis | **`503`**. Memberships carried in the token are not affected. |
+| Memberships from a `MembershipLoader` | Not affected: each instance holds its loader's answers and asks the loader, not Redis. An invalidation does not reach the other instances while Redis is down; their entries expire within `cosec.authorization.membership.ttl`. |
 | API keys in Redis (`cosec.api-key.store=redis`) | **`503`**. |
 | Rate-limit counters | A rule with `strictFailure: true` answers **`503`**; any other rule is skipped and the request goes on ([Rate limiting](../policies/rate-limiting.md)). |
 | The control plane | A store read that fails is a failure, never "absent", and nothing is published. The control API answers **`503`**, without detail, for any call the store could not answer, whether the outage stops its authorization or a later read or write (`CTL-52`); the control host logs it at `WARN` with the request id. A stored value that does not decode is a `500`, logged at `ERROR` with its key. The maintenance passes log the failure and do nothing that pass: no window is closed, nothing is reclaimed. |

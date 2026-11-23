@@ -47,6 +47,7 @@ internal class CoSecPropertyCheckAutoConfiguration {
             StartupTask.BeforeBeans {
                 UnknownProperties.load(CoSecPropertyCheckAutoConfiguration::class.java.classLoader).check(environment)
                 CoSecSwitches.check(environment)
+                RetiredCacheSettings.check(environment)
             }
     }
 }
