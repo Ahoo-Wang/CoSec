@@ -4,38 +4,22 @@
   ],
   "polarity": "negative",
   "level": "pipeline",
-  "description": "A trailing separator is no empty segment before the end: the path is decided as written, and the DENY on one segment under /admin does not read /admin/x/.",
+  "description": "A trailing separator is no empty segment before the end: the path is decided, never refused 400; an ALLOW reads it as written (PIP-35 gives the DENYs both spellings).",
   "documents": {
     "platform": {
       "policies": [
-        {
-          "id": "no-admin",
-          "statements": [
-            {
-              "effect": "deny",
-              "action": "http:*",
-              "resource": "http:path:/admin/*"
-            }
-          ]
-        },
         {
           "id": "open",
           "statements": [
             {
               "effect": "allow",
-              "action": "http:GET"
+              "action": "http:GET",
+              "resource": "http:path:/admin/x/"
             }
           ]
         }
       ],
       "bindings": [
-        {
-          "id": "no-admin",
-          "subject": "*",
-          "app": "*",
-          "space": "*",
-          "policy": "no-admin"
-        },
         {
           "id": "open",
           "subject": "*",

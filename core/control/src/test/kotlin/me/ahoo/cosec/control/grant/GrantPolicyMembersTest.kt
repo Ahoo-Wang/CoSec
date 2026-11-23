@@ -71,7 +71,10 @@ class GrantPolicyMembersTest {
             "literals" to "compiled from the pattern and the two flags",
             "prefix" to "compiled from the pattern and the two flags",
         ),
-        ResourcePattern.Http::class.java to mapOf("path" to COMPARED),
+        ResourcePattern.Http::class.java to mapOf(
+            "path" to COMPARED,
+            "loose" to "compiled from the path and the statement's effect (PIP-35), which is compared",
+        ),
         ResourcePattern.Typed::class.java to mapOf(
             "text" to COMPARED,
             "type" to "parsed from the text",

@@ -3,12 +3,12 @@
 # Tests: :conformance:test
 
 diff --git a/core/document/src/main/kotlin/me/ahoo/cosec/document/route/RouteMap.kt b/core/document/src/main/kotlin/me/ahoo/cosec/document/route/RouteMap.kt
-index 197f5ae4..5953ce24 100644
+index e11d15a05..31e1fa5b5 100644
 --- a/core/document/src/main/kotlin/me/ahoo/cosec/document/route/RouteMap.kt
 +++ b/core/document/src/main/kotlin/me/ahoo/cosec/document/route/RouteMap.kt
-@@ -67,7 +67,7 @@ class RouteMap private constructor(private val routes: Map<String, List<Compiled
-      */
-     fun resolve(method: String, path: String): RouteResolution {
+@@ -123,7 +123,7 @@ class RouteMap private constructor(private val routes: Map<String, List<Compiled
+ 
+     private fun resolveWithHead(method: String, path: String): RouteResolution {
          val resolved = resolveExactly(method, path)
 -        if (resolved == RouteResolution.Unmapped && method == HEAD) {
 +        if (false) {

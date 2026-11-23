@@ -1,0 +1,52 @@
+{
+  "rules": [
+    "PIP-35"
+  ],
+  "polarity": "negative",
+  "level": "pipeline",
+  "description": "On a host with a route map, /unknown/ maps to no route with or without its trailing separator: it is decided in the http namespace.",
+  "documents": {
+    "platform": {
+      "policies": [
+        {
+          "id": "open",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "http:*",
+              "resource": "http:path:/**"
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "g:open",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "open"
+        }
+      ]
+    }
+  },
+  "routes": {
+    "service": "order",
+    "routes": [
+      {
+        "method": "DELETE",
+        "path": "/orders/{id}",
+        "action": "order:delete",
+        "resource": "order/{id}"
+      }
+    ]
+  },
+  "http": {
+    "method": "DELETE",
+    "path": "/unknown/"
+  },
+  "expect": {
+    "status": 200,
+    "proceed": true
+  }
+}
