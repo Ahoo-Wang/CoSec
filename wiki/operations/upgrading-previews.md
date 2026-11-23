@@ -30,6 +30,16 @@ Which preview of the library may run behind which preview of the gateway image: 
 
 ## From 8.0.0-beta.7 {#from-8-0-0-beta-7}
 
+- **Breaking: a gateway host with handlers of its own does not start until they are listed** (`STA-13`). Affected: a
+  Spring Cloud Gateway host in enforce mode whose application declares its own `@Controller`, `@RestController` or
+  `RouterFunction` beans.
+  - Those handlers are mapped before any gateway route, so CoSec, a filter of gateway routes, never decided them. Startup
+    used to warn and go on.
+  - Now it fails, naming each handler by bean name. Migrate by moving them to a service behind the gateway, where a route
+    decides them, or by listing the ones something else protects in `cosec.gateway.unprotected-handlers`. Startup then
+    names them in one INFO line.
+  - A name with `*` is refused. Spring's, CoSec's and actuator handlers are not the application's and need no entry
+    ([The gateway's own handlers](../integration/web.md#the-gateways-own-handlers)).
 - **An `explain` at a retained revision is cached like a head** (DR1-F-4). Affected: nothing to change. Repeating it
   compiles nothing, where each call compiled its documents again.
 - **`analyze` shows a tenant's bindings only to a caller who may read its document** (`CTL-51`, DR1-F-8). Affected: a

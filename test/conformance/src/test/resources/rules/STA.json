@@ -220,6 +220,19 @@
         "spring-boot:DerivedHeapTest#the startup line names each bound, what it came to and from what",
         "spring-boot:UnknownPropertiesTest#a removed key is said to be no longer a property, with what replaced it"
       ]
+    },
+    {
+      "id": "STA-13",
+      "source": "RC1 deep review, the coordinator's third batch and ruling of 2026-11-23 (design A); RFC 0006 §7 (sentences proposed in the PR)",
+      "statement": "On a Spring Cloud Gateway host in enforce mode, CoSec decides gateway routes only, and the application's own controllers and functional routes are mapped before any route: startup fails, naming each such handler, the property and the page, unless cosec.gateway.unprotected-handlers lists it by bean name. A listed name with * is refused (no handler is listed by a pattern), a listed name that matches no handler is ignored, as for cosec.gateway.unprotected-endpoints (STA-2), and the handlers listed are named in one INFO line at startup.",
+      "level": "startup",
+      "pending": null,
+      "guards": [
+        "spring-boot:GatewayOwnHandlersTest#a handler of the application that is not listed fails startup, naming it, the property and the page",
+        "spring-boot:GatewayOwnHandlersTest#every handler listed starts, and a name that matches no handler is ignored",
+        "spring-boot:GatewayOwnHandlersTest#a pattern is never accepted",
+        "spring-boot:GatewayOwnHandlersTest#a controller and a functional route are not seen by a gateway global filter, a route is"
+      ]
     }
   ]
 }

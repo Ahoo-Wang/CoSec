@@ -27,6 +27,12 @@ description: "每个 8.0 预览版（alpha 与 beta）到下一个之间的变�
 
 ## 从 8.0.0-beta.7 升级 {#from-8-0-0-beta-7}
 
+- **破坏性变更：有自己处理器的网关宿主在列出它们之前不会启动**（`STA-13`）。受影响的是 enforce 模式下、应用声明了自己的
+  `@Controller`、`@RestController` 或 `RouterFunction` bean 的 Spring Cloud Gateway 宿主。
+  - 这些处理器映射在所有网关路由之前，所以作为网关路由过滤器的 CoSec 从未决策过它们。原来启动时只告警，然后继续。
+  - 现在启动失败，并按 bean 名逐个指明。迁移方式：把它们移到网关之后的服务中，由路由来决策；或者把由其他手段保护的那些列在
+    `cosec.gateway.unprotected-handlers` 中，启动时会用一行 INFO 指明它们。
+  - 带 `*` 的名字被拒绝。Spring 的、CoSec 的和 actuator 的处理器不算应用的，不需要列出（[网关自己的处理器](../integration/web.md#the-gateways-own-handlers)）。
 - **在保留修订上的 `explain` 像头一样被缓存**（DR1-F-4）。无需改动。重复它不再编译，此前每次调用都重新编译它的文档。
 - **`analyze` 只向能读租户文档的调用者列出它的绑定**（`CTL-51`，DR1-F-8）。受影响的：对本租户文档有 `cosec:analyze`
   却没有 `cosec:read` 的主体（没有内置角色是这样）。它此前会得到该文档中所有匹配的绑定，现在一个也得不到，该文档计入 `hidden`。

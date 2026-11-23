@@ -105,9 +105,10 @@ Full model: https://cosec.ahoo.me/guide/security-model.
   to get past it.
 - **`CoSec is off: cosec.enabled=false.` (WARN, not a failure):** nothing is protected by CoSec on that application;
   ask whether that is intended.
-- **`This is a Spring Cloud Gateway host: CoSec decides the requests of gateway routes only. ... answered with no CoSec
-  decision: <beans>` (WARN):** the application's own controllers or functional routes are outside CoSec; move them
-  behind the gateway, or secure them in the application.
+- **`This is a Spring Cloud Gateway host: CoSec decides the requests of gateway routes only. ... would be answered with
+  no CoSec decision: <beans> ... (STA-13)` (startup fails):** the application's own controllers or functional routes are
+  outside CoSec; move them behind the gateway, or list the ones something else protects, by bean name, in
+  `cosec.gateway.unprotected-handlers` (never a pattern). Never list a handler just to start.
 - **`No platform document under [<prefix>:snapshot:platform] in Redis <host:port/db>: this instance is not ready ...`
   (WARN, repeated every 6 revalidation intervals):** the instance waits for its platform document. Check, in this order, that
   something was published (`cosec-migrate publish --key-prefix <prefix>`), that `cosec.key-prefix` is the publisher's, and

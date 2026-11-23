@@ -498,9 +498,13 @@ Set each to one of its values, or remove it to take its default: https://cosec.a
 
 `CoSec is off: cosec.enabled=false. This application authorizes no request and nothing is protected by CoSec.` 是应用启动后记录的一条 WARN。CoSec 装配的一切都不起作用：没有管道、没有令牌校验、没有快照。除非你本就这样打算，否则删掉该配置项或设为 `cosec.enabled=true`；网关仍会剥掉客户端的 `CoSec-Identity`。
 
-### 日志说网关自己的处理器不被决策 {#the-log-says-the-gateways-own-handlers-are-not-decided}
+### 网关自己的处理器导致启动失败 {#startup-fails-on-the-gateways-own-handlers}
 
-`This is a Spring Cloud Gateway host: CoSec decides the requests of gateway routes only. n handler(s) of the application itself ... are answered with no CoSec decision: ...` 指明应用自己的控制器或函数式路由。它们映射在所有网关路由之前，所以 CoSec 看不到对它们的请求（[网关自己的处理器](../integration/web.md#the-gateways-own-handlers)）。把它们移到网关之后的服务中，或在应用内自行保护。
+```text
+This is a Spring Cloud Gateway host: CoSec decides the requests of gateway routes only. n handler(s) of the application itself are mapped before any route and would be answered with no CoSec decision (no authentication, no policy, no rate limit): ... (STA-13, ...)
+```
+
+它按 bean 名指明应用自己的控制器或函数式路由。它们映射在所有网关路由之前，所以 CoSec 看不到对它们的请求（[网关自己的处理器](../integration/web.md#the-gateways-own-handlers)）。把它们移到网关之后的服务中，由路由来决策；或者把由其他手段保护的那些按 bean 名列在 `cosec.gateway.unprotected-handlers`（`COSEC_GATEWAY_UNPROTECTEDHANDLERS`）中，启动时会用一行 INFO 指明它们。`... lists [*]: it takes the bean names of handlers, never a pattern` 表示列出的名字含有 `*`：请逐个写出名字。
 
 ### 缺少模块时启动失败 {#startup-fails-on-a-missing-module}
 
