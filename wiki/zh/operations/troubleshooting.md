@@ -744,6 +744,14 @@ cosec.authorization.snapshot.revalidate-interval (PT0S) must be positive: the pe
 5 分钟、配置了 `fail-closed.tenants` 时还要小于 `fail-closed.max-lag`（[配置](./configuration.md#snapshot)）。文档很多时要节省
 Redis 的 CPU，在这些范围内调大它（[存储](./storage.md#what-revalidation-costs-redis)）。
 
+### key 前缀导致启动失败 {#startup-fails-on-the-key-prefix}
+
+```text
+cosec.key-prefix [cosec:prod] holds ':': a key prefix is letters, digits, '_', '.' and '-' (cosec), or such a string wrapped whole in braces, a Redis Cluster hash tag ({cosec}), so that no deployment's prefix nests inside another's (SNP-9). ...
+```
+
+一个部署的前缀不能嵌套在另一个部署的前缀里：`a` 和 `a:b` 并存时，后者的 key 也都在前者之下。信息里写明了该怎么做。末尾的 `:`（`cosec:`），之前的预览版会忽略，它与去掉 `:` 后指的是同一批 key：删掉它即可。前缀中间的 `:`（`cosec:prod`）指向的 key 不在现在允许的任何前缀之下：按[升级说明](./upgrading-previews.md#from-8-0-0-beta-7)迁移它们。花括号只有在一对花括号包住整个前缀时才算 hash tag。
+
 ### 已移除的 key 前缀导致启动失败 {#startup-fails-on-a-removed-key-prefix}
 
 ```text

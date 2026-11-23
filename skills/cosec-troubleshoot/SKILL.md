@@ -77,6 +77,10 @@ Full model: https://cosec.ahoo.me/guide/security-model.
   bound on a lost invalidation (SNP-6), so the interval must be at least 1 second, at most 5 minutes, and,
   with `fail-closed.tenants`, less than `fail-closed.max-lag`. Use a value within the bounds; never
   suggest turning revalidation off.
+- **`cosec.key-prefix [<p>] holds ...: a key prefix is letters, digits, '_', '.' and '-' (cosec), or ... ({cosec})`**
+  (SNP-9): a prefix that could nest inside another deployment's. A trailing `:` names the same keys: remove it. A `:`
+  inside it: move the keys to an allowed prefix (stop the writers, copy with their TTL, switch). Braces are a hash tag
+  only around the whole prefix.
 - **`CoSec does not read ... cosec.authorization.snapshot.key-prefix`** (or `cosec.authorization.cache.key-prefix`,
   `cosec.api-key.key-prefix`): one `cosec.key-prefix` replaced them (SNP-9), and they fail startup as unknown keys. Which
   families move, from where to where, is at https://cosec.ahoo.me/operations/upgrading-previews#from-8-0-0-alpha-2. Have the token

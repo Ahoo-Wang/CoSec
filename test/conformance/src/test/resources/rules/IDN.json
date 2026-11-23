@@ -343,13 +343,15 @@
     {
       "id": "IDN-26",
       "source": "RFC 0004 §4.5.3; #1629 finding 5",
-      "statement": "A revocation through TokenRevoker invalidates every instance's local 'not revoked' answer for that token or subject at once; an instance that missed the invalidation keeps that answer for at most 30 seconds (RevokedTokenCache.MISSING_TTL_SECONDS), and no property, layer or customizer lengthens it.",
+      "statement": "A revocation through TokenRevoker invalidates every instance's local 'not revoked' answer for that token or subject at once; an instance that missed the invalidation keeps that answer for at most 30 seconds (RevokedTokenCache.MISSING_TTL_SECONDS), and no property, layer or customizer lengthens it. A revocation an instance holds locally, a subject revocation raised since included, is kept at most as long (DR1-D-3): both tables' local-max-age, as the cache ends with it, is at most 30 seconds: cosec.authentication.revocation.cache.local-max-age, a cocache.* property or a customizer above it fails startup, and a layer may only tighten it.",
       "level": "startup",
       "pending": null,
       "guards": [
         "cocache:CacheTtlPolicyTest#revocationTablesKeepNotRevokedFor30SecondsAtMost",
         "spring-boot:StrictCacheFailureTest#revocationTablesKeepNotRevokedFor30SecondsWhateverTheGlobalLayersSay",
-        "spring-boot:StrictCacheFailureTest#aRevocationTablesAbsentTtlPropertyFailsStartup"
+        "spring-boot:StrictCacheFailureTest#aRevocationTablesAbsentTtlPropertyFailsStartup",
+        "spring-boot:StrictCacheFailureTest#aRevocationTablesLocalMaxAgeIsAtMost30Seconds",
+        "cocache:CacheTtlPolicyTest#revocationTablesHoldARevocationFor30SecondsAtMost"
       ]
     },
     {
