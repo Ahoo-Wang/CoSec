@@ -41,8 +41,8 @@ import me.ahoo.cosec.spi.snapshot.SnapshotKey
  * bindings and many conditions (`DocumentCacheTest`). A document weighs [DERIVED_BINDING_BYTES] more stored bytes for
  * each binding its roles derive (RFC 0012 §6.3): a few roles may expand far beyond what they store. What `analyze` parses
  * of it is not weighed. A candidate, which no
- * digest names, is never kept, nor is a retained revision `explain` decides at: [Simulator] compiles those per call. Nor
- * is a document that, decoded and compiled once, would weigh more than half the bound (R2-L2 of #1240's review): it
+ * digest names, is never kept: [Simulator] compiles it per call. A retained revision `explain` decides at is kept like a
+ * head, by the digest of its record (DR1-F-4): its content never changes. Nor is a document that, decoded and compiled once, would weigh more than half the bound (R2-L2 of #1240's review): it
  * would push every other entry out, and be pushed out by the next one, so it is decoded and compiled per call too.
  */
 internal class DocumentCache(
