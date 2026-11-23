@@ -59,7 +59,10 @@ class JwtProperties(
     class TokenValidity(
         /** The lifetime of an access token. */
         var access: Duration = Duration.ofMinutes(10),
-        /** The lifetime of a refresh token; a revocation is kept this long, plus one second. */
+        /**
+         * The lifetime of a refresh token. A revocation is kept for the longer of this and the access token's, plus
+         * `cosec.authentication.revocation.skew`: past the end of every token it can name.
+         */
         var refresh: Duration = Duration.ofDays(7)
     )
 

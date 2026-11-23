@@ -22,11 +22,24 @@ import java.util.concurrent.atomic.AtomicInteger
  *
  * Anyone can start a sign-in, so [put] must stay cheap: it drops the expired states only once the store holds twice
  * what it held after the last sweep, and at least [sweepFloor], which keeps a put constant time on average.
+ *
+ * It holds at most [maxStates] states (DR1-D-9): past them, and after dropping the expired, a put throws
+ * [SocialStatesFullException] and that sign-in is refused. A fixed count, not a share of the heap (`STA-12` bounds memory
+ * held for performance; this is correctness state, of tests and a single instance): [DEFAULT_MAX_STATES] is about 2 MB,
+ * and more sign-ins than a single instance serves in a state's lifetime.
  */
-class InMemorySocialStateStore(private val sweepFloor: Int = SWEEP_FLOOR) : SocialStateStore {
+class InMemorySocialStateStore(
+    private val sweepFloor: Int,
+    private val maxStates: Int,
+) : SocialStateStore {
     init {
         require(sweepFloor >= 1) { "The sweep floor is positive, not $sweepFloor." }
+        require(maxStates >= 1) { "The store holds at least one state, not $maxStates." }
     }
+
+    /** A store of [DEFAULT_MAX_STATES]; the constructor of 8.0's previews, kept as it was. */
+    @JvmOverloads
+    constructor(sweepFloor: Int = SWEEP_FLOOR) : this(sweepFloor, DEFAULT_MAX_STATES)
 
     /** The clock the states expire by; tests move it. */
     internal var nanoTime: () -> Long = System::nanoTime
@@ -45,6 +58,12 @@ class InMemorySocialStateStore(private val sweepFloor: Int = SWEEP_FLOOR) : Soci
 
     override suspend fun put(state: String, bindingHash: String, lifetime: Duration) {
         val now = nanoTime()
+        if (states.size >= maxStates) {
+            states.values.removeIf { it.expiresAt - now <= 0 }
+            if (states.size >= maxStates) {
+                throw SocialStatesFullException("$maxStates social sign-ins are in progress: this one is not started.")
+            }
+        }
         states[state] = Entry(bindingHash, now + lifetime.toNanos())
         val threshold = sweepAt.get()
         // One caller claims the sweep; the others go on.
@@ -61,5 +80,11 @@ class InMemorySocialStateStore(private val sweepFloor: Int = SWEEP_FLOOR) : Soci
     companion object {
         /** The size below which a put never sweeps. */
         const val SWEEP_FLOOR: Int = 1024
+
+        /**
+         * The states held at most: 10,000 sign-ins started within a state's lifetime (3 minutes), 55 a second sustained,
+         * far more than one instance's people sign in at; about 200 bytes each, 2 MB.
+         */
+        const val DEFAULT_MAX_STATES: Int = 10_000
     }
 }

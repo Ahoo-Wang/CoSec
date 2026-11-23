@@ -60,6 +60,7 @@ import me.ahoo.cosec.spring.boot.ConditionalOnCoSecEnabled
 import me.ahoo.cosec.spring.boot.StartupTask
 import me.ahoo.cosec.spring.boot.StartupTaskExclusion
 import me.ahoo.cosec.spring.boot.jwt.JwtProperties
+import me.ahoo.cosec.spring.boot.jwt.RevocationRetention
 import me.ahoo.cosec.spring.boot.pipeline.CoCacheRevocation
 import me.ahoo.cosec.spring.boot.pipeline.CoSecPipelineAutoConfiguration
 import me.ahoo.cosec.spring.boot.pipeline.DerivedTimeouts
@@ -208,7 +209,7 @@ internal class CoSecControlAutoConfiguration {
         revocation: RevocationProperties,
         jwt: ObjectProvider<JwtProperties>,
     ): ChangeAuthority {
-        jwt.ifAvailable?.let { checkRetention(it, properties) }
+        jwt.ifAvailable?.let { checkRetention(it, properties, revocation) }
         return ChangeAuthority(
             authorizer,
             options,
@@ -384,16 +385,15 @@ internal class CoSecControlAutoConfiguration {
 
         /**
          * An approval counts for [ControlProperties.Approval.expireAfter] and is checked at publish against the
-         * revocations of its token; a revocation is kept for the refresh token validity. A shorter one forgets a
+         * revocations of its token; a revocation is kept for [RevocationRetention]. A shorter one forgets a
          * revocation while an approval it revoked still counts, so startup fails.
          */
-        fun checkRetention(jwt: JwtProperties, control: ControlProperties) {
-            val retention = jwt.tokenValidity.refresh
+        fun checkRetention(jwt: JwtProperties, control: ControlProperties, revocation: RevocationProperties) {
             val approvals = control.approval.expireAfter
-            check(retention >= approvals) {
-                "${JwtProperties.PREFIX}.token-validity.refresh ($retention), how long a token revocation is kept, is " +
-                    "shorter than ${ControlProperties.PREFIX}.approval.expire-after ($approvals): an approval would " +
-                    "outlive the revocation of its token. Raise the first or lower the second."
+            check(RevocationRetention.of(jwt, revocation) >= approvals) {
+                "A token revocation is kept for ${RevocationRetention.describe(jwt, revocation)}, shorter than " +
+                    "${ControlProperties.PREFIX}.approval.expire-after ($approvals): an approval would outlive the " +
+                    "revocation of its token. Raise a token validity or lower the approvals' expiry."
             }
         }
     }

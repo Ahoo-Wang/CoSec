@@ -72,12 +72,14 @@ class DocumentCache(
         val digest: SnapshotDigest,
         val document: PolicyDocument,
         val size: Int,
+        /** What it weighs as stored bytes ([weighedBytes]), worked out before the cache's lock is taken. */
+        private val weighed: Long = weighedBytes(size, document),
     ) {
         /** Its compiled forms by the platform document's digest they compiled with, at most [VARIANTS]. */
         private val compiled = LinkedHashMap<SnapshotDigest?, Lazy<Result<CompiledDocument>>>()
 
         /** What it is counted for in [heap], while it is held: guarded by the cache's lock. */
-        internal var weight: Long = weighedBytes(size, document) * DECODED_FACTOR + ENTRY_BYTES
+        internal var weight: Long = weighed * DECODED_FACTOR + ENTRY_BYTES
 
         /** What is enforced: the roles and short forms of [document], expanded, for `analyze` as for the engine. */
         val effective: PolicyDocument by lazy(LazyThreadSafetyMode.PUBLICATION) { RoleExpansion.effective(document) }
@@ -90,7 +92,7 @@ class DocumentCache(
         fun compiled(platform: SnapshotDigest?, compile: () -> CompiledDocument): Result<CompiledDocument> {
             val (compilation, added) = synchronized(compiled) { formFor(platform, compile) }
             if (added) {
-                weigh(this, weighedBytes(size, document) * COMPILED_FACTOR + FORM_BYTES)
+                weigh(this, weighed * COMPILED_FACTOR + FORM_BYTES)
             }
             return compilation.value
         }
@@ -181,16 +183,24 @@ class DocumentCache(
         digest: SnapshotDigest,
         size: Int,
         document: PolicyDocument
-    ): Entry = synchronized(entries) {
-        entries[Key(key, digest)]?.let { return it }
-        val entry = Entry(key, digest, document, size)
-        if (!admits(weighedBytes(size, document))) {
+    ): Entry {
+        // Weighed before the lock (DR1-F-4): what a document's roles derive can take long to count, and every reader of
+        // the cache waits on its lock.
+        val weighed = weighedBytes(size, document)
+        return synchronized(entries) { held(Key(key, digest), document, size, weighed) }
+    }
+
+    /** The entry held under [key], or a new one, under the cache's lock. */
+    private fun held(key: Key, document: PolicyDocument, size: Int, weighed: Long): Entry {
+        entries[key]?.let { return it }
+        val entry = Entry(key.key, key.digest, document, size, weighed)
+        if (!admits(weighed)) {
             return entry
         }
-        entries[Key(key, digest)] = entry
+        entries[key] = entry
         heap += entry.weight
         evict()
-        entry
+        return entry
     }
 
     /** Whether a document of [size] stored bytes, decoded and compiled once, weighs at most half the bound. */

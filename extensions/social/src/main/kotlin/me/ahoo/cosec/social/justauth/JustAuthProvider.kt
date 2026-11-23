@@ -15,6 +15,7 @@
 
 package me.ahoo.cosec.social.justauth
 
+import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runInterruptible
 import kotlinx.coroutines.sync.Semaphore
@@ -26,6 +27,7 @@ import me.ahoo.cosec.social.SocialCredentials
 import me.ahoo.cosec.social.SocialUser
 import me.ahoo.cosec.social.justauth.SocialUserConverter.toSocialUser
 import me.ahoo.cosec.spi.social.SocialStateStore
+import me.ahoo.cosec.spi.social.SocialStatesFullException
 import me.zhyd.oauth.model.AuthResponse
 import me.zhyd.oauth.model.AuthUser
 import me.zhyd.oauth.request.AuthRequest
@@ -33,6 +35,7 @@ import java.security.MessageDigest
 import java.security.SecureRandom
 import java.time.Duration
 import java.util.Base64
+import java.util.concurrent.atomic.AtomicLong
 
 /**
  * A [SocialAuthenticationProvider] over a JustAuth [AuthRequest].
@@ -46,9 +49,12 @@ import java.util.Base64
  *
  * JustAuth blocks: the authorize step writes JustAuth's own state cache, and a login calls the provider over blocking HTTP.
  * Each runs on a dispatcher of this provider's own, of at most [parallelism] threads, so they never hold an event loop,
- * a provider that hangs delays only its own logins, and a flood of sign-in starts, which anyone can send, never lines up
- * ahead of a real login. At most [pendingStarts] starts are in flight (running or queued) at once: one more is refused
- * at once with a [SocialAuthenticationException], where it would otherwise queue without bound (R2B-23).
+ * a provider that hangs delays only its own logins, and starts and logins do not share threads. Both are bounded, since
+ * both would otherwise queue without bound: at most [pendingStarts] starts (R2B-23) and at most [pendingLogins] logins
+ * are in flight (running or queued) at once, and one more is refused at once with a [SocialAuthenticationException]. A
+ * login takes its slot only once its callback's state holds, so a callback CoSec did not issue never holds one; but
+ * anyone can start sign-ins and send their callbacks, so a flood of them can still make a real callback wait behind up
+ * to [pendingLogins] logins, or be refused and start again: the bound is on the memory and the wait, not on who waits.
  * [SocialStateStore] suspends, so it is called outside the blocking section: the callback's state is taken first, and
  * only then does the login block.
  *
@@ -60,14 +66,19 @@ class JustAuthProvider @InternalCoSecApi constructor(
     private val states: SocialStateStore,
     parallelism: Int = DEFAULT_PARALLELISM,
     pendingStarts: Int = DEFAULT_PENDING_STARTS,
+    pendingLogins: Int = DEFAULT_PENDING_LOGINS,
 ) : SocialAuthenticationProvider {
     private val starting = Dispatchers.IO.limitedParallelism(parallelism)
     private val loggingIn = Dispatchers.IO.limitedParallelism(parallelism)
     private val startSlots = Semaphore(pendingStarts)
+    private val loginSlots = Semaphore(pendingLogins)
 
     private companion object {
         const val DEFAULT_PARALLELISM = 16
         const val DEFAULT_PENDING_STARTS = 64
+        val REFUSAL_LOG_INTERVAL_NANOS: Long = Duration.ofMinutes(1).toNanos()
+        private val log = KotlinLogging.logger {}
+        const val DEFAULT_PENDING_LOGINS = 64
         const val RANDOM_BYTES = 16
         val STATE = Regex("[A-Za-z0-9_-]{22}")
         val lifetime: Duration = Duration.ofSeconds(SocialAuthorization.STATE_LIFETIME_SECONDS)
@@ -93,18 +104,61 @@ class JustAuthProvider @InternalCoSecApi constructor(
         try {
             val state = fresh()
             val binding = fresh()
-            states.put(state, hash(binding), lifetime)
+            try {
+                states.put(state, hash(binding), lifetime)
+            } catch (full: SocialStatesFullException) {
+                throw refusedFull(full)
+            }
             return SocialAuthorization(runInterruptible(starting) { authRequest.authorize(state) }, binding)
         } finally {
             startSlots.release()
         }
     }
 
+    /** Starts refused because the store held all it may, since the last WARN; the WARN says how many (DR1-D-9). */
+    private val refusedSinceLog = AtomicLong()
+    private val lastRefusalLog = AtomicLong(Long.MIN_VALUE)
+
+    /** How many starts this provider refused because the state store was full. */
+    internal val refusedStarts: Long get() = refusedTotal.get()
+    private val refusedTotal = AtomicLong()
+
+    /**
+     * A start the store could not record: the sign-in is refused, as a "try again shortly", never started unchecked.
+     * Logged at WARN at most once a minute, with the count since, so a flood of anonymous starts is seen without a line
+     * per request.
+     */
+    private fun refusedFull(full: SocialStatesFullException): SocialAuthenticationException {
+        refusedTotal.incrementAndGet()
+        val since = refusedSinceLog.incrementAndGet()
+        val now = System.nanoTime()
+        val last = lastRefusalLog.get()
+        if ((last == Long.MIN_VALUE || now - last >= REFUSAL_LOG_INTERVAL_NANOS) && lastRefusalLog.compareAndSet(last, now)) {
+            refusedSinceLog.addAndGet(-since)
+            log.warn {
+                "Refused $since [$name] sign-in start(s) since the last such line: ${full.message} Something may be " +
+                    "starting sign-ins in a flood; rate limit the start route at the edge."
+            }
+        }
+        return SocialAuthenticationException(
+            "The [$name] provider has too many sign-ins in progress: try again shortly."
+        )
+    }
+
     override suspend fun authenticate(credentials: SocialCredentials): SocialUser {
         require(credentials is JustAuthCredentials)
         // Taken before the blocking section: the login runs only for a state that holds.
         checkState(credentials)
-        return runInterruptible(loggingIn) { login(credentials) }.toSocialUser(name)
+        if (!loginSlots.tryAcquire()) {
+            throw SocialAuthenticationException(
+                "The [$name] provider has too many sign-ins completing: start the sign-in again shortly."
+            )
+        }
+        try {
+            return runInterruptible(loggingIn) { login(credentials) }.toSocialUser(name)
+        } finally {
+            loginSlots.release()
+        }
     }
 
     /** The callback's state is one [authorize] issued to the browser that sends [SocialCredentials.binding]. */

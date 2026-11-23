@@ -132,9 +132,13 @@ await logout();
 
 ## 上报错误
 
-请求的错误（`FetcherError`，以及本包中继承它的错误，包括 `RefreshTokenError`）带着该请求的 `exchange`：请求头和请求体，所以包含访问令牌，
-刷新时还包含令牌对。去掉刷新错误上的 `token` 并没有让它们可以安全地序列化。把错误发给上报工具（Sentry、日志管道）的应用要先清理
-`exchange`，或者只上报 `name`、`message` 和 `problem`。
+本包在刷新或退出时抛出的错误（`RefreshTokenError`、`RefreshUnavailableError`、`RefreshSessionChangedError`、
+`LogoutUnconfirmedError`）不带令牌：刷新或退出请求的请求体就是令牌对，所以不保留该请求的错误。它们的 `cause` 是一个普通的
+`Error`，只有那个错误及其每一层原因的名字和消息，`problem` 和 `status` 说明服务端回答了什么。
+
+应用自己请求的错误（`FetcherError`，以及包着上述错误之一的 `ExchangeError`）仍然带着该请求的 `exchange`：请求头，所以包含
+`Authorization` 里的访问令牌，以及请求体。把错误发给上报工具（Sentry、日志管道）的应用要先清理 `exchange`，或者只上报
+`name`、`message` 和 `problem`。
 
 ## 从 `@ahoo-wang/fetcher-cosec` 6.x 升级
 
