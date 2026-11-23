@@ -23,7 +23,7 @@ a change that fails to compile. When unsure, deny, and ask.
 ./gradlew propertyStress -PpropertyIterations=1000   # the registered property tests, more cases (not in check)
 gh workflow run property-stress.yml -f ref=<branch>    # the 1M run: on CI only, never on a local machine
 ./gradlew :conformance:mutationCheck -Pmutants=a,b  # break a security rule on purpose, expect a test to fail (not in check)
-gh workflow run mutation.yml                       # every mutant, on CI only: a shard per rule family, about an hour (-f mutants=a,b for a subset, which runs beside other branches' subsets; also weekly)
+gh workflow run mutation.yml                       # every mutant, on CI only: a shard per rule family, about an hour (-f mutants=a,b for a subset, which runs beside other branches' subsets; -f parallel=16 at a release gate only; also weekly)
 ./gradlew :spi:updateKotlinAbi                     # rewrite a module's ABI dump, api/<project>.api, after an intended change
 ./gradlew :runtime:updateClientContract :jwt:updateClientContract :control:updateClientContract   # rewrite contract/, what a client receives (PIP-25) and what the control API answers (CTL-61), after an intended change
 (cd typescript && pnpm install --frozen-lockfile && pnpm lint && pnpm typecheck && pnpm test)   # the TypeScript packages: what the `typescript` job of CI runs
@@ -79,16 +79,24 @@ gh workflow run system-test.yml --ref main -f ref=<sha>   # the system test on a
   `updateKotlinAbi` dumps what is in `build/`: after moving or deleting classes, run `clean` first, or a stale class
   lands in the dump and CI, which builds from scratch, fails the check. Adding an opt-in marker to a declaration does
   not recompile its users incrementally: compile them with `--rerun-tasks` to see the opt-ins they now need.
-- `:conformance:mutationCheck` applies each patch in `test/conformance/mutants/` in a temporary worktree and requires a
-  failing test (`-Pmutants=a,b` runs a subset). Run it in PRs that add or change a security property; list the
+- `:conformance:mutationCheck` applies each patch in `test/conformance/mutants/` in a temporary worktree its mutants
+  share, one after another, and requires a failing test that passes again once the patch is reverted (the control;
+  `-Pmutants=a,b` runs a subset). Run it in PRs that add or change a security property; list the
   mutants the change kills in the PR. Only a failed test in a result file is a kill: a build that fails otherwise is
-  `BUILD_FAILED`, to be run again. The full run is the `mutation.yml` workflow (`.github/workflows/`), weekly and on
+  `BUILD_FAILED`, to be run again, and a mutant whose tests fail without the patch too is `FAILS_WITHOUT_PATCH`, a
+  flaky test or a wrong header to fix. A `--tests` name of a header must match a test class of its task's project
+  (`MutationCheckTest`): move a test class and the headers that name it together. A local run leaves a Gradle
+  daemon alive for two minutes. The full run is the `mutation.yml` workflow (`.github/workflows/`), weekly and on
   demand, never a local run: a mutant it reports as not killed is either a wrong patch or a missing test. `:conformance:check` requires every patch to apply to the working tree
   (`MutationCheckTest`): a refactoring that moves the code a mutant breaks fails `check` and names the patch. Rewrite
   it to break the same property where the code now lives (its header says what it is for), then run it.
   `check` proves a patch applies, not that the patched tree compiles: a change of compiler flags or lint rules can
   break mutants without `check` noticing (a mutant that does not compile is not a kill), so the full run
   (`gh workflow run mutation.yml --ref <branch>`) is part of such a change.
+- A manual dispatch (a JMH A/B, a full mutation run, a 1M property stress) takes the runners a pull request's CI needs:
+  start one only when no pull request is armed, except at a release gate
+  (`docs/reviews/2026-11/ci-efficiency.md`). CodeQL, a required check, analyses main sources only: test code is not
+  scanned (the maintainer's decision, 2026-11-22).
 - Build cache, configuration cache and parallel execution are on in `gradle.properties`. If a task fails with a
   configuration-cache problem, don't capture `Project` in `doFirst`/`doLast`; `--no-configuration-cache` bypasses it.
   A cached `test` run does not hit Redis: use `--rerun` (or `cleanTest`) to force Redis-backed tests.
