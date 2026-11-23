@@ -92,6 +92,22 @@ class CheckMisuseTest {
         debugs().filter { it.startsWith("Check denied before any policy was read") }.assert().hasSize(9)
     }
 
+    /** DR1-C-5: the action and resource are the caller's: a line break in either forges no line, and a long one is cut. */
+    @Test
+    fun `the caller's action and resource are printable and bounded in the line`() = runBlocking<Unit> {
+        val foreign = mockk<SecurityContext>()
+        val forged = "order/1\nWARN Check passed for admin"
+        checker.decide(foreign, "order:read\r\nx", forged).assert().isEqualTo(Decision.Deny(null))
+        checker.decide(foreign, "order:read", "a".repeat(5_000)).assert().isEqualTo(Decision.Deny(null))
+
+        val logged = lines.captured().map { it.formattedMessage }
+        logged.assert().allMatch { '\n' !in it && '\r' !in it }
+        logged.first().assert().contains(
+            "order/1\\u000AWARN Check passed for admin"
+        ).contains("order:read\\u000D\\u000Ax")
+        logged.last().assert().contains("(5000 characters)").hasSizeLessThan(1_000)
+    }
+
     @Test
     fun `a kind warns again once its interval has passed`() = runBlocking<Unit> {
         val foreign = mockk<SecurityContext>()

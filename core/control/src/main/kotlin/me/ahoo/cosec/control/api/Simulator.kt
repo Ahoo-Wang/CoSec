@@ -65,9 +65,9 @@ class Simulator(
     private val attributes: AttributeCatalog = AttributeCatalog.NONE,
     /** The headers the host reads credentials from besides the fixed ones, as enforcement compiles with them. */
     private val credentialHeaders: Set<String> = emptySet(),
+    /** The documents decoded and compiled, one cache per host shared by its simulators (DR1-F-5). */
+    internal val cache: DocumentCache = DocumentCache(),
 ) {
-    /** The documents decoded and compiled for this simulator's compilers. */
-    internal val cache = DocumentCache()
 
     /** Every compilation this simulator made, cached or not; for tests. */
     internal val compilations = AtomicLong()
