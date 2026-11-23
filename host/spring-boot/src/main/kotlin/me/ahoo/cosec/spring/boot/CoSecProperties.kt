@@ -71,8 +71,9 @@ class CoSecProperties(
                     "Braces are a hash tag only when one pair wraps the whole prefix ({cosec}), never part of it."
                 prefix.trimEnd(':').let { KEY_PREFIX.matches(it) } ->
                     "Remove the trailing ':' (${prefix.trimEnd(':')}): the keys are the same."
-                ':' in prefix -> "A ':' inside it names keys under another prefix: move them to one without it " +
-                    "(https://cosec.ahoo.me/operations/upgrading-previews)."
+                ':' in prefix ->
+                    "A ':' inside it names keys under another prefix: move them to one without it " +
+                        "(https://cosec.ahoo.me/operations/upgrading-previews)."
                 else -> "Write it with letters, digits, '_', '.' and '-'."
             }
             throw IllegalArgumentException(
