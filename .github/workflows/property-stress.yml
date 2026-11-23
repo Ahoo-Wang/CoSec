@@ -12,7 +12,10 @@
 #
 
 # Manual property stress (RFC 0008 §3.5/§3.9): the property tests the rule registry names, with `iterations` random
-# cases each (default 1,000,000), one job per module that registers the `propertyStress` task. Run it here, never
+# cases each (default 1,000,000), one job per registered test class: `--tests` on the command line narrows the module's
+# `propertyStress` task, which keeps its own includes, to that one class, so the jobs together run the same tests with the
+# same iterations as one job per module did, and the run lasts as long as its longest class, not its longest module (on
+# 2026-11-22 `:runtime` took 51 of the run's 52 minutes, its classes one after another: docs/reviews/2026-11/ci-efficiency.md). Run it here, never
 # on a developer machine: a million cases per property takes far too long and loads the machine. The modules come
 # from test/conformance/src/test/resources/rules/*.json of the tested ref, the same source build.gradle.kts registers
 # the tasks from, so a new registered property needs no change to this file.
@@ -60,13 +63,15 @@ jobs:
           import glob, json, os, re, sys
           if not re.fullmatch(r"[1-9][0-9]{0,11}", os.environ["ITERATIONS"]):
               sys.exit("::error::iterations must be a positive integer")
-          dirs = set()
+          classes = {}
           for path in glob.glob("test/conformance/src/test/resources/rules/*.json"):
               if path.endswith("_meta.json"):
                   continue
               for rule in json.load(open(path))["rules"]:
                   for prop in rule.get("properties", []):
-                      dirs.add(prop.split(":")[0])  # module:Class#test
+                      name, test = prop.split(":", 1)  # module:Class#test
+                      classes.setdefault(name, set()).add(test.split("#")[0])
+          dirs = set(classes)
           # Guards name the project (settings.gradle.kts: `:<name>` in `<group>/<name>`); find its directory.
           mods = {}
           for name in dirs:
@@ -80,7 +85,10 @@ jobs:
               if unknown:
                   sys.exit("::error::unknown modules (no registered property tests): " + ", ".join(sorted(unknown)))
               mods = {n: d for n, d in mods.items() if n in want or d in want}
-          include = [{"name": n, "dir": d, "project": ":" + n} for n, d in sorted(mods.items())]
+          include = [
+              {"name": f"{n}-{c}", "dir": d, "project": ":" + n, "class": c}
+              for n, d in sorted(mods.items()) for c in sorted(classes[n])
+          ]
           if not include:
               sys.exit("::error::no module registers propertyStress")
           with open(os.environ["GITHUB_OUTPUT"], "a") as out:
@@ -89,7 +97,7 @@ jobs:
           PY
 
   stress:
-    name: ${{ matrix.project }}
+    name: ${{ matrix.project }} ${{ matrix.class }}
     needs: plan
     runs-on: ubuntu-latest
     timeout-minutes: 180
@@ -101,6 +109,7 @@ jobs:
     env:
       ITERATIONS: ${{ inputs.iterations }}
       PROJECT: ${{ matrix.project }}
+      CLASS: ${{ matrix.class }}
       MODULE_DIR: ${{ matrix.dir }}
       SHA: ${{ needs.plan.outputs.sha }}
       DUMP_DIR: ${{ github.workspace }}/stress-dumps
@@ -137,7 +146,7 @@ jobs:
           ( while sleep 1200; do
               for pid in $(jps -q); do jcmd "$pid" Thread.print > "$DUMP_DIR/threads-$pid-$(date +%s).txt" 2>&1 || true; done
             done ) &
-          ./gradlew "$PROJECT:propertyStress" "-PpropertyIterations=$ITERATIONS" --no-daemon --no-build-cache --stacktrace
+          ./gradlew "$PROJECT:propertyStress" --tests "*.$CLASS" "-PpropertyIterations=$ITERATIONS" --no-daemon --no-build-cache --stacktrace
 
       - name: Summary
         if: always()
@@ -146,11 +155,11 @@ jobs:
           REF: ${{ inputs.ref }}
         run: |
           {
-            echo "### Property stress: \`$PROJECT\`"
+            echo "### Property stress: \`$PROJECT\` \`$CLASS\`"
             echo
-            echo "| Module | Iterations | Result | Commit |"
-            echo "|---|---|---|---|"
-            echo "| \`$PROJECT\` | $ITERATIONS | $STATUS | \`$SHA\` (ref \`$REF\`) |"
+            echo "| Module | Class | Iterations | Result | Commit |"
+            echo "|---|---|---|---|---|"
+            echo "| \`$PROJECT\` | \`$CLASS\` | $ITERATIONS | $STATUS | \`$SHA\` (ref \`$REF\`) |"
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload test reports
