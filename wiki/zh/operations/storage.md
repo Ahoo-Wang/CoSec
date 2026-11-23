@@ -68,7 +68,8 @@ key 都在它之下（`SNP-9`）。
 | `<s>:shadow:resident:<instance>` | 仅数据面实例 `<instance>` | 该实例持有的文档及各自的修订（`CTL-75`）：只有 `propagation` 读取它。持有 16,384 个租户的网关在这里写入约 0.4 到 0.9 MB，取决于租户 id 的长度，但只在它持有的内容变化时（装入、驱逐、新修订）写入，并且至少每 30 分钟写一次；先于状态写入；最后一次写入整 1 小时后过期（没有抖动）。写入失败时，每个上报间隔都会重试 |
 | `<s>:shadow:instances:all` | 每个数据面实例 | 有状态可读的实例，每个带上它登记自己的时间；实例启动时登记，之后每小时再登记一次，写这个列表的实例顺带删掉超过 3 小时的条目；过期时间同报告 |
 | `<s>:token:revoked:<tokenId>` | `TokenRevoker`（登出），经由 `TokenStore.revoke`，后者接收令牌的 `jti`：应用通过 `TokenRevoker` 登出，从不直接调用存储 | 已吊销令牌 id 对应 `true`；在刷新令牌有效期之后一秒过期 |
-| `<s>:token:family:<sid>` | 登录、刷新和登出 | 一个会话的令牌族：主体、登录时间、结束时间、当前代数，以及是否已被吊销。每个存活的会话一个 key，在登录和每次刷新时写入，几百字节；它在会话结束时过期（登录后 `cosec.jwt.session.lifetime`），被吊销的会话带着标记保留到那时。只在刷新和登出时读取，从不在请求时读取 |
+| `<s>:token:family:<sid>` | 登录、刷新和登出 | 一个会话的令牌族：主体、登录时间、结束时间、当前代数，以及是否已被吊销。每个存活的会话一个 key，在登录和每次刷新时写入，几百字节。每次写入把它保留会话剩余时间（登录后 `cosec.jwt.session.lifetime`）与刷新令牌有效期（`cosec.jwt.token-validity.refresh`，7 天）中较短的那个，所以没人刷新的会话随它最后一个刷新令牌离开 Redis；被吊销的会话带着标记，从吊销时起保留同样长。一个主体在一个租户里保留 64 个，按开始时间最近的：第 65 个会删除最早的那个（`IDN-35`）。只在刷新和登出时读取，从不在请求时读取 |
+| `<s>:token:sessions:<n>:<tenant>:<principal>` | 登录和租户切换 | 一个主体在一个租户里的会话（`<n>` 是租户 id 的长度），按开始时间排序的会话 id 有序集合：正是它保留其中 64 个（`IDN-35`）。在会话自己的 key 之前写入；它与它计入的最长的会话活得一样长。最多 64 个成员，每个约 30 字节 |
 | `<s>:token:subject:revoked:<n>:<tenantId>:<principalId>` | `TokenStore.revokeSubject` | 以 epoch 毫秒表示的 `issuedBefore`；`<n>` 是 `<tenantId>` 的长度；在 `issuedBefore` 之后再过刷新令牌有效期加一秒过期 |
 | `<s>:inv:membership`（通道，不是键） | `CoCacheMembershipProvider.invalidate` | 指名成员关系已变化的主体的帧，每个实例据此从自己的内存中丢弃。Redis 中不存成员关系（DR1-D-2）：8.0 预览版把它们存在 `<s>:membership:*` 下，现在没有任何东西读取，可以删除 |
 | `<s>:api-key:<sha256>` | `RedisApiKeyStore` | 一个 API key 的 JSON（`"format":3`），按 key 的 SHA-256 存放；8.0 之前格式的 key 在 `cosec-migrate api-keys` 转换之前都会被拒绝，8.0 预发布版以其他格式存储的 key 在重新签发之前都会被拒绝 |
