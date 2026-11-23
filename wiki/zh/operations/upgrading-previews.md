@@ -27,6 +27,10 @@ description: "每个 8.0 预览版（alpha 与 beta）到下一个之间的变�
 
 ## 从 8.0.0-beta.7 升级 {#from-8-0-0-beta-7}
 
+- **对基于 CoSec 镜像构建的镜像是破坏性变更：应用的文件归 root 所有**（DR1-G-8）。受影响的是 `FROM` 网关或控制面镜像、
+  并以 `appuser` 身份在 `/opt/<app>` 下写文件（包括重新训练 AOT 缓存）的 Dockerfile。进程现在只拥有 `logs/` 和 `data/`，
+  被诱使写文件的进程无法替换自己的 jar。这些步骤前切到 `USER root`，之后切回 `USER appuser`
+  （[训练自己的缓存](./deployment.md#training-your-own-cache)）。
 - **破坏性变更：`cosec.key-prefix` 里不能有 `:`**（`SNP-9`，DR1-D-4）。受影响的是前缀里含有字母、数字、`_`、`.`、`-`
   以外字符的部署，用一对花括号包住整个前缀的除外（hash tag `{cosec}` 仍然可用）。
   - 像 `a` 和 `a:b` 这样的前缀会嵌套，同一个 Redis 上的两个部署因此共用 key。现在这样的前缀会让启动失败，信息里点名它含有什么。

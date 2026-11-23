@@ -30,6 +30,11 @@ Which preview of the library may run behind which preview of the gateway image: 
 
 ## From 8.0.0-beta.7 {#from-8-0-0-beta-7}
 
+- **Breaking for images built on top of CoSec's: the application's files are root's** (DR1-G-8). Affected: a
+  Dockerfile `FROM` the gateway or control-plane image that writes under `/opt/<app>` as `appuser`, retraining the AOT
+  cache included. The process now owns only `logs/` and `data/`, so a process made to write files cannot replace its
+  jars. Switch to `USER root` for those steps and back to `USER appuser` after
+  ([Training your own cache](./deployment.md#training-your-own-cache)).
 - **Breaking: `cosec.key-prefix` holds no `:`** (`SNP-9`, DR1-D-4). Affected: a deployment whose prefix has a
   character other than letters, digits, `_`, `.` and `-`, other than one pair of braces around the whole prefix (a hash
   tag, `{cosec}`, still works).
