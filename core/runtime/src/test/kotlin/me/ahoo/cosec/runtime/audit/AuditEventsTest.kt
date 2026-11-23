@@ -214,7 +214,7 @@ class AuditEventsTest {
             it.authorization.source.via.assert().isEqualTo(AuditVia.NONE)
             it.binding.assert().isNull()
         }
-        // RFC 0007 §7.6, UD-7: a boundary refusal is its own decision; the response says only `forbidden`.
+        // RFC 0007 §7.6; usability review UD-7 (OBS-6): a boundary refusal is its own decision; the response says only `forbidden`.
         audit(Decision.Deny(StatementRef.Boundary(PolicyId("fence"), PipelineFixtures.TENANT))).authorization.let {
             it.decision.assert().isEqualTo(AuditDecision.BOUNDARY)
             it.reasonCode.assert().isEqualTo(AuditReasonCode.BOUNDARY)
