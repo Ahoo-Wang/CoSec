@@ -1,0 +1,17 @@
+# Rule: CTL-82
+# Mutant: a cancelled caller leaves its exchange running: the host's request goes on until the call's timeout ends it
+# Tests: :control-http:test --tests me.ahoo.cosec.control.http.HttpCallCancellationTest
+
+diff --git a/extensions/control-http/src/main/kotlin/me/ahoo/cosec/control/http/HttpTransport.kt b/extensions/control-http/src/main/kotlin/me/ahoo/cosec/control/http/HttpTransport.kt
+index 1fdd34393..86fd667be 100644
+--- a/extensions/control-http/src/main/kotlin/me/ahoo/cosec/control/http/HttpTransport.kt
++++ b/extensions/control-http/src/main/kotlin/me/ahoo/cosec/control/http/HttpTransport.kt
+@@ -116,7 +116,7 @@ internal class HttpTransport(
+                 continuation.resumeWithException((failure as? CompletionException)?.cause ?: failure)
+             }
+         }
+-        continuation.invokeOnCancellation { cancel(true) }
++        continuation.invokeOnCancellation { cancel(false) }
+     }
+ 
+     private fun uri(call: ServiceCall): URI {
