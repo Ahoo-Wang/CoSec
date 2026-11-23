@@ -53,6 +53,18 @@ object GuardAllowlist {
             "spring-boot:ControlServicePortTest#a service port beside the application's, the management port or a disabled control API is refused",
             "spring-boot:ControlServicePortTest#a service port with no WebFlux server to serve it fails startup naming what to do",
             "spring-boot:ControlServicePortTest#cosec control http enabled false serves no control route, and the control plane stays for what embeds it",
+            // CTL-82: a control request's deadline is its caller's, reaching it by cancellation; every wait bounded on its own.
+            "control-http:HttpCallCancellationTest#a cancelled caller closes the exchange it was waiting on - CTL-82",
+            "spring-boot:ControlRequestCancellationTest#a caller that is cancelled cancels the host's request, which publishes nothing and holds nothing - CTL-82",
+            "spring-boot:ControlRequestCancellationTest#a call that times out cancels the host's request, which publishes nothing and holds nothing - CTL-82",
+            "control:ControlServiceCancellationTest#a caller's timeout before the head write publishes nothing and holds nothing more - CTL-82",
+            "control:ControlServiceCancellationTest#a caller cancelled after the head write leaves the change settled, released and recorded - CTL-82",
+            "control:CommittedRevisionTest#a caller cancelled before the head write is cancelled and writes no head - #1263",
+            "control:CommittedRevisionTest#a caller cancelled after the head write stays cancelled, the revision settled - #1263",
+            "control:StageReservationTest#a stage cancelled while writing its candidate gives the slot back and stays cancelled - #1235",
+            "control:ChangeListenersTest#a gated event waits for the REQUIRED listeners, and fails with them",
+            "control:MovedHeadsTest#a detection that does not finish in time is recorded for review",
+            "spring-boot:DerivedTimeoutsTest#the values follow the deadlines an operator states",
             // CTL-81: no trust root through the service profile.
             "control:ServiceTrustRootTest#a stated platform administrator's widened catalog waits through the service port and the facade - CTL-81",
             "control:ServiceTrustRootTest#a stated platform administrator's grant on a tenant's document waits through the service port - CTL-81",
