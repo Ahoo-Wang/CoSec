@@ -228,6 +228,18 @@ class ControlHttpTest {
         allows.single().has("expiresAt").assert().isFalse()
     }
 
+    /** DR1-B-2: an `expiresAt` whose epoch milliseconds overflow is a 400 naming the field, never a 500. */
+    @Test
+    fun `an expiresAt past year 9999 is refused as a field, not answered as an error`() {
+        val proposal = """{"document":"tenant:acme","base":1,"note":"far","operations":[""" +
+            """{"op":"putPolicy","policy":{"id":"far","statements":[{"effect":"allow","action":"order:read"}]}},""" +
+            """{"op":"putBinding","binding":{"id":"far","subject":{"role":"viewer"},"app":"order","space":"*",""" +
+            """"policy":"far","expiresAt":"+999999999-12-31T23:59:59Z"}}]}"""
+        val (status, problem) = call("POST", "/changes", proposal)
+        status.assert().isEqualTo(400)
+        problem.get("detail").asString().assert().contains("expiresAt").contains("year 9999")
+    }
+
     /** RFC 0009 §4.2: a simulated credential states its flags; anything but a boolean is refused, never read as one. */
     @Test
     fun `simulate reads the credential's flags as booleans only`() {

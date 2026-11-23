@@ -15,6 +15,7 @@
 
 package me.ahoo.cosec.runtime.stage
 
+import me.ahoo.cosec.runtime.call.FallbackIds
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.api.audit.AuditRequest
@@ -93,6 +94,11 @@ internal class RequestState(
 
     /** The principal's tenant, the default one when anonymous: the scope's from `ResolveScope` on. */
     val tenant: TenantId get() = principal?.tenant ?: TenantId.DEFAULT
+
+    private var eventId: String? = null
+
+    /** The one id of this request's decision events: its REQUIRED and BEST_EFFORT listeners see the same (DR1-C-6). */
+    fun eventId(ids: FallbackIds): String = eventId ?: ids.generate().also { eventId = it }
 
     /**
      * The [DecisionEvent] for [outcome], null when the caller went away. A stage that did not finish leaves its fields
