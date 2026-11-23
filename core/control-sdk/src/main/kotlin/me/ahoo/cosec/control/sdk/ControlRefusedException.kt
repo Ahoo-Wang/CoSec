@@ -49,8 +49,9 @@ class ControlRefusedException(
     val conflict: ConflictKind? get() = read(problem, "conflict")?.let(ConflictKind::of)
 
     /**
-     * The change that holds the slot a [ConflictKind.SLOT_HELD] wanted (the problem's `heldBy`, `CTL-80`), where the
-     * control plane knows it; null for any other refusal.
+     * The change that holds the slot a [ConflictKind.SLOT_HELD] wanted, or the oldest open change of a document at its
+     * [ConflictKind.OPEN_LIMIT] (the problem's `heldBy`, `CTL-80`, `CTL-83`), where the control plane knows it; null for
+     * any other refusal.
      */
     val heldBy: String? get() = read(problem, "heldBy")
 

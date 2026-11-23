@@ -15,6 +15,8 @@
 
 package me.ahoo.cosec.conformance
 
+import java.time.Duration
+import java.time.Instant
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
@@ -61,6 +63,7 @@ import me.ahoo.cosec.control.store.ControlStore
 import me.ahoo.cosec.control.store.ControlStoreException
 import me.ahoo.cosec.control.store.InMemoryControlStore
 import me.ahoo.cosec.control.store.Publication
+import me.ahoo.cosec.control.store.RetentionPolicy
 import me.ahoo.cosec.control.store.Revisions
 import me.ahoo.cosec.document.Actor
 import me.ahoo.cosec.document.PolicyDocument
@@ -106,8 +109,6 @@ import me.ahoo.cosec.testkit.text
 import tools.jackson.databind.JsonNode
 import tools.jackson.databind.node.JsonNodeFactory
 import tools.jackson.databind.node.ObjectNode
-import java.time.Duration
-import java.time.Instant
 
 /**
  * The `control` runner for the change flow (RFC 0007 §6.1–§6.3, §7.2–§7.5): steps over an in-memory control plane,
@@ -125,6 +126,7 @@ import java.time.Instant
  *                                                                           // token "token-<name>", issued at no time
  *                "dave": { "tenant": "acme", "roles": ["approver"], "provider": true } },  // the provider says its roles
  * "options":   { "fourEyes": true, "lockout": true (the UC-6 check, off by default), "shadow": { "minDuration": "PT15M", "minSamples": 3, "maxDuration": "PT1H" },
+ *                "maxCount": 2,                                    // cosec.control.revisions.max-count (CTL-83); 50 when absent
  *                "providers": [ { "path": "ext.geo.country", "type": "string" } ] },   // the host's AttributeProviders
  * "steps": [ { "propose": { "change": "c1", "by": "alice", "document": "tenant:acme", "kind": "BREAK_GLASS",
  *                           "operations": [ { "putPolicy": { ...the document format's policy... } },
@@ -263,7 +265,11 @@ object ChangeRunner : ScenarioRunner {
             }
         } as ControlStore
 
-        val revisions = Revisions(store, clock)
+        val revisions = Revisions(
+            store,
+            clock,
+            RetentionPolicy(maxCount = node.get("options")?.get("maxCount")?.intValue() ?: RetentionPolicy().maxCount),
+        )
 
         /** The roles the membership provider answers, by operator; a `provide` step changes them. */
         private val provided = node.get("operators")?.fields().orEmpty().entries
@@ -395,7 +401,7 @@ object ChangeRunner : ScenarioRunner {
 
         /** A window closes as soon as it is looked at, unless the scenario sets `options.shadow`. */
         private fun shadowOptions(): ShadowOptions {
-            node.get("options")?.only("fourEyes", "shadow", "providers", "lockout")
+            node.get("options")?.only("fourEyes", "shadow", "providers", "lockout", "maxCount")
             val shadow = node.get("options")?.get("shadow") ?: return ShadowOptions(Duration.ZERO, 0, Duration.ZERO)
             shadow.only("minDuration", "minSamples", "maxDuration")
             return ShadowOptions(

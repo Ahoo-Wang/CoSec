@@ -50,7 +50,9 @@ class ControlMaintenanceTest {
     private val ids = AtomicInteger()
     private val changes = Changes(
         store,
-        revisions,
+        // The open-change limit (CTL-83) is the retention's max-count; these tests keep one revision to reclaim, and
+        // propose more open changes than that, so the changes keep the default.
+        Revisions(store, clock),
         { ChangeId("c${ids.incrementAndGet()}") },
         PERMIT_ALL,
         clock,
@@ -425,5 +427,33 @@ class ControlMaintenanceTest {
         reclaimed.getValue(beta).records.assert().containsExactlyInAnyOrder(other[0], other[1])
         store.recordDigests(ACME).assert().containsExactlyInAnyOrder(acme[0], acme[2])
         store.recordDigests(beta).assert().containsExactly(other[2])
+    }
+
+    /**
+     * CTL-72, DR1-E-2: the open changes are read by the one instance that holds the reclaim pass's lease, under it, and by
+     * no other: an instance without the lease reads none of them, where every instance read every document's each hour.
+     */
+    @Test
+    fun `only the instance holding the reclaim lease reads the open changes`() = runBlocking<Unit> {
+        val reads = AtomicInteger()
+        val counting = object : ControlStore by store {
+            override suspend fun openChanges(document: SnapshotKey): List<ListedChange> {
+                reads.incrementAndGet()
+                return store.openChanges(document)
+            }
+        }
+        val maintenance = ControlMaintenance(counting, Revisions(counting, clock, revisions.retention), changes, Duration.ofMinutes(1))
+        published()
+        published()
+        changes.propose(ALICE_OP, ACME, 2, listOf(Operation.PutPolicy(allow("read"))), "open")
+        published()
+        clock.now = clock.now.plus(Duration.ofDays(1))
+        // Another instance runs this pass.
+        store.acquireLease(ControlMaintenance.RECLAIM_LEASE, "another instance", Duration.ofMinutes(5)).assert().isTrue()
+        maintenance.reclaim().assert().isEmpty()
+        reads.get().assert().isEqualTo(0)
+        store.releaseLease(ControlMaintenance.RECLAIM_LEASE, "another instance")
+        maintenance.reclaim().assert().containsKey(ACME)
+        reads.get().assert().isEqualTo(1)
     }
 }

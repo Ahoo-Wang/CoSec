@@ -97,6 +97,19 @@ class ControlMaintenance(
             }
             return emptyMap()
         }
+        // One instance a pass reads the open changes and reclaims, under the pass's lease (CTL-72, DR1-E-2): the others
+        // read none, where every instance read every document's open changes each hour.
+        if (attempt("take the reclaim lease") { store.acquireLease(RECLAIM_LEASE, holder, ControlDerived.RECLAIM_INTERVAL) } != true) {
+            return emptyMap()
+        }
+        try {
+            return reclaimLeased(documents)
+        } finally {
+            withContext(NonCancellable) { attempt("release the reclaim lease") { store.releaseLease(RECLAIM_LEASE, holder) } }
+        }
+    }
+
+    private suspend fun reclaimLeased(documents: Set<SnapshotKey>): Map<SnapshotKey, Reclaimed> {
         val reclaimed = LinkedHashMap<SnapshotKey, Reclaimed>()
         for (key in documents) {
             val keep = attempt("read the open changes of [$key]") { resting(key) } ?: continue
@@ -264,6 +277,9 @@ class ControlMaintenance(
     @InternalCoSecApi
     companion object {
         const val SHADOW_LEASE = "shadow-windows"
+
+        /** Held by the one instance that reads the open changes and reclaims in a pass (`CTL-72`). */
+        const val RECLAIM_LEASE = "reclaim-pass"
 
         /** How many shadowing changes the pass reads a page. */
         private const val SHADOW_PAGE = 200
