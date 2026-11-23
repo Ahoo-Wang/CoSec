@@ -43,8 +43,6 @@ import me.ahoo.cosec.webmvc.SecurityContextArgumentResolver
 import me.ahoo.cosec.webmvc.ServletXForwardedRemoteIpResolver
 import me.ahoo.cosec.webmvc.SuspendingHandlerHolderInterceptor
 import org.springframework.beans.factory.ListableBeanFactory
-import org.springframework.boot.context.properties.bind.Bindable
-import org.springframework.boot.context.properties.bind.Binder
 import org.springframework.beans.factory.ObjectProvider
 import org.springframework.boot.autoconfigure.AutoConfiguration
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean
@@ -54,6 +52,8 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingClas
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication
 import org.springframework.boot.context.properties.EnableConfigurationProperties
+import org.springframework.boot.context.properties.bind.Bindable
+import org.springframework.boot.context.properties.bind.Binder
 import org.springframework.boot.web.servlet.FilterRegistrationBean
 import org.springframework.cloud.gateway.route.RouteLocator
 import org.springframework.context.ApplicationContext
@@ -285,7 +285,7 @@ internal class CoSecPipelineWebAutoConfiguration {
             StartupTask.AfterSingletons {
                 val listed = Binder.get(environment)
                     .bind(GatewayProperties.UNPROTECTED_HANDLERS_KEY, Bindable.setOf(String::class.java))
-                    .orElse(emptySet())
+                    .orElse(null) ?: emptySet()
                 GatewayOwnHandlers.require(beans, listed)
             }
     }
