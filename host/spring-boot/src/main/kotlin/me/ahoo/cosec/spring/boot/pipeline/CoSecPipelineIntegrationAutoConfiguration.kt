@@ -183,6 +183,7 @@ class CoSecPipelineIntegrationAutoConfiguration {
         @ConditionalOnClass(name = ["me.ahoo.cosec.micrometer.MetricsListener"])
         @ConditionalOnBean(MeterRegistry::class)
         @ConditionalOnProperty(value = [MetricsProperties.ENABLED_KEY], havingValue = "true", matchIfMissing = true)
+        @InternalCoSecApi
         class Meters {
             @Bean
             fun cosecKafkaAuditMeters(

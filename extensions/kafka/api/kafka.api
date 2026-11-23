@@ -6,6 +6,7 @@ public final class me/ahoo/cosec/kafka/KafkaAuditListener : me/ahoo/cosec/runtim
 	public fun destroy ()V
 	public fun getDelivery ()Lme/ahoo/cosec/runtime/event/Delivery;
 	public fun getName ()Ljava/lang/String;
+	public final fun getSendFailures ()J
 	public fun onDecision (Lme/ahoo/cosec/runtime/event/DecisionEvent;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun toString ()Ljava/lang/String;
 }
