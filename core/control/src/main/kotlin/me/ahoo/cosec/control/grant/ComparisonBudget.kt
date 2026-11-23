@@ -42,5 +42,19 @@ internal class ComparisonBudget(private val limit: Long = MAX_COMPARISONS) {
          * took 1.4 s of CPU.
          */
         const val MAX_COMPARISONS: Long = 4_000_000
+
+        /**
+         * The comparisons the largest legitimate change makes per fragment it grants: 60,600 for 1,200, rounded down
+         * (`SaasAppChangeMeasurement.largestLegitimate`).
+         */
+        const val COMPARISONS_PER_FRAGMENT: Long = 50
+
+        /**
+         * The fragments one analysis splits a change into (DR1-E-1): as many as [MAX_COMPARISONS] can check at the rate
+         * of the largest legitimate change, 80,000, 66 times its 1,200. A change of more is too large to analyse before
+         * any is split, as one finding: a fragment the grantor holds nothing for costs no comparison, so the comparison
+         * budget alone bounds neither how many are split nor how many are recorded.
+         */
+        const val MAX_FRAGMENTS: Long = MAX_COMPARISONS / COMPARISONS_PER_FRAGMENT
     }
 }

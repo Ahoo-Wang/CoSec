@@ -158,6 +158,9 @@ object Expectations {
         if (outcome.analysis.unprotect.isNotEmpty()) {
             set("unprotect", json.arrayNode().apply { outcome.analysis.unprotect.forEach { add(entry(it)) } })
         }
+        if (outcome.analysis.tooLarge) {
+            put("tooLarge", true)
+        }
     }
 
     /** A fragment and its verdict: `YES` for contained (also for the trust root), `UNKNOWN` with reason and shortfall. */
