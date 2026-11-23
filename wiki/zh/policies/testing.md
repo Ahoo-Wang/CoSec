@@ -213,7 +213,7 @@ flowchart LR
 任何应答中：候选检查时所依据的各文档头、在其窗口上报过的实例，以及审批人持有的内容（`CTL-61`）。
 
 由请求创建的变更还应答 `origin`，即其作者是如何被识别的（`CTL-70`）：
-- **变更的每个读者**都得到 `asserted` 和 `via.method`。`asserted` 为 true 表示主机相信了调用方声明的身份（`CoSec-Identity` 头），而不是自己验证凭证；`via.method` 是凭证的种类（`jwt`、`api-key`，经控制面门面的调用为 `in-process`）。
+- **变更的每个读者**都得到 `asserted` 和 `via.method`。`asserted` 为 true 表示主机相信了调用方声明的身份（`CoSec-Identity` 头），而不是自己验证凭证；`via.method` 是凭证的种类（`jwt`、`api-key`；服务以自己的主体经网络调用时为 `service`，经控制面门面的调用为 `in-process`）。
 - **对变更的文档持有 `cosec:approve`、或对平台文档持有 `cosec:read` 的读者**，还得到 `via.credential`（凭证的 id，从不是它的值）、`via.request`（请求的 id）和 `peer`（请求到达时连接的地址）。它们说明是哪个密钥或令牌、从哪里写了这个变更：这是为变更负责的人衡量它的依据。
 - **其他读者**（包括作者本人）完全得不到这些成员，连空成员也没有。无法作出决策的读者同样得不到：只有允许才算数。
 
@@ -366,7 +366,7 @@ flowchart LR
 
 对文档持有 `cosec:approve` 的平台主体是信任根：其自己的变更不做分析，除非开启了 `cosec.control.approval.four-eyes`，这时它们会像其他人的变更一样被分析。平台授予了其租户文档上 `cosec:approve` 的租户主体，审批别人的变更，它自己的变更要经分析。开启 four-eyes 时，信任根的变更需要审批的部分必须由另一位平台主体审批。租户的边界属于平台：只有平台主体能设置它（否则 `403`），也只有平台主体能审批、驳回或放弃设置边界的变更。
 
-API key 无论其主体持有什么，都不是信任根，也从不审批。CoSec 按校验来源识别自己的 API key，任何名为 `api-key` 的凭证（包括网关转发的身份所带的）也算作 API key。你自己的认证器认可的凭证，在 CoSec 看来是人的凭证：不要给面向工作负载的认证器授予 `cosec:approve` 或 `cosec:platform-admin`。
+工作负载的凭证无论其主体持有什么，都不是信任根，也从不审批（`IDN-34`）：API key，或服务自己的身份（`ControlCaller.service`），其凭证名为 `service`。CoSec 按校验来源识别自己的 API key，任何名为 `api-key` 或 `service` 的凭证（包括网关转发的身份所带的）也算作工作负载的凭证。你自己的认证器认可的凭证，除非它把凭证命名为 `service`，在 CoSec 看来都是人的凭证：不要给面向工作负载的认证器授予 `cosec:approve` 或 `cosec:platform-admin`，或者让它把凭证命名为 `service`。
 
 分析看不到的东西：
 
@@ -374,7 +374,7 @@ API key 无论其主体持有什么，都不是信任根，也从不审批。CoS
 - **针对个人的限制。** 绑定到 `Anyone`、带 `subject.id` 条件的 DENY 限制的是该主体能做什么，而不是它能授出什么：分析把 `Anyone` 的 DENY 读作对每个被授予者同样生效。请把这条 DENY 绑定到该主体。
 - **信任根。** 不开启 four-eyes 时，它的变更完全不经分析；这时 break-glass 的两个人和时间上限也都约束不了它（[安全模型](../guide/security-model.md#break-glass)）。
 
-有升级的变更在窗口关闭或被跳过后停留在 `AWAITING_APPROVAL`。另一位持有 `cosec:approve` 的人通过 `POST /changes/{id}:approve` 审批，并带上他们评审过的 `candidate` 摘要（来自 `GET /changes/{id}`）；摘要不同返回 `409`，作者不能审批自己的变更。审批是人的行为：以 API key 认证的主体不能审批（`403`），凭证不带 id 的主体也不能（`403`），因为发布时不会计入它的审批。审批记录审批人的令牌（`jti` 与 `iat`）；变更发布之前，如果这个令牌，或审批人截至当时签发的全部令牌被吊销，审批就不再算数。没有记下凭证 id 的审批也不算数：升级到本版本之前做的、旧版本实例接受的，或用不带 id 的凭证给出的审批；请重新审批。凭证不说明签发时间时（你的认证器没有设置 `issuedAt`），该主体的令牌只要有一次吊销，其审批就作废。审批人的访问令牌过期之后，`TokenRevoker.revoke` 不再接受它，只有 `revokeSubject` 能收回其审批。吊销按数据面管道的方式判断，但这里无法读取的存储不算"未吊销"：与其他读取失败一样返回 `503`（[认证](../integration/authentication.md#logout-and-revocation)），变更保留其审批，等存储恢复后再发布。吊销保留 `cosec.jwt.token-validity.refresh` 这么久，它不能短于 `cosec.control.approval.expire-after`，否则 starter 不会启动。成员关系来自成员关系提供者的审批人，发布时判定两次：一次按审批时持有且现在仍持有的角色，一次按提供者现在答复的全部内容；两次都必须放行，所以绑定在其后新获得角色上的 DENY 会让审批作废。`:reject` 带上 `reason` 结束该变更。审批在 `cosec.control.approval.expire-after`（72 小时）内有效，且只对该候选有效。`GET /changes/{id}` 显示谁审批、何时、为何审批，不显示审批人的凭证、成员关系、属性，以及其凭证能触及什么；这些只保存在存储中的变更记录里，任何变更事件都不带它们。break-glass 的审批先由 REQUIRED 变更监听器记录，再存入变更：之后存入失败时，记录中会有一条变更上没有的审批，由审批人重新审批。
+有升级的变更在窗口关闭或被跳过后停留在 `AWAITING_APPROVAL`。另一位持有 `cosec:approve` 的人通过 `POST /changes/{id}:approve` 审批，并带上他们评审过的 `candidate` 摘要（来自 `GET /changes/{id}`）；摘要不同返回 `409`，作者不能审批自己的变更。审批是人的行为：以工作负载的凭证（API key、服务自己的身份）认证的主体不能审批（`403`），凭证不带 id 的主体也不能（`403`），因为发布时不会计入它的审批。审批记录审批人的令牌（`jti` 与 `iat`）；变更发布之前，如果这个令牌，或审批人截至当时签发的全部令牌被吊销，审批就不再算数。没有记下凭证 id 的审批也不算数：升级到本版本之前做的、旧版本实例接受的，或用不带 id 的凭证给出的审批；请重新审批。凭证不说明签发时间时（你的认证器没有设置 `issuedAt`），该主体的令牌只要有一次吊销，其审批就作废。审批人的访问令牌过期之后，`TokenRevoker.revoke` 不再接受它，只有 `revokeSubject` 能收回其审批。吊销按数据面管道的方式判断，但这里无法读取的存储不算"未吊销"：与其他读取失败一样返回 `503`（[认证](../integration/authentication.md#logout-and-revocation)），变更保留其审批，等存储恢复后再发布。吊销保留 `cosec.jwt.token-validity.refresh` 这么久，它不能短于 `cosec.control.approval.expire-after`，否则 starter 不会启动。成员关系来自成员关系提供者的审批人，发布时判定两次：一次按审批时持有且现在仍持有的角色，一次按提供者现在答复的全部内容；两次都必须放行，所以绑定在其后新获得角色上的 DENY 会让审批作废。`:reject` 带上 `reason` 结束该变更。审批在 `cosec.control.approval.expire-after`（72 小时）内有效，且只对该候选有效。`GET /changes/{id}` 显示谁审批、何时、为何审批，不显示审批人的凭证、成员关系、属性，以及其凭证能触及什么；这些只保存在存储中的变更记录里，任何变更事件都不带它们。break-glass 的审批先由 REQUIRED 变更监听器记录，再存入变更：之后存入失败时，记录中会有一条变更上没有的审批，由审批人重新审批。
 
 ### 角色类 {#the-role-class}
 

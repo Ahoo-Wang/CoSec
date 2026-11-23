@@ -43,8 +43,9 @@ The decision event's `outcome.reason` names what decided, and every output uses 
 | `CANCELLED` | `cancelled` | no audit record | callers that went away |
 
 The event's `subject.method` names how the principal authenticated in the words `CoSec-Identity` uses for the same
-credential: `jwt` for CoSec's own token, `api-key`, or the name another verifier's tokens are given (`token` by
-default); a principal with no credential is named by its authenticator.
+credential: `jwt` for CoSec's own token, `api-key`, `service` for a service that calls the control plane as its own
+principal (`IDN-34`), or the name another verifier's tokens are given (`token` by default); a principal with no
+credential is named by its authenticator.
 
 The listeners the starter registers:
 

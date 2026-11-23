@@ -155,10 +155,11 @@ object DocumentFormats {
                         listOf(
                             Field(
                                 "method",
-                                StringType(minLength = 1, examples = listOf("jwt", "api-key")),
+                                StringType(minLength = 1, examples = listOf("jwt", "api-key", "service")),
                                 required = true,
-                                description = "How the principal authenticated: `jwt` and `api-key` are CoSec's own, " +
-                                    "and an authenticator of another credential names its own.",
+                                description = "How the principal authenticated: `jwt`, `api-key` and `service` are " +
+                                    "CoSec's own, `api-key` and `service` a workload's credential, and an authenticator " +
+                                    "of another credential names its own.",
                             ),
                             Field(
                                 "jti",

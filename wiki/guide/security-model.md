@@ -276,10 +276,12 @@ ALLOW of everything, which is what break-glass gives, without its second person,
 no time bound and no REQUIRED audit to such a binding. Turn four-eyes on where a second person matters
 ([Testing policies](../policies/testing.md#approval)), and watch the change log for ALLOWs of everything.
 
-The trust root is a person. An API key is never the trust root and never approves, whatever its principal holds: CoSec
-tells its own API keys by where they were verified, and takes any credential named `api-key`, a gateway's forwarded
-identity's included, for one. A credential your own authenticator accepts is a person's to CoSec, so give an
-authenticator of workloads neither `cosec:approve` nor `cosec:platform-admin`.
+The trust root is a person. A workload's credential is never the trust root and never approves, whatever its principal
+holds (`IDN-34`). A workload's credential is an API key, or the identity a service states when it calls the control
+plane as its own principal, whose credential is named `service`. CoSec tells its own API keys by where they were
+verified, and takes any credential named `api-key` or `service`, a gateway's forwarded identity's included, for a
+workload's. A credential your own authenticator accepts is a person's to CoSec unless it names it `service`, so give an
+authenticator of workloads neither `cosec:approve` nor `cosec:platform-admin`, or have it name its credential `service`.
 
 No one is the trust root through the control API's service profile, on the control-plane host's service port or
 through `ControlService` in process (`CTL-81`). There the identity is only stated, by whatever workload the network

@@ -13,16 +13,26 @@ description: "每个 8.0 预览版（alpha 与 beta）到下一个之间的变�
 
 | 你运行的版本 | 阅读 |
 |---|---|
-| `8.0.0-beta.6` | [从 beta.6 升级](#from-8-0-0-beta-6) |
-| `8.0.0-beta.5` | [从 beta.5 升级](#from-8-0-0-beta-5)，然后是上面那一节 |
-| `8.0.0-beta.4` | [从 beta.4 升级](#from-8-0-0-beta-4)，然后是上面两节 |
-| `8.0.0-beta.3` | [从 beta.3 升级](#from-8-0-0-beta-3)，然后是上面三节 |
-| `8.0.0-beta.2` | [从 beta.2 升级](#from-8-0-0-beta-2)，然后是上面四节 |
-| `8.0.0-beta.1` | [从 beta.1 升级](#from-8-0-0-beta-1)，然后是上面五节 |
-| `8.0.0-alpha.4` | [从 alpha.4 升级](#from-8-0-0-alpha-4)，然后是上面六节 |
+| `8.0.0-beta.7` | [从 beta.7 升级](#from-8-0-0-beta-7) |
+| `8.0.0-beta.6` | [从 beta.6 升级](#from-8-0-0-beta-6)，然后是上面那一节 |
+| `8.0.0-beta.5` | [从 beta.5 升级](#from-8-0-0-beta-5)，然后是上面两节 |
+| `8.0.0-beta.4` | [从 beta.4 升级](#from-8-0-0-beta-4)，然后是上面三节 |
+| `8.0.0-beta.3` | [从 beta.3 升级](#from-8-0-0-beta-3)，然后是上面四节 |
+| `8.0.0-beta.2` | [从 beta.2 升级](#from-8-0-0-beta-2)，然后是上面五节 |
+| `8.0.0-beta.1` | [从 beta.1 升级](#from-8-0-0-beta-1)，然后是上面六节 |
+| `8.0.0-alpha.4` | [从 alpha.4 升级](#from-8-0-0-alpha-4)，然后是上面七节 |
 | `8.0.0-alpha.3`、`alpha.2`、`alpha.1` | [从 alpha.3](#from-8-0-0-alpha-3)、[alpha.2](#from-8-0-0-alpha-2) 或 [alpha.1](#from-8-0-0-alpha-1) 升级，然后是它上面的每一节 |
 
 库的哪个预览版可以运行在网关镜像的哪个预览版之后：见[升级运行中的部署](./upgrading.md#upgrading-a-running-deployment)。
+
+## 从 8.0.0-beta.7 升级 {#from-8-0-0-beta-7}
+
+- **以自己的主体调用控制面的服务记为 `service`**（`ControlCaller.service`，`IDN-34`）。受影响的：读取控制请求记录的东西，以及升级的顺序。
+  - **记录。** 这样的服务所声明的身份把凭证命名为 `service`，beta.7 命名为 `api-key`。它不是 API key，记录现在照实写：它对控制面宿主的请求在决策事件与审计里的 `subject.method`、变更日志里的 `origin.via.method` 都是 `service`（经进程内 `ControlService` 的调用仍是 `in-process`）。此前存储的变更保留 `api-key`。按 `api-key` 找服务调用方的看板、告警或查询，也要找 `service`。
+  - **它能做什么没有变。** `service` 和 `api-key` 一样是工作负载的凭证：从不审批，也从不是信任根，没有会话，也没有 break-glass（新增 `AuthenticatedPrincipal.workload`）。
+  - **先升级控制面宿主，再升级调用它们的服务。** beta.7 宿主不认识 `service`，把它当作人的凭证。在它的服务端口上这不改变什么：那里不提供审批，也没有人是信任根。但如果某个服务的 `cosec.control.service-url` 指向 beta.7 宿主的运维端口（相信 `CoSec-Identity` 的端口），它就能审批变更；如果它是持有 `cosec:approve` 的平台管理员，还会是信任根，而 beta.7 的 `api-key` 两样都做不到。已升级的调用方调用 beta.7 宿主的服务端口是安全的；无论如何都不要让服务指向运维端口。beta.7 调用方调用已升级的宿主时仍发送 `api-key`，已升级的宿主仍把它当作工作负载的凭证。
+- **你自己的 `Authenticator` 把凭证命名为 `service`** 时，现在命名的是工作负载的凭证：它的主体不再能审批变更或成为信任根，与 `api-key` 相同。受影响的：只有用了这个名字的认证器。如果它的主体是人，请改名；否则无需改动（[扩展 CoSec](../architecture/extending.md)）。
+- **被取消的 `HttpControlService` 调用现在会结束它在宿主上的请求**（`CTL-82`，#1893）。受影响的：无需改动。经 `HttpControlService` 的调用所在的协程被取消时，调用会关闭它的 HTTP 交换，控制面宿主（WebFlux）随之取消该请求。此前，请求会留在宿主上，直到调用自己的超时（默认 30 秒）结束它。控制调用没有自己的期限，由你决定：包住调用的 `withTimeout`，或 `HttpControlService` 的 `timeout`（[在代码中修改策略](../integration/checks.md#changing-policies-from-your-code)）。
 
 ## 从 8.0.0-beta.6 升级 {#from-8-0-0-beta-6}
 

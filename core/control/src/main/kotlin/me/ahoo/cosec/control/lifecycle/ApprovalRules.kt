@@ -112,13 +112,14 @@ internal class ApprovalRules(
 
     /**
      * Why [operator] may not approve [change] whatever it holds (RFC 0007 §7.5); `null` when it may. An approval is a
-     * person's: an API key, a workload's credential, never approves, as break-glass never reaches one (`BRK-8`). A
+     * person's: a workload's credential (an API key, a service's own identity) never approves, as break-glass never
+     * reaches one (`BRK-8`, `IDN-34`). A
      * boundary is the platform's (§9.1): only a platform principal approves a change that sets one (RC1-10). Under
      * four-eyes, a platform principal's change is approved by another platform principal: the second person of the
      * trust root is the trust root's.
      */
     fun approvalRefusal(operator: Operator, change: ChangeRequest): String? = when {
-        apiKey(operator) -> "an API key cannot approve: an approval is a person's"
+        workload(operator) -> WORKLOAD_REFUSAL
 
         // Publishing would not count it: its revocation could not be checked (review D3).
         operator.security?.principal?.credential?.id == null ->
@@ -197,7 +198,7 @@ internal class ApprovalRules(
         }
         // Under the terms it approved with (review N3): a capped credential's principal bindings, and break-glass for
         // anything but CoSec's own token, do not count now either. The credential is rebuilt only for those two facts,
-        // under a method of its own: an API key never approved (approvalRefusal).
+        // under a method of its own, a person's: a workload never approved (approvalRefusal).
         val principal = AuthenticatedPrincipal(
             approval.approver.principal,
             approval.approver.tenant,
@@ -223,12 +224,15 @@ internal class ApprovalRules(
         return if (permitted) null else "the approver no longer holds cosec:approve on the document"
     }
 
-    /** Whether an API key authenticated [operator], by provenance or by a credential of that name (fail closed). */
-    fun apiKey(operator: Operator): Boolean = operator.security?.principal?.apiKey == true
+    /** Whether a workload's credential authenticated [operator] (`IDN-34`): by provenance or by its name (fail closed). */
+    fun workload(operator: Operator): Boolean = operator.security?.principal?.workload == true
 
     private companion object {
         /** The id of the credential a recorded approver is checked with again: not a credential anyone presented. */
         const val RECORDED_APPROVAL = "recorded-approval"
+
+        /** Why a workload's credential does not approve, as the refusal and the log say. */
+        const val WORKLOAD_REFUSAL = "a workload's credential (an API key, a service) cannot approve: an approval is a person's"
         private val RECORDED_METHOD = Identity.Method(RECORDED_APPROVAL)
     }
 }

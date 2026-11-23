@@ -148,10 +148,11 @@ class Identity(
     }
 
     /**
-     * How the principal authenticated, by name: any non-empty one. [JWT] and [API_KEY] are CoSec's own; an authenticator
-     * for another kind of credential names its own (RFC 0010 C3), and a service behind the gateway reads it as it is.
-     * [JWT] is reserved: only CoSec's own token verifier yields it (`AuthenticatedPrincipal`), so behind a gateway it
-     * says that the gateway verified CoSec's token, which alone may use break-glass (RC1-26).
+     * How the principal authenticated, by name: any non-empty one. [JWT], [API_KEY] and [SERVICE] are CoSec's own; an
+     * authenticator for another kind of credential names its own (RFC 0010 C3), and a service behind the gateway reads
+     * it as it is. [JWT] is reserved: only CoSec's own token verifier yields it (`AuthenticatedPrincipal`), so behind a
+     * gateway it says that the gateway verified CoSec's token, which alone may use break-glass (RC1-26). [API_KEY] and
+     * [SERVICE] name a workload's credential wherever they appear (`AuthenticatedPrincipal.workload`, fail closed).
      */
     class Method(val value: String) {
         init {
@@ -167,6 +168,12 @@ class Identity(
         companion object {
             val JWT = Method("jwt")
             val API_KEY = Method("api-key")
+
+            /**
+             * A service calling the control plane as its own principal (`ControlCaller.service`, `IDN-34`): the identity it
+             * states for itself, a workload's, never a person's and never an API key.
+             */
+            val SERVICE = Method("service")
         }
     }
 }
