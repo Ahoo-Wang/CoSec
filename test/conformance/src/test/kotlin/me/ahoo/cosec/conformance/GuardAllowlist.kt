@@ -53,6 +53,15 @@ object GuardAllowlist {
             "spring-boot:ControlServicePortTest#a service port beside the application's, the management port or a disabled control API is refused",
             "spring-boot:ControlServicePortTest#a service port with no WebFlux server to serve it fails startup naming what to do",
             "spring-boot:ControlServicePortTest#cosec control http enabled false serves no control route, and the control plane stays for what embeds it",
+            // IDN-34: a service's own identity names its credential `service`, a workload's, read from workload alone.
+            "spi:AuthenticatedPrincipalTest#a workload is an API key or a service, by provenance or by name - IDN-34",
+            "spi:AuthenticatedPrincipalTest#a service's credential has no break-glass and no session - IDN-34",
+            "runtime:ServiceIdentityTest#a service's identity names its credential service - IDN-34",
+            "runtime:ServiceIdentityTest#admitted, a service's identity is a workload's, without break-glass - IDN-34",
+            "runtime:IdentityGateTest#a forwarded service identity is a workload's credential, without break-glass - IDN-34",
+            "control:ApprovalB2Test#a service's own identity never approves - IDN-34",
+            "control:ApprovalB2Test#a service's own identity is never the trust root - IDN-34",
+            "architecture:WorkloadCredentialTest#whether a principal is a workload is read from workload, never from apiKey alone - IDN-34",
             // CTL-82: a control request's deadline is its caller's, reaching it by cancellation; every wait bounded on its own.
             "control-http:HttpCallCancellationTest#a cancelled caller closes the exchange it was waiting on - CTL-82",
             "spring-boot:ControlRequestCancellationTest#a caller that is cancelled cancels the host's request, which publishes nothing and holds nothing - CTL-82",

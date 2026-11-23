@@ -3,15 +3,15 @@
 # Tests: :control:test --tests me.ahoo.cosec.control.authz.ApprovalB2Test :conformance:test
 
 diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ApprovalRules.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ApprovalRules.kt
-index 0da6cedc..f7907b55 100644
+index 0a2238626..4954fc7bb 100644
 --- a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ApprovalRules.kt
 +++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ApprovalRules.kt
-@@ -104,7 +104,7 @@ internal class ApprovalRules(
+@@ -119,7 +119,7 @@ internal class ApprovalRules(
       * trust root is the trust root's.
       */
      fun approvalRefusal(operator: Operator, change: ChangeRequest): String? = when {
--        apiKey(operator) -> "an API key cannot approve: an approval is a person's"
-+        apiKey(operator) && change.operations.isEmpty() -> "an API key cannot approve: an approval is a person's"
+-        workload(operator) -> WORKLOAD_REFUSAL
++        workload(operator) && change.operations.isEmpty() -> WORKLOAD_REFUSAL
  
          // Publishing would not count it: its revocation could not be checked (review D3).
          operator.security?.principal?.credential?.id == null ->

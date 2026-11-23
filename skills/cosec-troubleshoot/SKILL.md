@@ -590,8 +590,9 @@ An approval that no longer counts at publish sends the change back to `AWAITING_
 the approver's token was revoked since, the provider no longer gives the approver its role or now binds it a DENY, a
 tenant principal approved a boundary change or (under four-eyes) a platform principal's change, or the approval names
 no credential (`the approval does not say what credential its approver approved with`: from before the upgrade, an
-older instance, or a credential without an id), so approve again. A 403 on `:approve` with `an API key cannot approve`
-in the log: approvals are a person's, so approve with a token; an API key is never the trust root either. A change a
+older instance, or a credential without an id), so approve again. A 403 on `:approve` with `a workload's credential (an API key, a service) cannot approve`
+in the log: approvals are a person's, so approve with a token; a workload's credential (an API key, or a service's own
+identity, whose credential is named `service`, IDN-34) is never the trust root either. A change a
 service makes through `ControlService` or the service port that waits for a person (`NOT_ANALYZED` on an app's catalog,
 `CROSS_TENANT` on a tenant's grant) although it states a platform administrator: no one is the trust root there
 (`CTL-81`); give a role projection the role class (`cosec:manage-roles`), or have a person approve on the operators'
