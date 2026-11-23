@@ -50,6 +50,12 @@ Which preview of the library may run behind which preview of the gateway image: 
   approve a change or be the trust root, as for `api-key`. Affected: only an authenticator that used that name. Rename
   its method if its principals are people; otherwise nothing to do
   ([Extending CoSec](../architecture/extending.md)).
+- **A cancelled `HttpControlService` call now ends its request on the host** (`CTL-82`, #1893). Affected: nothing to
+  change. When the coroutine of a call through `HttpControlService` is cancelled, the call closes its HTTP exchange and
+  the control-plane host (WebFlux) cancels the request. Before, the request stayed on the host until the call's own
+  timeout (30 seconds by default) ended it. A control call has no deadline of its own: yours decides, a `withTimeout`
+  around the call or the `timeout` of `HttpControlService`
+  ([Changing policies from your code](../integration/checks.md#changing-policies-from-your-code)).
 
 ## From 8.0.0-beta.6 {#from-8-0-0-beta-6}
 

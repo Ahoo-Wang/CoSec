@@ -32,6 +32,7 @@ description: "每个 8.0 预览版（alpha 与 beta）到下一个之间的变�
   - **它能做什么没有变。** `service` 和 `api-key` 一样是工作负载的凭证：从不审批，也从不是信任根，没有会话，也没有 break-glass（新增 `AuthenticatedPrincipal.workload`）。
   - **先升级控制面宿主，再升级调用它们的服务。** beta.7 宿主不认识 `service`，把它当作人的凭证。在它的服务端口上这不改变什么：那里不提供审批，也没有人是信任根。但如果某个服务的 `cosec.control.service-url` 指向 beta.7 宿主的运维端口（相信 `CoSec-Identity` 的端口），它就能审批变更；如果它是持有 `cosec:approve` 的平台管理员，还会是信任根，而 beta.7 的 `api-key` 两样都做不到。已升级的调用方调用 beta.7 宿主的服务端口是安全的；无论如何都不要让服务指向运维端口。beta.7 调用方调用已升级的宿主时仍发送 `api-key`，已升级的宿主仍把它当作工作负载的凭证。
 - **你自己的 `Authenticator` 把凭证命名为 `service`** 时，现在命名的是工作负载的凭证：它的主体不再能审批变更或成为信任根，与 `api-key` 相同。受影响的：只有用了这个名字的认证器。如果它的主体是人，请改名；否则无需改动（[扩展 CoSec](../architecture/extending.md)）。
+- **被取消的 `HttpControlService` 调用现在会结束它在宿主上的请求**（`CTL-82`，#1893）。受影响的：无需改动。经 `HttpControlService` 的调用所在的协程被取消时，调用会关闭它的 HTTP 交换，控制面宿主（WebFlux）随之取消该请求。此前，请求会留在宿主上，直到调用自己的超时（默认 30 秒）结束它。控制调用没有自己的期限，由你决定：包住调用的 `withTimeout`，或 `HttpControlService` 的 `timeout`（[在代码中修改策略](../integration/checks.md#changing-policies-from-your-code)）。
 
 ## 从 8.0.0-beta.6 升级 {#from-8-0-0-beta-6}
 
