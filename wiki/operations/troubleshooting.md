@@ -605,6 +605,17 @@ version; until then, read that document through `ControlService`, as JSON ([Chan
 code](../integration/checks.md#changing-policies-from-your-code)). A value of a closed set the client does not know
 (a change state, a conflict) is not this error: it reads as unknown, with its text.
 
+## Social sign-in is refused: too many sign-ins in progress {#social-sign-in-is-refused-too-many-sign-ins-in-progress}
+
+`authorize` throws `SocialAuthenticationException`
+`The [<provider>] provider has too many sign-ins in progress: try again shortly.`, and an instance logs at most once a minute `Refused <n> [<provider>] sign-in start(s) since the last
+such line: <n> social sign-ins are in progress ...` at `WARN`. The deployment holds as many sign-ins in progress as it
+may: a 64th of the memory Redis reports, at 512 bytes a sign-in, or 100,000 when Redis reports none (the startup line
+`Social sign-in states: ...` says which; [Storage](./storage.md#redis-keys)). Starting a sign-in is anonymous, so a
+steady stream of these lines is something starting sign-ins in a flood: rate limit the start route at your edge. A
+start refused writes nothing, and a sign-in already in progress is not affected. With the in-memory store
+(`InMemorySocialStateStore`, tests and a single instance) the bound is 10,000.
+
 ## Startup failures
 
 ### Startup fails on an unknown property

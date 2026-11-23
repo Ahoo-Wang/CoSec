@@ -59,6 +59,7 @@ CoSec 没有哪个配置项叫这些名字，而已知的 key 无论来源都不
 | 一次重新确认并发确认的文档数 | 16，常量：一轮超过间隔时各轮首尾相接，只有突发量取决于它 | |
 | 每个吊销表的本地副本（`RevokedTokenCache`、`RevokedSubjectCache`）容纳 | 堆的八分之一，按每表每条 290 + 230 字节计数：2 GiB 时每表 516,222 条，原来的上限是 500,000。对你的流量太小时表现为带标签 `cache=RevokedTokenCache`（或 `RevokedSubjectCache`）的 `cocache.misses`（Prometheus 中为 `cocache_misses_total`，即本地副本没有应答的读取）持续上升，而同标签的 gauge `cocache.local.size` 停在该数（`IDN-33`） | 堆（`Runtime.maxMemory()`） |
 | 已校验令牌缓存容纳的量 | 堆的十六分之一，每个条目按其令牌长度 × 5 字节计重：2 GiB 时 128 MiB，多于原上限的 16,384 个大令牌（约 115 MB）。太小时表现为 `cosec.token.cache.evictions`（`IDN-32`） | 同上 |
+| 部署在 Redis 中最多持有多少个进行中的社交登录 | Redis 报告的内存（`maxmemory`，否则 `total_system_memory`，启动时读一次）的六十四分之一，每个登录按 512 字节计（两把键实测 352 字节）；Redis 两者都不报告时为 100,000，并记 WARN | 相同 |
 | 实例持有多少个主体的成员关系 | 堆的六十四分之一，按每个主体 3,072 字节计（十个角色分布在两个空间、五个附加策略时实测 2,293 字节）：2 GiB 时约 10,900 个。多出的一个会重新加载，从不被拒绝 | 相同 |
 | 一个 `BEST_EFFORT` 决策监听器最多可以有多少个待处理的事件 | 堆的六十四分之一，由各 `BEST_EFFORT` 监听器均分，按 `cosec.pipeline.trace-level` 下一个事件的大小计数：不追踪时 1 KB，追踪时（`full`、`exhaustive`）8 KB，因为追踪带着每条候选语句。2 GiB、四个监听器时，每个容纳 8,192 个不追踪的事件或 1,024 个追踪的事件，原来不论级别都是每个 1,024 个。太小时表现为 `cosec.listener.dropped`（`OBS-11`） | 同上，以及监听器数 |
 | 一个实例持有多少租户文档和应用文档 | 每个族已持有的，加上堆的四分之一（减去“不存在”条目那一份）剩下的空间，按其常驻文档的典型重量计数；重量是一个从不低于一个文档实际保留量的估计（`DocumentWeight`）：2 GiB 时约 14,500 个部署页面那种形状的租户（估计 34.6 KB，实际保留 29.5 KB）。每轮重新确认时以及每次淘汰之前重新计算，因此只在常驻内容的重量超过份额时才淘汰文档，从不低于 64 个；控制面与管道同在一个进程时各得一半；一个很重的文档只从空间里拿走它自己的重量。冷加载突发时一个族可能短暂地持有至多其上限的两倍，且绝不超出上限 4,096 个以上。太小时表现为 `cosec.snapshot.evictions` 上升而 `cosec.snapshot.installed` 停在 `cosec.snapshot.bound`（`SNP-24`） | 堆（`Runtime.maxMemory()`） |

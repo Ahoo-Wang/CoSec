@@ -3,13 +3,15 @@
 # Tests: :cocache:test --tests me.ahoo.cosec.cocache.RedisSocialStateStoreTest
 
 diff --git a/backends/cocache/src/main/kotlin/me/ahoo/cosec/cocache/RedisSocialStateStore.kt b/backends/cocache/src/main/kotlin/me/ahoo/cosec/cocache/RedisSocialStateStore.kt
-index 4b64e60a6..cdd2d0a30 100644
+index 53a8aec14..bb43a99d7 100644
 --- a/backends/cocache/src/main/kotlin/me/ahoo/cosec/cocache/RedisSocialStateStore.kt
 +++ b/backends/cocache/src/main/kotlin/me/ahoo/cosec/cocache/RedisSocialStateStore.kt
-@@ -40,5 +40,5 @@ class RedisSocialStateStore @InternalCoSecApi constructor(
+@@ -63,7 +63,7 @@ class RedisSocialStateStore @InternalCoSecApi constructor(
      }
  
      override suspend fun take(state: String): String? =
 -        redisTemplate.opsForValue().getAndDelete(keyPrefix + state).toFuture().await()
 +        redisTemplate.opsForValue().get(keyPrefix + state).toFuture().await()
- }
+ 
+     @InternalCoSecApi
+     companion object {

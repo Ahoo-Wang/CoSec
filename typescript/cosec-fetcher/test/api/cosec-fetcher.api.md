@@ -435,10 +435,11 @@ export interface RefreshToken {
     refreshToken: string;
 }
 
-// @public (undocumented)
+// @public
 export class RefreshTokenError extends FetcherError {
     constructor(cause?: unknown);
     readonly problem?: CoSecProblem;
+    readonly status?: number;
 }
 
 // @public
@@ -451,6 +452,7 @@ export interface RefreshTokenStatusCapable {
 export class RefreshUnavailableError extends FetcherError {
     constructor(cause?: unknown);
     readonly problem?: CoSecProblem;
+    readonly status?: number;
 }
 
 // @public
