@@ -2,7 +2,7 @@
 # Mutant: a simulated tenant change is decided on the documents its head reads, not those the candidate makes the request read
 # Tests: :control:test --tests me.ahoo.cosec.control.api.AppDocumentDecisionsTest :conformance:test
 diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/api/DecisionQueries.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/api/DecisionQueries.kt
-index eb6a87b5c..5630f4990 100644
+index 29192dc5c..e67ce6441 100644
 --- a/core/control/src/main/kotlin/me/ahoo/cosec/control/api/DecisionQueries.kt
 +++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/api/DecisionQueries.kt
 @@ -62,7 +62,7 @@ internal class DecisionQueries(
@@ -13,4 +13,4 @@ index eb6a87b5c..5630f4990 100644
 +            val fetched = keys
              // The candidate is no stored content: compiled once, here; the heads come from the cache.
              val proposedHeads = fetched.associateWith { heads[it] ?: retained.held(it) } + (change.key to Held(document, null))
-             documents(proposedHeads).also { proposedDocuments = it }.let { simulator.decide(simulated, scope, it) }
+             val proposedView = documents(proposedHeads).also { proposedDocuments = it }
