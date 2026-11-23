@@ -71,6 +71,7 @@ CoSec 没有哪个配置项叫这些名字，而已知的 key 无论来源都不
 | CoSec 自己的吊销读取器的每次读取（先读令牌，再读它的主体）；超过后 Redis 算作无法读取：令牌被接受（使用 `fail-closed` 时被拒绝），刷新失败 | 认证超时的 30 %：`300ms`。它的两倍，即一个令牌的两次读取，在认证超时之内结束，所以挂起的 Redis 绝不会让每个经过认证的请求都返回 `503`。应用自己的 `RevocationReader` 自行限定它的读取（[扩展](../architecture/extending.md)） | 同上 |
 | 一个 `REQUIRED` 决策监听器；失败或超时会把放行变成 `503` | 20 %：`1s`，所以它的等待在请求之内结束 | 同上 |
 | 所有 `REQUIRED` 变更监听器合计记录一个受控步骤（发布、break-glass）；超过后该步骤以 `503` 失败 | 管道超时，即控制请求自身授权的上限：`5s` | 同上 |
+| 一次控制请求可以用多久 | 没有自己的期限：期限是调用方的，经取消到达；其中每个等待由上面的值和 CoCache 的命令超时各自限定（`CTL-82`，[在代码中修改策略](../integration/checks.md#changing-policies-from-your-code)） | 调用方 |
 | 关闭时，每组监听器（决策监听器、变更监听器）还能继续投递排队事件多久；之后剩下的被丢弃。Kafka 审计监听器和 Kafka 变更监听器还会再用同样长的时间等待它们手中的发送 | 关闭阶段的六分之一：Spring 默认 `30s` 时为 `5s`。六次排空合计不超过一个阶段 | `spring.lifecycle.timeout-per-shutdown-phase` |
 | 一个实例记住 `MembershipLoader` 不认识某个主体（被移除成员仍有效的令牌）多久 | 5 秒，常量：你新增的主体在它结束时被每个实例认识，在执行 `invalidate` 的实例上立即被认识；失败的加载从不被记住（[成员关系](../integration/authentication.md#memberships)） | |
 | 实例多久写一次影子报告和状态 | 状态存活期的六分之一（`10s`），且不比窗口最短存活期的五分之一或一秒更频繁 | [`cosec.control.shadow.min-duration`](#control-plane)，在它被设置的地方读取 |

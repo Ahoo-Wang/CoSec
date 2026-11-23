@@ -15,7 +15,7 @@
 
 package me.ahoo.cosec.control.http
 
-import kotlinx.coroutines.future.await
+import kotlinx.coroutines.suspendCancellableCoroutine
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.control.sdk.ControlCaller
@@ -35,6 +35,10 @@ import java.net.http.HttpRequest
 import java.net.http.HttpResponse
 import java.time.Clock
 import java.time.Duration
+import java.util.concurrent.CompletableFuture
+import java.util.concurrent.CompletionException
+import kotlin.coroutines.resume
+import kotlin.coroutines.resumeWithException
 
 /** How [HttpControlService] carries a call: one request to the service port, its caller in `CoSec-Identity`. */
 internal class HttpTransport(
@@ -70,7 +74,7 @@ internal class HttpTransport(
                 }
             }
             .build()
-        val response = client.sendAsync(request, HttpResponse.BodyHandlers.ofString()).await()
+        val response = client.sendAsync(request, HttpResponse.BodyHandlers.ofString()).awaitOrAbort()
         // Only a 2xx is the route's answer: a redirect the client did not follow, or a proxy's error page, is not.
         if (response.statusCode() !in SUCCESS) throw ControlRefusedException(response.statusCode(), response.body())
         return response.body()
@@ -96,6 +100,23 @@ internal class HttpTransport(
             ids.generate()
         )
         return IdentityHeader.write(identity)
+    }
+
+    /**
+     * The exchange's answer, and a caller that goes away takes the exchange with it (`CTL-82`): `cancel(true)` is what the
+     * JDK's client reads as "abort the exchange" (it closes an HTTP/1.1 connection, resets an HTTP/2 stream), and the host
+     * sees its request end and cancels its work. kotlinx's `await` cancels with `false`, which leaves the request running
+     * on the host until the timeout ends it.
+     */
+    private suspend fun <T> CompletableFuture<T>.awaitOrAbort(): T = suspendCancellableCoroutine { continuation ->
+        whenComplete { value, failure ->
+            if (failure == null) {
+                continuation.resume(value)
+            } else {
+                continuation.resumeWithException((failure as? CompletionException)?.cause ?: failure)
+            }
+        }
+        continuation.invokeOnCancellation { cancel(true) }
     }
 
     private fun uri(call: ServiceCall): URI {
