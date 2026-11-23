@@ -18,6 +18,8 @@ package me.ahoo.cosec.spring.boot.pipeline
 import io.mockk.confirmVerified
 import io.mockk.every
 import io.mockk.mockk
+import io.mockk.mockkStatic
+import io.mockk.unmockkStatic
 import io.mockk.verify
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.runtime.snapshot.DocumentReadiness
@@ -25,8 +27,10 @@ import me.ahoo.cosec.runtime.snapshot.DocumentState
 import me.ahoo.cosec.runtime.snapshot.Snapshot
 import me.ahoo.cosec.runtime.snapshot.SnapshotEntry
 import me.ahoo.cosec.runtime.snapshot.SnapshotSource
+import me.ahoo.cosec.runtime.snapshot.compileTimedOut
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.test.asserts.assert
+import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Test
 import org.springframework.boot.availability.ApplicationAvailability
 import org.springframework.boot.availability.AvailabilityChangeEvent
@@ -40,6 +44,9 @@ import java.util.concurrent.CompletableFuture
 
 /** The states of [SnapshotHealthIndicator] and [SnapshotReadiness] the starter test does not reach. */
 class SnapshotHealthIndicatorTest {
+    @AfterEach
+    fun unmockProbes() = unmockkStatic(PROBES)
+
     private fun source(
         state: DocumentState<Any>?,
         prewarmed: Boolean,
@@ -48,6 +55,8 @@ class SnapshotHealthIndicatorTest {
         invalidPlatform: Long? = null,
         /** Tenants whose stored revision does not compile, by id. */
         invalidTenants: Map<String, Long> = emptyMap(),
+        /** Newer revisions read and not compiled in time, still compiling (DR1-D-1). */
+        compileTimedOut: List<Pair<SnapshotKey, Long>> = emptyList(),
     ): SnapshotSource<Any, Any> {
         val snapshot = state?.let { policies -> mockk<Snapshot<Any, Any>> { every { this@mockk.policies } returns policies } }
         val entries = listOfNotNull(
@@ -72,10 +81,13 @@ class SnapshotHealthIndicatorTest {
                 every { invalid } returns true
             }
         }
+        // compileTimedOut is an extension over the source's internals: stubbed where it is declared.
+        mockkStatic(PROBES)
         return mockk {
             every { peek(any()) } returns snapshot
             every { isPrewarmed } returns prewarmed
             every { entries() } returns entries
+            every { compileTimedOut() } returns compileTimedOut
             // Readiness waits for its own prewarm (SNP-21): complete when the test says the source is prewarmed.
             every { load(any()) } returns CompletableFuture.completedFuture(snapshot)
             every { prewarm(any()) } returns if (prewarmed) CompletableFuture.completedFuture(null) else CompletableFuture()
@@ -136,6 +148,28 @@ class SnapshotHealthIndicatorTest {
         }
         // Without one, the body says nothing of it.
         health(failed, true).details.containsKey("invalid").assert().isFalse()
+    }
+
+    /**
+     * DR1-D-1: a newer revision that did not compile within its load's budget, and still compiles, is named by key and
+     * revision: the instance decides on the one it holds meanwhile, so the status stays what readiness says.
+     */
+    @Test
+    fun `health names a newer revision that did not compile in time, by key and revision`() {
+        val present = DocumentState.Present(Any())
+        val timedOut = listOf(
+            SnapshotKey.Tenant("t2") to 9L,
+            SnapshotKey.Platform to 4L,
+            SnapshotKey.Tenant("t1") to 3L
+        )
+        val source = source(present, prewarmed = true, compileTimedOut = timedOut)
+        SnapshotHealthIndicator(source, readiness(source)).health().apply {
+            status.assert().isEqualTo(Status.UP)
+            details["compileTimedOut"].assert().isEqualTo(3)
+            details["compileTimedOutFirst"].assert().isEqualTo(listOf("platform@4", "tenant:t1@3", "tenant:t2@9"))
+        }
+        // Without one, the body says nothing of it.
+        health(present, true).details.containsKey("compileTimedOut").assert().isFalse()
     }
 
     /**
@@ -223,5 +257,8 @@ class SnapshotHealthIndicatorTest {
 
     private companion object {
         const val TENANT = "t1"
+
+        /** The file of the source's probes, [compileTimedOut] among them. */
+        const val PROBES = "me.ahoo.cosec.runtime.snapshot.SnapshotSourceProbesKt"
     }
 }

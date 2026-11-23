@@ -158,7 +158,7 @@ internal class KeyEffects<T : Any>(
             owner.offer(KeyEvent.CompileTimedOut(id))
             return
         }
-        val running = CompileDeadlines.Running(id, read.digest, effect.deadline, owner)
+        val running = CompileDeadlines.Running(id, read.digest, read.document.revision, effect.deadline, owner)
         context.compiling[key] = running
         try {
             context.threads.compileExecutor.execute { compileOnPool(running, read) }
@@ -275,6 +275,8 @@ internal class KeyEffects<T : Any>(
     private fun report(metric: KeyEffect.Metric) {
         when (metric) {
             is KeyEffect.Metric.DocumentLost -> context.metrics.onDocumentLost(key, metric.revision)
+            // A compilation past its deadline produced no document: counted as a compile that failed (DR1-D-1).
+            is KeyEffect.Metric.CompileTimedOut -> context.metrics.onCompile(key.kind, metric.elapsed, false)
         }
     }
 

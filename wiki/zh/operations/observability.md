@@ -232,7 +232,7 @@ CoCache 会在同一个 registry 中为 CoSec 的缓存记录它自己的指标�
 | 指标 | 类型 | 标签 | 含义 |
 |---|---|---|---|
 | `cosec.snapshot.loads` | counter | `kind`、`result` | 必须加载文档的请求：`cold`（请求等待它的加载）、`failed`（加载失败，请求按失败关闭判定）、`timeout`（加载超过了冷加载超时）。文档已安装的请求不计数：那是每个请求都走的路径 |
-| `cosec.snapshot.compile.duration` | timer | `kind`、`result` = `success`、`failure` | 编译一个文档；`failure` 是一个在本实例上无法编译的已存储文档 |
+| `cosec.snapshot.compile.duration` | timer | `kind`、`result` = `success`、`failure` | 编译一个文档；`failure` 是一个在本实例上无法编译的已存储文档，或一个没有在加载预算内结束的编译（按加载已用的时间记录；每次加载遇到该修订仍在编译时再记一次；它结束时按结果再记一次） |
 | `cosec.snapshot.installs` | counter | `kind` | 安装的文档：首次加载或新修订 |
 | `cosec.snapshot.installed` | gauge | `kind`、`state` | 当前持有的条目，按状态：`present`、`invalid`（在此无法编译）、`pending`（其输入已变，等待重新编译）、`undecodable`、`absent`（没有文档，之前也没见过）、`lost`（之前见过的文档不见了）、`unreadable`。各状态之和等于实例持有的条目数 |
 | `cosec.snapshot.lag` | gauge，秒 | `kind` | 持有的条目中（失败的除外）最久未被存储确认的时长 |
@@ -267,7 +267,7 @@ CoCache 会在同一个 registry 中为 CoSec 的缓存记录它自己的指标�
 上面的指标负责计数；下面的健康指示器和日志回答实例是否跟上了文档：
 
 - **健康。** 有 Spring Boot Actuator 时，`cosecSnapshot` 健康指示器在平台文档和每个预热文档安装后为 `UP`，之前为
-  `DOWN`，细节为 `platform`（`installed`；已存储但无法编译时为 `invalid`；`failed`、`absent` 或 `loading`）、`prewarmed`、`missing`，以及在有文档无法编译时的 `invalid`（无法编译的文档数）和 `invalidFirst`（其中的前十个及其存储的修订，平台文档在前，其余按键排序，如 `["tenant:acme@7"]`），从不包含编译器的消息。就绪状态遵循同样的条件
+  `DOWN`，细节为 `platform`（`installed`；已存储但无法编译时为 `invalid`；`failed`、`absent` 或 `loading`）、`prewarmed`、`missing`，以及在有文档无法编译时的 `invalid`（无法编译的文档数）和 `invalidFirst`（其中的前十个及其存储的修订，平台文档在前，其余按键排序，如 `["tenant:acme@7"]`），从不包含编译器的消息。当某个修订的编译没有在加载预算内结束且仍在运行时，`compileTimedOut` 给出它们的个数，`compileTimedOutFirst` 以同样的顺序和形式列出前十个：实例按之前持有的修订决策，状态不变（[编译不结束](./troubleshooting.md#a-compilation-does-not-end)）。就绪状态遵循同样的条件
   （[就绪](./deployment.md#readiness)）。
 - **驱逐。** 在 Redis 上，Redis 可能驱逐快照时 `cosecSnapshotEviction` 健康指示器为 `DOWN`，并带说明原因的 `eviction`
   细节。它报告实例最近一次读到的结果：每个 `revalidate-interval` 在自己的线程上读取的每个节点的 `maxmemory-policy`，

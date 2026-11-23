@@ -52,6 +52,8 @@ internal class CompileDeadlines<T : Any>(private val config: KeyConfig, private 
     fun onTimedOut(step: KeyStepBuilder<T>, load: LoadState<T>, read: SnapshotRead.Present) {
         val budget = budget(config, load)
         step.emit(KeyEffect.AbandonCompile(load.id))
+        val elapsed = Duration.ofNanos(step.moment.nanos - load.startedNanos)
+        step.emit(KeyEffect.Report(KeyEffect.Metric.CompileTimedOut(elapsed)))
         step.emit(
             KeyEffect.Log(
                 Level.ERROR,
@@ -73,6 +75,8 @@ internal class CompileDeadlines<T : Any>(private val config: KeyConfig, private 
     internal class Running(
         val loadId: Long,
         val digest: SnapshotDigest,
+        /** The revision it compiles, for what reports a revision that did not compile in time ([timedOut]). */
+        val revision: Long,
         val deadline: Long,
         private val owner: KeyOwner<*>,
     ) {
@@ -127,6 +131,18 @@ internal class CompileDeadlines<T : Any>(private val config: KeyConfig, private 
             if (!running.abandon()) return
             context.stuckCompiles[key] = running.digest
             if (context.compiling[key] !== running) context.stuckCompiles.remove(key, running.digest)
+        }
+
+        /**
+         * The keys whose compilation timed out and still runs, each with the revision it compiles (DR1-D-1): a reload's
+         * is a newer revision this instance read and does not decide on, keeping the one it holds (`SNP-22`), and no load
+         * compiles it again until that compilation returns.
+         */
+        fun timedOut(context: KeyContext): List<Pair<SnapshotKey, Long>> {
+            if (context.stuckCompiles.isEmpty()) return emptyList()
+            return context.stuckCompiles.mapNotNull { (key, digest) ->
+                context.compiling[key]?.takeIf { it.digest == digest }?.let { key to it.revision }
+            }
         }
 
         /** Whether a compilation of [key]'s revision [digest] timed out and still runs. */
