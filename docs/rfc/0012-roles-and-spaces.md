@@ -2,12 +2,10 @@
 
 > 状态：已确认（2026-11-08，维护者："按建议定稿"） · 上位文档：[RFC 0001](0001-target-architecture.md) P11 ·
 > 修订：[RFC 0004](0004-unified-model.md) §4.6、§4.9，[RFC 0007](0007-control-plane.md) §5.8、§7.1，[RFC 0009](0009-identity-and-credentials.md) ·
-> 基线：`main` @ `50e7945c` · 交付：§11 的 G1–G3，§3.5 随 R7b，都在 8.0 GA 之前合入
-
-> **2026-11-09 说明（#1306）**：OpenAPI 生成的权限组不带 `spaced`，用 Space 的 App 生成后自行设置。attachment 在授出分析里按 `(*, *)` 计，但数据面上指定 Space 的请求仍要求在该 Space 有角色。
-
-> **2026-11-20 修订（#1739，`ROL-12`）**：§7.5 增加一条告警。应用文档定义的系统角色，其 id 已被另一个应用的头定义时，变更带一条 `REFERENCES` 告警，说出角色与那些应用，绝不拒绝：
-> 成员关系是 `role@space`，里面没有 app，角色不是按应用签发的成员因此在每个定义该 id 的应用里都持有它。检查读应用清单与那些应用的头，不读任何租户文档。
+> 交付：§11 的 G1、G2（#1289）与 G3（#1306），§3.5 随 R7b（#1302），都已于 2026-11-08 合入
+>
+> **2026-11-23 合订**：此前的两段修订说明（2026-11-09、2026-11-20）与 §3.5 的日期注记已并入正文，被取代的说法已删去；章节号、§10 的规则号与 G1–G3 的编号不变。
+> 合订前的全文见 git 历史：`git show b164f273:docs/rfc/0012-roles-and-spaces.md`。修订沿革见文末。
 
 ## 0. 结论先行
 
@@ -43,7 +41,9 @@
 
 ### 1.3 今天的写法对不上这些场景
 
-| 问题 | 现状 |
+本节记录本 RFC 之前（G1 之前的 8.0）的写法，是本 RFC 的动机。
+
+| 问题 | 本 RFC 之前 |
 |---|---|
 | 一个权限写三处 | 目录条目、`perm:` 策略、绑定各写一遍；目录和策略之间没有校验 |
 | 每对“角色×权限”一条绑定 | 467 条，每条都要 `id`、`subject`、`app`、`space`、`policy` |
@@ -54,6 +54,8 @@
 ## 2. 模型
 
 ### 2.1 实体
+
+“CoSec 里是什么”一栏是本 RFC 之前的样子，“本 RFC”一栏是它的改变。
 
 | 概念 | CoSec 里是什么 | 在哪里 | 本 RFC |
 |---|---|---|---|
@@ -137,9 +139,9 @@ Space 是不透明字符串，CoSec 不保存它的归属。关系由角色决�
 
 ### 3.5 token 绑定 App（修订 RFC 0004 §4.6、RFC 0009）
 
-> 2026-11-08 维护者"按建议定"。随 R7b（主体与令牌契约重切）交付，不在 G1–G3 里。
+随 R7b（主体与令牌契约重切，#1302）交付，不在 G1–G3 里。
 
-token 和 API key 声明它们属于哪个 App，用 JWT 标准的 `aud`，8.0 只允许单个值（也接受只含一个字符串的数组，这是 RFC 7519 的写法）。API key 记录是格式 3，带必填的 `app`。今天的 token 不声明 App，也不校验 audience：同一个签名密钥下，发给一个 App 的 token 在另一个 App 也有效，只要两边有同名角色就生效。
+token 和 API key 声明它们属于哪个 App，用 JWT 标准的 `aud`，8.0 只允许单个值（也接受只含一个字符串的数组，这是 RFC 7519 的写法）。API key 记录是格式 3，总是写出 `app`（不声明 App 时为 `null`）。在此之前 token 不声明 App，也不校验 audience：同一个签名密钥下，发给一个 App 的 token 在另一个 App 也有效，只要两边有同名角色就生效。
 
 `ScopeResolver` 按下表解析：
 
@@ -151,7 +153,8 @@ token 和 API key 声明它们属于哪个 App，用 JWT 标准的 `aud`，8.0 �
 | 未配置 | `wms` | `wms` |
 | 未配置 | 未声明 | 没有 App，不读 App 文档 |
 
-- 匿名请求没有凭证，App 取宿主的。
+- 匿名请求没有凭证，App 取宿主的。网关转发的身份是网关之后的凭证，同样按上表检查。
+- `aud` 不是一个可以作 App id 的字符串的 token 无效，在每条验证令牌的路径上都如此（`SCP-11`）。
 - **客户端不再声明 App**：`CoSec-App-Id` 删除。易用性审查的 U15（`client-declared-app` 开关）取消。
 - token 里的角色都属于这个 App，同名系统角色不再跨 App 生效。
 - 一次登录访问多个 App 时，按 App 各换一个 token。操作控制面的 token 发给控制面的 App。
@@ -200,13 +203,13 @@ token 和 API key 声明它们属于哪个 App，用 JWT 标准的 `aud`，8.0 �
 
 - 同一个权限既写了 `action`，又有同 id 的手写策略：编译错误。一个权限只有一处定义，避免删除手写策略时悄悄换成无条件的简写策略。
 - 需要条件、DENY 或多条语句时手写 `perm:` 策略，`spaced` 的限制由作者自己写。
-- 既没有 `action` 也没有策略的条目仍然只用于显示，与今天一样；但它不能被 `roles` 引用（§6.2）。旧文档的语义不变，加载不会失败。
+- 既没有 `action` 也没有策略的条目仍然只用于显示，与本 RFC 之前一样；但它不能被 `roles` 引用（§6.2）。旧文档的语义不变，加载不会失败。
 
 ### 4.4 `action` 从哪里来
 
 简写权限要求请求能解析出它写的动作：路由映射、OpenAPI 生成或代码里的检查。没有路由映射的服务也可以直接写 HTTP：`"action": "http:GET", "resource": "http:path:/orders/**"`，这样不需要维护路由映射。
 
-`cosecServiceGenerator/app` 改为生成简写权限，不再生成策略。
+`cosec-openapi` 的生成器（`OpenAPIServiceGenerator`）生成简写权限，不生成策略。它生成的权限组不带 `spaced`，权限只在默认空间生效；用 Space 的 App 审阅生成的文档时自己给组设置 `spaced`。
 
 ## 5. 角色
 
@@ -223,7 +226,7 @@ token 和 API key 声明它们属于哪个 App，用 JWT 标准的 `aud`，8.0 �
 }
 ```
 
-- 对所有租户生效，与今天不带 `tenant` 的角色绑定相同。App 由文档决定，不用写。
+- 对所有租户生效，与不带 `tenant` 的角色绑定相同。App 由文档决定，不用写。
 - `"*"` 表示目录里所有已定义的权限，只允许在 App 文档里写。目录增长时这些角色自动获得新权限，变更差异和审批里能看到（§7.4）。
 - 不能指定 `space`：Space 是租户里的实例，平台级的角色不知道它们。
 
@@ -262,16 +265,17 @@ token 和 API key 声明它们属于哪个 App，用 JWT 标准的 `aud`，8.0 �
 
 ### 6.1 一个函数
 
-`RoleExpansion.effective(document): PolicyDocument`（`cosec-runtime`）是纯函数，存储的文档保持简写。所有需要语义的地方都先调用它：
+`RoleExpansion.effective(document): PolicyDocument`（`cosec-document`）是纯函数，存储的文档保持简写。所有需要语义的地方都读它的结果（编译器与检查用同一展开的 `RoleExpansion.expand`，它同时带出派生绑定的上限）：
 
 | 位置 | 作用 |
 |---|---|
 | `PolicyDocumentCompiler` | 数据面与校验的编译 |
 | `GrantDocuments.of` | 授出分析的前后两侧 |
-| `Revisions.references` | 反向引用索引 |
-| `ChangeChecks.unresolved` | 候选文档和被引用的 App 文档 |
+| `ReferrerIndex.references` | 反向引用索引 |
+| `BindingChecks.unresolved` | 候选文档和被引用的 App 文档 |
 | `ControlPlane.diff` | 差异 |
-| `Revisions.referenced`、`ChangeAuthority.analyze`、`referringBindings`、`Narrowing`、`ControlPlane.analyze` | 删除校验、授出分析、收窄判定和访问审查 |
+| `ReferrerIndex.referenced`、`ReferencedPolicies`、`RemovedReferences`、`Narrowing`、`ControlPlane.analyze` | 删除校验、收窄判定和访问审查 |
+| `ChangeAuthority`（`RoleExpansion.bindings`） | `PutRole` 新增了哪些派生绑定（§7.2） |
 
 ### 6.2 规则
 
@@ -325,7 +329,7 @@ token 和 API key 声明它们属于哪个 App，用 JWT 标准的 `aud`，8.0 �
 
 经角色持有的权限只在持有的 Space 里算，永远覆盖不了“所有 Space”，所以第三种情况的结果是 UNKNOWN，走审批。
 
-租户 Owner 用 attachment 表达最合适：token 的 `policies` 声明一条可附加的策略，授出分析按 `(*, *)` 计。Owner 的授予和转移由身份系统决定，不需要写文档。这一点写进 `wiki/policies/role-permissions.md`。
+租户 Owner 用 attachment 表达最合适：token 的 `policies` 声明一条可附加的策略，授出分析按 `(*, *)` 计。Owner 的授予和转移由身份系统决定，不需要写文档。这一点写进 `wiki/policies/role-permissions.md`。授出分析按 `(*, *)` 计不改变数据面：指定了 Space 的请求仍要求主体在该 Space 持有角色（`SPACE_NOT_MEMBER`）。
 
 ### 7.4 差异
 
@@ -339,6 +343,10 @@ token 和 API key 声明它们属于哪个 App，用 JWT 标准的 `aud`，8.0 �
 
 - Tenant 文档的角色 id 与它的 App 的系统角色相同，结果是并集；
 - 指定了 Space 的角色包含非 `spaced` 权限，这项权限在那个 Space 里永远不生效。
+
+App 文档也有一条（`ROL-12`）：它定义的系统角色，其 id 已被另一个 App 的头定义时，变更带一条 `REFERENCES` 告警，说出角色与那些 App，绝不拒绝。
+成员关系是 `role@space`，里面没有 App，所以角色不是按 App 签发的成员（来自 `MembershipProvider`，或令牌不绑定 App）一旦持有它，就在每个定义该 id 的 App 里都持有它；
+这可能是有意的，所以只告警，告警建议以 App 为前缀命名角色 id。检查读 App 清单与那些 App 的头，不读任何租户文档。
 
 ### 7.6 CoSec 自己的控制面
 
@@ -387,32 +395,33 @@ token 和 API key 声明它们属于哪个 App，用 JWT 标准的 `aud`，8.0 �
 
 ## 10. 规范规则
 
-新增规则族 `ROL`，并扩展 `SCP`。每条都有正反场景和变异体。
+规则族 `ROL`，并扩展 `SCP`。措辞与守卫以规则登记表（`test/conformance/src/test/resources/rules/`）为准；破坏这些规则的变异体在 `test/conformance/mutants/`。
 
-| 规则 | 内容 |
-|---|---|
-| `ROL-1` | 带 `roles` 的文档与写出 `effective` 结果的文档决定完全相同（性质测试） |
-| `ROL-2` | 编译、授出分析、引用索引、差异都读展开后的文档 |
-| `ROL-3` | App 文档引用未定义的权限不能编译；Tenant 文档报 `REFERENCES`；数据面失败即拒绝 |
-| `ROL-4` | `"*"` 只在 App 文档；目录增长表现为新增的派生绑定 |
-| `ROL-5` | 同一权限既有 `action` 又有手写策略不能编译 |
-| `ROL-6` | 非 `spaced` 的简写权限只在默认空间生效 |
-| `ROL-7` | 角色 id 的校验；派生绑定 id 相撞不能编译；`role:` 保留 |
-| `ROL-8` | 派生绑定超过上限不能编译 |
-| `ROL-9` | `PutRole` 按权限走授出分析，无法证明包含的走审批 |
-| `ROL-10` | 被租户角色引用的权限不能从 App 删除 |
-| `ROL-11` | 角色只在自己的 App 生效；指定了 Space 的角色只在那个 Space 生效 |
-| `SCP-11` | 凭证声明的 App 与宿主的 App 不同，或宿主有 App 而凭证未声明，作用域解析拒绝；请求不能声明 App（随 R7b） |
+| 规则 | 级别 | 内容 |
+|---|---|---|
+| `ROL-1` | engine | 带 `roles` 与简写权限的文档，与写出 `RoleExpansion.effective` 结果的文档决定完全相同（性质测试） |
+| `ROL-2` | control | 编译、授出分析、引用索引、差异都读展开后的文档 |
+| `ROL-3` | engine | App 文档的角色引用未定义的权限不能编译；Tenant 文档的报 `REFERENCES`，在数据面失败即拒绝 |
+| `ROL-4` | engine | `"*"` 只在 App 文档；目录增长表现为新增的派生绑定 |
+| `ROL-5` | engine | 同一权限既有 `action` 又有手写策略不能编译 |
+| `ROL-6` | engine | 非 `spaced` 组的简写权限只在默认空间生效 |
+| `ROL-7` | engine | 角色 id 受校验；派生绑定 id 相撞不能编译；`role:` 只留给派生绑定 |
+| `ROL-8` | engine | 角色派生的绑定超过上限的文档不能编译 |
+| `ROL-9` | control | `PutRole` 按权限走授出分析，无法证明包含的走审批；增加权限需要 `cosec:grant` |
+| `ROL-10` | control | 被租户角色列出的权限不能从它的 App 删除 |
+| `ROL-11` | engine | 角色只在自己的 App 生效；指定了 Space 的角色只在那个 Space 生效 |
+| `ROL-12` | control | App 文档定义的系统角色，其 id 已被另一个 App 的头定义时，变更带一条 `REFERENCES` 告警，说出角色与那些 App，绝不拒绝；检查读 App 清单与那些 App 的头，不读租户文档 |
+| `SCP-11` | engine | token 与 API key 用 `aud` 声明所属 App（一个值）。有 App 的宿主只接受声明该 App 的凭证，声明别的或未声明为 `Rejected(APP_MISMATCH)`；没有宿主 App 时取凭证的 App，未声明则不在任何 App、不读 App 文档；匿名请求的 App 取宿主的；网关转发的身份同样检查；请求不能声明 App（不读 `CoSec-App-Id`）；`aud` 不是一个可作 App id 的字符串的 token 在每条验证路径上都无效 |
 
 ## 11. 交付
 
-| PR | 内容 | 主要模块 |
-|---|---|---|
-| G1 | 格式（`roles`、`action`、`resource`）、`RoleExpansion`、编译、schema、JMH | `cosec-runtime` |
-| G2 | 操作、授权、摘要、分析、差异、引用、检查 | `cosec-control` |
-| G3 | 文档、skill、OpenAPI 生成器；与 F2 合并 | `wiki/`、`skills/`、`cosec-openapi` |
+| PR | 内容 | 主要模块 | 状态 |
+|---|---|---|---|
+| G1 | 格式（`roles`、`action`、`resource`）、`RoleExpansion`、编译、schema、JMH | `cosec-runtime`（这些今天在 `cosec-document`） | 已合入（#1289） |
+| G2 | 操作、授权、摘要、分析、差异、引用、检查 | `cosec-control` | 已合入（#1289） |
+| G3 | 文档、skill、OpenAPI 生成器；与 F2 合并 | `wiki/`、`skills/`、`cosec-openapi` | 已合入（#1306） |
 
-G1 与 G2 合成一个 PR：只有 G1 时，控制面能发布带 `roles` 的文档却不做授出分析。整体顺序见 `docs/roadmap.md`。F2 的模型类图以本 RFC §2 为准。
+G1 与 G2 合成一个 PR：只有 G1 时，控制面能发布带 `roles` 的文档却不做授出分析。F2 的模型类图以本 RFC §2 为准。
 
 ## 12. 非目标
 
@@ -447,3 +456,12 @@ G1 与 G2 合成一个 PR：只有 G1 时，控制面能发布带 `roles` 的文
 | 未指定 Space 的角色授出 `spaced` 权限，需要 `(*, *)` 的持有，否则走审批 | §7.3 | 维护者 2026-11-08 "按建议定稿" |
 | 在 F1 之后、F2 之前实现 | §11 | 维护者 2026-11-08 "按建议定稿" |
 | token 绑定 App，Space 不绑定单个值 | §3.5 | 维护者 2026-11-08 "按建议定" |
+
+## 修订沿革
+
+只列日期与出处，内容都在正文里。
+
+- 2026-11-08：确认（#1277）；token 绑定 App（#1279，随 R7b 交付：#1302）；G1、G2（#1289）；G3（#1306）。
+- 2026-11-09：OpenAPI 生成的权限组不带 `spaced`；attachment 与指定 Space 的请求（#1306）。
+- 2026-11-20：系统角色 id 跨 App 重复的告警（#1739，`ROL-12`）。
+- 2026-11-23：合订。
