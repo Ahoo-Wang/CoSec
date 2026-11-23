@@ -1,0 +1,58 @@
+{
+  "rules": [
+    "PIP-35"
+  ],
+  "polarity": "positive",
+  "level": "pipeline",
+  "description": "A DENY written on /orders/ applies to /orders too: in the deny direction a trailing separator does not count, of the pattern or of the path.",
+  "documents": {
+    "platform": {
+      "policies": [
+        {
+          "id": "open",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "http:*",
+              "resource": "http:path:/**"
+            }
+          ]
+        },
+        {
+          "id": "no-orders",
+          "statements": [
+            {
+              "effect": "deny",
+              "action": "http:*",
+              "resource": "http:path:/orders/"
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "g:open",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "open"
+        },
+        {
+          "id": "g:no-orders",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "no-orders"
+        }
+      ]
+    }
+  },
+  "http": {
+    "method": "GET",
+    "path": "/orders"
+  },
+  "expect": {
+    "status": 403,
+    "type": "forbidden"
+  }
+}

@@ -1,0 +1,69 @@
+{
+  "rules": [
+    "PIP-35"
+  ],
+  "polarity": "positive",
+  "level": "pipeline",
+  "description": "On a host with a route map, DELETE /orders/123/ maps to no route and maps without its trailing separator: 400 before authentication, since a backend may read it as either.",
+  "documents": {
+    "platform": {
+      "policies": [
+        {
+          "id": "open",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "http:*",
+              "resource": "http:path:/**"
+            }
+          ]
+        },
+        {
+          "id": "no-delete",
+          "statements": [
+            {
+              "effect": "deny",
+              "action": "order:delete",
+              "resource": "order/*"
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "g:open",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "open"
+        },
+        {
+          "id": "g:no-delete",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "no-delete"
+        }
+      ]
+    }
+  },
+  "routes": {
+    "service": "order",
+    "routes": [
+      {
+        "method": "DELETE",
+        "path": "/orders/{id}",
+        "action": "order:delete",
+        "resource": "order/{id}"
+      }
+    ]
+  },
+  "http": {
+    "method": "DELETE",
+    "path": "/orders/123/"
+  },
+  "expect": {
+    "status": 400,
+    "type": "invalid-request"
+  }
+}

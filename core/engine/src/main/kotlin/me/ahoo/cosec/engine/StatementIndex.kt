@@ -198,8 +198,9 @@ internal class StatementIndex(statements: Array<CompiledStatement>, options: Ind
                 when (resource) {
                     ResourcePattern.AnyResource -> anyResource += position
                     is ResourcePattern.Typed -> types.getOrPut(resource.type, ::ArrayList) += position
+                    // Its loose prefix (PIP-35): a path without the pattern's trailing `/` still reaches its node.
                     is ResourcePattern.Http -> (http ?: PathBuilder().also { http = it }).add(
-                        resource.path.prefix,
+                        resource.indexPrefix,
                         position
                     )
                 }

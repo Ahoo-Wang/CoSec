@@ -159,8 +159,13 @@ Before anything else, `PathNormalizer` checks it. On every adapter the path is:
   trailing `.` or space. A raw control character is refused too, though the servers CoSec runs on already refuse one
   before any filter. Some servers refuse a few of the encoded spellings themselves as well: Jetty every encoded
   control character (and `%25`), Tomcat `%00`;
-- **kept with a trailing `/`**: `/admin/` is its own path, as in Spring's routing. A pattern written `/admin` does not
-  match it, and `/admin/**` does.
+- **kept with a trailing `/`**: `/admin/` is its own path, as in Spring's routing, for an ALLOW: a pattern written
+  `/admin` does not permit it, and `/admin/**` does. In the deny direction a trailing `/` does not count (`PIP-35`): a
+  DENY or a rate limit rule on `/orders/{id}` also covers `/orders/123/`, and one on `/orders/` covers `/orders`, since a
+  backend may serve both spellings as one (Express without strict routing, Rails, ASP.NET Core, Spring 5 with
+  `useTrailingSlashMatch`). On a host with a route map, a path that ends with `/`, maps to no route, and maps without
+  it is refused `400` `invalid-request` before authentication: deciding it in the `http` namespace would step around
+  the route's DENYs, and mapping it would widen its ALLOWs.
 
 ## Route maps
 

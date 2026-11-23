@@ -209,7 +209,8 @@ class PolicyCompiler(
             parse("$path.resource[$i]", errors) {
                 ResourcePattern.parse(resource.pattern, resource.caseSensitive, resource.decodeAndParseSegments)
             }
-        }.ifEmpty { listOf(ResourcePattern.AnyResource) }
+        }.map { if (source.effect === Effect.DENY || rateLimit) it.inDenyDirection() else it } // PIP-35
+            .ifEmpty { listOf(ResourcePattern.AnyResource) }
         if (source.effect === Effect.DENY) {
             checkBare(resources, path, errors)
             checkDecoded(source.resources, path, rateLimit, errors)
