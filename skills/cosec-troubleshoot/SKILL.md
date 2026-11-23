@@ -171,8 +171,9 @@ Full model: https://cosec.ahoo.me/guide/security-model.
   `KafkaOperations` bean and `cosec.control.audit.kafka.enabled=true`, or use `best-effort`.
 - **`The control plane checks its approvers' revocations, but no revocation reader is available`**: enable CoSec's
   tokens with `cosec-cocache`, or declare a `RevocationReader` bean (`RevocationReader.NONE` only when no approver's
-  credential is ever revoked). **`cosec.jwt.token-validity.refresh (...), how long a token revocation is kept, is
-  shorter than cosec.control.approval.expire-after`**: raise the first or lower the second.
+  credential is ever revoked). **`A token revocation is kept for ...: the longer of cosec.jwt.token-validity.access
+  (...) and cosec.jwt.token-validity.refresh (...), plus cosec.authentication.revocation.skew (...), shorter than
+  cosec.control.approval.expire-after`**: raise a token validity or lower the approvals' expiry.
 - **`Redis may evict CoSec's policy snapshot: maxmemory-policy is {...}, not noeviction`**: set
   `maxmemory-policy noeviction` on every node. **`Cannot tell whether Redis may evict CoSec's policy snapshot (Redis
   refused INFO ...)`** or `(the CoCache backend ... is not one this check can read)`: a Redis user without `+info`, a

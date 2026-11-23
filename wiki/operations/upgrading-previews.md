@@ -30,6 +30,13 @@ Which preview of the library may run behind which preview of the gateway image: 
 
 ## From 8.0.0-beta.7 {#from-8-0-0-beta-7}
 
+- **A token revocation outlives the token it names** (`IDN-35`). Affected: a deployment whose
+  `cosec.jwt.token-validity.access` is longer than `cosec.jwt.token-validity.refresh`. A revocation was kept for the
+  refresh token's lifetime, so an access token valid longer was accepted again once its record expired. It is now kept
+  for the longer of the two, plus `cosec.authentication.revocation.skew` (an issuer's clock may run that far ahead), and
+  startup logs the value. Records written before keep their lifetime. The control plane's check that a revocation
+  outlives an approval (`cosec.control.approval.expire-after`) uses the same value, and its message changed: it now
+  begins `A token revocation is kept for` ([Troubleshooting](./troubleshooting.md)).
 - **`HttpControlService` relays a user's attributes** (`CTL-77`, DR1-F-1). Affected: an application that calls a
   control-plane host through `HttpControlService` as the user whose request it serves (`ControlCaller.of`), with a
   control policy that reads `subject.attributes`. Before, no attribute went with the call, so a DENY on one did not match
