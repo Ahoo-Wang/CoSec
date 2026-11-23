@@ -162,9 +162,10 @@ class DocumentCacheTest {
         entry.compiled(digest(7)) { PolicyDocumentCompiler.forPlatform(null).compile(decoded) }.getOrThrow()
         val form = retained() - empty - held
 
-        held.assert().describedAs("an entry of ${stored.size} stored bytes retains $held")
+        val measured = "an entry of ${stored.size} stored bytes retains $held, its compiled form $form"
+        held.assert().describedAs(measured)
             .isLessThanOrEqualTo(stored.size * DocumentCache.DECODED_FACTOR + DocumentCache.ENTRY_BYTES)
-        form.assert().describedAs("its compiled form retains $form")
+        form.assert().describedAs(measured)
             .isLessThanOrEqualTo(stored.size * DocumentCache.COMPILED_FACTOR + DocumentCache.FORM_BYTES)
     }
     }
