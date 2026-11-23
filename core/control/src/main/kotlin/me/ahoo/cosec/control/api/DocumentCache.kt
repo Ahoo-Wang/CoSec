@@ -245,13 +245,14 @@ class DocumentCache(
 
         /**
          * What an entry holds whatever its document's size (DR1-F-5): the entry, its key and digest, the map's node, the
-         * decoded document's own objects and the lazies it keeps, measured on an empty document with JOL
-         * (`DocumentCacheTest`, which holds the estimate never below what the smallest documents retain).
+         * decoded document's own objects and the lazies it keeps. Measured with JOL on an empty tenant document (90 bytes
+         * stored): 872 bytes, without counting its stored size (`DocumentCacheTest`, which holds the estimate never below
+         * what the smallest documents retain).
          */
-        const val ENTRY_BYTES: Long = 2_048
+        const val ENTRY_BYTES: Long = 1_024
 
-        /** What a compiled form holds whatever its document's size: the compiled document's indexes, empty. */
-        const val FORM_BYTES: Long = 2_048
+        /** What a compiled form holds whatever its document's size: its empty indexes, measured at 400 bytes the same way. */
+        const val FORM_BYTES: Long = 512
 
         /** What one derived binding would take stored, written out. */
         const val DERIVED_BINDING_BYTES: Long = 160
