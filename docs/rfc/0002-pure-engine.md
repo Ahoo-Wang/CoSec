@@ -57,7 +57,7 @@ Engine.evaluate(EngineRequest, SnapshotView, TraceLevel) -> Evaluation(Decision,
 | 删除 `BlockingAware`、热路径无 `Mono`（§3.4） | 适配层按 `BlockingAware` 切换线程（S13） | RFC 0006：随匹配器一起删除 |
 | 编译执行：AST、索引、索引完整性性质测试（§3.3） | 引擎按源顺序线性扫描 | RFC 0005：按命名空间的索引，`IDX-1` |
 | `Binding`、成员关系、平台层 / 租户层、黑名单拆分、root 作为 break-glass 绑定（§3.2） | 7.x 的三层结构被适配成引擎输入 | RFC 0004 |
-| 条件 AST 取代 OGNL/SpEL 和 part 匹配器；`MatchResult(bindings)`（P6、P10） | 现有匹配器原样调用（§6） | RFC 0005；`legacy` 节点在 RFC 0006 删除 |
+| 条件 AST 取代 OGNL/SpEL 和 part 匹配器；`MatchResult(bindings)`（P6、P10） | 现有匹配器原样调用（§6） | RFC 0005；自定义匹配器在转换时被拒绝，改为 `AttributeProvider` 加条件（RFC 0008 §6 Q4） |
 | 扁平组合顺序、ALLOW 出错按未命中处理、`onMissing`、`withinBoundary`（§3.3） | 保持 7.x 的语义（§4.3） | RFC 0004 §6.1；`onMissing` 在 RFC 0006 §5.4.3；边界在 RFC 0007 §7.6 |
 | `ScopeResolver`、经校验的 `Scope`（P4） | 只定义类型，`Scope` 标明来源为"客户端声明" | RFC 0004 §4.6：`Scope` 只能由 `ScopeResolver` 构造（`SCP-5`） |
 | 503、`Decision` 直接进入 Pipeline、义务、`DecisionListener` | `Indeterminate` 在适配层还原为原异常，状态码不变（§3.5） | RFC 0006 |
@@ -388,8 +388,9 @@ return 有 ALLOW 因外部属性不可用而跳过 ? Indeterminate(AttributeUnav
 语句提供一个只属于它的路径变量上下文。选择 B（§10 Q1）：下游只改一次，零差异门槛才可行，D1/D7 同样在结构上消除；SPI 的形状应该由第 4 阶段的
 编译模型决定。
 
-结局：第 4 阶段用条件 AST 取代 OGNL/SpEL 与 part 匹配器，自定义匹配器暂由不可分析的 `legacy` 节点承载（RFC 0005 §3.7、Q2），第 5 阶段删除
-（RFC 0006）。今天没有匹配器 SPI：动作与资源模式编译后返回捕获的变量，条件 AST 读取它们（RFC 0001 P6）。
+结局：条件 AST 取代 OGNL/SpEL 与 part 匹配器（RFC 0005）。原计划让自定义匹配器经一个不可分析的 `legacy` 节点过渡，它没有实现：8.0 只有一次
+切换，`AttributeProvider` 与条件 AST 同时可用，转换工具拒绝自定义匹配器并报告位置，改写成 `AttributeProvider` 加条件（RFC 0005 §3.7，
+RFC 0008 §6 Q4）。今天没有匹配器 SPI：动作与资源模式编译后返回捕获的变量，条件 AST 读取它们（RFC 0001 P6）。
 
 ### 6.2 方案 B 的语句作用域上下文
 
@@ -554,4 +555,4 @@ JMH 任务默认只跑 1 fork × 1 iteration，是冒烟，不足以判定几个
 - 2026-10-26：门槛由 RFC 0008 的规范一致性套件取代（#1039）。
 - 2026-10-28：模块目录与项目名去掉 `cosec-` 前缀（#1132、#1139）。
 - 2026-11-08：审计记录的来源改为 `source.via`（#1297，记录于 #1299）。
-- 2026-11-22：§9 与附录 B 压缩为一行（#1882）。
+- 2026-11-23：§9 与附录 B 压缩为一行（#1882）。
