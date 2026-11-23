@@ -24,7 +24,7 @@ import org.springframework.aot.hint.RuntimeHintsRegistrar
  * class it lists, as found on the classpath when the AOT processor runs, so a module added by the application is
  * covered too.
  *
- * A missing hint can only make a document or entry fail to decode or compile (RFC 0003 §4.4 F3, F4), which fails
+ * A missing hint can only make a document fail to decode or compile (RFC 0003 §4.4 F3, F4), which fails
  * closed; it never skips a statement.
  *
  * No native build verifies these hints yet: 8.0 supports the JDK AOT cache, not Spring AOT or native images
