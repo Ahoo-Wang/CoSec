@@ -35,6 +35,8 @@ dependencies {
     testImplementation(project(":webmvc"))
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-reactor")
     testImplementation("org.springframework:spring-test")
+    // The samples that start an application with SpringApplicationBuilder (#1872).
+    testImplementation("org.springframework.boot:spring-boot")
     testImplementation("io.projectreactor:reactor-test")
 }
 

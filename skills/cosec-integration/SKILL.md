@@ -227,7 +227,9 @@ cosec:
   revocations)` for a real token's session. A header is refused after 60s: make one per request. Never hand-write the
   JSON, and never use it in production. A Spring Boot test that starts the service states the boundary too, or the
   context fails to start: `@SpringBootTest(properties = [IdentityHeader.ONLY_GATEWAY_CAN_REACH])` (true in a test,
-  which only its own client reaches; never copied into a deployment).
+  which only its own client reaches; never copied into a deployment). A launcher that takes a property map uses the
+  key apart: `mapOf(IdentityHeader.ONLY_GATEWAY_CAN_REACH_KEY to "true")`; a builder `.properties(...)` or a `--`
+  argument takes the assignment as it is.
 
 Details: https://cosec.ahoo.me/integration/web#services-behind-the-gateway and
 https://cosec.ahoo.me/guide/security-model#trust-boundaries.

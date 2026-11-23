@@ -1109,6 +1109,14 @@ test's context is no exception. In a test the statement is true: the service is 
 class OrdersServiceTest
 ```
 
+A test that starts the application itself states it the same way:
+
+```kotlin
+SpringApplicationBuilder(OrdersApplication::class.java).properties(IdentityHeader.ONLY_GATEWAY_CAN_REACH)  // a builder
+runApplication<OrdersApplication>("--" + IdentityHeader.ONLY_GATEWAY_CAN_REACH)                          // a `--` argument
+mapOf(IdentityHeader.ONLY_GATEWAY_CAN_REACH_KEY to "true")                                                // a property map: the key apart
+```
+
 In a deployment the statement is the operator's to make once the network makes it true
 ([Services behind the gateway](../integration/web.md#services-behind-the-gateway)); never copy it from a test. A test
 that only runs CoSec's filter, as above, starts no CoSec auto-configuration and needs none.

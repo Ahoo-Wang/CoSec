@@ -56,6 +56,7 @@ public final class me/ahoo/cosec/testkit/IdentityHeader {
 	public static final field INSTANCE Lme/ahoo/cosec/testkit/IdentityHeader;
 	public static final field NAME Ljava/lang/String;
 	public static final field ONLY_GATEWAY_CAN_REACH Ljava/lang/String;
+	public static final field ONLY_GATEWAY_CAN_REACH_KEY Ljava/lang/String;
 	public static final fun forSubject (Ljava/lang/String;)Ljava/lang/String;
 	public static final fun forSubject (Ljava/lang/String;Ljava/lang/String;)Ljava/lang/String;
 	public static final fun forSubject (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)Ljava/lang/String;

@@ -59,6 +59,13 @@ object IdentityHeader {
     const val NAME: String = IdentityCodec.HEADER
 
     /**
+     * The key of [ONLY_GATEWAY_CAN_REACH] alone, `cosec.pipeline.identity.only-gateway-can-reach`, whose value is `true`:
+     * for a launcher that takes a property map (`mapOf(ONLY_GATEWAY_CAN_REACH_KEY to "true")`) rather than an assignment.
+     * For tests only, as [ONLY_GATEWAY_CAN_REACH].
+     */
+    const val ONLY_GATEWAY_CAN_REACH_KEY: String = "cosec.pipeline.identity.only-gateway-can-reach"
+
+    /**
      * The statement a Spring Boot test of a service in `gateway` mode makes, as a property assignment:
      * `cosec.pipeline.identity.only-gateway-can-reach=true`, for `@SpringBootTest(properties = [...])` or
      * `@TestPropertySource(properties = [...])`. Without it the service does not start (`STA-7`): it believes any
@@ -68,7 +75,7 @@ object IdentityHeader {
      * deployment it is the operator's to make once the network makes it true (a NetworkPolicy, mutual TLS, a private
      * network), never copied from a test.
      */
-    const val ONLY_GATEWAY_CAN_REACH: String = "cosec.pipeline.identity.only-gateway-can-reach=true"
+    const val ONLY_GATEWAY_CAN_REACH: String = "$ONLY_GATEWAY_CAN_REACH_KEY=true"
 
     /** How long [forSubject]'s credential is valid by default. */
     private val DEFAULT_VALIDITY: Duration = Duration.ofHours(1)

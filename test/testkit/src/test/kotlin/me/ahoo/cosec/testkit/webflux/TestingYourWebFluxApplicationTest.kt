@@ -34,6 +34,8 @@ import me.ahoo.test.asserts.assertThrownBy
 import org.junit.jupiter.api.Nested
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
+import org.springframework.boot.WebApplicationType
+import org.springframework.boot.builder.SpringApplicationBuilder
 import org.springframework.context.annotation.Configuration
 import org.springframework.core.env.Environment
 import org.springframework.mock.http.server.reactive.MockServerHttpRequest
@@ -144,6 +146,22 @@ class TestingYourWebFluxApplicationTest {
         fun `the test's context states that only the gateway can reach the service`() {
             environment.getProperty("cosec.pipeline.identity.only-gateway-can-reach").assert().isEqualTo("true")
         }
+    }
+
+    /**
+     * The other ways a test starts an application state the same boundary (#1872): a builder's properties, a `--`
+     * argument, or a property map with the key apart.
+     */
+    @Test
+    fun `a test that starts the application itself states the boundary the same way`() {
+        fun started(configure: (SpringApplicationBuilder) -> SpringApplicationBuilder, vararg args: String): String? =
+            configure(SpringApplicationBuilder(Empty::class.java).web(WebApplicationType.NONE)).run(*args).use {
+                it.environment.getProperty("cosec.pipeline.identity.only-gateway-can-reach")
+            }
+        started({ it.properties(IdentityHeader.ONLY_GATEWAY_CAN_REACH) }).assert().isEqualTo("true")
+        started({ it }, "--" + IdentityHeader.ONLY_GATEWAY_CAN_REACH).assert().isEqualTo("true")
+        val map = mapOf(IdentityHeader.ONLY_GATEWAY_CAN_REACH_KEY to "true")
+        started({ it.properties(map) }).assert().isEqualTo("true")
     }
 
     @Configuration(proxyBeanMethods = false)
