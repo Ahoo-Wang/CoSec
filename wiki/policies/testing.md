@@ -83,8 +83,12 @@ a space. A malformed escape (`%zz`, a lone `%`, bytes that are not UTF-8) is a `
 Errors are `application/problem+json`. A `409` also names which conflict it is in `conflict` (`CTL-80`): `BASE_MOVED`
 (read the head again, then propose again or rebase), `SLOT_HELD` (another change holds the document's staging slot,
 named in `heldBy` wherever `detail` names it: wait, or abandon it), `STATE` (the change's state does not admit the step), `CANDIDATE_MOVED`, `WINDOW_OPEN` (wait for the
-window to close), `WINDOW_BLOCKED` (the change never publishes), `CONTENDED` (the same call may succeed) or `EXISTS`
-(something of that id already stands where the step needs something else); read it, not `detail`, whose wording may
+window to close), `WINDOW_BLOCKED` (the change never publishes), `CONTENDED` (the same call may succeed), `EXISTS`
+(something of that id already stands where the step needs something else) or `OPEN_LIMIT` (the document holds as many
+open changes as `cosec.control.revisions.max-count`, 50 by default; the oldest is named in `heldBy`: abandon one, or
+wait for it to expire, `CTL-83`). At the limit, your own oldest change whose checks failed (a `DRAFT`, which cannot be
+edited) is abandoned first to make room, so a pipeline that keeps proposing failing changes does not lock the document;
+no other change is abandoned for room, and break-glass is never held to the limit. Read `conflict`, not `detail`, whose wording may
 change. A conflict's members are in `contract/control/conflict.json`. A `400`, `409`, `410`, `412`, `422` or `428` explains your own request in
 `detail`; a `401`, `403`, `404`, `500` or `503` carries no detail, so a refusal never tells whether a document or change
 exists. A `400`'s `detail` is one of the control plane's own checks, or names the field that does not parse (`[mode] is

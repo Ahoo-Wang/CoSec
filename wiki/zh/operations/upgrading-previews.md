@@ -27,6 +27,10 @@ description: "每个 8.0 预览版（alpha 与 beta）到下一个之间的变�
 
 ## 从 8.0.0-beta.7 升级 {#from-8-0-0-beta-7}
 
+- **一份文档至多有 `cosec.control.revisions.max-count` 个未结束变更**（默认 50，`CTL-83`，DR1-E-2）。受影响的：在同一份文档上
+  留着很多未结束变更的客户端。超过上限的提议、`:apply` 或回滚，先放弃其作者自己最老的、检查失败的变更，否则以 `409` 拒绝，
+  冲突种类为新增的 `OPEN_LIMIT`，`heldBy` 给出最老的未结束变更；类型化客户端看到 `ConflictKind.OPEN_LIMIT`。请放弃不再需要的变更。
+  升级时已经超出上限的文档不受追溯：它的变更会在 `cosec.control.changes.expire-after`（7 天）之内过期，回到上限以内，在那之前它不接受新的变更。
 - **`analyze` 只向能读租户文档的调用者列出它的绑定**（`CTL-51`，DR1-F-8）。受影响的：对本租户文档有 `cosec:analyze`
   却没有 `cosec:read` 的主体（没有内置角色是这样）。它此前会得到该文档中所有匹配的绑定，现在一个也得不到，该文档计入 `hidden`。
   请把 `cosec:read` 与 `cosec:analyze` 一起授予，就像 `cosec:tenant-viewer` 那样。

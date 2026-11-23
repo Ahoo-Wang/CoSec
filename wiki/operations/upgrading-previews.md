@@ -30,6 +30,13 @@ Which preview of the library may run behind which preview of the gateway image: 
 
 ## From 8.0.0-beta.7 {#from-8-0-0-beta-7}
 
+- **A document holds at most `cosec.control.revisions.max-count` open changes** (50 by default, `CTL-83`, DR1-E-2).
+  Affected: a client that leaves many changes open on one document. A proposal, an `:apply` or a rollback past the
+  limit first abandons its author's own oldest change whose checks failed, then is refused `409` with the new conflict
+  `OPEN_LIMIT`, naming the oldest open change in `heldBy`; a typed client sees `ConflictKind.OPEN_LIMIT`. Abandon the
+  changes you no longer need. A document already over the limit when you upgrade is not touched: its changes expire
+  within `cosec.control.changes.expire-after` (7 days) and bring it back under the limit, and until then it takes no new
+  change.
 - **`analyze` shows a tenant's bindings only to a caller who may read its document** (`CTL-51`, DR1-F-8). Affected: a
   principal granted `cosec:analyze` on its tenant's document but not `cosec:read` (no built-in role is shaped so). It
   was answered with every matching binding of that document; it now gets none, and the document is counted in `hidden`.

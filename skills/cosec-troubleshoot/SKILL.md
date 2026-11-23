@@ -619,6 +619,10 @@ bootstrap, a migration or an older instance, which may have been publishing the 
 over the same base first, by <id>` are publishes that crossed: rebase the change that lost. Blocking a principal is not
 a document change: use the blacklist's `BlacklistSource`, which waits for no slot.
 
+When a proposal is `409` with `conflict: OPEN_LIMIT`, the document holds `cosec.control.revisions.max-count` open
+changes (`CTL-83`); `heldBy` names the oldest. The author's own oldest failed draft was already abandoned for room:
+abandon, publish or let expire the open changes still there.
+
 When a tenant change waits for approval with `TOO_LARGE`, the grant analysis spent its four million comparisons
 before it reached those grants (`CTL-49`): split the change; what counts is what it adds or rewrites, times what its
 author holds. One entry `change of tenant:<t>` means it grants more than 80,000 fragments (actions × resources × bindings
