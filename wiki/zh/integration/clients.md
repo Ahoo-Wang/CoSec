@@ -25,7 +25,9 @@ CoSec 不提供登录和租户切换：它们属于应用，用 CoSec 的类编�
 | 租户或应用切换 | 应用：`SwitchTenantAuthentication`，从一个有效会话发起 | 入：`Authorization` 头里的当前令牌，加上你的凭证类的请求体；出：`CompositeToken` |
 
 `CompositeToken` 写成 `{"accessToken":"<jwt>","refreshToken":"<jwt>"}`，没有别的字段（`CompositeTokenJsonTest` 逐字节固定它）。
-应用在响应里加字段不会破坏 CoSec，客户端要忽略它不认识的字段。
+应用在响应里加字段不会破坏 CoSec，客户端要忽略它不认识的字段。客户端发回的只能正好是令牌对，不能是原样的响应：
+刷新与退出路由对其他请求体回答 `400 invalid-request`。`cosec-fetcher` 只保留交给 `signIn` 的对象里的 `accessToken` 和
+`refreshToken`。
 
 **提供的刷新路由如何应答。** 每个应答都带 `Cache-Control: no-store`。
 
@@ -196,6 +198,6 @@ pnpm add @ahoo-wang/fetcher @ahoo-wang/fetcher-eventbus @ahoo-wang/fetcher-stora
 | 遇到 `401` 就刷新 | 读取 `401` 的 problem 类型。`token-expired`，或不是 CoSec 写出的无正文 `401`，刷新一次并重试请求。`unauthorized` 不刷新。`token-revoked` 和 `token-invalid` 也不刷新，并删除已保存的令牌对 |
 | 刷新失败就结束会话，不论什么原因 | 只有刷新路由回答 `401` 才结束会话；`400`、`403`、`404`、`429`、`5xx` 或网络失败都保留会话。`isRefreshRejected` 可以指定别的拒绝方式。刷新请求 10 秒后被截断 |
 | 把每个 `403` 交给 `onForbidden` | 把 `403 scope-rejected` 交给 `onScopeRejected`，没有它时交给 `onForbidden`。回调的第二个参数是 problem |
-| 在 `RefreshTokenError` 和 `RefreshUnavailableError` 上带着令牌对 | 任何错误上都不带令牌。错误仍然带着它的 `exchange`，其请求持有 `Authorization` 头：发送给错误上报器之前先清理 |
+| 在 `RefreshTokenError` 和 `RefreshUnavailableError` 上带着令牌对 | 它抛出的任何错误上都不带令牌：刷新或退出的错误只保留其请求错误的名字和消息，因为那个请求的请求体就是令牌对。你自己请求的错误仍然带着它的 `exchange`，其请求持有 `Authorization` 头：发送给错误上报器之前先清理 |
 
 该包自己的 README 逐项列出被移除的成员。

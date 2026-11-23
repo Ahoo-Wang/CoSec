@@ -71,7 +71,7 @@ function Profile() {
 - `useSecurity`：不经过 context 的同一个 hook。
 - `logout` 和 `signOut`：`logout` 是用户的"退出"：通过 `tokenManager` 选项（`JwtTokenManager.logout()`，需要 `tokenRevoker`）在服务端结束会话，然后删除这里的令牌对。服务端回答之前，会话不变。`204` 或 `401` 时 resolve，其他情况（以及没有 `tokenManager` 时）以 `LogoutUnconfirmedError` reject；无论哪种情况，令牌对在这里都已删除，`onSignOut` 会触发，除非更新的登录替换了会话。`signOut` 只在这里立即删除令牌对：用于已知已经结束的会话。`tokenManager` 必须是该 hook 的 `tokenStorage` 的管理器，否则 hook 会抛出。
 - `RouteGuard`：用户已登录时渲染子节点，否则渲染 `fallback`。`onUnauthorized` 在渲染提交之后运行，用户每次变为（或一开始就是）未登录时调用一次。
-- `RefreshableRouteGuard`：用于 `JwtTokenManager` 能刷新的会话：它自己发起刷新，刷新期间渲染 `refreshing`，刷新失败时渲染 `fallback`。
+- `RefreshableRouteGuard`：用于 `JwtTokenManager` 能刷新的会话：它自己发起刷新，刷新期间渲染 `refreshing`，刷新失败时渲染 `fallback`。它用 `console.error` 记录失败的刷新，只记错误的名字和消息。
 - `ANONYMOUS_USER`：未登录访客的 `currentUser`。
 
 `authenticated` 就是 `TokenStorage` 对所存令牌给出的答案。守卫只是界面上的便利，从来不是决定：决定在服务端由 CoSec 做出。

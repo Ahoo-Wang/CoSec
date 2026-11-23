@@ -20,7 +20,7 @@ import { isTokenExpired, parseJwtPayload } from './jwts.js';
 import type { CompositeToken } from './tokenRefresher.js';
 import type { Serializer } from '@ahoo-wang/fetcher-storage';
 import { idGenerator } from './idGenerator.js';
-import { isCompositeToken } from './compositeToken.js';
+import { isCompositeToken, pairOf } from './compositeToken.js';
 
 /**
  * Interface for JWT token with typed payload.
@@ -172,19 +172,27 @@ export class JwtCompositeToken
   public readonly refresh: JwtToken<JwtPayload>;
 
   /**
+   * The pair: `accessToken` and `refreshToken` only, whatever else the object
+   * it was made from had, since it is stored and sent back to the refresh and
+   * logout routes, which accept exactly the pair.
+   */
+  public readonly token: CompositeToken;
+
+  /**
    * Creates a new JwtCompositeToken instance.
    *
    * Initializes both access and refresh token instances with the provided early period.
    *
-   * @param token The composite token containing access and refresh token strings
+   * @param token The composite token containing access and refresh token strings; other members are dropped
    * @param earlyPeriod The early expiration period in seconds (default: 0)
    * @param sessionId Session generation retained when restoring or refreshing a token.
    */
   constructor(
-    public readonly token: CompositeToken,
+    token: CompositeToken,
     public readonly earlyPeriod: number = 0,
     public readonly sessionId: string = idGenerator.generateId(),
   ) {
+    this.token = pairOf(token);
     this.access = new JwtToken(token.accessToken, earlyPeriod);
     this.refresh = new JwtToken(token.refreshToken, earlyPeriod);
   }

@@ -279,9 +279,43 @@ describe('RefreshableRouteGuard', () => {
       await waitFor(() => {
         expect(screen.getByText('Login required')).toBeTruthy();
       });
-      expect(consoleErrorSpy).toHaveBeenCalledWith(new Error('Refresh failed'));
+      expect(consoleErrorSpy).toHaveBeenCalledWith('Error: Refresh failed');
       expect(screen.queryByText('Refreshing...')).toBeNull();
       expect(refreshSpy).toHaveBeenCalledTimes(1);
+    });
+
+    // DR1-H-1: a console is often captured by an error reporter.
+    it('logs a failed refresh by name and message only, never what the error holds', async () => {
+      const consoleErrorSpy = vi
+        .spyOn(console, 'error')
+        .mockImplementation(() => {});
+      const secret = 'refresh-token-secret';
+      vi.spyOn(tokenManager, 'refresh').mockRejectedValue(
+        Object.assign(new Error('Refresh failed'), {
+          exchange: { request: { body: { refreshToken: secret } } },
+          cause: { refreshToken: secret },
+        }),
+      );
+
+      render(
+        <SecurityProvider tokenStorage={tokenStorage}>
+          <RefreshableRouteGuard
+            tokenManager={tokenManager}
+            fallback={<div>Login required</div>}
+          >
+            <div>Protected Content</div>
+          </RefreshableRouteGuard>
+        </SecurityProvider>,
+      );
+
+      await waitFor(() => {
+        expect(screen.getByText('Login required')).toBeTruthy();
+      });
+      expect(consoleErrorSpy).toHaveBeenCalledTimes(1);
+      for (const argument of consoleErrorSpy.mock.calls[0]) {
+        expect(typeof argument).toBe('string');
+        expect(argument as string).not.toContain(secret);
+      }
     });
   });
 

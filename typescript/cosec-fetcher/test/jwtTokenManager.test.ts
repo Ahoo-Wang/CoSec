@@ -189,7 +189,10 @@ describe('JwtTokenManager', () => {
 
     const failure = await jwtTokenManager.refresh().catch(e => e);
     expect(failure).toBeInstanceOf(RefreshUnavailableError);
-    expect(failure.cause).toBe(error);
+    // The cause keeps the name and message only, never the refresh's exchange.
+    expect(failure.cause).toBeInstanceOf(Error);
+    expect(failure.cause.message).toBe((error as Error).message);
+    expect(failure.cause).not.toHaveProperty('exchange');
     // The error carries no credential: error reporters serialize own properties.
     expect(failure).not.toHaveProperty('token');
     expect(tokenStorage.get()).toBe(jwtCompositeToken);
