@@ -483,6 +483,10 @@ publish(change c, 基准摘要 b, 候选文档 d):     // d 的 provenance.paren
 - 写入顺序、冲突处理、"结果未知时读回摘要"都从 `RedisSnapshotPublisher` 搬过来；不同的是冲突后**不**在新内容上重做修改：控制面的检查
   （授出分析、影子窗口）是针对基准 b 做的，换一个基准就要重做检查（§5.5）。
 
+- **调用方的取消只在写头之前生效（`CTL-82`，2026-11-23，#1893）。** 第 4 步（写头）及其后各步在 `NonCancellable` 中执行。写头之前被取消，与在第 1 步或第 2、3 步之后中断相同：
+  不发布任何东西，变更保持 `READY` 并持有自己的槽位（槽位属于变更，不属于请求），再发布一次即可发布。写头之后被取消，后续各步照常走完；在那里失败的，再发布一次即可结算，
+  不增加修订（`CTL-2`）。
+
 ### 5.5 并发：基准、暂存槽与变基
 
 - **乐观并发**：变更请求创建时记下基准 `(修订号, 摘要)`；发布时 `putIfMatch(expected = 基准摘要)`。中间有别人发布，这次发布就是 `Conflict`。
@@ -1173,6 +1177,11 @@ JSON 结构与上面的类型一一对应；`docKey` 在路径中写作 `platfor
 
 > **实现说明（2026-10-27，#1097）**：starter 的 `controlSupport` 变体在 `cosec.control.http.base-path` 下注册 WebFlux 与 WebMvc 的函数式路由（未登记，S1b 登记）。控制面的授权用 `PipelineControlAuthorizer`，它读**单独的快照源**，每次检查前以强制读取确认文档是当前的（§7.2）；`RequestSecurity.of(SecurityContext)` 只对管道自己构造的上下文返回放行的安全信息，其他一律 401。`cosec.control.*` 包括 `app-id`、`http.base-path`、`revisions.{max-count,min-age,orphan-age}`、`changes.expire-after`、`approval.{expire-after,four-eyes}`、`break-glass.max-duration`、`shadow.{min-duration,min-samples,max-duration}`。
 
+> **2026-11-23 修订（#1893，`CTL-82`；维护者：“按建议办”）**：控制请求没有自己的期限：期限是调用方的，经取消到达。进程内（`LocalControlService`）由调用方的协程执行请求，
+> 调用方用 `withTimeout` 限定。经网络时，`HttpControlService` 在调用方被取消或调用超时时中止交换（对 `sendAsync` 返回的 future 调 `cancel(true)`：HTTP/1.1 关闭连接，HTTP/2 重置流；
+> 此前用的 `await` 以 `cancel(false)` 取消，被取消的调用方把请求留在宿主上直到调用自己的超时）；WebFlux 宿主（运维端口与服务端口）在连接结束时取消处理该请求的协程。
+> Servlet 宿主只在运维端口上提供控制 API，容器不告诉处理方客户端已经离开，请求在那里走完，其中每个等待各自有界（§14.2）。
+
 ### 10.3 `simulate`、`explain`、`analyze`
 
 | 操作 | 做什么 | 权限 |
@@ -1348,6 +1357,11 @@ AGENTS.md 在 PR-11 更新：Mental model 的 "Layers" 加上 `control/`，新�
 > **实现说明（2026-10-27，#1091）**：AOT：控制面读写 JSON 用 Jackson 树与手写的编解码，不按名字加载任何类，不需要提示。`ControlBoundaryTest` 新增一条规则：反射式 Jackson 绑定（`readValue`、`treeToValue`、`convertValue` 等）、`Class.forName`、`ServiceLoader`、`kotlin.reflect.full` 都会使它失败，因为它们需要没人注册的提示，且只在原生镜像里才出错。
 
 > **运维要求（2026-10-27，#1095）**：影子报告的 key 是 `{prefix}:shadow:report:{changeId}@{ms}` 与 `{prefix}:shadow:status:instances`（2026-10-27 第 2 轮审查更正：此前写成 `cosec:…:shadow-report`，按那个写的 ACL 什么也保护不了）。报告按原样被信任：`ShadowWindows` 直接对报告求和。只有数据面实例可以写这些 key，要用 Redis ACL 强制；能写的人可以用零差异提前关闭窗口。由于同一窗口所有实例的报告在同一个 key 里、每次整体改写，任何一个数据面实例都能抬高样本数或抹掉别的实例的 `CANDIDATE_ERROR`；按实例分 key 的修复见第 2 轮审查的跟进 PR。数据面的凭据对 `snapshot:*`、`candidate:*`、`control:*` 也必须只读。
+
+> **2026-11-23 修订（#1893，`CTL-82`）**：上表是预算，不是期限：8.0 不为控制请求设期限属性（§10.2）。每个等待各自有界：鉴权与必达变更监听器的合计各由 `cosec.pipeline.timeout`；
+> 确认检查所用文档由快照源的存储读超时；`MovedHeads` 1 秒；每个比较并设置的循环由尝试次数（16）；Redis 控制存储的每条命令由 CoCache 的命令超时（`cocache.redis.command-timeout`，
+> 默认 2 秒；CoSec 不设置也不锁定它，这是部署的选择），连接断开时立即拒绝。没有哪个等待要等别的请求释放锁、槽位或租约：被占的槽位答 409，租约是尝试加锁。
+> 一条请求最长能跑多久是这些有界步骤之和，只有调用方能说它愿意等多久。逐项的出处见 #1893 的说明。
 
 ---
 
