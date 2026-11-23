@@ -1,0 +1,16 @@
+# Rule: IDN-36
+# Mutant: no answer that a switched session is live reads its root, so it outlives the login it was switched from
+# Tests: :login:test --tests me.ahoo.cosec.login.token.SwitchedSessionRootTest
+
+diff --git a/extensions/login/src/main/kotlin/me/ahoo/cosec/login/token/TokenFamilies.kt b/extensions/login/src/main/kotlin/me/ahoo/cosec/login/token/TokenFamilies.kt
+index 6f03a3ff4..542132b7d 100644
+--- a/extensions/login/src/main/kotlin/me/ahoo/cosec/login/token/TokenFamilies.kt
++++ b/extensions/login/src/main/kotlin/me/ahoo/cosec/login/token/TokenFamilies.kt
+@@ -217,6 +217,7 @@ class TokenFamilies @JvmOverloads constructor(
+      */
+     private suspend fun requireRootLive(family: TokenFamily) {
+         val rootId = family.root ?: return
++        if (rootId.isNotEmpty()) return
+         repeat(MAX_ATTEMPTS) {
+             val root = sessionStore("read a session's root") { store.read(rootId) }
+             val live = root != null && !root.family.revoked && root.family.expiresAt.isAfter(clock.instant()) &&

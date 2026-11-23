@@ -47,6 +47,10 @@ import java.time.Instant
  *   pair, and may get one each time they ask until it closes; that holder held the current pair a moment earlier.
  * - **A family ends [lifetime] after its login**, whatever happens: a refresh after that is refused, the user signs in
  *   again, and no pair it issues outlives that end ([Issue.notAfter]).
+ * - **A session a tenant switch started lives only while its login's does** (`IDN-36`). It names its root, the session
+ *   the login began ([TokenFamily.root]); every answer that it is live (its refresh, the retry within the leeway, a
+ *   switch from it) reads the root too, and a root ended, revoked or gone revokes it and refuses. Each such answer
+ *   writes the root back unchanged, conditionally, so the root is kept as long as a session that depends on it.
  * - **It fails closed.** A record that cannot be read or a write that cannot be confirmed throws, and nothing is issued
  *   (503); a missing record refuses the refresh (401).
  *
@@ -82,17 +86,35 @@ class TokenFamilies @JvmOverloads constructor(
      * @throws TokenExpiredException when [authTime] is more than [lifetime] ago
      */
     @InternalCoSecApi
-    suspend fun startAt(tenant: TenantId, principal: PrincipalId, authTime: Instant): Issue =
-        create(tenant, principal, authTime)
+    suspend fun startAt(tenant: TenantId, principal: PrincipalId, authTime: Instant, root: String): Issue {
+        val issue = create(tenant, principal, authTime, root)
+        // A store that does not keep the root would make this a session that outlives its login: read it back.
+        val read = sessionStore("read a session") { store.read(issue.session.id) }
+        if (read == null || read.family.root != root) {
+            end(issue.session.id)
+            throw IllegalStateException(
+                "The TokenFamilyStore did not keep the root of a session a tenant switch started (TokenFamily.root): " +
+                    "the session would outlive the login it was switched from, so the switch is refused. A " +
+                    "TokenFamilyStore must save TokenFamily.root (IDN-36)."
+            )
+        }
+        requireRootLive(read.family)
+        return issue
+    }
 
-    private suspend fun create(tenant: TenantId, principal: PrincipalId, authTime: Instant?): Issue {
+    private suspend fun create(
+        tenant: TenantId,
+        principal: PrincipalId,
+        authTime: Instant?,
+        root: String? = null,
+    ): Issue {
         val loggedIn = (authTime ?: clock.instant()).truncatedToSeconds()
         val expiresAt = loggedIn.plus(lifetime)
         if (!expiresAt.isAfter(clock.instant())) {
             throw TokenExpiredException("The session that began at $loggedIn has ended: sign in again.")
         }
         repeat(MAX_ATTEMPTS) {
-            val family = TokenFamily(ids.generate(), tenant, principal, loggedIn, expiresAt, 1, null, false)
+            val family = TokenFamily(ids.generate(), tenant, principal, loggedIn, expiresAt, 1, null, false, root)
             if (sessionStore("create a session") { store.create(family) }) {
                 return Issue(TokenSession(family.id, loggedIn, 1), expiresAt)
             }
@@ -132,15 +154,18 @@ class TokenFamilies @JvmOverloads constructor(
             }
             when {
                 session.generation == family.generation -> {
+                    requireRootLive(family)
                     val next = family.rotated(now)
                     if (sessionStore("rotate a session") { store.replace(read.version, next) }) {
                         return Issue(TokenSession(family.id, family.authTime, next.generation), family.expiresAt)
                     }
                     // Another refresh moved the family in between: read it again, the pair is now the one before.
                 }
-                session.generation == family.generation - 1 && family.rotatedAt?.plus(leeway)?.isAfter(now) == true ->
-                    // A retry, or another tab: the pair was current a moment ago. Nothing is written.
+                session.generation == family.generation - 1 && family.rotatedAt?.plus(leeway)?.isAfter(now) == true -> {
+                    // A retry, or another tab: the pair was current a moment ago. Nothing of the family is written.
+                    requireRootLive(family)
                     return Issue(TokenSession(family.id, family.authTime, family.generation), family.expiresAt)
+                }
                 session.generation < family.generation -> {
                     if (revoke(read)) {
                         throw TokenRevokedException(
@@ -156,8 +181,9 @@ class TokenFamilies @JvmOverloads constructor(
     }
 
     /**
-     * Returns when [session] of [principal] in [tenant] is live: its family exists, is theirs, and is neither revoked nor
-     * ended. It moves nothing. What a tenant switch issues from (`IDN-22`), checked once in `cosec-login`.
+     * Returns the family of [session] of [principal] in [tenant] once it is live: it exists, is theirs, is neither revoked
+     * nor ended, and so is its root (`IDN-36`). It moves nothing. What a tenant switch issues from (`IDN-22`), checked once
+     * in `cosec-login`.
      *
      * @throws TokenVerificationException when the family is unknown or another principal's
      * @throws TokenRevokedException when the family is revoked
@@ -166,7 +192,7 @@ class TokenFamilies @JvmOverloads constructor(
     // Each refusal is a different answer to the client (401 invalid, revoked or expired), so each has its own throw.
     @Suppress("ThrowsCount")
     @InternalCoSecApi
-    suspend fun requireLive(session: TokenSession, tenant: TenantId, principal: PrincipalId) {
+    suspend fun requireLive(session: TokenSession, tenant: TenantId, principal: PrincipalId): TokenFamily {
         val now = clock.instant()
         if (!session.authTime.plus(lifetime).isAfter(now)) {
             throw TokenExpiredException("The session that began at ${session.authTime} has ended: sign in again.")
@@ -180,6 +206,30 @@ class TokenFamilies @JvmOverloads constructor(
         if (!family.expiresAt.isAfter(now)) {
             throw TokenExpiredException("The session that began at ${family.authTime} has ended: sign in again.")
         }
+        requireRootLive(family)
+        return family
+    }
+
+    /**
+     * Returns when [family] has no root, or its root is live; otherwise revokes [family] and throws
+     * [TokenRevokedException] (`IDN-36`). A live root is written back unchanged, conditionally, which keeps it as long as
+     * [family] is kept; a write that fails means the root changed in between, and it is read and judged again.
+     */
+    private suspend fun requireRootLive(family: TokenFamily) {
+        val rootId = family.root ?: return
+        repeat(MAX_ATTEMPTS) {
+            val root = sessionStore("read a session's root") { store.read(rootId) }
+            val live = root != null && !root.family.revoked && root.family.expiresAt.isAfter(clock.instant()) &&
+                root.family.principal == family.principal
+            if (!live) {
+                end(family.id)
+                throw TokenRevokedException("The session this one was switched from has ended: sign in again.")
+            }
+            if (sessionStore("keep a session's root") { store.replace(root.version, root.family) }) {
+                return
+            }
+        }
+        throw IllegalStateException("The root session [$rootId] kept changing while it was checked.")
     }
 
     /**

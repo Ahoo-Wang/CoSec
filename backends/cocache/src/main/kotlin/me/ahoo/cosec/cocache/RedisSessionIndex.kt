@@ -41,7 +41,8 @@ class RedisSessionIndex(
         val tenant = family.tenant.value
         val key = "$keyPrefix${tenant.length}:$tenant:${family.principal.value}"
         val life = keepFor.toMillis().coerceAtLeast(1)
-        return redisTemplate.execute(SCRIPT, listOf(key), listOf(family.id, limit.toString(), life.toString()))
+        val arguments = listOf(family.id, limit.toString(), life.toString(), family.root.orEmpty())
+        return redisTemplate.execute(SCRIPT, listOf(key), arguments)
             .next().toFuture().await()
             ?.map { it.toString() }
             ?: error("The session index script returned no reply.")

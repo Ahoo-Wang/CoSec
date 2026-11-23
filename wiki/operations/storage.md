@@ -155,7 +155,7 @@ decision inputs stay strict: they carry no such tolerance.
 | Shadow report (`shadow:report:<window>:<instance>`) | `format: 1` | ignored | the window cannot be looked at (`503`) until the report reads or is written again |
 | Reporters of a window (`shadow:reporters:<window>`) | `format: 1` | ignored | the window cannot be judged until it is written again |
 | Instance status and its index (`shadow:status:*`) | `format: 1`, with `formatLevel` | ignored | the propagation of a revision cannot be read (`GET .../propagation`); publishing does not wait for it; no shadow window passes until it can be read (`CTL-10`) |
-| Session (`token:family:<id>`) | `format: 1` | ignored | the session ends: its refresh is refused and the user signs in again |
+| Session (`token:family:<id>`) | `format: 1`; `format: 2` for a session a tenant switch started, which names its `root` (`IDN-36`) | ignored | the session ends: its refresh is refused and the user signs in again |
 | API key (`apikey:*`) | `format: 3` | refused | the key is refused |
 | Revocations, leases, rate-limit counters | none (scalar) | not applicable | as each says above |
 
