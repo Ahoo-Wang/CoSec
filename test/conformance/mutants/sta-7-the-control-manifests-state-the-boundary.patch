@@ -1,0 +1,17 @@
+# Rule: STA-7
+# Mutant: k8s/control states the control host's boundary itself, so every overlay, kind's included, makes it whether or not the cluster enforces the policies
+# Tests: :spring-boot:test --tests me.ahoo.cosec.spring.boot.ControlManifestsTest
+
+diff --git a/k8s/control/deployment.yaml b/k8s/control/deployment.yaml
+index b5bc58e03..2cfaaac28 100644
+--- a/k8s/control/deployment.yaml
++++ b/k8s/control/deployment.yaml
+@@ -63,6 +63,8 @@ spec:
+             # header of whoever can). The three NetworkPolicies beside this file make it true only where the cluster's network
+             # plugin enforces them, which no file can say: the overlay you apply states it, and boundary-check.yaml checks it
+             # on the cluster. Without the statement the host does not start.
++            - name: COSEC_PIPELINE_IDENTITY_ONLYTRUSTEDCALLERSCANREACH
++              value: "true"
+             # Heap, direct memory and metaspace, sized for the memory limit below. An overlay that changes the limit
+             # replaces this variable too.
+             - name: JVM_MEMORY_OPTS

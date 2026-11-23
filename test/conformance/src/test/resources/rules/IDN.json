@@ -459,6 +459,23 @@
       ]
     },
     {
+      "id": "IDN-35",
+      "source": "RC1 deep review DR1-G-2 (round-1-g-host.md); the coordinator's ruling of 2026-11-23; RFC 0009 (sentences proposed in the PR)",
+      "statement": "A session record (a token family) is kept from each write for the shorter of what is left of its lifetime and the refresh token validity (cosec.jwt.token-validity.refresh), so a session nobody refreshes leaves the store with its last refresh token; and a store keeps, for each principal in each tenant, the TokenFamilyStore.SESSIONS_PER_PRINCIPAL (64) sessions that began most recently: creating one more deletes the record of the one that began earliest, live, revoked or ended, whose next refresh is then refused as an unknown session. CoSec's stores count a session before they write its record, so none escapes the count.",
+      "level": "build",
+      "pending": null,
+      "guards": [
+        "spi:InMemorySessionBoundTest#a record nobody refreshes ends with its refresh token, and each write keeps it that long again",
+        "spi:InMemorySessionBoundTest#a write never keeps a record past the end of its session",
+        "spi:InMemorySessionBoundTest#a principal keeps the sessions that began last, the earliest deleted, revoked or not",
+        "spi:InMemorySessionBoundTest#the bound is per principal and per tenant",
+        "cocache:SessionBoundTest#a record is kept no longer than its refresh token, from each write",
+        "cocache:SessionBoundTest#a principal keeps the sessions that began last, and the earliest is deleted",
+        "cocache:SessionBoundTest#the bound is per principal and per tenant",
+        "cocache:SessionBoundTest#the index lives as long as the longest session it counts"
+      ]
+    },
+    {
       "id": "IDN-37",
       "source": "RC1 deep review, the coordinator's third batch, 2026-11-23; RFC 0004 §4.5.3, RFC 0009 (sentences proposed in the PR)",
       "statement": "A token revocation is kept past the end of every token it can name, so no revoked token is valid again when its record expires: the starter keeps a token's or a subject's revocation for the longer of cosec.jwt.token-validity.access and cosec.jwt.token-validity.refresh, plus cosec.authentication.revocation.skew (an issuer's clock may run that far ahead, IDN-29), computed and never configured, and the control plane's check that a revocation outlives an approval reads the same value.",

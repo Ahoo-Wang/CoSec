@@ -1,0 +1,17 @@
+# Rule: STA-7
+# Mutant: the boundary check does not try the management port, so a cluster that leaves the actuator open passes it
+# Tests: :spring-boot:test --tests me.ahoo.cosec.spring.boot.ControlManifestsTest
+
+diff --git a/k8s/control/boundary-check.yaml b/k8s/control/boundary-check.yaml
+index b6d47b3c6..bd5246073 100644
+--- a/k8s/control/boundary-check.yaml
++++ b/k8s/control/boundary-check.yaml
+@@ -47,7 +47,7 @@ spec:
+             - |
+               set -u
+               # The host's three container ports (deployment.yaml): the operators' API, the service API, the actuator.
+-              PORTS="8080 8082 8081"
++              PORTS="8080 8082"
+               deadline=$((SECONDS + 600))
+               while :; do
+                 addresses=$(getent ahostsv4 cosec-control-pods | awk '{ print $1 }' | sort -u)

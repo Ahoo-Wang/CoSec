@@ -1,10 +1,21 @@
-# For trying CoSec out on any cluster, kind and minikube included: one gateway with the base's small resources
-# (768Mi, a 256 MB heap), the control plane's host with its small ones (1536Mi, a 768 MB heap), and a single Redis in the
-# same namespace. Not for production.
+# UNSAFE ON A SHARED CLUSTER. This overlay states, for the control plane's host, that nothing but the gateway and the
+# services you name can reach it (COSEC_PIPELINE_IDENTITY_ONLYTRUSTEDCALLERSCANREACH=true, below), before anything has
+# checked that the cluster's network plugin enforces the NetworkPolicies that make it true. Many plugins do not (kind's
+# kindnet does in recent releases): on such a cluster any pod can reach the host, state a platform administrator, and
+# publish and approve any policy. The Job cosec-control-boundary-check says which it is on yours. Apply it only to a
+# cluster of your own that nothing else runs on.
+#
+# For trying CoSec out: one gateway with the base's small resources (768Mi, a 256 MB heap), the control plane's host with
+# its small ones (1536Mi, a 768 MB heap), and a single Redis in the same namespace. Not for production.
 #
 #   kubectl create namespace cosec-dev
 #   kubectl -n cosec-dev create secret generic cosec-jwt-secret --from-literal=secret="$(openssl rand -base64 48)"
+#   kubectl -n cosec-dev delete job cosec-control-boundary-check --ignore-not-found
 #   kubectl apply -k k8s/overlays/dev
+#   kubectl -n cosec-dev wait --for=condition=complete job/cosec-control-boundary-check --timeout=900s
+#
+# The Job is deleted before each apply: its pod template cannot change (an apply with a new image tag fails on it), and one
+# that has finished is not run again, so without the delete the wait would answer last time's verdict.
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
@@ -31,3 +42,16 @@ configMapGenerator:
     literals:
       - SPRING_DATA_REDIS_HOST=redis
       - SPRING_DATA_REDIS_PORT=6379
+
+patches:
+  # The statement the control host starts on, made here for a throwaway cluster of your own (the warning above): true there
+  # only because nothing else runs on it, not because of the policies.
+  - target:
+      kind: Deployment
+      name: cosec-control
+    patch: |-
+      - op: add
+        path: /spec/template/spec/containers/0/env/-
+        value:
+          name: COSEC_PIPELINE_IDENTITY_ONLYTRUSTEDCALLERSCANREACH
+          value: "true"

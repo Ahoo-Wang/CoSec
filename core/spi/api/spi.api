@@ -666,6 +666,7 @@ public final class me/ahoo/cosec/spi/token/InMemoryTokenFamilyStore : me/ahoo/co
 	public fun <init> ()V
 	public fun <init> (Lkotlin/jvm/functions/Function0;)V
 	public synthetic fun <init> (Lkotlin/jvm/functions/Function0;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun <init> (Lkotlin/jvm/functions/Function0;Ljava/time/Duration;)V
 	public fun create (Lme/ahoo/cosec/spi/token/TokenFamily;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun read (Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun replace (Ljava/lang/String;Lme/ahoo/cosec/spi/token/TokenFamily;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
@@ -715,9 +716,15 @@ public final class me/ahoo/cosec/spi/token/TokenFamily {
 }
 
 public abstract interface class me/ahoo/cosec/spi/token/TokenFamilyStore {
+	public static final field Companion Lme/ahoo/cosec/spi/token/TokenFamilyStore$Companion;
+	public static final field SESSIONS_PER_PRINCIPAL I
 	public abstract fun create (Lme/ahoo/cosec/spi/token/TokenFamily;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public abstract fun read (Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public abstract fun replace (Ljava/lang/String;Lme/ahoo/cosec/spi/token/TokenFamily;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+}
+
+public final class me/ahoo/cosec/spi/token/TokenFamilyStore$Companion {
+	public static final field SESSIONS_PER_PRINCIPAL I
 }
 
 public final class me/ahoo/cosec/spi/token/TokenFamilyStore$Read {

@@ -414,6 +414,15 @@ object GuardAllowlist {
             "social:JustAuthProviderTest#a state is used once",
             "social:JustAuthProviderTest#another browser's state is refused",
             "cocache:RedisSocialStateStoreTest#aStateIsTakenOnce",
+            // IDN-35, DR1-G-2: a session record is kept no longer than its refresh token, and a principal keeps its latest sessions.
+            "spi:InMemorySessionBoundTest#a record nobody refreshes ends with its refresh token, and each write keeps it that long again",
+            "spi:InMemorySessionBoundTest#a write never keeps a record past the end of its session",
+            "spi:InMemorySessionBoundTest#a principal keeps the sessions that began last, the earliest deleted, revoked or not",
+            "spi:InMemorySessionBoundTest#the bound is per principal and per tenant",
+            "cocache:SessionBoundTest#a record is kept no longer than its refresh token, from each write",
+            "cocache:SessionBoundTest#a principal keeps the sessions that began last, and the earliest is deleted",
+            "cocache:SessionBoundTest#the bound is per principal and per tenant",
+            "cocache:SessionBoundTest#the index lives as long as the longest session it counts",
         ),
         "startup" to StartupGuards.GUARDS,
         "timing" to setOf(

@@ -58,14 +58,11 @@ spec:
               containerPort: 8081
               protocol: TCP
           env:
-            # The statement the image will not start without: nothing but the gateway and the services you name can reach this
-            # host, which believes the CoSec-Identity header of whoever can. It is true because of the three NetworkPolicies
-            # beside this file, which select these pods and admit one source per port. Keep them together: this variable
-            # without the policies is a false statement, and the policies without it are a host that does not start. It is
-            # not a defence: a workload that can reach the host can state any principal, a platform administrator included,
-            # and be both the author and the approver of a change. The network is the boundary.
-            - name: COSEC_PIPELINE_IDENTITY_ONLYTRUSTEDCALLERSCANREACH
-              value: "true"
+            # Not here: the statement the image will not start without, COSEC_PIPELINE_IDENTITY_ONLYTRUSTEDCALLERSCANREACH=true
+            # (nothing but the gateway and the services you name can reach this host, which believes the CoSec-Identity
+            # header of whoever can). The three NetworkPolicies beside this file make it true only where the cluster's network
+            # plugin enforces them, which no file can say: the overlay you apply states it, and boundary-check.yaml checks it
+            # on the cluster. Without the statement the host does not start.
             # Heap, direct memory and metaspace, sized for the memory limit below. An overlay that changes the limit
             # replaces this variable too.
             - name: JVM_MEMORY_OPTS
