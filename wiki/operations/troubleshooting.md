@@ -607,8 +607,8 @@ code](../integration/checks.md#changing-policies-from-your-code)). A value of a 
 
 ## Social sign-in is refused: too many sign-ins in progress {#social-sign-in-is-refused-too-many-sign-ins-in-progress}
 
-`authorize` throws `SocialAuthenticationException` "The [<provider>] provider has too many sign-ins in progress: try
-again shortly.", and an instance logs at most once a minute `Refused <n> [<provider>] sign-in start(s) since the last
+`authorize` throws `SocialAuthenticationException`
+`The [<provider>] provider has too many sign-ins in progress: try again shortly.`, and an instance logs at most once a minute `Refused <n> [<provider>] sign-in start(s) since the last
 such line: <n> social sign-ins are in progress ...` at `WARN`. The deployment holds as many sign-ins in progress as it
 may: a 64th of the memory Redis reports, at 512 bytes a sign-in, or 100,000 when Redis reports none (the startup line
 `Social sign-in states: ...` says which; [Storage](./storage.md#redis-keys)). Starting a sign-in is anonymous, so a
