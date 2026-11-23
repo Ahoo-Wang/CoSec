@@ -204,8 +204,8 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
      * It completes exceptionally only when this source is closed, including while the request waits.
      *
      * The future may complete on a CoSec compile or scheduler thread. Those threads exist to compile and to keep time,
-     * so callers must move their continuation elsewhere (RFC 0003 §4.3: `publishOn(boundedElastic)`) rather than
-     * evaluate on them.
+     * so callers must move their continuation elsewhere rather than evaluate on them (RFC 0003 §4.3): the pipeline
+     * resumes by the rule of RFC 0006 §7.2.
      *
      * @throws IllegalArgumentException when [appId] is not a valid app id; check [SnapshotKey.App.isValidAppId] first.
      */
