@@ -692,6 +692,9 @@ override fun doFilter(request: ServletRequest, response: ServletResponse, chain:
   它们只留给接收身份、且凭据被接受的请求的路由。cookie 头改写时去掉那一对和一个相邻的 `;`，其余逐字节保留。凭据剥离只做一次，由它自己的类负责。
 - **方法覆盖头**（`PIP-31`）：`PipelineGatewayFilter` 从它转发的每个请求移除 `X-HTTP-Method-Override`、`X-HTTP-Method`、`X-Method-Override`
   （任何大小写），在每条路由上，不可配置：后端永远不会把请求当作网关所判定的方法之外的方法执行。
+- **宿主自己的处理器**（`STA-13`）：Spring Cloud Gateway 宿主在 `mode=enforce` 时只决定网关路由，而应用自己的控制器与函数式路由映射在任何路由之前：
+  应用有这样的处理器、又没有按 bean 名列在 `cosec.gateway.unprotected-handlers` 里时，启动失败，并点出每个处理器、这个属性与文档页。
+  带 `*` 的名字被拒绝，匹配不到处理器的名字被忽略（与 `cosec.gateway.unprotected-endpoints` 一样，`STA-2`），列出的处理器在启动时的一行 INFO 里点名。
 - **执法放行清掉客户端的 `CoSec-Identity`**（`IDN-9`）：决策的宿主（`mode=enforce`）的每个放行都在 `Outcome` 里写明去掉 `CoSec-Identity`，三个适配器
   一样应用。网关之后的服务（`mode=gateway`）保留网关发的头。
 - **路由的应用**：路由的 `cosec-app-id` 原样以 `HttpFacts.routeApp` 交给管道，适配器不判断（`SCP-2`，RFC 0004 §4.6）。
