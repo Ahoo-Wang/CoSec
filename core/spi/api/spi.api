@@ -699,6 +699,7 @@ public final class me/ahoo/cosec/spi/token/TokenExpiredException : me/ahoo/cosec
 }
 
 public final class me/ahoo/cosec/spi/token/TokenFamily {
+	public synthetic fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/time/Instant;Ljava/time/Instant;JLjava/time/Instant;ZLjava/lang/String;Lkotlin/jvm/internal/DefaultConstructorMarker;)V
 	public synthetic fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/time/Instant;Ljava/time/Instant;JLjava/time/Instant;ZLkotlin/jvm/internal/DefaultConstructorMarker;)V
 	public fun equals (Ljava/lang/Object;)Z
 	public final fun getAuthTime ()Ljava/time/Instant;
@@ -707,6 +708,7 @@ public final class me/ahoo/cosec/spi/token/TokenFamily {
 	public final fun getId ()Ljava/lang/String;
 	public final fun getPrincipal-YkQvfWk ()Ljava/lang/String;
 	public final fun getRevoked ()Z
+	public final fun getRoot ()Ljava/lang/String;
 	public final fun getRotatedAt ()Ljava/time/Instant;
 	public final fun getTenant-Zu1zXv4 ()Ljava/lang/String;
 	public fun hashCode ()I
