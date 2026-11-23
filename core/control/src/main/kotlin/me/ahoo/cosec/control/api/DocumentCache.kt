@@ -15,7 +15,6 @@
 
 package me.ahoo.cosec.control.api
 
-import me.ahoo.cosec.control.lifecycle.ChangeOptions
 import me.ahoo.cosec.document.PolicyDefinition
 import me.ahoo.cosec.document.PolicyDocument
 import me.ahoo.cosec.document.RoleExpansion
@@ -194,21 +193,6 @@ internal class DocumentCache(
         return entry
     }
 
-    /** Whether [entry] is the one held for its key: compiling with any other compiles for the call alone. */
-    fun holds(entry: Entry?): Boolean =
-        entry != null && synchronized(entries) { entries[Key(entry.key, entry.digest)] === entry }
-
-    /**
-     * How many compiles that the cache does not hold (a candidate, a document too heavy to admit) may run at once
-     * (DR1-F-4): as many as [maxHeap] holds of the largest document, decoded and compiled, at least one. Such a compile
-     * holds about twelve times the stored size of what it compiles, and nothing else bounds how many run.
-     */
-    val uncachedCompiles: Int
-        get() {
-            val largest = MAX_DOCUMENT_BYTES * (DECODED_FACTOR + COMPILED_FACTOR)
-            return (maxHeap / largest).coerceIn(1, Int.MAX_VALUE.toLong()).toInt()
-        }
-
     /** Whether a document of [size] stored bytes, decoded and compiled once, weighs at most half the bound. */
     fun admits(size: Long): Boolean = size * (DECODED_FACTOR + COMPILED_FACTOR) <= maxHeap / 2
 
@@ -252,9 +236,6 @@ internal class DocumentCache(
 
         /** A compiled form's heap per stored byte of its document, at most about 7.5 as measured. */
         const val COMPILED_FACTOR: Int = 8
-
-        /** The largest document a store holds, stored (the document cap). */
-        private const val MAX_DOCUMENT_BYTES: Long = ChangeOptions.DEFAULT_MAX_DOCUMENT_BYTES.toLong()
 
         /** What one derived binding would take stored, written out. */
         const val DERIVED_BINDING_BYTES: Long = 160

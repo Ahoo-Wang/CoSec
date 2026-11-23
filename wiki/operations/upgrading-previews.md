@@ -30,10 +30,8 @@ Which preview of the library may run behind which preview of the gateway image: 
 
 ## From 8.0.0-beta.7 {#from-8-0-0-beta-7}
 
-- **The control plane's reads compile within a bound** (DR1-F-4). Affected: nothing to change. An `explain` at a retained
-  revision is now cached like a head, so repeating it compiles nothing. The calls that compile a candidate, or a document
-  too large for the cache, now run as many at once as the cache's bound holds of the largest document, at least one;
-  more wait their turn instead of each holding about twelve times what it compiles.
+- **An `explain` at a retained revision is cached like a head** (DR1-F-4). Affected: nothing to change. Repeating it
+  compiles nothing, where each call compiled its documents again.
 - **`HttpControlService` relays a user's attributes** (`CTL-77`, DR1-F-1). Affected: an application that calls a
   control-plane host through `HttpControlService` as the user whose request it serves (`ControlCaller.of`), with a
   control policy that reads `subject.attributes`. Before, no attribute went with the call, so a DENY on one did not match
