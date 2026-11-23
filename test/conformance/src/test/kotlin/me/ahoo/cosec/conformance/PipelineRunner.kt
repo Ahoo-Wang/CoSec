@@ -30,6 +30,7 @@ import me.ahoo.cosec.document.route.RouteMap
 import me.ahoo.cosec.document.route.RouteMapCodec
 import me.ahoo.cosec.document.route.RouteMapException
 import me.ahoo.cosec.engine.CompiledDocument
+import me.ahoo.cosec.engine.CompiledRateLimit
 import me.ahoo.cosec.engine.SnapshotView
 import me.ahoo.cosec.gateway.IdentityHeadersFilter
 import me.ahoo.cosec.gateway.IdentityStripFilter
@@ -207,7 +208,9 @@ import me.ahoo.cosec.runtime.http.Outcome as PipelineOutcome
  * // Decision listeners (RFC 0006 §9): each answers, fails or never answers; REQUIRED ones within
  * // options.requiredTimeoutMillis (default 1000)
  * // A rate limiter (RFC 0006 §8.4) that has permits for every rule but the exhausted ones, or that fails; absent: none
- * "rateLimiter":        { "exhausted": ["rule-id"] } | { "fails": "message" },
+ * "rateLimiter":        { "exhausted": ["rule-id"] } | { "fails": "message" }
+ *                       | { "exhaustedKeys": { "rule-id": ["key value", ...] } }   // those values' buckets only,
+ *                       // named as the engine names a value's bucket (CompiledRateLimit.keyedBucket)
  * "listeners":          [{ "name": "audit", "delivery": "required" | "best-effort", "fails": "message" | "hangs": true }],
  * // A listener that reads only the events it sampled, as the shadow listener does (`OBS-8`): BEST_EFFORT, sampling
  * // every decided request or none. `expect.events` then says how many events each listener received, all delivered.
@@ -912,11 +915,14 @@ class PipelineRunner(private val compiler: SnapshotCompiler = DocumentSnapshotCo
 
     private fun rateLimiter(node: JsonNode?): RateLimiter? {
         node ?: return null
-        node.only("exhausted", "fails")
+        node.only("exhausted", "fails", "exhaustedKeys")
         node.get("fails")?.let { fails -> return RateLimiter { _, _, _ -> throw IllegalStateException(fails.text()) } }
         val exhausted = node.get("exhausted")?.strings().orEmpty().toSet()
-        return RateLimiter { ruleId, _, limit ->
-            val allowed = ruleId !in exhausted
+        val exhaustedBuckets = node.get("exhaustedKeys")?.fields().orEmpty().flatMap { (ruleId, values) ->
+            values.strings().map { ruleId to CompiledRateLimit.keyedBucket(it) }
+        }.toSet()
+        return RateLimiter { ruleId, bucket, limit ->
+            val allowed = ruleId !in exhausted && (ruleId to bucket) !in exhaustedBuckets
             val perWindow = (limit.permitsPerSecond * limit.windowSeconds).toLong()
             RateLimitResult(allowed, perWindow, if (allowed) perWindow - 1 else 0, java.time.Duration.ofSeconds(1))
         }
