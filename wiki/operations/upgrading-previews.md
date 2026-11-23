@@ -37,6 +37,15 @@ Which preview of the library may run behind which preview of the gateway image: 
   changes you no longer need. A document already over the limit when you upgrade is not touched: its changes expire
   within `cosec.control.changes.expire-after` (7 days) and bring it back under the limit, and until then it takes no new
   change.
+- **A document keeps at most `max-count` ended changes, and reclamation removes old ones** (`CTL-83`, DR1-E-2).
+  Affected: a client that reads a change long after it ended. Ending a change removes the document's oldest ended
+  changes past `cosec.control.revisions.max-count`, whatever their age, and the hourly reclamation removes those older
+  than `cosec.control.revisions.min-age` whose change published no revision still retained. `GET /changes/{id}` of a
+  removed change is `404`. Read who published a revision from the revision itself:
+  `GET /documents/{key}/revisions/{revision}` names its change, author and approvers in `provenance`, and `explain`
+  still decides on it. A `ControlStore` of your own implements `endedChanges` and `removeChange`. Changes that ended
+  before the upgrade are not listed, so nothing removes them: delete their `<s>:control:change:<id>` keys yourself if
+  you want them gone.
 - **`analyze` shows a tenant's bindings only to a caller who may read its document** (`CTL-51`, DR1-F-8). Affected: a
   principal granted `cosec:analyze` on its tenant's document but not `cosec:read` (no built-in role is shaped so). It
   was answered with every matching binding of that document; it now gets none, and the document is counted in `hidden`.

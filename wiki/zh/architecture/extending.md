@@ -427,6 +427,7 @@ fun problemRenderer(): ProblemRenderer {
 使用 `cosec-control` 时，控制面把修订、变更请求、暂存槽、候选和租约保存在 `ControlStore` 中；starter 提供的是 Redis 上的 `CoCacheControlStore`。存储、它的记录（`ChangeRequest`、`RevisionIndex`、`StageSlot` 等）和影子窗口端口（位于 `cosec-spi`；`CandidateStore`、`ShadowReportSink`、`ShadowReportReader` 及其报告）是 `@ExperimentalCoSecApi`：控制面的契约是它的 HTTP API，这些随它变化，可能在次版本中改变。`ChangeListener` 和它收到的 `ChangeEvent` 是稳定的。存储无法应答时抛出 `ControlStoreException`：控制 API 返回 `503`，维护任务本轮什么都不做（`CTL-52`）。读到的值无法解码时抛出 `SnapshotFormatException`，即 `500`。两种情况都绝不回答"不存在"。除了按 key 读写这些记录，存储还要回答维护任务需要访问什么：
 
 - `documents()`：它为之建立了修订索引的每个文档。可以多列，不能少列。
+- `endedChanges(document, endedBefore, limit)` 和 `removeChange(document, id, expected)`：一个文档中在某时刻之前结束的变更，最早的在前；以及删除一条已结束变更的记录（`CTL-83`）。终态变更的 `putChange` 在写入之前，以它的 `updatedAt` 把它登记进去，所以落败的写入只会多留一条，不会少一条；按某条登记行事的一方先读它的记录。`removeChange` 只在记录仍是 `expected` 时删除它，并移除该变更的每条登记；`expected` 为 `null` 时只在没有记录时生效，于是记录已不在的登记被移除。控制面在结束变更的那次写入上，让每个文档至多保留 `max-count` 个已结束的变更；回收任务删除超过 `min-age` 且发布的修订已不再保留的那些。
 - `openChanges(document)` 和 `changes(state, after, limit, documents)`：一个文档中未结束的变更，以及处于某个状态的一页变更，每个都是此刻读取的（`CTL-54`）。每个已写入且未结束的变更都在其中；记录无法解码的变更是 `ListedChange.Unreadable`，从不省略，维护任务本轮跳过它的文档或它的窗口。`openChangesKept()` 说明这些列表是否可信；在可信之前维护任务不回收任何东西，`keepOpenChanges()` 让新存储的列表可信。
 - `acquireLease(name, holder, duration)` 和 `releaseLease(name, holder)`：每项任务同一时间只有一个实例。只有 `holder` 仍持有租约时，释放才会删除它，检查与删除是一步原子操作（CoCache 的 `deleteIfMatch`）：期间过期并被另一个实例取得的租约仍归对方。
 - `withdrawCandidate(key, window)`：只在文档的候选仍是 `window` 的候选时删除它，一步原子操作（`CTL-26`）。变更在结束之后撤回候选，此时另一个变更可能已暂存了自己的候选。

@@ -88,7 +88,10 @@ window to close), `WINDOW_BLOCKED` (the change never publishes), `CONTENDED` (th
 open changes as `cosec.control.revisions.max-count`, 50 by default; the oldest is named in `heldBy`: abandon one, or
 wait for it to expire, `CTL-83`). At the limit, your own oldest change whose checks failed (a `DRAFT`, which cannot be
 edited) is abandoned first to make room, so a pipeline that keeps proposing failing changes does not lock the document;
-no other change is abandoned for room, and break-glass is never held to the limit. Read `conflict`, not `detail`, whose wording may
+no other change is abandoned for room, and break-glass is never held to the limit. An ended change is kept only so long:
+a document keeps its latest `max-count` ended changes, and the hourly reclamation removes those older than `min-age`
+whose change published no revision still retained, after which `GET /changes/{id}` is `404`; the revision a change
+published names the change, its author and approvers in its own `provenance`. Read `conflict`, not `detail`, whose wording may
 change. A conflict's members are in `contract/control/conflict.json`. A `400`, `409`, `410`, `412`, `422` or `428` explains your own request in
 `detail`; a `401`, `403`, `404`, `500` or `503` carries no detail, so a refusal never tells whether a document or change
 exists. A `400`'s `detail` is one of the control plane's own checks, or names the field that does not parse (`[mode] is

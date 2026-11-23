@@ -623,6 +623,10 @@ When a proposal is `409` with `conflict: OPEN_LIMIT`, the document holds `cosec.
 changes (`CTL-83`); `heldBy` names the oldest. The author's own oldest failed draft was already abandoned for room:
 abandon, publish or let expire the open changes still there.
 
+When `GET /changes/{id}` is `404` for a change that ended, the bound removed it (`CTL-83`): a document keeps its latest
+`max-count` ended changes, and reclamation removes older ones past `min-age` whose revision is gone. Read who published
+a revision from `GET /documents/{key}/revisions/{revision}` (`provenance`), and the rest from the audit events.
+
 When a tenant change waits for approval with `TOO_LARGE`, the grant analysis spent its four million comparisons
 before it reached those grants (`CTL-49`): split the change; what counts is what it adds or rewrites, times what its
 author holds. One entry `change of tenant:<t>` means it grants more than 80,000 fragments (actions × resources × bindings

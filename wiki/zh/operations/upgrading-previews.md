@@ -31,6 +31,12 @@ description: "每个 8.0 预览版（alpha 与 beta）到下一个之间的变�
   留着很多未结束变更的客户端。超过上限的提议、`:apply` 或回滚，先放弃其作者自己最老的、检查失败的变更，否则以 `409` 拒绝，
   冲突种类为新增的 `OPEN_LIMIT`，`heldBy` 给出最老的未结束变更；类型化客户端看到 `ConflictKind.OPEN_LIMIT`。请放弃不再需要的变更。
   升级时已经超出上限的文档不受追溯：它的变更会在 `cosec.control.changes.expire-after`（7 天）之内过期，回到上限以内，在那之前它不接受新的变更。
+- **一份文档至多保留 `max-count` 个已结束的变更，回收任务删除旧的**（`CTL-83`，DR1-E-2）。受影响的：在变更结束很久之后还读取它的客户端。
+  结束一个变更时，删除该文档超出 `cosec.control.revisions.max-count` 的最早的已结束变更，不论年龄；每小时的回收任务删除早于
+  `cosec.control.revisions.min-age`、且其变更发布的修订已不再保留的那些。读取已删除的变更 `GET /changes/{id}` 返回 `404`。
+  要知道谁发布了某个修订，读修订本身：`GET /documents/{key}/revisions/{revision}` 在 `provenance` 中给出它的变更、作者与审批人，
+  `explain` 也仍然基于它决定。自己实现的 `ControlStore` 要实现 `endedChanges` 与 `removeChange`。升级之前结束的变更没有登记，
+  所以不会被删除：想删掉它们，请自己删除对应的 `<s>:control:change:<id>` 键。
 - **`analyze` 只向能读租户文档的调用者列出它的绑定**（`CTL-51`，DR1-F-8）。受影响的：对本租户文档有 `cosec:analyze`
   却没有 `cosec:read` 的主体（没有内置角色是这样）。它此前会得到该文档中所有匹配的绑定，现在一个也得不到，该文档计入 `hidden`。
   请把 `cosec:read` 与 `cosec:analyze` 一起授予，就像 `cosec:tenant-viewer` 那样。
