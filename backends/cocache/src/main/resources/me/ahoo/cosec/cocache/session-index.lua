@@ -4,6 +4,8 @@
 -- ARGV[1]: the id of the session that begins now.
 -- ARGV[2]: how many sessions the principal keeps.
 -- ARGV[3]: the least time the index must still live, in milliseconds: the longest any of its sessions can.
+-- ARGV[4]: the root of the session that begins now (IDN-36), or '': when it is in this index, it is begun again now, so
+--          switching back and forth between two tenants never pushes out the login the switched sessions depend on.
 -- Returns the ids pushed out, oldest first.
 -- The time is Redis's own (TIME), so every instance orders sessions alike; a session that begins now is always the
 -- newest, even in the millisecond of another, so it is never the one pushed out.
@@ -14,6 +16,10 @@ local score = tonumber(now[1]) * 1000 + math.floor(tonumber(now[2]) / 1000)
 local newest = redis.call('ZREVRANGE', KEYS[1], 0, 0, 'WITHSCORES')
 if newest[2] ~= nil and tonumber(newest[2]) >= score then
     score = tonumber(newest[2]) + 1
+end
+if ARGV[4] ~= '' then
+    redis.call('ZADD', KEYS[1], 'XX', score, ARGV[4])
+    score = score + 1
 end
 redis.call('ZADD', KEYS[1], score, ARGV[1])
 local pushed = {}

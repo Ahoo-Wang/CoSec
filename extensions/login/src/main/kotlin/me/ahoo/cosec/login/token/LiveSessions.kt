@@ -61,19 +61,26 @@ internal class LiveSessions(private val revocation: TokenRevocation, private val
         session: TokenSession,
     ): Live {
         revocation.check(tokenId, tenant, principal, issuedAt)
-        families.requireLive(session, tenant, principal)
-        return Live(principal, session)
+        val family = families.requireLive(session, tenant, principal)
+        return Live(principal, session, family.root ?: family.id)
     }
 
-    /** A session known to be live: what may be issued from it. */
-    inner class Live internal constructor(private val principal: PrincipalId, val session: TokenSession) {
+    /** A session known to be live, and the session its login began: what may be issued from it. */
+    inner class Live internal constructor(
+        private val principal: PrincipalId,
+        val session: TokenSession,
+        private val root: String,
+    ) {
         /** Its next generation, for [token], the refresh's: the family moves, or refuses a pair presented again. */
         suspend fun next(token: VerifiedToken): TokenFamilies.Issue {
             require(token.session == session) { "The token refreshed is not the one whose session was checked." }
             return families.rotate(token)
         }
 
-        /** A session of its own in [tenant], which ends when this one would: a tenant switch (`IDN-17`). */
-        suspend fun fork(tenant: TenantId): TokenFamilies.Issue = families.startAt(tenant, principal, session.authTime)
+        /**
+         * A session of its own in [tenant], which ends when this one would (`IDN-17`) and lives only while the login's
+         * session does (`IDN-36`): its root is this session's root, or this session when it is the login's.
+         */
+        suspend fun fork(tenant: TenantId): TokenFamilies.Issue = families.startAt(tenant, principal, session.authTime, root)
     }
 }

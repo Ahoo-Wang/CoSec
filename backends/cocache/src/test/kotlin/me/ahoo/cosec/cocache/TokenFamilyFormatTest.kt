@@ -56,6 +56,19 @@ class TokenFamilyFormatTest {
         same(read(written))
     }
 
+    /**
+     * IDN-36: a switched session names its root and is format 2, which a reader of format 1 refuses, ending that session,
+     * where it would ignore the member and drop it at its next rewrite; a session without a root stays format 1.
+     */
+    @Test
+    fun `a switched session is format 2, with its root`() {
+        val switched = TokenFamily("f2", TenantId("beta"), PrincipalId("alice"), at, at.plusSeconds(60), 1, null, false, "f1")
+        val text = TokenFamilyCodec.encode(switched).decodeToString()
+        text.assert().startsWith("""{"format":2,""").contains(""""root":"f1"""")
+        read(text).assert().isEqualTo(switched)
+        read(text).revoked().rotated(at.plusSeconds(1)).root.assert().isEqualTo("f1")
+    }
+
     @Test
     fun `a session written before formats is format 1`() {
         same(read(written.replace(""""format":1,""", "")))
@@ -69,7 +82,8 @@ class TokenFamilyFormatTest {
 
     @Test
     fun `a later format, or a session that lacks what it needs, is refused as a format error`() {
-        assertThrownBy<SnapshotFormatException> { read(written.replace(""""format":1""", """"format":2""")) }
+        // Format 2 is a switched session's (IDN-36): the one after it is later.
+        assertThrownBy<SnapshotFormatException> { read(written.replace(""""format":1""", """"format":3""")) }
         assertThrownBy<SnapshotFormatException> { read(written.replace(""""tenant":"acme",""", "")) }
         assertThrownBy<SnapshotFormatException> {
             read(
