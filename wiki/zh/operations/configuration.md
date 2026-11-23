@@ -279,7 +279,7 @@ CoSec 没有哪个配置项叫这些名字，而已知的 key 无论来源都不
 
 | 配置项 | 类型 | 默认值 | 作用 |
 |---|---|---|---|
-| `cosec.authentication.revocation.cache.*` | [本地缓存设置](#local-cache-settings) | `local-max-age: 30s` | 吊销查询的本地副本（`RevokedTokenCache` 和 `RevokedSubjectCache`）。只有实例在最近 30 秒内见过的令牌或主体才有条目，未命中就是请求路径上的一次 Redis 读取。每张表容纳多少条不是配置项：堆的八分之一，按每个令牌 290 字节、每个主体 230 字节计数（[由计算得出，而非配置](#computed-not-configured)、[为 SaaS 网关定容量](./deployment.md#what-a-replica-holds)）。 |
+| `cosec.authentication.revocation.cache.*` | [本地缓存设置](#local-cache-settings) | `local-max-age: 30s` | 吊销查询的本地副本（`RevokedTokenCache` 和 `RevokedSubjectCache`）。`local-max-age` 最多 `30s`：更长的值会让启动失败，因为失效消息丢失后，它会让本地一直保留已被提高的吊销所替换的旧吊销（`IDN-26`）。只有实例在最近 30 秒内见过的令牌或主体才有条目，未命中就是请求路径上的一次 Redis 读取。每张表容纳多少条不是配置项：堆的八分之一，按每个令牌 290 字节、每个主体 230 字节计数（[由计算得出，而非配置](#computed-not-configured)、[为 SaaS 网关定容量](./deployment.md#what-a-replica-holds)）。 |
 
 ### 本地缓存设置 {#local-cache-settings}
 

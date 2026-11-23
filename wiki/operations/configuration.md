@@ -326,7 +326,7 @@ Snapshot documents have their own properties ([Snapshot](#snapshot)).
 
 | Property | Type | Default | Effect |
 |---|---|---|---|
-| `cosec.authentication.revocation.cache.*` | [local cache settings](#local-cache-settings) | `local-max-age: 30s` | Local copy of revocation lookups (`RevokedTokenCache` and `RevokedSubjectCache`). An entry exists only for a token or principal the instance saw in the last 30 seconds, and a miss is a Redis read on the request path. How many entries each holds is not a setting: an 8th of the heap, counted at 290 bytes a token and 230 bytes a principal ([Computed, not configured](#computed-not-configured), [Sizing a SaaS gateway](./deployment.md#what-a-replica-holds)). |
+| `cosec.authentication.revocation.cache.*` | [local cache settings](#local-cache-settings) | `local-max-age: 30s` | Local copy of revocation lookups (`RevokedTokenCache` and `RevokedSubjectCache`). `local-max-age` is at most `30s`: a longer one fails startup, since past a lost invalidation it would keep an older revocation that a raised one replaced (`IDN-26`). An entry exists only for a token or principal the instance saw in the last 30 seconds, and a miss is a Redis read on the request path. How many entries each holds is not a setting: an 8th of the heap, counted at 290 bytes a token and 230 bytes a principal ([Computed, not configured](#computed-not-configured), [Sizing a SaaS gateway](./deployment.md#what-a-replica-holds)). |
 
 ### Local cache settings
 
