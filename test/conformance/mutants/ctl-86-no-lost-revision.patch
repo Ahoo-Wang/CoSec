@@ -10,5 +10,5 @@ diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/store/LostRevisi
      val index = index(key)?.value ?: return emptyList()
      val head = head(key) ?: return emptyList()
 -    return index.entries.filter { it.revision > head.document.revision }
-+    return index.entries.filter { false }
++    return index.entries.filter { it.revision > maxOf(head.document.revision, Long.MAX_VALUE) }
  }

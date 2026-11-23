@@ -118,21 +118,7 @@ object Expectations {
 
     private fun stored(outcome: Outcome.Stored): JsonNode = json.objectNode().apply {
         set("outcomes", json.arrayNode().apply { outcome.outcomes.forEach(::add) })
-        set(
-            "head",
-            json.objectNode().apply {
-                // As ints, as the scenario's JSON reads small numbers: an IntNode never equals a LongNode.
-                if (outcome.revision == null) {
-                    putNull(
-                        "revision"
-                    )
-                } else {
-                    put("revision", Math.toIntExact(outcome.revision))
-                }
-                if (outcome.parent == null) putNull("parent") else put("parent", Math.toIntExact(outcome.parent))
-                if (outcome.parentRecord == null) putNull("parentRecord") else put("parentRecord", outcome.parentRecord)
-            },
-        )
+        set("head", head(outcome))
         put("records", outcome.records)
         set("writes", json.arrayNode().apply { outcome.writes.forEach(::add) })
         outcome.history?.let { history -> set("history", json.arrayNode().apply { history.forEach(::add) }) }
@@ -143,6 +129,13 @@ object Expectations {
                 json.objectNode().apply { cost.forEach { (k, v) -> put(k, v) } }
             )
         }
+    }
+
+    /** The head of a stored outcome, as ints: the scenario's JSON reads small numbers, and an IntNode never equals a LongNode. */
+    private fun head(outcome: Outcome.Stored): JsonNode = json.objectNode().apply {
+        if (outcome.revision == null) putNull("revision") else put("revision", Math.toIntExact(outcome.revision))
+        if (outcome.parent == null) putNull("parent") else put("parent", Math.toIntExact(outcome.parent))
+        if (outcome.parentRecord == null) putNull("parentRecord") else put("parentRecord", outcome.parentRecord)
     }
 
     private fun analyzed(outcome: Outcome.Analyzed): JsonNode = json.objectNode().apply {
