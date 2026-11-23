@@ -130,11 +130,20 @@ internal class CoSecControlAutoConfiguration {
 
     @Bean
     @ConditionalOnMissingBean
-    fun cosecRevisions(store: ControlStore, properties: ControlProperties, options: ChangeOptions): Revisions = Revisions(
+    fun cosecRevisions(
+        store: ControlStore,
+        properties: ControlProperties,
+        options: ChangeOptions
+    ): Revisions = Revisions(
         store,
         retention = with(properties.revisions) {
             // The byte budget and the index bound follow the documents' cap (CTL-84).
-            RetentionPolicy(maxCount, minAge, ControlDerived.ORPHAN_AGE, documentCap = options.maxDocumentBytes.toLong())
+            RetentionPolicy(
+                maxCount,
+                minAge,
+                ControlDerived.ORPHAN_AGE,
+                documentCap = options.maxDocumentBytes.toLong()
+            )
         },
     )
 

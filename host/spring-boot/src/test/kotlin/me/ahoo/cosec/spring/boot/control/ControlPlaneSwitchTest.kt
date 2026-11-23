@@ -165,10 +165,16 @@ class ControlPlaneSwitchTest {
             context.startupFailure.assert().isNull()
             val registry = context.getBean(io.micrometer.core.instrument.MeterRegistry::class.java)
             // No pass has run: this instance found nothing, which is what an instance that does not lead a pass reports.
-            for (name in listOf(ControlMetersConfiguration.RECORDS, ControlMetersConfiguration.BYTES, ControlMetersConfiguration.OPEN_CHANGES)) {
+            for (name in listOf(
+                ControlMetersConfiguration.RECORDS,
+                ControlMetersConfiguration.BYTES,
+                ControlMetersConfiguration.OPEN_CHANGES
+            )) {
                 registry.find(name).gauge()!!.value().assert().describedAs(name).isEqualTo(0.0)
             }
-            registry.find(ControlMetersConfiguration.RECLAIMED_YOUNG).functionCounter()!!.count().assert().isEqualTo(0.0)
+            registry.find(
+                ControlMetersConfiguration.RECLAIMED_YOUNG
+            ).functionCounter()!!.count().assert().isEqualTo(0.0)
         }
     }
 

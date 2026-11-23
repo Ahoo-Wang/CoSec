@@ -162,8 +162,7 @@ internal class Retention(
                 pending.digest !in chain && pending.digest !in keep && pending.digest != head &&
                     pending.since.isBefore(now.minus(retention.orphanAge))
             }.map { it.digest }
-            val entries = index.entries.filter { entry -> removed.none { it.digest == entry.digest } }
-                .map { entry -> entry.size?.let { entry } ?: sizes[entry.digest]?.let { entry.copy(size = it) } ?: entry }
+            val entries = index.entries.filter { entry -> removed.none { it.digest == entry.digest } }.map { sized(it, sizes) }
             val pending = index.pending.filter { it.digest !in orphans }
             // What the verified history keeps is live too: a digest it lists is never left to delete (#1536).
             val live = entries.map { it.digest }.toSet() + pending.map { it.digest } + keep + listOfNotNull(head) +
@@ -191,8 +190,15 @@ internal class Retention(
         return Reclaimed(removed.map { it.digest }, orphans, deleted, failed)
     }
 
+    /** [entry] with its size from [sizes] when the index had none. */
+    private fun sized(entry: RevisionEntry, sizes: Map<SnapshotDigest, Long>): RevisionEntry =
+        if (entry.size != null) entry else sizes[entry.digest]?.let { entry.copy(size = it) } ?: entry
+
     /** Whether [entry] is older than `min-age` at [now]. */
-    private fun old(entry: RevisionEntry, now: Instant): Boolean = entry.publishedAt.isBefore(now.minus(retention.minAge))
+    private fun old(
+        entry: RevisionEntry,
+        now: Instant
+    ): Boolean = entry.publishedAt.isBefore(now.minus(retention.minAge))
 
     /**
      * What the records of [entries] the index has no size for weigh (entries an older version wrote): each read once, and

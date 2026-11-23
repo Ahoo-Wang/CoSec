@@ -71,7 +71,9 @@ internal class ControlMetersConfiguration {
         val meters = registry.ifAvailable ?: return@AfterSingletons
         maintenance.ifAvailable?.let { bound ->
             Gauge.builder(RECORDS, bound) { it.retained.records.toDouble() }
-                .description("Revision records the documents retain, as the last reclamation pass this instance led found")
+                .description(
+                    "Revision records the documents retain, as the last reclamation pass this instance led found"
+                )
                 .register(meters)
             Gauge.builder(BYTES, bound) { it.retained.bytes.toDouble() }
                 .description("Stored bytes of those records").baseUnit("bytes").register(meters)
