@@ -52,7 +52,7 @@
    `Overlay*Repository`（§5.2）。
 
 第 3 阶段原计划的比较器、回放与规模测量工具（§8、§4.8），随 RFC 0008 取消门槛方法而删除（RFC 0008 §4.2）。
-实现分六个 PR（§11）：PR-1 至 PR-4 已合入（PR-3 是 #1006，PR-4 是 #1030），PR-5（切换）取消，PR-6（删除）并入 RFC 0008 的切换 PR（RFC 0008 §4.4）。
+实现分六个 PR（§11）：PR-1（`SnapshotSource`）、PR-2（编译器与读快照的流程）、PR-3（#1006，CoCache 上的文档存储与写入）、PR-4（#1030，比较、回放与测量工具）已合入，PR-5（切换）取消，PR-6（删除）并入 RFC 0008 的切换 PR（RFC 0008 §4.4）。
 
 ### 1.2 非目标
 
@@ -271,18 +271,18 @@ sealed interface DocumentState<out T : Any> {
 `<p>:snapshot:platform`、`<p>:snapshot:app:<appId>`、`<p>:snapshot:tenant:<tenantId>`，`<p>` 是 `cosec.key-prefix`。
 
 - **永不过期、读失败抛出，谁创建都一样**（`SNP-3`）。`createPolicySnapshotCache` 对任何声明都施加快照自己的 key 编码器与编解码器、去掉 key 过滤器与按条目的 TTL、
-  把 `ttl` 固定为永不过期、把 `unknown-read` 固定为 `throw`；CoSec 的锁（`CoSecCacheSpecs.locks`）再把它们与存储布局、本地副本的最大年龄固定住，
+  把 `ttl` 固定为永不过期、把 `unknown-read` 固定为 `throw`（失败的删除同样抛出，不在后台晚些重试，那样可能删掉其间别人写入的新值）；CoSec 的锁（`CoSecCacheSpecs.locks`）再把它们与存储布局、本地副本的最大年龄固定住，
   在 `cocache.caches.[name].unlock` 之后施加，所以应用的 `cocache.*` 属性与 customizer 改得了别的，改不了这些，"打破玻璃"也不能让策略过期，
   或让失败的读读成"不存在"。starter 装配的每个 CoSec 存储，customizer 都替换不了它的编解码器、加载器、key 过滤器与按条目的寿命。
 - 它是 `CoCacheFactory.create` 返回的 `Store`，不是接口代理，native image 不需要代理 hint（§10）。
 - **一个前缀**（`SNP-9`）：一个部署写进 Redis 的每个 key 都在它唯一的 `cosec.key-prefix` 之下：快照文档、控制面记录、候选、影子报告、吊销、成员关系、API Key、
   限流计数与社交登录的 OAuth state；前缀不同的两个部署共用一个 Redis 也不共享任何 key。它取代的三个旧前缀若仍在环境里，启动失败（作为 CoSec 不读的 key，
-  没有属性关得掉这条检查），所以不会有吊销留在没人读的地方。
+  没有属性关得掉这条检查），所以不会有吊销留在没人读的地方。未知的 `cosec.*` 键一律让启动失败（`cosec.unknown-properties` 已删除），旧前缀也不例外。
 - **本地副本的最大年龄**由 starter 算出：三个再验证间隔（默认 30 秒；`cosec.authorization.snapshot.local-max-age` 已不是属性，设置它启动失败）。本地（L2）副本只服务冷加载，
   已安装的文档由条件读直接向 Redis 确认（§4.5）。
 - **Redis 必须用 `maxmemory-policy noeviction`**。`allkeys-*` 会淘汰快照文档：读到过它的实例失败即拒绝（F2a），但之后启动的实例从没见过它，
   读到"不存在"就是 F2；平台文档没有了，每个请求失败即拒绝（§3.5）。启动时读 `maxmemory-policy`（`SNP-3`）：超时、断线或暂时性应答在 CoCache 自己的
-  上限内重试（5 次，间隔从 0.5 秒倍增至 2 秒），被拒绝的 `INFO` 不重试；读到会淘汰的策略、或重试之后仍读不到，都不算安全，`eviction-check: fail`（默认）
+  上限内重试（5 次，间隔从 0.5 秒倍增至 2 秒），被拒绝的 `INFO` 不重试（Redis 用户需要 `INFO` 的权限）；读到会淘汰的策略、或重试之后仍读不到，都不算安全，`eviction-check: fail`（默认）
   时启动失败，原因照实说（超时是超时，拒绝是权限）。启动之后每个再验证间隔在探针路径之外复查一次，它的重试就是下一个间隔，由单独的健康指示器
   `cosecSnapshotEviction` 报告：可能淘汰时 DOWN；`eviction-check: warn` 下读不到时 UP 并带 `eviction: unknown`。它是告警信号，不属于就绪组。
   CoCache 8 自己也有淘汰检查，两者并存。
@@ -318,7 +318,7 @@ interface SnapshotDocumentStore {
   已登记的 8.1 候选项），所以签名可能在次版本中变化。自己实现这个端口的应用要显式选择加入。
 
 `SnapshotSource`（`cosec-runtime`，`@InternalCoSecApi`）持有编译后的文档：`peek` 只看内存、不做 I/O、命中时不分配；`load`/`loadAll` 加载缺少的文档；
-`prewarm` 预热；`revalidate`、`recompile`、`reload` 是维护调用。管道经 `SuspendingSnapshotSource` 挂起等待它（RFC 0006 §5.5.1），
+`prewarm` 预热；`revalidate`、`recompile`、`reload` 是维护调用。每个族按自己的上限持有文档，存储里没有的文档的条目另有上限（`SNP-7`，§4.3）。管道经 `SuspendingSnapshotSource` 挂起等待它（RFC 0006 §5.5.1），
 应用经 `Pipeline.builder` 给出一个 `SnapshotDocumentStore` 即可（AGENTS.md）。它的内部按 RFC 0013 §5.4 改写过（每个 key 一个所有者、单线程推进的状态机），
 本节与 §4.3–§4.5 的保证不变。
 
@@ -360,6 +360,7 @@ sequenceDiagram
   冷加载直接用条件读，所以一份更旧的本地副本不会替换本实例已经用过的修订。`confirmedAt` 取读取开始的时间；来自本地副本的安装按 `localCopyMaxAge`
   往前回拨，只有条件读成功才能让它显得新鲜。`RedisSnapshotDocumentStore.read` 从不用本地副本回答"不存在"：CoCache 在本地记下的"没有值"可能早于一次发布，
   所以本地的任何未命中都再用条件读向 Redis 确认；Redis 没有答案时读失败，绝不当作不存在。本地副本不带摘要，摘要在调用方线程之外算（SHA-256，与 CoCache 相同）。
+- **编译不过**：存储里的文档在本实例上编译不过时，判定原因是 `DocumentInvalid`（`SNP-11`，§3.4）。
 - **存储读取的上界**：存储的 future 超过存储读取期限（30 秒）未完成即视为读取失败（F1、F6），一个永不完成的读不会卡住这个 key。在途的加载不计入族的上限，
   由这个期限约束。
 - **按族淘汰**：应用与租户两个族各有自己的上限，按最近最少使用淘汰；平台文档常驻，不被淘汰。被淘汰的文档下次是冷加载。
@@ -595,7 +596,8 @@ evaluate(request):
 
 ## 6. 不变量
 
-AGENTS.md 的每条不变量在快照这一层如何成立，失败模式各由哪个测试守护：
+AGENTS.md 的每条不变量在快照这一层如何成立，失败模式各由哪个测试守护。快照自己的不变量是 §8.4 的两条：同一个 key 按加载开始的顺序安装（P6，`SNP-2`），
+一次评估读到的每份文档只来自一个修订（P7，`SNP-1`）。
 
 | 不变量 | 如何成立 | 守护 |
 |---|---|---|
@@ -685,63 +687,40 @@ AGENTS.md 的每条不变量在快照这一层如何成立，失败模式各由�
 
 ### 9.1 目标
 
-> **2026-10-26**：下表中与 `engine`（第 2 阶段实现）比较的相对目标取消；保留的是 RFC 0003 Q14 的编译预算（RFC 0008 §3.8）。
+第 3 阶段的目标是相对第 2 阶段实现的吞吐与分配（不低于 `engine` 的 95 %），这些相对目标随 RFC 0008 取消；保留的是 Q14 的编译预算（RFC 0008 §3.8）。
+今天快照这一层的基准：
 
-| 基准 | 比较 | 目标 |
-|---|---|---|
-| `SimpleAuthorizationBenchmark`（`cosec-core`，场景 `global`、`role`、`none`、`global-deny`） | 参数 `source` ∈ {`legacy`, `legacy-deferred`, `engine`, `engine-deferred`, `snapshot`}，另有 `engine-mixed`、`engine-deferred-mixed`、`snapshot-mixed`（每 8 次调用有一次 `TraceLevel.FULL`；`legacy` 没有追踪级别，所以没有 `-mixed` 值）。每个值是一种实际存在的组合，矩阵里没有重复格：`engine`/`engine-deferred` 是第 2 阶段结束时的实现（内存仓库），`snapshot` 是已加载的快照；setup 断言各来源对每个场景的决策相同 | 吞吐不低于 `engine` 的 95%（判定方法同 RFC 0002 §7.1）；B/op 不高于 `engine`。预期两者都更好：少了三个 `Mono`、`Mono.zip` 和 `AppRolePermissionData` 的重建 |
-| `global-deny` | 同上 | 只记录，不设门槛。第 2 阶段并行预取三层（RFC 0002 X1）；快照下三层都在内存里，这笔开销应当消失 |
-| 新增 `SnapshotAuthorizationBenchmark`（`cosec-cocache`，新的 `jmh` 源码集） | CoCache **内存后端**上，7.0 的 Redis 仓库（L2 全部命中，经 `toLocalFirstMono`）与快照 | 只记录。这是本阶段真正改变的热路径：现有基准用的是返回 `Mono.just` 的内存仓库，测不到 CoCache 的开销。PR-2 加上 `jmh` 源码集和 `repository` 一侧；`snapshot` 一侧依赖 CoCache 快照存储，随 PR-3 加入 |
-| 新增 `SnapshotCompileBenchmark`（`cosec-core`，`avgt`，ms/op） | 编译 10、100、1,000、10,000 条语句的文档 | 只记录，用来解释 §4.8 的真实数据 |
-| `EngineBenchmark`（`engine/`） | — | 不变（引擎不改） |
+| 基准 | 测的是 |
+|---|---|
+| `SnapshotPeekBenchmark`（`test/e2e`） | 已安装时的 `peek`（平台文档加一份应用文档），经 starter 的装配、带 `MeterRegistry`：每个请求都走的路径 |
+| `DocumentSnapshotViewsBenchmark`（`core/runtime`） | 管道每个请求组一次的视图（`DocumentSnapshotViews.peek`） |
+| `SnapshotColdLoadBenchmark`（`core/runtime`） | 冷路径：读、在编译池上编译、安装、回答，以及它引起的淘汰 |
+| `ColdBurstBenchmark`、`KeyBurstBenchmark`（`core/runtime`） | 新副本面对一批从未见过的租户、一个 key 上的一批冷请求 |
+| `EvictionPassBenchmark`、`AbsentScanBenchmark`（`core/runtime`） | 安装的线程就地执行的一次淘汰（`SNP-14`）、不存在的条目的淘汰扫描 |
+| `PipelineBenchmark`（`test/e2e`） | 整条管道，含快照这一步 |
 
-"分配不随策略数量增长"（AGENTS.md 与 RFC 0001 §5"热路径有基准"）：`SimpleAuthorizationBenchmark` 的 `snapshot` 来源增加参数 `globalPolicies` ∈ {10, 100, 1000}，
-B/op 不随它变化（GLOBAL 层复用预构造的 `LayerInput`）。PR-2 的测量（只计调用线程的分配）：快照加载器不随策略数分配；剩下的增长来自引擎的守卫位图
-（`Evaluator` 在一层超过 64 个组时分配 `ceil(组数 / 64)` 个 `long`，1000 个组即 144 B），引擎不在本阶段修改，是否消除由维护者决定。JMH 的
-`gc.alloc.rate.norm` 计入所有线程，吞吐低时还会摊入后台分配，不能单独用来判定这一条。
+"分配不随策略数量增长"：已安装时 `peek` 不分配（`PeekAllocationTest`），组视图只引用已编译的不可变对象。
 
 ### 9.2 测量方法
 
-完全沿用 RFC 0002 §7.2 和 [`docs/perf/rfc-0002-baseline`](../perf/rfc-0002-baseline/README.md) 的做法：
-
-```bash
-./gradlew :core:jmh -PjmhIncludes=SimpleAuthorizationBenchmark,SnapshotCompileBenchmark -PjmhJavaVersion=25 -PjmhWarmupIterations=5 -PjmhIterations=10 -PjmhFork=3 -PjmhProfilers=gc
-```
-
-`globalPolicies` 不在默认矩阵里，从基准 jar 运行：
-
-```bash
-./gradlew :core:jmhJar
-```
-
-```bash
-java -jar core/core/build/libs/cosec-core-<version>-jmh.jar SimpleAuthorizationBenchmark -p source=engine,snapshot -p scenario=none -p globalPolicies=10,100,1000 -f 3 -wi 5 -i 10 -prof gc -jvmArgsAppend -Dlogback.configurationFile=$PWD/config/logback-jmh.xml
-```
-
-```bash
-./gradlew :cocache:jmh -PjmhIncludes=SnapshotAuthorizationBenchmark -PjmhJavaVersion=25 -PjmhWarmupIterations=5 -PjmhIterations=10 -PjmhFork=3 -PjmhProfilers=gc
-```
-
-- `cosec-cocache` 现在没有 `jmh` 源码集，PR-2 按根 `build.gradle.kts` 中 `cosec-core` 的配置加上，并支持同样的 `-Pjmh*` 属性。
-- `SnapshotCompileBenchmark` 由注解声明为 `avgt`、ms/op；根构建只在传入 `-PjmhMode` 时覆盖基准自己的模式。
-- 空闲机器，负载低于 1，否则作废重跑；记录 JDK、CPU、操作系统；`repository` 与 `snapshot` 在同一台机器上交替跑三轮。
-- 结果按 `docs/perf/` 的格式记录在 `docs/perf/rfc-0003-snapshot/README.md`（JMH JSON 裁剪为 `benchmark`、`params`、`primaryMetric`、`gc.alloc.rate.norm`），
-  在 PR-5 的描述中附前后对比；PR-6 把最终数字写进 `wiki/architecture/overview.md` 的性能一节（中英文）。
+按 AGENTS.md 与 [`wiki/architecture/overview.md#measuring`](../../wiki/architecture/overview.md#measuring)：模块的 `jmh` 任务（默认 1 个 fork × 1 轮，是冒烟运行，
+比较版本时传 `-PjmhFork`、`-PjmhIterations`、`-PjmhWarmupIterations`、`-PjmhProfilers`、`-PjmhJavaVersion`），或在同一台 CI 机器上比较两个引用的
+`jmh-ab.yml`。自己运行基准 jar 时加 `-jvmArgsAppend -Dlogback.configurationFile=$PWD/config/logback-jmh.xml`。参考结果在 `docs/perf/`。
 
 ---
 
 ## 10. AOT（RFC 0001 §3.10）
 
-| 约束 | 本阶段的做法 |
+| 约束 | 快照这一层的做法 |
 |---|---|
-| 不用反射和动态代理（`model`、`engine`） | 不涉及：本阶段不改这两个模块 |
-| 不用 JDK 动态代理包装缓存 | `PolicySnapshotCache` 直接用 `CacheRuntime.create(spec)` 返回的 `Cache`，不经 `CacheProxies.create`（它用 `Proxy.newProxyInstance`）。CoCache 的 `CoCacheAotProcessor` 只为 `@EnableCoCache(caches = ...)` 声明的接口注册代理 hint，CoSec 在 starter 的 `@Bean` 方法里用 `CacheProxies.create` 手工创建的四个缓存不在其中，这个已有的缺口随 PR-6 删除它们而消失 |
-| key 编码不用反射 | 显式的 `keyEncoder`，不用 `KeyEncoder.ofToString()`（它经 `getMethod("toString")` 检查 key 类型，需要反射 hint） |
-| 文档解码 | `SnapshotDocumentCodec` 用 Jackson 流式 API 读头部，不经数据绑定；正文中的策略和应用权限沿用现有的反序列化路径（`CoSecModule` 及其反序列化器）。PR-3 给 `cosec-cocache` 加一个 `RuntimeHintsRegistrar`（经 `META-INF/spring/aot.factories` 注册），覆盖文档正文用到的数据类，并用 `RuntimeHintsPredicates` 写测试 |
-| 匹配器工厂显式注册 | 不变：编译经现有的 `MatcherFactoryRegistry.getRequired` |
-| 缺少 hint 必须导致加载失败和拒绝 | 缺少 hint 表现为解码或编译失败，即 F3/F4，到达对应层的请求 500，不会跳过语句 |
-| 不能为了 native 拖慢 JIT 路径 | 热路径只是内存查找；§9 的 JMH 守护 |
-| JDK 25 AOT cache | 启动预热（§4.3）让训练运行加载并编译快照，相关的类和方法 profile 进入 AOT cache。`docs/perf/gateway-aot-cache` 的测量在 PR-5 后对 `cosec-gateway-server` 重跑一次，作为参考 |
+| 不用反射和动态代理（`model`、`engine`） | 这两个模块只依赖 Kotlin 标准库与稳定性标记（`EnginePurityTest`） |
+| 不用 JDK 动态代理包装缓存 | `PolicySnapshotCache` 就是 `CoCacheFactory.create` 返回的 `Store`（§4.1），不需要代理 hint |
+| key 编码不用反射 | 显式的 `SnapshotKeyEncoder` |
+| 文档解码 | `SnapshotDocumentCodec` 用流式解析读文档头，不经数据绑定；正文经 `CoSecJson.mapper` 解析。`cosec-cocache` 的 `SnapshotRuntimeHints`（经 `META-INF/spring/aot.factories` 注册）声明文档正文用到的资源与类，有测试 |
+| 条件不靠注册的匹配器 | 条件是编译期检查的 AST，没有匹配器插件（RFC 0005） |
+| 缺少 hint 必须导致加载失败和拒绝 | 缺少 hint 表现为解码或编译失败，即 F3、F4，需要该文档的请求 503，不会跳过语句 |
+| 不能为了 native 拖慢 JIT 路径 | 热路径只是内存查找；§9 的基准守护 |
+| JDK 25 AOT cache | 网关与控制面两个镜像带 AOT cache；启动预热（§4.3）让训练运行加载并编译文档。测量见 `docs/perf/gateway-aot-cache` |
 
 ---
 
@@ -751,37 +730,37 @@ java -jar core/core/build/libs/cosec-core-<version>-jmh.jar SimpleAuthorizationB
 
 ## 12. 决定
 
-以下各项已于 **2026-10-21** 由维护者确认，全部按本文的推荐决定；Q5 另加一条：条件读是必需的，不是可选的。标注"测量后确认"的（Q7、Q14、Q18、Q19），
-PR 按这里的值实现，数字由门槛的测量结果（§4.8）校准。
+以下各项已于 **2026-10-21** 由维护者确认，全部按本文的推荐决定；Q5 另加一条：条件读是必需的，不是可选的。"今天"写出后来各阶段改变了什么。
+标注"测量后确认"的四项（Q7、Q14、Q18、Q19）没有等到真实数据：Q7、Q18 的值改为算出（`SNP-23`），Q19 改为从堆算出（`SNP-24`），Q14 的上限照原样执行。
 
 | # | 问题 | 决定 | 理由 |
 |---|---|---|---|
-| Q1 | **快照怎么分区**（§3.2，§2 I1） | **已决定**：一份共享的 `Policies` 文档 + 每个应用一份 `App` 文档；不按租户 | 现有数据没有租户维度，按租户分区就是改变语义；两种文档之间没有引用，分别带版本读取不会混合；形状与第 4 阶段的"平台 + 租户"同构 |
-| Q2 | **引擎签名**（§3.5） | **已决定**：本阶段不改，仍是 `evaluate(request, PolicySet)`；`evaluate(request, snapshot)` 在第 4 阶段编译执行时引入 | 本阶段的规则仍是 PR-3 的适配对象，引擎没有理由知道快照的形状；不改引擎才能直接沿用第 2 阶段的门槛 |
-| Q3 | **SPI**（§4.2，§2 I8；AGENTS.md 要求先问） | **已决定**：用 `SnapshotDocumentStore` 取代 `PolicyRepository`/`AppRolePermissionRepository` 的读侧；编译和持有放在 `cosec-core` 的 `SnapshotSource`，不进 SPI | 快照要求"整份文档"，按 id 或按角色查询的仓库无法提供；把编译放进 SPI 会让每个实现重复最容易出错的部分 |
-| Q4 | **写 API**（§4.6） | **已决定**：`SnapshotPublisher` 只覆盖 7.0 已有的写操作（策略、应用权限、角色授予）；第 6 阶段由控制面取代 | 读写分离（P9）在本阶段先落到接口层面；不提前设计第 6 阶段的修订、回滚和审批 |
-| Q5 | **条件写入与条件读**（§4.5、§4.6，§2 I9） | **已决定**：在 CoCache 6.7 中增加按摘要比较的条件写入，以及按摘要比较的条件读（总是读 L1，摘要未变时不返回正文）。条件读是**必需的**：`SnapshotSource` 的重新校验和 CoCache 在 `localMaxAge` 到期时的重新确认都用它。PR-3 依赖两者。CoCache 6.7.0 已于 2026-10-22 发布，方案 B 不再需要 | 一个文档包含多条策略后，"读—改—写"必须原子，CoCache 6.6 没有这个原语；在 CoCache 的 Lua 脚本里做，比 CoSec 自己加锁容易证明正确。条件读让重新校验直接确认 L1，`lag` 成为真实陈旧度的上界，带宽由变更而不是实例数和文档数决定 |
-| Q6 | **变更通知的来源**（§4.4） | **已决定**：在快照命名空间上订阅 CoCache 的 `InvalidationChannel`（`CacheRuntime.backend.channel.subscribe`，公开的 SPI），周期性重新校验兜底 | 通知到达即重新加载，陈旧度通常是毫秒级；用的是 CoCache 的 SPI 而非内部类，Redis 与内存后端都支持同一命名空间的多个监听器。备选：请 CoCache 提供面向用户的变更回调，或只靠周期性重新校验 |
-| Q7 | **陈旧度参数**（§4.5，§2 I4）（测量后确认） | **已决定**：`localMaxAge` 30 秒、`revalidate-interval` 10 秒、告警 60 秒、升级 5 分钟、`fail-closed` 按租户可选、默认上限 30 分钟 | 沿用 RFC 0001 §7.1；条件读直接向 L1 确认，落后时长就是真实陈旧度的上界；条件读的往返开销用 §4.8 校准 |
-| Q8 | **编译或解码失败**（§4.4，§2 I5） | **已决定**：本阶段保持 7.0 的语义：失败的文档或条目让到达它的层 500，不保留旧版本（F4、F5）；读取暂时失败时保留已安装的版本（F6）。RFC 0001 的"保留旧版本"推迟到第 6 阶段控制面在发布前编译之后 | 本阶段承诺不改变决策；保留旧版本会让本该拒绝的请求按旧内容放行 |
-| Q9 | **`BlockingAware`**（§5.2，§2 I2） | **已决定**：本阶段保留，只删除策略数据的调度器切换；第 5 阶段 `AttributeProvider` 落地后删除 | 它针对阻塞匹配器，删除它会让这些匹配器在事件循环上执行，违反"不阻塞事件循环" |
-| Q10 | **`SnapshotSource` 的编程模型**（§4.2，§2 I3） | **已决定**：本阶段返回 `CompletableFuture`，变更通知用监听器；第 5 阶段加挂起包装 | 协程在第 5 阶段才进入运行时；`CompletableFuture` 与 CoCache 的异步 API 直接对应 |
-| Q11 | **7.0 数据的迁移**（§4.7；**2026-10-26**：`snapshotConvert` 随切换删除，读取器由 RFC 0004 PR-5 搬进 `migrate/`，见 [RFC 0008](0008-conformance-and-direct-build.md) §4.2） | **已决定**：本阶段只提供读取器和 `snapshotConvert`（测试源码集），用于门槛、测量和开发环境；面向用户的 7.x → 8.0 迁移在第 4 阶段一次性提供；schema 标记升为 `"8"` | 8.0 在第 6 阶段之前不发布，用户只迁移一次；第 3 阶段的文档布局是内部的中间状态 |
-| Q12 | **比较器与回放工具**（§8.1，§2 I10；**2026-10-26 由 [RFC 0008](0008-conformance-and-direct-build.md) 取代**：切换时删除） | **已决定**：修订 RFC 0002 PR-6：`EngineParity`、`engineReplay` 改名为通用的 `DecisionParity`、`decisionReplay` 留在测试夹具中，不删除；`PolicyTestKit.parity` 照常删除 | 第 3 阶段证明等价、第 4 阶段的影子门槛都需要它们；先删再加只是重复劳动 |
-| Q13 | **全局策略的顺序**（§7 X3） | **已决定**：按 `policyId` 排序 | 7.0 的顺序是 Redis 集合的迭代顺序，没有定义；确定的顺序让解释和审计在实例之间一致；决策不变 |
-| Q14 | **规模上限与分片**（§4.8）（测量后确认） | **已决定**：文档 ≤ 8 MB、编译 p99 ≤ 200 ms；超限时按 §4.8 的方案分片 | 给测量一个明确的判定标准；分片只影响 `SnapshotKey` 和加载器，接口不变 |
-| Q15 | **预热与就绪**（§4.3） | **已决定**：启动时预热 `Policies` 和 `prewarm-apps`；完成前 readiness 不就绪；预热失败不阻止启动，按退避重试 | 避免实例在快照未就绪时接流量；不阻止启动，与 7.0 "启动时不读策略" 的可用性一致 |
-| Q16 | **快照不可用或陈旧超限时的状态码**（§2 I7） | **已决定**：本阶段 500；第 5 阶段统一改为 503 | 503 属于状态码变更，RFC 0002 Q3 已决定放在第 5 阶段 |
-| Q17 | **限流规则**（§3.6，§2 I6） | **已决定**：本阶段不进快照；第 5 阶段随义务一起进入 | 规则现在是静态配置，没有分发问题；义务的形状在第 5 阶段才确定 |
-| Q18 | **冷加载的请求侧等待上限**（§4.3）（测量后确认） | **已决定**：2 秒 | CoCache 的 `asyncTimeout` 默认 30 秒，对请求太长；用 §4.8 的编译耗时校准 |
-| Q19 | **应用文档的 LRU 上限**（§4.3）（测量后确认） | **已决定**：1024 个 | 用 §4.8 的活跃应用数和每个应用文档的常驻内存校准 |
-| Q20 | **快照版本的可见性**（§1.2） | **已决定**：本阶段经 DEBUG 日志和 `cosecsnapshot` 端点暴露，不改 `AuditEvent`；第 5 阶段写进 `DecisionEvent` | 改 `AuditEvent` 是可观测性契约的变更，第 5 阶段 `DecisionEvent` 本来就要重新定义它 |
+| Q1 | **快照怎么分区**（§3.2，§2 I1） | 一份共享的 `Policies` 文档 + 每个应用一份 `App` 文档；不按租户。今天：平台、应用、租户三种文档（RFC 0004） | 现有数据没有租户维度，按租户分区就是改变语义；两种文档之间没有引用，分别带版本读取不会混合；形状与第 4 阶段的"平台 + 租户"同构 |
+| Q2 | **引擎签名**（§3.5） | 第 3 阶段不改，仍是 `evaluate(request, PolicySet)`。今天：引擎直接读视图（RFC 0004） | 第 3 阶段的规则仍是适配对象，引擎没有理由知道快照的形状；不改引擎才能直接沿用第 2 阶段的门槛 |
+| Q3 | **SPI**（§4.2，§2 I8；AGENTS.md 要求先问） | 用 `SnapshotDocumentStore` 取代 `PolicyRepository`/`AppRolePermissionRepository` 的读侧；编译和持有放在 `SnapshotSource`，不进 SPI。今天：照此实现，SPI 在 `cosec-spi`、8.0 中是实验性的，`SnapshotSource` 在 `cosec-runtime` | 快照要求"整份文档"，按 id 或按角色查询的仓库无法提供；把编译放进 SPI 会让每个实现重复最容易出错的部分 |
+| Q4 | **写 API**（§4.6） | `SnapshotPublisher` 只覆盖 7.0 已有的写操作（策略、应用权限、角色授予）；第 6 阶段由控制面取代。今天：写文档的只有控制面与 `cosec-migrate` | 读写分离（P9）先落到接口层面；不提前设计第 6 阶段的修订、回滚和审批 |
+| Q5 | **条件写入与条件读**（§4.5、§4.6，§2 I9） | 在 CoCache 中增加按摘要比较的条件写入，以及按摘要比较的条件读（总是读 Redis，摘要未变时不返回正文）。条件读是**必需的**：再验证用它。CoCache 6.7.0 于 2026-10-22 发布（`Cache.getIfChanged`、`Cache.putIfMatch`），方案 B 不再需要。今天：CoCache 8 的 `Store` 上的同一对原语 | 一份文档包含多条策略后，"读—改—写"必须原子；在 CoCache 的 Lua 脚本里做，比 CoSec 自己加锁容易证明正确。条件读让再验证直接确认 Redis，`lag` 成为真实陈旧度的上界，带宽由变更而不是实例数和文档数决定 |
+| Q6 | **变更通知的来源**（§4.4） | 在快照键空间上订阅 CoCache 的失效通道（公开的 SPI），周期性再验证兜底 | 通知到达即重新加载，陈旧度通常是毫秒级；用的是 CoCache 的 SPI 而非内部类，Redis 与内存后端都支持同一键空间的多个监听器 |
+| Q7 | **陈旧度参数**（§4.5，§2 I4）（测量后确认） | 本地副本 30 秒、再验证间隔 10 秒、告警 60 秒、升级 5 分钟、`fail-closed` 按租户可选、默认上限 30 分钟。今天：再验证间隔 10 秒与 `fail-closed.max-lag` 30 分钟仍是属性；告警是 6 与 30 个间隔、本地副本是 3 个间隔，都由间隔算出（`SNP-23`），默认值不变 | 沿用 RFC 0001 §7.1；条件读直接向 Redis 确认，落后时长就是真实陈旧度的上界 |
+| Q8 | **编译或解码失败**（§4.4，§2 I5） | 失败的文档让到达它的请求失败，不保留旧版本（F4、F5）；读取暂时失败时保留已安装的版本（F6）。RFC 0001 的"保留旧版本"推迟到第 6 阶段控制面在发布前编译之后。今天：仍不保留旧版本（RFC 0007 §3 M2）；控制面不发布编译不过的文档 | 保留旧版本会让本该拒绝的请求按旧内容放行，一条刚发布的 DENY 会被静默忽略 |
+| Q9 | **`BlockingAware`**（§5.2，§2 I2） | 第 3 阶段保留，只删除策略数据的调度器切换；第 5 阶段 `AttributeProvider` 落地后删除。今天：已删除 | 它针对阻塞匹配器，删除它会让这些匹配器在事件循环上执行，违反"不阻塞事件循环" |
+| Q10 | **`SnapshotSource` 的编程模型**（§4.2，§2 I3） | 返回 `CompletableFuture`，变更通知用监听器；第 5 阶段加挂起包装。今天：SPI 与 `SnapshotSource` 仍是 `CompletableFuture`，管道经 `SuspendingSnapshotSource` 挂起等待 | 协程在第 5 阶段才进入运行时；`CompletableFuture` 与 CoCache 的异步 API 直接对应 |
+| Q11 | **7.0 数据的迁移**（§4.7） | 第 3 阶段只提供读取器和 `snapshotConvert`（测试源码集），用于门槛、测量和开发环境；面向用户的 7.x → 8.0 迁移在第 4 阶段一次性提供。今天：`snapshotConvert` 随切换删除，读取器在 `cosec-migrate` 里（RFC 0008 §4.2） | 8.0 在第 6 阶段之前不发布，用户只迁移一次；第 3 阶段的文档布局是内部的中间状态 |
+| Q12 | **比较器与回放工具**（§8.1，§2 I10） | 修订 RFC 0002 PR-6：`EngineParity`、`engineReplay` 改名为通用的 `DecisionParity`、`decisionReplay` 留在测试夹具中，不删除；`PolicyTestKit.parity` 照常删除。今天：比较器与回放随 RFC 0008 取消门槛而在切换时删除 | 第 3 阶段证明等价、第 4 阶段的影子门槛都需要它们；先删再加只是重复劳动 |
+| Q13 | **全局策略的顺序**（§7 X3） | 按 `policyId` 排序。今天：按文档顺序（§7 X3） | 7.0 的顺序是 Redis 集合的迭代顺序，没有定义；确定的顺序让解释和审计在实例之间一致；决策不变 |
+| Q14 | **规模上限与分片**（§4.8）（测量后确认） | 文档 ≤ 8 MB、编译 p99 ≤ 200 ms；超限时分片。今天：上限照此执行（控制面拒绝超过 8 MB 的文档），分片是 8.1 的工作（§4.8） | 给测量一个明确的判定标准；分片只影响 `SnapshotKey` 与组视图的规则，接口不变 |
+| Q15 | **预热与就绪**（§4.3） | 启动时预热平台文档和列出的文档；完成前不就绪；预热失败不阻止启动，按退避重试。今天：还预热宿主点名的应用（`SNP-20`），首次读取失败的自己重读（`SNP-21`） | 避免实例在快照未就绪时接流量；不阻止启动，与 7.0 "启动时不读策略" 的可用性一致 |
+| Q16 | **快照不可用或陈旧超限时的状态码**（§2 I7） | 第 3 阶段 500；第 5 阶段统一改为 503。今天：503（`PIP-2`） | 503 属于状态码变更，RFC 0002 Q3 已决定放在第 5 阶段 |
+| Q17 | **限流规则**（§3.6，§2 I6） | 第 3 阶段不进快照；第 5 阶段随义务一起进入。今天：文档的 `rateLimits` 一节 | 规则当时是静态配置，没有分发问题；义务的形状在第 5 阶段才确定 |
+| Q18 | **冷加载的请求侧等待上限**（§4.3）（测量后确认） | 2 秒。今天：`cosec.pipeline.timeout` 的 40 %，默认管线超时下仍是 2 秒（`SNP-23`） | CoCache 的异步超时默认 30 秒，对请求太长 |
+| Q19 | **应用文档的上限**（§4.3）（测量后确认） | 1,024 个。今天：从堆算出（`SNP-24`） | 用活跃应用数和每份应用文档的常驻内存校准 |
+| Q20 | **快照版本的可见性**（§1.2） | 第 3 阶段经日志与端点暴露，不改 `AuditEvent`；第 5 阶段写进 `DecisionEvent`。今天：`DecisionEvent.snapshotVersion` 是 `ViewVersion` | 改 `AuditEvent` 是可观测性契约的变更，第 5 阶段 `DecisionEvent` 本来就要重新定义它 |
 
 ---
 
 ## 附录 A：已确认差异
 
-门槛期间发现、并经维护者确认属于基准缺陷的差异登记在这里（初始为空）。
+门槛期间发现、并经维护者确认属于基准缺陷的差异登记在这里。门槛随 RFC 0008 取消，本表始终为空。
 
 | 编号 | 输入 | 基准 | 候选 | 结论 | 确认人 / 日期 |
 |---|---|---|---|---|---|
@@ -789,3 +768,22 @@ PR 按这里的值实现，数字由门槛的测量结果（§4.8）校准。
 ## 附录 B：涉及的现有代码
 
 > **2026-11-23 压缩时删去**：本节是7.x 里与本文有关的文件清单，这些代码已删除。原文见 `git show 3cd4dca9:docs/rfc/0003-policy-snapshot.md`。
+
+## 修订沿革
+
+只列日期与出处，内容都在正文里。
+
+- 2026-10-21：确认（第 2 版）。
+- 2026-10-26（RFC 0008）：门槛与等价、对 `engine` 的相对性能目标与 PR-5 取消，PR-6 并入切换。
+- 2026-11-02（#1188）：CoCache 6.10 的失败模式（只适用于 CoCache 6）。
+- 2026-11-04（#1200）：一个前缀（`SNP-9`）；再验证关不掉（`SNP-6`）；不存在的文档单独计数（`SNP-7`）；F5 包括 `VirtualMachineError`（`SNP-8`）；不经 starter 的缓存也被固定（`SNP-3`）。
+- 2026-11-07（#1231、#1240）：一次一轮（`SNP-6`）；运行时的淘汰策略复查与主节点读。
+- 2026-11-08（#1203）：CoCache 8.0.0；（#1295）未知的 `cosec.*` 键一律启动失败。
+- 2026-11-09（#1304）：一轮不等待超时的在途加载（`SNP-6`）。
+- 2026-11-14（#1351）：`cosec-migrate cocache8` 不在 GA 的工具里。
+- 2026-11-15（#1421、#1432）：文档以正文为准（`SNP-12`）；编译不过有自己的原因（`SNP-11`）。
+- 2026-11-16：维护调用的 future（`SNP-13`）；突发之下的封顶（`SNP-14`）。
+- 2026-11-18（#1614、#1648）：指标；一轮从不把开始之前的读当作确认（`SNP-6`）。
+- 2026-11-20（#1741）：`SnapshotDocumentStore` 是实验性的；（#1762、#1776）`SNP-21`、`SNP-22`、`SNP-4`、`SNP-5`。
+- 2026-11-21（#1821）：快照源的设置改为算出（`SNP-23`）。
+- 2026-11-22（#1854、#1859、#1866）：族的上限从堆算出（`SNP-24`）；淘汰策略的启动检查（`SNP-3`）。
