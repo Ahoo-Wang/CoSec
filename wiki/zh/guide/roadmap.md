@@ -36,11 +36,11 @@ description: "CoSec 8.0 改变什么、发布前处于什么状态，以及 7.x 
 
 ## 8.0 的现状 {#where-8-0-stands}
 
-上述架构已经合入 `main`，7.x 的代码已经移除。当前的预览版是 `8.0.0-beta.6`。它为控制面带来类型化的 Kotlin API，进程内与经 HTTP 的用法相同（[外部事实源同步角色](../scenarios/external-source.md)）；并去掉了 CoSec 自己能算出的设置：各阶段的超时是管线期限的份额，缓存与快照的上限是堆的份额（[由计算得出，而非配置](../operations/configuration.md#computed-not-configured)）。它基于 Spring Boot 4.2 与 CoCache 8.2 构建。接下来再做两轮审查并修复其发现，然后是候选发布版。按 PR 的状态见 [`docs/roadmap.md`](https://github.com/Ahoo-Wang/CoSec/blob/main/docs/roadmap.md)，由它负责跟踪；本页只写你可以依赖什么。
+上述架构已经合入 `main`，7.x 的代码已经移除。当前的预览版是 `8.0.0-beta.7`。最近两个 beta 为控制面带来类型化的 Kotlin API，进程内与经 HTTP 的用法相同（[外部事实源同步角色](../scenarios/external-source.md)）；并去掉了 CoSec 自己能算出的设置：各阶段的超时是管线期限的份额，缓存与快照的上限是堆的份额（[由计算得出，而非配置](../operations/configuration.md#computed-not-configured)）。它们基于 Spring Boot 4.2 与 CoCache 8.2 构建。接下来再做两轮审查并修复其发现，然后是候选发布版。按 PR 的状态见 [`docs/roadmap.md`](https://github.com/Ahoo-Wang/CoSec/blob/main/docs/roadmap.md)，由它负责跟踪；本页只写你可以依赖什么。
 
 ## 发布策略 {#release-policy}
 
-- **8.0 的预发布版（alpha 和 beta，最新为 `8.0.0-beta.6`）是预览版，不承诺兼容性。** 公共 API、`cosec.*` 属性、文档与线上格式（`schema: 2`、`CoSec-Identity`）
+- **8.0 的预发布版（alpha 和 beta，最新为 `8.0.0-beta.7`）是预览版，不承诺兼容性。** 公共 API、`cosec.*` 属性、文档与线上格式（`schema: 2`、`CoSec-Identity`）
   以及授权语义，在之后的任何 alpha 或 RC 中都可能改变，预览版之间不提供迁移路径。请在生产以外试用，暂时不要在它上面构建。
 - 候选发布版要等上述检查完成：对整个系统的两轮审查（RC 安全审查，然后按模块审查）及其发现全部修复，以及 ABI 校验（GA 时冻结公共 API，RFC 0011 D4）。此后 8.0 才遵循语义化版本。
 - **8.0 不比 7.0 慢。** 性能预算以 7.0 的实测数字设定：编译执行的授权吞吐与 Pipeline 吞吐不低于 7.0 的 100 %，分配不高于 7.0
@@ -54,7 +54,7 @@ description: "CoSec 8.0 改变什么、发布前处于什么状态，以及 7.x 
   （未知字段、应为列表处写了标量、重复键），不再把它们编译成范围更大的策略。升级前先读它的升级说明：已存入 Redis 的策略在重新发布之前，可能让请求失败。
 - 最新的安全公告是
   [GHSA-2293-jx8h-56m8](https://github.com/Ahoo-Wang/CoSec/security/advisories/GHSA-2293-jx8h-56m8)，已在 7.0.1 与 6.1.2 中修复。
-- 现在该做的：生产环境继续用 7.0.2，即最新的 7.0.x。想评估 8.0，在测试环境中试用最新的预发布版（`8.0.0-beta.6`，需要 Java 21），配合[升级](../operations/upgrading.md)；
+- 现在该做的：生产环境继续用 7.0.2，即最新的 7.0.x。想评估 8.0，在测试环境中试用最新的预发布版（`8.0.0-beta.7`，需要 Java 21），配合[升级](../operations/upgrading.md)；
   RC 之前还会有改动。
 
 ## 如何跟进 {#how-to-follow}
