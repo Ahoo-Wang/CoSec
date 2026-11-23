@@ -33,7 +33,10 @@ class ControlFieldErrorTest {
             """{"op":"putPolicy","policy":{"id":"far","statements":[{"effect":"allow","action":"order:read"}]}},""" +
             """{"op":"putBinding","binding":{"id":"far","subject":{"role":"viewer"},"app":"order","space":"*",""" +
             """"policy":"far","expiresAt":"+999999999-12-31T23:59:59Z"}}]}"""
-        val response = http.handle(ControlHttpRequest("POST", "/changes", emptyMap(), proposal.encodeToByteArray()), alice)
+        val response = http.handle(
+            ControlHttpRequest("POST", "/changes", emptyMap(), proposal.encodeToByteArray()),
+            alice
+        )
         response.status.assert().isEqualTo(400)
         CoSecJson.mapper.readTree(response.body).get("detail").asString().assert().contains("expiresAt")
             .contains("year 9999")
