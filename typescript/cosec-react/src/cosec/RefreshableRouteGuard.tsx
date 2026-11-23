@@ -52,7 +52,9 @@ export function RefreshableRouteGuard({
     tokenManager.refresh().catch(error => {
       // The refresh of a session that is no longer the guard's.
       if (!current) return;
-      console.error(error);
+      // The name and message only: an error can hold the request that
+      // carried a token, and a console is often captured by a reporter.
+      console.error(describe(error));
       setFailedToken(refreshToken);
     });
     return () => {
@@ -69,4 +71,10 @@ export function RefreshableRouteGuard({
   }
   const refreshingNode = refreshing ?? <p>Refreshing...</p>;
   return <>{refreshingNode}</>;
+}
+
+function describe(error: unknown): string {
+  return error instanceof Error
+    ? `${error.name}: ${error.message}`
+    : 'Refresh failed.';
 }

@@ -53,11 +53,14 @@ export function createClient(
     spaced = () => true,
     tokens: sharedTokens,
     config = {},
+    refreshTimeout,
   }: {
     signedIn?: FakeToken;
     spaced?: (url: string) => boolean;
     tokens?: TokenStorage;
     config?: Partial<CoSecConfig>;
+    /** The refresher's timeout, when not its default. */
+    refreshTimeout?: number;
   } = {},
 ): TestClient {
   const key = `test-${++counter}`;
@@ -86,6 +89,7 @@ export function createClient(
     tokenRefresher: new CoSecTokenRefresher({
       fetcher: client,
       endpoint: '/auth/refresh',
+      timeout: refreshTimeout,
     }),
     ...config,
   });

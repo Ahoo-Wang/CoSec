@@ -171,12 +171,18 @@ per-tab in-memory storage, refresh in one place only. The
 
 ## Reporting errors
 
-The errors of a request (`FetcherError` and the ones of this package that extend
-it, `RefreshTokenError` among them) carry the `exchange` of the request: its
-headers and body, so the access token, and on a refresh the token pair.
-Removing `token` from the refresh errors did not make them safe to serialize.
-An application that sends errors to a reporter (Sentry, a log pipeline) scrubs
-`exchange` first, or reports only `name`, `message` and `problem`.
+The errors of this package that a refresh or a logout raises
+(`RefreshTokenError`, `RefreshUnavailableError`, `RefreshSessionChangedError`,
+`LogoutUnconfirmedError`) carry no token: the request of a refresh or a logout
+has the pair as its body, so its error is not kept. Their `cause` is a plain
+`Error` with the name and message of that error and of each of its causes, and
+`problem` and `status` say what the server answered.
+
+The error of an application's own request (a `FetcherError`, an
+`ExchangeError` around one of the errors above) still carries the `exchange` of
+that request: its headers, so the access token in `Authorization`, and its
+body. An application that sends errors to a reporter (Sentry, a log pipeline)
+scrubs `exchange` first, or reports only `name`, `message` and `problem`.
 
 ## Upgrading from `@ahoo-wang/fetcher-cosec` 6.x
 
