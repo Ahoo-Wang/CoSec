@@ -1,0 +1,17 @@
+# Rule: CTL-77
+# Mutant: HttpControlService relays no attribute of the caller, so a DENY on one lapses over HTTP
+# Tests: :spring-boot:test --tests me.ahoo.cosec.spring.boot.control.ControlServiceParityTest
+
+diff --git a/extensions/control-http/src/main/kotlin/me/ahoo/cosec/control/http/HttpTransport.kt b/extensions/control-http/src/main/kotlin/me/ahoo/cosec/control/http/HttpTransport.kt
+index 8bc826111..6dc83120f 100644
+--- a/extensions/control-http/src/main/kotlin/me/ahoo/cosec/control/http/HttpTransport.kt
++++ b/extensions/control-http/src/main/kotlin/me/ahoo/cosec/control/http/HttpTransport.kt
+@@ -55,7 +55,7 @@ internal class HttpTransport(
+      * The gateway's one mapping of a request's security to the header it forwards, with every attribute of the caller
+      * (DR1-F-1): the host's policies may read any of them, as the in-process facade's do.
+      */
+-    private val issuer = IdentityIssuer(clock = clock, relay = true)
++    private val issuer = IdentityIssuer(clock = clock, relay = false)
+ 
+     init {
+         require(baseUri.isAbsolute && baseUri.scheme in SCHEMES) { "The control API's base is an http or https URI." }

@@ -22,6 +22,7 @@ import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.api.context.SecurityContext
 import me.ahoo.cosec.api.context.SecurityScope
 import me.ahoo.cosec.api.principal.CoSecPrincipal
+import me.ahoo.cosec.api.token.CompositeToken
 import me.ahoo.cosec.control.http.HttpControlService
 import me.ahoo.cosec.control.local.LocalControlService
 import me.ahoo.cosec.control.sdk.ChangeState
@@ -41,6 +42,9 @@ import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.model.decision.DocumentKind
 import me.ahoo.cosec.spi.identity.Identity
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
+import me.ahoo.cosec.spi.token.RevocationReader
+import me.ahoo.cosec.spi.token.TokenVerifier
+import me.ahoo.cosec.spi.token.VerifiedToken
 import me.ahoo.cosec.spring.boot.jwt.CoSecJwtAutoConfiguration
 import me.ahoo.cosec.spring.boot.jwt.CoSecTokenRevocationCacheAutoConfiguration
 import me.ahoo.cosec.spring.boot.pipeline.CoSecGatewayModeAutoConfiguration
@@ -324,6 +328,69 @@ class ControlServiceParityTest {
         }
     }
 
+    /**
+     * A request [subject] of [tenant] makes as an administrator, its token holding [attributes] of any JSON type: a context
+     * CoSec's own token authenticator made, with a credential, as an application's signed-in user has.
+     */
+    private fun withAttributes(tenant: String, subject: String, attributes: Map<String, Any>): ControlCaller {
+        val now = Instant.now()
+        val token = VerifiedToken(
+            "t-$subject-$tenant",
+            subject,
+            tenant,
+            "cosec-control",
+            setOf("admin"),
+            attributes = attributes,
+            issuedAt = now,
+            expiresAt = now.plusSeconds(300),
+        )
+        val verifier = object : TokenVerifier {
+            override fun verify(accessToken: String): VerifiedToken = token
+            override fun refresh(token: CompositeToken): VerifiedToken = error("not refreshed")
+        }
+        return ControlCaller.of(PermittedRequest.withToken("token", verifier, RevocationReader.NONE))
+    }
+
+    @Test
+    fun `a DENY on the caller's attributes decides alike through both implementations - CTL-77`() {
+        // DR1-F-1: over HTTP the caller's attributes reach the host, each as the text the engine reads in process, so a
+        // DENY that reads one refuses through either implementation. Before, none was forwarded: absent, the DENY lapsed.
+        runner.run { context ->
+            context.startupFailure.assert().isNull()
+            publish(context, SnapshotKey.Platform, DocumentKind.PLATFORM, "", ATTRIBUTE_DENIES)
+            listOf(LOCAL, REMOTE).forEach { publish(context, SnapshotKey.Tenant(it), DocumentKind.TENANT, it, TENANT) }
+            val local = context.getBean(ControlService::class.java)
+            val port = context.getBean(ControlServiceListener::class.java).boundPort
+            val http = HttpControlService(URI("http://127.0.0.1:$port/cosec/control/v1"))
+            val deadline = System.nanoTime() + Duration.ofSeconds(10).toNanos()
+            val ready = { runBlocking { answer { http.document(alice(REMOTE), SnapshotKey.Tenant(REMOTE)) } } }
+            while (!ready().startsWith("200")) {
+                check(System.nanoTime() < deadline) { "The platform document was not installed" }
+                Thread.sleep(20)
+            }
+            fun script(service: ControlService, tenant: String): List<String> = runBlocking {
+                val proposal = """{"document":"tenant:$tenant","base":1,"note":"n","operations":[{"op":"putPolicy",""" +
+                    """"policy":{"id":"p","statements":[{"effect":"allow","action":"order:read"}]}}]}"""
+                listOf(
+                    // A boolean, read as "true"; a list, read as its text; and a caller with neither.
+                    answer { service.check(withAttributes(tenant, "sam", mapOf("suspended" to true)), proposal) },
+                    answer {
+                        service.check(
+                            withAttributes(tenant, "gus", mapOf("groups" to listOf("ops", "night"))),
+                            proposal
+                        )
+                    },
+                    answer { service.check(withAttributes(tenant, "ann", mapOf("groups" to listOf("ops"))), proposal) },
+                ).map { it.replace(LOCAL, "<tenant>").replace(REMOTE, "<tenant>") }
+            }
+            val inProcess = script(local, LOCAL)
+            script(http, REMOTE).assert().isEqualTo(inProcess)
+            inProcess[0].assert().startsWith("403")
+            inProcess[1].assert().startsWith("403")
+            inProcess[2].assert().startsWith("200")
+        }
+    }
+
     private companion object {
         const val LOCAL = "acme"
         const val REMOTE = "globex"
@@ -343,6 +410,21 @@ class ControlServiceParityTest {
             """"bindings":[{"id":"control-api","subject":"*","app":"*","space":"*","policy":"control-api"},""" +
             """{"id":"svc-iam","subject":{"principal":"svc-iam","tenant":"(platform)"},"app":"cosec-control",""" +
             """"space":"","policy":"control-service"}]"""
+
+        /**
+         * Anyone reaches the control API, and two DENYs of a write on the caller's attributes: a suspended caller, and a
+         * caller whose groups, a list, read as `[ops, night]`.
+         */
+        const val ATTRIBUTE_DENIES = ""","policies":[{"id":"control-api","statements":[{"effect":"allow",""" +
+            """"action":["http:GET","http:POST"],"resource":"http:path:/cosec/control/v1/**",""" +
+            """"condition":{"eq":["subject.authenticated",true]}}]},""" +
+            """{"id":"no-suspended","statements":[{"effect":"deny","action":"cosec:write",""" +
+            """"condition":{"eq":["subject.attributes.suspended","true"]}}]},""" +
+            """{"id":"no-night","statements":[{"effect":"deny","action":"cosec:write",""" +
+            """"condition":{"eq":["subject.attributes.groups","[ops, night]"]}}]}],""" +
+            """"bindings":[{"id":"control-api","subject":"*","app":"*","space":"*","policy":"control-api"},""" +
+            """{"id":"no-suspended","subject":"*","app":"cosec-control","space":"","policy":"no-suspended"},""" +
+            """{"id":"no-night","subject":"*","app":"cosec-control","space":"","policy":"no-night"}]"""
 
         /** The tenant's administrators, by role, and one policy. */
         const val TENANT = ""","policies":[{"id":"orders","statements":[{"effect":"allow","action":"order:*"}]}],""" +
