@@ -3,12 +3,12 @@
 # Tests: :spring-boot:test --tests me.ahoo.cosec.spring.boot.authorization.cache.StrictCacheFailureTest
 
 diff --git a/backends/cocache/src/main/kotlin/me/ahoo/cosec/cocache/CacheLocks.kt b/backends/cocache/src/main/kotlin/me/ahoo/cosec/cocache/CacheLocks.kt
-index be5e7725d..aa309744f 100644
+index 005c8643d..f61147ba3 100644
 --- a/backends/cocache/src/main/kotlin/me/ahoo/cosec/cocache/CacheLocks.kt
 +++ b/backends/cocache/src/main/kotlin/me/ahoo/cosec/cocache/CacheLocks.kt
-@@ -116,7 +116,6 @@ internal object CacheLocks {
+@@ -117,7 +117,6 @@ internal object CacheLocks {
                  // lifetime of its own, which neither ttl nor ttl-jitter shortens in Redis; local-maximum-size only evicts.
-                 lock(PolicyField.ABSENT_TTL, PolicyField.LOCAL_MAX_AGE)
+                 lock(PolicyField.ABSENT_TTL)
                  constrain(PolicyField.ABSENT_TTL) { NOT_REVOKED_FOR }
 -                verify { revocationsHeldAtMost(it) }
                  // The local copy holds the revocation tables' share of the heap (IDN-33): the declaration's count, kept.
