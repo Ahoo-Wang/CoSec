@@ -18,19 +18,15 @@ package me.ahoo.cosec.cocache
 import me.ahoo.cocache.api.Codec
 import me.ahoo.cocache.api.Store
 import me.ahoo.cocache.codec.jackson.JacksonCodec
-import me.ahoo.cocache.core.CacheSpec
 import me.ahoo.cocache.core.CoCacheFactory
 import me.ahoo.cocache.core.KeyEncoder
 import me.ahoo.cocache.core.Locks
 import me.ahoo.cocache.core.StoreSpec
-import me.ahoo.cocache.core.policy.InvalidateFailureMode
-import me.ahoo.cocache.core.policy.ReadFailureMode
 import me.ahoo.cocache.core.policy.UnknownReadMode
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.cocache.snapshot.SnapshotDocumentCodec
 import me.ahoo.cosec.cocache.snapshot.SnapshotKeyEncoder
 import me.ahoo.cosec.document.json.CoSecJson
-import me.ahoo.cosec.model.Memberships
 import me.ahoo.cosec.spi.snapshot.SnapshotDocument
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.cosec.spi.token.TokenFamily
@@ -64,14 +60,15 @@ object CoSecCacheSpecs {
     /** The refresh token families, one per live session (RFC 0009): read and written on refresh and logout only. */
     const val TOKEN_FAMILY_CACHE_NAME = "TokenFamilyCache"
 
-    /** The memberships a `MembershipLoader` answers for principals whose token asks the provider (RFC 0004 §4.5.2). */
+    /**
+     * The name the shared memberships cache of the 8.0 previews had. Memberships are held by each process only
+     * ([LocalMemberships], DR1-D-2): no CoSec cache has this name, and the starter refuses `cocache.caches.` settings of
+     * it, which would do nothing.
+     */
     const val MEMBERSHIP_CACHE_NAME = "MembershipCache"
 
-    /**
-     * How long a principal's cached memberships live: the longest a membership change can take to apply when its
-     * invalidation is lost (RFC 0001 §3.2, the revocation delay of the provider source).
-     */
-    val DEFAULT_MEMBERSHIP_TTL: Duration = Duration.ofMinutes(1)
+    /** The storage path of the memberships' invalidation channel, `{keyPrefix}:membership` ([MembershipInvalidations]). */
+    fun membershipPath(keyPrefix: String): String = "${keyPrefix.trimEnd(':')}:membership"
 
     /** The snapshot documents of RFC 0003 (§4.1): the store of record the snapshot source loads. */
     const val POLICY_SNAPSHOT_CACHE_NAME = "PolicySnapshotCache"
@@ -157,7 +154,6 @@ object CoSecCacheSpecs {
         REVOKED_SUBJECT_CACHE_NAME to "token:subject:revoked",
         TOKEN_FAMILY_CACHE_NAME to "token:family",
         POLICY_SNAPSHOT_CACHE_NAME to "snapshot",
-        MEMBERSHIP_CACHE_NAME to "membership",
         REVISION_RECORD_CACHE_NAME to "control:revision",
         REVISION_INDEX_CACHE_NAME to "control:revisions",
         REFERENCE_INDEX_CACHE_NAME to "control:refs",
@@ -179,7 +175,7 @@ object CoSecCacheSpecs {
 
     /**
      * Every cache CoSec may create, by name. An instance creates those of the features it runs: the control plane's
-     * caches only where the control plane runs, [MEMBERSHIP_CACHE_NAME] only with a membership loader, the revocation
+     * caches only where the control plane runs, the revocation
      * tables only with JWT.
      */
     val CACHE_NAMES: Set<String> = PATHS.keys
@@ -232,12 +228,6 @@ object CoSecCacheSpecs {
      * - a failed Redis read is `Lookup.Unknown` and `get` throws (`unknown-read` locked to `throw`), instead of
      *   degrading to a miss, which would silently drop a policy or permission. The security pipeline turns the error
      *   into a denied (503) response.
-     *
-     * The memberships cache is not the store of record, so its entries expire, but a failed read must never become "no
-     * memberships" (RFC 0006 §5.5.2): with no roles, a DENY on a role would not apply. So its `ttl` is always finite
-     * ([DEFAULT_MEMBERSHIP_TTL] when the effective value is forever) and without jitter, so the TTL is the bound it is
-     * documented as, and a failed Redis read throws (`read-failure` and `unknown-read` locked to `throw`): the request
-     * fails closed with 503.
      *
      * The revocation tables read a failed Redis read as unknown (`unknown-read` locked to `throw`), which their reader
      * reports as unavailable: never "not revoked", which would let refresh issue a token on a read that failed (round-2
@@ -348,34 +338,6 @@ object CoSecCacheSpecs {
             .keyEncoder(KeyEncoder.ofToString())
             .codec(TokenFamilyCodec)
             .unknownRead(UnknownReadMode.THROW)
-            .build()
-    }
-
-    /**
-     * The memberships of principals whose token asks the provider ([CoCacheMembershipProvider]): an externally sourced
-     * `Cache`, which the provider reads with its own loader on each call, keyed by [MembershipCache.key], expiring
-     * after [ttl], and failing closed on read ([locks]).
-     *
-     * A failed [CoCacheMembershipProvider.invalidate] is retried in the background ([InvalidateFailureMode.RETRY]):
-     * every read passes the provider's loader, so a late delete only makes the next request load again.
-     */
-    fun membership(
-        keyPrefix: String = DEFAULT_KEY_PREFIX,
-        ttl: Duration = DEFAULT_MEMBERSHIP_TTL
-    ): CacheSpec<String, Memberships> {
-        val layout = layout(keyPrefix, MEMBERSHIP_CACHE_NAME)
-        return CacheSpec.builder<String, Memberships>(MEMBERSHIP_CACHE_NAME)
-            .keyPrefix(layout.keyPrefix)
-            .namespace(layout.namespace)
-            .keyEncoder(KeyEncoder.ofToString())
-            .codec(MembershipsCodec)
-            .externallySourced()
-            .policy {
-                this.ttl = ttl
-                ttlJitter = Duration.ZERO
-                readFailure = ReadFailureMode.THROW
-                invalidateFailure = InvalidateFailureMode.RETRY
-            }
             .build()
     }
 

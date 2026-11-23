@@ -16,6 +16,7 @@
 package me.ahoo.cosec.spring.boot.pipeline
 
 import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.cocache.LocalMemberships
 import me.ahoo.cosec.cocache.RevokedSubjectCache
 import me.ahoo.cosec.cocache.RevokedTokenCache
 import me.ahoo.cosec.engine.TraceLevel
@@ -45,6 +46,9 @@ internal object DerivedHeap {
     fun revocationEntries(budget: HeapBudget): Long =
         HeapBudget.count(budget.revocationTables, REVOCATION_ENTRY_BYTES).toLong()
 
+    /** The memberships each instance holds of its loader's answers: the memberships' share at their measured size. */
+    fun membershipEntries(budget: HeapBudget): Int = HeapBudget.count(budget.memberships, LocalMemberships.ENTRY_BYTES)
+
     /**
      * The heap's part of the startup line; [queueCapacity] is each BEST_EFFORT decision listener's, when there are any,
      * counted at the size of an event of [traceLevel].
@@ -57,6 +61,7 @@ internal object DerivedHeap {
         return "heap budget ($budget): ${DocumentBudget(budget.documents)}, recomputed from what is resident each " +
             "revalidation pass and before each eviction (cosec.snapshot.bound); revocation tables=${revocationEntries(budget)} entries each " +
             "(${RevokedTokenCache.ENTRY_BYTES} + ${RevokedSubjectCache.ENTRY_BYTES} B a pair), token cache weighed at " +
-            "${VerifiedTokenCache.BYTES_PER_TOKEN_CHAR} B a token character${queues.orEmpty()}"
+            "${VerifiedTokenCache.BYTES_PER_TOKEN_CHAR} B a token character, memberships=${membershipEntries(budget)} " +
+            "principals (${LocalMemberships.ENTRY_BYTES} B each)${queues.orEmpty()}"
     }
 }

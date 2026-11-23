@@ -18,14 +18,13 @@ package me.ahoo.cosec.spring.boot.pipeline
 import me.ahoo.cocache.core.CoCacheFactory
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.cocache.CoCacheMembershipProvider
-import me.ahoo.cosec.cocache.CoSecCacheSpecs
-import me.ahoo.cosec.cocache.MembershipCache
+import me.ahoo.cosec.cocache.LocalMemberships
 import me.ahoo.cosec.cocache.MembershipLoader
+import me.ahoo.cosec.cocache.membershipInvalidations
 import me.ahoo.cosec.spi.membership.MembershipProvider
 import me.ahoo.cosec.spring.boot.CoSecProperties
 import me.ahoo.cosec.spring.boot.ConditionalOnCoSecEnabled
 import me.ahoo.cosec.spring.boot.authorization.cache.COCACHE_AUTO_CONFIGURATION
-import me.ahoo.cosec.spring.boot.authorization.cache.createCoSecCache
 import org.springframework.boot.autoconfigure.AutoConfiguration
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass
@@ -36,11 +35,11 @@ import org.springframework.core.env.Environment
 import kotlin.time.toJavaDuration
 
 /**
- * Memberships from the application's [MembershipLoader], cached in Redis for every instance (RFC 0006 §5.5.2), whenever
- * `cosec-cocache` is present: the pipeline asks it for API keys and for tokens that carry
- * `cosec.membership: "provider"`. Entries expire
- * after one minute ([CoSecCacheSpecs.DEFAULT_MEMBERSHIP_TTL]); `cocache.caches.[MembershipCache].ttl` changes that, and
- * `forever` is one minute.
+ * Memberships from the application's [MembershipLoader] (RFC 0006 §5.5.2), whenever `cosec-cocache` is present: the
+ * pipeline asks it for API keys and for tokens that carry `cosec.membership: "provider"`. Each instance holds what its
+ * loader answered in its own memory ([LocalMemberships], DR1-D-2), never in Redis, for
+ * `cosec.authorization.membership.ttl`, at most the memberships' share of the heap ([DerivedHeap.membershipEntries]);
+ * only the invalidation frames of `CoCacheMembershipProvider.invalidate` cross Redis, on CoCache's channel.
  */
 @AutoConfiguration(before = [CoSecPipelineAutoConfiguration::class], afterName = [COCACHE_AUTO_CONFIGURATION])
 @ConditionalOnCoSecEnabled
@@ -50,23 +49,24 @@ import kotlin.time.toJavaDuration
 @EnableConfigurationProperties(RuntimeAuthorizationProperties::class, CoSecProperties::class)
 @InternalCoSecApi
 class CoSecMembershipAutoConfiguration {
-    @Bean(CoSecCacheSpecs.MEMBERSHIP_CACHE_NAME)
-    @ConditionalOnMissingBean
-    fun cosecMembershipCache(factory: CoCacheFactory, cosec: CoSecProperties): MembershipCache =
-        factory.createCoSecCache(MembershipCache::class.java, CoSecCacheSpecs.membership(cosec.keyPrefix))
-
-    @Bean
+    @Bean(destroyMethod = "close")
     @ConditionalOnMissingBean(MembershipProvider::class)
     fun cosecMembershipProvider(
-        cache: MembershipCache,
+        factory: CoCacheFactory,
+        cosec: CoSecProperties,
+        authorization: RuntimeAuthorizationProperties,
         loader: MembershipLoader,
         environment: Environment,
-    ): CoCacheMembershipProvider =
-        // A fill takes no longer than a request waits for it, the membership's share of the pipeline timeout (PIP-33).
-        CoCacheMembershipProvider(
-            cache,
+    ): CoCacheMembershipProvider {
+        val ttl = authorization.membership.ttl
+        require(!ttl.isNegative && !ttl.isZero) { "cosec.authorization.membership.ttl must be positive, not $ttl." }
+        return CoCacheMembershipProvider(
+            LocalMemberships(ttl, DerivedHeap.membershipEntries(DerivedHeap.budget())),
+            // A fill takes no longer than a request waits for it, the membership's share of the pipeline timeout (PIP-33).
             DerivedTimeouts.budgets(environment).membership.toJavaDuration(),
-            CoCacheMembershipProvider.DEFAULT_UNKNOWN_LIFE,
+            minOf(CoCacheMembershipProvider.DEFAULT_UNKNOWN_LIFE, ttl),
+            factory.membershipInvalidations(cosec.keyPrefix),
             loader,
         )
+    }
 }

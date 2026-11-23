@@ -64,6 +64,12 @@
       "type": "me.ahoo.cosec.spring.boot.pipeline.RuntimeAuthorizationProperties"
     },
     {
+      "name": "cosec.authorization.membership",
+      "type": "me.ahoo.cosec.spring.boot.pipeline.RuntimeAuthorizationProperties$Membership",
+      "sourceType": "me.ahoo.cosec.spring.boot.pipeline.RuntimeAuthorizationProperties",
+      "sourceMethod": "getMembership()"
+    },
+    {
       "name": "cosec.authorization.remote-ip",
       "sourceMethod": "getRemoteIp()",
       "sourceType": "me.ahoo.cosec.spring.boot.pipeline.RuntimeAuthorizationProperties",
@@ -318,6 +324,12 @@
       "name": "cosec.authentication.token-cache.enabled",
       "sourceType": "me.ahoo.cosec.spring.boot.pipeline.TokenCacheProperties",
       "type": "java.lang.Boolean"
+    },
+    {
+      "name": "cosec.authorization.membership.ttl",
+      "type": "java.time.Duration",
+      "description": "How long an instance keeps the memberships its `MembershipLoader` answered for a principal: the longest a membership change takes to apply on an instance that a `CoCacheMembershipProvider.invalidate` did not reach (RFC 0001 §3.2). Longer asks the loader less often; shorter applies a missed change sooner. Each instance holds its own copy and asks the loader itself (DR1-D-2).",
+      "sourceType": "me.ahoo.cosec.spring.boot.pipeline.RuntimeAuthorizationProperties$Membership"
     },
     {
       "description": "How many proxy hops of `X-Forwarded-For` to trust: `0` ignores the header (a directly exposed host), `N` takes the entry the closest of N trusted proxies appended.",
