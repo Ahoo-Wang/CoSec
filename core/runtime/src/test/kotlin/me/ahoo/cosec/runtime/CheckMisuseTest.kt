@@ -102,7 +102,9 @@ class CheckMisuseTest {
 
         val logged = lines.captured().map { it.formattedMessage }
         logged.assert().allMatch { '\n' !in it && '\r' !in it }
-        logged.first().assert().contains("order/1\\u000AWARN Check passed for admin").contains("order:read\\u000D\\u000Ax")
+        logged.first().assert().contains(
+            "order/1\\u000AWARN Check passed for admin"
+        ).contains("order:read\\u000D\\u000Ax")
         logged.last().assert().contains("(5000 characters)").hasSizeLessThan(1_000)
     }
 

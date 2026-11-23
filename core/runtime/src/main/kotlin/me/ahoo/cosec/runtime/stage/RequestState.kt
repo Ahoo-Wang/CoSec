@@ -15,7 +15,6 @@
 
 package me.ahoo.cosec.runtime.stage
 
-import me.ahoo.cosec.runtime.call.FallbackIds
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.api.audit.AuditRequest
@@ -31,6 +30,7 @@ import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.model.decision.Decision
 import me.ahoo.cosec.model.scope.Scope
 import me.ahoo.cosec.runtime.attribute.FetchedAttributes
+import me.ahoo.cosec.runtime.call.FallbackIds
 import me.ahoo.cosec.runtime.event.DecisionEvent
 import me.ahoo.cosec.runtime.event.ReplayHandle
 import me.ahoo.cosec.runtime.event.RequestSummary

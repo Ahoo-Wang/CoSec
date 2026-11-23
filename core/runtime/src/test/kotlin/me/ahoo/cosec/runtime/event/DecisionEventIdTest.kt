@@ -57,7 +57,11 @@ class DecisionEventIdTest {
     fun `a request's REQUIRED and BEST_EFFORT events carry one id`() = runBlocking<Unit> {
         val audit = Recording("audit", Delivery.REQUIRED)
         val metrics = Recording("metrics", Delivery.BEST_EFFORT)
-        val pipeline = PipelineFixtures.pipeline { listeners(registered(audit, metrics)) }
+        val counter = java.util.concurrent.atomic.AtomicInteger()
+        val pipeline = PipelineFixtures.pipeline {
+            listeners(registered(audit, metrics))
+            ids(me.ahoo.cosec.spi.id.IdGenerator { "id-${counter.incrementAndGet()}" })
+        }
         repeat(2) { pipeline.evaluate(PipelineFixtures.facts()).status.assert().isEqualTo(200) }
         withTimeout(5.seconds) {
             while (metrics.events.size < 2) delay(5)
