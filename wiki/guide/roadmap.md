@@ -6,7 +6,8 @@ description: "What CoSec 8.0 changes, where it stands before it ships, and what 
 # Roadmap
 
 For teams running CoSec 7.x, or evaluating CoSec, who want to know what 8.0 is and when it can ship. This page
-stays at the level of what you can rely on. Per-PR progress is in the contributor tracker,
+stays at the level of what you can rely on. Where the work stands, what is still open before the
+release candidate and what waits for 8.1 are in the contributor tracker,
 [`docs/roadmap.md`](https://github.com/Ahoo-Wang/CoSec/blob/main/docs/roadmap.md) (Chinese), and every design
 decision is in the [RFCs](https://github.com/Ahoo-Wang/CoSec/tree/main/docs/rfc). Where this page and an RFC differ,
 the RFC is right.
@@ -46,8 +47,8 @@ two betas add a typed Kotlin API for the control plane, the same in process and 
 ([Roles From an External Source](../scenarios/external-source.md)), and they remove the settings CoSec can compute:
 stage timeouts are shares of the pipeline's deadline, and the bounds of caches and snapshots are shares of the heap
 ([Computed, not configured](../operations/configuration.md#computed-not-configured)). They are built on Spring Boot 4.2
-and CoCache 8.2. Next are two more rounds of review with their findings fixed, and then a release candidate. Per-PR
-status is in
+and CoCache 8.2. Next are two more rounds of review with their findings fixed, and then a release candidate. What
+is still open before it is in
 [`docs/roadmap.md`](https://github.com/Ahoo-Wang/CoSec/blob/main/docs/roadmap.md), which is the page that tracks it;
 this one stays at the level of what you can rely on.
 
@@ -79,7 +80,7 @@ this one stays at the level of what you can rely on.
 ## How to follow
 
 - [RFC index](https://github.com/Ahoo-Wang/CoSec/tree/main/docs/rfc): the design, decisions and open questions.
-- [`docs/roadmap.md`](https://github.com/Ahoo-Wang/CoSec/blob/main/docs/roadmap.md): per-PR progress and review
-  rounds (Chinese).
+- [`docs/roadmap.md`](https://github.com/Ahoo-Wang/CoSec/blob/main/docs/roadmap.md): where the work stands, the
+  gates of the release candidate, and what is left for 8.1 (Chinese).
 - [Issues](https://github.com/Ahoo-Wang/CoSec/issues) and
   [pull requests](https://github.com/Ahoo-Wang/CoSec/pulls) on GitHub.

@@ -5,7 +5,7 @@ Measured on 2026-11-22, after `8.0.0-beta.6`, from the GitHub runs named below. 
 [`scripts/ci/run_timings.py`](../../../scripts/ci/run_timings.py) (`runs`, `summary`, `merges`); nothing is estimated
 unless a line says so. "Wall" is from the run's creation to the end of its gate job; "runner-hours" add the jobs' own
 durations. Seconds are medians unless marked p90. Background: the earlier measurement of 2026-11-19/20 is
-[`ci-affected-groups-proposal.md`](ci-affected-groups-proposal.md); since then the path rule (`plan.py`) and the CodeQL
+`ci-affected-groups-proposal.md` (removed since; `git show 8b881ed3:docs/reviews/2026-11/ci-affected-groups-proposal.md`); since then the path rule (`plan.py`) and the CodeQL
 skip (`codeql_needed.py`) shipped, so the numbers below are what is left.
 
 ## 1. A pull request
