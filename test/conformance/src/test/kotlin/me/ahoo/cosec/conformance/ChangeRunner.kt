@@ -169,6 +169,8 @@ import java.time.Instant
  *                                              // calls, as by's request: the change's state, `read`, or `refused <status>`
  *            { "simulate": { "by": "alice", "request": { ... }, "candidate": "c1" } },
  *            { "explain": { "by": "alice", "request": { ... }, "at": { "platform": 1, "app": 1, "tenant": 1 } } },
+ *            { "analyze": { "by": "viv", "query": { "tenant": "acme", "action": "order:read", "resource": "order/1" } } },
+ *                                              // `allows <bindings> denies <bindings> hidden <n>`, or `refused <status>`
  *            { "apply": { "change": "c3", "by": "walt", "document": "platform", "mode": "REPLACE", "desired": {...} } },
  *                                              // "revision": the header's, the revision the file was read at (default: the head's)
  *            { "rateLimits": "platform" },     // the rule ids of the document's head, in order
@@ -667,6 +669,7 @@ object ChangeRunner : ScenarioRunner {
         private suspend fun query(action: String, argument: JsonNode): String = when (action) {
             "simulate" -> simulate(argument)
             "explain" -> explain(argument)
+            "analyze" -> AnalyzeStep.run(plane, by(argument), argument, ::refused)
             else -> viaFacade(argument)
         }
 
@@ -1066,7 +1069,7 @@ object ChangeRunner : ScenarioRunner {
     private val CREDENTIAL_STEPS = setOf("revoke", "revokeTokens", "provide", "unaudited")
 
     /** The control plane's queries, and a call through its facade (`CTL-65`). */
-    private val QUERIES = setOf("simulate", "explain", "viaFacade")
+    private val QUERIES = setOf("simulate", "explain", "analyze", "viaFacade")
 
     /** The steps that read what the control plane holds or answers, and the instance statuses it reads. */
     private val READS = setOf(
