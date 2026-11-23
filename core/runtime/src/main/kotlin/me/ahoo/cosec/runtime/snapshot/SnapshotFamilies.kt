@@ -96,7 +96,7 @@ internal class SnapshotFamilies<A : Any>(
         }
         for (victim in victims(family, absent, minOf(excess, limit))) {
             // A reply already complete at the bound stops the pass; one not yet complete never
-            // holds it back: a claim cannot take a kind below its bound, whatever is offered (§4b, decision B).
+            // holds it back: a claim cannot take a kind below its bound, whatever is offered (RFC 0013 §5.4, decision B).
             if (evictOne(victim, absent).getNow(null) == Eviction.AT_BOUND) return
         }
     }
