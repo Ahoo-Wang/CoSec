@@ -3,14 +3,14 @@
 # Tests: :spi:test --tests me.ahoo.cosec.spi.token.InMemorySessionBoundTest
 
 diff --git a/core/spi/src/main/kotlin/me/ahoo/cosec/spi/token/InMemoryTokenFamilyStore.kt b/core/spi/src/main/kotlin/me/ahoo/cosec/spi/token/InMemoryTokenFamilyStore.kt
-index a5c028f86..cea7446ee 100644
+index 8e5054900..8171d49fa 100644
 --- a/core/spi/src/main/kotlin/me/ahoo/cosec/spi/token/InMemoryTokenFamilyStore.kt
 +++ b/core/spi/src/main/kotlin/me/ahoo/cosec/spi/token/InMemoryTokenFamilyStore.kt
-@@ -106,7 +106,7 @@ class InMemoryTokenFamilyStore(
+@@ -124,7 +124,7 @@ class InMemoryTokenFamilyStore(
              Duration.between(at, family.expiresAt).coerceAtLeast(Duration.ZERO),
              TokenFamilyStore.SESSIONS_PER_PRINCIPAL,
          )
--        pushedOut.forEach { families.remove(it) }
+-        pushedOut.forEach { id -> families.remove(id)?.let { forget(id, it) } }
 +        pushedOut.forEach { families[it] }
          var created = false
          families.compute(family.id) { _, existing ->
