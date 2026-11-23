@@ -185,6 +185,9 @@ class SnapshotCompileDeadlineTest {
             clock.advance(Duration.ofSeconds(1))
             val snapshot = source.peek("app-a")!!
             snapshot.appCompiled.revision.assert().isEqualTo(1)
+            // The app's own entry lags, not only the platform's, which no pass confirmed here either.
+            source.entries().single { it.key == APP_A }.lagAt(clock.instant())
+                .assert().isGreaterThan(options.failClosedMaxLag)
             assertThrows<SnapshotStaleException> { source.checkFresh(snapshot, "acme") }
             source.checkFresh(snapshot, "other")
             gate.countDown()
