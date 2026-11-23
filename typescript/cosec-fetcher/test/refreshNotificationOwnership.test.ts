@@ -11,11 +11,7 @@
  * limitations under the License.
  */
 
-import {
-  Fetcher,
-  deleteHeader,
-  type FetchExchange,
-} from '@ahoo-wang/fetcher';
+import { Fetcher, deleteHeader, type FetchExchange } from '@ahoo-wang/fetcher';
 import { InMemoryStorage } from '@ahoo-wang/fetcher-storage';
 import { SerialTypedEventBus } from '@ahoo-wang/fetcher-eventbus';
 import {
