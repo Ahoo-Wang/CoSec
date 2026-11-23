@@ -176,7 +176,7 @@
     },
     {
       "id": "IDN-14",
-      "source": "Round-2 review H1 (2026-11-13); RFC 0009 §5",
+      "source": "Round-2 review H1 (2026-11-13); RFC 0009 §11.2",
       "statement": "A token is never issued from an earlier token on a revocation read that failed: a refresh, or a tenant switch, whose revocations cannot be read (RevocationUnavailableException) fails, never reads the earlier token as not revoked, so a revoked token, or a token of a revoked principal, cannot be refreshed or switched into one that no revocation names. The pipeline's degraded verification (PIP-7) applies to verifying a token only.",
       "level": "pipeline",
       "pending": null,
@@ -189,7 +189,7 @@
     },
     {
       "id": "IDN-15",
-      "source": "RFC 0009 (refresh token families, 2026-11-14 revision); round-2 review M2",
+      "source": "RFC 0009 §11.3; round-2 review M2",
       "statement": "Only a family's current generation moves it: a refresh of the current generation moves the family to its next generation with a conditional write of the record it read, so of concurrent refreshes of one pair exactly one moves it, on one instance or many. A refresh of any other generation never moves it.",
       "level": "pipeline",
       "pending": null,
@@ -202,7 +202,7 @@
     },
     {
       "id": "IDN-16",
-      "source": "RFC 0009 (refresh token families, 2026-11-14 revision); round-2 review M2",
+      "source": "RFC 0009 §11.3; round-2 review M2",
       "statement": "The generation the family just replaced, presented within cosec.jwt.session.rotation-leeway of the move, is answered with a pair of the current generation and moves nothing: a refresh whose response was lost can be retried, and two tabs refreshing one pair both keep a usable pair. The window opens at the move and does not slide. Any older generation, or the one just replaced after the leeway, revokes the whole family and is refused, so a copied pair, even one answered within the leeway, is caught at the next refresh after it.",
       "level": "pipeline",
       "pending": null,
@@ -214,7 +214,7 @@
     },
     {
       "id": "IDN-17",
-      "source": "RFC 0009 (refresh token families, 2026-11-14 revision); round-2 review M2",
+      "source": "RFC 0009 §11.3; round-2 review M2",
       "statement": "A family ends cosec.jwt.session.lifetime after its login, however often it was refreshed: a refresh after that is refused and the user signs in again, no pair outlives that end, and a tenant switch, which does not sign the user in again, keeps the login time.",
       "level": "pipeline",
       "pending": null,
@@ -226,7 +226,7 @@
     },
     {
       "id": "IDN-18",
-      "source": "RFC 0009 (refresh token families, 2026-11-14 revision); round-2 review M2",
+      "source": "RFC 0009 §11.3; round-2 review M2",
       "statement": "A logout ends the session: TokenRevoker revokes the family and the access token's id, from the access token while it is valid and from the pair (bound as a refresh requires) once it has expired, so no pair of the family refreshes afterwards, the pairs it was refreshed from included. The family is marked revoked, never deleted, until its end.",
       "level": "pipeline",
       "pending": null,
@@ -238,7 +238,7 @@
     },
     {
       "id": "IDN-19",
-      "source": "RFC 0009 (refresh token families, 2026-11-14 revision); round-2 review M2",
+      "source": "RFC 0009 §11.3; round-2 review M2",
       "statement": "A family record that cannot be read, or a write of it that cannot be confirmed, issues nothing: the refresh fails (503), never reads the family as absent or the write as done. A missing record refuses the refresh (401).",
       "level": "pipeline",
       "pending": null,
@@ -250,7 +250,7 @@
     },
     {
       "id": "IDN-20",
-      "source": "Round-2 review M4 (2026-11-13)",
+      "source": "Round-2 review M4 (2026-11-13); RFC 0009 §11.1",
       "statement": "A social sign-in's callback is accepted only with a state CoSec issued, once, and only from the browser that started the sign-in: the state is taken from the SocialStateStore (removed atomically) before the provider is called, whatever follows, and the browser's binding must hash to the one recorded with the state. A callback whose state is unknown, expired, already used or issued to another browser is refused, and the provider is never called for it.",
       "level": "build",
       "pending": null,
@@ -262,7 +262,7 @@
     },
     {
       "id": "IDN-21",
-      "source": "Round-2 review L3 (2026-11-14)",
+      "source": "Round-2 review L3 (2026-11-14); RFC 0009 §3",
       "statement": "A principal's attributes cannot be changed once its authenticator has returned it: they are what the host reads from its SecurityContext and what every further check of the request decides on (subject.attributes.*). AuthenticatedPrincipal keeps a read-only view of the map it is handed, and CoSec's token verifier makes the attributes claim read-only at every level, nested objects and arrays included. A change through the principal, at any level, throws, and a further check decides as the first did; what is read is what the authenticator handed over.",
       "level": "build",
       "pending": null,
@@ -274,7 +274,7 @@
     },
     {
       "id": "IDN-22",
-      "source": "RFC 0009 (8.0 drill, entry 9)",
+      "source": "RFC 0009 §11.4 (8.0 drill, entry 9)",
       "statement": "A tenant switch issues only from a live session: the request's session, as CoSec's token proved it, whose family is readable, its principal's and tenant's, not revoked and not ended, with the token's revocations read strictly (IDN-14). Otherwise nothing is issued: 401 when the session is unknown, another's, revoked or ended, 503 when the family or the revocations cannot be read (IDN-19). A refresh checks its session in the same place, so a family revoked by a logout (IDN-18) or by a pair presented again (IDN-16) issues nothing, by either.",
       "level": "pipeline",
       "pending": null,
@@ -291,7 +291,7 @@
     },
     {
       "id": "IDN-23",
-      "source": "RFC 0009, docs/roadmap.md §9 as of commit 8b881ed3 (the starter serves the refresh route)",
+      "source": "RFC 0009 §11.3; docs/roadmap.md §9 as of commit 8b881ed3 (the starter serves the refresh route)",
       "statement": "When cosec.authentication.login.refresh.path is set, the starter serves POST on it, on Spring MVC and on WebFlux, under the pipeline like every route (STA-4: a document must permit an anonymous POST of it; nothing is exempted from the filter), and never on a gateway. Its body is exactly {\"accessToken\",\"refreshToken\"} as application/json, at most 32 KiB; anything else is 400 invalid-request. It answers 200 application/json, the CompositeToken written by CoSec's one mapper; 401 token-expired, token-revoked or token-invalid for a refusal of the pair; 503 unavailable when the revocations or the session store cannot answer (nothing issued, nothing spent: IDN-14, IDN-19); 500 internal-error for any other error, never 401. Every answer carries Cache-Control: no-store, a problem body is ProblemEncoder's and carries nothing of the request but its request id, and no log line of CoSec carries a token. A path set where the route cannot be served fails startup (STA-1).",
       "level": "pipeline",
       "pending": null,
@@ -315,7 +315,7 @@
     },
     {
       "id": "IDN-24",
-      "source": "RFC 0009, docs/roadmap.md §9 as of commit 8b881ed3 (the starter serves the refresh route)",
+      "source": "RFC 0009 §11.3; docs/roadmap.md §9 as of commit 8b881ed3 (the starter serves the refresh route)",
       "statement": "When cosec.authentication.login.logout.path is set, the starter serves POST on it as it serves the refresh route (IDN-23): the pair in the body, TokenRevoker.revoke of the pair, whether or not the access token has expired. It answers 204 when the session is ended, and when it already was (token-revoked), so a logout whose answer was lost can be sent again; 401 for a pair that is not one; 503 when the store cannot record it; 500 for any other error; 400 for a body that is not the pair; Cache-Control: no-store on every answer.",
       "level": "pipeline",
       "pending": null,
@@ -400,7 +400,7 @@
     },
     {
       "id": "IDN-31",
-      "source": "Review round 2, R2C-28 (saas-open-changes-design.md §4); RFC 0009",
+      "source": "Review round 2, R2C-28 (saas-open-changes-design.md §4); RFC 0009 §11.3",
       "statement": "A session record (a token family) carries its format and is read by the reader's rule: a member a later version adds is ignored, a record written before formats is format 1, and a later format is refused, which ends that session, never reads as another one.",
       "level": "build",
       "guards": [
@@ -413,7 +413,7 @@
     },
     {
       "id": "IDN-32",
-      "source": "Review round 2, R2B-22: the cache of verified tokens",
+      "source": "Review round 2, R2B-22: the cache of verified tokens; RFC 0009 §11.5",
       "statement": "A cached verification is what verifying the token again would answer: CoSec's verifier answers from its cache only while its own clock is where verifying again would succeed, so a cached token never outlives its `exp` nor precedes its `iat` and `nbf` beyond the skew, and a token that differs in any byte is verified again; only successes are kept, and the revocation and reserved-attribute checks run after it on every request. The cache holds the token cache's share of the heap (`STA-12`), each entry weighed by its token's length times what an entry measurably retains for a character; the weight is reckoned when an entry is put, on a miss, never on a hit, and an evicted entry costs one verification, never another answer. Refresh, tenant switch and logout never read it, and an application's own TokenVerifier is never given it.",
       "level": "build",
       "pending": null,
