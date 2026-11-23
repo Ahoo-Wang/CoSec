@@ -842,7 +842,7 @@
     {
       "id": "CTL-58",
       "source": "RFC 0007 §10.2 (maintainer decision 2026-11-21, the control-plane host's service API; control-server-design §0.7, §0.8)",
-      "statement": "The control API's service profile is the narrow set a service that calls the control plane directly may ask for, served on a port of its own (`cosec.control.http.service-port`, WebFlux only; the network, not a filter, says who may use it): the tenant and app documents (their reads, and `:apply` on a tenant's) and the change flow that needs no person, of a tenant's or an app's document (propose and check, read, list, rebase, abandon, run or skip the shadow window, publish); a change made through it is always analyzed, whoever is stated: no one is the trust root through the service profile (CTL-81), so only what grants nothing anew publishes alone and anything else waits for a person, who approves on the operators' port. Every other route is a `404` before the control plane is asked, as if it did not exist: the platform document, approvals and rejections, rollback, break-glass, the queries and propagation. Nothing but the control API is served on that port. The profile narrows what is served and never widens what the caller may do: each route it serves is authorized for the stated principal by the policies. The service port is not the application's or the management port, and it is refused with the control API off (`cosec.control.http.enabled=false`, which serves no control route at all) or beside the gateway's statement (`only-gateway-can-reach`), since a service port admits services. The listener stops by unbinding, waiting for the requests in flight within the shutdown grace, and closing every connection still open, the idle keep-alive ones included.",
+      "statement": "The control API's service profile is the narrow set a service that calls the control plane directly may ask for, served on a port of its own (`cosec.control.http.service-port`, WebFlux only; the network, not a filter, says who may use it): the tenant and app documents (their reads, and `:apply` on a tenant's) and the change flow that needs no person, of a tenant's or an app's document (propose and check, read, list, rebase, abandon, run or skip the shadow window, publish); a change made through it is always analyzed as the principal it states, with the roles it states: no one is the trust root through the service profile (CTL-81), so a change publishes alone only what the analysis proves that principal holds (and a holder's roles-only change, by the role class, CTL-79), and anything else waits for a person, who approves on the operators' port. A workload the network admits to the port can therefore publish alone what any principal and roles it states hold, in any tenant. Every other route is a `404` before the control plane is asked, as if it did not exist: the platform document, approvals and rejections, rollback, break-glass, the queries and propagation. Nothing but the control API is served on that port. The profile narrows what is served and never widens what the caller may do: each route it serves is authorized for the stated principal by the policies. The service port is not the application's or the management port, and it is refused with the control API off (`cosec.control.http.enabled=false`, which serves no control route at all) or beside the gateway's statement (`only-gateway-can-reach`), since a service port admits services. The listener stops by unbinding, waiting for the requests in flight within the shutdown grace, and closing every connection still open, the idle keep-alive ones included.",
       "level": "build",
       "pending": null,
       "guards": [
@@ -858,7 +858,8 @@
         "spring-boot:ControlServicePortTest#a service port with no WebFlux server to serve it fails startup naming what to do",
         "spring-boot:ControlServicePortTest#cosec control http enabled false serves no control route, and the control plane stays for what embeds it",
         "control:AppDocumentServiceTest#what a service publishes alone in an app document, and what waits for a person - CTL-58",
-        "control:AppDocumentServiceTest#the platform document stays outside the service profile, proposed or checked - CTL-58, CTL-65"
+        "control:AppDocumentServiceTest#the platform document stays outside the service profile, proposed or checked - CTL-58, CTL-65",
+        "control:ServiceTrustRootTest#a stated tenant principal publishes alone what its stated roles hold, through the service port - CTL-58, CTL-81"
       ]
     },
     {
@@ -1172,7 +1173,8 @@
         "control:ServiceTrustRootTest#a stated platform administrator's grant on a tenant's document waits through the service port - CTL-81",
         "control:ServiceTrustRootTest#a holder's roles-only change still publishes through the service port, by the role class - CTL-81",
         "control:ServiceTrustRootTest#a removal that grants nothing still publishes alone through the service port - CTL-81",
-        "control:ServiceTrustRootTest#the profile is the request's, not the change's, one readied on the operators' port waits when published on the service port - CTL-81"
+        "control:ServiceTrustRootTest#the profile is the request's, not the change's, one readied on the operators' port waits when published on the service port - CTL-81",
+        "control:ServiceTrustRootTest#a stated tenant principal publishes alone what its stated roles hold, through the service port - CTL-58, CTL-81"
       ]
     },
     {

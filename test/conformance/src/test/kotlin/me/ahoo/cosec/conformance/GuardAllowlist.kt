@@ -80,6 +80,7 @@ object GuardAllowlist {
             "control:ServiceTrustRootTest#a holder's roles-only change still publishes through the service port, by the role class - CTL-81",
             "control:ServiceTrustRootTest#a removal that grants nothing still publishes alone through the service port - CTL-81",
             "control:ServiceTrustRootTest#the profile is the request's, not the change's, one readied on the operators' port waits when published on the service port - CTL-81",
+            "control:ServiceTrustRootTest#a stated tenant principal publishes alone what its stated roles hold, through the service port - CTL-58, CTL-81",
             // CTL-79: the role class, and the bounds of a tenant's role.
             "control:RoleClassBoundsTest#a tenant's role cannot be every permission of its app - CTL-79",
             "control:RoleClassBoundsTest#the platform document has no roles - CTL-79",
