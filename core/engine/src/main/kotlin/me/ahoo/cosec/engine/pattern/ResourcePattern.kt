@@ -44,6 +44,9 @@ sealed class ResourcePattern {
     /** [matches], an evaluation's: glob segments use the table of [scratch]. */
     internal open fun matches(target: ResourceTarget, scratch: ScratchSource): Boolean = matches(target)
 
+    /** This pattern as a DENY's or a rate limit rule's reads it (`PIP-35`): the same but for an `http:path:` pattern. */
+    internal open fun inDenyDirection(): ResourcePattern = this
+
     /** Every resource; captures nothing. */
     @InternalCoSecApi
     object AnyResource : ResourcePattern() {
@@ -57,18 +60,46 @@ sealed class ResourcePattern {
     }
 
     @InternalCoSecApi
-    class Http internal constructor(val path: HttpPathPattern) : ResourcePattern() {
+    class Http internal constructor(
+        val path: HttpPathPattern,
+        /**
+         * Set on the patterns of DENY statements and rate limit rules ([inDenyDirection], `PIP-35`): [path]
+         * without its trailing `/`, or [path] itself when it has none. A trailing `/`, of the request's path or of the
+         * pattern, does not count against it, since a backend may serve both spellings as one.
+         */
+        private val loose: HttpPathPattern? = null,
+    ) : ResourcePattern() {
         override val variableNames: List<String> get() = path.variableNames
+
+        /** The literal start the index files it by: [loose]'s, which is a prefix of [path]'s own (`IDX-1`). */
+        internal val indexPrefix: Array<String?> get() = (loose ?: path).prefix
+
+        /** A trailing separator does not count (`PIP-35`); an ALLOW's and the boundary's patterns stay as written. */
+        override fun inDenyDirection(): Http = if (loose != null) this else Http(path, looseOf(path))
+
+        /**
+         * The path [loose] matches when [path] did not: the request's path without its trailing `/`, or the path as it
+         * is when only the pattern had one. Null when neither had one: then [loose] is [path], which did not match.
+         */
+        private fun loosePath(target: ResourceTarget): HttpPath? {
+            loose ?: return null
+            return target.withoutTrailingSeparator(path.decodeAndParseSegments)
+                ?: target.httpPath(path.decodeAndParseSegments).takeIf { loose !== path }
+        }
 
         override fun match(target: ResourceTarget): Captures? {
             if (target.resource.type != HTTP_TYPE) {
                 return null
             }
             return path.match(target.httpPath(path.decodeAndParseSegments))
+                ?: loosePath(target)?.let { loose?.match(it) }
         }
 
         override fun matches(target: ResourceTarget): Boolean =
-            target.resource.type == HTTP_TYPE && path.matches(target.httpPath(path.decodeAndParseSegments))
+            target.resource.type == HTTP_TYPE && (
+                path.matches(target.httpPath(path.decodeAndParseSegments)) ||
+                    loosePath(target)?.let { loose?.matches(it) } == true
+                )
 
         // Only glob segments use the table: a pattern without one takes the plain path, and never makes it.
         override fun match(target: ResourceTarget, scratch: ScratchSource): Captures? {
@@ -79,14 +110,17 @@ sealed class ResourcePattern {
                 return null
             }
             return path.match(target.httpPath(path.decodeAndParseSegments), scratch.scratch())
+                ?: loosePath(target)?.let { loose?.match(it, scratch.scratch()) }
         }
 
         override fun matches(target: ResourceTarget, scratch: ScratchSource): Boolean {
             if (path.globUnits == 0) {
                 return matches(target)
             }
-            return target.resource.type == HTTP_TYPE &&
-                path.matches(target.httpPath(path.decodeAndParseSegments), scratch.scratch())
+            return target.resource.type == HTTP_TYPE && (
+                path.matches(target.httpPath(path.decodeAndParseSegments), scratch.scratch()) ||
+                    loosePath(target)?.let { loose?.matches(it, scratch.scratch()) } == true
+                )
         }
 
         override fun equals(other: Any?): Boolean = other is Http && other.path == path
@@ -163,6 +197,19 @@ sealed class ResourcePattern {
          * paths, is held to the same length (RC1-8, `DOC-4`).
          */
         const val MAX_LENGTH: Int = HTTP_PREFIX.length + HttpPathPattern.MAX_LENGTH
+
+        /**
+         * [pattern] without its trailing separator (`PIP-35`), or [pattern] itself: the root and a pattern without one
+         * keep theirs. A pattern that ends with a double star or a `{*name}` has none, and matches either spelling.
+         */
+        private fun looseOf(pattern: HttpPathPattern): HttpPathPattern {
+            val text = pattern.pattern
+            if (text.length <= 1 || !text.endsWith('/')) {
+                return pattern
+            }
+            return HttpPathPattern.compile(text.dropLast(1), pattern.caseSensitive, pattern.decodeAndParseSegments)
+        }
+
         private const val ID_SEPARATOR = '/'
 
         /**
@@ -202,6 +249,24 @@ sealed class ResourcePattern {
 class ResourceTarget(val resource: Resource) {
     private var decoded: HttpPath? = null
     private var raw: HttpPath? = null
+    private var decodedLoose: HttpPath? = null
+    private var rawLoose: HttpPath? = null
+
+    /**
+     * The path of an `http` resource without its trailing `/` (`PIP-35`), or null when it has none or is the root.
+     * Parsed once, and only for a path that ends with `/`.
+     */
+    internal fun withoutTrailingSeparator(decodeAndParseSegments: Boolean): HttpPath? {
+        val id = resource.id
+        if (id.length <= 1 || id[id.length - 1] != '/') {
+            return null
+        }
+        return if (decodeAndParseSegments) {
+            decodedLoose ?: HttpPath.parse(id.substring(0, id.length - 1), true).also { decodedLoose = it }
+        } else {
+            rawLoose ?: HttpPath.parse(id.substring(0, id.length - 1), false).also { rawLoose = it }
+        }
+    }
 
     /** The path of an `http` resource. Throws [IllegalArgumentException] for a malformed percent-escape. */
     fun httpPath(decodeAndParseSegments: Boolean): HttpPath =

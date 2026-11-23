@@ -1,0 +1,17 @@
+# Rule: IDX-1
+# Mutant: the index files a DENY's http pattern by its own literal start, trailing / included, so a path without it misses the statement (DR1-C-9)
+# Tests: :engine:test --tests me.ahoo.cosec.engine.IndexPropertyTest
+
+diff --git a/core/engine/src/main/kotlin/me/ahoo/cosec/engine/StatementIndex.kt b/core/engine/src/main/kotlin/me/ahoo/cosec/engine/StatementIndex.kt
+index 3dfb3c83c..9ef0ec713 100644
+--- a/core/engine/src/main/kotlin/me/ahoo/cosec/engine/StatementIndex.kt
++++ b/core/engine/src/main/kotlin/me/ahoo/cosec/engine/StatementIndex.kt
+@@ -200,7 +200,7 @@ internal class StatementIndex(statements: Array<CompiledStatement>, options: Ind
+                     is ResourcePattern.Typed -> types.getOrPut(resource.type, ::ArrayList) += position
+                     // Its loose prefix (PIP-35): a path without the pattern's trailing `/` still reaches its node.
+                     is ResourcePattern.Http -> (http ?: PathBuilder().also { http = it }).add(
+-                        resource.indexPrefix,
++                        resource.path.prefix,
+                         position
+                     )
+                 }
