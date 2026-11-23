@@ -22,8 +22,45 @@ import me.ahoo.cosec.model.Match
 import me.ahoo.cosec.model.PolicyId
 import me.ahoo.cosec.model.TenantId
 
-/** What a change grants (§7.4.1): the fragments, one per action and resource of each ALLOW a binding or an attachment reaches. */
-internal class GrantFragmenter(private val narrowing: GrantNarrowing, private val equality: GrantEquality) {
+/**
+ * What a change grants (§7.4.1): the fragments, one per action and resource of each ALLOW a binding or an attachment
+ * reaches.
+ *
+ * At most [maxFragments] of them (DR1-E-1): a statement's actions times its resources is counted before it is split, and
+ * a change that would split into more is [Split.tooLarge], with nothing split at all. One statement of a thousand
+ * actions and a thousand resources is a million fragments; split, they would cost more heap than the analysis has,
+ * whatever the comparison budget then allows.
+ */
+internal class GrantFragmenter(
+    private val narrowing: GrantNarrowing,
+    private val equality: GrantEquality,
+    private val maxFragments: Long = ComparisonBudget.MAX_FRAGMENTS,
+) {
+    /** The fragments of a change, or none when it is [tooLarge] to split within [maxFragments]. */
+    class Split(val fragments: List<GrantFragment>, val tooLarge: Boolean)
+
+    /** The fragments split so far: once one more does not fit, none is kept and nothing more is split. */
+    private class Collected(private val limit: Long) {
+        val fragments = ArrayList<GrantFragment>()
+        var tooLarge = false
+            private set
+
+        /** Whether [count] more fragments fit. The first that does not drops what was split. */
+        fun fits(count: Long): Boolean {
+            if (!tooLarge && fragments.size + count > limit) {
+                tooLarge = true
+                fragments.clear()
+                fragments.trimToSize()
+            }
+            return !tooLarge
+        }
+
+        /** Keeps [fragment] when it fits. */
+        fun add(fragment: GrantFragment) {
+            if (fits(1)) fragments += fragment
+        }
+    }
+
     /**
      * The fragments [change] grants (§7.4.1). Policies resolve in the candidate; a new or changed binding whose policy
      * does not resolve is an [unresolved][GrantFragment.unresolved] fragment (RC1-32).
@@ -35,19 +72,20 @@ internal class GrantFragmenter(private val narrowing: GrantNarrowing, private va
         snapshot: GrantSnapshot,
         change: GrantChange,
         budget: ComparisonBudget = ComparisonBudget(),
-    ): List<GrantFragment> {
+    ): Split {
         val before = snapshot.tenant(change.tenant)
         val after = change.candidate
-        val fragments = ArrayList<GrantFragment>()
+        val fragments = Collected(maxFragments)
         // By id: a few roles can derive as many bindings as a whole document can hold written out.
         val previous = before.bindings.groupBy { it.id }
         val changed = after.bindings.filter { binding ->
             previous[binding.id].orEmpty().none { GrantEquality.same(it, binding) }
         }
         for (binding in changed) {
+            if (fragments.tooLarge) return Split(emptyList(), tooLarge = true)
             val policy = resolve(snapshot, after, binding)
             if (policy == null) {
-                fragments += GrantFragment.unresolved(change.tenant, binding)
+                fragments.add(GrantFragment.unresolved(change.tenant, binding))
                 continue
             }
             policy.statements.indices.forEach { split(change.tenant, policy, it, Grantee.Bound(binding), fragments) }
@@ -57,12 +95,13 @@ internal class GrantFragmenter(private val narrowing: GrantNarrowing, private va
         val bound = after.bindings.groupBy { it.policy }
         reresolved(snapshot, change, changedSet, fragments)
         for (policy in after.policies) {
+            if (fragments.tooLarge) return Split(emptyList(), tooLarge = true)
             val unchanged = bound[policy.id].orEmpty().filter { binding ->
                 binding !in changedSet && binding.expiresAt.let { it == null || snapshot.now < it }
             }
             changedPolicy(change.tenant, before.policy(policy.id), policy, unchanged, fragments, budget)
         }
-        return fragments
+        return Split(fragments.fragments, fragments.tooLarge)
     }
 
     /**
@@ -74,7 +113,7 @@ internal class GrantFragmenter(private val narrowing: GrantNarrowing, private va
         snapshot: GrantSnapshot,
         change: GrantChange,
         changed: Set<Binding>,
-        into: MutableList<GrantFragment>,
+        into: Collected,
     ) {
         val after = change.candidate
         val before = snapshot.tenant(change.tenant)
@@ -89,7 +128,7 @@ internal class GrantFragmenter(private val narrowing: GrantNarrowing, private va
             val now = resolve(snapshot, after, binding)
             when {
                 // It names nothing now: what it grants cannot be told (RC1-32).
-                now == null -> into += GrantFragment.unresolved(change.tenant, binding)
+                now == null -> into.add(GrantFragment.unresolved(change.tenant, binding))
                 !equality.samePolicy(removed.getValue(binding.policy), now) ->
                     now.statements.indices.forEach { split(change.tenant, now, it, Grantee.Bound(binding), into) }
             }
@@ -154,11 +193,12 @@ internal class GrantFragmenter(private val narrowing: GrantNarrowing, private va
         policy: GrantPolicy,
         /** The candidate's unchanged, live bindings to [policy], in the candidate's order. */
         bound: List<Binding>,
-        into: MutableList<GrantFragment>,
+        into: Collected,
         budget: ComparisonBudget,
     ) {
         val granted = granted(previous, policy, budget)
         for (binding in bound) {
+            if (into.tooLarge) return
             granted.forEach { split(tenant, policy, it, Grantee.Bound(binding), into) }
         }
         if (policy.attachable) {
@@ -173,10 +213,11 @@ internal class GrantFragmenter(private val narrowing: GrantNarrowing, private va
         policy: GrantPolicy,
         index: Int,
         grantee: Grantee,
-        into: MutableList<GrantFragment>,
+        into: Collected,
     ) {
         val statement = policy.statements[index]
-        if (statement.effect != Effect.ALLOW) {
+        // Counted before it is split (DR1-E-1): a statement too large to split is never materialised.
+        if (statement.effect != Effect.ALLOW || !into.fits(statement.actions.size.toLong() * statement.resources.size)) {
             return
         }
         val scope = when (grantee) {
@@ -186,7 +227,7 @@ internal class GrantFragmenter(private val narrowing: GrantNarrowing, private va
         val condition = both(policy.condition, statement.condition)
         for (action in statement.actions) {
             for (resource in statement.resources) {
-                into += GrantFragment(tenant, policy.id, index, action, resource, condition, grantee, scope)
+                into.fragments += GrantFragment(tenant, policy.id, index, action, resource, condition, grantee, scope)
             }
         }
     }

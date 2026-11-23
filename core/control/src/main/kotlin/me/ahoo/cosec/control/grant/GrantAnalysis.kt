@@ -24,7 +24,12 @@ class GrantAnalysis(
     val unprotect: List<ProtectedEntry>,
     /** The comparisons the analysis made ([ComparisonBudget]): what sizing the budget measures. */
     val comparisons: Long = 0,
+    /**
+     * Whether the change grants more fragments than one analysis splits ([ComparisonBudget.MAX_FRAGMENTS], DR1-E-1):
+     * then nothing was split and [verdicts] is empty, and the change is too large to analyse as a whole.
+     */
+    val tooLarge: Boolean = false,
 ) {
-    /** Whether a platform administrator must approve the change (RFC 0007 §7.5). */
-    val needsApproval: Boolean get() = verdicts.any { it.second is GrantVerdict.Unknown }
+    /** Whether a person must approve the change (RFC 0007 §7.5). */
+    val needsApproval: Boolean get() = tooLarge || verdicts.any { it.second is GrantVerdict.Unknown }
 }
