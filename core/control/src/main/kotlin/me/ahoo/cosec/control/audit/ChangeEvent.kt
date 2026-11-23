@@ -96,6 +96,14 @@ class ChangeEvent(
 
         /** A change was rebased on its document's current head and checked again (`CTL-63`). */
         REBASED,
+
+        /**
+         * A revision this change published is no longer the head, though nothing published over it (`CTL-86`, DR1-F-7):
+         * its head write was lost, as a Redis failover loses one, and the head is back at [ChangeEvent.base]. What the
+         * change did is not in effect: publish it again, or roll back. Told once by each instance whose reclamation
+         * pass finds it; the operator is who published it.
+         */
+        HEAD_LOST,
         ;
 
         /**

@@ -136,6 +136,7 @@ object Expectations {
         put("records", outcome.records)
         set("writes", json.arrayNode().apply { outcome.writes.forEach(::add) })
         outcome.history?.let { history -> set("history", json.arrayNode().apply { history.forEach(::add) }) }
+        outcome.lost?.let { lost -> set("lost", json.arrayNode().apply { lost.forEach { add(Math.toIntExact(it)) } }) }
         outcome.cost?.let { cost ->
             set(
                 "lastPublish",

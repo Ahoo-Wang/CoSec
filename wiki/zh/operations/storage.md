@@ -130,6 +130,7 @@ CoSec 保存在 Redis 中的每条记录，都说明了读取它的实例比写�
 - **每个节点的 `maxmemory-policy` 都是 `noeviction`。** 文档没有 TTL，也没有其他副本。在 `allkeys-*` 策略下 Redis
   可能驱逐一个文档：已经装入它的实例会失败即拒绝，但之后才加载它的实例会把被驱逐的应用文档或租户文档读成不存在，于是
   其中的 DENY 语句悄悄失效。使用 `noeviction`，并按数据量规划 Redis 的容量。
+- **会故障转移的 Redis 上设 `min-replicas-to-write 1`（以及 `min-replicas-max-lag`）。** 复制是异步的，控制面不等待副本（RFC 0007 Q27）：故障转移可能丢掉一次已确认的头部写入，头部回到之前的修订，那个修订的变更收窄的东西（被撤销的绑定、新加的 DENY）重新生效。设了 `min-replicas-to-write 1`，连不上副本的主节点会拒绝写入，所以控制面看到落地的写入也在副本上。即便如此仍丢了的头部，由下一轮回收发现：它的索引仍在头部之上列着那个修订，回收任务记 `ERROR`、计数（`cosec.control.revisions.lost`），并向变更监听器发 `HEAD_LOST`，点名该变更（`CTL-86`，[故障排查](./troubleshooting.md#a-published-revision-is-no-longer-the-head)）。
 - **启动检查。** 使用 Redis 后端时，每个实例在启动时从 `INFO memory` 读取每个节点的 `maxmemory-policy`；托管 Redis
   通常禁用 `CONFIG`，但允许 `INFO`。有两个检查读取它：
   - CoSec 自己的检查（`SNP-3`），检查创建快照存储的 CoCache 运行时背后的 Redis：某个节点不是 `noeviction`、`INFO`

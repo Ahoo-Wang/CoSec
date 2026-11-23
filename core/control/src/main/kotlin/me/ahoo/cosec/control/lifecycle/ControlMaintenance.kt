@@ -120,6 +120,8 @@ class ControlMaintenance(
         val counting = RetainedTotals.Counting()
         for (key in documents) {
             val keep = attempt("read the open changes of [$key]") { resting(key, counting) } ?: continue
+            // Before the revisions: a history read there may rebuild the index from the head, dropping what is above it.
+            attempt("look for the revisions [$key] lost") { changes.lostHeads.check(key) }
             attempt("reclaim the revisions of [$key]") { revisions.reclaim(key, keep) }
                 ?.takeIf { it.any }
                 ?.let { reclaimed[key] = it }
@@ -133,6 +135,9 @@ class ControlMaintenance(
 
     /** What this instance's last pass found (`CTL-84`): the meters `cosec.control.revisions.*` and `changes.open`. */
     val retained: RetainedTotals get() = totals.get()
+
+    /** Revisions this instance found lost above their heads (`CTL-86`): `cosec.control.revisions.lost`. */
+    val lostRevisions: Long get() = changes.lostHeads.found.get()
 
     /**
      * The ended changes of [key] past `min-age` that published no revision still retained (`CTL-83`): after the

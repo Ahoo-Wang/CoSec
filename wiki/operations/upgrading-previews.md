@@ -30,6 +30,11 @@ Which preview of the library may run behind which preview of the gateway image: 
 
 ## From 8.0.0-beta.7 {#from-8-0-0-beta-7}
 
+- **A head lost in a failover is reported** (`CTL-86`, DR1-F-7). Affected: a change listener that handles every kind
+  (one with an exhaustive `when` needs an `else`, as the kind's KDoc says), and Redis deployments that fail over. A new
+  event kind, `HEAD_LOST`, and a counter, `cosec.control.revisions.lost`, name a revision whose head write was lost;
+  set `min-replicas-to-write` on Redis ([Storage](./storage.md#redis-requirements)).
+
 - **A document's revision records are bounded within `min-age` too** (`CTL-84`, DR1-F-6). Affected: a document that
   publishes large documents often. Beyond its `max-count` most recent revisions, a document keeps at most `max-count`
   times the document cap of records (400 MB) and 26,214 index entries; past either, the oldest go, younger than

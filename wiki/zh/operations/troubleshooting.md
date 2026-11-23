@@ -231,6 +231,10 @@ CoSec 自己的拒绝很容易区分：它们总是 `application/problem+json`�
 
 执法拒绝的路径不会被记录：它可能来自客户端。
 
+## 已发布的修订不再是头部 {#a-published-revision-is-no-longer-the-head}
+
+变更事件 `HEAD_LOST`、`cosec.control.revisions.lost`，或 `me.ahoo.cosec.control.lifecycle` 的一条 `ERROR`：`[<doc>] revision <n> is listed above the head at revision <m>, and nothing published over it`。它点名的变更已经发布，随后头部写入丢失了：异步复制的 Redis 发生了故障转移（`CTL-86`）。头部回到了修订 `<m>`，该变更做的事没有生效：被撤销的绑定又生效了。重新发布该变更（在当前头部上重新提出），或回滚到你要的修订，然后在 Redis 上设 `min-replicas-to-write`（[存储](./storage.md#redis-requirements)）。装入过丢失修订的数据面实例会记一次回退，并随头部退回。
+
 ## 修订在 min-age 之内被回收 {#revisions-reclaimed-within-min-age}
 
 `cosec.control.revisions.reclaimed-young` 在计数，`me.ahoo.cosec.control.store` 的一条 `WARN` 说 `records younger than ... reclaimed` 并点名文档：它在最近 `max-count` 个之外的记录超出了能保留的量（`max-count` 乘以文档上限），或者索引多列了超过 26,214 条（`CTL-84`）。最老的先被删除，即使早于 `min-age`。最近 `max-count` 个修订、头部与未结束变更所依赖的修订总会保留，所以回滚到最近的修订仍然可行；回滚到更早的修订可能变成 `410`。找出循环发布大文档的客户端（它的变更的审计事件会点名它），按租户对它限流（[限流](../policies/rate-limiting.md#the-control-api)）。这条 `WARN` 每轮回收至多一次，并带上此后其余的数量。

@@ -318,6 +318,16 @@ resource:
 
 A path that enforcement refuses is not logged: it can come from a client.
 
+## A published revision is no longer the head {#a-published-revision-is-no-longer-the-head}
+
+A change event `HEAD_LOST`, `cosec.control.revisions.lost`, or an `ERROR` of `me.ahoo.cosec.control.lifecycle`:
+`[<doc>] revision <n> is listed above the head at revision <m>, and nothing published over it`. The change it names
+was published, and then the head write was lost: a Redis failover with asynchronous replication (`CTL-86`). The head is
+back at revision `<m>`, and what the change did is not in effect: a revoked binding is granted again. Publish the change
+again (propose it on the current head) or roll back to the revision you want, then set `min-replicas-to-write` on Redis
+([Storage](./storage.md#redis-requirements)). Data-plane instances that had installed the lost revision log a
+regression and follow the head back.
+
 ## Revisions reclaimed within min-age {#revisions-reclaimed-within-min-age}
 
 `cosec.control.revisions.reclaimed-young` counts, and a `WARN` of `me.ahoo.cosec.control.store` says

@@ -27,6 +27,8 @@ description: "每个 8.0 预览版（alpha 与 beta）到下一个之间的变�
 
 ## 从 8.0.0-beta.7 升级 {#from-8-0-0-beta-7}
 
+- **故障转移中丢失的头部会被报告**（`CTL-86`，DR1-F-7）。受影响的：处理每一种事件的变更监听器（穷举的 `when` 需要 `else`，如该种类的 KDoc 所说），以及会故障转移的 Redis 部署。新的事件种类 `HEAD_LOST` 与计数器 `cosec.control.revisions.lost` 点名头部写入丢失的修订；请在 Redis 上设 `min-replicas-to-write`（[存储](./storage.md#redis-requirements)）。
+
 - **文档的修订记录在 `min-age` 之内也有上限**（`CTL-84`，DR1-F-6）。受影响的：频繁发布大文档的文档。在最近 `max-count` 个修订之外，一个文档至多保留 `max-count` 乘以文档上限的记录（400 MB）与 26,214 条索引项；超出任一项，从最老的开始删除，不论是否早于 `min-age`，由 `cosec.control.revisions.reclaimed-young` 计数并记 `WARN`。新增四个度量：`cosec.control.revisions.records`、`.bytes`、`.reclaimed-young` 与 `cosec.control.changes.open`；量规请跨实例求和（[可观测性](./observability.md)）。每条修订索引项现在记着它的记录大小；较早的控制面读取时会跳过它，它写入的不带大小的索引项，由下一轮回收读取记录得出大小。
 
 - **一份文档有了 `cosec.control.revisions.max-count` 个未结束变更后不再接受新变更**（默认 50，`CTL-83`，DR1-E-2；在写入之前计数，同一时刻提出的变更可能都会通过）。受影响的：在同一份文档上
