@@ -35,6 +35,10 @@ Which preview of the library may run behind which preview of the gateway image: 
   documents' quarter of the heap (about 170 MB at 2 GiB), where two caches held a fixed 64 MB each. The host's two
   snapshot sources now hold a third of that quarter each, where they held half: at 2 GiB about 4,800 typical tenants in
   each, where it was 7,200. Give a control-plane host more heap to hold more; nothing else to change.
+- **`analyze` shows a tenant's bindings only to a caller who may read its document** (`CTL-51`, DR1-F-8). Affected: a
+  principal granted `cosec:analyze` on its tenant's document but not `cosec:read` (no built-in role is shaped so). It
+  was answered with every matching binding of that document; it now gets none, and the document is counted in `hidden`.
+  Grant `cosec:read` with `cosec:analyze`, as `cosec:tenant-viewer` does.
 - **`HttpControlService` relays a user's attributes** (`CTL-77`, DR1-F-1). Affected: an application that calls a
   control-plane host through `HttpControlService` as the user whose request it serves (`ControlCaller.of`), with a
   control policy that reads `subject.attributes`. Before, no attribute went with the call, so a DENY on one did not match

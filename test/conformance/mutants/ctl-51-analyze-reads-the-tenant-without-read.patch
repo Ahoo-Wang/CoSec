@@ -1,0 +1,17 @@
+# Rule: CTL-51
+# Mutant: analyze reads the tenant document asked about for any caller holding cosec:analyze, without cosec:read
+# Tests: :conformance:test --tests me.ahoo.cosec.conformance.ConformanceTest
+
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/api/AccessAnalysis.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/api/AccessAnalysis.kt
+index 2a27aa7e4..c062f573a 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/api/AccessAnalysis.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/api/AccessAnalysis.kt
+@@ -44,7 +44,7 @@ internal class AccessAnalysis(
+         val keys = listOfNotNull(SnapshotKey.Platform, tenant, app)
+         // Every document read for the caller is held to cosec:read, its own tenant's too (DR1-F-8): cosec:analyze on the
+         // tenant asks the question, it does not grant the bindings the answer lists. What it may not read is hidden.
+-        val readable = keys.filter { authority.holds(operator, it, ControlActions.READ) }
++        val readable = keys.filter { it == tenant || authority.holds(operator, it, ControlActions.READ) }
+         val platform = SnapshotKey.Platform.takeIf { it in readable }?.let { retained.entry(it) }
+         val application = app?.takeIf { it in readable }?.let { retained.entry(it) }
+         val found = AccessFindings(asked, ResourceTarget(resource))
