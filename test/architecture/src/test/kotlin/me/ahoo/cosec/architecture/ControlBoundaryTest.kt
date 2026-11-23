@@ -28,8 +28,9 @@ import org.junit.jupiter.api.Test
 /**
  * The control plane is a library that adapters wire in (RFC 0007 §5.1): its code never references Spring, Reactor
  * (nor the coroutine and Reactive Streams bridges to it) or a Redis client, and never blocks or leaves its scope. The
- * Redis store is `CoCacheControlStore` in `cosec-cocache`; the HTTP routes are wired by the starter. `cosec-core` still
- * brings Reactor onto the classpath, so this checks references, not dependencies (Q20).
+ * Redis store is `CoCacheControlStore` in `cosec-cocache`; the HTTP routes are wired by the starter. This checks what
+ * the code references (Q20); what `cosec-control` resolves at run time is `DependencyRulesTest`'s, which finds no Reactor,
+ * Spring, Servlet API or Redis client there.
  *
  * The classes are imported from where the module's own classes are compiled, not by package, so a class `control/`
  * puts in another package is checked too, and is itself a violation.
