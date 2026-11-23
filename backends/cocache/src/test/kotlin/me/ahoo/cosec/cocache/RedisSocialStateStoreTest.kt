@@ -21,6 +21,7 @@ import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.runBlocking
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.spi.id.RandomIdGenerator
+import me.ahoo.cosec.spi.social.SocialStatesFullException
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.AfterAll
 import org.junit.jupiter.api.BeforeAll
@@ -91,6 +92,32 @@ class RedisSocialStateStoreTest {
         } finally {
             unreachable.destroy()
         }
+    }
+
+    /**
+     * DR1-D-9: the deployment holds at most its bound of sign-ins in progress. Past it a start is refused and writes
+     * nothing; the starts are counted on one key, so the script runs on a Redis Cluster as on one node, and that key
+     * expires within two of the states' lifetimes, leaving nothing behind.
+     */
+    @Test
+    fun startsPastTheBoundAreRefusedAndWriteNothing(): Unit = runBlocking {
+        val bounded = RedisSocialStateStore(ReactiveStringRedisTemplate(factory), keyPrefix, maxStates = 3)
+        val issued = List(3) { RandomIdGenerator.generate() }
+        issued.forEach { bounded.put(it, "hash", Duration.ofSeconds(60)) }
+        val refused = RandomIdGenerator.generate()
+        assertThrows<SocialStatesFullException> { runBlocking { bounded.put(refused, "hash", Duration.ofSeconds(60)) } }
+        val redis = StringRedisTemplate(factory)
+        redis.hasKey(keyPrefix + refused).assert().isFalse()
+        // Taking a state does not free its count: the bound is on starts within a lifetime, which hold every live state.
+        bounded.take(issued.first()).assert().isEqualTo("hash")
+        assertThrows<SocialStatesFullException> { runBlocking { bounded.put(refused, "hash", Duration.ofSeconds(60)) } }
+        // One key, under the store's prefix: one slot on a Redis Cluster.
+        redis.keys("$keyPrefix*").assert().containsExactlyInAnyOrder(
+            keyPrefix + RedisSocialStateStore.COUNT_SUFFIX,
+            *issued.drop(1).map { keyPrefix + it }.toTypedArray(),
+        )
+        val ttl = redis.getExpire(keyPrefix + RedisSocialStateStore.COUNT_SUFFIX, java.util.concurrent.TimeUnit.SECONDS)
+        ttl.assert().isGreaterThan(0).isLessThanOrEqualTo(120)
     }
 
     companion object {

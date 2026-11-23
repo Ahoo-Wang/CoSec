@@ -108,6 +108,9 @@ object StartupGuards {
         "spring-boot:OneVerifierTest#the served refresh route refreshes with the application's own refresh authentication, its hook included",
         "spring-boot:OneVerifierTest#a refresh authentication over credentials of the application's own fails startup with the route set",
         "spring-boot:OneVerifierTest#an application verifier that wraps CoSec's own makes a request's token not CoSec's, without session or break-glass",
+        // IDN-37: a revocation is kept past the end of every token it can name.
+        "spring-boot:CoSecJwtAutoConfigurationTest#aRevocationOutlivesAnAccessTokenValidLongerThanTheRefreshToken",
+        "spring-boot:CoSecJwtAutoConfigurationTest#contextLoadsTokenRevocationDefaults",
         // IDN-26: the revocation tables' absent-ttl, locked at 30 seconds.
         "cocache:CacheTtlPolicyTest#revocationTablesKeepNotRevokedFor30SecondsAtMost",
         "spring-boot:StrictCacheFailureTest#revocationTablesKeepNotRevokedFor30SecondsWhateverTheGlobalLayersSay",

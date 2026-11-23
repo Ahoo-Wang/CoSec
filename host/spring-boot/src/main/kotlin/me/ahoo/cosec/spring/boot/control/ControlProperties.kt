@@ -99,8 +99,8 @@ class ControlProperties {
     @InternalCoSecApi
     class Approval {
         /**
-         * How long an approval stays valid; startup fails when it is longer than `cosec.jwt.token-validity.refresh`,
-         * how long a token revocation is kept.
+         * How long an approval stays valid; startup fails when it is longer than how long a token revocation is kept:
+         * the longer of `cosec.jwt.token-validity.access` and `.refresh`, plus `cosec.authentication.revocation.skew`.
          */
         var expireAfter: Duration = Duration.ofHours(72)
 
