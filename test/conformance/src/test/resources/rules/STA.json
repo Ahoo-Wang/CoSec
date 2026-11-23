@@ -3,7 +3,7 @@
     {
       "id": "STA-1",
       "source": "RFC 0011 D2",
-      "statement": "A feature turned on by a property or by the host's classpath never runs without what it needs (its module, its REQUIRED listener, its Redis connection): startup fails and names what to add. A module no feature uses needs nothing: a service behind a gateway (`cosec.pipeline.mode=gateway`) with JWT off, which wires no Redis data plane, starts without Redis although `cosec-cocache` is on its classpath.",
+      "statement": "A feature turned on by a property or by the host's classpath never runs without what it needs (its module, its REQUIRED listener, its Redis connection): startup fails and names what to add. A module no feature uses needs nothing: a service behind a gateway (`cosec.pipeline.mode=gateway`) with JWT off, which wires no Redis data plane, starts without Redis although `cosec-cocache` is on its classpath. What a feature needs is checked as well as its module: a web host with CoSec on registers one of CoSec's gates (a filter of the three adapters, found by type, as a bean or a filter registration), and `cosec.control.enabled=true` fails startup in `gateway` mode, which wires no control plane (DR1-G-5, DR1-G-6).",
       "level": "startup",
       "pending": null,
       "guards": [
@@ -26,7 +26,10 @@
         "spring-boot:LoginRoutesStartupTest#a gateway host with a path set fails startup",
         "spring-boot:LoginRoutesStartupTest#a path that is not one plain absolute path fails startup",
         "spring-boot:CoSecModuleCheckAutoConfigurationTest#the control plane switched on explicitly without cosec-control or cosec-cocache fails startup",
-        "spring-boot:CoSecModuleCheckAutoConfigurationTest#a cosec control enabled that is neither true nor false fails startup, without the modules too"
+        "spring-boot:CoSecModuleCheckAutoConfigurationTest#a cosec control enabled that is neither true nor false fails startup, without the modules too",
+        "spring-boot:WebGateCheckTest#a web host with CoSec on and its adapter's module, but no gate, fails startup",
+        "spring-boot:WebGateCheckTest#a gate found by type, whatever its bean's name, lets the host start",
+        "spring-boot:WebGateCheckTest#the control plane switched on in gateway mode fails startup, which wires none"
       ]
     },
     {

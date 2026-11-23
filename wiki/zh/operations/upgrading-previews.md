@@ -27,6 +27,13 @@ description: "每个 8.0 预览版（alpha 与 beta）到下一个之间的变�
 
 ## 从 8.0.0-beta.7 升级 {#from-8-0-0-beta-7}
 
+- **破坏性变更：开启了 CoSec 的 Web 宿主没有 CoSec 的门时启动失败**（`STA-1`，DR1-G-6）。受影响的是保留 `cosec.enabled`，
+  却排除了 `CoSecPipelineWebAutoConfiguration`、或用另一种类型的过滤器替换了适配器 bean 的应用。它原来不经裁决地放行每个请求，
+  唯一的迹象是启动摘要里的 `web=none`。保留这个自动配置、自己注册 CoSec 的过滤器，或者设置 `cosec.enabled=false`
+  （[故障排查](./troubleshooting.md#startup-fails-on-a-missing-module)）。
+- **破坏性变更：`gateway` 模式下写了 `cosec.control.enabled=true` 时启动失败**（`STA-1`，DR1-G-5）。受影响的是写了这个键的
+  网关后服务。它的控制面从未装配，启动行却说路由在服务；这行现在只在控制面实际运行的宿主上出现。删除这个键，或者把控制面放到
+  `enforce` 宿主上运行。
 - **破坏性变更：`cosec.key-prefix` 里不能有 `:`**（`SNP-9`，DR1-D-4）。受影响的是前缀里含有字母、数字、`_`、`.`、`-`
   以外字符的部署，用一对花括号包住整个前缀的除外（hash tag `{cosec}` 仍然可用）。
   - 像 `a` 和 `a:b` 这样的前缀会嵌套，同一个 Redis 上的两个部署因此共用 key。现在这样的前缀会让启动失败，信息里点名它含有什么。

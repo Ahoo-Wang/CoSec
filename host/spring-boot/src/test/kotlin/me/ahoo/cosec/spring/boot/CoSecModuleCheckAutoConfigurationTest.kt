@@ -20,6 +20,8 @@ import me.ahoo.cosec.spi.social.SocialStateStore
 import me.ahoo.cosec.spring.boot.jwt.CoSecJwtAutoConfiguration
 import me.ahoo.cosec.spring.boot.jwt.CoSecTokenRevocationCacheAutoConfiguration
 import me.ahoo.cosec.spring.boot.pipeline.GATEWAY_GLOBAL_FILTER
+import me.ahoo.cosec.webflux.PipelineWebFilter
+import me.ahoo.cosec.webmvc.PipelineServletFilter
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.extension.ExtendWith
@@ -31,6 +33,7 @@ import org.springframework.boot.test.context.runner.ReactiveWebApplicationContex
 import org.springframework.boot.test.context.runner.WebApplicationContextRunner
 import org.springframework.boot.test.system.CapturedOutput
 import org.springframework.boot.test.system.OutputCaptureExtension
+import org.springframework.boot.web.servlet.FilterRegistrationBean
 import org.springframework.data.redis.core.ReactiveStringRedisTemplate
 
 /** `STA-1`: a feature that needs a module fails startup without it, and names the artifact to add. */
@@ -41,12 +44,18 @@ class CoSecModuleCheckAutoConfigurationTest {
     private val plain = ApplicationContextRunner().withConfiguration(config)
         .withBean(ReactiveStringRedisTemplate::class.java, redis)
         .withBean(CacheRuntime::class.java, runtime)
+
+    // Each web host registers its gate, as CoSecPipelineWebAutoConfiguration does: WebGateCheckTest asks for one.
     private val servlet = WebApplicationContextRunner().withConfiguration(config)
         .withBean(ReactiveStringRedisTemplate::class.java, redis)
         .withBean(CacheRuntime::class.java, runtime)
+        .withBean("cosecPipelineServletFilter", FilterRegistrationBean::class.java, {
+            FilterRegistrationBean(mockk<PipelineServletFilter>(relaxed = true))
+        })
     private val reactive = ReactiveWebApplicationContextRunner().withConfiguration(config)
         .withBean(ReactiveStringRedisTemplate::class.java, redis)
         .withBean(CacheRuntime::class.java, runtime)
+        .withBean(PipelineWebFilter::class.java, { mockk<PipelineWebFilter>(relaxed = true) })
 
     private fun failsNaming(runner: AbstractApplicationContextRunner<*, *, *>, artifact: String) {
         runner.run { context ->

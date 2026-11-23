@@ -469,6 +469,7 @@
         "jwt:LoginRoutesTest#the login routes render a refusal as the adapters do",
         "spring-boot:ProblemRendererWiringTest#the application's renderer writes the body, under CoSec's status and media type",
         "spring-boot:ProblemRendererWiringTest#two renderers fail startup and name both",
+        "spring-boot:GatewayHostProblemBodyTest#the control routes of a gateway host render a refusal with the host's renderer",
         "architecture:OneDecisionPathTest#renderersNeverSeeDecisions",
         "architecture:OneDecisionPathTest#refusalBodiesComeFromProblemBodies",
         "micrometer:ProblemRenderFailedMetricTest#each refusal a renderer failed is counted, and a rendered one is not"

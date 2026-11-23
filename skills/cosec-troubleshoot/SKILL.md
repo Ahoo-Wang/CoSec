@@ -123,6 +123,12 @@ Full model: https://cosec.ahoo.me/guide/security-model.
   `cosec.enabled=false`: its filter strips a client's `CoSec-Identity`), `cosec.api-key.store=redis` `cosec-cocache`,
   `cosec.audit.kafka.delivery=required` `cosec-kafka`, `cosec.cosid.generator` `cosec-cosid`. Add the named artifact next to `cosec-spring-boot`. Do not
   suggest turning the feature off unless the user does not want it.
+- **`CoSec is on (cosec.enabled), but this web host registers none of its gates ...`** (STA-1): the adapter's module
+  is there but no CoSec filter is registered, so every request would pass undecided. Usually the application excluded
+  `CoSecPipelineWebAutoConfiguration`, or declared a filter of another type under the adapter's bean name. Keep the
+  auto-configuration, or register CoSec's filter itself; never suggest turning CoSec off unless the user wants no gate.
+- **`cosec.control.enabled=true, but cosec.pipeline.mode=gateway`** (STA-1): a service behind a gateway wires no
+  control plane. Run the control plane on an `enforce` host, or remove the key.
 - **`cosec.audit.kafka.delivery=required, but no Kafka audit listener was created`** (STA-1): `cosec-kafka` is there,
   but the listener is not: add a `KafkaOperations` bean (`spring-boot-starter-kafka` with `spring.kafka.*`), and keep
   `cosec.audit.enabled` and `cosec.audit.kafka.enabled` on; or use `best-effort`.

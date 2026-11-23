@@ -53,7 +53,10 @@ The starter checks the adapter at startup (STA-1): a Spring MVC host without `co
 `cosec-webflux` or a Spring Cloud Gateway host without `cosec-gateway` does not start, and the message names the
 artifact. A gateway host is checked even with `cosec.enabled=false`, because the gateway filter that strips a client's
 `CoSec-Identity` header comes with `cosec-gateway`. The [module list](../guide/introduction.md#modules) names what
-each module needs with it.
+each module needs with it. Once every bean exists, it also checks the gate itself: a web host with CoSec on that
+registers none of the three filters, neither as a bean of its type nor as a `FilterRegistrationBean` around one, does
+not start ([message](../operations/troubleshooting.md#startup-fails-on-a-missing-module)). An application may replace
+the adapter's bean with its own instance of the same filter; one of another type is no gate.
 
 ## How a request is handled
 
