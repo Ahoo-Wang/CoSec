@@ -8,7 +8,7 @@ control store; [the split](#the-split-of-corecontrol-between-e-and-f) below says
 
 | | |
 |---|---|
-| Commit reviewed | `origin/main` at `0fb1a1d2` (#1910); `core/control` last changed at `7f9de337` |
+| Commit reviewed | `origin/main` at `0fb1a1d2` (#1910); `core/control`'s main sources last changed at `7f9de337`, and are unchanged at `9e6a2a1a` (#1909), when this file was opened (only a build-script comment moved) |
 | Date | 2026-11-23 |
 | Scope | every main source file of `core/control` in the packages `me.ahoo.cosec.control` (the module marker), `authz`, `change`, `grant` and `lifecycle`: 119 files, 11,848 lines |
 | Reviewer | one read-only session with three read-only sub-reviewers it briefed; none is an author of the code reviewed. Every finding below was checked against the code by the lead reviewer. No code, test, rule or RFC was changed |
