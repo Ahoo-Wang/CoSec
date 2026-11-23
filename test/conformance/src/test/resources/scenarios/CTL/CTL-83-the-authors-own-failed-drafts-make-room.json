@@ -1,0 +1,89 @@
+{
+  "rules": [
+    "CTL-83"
+  ],
+  "level": "control",
+  "options": {
+    "maxCount": 2
+  },
+  "polarity": "positive",
+  "description": "DR1-E-2: a draft whose checks failed cannot be edited, only abandoned or left to expire. At the limit, the author's own oldest failed draft is abandoned to make room, so a loop of failing proposals does not lock the document: d1 is abandoned (a rebase of it is refused, it is no longer open), and c3 is stored.",
+  "steps": [
+    {
+      "propose": {
+        "change": "d1",
+        "document": "platform",
+        "operations": [
+          {
+            "putBinding": {
+              "id": "x",
+              "subject": "*",
+              "app": "*",
+              "space": "*",
+              "policy": "nowhere"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "propose": {
+        "change": "d2",
+        "document": "platform",
+        "operations": [
+          {
+            "putBinding": {
+              "id": "y",
+              "subject": "*",
+              "app": "*",
+              "space": "*",
+              "policy": "nowhere"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "propose": {
+        "change": "c3",
+        "document": "platform",
+        "operations": [
+          {
+            "putPolicy": {
+              "id": "c",
+              "statements": [
+                {
+                  "effect": "allow",
+                  "action": "order:read"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "rebase": "d1"
+    }
+  ],
+  "expect": {
+    "steps": [
+      "DRAFT",
+      "DRAFT",
+      "CHECKED",
+      "refused 409 STATE"
+    ],
+    "errors": {
+      "d1": [
+        "COMPILE"
+      ],
+      "d2": [
+        "COMPILE"
+      ],
+      "c3": []
+    },
+    "heads": {
+      "platform": 0
+    }
+  }
+}

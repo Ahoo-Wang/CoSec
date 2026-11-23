@@ -665,6 +665,13 @@ visit:
   terminal is among them; a change whose record does not decode is `ListedChange.Unreadable`, never left out, and
   maintenance skips its document or its window that pass. `openChangesKept()` says whether these lists can be
   trusted; maintenance reclaims nothing until they can, and `keepOpenChanges()` makes a new store's lists trusted.
+- `endedChanges(document, endedBefore, limit)` and `removeChange(document, id, expected)`: the changes of a document
+  that ended before a time, the oldest first, and the removal of one ended change's record (`CTL-83`). A `putChange` of
+  a terminal change lists it under its `updatedAt` before it writes it, so a write that lost leaves an extra entry,
+  never a missing one; whoever acts on an entry reads its record first. `removeChange` removes the record only while
+  it is `expected` and takes every entry of the change out; with `expected` `null`, only where there is no record, so
+  an entry whose record is gone leaves. The control plane keeps at most `max-count` ended changes a document, on the
+  write that ends one, and reclamation removes those past `min-age` that published no revision still retained.
 - `acquireLease(name, holder, duration)` and `releaseLease(name, holder)`: one instance at a time per task. A release
   removes the lease only while `holder` still has it, checked and removed in one atomic step (CoCache's
   `deleteIfMatch`): a lease that expired and another instance took meanwhile stays theirs.

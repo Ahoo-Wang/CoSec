@@ -1,0 +1,108 @@
+{
+  "rules": [
+    "CTL-83"
+  ],
+  "level": "control",
+  "options": {
+    "maxCount": 2
+  },
+  "polarity": "positive",
+  "description": "DR1-E-2: a document keeps at most max-count ended changes: once c3 ends, the third ended change of the platform document with max-count 2, the oldest, c1, is removed, whatever its age.",
+  "steps": [
+    {
+      "propose": {
+        "change": "c1",
+        "document": "platform",
+        "operations": [
+          {
+            "putPolicy": {
+              "id": "p1",
+              "statements": [
+                {
+                  "effect": "allow",
+                  "action": "order:read"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "abandon": "c1"
+    },
+    {
+      "advance": "PT1M"
+    },
+    {
+      "propose": {
+        "change": "c2",
+        "document": "platform",
+        "operations": [
+          {
+            "putPolicy": {
+              "id": "p2",
+              "statements": [
+                {
+                  "effect": "allow",
+                  "action": "order:read"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "abandon": "c2"
+    },
+    {
+      "advance": "PT1M"
+    },
+    {
+      "propose": {
+        "change": "c3",
+        "document": "platform",
+        "operations": [
+          {
+            "putPolicy": {
+              "id": "p3",
+              "statements": [
+                {
+                  "effect": "allow",
+                  "action": "order:read"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "abandon": "c3"
+    },
+    {
+      "advance": "PT1M"
+    }
+  ],
+  "expect": {
+    "steps": [
+      "CHECKED",
+      "ABANDONED",
+      "advanced",
+      "CHECKED",
+      "ABANDONED",
+      "advanced",
+      "CHECKED",
+      "ABANDONED",
+      "advanced"
+    ],
+    "errors": {
+      "c2": [],
+      "c3": []
+    },
+    "heads": {
+      "platform": 0
+    }
+  }
+}

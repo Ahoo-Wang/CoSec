@@ -51,8 +51,14 @@ class ConflictKind private constructor(text: String, isUnknown: Boolean) : Close
          */
         val EXISTS: ConflictKind = ConflictKind("EXISTS", false)
 
+        /**
+         * The document holds as many open changes as it may (`CTL-83`), the oldest [ControlRefusedException.heldBy]:
+         * abandon one, or wait for it to expire.
+         */
+        val OPEN_LIMIT: ConflictKind = ConflictKind("OPEN_LIMIT", false)
+
         private val SET = ClosedSet(
-            listOf(BASE_MOVED, SLOT_HELD, STATE, CANDIDATE_MOVED, WINDOW_OPEN, WINDOW_BLOCKED, CONTENDED, EXISTS)
+            listOf(BASE_MOVED, SLOT_HELD, STATE, CANDIDATE_MOVED, WINDOW_OPEN, WINDOW_BLOCKED, CONTENDED, EXISTS, OPEN_LIMIT)
         ) {
             ConflictKind(it, true)
         }
