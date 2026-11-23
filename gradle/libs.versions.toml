@@ -21,7 +21,7 @@ fluent-assert = "1.2.1"
 mockk = "1.14.12"
 jmh = "1.37"
 archunit = "1.5.1"
-blockhound = "1.0.18.RELEASE"
+blockhound = "1.0.19.RELEASE"
 # The verified-token cache's retained size only (R2B-22); never on a runtime classpath
 jol = "0.17"
 # SchemaConformanceTest only (RFC 0007 §10.4); never on a runtime classpath
