@@ -24,10 +24,10 @@ import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 
 /**
- * A family lists the slots holding an absent entry beside its counts (RFC 0013 B2b §4c), so that the absent kind's
- * pass costs what that kind holds: over a family of [DOCUMENTS] documents it reads the stamps of its absent entries
- * alone, while the documents' pass reads the documents'. Housekeeping is a queue the test runs itself, so nothing is
- * evicted behind its back.
+ * A family lists the slots holding an absent entry beside its counts (RFC 0013 §5.4, the absent kind's member set), so
+ * that the absent kind's pass costs what that kind holds: over a family of [DOCUMENTS] documents it reads the stamps of
+ * its absent entries alone, while the documents' pass reads the documents'. Housekeeping is a queue the test runs
+ * itself, so nothing is evicted behind its back.
  */
 class SnapshotFamilyMembershipTest {
     private val threads = SourceModelThreads()
