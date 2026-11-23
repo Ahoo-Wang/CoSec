@@ -1,0 +1,83 @@
+{
+  "rules": [
+    "CTL-40"
+  ],
+  "polarity": "positive",
+  "level": "control",
+  "description": "The platform allows two bindings to a role a document; acme writes none. A role of three permissions derives three (DR1-B-1): the change stays a draft with a V2 error naming the budget, and the head stays at revision 1.",
+  "documents": {
+    "platform": {
+      "limits": {
+        "maxRoleBindings": 2
+      }
+    },
+    "apps": {
+      "wms": {
+        "catalog": {
+          "groups": [
+            {
+              "name": "ops",
+              "permissions": [
+                {
+                  "id": "read",
+                  "action": "wms:read"
+                },
+                {
+                  "id": "edit",
+                  "action": "wms:edit"
+                },
+                {
+                  "id": "ship",
+                  "action": "wms:ship"
+                }
+              ]
+            }
+          ]
+        }
+      }
+    },
+    "tenants": {
+      "acme": {
+        "bindings": []
+      }
+    }
+  },
+  "steps": [
+    {
+      "propose": {
+        "change": "c1",
+        "document": "tenant:acme",
+        "operations": [
+          {
+            "putRole": {
+              "id": "night",
+              "app": "wms",
+              "permissions": [
+                "read",
+                "edit",
+                "ship"
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "publish": "c1"
+    }
+  ],
+  "expect": {
+    "steps": [
+      "DRAFT",
+      "refused 409 STATE"
+    ],
+    "errors": {
+      "c1": [
+        "V2"
+      ]
+    },
+    "heads": {
+      "tenant:acme": 1
+    }
+  }
+}
