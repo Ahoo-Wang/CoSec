@@ -97,7 +97,7 @@
     },
     {
       "id": "OBS-8",
-      "source": "Design D2 (saas-shadow-staged-design.md §4, §9 decisions 2 and 3, condition 3)",
+      "source": "Design D2 (saas-shadow-staged-design.md §4, §9 decisions 2 and 3, condition 3); RFC 0006 §9.3",
       "statement": "A BEST_EFFORT listener that reads only the events it sampled (the shadow listener) is offered only the events whose replay names it, and when every BEST_EFFORT listener is one and none samples a request, no decision event is made for that request. A REQUIRED listener, and every other BEST_EFFORT listener, receives every event whatever those sample. With cosec-micrometer and a MeterRegistry, `cosec.shadow.staged.age` is the time since this instance's store last answered its read of the staged list (NaN before the first answer), which keeps rising while the list cannot be read.",
       "level": "pipeline",
       "pending": null,
@@ -113,7 +113,7 @@
     },
     {
       "id": "OBS-9",
-      "source": "Coordinator's brief, 2026-11-21 (one table for a cause's wire name, after #1792's control vocabulary)",
+      "source": "Coordinator's brief, 2026-11-21 (one table for a cause's wire name, after #1792's control vocabulary); RFC 0006 §9.2",
       "statement": "A decision's cause is named on the wire by one exhaustive table in cosec-runtime (`CauseName`), never by its class: the audit record's reason (`INDETERMINATE: <name>`), the shadow report's sample and the control API's `cause` write the same name for each kind of cause, a new kind does not compile until it is named, and the names stay the spellings 8.0's previews wrote.",
       "level": "build",
       "pending": null,
@@ -126,7 +126,7 @@
     },
     {
       "id": "OBS-10",
-      "source": "Coordinator's brief for 8.0.0-beta.6, 2026-11-21 (the properties review, items 18 to 20)",
+      "source": "Coordinator's brief for 8.0.0-beta.6, 2026-11-21 (the properties review, items 18 to 20); RFC 0006 §9.3, §7.1",
       "statement": "A listener's two timeouts are derived, never set: a REQUIRED decision listener may take 20 % of `cosec.pipeline.timeout`, so its wait ends inside the request it delays; the REQUIRED change listeners of a control request together take `cosec.pipeline.timeout`, the bound of the request's own authorization, as no other deadline bounds a control request; at shutdown the decision listeners, the change listeners and the Kafka audit and change listeners each deliver what is queued for a sixth of `spring.lifecycle.timeout-per-shutdown-phase` (5 s at Spring's default 30 s). `cosec.observability.listener.required-timeout`, `cosec.observability.listener.drain-timeout` and `cosec.control.audit.required-timeout` fail startup as keys CoSec does not read, saying what replaced them.",
       "level": "startup",
       "pending": null,
@@ -140,7 +140,7 @@
     },
     {
       "id": "OBS-11",
-      "source": "Coordinator's brief for 8.0.0-beta.6, 2026-11-21 (the properties review, items 22, 23 and 26; memory by heap share)",
+      "source": "Coordinator's brief for 8.0.0-beta.6, 2026-11-21 (the properties review, items 22, 23 and 26; memory by heap share); RFC 0006 §9.3",
       "statement": "A BEST_EFFORT decision listener's queue holds its part of the decision listeners' share of the heap (`STA-12`), divided equally by the BEST_EFFORT listeners and counted in events at the measured size of an event of the pipeline's trace level (`HeapBudget.decisionEventBytes`: untraced, and traced at `full` and `exhaustive`, whose trace carries every candidate statement; each held by a test never below what such an event retains on a representative deployment's documents and at most twice it, the traced ones at their upper case, a denied request). A traced pipeline's queues hold fewer events, never the untraced count of traced events. The count is reckoned once, when the listeners are built: nothing is measured on the request path. A full queue drops the next event and counts it (`cosec.listener.dropped`).",
       "level": "startup",
       "pending": null,
