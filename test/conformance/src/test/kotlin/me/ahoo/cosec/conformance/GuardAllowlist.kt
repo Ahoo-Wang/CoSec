@@ -389,6 +389,9 @@ object GuardAllowlist {
             "runtime:LocalRateLimiterCountsTest#a flood of other buckets keeps a live count",
             "runtime:LocalRateLimiterBoundsTest#a bucket is removed only once it can no longer change an answer",
             "runtime:LocalRateLimiterBoundsTest#a bucket removed while held is not counted into",
+            // OBL-5, DR1-C-10: a time behind a bucket's window never moves it back.
+            "runtime:LocalRateLimiterCountsTest#a late time changes no answer of the window after it",
+            "runtime:LocalRateLimiterCountsTest#a clock set back keeps the window it reached",
             "runtime:RateLimitObligationTest#aFullLocalLimiterIsOneThatCannotCount",
             "runtime:LocalRateLimiterBoundsTest#a flood on one rule leaves the other rules counting and admitting",
             "runtime:LocalRateLimiterBoundsTest#a limiter full in total refuses new buckets of every rule",
@@ -420,6 +423,10 @@ object GuardAllowlist {
             // SNP-22: a load's compilation has the load's deadline (R2D-11).
             "runtime:SnapshotCompileDeadlineTest#a cold load whose compilation never returns fails at the tick after its deadline, and holds one thread",
             "runtime:SnapshotCompileDeadlineTest#a reload whose compilation never returns keeps what is installed once its budget is spent",
+            // SNP-22, DR1-D-1: a reload kept past its compile deadline is visible, and fail-closed tenants still bound it.
+            "runtime:SnapshotCompileDeadlineTest#a reload whose compilation never returns is reported, by key and revision, until it returns",
+            "runtime:SnapshotCompileDeadlineTest#a fail-closed tenant is refused past its lag bound while a newer revision does not compile in time",
+            "spring-boot:SnapshotHealthIndicatorTest#health names a newer revision that did not compile in time, by key and revision",
             "runtime:SnapshotCompileDeadlineTest#a compilation still queued when its load times out never starts",
             "runtime:KeyTransitionsTest#aRecompileWhoseCompilationTimesOutFailsClosedAndAbandonsIt",
             "runtime:KeyTransitionsTest#aColdLoadWhoseCompilationTimesOutAnswersFailed",

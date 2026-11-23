@@ -242,6 +242,7 @@ CoSec 自己的拒绝很容易区分：它们总是 `application/problem+json`�
   周期确认不能关闭：Redis 正常而间隔更长，说明实例的确认轮次在失败，它的日志会写明原因。
 - **实例读的是另一个命名空间。** 所有实例和控制面必须共用
   [`cosec.key-prefix`](./configuration.md#key-prefix) 和同一个 Redis。
+- **更新的修订没能及时编译。** 实例读到了它，但它的编译超过了重新加载的 30 秒：实例以 `ERROR` 记录 `Compiling snapshot document [<doc>] revision <n> did not end within <budget>; ...`，并继续按它持有的修订决策（[编译不结束](#a-compilation-does-not-end)）。
 - **Redis 丢了写入。** 故障切换后实例可能以 `ERROR` 记录
   `Snapshot document [<doc>] regressed from revision <a> to <b>; ...`：重新发布这个变更。
   [`cosec-migrate verify-chain`](./upgrading.md#verify-the-revision-chains) 会指出每一份修订链丢了记录的文档。
@@ -369,6 +370,8 @@ Redis may evict CoSec's policy snapshot: maxmemory-policy is {<node>=<policy>}, 
 ## 编译不结束 {#a-compilation-does-not-end}
 
 以 `ERROR` 记录 `Compiling snapshot document [<doc>] revision <n> did not end within <budget>; the load fails, and the revision is not compiled again while that compilation runs.`：编译器在该存储修订上用时超过加载的预算（尚未持有的文档为冷加载超时，2 秒；重新加载为 30 秒）。需要它的请求在它未被持有时回答 `503`，或者按之前持有的修订决策。该编译在结束之前占用一个编译线程；同时有两个这样的修订会占满默认的两个线程，此时在其中一个结束之前没有其他文档能编译：每个加载都在其截止时间失败关闭。经过控制面校验的文档编译用时远低于一毫秒：查找绕过控制面写入 Redis 的修订，并发布一个改正的修订，它会像其他修订一样编译（[存储](./storage.md#how-instances-read-documents)）。
+
+对重新加载而言，这与读不到 Redis 的重新加载不同，后者只记录 `Reloading snapshot document [<doc>] failed; keeping revision <n>.`：这里实例读到了更新的修订，却不按它决策。在它的编译结束之前，每次重新校验都会再遇到这个修订，这一行每次都以 `ERROR` 重复；实例保留它持有的修订（`SNP-22`），该修订不再被确认，所以 6 个和 30 个间隔后会出现滞后日志和 `cosec.snapshot.lagging`，与 Redis 不可达时一样。在 [`fail-closed.tenants`](./configuration.md#snapshot) 中的租户在滞后超过 `fail-closed.max-lag` 后被拒绝（`503`）；其他租户都按旧修订决策，直到编译结束或发布了改正的修订。除日志外的观察方式（[快照健康状况](./observability.md#snapshot-health)）：编译仍在运行期间，`cosecSnapshot` 的 `compileTimedOut` 和 `compileTimedOutFirst` 给出文档与修订（`["tenant:acme@8"]`）；`cosec.snapshot.compile.duration{result="failure"}` 为每个这样结束的加载计数，而 `cosec.snapshot.installed{state="invalid"}` 不变。
 
 ## 影子窗口在等待某个实例 {#shadow-window-waiting-for-an-instance}
 

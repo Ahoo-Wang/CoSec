@@ -331,6 +331,9 @@ plane published.
   turned off: a longer gap with Redis healthy means the instance's revalidation pass is failing; its log says why.
 - **The instance reads another namespace.** Every instance and the control plane must share
   [`cosec.key-prefix`](./configuration.md#key-prefix) and the Redis.
+- **The newer revision does not compile in time.** The instance read it, but its compilation outlasted the reload's
+  30 seconds: it logs `Compiling snapshot document [<doc>] revision <n> did not end within <budget>; ...` at `ERROR` and
+  keeps deciding on the revision it holds ([A compilation does not end](#a-compilation-does-not-end)).
 - **Redis lost the write.** After a failover the instance may log
   `Snapshot document [<doc>] regressed from revision <a> to <b>; ...` at `ERROR`: publish the change again.
   [`cosec-migrate verify-chain`](./upgrading.md#verify-the-revision-chains) names every document whose revision
@@ -525,6 +528,18 @@ keeps one compile thread until it ends; two such revisions at once hold both def
 document compiles until one ends: every load fails at its deadline, closed. A document the control plane validated compiles in well under a millisecond: look for a
 revision written to Redis outside the control plane, and publish a corrected revision, which compiles as any other
 ([Storage](./storage.md#how-instances-read-documents)).
+
+For a reload, this differs from a reload that cannot read Redis, which logs only `Reloading snapshot document [<doc>]
+failed; keeping revision <n>.`: here the instance read the newer revision and does not decide on it. Until its
+compilation ends, every revalidation pass meets that revision again, and the line repeats at `ERROR` each time; the
+instance keeps the revision it holds (`SNP-22`), which is no longer confirmed, so the lag lines and
+`cosec.snapshot.lagging` follow after 6 and 30 intervals as for an unreachable Redis. A tenant in
+[`fail-closed.tenants`](./configuration.md#snapshot) is refused (`503`) once that lag passes `fail-closed.max-lag`; every
+other tenant is decided on the old revision until the compilation ends or a corrected revision is published. Where to
+see it besides the log ([Snapshot health](./observability.md#snapshot-health)): `cosecSnapshot`'s `compileTimedOut` and
+`compileTimedOutFirst` name the document and the revision (`["tenant:acme@8"]`) while the compilation runs, and
+`cosec.snapshot.compile.duration{result="failure"}` counts each load that ended this way, while
+`cosec.snapshot.installed{state="invalid"}` does not move.
 
 ## Shadow window waiting for an instance
 

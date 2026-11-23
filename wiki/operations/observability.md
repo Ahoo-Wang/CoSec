@@ -274,7 +274,7 @@ there are 80 series whatever the number of documents. `kind` is `platform`, `app
 | Meter | Type | Tags | What it says |
 |---|---|---|---|
 | `cosec.snapshot.loads` | counter | `kind`, `result` | a request that had to load a document: `cold` (the request waited for its load), `failed` (the load failed, and the request is decided fail-closed), `timeout` (the load outlasted the cold-load timeout). A request that finds its documents installed is not counted: that is every request's path |
-| `cosec.snapshot.compile.duration` | timer | `kind`, `result` = `success`, `failure` | compiling a document; `failure` is a stored document that does not compile on this instance |
+| `cosec.snapshot.compile.duration` | timer | `kind`, `result` = `success`, `failure` | compiling a document; `failure` is a stored document that does not compile on this instance, or a compilation that did not end within its load's budget (recorded with the time the load had taken, again at each load that meets that revision still compiling, and once more, as it ends, when it ends) |
 | `cosec.snapshot.installs` | counter | `kind` | documents installed: a first load or a new revision |
 | `cosec.snapshot.installed` | gauge | `kind`, `state` | the entries held now, by state: `present`, `invalid` (does not compile here), `pending` (its inputs changed and it waits for its compile again), `undecodable`, `absent` (no document, none seen before), `lost` (a document seen before is gone), `unreadable`. The states add up to what the instance holds |
 | `cosec.snapshot.lag` | gauge, seconds | `kind` | the oldest confirmation by the store among the entries held, failed ones aside |
@@ -313,7 +313,10 @@ The meters above count; the health indicators and logs below answer whether an i
   every prewarmed document are installed, `DOWN` before, with the details `platform` (`installed`, `invalid` when it is
   stored and does not compile, `failed`, `absent` or `loading`), `prewarmed`, `missing`, and, when any document does
   not compile, `invalid`, how many do not, and `invalidFirst`, the first ten of them with their stored revisions,
-  the platform first and then by key (`["tenant:acme@7"]`), never the compiler's message. Readiness follows the same condition
+  the platform first and then by key (`["tenant:acme@7"]`), never the compiler's message. When the compilation of a
+  revision did not end within its load's budget and still runs, `compileTimedOut` counts them and `compileTimedOutFirst`
+  names the first ten in the same order and form: the instance decides on the revision it held before, and the status
+  does not change ([A compilation does not end](./troubleshooting.md#a-compilation-does-not-end)). Readiness follows the same condition
   ([Readiness](./deployment.md#readiness)).
 - **Eviction.** On Redis, the `cosecSnapshotEviction` health indicator is `DOWN` while Redis may evict the snapshot,
   with an `eviction` detail that says why. It reports what the instance read last: every node's `maxmemory-policy`,

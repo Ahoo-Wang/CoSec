@@ -137,9 +137,16 @@ class LocalRateLimiter(
             synchronized(window) {
                 // Removed by a sweep between the lookup and the lock: count into the bucket that replaces it.
                 if (!window.retired) {
-                    window.lastAccess = now
-                    window.windowMillis = rateLimit.windowMillis
-                    return acquire(window, rateLimit, now)
+                    // Read under the bucket's lock, so the requests of one bucket count in the order they hold it: a
+                    // time read before another request moved the window on would move it back (DR1-C-10).
+                    val counted = clock()
+                    window.lastAccess = maxOf(window.lastAccess, counted)
+                    if (window.windowMillis != rateLimit.windowMillis) {
+                        // The rule's window changed: counts of the old length say nothing of the new one.
+                        window.windowMillis = rateLimit.windowMillis
+                        window.index = Long.MIN_VALUE
+                    }
+                    return acquire(window, rateLimit, counted)
                 }
             }
         }
@@ -298,8 +305,12 @@ class LocalRateLimiter(
         }
     }
 
-    private fun acquire(window: Window, rateLimit: RateLimitSpec, nowMillis: Long): RateLimitResult {
+    private fun acquire(window: Window, rateLimit: RateLimitSpec, clockMillis: Long): RateLimitResult {
         val windowMillis = rateLimit.windowMillis
+        // A window never moves back (OBL-5, DR1-C-10): a clock behind the bucket's window, set back or read late, counts
+        // in that window, at its start, and never clears the counts a later request made.
+        val start = if (window.index == Long.MIN_VALUE) Long.MIN_VALUE else window.index * windowMillis
+        val nowMillis = maxOf(clockMillis, start)
         val index = nowMillis / windowMillis
         when (index) {
             window.index -> Unit
