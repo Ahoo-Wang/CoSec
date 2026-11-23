@@ -37,4 +37,13 @@ object ClientAddress {
         }
         return address
     }
+
+    /**
+     * The connection's peer as the server reported it: [XForwardedRemoteIpResolver.UNKNOWN] when it reported none
+     * (Reactor Netty on a Unix domain socket, for one). Every request has a peer, so one the server does not report
+     * could not be read, and `environment.ip` is unavailable, never absent: a DENY or the blacklist that reads it
+     * cannot be skipped by a request whose peer is unknown (`PIP-17`). Absent is for a check or a simulation that names
+     * no address, never for a request.
+     */
+    fun ofPeer(peer: String?): String = if (peer.isNullOrBlank()) XForwardedRemoteIpResolver.UNKNOWN else peer
 }

@@ -146,6 +146,8 @@ class WebAdapterParityTest {
         val pipeline: String = "default",
         val status: Int,
         val type: String?,
+        /** Whether the server reports the connection's peer: not over a Unix domain socket, for one (`PIP-17`). */
+        val peer: Boolean = true,
     ) {
         override fun toString(): String = name
     }
@@ -202,11 +204,15 @@ class WebAdapterParityTest {
             {"id":"no-debug","statements":[{"effect":"deny","action":"*","resource":"http:path:/public/**",
               "condition":{"eq":["http.header.X-Debug","1"]}}]},
             {"id":"geo","statements":[{"effect":"allow","action":"http:GET","resource":"http:path:/geo/**",
-              "condition":{"eq":["ext.geo.inFence",true]}}]}],
+              "condition":{"eq":["ext.geo.inFence",true]}}]},
+            {"id":"located","statements":[{"effect":"allow","action":"http:GET","resource":"http:path:/located/**"},
+              {"effect":"deny","action":"*","resource":"http:path:/located/**",
+               "condition":{"cidr":["environment.ip",["192.0.2.0/24"]]}}]}],
           "bindings":[{"id":"g:public","subject":"*","app":"*","space":"*","policy":"public"},
                       {"id":"g:no-delete","subject":"*","app":"*","space":"*","policy":"no-delete"},
                       {"id":"g:no-debug","subject":"*","app":"*","space":"*","policy":"no-debug"},
-                      {"id":"g:geo","subject":"*","app":"*","space":"*","policy":"geo"}],
+                      {"id":"g:geo","subject":"*","app":"*","space":"*","policy":"geo"},
+                      {"id":"g:located","subject":"*","app":"*","space":"*","policy":"located"}],
           "rateLimits":[{"id":"limited","action":"*","resource":"http:path:/public/limited/**","permitsPerSecond":10}]""",
     )
 
@@ -339,7 +345,7 @@ class WebAdapterParityTest {
         // Absolute, as Reactor Netty builds it from the request target: `//public` alone would be read as an authority.
         val uri = URI.create("http://localhost${scenario.path}")
         val request = MockServerHttpRequest.method(HttpMethod.valueOf(scenario.method), uri)
-            .remoteAddress(InetSocketAddress("127.0.0.1", 50000))
+        if (scenario.peer) request.remoteAddress(InetSocketAddress("127.0.0.1", 50000))
         scenario.headers.forEach { (name, value) -> request.header(name, value) }
         val exchange = MockServerWebExchange.from(request)
         var proceeded: SecurityContext? = null
@@ -381,7 +387,8 @@ class WebAdapterParityTest {
         val filter = filter ?: PipelineServletFilter(gates.getValue(scenario.pipeline), contributors, bodies = bodies)
         val request = MockHttpServletRequest(scenario.method, scenario.path.substringBefore('?'))
         request.queryString = scenario.path.substringAfter('?', "").ifEmpty { null }
-        request.remoteAddr = "127.0.0.1"
+        // A servlet container without a peer address answers none (empty, or null, which the resolver reads alike).
+        request.remoteAddr = if (scenario.peer) "127.0.0.1" else ""
         scenario.headers.forEach { (name, value) -> request.addHeader(name, value) }
         val response = MockHttpServletResponse()
         val chain = MockFilterChain()
@@ -555,6 +562,21 @@ class WebAdapterParityTest {
                 headers = mapOf("X-Debug" to "1"),
                 status = 401,
                 type = "unauthorized"
+            ),
+            // PIP-17, DR1-C-8: an address outside the blocked range is decided; a request whose server reports no peer
+            // (a Unix domain socket) has an address that could not be read, so the IP DENY is Indeterminate, never skipped.
+            Scenario(
+                "an address outside a blocked range is decided",
+                path = "/located/page",
+                status = 200,
+                type = null
+            ),
+            Scenario(
+                "a request without a peer address is unavailable to an IP DENY",
+                path = "/located/page",
+                status = 503,
+                type = "unavailable",
+                peer = false,
             ),
             Scenario(
                 "an exhausted rate limit is 429",
@@ -821,7 +843,8 @@ class WebAdapterParityTest {
                 headers,
                 scenario.pipeline,
                 scenario.status,
-                scenario.type
+                scenario.type,
+                scenario.peer,
             )
         events.clear()
         // REQUIRED delivery finishes before the response is written, so each adapter's event is here when it returns.

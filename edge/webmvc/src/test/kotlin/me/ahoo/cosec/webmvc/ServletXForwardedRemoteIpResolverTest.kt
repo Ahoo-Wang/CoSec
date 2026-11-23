@@ -15,9 +15,12 @@
 
 package me.ahoo.cosec.webmvc
 
+import jakarta.servlet.http.HttpServletRequestWrapper
 import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.runtime.http.XForwardedRemoteIpResolver
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
+import org.springframework.mock.web.MockHttpServletRequest
 
 class ServletXForwardedRemoteIpResolverTest {
 
@@ -26,5 +29,21 @@ class ServletXForwardedRemoteIpResolverTest {
         val xForwardedRemoteIpResolver = ServletXForwardedRemoteIpResolver()
         // The default trusts exactly one hop: the rightmost entry.
         xForwardedRemoteIpResolver.maxTrustedIndex.assert().isEqualTo(1)
+    }
+
+    /** PIP-17, DR1-C-8: a container that reports no peer gives an address that could not be read, never empty. */
+    @Test
+    fun aRequestWithoutAPeerReadsAsUnknown() {
+        val unreported = object : HttpServletRequestWrapper(MockHttpServletRequest("GET", "/orders")) {
+            override fun getRemoteAddr(): String? = null
+        }
+        val empty = MockHttpServletRequest("GET", "/orders").apply { remoteAddr = "" }
+        for (noPeer in listOf(unreported, empty)) {
+            ServletRemoteIpResolver.resolve(noPeer).assert().isEqualTo(XForwardedRemoteIpResolver.UNKNOWN)
+            ServletXForwardedRemoteIpResolver(0).resolve(noPeer).assert().isEqualTo(XForwardedRemoteIpResolver.UNKNOWN)
+            ServletXForwardedRemoteIpResolver(1).resolve(noPeer).assert().isEqualTo(XForwardedRemoteIpResolver.UNKNOWN)
+        }
+        val peer = MockHttpServletRequest("GET", "/orders").apply { remoteAddr = "192.0.2.1" }
+        ServletRemoteIpResolver.resolve(peer).assert().isEqualTo("192.0.2.1")
     }
 }
