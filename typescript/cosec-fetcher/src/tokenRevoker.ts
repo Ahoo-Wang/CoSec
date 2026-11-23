@@ -12,6 +12,7 @@
  */
 
 import type { Fetcher } from '@ahoo-wang/fetcher';
+import { pairOf } from './compositeToken.js';
 import { sessionRequestAttributes } from './sessionRequest.js';
 import {
   DEFAULT_REFRESH_TIMEOUT,
@@ -67,7 +68,7 @@ export class CoSecTokenRevoker implements TokenRevoker {
     await this.options.fetcher.post(
       this.options.endpoint,
       {
-        body: token,
+        body: pairOf(token),
         timeout: this.options.timeout ?? DEFAULT_REFRESH_TIMEOUT,
       },
       { attributes: sessionRequestAttributes(() => false) },

@@ -686,7 +686,7 @@
     {
       "id": "CTL-51",
       "source": "R2C-32 (review round 2, fourth pass); RFC 0007 §10.3",
-      "statement": "simulate and explain name a statement (its policy, index and name, and in the trace its effect and whether it matched) only to a caller who may read the document that defines its policy, whichever document the binding it applied through lives in: a tenant's binding to a platform policy or to an app's permission policy shows a tenant administrator neither the statement that decided nor any of that policy's statements in the trace, which are counted as redacted. A caller who may read the defining document is told them.",
+      "statement": "simulate and explain name a statement (its policy, index and name, and in the trace its effect and whether it matched) only to a caller who may read the document that defines its policy, whichever document the binding it applied through lives in: a tenant's binding to a platform policy or to an app's permission policy shows a tenant administrator neither the statement that decided nor any of that policy's statements in the trace, which are counted as redacted. A caller who may read the defining document is told them. analyze, likewise, lists only the bindings of the documents the caller may read (cosec:read), its own tenant's document included, and counts the others as hidden: cosec:analyze on a tenant asks who may do what there, it does not grant reading the bindings the answer lists (DR1-F-8).",
       "level": "control",
       "guards": [
         "control:DecisionQueriesTest#a tenant administrator does not see the statements of a platform policy their binding points to",

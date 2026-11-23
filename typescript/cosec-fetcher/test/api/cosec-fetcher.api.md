@@ -325,7 +325,6 @@ export class JwtCompositeToken implements EarlyPeriodCapable, RefreshTokenStatus
     readonly refresh: JwtToken<JwtPayload>;
     // (undocumented)
     readonly sessionId: string;
-    // (undocumented)
     readonly token: CompositeToken;
 }
 

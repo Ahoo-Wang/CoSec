@@ -35,7 +35,9 @@ it writes its login.
 
 A `CompositeToken` is written as `{"accessToken":"<jwt>","refreshToken":"<jwt>"}`, nothing else
 (`CompositeTokenJsonTest` keeps it byte for byte). An application that adds fields to its answer is not breaking
-CoSec, and a client must ignore the ones it does not know.
+CoSec, and a client must ignore the ones it does not know. A client sends back exactly the pair, never the answer as it
+came: the refresh and logout routes answer `400 invalid-request` to any other body. `cosec-fetcher` keeps only
+`accessToken` and `refreshToken` of what `signIn` is given.
 
 **What the served refresh route answers.** Every answer carries `Cache-Control: no-store`.
 
