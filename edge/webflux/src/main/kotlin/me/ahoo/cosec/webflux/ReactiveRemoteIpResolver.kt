@@ -16,6 +16,7 @@
 package me.ahoo.cosec.webflux
 
 import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.runtime.http.ClientAddress
 import me.ahoo.cosec.runtime.http.RemoteIpResolver
 import org.springframework.web.server.ServerWebExchange
 
@@ -23,9 +24,9 @@ import org.springframework.web.server.ServerWebExchange
 object ReactiveRemoteIpResolver : RemoteIpResolver<ServerWebExchange> {
     /**
      * Uses [java.net.InetSocketAddress.getHostString] rather than `getHostName`, which may trigger a
-     * blocking reverse DNS lookup on the event loop and return a host name instead of the IP.
+     * blocking reverse DNS lookup on the event loop and return a host name instead of the IP. A server that reports
+     * no peer (a Unix domain socket) gives `unknown`: the address could not be read (`PIP-17`, [ClientAddress.ofPeer]).
      */
-    override fun resolve(request: ServerWebExchange): String {
-        return request.request.remoteAddress?.hostString.orEmpty()
-    }
+    override fun resolve(request: ServerWebExchange): String =
+        ClientAddress.ofPeer(request.request.remoteAddress?.hostString)
 }

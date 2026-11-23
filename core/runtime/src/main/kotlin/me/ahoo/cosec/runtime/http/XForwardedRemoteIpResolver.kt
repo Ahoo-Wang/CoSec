@@ -26,6 +26,8 @@ import me.ahoo.cosec.annotations.InternalCoSecApi
  * - An entry, or the peer, is read as the address it writes: without a port (`192.0.2.1:8080`), brackets
  *   (`[2001:db8::1]:443`) or a zone (`fe80::1%en0`). One that is no address (`unknown`, an RFC 7239 obfuscated
  *   identifier) stays as written: `environment.ip` is then unavailable, and a statement that reads it errs (`PIP-17`).
+ * - A peer the server does not report (Reactor Netty on a Unix domain socket) is [UNKNOWN], never empty: every request
+ *   has one, so `environment.ip` is unavailable, and an IP DENY or the blacklist is not skipped ([ClientAddress.ofPeer]).
  * - [peerIsConnection] false: the host's own remote address is not the connection's peer but what the server took from
  *   a header a client writes (Reactor Netty's and Jetty's forwarded handling, `server.request.header.forwarded.strategy=web-server`).
  *   The address then comes from `X-Forwarded-For` alone, never from the host, and is [UNKNOWN] without the header.
@@ -60,7 +62,7 @@ abstract class XForwardedRemoteIpResolver<R>(
 
     private fun read(request: R): String {
         if (maxTrustedIndex == 0) {
-            return peer.resolve(request)
+            return peerOf(request)
         }
         // Several header lines are one list, in the order received (RFC 9110 §5.3): a proxy that adds its own line
         // appends as surely as one that extends the last. Reading the peer instead would let a client that sends a
@@ -120,7 +122,10 @@ abstract class XForwardedRemoteIpResolver<R>(
     }
 
     /** Without a usable header: the peer, or [UNKNOWN] when the host's address is not the peer's. */
-    private fun fallback(request: R): String = if (peerIsConnection) peer.resolve(request) else UNKNOWN
+    private fun fallback(request: R): String = if (peerIsConnection) peerOf(request) else UNKNOWN
+
+    /** The peer, or [UNKNOWN] when the server reported none ([ClientAddress.ofPeer]), whatever [peer] answers. */
+    private fun peerOf(request: R): String = ClientAddress.ofPeer(peer.resolve(request))
 
     abstract fun extractXForwardedHeaderValues(request: R): List<String>?
 }
