@@ -77,7 +77,7 @@ class ControlBoundaryTest {
     }
 
     /**
-     * AOT (RFC 0007 §10, PR-9): a native image needs a hint for each class read reflectively. The control plane needs
+     * AOT (RFC 0007 §13): a native image needs a hint for each class read reflectively. The control plane needs
      * none: it reads and writes JSON as Jackson trees with hand-written codecs, and loads nothing by name. This keeps it
      * so: a class bound with `readValue`, `treeToValue` or `convertValue`, a lookup by name or a `ServiceLoader` would
      * need a hint the starter does not register, and would fail only in a native image.
@@ -95,7 +95,7 @@ class ControlBoundaryTest {
             .orShould().callMethodWhere(target(owner(name("java.lang.Class"))).and(target(name("forName"))))
             .orShould().dependOnClassesThat().haveFullyQualifiedName("java.util.ServiceLoader")
             .orShould().dependOnClassesThat().resideInAPackage("kotlin.reflect.full..")
-            .because("the control plane needs no AOT hints (RFC 0007 §10)")
+            .because("the control plane needs no AOT hints (RFC 0007 §13)")
             .check(classes)
     }
 
@@ -106,7 +106,7 @@ class ControlBoundaryTest {
         private val CONTROL_MODULE: Class<*> = Class.forName("$CONTROL.ControlModule")
 
         /**
-         * CoCache (`me.ahoo.cache`) is not here: `ControlStore` adapters may use it (RFC 0007 PR-4). Its Redis backends
+         * CoCache (`me.ahoo.cache`) is not here: `ControlStore` adapters may use it (RFC 0007 §5.1). Its Redis backends
          * are in `cosec-cocache`, and the Redis clients themselves stay forbidden.
          */
         private val FORBIDDEN = arrayOf(
