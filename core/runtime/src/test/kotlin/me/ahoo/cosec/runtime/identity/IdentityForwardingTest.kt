@@ -396,7 +396,8 @@ class IdentityForwardingTest {
 
     @Test
     fun `a relayed caller whose attributes do not fit fails before anything is sent, naming them, never their values`() {
-        val long = evaluate(attributed(mapOf("note" to "x".repeat(IdentityCodec.MAX_CLAIM_LENGTH + 1))), issuer = relaying)
+        val long =
+            evaluate(attributed(mapOf("note" to "x".repeat(IdentityCodec.MAX_CLAIM_LENGTH + 1))), issuer = relaying)
         long.status.assert().isEqualTo(500)
         long.proceed.assert().isFalse()
         val many = (1..10).associate { "claim-$it" to "v".repeat(1_000) }
@@ -412,7 +413,10 @@ class IdentityForwardingTest {
 
     /** The security the pipeline makes for [authn], permitted. */
     private fun security(authn: AuthnResult): me.ahoo.cosec.runtime.http.RequestSecurity = runBlocking {
-        PipelineFixtures.pipeline(PipelineFixtures.authenticator(authn), PipelineFixtures.StubEngine(PipelineFixtures.PERMIT))
+        PipelineFixtures.pipeline(
+            PipelineFixtures.authenticator(authn),
+            PipelineFixtures.StubEngine(PipelineFixtures.PERMIT)
+        )
             .evaluate(facts(routed)).security!!
     }
 

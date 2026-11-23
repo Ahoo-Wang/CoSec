@@ -71,7 +71,9 @@ class IdentityIssuer(
             IdentityCodec.encode(identity, maxBytes)
         } catch (e: IdentityOverflowException) {
             // Which attributes make it too large, by name and size, never by value.
-            throw IdentityOverflowException("${e.message} The largest attributes: ${largest(identity.claims)}.")
+            throw IdentityOverflowException("${e.message} The largest attributes: ${largest(identity.claims)}.").apply {
+                initCause(e)
+            }
         }
     }
 

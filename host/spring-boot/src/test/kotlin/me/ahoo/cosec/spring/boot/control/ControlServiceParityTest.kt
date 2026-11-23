@@ -15,10 +15,6 @@
 
 package me.ahoo.cosec.spring.boot.control
 
-import java.net.URI
-import java.time.Duration
-import java.time.Instant
-import java.util.UUID
 import kotlinx.coroutines.runBlocking
 import me.ahoo.cocache.spring.boot.CoCacheAutoConfiguration
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
@@ -71,6 +67,10 @@ import org.springframework.boot.webflux.autoconfigure.WebFluxAutoConfiguration
 import org.springframework.context.ApplicationContext
 import tools.jackson.databind.JsonNode
 import tools.jackson.databind.node.ObjectNode
+import java.net.URI
+import java.time.Duration
+import java.time.Instant
+import java.util.UUID
 
 /**
  * `CTL-77`: the two implementations of `ControlService` answer alike. One host runs the control plane and its service port
@@ -335,8 +335,14 @@ class ControlServiceParityTest {
     private fun withAttributes(tenant: String, subject: String, attributes: Map<String, Any>): ControlCaller {
         val now = Instant.now()
         val token = VerifiedToken(
-            "t-$subject-$tenant", subject, tenant, "cosec-control", setOf("admin"),
-            attributes = attributes, issuedAt = now, expiresAt = now.plusSeconds(300),
+            "t-$subject-$tenant",
+            subject,
+            tenant,
+            "cosec-control",
+            setOf("admin"),
+            attributes = attributes,
+            issuedAt = now,
+            expiresAt = now.plusSeconds(300),
         )
         val verifier = object : TokenVerifier {
             override fun verify(accessToken: String): VerifiedToken = token
@@ -357,7 +363,8 @@ class ControlServiceParityTest {
             val port = context.getBean(ControlServiceListener::class.java).boundPort
             val http = HttpControlService(URI("http://127.0.0.1:$port/cosec/control/v1"))
             val deadline = System.nanoTime() + Duration.ofSeconds(10).toNanos()
-            while (runBlocking { answer { http.document(alice(REMOTE), SnapshotKey.Tenant(REMOTE)) } }.startsWith("200").not()) {
+            val ready = { runBlocking { answer { http.document(alice(REMOTE), SnapshotKey.Tenant(REMOTE)) } } }
+            while (!ready().startsWith("200")) {
                 check(System.nanoTime() < deadline) { "The platform document was not installed" }
                 Thread.sleep(20)
             }
@@ -367,7 +374,12 @@ class ControlServiceParityTest {
                 listOf(
                     // A boolean, read as "true"; a list, read as its text; and a caller with neither.
                     answer { service.check(withAttributes(tenant, "sam", mapOf("suspended" to true)), proposal) },
-                    answer { service.check(withAttributes(tenant, "gus", mapOf("groups" to listOf("ops", "night"))), proposal) },
+                    answer {
+                        service.check(
+                            withAttributes(tenant, "gus", mapOf("groups" to listOf("ops", "night"))),
+                            proposal
+                        )
+                    },
                     answer { service.check(withAttributes(tenant, "ann", mapOf("groups" to listOf("ops"))), proposal) },
                 ).map { it.replace(LOCAL, "<tenant>").replace(REMOTE, "<tenant>") }
             }
