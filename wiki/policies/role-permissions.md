@@ -357,7 +357,10 @@ its `x-cosec-action`. Its resource is `<service>/{<variable>}/...`, every variab
 is the document's `servers` path followed by the operation's, without the context path (`server.servlet.context-path`,
 `spring.webflux.base-path`), as CoSec decides requests: a server `https://api.example.com/api/v1` and a path
 `/orders/{id}` are the route `/api/v1/orders/{id}`. Servers with different paths, or a server path holding a server
-variable, fail generation: which one the host serves cannot be told. The app document is a catalog with one group per operation's first tag (`default` without one),
+variable, fail generation: which one the host serves cannot be told. Only servers you wrote count (an `OpenAPI` bean's,
+`@OpenAPIDefinition`'s or a customizer's): where none is written, springdoc puts a server of its own, `Generated server
+url`, into the document it caches, taken from the last request for the API docs (its URL, query string included), so
+generation leaves it out and the routes sit at the root of the application, whoever fetched the docs last. The app document is a catalog with one group per operation's first tag (`default` without one),
 and one [short-form permission](#short-form-permissions) per action, `<verb>`, allowing that action on any resource
 (the policy `perm:<service>/<verb>`); no policy is written by hand. It has no roles and no bindings: add them, review
 the document, and publish it as above. The groups are not `spaced`, so a permission applies in the default space only:

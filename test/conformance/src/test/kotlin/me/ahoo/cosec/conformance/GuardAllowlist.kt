@@ -336,6 +336,9 @@ object GuardAllowlist {
             "openapi:OpenAPIServiceGeneratorTest#servers whose path cannot be told fail generation",
             "openapi:OpenAPIServiceGeneratorTest#a path with several variables names all of them in its resource, in order",
             "spring-boot:CoSecServiceGeneratorEndpointTest#the routes sit at the servers path within the application",
+            // RTE-4, DR1-C-2: a server springdoc generated from a request for the API docs never places a route.
+            "spring-boot:CoSecServiceGeneratorEndpointTest#a request for the API docs does not move the routes",
+            "spring-boot:CoSecServiceGeneratorEndpointTest#a request for the API docs leaves the servers an operator wrote",
             "ip2region:GeoBlockDecisionTest#a geo block is not stepped around over IPv6",
             "ip2region:GeoBlockDecisionTest#onMissing nomatch lets an unlocatable address through",
             "ip2region:Ip2RegionAttributeProviderTest#anAddressNoDatabaseCoversIsUnavailable",
