@@ -1,0 +1,183 @@
+{
+  "rules": [
+    "CTL-49"
+  ],
+  "polarity": "negative",
+  "level": "control",
+  "description": "DR1-E-1: the same change with room for its 4 fragments is split and analysed as usual; gina holds order:* on order/** in team-a, so each is contained and nothing is too large.",
+  "documents": {
+    "platform": {
+      "policies": [
+        {
+          "id": "cosec:tenant-admin",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": [
+                "cosec:read",
+                "cosec:write",
+                "cosec:grant",
+                "cosec:publish",
+                "cosec:simulate",
+                "cosec:explain",
+                "cosec:analyze",
+                "cosec:shadow-read"
+              ],
+              "resource": [
+                "doc/tenant/{t}/**",
+                "scope/{t}/**"
+              ],
+              "condition": {
+                "eq": [
+                  "resource.var.t",
+                  {
+                    "attr": "subject.tenant"
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    "tenants": {
+      "acme": {
+        "policies": [
+          {
+            "id": "orders",
+            "statements": [
+              {
+                "effect": "allow",
+                "action": "order:*",
+                "resource": "order/**"
+              }
+            ]
+          }
+        ],
+        "bindings": [
+          {
+            "id": "admin",
+            "subject": {
+              "role": "admin"
+            },
+            "app": "cosec-control",
+            "space": "",
+            "policy": "cosec:tenant-admin"
+          },
+          {
+            "id": "ops",
+            "subject": {
+              "role": "ops"
+            },
+            "app": "*",
+            "space": "*",
+            "policy": "orders"
+          }
+        ]
+      }
+    }
+  },
+  "grantor": {
+    "tenant": "acme",
+    "id": "gina",
+    "roles": [
+      "admin",
+      "ops@team-a"
+    ]
+  },
+  "candidate": {
+    "tenant": "acme",
+    "document": {
+      "policies": [
+        {
+          "id": "orders",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "order:*",
+              "resource": "order/**"
+            }
+          ]
+        },
+        {
+          "id": "viewer",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": [
+                "order:read",
+                "order:list"
+              ],
+              "resource": [
+                "order/{id}",
+                "order/archive"
+              ]
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "admin",
+          "subject": {
+            "role": "admin"
+          },
+          "app": "cosec-control",
+          "space": "",
+          "policy": "cosec:tenant-admin"
+        },
+        {
+          "id": "ops",
+          "subject": {
+            "role": "ops"
+          },
+          "app": "*",
+          "space": "*",
+          "policy": "orders"
+        },
+        {
+          "id": "viewer",
+          "subject": {
+            "role": "viewer"
+          },
+          "app": "order",
+          "space": "team-a",
+          "policy": "viewer"
+        }
+      ]
+    }
+  },
+  "maxFragments": 4,
+  "expect": {
+    "fragments": [
+      {
+        "policy": "viewer",
+        "statement": 0,
+        "action": "order:read",
+        "resource": "order/{id}",
+        "verdict": "YES"
+      },
+      {
+        "policy": "viewer",
+        "statement": 0,
+        "action": "order:read",
+        "resource": "order/archive",
+        "verdict": "YES"
+      },
+      {
+        "policy": "viewer",
+        "statement": 0,
+        "action": "order:list",
+        "resource": "order/{id}",
+        "verdict": "YES"
+      },
+      {
+        "policy": "viewer",
+        "statement": 0,
+        "action": "order:list",
+        "resource": "order/archive",
+        "verdict": "YES"
+      }
+    ]
+  }
+}

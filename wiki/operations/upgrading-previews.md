@@ -30,6 +30,13 @@ Which preview of the library may run behind which preview of the gateway image: 
 
 ## From 8.0.0-beta.7 {#from-8-0-0-beta-7}
 
+- **A change too large to analyse is one `TOO_LARGE` entry** (`CTL-49`, DR1-E-1). Affected: a tenant change whose
+  granted ALLOWs come to more than 80,000 fragments (each action times each resource, for each binding that reaches
+  them), and what reads a change's escalations. Such a change is counted before it is split: none of it is analysed,
+  and it waits for approval with the one entry `change of tenant:<t>`. Before, it was split whole, one escalation each,
+  and one statement of a thousand actions and a thousand resources could exhaust the control plane's heap. The grants an
+  analysis reaches past its four million comparisons are one entry too, `<n> fragments of tenant:<t>`, where each was
+  its own. An approval of such a change in beta.7 does not cover the new entry: approve it again.
 - **A service calling the control plane as its own principal is recorded as `service`** (`ControlCaller.service`,
   `IDN-34`). Affected: what reads the records of control requests, and the order you upgrade in.
   - **Records.** The identity such a service states names its credential `service`, where beta.7 named it `api-key`.

@@ -625,7 +625,9 @@ a document change: use the blacklist's `BlacklistSource`, which waits for no slo
 
 When a tenant change waits for approval with `TOO_LARGE`, the grant analysis spent its four million comparisons
 before it reached those grants (`CTL-49`): split the change; what counts is what it adds or rewrites, times what its
-author holds.
+author holds. One entry `change of tenant:<t>` means it grants more than 80,000 fragments (actions × resources × bindings
+of its granted ALLOWs), and none was analysed: spread the statement's actions or resources, or its bindings, over
+several changes.
 
 When every tenant grant over every app (a binding with app `*`, an attachment, also one whose condition narrows it to
 apps the change does not name) waits for approval as `UNREADABLE`
