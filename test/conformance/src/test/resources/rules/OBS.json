@@ -97,7 +97,7 @@
     },
     {
       "id": "OBS-8",
-      "source": "Design D2 (saas-shadow-staged-design.md §4, §9 decisions 2 and 3, condition 3); RFC 0006 §9.3",
+      "source": "RFC 0007 §6.4; RFC 0006 §9.3 (design D2: saas-shadow-staged-design.md §4, §9 decisions 2 and 3, condition 3)",
       "statement": "A BEST_EFFORT listener that reads only the events it sampled (the shadow listener) is offered only the events whose replay names it, and when every BEST_EFFORT listener is one and none samples a request, no decision event is made for that request. A REQUIRED listener, and every other BEST_EFFORT listener, receives every event whatever those sample. With cosec-micrometer and a MeterRegistry, `cosec.shadow.staged.age` is the time since this instance's store last answered its read of the staged list (NaN before the first answer), which keeps rising while the list cannot be read.",
       "level": "pipeline",
       "pending": null,
