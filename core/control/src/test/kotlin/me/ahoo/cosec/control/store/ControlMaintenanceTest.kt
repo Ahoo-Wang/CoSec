@@ -442,14 +442,24 @@ class ControlMaintenanceTest {
                 return store.openChanges(document)
             }
         }
-        val maintenance = ControlMaintenance(counting, Revisions(counting, clock, revisions.retention), changes, Duration.ofMinutes(1))
+        val maintenance =
+            ControlMaintenance(
+                counting,
+                Revisions(counting, clock, revisions.retention),
+                changes,
+                Duration.ofMinutes(1)
+            )
         published()
         published()
         changes.propose(ALICE_OP, ACME, 2, listOf(Operation.PutPolicy(allow("read"))), "open")
         published()
         clock.now = clock.now.plus(Duration.ofDays(1))
         // Another instance runs this pass.
-        store.acquireLease(ControlMaintenance.RECLAIM_LEASE, "another instance", Duration.ofMinutes(5)).assert().isTrue()
+        store.acquireLease(
+            ControlMaintenance.RECLAIM_LEASE,
+            "another instance",
+            Duration.ofMinutes(5)
+        ).assert().isTrue()
         maintenance.reclaim().assert().isEmpty()
         reads.get().assert().isEqualTo(0)
         store.releaseLease(ControlMaintenance.RECLAIM_LEASE, "another instance")

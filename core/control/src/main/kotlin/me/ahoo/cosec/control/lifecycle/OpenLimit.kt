@@ -15,6 +15,7 @@
 
 package me.ahoo.cosec.control.lifecycle
 
+import io.github.oshai.kotlinlogging.KotlinLogging
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.control.audit.ChangeEvent
 import me.ahoo.cosec.control.authz.Operator
@@ -26,6 +27,8 @@ import me.ahoo.cosec.control.store.ControlStore
 import me.ahoo.cosec.control.store.ListedChange
 import me.ahoo.cosec.document.ProvenanceKind
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
+
+private val log = KotlinLogging.logger {}
 
 /**
  * How many open changes a document holds (`CTL-83`, DR1-E-2): at most [maxOpen], the revisions the operator keeps
@@ -48,10 +51,11 @@ internal class OpenLimit(
         val listed = store.openChanges(key)
         // A change that does not read still counts: it may be open, and it may pin a revision.
         val unreadable = listed.count { it is ListedChange.Unreadable }
-        val open = listed.filterIsInstance<ListedChange.Readable>().map { flow.current(it.change) }.filterNot { it.state.terminal }
+        val open = listed.filterIsInstance<ListedChange.Readable>()
+            .map { flow.current(it.change) }
+            .filterNot { it.state.terminal }
         if (open.size + unreadable < maxOpen) return
-        val failed = open.filter { it.author == author.actor && it.state == ChangeState.DRAFT && it.kind == ProvenanceKind.PUBLISH }
-            .minByOrNull { it.createdAt }
+        val failed = open.filter { failedDraftOf(it, author) }.minByOrNull { it.createdAt }
         if (failed != null && abandoned(failed, author) && open.size + unreadable - 1 < maxOpen) return
         val oldest = open.filterNot { it.id == failed?.id }.minByOrNull { it.createdAt } ?: failed
             ?: throw ChangeRejectedException.conflict(ConflictKind.OPEN_LIMIT, "[$key] holds $maxOpen open changes that do not read")
@@ -62,15 +66,22 @@ internal class OpenLimit(
         )
     }
 
-    /** Abandons [draft] for room, as its own author; false when another write moved it first. */
+    /** Whether [change] is [author]'s own ordinary change whose checks failed: a draft, which cannot be edited. */
+    private fun failedDraftOf(change: ChangeRequest, author: Operator): Boolean =
+        change.author == author.actor && change.state == ChangeState.DRAFT && change.kind == ProvenanceKind.PUBLISH
+
+    /** Abandons [draft] for room, as its own author; false when another write moved it first, or the store refused. */
     private suspend fun abandoned(draft: ChangeRequest, author: Operator): Boolean = try {
         val change = flow.transition(draft.id, ChangeStep.ABANDON) { it.copy(state = ChangeState.ABANDONED) }
         flow.audit(ChangeEvent.Kind.ABANDONED, change.abandonedForRoom(), author.actor, origin = author.origin)
         true
     } catch (e: ChangeRejectedException) {
+        log.warn(e) { "Change [${draft.id.value}] could not be abandoned for room; the new change is refused instead." }
         false
     }
 }
 
 /** This change as an abandon for room records it (`CTL-83`): the note says why, and names its author. */
-internal fun ChangeRequest.abandonedForRoom(): ChangeRequest = abandoned().copy(note = "abandoned for room (CTL-83); ${abandoned().note}")
+internal fun ChangeRequest.abandonedForRoom(): ChangeRequest = abandoned().copy(
+    note = "abandoned for room (CTL-83); ${abandoned().note}"
+)

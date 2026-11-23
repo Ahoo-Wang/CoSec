@@ -99,13 +99,16 @@ class ControlMaintenance(
         }
         // One instance a pass reads the open changes and reclaims, under the pass's lease (CTL-72, DR1-E-2): the others
         // read none, where every instance read every document's open changes each hour.
-        if (attempt("take the reclaim lease") { store.acquireLease(RECLAIM_LEASE, holder, ControlDerived.RECLAIM_INTERVAL) } != true) {
-            return emptyMap()
+        val leased = attempt("take the reclaim lease") {
+            store.acquireLease(RECLAIM_LEASE, holder, ControlDerived.RECLAIM_INTERVAL)
         }
+        if (leased != true) return emptyMap()
         try {
             return reclaimLeased(documents)
         } finally {
-            withContext(NonCancellable) { attempt("release the reclaim lease") { store.releaseLease(RECLAIM_LEASE, holder) } }
+            withContext(
+                NonCancellable
+            ) { attempt("release the reclaim lease") { store.releaseLease(RECLAIM_LEASE, holder) } }
         }
     }
 

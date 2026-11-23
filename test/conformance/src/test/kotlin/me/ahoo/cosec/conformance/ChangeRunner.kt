@@ -15,8 +15,6 @@
 
 package me.ahoo.cosec.conformance
 
-import java.time.Duration
-import java.time.Instant
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
@@ -109,6 +107,8 @@ import me.ahoo.cosec.testkit.text
 import tools.jackson.databind.JsonNode
 import tools.jackson.databind.node.JsonNodeFactory
 import tools.jackson.databind.node.ObjectNode
+import java.time.Duration
+import java.time.Instant
 
 /**
  * The `control` runner for the change flow (RFC 0007 §6.1–§6.3, §7.2–§7.5): steps over an in-memory control plane,
