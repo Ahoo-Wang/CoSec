@@ -48,7 +48,11 @@ internal object ControlChangeInputs {
 
     /** A simulator that compiles as enforcement does, over the host's one document cache (S5, DR1-F-5). */
     fun simulator(attributes: AttributeProviders, environment: Environment, documentCache: DocumentCache): Simulator =
-        Simulator(attributes = attributes.catalog, credentialHeaders = credentialHeaders(environment), cache = documentCache)
+        Simulator(
+            attributes = attributes.catalog,
+            credentialHeaders = credentialHeaders(environment),
+            cache = documentCache
+        )
 
     /** UC-6: a change that would keep its operator out of the control plane needs an acknowledgement. */
     fun lockout(
