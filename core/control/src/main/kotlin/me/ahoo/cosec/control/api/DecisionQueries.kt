@@ -48,7 +48,7 @@ internal class DecisionQueries(
         val keys = simulator.keys(scope, tenantHead?.document)
         val heads = keys.associateWith { if (it == tenant) tenantHead else retained.held(it) }
         val enforcedDocuments = documents(heads)
-        val enforced = simulator.decide(simulated, scope, enforcedDocuments)
+        val enforced = simulator.decideBounded(simulated, scope, enforcedDocuments)
         var proposedDocuments: HeldDocuments? = null
         val proposed = candidate?.let { id ->
             val change = changes.visible(operator, id)
@@ -65,7 +65,7 @@ internal class DecisionQueries(
             val fetched = if (change.key == tenant) simulator.keys(scope, document) else keys
             // The candidate is no stored content: compiled once, here; the heads come from the cache.
             val proposedHeads = fetched.associateWith { heads[it] ?: retained.held(it) } + (change.key to Held(document, null))
-            documents(proposedHeads).also { proposedDocuments = it }.let { simulator.decide(simulated, scope, it) }
+            documents(proposedHeads).also { proposedDocuments = it }.let { simulator.decideBounded(simulated, scope, it) }
         }
         val redaction = redaction(operator, (enforced.read + proposed?.read.orEmpty()).distinct())
         val enforcedHomes = PolicyHomes(enforcedDocuments)
@@ -105,7 +105,7 @@ internal class DecisionQueries(
         val documents = keys.associateWith { if (it == tenant) tenantDocument else documentAt(it) }
         // The revisions the view read (R2-5): an app's only when it took the app's document.
         val decidedDocuments = documents(documents)
-        val decided = simulator.decide(explained, scope, decidedDocuments)
+        val decided = simulator.decideBounded(explained, scope, decidedDocuments)
         val redaction = redaction(operator, decided.read)
         val homes = PolicyHomes(decidedDocuments)
         return Explanation(

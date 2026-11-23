@@ -15,6 +15,9 @@
 
 package me.ahoo.cosec.control.api
 
+import java.util.concurrent.atomic.AtomicLong
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.control.change.ChangeRejectedException
@@ -49,7 +52,6 @@ import me.ahoo.cosec.runtime.snapshot.MissingPlatformException
 import me.ahoo.cosec.runtime.snapshot.ViewDocuments
 import me.ahoo.cosec.spi.membership.MembershipClaims
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
-import java.util.concurrent.atomic.AtomicLong
 
 /**
  * The control plane's decisions (RFC 0007 §10.3, Q22, CTL-3): the enforcing flow's parts, not a second evaluator. The
@@ -71,6 +73,9 @@ class Simulator(
 
     /** Every compilation this simulator made, cached or not; for tests. */
     internal val compilations = AtomicLong()
+
+    /** The decisions that compile a document for the call alone, at most [DocumentCache.uncachedCompiles] at once. */
+    private val uncached = Semaphore(cache.uncachedCompiles)
 
     /**
      * The scope [request] resolves to, or the rejection that decides it, as the pipeline resolves a request. [request]'s
@@ -150,6 +155,26 @@ class Simulator(
      */
     internal fun decide(request: EngineRequest, documents: HeldDocuments): Evaluation =
         engine.evaluate(request, view(request.scope, documents), TraceLevel.FULL)
+
+    /**
+     * [decide], holding a permit of [uncached] while it compiles a document the cache does not hold (DR1-F-4): a
+     * candidate, a document too heavy to admit, or any with a platform it does not hold. Each such compile holds about
+     * twelve times what it compiles, and every caller of the control API may ask for one.
+     */
+    internal suspend fun decideBounded(request: SimulatedRequest, scope: Scope, documents: HeldDocuments): Decided =
+        if (compilesForTheCall(documents)) {
+            uncached.withPermit { decide(request, scope, documents) }
+        } else {
+            decide(request, scope, documents)
+        }
+
+    /** [decide] of an engine request, bounded as [decideBounded]. */
+    internal suspend fun decideBounded(request: EngineRequest, documents: HeldDocuments): Evaluation =
+        if (compilesForTheCall(documents)) uncached.withPermit { decide(request, documents) } else decide(request, documents)
+
+    /** Whether deciding on [documents] compiles one of them for the call alone, which the cache will not keep. */
+    internal fun compilesForTheCall(documents: HeldDocuments): Boolean =
+        listOfNotNull(documents.platform, documents.app, documents.tenant).any { !cache.holds(it.entry) }
 
     /** An evaluation, and the documents its view read with their revisions. */
     internal class Decided(val evaluation: Evaluation, scope: Scope, version: ViewVersion) {

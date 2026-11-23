@@ -99,7 +99,7 @@ class ControlLockout(
             heads.entries.firstOrNull { it.key is SnapshotKey.App }?.value,
             heads.entries.firstOrNull { it.key is SnapshotKey.Tenant }?.value,
         )
-        return when (val decision = simulator.decide(request, documents).decision) {
+        return when (val decision = simulator.decideBounded(request, documents).decision) {
             is Decision.Permit -> null
             else -> LockoutCheck.Lockout("$what would be ${describe(decision)}")
         }

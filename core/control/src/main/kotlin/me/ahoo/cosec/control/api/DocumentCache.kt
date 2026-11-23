@@ -15,6 +15,7 @@
 
 package me.ahoo.cosec.control.api
 
+import me.ahoo.cosec.control.lifecycle.ChangeOptions
 import me.ahoo.cosec.document.PolicyDefinition
 import me.ahoo.cosec.document.PolicyDocument
 import me.ahoo.cosec.document.RoleExpansion
@@ -64,12 +65,14 @@ internal class DocumentCache(
         val digest: SnapshotDigest,
         val document: PolicyDocument,
         val size: Int,
+        /** What it weighs as stored bytes ([weighedBytes]), worked out before the cache's lock is taken. */
+        private val weighed: Long = weighedBytes(size, document),
     ) {
         /** Its compiled forms by the platform document's digest they compiled with, at most [VARIANTS]. */
         private val compiled = LinkedHashMap<SnapshotDigest?, Lazy<Result<CompiledDocument>>>()
 
         /** What it is counted for in [heap], while it is held: guarded by the cache's lock. */
-        internal var weight: Long = weighedBytes(size, document) * DECODED_FACTOR
+        internal var weight: Long = weighed * DECODED_FACTOR
 
         /** What is enforced: the roles and short forms of [document], expanded, for `analyze` as for the engine. */
         val effective: PolicyDocument by lazy(LazyThreadSafetyMode.PUBLICATION) { RoleExpansion.effective(document) }
@@ -82,7 +85,7 @@ internal class DocumentCache(
         fun compiled(platform: SnapshotDigest?, compile: () -> CompiledDocument): Result<CompiledDocument> {
             val (compilation, added) = synchronized(compiled) { formFor(platform, compile) }
             if (added) {
-                weigh(this, weighedBytes(size, document) * COMPILED_FACTOR)
+                weigh(this, weighed * COMPILED_FACTOR)
             }
             return compilation.value
         }
@@ -171,17 +174,37 @@ internal class DocumentCache(
         digest: SnapshotDigest,
         size: Int,
         document: PolicyDocument
-    ): Entry = synchronized(entries) {
-        entries[Key(key, digest)]?.let { return it }
-        val entry = Entry(key, digest, document, size)
-        if (!admits(weighedBytes(size, document))) {
+    ): Entry {
+        // Weighed before the lock (DR1-F-4): what a document's roles derive can take long to count, and every reader of
+        // the cache waits on its lock.
+        val weighed = weighedBytes(size, document)
+        return synchronized(entries) { held(Key(key, digest), document, size, weighed) }
+    }
+
+    /** The entry held under [key], or a new one, under the cache's lock. */
+    private fun held(key: Key, document: PolicyDocument, size: Int, weighed: Long): Entry {
+        entries[key]?.let { return it }
+        val entry = Entry(key.key, key.digest, document, size, weighed)
+        if (!admits(weighed)) {
             return entry
         }
-        entries[Key(key, digest)] = entry
+        entries[key] = entry
         heap += entry.weight
         evict()
-        entry
+        return entry
     }
+
+    /** Whether [entry] is the one held for its key: compiling with any other compiles for the call alone. */
+    fun holds(entry: Entry?): Boolean =
+        entry != null && synchronized(entries) { entries[Key(entry.key, entry.digest)] === entry }
+
+    /**
+     * How many compiles that the cache does not hold (a candidate, a document too heavy to admit) may run at once
+     * (DR1-F-4): as many as [maxHeap] holds of the largest document, decoded and compiled, at least one. Such a compile
+     * holds about twelve times the stored size of what it compiles, and nothing else bounds how many run.
+     */
+    val uncachedCompiles: Int
+        get() = (maxHeap / (MAX_DOCUMENT_BYTES * (DECODED_FACTOR + COMPILED_FACTOR))).coerceIn(1, Int.MAX_VALUE.toLong()).toInt()
 
     /** Whether a document of [size] stored bytes, decoded and compiled once, weighs at most half the bound. */
     fun admits(size: Long): Boolean = size * (DECODED_FACTOR + COMPILED_FACTOR) <= maxHeap / 2
@@ -226,6 +249,9 @@ internal class DocumentCache(
 
         /** A compiled form's heap per stored byte of its document, at most about 7.5 as measured. */
         const val COMPILED_FACTOR: Int = 8
+
+        /** The largest document a store holds, stored (the document cap). */
+        private const val MAX_DOCUMENT_BYTES: Long = ChangeOptions.DEFAULT_MAX_DOCUMENT_BYTES.toLong()
 
         /** What one derived binding would take stored, written out. */
         const val DERIVED_BINDING_BYTES: Long = 160
