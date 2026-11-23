@@ -22,6 +22,7 @@ import me.ahoo.cosec.document.json.CoSecJson
 import me.ahoo.cosec.document.route.RouteMapCodec
 import me.ahoo.cosec.openapi.generator.OpenAPIServiceGenerator
 import org.springdoc.api.AbstractOpenApiResource
+import org.springdoc.core.utils.Constants
 import org.springframework.beans.factory.ObjectProvider
 import org.springframework.boot.actuate.endpoint.annotation.Endpoint
 import org.springframework.boot.actuate.endpoint.annotation.ReadOperation
@@ -56,10 +57,17 @@ internal class CoSecServiceGeneratorEndpoint(
     }
 
     /**
-     * The document `/v3/api-docs` serves. An `OpenAPI` bean is not it: springdoc clones that one and adds the paths to
-     * the clone, so the bean never has any.
+     * The document `/v3/api-docs` serves, without a server springdoc generated. An `OpenAPI` bean is not it: springdoc
+     * clones that one and adds the paths to the clone, so the bean never has any.
+     *
+     * Where no server is configured, springdoc writes one into the document it caches from each request for the API
+     * docs: that request's URL (on WebFlux with its query string still on it) and forwarded headers, which any client
+     * that reaches the docs chooses (DR1-C-2). The routes sit at the path of the servers an operator wrote (`RTE-4`),
+     * so a generated one is left out, and the routes sit at the root of the application.
      */
-    private fun scanned(): OpenAPI {
+    private fun scanned(): OpenAPI = withoutGeneratedServers(cached())
+
+    private fun cached(): OpenAPI {
         val resource = checkNotNull(springDoc.getIfUnique()) {
             "springdoc serves no single OpenAPI document here (springdoc.api-docs.enabled=false, or GroupedOpenApi beans): " +
                 "$ID has nothing to read."
@@ -69,6 +77,31 @@ internal class CoSecServiceGeneratorEndpoint(
         val openAPI = ReflectionUtils.invokeMethod(scan, resource, Locale.getDefault()) as OpenAPI
         check(!openAPI.paths.isNullOrEmpty()) { "springdoc scanned no operations: $ID has nothing to generate from." }
         return openAPI
+    }
+
+    /**
+     * [openAPI] as a copy without the servers springdoc generated, or itself when it has none; springdoc's cached
+     * document is never changed, since its next request for the API docs reads it.
+     */
+    private fun withoutGeneratedServers(openAPI: OpenAPI): OpenAPI {
+        val servers = openAPI.servers ?: return openAPI
+        val written = servers.filterNot { it.description == Constants.DEFAULT_SERVER_DESCRIPTION }
+        if (written.size == servers.size) {
+            return openAPI
+        }
+        return OpenAPI(openAPI.specVersion).also {
+            it.openapi = openAPI.openapi
+            it.info = openAPI.info
+            it.externalDocs = openAPI.externalDocs
+            it.servers = written.ifEmpty { null }
+            it.security = openAPI.security
+            it.tags = openAPI.tags
+            it.paths = openAPI.paths
+            it.components = openAPI.components
+            it.extensions = openAPI.extensions
+            it.jsonSchemaDialect = openAPI.jsonSchemaDialect
+            it.webhooks = openAPI.webhooks
+        }
     }
 
     /** What springdoc writes into its server URL but the host does not authorize (round 2 L4). */
