@@ -3,13 +3,13 @@
 # Tests: :engine:test --tests me.ahoo.cosec.engine.RateLimitObligationTest :cocache:test --tests me.ahoo.cosec.cocache.UnpairedSurrogateKeyTest
 
 diff --git a/core/engine/src/main/kotlin/me/ahoo/cosec/engine/CompiledRateLimit.kt b/core/engine/src/main/kotlin/me/ahoo/cosec/engine/CompiledRateLimit.kt
-index d9ce0047..0d81e0a6 100644
+index 57818df36..fcdcb1e2e 100644
 --- a/core/engine/src/main/kotlin/me/ahoo/cosec/engine/CompiledRateLimit.kt
 +++ b/core/engine/src/main/kotlin/me/ahoo/cosec/engine/CompiledRateLimit.kt
-@@ -64,7 +64,7 @@ class CompiledRateLimit internal constructor(
-          * escape: well formed, and its own.
-          */
-         fun keyedBucket(value: String): String {
+@@ -89,7 +89,7 @@ class CompiledRateLimit internal constructor(
+ 
+         /** [value]'s bucket as written: [KEYED_BUCKET_PREFIX] and the value, or escaped when it is not well formed. */
+         private fun writtenBucket(value: String): String {
 -            if (Identifiers.isWellFormed(value)) {
 +            if (value.isNotEmpty() || value.isEmpty()) {
                  return KEYED_BUCKET_PREFIX + value

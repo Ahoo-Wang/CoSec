@@ -101,7 +101,12 @@ rule's condition holds ([path variables](./language.md#path-variables)).
 A value is its bucket as it is, `k:<value>`, which every limiter writes as UTF-8. A value with an unpaired UTF-16
 surrogate (a JSON escape such as `"\uD800"` in a token attribute) has no UTF-8 encoding: its bucket is `e:<value>`
 with each unpaired surrogate as its `\uXXXX` escape and each `\` doubled, so it never counts in the bucket of the
-value with `?` in its place (`IDN-10`). A limiter of your own gets only buckets that are well-formed text.
+value with `?` in its place (`IDN-10`). A value that, so written, is longer than 256 characters (the longest path
+segment) is named by its hash instead: its bucket is `h:` and the SHA-256 of `k:<value>` or `e:<value>`, in hex, 66
+characters whatever the value's length. The same value is always the same bucket, and two values are two buckets
+however much of them they share; a client that chooses the value (a header the key reads) chooses how many buckets it
+makes, never how long each one is, in the local limiter's memory or in Redis. A limiter of your own gets only buckets
+that are well-formed text of at most 258 characters.
 
 Rules of different documents never share buckets: a rule counts under its document and its id, `platform/<id>`,
 `app:<appId>/<id>` or `tenant:<tenantId>/<id>`
@@ -151,7 +156,8 @@ line `Rate limiter unavailable: rule [<id>] ...` then carries
 `The local rate limiter holds its maximum of buckets (rule [<id>]: <n> of <max>, its document: <n> of <max>, all: <n> of <max>).`,
 and `cosec.ratelimit.local.refused` counts each bucket refused, by the kind of document whose rule asked
 ([Observability](../operations/observability.md#metrics)). Buckets that already exist keep
-counting.
+counting. A bucket holds at most about 1 KB, however long the key a client sent, since its name is at most 258
+characters ([Keys](#keys)): one document's share at most about 25 MB, the whole limiter at most about 100 MB.
 
 A rule whose `key` reads something a client can vary fills only its own share, and the rules of one tenant or one app
 only their document's: two such rules of one tenant hold at most a quarter of the buckets, and the other documents'

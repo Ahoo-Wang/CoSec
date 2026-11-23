@@ -78,6 +78,13 @@ Which preview of the library may run behind which preview of the gateway image: 
   and the blacklist, answer `503`, alike behind the three adapters. Put a proxy that writes `X-Forwarded-For` in front
   of such a host and set the index to `1` or more ([Web integration](../integration/web.md)); a host whose server
   reports its peers is unchanged.
+- **A rate limit key value longer than 256 characters names its bucket by its hash** (`OBL-6`, DR1-C-1). Affected:
+  rules whose `key` reads values that long, nearly always a header a client chooses. Such a bucket is now
+  `h:<sha-256>` where it was `k:<value>` ([Rate limiting](../policies/rate-limiting.md#keys)), so its count starts
+  again once: on Redis the old key is no longer read and expires after two windows; the local limiter's counts are the
+  instance's anyway. While a rolling upgrade has both versions serving, such a value counts in two buckets, one per
+  version, so it gets at most twice its limit until the last instance is upgraded. Values of 256 characters or fewer
+  keep their buckets and counts. Nothing to change.
 - **The generated route map no longer depends on who fetched the API docs last** (`RTE-4`, DR1-C-2). Affected: a
   route map from `cosecServiceGenerator/routes` on a host whose OpenAPI document writes no `servers`. springdoc then
   puts a server of its own into the document it caches, from the last request for the API docs, query string
