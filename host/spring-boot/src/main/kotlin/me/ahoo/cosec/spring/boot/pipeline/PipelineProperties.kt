@@ -132,10 +132,19 @@ class GatewayProperties {
      */
     var unprotectedEndpoints: Set<String> = emptySet()
 
+    /**
+     * The application's own controllers and functional routes, by bean name, that may be served on the gateway host,
+     * where CoSec does not decide them (they are mapped before any gateway route), because something else protects them.
+     * Any other one fails startup (`STA-13`); a name with `*` is refused, since no handler is listed by a pattern. A
+     * statement only the operator can make: which handlers need no CoSec decision is not something a process observes.
+     */
+    var unprotectedHandlers: Set<String> = emptySet()
+
     @InternalCoSecApi
     companion object {
         const val PREFIX = CoSecProperties.PREFIX + ".gateway"
         const val UNPROTECTED_ENDPOINTS_KEY = "$PREFIX.unprotected-endpoints"
+        const val UNPROTECTED_HANDLERS_KEY = "$PREFIX.unprotected-handlers"
     }
 }
 
