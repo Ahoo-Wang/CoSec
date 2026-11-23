@@ -72,6 +72,7 @@ import me.ahoo.cosec.model.condition.AttributeType
 import me.ahoo.cosec.model.condition.Condition
 import me.ahoo.cosec.model.condition.Literal
 import me.ahoo.cosec.spi.snapshot.SnapshotDigest
+import me.ahoo.cosec.spi.snapshot.SnapshotDocument
 import me.ahoo.cosec.spi.snapshot.SnapshotFormatException
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.cosec.spi.token.RevocationReader
@@ -98,7 +99,24 @@ class ControlPlaneTest {
     @Volatile
     var down = false
 
+    /**
+     * Run before the store writes a revision's record ([ControlStore.putRecord], before a head write) or a change
+     * ([ControlStore.putChange], with the change written), so that a test can hold a step there; null holds nothing.
+     */
+    @Volatile
+    var beforeWrite: (suspend (key: SnapshotKey?, change: ChangeRequest?) -> Unit)? = null
+
     val store: ControlStore = outage(object : ControlStore by memory {
+        override suspend fun putRecord(key: SnapshotKey, document: SnapshotDocument): SnapshotDigest {
+            beforeWrite?.invoke(key, null)
+            return memory.putRecord(key, document)
+        }
+
+        override suspend fun putChange(expected: SnapshotDigest?, change: ChangeRequest, previous: ChangeState?): Boolean {
+            beforeWrite?.invoke(null, change)
+            return memory.putChange(expected, change, previous)
+        }
+
         override suspend fun change(id: ChangeId): Versioned<ChangeRequest>? = if (id in unreadable) {
             // Wrapped, as a store's cache may wrap what its codec threw.
             throw IllegalStateException("decoding", SnapshotFormatException("A change request is malformed."))
