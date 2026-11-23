@@ -1,0 +1,115 @@
+{
+  "rules": [
+    "CTL-51"
+  ],
+  "polarity": "positive",
+  "level": "control",
+  "documents": {
+    "platform": {
+      "bindings": [
+        {
+          "id": "plato",
+          "subject": {
+            "principal": "plato",
+            "tenant": "(platform)"
+          },
+          "app": "cosec-control",
+          "space": "",
+          "policy": "cosec:platform-admin"
+        }
+      ]
+    },
+    "tenants": {
+      "acme": {
+        "policies": [
+          {
+            "id": "analyst",
+            "statements": [
+              {
+                "effect": "allow",
+                "action": "cosec:analyze",
+                "resource": "doc/tenant/acme"
+              }
+            ]
+          },
+          {
+            "id": "orders",
+            "statements": [
+              {
+                "effect": "allow",
+                "action": "order:read",
+                "resource": "order/**"
+              }
+            ]
+          }
+        ],
+        "bindings": [
+          {
+            "id": "admins",
+            "subject": {
+              "role": "admin"
+            },
+            "app": "cosec-control",
+            "space": "",
+            "policy": "cosec:tenant-admin"
+          },
+          {
+            "id": "analysts",
+            "subject": {
+              "role": "analyst"
+            },
+            "app": "cosec-control",
+            "space": "",
+            "policy": "analyst"
+          },
+          {
+            "id": "ops",
+            "subject": {
+              "role": "ops"
+            },
+            "app": "order",
+            "space": "*",
+            "policy": "orders"
+          }
+        ]
+      }
+    }
+  },
+  "operators": {
+    "plato": {
+      "tenant": "(platform)"
+    },
+    "alice": {
+      "tenant": "acme",
+      "roles": [
+        "admin"
+      ]
+    },
+    "viv": {
+      "tenant": "acme",
+      "roles": [
+        "analyst"
+      ]
+    }
+  },
+  "description": "DR1-F-8: viv holds cosec:analyze on acme's document and not cosec:read. analyze lists the bindings of the documents the caller may read, and viv may read neither the platform's nor acme's own: no binding is shown, and both documents are counted as hidden. Before, the caller's own tenant document was read for it whatever it held.",
+  "steps": [
+    {
+      "analyze": {
+        "by": "viv",
+        "query": {
+          "tenant": "acme",
+          "action": "order:read",
+          "resource": "order/1"
+        }
+      }
+    }
+  ],
+  "expect": {
+    "steps": [
+      "allows none denies none hidden 2"
+    ],
+    "errors": {},
+    "heads": {}
+  }
+}
