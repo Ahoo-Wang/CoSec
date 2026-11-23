@@ -1,0 +1,89 @@
+{
+  "rules": [
+    "CTL-83"
+  ],
+  "level": "control",
+  "options": {
+    "maxCount": 2
+  },
+  "polarity": "negative",
+  "description": "DR1-E-2: below the limit nothing is refused: an abandoned change is no longer open, so the document holds c2 and c3, two open changes, as max-count 2 allows.",
+  "steps": [
+    {
+      "propose": {
+        "change": "c1",
+        "document": "platform",
+        "operations": [
+          {
+            "putPolicy": {
+              "id": "a",
+              "statements": [
+                {
+                  "effect": "allow",
+                  "action": "order:read"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "abandon": "c1"
+    },
+    {
+      "propose": {
+        "change": "c2",
+        "document": "platform",
+        "operations": [
+          {
+            "putPolicy": {
+              "id": "b",
+              "statements": [
+                {
+                  "effect": "allow",
+                  "action": "order:read"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "propose": {
+        "change": "c3",
+        "document": "platform",
+        "operations": [
+          {
+            "putPolicy": {
+              "id": "c",
+              "statements": [
+                {
+                  "effect": "allow",
+                  "action": "order:read"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    }
+  ],
+  "expect": {
+    "steps": [
+      "CHECKED",
+      "ABANDONED",
+      "CHECKED",
+      "CHECKED"
+    ],
+    "errors": {
+      "c1": [],
+      "c2": [],
+      "c3": []
+    },
+    "heads": {
+      "platform": 0
+    }
+  }
+}

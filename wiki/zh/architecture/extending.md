@@ -145,7 +145,7 @@ Pipeline 在请求路径上调用每个 SPI，常常是在 Netty 事件循环上
 
 [break-glass](../guide/security-model.md#break-glass) 绑定是否适用按来源判断：只有经 `TokenAuthenticator`、由 CoSec 自己的 `JwtTokenVerifier` 校验过的令牌能得到它。你的认证器返回的主体，无论凭证使用自己的方式（例如 `Identity.Method("ldap")`）还是没有凭证，永远得不到 break-glass；你自己的 `TokenVerifier` 认可的令牌也得不到，即使经过 `TokenAuthenticator`（此时凭证以认证器的 `method` 命名，默认为 `token`）。方式 `JWT` 保留给 CoSec 的令牌：你用它构造的 `AuthenticatedPrincipal` 会被拒绝（`IllegalArgumentException`，即 `503`），因此任何认证器都无法凭名字冒充 CoSec 的令牌（`BRK-8`）。
 
-控制面在审批时还会读取主体的两项事实（[测试策略](../policies/testing.md#approval)）。`workload`（`IDN-34`）：对 API key（`apiKey`：CoSec 的 API key 认证器设置它，方式为 `API_KEY` 的凭证无论由谁构造都算作 API key）和方式为 `SERVICE` 的凭证（`service`，服务自己的身份，无论由谁构造）为真；工作负载从不审批，也从不是信任根。你的主体在 CoSec 看来是人的，除非其凭证名为 `api-key` 或 `service`，所以不要给面向工作负载的认证器授予 `cosec:approve` 或 `cosec:platform-admin`，或者让它把凭证命名为 `Identity.Method.SERVICE`。凭证的 id：审批会记下它，没有 id 的审批不算数。你构造的主体没有 `issuedAt`，所以其令牌的任何一次吊销（`subjectRevokedBefore`）都会让它的审批作废。
+控制面在审批时还会读取主体的两项事实（[测试策略](../policies/testing.md#approval)）。`workload`（`IDN-34`）：对 API key（`apiKey`：CoSec 的 API key 认证器设置它，方式为 `API_KEY` 的凭证无论由谁构造都算作 API key）和方式为 `SERVICE` 的凭证（`service`，服务自己的身份，无论由谁构造）为真；工作负载从不审批，也从不是信任根。你的主体在 CoSec 看来是人的，除非其凭证名为 `api-key` 或 `service`。所以你的认证器以自己的方式名（比如 `oauth-client`）证明的机器客户端，如果被授予 `cosec:approve`，就能审批变更、也能当信任根：两个这样的凭证就凑成了四眼。面向工作负载的认证器在它构造的主体里把凭证写成 `Identity.Credential(Identity.Method.SERVICE, id, expiresAt)`（或 `API_KEY`），这样主体就是工作负载，并且不授予它 `cosec:approve` 或 `cosec:platform-admin`（DR1-C-3；只按出处认定人留到 8.1）。凭证的 id：审批会记下它，没有 id 的审批不算数。你构造的主体没有 `issuedAt`，所以其令牌的任何一次吊销（`subjectRevokedBefore`）都会让它的审批作废。
 
 认证器只能看到 Pipeline 读作凭证的内容：令牌（`Authorization` 请求头；开启 `cosec.pipeline.allow-query-token` 时其次是同名查询参数；开启 `cosec.pipeline.allow-cookie-token` 时再次是 Cookie）和 API key 请求头（`cosec.pipeline.api-key-header`）。
 
@@ -427,6 +427,7 @@ fun problemRenderer(): ProblemRenderer {
 使用 `cosec-control` 时，控制面把修订、变更请求、暂存槽、候选和租约保存在 `ControlStore` 中；starter 提供的是 Redis 上的 `CoCacheControlStore`。存储、它的记录（`ChangeRequest`、`RevisionIndex`、`StageSlot` 等）和影子窗口端口（位于 `cosec-spi`；`CandidateStore`、`ShadowReportSink`、`ShadowReportReader` 及其报告）是 `@ExperimentalCoSecApi`：控制面的契约是它的 HTTP API，这些随它变化，可能在次版本中改变。`ChangeListener` 和它收到的 `ChangeEvent` 是稳定的。存储无法应答时抛出 `ControlStoreException`：控制 API 返回 `503`，维护任务本轮什么都不做（`CTL-52`）。读到的值无法解码时抛出 `SnapshotFormatException`，即 `500`。两种情况都绝不回答"不存在"。除了按 key 读写这些记录，存储还要回答维护任务需要访问什么：
 
 - `documents()`：它为之建立了修订索引的每个文档。可以多列，不能少列。
+- `endedChanges(document, endedBefore, limit)` 和 `removeChange(document, id, expected)`：一个文档中在某时刻之前结束的变更，最早的在前；以及删除一条已结束变更的记录（`CTL-83`）。终态变更的 `putChange` 在写入之前，以它的 `updatedAt` 把它登记进去，所以落败的写入只会多留一条，不会少一条；按某条登记行事的一方先读它的记录。`removeChange` 只在记录仍是 `expected` 时删除它，并移除该变更的每条登记；`expected` 为 `null` 时只在没有记录时生效，于是记录已不在的登记被移除。控制面在结束变更的那次写入上，让每个文档至多保留 `max-count` 个已结束的变更；回收任务删除超过 `min-age` 且发布的修订已不再保留的那些。
 - `openChanges(document)` 和 `changes(state, after, limit, documents)`：一个文档中未结束的变更，以及处于某个状态的一页变更，每个都是此刻读取的（`CTL-54`）。每个已写入且未结束的变更都在其中；记录无法解码的变更是 `ListedChange.Unreadable`，从不省略，维护任务本轮跳过它的文档或它的窗口。`openChangesKept()` 说明这些列表是否可信；在可信之前维护任务不回收任何东西，`keepOpenChanges()` 让新存储的列表可信。
 - `acquireLease(name, holder, duration)` 和 `releaseLease(name, holder)`：每项任务同一时间只有一个实例。只有 `holder` 仍持有租约时，释放才会删除它，检查与删除是一步原子操作（CoCache 的 `deleteIfMatch`）：期间过期并被另一个实例取得的租约仍归对方。
 - `withdrawCandidate(key, window)`：只在文档的候选仍是 `window` 的候选时删除它，一步原子操作（`CTL-26`）。变更在结束之后撤回候选，此时另一个变更可能已暂存了自己的候选。

@@ -466,6 +466,10 @@ spring:
 
 **不转发身份的情况**：匿名的 Permit、被拒绝的请求、不接收身份的路由、认证器没有给出凭证的主体（CoSec 的令牌和 API key 认证器总会给出），或设置了 `cosec.gateway.identity.enabled=false`。
 
+**由路由决定，而不是最终的 URL。** 请求是否接收身份，按它的路由来读：路由的元数据，或它的 `lb://` URI。之后改写 URL 的路由过滤器（Spring Cloud Gateway 的 `RequestHeaderToRequestUri`，其 URL 来自客户端的头；`SetRequestUri`；或你自己的过滤器）会把身份、以及开启 `forward-authorization` 时的凭证，发往 URL 现在指向的任何地方。不要把这类过滤器与接收身份的路由一起使用。
+
+**参数里的方法覆盖会到达后端。** 网关按请求行的方法判定，并去掉方法覆盖头（`PIP-31`），但 `_method` 查询参数或表单参数会被放过：`POST /orders/1?_method=DELETE` 按 `http:POST` 判定，而运行 Spring hidden-method 过滤器的后端会把它当作 `DELETE` 来处理。网关之后的 CoSec 服务在启动时拒绝这个过滤器（`STA-6`）；在其他后端里请关掉它（`spring.mvc.hiddenmethod.filter.enabled=false`，默认就是关的）。
+
 **它携带的内容。** 值是紧凑 JSON 的 base64url 编码（无填充），格式版本 1；JSON Schema 是 [`schema/8.0/cosec-identity.schema.json`](https://cosec.ahoo.me/schema/8.0/cosec-identity.schema.json)。
 
 | 成员 | 内容 |

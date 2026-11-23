@@ -31,6 +31,7 @@ import me.ahoo.cosec.cocache.control.ConditionalStores.MAX_LIST_ATTEMPTS
 import me.ahoo.cosec.cocache.control.ConditionalStores.Put
 import me.ahoo.cosec.cocache.control.ConditionalStores.answering
 import me.ahoo.cosec.cocache.control.ConditionalStores.deleteIf
+import me.ahoo.cosec.cocache.control.ConditionalStores.deleteIfDigest
 import me.ahoo.cosec.cocache.control.ConditionalStores.put
 import me.ahoo.cosec.cocache.control.ConditionalStores.read
 import me.ahoo.cosec.cocache.createLocked
@@ -48,6 +49,7 @@ import me.ahoo.cosec.control.change.StageSlot
 import me.ahoo.cosec.control.store.AppList
 import me.ahoo.cosec.control.store.ChangePage
 import me.ahoo.cosec.control.store.ControlStore
+import me.ahoo.cosec.control.store.EndedChange
 import me.ahoo.cosec.control.store.HeadWrite
 import me.ahoo.cosec.control.store.ListedChange
 import me.ahoo.cosec.control.store.ReferrerEntry
@@ -242,6 +244,15 @@ class CoCacheControlStore internal constructor(
         if (written) openChanges.unlistAfter(change, previous, expected, digest)
         return written
     }
+
+    override suspend fun removeChange(document: SnapshotKey, id: ChangeId, expected: SnapshotDigest?): Boolean {
+        val removed = if (expected == null) read(changes, id) == null else deleteIfDigest(changes, id, expected)
+        if (removed) openChanges.unlistEnded(document, id)
+        return removed
+    }
+
+    override suspend fun endedChanges(document: SnapshotKey, endedBefore: Instant, limit: Int): List<EndedChange> =
+        openChanges.ended(document, endedBefore, limit)
 
     override suspend fun openChangesKept(): Boolean = openChanges.kept()
 

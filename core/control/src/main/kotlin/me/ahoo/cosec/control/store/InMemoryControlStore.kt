@@ -176,6 +176,24 @@ class InMemoryControlStore(private val clock: Clock = Clock.systemUTC()) : Contr
         true
     }
 
+    override suspend fun removeChange(document: SnapshotKey, id: ChangeId, expected: SnapshotDigest?): Boolean =
+        synchronized(lock) {
+            val current = changes[id] ?: return expected == null
+            if (expected == null || version(current.second) != expected) return false
+            changes -= id
+            true
+        }
+
+    // Every terminal record is listed: this store kept the list from its start.
+    override suspend fun endedChanges(document: SnapshotKey, endedBefore: Instant, limit: Int): List<EndedChange> =
+        synchronized(lock) {
+            changes.values.map { it.first }
+                .filter { it.key == document && it.state.terminal && it.updatedAt.isBefore(endedBefore) }
+                .sortedWith(compareBy({ it.updatedAt }, { it.id.value }))
+                .take(limit)
+                .map { EndedChange(it.id, it.updatedAt) }
+        }
+
     override suspend fun candidate(key: SnapshotKey): StoredCandidate? = synchronized(lock) { candidates[key] }
 
     override suspend fun stagedCandidate(key: SnapshotKey): Versioned<StoredCandidate>? =

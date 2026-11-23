@@ -228,8 +228,12 @@ The control plane reads two more facts of the principal for approvals ([Testing 
 `workload` (`IDN-34`): true for an API key (`apiKey`: CoSec's API key authenticator sets it, and a credential of the
 method `API_KEY` counts as one whoever made it) and for a credential of the method `SERVICE` (`service`, a service's
 own identity), whoever made it; a workload never approves and is never the trust root. A principal of yours is a
-person's to CoSec unless its credential is named `api-key` or `service`, so give an authenticator of workloads neither
-`cosec:approve` nor `cosec:platform-admin`, or have it name its credential `Identity.Method.SERVICE`. The credential's id: an approval records
+person's to CoSec unless its credential is named `api-key` or `service`. So a machine client your authenticator proves
+under a method of its own (`oauth-client`, say) and grants `cosec:approve` can approve changes and be the trust root:
+two such credentials make four eyes. An authenticator of workloads names its credential
+`Identity.Credential(Identity.Method.SERVICE, id, expiresAt)` (or `API_KEY`) in the principal it builds, which makes
+the principal a workload, and gives it neither `cosec:approve` nor `cosec:platform-admin` (DR1-C-3; telling a person by
+provenance alone is 8.1's). The credential's id: an approval records
 it, and one without an id does not count. A principal you construct has no `issuedAt`, so any revocation of its
 tokens (`subjectRevokedBefore`) takes its approvals back.
 
@@ -665,6 +669,13 @@ visit:
   terminal is among them; a change whose record does not decode is `ListedChange.Unreadable`, never left out, and
   maintenance skips its document or its window that pass. `openChangesKept()` says whether these lists can be
   trusted; maintenance reclaims nothing until they can, and `keepOpenChanges()` makes a new store's lists trusted.
+- `endedChanges(document, endedBefore, limit)` and `removeChange(document, id, expected)`: the changes of a document
+  that ended before a time, the oldest first, and the removal of one ended change's record (`CTL-83`). A `putChange` of
+  a terminal change lists it under its `updatedAt` before it writes it, so a write that lost leaves an extra entry,
+  never a missing one; whoever acts on an entry reads its record first. `removeChange` removes the record only while
+  it is `expected` and takes every entry of the change out; with `expected` `null`, only where there is no record, so
+  an entry whose record is gone leaves. The control plane keeps at most `max-count` ended changes a document, on the
+  write that ends one, and reclamation removes those past `min-age` that published no revision still retained.
 - `acquireLease(name, holder, duration)` and `releaseLease(name, holder)`: one instance at a time per task. A release
   removes the lease only while `holder` still has it, checked and removed in one atomic step (CoCache's
   `deleteIfMatch`): a lease that expired and another instance took meanwhile stays theirs.

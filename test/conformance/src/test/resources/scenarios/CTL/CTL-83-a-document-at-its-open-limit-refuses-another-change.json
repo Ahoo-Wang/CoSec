@@ -1,0 +1,84 @@
+{
+  "rules": [
+    "CTL-83"
+  ],
+  "level": "control",
+  "options": {
+    "maxCount": 2
+  },
+  "polarity": "positive",
+  "description": "DR1-E-2: with max-count 2 the platform document holds at most two open changes. A third proposal is refused 409 OPEN_LIMIT, naming the oldest open change; nothing is stored.",
+  "steps": [
+    {
+      "propose": {
+        "change": "c1",
+        "document": "platform",
+        "operations": [
+          {
+            "putPolicy": {
+              "id": "a",
+              "statements": [
+                {
+                  "effect": "allow",
+                  "action": "order:read"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "propose": {
+        "change": "c2",
+        "document": "platform",
+        "operations": [
+          {
+            "putPolicy": {
+              "id": "b",
+              "statements": [
+                {
+                  "effect": "allow",
+                  "action": "order:read"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "propose": {
+        "change": "c3",
+        "document": "platform",
+        "operations": [
+          {
+            "putPolicy": {
+              "id": "c",
+              "statements": [
+                {
+                  "effect": "allow",
+                  "action": "order:read"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    }
+  ],
+  "expect": {
+    "steps": [
+      "CHECKED",
+      "CHECKED",
+      "refused 409 OPEN_LIMIT"
+    ],
+    "errors": {
+      "c1": [],
+      "c2": []
+    },
+    "heads": {
+      "platform": 0
+    }
+  }
+}
