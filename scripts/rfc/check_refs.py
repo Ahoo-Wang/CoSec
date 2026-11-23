@@ -16,7 +16,8 @@
 
 1. Every place in the repository that cites this RFC (`RFC 0011 §5`, `RFC 0011 D3`, `[RFC 0011](…) §3`) names a
    section that has a heading here, or a label (D3, PR-2, Q5 …) that appears here. Rule ids (`ROL-1`) are left to
-   the registry's own check. A review finding's id after a citation (`RFC 0007 UD-7`) is reported too: judge it.
+   the registry's own check. A review finding's id written right after a citation (a comment that names the RFC
+   and then the finding that led to it) reads like a label and is reported too: judge it.
 2. Every section and label this RFC cites of another RFC exists there.
 3. With --before, every numbered heading of the RFC at that commit is still here with the same title. Label tokens
    that were in the old text and are gone are printed as notes (a removed mention is not always a lost label).

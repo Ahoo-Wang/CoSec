@@ -12,8 +12,8 @@
  */
 
 // The control plane (RFC 0007 §5.1): revisions, the publish flow and the authorization of control-plane writes.
-// cosec-core still brings Reactor onto the classpath and the Redis store lives in cosec-cocache, so ControlBoundaryTest
-// guards what the code references, not the classpath (RFC 0007 §3 M12, Q20).
+// The Redis store lives in cosec-cocache. ControlBoundaryTest guards what the code references, DependencyRulesTest what
+// it resolves: neither Reactor, Spring, the Servlet API nor a Redis client (RFC 0007 §3 M12, Q20).
 dependencies {
     // Every write is itself authorized through the pipeline (AuthorizationChecker).
     api(project(":runtime"))
