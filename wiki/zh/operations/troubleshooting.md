@@ -804,7 +804,7 @@ Tokens are verified against RevocationReader.NONE: a revoked token (logout, revo
 | `The control plane checks its approvers' revocations, but no revocation reader is available: ...` | 启用 CoSec 的令牌并加上 `cosec-cocache`，或声明一个 `RevocationReader` bean；只有在审批人的凭证从不吊销时才用 `RevocationReader.NONE`（[控制面](./configuration.md#control-plane)）。 |
 | `cosec.authentication.login.refresh.path is set on a Spring Cloud Gateway host. ...` | 网关不签发会话：在网关上取消设置，改在网关之后签发会话的服务上设置。 |
 | `... is set, but this application serves no HTTP ...`、`... is set, but login or JWT is off ...`、`... is not one plain absolute path ...`、`... name one path ...` | 取消设置[登录路由路径](./configuration.md#authentication)，或给宿主它所要求的：一个 Web 栈、`cosec.authentication.login.enabled` 和 `cosec.jwt.enabled`、每个路由一个普通路径。 |
-| `cosec.jwt.token-validity.refresh (<d>), how long a token revocation is kept, is shorter than cosec.control.approval.expire-after (<d>): ...` | 调大前者或调小后者：吊销记录必须比它的令牌给出的每一次审批活得更久。 |
+| `A token revocation is kept for <d>: the longer of cosec.jwt.token-validity.access (<d>) and cosec.jwt.token-validity.refresh (<d>), plus cosec.authentication.revocation.skew (<d>), shorter than cosec.control.approval.expire-after (<d>): ...` | 调大某个令牌有效期，或调小审批的有效期：吊销记录必须比它的令牌给出的每一次审批都活得长。 |
 
 ## 控制面错误 {#control-plane-errors}
 
