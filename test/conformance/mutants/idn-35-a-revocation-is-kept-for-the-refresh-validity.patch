@@ -1,0 +1,17 @@
+# Rule: IDN-35
+# Mutant: a revocation is kept for the refresh validity only, so an access token valid longer is accepted again once its record expires
+# Tests: :spring-boot:test --tests me.ahoo.cosec.spring.boot.jwt.CoSecJwtAutoConfigurationTest
+
+diff --git a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/jwt/RevocationRetention.kt b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/jwt/RevocationRetention.kt
+index 84182e04b..c7eb1cc35 100644
+--- a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/jwt/RevocationRetention.kt
++++ b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/jwt/RevocationRetention.kt
+@@ -28,7 +28,7 @@ private val log = KotlinLogging.logger {}
+  */
+ internal object RevocationRetention {
+     fun of(jwt: JwtProperties, revocation: RevocationProperties): Duration =
+-        maxOf(jwt.tokenValidity.access, jwt.tokenValidity.refresh) + revocation.skew
++        jwt.tokenValidity.refresh + revocation.skew
+ 
+     /** [of], said once at startup with what it is derived from. */
+     fun logged(jwt: JwtProperties, revocation: RevocationProperties): Duration =
