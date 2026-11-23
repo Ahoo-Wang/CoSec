@@ -3,15 +3,15 @@
 # Tests: :runtime:test --tests me.ahoo.cosec.runtime.snapshot.SnapshotDerivedBoundsTest
 
 diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/Passes.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/Passes.kt
-index cf1a700..324646b 100644
+index 4649462d6..06ea8f27c 100644
 --- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/Passes.kt
 +++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/Passes.kt
-@@ -176,7 +176,7 @@ internal class Passes(
-         lagReports.queue()
-         // The derived bounds follow what is resident (SNP-24), once per pass; a family now above its bound is taken back to
-         // it by housekeeping, as after an install.
--        for (family in families.rebound()) {
-+        for (family in emptyList<SnapshotFamilies.Family<*>>()) {
-             context.threads.offHousekeeping(
-                 HousekeepingTask.EVICT,
-                 { "The eviction pass of the ${family.spec.kind} family." }
+@@ -177,7 +177,7 @@ internal class Passes(
+             lagReports.queue()
+             // The derived bounds follow what is resident (SNP-24), once per pass; a family now above its bound is taken
+             // back to it by housekeeping, as after an install.
+-            for (family in families.rebound()) {
++            for (family in emptyList<SnapshotFamilies.Family<*>>()) {
+                 context.threads.offHousekeeping(
+                     HousekeepingTask.EVICT,
+                     { "The eviction pass of the ${family.spec.kind} family." }
