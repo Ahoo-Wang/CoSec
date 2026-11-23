@@ -57,6 +57,13 @@ Which preview of the library may run behind which preview of the gateway image: 
   and the blacklist, answer `503`, alike behind the three adapters. Put a proxy that writes `X-Forwarded-For` in front
   of such a host and set the index to `1` or more ([Web integration](../integration/web.md)); a host whose server
   reports its peers is unchanged.
+- **The generated route map no longer depends on who fetched the API docs last** (`RTE-4`, DR1-C-2). Affected: a
+  route map from `cosecServiceGenerator/routes` on a host whose OpenAPI document writes no `servers`. springdoc then
+  puts a server of its own into the document it caches, from the last request for the API docs, query string
+  included, and the routes were generated under its path. That server is now left out, and the routes sit at the root
+  of the application. Generate the route map again if one was generated under a path such as `/v3/api-docs`, and
+  write `servers` in the document when the service is served under a path the host does not remove
+  ([Role permissions](../policies/role-permissions.md#generating-a-catalog-from-openapi)).
 - **A cancelled `HttpControlService` call now ends its request on the host** (`CTL-82`, #1893). Affected: nothing to
   change. When the coroutine of a call through `HttpControlService` is cancelled, the call closes its HTTP exchange and
   the control-plane host (WebFlux) cancels the request. Before, the request stayed on the host until the call's own
