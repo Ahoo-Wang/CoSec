@@ -3,15 +3,16 @@
 # Tests: :cocache:test --tests me.ahoo.cosec.cocache.CacheTtlPolicyTest
 
 diff --git a/backends/cocache/src/main/kotlin/me/ahoo/cosec/cocache/CacheLocks.kt b/backends/cocache/src/main/kotlin/me/ahoo/cosec/cocache/CacheLocks.kt
-index 098910d..31dc25c 100644
+index be5e7725d..87e600737 100644
 --- a/backends/cocache/src/main/kotlin/me/ahoo/cosec/cocache/CacheLocks.kt
 +++ b/backends/cocache/src/main/kotlin/me/ahoo/cosec/cocache/CacheLocks.kt
-@@ -105,8 +105,6 @@ internal object CacheLocks {
-                 // absent-ttl would accept a revoked token for that long. Of the other fields of a Store, none can lengthen
-                 // it: a missing entry lives min(absent-ttl, local-max-age); a revocation is written with a lifetime of its
-                 // own, which neither ttl nor ttl-jitter shortens in Redis; local-maximum-size only evicts.
--                lock(PolicyField.ABSENT_TTL)
+@@ -114,8 +114,7 @@ internal object CacheLocks {
+                 // as long, whatever the declaration (cosec.authentication.revocation.cache.local-max-age) says, and no
+                 // layer changes it. Of the other fields, none lengthens either answer: a revocation is written with a
+                 // lifetime of its own, which neither ttl nor ttl-jitter shortens in Redis; local-maximum-size only evicts.
+-                lock(PolicyField.ABSENT_TTL, PolicyField.LOCAL_MAX_AGE)
 -                constrain(PolicyField.ABSENT_TTL) { NOT_REVOKED_FOR }
++                lock(PolicyField.LOCAL_MAX_AGE)
+                 verify { revocationsHeldAtMost(it) }
                  // The local copy holds the revocation tables' share of the heap (IDN-33): the declaration's count, kept.
                  lock(PolicyField.LOCAL_MAXIMUM_SIZE)
-             }
