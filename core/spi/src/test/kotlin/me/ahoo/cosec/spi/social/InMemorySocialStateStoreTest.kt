@@ -13,9 +13,11 @@
 
 package me.ahoo.cosec.spi.social
 
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.runTest
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.assertThrows
 import java.time.Duration
 
 class InMemorySocialStateStoreTest {
@@ -65,5 +67,24 @@ class InMemorySocialStateStoreTest {
         now = Duration.ofSeconds(1).toNanos()
         store.take("t").assert().isNull()
         store.take("never").assert().isNull()
+    }
+
+    /** DR1-D-9: past its bound, and once the expired are dropped, a put is refused and nothing is recorded. */
+    @Test
+    fun `a full store refuses a state after dropping the expired`() = runTest {
+        var now = 0L
+        val store = InMemorySocialStateStore(
+            InMemorySocialStateStore.SWEEP_FLOOR,
+            maxStates = 2
+        ).apply { nanoTime = { now } }
+        store.put("a", "h", Duration.ofSeconds(1))
+        store.put("b", "h", Duration.ofSeconds(60))
+        now = Duration.ofSeconds(2).toNanos()
+        store.put("c", "h", Duration.ofSeconds(60))
+        assertThrows<SocialStatesFullException> { runBlocking { store.put("d", "h", Duration.ofSeconds(60)) } }
+        store.take("d").assert().isNull()
+        store.take("c").assert().isEqualTo("h")
+        store.put("d", "h", Duration.ofSeconds(60))
+        store.take("d").assert().isEqualTo("h")
     }
 }
