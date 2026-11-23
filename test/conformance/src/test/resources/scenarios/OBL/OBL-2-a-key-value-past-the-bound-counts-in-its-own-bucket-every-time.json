@@ -1,0 +1,59 @@
+{
+  "rules": [
+    "OBL-2"
+  ],
+  "polarity": "positive",
+  "level": "pipeline",
+  "description": "A key value longer than the bound a bucket is named by (256 units) is hashed (DR1-C-1), and the same value is the same bucket on every request: its exhausted bucket refuses it.",
+  "documents": {
+    "platform": {
+      "policies": [
+        {
+          "id": "read",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "http:GET",
+              "resource": "http:path:/orders/**"
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "g:read",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "read"
+        }
+      ],
+      "rateLimits": [
+        {
+          "id": "clients",
+          "action": "*",
+          "resource": "http:path:/orders/**",
+          "permitsPerSecond": 10,
+          "key": "http.header.x-client-id"
+        }
+      ]
+    }
+  },
+  "rateLimiter": {
+    "exhaustedKeys": {
+      "platform/clients": [
+        "client-ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+      ]
+    }
+  },
+  "http": {
+    "path": "/orders/1",
+    "headers": {
+      "x-client-id": "client-ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+    }
+  },
+  "expect": {
+    "status": 429,
+    "type": "too-many-requests"
+  }
+}
