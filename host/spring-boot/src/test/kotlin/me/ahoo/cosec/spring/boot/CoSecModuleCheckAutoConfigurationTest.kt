@@ -44,6 +44,7 @@ class CoSecModuleCheckAutoConfigurationTest {
     private val plain = ApplicationContextRunner().withConfiguration(config)
         .withBean(ReactiveStringRedisTemplate::class.java, redis)
         .withBean(CacheRuntime::class.java, runtime)
+
     // Each web host registers its gate, as CoSecPipelineWebAutoConfiguration does: WebGateCheckTest asks for one.
     private val servlet = WebApplicationContextRunner().withConfiguration(config)
         .withBean(ReactiveStringRedisTemplate::class.java, redis)
