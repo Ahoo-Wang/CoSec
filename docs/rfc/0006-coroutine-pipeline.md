@@ -513,6 +513,8 @@ class Pipeline internal constructor(/* PipelineComponents */) : RequestGate {
 - `Outcome` 只能由 `StatusMapping` 构造（`internal` 构造器），适配器拿到的永远是映射后的结果，不放行的 `Outcome` 带上它的 problem（§6.3）。
 - 请求 id 与事件 id 在 `StatusMapping` 作答处生成；`IdGenerator` 抛出时改用随机 id（`PIP-23`，§6.3）。
 
+---
+
 ## 6. 状态码
 
 ### 6.1 完整列表
@@ -988,7 +990,9 @@ RFC 0001 §3.7、RFC 0004 I9：break-glass 的每一次使用都要写入 REQUIR
 
 所有标签都是低基数的枚举，不含策略 id、应用 id 或租户 id。
 
-#### 9.5.3 审计（`cosec-runtime`、`cosec-kafka`）
+#### 9.5.3 审计（`cosec-core`、`cosec-kafka`）
+
+审计的映射今天在 `cosec-runtime`（`runtime/audit/`）；7.x 的 `cosec-core` 已删除。
 
 - `AuditEvent`（`cosec-api`）由 `DecisionEvent` 映射而来（`AuditEvents.from(event)`，`runtime/audit/`）。审计保留细分的原因，包括显式与隐式拒绝的区别；
   响应体不保留（§6.2）。
@@ -1001,7 +1005,9 @@ RFC 0001 §3.7、RFC 0004 I9：break-glass 的每一次使用都要写入 REQUIR
   REQUIRED 时等待确认（§9.4）；关闭时在排空期限内等待队列（§7.1）。
 - 自定义 sink 实现 `DecisionListener`，或者用只接收 `AuditEvent` 的适配器 `AuditListener.of(sink, name)`，免得每个实现都自己映射。
 
-#### 9.5.4 影子（`cosec-runtime`）
+#### 9.5.4 影子（`cosec-core`）
+
+影子监听器今天在 `cosec-runtime`（`runtime/shadow/`）。
 
 - `ShadowListener`（BEST_EFFORT，`SampledOnlyListener`）：按 `cosec.authorization.shadow.sample-rate` 采样，采样在创建事件时决定，未命中不创建
   `ReplayHandle`；有暂存清单时，只有视图读到清单中某份文档的请求才会被采样（`CTL-47`）。用 `ReplayHandle` 中的请求、视图和**已经取到的**外部属性，在暂存
@@ -1016,101 +1022,82 @@ RFC 0001 §3.7、RFC 0004 I9：break-glass 的每一次使用都要写入 REQUIR
 
 ### 10.1 AGENTS.md 的每一条
 
-| 不变量 | 本阶段如何成立 | 守护 |
+| 不变量 | 如何成立 | 守护 |
 |---|---|---|
-| **Deny-first** | 引擎不变（RFC 0004 扁平算法）；`onMissing` 的补充规则只把 `Deny(null)` 改成 `Indeterminate`，从不产生 Permit，任何 DENY 命中仍然优先；义务只在 Permit 之后；监听器不能改变决策 | P1′（RFC 0004，扩展到外部属性不可用的输入）；`PipelineDenyFirstTest`：任意注入的提供者、监听器、限流故障下，加入一条命中的 DENY，结果从不是 proceed |
-| **Fail closed** | 每个阶段的失败、超时都是 `Indeterminate` → 503；未建模的异常 → 500；外部取消不产生 `Outcome`（§7.4）。文档化的例外仍然只有两个：非 `strictFailure` 的限流规则、吊销检查降级。`onMissing: nomatch` 是策略作者的显式声明，不是运行时默认，写进 `security-model.md` 的同一节 | `SecurityPipelineTest` 改写为 `PipelineFailClosedTest`（逐阶段注入失败、超时、取消）；性质测试 P13（§10.2） |
-| **One decision path** | `StatusMapping` 是唯一构造 `Outcome` 的地方；适配器只写 `Outcome` | `WebAdapterParityTest`（加上 Gateway 与 §6.3 的新场景）；ArchUnit：适配器不引用 `Decision`、`Cause` |
-| **No blocking on the event loop** | 全部数据面 SPI 挂起；内置实现非阻塞；恢复规则 T1–T3（§7.2）；`BlockingAware` 删除——引擎不再调用用户代码；Kafka 在自己的执行器上发送 | `PipelineHotPathTest`、`PipelineResumeTest`；`PipelineBlockHoundTest`（`cosec-spring-boot-starter`，真实 Redis，Netty 与 `Default` 线程，经 `kotlinx-coroutines-debug` 的 BlockHound 集成）；`RedisRateLimitingOffEventLoopTest` 改写；RFC 0003 的 `SnapshotHotPathTest` 不变 |
-| **Authorization is a pure decision** | 引擎纯（`EnginePurityTest` 不变，`LegacyCondition` 豁免删除，§5.6）；义务在引擎内**计算**、在 Pipeline 中**执行**；只有 `Permit` 有义务字段，被拒绝的请求从不扣配额 | `EnginePurityTest`；`RateLimitingAuthorizationTest` 改写为 `RateLimitObligationTest`（含"Deny 与 Indeterminate 从不调用 `RateLimiter`"） |
-| **策略 / 权限缓存 `ttl = null`、读失败抛出** | 不变：仍是同一个 `PolicySnapshotCache`；限流规则进快照后同样适用。新的成员关系缓存有 TTL（按设计），但读失败抛出 | `CacheTtlPolicyTest`、`StrictCacheFailureTest` 不变；新增 `MembershipCacheFailureTest` |
-| **Hot-path changes come with a JMH before/after** | §13 | `PipelineBenchmark`、端到端压测 |
+| **Deny-first** | 引擎的扁平算法（RFC 0004 §6.1）；`onMissing` 的补充规则只把 `Deny(null)` 改成 `Indeterminate`，从不产生 Permit，任何 DENY 命中仍然优先；义务只在 Permit 之后；监听器不能改变决策 | `EnginePropertyTest`（P1′）；`ExternalAttributesPropertyTest`（P9′，`ATR-1`）；`ALG-1` 的场景 |
+| **Fail closed** | 每个阶段的失败、超时都是 `Indeterminate` → 503；未建模的异常 → 500；外部取消不产生 `Outcome`（§7.4）。文档化的例外：非 `strictFailure` 的限流规则、读不到吊销表时验证请求的令牌（`PIP-7`）、重新加载失败时按已安装的文档决策（`SNP-5`）。`onMissing: nomatch` 是策略作者经控制面确认的显式声明，不是运行时默认 | `PipelineTest`（`PIP-2`、`PIP-4`）、`PipelineCancellationTest`（`PIP-3`）、`EnginePropertyTest`（P9） |
+| **One decision path** | `StatusMapping` 是唯一构造 `Outcome` 的地方；适配器只写 `Outcome` | `OneDecisionPathTest`、`WebAdapterParityTest`、`RealServerParityTest`（`PIP-1`） |
+| **No blocking on the event loop** | 全部数据面 SPI 挂起；内置实现非阻塞；恢复规则 T1–T3（§7.2）；引擎不调用用户代码；Kafka 在自己的执行器上发送 | `PipelineHotPathTest`、`PipelineResumeTest`、`PipelineBlockHoundTest`（`test/e2e`，真实 Redis，Netty 与 `Default` 线程）、`SnapshotStoreBlockHoundTest`、`SuspendingRedisRateLimitingTest`、`RuntimeBoundaryTest` |
+| **Authorization is a pure decision** | 引擎纯；义务在引擎内**计算**、在 Pipeline 中**执行**；只有 `Permit` 有义务字段，被拒绝的请求从不扣配额 | `EnginePurityTest`；`RateLimitObligationTest`（`engine` 与 `runtime`，P15，`OBL-1`） |
+| **快照与控制面的缓存永不过期、读失败抛出** | 不变：限流规则进快照后同样适用。成员关系缓存有 TTL（按设计），但读失败抛出 | `CacheTtlPolicyTest`、`StrictCacheFailureTest`、`MembershipCacheFailureTest` |
+| **Hot-path changes come with a JMH before/after** | §13 | `PipelineBenchmark`（`test/e2e`）、`EngineAuthorizationBenchmark` |
 
 ### 10.2 新的不变量与性质测试
 
 | 不变量 | 守护 |
 |---|---|
-| （新）**观察不改变决策**：BEST_EFFORT 监听器的失败、阻塞、队列满对 `Outcome` 没有任何影响；REQUIRED 只能把 Permit 改成 503 | `ListenerIsolationTest`；ArchUnit：`DecisionListener` 的实现拿不到 `Outcome` 的构造器 |
-| （新）**取消从不放行**：外部取消不产生 `Outcome`，下游从不被调用 | `PipelineCancellationTest`（在每个挂起点取消） |
-| （新）**桥接只在适配器** | ArchUnit：只有三个适配器模块引用 `kotlinx.coroutines.reactor` / `runBlocking`；`runtime/` 不引用 `reactor.*` |
-| P9′ **不可用不会产生 Permit**（RFC 0004 P9 扩展） | 任意快照与请求，把任意外部属性换成"取不到"，结果不会从 Deny / Indeterminate 变成 Permit |
-| P13 **任何 SPI 失败或超时都不会产生 Permit** | 随机选择一个阶段注入失败或超时，与无故障时的结果比较：无故障为 Deny 时有故障必为 Deny 或 Indeterminate；无故障为 Permit 时有故障为 Permit、429 或 503 |
-| P14 **属性计划完整** | 随机快照与请求，`plan` ⊇ `evaluate` 实际读取的外部属性（引擎在测试中记录读取） |
-| P15 **义务只随 Permit** | 随机快照与请求，`Decision` 不是 Permit 时 `RateLimiter` 调用次数为 0 |
-| P16 **响应体只含允许的成员与取值**（2026-10-26 新增，§6.2） | `ProblemBodyPropertyTest`（`runtime/`，PR-2）：随机生成每一种不放行的 `Outcome`（§6.1 的每一行；`Cause`、策略 id、语句名、绑定 id、异常信息与原因链里放入随机的标记串），随机的 `requestId`（含引号、反斜杠、控制字符、非 ASCII）与有无 `traceId`，用通用 JSON 解析器解析编码结果：成员集合是 `{type, title, status, code, requestId}` 或再加 `traceId`；`(type, title, status, code)` 是 §6.1 中的一行，`status` 等于 `Outcome.status`；`requestId` 等于响应头的值；标记串不出现在字节中 |
+| **观察不改变决策**：BEST_EFFORT 监听器的失败、阻塞、队列满对 `Outcome` 没有任何影响；REQUIRED 只能把 Permit 改成 503（`OBS-1`） | `ListenerIsolationTest`；`Outcome` 只有 `StatusMapping` 能构造 |
+| **取消从不放行**：外部取消不产生 `Outcome`，下游从不被调用（`PIP-3`） | `PipelineCancellationTest`（在每个挂起点取消） |
+| **桥接只在适配器** | `RuntimeBoundaryTest`：`runtime/` 不引用 `reactor.*`、`kotlinx.coroutines.reactor`、`runBlocking` |
+| P9′ **不可用不会产生 Permit**（RFC 0004 P9 扩展） | 任意快照与请求，把任意外部属性换成"取不到"，结果不会从 Deny / Indeterminate 变成 Permit（`ExternalAttributesPropertyTest`，`ATR-1`） |
+| P13 **任何 SPI 失败或超时都不会产生 Permit** | 设计为随机注入的性质测试：随机选择一个阶段注入失败或超时，无故障为 Deny 时有故障必为 Deny 或 Indeterminate；无故障为 Permit 时有故障为 Permit、429 或 503。登记为 `PIP-4`，今天由 `PipelineTest` 的逐阶段用例守护（认证器超时、成员关系失败或超时或答错、快照源失败） |
+| P14 **属性计划完整** | 随机快照与请求，`plan` ⊇ `evaluate` 实际读取的外部属性（`ExternalAttributesPropertyTest`，`ATR-8`） |
+| P15 **义务只随 Permit** | 随机快照与请求，`Decision` 不是 Permit 时没有义务、`RateLimiter` 调用次数为 0（`RateLimitObligationTest`，`OBL-1`） |
+| P16 **响应体只含允许的成员与取值**（§6.2） | `ProblemBodyPropertyTest`：随机生成每一种不放行的 `Outcome`（§6.1 的每一行；`Cause`、策略 id、语句名、绑定 id、异常信息与原因链里放入随机的标记串），随机的 `requestId` 与有无 `traceId`，用通用 JSON 解析器解析编码结果：成员集合是 `{type, title, status, code, requestId}` 或再加 `traceId`；`(type, title, status, code)` 是 §6.1 中的一行，`status` 等于 `Outcome.status`；`requestId` 等于响应头的值；标记串不出现在字节中 |
 
-AGENTS.md 的 Invariants 表在 PR-9 更新：守护列换成上面的测试名；新增"观察不改变决策""取消从不放行"两行；Mental model 的 "Request path" 与 "Authorization"
-两条改写（装饰器链删除，§15.3）。
+根 `AGENTS.md` 的 Invariants 表与 Mental model 的 "Request path" 一段写的就是本节与 §5.2。
 
 ---
 
 ## 11. 门槛 C
 
-> **2026-10-26：本节整体由 [RFC 0008](0008-conformance-and-direct-build.md) 取代。** 以下原文保留，仅供追溯。
+门槛 C 要证明：对同一份数据和同一批请求，第 4 阶段结束时的 Reactor Pipeline 加装饰器链（基准）与本文的 Pipeline（候选）给出相同的结果，除了三类只改状态码的
+改动；没有放宽类，候选放行而基准不放行的任何差异都是失败。这一节由 RFC 0008 取代（维护者 2026-10-26）：8.0 不考虑兼容性，正确性来自规范本身；PR-8 取消，
+PR-9、PR-10 并入 RFC 0008 的切换。下面各小节只记录仍然有效的部分。
 
 ### 11.1 要证明什么
 
-本阶段**不改变 Permit / Deny 的划分**。要证明的是：对同一份数据和同一批请求，第 4 阶段结束时的 Pipeline（`SecurityPipeline` + 装饰器链 + 编译执行的引擎，下称**基准**）
-与本文的 Pipeline（下称**候选**）给出相同的结果，除了 §11.4 列出的状态码改动。判据沿用 RFC 0004 §9.1：
-
-1. **完备**：每一条差异都归入 R1–R3 之一；未归类差异为 0。
-2. **可信**：每条归类都带证据，由基准的异常类与候选的 `Cause` 机械地检查。
-3. **没有放宽类**：R1–R3 都只把一种拒绝换成另一种拒绝。候选 proceed 而基准没有 proceed 的任何一条样本都是失败，不能归类。
+本阶段**不改变 Permit / Deny 的划分**，这一点今天由规范一致性套件的规则与场景检查（`PIP`、`OBL`、`OBS`、`ATR` 各族），不再与 7.x 比较。
 
 ### 11.2 比较器
 
-`DecisionParity`（`cosec-core` 测试夹具，RFC 0002 Q14、RFC 0003 Q12）比较的是两个 `DecisionAuthorization`，本阶段两边不再都是它。PR-8 在同一个测试夹具中增加
-`PipelineParity`：
-
-- 对同一个样本，基准经 `SecurityPipeline.evaluate`（装配方式与第 4 阶段的 starter 完全相同，含装饰器链），候选经 `Pipeline.evaluate`（`runBlocking`，测试中）。
-- 结果元组：状态、原因码、做出决策的语句（`StatementRef` + `BindingRef`）、限流结果（`limit`、`remaining`、是否耗尽）、是否 proceed。
-- 两边的 `Request`/`HttpFacts` 由同一条样本构造；两边读同一份 `cosec-migrate` 转换后的文档，经同一个内存 `SnapshotDocumentStore`。
-- 回放任务（现名 `engineReplay`，RFC 0002 PR-6 改名为 `decisionReplay`）增加 `-PreplayMode=pipeline`。
-- 差异分类器沿用 RFC 0004 §9.2 的 `DifferenceClassifier`，类别换成 R1–R3，每一类都有正例与反例测试。
+`PipelineParity` 与回放工具随门槛取消，没有实现。比较两个提交的性能用 `jmh-ab.yml`（§13）。
 
 ### 11.3 语料
 
-| 来源 | 内容 | 何时跑 |
-|---|---|---|
-| 现有测试 | `SecurityPipelineTest`、`WebAdapterParityTest`、`RateLimitingAuthorizationTest`、`AuditingAuthorizationTest`、`MeteredAuthorizationTest`、`TracingAuthorizationTest`、`ShadowAuthorizationTest`、`KafkaAuditEventSinkTest` 参数化为"基准 / 候选"两边各跑一遍；预期不同的断言按 R 类标注，每一处在 PR 描述里列出 | 每次 `check`，直到 PR-10 |
-| 合成语料 | R1–R3 每类的正例与反例；§7.4 的每一种取消与超时；§9.4 的 REQUIRED 失败矩阵 | 每次 `check` |
-| 随机生成 | RFC 0004 的生成器，另加：按概率失败或超时的认证器、成员关系、外部属性、限流后端、监听器 | `check` 跑固定种子 2,000 例；`-PparityIterations=1000000` 手动跑百万例，PR-9 前必须跑过一次 |
-| 限流重放 | 两边都用 `LocalRateLimiter`，注入同一个虚拟时钟，按样本时间戳顺序重放；限流规则来自导出部署的配置（经转换工具进 `Platform` 文档） | 与离线回放一起 |
-| 审计字段 | 对每条样本比较基准的 `AuditEvent` 与候选经 `AuditEvents.from` 得到的 `AuditEvent`：只允许 §14 X1–X3 列出的字段不同 | 与离线回放一起 |
-| 真实数据离线回放 | RFC 0002 §8.2.1 的同一批导出，不需要重新导出；两边都在 `cosec-migrate convert --from-files` 的输出上 | PR-8 合入之后、PR-9 合入之前 |
-
-回放覆盖不到的行为（真实的取消、线程、Redis 与 Kafka 的时序、端到端延迟）由 §10 的测试和 §13 的压测覆盖，留到目标达成后的 RC 或预发验证（RFC 0001 §6）。
+今天的语料是规范一致性套件的场景（`test/conformance/src/test/resources/scenarios/`）、`core/runtime` 与适配器的测试（§10），以及系统测试
+（`test/system-test`，网关镜像、服务、Redis 与 Kafka，经网络驱动）。
 
 ### 11.4 改动目录
 
-| # | 改动 | 基准 | 候选 | 方向 | 证据 |
-|---|---|---|---|---|---|
-| R1 | **`Indeterminate` → 503**（§6.1） | 500（`SecurityStatus.ERROR`） | 503 | 只改状态码 | 基准异常类属于 {`SnapshotUnavailableException`、`SnapshotStaleException`、`MissingPolicyException`、`MembershipUnavailableException`、黑名单检查的错误信号、冷加载超时}；候选为 `Indeterminate`，`Cause` 与该异常类一一对应（对应表在分类器中，单元测试固定） |
-| R2 | **认证器的依赖不可用 → 503**（§5.3.2） | 500（`parseSecurityContext` 的非 token 异常） | 503 | 只改状态码 | 基准在认证阶段出错（没有进入授权）；候选为 `AuthenticatorUnavailable` |
-| R3 | **`strictFailure` 的后端失败 → 503**（§8.3，Q17） | 429 | 503 | 只改状态码 | 基准的限流结果来自 `onFailure`（不是真实计数）；候选为 `RateLimiterUnavailable`，同一条规则 |
+R1–R3 是 8.0 相对 7.x 的三处状态码改动，都已登记为规则：
 
-**必须为零差异的**：400 的判定（路径规范化原样搬家）、401/403 的划分与原因码、429 的判定与响应头、做出决策的语句、`Rejected` 按匿名评估的结果、非 strict 限流规则的跳过。
+| # | 改动 | 7.x | 8.0 | 规则 |
+|---|---|---|---|---|
+| R1 | **`Indeterminate` → 503**（§6.1） | 500 | 503 | `PIP-2` |
+| R2 | **认证器的依赖不可用 → 503**（§5.3.2） | 500 | 503 | `PIP-2`、`PIP-8` |
+| R3 | **`strictFailure` 的后端失败 → 503**（§8.3，Q17） | 429 | 503 | `RTL-2` |
+
+400 的判定、401/403 的划分、429 的判定与响应头、做出决策的语句、`Rejected` 按匿名评估的结果、非 strict 限流规则的跳过，都是 8.0 的规则（§6.1）。
 
 ### 11.5 判定
 
-与 RFC 0004 §9.4 相同：合成语料、离线语料与随机用例的未归类差异为 0；离线回放每个部署至少 100 万条、至少 7 天，未归类差异为 0，`candidate_error` 为 0
-（或每条都对应基准同样出错的样本）。各类别的计数写进 PR-9 的门槛证据，只有计数和哈希（RFC 0002 §8.2.1 的数据处理规则不变）。发现未归类差异时：修候选，
-或者证明是基准的缺陷并登记附录 A，或者修订本 RFC 的改动目录后从零重跑。
+由 RFC 0008 §3.9 的切换标准取代。
 
 ---
 
 ## 12. AOT（RFC 0001 §3.10）
 
-| 约束 | 本阶段的做法 |
+| 约束 | 做法 |
 |---|---|
 | `model/`、`engine/` 不用反射和动态代理 | 新增的类型（`Obligation`、外部属性的值与状态、`onMissing`）都是普通类和 sealed 接口；`EnginePurityTest` 守护 |
 | `runtime/` 不用反射 | 只有普通类、sealed 接口和挂起函数；SPI 实现以 Spring bean 注入，没有 `ServiceLoader`、类路径扫描或按类名实例化 |
-| 匹配器工厂的 `ServiceLoader` | 随 `legacy` 节点删除（§5.6）；`cosec-core` 的 `META-INF/services` 中条件工厂的条目删除 |
-| `kotlinx-coroutines` | 只用 `core`、`reactor`、`slf4j`；不用 `Dispatchers.Main`（它经 `ServiceLoader` 查找 `MainDispatcherFactory`）。Spring AOT 对挂起函数 bean 没有额外要求 |
-| Kafka 审计的 JSON | 事件经 `CoSecJsonSerializer` 序列化。若 `AuditEventData` 走 Jackson 数据绑定，`cosec-kafka` 自带 `RuntimeHintsRegistrar`（`META-INF/spring/aot.factories`）并用 `RuntimeHintsPredicates` 测试；PR-6 实现时先确认现在是否已经覆盖 |
-| 缺少 hint 必须导致失败和拒绝 | 外部属性目录在快照编译时检查：一个提供者因缺少 hint 没有注册，引用它的语句编译失败（`Broken`，读到它的请求失败即拒绝），不会被当作"属性不存在"跳过 |
+| 匹配器工厂的 `ServiceLoader` | 已删除（§5.6） |
+| `kotlinx-coroutines` | 只用 `core`、`reactor`、`slf4j`；不用 `Dispatchers.Main`（它经 `ServiceLoader` 查找 `MainDispatcherFactory`） |
+| Kafka 审计的 JSON | 审计记录经 `CoSecJson.mapper`（Jackson 数据绑定）写出。在 native image 上它需要提示；8.0 不支持 native（RFC 0001 §3.10），`cosec-kafka` 今天没有 `RuntimeHintsRegistrar` |
+| 缺少 hint 必须导致失败和拒绝 | 外部属性目录在快照编译时检查：一个提供者因缺少 hint 没有注册，引用它的语句编译失败（`ATR-4`），不会被当作"属性不存在"跳过 |
 | 不能为了 native 拖慢 JIT 路径 | §13 |
-| JDK 25 AOT cache | 训练运行要覆盖 Pipeline（协程、监听器分发）；`docs/perf/gateway-aot-cache` 的测量在 PR-9 后重跑一次作参考 |
+| JDK 25 AOT cache | 两个镜像的训练运行覆盖 Pipeline（协程、监听器分发）；CI 的 AOT 冒烟每次推送到 `main` 都运行（`wiki/operations/deployment.md`） |
 
 ---
 
@@ -1118,43 +1105,44 @@ AGENTS.md 的 Invariants 表在 PR-9 更新：守护列换成上面的测试名�
 
 ### 13.1 目标
 
-> **2026-10-26**：`impl` 的对照从 `phase4` 改为从 `v7.0.1` 标签构建的 7.0 `SecurityPipeline` + 装饰器链，端到端压测同样对照 7.0；百分比不变（[RFC 0008](0008-conformance-and-direct-build.md) §3.8）。
-
 | 基准 | 比较 | 目标 |
 |---|---|---|
-| 新增 `PipelineBenchmark`（`runtime/` 的 `jmh` 源码集） | 参数 `impl` ∈ {`phase4`, `coroutine`}：`phase4` 是第 4 阶段结束时的 `SecurityPipeline` + 与 starter 相同的装饰器链（OTel 用 no-op SDK，审计到 no-op sink，指标到 `SimpleMeterRegistry`）；`coroutine` 是本文的 Pipeline，监听器配置对应。参数 `bridge` ∈ {`mono`, `runBlocking`}，场景 `scenario` ∈ {`global`, `role`, `none`, `blocked`, `rate-limited`（`LocalRateLimiter`）, `anonymous`} | **吞吐不低于 `phase4` 的 100 %**（交替三轮的平均；任何一轮不低于 97 %）；**B/op 不高于 `phase4`**。任一场景达不到，切换 PR（PR-9）停止，交回维护者（与 RFC 0005 Q12 同样的做法，Q24） |
-| `PipelineBenchmark` 的 `listeners` 参数 ∈ {0, 3, 3 + REQUIRED（内存实现）} | — | 只记录：BEST_EFFORT 投递的每请求开销；REQUIRED 的额外延迟 |
-| `SimpleAuthorizationBenchmark`、`EngineBenchmark` | 引擎不变 | 不变；`onMissing` 与义务的计算只在相关场景出现，另加 `obligations` 场景只记录 |
-| 端到端压测：`cosec-gateway-server`（Gateway）与一个 WebMvc 示例服务，JDK 25，同一台空闲机器，wrk2 定速 | `phase4` 与 `coroutine` 两个构建交替三轮 | 最大吞吐不低于 `phase4` 的 100 %；在 70 % 负载下 p99 不高于 `phase4` 的 105 %（延迟比吞吐噪声大）；结果附在 PR-9 |
+| `PipelineBenchmark`（`test/e2e` 的 `jmh` 源码集） | 与从 `v7.0.1` 标签构建的 7.0 `SecurityPipeline` + 装饰器链比较；场景含 `global`、`role`、`none`、`blocked`、`rate-limited`、`anonymous` | **吞吐不低于 7.0 的 100 %**（交替三轮的平均；任何一轮不低于 97 %）；**B/op 不高于 7.0**。以 7.0 的实测数字为绝对预算（RFC 0008 §3.8，Q24） |
+| `PipelineBenchmark` 的监听器配置 | — | 只记录：BEST_EFFORT 投递的每请求开销；REQUIRED 的额外延迟 |
+| `EngineAuthorizationBenchmark`、`EngineBenchmark` | 引擎 | RFC 0002 §7、RFC 0005 的预算 |
+| 端到端压测：`cosec-gateway-server` 与一个 WebMvc 服务，JDK 25，同一台空闲机器，定速 | 与 7.0 交替三轮 | 最大吞吐不低于 7.0 的 100 %；在 70 % 负载下 p99 不高于 7.0 的 105 %（延迟比吞吐噪声大） |
 
 预期：每个请求少了五层装饰器的 `Mono.defer` 与操作符、`subscribeOn(immediate)`、`SecurityContext` 属性 map 的写入；多了一次 `mono {}` 的协程创建和
-`Outcome` 对象。RFC 0001 §3.8 说"与网络 I/O 相比可以忽略，落地时用 JMH 加端到端压测确认"，上表就是这次确认。
+`Outcome` 对象。RFC 0001 §3.8 说桥接的开销"与网络 I/O 相比可以忽略，由 JMH 与端到端压测确认"，上表就是这次确认。当时的测量见
+[`docs/perf/e2e-slice`](../perf/e2e-slice/README.md)（Pipeline 与 7.0 的对比）与 [`docs/perf/rfc-0008-baseline`](../perf/rfc-0008-baseline/README.md)（7.0 的基线）；
+同一 CI 机器上的 7.x 与 8.0 对比是 `jmh-v7-v8.yml`。
 
 ### 13.2 测量方法
 
-完全沿用 RFC 0002 §7.2：JDK 25、`-PjmhWarmupIterations=5 -PjmhIterations=10 -PjmhFork=3 -PjmhProfilers=gc`、空闲机器（负载 < 1）、两边交替三轮。
+沿用 RFC 0002 §7.2：JDK 25、`-PjmhWarmupIterations=5 -PjmhIterations=10 -PjmhFork=3 -PjmhProfilers=gc`、空闲机器（负载 < 1）、两边交替三轮。
 
 ```bash
-./gradlew :runtime:jmh -PjmhIncludes=PipelineBenchmark -PjmhJavaVersion=25 -PjmhWarmupIterations=5 -PjmhIterations=10 -PjmhFork=3 -PjmhProfilers=gc
+./gradlew :e2e:jmh -PjmhIncludes=PipelineBenchmark -PjmhJavaVersion=25 -PjmhWarmupIterations=5 -PjmhIterations=10 -PjmhFork=3 -PjmhProfilers=gc
 ```
 
-`runtime/` 的 `jmh` 源码集按根 `build.gradle.kts` 中 `cosec-core` 的配置加上，支持同样的 `-Pjmh*` 属性。结果记在 `docs/perf/rfc-0006-pipeline/README.md`；
-PR-9 的描述附前后对比，PR-10 把最终数字写进 `wiki/architecture/overview.md`（中英文）。
+热路径的改动附前后对比（AGENTS.md 的不变量）；同一 CI 机器上的两个提交可以用 `jmh-ab.yml` 比较；最终数字在 `wiki/architecture/overview.md` 的性能一节。
 
 ---
 
 ## 14. 已知的非决策差异
 
-| # | 差异 | 谁能观察到 | 处理 |
+相对 7.x 的、不改变决策的差异，都写进了 `wiki/operations/upgrading.md`：
+
+| # | 差异 | 谁能观察到 | 写在 |
 |---|---|---|---|
-| X1 | **审计范围**：每个结果都产生事件，包括 400、认证不可用、取消、未建模的异常；新增字段 `snapshotVersion`、`binding`、`breakGlass`、`kind`；`AuditDecision.INDETERMINATE` | 审计消费方 | 写进 `observability.md`、`upgrading.md` |
-| X2 | **审计耗时**：`elapsedNanos` 是 Pipeline 全程（含认证、属性、限流），现在只算授权装饰器内部 | 按耗时告警的规则 | 同上 |
+| X1 | **审计范围**：每个结果都产生事件，包括 400、认证不可用、取消、未建模的异常；新增字段快照版本、`binding`、`breakGlass`、`kind`；`AuditDecision.INDETERMINATE` | 审计消费方 | `observability.md`、`upgrading.md` |
+| X2 | **审计耗时**：`elapsedNanos` 是 Pipeline 全程（含认证、属性、限流），7.x 只算授权装饰器内部 | 按耗时告警的规则 | 同上 |
 | X3 | **追踪**：`cosec.authorize` span 事后生成，评估中的 I/O span 不再是它的子 span；审计事件的 `spanId` 是父 span 的 id（§9.5.1） | trace 视图、按 `spanId` 关联审计的工具 | 同上，Q21 |
-| X4 | **指标**：`cosec.authorization` 的 `result`、`source` 取值变化，新增 `cause` 标签；耗时口径同 X2 | 仪表盘、告警 | 写进 `observability.md`、`upgrading.md` |
-| X5 | ~~**响应体原因码**：新增 `INDETERMINATE`、`SCOPE_REJECTED`、`RATE_LIMITER_UNAVAILABLE`、`TOKEN_REVOKED`~~（2026-10-26 改写，Q27）**响应体改为 problem+json，破坏性变更**：`Content-Type` 从 `application/json` 改为 `application/problem+json`；`{"authorized", "reason"}` 删除，改为 `type`、`title`、`status`、`code`、`requestId`（追踪生效时加 `traceId`）；显式与隐式拒绝在响应中不再区分（`unauthorized`/`forbidden`）；400 现在带响应体与 `CoSec-Request-Id`；500 是 `internal-error`（原来写 `Implicit Deny`）；吊销是 `token-revoked`（原来是 `Token Invalid`） | 解析拒绝响应体的客户端、按 `reason` 告警的网关与日志规则 | 写进 `web.md`（状态表与响应体示例）、`troubleshooting.md`（每个 `type` 一个锚点）、`upgrading.md`；切换 PR 的标题带 `!` |
-| X6 | **线程**：真正挂起之后，下游 WebFlux 处理链在 `Dispatchers.Default` 的线程上继续，而不是 `boundedElastic` | 依赖线程名或 `ThreadLocal` 的下游代码（本来就不可靠） | 写进 `web.md` |
-| X7 | **API**：§5.7 的全部删除项；`CoSecAuthorizationCustomizer` 删除；`AuthorizationChecker` 变为挂起 | 应用代码、自定义扩展 | 破坏性变更，写进 `upgrading.md`；PR 标题带 `!` |
-| X8 | **配置**：新增 `cosec.pipeline.*`、`cosec.authorization.attributes.*`、`cosec.audit.kafka.delivery`、`cosec.audit.required.timeout`、`cosec.observability.listener.*`；本地限流规则文件的属性删除（规则进快照） | 部署配置 | 写进 `configuration.md`、`upgrading.md` |
+| X4 | **指标**：`cosec.authorization` 的标签与取值变化（§9.5.2）；耗时口径同 X2 | 仪表盘、告警 | `observability.md`、`upgrading.md` |
+| X5 | **响应体改为 problem+json，破坏性变更**：`Content-Type` 从 `application/json` 改为 `application/problem+json`；`{"authorized", "reason"}` 删除，改为 `type`、`title`、`status`、`code`、`requestId`（追踪生效时加 `traceId`）；显式与隐式拒绝在响应中不再区分；400 带响应体与 `CoSec-Request-Id`；500 是 `internal-error`（7.x 写 `Implicit Deny`）；吊销是 `token-revoked`（7.x 是 `Token Invalid`） | 解析拒绝响应体的客户端、按 `reason` 告警的网关与日志规则 | `web.md`、`troubleshooting.md`（每个 `type` 一个锚点）、`upgrading.md` |
+| X6 | **线程**：真正挂起之后，下游 WebFlux 处理链在 `Dispatchers.Default` 的线程上继续，而不是 `boundedElastic` | 依赖线程名或 `ThreadLocal` 的下游代码（本来就不可靠） | `web.md` |
+| X7 | **API**：§5.7 的全部删除项；`CoSecAuthorizationCustomizer` 删除；`AuthorizationChecker` 变为挂起 | 应用代码、自定义扩展 | `upgrading.md` |
+| X8 | **配置**：`cosec.pipeline.*`、`cosec.audit.kafka.delivery`；各阶段的超时与队列容量不是属性，而是 `cosec.pipeline.timeout` 与堆的份额（`PIP-33`、`STA-12`）：曾经设置它们的键让启动失败并说明由什么取代（`RemovedProperties`）；本地限流规则文件的属性删除（规则进快照） | 部署配置 | `configuration.md`（"Computed, not configured"）、`upgrading.md` |
 
 ---
 
@@ -1162,45 +1150,61 @@ PR-9 的描述附前后对比，PR-10 把最终数字写进 `wiki/architecture/o
 
 > **2026-11-23 压缩时删去**：本节是实现的 PR 划分，都已合入。原文见 `git show 3cd4dca9:docs/rfc/0006-coroutine-pipeline.md`。
 
+别处引用的 PR 编号与当时的标题：
+
+| PR | 标题 | 结局 |
+|---|---|---|
+| PR-1 | `build: add the cosec-runtime module with kotlinx-coroutines` | 已合入（#1025） |
+| PR-2 | `feat(runtime): add the coroutine pipeline with outcomes and one status mapping` | 已合入 |
+| PR-3 | `feat(core,jwt,cocache): authenticate and resolve memberships with suspend functions` | 已合入 |
+| PR-4 | `feat(engine,runtime): fetch external attributes and apply onMissing` | 已合入（#1066） |
+| PR-5 | `feat(engine,runtime): enforce rate limits as obligations` | 已合入 |
+| PR-6 | `feat(runtime,opentelemetry,micrometer,kafka): add decision events and listeners` | 已合入（#1068） |
+| PR-7 | `feat(webflux,gateway,webmvc): bridge the adapters to the coroutine pipeline` | 已合入 |
+| PR-8 | `test: compare the coroutine pipeline with the phase 4 pipeline in replay` | 取消（RFC 0008） |
+| PR-9 | `refactor!: serve requests through the coroutine pipeline` | 并入 RFC 0008 的切换 |
+| PR-10 | `refactor!: remove the decorator chain, BlockingAware and the reactive authorization API` | 并入 RFC 0008 的切换 |
+
 ## 16. 决定
 
-以下各项已于 **2026-10-25** 由维护者确认，全部按本文的推荐决定（含 Q7 的新依赖、Q11 与 Q22 的 SPI 与 `cosec-api` 变更）。标注"测量后确认"的（Q25），PR 按这里的值实现，数字由测量结果校准。
+以下各项于 **2026-10-25** 由维护者确认，全部按本文的推荐决定（含 Q7 的新依赖、Q11 与 Q22 的 SPI 与 `cosec-api` 变更）；Q27 于 2026-10-26 新增。
+各行写的是今天的决定；后来改变了的部分注明出处。
 
 | # | 问题 | 决定 | 理由 |
 |---|---|---|---|
-| Q1 | **`Indeterminate` 的状态码**（§3 K1、§6） | **已决定**：每个 `Indeterminate` → 503，不带 `Retry-After`；500 只留给未建模的异常 | RFC 0001 的 500 一行在 RFC 0005 之后已经没有来源；"无法判定"的原因都是可重试的依赖或数据问题；500 因此只表示 CoSec 的缺陷，告警更有意义 |
-| Q2 | **凭证无效时的处理**（§3 K2） | **已决定**：保持现在的语义：按匿名评估，拒绝时 401 并带拒绝原因 | 一律 401 会让带过期 cookie 的浏览器打不开公开页面；不改变决策，门槛 C 可以要求零差异 |
-| Q3 | **阶段顺序**（§3 K3、§5.2） | **已决定**：认证 → 成员关系与黑名单属性（并发）→ 作用域 → 快照视图 → 属性计划与预取 → 引擎 → 义务 → 监听器 | 需要哪些文档取决于作用域和黑名单（RFC 0004 §7.4，已确认）；属性只取候选语句需要的 |
-| Q4 | **`ScopeResolver` 的位置**（§3 K4；RFC 0004 §4.1 留待本阶段） | **已决定**：留在 `model/`，同步纯函数 | 它没有 I/O；`Scope` 的 `internal` 构造器要求同模块；挂起的是成员关系 |
-| Q5 | **模块布局**（§3 K10、§5.1） | **已决定**：只新增 `runtime/`（构件 `cosec-runtime`），依赖 `cosec-core`；不改名现有模块；成员关系的 Redis 实现放 `cosec-cocache` | 搬家和改名都没有决策收益，却会改变每个下游的依赖坐标；与"短目录名、构件保留前缀"的约定一致 |
-| Q6 | **"不依赖 Reactor"的范围**（§3 K9） | **已决定**：本阶段守两条：`runtime/`、`engine/`、`model/` 的类不引用 `reactor.*`；数据面 SPI 的签名不含 Reactor 类型。类路径检查在第 6 阶段之后 | Lettuce 自己依赖 `reactor-core`；`SnapshotPublisher` 在第 6 阶段才重写；按字面执行本阶段无法通过 |
-| Q7 | **新依赖**（AGENTS.md 要求先问） | **已决定**：引入 `kotlinx-coroutines-core`、`-reactor`、`-slf4j`、`-test`、`-debug` 与 `opentelemetry-extension-kotlin`，版本与 Spring Boot 4 BOM 对齐 | RFC 0001 §3.8 已决定协程；这些是它的最小集合，`-debug` 提供 BlockHound 集成 |
-| Q8 | **恢复线程**（§3 K8、§7.2） | **已决定**：热路径零切换；真正挂起之后在 `Dispatchers.Default`（WebFlux / Gateway）或请求线程（WebMvc）上恢复；用 T1–T3 三个测试固定 | `mono {}` 的默认调度器让每个请求多切一次线程；`Unconfined` 让 CPU 工作落到客户端的 I/O 线程上 |
-| Q9 | **取消与超时**（§3 K13、§7.4） | **已决定**：外部取消重新抛出、不产生 `Outcome`、记 `CANCELLED` 事件；Pipeline 自己的超时用 `withTimeoutOrNull`，得到 503；禁止 `runCatching` 包住挂起调用 | 取消时没有人接收响应，"不放行"由"只有 Permit 能 proceed"在结构上保证；超时必须是一个响应；混淆两者会破坏结构化并发 |
-| Q10 | **阻塞的 SPI 实现**（§3 K15、§7.7） | **已决定**：CoSec 不自动切换线程，不提供 `BlockingAware` 的替代品；契约是"不得阻塞调用线程"，需要阻塞客户端的实现在内部切到自己的有界执行器；文档给出示例 | "是否阻塞"只有实现者知道；自动切换就是 `BlockingAware` 的翻版，并且声明错了照样阻塞 |
-| Q11 | **SPI 变更**（AGENTS.md 要求先问） | **已决定**：`Authenticator` 取代 `SecurityContextParser`；`MembershipProvider`、`TokenStore`、`ApiKeyStore`、`RateLimiter` 改为挂起（直接替换，不另加包装）；新增 `AttributeProvider`、`BlacklistSource`、`DecisionListener`、`BridgeContextContributor`；删除 `CoSecAuthorizationCustomizer`、`AuditEventSink`（提供 `AuditListener.of(sink)`） | 8.0 没有发布过，`CompletableFuture` 形式没有外部使用者，包装只会留下两套接口；没有可包装的 `Authorization` 之后，定制器没有意义 |
-| Q12 | **`onMissing` 与 ALLOW**（§3 K12、§5.4.3） | **已决定**：因外部属性不可用（`indeterminate`）而跳过的 ALLOW，在最终没有 Permit 时得到 `Indeterminate`（503）；任何 DENY 命中仍优先；不会产生 Permit | 否则 ALLOW 上的 `indeterminate` 与 `nomatch` 没有区别；依赖故障应当告诉客户端"可重试"，而不是"没有权限" |
-| Q13 | **DENY 上的 `onMissing: nomatch`**（§5.4.3） | **已决定**：本阶段只允许 `Platform` 文档这样写，编译时 WARN；控制面的显式确认在第 6 阶段 | 它让依赖故障时 DENY 失效（RFC 0001 §3.3）；没有控制面时，把它限制在平台管理员发布的文档里 |
-| Q14 | **黑名单**（§3 K17、§5.4.4；RFC 0004 Q9） | **已决定**：内置 `BlacklistAttributeProvider`，三个属性 `ext.blacklist.principal`/`ip`/`device`，名单来源是新的 `BlacklistSource` SPI；阶段 A 预取；删除 `BlacklistChecker` | 名单是外部数据，取值可能失败，正是 `AttributeProvider` 的用途；阶段 A 保住"被拉黑只读 `Platform`"（RFC 0004 §7.4） |
-| Q15 | **自定义匹配器与 `BlockingAware`**（§5.6；RFC 0005 Q2） | **已决定**：PR-10 删除 `legacy` 节点、`ConditionMatcherFactory`、`MatcherFactoryRegistry`、`BlockingAware`；自定义匹配器改写为 `AttributeProvider` + AST；`cosec-migrate` 拒绝 `legacy` 节点 | RFC 0005 Q2 的过渡到此结束；之后引擎不再调用任何用户代码，"纯决策"无例外成立 |
+| Q1 | **`Indeterminate` 的状态码**（§3 K1、§6） | **已决定**：每个 `Indeterminate` → 503，不带 `Retry-After`；500 只留给未建模的异常（`PIP-2`） | 合订前的 RFC 0001 的 500 一行在 RFC 0005 之后已经没有来源；"无法判定"的原因都是可重试的依赖或数据问题；500 因此只表示 CoSec 的缺陷，告警更有意义 |
+| Q2 | **凭证无效时的处理**（§3 K2） | **已决定**：按匿名评估，拒绝时 401 并带拒绝原因（`PIP-6`） | 一律 401 会让带过期 cookie 的浏览器打不开公开页面；不改变决策 |
+| Q3 | **阶段顺序**（§3 K3、§5.2） | **已决定**：读请求 → 认证 → 成员关系与阶段 A 属性（并发）→ 作用域 → 快照视图 → 属性计划与阶段 B 属性 → 引擎 → 义务 → 身份转发 → 监听器 | 需要哪些文档取决于作用域和黑名单（RFC 0004 §7.4）；属性只取候选语句需要的 |
+| Q4 | **`ScopeResolver` 的位置**（§3 K4） | **已决定**：留在 `model/`，同步纯函数 | 它没有 I/O；`Scope` 的 `internal` 构造器要求同模块；挂起的是成员关系 |
+| Q5 | **模块布局**（§3 K10、§5.1） | **已决定**：只新增 `runtime/`（构件 `cosec-runtime`）；成员关系的 Redis 实现放 `cosec-cocache`。之后的模块分组与 `cosec-document` 的拆分见 RFC 0011、RFC 0013 §3 | 搬家和改名都没有决策收益 |
+| Q6 | **"不依赖 Reactor"的范围**（§3 K9） | **已决定**：`runtime/`、`document/`、`engine/`、`model/` 的类不引用 `reactor.*`；数据面 SPI 的签名不含 Reactor 类型；`runtime`、`control` 不解析到 Reactor（`RuntimeBoundaryTest`、`DependencyRulesTest`）。Reactor 只在 `edge`、`host` 与 `cosec-cocache` 内部（RFC 0011 §5） | Lettuce 自己依赖 `reactor-core`；规则守的是引用与签名，类路径规则在控制面重写发布接口之后才可能 |
+| Q7 | **新依赖** | **已决定**：引入 `kotlinx-coroutines-core`、`-reactor`、`-slf4j`、`-test`、`-debug` 与 `opentelemetry-extension-kotlin`，版本与 Spring Boot 的 BOM 对齐 | RFC 0001 §3.8 已决定协程；这些是它的最小集合，`-debug` 提供 BlockHound 集成 |
+| Q8 | **恢复线程**（§3 K8、§7.2） | **已决定**：热路径零切换；真正挂起之后在 `Dispatchers.Default`（WebFlux / Gateway）或请求线程（WebMvc）上恢复；用 T1–T3 固定 | `mono {}` 的默认调度器让每个请求多切一次线程；`Unconfined` 让 CPU 工作落到客户端的 I/O 线程上 |
+| Q9 | **取消与超时**（§3 K13、§7.4） | **已决定**：外部取消重新抛出、不产生 `Outcome`、记 `CANCELLED` 事件；Pipeline 自己的超时用 `...OrNull` 的形式，得到 503；禁止 `runCatching` | 取消时没有人接收响应，"不放行"由"只有 Permit 能 proceed"在结构上保证；超时必须是一个响应；混淆两者会破坏结构化并发 |
+| Q10 | **阻塞的 SPI 实现**（§3 K15、§7.7） | **已决定**：CoSec 不自动切换线程，不提供 `BlockingAware` 的替代品；契约是"不得阻塞调用线程"，需要阻塞客户端的实现在内部切到自己的有界执行器 | "是否阻塞"只有实现者知道；自动切换就是 `BlockingAware` 的翻版，并且声明错了照样阻塞 |
+| Q11 | **SPI 变更** | **已决定**：`Authenticator` 取代 `SecurityContextParser`；`MembershipProvider`、`ApiKeyStore`、`RateLimiter` 是挂起函数，`TokenStore` 只有挂起的写入，读取属于 `RevocationReader`（§5.3.2）；新增 `AttributeProvider`、`BlacklistSource`、`DecisionListener`、`BridgeContextContributor`；删除 `CoSecAuthorizationCustomizer`；`AuditEventSink` 只经 `AuditListener.of(sink, name)` 接入 | 8.0 发布之前，`CompletableFuture` 形式没有外部使用者，包装只会留下两套接口；没有可包装的 `Authorization` 之后，定制器没有意义 |
+| Q12 | **`onMissing` 与 ALLOW**（§3 K12、§5.4.3） | **已决定**：因外部属性不可用（`indeterminate`）而跳过的 ALLOW，在最终没有 Permit 时得到 `Indeterminate`（503）；任何 DENY 命中仍优先；不会产生 Permit（`ATR-2`） | 否则 ALLOW 上的 `indeterminate` 与 `nomatch` 没有区别；依赖故障应当告诉客户端"可重试"，而不是"没有权限" |
+| Q13 | **DENY 上的 `onMissing: nomatch`**（§5.4.3） | **已决定**：第 5 阶段只允许 `Platform` 文档这样写（`ATR-3`，已被取代）；控制面落地之后，经控制面显式确认的这类 DENY 在任何文档里都能编译，没有确认的在任何文档里都不编译（RFC 0007 N6，`ATR-6`） | 它让依赖故障时 DENY 失效（RFC 0001 §3.3）；没有控制面时，把它限制在平台管理员发布的文档里 |
+| Q14 | **黑名单**（§3 K17、§5.4.4；RFC 0004 Q9） | **已决定**：内置 `BlacklistAttributeProvider`，三个属性 `ext.blacklist.principal`/`ip`/`device`，名单来源是 `BlacklistSource`；阶段 A 预取；删除 `BlacklistChecker` | 名单是外部数据，取值可能失败，正是 `AttributeProvider` 的用途；阶段 A 保住"被拉黑只读 `Platform`"（RFC 0004 §7.4） |
+| Q15 | **自定义匹配器与 `BlockingAware`**（§5.6；RFC 0005 Q2） | **已决定**：删除 `ConditionMatcherFactory`、`MatcherFactoryRegistry`、`BlockingAware`；自定义匹配器改写为 `AttributeProvider` + AST；`cosec-migrate` 拒绝自定义匹配器。`legacy` 节点没有实现（RFC 0008 §6 Q4） | 引擎不再调用任何用户代码，"纯决策"无例外成立 |
 | Q16 | **限流规则与义务**（§3 K7、§8；RFC 0003 Q17） | **已决定**：规则进快照文档（`rateLimits` 节）；引擎在 Permit 后匹配规则、算桶，作为 `Permit.obligations` 返回；Pipeline 顺序执行；删除 `RateLimitRuleProvider` | 规则本来就独立于放行语句；匹配留在纯引擎里，执行留在 Pipeline 里；只有 Permit 有义务，"被拒绝的请求不扣配额"由类型保证 |
-| Q17 | **`strictFailure` 的状态码**（§3 K14） | **已决定**：503（`RATE_LIMITER_UNAVAILABLE`），门槛 C 的 R3 | 429 说的是"你超额了"，事实是"限流后端不可用"；与"依赖不可用即 503"一致。备选：保持 429，R3 删除 |
-| Q18 | **REQUIRED 失败时的 Deny**（§3 K5 ①、§9.4.2） | **已决定**：只把 Permit 改成 503；Deny、Indeterminate、429 保持原状态码，记 ERROR 并计数 | 只有 Permit 会在没有审计记录的情况下产生效果；把 403 改成 503 只会让客户端误以为可以重试 |
+| Q17 | **`strictFailure` 的状态码**（§3 K14） | **已决定**：503（`RateLimiterUnavailable`），R3（`RTL-2`） | 429 说的是"你超额了"，事实是"限流后端不可用"；与"依赖不可用即 503"一致 |
+| Q18 | **REQUIRED 失败时的 Deny**（§3 K5 ①、§9.4.2） | **已决定**：只把 Permit 改成 503；Deny、Indeterminate、429 保持原状态码，记 ERROR 并计数（`OBS-1`） | 只有 Permit 会在没有审计记录的情况下产生效果；把 403 改成 503 只会让客户端误以为可以重试 |
 | Q19 | **义务与 REQUIRED 的顺序**（§3 K5 ②） | **已决定**：先义务后 REQUIRED；审计失败时已扣的许可不退，写进 `rate-limiting.md` | 审计要记录最终结果（含 429）；多扣的方向是更严；反过来的顺序会让审计记下错误的结果 |
-| Q20 | **break-glass 与 REQUIRED**（§9.4.3；RFC 0004 I9） | **已决定**：break-glass 的 Permit 至少要有一个 REQUIRED 监听器成功；没有配置时也是 503；启动时 WARN | RFC 0001 §3.7 要求每一次使用都写 REQUIRED 审计；没有 REQUIRED 监听器时无法满足，只能拒绝 |
+| Q20 | **break-glass 与 REQUIRED**（§9.4.3；RFC 0004 I9） | **已决定**：break-glass 的 Permit 至少要有一个 REQUIRED 监听器记下；没有配置时也是 503；启动时 WARN（`OBS-2`） | RFC 0001 §3.7 要求每一次使用都写 REQUIRED 审计；没有 REQUIRED 监听器时无法满足，只能拒绝 |
 | Q21 | **OpenTelemetry**（§3 K6、§9.5.1） | **已决定**：`TracingListener` 按事件的时间戳事后生成 `cosec.authorize` span；评估中的 I/O 挂在父 span 下；审计记录父 span id。备选：保留一个只能包住评估的钩子（它就是一个装饰器） | 保住"观察不改变决策"这条结构性保证；trace 视图里的时间位置不变，丢掉的只是一层嵌套 |
-| Q22 | **`cosec-api` 的删除项**（AGENTS.md 要求先问；RFC 0002 Q5 推迟的 `VerifyResult`） | **已决定**：PR-10 删除 `Authorization`、`DecisionAuthorization`、`AuthorizationDecision`、`AuthorizeResult`、`VerifyResult`、`VerifyContext` 及子类、`SecurityContext` 中内部使用的可变属性；`SecurityContext` 保留为只读视图并增加 `scope`；~~响应体的 JSON 形状保留~~（2026-10-26 由 Q27 推翻：响应体改为 problem+json） | 四种结果类型收敛为 `Decision` + `Outcome`（RFC 0001 §1.2）；~~保留响应体形状，客户端不必改解析~~（8.0 不考虑兼容性之后不再成立，Q27） |
-| Q23 | ~~**门槛 C 的标准**（§11）~~（2026-10-26 由 [RFC 0008](0008-conformance-and-direct-build.md) 取代） | **已决定**：沿用 RFC 0004 Q20："未归类差异为零"；改动目录 R1–R3 都只改状态码，没有放宽类；新增类别必须修订本 RFC | 本阶段承诺不改变 Permit / Deny 的划分；没有放宽类，任何放宽都直接失败 |
-| Q24 | **性能要求**（§13；**2026-10-26 修订**：对照从第 4 阶段改为 7.0，见 [RFC 0008](0008-conformance-and-direct-build.md) §3.8） | **已决定**：`PipelineBenchmark` 全部场景吞吐不低于第 4 阶段结束时的 100 %、B/op 不高于它；端到端最大吞吐不低于 100 %、70 % 负载下 p99 不高于 105 %；达不到时 PR-9 停止，交回维护者 | "不回退"需要一个可检查的数字；装饰器链的开销应当大于协程桥接的开销，否则这次重组没有兑现 RFC 0001 §3.8 的前提 |
-| Q25 | **超时默认值**（测量后确认） | **已决定**：整体 `cosec.pipeline.timeout` 5 秒（上限，不是各阶段之和）；认证 1 秒；成员关系 500 ms（RFC 0004）；外部属性每个提供者 300 ms；冷加载 2 秒（RFC 0003）；限流 200 ms；REQUIRED 监听器 1 秒；BEST_EFFORT 队列 1024 | 给每个外部调用一个上界；数字用端到端压测和真实部署的依赖延迟校准 |
-| Q26 | **审计的范围**（§3.1 L2、§9.2） | **已决定**：每个结果都产生 `DecisionEvent`，包括 400、认证不可用、取消、未建模的异常 | 现在认证阶段的失败不留任何记录；"无法判定"与"出错"恰恰是事后最需要追查的 |
-| Q27 | **错误响应体**（§6.1、§6.2、X5；2026-10-26 新增） | **已决定（2026-10-26，维护者）**：CoSec 自己写的每个错误响应用 RFC 9457 的 `application/problem+json`，不做内容协商；`type` 是 `https://cosec.ahoo.me/problems/<slug>`，解析到中英文文档锚点；成员只有 `type`、`title`（每个 `type` 固定的英文）、`status` 与扩展 `code`、`requestId`（追踪生效时加 `traceId`），没有 `detail`、`instance`；词汇只有 §6.1 的十个 `type`，显式与隐式拒绝合并为 `unauthorized`/`forbidden`；响应体不泄露策略、语句与异常，细节只进审计与 `explain`；`StatusMapping` 把 problem 作为 `Outcome` 的一部分构造，`runtime/` 的手写编码器是唯一的序列化路径（不用 Jackson、不用 Spring `ProblemDetail`）；没有配置项。推翻 §6.2 原文与 Q22 的"响应体的 JSON 形状保留"，X5 改为破坏性变更 | 保留 7.x 形状只为不改客户端解析，8.0 不考虑兼容性（RFC 0008）；problem+json 是标准，客户端与网关有现成的处理；只暴露客户端能据以行动的区分，响应不再告诉调用者"这里有一条 DENY"；手写编码器让三个适配器逐字节相同，也不需要 AOT 提示。维护者原话："Adopt problem+json as recommended (P1–P8), including collapsing explicit/implicit deny into unauthorized/forbidden." |
+| Q22 | **`cosec-api` 的删除项**（RFC 0002 Q5 推迟的 `VerifyResult`） | **已决定**：删除 `Authorization`、`DecisionAuthorization`、`AuthorizationDecision`、`AuthorizeResult`、`VerifyResult`、`VerifyContext` 及子类、`SecurityContext` 中内部使用的可变属性；`SecurityContext` 保留为只读视图并增加作用域。响应体的形状见 Q27 | 四种结果类型收敛为 `Decision` + `Outcome`（RFC 0001 §1.2） |
+| Q23 | **门槛 C 的标准**（§11） | **已决定，由 RFC 0008 取代**：第 5 阶段的门槛是"未归类差异为零"，R1–R3 都只改状态码，没有放宽类；今天由规范一致性套件检查（§11） | 本阶段承诺不改变 Permit / Deny 的划分 |
+| Q24 | **性能要求**（§13） | **已决定**：`PipelineBenchmark` 全部场景吞吐不低于 7.0 的 100 %、B/op 不高于它；端到端最大吞吐不低于 100 %、70 % 负载下 p99 不高于 105 %（RFC 0008 §3.8 的绝对预算，对照 7.0） | "不回退"需要一个可检查的数字；装饰器链的开销应当大于协程桥接的开销，否则这次重组没有兑现 RFC 0001 §3.8 的前提 |
+| Q25 | **超时与容量**（测量后确认） | **已决定，2026-11-22 改为算出**（"能算出来的就不要配置"，`PIP-33`、`OBS-10`、`OBS-11`、`STA-12`）：运维只写整体期限 `cosec.pipeline.timeout`（默认 5 秒，上限，不是各阶段之和）；认证 20 %、成员关系 10 %（也是成员关系缓存的填充期限）、没有自带超时的属性提供者 6 %、限流 10 %、CoSec 自己的吊销读取是认证超时的 30 %、REQUIRED 监听器 20 %、冷加载 40 %，每个份额是具名常量（`StageBudgets`、`SnapshotOptions`），不低于 1 毫秒；默认期限下每个值都等于原来的默认值（认证 1 秒、成员关系 500 ms、属性 300 ms、限流 500 ms、吊销读取 300 ms、REQUIRED 1 秒、冷加载 2 秒）。期限低于 20 毫秒时两次吊销读取不再保证落在认证超时之内。BEST_EFFORT 队列是堆的份额（§9.3）。启动时说一次每个值与它的来源 | 给每个外部调用一个上界；份额让各个超时随运维唯一知道的那个期限一起缩放，而不是十几个彼此不一致的属性 |
+| Q26 | **审计的范围**（§3.1 L2、§9.2） | **已决定**：每个结果都产生 `DecisionEvent`，包括 400、认证不可用、取消、未建模的异常 | 7.x 认证阶段的失败不留任何记录；"无法判定"与"出错"恰恰是事后最需要追查的 |
+| Q27 | **错误响应体**（§6.1、§6.2、X5；2026-10-26 新增） | **已决定（2026-10-26，维护者）**：CoSec 自己写的每个错误响应用 RFC 9457 的 `application/problem+json`，不做内容协商；`type` 是 `https://cosec.ahoo.me/problems/<slug>`，解析到中英文文档锚点；成员只有 `type`、`title`（每个 `type` 固定的英文）、`status` 与扩展 `code`、`requestId`（追踪生效时加 `traceId`），没有 `detail`、`instance`；词汇只有 §6.1 的十个 `type`，显式与隐式拒绝合并为 `unauthorized`/`forbidden`；响应体不泄露策略、语句与异常，细节只进审计与 `explain`；`StatusMapping` 把 problem 作为 `Outcome` 的一部分构造，`runtime/` 的手写编码器是默认的序列化路径（不用 Jackson、不用 Spring `ProblemDetail`）；没有配置项。宿主可以用 `ProblemRenderer` 换掉响应体的渲染，状态码与响应头仍是 CoSec 的（`PIP-34`，2026-11-22） | 保留 7.x 形状只为不改客户端解析，8.0 不考虑兼容性（RFC 0008）；problem+json 是标准，客户端与网关有现成的处理；只暴露客户端能据以行动的区分，响应不再告诉调用者"这里有一条 DENY"；手写编码器让三个适配器逐字节相同，也不需要 AOT 提示。维护者原话："Adopt problem+json as recommended (P1–P8), including collapsing explicit/implicit deny into unauthorized/forbidden." |
 
 ---
 
 ## 附录 A：已确认差异
 
-门槛期间发现、并经维护者确认的差异登记在这里（初始为空）。
+门槛期间发现、并经维护者确认的差异登记在这里。门槛 C 在任何差异登记之前由 RFC 0008 取代，表为空。
 
 | 编号 | 类别 | 计数 | 结论 | 确认人 / 日期 |
 |---|---|---|---|---|
@@ -1208,3 +1212,27 @@ PR-9 的描述附前后对比，PR-10 把最终数字写进 `wiki/architecture/o
 ## 附录 B：涉及的现有代码
 
 > **2026-11-23 压缩时删去**：本节是7.x 里与本文有关的文件清单，这些代码已删除。原文见 `git show 3cd4dca9:docs/rfc/0006-coroutine-pipeline.md`。
+
+---
+
+## 修订沿革
+
+只列日期与出处，内容都在正文里。
+
+- 2026-10-25：确认（#1014）。
+- 2026-10-26：门槛 C 由 RFC 0008 取代（#1039）；错误响应体改为 problem+json（Q27）；运行时第 1 轮审查的更正。
+- 2026-10-27：PR-2 审查（#1044）的路径规则；限流规则进文档（#1078）；`PipelineComponents`（#1088）；BEST_EFFORT 队列（#1096）。
+- 2026-11-03：网关的身份与凭据（#1194）。
+- 2026-11-04：RC 修复批次 D1（#1200）：重复的请求头、格式错误的令牌声明。
+- 2026-11-07：属性计划完整与检查的属性（#1231）；限流计数键（#1231）；限流桶的转义（#1254）。
+- 2026-11-08：CoCache 8（#1203）；监听器超时的属性名与内部 API（#1283）；限流计数器 id（#1284）；cookie 令牌与 `CoSec-*` 只读请求头（#1295）；`AuditVia`（#1297）。
+- 2026-11-09：属性规划沿语句索引（#1304）。
+- 2026-11-13：路径的空段、编码分隔符与反斜杠（#1311）；检查与执行读同一条路径（#1311）；限流规则的上限（#1318）。
+- 2026-11-14：令牌读取与吊销（#1321）；Redis 限流器的单键布局（#1322）；客户端地址与真实服务器的一致性（#1326）；方法、过滤器顺序与应用内路径（#1328）；
+  应用代码里的安全上下文（#1329）；`ip2region` 的取不到与 `IdGenerator` 的回退（#1330）。
+- 2026-11-18：检查属于它的请求，读取入口只返回 pipeline 造出的上下文（#1657）。
+- 2026-11-19：易用性审查（#1662、#1666、#1672、#1676、#1679、#1682、#1688）；第一轮整体审查的加固（#1710、#1711）；刷新的成员关系（#1728）。
+- 2026-11-20：审计记录的类型（#1741）；网关与适配器的请求路径（#1768、#1772、#1778）。
+- 2026-11-21：只读采样事件的监听器（#1790）；控制面宿主的调用方（#1789）；原因的线上名字（#1815）与 CoSec 路由的端口（#1811）。
+- 2026-11-22：各阶段超时是期限的份额（#1839）；内存上限是堆的份额（#1844）；路径与段的上限（#1860）；转发头策略的新键（#1849）；宿主渲染拒绝的响应体（#1864）。
+- 2026-11-23：§2、§4、§15 与附录 B 压缩为一行（#1882）。
