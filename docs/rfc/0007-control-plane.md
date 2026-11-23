@@ -148,198 +148,229 @@
 ### 5.1 模块与依赖
 
 ```
-model/ ← engine/ ← cosec-core ← runtime/ ← control/（cosec-control）
-                                              ↑
-cosec-cocache（CoCacheControlStore）──────────┘      cosec-spring-boot-starter（feature variant controlSupport）
+model ← engine ← spi ← document ← runtime ← control（cosec-control）
+                                    ↑            ↑
+cosec-cocache（CoCacheControlStore，经 compileOnlyApi 实现 control 的端口）    cosec-spring-boot（类路径上有 cosec-control 时装配）
+control-sdk（ControlService 门面，只依赖 api、spi、document）← control-http（HttpControlService）
 ```
 
-| 模块 | 本阶段新增或改动 | 理由 |
+| 模块 | 内容 | 理由 |
 |---|---|---|
-| `model/` | 无新类型；`implies`（RFC 0005 PR-2）被控制面调用 | 纯函数，已在那里 |
-| `engine/` | `withinBoundary`（§7.6）；动作与资源模式的包含判断（RFC 0005 §5.5，§3.1 N7） | 都是纯函数，模式实现（`HttpPathPattern`）在这里 |
-| `cosec-core` | 文档格式：`provenance`、`boundary`、`boundaries`、`limits`、`attributes`（§5.3、§7.6、§3.1 N3）；编译器的新规则（N1、N2、§9.5）；**文档格式描述与 schema 生成**（§10.4）；`SnapshotPublisher` 删除 | 编解码与编译器在这里（RFC 0004 Q10）；数据面和控制面必须用同一个编译器 |
-| `runtime/` | `ShadowListener` 读取候选文档（§6.4）；`ShadowReportSink` SPI | 影子是数据面监听器（RFC 0006 §9.5.4） |
-| `control/`（新） | `ControlPlane`、变更请求、发布流程、`GrantAnalyzer`、审批、break-glass、`apply`、`simulate`/`explain`/`analyze`、`ControlStore` SPI、`ChangeListener` SPI | 只有控制面用到的东西；不依赖 Spring、Reactor、Redis 客户端（ArchUnit） |
-| `cosec-cocache` | `CoCacheControlStore`、`CoCacheShadowReportSink`、候选文档的存储 | CoCache 的实现都在这里（RFC 0006 Q5） |
+| `model` | `implies`（RFC 0005 §4.2）被控制面调用 | 纯函数 |
+| `engine` | `withinBoundary`（§7.6）；动作与资源模式的包含判断（RFC 0005 §5.5，§3.1 N7，`PatternContainment`） | 都是纯函数，模式实现（`HttpPathPattern`）在这里 |
+| `document` | 文档格式：`provenance`、`boundary`、`boundaries`、`limits`、`attributes`（§5.3、§7.6、§3.1 N3）；编译器的规则（N1、N2、§9.5）；文档格式描述与 schema 生成（§10.4） | 编解码与编译器在这里；数据面和控制面必须用同一个编译器 |
+| `spi` | 影子候选与报告的端口（`CandidateStore`、`ShadowReportSink`、`ShadowReportReader`） | 数据面与控制面都用，签名只需要模型 |
+| `runtime` | 数据面读取候选文档、记录影子比较（§6.4） | 影子在数据面的请求路径上 |
+| `control` | `ControlPlane`、变更请求、发布流程、授出分析、审批、break-glass、`apply`、`simulate`/`explain`/`analyze`、`ControlStore` 端口、`ChangeListener` 端口、HTTP 路由的处理（`ControlHttp`）、进程内的门面实现 `LocalControlService` | 只有控制面用到的东西；不引用 Spring、Reactor、Redis 客户端（`ControlBoundaryTest`） |
+| `control-sdk` | 门面 `ControlService`、`ControlCaller`、类型化的 `ControlClient`（§10.2） | 应用调用控制面的接口；不依赖 `runtime` 与 `control`，只调用控制面宿主的应用两者都不用带 |
+| `control-http` | `HttpControlService`：经 HTTP 调控制面宿主的服务端口（§10.2） | 一种技术一个模块 |
+| `cosec-cocache` | `CoCacheControlStore`、影子报告与候选的存储 | CoCache 的实现都在这里；不依赖 `runtime`，只经列出的端口触及 `control` |
 | `cosec-kafka` | `KafkaChangeListener` | 与 `KafkaAuditListener` 同一模块 |
-| `cosec-spring-boot-starter` | feature variant `controlSupport`：装配 `ControlPlane` 与 HTTP 路由（§10.2） | 应用只在需要时引入控制面 |
-| `migrate/` | `bootstrap`；`publish` 改经 `ControlStore` | 唯一在控制面之外写存储的工具（§5.9） |
-
-`control/` 以 Gradle 项目 `:control`、目录 `control/` 加入，与 `model/`、`engine/`、`runtime/` 的约定一致。
+| `cosec-spring-boot` | 类路径上有 `cosec-control` 时装配 `ControlPlane`、HTTP 路由与服务端口（§10.2） | 应用只在需要时引入控制面 |
+| `cosec-migrate` | `bootstrap`、`restore`、`repair-references`；`publish` 经控制面的存储写入（§5.9） | 唯一在控制面之外写存储的工具 |
+| `cosec-control-server` | 控制面宿主镜像（`platform/control-server`）：starter 加控制面，别无他物 | 不嵌入应用的部署（§10.2） |
 
 ### 5.2 数据
 
-> **实现说明（2026-11-08，#1203，CoCache 8.0.0）**：`ControlStore` 的 Redis 实现（`CoCacheControlStore`）现在基于 CoCache 8.0.0 的 `Store`：条件写（原文的 `putIfMatch`）是 CoCache 8 的条件写，仍只对一个 key 做比较并交换；新增的条件删除 `Store.deleteIfMatch` 让候选的撤回与租约的释放只删自己写的那一个（审计批次 E2a，#1268，规则 `CTL-26`）。摘要是 SHA-256，写作 `SHA-256:<64 位十六进制>`：修订记录的 key、修订索引、`provenance.parent.digest`、变更的 `base.digest` 与 `checkedWith`。CoCache 6 写的控制面记录读出即 500，由 `cosec-migrate cocache8` 删除，历史从重新发布的文档重新开始。（2026-11-14 修订，#1351：该命令在 GA 的工具里已删除，alpha 部署用 `8.0.0-alpha.4` 的 `cosec-migrate` 完成这次升级；GA 的 `publish` 遇到未完成升级留下的 `<prefix>:meta:cocache8` 标记时拒绝写入。）
+`ControlStore` 的 Redis 实现是 `cosec-cocache` 的 `CoCacheControlStore`，建在 CoCache 8 的 `Store` 上。条件写（`putIfMatch`）只对一个 key 做比较并交换；
+条件删除（`deleteIfMatch`）让候选的撤回与租约的释放只删自己写的那一个（`CTL-26`）。摘要是 SHA-256，写作 `SHA-256:<64 位十六进制>`：修订记录的 key、
+修订索引、`provenance.parent.digest`、变更的 `base.digest` 与 `checkedWith` 都用它。
 
 | 数据 | CoCache 缓存 | Redis key（`<p>` 是 key 前缀） | 写入 | 读者 | 丢失的后果 |
 |---|---|---|---|---|---|
-| **头**：已发布的快照文档 | `PolicySnapshotCache`（RFC 0003 §4.1，不变） | `<p>:snapshot:platform`、`…:app:<a>`、`…:tenant:<t>`（RFC 0004 §7.1） | 只有控制面（以及 `cosec-migrate`）；`putIfMatch(expected = 基准摘要)` | 数据面、控制面 | 与现在相同（F2a，失败即拒绝） |
-| **修订记录** | `RevisionRecordCache` | `<p>:control:revision:<docKey>:<digest>` | 控制面；`putIfMatch(expected = null)`，只建不改 | 控制面 | 历史、回滚、按版本解释不可用；数据面不受影响 |
-| 修订索引 | `RevisionIndexCache` | `<p>:control:revisions:<docKey>` | 控制面；CAS 追加 | 控制面 | 可从头沿 `parent` 链重建（§5.4） |
-| 变更请求 | `ChangeRequestCache` | `<p>:control:change:<changeId>` | 控制面；CAS 状态转换 | 控制面 | 进行中的变更丢失，已发布的不受影响 |
-| 暂存槽 | `StageCache` | `<p>:control:stage:<docKey>` | 控制面；`putIfMatch(expected = null)` 占用 | 控制面 | 见 §5.5 |
-| 候选文档 | `CandidateSnapshotCache` | `<p>:candidate:<docKey>` | 控制面 | 数据面的影子监听器 | 影子窗口没有样本；决策不受影响 |
-| 影子报告 | `ShadowReportCache`（有 TTL） | `<p>:control:shadow:<changeId>:<instanceId>` 与登记 `…:<changeId>` | 数据面实例，各写各的 key | 控制面 | 窗口证据不足，需要重跑 |
-| 反向引用索引 | `ReferenceIndexCache` | `<p>:control:refs:<docKey>:<policyId>` | 控制面；CAS | 控制面 | 可从各个头重建（§5.8） |
+| **头**：已发布的快照文档 | `PolicySnapshotCache`（RFC 0003 §4.1） | `<p>:snapshot:platform`、`…:app:<a>`、`…:tenant:<t>` | 只有控制面（以及 `cosec-migrate`）；条件写（期望 = 基准摘要） | 数据面、控制面 | 失败即拒绝 |
+| **修订记录** | `RevisionRecordCache` | `<p>:control:revision:<docKey>:SHA-256:<hex>` | 控制面；只建不改 | 控制面 | 历史、回滚、按版本解释不可用；数据面不受影响 |
+| 修订索引 | `RevisionIndexCache` | `<p>:control:revisions:<docKey>` | 控制面；条件写 | 控制面 | 可从头沿 `parent` 链重建（§5.4） |
+| 变更请求 | `ChangeRequestCache` | `<p>:control:change:<changeId>` | 控制面；条件写的状态转换 | 控制面 | 进行中的变更丢失，已发布的不受影响 |
+| 未结束变更的集合 | `ControlChangeSetCache` | `<p>:control:changes:doc:<docKey>`、`…:state:<状态>` | 控制面；逐个加入与摘除成员 | 控制面 | 见 §5.7 |
+| 文档集合 | `ControlDocumentSetCache` | `<p>:control:documents:all` | 控制面 | 控制面 | 可从各个头重建 |
+| app 列表 | `ControlAppListCache` | `<p>:control:apps:all` | 控制面 | 控制面的授出分析（§7.4.3） | 授出分析把所有 app 当作未读（UNKNOWN），fail closed |
+| 暂存槽 | `StageCache` | `<p>:control:stage:<docKey>` | 控制面；条件写占用 | 控制面 | 见 §5.5 |
+| 候选文档 | `CandidateCache` | `<p>:candidate:<docKey>` | 控制面 | 数据面 | 影子窗口没有样本；决策不受影响 |
+| 已暂存候选的清单 | `CandidateStagedCache` | `<p>:candidate-staged:all` | 控制面 | 数据面 | 见 §6.4 |
+| 影子报告与实例状态 | `ShadowReportCache` 等（有 TTL） | `<p>:shadow:report:<window>:<instance>`、`…:reporters:<window>`、`…:status:<instance>`、`…:resident:<instance>`、`…:instances:all` | 数据面实例，各写各的 key | 控制面 | 窗口证据不足，需要重跑 |
+| 反向引用索引 | `ReferenceIndexCache` | `<p>:control:refs:<docKey>:<policyId>`（集合） | 控制面；逐个加入与摘除成员 | 控制面 | 可从各个头重建（§5.8） |
+| 租约 | `ControlLeaseCache` | `<p>:control:lease:<name>` | 控制面；条件写，带期限 | 控制面 | 一次维护任务可能由两个实例做 |
 
-- **头是唯一的权威**（§3 M10，Q4）。数据面只读头；其余数据都可以丢失而不影响任何决策。这一条让"策略缓存永不过期、读失败抛出"的不变量只需要
-  覆盖一个缓存，与现在相同。
-- 除影子报告外，新缓存都用 `storeOfRecord()`（`ttl = null`、`ReadFailureMode.THROW`，2026-11-02 起另有 `InvalidateFailureMode.THROW`：晚到的删除重试可能删掉其间的新写入，例如重新写入的修订记录或重新取得的租约，#1188），在任何 customizer 之后施加（`CoSecCacheSpecs.pinnedPolicy` 的做法）；
-  `CacheTtlPolicyTest` 扩展到它们。修订记录与变更请求不是数据面的策略数据，但读失败当作"不存在"会让控制面在错误的基准上发布，所以同样抛出。
-- 影子报告有 TTL（窗口最长时长 + 1 天）：它们是可以重跑的观测结果。
-- `docKey` 沿用 `SnapshotKey` 的显式编码（RFC 0003 §4.1：`platform`、`app:<a>`、`tenant:<t>`，拒绝含 `:` 的 id）。所有 key 都经 CoCache 写入，
-  没有绕过 CoCache 的 Redis 命令；最小化的 Redis ACL 与现在相同（RFC 0001 §3.11 的 `+hkeys +hget` 等）。
+- **头是唯一的权威**（§3 M10，Q4）。数据面只读头；其余数据都可以丢失而不影响任何决策。
+- 除影子报告与实例状态外，这些缓存都是"记录"：永不过期、读失败抛出、删除失败抛出，由 `CoSecCacheSpecs.locks` 在任何 customizer 与属性之后固定
+  （`CacheTtlPolicyTest`、`StrictCacheFailureTest`）。修订记录与变更请求不是数据面的策略数据，但读失败当作"不存在"会让控制面在错误的基准上发布，所以同样抛出。
+- **存储失败绝不读成空答案**（`CTL-52`）：控制存储答不上来时（`ControlStoreException`），每条控制路由对有权调用的人回答不带细节的 503，两遍维护在那一遍
+  什么都不做；存下的值解不出来是 500，绝不是 400，也不是"不存在"。
+- **每条记录都带格式号，按一条规则读**（`StoredFormat`，`CTL-53`）：没有格式号的记录是格式 1；已知格式里本版本不认识的成员忽略；更晚的格式拒绝，算格式错误，
+  绝不读成不存在。策略文档、API key 与反向引用的成员是判定的输入，保持严格。跨格式升级时先停控制面，登录宿主一起滚动。
+- 影子报告与实例状态有 TTL：它们是可以重跑的观测结果；读失败同样抛出，存储故障从不读成"没有样本"或"没有实例"（§6.4）。
+- `docKey` 沿用 `SnapshotKey` 的显式编码（`platform`、`app:<a>`、`tenant:<t>`，拒绝含 `:` 的 id）。所有 key 都经 CoCache 写入，没有绕过 CoCache 的
+  Redis 命令。早期版本写下的非法 app id 一律跳过（反向引用、检查、授出分析、收窄、app 列表），反向引用集合里的这种成员记一条转义后的 WARN；
+  变更记录与实例状态里的这种值是该条记录的格式错误。
+- Redis 的键与 ACL 的建议写在 [`wiki/operations/storage.md`](../../wiki/operations/storage.md)。
 
 ### 5.3 文档头
 
 ```jsonc
 {
-  "schema": 4,                                         // 示意：RFC 0005 切换后的值 + 1（§3.1 N4）
+  "schema": 2,
   "revision": 43,
   "publishedAt": "2027-01-10T08:00:00Z",
   "provenance": {
-    "parent": { "revision": 42, "digest": "9f2c…" },  // 上一个头的 CoCache 摘要；第一个修订为 null
-    "change": "0QH8K3…",                               // 变更请求 id（CosIdGenerator，可排序，RFC 0001 §3.11）
+    "parent": { "revision": 42, "digest": "SHA-256:9f2c…" },  // 上一个头的摘要；第一个修订为 null
+    "change": "0QH8K3…",                               // 变更请求 id（`IdGenerator`）
     "kind": "PUBLISH",                                 // PUBLISH / ROLLBACK / BREAK_GLASS / EXPIRE / MIGRATE / BOOTSTRAP
     "publishedBy": { "tenant": "acme", "principal": "alice" },
     "approvedBy": [ { "tenant": "(platform)", "principal": "ops-1" } ],   // 没有审批时为空
     "shadow": { "window": "0QH8M1…", "skipped": false }
   },
-  "policies": [ … ], "bindings": [ … ]                 // 正文，RFC 0004 §7.1 / RFC 0005 的格式
+  "policies": [ … ], "bindings": [ … ]                 // 正文
 }
 ```
 
 - 数据面编译器只检查 `provenance` 的结构（字段齐全、类型正确），不用它的内容做任何决策。编译结果因此与 `provenance` 无关：同一份正文、不同的
-  `provenance` 编译出结构相同的快照（门槛 D 的往返性质，§12）。
-- 摘要是 CoCache 的摘要（编码后字节的 SHA-1，RFC 0003 §4.1 说明它与 Redis 算出的相同）。修订记录按这个摘要寻址，所以 `parent.digest` 直接就是
-  上一条记录的 key。
+  `provenance` 编译出结构相同的快照（发布往返的性质，§12）。
+- 摘要是编码后字节的 SHA-256。修订记录按这个摘要寻址，所以 `parent.digest` 直接就是上一条记录的 key。
 
 ### 5.4 发布：写入顺序
 
 ```
 publish(change c, 基准摘要 b, 候选文档 d):     // d 的 provenance.parent = (b 的修订号, b)
   1. ChangeEvent(PUBLISHING) 投递给全部 REQUIRED 监听器（§10.5）        任一失败 → 不发布，c 保持 READY
-  2. revision:<key>:<digest(d)> ← d          putIfMatch(expected = null)；已存在且字节相同 = 成功
-  3. 对 d 新增的跨文档引用，先在反向索引中加上（§5.8）                      索引只会多，不会少
-  4. head:<key>：putIfMatch(expected = b, d)
+  2. revision:<key>:<digest(d)> ← d          条件写（期望 = 不存在）；已存在且字节相同 = 成功
+  3. 对 d 新增的跨文档引用，先记入 d 的修订索引，再在反向索引中加上（§5.8）   索引只会多，不会少
+  4. head:<key>：条件写（期望 = b, d）
        Applied     → 继续
-       Conflict    → c 进入 CONFLICTED（不自动重做，§5.5）；第 2、3 步留下的记录与引用由回收任务清理（§5.7）
-       结果未知     → getIfChanged(key, digest(d))：Unchanged 即已写入，否则按 Conflict 处理（与 RedisSnapshotPublisher 相同）
-  5. revisions:<key> 追加 (修订号, digest(d), d 的 parent 摘要) CAS 循环；失败只记告警，索引可以重建；同号而摘要不同的项不替换
+       Conflict    → 先读头：头（或修订链）是本变更在其基准上的修订，说明另一次调用已发布了它，按当前状态返回；
+                     否则 c 进入 CONFLICTED（不自动重做，§5.5）；第 2、3 步留下的记录与引用由回收任务清理（§5.7）
+       结果未知     → 读回摘要：未变即已写入，否则按 Conflict 处理
+  5. revisions:<key> 加入 (修订号, digest(d), d 的 parent 摘要)；失败只记告警，索引可以重建；同号而摘要不同的项不替换
   6. 从反向索引中删除 b 有而 d 没有的引用，除非更晚的修订又索引了它
-  7. c → PUBLISHED（CAS）；ChangeEvent(PUBLISHED) 给全部监听器（BEST_EFFORT 语义）
+  7. c → PUBLISHED（条件写）；ChangeEvent(PUBLISHED) 给全部监听器（BEST_EFFORT 语义）；写后检测（见下）
 ```
 
 | 在第几步之后中断 | 头 | 数据面看到 | 修复 |
 |---|---|---|---|
 | 1 | b | b | 无；审计里有一条没有下文的 PUBLISHING，事件带 `change` id，可以对上 |
 | 2、3 | b | b | 孤儿记录与多余的引用，回收任务处理；多余的引用最多让平台的一次删除被误拦（§5.8 的修复命令） |
-| 4 | d | d（广播到达后，最迟 RFC 0003 §4.5 的落后上界） | 索引缺一项，`revisions` 读取时发现索引的最上一项不是头，沿 `parent` 链补齐（见下，`CTL-35`） |
+| 4 | d | d（广播到达后，最迟 RFC 0003 §4.5 的落后上界） | 索引缺一项，`revisions` 读取时发现索引的最上一项不是头，沿 `parent` 链补齐（见下，`CTL-35`）；再发布一次该变更即可结算，不增加修订 |
 | 5、6 | d | d | 同上；多余的引用同第 2、3 行 |
 
-- **数据面只会看到 b 或 d**：头是一个 key，`putIfMatch` 是一个 Lua 脚本（CoCache 6.7）。其余几步的失败都只影响控制面自己的辅助数据，方向都是
-  "多保留"而不是"少检查"。
+- **头写入是发布的提交点**（`CTL-2`）。第 4 步及其后各步在 `NonCancellable` 中执行；头写入成功之后的收尾（索引、引用、完成判定、结算、审计、写后检测）里，
+  存储自己的超时与非致命错误只记日志，已写入的修订照常算发布，从不把它报告为失败；`afterWrite` 在头写入后恰好执行一次。重试时按头的出处认出这个变更已发布，
+  结算为 `PUBLISHED`，不增加修订。
+- **调用方的取消只在写头之前生效**（`CTL-82`）。写头之前被取消，与在第 1 步或第 2、3 步之后中断相同：不发布任何东西，变更保持 `READY` 并持有自己的槽位
+  （槽位属于变更，不属于请求），再发布一次即可发布。写头之后被取消，后续各步照常走完；在那里失败的，再发布一次即可结算，不增加修订。
+- **数据面只会看到 b 或 d**：头是一个 key，条件写是一个 Lua 脚本。其余几步的失败都只影响控制面自己的辅助数据，方向都是"多保留"而不是"少检查"。
+- **写后检测**（RC1-33）。发布只对目标头比较并交换。检查与分析读过的其他头（记在变更的 `checkedWith` 里，连同 app 列表的摘要）是没有共同 hash tag 的
+  独立键，而 Redis Cluster 受支持，所以多键原子写不可行（全部快照键共用一个 hash tag 会把所有文档压到一个分片上，否决）。所以写入之后重读 `checkedWith` 中的
+  每个头：有变化就以当前的头重新分析，写一条 BEST_EFFORT 的变更事件 `HEADS_MOVED`（找不到发布时没批准的东西）或 `REVIEW_NEEDED`（找到了，或分析做不了；
+  检测超时为 `DETECTION_TIMED_OUT`），不回滚。窗口可以接受：限制授出者不撤销它已做的授出，并发结果等于"先授出、后限制"的串行顺序；唯一例外是两个变更
+  各自移除对方授出所依赖的权利且在同一窗口内落地，事件让人看到并复核。由别人结算的发布（重试、取槽的变更）不以他们的权限重新分析，记为需要复核。
 - **不加 `WAIT`**（Q27），理由与 RFC 0003 §4.6 相同。修订链让主从切换丢写变得可以诊断：丢了头，数据面按 F11 报回退；丢了记录，头的 `parent`
   指向一条不存在的记录，`verify-chain`（控制面的只读检查）报告断链。`storage.md` 建议需要更强保证的部署配置 `min-replicas-to-write`。
-- **历史是头的链，索引自己可以被验证（`CTL-35`，2026-11-17，#1536）。** 一个文档的修订历史是它的头沿 `parent` 走出的链；修订索引只是这条链的缓存，头才是权威。
+- **历史是头的链，索引自己可以被验证（`CTL-35`）。** 一个文档的修订历史是它的头沿 `parent` 走出的链；修订索引只是这条链的缓存，头才是权威。
   索引的每一项带着它那份记录的 `parent` 摘要：记录按摘要寻址、不可变，所以不论谁在什么先后顺序下写，同一个摘要的项内容都相同。读索引时（先去掉头的修订号之上的项）
   **只有当最上一项的摘要是头的摘要、并且每一项的 `parent` 都是它下面那一项的摘要时，才把它当作历史返回**：只比较摘要，不读记录、不解码。否则从头沿链走到索引里第一个
-  “摘要相符且自它以下各环都成立”的项，用链上的项替换不同的、补上缺的；被替换的摘要交给回收（仍受“未结束的变更持有的基准”保护），并记一条 WARN。走到一条缺失的记录就停：
+  "摘要相符且自它以下各环都成立"的项，用链上的项替换不同的、补上缺的；被替换的摘要交给回收（仍受"未结束的变更持有的基准"保护），并记一条 WARN。走到一条缺失的记录就停：
   它以下无法证明在链上的项不返回，也不删除。写的一侧只追加：同一个修订号已有另一个摘要的项时不替换，替换只由走过链的修复来做。
-  - **为什么需要它。** 头被移回（部分恢复存储）之后修订号会被重用。此前索引只按修订号比较，于是按修订读文档、解释、比较差异、挑选回滚的目标与回收都可能读到旧分支上同号的那一份。
-  - **为什么不是“只比最上一项，写的时候保证其余”。** 那是这条规则的第一版设计，已经实现并被两个序列推翻：一次发布追加在一个没有列出的父项之上，最上一项与头相符而下面仍是旧分支；
-    旧分支迟到的一次索引写入把正确的项换了回去。两个不变式分放在读与写两处、再与“迟到的结算不得截断后来的修订”合在一起，推理不下来；一项事实自带它的父摘要，读的一侧就能独自判定。
-  - 这给修订索引的存储格式加了一个字段（`RevisionEntry.parent`）。没有这个字段的旧项过不了它的那一环，第一次读时由修复重写，不需要迁移。
+  - **为什么需要它。** 头被移回（部分恢复存储）之后修订号会被重用。只按修订号比较的索引会让按修订读文档、解释、比较差异、挑选回滚的目标与回收读到旧分支上同号的那一份。
+  - **为什么不是"只比最上一项，写的时候保证其余"。** 那样的设计被两个序列推翻：一次发布追加在一个没有列出的父项之上，最上一项与头相符而下面仍是旧分支；
+    旧分支迟到的一次索引写入把正确的项换了回去。两个不变式分放在读与写两处、再与"迟到的结算不得截断后来的修订"合在一起，推理不下来；一项事实自带它的父摘要，读的一侧就能独自判定。
 - **为什么记录先于头**：反过来，头写成功而记录失败时，修订的内容只存在于头里；下一次发布覆盖头之后它就永远丢了。先写记录的代价只是偶尔的孤儿。
-- 写入顺序、冲突处理、"结果未知时读回摘要"都从 `RedisSnapshotPublisher` 搬过来；不同的是冲突后**不**在新内容上重做修改：控制面的检查
-  （授出分析、影子窗口）是针对基准 b 做的，换一个基准就要重做检查（§5.5）。
-
-- **调用方的取消只在写头之前生效（`CTL-82`，2026-11-23，#1893）。** 第 4 步（写头）及其后各步在 `NonCancellable` 中执行。写头之前被取消，与在第 1 步或第 2、3 步之后中断相同：
-  不发布任何东西，变更保持 `READY` 并持有自己的槽位（槽位属于变更，不属于请求），再发布一次即可发布。写头之后被取消，后续各步照常走完；在那里失败的，再发布一次即可结算，
-  不增加修订（`CTL-2`）。
+- 冲突后**不**在新内容上重做修改：控制面的检查（授出分析、影子窗口）是针对基准 b 做的，换一个基准就要重做检查（§5.5）。
 
 ### 5.5 并发：基准、暂存槽与变基
 
-- **乐观并发**：变更请求创建时记下基准 `(修订号, 摘要)`；发布时 `putIfMatch(expected = 基准摘要)`。中间有别人发布，这次发布就是 `Conflict`。
-  这正是 RFC 0001 §3.7 的"CAS on version"，由 CoCache 6.7 的 `putIfMatch` 提供，控制面不自己实现比较。
-- **不自动变基**：`SnapshotPublisher` 冲突后自动在新内容上重做，因为它没有任何依赖基准的检查。控制面的变更带着针对基准得出的授出分析、影子报告和
-  审批，自动换基准会让它们失效而不被察觉。变更进入 `CONFLICTED`，由作者调用 `rebase`：在新的头上重放条目级操作（每个操作可以带条目摘要作为前置条件，
-  前置条件不满足即失败），得到新的候选，**全部检查重做**，审批与影子报告作废。
-- **每份文档一个暂存槽**：一份文档同一时间至多一个变更处于影子窗口或等待审批（`stage:<docKey>`，`putIfMatch(expected = null)` 占用，发布、放弃或
-  过期时释放）。否则两个各自影子通过的变更依次发布，第二个的影子比较的是一个已经不存在的基准。别的变更可以照常起草和检查，但要排队进入窗口。
-- **收窄的紧急变更可以抢占**：只包含收窄操作（§7.4.4 的判定）且发布者有 `cosec:skip-shadow` 的变更，可以在槽被占用时直接发布；被抢占的变更因基准
-  变化而进入 `CONFLICTED`。紧急封禁不必等别人的窗口结束。
+- **乐观并发**：变更请求创建时记下基准 `(修订号, 摘要)`；发布时条件写（期望 = 基准摘要）。中间有别人发布，这次发布就是 `Conflict`。
+  这正是 RFC 0001 §3.7 的"CAS on version"，由 CoCache 的条件写提供，控制面不自己实现比较。
+- **不自动变基**：控制面的变更带着针对基准得出的授出分析、影子报告和审批，自动换基准会让它们失效而不被察觉。变更进入 `CONFLICTED`，由作者调用 `rebase`：
+  在新的头上重放条目级操作（每个操作可以带条目摘要作为前置条件，前置条件不满足即失败），得到新的候选，**全部检查重做**，审批与影子报告作废。
+- **每份文档一个暂存槽**（`CTL-6`）：一份文档同一时间至多一个变更持有它（`stage:<docKey>`，条件写占用）。槽从影子窗口开始一直持有到 `READY`：一个已就绪而尚未发布的
+  变更仍占着槽；发布、放弃、过期、拒绝、发布时落回 `CONFLICTED` 或 `DRAFT`，以及被抢占时释放。否则两个各自影子通过的变更依次发布，第二个的影子比较的是
+  一个已经不存在的基准。别的变更可以照常起草和检查，但要排队进入窗口。暂存时变更先离开 `CHECKED` 再占槽，一次条件写决定两个调用的胜负；
+  候选只写在自己读到的那份之上，且写前确认仍持有槽，所以写候选时被抢占的变更从不替换取走槽的变更的候选。
+- **收窄的紧急变更在占槽的那一刻抢占**（`CTL-22`，RC1-12）：只包含收窄操作、由持有 `cosec:skip-shadow` 的人暂存（`:shadow` 或 `:skip-shadow`）、且基准等于当前头的变更，
+  在槽被占用时照常经过自己的那一步拿到槽；原持有者先从 `SHADOWING`、`AWAITING_APPROVAL` 或 `READY` 置为 `CONFLICTED`，撤回候选并记 `FAILED`（`preempted by <id>`），
+  做不到就放弃抢占（409、503）。"只收窄"按白名单判断（`Narrowing`），变更的每个操作须属于其一：删除只含 ALLOW 的策略的绑定；把可附加、只含 ALLOW 的策略改为
+  不可附加，语句不变；以新 id 新增只含 DENY 的策略（不是边界），或新增绑定候选中只含 DENY 的策略的绑定（不是 break-glass）。删除含 DENY 的绑定、删除黑名单绑定、
+  把含 DENY 的策略改为不可附加、替换基准中已有的条目、操作平台也定义的同 id 租户策略，都不算收窄。封禁主体不改文档（黑名单来自属性提供者的
+  `environment.blocked`），不等槽。紧急封禁不必等别人的窗口结束。
+- **break-glass 撤销**：撤销仍在生效的 break-glass 绑定的变更总能抢占；它持槽时，只有另一个这样的撤销能取走槽（`BRK-9`）。撤销已过期绑定的变更像普通变更一样排队，
+  持槽时也不受保护；对同一绑定再撤销一次，会发布停住的 `READY` 撤销（§8）。
+- **抢占与发布的剩余窗口**：持槽者的修订若已写在修订链上，来取槽的变更先把它结算为 `PUBLISHED` 再取槽。发布在写 `PUBLISHING` 之前与写头之前各查一次槽，
+  写头仍只以基准摘要为条件，所以剩余窗口是一次存储往返加上发布实例在两步之间的停顿：窗口内被抢占的持槽者仍会发布，取走槽的变更随后 `CONFLICTED`
+  并记下先发布的修订。
+- 基准在一个变更等待审批期间移动，不会当即把它变成 `CONFLICTED`：它仍可以被批准，在发布时冲突，或在别的变更占槽时被抢占。方向是拒绝，不需要为此监视文档头。
 - **代价**：标准路径上，一份文档每小时最多发布约 4 次（窗口默认 15 分钟，§6.4）。一个变更可以包含任意多个操作；租户之间互不影响；平台文档是
   唯一会排队的地方（Q5）。
-
-**2026-11-16 修订（与实现对照后；RFC 0013 B4）。** 上面两条按实现更正，实现是更严的读法：
-
-- 暂存槽一直持有到 `READY`，不只到“影子窗口或等待审批”：一个已就绪而尚未发布的变更仍占着槽。释放的时机除了发布、放弃、过期，还有拒绝、
-  发布时落回 `CONFLICTED` 或 `DRAFT`，以及被抢占。
-- 收窄的紧急变更是在**占用暂存槽的那一刻**抢占（`stage` 或 `skip-shadow`），不是在发布时：它照常经过自己的那一步拿到槽，原持有者从
-  `SHADOWING`、`AWAITING_APPROVAL` 或 `READY` 进入 `CONFLICTED`。“可以在槽被占用时直接发布”那半句不成立。
-- 基准在一个变更等待审批期间移动，不会当即把它变成 `CONFLICTED`：它仍可以被批准，在发布时冲突，或在别的变更占槽时被抢占。方向是拒绝，
-  不需要为此监视文档头。
 
 ### 5.6 回滚
 
 `rollback(docKey, toRevision)` 创建一个 `kind = ROLLBACK` 的普通变更：候选的正文取自那条修订记录，头部重写（`revision` = 当前 + 1，`parent` = 当前头）。
-它走完整的流程：
+回滚者先要对该文档有 `cosec:read`，否则与不存在的修订一样答 404，不透露历史（`CTL-18`）。它走完整的流程：
 
 - **编译**针对**当前**的其他文档：回到第 40 修订时，那时引用的平台策略可能已经删除，编译失败即不能回滚，必须先处理引用。这正是 7.x 按策略回滚做不到的检查。
 - **授出分析**照常：回滚可以恢复一个已经被撤销的高权限绑定，回滚者没有这个权限就要审批。回滚不是绕过不能越权授权的后门。
 - **影子窗口**照常；需要快速回滚时由有 `cosec:skip-shadow` 的人发布（Q1）。
+- **break-glass**：回滚若放入、恢复 break-glass 绑定或改动生效中的 break-glass 绑定授出的策略，就是 break-glass 变更，需要 `cosec:breakglass` 并受 V5 约束，
+  回滚永远不会带回 break-glass（`BRK-7`）；只移除 break-glass 绑定的回滚立即发布。
 - 只提供"回到某个修订的整份文档"，不提供"撤销某一次变更"：后者是条目级的逆操作，留给 UI 用 `propose` 自己组合。
-
-> **实现说明（2026-10-27，#1110）**：回滚先要求回滚者对该文档有 `cosec:read`，否则与不存在的修订一样答 404，不透露历史（`CTL-18`）；回滚若放入、恢复 break-glass 绑定或改动 live break-glass 绑定授出的策略，就是 break-glass 变更，需要 `cosec:breakglass` 并受 V5 约束，回滚永远不会带回 break-glass（`BRK-7`）；只移除 break-glass 绑定的回滚立即发布。
 
 ### 5.7 保留与回收
 
 | 对象 | 保留规则（默认） | 属性 |
 |---|---|---|
 | 修订记录 | 从头沿链的最近 50 个，**并且**任何不到 7 天的；被未结束的变更（基准、回滚目标）引用的一律保留 | `cosec.control.revisions.max-count`、`min-age` |
-| 孤儿记录（不在链上，也不被变更引用） | 1 小时后删除 | `cosec.control.revisions.orphan-age` |
-| 变更请求 | 终态之后 30 天 | `cosec.control.changes.retention` |
-| 影子报告 | 窗口最长时长 + 1 天（TTL） | — |
+| 孤儿记录（不在链上，也不被变更引用）、列出却从未写成的变更 | 满一个回收周期（1 小时）后删除 | 算出，不配置（`CTL-72`） |
+| 变更请求 | 终态的记录不删除 | — |
+| 影子报告 | 最后一次写入后 8 天（TTL）；实例状态 2 分钟 | — |
 
-- 体积不作为删除条件：按体积删除会让最近几天的修订突然不可解释。每份文档的记录总字节数作为指标 `cosec.control.revisions.bytes` 暴露，超过
-  `cosec.control.revisions.warn-bytes`（默认 256 MB）告警。M13 的问题由数量和时间约束，大文档的部署调小 `max-count`。
-- 回收由控制面的一个定时任务执行（多个控制面实例时用暂存槽同样的 `putIfMatch` 占用一个租约 key，只有一个实例执行），删除用 CoCache 的 `delete`、`deleteIfMatch`。
+- 体积不作为删除条件：按体积删除会让最近几天的修订突然不可解释。M13 的问题由数量和时间约束，大文档的部署调小 `max-count`。
+- 回收由每个运行控制面的实例每小时执行一次（常量，`CTL-72`；要回收什么由 `min-age` 与 `max-count` 决定）；同一份文档同时只有一个实例回收：
+  以条件写占用一个租约 key（`<p>:control:lease:reclaim:<docKey>`），用完以条件删除释放。删除用 CoCache 的 `delete`、`deleteIfMatch`；
+  从索引取出的内容先记入 `RevisionIndex.reclaiming`，删除失败的下一轮重试。
+- **未结束的变更是集合**（`CTL-54`）：按文档一个集合（`doc:<文档键>`），按状态一个集合（`state:<状态>`），成员是 `<文档键>#<变更 id>@<那次写入所写记录的摘要>`。
+  每次写变更之前先加入它的文档集合与状态集合，写完之后从不再适用的集合里摘除，且只摘除自己那次写入放进去的那个成员：变更重新进入同一状态时，
+  迟到的摘除因此拿不走后一次写入的成员。集合是未结束变更的超集。只有在集合已有人维护、并且 8.0.0-beta.5 之前格式的清单（`list:open-changes`）不存在时
+  才信任集合；在那之前不回收任何修订，列表请求被拒绝。`cosec-migrate repair-references` 运行一次完成转换。
 - 数据面的 `explain` 需要的是决策时的修订：审计保留期比 7 天长的部署要么调大 `min-age`，要么接受较早的决策只能在当前快照上解释（`explain` 返回 410，§10.2）。
 
 ### 5.8 跨文档引用：反向引用索引
 
-被引用的一方删除策略、或把它改成另一种东西时，引用方不会自己知道（RFC 0004 §7.2）。控制面维护一个反向索引：
+被引用的一方删除策略、或把它改成另一种东西时，引用方不会自己知道（RFC 0004 §7.2）。控制面维护一个反向索引，按被引用的策略分片：
 
 ```
-refs:<被引用文档>:<policyId> = { 引用它的 docKey… }      // 例：refs:platform:shared-read = { tenant:acme, tenant:beta, app:order }
+refs:<被引用文档>:<policyId> = { (引用方 docKey, 索引它的修订, 标志)… }   // 例：refs:platform:shared-read = { (tenant:acme, 7, …), (app:order, 3, …) }
 ```
 
 - **覆盖的引用**：`App`/`Tenant` 的绑定 → `Platform` 的策略；`Tenant` 的绑定 → `App` 的权限策略（N1）；`Tenant` 的 `boundary` → `Platform` 的边界策略（§7.6）。
+  租户自有的策略 id 也记为 `(platform, id)` 的引用方，读者按引用方的头区分"定义"与"引用"（RC1-9）。
 - **按策略分片**：一条共享策略可能被十万个租户引用，所以 key 带 `policyId`，不是每份文档一个大集合。
-- **维护**：发布前先加新引用、发布后再删旧引用（§5.4），所以索引是真实引用的**超集**：它可能误拦一次删除，不会漏拦。`repair-references(docKey)`
-  从全部相关的头重新计算（只读头，平台管理员执行）。
-- **检查**：发布 `Platform`/`App` 时，候选删除了某个策略 id，或者把它从普通策略改成边界策略（反之亦然），而索引里仍有引用方 → 拒绝发布（422），
-  错误列出引用方。修改被引用策略的**内容**不拦：它对每个引用方生效，影子窗口在所有租户的流量上比较（平台候选影响每个请求，§6.4）。
+- **维护**（`CTL-25`、`CTL-44`）：一次发布把它新增的引用先记入自己的修订索引（正向记录），再为每条引用加入一个成员；发布后只删除正向记录中不高于自身修订、
+  新修订已不再有的成员，不读集合。所以索引是真实引用的**超集**：它可能误拦一次删除，不会漏拦；一次租户发布读写的东西不随引用同一策略的其他文档的数量增长。
+- **修复**：`cosec-migrate repair-references`（`--to-redis` 或 `--cluster`）只读每个文档的头与它自己的正向记录，不读任何反向引用集合，代价跟着文档持有的引用走；
+  可在控制面运行时执行，两次运行共用一个租约。它依赖一条不变量：**记录里有的引用，要么在它的集合里，要么不在文档头里**——发布守住它（先记录、再加成员、全部加完才移动头），
+  删除守住它（头里已没有它删的东西），修复自己则反过来先加成员、后写记录。它双向修复：补上头引用而索引缺少的，并删除索引有而任何头都没有的，
+  且只在引用方的头已不低于写入该引用的修订、头里也没有这条引用时才删除，所以仍在进行中的发布保留自己的引用。它也把 8.0.0-beta.5 之前格式的存储转换过来
+  （`MIG-4`）。
+- **检查**：发布 `Platform`/`App` 时，候选删除了某个策略 id，而索引里仍有引用方 → 拒绝发布（422），错误列出引用方。只定义该 id（且边界不指向它）的租户
+  不阻止平台删除自己的同名策略；读不到的引用方头按引用处理。被引用的策略在普通策略与边界策略之间改变种类，检查时与写头时都拒绝（`CTL-30`）：绑定只到达策略，
+  租户的边界只到达边界，另一种对它们就是缺失；没有引用的策略可以改种类。修改被引用策略的**内容**不拦：它对每个引用方生效，影子窗口在所有租户的流量上比较（§6.4）。
 - **token 附加不在索引中**：主体附加哪个策略由 token 签发方决定，控制面看不到。删除一条可附加的平台策略会让附加它的主体得到
   `Indeterminate(MissingPolicies)`（失败即拒绝）；影子窗口把这些请求报告为 `BECAME_INDETERMINATE`，发布者在确认时看到数字。
 
 ### 5.9 自举与 `cosec-migrate`
 
-控制面用快照里的策略授权自己，存储为空时没有任何人能写（§3 M15）。两条在控制面之外写存储的路径，都在 `cosec-migrate` 里，都需要 Redis 凭据：
+控制面用快照里的策略授权自己，存储为空时没有任何人能写（§3 M15）。在控制面之外写存储的路径都在 `cosec-migrate` 里，都需要 Redis 凭据，都经控制面的存储写入，
+所以都留下修订记录：
 
 | 命令 | 写什么 | 约束 |
 |---|---|---|
-| `bootstrap --platform-admin <principal>` | 在 `Tenant((platform))` 中加一条 `Principal((platform), <principal>) → cosec:platform-admin` 绑定，作用域 `(*, *)`，`kind = BOOTSTRAP` | 只有当该文档里没有任何指向 `cosec:platform-admin` 的绑定时才执行；否则拒绝，除非 `--force`（用于"管理员全部失效"的恢复）。照常写修订记录 |
-| `publish --in ./converted` | RFC 0004 §8.2 的转换结果，`kind = MIGRATE`，`expected = null`（仅当不存在） | 改经 `ControlStore` 写，所以修订链从第一个修订开始；root 绑定受 break-glass 的期限上限（§8） |
+| `bootstrap --platform-admin <principal>` | 在 `Tenant((platform))` 中加一条 `Principal((platform), <principal>) → cosec:platform-admin` 绑定（id `platform-admin-<principal>`），作用域 `(*, *)`，`kind = BOOTSTRAP` | 只有当该文档里没有任何指向 `cosec:platform-admin` 的绑定时才执行；否则拒绝，除非 `--force`（用于"管理员全部失效"的恢复） |
+| `publish --in ./converted` | RFC 0004 §8.2 的转换结果，`kind = MIGRATE`，期望 = 不存在 | 拒绝含 break-glass 绑定的输入（§8）；遇到未完成的 CoCache 8 升级留下的 `<p>:meta:cocache8` 标记时拒绝写入 |
+| `restore` | 把一个保留的修订或一个文件写成下一个修订，只覆盖调用者确认的那个头修订 | 从锁死中回来的路，不是发布的途径；变更监听器听不到它（控制面发现不是自己写的头并通知监听器，列入 8.1） |
+| `repair-references` | 反向引用索引与 app 列表（§5.8、§7.4.3） | 只增补与按条件删除，可在控制面运行时执行 |
 
-拥有 Redis 写凭据的人本来就能改写任何文档，这两条命令没有扩大谁能做什么；它们只是让这类写入也留下修订记录。
+拥有 Redis 写凭据的人本来就能改写任何文档，这些命令没有扩大谁能做什么；它们只是让这类写入也留下修订记录。
 
 ---
-
-> **实现说明（2026-10-27，#1087）**：`bootstrap` 写入的绑定 id 是 `platform-admin-<principal>`；`publish` 经 `ControlStore` 写修订（`kind = MIGRATE`），拒绝期限超过 `--break-glass-max-duration` 的 break-glass 绑定。
-
-> **实现说明（2026-11-08，#1268）**：反向索引的每个引用方带上最后索引它的修订，发布后只删除不高于自身修订的条目（`CTL-25`，#1207），所以并发发布同一引用方时“超集”仍然成立。索引条目写在更晚的修订旁边，`history` 不读头之上的条目。回收把从索引取出的内容记入 `RevisionIndex.reclaiming`，失败的删除会重试（#1226），租约用 `deleteIfMatch` 释放。候选只有在仍是该变更的窗口时才撤回，在一次原子操作里完成（`CTL-26`，#1227，§5.5、§6.4）；实例在候选撤回且最后一份报告写入后停止上报（#1210）。
 
 ## 6. 发布流程
 
@@ -370,13 +401,12 @@ flowchart LR
     X -->|rebase，检查失败| D
 ```
 
-所有状态转换都是对 `change:<id>` 的 `putIfMatch`，并发的两个操作（例如同时批准和放弃）只有一个成功。任何非终态都可以 `abandon`；变更超过
+所有状态转换都是对 `change:<id>` 的条件写，并发的两个操作（例如同时批准和放弃）只有一个成功。任何非终态都可以 `abandon`；变更超过
 `cosec.control.changes.expire-after`（默认 7 天）未发布即 `EXPIRED`。`REJECTED`、`ABANDONED`、`EXPIRED`、`PUBLISHED` 是终态。
 
-**2026-11-16 修订：转换表是规范（`CTL-33`；RFC 0013 B4）。** 上图按实现重画，原图有四处与实现不符：没有 `SHADOWED` 这个状态（见下）；
-提议直接生成 `CHECKED` 或 `DRAFT`，检查是命令的一部分而不是一次转换；`rebase` 一步到 `CHECKED` 或 `DRAFT`，并且也接受 `DRAFT` 与 `CHECKED`；
-发布可以把变更退回 `DRAFT` 或 `AWAITING_APPROVAL`。准确的定义是下面这张表：它是代码里的 `ChangeStep`，由
-`core/control/src/test/resources/change-transitions.md` 提交，测试把枚举渲染出来与那个文件逐字比较，所以改动任何一格都会出现在评审的 diff 里。
+**转换表是规范**（`CTL-33`）。准确的定义是下面这张表：它是代码里的 `ChangeStep`，由 `core/control/src/test/resources/change-transitions.md` 提交，
+测试把枚举渲染出来与那个文件逐字比较，所以改动任何一格都会出现在评审的 diff 里。提议直接生成 `CHECKED` 或 `DRAFT`，检查是命令的一部分而不是一次转换；
+`rebase` 一步到 `CHECKED` 或 `DRAFT`，并且也接受 `DRAFT` 与 `CHECKED`；发布可以把变更退回 `DRAFT` 或 `AWAITING_APPROVAL`。
 
 | 步骤 | 起始状态 | 结果状态 |
 |---|---|---|
@@ -394,8 +424,9 @@ flowchart LR
 | WRITTEN | 除 PUBLISHED 外的每一个状态 | PUBLISHED |
 | EXPIRE | DRAFT、CHECKED、SHADOWING、AWAITING_APPROVAL、READY、CONFLICTED | EXPIRED |
 
-前八行是命令；其余是命令途中的步骤：UNRESERVE 是没有拿到槽的 `stage` 或 `skip-shadow` 退回；PREEMPT 是槽被别的变更占走；UNWRITTEN 是没有写入头的发布；
-WRITTEN 是头已经写入的发布；EXPIRE 是每次读取都会施加的过期。规则有三条：
+前八行是命令（STAGE 在 API 上是 `:shadow`，内部入口是 `startShadow`）；其余是命令途中的步骤：UNRESERVE 是没有拿到槽的 `:shadow` 或 `:skip-shadow` 退回，
+以及窗口开始一分钟后仍没有候选的变更退回（§6.4）；PREEMPT 是槽被别的变更占走；UNWRITTEN 是没有写入头的发布；WRITTEN 是头已经写入的发布；
+EXPIRE 是每次读取都会施加的过期。规则有三条：
 
 - 一行的结果状态恰好是该步骤会写入的状态。`PUBLISHED` 只在 WRITTEN 一行里：只有本变更自己的发布写入了头，才到得了这一步。
 - 命令对起始状态之外的变更答 409。内部步骤不是命令，从不答 409；一个步骤要写入表外的状态是实现的错误，什么都不写入，控制面 API 答服务端错误
@@ -405,113 +436,164 @@ WRITTEN 是头已经写入的发布；EXPIRE 是每次读取都会施加的过�
 
 **没有 `SHADOWED` 状态。** 窗口一关闭，下一个状态立刻可以算出（没有 UNKNOWN 片段就是 `READY`，有就是 `AWAITING_APPROVAL`），中间没有可以停留的地方。
 窗口怎样关闭记在变更的影子摘要里，不是状态：样本足够；到最长时长仍不足（`insufficient`，发布必须确认）；任一实例报告候选出错（`blocked`，
-任何发布都答 409，`CTL-12`）。§6.4 的表里写“`SHADOWED`”的地方读作“窗口关闭”。`ChangeState` 里那个从未被写入过的枚举值已删除；审计事件
-`SHADOWED`（窗口关闭这件事）保留。
+任何发布都答 409，`CTL-12`）。审计事件 `SHADOWED`（窗口关闭这件事）保留。
 
-"检查"（DRAFT → CHECKED）按顺序是：授权（§7.2）→ 校验（§6.2）→ 编译（§6.3）→ 授出分析（§7.4）。授出分析得到 UNKNOWN 不阻止进入影子窗口：
-影子只是观测，审批人需要看到影子报告再做决定。
+"检查"按顺序是：授权（§7.2）→ 校验（§6.2）→ 编译（§6.3）→ 授出分析（§7.4）。授出分析得到 UNKNOWN 不阻止进入影子窗口：
+影子只是观测，审批人需要看到影子报告再做决定。同一组检查也可以不建变更单独运行（`:check`，§10.2）。
 
 ### 6.2 校验
 
 | # | 检查 | 失败时 |
 |---|---|---|
 | V1 | **格式**：按生成的 JSON schema（§10.4）给出带 JSON 路径的错误；真正的判定是编译器（V1 只为更好的错误信息） | 400 |
-| V2 | **规模与结构**：文档 ≤ 8 MB（RFC 0003 Q14）；每文档主体绑定 ≤ 1,000（RFC 0004 Q2）；保留前缀（`cosec:`、`perm:`、`g:`、`r:`）只能由内置策略和 `cosec-migrate` 使用；租户文档里的策略 id 不能与平台层重名（N2） | 400 / 422 |
+| V2 | **规模与结构**：文档 ≤ 8 MB（RFC 0003 Q14）；每文档主体绑定 ≤ 1,000（RFC 0004 Q2）；条目预算（`CTL-40`，见下）；保留前缀（`cosec:`、`perm:`、`g:`、`r:`）只能由内置策略和 `cosec-migrate` 使用；租户文档里的策略 id 不能与平台层重名，除非是平台策略的精确副本（N2，`CTL-14`）；命名非法 app 的绑定（不符合 `ScopeResolver.isValidAppId`） | 400 / 422 |
 | V3 | **语言**：类型、属性目录（`Platform` 文档的 `attributes` 节加内置目录，N3）、成本上限（`Platform` 文档的 `limits` 节，RFC 0005 §3.5）；不可满足的条件给警告 | 422 |
-| V4 | **目录**：动作的 `service` 在某个 `App` 文档的 `Catalog` 中声明过时，`verb` 与资源 `type` 必须在目录里；`service` 没有目录时只给警告 | 422 / 警告 |
+| V4 | **锁死检查**（`CTL-38`）：对平台文档、平台租户文档、控制应用文档的变更，由引擎在候选上判定操作者在候选生效后是否仍能到达控制面（当前这次请求按 Pipeline 的判定，加上控制应用中该文档上的 `cosec:publish`）；只检查操作者自己的回路，用的是当前请求的事实 | 提议时警告；发布时 422，除非发布者确认（`"lockout": true`） |
 | V5 | **语义规则**：DENY 上的 `onMissing: nomatch` 必须带确认（§9.5）；break-glass 的规则（§8）；边界策略只含 ALLOW、只在 `Platform`（§7.6）；修改 `protected` 条目需要 `cosec:unprotect`（§7.4.4） | 428 / 422 / 403 |
+
+- **条目预算**（`CTL-40`）：平台 `limits` 里为每份文档设策略、语句、对角色的绑定、对所有人的绑定的上限（默认 10,000、20,000、10,000、1,000）。对每一项，
+  候选的数量不得超过限值与它所替换的头的数量中较大的那个：已超出的文档继续被服务，可以改小，不能再增。控制面在提议、`apply`、回滚、变基与发布时检查，
+  编译器与宿主不检查。
+- **命名非法 app 的绑定**检查的是整个候选文档，所以头上还留着这种绑定的租户，下一次变更必须删掉它；只删掉它的变更是合法的。数据面不拒绝这类绑定：它们永远匹配不到请求，存着无害。
+- **动作名不对照目录校验**：编译器只检查动作与资源的语法；目录声明的是权限 id（RFC 0012），控制面不按目录核对动作名或资源类型（RFC 0005 §5.1）。
+- **路由映射**：给出各服务的路由映射（`cosec.control.analysis.route-maps`）时，变更带一条 `ROUTES` 警告，列出候选中被已映射路由绕开的 `http:` DENY 语句与限流规则；
+  没有给出时，含这类语句的候选说明未提供路由映射。宿主一侧，配置了路由映射的宿主在快照源的维护线程上（绝不在加载路径上）审查它安装的每个文档修订，
+  各记一条 WARN；被维护线程拒绝的审查计数（`install-review`），在一次读取确认该修订仍在生效时重新提交；之后的任何安装都会替换或丢弃它。审查从不延迟、
+  失败或改变一次安装（`SNP-19`）。
 
 警告记在变更请求上，不阻止发布；发布者在 `publish` 时看得到。
 
 ### 6.3 编译：发布前编译，失败保留旧版本
 
-- **同一个编译器**：控制面调用 `cosec-core` 中数据面使用的那个 `SnapshotCompiler`，不另写一份。候选文档与它要组合的其他文档的**当前头**一起编译：
+- **同一个编译器**：控制面调用 `cosec-document` 中数据面使用的那个编译器（`PolicyDocumentCompiler`），不另写一份。候选文档与它要组合的其他文档的**当前头**一起编译：
   `Tenant(T)` 的候选与当前的 `Platform` 和它引用到的 `App`；`App(a)` 的候选与当前的 `Platform`；`Platform` 的候选单独编译，另加 §5.8 的反向检查。
-- **严格**：数据面编译时，一条编译失败的策略只是 `Broken`，读到它的请求失败即拒绝（RFC 0003 F4）。控制面不发布含任何 `Broken` 的文档：候选的每一个
-  条目都必须编译成功，悬空引用、跨租户引用、主体绑定超限、break-glass 缺少期限这些 RFC 0004 的编译错误都在这里拦住。
-- **为什么现在"保留旧版本"是安全的**：被拒绝的候选从未写进头，没有任何实例见过它，"旧版本"就是当前的头，每个请求仍然按已发布的头决策。
+- **严格**：数据面编译时，一条编译失败的策略只是 `Broken`，读到它的请求失败即拒绝（RFC 0003 F4）。控制面不发布含任何 `Broken` 的文档（`CTL-1`）：候选的每一个
+  条目都必须编译成功，悬空引用、跨租户引用、主体绑定超限、break-glass 缺少期限这些编译错误都在这里拦住。
+- **为什么"保留旧版本"是安全的**：被拒绝的候选从未写进头，没有任何实例见过它，"旧版本"就是当前的头，每个请求仍然按已发布的头决策。
   RFC 0003 Q8 拒绝的是另一件事：数据面在**已发布**的新修订编译失败时退回旧修订。那仍然不做（§3 M2）。
 - **数据面仍可能编译失败**：控制面接受、某个实例拒绝，只可能是两者不一致——代码版本不同（升级顺序错误，§3.1 N4）、实例缺少 `Platform` 文档声明的
-  属性提供者（N3）、缺少 AOT hint。这时该实例按 F5 失败即拒绝，加载结果记为 `incompatible`，告警文案指出"控制面接受了这个修订"，便于定位。
-  控制面在影子窗口里也能看到它：候选在该实例上编译失败，报告为 `CANDIDATE_ERROR`，阻止发布（§6.4）。
+  属性提供者（N3）、实例的栈更小（RC1-43）。这时该实例按 F5 失败即拒绝，记为失败的编译。控制面在影子窗口里也能看到它：实例第一次在暂存清单里见到
+  一个窗口时就读取并编译它的候选，不等第一个被采样的请求；编不过的候选在同一个周期记为 `CANDIDATE_ERROR`，窗口因此立刻关闭并且不能发布，不取决于该实例
+  有没有流量（`CTL-12`）。这种编译在上报协程上逐个进行，绝不占用快照源的编译池与队列；每个周期至多花一个上报间隔（在两个候选之间检查，不打断正在编译的那个），
+  其余留给后面的周期，等得最久的先做。
 
 ### 6.4 影子窗口
 
 **候选的分发**：
 
-- 进入 `SHADOWING` 时，控制面把候选文档写进 `candidate:<docKey>`，附带 `change` id 和基准摘要。
-- 数据面的 `ShadowListener`（RFC 0006 §9.5.4）不再从本地文件得到候选，而是从一个 `CandidateSource` 得到：它是第二个 `SnapshotSource` 实例，读
-  `candidate:` 命名空间，有自己的 LRU（默认 16 份文档），不参与就绪检查，加载失败只计数。
-- 对一个被采样的请求，若它的 `SnapshotView` 用到的某份文档 K 有候选，**且候选的基准摘要等于本实例已安装的 K 的摘要**，就用候选替换 K 组成候选视图，
-  再调用一次 `Engine.evaluate`。基准不一致（本实例落后，或头已经变了）时不比较，计为 `BASE_MISMATCH`。
+- 进入 `SHADOWING` 时，控制面先在 `<p>:candidate-staged:all` 中登记该文档与窗口，再把候选文档写进 `candidate:<docKey>`，附带窗口与基准修订。
+- **暂存清单**（`CTL-46`）是已暂存候选的超集：窗口先登记、候选后写入；候选撤回之后才摘除，撤回失败则保持登记。登记是无条件加入一个成员，所以其他文档的并发暂存
+  从不让它失败；登记失败则暂存失败，什么也不写。成员 `.kept` 表示清单有人维护，没有它即"无人维护"，读取方按键读。读取方不认识的成员跳过，代价至多是少了样本、
+  窗口按证据不足关闭，绝不会让窗口通过。每个影子轮在租约之下对账：补登记漏掉的窗口；连续两轮都该清理的窗口才清理；候选在而没有影子中的变更认领它的，
+  只有读全了所有未结束变更的一轮才撤回。
+- **缺候选的窗口**：处于 `SHADOWING` 的变更，窗口开始一分钟后它的文档仍没有该窗口的候选，则退回 `CHECKED`、释放槽、记一条失败事件，由作者重新发起；
+  窗口不在缺口上继续，维护任务也不代写候选。
+- 数据面读候选经 `CandidateSource`（`CachingCandidateSource`）：它与执行用的文档分开，至多 1,024 份文档（最久未用的先出），每份 10 秒后重读，不参与就绪检查，
+  读取失败只计数、不给候选。它在请求路径之外读暂存清单（`CTL-47`）：有清单时只为清单列出的文档读候选，只采样视图会读到清单所列文档的请求；清单为空时不采样，
+  也不读候选；没有人维护清单时，照旧按键读每个候选并采样；读不了的清单算没有清单，绝不算"没有暂存"。清单只做门：候选仍按键读、按窗口核对，
+  所以读晚了的清单只损失样本，绝不产生错误候选的样本，也不产生通过。只读自己采样的事件的 BEST_EFFORT 监听器（影子监听器）只拿到点它名的事件（`OBS-8`）。
+- 对一个被采样的请求，若它的 `SnapshotView` 用到的某份文档 K 有候选，**且候选的基准修订等于本实例已安装的 K 的修订**，就用候选替换 K 组成候选视图，
+  再调用一次引擎。基准不一致（本实例落后，或头已经变了）时不比较，计为 `BASE_MISMATCH`。
 - 采样只针对用到 K 的请求：租户文档的候选只在该租户的请求上评估；`Platform` 的候选在全部请求上评估。
-- 候选只为比较而编译，绝不改变本实例执行所用的编译输入：平台候选按它自己的限制与属性声明编译，其余候选按已安装的平台编译
-  （第 2 轮审查 `core/runtime` 的 H1，#1311，`SNP-10`；此前 starter 把执行用的编译入口交给了候选源，暂存的平台候选会让租户文档失败关闭）。
+- 候选只为比较而编译，绝不改变本实例执行所用的编译输入：平台候选按它自己的限制与属性声明编译，其余候选按已安装的平台编译（`SNP-10`）。
 
-**汇总**：每个实例按 `(change, 窗口)` 在内存中累计，每 10 秒经 `ShadowReportSink`（`runtime/` 的 SPI，默认 CoCache 实现）写一次自己的报告：
+**汇总**：每个实例按窗口在内存中累计，每个上报间隔（由状态的存活期与 `cosec.control.shadow.min-duration` 算出，不是属性，见
+[`configuration.md`](../../wiki/operations/configuration.md#computed-not-configured)）经 `ShadowReportSink` 写一次自己的累计报告：
 
 | 字段 | 内容 |
 |---|---|
-| 计数 | `SAME`、`WIDENED`（基准不是 Permit、候选是）、`NARROWED`（基准 Permit、候选不是）、`BECAME_INDETERMINATE`、`CANDIDATE_INDETERMINATE`（RFC 0006 §9.5.4）、`CANDIDATE_ERROR`、`BY_CHANGED`（结果相同、决策语句不同）、`BECAME_DENIED`（基准 Indeterminate、候选 Deny）、`OBLIGATIONS_CHANGED`（同一语句的 Permit、限流义务不同；后两项随 #1311 加入）、`BASE_MISMATCH` |
+| 计数 | `SAME`、`WIDENED`（基准不是 Permit、候选是）、`NARROWED`（基准 Permit、候选不是）、`BECAME_INDETERMINATE`、`CANDIDATE_INDETERMINATE`（候选读到请求没有取的外部属性，RFC 0006 §9.5.4）、`CANDIDATE_ERROR`、`BY_CHANGED`（结果相同、决策语句不同）、`BECAME_DENIED`（基准 Indeterminate、候选 Deny）、`OBLIGATIONS_CHANGED`（同一语句的 Permit、限流义务不同）、`BASE_MISMATCH` |
 | 样本 | 每类最多 20 条，字段与 `DecisionEvent` 相同的那部分（主体、作用域、动作、资源摘要、两边的 `by`），不含请求头、token 和外部属性的值（RFC 0006 §9.2） |
 | 实例 | 实例 id、看到的基准修订、首末时间 |
 
-**窗口何时关闭**（默认值可以按文档类别配置，`cosec.control.shadow.*`）：
+- **报告按实例分 key**（`CTL-16`）：`<p>:shadow:report:<window>:<instance>`，加上只增的索引 `<p>:shadow:reporters:<window>`；实例 id 只允许 `[A-Za-z0-9._-]`。
+  每个实例只写自己的 key，所以一个实例永远替换不了另一个的数字，ACL 可以把每个实例限制在自己的 key 上。窗口的数字是每个实例最新一份累计报告之和；
+  同一实例的第二份报告、别的窗口的报告、负的计数，或在窗口上报告过的实例没有报告，都让窗口保持打开而不计入；任何一个实例的 `CANDIDATE_ERROR` 单独就阻止窗口。
+  控制面把见过的实例记入变更的影子状态，之后被删出索引也照样要求它的报告。
+- **进程 id 每次启动都新**（`CTL-45`）：一个进程的报告与状态写在此前没有任何进程用过的 id 之下，不论 `cosec.authorization.shadow.instance-id` 设成什么
+  （配置值是前缀，每次启动加一个新的后缀）。否则重启后沿用旧 id 的进程会覆盖前一个进程的累计报告，并抹掉它记录的 `CANDIDATE_ERROR`。
+- **绝不因缺少证据而通过**（`CTL-56`）：在某个窗口上报告过、现在读不到报告的实例要等；到最长时长时，窗口以"证据不足"关闭并说出是哪个实例，绝不凭其余实例的报告通过
+  （`ShadowReportReader.readings(window)` 说出登记了报告却读不出的实例）。影子巡检跳过读不了的变更并计数，从最旧的开始。
+
+**窗口何时关闭**（默认值可以配置，`cosec.control.shadow.*`）：
 
 | 条件 | 默认 | 结果 |
 |---|---|---|
-| 已过最短时长，且有效样本（不含 `BASE_MISMATCH`）达到最少样本数 | 15 分钟；1,000 条 | `SHADOWED` |
-| 到达最长时长仍未达到样本数 | 24 小时 | `SHADOWED`，标记 `insufficient`：发布时必须确认"证据不足" |
-| 任一实例报告 `CANDIDATE_ERROR` | — | 立即关闭，`SHADOWED` 但**不能发布**：候选在某个实例上无法编译或评估，先修正（§6.3） |
+| 已过最短时长，有效样本（不含 `BASE_MISMATCH`）达到最少样本数，**并且**参与影子的在线实例都已确认该窗口 | 15 分钟；1,000 条 | 窗口关闭 |
+| 到达最长时长仍未满足上一行 | 24 小时 | 窗口关闭，标记 `insufficient`：发布时必须确认"证据不足" |
+| 任一实例报告 `CANDIDATE_ERROR` | — | 立即关闭，**不能发布**：候选在某个实例上无法编译或评估，先修正（§6.3） |
 | 头在窗口期间变化 | — | `CONFLICTED`（§5.5） |
 
-**确认**：`publish` 带上 `ack = { window, counts }`，计数必须与报告当前的汇总一致（防止确认过期的数字）。`WIDENED`、`NARROWED`、`BECAME_INDETERMINATE`、`BECAME_DENIED`、`OBLIGATIONS_CHANGED`
-任一不为零，或者 `insufficient`，都必须确认；全部为零且样本充足时可以不带 `ack`。确认记入修订记录的 `provenance.shadow` 和审计。
+- **确认**（`CTL-10`）：在最近一分钟有状态、并且参与影子的每个实例都在自己的状态里确认了该窗口，窗口才可能通过。不发确认的实例（旧版本，或没有读到暂存清单）
+  什么也没确认；状态里说自己不做影子的实例（候选来源不是 CoSec 自己的）不等它，但 `propagation` 仍然数它。暂存这一步本身让清单开始被维护，所以在没有启动任务或
+  影子周期跑过的存储上暂存的窗口同样能被确认。确认不增加样本；读不了状态时窗口保持打开。窗口打开期间，变更的应答说出多少在线实例已确认、哪些没有
+  （`waitingFor`：至多二十个 id 与其余的个数）。
+- **解不出的状态**（`CTL-73`）：一条列出来却解不出的实例状态不让整次读取失败：该实例算在线、什么窗口也没确认，所以没有窗口因它通过，变更的应答在 `waitingFor` 里
+  点它的名，其余状态照读。它在自己的值过期时不再计数：每条状态写入时带恰好两分钟的存活期，不带抖动。每条这样的状态按实例至多每分钟记一次日志并计数
+  （`cosec.control.shadow.status.unreadable`）。写在别的实例的键下的状态、不应答的存储，仍然让读取失败。
 
-**影子窗口对数据面的约束**：沿用 RFC 0006 的监听器规则——`BEST_EFFORT`、有界队列、采样、绝不影响决策（`ListenerIsolationTest` 扩展到候选来源的故障）。
-样本包含主体 id 与路径，与审计事件同级；读取影子报告需要 `cosec:shadow-read`（§7.1）。
+**发布时的确认**（`CTL-11`）：`publish` 带上 `ack = { window, counts }`，计数必须与窗口关闭时冻结的汇总一致（防止确认过期的数字）。`WIDENED`、`NARROWED`、
+`BECAME_INDETERMINATE`、`BECAME_DENIED`、`OBLIGATIONS_CHANGED` 任一不为零，或者 `insufficient`，都必须确认；全部为零且样本充足时可以不带 `ack`。确认记入修订记录的
+`provenance.shadow` 和审计。窗口关闭时冻结汇总并撤下候选文档；实例在候选撤回且最后一份报告写入后停止上报。
+
+**影子窗口对数据面的约束**：沿用 RFC 0006 的监听器规则——`BEST_EFFORT`、有界队列、采样、绝不影响决策。样本包含主体 id 与路径，与审计事件同级；
+读取影子报告需要 `cosec:shadow-read`（§7.1）。
+
+**跳过窗口**（`CTL-13`）：创建或撤销 break-glass 绑定没有影子窗口；其他变更只有持有 `cosec:skip-shadow` 并写明原因才能跳过窗口。
 
 **为什么默认强制**（Q1）：不能越权授权回答"这个人有没有资格这样改"，影子窗口回答"这样改了，真实流量会怎样"。前者挡不住"有资格但写错了"——
 例如租户管理员把一条 DENY 的资源模式写宽了，把自己的整个应用锁死。没有影子窗口，这类错误只能在发布后被用户发现。
-
-> **实现说明（2026-10-27，#1080）**：窗口关闭时冻结汇总并撤下候选文档，发布者的确认对照冻结的汇总；基准按修订匹配（`BASE_MISMATCH` 不计入有效样本）。
-
-> **实现说明（2026-10-27，#1110）**：影子报告按实例分 key：`{prefix}:shadow:report:{changeId}@{ms}:{instance}`，加上索引 `{prefix}:shadow:reporters:{changeId}@{ms}`；实例 id 只允许 `[A-Za-z0-9._-]`。窗口取每个实例的最新报告；计数为负即解码失败；任何一个实例的 `CANDIDATE_ERROR > 0` 就阻止发布（不按总和判断）；索引中列出、但报告缺失的实例使窗口保持打开（503），控制面把见过的实例记入变更的 `ShadowState`，之后被删出索引也照样要求它的报告（`CTL-16`）。信任模型：每个数据面实例对自己的报告负责，ACL 只许它写自己的 key；剩余缺口是在控制面第一次看到之前就被删出索引的实例，前提是攻击者能写 `shadow:reporters:*`。把索引改成只增的 Redis SET（`SADD`，ACL 只放行 `SADD`/`SMEMBERS`）是后续项，需要 starter 传入 Redis 客户端。
 
 ### 6.5 发布与传播
 
 发布按 §5.4 写入。之后各实例在失效通知到达时重新加载（RFC 0003 §4.4），陈旧度有 RFC 0003 §4.5 的上界。`ControlPlane.publish` 在头写入成功后返回
 新的修订号，不等待传播。
 
-每个实例在写影子报告的同一个周期里写一条**实例状态**（`ShadowReportSink` 的同一个 key 空间，TTL 1 分钟）：已安装的各文档修订号与落后时长。控制面据此
-提供只读的 `propagation(docKey, revision)`：报告了这个修订的实例数 / 最近一分钟报告过的实例数。它只用于观测，发布不等待它（Q29）。
+每个实例在写影子报告的同一个周期里写两条自己的记录（`CTL-74`、`CTL-75`）：
+
+- **状态** `<p>:shadow:status:<instance>`：每个上报间隔写，恰好活两分钟、不带抖动；只有实例、时间、格式级别、是否做影子与已确认的窗口，不带文档，
+  所以存活、确认与关窗路径每个实例读的东西不随它持有的文档增长。
+- **驻留记录** `<p>:shadow:resident:<instance>`：实例持有的文档到修订号，先于状态写，只在与上一次写成功的内容不同时写，且至少每半小时写一次（恰好活一小时、
+  不带抖动）；写失败不妨碍写状态，记为欠着，每个周期重试。
+
+控制面据此提供只读的 `propagation(docKey, revision)`（`CTL-62`），应答 `{revision, installed, holding, recent, unknown, asOf}`：`recent` 是最近一分钟有状态的实例，
+`holding` 是其中持有该文档（任意修订）的，`installed` 是其中已安装该修订或更新修订的，`unknown` 是在线但驻留记录缺失或解不出的。`installed == holding` 且
+`unknown == 0` 时没有实例落后；`holding: 0` 表示没有实例持有该文档，第一个需要它的请求直接加载已发布的修订。状态与驻留记录每个控制面宿主至多五秒读一次
+（`asOf` 说出何时读的），并发调用共用一次读；读失败不缓存、不用旧数据回答，按 `CTL-52` 答 503。它只用于观测，发布不等待它（Q29）。
+
+影子报告与状态的端口（`ShadowReportSink`、`ShadowReportReader`）是实验性的。升级顺序：先控制面，后数据面。
 
 ### 6.6 什么会阻止发布
 
 | 阶段 | 条件 | HTTP 状态（§10.2） |
 |---|---|---|
 | 授权 | 操作者没有目标上的动作；跨租户的硬性规则（§7.2） | 403 |
-| 校验 | V1–V5 任一失败 | 400 / 422 / 428 |
+| 校验 | V1–V5 任一失败；锁死检查未经确认（V4） | 400 / 422 / 428 |
 | 编译 | 候选或组合有任何编译错误；反向引用检查失败 | 422 |
 | 授出分析 | 有 UNKNOWN 片段且没有有效的批准（§7.5） | 428 |
-| 暂存槽 | 槽被别的变更占用（收窄的紧急变更除外，§5.5） | 409 |
+| 暂存槽 | 槽被别的变更占用（收窄的紧急变更与 break-glass 撤销除外，§5.5） | 409 |
 | 影子窗口 | 窗口未关闭（且未经许可跳过）；`CANDIDATE_ERROR`；`ack` 缺失或与汇总不符 | 409 / 428 |
-| 并发 | 基准已变化（`putIfMatch` 冲突） | 409 |
+| 并发 | 基准已变化（条件写冲突） | 409 |
 | 审计 | 任一 `REQUIRED` 的 `ChangeListener` 失败（§10.5）；break-glass 时没有配置 `REQUIRED` 监听器 | 503 |
-| 存储 | `ControlStore` 读写失败 | 503 |
+| 存储 | `ControlStore` 读写失败；判断不了调用者能否读这个变更（`CTL-17`） | 503 |
 
-每一种失败，头都没有变化：失败即不发布。
+每一种失败，头都没有变化：失败即不发布。每个 409 都在 problem 的 `conflict` 成员里说出是哪一种冲突（`CTL-80`，§10.2）。
 
 ### 6.7 声明式 `apply`
 
 `apply(docKey, desired, mode)` 把"期望的文档内容"与当前头比较，算出条目级操作，创建一个普通的变更请求。`mode = MERGE` 只增改、不删除未提到的条目；
 `REPLACE` 让文档与期望内容完全一致。它取代两样东西（N9，Q17）：
 
-- `LocalPolicyInitializer` 的 `init-repository`：每个实例启动时写库的做法删除。需要"策略随代码发布"的部署，在 CI 中用一个服务主体调用 `apply`，变更照常经过授权、
+- `LocalPolicyInitializer` 的 `init-repository`：每个实例启动时写库的做法已删除。需要"策略随代码发布"的部署，在 CI 中用一个服务主体调用 `apply`，变更照常经过授权、
   影子与审批。本地策略文件仍然可以直接装进内存存储（`InMemorySnapshotDocumentStore`），供开发、测试和不用 Redis 的单实例部署。
-- 生成器端点（`cosecPolicyGenerator`、`cosecAppPermissionGenerator`）留在 starter，它们只读宿主的 OpenAPI 并返回 JSON；这些 JSON 是 `apply` 的输入。
+- 生成器端点 `cosecServiceGenerator` 留在 starter，它只读宿主的 OpenAPI 并返回路由映射与 app 文档的 JSON；这些 JSON 是 `apply` 的输入。
 
-> **实现说明（2026-10-27，#1095）**：变更的 `kind` 不属于 API：`POST /changes` 带 `kind` 字段为 400，`Changes.propose` 只接受 `PUBLISH` 与 `BREAK_GLASS`，`ROLLBACK` 只由 `rollback()` 设置，`MIGRATE`、`BOOTSTRAP` 只存在于 `cosec-migrate` 直接走 `Revisions` 的路径；break-glass 请求走 `/break-glass`（§8）。
+- **`REPLACE` 基于文件所写的修订**（`CTL-36`）：对已有头的文档，`REPLACE` 的 `:apply` 按文档头所写的修订（读到它的那个修订）提出，不按当前头；那个修订不是头时
+  以 409 拒绝，与 `POST /changes` 的基准过期相同，消息说明要重新读头、把变化带进文件、把修订设为头的修订后再 apply。尚未发布的文档不比较。
+- **`MERGE` 保留略去的条目**（`CTL-37`）：文件略去了头的条目时保留它们，变更每一节（`$.policies`、`$.bindings`、`$.roles`、`$.rateLimits`）带一条 `WARNING` 发现
+  （检查 `OPERATION`），点名保留的 id，并说明 `REPLACE` 会删除它们。`REPLACE` 不带：它删除的就是它的操作。
+- **变更的 `kind` 不属于 API**：`POST /changes` 带 `kind` 字段为 400，提议只接受 `PUBLISH` 与 `BREAK_GLASS`，`ROLLBACK` 只由 `rollback()` 设置，`MIGRATE`、`BOOTSTRAP`
+  只存在于 `cosec-migrate` 直接写修订的路径；break-glass 请求走 `/break-glass`（§8）。
 
 ---
 
