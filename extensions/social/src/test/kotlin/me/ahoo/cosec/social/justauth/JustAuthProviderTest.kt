@@ -255,6 +255,40 @@ internal class JustAuthProviderTest {
         authClient.authorize().url.assert().isEqualTo("authorizeUrl")
     }
 
+    /**
+     * At most `pendingLogins` logins are in flight: one more callback is refused at once, before the provider is called,
+     * where it would otherwise queue without bound behind the provider's threads; and a slot is free again once a login
+     * ends, whether it succeeded or not.
+     */
+    @Test
+    fun `the logins in flight are bounded, and one more is refused at once`(): Unit = runBlocking {
+        val inside = CountDownLatch(2)
+        val release = CountDownLatch(1)
+        val logins = AtomicInteger()
+        val authClient = JustAuthProvider(
+            "clientId",
+            BlockingAuthRequest {
+                logins.incrementAndGet()
+                inside.countDown()
+                release.await()
+            },
+            states,
+            parallelism = 2,
+            pendingLogins = 2,
+        )
+        val held = List(2) { async(Dispatchers.Default) { authClient.authenticate(issued("clientId")) } }
+        // Both slots are taken: each login holds its slot while it runs.
+        runInterruptible(Dispatchers.IO) { inside.await() }
+
+        assertThrows<SocialAuthenticationException> { authClient.authenticate(issued("clientId")) }
+            .message.assert().contains("too many sign-ins completing")
+        logins.get().assert().isEqualTo(2)
+
+        release.countDown()
+        held.awaitAll().assert().hasSize(2)
+        authClient.authenticate(issued("clientId")).id.assert().isEqualTo("u1")
+    }
+
     /** R2B-23: a flood of starts holds only the starting section, so a real login is not queued behind it. */
     @Test
     fun `a flood of sign-in starts does not delay a login`(): Unit = runBlocking {
