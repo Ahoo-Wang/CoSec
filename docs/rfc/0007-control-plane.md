@@ -78,14 +78,14 @@
 >   这个变更已发布，结算为 `PUBLISHED`；`afterWrite` 在头写入后恰好执行一次（`try`/`finally`）。
 > - §7.1：控制面资源中默认空间的占位符是 `(default)`。以 `(` 开头的空间 id 保留：编译器拒绝其中的绑定，`ScopeResolver` 把声明的保留空间判为
 >   `SPACE_NOT_MEMBER`（403 `scope-rejected`）；`scope/<t>/<a>/-` 不再表示默认空间（`SCP-9`）。
-> - §7.3：信任根是平台租户中持有 `cosec:approve`、凭据不是 API Key 的主体（`APR-3`）。是否 API Key 看 `AuthenticatedPrincipal.apiKey`：由
->   `ApiKeyAuthenticator` 按来源设置，凭据名为 `api-key` 的转发身份也算（fail closed）。`SetBoundary` 只归平台：非平台主体提议即 403；设置边界的变更只有
+> - §7.3：信任根是平台租户中持有 `cosec:approve`、凭据不是工作负载凭据的主体（`APR-3`）。是否工作负载看 `AuthenticatedPrincipal.workload`（2026-11-23，#1898，`IDN-34`；
+>   此前读 `apiKey`）：API Key（由 `ApiKeyAuthenticator` 按来源设置，或凭据名为 `api-key`），或凭据名为 `service` 的身份（服务以自己的主体调用控制面时声明的），转发的身份也算（fail closed）。`SetBoundary` 只归平台：非平台主体提议即 403；设置边界的变更只有
 >   平台主体能批准（批准时与发布时都查）、拒绝或放弃（`BDY-2`）。四眼模式下，平台主体的变更须由平台审批人批准。RC1-36 的偏离（2026-11-01 确认）：
 >   `cosec:platform-admin` 可以绑定在平台文档与平台租户自己的文档 `Tenant((platform))` 中，租户与 app 文档中的绑定编译失败（`TNT-2`）。`bootstrap`
 >   把第一位管理员绑定在平台租户文档中（§5.9），已有部署也有这样的绑定；该文档的主体都是平台自己的主体，RC1-36 的威胁不适用。
 > - §7.4：租户 `(0)` 中授给 `Anyone` 的片段为 UNKNOWN（`ANONYMOUS`），只对经分析的变更（`GRT-7`）。本实例首次对账成功之前不信任 app 列表：分析在首次
 >   读列表前先对账，失败即不可信，最多每 30 秒再试一次；启动对账按退避重试（1 秒起翻倍，至多 1 分钟）。
-> - §7.5：API Key 不能审批（403，`APR-7`），没有凭据 id 的凭据也不能。审批记录 token 的 `jti`（`credentialId`）与 `iat`（`issuedAt`，
+> - §7.5：审批是人的：以工作负载的凭据（API Key、服务自己的身份）认证的主体不能审批（403，`APR-7`），没有凭据 id 的凭据也不能。审批记录 token 的 `jti`（`credentialId`）与 `iat`（`issuedAt`，
 >   `AuthenticatedPrincipal.issuedAt` 新增）；发布时 `ChangeAuthority` 查 `RevocationReader.isRevoked(jti)` 与主体吊销（容差为
 >   `cosec.authentication.revocation.skew`）。吊销读不到为 503，审批保留：存储错误不说明审批人的任何情况。不带 `credentialId` 的审批（含升级前的）不计入，
 >   须重新审批。成员关系来自提供者的审批人判定两次，都须放行：一次用"审批时持有 ∩ 现在持有"的角色加提供者当前的附加策略，一次用提供者完整的当前答复
