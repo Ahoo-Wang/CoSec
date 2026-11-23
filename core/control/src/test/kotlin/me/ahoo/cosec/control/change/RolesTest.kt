@@ -348,7 +348,8 @@ class RolesTest {
         val operations = listOf(Operation.PutCatalog(Catalog(listOf(CatalogGroup("g", permissions = permissions))))) +
             (1..300).map { Operation.PutRole(system("r$it", RolePermissions.All)) }
         val change = changes.propose(operatorFor(wms), wms, 0, operations, "too many")
-        change.errors.map { it.check to it.path }.assert().containsExactly("COMPILE" to "$.roles")
+        // 90,000 derived bindings: over the role-binding budget (CTL-40, DR1-B-1) and over what compiles.
+        change.errors.map { it.check to it.path }.assert().containsExactly("V2" to "$.bindings", "COMPILE" to "$.roles")
     }
 
     @Test
