@@ -882,7 +882,11 @@ JustAuth's: an application cannot add one of its own, since the provider interfa
    needs a `StringRedisTemplate`). Starting a sign-in is anonymous, so each provider admits a bounded number at once
    (64 in flight); past it `authorize` throws a `SocialAuthenticationException` at once, which the route you serve it from
    should answer with `429` or `503`. Starts and logins run on separate threads, so starts alone do not delay a
-   callback's login.
+   callback's login. The states a
+   deployment holds are bounded too: a 64th of the memory Redis reports, counted at 512 bytes a sign-in
+   ([Storage](../operations/storage.md#redis-keys)); past it `authorize` throws the same exception ("too many sign-ins in
+   progress: try again shortly"), writing nothing, and the instance logs at most one WARN a minute with how many it
+   refused. Rate limit the start route at your edge: anyone can call it.
 2. In your callback endpoint, bind the provider's callback parameters (`code`, `state`, ...) to
    `JustAuthCredentials("<name>", <the binding cookie, or "">)`, and pass it to
    `TokenCompositeAuthentication.authenticateAsToken`. The callback is accepted only when its `state` is one CoSec

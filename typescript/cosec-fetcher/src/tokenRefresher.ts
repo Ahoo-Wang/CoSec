@@ -14,6 +14,7 @@
 import type { Fetcher } from '@ahoo-wang/fetcher';
 import { ResultExtractors } from '@ahoo-wang/fetcher';
 import { NOTIFICATION_GUARD_REFRESHER } from './refreshProtocol.js';
+import { pairOf } from './compositeToken.js';
 import { sessionRequestAttributes } from './sessionRequest.js';
 
 /**
@@ -206,7 +207,7 @@ export class CoSecTokenRefresher implements TokenRefresher {
     return this.options.fetcher.post<CompositeToken>(
       this.options.endpoint,
       {
-        body: token,
+        body: pairOf(token),
         timeout: this.options.timeout ?? DEFAULT_REFRESH_TIMEOUT,
       },
       {

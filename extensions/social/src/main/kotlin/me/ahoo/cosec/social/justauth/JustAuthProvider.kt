@@ -15,6 +15,7 @@
 
 package me.ahoo.cosec.social.justauth
 
+import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runInterruptible
 import kotlinx.coroutines.sync.Semaphore
@@ -26,6 +27,7 @@ import me.ahoo.cosec.social.SocialCredentials
 import me.ahoo.cosec.social.SocialUser
 import me.ahoo.cosec.social.justauth.SocialUserConverter.toSocialUser
 import me.ahoo.cosec.spi.social.SocialStateStore
+import me.ahoo.cosec.spi.social.SocialStatesFullException
 import me.zhyd.oauth.model.AuthResponse
 import me.zhyd.oauth.model.AuthUser
 import me.zhyd.oauth.request.AuthRequest
@@ -33,6 +35,7 @@ import java.security.MessageDigest
 import java.security.SecureRandom
 import java.time.Duration
 import java.util.Base64
+import java.util.concurrent.atomic.AtomicLong
 
 /**
  * A [SocialAuthenticationProvider] over a JustAuth [AuthRequest].
@@ -73,6 +76,8 @@ class JustAuthProvider @InternalCoSecApi constructor(
     private companion object {
         const val DEFAULT_PARALLELISM = 16
         const val DEFAULT_PENDING_STARTS = 64
+        val REFUSAL_LOG_INTERVAL_NANOS: Long = Duration.ofMinutes(1).toNanos()
+        private val log = KotlinLogging.logger {}
         const val DEFAULT_PENDING_LOGINS = 64
         const val RANDOM_BYTES = 16
         val STATE = Regex("[A-Za-z0-9_-]{22}")
@@ -99,11 +104,45 @@ class JustAuthProvider @InternalCoSecApi constructor(
         try {
             val state = fresh()
             val binding = fresh()
-            states.put(state, hash(binding), lifetime)
+            try {
+                states.put(state, hash(binding), lifetime)
+            } catch (full: SocialStatesFullException) {
+                throw refusedFull(full)
+            }
             return SocialAuthorization(runInterruptible(starting) { authRequest.authorize(state) }, binding)
         } finally {
             startSlots.release()
         }
+    }
+
+    /** Starts refused because the store held all it may, since the last WARN; the WARN says how many (DR1-D-9). */
+    private val refusedSinceLog = AtomicLong()
+    private val lastRefusalLog = AtomicLong(Long.MIN_VALUE)
+
+    /** How many starts this provider refused because the state store was full. */
+    internal val refusedStarts: Long get() = refusedTotal.get()
+    private val refusedTotal = AtomicLong()
+
+    /**
+     * A start the store could not record: the sign-in is refused, as a "try again shortly", never started unchecked.
+     * Logged at WARN at most once a minute, with the count since, so a flood of anonymous starts is seen without a line
+     * per request.
+     */
+    private fun refusedFull(full: SocialStatesFullException): SocialAuthenticationException {
+        refusedTotal.incrementAndGet()
+        val since = refusedSinceLog.incrementAndGet()
+        val now = System.nanoTime()
+        val last = lastRefusalLog.get()
+        if ((last == Long.MIN_VALUE || now - last >= REFUSAL_LOG_INTERVAL_NANOS) && lastRefusalLog.compareAndSet(last, now)) {
+            refusedSinceLog.addAndGet(-since)
+            log.warn {
+                "Refused $since [$name] sign-in start(s) since the last such line: ${full.message} Something may be " +
+                    "starting sign-ins in a flood; rate limit the start route at the edge."
+            }
+        }
+        return SocialAuthenticationException(
+            "The [$name] provider has too many sign-ins in progress: try again shortly."
+        )
     }
 
     override suspend fun authenticate(credentials: SocialCredentials): SocialUser {

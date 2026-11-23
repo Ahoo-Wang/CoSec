@@ -30,6 +30,8 @@ Which preview of the library may run behind which preview of the gateway image: 
 
 ## From 8.0.0-beta.7 {#from-8-0-0-beta-7}
 
+- **An `explain` at a retained revision is cached like a head** (DR1-F-4). Affected: nothing to change. Repeating it
+  compiles nothing, where each call compiled its documents again.
 - **`analyze` shows a tenant's bindings only to a caller who may read its document** (`CTL-51`, DR1-F-8). Affected: a
   principal granted `cosec:analyze` on its tenant's document but not `cosec:read` (no built-in role is shaped so). It
   was answered with every matching binding of that document; it now gets none, and the document is counted in `hidden`.
@@ -131,6 +133,12 @@ Which preview of the library may run behind which preview of the gateway image: 
   /orders/123/` for a route `/orders/{id}`) is answered `400` `invalid-request` where it used to be decided in the `http`
   namespace. A client that sends such paths to a mapped host should drop the trailing `/`
   ([Web integration](../integration/web.md)).
+- **Social sign-in states are bounded** (DR1-D-9). Affected: deployments that serve social login. A deployment holds
+  at most a 64th of the memory Redis reports in sign-ins in progress (512 bytes each; 100,000 when Redis does not
+  report its memory), and a start past it is refused with a `SocialAuthenticationException` ("try again shortly")
+  where it used to write two more keys. The process serving social login needs `INFO` on Redis, as `SNP-3` already
+  asks; without it the fixed bound applies, with a WARN. `InMemorySocialStateStore` holds at most 10,000. Nothing to
+  change, beyond rate limiting the start route at the edge ([Storage](./storage.md#redis-keys)).
 
 ## From 8.0.0-beta.6 {#from-8-0-0-beta-6}
 

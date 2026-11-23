@@ -132,6 +132,10 @@ Full model: https://cosec.ahoo.me/guide/security-model.
   https://cosec.ahoo.me/operations/troubleshooting#startup-fails-on-the-client-address
 - **`Social sign-in, whose states are kept in Redis ..., needs cosec-cocache`** (STA-1): add `cosec-cocache`, declare
   your own `SocialStateStore` bean, or set `cosec.authentication.login.social.enabled=false`.
+- **Sign-in refused with "too many sign-ins in progress: try again shortly", and a WARN `Refused <n> [<provider>]
+  sign-in start(s)`**: the deployment holds its bound of sign-ins in progress (a 64th of Redis's memory at 512 bytes a
+  sign-in, or 100,000 when Redis reports none). Starting a sign-in is anonymous: rate limit the start route at the edge.
+  https://cosec.ahoo.me/operations/troubleshooting#social-sign-in-is-refused-too-many-sign-ins-in-progress
 - **`cosec-cocache needs a ReactiveStringRedisTemplate bean`** (STA-1): add `spring-boot-data-redis` and configure
   Redis; without it no snapshot is read and rate limits would count per instance.
 - **`cosec.pipeline.mode=gateway: this service believes any CoSec-Identity header it receives ... State it once it is

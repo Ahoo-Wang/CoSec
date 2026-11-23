@@ -14,6 +14,14 @@
 import { FetcherError } from '@ahoo-wang/fetcher';
 import { getCoSecProblem, type CoSecProblem } from './problem.js';
 
+/**
+ * The server refused the refresh token, so the session ended.
+ *
+ * It carries no token: the request of a refresh has the pair as its body, so
+ * the error of that request is not kept. Its `cause` is a plain `Error` with
+ * the name and message of that error (and its causes, likewise), and
+ * {@link problem} and {@link status} say what the server answered.
+ */
 export class RefreshTokenError extends FetcherError {
   /**
    * Why CoSec refused the refresh, when it said so (`token-revoked`: the
@@ -21,18 +29,25 @@ export class RefreshTokenError extends FetcherError {
    * is closed to anonymous callers; `token-invalid`: the pair is not one).
    */
   readonly problem?: CoSecProblem;
+  /** The status the refresh route answered, when it answered. */
+  readonly status?: number;
 
   constructor(cause?: unknown) {
-    super(`Refresh token failed.`, cause);
+    super(`Refresh token failed.`, withoutExchange(cause));
     this.problem = getCoSecProblem(cause);
+    this.status = answeredStatus(cause);
     this.name = 'RefreshTokenError';
   }
 }
 
-/** The session changed while refreshing; the original request must stop. */
+/**
+ * The session changed while refreshing; the original request must stop. Like
+ * the other refresh errors, its `cause` keeps only the name and message of the
+ * refresh's error, never its exchange.
+ */
 export class RefreshSessionChangedError extends FetcherError {
   constructor(cause?: unknown) {
-    super('The token session changed during refresh.', cause);
+    super('The token session changed during refresh.', withoutExchange(cause));
     this.name = 'RefreshSessionChangedError';
   }
 }
@@ -43,14 +58,24 @@ export class RefreshSessionChangedError extends FetcherError {
  * kept and no unauthorized notification is sent. A later request refreshes
  * again. Only a 4xx answer from the refresh endpoint (or a malformed refresh
  * response) ends the session with {@link RefreshTokenError}.
+ *
+ * It carries no token: its `cause` is a plain `Error` with the name and message
+ * of the refresh's error, whose request had the pair as its body; {@link problem}
+ * and {@link status} say what the server answered.
  */
 export class RefreshUnavailableError extends FetcherError {
   /** What CoSec answered (`too-many-requests`, `unavailable`, ...), when it said. */
   readonly problem?: CoSecProblem;
+  /** The status the refresh route answered, when it answered. */
+  readonly status?: number;
 
   constructor(cause?: unknown) {
-    super('Refresh token is unavailable; the session is kept.', cause);
+    super(
+      'Refresh token is unavailable; the session is kept.',
+      withoutExchange(cause),
+    );
     this.problem = getCoSecProblem(cause);
+    this.status = answeredStatus(cause);
     this.name = 'RefreshUnavailableError';
   }
 }
@@ -63,8 +88,8 @@ export class RefreshUnavailableError extends FetcherError {
  *
  * It carries no token: the request of a logout has the pair as its body, so
  * the error of that request is not kept. Its `cause` is a plain `Error` with
- * the name and message of that error, and {@link problem} and {@link status}
- * say what the server answered.
+ * the name and message of that error (and its causes, likewise), and
+ * {@link problem} and {@link status} say what the server answered.
  */
 export class LogoutUnconfirmedError extends FetcherError {
   /** What CoSec answered (`unavailable`, `internal-error`, ...), when it said. */
@@ -78,20 +103,39 @@ export class LogoutUnconfirmedError extends FetcherError {
       withoutExchange(cause),
     );
     this.problem = getCoSecProblem(cause);
-    const status = (
-      cause as { exchange?: { response?: { status?: unknown } } } | undefined
-    )?.exchange?.response?.status;
-    this.status = typeof status === 'number' ? status : undefined;
+    this.status = answeredStatus(cause);
     this.name = 'LogoutUnconfirmedError';
   }
 }
 
-/** The name and message of `error`, and nothing else of it: not its exchange, not its causes. */
-function withoutExchange(error: unknown): Error | undefined {
-  if (error === undefined) return undefined;
-  const plain = new Error(
+/** The status of the response `error`'s exchange received, when it received one. */
+function answeredStatus(error: unknown): number | undefined {
+  const status = (
+    error as { exchange?: { response?: { status?: unknown } } } | undefined
+  )?.exchange?.response?.status;
+  return typeof status === 'number' ? status : undefined;
+}
+
+/** Causes past this depth are left out (a chain can loop). */
+const CAUSE_DEPTH = 8;
+
+/**
+ * The name and message of `error` and of each of its causes, and nothing else
+ * of them: not an exchange, not a request. A fetcher error holds the request,
+ * whose body may be the token pair, so no original error object is kept.
+ */
+function withoutExchange(error: unknown, depth = 0): Error | undefined {
+  if (error === undefined || error === null || depth >= CAUSE_DEPTH) {
+    return undefined;
+  }
+  const cause =
+    error instanceof Error
+      ? withoutExchange((error as { cause?: unknown }).cause, depth + 1)
+      : undefined;
+  const plain: Error & { cause?: unknown } = new Error(
     error instanceof Error ? error.message : String(error),
   );
+  if (cause !== undefined) plain.cause = cause;
   plain.name = error instanceof Error ? error.name : 'Error';
   return plain;
 }
