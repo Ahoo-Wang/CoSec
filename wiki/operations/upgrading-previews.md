@@ -15,16 +15,27 @@ section above it:
 
 | You run | Read |
 |---|---|
-| `8.0.0-beta.5` | [From beta.5](#from-8-0-0-beta-5) |
-| `8.0.0-beta.4` | [From beta.4](#from-8-0-0-beta-4), then the one above |
-| `8.0.0-beta.3` | [From beta.3](#from-8-0-0-beta-3), then the two above |
-| `8.0.0-beta.2` | [From beta.2](#from-8-0-0-beta-2), then the three above |
-| `8.0.0-beta.1` | [From beta.1](#from-8-0-0-beta-1), then the four above |
-| `8.0.0-alpha.4` | [From alpha.4](#from-8-0-0-alpha-4), then the five above |
+| `8.0.0-beta.6` | [From beta.6](#from-8-0-0-beta-6) |
+| `8.0.0-beta.5` | [From beta.5](#from-8-0-0-beta-5), then the one above |
+| `8.0.0-beta.4` | [From beta.4](#from-8-0-0-beta-4), then the two above |
+| `8.0.0-beta.3` | [From beta.3](#from-8-0-0-beta-3), then the three above |
+| `8.0.0-beta.2` | [From beta.2](#from-8-0-0-beta-2), then the four above |
+| `8.0.0-beta.1` | [From beta.1](#from-8-0-0-beta-1), then the five above |
+| `8.0.0-alpha.4` | [From alpha.4](#from-8-0-0-alpha-4), then the six above |
 | `8.0.0-alpha.3`, `alpha.2`, `alpha.1` | [From alpha.3](#from-8-0-0-alpha-3), [alpha.2](#from-8-0-0-alpha-2) or [alpha.1](#from-8-0-0-alpha-1), then every section above it |
 
 Which preview of the library may run behind which preview of the gateway image: see
 [Upgrading a running deployment](./upgrading.md#upgrading-a-running-deployment).
+
+## From 8.0.0-beta.6 {#from-8-0-0-beta-6}
+
+Nothing to change: no property, format, status code, stored record or public signature that a beta.6 deployment uses
+changed, and the gateway and control-plane images differ only by their version.
+
+- **New in the test kit: `IdentityHeader.ONLY_GATEWAY_CAN_REACH_KEY`** (#1876). Affected: nothing. It is the key of
+  `IdentityHeader.ONLY_GATEWAY_CAN_REACH` alone, for a test that starts the application with a launcher taking a
+  property map: `mapOf(IdentityHeader.ONLY_GATEWAY_CAN_REACH_KEY to "true")`
+  ([Testing your application](../policies/testing.md#testing-your-application)).
 
 ## From 8.0.0-beta.5 {#from-8-0-0-beta-5}
 

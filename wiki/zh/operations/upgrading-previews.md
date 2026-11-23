@@ -13,15 +13,22 @@ description: "每个 8.0 预览版（alpha 与 beta）到下一个之间的变�
 
 | 你运行的版本 | 阅读 |
 |---|---|
-| `8.0.0-beta.5` | [从 beta.5 升级](#from-8-0-0-beta-5) |
-| `8.0.0-beta.4` | [从 beta.4 升级](#from-8-0-0-beta-4)，然后是上面那一节 |
-| `8.0.0-beta.3` | [从 beta.3 升级](#from-8-0-0-beta-3)，然后是上面两节 |
-| `8.0.0-beta.2` | [从 beta.2 升级](#from-8-0-0-beta-2)，然后是上面三节 |
-| `8.0.0-beta.1` | [从 beta.1 升级](#from-8-0-0-beta-1)，然后是上面四节 |
-| `8.0.0-alpha.4` | [从 alpha.4 升级](#from-8-0-0-alpha-4)，然后是上面五节 |
+| `8.0.0-beta.6` | [从 beta.6 升级](#from-8-0-0-beta-6) |
+| `8.0.0-beta.5` | [从 beta.5 升级](#from-8-0-0-beta-5)，然后是上面那一节 |
+| `8.0.0-beta.4` | [从 beta.4 升级](#from-8-0-0-beta-4)，然后是上面两节 |
+| `8.0.0-beta.3` | [从 beta.3 升级](#from-8-0-0-beta-3)，然后是上面三节 |
+| `8.0.0-beta.2` | [从 beta.2 升级](#from-8-0-0-beta-2)，然后是上面四节 |
+| `8.0.0-beta.1` | [从 beta.1 升级](#from-8-0-0-beta-1)，然后是上面五节 |
+| `8.0.0-alpha.4` | [从 alpha.4 升级](#from-8-0-0-alpha-4)，然后是上面六节 |
 | `8.0.0-alpha.3`、`alpha.2`、`alpha.1` | [从 alpha.3](#from-8-0-0-alpha-3)、[alpha.2](#from-8-0-0-alpha-2) 或 [alpha.1](#from-8-0-0-alpha-1) 升级，然后是它上面的每一节 |
 
 库的哪个预览版可以运行在网关镜像的哪个预览版之后：见[升级运行中的部署](./upgrading.md#upgrading-a-running-deployment)。
+
+## 从 8.0.0-beta.6 升级 {#from-8-0-0-beta-6}
+
+无需任何改动：beta.6 部署用到的属性、格式、状态码、存储的记录和公共签名都没有变化，网关镜像和控制面镜像只有版本号不同。
+
+- **测试工具包新增 `IdentityHeader.ONLY_GATEWAY_CAN_REACH_KEY`**（#1876）。受影响的：没有。它是 `IdentityHeader.ONLY_GATEWAY_CAN_REACH` 单独的 key，供用接受属性 map 的启动器启动应用的测试使用：`mapOf(IdentityHeader.ONLY_GATEWAY_CAN_REACH_KEY to "true")`（[测试你的应用](../policies/testing.md#testing-your-application)）。
 
 ## 从 8.0.0-beta.5 升级 {#from-8-0-0-beta-5}
 
