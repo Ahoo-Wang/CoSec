@@ -466,11 +466,34 @@ customizer reaches only that client, behind the Redis templates (API keys, the r
 builds its own client for the documents, the control-plane records and the revocations ([Redis client](#redis-requirements)),
 and configures it itself.
 
+```kotlin
+@Bean
+fun boundedLettuce(): LettuceClientConfigurationBuilderCustomizer = LettuceClientConfigurationBuilderCustomizer {
+    it.clientOptions(
+        ClientOptions.builder()
+            // The commands one connection holds: about the request rate that sends commands, times the command timeout.
+            .requestQueueSize(2_000)
+            .disconnectedBehavior(ClientOptions.DisconnectedBehavior.REJECT_COMMANDS)
+            .build()
+    )
+}
+```
+
+Size `requestQueueSize` as the page reasons for revocations: the rate of commands on that client times the command
+timeout (1,000 commands a second and a 2-second timeout is 2,000). Past it, and while disconnected with
+`REJECT_COMMANDS`, a command fails at once, which each of those features answers as it answers an unavailable Redis. No
+meter counts the commands waiting: what you see while it happens is the latency of the requests that use those
+features (an API key, a Redis rate limit, a social sign-in), and Lettuce's own reconnect lines in the log. CoCache's
+client, connected to a Redis that hangs, has no bound by number either; its command timeout,
+`cocache.redis.command-timeout`, is the bound, and CoSec does not change it.
+
 **Loads in flight are bounded by time, not by number.** A document being loaded counts toward neither its family's bound
 for documents nor the one for ids without a document until its load ends: it fails after the store read timeout (30 seconds)
 while Redis hangs, though the request waiting for it answers `503` after the cold-load timeout. So credentials for new app ids
 used at a high rate keep up to that rate × 30 seconds of loads, and their pending Lettuce commands, in memory
-during such an outage; `requestQueueSize` bounds the commands. None of them ever pushes out an installed document.
+during such an outage; `requestQueueSize` bounds the commands. None of them ever pushes out an installed document. What
+you see: `cosec.snapshot.loads` with `result=timeout` rising ([Metrics](./observability.md)), and the requests that
+needed those documents answered `503`; no meter counts the loads in flight.
 
 **Apps without a document share 256 places.** The app ids an instance remembers as having no document, at most
 the app family's absent entries (256 at 2 GiB, `SNP-7`), are shared by every tenant. Credentials issued for many apps that have no app document push out the real apps

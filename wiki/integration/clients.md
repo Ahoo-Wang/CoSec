@@ -163,6 +163,13 @@ that asks of a client:
   (`cosec.jwt.session.lifetime`, `IDN-17`), so a client that reads the refresh token's `exp` knows when a refresh
   cannot work and skips the call.
 
+**Where the pair is kept, and who can read it.** `cosec-fetcher` keeps the pair in `localStorage` by default, so any
+script that runs on the page's origin, a dependency or an injected one, can read the refresh token and renew the
+session until its lifetime ends. That is what keeps one refresh for every tab of a session. `sessionStorage` or memory
+(`new TokenStorage({ storage: ... })`) keep the pair from other tabs but not from a script on the page, and cost the
+shared refresh: each tab then holds a copy of its own and must not refresh it alongside another (above). What protects
+the pair is keeping foreign script off the origin: a Content-Security-Policy, and dependencies you trust.
+
 ## The claims a client may read
 
 The client does not verify a token: only the application can, so what it reads decides nothing, it only shows. These
