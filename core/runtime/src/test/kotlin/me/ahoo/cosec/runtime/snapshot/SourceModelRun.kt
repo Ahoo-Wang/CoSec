@@ -41,7 +41,8 @@ internal class SourceModelRun(
     private val options = SnapshotOptions(
         maxApps = 1,
         maxTenants = 1,
-        // Absent entries evicted too, so their claims and their set are checked (`SNP-14`, RFC 0013 B2b §4c).
+        // Absent entries evicted too, so their claims and their set are checked (`SNP-14`; RFC 0013 §5.4, the absent
+        // kind's member set).
         maxAbsentApps = 1,
         maxAbsentTenants = 1,
         reloadConcurrency = script.lanes,

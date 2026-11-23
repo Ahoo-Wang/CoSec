@@ -31,8 +31,8 @@ import java.util.concurrent.TimeUnit
  * [KeyTransitions.next] returned it, and an event an effect raises is queued behind what is there, never recursed into.
  * It drops, merges and reorders nothing; every such decision is `next`'s.
  *
- * Its one rule of its own is the page's (§4b): an eviction is taken from the queue as a request, and only then asked
- * [KeyTransitions.evictable], claimed, and fed to `next` as an [KeyEvent.Evict] carrying what was found.
+ * Its one rule of its own is RFC 0013 §5.4's decision B: an eviction is taken from the queue as a request, and only
+ * then asked [KeyTransitions.evictable], claimed, and fed to `next` as an [KeyEvent.Evict] carrying what was found.
  */
 internal class KeyModelRunner(
     private val world: KeyModelWorld,
@@ -53,7 +53,10 @@ internal class KeyModelRunner(
     private var draining = false
     private val readTimeouts = HashMap<Long, ScheduledFuture<*>>()
 
-    /** An eviction as offered: claimed when it is taken (§4b), by [claim] when the key is evictable. */
+    /**
+     * An eviction as offered: claimed when it is taken (RFC 0013 §5.4, decision B), by [claim] when the key is
+     * evictable.
+     */
     class EvictRequest(
         val onlyIfEmpty: Boolean,
         val absent: Boolean?,
