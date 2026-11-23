@@ -551,7 +551,8 @@ refresh token of that principal in that tenant whose `iat` is before `issuedBefo
   reject tokens issued up to `cosec.authentication.revocation.skew` (5 seconds) after `issuedBefore`. A user who
   logs in again within that window must log in once more. [Refreshing](#refreshing-tokens) applies the same skew,
   so such a token cannot be refreshed into a new one either.
-- The entry is kept for the refresh token lifetime past `issuedBefore`. A later call with an earlier `issuedBefore`
+- The entry is kept past `issuedBefore` for the longer of the access and the refresh token lifetimes, plus
+  `cosec.authentication.revocation.skew`, so it outlives every token it revokes. A later call with an earlier `issuedBefore`
   does not shorten it, even when two instances revoke the same principal at once.
 - It needs the same store as revoking one token. A `TokenStore` that cannot revoke a principal at all throws
   `UnsupportedOperationException` instead of doing nothing; one that fails to record it (Redis down, say) throws
