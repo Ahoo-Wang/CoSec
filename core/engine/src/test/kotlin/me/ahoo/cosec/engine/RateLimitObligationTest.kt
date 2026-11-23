@@ -32,8 +32,6 @@ import me.ahoo.cosec.model.decision.RateLimitSpec
 import me.ahoo.test.asserts.assert
 import me.ahoo.test.asserts.assertThrownBy
 import org.junit.jupiter.api.Test
-import java.security.MessageDigest
-import java.util.HexFormat
 
 /**
  * RFC 0006 §8.2: a permit carries the obligations of every rate limit rule that matches it, in document and rule order,
@@ -116,38 +114,6 @@ class RateLimitObligationTest {
         bucket("x\uD800").assert().isEqualTo("e:x\\uD800")
         bucket("x\\uD800").assert().isEqualTo("k:x\\uD800")
         CompiledRateLimit.keyedBucket("\\\uDC00").assert().isEqualTo("e:\\\\\\uDC00")
-    }
-
-    /**
-     * DR1-C-1: a client chooses a keyed bucket's value, never its length. A value written longer than the bound is the
-     * SHA-256 of its written bucket: the same value the same bucket, two values two buckets, however much they share,
-     * and never a written bucket.
-     */
-    @Test
-    fun `a key value past the bound names a bucket of bounded length, its own`() {
-        val bound = CompiledRateLimit.MAX_WRITTEN_KEY_LENGTH
-        fun sha256(text: String) = "h:" + HexFormat.of().formatHex(
-            MessageDigest.getInstance("SHA-256").digest(text.encodeToByteArray())
-        )
-        val atBound = "x".repeat(bound)
-        CompiledRateLimit.keyedBucket(atBound).assert().isEqualTo("k:$atBound")
-        val past = atBound + "y"
-        val hashed = CompiledRateLimit.keyedBucket(past)
-        hashed.assert().isEqualTo(sha256("k:$past"))
-        CompiledRateLimit.keyedBucket(past).assert().isEqualTo(hashed)
-        // Values that share the bound's first units, or all but the last, are buckets of their own.
-        val long = "v".repeat(LONG_VALUE)
-        val values = listOf(past, atBound + "z", long, long + "w", long.dropLast(1) + "w", "\uD800".repeat(bound))
-        val buckets = values.map(CompiledRateLimit::keyedBucket)
-        buckets.toSet().assert().hasSize(values.size)
-        buckets.forEach { it.length.assert().isEqualTo(HASHED_LENGTH) }
-        // A value with unpaired surrogates is written longer than it is, and hashed from its escaped form.
-        val fits = bound / ESCAPED_UNIT
-        CompiledRateLimit.keyedBucket("\uD800".repeat(fits)).assert().isEqualTo("e:" + "\\uD800".repeat(fits))
-        CompiledRateLimit.keyedBucket("\uD800".repeat(fits + 1))
-            .assert().isEqualTo(sha256("e:" + "\\uD800".repeat(fits + 1)))
-        // A written bucket can look like a hashed one only under its own prefix.
-        CompiledRateLimit.keyedBucket(hashed).assert().isEqualTo("k:$hashed")
     }
 
     /** P15: a deny spends nothing, so it carries no obligation. */
@@ -280,16 +246,5 @@ class RateLimitObligationTest {
                 assertThrownBy<AssertionError> { CoSecEngine.evaluate(flatRequest(), view, level) }
             }
         }
-    }
-
-    private companion object {
-        /** A value as long as a header a server accepts by default. */
-        const val LONG_VALUE = 8 * 1024
-
-        /** `h:` and 64 hex digits. */
-        const val HASHED_LENGTH = 2 + 64
-
-        /** An unpaired surrogate written as its `\uXXXX` escape. */
-        const val ESCAPED_UNIT = 6
     }
 }

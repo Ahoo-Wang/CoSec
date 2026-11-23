@@ -398,9 +398,9 @@ on its own.
 | Directory | For | Contents |
 |---|---|---|
 | `base/` | the overlays to build on | The Deployment and a Service (port 80 to the container's 8080; the management port 8081 is a container port the Service does not publish). `application.yaml` (the routes and the `cosec.*` settings above) becomes a ConfigMap mounted as `/opt/cosec-gateway-server/config/application.yaml`, read in addition to the image's defaults; its CORS origin, discovery list and route are a demo to replace; its name carries a hash of the file, so a change to it rolls the pods. The image is `ghcr.io/ahoo-wang/cosec-gateway`, with its tag set under `images:`. One gateway gets 768Mi and a 256 MiB heap. |
-| `control/` | the overlays to build on | The control-plane host ([above](#the-control-plane-host)): a Deployment (`strategy: Recreate`, one replica, probes on the management port), two Services (`cosec-control`, port 80 to 8080, for the gateway's route; `cosec-control-service`, port 80 to 8082, for the services you name; neither publishes 8081), a ConfigMap for `application.yaml`, and **one NetworkPolicy per port**. The Deployment sets `COSEC_PIPELINE_IDENTITY_ONLYTRUSTEDCALLERSCANREACH=true`, and the policies are resources of the same kustomization, because the statement is true only with them. The image is `ghcr.io/ahoo-wang/cosec-control`, its tag under `images:`, moved with the gateway's at a release. |
-| `overlays/dev/` | trying CoSec out on any cluster, kind and minikube included | The namespace `cosec-dev`, one gateway with the base's resources, the control-plane host with its own (1536Mi, a 768 MiB heap) on the same Redis, and a single Redis 7.4 with `maxmemory-policy noeviction` and no password. Redis keeps its data in an `emptyDir`, which outlives a container restart but not the pod: deleting the Redis pod deletes the documents. |
-| `overlays/production/` | a starting point for your own overlay | The namespace `cosec`; your Redis, from the ConfigMap `cosec-gateway-redis` (host and port; or `SPRING_DATA_REDIS_CLUSTER_NODES` for a cluster) and the Secret `cosec-redis-secret` (`password`, and `username` for an ACL user); 2 to 10 gateways behind a HorizontalPodAutoscaler on CPU (70 % of the 1 CPU each requests; it needs the metrics server); a PodDisruptionBudget that evicts one gateway at a time and always lets an unready one go, so a drain never waits for a platform document; a NetworkPolicy that admits port 8080 from anywhere and the management port from the `monitoring` namespace only; 3200Mi and a 2 GiB heap per gateway, spread across nodes. The control-plane host gets its own Redis account (the Secret `cosec-control-redis-credentials`, never the gateways'), 3200Mi and a 2 GiB heap, and a disruption budget that matters once you run a second replica. |
+| `control/` | the overlays to build on | The control-plane host ([above](#the-control-plane-host)): a Deployment (`strategy: Recreate`, one replica, probes on the management port), two Services (`cosec-control`, port 80 to 8080, for the gateway's route; `cosec-control-service`, port 80 to 8082, for the services you name; neither publishes 8081), a ConfigMap for `application.yaml`, **one NetworkPolicy per port**, and the boundary check: the Job `cosec-control-boundary-check`, which fails when a pod no policy admits reaches the host, with the headless Service `cosec-control-pods` (no port) it finds the pods by. The Deployment does **not** set `COSEC_PIPELINE_IDENTITY_ONLYTRUSTEDCALLERSCANREACH=true`: the policies make it true only where the network plugin enforces them, which no file can say, so the overlay you apply states it, beside the check. The image is `ghcr.io/ahoo-wang/cosec-control`, its tag under `images:`, moved with the gateway's at a release. |
+| `overlays/dev/` | trying CoSec out on a cluster of your own that nothing else runs on; **unsafe on a shared cluster** | It states the control-plane host's boundary, and on a cluster whose network plugin does not enforce the policies (kind's, among others) that statement is false: any pod can reach the host and state a platform administrator. The boundary check fails there, and says so. The namespace `cosec-dev`, one gateway with the base's resources, the control-plane host with its own (1536Mi, a 768 MiB heap) on the same Redis, and a single Redis 7.4 with `maxmemory-policy noeviction` and no password. Redis keeps its data in an `emptyDir`, which outlives a container restart but not the pod: deleting the Redis pod deletes the documents. |
+| `overlays/production/` | a starting point for your own overlay | The namespace `cosec`; your Redis, from the ConfigMap `cosec-gateway-redis` (host and port; or `SPRING_DATA_REDIS_CLUSTER_NODES` for a cluster) and the Secret `cosec-redis-secret` (`password`, and `username` for an ACL user); 2 to 10 gateways behind a HorizontalPodAutoscaler on CPU (70 % of the 1 CPU each requests; it needs the metrics server); a PodDisruptionBudget that evicts one gateway at a time and always lets an unready one go, so a drain never waits for a platform document; a NetworkPolicy that admits port 8080 from anywhere and the management port from the `monitoring` namespace only; 3200Mi and a 2 GiB heap per gateway, spread across nodes. The control-plane host gets its own Redis account (the Secret `cosec-control-redis-credentials`, never the gateways'), 3200Mi and a 2 GiB heap, a disruption budget that matters once you run a second replica, and the statement of its boundary (`control-deployment-patch.yaml`), for a cluster that enforces the policies. |
 
 ### Deploying
 
@@ -436,6 +436,18 @@ on its own.
    `kubectl -n cosec-dev port-forward svc/redis 6379` and publish with
    `cosec-migrate publish --to-redis redis://localhost:6379 --in <dir>` ([The first documents](./storage.md#the-first-documents)).
 5. **Try a request** through `kubectl -n cosec-dev port-forward svc/cosec-gateway 8080:80`.
+6. **Production: check the control-plane host's boundary.** The overlay states that nothing but the gateway and the services
+   you name can reach the host, and the Job `cosec-control-boundary-check` tests it on your cluster, from a pod no policy
+   admits, against every port of every pod:
+
+   ```bash
+   kubectl -n cosec wait --for=condition=complete job/cosec-control-boundary-check --timeout=900s
+   ```
+
+   If it fails, `kubectl logs job/cosec-control-boundary-check` names the port it reached: the policies are not enforced and
+   the statement is false, so take it out of your overlay (the host stops) until they are. It also fails, as unable to tell,
+   when the host never listened within ten minutes, or the plugin refuses rather than drops a connection; check that case by
+   hand. Delete the Job to run it again.
 
 ### What the manifests set
 
@@ -470,9 +482,9 @@ on its own.
   the `namespaceSelector` of the example above) to 8080; the services you name to 8082; the `monitoring` namespace to 8081.
   **As shipped, the services policy names a namespace and a label that do not exist, so it admits no one**: change both to
   each service that calls the control plane, in its own namespace, with one `from` entry each, and treat each as being as
-  trusted as the control plane itself. They need a network plugin that enforces `NetworkPolicy`, and kind's does not:
-  test, on a cluster that does, that a pod of another label cannot connect to any of the three ports. The manifests set
-  no egress policy.
+  trusted as the control plane itself. They need a network plugin that enforces `NetworkPolicy`, and kind's does not: the
+  Job `cosec-control-boundary-check` tests, on your cluster, that a pod of another label cannot connect to any of the three
+  ports of any pod, and the statement of the boundary is the overlay's, not `control/`'s. The manifests set no egress policy.
 - **JVM options**, through `JAVA_OPTS`: the memory sizes below, `-XX:+ExitOnOutOfMemoryError` so that a JVM that ran
   out of memory is restarted, `-Djava.net.preferIPv4Stack=true` (for
   [netty#16082](https://github.com/netty/netty/issues/16082)). The image starts no JMX agent.
@@ -774,8 +786,10 @@ A second job of the same workflow applies the manifests of [`k8s/`](https://gith
 the pod stays live but out of the Service until `cosec-migrate publish`, then turns ready; a decision is made (`401`, `403`, and a
 permit that fails only at the missing backend); the Prometheus endpoint of the management port is read from another pod, and the
 Service does not publish that port; and the example `NetworkPolicy` for a service behind the gateway is valid for the API server
-and selects the service's pods and the gateway's. That last check shows the policy says what it should, not that it is enforced:
+and selects the service's pods and the gateway's. That check shows the policy says what it should, not that it is enforced:
 kind's network plugin does not enforce `NetworkPolicy`, so test enforcement on your own cluster, as the example's header says.
+The control-plane host's boundary check is run there too, and must fail: it reaches the host, as it would on any cluster that
+does not enforce the policies.
 
 It does not measure performance ([JMH](../architecture/overview.md#measuring)), version skew between a gateway and its services,
 or Redis Cluster, TLS and per-instance users.

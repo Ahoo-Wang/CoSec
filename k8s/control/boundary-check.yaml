@@ -1,0 +1,96 @@
+# The check of the one statement the control host starts on: that nothing but the gateway and the services you name can
+# reach it. A pod with a label no NetworkPolicy here admits connects to every pod of the host, on each of its three ports,
+# by the addresses cosec-control-pods answers (ready or not). The policies drop such a connection where the network
+# plugin enforces them, and nowhere else (kind's does not):
+#
+# - any answer on any port: the Job fails, and says which. The host believes whoever reaches it; until the policies are
+#   enforced, take the statement out of your overlay (the host stops) or the host off the cluster's network;
+# - every connection dropped (no answer within the connect timeout): the Job completes;
+# - refused, or no address yet: the host is not listening yet, and the Job tries again, for ten minutes at most, then
+#   fails as unable to tell. A plugin that refuses rather than drops reads the same way: check by hand that a pod of
+#   another label cannot connect.
+#
+# It runs once per apply of a fresh Job: delete it to check again (kubectl delete job cosec-control-boundary-check). Read
+# the verdict with kubectl logs job/cosec-control-boundary-check; kubectl wait --for=condition=complete waits for a pass.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: cosec-control-boundary-check
+  labels:
+    app.kubernetes.io/name: cosec-control-boundary-check
+spec:
+  backoffLimit: 0
+  activeDeadlineSeconds: 900
+  template:
+    metadata:
+      labels:
+        # Admitted by none of the three policies: they admit the gateway's pods, the services you name, and a monitoring
+        # namespace.
+        app.kubernetes.io/name: cosec-control-boundary-check
+    spec:
+      restartPolicy: Never
+      enableServiceLinks: false
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 999
+        runAsGroup: 999
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: check
+          # The control host's own image (bash, curl and getent are in it): nothing else is pulled.
+          image: ghcr.io/ahoo-wang/cosec-control
+          command:
+            - bash
+            - -c
+            - |
+              set -u
+              # The host's three container ports (deployment.yaml): the operators' API, the service API, the actuator.
+              PORTS="8080 8082 8081"
+              deadline=$((SECONDS + 600))
+              while :; do
+                addresses=$(getent ahostsv4 cosec-control-pods | awk '{ print $1 }' | sort -u)
+                verdict=waiting
+                if [ -n "$addresses" ]; then
+                  verdict=dropped
+                  for address in $addresses; do
+                    for port in $PORTS; do
+                      curl -s -o /dev/null --connect-timeout 5 -m 8 "http://$address:$port/"
+                      code=$?
+                      case $code in
+                        28) ;;
+                        7) verdict=waiting ;;
+                        *)
+                          echo "FAIL reached the control host at $address:$port from a pod no NetworkPolicy admits (curl exit $code):" \
+                            "the cluster does not enforce the policies, and COSEC_PIPELINE_IDENTITY_ONLYTRUSTEDCALLERSCANREACH=true is false." \
+                            "Whoever reaches the host can state any principal."
+                          exit 1
+                          ;;
+                      esac
+                    done
+                  done
+                fi
+                if [ "$verdict" = dropped ]; then
+                  echo "ok   every connection from a pod no NetworkPolicy admits was dropped: $(echo $addresses) on ports $PORTS"
+                  exit 0
+                fi
+                if [ "$SECONDS" -ge "$deadline" ]; then
+                  echo "FAIL could not tell: the host refused or had no address for 600 s (not listening yet, or a plugin that refuses rather than drops)"
+                  exit 2
+                fi
+                sleep 5
+              done
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 250m
+              memory: 128Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL

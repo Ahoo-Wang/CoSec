@@ -2,13 +2,16 @@
 # NetworkPolicy, and 3200Mi per gateway (a 2 GiB heap); and the control plane's host, with its own Redis account, three
 # NetworkPolicies (one per port) and 3200Mi. Set the Redis address below, name the services that may call the control plane
 # in ../../control/networkpolicy-services.yaml (as shipped it admits none), then build your own overlay on this one (or copy
-# it) for your namespace, routes and image tags.
+# it) for your namespace, routes and image tags. The control host starts only on the statement that nothing but the gateway
+# and the services you name can reach it (control-deployment-patch.yaml); the Job cosec-control-boundary-check fails when a
+# pod no policy admits reaches it. Wait for it after every apply:
 #
 #   kubectl create namespace cosec
 #   kubectl -n cosec create secret generic cosec-jwt-secret --from-literal=secret="$(openssl rand -base64 48)"
 #   kubectl -n cosec create secret generic cosec-redis-secret --from-literal=password=<the Redis password>
 #   kubectl -n cosec create secret generic cosec-control-redis-credentials --from-literal=username=cosec-control --from-literal=password=<its password>
 #   kubectl apply -k k8s/overlays/production
+#   kubectl -n cosec wait --for=condition=complete job/cosec-control-boundary-check --timeout=900s
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 

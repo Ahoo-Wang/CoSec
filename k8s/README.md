@@ -6,8 +6,8 @@ Kustomize manifests for the gateway image `ghcr.io/ahoo-wang/cosec-gateway` and 
 | Directory | What it is |
 |---|---|
 | [`base/`](base) | The gateway's Deployment, Service and `application.yaml`. The overlays build on it. |
-| [`control/`](control) | The control plane's host: a Deployment, two Services, and **one NetworkPolicy per port**. The overlays build on it. |
-| [`overlays/dev/`](overlays/dev) | One small gateway, the control plane's host and a single Redis, for trying CoSec out on any cluster, kind included. |
+| [`control/`](control) | The control plane's host: a Deployment, its Services, **one NetworkPolicy per port**, and the Job that checks them on your cluster. The overlays build on it. |
+| [`overlays/dev/`](overlays/dev) | One small gateway, the control plane's host and a single Redis, for trying CoSec out on a cluster of your own that nothing else runs on. **Unsafe on a shared cluster**: it states the control host's boundary, which kind's network plugin, among others, does not enforce. |
 | [`overlays/production/`](overlays/production) | Your own Redis, an autoscaler, a disruption budget, a network policy, 3200Mi per gateway (a 2 GiB heap, room for every snapshot and revocation default at its bound); the control plane's host with its own Redis account and 3200Mi. |
 | [`examples/`](examples) | Manifests to copy: a `NetworkPolicy` that lets only the gateway reach a service in `gateway` mode. |
 
@@ -22,9 +22,19 @@ kubectl apply -k k8s/overlays/dev
 ## The control plane's host
 
 [`control/`](control) runs the image the control plane ships as. It believes the `CoSec-Identity` header of whoever can
-reach it, and **does not start until the manifests state** `COSEC_PIPELINE_IDENTITY_ONLYTRUSTEDCALLERSCANREACH=true`. That
-statement is true only because of the three NetworkPolicies beside it, one per port, so they are one kustomization and
-never apart: a copy of the Deployment without them states something false.
+reach it, and **does not start until it is told** `COSEC_PIPELINE_IDENTITY_ONLYTRUSTEDCALLERSCANREACH=true`. That statement
+is true only where the cluster enforces the three NetworkPolicies beside the Deployment, one per port, and no file can say
+that, so `control/` does not make it: each overlay does, and `control/` ships the check beside the policies, the Job
+`cosec-control-boundary-check`. From a pod no policy admits, it connects to every port of every pod (found by the
+headless Service `cosec-control-pods`, which publishes no port), and fails, naming the port, when one answers. After an apply
+of the production overlay:
+
+```bash
+kubectl -n cosec wait --for=condition=complete job/cosec-control-boundary-check --timeout=900s
+```
+
+If it fails, the statement is false: take it out of your overlay (the host stops) until the policies are enforced. On kind
+it fails, as it should. The policies and the check are one kustomization and never apart.
 
 | Port | What | Who is admitted | Service |
 |---|---|---|---|
@@ -36,8 +46,8 @@ never apart: a copy of the Deployment without them states something false.
 audit, and does not verify its callers. A workload it admits can state any principal, a platform administrator included,
 and be both the author and the approver of a change; so a compromise of the gateway, or of any service you name, is a
 compromise of the control plane. Name the fewest services, each by its own label in its own namespace. The policies need a
-network plugin that enforces NetworkPolicy; without one they do nothing, and kind's does not enforce them, so test that a
-pod of another label cannot connect.
+network plugin that enforces NetworkPolicy; without one they do nothing, and kind's does not enforce them: the boundary
+check is that test.
 
 The gateway reaches the control plane through a route to `lb://cosec-control` whose metadata `cosec-app-id` is
 `cosec-control` (the image's `cosec.authorization.scope.app-id`). The Deployment's strategy is `Recreate` and its replica

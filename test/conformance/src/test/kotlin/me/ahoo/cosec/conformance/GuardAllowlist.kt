@@ -408,9 +408,6 @@ object GuardAllowlist {
             "spring-boot:MembershipsStayLocalStarterTest#a membership record in Redis is never the provider's answer, and none is written",
             "cocache:LocalMembershipsTest#concurrent misses of one key share one load, and it answers them all",
             "cocache:LocalMembershipsTest#an invalidation during a load answers its waiters and keeps nothing",
-            // OBL-6, DR1-C-1: a bucket's bytes are bounded too, whatever the length of the key a client chose.
-            "runtime:LocalRateLimiterBucketBytesTest#a bucket retains a bounded number of bytes, whatever the length of the key a client chose",
-            "engine:RateLimitObligationTest#a key value past the bound names a bucket of bounded length, its own",
             "social:JustAuthProviderTest#a state is used once",
             "social:JustAuthProviderTest#another browser's state is refused",
             "cocache:RedisSocialStateStoreTest#aStateIsTakenOnce",

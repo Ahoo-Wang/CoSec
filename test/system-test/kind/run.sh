@@ -30,7 +30,9 @@
 #   5. k8s/examples/gateway-mode-service-networkpolicy.yaml is valid for the API server, and selects what it says: the
 #      service's pods in its namespace, admitted from the gateway's pods of the namespace the gateway runs in (every selector
 #      read from the applied policy itself). Enforcement is not tested: kind's network plugin does not enforce it.
-#   6. the decisions of step 3 are counted, by result (the scrape of step 4, read last).
+#   6. the decisions of step 3 are counted, by result (the scrape of step 4, read last);
+#   7. the control host's boundary check (k8s/control/boundary-check.yaml) fails, saying it reached the host: kind's network
+#      plugin does not enforce the policies, so the statement the dev overlay makes is false here, and the check must say so.
 # Every wait is a bounded poll against the property it comes from; nothing is retried.
 set -euo pipefail
 
@@ -237,5 +239,15 @@ ok "the example NetworkPolicy is valid, selects the service's pod ($SERVICE_SELE
 grep -q '^cosec_authorization_seconds_count{.*result="permit"' "$WORK/scrape.txt" || fail "the scrape has no cosec.authorization count for result=permit"
 grep -q '^cosec_authorization_seconds_count{.*result="explicit_deny"' "$WORK/scrape.txt" || fail "the scrape has no cosec.authorization count for result=explicit_deny"
 ok "the decisions of step 3 are counted: a permit and an explicit deny"
+
+# --- 7. the control host's boundary check ---------------------------------------------------------------------------------
+# The dev overlay states the control host's boundary (its first lines say why that is unsafe on a shared cluster), and
+# kindnet does not enforce the policies of k8s/control: from a pod no policy admits, the check reaches the host and fails.
+# The host's image is pulled (the overlay's tag) and the host listens once its JVM is up, ready or not.
+job_failed() { [ "$(kc get job cosec-control-boundary-check -o jsonpath='{.status.failed}')" = 1 ]; }
+wait_for "the boundary check to fail" 420 "the control image's pull + its startupProbe (90 x 2 s) + the check's rounds (5 s, 8 s per port)" job_failed
+CHECK_LOG=$(kc logs job/cosec-control-boundary-check)
+grep -q '^FAIL reached the control host' <<<"$CHECK_LOG" || fail "the boundary check failed otherwise than by reaching the host: $CHECK_LOG"
+ok "the control host's boundary check fails on kind, which does not enforce NetworkPolicy: ${CHECK_LOG:0:160}"
 
 echo "kind leg: passed"

@@ -437,7 +437,22 @@ cosec.pipeline.mode=gateway: this service believes any CoSec-Identity header it 
 
 `cosec.pipeline.mode=gateway` 的服务信任网络（`STA-7`）。先让它成真，再写下这一行：只放行网关 pod 的 `NetworkPolicy`（[`k8s/examples/gateway-mode-service-networkpolicy.yaml`](https://github.com/Ahoo-Wang/CoSec/blob/main/k8s/examples/gateway-mode-service-networkpolicy.yaml)）、双向 TLS，或只有网关所在的私有网络。`It is [false]`（或 `1`、`on`、空值）表示这个配置项写成了不是 `true` 的值。不要在网络还没有保证之前，为了绕过这条信息而写它。之后启动日志记录一行 `INFO`。
 
-在以策略决策、又从身份确定调用方的宿主上（如[控制面宿主](./deployment.md#the-control-plane-host)，或内嵌控制面的 IAM 服务，`STA-9`），同样的信息以 `cosec.pipeline.caller=forwarded-identity:` 开头；应用自己声明了网关时，则以 `the web gate of this host is an IdentityGate bean of the application` 开头。它点出两行：只有网关能连到宿主时写 `only-gateway-can-reach=true`；服务直接调用宿主时写 `cosec.pipeline.identity.only-trusted-callers-can-reach=true`（`COSEC_PIPELINE_IDENTITY_ONLYTRUSTEDCALLERSCANREACH`），`cosec-control` 镜像的服务端口默认开启，服务就是这样调用它的；在服务端口旁边，网关那一行会被拒绝，因为它不属实。先有网络，每个端口一条策略（[`k8s/control/`](https://github.com/Ahoo-Wang/CoSec/tree/main/k8s/control)），再写这一行。
+在以策略决策、又从身份确定调用方的宿主上（如[控制面宿主](./deployment.md#the-control-plane-host)，或内嵌控制面的 IAM 服务，`STA-9`），同样的信息以 `cosec.pipeline.caller=forwarded-identity:` 开头；应用自己声明了网关时，则以 `the web gate of this host is an IdentityGate bean of the application` 开头。它点出两行：只有网关能连到宿主时写 `only-gateway-can-reach=true`；服务直接调用宿主时写 `cosec.pipeline.identity.only-trusted-callers-can-reach=true`（`COSEC_PIPELINE_IDENTITY_ONLYTRUSTEDCALLERSCANREACH`），`cosec-control` 镜像的服务端口默认开启，服务就是这样调用它的；在服务端口旁边，网关那一行会被拒绝，因为它不属实。先有网络，每个端口一条策略（[`k8s/control/`](https://github.com/Ahoo-Wang/CoSec/tree/main/k8s/control)），再写这一行；在 Kubernetes 上由 overlay 写，并配有[边界检查](#the-control-hosts-boundary-check-fails)。
+
+### 控制面宿主的边界检查失败 {#the-control-hosts-boundary-check-fails}
+
+```text
+FAIL reached the control host at 10.244.0.7:8080 from a pod no NetworkPolicy admits (curl exit 0): the cluster does not enforce the policies, and COSEC_PIPELINE_IDENTITY_ONLYTRUSTEDCALLERSCANREACH=true is false. Whoever reaches the host can state any principal.
+```
+
+[`k8s/control/`](https://github.com/Ahoo-Wang/CoSec/tree/main/k8s/control) 中的 Job `cosec-control-boundary-check`
+从一个没有任何策略放行的 pod，连接控制面宿主每个 pod 的每个端口（[部署](./deployment.md#kubernetes)）。有连接得到应答，
+说明集群的网络插件没有强制执行那三条 NetworkPolicy，overlay 的边界声明是假的，集群里的任何工作负载都能向宿主声称自己是平台管理员。
+在插件强制执行这些策略之前，把声明从你的 overlay 中拿掉（宿主随之停止），然后删除这个 Job 再应用一次。不要为了让失败消失而删除 Job。
+在 kind 上它按设计就会失败：`k8s/overlays/dev` 只用于没有其他工作负载的集群。
+
+`FAIL could not tell` 表示宿主在十分钟内拒绝了每个连接，或者没有地址：它一直没有监听（用 `kubectl logs deploy/cosec-control` 看原因），
+或者插件拒绝而不是丢弃连接。后一种情况请手动检查别的标签的 pod 连不上。
 
 ### 控制面镜像的设置导致启动失败 {#startup-fails-on-the-control-plane-images-settings}
 
