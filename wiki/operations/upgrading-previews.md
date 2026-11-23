@@ -50,6 +50,13 @@ Which preview of the library may run behind which preview of the gateway image: 
   approve a change or be the trust root, as for `api-key`. Affected: only an authenticator that used that name. Rename
   its method if its principals are people; otherwise nothing to do
   ([Extending CoSec](../architecture/extending.md)).
+- **A request whose server reports no peer address reads its client address as unavailable** (`PIP-17`, DR1-C-8).
+  Affected: a host whose server reports no peer, Reactor Netty listening on a Unix domain socket for one, with a
+  statement or the blacklist on `environment.ip`. Before, the address was empty, read as absent: a DENY on it did not
+  match and the IP blacklist was not asked. It is now `unknown`, as a trusted proxy's `unknown` entry is: such a DENY,
+  and the blacklist, answer `503`, alike behind the three adapters. Put a proxy that writes `X-Forwarded-For` in front
+  of such a host and set the index to `1` or more ([Web integration](../integration/web.md)); a host whose server
+  reports its peers is unchanged.
 - **The generated route map no longer depends on who fetched the API docs last** (`RTE-4`, DR1-C-2). Affected: a
   route map from `cosecServiceGenerator/routes` on a host whose OpenAPI document writes no `servers`. springdoc then
   puts a server of its own into the document it caches, from the last request for the API docs, query string

@@ -80,6 +80,23 @@ class XForwardedRemoteIpResolverTest {
         resolver.resolve(listOf(" ")).assert().isEqualTo(XForwardedRemoteIpResolver.UNKNOWN)
     }
 
+    /** PIP-17, DR1-C-8: a peer the server does not report could not be read, so it is unavailable, never absent. */
+    @Test
+    fun aPeerTheServerDoesNotReportIsUnknown() {
+        for (unreported in listOf("", " ")) {
+            val resolver = { index: Int ->
+                object : XForwardedRemoteIpResolver<List<String>?>(RemoteIpResolver { unreported }, index) {
+                    override fun extractXForwardedHeaderValues(request: List<String>?): List<String>? = request
+                }
+            }
+            resolver(0).resolve(listOf("203.0.113.7")).assert().isEqualTo(XForwardedRemoteIpResolver.UNKNOWN)
+            resolver(1).resolve(null).assert().isEqualTo(XForwardedRemoteIpResolver.UNKNOWN)
+            resolver(1).resolve(listOf("203.0.113.7")).assert().isEqualTo("203.0.113.7")
+        }
+        ClientAddress.ofPeer(null).assert().isEqualTo(XForwardedRemoteIpResolver.UNKNOWN)
+        ClientAddress.ofPeer("192.0.2.1").assert().isEqualTo("192.0.2.1")
+    }
+
     @Test
     fun withoutThePeerTheHeaderMustBeTrusted() {
         assertThrownBy<IllegalArgumentException> { Resolver(0, peerIsConnection = false) }

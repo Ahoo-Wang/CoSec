@@ -89,7 +89,7 @@ internal class KeyDrain<T : Any>(
     /** A `VirtualMachineError` an effect threw, and the effect, handled once the flag is released ([released]). */
     private var crash: Pair<String, VirtualMachineError>? = null
 
-    /** An eviction as offered; claimed when it is taken (§4b), so nothing of this key moves in between. */
+    /** An eviction as offered; claimed when it is taken (RFC 0013 §5.4, decision B): nothing of this key moves between. */
     class EvictRequest(val onlyIfEmpty: Boolean, val absent: Boolean?, val reply: CompletableFuture<Eviction>)
 
     /** Tests only: no event in either lane, and no thread draining this key. No production path branches on it. */

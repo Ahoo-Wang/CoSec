@@ -17,13 +17,14 @@ package me.ahoo.cosec.webmvc
 
 import jakarta.servlet.http.HttpServletRequest
 import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.runtime.http.ClientAddress
 import me.ahoo.cosec.runtime.http.RemoteIpResolver
 
 internal object ServletRemoteIpResolver : RemoteIpResolver<HttpServletRequest> {
     /**
      * Uses `remoteAddr` rather than `remoteHost`, which may resolve (via reverse DNS) to a host name instead of the IP.
+     * A container that reports no peer gives `unknown`: the address could not be read (`PIP-17`,
+     * [ClientAddress.ofPeer]).
      */
-    override fun resolve(request: HttpServletRequest): String {
-        return request.remoteAddr.orEmpty()
-    }
+    override fun resolve(request: HttpServletRequest): String = ClientAddress.ofPeer(request.remoteAddr)
 }
