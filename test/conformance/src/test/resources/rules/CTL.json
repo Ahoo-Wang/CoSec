@@ -27,7 +27,7 @@
     },
     {
       "id": "CTL-3",
-      "source": "RFC 0007 Q22; RFC 0008 §3.2 (reviews of #996, #998); D2 (PIP-12 parity, review L5 of #1200)",
+      "source": "RFC 0007 §10.3, Q22; RFC 0008 §3.2 (reviews of #996, #998); D2 (PIP-12 parity, review L5 of #1200)",
       "statement": "simulate, explain and analyze call the same Engine.evaluate as enforcement, and explanations are built by the enforcing flow. simulate, explain and a shadow window's comparison decide on the documents enforcement reads, by its one rule (ViewDocuments): the platform's, the tenant's, and the app's when the scope has roles in that app or the tenant document decided with (the head, the candidate, or the revision explained) binds one of that app's permission policies to Anyone or a principal; never more. What explain reports as the revisions decided on, and the documents simulate takes a candidate of, are those the view read: a tenant document that does not compile makes a roleless request read no app document. A shadow window's candidate is decided with the failures of the documents it reads, and only those: a tenant candidate that no longer reads an app document is not indeterminate for that document's failure, and one that starts reading an app document that cannot be read or does not compile is (#1410). A candidate of a document that does not compile replaces that failure with itself; one of a document the view could not read is not compared (BASE_MISMATCH). A simulated or explained request that sends a header the documents of its view read with different values is refused 400, as enforcement refuses it before evaluation (PIP-12). An http resource goes through the path normalization every request's path does (PathNormalizer; RC1-41): a path enforcement answers 400 (a dot segment after one decoding, an empty segment, an encoded separator or a backslash (PIP-14), a malformed escape, over 2,048 characters as written or 256 per segment once decoded (PIP-5)) is refused 400, by the one function enforcement's checks use (PathNormalizer.enforceable), and the normalized path, its path parameters removed, is decided; a typed resource is held to the same length bounds, as written. analyze takes its resource the same way. analyze resolves a binding's policy as the engine does: a built-in control-plane policy from the engine's own statements (BuiltinPolicies.CONTROL), never counted opaque (#1401); a break-glass binding of cosec:root is listed as an allow marked break-glass, conditional on its window, with that window. An http action goes through the reading every request's method does (PIP-18), by the same function: a verb with a lower-case letter is refused 400, and http:HEAD is decided, and analyzed, as http:GET.",
       "level": "control",
       "pending": null,
@@ -558,7 +558,7 @@
     },
     {
       "id": "CTL-41",
-      "source": "Review round 1 of beta.4 (R1B-4)",
+      "source": "RFC 0007 §10.1, §10.2 (review round 1 of beta.4, R1B-4)",
       "statement": "A change a client proposes carries at most the platform's limits.maxChangeOperations operations (20,000 by default): a larger one is refused 400, naming the count and the limit, before any operation is authorized or applied. An apply and a rollback are not held to it: their operations are derived from a document, which the entry budgets bound (CTL-40). The control routes read at most the document cap and 2 MB (10 MB) of a request's body on WebMvc and WebFlux alike, and answer a larger one 400 without asking the control plane (`CTL-70`).",
       "level": "control",
       "guards": [
@@ -764,7 +764,7 @@
     },
     {
       "id": "CTL-47",
-      "source": "Design D2 (saas-shadow-staged-design.md §4, §9 condition 4)",
+      "source": "RFC 0007 §6.4 (design D2: saas-shadow-staged-design.md §4, §9 condition 4)",
       "statement": "An instance reads the staged list off the request path and, with a list, reads a candidate only for a document it lists and samples only a request whose view reads a listed document; with nothing listed it samples nothing and reads no candidate. Without a list kept (no list, or a control plane that does not keep one) it reads every candidate by its key and samples as before; a list it cannot read counts as no list, never as nothing staged. The list only gates: a candidate is still read by its key and checked by its window, so a list read late, or kept by no one any more, costs samples and never yields a sample of the wrong candidate, nor a pass.",
       "level": "control",
       "pending": null,
@@ -822,7 +822,7 @@
     },
     {
       "id": "CTL-57",
-      "source": "maintainer decision 2026-11-21 (the control-plane host's callers, \"按你推荐\"); control-server-design §0.2",
+      "source": "RFC 0007 §10.2 (maintainer decision 2026-11-21, the control-plane host's callers, \"按你推荐\"; control-server-design §0.2)",
       "statement": "A control-plane change records how its author was identified, and each change event how the operator of its step was (`origin`): `asserted` is true when the host believed the identity the caller stated (the `CoSec-Identity` header, `STA-9`) instead of verifying a credential itself; `via` is the credential as stated or verified (its method, its id, never its value, and the request's id); `peer` is the address of the connection the request arrived on, read from the Reactor Netty channel beneath any forwarded-header handling (`server.forward-headers-strategy`, a `ForwardedHeaderTransformer`), so that a caller cannot state it as it states its client address; a host that cannot read it that way, any but Reactor Netty, records none. It is read where the control routes are served, never on the request path of the others. A step no request drives, a maintenance pass for one, records none. The member is additive: a stored change without it reads, and a reader that does not know it ignores it. An event written as JSON carries the member only when it has one.",
       "level": "build",
       "pending": null,
@@ -835,7 +835,7 @@
     },
     {
       "id": "CTL-58",
-      "source": "maintainer decision 2026-11-21 (the control-plane host's service API); control-server-design §0.7, §0.8",
+      "source": "RFC 0007 §10.2 (maintainer decision 2026-11-21, the control-plane host's service API; control-server-design §0.7, §0.8)",
       "statement": "The control API's service profile is the narrow set a service that calls the control plane directly may ask for, served on a port of its own (`cosec.control.http.service-port`, WebFlux only; the network, not a filter, says who may use it): the tenant and app documents (their reads, and `:apply` on a tenant's) and the change flow that needs no person, of a tenant's or an app's document (propose and check, read, list, rebase, abandon, run or skip the shadow window, publish); a change made through it is always analyzed, whoever is stated: no one is the trust root through the service profile (CTL-81), so only what grants nothing anew publishes alone and anything else waits for a person, who approves on the operators' port. Every other route is a `404` before the control plane is asked, as if it did not exist: the platform document, approvals and rejections, rollback, break-glass, the queries and propagation. Nothing but the control API is served on that port. The profile narrows what is served and never widens what the caller may do: each route it serves is authorized for the stated principal by the policies. The service port is not the application's or the management port, and it is refused with the control API off (`cosec.control.http.enabled=false`, which serves no control route at all) or beside the gateway's statement (`only-gateway-can-reach`), since a service port admits services. The listener stops by unbinding, waiting for the requests in flight within the shutdown grace, and closing every connection still open, the idle keep-alive ones included.",
       "level": "build",
       "pending": null,
@@ -857,7 +857,7 @@
     },
     {
       "id": "CTL-59",
-      "source": "maintainer decision 2026-11-21 (the control-plane host's replicas and embedders; what can be computed is not configured); control-server-design §0.6",
+      "source": "RFC 0007 §5.7 (maintainer decision 2026-11-21, the control-plane host's replicas and embedders; what can be computed is not configured; control-server-design §0.6)",
       "statement": "Every control-plane instance runs the maintenance passes (reclaiming revisions, closing shadow windows, reconciling the app list and the staged list), kept apart by their leases: any number of instances over one store run each pass once per interval, one at a time. There is no switch that turns them off, so no deployment can be configured in which none runs.",
       "level": "startup",
       "pending": null,
@@ -882,7 +882,7 @@
     },
     {
       "id": "CTL-65",
-      "source": "control-server-design.md §0.10, PR 3 (the control-plane SDK)",
+      "source": "RFC 0007 §10.2 (control-server-design.md §0.10, PR 3: the control-plane SDK)",
       "statement": "Every call through the control plane's facade is decided by the pipeline for the principal its ControlCaller states, by the policies, and recorded as that principal's step, by the route's own code path, with no path around it: the same call through the route and through the facade answers the same and records the same; the facade reaches exactly the routes the service profile serves (CTL-58), one definition for the facade and the service port, and the change flow of a tenant's or an app's document, analyzed whoever the caller states (no trust root through it, CTL-81), and no route on the platform document or of a platform document's change; a call through it is recorded via.method: in-process (CTL-57); and a ControlCaller made of a security context CoSec's gate or pipeline did not make is refused when the call is made, by the implementation, before the control plane is asked (as PIP-29). The facade's interface, ControlCaller and ControlRefusedException are cosec-control-sdk's, a module with no runtime and no control plane; the in-process implementation is cosec-control's.",
       "level": "control",
       "guards": [
@@ -901,7 +901,7 @@
     },
     {
       "id": "CTL-68",
-      "source": "control-server-design.md §0.8 and §9 row 9 (the listing route)",
+      "source": "RFC 0007 §10.2 (control-server-design.md §0.8 and §9 row 9: the listing route)",
       "statement": "GET /documents?kind= lists which tenant or app documents exist from the store's list of the documents it indexes, never by reading a document: every document of the layer to a caller holding cosec:read on the layer (doc/tenant, doc/app), which grants no document's own read and which no document's read grants, apart from a pattern whose ** covers the layer; its own tenant's document to a tenant's principal that may read it, from one read of whether the store indexes that document and never the whole list; and to anyone else a 403 without detail, with no decision per listed document. A kind other than tenant or app is a 400, and a store that cannot answer is a 503, never an empty page. Its cursor is a token of the convention the change listing uses (contract/control/cursor.json): one that does not decode, belongs to another listing or names a document of the other kind is a 400.",
       "level": "control",
       "guards": [
@@ -922,7 +922,7 @@
     },
     {
       "id": "CTL-69",
-      "source": "maintainer decision 2026-11-21 (the management port of a host that believes the identity it is stated is not a place for the control API); found by the system test of the control-plane host",
+      "source": "RFC 0007 §10.2 (maintainer decision 2026-11-21: the management port of a host that believes the identity it is stated is not a place for the control API; found by the system test of the control-plane host)",
       "statement": "CoSec's own routes, the control API and the login routes (refresh, logout), answer only on the ports they are for: the application's own port, which the server bound (the control API's operators' profile there; it may have been configured as 0 or changed, so it is read from the server and never from a property alone), and, for the control API, its service port (`cosec.control.http.service-port`). On any other port of the host, the management port (`management.server.port`) included, every path of those routes is a `404` before the control plane or a login handler is asked. Spring Boot's WebFlux management server is a child context that collects the application's `WebFilter`s and `RouterFunction`s, so CoSec's own `RouterFunction`s would be served there, behind the pipeline's filter; on a host that believes the identity it is stated (`STA-9`) that is the whole control API for whoever can reach the management port, which the statement of what can reach the host does not cover. An application's own routes served on the management port are Spring Boot's behaviour (`STA-4` pins it) and stay behind CoSec's pipeline. On a servlet host the management server serves none of them.",
       "level": "startup",
       "pending": null,
@@ -939,7 +939,7 @@
     },
     {
       "id": "CTL-66",
-      "source": "G2e finding (#1795); ctl-66-change-event-order.md, decided 2026-11-21",
+      "source": "RFC 0007 §10.5 (G2e finding, #1795; ctl-66-change-event-order.md, decided 2026-11-21)",
       "statement": "Within one control-plane instance, a change listener receives the events of one change in the order the instance wrote them: one queue and one consumer per listener, and those who wait for room in a queue are served in the order they came, so a smaller event never queues ahead of a larger one put before it. A gated step waits for its REQUIRED listeners to record its event after what was queued before it, within the required timeout, or fails (503); a REQUIRED listener's full queue, or its call that fails or does not answer, loses, counted and logged at ERROR, the event of a step already stored, never failing it; a BEST_EFFORT listener's full queue drops the incoming event, so what arrives is an ordered prefix. The queues hold together at most a thirty-second of the heap; a listener that stops answering is reported, never cut off. At shutdown the listeners stop taking events and deliver what is queued within the drain timeout; what is left is counted and logged (ERROR for a REQUIRED listener) before they stop, and a gated step arriving meanwhile is refused (503). Across instances, a consumer orders by each event's time and the change's record.",
       "level": "control",
       "guards": [
@@ -960,7 +960,7 @@
     },
     {
       "id": "CTL-70",
-      "source": "CTL-57 follow-up: the change answer carries its author's origin; visibility decided 2026-11-21",
+      "source": "RFC 0007 §10.2 (CTL-57 follow-up: the change answer carries its author's origin; visibility decided 2026-11-21)",
       "statement": "A change's answer carries how its author was identified, when a request made the change. Every reader of the change is told whether the identity was only stated (asserted) and by which kind of credential (via.method). The credential's id, the request's id and the address of the connection (peer) are given only to a reader who holds cosec:approve on the change's document or cosec:read on the platform's, on a permit: a deny or an indeterminate decision gives the short origin, and the short origin holds no member for what it leaves out.",
       "level": "control",
       "guards": [
@@ -973,7 +973,7 @@
     },
     {
       "id": "CTL-71",
-      "source": "maintainer review of 2026-11-21 (R3-1: the service listener was a bare second Netty server)",
+      "source": "RFC 0007 §10.2 (maintainer review of 2026-11-21, R3-1: the service listener was a bare second Netty server)",
       "statement": "The control API's service port (`cosec.control.http.service-port`, `CTL-58`) is the application's own server on another port, not a second server of its own: it is built from a fresh server factory that Spring Boot's customizers have configured as they configure the application's (`server.ssl.*` with client authentication, `server.address`, HTTP/2, header and body limits, timeouts, forwarded-header handling, `server.netty.*`, the application's Netty server customizers and shared event loop), then given its port, and takes no property of its own. A host that makes `only-trusted-callers-can-reach` true by mutual TLS on the application's port serves the service port with mutual TLS: a request in clear text, or a client with no certificate, fails there as on the application port; one bound to an address binds the service port there and is not reachable on another. The application's own factory is read, never changed. Netty route providers of the application's server are not carried over: the service port serves the control API's service profile and nothing else. It stops as before: unbinding, the requests in flight within the grace, every connection still open closed.",
       "level": "startup",
       "pending": null,
@@ -985,7 +985,7 @@
     },
     {
       "id": "CTL-72",
-      "source": "maintainer decision 2026-11-22 (what can be computed is not configured); the properties review, items 8-12",
+      "source": "RFC 0007 §5.7 (maintainer decision 2026-11-22: what can be computed is not configured; the properties review, items 8-12)",
       "statement": "The control plane's cadences and limits are constants or computed, and no property sets them: every instance reclaims revisions every hour; a record not on a revision chain, or a change listed but never written, is removed once it is one reclaim pass old, never younger, since a record whose first write is in flight is not an orphan; the open shadow windows are looked at every fifteenth of `cosec.control.shadow.min-duration`, between a quarter of a second and a minute, so a window closes at most one pass after it could; an instance writes its shadow reports and status every sixth of the status's life (10 s), and no oftener than a fifth of the shortest life of a window nor than a second, so it is never older than the status that makes it counted; the control routes read a body of at most the document cap and 2 MB (10 MB), so raising the cap raises the limit. The starter says once at startup what it derived and from what.",
       "level": "startup",
       "pending": null,
@@ -999,7 +999,7 @@
     },
     {
       "id": "CTL-73",
-      "source": "Review of 2026-11-21's merges, R3-9 (availability of the shadow flow); maintainer's coordinator, 2026-11-21",
+      "source": "RFC 0007 §6.4 (review of 2026-11-21's merges, R3-9: availability of the shadow flow; maintainer's coordinator, 2026-11-21)",
       "statement": "An instance status that is listed and does not decode never fails the control plane's read of the statuses: its instance counts as live and acknowledging no window, so no shadow window passes on it and the change's answer names it in `waitingFor`, while every other status is read and `propagation` answers, counting it as recent and holding no document. It stops counting when its value expires, exactly two minutes after its instance's last write (each status is written with that life, with no jitter), or, for a value stored with no life, once its instance's entry in the list of instances is older than its expiry. Each such status is logged with its instance and why, at most once a minute per instance, and counted (`cosec.control.shadow.status.unreadable`). A status under another instance's key, and a store that does not answer, still fail the read.",
       "level": "control",
       "pending": null,
@@ -1017,7 +1017,7 @@
     },
     {
       "id": "CTL-74",
-      "source": "Review of 2026-11-21's merges, R3-11 (the size of a status); maintainer's coordinator, 2026-11-22",
+      "source": "RFC 0007 §6.5 (review of 2026-11-21's merges, R3-11: the size of a status; maintainer's coordinator, 2026-11-22)",
       "statement": "An instance's status is small: its instance, when, its format level, whether it shadows and the windows it acknowledges, and no document it holds. Liveness, the acknowledgement of a shadow window and the window's closing path read only statuses and never an instance's resident documents, so what they read per instance does not grow with the documents it holds.",
       "level": "build",
       "pending": null,
@@ -1029,7 +1029,7 @@
     },
     {
       "id": "CTL-75",
-      "source": "Review of 2026-11-21's merges, R3-11 (the size of a status); maintainer's coordinator, 2026-11-22",
+      "source": "RFC 0007 §6.5 (review of 2026-11-21's merges, R3-11: the size of a status; maintainer's coordinator, 2026-11-22)",
       "statement": "The documents an instance holds, with the revision of each, are its resident record, a record of its own written before its status: when what it holds differs from what its last successful resident write held, and in any case once half the record's life (exactly one hour, no jitter) has passed since then. A resident write that fails does not stop the status write and stays owed: every cycle tries it again. `propagation` reads, at most every five seconds, the resident records of the instances with a live status only, counts those that hold the document and those that installed the revision, and counts as `unknown` every live instance whose resident record is missing or does not decode; no instance is behind only when `installed` equals `holding` and `unknown` is 0.",
       "level": "control",
       "pending": null,
@@ -1048,7 +1048,7 @@
     },
     {
       "id": "CTL-76",
-      "source": "RFC 0007 §10, §10.2 (2026-11-22 revision: the typed layer, #1836; the kinds of conflict, CTL-80)",
+      "source": "RFC 0007 §10.2 (the typed layer, #1836, 2026-11-22; the kinds of conflict, CTL-80)",
       "statement": "The control plane's typed objects say what the wire says. Each document entry the typed layer reads has exactly the document format's members (schema/), and an entry with a member it does not know does not read, since re-sending what was read would drop it; every tenant and app document of the wiki's samples reads and writes back as the same document; each kind of operation the typed layer writes is the operation the control plane reads, and reads back as written, as does every change body of the wiki's samples; every change the control plane's answer codec writes reads, its members those of contract/control/change.json, each read or named as left out; the closed sets are the wire's, and a value a later host adds keeps its text; and a refusal names which conflict a 409 is.",
       "level": "build",
       "guards": [
@@ -1068,7 +1068,7 @@
     },
     {
       "id": "CTL-77",
-      "source": "control-typed-api decisions of 2026-11-21 (the facade over HTTP; both kinds of caller in both implementations, a parity suite)",
+      "source": "RFC 0007 §10.2 (control-typed-api decisions of 2026-11-21: the facade over HTTP; both kinds of caller in both implementations, a parity suite)",
       "statement": "The control plane's facade has two implementations that answer alike: in process (`LocalControlService`) and over a control-plane host's service port (`HttpControlService`). Both make each call of the narrow set into the same request (one route table, `RoutedControlService`), and state a caller with one mapping each: a request's principal as the gateway forwards it (`IdentityIssuer`), the application's own principal as one service identity (`ServiceIdentity`), which the HTTP implementation writes into `CoSec-Identity` and the in-process one hands to the gate. A context CoSec did not make is refused by either before anything is asked, and a request's principal with no credential is refused by the HTTP implementation rather than sent as anonymous. The same script of calls, as both kinds of caller, answers the same in both for every answer and refusal of the control plane (state, operations, findings, conflicts, statuses and listings with their cursors, less what names the call itself). Over HTTP only a 2xx is an answer: any other status, a redirect or a proxy's error page included, is a refusal carrying that status and body; a call waits for its answer no longer than its timeout (30 s by default) and then fails with HttpTimeoutException, the outcome of a write unknown; and any other failure of the transport propagates as the client's IOException. That is the one difference: in process, the control plane is behind no connection.",
       "level": "build",
       "pending": null,
@@ -1086,7 +1086,7 @@
     },
     {
       "id": "CTL-78",
-      "source": "control-typed-api decisions of 2026-11-21 (validation before an IAM stores its event: check shares propose's path)",
+      "source": "RFC 0007 §10.2 (control-typed-api decisions of 2026-11-21: validation before an IAM stores its event; check shares propose's path)",
       "statement": "A check (`POST /changes:check`, `POST /documents/{key}:check`, `ControlService.check`/`checkApply`, `ControlClient.check`) answers what the proposal or the apply it stands for would: the same state, findings, escalations and base, by the proposal's own function, every step of it but the last. It answers no candidate: the candidate a proposal checks names the change that confirms a lapsing DENY, so a check's would be another document. It needs exactly what the proposal needs and is refused alike (a caller who may not propose may not check, so a check tells no more about a document than the proposal would; a stale base is the same conflict; the service profile serves it for a tenant's document only). It stores nothing, takes no staging slot, takes no change id and writes no change event; the request itself is decided and recorded as any call of the control API.",
       "level": "build",
       "pending": null,
@@ -1102,7 +1102,7 @@
     },
     {
       "id": "CTL-79",
-      "source": "control-typed-api decisions of 2026-11-21 (writer model B: the role class cosec:manage-roles)",
+      "source": "RFC 0007 §7.4.7 (control-typed-api decisions of 2026-11-21: writer model B, the role class cosec:manage-roles)",
       "statement": "The role class: a change of a tenant's document that only writes or removes roles (putRole, removeRole), by an author who holds cosec:manage-roles on that document, needs no second person on account of who grants, unless one of those roles has no app or is of the control plane's own app (cosec.control.app-id), the role written or the one the head holds under its id, which a putRole replaces and so removes: putting or removing such a role is analyzed as before and waits for a person, since a member of it holds control calls on its tenant's document, governors of the control plane being for a person to appoint. The exclusion is keyed on the role's app, not on its actions' names, and that is enough: a binding a tenant's role derives is scoped to its app, and a control request is decided in the control app, so a role of any other app permits no control call whatever its catalog's actions say. It sees every escalation of the change, the grant analysis's and the others' (a break-glass binding's), and lifts only when every one is one it may lift, each safe for a holder: CROSS_TENANT is a service principal's case, a principal outside the tenant projecting its roles; NOT_COVERED arises for a holder inside the tenant handing out catalog permissions it does not itself hold, which is what managing roles means; DENY_OVERLAP arises when a DENY that binds the author may overlap what the role grants, and a DENY still binds whomever it binds at decision time (deny-first), so lifting the overlap grants nothing a DENY forbids. It records one informational ROLE_CLASS escalation in their place, naming the holder and what it lifted; anything the analysis could not tell (an unreadable app document, an unresolved policy, a spent budget) still waits. cosec:write on each role and cosec:grant on each binding a role derives are decided as before; a change that writes anything else is analyzed whole; an app's or the platform's document is never the class's. The grant is decided again at publish, as the publisher, on the current heads, as the whole grant analysis is: a grant withdrawn after the check, while the change is checked, shadowing or ready, sends it back to AWAITING_APPROVAL, and nothing publishes. A check answers the same: a holder learns the change will not wait, anyone else the escalation it would wait on. Its bounds are the format's: a tenant's document holds no \"*\" role and the platform's none at all; a tenant's role derives only bindings of its own tenant's members, in its app, to the permission policies that app's document defines (a tenant cannot write a perm: policy, and a permission its app does not define does not publish); a member reaches nothing outside its own tenant's document, whatever the app's catalog grants (TenantIsolation); the tenant's boundary caps what such a role permits.",
       "level": "build",
       "pending": null,
@@ -1136,7 +1136,7 @@
     },
     {
       "id": "CTL-80",
-      "source": "control-typed-api decisions of 2026-11-21 (a service that calls the control plane tells read-again from wait from stop without reading a message)",
+      "source": "RFC 0007 §10.2, §6.6 (control-typed-api decisions of 2026-11-21: a service that calls the control plane tells read-again from wait from stop without reading a message)",
       "statement": "Every 409 the control API answers names which conflict it is, in the problem's `conflict` member, one of a closed set (`contract/control/vocabularies.json`): BASE_MOVED (the document's head is not the change's base: read it again, propose again or rebase), SLOT_HELD (another change holds the document's staging slot, which the problem's `heldBy` names wherever `detail` names it, so nothing more is told: wait for it, or abandon it), STATE (the change's state does not admit the step), CANDIDATE_MOVED (the candidate named is not the change's), WINDOW_OPEN (the shadow window is still open), WINDOW_BLOCKED (the window closed blocked: the change never publishes), CONTENDED (concurrent writes kept changing the record: the same call may succeed), EXISTS (something of that id already stands where the step needs something else: a change of that id, a binding break-glass would create, or a binding a break-glass revoke names that break-glass did not write). No other status carries the member, and no 409 is answered without it; `detail` still explains the case to a person and is no contract. No conflict but SLOT_HELD carries `heldBy` (`contract/control/conflict.json`). The typed write call (`proposeAndPublishWithoutShadow`) abandons the holder only when it is a change of the same author left CHECKED, SHADOWING or READY and not updated for at least the write's patience, by the control plane's times (the holder's updatedAt against the createdAt of the change the write just proposed): a writer that died holds the document for one patience. It waits for any other holder, so concurrent writers of one principal wait for each other and both publish.",
       "level": "control",
       "pending": null,
@@ -1157,7 +1157,7 @@
     },
     {
       "id": "CTL-81",
-      "source": "control-typed-api decisions of 2026-11-22 (no trust root through the service profile)",
+      "source": "RFC 0007 §7.3, §10.2 (control-typed-api decisions of 2026-11-22: no trust root through the service profile)",
       "statement": "No one is the trust root through the control API's service profile, on the service port or through the facade (CTL-58, CTL-65), for a tenant's document as for an app's: a change made or published through it is always analyzed, whoever is stated, and what the analysis cannot prove waits for a person, who approves on the operators' port. On that profile the caller's identity is only stated, by whatever workload the network admitted, so a trust root there would be anyone who names a platform administrator, and an app's catalog reaches every tenant at once. The trust root's exemption is a person's authority and belongs to the operators' port, where the gateway verified the credential. It is a fact of the request, the profile it came through, not of the identity: a forwarded identity on the operators' port stays eligible, and a change readied there is analyzed again when it is published through the service profile. The role class (CTL-79) still applies, and a removal that grants nothing still publishes alone.",
       "level": "build",
       "pending": null,

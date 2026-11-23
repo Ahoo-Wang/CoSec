@@ -157,7 +157,7 @@ control-sdk（ControlService 门面，只依赖 api、spi、document）← contr
 | 模块 | 内容 | 理由 |
 |---|---|---|
 | `model` | `implies`（RFC 0005 §4.2）被控制面调用 | 纯函数 |
-| `engine` | `withinBoundary`（§7.6）；动作与资源模式的包含判断（RFC 0005 §5.5，§3.1 N7，`PatternContainment`） | 都是纯函数，模式实现（`HttpPathPattern`）在这里 |
+| `engine` | `withinBoundary`（§7.6）；动作与资源模式的包含判断（§3.1 N7，`PatternContainment`；语义见 RFC 0005 §5.5） | 都是纯函数，模式实现（`HttpPathPattern`）在这里 |
 | `document` | 文档格式：`provenance`、`boundary`、`boundaries`、`limits`、`attributes`（§5.3、§7.6、§3.1 N3）；编译器的规则（N1、N2、§9.5）；文档格式描述与 schema 生成（§10.4） | 编解码与编译器在这里；数据面和控制面必须用同一个编译器 |
 | `spi` | 影子候选与报告的端口（`CandidateStore`、`ShadowReportSink`、`ShadowReportReader`） | 数据面与控制面都用，签名只需要模型 |
 | `runtime` | 数据面读取候选文档、记录影子比较（§6.4） | 影子在数据面的请求路径上 |
@@ -278,10 +278,10 @@ publish(change c, 基准摘要 b, 候选文档 d):     // d 的 provenance.paren
 
 ### 5.5 并发：基准、暂存槽与变基
 
-- **乐观并发**：变更请求创建时记下基准 `(修订号, 摘要)`；发布时条件写（期望 = 基准摘要）。中间有别人发布，这次发布就是 `Conflict`。
+- **乐观并发**：变更请求创建时记下基准 `(修订号, 摘要)`；发布时条件写（期望 = 基准摘要）。中间有别人发布，这次发布就是 `Conflict`，什么也不覆盖（`CTL-4`）。
   这正是 RFC 0001 §3.7 的"CAS on version"，由 CoCache 的条件写提供，控制面不自己实现比较。
 - **不自动变基**：控制面的变更带着针对基准得出的授出分析、影子报告和审批，自动换基准会让它们失效而不被察觉。变更进入 `CONFLICTED`，由作者调用 `rebase`：
-  在新的头上重放条目级操作（每个操作可以带条目摘要作为前置条件，前置条件不满足即失败），得到新的候选，**全部检查重做**，审批与影子报告作废。
+  在新的头上重放条目级操作（每个操作可以带条目摘要作为前置条件，前置条件不满足即失败），得到新的候选，**全部检查重做**，审批与影子报告作废：基准移动过的变更从不发布（`CTL-7`）。
 - **每份文档一个暂存槽**（`CTL-6`）：一份文档同一时间至多一个变更持有它（`stage:<docKey>`，条件写占用）。槽从影子窗口开始一直持有到 `READY`：一个已就绪而尚未发布的
   变更仍占着槽；发布、放弃、过期、拒绝、发布时落回 `CONFLICTED` 或 `DRAFT`，以及被抢占时释放。否则两个各自影子通过的变更依次发布，第二个的影子比较的是
   一个已经不存在的基准。别的变更可以照常起草和检查，但要排队进入窗口。暂存时变更先离开 `CHECKED` 再占槽，一次条件写决定两个调用的胜负；
@@ -326,6 +326,10 @@ publish(change c, 基准摘要 b, 候选文档 d):     // d 的 provenance.paren
 - 回收由每个运行控制面的实例每小时执行一次（常量，`CTL-72`；要回收什么由 `min-age` 与 `max-count` 决定）；同一份文档同时只有一个实例回收：
   以条件写占用一个租约 key（`<p>:control:lease:reclaim:<docKey>`），用完以条件删除释放。删除用 CoCache 的 `delete`、`deleteIfMatch`；
   从索引取出的内容先记入 `RevisionIndex.reclaiming`，删除失败的下一轮重试。
+- **每个实例都跑维护**（`CTL-59`、`CTL-72`，维护者 2026-11-21 决定）：每个控制面实例都跑维护周期（回收修订、关闭影子窗口、对账 app 列表与暂存清单），由租约隔开：
+  同一存储上任意多个实例，每个周期每个间隔只跑一次。没有关掉它们的开关（`cosec.control.maintenance.enabled` 已删除），所以配不出"没有实例跑维护"的部署。
+  节奏与上限是常量或算出来的，没有属性：每小时回收一次；不在修订链上的记录满一个回收周期才删；影子窗口每 `min-duration` 的十五分之一看一次（四分之一秒到一分钟之间）；
+  实例每十秒写一次报告与状态；控制路由读的请求体上限跟随文档上限（§10.2）。starter 启动时说一次它算出了什么、从什么算的。
 - **未结束的变更是集合**（`CTL-54`）：按文档一个集合（`doc:<文档键>`），按状态一个集合（`state:<状态>`），成员是 `<文档键>#<变更 id>@<那次写入所写记录的摘要>`。
   每次写变更之前先加入它的文档集合与状态集合，写完之后从不再适用的集合里摘除，且只摘除自己那次写入放进去的那个成员：变更重新进入同一状态时，
   迟到的摘除因此拿不走后一次写入的成员。集合是未结束变更的超集。只有在集合已有人维护、并且 8.0.0-beta.5 之前格式的清单（`list:open-changes`）不存在时
@@ -350,9 +354,13 @@ refs:<被引用文档>:<policyId> = { (引用方 docKey, 索引它的修订, 标
   删除守住它（头里已没有它删的东西），修复自己则反过来先加成员、后写记录。它双向修复：补上头引用而索引缺少的，并删除索引有而任何头都没有的，
   且只在引用方的头已不低于写入该引用的修订、头里也没有这条引用时才删除，所以仍在进行中的发布保留自己的引用。它也把 8.0.0-beta.5 之前格式的存储转换过来
   （`MIG-4`）。
-- **检查**：发布 `Platform`/`App` 时，候选删除了某个策略 id，而索引里仍有引用方 → 拒绝发布（422），错误列出引用方。只定义该 id（且边界不指向它）的租户
-  不阻止平台删除自己的同名策略；读不到的引用方头按引用处理。被引用的策略在普通策略与边界策略之间改变种类，检查时与写头时都拒绝（`CTL-30`）：绑定只到达策略，
+- **检查**（`CTL-5`、`CTL-43`）：发布 `Platform`/`App` 时，候选删除了某个策略 id，而索引里仍有引用方 → 拒绝发布（422），错误列出引用方；索引在头移动之前加入、
+  头移动之后才摘除。平台新增一个租户已在使用的 id 同样被拒绝（`CTL-21`，§7.4.1）。只定义该 id（且边界不指向它）的租户
+  不阻止平台删除自己的同名策略：是否"只定义"从集合的条目读，绝不读头；后来的修订或输掉的竞争留下的"引用"条目偏向拦截，直到该租户下一次发布或
+  `repair-references` 去掉它。app 策略的每个引用方都拦截它的删除。被引用的策略在普通策略与边界策略之间改变种类，检查时与写头时都拒绝（`CTL-30`）：绑定只到达策略，
   租户的边界只到达边界，另一种对它们就是缺失；没有引用的策略可以改种类。修改被引用策略的**内容**不拦：它对每个引用方生效，影子窗口在所有租户的流量上比较（§6.4）。
+- **读不出即拒绝**（`CTL-42`）：读不出的反向引用集合（含 8.0.0-beta.5 之前的格式）失败即拒绝：读取抛错并点名 `cosec-migrate repair-references`，需要它的检查拒绝变更（503），
+  需要它的头写入不做，也不向它加入或摘除成员。每次读集合都问 Redis：记录的集合不留本地副本。
 - **token 附加不在索引中**：主体附加哪个策略由 token 签发方决定，控制面看不到。删除一条可附加的平台策略会让附加它的主体得到
   `Indeterminate(MissingPolicies)`（失败即拒绝）；影子窗口把这些请求报告为 `BECAME_INDETERMINATE`，发布者在确认时看到数字。
 
@@ -363,7 +371,7 @@ refs:<被引用文档>:<policyId> = { (引用方 docKey, 索引它的修订, 标
 
 | 命令 | 写什么 | 约束 |
 |---|---|---|
-| `bootstrap --platform-admin <principal>` | 在 `Tenant((platform))` 中加一条 `Principal((platform), <principal>) → cosec:platform-admin` 绑定（id `platform-admin-<principal>`），作用域 `(*, *)`，`kind = BOOTSTRAP` | 只有当该文档里没有任何指向 `cosec:platform-admin` 的绑定时才执行；否则拒绝，除非 `--force`（用于"管理员全部失效"的恢复） |
+| `bootstrap --platform-admin <principal>` | 在 `Tenant((platform))` 中加一条 `Principal((platform), <principal>) → cosec:platform-admin` 绑定（id `platform-admin-<principal>`），作用域 `(*, *)`，`kind = BOOTSTRAP`；文档原有的策略、其他绑定、限流规则与角色全部保留，只有头部与绑定改变（`MIG-3`） | 只有当该文档里没有任何指向 `cosec:platform-admin` 的绑定时才执行；否则拒绝，除非 `--force`（用于"管理员全部失效"的恢复） |
 | `publish --in ./converted` | RFC 0004 §8.2 的转换结果，`kind = MIGRATE`，期望 = 不存在 | 拒绝含 break-glass 绑定的输入（§8）；遇到未完成的 CoCache 8 升级留下的 `<p>:meta:cocache8` 标记时拒绝写入 |
 | `restore` | 把一个保留的修订或一个文件写成下一个修订，只覆盖调用者确认的那个头修订 | 从锁死中回来的路，不是发布的途径；变更监听器听不到它（控制面发现不是自己写的头并通知监听器，列入 8.1） |
 | `repair-references` | 反向引用索引与 app 列表（§5.8、§7.4.3） | 只增补与按条件删除，可在控制面运行时执行 |
@@ -426,7 +434,7 @@ flowchart LR
 
 前八行是命令（STAGE 在 API 上是 `:shadow`，内部入口是 `startShadow`）；其余是命令途中的步骤：UNRESERVE 是没有拿到槽的 `:shadow` 或 `:skip-shadow` 退回，
 以及窗口开始一分钟后仍没有候选的变更退回（§6.4）；PREEMPT 是槽被别的变更占走；UNWRITTEN 是没有写入头的发布；WRITTEN 是头已经写入的发布；
-EXPIRE 是每次读取都会施加的过期。规则有三条：
+EXPIRE 是每次读取都会施加的过期：它不是命令，从变更此刻的状态移动它，别人先移动了就答变更现在的样子，从不 409；命令照旧拒绝已过期的变更（`CTL-34`）。规则有三条：
 
 - 一行的结果状态恰好是该步骤会写入的状态。`PUBLISHED` 只在 WRITTEN 一行里：只有本变更自己的发布写入了头，才到得了这一步。
 - 命令对起始状态之外的变更答 409。内部步骤不是命令，从不答 409；一个步骤要写入表外的状态是实现的错误，什么都不写入，控制面 API 答服务端错误
@@ -447,7 +455,7 @@ EXPIRE 是每次读取都会施加的过期。规则有三条：
 |---|---|---|
 | V1 | **格式**：按生成的 JSON schema（§10.4）给出带 JSON 路径的错误；真正的判定是编译器（V1 只为更好的错误信息） | 400 |
 | V2 | **规模与结构**：文档 ≤ 8 MB（RFC 0003 Q14）；每文档主体绑定 ≤ 1,000（RFC 0004 Q2）；条目预算（`CTL-40`，见下）；保留前缀（`cosec:`、`perm:`、`g:`、`r:`）只能由内置策略和 `cosec-migrate` 使用；租户文档里的策略 id 不能与平台层重名，除非是平台策略的精确副本（N2，`CTL-14`）；命名非法 app 的绑定（不符合 `ScopeResolver.isValidAppId`） | 400 / 422 |
-| V3 | **语言**：类型、属性目录（`Platform` 文档的 `attributes` 节加内置目录，N3）、成本上限（`Platform` 文档的 `limits` 节，RFC 0005 §3.5）；不可满足的条件给警告 | 422 |
+| V3 | **语言**：类型、属性目录（`Platform` 文档的 `attributes` 节加内置目录，N3）、成本上限（`Platform` 文档的 `limits` 节，RFC 0005 §3.5）；不可满足的条件给警告。条件先对照平台声明的外部属性、再对照宿主的属性提供者声明的检查，与实例编译时相同（`CTL-20`） | 422 |
 | V4 | **锁死检查**（`CTL-38`）：对平台文档、平台租户文档、控制应用文档的变更，由引擎在候选上判定操作者在候选生效后是否仍能到达控制面（当前这次请求按 Pipeline 的判定，加上控制应用中该文档上的 `cosec:publish`）；只检查操作者自己的回路，用的是当前请求的事实 | 提议时警告；发布时 422，除非发布者确认（`"lockout": true`） |
 | V5 | **语义规则**：DENY 上的 `onMissing: nomatch` 必须带确认（§9.5）；break-glass 的规则（§8）；边界策略只含 ALLOW、只在 `Platform`（§7.6）；修改 `protected` 条目需要 `cosec:unprotect`（§7.4.4） | 428 / 422 / 403 |
 
@@ -592,6 +600,7 @@ EXPIRE 是每次读取都会施加的过期。规则有三条：
   以 409 拒绝，与 `POST /changes` 的基准过期相同，消息说明要重新读头、把变化带进文件、把修订设为头的修订后再 apply。尚未发布的文档不比较。
 - **`MERGE` 保留略去的条目**（`CTL-37`）：文件略去了头的条目时保留它们，变更每一节（`$.policies`、`$.bindings`、`$.roles`、`$.rateLimits`）带一条 `WARNING` 发现
   （检查 `OPERATION`），点名保留的 id，并说明 `REPLACE` 会删除它们。`REPLACE` 不带：它删除的就是它的操作。
+- **限流规则只经变更改**（`CTL-19`）：`putRateLimit`、`removeRateLimit`，或设定它们的 `:apply`（都按 `REPLACE`）；不点名限流规则的变更保留头上的规则。
 - **变更的 `kind` 不属于 API**：`POST /changes` 带 `kind` 字段为 400，提议只接受 `PUBLISH` 与 `BREAK_GLASS`，`ROLLBACK` 只由 `rollback()` 设置，`MIGRATE`、`BOOTSTRAP`
   只存在于 `cosec-migrate` 直接写修订的路径；break-glass 请求走 `/break-glass`（§8）。
 
@@ -617,7 +626,7 @@ EXPIRE 是每次读取都会施加的过期。规则有三条：
 | `cosec:publish` | `doc/…` | 发布这份文档的变更（含回滚） |
 | `cosec:skip-shadow` | `doc/…` | 不经影子窗口发布；抢占暂存槽（§5.5） |
 | `cosec:approve` | `doc/…` | 批准含越权项的变更（§7.5） |
-| `cosec:unprotect` | 条目 | 修改或删除 `protected` 条目 |
+| `cosec:unprotect` | 条目 | 修改或删除 `protected` 条目（格式还没有这个标志，§7.4.4） |
 | `cosec:boundary` | `doc/tenant/<t>/boundary`、`doc/platform` | 设置租户边界（`doc/tenant/<t>/boundary`）或默认边界（`doc/platform`）；只在平台持有，内置的 `cosec:tenant-admin` 不持有 |
 | `cosec:breakglass` | `doc/platform` | 申请、发布、撤销 break-glass（§8） |
 | `cosec:manage-roles` | `doc/tenant/<t>` | 角色类别：只写入或删除角色的变更不因"谁在授出"而等第二个人（§7.4.7） |
@@ -798,6 +807,8 @@ analyze(g, change) : List<(piece, YES | UNKNOWN(reason))>
 - **删除或放宽 DENY**（§3 M6，Q9）：**租户文档**在有 `cosec:write` 的范围内允许，除非该条目带 `protected` 标志。理由：租户层只能在平台层允许的范围内放宽——删掉租户自己的
   DENY 之后，访问仍要经过某条 ALLOW（它在写入时已经过授出分析，或者由平台写入）、平台层的全部 DENY 与边界。真正需要"租户内的低级管理员不能删"的 DENY，
   由写它的人标为 `protected`，修改需要 `cosec:unprotect`。字面执行 RFC 0001 §7.1（每次都审批）是备选。
+  **现状**：分析对 `protected` 条目要求 `cosec:unprotect`（`ProtectedEntries`），但文档格式还没有这个标志，也没有设置它的操作，所以今天没有条目是 `protected`：
+  租户管理员能删掉平台放进租户文档的 DENY，再授出它拒绝的东西。对租户管理员的限制写在平台或应用文档里（`wiki/policies/testing.md` 的"分析看不到的"一节）。
   **平台与 App 文档**（维护者 2026-11-09 决定，`CTL-31`）之上没有更高一层的 DENY 或边界，删掉一条就放宽了每个租户能做的事，所以需要第二个人：删除含 DENY 的策略、
   删除所绑策略含 DENY（或读不到）的绑定，各记一条 `NOT_ANALYZED`；信任根可以单人完成，`four-eyes` 时信任根也要第二个人。按展开后的文档判断（RFC 0012 §6），
   所以删除角色、或用 `putRole` 去掉这样的权限，按它不再派生的每条绑定计算。撤销 break-glass 绑定不在此列（§8，单人）。文档读不到是 503，不跳过审批。
@@ -860,6 +871,7 @@ r[s := g]；r 的作用域在 σ' 中，`covers` 保证 H 在该作用域按策�
   - 设置租户边界的变更只有平台主体能批准，批准时与发布时都查；也只有平台主体能拒绝或放弃它（`BDY-2`）。
   - 四眼模式下，平台主体的变更由另一位平台主体批准。
   - 审批不是服务配置上的路由（`CTL-58`）：服务发起的、等人的变更在运维端口上批准（`CTL-81`）。
+- **发布时再判一次**（`CTL-9`）：发布在当前的头上重新判定发布者对每个目标的授权与授出分析；它单独发布不了的等待审批，什么也不写。
 - **批准绑定到内容**：批准记录候选摘要与越权项列表的摘要；变基、改动候选都让批准作废。批准 72 小时内有效（`cosec.control.approval.expire-after`，`APR-2`）。
 - **发布时再核实批准人**（`APR-5`、`APR-8`，RC1-11）：批准记录批准人的 token 属性（任何 JSON 类型）、成员关系、凭据 id（token 的 `jti`）与签发时间（`iat`）。发布时：
   - 按记录的成员关系与属性重新检查批准人对当前文档的 `cosec:approve`，失败或无法判定则回到 `AWAITING_APPROVAL` 并附发现；
@@ -927,7 +939,7 @@ withinBoundary(p, req, view):
 | 方面 | 规则 |
 |---|---|
 | 谁能申请 | 平台租户中对 `doc/platform` 有 `cosec:breakglass` 的主体。申请、发布已批准的申请、撤销都只需要它，不需要别的控制动作；它只在 `BREAK_GLASS` 变更上代替 `cosec:publish`。申请先授权、后读平台文档：没有它的申请在读平台文档之前得到 403，不论那个 id 的绑定存在与否，所以被拒绝的人学不到已有哪些绑定（`BRK-12`） |
-| 谁能批准 | 平台租户中有 `cosec:approve` 的另一个主体（总是四眼，不受 `four-eyes` 配置影响）；工作负载的凭据从不批准（§7.5） |
+| 谁能批准 | 平台租户中有 `cosec:approve` 的另一个主体（总是四眼，不受 `four-eyes` 配置影响：新的或改动的 break-glass 绑定总要第二个人批准，不论谁提议，`APR-4`）；工作负载的凭据从不批准（§7.5） |
 | 绑定的主体 | `Principal((platform), <id>)`，可以是申请人自己；只有经 CoSec 自己的 token 验证的主体能经它得到权限（`BRK-8`，RFC 0009 §4.2） |
 | 绑定 id | 由系统派生，调用方不能指定；已被占用即 409。break-glass 绑定从不替换另一条绑定（`V5` 发现）（`BRK-3`，RC1-29） |
 | 指向 | 任一平台策略，默认 `cosec:root`；鼓励授出比 root 窄的应急策略 |
@@ -965,7 +977,7 @@ withinBoundary(p, req, view):
 | 绑定指向 `Platform` 的策略 | 能 | 被引用的策略存在且不是边界策略（`CTL-32`）；进入反向索引 |
 | 绑定指向 `App(a)` 的权限策略 | 能（N1，Q14） | 绑定的作用域 `app = Exactly(a)`（`TNT-4`）；进入反向索引 |
 | `boundary` 字段 | 不能 | `cosec:boundary`，平台（`BDY-2`） |
-| `protected` 条目 | 不能，除非有 `cosec:unprotect` | — |
+| `protected` 条目 | 不能，除非有 `cosec:unprotect` | 格式还没有这个标志（§7.4.4）：平台放进租户文档的条目，租户管理员能改 |
 | break-glass 绑定 | 不能 | RFC 0004：只在 `Platform`；§8 |
 | `Platform`、`App` 文档（含 `Catalog`） | 不能 | 硬性规则（§7.2） |
 
@@ -1019,7 +1031,7 @@ RFC 0004 §5.2 方案 A 把 7.x 的数据全部放进平台层；控制面让运
   （`StatementDigest.of(statement, policyCondition)`）、不含确认本身：语句或策略条件变了，确认就不再匹配。回滚与提议一样携带 `confirmations`：恢复这样的 DENY 时要重新确认，
   旧修订的确认属于另一个人、另一次变更。
 - 发布时控制面把确认写进语句：`"onMissingConfirmed": { "by": { "tenant", "principal" }, "change": "…" }`。确认只由控制面写入，作者写进文档的确认被丢弃。数据面编译器在
-  **任何**文档里都要求 DENY + `nomatch` 带这个确认，否则编译错误（`ATR-6`；N6，Q13）。限流规则没有确认流程，它的 `onMissing: nomatch` 只能写在平台文档里。
+  **任何**文档里都要求 DENY + `nomatch` 带这个确认，否则编译错误（`ATR-6`；N6，Q13）。限流规则没有确认流程，它的 `onMissing: nomatch` 只能写在平台文档里（`ATR-7`）。
 - 确认记入 `ChangeEvent`。`wiki/guide/security-model.md` 的失败即拒绝一节写明：这是策略作者显式选择的降级，不是运行时默认。
 
 ---
@@ -1029,150 +1041,228 @@ RFC 0004 §5.2 方案 A 把 7.x 的数据全部放进平台层；控制面让运
 ### 10.1 库
 
 ```kotlin
-/** cosec-control。全部挂起，不阻塞调用线程；operator 来自宿主 Pipeline 的认证结果（含成员关系）。 */
+/** cosec-control（control/api/）。全部挂起，不阻塞调用线程；operator 来自宿主 Pipeline 的认证结果（含成员关系与来源）。 */
 interface ControlPlane {
-    suspend fun read(operator: Operator, key: SnapshotKey, revision: Long? = null): DocumentView
+    suspend fun read(operator: Operator, key: SnapshotKey, revision: Long? = null): PolicyDocument
     suspend fun history(operator: Operator, key: SnapshotKey, before: Long? = null, limit: Int = 20): List<RevisionSummary>
-    suspend fun diff(operator: Operator, key: SnapshotKey, from: Long, to: Long): DocumentDiff        // 按条目；按策略的历史由它得到
+    val listing: DocumentListing                                                        // GET /documents?kind=（CTL-68）
+    suspend fun diff(operator: Operator, key: SnapshotKey, from: Long, to: Long): DocumentDiff
 
     suspend fun propose(operator: Operator, key: SnapshotKey, base: Long, operations: List<Operation>, note: String,
-                        confirmations: List<Confirmation> = emptyList()): ChangeRequest   // DRAFT → 检查 → CHECKED 或带错误的 DRAFT
-    suspend fun apply(operator: Operator, key: SnapshotKey, desired: DesiredDocument, mode: ApplyMode): ChangeRequest
-    suspend fun rollback(operator: Operator, key: SnapshotKey, toRevision: Long, note: String): ChangeRequest
+                        confirmations: List<Confirmation> = emptyList(), commit: Boolean = true): ChangeRequest
+    suspend fun apply(operator: Operator, key: SnapshotKey, desired: PolicyDocument, mode: ApplyMode, note: String,
+                      commit: Boolean = true): ChangeRequest                          // commit = false：只校验（CTL-78）
+    suspend fun rollback(operator: Operator, key: SnapshotKey, toRevision: Long, note: String,
+                         confirmations: List<Confirmation> = emptyList()): ChangeRequest
     suspend fun rebase(operator: Operator, change: ChangeId): ChangeRequest
     suspend fun startShadow(operator: Operator, change: ChangeId): ChangeRequest
-    suspend fun approve(operator: Operator, change: ChangeId, candidate: Digest): ChangeRequest
+    suspend fun skipShadow(operator: Operator, change: ChangeId, reason: String): ChangeRequest
+    suspend fun approve(operator: Operator, change: ChangeId, candidate: String): ChangeRequest
     suspend fun reject(operator: Operator, change: ChangeId, reason: String): ChangeRequest
     suspend fun abandon(operator: Operator, change: ChangeId): ChangeRequest
-    suspend fun publish(operator: Operator, change: ChangeId, ack: ShadowAck? = null, skipShadow: String? = null): PublishResult
+    suspend fun publish(operator: Operator, change: ChangeId, ack: ShadowAck? = null, lockout: Boolean = false): ChangeRequest
     suspend fun get(operator: Operator, change: ChangeId): ChangeRequest
+    suspend fun changes(operator: Operator, document: SnapshotKey?, state: ChangeState?, after: String?, limit: Int,
+                        documents: (SnapshotKey) -> Boolean): ChangePage                // GET /changes（CTL-55）
 
     val breakGlass: BreakGlass                       // request / approve / revoke（§8）
     suspend fun simulate(operator: Operator, request: SimulatedRequest, candidate: ChangeId? = null): Simulation
-    suspend fun explain(operator: Operator, request: SimulatedRequest, at: SnapshotVersion? = null): Explanation
+    suspend fun explain(operator: Operator, request: SimulatedRequest, at: ViewVersion? = null): Explanation
     suspend fun analyze(operator: Operator, query: AccessQuery): AccessReport
     suspend fun propagation(operator: Operator, key: SnapshotKey, revision: Long): Propagation
 }
 
-sealed interface Operation {                         // 条目级；ifMatch 是条目当前内容的摘要，可选
-    class PutPolicy(val policy: PolicyJson, val ifMatch: Digest?) : Operation
-    class RemovePolicy(val id: String, val ifMatch: Digest?) : Operation
-    class PutBinding(val binding: BindingJson, val ifMatch: Digest?) : Operation
-    class RemoveBinding(val id: String, val ifMatch: Digest?) : Operation
-    class PutCatalog(val catalog: CatalogJson) : Operation                       // 只在 App
-    class SetBoundary(val policy: String?) : Operation                           // Tenant 的字段；Platform 的默认边界
-    class SetLimits(val limits: LimitsJson) : Operation                          // 只在 Platform（N3）
-    class SetAttributes(val attributes: AttributeCatalogJson) : Operation        // 只在 Platform（N3）
-    class Protect(val entry: EntryRef, val protected: Boolean) : Operation
+sealed interface Operation {                         // 条目级；ifMatch 是条目当前内容的摘要，可选；章节操作不接受 ifMatch（400）
+    class PutPolicy(val policy: PolicyDefinition, val ifMatch: String? = null) : Operation
+    class RemovePolicy(val id: PolicyId, val ifMatch: String? = null) : Operation
+    class PutBinding(val binding: Binding, val ifMatch: String? = null) : Operation
+    class RemoveBinding(val id: BindingId, val ifMatch: String? = null) : Operation
+    class PutRateLimit(val rule: RateLimitSource, val ifMatch: String? = null) : Operation
+    class RemoveRateLimit(val id: String, val ifMatch: String? = null) : Operation
+    class PutRole(val role: RoleDefinition, val ifMatch: String? = null) : Operation        // RFC 0012
+    class RemoveRole(val id: RoleId, val ifMatch: String? = null) : Operation
+    class PutCatalog(val catalog: Catalog?) : Operation                                    // 只在 App
+    class SetLimits(val limits: ConditionLimits?, val budgets: DocumentBudgets? = null) : Operation   // 只在 Platform（N3）
+    class SetAttributes(val attributes: List<Attribute>?) : Operation                     // 只在 Platform（N3）
+    class SetBoundary(val boundary: PolicyId?) : Operation                                // Tenant 的字段；Platform 的默认边界
 }
 ```
 
-`ControlStore`（SPI，`control/` 定义，`cosec-cocache` 实现）只有读写上面 §5.2 那几类数据的挂起方法，没有业务规则；内存实现供测试与单实例使用。
+- `DefaultControlPlane` 实现这些操作；每次调用都经 `ChangeAuthority`，硬性规则在先。读操作（`read`、`history`、`diff`、`propagation`）需要目标文档的 `cosec:read`，
+  `apply` 与 `rollback` 也先读头；`simulate`、`explain`、`analyze` 各需被模拟的租户文档上自己的动词（§10.3）。`cosec:shadow-read` 在 `ControlActions` 中定义，没有路由读影子报告
+  （窗口的汇总在变更上，`cosec:read` 已覆盖）。`publish` 的 `lockout` 是发布者对 V4 发现的确认（§6.2）：候选会把发布者自己关在控制面之外时，没有它即 422。
+- 客户端提议的变更至多携带平台 `limits.maxChangeOperations`（默认 20,000）个操作，超过即 400，写明数目与上限，在任何操作被授权或应用之前（`CTL-41`）；`apply` 与
+  `rollback` 的操作由文档派生，受条目预算约束（`CTL-40`）。
+- 章节操作（`PutCatalog`、`SetLimits`、`SetAttributes`、`SetBoundary`）的字段按文档格式的读取器校验：类型不对或越界即拒绝，从不变成另一个值，设定的每个上限都要写出（`CTL-28`）；
+  它们不接受 `ifMatch`（400）；各项检查在解码后的候选上运行。
+- `diff` 的 `sections` 列出策略、绑定与角色之外有差别的部分的名称（`catalog`、`boundary`、`limits`、`attributes`、`rateLimits`，按此顺序），每个部分按全部内容比较；
+  都相同时是空列表。文档的每个成员必须恰好属于"头部"、"按 id 列出的条目"、"有名字的部分"三者之一，否则测试失败：给格式加成员的人不会漏掉差异（`CTL-39`）。
+- `ControlStore`（`control/` 定义，`cosec-cocache` 实现）只有读写 §5.2 那几类数据的挂起方法，没有业务规则；内存实现供测试与单实例使用。
 
-> **实现说明（2026-10-27，#1091）**：`ControlPlane` 与 `DefaultControlPlane` 实现这些操作；每次调用都经 `ChangeAuthority`，硬性规则在先。读操作（`read`、`history`、`diff`、`propagation`）需要目标文档的 `cosec:read`，`apply` 与 `rollback` 也先读头；`simulate`、`explain`、`analyze` 各需模拟租户文档上自己的动词。`cosec:shadow-read` 已在 `ControlActions` 中定义，但没有路由读影子报告（窗口汇总在变更上，`cosec:read` 已覆盖）。
->
-> **实现说明（2026-11-19，#1704，`CTL-39`）**：`diff` 的 `sections` 列出策略、绑定与角色之外有差别的部分的名称（`catalog`、`boundary`、`limits`、`attributes`、`rateLimits`，按此顺序），每个部分按它的全部内容比较；都相同时是空列表（到 beta.4 为止是一个布尔值）。文档的每个成员必须恰好属于“头部”“按 id 列出的条目”“有名字的部分”三者之一，否则测试失败：此后给文档格式加成员的人不会漏掉差异。
+### 10.2 HTTP、服务端口与门面
 
-### 10.2 HTTP
-
-starter 的 feature variant `controlSupport` 在宿主上注册函数式路由（WebFlux 或 WebMvc，按宿主），前缀 `cosec.control.http.base-path`（默认 `/cosec/control/v1`）。
-JSON 结构与上面的类型一一对应；`docKey` 在路径中写作 `platform`、`app:order`、`tenant:acme`。
+starter 在类路径上有 `cosec-control`、且 `cosec.control.enabled` 不为 `false` 时运行控制面，`cosec.control.http.enabled`（默认真）时在宿主上注册函数式路由（WebFlux 或 WebMvc，
+按宿主），位于 `{cosec.control.http.base-path}/v1`（默认 `/cosec/control/v1`）。`ControlHttp` 不依赖 Web 框架（`ControlBoundaryTest`）；每个路由要求宿主 Pipeline 放行的
+`RequestSecurity`，没有就是 401，什么也不做；`RequestSecurity.of(SecurityContext)` 只对管道自己构造的上下文返回放行的安全信息。JSON 是控制面自己的线上格式；`docKey`
+在路径中写作 `platform`、`app:order`、`tenant:acme`。
 
 | 方法与路径 | 对应 |
 |---|---|
-| `GET /documents/{key}`、`GET /documents/{key}/revisions`、`GET /documents/{key}/revisions/{rev}`、`GET /documents/{key}/diff?from=&to=` | `read`、`history`、`diff` |
-| `POST /changes`、`GET /changes/{id}` | `propose`、`get` |
-| `POST /changes/{id}:rebase`、`:shadow`、`:approve`、`:reject`、`:abandon`、`:publish` | 状态转换 |
-| `POST /documents/{key}:apply`、`POST /documents/{key}:rollback` | `apply`、`rollback` |
-| `POST /break-glass`、`POST /break-glass/{change}:approve`、`DELETE /break-glass/{bindingId}` | §8 |
-| `POST /simulate`、`POST /explain`、`POST /analyze`、`GET /documents/{key}/revisions/{rev}/propagation` | §10.3、§6.5 |
+| `GET /documents?kind=` | 列出租户或应用文档（`CTL-68`） |
+| `GET /documents/{key}`、`GET /documents/{key}/revisions/{rev}`、`GET /documents/{key}/revisions?before=&limit=`、`GET /documents/{key}/diff?from=&to=` | `read`、`history`、`diff` |
+| `GET /documents/{key}/revisions/{rev}/propagation` | `propagation`（§6.5） |
+| `POST /documents/{key}:apply`、`POST /documents/{key}:rollback`、`POST /documents/{key}:check` | `apply`、`rollback`、只校验的 `apply`（`CTL-78`） |
+| `POST /changes`（201）、`POST /changes:check`、`GET /changes/{id}`、`GET /changes?document=&state=&after=&limit=` | `propose`、只校验的提议、`get`、`changes` |
+| `POST /changes/{id}:rebase`、`:shadow`、`:skip-shadow`、`:approve`、`:reject`、`:abandon`、`:publish` | 状态转换（§6.1） |
+| `POST /break-glass`（201）、`POST /break-glass/{change}:approve`、`DELETE /break-glass/{bindingId}?reason=` | §8 |
+| `POST /simulate`、`POST /explain`、`POST /analyze` | §10.3 |
 
 | 状态 | 含义 |
 |---|---|
 | 200 / 201 | 成功；201 表示创建了变更请求 |
-| 400 | 请求或文档格式错误（V1、V2） |
+| 400 | 请求或文档格式错误（V1、V2），操作数超限，请求体超过上限，游标解不出 |
 | 401 / 403 | 宿主 Pipeline 拒绝；或控制面的授权、硬性规则拒绝 |
-| 404 / 410 | 不存在；修订已被回收（`explain` 的历史版本） |
-| 409 | 基准已变化；暂存槽被占用；窗口未关闭；`CANDIDATE_ERROR` |
+| 404 / 410 | 不存在，或调用者看不到（`CTL-15`）；修订已被回收（`explain` 的历史版本） |
+| 409 | 冲突，problem 的 `conflict` 写明是哪一种（`CTL-80`） |
 | 412 | 条目级 `ifMatch` 不满足 |
-| 422 | 编译错误、语义规则、反向引用 |
+| 422 | 编译错误、语义规则、反向引用、V4 未确认 |
 | 428 | 缺少确认（`ack`、`nomatch` 确认）或缺少批准 |
+| 500 | 存下的文档或记录解不出来 |
 | 503 | 存储、审计、授权的 `Indeterminate` |
 
 这是控制面 API 自己的状态表，与数据面的 `StatusMapping`（RFC 0006 §6）无关；"一条决策路径"的不变量只约束数据面。
 
-**不提供**独立的控制面服务进程、gRPC 或 CLI 写入工具（`cosec-migrate` 的 `bootstrap`、`publish`、`partition plan` 除外）：管理服务嵌入库即可，CI 调 HTTP（Q18）。
-
-> **实现说明（2026-10-27，#1091）**：`ControlHttp` 不依赖 Web 框架（`ControlBoundaryTest`），starter 在 WebFlux 或 WebMvc 上把它注册成函数式路由；每个路由要求宿主 Pipeline 放行的 `RequestSecurity`，没有就是 401，什么也不做。控制面自己的问题类型沿用 RFC 0006 的词汇（`invalid-request`、`unauthorized`、`forbidden`、`unavailable`、`internal-error`），另有 `not-found`、`conflict`、`gone`、`precondition-failed`、`unprocessable`、`precondition-required`；**401、403、404、500、503 不带 `detail`**，拒绝不会泄露文档、变更或 DENY 是否存在，400、409、410、412、422、428 只解释调用者自己的请求。
-
-> **实现说明（2026-10-27，#1095）**：HTTP 的 401/403/404 响应体不带 `detail`；`POST /changes` 带 `kind` 字段为 400；以变更 id 为参数的所有 POST 动词，对别的租户的变更与不存在的变更给出相同的响应体。
-
-> **实现说明（2026-10-27，#1097）**：starter 的 `controlSupport` 变体在 `cosec.control.http.base-path` 下注册 WebFlux 与 WebMvc 的函数式路由（未登记，S1b 登记）。控制面的授权用 `PipelineControlAuthorizer`，它读**单独的快照源**，每次检查前以强制读取确认文档是当前的（§7.2）；`RequestSecurity.of(SecurityContext)` 只对管道自己构造的上下文返回放行的安全信息，其他一律 401。`cosec.control.*` 包括 `app-id`、`http.base-path`、`revisions.{max-count,min-age,orphan-age}`、`changes.expire-after`、`approval.{expire-after,four-eyes}`、`break-glass.max-duration`、`shadow.{min-duration,min-samples,max-duration}`。
-
-> **2026-11-23 修订（#1893，`CTL-82`；维护者：“按建议办”）**：控制请求没有自己的期限：期限是调用方的，经取消到达。进程内（`LocalControlService`）由调用方的协程执行请求，
-> 调用方用 `withTimeout` 限定。经网络时，`HttpControlService` 在调用方被取消或调用超时时中止交换（对 `sendAsync` 返回的 future 调 `cancel(true)`：HTTP/1.1 关闭连接，HTTP/2 重置流；
-> 此前用的 `await` 以 `cancel(false)` 取消，被取消的调用方把请求留在宿主上直到调用自己的超时）；WebFlux 宿主（运维端口与服务端口）在连接结束时取消处理该请求的协程。
-> Servlet 宿主只在运维端口上提供控制 API，容器不告诉处理方客户端已经离开，请求在那里走完，其中每个等待各自有界（§14.2）。
+- **问题体**（`CTL-24`，RC1-39）：控制面的问题类型沿用 RFC 0006 的词汇（`invalid-request`、`unauthorized`、`forbidden`、`unavailable`、`internal-error`），另有 `not-found`、
+  `conflict`、`gone`、`precondition-failed`、`unprocessable`、`precondition-required`。**401、403、404、500、503 不带 `detail`**：拒绝不泄露文档、变更或 DENY 是否存在，
+  被拒绝的步骤为何被拒绝记在 INFO 日志里。400、409、410、412、422、428 只解释调用者自己的请求：400 的 `detail` 只带控制面自己的请求校验消息，或点名解析失败的字段，
+  从不带异常消息或类名；解析失败的时间（含超出毫秒范围的）是 400。路径、查询或请求体里有不成对 UTF-16 代理项的字符串，在任何路由读它之前就是 400（RC1-52，`IDN-10`）。
+  存下的文档或记录解码失败（含分析读不懂的存储形式）是不带 detail 的 500，按 key 记 ERROR。控制存储答不上来时（`ControlStoreException`），每条控制路由对有权调用的人
+  回答不带细节的 503，绝不读成空答案（`CTL-52`）。
+- **冲突的类型**（`CTL-80`）：每个 409 在 problem 体里用 `conflict` 写明是哪一种：`BASE_MOVED`、`SLOT_HELD`、`STATE`、`CANDIDATE_MOVED`、`WINDOW_OPEN`、`WINDOW_BLOCKED`、
+  `CONTENDED`、`EXISTS`（`contract/control/conflict.json`、`vocabularies.json`）；别的状态不带这个成员，没有不带它的 409。`SLOT_HELD` 另带 `heldBy`（占位变更的 id），只在 `detail`
+  本来就写出它的地方。`detail` 是给人看的，不是契约。
+- **可见性**：以变更 id 为参数的每一步，调用者看不到的变更与不存在的变更答得完全一样（404，`CTL-15`，§9.2）；`POST /changes` 带 `kind` 字段为 400（种类由入口决定，`BRK-5`）。
+  存下的变更记录读不出来是 500（上一条），不再有单独的 `409 change-unreadable`（#1286）。
+- **列表**（`CTL-55`、`CTL-68`）：`GET /changes` 只显示按 id 读也会显示给调用方的变更，先滤掉调用方看不到的再切页，对滤掉的部分什么都不透露。按状态列变更先判定、后读取：
+  租户的主体只扫自己的租户，平台的主体只扫它在其上有 `cosec:read` 的层，其余 403 且什么也不扫；每个请求至多读四页，被上限截断的扫描答它找到的，并给出停下位置的游标，
+  那个位置可以是调用方看不到的条目。`GET /documents?kind=` 从存储的索引列出有哪些租户或应用文档，绝不读文档：在该层上有 `cosec:read`（`doc/tenant`、`doc/app`）的调用方
+  得到该层的全部，租户的主体只得到自己租户的那一个，其余 403；不对列出的每个文档各做一次判定。游标是客户端原样传回的令牌（`contract/control/cursor.json`），解不出或
+  属于别的列表的令牌是 400，绝不从头列起。
+- **路由的形状**：控制路由只服务确切的路径：末尾的 `/`、空段、叶子路由之后多出的段都答 404，所以按精确路径写的限流规则成立（`rate-limiting.md` 的控制 API 一节）。没有放行主体的
+  请求在读请求体之前答 401。控制路由至多读取文档上限加 2 MB 的请求体（`ControlDerived.MAX_BODY_BYTES`，默认 10 MB；不是属性），WebMvc 与 WebFlux 一致，更大的在问控制面之前答 400
+  （`CTL-41`）。
+- **应答模型**（`CTL-61`，R2C-11、R2C-13）：控制 API 从自己的响应模型应答。变更的应答只含编码器逐个写出的成员，绝不是存储记录的拷贝：记录里为存储自己的工作保留的东西
+  （检查时用过的头、报告过窗口的实例、记录的格式、批准人持有的东西）不出现在任何应答里，记录新增的成员在写进编码器之前到不了客户端。`simulate`、`explain` 与轨迹里的封闭取值
+  （`decision`、`cause`、`reason`、`effect`、`outcome`）各出自一张穷举的表，不取类名；被拒绝的作用域的 `APP_MISMATCH`、`SPACE_NOT_MEMBER` 在 `reason` 下。成员、取值以及每条路由
+  写哪种审计事件，钉在 `contract/control/`（`:control:updateClientContract`）。
+- **来源**（`CTL-57`、`CTL-70`）：变更记下作者是怎样被识别的，每个变更事件记下该步操作者是怎样被识别的（`origin`）：`asserted` 表示宿主相信了调用方声明的身份（`CoSec-Identity`，
+  `STA-9`）而不是自己验证凭据；`via` 是凭据的方法与 id（绝不是值）和请求 id；`peer` 是请求到达的连接的对端地址，从 Reactor Netty 的通道读，在任何转发头处理之下，调用方
+  声明不了它；读不到的宿主不记。没有请求驱动的步骤（维护周期）不记。变更的应答对每个读者说出 `asserted` 与 `via.method`；凭据 id、请求 id 与 `peer` 只给在该变更的文档上
+  有 `cosec:approve`、或能读平台文档的读者。
+- **服务配置与服务端口**（`CTL-58`、`CTL-71`）：直接调用控制面的服务只能用一个窄的集合（服务配置）：租户与应用文档的读、租户文档的 `:apply`，以及租户与应用文档上不需要人的
+  变更流程（提出与校验、读、列表、rebase、放弃、开始或跳过影子窗口、发布）；平台文档以及以后新增的任何一种文档都在其外。服务配置在自己的端口上提供
+  （`cosec.control.http.service-port`，仅 WebFlux；谁能用它由网络说了算）；其余路由在控制面被问到之前就是 404：平台文档、批准与拒绝、回滚、break-glass、查询与 propagation。
+  集合只收窄提供什么，绝不放宽调用方能做什么：每条路由仍按所声明的主体由策略授权，经服务配置没有信任根（`CTL-81`，§7.3）。服务端口不是另一台服务器：它由一个新的服务器工厂
+  建成，Spring Boot 的定制器像配置应用服务器那样配置它（TLS 与客户端认证、绑定地址、HTTP/2、各种上限与超时），自己没有属性；靠应用端口的双向 TLS 使
+  `only-trusted-callers-can-reach` 成立的宿主，服务端口同样是双向 TLS。
+- **CoSec 自己的路由只在该在的端口上应答**（`CTL-69`）：控制 API 与登录路由只在应用端口（从服务器读出实际绑定的端口，不只看属性）上应答，控制 API 另加服务端口；宿主的其他端口，
+  包括管理端口，对这些路径一律 404。WebFlux 的管理服务器是子上下文，会收集应用的路由；在相信声明身份的宿主上，那等于把整个控制 API 交给任何能到达管理端口的人。
+- **门面**（`CTL-65`、`CTL-77`、`STA-11`）：应用经 `cosec-control-sdk` 的 `ControlService` 调用控制面（`ControlCaller`、`ControlRefusedException` 也在那里，包名
+  `me.ahoo.cosec.control.sdk`；它不依赖 runtime 与控制面）。两种实现答得一样：进程内的 `LocalControlService`（`cosec-control`）与经控制面宿主服务端口的 `HttpControlService`
+  （`cosec-control-http`）。两者把服务配置的每个调用做成同一个请求（一张路由表，`RoutedControlService`），各用一套映射声明调用方：请求的主体按网关转发身份的方式写
+  （`IdentityIssuer`），应用自己的主体写成同一个服务身份（`ServiceIdentity`，凭据名 `service`，§7.3）。经门面的每次调用都由管线按 `ControlCaller` 所声明的主体、按策略判定，
+  并按该主体记录，走路由自己的代码路径，没有绕过它的路；门面恰好到达服务配置提供的路由，两者共用一个定义；进程内的调用记为 `via.method: in-process`。`ControlCaller.of`
+  接受任何 `SecurityContext`，不是 CoSec 的 gate 或管线所造的上下文在调用时被拒绝，在控制面被问到之前，两种实现用同样的异常与措辞（同 `PIP-29`）；HTTP 实现另外拒绝没有凭据的
+  请求主体，而不是把它当匿名发出。同一套调用脚本、两种调用方，在两种实现里对控制面的每个应答与拒绝都答得一样（`ControlServiceParityTest`）。经 HTTP 时只有 2xx 是应答；
+  一次调用至多等它的超时（默认 30 秒），之后以 `HttpTimeoutException` 失败，写操作的结果未知；其余传输失败原样抛出，这是唯一的差别。starter 只装配一个 `ControlService`：本实例
+  跑控制面时是进程内的，`cosec.control.service-url` 指明宿主时是 HTTP 的，两者同时出现则拒绝启动。
+- **类型化层**（`CTL-76`）：`ControlClient` 在 `ControlService` 之上把服务配置写成类型化的请求与应答，只写一份，两种实现共用。类型跟随线上格式并由测试钉住（`TypedWireTest`）：
+  每种条目的成员是 `schema/<line>/` 的；变更应答的成员是 `contract/control/change.json` 的，每个成员要么被读、要么被点名为不读；封闭集合等于词汇表与 schema 的枚举。读文档条目
+  是严格的：有本版本不认识的成员就拒绝，因为读了再写回会丢掉它，而文档是判定的输入；读应答是宽松的：未知成员忽略，未知取值保留原文。便捷调用"提出、跳过影子窗口、发布"
+  需要 `cosec:skip-shadow`；基线移动则重读重做，暂存槽被占则等待，都在一个等待期之内；同一主体的并发写入互相等待，死掉的写入方留下的变更占一个等待期，之后由下一次写入接管。
+- **只校验、不提出**（`CTL-78`）：`POST /changes:check` 与 `POST /documents/{key}:check` 取 `POST /changes` 与 `:apply` 的请求体，走提出的同一个函数直到最后一步之前：授权、基线、
+  草稿、候选的各项检查及其 findings 与 escalations 都照做，但不存储、不占暂存槽、不写变更事件、不取变更 id。应答是 `state`、`base`、`findings`、`escalations`
+  （`contract/control/change-check.json`），不含 `candidate`：候选里可能写入变更的 id，校验答不出与正式提出相同的值。不能提出的调用方也不能校验。它只是建议：基线之后仍可能移动。
+- **控制请求没有自己的期限**（`CTL-82`）：期限是调用方的，经取消到达。进程内由调用方的协程执行请求，调用方用 `withTimeout` 限定。经网络时，`HttpControlService` 在调用方被取消或
+  调用超时时中止交换（对 `sendAsync` 返回的 future 调 `cancel(true)`：HTTP/1.1 关闭连接，HTTP/2 重置流）；WebFlux 宿主（运维端口与服务端口）在连接结束时取消处理该请求的协程。
+  Servlet 宿主只在运维端口上提供控制 API，容器不告诉处理方客户端已经离开，请求在那里走完，其中每个等待各自有界（§14.2）。发布在写头之前被取消什么也不发布（§5.4）。
+- **控制面宿主**（`STA-10`，维护者 2026-11-21 决定）：控制面可以嵌入管理服务，也可以作为独立的控制面宿主运行：`cosec-control-server`（`platform/control-server`）是只做这件事的应用，
+  运维端口给经网关验证过凭据的人，服务端口给服务；它是应用，不发布为库。gRPC 与 CLI 写入工具不提供（`cosec-migrate` 的 `bootstrap`、`publish`、`partition plan`、`restore`、
+  `repair-references` 除外）：CI 调 HTTP（Q18）。
 
 ### 10.3 `simulate`、`explain`、`analyze`
 
 | 操作 | 做什么 | 权限 |
 |---|---|---|
 | `simulate(request, candidate?)` | 在当前头与（可选的）某个变更的候选上各评估一次，`TraceLevel.FULL`，返回两边的决策、trace 与差异。请求里描述主体与成员关系，所以可以模拟任意主体 | `cosec:simulate` |
-| `explain(request, at?)` | `at` 为空时等于在当前头上 `simulate`；给出 `SnapshotVersion(platform, app, tenant)`（审计事件里的那个，RFC 0006 §9.2）时，从修订记录装载这三个修订、编译（控制面按版本缓存）、评估。任一修订已被回收 → 410 | `cosec:explain` |
-| `analyze(query)` | `AccessAnalyzer` 在编译后的快照上重写：给定动作、资源与作用域，列出能放行它的绑定（以角色、主体绑定、`Anyone`、可附加策略表达，带条件），以及能拒绝它的 DENY；给定角色或策略，列出它在各作用域授出的东西 | `cosec:analyze` |
+| `explain(request, at?)` | `at` 为空时等于在当前头上 `simulate`；给出 `ViewVersion`（审计事件里的那个，RFC 0006 §9.2）时，从修订记录装载记录的修订、编译、评估。任一修订已被回收 → 410 | `cosec:explain` |
+| `analyze(query)` | 给定动作、资源与作用域，列出在作用域内有语句匹配它的绑定，分 ALLOW 与 DENY，条件只标记不求值 | `cosec:analyze` |
 
-- 三者都调用同一个 `Engine.evaluate`（P3），不另写决策逻辑。
-- `analyze` 不列出用户：成员关系不在快照里（P11），"哪些用户有角色 editor"要问身份源（§3 M14）。
-- 现在的 `cosecExplain` actuator 端点删除（N8）：它能解释任意主体，却只受 actuator 暴露配置保护。
-
-> **实现说明（2026-10-27，#1091）**：`Simulator` 用执法流程自己的部件（`ScopeResolver`、数据面的 `PolicyDocumentCompiler` 配平台的 `limits` 与 `attributes`、`CoSecFlatEngine.evaluate` 的 `FULL` trace），没有第二个求值器（`CTL-3`）。`explain` 在 `SnapshotVersion` 上决策，已不保留的修订为 410；`analyze` 列出在作用域内有语句匹配动作与资源的绑定，分 ALLOW 与 DENY，条件只标记不求值。**脱敏**：决策与 trace 只在调用者能读该文档时点名语句，否则决策为 `redacted`，trace 条目被略去并计数；`analyze` 只列可读文档，并统计隐藏的文档数，以及策略位于隐藏文档中的绑定数（不透明）。`simulate` 只看到调用者给出的属性：请求不带外部属性，读外部属性的语句在模拟中是 Indeterminate，与影子窗口相同。
-
-> **实现说明（2026-11-07，#1240，RC 修复批次 D2）**：
-> - **授权在决定所用的租户上（`CTL-23`，RC1-40）。** `simulate` 与 `explain` 的 `cosec:simulate`、`cosec:explain` 在被模拟的作用域实际解析到的租户上授权，即其文档决定这个请求的租户，不在请求只是点名的租户上；当前头、带候选的模拟与 explain 旧修订都如此。没有主体的请求按执法在 `(0)` 上判定，所以点名其他租户的匿名请求在 `(0)` 上授权之后答 400。
-> - **与执法一致（`CTL-3` 修订）。** 被模拟、explain 或分析的 `http` 资源经同一个 `PathNormalizer.normalize`，执法答 400 的路径这里也答 400；带类型的 id 受同样的长度上限。请求把视图中某份文档读的头以不同的值重复发送时答 400（`PIP-12`）。
-> - **编译缓存（RC1-41）。** 编译后的文档按 key 与存储摘要缓存，每个编译形态再按平台文档的摘要区分：至多 64 份、64 MB 的估计堆（存储字节 × 4 为解码、每个编译形态 × 8），`simulate`、`explain` 与 `analyze` 共用；候选在一次调用里只编译一次。explain 在保留修订上的文档、以及超过上界一半的文档，每次调用按需编译，不进缓存。平台文档的任何改动都产生新的编译形态，与 `SNP-4` 的语义相同。
-> - **错误体（`CTL-24`，RC1-39）。** 400 的 `detail` 只带控制面自己的请求校验消息，或点名解析失败的字段，从不带异常消息或类名；解析失败的时间（含超出毫秒范围的）是 400。存储的文档或记录解码失败（含分析读不懂的存储模式）是不带 detail 的 500，按 key 记 ERROR。
-> - **路由。** 控制路由只服务确切的路径：末尾的 `/`、空段、叶子路由之后多出的段都答 404，所以按精确路径写的限流规则成立（`rate-limiting.md` 的控制 API 一节：平台规则按 `scope.tenant` 分桶，break-glass 的撤销路径不在其中）。没有放行主体的请求在读请求体之前答 401。
+- **同一个求值器**（`CTL-3`）：三者都调用执法的 `Engine.evaluate`（P3），解释由执法流程自己的部件构造（`ScopeResolver`、数据面的 `PolicyDocumentCompiler` 配平台的 `limits` 与
+  `attributes`、`CoSecFlatEngine.evaluate` 的 `FULL` trace），没有第二个求值器。`simulate`、`explain` 与影子比较读执法会读的文档，按它的唯一规则（`ViewDocuments`）：平台的、租户的，
+  以及作用域在该 app 有角色、或用于判定的租户文档（头、候选或被解释的修订）把该 app 的权限策略绑给 `Anyone` 或主体时，该 app 的；不多读，因为多读的文档会带进它的限流规则
+  （RC1-17，`TNT-4`）。`explain` 按记录的租户修订判断；报告的版本与候选检查都取自视图实际读到的文档。被模拟、解释或分析的 `http` 资源经同一个 `PathNormalizer.normalize`，执法答 400
+  的路径这里也答 400；请求把视图中某份文档读的头以不同的值重复发送时答 400（`PIP-12`）。
+- **授权在决定所用的租户上**（`CTL-23`，RC1-40）：`cosec:simulate`、`cosec:explain` 在被模拟的作用域实际解析到的租户上授权，即其文档决定这个请求的租户，不在请求只是点名的租户上；
+  没有主体的请求按执法在 `(0)` 上判定，所以点名其他租户的匿名请求在 `(0)` 上授权之后答 400。
+- **脱敏**（`CTL-51`）：决策与 trace 只向能读"定义该策略的文档"的调用者点名语句（策略、序号、名字，以及轨迹里的效果与是否匹配），不论让它生效的绑定在哪份文档里：租户绑定了平台
+  策略或某个应用的权限策略时，租户管理员既看不到做出判定的语句，也看不到轨迹里那条策略的任何语句，它们只计入"已隐去"的数目。`analyze` 只列可读文档，并统计隐藏的文档数，
+  以及策略位于隐藏文档中的绑定数（不透明）。
+- `simulate` 只看到调用者给出的属性：请求不带外部属性，读外部属性的语句在模拟中是 `Indeterminate`，与影子窗口相同。
+- **编译缓存**（RC1-41）：编译后的文档按 key 与存储摘要缓存，每个编译形态再按平台文档的摘要区分，`simulate`、`explain` 与 `analyze` 共用：至多 64 份、64 MB 的估计堆（存储字节 × 4 为解码，每个编译形态再 × 8，
+  角色派生的绑定另计），最久未用的先出（`DocumentCache`）；候选在一次调用里只编译一次。explain 在保留修订上的文档、以及超过上界一半的文档，每次调用按需编译，不进缓存。平台文档的任何改动都产生新的编译形态（与 `SNP-4` 同义）。
+- `analyze` 不列出用户：成员关系不在快照里（P11），"哪些用户有角色 editor"要问身份源（§3 M14）。7.x 的 `cosecExplain` actuator 端点已删除（N8）：它能解释任意主体，却只受
+  actuator 暴露配置保护。
 
 ### 10.4 从格式描述生成 JSON schema
 
-- **格式描述**：`cosec-core` 中的 `me.ahoo.cosec.snapshot.format`，一个很小的 Kotlin DSL，逐个声明文档、策略、语句、条件运算符、属性目录类型、绑定、目录、
-  限流规则、`provenance` 等的字段、类型、枚举、必填项，以及与编译器一致的"不允许未知字段"。它是纯数据，不用反射。
-- **生成**：Gradle 任务 `:core:generateSchemas` 把描述写成 `schema/*.schema.json`（键排序、确定性输出）；`:core:verifySchemas` 挂在 `check` 上，
-  提交的文件与生成结果不同即失败。AGENTS.md 中"`schema/*.schema.json`（no test checks it）"一行随之改为"改格式描述，运行 `generateSchemas`"。
-- **与编解码器绑定**：`SchemaConformanceTest`：① 由描述随机生成合法文档，编译器必须接受（语义规则除外，如悬空引用——生成器只生成自洽的引用）；② 对合法文档做
-  单点变异（删必填字段、加未知字段、改类型），schema 校验与编译器必须同时拒绝；③ 仓库里全部示例与测试资源文件两边结论一致。编解码器仍是手写的流式代码
+- **格式描述**：`cosec-document` 的 `me.ahoo.cosec.document.format`（`DocumentFormats`），一个很小的 Kotlin DSL，逐个声明文档、策略、语句、条件运算符、属性目录类型、绑定、
+  角色、目录、限流规则、`provenance` 等的字段、类型、枚举、必填项，以及与编解码器一致的"不允许未知字段"。它是纯数据，不用反射。
+- **生成**：`:document:generateSchemas` 把描述写成 `schema/<line>/*.schema.json`（`<line>` 是 `DocumentFormats.SCHEMA_LINE`，发布线 `8.0`；键排序、确定性输出）；`verifySchemas`
+  挂在 `check` 上，提交的文件与生成结果不同即失败；`SchemaLineTest` 把发布线钉在项目版本上。站点在 `https://cosec.ahoo.me/schema/<line>/` 提供它们，这是每个文件的 `$id`；
+  已发布的发布线的目录不再改写。
+- **与编解码器绑定**（`SchemaConformanceTest`）：① 由描述生成的文档，schema 与编解码器都接受；② 对它们做单点变异（删必填字段、加未知字段、改类型、取值越出枚举或范围），schema
+  拒绝，编解码器除列明的宽松之处外也拒绝；③ 仓库资源与文档里的全部 JSON 两边结论一致。schema 不如编译器严格：通过它是必要条件，不是充分条件。编解码器仍是手写的流式代码
   （热路径与 AOT 的理由不变，RFC 0004 Q10），描述只用于生成和测试。
-- **生成哪些文件**：`cosec-snapshot-document`（三种文档）、`cosec-policy`、`cosec-binding`、`condition`、`action`（含 `resource`）、`cosec-catalog`、`rate-limit-rule`、
-  `cosec-change-request`（控制面 API 的请求体）。`cosec-app-permission.schema.json` 删除（RFC 0004 已改为目录），`definitions.schema.json` 由生成器按需产生。
-- **为什么不反射模型类**（M11，Q19）：`model/` 不能有反射，也没有与 JSON 一一对应的数据类；用 KSP 或注解处理器要给每个类型加注解、加构建步骤，生成的仍然不是
-  编解码器实际接受的东西。一份声明式描述加一致性测试，两者的偏差会被测试发现。
+- **生成哪些文件**：`cosec-snapshot-document`（三种文档）、`cosec-binding`、`cosec-catalog`、`cosec-identity`（`CoSec-Identity` 头）、`problem`、`definitions`。
+- **为什么不反射模型类**（M11，Q19）：`model/` 不能有反射，也没有与 JSON 一一对应的数据类；用 KSP 或注解处理器要给每个类型加注解、加构建步骤，生成的仍然不是编解码器实际接受的
+  东西。一份声明式描述加一致性测试，两者的偏差会被测试发现。
 
 ### 10.5 控制面审计
 
 ```kotlin
-/** control/ 的 SPI。投递语义沿用 RFC 0006 的 Delivery。 */
+/** control/audit/ 的 SPI。投递语义沿用 RFC 0006 的 Delivery。 */
 interface ChangeListener {
     val name: String
-    val delivery: Delivery                       // REQUIRED 或 BEST_EFFORT（默认）
+    val delivery: Delivery get() = Delivery.BEST_EFFORT          // 或 REQUIRED
     suspend fun onChange(event: ChangeEvent)
 }
 class ChangeEvent(
-    val id: String, val time: Long, val kind: Kind,            // PROPOSED / CHECKED / SHADOW_STARTED / SHADOWED / APPROVED / REJECTED / PUBLISHING / PUBLISHED / FAILED
-                                                               // / BREAK_GLASS_REQUESTED / BREAK_GLASS_APPROVED / REVOKED / BOOTSTRAP / MIGRATE
-    val operator: SubjectSummary, val change: ChangeId, val document: SnapshotKey,
-    val base: RevisionRef?, val candidate: RevisionRef?,       // 修订号 + 摘要
-    val escalations: List<EscalationSummary>,                  // UNKNOWN 片段及原因
-    val confirmations: List<Confirmation>, val shadow: ShadowSummary?, val note: String,
+    val id: String, val time: Instant, val kind: Kind,
+    // PROPOSED / CHECKED / SHADOW_STARTED / SHADOWED / APPROVED / REJECTED / PUBLISHING / PUBLISHED / FAILED
+    // / BREAK_GLASS_REQUESTED / BREAK_GLASS_APPROVED / REVOKED / HEADS_MOVED / REVIEW_NEEDED / ABANDONED / SHADOW_SKIPPED / REBASED
+    val operator: Actor, val change: ChangeId, val document: SnapshotKey,
+    val base: RevisionRef?, val candidate: RevisionRef?,           // 修订号 + 摘要
+    val escalations: List<Escalation>, val confirmations: List<Confirmation>, val shadow: ShadowSummary?, val note: String,
+    val moved: List<MovedHead>,                                    // HEADS_MOVED、REVIEW_NEEDED（§5.4）
+    val origin: ChangeOrigin?,                                     // CTL-57
 )
 ```
 
-- `PUBLISHING`、break-glass 的三个事件：`REQUIRED` 监听器全部成功之后才写头（§5.4 第 1 步）。其余事件按各监听器的 `delivery`。
+- 事件从不带文档内容。`Kind` 是会增长的集合：次版本可以加成员（RFC 0010 Q6），对它的 `when` 要有 `else`。
+- **设门的步骤**：`PUBLISHING` 与创建 break-glass 的两步（`BREAK_GLASS_REQUESTED`、`BREAK_GLASS_APPROVED`）等全部 `REQUIRED` 监听器写下事件才生效（§5.4 第 1 步、§8）；
+  break-glass 变更的放弃也等（`BRK-10`）。其余事件按各监听器的 `delivery`。
+- **改动变更记录的每一步都写事件**（`CTL-63`）：`:skip-shadow` 与免影子的 break-glass 路径写 `SHADOW_SKIPPED`，备注里带跳过的理由，不论变更最后是否发布；`:rebase` 写 `REBASED`；
+  被拒绝的步骤什么也不改，什么也不写。`SHADOW_SKIPPED` 尽力投递、不设门：跳过只在发布时才有影响，而发布是设门的。写后检测发尽力投递的 `HEADS_MOVED` 或 `REVIEW_NEEDED`（§5.4）。
+- **顺序**（`CTL-66`）：同一个控制面实例之内，监听器按实例写入的顺序收到一个变更的事件：每个监听器一个队列、一个消费者，等待队列空位的按到达顺序服务。设门的步骤在超时之内
+  等它的 `REQUIRED` 监听器记下事件（排在之前的之后），否则失败（503）；`REQUIRED` 监听器的队列满、调用失败或不应答时，丢的是已存储步骤的事件，计数并记 ERROR，绝不让该步骤失败；
+  `BEST_EFFORT` 监听器的队列满了就丢新来的，所以到达的是有序的前缀。队列合计至多占堆的三十二分之一（`HeapBudget`）；不应答的监听器只上报，不切断。一个控制请求的 `REQUIRED`
+  变更监听器合计至多用 `cosec.pipeline.timeout`；停机时在 `spring.lifecycle.timeout-per-shutdown-phase` 的六分之一之内投递完队列里的（`OBS-10`，没有属性）。跨实例的顺序由消费者
+  按事件的时间与变更的记录来排。
 - 默认没有 `REQUIRED` 监听器：修订记录本身就是"发布了什么、谁发布、谁批准"的持久记录，普通发布不强求外部审计。break-glass 必须有（§8）。Q21。
-- 实现：`LoggingChangeListener`（BEST_EFFORT）、`KafkaChangeListener`（`cosec-kafka`，主题 `cosec-control-audit`，可配置为 REQUIRED，与 `KafkaAuditListener` 相同的做法）。
-  **2026-11-14 修订（#1322）**：两个 Kafka 监听器共用一个有界发送器，关机时在 `cosec.observability.listener.drain-timeout` 内排空已排队的发送；此前变更监听器不排空。
-  控制面复核审批人时，吊销表读不到即 503，不发布（#1321）。
+- 实现：`LoggingChangeListener`（`BEST_EFFORT`）、`KafkaChangeListener`（`cosec-kafka`，主题 `cosec.control.audit.kafka.topic`，默认 `cosec-control-audit`，可配置为 `REQUIRED`，
+  与 `KafkaAuditListener` 相同的做法）。两个 Kafka 监听器共用一个有界发送器，停机时排空已排队的发送。
+- 控制面复核审批人时，吊销表读不到即 503，不发布（§7.5）。
 
 ---
 
@@ -1180,60 +1270,53 @@ class ChangeEvent(
 
 | 不变量 | 本阶段如何成立 | 守护 |
 |---|---|---|
-| **Deny-first** | 引擎只多了 `withinBoundary`，它只能把 Permit 改成 Deny 或 Indeterminate | P1′（RFC 0004）不变；P-B2（§12） |
-| **Fail closed** | 数据面：边界出错 → `Indeterminate`；F5 不变（§6.3）。控制面：任何检查失败、UNKNOWN 未获批准、存储或 REQUIRED 审计失败 → 不发布，头不变；授权中的 `Indeterminate` → 拒绝 | `ControlFailClosedTest`（逐阶段注入失败，断言头不变）；`PipelineFailClosedTest` 增加边界出错 |
-| **One decision path** | 数据面的 `StatusMapping` 不变；控制面 API 有自己的状态表（§10.2），不构造 `Outcome` | `WebAdapterParityTest` 增加边界拒绝的场景 |
-| **No blocking on the event loop** | 控制面不在请求路径上；`ControlStore` 用 CoCache 的异步与挂起 API；需要 JDBC 的自定义实现可以用 `Dispatchers.IO`（RFC 0001 §3.8）。数据面的候选加载在 `SnapshotSource` 的编译线程上 | `PipelineBlockHoundTest` 扩展到影子候选；`control/` 的 ArchUnit：不依赖阻塞的 Redis 客户端 |
+| **Deny-first** | 引擎只多了 `withinBoundary`，它只能把 Permit 改成 Deny 或 Indeterminate | P1′（RFC 0004）；P-B2（§12，`BDY-1`） |
+| **Fail closed** | 数据面：边界出错 → `Indeterminate`；F5 不变（§6.3）。控制面：任何检查失败、UNKNOWN 未获批准、存储或 `REQUIRED` 审计失败 → 不发布，头不变；授权中的 `Indeterminate` → 拒绝 | `ControlFailClosedTest`（逐阶段注入失败，断言头不变）；引擎的 `BoundaryTest` |
+| **One decision path** | 数据面的 `StatusMapping` 不变；控制面 API 有自己的状态表（§10.2），不构造 `Outcome` | `OneDecisionPathTest`、`WebAdapterParityTest` |
+| **No blocking on the event loop** | 控制面不在请求路径上；`ControlStore` 用 CoCache 的异步与挂起 API。数据面的候选加载在 `SnapshotSource` 的维护线程上 | `PipelineBlockHoundTest`；`ControlBoundaryTest`（不引用 Redis 客户端、`runBlocking`、`Dispatchers.IO`） |
 | **Authorization is a pure decision** | `withinBoundary` 是引擎内的纯函数 | `EnginePurityTest` |
-| **策略缓存 `ttl = null`、读失败抛出** | `PolicySnapshotCache` 不变；新增的控制面缓存除影子报告外同样 `storeOfRecord()` | `CacheTtlPolicyTest`、`StrictCacheFailureTest` 扩展 |
-| **Hot-path changes come with a JMH before/after** | §14 | `EngineBenchmark`、`PipelineBenchmark` 的 `boundary` 参数 |
-| （新）**快照只有一个写入者** | PR-11 删除 `SnapshotPublisher` 与 `LocalPolicyInitializer` 的写库模式；只有 `CoCacheControlStore` 写 `PolicySnapshotCache` | ArchUnit：只有 `CoCacheControlStore` 调用该缓存的 `putIfMatch`/`put` |
+| **快照与控制面的缓存永不过期、读失败抛出** | 快照文档的缓存不变；控制面的缓存除影子报告与实例状态外同样是"记录"（§5.2） | `CacheTtlPolicyTest`、`StrictCacheFailureTest` |
+| **Hot-path changes come with a JMH before/after** | §14 | `EngineAuthorizationBenchmark` 的 `boundary` 参数 |
+| （新）**快照只有控制面写** | 7.x 的写入路径已删除；不运行控制面的进程把快照与候选声明为只读，Redis 拒绝它的写入（§8） | `ReadOnlyDeclarationTest`（`SNP-18`） |
 | （新）**发布的文档都能编译** | 控制面严格编译（§6.3） | `PublishCompileTest`：含任何 `Broken` 条目的候选不会被写入 |
-| （新）**不能越权授权** | §7.4 | A5–A8；`GrantAnalyzerTest` 的正例与反例（§7.4.6 的每一行） |
+| （新）**不能越权授权** | §7.4 | A5–A8（`GrantPropertyTest`）；`GrantAnalyzerTest` 的正例与反例（§7.4.6 的每一行）；`GRT-*` 场景 |
 | （新）**控制面的租户隔离** | 硬性规则（§7.2）与编译检查（§9.2） | `ControlTenantIsolationTest`；P12 的控制面形式 |
 | （新）**修订可追溯** | 记录先于头写入；头带 `parent` | `RevisionChainTest`（逐步注入崩溃，断言链可以重建、头总有记录） |
-| （新）**break-glass 双人且有期限** | §8 | `BreakGlassControlTest`；`BreakGlassBindingTest`（RFC 0004）扩展到元数据 |
-| （新）**观察不改变决策**（RFC 0006） | 影子候选来源的任何故障只影响影子 | `ListenerIsolationTest` 扩展 |
+| （新）**break-glass 双人且有期限** | §8 | `BreakGlassControlTest`；`BRK-*` 场景 |
+| （新）**观察不改变决策**（RFC 0006） | 影子候选来源的任何故障只影响影子 | `ListenerIsolationTest` |
 
-AGENTS.md 在 PR-11 更新：Mental model 的 "Layers" 加上 `control/`，新增一条 "Control plane"；Invariants 表加上述新行；"Where a change has to land" 增加
-"控制面、发布、不能越权授权"一行（落点见 §16.3），schema 一行改为"格式描述 + `generateSchemas`"。
+`AGENTS.md` 的 Mental model 写了控制面一层，Invariants 表与 "Where a change has to land" 带着控制面的各行。
 
 ---
 
 ## 12. 门槛 D：本阶段不改变数据面的决策
 
-> **2026-10-26：本节由 [RFC 0008](0008-conformance-and-direct-build.md) 取代。** 发布往返（随 PR-8）与 P-B1–P-B3（随 PR-3）作为规范性质保留；离线回放与"与第 5 阶段零差异"取消。以下原文保留，仅供追溯。
+门槛 D 原定以离线回放证明本阶段与第 5 阶段在同一批数据上零差异；8.0 不考虑与 7.x 的兼容（RFC 0008），回放与"与第 5 阶段零差异"取消，
+由 [RFC 0008](0008-conformance-and-direct-build.md) 的规范一致性套件取代。本阶段的性质作为规范性质保留。
 
 ### 12.1 要证明什么
 
-对同一份数据和同一批请求，第 5 阶段结束时的数据面（RFC 0006 PR-10 之后，下称**基准**）与本阶段的数据面（下称**候选**）给出**完全相同**的结果元组：状态、原因码、
-`by`、`via`、限流结果、是否 proceed、快照版本三元组。本阶段没有改动目录，所以判据是"差异为零"，不是 RFC 0004 Q20 的"未归类差异为零"。
+本阶段对数据面的改动只有平台边界与控制面需要的格式；在没有边界数据的文档上，数据面的决策与没有这些改动时相同。
 
-### 12.2 为什么应当为零
+### 12.2 为什么应当恒等
 
-数据面的改动逐条列出，每一条说明它在现有数据上为什么是恒等的：
-
-| # | 改动 | 在现有数据上 |
+| # | 改动 | 在没有边界数据的文档上 |
 |---|---|---|
-| E1 | `withinBoundary` | 现有数据（`cosec-migrate convert` 的输出）没有 `boundaries` 与 `boundary`，`view.boundary == null`，函数第一行返回 `p` |
-| E2 | 文档格式：`provenance`、`limits`、`attributes`、`boundary`（N3、N4） | 编译结果与 `provenance` 无关（§5.3）；`limits` 缺省时等于 RFC 0005 Q9 的默认值，`attributes` 缺省时等于本实例注册的提供者——与基准读属性得到的相同；转换工具写入同样的值 |
-| E3 | 编译规则：`Tenant → App` 引用（N1）、两层同名（N2）、`nomatch` 需要确认元数据（N6） | N1 只让以前的编译错误变为合法，现有数据里没有这种引用；N2 只在两层同名时起作用，两种转换模式都不产生；现有数据没有外部属性，也就没有 `nomatch` |
+| E1 | `withinBoundary` | `view.boundary == null`，函数第一行返回 `p`；引擎整段跳过检查（`SnapshotView.bounded`） |
+| E2 | 文档格式：`provenance`、`limits`、`attributes`、`boundary`（N3、N4） | 编译结果与 `provenance` 无关（§5.3）；`limits` 缺省时等于 RFC 0005 Q9 的默认值，`attributes` 缺省时等于本实例注册的提供者声明的 |
+| E3 | 编译规则：`Tenant → App` 引用（N1）、两层同名（N2）、`nomatch` 需要确认（N6） | N1 只让以前的编译错误变为合法；N2 只在两层同名时起作用；没有外部属性的文档也就没有 `nomatch` |
 | E4 | 影子候选来源 | 只影响影子监听器；"观察不改变决策"（RFC 0006 §10.2） |
-| E5 | 删除 `SnapshotPublisher`、`LocalPolicyInitializer` 写库模式、`PolicyHistory` | 写入一侧，不在评估路径上 |
 
-### 12.3 怎么检查
+### 12.3 性质与守护
 
-| 检查 | 内容 | 何时 |
+| 性质 | 内容 | 守护 |
 |---|---|---|
-| 离线回放 | RFC 0002 §8.2.1 的同一批导出，经 `cosec-migrate convert` 后两边各装一次；比较器是 RFC 0006 的 `PipelineParity`，比较完整的结果元组；判据：差异为 0 | PR-10 合入之后、PR-11 合入之前，维护者本地 |
-| 发布往返 | 对转换后的文档 D，经控制面 `apply`（`REPLACE`，空存储）发布得到 D′；断言 D 与 D′ 编译出**结构相同**的快照（RFC 0003 P5 的结构比较），并在随机请求上决策相同 | 每次 `check` |
-| P-B1 边界恒等 | 随机快照与请求：边界为"一条 ALLOW `*`"时，决策与没有边界完全相同 | 每次 `check` |
-| P-B2 边界只收窄 | 随机快照与请求：加上任意边界，结果不会从 Deny / Indeterminate 变成 Permit | 每次 `check` |
-| P-B3 边界与候选顺序无关 | P8（RFC 0004）加上边界仍成立 | 每次 `check` |
-| 随机生成 | RFC 0006 的生成器（含边界为空），两边比较，固定种子 2,000 例；`-PparityIterations=1000000` 手动跑百万例，PR-11 前必须跑过一次 | 每次 `check`；PR-11 前 |
+| P-B1 边界恒等 | 随机快照与请求：边界为"一条 ALLOW `*`"时，决策与没有边界完全相同 | `EnginePropertyTest`，`BDY-1` 的场景 |
+| P-B2 边界只收窄 | 随机快照与请求：加上任意边界，结果不会从 Deny / Indeterminate 变成 Permit | `EnginePropertyTest`，`BDY-1` |
+| P-B3 边界与候选顺序无关 | P8（RFC 0004）加上边界仍成立 | `EnginePropertyTest`，`BDY-1` |
+| 发布往返 | 对一份文档 D，经控制面 `apply`（`REPLACE`，空存储）发布得到 D′；D 与 D′ 编译出**结构相同**的快照（RFC 0003 P5 的结构比较），并在随机请求上决策相同 | **没有专门的测试**：这是目标，不是守护。`cosec-migrate` 的写入经控制面的存储有测试，往返本身没有 |
 
-**判定**：离线回放每个部署至少 100 万条、至少 7 天（RFC 0001 §7.1），差异为 0，`candidate_error` 为 0。任何一条差异都是缺陷：修候选，或者证明是基准的缺陷并登记附录 A。
-不允许通过修订本 RFC 增加改动类别——本阶段承诺不改变决策。
+三条 P-B 性质随 `check` 以固定的例数运行；`propertyStress` 以更多的例数运行它们（`-PpropertyIterations`，百万例只在 CI 上跑），RFC 0008 §3.6。
 
 ---
 
@@ -1243,13 +1326,13 @@ AGENTS.md 在 PR-11 更新：Mental model 的 "Layers" 加上 `control/`，新�
 |---|---|
 | `model/`、`engine/` 不用反射 | `withinBoundary`、模式包含都是普通函数；`EnginePurityTest` 守护 |
 | `control/` 不用反射 | 普通类、sealed 接口和挂起函数；SPI 实现以 Spring bean 注入，没有 `ServiceLoader` 或类路径扫描 |
-| 文档编解码 | 新的头字段与各节用现有的 Jackson 流式代码读写（RFC 0004 Q10），不需要 hint |
-| 控制面 API 的 JSON | 请求体与响应体用 Jackson 数据绑定（不在热路径上，代码简单）；`cosec-control` 自带 `RuntimeHintsRegistrar`（`META-INF/spring/aot.factories`），用 `RuntimeHintsPredicates` 测试每个 DTO 已注册 |
+| 文档编解码 | 新的头字段与各节用现有的 Jackson 流式代码读写（RFC 0004 Q10），不需要提示 |
+| 控制面 API 的 JSON | 用 Jackson 树与手写的编解码读写，不按名字加载任何类，不需要提示。`ControlBoundaryTest` 拒绝反射式的 Jackson 绑定（`readValue`、`treeToValue`、`convertValue`、`readerFor`、`valueToTree`）、`Class.forName`、`ServiceLoader` 与 `kotlin.reflect.full`：它们需要没人注册的提示，且只在原生镜像里才出错 |
 | HTTP 路由 | 函数式路由（`RouterFunction`），不用基于注解扫描的控制器 |
 | schema 生成 | 构建期任务，不进运行时类路径 |
-| 缺少 hint 必须导致失败和拒绝 | 控制面：DTO 反序列化失败 → 400，不发布；数据面：不变（RFC 0006 §12） |
-| JDK 17 | 没有用到 17 以后的 API |
-| JDK 25 AOT cache | 管理服务的部署问题，不在本文；`cosec-gateway-server` 不嵌入控制面 |
+| 缺少提示必须导致失败和拒绝 | 控制面：请求体解码失败 → 400，不发布；数据面：不变（RFC 0006 §12） |
+| JDK | 项目的基线是 Java 21，没有用到更新的 API |
+| JDK 25 AOT cache | 宿主的部署问题，不在本文；`cosec-gateway-server` 不嵌入控制面 |
 
 ---
 
@@ -1257,15 +1340,16 @@ AGENTS.md 在 PR-11 更新：Mental model 的 "Layers" 加上 `control/`，新�
 
 ### 14.1 数据面（硬性要求）
 
-> **2026-10-26**：`boundary = none` 的对照改为同一构建中去掉边界检查的对照实现（[RFC 0008](0008-conformance-and-direct-build.md) §3.8）；整体吞吐按 7.0 的绝对预算判定。
-
 | 基准 | 比较 | 目标 |
 |---|---|---|
-| `EngineBenchmark`、`PipelineBenchmark`（RFC 0006）增加参数 `boundary` ∈ {`none`, `1`, `8`}（边界语句数） | `none` 与第 5 阶段结束时比较 | `none`：吞吐不低于 100 %（交替三轮的平均，任一轮不低于 97 %），B/op 不高于；`1`、`8` 只记录。达不到时 PR-3 停止，交回维护者 |
+| `EngineAuthorizationBenchmark` 的参数 `boundary` ∈ {`none`, `1`, `8`}（边界语句数） | `none` 与同一构建中去掉边界检查的对照实现比较（RFC 0008 §3.8）；整体吞吐按 7.0 的绝对预算判定 | `none`：吞吐不低于 100 %（交替三轮的平均，任一轮不低于 97 %），B/op 不高于；`1`、`8` 只记录 |
 | 影子候选评估 | `sample-rate` ∈ {0.01, 1.0}，有一个候选 | 只记录 BEST_EFFORT 队列的每请求开销与 CPU；它不在请求延迟里（RFC 0006 §9.3） |
-| 内存 | 候选来源的 LRU（16 份） | 只记录；写进 `storage.md` 的容量估算 |
+| 内存 | 候选来源的 LRU（1,024 份，§6.4） | 只记录 |
 
-测量方法沿用 RFC 0002 §7.2：JDK 25、`-PjmhWarmupIterations=5 -PjmhIterations=10 -PjmhFork=3 -PjmhProfilers=gc`、空闲机器、交替三轮。
+- **测得的**（#1075，Q24）：CI 的 JMH A/B（[run 40477072342](https://github.com/Ahoo-Wang/CoSec/actions/runs/40477072342)，三轮，JDK 25，同一作业内交替跑基准与候选），`boundary = none`
+  相对 `main`：`global` 100.9 %、`none` 101.0 %、`role` 99.2 %（最低 98.4 %）、`role-heavy` 100.5 %，B/op 没有增加。维护者接受：没有边界适用时引擎跳过整段检查
+  （`SnapshotView.bounded`），`role` 低于 100 % 线但在共享机器的误差内。有边界时的代价（`global`：1 条语句 97.2 %，8 条语句 83.4 %）和原始 JSON 在 `docs/perf/rfc-0007-boundary/`。
+- 测量方法沿用 RFC 0002 §7.2：JDK 25、`-PjmhWarmupIterations=5 -PjmhIterations=10 -PjmhFork=3 -PjmhProfilers=gc`、空闲机器、交替三轮；日常对比用 `jmh-ab.yml`。
 
 ### 14.2 控制面（预算）
 
@@ -1275,25 +1359,23 @@ AGENTS.md 在 PR-11 更新：Mental model 的 "Layers" 加上 `control/`，新�
 |---|---|---|
 | 授权（每个目标一次 `check`，含一次条件读） | ≤ 5 ms | 引擎微秒级；条件读是几十字节的往返 |
 | 校验 + 编译（候选与组合） | ≤ 300 ms / ≤ 1 s | RFC 0003 Q14：编译 p99 ≤ 200 ms |
-| 授出分析 | ≤ 100 ms（≤ 1,000 个片段 × ≤ 1,000 条授权者语句） | `implies` 在 ≤ 64 个节点上是多项式时间 |
+| 授出分析 | ≤ 100 ms（≤ 1,000 个片段 × ≤ 1,000 条授权者语句） | `implies` 在 ≤ 64 个节点上是多项式时间；比较预算见 §7.4.3（`CTL-49`） |
 | 写入（记录 + 头 + 索引） | ≤ 50 ms / ≤ 300 ms | 两次整份文档的写入 |
 | `publish` 端到端（不含影子窗口与审批） | ≤ 1 s / ≤ 3 s | 上面几项之和 |
 | 传播到数据面 | 通知送达时毫秒级；最迟 RFC 0003 §4.5 的落后上界（默认约 10 秒） | RFC 0003 |
 | `history`、`read` | ≤ 100 ms | 一次索引读 + 按需读记录 |
 
-`ControlPlaneBenchmark`（`control/` 的 `jmh` 源码集）测量授出分析与编译；端到端数字在 PR-9 用内存与真实 Redis 各测一次，记在 `docs/perf/rfc-0007-control/README.md`。
-超出预算不阻止合入，但必须在 PR 中说明原因并交维护者判断。
-
-> **实现说明（2026-10-27，#1091）**：`ControlPlaneBenchmark`（`control/` 的 `jmh` 源码集）与 `ControlPlaneLatencyTest`（真实 Redis，`cosec-cocache`）的数字记在 `docs/perf/rfc-0007-control/README.md`，都在预算内：内存、13 KB 租户文档 `propose` p99 0.63 ms、`publish` 端到端 p99 40.6 ms；内存、0.95 MB 为 41.3 ms 与 104.6 ms；Redis、0.95 MB 为 125 ms 与 313 ms。Redis 测试断言 p99 低于 3 s（8 MB 的预算），以免拥挤的 CI 主机误报；8 MB 的文档没有测。
-
-> **实现说明（2026-10-27，#1091）**：AOT：控制面读写 JSON 用 Jackson 树与手写的编解码，不按名字加载任何类，不需要提示。`ControlBoundaryTest` 新增一条规则：反射式 Jackson 绑定（`readValue`、`treeToValue`、`convertValue` 等）、`Class.forName`、`ServiceLoader`、`kotlin.reflect.full` 都会使它失败，因为它们需要没人注册的提示，且只在原生镜像里才出错。
-
-> **运维要求（2026-10-27，#1095）**：影子报告的 key 是 `{prefix}:shadow:report:{changeId}@{ms}` 与 `{prefix}:shadow:status:instances`（2026-10-27 第 2 轮审查更正：此前写成 `cosec:…:shadow-report`，按那个写的 ACL 什么也保护不了）。报告按原样被信任：`ShadowWindows` 直接对报告求和。只有数据面实例可以写这些 key，要用 Redis ACL 强制；能写的人可以用零差异提前关闭窗口。由于同一窗口所有实例的报告在同一个 key 里、每次整体改写，任何一个数据面实例都能抬高样本数或抹掉别的实例的 `CANDIDATE_ERROR`；按实例分 key 的修复见第 2 轮审查的跟进 PR。数据面的凭据对 `snapshot:*`、`candidate:*`、`control:*` 也必须只读。
-
-> **2026-11-23 修订（#1893，`CTL-82`）**：上表是预算，不是期限：8.0 不为控制请求设期限属性（§10.2）。每个等待各自有界：鉴权与必达变更监听器的合计各由 `cosec.pipeline.timeout`；
-> 确认检查所用文档由快照源的存储读超时；`MovedHeads` 1 秒；每个比较并设置的循环由尝试次数（16）；Redis 控制存储的每条命令由 CoCache 的命令超时（`cocache.redis.command-timeout`，
-> 默认 2 秒；CoSec 不设置也不锁定它，这是部署的选择），连接断开时立即拒绝。没有哪个等待要等别的请求释放锁、槽位或租约：被占的槽位答 409，租约是尝试加锁。
-> 一条请求最长能跑多久是这些有界步骤之和，只有调用方能说它愿意等多久。逐项的出处见 #1893 的说明。
+- **测得的**：`ControlPlaneBenchmark`（`control/` 的 `jmh` 源码集）与 `ControlPlaneLatencyTest`（真实 Redis，`cosec-cocache`）在 #1091 时都在预算内：内存、13 KB 租户文档 `propose`
+  p99 0.63 ms、`publish` 端到端 p99 40.6 ms；内存、0.95 MB 为 41.3 ms 与 104.6 ms；Redis、0.95 MB 为 125 ms 与 313 ms（`git show 67c1955c0:docs/perf/rfc-0007-control/README.md`）。
+  Redis 测试断言 p99 低于 3 s（8 MB 的预算），以免拥挤的 CI 主机误报；8 MB 的文档没有测。检查一个变更随文档大小的代价（到 10 万条目）在
+  [架构页](../../wiki/architecture/overview.md#what-checking-a-change-costs)：越权分析原先随文档大小按平方增长，10 万条目的变更超过一分钟并耗尽 512 MB 的堆，#1722 把它改成线性
+  （44.7 秒 → 4.7 秒）。授出分析不读全部文档：每次租户分析读 app 列表与各 app 的头（§7.4.3）。
+- **预算不是期限**（`CTL-82`，维护者 2026-11-23）：8.0 不为控制请求设期限属性（§10.2）。每个等待各自有界：鉴权与 `REQUIRED` 变更监听器的合计各由 `cosec.pipeline.timeout`；
+  确认检查所用文档由快照源的存储读超时（30 秒）；写后检测 1 秒（§5.4）；每个比较并设置的循环由尝试次数（16；授权批次 4）；Redis 控制存储的每条命令由 CoCache 的命令超时
+  （`cocache.redis.command-timeout`，默认 2 秒；CoSec 不设置也不锁定它，这是部署的选择），连接断开时立即拒绝。没有哪个等待要等别的请求释放：被占的槽答 409，被占的租约是跳过
+  这一遍，进程内的锁至多为一次有界的读持有。一条请求最长能跑多久是这些有界步骤之和，只有调用方能说它愿意等多久。
+- **运维要求**：影子报告、实例状态与驻留集合只由数据面实例写（§6.4 的键），能写的人能伪造报告；控制面汇总时按实例分键读，所以一个实例改写不了别的实例的报告。数据面的凭据对
+  快照文档与候选文档只读（`SNP-18`），对 `control:*` 没有权限；`wiki/operations/storage.md` 给出 ACL。
 
 ---
 
@@ -1301,14 +1383,14 @@ AGENTS.md 在 PR-11 更新：Mental model 的 "Layers" 加上 `control/`，新�
 
 | # | 差异 | 谁能观察到 | 处理 |
 |---|---|---|---|
-| X1 | **写 API**：`SnapshotPublisher`、`RedisSnapshotPublisher`、`LocalPolicyInitializer` 的写库模式（`init-repository`、`force-refresh`）、`PolicyHistory`、`VersionedPolicyRepository`、`PolicyRevisionStore` 及两个实现删除；7.x 的历史 key（`<p>:policy:history:*`）不转换、不删除 | 写策略的应用代码、运维 | 破坏性变更，写进 `upgrading.md`：改用控制面（库或 HTTP）；历史需要保留的先自行导出 |
+| X1 | **写 API**：`SnapshotPublisher`、`RedisSnapshotPublisher`、`LocalPolicyInitializer` 的写库模式（`init-repository`、`force-refresh`）、`PolicyHistory`、`VersionedPolicyRepository`、`PolicyRevisionStore` 及两个实现删除；7.x 的历史 key（`<p>:policy:history:*`）不转换、不删除 | 写策略的应用代码、运维 | 破坏性变更，写进 `upgrading.md`：改用控制面（库、HTTP 或门面）；历史需要保留的先自行导出 |
 | X2 | **影子**：`cosec.shadow.locations`、`app-permission-locations`、`ShadowPolicyProvider` 删除；候选来自控制面；差异种类新增 `BECAME_INDETERMINATE`、`BASE_MISMATCH`；报告写进 Redis 而不只是日志 | 用本地影子文件的部署 | 写进 `testing.md`、`upgrading.md`、`configuration.md` |
 | X3 | **解释**：`cosecExplain` actuator 端点删除，改为控制面的 `explain`（带权限、可按版本） | 用 actuator 解释的运维 | 写进 `testing.md`、`upgrading.md` |
-| X4 | **文档格式**：`schema` 加一；新的头与各节；schema 标记更新 | 直接读写 Redis 文档的工具 | 写进 `storage.md`、`upgrading.md`（升级顺序：先数据面后控制面） |
+| X4 | **文档格式**：`schema: 2`；新的头与各节 | 直接读写 Redis 文档的工具 | 写进 `storage.md`、`upgrading.md` |
 | X5 | **配置**：新增 `cosec.control.*`；`cosec.policy.limits.*` 删除（移进 `Platform` 文档，N3）；`cosec.authorization.local-policy.init-repository`、`force-refresh` 删除 | 部署配置 | 写进 `configuration.md`、`upgrading.md` |
-| X6 | **schema 文件**：改为生成；文件名与内容变化（§10.4） | 用 schema 做编辑器校验的用户 | 写进 `language.md` |
+| X6 | **schema 文件**：改为生成，位于 `schema/<line>/`；文件名与内容变化（§10.4） | 用 schema 做编辑器校验的用户 | 写进 `language.md` |
 | X7 | **审计**：新增控制面事件（`ChangeEvent`）与 Kafka 主题；数据面审计新增原因码 `BOUNDARY`、指标 `source=boundary` | 审计消费方、仪表盘 | 写进 `observability.md` |
-| X8 | **Redis**：新的 key 命名空间 `<p>:control:*`、`<p>:candidate:*`；建议只让控制面账号写 `<p>:snapshot:*` | 运维、Redis ACL | 写进 `storage.md` |
+| X8 | **Redis**：新的 key 命名空间 `<p>:control:*`、`<p>:candidate:*`、`<p>:shadow:*`；数据面的凭据对快照与候选只读 | 运维、Redis ACL | 写进 `storage.md` |
 
 ---
 
@@ -1316,53 +1398,68 @@ AGENTS.md 在 PR-11 更新：Mental model 的 "Layers" 加上 `control/`，新�
 
 > **2026-11-23 压缩时删去**：本节是实现的 PR 划分，都已合入。原文见 `git show 3cd4dca9:docs/rfc/0007-control-plane.md`。
 
+仍被引用的标签与它们合入时的提交：
+
+| 标签 | 标题 | 合入 |
+|---|---|---|
+| PR-1 | `build: add the cosec-control module` | #1032 |
+| PR-2 | `feat(core): generate JSON schemas from document format descriptors` | #1038 |
+| PR-3 | `feat(engine,core): enforce platform boundaries` | #1075 |
+| PR-4 | `feat(control,cocache): store revisions and publish documents with putIfMatch` | #1064 |
+| PR-5 | `feat(control): validate, compile and stage changes` | #1071 |
+| PR-6a | `feat(engine,control): analyze grants`（合入时为 `… analyze grants against the grantor's own rights`） | #1059 |
+| PR-6 | `feat(engine,control): authorize control-plane writes and analyze grants`（合入时为 `feat(control): authorize control-plane writes and require approvals`） | #1076 |
+| PR-7 | `feat(runtime,control): run shadow windows on candidate documents` | #1080 |
+| PR-8 | `feat(control,core,migrate,kafka): break-glass, tenant self-service and change audit` | #1087 |
+| PR-9 | `feat(control,starter): expose the control plane as a library and over HTTP`（合入时为 `feat(control): …`；starter 的装配在 RFC 0008 S1） | #1091 |
+| PR-10 | `test: replay phase 6 against phase 5 with zero differences` | 取消（2026-10-26，RFC 0008） |
+| PR-11 | `refactor!: make the control plane the only writer of snapshot documents` | 并入 RFC 0008 的切换 S1–S5（§4.4） |
+
+规则号 `CTL-60`、`CTL-64`、`CTL-67` 没有用（`CTL-67` 原定给维护心跳，随 `cosec.control.maintenance.enabled` 一起取消）。
+
 ## 17. 决定
 
-以下各项已于 **2026-10-26** 由维护者确认，全部按本文的推荐决定（含 Q25 的 SPI 变更：新增 `ControlStore`、`ChangeListener`、`ShadowReportSink`，删除 `SnapshotPublisher`、`ShadowPolicyProvider`、`PolicyRevisionStore`）。标注"测量后确认"的，PR 按这里的值实现，数字由测量结果校准。
+以下各项已于 **2026-10-26** 由维护者确认，全部按本文的推荐决定（含 Q25 的 SPI 变更）。此后的决定写在它们所改的章节里，带日期与决定人；下表"决定"一栏写的是现状，
+与 2026-10-26 不同之处在"理由"一栏之后注明。
 
 | # | 问题 | 决定 | 理由 |
 |---|---|---|---|
-| Q1 | **影子窗口强制还是可选**（§3 M1、§6.4） | **已决定**：默认强制；`cosec:skip-shadow` 可以跳过并记录原因；break-glass 的创建与撤销免除；样本不足时最长 24 小时后关闭并要求确认。默认最短 15 分钟、1,000 条样本（测量后确认） | 授出分析挡不住"有资格但写错了"；紧急情况需要一条有记录的快速通道；低流量文档不能永远卡住 |
-| Q2 | **编译失败与旧版本**（§3 M2、§6.3） | **已决定**：控制面严格编译，失败即不发布（头不变）；数据面 F5 不变，失败即拒绝，加载结果记为 `incompatible` | 发布前编译之后，数据面的失败只来自版本或配置不一致，那时退回旧版本同样会忽略已发布的 DENY |
-| Q3 | **修订的单位与历史**（§3 M3、§5.3） | **已决定**：按文档；记录按摘要寻址、先于头写入、头带 `parent`；按策略的历史是差异视图；删除 `PolicyHistory` 与两个修订存储；7.x 的历史不转换 | 发布的单位就是文档；按版本解释需要整份文档；先写记录才不会丢内容 |
-| Q4 | **权威存储**（§3 M10） | **已决定**：已发布的快照文档就是头，是唯一的权威；修订、变更、索引都是可以重建或丢弃的辅助数据 | 两份权威数据就要同步，正是 D4 的形状；不变量只需覆盖一个缓存 |
-| Q5 | **并发**（§5.5） | **已决定**：`putIfMatch(expected = 基准摘要)`；冲突不自动重做，`rebase` 后重做全部检查；每份文档一个暂存槽；只含收窄操作且有 `cosec:skip-shadow` 的变更可以抢占 | 检查结果绑定基准；两个都通过影子的变更依次发布会让第二个的影子失真；紧急封禁不能排队 |
-| Q6 | **保留**（§3 M13、§5.7）（测量后确认） | **已决定**：最近 50 个**且**不少于 7 天；孤儿 1 小时；体积只告警（256 MB）；不提供归档 SPI | 按体积删除会让最近的决策不可解释；归档等有需求再加 |
-| Q7 | **控制面怎样授权自己**（§3 M9、§7.2） | **已决定**：宿主 Pipeline 认证并做路径级授权；控制面内对每个目标调用 `AuthorizationChecker`，检查前对文档做条件读；另加不经策略的租户隔离硬性规则；三条内置控制面策略 | 路径表达不了请求体里的目标；控制面不接受数据面那样的有界陈旧；硬性规则是策略写错时的最后一道线 |
-| Q8 | **包含的语义与算法**（§3 M4、M5、§7.4） | **已决定**：§7.4.2 的定义；单条 H 包含；先把授权者自身属性代换为常量；含 `ext.*` 的授权者条件视为不可比较；不计入经 `Anyone` 绑定的 DENY。备选：计入全部 DENY（严格按定义，误报多） | 可判定、可靠；`Anyone` DENY 对被授权者同样生效，计入它会拦住最常见的平台规则形态 |
-| Q9 | **删除或放宽 DENY**（§3 M6、§7.4.4） | **已决定**：在有写权限的范围内允许，`protected` 条目除外；收窄一律允许。备选：按 §7.1 字面，删除 DENY 一律审批 | 租户放宽后仍受平台层的 DENY 与边界约束；撤销访问不应比授予更难；`protected` 给需要的人一个开关 |
-| Q10 | **审批**（§7.5） | **已决定**：有 `cosec:approve` 的另一个人批准；批准绑定候选摘要，72 小时有效；平台管理员自己的变更默认不需要第二人（`four-eyes` 可开启）；break-glass 总是双人 | 平台管理员是信任根，强制双人会让平台日常运维依赖两个人在线；break-glass 是例外 |
-| Q11 | **平台边界**（§3 M8、§7.6） | **已决定**：`Platform` 放默认边界，`Tenant(T).boundary`（只有平台能写）覆盖；约束租户主体的全部 Permit；只含 ALLOW、只在 `Platform`；平台租户没有边界 | 平台文档不随租户数增长；边界是平台给租户的总包络，平台层自己的授出也应在其中 |
-| Q12 | **break-glass**（§3 M7、§8） | **已决定**：主体只能是平台租户的主体；双人；期限上限默认 4 小时、最多 24 小时；免影子；发布前必须有 REQUIRED 的控制面审计；元数据由编译器检查；`cosec-migrate publish` 对 root 绑定执行同样的期限上限 | "只能由控制面创建"靠唯一写入者与 ACL 实现；长期 root 正是 break-glass 要取代的 |
-| Q13 | **DENY 上的 `nomatch`**（§3.1 N6、§9.5） | **已决定**：按语句确认（带语句摘要），确认写进元数据，编译器在任何文档里要求它；删除"只允许 `Platform`"的过渡规则 | 风险在于"依赖故障时 DENY 失效"，而不在于谁写；显式、可审计的确认才是 RFC 0001 §3.3 要的 |
-| Q14 | **租户引用应用目录**（§3.1 N1、§9.3） | **已决定**：允许 `Tenant(T)` 的绑定指向 `App(a)` 的权限策略，作用域必须是 `app = a`；反向索引保护 | 没有它租户自助只能复制语句；悬空引用已有失败即拒绝与控制面检查；I/O 不变 |
-| Q15 | **跨层同名**（§3.1 N2、§9.4） | **已决定**：控制面拒绝租户使用平台已有的 id；数据面两层同名时内容相同则解析，否则 `Indeterminate(AmbiguousPolicy)`；分区按 §9.4 的四步 | 租户层优先会让租户使平台 DENY 失效；平台层优先则无法分区；"内容相同"给迁移留出安全的过渡 |
-| Q16 | **必须一致的配置**（§3.1 N3） | **已决定**：外部属性目录与成本上限写进 `Platform` 文档；删除 `cosec.policy.limits.*`；实例在安装 `Platform` 时检查提供者覆盖 | 控制面与数据面必须用同一份依据编译，否则"控制面接受、数据面拒绝"成为常态 |
-| Q17 | **本地策略与本地影子文件**（§3.1 N9、§6.7） | **已决定**：删除 `init-repository`/`force-refresh` 与本地影子文件；本地策略文件只装进内存存储；提供声明式 `apply` | 每实例启动时写库是一条不经授权、不留修订的写入路径 |
-| Q18 | **API 形态**（§10） | **已决定**：库 + starter 中可选的 HTTP 适配；不提供独立服务、gRPC 或写入用的 CLI | RFC 0001 §4 的"可以嵌入管理服务的库"；最小的表面就是一个挂起接口加它的 HTTP 映射 |
-| Q19 | **schema 生成**（§3 M11、§10.4） | **已决定**：`cosec-core` 中的声明式格式描述 → `generateSchemas`；`verifySchemas` 进 `check`；一致性测试绑定描述与编解码器 | 模型类不能反射，也不等于 JSON 形状；描述 + 测试让偏差可见 |
-| Q20 | **"不依赖 Reactor"的最终形式**（§3 M12） | **已决定**：公开签名规则 + `model/`、`engine/`、`runtime/`、`control/` 不引用 `reactor.*`；不做类路径检查 | Lettuce 依赖 `reactor-core`，类路径检查永远无法通过；签名规则守住的是下游真正受影响的东西 |
-| Q21 | **控制面审计**（§10.5） | **已决定**：`ChangeListener`，投递语义沿用 RFC 0006；`PUBLISHING` 与 break-glass 事件先于头写入投递给 REQUIRED 监听器；默认没有 REQUIRED，break-glass 必须有 | 修订记录本身是持久的发布记录；break-glass 与 RFC 0006 Q20 对使用的要求对称 |
-| Q22 | **`simulate`/`explain`/`analyze`**（§3 M14、§10.3） | **已决定**：三者都调用同一个 `Engine.evaluate`；`explain` 可以指定 `SnapshotVersion`；`analyze` 以绑定的主体表达；删除 `cosecExplain` 端点 | P3；RFC 0001 §3.3 要求按版本解释；P11 之后无法列出用户；actuator 端点没有按租户的授权 |
-| Q23 | ~~**门槛 D 的标准**（§12）~~（2026-10-26 由 [RFC 0008](0008-conformance-and-direct-build.md) 取代） | **已决定**：差异为零，没有改动目录；任何差异都是缺陷 | 本阶段承诺不改变决策；数据面的改动在现有数据上都是恒等的 |
-| Q24 | **性能**（§14；**2026-10-26 修订**：数据面按 [RFC 0008](0008-conformance-and-direct-build.md) §3.8 的绝对预算） | **已决定**：数据面：`boundary = none` 吞吐不低于第 5 阶段的 100 %，B/op 不高于，达不到时 PR-3 停止；控制面：§14.2 的预算，超出须在 PR 中说明 | 没有边界时不应有任何代价；控制面不在请求路径上，预算是体验目标而不是门槛 |
-| Q25 | **SPI 与 API 变更**（AGENTS.md 要求先问） | **已决定**：新增 SPI `ControlStore`、`ChangeListener`、`ShadowReportSink`；删除 `SnapshotPublisher`、`ShadowPolicyProvider`、`PolicyRevisionStore`；`cosec-api` 不变 | 8.0 没有发布过，删除的接口没有外部使用者；写入只剩一条路径 |
-| Q26 | **自举**（§3 M15、§5.9） | **已决定**：`cosec-migrate bootstrap`，只在没有平台管理员绑定时执行，`--force` 用于恢复；写修订记录 | 存储为空时没有人有权写；拿到 Redis 凭据的人本来就能写，命令只让这类写入留下记录 |
-| Q27 | **复制与确认**（§5.4） | **已决定**：不加 `WAIT`；修订链让丢写可诊断；`storage.md` 建议 `min-replicas-to-write` | RFC 0003 §4.6 的理由不变；控制面没有让 `WAIT` 变得更有效 |
-| Q28 | **文档格式与升级顺序**（§3.1 N4） | **已决定**：`schema` 加一，schema 标记按 RFC 0004 §8.5 更新；先升级数据面，再让控制面发布新格式 | 现有编译器拒绝未知字段；顺序错误会让实例失败即拒绝，告警指出原因 |
-| Q29 | **传播的可见性**（§6.5） | **已决定**：实例在影子报告的周期里写已安装的修订，控制面提供只读的 `propagation`；发布不等待它 | 运维需要知道"新策略生效了没有"；等待所有实例会让一个失联实例卡住发布 |
-
-> **实现说明（2026-10-27，#1075，Q24）**：CI 的 JMH A/B（[run 40477072342](https://github.com/Ahoo-Wang/CoSec/actions/runs/40477072342)，三轮，JDK 25，同一作业内交替跑基准与候选），`boundary = none` 相对 `main`：`global` 100.9 %、`none` 101.0 %、`role` 99.2 %（最低 98.4 %）、`role-heavy` 100.5 %，B/op 没有增加。维护者接受：没有边界适用时引擎跳过整段检查（`SnapshotView.bounded`），`role` 低于 100 % 线但在共享机器的误差内，由 S1 的空闲机器测量复核。有边界时的代价（`global`：1 条语句 97.2 %，8 条语句 83.4 %）和原始 JSON 在 `docs/perf/rfc-0007-boundary/`。
+| Q1 | **影子窗口强制还是可选**（§3 M1、§6.4） | 默认强制；`cosec:skip-shadow` 可以跳过并记录原因；break-glass 的创建与撤销免除；样本不足时最长 24 小时后关闭并要求确认。默认最短 15 分钟、1,000 条样本 | 授出分析挡不住"有资格但写错了"；紧急情况需要一条有记录的快速通道；低流量文档不能永远卡住 |
+| Q2 | **编译失败与旧版本**（§3 M2、§6.3） | 控制面严格编译，失败即不发布（头不变）；数据面 F5 不变，失败即拒绝 | 发布前编译之后，数据面的失败只来自版本或配置不一致，那时退回旧版本同样会忽略已发布的 DENY |
+| Q3 | **修订的单位与历史**（§3 M3、§5.3） | 按文档；记录按摘要寻址、先于头写入、头带 `parent`；按策略的历史是差异视图；7.x 的历史不转换 | 发布的单位就是文档；按版本解释需要整份文档；先写记录才不会丢内容 |
+| Q4 | **权威存储**（§3 M10） | 已发布的快照文档就是头，是唯一的权威；修订、变更、索引都是可以重建或丢弃的辅助数据 | 两份权威数据就要同步；不变量只需覆盖一个缓存 |
+| Q5 | **并发**（§5.5） | `putIfMatch(expected = 基准摘要)`；冲突不自动重做，`rebase` 后重做全部检查；每份文档一个暂存槽；只含收窄操作且有 `cosec:skip-shadow` 的变更可以抢占 | 检查结果绑定基准；两个都通过影子的变更依次发布会让第二个的影子失真；紧急封禁不能排队 |
+| Q6 | **保留**（§3 M13、§5.7） | 最近 50 个**且**不少于 7 天；孤儿满一个回收周期；不提供归档 SPI | 按体积删除会让最近的决策不可解释；归档等有需求再加。体积告警（256 MB）没有实现（§5.7） |
+| Q7 | **控制面怎样授权自己**（§3 M9、§7.2） | 宿主 Pipeline 认证并做路径级授权；控制面内对每个目标调用 `AuthorizationChecker`，检查前对文档做条件读；另加不经策略的租户隔离硬性规则；三条内置控制面策略 | 路径表达不了请求体里的目标；控制面不接受数据面那样的有界陈旧；硬性规则是策略写错时的最后一道线 |
+| Q8 | **包含的语义与算法**（§3 M4、M5、§7.4） | §7.4.2 的定义；单条 H 包含；先把授权者自身属性代换为常量；含 `ext.*` 的授权者条件视为不可比较；不计入经 `Anyone` 绑定的 DENY。备选：计入全部 DENY（严格按定义，误报多） | 可判定、可靠；`Anyone` DENY 对被授权者同样生效，计入它会拦住最常见的平台规则形态 |
+| Q9 | **删除或放宽 DENY**（§3 M6、§7.4.4） | 租户文档在有写权限的范围内允许，`protected` 条目除外；平台与 App 文档要第二个人（`CTL-31`）；收窄一律允许。备选：按 §7.1 字面，删除 DENY 一律审批 | 租户放宽后仍受平台层的 DENY 与边界约束；撤销访问不应比授予更难。`protected` 标志还没有进入文档格式（§7.4.4） |
+| Q10 | **审批**（§7.5） | 有 `cosec:approve` 的另一个人批准；批准绑定候选摘要，72 小时有效；信任根自己的变更默认不需要第二人（`four-eyes` 可开启）；break-glass 总是双人；工作负载的凭据从不批准 | 平台管理员是信任根，强制双人会让平台日常运维依赖两个人在线；break-glass 是例外 |
+| Q11 | **平台边界**（§3 M8、§7.6） | `Platform` 放默认边界，`Tenant(T).boundary`（只有平台能写）覆盖；约束租户主体的全部 Permit；只含 ALLOW、只在 `Platform`；平台租户没有边界 | 平台文档不随租户数增长；边界是平台给租户的总包络，平台层自己的授出也应在其中 |
+| Q12 | **break-glass**（§3 M7、§8） | 主体只能是平台租户的主体；双人；期限上限默认 4 小时、最多 24 小时；免影子；发布前必须有 `REQUIRED` 的控制面审计；`cosec-migrate` 不写 break-glass 绑定 | "只能由控制面创建"靠唯一写入者与 ACL 实现；长期 root 正是 break-glass 要取代的。2026-10-30 起不再由编译器检查元数据（RC1-27，§8） |
+| Q13 | **DENY 上的 `nomatch`**（§3.1 N6、§9.5） | 按语句确认（带语句摘要），确认写进语句，编译器在任何文档里要求它 | 风险在于"依赖故障时 DENY 失效"，而不在于谁写；显式、可审计的确认才是 RFC 0001 §3.3 要的 |
+| Q14 | **租户引用应用目录**（§3.1 N1、§9.3） | 允许 `Tenant(T)` 的绑定指向 `App(a)` 的权限策略，作用域必须是 `app = a`；反向索引保护 | 没有它租户自助只能复制语句；悬空引用已有失败即拒绝与控制面检查 |
+| Q15 | **跨层同名**（§3.1 N2、§9.4） | 控制面拒绝租户使用平台已有的 id，平台策略的精确副本除外（2026-11-07，#1224）；数据面两层同名时内容相同则解析，否则 `Indeterminate(AmbiguousPolicy)`；分区按 §9.4 的四步 | 租户层优先会让租户使平台 DENY 失效；平台层优先则无法分区；"内容相同"给迁移留出安全的过渡 |
+| Q16 | **必须一致的配置**（§3.1 N3） | 外部属性目录与成本上限写进 `Platform` 文档；删除 `cosec.policy.limits.*`；实例在安装 `Platform` 时检查提供者覆盖 | 控制面与数据面必须用同一份依据编译，否则"控制面接受、数据面拒绝"成为常态 |
+| Q17 | **本地策略与本地影子文件**（§3.1 N9、§6.7） | 删除 `init-repository`/`force-refresh` 与本地影子文件；本地策略文件只装进内存存储；提供声明式 `apply` | 每实例启动时写库是一条不经授权、不留修订的写入路径 |
+| Q18 | **API 形态**（§10） | 库 + 宿主上的 HTTP 路由 + 门面 `ControlService`；不提供 gRPC 或写入用的 CLI。2026-11-21 起另有控制面宿主镜像 `cosec-control-server`（§10.2） | RFC 0001 §4 的"可以嵌入管理服务的库"；最小的表面就是一个挂起接口加它的 HTTP 映射 |
+| Q19 | **schema 生成**（§3 M11、§10.4） | `cosec-document` 中的声明式格式描述 → `generateSchemas`；`verifySchemas` 进 `check`；一致性测试绑定描述与编解码器 | 模型类不能反射，也不等于 JSON 形状；描述 + 测试让偏差可见 |
+| Q20 | **"不依赖 Reactor"的最终形式**（§3 M12） | 公开签名规则 + `model/`、`engine/`、`runtime/`、`control/` 不引用 `reactor.*`；不做类路径检查 | Lettuce 依赖 `reactor-core`，类路径检查永远无法通过；签名规则守住的是下游真正受影响的东西 |
+| Q21 | **控制面审计**（§10.5） | `ChangeListener`，投递语义沿用 RFC 0006；`PUBLISHING` 与 break-glass 事件先于头写入投递给 `REQUIRED` 监听器；默认没有 `REQUIRED`，break-glass 必须有 | 修订记录本身是持久的发布记录；break-glass 与 RFC 0006 Q20 对使用的要求对称 |
+| Q22 | **`simulate`/`explain`/`analyze`**（§3 M14、§10.3） | 三者都调用同一个 `Engine.evaluate`；`explain` 可以指定 `ViewVersion`；`analyze` 以绑定的主体表达；删除 `cosecExplain` 端点 | P3；RFC 0001 §3.3 要求按版本解释；P11 之后无法列出用户；actuator 端点没有按租户的授权 |
+| Q23 | **门槛 D 的标准**（§12） | 由 RFC 0008 的规范一致性套件取代（2026-10-26）；P-B1–P-B3 与发布往返作为规范性质保留 | 8.0 不考虑与 7.x 的兼容 |
+| Q24 | **性能**（§14） | 数据面：`boundary = none` 吞吐不低于对照的 100 %，B/op 不高于；整体按 RFC 0008 §3.8 的绝对预算；控制面：§14.2 的预算，超出须在 PR 中说明 | 没有边界时不应有任何代价；控制面不在请求路径上，预算是体验目标而不是门槛 |
+| Q25 | **SPI 与 API 变更**（AGENTS.md 要求先问） | 新增 SPI `ControlStore`、`ChangeListener`、`ShadowReportSink`；删除 `SnapshotPublisher`、`ShadowPolicyProvider`、`PolicyRevisionStore`；`cosec-api` 不变 | 8.0 没有发布过，删除的接口没有外部使用者；写入只剩一条路径 |
+| Q26 | **自举**（§3 M15、§5.9） | `cosec-migrate bootstrap`，只在没有平台管理员绑定时执行，`--force` 用于恢复；写修订记录 | 存储为空时没有人有权写；拿到 Redis 凭据的人本来就能写，命令只让这类写入留下记录 |
+| Q27 | **复制与确认**（§5.4） | 不加 `WAIT`；修订链让丢写可诊断；`storage.md` 建议 `min-replicas-to-write` | RFC 0003 §4.6 的理由不变；控制面没有让 `WAIT` 变得更有效 |
+| Q28 | **文档格式与升级顺序**（§3.1 N4） | `schema: 2`；先升级数据面，再让控制面发布新格式 | 现有编译器拒绝未知字段；顺序错误会让实例失败即拒绝，告警指出原因 |
+| Q29 | **传播的可见性**（§6.5） | 实例在影子报告的周期里写已安装的修订，控制面提供只读的 `propagation`；发布不等待它 | 运维需要知道"新策略生效了没有"；等待所有实例会让一个失联实例卡住发布 |
 
 ---
 
 ## 附录 A：已确认差异
 
-门槛 D 期间发现、并经维护者确认属于基准缺陷的差异登记在这里（初始为空）。
-
-| 编号 | 类别 | 计数 | 结论 | 确认人 / 日期 |
-|---|---|---|---|---|
+门槛 D 取消（§12），没有登记任何差异。
 
 ## 附录 B：涉及的现有代码
 
-> **2026-11-23 压缩时删去**：本节是7.x 里与本文有关的文件清单，这些代码已删除。原文见 `git show 3cd4dca9:docs/rfc/0007-control-plane.md`。
+> **2026-11-23 压缩时删去**：本节是 7.x 里与本文有关的文件清单，这些代码已删除。原文见 `git show 3cd4dca9:docs/rfc/0007-control-plane.md`。
