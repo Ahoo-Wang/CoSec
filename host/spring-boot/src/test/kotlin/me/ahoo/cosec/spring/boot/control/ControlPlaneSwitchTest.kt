@@ -175,6 +175,8 @@ class ControlPlaneSwitchTest {
             registry.find(
                 ControlMetersConfiguration.RECLAIMED_YOUNG
             ).functionCounter()!!.count().assert().isEqualTo(0.0)
+            // CTL-86: no head was found lost.
+            registry.find(ControlMetersConfiguration.LOST).functionCounter()!!.count().assert().isEqualTo(0.0)
         }
     }
 
