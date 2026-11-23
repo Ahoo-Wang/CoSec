@@ -30,6 +30,10 @@ Which preview of the library may run behind which preview of the gateway image: 
 
 ## From 8.0.0-beta.7 {#from-8-0-0-beta-7}
 
+- **`analyze` shows a tenant's bindings only to a caller who may read its document** (`CTL-51`, DR1-F-8). Affected: a
+  principal granted `cosec:analyze` on its tenant's document but not `cosec:read` (no built-in role is shaped so). It
+  was answered with every matching binding of that document; it now gets none, and the document is counted in `hidden`.
+  Grant `cosec:read` with `cosec:analyze`, as `cosec:tenant-viewer` does.
 - **A change too large to analyse is one `TOO_LARGE` entry** (`CTL-49`, DR1-E-1). Affected: a tenant change whose
   granted ALLOWs come to more than 80,000 fragments (each action times each resource, for each binding that reaches
   them), and what reads a change's escalations. Such a change is counted before it is split: none of it is analysed,
