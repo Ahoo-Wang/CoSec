@@ -874,49 +874,7 @@ PR-4 新增 `DecisionParity`，取代原稿的 `EngineParityAuthorization`：它
 
 ## 9. 实现拆分
 
-### 9.1 交付方式
-
-- **`main` 是 8.0 线，不开长期分支。** 6 个 PR 都以 `main` 为 base，与其他 PR 一样 squash 合并，因此也不存在"把 main 同步到集成分支"的问题。
-  `7.x` 是从 `v7.0.0` 切出的维护分支，只接收安全和关键修复。
-- **PR-1 到 PR-5 只做加法**：新模块、新类（`EngineAuthorization`、比较器 `DecisionParity`、回放工具、基于 trace 的解释路径）。
-  starter 不装配其中任何一个，不新增 `cosec.*` 属性；行为、公共 API 和 `cosec.*` 属性的既有含义都不变，标题都不带 `!`。
-- **不发布任何版本（2026-10-21 修订，取代"PR-5 之后发布 `8.0.0-RC1`、在 RC 上做生产采样"）。** 门槛全部离线完成（§8）。
-  8.0.0 GA 包含 RFC 0001 的第 2–6 阶段，每个阶段都实现完毕并做完两轮审查；在此之前没有里程碑版，也没有 RC。目标架构全部达成后，
-  由维护者决定发布 RC 还是直接发布 GA；发布 RC 时，可以在预发环境上验证回放覆盖不到的运行时行为（§8.2.1）。
-- **PR-6 是第 2 阶段唯一的破坏性变更**：删除旧实现，`SimpleAuthorization` 改由引擎实现，删除 `cosec-api` 的旧算法方法。
-  它只能在 §8 的门槛（包括离线回放）全部通过之后合入。PR-6 结束第 2 阶段，不触发任何发布；8.0.0 GA 在第 6 阶段完成之后。
-- **两条线的修复**：需要同时进 `main` 和 `7.x` 的修复，先合入 `main`，再用 cherry-pick PR 回移到 `7.x`（见 `CONTRIBUTING.md`）。
-  在 `main` 上，PR-3 到 PR-6 之间两个实现并存，§8.2 的参数化测试对两者都跑，所以触及决策语义的修复要同时改旧实现和引擎适配层，
-  否则测试失败。
-
-### 9.2 PR 列表
-
-| PR | 标题（Conventional Commits） | 发布 | 范围 | 依赖 | 完成标准 |
-|---|---|---|---|---|---|
-| PR-1 | `build: add cosec-model and cosec-engine modules` | 8.0 线（已合入，#974） | 两个空模块与 BOM；§2.2 的依赖排除和 `verifyPureClasspath`；ArchUnit 依赖与 §2.3 的规则；§7.2 的 JMH 属性；在 JDK 25 上录 `SimpleAuthorizationBenchmark` 基线 | — | 两个模块 `check` 通过；临时加一个引用 `java.io.File` 的类能让 ArchUnit 失败（在 PR 描述里给出输出，不提交）；基线 JSON 附在 PR 上 |
-| PR-2 | `feat(engine): add the decision model and the single combining algorithm` | 8.0 线 | §3.1、§3.2 的全部类型；§4.1 的算法与三级 trace；用测试替身（不依赖 `cosec-core`）写的单元测试、P1、P2、P4；`EngineBenchmark` | PR-1 | 两个模块 `check` 通过，变更行覆盖率 ≥ 80%；`EngineBenchmark` 满足 §7.1 的分配目标 |
-| PR-3 | `feat(core): add EngineAuthorization backed by the engine` | 8.0 线 | §3.3、§3.4、§3.5 的适配层；§6.2 的语句作用域上下文；`EngineAuthorization`；`ShadowAuthorization` 的候选实现工厂参数（§5.3）；`SimpleAuthorizationBenchmark` 的 `impl` 参数；§8.2 第一行的参数化测试；P3（固定种子）。`SimpleAuthorization` 不改 | PR-2，以及 7.0 中 S10a 的修复 | `:core:check`、`:cocache:check`、`:spring-boot:check` 及其他依赖 `cosec-core` 的模块通过；两个实现在全部参数化测试上结果相同；JMH 对比满足 §7.1 |
-| PR-4 | `feat(core): add the engine parity comparator and offline replay` | 8.0 线 | 比较器 `DecisionParity`（§8.1，通用，放在 `cosec-core` 的测试夹具中，不发布；含把 `SecurityPipeline` 的 `toDecision`/`toErrorDecision` 改为 `internal`）；`PolicyTestKit.parity`（测试夹具中的扩展函数）；百万例的手动任务；离线回放工具（§8.2.1：输入格式、`engineReplay` Gradle 任务、报告）。不新增 `cosec.*` 属性，不改 starter，不新增 `ShadowDiffKind` 取值（2026-10-21 修订，取代原来的开关与陪跑影子） | PR-3 | starter 的装配与现在完全相同；一个人为制造差异的测试能让比较器报告 `MISMATCH`，同样的差异经回放工具出现在报告和明细中；用仓库内的合成数据（不含真实数据）跑通回放工具；百万例跑通 |
-| PR-5 | `feat(core): explain decisions from the engine trace` | 8.0 线 | §5.2 的基于 trace 的解释路径，只在测试中装配，starter 不使用；`Explanation` 结构不变；旧叙述、`ExplainerConsistencyTest`、`TRACE_INCONSISTENT` 保留 | PR-3（可与 PR-4 并行） | `AuthorizationExplainerTest`、`PolicyTestKitTest`、`CoSecExplainAutoConfigurationTest` 不改即通过；用 trace 解释路径（测试中装配）再跑一遍时，除 X6 涉及的断言外通过，X6 涉及的断言逐条在 PR 描述中说明 |
-| ~~PR-6~~ | ~~`refactor!: remove the legacy authorization path`~~ **已取消（2026-10-26，[RFC 0008](0008-conformance-and-direct-build.md)）**：删除旧实现并入 RFC 0008 的切换 PR，回放门槛取消 | 8.0 线（结束第 2 阶段；8.0.0 GA 在第 6 阶段之后） | 门槛（含离线回放）通过后：`SimpleAuthorization` 改由引擎实现并删除 `EngineAuthorization`；`engineReplay` 改名为 `decisionReplay` 并用参数选择两边的实现（`DecisionParity` 与回放工具 PR-4 起已在测试夹具中且是通用的，§8.1，不删除）；删除 `PolicyTestKit.parity`、`ShadowAuthorization` 的工厂参数；删除旧解释叙述、`Snapshot*Repository`、`ExplainerConsistencyTest`、`TRACE_INCONSISTENT`；`DefaultPolicyEvaluator`/`DefaultAppPermissionEvaluator` 改为调用引擎；删除 `Policy.verify`、`Statement.verify`、`PermissionVerifier`、`verifyScoped`（`clearPathVariablesBeforeMatch` 保留给限流规则）；文档（下表）；最终 JMH 数字 | PR-4、PR-5、§8 的门槛 | 全部模块 `check` 通过；门槛证据附在 PR 上：百万例结果，以及每个回放部署的报告摘要（样本数、时间跨度、各项计数、输入文件的 SHA-256），只有计数和哈希，不含导出数据或差异明细；按 §7.2 第 4 步重新测量 JMH（第 2 阶段对 §7.1 的豁免见 §7.2 第 8 步：差距最多约 7 % 可接受，任一门槛场景低于 90 % 时停止并交回协调者）；文档全部更新 |
-
-每个 PR 合入后照例做两轮审查（与第 1 阶段相同），审查修复以 `fix(engine|core): round-N review fixes ...` 的 PR 合入 `main`。
-
-### 9.3 文档落点（中英文同步）
-
-按 AGENTS.md 的"Where a change has to land"：
-
-| 文件 | PR | 内容 |
-|---|---|---|
-| `wiki/architecture/overview.md` | PR-6 | 新模块与依赖规则、决策流程图（`SimpleAuthorization` → 引擎）、"一份算法"、路径变量的语句作用域、JMH 数字 |
-| `wiki/architecture/extending.md`、`skills/cosec-custom-matcher` | PR-6 | 匹配器在语句作用域上下文中执行；X2、X3、X4、X5 对自定义代码的影响 |
-| `wiki/operations/upgrading.md` | PR-6 | 7.x → 8.0：X2、X3、X5、X6（含 PR-5 确认的各项解释输出变化）、X8（决策之后的 `Error` 不再让解释失败；映射决策失败、黑名单检查返回空 `Mono` 时解释改为失败）与 `cosec-api` 的删除项（`Policy.verify`、`Statement.verify`、`PermissionVerifier`、`ExplainWarningCode.TRACE_INCONSISTENT`） |
-| `wiki/operations/troubleshooting.md`、`skills/cosec-troubleshoot` | PR-6 | 删除 `TRACE_INCONSISTENT` 的条目（若有） |
-
-PR-4 不改 `wiki/`（2026-10-21 修订，原来要在 `configuration.md` 写开关、在 `testing.md` 写陪跑影子）：`PolicyTestKit.parity` 在 PR-6 删除，
-比较器和回放工具留在测试夹具中（§8.1），都不会进入任何发布版本。回放工具的输入格式和用法写在它自己的 KDoc 里，以本文 §8.2.1 为准。
-
----
+> **2026-11-23 压缩时删去**：本节是实现的 PR 划分，都已合入。原文见 `git show 3cd4dca9:docs/rfc/0002-pure-engine.md`。
 
 ## 10. 决定
 
@@ -954,23 +912,4 @@ PR-4 不改 `wiki/`（2026-10-21 修订，原来要在 `configuration.md` 写开
 
 ## 附录 B：涉及的现有代码
 
-本文对现有行为的描述，以 `0436acb4` 时的下列代码为准：
-
-- 决策：`core/.../authorization/SimpleAuthorization.kt`、`RoleScope.kt`、`RootPrincipalMatcher.kt`、`PolicyVerifyContext.kt`、
-  `AuthorizationDecision.kt`、`MissingPolicyException.kt`、`blacklist/BlacklistChecker.kt`、`policy/BlockingAware.kt`
-- 路径变量：`policy/PathVariableScope.kt`、`policy/action/PathActionMatcher.kt`（`PATH_VARIABLES_KEY`、`ReplaceablePathActionMatcher`、
-  路径解析缓存）、`policy/condition/part/PartExtractor.kt`、`limiter/RateLimitRule.kt`
-- 匹配器：`policy/condition/context/InRoleConditionMatcher.kt`、`policy/action/CompositeActionMatcher.kt`、
-  `policy/action/AbstractActionMatcher.kt`、`policy/condition/AbstractConditionMatcher.kt`、`policy/condition/part/BoundedRegex.kt`
-- 第二、第三份算法：`api/.../policy/Policy.kt`、`Statement.kt`、`PermissionVerifier.kt`；
-  `core/.../explain/AuthorizationExplainer.kt`、`Explanation.kt`、`SnapshotRepositories.kt`、`DecisionRefs.kt`；
-  `core/core/src/test/.../explain/ExplainerConsistencyTest.kt`
-- 间接使用者：`shadow/ShadowAuthorization.kt`、`ShadowDiff.kt`、`authorization/AuthorizationChecker.kt`、`analysis/AccessAnalyzer.kt`、
-  `testkit/PolicyTestKit.kt`、`policy/DefaultPolicyEvaluator.kt`、`permission/DefaultAppPermissionEvaluator.kt`
-- 状态码：`pipeline/SecurityPipeline.kt`、`pipeline/SecurityDecision.kt`
-- 数据类：`policy/PolicyData.kt`、`permission/AppPermissionData.kt`（惰性 `permissionIndexer`、预先计算的 `requiresBlocking`）、
-  `context/SimpleSecurityContext.kt`（`ConcurrentHashMap` 属性）
-- 构建：根 `build.gradle.kts`（库模块默认依赖、JMH 配置、`jvmToolchain(17)`）、`gradle/libs.versions.toml`、
-  `core/core/src/jmh/.../authorization/SimpleAuthorizationBenchmark.kt`
-- starter：`spring-boot-starter/.../authorization/CoSecAuthorizationAutoConfiguration.kt`（影子包在 `SimpleAuthorization` 外、
-  限流之内）、`AuthorizationProperties.kt`（`cosec.authorization.*`）
+> **2026-11-23 压缩时删去**：本节是7.x 里与本文有关的文件清单，这些代码已删除。原文见 `git show 3cd4dca9:docs/rfc/0002-pure-engine.md`。

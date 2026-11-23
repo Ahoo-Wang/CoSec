@@ -1058,18 +1058,4 @@ PR-1、PR-3 可以立即并行；PR-2 只等 PR-1。RFC 0005 的 PR-1（AST 类�
 
 ## 附录 B：涉及的现有代码
 
-本文对现有行为的描述，以 `main` @ `334da022` 的下列代码为准：
-
-- 契约：`api/.../principal/CoSecPrincipal.kt`（`ROOT_ID`、`isRoot`）、`RoleCapable.kt`（`SpacedRoleId`、`roles` 的作用域约定）、`PolicyCapable.kt`、
-  `policy/Policy.kt`、`PolicyType.kt`、`Statement.kt`、`permission/AppPermission.kt`、`AppRolePermission.kt`、`RolePermission.kt`、`PermissionGroup.kt`（`spaced`）、
-  `MissingPermissionException.kt`、`context/request/Request.kt`（`appId`、`spaceId` 来自 Header 或 Query）、`SpaceIdCapable.kt`、`tenant/Tenant.kt`、`CoSec.kt`、
-  `audit/AuditEvent.kt`（`AuditSourceType`）
-- 决策：`core/.../authorization/SimpleAuthorization.kt`、`RoleScope.kt`、`RootPrincipalMatcher.kt`、`PolicyVerifyContext.kt`、`MissingPolicyException.kt`、
-  `blacklist/BlacklistChecker.kt`、`context/SimpleSecurityContext.kt`（租户来自主体）、`context/DefaultSecurityContextParser.kt`
-- 匹配器（本阶段不改，RFC 0005 翻译）：`policy/condition/context/InRoleConditionMatcher.kt`、`InTenantConditionMatcher.kt`、`policy/condition/part/PartExtractor.kt`
-- 引擎：`core/model/src/main/kotlin/me/ahoo/cosec/model/AuthzRequest.kt`、`Decision.kt`、`LayerKind.kt`；`core/engine/src/main/kotlin/me/ahoo/cosec/engine/Engine.kt`、`PolicySet.kt`、`Evaluator.kt`
-- 认证：`jwt/.../JwtTokenConverter.kt`、`Jwts.kt`（`roles`、`policies`、`tenantId` 声明）、`core/.../token/TokenRevoker.kt`、`RevocableTokenVerifier.kt`、
-  `spring-boot-starter/.../jwt/JwtProperties.kt`（access token 默认 10 分钟）
-- 存储：RFC 0003 附录 B 的全部；`cocache/.../cache/AppSpacedRoleId.kt`、`CoSecSchemaMarker.kt`
-- 生成器：`openapi/.../generator/OpenAPIPolicyGenerator.kt`（`tenantId` 总是默认租户）、`OpenAPIAppPermissionGenerator.kt`
-- Gateway：`gateway/.../GatewayRouteRequestAttributesAppender.kt`（路由 id 进入请求属性）
+> **2026-11-23 压缩时删去**：本节是7.x 里与本文有关的文件清单，这些代码已删除。原文见 `git show 3cd4dca9:docs/rfc/0004-unified-model.md`。

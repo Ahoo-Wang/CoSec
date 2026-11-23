@@ -957,50 +957,7 @@ java -jar core/core/build/libs/cosec-core-<version>-jmh.jar SimpleAuthorizationB
 
 ## 11. 实现拆分
 
-### 11.1 交付方式
-
-- 全部 PR 以 `main` 为 base，squash 合并；不开长期分支；不发布任何版本（RFC 0001 §6）。
-- **PR-1 到 PR-4 只做加法**：新类、新缓存声明、新工具，starter 不装配，`SimpleAuthorization` 不改，不新增 `cosec.*` 属性，标题不带 `!`。
-- **PR-5 是切换**，**PR-6 是删除**，两者都是破坏性变更，都在 RFC 0002 PR-6 和本阶段的门槛（§8）之后。
-- 每个 PR 合入后照例做两轮审查，修复以 `fix(core|cocache): round-N review fixes ...` 的 PR 合入。
-- 需要同时进 `7.x` 的修复先进 `main` 再回移（`CONTRIBUTING.md`）；本阶段的改动都不回移。
-
-### 11.2 PR 列表
-
-| PR | 标题（Conventional Commits） | 范围 | 依赖 | 能否在 RFC 0002 PR-6 之前开工 | 完成标准 |
-|---|---|---|---|---|---|
-| PR-1 | `feat(core): add the snapshot source with on-demand loading and bounded staleness` | `SnapshotKey`、`SnapshotDocument`、`SnapshotVersion`、`SnapshotDocumentStore`/`SnapshotChangeListener` SPI、内存 `SnapshotDocumentStore`、`SnapshotSource`（对编译函数泛化：单飞、有序安装、重新校验、LRU、落后时长、fail-closed 判定、预热、指标接口）；F1–F11、F14、F15 的测试和 P6（用一个假的编译函数） | 本 RFC 获批 | **能**：不依赖引擎适配层 | `:core:check` 通过，变更行覆盖率 ≥ 80% |
-| PR-2 | `feat(core): compile policy snapshots and load the PolicySet from them` | `SnapshotCompiler`（JSON → `PolicyData`/`AppPermissionData` → PR-3 的规则组，含 `Broken`）、`CompiledPolicies`/`CompiledApp`、`PolicySnapshot`、`SnapshotPolicySetLoader`；P5、P7；`SimpleAuthorizationBenchmark` 的 `source` 参数（`snapshot` 来源在 PR-5 之前经测试用的装配运行）；`SnapshotCompileBenchmark`；`cosec-cocache` 的 `jmh` 源码集 | PR-1；RFC 0002 PR-3（`PolicySetLoader`、`PolicyGroup`、`AppPermissionRules`） | **能**：RFC 0002 PR-3 合入即可 | `:core:check` 及依赖它的模块通过；P5 固定种子 2,000 例零差异 |
-| PR-3 | `feat(cocache): store snapshot documents in CoCache` | `PolicySnapshotCache` 声明（`storeOfRecord`，显式 key 编码）、`SnapshotDocumentCodec`、`RedisSnapshotDocumentStore`（含失效通道订阅）、`RedisSnapshotPublisher`（条件写入）、`CoSec7xReader` 与 `snapshotConvert` 任务、`RuntimeHintsRegistrar`；F3、F9、F12 在真实 Redis 上的测试；`CacheTtlPolicyTest`、`StrictCacheFailureTest` 增加针对新缓存的用例 | PR-1；CoCache 6.7.0 的条件写入与条件读（Q5；2026-10-22 发布） | **能** | `:cocache:check` 通过（需要 Redis）；一个人为制造的并发写入测试证明不丢更新 |
-| PR-4 | `test: add snapshot parity, replay and sizing tools`（已合入，#1030；**2026-10-26**：工具在 RFC 0008 的切换 PR 中删除） | `DecisionParity` 对快照来源的装配；回放工具增加候选为快照的模式；百万例任务；`snapshotMeasure` 任务（§4.8）；§8.2 第一行的参数化测试 | PR-2、PR-3；RFC 0002 PR-4（比较器、回放工具） | **能**：基于 RFC 0002 PR-4 的代码；RFC 0002 PR-6 之后改用改名后的 `DecisionParity`、`decisionReplay`（Q12） | 用仓库内的合成数据跑通回放和测量；一个人为制造的差异出现在报告中；百万例跑通 |
-| — | ~~**门槛**~~ **已取消（2026-10-26，[RFC 0008](0008-conformance-and-direct-build.md)）** | 维护者在本地：对 RFC 0002 的同一批导出数据跑回放（§8.3）；对完整数据跑 `snapshotMeasure`（§4.8），据此确认 Q7、Q14、Q19 的数字 | PR-4 | — | 回放零差异；测量摘要贴在 issue 或 PR-5 中 |
-| ~~PR-5~~ | ~~`refactor!: authorize from the policy snapshot`~~ **已取消（2026-10-26，[RFC 0008](0008-conformance-and-direct-build.md)）**：7.0 形状的文档被 RFC 0004 取代；仍然成立的要求转入切换 PR | `SimpleAuthorization` 改为 §5.1 的流程；starter 装配 `SnapshotSource`、`RedisSnapshotDocumentStore`、`SnapshotPublisher`、健康指标、actuator 端点、`cosec.authorization.snapshot.*` 属性；`LocalPolicyInitializer`、`PolicyHistory`、解释、`AuthorizationChecker`、`PolicyTestKit` 改为读快照或经发布者写入；影子改为快照叠加，删除 `Overlay*Repository`；`CoSecSchemaMarker` 升为 `"8"`；`WebAdapterParityTest` 的新用例；文档（§11.3）；JMH 对比 | RFC 0002 PR-6；PR-4；门槛 | **不能** | 全部模块 `check` 通过；门槛证据（计数与哈希）附在 PR 上；§9 的目标满足 |
-| ~~PR-6~~ | ~~`refactor(cocache)!: remove the per-request policy repositories`~~ **并入 RFC 0008 的切换 PR（2026-10-26）**，删除清单不变 | 删除 `PolicyRepository`、`AppRolePermissionRepository`、两个 Redis 仓库、四个缓存及其 bean 和属性（`cosec.authorization.cache.policy.*`、`.role.*`）、`CacheFutures.kt`、`LocalCacheFastPathTest`；参数化测试去掉仓库来源（`DecisionParity`、`decisionReplay` 保留，Q12）；文档中仓库的描述 | PR-5 | **不能** | 全部模块 `check` 通过；`wiki` 检查通过 |
-
-PR-1 和 PR-3 互不依赖对方的实现（PR-3 只用 PR-1 的 SPI 类型），可以在 PR-1 的类型合入后并行；PR-2 等 RFC 0002 PR-3。
-
-### 11.3 文档落点（中英文同步）
-
-按 AGENTS.md 的 "Where a change has to land"：
-
-| 文件 | PR | 内容 |
-|---|---|---|
-| `wiki/operations/storage.md` | PR-5、PR-6 | 快照文档、Redis key（`<p>:snapshot:*`）、发布（`SnapshotPublisher`、条件写入、读己之写）、陈旧度上界与 `fail-closed`、Redis 不可用时的行为（X1）、schema 标记 `"8"`；删除四个缓存与全局索引的章节 |
-| `wiki/operations/configuration.md` | PR-5、PR-6 | `cosec.authorization.snapshot.*`（`local-max-age`、`revalidate-interval`、`lag-warn`、`lag-escalate`、`fail-closed.tenants`、`fail-closed.max-lag`、`cold-load-timeout`、`max-apps`、`prewarm-apps`、`compile-threads`）；删除 `cosec.authorization.cache.policy.*`、`.role.*` |
-| `wiki/operations/observability.md` | PR-5 | `cosec.snapshot.*` 指标、`cosecSnapshot` 健康指标、`cosecsnapshot` actuator 端点 |
-| `wiki/operations/deployment.md` | PR-5 | 预热与 readiness（X6）、`prewarm-apps` |
-| `wiki/operations/troubleshooting.md`、`skills/cosec-troubleshoot` | PR-5 | 新症状：快照落后告警、冷加载超时 500、`SnapshotUnavailableException`/`SnapshotStaleException`、schema `"8"` 标记缺失时拒绝启动、发布冲突重试 |
-| `wiki/operations/upgrading.md` | PR-5、PR-6 | 7.x → 8.0：仓库 SPI 被 `SnapshotDocumentStore` 取代、写 API 被 `SnapshotPublisher` 取代（X7）、四个缓存 bean 和属性删除、X1、X3、X4。**不写数据迁移步骤**（§4.7，第 4 阶段） |
-| `wiki/architecture/overview.md` | PR-5、PR-6 | 请求路径与缓存一节改为快照；"No blocking" 不变量的守护测试换成 §6 的新测试；JMH 数字 |
-| `wiki/architecture/extending.md`、`skills/cosec-custom-matcher` | PR-5 | "Repositories" 扩展点改为 `SnapshotDocumentStore`；`BlockingAware` 的说明保留 |
-| `wiki/policies/role-permissions.md` | PR-5 | 角色授予经 `SnapshotPublisher.setRoleGrants` 写入，存放在应用文档中 |
-| `wiki/integration/web.md` | PR-5 | 快照不可用、陈旧超限时的状态（500） |
-| `wiki/guide/quick-start.md`、`wiki/guide/introduction.md`、`skills/cosec-integration` | PR-5 | 写策略和角色授予的示例代码 |
-| `AGENTS.md` | PR-5 | Mental model 的 "Caching" 一条；Invariants 表中缓存一行的适用对象与 "No blocking" 一行的守护测试 |
-
-PR-1 到 PR-4 不改 `wiki/`：它们不改变任何行为，新的类型在 PR-5 之前没有使用者。
-
----
+> **2026-11-23 压缩时删去**：本节是实现的 PR 划分，都已合入。原文见 `git show 3cd4dca9:docs/rfc/0003-policy-snapshot.md`。
 
 ## 12. 决定
 
@@ -1041,25 +998,4 @@ PR 按这里的值实现，数字由门槛的测量结果（§4.8）校准。
 
 ## 附录 B：涉及的现有代码
 
-本文对现有行为的描述，以 `main` @ `a130eb90` 的下列代码和 CoCache `v6.6.0` 为准：
-
-- 决策：`core/.../authorization/SimpleAuthorization.kt`、`PolicyRepository.kt`、`AppRolePermissionRepository.kt`、`RoleScope.kt`、
-  `MissingPolicyException.kt`；`policy/BlockingAware.kt`、`policy/PolicyData.kt`、`permission/AppPermissionData.kt`、`policy/condition/BoolConditionMatcher.kt`
-- 引擎输入：`core/engine/src/main/kotlin/me/ahoo/cosec/engine/PolicySet.kt`、`Engine.kt`；RFC 0002 PR-3 的适配层（进行中，`me.ahoo.cosec.authorization.engine`）
-- 存储：`cocache/.../cache/CoSecCacheSpecs.kt`、`PolicyCache.kt`、`GlobalPolicyIndexCache.kt`、`AppPermissionCache.kt`、`RolePermissionCache.kt`、
-  `AppSpacedRoleId.kt`、`RedisPolicyRepository.kt`、`RedisAppRolePermissionRepository.kt`、`CacheFutures.kt`、`CoSecSchemaMarker.kt`、
-  `CoSecCoCache5Migration.kt`、`RolePermissionKeyMigration.kt`、`RedisPolicyRevisionStore.kt`、`limiter/RedisRateLimiter.kt`
-- 写入方：`core/.../policy/LocalPolicyInitializer.kt`、`policy/history/PolicyHistory.kt`
-- 影子与解释：`core/.../shadow/ShadowAuthorization.kt`、`OverlayPolicyRepository.kt`、`OverlayAppRolePermissionRepository.kt`、
-  `explain/AuthorizationExplainer.kt`、`explain/SnapshotRepositories.kt`
-- 限流：`core/.../limiter/RateLimitRuleProvider.kt`
-- starter：`spring-boot-starter/.../authorization/cache/CoSecPolicyCacheAutoConfiguration.kt`、`CoSecPermissionCacheAutoConfiguration.kt`、
-  `authorization/CoSecAuthorizationAutoConfiguration.kt`、`authorization/SecurityContextParseSchedulers.kt`
-- 测试：`backends/cocache/src/test/.../CacheTtlPolicyTest.kt`、`LocalCacheFastPathTest.kt`、`limiter/RedisRateLimitingOffEventLoopTest.kt`；
-  `host/spring-boot/src/test/.../cache/StrictCacheFailureTest.kt`
-- 基准：`core/core/src/jmh/.../authorization/SimpleAuthorizationBenchmark.kt`（内存仓库，返回 `Mono.just`）、`core/engine/src/jmh/.../EngineBenchmark.kt`
-- CoCache 6.6.0：`cocache-api` 的 `Cache`、`AsyncCache`、`Lookup`、`spi/InvalidationChannel`、`spi/CoherenceBackend`、`spi/RemoteStore`、`spi/Digest`；
-  `cocache-core` 的 `policy/CachePolicy`（`ttl`、`localMaxAge`、`refreshWindow`、`LocalPolicy.maximumSize`、`LoadPolicy.asyncTimeout`、`ReadFailureMode`、
-  `ForeignFormatMode`）、`engine/AbstractEngine.localEntry`（`ttl = null` 时 `refreshAt` 为永不）、`CacheRuntime.backend`、`CacheAdmin`、`ExternalInvalidator`、
-  `proxy/CacheProxies`；`cocache-redis` 的 `RedisInvalidationChannel`（同一频道多个监听器）、`RedisBackendOptions.heartbeat`；`cocache-coroutines` 的
-  `SuspendingCache`（第 5 阶段使用）；`cocache-spring-boot-starter` 的 `CoCacheAotProcessor`；CoCache `docs/rfc/0003-target-architecture.md` 的 G1
+> **2026-11-23 压缩时删去**：本节是7.x 里与本文有关的文件清单，这些代码已删除。原文见 `git show 3cd4dca9:docs/rfc/0003-policy-snapshot.md`。
