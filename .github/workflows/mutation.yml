@@ -121,9 +121,9 @@ jobs:
       - name: Resolve the dependencies
         run: .github/scripts/resolve-dependencies.sh
 
-      # Each mutant builds in a worktree of its own: with the dependencies and the unchanged modules already built, a
-      # mutant rebuilds only what it changes, and 36 shards do not all ask Maven Central for everything at once (it
-      # answers 429 to that).
+      # The shard's mutants build one after another in one worktree, through one Gradle daemon: with the dependencies and
+      # the unchanged modules already built, a mutant rebuilds only what it changes, and the shards do not all ask Maven
+      # Central for everything at once (it answers 429 to that).
       - name: Warm the dependency and build caches
         run: ./gradlew testClasses --no-daemon --build-cache --stacktrace
 
@@ -143,8 +143,8 @@ jobs:
           {
             echo "### Mutation shard \`$SHARD\`"
             if grep -qE '^(All [0-9]+ mutants killed|[0-9]+ of [0-9]+ mutant)' mutation.log 2>/dev/null; then
-              # Not killed: a mutant to fix, or a test to write.
-              if grep -E '^(SURVIVED|DOES_NOT_COMPILE|DOES_NOT_APPLY) ' mutation.log; then
+              # Not killed: a mutant to fix, or a test to write (FAILS_WITHOUT_PATCH: its tests fail without the patch too).
+              if grep -E '^(SURVIVED|DOES_NOT_COMPILE|DOES_NOT_APPLY|FAILS_WITHOUT_PATCH) ' mutation.log; then
                 echo
                 echo "The mutants above are not killed."
               fi
@@ -153,15 +153,17 @@ jobs:
                 echo
                 echo "The mutants above were not checked: their build failed. Re-run the shard."
               fi
-              if ! grep -qE '^(SURVIVED|DOES_NOT_COMPILE|DOES_NOT_APPLY|BUILD_FAILED) ' mutation.log; then
+              if ! grep -qE '^(SURVIVED|DOES_NOT_COMPILE|DOES_NOT_APPLY|FAILS_WITHOUT_PATCH|BUILD_FAILED) ' mutation.log; then
                 echo "Every mutant killed."
               fi
+              # Each kill is proved by its control: the same tests pass once the patch is reverted.
+              grep -E '^Controls: ' mutation.log || true
             else
               echo "mutationCheck did not finish: see the job log. These mutants are **not checked**:"
               echo
               echo "$MUTANTS" | tr ',' '\n' | sed 's/^/- NOT_CHECKED /'
             fi
-          } | sed -E 's/^(SURVIVED|DOES_NOT_COMPILE|DOES_NOT_APPLY|BUILD_FAILED) +/- \1: /' >> "$GITHUB_STEP_SUMMARY"
+          } | sed -E 's/^(SURVIVED|DOES_NOT_COMPILE|DOES_NOT_APPLY|FAILS_WITHOUT_PATCH|BUILD_FAILED) +/- \1: /' >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload the log
         if: failure()
