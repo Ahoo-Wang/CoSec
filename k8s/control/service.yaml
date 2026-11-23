@@ -1,5 +1,6 @@
 # Two Services, one per API, so that what a client names says which API it calls. Neither publishes the management port
-# (8081): a Service is reachable from the whole cluster, and nothing in CoSec authorizes the actuator.
+# (8081): a Service is reachable from the whole cluster, and nothing in CoSec authorizes the actuator. A third,
+# cosec-control-pods, publishes no port: it only names the pods' addresses for the boundary check.
 #
 # cosec-control: the operators' API (8080). The gateway's route points at it (lb://cosec-control); a policy admits the
 # gateway's pods to it and no one else.
@@ -34,3 +35,18 @@ spec:
       port: 80
       targetPort: service
       protocol: TCP
+---
+# The pods' addresses, for boundary-check.yaml: headless (no address of its own, nothing is proxied) and with no port, so
+# it publishes nothing; DNS answers the address of every pod, ready or not, since the host is not ready before the
+# platform document is installed and the check must reach it all the same.
+apiVersion: v1
+kind: Service
+metadata:
+  name: cosec-control-pods
+  labels:
+    app.kubernetes.io/name: cosec-control
+spec:
+  clusterIP: None
+  publishNotReadyAddresses: true
+  selector:
+    app.kubernetes.io/name: cosec-control

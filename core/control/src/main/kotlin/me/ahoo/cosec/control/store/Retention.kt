@@ -162,7 +162,8 @@ internal class Retention(
                 pending.digest !in chain && pending.digest !in keep && pending.digest != head &&
                     pending.since.isBefore(now.minus(retention.orphanAge))
             }.map { it.digest }
-            val entries = index.entries.filter { entry -> removed.none { it.digest == entry.digest } }.map { sized(it, sizes) }
+            val entries = index.entries.filter { entry -> removed.none { it.digest == entry.digest } }
+                .map { sized(it, sizes) }
             val pending = index.pending.filter { it.digest !in orphans }
             // What the verified history keeps is live too: a digest it lists is never left to delete (#1536).
             val live = entries.map { it.digest }.toSet() + pending.map { it.digest } + keep + listOfNotNull(head) +

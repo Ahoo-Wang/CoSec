@@ -38,7 +38,6 @@ import me.ahoo.cosec.control.lifecycle.ControlDerived
 import me.ahoo.cosec.control.lifecycle.ControlMaintenance
 import me.ahoo.cosec.control.lifecycle.ShadowOptions
 import me.ahoo.cosec.control.store.ControlStore
-import me.ahoo.cosec.control.store.RetentionPolicy
 import me.ahoo.cosec.control.store.Revisions
 import me.ahoo.cosec.kafka.KafkaChangeListener
 import me.ahoo.cosec.model.AppId
@@ -130,22 +129,8 @@ internal class CoSecControlAutoConfiguration {
 
     @Bean
     @ConditionalOnMissingBean
-    fun cosecRevisions(
-        store: ControlStore,
-        properties: ControlProperties,
-        options: ChangeOptions
-    ): Revisions = Revisions(
-        store,
-        retention = with(properties.revisions) {
-            // The byte budget and the index bound follow the documents' cap (CTL-84).
-            RetentionPolicy(
-                maxCount,
-                minAge,
-                ControlDerived.ORPHAN_AGE,
-                documentCap = options.maxDocumentBytes.toLong()
-            )
-        },
-    )
+    fun cosecRevisions(store: ControlStore, properties: ControlProperties, options: ChangeOptions): Revisions =
+        Revisions(store, retention = properties.revisions.retention(options.maxDocumentBytes.toLong()))
 
     /**
      * The snapshot source the control plane's own checks read: apart from the data plane's, so that confirming a

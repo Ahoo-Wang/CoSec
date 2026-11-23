@@ -65,12 +65,21 @@ object StartupGuards {
         "spring-boot:ControlServicePortTest#the maintenance passes run on every host that has the control plane, and no property turns them off",
         "spring-boot:UnknownPropertiesTest#a switch that was removed before it was released is not a property",
         "control:ControlMaintenanceTest#shadow windows are closed by whoever holds the lease, which a pass releases",
+        // STA-13: a gateway host serves no handler of its own without a CoSec decision unless the operator lists it.
+        "spring-boot:GatewayOwnHandlersTest#a handler of the application that is not listed fails startup, naming it, the property and the page",
+        "spring-boot:GatewayOwnHandlersTest#every handler listed starts, and a name that matches no handler is ignored",
+        "spring-boot:GatewayOwnHandlersTest#a pattern is never accepted",
+        "spring-boot:GatewayOwnHandlersTest#a controller and a functional route are not seen by a gateway global filter, a route is",
         // STA-6, STA-7: a service behind a gateway states its network boundary and runs no hidden-method filter.
         "spring-boot:GatewayModeTrustTest#a service in gateway mode does not start until the operator states the boundary, and the message says what to write",
         "spring-boot:GatewayModeTrustTest#false and every value but true fail like an absent one, and say what was written",
         "spring-boot:GatewayModeTrustTest#with the statement the service starts, in any letter case of true, and an enforcing host needs none",
         "spring-boot:GatewayModeTrustTest#a hidden-method filter in a service behind a gateway fails startup, by property and by bean",
         "spring-boot:GatewayModeTrustTest#a reactive service is held to the same two statements",
+        // STA-7 (DR1-G-1): the shipped manifests state the control host's boundary only in an overlay, beside the Job that checks it on the cluster.
+        "spring-boot:ControlManifestsTest#the control directory does not state the boundary, and either statement there is reported",
+        "spring-boot:ControlManifestsTest#an overlay states the boundary beside the check, and the dev overlay says first that it is unsafe on a shared cluster",
+        "spring-boot:ControlManifestsTest#a check that a policy admits, that leaves out a port, or that cannot find a pod that is not ready is reported",
         // STA-6, STA-7, STA-9: the guards follow the gate, so a host that decides with policies and believes the identity states what can reach it too.
         "spring-boot:ForwardedIdentityCallerTest#the control plane starts on the forwarded identity with no JWT and no secret, and the gate is the identity gate",
         "spring-boot:ForwardedIdentityCallerTest#it does not start until the operator states what can reach it, and either statement will do",

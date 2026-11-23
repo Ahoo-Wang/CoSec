@@ -99,7 +99,7 @@ limit CoSec owns, and has no key. Each is logged once at startup, in a line that
 | How many revisions a document's index lists beyond its `max-count` most recent (`CTL-84`) | the document cap at 320 bytes an entry, the most one takes: 26,214 | the document cap |
 | When a record outside a revision chain, or a change listed and never written, is removed | one reclaim pass old: 1 hour | the reclaim interval |
 | How often shadowing changes are looked at | a fifteenth of `min-duration`, between 250 ms and 1 minute: `1m` at the default | [`cosec.control.shadow.min-duration`](#control-plane) |
-| The largest request body the control API reads | the document cap (8 MB) and 2 MB for the operations around it: 10 MB | the document cap |
+| The largest request body the control API reads | for a proposal, an `:apply` and their checks, the document cap (8 MB) and 2 MB for the operations around it: 10 MB; for every other route, 64 KB, eight times the 8 KB a request's headers take on Spring Boot's servers by default (a simulated request is one request's headers and attributes) | the document cap; a request's header size |
 | The initial size and an idle expiry of the revocation caches' local copy | none: the cache sizes itself, and `local-max-age` expires every entry | |
 
 Each share of the pipeline timeout is at least `1ms`; below a `cosec.pipeline.timeout` of 20 ms a token's two revocation
@@ -213,6 +213,7 @@ It replaced `cosec.authorization.snapshot.key-prefix`, `cosec.authorization.cach
 
 | Property | Type | Default | Effect |
 |---|---|---|---|
+| `cosec.gateway.unprotected-handlers` | set of bean names | empty | The application's own controllers and functional routes that may be served on a Spring Cloud Gateway host, where CoSec does not decide them (they are mapped before any route), because something else protects them. Any other one fails startup in enforce mode (`STA-13`); a name with `*` is refused; a name that matches no handler is ignored. Only the operator knows which handlers need no CoSec decision, so it is a statement, not a computed value ([The gateway's own handlers](../integration/web.md#the-gateways-own-handlers)). |
 | `cosec.gateway.unprotected-endpoints` | set of endpoint ids | empty | Actuator endpoints that may be exposed over HTTP on the gateway's application port, where CoSec does not authorize them, because something else protects them. Any other one but `health` fails startup there (`STA-2`); `gateway`, which changes routes, is never accepted. On a separate `management.server.port` any endpoint may be exposed ([Actuator on a gateway](../integration/web.md#actuator-on-a-gateway)). |
 
 ## Gateway identity

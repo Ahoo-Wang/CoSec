@@ -28,6 +28,7 @@ import me.ahoo.cosec.control.change.ChangeRequest
 import me.ahoo.cosec.control.change.ControlStatus.NOT_FOUND
 import me.ahoo.cosec.control.change.InvalidControlRequestException
 import me.ahoo.cosec.control.change.requireRequest
+import me.ahoo.cosec.control.lifecycle.ControlDerived
 import me.ahoo.cosec.document.PolicyDocumentCodec
 import me.ahoo.cosec.document.json.CoSecJson
 import tools.jackson.core.JacksonException
@@ -42,8 +43,19 @@ import tools.jackson.databind.node.JsonNodeFactory
 internal object ControlHttpSupport {
     val reader = CoSecJson.mapper.reader().with(StreamReadFeature.STRICT_DUPLICATE_DETECTION)
 
-    inline fun post(request: ControlHttpRequest, block: (JsonNode) -> ControlHttpResponse): ControlHttpResponse {
+    /**
+     * A POST's body as a JSON object, given to [block]. One larger than [maxBytes] is a 400 before it is parsed
+     * (DR1-F-3): only the routes that carry a document read up to [ControlDerived.MAX_BODY_BYTES], every other one
+     * [ControlDerived.SMALL_BODY_BYTES], so a body costs about its size until a route has authorized what it asks.
+     */
+    inline fun post(
+        request: ControlHttpRequest,
+        maxBytes: Long = ControlDerived.SMALL_BODY_BYTES,
+        block: (JsonNode) -> ControlHttpResponse,
+    ): ControlHttpResponse {
         if (request.method != POST) return methodNotAllowed()
+        val size = request.body?.size ?: 0
+        requireRequest(size <= maxBytes) { "The request body is $size bytes, over the $maxBytes this route reads." }
         val body = request.body?.takeIf { it.isNotEmpty() }?.let { bytes ->
             try {
                 reader.readTree(bytes)

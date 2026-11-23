@@ -1,0 +1,16 @@
+# Rule: CTL-84
+# Mutant: no record is ever past what a document retains, so every record younger than min-age stays whatever their bytes or number
+# Tests: :conformance:test --tests me.ahoo.cosec.conformance.ConformanceTest
+
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/store/RecordBudget.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/store/RecordBudget.kt
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/store/RecordBudget.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/store/RecordBudget.kt
+@@ -53,7 +53,7 @@ internal class RecordBudget(private val clock: Clock) {
+         entries.asReversed().forEachIndexed { newest, entry ->
+             bytes += entry.size ?: sizes[entry.digest] ?: 0
+             val beyond = newest - retention.maxCount
+-            if (beyond >= 0 && (bytes > retention.byteBudget || beyond >= retention.maxEntries)) {
++            if (beyond >= 0 && (bytes > Long.MAX_VALUE || beyond >= Int.MAX_VALUE)) {
+                 over += entry.digest
+             }
+         }
