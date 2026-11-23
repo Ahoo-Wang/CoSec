@@ -81,7 +81,9 @@ class DocumentCacheTest {
     fun `the estimated heap is bounded`() {
         val decoded = 100L * DocumentCache.DECODED_FACTOR + DocumentCache.ENTRY_BYTES
         val compiledForm = 100L * DocumentCache.COMPILED_FACTOR + DocumentCache.FORM_BYTES
-        val cache = DocumentCache(maxHeap = 2 * (decoded + compiledForm))
+        // Three entries and one compiled form fill the bound exactly; a document is admitted while one of each is half.
+        check(compiledForm <= decoded)
+        val cache = DocumentCache(maxHeap = 3 * decoded + compiledForm)
         val first = cache.put(key(1), digest(1), 100, document)
         val second = cache.put(key(2), digest(2), 100, document)
         cache.put(key(3), digest(3), 100, document)
