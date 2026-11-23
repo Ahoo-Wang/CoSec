@@ -882,7 +882,8 @@ JustAuth's: an application cannot add one of its own, since the provider interfa
    and a Redis connection (or your own `SocialStateStore` bean, and JustAuth's `AuthStateCache`, which blocks and
    needs a `StringRedisTemplate`). Starting a sign-in is anonymous, so each provider admits a bounded number at once
    (64 in flight); past it `authorize` throws a `SocialAuthenticationException` at once, which the route you serve it from
-   should answer with `429` or `503`, and a flood of starts never delays a real callback's login. The states a
+   should answer with `429` or `503`. Starts and logins run on separate threads, so starts alone do not delay a
+   callback's login. The states a
    deployment holds are bounded too: a 64th of the memory Redis reports, counted at 512 bytes a sign-in
    ([Storage](../operations/storage.md#redis-keys)); past it `authorize` throws the same exception ("too many sign-ins in
    progress: try again shortly"), writing nothing, and the instance logs at most one WARN a minute with how many it
@@ -894,7 +895,12 @@ JustAuth's: an application cannot add one of its own, since the provider interfa
    called), and the browser's binding hashes to the one recorded with it, compared in constant time. A state sent from
    another browser, sent twice, or made up is a `SocialAuthenticationException`. This is what stops login CSRF: a
    callback URL an attacker obtained for their own account, opened in a victim's browser, carries the attacker's state
-   but not the attacker's cookie. `ignore-check-state: true` on a registration fails startup.
+   but not the attacker's cookie. `ignore-check-state: true` on a registration fails startup. Once its state holds, a
+   callback's login is bounded too: each provider runs at most 64 at once, running or waiting for one of its 16 threads,
+   and past it the callback is a `SocialAuthenticationException` at once (answer it as you answer a refused start): the
+   user starts the sign-in again. Anyone can start sign-ins and complete them, so a flood of real callbacks can still make
+   a user's callback wait behind those 64, or be refused; rate-limit both routes by address
+   ([Rate limiting](../policies/rate-limiting.md)).
 3. A `SocialUserPrincipalConverter` turns the provider's user into your principal. The default,
    `DirectSocialUserPrincipalConverter`, makes its token for `cosec.authorization.scope.app-id`, the app of the host the
    user signs in to, or none without one, and a principal with the id `<provider user id>@<name>`, two attributes,
