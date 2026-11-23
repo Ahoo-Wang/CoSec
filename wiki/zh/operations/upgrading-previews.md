@@ -39,6 +39,7 @@ description: "每个 8.0 预览版（alpha 与 beta）到下一个之间的变�
   - **行为。** 原来第二个实例的未命中是一次 Redis 读取，现在是一次加载器调用：N 个实例在一个寿命内对同一主体最多加载 N 次，请按此评估加载器的容量。`invalidate(tenant, principal)` 仍会经 Redis 的失效通道（`<s>:inv:membership`）在所有实例上丢弃该主体，这不需要任何键权限。
   - **配置。** 寿命是 `cosec.authorization.membership.ttl`（一分钟，与之前相同）。任何 `cocache.caches.MembershipCache.*` 设置，尤其是它的 `ttl`，都会使启动失败并指出该属性：请迁移过去。成员关系占用堆的六十四分之一，见启动日志。
   - **Redis。** `<s>:membership:*` 键不再被读写：所有实例都运行此版本后可以删除（`redis-cli --scan --pattern '<s>:membership:*' | xargs redis-cli del`），并从数据面的 ACL 中去掉 `~<s>:membership:*`（[谁可以写哪些 key](./storage.md#who-may-write-which-keys)）。新旧实例并存期间，旧实例的 `invalidate` 仍能到达新实例（同一通道、同样的帧）。
+- **社交登录的 state 有了上界**（DR1-D-9）。受影响的：提供社交登录的部署。一个部署最多持有 Redis 报告的内存的六十四分之一的进行中登录（每个 512 字节；Redis 不报告内存时为 100,000），超过时开始登录以 `SocialAuthenticationException`（“稍后再试”）拒绝，而不是再写两把键。提供社交登录的进程需要 Redis 的 `INFO` 权限，`SNP-3` 本来就要求；没有时使用固定上界，并记一条 WARN。`InMemorySocialStateStore` 最多持有 10,000 个。除了在边缘对开始登录的路由限流，无需改动（[存储](./storage.md#redis-keys)）。
 
 ## 从 8.0.0-beta.6 升级 {#from-8-0-0-beta-6}
 

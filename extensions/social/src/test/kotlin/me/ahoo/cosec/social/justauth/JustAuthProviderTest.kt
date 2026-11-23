@@ -434,4 +434,23 @@ internal class JustAuthProviderTest {
             JustAuthProvider("clientId", authRequest, states).authenticate(oAuthCredentials)
         }
     }
+
+    /**
+     * DR1-D-9: a store that holds all it may refuses the start, which is a "try again shortly" refusal of the sign-in,
+     * never started unchecked: JustAuth is not asked, so its own state is not written either, and the refusal is counted.
+     */
+    @Test
+    fun `a start the full store cannot record is refused, and JustAuth is not asked`() = runTest {
+        val authRequest = succeeding()
+        val provider = JustAuthProvider(
+            "github",
+            authRequest,
+            InMemorySocialStateStore(InMemorySocialStateStore.SWEEP_FLOOR, maxStates = 1)
+        )
+        provider.authorize()
+        assertThrows<SocialAuthenticationException> { runBlocking { provider.authorize() } }
+            .message.assert().contains("too many sign-ins in progress").contains("try again shortly")
+        verify(exactly = 1) { authRequest.authorize(any()) }
+        provider.refusedStarts.assert().isEqualTo(1)
+    }
 }

@@ -403,6 +403,10 @@ Redis may evict CoSec's policy snapshot: maxmemory-policy is {<node>=<policy>}, 
 `ControlClient` 抛出 `SnapshotFormatException`，消息为 `The control plane's answer does not read: a <entry> has members
 this version does not know`：控制面宿主的版本比应用使用的 `cosec-control-sdk` 新，而文档中有只有新版本才认识的成员。类型化客户端拒绝读取它而不是丢掉它，因为把读到的内容再 `:apply` 回去会从文档中删除这个成员。把 `cosec-control-sdk` 升级到宿主的版本；在此之前，通过 `ControlService` 以 JSON 读取该文档（[从代码中修改策略](../integration/checks.md#changing-policies-from-your-code)）。客户端不认识的封闭集合值（变更状态、冲突类型）不属于这个错误：它们被读作未知值，并保留其文本。
 
+## 社交登录被拒：进行中的登录过多 {#social-sign-in-is-refused-too-many-sign-ins-in-progress}
+
+`authorize` 抛出 `SocialAuthenticationException`“The [<provider>] provider has too many sign-ins in progress: try again shortly.”，实例每分钟最多以 `WARN` 记一条 `Refused <n> [<provider>] sign-in start(s) since the last such line: <n> social sign-ins are in progress ...`。部署持有的进行中登录已到上界：Redis 报告的内存的六十四分之一，每个登录按 512 字节计；Redis 不报告时为 100,000（启动日志 `Social sign-in states: ...` 写明是哪一种；[存储](./storage.md#redis-keys)）。开始登录是匿名的，所以持续出现这一行说明有人在大量发起登录：请在边缘对开始登录的路由限流。被拒的开始什么都不写，已在进行的登录不受影响。使用内存存储（`InMemorySocialStateStore`，用于测试和单实例）时上界为 10,000。
+
 ## 启动失败 {#startup-failures}
 
 ### 未知配置项导致启动失败 {#startup-fails-on-an-unknown-property}

@@ -84,6 +84,12 @@ Which preview of the library may run behind which preview of the gateway image: 
     version (`redis-cli --scan --pattern '<s>:membership:*' | xargs redis-cli del`), and take `~<s>:membership:*` out of
     the data plane's ACL ([Who may write which keys](./storage.md#who-may-write-which-keys)). While old and new instances
     run side by side, an old instance's `invalidate` still reaches the new ones (same channel, same frames).
+- **Social sign-in states are bounded** (DR1-D-9). Affected: deployments that serve social login. A deployment holds
+  at most a 64th of the memory Redis reports in sign-ins in progress (512 bytes each; 100,000 when Redis does not
+  report its memory), and a start past it is refused with a `SocialAuthenticationException` ("try again shortly")
+  where it used to write two more keys. The process serving social login needs `INFO` on Redis, as `SNP-3` already
+  asks; without it the fixed bound applies, with a WARN. `InMemorySocialStateStore` holds at most 10,000. Nothing to
+  change, beyond rate limiting the start route at the edge ([Storage](./storage.md#redis-keys)).
 
 ## From 8.0.0-beta.6 {#from-8-0-0-beta-6}
 

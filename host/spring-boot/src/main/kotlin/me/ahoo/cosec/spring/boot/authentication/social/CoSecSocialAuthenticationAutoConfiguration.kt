@@ -82,8 +82,16 @@ internal class CoSecSocialAuthenticationAutoConfiguration(
     class RedisStates {
         @Bean
         @ConditionalOnMissingBean
-        fun socialStateStore(redisTemplate: ReactiveStringRedisTemplate, cosec: CoSecProperties): SocialStateStore =
-            RedisSocialStateStore(redisTemplate, cosec.keysOf(OAUTH_BINDING) + ":")
+        fun socialStateStore(
+            redisTemplate: ReactiveStringRedisTemplate,
+            blocking: StringRedisTemplate,
+            cosec: CoSecProperties,
+        ): SocialStateStore = RedisSocialStateStore(
+            redisTemplate,
+            cosec.keysOf(OAUTH_BINDING) + ":",
+            // Read once, at startup (DR1-D-9): the memory Redis reports is what the bound keeps CoSec's.
+            SocialStateBound.of { blocking.execute { it.serverCommands().info("memory") } },
+        )
     }
 
     /**
