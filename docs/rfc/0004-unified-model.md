@@ -431,10 +431,10 @@ sealed interface ScopeResolution {
 | 只有授予、没有应用权限的应用（7.x 不生效） | 不转换，报告 | 相同（都不生效） |
 | `BlacklistChecker` | 名单来源不变；规则成为内置 DENY（§4.7） | 出错路径见 C1b |
 | `RootPrincipalMatcher` + `root-enabled` | break-glass 绑定（§4.8） | C2 |
-| `CoSec-App-Id`、`CoSec-Space-Id` | `ScopeResolver` 的声明输入（§4.6） | C3 |
-| `inRole`、`inTenant`、各 part 条件、OGNL、SpEL、动作匹配器 | **本阶段不变**，原样作为语句的匹配器执行；翻译见 RFC 0005 | 相同 |
-| 限流规则 | 不变（第 5 阶段成为义务） | 相同 |
-| `PolicyVerifySource`、`AuditSourceType`（`ROOT`、`BLACKLIST`、`GLOBAL_POLICY`、`PRINCIPAL_POLICY`、`ROLE_PERMISSION`） | `StatementRef`：`Policy(policyId, index)` + 经过的绑定或附加 | 非决策差异 X1 |
+| `CoSec-App-Id`、`CoSec-Space-Id` | `CoSec-Space-Id` 是 `ScopeResolver` 的声明输入；`CoSec-App-Id` 不读，App 来自宿主与凭证（§4.6） | C3、C4 |
+| `inRole`、`inTenant`、各 part 条件、OGNL、SpEL、动作匹配器 | 翻译成条件 AST 与 `service:verb`/`http` 动作，翻译不了的拒绝（RFC 0005 §7） | 见 RFC 0005 §8 的 D1–D3 |
+| 限流规则 | 翻译后写进平台文档的 `rateLimits`，在许可之后作为义务执行（RFC 0005 §7.3，RFC 0006 §8） | 相同 |
+| `PolicyVerifySource`、`AuditSourceType`（`ROOT`、`BLACKLIST`、`GLOBAL_POLICY`、`PRINCIPAL_POLICY`、`ROLE_PERMISSION`） | `StatementRef`：`Policy(policyId, index)` + 经过的绑定或附加；审计记录用 `AuditVia` 与 `AuditDocument` | 非决策差异 X1 |
 
 ### 5.2 为什么转换后的数据全部放在平台层
 
@@ -442,49 +442,48 @@ sealed interface ScopeResolution {
 
 | 方案 | 做法 | 评价 |
 |---|---|---|
-| **A. 全部放进平台层（已决定，默认）** | 全局策略、全部非全局策略（可附加）、全部应用文档都属于平台层；租户文档为空 | 语义与 7.x 相同：任何主体能附加任何策略，角色授予对所有租户里的同名角色生效。门槛 A 的差异只来自 C1–C3。缺点是"同名角色跨租户"这个 7.x 的风险原样保留（§5.4） |
-| B. 按 `Policy.tenantId` 放进租户文档（`--partition=by-owner`） | 非全局策略按 `tenantId` 分到租户文档 | 改变语义：主体不能再附加别的租户的策略。7.x 的生成器（[`OpenAPIPolicyGenerator`](../../openapi/src/main/kotlin/me/ahoo/cosec/openapi/generator/OpenAPIPolicyGenerator.kt)）总是写默认租户，`tenantId` 多半不反映真实归属，按它分区会让大量附加失效（500）。作为可选项提供，转换工具报告每个租户的策略数和跨租户附加的样本数（需要请求样本） |
+| **A. 全部放进平台层（已决定，默认）** | 全局策略、全部非全局策略（可附加）、全部应用文档都属于平台层；租户文档为空 | 语义与 7.x 相同：任何主体能附加任何策略，角色授予对所有租户里的同名角色生效。决策差异只来自 C1–C3。缺点是"同名角色跨租户"这个 7.x 的风险原样保留（§5.4） |
+| B. 按 `Policy.tenantId` 放进租户文档（`--partition=by-owner`） | 非全局策略按 `tenantId` 分到租户文档 | 改变语义：主体不能再附加别的租户的策略。7.x 的生成器（`OpenAPIPolicyGenerator`）总是写默认租户，`tenantId` 多半不反映真实归属，按它分区会让大量附加失效（500）。作为可选项提供，转换工具报告每个租户的策略数和跨租户附加的样本数（需要请求样本） |
 | C. 角色授予复制到每个租户 | 每个租户一份应用文档 | 规模乘以租户数；转换工具不知道有哪些租户；新租户没有授予 |
 
-A 不是终点：第 6 阶段控制面让租户写自己的数据，运维可以逐步把共享数据收窄。本阶段交付的是**机制**：租户文档、租户隔离的编译检查、
-按租户的 LRU 和陈旧度。
+A 不是终点：控制面（RFC 0007）让租户写自己的数据，运维可以逐步把共享数据收窄。本文交付的是**机制**：租户文档、租户隔离的编译检查、
+按租户的缓存与陈旧度。
 
 ### 5.3 语义改动目录（门槛 A）
 
-> **2026-10-26**：门槛 A 取消（[RFC 0008](0008-conformance-and-direct-build.md)）。下表不再用于给回放差异分类；每一项是 8.0 的一条规则，登记在一致性套件中（例如 C1a → `ALG-4`、
-> C1b → `ALG-1`、C2 → `BRK-1`、C3 → `SCP-1`、C4 → `SCP-2`、C5 → `BND-2`，RFC 0008 §3.2），并写进 `upgrading.md`（RFC 0008 §4.4）。
+下面是转换到 8.0 时**有意**改变的全部决策语义。每一项是 8.0 的一条规则，登记在一致性套件中（例如 C1a → `ALG-4`、C1b → `ALG-1`、C2 → `BRK-1`、
+C3 → `SCP-1`、C4 → `SCP-2`、C5 → `BND-2`，RFC 0008 §3.2），写进 `upgrading.md`（RFC 0008 §4.4）；转换工具的报告列出受影响的每一处 7.x 配置形态（§8）。
+原定的门槛 A 用这张表给回放差异分类，它由一致性套件取代（§9）。
 
-下面是本阶段**有意**改变的全部决策语义。门槛（§9）要求每一条回放差异都归入其中某一类，并带有该类要求的证据。
+| # | 改动 | 7.x | 8.0 | 方向 | 理由 |
+|---|---|---|---|---|---|
+| C1a | **ALLOW 出错按未命中处理**（RFC 0002 E1、E4） | 任何一层的 ALLOW 语句或其前置条件抛错 → 500 | 跳过它：别的 ALLOW 命中则 Permit，否则隐式拒绝（401/403） | E1 **放宽**（500 → 放行）；E4 只改状态码 | deny-first 下 ALLOW 出错按未命中只会更严（RFC 0001 §3.3）；一条出错的 ALLOW 不应让整个请求失败 |
+| C1b | **DENY 命中优先于别处的错误、缺失和不可用**（RFC 0002 E2、§3 I6） | 层顺序在前的错误、缺失（D2）、读取失败先发生 → 500 | 只要有一条 DENY 命中 → 403/401 | 只改状态码（都拒绝） | 拒绝已经确定，"无法判定"不再成立；决策与候选顺序无关 |
+| C1c | **前置条件只在需要时评估**（RFC 0002 E5、S4） | 每层先评估该层全部策略的前置条件，任何一个抛错 → 500 | 前置条件在它的第一条候选语句被访问时评估；出错时它的 DENY 语句算 `ERROR`、ALLOW 语句算未命中 | 只改状态码，或按 C1a 放宽 | 前置条件只是语句的一个合取项，按语句处理就不需要"每层先评估全部"这个特殊规则 |
+| C1d | **黑名单和 root 不再短路平台文档的读取** | 被拉黑或 root 时不读任何策略 | 仍需常驻的 `Platform` 文档（以及 root 的平台租户文档） | 只改状态码（`Platform` 不可用时 403/放行 → 503） | 黑名单规则和 root 本身都在平台层；`Platform` 启动时预热、常驻不淘汰（RFC 0003 §4.3），实际只在实例未就绪时发生 |
+| C2 | **root 受全部 DENY 约束**（§4.8） | root 跳过全部策略 → 放行 | 命中的 DENY 拒绝 root | **收紧** | deny-first 对所有主体成立 |
+| C3 | **声明的空间必须由成员关系确认**（§4.6） | 按声明的空间评估：角色层可能为空，策略照常评估，条件读到声明的 `request.spaceId` | `Rejected(SPACE_NOT_MEMBER)` → 403/401 | **收紧**（可能把原来的放行变成拒绝） | 客户端只能在凭证给出的作用域里选择（P4），否则后端会在主体不属于的空间里执行请求 |
 
-| # | 改动 | 7.x | 8.0 | 方向 | 证据（候选 trace 必须给出） | 理由 |
-|---|---|---|---|---|---|---|
-| C1a | **ALLOW 出错按未命中处理**（RFC 0002 E1、E4） | 任何一层的 ALLOW 语句或其前置条件抛错 → 500 | 跳过它：别的 ALLOW 命中则 Permit，否则隐式拒绝（401/403） | E1 **放宽**（500 → 放行）；E4 只改状态码 | 基准的异常来自一条 ALLOW 语句或只含 ALLOW 的策略的前置条件 `S`；候选 trace 中 `S` 为 `ERROR`、`afterDecision = false`；所有 DENY 候选都是 `NO_MATCH`；没有缺失和不可用的输入 | deny-first 下 ALLOW 出错按未命中只会更严（RFC 0001 §3.3）；一条出错的 ALLOW 不应让整个请求失败 |
-| C1b | **DENY 命中优先于别处的错误、缺失和不可用**（RFC 0002 E2、§3 I6） | 层顺序在前的错误、缺失（D2）、读取失败先发生 → 500 | 只要有一条 DENY 命中 → 403/401 | 只改状态码（都拒绝） | 候选决策为 `Deny(s)`；基准的错误发生在按 7.x 层顺序排在 `s` 之前的位置 | 拒绝已经确定，"无法判定"不再成立；决策与候选顺序无关 |
-| C1c | **前置条件只在需要时评估**（RFC 0002 E5、S4） | 每层先评估该层全部策略的前置条件，任何一个抛错 → 500 | 前置条件在它的第一条候选语句被访问时评估；出错时它的 DENY 语句算 `ERROR`、ALLOW 语句算未命中 | 只改状态码，或按 C1a 放宽 | 基准的异常来自策略 `P` 的前置条件；候选 trace 中 `P` 的前置条件为 `ERROR` 或未评估（决策在访问 `P` 之前已确定） | 前置条件只是语句的一个合取项，按语句处理就不需要"每层先评估全部"这个特殊规则 |
-| C1d | **黑名单和 root 不再短路平台文档的读取** | 被拉黑或 root 时不读任何策略 | 仍需常驻的 `Platform` 文档（以及 root 的平台租户文档） | 只改状态码（`Platform` 不可用时 403/放行 → 500） | 候选原因为 `SourceUnavailable(Platform)` 或 root 的租户文档不可用 | 黑名单规则和 root 本身都在平台层；`Platform` 启动时预热、常驻不淘汰（RFC 0003 §4.3），实际只在实例未就绪时发生 |
-| C2 | **root 受全部 DENY 约束**（§4.8） | root 跳过全部策略 → 放行 | 命中的 DENY 拒绝 root | **收紧** | 主体匹配 break-glass 绑定；候选决策为 `Deny(s)`，`s` 不是黑名单 | deny-first 对所有主体成立 |
-| C3 | **声明的空间必须由成员关系确认**（§4.6） | 按声明的空间评估：角色层可能为空，策略照常评估，条件读到声明的 `request.spaceId` | `Rejected(SPACE_NOT_MEMBER)` → 403/401 | **收紧**（可能把原来的放行变成拒绝） | 候选决策为 `Deny(ScopeRejected(SPACE_NOT_MEMBER))`；样本的成员关系里没有该空间 | 客户端只能在凭证给出的作用域里选择（P4），否则后端会在主体不属于的空间里执行请求 |
+**不在目录里、因此与 7.x 相同的**：附加与缺失策略（除 C1b 外）、角色作用域、全局策略、应用条件、权限语句顺序、做出决策的语句（没有错误时，
+§6.3）。匹配器翻译带来的改动是 RFC 0005 §8 的 D1–D3。
 
-**不在目录里、因此必须为零差异的**：附加与缺失策略（除 C1b 外）、角色作用域、全局策略、应用条件、权限语句顺序、做出决策的语句（没有错误时，
-§6.3）、任何匹配器的行为。
+**C4–C9 是同样写进 `upgrading.md` 的语义改动**，与 7.x 回放比较时看不到：
 
-**C4–C6 不产生回放差异，但仍是语义改动**，写进 `upgrading.md`：
-
-| # | 改动 | 为什么回放看不到 |
+| # | 改动 | 为什么与 7.x 回放比较时看不到 |
 |---|---|---|
-| C4 | 宿主配置了应用后，客户端声明的应用不再生效（不一致即拒绝，没有声明时用宿主的应用） | 回放按 7.x 的配置运行（宿主不配置应用） |
+| C4 | 宿主有应用时，只接受声明了这个应用的凭证；客户端不能声明应用（§4.6，RFC 0012 §3.5，`SCP-2`、`SCP-11`） | 7.x 的宿主不配置应用，凭证也不声明应用 |
 | C5 | 主体只能附加本租户或平台层中可附加的策略 | 默认的方案 A 把全部策略放进平台层并标为可附加 |
 | C6 | 授予了不存在的权限 id 的数据在转换时被拒绝（7.x 是到达时 500） | 运维修正数据之后才能转换，回放的两边读的是修正后的同一份数据（§9.3） |
-| C7 | （2026-11-15，RFC 0005 §7.2，`MIG-2`）对 7.x 所有动作的 DENY 保持为所有动作 `*`：对它匹配的请求，现在也拒绝代码里的检查与控制面的动作（`cosec:*`），这些 7.x 没有。转换报告在该语句的动作处记录它。对所有动作的 ALLOW 转成 `http:*`，是精确的译法，不是语义改动 | 7.x 只有 HTTP 请求，回放比较不到别的动作 |
-| C8 | （2026-11-15，`MIG-2`，#1433）对 7.x 所有动作的 ALLOW 转成 `http:*`，即所有 HTTP 请求；一旦路由映射把某条路由映射成业务动作，这条路由就不再是 `http:` 动作，转换来的这条语句不再授予它，从加入路由映射的那天起被拒绝（403）。转换本身是精确的，变的是之后加路由映射时的含义；转换报告在该语句的动作处记录它，运维因此有一行可查 | 7.x 里路由就是 HTTP 请求，没有“映射之后的动作”这回事 |
-| C9 | （2026-11-20，`MIG-5`、`RTE-5`，#1775，第二轮审查 R2E-1）只对“未映射的请求”才有意义的 DENY 与限流规则：动作是 `http:`、资源是 `http:path:`，或条件读 `resource.id`、`action.verb`、`resource.var.*`（7.x 的 `request.path`、`request.method`、`request.path.var.*`），写在语句里或它所属策略的条件里。路由映射把它映射的路由移出这套词汇，于是这样的 DENY 不再拒绝被映射的路由，这样的限流规则不再限制它，运行时没有任何东西提示。转换报告把每一条记为 C9；带路由映射的宿主对“所有动作、所有资源、条件读这三类属性”的 DENY 与限流规则，每个安装的修订告警一次（`RTE-5`）。ALLOW、不带条件的全动作 DENY、读别的属性的条件不记 | 7.x 里路由就是 HTTP 请求；C8 说的是 ALLOW 少授予，C9 说的是 DENY 少拒绝，后者更危险，所以单列 |
+| C7 | （RFC 0005 §7.2，`MIG-2`）对 7.x 所有动作的 DENY 保持为所有动作 `*`：对它匹配的请求，现在也拒绝代码里的检查与控制面的动作（`cosec:*`），这些 7.x 没有。转换报告在该语句的动作处记录它。对所有动作的 ALLOW 转成 `http:*`，是精确的译法，不是语义改动 | 7.x 只有 HTTP 请求，回放比较不到别的动作 |
+| C8 | （`MIG-2`）对 7.x 所有动作的 ALLOW 转成 `http:*`，即所有 HTTP 请求；一旦路由映射把某条路由映射成业务动作，这条路由就不再是 `http:` 动作，转换来的这条语句不再授予它，从加入路由映射的那天起被拒绝（403）。转换本身是精确的，变的是之后加路由映射时的含义；转换报告在该语句的动作处记录它，运维因此有一行可查 | 7.x 里路由就是 HTTP 请求，没有“映射之后的动作”这回事 |
+| C9 | （`MIG-5`、`RTE-5`）只对“未映射的请求”才有意义的 DENY 与限流规则：动作是 `http:`、资源是 `http:path:`，或条件读 `resource.id`、`action.verb`、`resource.var.*`（7.x 的 `request.path`、`request.method`、`request.path.var.*`），写在语句里或它所属策略的条件里。路由映射把它映射的路由移出这套词汇，于是这样的 DENY 不再拒绝被映射的路由，这样的限流规则不再限制它，运行时没有任何东西提示。转换报告把每一条记为 C9；带路由映射的宿主对“所有动作、所有资源、条件读这三类属性”的 DENY 与限流规则，每个安装的修订告警一次（`RTE-5`）。ALLOW、不带条件的全动作 DENY、读别的属性的条件不记 | 7.x 里路由就是 HTTP 请求；C8 说的是 ALLOW 少授予，C9 说的是 DENY 少拒绝，后者更危险，所以单列 |
 
 ### 5.4 保留下来的 7.x 风险
 
 方案 A 原样保留了两个 7.x 的行为，它们不是本阶段引入的，但在新模型里变得显眼，`wiki/guide/security-model.md` 的"租户隔离"一节要写清楚：
 
 - **同名角色跨租户**：平台层的角色绑定 `Role(null, admin)` 对任何租户里叫 `admin` 的角色生效。7.x 的角色授予本来就不区分租户。
-  需要区分时，运维把授予改写进租户文档（第 6 阶段之后由控制面完成）。
+  需要区分时，运维把授予改写进租户文档（经控制面，RFC 0007）。
 - **任何主体可以附加任何共享策略**：token 签发方决定主体附加哪些策略，与 7.x 相同。
 
 ---
@@ -494,40 +493,45 @@ A 不是终点：第 6 阶段控制面让租户写自己的数据，运维可以
 ### 6.1 扁平组合算法
 
 ```
-evaluate(req, snap, level):
-    applicable = snap.bindingsFor(req.subject, req.scope, req.environment.time)   // §6.4，按 §6.3 的顺序
-    unresolved = snap.unresolved(req)        // 缺失的附加、不可用的文档；不含已经确定"不需要"的文档
+evaluate(req, view):
     // DENY 扫描：扫完全部 DENY，任一命中即拒绝
     firstError = null
-    for (s, via) in candidates(applicable) where s.effect == DENY:
-        when matchWithGuard(s, req):
+    for (s, via) in candidates(req, view, DENY):                 // §6.3 的顺序
+        when step(s, req):
             MATCH    -> return Deny(ref(s, via))
             ERROR    -> firstError = firstError ?: ref(s, via)
             NO_MATCH -> continue
-    if firstError != null: return Indeterminate(MatcherFailed(firstError))
-    if unresolved != ∅:    return Indeterminate(unresolved.cause)   // 无法确认那里没有 DENY
+    if firstError != null: return Indeterminate(firstError)       // MatcherFailed；取不到的外部属性是 AttributeUnavailable
+    if view.unresolved(req) != ∅: return Indeterminate(cause)     // 缺失或歧义的策略、读不到的文档：无法确认那里没有 DENY
     // ALLOW 扫描：所有 DENY 都已确认不适用
-    for (s, via) in candidates(applicable) where s.effect == ALLOW:
-        when matchWithGuard(s, req):
-            MATCH    -> return withinBoundary(Permit(ref(s, via)))   // 第 6 阶段之前恒为通过
-            ERROR    -> continue                                     // 记入 trace，结果只会更严
+    for (s, via) in candidates(req, view, ALLOW):                // 带角色上限的凭据：不含附加与主体绑定（§4.2）
+        when step(s, req):
+            MATCH    -> return withObligations(withinBoundary(Permit(ref(s, via))))
+            ERROR    -> continue                                  // 记入 trace，结果只会更严
             NO_MATCH -> continue
-    return Deny(null)
+    return 有 ALLOW 因外部属性取不到而跳过 ? Indeterminate(AttributeUnavailable) : Deny(null)
 
-matchWithGuard(s, req):
-    g = s.policy.guard                        // 策略级条件；每次评估每个策略至多评估一次，结果记在位图里
-    if g 未评估: g.result = try g.matches(req) catch -> ERROR
-    if g.result == ERROR: return ERROR
-    if g.result == NO_MATCH: return NO_MATCH
-    return try s.match(req) catch -> ERROR    // 7.x 匹配器经 RFC 0002 PR-3 的适配层，抛出的 Exception 变成 ERROR
+step(s, req):            // 依次检查，遇到第一个不成立的即停（RFC 0005 §6.2）
+    动作 → 可索引属性的索引键 → 资源 → 策略级条件 → 语句条件
+    // 策略级条件每次评估至多求值一次，结果按策略缓存，只在它的某条语句的动作与资源匹配（或资源匹配出错）之后求值；
+    // 出错是 ERROR（取不到的外部属性、无法解码的路径）；只捕获 Exception，Error 照常传播
 ```
 
 - **黑名单与作用域**：`ScopeResolver` 在引擎之前运行，`Rejected` 不进入引擎（§4.6）。黑名单是候选集的第一条 DENY（§4.7）。
-- **`unresolved` 的位置**：在 DENY 扫描之后检查，所以一条命中的 DENY 胜过缺失和不可用（C1b）；在 ALLOW 扫描之前检查，所以缺失和不可用
-  永远不会产生 Permit（失败即拒绝）。
+- **`unresolved` 的位置**：在 DENY 扫描之后检查，所以一条命中的 DENY 胜过缺失和不可用（C1b，`ALG-1`）；在 ALLOW 扫描之前检查，所以缺失和不可用
+  永远不会产生 Permit（失败即拒绝，`ALG-3`）。没有命中的 DENY 时，出错的 DENY 使决策为 `Indeterminate`（`ALG-2`）；ALLOW 出错按未命中处理（C1a，`ALG-4`）；
+  什么都没有命中是隐式拒绝 `Deny(null)`（`ALG-5`）。
 - **`Error` 的处理**不变（RFC 0002 §3.2）：只捕获 `Exception`；`Error` 照常传播。
-- **一个策略的前置条件**只评估一次，并且只在它的某条语句成为候选时评估。本阶段没有索引，适用绑定的全部语句都是候选，所以实际上
-  适用策略的前置条件都会被评估，除非 DENY 扫描提前返回。RFC 0005 有了索引之后，没有候选语句的策略不评估前置条件（C1c）。
+- **一个策略的前置条件**（策略级条件）每次评估至多求值一次，并且只在它的某条语句的动作与资源匹配（或资源匹配出错）之后求值；不带 trace 时，
+  做出决策的语句之后不再求值任何东西（`ALG-7`）。索引排除的语句不让它的策略求值前置条件（C1c）。
+- **外部属性**（RFC 0006 §5.4.3）：DENY 读到取不到的外部属性时按 `onMissing` 处理，默认算出错；ALLOW 因此被跳过时，最终没有 Permit 就是 `Indeterminate`
+  而不是隐式拒绝（`ATR-2`）。外部属性取不到从不把 Deny 或 `Indeterminate` 变成 Permit（`ATR-1`）。
+- **`withinBoundary`**：租户有平台边界时（RFC 0007 §7.6），Permit 还必须同时落在边界之内，否则是 `Deny(boundary)`；边界无法判定时是 `Indeterminate`。
+  边界只能把 Permit 变成 Deny 或 `Indeterminate`（P-B2），没有边界时恒等（P-B1，`BDY-1`）。
+- **`withObligations`**：得到 Permit 之后，引擎匹配文档里的限流规则，算出桶 key，作为义务随 Permit 返回；执行在 Pipeline（RFC 0006 §8.2，`OBL-1`）。
+  被边界拒绝的请求不消耗限流配额。
+
+这段算法与 RFC 0001 §3.3 写的是同一个算法，唯一实现是 `core/engine` 的 `Evaluator` 与 `CandidateOrder`。
 
 ### 6.2 与层顺序的差别
 
@@ -552,34 +556,39 @@ RFC 0002 §4.3 证明了：没有错误的输入上，层顺序与扁平顺序�
 | 0 | 内置黑名单规则 | 黑名单检查 | — |
 | 1 | 平台层 `Anyone` 绑定 | 全局层 | 按策略 id（RFC 0003 Q13） |
 | 2 | 租户层 `Anyone` 绑定 | （无） | 按策略 id |
-| 3 | 附加的策略，以及快照里的 `Principal` 绑定（root 除外） | 主体层 | 附加按声明顺序；绑定按绑定 id |
+| 3 | 附加的策略，然后平台与租户文档里的 `Principal` 绑定（break-glass 除外） | 主体层 | 附加按声明顺序，同一策略附加两次只算一次；绑定按绑定 id |
 | 4 | 角色绑定：平台层的 `App(appId)`，再到租户层 | 角色层 | 按 `scope.roles` 的顺序（声明顺序），同一角色内按授予顺序 |
 | 5 | break-glass 绑定 | root | 按绑定 id |
 
-2026-10-26 修订（#1070 第 1 轮审查 A2）：break-glass 绑定从第 1 位移到最后。它绕过的是"缺少的 ALLOW"（§4.8），所以只在别的 ALLOW 都不命中时才被记为放行的来源；
-放在前面时，一个普通绑定也放行的请求会被记成 break-glass 的使用，没有 REQUIRED 监听器时变成 503（RFC 0006 §9.4.3），有时则写下一条假的 break-glass 审计。
-与 7.x 的 root 先于各层不同，这只改变"记哪一条"，不改变决策。
+break-glass 绑定排在最后：它绕过的是"缺少的 ALLOW"（§4.8），所以只在别的 ALLOW 都不命中时才被记为放行的来源。放在前面时，一个普通绑定也放行的请求
+会被记成 break-glass 的使用，没有 REQUIRED 监听器时变成 503（RFC 0006 §9.4.3），有时则写下一条假的 break-glass 审计。与 7.x 的 root 先于各层不同，
+这只改变"记哪一条"，不改变决策（`ALG-6`）。凭据带角色上限时，第 3 位只在 DENY 扫描中出现；break-glass 只对 `Subject.breakGlass` 为真的主体出现（§4.2）。
 
 每个策略内按语句下标。于是没有错误时，第一条命中的 DENY（或在没有 DENY 命中时第一条命中的 ALLOW）与 7.x 按（层，组，规则）顺序的第一条
-是同一条，经来源映射（§8.2）后门槛直接比较。
+是同一条，可以经来源映射（§8.2）对回 7.x 的规则。
 
-> **实现说明（2026-11-04，#1200，RC 修复批次 D1，`ALG-9`）**：一次扫描（DENY 或 ALLOW）中，同一份文档里指向同一策略的多条绑定只评估一次策略，附加两次的策略也只评估一次。所以一条策略在一次扫描中的成本至多是"绑定它的每份文档一次，附加一次"（平台、app、租户三份文档，至多三次加一次），不再随绑定数成倍增长（第 1 轮审查 M1：绑定让一条策略的成本成倍增长，RC1-8 的路径模式上界因此不成立）。同一份文档里，同一个策略 id 的每条能解析的绑定都解析到同一个编译后的策略，所以跳过时不需要在运行时比较任何东西。
-> - **决策与报告不变**：与逐条评估每个绑定的结果相同。候选顺序中的第一条绑定报告命中或记下错误，后面的绑定沿用它的结果。
-> - **实现**：编译时，文档里策略 id 被不止一条绑定引用的绑定得到一个槽位（`BoundEntry.repeat`、`CompiledDocument.repeats`）。`CandidateOrder` 把这样的条目交给 `CandidateVisitor.repeated`，`FlatEvaluator` 在一个位图里标记（文档，槽位，扫描），之后的同槽位绑定跳过。位图在这次评估的 `EvaluationScratch` 里，只在扫描遇到这样的条目时才分配。附加的去重在 `CandidateOrder` 中。每条绑定指向不同策略的文档不付任何代价。
-> - **trace 重放而不重新评估**：后面的绑定记下第一条绑定的结果，带着它自己的 `via` 与 `afterDecision`；`explain` 列出的行与以前相同。
+**同一策略只评估一次**（`ALG-9`）：一次扫描（DENY 或 ALLOW）中，同一份文档里指向同一策略的多条绑定只评估一次策略，附加两次的策略也只评估一次。
+所以一条策略在一次扫描中的成本至多是"绑定它的每份文档一次，附加一次"（平台、app、租户三份文档，至多三次加一次），不随绑定数成倍增长，
+RFC 0005 §3.5 的路径模式上界因此成立。决策与报告与逐条评估每个绑定的结果相同：候选顺序中的第一条绑定报告命中或记下错误，后面的绑定沿用它的结果。
+实现上，编译时文档里被不止一条绑定引用的策略 id 得到一个槽位（`BoundEntry.repeat`、`CompiledDocument.repeats`），`CandidateOrder` 把这样的条目交给
+`CandidateVisitor.repeated`，求值器在这次评估的 `EvaluationScratch` 的位图里标记（文档，槽位，扫描），之后的同槽位绑定跳过；附加的去重在 `CandidateOrder` 中。
+每条绑定指向不同策略的文档不付任何代价。trace 重放而不重新评估：后面的绑定记下第一条绑定的结果，带着它自己的 `via` 与 `afterDecision`。
 
 ### 6.4 `evaluate(request, snapshot)` 与适用性查找
 
 ```kotlin
 interface Engine {
-    fun evaluate(request: AuthzRequest, snapshot: SnapshotView, trace: TraceLevel = TraceLevel.OFF): Evaluation
+    fun evaluate(request: EngineRequest, snapshot: SnapshotView, trace: TraceLevel = TraceLevel.OFF): Evaluation
 }
+/** 引擎的输入：请求、经 ScopeResolver 校验的作用域、成员关系、请求时间（§4.1）。 */
+class EngineRequest(val request: AuthzRequest, val scope: Scope, val memberships: Memberships, val time: Long, ...)
 
-/** 一次评估持有的组合快照（§7.3）：三份已编译文档的不可变引用，外加本请求的 unresolved。构造它不复制任何集合。 */
-class SnapshotView(val platform: CompiledPlatform, val app: CompiledApp?, val tenant: CompiledTenant, val unresolved: List<Cause>)
+/** 一次评估持有的组合快照（§7.3）：三份已编译文档的不可变引用，外加本请求的 unresolved 与版本。构造它不复制任何集合。 */
+class SnapshotView(val platform: CompiledDocument, val app: CompiledDocument?, val tenant: CompiledDocument?,
+                   val unresolved: List<Cause> = emptyList(), val version: ViewVersion? = null)
 ```
 
-`RFC 0002` 的 `evaluate(request, PolicySet)` 在切换（PR-7）之前与它并存，PR-8 删除。
+RFC 0002 的 `evaluate(request, PolicySet)` 已删除（PR-8，并入 RFC 0008 的切换 PR）。
 
 **适用性查找**（`bindingsFor`）在每份编译后的文档里是哈希查找，不扫描全部绑定：
 
@@ -593,21 +602,28 @@ class SnapshotView(val platform: CompiledPlatform, val app: CompiledApp?, val te
 角色绑定的查找：对 `scope.roles` 中的每个角色，在 `App(scope.app)` 和 `Tenant` 的 `byRole` 里各查一次，按作用域过滤。每个请求的工作量
 与"主体的角色数 + 附加数 + 适用的绑定数"成正比，与快照里绑定和策略的总数无关。
 
-**分配**：`OFF` 时，候选的遍历用访问者（与 RFC 0002 `RuleGroup.forEachRule` 相同的做法），不物化候选列表；策略前置条件的结果用位图，
-按"本请求涉及的策略数"分配（≤ 64 个时是一个 `Long` 局部变量）。目标见 §12。
+**分配**：`OFF` 时，候选的遍历用访问者（`CandidateVisitor`），不物化候选列表。策略前置条件的结果按策略实例缓存：少量时放在两个小数组里扫描，
+不分配；超过一个阈值时换成 `IdentityHashMap`，所以查找一个永远不超过一次哈希。目标见 §12。
 
 ### 6.5 trace
 
-RFC 0002 的 `Trace`（按层的 `LayerTrace`）在 PR-8 随层一起删除，换成按候选的 trace：
+RFC 0002 的 `Trace`（按层的 `LayerTrace`）随层一起删除，换成按候选的 trace（`core/engine` 的 `trace` 包）：
 
 ```kotlin
-class Trace(val scope: ScopeTrace, val candidates: List<CandidateTrace>, val unresolved: List<Cause>)
-class CandidateTrace(val ref: StatementRef, val via: BindingRef, val effect: Effect, val outcome: RuleOutcome, val error: Throwable?, val afterDecision: Boolean)
-sealed interface BindingRef { data class Bound(val id: BindingId, val layer: Layer) : BindingRef; data class Attached(val policy: PolicyId) : BindingRef; data object Builtin : BindingRef }
+class EvaluationTrace(val scope: Scope, val candidates: List<CandidateTrace>, val expired: List<BindingRef.Bound>,
+                      val unresolved: List<Cause>, val boundary: List<CandidateTrace>)
+class CandidateTrace(val ref: StatementRef.Policy, val effect: Effect, val outcome: CandidateOutcome, val error: Throwable?, val afterDecision: Boolean)   // via = ref.via
+sealed interface BindingRef {
+    data class Bound(val id: BindingId, val document: DocumentKind) : BindingRef
+    data class Attached(val policy: PolicyId) : BindingRef
+    data object Builtin : BindingRef
+    data class Boundary(val tenant: TenantId) : BindingRef
+}
 ```
 
-`Explanation`（`CoSecExplainEndpoint` 的 JSON）在 PR-7 改为按绑定组织：每条候选语句说明它经哪条绑定或附加进入、在哪个文档、结果如何。
-这是 explain 的破坏性变更（X3）。`FULL`/`EXHAUSTIVE` 的含义不变：决策之后继续评估剩余候选，记为 `afterDecision`；性质测试 P2 不变。
+解释（控制面的 explain，RFC 0007 §10.3）按绑定组织：每条候选语句说明它经哪条绑定或附加进入、在哪个文档、结果如何。这是 explain 的破坏性变更（X3）。
+`FULL`/`EXHAUSTIVE` 决策之后继续评估剩余候选，记为 `afterDecision`；决策与 trace 级别无关（`ALG-8`，性质 P2 不变）。带 trace 的求值器是单独的类，
+热路径不带 trace 代码。
 
 ---
 
@@ -616,22 +632,22 @@ sealed interface BindingRef { data class Bound(val id: BindingId, val layer: Lay
 ### 7.1 文档
 
 ```kotlin
-sealed interface SnapshotKey {
+sealed interface SnapshotKey {                           // cosec-spi 的 spi.snapshot
     data object Platform : SnapshotKey                   // 常驻，启动时预热，不被淘汰
-    data class App(val appId: AppId) : SnapshotKey       // 按需加载，LRU
-    data class Tenant(val tenantId: TenantId) : SnapshotKey   // 按需加载，LRU
+    data class App(val appId: String) : SnapshotKey      // 按需加载
+    data class Tenant(val tenantId: String) : SnapshotKey   // 按需加载
 }
 ```
 
-RFC 0003 的 `Policies`、`App(appId)` 在 PR-7 被替换：`Policies` 的内容并入 `Platform`；`App` 的 key 不变，内容从"应用权限 + 授予"变成
-"目录 + 权限策略 + 角色绑定"（§4.3）。Redis key：`<p>:snapshot:platform`、`<p>:snapshot:app:<appId>`、`<p>:snapshot:tenant:<tenantId>`。
+RFC 0003 的 `Policies` key 已删除，内容并入 `Platform`；`App` 的 key 不变，内容是"目录 + 权限策略 + 角色绑定"（§4.3）。平台文档不接受角色绑定，
+应用文档只接受角色绑定（`BND-3`）；候选顺序永远到不了的绑定（没有哪个请求能匹配的主体或作用域）不能编译，所以不会有 DENY 悄悄失效（`BND-8`）。Redis key：`<p>:snapshot:platform`、`<p>:snapshot:app:<appId>`、`<p>:snapshot:tenant:<tenantId>`。
 `tenantId` 的编码规则与 `appId` 相同（RFC 0003 §4.1：显式编码、拒绝含 `:` 的 id），`(platform)`、`(0)` 这类带括号的 id 原样编码。
 
 ```jsonc
 // SnapshotKey.Platform
 {
   "schema": 2, "revision": 42, "publishedAt": "2026-11-01T08:00:00Z",
-  "policies": [ { "id": "deny-ip", "attachable": false, "statements": [ ... ] }, ... ],   // 7.x 策略格式（RFC 0005 切换后改为 AST）
+  "policies": [ { "id": "deny-ip", "attachable": false, "statements": [ ... ] }, ... ],   // 语句是 RFC 0005 的格式
   "bindings": [
     { "id": "g:deny-ip", "subject": "*", "app": "*", "space": "*", "policy": "deny-ip" },
     { "id": "root", "subject": { "principal": "cosec", "tenant": "(platform)" }, "app": "*", "space": "*",
@@ -648,22 +664,21 @@ RFC 0003 的 `Policies`、`App(appId)` 在 PR-7 被替换：`Policies` 的内容
 // SnapshotKey.Tenant("acme")：结构同 Platform，没有 breakGlass
 ```
 
-`schema` 从 RFC 0003 的 `1` 升为 `2`。`SnapshotDocumentCodec` 只认识 `2`，读到 `1` 是 `SnapshotFormatException`（RFC 0003 F3），即 500：
-`main` 上第 3 阶段格式的开发部署必须重新转换（§8.5）。
+`schema` 从 RFC 0003 的 `1` 升为 `2`。`PolicyDocumentCodec`（`cosec-document`）只认识 `2`，读到别的版本、或不恰好是这个格式的文档（未知字段、第二个运算符、
+类型不对的值）都解码失败，需要它的请求失败即拒绝（RFC 0003 F3，`DOC-3`）。格式由 `schema/<line>/cosec-snapshot-document.schema.json` 描述。
 
 ### 7.2 版本
 
 ```kotlin
-/** 一次评估读到的三份文档各是哪个修订。不需要或不存在的文档为 0。第 5 阶段写进 DecisionEvent。 */
-data class SnapshotVersion(val platform: Long, val app: Long, val tenant: Long)
+/** 一次评估读到的三份文档各是哪个修订。不需要或不存在的文档为 null。 */
+class ViewVersion(val platform: Long, val app: Long?, val tenant: Long?)
 ```
 
-三份文档之间的引用只有一个方向：`App` 与 `Tenant` 的绑定可以指向 `Platform` 的策略；`Tenant` 的绑定可以指向 `App` 的权限策略吗？**不可以**
-（编译检查）：权限策略只经同一个 `App` 文档里的角色绑定生效，否则 `App` 文档删除一个权限就会让某个租户文档的引用悬空，而两份文档分别带版本读取。
+三份文档之间的引用：`App` 与 `Tenant` 的绑定可以指向 `Platform` 的策略；`Tenant` 文档只能引用本租户或平台层的策略（`TNT-2`），另外可以把某个 `App`
+的权限策略绑定在**那个** App 的作用域里（RFC 0007 §9.3、Q14，`TNT-4`）：这样的绑定在同一个视图里从那个 App 的文档解析，别处的都不能编译。
 
-`App`、`Tenant` 指向 `Platform` 的引用跨文档，存在版本竞态：平台删掉一条共享策略，租户文档还引用它。处理与 RFC 0003 §4.8 分片方案相同：
-悬空的引用表现为 `unresolved`（`MissingPolicies`），失败即拒绝，不会放行；发布者删除平台策略之前检查是否仍被已发布的 `App` 文档引用（`Tenant` 文档的
-引用在第 6 阶段控制面检查，本阶段写进 `storage.md` 的发布注意事项）。
+`App`、`Tenant` 指向 `Platform`（以及 `Tenant` 指向 `App`）的引用跨文档，存在版本竞态：平台删掉一条共享策略，租户文档还引用它。处理与 RFC 0003 §4.8 分片方案相同：
+悬空的引用表现为 `unresolved`（`MissingPolicies`），失败即拒绝，不会放行（`ALG-3`）；控制面在发布删除之前检查是否仍被引用（RFC 0007 §5.8）。
 
 ### 7.3 组合，而不是合并
 
@@ -677,78 +692,76 @@ RFC 0001 §3.2 要求"一次评估只读一份快照"（P7）。本文的 `Snaps
 | 查找 | 一个索引 | 三个索引各查一次（§6.4），常数倍开销 |
 | 一致性 | 一个版本号 | 三元组（§7.2） |
 
-查找多两次哈希，换来平台发布时不需要 O(租户数) 的重新编译。JMH 的 `tenant` 场景（§12）测量这笔开销。
+查找多两次哈希，换来平台发布时不需要 O(租户数) 的重新编译。
 
 ### 7.4 加载与写入：复用 RFC 0003
 
-RFC 0003 的 `SnapshotSource`（单飞、有序安装、条件读重新校验、落后时长、LRU、预热、就绪、指标）、`SnapshotDocumentStore`、
-`PolicySnapshotCache` 声明、失效监听、`SnapshotPublisher` 的条件写入，全部**原样复用**，只换 key 和文档类型（RFC 0003 §3.7 的承诺）。
-新增的只有：
+RFC 0003 的 `SnapshotSource`（单飞、有序安装、条件读重新校验、落后时长、按容量淘汰、预热、就绪、指标）与 `SnapshotDocumentStore` 原样复用，只换 key 和文档类型
+（RFC 0003 §3.7 的承诺）。新增的：
 
 | 项 | 内容 |
 |---|---|
-| 一次评估需要的文档 | 被拉黑：`Platform`。否则：`Platform` + `Tenant(subject.tenant)` + （`scope.roles` 非空且 `scope.app` 非空时）`App(scope.app)`。与 RFC 0003 §3.2 的规则同构 |
-| LRU | `App` 与 `Tenant` 各自一个上限（默认各 1,024，Q15，用 RFC 0003 §4.8 的测量工具校准） |
-| 预热 | `Platform`，以及 `prewarm-apps`、新增的 `prewarm-tenants` |
-| `fail-closed` | RFC 0003 §4.5 的"按租户"在本阶段有了真正的租户文档：判断依据仍是请求的租户和本次评估用到的文档的最大落后时长 |
-| `SnapshotPublisher` | 增加 `setBinding(key, binding)`、`removeBinding(key, id)`；`setRoleGrants` 改为写 `App` 文档里的角色绑定（签名不变，过渡到第 6 阶段）；`setPolicy` 增加目标文档参数（`Platform` 或 `Tenant`） |
-| 发布前编译 | 发布者在条件写入之前编译整个组合（新文档 + 当前的 `Platform`），编译错误（悬空引用、跨租户引用、主体绑定超限、break-glass 缺少过期时间）直接拒绝写入 |
+| 一次评估需要的文档 | 被拉黑：`Platform`（`BLK-1`）。否则：`Platform` + `Tenant(subject.tenant)` + `App(scope.app)`，后者在请求在该 App 里有角色时读取，也在租户文档把这个 App 的权限策略绑定给 `Anyone`、某个主体或角色时读取（`TNT-4`），所以这样的绑定能解析。规则只有一处（`ViewDocuments.appOf`），执法、`simulate`、`explain` 与影子比较共用（`CTL-3`）；编译器给每个租户文档记下它需要哪些 App，查找是一次集合查询，不做 I/O。读不到需要的 App 文档时失败即拒绝。读 App 文档也带来它的限流规则（`wiki/policies/rate-limiting.md`） |
+| 容量 | `App` 与 `Tenant` 文档各自能保留多少份，由文档在堆上的份额与常驻文档的实测大小算出（`DocumentBudget`，`SNP-24`），没有配置项 |
+| 预热 | `Platform`，以及 `prewarm-apps`、`prewarm-tenants` |
+| `fail-closed` | RFC 0003 §4.5 的"按租户"有了真正的租户文档：判断依据是请求的租户和本次评估用到的文档的最大落后时长（`fail-closed.tenants`，`SNP-5`） |
+| 写入 | 只经控制面（RFC 0007），它在写入前对照当前的头编译整个候选文档，编译错误（悬空引用、跨租户引用、主体绑定超限、break-glass 缺少过期时间）直接拒绝；`cosec-migrate publish` 写下每份文档的第一个修订（§8.2） |
 | 成员关系 | 不进快照；`MembershipProvider` 的结果不经 `SnapshotSource` |
 
----
-
-> **实现说明（2026-11-03，#1194，RC 修复批次 C，TNT-4，RC1-17）**：
-> - **什么时候读 app 文档。** 租户文档把某个 app 的 `perm:` 策略绑定给 `Anyone` 或某个主体时，视图会读取那个 app 的文档，即使请求在该 app 里没有角色，这样的绑定因此能解析。
->   - 编译器给每个编译后的租户文档记下它需要哪些 app（`boundApps`、`needsApp`）。查找是一次集合查询，不做 I/O。
->   - 读不到 app 文档时 fail closed。
-> - **`CandidateOrder`。** 对 `Anyone` 绑定，也从 app 文档解析 app 的权限策略。只是把原来解析不了的绑定解析出来，候选顺序和组合方式都不变。
-> - **副作用。** 读 app 文档也会带来它的限流规则，`rate-limiting.md` 写明了。
-> - **规则只有一处。** 一个请求读哪些文档，由一个规则决定（`ViewDocuments.appOf`）。执法、`simulate`、`explain` 和影子比较共用它（CTL-3），见 [RFC 0007](0007-control-plane.md) 的批次 C 说明。
+`CandidateOrder` 对 `Anyone` 绑定也从 App 文档解析该 App 的权限策略：只是把原来解析不了的绑定解析出来，候选顺序和组合方式都不变。
 
 ## 8. 一次性数据转换工具 `cosec-migrate`
 
 ### 8.1 定位
 
-- 新模块 `migrate/`，构件 `cosec-migrate`（目录短名、构件保留前缀，与 `model/`、`engine/` 一致）。它是用户在升级时运行的工具，所以
-  **发布**（不同于 `cosec-gateway-server`），形式是一个带 `main` 的 jar，也可以作为库调用（Q16）。
-- 依赖 `cosec-core`、`cosec-cocache`（读取 7.x Redis 数据用 RFC 0003 的 `CoSec7xReader`），不依赖 Spring。
+- 模块 `migration/migrate`，构件 `cosec-migrate`。它是用户在升级时运行的工具，所以**发布**（不同于 `cosec-gateway-server`），形式是一个带 `main` 的 jar，
+  也可以作为库调用（Q16）。它的契约是命令行，不做 ABI 校验（RFC 0011 §6.3）。
+- 依赖 `cosec-cocache`、`cosec-control`、`cosec-document`；读 7.x 数据（`CoSec7xReader`）所用的 7.x 模型只在它自己的 `me.ahoo.cosec.migrate.v7` 里。
+  不依赖 Spring Boot；7.x 的 `path` 匹配器与表达式要 `spring-web`、`spring-expression`，它把两者声明为依赖（维护者 2026-10-26 批准）。
 - 不进入任何应用的运行时类路径：starter 不依赖它。
 
 ### 8.2 输入与输出
 
 ```bash
-java -jar cosec-migrate.jar convert --from-redis redis://localhost:6379 --key-prefix cosec --out ./converted [--root-expires-at 2026-12-31T00:00:00Z] [--partition by-owner]
-java -jar cosec-migrate.jar convert --from-files ./export --out ./converted
-java -jar cosec-migrate.jar publish --to-redis redis://localhost:6379 --key-prefix cosec --in ./converted
-java -jar cosec-migrate.jar verify --in ./converted --requests ./audit.jsonl [--report ./verify-report.json]
+java -jar cosec-migrate.jar convert --from-redis redis://localhost:6379 [--key-prefix cosec] --out ./converted [--partition platform|by-owner]
+java -jar cosec-migrate.jar convert --from-files ./export --out ./converted [--rate-limit-rules ./rate-limit.json]
+java -jar cosec-migrate.jar publish --to-redis redis://localhost:6379 [--cluster] [--key-prefix cosec] --in ./converted [--resume]
+java -jar cosec-migrate.jar partition plan (--from-redis <uri> | --from-files ./export) --out ./plan
 ```
+
+另有 `bootstrap`、`repair-references`、`verify-chain`、`restore` 与 `api-keys` 几个命令，属于控制面与 API key 迁移（RFC 0007 §5.9，RFC 0009 §4.4），
+命令与选项以 `MigrateMain` 的用法说明为准；一个命令不读的选项是用法错误。没有 `verify`（§8.7）。
 
 | 输入 | 内容 |
 |---|---|
 | `--from-redis` | 7.x 布局的 Redis（schema 标记 `"7"`），经 `CoSec7xReader` 读取：策略、全局索引、应用权限、角色授予（RFC 0003 §4.7） |
 | `--from-files` | RFC 0002 §8.2.1 的导出格式：`policies.json`、`app-role-permissions.json`，另加一个 `global-policies.json`（全局索引里的 id）。维护者的回放数据就是这个格式 |
-| `--root-expires-at`、`--root-id` | 7.x 部署开启了 root 时必需（§8.4） |
 | `--partition` | `platform`（默认，§5.2 方案 A）或 `by-owner` |
-| 匹配器工厂 | 自定义动作 / 条件匹配器的 jar 放在类路径上（`-cp`），转换工具用与运行时相同的 `MatcherFactoryRegistry` 解析；本阶段只校验能解析，不翻译 |
+| `--rate-limit-rules` | 7.x 的限流规则，翻译后写进平台文档的 `rateLimits`（RFC 0005 §7.3） |
+| 匹配器 | 7.x 的内置匹配器按 RFC 0005 §7 翻译；`spel`、`ognl` 与自定义条件、自定义动作在任何版本都拒绝；类路径缺少某个匹配器的类时，用到它的条目拒绝 |
 
 | 输出（`--out` 目录） | 内容 |
 |---|---|
 | `platform.json`、`apps/<appId>.json`、`tenants/<tenantId>.json` | §7.1 的文档，`revision = 1` |
-| `provenance.json` | 来源映射：每个 8.0 的 `(policyId, statementIndex)` 和每条绑定对应的 7.x 位置（`GLOBAL`/`PRINCIPAL` 策略 id 与下标，或 `(appId, roleId, spaceId, permissionId)`）。门槛和 `verify` 用它比较"做出决策的规则" |
-| `report.json` + 控制台摘要 | 每类对象的数量和字节数；拒绝项（§8.4）及其位置；警告项；输入与输出文件的 SHA-256 |
+| `provenance.json` | 来源映射：每个 8.0 的 `(policyId, statementIndex)` 和每条绑定对应的 7.x 位置（`GLOBAL`/`PRINCIPAL` 策略 id 与下标，或 `(appId, roleId, spaceId, permissionId)`），用来把"做出决策的规则"对回 7.x |
+| `report.json` + 控制台摘要 | 每类对象的数量和字节数；拒绝项（§8.4）及其位置；警告项；`semanticChanges`：受 C1a–C9（§5.3）与 RFC 0005 的 D1–D3 影响的每一处 7.x 配置形态；输入与输出文件的 SHA-256 |
 
-`publish` 用 `SnapshotPublisher` 的条件写入（`expected = null`，即"仅当不存在"）写入文档，然后写 schema 标记；已经存在 8.0 文档时失败，不覆盖。
-它不删除 7.x 的 key，回滚就是不切换（`upgrading.md` 的回滚一节）。
+每个 7.x 策略与应用权限先用 7.x 的反序列化器解码，7.x 读不了的数据拒绝（`UNDECODABLE`），不会被转换成会放行的语句。
+
+`publish` 经控制面的存储写入（RFC 0007 §5.9），所以每份文档的修订链从它写下的开始：先写修订记录，再写头，都是"仅当不存在"的条件写入，已有 8.0 部署时不覆盖。
+写入之前每份文档都先编译，每份 App 文档对照平台文档检查引用；含 break-glass 绑定的文档拒绝写入（RC1-27，§4.8）。它不写 schema 标记（§8.5），
+不删除 7.x 的 key，回滚就是不切换（`upgrading.md` 的回滚一节）。
 
 ### 8.3 转换规则
 
 即 §5.1 的表。要点：
 
 - 全局策略 = 全局索引中、类型为 `GLOBAL` 的策略（与 `RedisPolicyRepository.globalPoliciesOf` 相同）。
-- 策略 id、权限 id、角色 id 原样保留；生成的 id 带保留前缀：`perm:`、`g:`、`r:`、`cosec:`。7.x 数据里出现以保留前缀开头的策略 id 时拒绝（§8.4）。
+- 策略 id、权限 id、角色 id 原样保留；生成的 id 带保留前缀：`perm:`、`g:`、`r:`、`cosec:`（`Converter.RESERVED_PREFIXES`）。7.x 数据里出现以保留前缀开头的策略 id 时拒绝（§8.4）。
 - 权限策略按需生成：只为被授予的权限和被 `*` 授予的应用生成，未被任何角色授予的权限只进 `Catalog`。
 - 角色绑定按 7.x 授予的顺序编号（`r:<role>[@<space>]:<n>`），候选顺序由编号决定（§6.3）。
-- 策略与语句的匹配器 JSON 原样搬运（本阶段），RFC 0005 加上翻译。
+- 语句的动作与条件按 RFC 0005 §7 翻译成 8.0 的格式。
+- 7.x 的 root 不转换：转换工具不写 break-glass 绑定（§4.8，RC1-27）。
 
 ### 8.4 拒绝什么
 
@@ -762,49 +775,28 @@ java -jar cosec-migrate.jar verify --in ./converted --requests ./audit.jsonl [--
 | 授予了应用没有定义的权限 id | 拒绝扫描到达时 500（S10a） | 拒绝（C6） |
 | 只有授予、没有应用权限 | 不生效 | 丢弃，警告 |
 | 策略或应用权限无法解码、匹配器类型未注册 | 读到它的请求 500 | 拒绝 |
+| 条件或动作翻译不了（RFC 0005 §7）；`spel`、`ognl`；自定义条件或动作 | — | 拒绝 |
 | 策略 id 以保留前缀开头 | — | 拒绝 |
-| `appId` 含 `:`、角色 id 含 `@`（`AppSpacedRoleId` 的约束） | 7.0 已不可能写入 | 拒绝 |
-| 开启了 root 但没有给 `--root-expires-at` | — | 拒绝（§4.8） |
+| `appId` 含 `:`、角色 id 含 `@`（`AppSpacedRoleId` 的约束）；id 为 `*` 或含落单的代理项（`IDN-10`）；租户或 App id 含 `/`（`SCP-13`）；重复的 id | 7.0 已不可能写入，或 8.0 读不了 | 拒绝 |
+| 转换后的文档不能编译 | — | 拒绝 |
 | `--partition by-owner` 时，策略的 `tenantId` 为空或是不存在的租户格式 | — | 拒绝 |
 | schema 标记不是 `"7"` | — | 拒绝（6.x 数据先按 7.0 的步骤迁移） |
 
 ### 8.5 schema 标记
 
-`CoSecSchemaMarker` 在 RFC 0003 PR-5 升为 `"8"`（第 3 阶段的文档布局）。本阶段的布局再次变化，标记改为 `"8.4"`（"8.0 线、第 4 阶段的布局"），
-8.0 启动时只接受它（Q17）。`main` 上读到 `"8"` 的开发部署启动失败，提示用 `cosec-migrate` 重新从 7.x 数据转换，或者用 RFC 0003 的
-`snapshotConvert` 先回到第 3 阶段格式再转换。GA 前如果布局还有变化（RFC 0005 切换），标记再变；GA 时定为最终值。
+8.0 没有 schema 标记：它只读自己的文档格式（§7.1），文档自带 `schema: 2`。`cosec-migrate` 只接受标记为 `"7"` 的 7.x 数据（6.x 的数据先按 7.0 的步骤迁移）；
+`publish` 不写标记，因为写了会让仍在运行的 7.x 实例重启失败。
 
 ### 8.6 与 RFC 0005 的关系
 
-GA 版本的 `convert` 一次完成两篇的转换：先按本文转换模型，再按 RFC 0005 §7 把每条语句的匹配器翻译成 AST，翻译不了的按 RFC 0005 的规则拒绝。
-用户不会见到中间格式。
-
-> **2026-10-26 实现说明（PR-5，#1067）**：
-> - **翻译的范围。** PR-5 只翻译动作（§5.2 的 `http` 命名空间：`all`、`path` 模式及其方法与选项、`composite`）与 `all` 条件。其余条件按 RFC 0005 §7.1 由 RFC 0005 PR-6 翻译（#1069，见 RFC 0005 §7 的实现说明）；没有精确或安全翻译的条件仍然拒绝并报告位置（`CONDITION_NOT_TRANSLATED`）。`spel`、`ognl`（`EXPRESSION_CONDITION`）与自定义条件（`CUSTOM_CONDITION`，RFC 0008 Q4）在任何版本都拒绝。路径模板与非 `/` 的分隔符同样留给 PR-6。
-> - **解码。** 每个 7.x 策略与应用权限先用 7.x 的反序列化器解码，7.x 读不了的数据拒绝（`UNDECODABLE`），不会被转换成会放行的语句。
-> - **报告。** `report.json` 的 `semanticChanges` 列出受 C1a–C6、D1–D3 影响的每一处 7.x 配置形态（RFC 0008 Q3）。
-> - **root。** 用 `--root-enabled`、`--root-id` 声明 root 已开启，必须同时给出 `--root-expires-at`。
-> - **`--from-files`。** 读 `policies.json`、`global-policies.json`、`app-role-permissions.json`。
-> - **`publish`。** 每个文档都是"仅当不存在"的条件写入，已有任何 8.0 文档时什么也不写。它不写 schema 标记：标记属于切换 S1，写了会让仍在运行的 7.x 实例重启失败。
-> - **命令行。** 参数解析不引入新依赖。
-> - **类路径。** 7.x 的 `path` 匹配器依赖 `spring-web`，`cosec-migrate` 把它声明为运行时依赖（维护者 2026-10-26 批准）；类路径缺少某个匹配器的类时，用到它的条目以"类路径缺少类"为由拒绝。
+`convert` 一次完成两篇的转换：先按本文转换模型，再按 RFC 0005 §7 把每条语句的匹配器翻译成 AST，翻译不了的按 RFC 0005 的规则拒绝（`CONDITION_NOT_TRANSLATED`、
+`ACTION_NOT_TRANSLATED`）。用户不会见到中间格式。
 
 ### 8.7 用户怎么验证
 
-> **2026-10-26**：`verify` 在 8.0.0 中不提供（[RFC 0008](0008-conformance-and-direct-build.md) §6 Q3）：它依赖只为门槛 A 存在的分类器。`convert` 的报告列出受语义改动影响的 7.x 配置形态。以下原文保留，仅供追溯。
-
-维护者的门槛（§9）能用旧实现做基准，因为在切换之前旧实现还在 `main` 上。用户升级时旧实现已经不在 8.0 里了，所以 `verify` 以**用户自己的
-7.x 审计日志中记录的决策**为基准：
-
-1. 在 7.x 上冻结策略写入（或者只取最后一次策略变更之后的审计事件），运行 `convert`。
-2. 导出这段时间的审计事件（`AuditEvent`，Kafka 或日志 sink，字段见 RFC 0002 §8.2.1），每行一个 JSON。
-3. 运行 `verify`：用 8.0 的引擎在转换后的文档上评估每个请求，与审计事件记录的 `decision`、`reasonCode`、`source` 比较，`source` 经 `provenance.json`
-   映射。差异用门槛的同一个分类器（§9.2）归类。
-4. 报告：样本数、时间跨度、一致数、按 C1–C3 分类的差异数、未归类的差异数和明细（写在本地 `verify-mismatches.jsonl`）。**未归类的差异必须为零**才建议切换；
-   C1a 的每一条都单独列出。
-
-局限，写进 `upgrading.md`：审计事件不含请求头、请求属性和主体属性（RFC 0002 §8.2.1 的表），读取这些输入的条件在 `verify` 里只走"值为空"的一支，
-报告列出这些策略；审计事件记录的是 7.x 执法时的策略版本，策略在采样期间变过就会出现与转换无关的差异，所以第 1 步要冻结或截取。
+`verify` 不提供（[RFC 0008](0008-conformance-and-direct-build.md) §6 Q3）：原设计是以用户自己的 7.x 审计日志为基准，在转换后的文档上重新评估每个请求，
+用门槛 A 的分类器给差异归类，而那个分类器只为门槛 A 存在。用户的依据是 `convert` 的报告：`semanticChanges` 列出受语义改动影响的每一处 7.x 配置形态，
+`wiki/operations/upgrading.md` 讲怎样逐项检查。
 
 ---
 
