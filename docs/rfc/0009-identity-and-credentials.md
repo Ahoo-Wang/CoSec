@@ -231,7 +231,7 @@ JWT 保留 `roles`、`policies`、`attributes` 声明作为已签名缓存，条
 |---|---|---|
 | IDN-1 | pipeline | API Key 的生效成员关系是主体成员关系的子集；key 没有任何授予 |
 | IDN-2 | pipeline | 上限只收窄：有上限时不出现上限之外的角色（按空间与角色精确匹配），直接附加策略与主体绑定的 ALLOW 不到达 key；它们的 DENY 照常适用（RC1-1） |
-| IDN-3 | pipeline | 主体未知或停用时，它的 key 判为无效 |
+| IDN-3 | pipeline | 成员关系来自提供者的凭据（API Key，或带 `cosec.membership: provider` 标记的令牌），在主体未知或停用时判为无效 |
 | IDN-4 | pipeline | 带 `act` 的 token 判为无效 |
 | IDN-5 | engine | `principal.type`、`auth.method` 只来自注册表与认证器；token 声明、key 与宿主属性不能写入。随 §5 在 8.1 加入，登记表里还没有 |
 | IDN-6 | startup | 启用 API Key 而没有 `MembershipProvider` 时启动失败 |
@@ -252,7 +252,7 @@ JWT 保留 `roles`、`policies`、`attributes` 声明作为已签名缓存，条
 | IDN-31 | build | 会话记录带格式号，按读者的规则读，更晚的格式拒绝（§11.3） |
 | IDN-32 | build | 缓存的验证结果就是再验证一遍会得到的结果（§11.5） |
 
-每条规则配正反场景；IDN-1 至 IDN-4 与 IDN-6 各配变异体（`test/conformance/mutants/idn-*`）。
+每条规则配正反场景；变异体在 `test/conformance/mutants/idn-*`，由 `mutation.yml` 运行。
 
 ## 9. 交付
 
