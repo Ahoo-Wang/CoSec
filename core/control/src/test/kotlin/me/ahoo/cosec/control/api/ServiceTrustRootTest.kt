@@ -185,6 +185,24 @@ class ServiceTrustRootTest {
     }
 
     @Test
+    fun `a stated tenant principal publishes alone what its stated roles hold, through the service port - CTL-58, CTL-81`() {
+        // DR1-E-4: whatever workload the network admits to the service port states who acts, roles included. The change
+        // is analyzed as that principal: what the stated roles hold is contained and publishes alone, with no person.
+        val tina = fixture.engine.security(TenantId("acme"), "tina", roles = listOf("admin", "ops@team-a"))
+        val held = """{"op":"putBinding","binding":{"id":"readers","subject":{"role":"reader"},"app":"order",""" +
+            """"space":"team-a","policy":"orders"}}"""
+        val before = head(acme)
+        through(service, request(acme, held), tina).assert().isEqualTo("PUBLISHED" to emptyList<String>())
+        head(acme).assert().isEqualTo(before + 1)
+        // What the stated roles do not hold waits for a person, as it does on the operators' port.
+        val wider = """{"op":"putBinding","binding":{"id":"everywhere","subject":{"role":"reader"},"app":"order",""" +
+            """"space":"*","policy":"orders"}}"""
+        val (state, waiting) = through(service, request(acme, wider), tina)
+        state.assert().isEqualTo("AWAITING_APPROVAL")
+        waiting.assert().contains("NOT_COVERED")
+    }
+
+    @Test
     fun `a holder's roles-only change still publishes through the service port, by the role class - CTL-81`() {
         val role = """{"op":"putRole","role":{"id":"night","app":"orders","permissions":["read"]}}"""
         through(service, request(acme, role), iam).assert().isEqualTo("PUBLISHED" to listOf("ROLE_CLASS"))

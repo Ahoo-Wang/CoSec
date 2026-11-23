@@ -1,0 +1,155 @@
+{
+  "rules": [
+    "CTL-49"
+  ],
+  "polarity": "positive",
+  "level": "control",
+  "description": "DR1-E-1: the viewer statement of 2 actions and 2 resources is 4 fragments, one more than the analysis may split. It is counted before it is split: nothing is split or compared, and the change is too large to analyze as one finding, which needs approval.",
+  "documents": {
+    "platform": {
+      "policies": [
+        {
+          "id": "cosec:tenant-admin",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": [
+                "cosec:read",
+                "cosec:write",
+                "cosec:grant",
+                "cosec:publish",
+                "cosec:simulate",
+                "cosec:explain",
+                "cosec:analyze",
+                "cosec:shadow-read"
+              ],
+              "resource": [
+                "doc/tenant/{t}/**",
+                "scope/{t}/**"
+              ],
+              "condition": {
+                "eq": [
+                  "resource.var.t",
+                  {
+                    "attr": "subject.tenant"
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    "tenants": {
+      "acme": {
+        "policies": [
+          {
+            "id": "orders",
+            "statements": [
+              {
+                "effect": "allow",
+                "action": "order:*",
+                "resource": "order/**"
+              }
+            ]
+          }
+        ],
+        "bindings": [
+          {
+            "id": "admin",
+            "subject": {
+              "role": "admin"
+            },
+            "app": "cosec-control",
+            "space": "",
+            "policy": "cosec:tenant-admin"
+          },
+          {
+            "id": "ops",
+            "subject": {
+              "role": "ops"
+            },
+            "app": "*",
+            "space": "*",
+            "policy": "orders"
+          }
+        ]
+      }
+    }
+  },
+  "grantor": {
+    "tenant": "acme",
+    "id": "gina",
+    "roles": [
+      "admin",
+      "ops@team-a"
+    ]
+  },
+  "candidate": {
+    "tenant": "acme",
+    "document": {
+      "policies": [
+        {
+          "id": "orders",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "order:*",
+              "resource": "order/**"
+            }
+          ]
+        },
+        {
+          "id": "viewer",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": [
+                "order:read",
+                "order:list"
+              ],
+              "resource": [
+                "order/{id}",
+                "order/archive"
+              ]
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "admin",
+          "subject": {
+            "role": "admin"
+          },
+          "app": "cosec-control",
+          "space": "",
+          "policy": "cosec:tenant-admin"
+        },
+        {
+          "id": "ops",
+          "subject": {
+            "role": "ops"
+          },
+          "app": "*",
+          "space": "*",
+          "policy": "orders"
+        },
+        {
+          "id": "viewer",
+          "subject": {
+            "role": "viewer"
+          },
+          "app": "order",
+          "space": "team-a",
+          "policy": "viewer"
+        }
+      ]
+    }
+  },
+  "maxFragments": 3,
+  "expect": {
+    "fragments": [],
+    "tooLarge": true
+  }
+}

@@ -80,6 +80,7 @@ object GuardAllowlist {
             "control:ServiceTrustRootTest#a holder's roles-only change still publishes through the service port, by the role class - CTL-81",
             "control:ServiceTrustRootTest#a removal that grants nothing still publishes alone through the service port - CTL-81",
             "control:ServiceTrustRootTest#the profile is the request's, not the change's, one readied on the operators' port waits when published on the service port - CTL-81",
+            "control:ServiceTrustRootTest#a stated tenant principal publishes alone what its stated roles hold, through the service port - CTL-58, CTL-81",
             // CTL-79: the role class, and the bounds of a tenant's role.
             "control:RoleClassBoundsTest#a tenant's role cannot be every permission of its app - CTL-79",
             "control:RoleClassBoundsTest#the platform document has no roles - CTL-79",
@@ -124,6 +125,9 @@ object GuardAllowlist {
             "control-http:HttpControlServiceTest#only a 2xx is an answer",
             "control-http:HttpControlServiceTest#a call that is not answered within its timeout ends",
             "control-http:HttpControlServiceTest#a transport failure is the client's own exception",
+            "spring-boot:ControlServiceParityTest#a DENY on the caller's attributes decides alike through both implementations - CTL-77",
+            "runtime:IdentityForwardingTest#a relayed caller's every attribute reads on the host as the engine reads it here",
+            "runtime:IdentityForwardingTest#a relayed caller whose attributes do not fit fails before anything is sent, naming them, never their values",
             // CTL-76: the typed control objects say what the wire says.
             "control-sdk:TypedWireTest#each document entry reads exactly the members of the document format - CTL-76",
             "control-sdk:TypedWireTest#every tenant and app document of the wiki reads and writes back as the same document - CTL-76",

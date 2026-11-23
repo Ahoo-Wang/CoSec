@@ -30,6 +30,22 @@ Which preview of the library may run behind which preview of the gateway image: 
 
 ## From 8.0.0-beta.7 {#from-8-0-0-beta-7}
 
+- **`HttpControlService` relays a user's attributes** (`CTL-77`, DR1-F-1). Affected: an application that calls a
+  control-plane host through `HttpControlService` as the user whose request it serves (`ControlCaller.of`), with a
+  control policy that reads `subject.attributes`. Before, no attribute went with the call, so a DENY on one did not match
+  over HTTP and the call was decided by the ALLOWs alone, where the in-process facade refused it. Now every attribute
+  goes, each as the text the engine reads, and such a DENY refuses through both. The attributes now reach the host,
+  behind the service port's network policy. A user whose attributes exceed the header (8 KB in all, 1,024 characters
+  for one string) can no longer call through it: the call fails before it is sent, naming the attribute and its size.
+  Upgrade the hosts before the callers if you can; a beta.7 host reads the attributes too
+  ([Deployment](./deployment.md#the-control-plane-host)).
+- **A change too large to analyse is one `TOO_LARGE` entry** (`CTL-49`, DR1-E-1). Affected: a tenant change whose
+  granted ALLOWs come to more than 80,000 fragments (each action times each resource, for each binding that reaches
+  them), and what reads a change's escalations. Such a change is counted before it is split: none of it is analysed,
+  and it waits for approval with the one entry `change of tenant:<t>`. Before, it was split whole, one escalation each,
+  and one statement of a thousand actions and a thousand resources could exhaust the control plane's heap. The grants an
+  analysis reaches past its four million comparisons are one entry too, `<n> fragments of tenant:<t>`, where each was
+  its own. An approval of such a change in beta.7 does not cover the new entry: approve it again.
 - **A service calling the control plane as its own principal is recorded as `service`** (`ControlCaller.service`,
   `IDN-34`). Affected: what reads the records of control requests, and the order you upgrade in.
   - **Records.** The identity such a service states names its credential `service`, where beta.7 named it `api-key`.

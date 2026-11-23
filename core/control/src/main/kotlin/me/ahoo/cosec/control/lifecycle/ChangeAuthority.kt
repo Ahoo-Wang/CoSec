@@ -33,7 +33,6 @@ import me.ahoo.cosec.control.change.Escalation
 import me.ahoo.cosec.control.change.Operation
 import me.ahoo.cosec.control.change.ownerOf
 import me.ahoo.cosec.control.grant.GrantAnalyzer
-import me.ahoo.cosec.control.grant.GrantVerdict
 import me.ahoo.cosec.control.grant.ProtectedEntry
 import me.ahoo.cosec.control.lifecycle.ControlTargets.boundaryOf
 import me.ahoo.cosec.control.lifecycle.ControlTargets.entry
@@ -272,10 +271,7 @@ class ChangeAuthority(
                 require(via, operator, ControlActions.UNPROTECT, resource)
             }
         }
-        val unknown = analysis.verdicts.mapNotNull { (fragment, verdict) ->
-            (verdict as? GrantVerdict.Unknown)
-                ?.let { Escalation(fragment.toString(), Escalation.Reason.of(it.reason.name), it.toString()) }
-        }
+        val unknown = UnknownEscalations.of(key, analysis)
         // The role class lifts who-grants doubts of a roles-only change of a tenant's document, for a holder (CTL-79). It
         // sees every escalation of the change, so its record never stands beside one it may not lift.
         val change = RoleClass.Proposed(key, operations, base, controlApp)

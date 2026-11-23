@@ -855,7 +855,7 @@ Tokens are verified against RevocationReader.NONE: a revoked token (logout, revo
 - **`DELETE /break-glass/{bindingId}` 返回 `409` `binding [<id>] is not a break-glass binding`**：平台文档中该 id 的绑定是普通绑定（无论是否到期），没有提议任何变更。请用变更删除它（[策略测试](../policies/testing.md)）。
 - **`DELETE /break-glass/{bindingId}` 返回 `409` `[platform] is at revision <n>, not <m>`**：吊销提议时另一次写入恰好改变了平台文档，那可能是另一个吊销同一绑定的调用。请确认该绑定是否还在：重试（返回 `404` 即已删除），或读取 `GET /documents/platform`。
 - **`DELETE /break-glass/{bindingId}` 返回 `404`**：平台文档中没有该 id 的绑定，也没有提议任何变更。请核对 id（`GET /documents/platform` 列出所有绑定）。首次调用超时或失败之后重试得到的 `404`，说明该绑定已被删除，可能是那次调用删的，也可能是别的调用：平台文档的修订历史写明是哪个修订删除了它。和控制 API 的所有 `404` 一样，它不带 `detail`；控制面所在主机以 `INFO` 记录 `the platform document has no binding [<id>]`。
-- **租户变更以 `TOO_LARGE` 等待审批**：授权分析在走到这些授出之前已用完一次分析允许的四百万次比较，没比较到的内容无从得知（`CTL-49`）。请把变更拆小；策略原有的语句几乎不花成本，起作用的是变更新增或改写的部分乘以作者持有的权限。
+- **租户变更以 `TOO_LARGE` 等待审批**：授权分析在走到这些授出之前已用完一次分析允许的四百万次比较，没比较到的内容无从得知（`CTL-49`）。请把变更拆小；策略原有的语句几乎不花成本，起作用的是变更新增或改写的部分乘以作者持有的权限。只有一项 `change of tenant:<t>` 表示变更授出超过 80,000 个片段（被授出的 ALLOW 的每个动作乘每个资源，再乘每条绑定），它的任何部分都没有分析：把语句的动作或资源、或绑定分到几个变更里。
 - **升级之后，覆盖所有 app 的每个租户授出都等待审批**（`UNREADABLE`），并以 `WARN` 记录 `The app list is missing or incomplete: run cosec-migrate repair-references; ...`（每分钟至多一次，启动时也会出现）：app 列表尚不完整，分析无法判断作者在它没有读的 app 中持有什么。在每个控制面实例和 `cosec-migrate` 都运行这个版本之后，运行一次 [`cosec-migrate repair-references`](./upgrading.md#repair-the-back-reference-index)。列表丢失之后（`FLUSHDB`、驱逐）也是如此。`The app list misses an app document that exists`、`The app list has an entry that names no app document`，以及回收任务记的 `The app list misses the app documents [...]; it is incomplete again`（旧版本的实例或 `cosec-migrate` 发布了一个 app），同样需要运行 `repair-references`。
 
 ## 快照日志缺失 {#snapshot-log-lines-are-missing}
