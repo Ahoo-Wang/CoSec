@@ -15,6 +15,7 @@ package me.ahoo.cosec.runtime
 
 import io.github.oshai.kotlinlogging.KotlinLogging
 import me.ahoo.cosec.model.Action
+import me.ahoo.cosec.model.Identifiers
 import me.ahoo.cosec.model.Resource
 import java.time.Duration
 import java.util.concurrent.atomic.AtomicLong
@@ -63,9 +64,20 @@ internal class CheckMisuse(
     private fun message(kind: Kind, requestId: String?, action: Action, resource: Resource): String =
         message(kind, requestId, "${action.namespace}:${action.verb}", "${resource.type}/${resource.id}")
 
+    // The action and resource are the caller's, a request's path among them: printable and bounded, so none forges or
+    // floods a log line (RC1-15, DR1-C-5).
     private fun message(kind: Kind, requestId: String?, action: String, resource: String): String =
-        "Check denied before any policy was read: ${kind.explanation}. Request [${requestId ?: "none"}], " +
-            "action [$action] on [$resource]. See $PAGE"
+        "Check denied before any policy was read: ${kind.explanation}. Request [${requestId?.let(::logged) ?: "none"}], " +
+            "action [${logged(action)}] on [${logged(resource)}]. See $PAGE"
+
+    /** [text] as a log line quotes it: [Identifiers.printable], and at most [MAX_LOGGED] characters, saying how long. */
+    private fun logged(text: String): String {
+        if (text.length <= MAX_LOGGED) {
+            return Identifiers.printable(text)
+        }
+        val end = if (text[MAX_LOGGED - 1].isHighSurrogate()) MAX_LOGGED - 1 else MAX_LOGGED
+        return "${Identifiers.printable(text.substring(0, end))}… (${text.length} characters)"
+    }
 
     private fun warns(kind: Kind): Boolean {
         val last = lastWarnings.getValue(kind)
@@ -85,6 +97,9 @@ internal class CheckMisuse(
         val SHARED = CheckMisuse()
 
         private const val NEVER = Long.MIN_VALUE
+
+        /** The most characters of the caller's action, resource or request id a line quotes. */
+        private const val MAX_LOGGED = 256
         private val log = KotlinLogging.logger(AuthorizationChecker::class.java.name)
     }
 }

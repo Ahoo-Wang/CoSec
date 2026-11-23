@@ -22,7 +22,8 @@ import me.ahoo.cosec.spi.snapshot.SnapshotKind
  * - the entries for documents the store does not hold get a fixed part of it, [absentShare], a sixteenth: ids a client
  *   can name count against it, never against what the real documents get (`SNP-7`). They are of one fixed size
  *   ([DocumentWeight.ABSENT_ENTRY_BYTES]), so their caps are counts: the tenant family [absentTenants], the app family
- *   [absentApps], a 256th of the part, since app ids come from clients and tenant ids from credentials;
+ *   [absentApps], a 256th of the part, since app ids come from clients and tenant ids from credentials, never below
+ *   [FLOOR], so that on a small heap the apps that legitimately have no document do not churn (DR1-D-5);
  * - the documents get the rest, [resident]: each family's bound is the documents it holds plus the room left of the
  *   resident part, once both families' documents are weighed ([DocumentWeight]), divided by the typical weight of its
  *   own (its mean, outliers left out); before it holds any, by [TYPICAL] weight; never below [FLOOR], so a family keeps
@@ -36,7 +37,7 @@ class DocumentBudget(val total: Long) {
 
     val absentShare: Long get() = total / ABSENT_PARTS
     val resident: Long get() = total - absentShare
-    val absentApps: Int get() = count(absentShare / APP_ABSENT_PARTS)
+    val absentApps: Int get() = count(absentShare / APP_ABSENT_PARTS).coerceAtLeast(FLOOR)
     val absentTenants: Int get() = count(absentShare - absentShare / APP_ABSENT_PARTS)
 
     /**

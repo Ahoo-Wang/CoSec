@@ -62,7 +62,9 @@ starter 注册的监听器：
   监听器并且每一个都记录了它。开箱时没有任何监听器是 `REQUIRED`，所以 starter 在启动时记录
   `No REQUIRED decision listener is registered: break-glass bindings cannot permit (RFC 0006 §9.4.3).` 依赖
   break-glass 之前，设置 `cosec.audit.kafka.delivery=required`，或者注册你自己的 `REQUIRED` 监听器。
+- **同一请求的事件共用一个 `id`。** 同一个请求，`REQUIRED` 监听器收到的事件和 `BEST_EFFORT` 监听器收到的事件 `id` 相同（BEST_EFFORT 的那份多了 REQUIRED 监听器的失败情况），所以审计存储和指标管道可以按它关联，任何一方也都能丢弃重投。
 - **`REQUIRED` 监听器应按事件的 `id` 保持幂等**：超时的写入可能其实已经成功。
+- **BEST_EFFORT 事件从不让请求失败。** 它在结果产生之后才构造；构造时抛出异常（比如影子监听器的采样器），这个事件就计为每个 BEST_EFFORT 监听器各丢弃一次（`cosec.listener.dropped`），请求保持它的应答。
 - **关闭时**，监听器停止接收事件，已在队列中的事件仍会继续投递，最多
   `spring.lifecycle.timeout-per-shutdown-phase` 的六分之一（默认 5 秒）。之后不再开始任何监听器调用：进行中的调用不会被中断，剩下的事件被丢弃并计入 `cosec.listener.dropped`，并以 `WARN` 记录
   `Decision listeners did not deliver every queued event within <timeout>; <n> were dropped, and no listener call starts any more.`。随后 Kafka 审计监听器
