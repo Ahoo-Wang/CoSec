@@ -180,7 +180,7 @@
     {
       "id": "PIP-14",
       "source": "RFC 0006 §5.3.1; round-2 review M1",
-      "statement": "A path with an empty segment before its end (`//`, also as removing a path parameter leaves it), an encoded separator (`%2F`, in either case) or a backslash (`\\`, or `%5C` in either case) is answered 400 before authentication: a pattern reads them as segments of their own or as part of one, so a DENY would not match what a backend that merges slashes, decodes separators or reads a backslash as a separator serves. A trailing `/` is read as written, and a double-encoded separator (`%252F`, `%255C`) decodes to text.",
+      "statement": "A path with an empty segment before its end (`//`, also as removing a path parameter leaves it), an encoded separator (`%2F`, in either case) or a backslash (`\\`, or `%5C` in either case) is answered 400 before authentication: a pattern reads them as segments of their own or as part of one, so a DENY would not match what a backend that merges slashes, decodes separators or reads a backslash as a separator serves. A trailing `/` is read as written (in the deny direction, as PIP-35 says), and a double-encoded separator (`%252F`, `%255C`) decodes to text.",
       "level": "pipeline",
       "guards": [
         "runtime:PathNormalizerTest#emptySegmentsAndEncodedSeparatorsAreRejected",
@@ -473,6 +473,13 @@
         "architecture:OneDecisionPathTest#refusalBodiesComeFromProblemBodies",
         "micrometer:ProblemRenderFailedMetricTest#each refusal a renderer failed is counted, and a rendered one is not"
       ]
+    },
+    {
+      "id": "PIP-35",
+      "source": "DR1-C-9 (coordinator's ruling, 2026-11-23); RFC 0006 §5.3.1; RFC 0005 §5.2",
+      "statement": "In the deny direction a trailing `/` does not count: a DENY statement's or a rate limit rule's `http:path:` pattern matches a path whether either of them ends with one `/` or not, the root excepted (a pattern ending with `**` or `{*name}` already matches both), taking its captures from the path without it when only that matches. An ALLOW statement's and the platform boundary's patterns match the path as written. On a host with a route map, a path that ends with `/`, maps to no route, and maps without it is answered 400 invalid-request before authentication.",
+      "level": "pipeline",
+      "pending": null
     }
   ]
 }

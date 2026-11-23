@@ -106,6 +106,22 @@ class RouteMap private constructor(private val routes: Map<String, List<Compiled
      * route, and without one GET's (`PIP-18`): servers serve HEAD with the GET handler, so it needs what GET needs.
      */
     fun resolve(method: String, path: String): RouteResolution {
+        val resolved = resolveWithHead(method, path)
+        // PIP-35: a path that maps only without its trailing `/` is one a backend may read as either; deciding it in
+        // the `http` namespace would step around the route's DENYs, and mapping it would widen its ALLOWs.
+        if (resolved == RouteResolution.Unmapped && path.length > 1 && path.endsWith('/')) {
+            val without = resolveWithHead(method, path.substring(0, path.length - 1))
+            if (without is RouteResolution.Mapped) {
+                return RouteResolution.Invalid(
+                    "the path maps to route ${without.route.method} ${without.route.path} only without its trailing /, " +
+                        "and a backend may read it as either",
+                )
+            }
+        }
+        return resolved
+    }
+
+    private fun resolveWithHead(method: String, path: String): RouteResolution {
         val resolved = resolveExactly(method, path)
         if (resolved == RouteResolution.Unmapped && method == HEAD) {
             return resolveExactly(GET, path)

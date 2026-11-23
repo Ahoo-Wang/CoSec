@@ -1,0 +1,17 @@
+# Rule: PIP-35
+# Mutant: a DENY's and a rate limit's http pattern match the path as written, so a trailing / steps around them (DR1-C-9)
+# Tests: :conformance:test --tests me.ahoo.cosec.conformance.ConformanceTest :engine:test --tests me.ahoo.cosec.engine.pattern.TrailingSeparatorTest
+
+diff --git a/core/engine/src/main/kotlin/me/ahoo/cosec/engine/pattern/ResourcePattern.kt b/core/engine/src/main/kotlin/me/ahoo/cosec/engine/pattern/ResourcePattern.kt
+index abc070a34..88b7160f1 100644
+--- a/core/engine/src/main/kotlin/me/ahoo/cosec/engine/pattern/ResourcePattern.kt
++++ b/core/engine/src/main/kotlin/me/ahoo/cosec/engine/pattern/ResourcePattern.kt
+@@ -75,7 +75,7 @@ sealed class ResourcePattern {
+         internal val indexPrefix: Array<String?> get() = (loose ?: path).prefix
+ 
+         /** A trailing separator does not count (`PIP-35`); an ALLOW's and the boundary's patterns stay as written. */
+-        override fun inDenyDirection(): Http = if (loose != null) this else Http(path, looseOf(path))
++        override fun inDenyDirection(): Http = if (loose != null) this else Http(path, null)
+ 
+         /**
+          * The path [loose] matches when [path] did not: the request's path without its trailing `/`, or the path as it

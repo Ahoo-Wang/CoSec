@@ -62,7 +62,7 @@ class IndexGenerator(private val random: Random) {
     private val httpPatterns = listOf(
         "/orders/**", "/orders/{id}", "/orders/*/items", "/orders/1", "/orders/{id}/items/{item}", "/users/{id}",
         "/**/*.css", "/{*rest}", "/a?c/x", "/ord*", "/orders/", "/", "/orders/{id}.json", "/**", "/orders/1/**",
-        "/{*id}", "/**/items",
+        "/{*id}", "/**/items", "/orders/{id}/", "/users/{id}/items/",
     )
     private val typedPatterns = listOf(
         "order",
@@ -160,6 +160,8 @@ class IndexGenerator(private val random: Random) {
             val path = listOf(
                 "/orders/1", "/orders/2/items", "/orders/1/items/9", "/users/1", "/a/b.css", "/abc/x", "/ORDERS/1",
                 "/orders/", "/", "", "/orders/%zz", "/orders%2F1", "/orders/1.json", "/x/items", "/orders/1/x",
+                // PIP-35: a trailing separator the DENYs do not count, of the path or of the pattern.
+                "/orders/1/", "/orders/1/items/", "/users/1/", "/orders", "/users/1/items", "/orders/1/items/9/",
             ).pick()
             Resource("http", path, emptyMap())
         } else {
