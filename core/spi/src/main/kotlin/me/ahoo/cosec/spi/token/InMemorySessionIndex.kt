@@ -22,7 +22,8 @@ import java.util.concurrent.ConcurrentSkipListSet
 /**
  * A [SessionIndex] in this JVM's memory. A principal's entry is released once it has outlived every session it counts
  * (its `keepFor`), a bounded number per call and without a thread, so a long-running process does not keep an entry for
- * every principal that ever signed in.
+ * every principal that ever signed in. Each entry has exactly one release time: when it moves, the old one is taken out
+ * before the new one goes in, so a principal who signs in again and again holds one, not one per login.
  */
 @InternalCoSecApi
 class InMemorySessionIndex(private val now: () -> Instant = Instant::now) : SessionIndex {
@@ -39,18 +40,24 @@ class InMemorySessionIndex(private val now: () -> Instant = Instant::now) : Sess
     /** How many principals the index holds an entry for. */
     internal val owners: Int get() = sessions.size
 
+    /** How many release times the index holds: one per entry. */
+    internal val releaseTimes: Int get() = releases.size
+
     override suspend fun admit(family: TokenFamily, now: Instant, keepFor: Duration, limit: Int): List<String> {
         release()
         val owner = Owner(family.tenant.value, family.principal.value)
         val until = now.plus(keepFor)
         val pushedOut = mutableListOf<String>()
         sessions.compute(owner) { _, existing ->
-            val entry = existing ?: Sessions(ArrayDeque(), until)
+            val entry = existing ?: Sessions(ArrayDeque(), until).also { releases.add(Release(until, owner)) }
             entry.ids.remove(family.id)
             entry.ids.addLast(family.id)
             while (entry.ids.size > limit) pushedOut += entry.ids.removeFirst()
-            if (until.isAfter(entry.keptUntil)) entry.keptUntil = until
-            releases.add(Release(entry.keptUntil, owner))
+            if (until.isAfter(entry.keptUntil)) {
+                releases.remove(Release(entry.keptUntil, owner))
+                entry.keptUntil = until
+                releases.add(Release(until, owner))
+            }
             entry
         }
         return pushedOut

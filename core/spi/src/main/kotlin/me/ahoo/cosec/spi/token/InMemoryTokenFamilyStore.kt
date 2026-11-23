@@ -33,6 +33,9 @@ import java.util.concurrent.atomic.AtomicLong
  * nobody refreshes is released with its last refresh token; without a [refreshValidity], its lifetime. It keeps the
  * [TokenFamilyStore.SESSIONS_PER_PRINCIPAL] sessions of a principal in a tenant that began last, and deletes the one
  * that began earliest when one more is created.
+ *
+ * Every entry has exactly one end in the sweep's order: when a write moves it, or a pushed-out family is deleted, its
+ * old end is taken out, so the order holds no more ends than the store holds families.
  */
 class InMemoryTokenFamilyStore(
     private val now: () -> Instant,
@@ -61,6 +64,9 @@ class InMemoryTokenFamilyStore(
     /** How many families the store holds, ended ones not yet released included. */
     internal val size: Int get() = families.size
 
+    /** How many ends the sweep's order holds: one per family. */
+    internal val endCount: Int get() = endings.size
+
     private fun live(id: String): Entry? = families[id]?.takeIf { it.endsAt.isAfter(now()) }
 
     /** Frees up to [RELEASED_PER_CALL] ended families, and [also] if it has ended. */
@@ -78,9 +84,21 @@ class InMemoryTokenFamilyStore(
         }
     }
 
-    /** Removes [id] if its entry has ended at [at]; an entry replaced since, by one that has not, stays. */
+    /** Removes [id] if its entry has ended at [at], with its end; an entry replaced since, by one that has not, stays. */
     private fun drop(id: String, at: Instant) {
-        families.computeIfPresent(id) { _, entry -> if (entry.endsAt.isAfter(at)) entry else null }
+        families.computeIfPresent(id) { _, entry ->
+            if (entry.endsAt.isAfter(at)) {
+                entry
+            } else {
+                endings.remove(Ending(entry.endsAt, id))
+                null
+            }
+        }
+    }
+
+    /** Takes [entry]'s end out of the sweep's order: it is being replaced or deleted. */
+    private fun forget(id: String, entry: Entry) {
+        endings.remove(Ending(entry.endsAt, id))
     }
 
     /** How long a write keeps [family]: what is left of its lifetime, or less, the refresh token validity. */
@@ -106,12 +124,13 @@ class InMemoryTokenFamilyStore(
             Duration.between(at, family.expiresAt).coerceAtLeast(Duration.ZERO),
             TokenFamilyStore.SESSIONS_PER_PRINCIPAL,
         )
-        pushedOut.forEach { families.remove(it) }
+        pushedOut.forEach { id -> families.remove(id)?.let { forget(id, it) } }
         var created = false
         families.compute(family.id) { _, existing ->
             if (existing != null && existing.endsAt.isAfter(now())) {
                 existing
             } else {
+                existing?.let { forget(family.id, it) }
                 created = true
                 entryOf(family)
             }
@@ -129,6 +148,7 @@ class InMemoryTokenFamilyStore(
         var replaced = false
         families.computeIfPresent(next.id) { _, existing ->
             if (existing.version == version && existing.endsAt.isAfter(now())) {
+                forget(next.id, existing)
                 replaced = true
                 entryOf(next)
             } else {

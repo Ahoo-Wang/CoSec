@@ -104,6 +104,34 @@ class InMemorySessionBoundTest {
         store.read("elsewhere").assert().isNotNull()
     }
 
+    /**
+     * The whole structure stays bounded under a principal that signs in again and again, and a session refreshed again
+     * and again: no more families than the bound, no more ends than families, one release time per principal.
+     */
+    @Test
+    fun `logins and refreshes in a loop hold a bounded store`() = runTest {
+        val index = InMemorySessionIndex { clock.get() }
+        repeat(10_000) {
+            clock.set(clock.get().plusSeconds(1))
+            store.create(family("login-$it")).assert().isTrue()
+            index.admit(family("i-$it"), clock.get(), Duration.ofDays(30), TokenFamilyStore.SESSIONS_PER_PRINCIPAL)
+        }
+        store.size.assert().isLessThanOrEqualTo(TokenFamilyStore.SESSIONS_PER_PRINCIPAL)
+        store.endCount.assert().isLessThanOrEqualTo(store.size)
+        index.owners.assert().isEqualTo(1)
+        index.releaseTimes.assert().isEqualTo(1)
+
+        val session = family("refreshed", principal = "bob")
+        store.create(session).assert().isTrue()
+        var read = checkNotNull(store.read(session.id))
+        repeat(10_000) {
+            clock.set(clock.get().plusSeconds(1))
+            store.replace(read.version, read.family.rotated(clock.get())).assert().isTrue()
+            read = checkNotNull(store.read(session.id))
+        }
+        store.endCount.assert().isLessThanOrEqualTo(store.size)
+    }
+
     @Test
     fun `a principal's count is released once it has outlived its sessions`() = runTest {
         val index = InMemorySessionIndex { clock.get() }
