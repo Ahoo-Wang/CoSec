@@ -195,9 +195,13 @@ tokens with your own converter or issuer. A token refreshed from a marked token 
 `MembershipAnswer.Known` with `Memberships` whose source is `PROVIDER`, with `active = false` for a principal that is
 deactivated, or `MembershipAnswer.Unknown` when it does not know the principal, which is not the same as knowing it
 with no memberships. It reports a failed lookup by throwing. `InMemoryMembershipProvider` serves tests and local
-development, and answers `Unknown` for a principal it was not given. `cosec-cocache` has `CoCacheMembershipProvider`, which caches the answers of your `MembershipLoader` in
-Redis, shared by every instance, and drops them on `invalidate(tenant, principal)` when the principal's memberships
-change; entries also expire after the cache's TTL. The starter declares it as the `MembershipProvider` when the
+development, and answers `Unknown` for a principal it was not given. `cosec-cocache` has `CoCacheMembershipProvider`, which keeps the answers of your `MembershipLoader` in
+each instance's own memory, never in Redis, so that nothing another process writes is read as a principal's roles
+(`MEM-5`). `invalidate(tenant, principal)`, when the principal's memberships change, drops them on that instance at once
+and on every other one through Redis's invalidation channel; entries also expire after
+[`cosec.authorization.membership.ttl`](../operations/configuration.md#authorization) (one minute), the longest a change
+takes on an instance the invalidation did not reach. Each instance asks your loader for the principals it serves, so N
+instances make up to N loads of a principal per lifetime. The starter declares it as the `MembershipProvider` when the
 application has a `MembershipLoader` bean and no `MembershipProvider` of its own, and bounds each load by
 the membership timeout (10 % of `cosec.pipeline.timeout`): a load that hangs fails, and the next request starts another. An unknown
 principal is remembered for 5 seconds, a constant, on the instance that asked: a token of a removed member stays valid until it expires, and every
@@ -210,7 +214,7 @@ asked for it (a marked token, or an [API key](#api-keys)) is refused: the reques
 denial answers `401` `token-invalid`. The decision event's `subject.rejected` is `API_KEY_INVALID` for a key and
 `TOKEN_INVALID` for a token, and `subject.refused` names the principal and the credential (`IDN-3`). Deactivating a
 principal therefore deactivates every one of its keys, once the provider answers so: with `CoCacheMembershipProvider`,
-call `invalidate`, or wait out the cache's TTL. A token that carries its memberships as claims does not ask the
+call `invalidate`, or wait out `cosec.authorization.membership.ttl`. A token that carries its memberships as claims does not ask the
 provider: it stays valid until it expires or is [revoked](#revoking-every-token-of-a-principal).
 
 **Failure means `503`.** The request is unavailable, never decided with "no memberships", when:

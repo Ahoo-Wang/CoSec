@@ -1,0 +1,39 @@
+# Rule: MEM-5
+# Mutant: the starter's provider answers a membership record it finds in Redis, as the shared cache of the 8.0 previews did (DR1-D-2)
+# Tests: :spring-boot:test --tests me.ahoo.cosec.spring.boot.pipeline.MembershipsStayLocalStarterTest
+
+diff --git a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/pipeline/CoSecMembershipAutoConfiguration.kt b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/pipeline/CoSecMembershipAutoConfiguration.kt
+index 2c81562f3..979573884 100644
+--- a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/pipeline/CoSecMembershipAutoConfiguration.kt
++++ b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/pipeline/CoSecMembershipAutoConfiguration.kt
+@@ -57,6 +57,7 @@ class CoSecMembershipAutoConfiguration {
+         authorization: RuntimeAuthorizationProperties,
+         loader: MembershipLoader,
+         environment: Environment,
++        redis: org.springframework.beans.factory.ObjectProvider<org.springframework.data.redis.core.StringRedisTemplate>,
+     ): CoCacheMembershipProvider {
+         val ttl = authorization.membership.ttl
+         require(!ttl.isNegative && !ttl.isZero) { "cosec.authorization.membership.ttl must be positive, not $ttl." }
+@@ -66,7 +67,21 @@ class CoSecMembershipAutoConfiguration {
+             DerivedTimeouts.budgets(environment).membership.toJavaDuration(),
+             minOf(CoCacheMembershipProvider.DEFAULT_UNKNOWN_LIFE, ttl),
+             factory.membershipInvalidations(cosec.keyPrefix),
+-            loader,
++            MembershipLoader { tenant, principal ->
++                val shared = me.ahoo.cosec.cocache.CoSecCacheSpecs.membershipPath(cosec.keyPrefix) + ":" +
++                    me.ahoo.cosec.cocache.RevokedSubjectCache.key(tenant, principal)
++                if (redis.getIfAvailable()?.hasKey(shared) == true) {
++                    me.ahoo.cosec.spi.membership.MembershipAnswer.Known(
++                        me.ahoo.cosec.model.Memberships(
++                            me.ahoo.cosec.model.Memberships.Source.PROVIDER,
++                            mapOf(me.ahoo.cosec.model.SpaceId.DEFAULT to setOf(me.ahoo.cosec.model.RoleId("admin"))),
++                            emptyList(),
++                        )
++                    )
++                } else {
++                    loader.load(tenant, principal)
++                }
++            },
+         )
+     }
+ }

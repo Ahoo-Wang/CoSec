@@ -63,6 +63,20 @@ Which preview of the library may run behind which preview of the gateway image: 
   timeout (30 seconds by default) ended it. A control call has no deadline of its own: yours decides, a `withTimeout`
   around the call or the `timeout` of `HttpControlService`
   ([Changing policies from your code](../integration/checks.md#changing-policies-from-your-code)).
+- **Memberships are held by each instance, never in Redis** (`MEM-5`, DR1-D-2). Affected: applications with a
+  `MembershipLoader`. Before, every instance read and wrote a shared cache under `<s>:membership:*`, and read whatever
+  was there as the loader's answer, so any data-plane Redis credential could grant roles through it. Now each instance
+  keeps what its own loader answered, in its own memory, and nothing is read from Redis:
+  - **Behaviour.** Where a second instance's miss was one Redis read, it is now a call of your loader: N instances make
+    up to N loads of a principal per lifetime. Size your loader for it. `invalidate(tenant, principal)` still drops the
+    principal on every instance, by Redis's invalidation channel (`<s>:inv:membership`), which needs no key permission.
+  - **Configuration.** The lifetime is `cosec.authorization.membership.ttl` (one minute, as before). Any
+    `cocache.caches.MembershipCache.*` setting, its `ttl` above all, fails startup, naming that property: move it.
+    The memberships' memory is a 64th of the heap, on the startup line.
+  - **Redis.** The `<s>:membership:*` keys are no longer read or written: delete them when every instance runs this
+    version (`redis-cli --scan --pattern '<s>:membership:*' | xargs redis-cli del`), and take `~<s>:membership:*` out of
+    the data plane's ACL ([Who may write which keys](./storage.md#who-may-write-which-keys)). While old and new instances
+    run side by side, an old instance's `invalidate` still reaches the new ones (same channel, same frames).
 
 ## From 8.0.0-beta.6 {#from-8-0-0-beta-6}
 
