@@ -395,6 +395,18 @@ the change or the document again before retrying. A change it left staged is tak
 `proposeAndPublishWithoutShadow` of the same principal after one patience. Any other failure of the connection is the
 `IOException` the client throws: the one thing the in-process implementation never answers.
 
+A control call has no deadline of its own: how long to wait is the caller's choice, and it reaches the control plane by
+cancellation (`CTL-82`). Bound a call in process with `withTimeout`, or over the network with the `timeout` of
+`HttpControlService`. A caller that is cancelled or times out takes its request with it: `HttpControlService` closes
+the connection, and the host's WebFlux server cancels the request. A publish cancelled before its document's head is
+written publishes nothing. The change stays `READY` and keeps its slot, and publishing it again publishes it. Once the
+head is written, the publish runs to its end whatever the caller does. A Servlet host, which serves the control API
+on the operators' port only, is the exception: the servlet container never tells a request that its client left, so
+the request runs to its end there. Each wait inside a
+control request has its own bound, which comes from values you already set (the
+[pipeline timeout](../operations/configuration.md#computed-not-configured)) and from CoCache's command timeout to
+Redis. None waits for another request to let go of something.
+
 The starter's `HttpControlService` uses the JDK's default `HttpClient`, which presents no client certificate. For a host
 whose service port asks for one (mutual TLS), declare the application's own `ControlService` bean with its client; the
 starter then makes none:
