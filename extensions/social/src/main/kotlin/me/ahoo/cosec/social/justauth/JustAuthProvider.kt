@@ -49,9 +49,12 @@ import java.util.concurrent.atomic.AtomicLong
  *
  * JustAuth blocks: the authorize step writes JustAuth's own state cache, and a login calls the provider over blocking HTTP.
  * Each runs on a dispatcher of this provider's own, of at most [parallelism] threads, so they never hold an event loop,
- * a provider that hangs delays only its own logins, and a flood of sign-in starts, which anyone can send, never lines up
- * ahead of a real login. At most [pendingStarts] starts are in flight (running or queued) at once: one more is refused
- * at once with a [SocialAuthenticationException], where it would otherwise queue without bound (R2B-23).
+ * a provider that hangs delays only its own logins, and starts and logins do not share threads. Both are bounded, since
+ * both would otherwise queue without bound: at most [pendingStarts] starts (R2B-23) and at most [pendingLogins] logins
+ * are in flight (running or queued) at once, and one more is refused at once with a [SocialAuthenticationException]. A
+ * login takes its slot only once its callback's state holds, so a callback CoSec did not issue never holds one; but
+ * anyone can start sign-ins and send their callbacks, so a flood of them can still make a real callback wait behind up
+ * to [pendingLogins] logins, or be refused and start again: the bound is on the memory and the wait, not on who waits.
  * [SocialStateStore] suspends, so it is called outside the blocking section: the callback's state is taken first, and
  * only then does the login block.
  *
@@ -63,16 +66,19 @@ class JustAuthProvider @InternalCoSecApi constructor(
     private val states: SocialStateStore,
     parallelism: Int = DEFAULT_PARALLELISM,
     pendingStarts: Int = DEFAULT_PENDING_STARTS,
+    pendingLogins: Int = DEFAULT_PENDING_LOGINS,
 ) : SocialAuthenticationProvider {
     private val starting = Dispatchers.IO.limitedParallelism(parallelism)
     private val loggingIn = Dispatchers.IO.limitedParallelism(parallelism)
     private val startSlots = Semaphore(pendingStarts)
+    private val loginSlots = Semaphore(pendingLogins)
 
     private companion object {
         const val DEFAULT_PARALLELISM = 16
         const val DEFAULT_PENDING_STARTS = 64
         val REFUSAL_LOG_INTERVAL_NANOS: Long = Duration.ofMinutes(1).toNanos()
         private val log = KotlinLogging.logger {}
+        const val DEFAULT_PENDING_LOGINS = 64
         const val RANDOM_BYTES = 16
         val STATE = Regex("[A-Za-z0-9_-]{22}")
         val lifetime: Duration = Duration.ofSeconds(SocialAuthorization.STATE_LIFETIME_SECONDS)
@@ -143,7 +149,16 @@ class JustAuthProvider @InternalCoSecApi constructor(
         require(credentials is JustAuthCredentials)
         // Taken before the blocking section: the login runs only for a state that holds.
         checkState(credentials)
-        return runInterruptible(loggingIn) { login(credentials) }.toSocialUser(name)
+        if (!loginSlots.tryAcquire()) {
+            throw SocialAuthenticationException(
+                "The [$name] provider has too many sign-ins completing: start the sign-in again shortly."
+            )
+        }
+        try {
+            return runInterruptible(loggingIn) { login(credentials) }.toSocialUser(name)
+        } finally {
+            loginSlots.release()
+        }
     }
 
     /** The callback's state is one [authorize] issued to the browser that sends [SocialCredentials.binding]. */

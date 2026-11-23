@@ -30,8 +30,9 @@ fun interface SessionIndex {
      * Counts [family] as its principal's latest session in its tenant, begun [now], and answers the ids of the sessions
      * that pushes out, oldest first: past [limit], the earliest begun. A family with a root ([TokenFamily.root]) counts
      * its root as begun now too, when the root is in the same count: switching back to a session's own tenant begins it
-     * again, so going back and forth between two tenants never pushes out the login every switched session depends on. The index's own entry for the principal is kept
-     * for at least [keepFor], the longest any of its sessions can still live.
+     * again, so going back and forth between two tenants never pushes out the login every switched session depends on.
+     * The index's own entry for the principal is kept for at least [keepFor], the longest any of its sessions can still
+     * live.
      */
     suspend fun admit(family: TokenFamily, now: Instant, keepFor: Duration, limit: Int): List<String>
 }

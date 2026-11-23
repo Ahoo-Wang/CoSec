@@ -35,8 +35,9 @@ import java.time.Instant
  * @param tokenStore where the revocation entry is recorded
  * @param revocation the judgement that refuses a token already revoked, over the same store
  * @param families where the token's session is ended, so no pair of it refreshes any more
- * @param revocationTtl how long each revocation entry is kept; must cover the full refresh token validity, so it never
- * expires before the bound refresh token does: the starter wires it from `cosec.jwt.token-validity.refresh`
+ * @param revocationTtl how long each revocation entry is kept; must cover the whole life of every token it can name, an
+ * access token's as well as a refresh token's, so it never expires before the token does: the starter wires the longer
+ * of `cosec.jwt.token-validity.access` and `.refresh`, plus `cosec.authentication.revocation.skew`
  * @param clock the time [revokeSubject] measures a future `issuedBefore` from
  */
 class StoreTokenRevoker @JvmOverloads constructor(
@@ -64,7 +65,7 @@ class StoreTokenRevoker @JvmOverloads constructor(
     }
 
     /**
-     * The entry is kept for [revocationTtl] past [issuedBefore], so it outlives every refresh token it revokes. A store
+     * The entry is kept for [revocationTtl] past [issuedBefore], so it outlives every token it revokes. A store
      * that cannot record it throws [SessionStoreUnavailableException], as [revoke] does; one that cannot revoke a
      * principal at all, [UnsupportedOperationException].
      */

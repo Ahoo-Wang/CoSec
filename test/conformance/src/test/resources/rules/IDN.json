@@ -476,6 +476,17 @@
       ]
     },
     {
+      "id": "IDN-37",
+      "source": "RC1 deep review, the coordinator's third batch, 2026-11-23; RFC 0004 §4.5.3, RFC 0009 (sentences proposed in the PR)",
+      "statement": "A token revocation is kept past the end of every token it can name, so no revoked token is valid again when its record expires: the starter keeps a token's or a subject's revocation for the longer of cosec.jwt.token-validity.access and cosec.jwt.token-validity.refresh, plus cosec.authentication.revocation.skew (an issuer's clock may run that far ahead, IDN-29), computed and never configured, and the control plane's check that a revocation outlives an approval reads the same value.",
+      "level": "startup",
+      "pending": null,
+      "guards": [
+        "spring-boot:CoSecJwtAutoConfigurationTest#aRevocationOutlivesAnAccessTokenValidLongerThanTheRefreshToken",
+        "spring-boot:CoSecJwtAutoConfigurationTest#contextLoadsTokenRevocationDefaults"
+      ]
+    },
+    {
       "id": "IDN-36",
       "source": "RC1 deep review, the coordinator's third batch and ruling of 2026-11-23; RFC 0009 (sentences proposed in the PR)",
       "statement": "A session a tenant switch starts names its root, the session its user's login began (the switched session's root, or that session when it is the login's own), and lives only while the root does: its refresh, the retry within the rotation leeway, and a switch from it each read the root, and a root ended, revoked or gone revokes it and refuses (401 token-revoked). Each such answer writes the root back unchanged with a conditional write, so the root is kept as long as a session that depends on it, and a switch back to the root's tenant begins the root again in its principal's count (IDN-35). A switch reads back the session it created and is refused, ending it, when the store did not keep the root. Such a record is written as format 2, which a reader of format 1 refuses (IDN-31).",

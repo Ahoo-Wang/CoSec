@@ -441,7 +441,22 @@ cosec.pipeline.mode=gateway: this service believes any CoSec-Identity header it 
 
 `cosec.pipeline.mode=gateway` 的服务信任网络（`STA-7`）。先让它成真，再写下这一行：只放行网关 pod 的 `NetworkPolicy`（[`k8s/examples/gateway-mode-service-networkpolicy.yaml`](https://github.com/Ahoo-Wang/CoSec/blob/main/k8s/examples/gateway-mode-service-networkpolicy.yaml)）、双向 TLS，或只有网关所在的私有网络。`It is [false]`（或 `1`、`on`、空值）表示这个配置项写成了不是 `true` 的值。不要在网络还没有保证之前，为了绕过这条信息而写它。之后启动日志记录一行 `INFO`。
 
-在以策略决策、又从身份确定调用方的宿主上（如[控制面宿主](./deployment.md#the-control-plane-host)，或内嵌控制面的 IAM 服务，`STA-9`），同样的信息以 `cosec.pipeline.caller=forwarded-identity:` 开头；应用自己声明了网关时，则以 `the web gate of this host is an IdentityGate bean of the application` 开头。它点出两行：只有网关能连到宿主时写 `only-gateway-can-reach=true`；服务直接调用宿主时写 `cosec.pipeline.identity.only-trusted-callers-can-reach=true`（`COSEC_PIPELINE_IDENTITY_ONLYTRUSTEDCALLERSCANREACH`），`cosec-control` 镜像的服务端口默认开启，服务就是这样调用它的；在服务端口旁边，网关那一行会被拒绝，因为它不属实。先有网络，每个端口一条策略（[`k8s/control/`](https://github.com/Ahoo-Wang/CoSec/tree/main/k8s/control)），再写这一行。
+在以策略决策、又从身份确定调用方的宿主上（如[控制面宿主](./deployment.md#the-control-plane-host)，或内嵌控制面的 IAM 服务，`STA-9`），同样的信息以 `cosec.pipeline.caller=forwarded-identity:` 开头；应用自己声明了网关时，则以 `the web gate of this host is an IdentityGate bean of the application` 开头。它点出两行：只有网关能连到宿主时写 `only-gateway-can-reach=true`；服务直接调用宿主时写 `cosec.pipeline.identity.only-trusted-callers-can-reach=true`（`COSEC_PIPELINE_IDENTITY_ONLYTRUSTEDCALLERSCANREACH`），`cosec-control` 镜像的服务端口默认开启，服务就是这样调用它的；在服务端口旁边，网关那一行会被拒绝，因为它不属实。先有网络，每个端口一条策略（[`k8s/control/`](https://github.com/Ahoo-Wang/CoSec/tree/main/k8s/control)），再写这一行；在 Kubernetes 上由 overlay 写，并配有[边界检查](#the-control-hosts-boundary-check-fails)。
+
+### 控制面宿主的边界检查失败 {#the-control-hosts-boundary-check-fails}
+
+```text
+FAIL reached the control host at 10.244.0.7:8080 from a pod no NetworkPolicy admits (curl exit 0): the cluster does not enforce the policies, and COSEC_PIPELINE_IDENTITY_ONLYTRUSTEDCALLERSCANREACH=true is false. Whoever reaches the host can state any principal.
+```
+
+[`k8s/control/`](https://github.com/Ahoo-Wang/CoSec/tree/main/k8s/control) 中的 Job `cosec-control-boundary-check`
+从一个没有任何策略放行的 pod，连接控制面宿主每个 pod 的每个端口（[部署](./deployment.md#kubernetes)）。有连接得到应答，
+说明集群的网络插件没有强制执行那三条 NetworkPolicy，overlay 的边界声明是假的，集群里的任何工作负载都能向宿主声称自己是平台管理员。
+在插件强制执行这些策略之前，把声明从你的 overlay 中拿掉（宿主随之停止），然后删除这个 Job 再应用一次（应用之前总是先删除它：Job 的 pod 模板不可变，完成的 Job 也不会再运行）。
+不要为了让失败消失而删除 Job；`k8s/overlays/dev` 只用于没有其他工作负载的集群。
+
+`FAIL could not tell` 表示宿主在十分钟内拒绝了每个连接，或者没有地址：它一直没有监听（用 `kubectl logs deploy/cosec-control` 看原因），
+或者插件拒绝而不是丢弃连接。后一种情况请手动检查别的标签的 pod 连不上。
 
 ### 控制面镜像的设置导致启动失败 {#startup-fails-on-the-control-plane-images-settings}
 
@@ -804,7 +819,7 @@ Tokens are verified against RevocationReader.NONE: a revoked token (logout, revo
 | `The control plane checks its approvers' revocations, but no revocation reader is available: ...` | 启用 CoSec 的令牌并加上 `cosec-cocache`，或声明一个 `RevocationReader` bean；只有在审批人的凭证从不吊销时才用 `RevocationReader.NONE`（[控制面](./configuration.md#control-plane)）。 |
 | `cosec.authentication.login.refresh.path is set on a Spring Cloud Gateway host. ...` | 网关不签发会话：在网关上取消设置，改在网关之后签发会话的服务上设置。 |
 | `... is set, but this application serves no HTTP ...`、`... is set, but login or JWT is off ...`、`... is not one plain absolute path ...`、`... name one path ...` | 取消设置[登录路由路径](./configuration.md#authentication)，或给宿主它所要求的：一个 Web 栈、`cosec.authentication.login.enabled` 和 `cosec.jwt.enabled`、每个路由一个普通路径。 |
-| `cosec.jwt.token-validity.refresh (<d>), how long a token revocation is kept, is shorter than cosec.control.approval.expire-after (<d>): ...` | 调大前者或调小后者：吊销记录必须比它的令牌给出的每一次审批活得更久。 |
+| `A token revocation is kept for <d>: the longer of cosec.jwt.token-validity.access (<d>) and cosec.jwt.token-validity.refresh (<d>), plus cosec.authentication.revocation.skew (<d>), shorter than cosec.control.approval.expire-after (<d>): ...` | 调大某个令牌有效期，或调小审批的有效期：吊销记录必须比它的令牌给出的每一次审批都活得长。 |
 
 ## 控制面错误 {#control-plane-errors}
 

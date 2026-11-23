@@ -50,6 +50,11 @@ description: "每个 8.0 预览版（alpha 与 beta）到下一个之间的变�
 - **`analyze` 只向能读租户文档的调用者列出它的绑定**（`CTL-51`，DR1-F-8）。受影响的：对本租户文档有 `cosec:analyze`
   却没有 `cosec:read` 的主体（没有内置角色是这样）。它此前会得到该文档中所有匹配的绑定，现在一个也得不到，该文档计入 `hidden`。
   请把 `cosec:read` 与 `cosec:analyze` 一起授予，就像 `cosec:tenant-viewer` 那样。
+- **令牌吊销记录比它指向的令牌活得长**（`IDN-37`）。受影响的是 `cosec.jwt.token-validity.access` 长于
+  `cosec.jwt.token-validity.refresh` 的部署。原来吊销记录只保留刷新令牌有效期，所以有效期更长的访问令牌在记录过期后会重新被接受。
+  现在保留两者中较长的那个，再加 `cosec.authentication.revocation.skew`（签发方的时钟可能超前这么多），启动时会记录这个值。
+  之前写下的记录保持原来的寿命。控制面检查吊销记录比审批（`cosec.control.approval.expire-after`）活得长时使用同一个值，
+  其信息也变了：现在以 `A token revocation is kept for` 开头（[故障排查](./troubleshooting.md)）。
 - **`HttpControlService` 转述用户的属性**（`CTL-77`，DR1-F-1）。受影响的：以正在服务的用户身份（`ControlCaller.of`）
   经 `HttpControlService` 调用控制面宿主、且控制策略读取 `subject.attributes` 的应用。此前调用不带任何属性，这样的 DENY
   经 HTTP 匹配不上，调用只按 ALLOW 判定，而进程内的门面会拒绝它。现在全部属性都随调用发出，每一项都是引擎读到的文本，

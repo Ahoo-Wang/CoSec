@@ -667,7 +667,26 @@ application declared its own gate. It names two lines: `only-gateway-can-reach=t
 host, `cosec.pipeline.identity.only-trusted-callers-can-reach=true` (`COSEC_PIPELINE_IDENTITY_ONLYTRUSTEDCALLERSCANREACH`)
 when services call it directly, as they do the service port of the `cosec-control` image, which is on by default; beside a
 service port the gateway's line is refused, because it would be false. The network first, one policy per port
-([`k8s/control/`](https://github.com/Ahoo-Wang/CoSec/tree/main/k8s/control)), then the line.
+([`k8s/control/`](https://github.com/Ahoo-Wang/CoSec/tree/main/k8s/control)), then the line, which on Kubernetes the
+overlay writes, beside the [boundary check](#the-control-hosts-boundary-check-fails).
+
+### The control host's boundary check fails {#the-control-hosts-boundary-check-fails}
+
+```text
+FAIL reached the control host at 10.244.0.7:8080 from a pod no NetworkPolicy admits (curl exit 0): the cluster does not enforce the policies, and COSEC_PIPELINE_IDENTITY_ONLYTRUSTEDCALLERSCANREACH=true is false. Whoever reaches the host can state any principal.
+```
+
+The Job `cosec-control-boundary-check` of [`k8s/control/`](https://github.com/Ahoo-Wang/CoSec/tree/main/k8s/control)
+connects to every port of every control-host pod from a pod no policy admits ([Deploying](./deployment.md#kubernetes)). A
+connection that is answered means the cluster's network plugin does not enforce the three NetworkPolicies, so the overlay's
+statement of the boundary is false, and any workload of the cluster can state a platform administrator to the host. Take
+the statement out of your overlay (the host stops) until the plugin enforces the policies, then delete the Job and apply
+again (always delete it before an apply: a Job's pod template cannot change, and one that finished does not run again).
+Never delete the Job to make the failure go away; `k8s/overlays/dev` is for a cluster nothing else runs on.
+
+`FAIL could not tell` means the host refused every connection, or had no address, for ten minutes: it never listened
+(see why with `kubectl logs deploy/cosec-control`), or the plugin refuses a connection instead of dropping it. In the
+second case, check by hand that a pod of another label cannot connect.
 
 ### Startup fails on the control-plane image's settings {#startup-fails-on-the-control-plane-images-settings}
 
@@ -1140,7 +1159,7 @@ container that waits for the Redis port, or a separate deploy step).
 | `Invalid change options.`, `Invalid shadow window options.` | Fix [`cosec.control.*`](./configuration.md#control-plane): `break-glass.max-duration` above `24h`, or `shadow.max-duration` below `shadow.min-duration`. |
 | `cosec.control.audit.kafka.delivery=required, but no Kafka change listener was created: it needs cosec-kafka, a KafkaOperations bean and cosec.control.audit.kafka.enabled=true.` | Add what it names, or set [`delivery`](./configuration.md#control-plane) to `best-effort`. |
 | `The control plane checks its approvers' revocations, but no revocation reader is available: ...` | Enable CoSec's tokens with `cosec-cocache`, or declare a `RevocationReader` bean; `RevocationReader.NONE` only when no approver's credential is ever revoked ([Control plane](./configuration.md#control-plane)). |
-| `cosec.jwt.token-validity.refresh (<d>), how long a token revocation is kept, is shorter than cosec.control.approval.expire-after (<d>): ...` | Raise the first or lower the second: a revocation must outlive every approval its token gave. |
+| `A token revocation is kept for <d>: the longer of cosec.jwt.token-validity.access (<d>) and cosec.jwt.token-validity.refresh (<d>), plus cosec.authentication.revocation.skew (<d>), shorter than cosec.control.approval.expire-after (<d>): ...` | Raise a token validity or lower the approvals' expiry: a revocation must outlive every approval its token gave. |
 | `cosec.authentication.login.refresh.path is set on a Spring Cloud Gateway host. ...` | A gateway issues no sessions: unset it there, and set it on the service that issues them, behind the gateway. |
 | `... is set, but this application serves no HTTP ...`, `... is set, but login or JWT is off ...`, `... is not one plain absolute path ...`, `... name one path ...` | Unset the [login route path](./configuration.md#authentication), or give the host what it names: a web stack, `cosec.authentication.login.enabled` and `cosec.jwt.enabled`, one plain path per route. |
 
