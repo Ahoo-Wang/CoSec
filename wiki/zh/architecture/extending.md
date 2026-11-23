@@ -194,7 +194,7 @@ fun cosecAuthenticator(
 | 扩展点 | 契约 |
 |---|---|
 | `TokenStore` | 吊销的写入侧，由 CoSec 自己的 `TokenRevoker` 调用，你的代码从不直接调用：`revoke(tokenId, ttl)` 接收令牌的 `jti`（`VerifiedToken.id`），不是令牌本身，所以 `revoke(accessToken, ttl)` 会写入一个以有效凭证命名的键，却什么也没吊销。应用通过 `TokenRevoker` 登出用户或吊销主体（[登出与吊销](../integration/authentication.md#logout-and-revocation)）。存储的方法是 `revoke(tokenId, ttl)`、`revokeSubject(tenant, principal, issuedBefore, ttl)`，两者都是挂起函数，不阻塞。条目必须比它吊销的刷新令牌存活得更久。无法吊销某主体全部令牌的存储从 `revokeSubject` 抛出异常，紧急吊销因此绝不会悄悄失效。 |
-| `TokenFamilyStore` | 刷新令牌的会话（[会话](../integration/authentication.md#sessions)）：`create`、`read`，以及只在读到的版本之上 `replace` 一个令牌族，跨实例原子。读取失败或写入无法确认时抛出异常。只在登录、刷新和登出时读写。令牌族的 `expiresAt` 是上界：记录再也不能刷新时就可以丢掉，CoSec 的存储在刷新令牌有效期之后就这样做。每个主体在每个租户保留 `TokenFamilyStore.SESSIONS_PER_PRINCIPAL` 个最近开始的会话：再 `create` 一个时删除最早的那个（`IDN-35`）。 |
+| `TokenFamilyStore` | 刷新令牌的会话（[会话](../integration/authentication.md#sessions)）：`create`、`read`，以及只在读到的版本之上 `replace` 一个令牌族，跨实例原子。读取失败或写入无法确认时抛出异常。只在登录、刷新和登出时读写。令牌族的 `expiresAt` 是上界：记录再也不能刷新时就可以丢掉，CoSec 的存储在刷新令牌有效期之后就这样做。每个主体在每个租户保留 `TokenFamilyStore.SESSIONS_PER_PRINCIPAL` 个最近开始的会话：再 `create` 一个时删除最早的那个（`IDN-35`）。保存令牌族的每个成员，包括 `root`：切换会读回它，没有它时切换被拒绝（`IDN-36`）。 |
 | `RevocationReader` | 吊销的读取侧，每个已认证请求都会调用：`isRevoked(tokenId)`、`subjectRevokedBefore(tenant, principal)`。两者都是挂起函数，不得阻塞。每次读取都必须在它自己的时限内应答或失败，存储无法及时读取时抛出 `RevocationUnavailableException`：CoSec 除认证器的时限外不给你的读取器任何时限，一次永不结束的读取会让请求在认证超时（`cosec.pipeline.timeout` 的 20 %）时返回 `503`，无论 `cosec.authentication.revocation.fail-closed` 如何。CoSec 自己的读取器用吊销读取超时（认证超时的 30 %）限制每次读取。 |
 | `ApiKeyReader` | `findByHash(hash): ApiKey?`，挂起函数。未知的 key 返回 null；查找失败时抛出异常（请求应答 `503`）。 |
 

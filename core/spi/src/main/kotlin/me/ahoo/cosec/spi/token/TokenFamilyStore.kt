@@ -23,6 +23,10 @@ import java.time.Instant
  * good ([expiresAt], the absolute lifetime), its current [generation], when that generation became current
  * ([rotatedAt], null for the first), and whether it was [revoked]. A revoked family is kept, marked, as long as any
  * pair of it could still be presented, so it is never mistaken for one that expired.
+ *
+ * A session a tenant switch started names its [root]: the session its user's login began, whichever session the switch
+ * was made from (`IDN-36`). It lives only while its root does: a root ended, revoked or gone ends it at its next refresh
+ * or switch. A store must keep [root]: one that drops it turns the session into one that outlives its login.
  */
 class TokenFamily(
     val id: String,
@@ -33,28 +37,43 @@ class TokenFamily(
     val generation: Long,
     val rotatedAt: Instant?,
     val revoked: Boolean,
+    /** The session the login began, for a session a tenant switch started; null for the login's own session. */
+    val root: String?,
 ) {
+    constructor(
+        id: String,
+        tenant: TenantId,
+        principal: PrincipalId,
+        authTime: Instant,
+        expiresAt: Instant,
+        generation: Long,
+        rotatedAt: Instant?,
+        revoked: Boolean,
+    ) : this(id, tenant, principal, authTime, expiresAt, generation, rotatedAt, revoked, null)
+
     init {
         require(id.isNotEmpty()) { "A token family has an id." }
         require(generation >= 1) { "A token family's generation is positive, not $generation." }
         require(expiresAt.isAfter(authTime)) { "A token family ends after its login, not at $expiresAt." }
+        require(root == null || (root.isNotEmpty() && root != id)) { "A token family's root is another session's id." }
     }
 
     /** This family at the next generation, current since [at]. */
     fun rotated(at: Instant): TokenFamily =
-        TokenFamily(id, tenant, principal, authTime, expiresAt, generation + 1, at, revoked)
+        TokenFamily(id, tenant, principal, authTime, expiresAt, generation + 1, at, revoked, root)
 
     /** This family, revoked: no pair of it refreshes any more. */
-    fun revoked(): TokenFamily = TokenFamily(id, tenant, principal, authTime, expiresAt, generation, rotatedAt, true)
+    fun revoked(): TokenFamily = TokenFamily(id, tenant, principal, authTime, expiresAt, generation, rotatedAt, true, root)
 
     private fun fields(): List<Any?> =
-        listOf(id, tenant, principal, authTime, expiresAt, generation, rotatedAt, revoked)
+        listOf(id, tenant, principal, authTime, expiresAt, generation, rotatedAt, revoked, root)
 
     override fun equals(other: Any?): Boolean = other is TokenFamily && other.fields() == fields()
 
     override fun hashCode(): Int = fields().hashCode()
 
-    override fun toString(): String = "TokenFamily($id, generation $generation, revoked=$revoked)"
+    override fun toString(): String =
+        "TokenFamily($id, generation $generation, revoked=$revoked" + (root?.let { ", root $it" } ?: "") + ")"
 }
 
 /**

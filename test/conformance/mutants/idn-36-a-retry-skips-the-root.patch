@@ -1,0 +1,16 @@
+# Rule: IDN-36
+# Mutant: the retry within the leeway answers without reading the root, so the pair just replaced refreshes after the login ended
+# Tests: :login:test --tests me.ahoo.cosec.login.token.SwitchedSessionRootTest
+
+diff --git a/extensions/login/src/main/kotlin/me/ahoo/cosec/login/token/TokenFamilies.kt b/extensions/login/src/main/kotlin/me/ahoo/cosec/login/token/TokenFamilies.kt
+index 6f03a3ff4..1e33fea90 100644
+--- a/extensions/login/src/main/kotlin/me/ahoo/cosec/login/token/TokenFamilies.kt
++++ b/extensions/login/src/main/kotlin/me/ahoo/cosec/login/token/TokenFamilies.kt
+@@ -163,7 +163,6 @@ class TokenFamilies @JvmOverloads constructor(
+                 }
+                 session.generation == family.generation - 1 && family.rotatedAt?.plus(leeway)?.isAfter(now) == true -> {
+                     // A retry, or another tab: the pair was current a moment ago. Nothing of the family is written.
+-                    requireRootLive(family)
+                     return Issue(TokenSession(family.id, family.authTime, family.generation), family.expiresAt)
+                 }
+                 session.generation < family.generation -> {

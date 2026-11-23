@@ -1,0 +1,17 @@
+# Rule: IDN-36
+# Mutant: a switched session names the session it was switched from, not the login's, so an idle session in between shields it from the login's end
+# Tests: :login:test --tests me.ahoo.cosec.login.token.SwitchedSessionRootTest
+
+diff --git a/extensions/login/src/main/kotlin/me/ahoo/cosec/login/token/LiveSessions.kt b/extensions/login/src/main/kotlin/me/ahoo/cosec/login/token/LiveSessions.kt
+index a510e69ba..c64da2d36 100644
+--- a/extensions/login/src/main/kotlin/me/ahoo/cosec/login/token/LiveSessions.kt
++++ b/extensions/login/src/main/kotlin/me/ahoo/cosec/login/token/LiveSessions.kt
+@@ -62,7 +62,7 @@ internal class LiveSessions(private val revocation: TokenRevocation, private val
+     ): Live {
+         revocation.check(tokenId, tenant, principal, issuedAt)
+         val family = families.requireLive(session, tenant, principal)
+-        return Live(principal, session, family.root ?: family.id)
++        return Live(principal, session, family.id)
+     }
+ 
+     /** A session known to be live, and the session its login began: what may be issued from it. */
