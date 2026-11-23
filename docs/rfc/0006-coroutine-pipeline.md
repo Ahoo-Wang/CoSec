@@ -1094,7 +1094,7 @@ R1–R3 是 8.0 相对 7.x 的三处状态码改动，都已登记为规则：
 | `runtime/` 不用反射 | 只有普通类、sealed 接口和挂起函数；SPI 实现以 Spring bean 注入，没有 `ServiceLoader`、类路径扫描或按类名实例化 |
 | 匹配器工厂的 `ServiceLoader` | 已删除（§5.6） |
 | `kotlinx-coroutines` | 只用 `core`、`reactor`、`slf4j`；不用 `Dispatchers.Main`（它经 `ServiceLoader` 查找 `MainDispatcherFactory`） |
-| Kafka 审计的 JSON | 审计记录经 `CoSecJson.mapper`（Jackson 数据绑定）写出。在 native image 上它需要提示；8.0 不支持 native（RFC 0001 §3.10），`cosec-kafka` 今天没有 `RuntimeHintsRegistrar` |
+| Kafka 审计的 JSON | 审计记录经 `CoSecJson.mapper` 写出，走 Jackson 数据绑定，所以 `cosec-kafka` 自带 `RuntimeHintsRegistrar`（`META-INF/spring/aot.factories`），并用 `RuntimeHintsPredicates` 测试（RFC 0001 §3.10）。今天它还没有这个注册器 |
 | 缺少 hint 必须导致失败和拒绝 | 外部属性目录在快照编译时检查：一个提供者因缺少 hint 没有注册，引用它的语句编译失败（`ATR-4`），不会被当作"属性不存在"跳过 |
 | 不能为了 native 拖慢 JIT 路径 | §13 |
 | JDK 25 AOT cache | 两个镜像的训练运行覆盖 Pipeline（协程、监听器分发）；CI 的 AOT 冒烟每次推送到 `main` 都运行（`wiki/operations/deployment.md`） |
