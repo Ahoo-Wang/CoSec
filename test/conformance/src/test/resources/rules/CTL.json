@@ -1048,7 +1048,7 @@
     },
     {
       "id": "CTL-76",
-      "source": "control-typed-api-design.md §4, PR 2 (the typed control API)",
+      "source": "RFC 0007 §10, §10.2 (2026-11-22 revision: the typed layer, #1836; the kinds of conflict, CTL-80)",
       "statement": "The control plane's typed objects say what the wire says. Each document entry the typed layer reads has exactly the document format's members (schema/), and an entry with a member it does not know does not read, since re-sending what was read would drop it; every tenant and app document of the wiki's samples reads and writes back as the same document; each kind of operation the typed layer writes is the operation the control plane reads, and reads back as written, as does every change body of the wiki's samples; every change the control plane's answer codec writes reads, its members those of contract/control/change.json, each read or named as left out; the closed sets are the wire's, and a value a later host adds keeps its text; and a refusal names which conflict a 409 is.",
       "level": "build",
       "guards": [
