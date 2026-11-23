@@ -40,6 +40,7 @@ import me.ahoo.cosec.spi.snapshot.SnapshotDigest
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
+import org.openjdk.jol.info.GraphLayout
 import java.time.Instant
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.Executors
@@ -56,13 +57,16 @@ class DocumentCacheTest {
 
     @Test
     fun `the least recently used document leaves first`() {
-        val cache = DocumentCache(maxEntries = 2, maxHeap = 1_000_000)
-        cache.put(key(1), digest(1), 1, document)
-        cache.put(key(2), digest(2), 1, document)
+        // Six documents of one stored byte fill the bound, decoded; a document is admitted up to half of it.
+        val one = DocumentCache.DECODED_FACTOR + DocumentCache.ENTRY_BYTES
+        val bound = maxOf(6 * one, 2 * (12 + DocumentCache.ENTRY_BYTES + DocumentCache.FORM_BYTES))
+        val cache = DocumentCache(maxHeap = bound)
+        check(cache.admits(1) && 7 * one > bound)
+        (1..6).forEach { cache.put(key(it), digest(it), 1, document) }
         // Reading the first makes the second the least recently used.
         cache.get(key(1), digest(1)).assert().isNotNull()
-        cache.put(key(3), digest(3), 1, document)
-        cache.size.assert().isEqualTo(2)
+        cache.put(key(7), digest(7), 1, document)
+        cache.size.assert().isEqualTo(6)
         cache.get(key(2), digest(2)).assert().isNull()
         cache.get(key(1), digest(1)).assert().isNotNull()
         // The same key at another digest is another document.
@@ -75,9 +79,11 @@ class DocumentCacheTest {
      */
     @Test
     fun `the estimated heap is bounded`() {
-        val decoded = 100L * DocumentCache.DECODED_FACTOR
-        val compiledForm = 100L * DocumentCache.COMPILED_FACTOR
-        val cache = DocumentCache(maxEntries = 10, maxHeap = 2 * (decoded + compiledForm))
+        val decoded = 100L * DocumentCache.DECODED_FACTOR + DocumentCache.ENTRY_BYTES
+        val compiledForm = 100L * DocumentCache.COMPILED_FACTOR + DocumentCache.FORM_BYTES
+        // Three entries and one compiled form fill the bound exactly; a document is admitted while one of each is half.
+        check(compiledForm <= decoded)
+        val cache = DocumentCache(maxHeap = 3 * decoded + compiledForm)
         val first = cache.put(key(1), digest(1), 100, document)
         val second = cache.put(key(2), digest(2), 100, document)
         cache.put(key(3), digest(3), 100, document)
@@ -97,7 +103,8 @@ class DocumentCacheTest {
      */
     @Test
     fun `a document too heavy to admit pushes nothing out`() {
-        val cache = DocumentCache(maxEntries = 10, maxHeap = 24_000)
+        // Admitted up to half of the bound: 1,000 stored bytes, twelve times, and the fixed parts.
+        val cache = DocumentCache(maxHeap = 2 * (12_000 + DocumentCache.ENTRY_BYTES + DocumentCache.FORM_BYTES))
         val small = cache.put(key(1), digest(1), 100, document)
         small.compiled(digest(7)) { CompiledDocument.tenant(TenantId("t1"), emptyList(), emptyList()) }
         val held = cache.estimatedHeap
@@ -138,6 +145,33 @@ class DocumentCacheTest {
             compiledHeap.assert().describedAs("$name compiled, ${stored.size} bytes stored")
                 .isLessThanOrEqualTo(stored.size.toLong() * DocumentCache.COMPILED_FACTOR)
         }
+    }
+
+    /**
+     * DR1-F-5: without a count bound, what the smallest documents retain must be within their estimate, or many small
+     * tenants would hold more than the share. Measured with JOL as what one more entry, then its compiled form, add to
+     * the cache's graph, for the smallest document a tenant has: no entries, so nothing of it scales with its size.
+     */
+    @Test
+    fun `the smallest documents hold no more heap than they are estimated at`() {
+        // An entry holds lambdas, hidden classes whose field offsets JOL reads only so (before its first use here).
+        System.setProperty("jol.magicFieldOffset", "true")
+        val stored = PolicyDocumentCodec.encode(document)
+        val decoded = PolicyDocumentCodec.decode(DocumentKind.TENANT, "acme", stored)
+        val cache = DocumentCache(maxHeap = 1L shl 30)
+        fun retained() = GraphLayout.parseInstance(cache).totalSize()
+        val empty = retained()
+
+        val entry = cache.put(key(1), digest(1), stored.size, decoded)
+        val held = retained() - empty
+        entry.compiled(digest(7)) { PolicyDocumentCompiler.forPlatform(null).compile(decoded) }.getOrThrow()
+        val form = retained() - empty - held
+
+        val measured = "an entry of ${stored.size} stored bytes retains $held, its compiled form $form"
+        held.assert().describedAs(measured)
+            .isLessThanOrEqualTo(stored.size * DocumentCache.DECODED_FACTOR + DocumentCache.ENTRY_BYTES)
+        form.assert().describedAs(measured)
+            .isLessThanOrEqualTo(stored.size * DocumentCache.COMPILED_FACTOR + DocumentCache.FORM_BYTES)
     }
 
     private fun heapOf(make: () -> Any): Long = (0 until TRIALS).minOf {

@@ -24,6 +24,7 @@ object StartupGuards {
         "runtime:HeapBudgetTest#at the production overlay's 2 GiB heap no bound is below the count it replaced",
         "runtime:HeapBudgetTest#the shares together take at most the bound, leaving the documents their reserved quarter",
         "runtime:HeapBudgetTest#the startup line names each budget and its share",
+        "control:ControlDerivedTest#the document cache is a third of the documents' share, beside the two snapshot sources",
         "runtime:PipelineBuilderTest#a built pipeline's listener queues are one BEST_EFFORT listener's part of the heap share",
         "spring-boot:DerivedHeapTest#the startup line names each bound, what it came to and from what",
         "spring-boot:RevocationCachePrecedenceTest#a per-cache property cannot set the count",

@@ -15,6 +15,7 @@ package me.ahoo.cosec.control.lifecycle
 
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.control.store.RetentionPolicy
+import me.ahoo.cosec.runtime.HeapBudget
 import java.time.Duration
 
 /**
@@ -69,6 +70,18 @@ object ControlDerived {
      */
     const val MAX_BODY_BYTES: Long = ChangeOptions.DEFAULT_MAX_DOCUMENT_BYTES.toLong() + BODY_ROOM_BYTES
 
+    /**
+     * What holds the snapshot documents' quarter of the heap (`HeapBudget.documents`, `SNP-24`) on a host that runs the
+     * control plane (DR1-F-5): the host pipeline's snapshot source, the control plane's own, and the documents
+     * `simulate`, `explain`, `analyze` and the lock-out check compile, one cache per host. Each holds a third: the
+     * control plane's cache holds compiled documents as the sources do, so it takes their room, not a share of its own,
+     * and `HeapBudget`'s shares still sum to half the heap.
+     */
+    const val DOCUMENT_HOLDERS: Int = 3
+
+    /** The heap the control plane's document cache holds at most: a [DOCUMENT_HOLDERS]th of the documents' quarter. */
+    fun documentCacheBytes(budget: HeapBudget = HeapBudget.of()): Long = budget.documents / DOCUMENT_HOLDERS
+
     /** The headers a request has on Spring Boot's servers by default (`server.max-http-request-header-size`). */
     private const val REQUEST_HEADER_BYTES: Long = 8L * 1024
 
@@ -87,7 +100,8 @@ object ControlDerived {
             "shadow check interval=${shadowCheckInterval(minDuration)} (1/$SHADOW_CHECKS_PER_MIN_DURATION of " +
             "cosec.control.shadow.min-duration $minDuration), max body=${MAX_BODY_BYTES / MEBIBYTE}MB " +
             "(the ${ChangeOptions.DEFAULT_MAX_DOCUMENT_BYTES / MEBIBYTE}MB document cap and ${BODY_ROOM_BYTES / MEBIBYTE}MB), " +
-            "${SMALL_BODY_BYTES / KIBIBYTE}KB for a route that carries no document (8 request headers' worth)"
+            "${SMALL_BODY_BYTES / KIBIBYTE}KB for a route that carries no document (8 request headers' worth), " +
+            "document cache=${documentCacheBytes() / MEBIBYTE}MB (1/$DOCUMENT_HOLDERS of the documents' share)"
 
     private const val MEBIBYTE = 1024L * 1024
     private const val KIBIBYTE = 1024L

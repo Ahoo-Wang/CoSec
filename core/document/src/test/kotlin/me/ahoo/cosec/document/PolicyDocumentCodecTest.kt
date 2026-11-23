@@ -297,6 +297,9 @@ class PolicyDocumentCodecTest {
             ""","bindings":[{"id":"b","subject":"*","space":"*","policy":"p"}]|$.bindings[0]: [app] is required""",
             ""","bindings":[{"id":"b","subject":"*","app":"","space":"*","policy":"p"}]|$.bindings[0].app: an app is an app id or *""",
             ""","bindings":[{"id":"b","subject":"*","app":"*","space":"*","policy":"p","expiresAt":"tomorrow"}]|$.bindings[0].expiresAt: expected an ISO-8601 instant""",
+            // DR1-B-2: a year past 9999 parses, and its epoch milliseconds overflow: a format error, never an ArithmeticException.
+            ""","bindings":[{"id":"b","subject":"*","app":"*","space":"*","policy":"p","expiresAt":"+999999999-12-31T23:59:59Z"}]|$.bindings[0].expiresAt: expected an instant from year 0000 to year 9999""",
+            ""","bindings":[{"id":"b","subject":"*","app":"*","space":"*","policy":"p","expiresAt":"+10000-01-01T00:00:00Z"}]|$.bindings[0].expiresAt: expected an instant from year 0000 to year 9999""",
             ""","bindings":[{"id":"b","subject":"*","app":"*","space":"*","policy":"p","breakGlass":1}]|$.bindings[0].breakGlass: expected a boolean""",
         ],
     )

@@ -173,19 +173,24 @@ internal class Passes(
      * completes when a pass that started after this call has ended.
      */
     fun periodic(): CompletableFuture<Void> {
-        lagReports.queue()
-        // The derived bounds follow what is resident (SNP-24), once per pass; a family now above its bound is taken back to
-        // it by housekeeping, as after an install.
-        for (family in families.rebound()) {
-            context.threads.offHousekeeping(
-                HousekeepingTask.EVICT,
-                { "The eviction pass of the ${family.spec.kind} family." }
-            ) {
-                families.evictBeyond(family)
+        try {
+            lagReports.queue()
+            // The derived bounds follow what is resident (SNP-24), once per pass; a family now above its bound is taken
+            // back to it by housekeeping, as after an install.
+            for (family in families.rebound()) {
+                context.threads.offHousekeeping(
+                    HousekeepingTask.EVICT,
+                    { "The eviction pass of the ${family.spec.kind} family." }
+                ) {
+                    families.evictBeyond(family)
+                }
             }
+            return tick()
+        } finally {
+            // After the tick, which abandons a pass held only by compilations (SNP-6), the loads of those compilations
+            // end; and whatever threw before it, so a failing tick never skips the deadlines' sweep (DR1-D-5).
+            CompileDeadlines.sweep(context, context.nanoTime.get().asLong)
         }
-        // After the tick, which abandons a pass held only by compilations (SNP-6), the loads of those compilations end.
-        return tick().also { CompileDeadlines.sweep(context, context.nanoTime.get().asLong) }
     }
 
     /** Schedules [periodic] every [SnapshotOptions.revalidateInterval]; the source does, once, while it is built. */
