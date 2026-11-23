@@ -23,7 +23,6 @@ import me.ahoo.cosec.control.sdk.ControlRefusedException
 import me.ahoo.cosec.control.sdk.RoutedControlService
 import me.ahoo.cosec.control.sdk.ServiceCall
 import me.ahoo.cosec.document.identity.IdentityHeader
-import me.ahoo.cosec.document.json.CoSecJson
 import me.ahoo.cosec.runtime.http.ProblemType
 import me.ahoo.cosec.runtime.http.RequestSecurity
 import me.ahoo.cosec.runtime.identity.IdentityIssuer
@@ -102,7 +101,7 @@ internal class HttpTransport(
                 "[${security?.principal?.id?.value ?: "anonymous"}] of tenant [${security?.scope?.tenant?.value}] after it " +
                 "ended: refused, not sent, so no host records it (PIP-26)"
         }
-        throw ControlRefusedException(ProblemType.FORBIDDEN.status, forbidden(e.requestId))
+        throw ControlRefusedException(ProblemType.FORBIDDEN.status, forbidden(e.requestId)).apply { initCause(e) }
     }
 
     /**
@@ -162,14 +161,22 @@ internal class HttpTransport(
         fun encode(text: String): String = URLEncoder.encode(text, Charsets.UTF_8).replace("+", "%20")
 
         /** The problem a host answers a refused call, member by member as the control API writes it, without detail. */
-        fun forbidden(requestId: String): String = CoSecJson.mapper.writeValueAsString(
-            linkedMapOf(
-                "type" to ProblemType.FORBIDDEN.uri,
-                "title" to ProblemType.FORBIDDEN.title,
-                "status" to ProblemType.FORBIDDEN.status,
-                "code" to ProblemType.FORBIDDEN.name,
-                "requestId" to requestId,
-            ),
-        )
+        fun forbidden(requestId: String): String = with(ProblemType.FORBIDDEN) {
+            """{"type":${text(uri)},"title":${text(title)},"status":$status,"code":${text(name)},""" +
+                """"requestId":${text(requestId)}}"""
+        }
+
+        /** [value] as a JSON string: quoted, with a quote, a backslash and a control character escaped. */
+        private fun text(value: String): String = buildString {
+            append('"')
+            value.forEach { char ->
+                when {
+                    char == '"' || char == '\\' -> append('\\').append(char)
+                    char < ' ' -> append("\\u%04x".format(char.code))
+                    else -> append(char)
+                }
+            }
+            append('"')
+        }
     }
 }
