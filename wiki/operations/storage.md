@@ -107,6 +107,14 @@ contain `:` or `/`, so a key names one document only.
 | `<s>:rate-limiter:<ruleId>:<bucket>` | the Redis rate limiter | a hash of one rule's bucket: the window it counts in and that window's and the previous window's counts; expires two windows after its last count. One key per bucket value: a rule keyed on what a client chooses, with a long window, is memory the client controls ([Rate limiting](../policies/rate-limiting.md#counting-and-backends)) |
 | `<s>:oauth:state:<state>` | social login | the OAuth `state` of a login in progress, as JustAuth keeps it (JustAuth's cache blocks: `cosec-social` writes it through a `StringRedisTemplate`); expires after 3 minutes |
 | `<s>:oauth:binding:<state>` | social login | the SHA-256 of the binding of the browser the state was issued to; written and taken (`GETDEL`) by `cosec-cocache`'s non-blocking client, so a state is used once; expires after 3 minutes |
+| `<s>:oauth:binding:!count` | social login | how many sign-ins the deployment started in the last two windows of 3 minutes, a hash by window counted by a script on Redis's clock; expires two windows after the last start (DR1-D-9) |
+
+**Social sign-in states are memory an anonymous caller drives.** Anyone can start a sign-in, and each start writes
+both `oauth` keys for 3 minutes into a Redis that must not evict. So a deployment holds at most a 64th of the memory
+Redis reports (`maxmemory`, or `total_system_memory` without one, read once at startup with `INFO memory`, which the
+process serving social login needs as `SNP-3` does) counted at 512 bytes a sign-in: a 1 GiB `maxmemory` holds 32,768
+sign-ins in progress. Past it a start is refused and writes nothing. When Redis reports neither, the bound is 100,000
+(about 50 MB), with a WARN. The startup line says which. Rate limit the start route at the edge as well.
 
 - When several deployments share one Redis, give each its own `cosec.key-prefix`: with different prefixes they share no
   key, so an API key one issues is never accepted by the other, and their rate limit counters stay apart.
