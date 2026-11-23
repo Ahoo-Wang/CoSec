@@ -55,6 +55,74 @@ class MutationCheckTest {
         malformed.assert().describedAs("mutants whose Tests line Gradle cannot run").isEmpty()
     }
 
+    /**
+     * A `--tests` name that matches no test class of its task's project is a guard that never runs: Gradle fails the task
+     * ("No tests found for given includes"), or, beside another name that matches, runs that one and says nothing. A test
+     * class that moves strands the mutants that name it (five did when `MembershipResolverTest` moved to `stage`), so
+     * every name must match a class, a method of one, or, with `*`, at least one class of the project's test sources.
+     */
+    @Test
+    fun `every --tests name of a mutant matches a test class of its project`() {
+        val root = Path(requireNotNull(System.getProperty("cosec.repository.root")) { "cosec.repository.root" })
+        val directories = projectDirectories(root.resolve("settings.gradle.kts"))
+        val classes = mutableMapOf<String, Set<String>>()
+        val stale = Mutant.all(Path("mutants")).flatMap { mutant ->
+            testFilters(mutant.tests).filterNot { (project, pattern) ->
+                val known = classes.getOrPut(project) { testClasses(root.resolve(directories.getValue(project))) }
+                matchesAny(pattern, known)
+            }.map { (project, pattern) -> "${mutant.name}: :$project --tests $pattern" }
+        }
+        stale.assert().describedAs("--tests names that match no test class of their project").isEmpty()
+    }
+
+    @Test
+    fun `a --tests name matches a class, a method of one, or a pattern`() {
+        val known = setOf("me.ahoo.a.FooTest", "me.ahoo.a.stage.BarTest")
+        matchesAny("me.ahoo.a.FooTest", known).assert().isTrue()
+        matchesAny("me.ahoo.a.FooTest.aMethod", known).assert().isTrue()
+        matchesAny("me.ahoo.a.*Test", known).assert().isTrue()
+        matchesAny("me.ahoo.a.BarTest", known).assert().isFalse()
+        matchesAny("me.ahoo.a.Foo", known).assert().isFalse()
+        matchesAny("me.ahoo.b.*", known).assert().isFalse()
+    }
+
+    /** The (project, pattern) of each `--tests` of a Tests line, the project being that of the task before it. */
+    private fun testFilters(tests: List<String>): List<Pair<String, String>> {
+        val filters = mutableListOf<Pair<String, String>>()
+        var project: String? = null
+        tests.forEachIndexed { index, entry ->
+            when {
+                entry.startsWith(":") -> project = entry.split(':')[1]
+                entry == "--tests" -> filters += requireNotNull(project) to tests[index + 1]
+            }
+        }
+        return filters
+    }
+
+    /** Fully qualified names of the classes declared in a project's test sources. */
+    private fun testClasses(project: Path): Set<String> {
+        val sources = listOf("kotlin", "java").map { project.resolve("src/test/$it") }.filter { Files.isDirectory(it) }
+        return sources.flatMap { source ->
+            Files.walk(source).use { paths ->
+                paths.filter { it.toString().endsWith(".kt") || it.toString().endsWith(".java") }.toList()
+            }
+        }.flatMap { file ->
+            val text = Files.readString(file)
+            val packageName = Regex("^package\\s+([\\w.]+)", RegexOption.MULTILINE).find(text)?.groupValues?.get(1)
+            val prefix = packageName?.let { "$it." } ?: ""
+            Regex("\\b(?:class|object)\\s+(\\w+)").findAll(text).map { prefix + it.groupValues[1] }.toList()
+        }.toSet()
+    }
+
+    /** The directory of each project of `settings.gradle.kts`: `<group>/<name>`. */
+    private fun projectDirectories(settings: Path): Map<String, String> {
+        val groups = Files.readString(settings).substringAfter("val groups = linkedMapOf(").substringBefore("\n)")
+        return Regex("\"([a-z]+)\" to listOf\\(([^)]*)\\)").findAll(groups).flatMap { group ->
+            Regex("\"([a-z0-9-]+)\"").findAll(group.groupValues[2])
+                .map { it.groupValues[1] to "${group.groupValues[1]}/${it.groupValues[1]}" }
+        }.toMap()
+    }
+
     @Test
     fun `a Tests line with a comma, an unknown project or a stray pattern is refused`() {
         fun problem(tests: String) = Mutant("m", listOf("X-1"), "d", tests.split(' ').filter { it.isNotBlank() }, temp)
@@ -380,4 +448,11 @@ private const val APPLY_TIMEOUT_SECONDS = 60L
 /** `git` by its absolute path on the `PATH` (`git.exe` on Windows), so the test runs the binary it found. */
 private val GIT: String by lazy {
     Executables.find("git")?.toString() ?: error("git is not on the PATH")
+}
+
+/** Whether a `--tests` pattern selects at least one of [classes]: a class, a method of one, or with `*` a wildcard. */
+private fun matchesAny(pattern: String, classes: Set<String>): Boolean {
+    if ('*' !in pattern) return classes.any { pattern == it || pattern.startsWith("$it.") }
+    val regex = Regex(pattern.split('*').joinToString(".*") { Regex.escape(it) })
+    return classes.any { regex.matches(it) || regex.matches("$it.aMethod") }
 }

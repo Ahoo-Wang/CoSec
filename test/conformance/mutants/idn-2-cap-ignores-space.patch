@@ -1,6 +1,6 @@
 # Rule: IDN-2
 # Mutant: the cap matches a role by name in any space, so a role the cap names in one space is kept in every other
-# Tests: :runtime:test --tests me.ahoo.cosec.runtime.MembershipResolverTest :conformance:test
+# Tests: :runtime:test --tests me.ahoo.cosec.runtime.stage.MembershipResolverTest :conformance:test
 
 diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/stage/MembershipResolver.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/stage/MembershipResolver.kt
 index 9bf07764..095ddcd9 100644

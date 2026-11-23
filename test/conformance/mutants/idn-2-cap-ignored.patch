@@ -1,6 +1,6 @@
 # Rule: IDN-2
 # Mutant: the key's cap is not applied, so a key holds every role and attachment of its principal
-# Tests: :runtime:test --tests me.ahoo.cosec.runtime.MembershipResolverTest --tests me.ahoo.cosec.runtime.PipelineTest :conformance:test
+# Tests: :runtime:test --tests me.ahoo.cosec.runtime.stage.MembershipResolverTest --tests me.ahoo.cosec.runtime.PipelineTest :conformance:test
 
 diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/stage/MembershipResolver.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/stage/MembershipResolver.kt
 index c46e355f..6b677806 100644
