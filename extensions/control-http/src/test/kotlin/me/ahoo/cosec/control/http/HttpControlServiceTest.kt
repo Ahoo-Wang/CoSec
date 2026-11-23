@@ -212,6 +212,35 @@ class HttpControlServiceTest {
         received.assert().isEmpty()
     }
 
+    /** DR1-F-2, `PIP-26`: a request that has ended is not stated: refused as the host refuses, `403` without detail. */
+    @Test
+    fun `an ended request's caller is refused before anything is sent`() {
+        val now = Instant.now()
+        val forwarded = Identity(
+            tenant = "acme",
+            subject = "alice",
+            app = "cosec-control",
+            space = "",
+            roles = setOf("admin"),
+            credential = Identity.Credential(Identity.Method.JWT, "token-1", now.plusSeconds(300)),
+            issuedAt = now,
+            requestId = "r1",
+        )
+        val context = PermittedRequest.withIdentity(IdentityHeader.write(forwarded))
+        val security = me.ahoo.cosec.runtime.http.RequestSecurity.of(context)!!
+        security.end()
+
+        val refused = assertThrownBy<ControlRefusedException> {
+            runBlocking { service.document(ControlCaller.of(context), acme) }
+        }.actual()
+
+        refused.status.assert().isEqualTo(403)
+        refused.code.assert().isEqualTo("FORBIDDEN")
+        refused.detail.assert().isNull()
+        refused.problem.assert().contains("\"requestId\":\"${security.requestId}\"")
+        received.assert().isEmpty()
+    }
+
     @Test
     fun `a refusal is the route's problem`() {
         val problem = """{"type":"https://cosec.ahoo.me/problems/conflict","status":409,"code":"CONFLICT",""" +

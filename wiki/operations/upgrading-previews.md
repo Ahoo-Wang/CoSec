@@ -30,6 +30,11 @@ Which preview of the library may run behind which preview of the gateway image: 
 
 ## From 8.0.0-beta.7 {#from-8-0-0-beta-7}
 
+- **`HttpControlService` refuses a request that has ended** (`CTL-77`, `PIP-26`, DR1-F-2). Affected: an application that
+  keeps a `ControlCaller.of(context)` past its request (a launched job, a deferred write). Over HTTP it acted as the
+  user until the credential expired, after a logout too; it is now refused `403`, as in process, before anything is
+  sent, with a `WARN`. Call as the application's own principal (`ControlCaller.service`) from such work.
+
 - **A control route that carries no document reads at most 64 KB** (DR1-F-3). Affected: a client that posts more than
   64 KB to `simulate`, `explain`, `analyze`, a step of a change, a rollback or break-glass. Such a body is now a `400`
   before it is parsed, where it was read and parsed up to 10 MB before anything was authorized. Proposals, `:apply` and

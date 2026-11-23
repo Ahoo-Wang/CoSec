@@ -40,6 +40,7 @@ import me.ahoo.cosec.document.json.CoSecJson
 import me.ahoo.cosec.model.PrincipalId
 import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.model.decision.DocumentKind
+import me.ahoo.cosec.runtime.http.RequestSecurity
 import me.ahoo.cosec.spi.identity.Identity
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.cosec.spi.token.RevocationReader
@@ -349,6 +350,45 @@ class ControlServiceParityTest {
             override fun refresh(token: CompositeToken): VerifiedToken = error("not refreshed")
         }
         return ControlCaller.of(PermittedRequest.withToken("token", verifier, RevocationReader.NONE))
+    }
+
+    /**
+     * DR1-F-2, `PIP-26`: a caller kept past its request (a launched job, a deferred write) is refused alike: in process the
+     * check of an ended request denies, and over HTTP its caller is never stated, so nothing is sent. The same `403`,
+     * without detail, through both.
+     */
+    @Test
+    fun `an ended request's caller is refused alike through both implementations - CTL-77`() {
+        runner.run { context ->
+            context.startupFailure.assert().isNull()
+            publish(context, SnapshotKey.Platform, DocumentKind.PLATFORM, "", PLATFORM)
+            listOf(LOCAL, REMOTE).forEach { publish(context, SnapshotKey.Tenant(it), DocumentKind.TENANT, it, TENANT) }
+            val local = context.getBean(ControlService::class.java)
+            val port = context.getBean(ControlServiceListener::class.java).boundPort
+            val http = HttpControlService(URI("http://127.0.0.1:$port/cosec/control/v1"))
+            fun ended(tenant: String): ControlCaller =
+                alice(tenant).also { RequestSecurity.of(checkNotNull(it.context))!!.end() }
+            fun script(service: ControlService, tenant: String): List<String> = runBlocking {
+                listOf(
+                    answer { service.document(alice(tenant), SnapshotKey.Tenant(tenant)) },
+                    answer { service.document(ended(tenant), SnapshotKey.Tenant(tenant)) },
+                )
+            }
+            val deadline = System.nanoTime() + Duration.ofSeconds(10).toNanos()
+            while (!script(http, REMOTE)[0].startsWith("200")) {
+                check(System.nanoTime() < deadline) { "The platform document was not installed" }
+                Thread.sleep(20)
+            }
+
+            val inProcess = script(local, LOCAL)
+
+            script(http, REMOTE).assert().isEqualTo(inProcess)
+            inProcess[1].assert().startsWith("403 FORBIDDEN")
+            val refused = org.junit.jupiter.api.assertThrows<ControlRefusedException> {
+                runBlocking { http.document(ended(REMOTE), SnapshotKey.Tenant(REMOTE)) }
+            }
+            refused.detail.assert().isNull()
+        }
     }
 
     @Test
