@@ -54,7 +54,9 @@ class GrantAnalyzer(
     zones: ZoneResolver = ZoneResolver.FIXED,
     limits: ConditionLimits = ConditionLimits.DEFAULT,
     /** The comparisons one analysis may make (`CTL-49`); smaller only in tests. */
-    private val maxComparisons: Long = ComparisonBudget.MAX_COMPARISONS,
+    private val maxComparisons: Long = MAX_COMPARISONS,
+    /** The fragments one analysis splits a change into (`CTL-49`, DR1-E-1); smaller only in tests. */
+    maxFragments: Long = MAX_FRAGMENTS,
 ) {
     private val checker = ConditionChecker(
         ConditionLimits(
@@ -69,7 +71,7 @@ class GrantAnalyzer(
     )
     private val equality = GrantEquality(checker)
     private val narrowing = GrantNarrowing(checker, equality)
-    private val fragmenter = GrantFragmenter(narrowing, equality)
+    private val fragmenter = GrantFragmenter(narrowing, equality, maxFragments)
     private val verdicts = GrantVerdicts(checker, equality)
     private val entries = ProtectedEntries(equality)
 
@@ -84,8 +86,12 @@ class GrantAnalyzer(
         trustRoot: Boolean = false
     ): GrantAnalysis {
         val budget = ComparisonBudget(maxComparisons)
-        val fragments = fragmenter.fragments(snapshot, change, budget)
+        val split = fragmenter.fragments(snapshot, change, budget)
         val unprotect = entries.unprotect(snapshot.tenant(change.tenant), change.candidate)
+        if (split.tooLarge) {
+            return GrantAnalysis(emptyList(), unprotect, budget.spent, tooLarge = true)
+        }
+        val fragments = split.fragments
         if (trustRoot) {
             return GrantAnalysis(fragments.map { it to GrantVerdict.TrustRoot }, unprotect, budget.spent)
         }
@@ -105,7 +111,7 @@ class GrantAnalyzer(
      * bindings and attachments that named the tenant's now name that one, which nobody analyzed for them.
      */
     fun fragments(snapshot: GrantSnapshot, change: GrantChange): List<GrantFragment> =
-        fragmenter.fragments(snapshot, change)
+        fragmenter.fragments(snapshot, change).fragments
 
     /**
      * The ALLOWs of each policy of [after] that are new or widen what it had in [before] (§7.4.1, §7.4.4): what every
@@ -129,4 +135,13 @@ class GrantAnalyzer(
     /** The verdict for one fragment (§7.4.3, the loop body). */
     fun verdict(grantor: Grantor, rights: GrantorRights, fragment: GrantFragment): GrantVerdict =
         verdicts.verdict(grantor, rights, fragment)
+
+    @InternalCoSecApi
+    companion object {
+        /** The comparisons one analysis makes by default (`CTL-49`). */
+        const val MAX_COMPARISONS: Long = ComparisonBudget.MAX_COMPARISONS
+
+        /** The fragments one analysis splits a change into by default (`CTL-49`, DR1-E-1). */
+        const val MAX_FRAGMENTS: Long = ComparisonBudget.MAX_FRAGMENTS
+    }
 }

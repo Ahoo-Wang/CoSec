@@ -1,0 +1,17 @@
+# Rule: CTL-49
+# Mutant: the fragment bound counts only what was split, so one statement of many actions and resources is split whole
+# Tests: :control:test --tests me.ahoo.cosec.control.grant.ComparisonBudgetTest
+
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/grant/GrantFragmenter.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/grant/GrantFragmenter.kt
+index c054a023a..0b93655b4 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/grant/GrantFragmenter.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/grant/GrantFragmenter.kt
+@@ -47,7 +47,7 @@ internal class GrantFragmenter(
+ 
+         /** Whether [count] more fragments fit. The first that does not drops what was split. */
+         fun fits(count: Long): Boolean {
+-            if (!tooLarge && fragments.size + count > limit) {
++            if (!tooLarge && fragments.size > limit) {
+                 tooLarge = true
+                 fragments.clear()
+                 fragments.trimToSize()

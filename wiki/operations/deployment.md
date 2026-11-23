@@ -312,11 +312,14 @@ that admits it and the service itself: a rate limit rule on a control route hold
 
 **Stating an identity on the service port never makes the trust root** (`CTL-81`). A workload the network admits to
 8082 can state any principal, a platform administrator included, and acts with what the policies grant that principal:
-it reads, proposes, stages and publishes what that principal may. But every change it makes there is analyzed: what
-grants nothing anew publishes alone, a holder of `cosec:manage-roles` projects roles into tenants alone, and anything
-else waits for a person, who approves on 8080 behind the gateway. A change readied on 8080 is analyzed again when it is
-published on 8082. Admit to 8082 only the services you would let propose; none of them can publish a grant alone by
-naming an administrator.
+it reads, proposes, stages and publishes what that principal may. But every change it makes there is analyzed as the
+principal it states, with the roles it states: what the analysis proves that principal holds publishes alone, a holder
+of `cosec:manage-roles` projects roles into tenants alone, and anything else waits for a person, who approves on 8080
+behind the gateway. A change readied on 8080 is analyzed again when it is published on 8082. So a workload on 8082 can
+publish alone, in any tenant, what any role it names holds there: stating a tenant administrator's roles lets it grant
+what that administrator could grant. Naming a platform administrator does not help it: on a tenant's document that is
+another tenant's principal, and on an app's document only a removal publishes alone. Admit to 8082 only the services you
+would trust with the roles they may state.
 
 **How a caller is identified.** An operator signs in at the IAM service, and the gateway verifies the token and forwards
 the identity to a route to the host. Give that route its app, so that an identity for another app is refused:
