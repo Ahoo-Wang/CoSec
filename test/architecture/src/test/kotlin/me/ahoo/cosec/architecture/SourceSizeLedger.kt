@@ -36,7 +36,8 @@ object SourceSizeLedger {
             // +2 (B2b step 2b): the runner seam (`KeyRunner.Settings` since step 4), a parameter with its KDoc, and the
             // context's construction wrapped.
             // -2 (B2b step 3): close runs the pending hand-offs, and it enters by a CAS on one line, not three.
-            450,
+            // +3 (DR1-D-1): the revisions that did not compile in time, for the health body, a function with its KDoc.
+            453,
             Disposition.Stays(
                 "the read interface with its contract, and the construction and close order in one place"
             ),

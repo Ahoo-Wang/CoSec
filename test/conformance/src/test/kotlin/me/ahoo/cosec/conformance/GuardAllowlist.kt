@@ -411,6 +411,10 @@ object GuardAllowlist {
             // SNP-22: a load's compilation has the load's deadline (R2D-11).
             "runtime:SnapshotCompileDeadlineTest#a cold load whose compilation never returns fails at the tick after its deadline, and holds one thread",
             "runtime:SnapshotCompileDeadlineTest#a reload whose compilation never returns keeps what is installed once its budget is spent",
+            // SNP-22, DR1-D-1: a reload kept past its compile deadline is visible, and fail-closed tenants still bound it.
+            "runtime:SnapshotCompileDeadlineTest#a reload whose compilation never returns is reported, by key and revision, until it returns",
+            "runtime:SnapshotCompileDeadlineTest#a fail-closed tenant is refused past its lag bound while a newer revision does not compile in time",
+            "spring-boot:SnapshotHealthIndicatorTest#health names a newer revision that did not compile in time, by key and revision",
             "runtime:SnapshotCompileDeadlineTest#a compilation still queued when its load times out never starts",
             "runtime:KeyTransitionsTest#aRecompileWhoseCompilationTimesOutFailsClosedAndAbandonsIt",
             "runtime:KeyTransitionsTest#aColdLoadWhoseCompilationTimesOutAnswersFailed",

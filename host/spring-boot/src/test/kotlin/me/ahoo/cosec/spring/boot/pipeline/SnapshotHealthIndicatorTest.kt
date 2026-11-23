@@ -48,6 +48,8 @@ class SnapshotHealthIndicatorTest {
         invalidPlatform: Long? = null,
         /** Tenants whose stored revision does not compile, by id. */
         invalidTenants: Map<String, Long> = emptyMap(),
+        /** Newer revisions read and not compiled in time, still compiling (DR1-D-1). */
+        compileTimedOut: List<Pair<SnapshotKey, Long>> = emptyList(),
     ): SnapshotSource<Any, Any> {
         val snapshot = state?.let { policies -> mockk<Snapshot<Any, Any>> { every { this@mockk.policies } returns policies } }
         val entries = listOfNotNull(
@@ -76,6 +78,7 @@ class SnapshotHealthIndicatorTest {
             every { peek(any()) } returns snapshot
             every { isPrewarmed } returns prewarmed
             every { entries() } returns entries
+            every { compileTimedOut() } returns compileTimedOut
             // Readiness waits for its own prewarm (SNP-21): complete when the test says the source is prewarmed.
             every { load(any()) } returns CompletableFuture.completedFuture(snapshot)
             every { prewarm(any()) } returns if (prewarmed) CompletableFuture.completedFuture(null) else CompletableFuture()
@@ -136,6 +139,28 @@ class SnapshotHealthIndicatorTest {
         }
         // Without one, the body says nothing of it.
         health(failed, true).details.containsKey("invalid").assert().isFalse()
+    }
+
+    /**
+     * DR1-D-1: a newer revision that did not compile within its load's budget, and still compiles, is named by key and
+     * revision: the instance decides on the one it holds meanwhile, so the status stays what readiness says.
+     */
+    @Test
+    fun `health names a newer revision that did not compile in time, by key and revision`() {
+        val present = DocumentState.Present(Any())
+        val timedOut = listOf(
+            SnapshotKey.Tenant("t2") to 9L,
+            SnapshotKey.Platform to 4L,
+            SnapshotKey.Tenant("t1") to 3L
+        )
+        val source = source(present, prewarmed = true, compileTimedOut = timedOut)
+        SnapshotHealthIndicator(source, readiness(source)).health().apply {
+            status.assert().isEqualTo(Status.UP)
+            details["compileTimedOut"].assert().isEqualTo(3)
+            details["compileTimedOutFirst"].assert().isEqualTo(listOf("platform@4", "tenant:t1@3", "tenant:t2@9"))
+        }
+        // Without one, the body says nothing of it.
+        health(present, true).details.containsKey("compileTimedOut").assert().isFalse()
     }
 
     /**

@@ -297,6 +297,9 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
         }
     }
 
+    /** The keys whose newer revision did not compile within its budget and still compiles, with that revision. */
+    fun compileTimedOut(): List<Pair<SnapshotKey, Long>> = CompileDeadlines.timedOut(context)
+
     /** Every installed entry: for gauges and the actuator endpoint. */
     fun entries(): List<SnapshotEntry<*>> = buildList {
         shared.installed?.let { add(it) }
