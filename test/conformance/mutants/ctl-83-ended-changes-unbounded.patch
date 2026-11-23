@@ -1,0 +1,16 @@
+# Rule: CTL-83
+# Mutant: the write that ends a change removes none of the oldest ended changes past max-count, so a document keeps every ended change
+# Tests: :conformance:test --tests me.ahoo.cosec.conformance.ConformanceTest
+
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/EndedChanges.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/EndedChanges.kt
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/EndedChanges.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/EndedChanges.kt
+@@ -56,7 +56,7 @@ internal class EndedChanges(
+     suspend fun bound(key: SnapshotKey) {
+         try {
+             val listed = store.endedChanges(key, Instant.MAX, Int.MAX_VALUE)
+-            listed.take((listed.size - maxCount).coerceAtLeast(0)).forEach { remove(key, it) { true } }
++            listed.take(0).forEach { remove(key, it) { true } }
+         } catch (e: CancellationException) {
+             throw e
+         } catch (e: Exception) {

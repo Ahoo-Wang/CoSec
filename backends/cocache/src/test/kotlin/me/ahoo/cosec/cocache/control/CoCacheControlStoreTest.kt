@@ -668,6 +668,42 @@ class CoCacheControlStoreTest {
         }
     }
 
+    /**
+     * `CTL-83`: a terminal write lists its change among its document's ended changes, under its end, before it writes
+     * it; a write that lost leaves the change listed at an earlier end, and the latest one is answered. `removeChange`
+     * removes only the record it names, and takes every entry of the change out; with no record, only the entries.
+     */
+    @Test
+    fun `ended changes are listed by their end on Redis, and removed with their record`() = runBlocking<Unit> {
+        SnapshotNode(RedisTarget.REDIS.backend(), newKeyPrefix()).use { node ->
+            val store = store(node)
+            val start = Instant.parse("2026-11-01T00:00:00Z")
+            val open = change("open", ChangeState.CHECKED)
+            store.putChange(null, open).assert().isTrue()
+            val old = change("old", ChangeState.ABANDONED).copy(updatedAt = start.plusSeconds(10))
+            store.putChange(null, old).assert().isTrue()
+            val ended = open.copy(state = ChangeState.EXPIRED, updatedAt = start.plusSeconds(20))
+            val openDigest = store.change(open.id)!!.digest
+            // A terminal write that lost: listed at its end, never written.
+            store.putChange(store.digestOf(document(1)), ended.copy(updatedAt = start.plusSeconds(5)), open.state)
+                .assert().isFalse()
+            store.putChange(openDigest, ended, open.state).assert().isTrue()
+
+            store.endedChanges(key, Instant.MAX, 10).map { it.id.value to it.endedAt }.assert()
+                .containsExactly("old" to start.plusSeconds(10), "open" to start.plusSeconds(20))
+            store.endedChanges(key, start.plusSeconds(20), 10).map { it.id.value }.assert().containsExactly("old")
+            store.endedChanges(key, Instant.MAX, 1).map { it.id.value }.assert().containsExactly("old")
+            store.endedChanges(SnapshotKey.Platform, Instant.MAX, 10).assert().isEmpty()
+
+            store.removeChange(key, old.id, null).assert().isFalse()
+            store.removeChange(key, old.id, openDigest).assert().isFalse()
+            store.removeChange(key, old.id, store.change(old.id)!!.digest).assert().isTrue()
+            store.change(old.id).assert().isNull()
+            store.removeChange(key, ended.id, store.change(ended.id)!!.digest).assert().isTrue()
+            store.endedChanges(key, Instant.MAX, 10).assert().isEmpty()
+        }
+    }
+
     @Test
     fun `a removed record is gone from Redis`() = runBlocking<Unit> {
         val backend = RedisTarget.REDIS.backend()

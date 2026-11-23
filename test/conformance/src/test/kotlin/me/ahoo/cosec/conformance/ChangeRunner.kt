@@ -45,7 +45,6 @@ import me.ahoo.cosec.control.change.ChangeRequest
 import me.ahoo.cosec.control.change.ChangeRequestCodec
 import me.ahoo.cosec.control.change.ChangeState
 import me.ahoo.cosec.control.change.Operation
-import me.ahoo.cosec.control.change.Severity
 import me.ahoo.cosec.control.change.ShadowAck
 import me.ahoo.cosec.control.change.ownerOf
 import me.ahoo.cosec.control.lifecycle.CandidateCompile
@@ -461,20 +460,8 @@ object ChangeRunner : ScenarioRunner {
         }
 
         private suspend fun outcome(results: List<String>): Outcome {
-            val errors = named.keys.associateWith { id -> changes.get(ChangeId(id)).errors.map { it.check } }
-            val escalations = named.keys.associateWith { id ->
-                changes.get(
-                    ChangeId(id)
-                ).escalations.map { it.reason.name }
-            }
-                .filterValues { it.isNotEmpty() }
-            val warnings = named.keys.associateWith { id ->
-                changes.get(
-                    ChangeId(id)
-                ).findings.filter { it.severity == Severity.WARNING }.map { "${it.check} ${it.path}" }
-            }.filterValues { it.isNotEmpty() }
             val heads = documents.associate { it.toString() to (revisions.head(it)?.revision ?: 0) }
-            return Outcome.Changed(results, errors, heads, escalations, warnings)
+            return ChangeOutcome.of(changes, memory, named.keys, results, heads)
         }
 
         /** One step's result, as `expect.steps` writes it. */

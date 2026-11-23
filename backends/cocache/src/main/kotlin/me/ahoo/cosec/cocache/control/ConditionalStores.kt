@@ -114,6 +114,19 @@ internal object ConditionalStores {
     }
 
     /**
+     * Removes [key] only while it holds [expected] (`deleteIfMatch`): whether it did. A removal whose outcome is unknown
+     * is read back, as [deleteIf]'s.
+     */
+    suspend fun <K : Any, V : Any> deleteIfDigest(store: Store<K, V>, key: K, expected: SnapshotDigest): Boolean =
+        answering("[$key]") {
+            try {
+                store.async().deleteIfMatch(key, cocacheDigest(expected)).await() == ConditionalDelete.Deleted
+            } catch (error: CacheWriteException) {
+                removedAfter(store, key, expected, error)
+            }
+        }
+
+    /**
      * Whether a `deleteIfMatch` of [key] over [digest] that failed with [error] removed it: read back when its outcome
      * is unknown. Still [digest] means it did not, and the failure is the answer.
      */

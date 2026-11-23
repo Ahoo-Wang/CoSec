@@ -56,6 +56,7 @@ public final class me/ahoo/cosec/cocache/control/CoCacheControlStore : me/ahoo/c
 	public fun changes (Lme/ahoo/cosec/control/change/ChangeState;Ljava/lang/String;ILkotlin/jvm/functions/Function1;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun digestOf (Lme/ahoo/cosec/spi/snapshot/SnapshotDocument;)Lme/ahoo/cosec/spi/snapshot/SnapshotDigest;
 	public fun documents (Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun endedChanges (Lme/ahoo/cosec/spi/snapshot/SnapshotKey;Ljava/time/Instant;ILkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun head (Lme/ahoo/cosec/spi/snapshot/SnapshotKey;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun index (Lme/ahoo/cosec/spi/snapshot/SnapshotKey;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun keepOpenChanges (Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
@@ -73,6 +74,7 @@ public final class me/ahoo/cosec/cocache/control/CoCacheControlStore : me/ahoo/c
 	public fun record (Lme/ahoo/cosec/spi/snapshot/SnapshotKey;Lme/ahoo/cosec/spi/snapshot/SnapshotDigest;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun referrers-23YAg4Q (Lme/ahoo/cosec/spi/snapshot/SnapshotKey;Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun releaseLease (Ljava/lang/String;Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun removeChange-mm4FcV0 (Lme/ahoo/cosec/spi/snapshot/SnapshotKey;Ljava/lang/String;Lme/ahoo/cosec/spi/snapshot/SnapshotDigest;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun removeRecord (Lme/ahoo/cosec/spi/snapshot/SnapshotKey;Lme/ahoo/cosec/spi/snapshot/SnapshotDigest;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun removeReferrers-R2kOZZc (Lme/ahoo/cosec/spi/snapshot/SnapshotKey;Ljava/lang/String;Ljava/util/Set;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun stage (Lme/ahoo/cosec/spi/snapshot/SnapshotKey;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;

@@ -23,6 +23,8 @@ import me.ahoo.cosec.control.change.ChangeId
 import me.ahoo.cosec.control.change.ChangeRequest
 import me.ahoo.cosec.control.change.ChangeState
 import me.ahoo.cosec.control.store.ChangePage
+import me.ahoo.cosec.control.store.ControlStore
+import me.ahoo.cosec.control.store.EndedChange
 import me.ahoo.cosec.control.store.ListedChange
 import me.ahoo.cosec.control.store.Versioned
 import me.ahoo.cosec.spi.snapshot.SnapshotDigest
@@ -79,12 +81,33 @@ internal class OpenChangeSets(
     /** The marker, written by the conversion once it listed every change of the old list. */
     suspend fun keepConverted() = sets.addChangeMembers(KEPT, listOf(KEPT))
 
-    /** Before [change] is written as [written]: in its document's set and, unless it is terminal, in its state's. */
+    /**
+     * Before [change] is written as [written]: in its document's set and, unless it is terminal, in its state's; a
+     * terminal one in its document's ended set instead (`CTL-83`), under its end, so a write that lost leaves an extra
+     * member, never a missing one.
+     */
     suspend fun listBefore(change: ChangeRequest, written: SnapshotDigest) {
         sets.addChangeMembers(documentKey(change.key), listOf(change.id.value))
-        if (!change.state.terminal) {
+        if (change.state.terminal) {
+            sets.addChangeMembers(endedKey(change.key), listOf(endedMember(change.updatedAt, change.id)))
+        } else {
             sets.addChangeMembers(stateKey(change.state), listOf(member(change.key, change.id, written)))
         }
+    }
+
+    /** [ControlStore.endedChanges]: one entry a change, at its latest end (an earlier one is a write that lost). */
+    suspend fun ended(document: SnapshotKey, endedBefore: Instant, limit: Int): List<EndedChange> =
+        sets.changeMembers(endedKey(document)).mapNotNull(::parseEnded)
+            .groupBy { it.id }
+            .map { (_, ends) -> ends.maxBy { it.endedAt } }
+            .filter { it.endedAt.isBefore(endedBefore) }
+            .sortedWith(compareBy({ it.endedAt }, { it.id.value }))
+            .take(limit)
+
+    /** Every member of [id] out of [document]'s ended set: after its record was removed. */
+    suspend fun unlistEnded(document: SnapshotKey, id: ChangeId) {
+        val key = endedKey(document)
+        sets.removeChangeMembers(key, sets.changeMembers(key).filterTo(HashSet()) { parseEnded(it)?.id == id })
     }
 
     /**
@@ -206,6 +229,18 @@ internal class OpenChangeSets(
         fun documentKey(document: SnapshotKey) = "doc:$document"
 
         fun stateKey(state: ChangeState) = "state:${state.name}"
+
+        /** A document's ended changes (`CTL-83`): `<epoch millis of its end>#<id>`. */
+        fun endedKey(document: SnapshotKey) = "ended:$document"
+
+        fun endedMember(endedAt: Instant, id: ChangeId) = "${endedAt.toEpochMilli()}#${id.value}"
+
+        /** An ended member, split at its first `#` (millis hold none); null for one of another form. */
+        fun parseEnded(member: String): EndedChange? {
+            val millis = member.substringBefore('#', "").toLongOrNull() ?: return null
+            val id = member.substringAfter('#', "")
+            return if (id.isEmpty()) null else EndedChange(ChangeId(id), Instant.ofEpochMilli(millis))
+        }
 
         /** A change's place in the order of a state's listing, and the cursor of its pages. */
         fun cursor(document: SnapshotKey, id: ChangeId) = "$document#${id.value}"

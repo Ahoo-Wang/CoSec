@@ -119,8 +119,20 @@ class ControlMaintenance(
             attempt("reclaim the revisions of [$key]") { revisions.reclaim(key, keep) }
                 ?.takeIf { it.any }
                 ?.let { reclaimed[key] = it }
+            attempt("reclaim the ended changes of [$key]") { reclaimEnded(key) }
         }
         return reclaimed
+    }
+
+    /**
+     * The ended changes of [key] past `min-age` that published no revision still retained (`CTL-83`): after the
+     * revisions, so a revision reclaimed now no longer keeps its change. Nothing while the index does not read.
+     */
+    private suspend fun reclaimEnded(key: SnapshotKey) {
+        val index = store.index(key)?.value ?: return
+        val retained = index.entries.mapTo(HashSet()) { it.revision }
+        val removed = changes.ended.reclaim(key, revisions.retention.minAge, retained)
+        if (removed > 0) log.info { "Reclaimed $removed ended changes of [$key]." }
     }
 
     /**
