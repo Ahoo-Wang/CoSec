@@ -15,6 +15,8 @@
 
 package me.ahoo.cosec.cocache
 
+import io.github.oshai.kotlinlogging.KotlinLogging
+import kotlinx.coroutines.CancellationException
 import me.ahoo.cocache.api.ConditionalGet
 import me.ahoo.cocache.api.ConditionalPut
 import me.ahoo.cocache.api.Store
@@ -22,13 +24,11 @@ import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.cocache.snapshot.RedisSnapshotDocumentStore.Companion.cocacheDigest
 import me.ahoo.cosec.cocache.snapshot.RedisSnapshotDocumentStore.Companion.snapshotDigest
 import me.ahoo.cosec.model.Identifiers
-import io.github.oshai.kotlinlogging.KotlinLogging
 import me.ahoo.cosec.spi.snapshot.SnapshotDigest
 import me.ahoo.cosec.spi.token.InMemorySessionIndex
 import me.ahoo.cosec.spi.token.SessionIndex
 import me.ahoo.cosec.spi.token.TokenFamily
 import me.ahoo.cosec.spi.token.TokenFamilyStore
-import kotlinx.coroutines.CancellationException
 import java.time.Clock
 import java.time.Duration
 
@@ -72,7 +72,8 @@ class CoCacheTokenFamilyStore @InternalCoSecApi constructor(
     }
 
     /** Deletes a session pushed out of its principal's count, as well as it can: a login does not fail on it. */
-    @Suppress("TooGenericExceptionCaught") // stays: any failure of a best-effort delete is logged, cancellation excepted
+    // Any failure of a best-effort delete is logged; cancellation is rethrown.
+    @Suppress("TooGenericExceptionCaught")
     private suspend fun delete(id: String) {
         try {
             cache.suspending().delete(key(id))

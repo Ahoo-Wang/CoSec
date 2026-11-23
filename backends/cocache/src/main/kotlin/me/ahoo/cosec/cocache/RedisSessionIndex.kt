@@ -26,9 +26,9 @@ import java.time.Instant
 
 /**
  * The [SessionIndex] on Redis: one sorted set per principal and tenant, `<keyPrefix><n>:<tenant>:<principal>`, where
- * `<n>` is the tenant id's length, so that ids holding `:` never share a key; of session ids scored by when each began, in Redis's own time. One script admits a session, pushes out the earliest past the
- * limit and keeps the key at least as long as the session can live (`session-index.lua`); it touches that one key only,
- * so it runs on a Redis Cluster. It runs through the reactive client and awaits it: no thread waits for Redis. A
+ * `<n>` is the tenant id's length, so that ids holding `:` never share a key; of session ids scored by when each began,
+ * in Redis's own time. One script admits a session, pushes out the earliest past the limit and keeps the key at least
+ * as long as the session can live (`session-index.lua`); it touches that one key only, so it runs on a Redis Cluster. It runs through the reactive client and awaits it: no thread waits for Redis. A
  * failure throws, so the login fails rather than create a session the index does not count.
  */
 @InternalCoSecApi

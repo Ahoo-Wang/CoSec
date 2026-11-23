@@ -60,7 +60,8 @@ class InMemorySessionBoundTest {
 
     @Test
     fun `a write never keeps a record past the end of its session`() = runTest {
-        val short = TokenFamily("s", TenantId("t"), PrincipalId("alice"), start, start.plus(Duration.ofDays(1)), 1, null, false)
+        val short =
+            TokenFamily("s", TenantId("t"), PrincipalId("alice"), start, start.plus(Duration.ofDays(1)), 1, null, false)
         store.create(short).assert().isTrue()
         clock.set(start.plus(Duration.ofDays(1)))
         store.read("s").assert().isNull()
