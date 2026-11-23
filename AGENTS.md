@@ -165,8 +165,8 @@ the adapters, snapshots or the control plane. The parts that take several files 
   starter bring CosId, since CoSec owns its ids through `IdGenerator`), `SourceRulesTest`
   (Reactor only in edge and host, plus cocache's reactive Redis client, never in its public signatures; no Spring, Servlet or Redis client
   in `api/` and `core/`; no backend class references `runtime`; backends reach into `control` only through the listed ports and into
-  `document` only through the mapper, the rule a stored record's format number is read by (`StoredFormat`) and the codec of a
-  format they store (`ShadowCodec`): a backend stores bytes and
+  `document` only through the mapper, the rule a stored record's format number is read by (`StoredFormat`), the codec of a
+  format they store (`ShadowCodec`) and the one way to make the `SnapshotDocument` a store returns (`SnapshotDocuments`, which reads the header only): a backend stores bytes and
   never reads what a document grants; `kafka` reaches into `control` only through the change listener port;
   opt-ins to `InternalCoSecApi` only in CoSec's own Kotlin sources, so never in a doc sample),
   `JacksonSignatureTest` (no Jackson type in a public signature of `api/` or `core/`, no Reactor type in one of
