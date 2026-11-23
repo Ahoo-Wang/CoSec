@@ -1,6 +1,6 @@
 # RFC 0005：条件 AST、动作词汇与编译执行（RFC 0001 迁移第 4 阶段，下篇）
 
-> 状态：已确认（第 2 版，§15 / §11 的决定已于 2026-10-22 由维护者确认）· 上位文档：[RFC 0001](0001-target-architecture.md) P6、P10、§3.3、§3.10、§6 第 4 阶段、§7.1 ·
+> 状态：已确认（第 2 版，§11 的决定已于 2026-10-22 由维护者确认）· 上位文档：[RFC 0001](0001-target-architecture.md) P6、P10、§3.3、§3.10、§6 第 4 阶段、§7.1 ·
 > 姊妹篇：[RFC 0004](0004-unified-model.md)（第 4 阶段上篇：绑定、租户分层、转换工具、门槛方法），本文以它为前提 ·
 > 交付：全部合入 `main`（8.0 线），随 8.0 发布 ·
 > 范围（今天的项目）：`model`、`engine`、`document`、`runtime`、`openapi`、`webflux`、`webmvc`、`gateway`、`migrate`
@@ -67,7 +67,7 @@ RFC 0004 统一了"一条语句对谁、在哪里生效"。本文统一"一条�
 | J6 | §7.1：运算符集合固定 | 7.x 的 `endsWith`、`contains`、`regular` 在策略里很常见（例如按来源域名后缀放行），集合里没有对应的运算符 | 不加运算符。提供一个派生属性 `*.host.labels`（反转的域名标签，§3.2），使"域名后缀"可以写成 `prefix`；其余拒绝转换（§3.6）。Q5 |
 | J7 | §7.1："按 action 键精确查找，索引快且不会漏" | 只对 `service:verb` 成立。`http` 命名空间的路径模式（`**`、`{var}`、模板）不能按键精确查找 | 按命名空间分区：`service:verb` 哈希，`http` 按段前缀树，模板和不可分析的进"总是候选"桶（§6.2） |
 | J8 | §3.3 `onMissing` | 见 RFC 0004 §3 I7 | §3.4 |
-| J9 | （7.x 现状，非 RFC 0001）`#{...}` 路径模板在求值后才成为模式的一部分 | 模板不可分析，也无法建索引 | 路径模板在 AST 中变成"捕获变量 + `eq`"（§7.2），代入的值只参与相等比较，永远不会改变模式。Q6 |
+| J9 | （7.x 现状，非 RFC 0001）`#{...}` 路径模板在求值后才成为模式的一部分 | 模板不可分析，也无法建索引 | 8.0 的写法是"捕获变量 + `eq`"（§5.2，`ACT-1`），代入的值只参与相等比较，永远不会改变模式；转换工具拒绝带模板的动作（§7.2）。Q6 |
 
 ---
 
@@ -307,7 +307,7 @@ class Resource(val type: String, val id: String, val attributes: Map<String, Str
 
 - 动作模式：`service:verb`、`service:*`、`*`。不允许其他通配，所以动作的包含判断是平凡的。
 - 资源模式：`type/段/段...`，段是字面量、`*`（一段）、`{name}`（一段并捕获）、末尾的 `**`（任意多段）。捕获的变量进 `resource.var.<name>`，只在本语句可见（P6）。
-- `service` 与 `type` 的命名由 `Catalog` 声明（RFC 0004 §4.9）；控制面据此校验，编译器只检查语法。
+- 编译器只检查动作与资源的语法；控制面不按目录校验动作名与资源类型：目录声明的是权限 id，不是 service、verb 或资源类型（RFC 0004 §4.9，RFC 0012 §4）。
 - 没有任何请求会有的 `http` 动作不能编译（`DOC-8`）：`http:HEAD`（HEAD 请求按 `http:GET` 决策，`PIP-18`），以及动词含 ASCII 小写字母的动作（这样的方法在决策之前就被拒绝）。
   语句、限流规则和目录里的简写权限（按 `RoleExpansion.effective` 写出后）都适用；`http:*`、大写动词和其他服务的小写动词（`order:head`）不受影响。错误信息指出动作，建议写 `http:GET` 或大写的动词。
   理由：这样的 DENY 是作者以为堵上了的洞。数据面与控制面共用一个编译器，所以含这种动作的已存储文档按失败安装（失败即拒绝），控制面拒绝产生它的变更，schema 也这样写；`upgrading.md` 写明怎么找和改。
@@ -604,6 +604,18 @@ C9 记录每条说的是只有未映射请求才有的东西的 DENY 与限流�
 ## 10. 实现拆分
 
 > **2026-11-23 压缩时删去**：本节是实现的 PR 划分，都已合入。原文见 `git show 3cd4dca9:docs/rfc/0005-condition-ast.md`。
+
+别处引用的 PR 编号与它们的标题：
+
+- PR-1 `feat(model): add the condition AST with types and cost bounds`
+- PR-2 `feat(model): extract index keys and decide condition containment`
+- PR-3 `feat(engine): match actions and resources without Spring`
+- PR-4 `feat(engine): compile statements and index candidates`
+- PR-5 `feat(openapi): generate route maps and service actions`
+- PR-6 `feat(migrate): translate 7.x matchers into the condition AST`
+- PR-7 `test: classify AST migration differences in replay`（已取消）
+- PR-8 `refactor!: evaluate compiled conditions and actions`（并入 RFC 0008 的切换 PR）
+- PR-9 `refactor!: remove the legacy matchers`（并入 RFC 0008 的切换 PR）
 
 ## 11. 决定
 
