@@ -46,6 +46,10 @@ internal object ControlChangeInputs {
         RouteMaps.loadAnalysis(properties.analysis.routeMaps, resourceLoader),
     )
 
+    /** A simulator that compiles as enforcement does, over the host's one document cache (S5, DR1-F-5). */
+    fun simulator(attributes: AttributeProviders, environment: Environment, documentCache: DocumentCache): Simulator =
+        Simulator(attributes = attributes.catalog, credentialHeaders = credentialHeaders(environment), cache = documentCache)
+
     /** UC-6: a change that would keep its operator out of the control plane needs an acknowledgement. */
     fun lockout(
         revisions: Revisions,
@@ -55,7 +59,7 @@ internal object ControlChangeInputs {
         documentCache: DocumentCache,
     ): LockoutCheck = ControlLockout(
         revisions,
-        Simulator(attributes = attributes.catalog, credentialHeaders = credentialHeaders(environment), cache = documentCache),
+        simulator(attributes, environment, documentCache),
         AppId(properties.appId),
     )
 }

@@ -65,6 +65,7 @@ class DocumentCache(
     private var heap = 0L
 
     /** A stored document: [key] at [digest], decoded, of [size] stored bytes. */
+    @InternalCoSecApi
     inner class Entry internal constructor(
         val key: SnapshotKey,
         val digest: SnapshotDigest,
@@ -145,6 +146,7 @@ class DocumentCache(
      * A policy, its statements' action and resource patterns parsed ([parse]) when `analyze` first reaches it: a stored
      * document's by its entry, which names the document when one does not parse; a built-in's ([BUILTIN]) as written.
      */
+    @InternalCoSecApi
     class AnalyzedPolicy internal constructor(
         val definition: PolicyDefinition,
         parse: () -> List<AnalyzedStatement>,
@@ -152,6 +154,7 @@ class DocumentCache(
         val statements: List<AnalyzedStatement> by lazy(LazyThreadSafetyMode.PUBLICATION, parse)
     }
 
+    @InternalCoSecApi
     class AnalyzedStatement(val index: Int, val source: StatementSource) {
         private val actions = source.actions.map { ActionPattern.parse(it) }
 
@@ -220,6 +223,7 @@ class DocumentCache(
     /** The heap it is estimated to hold; for tests. */
     val estimatedHeap: Long get() = synchronized(entries) { heap }
 
+    @InternalCoSecApi
     companion object {
         /** A decoded document's heap per stored byte, at most about 3.8 as measured. */
         const val DECODED_FACTOR: Int = 4

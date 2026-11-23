@@ -13,10 +13,10 @@
 
 package me.ahoo.cosec.control.lifecycle
 
-import java.time.Duration
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.control.store.RetentionPolicy
 import me.ahoo.cosec.runtime.HeapBudget
+import java.time.Duration
 
 /**
  * The control plane's cadences and limits that are computed or constant, not configured (the rule of root `AGENTS.md`:

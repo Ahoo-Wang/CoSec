@@ -15,7 +15,6 @@
 
 package me.ahoo.cosec.spring.boot.control
 
-import java.time.Clock
 import me.ahoo.cocache.core.CoCacheFactory
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
@@ -27,7 +26,6 @@ import me.ahoo.cosec.control.api.ControlHttp
 import me.ahoo.cosec.control.api.ControlPlane
 import me.ahoo.cosec.control.api.DefaultControlPlane
 import me.ahoo.cosec.control.api.DocumentCache
-import me.ahoo.cosec.control.api.Simulator
 import me.ahoo.cosec.control.audit.ChangeListeners
 import me.ahoo.cosec.control.audit.LoggingChangeListener
 import me.ahoo.cosec.control.authz.ControlAuthorizer
@@ -85,6 +83,7 @@ import org.springframework.context.annotation.Import
 import org.springframework.core.env.Environment
 import org.springframework.core.io.ResourceLoader
 import org.springframework.kafka.core.KafkaOperations
+import java.time.Clock
 
 /**
  * The control plane (RFC 0007, with `cosec-control`): the only writer of the policy documents, on
@@ -154,8 +153,7 @@ internal class CoSecControlAutoConfiguration {
             DocumentSnapshots.source(
                 documents,
                 compiler,
-                // A third of the documents' share: the pipeline's source and the control plane's document cache hold the
-                // others (SNP-24, DR1-F-5).
+                // A third of the documents' share, beside the pipeline's source and the document cache (SNP-24, DR1-F-5).
                 properties.snapshot.toOptions(pipeline.timeout, sources = ControlDerived.DOCUMENT_HOLDERS),
                 clock
             ).also(compiler::bind),
@@ -314,10 +312,7 @@ internal class CoSecControlAutoConfiguration {
         shadowInterval = ControlDerived.shadowCheckInterval(properties.shadow.minDuration),
     )
 
-    /**
-     * The documents `simulate`, `explain`, `analyze` and the lock-out check compile, one cache per host (DR1-F-5): a third
-     * of the documents' share of the heap, beside the two snapshot sources ([ControlDerived.DOCUMENT_HOLDERS]).
-     */
+    /** One per host, shared by simulate, explain, analyze and the lock-out check (DR1-F-5, [ControlDerived.DOCUMENT_HOLDERS]). */
     @Bean
     fun cosecControlDocumentCache(): DocumentCache = DocumentCache(ControlDerived.documentCacheBytes())
 
@@ -336,7 +331,7 @@ internal class CoSecControlAutoConfiguration {
             changes,
             revisions,
             authority,
-            Simulator(attributes = attributes.catalog, credentialHeaders = credentialHeaders(environment), cache = documentCache),
+            ControlChangeInputs.simulator(attributes, environment, documentCache),
         )
 
     /** Not replaceable: every route needs a request the host pipeline permitted. */

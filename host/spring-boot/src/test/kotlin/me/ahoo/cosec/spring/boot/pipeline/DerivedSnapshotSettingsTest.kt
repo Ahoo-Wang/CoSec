@@ -15,13 +15,13 @@
 
 package me.ahoo.cosec.spring.boot.pipeline
 
-import java.time.Duration
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.control.lifecycle.ControlDerived
 import me.ahoo.cosec.runtime.HeapBudget
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import org.springframework.mock.env.MockEnvironment
+import java.time.Duration
 
 /**
  * `SNP-23`, `CTL-72`: what the data plane computes where it used to be told, and the one startup line that says what
