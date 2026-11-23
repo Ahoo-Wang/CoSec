@@ -265,6 +265,9 @@ class ManagementPortTest {
                 add("spring.cloud.gateway.server.webflux.routes[1].id=closed")
                 add("spring.cloud.gateway.server.webflux.routes[1].uri=http://localhost:$backendPort")
                 add("spring.cloud.gateway.server.webflux.routes[1].predicates[0]=Path=/closed")
+                // springdoc is on this module's test classpath: its document endpoint would be a handler of the host's
+                // own, which a gateway does not serve without a decision (STA-13). The gateway image has no springdoc.
+                add("springdoc.api-docs.enabled=false")
             } else {
                 add("cosec.authentication.login.logout.path=$LOGOUT")
                 // Spring Cloud Gateway is on the test classpath for other tests: none of its configurations is wanted.

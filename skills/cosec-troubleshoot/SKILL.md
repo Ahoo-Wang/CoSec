@@ -105,9 +105,10 @@ Full model: https://cosec.ahoo.me/guide/security-model.
   to get past it.
 - **`CoSec is off: cosec.enabled=false.` (WARN, not a failure):** nothing is protected by CoSec on that application;
   ask whether that is intended.
-- **`This is a Spring Cloud Gateway host: CoSec decides the requests of gateway routes only. ... answered with no CoSec
-  decision: <beans>` (WARN):** the application's own controllers or functional routes are outside CoSec; move them
-  behind the gateway, or secure them in the application.
+- **`This is a Spring Cloud Gateway host: CoSec decides the requests of gateway routes only. ... would be answered with
+  no CoSec decision: <beans> ... (STA-13)` (startup fails):** the application's own controllers or functional routes are
+  outside CoSec; move them behind the gateway, or list the ones something else protects, by bean name, in
+  `cosec.gateway.unprotected-handlers` (never a pattern). Never list a handler just to start.
 - **`No platform document under [<prefix>:snapshot:platform] in Redis <host:port/db>: this instance is not ready ...`
   (WARN, repeated every 6 revalidation intervals):** the instance waits for its platform document. Check, in this order, that
   something was published (`cosec-migrate publish --key-prefix <prefix>`), that `cosec.key-prefix` is the publisher's, and
@@ -148,7 +149,14 @@ Full model: https://cosec.ahoo.me/guide/security-model.
   The key to write depends on who reaches it: `only-gateway-can-reach=true` when only the gateway does,
   `only-trusted-callers-can-reach=true` when services call it directly (the image has a service port by default, so the
   second; the gateway's key is refused beside a service port). The network first (a NetworkPolicy per port, as in
-  `k8s/control/`), then the line.
+  `k8s/control/`), then the line. On Kubernetes the overlay writes the line, never `k8s/control/` itself.
+- **The Job `cosec-control-boundary-check` fails** (`k8s/control/boundary-check.yaml`): `FAIL reached the control host at
+  <address>:<port>` means a pod no policy admits reached it, so the network plugin does not enforce the policies and the
+  overlay's boundary statement is false; anyone in the cluster can state any principal. Take the statement out of the
+  overlay (the host stops) until the policies are enforced; never delete the Job to make it pass. `FAIL could not tell`
+  means the host never listened within ten minutes, or the plugin refuses instead of dropping: check by hand. Delete the
+  Job before every apply (its pod template cannot change, and a finished one does not run again), or the verdict is the
+  last apply's.
 - **`cosec-control-server runs the control plane; cosec.control.enabled=false ...`, or `cosec-control-server verifies no
   credential and issues no token ... cosec.jwt.enabled=true`** (also `cosec.api-key.enabled`,
   `cosec.authentication.login.enabled`; `STA-10`): the `cosec-control` image refuses them. Remove the key; a control plane

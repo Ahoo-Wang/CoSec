@@ -55,8 +55,37 @@ Which preview of the library may run behind which preview of the gateway image: 
   still decides on it. A `ControlStore` of your own implements `endedChanges` and `removeChange`. Changes that ended
   before the upgrade are not listed, so nothing removes them: delete their `<s>:control:change:<id>` keys yourself if
   you want them gone.
+- **A control route that carries no document reads at most 64 KB** (DR1-F-3). Affected: a client that posts more than
+  64 KB to `simulate`, `explain`, `analyze`, a step of a change, a rollback or break-glass. Such a body is now a `400`
+  before it is parsed, where it was read and parsed up to 10 MB before anything was authorized. Proposals, `:apply` and
+  their checks still read up to 10 MB. A simulated request larger than 64 KB has more headers and attributes than a real
+  request can carry: trim it.
+- **Breaking: a gateway host with handlers of its own does not start until they are listed** (`STA-13`). Affected: a
+  Spring Cloud Gateway host in enforce mode whose application declares its own `@Controller`, `@RestController` or
+  `RouterFunction` beans.
+  - Those handlers are mapped before any gateway route, so CoSec, a filter of gateway routes, never decided them. Startup
+    used to warn and go on.
+  - Now it fails, naming each handler by bean name. Migrate by moving them to a service behind the gateway, where a route
+    decides them, or by listing the ones something else protects in `cosec.gateway.unprotected-handlers`. Startup then
+    names them in one INFO line.
+  - A name with `*` is refused. Spring's, CoSec's and actuator handlers are not the application's and need no entry
+    ([The gateway's own handlers](../integration/web.md#the-gateways-own-handlers)). A library's controller is: springdoc's
+    `openApiResource` on a gateway host is refused like your own (turn it off with `springdoc.api-docs.enabled=false`, or
+    list it).
 - **An `explain` at a retained revision is cached like a head** (DR1-F-4). Affected: nothing to change. Repeating it
   compiles nothing, where each call compiled its documents again.
+- **Session records are kept no longer than their refresh token, and 64 per principal** (`IDN-35`, DR1-G-2).
+  Affected: every deployment that issues CoSec's tokens, and a `TokenFamilyStore` of your own.
+  - A session record (`<s>:token:family:<sid>`) used to stay in Redis for the whole session lifetime (30 days), even
+    when nobody refreshed it after a week. Each write now keeps it for the shorter of what is left of the session and
+    `cosec.jwt.token-validity.refresh`.
+  - A principal keeps the 64 sessions that began most recently in a tenant, counted in the new key
+    `<s>:token:sessions:...`. A login or a switch past them deletes the earliest, whose next refresh is `401
+    token-invalid`: that device signs in again.
+  - Records written before keep their lifetime and are not counted. They leave Redis as they did.
+  - **A `TokenFamilyStore` of your own** may keep a family until its `expiresAt` as before, which the contract now
+    calls an upper bound. It should keep `TokenFamilyStore.SESSIONS_PER_PRINCIPAL` sessions per principal and tenant,
+    as CoSec's do ([Extending](../architecture/extending.md)).
 - **`analyze` shows a tenant's bindings only to a caller who may read its document** (`CTL-51`, DR1-F-8). Affected: a
   principal granted `cosec:analyze` on its tenant's document but not `cosec:read` (no built-in role is shaped so). It
   was answered with every matching binding of that document; it now gets none, and the document is counted in `hidden`.

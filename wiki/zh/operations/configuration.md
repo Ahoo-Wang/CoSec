@@ -82,7 +82,7 @@ CoSec 没有哪个配置项叫这些名字，而已知的 key 无论来源都不
 | 一个文档的索引在最近 `max-count` 个之外至多列出多少条修订（`CTL-84`） | 文档上限除以每条 320 字节（一条至多占用的大小）：26,214 | 文档上限 |
 | 修订链之外的记录、或登记了却从未写入的变更何时删除 | 满一轮回收的年龄：1 小时 | 回收间隔 |
 | 多久查看一次处于影子阶段的变更 | `min-duration` 的十五分之一，在 250 ms 到 1 分钟之间：默认 `1m` | [`cosec.control.shadow.min-duration`](#control-plane) |
-| 控制 API 读取的最大请求体 | 文档上限（8 MB）再加操作外层 JSON 的 2 MB：10 MB | 文档上限 |
+| 控制 API 读取的最大请求体 | 提议、`:apply` 及其校验：文档上限（8 MB）再加操作外层 JSON 的 2 MB，即 10 MB；其他路由：64 KB，即 Spring Boot 服务器默认请求头大小 8 KB 的八倍（模拟请求就是一个请求的头与属性） | 文档上限；请求头大小 |
 | 吊销缓存本地副本的初始容量和空闲过期 | 没有：缓存自己决定大小，`local-max-age` 让每个条目过期 | |
 
 管道超时的每一份至少为 `1ms`；`cosec.pipeline.timeout` 低于 20 ms 时，一个令牌的两次吊销读取可能不再在认证超时之内结束。
@@ -173,6 +173,7 @@ CoSec 没有哪个配置项叫这些名字，而已知的 key 无论来源都不
 
 | 配置项 | 类型 | 默认值 | 作用 |
 |---|---|---|---|
+| `cosec.gateway.unprotected-handlers` | bean 名集合 | 空 | 可以在 Spring Cloud Gateway 宿主上提供的应用自己的控制器和函数式路由：CoSec 不决策它们（它们映射在所有路由之前），它们由其他手段保护。其他任何一个都会让 enforce 模式下的启动失败（`STA-13`）；带 `*` 的名字被拒绝；对不上任何处理器的名字被忽略。哪些处理器不需要 CoSec 决策只有运维知道，所以它是一项声明，而不是算出来的值（[网关自己的处理器](../integration/web.md#the-gateways-own-handlers)）。 |
 | `cosec.gateway.unprotected-endpoints` | 端点 id 集合 | 空 | 可以在网关应用端口上通过 HTTP 暴露的 actuator 端点：CoSec 不授权它们，它们由其他手段保护。其他任何 `health` 以外的端点在那里暴露都会使启动失败（`STA-2`）；会修改路由的 `gateway` 从不接受。在单独的 `management.server.port` 上可以暴露任何端点（[网关上的 actuator](../integration/web.md#actuator-on-a-gateway)）。 |
 
 ## 网关身份 {#gateway-identity}

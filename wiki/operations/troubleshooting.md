@@ -678,7 +678,26 @@ application declared its own gate. It names two lines: `only-gateway-can-reach=t
 host, `cosec.pipeline.identity.only-trusted-callers-can-reach=true` (`COSEC_PIPELINE_IDENTITY_ONLYTRUSTEDCALLERSCANREACH`)
 when services call it directly, as they do the service port of the `cosec-control` image, which is on by default; beside a
 service port the gateway's line is refused, because it would be false. The network first, one policy per port
-([`k8s/control/`](https://github.com/Ahoo-Wang/CoSec/tree/main/k8s/control)), then the line.
+([`k8s/control/`](https://github.com/Ahoo-Wang/CoSec/tree/main/k8s/control)), then the line, which on Kubernetes the
+overlay writes, beside the [boundary check](#the-control-hosts-boundary-check-fails).
+
+### The control host's boundary check fails {#the-control-hosts-boundary-check-fails}
+
+```text
+FAIL reached the control host at 10.244.0.7:8080 from a pod no NetworkPolicy admits (curl exit 0): the cluster does not enforce the policies, and COSEC_PIPELINE_IDENTITY_ONLYTRUSTEDCALLERSCANREACH=true is false. Whoever reaches the host can state any principal.
+```
+
+The Job `cosec-control-boundary-check` of [`k8s/control/`](https://github.com/Ahoo-Wang/CoSec/tree/main/k8s/control)
+connects to every port of every control-host pod from a pod no policy admits ([Deploying](./deployment.md#kubernetes)). A
+connection that is answered means the cluster's network plugin does not enforce the three NetworkPolicies, so the overlay's
+statement of the boundary is false, and any workload of the cluster can state a platform administrator to the host. Take
+the statement out of your overlay (the host stops) until the plugin enforces the policies, then delete the Job and apply
+again (always delete it before an apply: a Job's pod template cannot change, and one that finished does not run again).
+Never delete the Job to make the failure go away; `k8s/overlays/dev` is for a cluster nothing else runs on.
+
+`FAIL could not tell` means the host refused every connection, or had no address, for ten minutes: it never listened
+(see why with `kubectl logs deploy/cosec-control`), or the plugin refuses a connection instead of dropping it. In the
+second case, check by hand that a pod of another label cannot connect.
 
 ### Startup fails on the control-plane image's settings {#startup-fails-on-the-control-plane-images-settings}
 
@@ -762,13 +781,18 @@ WARN, logged once the application has started. Nothing CoSec wires is active: no
 snapshot. Remove the property, or set `cosec.enabled=true`, unless that is what you meant; a gateway still strips a
 client's `CoSec-Identity`.
 
-### The log says the gateway's own handlers are not decided {#the-log-says-the-gateways-own-handlers-are-not-decided}
+### Startup fails on the gateway's own handlers {#startup-fails-on-the-gateways-own-handlers}
 
-`This is a Spring Cloud Gateway host: CoSec decides the requests of gateway routes only. n handler(s) of the
-application itself ... are answered with no CoSec decision: ...` names controllers or functional routes of the
-application. They are mapped before any gateway route, so CoSec never sees a request for them
-([The gateway's own handlers](../integration/web.md#the-gateways-own-handlers)). Move them to a service behind the
-gateway, or secure them in the application.
+```text
+This is a Spring Cloud Gateway host: CoSec decides the requests of gateway routes only. n handler(s) of the application itself are mapped before any route and would be answered with no CoSec decision (no authentication, no policy, no rate limit): ... (STA-13, ...)
+```
+
+It names controllers or functional routes of the application, by bean name. They are mapped before any gateway route,
+so CoSec never sees a request for them ([The gateway's own handlers](../integration/web.md#the-gateways-own-handlers)).
+Move them to a service behind the gateway, where a route decides them. Or, for the ones something else protects, list
+their bean names in `cosec.gateway.unprotected-handlers` (`COSEC_GATEWAY_UNPROTECTEDHANDLERS`); startup then names them
+in one INFO line. `... lists [*]: it takes the bean names of handlers, never a pattern` means a listed name holds `*`:
+write each name.
 
 ### Startup fails on a missing module
 
@@ -1171,7 +1195,7 @@ principal sets a tenant's boundary`.
 |---|---|---|
 | `401` | No principal the pipeline permitted stands behind the request: anonymous, or the route is not served behind the pipeline. Nothing of its body is read. | Send a credential. The documents must permit the HTTP request to `cosec.control.http.base-path` for this principal. |
 | `403` | The operator may not take this action on this document (for `simulate` and `explain`, on the tenant the request is decided in: `(0)` for one without a `principal`), or the hard rules forbid it: the author approving their own change, someone else rebasing it, or anyone but its author abandoning a revoke of a live break-glass binding (`BRK-10`). | Bind the operator a control-plane policy (`cosec:platform-admin`, `cosec:tenant-admin`, ...) for that document ([Testing changes](../policies/testing.md)). |
-| `400` | The body is not a JSON object, a field is missing or unknown, a value has the wrong type or does not parse (a time, a mode, a number), or (WebMvc) the body is larger than 10 MB (the document cap and 2 MB, [computed](./configuration.md#computed-not-configured)). `simulate` and `explain` also refuse a request without a `principal` that names a tenant other than `(0)`, which enforcement would decide on `(0)`; one that repeats, with different values, a header a document of its view reads, as enforcement refuses it; and an `http` path enforcement refuses (a dot segment, a malformed escape, over 2,048 characters as received or 256 per segment once decoded) or a typed id over those lengths as written, which `analyze` refuses too. Any request whose path, query or body holds a string with an unpaired UTF-16 surrogate (a JSON escape such as `"\uD800"`) is refused before its route reads it: `The request holds a string with an unpaired UTF-16 surrogate, which no id may hold (IDN-10).` | Fix the request; `detail` says what, in the control plane's own words or by the field's name, never an exception's message. A `400` without `detail` is logged at `INFO`: `Control API <method> <path> (request <requestId>) is 400: <reason>`. On WebFlux a large body is bounded by `spring.codec.max-in-memory-size`. |
+| `400` | The body is not a JSON object, a field is missing or unknown, a value has the wrong type or does not parse (a time, a mode, a number), or (WebMvc) the body is larger than 10 MB (the document cap and 2 MB, [computed](./configuration.md#computed-not-configured)), or larger than 64 KB on a route that carries no document (`The request body is <n> bytes, over the 65536 this route reads.`). `simulate` and `explain` also refuse a request without a `principal` that names a tenant other than `(0)`, which enforcement would decide on `(0)`; one that repeats, with different values, a header a document of its view reads, as enforcement refuses it; and an `http` path enforcement refuses (a dot segment, a malformed escape, over 2,048 characters as received or 256 per segment once decoded) or a typed id over those lengths as written, which `analyze` refuses too. Any request whose path, query or body holds a string with an unpaired UTF-16 surrogate (a JSON escape such as `"\uD800"`) is refused before its route reads it: `The request holds a string with an unpaired UTF-16 surrogate, which no id may hold (IDN-10).` | Fix the request; `detail` says what, in the control plane's own words or by the field's name, never an exception's message. A `400` without `detail` is logged at `INFO`: `Control API <method> <path> (request <requestId>) is 400: <reason>`. On WebFlux a large body is bounded by `spring.codec.max-in-memory-size`. |
 | `404` | No such route, document or change, or one the operator may not see. A path with a trailing `/` or an empty segment (`//`) is no route. | Use the route's exact path. |
 | `409` | The base moved (`[<doc>] is at revision <n>, not <m>`), the change is in another state, another change holds the document's staging slot (only a break-glass revoke, or a change that only narrows by a holder of `cosec:skip-shadow`, takes it, and only another revoke of a live binding takes a revoke of a live binding's: [Taking a busy slot](../policies/testing.md#taking-a-busy-slot)), the shadow window is open or blocked, or a break-glass revoke did not take effect (`binding [<id>] still grants: change <id> is <state>`, below). | Rebase, wait for the other change, read the window's summary, or revoke again. |
 | `409` from `:apply` with `REPLACE`: `[<doc>] is at revision <n>, not <m>: REPLACE removes what the file leaves out, and the file was read at revision <m>` | The file's header names the revision it was read at, and the head moved since: applying it would remove what was published in between. | Read the head (`GET /documents/<doc>`), bring what changed into the file, set its `revision` to the head's and apply again ([Changes](../policies/testing.md#changes)). |

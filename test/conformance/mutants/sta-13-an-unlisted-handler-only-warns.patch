@@ -1,0 +1,17 @@
+# Rule: STA-13
+# Mutant: a gateway host warns about a handler of its own that nobody listed and starts, serving it with no CoSec decision
+# Tests: :spring-boot:test --tests me.ahoo.cosec.spring.boot.pipeline.GatewayOwnHandlersTest
+
+diff --git a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/pipeline/GatewayOwnHandlers.kt b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/pipeline/GatewayOwnHandlers.kt
+index 65a529190..37a8b4a6c 100644
+--- a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/pipeline/GatewayOwnHandlers.kt
++++ b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/pipeline/GatewayOwnHandlers.kt
+@@ -106,7 +106,7 @@ internal object GatewayOwnHandlers {
+         }
+         val names = listed.mapTo(HashSet()) { it.trim() }
+         val handlers = find(beans)
+-        message(handlers.filter { it !in names })?.let { refusal -> throw IllegalStateException(refusal) }
++        message(handlers.filter { it !in names })?.let { refusal -> log.warn { refusal } }
+         val served = handlers.filter { it in names }
+         if (served.isNotEmpty()) {
+             log.info {
