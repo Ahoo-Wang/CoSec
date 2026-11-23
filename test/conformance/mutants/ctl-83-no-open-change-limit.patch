@@ -1,0 +1,16 @@
+# Rule: CTL-83
+# Mutant: no document is ever at its open-change limit, so a proposal past max-count is stored
+# Tests: :conformance:test --tests me.ahoo.cosec.conformance.ConformanceTest
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/OpenLimit.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/OpenLimit.kt
+index 1d5256b4a..273e050e2 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/OpenLimit.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/OpenLimit.kt
+@@ -49,7 +49,7 @@ internal class OpenLimit(
+         // A change that does not read still counts: it may be open, and it may pin a revision.
+         val unreadable = listed.count { it is ListedChange.Unreadable }
+         val open = listed.filterIsInstance<ListedChange.Readable>().map { flow.current(it.change) }.filterNot { it.state.terminal }
+-        if (open.size + unreadable < maxOpen) return
++        if (open.size + unreadable < Int.MAX_VALUE) return
+         val failed = open.filter { it.author == author.actor && it.state == ChangeState.DRAFT && it.kind == ProvenanceKind.PUBLISH }
+             .minByOrNull { it.createdAt }
+         if (failed != null && abandoned(failed, author) && open.size + unreadable - 1 < maxOpen) return
