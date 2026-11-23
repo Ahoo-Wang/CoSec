@@ -423,6 +423,16 @@ object GuardAllowlist {
             "cocache:SessionBoundTest#a principal keeps the sessions that began last, and the earliest is deleted",
             "cocache:SessionBoundTest#the bound is per principal and per tenant",
             "cocache:SessionBoundTest#the index lives as long as the longest session it counts",
+            // IDN-36: a switched session lives only while its login's does.
+            "login:SwitchedSessionRootTest#a session switched to ends with the login it was switched from",
+            "login:SwitchedSessionRootTest#the root is the login's session, however many switches lie between",
+            "login:SwitchedSessionRootTest#a retry within the leeway is refused once the root has ended",
+            "login:SwitchedSessionRootTest#a gone root ends the session as a revoked one does",
+            "login:SwitchedSessionRootTest#a switched session's refreshes keep its root",
+            "login:SwitchedSessionRootTest#a store that does not keep the root refuses the switch, and ends the session it started",
+            "login:SwitchedSessionRootTest#switching back and forth never pushes out the login",
+            "cocache:TokenFamilyFormatTest#a switched session is format 2, with its root",
+            "cocache:SessionBoundTest#switching back to the login's tenant keeps the login among the latest",
         ),
         "startup" to StartupGuards.GUARDS,
         "timing" to setOf(

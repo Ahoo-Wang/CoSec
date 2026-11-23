@@ -33,12 +33,19 @@ import java.time.format.DateTimeParseException
  * ([StoredFormat]), so a member a later version adds is ignored and a later format is refused, which ends the session
  * (the refresh is refused and the user signs in again). A record written before formats is format 1. Anything
  * malformed is a [SnapshotFormatException], never an argument error the store would read as an outage.
+ *
+ * A session a tenant switch started is written as format 2, with its `root` (`IDN-36`): a reader of format 1 would
+ * ignore the member and drop it when it rewrote the record at a refresh, and the session would outlive its login, so it
+ * refuses the record instead, which ends that session. A session without a root stays format 1.
  */
 internal object TokenFamilyCodec : Codec<TokenFamily> {
     private const val WHAT = "token family"
 
+    /** The format of a session that names its root (`IDN-36`). */
+    private const val ROOTED = 2
+
     override fun encode(value: TokenFamily): ByteArray {
-        val node = StoredFormat.write(CoSecJson.mapper.createObjectNode())
+        val node = StoredFormat.write(CoSecJson.mapper.createObjectNode(), if (value.root == null) 1 else ROOTED)
         node.put("id", value.id)
         node.put("tenant", value.tenant.value)
         node.put("principal", value.principal.value)
@@ -47,6 +54,7 @@ internal object TokenFamilyCodec : Codec<TokenFamily> {
         node.put("generation", value.generation)
         node.put("rotatedAt", value.rotatedAt?.toString())
         node.put("revoked", value.revoked)
+        value.root?.let { node.put("root", it) }
         return CoSecJson.mapper.writeValueAsBytes(node)
     }
 
@@ -56,7 +64,7 @@ internal object TokenFamilyCodec : Codec<TokenFamily> {
         } catch (_: JacksonException) {
             throw SnapshotFormatException("A stored $WHAT is not JSON.")
         }
-        StoredFormat.of(node, WHAT)
+        StoredFormat.of(node, WHAT, known = ROOTED)
         val generation = node.need("generation")
         val counted = generation.isIntegralNumber && generation.canConvertToLong()
         if (!counted) malformed("its generation is not an integer")
@@ -71,6 +79,7 @@ internal object TokenFamilyCodec : Codec<TokenFamily> {
             generation = generation.asLong(),
             rotatedAt = node.get("rotatedAt")?.takeUnless { it.isNull }?.let { node.instant("rotatedAt") },
             revoked = revoked.booleanValue(),
+            root = node.get("root")?.takeUnless { it.isNull }?.let { node.text("root") },
         )
     }
 

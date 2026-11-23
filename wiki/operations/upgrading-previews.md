@@ -65,6 +65,20 @@ Which preview of the library may run behind which preview of the gateway image: 
     list it).
 - **An `explain` at a retained revision is cached like a head** (DR1-F-4). Affected: nothing to change. Repeating it
   compiles nothing, where each call compiled its documents again.
+- **A session a tenant switch started ends with the login** (`IDN-36`). Affected: applications that serve tenant or
+  app switches (`SwitchTenantAuthentication`), and a `TokenFamilyStore` of your own.
+  - Before, the switched session was a session of its own. It kept the login time, but a logout of the login's session,
+    or its revocation as a reused pair, left it refreshing until its lifetime ended. Now it names the login's session as
+    its root, and its next refresh or switch after the root ends is `401 token-revoked`. Its access token stays valid
+    until it expires.
+  - **A `TokenFamilyStore` of your own must save `TokenFamily.root`** (a new nullable member; the constructor without it
+    stays). A switch reads the session back and is refused, with a message naming the member, when the root was not
+    kept.
+  - **Rolling upgrade.** A switched session's record is now written as format 2. An 8.0.0-beta.7 instance refuses it, so
+    that session ends there: the user who switched on an upgraded instance and refreshes on an old one switches again.
+    Sessions started by a login are unchanged (format 1).
+  - **Going back to 8.0.0-beta.7** ends every session a switch started after the upgrade, for the same reason.
+  - Switched sessions started before the upgrade have no root and keep their old behaviour until they end.
 - **Session records are kept no longer than their refresh token, and 64 per principal** (`IDN-35`, DR1-G-2).
   Affected: every deployment that issues CoSec's tokens, and a `TokenFamilyStore` of your own.
   - A session record (`<s>:token:family:<sid>`) used to stay in Redis for the whole session lifetime (30 days), even

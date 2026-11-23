@@ -1,0 +1,17 @@
+# Rule: IDN-36
+# Mutant: a switched session's refreshes do not write its root back, so a login nobody refreshes leaves the store and ends what was switched from it
+# Tests: :login:test --tests me.ahoo.cosec.login.token.SwitchedSessionRootTest
+
+diff --git a/extensions/login/src/main/kotlin/me/ahoo/cosec/login/token/TokenFamilies.kt b/extensions/login/src/main/kotlin/me/ahoo/cosec/login/token/TokenFamilies.kt
+index 6f03a3ff4..6ada94f4f 100644
+--- a/extensions/login/src/main/kotlin/me/ahoo/cosec/login/token/TokenFamilies.kt
++++ b/extensions/login/src/main/kotlin/me/ahoo/cosec/login/token/TokenFamilies.kt
+@@ -225,7 +225,7 @@ class TokenFamilies @JvmOverloads constructor(
+                 end(family.id)
+                 throw TokenRevokedException("The session this one was switched from has ended: sign in again.")
+             }
+-            if (sessionStore("keep a session's root") { store.replace(root.version, root.family) }) {
++            if (true) {
+                 return
+             }
+         }
