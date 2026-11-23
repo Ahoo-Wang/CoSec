@@ -183,13 +183,10 @@ class Revisions(
     }
 
     /** The index entry of [document], the revision whose record has [digest] and [size] bytes: with the parent it names. */
-    private fun entryOf(document: PolicyDocument, digest: SnapshotDigest, size: Long) = RevisionEntry(
-        document.revision,
-        digest,
-        document.publishedAt,
-        document.provenance?.parent?.digest?.let(SnapshotDigest::parse),
-        size,
-    )
+    private fun entryOf(document: PolicyDocument, digest: SnapshotDigest, size: Long): RevisionEntry {
+        val parent = document.provenance?.parent?.digest?.let(SnapshotDigest::parse)
+        return RevisionEntry(document.revision, digest, document.publishedAt, parent, size)
+    }
 
     /** The document [publish] writes: the candidate's body at the revision after [base], naming [base] as its parent. */
     private fun next(base: Head?, candidate: PolicyDocument, publication: Publication): PolicyDocument = candidate.copy(

@@ -50,6 +50,7 @@ class RevisionIndexCodecTest {
             digest(0xfe),
             size = Long.MAX_VALUE,
         )
+
         // Ascending, as an index is: the last revisions there can be, each as long as the largest.
         fun entries(count: Int) = List(count) { largest.copy(revision = Long.MAX_VALUE - count + 1 + it) }
         fun encoded(count: Int) = RevisionIndexCodec.encode(RevisionIndex(entries = entries(count))).size.toLong()
