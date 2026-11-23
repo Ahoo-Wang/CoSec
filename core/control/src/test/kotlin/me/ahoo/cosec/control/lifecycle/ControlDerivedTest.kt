@@ -26,6 +26,19 @@ import java.time.Duration
  * least a window lives.
  */
 class ControlDerivedTest {
+    /** CTL-85: the work budget is an eighth of the heap, and the startup line says what the largest body costs. */
+    @Test
+    fun `the work budget is an eighth of the heap, and the line says how many of the largest bodies fit`() {
+        val mib = 1024L * 1024
+        ControlDerived.workBudgetBytes(2_048 * mib).assert().isEqualTo(256 * mib)
+        ControlDerived.workBudget(heap = 512 * mib).capacity.assert().isEqualTo(64 * mib)
+        ControlDerived.bodyWeight(ControlDerived.MAX_BODY_BYTES).assert()
+            .isEqualTo(ControlDerived.MAX_BODY_BYTES * (ControlDerived.BODY_TREE_FACTOR + ControlDerived.CANDIDATE_FACTOR))
+        // On 512 MiB the largest body weighs more than the budget: it runs alone, one at a time.
+        ControlDerived.describeWork(512 * mib).assert().contains("work budget=64MB (1/8 of the heap)").contains(": 1 at once")
+        ControlDerived.describe(Duration.ofMinutes(15)).assert().contains("work budget=")
+    }
+
     @Test
     fun `an orphan is removed only once it has outlived a whole reclaim pass`() {
         ControlDerived.ORPHAN_AGE.assert().isGreaterThanOrEqualTo(ControlDerived.RECLAIM_INTERVAL)
