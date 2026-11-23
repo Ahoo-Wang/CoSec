@@ -38,7 +38,6 @@ import me.ahoo.cosec.control.lifecycle.ControlDerived
 import me.ahoo.cosec.control.lifecycle.ControlMaintenance
 import me.ahoo.cosec.control.lifecycle.ShadowOptions
 import me.ahoo.cosec.control.store.ControlStore
-import me.ahoo.cosec.control.store.RetentionPolicy
 import me.ahoo.cosec.control.store.Revisions
 import me.ahoo.cosec.kafka.KafkaChangeListener
 import me.ahoo.cosec.model.AppId
