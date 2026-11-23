@@ -1246,7 +1246,9 @@ for a check, `412` for an `ifMatch` that does not hold).
 - **A tenant change waits for approval with `TOO_LARGE`**: the grant analysis made the four million comparisons one
   analysis may make before it reached those grants, so what it did not compare is not known (`CTL-49`). Split the
   change into smaller ones; statements a policy already had cost almost nothing, so the size that matters is what the
-  change adds or rewrites, times what its author holds.
+  change adds or rewrites, times what its author holds. One entry `change of tenant:<t>` means the change grants more
+  than 80,000 fragments (each action times each resource of a granted ALLOW, for each binding): nothing of it was
+  analysed. Split the statement's actions or resources, or the bindings, over several changes.
 - **Every tenant grant over every app waits for approval** (`UNREADABLE`) after an upgrade, with
   `The app list is missing or incomplete: run cosec-migrate repair-references; ...` at `WARN` (at most once a minute, at
   startup too):
