@@ -30,11 +30,23 @@ Which preview of the library may run behind which preview of the gateway image: 
 
 ## From 8.0.0-beta.7 {#from-8-0-0-beta-7}
 
+<<<<<<< HEAD
 - **Breaking for images built on top of CoSec's: the application's files are root's** (DR1-G-8). Affected: a
   Dockerfile `FROM` the gateway or control-plane image that writes under `/opt/<app>` as `appuser`, retraining the AOT
   cache included. The process now owns only `logs/` and `data/`, so a process made to write files cannot replace its
   jars. Switch to `USER root` for those steps and back to `USER appuser` after
   ([Training your own cache](./deployment.md#training-your-own-cache)).
+=======
+- **Breaking: a web host with CoSec on fails startup without a CoSec gate** (`STA-1`, DR1-G-6). Affected: an
+  application that excluded `CoSecPipelineWebAutoConfiguration`, or replaced the adapter's bean with a filter of another
+  type, while keeping `cosec.enabled`. It served every request undecided, with `web=none` in the startup summary as the
+  only sign. Keep the auto-configuration, register CoSec's filter yourself, or set `cosec.enabled=false`
+  ([Troubleshooting](./troubleshooting.md#startup-fails-on-a-missing-module)).
+- **Breaking: `cosec.control.enabled=true` fails startup in `gateway` mode** (`STA-1`, DR1-G-5). Affected: a service
+  behind a gateway that wrote the key. Its control plane was never wired, while the startup line said its routes were
+  served; that line now appears only where the control plane runs. Remove the key, or run the control plane on an
+  `enforce` host.
+>>>>>>> origin/main
 - **Breaking: `cosec.key-prefix` holds no `:`** (`SNP-9`, DR1-D-4). Affected: a deployment whose prefix has a
   character other than letters, digits, `_`, `.` and `-`, other than one pair of braces around the whole prefix (a hash
   tag, `{cosec}`, still works).

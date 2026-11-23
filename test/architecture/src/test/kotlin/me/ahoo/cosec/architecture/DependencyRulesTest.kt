@@ -114,6 +114,28 @@ class DependencyRulesTest {
         violations.assert().isEmpty()
     }
 
+    /**
+     * DR1-G-7: an image (a project of `platform/`) brings only what an application could depend on: the published
+     * libraries (the root build's `libraryProjects`) and the build's own platform. An allow-list, not a deny-list: a
+     * project outside `test/` that is not published (a tool, a sample) is never in an image, whatever its group.
+     */
+    @Test
+    fun `an image declares and resolves only published libraries`() {
+        val libraries = requireNotNull(System.getProperty("cosec.coverage.projects")) {
+            "cosec.coverage.projects is not set: run the rules through Gradle."
+        }.split(';').filter { it.isNotBlank() }.toSet()
+        val images = ProjectListTest.GROUPS.getValue("platform")
+        images.filter { resolvedProjects(it, "runtimeClasspath").isEmpty() }
+            .assert().describedAs("images with no facts: the rule would check nothing").isEmpty()
+        val violations = images.flatMap { image ->
+            (declaredProjects(image) + resolvedProjects(image, "runtimeClasspath"))
+                .distinct()
+                .filterNot { it == image || it in libraries || it in DependencyRules.PLATFORMS }
+                .map { "$image -> $it" }
+        }
+        violations.assert().isEmpty()
+    }
+
     @Test
     fun `a generator of documents does not bring the request path`() {
         val violations = DependencyRules.DOCUMENT_ONLY.flatMap { project ->

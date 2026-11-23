@@ -32,6 +32,8 @@ import me.ahoo.cosec.spring.boot.jwt.ConditionalOnJwtEnabled
 import me.ahoo.cosec.spring.boot.micrometer.MetricsProperties
 import me.ahoo.cosec.spring.boot.pipeline.ConditionalOnEnforceMode
 import me.ahoo.cosec.spring.boot.pipeline.GATEWAY_GLOBAL_FILTER
+import me.ahoo.cosec.spring.boot.pipeline.GatewayModeTrust
+import me.ahoo.cosec.spring.boot.pipeline.PipelineProperties
 import org.springframework.boot.autoconfigure.AutoConfiguration
 import org.springframework.boot.autoconfigure.AutoConfigureOrder
 import org.springframework.boot.autoconfigure.condition.AnyNestedCondition
@@ -91,6 +93,19 @@ internal class CoSecModuleCheckAutoConfiguration {
                 "cosec-webflux",
                 "A WebFlux host",
             )
+    }
+
+    /**
+     * The gate itself, once every singleton exists ([WebGateCheck]): a web host with CoSec on and its adapter's module
+     * present, but no gate registered, would serve every request undecided.
+     */
+    @Configuration(proxyBeanMethods = false)
+    @ConditionalOnCoSecEnabled
+    @ConditionalOnWebApplication
+    class WebGate {
+        @Bean
+        fun cosecWebGateCheck(context: ApplicationContext): StartupTask =
+            StartupTask.AfterSingletons { WebGateCheck.require(context, context.classLoader) }
     }
 
     /** Whether or not CoSec is enabled: a gateway strips the client's identity header always (PIP-10). */
@@ -180,10 +195,11 @@ internal class CoSecModuleCheckAutoConfiguration {
 
     /**
      * The control plane asked for in so many words: `cosec.control.enabled=true` written, and `cosec-control` or
-     * `cosec-cocache` missing. Unset, it stays silent: an instance without the modules is a data-plane instance. A value
-     * that is neither `true` nor `false` fails here too, whatever the classpath. Where the role is decided once per
-     * startup, an instance whose classpath has the control plane and switches it off says so, at INFO, so that its role
-     * is in its log; one without the classes says nothing.
+     * `cosec-cocache` missing, or the host in `gateway` mode, which wires no control plane (DR1-G-5). Unset, it stays
+     * silent: an instance without the modules is a data-plane instance. A value that is neither `true` nor `false` fails
+     * here too, whatever the classpath. Where the role is decided once per startup, an instance whose classpath has the
+     * control plane and switches it off says so, at INFO, so that its role is in its log; one without the classes says
+     * nothing.
      */
     @Configuration(proxyBeanMethods = false)
     @ConditionalOnCoSecEnabled
@@ -195,6 +211,11 @@ internal class CoSecModuleCheckAutoConfiguration {
                 val what = "${ControlPlaneCondition.ENABLED_KEY}=true"
                 checkModule(context, "me.ahoo.cosec.control.api.ControlHttp", "cosec-control", what)
                 checkModule(context, "me.ahoo.cosec.cocache.control.CoCacheControlStore", "cosec-cocache", what)
+                check(!GatewayModeTrust.isGatewayMode(context.environment)) {
+                    "$what, but ${PipelineProperties.MODE_KEY}=gateway: a service behind a gateway decides with no " +
+                        "policy documents, so the control plane, which writes them, is not wired here. Run it on a host " +
+                        "in enforce mode (the default), or remove ${ControlPlaneCondition.ENABLED_KEY} (STA-1)."
+                }
             }
             if (written == false && ControlPlaneCondition.present(context.classLoader)) {
                 log.info {
