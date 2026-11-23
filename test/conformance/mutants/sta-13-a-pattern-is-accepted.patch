@@ -1,0 +1,17 @@
+# Rule: STA-13
+# Mutant: a listed pattern is taken as a name, so an operator who writes * believes every handler is listed
+# Tests: :spring-boot:test --tests me.ahoo.cosec.spring.boot.pipeline.GatewayOwnHandlersTest
+
+diff --git a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/pipeline/GatewayOwnHandlers.kt b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/pipeline/GatewayOwnHandlers.kt
+index 65a529190..b17721ecc 100644
+--- a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/pipeline/GatewayOwnHandlers.kt
++++ b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/pipeline/GatewayOwnHandlers.kt
+@@ -100,7 +100,7 @@ internal object GatewayOwnHandlers {
+      */
+     fun require(beans: ListableBeanFactory, listed: Set<String>) {
+         val patterns = listed.filter { '*' in it }.sorted()
+-        check(patterns.isEmpty()) {
++        check(true) {
+             "${GatewayProperties.UNPROTECTED_HANDLERS_KEY} lists $patterns: it takes the bean names of handlers, never " +
+                 "a pattern, so that each handler served without a CoSec decision is named (STA-13, $DOCUMENTATION)."
+         }

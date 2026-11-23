@@ -770,13 +770,18 @@ WARN, logged once the application has started. Nothing CoSec wires is active: no
 snapshot. Remove the property, or set `cosec.enabled=true`, unless that is what you meant; a gateway still strips a
 client's `CoSec-Identity`.
 
-### The log says the gateway's own handlers are not decided {#the-log-says-the-gateways-own-handlers-are-not-decided}
+### Startup fails on the gateway's own handlers {#startup-fails-on-the-gateways-own-handlers}
 
-`This is a Spring Cloud Gateway host: CoSec decides the requests of gateway routes only. n handler(s) of the
-application itself ... are answered with no CoSec decision: ...` names controllers or functional routes of the
-application. They are mapped before any gateway route, so CoSec never sees a request for them
-([The gateway's own handlers](../integration/web.md#the-gateways-own-handlers)). Move them to a service behind the
-gateway, or secure them in the application.
+```text
+This is a Spring Cloud Gateway host: CoSec decides the requests of gateway routes only. n handler(s) of the application itself are mapped before any route and would be answered with no CoSec decision (no authentication, no policy, no rate limit): ... (STA-13, ...)
+```
+
+It names controllers or functional routes of the application, by bean name. They are mapped before any gateway route,
+so CoSec never sees a request for them ([The gateway's own handlers](../integration/web.md#the-gateways-own-handlers)).
+Move them to a service behind the gateway, where a route decides them. Or, for the ones something else protects, list
+their bean names in `cosec.gateway.unprotected-handlers` (`COSEC_GATEWAY_UNPROTECTEDHANDLERS`); startup then names them
+in one INFO line. `... lists [*]: it takes the bean names of handlers, never a pattern` means a listed name holds `*`:
+write each name.
 
 ### Startup fails on a missing module
 

@@ -657,10 +657,13 @@ With one port, or `management.server.port` equal to the application's, every row
 The gateway filter decides gateway routes. A controller or a functional route (`RouterFunction` bean) of the
 application itself is mapped before any gateway route (Spring WebFlux's annotated-controller mapping has order `0` and
 the router-function mapping `-1`; the gateway's route mapping `1`), so the request is answered with no CoSec decision:
-no authentication, no policy, no rate limit. The starter logs one WARN at startup when it finds such a handler of the
-application's own, naming it ([the log line](../operations/troubleshooting.md#the-log-says-the-gateways-own-handlers-are-not-decided)).
-Move those handlers to a service behind the gateway, where a route decides them, or secure them in the application;
-CoSec's gateway filter does not cover them.
+no authentication, no policy, no rate limit. So in enforce mode a gateway host that has such a handler of the
+application's own does not start, and the message names each (`STA-13`,
+[the message](../operations/troubleshooting.md#startup-fails-on-the-gateways-own-handlers)). Move those handlers to a
+service behind the gateway, where a route decides them, or list the ones something else protects, by bean name, in
+`cosec.gateway.unprotected-handlers`: a statement that CoSec does not decide them, which startup repeats in one INFO line.
+A name with `*` is refused, since each handler served without a decision is named; a name that matches no handler is
+ignored.
 
 ### Actuator on a gateway
 

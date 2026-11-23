@@ -19,6 +19,8 @@ import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.sample.OwnHandlers
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.assertDoesNotThrow
+import org.junit.jupiter.api.assertThrows
 import org.springframework.boot.autoconfigure.AutoConfigurations
 import org.springframework.boot.autoconfigure.ssl.SslAutoConfiguration
 import org.springframework.boot.test.context.runner.ReactiveWebApplicationContextRunner
@@ -33,8 +35,9 @@ import reactor.core.publisher.Mono
 import java.util.concurrent.atomic.AtomicInteger
 
 /**
- * UB-10: on a Spring Cloud Gateway host the application's own controllers and functional routes are answered before any
- * gateway route, so a global filter (CoSec's) never sees them; startup names them.
+ * UB-10, `STA-13`: on a Spring Cloud Gateway host the application's own controllers and functional routes are answered
+ * before any gateway route, so a global filter (CoSec's) never sees them; startup fails, naming them, unless
+ * `cosec.gateway.unprotected-handlers` lists each.
  */
 class GatewayOwnHandlersTest {
     class Counting : GlobalFilter {
@@ -90,6 +93,43 @@ class GatewayOwnHandlersTest {
         AnnotationConfigApplicationContext().use { context ->
             context.refresh()
             GatewayOwnHandlers.message(GatewayOwnHandlers.find(context)).assert().isNull()
+        }
+    }
+
+    @Test
+    fun `a handler of the application that is not listed fails startup, naming it, the property and the page`() {
+        AnnotationConfigApplicationContext(OwnHandlers::class.java).use { context ->
+            val refusal = assertThrows<IllegalStateException> { GatewayOwnHandlers.require(context, emptySet()) }
+            refusal.message.assert().contains("ordersController").contains("functionalRoutes")
+                .contains(GatewayProperties.UNPROTECTED_HANDLERS_KEY).contains("STA-13")
+                .contains(GatewayOwnHandlers.DOCUMENTATION)
+            // Listing one leaves the other refused.
+            assertThrows<IllegalStateException> { GatewayOwnHandlers.require(context, setOf("ordersController")) }
+                .message.assert().contains("functionalRoutes").doesNotContain("ordersController,")
+        }
+    }
+
+    @Test
+    fun `every handler listed starts, and a name that matches no handler is ignored`() {
+        AnnotationConfigApplicationContext(OwnHandlers::class.java).use { context ->
+            assertDoesNotThrow {
+                GatewayOwnHandlers.require(context, setOf("ordersController", " functionalRoutes ", "noSuchHandler"))
+            }
+        }
+        AnnotationConfigApplicationContext().use { context ->
+            context.refresh()
+            assertDoesNotThrow { GatewayOwnHandlers.require(context, emptySet()) }
+        }
+    }
+
+    @Test
+    fun `a pattern is never accepted`() {
+        AnnotationConfigApplicationContext(OwnHandlers::class.java).use { context ->
+            for (pattern in listOf("*", "orders*")) {
+                assertThrows<IllegalStateException> {
+                    GatewayOwnHandlers.require(context, setOf(pattern, "ordersController", "functionalRoutes"))
+                }.message.assert().contains("never a pattern").contains(pattern)
+            }
         }
     }
 }
