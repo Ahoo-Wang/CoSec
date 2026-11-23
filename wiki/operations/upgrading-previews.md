@@ -39,7 +39,9 @@ Which preview of the library may run behind which preview of the gateway image: 
     decides them, or by listing the ones something else protects in `cosec.gateway.unprotected-handlers`. Startup then
     names them in one INFO line.
   - A name with `*` is refused. Spring's, CoSec's and actuator handlers are not the application's and need no entry
-    ([The gateway's own handlers](../integration/web.md#the-gateways-own-handlers)).
+    ([The gateway's own handlers](../integration/web.md#the-gateways-own-handlers)). A library's controller is: springdoc's
+    `openApiResource` on a gateway host is refused like your own (turn it off with `springdoc.api-docs.enabled=false`, or
+    list it).
 - **An `explain` at a retained revision is cached like a head** (DR1-F-4). Affected: nothing to change. Repeating it
   compiles nothing, where each call compiled its documents again.
 - **`analyze` shows a tenant's bindings only to a caller who may read its document** (`CTL-51`, DR1-F-8). Affected: a
