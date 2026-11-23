@@ -297,7 +297,7 @@ fun controlService(sslContext: SSLContext): ControlService = HttpControlService(
   - 应答是控制 API 的 JSON（[变更的应答](../policies/testing.md#what-a-change-answers)），以文本形式给出。
   - 拒绝是带有路由状态码和问题详情的 `ControlRefusedException`。
 - **确切能触及的范围：** 与控制面宿主服务端口相同的路由，两者共用一个定义（`cosec.control.http.service-port`）。按 id 指定的变更，只有在它修改的是租户或 app 文档时才可触及，列表也只显示这样的变更：按状态列出时平台文档的变更被省略，且不透露任何关于它们的信息。
-- **记录什么：** 每一步都记为所声明主体的步骤，来源中带 `via.method: in-process`（[控制面变更日志](../operations/observability.md#control-plane-change-log)）。
+- **记录什么：** 每一步都记为所声明主体的步骤，来源中带 `via.method: in-process`（[控制面变更日志](../operations/observability.md#control-plane-change-log)）。经网络时，`ControlCaller.service` 调用方的凭证名为 `service`（`IDN-34`），在变更日志和宿主的审计中都是如此：这是工作负载的凭证，和 API key 一样从不审批，也从不是信任根。
 
 用类型化的值时，`ControlClient(service)` 按路由接受和应答的格式写出每个请求、读取每个应答（`CTL-76`），适用于 `ControlService` 的任一实现。文档是 `DocumentContent`，包含 `Policy`、`Binding`、`Role` 和 `Catalog`；变更是 `ChangeRequest` 中的 `Operation`（`PutPolicy`、`PutRole` 等），`:apply` 则用 `ApplyRequest`；应答是 `Change`、`DocumentHead` 或 `Page`。条件和限流规则仍是 JSON（`Condition.of`、`RateLimitRule.of`）：控制面在提议变更时检查它们。封闭集合（`ChangeState`、`Effect`、`ConflictKind` 等）把较新宿主新增的值读作未知值并保留其文本；而文档条目中含有本版本不认识的成员时根本不会被读取，因为把读到的内容再 apply 回去会丢掉它。`ControlRefusedException.conflict` 说明一个 409 是哪种冲突。
 

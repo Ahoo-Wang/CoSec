@@ -325,7 +325,8 @@ what an approver held (`CTL-61`).
 A change a request made also answers `origin`, how its author was identified (`CTL-70`):
 - **Every reader of the change** gets `asserted`, true when the host believed an identity the caller stated (the
   `CoSec-Identity` header) instead of verifying a credential itself, and `via.method`, the kind of credential (`jwt`,
-  `api-key`, `in-process` for a call through the control plane's facade).
+  `api-key`, `service` for a service calling over the network as its own principal, `in-process` for a call through
+  the control plane's facade).
 - **A reader who holds `cosec:approve` on the change's document, or `cosec:read` on the platform's**, is also given
   `via.credential` (the credential's id, never its value), `via.request` (the request's id) and `peer` (the address of
   the connection the request arrived on). These say which key or token wrote the change, and from where: what someone
@@ -646,10 +647,12 @@ anyone's and what needs approval needs another platform principal's. A tenant pr
 platform's: only a platform principal sets it (`403` otherwise), and only a platform principal approves, rejects or
 abandons a change that sets one.
 
-An API key is never the trust root, and never approves, whatever its principal holds. CoSec tells its own API keys by
-where they were verified, and any credential named `api-key`, a gateway's forwarded identity's among them, counts as
-one. A credential your own authenticator accepts is a person's to CoSec: give an authenticator of workloads neither
-`cosec:approve` nor `cosec:platform-admin`.
+A workload's credential is never the trust root, and never approves, whatever its principal holds (`IDN-34`): an API
+key, or a service's own identity (`ControlCaller.service`), whose credential is named `service`. CoSec tells its own API
+keys by where they were verified, and any credential named `api-key` or `service`, a gateway's forwarded identity's
+among them, counts as a workload's. A credential your own authenticator accepts is a person's to CoSec unless it names
+it `service`: give an authenticator of workloads neither `cosec:approve` nor `cosec:platform-admin`, or have it name its
+credential `service`.
 
 What the analysis does not see:
 
@@ -665,7 +668,8 @@ What the analysis does not see:
 A change with escalations waits in `AWAITING_APPROVAL` once its window closed or was skipped. Another person holding
 `cosec:approve` approves it with `POST /changes/{id}:approve` and the `candidate` digest they reviewed (from
 `GET /changes/{id}`); a different digest is a `409`, and the author cannot approve their own change. An approval is a
-person's: a principal that authenticated with an API key cannot approve (`403`), nor can one whose credential names no
+person's: a principal that authenticated with a workload's credential (an API key, a service's own identity) cannot
+approve (`403`), nor can one whose credential names no
 id (`403`), since publishing would not count its approval. The approval records the approver's
 credential (its id, a token's `jti`, and when it was issued, its `iat`); when that token, or every token of the
 approver issued by then, is revoked before the change publishes, the approval no longer counts. An approval that

@@ -225,9 +225,11 @@ after the authenticator's `method`, `token` by default). The method `JWT` is res
 can pass for CoSec's token by its name (`BRK-8`).
 
 The control plane reads two more facts of the principal for approvals ([Testing policies](../policies/testing.md#approval)).
-`apiKey`: CoSec's API key authenticator sets it, and a credential of the method `API_KEY` counts as one whoever made
-it; an API key never approves and is never the trust root. A principal of yours is a person's to CoSec, so give an
-authenticator of workloads neither `cosec:approve` nor `cosec:platform-admin`. The credential's id: an approval records
+`workload` (`IDN-34`): true for an API key (`apiKey`: CoSec's API key authenticator sets it, and a credential of the
+method `API_KEY` counts as one whoever made it) and for a credential of the method `SERVICE` (`service`, a service's
+own identity), whoever made it; a workload never approves and is never the trust root. A principal of yours is a
+person's to CoSec unless its credential is named `api-key` or `service`, so give an authenticator of workloads neither
+`cosec:approve` nor `cosec:platform-admin`, or have it name its credential `Identity.Method.SERVICE`. The credential's id: an approval records
 it, and one without an id does not count. A principal you construct has no `issuedAt`, so any revocation of its
 tokens (`subjectRevokedBefore`) takes its approvals back.
 

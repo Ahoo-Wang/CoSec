@@ -453,7 +453,9 @@ fun controlService(sslContext: SSLContext): ControlService = HttpControlService(
   app's document, and a listing shows only such changes: one by state leaves the platform document's out, and says
   nothing of them.
 - **What is recorded:** each step as the stated principal's, with `via.method: in-process` in its origin
-  ([Control-plane change log](../operations/observability.md#control-plane-change-log)).
+  ([Control-plane change log](../operations/observability.md#control-plane-change-log)). Over the network, a
+  `ControlCaller.service` caller's credential is named `service` (`IDN-34`), in the change log as in the host's audit:
+  a workload's credential, which never approves and is never the trust root, as an API key's.
 
 In typed values, `ControlClient(service)` writes each request and reads each answer as the route takes
 and answers it (`CTL-76`), over either implementation of `ControlService`. Documents are `DocumentContent` with

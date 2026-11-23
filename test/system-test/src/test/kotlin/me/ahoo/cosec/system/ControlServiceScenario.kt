@@ -187,7 +187,8 @@ class ControlServiceScenario {
         (published["operator"] as Map<*, *>)["principal"].assert().isEqualTo("svc-iam")
         val origin = published["origin"] as Map<*, *>
         origin["asserted"].assert().isEqualTo(true)
-        (origin["via"] as Map<*, *>)["method"].assert().describedAs("$origin").isEqualTo("api-key")
+        // A service's own identity, as CoSec's writer states it: a workload's credential of its own name (IDN-34).
+        (origin["via"] as Map<*, *>)["method"].assert().describedAs("$origin").isEqualTo("service")
         (origin["peer"] as String?).assert().describedAs("the IAM's address, not the runner's: $origin").isNotBlank()
     }
 
