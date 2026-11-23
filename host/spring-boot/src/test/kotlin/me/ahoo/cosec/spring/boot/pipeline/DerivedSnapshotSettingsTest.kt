@@ -16,6 +16,7 @@
 package me.ahoo.cosec.spring.boot.pipeline
 
 import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.control.lifecycle.ControlDerived
 import me.ahoo.cosec.runtime.HeapBudget
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
@@ -80,12 +81,17 @@ class DerivedSnapshotSettingsTest {
         ).coldLoadTimeout.assert().isEqualTo(Duration.ofSeconds(2))
     }
 
-    /** `SNP-24`: the documents' share of the heap, all of it for one source, half each where the control plane runs. */
+    /**
+     * `SNP-24`: the documents' share of the heap, all of it for one source; where the control plane runs, a third each to
+     * its two sources and its document cache (DR1-F-5).
+     */
     @Test
     fun `the snapshot sources of a process share the documents' quarter of the heap`() {
         val snapshot = RuntimeAuthorizationProperties().snapshot
         val share = HeapBudget.of().documents
         snapshot.toOptions(Duration.ofSeconds(5), 1).documentsBudget.assert().isEqualTo(share)
-        snapshot.toOptions(Duration.ofSeconds(5), 2).documentsBudget.assert().isEqualTo(share / 2)
+        snapshot.toOptions(Duration.ofSeconds(5), ControlDerived.DOCUMENT_HOLDERS).documentsBudget
+            .assert().isEqualTo(share / 3)
+        (share / 3).assert().isEqualTo(ControlDerived.documentCacheBytes())
     }
 }

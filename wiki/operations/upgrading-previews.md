@@ -30,6 +30,11 @@ Which preview of the library may run behind which preview of the gateway image: 
 
 ## From 8.0.0-beta.7 {#from-8-0-0-beta-7}
 
+- **The control plane's document cache is a share of the heap** (`STA-12`, DR1-F-5). Affected: a control-plane host's
+  memory. `simulate`, `explain`, `analyze` and the lock-out check share one cache per host, a third of the snapshot
+  documents' quarter of the heap (about 170 MB at 2 GiB), where two caches held a fixed 64 MB each. The host's two
+  snapshot sources now hold a third of that quarter each, where they held half: at 2 GiB about 4,800 typical tenants in
+  each, where it was 7,200. Give a control-plane host more heap to hold more; nothing else to change.
 - **A document holds at most `cosec.control.revisions.max-count` open changes** (50 by default, `CTL-83`, DR1-E-2).
   Affected: a client that leaves many changes open on one document. A proposal, an `:apply` or a rollback past the
   limit first abandons its author's own oldest change whose checks failed, then is refused `409` with the new conflict
