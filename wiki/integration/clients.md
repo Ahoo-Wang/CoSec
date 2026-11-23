@@ -260,6 +260,6 @@ hooks' imports from `@ahoo-wang/fetcher-react` to `@ahoo-wang/cosec-react`. What
 | Refreshed on a `401` | Reads the problem type of a `401`. `token-expired`, or a `401` without a body CoSec wrote, is refreshed once and the request retried. `unauthorized` is not refreshed. `token-revoked` and `token-invalid` are not refreshed either, and remove the stored pair |
 | Ended the session when a refresh failed, whatever the failure | Ends the session only when the refresh route answers `401`; a `400`, `403`, `404`, `429`, a `5xx` or a network failure keeps it. `isRefreshRejected` names a different refusal. The refresh request is cut short after 10 seconds |
 | Handed every `403` to `onForbidden` | Hands a `403 scope-rejected` to `onScopeRejected`, and to `onForbidden` when there is none. The callbacks receive the problem as their second argument |
-| Put the token pair on `RefreshTokenError` and `RefreshUnavailableError` | Puts no token on any error. An error still carries its `exchange`, whose request holds the `Authorization` header: scrub it before it goes to an error reporter |
+| Put the token pair on `RefreshTokenError` and `RefreshUnavailableError` | Puts no token on any error it raises: a refresh's or a logout's error keeps the request's error by name and message only, since that request's body is the pair. The error of your own request still carries its `exchange`, whose request holds the `Authorization` header: scrub it before it goes to an error reporter |
 
 The package's own README lists the removed members one by one.
