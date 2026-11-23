@@ -1,0 +1,17 @@
+# Rule: IDN-36
+# Mutant: a switch does not read back the root it wrote, so a store that drops it makes a session that outlives its login
+# Tests: :login:test --tests me.ahoo.cosec.login.token.SwitchedSessionRootTest
+
+diff --git a/extensions/login/src/main/kotlin/me/ahoo/cosec/login/token/TokenFamilies.kt b/extensions/login/src/main/kotlin/me/ahoo/cosec/login/token/TokenFamilies.kt
+index 6f03a3ff4..eeb0bc0dc 100644
+--- a/extensions/login/src/main/kotlin/me/ahoo/cosec/login/token/TokenFamilies.kt
++++ b/extensions/login/src/main/kotlin/me/ahoo/cosec/login/token/TokenFamilies.kt
+@@ -90,7 +90,7 @@ class TokenFamilies @JvmOverloads constructor(
+         val issue = create(tenant, principal, authTime, root)
+         // A store that does not keep the root would make this a session that outlives its login: read it back.
+         val read = sessionStore("read a session") { store.read(issue.session.id) }
+-        if (read == null || read.family.root != root) {
++        if (read == null) {
+             end(issue.session.id)
+             throw IllegalStateException(
+                 "The TokenFamilyStore did not keep the root of a session a tenant switch started (TokenFamily.root): " +

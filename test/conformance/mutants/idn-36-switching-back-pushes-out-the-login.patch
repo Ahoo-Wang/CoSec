@@ -1,0 +1,16 @@
+# Rule: IDN-36
+# Mutant: a switch back to the login's tenant does not begin the login again, so going back and forth pushes it out (IDN-35) and ends every switched session
+# Tests: :login:test --tests me.ahoo.cosec.login.token.SwitchedSessionRootTest
+
+diff --git a/core/spi/src/main/kotlin/me/ahoo/cosec/spi/token/InMemorySessionIndex.kt b/core/spi/src/main/kotlin/me/ahoo/cosec/spi/token/InMemorySessionIndex.kt
+index f1a127ca9..dead05e8e 100644
+--- a/core/spi/src/main/kotlin/me/ahoo/cosec/spi/token/InMemorySessionIndex.kt
++++ b/core/spi/src/main/kotlin/me/ahoo/cosec/spi/token/InMemorySessionIndex.kt
+@@ -46,7 +46,6 @@ class InMemorySessionIndex(private val now: () -> Instant = Instant::now) : Sess
+         val pushedOut = mutableListOf<String>()
+         sessions.compute(owner) { _, existing ->
+             val entry = existing ?: Sessions(ArrayDeque(), until)
+-            family.root?.let { root -> if (entry.ids.remove(root)) entry.ids.addLast(root) }
+             entry.ids.remove(family.id)
+             entry.ids.addLast(family.id)
+             while (entry.ids.size > limit) pushedOut += entry.ids.removeFirst()
