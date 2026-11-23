@@ -30,6 +30,10 @@ Which preview of the library may run behind which preview of the gateway image: 
 
 ## From 8.0.0-beta.7 {#from-8-0-0-beta-7}
 
+- **`analyze` shows a tenant's bindings only to a caller who may read its document** (`CTL-51`, DR1-F-8). Affected: a
+  principal granted `cosec:analyze` on its tenant's document but not `cosec:read` (no built-in role is shaped so). It
+  was answered with every matching binding of that document; it now gets none, and the document is counted in `hidden`.
+  Grant `cosec:read` with `cosec:analyze`, as `cosec:tenant-viewer` does.
 - **A token revocation outlives the token it names** (`IDN-37`). Affected: a deployment whose
   `cosec.jwt.token-validity.access` is longer than `cosec.jwt.token-validity.refresh`. A revocation was kept for the
   refresh token's lifetime, so an access token valid longer was accepted again once its record expired. It is now kept

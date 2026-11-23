@@ -27,6 +27,9 @@ description: "每个 8.0 预览版（alpha 与 beta）到下一个之间的变�
 
 ## 从 8.0.0-beta.7 升级 {#from-8-0-0-beta-7}
 
+- **`analyze` 只向能读租户文档的调用者列出它的绑定**（`CTL-51`，DR1-F-8）。受影响的：对本租户文档有 `cosec:analyze`
+  却没有 `cosec:read` 的主体（没有内置角色是这样）。它此前会得到该文档中所有匹配的绑定，现在一个也得不到，该文档计入 `hidden`。
+  请把 `cosec:read` 与 `cosec:analyze` 一起授予，就像 `cosec:tenant-viewer` 那样。
 - **令牌吊销记录比它指向的令牌活得长**（`IDN-37`）。受影响的是 `cosec.jwt.token-validity.access` 长于
   `cosec.jwt.token-validity.refresh` 的部署。原来吊销记录只保留刷新令牌有效期，所以有效期更长的访问令牌在记录过期后会重新被接受。
   现在保留两者中较长的那个，再加 `cosec.authentication.revocation.skew`（签发方的时钟可能超前这么多），启动时会记录这个值。
