@@ -24,6 +24,9 @@ import me.ahoo.cosec.control.authz.Operator
 import me.ahoo.cosec.control.change.ChangeRejectedException
 import me.ahoo.cosec.control.change.ConflictKind
 import me.ahoo.cosec.control.change.InvalidControlRequestException
+import me.ahoo.cosec.control.lifecycle.ControlDerived
+import me.ahoo.cosec.control.lifecycle.WorkBudget
+import me.ahoo.cosec.control.lifecycle.WorkBudgetExhaustedException
 import me.ahoo.cosec.control.store.ControlStoreException
 import me.ahoo.cosec.document.json.CoSecJson
 import me.ahoo.cosec.runtime.http.ProblemType
@@ -70,8 +73,13 @@ private val log = KotlinLogging.logger {}
  * (`BRK-11`).
  */
 @InternalCoSecApi
-class ControlHttp(plane: ControlPlane, private val profile: ControlProfile = ControlProfile.OPERATORS) {
-    private val routes = ControlRoutes(plane, profile)
+class ControlHttp(
+    plane: ControlPlane,
+    private val profile: ControlProfile = ControlProfile.OPERATORS,
+    /** The host's one work budget (`CTL-85`): each call holds what it works on for itself within it, until its answer. */
+    private val work: WorkBudget = ControlDerived.workBudget(),
+) {
+    private val routes = ControlRoutes(plane, profile, work)
 
     @Suppress("TooGenericExceptionCaught")
     suspend fun handle(request: ControlHttpRequest, security: RequestSecurity?): ControlHttpResponse {
@@ -80,9 +88,13 @@ class ControlHttp(plane: ControlPlane, private val profile: ControlProfile = Con
             Operator.of(it, request.peer, request.inProcess, serviceProfile = profile == ControlProfile.SERVICE)
         } ?: return problem(Problem.UNAUTHORIZED, requestId, null)
         return try {
-            routes.route(operator, request)
+            work.call { routes.route(operator, request) }
         } catch (e: CancellationException) {
             throw e
+        } catch (e: WorkBudgetExhaustedException) {
+            // Not a store failure: the control plane's work memory is full, of large documents (CTL-85).
+            log.info { "Control API ${request.method} ${request.path} (request $requestId) is 503: ${e.message}" }
+            busy(requestId)
         } catch (e: ChangeRejectedException) {
             val problem = Problem.of(e.status)
             if (!problem.detailed) {
@@ -130,6 +142,11 @@ class ControlHttp(plane: ControlPlane, private val profile: ControlProfile = Con
             e
         ) { "Control API ${request.method} ${request.path} (request $requestId): a stored value does not decode." }
         return problem(Problem.INTERNAL_ERROR, requestId, null)
+    }
+
+    /** The `503` of a call the work budget refused (`CTL-85`): a retry in a second may fit. */
+    private fun busy(requestId: String): ControlHttpResponse = problem(Problem.UNAVAILABLE, requestId, null).let {
+        ControlHttpResponse(it.status, it.contentType, it.body, mapOf(RETRY_AFTER to RETRY_AFTER_SECONDS))
     }
 
     /** The problems of the control API: RFC 0006's where it has one, the control API's own statuses otherwise. */
@@ -189,6 +206,8 @@ class ControlHttp(plane: ControlPlane, private val profile: ControlProfile = Con
     companion object {
         const val JSON: String = "application/json"
         const val PROBLEM_JSON: String = "application/problem+json"
+        const val RETRY_AFTER: String = "Retry-After"
+        private const val RETRY_AFTER_SECONDS = "1"
         private const val ANONYMOUS_REQUEST = "-"
     }
 }

@@ -24,6 +24,7 @@ import me.ahoo.cosec.control.api.ControlHttpSupport.get
 import me.ahoo.cosec.control.api.ControlHttpSupport.json
 import me.ahoo.cosec.control.api.ControlHttpSupport.notFound
 import me.ahoo.cosec.control.api.ControlHttpSupport.post
+import me.ahoo.cosec.control.api.ControlHttpSupport.postLarge
 import me.ahoo.cosec.control.api.ControlHttpSupport.revision
 import me.ahoo.cosec.control.api.ControlHttpSupport.verbOf
 import me.ahoo.cosec.control.api.ControlRequestJson.confirmations
@@ -40,12 +41,16 @@ import me.ahoo.cosec.control.api.JsonFields.need
 import me.ahoo.cosec.control.api.JsonFields.optText
 import me.ahoo.cosec.control.api.JsonFields.text
 import me.ahoo.cosec.control.authz.Operator
+import me.ahoo.cosec.control.authz.TenantIsolation
 import me.ahoo.cosec.control.change.ApplyMode
+import me.ahoo.cosec.control.change.ChangeRejectedException
 import me.ahoo.cosec.control.change.ChangeRequestCodec
+import me.ahoo.cosec.control.change.ControlStatus
 import me.ahoo.cosec.control.change.InvalidControlRequestException
 import me.ahoo.cosec.control.change.ownerOf
 import me.ahoo.cosec.control.change.requireRequest
 import me.ahoo.cosec.control.lifecycle.ControlDerived
+import me.ahoo.cosec.control.lifecycle.WorkBudget
 import me.ahoo.cosec.document.PolicyDocument
 import me.ahoo.cosec.document.PolicyDocumentCodec
 import me.ahoo.cosec.model.decision.DocumentKind
@@ -53,7 +58,10 @@ import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import tools.jackson.databind.JsonNode
 
 /** The routes of `/documents` (`CTL-68`, the listing) and `/documents/{key}` (RFC 0007 §10.2): its reads, `:apply` and `:rollback`. */
-internal class DocumentRoutes(private val plane: ControlPlane) : RouteHandler {
+internal class DocumentRoutes(
+    private val plane: ControlPlane,
+    private val work: WorkBudget = ControlDerived.workBudget(),
+) : RouteHandler {
     override suspend fun handle(
         operator: Operator,
         request: ControlHttpRequest,
@@ -68,14 +76,14 @@ internal class DocumentRoutes(private val plane: ControlPlane) : RouteHandler {
         val key = documentKey(unescaped(keyText))
         return when (verb) {
             null -> revisions(operator, request, key, segments.drop(1))
-            "apply" -> post(request, ControlDerived.MAX_BODY_BYTES) {
+            "apply" -> large(operator, request, key) {
                 val (desired, mode) = desired(key, it)
                 val change = plane.apply(operator, key, desired, mode, it.optText("note").orEmpty())
                 changeResponse(plane, operator, change, CREATED)
             }
 
             // `CTL-78`: the check of an `:apply`, the same body, stored nowhere.
-            "check" -> post(request, ControlDerived.MAX_BODY_BYTES) {
+            "check" -> large(operator, request, key) {
                 val (desired, mode) = desired(key, it)
                 ChangeCheckAnswer.response(
                     plane.apply(operator, key, desired, mode, it.optText("note").orEmpty(), commit = false)
@@ -93,6 +101,22 @@ internal class DocumentRoutes(private val plane: ControlPlane) : RouteHandler {
 
             else -> notFound()
         }
+    }
+
+    /**
+     * A body that carries a document for [key] (`CTL-85`): the hard rule first, before a permit is held or a byte parsed,
+     * so only callers of [key]'s tenant, or the platform, hold work for it; then its tree and candidate, held; then read.
+     */
+    private suspend fun large(
+        operator: Operator,
+        request: ControlHttpRequest,
+        key: SnapshotKey,
+        block: suspend (JsonNode) -> ControlHttpResponse,
+    ): ControlHttpResponse {
+        if (!TenantIsolation.allows(operator, key)) {
+            throw ChangeRejectedException(ControlStatus.FORBIDDEN, "$operator may not act on this document")
+        }
+        return postLarge(request, work, operator.tenant.value) { block(it) }
     }
 
     /** The document and the mode an `:apply` body states, for [key]. */

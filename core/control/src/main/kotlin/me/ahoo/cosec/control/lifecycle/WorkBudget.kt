@@ -45,9 +45,14 @@ import kotlin.coroutines.CoroutineContext
  *   cancelled while it waits leaves the queue.
  */
 @InternalCoSecApi
-class WorkBudget(val capacity: Long, val free: Long = 0) {
+class WorkBudget(
+    val capacity: Long,
+    val free: Long = 0,
+    /** How long a call that holds nothing yet waits by default. */
+    val patience: Duration = Duration.ofSeconds(1),
+) {
     init {
-        require(capacity > 0 && free >= 0) { "A work budget is positive, not $capacity." }
+        require(capacity > 0 && free >= 0 && !patience.isNegative) { "A work budget is positive, not $capacity." }
     }
 
     private val lock = Any()
@@ -86,7 +91,7 @@ class WorkBudget(val capacity: Long, val free: Long = 0) {
      * Holds [weight] for [tenant] until the current [call] ends: waiting at most [patience] while the call holds nothing
      * yet, granted at once or refused when it does. Work at most [free] holds nothing.
      */
-    suspend fun hold(tenant: String, weight: Long, patience: Duration) {
+    suspend fun hold(tenant: String, weight: Long, patience: Duration = this.patience) {
         if (weight <= free) return
         val scope = checkNotNull(currentCoroutineContext()[CallScope]) { "Work is held within a call." }
         scope.add(acquire(tenant, weight.coerceAtMost(capacity), patience, scope.holds()))

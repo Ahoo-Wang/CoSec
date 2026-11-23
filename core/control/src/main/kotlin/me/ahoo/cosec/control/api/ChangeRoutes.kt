@@ -24,6 +24,7 @@ import me.ahoo.cosec.control.api.ControlHttpSupport.get
 import me.ahoo.cosec.control.api.ControlHttpSupport.json
 import me.ahoo.cosec.control.api.ControlHttpSupport.notFound
 import me.ahoo.cosec.control.api.ControlHttpSupport.post
+import me.ahoo.cosec.control.api.ControlHttpSupport.postLarge
 import me.ahoo.cosec.control.api.ControlHttpSupport.verbOf
 import me.ahoo.cosec.control.api.ControlRequestJson.ack
 import me.ahoo.cosec.control.api.ControlRequestJson.changeIdOf
@@ -44,6 +45,7 @@ import me.ahoo.cosec.control.change.InvalidControlRequestException
 import me.ahoo.cosec.control.change.Operation
 import me.ahoo.cosec.control.change.requireRequest
 import me.ahoo.cosec.control.lifecycle.ControlDerived
+import me.ahoo.cosec.control.lifecycle.WorkBudget
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import tools.jackson.databind.JsonNode
 
@@ -51,6 +53,7 @@ import tools.jackson.databind.JsonNode
 internal class ChangeRoutes(
     private val plane: ControlPlane,
     private val profile: ControlProfile = ControlProfile.OPERATORS,
+    private val work: WorkBudget = ControlDerived.workBudget(),
 ) : RouteHandler {
     override suspend fun handle(
         operator: Operator,
@@ -97,7 +100,8 @@ internal class ChangeRoutes(
         if (request.method == "GET") {
             return listing(operator, request)
         }
-        return post(request, ControlDerived.MAX_BODY_BYTES) {
+        // CTL-85: the document is named only in the body, so its weight is the caller's own tenant's.
+        return postLarge(request, work, operator.tenant.value) {
             val proposal = proposal(it) ?: return@post notFound()
             val change = with(proposal) { plane.propose(operator, key, base, operations, note, confirmations) }
             changeResponse(plane, operator, change, CREATED)
@@ -108,13 +112,14 @@ internal class ChangeRoutes(
      * `POST /changes:check` (`CTL-78`): the body of `POST /changes`, read the same way, answered with what the proposal
      * would find, and stored nowhere.
      */
-    suspend fun check(operator: Operator, request: ControlHttpRequest): ControlHttpResponse =
-        post(request, ControlDerived.MAX_BODY_BYTES) {
+    suspend fun check(operator: Operator, request: ControlHttpRequest): ControlHttpResponse {
+        return postLarge(request, work, operator.tenant.value) {
             val proposal = proposal(it) ?: return@post notFound()
             ChangeCheckAnswer.response(
                 with(proposal) { plane.propose(operator, key, base, operations, note, confirmations, commit = false) },
             )
         }
+    }
 
     /** A proposal's body; null for a document this profile serves no write to. */
     private fun proposal(body: JsonNode): Proposal? {

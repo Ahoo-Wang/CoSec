@@ -22,6 +22,8 @@ import me.ahoo.cosec.control.api.ControlHttpSupport.get
 import me.ahoo.cosec.control.api.ControlHttpSupport.notFound
 import me.ahoo.cosec.control.api.ControlRequestJson.query
 import me.ahoo.cosec.control.authz.Operator
+import me.ahoo.cosec.control.lifecycle.ControlDerived
+import me.ahoo.cosec.control.lifecycle.WorkBudget
 import me.ahoo.cosec.control.change.requireRequest
 import me.ahoo.cosec.model.Identifiers
 
@@ -30,13 +32,17 @@ import me.ahoo.cosec.model.Identifiers
  * handler of its routes. [route] checks what every route needs first: no unpaired surrogate in the path or the query,
  * the path written the one way the routes are, a leaf route of one segment; a path that names no resource is a 404.
  */
-internal class ControlRoutes(plane: ControlPlane, private val profile: ControlProfile = ControlProfile.OPERATORS) {
+internal class ControlRoutes(
+    plane: ControlPlane,
+    private val profile: ControlProfile = ControlProfile.OPERATORS,
+    work: WorkBudget = ControlDerived.workBudget(),
+) {
     private val queries = QueryRoutes(plane)
-    private val changes = ChangeRoutes(plane, profile)
+    private val changes = ChangeRoutes(plane, profile, work)
 
     /** A path's first segment, and the handler of the routes under it. */
     private val resources: Map<String, RouteHandler> = mapOf(
-        "documents" to DocumentRoutes(plane),
+        "documents" to DocumentRoutes(plane, work),
         "changes" to changes,
         // `CTL-78`: the check of a proposal, a leaf beside `/changes`: no change is named, and none is made.
         "changes:check" to RouteHandler { operator, request, _ -> changes.check(operator, request) },

@@ -81,13 +81,53 @@ object ControlDerived {
      */
     const val SMALL_BODY_BYTES: Long = 8 * REQUEST_HEADER_BYTES
 
+    /**
+     * The work budget's share of the heap (`CTL-85`): an eighth, a quarter of the half `HeapBudget`'s shares leave to
+     * everything else. Not a `HeapBudget` share: it bounds work in flight, not memory held for performance.
+     */
+    const val WORK_SHARE: Long = 8
+
+    /**
+     * What a JSON body becomes as a tree, per byte, at worst: measured on the shapes that make the most nodes of the
+     * fewest bytes (`ControlBodyTreeTest`, which holds the trees under it).
+     */
+    const val BODY_TREE_FACTOR: Long = 64
+
+    /** A candidate's compiled form per byte of its document: `DocumentCache.COMPILED_FACTOR`, held equal by a test. */
+    const val CANDIDATE_FACTOR: Long = 8
+
+    /** Work weighing at most this holds nothing (`CTL-85`): what a route that carries no document's body becomes. */
+    const val FREE_WORK_BYTES: Long = SMALL_BODY_BYTES * BODY_TREE_FACTOR
+
+    /** The work budget of a heap of [heap] bytes: a [WORK_SHARE]th. */
+    fun workBudgetBytes(heap: Long = Runtime.getRuntime().maxMemory()): Long = heap / WORK_SHARE
+
+    /** How long a call waits for the work budget at the default pipeline deadline, 5 s: `StageBudgets.workWait`. */
+    val DEFAULT_WORK_WAIT: Duration = Duration.ofMillis(2_500)
+
+    /** The host's work budget (`CTL-85`): a [WORK_SHARE]th of the heap, a call waiting at most [wait]. */
+    fun workBudget(wait: Duration = DEFAULT_WORK_WAIT, heap: Long = Runtime.getRuntime().maxMemory()): WorkBudget =
+        WorkBudget(workBudgetBytes(heap), FREE_WORK_BYTES, wait)
+
+    /** What a body of [bytes] that carries a document weighs: its tree, and the candidate compiled from it. */
+    fun bodyWeight(bytes: Long): Long = bytes * (BODY_TREE_FACTOR + CANDIDATE_FACTOR)
+
+    /** The work budget, and what the largest body weighs at worst and how many run at once, for the startup line. */
+    fun describeWork(heap: Long = Runtime.getRuntime().maxMemory()): String {
+        val budget = workBudgetBytes(heap)
+        val largest = bodyWeight(MAX_BODY_BYTES)
+        return "work budget=${budget / MEBIBYTE}MB (1/$WORK_SHARE of the heap), the largest body weighs " +
+            "${largest / MEBIBYTE}MB at worst: ${maxOf(1, budget / largest)} at once"
+    }
+
     /** One line for the startup log: what was derived, from what. */
     fun describe(minDuration: Duration): String =
         "reclaim-interval=$RECLAIM_INTERVAL (constant), orphan-age=$ORPHAN_AGE (one reclaim pass), " +
             "shadow check interval=${shadowCheckInterval(minDuration)} (1/$SHADOW_CHECKS_PER_MIN_DURATION of " +
             "cosec.control.shadow.min-duration $minDuration), max body=${MAX_BODY_BYTES / MEBIBYTE}MB " +
             "(the ${ChangeOptions.DEFAULT_MAX_DOCUMENT_BYTES / MEBIBYTE}MB document cap and ${BODY_ROOM_BYTES / MEBIBYTE}MB), " +
-            "${SMALL_BODY_BYTES / KIBIBYTE}KB for a route that carries no document (8 request headers' worth)"
+            "${SMALL_BODY_BYTES / KIBIBYTE}KB for a route that carries no document (8 request headers' worth), " +
+            describeWork()
 
     private const val MEBIBYTE = 1024L * 1024
     private const val KIBIBYTE = 1024L
