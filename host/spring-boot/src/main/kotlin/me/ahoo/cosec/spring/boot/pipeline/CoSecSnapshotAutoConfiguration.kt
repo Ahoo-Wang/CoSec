@@ -337,7 +337,7 @@ class CoSecSnapshotAutoConfiguration {
         environment: Environment,
     ): SnapshotSource<CompiledDocument, CompiledDocument> {
         val snapshot = properties.snapshot
-        // Where the control plane runs, its source and its document cache hold two thirds of the documents' share (DR1-F-5).
+        // A third each with the control plane's source and cache (DR1-F-5); a const, inlined: cosec-control stays optional.
         val sources = if (ControlPlaneCondition.wired(resources.classLoader, environment)) DOCUMENT_HOLDERS else 1
         val options = snapshot.toOptions(pipeline.timeout, sources)
         // The data plane's source only: the control plane's own would count its reads under the same names.

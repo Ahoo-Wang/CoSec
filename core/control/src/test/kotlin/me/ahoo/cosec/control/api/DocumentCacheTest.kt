@@ -40,6 +40,7 @@ import me.ahoo.cosec.spi.snapshot.SnapshotDigest
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
+import org.openjdk.jol.info.GraphLayout
 import java.time.Instant
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.Executors
@@ -56,8 +57,10 @@ class DocumentCacheTest {
 
     @Test
     fun `the least recently used document leaves first`() {
-        // Six documents of one stored byte, four decoded, fill a bound of 24; a document is admitted up to half of it.
-        val cache = DocumentCache(maxHeap = 6L * DocumentCache.DECODED_FACTOR)
+        // Six documents of one stored byte fill the bound, decoded; a document is admitted up to half of it.
+        val one = DocumentCache.DECODED_FACTOR + DocumentCache.ENTRY_BYTES
+        val cache = DocumentCache(maxHeap = maxOf(6 * one, 2 * (12 + DocumentCache.ENTRY_BYTES + DocumentCache.FORM_BYTES)))
+        check(cache.admits(1) && 7 * one > maxOf(6 * one, 2 * (12 + DocumentCache.ENTRY_BYTES + DocumentCache.FORM_BYTES)))
         (1..6).forEach { cache.put(key(it), digest(it), 1, document) }
         // Reading the first makes the second the least recently used.
         cache.get(key(1), digest(1)).assert().isNotNull()
@@ -75,8 +78,8 @@ class DocumentCacheTest {
      */
     @Test
     fun `the estimated heap is bounded`() {
-        val decoded = 100L * DocumentCache.DECODED_FACTOR
-        val compiledForm = 100L * DocumentCache.COMPILED_FACTOR
+        val decoded = 100L * DocumentCache.DECODED_FACTOR + DocumentCache.ENTRY_BYTES
+        val compiledForm = 100L * DocumentCache.COMPILED_FACTOR + DocumentCache.FORM_BYTES
         val cache = DocumentCache(maxHeap = 2 * (decoded + compiledForm))
         val first = cache.put(key(1), digest(1), 100, document)
         val second = cache.put(key(2), digest(2), 100, document)
@@ -97,7 +100,8 @@ class DocumentCacheTest {
      */
     @Test
     fun `a document too heavy to admit pushes nothing out`() {
-        val cache = DocumentCache(maxHeap = 24_000)
+        // Admitted up to half of the bound: 1,000 stored bytes, twelve times, and the fixed parts.
+        val cache = DocumentCache(maxHeap = 2 * (12_000 + DocumentCache.ENTRY_BYTES + DocumentCache.FORM_BYTES))
         val small = cache.put(key(1), digest(1), 100, document)
         small.compiled(digest(7)) { CompiledDocument.tenant(TenantId("t1"), emptyList(), emptyList()) }
         val held = cache.estimatedHeap
@@ -138,6 +142,31 @@ class DocumentCacheTest {
             compiledHeap.assert().describedAs("$name compiled, ${stored.size} bytes stored")
                 .isLessThanOrEqualTo(stored.size.toLong() * DocumentCache.COMPILED_FACTOR)
         }
+    }
+
+    /**
+     * DR1-F-5: without a count bound, what the smallest documents retain must be within their estimate, or many small
+     * tenants would hold more than the share. Measured with JOL as what one more entry, then its compiled form, add to
+     * the cache's graph, for the smallest document a tenant has: no entries, so nothing of it scales with its size.
+     */
+    @Test
+    fun `the smallest documents hold no more heap than they are estimated at`() {
+        val stored = PolicyDocumentCodec.encode(document)
+        val decoded = PolicyDocumentCodec.decode(DocumentKind.TENANT, "acme", stored)
+        val cache = DocumentCache(maxHeap = 1L shl 30)
+        fun retained() = GraphLayout.parseInstance(cache).totalSize()
+        val empty = retained()
+
+        val entry = cache.put(key(1), digest(1), stored.size, decoded)
+        val held = retained() - empty
+        entry.compiled(digest(7)) { PolicyDocumentCompiler.forPlatform(null).compile(decoded) }.getOrThrow()
+        val form = retained() - empty - held
+
+        held.assert().describedAs("an entry of ${stored.size} stored bytes retains $held")
+            .isLessThanOrEqualTo(stored.size * DocumentCache.DECODED_FACTOR + DocumentCache.ENTRY_BYTES)
+        form.assert().describedAs("its compiled form retains $form")
+            .isLessThanOrEqualTo(stored.size * DocumentCache.COMPILED_FACTOR + DocumentCache.FORM_BYTES)
+    }
     }
 
     private fun heapOf(make: () -> Any): Long = (0 until TRIALS).minOf {
