@@ -30,6 +30,8 @@ Which preview of the library may run behind which preview of the gateway image: 
 
 ## From 8.0.0-beta.7 {#from-8-0-0-beta-7}
 
+- **An `explain` at a retained revision is cached like a head** (DR1-F-4). Affected: nothing to change. Repeating it
+  compiles nothing, where each call compiled its documents again.
 - **`analyze` shows a tenant's bindings only to a caller who may read its document** (`CTL-51`, DR1-F-8). Affected: a
   principal granted `cosec:analyze` on its tenant's document but not `cosec:read` (no built-in role is shaped so). It
   was answered with every matching binding of that document; it now gets none, and the document is counted in `hidden`.

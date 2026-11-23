@@ -44,15 +44,16 @@ internal class RetainedDocuments(
     }
 
     /**
-     * [key] at [revision], as [retained] reads it: 410 when it is no longer kept. Taken from the cache when it holds that
-     * content (the head's, say), never put in it (review M2 of #1240): each retained revision would be an entry of its
-     * own, and explaining at revisions is rare, so it is decoded and compiled for the call.
+     * [key] at [revision], as [retained] reads it: 410 when it is no longer kept. Cached by its digest like a head
+     * (DR1-F-4): a retained revision's content never changes, the cache is bounded by the heap it holds, so repeating an
+     * explanation at one revision compiles it once instead of on every call.
      */
     suspend fun retainedHeld(key: SnapshotKey, revision: Long): Held {
         val digest = revisions.retainedDigest(key, revision) ?: throw gone(key, revision)
         cache.get(key, digest)?.let { return Held(it.document, it) }
         val record = revisions.record(key, digest) ?: throw gone(key, revision)
-        return Held(revisions.decode(key, record), null)
+        val entry = cache.put(key, digest, record.bodySize, revisions.decode(key, record))
+        return Held(entry.document, entry)
     }
 
     suspend fun retained(key: SnapshotKey, revision: Long): PolicyDocument =
