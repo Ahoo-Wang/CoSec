@@ -212,8 +212,11 @@ contain `:`; no literal may contain `*`, `?`, `{`, `}`, whitespace or control ch
 
 `http:path:<pattern>` matches a resource of type `http` whose id is the request path, as the pipeline normalized it
 ([Web integration](../integration/web.md)). A pattern never meets an empty segment before the end of a path, an
-encoded `/` or a `\`, which the pipeline refuses with `400`. A trailing `/` is part of the path: `/admin` does not match
-`/admin/`, and `/admin/**` does. It matches what Spring's `PathPattern` matches, on this subset:
+encoded `/` or a `\`, which the pipeline refuses with `400`. A trailing `/` is part of the path for an ALLOW and the
+platform boundary: `/admin` does not match `/admin/`, and `/admin/**` does. A DENY's and a rate limit rule's patterns do
+not count a trailing `/`, of the path or of the pattern (`PIP-35`): a DENY on `/orders/{id}` also matches
+`/orders/123/` (capturing `123`), one on `/orders/` also matches `/orders`; the root keeps its `/`. It matches what
+Spring's `PathPattern` matches, on this subset:
 
 | Element | Matches |
 |---|---|

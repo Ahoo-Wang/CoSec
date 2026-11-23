@@ -73,6 +73,13 @@ Which preview of the library may run behind which preview of the gateway image: 
   and the blacklist, answer `503`, alike behind the three adapters. Put a proxy that writes `X-Forwarded-For` in front
   of such a host and set the index to `1` or more ([Web integration](../integration/web.md)); a host whose server
   reports its peers is unchanged.
+- **A rate limit key value longer than 256 characters names its bucket by its hash** (`OBL-6`, DR1-C-1). Affected:
+  rules whose `key` reads values that long, nearly always a header a client chooses. Such a bucket is now
+  `h:<sha-256>` where it was `k:<value>` ([Rate limiting](../policies/rate-limiting.md#keys)), so its count starts
+  again once: on Redis the old key is no longer read and expires after two windows; the local limiter's counts are the
+  instance's anyway. While a rolling upgrade has both versions serving, such a value counts in two buckets, one per
+  version, so it gets at most twice its limit until the last instance is upgraded. Values of 256 characters or fewer
+  keep their buckets and counts. Nothing to change.
 - **The generated route map no longer depends on who fetched the API docs last** (`RTE-4`, DR1-C-2). Affected: a
   route map from `cosecServiceGenerator/routes` on a host whose OpenAPI document writes no `servers`. springdoc then
   puts a server of its own into the document it caches, from the last request for the API docs, query string
@@ -113,6 +120,13 @@ Which preview of the library may run behind which preview of the gateway image: 
   (a `"*"` role adds the number of its app's catalog permissions). Raise the budgets in the platform's `limits` if the
   document needs them. Each 1,000 derived bindings spread over distinct permissions cost the check of a tenant
   administrator's change about 0.5 s, and each binding about 240 bytes on every instance that holds the document.
+- **In the deny direction a trailing `/` does not count** (`PIP-35`, DR1-C-9). Affected: every deployment, in the
+  direction of fewer permits. A DENY statement or a rate limit rule on `/orders/{id}` now also applies to
+  `/orders/123/`, and one on `/orders/` to `/orders`; ALLOWs and the platform boundary still match the path as written.
+  On a host with a route map, a request whose path ends with `/`, maps to no route and maps without it (`DELETE
+  /orders/123/` for a route `/orders/{id}`) is answered `400` `invalid-request` where it used to be decided in the `http`
+  namespace. A client that sends such paths to a mapped host should drop the trailing `/`
+  ([Web integration](../integration/web.md)).
 - **Social sign-in states are bounded** (DR1-D-9). Affected: deployments that serve social login. A deployment holds
   at most a 64th of the memory Redis reports in sign-ins in progress (512 bytes each; 100,000 when Redis does not
   report its memory), and a start past it is refused with a `SocialAuthenticationException` ("try again shortly")

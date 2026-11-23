@@ -1,0 +1,41 @@
+{
+  "rules": [
+    "PIP-35"
+  ],
+  "polarity": "negative",
+  "level": "pipeline",
+  "description": "Only an ALLOW on GET /orders/{id}: GET /orders/123/ is not permitted by it. An ALLOW matches the path as written.",
+  "documents": {
+    "platform": {
+      "policies": [
+        {
+          "id": "read",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "http:GET",
+              "resource": "http:path:/orders/{id}"
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "g:read",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "read"
+        }
+      ]
+    }
+  },
+  "http": {
+    "method": "GET",
+    "path": "/orders/123/"
+  },
+  "expect": {
+    "status": 403,
+    "type": "forbidden"
+  }
+}
