@@ -69,12 +69,26 @@ object ControlDerived {
      */
     const val MAX_BODY_BYTES: Long = ChangeOptions.DEFAULT_MAX_DOCUMENT_BYTES.toLong() + BODY_ROOM_BYTES
 
+    /** The headers a request has on Spring Boot's servers by default (`server.max-http-request-header-size`). */
+    private const val REQUEST_HEADER_BYTES: Long = 8L * 1024
+
+    /**
+     * The largest body of a route that carries no document (DR1-F-3): every route but a proposal, an `:apply` and their
+     * checks. Eight times the [REQUEST_HEADER_BYTES] a real request's headers take: the largest such body is a simulated
+     * request, one request's headers, attributes, roles and policies; the others (a reason, an acknowledgement, a
+     * break-glass request, a rollback) are smaller still. Larger is a 400 before the body is parsed, so a request nobody
+     * authorized yet costs about its size, not the tree a parser would build of [MAX_BODY_BYTES].
+     */
+    const val SMALL_BODY_BYTES: Long = 8 * REQUEST_HEADER_BYTES
+
     /** One line for the startup log: what was derived, from what. */
     fun describe(minDuration: Duration): String =
         "reclaim-interval=$RECLAIM_INTERVAL (constant), orphan-age=$ORPHAN_AGE (one reclaim pass), " +
             "shadow check interval=${shadowCheckInterval(minDuration)} (1/$SHADOW_CHECKS_PER_MIN_DURATION of " +
             "cosec.control.shadow.min-duration $minDuration), max body=${MAX_BODY_BYTES / MEBIBYTE}MB " +
-            "(the ${ChangeOptions.DEFAULT_MAX_DOCUMENT_BYTES / MEBIBYTE}MB document cap and ${BODY_ROOM_BYTES / MEBIBYTE}MB)"
+            "(the ${ChangeOptions.DEFAULT_MAX_DOCUMENT_BYTES / MEBIBYTE}MB document cap and ${BODY_ROOM_BYTES / MEBIBYTE}MB), " +
+            "${SMALL_BODY_BYTES / KIBIBYTE}KB for a route that carries no document (8 request headers' worth)"
 
     private const val MEBIBYTE = 1024L * 1024
+    private const val KIBIBYTE = 1024L
 }

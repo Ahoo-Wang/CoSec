@@ -30,6 +30,11 @@ Which preview of the library may run behind which preview of the gateway image: 
 
 ## From 8.0.0-beta.7 {#from-8-0-0-beta-7}
 
+- **A control route that carries no document reads at most 64 KB** (DR1-F-3). Affected: a client that posts more than
+  64 KB to `simulate`, `explain`, `analyze`, a step of a change, a rollback or break-glass. Such a body is now a `400`
+  before it is parsed, where it was read and parsed up to 10 MB before anything was authorized. Proposals, `:apply` and
+  their checks still read up to 10 MB. A simulated request larger than 64 KB has more headers and attributes than a real
+  request can carry: trim it.
 - **An `explain` at a retained revision is cached like a head** (DR1-F-4). Affected: nothing to change. Repeating it
   compiles nothing, where each call compiled its documents again.
 - **Session records are kept no longer than their refresh token, and 64 per principal** (`IDN-35`, DR1-G-2).
