@@ -59,8 +59,9 @@ class DocumentCacheTest {
     fun `the least recently used document leaves first`() {
         // Six documents of one stored byte fill the bound, decoded; a document is admitted up to half of it.
         val one = DocumentCache.DECODED_FACTOR + DocumentCache.ENTRY_BYTES
-        val cache = DocumentCache(maxHeap = maxOf(6 * one, 2 * (12 + DocumentCache.ENTRY_BYTES + DocumentCache.FORM_BYTES)))
-        check(cache.admits(1) && 7 * one > maxOf(6 * one, 2 * (12 + DocumentCache.ENTRY_BYTES + DocumentCache.FORM_BYTES)))
+        val bound = maxOf(6 * one, 2 * (12 + DocumentCache.ENTRY_BYTES + DocumentCache.FORM_BYTES))
+        val cache = DocumentCache(maxHeap = bound)
+        check(cache.admits(1) && 7 * one > bound)
         (1..6).forEach { cache.put(key(it), digest(it), 1, document) }
         // Reading the first makes the second the least recently used.
         cache.get(key(1), digest(1)).assert().isNotNull()
