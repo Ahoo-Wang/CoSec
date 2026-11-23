@@ -160,6 +160,13 @@ Where a request's action comes from:
   match a mapped request.
 - A check in code names the action and resource itself ([Checks in code](../integration/checks.md)).
 
+**A misspelt name matches nothing, and nothing says so.** The compiler checks the syntax of an action and of a resource
+type, not that anything produces them: no catalog lists services, verbs or resource types, only permission ids (RFC
+0005 §5.1). A DENY on `order:exprot`, or on a resource type no route map writes, compiles, publishes and denies nothing.
+Only `http:HEAD` and a lower-case `http` verb are refused (`DOC-8`), because there the system knows they match nothing.
+Hold each DENY to a scenario that shows it denying ([Prove it with a test](./testing.md#prove-it-with-a-test)), or try
+it with [a simulation](./testing.md#simulating-a-request) before it is published.
+
 ### Route maps
 
 A route map (`cosec-routes.json`, loaded from `cosec.authorization.routes.location`,

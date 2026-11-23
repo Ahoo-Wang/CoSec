@@ -3,7 +3,7 @@
 # Tests: :jwt:test --tests me.ahoo.cosec.jwt.RefreshTokenAuthenticationTest :login:test --tests me.ahoo.cosec.login.token.SwitchLiveSessionTest :conformance:test
 
 diff --git a/extensions/login/src/main/kotlin/me/ahoo/cosec/login/token/LiveSessions.kt b/extensions/login/src/main/kotlin/me/ahoo/cosec/login/token/LiveSessions.kt
-index 68c99d14..25f8b82c 100644
+index a510e69ba..d2c076059 100644
 --- a/extensions/login/src/main/kotlin/me/ahoo/cosec/login/token/LiveSessions.kt
 +++ b/extensions/login/src/main/kotlin/me/ahoo/cosec/login/token/LiveSessions.kt
 @@ -60,7 +60,6 @@ internal class LiveSessions(private val revocation: TokenRevocation, private val
@@ -11,6 +11,6 @@ index 68c99d14..25f8b82c 100644
          session: TokenSession,
      ): Live {
 -        revocation.check(tokenId, tenant, principal, issuedAt)
-         families.requireLive(session, tenant, principal)
-         return Live(principal, session)
+         val family = families.requireLive(session, tenant, principal)
+         return Live(principal, session, family.root ?: family.id)
      }

@@ -32,7 +32,9 @@ private val log = KotlinLogging.logger {}
  * What a failure of a login route answers (`IDN-23`): a refusal of the pair is `401` with the type that names why;
  * a revocation read or a session store that cannot answer is `503` (`IDN-14`, `IDN-19`: nothing issued, nothing
  * spent); anything else is an error, `500`, as the pipeline answers an unmodelled one, so a bug never looks like an
- * outage. Neither `503` nor `500` ever ends a client's session. Nothing of the exception reaches the body, and the
+ * outage. A `503` never ends a client's session. A `500` after a refresh has moved the session (the token converter
+ * failed) leaves the client with the generation before: a retry within the rotation leeway gets the current pair, and
+ * the first one after it is read as reuse and ends the session (DR1-G-3; issuing before the move is 8.1's). Nothing of the exception reaches the body, and the
  * log line names its class and where it was thrown, never its message, which may hold a token.
  */
 internal object RouteFailure {

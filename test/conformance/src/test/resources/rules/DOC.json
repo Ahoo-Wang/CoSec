@@ -3,7 +3,7 @@
     {
       "id": "DOC-1",
       "source": "RFC 0004 §7.4; RFC 0003 §4.4",
-      "statement": "Dangling and cross-tenant references do not compile; a request that reaches a Broken entry on the data plane fails closed (F4, F5).",
+      "statement": "Dangling and cross-tenant references do not compile; a document compiles whole or not at all, so on the data plane every request that needs a document which did not compile fails closed, whatever entry it would have reached (F4, F5).",
       "level": "engine",
       "pending": null
     },

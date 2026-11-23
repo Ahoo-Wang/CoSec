@@ -20,8 +20,9 @@ import me.ahoo.cosec.annotations.InternalCoSecApi
  * `SnapshotSource.load`, and its result is shared by every request until a newer revision replaces it, so it must be
  * immutable.
  *
- * An entry that fails to compile should be recorded in the result (RFC 0003 §3.4 `Broken`) so that only the evaluations
- * reading it fail. Throwing fails the whole document closed.
+ * A document compiles whole or not at all (RFC 0003, `DOC-1`): a compiler throws on any entry that does not compile,
+ * and the document is installed as failed, so every request that needs it fails closed, whatever entry it would have
+ * reached. CoSec's compiler, `PolicyDocumentCompiler`, records no per-entry failure.
  */
 @InternalCoSecApi
 fun interface SnapshotCompiler<out T : Any> {

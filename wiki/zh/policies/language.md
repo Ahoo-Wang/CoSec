@@ -127,6 +127,8 @@ DENY 不能写裸资源类型，例如 `order`：它只覆盖 id 为空的那个
 - 其他 HTTP 请求的动作是 `http:<METHOD>`（按收到的方法，例如 `http:GET`），资源类型为 `http`、id 为请求路径。HEAD 按 `http:GET` 判定：它就是不带内容的 GET，服务器也用 GET 的处理器处理它，所以 `http:HEAD` 不匹配任何请求，路由映射也把 HEAD 映射为 `service:verb` 动作。含小写字母的方法在任何判定之前就是 `400`（`PIP-18`）。因此 `http:HEAD` 上的语句或限流规则，以及动词含小写字母的 `http` 动作（`http:get`），都不能编译（`DOC-8`）：这样的 DENY 什么也拒绝不了。请写 `http:GET`，或者大写的方法。针对 `service:verb` 的语句永远不会匹配它，针对 `http:*` 的语句也永远不会匹配已映射的请求。
 - 代码中的检查自己指定动作和资源（[代码中的检查](../integration/checks.md)）。
 
+**拼错的名字什么都不匹配，也没有任何提示。** 编译器只检查动作和资源类型的语法，不检查有没有东西产生它们：没有任何目录列出服务、动词或资源类型，目录里只有权限 id（RFC 0005 §5.1）。写在 `order:exprot` 上、或写在没有任何路由映射产生的资源类型上的 DENY，能编译、能发布，却什么都不拒绝。只有 `http:HEAD` 和含小写字母的 `http` 动词会被拒绝（`DOC-8`），因为系统知道它们匹配不到任何请求。给每条 DENY 配一个证明它确实拒绝的场景（[用测试证明](./testing.md#prove-it-with-a-test)），或者在发布之前用[模拟](./testing.md#simulating-a-request)试一下。
+
 ### 路由映射 {#route-maps}
 
 路由映射（`cosec-routes.json`，从 `cosec.authorization.routes.location` 加载，见[配置](../operations/configuration.md)）为服务的 HTTP 路由指定动作和类型化资源：
