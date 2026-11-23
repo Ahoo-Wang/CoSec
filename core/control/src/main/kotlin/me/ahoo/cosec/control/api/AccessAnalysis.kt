@@ -42,7 +42,9 @@ internal class AccessAnalysis(
         val asked = query.copy(action = EnforceableOrRefused.action(query.action))
         val app = queriedApp(query)
         val keys = listOfNotNull(SnapshotKey.Platform, tenant, app)
-        val readable = keys.filter { it == tenant || authority.holds(operator, it, ControlActions.READ) }
+        // Every document read for the caller is held to cosec:read, its own tenant's too (DR1-F-8): cosec:analyze on the
+        // tenant asks the question, it does not grant the bindings the answer lists. What it may not read is hidden.
+        val readable = keys.filter { authority.holds(operator, it, ControlActions.READ) }
         val platform = SnapshotKey.Platform.takeIf { it in readable }?.let { retained.entry(it) }
         val application = app?.takeIf { it in readable }?.let { retained.entry(it) }
         val found = AccessFindings(asked, ResourceTarget(resource))
