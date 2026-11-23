@@ -224,7 +224,7 @@ class PolicyDocumentCodecTest {
                 .isEqualTo(written)
         }
         PolicyDocumentCodec.encode(alone).decodeToString().assert().contains(
-            """"limits":{"maxPolicies":10000,"maxStatements":20000,"maxRoleBindings":10000,"maxAnyoneBindings":3,""" +
+            """"limits":{"maxPolicies":10000,"maxStatements":20000,"maxRoleBindings":20000,"maxAnyoneBindings":3,""" +
                 """"maxChangeOperations":20000}"""
         )
         error(""","limits":{"maxPolicies":0}""").assert().contains("$.limits.maxPolicies: a limit is a positive int")

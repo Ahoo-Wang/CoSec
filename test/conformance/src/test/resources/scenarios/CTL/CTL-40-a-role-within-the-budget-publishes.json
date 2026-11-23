@@ -1,0 +1,84 @@
+{
+  "rules": [
+    "CTL-40"
+  ],
+  "polarity": "negative",
+  "level": "control",
+  "description": "The platform allows two bindings to a role a document; a role of two permissions derives two, within the budget: it is checked and published.",
+  "documents": {
+    "platform": {
+      "limits": {
+        "maxRoleBindings": 2
+      }
+    },
+    "apps": {
+      "wms": {
+        "catalog": {
+          "groups": [
+            {
+              "name": "ops",
+              "permissions": [
+                {
+                  "id": "read",
+                  "action": "wms:read"
+                },
+                {
+                  "id": "edit",
+                  "action": "wms:edit"
+                },
+                {
+                  "id": "ship",
+                  "action": "wms:ship"
+                }
+              ]
+            }
+          ]
+        }
+      }
+    },
+    "tenants": {
+      "acme": {
+        "bindings": []
+      }
+    }
+  },
+  "steps": [
+    {
+      "propose": {
+        "change": "c1",
+        "document": "tenant:acme",
+        "operations": [
+          {
+            "putRole": {
+              "id": "night",
+              "app": "wms",
+              "permissions": [
+                "read",
+                "edit"
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "skipShadow": "c1"
+    },
+    {
+      "publish": "c1"
+    }
+  ],
+  "expect": {
+    "steps": [
+      "CHECKED",
+      "READY",
+      "PUBLISHED"
+    ],
+    "errors": {
+      "c1": []
+    },
+    "heads": {
+      "tenant:acme": 2
+    }
+  }
+}

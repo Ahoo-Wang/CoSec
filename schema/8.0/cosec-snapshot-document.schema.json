@@ -693,7 +693,7 @@
               "type": "integer"
             },
             "maxRoleBindings": {
-              "default": 10000,
+              "default": 20000,
               "description": "Bindings to a role in one document (CTL-40).",
               "minimum": 1,
               "type": "integer"
