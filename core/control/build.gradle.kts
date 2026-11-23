@@ -28,4 +28,6 @@ dependencies {
     testImplementation(testFixtures(project(":runtime")))
     // CTL-85: the work budget's waits, on virtual time.
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test")
+    // CTL-85: the trees a body becomes, measured.
+    testImplementation("org.openjdk.jol:jol-core")
 }
