@@ -1278,6 +1278,15 @@ for a check, `412` for an `ifMatch` that does not hold).
   that timed out or failed, means the binding was removed, by that call or another: the platform document's revision
   history shows which revision removed it. Like every `404` of the control API it carries no `detail`; the control
   host logs `the platform document has no binding [<id>]` at `INFO`.
+- **A proposal is `409` with `conflict: OPEN_LIMIT`**: the document already holds `cosec.control.revisions.max-count`
+  open changes (50 by default, `CTL-83`); `heldBy` names the oldest. Your own oldest change whose checks failed was
+  abandoned first, so what is left is changes that can still move on, or other authors'. Abandon those you no longer
+  need (`POST /changes/{id}:abandon`), publish them, or wait for them to expire (`cosec.control.changes.expire-after`).
+- **`GET /changes/{id}` is `404` for a change that ended**: a document keeps its latest
+  `cosec.control.revisions.max-count` ended changes, and reclamation removes older ones past
+  `cosec.control.revisions.min-age` whose revision is no longer retained (`CTL-83`). Who published a revision is in the
+  revision itself: `GET /documents/{key}/revisions/{revision}` names its change, author and approvers in `provenance`;
+  the audit events of the change ([Observability](observability.md)) keep the rest.
 - **A tenant change waits for approval with `TOO_LARGE`**: the grant analysis made the four million comparisons one
   analysis may make before it reached those grants, so what it did not compare is not known (`CTL-49`). Split the
   change into smaller ones; statements a policy already had cost almost nothing, so the size that matters is what the

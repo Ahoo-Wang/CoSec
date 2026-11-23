@@ -229,6 +229,7 @@ public final class me/ahoo/cosec/control/sdk/ConflictKind$Companion {
 	public final fun getCONTENDED ()Lme/ahoo/cosec/control/sdk/ConflictKind;
 	public final fun getEXISTS ()Lme/ahoo/cosec/control/sdk/ConflictKind;
 	public final fun getKNOWN ()Ljava/util/List;
+	public final fun getOPEN_LIMIT ()Lme/ahoo/cosec/control/sdk/ConflictKind;
 	public final fun getSLOT_HELD ()Lme/ahoo/cosec/control/sdk/ConflictKind;
 	public final fun getSTATE ()Lme/ahoo/cosec/control/sdk/ConflictKind;
 	public final fun getWINDOW_BLOCKED ()Lme/ahoo/cosec/control/sdk/ConflictKind;

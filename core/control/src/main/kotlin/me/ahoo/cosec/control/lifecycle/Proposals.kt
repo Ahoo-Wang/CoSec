@@ -60,6 +60,9 @@ internal class Proposals(
     private val candidates: CandidateChecks,
     private val listeners: ChangeListeners,
 ) {
+    /** At most the revisions the operator keeps, open on one document (`CTL-83`). */
+    private val limit = OpenLimit(store, flow, revisions.retention.maxCount)
+
     /**
      * Proposes [operations] on revision [base] of [key] (0 for a document not published yet) and checks them. The
      * change is `CHECKED` when every check passes, `DRAFT` with its findings otherwise. A base that is not the head is
@@ -187,6 +190,8 @@ internal class Proposals(
 
     /** The last step of a proposal, which a check never takes (`CTL-78`): its events, and the change stored. */
     private suspend fun commitChange(checked: ChangeRequest, breakGlass: Boolean, author: Operator) {
+        // Break-glass never waits behind drafts: it is the platform's, and an emergency (CTL-83).
+        if (!breakGlass) limit.makeRoom(checked.key, author)
         if (breakGlass) {
             flow.audit(ChangeEvent.Kind.BREAK_GLASS_REQUESTED, checked, author.actor, origin = author.origin)
         }
