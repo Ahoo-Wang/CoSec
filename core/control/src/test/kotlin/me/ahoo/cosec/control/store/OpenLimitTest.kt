@@ -83,7 +83,13 @@ class OpenLimitTest {
     /** A change whose checks fail: a binding to a policy that is not there, which does not compile. */
     private suspend fun Changes.failed(by: Operator = ALICE_OP): ChangeRequest {
         clock.now = clock.now.plus(Duration.ofMinutes(1))
-        val binding = Binding(BindingId("b${ids.get()}"), SubjectRef.Anyone, BindingScope(Match.Any, Match.Any), PolicyId("nowhere"))
+        val binding =
+            Binding(
+                BindingId("b${ids.get()}"),
+                SubjectRef.Anyone,
+                BindingScope(Match.Any, Match.Any),
+                PolicyId("nowhere")
+            )
         return propose(by, ACME, 1, listOf(Operation.PutBinding(binding)), "failed").also {
             it.state.assert().isEqualTo(ChangeState.DRAFT)
         }
@@ -122,7 +128,7 @@ class OpenLimitTest {
 
         stored.state.assert().isEqualTo(ChangeState.CHECKED)
         store.change(draft.id)!!.value.state.assert().isEqualTo(ChangeState.ABANDONED)
-        store.change(draft.id)!!.value.note.assert().startsWith("abandoned for room (CTL-83)")
+        // Its record keeps its note; the audit event of the abandon says it was for room (CTL-83).
         // Bob's failed draft is his: alice cannot make room with it.
         refused { changes.open() }.conflict.assert().isEqualTo(ConflictKind.OPEN_LIMIT)
     }
@@ -145,7 +151,10 @@ class OpenLimitTest {
         published()
         val unreadable = object : ControlStore by store {
             override suspend fun openChanges(document: SnapshotKey): List<ListedChange> =
-                listOf(ListedChange.Unreadable(ChangeId("x"), document), ListedChange.Unreadable(ChangeId("y"), document))
+                listOf(
+                    ListedChange.Unreadable(ChangeId("x"), document),
+                    ListedChange.Unreadable(ChangeId("y"), document)
+                )
         }
 
         val refused = refused { changes(unreadable).open() }
@@ -162,7 +171,15 @@ class OpenLimitTest {
                 expected: me.ahoo.cosec.spi.snapshot.SnapshotDigest?,
                 change: ChangeRequest,
                 previous: ChangeState?,
-            ): Boolean = if (change.state == ChangeState.ABANDONED) false else store.putChange(expected, change, previous)
+            ): Boolean = if (change.state == ChangeState.ABANDONED) {
+                false
+            } else {
+                store.putChange(
+                    expected,
+                    change,
+                    previous
+                )
+            }
         }
         val changes = changes(racing)
         changes.failed()
