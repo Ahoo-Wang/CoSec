@@ -445,6 +445,43 @@ class ApprovalB2Test {
         }
     }
 
+    /** A platform principal behind a credential named `service`: a service's own identity, as a gateway forwards it. */
+    private fun service(principal: String) = engine.operator(
+        AuthenticatedPrincipal(
+            PrincipalId(principal),
+            TenantId.PLATFORM,
+            Memberships(Memberships.Source.CLAIMS, emptyMap(), emptyList()),
+            credential = Identity.Credential(Identity.Method.SERVICE, "service:$principal", null),
+            app = PipelineControlAuthorizer.CONTROL_APP,
+        )
+    )
+
+    /** IDN-34: a service's own identity is a workload's credential, as an API key is: it never approves (APR-7). */
+    @Test
+    fun `a service's own identity never approves - IDN-34`() = runBlocking<Unit> {
+        val change = awaiting("viewers")
+        refused { changes.approve(service("pia"), change.id, change.candidate!!) }.assert().isEqualTo(403)
+        changes.approve(pia, change.id, change.candidate!!).state.assert().isEqualTo(ChangeState.READY)
+    }
+
+    /**
+     * IDN-34: a service's own identity is never the trust root (APR-3), though its principal holds
+     * `cosec:platform-admin`, outside the service profile too: its platform change waits for a person.
+     */
+    @Test
+    fun `a service's own identity is never the trust root - IDN-34`() = runBlocking<Unit> {
+        val platform = listOf(Operation.PutPolicy(allow("services", action = "order:read", resource = "order/**")))
+        changes.propose(pia, SnapshotKey.Platform, head(SnapshotKey.Platform), platform, "a person")
+            .escalations.assert().isEmpty()
+        val svc = service("pia")
+        val change = changes.propose(svc, SnapshotKey.Platform, head(SnapshotKey.Platform), platform, "a service")
+        change.escalations.map { it.reason.name }.assert().containsExactly("NOT_ANALYZED")
+        changes.startShadow(svc, change.id)
+        changes.shadowed(change.id).state.assert().isEqualTo(ChangeState.AWAITING_APPROVAL)
+        refused { changes.publish(svc, change.id) }.assert().isEqualTo(409)
+        changes.abandon(svc, change.id)
+    }
+
     /** RC1-11: the approval records its token's id and `iat`; a revocation since takes it back. */
     @Test
     fun `an approval by a token revoked since does not count`() = runBlocking<Unit> {

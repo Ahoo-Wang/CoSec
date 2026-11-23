@@ -440,6 +440,23 @@
         "spring-boot:RevocationCachePrecedenceTest#each table holds the revocation tables' share of the heap, over cocache defaults",
         "spring-boot:RevocationCachePrecedenceTest#a per-cache property cannot set the count"
       ]
+    },
+    {
+      "id": "IDN-34",
+      "source": "Roadmap §4 (beta.5: a service caller first declared api-key, a method of its own before RC1); coordinator's decision of 2026-11-23 (design (b): AuthenticatedPrincipal.workload); RFC 0009 §3, §4.2, RFC 0010 C3 (sentences proposed in the PR)",
+      "statement": "The identity a service states for itself when it calls the control plane as its own principal (ControlCaller.service, ServiceIdentity), in process or over the network, names its credential `service`, never `api-key` or `jwt`, and audit, decision and change records name it so. `service` and `api-key` are CoSec's workload methods: a principal is a workload's (AuthenticatedPrincipal.workload) when CoSec's API key authenticator proved it (by provenance) or its credential is named `api-key` or `service`, whoever named it: a gateway's forwarded identity, a service's stated one, or another authenticator's (fail closed). What a principal may do as a person or as a workload is read from workload alone, never from apiKey, which keeps its meaning (an API key proved it): a workload never approves (APR-7) and is never the trust root (APR-3). A `service` credential, as any credential but CoSec's own token, has no session and no break-glass.",
+      "level": "build",
+      "pending": null,
+      "guards": [
+        "spi:AuthenticatedPrincipalTest#a workload is an API key or a service, by provenance or by name - IDN-34",
+        "spi:AuthenticatedPrincipalTest#a service's credential has no break-glass and no session - IDN-34",
+        "runtime:ServiceIdentityTest#a service's identity names its credential service - IDN-34",
+        "runtime:ServiceIdentityTest#admitted, a service's identity is a workload's, without break-glass - IDN-34",
+        "runtime:IdentityGateTest#a forwarded service identity is a workload's credential, without break-glass - IDN-34",
+        "control:ApprovalB2Test#a service's own identity never approves - IDN-34",
+        "control:ApprovalB2Test#a service's own identity is never the trust root - IDN-34",
+        "architecture:WorkloadCredentialTest#whether a principal is a workload is read from workload, never from apiKey alone - IDN-34"
+      ]
     }
   ]
 }
