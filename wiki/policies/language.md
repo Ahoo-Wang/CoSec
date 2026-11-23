@@ -659,7 +659,7 @@ defaults; the platform raises or lowers them like any other limit.
 |---|---|---|
 | `maxPolicies` | 10,000 | Policies one document holds: those it writes, and one for each catalog permission with an `action`. |
 | `maxStatements` | 20,000 | Statements of all those policies: a catalog permission with an `action` is one. |
-| `maxRoleBindings` | 10,000 | Bindings to a role in one document: those it writes, and one for each permission each of its roles lists (all the catalog's for `"*"`). |
+| `maxRoleBindings` | 20,000 | Bindings to a role in one document: those it writes, and one for each permission each of its roles lists (all the catalog's for `"*"`). |
 | `maxAnyoneBindings` | 1,000 | Bindings to `*` (`Anyone`) in one document. Each is a candidate on every request in its scope. |
 | `maxChangeOperations` | 20,000 | Operations of one change a client proposes. An `apply` and a rollback are not held to it: their operations come from a document, which the other budgets bound. |
 
@@ -671,7 +671,9 @@ their own limit of 1,000 ([Bindings](#bindings)).
 They bound what checking a change costs the control plane, not what a host does. A host compiles a document in time
 that grows with its size; the analysis of what a tenant administrator's change grants grows with the square of it: on
 one machine, 0.8 s for a change of 10,000 policies and bindings, over a minute for 100,000, which also exhausted a
-512 MB heap ([Performance](../architecture/overview.md#what-checking-a-change-costs)).
+512 MB heap ([Performance](../architecture/overview.md#what-checking-a-change-costs)). Bindings a document's roles
+derive, spread over distinct permissions, cost that analysis about 0.5 s per 1,000 and each instance that holds the
+document about 240 bytes each: at the default 20,000, about 10 s for a change that writes them all, and 4.8 MB.
 
 For each budget, a candidate's count must be at most the larger of the limit and the count of the head it replaces:
 

@@ -89,7 +89,7 @@ data class DocumentBudgets(
     companion object {
         const val DEFAULT_MAX_POLICIES: Int = 10_000
         const val DEFAULT_MAX_STATEMENTS: Int = 20_000
-        const val DEFAULT_MAX_ROLE_BINDINGS: Int = 10_000
+        const val DEFAULT_MAX_ROLE_BINDINGS: Int = 20_000
         const val DEFAULT_MAX_ANYONE_BINDINGS: Int = 1_000
         const val DEFAULT_MAX_CHANGE_OPERATIONS: Int = 20_000
 

@@ -227,7 +227,7 @@ description: "在应用文档中描述应用的权限，并按应用和空间把
 - 成员资格中的角色 id 不带应用限定：成员的角色是 `role@space`，其中没有应用。角色来自 `MembershipProvider`（只按租户和主体询问）或来自未绑定应用的令牌时，持有一次的角色在每个定义了该 id 的应用中都生效：十几个应用都定义的 `admin` 在所有这些应用中都被持有。绑定到某个应用的令牌只按该应用的文档判定。对应用文档的变更定义了另一个应用已经定义的系统角色时，会得到一条告警，写明该角色和其他应用（`ROL-12`）；它不会被拒绝，因为跨应用的角色可能正是本意。若并非本意，就给角色 id 加上应用前缀（`wms.clerk`）。
 - 角色没有 `expiresAt`，不是 break-glass，也不能绑定主体或 `Anyone`：这些情况写[绑定](#granting-permissions-to-roles)。两种写法可以授予同一个角色，结果取并集。
 
-角色不以绑定形式存储。所有读取文档授权含义的地方都先展开它：每个权限一条绑定，id 为 `role:<roleId>@<app>:<permission>`，排在手写绑定之后。编译、授出分析、引用索引、差异、`simulate`、`explain` 和 `analyze` 都读取展开结果。文档的角色派生的绑定与它手写的绑定一起计入它的 [`maxRoleBindings`](./language.md#entry-budgets) 预算（默认 10,000），目录简写派生的策略计入 `maxPolicies` 与 `maxStatements`：会把某个计数抬过预算的变更停留在草稿（`CTL-40`）。在控制面守住的预算之外，一份文档的角色最多派生 **50,000** 条绑定，超过则无法编译，错误位于 `$.roles`。
+角色不以绑定形式存储。所有读取文档授权含义的地方都先展开它：每个权限一条绑定，id 为 `role:<roleId>@<app>:<permission>`，排在手写绑定之后。编译、授出分析、引用索引、差异、`simulate`、`explain` 和 `analyze` 都读取展开结果。文档的角色派生的绑定与它手写的绑定一起计入它的 [`maxRoleBindings`](./language.md#entry-budgets) 预算（默认 20,000），目录简写派生的策略计入 `maxPolicies` 与 `maxStatements`：会把某个计数抬过预算的变更停留在草稿（`CTL-40`）。在控制面守住的预算之外，一份文档的角色最多派生 **50,000** 条绑定，超过则无法编译，错误位于 `$.roles`。
 
 ### 授权者需要什么 {#what-a-grantor-needs}
 

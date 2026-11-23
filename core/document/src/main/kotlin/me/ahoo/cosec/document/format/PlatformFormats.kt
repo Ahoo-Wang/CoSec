@@ -36,7 +36,7 @@ internal object PlatformFormats {
                     limit("maxCost", 256, "Weighted cost of one statement's condition."),
                     limit("maxPolicies", 10_000, "Policies one document writes (CTL-40)."),
                     limit("maxStatements", 20_000, "Statements of the policies one document writes (CTL-40)."),
-                    limit("maxRoleBindings", 10_000, "Bindings to a role in one document (CTL-40)."),
+                    limit("maxRoleBindings", 20_000, "Bindings to a role in one document (CTL-40)."),
                     limit("maxAnyoneBindings", 1_000, "Bindings to Anyone in one document (CTL-40)."),
                     limit("maxChangeOperations", 20_000, "Operations of one change a client proposes (CTL-41)."),
                 ),

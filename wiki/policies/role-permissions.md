@@ -281,7 +281,7 @@ A tenant document holds that tenant's **custom roles**, each of one app:
 A role is not stored as bindings. Everything that reads what a document grants expands it first: one binding per
 permission, `role:<roleId>@<app>:<permission>`, after the hand-written ones. Compilation, the grant analysis, the
 reference index, the diff, `simulate`, `explain` and `analyze` all read that expansion. The bindings a document's roles
-derive count against its [`maxRoleBindings`](./language.md#entry-budgets) budget (10,000 by default) with the ones it
+derive count against its [`maxRoleBindings`](./language.md#entry-budgets) budget (20,000 by default) with the ones it
 writes, and the policies its catalog's short forms derive against `maxPolicies` and `maxStatements`: a change that would
 raise a count over its budget stays a draft (`CTL-40`). Past the budgets, which the control plane holds, roles may
 derive at most **50,000** bindings per document; more does not compile, at `$.roles`.

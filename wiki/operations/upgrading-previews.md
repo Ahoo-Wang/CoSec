@@ -86,7 +86,8 @@ Which preview of the library may run behind which preview of the gateway image: 
     run side by side, an old instance's `invalidate` still reaches the new ones (same channel, same frames).
 - **The entry budgets count what roles and catalog short forms derive** (`CTL-40`, DR1-B-1). Affected: documents whose
   roles list many permissions, or app catalogs with many permissions that have an `action`. `maxRoleBindings` now counts
-  a role's bindings (one per permission it lists, all of the catalog's for `"*"`) with the written ones, and
+  a role's bindings (one per permission it lists, all of the catalog's for `"*"`) with the written ones, and its
+  default is now 20,000 (was 10,000), so that 100 roles of 100 permissions fit with room to spare; and
   `maxPolicies` and `maxStatements` count one policy of one statement per catalog permission with an `action`. A change
   that would raise such a count over its budget, which beta.7 published, now stays a draft with a `V2` error; a stored
   document already over keeps being served and may change as long as it does not grow. To see whether one is: run `POST /changes:check` on
@@ -94,7 +95,8 @@ Which preview of the library may run behind which preview of the gateway image: 
   ([Entry budgets](../policies/language.md#entry-budgets)); or count its derived bindings, roles' permissions summed:
   `jq '[.roles[]?.permissions | if type == "array" then length else 0 end] | add + ([.bindings[]? | select(.subject.role)] | length)'`
   (a `"*"` role adds the number of its app's catalog permissions). Raise the budgets in the platform's `limits` if the
-  document needs them.
+  document needs them. Each 1,000 derived bindings spread over distinct permissions cost the check of a tenant
+  administrator's change about 0.5 s, and each binding about 240 bytes on every instance that holds the document.
 
 ## From 8.0.0-beta.6 {#from-8-0-0-beta-6}
 
