@@ -111,7 +111,7 @@ internal object CacheLocks {
                 // absent-ttl would accept a revoked token for that long. A revocation held locally is bounded too, by
                 // local-max-age (DR1-D-3): a subject's revocation raised since is otherwise read as the older one it
                 // replaced, past a lost invalidation, for as long as the local copy lives. So the local max age the cache
-                // ends with, whatever declared or layered it (cosec.authentication.revocation.cache.local-max-age, a
+                // ends with, whatever declared or set it (cosec.authentication.revocation.cache.local-max-age, a
                 // cocache.* property, a customizer), is at most as long: a layer may tighten it, and one that lengthens it
                 // past that fails. Of the other fields, none lengthens either answer: a revocation is written with a
                 // lifetime of its own, which neither ttl nor ttl-jitter shortens in Redis; local-maximum-size only evicts.
