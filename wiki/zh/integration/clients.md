@@ -25,7 +25,9 @@ CoSec 不提供登录和租户切换：它们属于应用，用 CoSec 的类编�
 | 租户或应用切换 | 应用：`SwitchTenantAuthentication`，从一个有效会话发起 | 入：`Authorization` 头里的当前令牌，加上你的凭证类的请求体；出：`CompositeToken` |
 
 `CompositeToken` 写成 `{"accessToken":"<jwt>","refreshToken":"<jwt>"}`，没有别的字段（`CompositeTokenJsonTest` 逐字节固定它）。
-应用在响应里加字段不会破坏 CoSec，客户端要忽略它不认识的字段。
+应用在响应里加字段不会破坏 CoSec，客户端要忽略它不认识的字段。客户端发回的只能正好是令牌对，不能是原样的响应：
+刷新与退出路由对其他请求体回答 `400 invalid-request`。`cosec-fetcher` 只保留交给 `signIn` 的对象里的 `accessToken` 和
+`refreshToken`。
 
 **提供的刷新路由如何应答。** 每个应答都带 `Cache-Control: no-store`。
 

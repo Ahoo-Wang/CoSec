@@ -29,3 +29,13 @@ export function isCompositeToken(token: unknown): token is CompositeToken {
     typeof (token as CompositeToken).refreshToken === 'string'
   );
 }
+
+/**
+ * The pair alone: `accessToken` and `refreshToken`, nothing else of `token`.
+ * A login may answer more members (`clients.md` lets a client ignore them),
+ * but the refresh and logout routes accept exactly the pair
+ * (`contract/token/composite-token.json`), so only the pair is kept and sent.
+ */
+export function pairOf(token: CompositeToken): CompositeToken {
+  return { accessToken: token.accessToken, refreshToken: token.refreshToken };
+}
