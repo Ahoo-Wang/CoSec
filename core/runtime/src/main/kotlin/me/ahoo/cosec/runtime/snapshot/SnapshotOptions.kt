@@ -20,8 +20,10 @@ import me.ahoo.cosec.spi.snapshot.SnapshotKind
 import java.time.Duration
 
 /**
- * Tuning of a [SnapshotSource]. Defaults are the values RFC 0003 §12 decided (Q7, Q18, Q19); the ones marked there as
- * "confirmed after measurement" may change once §4.8 has real numbers.
+ * Tuning of a [SnapshotSource]. The constructor's defaults are the values RFC 0003 §12 first decided (Q7, Q18, Q19),
+ * which CoSec's own tests and benchmarks use. A host never sets them: the starter and `Pipeline.builder` derive the
+ * lag thresholds, the cold-load timeout, the compile threads and the reload concurrency with [derive] (`SNP-23`), and
+ * the families' bounds from [documentsBudget] (`SNP-24`).
  */
 // stays: one parameter per option of a value set by name
 @Suppress("LongParameterList")
@@ -73,7 +75,10 @@ class SnapshotOptions(
      */
     val maxAbsentTenants: Int = DEFAULT_MAX_ABSENT_TENANTS,
     val compileThreads: Int = 2,
-    /** Compilations waiting for a thread; beyond it a load fails closed (RFC 0003 §6 F8). */
+    /**
+     * Compilations waiting for a thread. Beyond it a cold load waits and compiles again until [coldLoadTimeout] since
+     * it began, and a reload keeps what is installed meanwhile (RFC 0003 §6 F8, `SNP-4`).
+     */
     val compileQueueCapacity: Int = 64,
     /** Documents reloaded at once by a revalidation pass or after a reset ([DEFAULT_RELOAD_CONCURRENCY]). */
     val reloadConcurrency: Int = DEFAULT_RELOAD_CONCURRENCY,
