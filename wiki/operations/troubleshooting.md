@@ -1127,7 +1127,7 @@ The request to the control API goes through the host's pipeline first, like any 
 does, so a refusal does not tell whether a document, a change or a DENY exists. The reason of a refused step is in the
 control host's log instead, at `INFO` from `me.ahoo.cosec.control.api`:
 `Control API <method> <path> by <tenant>/<principal> is <status> (request <requestId>): <reason>`, with the
-`requestId` of the problem body, such as `an API key cannot approve: an approval is a person's` or `only a platform
+`requestId` of the problem body, such as `a workload's credential (an API key, a service) cannot approve: an approval is a person's` or `only a platform
 principal sets a tenant's boundary`.
 
 | Status | Cause | Fix |
@@ -1189,8 +1189,8 @@ for a check, `412` for an `ifMatch` that does not hold).
   holds cosec:approve on the document`, `only a platform principal approves a boundary change`, `under four-eyes, only
   a platform principal approves a platform principal's change`, or `the approval does not say what credential its
   approver approved with` (an approval from before the upgrade, from an older instance, or by a credential without an
-  id). Ask for a new approval. A `403` on `:approve` with `an API key cannot approve` in the log: approve with a
-  person's token; with `an approval names the approver's credential, and this one names none`: approve with a
+  id). Ask for a new approval. A `403` on `:approve` with `a workload's credential (an API key, a service) cannot approve` in the log: the approver
+  authenticated with an API key or stated a service's own identity (`IDN-34`); approve with a person's token; with `an approval names the approver's credential, and this one names none`: approve with a
   credential that has an id, such as CoSec's token.
 - **A service's change waits for a person although it states a platform administrator**: the change came through
   `ControlService` or the control-plane host's service port, where no one is the trust root (`CTL-81`), so it is

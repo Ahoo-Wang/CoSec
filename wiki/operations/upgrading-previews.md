@@ -15,17 +15,47 @@ section above it:
 
 | You run | Read |
 |---|---|
-| `8.0.0-beta.6` | [From beta.6](#from-8-0-0-beta-6) |
-| `8.0.0-beta.5` | [From beta.5](#from-8-0-0-beta-5), then the one above |
-| `8.0.0-beta.4` | [From beta.4](#from-8-0-0-beta-4), then the two above |
-| `8.0.0-beta.3` | [From beta.3](#from-8-0-0-beta-3), then the three above |
-| `8.0.0-beta.2` | [From beta.2](#from-8-0-0-beta-2), then the four above |
-| `8.0.0-beta.1` | [From beta.1](#from-8-0-0-beta-1), then the five above |
-| `8.0.0-alpha.4` | [From alpha.4](#from-8-0-0-alpha-4), then the six above |
+| `8.0.0-beta.7` | [From beta.7](#from-8-0-0-beta-7) |
+| `8.0.0-beta.6` | [From beta.6](#from-8-0-0-beta-6), then the one above |
+| `8.0.0-beta.5` | [From beta.5](#from-8-0-0-beta-5), then the two above |
+| `8.0.0-beta.4` | [From beta.4](#from-8-0-0-beta-4), then the three above |
+| `8.0.0-beta.3` | [From beta.3](#from-8-0-0-beta-3), then the four above |
+| `8.0.0-beta.2` | [From beta.2](#from-8-0-0-beta-2), then the five above |
+| `8.0.0-beta.1` | [From beta.1](#from-8-0-0-beta-1), then the six above |
+| `8.0.0-alpha.4` | [From alpha.4](#from-8-0-0-alpha-4), then the seven above |
 | `8.0.0-alpha.3`, `alpha.2`, `alpha.1` | [From alpha.3](#from-8-0-0-alpha-3), [alpha.2](#from-8-0-0-alpha-2) or [alpha.1](#from-8-0-0-alpha-1), then every section above it |
 
 Which preview of the library may run behind which preview of the gateway image: see
 [Upgrading a running deployment](./upgrading.md#upgrading-a-running-deployment).
+
+## From 8.0.0-beta.7 {#from-8-0-0-beta-7}
+
+- **A service calling the control plane as its own principal is recorded as `service`** (`ControlCaller.service`,
+  `IDN-34`). Affected: what reads the records of control requests, and the order you upgrade in.
+  - **Records.** The identity such a service states names its credential `service`, where beta.7 named it `api-key`.
+    It is not an API key, and records now say so: `subject.method` in the decision events and audit of its requests to a
+    control-plane host, and `origin.via.method` in the change log, are `service` (a call through the in-process
+    `ControlService` stays `in-process`). Changes stored before keep `api-key`. A dashboard, alert or query that finds
+    service callers by `api-key` must look for `service` too.
+  - **What it may do does not change.** `service`, like `api-key`, is a workload's credential: it never approves and is
+    never the trust root, and it has no session and no break-glass (`AuthenticatedPrincipal.workload`, new).
+  - **Upgrade the control-plane hosts first, then the services that call them.** A beta.7 host does not know `service`
+    and takes it for a person's credential. On its service port that changes nothing: approvals are not served there and
+    nothing there is the trust root. But a service whose `cosec.control.service-url` names an operators' port of a beta.7
+    host (one that believes `CoSec-Identity`) could approve changes, and be the trust root if it is a platform
+    administrator holding `cosec:approve`, where beta.7's `api-key` could do neither. An upgraded caller of a beta.7
+    host's service port is safe; point no service at an operators' port in any case. A beta.7 caller of an upgraded
+    host keeps sending `api-key`, which the upgraded host still takes for a workload's.
+- **Your own `Authenticator` that names its credential `service`** now names a workload's: its principals can no longer
+  approve a change or be the trust root, as for `api-key`. Affected: only an authenticator that used that name. Rename
+  its method if its principals are people; otherwise nothing to do
+  ([Extending CoSec](../architecture/extending.md)).
+- **A cancelled `HttpControlService` call now ends its request on the host** (`CTL-82`, #1893). Affected: nothing to
+  change. When the coroutine of a call through `HttpControlService` is cancelled, the call closes its HTTP exchange and
+  the control-plane host (WebFlux) cancels the request. Before, the request stayed on the host until the call's own
+  timeout (30 seconds by default) ended it. A control call has no deadline of its own: yours decides, a `withTimeout`
+  around the call or the `timeout` of `HttpControlService`
+  ([Changing policies from your code](../integration/checks.md#changing-policies-from-your-code)).
 
 ## From 8.0.0-beta.6 {#from-8-0-0-beta-6}
 

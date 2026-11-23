@@ -92,6 +92,7 @@ public final class me/ahoo/cosec/spi/authn/AuthenticatedPrincipal {
 	public final fun getMemberships ()Lme/ahoo/cosec/model/Memberships;
 	public final fun getPrincipalBindings ()Z
 	public final fun getTenant-Zu1zXv4 ()Ljava/lang/String;
+	public final fun getWorkload ()Z
 }
 
 public abstract interface class me/ahoo/cosec/spi/authn/Authenticator {
@@ -238,6 +239,7 @@ public final class me/ahoo/cosec/spi/identity/Identity$Method {
 public final class me/ahoo/cosec/spi/identity/Identity$Method$Companion {
 	public final fun getAPI_KEY ()Lme/ahoo/cosec/spi/identity/Identity$Method;
 	public final fun getJWT ()Lme/ahoo/cosec/spi/identity/Identity$Method;
+	public final fun getSERVICE ()Lme/ahoo/cosec/spi/identity/Identity$Method;
 }
 
 public final class me/ahoo/cosec/spi/membership/InMemoryMembershipProvider : me/ahoo/cosec/spi/membership/MembershipProvider {

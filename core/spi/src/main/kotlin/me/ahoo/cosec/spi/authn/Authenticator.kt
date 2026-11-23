@@ -59,9 +59,10 @@ class Credentials(val token: String?, val apiKey: String?) {
 
 sealed interface AuthnResult {
     /**
-     * [method] names how the principal authenticated, as [Identity.Method] does everywhere else: [Identity.Method.JWT]
-     * and [Identity.Method.API_KEY] are CoSec's own (`jwt`, `api-key` in an audit record and in `CoSec-Identity`), and an
-     * authenticator for another kind of credential names its own, any non-empty name. The audit record carries the
+     * [method] names how the principal authenticated, as [Identity.Method] does everywhere else: [Identity.Method.JWT],
+     * [Identity.Method.API_KEY] and [Identity.Method.SERVICE] are CoSec's own (`jwt`, `api-key`, `service` in an audit
+     * record and in `CoSec-Identity`), and an authenticator for another kind of credential names its own, any non-empty
+     * name. One that names `api-key` or `service` names a workload's credential ([AuthenticatedPrincipal.workload]). The audit record carries the
      * method of the principal's credential when it has one, and this one when it has none.
      */
     class Authenticated(val principal: AuthenticatedPrincipal, val method: Identity.Method) : AuthnResult
@@ -256,12 +257,20 @@ class AuthenticatedPrincipal @InternalCoSecApi constructor(
     }
 
     /**
-     * Whether an API key proved the principal, a workload's credential: so CoSec's API key authenticator says, by
-     * provenance, and so does any credential named [Identity.Method.API_KEY], a gateway's forwarded identity among them
-     * (fail closed). An API key never approves a change and is never the control plane's trust root (RC1-11); a host's
-     * own authenticator for workloads should not be given `cosec:approve` either.
+     * Whether an API key proved the principal: so CoSec's API key authenticator says, by provenance, and so does any
+     * credential named [Identity.Method.API_KEY], a gateway's forwarded identity among them. What it may do is read from
+     * [workload], which counts it among the workloads' credentials; nothing is decided on this alone.
      */
     val apiKey: Boolean get() = apiKeyCredential || credential?.method == Identity.Method.API_KEY
+
+    /**
+     * Whether a workload's credential proved the principal (`IDN-34`): an API key ([apiKey], by provenance or by name), or
+     * a credential named [Identity.Method.SERVICE], the identity a service states for itself when it calls the control
+     * plane, a gateway's forwarded identity among them (fail closed). A workload never approves a change and is never the
+     * control plane's trust root (RC1-11); a host's own authenticator for workloads should not be given `cosec:approve`
+     * either, or should name its credential `service`.
+     */
+    val workload: Boolean get() = apiKey || credential?.method == Identity.Method.SERVICE
 
     /** The claimed memberships; null when they come from the provider or cannot be used. */
     val memberships: Memberships? get() = (membershipSource as? MembershipSource.Claims)?.memberships

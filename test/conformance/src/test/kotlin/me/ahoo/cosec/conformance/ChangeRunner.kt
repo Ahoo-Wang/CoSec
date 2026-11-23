@@ -119,6 +119,7 @@ import java.time.Instant
  * "documents": { "platform": {...}, "apps": { "order": {...} }, "tenants": { "acme": {...} } },  // published first
  * "operators": { "alice": { "tenant": "acme", "roles": ["admin"], "policies": [], "attributes": { "level": 3 } },
  *                "kim":  { "tenant": "(platform)", "credential": "api-key" },           // authenticated by an API key
+ *                "sam":  { "tenant": "(platform)", "credential": "service" },           // a service's own identity
  *                "pia":  { "tenant": "(platform)", "credential": { "token": "t1", "issuedAt": "2026-11-01T00:00:00Z" } },
  *                "nia":  { "tenant": "(platform)", "credential": "none" },  // a credential without an id; by default,
  *                                                                           // token "token-<name>", issued at no time
@@ -310,12 +311,14 @@ object ChangeRunner : ScenarioRunner {
         }
 
         /**
-         * `"api-key"`, `"none"` (a credential that names no id), or `{ "token": "t1", "issuedAt": ... }`: a token
+         * `"api-key"`, `"service"` (a service's own identity, IDN-34), `"none"` (a credential that names no id), or
+         * `{ "token": "t1", "issuedAt": ... }`: a token
          * CoSec's verifier did not issue, by its id.
          */
         private fun credential(node: JsonNode): Identity.Credential? = if (node.isString) {
             when (node.text()) {
                 "api-key" -> Identity.Credential(Identity.Method.API_KEY, "key", null)
+                "service" -> Identity.Credential(Identity.Method.SERVICE, "service:svc", null)
                 "none" -> null
                 else -> throw ScenarioFormatException("Unknown credential $node")
             }
