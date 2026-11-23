@@ -65,6 +65,11 @@ object StartupGuards {
         "spring-boot:ControlServicePortTest#the maintenance passes run on every host that has the control plane, and no property turns them off",
         "spring-boot:UnknownPropertiesTest#a switch that was removed before it was released is not a property",
         "control:ControlMaintenanceTest#shadow windows are closed by whoever holds the lease, which a pass releases",
+        // STA-13: a gateway host serves no handler of its own without a CoSec decision unless the operator lists it.
+        "spring-boot:GatewayOwnHandlersTest#a handler of the application that is not listed fails startup, naming it, the property and the page",
+        "spring-boot:GatewayOwnHandlersTest#every handler listed starts, and a name that matches no handler is ignored",
+        "spring-boot:GatewayOwnHandlersTest#a pattern is never accepted",
+        "spring-boot:GatewayOwnHandlersTest#a controller and a functional route are not seen by a gateway global filter, a route is",
         // STA-6, STA-7: a service behind a gateway states its network boundary and runs no hidden-method filter.
         "spring-boot:GatewayModeTrustTest#a service in gateway mode does not start until the operator states the boundary, and the message says what to write",
         "spring-boot:GatewayModeTrustTest#false and every value but true fail like an absent one, and say what was written",

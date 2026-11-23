@@ -561,13 +561,17 @@
     {
       "id": "CTL-41",
       "source": "RFC 0007 §10.1, §10.2 (review round 1 of beta.4, R1B-4)",
-      "statement": "A change a client proposes carries at most the platform's limits.maxChangeOperations operations (20,000 by default): a larger one is refused 400, naming the count and the limit, before any operation is authorized or applied. An apply and a rollback are not held to it: their operations are derived from a document, which the entry budgets bound (CTL-40). The control routes read at most the document cap and 2 MB (10 MB) of a request's body on WebMvc and WebFlux alike, and answer a larger one 400 without asking the control plane (`CTL-70`).",
+      "statement": "A change a client proposes carries at most the platform's limits.maxChangeOperations operations (20,000 by default): a larger one is refused 400, naming the count and the limit, before any operation is authorized or applied. An apply and a rollback are not held to it: their operations are derived from a document, which the entry budgets bound (CTL-40). The control routes read at most the document cap and 2 MB (10 MB) of a request's body on WebMvc and WebFlux alike, and answer a larger one 400 without asking the control plane (`CTL-70`). Every other route, one that carries no document (simulate, explain, analyze, a change's steps, a rollback, break-glass), reads at most 64 KB, eight times the 8 KB a request's headers take on Spring Boot's servers by default, and refuses a larger body 400 before it is parsed (DR1-F-3).",
       "level": "control",
       "guards": [
         "control:EntryBudgetsTest#a client's change carries at most maxChangeOperations operations, an apply is not held to it",
         "spring-boot:ControlBodyLimitTest#a body within the limit reaches the control plane on both stacks, a larger one is a 400 that never does",
         "spring-boot:ControlBodyLimitTest#the limit is the document cap and 2 MB, 10 MB, and follows the cap",
-        "control:ControlDerivedTest#the body limit is the document cap and two megabytes, so it follows the cap"
+        "control:ControlDerivedTest#the body limit is the document cap and two megabytes, so it follows the cap",
+        "control:ControlBodyBoundTest#a large body to a route that carries no document is a 400 before it is parsed",
+        "control:ControlBodyBoundTest#a body at the small bound is read, one byte more is not",
+        "control:ControlBodyBoundTest#the routes that carry a document still read up to the document's bound",
+        "control:ControlBodyBoundTest#the small bound is eight request headers' worth"
       ],
       "pending": null
     },

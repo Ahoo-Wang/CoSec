@@ -174,7 +174,7 @@ description: "通过控制面安全地修改策略：校验与编译错误、sim
 | `setLimits` | 包含全部六个条件限制的 `limits`，每个都是与文档中相同的正整数，以及任意[条目预算](./language.md#entry-budgets) | 整体设置平台的限制：未写出的预算取默认值；没有 `limits` 时恢复默认值。其他类型的值返回 `400`。 |
 | `setAttributes` | `attributes`，与文档中相同的数组 | 设置平台声明的属性；没有 `attributes` 时删除该字段。不是属性数组时返回 `400`。 |
 
-一个变更最多带平台 `maxChangeOperations` 个操作（默认 20,000），控制 API 读取的请求体最多为 10 MB（文档上限再加 2 MB）：更大的变更在任何操作被检查之前即返回 `400`，请拆成几个变更提议（`CTL-41`，[条目预算](./language.md#entry-budgets)）。
+一个变更最多带平台 `maxChangeOperations` 个操作（默认 20,000），控制 API 读取的请求体最多为 10 MB（文档上限再加 2 MB）：更大的变更在任何操作被检查之前即返回 `400`，请拆成几个变更提议（`CTL-41`，[条目预算](./language.md#entry-budgets)）。其他不携带文档的路由（`simulate`、`explain`、`analyze`、变更的各步、回滚、break-glass）最多读取 64 KB，更大的请求体在解析之前即返回 `400`（DR1-F-3）。
 
 `ifMatch` 是条目按文档写法的 SHA-256：只有条目仍是这个样子时操作才生效。不想手写操作时，`POST /documents/{key}:apply` 接受整份文档（`{"document", "mode", "note"}`），并提议把当前修订变成该文档所需的操作：`MERGE` 只新增和修改，`REPLACE` 还会删除文档中没有的内容。
 
