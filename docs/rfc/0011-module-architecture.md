@@ -163,7 +163,7 @@ pnpm 工作区，有自己的锁文件，与 `wiki/` 的互不相见；不是 Gr
 | `document` | `engine`、`spi`，加 Jackson；没有日志门面 |
 | `runtime`、`control` | 以上，加日志门面；不得引用 Reactor、Spring、Servlet、Redis 客户端 |
 | `control-sdk` | `api`、`spi`、`document`；与 `runtime`、`control` 一样不得有 Reactor、Spring、Servlet、Redis 客户端，且运行时类路径上没有 `runtime` |
-| `backends` | `spi`、`document` 与自己的技术。**不依赖 `runtime`**：主代码不声明、运行时类路径解析不到、类不引用 `me.ahoo.cosec.runtime.*`（编译类路径不查：`cocache` 以 `compileOnlyApi` 用 `control` 实现 `ControlStore`）。对 `document` 只用 mapper 与它所存格式的编解码器（`ShadowCodec`）：后端只存字节，不读文档授予了什么。对 `control` 只经 `test/architecture` 里的数据白名单 |
+| `backends` | `spi`、`document` 与自己的技术。**不依赖 `runtime`**：主代码不声明、运行时类路径解析不到、类不引用 `me.ahoo.cosec.runtime.*`（编译类路径不查：`cocache` 以 `compileOnlyApi` 用 `control` 实现 `ControlStore`）。对 `document` 只用四样：唯一的 mapper（`CoSecJson`）、每种存储记录的格式号怎么读写（`StoredFormat`，`CTL-53`）、它所存格式的编解码器（`ShadowCodec`）、构造它返回的 `SnapshotDocument` 的唯一办法（`SnapshotDocuments`，只读文档头，`SNP-12`）：后端只存字节，不读文档授予了什么。对 `control` 只经 `test/architecture` 里的数据白名单 |
 | `edge`、`extensions` | `spi`、`document`、`runtime`。Reactor 只允许出现在 `edge` 与 `host`：`extensions` 不用（`cocache` 的例外见下表）。`openapi` 只依赖 `document`，运行时类路径上没有 `runtime`；`kafka` 对 `control` 只用变更监听端口 |
 | `host` | 全部；Spring 只允许出现在 `host` 与 `edge` |
 | 任何模块的 `main` | 不得依赖 `test/*` 与 `platform/*` |
@@ -179,7 +179,7 @@ POM 带进运行时的不得多于 Gradle 的运行时变体，仅编译期的 A
 
 | 例外 | 理由 |
 |---|---|
-| `cocache` 可以引用 `me.ahoo.cosec.document.json.CoSecJson` 与 `document.shadow.ShadowCodec`（都是 `@InternalCoSecApi`） | 存储格式只有一份配置；字节固定测试覆盖每一种存储类型 |
+| `cocache` 可以引用 `me.ahoo.cosec.document.json.CoSecJson`、`document.json.StoredFormat`、`document.shadow.ShadowCodec`（都是 `@InternalCoSecApi`）与 `document.SnapshotDocuments` | 存储格式只有一份配置，字节固定测试覆盖每一种存储类型；`StoredFormat` 是每种存储记录的格式号怎么读写（`CTL-53`），`ShadowCodec` 是它所存格式的编解码，`SnapshotDocuments` 是构造它返回的 `SnapshotDocument` 的唯一办法，只读文档头（`SNP-12`）。四项都不读文档授予了什么 |
 | `cocache` → `control`（`compileOnlyApi`），只到 `ControlStore` 的包与它签名所带的变更值 | `CoCacheControlStore` 实现控制面的 `ControlStore` |
 | `kafka` → `control`，只到变更监听端口与它的事件 | `KafkaChangeListener` 是控制面的 `ChangeListener` |
 | `gateway` → `webflux` | 网关过滤器运行在 WebFlux 桥上 |
@@ -196,7 +196,7 @@ POM 带进运行时的不得多于 Gradle 的运行时变体，仅编译期的 A
 | # | 决定 | 理由 |
 |---|---|---|
 | D1 | **项目名去掉 `cosec-` 前缀**（`:engine` 在 `core/engine`），根构建把 jar 名与 Maven `artifactId` 设为 `cosec-<name>`；构件坐标不变 | 与目录一致（Wow D87）。代价：CI 工作流、`property-stress.yml` 的 `modules` 输入、AGENTS.md 与文档里的 `:cosec-*` 全部改；`jmh-v7-v8.yml` 的 v7 一侧保留旧名 |
-| D2 | **starter 取消 Gradle 特性变体**，改为一个按类路径生效的自动配置模块 `cosec-spring-boot`；用户直接加技术模块（`cosec-cocache`、`cosec-webflux` …） | 特性变体只在 Gradle 里有效，Maven 用户只能手工补依赖（Wow D44）。**fail closed**：凡是由属性开启的安全功能（API Key、吊销、黑名单、必需的监听器、网关身份），所需模块不在类路径上时启动失败，错误信息写明要加的构件；规则 `STA-1`（`startup` 级）。starter 的启动检查见 §6.1 |
+| D2 | **starter 取消 Gradle 特性变体**，改为一个按类路径生效的自动配置模块 `cosec-spring-boot`；用户直接加技术模块（`cosec-cocache`、`cosec-webflux` …） | 特性变体只在 Gradle 里有效，Maven 用户只能手工补依赖（Wow D44）。**fail closed**：由属性或宿主的类路径开启的功能，缺它所需的东西（模块、必需的监听器、Redis 连接）时启动失败，错误信息写明要加什么；规则 `STA-1`（`startup` 级）。starter 的启动检查见 §6.1 |
 | D3 | **Jackson 作为核心模块的实现细节**：唯一的 mapper 在 `document`，`runtime`、`control` 可以在实现里用它 | 要挡在核心外的是 Reactor 与 Spring。条件：公共 API 只收发 `ByteArray`、`String` 或 CoSec 自己的类型；`PolicyDocumentCodec.decode(…, JsonNode)` 是 `@InternalCoSecApi`，`ConditionJson`、`RouteMapCodec.tree(…): ObjectNode` 是 `internal`，`testkit` 需要时以 `@InternalCoSecApi` 打开。否则 Jackson 的一次大版本升级就是 CoSec 的破坏性变更。这个 mapper 同时是严格的（§6.2） |
 | D4 | **ABI 校验与 API 分级**：Kotlin Gradle 插件的 `abiValidation` 进入 `check`，每个发布模块保存转储文件；`@InternalCoSecApi`（opt-in 为 ERROR，不进转储）、`@ExperimentalCoSecApi`（WARNING，进转储） | 核心模型的稳定靠构建守住，不靠评审（Wow D216、D282）。RC 时开启，GA 时冻结：此后转储的删除或签名改变即破坏性变更，PR 标题带 `!`。落地见 §6.3 |
 | D5 | **`gateway-server` 移到 `platform/`** | 它是给用户直接部署的产品（Docker 镜像），不是示例，也不是库：它是 CoSec 模块的一个应用，只依赖发布的模块，与 Wow 的 `platform/` 服务同一种定位。Maven 不发布它 |
@@ -290,7 +290,7 @@ RFC 0006 Q5（不改模块名）由 D1 修订。RFC 0008 L11（`cosec-api` 保�
 | `STA-1` | startup | 由属性或宿主类路径开启的功能，缺它所需的东西（模块、必需的监听器、Redis 连接）时启动失败并写明要加什么；没有功能用到的模块什么都不需要 |
 | `STA-2` | startup | 执法模式的 Spring Cloud Gateway 宿主，应用端口上经 HTTP 暴露了 `health` 以外、未被 `cosec.gateway.unprotected-endpoints` 列出的任何 Actuator 端点（操作端点或控制器端点）时启动失败，该属性在哪里都不接受 `gateway`；独立的管理端口上或管理服务器关闭时，任何端点都可以暴露 |
 | `STA-3` | startup | 不论 `spring.main.lazy-initialization` 怎么设，starter 的每个启动检查照样让启动失败，持续运行的组件照样在启动时开始：它们都是延迟初始化不会推迟的 `StartupTask` bean，没有一个以别的方式声明 |
-| `STA-4` | startup | 宿主打开的每个端口上，应用提供的东西都不经 CoSec 就不应答：WebFlux 应用的管理服务器在管道之下；WebMvc 应用与网关的管理服务器只提供 Actuator 的端点（网关的路由只在随机管理端口上、在网关的过滤器之下应答）；CoSec 自己的路由不在管理端口上 |
+| `STA-4` | startup | 在宿主打开的每个端口上，应用提供的东西没有一样不经 CoSec 就应答：WebFlux 应用的管理服务器在管道之下；WebMvc 应用与网关的管理服务器只提供 Actuator 的端点（网关的路由只在随机管理端口上、在网关的过滤器之下应答）；CoSec 自己的路由不在管理端口上 |
 | `STA-5` | startup | 应用声明了 `CorsConfigurationSource` 且没有自己的 CORS 过滤器时，starter 在 Spring MVC 与 WebFlux 上紧挨管道之前注册一个：预检请求由它应答、不被判定，其余请求照旧判定，不被允许的来源在管道之前被它拒绝；没有这个 bean 时什么都不注册 |
 | `DOC-5` | build | CoSec 读的每种存储格式与每个控制面请求体都拒绝重复的 key |
 
