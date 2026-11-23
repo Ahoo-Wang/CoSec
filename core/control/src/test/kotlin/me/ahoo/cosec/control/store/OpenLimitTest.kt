@@ -83,7 +83,13 @@ class OpenLimitTest {
     /** A change whose checks fail: a binding to a policy that is not there, which does not compile. */
     private suspend fun Changes.failed(by: Operator = ALICE_OP): ChangeRequest {
         clock.now = clock.now.plus(Duration.ofMinutes(1))
-        val binding = Binding(BindingId("b${ids.get()}"), SubjectRef.Anyone, BindingScope(Match.Any, Match.Any), PolicyId("nowhere"))
+        val binding =
+            Binding(
+                BindingId("b${ids.get()}"),
+                SubjectRef.Anyone,
+                BindingScope(Match.Any, Match.Any),
+                PolicyId("nowhere")
+            )
         return propose(by, ACME, 1, listOf(Operation.PutBinding(binding)), "failed").also {
             it.state.assert().isEqualTo(ChangeState.DRAFT)
         }
@@ -145,7 +151,10 @@ class OpenLimitTest {
         published()
         val unreadable = object : ControlStore by store {
             override suspend fun openChanges(document: SnapshotKey): List<ListedChange> =
-                listOf(ListedChange.Unreadable(ChangeId("x"), document), ListedChange.Unreadable(ChangeId("y"), document))
+                listOf(
+                    ListedChange.Unreadable(ChangeId("x"), document),
+                    ListedChange.Unreadable(ChangeId("y"), document)
+                )
         }
 
         val refused = refused { changes(unreadable).open() }
@@ -162,7 +171,11 @@ class OpenLimitTest {
                 expected: me.ahoo.cosec.spi.snapshot.SnapshotDigest?,
                 change: ChangeRequest,
                 previous: ChangeState?,
-            ): Boolean = if (change.state == ChangeState.ABANDONED) false else store.putChange(expected, change, previous)
+            ): Boolean = if (change.state == ChangeState.ABANDONED) false else store.putChange(
+                expected,
+                change,
+                previous
+            )
         }
         val changes = changes(racing)
         changes.failed()
