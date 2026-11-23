@@ -246,6 +246,7 @@ C3 → `SCP-1`、R1 → `PIP-2`）；它们对 7.x 用户意味着什么，写�
 | P15 | 义务只随 Permit 执行；被拒绝的请求不消耗限流配额 | `engine`、`runtime`：`RateLimitObligationTest`（守护测试） | `OBL-1` |
 | A5–A8 | 不能越权授权的可靠性 | `control`：`GrantPropertyTest`；`engine`：`PatternContainmentPropertyTest` | `GRT-1`–`GRT-4` |
 | P-B1–P-B3 | 没有边界时恒等；边界不放行没有它时不放行的；边界的决策与候选顺序无关 | `engine`：`EnginePropertyTest` | `BDY-1` |
+| 发布往返 | 转换后的文档经控制面 `apply` 发布，编译出结构相同的快照（RFC 0007 §12.3 中保留下来的一项） | 今天没有专门的测试；`cosec-migrate` 经控制面的存储写入由 `ControlWritesTest` 检查 | — |
 
 只为等价存在的性质（P3 新旧等价、P5 快照与仓库加载结构相同、快照来源的决策比较、按层引擎上的 P1、P2、P4）随切换删除。
 
