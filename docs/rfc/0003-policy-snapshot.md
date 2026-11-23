@@ -442,6 +442,9 @@ sequenceDiagram
 | F5 已安装修订 r，重新加载得到的 r+1 解码或编译失败，包括以 `VirtualMachineError`（如 `StackOverflowError`）结束的编译 | 安装 `Failed`，**不保留 r**（`SNP-8`） | 同 F1 |
 | F6 重新加载时读取失败（Redis 暂时不可用） | **保留已安装的 r**，`confirmedAt` 不前进 | 照常用 r；落后时长增长，按 §4.5 告警或对列出的租户失败即拒绝 |
 
+重载读到了 r+1、而它的编译超过期限仍未答（`SNP-22`，§4.3）按 F6 处理，不按 F5：编译没有给出“用不了”的答案，只是还没有答案，所以已安装的 r 继续使用，`confirmedAt` 不前进，
+由落后时长约束，列在 `fail-closed.tenants` 里的租户在上限之后失败即拒绝。冷加载与重编译的编译超时没有可以保留的修订，失败即拒绝（协调者 2026-11-23，审查发现 DR1-D-1）。
+
 F5 与 F6 的区别是有意的：F6 是"不知道有没有新版本"，旧修订仍是一份已发布的一致状态（RFC 0001 §7.1 的理由），由落后时长约束；F5 是"知道有新版本，
 但它无法使用"，失败即拒绝。F6 相对 7.0 的差异见 §7 X1。
 
@@ -602,7 +605,7 @@ AGENTS.md 的每条不变量在快照这一层如何成立，失败模式各由�
 | 不变量 | 如何成立 | 守护 |
 |---|---|---|
 | **Deny-first** | 快照只决定引擎读到哪些文档、哪个修订，不改变组合算法 | 引擎的性质测试（`EnginePropertyTest`）；视图的组成见 `DocumentSnapshotViewsTest` |
-| **Fail closed** | 读取失败、解码失败、编译失败、冷加载超时、编译期限到期，都让需要该文档的请求不确定（503，除非有 DENY 命中）；唯一的放宽是 F6（已安装的修订在重载失败期间继续使用），这是 RFC 0001 §7.1 已确认的决定，并且可以按租户失败即拒绝（`SNP-5`） | 下表 F1–F15 |
+| **Fail closed** | 读取失败、解码失败、编译失败、冷加载超时、冷加载与重编译的编译期限到期，都让需要该文档的请求不确定（503，除非有 DENY 命中）；唯一的放宽是 F6（已安装的修订在重载失败期间继续使用，重载的编译超过期限也算重载失败，§4.4），这是 RFC 0001 §7.1 已确认的决定，并且可以按租户失败即拒绝（`SNP-5`） | 下表 F1–F15 |
 | **One decision path** | 快照的失败都变成判定的原因（`SourceUnavailable`、`DocumentInvalid`），状态码只由 `StatusMapping` 给出 | `OneDecisionPathTest`、`WebAdapterParityTest` |
 | **No blocking on the event loop** | `peek` 不做 I/O、不经过 future；冷路径的编译在编译池上；存储的每个入口不阻塞 | `SnapshotColdLoadTest`（已安装时在调用方线程上完成，不碰任何执行器与存储；冷未命中不在调用方线程上编译）；`SnapshotStoreBlockHoundTest`（真实 Redis）；`PipelineBlockHoundTest` |
 | **Authorization is a pure decision** | 快照是不可变数据，引擎不做 I/O | `EnginePurityTest` |
