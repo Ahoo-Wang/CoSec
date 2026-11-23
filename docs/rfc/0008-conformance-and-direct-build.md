@@ -84,168 +84,105 @@ RFC 0002–0007 起初让每个阶段以"与 7.x 或与上一阶段等价"为切
 
 ### 3.1 位置
 
-新增一个只含测试的 Gradle 模块，目录 `conformance/`，项目名 `:conformance`，没有 `cosec-` 前缀（它不发布，也就没有 artifactId 的约定要遵守）：
+一个只含测试的 Gradle 项目，目录 `test/conformance/`，项目名 `:conformance`（RFC 0011 的分组目录与命名）：
 
-- 不进 `cosec-bom`，不应用 `maven-publish`；与 `cosec-core` 的 `verifyTestFixturesUnpublished` 同样做法，`check` 中的一个任务断言它不在任何发布物里。
-- 只有 `src/test`：依赖 `model/`、`engine/`、`runtime/`、`control/`、`cosec-core`（文档编解码与编译器），各自 PR 合入后再加上对应依赖。
-- 规则登记表与场景语料放在 `test/conformance/src/test/resources/`；已经存在的性质测试**不搬家**，留在各自的模块里（§3.5），登记表只引用它们。
+- **不发布**：不进 `cosec-bom`，不应用 `maven-publish`；根构建的 `verifyUnpublished` 在 `check` 中断言它不在任何发布物里（`:e2e` 也一样，§4.4.3）。
+- **只有 `src/test`**：依赖它要驱动的模块（`engine`、`runtime`、`control`，以及 `jwt`、`gateway`、`webflux` 用于经真实组件的场景）和 `testkit`。
+  场景格式的 `engine` 级与它的读取在 `cosec-testkit` 中（§6 Q11）：用户用同一份格式测试自己的文档，一致性套件复用它。
+- **规则登记表与场景**放在 `test/conformance/src/test/resources/`（§3.2、§3.3），变异体放在 `test/conformance/mutants/`（§3.7）。
+  守护规则的性质测试与单元测试**不搬家**，留在各自的模块里，登记表按 `项目:测试类#测试名` 引用它们。
+- wiki 场景页的示例（`wiki/examples/`）也在这里编译并运行（`DocumentationExamplesTest`），所以页面上的代码与文档样例由同一套检查守着。
 
-不用 `testFixtures`：场景要跨 `engine/`、`runtime/`、`control/` 三层运行，放进任何一个模块的测试夹具都会让它依赖上层模块。
+不用 `testFixtures`：场景要跨 `engine`、`runtime`、`control` 三层运行，放进任何一个模块的测试夹具都会让它依赖上层模块。
 
 ### 3.2 规则登记表
 
-`test/conformance/src/test/resources/rules.json` 是 8.0 规范性规则的唯一索引。每一条：
+`test/conformance/src/test/resources/rules/<族>.json`（每个文件是 `{"rules": [...]}`）是 8.0 规范性规则的唯一索引；登记表范围的说明在
+`rules/_meta.json`。`Corpus` 读取 `_meta.json` 与全部族文件，规则出现在别族的文件里、或族文件除 `rules` 之外还有别的内容时失败。每一条：
 
 ```jsonc
 {
   "id": "ALG-1",
-  "source": "RFC 0004 §6.1",            // 规则出自哪一节；多处时取定义它的那一节
-  "statement": "任何一条适用的 DENY 命中，决策为 Deny，不论别处有无错误、缺失或不可用",
-  "level": "engine",                    // engine | pipeline | control | build（ArchUnit、构建检查）
-  "properties": ["engine:FlatEnginePropertyTest#P1' adding a matching deny always denies"],  // 可选：守护它的性质测试
-  "pending": null                       // 尚未实现时写实现它的 PR，例如 "RFC 0005 PR-4"；切换 PR 合入时必须全部为 null
+  "source": "RFC 0004 §6.1",            // 规则出自哪一节；多处时取定义它的那一节，可以附审查发现或决定的编号
+  "statement": "...",                   // 规则本身；措辞以登记表为准
+  "level": "engine",                    // engine | analysis | pipeline | control | build | startup | timing
+  "properties": ["engine:EnginePropertyTest#P1' adding a matching deny always denies"],  // 可选：守护它的性质测试
+  "guards": ["runtime:PipelineTest#snapshotSourceFailureIs503"],                            // 可选：其他守护（单元测试、ArchUnit 规则）
+  "pending": null,                      // 尚未实现时写实现它的 PR；今天全部为 null
+  "superseded": null                    // 被取代时写取代它的规则 id
 }
 ```
 
-**编号**按领域取前缀，序号只增不复用；规则改变语义时新开一个 id，旧 id 标为 `superseded`，场景随之迁移：
+**级别。** `engine`、`analysis`、`pipeline`、`control` 的规则由场景守护（§3.3）。`build`（构建与源码的检查、ArchUnit 规则）、`startup`（实例怎样启动）
+与 `timing`（并发的加载怎样交错）的规则没有场景运行器能驱动，由它所列的测试守护；这些测试必须是 JUnit 会运行的单个测试，并列在
+`GuardAllowlist` 中该级别之下（§3.4），`timing` 级还要有一个随 `cosec.property.iterations` 扩大例数的性质测试（§3.5）。
 
-| 前缀 | 领域 | 定义出处 |
+**编号**按领域取前缀，序号只增不复用；规则改变语义时新开一个 id，旧 id 标为 `superseded`，场景随之迁移。今天的族：
+
+| 前缀 | 领域 | 主要出处 |
 |---|---|---|
-| `SCP` | 作用域解析与信任边界 | RFC 0004 §4.6；RFC 0001 P4 |
-| `MEM` | 成员关系、按主体吊销 | RFC 0004 §4.5 |
-| `BND` | 绑定的适用性、附加、平台层与租户层 | RFC 0004 §4.2–§4.4、§7.2 |
-| `BLK` | 黑名单 | RFC 0004 §4.7；RFC 0006 §5.4.4 |
-| `BRK` | break-glass | RFC 0004 §4.8；RFC 0007 §8 |
-| `ALG` | 扁平组合算法与候选顺序 | RFC 0004 §6.1、§6.3 |
-| `DOC` | 快照文档、编译检查、编解码 | RFC 0004 §7；RFC 0003 §4.4（F1–F15）；RFC 0007 §5.3、§6.3 |
-| `SNP` | 快照分发：一次评估一个快照、安装顺序、陈旧度、缓存 | RFC 0003 §4、§6 |
-| `CND` | 条件 AST：类型、求值、不存在的属性、成本 | RFC 0005 §3 |
+| `ACT` | 动作、资源、`http` 命名空间 | RFC 0005 §2、§5 |
+| `ALG` | 扁平组合算法与候选顺序 | RFC 0004 §6 |
 | `ANA` | 可分析性：索引键、`implies` | RFC 0005 §4 |
-| `ACT` | 动作、资源、`http` 命名空间、路由映射 | RFC 0005 §5 |
-| `IDX` | 编译执行与索引完整性 | RFC 0005 §6 |
-| `PIP` | Pipeline：状态码、取消、超时、桥接 | RFC 0006 §5–§7 |
+| `APR` | 审批与信任根 | RFC 0007 §7.3、§7.5 |
 | `ATR` | 外部属性与 `onMissing` | RFC 0006 §5.4 |
+| `BDY` | 平台边界 | RFC 0007 §7.6 |
+| `BLK` | 黑名单 | RFC 0004 §4.7；RFC 0006 §5.4.4 |
+| `BND` | 绑定的适用性、附加、平台层与租户层 | RFC 0004 §4.2–§4.4 |
+| `BRK` | break-glass | RFC 0004 §4.8；RFC 0007 §8 |
+| `CND` | 条件 AST：类型、求值、不存在的属性、成本 | RFC 0005 §3 |
+| `CTL` | 控制面：修订、发布流程、影子窗口、控制 API | RFC 0007 §5、§6、§10 |
+| `DOC` | 快照文档、编译检查、编解码 | RFC 0004 §7；RFC 0003 §4.4；RFC 0005 §3 |
+| `GRT` | 不能越权授权 | RFC 0007 §7.4 |
+| `IDN` | 身份、凭据、身份转发 | RFC 0009；RFC 0006 §5.3、§7.3 |
+| `IDX` | 编译执行与索引完整性 | RFC 0005 §6 |
+| `MEM` | 成员关系、按主体吊销 | RFC 0004 §4.5 |
+| `MIG` | 7.x 数据的转换与迁移 | RFC 0005 §7；RFC 0007 §5.8、§5.9 |
 | `OBL` | 义务与限流 | RFC 0006 §8 |
 | `OBS` | 观察与 REQUIRED 审计 | RFC 0006 §9 |
-| `TNT` | 租户隔离（数据面与控制面） | RFC 0004 §4.3、§10；RFC 0007 §7.2、§9.2 |
-| `CTL` | 控制面：修订、发布流程、严格编译 | RFC 0007 §5、§6 |
-| `GRT` | 不能越权授权 | RFC 0007 §7.4 |
-| `BDY` | 平台边界 | RFC 0007 §7.6 |
+| `PIP` | Pipeline：状态码、取消、超时、桥接 | RFC 0006 §5–§7 |
+| `ROL` | 角色与短形式权限 | RFC 0012 |
+| `RTE` | 路由映射 | RFC 0005 §5.3 |
+| `RTL` | 限流的应答 | RFC 0006 §8.3 |
+| `SCP` | 作用域解析与信任边界 | RFC 0004 §4.6；RFC 0001 P4 |
+| `SNP` | 快照分发：一次评估一个修订、安装顺序、陈旧度、缓存与上界 | RFC 0003 §4、§6；RFC 0013 §5.4 |
+| `STA` | starter 的装配与启动检查 | RFC 0011；RFC 0006 §7.3 |
+| `TNT` | 租户隔离（数据面与控制面） | RFC 0004 §4.3、§10；RFC 0007 §7.2、§9 |
 
-**初始登记**（RFC 0008 PR-1 以此为起点，逐节走完上表"定义出处"列中的每一条"必须 / 不得 / 一律"，补全登记表；补全后登记表本身就是规范的索引，
-RFC 正文与登记表不一致时按 AGENTS.md "以代码为准"的原则修 RFC 或修实现，不允许两者长期不一致）：
+**登记表与 RFC。** 每个 RFC 正文里的"必须 / 不得 / 一律"都在登记表里有一条规则（本文自己定下的几条见 §3.2.1）。
+RFC 正文与登记表不一致时，按 AGENTS.md "以代码为准"的原则修 RFC 或修实现，不允许两者长期不一致。
+RFC 0004 §5.3 的 C1–C6、RFC 0005 §8 的 D1–D3、RFC 0006 §11.4 的 R1–R3 不再是"差异类别"，而是登记表中的规则（例如 C1a → `ALG-4`、
+C3 → `SCP-1`、R1 → `PIP-2`）；它们对 7.x 用户意味着什么，写在 `wiki/operations/upgrading.md`（§4.4）。
 
-| id | 规则 | 出处 |
+#### 3.2.1 本文定下的规则
+
+下面几条规则的出处是本文自己（来自 RFC 0008 落笔前后的审查），陈述以登记表为准：
+
+| id | 规则（概要） | 出处 |
 |---|---|---|
-| `ALG-1` | 任何一条适用的 DENY 命中，决策为 `Deny`，不论别处有无错误、缺失或不可用（C1b） | RFC 0004 §6.1 |
-| `ALG-2` | 没有 DENY 命中、至少一条 DENY 出错时，决策为 `Indeterminate(MatcherFailed)` | RFC 0004 §6.1 |
-| `ALG-3` | 没有 DENY 命中、存在未解析的输入（缺失的附加、不可用或未加载的必需文档）时，决策为 `Indeterminate`，永远不是 `Permit` | RFC 0004 §6.1 |
-| `ALG-4` | ALLOW 出错按未命中处理（C1a） | RFC 0004 §6.1 |
-| `ALG-5` | 没有任何命中时为隐式拒绝 `Deny(null)` | RFC 0004 §6.1 |
-| `ALG-6` | 候选顺序只决定"记哪一条"（`by`），不决定决策的类型 | RFC 0004 §6.3 |
-| `ALG-7` | 策略级条件每次评估至多求值一次，只在它的某条语句成为候选时求值 | RFC 0004 §6.1 |
-| `BND-1` | 过期的绑定不适用 | RFC 0004 §4.2 |
-| `BND-2` | 主体只能附加本租户或平台层中 `attachable` 的策略（C5） | RFC 0004 §4.4 |
-| `BND-3` | 平台文档不接受角色绑定，应用文档只接受角色绑定 | RFC 0004 §7.1（#1029 落实） |
-| `BLK-1` | 被拉黑的主体一律拒绝，且只需要 `Platform` 文档 | RFC 0004 §4.7、§7.4 |
-| `BRK-1` | break-glass 主体同样受全部 DENY 约束（C2） | RFC 0004 §4.8 |
-| `BRK-2` | break-glass 绑定只在平台层、只绑定主体、必须有 `expiresAt` | RFC 0004 §4.8 |
-| `BRK-3` | break-glass 只能经控制面创建：双人、有上限的有效期、先写 REQUIRED 审计 | RFC 0007 §8 |
-| `SCP-1` | 声明的非空空间不在成员关系里时，结果为 `Rejected(SPACE_NOT_MEMBER)`（C3） | RFC 0004 §4.6 |
-| `SCP-2` | 宿主配置了应用时，客户端声明的不同应用被拒绝；没有声明时用宿主的应用（C4） | RFC 0004 §4.6 |
-| `SCP-3` | 匿名请求带 `CoSec-Space-Id` 时返回 401 | RFC 0004 §4.6（#1015 审查） |
-| `SCP-4` | 同一个 `CoSec-*` 参数在 Header 与 query 中的值不同时，请求无法无歧义解释，返回 400 | 本文（#1015 审查）；RFC 0006 §6.1 |
-| `SCP-5` | `Scope` 只能由 `ScopeResolver` 构造；任何解码路径（JSON、Header、缓存）都不反序列化出 `Scope` | RFC 0004 §4.1、§10 |
-| `MEM-1` | 成员关系标记与 token 中声明的角色或策略同时出现时，失败即拒绝 | RFC 0004 §4.5（#1027） |
-| `MEM-2` | `MembershipProvider` 不可用时为 `Indeterminate`，不会退回到 token 声明 | RFC 0004 §4.5.2 |
-| `TNT-1` | 另一个租户的文档不改变本租户主体的任何决策（P12） | RFC 0004 §10 |
-| `TNT-2` | 租户文档只能引用本租户或平台层；违反时编译失败 | RFC 0004 §7.2 |
-| `TNT-3` | 租户的主体只能写自己租户的文档（不经策略的硬性规则） | RFC 0007 §7.2 |
-| `DOC-1` | 悬空引用、跨租户引用是编译错误；数据面读到 `Broken` 条目时，到达它的请求失败即拒绝（F4、F5） | RFC 0004 §7.4；RFC 0003 §4.4 |
-| `DOC-2` | 编解码器拒绝编码或解码 `Match.Exactly("*")`：`*` 只表示 `Match.Any` | 本文（#1015 审查） |
-| `DOC-3` | 文档的 `schema` 不是本版本的格式时，解码失败，失败即拒绝 | RFC 0004 §7.1；RFC 0003 F3 |
-| `SNP-1` | 一次评估用到的每份文档只来自一个修订（P7） | RFC 0003 §6 |
-| `SNP-2` | 同一个 key 的安装顺序等于加载开始顺序（P6） | RFC 0003 §4.4 |
-| `SNP-3` | 快照缓存 `ttl = null`、读失败抛出；Redis 的 `maxmemory-policy` 不是 `noeviction` 时实例拒绝启动 | RFC 0003 §4.1；本文（#1006 审查） |
-| `CND-1` | 不存在的属性不等于任何值，包括另一个不存在的值和空串；`exists` 为假 | RFC 0005 §3.4、Q7 |
-| `CND-2` | 超过成本上界的条件编译失败 | RFC 0005 §3.5 |
-| `ANA-1` | 条件为真时，请求的属性值总在抽取出的索引键里（A1） | RFC 0005 §4.1 |
-| `ANA-2` | `implies(c1, c2) = YES` 时不存在满足 `c1` 而不满足 `c2` 的请求（A2） | RFC 0005 §4.2 |
-| `ACT-1` | 路径模板代入的值永远不改变模式 | RFC 0005 §2 J9；GHSA-2293-jx8h-56m8 |
-| `ACT-2` | 未映射的路由落进 `http` 命名空间；`service:verb` 的 ALLOW 不覆盖未映射的路由 | RFC 0005 Q10 |
-| `RTE-1` | 两条路由可能匹配同一个请求（同一方法、路径不能证明不相交）时，路由映射不加载：一个请求只有一个动作和一个资源 | RFC 0005 §5.3（#1079） |
-| `RTE-2` | 含 `/`（解码后的 `%2F`）的捕获值从不成为类型化资源 id 的一段：请求以 400 拒绝 | RFC 0005 §5.3、§5.1（#1079） |
-| `RTE-3` | 格式错误的路由映射、或含任何一条格式错误路由的映射不加载：路由映射整体加载或整体失败 | RFC 0005 §5.3（#1079） |
-| `IDX-1` | 索引的候选集 ⊇ 暴力匹配的命中集（I1、I2） | RFC 0005 §6.3 |
-| `PIP-1` | 状态码只由 `StatusMapping` 给出，三个适配器对同一请求回答一致 | RFC 0006 §6.3 |
-| `PIP-2` | `Indeterminate` 一律 503；500 只留给未建模的异常 | RFC 0006 §6.1 |
-| `PIP-3` | 外部取消从不产生 `Outcome`，下游从不被调用 | RFC 0006 §7.4 |
-| `PIP-4` | 任何 SPI 的失败或超时都不会产生 Permit（P13） | RFC 0006 §10.2 |
-| `ATR-1` | 外部属性取不到时，结果不会从 Deny / Indeterminate 变成 Permit（P9′） | RFC 0006 §5.4.3 |
-| `OBL-1` | 义务只随 Permit 执行；被拒绝的请求不消耗限流配额（P15） | RFC 0006 §8.2 |
-| `OBS-1` | BEST_EFFORT 监听器的任何故障不改变 `Outcome`；REQUIRED 失败只能把 Permit 改为 503 | RFC 0006 §9.3、§9.4 |
-| `CTL-1` | 候选含任何 `Broken` 条目时不发布，头不变 | RFC 0007 §6.3 |
-| `CTL-2` | 修订记录先于头写入，头带 `parent` | RFC 0007 §5.4 |
-| `CTL-3` | `simulate`、`explain`、`analyze` 与执法调用同一个 `Engine.evaluate`，解释由执法的同一条流程构造 | RFC 0007 Q22；本文（#996、#998 审查） |
-| `GRT-1` | 每个授出片段必须被授权者自己的某一条 ALLOW 包含，且不与授权者受到的非 `Anyone` DENY 重叠 | RFC 0007 §7.4.2 |
-| `GRT-2` | 判断不了的片段进入平台管理员审批，从不按"大概包含"放行 | RFC 0007 §7.4.3 |
-| `BDY-1` | 平台边界只能把 Permit 改成 Deny 或 Indeterminate（P-B2）；没有边界时恒等（P-B1） | RFC 0007 §7.6 |
+| `SCP-4` | `CoSec-Space-Id` 与 `CoSec-Device-Id` 只从请求头读取，从不从查询参数读取；同一个参数的几个值不同时，请求无法无歧义解释，答 400。空白值与非空白值也算不同；只有全部为空白时才算没有发送，空白只指 ASCII 空白 | 本节（#1015 的审查）；RFC 0006 §6.1（RC1-16） |
+| `DOC-2` | 编解码器既不编码也不解码 `Match.Exactly("*")`：`*` 只表示 `Match.Any` | 本节（#1015 的审查） |
+| `CTL-3` | `simulate`、`explain`、`analyze` 与执法调用同一个 `Engine.evaluate`，解释由执法的同一条流程构造；`simulate`、`explain` 与影子窗口的比较读执法会读的文档，按它的同一条规则（`ViewDocuments`） | RFC 0007 Q22；本节（#996、#998 的审查） |
 
-RFC 0004 §5.3 的 C1–C6、RFC 0005 §8 的 D1–D3、RFC 0006 §11.4 的 R1–R3 不再是"差异类别"，而是上表中的规则（例如 C1a → `ALG-4`、C3 → `SCP-1`、
-R1 → `PIP-2`）；它们对 7.x 用户意味着什么，写进 `upgrading.md`（§4.4）。
-
-> **实现说明（2026-10-27，#1093）**：登记表已按族拆成 `test/conformance/src/test/resources/rules/<FAMILY>.json`（每个文件 `{"rules": [...]}`，规则按族内原来的顺序），登记表范围的 `$comment` 在 `rules/_meta.json`；本节与全文中所有"`rules.json`"、"把规则加进 `rules.json`"都指规则所属族的文件。`Corpus.rules()` 读取 `_meta.json` 和全部族文件（按文件名排序），规则出现在别族的文件里、或族文件除 `rules` 之外还有别的内容时失败。拆分时共 96 条规则，每条与原来逐字节相同；原来族与族之间交错的顺序不保留。仍然修改 `rules.json` 的分支会因文件被删除而冲突，要把规则条目重新加到族文件里。
->
-> **实现说明（2026-10-27，#1097）**：登记表新增 `startup` 级别：与 `build` 一样，它的规则由所列的测试守护，没有场景在该级别运行（`RuleCoverageTest`）。`SNP-3`（启动时检查 `noeviction`）改为 `startup`，不再 `pending`。
-
-> **实现说明（2026-11-03，#1194，RC 修复批次 C）**：登记表的变动：
-> - 新增 `IDN-7`（身份转发按 scheme 选择加入）。
-> - 新增 `IDN-8`（凭据不下行：头、查询参数、cookie）。它由属性测试守护，场景运行器自己判断哪些凭据到了后端：用字面名字，查询与 cookie 也自己解析，不借用被测的函数。
-> - 新增 `IDN-9`（执法放行清掉客户端的 `CoSec-Identity`，`build` 级，由三个适配器的一致性测试守护）。
-> - 新增 `STA-2`（网关上暴露的 Actuator 端点，`startup` 级）。
-> - 修订 `SCP-2`、`SCP-4`、`SCP-7`、`TNT-4`、`PIP-10`、`CTL-3`。
-> - 场景格式新增 `explain` 一步，用来驱动控制面的 `explain`。
-
-> **实现说明（2026-11-04，#1200，RC 修复批次 D1）**：登记表的变动：
-> - 新增 `SNP-6`（周期性重新校验不能关掉，间隔 1 秒到 5 分钟，`startup` 级）、`SNP-9`（一个 `cosec.key-prefix`，旧前缀让启动失败，`startup` 级）。
-> - 新增 `SNP-7`（不存在的文档单独计数）、`SNP-8`（编译以 `VirtualMachineError` 结束也装为失败），都是 `timing` 级，由性质测试守护。
-> - 新增 `ALG-9`（一次扫描中，一份文档对同一策略的多条绑定只评估一次）、`DOC-4`（路径模式的成本上界），都是 `engine` 级。
-> - 新增 `PIP-12`（读到的请求头重复且值不同即 400，`pipeline` 级）、`DOC-5`（一个严格的 mapper，`build` 级）。
-> - 修订 `PIP-6`（格式错误的 `roles`、`policies`、`attributes` 声明是无效凭据）、`PIP-9`（值不同的重复头见 `PIP-12`）、`SNP-3`（不经 starter 创建的快照缓存同样固定，customizer 换不掉 CoSec 缓存的编解码器、加载器、key 过滤器与按条目的期限）。
-> - #1200 的 `:conformance:mutationCheck`：新增的变异体与补丁涉及改动文件的已有变异体，第 0 轮 43 个、第 1 轮审查修复后 37 个，全部被杀死（清单见 PR 描述的 Mutants 一节）。
-
-> **实现说明（2026-11-07，#1231，审计批次 E1a）**：登记表的变动：
-> - 新增 `ATR-8`（属性计划的完整性，含持有请求的边界；检查向两个阶段的提供者都取，`pipeline` 级，三个场景）。它即 RFC 0006 的性质 P14，此前没有规则编号。
-> - 新增 `OBL-4`（Redis 限流器把一个桶的两个窗口放在同一个 Cluster slot，`build` 级，由性质测试守护）。
-> - 修订 `SNP-6`：一次一轮，变更由可读之后第一个到达其文档的一轮装上，停住的一轮按单调时间判定、有读在途时从不放弃；新增四个守护。
-> - 新增变异体 10 个（`atr-8-*` 3 个，`obl-4-*` 3 个，`snp-6-*` 4 个），全部被杀死；`snp-4-*` 与 `pip-9-*` 的补丁随代码刷新。
-
-> **实现说明（2026-11-07，#1240，RC 修复批次 D2）**：登记表的变动：
-> - 新增 `CTL-23`（`simulate`、`explain` 在作用域解析到的租户上授权；点名其他租户的匿名请求答 400），一个正例与一个反例场景。
-> - 新增 `CTL-24`（控制 API 的错误体只带控制面自己的消息；存储值解码失败是 500，`build` 级，由 `ControlHttpTest` 守护）。
-> - 修订 `CTL-3`：被模拟的 `http` 资源与执法经同一个路径规范化，重复的请求头答 400（`PIP-12` 的一致性）；新增场景。`DOC-4` 新增一个场景与前导 `**` 收窄的计数守护。
-> - 新增的变异体（`ctl-23-*`、`ctl-24-*`、`ctl-3-*`、`doc-4-*`）全部被杀死，其中 `ctl-3-simulated-raw-path-decided` 来自审查者存活的探针。
-
-> **实现说明（2026-11-07，#1254，RC1-52）**：登记表新增 `IDN-10`（`pipeline` 级）：含落单 UTF-16 代理项的 id 在进入处被拒绝，两个不同的 id 从不共用一个存储的 key。两个正例、一个反例场景（成对的代理项照常），12 个变异体全部被杀死；`idn-3-inactive-principal-accepted`、`scp-7-control-characters-accepted`、`scp-7-app-keys-take-any-id` 随代码重新生成。#1254 的审查确认：`main` 上自 #1240 起有 6 个变异体不再能应用，由 E2a 重新生成。
-
-> **实现说明（2026-11-08，#1203，CoCache 8.0.0）**：`PIP-7` 新增两个守护：`cocache:CacheTtlPolicyTest#revocationTablesReadForTheWholeCommandTimeout`（吊销表的 `read-timeout` 固定为命令超时）与 `cocache:CoCache6ValuesTest#aRevocationCoCache6WroteIsAnErrorNeverNotRevoked`（CoCache 6 写的吊销从不读成"没有吊销"）；`SNP-3` 的守护随 lock 加 constrain 改写，新增变异体 `snp-3-store-of-record-unknown-read-unconstrained`、`pip-7-revocation-read-timeout-unconstrained`，`snp-3-cache-outside-starter-unpinned` 与 `brk-3-migrate-writes-break-glass` 随代码重新生成。#1203 的 `mutationCheck` 31 个全部被杀死。
+切换时继承的两条（`SNP-3` 的 `noeviction` 检查与缓存固定、`SNP-4` 的平台改变后重新编译）出处是 §4.4。
 
 ### 3.3 场景语料
 
-每个场景是 `test/conformance/src/test/resources/scenarios/<前缀>/<id>-<名字>.json` 下的一个文件：
+每个场景是 `test/conformance/src/test/resources/scenarios/<前缀>/<规则 id>-<名字>.json` 下的一个文件：
 
 ```jsonc
 {
   "rules": ["ALG-1"],
   "polarity": "positive",               // positive：规则的前提成立，断言规则的结论；negative：最接近的"差一点"，断言规则不起作用
-  "level": "engine",                    // 用哪一层的 runner 执行：engine | pipeline | control
+  "level": "engine",                    // 用哪一层的 runner 执行：engine | analysis | pipeline | control
+  "description": "...",
   "documents": {                        // 8.0 的快照文档原样，与生产读到的格式相同
     "platform": { "...": "..." },
     "apps": { "order-service": { "...": "..." } },
     "tenants": { "acme": { "...": "..." } }
   },
-  "memberships": { "...": "..." },      // 可选
-  "request": { "...": "..." },          // engine：主体、作用域、动作、资源、环境；pipeline：HttpFacts 与凭证
+  "credential": { "...": "..." },       // engine：谁在请求（租户、id、声明的角色与策略、成员关系来源）
+  "request": { "...": "..." },          // engine：空间、动作、资源、环境；pipeline：HttpFacts 与凭据；control：步骤
   "expect": {
     "decision": "Deny",                 // Permit | Deny | Indeterminate | Rejected
     "cause": null,                      // Indeterminate 时的 Cause 类型
@@ -259,186 +196,174 @@ R1 → `PIP-2`）；它们对 7.x 用户意味着什么，写进 `upgrading.md`�
   回放数据或已有实现的输出生成期望值；期望值与实现不一致时，按规则判断是实现错了还是规则没写清楚，后者修订 RFC 并更新登记表。
 - **正例与反例。** 正例让规则的前提成立并断言它的结论；反例构造"差一点"的输入（例如 `ALG-1` 的反例：DENY 的条件恰好不满足，此时不能是该语句的 `Deny`），
   防止一个总返回 `Deny` 的实现通过正例。
-- **runner** 按 `level` 分三种，随对应的 PR 加入：`engine`（文档 → 编译 → `SnapshotView` → 引擎，RFC 0004 PR-4 之后）、`pipeline`（`Pipeline.decide`，
-  全部 SPI 用内存实现，RFC 0006 PR-2 起）、`control`（`ControlPlane` 的写操作，断言接受、拒绝或进入审批，RFC 0007 PR-5 起）。
-  runner 只解释场景文件，不含任何判定逻辑。
+- **runner** 按 `level` 分四种，由 `ConformanceTest` 分派，只解释场景文件，不含任何判定逻辑：
+  - `engine`：文档 → 编译 → `SnapshotView` → 引擎（`cosec-testkit` 的 `EngineScenarios`），之前先像 Pipeline 那样解析成员关系与作用域；
+    每个场景在每个 trace 级别下评估，结果必须一致（`ALG-8`）。
+  - `analysis`：条件的索引键与 `implies`（`AnalysisRunner`）。
+  - `pipeline`：`Pipeline.evaluate`，SPI 用内存实现，另有经真实 JWT 校验器与网关过滤器的场景（`PipelineRunner`）。
+  - `control`：控制面，按场景的形状分为发布与存储（`StoreRunner`）、变更流程的步骤（`ChangeRunner`）与授出分析（`GrantRunner`）。
 - 现有模块里针对单条规则的单元测试（例如 RFC 0005 Q7 的 `ConditionEvaluationTest`）不必搬进场景，可以在登记表里作为该规则的守护引用；
-  但每条规则至少要有一个**场景**正例和一个场景反例，保证规则在端到端的文档格式上也成立。
+  但 `engine`、`analysis`、`pipeline`、`control` 级的每条规则至少有一个**场景**正例和一个场景反例，保证规则在端到端的文档格式上也成立。
 
 ### 3.4 可追溯检查
 
-`:conformance:verifyRuleCoverage`，挂在 `:conformance:check` 上：
+`:conformance:verifyRuleCoverage`（`RuleCoverage`），挂在 `:conformance:check` 上：
 
-1. 每个非 `pending`、非 `superseded` 的规则至少有一个 `positive` 和一个 `negative` 场景；
-2. 每个场景引用的规则 id 都在登记表里，且没有引用 `superseded` 的规则；
-3. 登记表引用的每个性质测试都存在（按模块与测试名查找源码中的测试显示名）；
-4. 打印仍为 `pending` 的规则及其 PR。
+1. 每条既不 `pending` 也不 `superseded` 的规则有一个 `positive` 与一个 `negative` 场景；`build`、`startup`、`timing` 级的规则没有场景，改由性质测试或守护测试覆盖；
+2. 每个场景引用的规则 id 都在登记表里、没有引用 `superseded` 的规则，并使用已知的极性与级别；
+3. 登记表引用的每个性质测试与守护测试都存在（按项目与测试名查找）；
+4. 打印仍为 `pending` 的规则及其 PR（今天没有）；
+5. `build`、`startup`、`timing` 级的规则只由 `GuardAllowlist` 为该级别列出的测试覆盖，每个都是一个 JUnit 会运行的测试（不是整个类，也没有 `@Disabled`）；
+   `timing` 级的规则至少有一个读 `cosec.property.iterations` 的性质测试；名单上没有任何同级规则引用的测试，也算失败。
 
-每个实现 PR 把它实现的规则从 `pending` 改为 `null`，并在同一个 PR 里补上正例和反例；漏补时 `check` 失败。切换 PR 的前提之一是 `pending` 为空（§3.9）。**2026-10-26 修订（路线图审查）**：这一前提现在约束 S1（§4.4）；
-登记表中写成 `"RFC 0008 PR-4"` 的 `pending`（例如 `SNP-3`）与 `rules.json` 的 `$comment` 由下一个改动 `rules.json` 的 PR 改为 `"RFC 0008 S1"`。
+`GuardAllowlist` 在代码里：为一条 `build`、`startup` 或 `timing` 级的规则指定守护测试是一次经过审查的代码改动，不只是族文件里的一行。
+改变规范性规则的 PR 同时改登记表与场景（根 AGENTS.md "Where a change has to land"）。
 
 ### 3.5 可执行的 oracle 与不变量性质
 
-下列性质已经合入，原地保留并登记；"状态"列给出出处。全部用固定种子的 `kotlin.random.Random`，不引入测试库（RFC 0002 §8.4 的做法）：
+性质测试原地留在各自的模块里，由登记表的 `properties` 引用。全部用固定种子的 `kotlin.random.Random`，不引入测试库（RFC 0002 §8.4 的做法）。
+下表是本文起初登记的性质及今天守着它们的测试；完整的清单是登记表各规则的 `properties`：
 
-| 性质 | 内容 | 模块 / 测试 | 状态 |
+| 性质 | 内容 | 项目：测试 | 规则 |
 |---|---|---|---|
-| 扁平算法 oracle | 对 RFC 0004 §4.2 `appliesTo`、§6.3、§6.1 的独立转写，未追踪的决策必须与引擎完全相等 | `engine/`：`flat/Oracle.kt`、`FlatEnginePropertyTest` | 已合入（#1029） |
-| P1′ | 加入一条适用、必然命中的 DENY，结果为 `Deny`（不排除 root，不接受 `Indeterminate`） | `engine/`：`FlatEnginePropertyTest` | 已合入（#1029） |
-| P2 | 决策与 trace 级别无关 | `engine/`：`FlatEnginePropertyTest` | 已合入（#1029） |
-| P8 | 打乱候选顺序，决策类型不变 | `engine/`：`FlatEnginePropertyTest` | 已合入（#1029） |
-| P9 | 缺失与不可用不会产生 Permit | `engine/`：`FlatEnginePropertyTest` | 已合入（#1029） |
-| P10 | 绑定索引与逐条扫描一致 | `engine/`：`FlatEnginePropertyTest` | 已合入（#1029） |
-| P11 | 作用域只能收窄 | `model/`：`scope/ScopeResolverPropertyTest` | 已合入（#1015、#1024、#1033） |
-| P12 | 另一个租户的文档不改变任何决策 | `engine/`：`FlatEnginePropertyTest` | 已合入（#1029） |
-| A1 | 索引键可靠 | `model/`：`condition/AnalysisPropertyTest`、`AdversarialAnalysisTest` | 已合入（#1036、#1037） |
-| A2 | `implies` 可靠 | `model/`：`condition/AnalysisPropertyTest`、`AdversarialAnalysisTest` | 已合入（#1036、#1037） |
-| A3、A4 | 规范化不改变语义；求值访问的节点数不超过上限 | `model/`：`condition/ConditionPropertyTest` | 已合入（#1022） |
-| Q 规则 | 按决定编号写成的规则用例，例如 RFC 0005 Q7（不存在不等于任何值） | `model/`：`condition/ConditionEvaluationTest` | 已合入（#1022）；登记为 `CND-1` 的守护 |
-| P6 | 安装单调 | `cosec-core`：`snapshot/SnapshotInstallOrderPropertyTest` | 已合入（#988） |
-| P7 | 一次评估只用每份文档的一个修订 | `cosec-core`：`snapshot/SnapshotConsistencyPropertyTest` | 已合入（#998）；#1114 改到 8.0 的快照路径（平台与租户文档经 8.0 编译器、扁平引擎）；视图由测试内的 `DocumentSnapshotViews` 副本拼装，生产拼装在并发重新发布下的变体是后续项 |
+| 扁平算法 oracle | 对 RFC 0004 §4.2 `appliesTo`、§6.3、§6.1 的独立转写，未追踪的决策必须与引擎完全相等 | `engine`：`Oracle.kt`、`EnginePropertyTest` | `ALG-1`、`ALG-2`、`ALG-4`、`ALG-5`、`ALG-9` |
+| P1′ | 加入一条适用、必然命中的 DENY，结果为 `Deny`（不排除 root，不接受 `Indeterminate`） | `engine`：`EnginePropertyTest` | `ALG-1` |
+| P2 | 决策与 trace 级别无关 | `engine`：`EnginePropertyTest` | `ALG-8`、`ALG-9` |
+| P8 | 打乱候选顺序，决策类型不变 | `engine`：`EnginePropertyTest` | `ALG-6` |
+| P9 | 缺失与不可用不会产生 Permit | `engine`：`EnginePropertyTest` | `ALG-3` |
+| P10 | 绑定索引与逐条扫描一致 | `engine`：`EnginePropertyTest` | `BND-5` |
+| P11 | 作用域只能收窄 | `model`：`ScopeResolverPropertyTest` | `SCP-1`、`SCP-2` |
+| P12 | 另一个租户的文档不改变任何决策 | `engine`：`EnginePropertyTest` | `TNT-1` |
+| A1、A2 | 索引键可靠；`implies` 可靠 | `model`：`AnalysisPropertyTest`、`AdversarialAnalysisTest` | `ANA-1`、`ANA-2` |
+| A3、A4 | 规范化不改变语义；求值访问的节点数不超过上限 | `model`：`ConditionPropertyTest` | `CND-2`、`CND-3` |
+| Q 规则 | 按决定编号写成的规则用例，例如 RFC 0005 Q7（不存在不等于任何值） | `model`：`ConditionEvaluationTest` | `CND-1` 的守护 |
+| P6 | 安装单调 | `runtime`：`SnapshotInstallOrderPropertyTest`（另有 `SnapshotSourceModelPropertyTest`） | `SNP-2` |
+| P7 | 一次评估只用每份文档的一个修订 | `runtime`：`SnapshotConsistencyPropertyTest` | `SNP-1` |
+| I1、I2 | 索引完整：候选集包含暴力匹配的命中集，索引参数不改变决策 | `engine`：`IndexPropertyTest` | `IDX-1` |
+| `ALG-7` 的性质形式 | 策略级条件不重复求值，`OFF` 下决策之后不再求值（从 RFC 0002 的 P4 移植） | `engine`：`IndexPropertyTest` | `ALG-7` |
+| P9′、P14 | 外部属性取不到时不会从 Deny / Indeterminate 变成 Permit；属性计划完整 | `engine`：`ExternalAttributesPropertyTest` | `ATR-1`、`ATR-8` |
+| P13、取消 | 任何 SPI 的失败或超时都不产生 Permit；外部取消从不产生 `Outcome` | `runtime`：`PipelineTest`、`PipelineCancellationTest`（守护测试） | `PIP-4`、`PIP-3` |
+| P15 | 义务只随 Permit 执行；被拒绝的请求不消耗限流配额 | `engine`、`runtime`：`RateLimitObligationTest`（守护测试） | `OBL-1` |
+| A5–A8 | 不能越权授权的可靠性 | `control`：`GrantPropertyTest`；`engine`：`PatternContainmentPropertyTest` | `GRT-1`–`GRT-4` |
+| P-B1–P-B3 | 没有边界时恒等；边界不放行没有它时不放行的；边界的决策与候选顺序无关 | `engine`：`EnginePropertyTest` | `BDY-1` |
 
-随后续 PR 加入（登记表中先为 `pending`）：
+只为等价存在的性质（P3 新旧等价、P5 快照与仓库加载结构相同、快照来源的决策比较、按层引擎上的 P1、P2、P4）随切换删除。
 
-| 性质 | 模块 | 随哪个 PR |
-|---|---|---|
-| I1、I2 索引完整 | `engine/` | RFC 0005 PR-4 |
-| `ALG-7` 的性质形式（从 RFC 0002 的 P4 移植：前置条件不重复求值，`OFF` 下决策之后不再求值） | `engine/` | RFC 0005 PR-4 |
-| P9′、P14 | `engine/`、`runtime/` | RFC 0006 PR-4 |
-| P13、取消从不放行 | `runtime/` | RFC 0006 PR-2 |
-| P15 | `runtime/` | RFC 0006 PR-5 |
-| A5–A8 不能越权授权的可靠性 | `control/`、`engine/` | RFC 0007 PR-6a（#1059） |
-| P-B1–P-B3 边界 | `engine/` | RFC 0007 PR-3 |
-| 发布往返：转换后的文档经控制面 `apply` 发布，编译出结构相同的快照（RFC 0007 §12.3 中保留下来的一项） | `control/` | RFC 0007 PR-8 |
-
-**取消的性质**（只为等价存在，随切换 PR 删除）：P3 新旧等价（`cosec-core` 的 `EngineParityPropertyTest`）、P5 快照与仓库加载结构相同
-（`SnapshotPolicySetPropertyTest`）、快照来源的决策比较（`cosec-cocache` 的 `SnapshotDecisionParityPropertyTest`）、按层引擎上的 P1、P2、P4
-（`engine/` 的 `EnginePropertyTest`，随按层引擎删除）。
-
-**百万例运行**：每个随机性质读取系统属性 `cosec.property.iterations`（缺省为该测试的固定例数）；根项目新增 `propertyStress` 任务，
-以 `-PpropertyIterations=1000000` 运行全部随机性质，不挂到 `check`。它取代 `:core:engineParity` 与 `:cocache:snapshotParity`。
+**百万例运行。** 每个随机性质读取系统属性 `cosec.property.iterations`（缺省为该测试的固定例数）。根构建为登记表引用的每个性质测试所在的项目
+注册一个 `propertyStress` 任务，以 `-PpropertyIterations` 的例数（缺省 1,000,000）只运行这些测试类，日志用 `config/logback-property-stress.xml`；
+根项目的 `propertyStress` 依赖它们。它们不挂到 `check`（`check` 按各测试的固定例数运行）。一百万例只在 CI 上运行：手动工作流
+`.github/workflows/property-stress.yml`（参数为被测的引用、例数与可选的模块过滤），按测试类拆成作业，测试与例数不变，一轮的长度取决于最长的一个类
+（测量见 `docs/reviews/2026-11/ci-efficiency.md`）；本机只跑小的例数（`./gradlew propertyStress -PpropertyIterations=1000`）。
 
 ### 3.6 安全不变量作为性质
 
 | 不变量 | 守护 | 层 |
 |---|---|---|
 | **Deny-first** | P1′、P8；`ALG-1`、`BRK-1` 的场景；Pipeline 层的 P13 | engine、pipeline |
-| **失败即拒绝** | P9、P9′、P13、`ALG-2`/`ALG-3`/`MEM-2`/`DOC-1` 的场景；控制面的 `ControlFailClosedTest`（RFC 0007 §11） | engine、pipeline、control |
-| **租户隔离** | P12；`TNT-2` 的编译检查；`TNT-3` 的 `ControlTenantIsolationTest` 与 P12 的控制面形式 | engine、control |
-| **不能越权授权** | A2（`implies` 可靠）、A5–A8；`GRT-1`/`GRT-2` 的场景，包括 RFC 0007 §7.4.6 的每一行 | control |
-| **不阻塞事件循环** | `RuntimeBoundaryTest`（ArchUnit，已合入）；`PipelineBlockHoundTest`（RFC 0006 PR-7）；`SnapshotStoreBlockHoundTest`（已合入） | build、pipeline |
-| **作用域可信** | P11；`SCP-5` 的 ArchUnit 规则：`Scope` 的构造器只对 `ScopeResolver` 可见，且没有任何 Jackson 模块、`Codec` 或 `KSerializer` 处理 `Scope` | build |
-| **一条决策路径** | `WebAdapterParityTest`（三个适配器对同一语料回答一致；它比较的是三个适配器，不是 7.x，原样保留） | pipeline |
+| **失败即拒绝** | P9、P9′、P13；`ALG-2`/`ALG-3`/`MEM-2`/`DOC-1` 的场景；控制面的 `ControlFailClosedTest`（RFC 0007 §11） | engine、pipeline、control |
+| **租户隔离** | P12；`TNT-2` 的编译检查；`TNT-3` 的 `ControlTenantIsolationTest` | engine、control |
+| **不能越权授权** | A2（`implies` 可靠）、A5–A8；`GRT-*` 的场景，包括 RFC 0007 §7.4.6 的每一行 | control |
+| **不阻塞事件循环** | `RuntimeBoundaryTest`（`test/architecture`，ArchUnit）；`PipelineBlockHoundTest`（`:e2e`）；`SnapshotStoreBlockHoundTest`（`cosec-cocache`） | build、pipeline |
+| **作用域可信** | P11；`SCP-5`：`Scope` 只由 `ScopeResolver` 构造，没有任何解码路径构造它（`ScopeConstructionTest`） | build |
+| **一条决策路径** | `WebAdapterParityTest`（三个适配器对同一语料回答一致；它比较的是三个适配器，不是 7.x）；`OneDecisionPathTest` | pipeline、build |
 
 ### 3.7 变异检查
 
-> **2026-11-23 修订（#1871、#1874、#1875；测量见 `docs/reviews/2026-11/ci-efficiency.md`）**：变异检查怎么跑变了，证明的东西更强了。一个分片内的变异体依次共用一个临时工作区与一个 Gradle 守护进程，各自只重新构建补丁改动的部分。**杀死由对照证明**：补丁打上时至少一个测试失败，撤回后同一组测试在同一棵树上通过，才是 `KILLED`；撤回后仍失败是 `FAILS_WITHOUT_PATCH`（偶发失败的测试，或上一步留下了什么），不算杀死。判定仍只读结果文件：只有结果文件里失败的测试才算；超时是 `BUILD_FAILED`，不重试，超时前写出的结果不作数。每个变异体开始前，树必须与 `HEAD` 一致且没有任何结果目录；结论不是 `KILLED`、`SURVIVED`、`DOES_NOT_APPLY` 时，工作区换成新的，被放弃的构建写不进下一个变异体的树；撤不回补丁则整轮停下。说明里每个 `--tests` 名字必须匹配其任务所属模块里的测试类（`MutationCheckTest`），移动测试类时说明要跟着改。全量运行的并行数是工作流的输入（默认 8，发版门禁用 16）。§3.5 的一百万次属性压力按测试类拆作业，测试与次数不变。
+性质与场景能通过，不代表它们能发现缺陷。所以每个安全不变量（§3.6）至少有一个手写的变异体，一个可重复执行的检查证明它被杀死：
 
-性质与场景能通过，不代表它们能发现缺陷。沿用 #1029 的做法（在 PR 中手写变异体，例如"DENY 扫描在第一个错误处停止""丢掉租户的 `*` 绑定"，
-确认有性质因此失败），并把它变成可重复执行的检查：
+- **变异体**是 `test/conformance/mutants/<名字>.patch`：对生产代码的一个小补丁，文件头写明它针对的规则 id、它破坏了什么、哪些测试必须抓住它，
+  后面是 `git diff` 写出的补丁：
 
-- `test/conformance/mutants/<名字>.patch`：每个变异体是对生产代码的一个小补丁，文件头注明它针对的规则 id 和预期失败的测试。
-  每个安全不变量（§3.6）至少一个变异体；初始一组：DENY 扫描在第一个错误处停止（`ALG-1`）、ALLOW 出错按命中（`ALG-4`）、跳过 `unresolved` 检查（`ALG-3`）、
-  `ScopeResolver` 不检查成员关系（`SCP-1`）、`bindingsFor` 返回其他租户的绑定（`TNT-1`）、`implies` 对 `or` 的一个分支返回 `YES`（`ANA-2`）、
-  `StatusMapping` 把 `Indeterminate` 映射为放行（`PIP-2`）、授出分析忽略授权者的 DENY（`GRT-1`）。
-- 手动任务 `./gradlew :conformance:mutationCheck`：对每个补丁，在一个临时 `git worktree` 中应用它，运行它声明的测试集，断言**至少一个测试失败**；
-  补丁应用失败也算失败（代码变了，变异体必须随之更新）。不挂到 `check`（每个变异体都要重新编译），切换 PR 之前运行一次并把结果附在 PR 上（2026-10-26 修订（路线图审查）：S1 之前）。
-- 新增或修改安全相关性质的 PR，在描述里列出它杀死的变异体；没有变异体能杀死的性质要说明原因。
+  ```
+  # Rule: ALG-1
+  # Mutant: the DENY scan stops at the first error
+  # Tests: :engine:test --tests me.ahoo.cosec.engine.EnginePropertyTest
+  ```
 
-是否引入 PIT 一类的变异测试工具是新依赖，需要维护者决定，见 §6 Q2。
+  `Tests` 一行是交给 Gradle 的任务路径（每个都是 `settings.gradle.kts` 中的项目），可以带 `--tests` 与一个模式；每个 `--tests` 名字必须匹配其任务所属项目里的
+  测试类，移动测试类时文件头要跟着改。`MutationCheckTest`（在 `:conformance:check` 中）检查每个文件头完整、任务路径可用、测试名存在，并要求
+  **每个补丁都能应用到工作区**：一次重构移走了变异体所破坏的代码，`check` 就失败并点名这个补丁，要在代码的新位置重写一个破坏同一性质的变异体。
+  `check` 只证明补丁能应用，不证明打上补丁的树能编译：改编译选项或检查规则的 PR 要跑一次全量运行。
+- **判定。** `./gradlew :conformance:mutationCheck`（`-Pmutants=a,b` 只跑这些）。补丁打上时，它声明的测试至少一个失败；撤回补丁后，同一组测试在同一棵树上通过
+  （**对照**）：两者都成立才是 `KILLED`。判定只读 JUnit 的结果文件：只有结果文件里失败的测试才算，退出码与日志从不算，所以下载失败的依赖、崩溃的守护进程或
+  超时都冒充不了杀死。其余结论：`SURVIVED`（没有测试失败）、`DOES_NOT_APPLY`、`DOES_NOT_COMPILE`（代码变了，变异体必须随之更新）、
+  `FAILS_WITHOUT_PATCH`（撤回后仍失败：偶发失败的测试，或上一步留下了什么；不算杀死）、`BUILD_FAILED`（构建以别的原因失败两次，或超过 30 分钟：
+  它说明不了变异体，重跑，不为它写测试；超时不重试，超时前写出的结果不作数）。只有全部 `KILLED` 才通过。
+- **怎么跑。** 一次运行的变异体在一个临时 `git worktree`（`MutantTree`）里依次检查，共用一个 Gradle 守护进程，各自只重新构建补丁改动的部分。
+  每个变异体开始前，树必须与 `HEAD` 一致，所有 JUnit 结果目录先删掉，所以结论只来自它自己的构建；结论不是干净的通过（`KILLED`、`SURVIVED`、
+  `DOES_NOT_APPLY`）时，工作区换成新的，被放弃的构建写不进下一个变异体的树；撤不回补丁，整轮就停下，之后的变异体报告为没有检查。
+  每次运行都重新判定，不复用以前的结论。本机运行后守护进程会多留两分钟。
+- **全量运行在 CI 上**：`.github/workflows/mutation.yml`，每周一次和手动触发，不在本机跑。分片由补丁自己的文件头推导（`scripts/ci/mutation_plan.py`：
+  一个规则族一组，每组至多 15 个），新的族或变异体不需要改工作流；需要 Redis 的分片自己起一个。每个分片独立地恢复依赖缓存、预热构建，再运行 `mutationCheck`。
+  同时运行的分片数是工作流的输入（1 到 20，缺省 8，给拉取请求的 CI 留出 runner；16 只用于发版门禁）；`-f mutants=a,b` 只跑这些。
+  不挂到 `check`：每个变异体都要重新构建。
+- **PR 的义务。** 新增或修改安全相关性质的 PR 运行 `:conformance:mutationCheck -Pmutants=<它的变异体>`，在描述里列出它杀死的变异体；
+  没有变异体能杀死的性质要说明原因。全量运行报告某个变异体没被杀死，要么补丁错了，要么缺一个测试。
 
-> **实现说明（2026-10-27，#1086）**：初始的变异体已实现，另有八个：ALLOW 优先的 deny-first、失败的 DENY 被忽略、缺失属性使每条 DENY 失效（`onMissing`）、平台之外的 `nomatch`、租户名下的角色绑定、过期的绑定、任意租户中的 break-glass、不可用的认证器被当作匿名。`./gradlew :conformance:mutationCheck` 共 16 个变异体，全部被杀死（`-Pmutants=a,b` 选子集）：每个补丁在临时 `git worktree` 的 `HEAD` 上应用，要求被改动模块的测试源码能编译，再运行声明的测试，要求 JUnit 报告里至少一个失败；补丁不再适用（`DOES_NOT_APPLY`）或不再编译（`DOES_NOT_COMPILE`）也算失败。运行器是 `conformance` 测试源码里的 `MutationCheck.kt` 的 `main`，`MutationCheckTest` 检查每个补丁的文件头完整。`tnt-1`、`brk-4` 原先只被引擎测试杀死，#1093 为它们补了 `TNT-1`、`BRK-4` 的场景，现在只靠 `:conformance:test` 即被杀死。BDY-1（平台边界）的变异体尚未补。S1 之前运行并附上结果的要求不变。
+不引入 PIT 一类的变异测试工具（§6 Q2）。
 
 ### 3.8 性能：绝对预算
 
-JMH 预算保留，但比较对象从"上一阶段"改为 **7.0 的实测数字**。它们是产品目标：8.0 不能比它取代的版本慢。它们**不是**兼容门槛，
-不要求 8.0 的任何行为与 7.0 相同。
+JMH 预算比较的对象是 **7.0**。它们是产品目标：8.0 不能比它取代的版本慢。它们**不是**兼容门槛，不要求 8.0 的任何行为与 7.0 相同。
 
-- **基线**：在空闲机器上，从标签 `v7.0.1` 构建并运行 7.0 的基准（`SimpleAuthorizationBenchmark`、`RateLimitingAuthorizationBenchmark`；端到端压测用
-  同一标签的 `cosec-gateway-server`），方法同 RFC 0002 §7.2（JDK 25、5 次预热、10 次迭代、3 个 fork、`-prof gc`、负载 < 1、交替三轮）。
-  7.x 路径从 `main` 删除之后，基线仍从标签构建；每次比较都在同一台机器上重跑基线，不跨机器比较存下来的数字。结果记在 `docs/perf/rfc-0008-baseline/`。
-  已有的 [`docs/perf/7.0-vs-6.1.0`](../perf/7.0-vs-6.1.0/README.md) 在 JDK 17 上、负载 2.3–3.3 时录制，只作参考。
-- **预算**（场景按 7.0 基准的定义，8.0 一侧用 `cosec-migrate convert` 转换后的同一份合成数据）：
+- **怎么比较。** 手动工作流 `.github/workflows/jmh-v7-v8.yml` 在同一台 CI runner 上交替运行 7.0.x 与 8.0 的成对基准（`SimpleAuthorizationBenchmark` 与
+  `EngineAuthorizationBenchmark`、`SecurityPipelineBenchmark` 与 `PipelineBenchmark`），每个场景 8.0 对 7.x 的速度比例中位数不低于阈值（缺省 100 %）才通过；
+  共享的 runner 上只有比例有意义，绝对数字不跨机器比较（§6 Q7）。8.0 一侧用 `cosec-migrate convert` 转换的同一份合成数据。
+  常规的前后对比用 `.github/workflows/jmh-ab.yml`：同一个作业里交替跑基准与候选，只报相对比例。从 `v7.0.1` 标签录制的参考基线在
+  [`docs/perf/rfc-0008-baseline/`](../perf/rfc-0008-baseline/README.md)，端到端切片的测量在 [`docs/perf/e2e-slice/`](../perf/e2e-slice/README.md)；
+  [`docs/perf/7.0-vs-6.1.0`](../perf/7.0-vs-6.1.0/README.md) 只作参考。
+- **预算**：
 
 | 预算 | 场景 | 目标 | 出处 |
 |---|---|---|---|
-| 编译执行的授权吞吐 | `global`、`role`、`none`、`role-heavy` | 不低于 7.0 的 100 %；B/op 不高于 7.0 | RFC 0005 Q12、§9.3 |
-| Pipeline 吞吐 | `global`、`role`、`none`、`blocked`、`rate-limited`、`anonymous`（`PipelineBenchmark`） | 不低于 7.0 的 `SecurityPipeline` + 装饰器链的 100 %（交替三轮的平均，任一轮不低于 97 %）；B/op 不高于 | RFC 0006 §13.1、Q24（基准从"第 4 阶段"改为 7.0） |
-| 端到端 | Gateway 与 WebMvc 示例服务，k6 的 `constant-arrival-rate` 定速（2026-10-26 修订：原为 wrk2） | 最大吞吐不低于 7.0 的 100 %；70 % 负载下 p99 不高于 7.0 的 105 % | RFC 0006 §13.1 |
+| 编译执行的授权吞吐 | `global`、`role`、`none`、`role-heavy`（`EngineAuthorizationBenchmark`） | 不低于 7.0 的 100 %；B/op 不高于 7.0 | RFC 0005 Q12、§9.3 |
+| Pipeline 吞吐 | `global`、`role`、`none`、`blocked`、`rate-limited`、`anonymous`（`PipelineBenchmark`） | 不低于 7.0 的 `SecurityPipeline` + 装饰器链的 100 %；B/op 不高于 | RFC 0006 §13.1、Q24 |
+| 端到端 | Gateway 与 WebMvc 示例服务，k6 的 `constant-arrival-rate` 定速 | 最大吞吐不低于 7.0 的 100 %；70 % 负载下 p99 不高于 7.0 的 105 % | RFC 0006 §13.1 |
 | 分配与策略规模无关 | `EngineBenchmark` 的 `bindings`、`statements` 参数 | 同一场景下 B/op 不随规模变化；10,000 条语句时吞吐不低于 10 条时的 50 % | RFC 0004 §12.1、RFC 0005 §9.3 |
 | 没有边界时零代价 | `boundary = none` | 与同一构建中去掉边界检查的对照相比，吞吐不低于 100 %、B/op 不高于 | RFC 0007 Q24 |
-| 编译 | `SnapshotCompileBenchmark`，8 MB 文档 | p99 ≤ 200 ms | RFC 0003 Q14 |
+| 编译 | 8 MB 文档 | p99 ≤ 200 ms | RFC 0003 Q14 |
 
-- **取消的阶段间比较**：RFC 0002 §7.1 的"不低于基线 95 %"与 §7.2 第 8 步"PR-6 前任一场景低于 90 % 即停止"、RFC 0003 §9.1 对 `engine` 的 95 %、
-  RFC 0004 §12.1 对 `layered` 的 95 %、RFC 0005 §9.3 对 `legacy` 语言的 95 %、RFC 0006 §13.1 对 `phase4` 的 100 %、RFC 0007 §14.1 对第 5 阶段的 100 %。
-  它们比较的是即将删除的中间形态。
-- 达不到预算时，与 RFC 0005 Q12 相同：切换 PR 停止，交回维护者决定。
-- **2026-10-26 修订（路线图审查）：尽早测量。** 预算不再只在切换时第一次测量。端到端切片（§4.4.3）一能运行，就按本节的方法测一次
-  Pipeline 吞吐（JMH）；RFC 0006 PR-7 之后再加 k6 的端到端测量（`constant-arrival-rate` 执行器，按 70 % 负载下的 p99 比较；2026-10-26 修订：维护者决定用 k6 取代 wrk2，wrk2 不在 Homebrew core）；之后每个扩展切片的 PR 重测一次，结果记在 `docs/perf/e2e-slice/`。
-  这些测量不是合入门槛：任何一项低于预算时，测量的 PR 照常合入，但立即把数字交给维护者（不等到 S1），由维护者决定先优化还是继续。
-  硬性门槛仍是 S1（§3.9）。理由：#1040 的路径模式解析与匹配测得是 Spring `PathPattern` 的 44–102 %，等到切换才发现差距，修复会落在关键路径的末端。
+- **门槛是 v7/v8 对比。** S1 的性能门槛是 `jmh-v7-v8.yml` 在每个场景上不低于 100 %（维护者 2026-10-27 决定），低于 100 % 的场景在 S1b 之前优化，不豁免；
+  它在 S1b（#1104）之前通过。空闲机器上的 JMH 与 k6 端到端测量不是门槛；端到端与编译两行今天没有对应的工作流或基准，作为目标保留。
+- **不做阶段之间的比较**：RFC 0002 §7.1 的"不低于基线 95 %"与 §7.2 第 8 步的 90 % 停止线、RFC 0003 §9.1 对 `engine` 的 95 %、RFC 0004 §12.1 对 `layered` 的 95 %、
+  RFC 0005 §9.3 对 `legacy` 语言的 95 %、RFC 0006 §13.1 对 `phase4` 的 100 %、RFC 0007 §14.1 对第 5 阶段的 100 % 都已取消：它们比较的是已删除的中间形态。
+- 达不到预算时，与 RFC 0005 Q12 相同：交回维护者决定。热路径的改动随 PR 附上 JMH 的前后对比（根 AGENTS.md 的不变量表）。
 
-> **2026-10-27 修订**：常规的前后对比可以用 CI 的 JMH A/B 工作流（`.github/workflows/jmh-ab.yml`，#1084）：同一个作业里交替跑基准与候选，只报相对比例。
->
-> **2026-10-27 修订（维护者决定）**：S1 的性能门槛改为 CI 上的 v7/v8 对比：手动工作流 `jmh-v7-v8.yml` 在同一台 runner 上交替运行 7.0.x 与 8.0 的基准，每个场景 v8 与 v7 的比例不低于 100 % 即通过。上面以空闲机器测量为准的预算、本节的 k6 端到端测量都不再是门槛。低于 100 % 的场景在 S1b 之前优化，不豁免。
+### 3.9 切换与 RC 的通过标准
 
-### 3.9 最终切换的通过标准
-
-切换 PR（§4.4）只有在下列全部满足时才能合入：
-
-> **2026-10-26 修订（路线图审查）**：切换拆成 S1–S5（§4.4）。第 1–5 条是 **S1** 的合入门槛：S1 之后 `main` 上没有回到 7.x 路径的办法，
-> 所以全部证据在 S1 之前齐备。第 6 条改为 **S5** 的合入门槛。S2–S4 只删除，各自要求全部模块的 `check` 通过（第 1 条），不重复第 2–5 条的证据。
+**切换的通过标准。** S1（§4.4）是不可回退点，合入前下列第 1–5 条全部满足；第 6 条约束 S5；中间的删除 PR 只要求第 1 条。都已满足（S1b #1104、删除 PR #1114、S5 #1131）：
 
 1. 全部模块的 `check` 通过，其中包括 `:conformance:check`：全部场景通过，`verifyRuleCoverage` 通过；
 2. 登记表中没有 `pending` 的规则：每条规则都有正例和反例；
-3. 全部随机性质在固定种子下通过，并且 `propertyStress -PpropertyIterations=1000000` 运行过一次并全部通过，结果附在 PR 上；
-4. `:conformance:mutationCheck` 中每个变异体都被杀死，结果附在 PR 上；
-5. §3.8 的预算全部满足，JMH 与压测结果附在 PR 上；
-6. 文档按 §4.4 更新，`wiki/` 的检查通过（2026-10-26 修订（路线图审查）：S5 的门槛，见 §4.4.1）。
+3. 全部随机性质在固定种子下通过，并且 `propertyStress -PpropertyIterations=1000000` 在 CI 上运行过一次并全部通过（§3.5）；
+4. `:conformance:mutationCheck` 中每个变异体都被杀死；
+5. §3.8 的 v7/v8 对比在每个场景上不低于 100 %；
+6. 文档按 §4.4 更新，`wiki/` 的检查通过。
 
 不再需要：任何回放证据、维护者的导出数据、`ReplayGate` 的报告、改动目录的分类计数。
 
-**RC 前提**（2026-10-26 新增）。切换 PR 合入不等于可以发 RC。任何 8.0 RC 之前还必须满足：
+**RC 前提。** 任何 8.0 RC 之前还必须满足：
 
-1. §4.6.1 的清单除"保留"项之外为空：切换 PR、RFC 0008 PR-5 与 PR-6 都已合入，"维护者决定"的项都已决定并按决定执行；
-2. §4.6.2 的守护 G1–G4、G6、G7 挂在 `check`（G4 挂在 `pnpm check:docs`）上并通过；G5 的人工复核做过一次，结果附在最后一个清理 PR 上；
-3. 每个清理 PR 都做完两轮审查。
+1. §4.6.1 的清单除"保留"项之外为空，"维护者决定"的项都已按决定执行（已完成：§4.6.3）；
+2. §4.6.2 的守护 G1–G4、G6、G7 挂在 `check`（G4 挂在 `pnpm check:docs`）上并通过；G5 的人工复核在 RC 之前做一次；
+3. 审查按第 6 条对 RC 候选提交整体进行，不再逐个补做已合入 PR 的第二轮：那些 PR 的代码大多已被 S1–S5、#1114、#1136、#1139/#1141 与 RFC 0009 重写或移动，
+   审查历史 diff 等于审查已不存在的代码；审查现在的代码同时覆盖模块之间的交互（维护者 2026-10-29："Go with that"）；
+4. S1–S5 都已合入（已完成）；
+5. **AOT 冒烟**（RFC 0001 §3.10）：网关与控制面两个镜像（`cosec-gateway-server`、`cosec-control-server`）用 JDK 25 训练 AOT cache，再以 `-XX:AOTMode=on`
+   （cache 不可用时启动失败，而不是静默退回）连接真实的 Redis 启动，并回答一组冒烟请求。它是 `.github/workflows/docker-deploy.yml` 的 `aot-smoke` 作业，
+   随每次推送到 `main`、每晚一次以及改动镜像的 PR 运行；RC 要求它在 RC 的提交上通过。GraalVM native image 不在 8.0 范围内；
+6. **RC 审查**：对集成后的整个系统做两轮深度审查，审查者不是被审代码的作者，只读。第一轮按模块读全部代码，用攻击者与运维两种眼光，发现编号定级，
+   写明所读文件与触发方式，列出未读部分；修复；第二轮由另一个会话重读修复后的结果，并专门覆盖第一轮未读的部分（维护者 2026-11-21，路线图 §4）。
+   至少覆盖：多租户隔离（`TNT-*`、`SCP-*`、成员关系与作用域、租户自助）；控制面的权限提升与授出分析的可靠性（RFC 0007 §7.3、§7.4.5、UNKNOWN 路径、审批）；
+   break-glass（`BRK-*`）；快照与缓存投毒（`SNP-*`、`DOC-*`）；problem+json 的信息泄露（RFC 0006 §6.1、§6.2）；拒绝服务（RFC 0005 §3.5 的成本、索引退化、
+   外部属性的超时与 `onMissing`、限流后端故障）。结论写进 [`docs/security/8.0-rc-review.md`](../security/8.0-rc-review.md)：威胁、结论、每个发现的严重程度与修复它的 PR。
+   每个发现在 RC 之前修复并带回归测试（与规则有关时是一致性场景，与不变量有关时再加一个变异体，§3.7）；只有维护者能把一个发现推迟到 RC 之后，
+   并在审查记录中写明理由。第二轮没有未解决的 S1、S2 级（最高两级）发现，才切 RC 候选；
+7. **示例与 `cosec-gateway-server` 在 8.0 上运行**（已完成，S1b）：`cosec-gateway-server`、`k8s/` 中的配置与端到端切片（§4.4.3）都使用 8.0 的装配与属性；
+8. **发版提交上的门禁**（维护者 2026-11-21）：全量变异检查（`mutation.yml -f parallel=16`）、一百万次性质压力测试（`property-stress.yml`）、
+   系统测试（`system-test.yml`，两种部署，另有 kind）、代码扫描与依赖告警为零；门禁的完整清单与其余发版条件在[路线图](../roadmap.md) §4。
 
-**2026-10-26 修订（路线图审查）**，RC 前提增加：
-
-4. **S1–S5 都已合入**，各自做完两轮审查（§4.4）。
-5. **AOT 冒烟**（RFC 0001 §3.10）：`cosec-gateway-server` 用 JDK 25 构建 AOT cache，再用这个 cache 启动并跑一组冒烟请求。
-   在 CI 中运行：`docker-deploy.yml` 已经在每个指向 `main` 的 PR 上构建镜像，并在镜像里用 `aot-train.sh` 训练 cache（#978）；在它之后加一个
-   `aot-smoke` 作业：以 `-XX:AOTMode=on` 启动刚构建的镜像（默认的 `auto` 在 cache 不可用时静默退回，`on` 让它启动失败），连接一个 Redis 服务容器，
-   发送冒烟请求：健康探针被放行；未认证访问受保护路由得到 401 与 problem+json；带有效 token 的请求被放行；被 DENY 的请求得到 403。
-   作业随 S1 加入（S1 把 `cosec-gateway-server` 改到 8.0 路径，此前它测的是 7.x 路径）；RC 要求它在 RC 的提交上通过。
-   库模块的 Spring AOT hint 与 `RuntimeHintsPredicates` 测试随各自的 PR 加入（RFC 0001 §3.10、RFC 0007 PR-9），不属于这个作业。GraalVM native image 不在 8.0 范围内。
-6. **RC 安全审查**：对集成后的整个系统做一次威胁模型审查，而不是逐个 PR 的审查。审查者不是被审代码的作者；结论写进
-   `docs/security/8.0-rc-review.md`：威胁、结论、每个发现的严重程度与修复它的 PR。至少覆盖：
-   - **多租户隔离**：数据面（`TNT-*`、`SCP-*`、成员关系与作用域）与控制面（`TNT-3`、租户自助，RFC 0007 §9）；
-   - **控制面的权限提升与授出分析的可靠性**：内置控制面策略与信任根（RFC 0007 §7.3）、`GrantAnalyzer` 的可靠性论证（RFC 0007 §7.4.5）与 UNKNOWN 路径、审批；
-   - **break-glass**：双人、有效期上限、先写 REQUIRED 审计（`BRK-*`，RFC 0007 §8）；
-   - **快照与缓存投毒**：谁能写快照文档、`schema` 与编解码器、条件读的重新校验、本地缓存、`noeviction`（`SNP-*`、`DOC-*`）；
-   - **problem+json 的信息泄露**：响应体里不出现策略、语句、属性值或内部异常，显式与隐式拒绝不可区分（RFC 0006 §6.1、§6.2）；
-   - **拒绝服务**：路径长度与段数、模式与条件的成本（RFC 0005 §3.5）、索引退化、外部属性的超时与 `onMissing`、限流后端故障。
-
-   每个发现在 RC 之前修复，修复带回归测试（与规则有关时是一致性场景，与不变量有关时再加一个变异体，§3.7）。审查在 S1 之后开始（集成的路径此时才存在），
-   在最后一个清理 PR 之后的提交上做最后一遍。只有维护者能把一个发现推迟到 RC 之后，并在审查记录中写明理由。
-7. **示例与 `cosec-gateway-server` 在 8.0 上运行**：`cosec-gateway-server`、`k8s/` 中的配置与端到端切片（§4.4.3，它同时是 §3.8 端到端预算用的
-   WebFlux 与 WebMvc 示例服务；仓库中没有别的示例模块）都使用 8.0 的装配与属性。这一项落在 **S1**：S1 不再装配 7.x 路径、删除 `init-repository` 等 7.x 属性，
-   `cosec-gateway-server` 不改就无法启动（Docker 构建中的 AOT 训练也会失败）。`k8s/` 的文件改名与镜像标签仍按 §4.6 的 L33 在清理 PR 中做。
-
-> **2026-10-29 修订（维护者："Go with that"）**：第 3、4 条（以及 RFC 0001 §6 中"每个 PR 做完两轮审查"）改为**对 RC 候选提交做两轮整体审查**，
-> 不再逐个补做已合入 PR 的第二轮。理由：那些 PR 的代码大多已被 S1–S5、#1114、#1136、#1139/#1141 与 RFC 0009 重写或移动，审查历史 diff 等于审查已不存在的代码；
-> 审查现在的代码同时覆盖模块之间的交互。
->
-> - **第 1 轮：RC 安全审查**（第 6 条，内容不变），在 RC 候选提交上做。
-> - **第 2 轮：按模块的正确性审查**，在第 1 轮的修复合入之后的提交上做：`model`/`engine`、`runtime`、`control`、`cocache`、适配器与 starter、`login`/`jwt`、`migrate`，
->   每个模块一个审查者，审查者不是被审代码的作者，只读。
-> - 两轮的发现都在 RC 之前修复，带回归测试；结论都写进 `docs/security/8.0-rc-review.md`。之后在最终的提交上再做一遍第 6 条的最后一遍。
-> - 预览版（`8.0.0-alpha.N`）不受这些前提约束，也不承诺兼容性（`docs/roadmap.md` §9，2026-10-29）。
-
-满足这些条件之后，是否发 RC、何时发，仍由维护者决定（RFC 0001 §6）。
+预览版（`8.0.0-alpha.N`、`8.0.0-beta.N`）不受这些前提约束，也不承诺兼容性。满足这些条件之后，是否发 RC、何时发，仍由维护者决定（RFC 0001 §6）。
 
 ---
 
