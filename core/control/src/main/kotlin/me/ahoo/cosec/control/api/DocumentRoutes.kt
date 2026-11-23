@@ -45,6 +45,7 @@ import me.ahoo.cosec.control.change.ChangeRequestCodec
 import me.ahoo.cosec.control.change.InvalidControlRequestException
 import me.ahoo.cosec.control.change.ownerOf
 import me.ahoo.cosec.control.change.requireRequest
+import me.ahoo.cosec.control.lifecycle.ControlDerived
 import me.ahoo.cosec.document.PolicyDocument
 import me.ahoo.cosec.document.PolicyDocumentCodec
 import me.ahoo.cosec.model.decision.DocumentKind
@@ -67,14 +68,14 @@ internal class DocumentRoutes(private val plane: ControlPlane) : RouteHandler {
         val key = documentKey(unescaped(keyText))
         return when (verb) {
             null -> revisions(operator, request, key, segments.drop(1))
-            "apply" -> post(request) {
+            "apply" -> post(request, ControlDerived.MAX_BODY_BYTES) {
                 val (desired, mode) = desired(key, it)
                 val change = plane.apply(operator, key, desired, mode, it.optText("note").orEmpty())
                 changeResponse(plane, operator, change, CREATED)
             }
 
             // `CTL-78`: the check of an `:apply`, the same body, stored nowhere.
-            "check" -> post(request) {
+            "check" -> post(request, ControlDerived.MAX_BODY_BYTES) {
                 val (desired, mode) = desired(key, it)
                 ChangeCheckAnswer.response(
                     plane.apply(operator, key, desired, mode, it.optText("note").orEmpty(), commit = false)

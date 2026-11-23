@@ -97,7 +97,7 @@ limit CoSec owns, and has no key. Each is logged once at startup, in a line that
 | How often each control-plane instance reclaims revisions | 1 hour, a constant: what is reclaimed is decided by `min-age` and `max-count` | |
 | When a record outside a revision chain, or a change listed and never written, is removed | one reclaim pass old: 1 hour | the reclaim interval |
 | How often shadowing changes are looked at | a fifteenth of `min-duration`, between 250 ms and 1 minute: `1m` at the default | [`cosec.control.shadow.min-duration`](#control-plane) |
-| The largest request body the control API reads | the document cap (8 MB) and 2 MB for the operations around it: 10 MB | the document cap |
+| The largest request body the control API reads | for a proposal, an `:apply` and their checks, the document cap (8 MB) and 2 MB for the operations around it: 10 MB; for every other route, 64 KB, eight times the 8 KB a request's headers take on Spring Boot's servers by default (a simulated request is one request's headers and attributes) | the document cap; a request's header size |
 | The initial size and an idle expiry of the revocation caches' local copy | none: the cache sizes itself, and `local-max-age` expires every entry | |
 
 Each share of the pipeline timeout is at least `1ms`; below a `cosec.pipeline.timeout` of 20 ms a token's two revocation
