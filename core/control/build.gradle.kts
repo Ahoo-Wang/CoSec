@@ -26,4 +26,6 @@ dependencies {
     implementation("tools.jackson.core:jackson-databind")
     // PIP-25: ContractFiles, which ClientContractTest checks contract/control/ with (CTL-61).
     testImplementation(testFixtures(project(":runtime")))
+    // CTL-85: the work budget's waits, on virtual time.
+    testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test")
 }
