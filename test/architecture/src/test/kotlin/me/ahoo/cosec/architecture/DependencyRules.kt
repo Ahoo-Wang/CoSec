@@ -63,7 +63,7 @@ object DependencyRules {
 
     class Exception(val from: String, val to: String, val reason: String)
 
-    /** Reviewed exceptions to [ALLOWED] (RFC 0011 §2, §5 and its amendment, #1140). */
+    /** Reviewed exceptions to [ALLOWED] (RFC 0011 §2, the lead of §3, and §5). */
     val EXCEPTIONS: List<Exception> = listOf(
         Exception("cocache", "control", "CoCacheControlStore implements the control plane's ControlStore"),
         Exception("kafka", "control", "KafkaChangeListener is the control plane's ChangeListener"),

@@ -24,6 +24,8 @@ import java.time.Instant
  * `CTL-65`, `CTL-77`): a principal of the platform tenant, in the control plane's app, with the roles it states, behind a
  * credential that lives one call. The in-process implementation hands it to the gate as a forwarded identity; the HTTP
  * one writes it into `CoSec-Identity`: one identity, so the control plane decides and records the same call the same.
+ * Its credential is named [Identity.Method.SERVICE] (`IDN-34`), a workload's: it never approves and is never the trust
+ * root, and as any credential but CoSec's own token it has no session and no break-glass.
  */
 @InternalCoSecApi
 object ServiceIdentity {
@@ -40,7 +42,7 @@ object ServiceIdentity {
         app = app,
         space = "",
         roles = roles,
-        credential = Identity.Credential(Identity.Method.API_KEY, credentialId(principal), now.plus(LIFETIME)),
+        credential = Identity.Credential(Identity.Method.SERVICE, credentialId(principal), now.plus(LIFETIME)),
         issuedAt = now,
         requestId = requestId,
     )

@@ -31,10 +31,11 @@
           "type": "string"
         },
         "method": {
-          "description": "How the principal authenticated: `jwt` and `api-key` are CoSec's own, and an authenticator of another credential names its own.",
+          "description": "How the principal authenticated: `jwt`, `api-key` and `service` are CoSec's own, `api-key` and `service` a workload's credential, and an authenticator of another credential names its own.",
           "examples": [
             "jwt",
-            "api-key"
+            "api-key",
+            "service"
           ],
           "minLength": 1,
           "type": "string"

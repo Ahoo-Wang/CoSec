@@ -37,7 +37,7 @@ description: "看清 CoSec 做出的每个决策以及文档的每次变更：�
 | `ERROR` | `error` | `ERROR` | 缺陷（`500`） |
 | `CANCELLED` | `cancelled` | 没有审计记录 | 离开的调用方 |
 
-事件的 `subject.method` 用 `CoSec-Identity` 对同一凭证使用的词说明主体如何认证：CoSec 自己的令牌为 `jwt`，`api-key`，或其他校验器的令牌被赋予的名字（默认 `token`）；没有凭证的主体用它的认证器命名。
+事件的 `subject.method` 用 `CoSec-Identity` 对同一凭证使用的词说明主体如何认证：CoSec 自己的令牌为 `jwt`，`api-key`，服务以自己的主体调用控制面时为 `service`（`IDN-34`），或其他校验器的令牌被赋予的名字（默认 `token`）；没有凭证的主体用它的认证器命名。
 
 starter 注册的监听器：
 

@@ -168,6 +168,23 @@ class IdentityGateTest {
         principal(identity.credential).apiKey.assert().isFalse()
     }
 
+    /**
+     * IDN-34: a forwarded identity named `service`, a service's own, is a workload's credential behind the gateway, by its
+     * reserved name (fail closed), with no break-glass; an API key is one too, and CoSec's own token is a person's.
+     */
+    @Test
+    fun `a forwarded service identity is a workload's credential, without break-glass - IDN-34`() {
+        fun principal(credential: Identity.Credential) =
+            evaluate(IdentityCodec.encode(identity.copy(credential = credential))).security!!.principal!!
+        val service = principal(Identity.Credential(Identity.Method.SERVICE, "service:svc-iam", now.plusSeconds(30)))
+        service.workload.assert().isTrue()
+        service.apiKey.assert().isFalse()
+        service.breakGlass.assert().isFalse()
+        service.session.assert().isNull()
+        principal(Identity.Credential(Identity.Method.API_KEY, "k1", now.plusSeconds(3600))).workload.assert().isTrue()
+        principal(identity.credential).workload.assert().isFalse()
+    }
+
     @Test
     fun `no header is anonymous, and the service decides`() {
         val outcome = evaluate()

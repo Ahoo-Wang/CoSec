@@ -1,0 +1,17 @@
+# Rule: IDN-34
+# Mutant: a service's own identity states jwt, CoSec's own token: break-glass reaches it and it passes for a person
+# Tests: :runtime:test --tests me.ahoo.cosec.runtime.identity.ServiceIdentityTest
+
+diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/identity/ServiceIdentity.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/identity/ServiceIdentity.kt
+index f11d77488..6d0facec4 100644
+--- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/identity/ServiceIdentity.kt
++++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/identity/ServiceIdentity.kt
+@@ -42,7 +42,7 @@ object ServiceIdentity {
+         app = app,
+         space = "",
+         roles = roles,
+-        credential = Identity.Credential(Identity.Method.SERVICE, credentialId(principal), now.plus(LIFETIME)),
++        credential = Identity.Credential(Identity.Method.JWT, credentialId(principal), now.plus(LIFETIME)),
+         issuedAt = now,
+         requestId = requestId,
+     )

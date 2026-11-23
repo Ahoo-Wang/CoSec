@@ -243,9 +243,10 @@ class ChangeAuthority(
         val escalations = ArrayList<Escalation>()
         analyst.breakGlass(base, candidate, escalations)
         // The trust root is the platform's administrators (RFC 0007 §7.3): a tenant principal holding cosec:approve on
-        // its own document approves others' changes, and its own are analyzed (RC1-10). A person, never an API key, and
-        // never through the service profile, where whoever reaches the port states who it is (CTL-81).
-        val trustRoot = !operator.serviceProfile && operator.platform && !approvals.apiKey(operator) &&
+        // its own document approves others' changes, and its own are analyzed (RC1-10). A person, never a workload's
+        // credential (IDN-34), and never through the service profile, where whoever reaches the port states who it is
+        // (CTL-81).
+        val trustRoot = !operator.serviceProfile && operator.platform && !approvals.workload(operator) &&
             holds(operator, key, ControlActions.APPROVE)
         if (trustRoot && !options.fourEyes) {
             return escalations
