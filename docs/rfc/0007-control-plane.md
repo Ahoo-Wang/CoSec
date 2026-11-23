@@ -607,25 +607,26 @@ EXPIRE 是每次读取都会施加的过期。规则有三条：
 |---|---|---|
 | `doc/<layer>[/<id>]` | `doc/platform`、`doc/app/order`、`doc/tenant/acme` | 一份文档 |
 | `doc/<layer>[/<id>]/<kind>/<entryId>` | `doc/tenant/acme/policy/editor-read`、`doc/tenant/acme/binding/b-17` | 文档里的一个条目，`kind` ∈ `policy`、`binding`、`catalog`、`boundary` |
-| `scope/<tenant>/<app>/<space>` | `scope/acme/order/team-a`、`scope/acme/order/*` | 绑定授出到的作用域；通配维度写成字面量段 `*` |
+| `scope/<tenant>/<app>/<space>` | `scope/acme/order/team-a`、`scope/acme/order/*` | 绑定授出到的作用域；通配维度写成字面量段 `*`；默认空间写成 `(default)` |
 
 | 动作 | 资源 | 用途 |
 |---|---|---|
 | `cosec:read` | `doc/…` | 读头、历史、变更请求 |
 | `cosec:write` | 条目 | 起草对条目的修改 |
-| `cosec:grant` | `scope/…` | 创建或修改指向该作用域的绑定（与 `cosec:write` 都要有） |
+| `cosec:grant` | `scope/…` | 创建或修改指向该作用域的绑定，以及让角色新派生出绑定的变更（与 `cosec:write` 都要有） |
 | `cosec:publish` | `doc/…` | 发布这份文档的变更（含回滚） |
 | `cosec:skip-shadow` | `doc/…` | 不经影子窗口发布；抢占暂存槽（§5.5） |
-| `cosec:approve` | `doc/…` | 批准含 UNKNOWN 片段的变更（§7.5） |
+| `cosec:approve` | `doc/…` | 批准含越权项的变更（§7.5） |
 | `cosec:unprotect` | 条目 | 修改或删除 `protected` 条目 |
-| `cosec:boundary` | `doc/tenant/<t>/boundary`、`doc/platform` | 设置租户边界或默认边界 |
-| `cosec:breakglass` | `doc/platform` | 申请、撤销 break-glass（§8） |
+| `cosec:boundary` | `doc/tenant/<t>/boundary`、`doc/platform` | 设置租户边界（`doc/tenant/<t>/boundary`）或默认边界（`doc/platform`）；只在平台持有，内置的 `cosec:tenant-admin` 不持有 |
+| `cosec:breakglass` | `doc/platform` | 申请、发布、撤销 break-glass（§8） |
+| `cosec:manage-roles` | `doc/tenant/<t>` | 角色类别：只写入或删除角色的变更不因"谁在授出"而等第二个人（§7.4.7） |
 | `cosec:simulate`、`cosec:explain`、`cosec:analyze`、`cosec:shadow-read` | `doc/…` | 只读工具（§10.3） |
 
-资源模式的段 `*` 匹配任意一段，包括字面量段 `*`：能在 `order` 的任何一个空间写绑定的人，也能写 `space = *` 的绑定。两者能授出的范围相同（后者还覆盖
-将来的空间）；需要区分时写一条 DENY：`{"eq": ["resource.var.space", "*"]}`。`wiki` 的控制面页面写明这一点。
-
-> **实现说明（2026-10-27，#1075）**：`cosec:boundary` 只在平台持有，内置的 `cosec:tenant-admin` 不持有，租户不能改自己的边界；`doc/tenant/<t>/boundary` 指租户的边界，`doc/platform` 指默认边界。
+- 资源模式的段 `*` 匹配任意一段，包括字面量段 `*`：能在 `order` 的任何一个空间写绑定的人，也能写 `space = *` 的绑定。两者能授出的范围相同（后者还覆盖
+  将来的空间）；需要区分时写一条 DENY：`{"eq": ["resource.var.space", "*"]}`。`wiki` 的控制面页面写明这一点。
+- **默认空间的占位符**（`SCP-9`，RC1-37）是 `(default)`，一个空间 id 语法本来就不接受的形式：以 `(` 开头的空间 id 保留给 CoSec，编译器拒绝其中的绑定，
+  `ScopeResolver` 把声明的保留空间判为 `SPACE_NOT_MEMBER`（403 `scope-rejected`）；数据面格式不变。
 
 ### 7.2 授权怎么执行
 
@@ -646,48 +647,73 @@ sequenceDiagram
         C->>K: check(operator, cosec:verb, resource)
         K-->>C: Permit / Deny / Indeterminate
     end
+    C->>S: 再确认一次：文档有变化就从头再判定
     C-->>H: 403（任一不是 Permit）或继续检查
 ```
 
 - **两层**：宿主的 Pipeline 认证请求、按路径做粗粒度授权（例如"控制面 API 只对已认证主体开放"）；细粒度的授权在 `ControlPlane` 内对每个目标调用
   `AuthorizationChecker`（RFC 0006 §7.6 的挂起形式），评估用的是宿主自己的引擎和快照。作用域：租户是操作者的租户，应用是 `cosec.control.app-id`
   （默认 `cosec-control`），空间是默认空间。
-- **先确认再授权**：控制面用一个独立的 `SnapshotSource`，每次检查前对用到的文档做一次条件读（RFC 0003 §4.5，几十字节的往返）。数据面接受有界的陈旧，
-  控制面不接受：一个刚被撤销的租户管理员不能在落后窗口里继续改策略。
-- **硬性规则**（不经策略，ArchUnit 与单元测试守护，作为策略写错时的最后一道线）：租户 T 的主体只能读写 `doc/tenant/T` 及其条目；`doc/platform`、`doc/app/*`
-  只有平台租户 `(platform)` 的主体能写；break-glass 只有平台租户的主体能申请和批准。
-- **失败即拒绝**：任何一个目标不是 Permit（包括 `Indeterminate`）就整个拒绝；`Indeterminate` 给 503，其余 403。
+- **逐个目标判定**（`CTL-8`）：每个条目上的 `cosec:write`、绑定授出到的每个作用域上的 `cosec:grant`，以及这一步自己在文档上的动作，都在记下任何东西之前判定。
+  一次变更使某个角色新派生出绑定时也需要 `cosec:grant`，不论是 `putRole`，还是让 `"*"` 角色多出权限的 `putCatalog` 或 `putPolicy`（`ROL-9`）。变更写入的条目 id
+  不含 `/`（V2，422），权限策略的 `perm:<app>/<id>` 除外：带 `/` 的 id 会给 `cosec:write` 的资源多出路径段，逃出以 `*` 结尾的规则。
+- **先确认再授权**：控制面用一个独立的 `SnapshotSource`，对用到的文档做条件读（RFC 0003 §4.5，几十字节的往返）。数据面接受有界的陈旧，控制面不接受：
+  一个刚被撤销的租户管理员不能在落后窗口里继续改策略。一次变更的全部目标在一次确认上判定，判定完再确认一次：其间文档变了就整批重新判定，所以变更进行中被撤销的
+  操作者与每个目标之前都确认一次时同样被拒绝；确认不了或一直在变的文档拒绝这次变更（503）。
+- **硬性规则**（不经策略，单元测试守护，作为策略写错时的最后一道线）：租户 T 的主体只能读写 `doc/tenant/T` 及其条目（`TNT-3`）；`doc/platform`、`doc/app/*`
+  只有平台租户 `(platform)` 的主体能写；break-glass 只有平台租户的主体能申请和批准；设置租户边界只归平台（`BDY-2`，§7.6）。
+- **失败即拒绝**：任何一个目标不是 Permit（包括 `Indeterminate`）就整个拒绝；`Indeterminate` 给 503，其余 403。判断不了调用者能否读一个变更时
+  （存储或快照读失败），点名它的每一步都是 503，不论变更存在与否（`CTL-17`）。
 - 平台边界也约束控制面动作（它们是普通的 Permit）：平台不给某个租户的边界里放 `cosec:*`，就等于关闭了这个租户的自助。
 
 ### 7.3 内置的控制面策略与信任根
 
 | 策略 | 语句 | 由谁绑定 |
 |---|---|---|
-| `cosec:platform-admin` | ALLOW `cosec:*` 于 `doc/**`、`scope/**` | `bootstrap`（§5.9），之后由平台管理员 |
-| `cosec:tenant-admin` | ALLOW `cosec:read`、`write`、`grant`、`publish`、`simulate`、`explain`、`analyze`、`shadow-read` 于 `doc/tenant/{t}/**` 与 `scope/{t}/**`，条件 `{"eq": ["resource.var.t", {"attr": "subject.tenant"}]}` | 平台管理员在 `Tenant(T)` 中绑定给 T 的某个角色 |
-| `cosec:tenant-viewer` | 同上，只有 `read`、`simulate`、`explain`、`analyze`、`shadow-read` | 租户管理员（被 `tenant-admin` 包含，§7.4 允许） |
+| `cosec:platform-admin` | ALLOW `cosec:*` 于 `doc/**`、`scope/**` | `bootstrap`（§5.9），之后由平台管理员；只能绑定在平台文档与平台租户自己的文档 `Tenant((platform))` 中 |
+| `cosec:tenant-admin` | ALLOW `cosec:read`、`write`、`grant`、`publish`、`simulate`、`explain`、`analyze`、`shadow-read` 于 `doc/tenant/{t}/**` 与 `scope/{t}/**`；ALLOW `cosec:skip-shadow` 于 `doc/tenant/{t}`；两条都带条件 `{"eq": ["resource.var.t", {"attr": "subject.tenant"}]}` | 平台管理员在 `Tenant(T)` 中绑定给 T 的某个角色 |
+| `cosec:tenant-viewer` | 同上第一条，只有 `read`、`simulate`、`explain`、`analyze`、`shadow-read` | 租户管理员（被 `tenant-admin` 包含，§7.4 允许） |
 
-- 三条都是编译时注入的平台策略（与 RFC 0004 §4.7 的 `cosec:blacklist`、§4.8 的 `cosec:root` 同样的做法），不存进 Redis，不能被修改或删除。
+- 三条都是编译时注入的平台策略（与 RFC 0004 §4.7 的 `cosec:blacklist`、§4.8 的 `cosec:root` 同样的做法），每份平台文档都有，不存进 Redis，任何文档都不能定义、
+  修改或删除它们；授出分析像读任何策略一样读它们的语句。
+- `cosec:tenant-admin` 只能跳过自己租户文档的影子窗口（`CTL-27`）：流量少的租户上窗口会一直开到最长时长，而变更授出的东西照旧经过分析、超出管理员所持有的照旧要审批；
+  这条策略不让任何人跳过别的租户的文档，绑定给平台主体也一样。
+- `cosec:platform-admin` 只能绑定在平台文档与 `Tenant((platform))` 中，租户与 app 文档里的这种绑定编译失败（`TNT-2`，RC1-36）。`bootstrap` 把第一位管理员绑定在平台租户的
+  文档中（§5.9）；那份文档的主体都是平台自己的主体。
 - 指向它们的绑定用作用域 `(cosec.control.app-id, 默认空间)`：控制面只在这个作用域里检查自己的动作（§7.2）。写成 `(*, *)` 也能工作，但授出分析会要求授权者
   在 `*` 上拥有它（§7.4.3 的 `covers`），经角色得到的权限做不到。
-- **信任根是持有 `cosec:approve` 的平台管理员**：他们本来就能批准任何越权的变更，所以他们自己的变更不做授出分析（§7.4.3 第 0 步），但照常校验、编译、
-  影子和审计。break-glass 例外：总是双人（§8）。
+- **信任根**（`APR-3`）是**平台租户中**对目标文档持有 `cosec:approve` 的人：他们本来就能批准任何越权的变更，所以他们自己的变更不做授出分析（§7.4.3 第 0 步），
+  但照常校验、编译、影子和审计；`cosec.control.approval.four-eyes=true` 时，分析说不清的部分要另一位平台主体批准（§7.5）。有三类主体不是信任根：
+  - 持有 `cosec:approve` 的**租户主体**：它能批准别人在本租户文档上的变更，它自己的变更照常分析（RC1-10）；
+  - **工作负载的凭据**（API key，或服务以自己的主体调用控制面时声明的身份，凭据名为 `service`）认证的主体，不论它持有什么（`IDN-34`，§7.5）；
+  - 经**服务配置**（控制面宿主的服务端口，或门面 `ControlService`，§10.2）发来的请求：那里的身份只是由网络放行的某个工作负载声明的，所以在那里做出或发布的变更
+    不论声明的是谁都要分析，分析证明不了的等人在运维端口上批准（`CTL-81`）。这是请求的事实，不是身份的：同一个主体在运维端口上（包括转发的身份）仍保留豁免，
+    在那里就绪的变更经服务配置发布时再分析一次。
+- break-glass 例外：总是双人（§8）。
 
 ### 7.4 不能越权授权
 
 #### 7.4.1 什么算"授出"
 
-一次变更的操作先归一成"授出的语句片段"。不产生片段的变更只需要 §7.2 的写权限。
+一次变更的操作先归一成"授出的语句片段"。不产生片段的变更只需要 §7.2 的写权限。所有读"文档授出了什么"的地方都读展开后的文档（`RoleExpansion.effective`，
+RFC 0012 §6）：角色与短形式权限按它们派生出的绑定与策略计算。
 
 | 变更 | 授出的片段 | 授出到 |
 |---|---|---|
 | 新增或修改绑定 `b → P` | `P` 的每条 ALLOW | `b.subject`，作用域 `b.scope` |
 | 修改策略 `P`：新增 ALLOW，或把 ALLOW 改得不再被原语句包含（§7.4.4 的收窄判定不成立） | 新的或改过的那条 ALLOW（整条，不是差量） | 当前指向 `P` 的每条绑定（同一文档内的，以及经反向索引找到的）各自的主体与作用域 |
 | 把 `P` 设为 `attachable`，或修改可附加策略的 ALLOW | `P` 的每条 ALLOW（或改过的那条） | T 的任何已认证主体，作用域 `(*, *)`（附加的作用域，RFC 0004 §4.4） |
+| 写入角色，或让角色多出权限（RFC 0012） | 角色新派生出的每条绑定的每条 ALLOW，逐个权限分析（`ROL-9`） | 角色的成员，作用域为角色的应用与空间 |
+| 租户删除自有的、平台也定义的同 id 策略 | 平台那条策略的每条 ALLOW（`GRT-4`，RC1-9） | 租户里仍指向该 id 的每条生效绑定；平台策略可附加时也授给附加 |
 | 删除或放宽 DENY | 不产生片段，见 §7.4.4 | — |
 | 删除绑定、删除 ALLOW、收窄 ALLOW、新增 DENY、修改 `Catalog` | 不产生片段（收窄，或不参与评估） | — |
 
-一条 ALLOW 的动作列表与资源列表按笛卡儿积拆开：语句"`[order:read, order:list]` 于 `[order/*, invoice/*]`"是四个片段，每个片段单独判断。
+- 一条 ALLOW 的动作列表与资源列表按笛卡儿积拆开：语句"`[order:read, order:list]` 于 `[order/*, invoice/*]`"是四个片段，每个片段单独判断。
+- **指向不存在策略的绑定**是一个 UNKNOWN 片段（`UNRESOLVED`，RC1-32）：分析无从知道它会授出什么。
+- **只比较改动的部分**（`CTL-50`）：被当作"此前已写入"而跳过的策略或语句，在授出所依赖的每个成员上都与上一版相同：逐个成员比较，或列明它为何不必比较；与上一版
+  完全相同的语句算收窄，不论条件写了什么。
+- **平台新增与租户同 id 的策略**：平台候选新增的策略 id 若已被某个租户文档使用（定义或绑定），拒绝发布并列出这些文档（RC1-9）：租户定义的 id 会在那个租户里二义
+  （引擎对此 fail closed），只绑定不定义的会被重新指向平台的那条。读不到头的租户按使用处理（503）。精确副本的例外见 §9.4。
 
 #### 7.4.2 语义
 
@@ -696,16 +722,16 @@ sequenceDiagram
 > **定义**：G 被 g 包含，当且仅当对任意请求 r——其主体 s ∈ S_G、作用域的 `(app, space)` ∈ σ_G、G 匹配 r——把 r 的主体换成 g（成员关系换成 g 的，其余
 > 动作、资源、环境、`scope.tenant/app/space` 不变）得到的请求 r[s := g]，在当前发布的快照下对 g 是 Permit。
 
-这就是 RFC 0001 §3.7"授权者本人在同一作用域内拥有的权限的子集"的精确含义：被授权者经 G 能做的每一件事，授权者本人在同一个资源、同一个作用域上也能做。
+这就是 RFC 0001 §3.7"授权者本人在同一作用域内拥有的权限的子集"的精确含义：被授权者经 G 能做的每一件事，授权者本人在同一个资源、同一个作用域上也能做（`GRT-1`）。
 这里的 Permit 只指策略求值，不含 RFC 0004 §4.6 的空间成员门：附加、主体绑定与 `Anyone` 绑定对 g 按 `(*, *)` 适用，g 在没有角色的 Space 里也算持有它们
 （RFC 0012 §7.3 的租户 Owner 写法依赖这一点）。被授权者仍受同一道门约束。
-下面的算法是这个定义的**可靠的**（不会误判为包含）但不完备的近似，判断不了就是 UNKNOWN。
+下面的算法是这个定义的**可靠的**（不会误判为包含）但不完备的近似，判断不了就是 UNKNOWN，从不按"大概包含"放行（`GRT-2`）。
 
 #### 7.4.3 算法
 
 ```
 analyze(g, change) : List<(piece, YES | UNKNOWN(reason))>
-  0. g 在目标文档上有 cosec:approve → 全部 YES（信任根，§7.3），记入审计
+  0. g 是信任根（§7.3）→ 全部 YES，记入审计
   1. pieces = §7.4.1 的拆分
   2. Allow(g) = g 的适用 ALLOW 语句，每条带 applicability：g 在哪些 (app, space) 上能用到它
         Anyone / Principal 绑定：绑定的 (app, space)
@@ -714,11 +740,13 @@ analyze(g, change) : List<(piece, YES | UNKNOWN(reason))>
   3. Deny(g) = g 的适用 DENY 语句中，**不是**经 Anyone 绑定得到的那些（Anyone 的 DENY 对被授权者同样生效，见下）
   for piece G = (action a, resource ρ, condition C_G, σ_G, S_G) in pieces:
       if g.tenant != T:                                         UNKNOWN(CROSS_TENANT)
+      if G 授给租户 (0) 的 Anyone:                              UNKNOWN(ANONYMOUS)
       σ' = refine(σ_G, keys(C_G, scope.app), keys(C_G, scope.space))       // RFC 0005 §4.1：条件里对作用域的约束收窄 σ_G
       C_G' = C_G 中 subject.tenant、scope.tenant 代换为 T                   // 对 g 和被授权者都等于 T
       found = false
       for H in Allow(g):
           if not covers(H.applicability, σ'):        continue    // σ' 的每个 (app, space) 都在 H 的适用范围内；σ' 含 * 时 H 必须在该维也是 *
+          if not expiresNoLater(H, G):               continue    // 见下"到期"
           if not (a ⊑ H.actions):                    continue    // RFC 0005 §5.5
           if not (ρ ⊑ H.resources with vars):        continue    // 见下"捕获变量"
           C_H' = specialize(H.condition, g)                       // 见下
@@ -730,28 +758,47 @@ analyze(g, change) : List<(piece, YES | UNKNOWN(reason))>
       else YES
 ```
 
+- **授权者的权利与引擎读的完全一致**：
+  - `subject.attributes.*` 经引擎所用的同一个函数读取（任何 JSON 类型的值的 `toString()`），共用而不是复制（`GRT-5`，RC1-2）。
+  - **app 文档全部读入**（`GRT-6`，RC1-4）：授权者的角色能触及的每个 app 文档都要读入，不论变更点名哪个 app。控制面经一份只列 app 的小列表
+    `<p>:control:apps:all`（带 `complete` 标志）列出全部 app 文档逐个读头（反向引用索引不记录 app 绑定自己的 `perm:` 策略）。app 首次写索引时加入列表；
+    列表缺失时以未完成状态创建；它在平台的首个修订写入成功之后、且没有列表缺少的有头 App 键时标为完成，`repair-references` 按同一判定标完成；
+    控制面启动时与每次回收都对账，发现完整的列表缺少有头的 App 键就标回未完成；本实例首次对账成功之前不信任列表（分析在首次读列表前先对账，失败即不可信，
+    最多每 30 秒再试一次；启动对账按退避重试，1 秒起翻倍，至多 1 分钟）。列表缺失、未完成、读不到、含无法解码的条目，或点名的 app 有头却不在列表中，
+    触及变更没点名的 app 的片段一律 UNKNOWN（`UNREADABLE`），所以列表丢失后 fail closed；触及的 app 文档读不到，或授权者在该 app 的成员关系读不到，同样 UNKNOWN。
+  - 平台与租户同 id 的策略在分析中是二义的：授权者经它什么也不持有。
+  - 边界不是策略：授出分析不把边界当作策略读（`CTL-32`）。
+- **到期**（`GRT-3`，RC1-3）：经带 `expiresAt` 的绑定持有的语句，只包含自身绑定不晚于它到期的片段；授给附加的片段、没有到期或到期更晚的片段不被它包含
+  （`NOT_COVERED` 的不足项 `EXPIRY`）。
 - **`specialize(C_H, g)`**：把 C_H 中只与授权者有关的属性代换成 g 的值并做常量折叠：`subject.id`、`subject.authenticated`（真）、`subject.tenant`（T）、
   `subject.roles`、`subject.scopedRoles`、`subject.attributes.*`（来自 g 的 token），以及 `scope.roles`（σ' 只有一个空间时代换为 g 在该空间的角色；多个空间时
   各空间的值不同就保留为原子，于是这条 H 只有在 C_G' 里有同样的原子时才能用上——而 C_G' 中的 `scope.roles` 指的是被授权者，所以实际上用不上，结果是
   UNKNOWN，可靠）。折叠后为真的原子从 `and` 中去掉，为假的让整个 `and` 为假。代换之后 C_H' 只剩与请求有关的属性（动作、资源、环境、`http.*`、
   `request.*`、`scope.app/space`），它们在 r 与 r[s := g] 上取值相同，这是可靠性论证的关键（§7.4.5）。
 - **捕获变量**：C_H 引用 `resource.var.x` 时，ρ 必须在同一个段位置捕获变量（名字可以不同，比较前按位置重命名 C_G' 中的引用）；做不到就把这条 H 当作不包含。
+  条件里的资源变量一次全部改名，不逐个替换（`GRT-8`）：逐个替换可能把两个不同的变量改成同一个，据此得出的"已包含"与"收窄"都是错的。
 - **`disjoint(D, G)`**：动作没有公共元素（`service:verb` 集合在通配展开后不相交），或资源模式在某个前导字面量段上不同。只做这两种语法判断，其余视为重叠。
 - **为什么排除 `Anyone` 的 DENY**（Q8）：经 `Anyone` 绑定（平台层，或 `Tenant(T)`）的 DENY 对每个被授权者按他们自己的属性同样生效，被授权者经 G 得到的访问
   仍受它约束。把它们计入，就会出现"平台规定没有安全许可的人不能导出；授权者没有许可，于是不能把导出授给有许可的人"这类误报，而这正是最常见的平台 DENY 形态。
   只与 g 个人有关的 DENY（主体绑定、角色绑定、附加）计入：g 被单独拒绝的事，不能转手授给别人。严格按 §7.4.2 定义的备选是全部计入（Q8）。
+- **为什么 `(0)` 的 `Anyone` 总是 UNKNOWN**（`GRT-7`）：默认租户 `(0)` 是未认证调用方所在的地方，授给它的 `Anyone` 就是授给匿名请求，从不按包含放行。
 - **只用一条 H**：一个片段必须被**某一条** H 整个包含，不做"被 H1 与 H2 的并集包含"的推理。拆片段（§7.4.1）已经覆盖了最常见的并集：多个动作、多个资源。
-- **复杂度**：片段数 × |Allow(g)| 次 `implies`；条件节点数 ≤ 64（RFC 0005 §3.5），每次是多项式时间。§14 给出预算。
+- **复杂度与预算**（`CTL-49`）：片段数 × |Allow(g)| 次 `implies`；条件节点数 ≤ 64（RFC 0005 §3.5），每次是多项式时间。一次分析至多做它的比较预算
+  （`ComparisonBudget.MAX_COMPARISONS`，四百万次）那么多次比较，按分析的顺序花；超出预算绝不回答"已包含"：预算耗尽时正在比较的语句算授出，其后到达的每个片段
+  算 UNKNOWN（`TOO_LARGE`），所以没比较过的部分需要审批。分析的代价随文档大小线性增长（10 万条目的变更约 4.7 秒）。§14 给出预算。
+- 越权项的原因是一个枚举（`Escalation.Reason`）：`CROSS_TENANT`、`NOT_COVERED`、`DENY_OVERLAP`、`UNRESOLVED`、`UNREADABLE`、`ANONYMOUS`、`TOO_LARGE`、
+  `NOT_ANALYZED`（只有信任根能单人做的平台、app 与边界变更，§7.4.4、§7.5）、`BREAK_GLASS`（§8）；信息性的 `TENANT_BINDINGS`（§7.5）、`ROLE_CLASS`（§7.4.7）、
+  `DETECTION_TIMED_OUT`（§5.4）；以及 `UNKNOWN`（更晚的版本写下、本版本不认识的名字，从不是信息性的）。
 
 #### 7.4.4 收窄与 DENY
 
-- **收窄的判定**（语法）：新语句 S' 相对旧语句 S 是收窄，当且仅当 `effect` 相同、S'.actions ⊑ S.actions、S'.resources ⊑ S.resources、`implies(S'.condition, S.condition) = YES`。
-  一次修改不满足它，就按"新语句"处理（ALLOW 产生片段；DENY 是新增 DENY）。
+- **收窄的判定**（语法）：新语句 S' 相对旧语句 S 是收窄，当且仅当 `effect` 相同、S'.actions ⊑ S.actions、S'.resources ⊑ S.resources、`implies(S'.condition, S.condition) = YES`
+  （条件里的变量按 `GRT-8` 一次全部改名后比较）。一次修改不满足它，就按"新语句"处理（ALLOW 产生片段；DENY 是新增 DENY）。
 - **新增 DENY**：在有 `cosec:write` 的范围内一律允许（RFC 0001 §7.1）。
 - **删除或放宽 DENY**（§3 M6，Q9）：**租户文档**在有 `cosec:write` 的范围内允许，除非该条目带 `protected` 标志。理由：租户层只能在平台层允许的范围内放宽——删掉租户自己的
   DENY 之后，访问仍要经过某条 ALLOW（它在写入时已经过授出分析，或者由平台写入）、平台层的全部 DENY 与边界。真正需要"租户内的低级管理员不能删"的 DENY，
-  由写它的人标为 `protected`，修改需要 `cosec:unprotect`。字面执行 §7.1（每次都审批）是备选。
-  **平台与 App 文档**（2026-11-09 决定，`CTL-31`）之上没有更高一层的 DENY 或边界，删掉一条就放宽了每个租户能做的事，所以需要第二个人：删除含 DENY 的策略、
+  由写它的人标为 `protected`，修改需要 `cosec:unprotect`。字面执行 RFC 0001 §7.1（每次都审批）是备选。
+  **平台与 App 文档**（维护者 2026-11-09 决定，`CTL-31`）之上没有更高一层的 DENY 或边界，删掉一条就放宽了每个租户能做的事，所以需要第二个人：删除含 DENY 的策略、
   删除所绑策略含 DENY（或读不到）的绑定，各记一条 `NOT_ANALYZED`；信任根可以单人完成，`four-eyes` 时信任根也要第二个人。按展开后的文档判断（RFC 0012 §6），
   所以删除角色、或用 `putRole` 去掉这样的权限，按它不再派生的每条绑定计算。撤销 break-glass 绑定不在此列（§8，单人）。文档读不到是 503，不跳过审批。
 - **删除绑定、删除 ALLOW**：收窄，一律允许。撤销访问不应该比授予访问更难。
@@ -760,15 +807,16 @@ analyze(g, change) : List<(piece, YES | UNKNOWN(reason))>
 
 **论证**（`implies` 与 `⊑` 可靠的前提下）：设算法对 G 给出 YES，取任意满足定义前提的 r。G 匹配 r，所以 C_G' 在 r 上为真；由 `implies(C_G', C_H') = YES`，C_H' 在 r 上为真。
 C_H' 只含与请求有关的属性，它们在 r[s := g] 上取值相同，而 C_H' 是 C_H 对 g 的代换，所以 C_H 在 r[s := g] 上为真。a ⊑ H.actions、ρ ⊑ H.resources，所以 H 的动作与资源匹配
-r[s := g]；r 的作用域在 σ' 中，`covers` 保证 H 在该作用域按策略求值适用于 g（不含成员门，见 §7.4.2）。于是 H 对 g 命中。g 的 DENY 中，`Anyone` 的那些对 r 与 r[s := g] 的取舍按各自的属性进行，不在定义的
-保证之内（这是 Q8 的有意取舍）；其余的与 G 不相交，不命中。边界对 g 与被授权者同样适用。所以 r[s := g] 对 g 是 Permit（除去 `Anyone` DENY 的情形）。
+r[s := g]；r 的作用域在 σ' 中，`covers` 保证 H 在该作用域按策略求值适用于 g（不含成员门，见 §7.4.2）；H 的绑定不早于 G 的到期（`GRT-3`），所以 G 生效时 H 仍生效。
+于是 H 对 g 命中。g 的 DENY 中，`Anyone` 的那些对 r 与 r[s := g] 的取舍按各自的属性进行，不在定义的保证之内（这是 Q8 的有意取舍）；其余的与 G 不相交，不命中。
+边界对 g 与被授权者同样适用。所以 r[s := g] 对 g 是 Permit（除去 `Anyone` DENY 的情形）。
 
 | 性质 | 内容 | 位置 |
 |---|---|---|
-| A5 **授出分析可靠** | 随机快照、随机授权者与成员关系、随机片段；算法给出 YES 时，随机生成大量满足前提的请求 r，断言 r[s := g] 对 g 不是 Deny（`Anyone` DENY 命中的样本除外）。生成器偏向"授权者语句 AND 额外条件"、子模式、子集作用域，以测到 YES 分支 | `control/` 测试 |
-| A6 **收窄判定可靠** | 判为收窄的修改，修改后语句匹配的请求集合 ⊆ 修改前的（随机请求） | `control/` 测试 |
-| A7 **模式包含可靠**（N7） | `a ⊑ b` 为真时，随机动作与路径中不存在匹配 a 而不匹配 b 的 | `engine/` 测试 |
-| A8 **不越权的端到端形式** | 随机生成一串由非平台管理员发起、全部得到 YES 的变更并依次发布，任何主体的 Permit 集合都 ⊆ 初始时"某个授权者的 Permit 集合"的并集（按 §7.4.2 换主体） | `control/` 测试 |
+| A5 **授出分析可靠** | 随机快照、随机授权者与成员关系、随机片段；算法给出 YES 时，随机生成大量满足前提的请求 r，断言 r[s := g] 对 g 不是 Deny（`Anyone` DENY 命中的样本除外）。生成器偏向"授权者语句 AND 额外条件"、子模式、子集作用域，以测到 YES 分支 | `control`：`GrantPropertyTest` |
+| A6 **收窄判定可靠** | 判为收窄的修改，修改后语句匹配的请求集合 ⊆ 修改前的（随机请求） | `control`：`GrantPropertyTest` |
+| A7 **模式包含可靠**（N7） | `a ⊑ b` 为真时，随机动作与路径中不存在匹配 a 而不匹配 b 的 | `engine`：`PatternContainmentPropertyTest`；`control`：`GrantPropertyTest` |
+| A8 **不越权的端到端形式** | 随机生成一串由非平台管理员发起、全部得到 YES 的变更并依次发布，任何主体的 Permit 集合都 ⊆ 初始时"某个授权者的 Permit 集合"的并集（按 §7.4.2 换主体） | `control`：`GrantPropertyTest` |
 
 #### 7.4.6 例子
 
@@ -785,18 +833,49 @@ r[s := g]；r 的作用域在 σ' 中，`covers` 保证 H 在该作用域按策�
 | g 经默认空间的角色绑定得到 `cosec:tenant-admin`，绑定作用域 `(cosec-control, 默认空间)` | 在 `Tenant(acme)` 中把 `cosec:tenant-admin` 绑定给 `Role(acme, ops2)`，同一作用域 | YES：`subject.tenant` 代换为 acme 之后两边的条件相同 |
 | 把 `cosec:*` 于 `doc/**` 授给自己 | — | UNKNOWN（g 的 `doc/tenant/{t}/**` 不包含 `doc/**`）；另外硬性规则不允许租户写 `Platform` |
 
+#### 7.4.7 角色类别
+
+对租户文档持有 `cosec:manage-roles` 的作者，其只写入或删除角色（`putRole`、`removeRole`）的变更不因"谁在授出"而等第二个人（`CTL-79`）。这样的变更能授出什么
+由格式界定，不由作者界定：租户的角色只派生出本租户成员、在该角色的应用里、绑到该应用文档所定义的权限策略的绑定，而应用文档是人批准的；租户隔离把成员限制在
+自己租户的文档上，租户边界封顶。
+
+- 类别只放行对"谁在授出"的疑问（`CROSS_TENANT`、`NOT_COVERED`、`DENY_OVERLAP`），并且只在该变更的每一条越权项（分析的与其余的，例如 break-glass 绑定的）都属于这三种时
+  才放行：`CROSS_TENANT` 是服务主体在租户之外投影角色的情形；`NOT_COVERED` 是租户内的持有者交出它自己不持有的目录权限，这正是管理角色的意思；`DENY_OVERLAP`
+  在一条约束作者的 DENY 可能与角色授出的东西重叠时出现，而 DENY 在判定时照旧约束它约束的人。分析说不清的（读不到的应用文档、无处定义的策略、用尽的预算）照旧等人；
+  混有其他操作的变更整体照旧分析。`cosec:write` 与 `cosec:grant` 照旧判定。
+- 放行时以一条说明性的 `ROLE_CLASS` 记录取代被放行的各条，写明持有者与放行了什么。`:check` 给出同样的答案：持有者知道变更不会等人，其他人知道会等哪一条。
+- 没有应用的角色、或属于控制面自己应用（`cosec.control.app-id`）的角色永远不属于类别，写入与删除都是，覆盖同 id 的角色时新旧两个角色都受这条约束：
+  它的成员持有对自己租户文档的控制调用，谁治理控制面是人来任命的。别的应用的角色不让任何控制调用通过，不论其目录写了什么：控制请求在控制面的应用里判定。
+- 应用文档与平台文档永远不属于类别。授权在发布时由发布者在当前的头上重新判定，与整个授出分析一样：变更已检查、在影子窗口中或已就绪时授权被收回，退回
+  `AWAITING_APPROVAL`，什么也不发布。
+- 经服务配置时类别照样适用（`CTL-81`）。
+
 ### 7.5 审批
 
-- 含 UNKNOWN 片段的变更在影子窗口关闭后进入 `AWAITING_APPROVAL`。审批人看到：每个 UNKNOWN 片段、原因、最接近的授权者语句、影子报告。
-- **谁能批准**：在目标文档上有 `cosec:approve` 的主体（默认只有平台管理员），并且**不是**变更的作者。
-- **批准绑定到内容**：批准记录候选摘要与 UNKNOWN 片段列表的摘要；变基、改动候选都让批准作废。批准 72 小时内有效（`cosec.control.approval.expire-after`）。
-- **四眼原则**：平台管理员自己的变更不做授出分析（§7.3），默认不需要第二个人；`cosec.control.approval.four-eyes=true` 时，平台管理员的变更中会被判为
-  UNKNOWN 的片段也需要另一位平台管理员批准。break-glass 总是四眼（§8）。Q10。
+- 含越权项的变更在影子窗口关闭后进入 `AWAITING_APPROVAL`。审批人看到：每一项越权、原因、最接近的授权者语句、影子报告。
+- **谁能批准**（`APR-1`）：在目标文档上有 `cosec:approve` 的人，并且**不是**变更的作者。审批是人的行为：
+  - 工作负载的凭据（API key，或服务自己的身份 `service`）认证的主体从不批准（403），不论它持有什么（`APR-7`，`IDN-34`）；工作负载按出处（CoSec 的 API key 认证器）
+    与凭据上的保留方法名 `api-key`、`service` 认定，转发的身份也算。
+  - 凭据不带 id 的主体也不能批准（403）：发布时无法核实它的吊销。
+  - 设置租户边界的变更只有平台主体能批准，批准时与发布时都查；也只有平台主体能拒绝或放弃它（`BDY-2`）。
+  - 四眼模式下，平台主体的变更由另一位平台主体批准。
+  - 审批不是服务配置上的路由（`CTL-58`）：服务发起的、等人的变更在运维端口上批准（`CTL-81`）。
+- **批准绑定到内容**：批准记录候选摘要与越权项列表的摘要；变基、改动候选都让批准作废。批准 72 小时内有效（`cosec.control.approval.expire-after`，`APR-2`）。
+- **发布时再核实批准人**（`APR-5`、`APR-8`，RC1-11）：批准记录批准人的 token 属性（任何 JSON 类型）、成员关系、凭据 id（token 的 `jti`）与签发时间（`iat`）。发布时：
+  - 按记录的成员关系与属性重新检查批准人对当前文档的 `cosec:approve`，失败或无法判定则回到 `AWAITING_APPROVAL` 并附发现；
+  - 那个 token 已被吊销、或批准人截至当时签发的全部 token 已被吊销（容差为 `cosec.authentication.revocation.skew`），批准不再算数；吊销读不到是 503，批准保留；
+  - 没有记下凭据 id 的批准（升级前的、旧实例接受的）不算数，须重新批准；
+  - 成员关系来自提供者的批准人判定两次，都须放行：一次用"批准时持有 ∩ 现在持有"的角色加提供者当前的附加策略，一次用提供者完整的当前答复。附加策略取当前答复
+    而不取交集，否则批准之后附加的 DENY 会被丢掉（deny-first）。
+  - starter 的控制面 Pipeline 带上应用的 `MembershipProvider` 与 `RevocationReader`（RC1-13）；没有控制面可用的 `RevocationReader` 时启动失败（`RevocationReader.NONE` 是显式的退出），
+    `cosec.jwt.token-validity.refresh` 小于 `cosec.control.approval.expire-after` 时也启动失败。变更的应答不含批准人的成员关系、属性与凭据（`CTL-61`）。
+- **信任根之外的边界改动**（设置、替换、移除）是越权项 `NOT_ANALYZED`，要第二个人批准：它可能放宽租户的所有 Permit，而 §7.4 的分析看不到这一点；四眼模式下的信任根同样处理。
+- **应用变更触及的租户**（`CTL-48`，RC1-34）：应用变更放宽了一条被各租户的角色或绑定列出的权限策略时，变更按策略各带一条信息性条目 `TENANT_BINDINGS`，列出租户文档键
+  与绑定，数目取自反向引用索引，不读任何租户文档。这条信息性条目绝不代替需要审批的越权项：只有它是信息性的，审批仍须覆盖其余每一项，放宽策略本身仍有 `NOT_ANALYZED`；
+  它的变化不使批准失效。
+- **四眼原则**（Q10）：信任根自己的变更不做授出分析（§7.3），默认不需要第二个人；`cosec.control.approval.four-eyes=true` 时，信任根的变更中分析说不清的部分也需要另一位
+  平台主体批准。break-glass 总是四眼（§8）。
 - 批准、拒绝都是 `ChangeEvent`，按 §10.5 投递。
-
-> **实现说明（2026-10-27，#1095）**：批准只在批准人仍有权批准时才算数。`Approval` 记录批准人的成员关系与属性（旧记录没有这些，不计入）；`publish` 对当前文档重新检查批准人的 `cosec:approve`，失败或无法判定则回到 `AWAITING_APPROVAL` 并附 finding。已知限制：成员关系取批准时的快照，IdP 中撤销的角色要等批准过期（`approvalExpireAfter`）才被发现。
-
-> **实现说明（2026-10-27，#1075）**：信任根以外的任何边界改动（设置、替换、移除）都是 escalation（`NOT_ANALYZED`），要第二个人批准，因为它可能放宽租户的所有 Permit，而 §7.4 的分析看不到这一点；四眼模式下的信任根同样处理。
 
 ### 7.6 平台边界 `withinBoundary`
 
@@ -812,10 +891,12 @@ r[s := g]；r 的作用域在 σ' 中，`covers` 保证 H 在该作用域按策�
 
 - 有效边界 = `Tenant(T).boundary ?: Platform.boundaries.default ?: 无`。租户文档不存在（`Absent`）时用默认边界；租户文档不可用时本来就是 `unresolved`（RFC 0004 §6.1），
   不会走到边界。
-- 边界策略只能在 `Platform`，标 `boundary: true`，只含 ALLOW 语句，至多 64 条；不能被绑定或附加（编译错误）。平台租户 `(platform)` 不能设边界。
+- 边界策略只能在 `Platform`，标 `boundary: true`，只含 ALLOW 语句，至多 64 条；不能被绑定或附加：绑定指向边界策略在控制面是 422 `REFERENCES`，数据面找不到该 id 的策略
+  （`CTL-32`）。租户的 `boundary` 若指向的不是平台的边界策略，是 `$.boundary` 处的 `REFERENCES` 错误；租户的边界进入反向引用索引（§5.8）。平台租户 `(platform)` 不能设边界。
 - 边界约束租户 T 的主体的**全部** Permit，包括经平台层绑定得到的（M8）。平台层要给某个租户更多，就换一个更宽的边界。
+- 设置租户边界只归平台（`BDY-2`）：非平台主体提议即 403，不论它持有什么。
 
-**引擎**（`engine/`，扁平算法唯一的改动）：
+**引擎**（`engine`，扁平算法唯一的改动）：
 
 ```
     for (s, via) in candidates(applicable) where s.effect == ALLOW:
@@ -831,16 +912,13 @@ withinBoundary(p, req, view):
 ```
 
 - 边界是请求的性质，与哪一条 ALLOW 命中无关，所以只检查一次。`matchAny`：任一语句 MATCH 即 MATCH；否则任一 ERROR 即 ERROR；否则 NO_MATCH。
-- 结果只可能把 Permit 改成 Deny 或 Indeterminate，从不产生 Permit：deny-first 与失败即拒绝不受影响（P-B2）。
-- 状态码沿用 RFC 0006 §6.1：`Deny` 401/403，`Indeterminate` 503。审计原因码新增 `BOUNDARY`（2026-10-26 修订：响应体不带它，边界拒绝的 problem 是 `unauthorized`/`forbidden`，
-  边界不可用是 `unavailable`，RFC 0006 Q27）；指标 `cosec.authorization` 的 `source` 新增 `boundary`。
+  没有任何边界数据（租户没有边界、也没有默认边界）时引擎整段跳过检查（`SnapshotView.bounded`）。
+- 边界语句缺少外部属性且写了 `onMissing: nomatch` 时按普通的未命中处理，其他失败为 `Indeterminate(BoundaryUnavailable)`。边界的语句条件与策略条件读的外部属性进入属性计划，
+  由提供者照常取得，按取到的值判断边界（`ATR-8`）。
+- 结果只可能把 Permit 改成 Deny 或 Indeterminate，从不产生 Permit：deny-first 与失败即拒绝不受影响（`BDY-1`：P-B2；没有边界时恒等，P-B1）。
+- 状态码沿用 RFC 0006 §6.1：`Deny` 401/403，`Indeterminate` 503；响应体不区分边界，边界拒绝的 problem 是 `unauthorized`/`forbidden`，边界不可用是 `unavailable`（RFC 0006 Q27）。
+  审计的原因码有 `BOUNDARY`（`cosec-api` 的 `AuditReasonCode`），原因里带边界 id；指标 `cosec.authorization` 的 `source` 与 `cause` 标签为 `boundary`。
 - break-glass 的主体只能是平台租户的主体（§8），平台租户没有边界，所以 break-glass 不受边界约束，也不需要特例。
-
-> **实现说明（2026-10-27，#1075）**：边界语句缺少外部属性且写了 `onMissing nomatch` 时按普通的未命中处理，其他失败为 `Indeterminate(BoundaryUnavailable)`；没有任何边界数据（租户没有边界、也没有默认边界）时引擎整段跳过检查（`SnapshotView.bounded`）；租户的 `boundary` 若指向的不是平台的边界策略，是 `$.boundary` 处的 REFERENCES 错误，并进入反向引用索引。公开的 `cosec-api` `AuditReasonCode` 新增 `BOUNDARY`，审计的原因里带边界 id，指标的 `source` 与 `cause` 标签为 `boundary`；响应不变（边界拒绝是 `forbidden`/`unauthorized`，不可用是 `unavailable`）。Q24 的结果见 Q24 的实现说明。
-
-> **实现说明（2026-11-07，#1231，审计 issue #1208）**：边界的语句条件与策略条件读的外部属性进入属性计划，由提供者照常取得，按取到的值判断边界（`ATR-8`，见 [RFC 0006](0006-coroutine-pipeline.md) §5.4.2 的说明）。此前它们不在计划里，读外部属性的边界让合法请求得到 `BoundaryUnavailable`。
-
-> **实现说明（2026-10-27，#1095）**：所有 break-glass 规则按内容判定，而不是按变更的 kind：`BreakGlassRules.touches` 为真，即变更放入 break-glass 绑定、或在其上放入另一个绑定。`cosec:breakglass`、REQUIRED 变更监听器与 `BREAK_GLASS_REQUESTED` 事件、V5（含新规则：把 break-glass 绑定改成普通绑定也是 break-glass 变更）、期限上限、保留名检查都由它触发，没有 kind 可以豁免。移除 break-glass 绑定仍只缩小范围，只需 `cosec:write`。
 
 ---
 
@@ -848,31 +926,32 @@ withinBoundary(p, req, view):
 
 | 方面 | 规则 |
 |---|---|
-| 谁能申请 | 平台租户中有 `cosec:breakglass` 的主体 |
-| 谁能批准 | 平台租户中有 `cosec:approve` 的另一个主体（总是四眼，不受 `four-eyes` 配置影响） |
-| 绑定的主体 | `Principal((platform), <id>)`，可以是申请人自己 |
+| 谁能申请 | 平台租户中对 `doc/platform` 有 `cosec:breakglass` 的主体。申请、发布已批准的申请、撤销都只需要它，不需要别的控制动作；它只在 `BREAK_GLASS` 变更上代替 `cosec:publish`。申请先授权、后读平台文档：没有它的申请在读平台文档之前得到 403，不论那个 id 的绑定存在与否，所以被拒绝的人学不到已有哪些绑定（`BRK-12`） |
+| 谁能批准 | 平台租户中有 `cosec:approve` 的另一个主体（总是四眼，不受 `four-eyes` 配置影响）；工作负载的凭据从不批准（§7.5） |
+| 绑定的主体 | `Principal((platform), <id>)`，可以是申请人自己；只有经 CoSec 自己的 token 验证的主体能经它得到权限（`BRK-8`，RFC 0009 §4.2） |
+| 绑定 id | 由系统派生，调用方不能指定；已被占用即 409。break-glass 绑定从不替换另一条绑定（`V5` 发现）（`BRK-3`，RC1-29） |
 | 指向 | 任一平台策略，默认 `cosec:root`；鼓励授出比 root 窄的应急策略 |
-| 期限 | 必须有 `expiresAt`；`expiresAt - 发布时刻` ≤ `cosec.control.break-glass.max-duration`（默认 4 小时，最多 24 小时） |
-| 流程 | `kind = BREAK_GLASS` 的变更：授权 → 校验 → 编译 → 批准 → 发布；**免影子窗口**（按种类） |
-| 审计 | 发布前，`ChangeEvent(BREAK_GLASS_REQUESTED/APPROVED/PUBLISHING)` 必须被至少一个 `REQUIRED` 的 `ChangeListener` 写入成功；没有配置 `REQUIRED` 监听器时拒绝（503），与 RFC 0006 Q20 对使用的要求对称 |
-| 元数据 | 绑定带 `grantedBy`、`approvedBy`、`change`、`reason`；数据面编译器要求它们存在且 `grantedBy ≠ approvedBy` |
-| 使用 | 不变：经 break-glass 的 Permit 至少要有一个 `REQUIRED` 的 `DecisionListener` 成功（RFC 0006 §9.4.3）；事件的 `via` 是这条绑定，可与 `change` 对上 |
-| 撤销 | `revoke(bindingId)`：有 `cosec:breakglass` 的任何平台主体，单人，免影子（收窄） |
-| 过期 | 由引擎按 `environment.time` 判定（RFC 0004 §4.2），不需要发布；控制面的回收任务定期发布一个 `kind = EXPIRE` 的变更删除已过期的绑定，只为整洁 |
+| 期限 | 必须有 `expiresAt`；`expiresAt - 发布时刻` ≤ `cosec.control.break-glass.max-duration`（默认 4 小时，最多 24 小时），发布时再查一次 |
+| 流程 | `kind = BREAK_GLASS` 的变更：授权 → 校验 → 编译 → 批准 → 发布；**免影子窗口**（按种类）。变更的种类由入口决定：提议只能是 `PUBLISH` 或 `BREAK_GLASS`；创建或改动 break-glass 绑定的变更，不论种类，都需要 `cosec:breakglass` 与 `REQUIRED` 审计（`BRK-5`）。规则按内容判断（`BreakGlassRules.touches`），从不只看种类 |
+| 审计 | 申请的 `ChangeEvent(BREAK_GLASS_REQUESTED)`、批准的 `BREAK_GLASS_APPROVED` 与发布的 `PUBLISHING` 必须被至少一个 `REQUIRED` 的 `ChangeListener` 写入成功；没有配置 `REQUIRED` 监听器时拒绝（503），与 RFC 0006 Q20 对使用的要求对称。批准先核对候选摘要，再要求 `REQUIRED` 监听器，并在保存状态转移之前写 `BREAK_GLASS_APPROVED`（`BRK-3`，RC1-30）。`REQUIRED` 监听器抛出的 `CancellationException` 只在调用方的协程已取消时重抛，否则按监听器失败处理（503，RC1-31） |
+| 出处 | 修订的出处（§5.3）记录作者与批准人。数据面编译器不要求绑定带任何元数据：写在文档里的元数据挡不住能写文档的人，两人原则由控制面对每种变更强制（RC1-27） |
+| 使用 | 经 break-glass 的 Permit 至少要有一个 `REQUIRED` 的 `DecisionListener` 成功（RFC 0006 §9.4.3）；事件的 `via` 是这条绑定，可与出处中的变更对上 |
+| 冻结 | 生效的 break-glass 绑定（未过期，或没有期限）所授出的策略在绑定生效期间不变：改动它的变更需要 `cosec:breakglass` 与 `REQUIRED` 审计，并且从不干净地通过检查（`BRK-6`）。过期绑定所授出的策略按普通策略处理 |
+| 回滚 | 回滚受全部 break-glass 规则约束：会创建、改动或带回 break-glass 绑定，或改动生效绑定所授出的策略的回滚，与上一行同样处理；只删除 break-glass 绑定的回滚两者都不需要，也没有影子窗口（`BRK-7`，§5.6） |
+| 撤销 | `revoke(bindingId)`：有 `cosec:breakglass` 的任何平台主体，单人，免影子（收窄）。撤销仍生效的绑定抢占文档的暂存槽（§5.5，`BRK-9`）。`revoke` 先授权（与申请同一个检查）再读槽。`DELETE /break-glass/{bindingId}` 只在调用之后该绑定在平台头上不再生效时答 2xx，不论是谁删除的；头上没有该 id 的绑定、也没有调用方可见的停住的撤销占着槽时 404；该 id 的绑定不是 break-glass 绑定（生效或已过期）时 409；其余 409，写明调用方变更的状态。404 与"不是 break-glass 绑定"的 409 都不提议任何变更。撤销以 `CONFLICTED` 结束，或在提议、暂存之前头移动了，只要绑定仍是生效的 break-glass 绑定，就在新的头上再做一次，至多再做 3 次。输给另一个删除同一绑定的调用时可能答 409，此时绑定已不生效，重试答 404。对同一绑定再撤销一次会发布停住的撤销，事件记下第二位撤销人与理由（`BRK-11`） |
+| 放弃 | 撤销仍生效的 break-glass 绑定的变更只有其作者能放弃（其他人 403，看不到的人 404），被撤销的主体也不能。每次放弃写一条 `ChangeEvent(ABANDONED)`，备注以 `author <tenant>/<principal>` 开头；`BREAK_GLASS` 变更的放弃需要 `REQUIRED` 监听器（否则 503），并在保存状态转移之前写入；其他变更的放弃尽力投递，在转移之后（`BRK-10`，RC1-51） |
+| 过期 | 由引擎按 `environment.time` 判定（RFC 0004 §4.2），不需要发布。控制面不发布 `kind = EXPIRE` 的变更：过期的绑定留在平台文档里，直到一次撤销删除它，这样的撤销像任何变更一样等暂存槽（`BRK-9`）；`EXPIRE` 作为出处的一种保留在格式里 |
 | 续期 | 不提供；重新申请，重新批准 |
 
-- **"只能由控制面创建"怎么成立**（§3 M7，Q12）：PR-11 之后，快照文档的写入方只有 `ControlStore`（控制面与 `cosec-migrate`），ArchUnit 规则守护
-  "只有 `CoCacheControlStore` 对 `PolicySnapshotCache` 调用 `putIfMatch`"；剩下的写入方是拿到 Redis 凭据的人，`storage.md` 给出只允许控制面账号写
-  `<p>:snapshot:*` 的 ACL 示例。编译器对元数据的检查挡住的是"手工编辑文档时忘了流程"，不是恶意的 Redis 写入者（§1.2）。
-- **`cosec-migrate` 生成的 root 绑定**（RFC 0004 §4.8）：`convert` 不变（门槛 A 的回放需要它）；`publish` 对其中的 break-glass 绑定执行同样的期限上限，
-  超过即拒绝，并在报告中提示"切换后经控制面申请 break-glass"。一个长期有效的 root 正是 break-glass 要取代的东西。
+- **"只能由控制面创建"怎么成立**（§3 M7，Q12）：快照文档的写入方只有控制面的存储（控制面与 `cosec-migrate`）。不运行控制面的进程把快照文档与候选文档声明为只读，
+  所以只有读权限的 Redis 用户就够用，Redis 拒绝它的写入（`SNP-18`）；`storage.md` 给出把每一方限制在这个范围的 ACL 示例。剩下的写入方是拿到控制面 Redis 凭据的人，
+  在威胁模型之外（§1.2）。
+- **`cosec-migrate` 不写任何 break-glass 绑定**（RC1-27）：`convert` 不生成，`publish` 与 `bootstrap` 拒绝含 break-glass 绑定的输入；break-glass 在切换之后经控制面按两人流程申请。
+  一个长期有效的 root 正是 break-glass 要取代的东西。
+- **`four-eyes` 关闭时**（RC1-28）：break-glass 的两人保证约束的是 break-glass 流程，不约束单个信任根管理员：信任根的变更不做授出分析（§7.3），他可以用一次普通变更
+  绑定任何平台策略。8.0 把这一点写进文档；平台文档的每次发布都要求 `REQUIRED` 审计放到 8.1。
 
 ---
-
-> **实现说明（2026-10-27，#1087）**：经控制面的 break-glass 已实现（`BreakGlass`、`cosec:breakglass`、期限上限默认 4 小时、最长 24 小时，发布时再查）。
-> break-glass 绑定的元数据检查推迟到 PR-3 之后。
-
-> **实现说明（2026-10-27，#1110）**：live break-glass 绑定（未过期，或没有期限）所授出的策略被冻结，直到绑定被撤销或过期；改动它即为 break-glass 变更（`BRK-6`）。过期的 break-glass 绑定所授出的策略按普通策略处理。
 
 ## 9. 租户自助
 
@@ -880,11 +959,12 @@ withinBoundary(p, req, view):
 
 | 对象 | 租户主体（经 `cosec:tenant-admin`） | 约束 |
 |---|---|---|
-| `Tenant(T)` 的策略 | 能 | id 不与平台层重名（N2）；不用保留前缀；设为可附加或修改可附加策略的 ALLOW 要经授出分析（§7.4.1） |
+| `Tenant(T)` 的策略 | 能 | id 不与平台层重名，平台策略的完全相同副本除外（N2，`CTL-14`，§9.4）；不用保留前缀；设为可附加或修改可附加策略的 ALLOW 要经授出分析（§7.4.1） |
 | `Tenant(T)` 的绑定，主体 `Principal(T, ·)`、`Role(T, ·)`、`Anyone` | 能 | 主体必须属于 T（RFC 0004 的编译检查）；授出分析 |
+| `Tenant(T)` 的角色（RFC 0012） | 能 | 角色派生出的绑定按 §7.4.1 分析（`ROL-9`）；只写角色的变更见 §7.4.7 |
 | 绑定指向 `Platform` 的策略 | 能 | 被引用的策略存在且不是边界策略（`CTL-32`）；进入反向索引 |
-| 绑定指向 `App(a)` 的权限策略 | 能（N1，Q14） | 绑定的作用域 `app = Exactly(a)`；进入反向索引 |
-| `boundary` 字段 | 不能 | `cosec:boundary`，平台 |
+| 绑定指向 `App(a)` 的权限策略 | 能（N1，Q14） | 绑定的作用域 `app = Exactly(a)`（`TNT-4`）；进入反向索引 |
+| `boundary` 字段 | 不能 | `cosec:boundary`，平台（`BDY-2`） |
 | `protected` 条目 | 不能，除非有 `cosec:unprotect` | — |
 | break-glass 绑定 | 不能 | RFC 0004：只在 `Platform`；§8 |
 | `Platform`、`App` 文档（含 `Catalog`） | 不能 | 硬性规则（§7.2） |
@@ -895,22 +975,23 @@ withinBoundary(p, req, view):
 
 | 检查 | 在哪里 | 违反时 |
 |---|---|---|
-| 文档绑定到它的 key：`Tenant(T)` 文档里出现的租户 id 都是 T（与 RFC 0003 PR-3 对 `App` 文档的要求相同） | 数据面编译器 | 编译错误 |
+| 文档绑定到它的 key：`Tenant(T)` 文档里出现的租户 id 都是 T（与 RFC 0003 对 `App` 文档的要求相同） | 数据面编译器 | 编译错误 |
 | 允许的跨文档引用只有 `Tenant → Platform`、`Tenant → App 权限策略`（N1）、`App → Platform` | 数据面编译器 | 编译错误 |
-| 租户策略 id 不与平台层重名 | 控制面 V2；数据面遇到同名按 N2 处理 | 422；数据面 `Indeterminate(AmbiguousPolicy)`（内容相同除外） |
-| 租户主体只能写自己的文档 | 控制面硬性规则 | 403 |
+| 租户策略 id 不与平台层重名，完全相同的副本除外 | 控制面 V2（`CTL-14`）；数据面遇到同名按 N2 处理 | 422；数据面 `Indeterminate(AmbiguousPolicy)`（内容相同除外） |
+| 租户主体只能写自己的文档 | 控制面硬性规则（`TNT-3`） | 403 |
 | 影子报告、历史、解释按租户隔离 | 控制面授权（`cosec:read`、`cosec:shadow-read`、`cosec:explain` 的资源是文档） | 403 |
+| 以变更 id 为参数的每一步（`get`、`approve`、`reject`、`publish`、`stage`、`skipShadow`、`rebase`、`abandon`）先判可见：调用者不能读的变更与不存在的同为 404 `no change <id>`，在读状态、把过期变更写成 `EXPIRED` 之前就返回。可读 = 租户隔离加该文档的 `cosec:read`，或是变更的作者 | 控制面（`CTL-15`） | 404 |
 
-性质测试 P12（RFC 0004 §9.5，"修改 U 的租户文档不改变 T 的主体的任何决策"）扩展为经控制面发布：随机的租户管理员对 U 的任意一串变更，T 的主体的决策不变。
-
-> **实现说明（2026-10-27，#1095）**：对任何以变更 id 为参数的步骤（`get`、`approve`、`reject`、`publish`、`stage`、`skipShadow`、`rebase`、`abandon`），`Changes.visible` 先于一切运行；调用者不能读的变更与不存在的变更同为 `404 "no change <id>"`，在读取状态、把过期变更写回 EXPIRED 之前就返回。可读 = 租户隔离加该文档的 `cosec:read`，或是变更的作者。隔离拒绝不再点名文档；没有 `cosec:read` 的人对该文档的变更得到 404 而不是 403。
+性质 P12（RFC 0004 §9.5，"修改 U 的租户文档不改变 T 的主体的任何决策"）扩展为经控制面发布：随机的租户管理员对 U 的任意一串变更，T 的主体的决策不变（`control`：
+`ControlTenantIsolationTest`）。
 
 ### 9.3 租户引用应用目录（N1）
 
 `App(a)` 的权限策略（`perm:a/<permissionId>`）是应用提供的"可以授出的东西"。租户在自己的文档里写 `Role(T, editor) → perm:a/order.read`，作用域 `(a, team-a)`：
 
-- 评估时，`scope.roles` 非空且 `scope.app = a` 时本来就加载 `App(a)`（RFC 0004 §7.4），I/O 不变；查找按 RFC 0004 §6.4 在 `Tenant` 的 `byRole` 中进行，被指向的策略从
-  同一视图的 `App(a)` 中解析。
+- 评估时，`scope.roles` 非空且 `scope.app = a` 时本来就加载 `App(a)`（RFC 0004 §7.4）；租户文档把 `a` 的权限策略绑给 `Anyone` 或主体时，`a` 中的请求也读 `App(a)`，
+  不论有没有角色（`TNT-4`，RC1-17）。查找按 RFC 0004 §6.4 在 `Tenant` 的 `byRole` 中进行，被指向的策略从同一视图的 `App(a)` 中解析；在其他地方这样的绑定不编译。
+- `simulate`、`explain` 与影子比较读执法会读的文档，不多也不少（`ViewDocuments.appOf`，`CTL-3`）：多读的文档会带进它的限流规则。
 - 悬空（应用删除了这个权限）：`unresolved`（`MissingPolicies`），失败即拒绝。控制面的反向索引让应用删除被租户引用的权限之前就被拦住（§5.8）。
 - 授出分析把它当作普通的授出：租户管理员要拥有 `perm:a/order.read` 的语句所授的东西（通常经 `cosec:tenant-admin` 之外的数据面角色）。
 - 候选顺序：这类绑定排在 RFC 0004 §6.3 的第 5 组（角色绑定），在平台层的 `App(a)` 角色绑定之后、同组内按租户文档中的顺序。
@@ -922,28 +1003,26 @@ RFC 0004 §5.2 方案 A 把 7.x 的数据全部放进平台层；控制面让运
 | 步骤 | 变更 | 影子窗口预期 |
 |---|---|---|
 | 1 | 对每个租户 T：在 `Tenant(T)` 中加入 `owner = T` 的可附加策略的**完全相同**的副本（`cosec-migrate partition plan` 生成这些变更，经 `apply` 提交） | 零差异：两层同名且内容相同，N2 规则正常解析 |
-| 2 | 冻结：这些策略在两层都标为 `protected`，直到第 3 步完成（防止两边内容分叉，那会让附加变成 `AmbiguousPolicy`） | — |
-| 3 | 在 `Platform` 中删除它们（平台管理员） | 别的租户的主体附加了它们：`BECAME_INDETERMINATE`。这就是 RFC 0004 C5 描述的语义变化，发布者按数字确认 |
-| 4 | 解除租户副本的 `protected`；租户此后自己维护 | — |
+| 2 | 冻结：平台的那条还在时，控制面拒绝改动租户里的副本（`CTL-14`），租户持有副本时也拒绝改动平台的那条并点名租户（`CTL-29`），所以两层不会同名而内容不同 | — |
+| 3 | 在 `Platform` 中删除它们（平台管理员）；删除副本或平台的那条都不被拒绝 | 别的租户的主体附加了它们：`BECAME_INDETERMINATE`。这就是 RFC 0004 C5 描述的语义变化，发布者按数字确认 |
+| 4 | 租户此后自己维护副本 | — |
 
-同名角色跨租户（RFC 0004 §5.4）用同一套方法：在 `Tenant(T)` 中加 `Role(T, admin) → perm:a/…`（N1），再从 `App(a)` 中删除 `Role(null, admin)`。每一步都是普通发布，
-都有影子窗口和修订，回滚就是回滚。`cosec-migrate partition plan` 只生成变更请求，不写头。
-
-> **决定（2026-11-07，维护者"按你推荐"，审计 issue #1224）**：N2 与本节的第 1 步原先互相矛盾：N2 让控制面拒绝租户文档使用平台已有的策略 id（V2 照此实现），第 1 步却要经 `apply` 在租户文档里放入平台策略的完全相同的副本，于是 `partition plan → apply` 第一步就被 V2 拒绝。按本节原本的设计解决（选项 A）：V2 只接受与平台策略**编译结果完全相同**的副本；平台的那条还在时，拒绝对这份副本的任何修改，所以控制面进不了"两层同名但内容不同"的 fail closed 状态；平台删除自己那条时，租户里的副本就是绑定重新解析到的目标，按新授予分析（内容相同即没有新授予）。其他情形下 N2 不变。另一个选项（8.0 不提供分区流程，迁移一开始就用 `--partition by-owner`）没有采用：它收回一项已文档化的迁移路径。由审计批次 E3 实现。
+- V2 只接受与平台策略**编译结果完全相同**的副本（维护者 2026-11-07 决定，审计 issue #1224，选项 A）：N2 的"租户不能用平台已有的 id"与第 1 步原先互相矛盾，
+  按本节原本的设计解决。平台删除自己那条时，租户里的副本就是绑定重新解析到的目标，按新授予分析（内容相同即没有新授予）。另一个选项（8.0 不提供分区流程，迁移一开始
+  就用 `--partition by-owner`）没有采用：它收回一项已文档化的迁移路径。
+- 同名角色跨租户（RFC 0004 §5.4）用同一套方法：在 `Tenant(T)` 中加 `Role(T, admin) → perm:a/…`（N1），再从 `App(a)` 中删除 `Role(null, admin)`。每一步都是普通发布，
+  都有影子窗口和修订，回滚就是回滚。`cosec-migrate partition plan` 只生成变更请求，不写头。
 
 ### 9.5 DENY 上的 `onMissing: nomatch`
 
-- 写这样一条 DENY，变更必须带确认：`confirmations: [{ "policy": "...", "statement": 3, "kind": "deny-nomatch", "digest": "<语句的摘要>" }]`。语句内容变了，确认就不再匹配。
-- 发布时控制面把确认写进语句的元数据：`"onMissingConfirmed": { "by": {…}, "change": "…" }`。数据面编译器在**任何**文档里都要求 DENY + `nomatch` 带这个元数据，
-  否则编译错误；RFC 0006 的"只允许 `Platform`、编译时 WARN"在 PR-11 删除（N6，Q13）。
+- 写这样一条 DENY，变更必须带确认：`confirmations: [{ "policy": "...", "statement": 3, "kind": "deny-nomatch", "digest": "<语句的摘要>" }]`。语句摘要包含策略的条件
+  （`StatementDigest.of(statement, policyCondition)`）、不含确认本身：语句或策略条件变了，确认就不再匹配。回滚与提议一样携带 `confirmations`：恢复这样的 DENY 时要重新确认，
+  旧修订的确认属于另一个人、另一次变更。
+- 发布时控制面把确认写进语句：`"onMissingConfirmed": { "by": { "tenant", "principal" }, "change": "…" }`。确认只由控制面写入，作者写进文档的确认被丢弃。数据面编译器在
+  **任何**文档里都要求 DENY + `nomatch` 带这个确认，否则编译错误（`ATR-6`；N6，Q13）。限流规则没有确认流程，它的 `onMissing: nomatch` 只能写在平台文档里。
 - 确认记入 `ChangeEvent`。`wiki/guide/security-model.md` 的失败即拒绝一节写明：这是策略作者显式选择的降级，不是运行时默认。
 
 ---
-
-> **实现说明（2026-10-27，#1087）**：确认的 JSON 是 `onMissingConfirmed: { by: { tenant, principal }, change }`；语句摘要不含确认本身。确认只由控制面写入，
-> 作者写进文档的确认被丢弃。只限平台的过渡规则在 PR-8 中删除（原定 PR-11）。
-
-> **实现说明（2026-10-27，#1095）**：`nomatch` 确认的语句摘要包含策略的条件（`StatementDigest.of(statement, policyCondition)`），改变条件即丢弃确认；没有策略条件时摘要不变，已有的确认仍然匹配。
 
 ## 10. API
 
