@@ -134,7 +134,7 @@ CoSec 没有哪个配置项叫这些名字，而已知的 key 无论来源都不
 
 | 配置项 | 类型 | 默认值 | 作用 |
 |---|---|---|---|
-| `cosec.key-prefix` | string | `cosec` | 每个 Redis key 的前缀，去掉末尾的 `:`。同一部署的所有服务、它的控制面以及 `cosec-migrate --key-prefix` 使用同一个值。使用 Redis 限流器时，自带 hash tag 的前缀（如 `{cosec}`）让所有限流计数器落在 Redis Cluster 的同一个 slot 上（[限流](../policies/rate-limiting.md)）。 |
+| `cosec.key-prefix` | string | `cosec` | 每个 Redis key 的前缀：字母、数字、`_`、`.` 和 `-`（`cosec`），或者用一对花括号整个包住这样的串，即 Redis Cluster 的 hash tag（`{cosec}`）。其他任何形式，包括含 `:` 的，都会让启动失败，这样任何部署的前缀都不会嵌套在另一个部署的前缀里（`SNP-9`，[故障排查](./troubleshooting.md#startup-fails-on-the-key-prefix)）。同一部署的所有服务、它的控制面以及 `cosec-migrate --key-prefix` 使用同一个值。使用 Redis 限流器时，自带 hash tag 的前缀（如 `{cosec}`）让所有限流计数器落在 Redis Cluster 的同一个 slot 上（[限流](../policies/rate-limiting.md)）。 |
 
 ## 管道 {#pipeline}
 

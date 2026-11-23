@@ -174,7 +174,7 @@ It replaced `cosec.authorization.snapshot.key-prefix`, `cosec.authorization.cach
 
 | Property | Type | Default | Effect |
 |---|---|---|---|
-| `cosec.key-prefix` | string | `cosec` | The prefix of every Redis key, with a trailing `:` removed. Every service of one deployment, its control plane and `cosec-migrate --key-prefix` use the same value. With the Redis rate limiter, a prefix with a hash tag of its own, such as `{cosec}`, puts every rate limit counter on one Redis Cluster slot ([Rate limiting](../policies/rate-limiting.md)). |
+| `cosec.key-prefix` | string | `cosec` | The prefix of every Redis key: letters, digits, `_`, `.` and `-` (`cosec`), or such a string wrapped whole in braces, a Redis Cluster hash tag (`{cosec}`). Anything else, a `:` included, fails startup, so that no deployment's prefix nests inside another's (`SNP-9`, [Troubleshooting](./troubleshooting.md#startup-fails-on-the-key-prefix)). Every service of one deployment, its control plane and `cosec-migrate --key-prefix` use the same value. With the Redis rate limiter, a prefix with a hash tag of its own, such as `{cosec}`, puts every rate limit counter on one Redis Cluster slot ([Rate limiting](../policies/rate-limiting.md)). |
 
 ## Pipeline
 

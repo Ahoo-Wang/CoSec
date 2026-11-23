@@ -33,8 +33,9 @@ class CoSecProperties(
      * The prefix of every Redis key this deployment writes (`SNP-9`, RC1-46): snapshot documents, control-plane
      * records, shadow reports, token revocations, memberships (`<p>:snapshot:…`, `<p>:control:…`, `<p>:token:…`, …),
      * API keys (`<p>:api-key:…`) and rate limit counters (`<p>:rate-limiter:…`). Two deployments on one Redis that differ
-     * in it share nothing. Letters, digits, `_`, `.` and `-` only, never `:`, so that no deployment's prefix nests inside
-     * another's (`a` and `a:b` would share keys): anything else fails startup.
+     * in it share nothing. Letters, digits, `_`, `.` and `-` only, or such a string wrapped whole in braces, a Redis
+     * Cluster hash tag (`{cosec}`); never `:`, so that no deployment's prefix nests inside another's (`a` and `a:b` would
+     * share keys): anything else fails startup.
      */
     // The stores' own default: one definition, so the property's default and the keys the stores write agree. A const,
     // inlined here, so `cosec-cocache` stays an optional dependency.
@@ -54,7 +55,7 @@ class CoSecProperties(
 
         const val KEY_PREFIX_KEY = "$PREFIX.key-prefix"
 
-        private val KEY_PREFIX = Regex("[A-Za-z0-9_.-]+")
+        private val KEY_PREFIX = Regex("[A-Za-z0-9_.-]+|\\{[A-Za-z0-9_.-]+}")
 
         /**
          * Refuses a key prefix that could nest inside another deployment's (`SNP-9`, DR1-D-4), naming what it holds:
@@ -66,6 +67,8 @@ class CoSecProperties(
                 .joinToString(", ") { "'$it'" }
             val hint = when {
                 prefix.isEmpty() -> "It is empty."
+                '{' in prefix || '}' in prefix ->
+                    "Braces are a hash tag only when one pair wraps the whole prefix ({cosec}), never part of it."
                 prefix.trimEnd(':').let { KEY_PREFIX.matches(it) } ->
                     "Remove the trailing ':' (${prefix.trimEnd(':')}): the keys are the same."
                 ':' in prefix -> "A ':' inside it names keys under another prefix: move them to one without it " +
@@ -73,8 +76,9 @@ class CoSecProperties(
                 else -> "Write it with letters, digits, '_', '.' and '-'."
             }
             throw IllegalArgumentException(
-                "$KEY_PREFIX_KEY [$prefix] holds $wrong: a key prefix is letters, digits, '_', '.' and '-' only, so " +
-                    "that no deployment's prefix nests inside another's (SNP-9). $hint"
+                "$KEY_PREFIX_KEY [$prefix] holds $wrong: a key prefix is letters, digits, '_', '.' and '-' (cosec), or " +
+                    "such a string wrapped whole in braces, a Redis Cluster hash tag ({cosec}), so that no deployment's " +
+                    "prefix nests inside another's (SNP-9). $hint"
             )
         }
 

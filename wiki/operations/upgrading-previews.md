@@ -30,6 +30,18 @@ Which preview of the library may run behind which preview of the gateway image: 
 
 ## From 8.0.0-beta.7 {#from-8-0-0-beta-7}
 
+- **Breaking: `cosec.key-prefix` holds no `:`** (`SNP-9`, DR1-D-4). Affected: a deployment whose prefix has a
+  character other than letters, digits, `_`, `.` and `-`, other than one pair of braces around the whole prefix (a hash
+  tag, `{cosec}`, still works).
+  - A prefix like `a` and another like `a:b` nested, so two deployments on one Redis shared keys. Now such a prefix fails
+    startup, naming what it holds.
+  - **A trailing `:`** (`cosec:`) was removed before use, so the keys are already the ones without it: remove the `:`.
+  - **A `:` inside it** (`cosec:prod`): the keys live under it, and must move to a prefix allowed now (`cosec-prod`).
+    1. Stop the writers: the control plane's host (or an IAM that embeds it), `cosec-migrate`, and the gateways, whose
+       logouts write revocations.
+    2. Copy every key under `<old>:` to the same name under `<new>:`, with its TTL (`DUMP` and `RESTORE ... ABSTTL`, or
+       `RENAME` on a single node; on a cluster, keys of one hash slot only).
+    3. Start every process with `cosec.key-prefix=<new>`, then delete the old keys.
 - **Breaking: the revocation tables' `local-max-age` is at most 30 seconds** (`IDN-26`, DR1-D-3). Affected: a
   deployment that set `cosec.authentication.revocation.cache.local-max-age` above `30s`, or a `cocache.*` property or
   customizer that set the local max age of `RevokedTokenCache` or `RevokedSubjectCache`.

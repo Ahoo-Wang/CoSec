@@ -37,7 +37,7 @@ class KeyPrefixValidationTest {
 
     @Test
     fun `a prefix of letters, digits, underscore, dot and hyphen is a prefix`() {
-        for (prefix in listOf("cosec", "acme-prod", "eu.west_2", "e2e-0f8fad5b-d9cb-469f-a165-70867728950e")) {
+        for (prefix in listOf("cosec", "acme-prod", "eu.west_2", "e2e-0f8fad5b-d9cb-469f-a165-70867728950e", "{cosec}")) {
             CoSecProperties(keyPrefix = prefix).keysOf("snapshot").assert().isEqualTo("$prefix:snapshot")
         }
     }
@@ -49,6 +49,11 @@ class KeyPrefixValidationTest {
         assertThrows<IllegalArgumentException> { CoSecProperties(keyPrefix = "cosec:prod") }.message.assert()
             .contains("':'").contains("move them to one without it")
         assertThrows<IllegalArgumentException> { CoSecProperties(keyPrefix = "") }.message.assert().contains("It is empty")
+            .contains("(cosec)").contains("({cosec})")
+        for (partial in listOf("{cosec}prod", "a{b}", "{cosec", "cosec}", "{co}{sec}", "{cosec:prod}", "{}")) {
+            assertThrows<IllegalArgumentException> { CoSecProperties(keyPrefix = partial) }.message.assert()
+                .describedAs(partial).contains("SNP-9")
+        }
         for (prefix in listOf("a b", "a/b", "ünı", "a*")) {
             assertThrows<IllegalArgumentException> { CoSecProperties(keyPrefix = prefix) }.message.assert()
                 .contains("SNP-9")

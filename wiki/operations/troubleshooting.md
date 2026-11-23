@@ -1045,6 +1045,18 @@ installed document from Redis), at most 5 minutes, and with `fail-closed.tenants
 ([Configuration](./configuration.md#snapshot)). To spend less Redis CPU on many documents, raise it within those
 bounds ([Storage](./storage.md#what-revalidation-costs-redis)).
 
+### Startup fails on the key prefix {#startup-fails-on-the-key-prefix}
+
+```text
+cosec.key-prefix [cosec:prod] holds ':': a key prefix is letters, digits, '_', '.' and '-' (cosec), or such a string wrapped whole in braces, a Redis Cluster hash tag ({cosec}), so that no deployment's prefix nests inside another's (SNP-9). ...
+```
+
+A deployment's prefix must not be able to nest inside another's: with `a` and `a:b` the second's keys are also under
+the first. The message says what to do. A trailing `:` (`cosec:`), which earlier previews ignored, names the same keys
+without it: remove it. A `:` inside the prefix (`cosec:prod`) names keys that are not under any prefix allowed now: move
+them as the [upgrade note](./upgrading-previews.md#from-8-0-0-beta-7) says. Braces count as a hash tag only when one
+pair wraps the whole prefix.
+
 ### Startup fails on a removed key prefix
 
 ```text

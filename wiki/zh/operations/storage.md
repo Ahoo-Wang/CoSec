@@ -42,8 +42,8 @@ description: "平台文档、应用文档和租户文档存在哪里，实例如
 
 ### Redis key {#redis-keys}
 
-`<s>` 是 [`cosec.key-prefix`](./configuration.md#key-prefix)（默认 `cosec`），去掉末尾的 `:`：一个部署写入的每个
-key 都在它之下（`SNP-9`）。
+`<s>` 是 [`cosec.key-prefix`](./configuration.md#key-prefix)（默认 `cosec`），其中没有 `:`：一个部署写入的每个
+key 都在它之下，任何部署的前缀都不会嵌套在另一个部署的前缀里（`SNP-9`）。
 `<doc>` 指一个文档：`platform`、`app:<appId>` 或 `tenant:<tenantId>`。应用 id 和租户 id 不含 `:` 和 `/`，所以一个 key
 只对应一个文档。
 

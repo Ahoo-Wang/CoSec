@@ -74,8 +74,8 @@ role applied that long on an instance an invalidation did not reach.
 
 ### Redis keys
 
-`<s>` is [`cosec.key-prefix`](./configuration.md#key-prefix) (`cosec` by default) with a trailing `:` removed: every
-key a deployment writes lives under it (`SNP-9`). `<doc>` names one document: `platform`, `app:<appId>` or `tenant:<tenantId>`. App and tenant ids never
+`<s>` is [`cosec.key-prefix`](./configuration.md#key-prefix) (`cosec` by default), which holds no `:`: every key a
+deployment writes lives under it, and no deployment's prefix nests inside another's (`SNP-9`). `<doc>` names one document: `platform`, `app:<appId>` or `tenant:<tenantId>`. App and tenant ids never
 contain `:` or `/`, so a key names one document only.
 
 | Key | Written by | Contents |
