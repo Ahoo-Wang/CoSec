@@ -254,7 +254,9 @@ A change is a set of entry operations on one document, made on the revision you 
 
 A change carries at most the platform's `maxChangeOperations` operations (20,000 by default), and the control API reads
 a body of at most 10 MB (the document cap and 2 MB): a larger change is a `400` before any operation is
-checked, so propose it as several (`CTL-41`, [Entry budgets](./language.md#entry-budgets)).
+checked, so propose it as several (`CTL-41`, [Entry budgets](./language.md#entry-budgets)). Every other route, one
+that carries no document (`simulate`, `explain`, `analyze`, a step of a change, a rollback, break-glass), reads at most
+64 KB, and a larger body is a `400` before it is parsed (DR1-F-3).
 
 `ifMatch` is the SHA-256 of the entry as the document writes it: the operation applies only if the entry is still
 that. Instead of writing operations, `POST /documents/{key}:apply` takes a whole document (`{"document", "mode",

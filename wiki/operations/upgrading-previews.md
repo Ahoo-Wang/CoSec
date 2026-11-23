@@ -30,6 +30,11 @@ Which preview of the library may run behind which preview of the gateway image: 
 
 ## From 8.0.0-beta.7 {#from-8-0-0-beta-7}
 
+- **A control route that carries no document reads at most 64 KB** (DR1-F-3). Affected: a client that posts more than
+  64 KB to `simulate`, `explain`, `analyze`, a step of a change, a rollback or break-glass. Such a body is now a `400`
+  before it is parsed, where it was read and parsed up to 10 MB before anything was authorized. Proposals, `:apply` and
+  their checks still read up to 10 MB. A simulated request larger than 64 KB has more headers and attributes than a real
+  request can carry: trim it.
 - **Breaking: a gateway host with handlers of its own does not start until they are listed** (`STA-13`). Affected: a
   Spring Cloud Gateway host in enforce mode whose application declares its own `@Controller`, `@RestController` or
   `RouterFunction` beans.
