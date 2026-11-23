@@ -618,27 +618,7 @@ RFC 0002 的 `Rule`、`Guard`、`RuleGroup`、`RuleVisitor`、`HostFacts`、`Leg
 
 ## 10. 实现拆分
 
-| PR | 标题 | 范围 | 依赖 | 能否提前开工 |
-|---|---|---|---|---|
-| PR-1 | `feat(model): add the condition AST with types and cost bounds` | §3 的 AST、属性目录、类型检查、成本、规范化、求值；A3、A4 | 本 RFC 获批 | **能**：与 RFC 0004 PR-1 并行 |
-| PR-2 | `feat(model): extract index keys and decide condition containment` | §4.1、§4.2；A1、A2 | PR-1 | **能** |
-| PR-3 | `feat(engine): match actions and resources without Spring` | §5.1、§5.2：`Action`/`Resource` 模式、`HttpPathPattern`；与 `PathPattern` 的对照测试（`cosec-core`） | PR-1 | **能** |
-| PR-4 | `feat(engine): compile statements and index candidates` | §6：`CompiledStatement`、索引、捕获结果、引擎接入；I1、I2；`EngineBenchmark` 的新参数 | PR-2、PR-3；RFC 0004 PR-2 | RFC 0004 PR-2 合入后 |
-| PR-5 | `feat(openapi): generate route maps and service actions`（已合入，#1079） | §5.3：路由映射生成、宿主侧加载与查找、生成器改为 `service:verb`；§5.4 | PR-3 | **能** |
-| PR-6 | `feat(migrate): translate 7.x matchers into the condition AST`（已合入，#1069）（**2026-10-26 改动**：不做 `legacy` 节点，自定义条件匹配器转换时拒绝；见 [RFC 0008](0008-conformance-and-direct-build.md) §4.1） | §7 全部，包括限流规则；`legacy` 节点（Q2）；报告 | PR-4；RFC 0004 PR-5 | RFC 0004 PR-5 合入后 |
-| ~~PR-7~~ | ~~`test: classify AST migration differences in replay`~~ **已取消（2026-10-26，[RFC 0008](0008-conformance-and-direct-build.md)）** | D1–D3、正例与反例、翻译对照语料 | PR-6；RFC 0004 PR-6 | RFC 0004 PR-6 合入后 |
-| — | ~~**门槛 B**~~ **已取消（2026-10-26）** | 维护者本地回放 | PR-7；RFC 0004 PR-7（基准是切换后的实现） | — |
-| ~~PR-8~~ | ~~`refactor!: evaluate compiled conditions and actions`~~ **并入 RFC 0008 的切换 PR（2026-10-26）**，100 % 吞吐要求不变 | 切换（前提：§9.3 对 7.0 的 100 % 吞吐要求已满足，否则停止并交回维护者）：文档 `schema: 3`（AST），schema 标记更新（RFC 0004 §8.5）；starter 装配路由映射；`AuthorizationChecker` 的新签名；文档；JMH | 门槛 B | **不能** |
-| ~~PR-9~~ | ~~`refactor!: remove the legacy matchers`~~ **并入 RFC 0008 的切换 PR（2026-10-26）**，删除清单不变 | 删除 OGNL、SpEL（含 `OgnlSandbox` 和依赖）、全部内置匹配器与工厂、`ActionMatcherFactory` SPI、`PartExtractor`、`Expression`/模板、`StatementScopedContext`、`Rule`/`Guard`/`RuleGroup`、`HostFacts`/`LegacyFacts`、`PathVariableScope`；`cosec-api` 的 `ActionMatcher`、`ConditionMatcher`、`Statement`/`Policy` 中的匹配器字段（Q8） | PR-8 | **不能** |
-
-**文档**（中英文同步，PR-8/PR-9）：`wiki/policies/language.md` 重写（动作、资源、条件 AST、属性目录、不存在的属性、成本上限、迁移对照表）；
-`wiki/policies/rate-limiting.md`（规则的新写法）；`wiki/guide/security-model.md` 的 "Role scope and inRole"、"Path variable scope"；`wiki/integration/checks.md`；
-`wiki/integration/web.md`（路由映射、`http` 命名空间）；`wiki/architecture/extending.md` 与 `skills/cosec-custom-matcher`（自定义匹配器 → `legacy` 过渡 → 第 5 阶段 `AttributeProvider`）；
-`wiki/architecture/overview.md`（编译、索引、JMH）；`wiki/operations/upgrading.md`（D1–D3、拒绝项、如何改写 OGNL/SpEL/正则）；`wiki/operations/troubleshooting.md` 与 `skills/cosec-troubleshoot`
-（编译错误、成本超限、路由映射缺失）；`skills/cosec-policy-author`（全部示例改为 AST）；`schema/condition.schema.json`、`action.schema.json`（新增 `resource`）、`cosec-policy.schema.json`、
-`rate-limit-rule.schema.json`；`AGENTS.md` 的 "Where a change has to land" 中"New action/condition type"一行（工厂与 `META-INF/services` 不再存在，改为"属性目录与运算符"）。
-
----
+> **2026-11-23 压缩时删去**：本节是实现的 PR 划分，都已合入。原文见 `git show 3cd4dca9:docs/rfc/0005-condition-ast.md`。
 
 ## 11. 决定
 

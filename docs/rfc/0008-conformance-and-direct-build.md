@@ -510,24 +510,7 @@ JMH 预算保留，但比较对象从"上一阶段"改为 **7.0 的实测数字*
 
 ### 4.2 切换时删除的已合入脚手架
 
-下表每一项都在 `main` @ `a7d7f471` 上核对过路径。除注明外，切换 PR 删除它们以及它们的测试：
-
-| 项 | 路径 | 为什么存在 |
-|---|---|---|
-| 7.x 授权实现与按层的引擎适配 | `core/core/src/main/kotlin/me/ahoo/cosec/authorization/`：`SimpleAuthorization.kt`、`EngineAuthorization.kt`、`SnapshotEngineAuthorization.kt`、`PolicyRepository.kt`、`AppRolePermissionRepository.kt`、`RoleScope.kt`、`RootPrincipalMatcher.kt`、`PolicyVerifyContext.kt`、`AuthorizationDecision.kt` | 7.x 路径；第 2、3 阶段的候选实现 |
-| 按层引擎的适配层 | `core/.../authorization/engine/`：`LegacyRules.kt`、`LegacyFacts.kt`、`StatementScopedContext.kt`、`PolicySetLoader.kt`、`LayerReads.kt`、`EngineDecisionFlow.kt`、`Decisions.kt`、`EvaluationObserver.kt` | 把 7.x 数据和匹配器喂给按层引擎 |
-| 7.0 形状的快照 | `core/.../authorization/engine/`：`PolicySnapshotCompiler.kt`、`CompiledSnapshot.kt`（`CompiledPolicies`、`CompiledApp`）、`SnapshotPolicySetLoader.kt`；`core/.../snapshot/SnapshotKey.kt` 中的 `Policies` 与 7.0 内容的 `App`（RFC 0004 的 `Platform`/`App`/`Tenant` 取代）；`cocache/.../cache/snapshot/SnapshotContent.kt` 与 `SnapshotDocumentCodec.kt` 中 7.0 格式的部分。RFC 0004 PR-4 起两种格式并存，切换时一并删除 schema 1：`SnapshotDocument.CURRENT_SCHEMA` 与 `SCHEMAS`（只留 `DOCUMENT_SCHEMA = 2`）、`SnapshotDocumentCodec` 对 schema 1 的接受、`SnapshotKey.Policies` 与 `SnapshotKind.POLICIES`、`SnapshotKeyEncoder.POLICIES`、格式描述 `cosec-snapshot-document` 中的 `policiesDocument` 与 `legacyAppDocument`（连同 `cosec-policy`、`condition`、`action`、`cosec-app-permission` 等 7.x 描述，由 8.0 的描述接替这些文件名，RFC 0007 §10.4）、`SnapshotSource` 中拒绝 `Platform`/`Tenant` 的分支（由 RFC 0004 PR-4 之后的三文档源取代） | RFC 0003 的中间文档 |
-| 按层引擎 | `core/engine/src/main/kotlin/me/ahoo/cosec/engine/`：`Engine.kt`、`CoSecEngine.kt`、`Evaluator.kt`、`TracingEvaluator.kt`、`PolicySet.kt`（其中的 `Rule`/`Guard`/`RuleMatch` 在 RFC 0005 PR-4 之后不再被 `flat/` 使用）、`Trace.kt`；`model/`：`LayerKind.kt`、`Decision.kt`（按层的 `StatementRef`/`Decision`/`Cause`）、`AuthzRequest.kt` 中的 `HostFacts`；测试 `engine/.../EnginePropertyTest.kt` | RFC 0002 §4 的按层顺序只为与 7.0 逐条等价 |
-| 决策比较与回放 | `core/core/src/testFixtures/kotlin/me/ahoo/cosec/parity/`：`DecisionParity.kt`、`DecisionReplay.kt`、`PolicySetParity.kt`、`ReplayInputs.kt`、`ReplayMain.kt`、`ReplayReport.kt`（含 `ReplayGate`）、`ReplaySide.kt`、`RepositorySnapshotAuthorization.kt`、`SnapshotAuthorizationFixture.kt`；`.../testkit/PolicyTestKitParity.kt`；`core/core/src/testFixtures/resources/cosec-replay/`；`core/core/build.gradle.kts` 中的 `engineReplay`、`engineParity` 任务（测试夹具源码集与 `verifyTestFixturesUnpublished` 在没有其他使用者时一并删除） | RFC 0002 PR-4（#997） |
-| 快照的比较、回放与测量工具 | `backends/cocache/src/test/kotlin/me/ahoo/cosec/cocache/snapshot/`：`SnapshotReplay.kt`、`SnapshotDecisionParityPropertyTest.kt`、`SnapshotMeasure.kt`、`SnapshotConvert.kt`；`cocache/.../cache/SnapshotRepositoryParityTest.kt`；`backends/cocache/build.gradle.kts` 中的 `snapshotReplay`、`snapshotParity`、`snapshotMeasure`、`snapshotConvert` 任务。`CoSec7xReader` 读取 7.x 原始数据的部分已由 RFC 0004 PR-5 搬进 `migrate/`（#1067）；生成 7.0 形状快照的部分留在测试源码集，改名 `CoSec7xSnapshotReader.kt`（及其测试），随本行删除 | RFC 0003 PR-4（#1030） |
-| 等价性质 | `core/core/src/test/.../authorization/engine/EngineParityPropertyTest.kt`、`SnapshotPolicySetPropertyTest.kt`；`.../explain/ExplainerConsistencyTest.kt`；`.../parity/DecisionParityTest.kt`、`DecisionReplayTest.kt`；`.../testkit/PolicyTestKitParityTest.kt` | P3、P5 与比较器自身的测试 |
-| 每请求读仓库的路径 | `backends/cocache/src/main/kotlin/me/ahoo/cosec/cocache/`：`RedisPolicyRepository.kt`、`RedisAppRolePermissionRepository.kt`、`CacheFutures.kt` 以及四个缓存与它们的属性（RFC 0003 PR-6 的清单） | 7.x 路径 |
-| 7.x 的写入与历史 | `core/.../snapshot/SnapshotPublisher.kt`、`cocache/.../cache/snapshot/RedisSnapshotPublisher.kt`（条件写入的做法由 `CoCacheControlStore` 复用，§4.3）、`core/.../policy/history/PolicyHistory.kt`、`cocache/.../cache/RedisPolicyRevisionStore.kt`、`core/.../policy/LocalPolicyInitializer.kt` 与 `spring-boot-starter/.../policy/LocalPolicyInitializerLifecycle.kt` 的写库模式 | RFC 0007 Q17、Q25 |
-| 7.x 的解释与影子 | `core/.../explain/AuthorizationExplainer.kt`（叙述与 `explainFromTrace`）、`core/.../shadow/ShadowAuthorization.kt`、`ShadowPolicyProvider.kt` | RFC 0006 §9.5.4、RFC 0007 Q22 |
-
-另外，RFC 0004 PR-8、RFC 0005 PR-9、RFC 0006 PR-10、RFC 0007 §15 X1–X3 的删除清单（`cosec-api` 的 `AppRolePermission`、`RolePermission`、`ActionMatcher`、
-`ConditionMatcher`、响应式授权契约，OGNL/SpEL 与全部内置匹配器，装饰器链、`BlockingAware`、`SecurityPipeline` 等）原样并入切换 PR；`legacy` 节点从未实现，无需删除。
-`docs/perf/` 下的历史结果保留。
+> **2026-11-23 压缩时删去**：本节是切换时要删除的等价脚手架清单，已全部删除。原文见 `git show 3cd4dca9:docs/rfc/0008-conformance-and-direct-build.md`。
 
 ### 4.3 保留并复用的通用机制
 
@@ -693,68 +676,7 @@ token（按 token 与按主体）得到 401 `token-revoked`（#1072）。
 
 ### 4.5 依赖顺序
 
-"能否现在开工"以 `main` @ `a7d7f471` 与当时打开的 PR 为准；✓ 表示依赖已合入。
-**2026-10-26 修订（路线图审查）**：状态更新到 `main` @ `a973ad20`（RFC 0005 PR-3 #1040、RFC 0006 PR-1 的修复 #1031、RFC 0007 PR-1 #1032、RFC 0008 PR-1 #1045 已合入；
-RFC 0006 PR-2 #1044 随后也已合入）；RFC 0008 PR-4 一行换成 S1–S5；新增端到端切片、RFC 0007 PR-6 的分析部分与 RC 安全审查三行。
-
-| PR | 依赖 | 能否现在开工 |
-|---|---|---|
-| RFC 0008 PR-1 一致性套件 | — | ✓ 已合入（#1045） |
-| RFC 0008 PR-2 变异检查 | RFC 0008 PR-1 ✓ | ✓ 已合入（#1086） |
-| RFC 0008 PR-3 7.0 基线 | — | 已派发（2026-10-26；需要空闲机器） |
-| RFC 0005 PR-3 动作与资源 | RFC 0005 PR-1 ✓（#1022） | ✓ 已合入（#1040） |
-| RFC 0005 PR-4 编译与索引 | RFC 0005 PR-2 ✓（#1036、修复 #1037）、PR-3 ✓（#1040）；RFC 0004 PR-2 ✓（#1029） | ✓ 已合入（#1051） |
-| RFC 0005 PR-5 路由映射 | RFC 0005 PR-3 ✓ | 依赖已合入；按 §4.7 第 1 条在 #1040 的审查之后 |
-| RFC 0004 PR-4 文档与编译（改动） | RFC 0004 PR-2 ✓、PR-3 ✓（#1027）；RFC 0005 PR-4 ✓（#1051） | ✓ 已合入（#1052） |
-| RFC 0004 PR-4b 加载平台、应用、租户快照（2026-10-26 新增：`SnapshotSource` 推广为一个共享槽加多个 LRU 族，`runtime` 的 `DocumentSnapshotViews`） | RFC 0004 PR-4 ✓（#1052） | ✓ 已合入（#1053） |
-| RFC 0004 PR-5 `cosec-migrate`（改动） | RFC 0004 PR-4 ✓（#1052） | ✓ 已合入（#1067） |
-| RFC 0005 PR-6 翻译 7.x 匹配器（改动） | RFC 0005 PR-4 ✓；RFC 0004 PR-5 ✓（#1067） | 打开中（#1069） |
-| RFC 0006 PR-2 Pipeline（改动） | RFC 0006 PR-1 ✓（#1025，审查修复 #1031 ✓）；RFC 0004 PR-1 ✓、PR-2 ✓ | ✓ 已合入（#1044） |
-| RFC 0006 PR-3 认证与成员关系 | RFC 0006 PR-2 ✓（#1044）；RFC 0004 PR-3 ✓ | **能**（按 §4.7 第 1 条在 #1044 的审查之后） |
-| RFC 0006 PR-6 决策事件与监听器 | RFC 0006 PR-2 ✓（#1044） | **能**（按 §4.7 第 1 条在 #1044 的审查之后） |
-| RFC 0006 PR-4 外部属性 | RFC 0006 PR-2；RFC 0005 PR-4；RFC 0004 PR-4、PR-4b | 否 |
-| RFC 0006 PR-5 义务与限流 | RFC 0006 PR-4；RFC 0005 PR-6 | 否 |
-| RFC 0006 PR-7 适配器桥接（改动） | RFC 0006 PR-2、PR-6 | 否 |
-| RFC 0007 PR-1 `control/` 模块 | RFC 0007 ✓（#1028） | ✓ 已合入（#1032） |
-| RFC 0007 PR-2 schema 生成 | RFC 0007 ✓（#1028） | ✓ 已合入（#1038） |
-| RFC 0007 PR-3 平台边界 | RFC 0004 PR-4；RFC 0005 PR-4 | ✓ 已合入（#1075） |
-| RFC 0007 PR-4 修订与 `putIfMatch` | RFC 0007 PR-1；RFC 0004 PR-4 | 否 |
-| RFC 0007 PR-5 校验、编译与暂存 | RFC 0007 PR-4；RFC 0005 PR-4；RFC 0006 PR-4 | 否 |
-| RFC 0007 PR-6a 授出分析（2026-10-26 修订（路线图审查）：从 PR-6 拆出） | RFC 0005 PR-2 ✓（#1036）、PR-3 ✓（#1040）；RFC 0007 PR-1 ✓（#1032） | **现在开工**（2026-10-26） |
-| RFC 0007 PR-6 写操作授权与授出分析 | RFC 0007 PR-5；RFC 0005 PR-2 ✓、PR-3；RFC 0006 PR-7；（2026-10-26 修订）PR-6a | 分析部分在 RFC 0005 PR-3 合入后；接线等 PR-5 与 RFC 0006 PR-7。2026-10-26 修订（路线图审查）：分析部分即 PR-6a，PR-6 只剩接线 |
-| RFC 0007 PR-7 影子窗口 | RFC 0007 PR-5；RFC 0006 PR-6 | 否 |
-| RFC 0007 PR-8 break-glass、租户自助、变更审计 | RFC 0007 PR-6、PR-7；RFC 0004 PR-5 | 否 |
-| RFC 0007 PR-9 库与 HTTP（改动） | RFC 0007 PR-5–PR-8；RFC 0006 PR-7 | ✓ 已合入（#1091） |
-| 端到端切片（§4.4.3；2026-10-26 修订（路线图审查）） | RFC 0005 PR-4 ✓；RFC 0004 PR-4 ✓、PR-4b ✓（#1053）；RFC 0006 PR-2 ✓（#1044） | 打开中（#1056） |
-| ~~RFC 0008 PR-4 切换~~ | ~~以上全部；§3.9~~ | 2026-10-26 修订（路线图审查）：拆成下面五行 |
-| RFC 0008 S1a 装配 8.0 路径（未登记） | 以上全部，包括端到端切片 | ✓ 已合入（#1097） |
-| RFC 0008 S1b 登记 8.0 路径并删除 7.x 的自动配置 | S1a ✓；§3.9 第 1–5 条 | 否（阻塞项见 §4.4.2 之前的 2026-10-27 修订） |
-| RFC 0008 S2 删除存储与写入路径 | S1 | 否 |
-| RFC 0008 S3 删除 7.x 决策路径 | S2 | 否 |
-| RFC 0008 S4 删除 7.x 契约与匹配器 | S3 | 否 |
-| RFC 0008 S5 文档 | S1（开始写）；S4（合入）；§3.9 第 6 条 | 否 |
-| 提前清理：L17、L31（§4.6.3） | — | **能**（不依赖切换；不做也可并入 PR-5） |
-| RFC 0008 PR-5 清理遗留代码（§4.6） | RFC 0008 PR-4（2026-10-26 修订：S5）；§6 Q9–Q15 ✓（2026-10-26 批准） | 否 |
-| RFC 0008 PR-6 删除文档中的版本沿革（§4.6） | RFC 0008 PR-4（2026-10-26 修订：S5） | 否（可与 PR-5 并行，文件不重叠） |
-| RC 安全审查（§3.9 RC 前提第 6 条；2026-10-26 修订（路线图审查）） | S1（开始）；RFC 0008 PR-5、PR-6（最后一遍） | 否 |
-| 8.0 RC（维护者决定） | RFC 0008 PR-5、PR-6；§3.9 的 RC 前提（2026-10-26 修订：含 AOT 冒烟与 RC 安全审查） | 否 |
-
-关键路径是 RFC 0005 PR-3 → PR-4 → RFC 0004 PR-4 → RFC 0006 PR-4 → RFC 0007 PR-5 → PR-6/PR-7 → PR-8 → PR-9 → 切换。
-与它并行、现在就能开工的有 RFC 0008 PR-1、PR-3 与 RFC 0006 PR-2（随后是 PR-3、PR-6）。
-
-**2026-10-26 修订（路线图审查）**：关键路径改为
-（RFC 0005 PR-4 ✓ #1051 →）RFC 0004 PR-4 → RFC 0006 PR-4 → RFC 0007 PR-5 → PR-6/PR-7 → PR-8 → PR-9 → S1 → S2 → S3 → S4 → S5 → RFC 0008 PR-5/PR-6 → RC 安全审查的最后一遍 → RC。
-控制面的尾部（RFC 0007 PR-5 到 PR-9）是其中最长的一段，所以 PR-6 的分析部分作为 PR-6a 现在开工：`GrantAnalyzer` 与模式包含只依赖已经合入的
-`implies` 与动作、资源模式，等 PR-5 时 PR-6 只剩接线。S5 在 S1 之后与 S2–S4 并行写，不占关键路径的长度，只占最后一次合入。
-端到端切片（RFC 0004 PR-4 与 RFC 0006 PR-2 之后）、RFC 0008 PR-2（变异检查）、RFC 0005 PR-5 与 RC 安全审查的前几遍都与关键路径并行。
-现在就能开工（2026-10-26）：RFC 0007 PR-6a，RFC 0008 PR-2；RFC 0004 PR-4 与 RFC 0005 PR-5 的依赖已合入（RFC 0005 PR-4 #1051 随后合入），按 §4.7 第 1 条在 `engine/` 的审查之后开工；RFC 0008 PR-3 已派发；RFC 0006 PR-2 已合入（#1044），PR-3、PR-6 可以开工（先做 #1044 的审查，§4.7）。
-
-**RFC 0007 PR-6a**：`feat(engine,control): analyze grants`。范围是 RFC 0007 PR-6 中不需要控制面接线的部分：RFC 0007 §7.4.1–§7.4.4 的 `GrantAnalyzer`
-（片段拆分、`specialize`、捕获变量、`disjoint`、收窄判定）、RFC 0005 §5.5 的模式包含 `⊑`（RFC 0007 §3.1 N7，`engine/`）、性质 A6、A7，以及
-RFC 0007 §7.4.6 每一行的 `GrantAnalyzerTest`。实现时（#1059）A5、A8 与 `GRT-*` 场景也随 PR-6a 加入：A5、A8 用一个独立转写的数据面 oracle 在分析自己的
-输入（`GrantSnapshot`）上求值，A8 依次"发布"候选文档，不需要控制面的发布流程；`GRT-*` 场景用 `control` 级的 `GrantRunner`，断言每个片段的分析结论，
-RFC 0007 PR-5 之后它再扩展为 `ControlPlane` 的写操作。`GRT-1` 改为已实现；`GRT-2` 中"送平台管理员审批"的一半随 PR-6 的接线实现，仍为
-`pending: "RFC 0007 PR-6"`。PR-6 剩下 §7.1–§7.3、§7.5 与接线（由 RFC 0004 PR-4 的文档构造 `GrantSnapshot`）。
+> **2026-11-23 压缩时删去**：本节是各 PR 的依赖顺序，都已合入。原文见 `git show 3cd4dca9:docs/rfc/0008-conformance-and-direct-build.md`。
 
 ### 4.6 RC 前清理（2026-10-26 新增）
 

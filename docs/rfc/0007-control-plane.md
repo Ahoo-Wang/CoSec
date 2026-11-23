@@ -328,32 +328,7 @@
 
 ## 2. 前面各阶段推迟到本阶段的事项
 
-| 来源 | 推迟的内容 | 本文的处理 |
-|---|---|---|
-| RFC 0003 §1.2、§2 I5、Q8；RFC 0006 §1.2 | 编译失败时保留旧版本（RFC 0001 §3.4） | §6.3：控制面在发布前编译，失败即不发布，头不变；数据面 F5 不变（§3 M2，Q2） |
-| RFC 0003 §1.2、Q4；RFC 0004 §7.4；RFC 0006 §3 K9 | `SnapshotPublisher`（`Mono` 接口）由控制面取代 | §5.4：`ControlStore` 的发布沿用 `RedisSnapshotPublisher` 的 `putIfMatch` 循环与"冲突后重读"规则，但不自动重做变更；PR-11 删除 `SnapshotPublisher`（Q25） |
-| RFC 0003 §1.2；RFC 0001 §3.7 | `PolicyStore`、修订、回滚 | §5（Q3、Q4） |
-| RFC 0003 §3.6、§4.6 | 策略修订历史（`<p>:policy:history:*`）迁入 `cosec-control`；`PolicyHistory` 改为包装发布者 | §5.2、§5.6：修订的单位改为文档，按策略的历史由相邻修订的差异得到；`PolicyHistory`、`RedisPolicyRevisionStore` 删除；7.x 的历史 key 不转换（§15 X1，Q3） |
-| RFC 0003 §4.6 | 主从切换丢失已确认的写入："第 6 阶段的 `PolicyStore` 会重新设计持久化与确认" | §5.4：仍不加 `WAIT`；修订链让丢写可以被发现（头的 `parent` 指向一条不存在的记录或摘要不符）；`storage.md` 建议 `min-replicas-to-write`（Q27） |
-| RFC 0004 §2.2、§4.3、§6.1；RFC 0002 §1.2 | 平台边界策略与 `withinBoundary`（第 4 阶段恒为通过） | §7.6（Q11） |
-| RFC 0004 §2.2、§4.3 | 控制面、不能越权授权、租户写自己的数据；跨租户管理 | §7、§9；跨租户管理 = 平台租户的主体经控制面写某个租户的文档（§7.2） |
-| RFC 0004 §2.2、§5.2、§5.4 | `--partition by-owner` 在第 6 阶段之后；"同名角色跨租户"由控制面收窄 | §9.4：控制面提供分步的分区流程，每一步都是一次带影子窗口的普通发布；依赖跨层 id 的规则（§3.1 N2，Q15）与租户引用应用目录（N1，Q14） |
-| RFC 0004 §2.2；RFC 0005 §1.2；RFC 0006 §1.2 | 从模型生成 `schema/*.json` | §10.4（Q19） |
-| RFC 0004 §7.2 | `Tenant` 文档对 `Platform` 策略的引用"在第 6 阶段控制面检查" | §5.8：反向引用索引，平台删除被引用的策略之前拒绝发布 |
-| RFC 0004 §3 I9、Q8；RFC 0006 §9.4.3、Q20 | break-glass 绑定"只能由控制面创建"；创建与使用的 `REQUIRED` 审计 | §8：创建经控制面、双人、有上限；使用审计沿用 RFC 0006（Q12） |
-| RFC 0001 §3.3；RFC 0004 §3 I7、Q7；RFC 0005 §3.4；RFC 0006 §5.4.3、Q13 | DENY 上的 `onMissing: nomatch` 需要控制面的显式确认（第 5 阶段只允许 `Platform` 文档、编译时 WARN） | §9.5：按语句确认，确认写进语句的元数据，编译器要求它；之后任何文档都可以这样写（§3.1 N6，Q13） |
-| RFC 0005 §4.2、§5.5、§1.2 | 不能越权授权检查本身；它用到的 `implies`（A1/A2 由 RFC 0005 PR-2 提供）与动作、资源的包含 | §7.4。RFC 0005 §5.5 的包含判断在 RFC 0005 §10 的 PR 列表中没有归属，由本文 PR-6 实现在 `engine/`（§3.1 N7） |
-| RFC 0005 §3.5 | 成本上限"控制面（第 6 阶段）在发布前检查" | §6.2 V3；阈值从实例属性移进 `Platform` 文档（§3.1 N3，Q16） |
-| RFC 0005 §5.1 | `service` 与 `type` 的命名"由 `Catalog` 声明，控制面据此校验" | §6.2 V4 |
-| RFC 0001 §7.1（CEL）；RFC 0005 §3.7 | 不可分析的条件"只能由平台管理员发布" | `legacy` 节点已在第 5 阶段删除（RFC 0006 Q15）；一般规则：无法分析的语句在授出分析中得到 UNKNOWN，非平台管理员只能经审批发布（§7.4） |
-| RFC 0002 §1.2、§5.6 | `AccessAnalyzer` 迁入 `cosec-control`，基于编译后的快照重写 | §10.3（Q22） |
-| RFC 0001 §3.3、§3.6；RFC 0006 §9.2 | 解释历史决策时针对决策记录的快照版本重新评估 | §10.3：`explain(request, at = SnapshotVersion)` 从修订记录装载三份文档（Q22） |
-| RFC 0006 §3 K9、Q6 | "不依赖 Reactor"的类路径检查"在第 6 阶段之后" | §3 M12：仍然做不到（Lettuce）；改为公开签名规则（Q20） |
-| RFC 0006 §9.5.4；RFC 0003 PR-5 | 影子候选来自本地文件，经快照叠加评估 | §6.4：候选来自控制面暂存的文档；本地影子文件与 `ShadowPolicyProvider` 删除（Q17） |
-| RFC 0006 §5.4.1 | 外部属性目录 = 内置目录 + 本实例注册的提供者 | §3.1 N3：控制面编译需要同一份目录，目录声明移进 `Platform` 文档（Q16） |
-| RFC 0003 Q14；RFC 0004 §4.4、Q2 | 文档 ≤ 8 MB、每文档主体绑定 ≤ 1,000 | §6.2 V2：发布前检查 |
-
----
+> **2026-11-23 压缩时删去**：本节是前面各阶段推迟到本阶段的事项与各自在本文的去处，都已实现。原文见 `git show 3cd4dca9:docs/rfc/0007-control-plane.md`。
 
 ## 3. RFC 0001 中与第 6 阶段有关的不一致
 
@@ -395,23 +370,7 @@
 
 ## 4. 现状（`main` @ `95cc3252`）
 
-| 部分 | 现在怎么做 | 代码 |
-|---|---|---|
-| 写快照文档 | `SnapshotPublisher`（`Mono`）：每个写操作是对一份文档的"条件读 → 修改 → 校验 → `putIfMatch`"；冲突时从新读开始重做，指数退避，最多 64 次；不改变内容的写入什么都不写；不加 `WAIT` | [`SnapshotPublisher`](../../core/src/main/kotlin/me/ahoo/cosec/snapshot/SnapshotPublisher.kt)、[`RedisSnapshotPublisher`](../../cocache/src/main/kotlin/me/ahoo/cosec/cocache/snapshot/RedisSnapshotPublisher.kt) |
-| 校验 | 7.0 的加载期检查：`DefaultPolicyEvaluator`、`DefaultAppPermissionEvaluator` | [`DefaultPolicyEvaluator`](../../core/src/main/kotlin/me/ahoo/cosec/policy/DefaultPolicyEvaluator.kt) |
-| 谁能写 | 任何拿到发布者 bean（或 Redis 凭据）的代码；没有授权，没有"不能越权" | — |
-| 本地策略 | 每个实例启动时可以把本地 JSON 写进仓库（`init-repository`、`force-refresh`） | [`LocalPolicyInitializer`](../../core/src/main/kotlin/me/ahoo/cosec/policy/LocalPolicyInitializer.kt)、[`LocalPolicyInitializerLifecycle`](../../spring-boot-starter/src/main/kotlin/me/ahoo/cosec/spring/boot/policy/LocalPolicyInitializerLifecycle.kt) |
-| 历史与回滚 | 按策略：写入成功后追加一条修订（内存或 Redis 列表，独立计数器），回滚 = 把旧内容重新 `setPolicy` | [`PolicyHistory`](../../core/src/main/kotlin/me/ahoo/cosec/policy/history/PolicyHistory.kt)、[`RedisPolicyRevisionStore`](../../cocache/src/main/kotlin/me/ahoo/cosec/cocache/RedisPolicyRevisionStore.kt) |
-| 影子 | 装饰器（第 5 阶段改为 `ShadowListener`）；候选来自每个实例本地的文件（`ShadowPolicyProvider`），差异种类 `WIDENED`、`NARROWED`、`RULE_CHANGED`、`CANDIDATE_ERROR`，经 `ShadowEventSink` 写日志 | [`ShadowAuthorization`](../../core/src/main/kotlin/me/ahoo/cosec/shadow/ShadowAuthorization.kt)、[`ShadowPolicyProvider`](../../core/src/main/kotlin/me/ahoo/cosec/shadow/ShadowPolicyProvider.kt)、[`ShadowDiff`](../../core/src/main/kotlin/me/ahoo/cosec/shadow/ShadowDiff.kt)、[`CoSecShadowAutoConfiguration`](../../spring-boot-starter/src/main/kotlin/me/ahoo/cosec/spring/boot/shadow/CoSecShadowAutoConfiguration.kt) |
-| 解释 | actuator 端点 `cosecExplain`，针对当前状态 | [`CoSecExplainEndpoint`](../../spring-boot-starter/src/main/kotlin/me/ahoo/cosec/spring/boot/explain/CoSecExplainEndpoint.kt) |
-| 访问分析 | `AccessAnalyzer.whoCan`/`grantsOf`，在 7.x 的数据模型上 | [`AccessAnalyzer`](../../core/src/main/kotlin/me/ahoo/cosec/analysis/AccessAnalyzer.kt) |
-| 生成器 | actuator 端点从宿主的 OpenAPI 生成策略与应用权限 JSON（只读，不写入） | [`CoSecPolicyGeneratorEndpoint`](../../spring-boot-starter/src/main/kotlin/me/ahoo/cosec/spring/boot/actuate/CoSecPolicyGeneratorEndpoint.kt) |
-| JSON schema | 六个手写文件，没有测试检查（AGENTS.md） | [`schema/`](../../schema/) |
-| 文档头 | `schema`、`revision`、`publishedAt`；编译器拒绝未知的顶层字段 | [`PolicySnapshotCompiler`](../../core/src/main/kotlin/me/ahoo/cosec/authorization/engine/PolicySnapshotCompiler.kt) |
-
-第 4、5 阶段改的都是数据面；上表中写入一侧到第 5 阶段结束时仍是这样（RFC 0004 §7.4 给 `SnapshotPublisher` 加了绑定写入，RFC 0006 原样保留它）。
-
----
+> **2026-11-23 压缩时删去**：本节是写作时 7.x 写入路径的现状，这些代码已删除。原文见 `git show 3cd4dca9:docs/rfc/0007-control-plane.md`。
 
 ## 5. 模型：`PolicyStore`、修订与回滚
 
@@ -1409,59 +1368,7 @@ AGENTS.md 在 PR-11 更新：Mental model 的 "Layers" 加上 `control/`，新�
 
 ## 16. 实现拆分
 
-### 16.1 交付方式
-
-与前几个 RFC 相同：全部以 `main` 为 base，squash 合并；不发布任何版本；PR-1 到 PR-10 只做加法，starter 默认不装配控制面，标题不带 `!`；PR-11 是删除与切换；
-每个 PR 合入后两轮审查，修复以 `fix(control|...): round-N review fixes` 的 PR 合入。PR-11 和它的两轮审查结束，即第 6 阶段结束；此时第 2–6 阶段全部完成，
-由维护者决定 8.0 的 RC 或 GA（RFC 0001 §6），本文不触发任何发布。
-
-### 16.2 PR 列表
-
-| PR | 标题 | 范围 | 依赖 | 能否提前开工 | 完成标准 |
-|---|---|---|---|---|---|
-| PR-1 | `build: add the cosec-control module` | `control/` 空模块、BOM、ArchUnit（不依赖 Spring、Reactor、Redis 客户端；不引用 `reactor.*`）、`jmh` 源码集 | 本 RFC 获批 | **能** | `:control:check` 通过；临时引用一个 `reactor.core` 类能让 ArchUnit 失败 |
-| PR-2 | `feat(core): generate JSON schemas from document format descriptors`（**2026-10-26**：此后改格式的 PR 为 RFC 0004 PR-4、RFC 0006 PR-5、本文 PR-4/PR-5 与切换 PR，见 [RFC 0008](0008-conformance-and-direct-build.md) §4.1） | §10.4：格式描述（覆盖 `main` 当时的文档格式）、`generateSchemas`、`verifySchemas`、`SchemaConformanceTest`；AGENTS.md 的 schema 一行 | 本 RFC 获批 | **能**。之后每个改格式的 PR（RFC 0004 PR-7、RFC 0005 PR-8、RFC 0006 PR-5 等）必须同时改描述，`verifySchemas` 强制 | `:core:check` 通过；现有 schema 文件由生成得到 |
-| PR-3 | `feat(engine,core): enforce platform boundaries` | §7.6：文档的边界数据与编译规则、`withinBoundary`、`StatementRef.Boundary`、trace；P-B1–P-B3；`boundary` 基准参数 | RFC 0004 PR-2、PR-4；RFC 0005 PR-4 | RFC 0005 PR-4 合入后 | `:engine:check`、`:core:check` 通过；§14.1 的 `none` 目标 |
-| PR-4 | `feat(control,cocache): store revisions and publish documents with putIfMatch` | §5：`ControlStore` 与 CoCache 实现、修订记录与链、索引、写入顺序、回滚、回收、反向引用索引、`provenance` 与 schema 加一（**2026-10-26**：按 [RFC 0008](0008-conformance-and-direct-build.md) Q5 不加号，`provenance` 作为可选字段加进唯一的 `schema: 2` 格式）；`RevisionChainTest` | PR-1；RFC 0004 PR-4（三种文档）；RFC 0003 PR-3（已合入） | RFC 0004 PR-4 合入后 | `:control:check`、`:cocache:check` 通过（需要 Redis） |
-| PR-5 | `feat(control): validate, compile and stage changes` | §6.1–§6.3、§6.7：变更请求与状态机、条目级操作、V1–V5、严格编译、暂存槽、变基、`apply`；N3 的 `limits`/`attributes` 两节 | PR-4；RFC 0005 PR-4（AST 编译与成本）；RFC 0006 PR-4（属性目录） | RFC 0006 PR-4 合入后 | `PublishCompileTest`、`ControlFailClosedTest` |
-| PR-6a | `feat(engine,control): analyze grants`（**2026-10-26 修订（路线图审查）**：从 PR-6 拆出，现在开工，见 [RFC 0008](0008-conformance-and-direct-build.md) §4.5） | §7.4.1–§7.4.4：`GrantAnalyzer`（片段拆分、`specialize`、捕获变量、`disjoint`、收窄判定）；RFC 0005 §5.5 的模式包含（N7，`engine/`）；A6、A7。A5 在 RFC 0004 PR-4 之后加入（这里或 PR-6）；A8 与 `GRT-*` 场景留在 PR-6 | PR-1 ✓（#1032）；RFC 0005 PR-2 ✓（#1036）、PR-3 ✓（#1040） | **能**（2026-10-26 开工） | `GrantAnalyzerTest`（§7.4.6 每一行）、A6、A7 |
-| PR-6 | `feat(engine,control): authorize control-plane writes and analyze grants`（**2026-10-26 修订（路线图审查）**：分析部分移到 PR-6a，本 PR 只剩 §7.1–§7.3、§7.5、接线、A5（如未在 PR-6a 中）、A8 与 `GRT-*` 场景） | §7.1–§7.5：动作与资源、内置控制面策略、硬性规则、`GrantAnalyzer`、收窄判定、审批；RFC 0005 §5.5 的模式包含（N7）；A5–A8 | PR-5；RFC 0005 PR-2（`implies`、A1/A2）、PR-3（模式）；RFC 0006 PR-7（挂起的 `AuthorizationChecker`） | 分析部分在 RFC 0005 PR-2、PR-3 之后即可开工；接线等 RFC 0006 PR-7 | `GrantAnalyzerTest`（§7.4.6 每一行）、A5–A8 |
-| PR-7 | `feat(runtime,control): run shadow windows on candidate documents`（已合入，#1080） | §6.4、§6.5：候选文档、`CandidateSource`、`ShadowListener` 改读候选、`ShadowReportSink` 与 CoCache 实现、实例状态、窗口判定与确认、`propagation` | PR-5；RFC 0006 PR-6（监听器） | RFC 0006 PR-6 合入后 | `ListenerIsolationTest` 扩展；用两个内存实例跑通一个窗口 |
-| PR-8 | `feat(control,core,migrate,kafka): break-glass, tenant self-service and change audit`（已合入，#1087） | §8、§9、§10.5：break-glass、N1/N2 的编译规则、`nomatch` 确认（N6）、`ChangeListener` 与 Kafka 实现、`cosec-migrate bootstrap`/`partition plan`、`publish` 改经 `ControlStore` | PR-6、PR-7；RFC 0004 PR-5（`cosec-migrate`） | PR-6 合入后 | `BreakGlassControlTest`、`ControlTenantIsolationTest`、P12 的控制面形式 |
-| PR-9 | `feat(control,starter): expose the control plane as a library and over HTTP`（**2026-10-26 改动**：starter 装配移进切换 PR；依赖改为 RFC 0006 PR-7） | §10.1–§10.3：`ControlPlane` 门面、HTTP 路由、`controlSupport` feature variant 与属性、AOT hint 与测试、`simulate`/`explain`/`analyze`（`AccessAnalyzer` 重写）；控制面延迟测量（§14.2） | PR-5 到 PR-8；RFC 0006 PR-9（starter 装配 Pipeline） | RFC 0006 PR-9 合入后 | `:spring-boot:check` 通过（需要 Redis）；§14.2 的数字 |
-| ~~PR-10~~ | ~~`test: replay phase 6 against phase 5 with zero differences`~~ **已取消（2026-10-26，[RFC 0008](0008-conformance-and-direct-build.md)）** | §12：门槛 D 的回放模式、发布往返性质、随机比较、百万例任务 | PR-3、PR-8、PR-9；RFC 0006 PR-10（基准是第 5 阶段结束时的实现） | RFC 0006 PR-10 合入后 | 用仓库内的合成数据跑通回放与往返 |
-| — | ~~**门槛 D**~~ **已取消（2026-10-26）** | 维护者在本地：对同一批导出跑回放（§12.3） | PR-10 | — | 差异为 0；证据附在 PR-11 |
-| ~~PR-11~~ | ~~`refactor!: make the control plane the only writer of snapshot documents`~~ **并入 RFC 0008 的切换 PR（2026-10-26）** | 删除 §15 X1–X3 的全部项与 `cosecExplain`；`nomatch` 只限平台的规则删除；ArchUnit"快照只有一个写入者"与 Reactor 公开签名规则（M12）；starter 默认装配；文档（§16.3）；AGENTS.md | 门槛 D；PR-1 到 PR-10；RFC 0006 PR-10 | **不能** | 全部模块 `check` 通过；`wiki` 检查通过 |
-
-PR-1、PR-2 可以立即开工；PR-6 的分析部分只等 RFC 0005 PR-2、PR-3。其余按第 4、5 阶段对应 PR 的合入顺序推进。
-
-**2026-10-26 修订（路线图审查）**：RFC 0005 PR-2、PR-3 都已合入，PR-6 的分析部分作为 PR-6a 现在开工，缩短控制面这一段关键路径（RFC 0008 §4.5）。
-
-### 16.3 文档落点（中英文同步）
-
-| 文件 | PR | 内容 |
-|---|---|---|
-| `wiki/operations/control-plane.md`（新，Guide 类，加入两种语言的侧边栏） | PR-9、PR-11 | 自举、起草—检查—影子—审批—发布、回滚、`apply` 与 CI、break-glass 的申请与撤销、HTTP API 与状态表、"`*` 段也匹配通配作用域" |
-| `wiki/guide/security-model.md` | PR-3、PR-11 | 求值顺序加上边界；不能越权授权的保证、它的语义定义与已知的不完备（UNKNOWN 进审批）、`Anyone` DENY 的取舍；root 一节改为 break-glass 的创建规则；`nomatch` 的确认；控制面的信任根 |
-| `wiki/guide/concepts.md` | PR-11 | 修订、变更请求、边界、影子窗口 |
-| `wiki/operations/storage.md` | PR-4、PR-11 | 头、修订记录、索引、候选、报告的 Redis key；写入顺序；保留与回收；`min-replicas-to-write`；Redis ACL 示例；文档格式加一与升级顺序 |
-| `wiki/operations/configuration.md` | PR-9、PR-11 | `cosec.control.*` 全部属性与默认值；删除的属性（X5） |
-| `wiki/policies/testing.md` | PR-7、PR-11 | 影子窗口（取代本地影子文件）、`simulate`、按版本的 `explain`、`analyze` |
-| `wiki/policies/language.md` | PR-2、PR-11 | 生成的 schema；`protected`、`boundary`、`onMissingConfirmed` 字段 |
-| `wiki/policies/role-permissions.md` | PR-8 | 租户把应用目录里的权限授给自己的角色（N1）；分区流程（§9.4） |
-| `wiki/integration/checks.md` | PR-6 | 控制面怎样用 `AuthorizationChecker` 检查自己的动作（作为代码内检查的一个例子） |
-| `wiki/operations/observability.md` | PR-7、PR-8 | `ChangeEvent`、Kafka 主题、影子报告、`cosec.control.*` 指标、`BOUNDARY` 原因码 |
-| `wiki/operations/troubleshooting.md`、`skills/cosec-troubleshoot` | PR-11 | 发布被拒的每一种原因（§6.6）、`incompatible` 加载、`BASE_MISMATCH`、break-glass 因没有 REQUIRED 监听器被拒、边界拒绝 |
-| `wiki/operations/upgrading.md` | PR-11 | X1–X8 与迁移方法；7.x 历史不转换；`cosec-migrate bootstrap` |
-| `wiki/architecture/overview.md` | PR-11 | 控制面的结构（§5.1）、写入顺序、不变量（§11）、JMH 数字 |
-| `wiki/architecture/extending.md`、`skills/cosec-custom-matcher` | PR-11 | 新扩展点 `ControlStore`、`ChangeListener`、`ShadowReportSink` |
-| `wiki/guide/quick-start.md`、`skills/cosec-integration` | PR-11 | 自举与第一次发布的示例 |
-| `skills/cosec-policy-author` | PR-11 | 经控制面发布、影子窗口、授出分析得到 UNKNOWN 时怎么改写 |
-| `schema/` | PR-2 起 | 生成 |
-| `AGENTS.md` | PR-2、PR-11 | §11 末尾列出的改动 |
-| `docs/roadmap.md` | 每个 PR | 第 6 阶段的进度 |
-
----
+> **2026-11-23 压缩时删去**：本节是实现的 PR 划分，都已合入。原文见 `git show 3cd4dca9:docs/rfc/0007-control-plane.md`。
 
 ## 17. 决定
 
@@ -1512,18 +1419,4 @@ PR-1、PR-2 可以立即开工；PR-6 的分析部分只等 RFC 0005 PR-2、PR-3
 
 ## 附录 B：涉及的现有代码
 
-本文对现有行为的描述，以 `main` @ `95cc3252` 的下列代码为准：
-
-- 写入：`core/.../snapshot/SnapshotPublisher.kt`、`InMemorySnapshotDocumentStore.kt`、`SnapshotDocument.kt`；`cocache/.../cache/snapshot/RedisSnapshotPublisher.kt`
-  （`putIfMatch`、冲突后重读、退避、结果未知时读回摘要）、`RedisSnapshotDocumentStore.kt`；`cocache/.../cache/CoSecCacheSpecs.kt`
-- 编译：`core/.../authorization/engine/PolicySnapshotCompiler.kt`（头字段检查、未知字段即格式错误）；`core/.../policy/DefaultPolicyEvaluator.kt`
-- 本地策略：`core/.../policy/LocalPolicyInitializer.kt`；`spring-boot-starter/.../policy/LocalPolicyInitializerLifecycle.kt`
-- 历史：`core/.../policy/history/PolicyHistory.kt`（`VersionedPolicyRepository`、`InMemoryPolicyRevisionStore`）；`cocache/.../cache/RedisPolicyRevisionStore.kt`；
-  `spring-boot-starter/.../authorization/cache/CoSecPolicyCacheAutoConfiguration.kt`（`history.enabled`）
-- 影子：`core/.../shadow/ShadowAuthorization.kt`、`ShadowPolicyProvider.kt`（`LocalShadowPolicyProvider`）、`ShadowDiff.kt`；`spring-boot-starter/.../shadow/CoSecShadowAutoConfiguration.kt`
-- 解释、分析与生成器：`spring-boot-starter/.../explain/CoSecExplainEndpoint.kt`、`actuate/CoSecPolicyGeneratorEndpoint.kt`、`actuate/CoSecAppPermissionGeneratorEndpoint.kt`；
-  `core/.../analysis/AccessAnalyzer.kt`
-- 代码内检查：`core/.../authorization/AuthorizationChecker.kt`（第 5 阶段改为挂起，RFC 0006 §7.6）
-- 模型：`core/model/src/main/kotlin/me/ahoo/cosec/model/Binding.kt`、`Ids.kt`、`Memberships.kt`、`scope/Scope.kt`、`scope/ScopeResolver.kt`
-- schema：`schema/action.schema.json`、`condition.schema.json`、`cosec-app-permission.schema.json`、`cosec-policy.schema.json`、`definitions.schema.json`、`rate-limit-rule.schema.json`
-- 配置：`wiki/operations/configuration.md`（`local-policy.*`、`cache.history.*`、`shadow.*`）、`wiki/operations/storage.md`（策略历史与回滚）
+> **2026-11-23 压缩时删去**：本节是7.x 里与本文有关的文件清单，这些代码已删除。原文见 `git show 3cd4dca9:docs/rfc/0007-control-plane.md`。

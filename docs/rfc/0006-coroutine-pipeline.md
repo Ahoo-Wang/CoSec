@@ -138,28 +138,7 @@ suspend Pipeline.evaluate(HttpFacts): Outcome
 
 ## 2. 前面各阶段推迟到本阶段的事项
 
-| 来源 | 推迟的内容 | 本文的处理 |
-|---|---|---|
-| RFC 0002 §3.5、Q3；RFC 0003 §2 I7、Q16；RFC 0004 §2.2 | `Indeterminate` 映射为 503（快照不可用、陈旧超限、成员关系不可用都暂为 500） | §6：全部 `Indeterminate` → 503；500 只留给未建模的异常（Q1） |
-| RFC 0002 §5.2、Q5 | `VerifyResult` 保留到第 5 阶段，"随结果类型统一一起处理" | §5.7：`VerifyResult`、`AuthorizeResult`、`AuthorizationDecision`、`SecurityDecision` 收敛为 `Decision` + `Outcome`（Q22） |
-| RFC 0003 §2 I2、Q9；RFC 0005 §3.7 | 删除 `BlockingAware`；它的替代品 `AttributeProvider` | §5.4、§5.6；PR-10 删除 |
-| RFC 0003 §2 I3、Q10 | `SnapshotSource` 的挂起包装（第 3 阶段返回 `CompletableFuture`） | §5.5.1：`runtime/` 中的 `SuspendingSnapshotSource`，SPI 形状不变 |
-| RFC 0004 §4.5.2、Q14 | `MembershipProvider` 的挂起形式与 Redis 实现 | §5.5.2：SPI 改为 `suspend`；实现放在 `cosec-cocache`（§3 K18） |
-| RFC 0003 §2 I6、Q17；RFC 0005 §7.3、Q4 | 限流规则进快照；限流成为义务 | §8 |
-| RFC 0003 §5.2 | `RedisRateLimiter` 的 `subscribeOn(boundedElastic)`（阻塞调用） | §8.4：改为非阻塞客户端，删除切换 |
-| RFC 0003 §5.2 | `SecurityContextParseSchedulers`（吊销检查、API Key 存储）"第 5 阶段 `Authenticator` 挂起化时处理" | §5.3.2 |
-| RFC 0003 §1.2、Q20 | 快照版本写进决策事件 | §9.2：`DecisionEvent.snapshotVersion`（RFC 0004 的三元组） |
-| RFC 0004 §3 I9、Q8 | break-glass 使用写 `REQUIRED` 审计 | §9.4.3（Q20） |
-| RFC 0004 §3 I7、Q7；RFC 0005 §3.4 | `onMissing` 只作用于外部属性，第 5 阶段生效 | §5.4.3（Q12、Q13） |
-| RFC 0004 §3 I10、§4.7、Q9 | 黑名单名单改为 `AttributeProvider`，拆成主体、IP、设备三个集合 | §5.4.4（Q14） |
-| RFC 0005 §2 J2、§3.7、Q2 | 删除 `legacy` 条件节点与 `ConditionMatcherFactory` SPI | §5.6；PR-10 删除（Q15） |
-| RFC 0005 §5.2 | 路径规范化"属于第 5 阶段的 Pipeline 重组" | §5.3.1 |
-| RFC 0004 §4.1 | `ScopeResolver` 留在 `model/` 还是搬进 `cosec-runtime`，"第 5 阶段再定" | §3 K4：留在 `model/`（Q4） |
-| RFC 0004 §13 X6 | 后端读校验后的 `SecurityContext.scope`，而不是 Header | §7.6：适配器把 `Outcome` 中的作用域写进面向应用的 `SecurityContext` |
-| RFC 0001 §3.8 | `WebAdapterParityTest` 断言三类适配器的 trace id 与审计主体一致；BlockHound；JMH 加端到端压测确认桥接开销 | §6.3、§10、§13 |
-| RFC 0001 §3.11 | 请求 id、审计事件 id 经 `StringIdGenerator` 端口生成 | §9.2 |
-
----
+> **2026-11-23 压缩时删去**：本节是前面各阶段推迟到本阶段的事项与各自在本文的去处，都已实现。原文见 `git show 3cd4dca9:docs/rfc/0006-coroutine-pipeline.md`。
 
 ## 3. RFC 0001 中与第 5 阶段有关的不一致
 
@@ -198,26 +177,7 @@ suspend Pipeline.evaluate(HttpFacts): Outcome
 
 ## 4. 现状（`main` @ `4ddaee82`）
 
-| 部分 | 现在怎么做 | 代码 |
-|---|---|---|
-| 请求解析 | `RequestParser.parse`，路径非法抛 `InvalidRequestPathException` → 400（`SecurityDecision.BAD_REQUEST`，不带 `request`，适配器只写状态码）；规范化规则在 `RequestPaths` | [`SecurityPipeline`](../../core/src/main/kotlin/me/ahoo/cosec/pipeline/SecurityPipeline.kt)、[`RequestPaths`](../../core/src/main/kotlin/me/ahoo/cosec/context/request/RequestPaths.kt) |
-| 认证 | 同步的 `SecurityContextParser.parse`，经 `Mono.fromCallable(...).subscribeOn(securityContextParseScheduler)`；吊销检查（`TokenStore.isRevoked`）或阻塞的 API Key 存储开启时调度器是 `boundedElastic`，否则 `immediate` | [`SecurityContextParseSchedulers`](../../spring-boot-starter/src/main/kotlin/me/ahoo/cosec/spring/boot/authorization/SecurityContextParseSchedulers.kt)、[`TokenStore`](../../core/src/main/kotlin/me/ahoo/cosec/token/TokenStore.kt)、[`ApiKeys`](../../core/src/main/kotlin/me/ahoo/cosec/apikey/ApiKeys.kt) |
-| 认证失败 | `TokenVerificationException` → 匿名上下文并记下异常；其他异常 → 500 | `SecurityPipeline.parseSecurityContext`、`evaluate` |
-| 授权 | `Authorization.decide(request, context): Mono<AuthorizationDecision>`；空结果 → 隐式拒绝；错误 → `toErrorDecision`（`RegexTimeoutException` → 401/403，其余 → 500） | `SecurityPipeline.authorize` |
-| 装饰器链 | starter 中由外到内：`TracingAuthorization` → `AuditingAuthorization` → `MeteredAuthorization`（经 `CoSecAuthorizationCustomizer`）→ `RateLimitingAuthorization` → `ShadowAuthorization` → `SimpleAuthorization` | [`CoSecAuthorizationAutoConfiguration`](../../spring-boot-starter/src/main/kotlin/me/ahoo/cosec/spring/boot/authorization/CoSecAuthorizationAutoConfiguration.kt)、[`CoSecAuditAutoConfiguration`](../../spring-boot-starter/src/main/kotlin/me/ahoo/cosec/spring/boot/audit/CoSecAuditAutoConfiguration.kt)、[`CoSecOpenTelemetryAutoConfiguration`](../../spring-boot-starter/src/main/kotlin/me/ahoo/cosec/spring/boot/opentelemetry/CoSecOpenTelemetryAutoConfiguration.kt)、[`CoSecMetricsAutoConfiguration`](../../spring-boot-starter/src/main/kotlin/me/ahoo/cosec/spring/boot/micrometer/CoSecMetricsAutoConfiguration.kt) |
-| 状态码 | `toDecision`：限流未通过 → 429；授权 → 200；否则已认证 403、匿名 401（原因优先取 token 异常）；`SecurityStatus` 只有 200/400/401/403/429/500 | [`SecurityDecision`](../../core/src/main/kotlin/me/ahoo/cosec/pipeline/SecurityDecision.kt) |
-| 限流 | 授权通过后逐条匹配规则、即时算桶，按顺序 `tryAcquire`，第一条耗尽即 429；后端失败时 `strictFailure` → 429，否则跳过；`RedisRateLimiter` `subscribeOn(boundedElastic)` | [`RateLimitingAuthorization`](../../core/src/main/kotlin/me/ahoo/cosec/limiter/RateLimitingAuthorization.kt)、[`RedisRateLimiter`](../../cocache/src/main/kotlin/me/ahoo/cosec/cocache/limiter/RedisRateLimiter.kt) |
-| 审计 | `doOnSuccess`/`doOnError` 中同步调用 `AuditEventSink.publish`，异常吞掉记 WARN；Kafka sink 在自己的单线程有界调度器（队列 1024）上发送，满了丢弃 | [`AuditingAuthorization`](../../core/src/main/kotlin/me/ahoo/cosec/audit/AuditingAuthorization.kt)、[`KafkaAuditEventSink`](../../kafka/src/main/kotlin/me/ahoo/cosec/kafka/KafkaAuditEventSink.kt) |
-| 指标 | `cosec.authorization` 计时器，标签 `result`、`source` | [`MeteredAuthorization`](../../micrometer/src/main/kotlin/me/ahoo/cosec/micrometer/MeteredAuthorization.kt) |
-| 追踪 | 订阅时取 `Context.current()` 作父上下文，开 `cosec.authorize` span，把 trace/span id 写进请求属性供审计读取；span 属性从 `SecurityContext` 的可变属性里读 `VerifyContext` | [`AuthorizationMono`](../../opentelemetry/src/main/kotlin/me/ahoo/cosec/opentelemetry/AuthorizationMono.kt)、[`CoSecInstrumenter`](../../opentelemetry/src/main/kotlin/me/ahoo/cosec/opentelemetry/CoSecInstrumenter.kt) |
-| 影子 | 装饰器，采样后用覆盖仓库构造候选 `SimpleAuthorization` 再评估一次（RFC 0003 PR-5 改为快照叠加） | [`ShadowAuthorization`](../../core/src/main/kotlin/me/ahoo/cosec/shadow/ShadowAuthorization.kt) |
-| 适配器 | WebFlux 与 Gateway 共用 `ReactiveSecurityFilter.filterInternal`（`pipeline.evaluate(exchange).flatMap`）；WebMvc 在 Servlet 线程上 `pipeline.evaluate(request).block()`，`SecurityContextHolder` 是 `ThreadLocal` | [`ReactiveSecurityFilter`](../../webflux/src/main/kotlin/me/ahoo/cosec/webflux/ReactiveSecurityFilter.kt)、[`AuthorizationGatewayFilter`](../../gateway/src/main/kotlin/me/ahoo/cosec/gateway/AuthorizationGatewayFilter.kt)、[`AbstractAuthorizationInterceptor`](../../webmvc/src/main/kotlin/me/ahoo/cosec/webmvc/AbstractAuthorizationInterceptor.kt) |
-| 阻塞匹配器 | `BlockingAware.requiresBlocking` 为真的组让整次评估在 `boundedElastic` 上执行 | [`BlockingAware`](../../core/src/main/kotlin/me/ahoo/cosec/policy/BlockingAware.kt) |
-| 协程 | 仓库里没有任何 `kotlinx-coroutines` 依赖 | [`libs.versions.toml`](../../gradle/libs.versions.toml) |
-
-第 2–4 阶段改的都是 `SimpleAuthorization` 内部；上表中引擎外面的部分到第 4 阶段结束时仍是这样，本阶段的"基准"就是它（§11）。
-
----
+> **2026-11-23 压缩时删去**：本节是写作时 7.x 请求路径的现状，这些代码已删除。原文见 `git show 3cd4dca9:docs/rfc/0006-coroutine-pipeline.md`。
 
 ## 5. Pipeline 结构
 
@@ -1222,53 +1182,7 @@ PR-9 的描述附前后对比，PR-10 把最终数字写进 `wiki/architecture/o
 
 ## 15. 实现拆分
 
-### 15.1 交付方式
-
-与 RFC 0002 §9.1、RFC 0003 §11.1、RFC 0004 §14.1 相同：全部以 `main` 为 base，squash 合并；不发布任何版本；PR-1 到 PR-8 只做加法，starter 不装配新代码，
-标题不带 `!`；PR-9 是切换、PR-10 是删除；每个 PR 合入后两轮审查，修复以 `fix(runtime|...): round-N review fixes` 的 PR 合入。
-
-### 15.2 PR 列表
-
-| PR | 标题 | 范围 | 依赖 | 能否提前开工 | 完成标准 |
-|---|---|---|---|---|---|
-| PR-1 | `build: add the cosec-runtime module with kotlinx-coroutines` | `runtime/` 空模块与 BOM；`libs.versions.toml` 增加协程与 `opentelemetry-extension-kotlin`（Q7）；`RuntimeBoundaryTest`（ArchUnit）；`jmh` 源码集；`detekt` 的 `runCatching` 规则 | 本 RFC 获批 | **能**：只依赖已合入的 `model/`、`engine/` | `:runtime:check` 通过；临时引用一个 `reactor.core` 类能让 ArchUnit 失败（PR 描述给出输出） |
-| PR-2 | `feat(runtime): add the coroutine pipeline with outcomes and one status mapping`（**2026-10-26 改动**：增加 Header 与 query 不一致即 400，见 [RFC 0008](0008-conformance-and-direct-build.md) §4.1；**2026-10-26 改动（Q27）**：`Outcome` 带 problem，见下） | `HttpFacts`、`PathNormalizer`（搬家）、`Authenticator` SPI、`Outcome`、`StatusMapping`（含 §6.1 的 `type`/`code` 词汇与 `Outcome.problem`）、`ProblemEncoder`（§6.2）、`ProblemBodyPropertyTest`（P16）、`problem` 的格式描述与生成的 `schema/problem.schema.json`、`Pipeline.decide` 骨架、整体超时、取消规则、`resumeOffIo` 与 T1–T3、`SuspendingSnapshotSource`；全部用测试替身 | PR-1；RFC 0004 PR-2（`evaluate(request, view)`）、PR-1（`Scope`、`ScopeResolver`） | RFC 0004 PR-2 合入后 | 变更行覆盖率 ≥ 80%；`PipelineHotPathTest`、`PipelineResumeTest`、`PipelineCancellationTest` |
-| PR-3 | `feat(core,jwt,cocache): authenticate and resolve memberships with suspend functions` | `CompositeAuthenticator`、JWT 与 API Key 认证器、挂起的 `TokenStore.isRevoked`、`ApiKeyStore`；`MembershipProvider` 改为 `suspend`（Q11）与 `CoCacheMembershipProvider`；`MembershipCacheFailureTest` | PR-2；RFC 0004 PR-3 | RFC 0004 PR-3 合入后 | `:core:check`、`:jwt:check`、`:cocache:check` 通过（需要 Redis） |
-| PR-4 | `feat(engine,runtime): fetch external attributes and apply onMissing` | `AttributeProvider`、属性目录、`Engine.plan`、`onMissing`（§5.4.3）、阶段 A / B 预取、`BlacklistAttributeProvider` 与 `BlacklistSource`、`Ip2RegionAttributeProvider`；P9′、P14 | PR-2；RFC 0005 PR-1、PR-4（AST、编译执行）；RFC 0004 PR-4（文档编译） | RFC 0005 PR-4 合入后 | `:engine:check`、`:runtime:check`、`:ip2region:check` 通过 |
-| PR-5 | `feat(engine,runtime): enforce rate limits as obligations` | 文档的 `rateLimits` 节与编译、`Obligation`、`Permit.obligations`、义务执行、挂起的 `RateLimiter`、非阻塞的 `RedisRateLimiter`；P15；`RateLimitObligationTest`；转换工具把 7.x 规则写进 `Platform` 文档 | PR-4；RFC 0005 PR-6（限流规则的翻译） | RFC 0005 PR-6 合入后 | `:cocache:check` 通过；`RedisRateLimitingOffEventLoopTest` 改写后通过 |
-| PR-6 | `feat(runtime,opentelemetry,micrometer,kafka): add decision events and listeners` | `DecisionEvent`、`DecisionListener`、投递（§9.3、§9.4）、break-glass 规则；`TracingListener`、`MetricsListener`、`LoggingAuditListener`、`KafkaAuditListener`、`ShadowListener`、`AuditEvents.from`；`BridgeContextContributor` 的 OTel 与 MDC 实现；`ListenerIsolationTest` | PR-2；RFC 0004 PR-2（`BindingRef`、三元组版本） | PR-2 合入后，与 PR-3 到 PR-5 并行 | 各模块 `check` 通过 |
-| PR-7 | `feat(webflux,gateway,webmvc): bridge the adapters to the coroutine pipeline`（**2026-10-26 改动**：`WebAdapterParityTest` 只对新 Pipeline 运行） | `HttpFactsReader`、`mono {}` 与 `runBlocking` 桥接、`Outcome` 写回（2026-10-26 修订，Q27：写 `application/problem+json` 与 `ProblemEncoder` 的字节，400 也带 `CoSec-Request-Id`；`WebAdapterParityTest` 断言状态、响应头与响应体逐字节相同，§6.3）、`SecurityContext.scope`、挂起的 `AuthorizationChecker` 与两种扩展；`WebAdapterParityTest` 增加 Gateway（L1）与 §6.3 的场景，两种实现各跑一遍；`PipelineBlockHoundTest` | PR-2、PR-6 | **能**（L1 的 Gateway 场景可以先作为独立的 `test:` PR 进 `main`） | `:spring-boot:check` 通过（需要 Redis） |
-| ~~PR-8~~ | ~~`test: compare the coroutine pipeline with the phase 4 pipeline in replay`~~ **已取消（2026-10-26，[RFC 0008](0008-conformance-and-direct-build.md)）** | `PipelineParity`、R1–R3 的类别与正反例、合成语料、限流重放（虚拟时钟）、审计字段比较、回放的 `pipeline` 模式、百万例任务 | PR-3 到 PR-7；RFC 0004 PR-6（分类器） | RFC 0004 PR-6 合入后 | 每一类的正例被归入、反例不被归入；用仓库内的合成数据跑通回放 |
-| — | ~~**门槛 C**~~ **已取消（2026-10-26）** | 维护者在本地：对同一批导出跑回放（§11.5） | PR-8；第 4 阶段的切换（RFC 0004 PR-7、RFC 0005 PR-8，基准是切换后的实现） | — | 未归类差异为 0；证据附在 PR-9 |
-| ~~PR-9~~ | ~~`refactor!: serve requests through the coroutine pipeline`~~ **并入 RFC 0008 的切换 PR（2026-10-26）** | starter 装配 `Pipeline`、认证器、提供者、监听器与新属性（X8）；三个适配器改用新桥接；状态码变更生效；`upgrading.md` 与其余文档（§15.3）；JMH 与端到端压测（§13，Q24） | 第 4 阶段全部完成（RFC 0004 PR-8、RFC 0005 PR-9）；PR-8；门槛 C | **不能** | 全部模块 `check` 通过；门槛证据；§13 的目标 |
-| ~~PR-10~~ | ~~`refactor!: remove the decorator chain, BlockingAware and the reactive authorization API`~~ **并入 RFC 0008 的切换 PR（2026-10-26）**，删除清单不变（比较器与回放工具也一并删除） | 删除 §5.7 表中的全部旧类型与 SPI、`legacy` 节点、`ConditionMatcherFactory`、`MatcherFactoryRegistry`、`SecurityPipeline`、`SecurityContextParseSchedulers`、`RateLimitRuleProvider`、`BlacklistChecker`、`AuditEventSink`；参数化测试去掉基准一侧（`DecisionParity`、`PipelineParity`、回放工具保留在测试夹具中） | PR-9 | **不能** | 全部模块 `check` 通过；`wiki` 检查通过 |
-
-PR-1 可以立即开工；PR-2 只等 RFC 0004 PR-2；PR-6、PR-7 只等 PR-2，可以与 PR-3 到 PR-5 并行。L1（Gateway 进 `WebAdapterParityTest`）不依赖本 RFC 的任何代码，
-建议立即作为独立 PR 处理。
-
-### 15.3 文档落点（中英文同步）
-
-| 文件 | PR | 内容 |
-|---|---|---|
-| `wiki/architecture/overview.md` | PR-9、PR-10 | 请求路径（§5.2 的时序图）、模块与依赖规则（`runtime/`）、协程模型与线程表（§7.1、§7.2）、装饰器链删除、不变量（§10）、JMH 数字 |
-| `wiki/integration/web.md` | PR-9（2026-10-26：即 RFC 0008 的切换 PR） | 完整状态码表（§6.1）、~~响应体原因码~~ problem+json 的响应体示例与成员说明（§6.2，Q27）、三个适配器的桥接、`SecurityContext.scope`、请求属性（`HttpFacts.requestAttributes`）、X6 |
-| `wiki/integration/checks.md` | PR-9 | 挂起的 `AuthorizationChecker` 与 `Mono`/阻塞扩展；检查不执行义务 |
-| `wiki/integration/authentication.md` | PR-9 | `Authenticator`、凭证读取顺序、`Rejected` 按匿名评估、吊销检查降级、API Key 存储不可用即 503 |
-| `wiki/operations/observability.md` | PR-9 | `DecisionEvent`、REQUIRED 与 BEST_EFFORT、Kafka 的 `delivery`、指标（§9.5.2）、span（§9.5.1）、X1–X4 |
-| `wiki/operations/configuration.md` | PR-9、PR-10 | X8 的全部属性及默认值；删除的属性 |
-| `wiki/operations/troubleshooting.md`、`skills/cosec-troubleshoot` | PR-9（2026-10-26：即 RFC 0008 的切换 PR） | 2026-10-26 新增（Q27）：§6.1 的每个 `type` 一个锚点，锚点名与 slug 相同（中文页用 `{#<slug>}`），并写明凭 `requestId` 查审计与 `explain`；站点让 `https://cosec.ahoo.me/problems/<slug>` 落到该锚点；`pnpm check:docs` 检查每个 `type` 都有中英文锚点；新症状：503 及各 `cause`、REQUIRED 审计失败、监听器丢弃、整体超时、外部属性不可用、break-glass 因没有 REQUIRED 监听器而 503 |
-| `wiki/operations/upgrading.md` | PR-9、PR-10（2026-10-26：即 RFC 0008 的切换 PR） | 2026-10-26 新增（Q27）：错误响应体改为 problem+json、显式与隐式拒绝在响应中不再区分、旧 `reason` 到新 `code` 的对照；R1–R3、X1–X8、删除的 API 与 SPI 及迁移方法（装饰器 → 监听器、自定义匹配器 → 属性提供者、`BlacklistChecker` → `BlacklistSource`、`AuditEventSink` → 监听器） |
-| `wiki/operations/storage.md` | PR-5、PR-9 | 快照文档的 `rateLimits` 节；成员关系缓存（TTL、失效、读失败抛出） |
-| `wiki/policies/rate-limiting.md`、`schema/rate-limit-rule.schema.json` | PR-5、PR-9 | 规则在快照文档中；义务语义；`strictFailure` → 503；REQUIRED 审计失败时许可已扣（§9.4.2） |
-| `wiki/policies/language.md`、`skills/cosec-policy-author`、`schema/cosec-policy.schema.json` | PR-4、PR-9 | 外部属性 `ext.*`、`onMissing` 的语义（§5.4.3）、黑名单属性 |
-| `schema/problem.schema.json`（2026-10-26 新增，Q27） | PR-2 | 由 `problem` 的格式描述生成（RFC 0007 PR-2，#1038）；切换 PR 在 `web.md` 中链接它 |
-| `wiki/policies/testing.md` | PR-9 | 影子监听器、`CANDIDATE_INDETERMINATE` |
-| `wiki/guide/security-model.md` | PR-9 | "Fail closed"（503 与 500 的区分、取消、`onMissing: nomatch`、REQUIRED 审计）、"Evaluation order"（义务在 Permit 之后） |
-| `wiki/architecture/extending.md`、`skills/cosec-custom-matcher` | PR-9、PR-10 | 扩展点改为 `Authenticator`、`MembershipProvider`、`AttributeProvider`、`BlacklistSource`、`RateLimiter`、`DecisionListener`、`BridgeContextContributor`；阻塞客户端的写法（§7.7）；删除 `BlockingAware`、`ConditionMatcherFactory` |
-| `wiki/guide/quick-start.md`、`skills/cosec-integration` | PR-9 | 装配示例 |
-| `AGENTS.md` | PR-9 | Mental model 的 "Layers"（`runtime/`）、"Request path"、"Authorization"（装饰器链 → 义务与监听器）；Invariants 表（§10）；"Where a change has to land" 增加"外部属性、监听器"两行 |
-
----
+> **2026-11-23 压缩时删去**：本节是实现的 PR 划分，都已合入。原文见 `git show 3cd4dca9:docs/rfc/0006-coroutine-pipeline.md`。
 
 ## 16. 决定
 
@@ -1315,20 +1229,4 @@ PR-1 可以立即开工；PR-2 只等 RFC 0004 PR-2；PR-6、PR-7 只等 PR-2，
 
 ## 附录 B：涉及的现有代码
 
-本文对现有行为的描述，以 `main` @ `4ddaee82` 的下列代码为准：
-
-- Pipeline 与状态码：`core/.../pipeline/SecurityPipeline.kt`、`SecurityDecision.kt`（`SecurityStatus`、`responseHeaders`）、`context/request/RequestPaths.kt`、
-  `context/DefaultSecurityContextParser.kt`、`context/SecurityContextParser.kt`
-- 装饰器：`core/.../limiter/RateLimitingAuthorization.kt`、`RateLimitRule.kt`、`RateLimiter.kt`、`LocalRateLimiter.kt`、`audit/AuditingAuthorization.kt`、
-  `shadow/ShadowAuthorization.kt`；`micrometer/.../MeteredAuthorization.kt`；`opentelemetry/.../TracingAuthorization.kt`、`AuthorizationMono.kt`、`CoSecInstrumenter.kt`
-- starter 装配：`authorization/CoSecAuthorizationAutoConfiguration.kt`（`cosecAuthorization` 的包装顺序）、`CoSecAuthorizationCustomizer.kt`、`SecurityContextParseSchedulers.kt`、
-  `audit/CoSecAuditAutoConfiguration.kt`、`opentelemetry/CoSecOpenTelemetryAutoConfiguration.kt`、`micrometer/CoSecMetricsAutoConfiguration.kt`
-- 适配器：`webflux/.../ReactiveSecurityFilter.kt`、`ReactiveAuthorizationFilter.kt`、`ReactiveSecurityContexts.kt`；`gateway/.../AuthorizationGatewayFilter.kt`；
-  `webmvc/.../AbstractAuthorizationInterceptor.kt`、`AuthorizationFilter.kt`、`ServletRequestParser.kt`
-- 认证依赖：`core/.../token/TokenStore.kt`、`RevocableTokenVerifier.kt`、`apikey/ApiKeys.kt`；`cocache/.../CoCacheTokenStore.kt`、`CoSecCacheSpecs.kt`（吊销缓存的降级读）
-- 其他：`core/.../blacklist/BlacklistChecker.kt`、`policy/BlockingAware.kt`、`authorization/AuthorizationChecker.kt`、`context/request/RequestAttributesAppender.kt`；
-  `ip2region/.../Ip2RegionRequestAttributesAppender.kt`；`cocache/.../limiter/RedisRateLimiter.kt`；`kafka/.../KafkaAuditEventSink.kt`；
-  `api/.../audit/AuditEvent.kt`
-- 快照：`core/.../snapshot/SnapshotSource.kt`（`peek`/`load` 返回 `CompletableFuture`）、`SnapshotDocumentStore.kt`
-- 测试：`host/spring-boot/src/test/.../WebAdapterParityTest.kt`（只构造 WebFlux 与 WebMvc 两个适配器）；`core/core/src/testFixtures/.../parity/DecisionParity.kt`、
-  `DecisionReplay.kt`；`core/core/build.gradle.kts`（`engineReplay` 任务）
+> **2026-11-23 压缩时删去**：本节是7.x 里与本文有关的文件清单，这些代码已删除。原文见 `git show 3cd4dca9:docs/rfc/0006-coroutine-pipeline.md`。
