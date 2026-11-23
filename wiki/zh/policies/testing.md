@@ -649,6 +649,14 @@ mvc.get("/orders/1") { header(IdentityHeader.NAME, IdentityHeader.forSubject("al
 class OrdersServiceTest
 ```
 
+自己启动应用的测试用同样的方式声明：
+
+```kotlin
+SpringApplicationBuilder(OrdersApplication::class.java).properties(IdentityHeader.ONLY_GATEWAY_CAN_REACH)  // builder
+runApplication<OrdersApplication>("--" + IdentityHeader.ONLY_GATEWAY_CAN_REACH)                          // `--` 参数
+mapOf(IdentityHeader.ONLY_GATEWAY_CAN_REACH_KEY to "true")                                                // 属性映射：单独的键
+```
+
 在部署中，这个声明由运维人员在网络使它成真之后做出（[网关之后的服务](../integration/web.md#services-behind-the-gateway)）；
 永远不要从测试里照抄。像上面那样只运行 CoSec 过滤器的测试，不启动 CoSec 的任何自动配置，也就不需要它。
 

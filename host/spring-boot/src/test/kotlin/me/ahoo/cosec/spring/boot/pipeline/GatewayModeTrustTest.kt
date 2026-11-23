@@ -106,6 +106,8 @@ class GatewayModeTrustTest {
         IdentityHeader.ONLY_GATEWAY_CAN_REACH.assert().isEqualTo(
             "${PipelineProperties.ONLY_GATEWAY_CAN_REACH_KEY}=true"
         )
+        // The key apart (#1872), for a launcher that takes a property map.
+        IdentityHeader.ONLY_GATEWAY_CAN_REACH_KEY.assert().isEqualTo(PipelineProperties.ONLY_GATEWAY_CAN_REACH_KEY)
         gateway.withPropertyValues(IdentityHeader.ONLY_GATEWAY_CAN_REACH).run { it.startupFailure.assert().isNull() }
     }
 
