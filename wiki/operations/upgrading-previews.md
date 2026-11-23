@@ -30,6 +30,8 @@ Which preview of the library may run behind which preview of the gateway image: 
 
 ## From 8.0.0-beta.7 {#from-8-0-0-beta-7}
 
+- **An `explain` at a retained revision is cached like a head** (DR1-F-4). Affected: nothing to change. Repeating it
+  compiles nothing, where each call compiled its documents again.
 - **Session records are kept no longer than their refresh token, and 64 per principal** (`IDN-35`, DR1-G-2).
   Affected: every deployment that issues CoSec's tokens, and a `TokenFamilyStore` of your own.
   - A session record (`<s>:token:family:<sid>`) used to stay in Redis for the whole session lifetime (30 days), even
