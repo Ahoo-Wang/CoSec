@@ -1,0 +1,66 @@
+{
+  "rules": [
+    "CTL-84"
+  ],
+  "polarity": "negative",
+  "level": "control",
+  "description": "DR1-F-6: the same five publishes under the default cap: far within the byte budget and the index bound, every record younger than min-age stays.",
+  "retention": {
+    "maxCount": 2
+  },
+  "reclaim": true,
+  "publishes": [
+    {
+      "policies": [
+        "p1"
+      ]
+    },
+    {
+      "policies": [
+        "p2"
+      ]
+    },
+    {
+      "policies": [
+        "p3"
+      ]
+    },
+    {
+      "policies": [
+        "p4"
+      ]
+    },
+    {
+      "policies": [
+        "p5"
+      ]
+    }
+  ],
+  "expect": {
+    "outcomes": [
+      "Published",
+      "Published",
+      "Published",
+      "Published",
+      "Published"
+    ],
+    "head": {
+      "revision": 5,
+      "parent": 4,
+      "parentRecord": true
+    },
+    "records": 5,
+    "writes": [
+      "record",
+      "head",
+      "record",
+      "head",
+      "record",
+      "head",
+      "record",
+      "head",
+      "record",
+      "head"
+    ]
+  }
+}

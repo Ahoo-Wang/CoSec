@@ -16,10 +16,13 @@
 package me.ahoo.cosec.spring.boot.control
 
 import io.micrometer.core.instrument.FunctionCounter
+import io.micrometer.core.instrument.Gauge
 import io.micrometer.core.instrument.MeterRegistry
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.control.audit.ChangeListeners
 import me.ahoo.cosec.control.lifecycle.Changes
+import me.ahoo.cosec.control.lifecycle.ControlMaintenance
+import me.ahoo.cosec.control.store.Revisions
 import me.ahoo.cosec.spring.boot.StartupTask
 import me.ahoo.cosec.spring.boot.micrometer.ChangeListenerMeters
 import org.springframework.beans.factory.ObjectProvider
@@ -55,7 +58,39 @@ internal class ControlMetersConfiguration {
         }
     }
 
+    /**
+     * What the documents retain (`CTL-84`): set by each reclamation pass; only the instance that held the pass's lease
+     * reports what it found, the others 0, so summed across instances they are the store's as of the last pass.
+     */
+    @Bean
+    fun cosecRetainedMeters(
+        registry: ObjectProvider<MeterRegistry>,
+        maintenance: ObjectProvider<ControlMaintenance>,
+        revisions: ObjectProvider<Revisions>,
+    ): StartupTask = StartupTask.AfterSingletons {
+        val meters = registry.ifAvailable ?: return@AfterSingletons
+        maintenance.ifAvailable?.let { bound ->
+            Gauge.builder(RECORDS, bound) { it.retained.records.toDouble() }
+                .description("Revision records the documents retain, as the last reclamation pass this instance led found")
+                .register(meters)
+            Gauge.builder(BYTES, bound) { it.retained.bytes.toDouble() }
+                .description("Stored bytes of those records").baseUnit("bytes").register(meters)
+            Gauge.builder(OPEN_CHANGES, bound) { it.retained.openChanges.toDouble() }
+                .description("Open changes, as the last reclamation pass this instance led found")
+                .register(meters)
+        }
+        revisions.ifAvailable?.let { bound ->
+            FunctionCounter.builder(RECLAIMED_YOUNG, bound) { it.reclaimedYoung.toDouble() }
+                .description("Records reclaimed younger than min-age, past what a document retains: alert on any")
+                .register(meters)
+        }
+    }
+
     companion object {
         const val UNREADABLE_STATUSES = "cosec.control.shadow.status.unreadable"
+        const val RECORDS = "cosec.control.revisions.records"
+        const val BYTES = "cosec.control.revisions.bytes"
+        const val RECLAIMED_YOUNG = "cosec.control.revisions.reclaimed-young"
+        const val OPEN_CHANGES = "cosec.control.changes.open"
     }
 }

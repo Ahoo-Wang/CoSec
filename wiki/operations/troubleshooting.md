@@ -318,6 +318,17 @@ resource:
 
 A path that enforcement refuses is not logged: it can come from a client.
 
+## Revisions reclaimed within min-age {#revisions-reclaimed-within-min-age}
+
+`cosec.control.revisions.reclaimed-young` counts, and a `WARN` of `me.ahoo.cosec.control.store` says
+`records younger than ... reclaimed`, naming the document: its records weighed more than it may retain beyond its
+`max-count` most recent, `max-count` times the document cap, or its index listed more than 26,214 more (`CTL-84`). The
+oldest went first, younger than `min-age`. The `max-count` most recent revisions, the head and what open changes rest
+on are always kept, so a rollback to a recent revision still works; one to an older revision may now be `410`. Look for
+a client publishing large documents in a loop (the audit events of its changes name it) and rate-limit it per tenant
+([Rate limiting](../policies/rate-limiting.md#the-control-api)). The `WARN` comes at most once a reclaim pass, with the
+count of the others since.
+
 ## Decisions use an old revision
 
 The audit event's `snapshotVersion`, or the span's `cosec.snapshot.version`, is older than the revision the control

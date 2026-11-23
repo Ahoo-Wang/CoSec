@@ -498,6 +498,19 @@ Meters, each tagged `listener`:
 decode: each such instance holds every shadow window until its status reads or expires (`CTL-73`), and the log names it
 ([Troubleshooting](./troubleshooting.md#shadow-window-waiting-for-an-acknowledgement)). Alert on any.
 
+`cosec.control.revisions.records` and `cosec.control.revisions.bytes` (gauges, no tags) are the revision records the
+documents retain and their stored bytes, and `cosec.control.changes.open` the open changes (`CTL-84`). The reclamation
+pass sets them, every hour: only the instance that holds the pass's lease reads every document, so only it reports what
+it found, and every other instance reports `0`, as does one whose last pass could not run. **Sum them across
+instances**, or take the largest: either is the store's total as of the last pass. An instance that lost the lease
+drops its old value at its next pass. A document that pass skipped (an open change that does not read) is not counted,
+and `bytes` counts an entry an older version wrote only once a pass sized it. Alert on `bytes` approaching what Redis
+may hold.
+
+`cosec.control.revisions.reclaimed-young` (counter, no tags) counts the records an instance reclaimed younger than
+`min-age`, past what a document may retain (`CTL-84`): a document publishing large documents in a loop. Alert on any,
+and look for the `WARN` that names the document ([Troubleshooting](./troubleshooting.md#revisions-reclaimed-within-min-age)).
+
 ## Logs
 
 | Logger | What it logs |

@@ -30,7 +30,16 @@ Which preview of the library may run behind which preview of the gateway image: 
 
 ## From 8.0.0-beta.7 {#from-8-0-0-beta-7}
 
-- **A document holds at most `cosec.control.revisions.max-count` open changes** (50 by default, `CTL-83`, DR1-E-2).
+- **A document's revision records are bounded within `min-age` too** (`CTL-84`, DR1-F-6). Affected: a document that
+  publishes large documents often. Beyond its `max-count` most recent revisions, a document keeps at most `max-count`
+  times the document cap of records (400 MB) and 26,214 index entries; past either, the oldest go, younger than
+  `min-age` or not, counted by `cosec.control.revisions.reclaimed-young`, with a `WARN`. Four meters are new:
+  `cosec.control.revisions.records`, `.bytes`, `.reclaimed-young` and `cosec.control.changes.open`; sum the gauges
+  across instances ([Observability](./observability.md)). Each revision index entry now names its record's size; an
+  older control plane reads past it, and an entry it writes without one is sized from its record by the next pass.
+
+- **A document takes no new change once it holds `cosec.control.revisions.max-count` open changes** (50 by default,
+  `CTL-83`, DR1-E-2; counted before the write, so changes proposed at the same moment may all pass).
   Affected: a client that leaves many changes open on one document. A proposal, an `:apply` or a rollback past the
   limit first abandons its author's own oldest change whose checks failed, then is refused `409` with the new conflict
   `OPEN_LIMIT`, naming the oldest open change in `heldBy`; a typed client sees `ConflictKind.OPEN_LIMIT`. Abandon the

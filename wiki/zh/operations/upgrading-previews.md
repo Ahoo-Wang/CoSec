@@ -27,7 +27,9 @@ description: "每个 8.0 预览版（alpha 与 beta）到下一个之间的变�
 
 ## 从 8.0.0-beta.7 升级 {#from-8-0-0-beta-7}
 
-- **一份文档至多有 `cosec.control.revisions.max-count` 个未结束变更**（默认 50，`CTL-83`，DR1-E-2）。受影响的：在同一份文档上
+- **文档的修订记录在 `min-age` 之内也有上限**（`CTL-84`，DR1-F-6）。受影响的：频繁发布大文档的文档。在最近 `max-count` 个修订之外，一个文档至多保留 `max-count` 乘以文档上限的记录（400 MB）与 26,214 条索引项；超出任一项，从最老的开始删除，不论是否早于 `min-age`，由 `cosec.control.revisions.reclaimed-young` 计数并记 `WARN`。新增四个度量：`cosec.control.revisions.records`、`.bytes`、`.reclaimed-young` 与 `cosec.control.changes.open`；量规请跨实例求和（[可观测性](./observability.md)）。每条修订索引项现在记着它的记录大小；较早的控制面读取时会跳过它，它写入的不带大小的索引项，由下一轮回收读取记录得出大小。
+
+- **一份文档有了 `cosec.control.revisions.max-count` 个未结束变更后不再接受新变更**（默认 50，`CTL-83`，DR1-E-2；在写入之前计数，同一时刻提出的变更可能都会通过）。受影响的：在同一份文档上
   留着很多未结束变更的客户端。超过上限的提议、`:apply` 或回滚，先放弃其作者自己最老的、检查失败的变更，否则以 `409` 拒绝，
   冲突种类为新增的 `OPEN_LIMIT`，`heldBy` 给出最老的未结束变更；类型化客户端看到 `ConflictKind.OPEN_LIMIT`。请放弃不再需要的变更。
   升级时已经超出上限的文档不受追溯：它的变更会在 `cosec.control.changes.expire-after`（7 天）之内过期，回到上限以内，在那之前它不接受新的变更。

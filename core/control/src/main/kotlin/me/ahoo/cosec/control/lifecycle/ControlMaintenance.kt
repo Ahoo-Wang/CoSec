@@ -39,6 +39,7 @@ import java.time.Duration
 import java.time.Instant
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.atomic.AtomicReference
 import kotlin.coroutines.cancellation.CancellationException
 import kotlin.time.toKotlinDuration
 
@@ -86,6 +87,8 @@ class ControlMaintenance(
      * changes cannot be read is skipped this pass; the others are reclaimed (R2C-2).
      */
     suspend fun reclaim(): Map<SnapshotKey, Reclaimed> {
+        // Until this pass reads every document under the lease, it found nothing: summed, the instances' totals are the store's.
+        totals.set(RetainedTotals.NONE)
         // One read of the documents for both: they are one large value (B1 review).
         val documents = attempt("list the documents") { store.documents() } ?: return emptyMap()
         attempt("reconcile the app list with the documents") { reconcileApps(documents) }
@@ -114,22 +117,31 @@ class ControlMaintenance(
 
     private suspend fun reclaimLeased(documents: Set<SnapshotKey>): Map<SnapshotKey, Reclaimed> {
         val reclaimed = LinkedHashMap<SnapshotKey, Reclaimed>()
+        val counting = RetainedTotals.Counting()
         for (key in documents) {
-            val keep = attempt("read the open changes of [$key]") { resting(key) } ?: continue
+            val keep = attempt("read the open changes of [$key]") { resting(key, counting) } ?: continue
             attempt("reclaim the revisions of [$key]") { revisions.reclaim(key, keep) }
                 ?.takeIf { it.any }
                 ?.let { reclaimed[key] = it }
-            attempt("reclaim the ended changes of [$key]") { reclaimEnded(key) }
+            attempt("reclaim the ended changes of [$key]") { reclaimEnded(key, counting) }
         }
+        totals.set(counting.done())
         return reclaimed
     }
+
+    private val totals = AtomicReference(RetainedTotals.NONE)
+
+    /** What this instance's last pass found (`CTL-84`): the meters `cosec.control.revisions.*` and `changes.open`. */
+    val retained: RetainedTotals get() = totals.get()
 
     /**
      * The ended changes of [key] past `min-age` that published no revision still retained (`CTL-83`): after the
      * revisions, so a revision reclaimed now no longer keeps its change. Nothing while the index does not read.
      */
-    private suspend fun reclaimEnded(key: SnapshotKey) {
+    private suspend fun reclaimEnded(key: SnapshotKey, counting: RetainedTotals.Counting) {
         val index = store.index(key)?.value ?: return
+        counting.records += index.entries.size
+        counting.bytes += index.entries.sumOf { it.size ?: 0 }
         val retained = index.entries.mapTo(HashSet()) { it.revision }
         val removed = changes.ended.reclaim(key, revisions.retention.minAge, retained)
         if (removed > 0) log.info { "Reclaimed $removed ended changes of [$key]." }
@@ -140,13 +152,15 @@ class ControlMaintenance(
      * read, since it might rest on a revision. The store read each of them once to list it (#1219).
      */
     private suspend fun resting(
-        key: SnapshotKey
+        key: SnapshotKey,
+        counting: RetainedTotals.Counting,
     ): Set<SnapshotDigest> = store.openChanges(key).flatMapTo(HashSet()) { listed ->
         when (listed) {
             is ListedChange.Unreadable -> throw IllegalStateException(
                 "change [${listed.id.value}] of [$key] does not read"
             )
-            is ListedChange.Readable -> current(listed.change)?.takeUnless { it.state.terminal }?.restsOn().orEmpty()
+            is ListedChange.Readable -> current(listed.change)?.takeUnless { it.state.terminal }
+                ?.also { counting.openChanges++ }?.restsOn().orEmpty()
         }
     }
 

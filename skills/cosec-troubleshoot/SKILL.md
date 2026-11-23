@@ -632,6 +632,11 @@ When `GET /changes/{id}` is `404` for a change that ended, the bound removed it 
 `max-count` ended changes, and reclamation removes older ones past `min-age` whose revision is gone. Read who published
 a revision from `GET /documents/{key}/revisions/{revision}` (`provenance`), and the rest from the audit events.
 
+When `cosec.control.revisions.reclaimed-young` counts, or a `WARN` says records younger than `min-age` were reclaimed,
+a document's records weighed more than it may retain beyond its `max-count` most recent (`max-count` × the document
+cap, or 26,214 index entries, `CTL-84`): find the client publishing large documents in a loop and rate-limit it per
+tenant. The `max-count` most recent revisions stay, so a rollback to a recent one still works.
+
 When a tenant change waits for approval with `TOO_LARGE`, the grant analysis spent its four million comparisons
 before it reached those grants (`CTL-49`): split the change; what counts is what it adds or rewrites, times what its
 author holds. One entry `change of tenant:<t>` means it grants more than 80,000 fragments (actions × resources × bindings

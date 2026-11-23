@@ -433,6 +433,35 @@ class ControlMaintenanceTest {
      * CTL-72, DR1-E-2: the open changes are read by the one instance that holds the reclaim pass's lease, under it, and by
      * no other: an instance without the lease reads none of them, where every instance read every document's each hour.
      */
+    /**
+     * `CTL-84`: the pass that holds the lease reports what every document retains; a pass that does not hold it found
+     * nothing, so the instances' values summed are the store's, and an instance that lost the lease keeps no old value.
+     */
+    @Test
+    fun `only the instance that led the last pass reports what the documents retain`() = runBlocking<Unit> {
+        published()
+        published()
+        changes.propose(ALICE_OP, ACME, 2, listOf(Operation.PutPolicy(allow("read"))), "open")
+
+        maintenance.reclaim()
+
+        val sizes = store.index(ACME)!!.value.entries.map { it.size!! }
+        maintenance.retained.records.assert().isEqualTo(sizes.size.toLong())
+        maintenance.retained.bytes.assert().isEqualTo(sizes.sum())
+        maintenance.retained.openChanges.assert().isEqualTo(1L)
+
+        store.acquireLease(
+            ControlMaintenance.RECLAIM_LEASE,
+            "another instance",
+            Duration.ofMinutes(5)
+        ).assert().isTrue()
+        maintenance.reclaim()
+
+        maintenance.retained.records.assert().isEqualTo(0L)
+        maintenance.retained.bytes.assert().isEqualTo(0L)
+        maintenance.retained.openChanges.assert().isEqualTo(0L)
+    }
+
     @Test
     fun `only the instance holding the reclaim lease reads the open changes`() = runBlocking<Unit> {
         val reads = AtomicInteger()
