@@ -211,6 +211,7 @@ It replaced `cosec.authorization.snapshot.key-prefix`, `cosec.authorization.cach
 
 | Property | Type | Default | Effect |
 |---|---|---|---|
+| `cosec.gateway.unprotected-handlers` | set of bean names | empty | The application's own controllers and functional routes that may be served on a Spring Cloud Gateway host, where CoSec does not decide them (they are mapped before any route), because something else protects them. Any other one fails startup in enforce mode (`STA-13`); a name with `*` is refused; a name that matches no handler is ignored. Only the operator knows which handlers need no CoSec decision, so it is a statement, not a computed value ([The gateway's own handlers](../integration/web.md#the-gateways-own-handlers)). |
 | `cosec.gateway.unprotected-endpoints` | set of endpoint ids | empty | Actuator endpoints that may be exposed over HTTP on the gateway's application port, where CoSec does not authorize them, because something else protects them. Any other one but `health` fails startup there (`STA-2`); `gateway`, which changes routes, is never accepted. On a separate `management.server.port` any endpoint may be exposed ([Actuator on a gateway](../integration/web.md#actuator-on-a-gateway)). |
 
 ## Gateway identity

@@ -427,7 +427,7 @@ docker run -p 8080:8080 -e SPRING_DATA_REDIS_URL=redis://redis:6379 -e COSEC_JWT
 
 ### 网关自己的处理器 {#the-gateways-own-handlers}
 
-网关过滤器决策网关路由。应用自己的控制器或函数式路由（`RouterFunction` bean）映射在所有网关路由之前（Spring WebFlux 的注解控制器映射顺序为 `0`，router-function 映射为 `-1`，网关的路由映射为 `1`），所以对它们的请求不经任何 CoSec 决策就被应答：没有认证、没有策略、没有限流。启动时，starter 一旦发现这类应用自己的处理器，就记录一条 WARN 并指明它们（[日志行](../operations/troubleshooting.md#the-log-says-the-gateways-own-handlers-are-not-decided)）。把这些处理器移到网关之后的服务中，由路由来决策，或者在应用内自行保护；CoSec 的网关过滤器不覆盖它们。
+网关过滤器决策网关路由。应用自己的控制器或函数式路由（`RouterFunction` bean）映射在所有网关路由之前（Spring WebFlux 的注解控制器映射顺序为 `0`，router-function 映射为 `-1`，网关的路由映射为 `1`），所以对它们的请求不经任何 CoSec 决策就被应答：没有认证、没有策略、没有限流。所以在 enforce 模式下，带有这类应用自己处理器的网关宿主不会启动，信息里逐个指明它们（`STA-13`，[信息](../operations/troubleshooting.md#startup-fails-on-the-gateways-own-handlers)）。把这些处理器移到网关之后的服务中，由路由来决策；或者把由其他手段保护的那些按 bean 名列在 `cosec.gateway.unprotected-handlers` 中：这是一项声明，说明 CoSec 不决策它们，启动时会用一行 INFO 复述。带 `*` 的名字会被拒绝，因为每个不经决策就提供的处理器都要点名；对不上任何处理器的名字被忽略。
 
 ### 网关上的 actuator {#actuator-on-a-gateway}
 

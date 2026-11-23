@@ -52,6 +52,8 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingClas
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication
 import org.springframework.boot.context.properties.EnableConfigurationProperties
+import org.springframework.boot.context.properties.bind.Bindable
+import org.springframework.boot.context.properties.bind.Binder
 import org.springframework.boot.web.servlet.FilterRegistrationBean
 import org.springframework.cloud.gateway.route.RouteLocator
 import org.springframework.context.ApplicationContext
@@ -274,10 +276,18 @@ internal class CoSecPipelineWebAutoConfiguration {
             source: ObjectProvider<SnapshotSource<CompiledDocument, CompiledDocument>>,
         ): GatewayRouteApps = GatewayRouteApps(routes, readiness, source)
 
-        /** UB-10: the application's own controllers and functional routes are outside the gateway's filter. */
+        /**
+         * UB-10, `STA-13`: the application's own controllers and functional routes are outside the gateway's filter, so
+         * startup fails unless `cosec.gateway.unprotected-handlers` lists each.
+         */
         @Bean
-        fun cosecGatewayOwnHandlersCheck(beans: ListableBeanFactory): StartupTask =
-            StartupTask.AfterSingletons { GatewayOwnHandlers.warn(beans) }
+        fun cosecGatewayOwnHandlersCheck(beans: ListableBeanFactory, environment: Environment): StartupTask =
+            StartupTask.AfterSingletons {
+                val listed = Binder.get(environment)
+                    .bind(GatewayProperties.UNPROTECTED_HANDLERS_KEY, Bindable.setOf(String::class.java))
+                    .orElse(null) ?: emptySet()
+                GatewayOwnHandlers.require(beans, listed)
+            }
     }
 
     companion object {
