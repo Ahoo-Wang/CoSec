@@ -28,6 +28,13 @@ import me.ahoo.cosec.spi.snapshot.SnapshotKind
 @InternalCoSecApi
 fun SnapshotSource<*, *>.bound(kind: SnapshotKind, absent: Boolean): Int = familyOfKind(kind).bound(absent)
 
+/**
+ * The keys whose newer revision did not compile within its load's budget and still compiles, each with that revision
+ * (DR1-D-1): what the `cosecSnapshot` health body names.
+ */
+@InternalCoSecApi
+fun SnapshotSource<*, *>.compileTimedOut(): List<Pair<SnapshotKey, Long>> = CompileDeadlines.timedOut(context)
+
 /** What the resident documents of the family of [kind] weigh together now (`SNP-24`). */
 @InternalCoSecApi
 fun SnapshotSource<*, *>.residentWeight(kind: SnapshotKind): Long = familyOfKind(kind).weight
