@@ -38,7 +38,7 @@ description: "平台文档、应用文档和租户文档存在哪里，实例如
 - **CoSec 无法解码的值使读取失败，并留在 Redis 中。** 它永远不会被回收（删除），因为回收会删掉唯一的副本。用普通
   Redis 命令写入的值就属于这种值：只通过控制面或 `cosec-migrate` 写入文档（[发布文档](#publishing-documents)）。
 
-**CoCache 定制器还能改变什么。** CoSec 锁定决定缓存内容的部分：key 前缀、命名空间、key 编码、编解码器、数据来源、key 过滤器和按条目的生存期（[优先级](./configuration.md#precedence)）。无法读取的吊销使读取失败；成员关系总会过期，不带抖动，读取失败时失败即拒绝。影子缓存保持声明的寿命；吊销表的读取等待存储的整个命令超时（`cocache.redis.command-timeout`）：超时的读取是“无法读取”，流水线校验令牌时会接受它，所以任何 `read-timeout` 都不能缩短它。CoSec 的吊销读取器有自己更短的预算：它的两次读取各自在吊销读取超时（认证超时的 30 %，默认 300 毫秒）内结束，两次都远在认证器的预算（认证超时，即 `cosec.pipeline.timeout` 的 20 %，默认 1 秒）之内，因此挂起的 Redis 被当作拒绝连接的 Redis 处理，令牌被接受，而不是每个已认证请求都回答 `503`。超时的吊销读取留下的命令在 CoCache 的 Redis 客户端上等待，直到 `cocache.redis.command-timeout`（2 秒）。该客户端在断开期间拒绝命令，所以 Redis 宕机时每次读取立即失败；而在连接着一个挂起的 Redis 时，没有什么按数量限制等待中的命令（CoCache 不设置 `requestQueueSize`，CoSec 也不配置 CoCache 的客户端）。堆积量是未命中本地副本的吊销读取速率乘以命令超时。“未吊销”的答案在本地最多保留 30 秒，因此在这段时间内再次检查的令牌不会发出命令。缓存策略的其余部分仍由应用经定制器和 `cocache.*` 配置项决定（[优先级](./configuration.md#precedence)列出 CoSec 锁定的每个字段）：每个缓存的本地缓存大小和 `expireAfterAccess`，以及快照存储以外的 `local-max-age`；除吊销表以外每个缓存的 `read-timeout`，超时后权威存储的读取失败即拒绝；两个吊销表还有 `absent-ttl`；成员关系还有 `ttl`（永不为 forever）、`absent-ttl`、`degraded-local-max-age`、`lease-*`、`load-*` 和 `invalidate-failure`。这些都不会替换缓存的内容，但有些会延长实例依据已读内容行事的时间。吊销表上更长的 `local-max-age` 或 `absent-ttl`，会在吊销的失效消息丢失时让被吊销的令牌多被接受这么久（默认的界是 `cosec.authentication.revocation.cache.local-max-age`，30 秒）；在成员关系上，更长的 `ttl` 会让已移除的角色多生效这么久；对错过失效消息的实例，更长的 `local-max-age` 也是如此；更长的 `degraded-local-max-age` 则作用于 Redis 无法存下时实例自己加载的成员关系，它们只在该实例上，任何失效消息都到不了。
+**CoCache 定制器还能改变什么。** CoSec 锁定决定缓存内容的部分：key 前缀、命名空间、key 编码、编解码器、数据来源、key 过滤器和按条目的生存期（[优先级](./configuration.md#precedence)）。无法读取的吊销使读取失败。影子缓存保持声明的寿命；吊销表的读取等待存储的整个命令超时（`cocache.redis.command-timeout`）：超时的读取是“无法读取”，流水线校验令牌时会接受它，所以任何 `read-timeout` 都不能缩短它。CoSec 的吊销读取器有自己更短的预算：它的两次读取各自在吊销读取超时（认证超时的 30 %，默认 300 毫秒）内结束，两次都远在认证器的预算（认证超时，即 `cosec.pipeline.timeout` 的 20 %，默认 1 秒）之内，因此挂起的 Redis 被当作拒绝连接的 Redis 处理，令牌被接受，而不是每个已认证请求都回答 `503`。超时的吊销读取留下的命令在 CoCache 的 Redis 客户端上等待，直到 `cocache.redis.command-timeout`（2 秒）。该客户端在断开期间拒绝命令，所以 Redis 宕机时每次读取立即失败；而在连接着一个挂起的 Redis 时，没有什么按数量限制等待中的命令（CoCache 不设置 `requestQueueSize`，CoSec 也不配置 CoCache 的客户端）。堆积量是未命中本地副本的吊销读取速率乘以命令超时。“未吊销”的答案在本地最多保留 30 秒，因此在这段时间内再次检查的令牌不会发出命令。缓存策略的其余部分仍由应用经定制器和 `cocache.*` 配置项决定（[优先级](./configuration.md#precedence)列出 CoSec 锁定的每个字段）：每个缓存的本地缓存大小和 `expireAfterAccess`，以及快照存储以外的 `local-max-age`；除吊销表以外每个缓存的 `read-timeout`，超时后权威存储的读取失败即拒绝；两个吊销表还有 `absent-ttl`。这些都不会替换缓存的内容，但有些会延长实例依据已读内容行事的时间。吊销表上更长的 `local-max-age` 或 `absent-ttl`，会在吊销的失效消息丢失时让被吊销的令牌多被接受这么久（默认的界是 `cosec.authentication.revocation.cache.local-max-age`，30 秒）。成员关系不是 CoCache 缓存：每个实例把它的 `MembershipLoader` 的回答放在自己的内存里，保留 [`cosec.authorization.membership.ttl`](./configuration.md#authorization)，更长的值会让已移除的角色在没收到失效通知的实例上多生效这么久。
 
 ### Redis key {#redis-keys}
 
@@ -70,7 +70,7 @@ key 都在它之下（`SNP-9`）。
 | `<s>:token:revoked:<tokenId>` | `TokenRevoker`（登出），经由 `TokenStore.revoke`，后者接收令牌的 `jti`：应用通过 `TokenRevoker` 登出，从不直接调用存储 | 已吊销令牌 id 对应 `true`；在刷新令牌有效期之后一秒过期 |
 | `<s>:token:family:<sid>` | 登录、刷新和登出 | 一个会话的令牌族：主体、登录时间、结束时间、当前代数，以及是否已被吊销。每个存活的会话一个 key，在登录和每次刷新时写入，几百字节；它在会话结束时过期（登录后 `cosec.jwt.session.lifetime`），被吊销的会话带着标记保留到那时。只在刷新和登出时读取，从不在请求时读取 |
 | `<s>:token:subject:revoked:<n>:<tenantId>:<principalId>` | `TokenStore.revokeSubject` | 以 epoch 毫秒表示的 `issuedBefore`；`<n>` 是 `<tenantId>` 的长度；在 `issuedBefore` 之后再过刷新令牌有效期加一秒过期 |
-| `<s>:membership:<n>:<tenantId>:<principalId>` | `CoCacheMembershipProvider`，在应用注册了它时 | 一个主体的成员关系；会过期（默认一分钟） |
+| `<s>:inv:membership`（通道，不是键） | `CoCacheMembershipProvider.invalidate` | 指名成员关系已变化的主体的帧，每个实例据此从自己的内存中丢弃。Redis 中不存成员关系（DR1-D-2）：8.0 预览版把它们存在 `<s>:membership:*` 下，现在没有任何东西读取，可以删除 |
 | `<s>:api-key:<sha256>` | `RedisApiKeyStore` | 一个 API key 的 JSON（`"format":3`），按 key 的 SHA-256 存放；8.0 之前格式的 key 在 `cosec-migrate api-keys` 转换之前都会被拒绝，8.0 预发布版以其他格式存储的 key 在重新签发之前都会被拒绝 |
 | `<s>:rate-limiter:<ruleId>:<bucket>` | Redis 限流器 | 一条规则一个桶的 hash：它所计数的窗口，以及该窗口与上一个窗口的计数；最后一次计数两个窗口后过期。每个桶值一个 key：`key` 取客户端可以选择的内容且窗口很长的规则，就是客户端可以控制的内存（[限流](../policies/rate-limiting.md#counting-and-backends)） |
 | `<s>:oauth:state:<state>` | 社交登录 | 进行中的登录的 OAuth `state`，由 JustAuth 保存（JustAuth 的缓存会阻塞：`cosec-social` 通过 `StringRedisTemplate` 写入）；3 分钟后过期 |
@@ -112,12 +112,11 @@ CoSec 保存在 Redis 中的每条记录，都说明了读取它的实例比写�
 | 实例状态及其索引（`shadow:status:*`） | `format: 1`，带 `formatLevel` | 忽略 | 无法读取修订的传播情况（`GET .../propagation`）；发布不等待它；在能读取之前，没有影子窗口会通过（`CTL-10`） |
 | 会话（`token:family:<id>`） | `format: 1` | 忽略 | 会话结束：刷新被拒绝，用户重新登录 |
 | API key（`apikey:*`） | `format: 3` | 拒绝 | key 被拒绝 |
-| 缓存的成员关系 | 无（缓存） | 拒绝 | 未命中：重新从提供者加载 |
 | 吊销、租约、限流计数器 | 无（标量） | 不适用 | 见上文各自的说明 |
 
 ### Redis 要求 {#redis-requirements}
 
-- **持久化。** Redis 保存着文档、文档的修订历史、吊销记录、会话（刷新令牌族）、`cosec.api-key.store=redis` 时的 API key，以及部署的成员关系和影子报告，而且这是唯一的一份。没有持久化的 Redis 重启后是空的：所有文档都没了，在有人重新发布平台文档之前每个请求都是 `503`（历史也一并没了）；所有吊销记录都没了，已吊销的令牌在过期之前又会被接受（访问令牌的有效期是 `cosec.jwt.token-validity.access`，默认 10 分钟，你设得更长，暴露窗口就更长）；所有会话终止。请至少开启 AOF 并设为 `appendfsync everysec`，或使用托管服务的等价功能，并把数据放在比 Pod 或机器活得更久的卷上。CoSec 不读取 `INFO persistence`：持久化关着时没有任何告警。
+- **持久化。** Redis 保存着文档、文档的修订历史、吊销记录、会话（刷新令牌族）、`cosec.api-key.store=redis` 时的 API key，以及部署的影子报告，而且这是唯一的一份。没有持久化的 Redis 重启后是空的：所有文档都没了，在有人重新发布平台文档之前每个请求都是 `503`（历史也一并没了）；所有吊销记录都没了，已吊销的令牌在过期之前又会被接受（访问令牌的有效期是 `cosec.jwt.token-validity.access`，默认 10 分钟，你设得更长，暴露窗口就更长）；所有会话终止。请至少开启 AOF 并设为 `appendfsync everysec`，或使用托管服务的等价功能，并把数据放在比 Pod 或机器活得更久的卷上。CoSec 不读取 `INFO persistence`：持久化关着时没有任何告警。
 - **带故障转移的副本。** 一个节点就是每个决策的单点故障。请运行带自动故障转移的副本（Sentinel、托管服务或集群），并从主节点读取（见下）。复制是异步的：故障转移可能丢掉旧主节点已确认的最后几次写入。刚发布的文档修订可能在新主节点上消失（已安装它的实例会记录 `regressed from revision <a> to <b>`，见[实例如何读取文档](#how-instances-read-documents)，[`cosec-migrate verify-chain`](./upgrading.md#verify-the-revision-chains)会指出记录丢失的修订），刚写入的吊销记录也可能消失，它对应的令牌在过期之前又会被接受。故障转移之后，检查你改过的每份文档的头部，并把必须吊销的重新吊销。
 - **备份，以及恢复演练。** 按你能承受丢失多少天发布和吊销的节奏，备份[键前缀](#redis-keys)下的整个键空间（`<s>:*`），并至少把它恢复到一个独立的 Redis 里一次，确认可用：用一个实例连上它并运行 `verify-chain`。恢复带回的是备份那一刻的文档和吊销记录，而不是今天的：重新发布之后改动过的内容，并把此后吊销的令牌都当作未吊销。
 - **每个环境一个前缀。** [`cosec.key-prefix`](./configuration.md#key-prefix)是同一个 Redis 上两个部署之间唯一的隔离。两个环境用了同一个前缀，就共享文档、吊销记录和控制面，没有任何机制能发现。
@@ -163,8 +162,20 @@ CoSec 保存在 Redis 中的每条记录，都说明了读取它的实例比写�
 
 ### 谁可以写哪些 key {#who-may-write-which-keys}
 
-只有控制面（以及 `cosec-migrate`）写入文档和控制面记录。数据面实例读取文档和候选，只写影子报告和状态。Redis ACL 可以
-让两边各守其位：
+只有控制面（以及 `cosec-migrate`）写入文档和控制面记录。数据面实例读取文档和候选，写它们的影子报告与状态，以及它们所运行功能的键。有些键族是授权的输入：能写它们的人就能改变一个请求被授予什么，所以它们的写权限就是授权能力，只属于拥有它们的进程。
+
+| 键 | 数据面实例需要 | 谁写 | 写权限能做什么 |
+|---|---|---|---|
+| `<s>:snapshot:*`、`<s>:candidate:*`、`<s>:candidate-staged:*` | 只读（`%R~`） | 控制面 | 改变每个决策：绝不给数据面凭据 |
+| `<s>:control:*` | 无 | 控制面 | 改变文档及其历史：绝不给数据面凭据 |
+| `<s>:shadow:*` | 自己的报告、状态与驻留键，以及共享列表（[见下](#who-may-write-which-keys)） | 每个实例 | 误报影子窗口，只会让它保持打开，从不会让它通过 |
+| `<s>:api-key:*` | 只读（`%R~`），除非该进程签发 key | 签发 API key 的进程（`RedisApiKeyStore`） | **授权**：key 记录写着它的主体、租户、应用与角色，能写就能铸造带任意这些内容的 key |
+| `<s>:token:*` | 开启 JWT 处读写：应用可以从任何端点吊销（`TokenRevoker`），刷新会写会话族 | 登录、刷新、注销、`TokenRevoker` | **授权**：删掉吊销记录会让被吊销的令牌重新被接受；改写令牌族能让会话继续存活 |
+| `<s>:rate-limiter:*` | 用 Redis 限流器时读写 | 每个实例（Lua） | 清零或耗尽计数：取消限流或答 `429`，从不授予访问 |
+| `<s>:oauth:state:*`、`<s>:oauth:binding:*` | 只在提供社交登录的进程读写，其他进程无 | 社交登录 | 伪造或丢弃进行中的登录（浏览器绑定仍会校验） |
+| `&<s>:*`（通道） | 发布与订阅 | 每个实例 | 让实例重新读取它持有的东西（失效通知只带键，从不带值） |
+
+8.0 预览版还把 `MembershipLoader` 的回答存在 `<s>:membership:*` 下，每个实例都把它读作加载器的回答，所以数据面凭据可以借此授予角色。现在成员关系只由每个实例自己持有（`MEM-5`，DR1-D-2）；没有东西再读那些键，可以删除。Redis ACL 可以让两边守住上表：
 
 - 数据面凭证：对 `<s>:snapshot:*` 和 `<s>:candidate:*` 只读（`%R~`），对 `<s>:shadow:*` 可写，对 `<s>:control:*` 无权访问。
   不运行控制面的实例（类路径上没有 `cosec-control`，或 `cosec.control.enabled=false`）以只读方式读取文档和候选：CoCache 以 `EVALSHA_RO` 发送这些读取
@@ -206,7 +217,7 @@ ACL SETUSER cosec-pod-a +@connection +evalsha +eval +evalsha_ro +eval_ro +publis
 ```
 
 这个示例仍然给运营者的：不能访问 `<s>:control:*` 下的任何 key，报告和状态只能写在实例自己的名下。数据面实例需要
-`snapshot`、`candidate`、`candidate-staged` 和 `shadow` 几组 key，这几组是这里测试过的；令牌、成员关系、API key、限流和 OAuth 这几组只有用到
+`snapshot`、`candidate`、`candidate-staged` 和 `shadow` 几组 key，这几组是这里测试过的；令牌、API key、限流和 OAuth 这几组只有用到
 对应功能时才需要，它们没有用 ACL 试过。
 
 `~cosec:shadow:report:`、`~cosec:shadow:status:` 和 `~cosec:shadow:resident:`（不带 `*`）是 CoCache 创建这些缓存时用到的 key：没有它们，即使
@@ -214,7 +225,7 @@ ACL SETUSER cosec-pod-a +@connection +evalsha +eval +evalsha_ro +eval_ro +publis
 不运行控制面的实例创建缓存、读取文档、收到控制面用户的发布、写入自己的报告，`ACL LOG` 为空；以这个用户 `SET` 文档或候选
 会被拒绝（`NOPERM`）。
 
-再加上该实例其他功能用到的 key（吊销、API key、限流；见 [Redis key](#redis-keys)）。上生产前用 `ACL DRYRUN` 检查这个
+再按上表加上该实例其他功能用到的 key：API key 用 `%R~<s>:api-key:*`（只在签发 key 的地方可写），JWT 用 `~<s>:token:*`，Redis 限流器用 `~<s>:rate-limiter:*`，`oauth` 键只给提供社交登录的进程（[Redis key](#redis-keys)）。成员关系不需要任何键。上生产前用 `ACL DRYRUN` 检查这个
 用户：CoCache 通过 Lua 脚本写入，Redis 会逐个 key 检查。
 
 ## 实例如何读取文档 {#how-instances-read-documents}
@@ -304,7 +315,7 @@ sequenceDiagram
 | `fail-closed.tenants` 中的租户，其文档滞后超过 `fail-closed.max-lag` 之后 | **`503`**，除非先有 DENY 匹配（[实例如何读取文档](#how-instances-read-documents)）。 |
 | 没有发布平台文档 | 每个请求都是 **`503`**（[最初的文档](#the-first-documents)）。 |
 | 已吊销的令牌和主体 | 校验请求的令牌时，流水线 **接受** 它，这样一次故障不会拒绝所有已认证的请求（设置 `cosec.authentication.revocation.fail-closed` 时为 **`503`**）。令牌仍会校验签名，并会自行过期。失败的读取不会被缓存：每次检查都重新访问 Redis，Redis 一恢复应答，吊销就生效。挂起的 Redis 在吊销读取超时（认证超时的 30 %，默认 300 毫秒）之后算作无法读取。**刷新则失败**（`IDN-14`）：此时签发的令牌会逃过所有吊销。 |
-| 基于 Redis 的 `MembershipProvider` 提供的成员关系 | **`503`**。令牌中携带的成员关系不受影响。 |
+| 来自 `MembershipLoader` 的成员关系 | 不受影响：每个实例保存它的加载器的回答，并询问加载器而不是 Redis。Redis 宕机期间失效通知到不了其他实例，它们的条目在 `cosec.authorization.membership.ttl` 内过期。 |
 | Redis 中的 API key（`cosec.api-key.store=redis`） | **`503`**。 |
 | 限流计数器 | `strictFailure: true` 的规则得到 **`503`**；其他规则被跳过，请求继续（[限流](../policies/rate-limiting.md)）。 |
 | 控制面 | 存储读取失败就是失败，绝不当作"不存在"，不发布任何内容。存储无法应答的任何调用，无论故障让授权失败，还是让之后的读写失败，控制 API 都返回不带详情的 **`503`**（`CTL-52`）；控制面主机以 `WARN` 记录它及请求 id。已存储的值无法解码时返回 `500`，以 `ERROR` 记录其键。维护任务记录失败，本轮什么都不做：不关闭窗口，不回收任何内容。 |

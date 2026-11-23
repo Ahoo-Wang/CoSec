@@ -40,11 +40,8 @@ import me.ahoo.cosec.document.Actor
 import me.ahoo.cosec.document.ProvenanceKind
 import me.ahoo.cosec.document.SnapshotDocuments
 import me.ahoo.cosec.document.json.CoSecJson
-import me.ahoo.cosec.model.Memberships
 import me.ahoo.cosec.model.PolicyId
 import me.ahoo.cosec.model.PrincipalId
-import me.ahoo.cosec.model.RoleId
-import me.ahoo.cosec.model.SpaceId
 import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.spi.apikey.ApiKey
 import me.ahoo.cosec.spi.shadow.ShadowOutcome
@@ -155,40 +152,6 @@ class StoredFormatTest {
         assertThrows<SnapshotFormatException> { ApiKeyCodec.decode(written.replace("\"acme\"", "\"\"")) }
     }
 
-    @Test
-    fun memberships() {
-        val memberships = Memberships(
-            Memberships.Source.PROVIDER,
-            mapOf(SpaceId.DEFAULT to setOf(RoleId("admin")), SpaceId("sales") to setOf(RoleId("viewer"))),
-            listOf(PolicyId("p1")),
-        )
-        pinned(
-            "memberships",
-            memberships,
-            MembershipsCodec::encode,
-            MembershipsCodec::decode,
-            fixture("memberships")
-        )
-        MembershipsCodec.decode(fixture("memberships").encodeToByteArray()).active.assert().isTrue()
-    }
-
-    /** RFC 0009 §4.2: only a deactivated principal writes `active`, so every entry cached before it reads as active. */
-    @Test
-    fun `inactive memberships`() {
-        val inactive = Memberships(Memberships.Source.PROVIDER, emptyMap(), emptyList(), active = false)
-        pinned(
-            "memberships-inactive",
-            inactive,
-            MembershipsCodec::encode,
-            MembershipsCodec::decode,
-            fixture("memberships-inactive")
-        )
-        MembershipsCodec.decode(fixture("memberships-inactive").encodeToByteArray()).active.assert().isFalse()
-        assertThrows<SnapshotFormatException> {
-            MembershipsCodec.decode("""{"roles":{},"attachments":[],"active":true}""".encodeToByteArray())
-        }
-    }
-
     /**
      * RC1-44 (`DOC-5`): every stored format refuses an object with a duplicate key, the API key's `roles` above all:
      * read as its last value, `"roles":null` would make a capped key uncapped.
@@ -198,10 +161,6 @@ class StoredFormatTest {
         val key = fixture("apiKey").trimEnd()
         ApiKeyCodec.decode(key).roles.assert().isNotNull()
         assertThrows<SnapshotFormatException> { ApiKeyCodec.decode(key.removeSuffix("}") + ""","roles":null}""") }
-        val memberships = fixture("memberships").trimEnd()
-        assertThrows<SnapshotFormatException> {
-            MembershipsCodec.decode((memberships.removeSuffix("}") + ""","attachments":[]}""").encodeToByteArray())
-        }
         assertThrows<JacksonException> { CoSecJson.mapper.readTree("""{"a":1,"a":2}""") }
         assertThrows<SnapshotFormatException> { ReportersCodec.decode("""[{"a":1,"a":2}]""".encodeToByteArray()) }
     }

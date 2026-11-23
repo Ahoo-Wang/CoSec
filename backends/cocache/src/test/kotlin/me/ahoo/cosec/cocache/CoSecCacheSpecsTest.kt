@@ -18,7 +18,6 @@ package me.ahoo.cosec.cocache
 import me.ahoo.cocache.api.Codec
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.document.json.CoSecJson
-import me.ahoo.cosec.model.Memberships
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 
@@ -46,10 +45,11 @@ class CoSecCacheSpecsTest {
                 CoSecCacheSpecs.REVOKED_TOKEN_CACHE_NAME,
                 CoSecCacheSpecs.REVOKED_SUBJECT_CACHE_NAME,
                 CoSecCacheSpecs.TOKEN_FAMILY_CACHE_NAME,
-                CoSecCacheSpecs.MEMBERSHIP_CACHE_NAME,
             )
         )
-        names.size.assert().isEqualTo(22)
+        // DR1-D-2: memberships are held by each process; no cache of theirs is created or published.
+        names.assert().doesNotContain(CoSecCacheSpecs.MEMBERSHIP_CACHE_NAME)
+        names.size.assert().isEqualTo(21)
         listOf("cosec", "a:b").forEach { keyPrefix ->
             val prefixes = names.associateWith { CoSecCacheSpecs.layout(keyPrefix, it).storagePath + ":" }
             prefixes.forEach { (name, prefix) ->
@@ -64,11 +64,9 @@ class CoSecCacheSpecsTest {
         CoSecTestCaches(keyPrefix = "layout").use { caches ->
             caches.revokedTokenCache.put("jti", true)
             caches.revokedSubjectCache.put("1:t:alice", 1L)
-            caches.membershipCache.put("1:t:alice", Memberships(Memberships.Source.PROVIDER, emptyMap(), emptyList()))
             mapOf(
                 CoSecCacheSpecs.REVOKED_TOKEN_CACHE_NAME to ("jti" to "layout:token:revoked:jti"),
                 CoSecCacheSpecs.REVOKED_SUBJECT_CACHE_NAME to ("1:t:alice" to "layout:token:subject:revoked:1:t:alice"),
-                CoSecCacheSpecs.MEMBERSHIP_CACHE_NAME to ("1:t:alice" to "layout:membership:1:t:alice"),
             ).forEach { (cacheName, keys) ->
                 checkNotNull(caches.runtime.admin(cacheName)).inspect(keys.first).storageKey
                     .assert().isEqualTo(keys.second)

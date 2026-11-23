@@ -398,6 +398,12 @@ object GuardAllowlist {
             "runtime:LocalRateLimiterBoundsTest#a request that loses the admission of its key counts into the winner's bucket",
             "runtime:LocalRateLimiterBoundsTest#the counters equal what the limiter holds while sweeps run",
             "runtime:LocalRateLimiterBoundsTest#two flooded rules of one tenant fill only its document's share",
+            // MEM-5, DR1-D-2: memberships stay in the process that loaded them; nothing is read from Redis.
+            "cocache:MembershipsStayLocalTest#aRecordInRedisIsNeverReadAndNoneIsWritten",
+            "cocache:MembershipsStayLocalTest#anInvalidationOnOneInstanceReachesTheOther",
+            "spring-boot:MembershipsStayLocalStarterTest#a membership record in Redis is never the provider's answer, and none is written",
+            "cocache:LocalMembershipsTest#concurrent misses of one key share one load, and it answers them all",
+            "cocache:LocalMembershipsTest#an invalidation during a load answers its waiters and keeps nothing",
             "social:JustAuthProviderTest#a state is used once",
             "social:JustAuthProviderTest#another browser's state is refused",
             "cocache:RedisSocialStateStoreTest#aStateIsTakenOnce",

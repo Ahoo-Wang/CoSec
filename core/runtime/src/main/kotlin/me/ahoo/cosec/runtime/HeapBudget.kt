@@ -29,6 +29,7 @@ import me.ahoo.cosec.engine.TraceLevel
  * | [decisionListeners]: the BEST_EFFORT decision listeners' queues, counted by trace level (`OBS-11`) | 1/[DECISION_LISTENERS_SHARE] | 32 MiB |
  * | [changeListeners]: the change listeners' queues (`CTL-66`) | 1/[CHANGE_LISTENERS_SHARE] | 64 MiB |
  * | [documents]: the snapshot documents, from which `DocumentBudget` derives each family's bounds (`SNP-24`) | 1/[DOCUMENTS_SHARE] | 512 MiB |
+ * | [memberships]: the memberships each instance holds of what its `MembershipLoader` answered (DR1-D-2) | 1/[MEMBERSHIPS_SHARE] | 32 MiB |
  *
  * Together they take at most 1/[SUM_BOUND] of the heap ([SHARES]): the rest is the gateway's own and ZGC's headroom.
  */
@@ -39,6 +40,7 @@ class HeapBudget private constructor(val heap: Long) {
     val decisionListeners: Long get() = heap / DECISION_LISTENERS_SHARE
     val changeListeners: Long get() = heap / CHANGE_LISTENERS_SHARE
     val documents: Long get() = heap / DOCUMENTS_SHARE
+    val memberships: Long get() = heap / MEMBERSHIPS_SHARE
 
     /**
      * How many events one of [listeners] BEST_EFFORT decision listeners may have waiting, each counted at what an event
@@ -52,7 +54,8 @@ class HeapBudget private constructor(val heap: Long) {
             "(1/$REVOCATION_TABLES_SHARE), token cache=${mib(tokenCache)} (1/$TOKEN_CACHE_SHARE), " +
             "decision listener queues=${mib(decisionListeners)} (1/$DECISION_LISTENERS_SHARE), " +
             "change listener queues=${mib(changeListeners)} (1/$CHANGE_LISTENERS_SHARE), " +
-            "reserved for documents=${mib(documents)} (1/$DOCUMENTS_SHARE)"
+            "reserved for documents=${mib(documents)} (1/$DOCUMENTS_SHARE), " +
+            "memberships=${mib(memberships)} (1/$MEMBERSHIPS_SHARE)"
 
     @InternalCoSecApi
     companion object {
@@ -75,6 +78,12 @@ class HeapBudget private constructor(val heap: Long) {
         /** A quarter: the snapshot documents' share, divided into the families' bounds by `DocumentBudget` (`SNP-24`). */
         const val DOCUMENTS_SHARE: Long = 4
 
+        /**
+         * 2 GiB / 64 = 32 MiB: about 10,900 principals at 3 KB each, the principals one instance serves within a
+         * membership lifetime (a minute by default); one more is loaded again, never refused. The last 64th under the half.
+         */
+        const val MEMBERSHIPS_SHARE: Long = 64
+
         /** Every share together takes at most half the heap. */
         const val SUM_BOUND: Long = 2
 
@@ -85,6 +94,7 @@ class HeapBudget private constructor(val heap: Long) {
             "decision listener queues" to DECISION_LISTENERS_SHARE,
             "change listener queues" to CHANGE_LISTENERS_SHARE,
             "documents" to DOCUMENTS_SHARE,
+            "memberships" to MEMBERSHIPS_SHARE,
         )
 
         /**

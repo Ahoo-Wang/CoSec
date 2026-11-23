@@ -53,8 +53,6 @@ internal class CoSecTestCaches(
         factory.createLocked(CoSecCacheSpecs.tokenFamily(keyPrefix))
     }
 
-    val membershipCache: MembershipCache by lazy { factory.createCache(CoSecCacheSpecs.membership(keyPrefix)) }
-
     /** Drops this instance's local copies only; the shared backend keeps the values. */
     fun clearLocal(cacheName: String) {
         checkNotNull(runtime.admin(cacheName)).clearLocal()

@@ -159,15 +159,6 @@ class StoredRecordsTest {
             wrong = listOf("", "x", "[1]", """{"schema":2}"""),
         ),
         record(
-            "MembershipsCodec",
-            me.ahoo.cosec.model.Memberships(me.ahoo.cosec.model.Memberships.Source.PROVIDER, emptyMap(), emptyList()),
-            MembershipsCodec::encode,
-            MembershipsCodec::decode,
-            formatAt = null,
-            strictBecause = "a cache entry of a decision input: one this version cannot read is loaded again",
-            wrong = listOf("", "x", "[1]", """{"roles":{}}"""),
-        ),
-        record(
             "ReferrerMemberCodec",
             me.ahoo.cosec.control.store.ReferrerEntry(SnapshotKey.Tenant("acme"), 3),
             ReferrerMemberCodec::encode,
