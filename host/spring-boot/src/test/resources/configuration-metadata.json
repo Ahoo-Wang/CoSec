@@ -422,7 +422,7 @@
       "type": "java.lang.String"
     },
     {
-      "description": "How long an approval stays valid; startup fails when it is longer than `cosec.jwt.token-validity.refresh`, how long a token revocation is kept.",
+      "description": "How long an approval stays valid; startup fails when it is longer than how long a token revocation is kept: the longer of `cosec.jwt.token-validity.access` and `.refresh`, plus `cosec.authentication.revocation.skew`.",
       "name": "cosec.control.approval.expire-after",
       "sourceType": "me.ahoo.cosec.spring.boot.control.ControlProperties$Approval",
       "type": "java.time.Duration"
@@ -620,7 +620,7 @@
       "type": "java.time.Duration"
     },
     {
-      "description": "The lifetime of a refresh token; a revocation is kept this long, plus one second.",
+      "description": "The lifetime of a refresh token. A revocation is kept for the longer of this and the access token's, plus `cosec.authentication.revocation.skew`: past the end of every token it can name.",
       "name": "cosec.jwt.token-validity.refresh",
       "sourceType": "me.ahoo.cosec.spring.boot.jwt.JwtProperties$TokenValidity",
       "type": "java.time.Duration"
