@@ -1,0 +1,17 @@
+# Rule: IDN-35
+# Mutant: the session pushed out of a principal's latest is left in Redis, so the bound counts sessions without limiting what Redis holds
+# Tests: :cocache:test --tests me.ahoo.cosec.cocache.SessionBoundTest
+
+diff --git a/backends/cocache/src/main/kotlin/me/ahoo/cosec/cocache/CoCacheTokenFamilyStore.kt b/backends/cocache/src/main/kotlin/me/ahoo/cosec/cocache/CoCacheTokenFamilyStore.kt
+index 8dd5c8993..7a819e1a1 100644
+--- a/backends/cocache/src/main/kotlin/me/ahoo/cosec/cocache/CoCacheTokenFamilyStore.kt
++++ b/backends/cocache/src/main/kotlin/me/ahoo/cosec/cocache/CoCacheTokenFamilyStore.kt
+@@ -67,7 +67,7 @@ class CoCacheTokenFamilyStore @InternalCoSecApi constructor(
+     override suspend fun create(family: TokenFamily): Boolean {
+         val now = clock.instant()
+         val keepFor = Duration.between(now, family.expiresAt).coerceAtLeast(Duration.ofSeconds(1))
+-        sessions.admit(family, now, keepFor, TokenFamilyStore.SESSIONS_PER_PRINCIPAL).forEach { delete(it) }
++        sessions.admit(family, now, keepFor, TokenFamilyStore.SESSIONS_PER_PRINCIPAL)
+         return cache.suspending().putIfMatch(key(family.id), null, family, lifetime(family)) is ConditionalPut.Written
+     }
+ 

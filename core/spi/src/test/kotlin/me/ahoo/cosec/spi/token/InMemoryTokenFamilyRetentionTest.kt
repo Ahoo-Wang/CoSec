@@ -35,10 +35,11 @@ class InMemoryTokenFamilyRetentionTest {
     private val clock = AtomicReference(start)
     private val store = InMemoryTokenFamilyStore { clock.get() }
 
+    // One principal per session: what is held here is retention, not the bound on one principal's sessions.
     private fun family(id: String, lives: Duration = Duration.ofSeconds(60), generation: Long = 1) = TokenFamily(
         id,
         TenantId("t"),
-        PrincipalId("alice"),
+        PrincipalId("p-$id"),
         start,
         start.plus(lives),
         generation,
@@ -49,7 +50,7 @@ class InMemoryTokenFamilyRetentionTest {
     /** A family that signed in at the clock's present and lives a day. */
     private fun signedInNow(id: String): TokenFamily {
         val at = clock.get()
-        return TokenFamily(id, TenantId("t"), PrincipalId("alice"), at, at.plus(Duration.ofDays(1)), 1, null, false)
+        return TokenFamily(id, TenantId("t"), PrincipalId("p-$id"), at, at.plus(Duration.ofDays(1)), 1, null, false)
     }
 
     @Test

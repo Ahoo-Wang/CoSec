@@ -32,6 +32,18 @@ Which preview of the library may run behind which preview of the gateway image: 
 
 - **An `explain` at a retained revision is cached like a head** (DR1-F-4). Affected: nothing to change. Repeating it
   compiles nothing, where each call compiled its documents again.
+- **Session records are kept no longer than their refresh token, and 64 per principal** (`IDN-35`, DR1-G-2).
+  Affected: every deployment that issues CoSec's tokens, and a `TokenFamilyStore` of your own.
+  - A session record (`<s>:token:family:<sid>`) used to stay in Redis for the whole session lifetime (30 days), even
+    when nobody refreshed it after a week. Each write now keeps it for the shorter of what is left of the session and
+    `cosec.jwt.token-validity.refresh`.
+  - A principal keeps the 64 sessions that began most recently in a tenant, counted in the new key
+    `<s>:token:sessions:...`. A login or a switch past them deletes the earliest, whose next refresh is `401
+    token-invalid`: that device signs in again.
+  - Records written before keep their lifetime and are not counted. They leave Redis as they did.
+  - **A `TokenFamilyStore` of your own** may keep a family until its `expiresAt` as before, which the contract now
+    calls an upper bound. It should keep `TokenFamilyStore.SESSIONS_PER_PRINCIPAL` sessions per principal and tenant,
+    as CoSec's do ([Extending](../architecture/extending.md)).
 - **`analyze` shows a tenant's bindings only to a caller who may read its document** (`CTL-51`, DR1-F-8). Affected: a
   principal granted `cosec:analyze` on its tenant's document but not `cosec:read` (no built-in role is shaped so). It
   was answered with every matching binding of that document; it now gets none, and the document is counted in `hidden`.

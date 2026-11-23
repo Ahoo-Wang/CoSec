@@ -21,8 +21,8 @@ import java.time.Instant
 /**
  * What the store keeps of one session (RFC 0009): whose it is, when its user signed in ([authTime]), when it ends for
  * good ([expiresAt], the absolute lifetime), its current [generation], when that generation became current
- * ([rotatedAt], null for the first), and whether it was [revoked]. A revoked family is kept, marked, until [expiresAt],
- * so it is never mistaken for one that expired.
+ * ([rotatedAt], null for the first), and whether it was [revoked]. A revoked family is kept, marked, as long as any
+ * pair of it could still be presented, so it is never mistaken for one that expired.
  */
 class TokenFamily(
     val id: String,
@@ -60,8 +60,18 @@ class TokenFamily(
 /**
  * Where token families are kept (RFC 0009): read and written only when a token is issued, refreshed or revoked, never
  * on a request. Every write is conditional, so of two refreshes of one generation at most one moves the family on,
- * and an implementation honours that across instances (one key, one conditional write). A family lives until its
- * [TokenFamily.expiresAt] and no longer.
+ * and an implementation honours that across instances (one key, one conditional write).
+ *
+ * **How long a record is kept.** [TokenFamily.expiresAt] is an upper bound: a family is never kept past it. An
+ * implementation may drop a record earlier once no pair of it can refresh any more, as CoSec's do: each write keeps
+ * the record for the shorter of what is left of its lifetime and the refresh token validity, so a session nobody
+ * refreshes leaves the store with its last refresh token, not at the end of its lifetime.
+ *
+ * **How many records a principal has.** An implementation limits the sessions of one principal in one tenant: it keeps
+ * the [SESSIONS_PER_PRINCIPAL] that began most recently, and [create] of one more ends the one that began earliest by
+ * deleting its record, whether it is live, revoked or already ended. Its next refresh is then refused as a session that
+ * is unknown; its access token stays valid until it expires. Deleting, not marking, is what bounds the store: a marked
+ * record would be kept as long as a live one.
  *
  * Failing closed is the caller's: a store that cannot answer, or cannot confirm a write, throws; it never reads a
  * family as absent or a write as done.
@@ -79,4 +89,13 @@ interface TokenFamilyStore {
 
     /** Replaces the family read at [version] by [next]; false when it changed since. */
     suspend fun replace(version: String, next: TokenFamily): Boolean
+
+    companion object {
+        /**
+         * How many sessions one principal keeps in one tenant: the most recent, counted by when they began. A constant:
+         * nothing a process can observe says how many devices a person signs in from, and 64 is room for many devices
+         * and many tenant switches.
+         */
+        const val SESSIONS_PER_PRINCIPAL: Int = 64
+    }
 }
