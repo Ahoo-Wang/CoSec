@@ -30,6 +30,7 @@ import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.model.decision.Decision
 import me.ahoo.cosec.model.scope.Scope
 import me.ahoo.cosec.runtime.attribute.FetchedAttributes
+import me.ahoo.cosec.runtime.call.FallbackIds
 import me.ahoo.cosec.runtime.event.DecisionEvent
 import me.ahoo.cosec.runtime.event.ReplayHandle
 import me.ahoo.cosec.runtime.event.RequestSummary
@@ -93,6 +94,11 @@ internal class RequestState(
 
     /** The principal's tenant, the default one when anonymous: the scope's from `ResolveScope` on. */
     val tenant: TenantId get() = principal?.tenant ?: TenantId.DEFAULT
+
+    private var eventId: String? = null
+
+    /** The one id of this request's decision events: its REQUIRED and BEST_EFFORT listeners see the same (DR1-C-6). */
+    fun eventId(ids: FallbackIds): String = eventId ?: ids.generate().also { eventId = it }
 
     /**
      * The [DecisionEvent] for [outcome], null when the caller went away. A stage that did not finish leaves its fields
