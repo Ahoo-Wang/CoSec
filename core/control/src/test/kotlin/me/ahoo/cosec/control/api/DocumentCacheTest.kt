@@ -168,7 +168,6 @@ class DocumentCacheTest {
         form.assert().describedAs(measured)
             .isLessThanOrEqualTo(stored.size * DocumentCache.COMPILED_FACTOR + DocumentCache.FORM_BYTES)
     }
-    }
 
     private fun heapOf(make: () -> Any): Long = (0 until TRIALS).minOf {
         val held = ArrayList<Any>(COPIES)
