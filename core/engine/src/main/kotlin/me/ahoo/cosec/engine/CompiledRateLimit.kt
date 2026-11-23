@@ -16,6 +16,7 @@
 package me.ahoo.cosec.engine
 
 import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.engine.pattern.HttpPath
 import me.ahoo.cosec.model.Identifiers
 import me.ahoo.cosec.model.PolicyId
 import me.ahoo.cosec.model.condition.Attribute
@@ -56,14 +57,38 @@ class CompiledRateLimit internal constructor(
         /** The prefix of the bucket of a key value with an unpaired UTF-16 surrogate, escaped ([keyedBucket]). */
         const val ESCAPED_BUCKET_PREFIX = "e:"
 
+        /** The prefix of the bucket of a key value too long to name it as written, hashed ([keyedBucket]). */
+        const val HASHED_BUCKET_PREFIX = "h:"
+
+        /**
+         * The longest key value a bucket is named by as written, in UTF-16 units of its [KEYED_BUCKET_PREFIX] or
+         * [ESCAPED_BUCKET_PREFIX] form after the prefix: the longest segment a path holds.
+         */
+        const val MAX_WRITTEN_KEY_LENGTH: Int = HttpPath.MAX_SEGMENT_LENGTH
+
         /**
          * The bucket of the key value [value]: [KEYED_BUCKET_PREFIX] and the value. A value with an unpaired UTF-16
          * surrogate has no UTF-8 encoding, and a limiter writes its counters' keys as UTF-8: Spring's template would
          * hold `?` in its place, and the value would count in another value's bucket (RC1-52). Its bucket is
          * [ESCAPED_BUCKET_PREFIX] and the value with each `\` doubled and each unpaired surrogate as its `\uXXXX`
          * escape: well formed, and its own.
+         *
+         * A bucket whose value, so written, is longer than [MAX_WRITTEN_KEY_LENGTH] is [HASHED_BUCKET_PREFIX] and the
+         * SHA-256 of that written bucket's UTF-8, in hex (DR1-C-1): a client that chooses the value (a header the key
+         * reads) chooses how many buckets a limiter keeps, never how long each one is, in the local limiter's memory or
+         * in Redis. The same value is the same bucket; two values are two buckets, since their written buckets differ
+         * and SHA-256 has no known collision, and no hashed bucket is a written one, whose prefix differs.
          */
         fun keyedBucket(value: String): String {
+            val written = writtenBucket(value)
+            if (written.length - KEYED_BUCKET_PREFIX.length <= MAX_WRITTEN_KEY_LENGTH) {
+                return written
+            }
+            return HASHED_BUCKET_PREFIX + Sha256.hex(written.encodeToByteArray())
+        }
+
+        /** [value]'s bucket as written: [KEYED_BUCKET_PREFIX] and the value, or escaped when it is not well formed. */
+        private fun writtenBucket(value: String): String {
             if (Identifiers.isWellFormed(value)) {
                 return KEYED_BUCKET_PREFIX + value
             }
