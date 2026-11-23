@@ -30,6 +30,8 @@ Which preview of the library may run behind which preview of the gateway image: 
 
 ## From 8.0.0-beta.7 {#from-8-0-0-beta-7}
 
+- **An `explain` at a retained revision is cached like a head** (DR1-F-4). Affected: nothing to change. Repeating it
+  compiles nothing, where each call compiled its documents again.
 - **A session a tenant switch started ends with the login** (`IDN-36`). Affected: applications that serve tenant or
   app switches (`SwitchTenantAuthentication`), and a `TokenFamilyStore` of your own.
   - Before, the switched session was a session of its own. It kept the login time, but a logout of the login's session,
