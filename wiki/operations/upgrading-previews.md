@@ -30,6 +30,13 @@ Which preview of the library may run behind which preview of the gateway image: 
 
 ## From 8.0.0-beta.7 {#from-8-0-0-beta-7}
 
+- **The control plane holds its calls' large work to a budget** (`CTL-85`, DR1-F-3, DR1-F-4). Affected: a client that
+  proposes, applies or explains large documents many at once. A control host holds an eighth of its heap for the bodies
+  it parses and the documents it decodes or compiles for one call; a call that does not fit waits its tenant's turn, at
+  most half of `cosec.pipeline.timeout`, and is otherwise `503` with `Retry-After: 1`. Retry it. `StageBudgets`'
+  startup line names the wait, the control plane's line the budget; two meters are new: `cosec.control.work.held` and
+  `cosec.control.work.refused`. Nothing to configure.
+
 - **A control route that carries no document reads at most 64 KB** (DR1-F-3). Affected: a client that posts more than
   64 KB to `simulate`, `explain`, `analyze`, a step of a change, a rollback or break-glass. Such a body is now a `400`
   before it is parsed, where it was read and parsed up to 10 MB before anything was authorized. Proposals, `:apply` and

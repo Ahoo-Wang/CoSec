@@ -498,6 +498,12 @@ Meters, each tagged `listener`:
 decode: each such instance holds every shadow window until its status reads or expires (`CTL-73`), and the log names it
 ([Troubleshooting](./troubleshooting.md#shadow-window-waiting-for-an-acknowledgement)). Alert on any.
 
+`cosec.control.work.held` (gauge, bytes) is what this host's control calls hold of its work budget now, and
+`cosec.control.work.refused` (counter) the calls it refused `503` for want of room (`CTL-85`): large documents proposed,
+applied or explained at once. Each host has its own budget, so read them per host. A refusal now and then under a burst
+is the bound working; a steady rate means the host needs more heap or the large writes need spreading out
+([Troubleshooting](./troubleshooting.md#a-control-call-is-503-with-retry-after)).
+
 ## Logs
 
 | Logger | What it logs |

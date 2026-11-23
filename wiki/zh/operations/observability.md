@@ -366,6 +366,8 @@ break-glass 等待 broker 的确认（把生产者配置为 `acks=all`）。设�
 
 `cosec.control.shadow.status.unreadable`（无标签）统计控制面主机读到的、无法解码的实例状态：每个这样的实例在其状态能读取或过期之前，都会挡住所有影子窗口（`CTL-73`），日志会点名它（[故障排查](./troubleshooting.md#shadow-window-waiting-for-an-acknowledgement)）。任何一个都应告警。
 
+`cosec.control.work.held`（量规，字节）是本宿主的控制调用此刻持有的工作预算，`cosec.control.work.refused`（计数器）是因放不下而答 `503` 的调用数（`CTL-85`）：同时提议、应用或解释大文档。每个宿主有自己的预算，请按宿主读。突发时偶尔拒绝是这个界在起作用；持续地拒绝说明宿主需要更多的堆，或大文档的写入需要错开（[故障排查](./troubleshooting.md#a-control-call-is-503-with-retry-after)）。
+
 ## 日志 {#logs}
 
 | Logger | 记录内容 |

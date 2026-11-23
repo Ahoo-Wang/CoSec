@@ -719,3 +719,7 @@ In this repository, run a focused class first, for example:
 
 Use `$cosec-policy-author` to rewrite a confirmed-bad document and `$cosec-integration` to change confirmed-bad Spring
 configuration. For diagnosis-only requests, report the root cause and evidence without modifying files.
+
+When a control call is `503` with `Retry-After: 1` and `cosec.control.work.refused` counts, it is not the store: the
+control plane's work budget (an eighth of the heap) was full of large documents parsed or compiled at once (`CTL-85`).
+Retry; if steady, give the host more heap or spread out large `POST /changes` and `:apply` calls.
