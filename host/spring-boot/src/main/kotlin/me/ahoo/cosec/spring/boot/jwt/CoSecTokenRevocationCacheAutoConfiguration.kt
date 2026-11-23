@@ -20,9 +20,11 @@ import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.cocache.CoCacheTokenFamilyStore
 import me.ahoo.cosec.cocache.CoCacheTokenStore
 import me.ahoo.cosec.cocache.CoSecCacheSpecs
+import me.ahoo.cosec.cocache.RedisSessionIndex
 import me.ahoo.cosec.cocache.RevokedSubjectCache
 import me.ahoo.cosec.cocache.RevokedTokenCache
 import me.ahoo.cosec.cocache.createLocked
+import me.ahoo.cosec.spi.token.InMemorySessionIndex
 import me.ahoo.cosec.spi.token.TokenFamilyStore
 import me.ahoo.cosec.spi.token.TokenStore
 import me.ahoo.cosec.spring.boot.CoSecProperties
@@ -31,6 +33,7 @@ import me.ahoo.cosec.spring.boot.authorization.cache.createCoSecCache
 import me.ahoo.cosec.spring.boot.pipeline.DerivedHeap
 import me.ahoo.cosec.spring.boot.pipeline.DerivedTimeouts
 import me.ahoo.cosec.spring.boot.pipeline.RevocationProperties
+import org.springframework.beans.factory.ObjectProvider
 import org.springframework.boot.autoconfigure.AutoConfiguration
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass
@@ -38,6 +41,7 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean
 import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.context.annotation.Bean
 import org.springframework.core.env.Environment
+import org.springframework.data.redis.core.ReactiveStringRedisTemplate
 import kotlin.time.toJavaDuration
 
 /**
@@ -64,13 +68,32 @@ internal class CoSecTokenRevocationCacheAutoConfiguration(
     companion object {
         const val REVOKED_TOKEN_CACHE_BEAN_NAME = CoSecCacheSpecs.REVOKED_TOKEN_CACHE_NAME
         const val REVOKED_SUBJECT_CACHE_BEAN_NAME = CoSecCacheSpecs.REVOKED_SUBJECT_CACHE_NAME
+
+        /** Where each principal's sessions are counted: `<keyPrefix>:token:sessions:<n>:<tenant>:<principal>`. */
+        const val SESSIONS_FAMILY = "token:sessions"
     }
 
-    /** The refresh token families (RFC 0009), one Redis key per live session. */
+    /**
+     * The refresh token families (RFC 0009), one Redis key per live session, each kept no longer than its refresh token
+     * (`cosec.jwt.token-validity.refresh`), and the sessions of each principal counted in `<keyPrefix>:token:sessions`
+     * on Redis (DR1-G-2); in this process's memory on a host without a Redis client, whose CoCache is in memory too.
+     */
     @Bean
     @ConditionalOnMissingBean
-    fun coCacheTokenFamilyStore(factory: CoCacheFactory): TokenFamilyStore =
-        CoCacheTokenFamilyStore(factory.createLocked(CoSecCacheSpecs.tokenFamily(cosecProperties.keyPrefix)))
+    fun coCacheTokenFamilyStore(
+        factory: CoCacheFactory,
+        jwt: ObjectProvider<JwtProperties>,
+        redisTemplate: ObjectProvider<ReactiveStringRedisTemplate>,
+    ): TokenFamilyStore {
+        val sessions = redisTemplate.ifAvailable
+            ?.let { RedisSessionIndex(it, cosecProperties.keysOf(SESSIONS_FAMILY) + ":") }
+            ?: InMemorySessionIndex()
+        return CoCacheTokenFamilyStore(
+            factory.createLocked(CoSecCacheSpecs.tokenFamily(cosecProperties.keyPrefix)),
+            jwt.ifAvailable?.tokenValidity?.refresh,
+            sessions,
+        )
+    }
 
     @Bean
     @ConditionalOnMissingBean

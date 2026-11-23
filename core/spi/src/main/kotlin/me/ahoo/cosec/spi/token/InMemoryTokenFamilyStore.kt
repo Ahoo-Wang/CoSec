@@ -11,8 +11,12 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.spi.token
 
+import me.ahoo.cosec.annotations.InternalCoSecApi
+import java.time.Duration
 import java.time.Instant
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.ConcurrentSkipListSet
@@ -24,9 +28,27 @@ import java.util.concurrent.atomic.AtomicLong
  * has passed, oldest end first, so a long-running instance does not keep every session it ever had. There is no
  * background thread, and a family that is replaced is never freed by a sweep that began before: a sweep removes an entry
  * only if, at the moment it does, the entry itself has ended.
+ *
+ * Its end is the shorter of what is left of the family's lifetime and [refreshValidity], from each write, so a session
+ * nobody refreshes is released with its last refresh token; without a [refreshValidity], its lifetime. It keeps the
+ * [TokenFamilyStore.SESSIONS_PER_PRINCIPAL] sessions of a principal in a tenant that began last, and deletes the one
+ * that began earliest when one more is created.
  */
-class InMemoryTokenFamilyStore(private val now: () -> Instant = Instant::now) : TokenFamilyStore {
-    private class Entry(val family: TokenFamily, val version: String)
+class InMemoryTokenFamilyStore(
+    private val now: () -> Instant,
+    /** The refresh token validity (`cosec.jwt.token-validity.refresh`), or null to keep each family to its end. */
+    private val refreshValidity: Duration?,
+) : TokenFamilyStore {
+    @JvmOverloads
+    constructor(now: () -> Instant = Instant::now) : this(now, null)
+
+    init {
+        require(refreshValidity == null || refreshValidity.isPositive) {
+            "A refresh token validity is positive, not $refreshValidity."
+        }
+    }
+
+    private class Entry(val family: TokenFamily, val version: String, val endsAt: Instant)
 
     /** When a family ends, and its id: the order the sweep takes them in. */
     private data class Ending(val at: Instant, val id: String)
@@ -34,11 +56,12 @@ class InMemoryTokenFamilyStore(private val now: () -> Instant = Instant::now) : 
     private val families = ConcurrentHashMap<String, Entry>()
     private val endings = ConcurrentSkipListSet<Ending>(compareBy<Ending>({ it.at }, { it.id }))
     private val versions = AtomicLong()
+    private val sessions = InMemorySessionIndex(now)
 
     /** How many families the store holds, ended ones not yet released included. */
     internal val size: Int get() = families.size
 
-    private fun live(id: String): Entry? = families[id]?.takeIf { it.family.expiresAt.isAfter(now()) }
+    private fun live(id: String): Entry? = families[id]?.takeIf { it.endsAt.isAfter(now()) }
 
     /** Frees up to [RELEASED_PER_CALL] ended families, and [also] if it has ended. */
     private fun release(also: String? = null) {
@@ -57,20 +80,36 @@ class InMemoryTokenFamilyStore(private val now: () -> Instant = Instant::now) : 
 
     /** Removes [id] if its entry has ended at [at]; an entry replaced since, by one that has not, stays. */
     private fun drop(id: String, at: Instant) {
-        families.computeIfPresent(id) { _, entry -> if (entry.family.expiresAt.isAfter(at)) entry else null }
+        families.computeIfPresent(id) { _, entry -> if (entry.endsAt.isAfter(at)) entry else null }
+    }
+
+    /** How long a write keeps [family]: what is left of its lifetime, or less, the refresh token validity. */
+    private fun endOf(family: TokenFamily, at: Instant): Instant {
+        val byRefresh = refreshValidity?.let { at.plus(it) } ?: return family.expiresAt
+        return minOf(family.expiresAt, byRefresh)
     }
 
     /** The entry for [family], its end indexed before it is visible, so a sweep never finds one it cannot see. */
     private fun entryOf(family: TokenFamily): Entry {
-        endings.add(Ending(family.expiresAt, family.id))
-        return Entry(family, versions.incrementAndGet().toString())
+        val endsAt = endOf(family, now())
+        endings.add(Ending(endsAt, family.id))
+        return Entry(family, versions.incrementAndGet().toString(), endsAt)
     }
 
     override suspend fun create(family: TokenFamily): Boolean {
         release()
+        val at = now()
+        // Counted before it is written: a record the index does not count never exists.
+        val pushedOut = sessions.admit(
+            family,
+            at,
+            Duration.between(at, family.expiresAt).coerceAtLeast(Duration.ZERO),
+            TokenFamilyStore.SESSIONS_PER_PRINCIPAL,
+        )
+        pushedOut.forEach { families.remove(it) }
         var created = false
         families.compute(family.id) { _, existing ->
-            if (existing != null && existing.family.expiresAt.isAfter(now())) {
+            if (existing != null && existing.endsAt.isAfter(now())) {
                 existing
             } else {
                 created = true
@@ -89,7 +128,7 @@ class InMemoryTokenFamilyStore(private val now: () -> Instant = Instant::now) : 
         release()
         var replaced = false
         families.computeIfPresent(next.id) { _, existing ->
-            if (existing.version == version && existing.family.expiresAt.isAfter(now())) {
+            if (existing.version == version && existing.endsAt.isAfter(now())) {
                 replaced = true
                 entryOf(next)
             } else {
