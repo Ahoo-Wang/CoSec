@@ -27,7 +27,7 @@ description: "把 CoSec 接入 Spring WebFlux、Spring MVC 或 Spring Cloud Gate
 
 **Spring Cloud Gateway。** 类路径上有网关的 `GlobalFilter` 时，starter 注册 `PipelineGatewayFilter`，不注册 `PipelineWebFilter`。差异见[网关](#gateway)。
 
-starter 在启动时检查适配器（STA-1）：缺少 `cosec-webmvc` 的 Spring MVC 宿主、缺少 `cosec-webflux` 的 WebFlux 宿主、缺少 `cosec-gateway` 的 Spring Cloud Gateway 宿主都无法启动，报错信息会给出制品名。即使 `cosec.enabled=false` 也会检查网关宿主，因为剥离客户端 `CoSec-Identity` 头的网关过滤器随 `cosec-gateway` 提供。各模块还需要什么，见[模块列表](../guide/introduction.md#modules)。
+starter 在启动时检查适配器（STA-1）：缺少 `cosec-webmvc` 的 Spring MVC 宿主、缺少 `cosec-webflux` 的 WebFlux 宿主、缺少 `cosec-gateway` 的 Spring Cloud Gateway 宿主都无法启动，报错信息会给出制品名。即使 `cosec.enabled=false` 也会检查网关宿主，因为剥离客户端 `CoSec-Identity` 头的网关过滤器随 `cosec-gateway` 提供。各模块还需要什么，见[模块列表](../guide/introduction.md#modules)。所有 bean 创建完后，它还检查门本身：开启了 CoSec 的 Web 宿主如果三种过滤器一个都没注册（既没有该类型的 bean，也没有包着它的 `FilterRegistrationBean`），就无法启动（[信息](../operations/troubleshooting.md#startup-fails-on-a-missing-module)）。应用可以用同一种过滤器的自己的实例替换适配器的 bean；别的类型的过滤器不算门。
 
 ## 请求的处理过程 {#how-a-request-is-handled}
 

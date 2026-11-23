@@ -542,10 +542,21 @@ starter 只装配类路径上的 CoSec 模块，漏加一个模块会悄无声�
 | `cosec.cosid.generator is set, but CoSec's ids do not come from CosId` | 一个 `CosIdRuntime`（`cosid-spring-boot-starter` 及其 `cosid.*` 配置），或者删除这个键：应用自己有 `IdGenerator` bean 时，CoSec 的 id 来自那个 bean |
 | `cosec.metrics.enabled=true needs cosec-micrometer` | `cosec-micrometer`，或者删除这个键：不设置时指标是可选的 |
 | `cosec.control.enabled=true needs cosec-control`（或 `cosec-cocache`） | 消息中指出的制品，或者删除这个键：不设置时，没有这些模块的实例就是数据面实例 |
+| `cosec.control.enabled=true, but cosec.pipeline.mode=gateway` | 网关后的服务不装配控制面：把它放到 `enforce` 模式（默认）的宿主上运行，或者删除这个键 |
 | `Social sign-in, whose states are kept in Redis ..., needs cosec-cocache` | 添加 `cosec-cocache`（它把一次登录的 OAuth state 存在 Redis 里，每个只能用一次），或声明你自己的 `SocialStateStore` Bean，或用 `cosec.authentication.login.social.enabled=false` 关闭社交登录 |
 | `cosec-cocache needs a ReactiveStringRedisTemplate bean` | `spring-boot-data-redis` 和 Redis 连接（`spring.data.redis.*`）：没有它就读不到快照，限流也会退化为按实例计数 |
 
 Web 相关的检查只在 CoSec 开启时运行（`cosec.enabled`，默认 `true`）；网关宿主不做 WebFlux 检查，它需要的是 `cosec-gateway`。设置 `spring.main.lazy-initialization=true` 时每项检查同样运行（`STA-3`）。
+
+有了模块，Web 宿主仍可能没有门：应用排除了 `CoSecPipelineWebAutoConfiguration`，或者用另一种类型的过滤器替换了适配器的 bean。
+这时每个请求都会不经裁决地到达应用，所以启动失败：
+
+```text
+CoSec is on (cosec.enabled), but this web host registers none of its gates (PipelineServletFilter, PipelineWebFilter, PipelineGatewayFilter), as a bean or a filter registration: every request would reach the application undecided. ...
+```
+
+保留这个自动配置，或者自己注册 CoSec 的过滤器（它类型的 bean，或者过滤器是它的 `FilterRegistrationBean`：检查看的是类型，不是 bean 的名字），
+或者用 `cosec.enabled=false` 关闭 CoSec。
 
 ### 刷新路由的认证导致启动失败 {#startup-fails-on-the-refresh-routes-authentication}
 

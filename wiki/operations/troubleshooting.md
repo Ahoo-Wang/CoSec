@@ -805,11 +805,23 @@ It refuses to start instead, naming the artifact, when a feature that is on need
 | `cosec.cosid.generator is set, but CoSec's ids do not come from CosId` | A `CosIdRuntime` (`cosid-spring-boot-starter` and its `cosid.*` settings), or remove the key: with an `IdGenerator` bean of your own, that bean gives CoSec its ids |
 | `cosec.metrics.enabled=true needs cosec-micrometer` | `cosec-micrometer`, or remove the key: unset, metrics are optional |
 | `cosec.control.enabled=true needs cosec-control` (or `cosec-cocache`) | the artifact it names, or remove the key: unset, an instance without the modules is a data-plane instance |
+| `cosec.control.enabled=true, but cosec.pipeline.mode=gateway` | A service behind a gateway wires no control plane: run it on a host in `enforce` mode (the default), or remove the key |
 | `Social sign-in, whose states are kept in Redis ..., needs cosec-cocache` | add `cosec-cocache` (it keeps the OAuth states of a sign-in in Redis, once each), declare a `SocialStateStore` bean of your own, or turn social login off with `cosec.authentication.login.social.enabled=false` |
 | `cosec-cocache needs a ReactiveStringRedisTemplate bean` | `spring-boot-data-redis` and a Redis connection (`spring.data.redis.*`): without it no snapshot is read and rate limits would count per instance |
 
 The web checks run only while CoSec is on (`cosec.enabled`, default `true`); a gateway host is exempt from the WebFlux
 check, as it needs `cosec-gateway` instead. Every check runs with `spring.main.lazy-initialization=true` too (`STA-3`).
+
+A web host with the module can still run without its gate: the application excluded `CoSecPipelineWebAutoConfiguration`,
+or replaced the adapter's bean with a filter of another type. Every request would then reach the application
+undecided, so startup fails:
+
+```text
+CoSec is on (cosec.enabled), but this web host registers none of its gates (PipelineServletFilter, PipelineWebFilter, PipelineGatewayFilter), as a bean or a filter registration: every request would reach the application undecided. ...
+```
+
+Keep the auto-configuration, or register CoSec's filter yourself (a bean of its type, or a `FilterRegistrationBean`
+whose filter it is: the check looks for the type, not the bean's name), or turn CoSec off with `cosec.enabled=false`.
 
 ### Startup fails on the refresh route's authentication {#startup-fails-on-the-refresh-routes-authentication}
 

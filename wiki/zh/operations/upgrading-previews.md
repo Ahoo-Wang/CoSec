@@ -27,6 +27,13 @@ description: "每个 8.0 预览版（alpha 与 beta）到下一个之间的变�
 
 ## 从 8.0.0-beta.7 升级 {#from-8-0-0-beta-7}
 
+- **破坏性变更：开启了 CoSec 的 Web 宿主没有 CoSec 的门时启动失败**（`STA-1`，DR1-G-6）。受影响的是保留 `cosec.enabled`，
+  却排除了 `CoSecPipelineWebAutoConfiguration`、或用另一种类型的过滤器替换了适配器 bean 的应用。它原来不经裁决地放行每个请求，
+  唯一的迹象是启动摘要里的 `web=none`。保留这个自动配置、自己注册 CoSec 的过滤器，或者设置 `cosec.enabled=false`
+  （[故障排查](./troubleshooting.md#startup-fails-on-a-missing-module)）。
+- **破坏性变更：`gateway` 模式下写了 `cosec.control.enabled=true` 时启动失败**（`STA-1`，DR1-G-5）。受影响的是写了这个键的
+  网关后服务。它的控制面从未装配，启动行却说路由在服务；这行现在只在控制面实际运行的宿主上出现。删除这个键，或者把控制面放到
+  `enforce` 宿主上运行。
 - **控制面的文档缓存是堆的一份**（`STA-12`，DR1-F-5）。受影响的：控制面宿主的内存。`simulate`、`explain`、`analyze`
   与锁死检查共用每个宿主一个缓存，大小是快照文档那四分之一堆的三分之一（2 GiB 时约 170 MB）；此前是两个各固定 64 MB 的缓存。
   宿主的两个快照源现在各持有那四分之一的三分之一，此前各一半：2 GiB 时每个约 4,800 个典型租户，此前 7,200。要持有更多就给控制面宿主更多的堆；别无改动。

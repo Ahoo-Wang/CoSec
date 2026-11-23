@@ -134,6 +134,10 @@ object StartupGuards {
         "spring-boot:DataPlaneAclTest#an image with the control plane, switched off, starts with the page's user and may write no document",
         "spring-boot:CoSecModuleCheckAutoConfigurationTest#the control plane switched on explicitly without cosec-control or cosec-cocache fails startup",
         "spring-boot:CoSecModuleCheckAutoConfigurationTest#a cosec control enabled that is neither true nor false fails startup, without the modules too",
+        // STA-1: the gate of a web host, and a control plane switched on where none is wired (DR1-G-5, DR1-G-6).
+        "spring-boot:WebGateCheckTest#a web host with CoSec on and its adapter's module, but no gate, fails startup",
+        "spring-boot:WebGateCheckTest#a gate found by type, whatever its bean's name, lets the host start",
+        "spring-boot:WebGateCheckTest#the control plane switched on in gateway mode fails startup, which wires none",
         "cocache:ReadOnlyDeclarationTest#a layer cannot make a data-plane instance's snapshot store read-write",
         "cocache:ReadOnlyDeclarationTest#a layer cannot make the control plane's snapshot store read-only",
         "cocache:ReadOnlyDeclarationTest#a layer cannot make a data-plane instance's candidate store read-write",
