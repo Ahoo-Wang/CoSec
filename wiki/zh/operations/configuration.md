@@ -59,6 +59,7 @@ CoSec 没有哪个配置项叫这些名字，而已知的 key 无论来源都不
 | 一次重新确认并发确认的文档数 | 16，常量：一轮超过间隔时各轮首尾相接，只有突发量取决于它 | |
 | 每个吊销表的本地副本（`RevokedTokenCache`、`RevokedSubjectCache`）容纳 | 堆的八分之一，按每表每条 290 + 230 字节计数：2 GiB 时每表 516,222 条，原来的上限是 500,000。对你的流量太小时表现为带标签 `cache=RevokedTokenCache`（或 `RevokedSubjectCache`）的 `cocache.misses`（Prometheus 中为 `cocache_misses_total`，即本地副本没有应答的读取）持续上升，而同标签的 gauge `cocache.local.size` 停在该数（`IDN-33`） | 堆（`Runtime.maxMemory()`） |
 | 已校验令牌缓存容纳的量 | 堆的十六分之一，每个条目按其令牌长度 × 5 字节计重：2 GiB 时 128 MiB，多于原上限的 16,384 个大令牌（约 115 MB）。太小时表现为 `cosec.token.cache.evictions`（`IDN-32`） | 同上 |
+| 实例持有多少个主体的成员关系 | 堆的六十四分之一，按每个主体 3,072 字节计（十个角色分布在两个空间、五个附加策略时实测 2,293 字节）：2 GiB 时约 10,900 个。多出的一个会重新加载，从不被拒绝 | 相同 |
 | 一个 `BEST_EFFORT` 决策监听器最多可以有多少个待处理的事件 | 堆的六十四分之一，由各 `BEST_EFFORT` 监听器均分，按 `cosec.pipeline.trace-level` 下一个事件的大小计数：不追踪时 1 KB，追踪时（`full`、`exhaustive`）8 KB，因为追踪带着每条候选语句。2 GiB、四个监听器时，每个容纳 8,192 个不追踪的事件或 1,024 个追踪的事件，原来不论级别都是每个 1,024 个。太小时表现为 `cosec.listener.dropped`（`OBS-11`） | 同上，以及监听器数 |
 | 一个实例持有多少租户文档和应用文档 | 每个族已持有的，加上堆的四分之一（减去“不存在”条目那一份）剩下的空间，按其常驻文档的典型重量计数；重量是一个从不低于一个文档实际保留量的估计（`DocumentWeight`）：2 GiB 时约 14,500 个部署页面那种形状的租户（估计 34.6 KB，实际保留 29.5 KB）。每轮重新确认时以及每次淘汰之前重新计算，因此只在常驻内容的重量超过份额时才淘汰文档，从不低于 64 个；控制面与管道同在一个进程时各得一半；一个很重的文档只从空间里拿走它自己的重量。冷加载突发时一个族可能短暂地持有至多其上限的两倍，且绝不超出上限 4,096 个以上。太小时表现为 `cosec.snapshot.evictions` 上升而 `cosec.snapshot.installed` 停在 `cosec.snapshot.bound`（`SNP-24`） | 堆（`Runtime.maxMemory()`） |
 | 一个实例记住多少个没有文档的租户 id 和应用 id | 文档那四分之一中固定的十六分之一，每个 512 字节：2 GiB 时 65,280 个租户 id 和 256 个应用 id。固定不变，所以没有主人的 id 绝不会缩小文档所得（`SNP-7`） | 同上 |
@@ -85,7 +86,7 @@ CoSec 没有哪个配置项叫这些名字，而已知的 key 无论来源都不
 
 **更低的期限会缩短唯一一个失败即放行的阶段。** 吊销读取的预算随期限缩放：`cosec.pipeline.timeout=1s` 时每次读取只有 60 ms，而原来固定为 300 ms。超过预算的读取意味着吊销无法读取，此时校验会接受请求的令牌，除非设置了 `cosec.authentication.revocation.fail-closed=true`（[已写明的例外](../guide/security-model.md#the-two-documented-exceptions)）。期限低于默认值时，请设置 `fail-closed`，或确认 Redis 的应答远在读取预算之内。
 
-**堆的各份额在一张表里**（`HeapBudget`，`STA-12`）：上面四个上限，加上快照文档的四分之一（各族的上限由它推出，`SNP-24`），合计占堆的 31/64，不到一半，给网关的其余部分和 ZGC 留出空间。堆越小得到的越少，而且可见：512 MiB 的堆得到 64 MiB 的吊销表（每表 129,055 条）、32 MiB 的令牌缓存（约 4,150 个大令牌）、8 MiB 的决策监听器队列（四个监听器时每个 2,048 个事件），以及约 3,600 个典型租户的文档。启动日志行写明每一项得到多少，以及它读到的堆：`heap <n> MiB (Runtime.maxMemory())`。没有 `-Xmx` 的容器按 JVM 的默认只得到内存限制的四分之一，所以那里的上限偏小来自堆偏小：给 JVM 明确的 `-Xmx`（[内存](./deployment.md#memory)）。
+**堆的各份额在一张表里**（`HeapBudget`，`STA-12`）：上面五个上限，加上快照文档的四分之一（各族的上限由它推出，`SNP-24`），合计占堆的 32/64，即一半，给网关的其余部分和 ZGC 留出空间。堆越小得到的越少，而且可见：512 MiB 的堆得到 64 MiB 的吊销表（每表 129,055 条）、32 MiB 的令牌缓存（约 4,150 个大令牌）、8 MiB 的决策监听器队列（四个监听器时每个 2,048 个事件），以及约 3,600 个典型租户的文档。启动日志行写明每一项得到多少，以及它读到的堆：`heap <n> MiB (Runtime.maxMemory())`。没有 `-Xmx` 的容器按 JVM 的默认只得到内存限制的四分之一，所以那里的上限偏小来自堆偏小：给 JVM 明确的 `-Xmx`（[内存](./deployment.md#memory)）。
 
 曾经设置过其中某一项的 key 会让启动失败（作为 CoSec 不读取的 key），并说明它已不再是配置项，以及由什么取代（[未知配置项](#unknown-properties)）。其中包括 8.0 预览版的四个快照上限：`cosec.authorization.snapshot.max-apps`、`max-tenants`、`max-absent-apps` 和 `max-absent-tenants`，现在由文档的那四分之一推出（[从预览版升级](./upgrading-previews.md)）。
 
@@ -161,6 +162,7 @@ CoSec 没有哪个配置项叫这些名字，而已知的 key 无论来源都不
 | `cosec.authorization.scope.app-id` | string | 无 | 本宿主服务的应用。声明了其他应用或未声明应用的凭证被拒绝（`403` `scope-rejected`）。不设置时取凭证的应用（[应用](../integration/authentication.md#apps)）。在网关上，路由元数据 `cosec-app-id` 对该路由的请求优先（[网关](../integration/web.md#gateway)）。 |
 | `cosec.authorization.remote-ip.max-trusted-index` | int | `1` | 解析客户端 IP 时信任 `X-Forwarded-For` 中的几跳代理。`0` 忽略该请求头（宿主直接对外）；`N` 取第 N 近的代理追加的那一项。在 `native` 转发头策略下，于 Tomcat 上显式设置，或在 Reactor Netty、Jetty 上设为 `0`，都会导致启动失败，其他服务器或没有服务器（外部容器里的 war）也一样；`framework` 总是导致启动失败（[代理后的客户端 IP](../integration/web.md#client-ip-behind-proxies)，`PIP-16`）。 |
 | `cosec.authorization.routes.location` | 逗号分隔的资源位置 | 未设置 | WebFlux 或 WebMvc 宿主在启动时加载的路由映射，日志会写明每份映射的服务和路由条数。位置不存在、映射无法解析或映射没有路由，启动失败。未设置时不加载路由映射，每个请求都在 `http` 命名空间中授权；但 `classpath:cosec-routes.json` 存在时启动失败，直到配置项指明它或设为空。设置为空表示明确不使用路由映射。Spring Cloud Gateway 宿主忽略它，不加载路由映射。 |
+| `cosec.authorization.membership.ttl` | duration | `1m` | 实例保留它的 `MembershipLoader` 对一个主体所答成员关系的时长。每个实例持有自己的一份，从不放进 Redis，并自行询问加载器；`CoCacheMembershipProvider.invalidate` 会立即在所有实例上丢弃该主体，这是一次成员关系变化在没收到失效通知的实例上生效所需的最长时间（RFC 0001 §3.2）。更长则询问加载器更少；更短则错过的变化生效更快。取代 8.0 预览版的 `cocache.caches.MembershipCache.ttl`，后者现在会使启动失败（[成员关系](../integration/authentication.md#memberships)）。 |
 
 ## 网关 {#gateway}
 
@@ -368,9 +370,9 @@ cosec:
 | 配置项 | 对 CoSec 的影响 |
 |---|---|
 | `cocache.backend` | `redis`（默认）或 `memory`。使用 `memory` 时实例之间不共享任何内容，驱逐检查总是通过，每个实例启动时都没有文档：仅用于本地开发和测试。 |
-| `cocache.defaults.cache.*`、`cocache.defaults.store.*` | 只填补缓存的声明没有写出的字段。CoSec 的缓存声明了它们依赖的字段，所以这些配置影响不大：`MembershipCache` 属于 `cache`，其余 CoSec 缓存都属于 `store`（[优先级](#precedence)）。 |
+| `cocache.defaults.cache.*`、`cocache.defaults.store.*` | 只填补缓存的声明没有写出的字段。CoSec 的缓存声明了它们依赖的字段，所以这些配置影响不大：CoSec 的缓存都属于 `store`（[优先级](#precedence)）。 |
 | `cocache.overrides.cache.*`、`cocache.overrides.store.*` | 收紧所有缓存的陈旧界限（`local-max-age`、`absent-ttl`）与 `read-failure`，CoSec 锁定的字段除外。 |
-| `cocache.caches.[<CacheName>].*` | 按上面的名字设置单个缓存的策略。设置 CoSec 锁定的字段会使启动失败（[优先级](#precedence)）。设置 CoCache 不认识的键或不适用于该缓存的键（通常是拼写错误）同样启动失败，除非 `cocache.caches-validation: warn`（[故障排查](./troubleshooting.md#startup-fails-on-a-locked-cache-setting)）。CoSec 公布它可能创建的每个缓存名，所以为本实例不创建的 CoSec 缓存写的条目（没有运行控制面的服务上的控制面缓存、没有 `MembershipLoader` 时的 `MembershipCache`、关闭 JWT 时的吊销表）照常启动。 |
+| `cocache.caches.[<CacheName>].*` | 按上面的名字设置单个缓存的策略。设置 CoSec 锁定的字段会使启动失败（[优先级](#precedence)）。设置 CoCache 不认识的键或不适用于该缓存的键（通常是拼写错误）同样启动失败，除非 `cocache.caches-validation: warn`（[故障排查](./troubleshooting.md#startup-fails-on-a-locked-cache-setting)）。CoSec 公布它可能创建的每个缓存名，所以为本实例不创建的 CoSec 缓存写的条目（没有运行控制面的服务上的控制面缓存、关闭 JWT 时的吊销表）照常启动。8.0 预览版的共享成员关系缓存 `MembershipCache` 已不再是缓存：任何 `cocache.caches.MembershipCache.*` 都会使启动失败，并指出 `cosec.authorization.membership.ttl`。 |
 | `cocache.key-prefix` | 无：CoSec 锁定自己的前缀 [`cosec.key-prefix`](#key-prefix)。 |
 | `cocache.redis.command-timeout` | 一条 Redis 命令最多用多久（默认 `2s`）。超时的快照读取算作读取失败（[Redis 不可用时](./storage.md#when-redis-is-unavailable)）。 |
 | `cocache.redis.channel-mode` | `pubsub` 或 `sharded` 失效。所有实例以及控制面必须一致。 |
@@ -404,7 +406,6 @@ CoSec 声明的值无论取何值都优先于 `cocache.defaults.*`，与 CoCache
 | `PolicySnapshotCache` 以及控制面与影子窗口的权威存储（`RevisionRecordCache`、`RevisionIndexCache`、`ControlLeaseCache`、`ControlListCache`、`ControlAppListCache`、`ChangeRequestCache`、`StageCache`、`CandidateCache`） | `ttl`、`unknown-read`；快照存储还有 `local-max-age` | `ttl` 永不过期，`unknown-read: throw` | Redis 是权威存储（[存储](./storage.md#redis-is-the-store-of-record)）：过期、或把读取失败当作“不存在”，都会悄悄丢掉一个文档，连同它的 DENY 语句。作为 CoCache 的 `Store`，它们从不回收读不懂的内容，失败的删除直接抛出，而不是稍后重试、删掉更新的写入。 |
 | `ReferenceIndexCache`、`ControlDocumentSetCache`、`ControlChangeSetCache`、`CandidateStagedCache`（控制面的集合型权威存储：反向引用、文档列表、未完成的变更和暂存列表） | `ttl`、`local-max-age`、`degraded-local-max-age` | `ttl` 永不过期；两个本地最长保留时间都是 1 ns | Redis 也是它们的权威存储；删除检查若读到失效消息丢失后留下的本地副本，就可能放过某个引用者本应阻止的删除（`CTL-42`）。CoCache 8.1 没有为 `SetStore` 提供跳过本地副本的读取，也不接受为零的本地最长保留时间；它以毫秒保存本地过期时间，只在该时间仍晚于其时钟时才使用副本，所以只保留 1 ns 的副本从不被使用，即使在它被填入的那一毫秒之内也不会。`SetStore` 的读取失败总是抛出。 |
 | `ShadowReportCache`、`ShadowReporterCache`、`InstanceStatusCache`、`InstanceIndexCache` | `unknown-read`、`ttl` | `unknown-read: throw`；`ttl` 为声明的 8 天（报告、报告者）或 2 分钟（状态；实例列表仍是 8 天） | 故障不能读成“没有样本”或“没有实例”，实例的样本也不能从它报告过的窗口中过期。 |
-| `MembershipCache` | `read-failure`、`unknown-read` | `ttl` 有限（`forever` 时为一分钟），`ttl-jitter: 0s`，`read-failure` 与 `unknown-read: throw` | 读取失败绝不能变成“没有成员关系”，丢失的失效必须到期。 |
 | `TokenFamilyCache` | `unknown-read` | `unknown-read: throw` | 无法读取的会话会拒绝刷新（`503`），绝不读成不存在。每个条目都带着它所属会话的剩余寿命写入。 |
 | `RevokedTokenCache`、`RevokedSubjectCache` | `read-timeout`、`unknown-read`、`absent-ttl`、`local-maximum-size` | `read-timeout`：存储的命令超时；`unknown-read: throw`；`absent-ttl: 30s`；`local-maximum-size`：吊销表在堆中的份额（`IDN-33`） | “未吊销”的答案在本地最多保留 30 秒：更长的 `absent-ttl` 会在失效消息丢失之后的那么长时间里接受已吊销的令牌，`local-max-age` 只能缩短它。作为 `Store`，它们从不回收读不懂的吊销记录，否则其令牌会重新有效。读取失败是“未知”，绝不是“未吊销”：读成不存在会让刷新在一次失败的读取上签发令牌（`IDN-14`）。超时的读取是“无法读取”，流水线校验令牌时会接受它，所以任何一层，包括 `cocache.defaults.store.read-timeout`，都不能让它更早超时。校验时是否接受由 `cosec.authentication.revocation.fail-closed` 决定。 |
 | 每个 CoSec 缓存 | key 前缀、命名空间、key 编码器、编解码器、key 过滤器、`ttl` 函数、数据来源 | — | 存储布局由 CoSec 决定，每个实例与控制面都在那里找它。 |

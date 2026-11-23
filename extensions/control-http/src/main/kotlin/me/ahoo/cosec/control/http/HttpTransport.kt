@@ -51,8 +51,11 @@ internal class HttpTransport(
 ) : RoutedControlService() {
     private val base = baseUri.toString().trimEnd('/')
 
-    /** The gateway's one mapping of a request's security to the header it forwards. */
-    private val issuer = IdentityIssuer(clock = clock)
+    /**
+     * The gateway's one mapping of a request's security to the header it forwards, with every attribute of the caller
+     * (DR1-F-1): the host's policies may read any of them, as the in-process facade's do.
+     */
+    private val issuer = IdentityIssuer(clock = clock, relay = true)
 
     init {
         require(baseUri.isAbsolute && baseUri.scheme in SCHEMES) { "The control API's base is an http or https URI." }

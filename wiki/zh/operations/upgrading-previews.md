@@ -27,6 +27,17 @@ description: "每个 8.0 预览版（alpha 与 beta）到下一个之间的变�
 
 ## 从 8.0.0-beta.7 升级 {#from-8-0-0-beta-7}
 
+- **`HttpControlService` 转述用户的属性**（`CTL-77`，DR1-F-1）。受影响的：以正在服务的用户身份（`ControlCaller.of`）
+  经 `HttpControlService` 调用控制面宿主、且控制策略读取 `subject.attributes` 的应用。此前调用不带任何属性，这样的 DENY
+  经 HTTP 匹配不上，调用只按 ALLOW 判定，而进程内的门面会拒绝它。现在全部属性都随调用发出，每一项都是引擎读到的文本，
+  这样的 DENY 两条路都拒绝。属性因此会到达宿主，由服务端口的网络策略保护。属性超出请求头上限（合计 8 KB，单个字符串
+  1,024 个字符）的用户不能再经它调用：调用在发出之前失败，写明属性与大小。宿主能先升级就先升级；beta.7 的宿主同样会读这些属性
+  （[部署](./deployment.md#the-control-plane-host)）。
+- **太大而无法分析的变更只有一项 `TOO_LARGE`**（`CTL-49`，DR1-E-1）。受影响的：被授出的 ALLOW 合计超过 80,000 个片段
+  （每个动作乘每个资源，再乘到达它的每条绑定）的租户变更，以及读变更越权项的程序。这样的变更在拆分之前就被计数：任何部分都不分析，
+  以一项 `change of tenant:<t>` 等待审批。此前它被整个拆开、每个片段一项，一条一千个动作乘一千个资源的语句就能耗尽控制面的堆。
+  分析用完四百万次比较之后走到的授出也合为一项 `<n> fragments of tenant:<t>`，此前每个一项。beta.7 中对这种变更的批准
+  覆盖不了新的那一项：须重新批准。
 - **以自己的主体调用控制面的服务记为 `service`**（`ControlCaller.service`，`IDN-34`）。受影响的：读取控制请求记录的东西，以及升级的顺序。
   - **记录。** 这样的服务所声明的身份把凭证命名为 `service`，beta.7 命名为 `api-key`。它不是 API key，记录现在照实写：它对控制面宿主的请求在决策事件与审计里的 `subject.method`、变更日志里的 `origin.via.method` 都是 `service`（经进程内 `ControlService` 的调用仍是 `in-process`）。此前存储的变更保留 `api-key`。按 `api-key` 找服务调用方的看板、告警或查询，也要找 `service`。
   - **它能做什么没有变。** `service` 和 `api-key` 一样是工作负载的凭证：从不审批，也从不是信任根，没有会话，也没有 break-glass（新增 `AuthenticatedPrincipal.workload`）。
@@ -36,6 +47,11 @@ description: "每个 8.0 预览版（alpha 与 beta）到下一个之间的变�
 - **长于 256 个字符的限流键值改用其哈希命名桶**（`OBL-6`，DR1-C-1）。受影响的：`key` 读取这么长的值的规则，几乎总是客户端自选的请求头。这样的桶现在是 `h:<sha-256>`，此前是 `k:<value>`（[限流](../policies/rate-limiting.md#keys)），所以它的计数会重新开始一次：在 Redis 上旧键不再被读取，两个窗口后过期；本地限流器的计数本来就只属于该实例。滚动升级期间两个版本同时服务时，这样的值会计入两个桶（每个版本一个），所以在最后一个实例升级之前，它最多得到两倍的限额。256 个字符及以内的值保留原来的桶与计数。无需改动。
 - **生成的路由映射不再取决于最后是谁访问了 API 文档**（`RTE-4`，DR1-C-2）。受影响的：在 OpenAPI 文档没有写 `servers` 的宿主上，用 `cosecServiceGenerator/routes` 生成的路由映射。这时 springdoc 会在它缓存的文档里放一个自己的服务器，取自最近一次请求 API 文档的请求（含查询串），路由就生成在它的路径下。现在这个服务器被排除，路由位于应用的根路径。若曾在 `/v3/api-docs` 之类的路径下生成过路由映射，请重新生成；服务部署在宿主不会去掉的路径下时，在文档里写上 `servers`（[角色权限](../policies/role-permissions.md#generating-a-catalog-from-openapi)）。
 - **被取消的 `HttpControlService` 调用现在会结束它在宿主上的请求**（`CTL-82`，#1893）。受影响的：无需改动。经 `HttpControlService` 的调用所在的协程被取消时，调用会关闭它的 HTTP 交换，控制面宿主（WebFlux）随之取消该请求。此前，请求会留在宿主上，直到调用自己的超时（默认 30 秒）结束它。控制调用没有自己的期限，由你决定：包住调用的 `withTimeout`，或 `HttpControlService` 的 `timeout`（[在代码中修改策略](../integration/checks.md#changing-policies-from-your-code)）。
+- **成员关系由每个实例自己持有，从不放进 Redis**（`MEM-5`，DR1-D-2）。受影响的：有 `MembershipLoader` 的应用。此前每个实例都读写 `<s>:membership:*` 下的共享缓存，并把那里的任何东西读作加载器的回答，所以任何数据面 Redis 凭据都能借此授予角色。现在每个实例把它自己的加载器的回答放在自己的内存中，不从 Redis 读取任何东西：
+  - **行为。** 原来第二个实例的未命中是一次 Redis 读取，现在是一次加载器调用：N 个实例在一个寿命内对同一主体最多加载 N 次，请按此评估加载器的容量。`invalidate(tenant, principal)` 仍会经 Redis 的失效通道（`<s>:inv:membership`）在所有实例上丢弃该主体，这不需要任何键权限。
+  - **配置。** 寿命是 `cosec.authorization.membership.ttl`（一分钟，与之前相同）。任何 `cocache.caches.MembershipCache.*` 设置，尤其是它的 `ttl`，都会使启动失败并指出该属性：请迁移过去。成员关系占用堆的六十四分之一，见启动日志。
+  - **Redis。** `<s>:membership:*` 键不再被读写：所有实例都运行此版本后可以删除（`redis-cli --scan --pattern '<s>:membership:*' | xargs redis-cli del`），并从数据面的 ACL 中去掉 `~<s>:membership:*`（[谁可以写哪些 key](./storage.md#who-may-write-which-keys)）。新旧实例并存期间，旧实例的 `invalidate` 仍能到达新实例（同一通道、同样的帧）。
+- **条目预算计入角色与目录简写派生的条目**（`CTL-40`，DR1-B-1）。受影响的：角色列了很多权限的文档，或目录里有很多带 `action` 的权限的应用。`maxRoleBindings` 现在把角色的绑定（它所列的每个权限一条，`"*"` 为目录的全部权限）与手写的一起计入，默认值从 10,000 调到 20,000，让 100 个角色各 100 个权限留有余量；`maxPolicies` 与 `maxStatements` 为每个带 `action` 的目录权限计入一条只含一条语句的策略。beta.7 能发布、但会把这样的计数抬过预算的变更，现在停留在草稿并带 `V2` 错误；已存储的超预算文档继续被服务，只要不增长就仍可修改。如何判断：对它的任意变更调用 `POST /changes:check`（[不提出而检查](../policies/testing.md#checking-without-proposing)），`V2` 警告会写出每个超过预算的计数与上限（[条目预算](../policies/language.md#entry-budgets)）；或数出它派生的绑定，即各角色权限数之和：`jq '[.roles[]?.permissions | if type == "array" then length else 0 end] | add + ([.bindings[]? | select(.subject.role)] | length)'`（`"*"` 角色再加上它的应用目录的权限数）。文档确实需要时，在平台的 `limits` 中调高预算。分散在不同权限上的派生绑定，每千条让租户管理员变更的检查多约 0.5 秒，每条在持有该文档的每个实例上约占 240 字节。
 
 ## 从 8.0.0-beta.6 升级 {#from-8-0-0-beta-6}
 

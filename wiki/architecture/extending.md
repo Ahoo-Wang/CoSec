@@ -32,7 +32,7 @@ writes its implementations of CoSec's ports in Kotlin. Durations, instants and c
 | `TokenStore`, `RevocationReader` | `cosec-spi`, `spi.token` | Keep revoked tokens somewhere other than Redis. | one bean of each |
 | `ApiKeyReader` | `cosec-spi`, `spi.apikey` | Look API keys up somewhere other than memory or Redis. | one bean |
 | `MembershipProvider` | `cosec-spi`, `spi.membership` | Supply the roles and attached policies of principals whose credential does not carry them: tokens with the provider marker, and every API key. Say whether a principal is known and active. | one bean; required with API keys |
-| `MembershipLoader` | `cosec-cocache`, `cocache` | Load the memberships that `CoCacheMembershipProvider` caches in Redis for every instance. | one bean, wrapped in `CoCacheMembershipProvider` when there is no `MembershipProvider` |
+| `MembershipLoader` | `cosec-cocache`, `cocache` | Load the memberships that `CoCacheMembershipProvider` keeps in each instance's memory, never in Redis (`MEM-5`). | one bean, wrapped in `CoCacheMembershipProvider` when there is no `MembershipProvider` |
 | `AttributeProvider` | `cosec-spi`, `spi.attribute` | Give conditions external attributes (`ext.<provider>.<name>`). | every bean |
 | `AuditEventSink` | `cosec-spi`, `spi.audit` | Receive the flat audit record of each decision. | every bean, as a `BEST_EFFORT` listener |
 | `RateLimiter` | `cosec-spi`, `spi.ratelimit` | Count rate limit permits somewhere other than Redis or memory. | one bean, replacing the built-in one |
@@ -340,8 +340,8 @@ fun interface MembershipProvider {
   answer: answer the principal's memberships, never a key's.
 
 `InMemoryMembershipProvider` (`cosec-spi`) is for tests; it answers `Unknown` for a principal it was not given.
-`CoCacheMembershipProvider` (`cosec-cocache`) caches what your `MembershipLoader` answers in Redis, shared by every
-instance; `MembershipLoader.load` follows the same contract, `Unknown` is not cached, and a load that takes longer
+`CoCacheMembershipProvider` (`cosec-cocache`) keeps what your `MembershipLoader` answers in each instance's memory,
+never in Redis, so each instance asks your loader for the principals it serves (`MEM-5`); `MembershipLoader.load` follows the same contract, `Unknown` is not cached, and a load that takes longer
 than its fill timeout (in the starter the membership timeout, 10 % of `cosec.pipeline.timeout`) fails, so that the next request
 retries. Call its `invalidate`
 when a principal's memberships change. The starter registers `CoCacheMembershipProvider` when you declare a

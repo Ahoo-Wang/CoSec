@@ -80,6 +80,7 @@ object GuardAllowlist {
             "control:ServiceTrustRootTest#a holder's roles-only change still publishes through the service port, by the role class - CTL-81",
             "control:ServiceTrustRootTest#a removal that grants nothing still publishes alone through the service port - CTL-81",
             "control:ServiceTrustRootTest#the profile is the request's, not the change's, one readied on the operators' port waits when published on the service port - CTL-81",
+            "control:ServiceTrustRootTest#a stated tenant principal publishes alone what its stated roles hold, through the service port - CTL-58, CTL-81",
             // CTL-79: the role class, and the bounds of a tenant's role.
             "control:RoleClassBoundsTest#a tenant's role cannot be every permission of its app - CTL-79",
             "control:RoleClassBoundsTest#the platform document has no roles - CTL-79",
@@ -124,6 +125,9 @@ object GuardAllowlist {
             "control-http:HttpControlServiceTest#only a 2xx is an answer",
             "control-http:HttpControlServiceTest#a call that is not answered within its timeout ends",
             "control-http:HttpControlServiceTest#a transport failure is the client's own exception",
+            "spring-boot:ControlServiceParityTest#a DENY on the caller's attributes decides alike through both implementations - CTL-77",
+            "runtime:IdentityForwardingTest#a relayed caller's every attribute reads on the host as the engine reads it here",
+            "runtime:IdentityForwardingTest#a relayed caller whose attributes do not fit fails before anything is sent, naming them, never their values",
             // CTL-76: the typed control objects say what the wire says.
             "control-sdk:TypedWireTest#each document entry reads exactly the members of the document format - CTL-76",
             "control-sdk:TypedWireTest#every tenant and app document of the wiki reads and writes back as the same document - CTL-76",
@@ -389,12 +393,21 @@ object GuardAllowlist {
             "runtime:LocalRateLimiterCountsTest#a flood of other buckets keeps a live count",
             "runtime:LocalRateLimiterBoundsTest#a bucket is removed only once it can no longer change an answer",
             "runtime:LocalRateLimiterBoundsTest#a bucket removed while held is not counted into",
+            // OBL-5, DR1-C-10: a time behind a bucket's window never moves it back.
+            "runtime:LocalRateLimiterCountsTest#a late time changes no answer of the window after it",
+            "runtime:LocalRateLimiterCountsTest#a clock set back keeps the window it reached",
             "runtime:RateLimitObligationTest#aFullLocalLimiterIsOneThatCannotCount",
             "runtime:LocalRateLimiterBoundsTest#a flood on one rule leaves the other rules counting and admitting",
             "runtime:LocalRateLimiterBoundsTest#a limiter full in total refuses new buckets of every rule",
             "runtime:LocalRateLimiterBoundsTest#a request that loses the admission of its key counts into the winner's bucket",
             "runtime:LocalRateLimiterBoundsTest#the counters equal what the limiter holds while sweeps run",
             "runtime:LocalRateLimiterBoundsTest#two flooded rules of one tenant fill only its document's share",
+            // MEM-5, DR1-D-2: memberships stay in the process that loaded them; nothing is read from Redis.
+            "cocache:MembershipsStayLocalTest#aRecordInRedisIsNeverReadAndNoneIsWritten",
+            "cocache:MembershipsStayLocalTest#anInvalidationOnOneInstanceReachesTheOther",
+            "spring-boot:MembershipsStayLocalStarterTest#a membership record in Redis is never the provider's answer, and none is written",
+            "cocache:LocalMembershipsTest#concurrent misses of one key share one load, and it answers them all",
+            "cocache:LocalMembershipsTest#an invalidation during a load answers its waiters and keeps nothing",
             // OBL-6, DR1-C-1: a bucket's bytes are bounded too, whatever the length of the key a client chose.
             "runtime:LocalRateLimiterBucketBytesTest#a bucket retains a bounded number of bytes, whatever the length of the key a client chose",
             "engine:RateLimitObligationTest#a key value past the bound names a bucket of bounded length, its own",
@@ -417,6 +430,10 @@ object GuardAllowlist {
             // SNP-22: a load's compilation has the load's deadline (R2D-11).
             "runtime:SnapshotCompileDeadlineTest#a cold load whose compilation never returns fails at the tick after its deadline, and holds one thread",
             "runtime:SnapshotCompileDeadlineTest#a reload whose compilation never returns keeps what is installed once its budget is spent",
+            // SNP-22, DR1-D-1: a reload kept past its compile deadline is visible, and fail-closed tenants still bound it.
+            "runtime:SnapshotCompileDeadlineTest#a reload whose compilation never returns is reported, by key and revision, until it returns",
+            "runtime:SnapshotCompileDeadlineTest#a fail-closed tenant is refused past its lag bound while a newer revision does not compile in time",
+            "spring-boot:SnapshotHealthIndicatorTest#health names a newer revision that did not compile in time, by key and revision",
             "runtime:SnapshotCompileDeadlineTest#a compilation still queued when its load times out never starts",
             "runtime:KeyTransitionsTest#aRecompileWhoseCompilationTimesOutFailsClosedAndAbandonsIt",
             "runtime:KeyTransitionsTest#aColdLoadWhoseCompilationTimesOutAnswersFailed",

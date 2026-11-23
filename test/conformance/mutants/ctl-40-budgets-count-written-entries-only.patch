@@ -1,0 +1,23 @@
+# Rule: CTL-40
+# Mutant: a budget counts the entries a document writes, not those its roles and catalog derive (DR1-B-1)
+# Tests: :document:test --tests me.ahoo.cosec.document.DocumentBudgetsCountTest :conformance:test --tests me.ahoo.cosec.conformance.ConformanceTest
+
+diff --git a/core/document/src/main/kotlin/me/ahoo/cosec/document/DocumentBudgets.kt b/core/document/src/main/kotlin/me/ahoo/cosec/document/DocumentBudgets.kt
+index dade23b32..f6857f64b 100644
+--- a/core/document/src/main/kotlin/me/ahoo/cosec/document/DocumentBudgets.kt
++++ b/core/document/src/main/kotlin/me/ahoo/cosec/document/DocumentBudgets.kt
+@@ -70,11 +70,9 @@ data class DocumentBudgets(
+ 
+         /** How many of its entries [document] holds, the ones its short forms derive included. */
+         fun count(document: PolicyDocument): Int = when (this) {
+-            POLICIES -> document.policies.size + derivedPolicies(document)
+-            STATEMENTS -> document.policies.sumOf { it.statements.size } + derivedPolicies(document)
+-            ROLE_BINDINGS -> saturated(
+-                document.bindings.count { it.subject is SubjectRef.Role } + RoleExpansion.grants(document)
+-            )
++            POLICIES -> document.policies.size + 0 * derivedPolicies(document)
++            STATEMENTS -> document.policies.sumOf { it.statements.size }
++            ROLE_BINDINGS -> saturated(document.bindings.count { it.subject is SubjectRef.Role }.toLong())
+             ANYONE_BINDINGS -> document.bindings.count { it.subject == SubjectRef.Anyone }
+         }
+ 

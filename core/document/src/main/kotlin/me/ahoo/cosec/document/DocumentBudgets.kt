@@ -47,13 +47,16 @@ data class DocumentBudgets(
 
     /**
      * The entries one budget counts: [member] of `limits`, the JSON [path] of what it counts, and [what] in words.
-     * Counted as the document writes them: a role's short form is not written out.
+     * Counted as the document grants them (DR1-B-1): the entries it writes and those its short forms derive
+     * ([RoleExpansion]), without deriving them. A role's bindings are bindings to a role, and a catalog permission
+     * with `action` is a policy of one statement: what checking a change and holding the document cost grows with them
+     * as with the written ones. A document whose short forms are written out ([RoleExpansion.effective]) counts the same.
      */
     @InternalCoSecApi
     enum class Entry(val member: String, val path: String, val what: String) {
-        POLICIES("maxPolicies", "$.policies", "policies"),
-        STATEMENTS("maxStatements", "$.policies", "statements"),
-        ROLE_BINDINGS("maxRoleBindings", "$.bindings", "bindings to a role"),
+        POLICIES("maxPolicies", "$.policies", "policies (with one per catalog permission that has an action)"),
+        STATEMENTS("maxStatements", "$.policies", "statements (with one per catalog permission that has an action)"),
+        ROLE_BINDINGS("maxRoleBindings", "$.bindings", "bindings to a role (with the ones its roles derive)"),
         ANYONE_BINDINGS("maxAnyoneBindings", "$.bindings", "bindings to Anyone"),
         ;
 
@@ -65,20 +68,28 @@ data class DocumentBudgets(
             ANYONE_BINDINGS -> budgets.maxAnyoneBindings
         }
 
-        /** How many of its entries [document] holds. */
+        /** How many of its entries [document] holds, the ones its short forms derive included. */
         fun count(document: PolicyDocument): Int = when (this) {
-            POLICIES -> document.policies.size
-            STATEMENTS -> document.policies.sumOf { it.statements.size }
-            ROLE_BINDINGS -> document.bindings.count { it.subject is SubjectRef.Role }
+            POLICIES -> document.policies.size + derivedPolicies(document)
+            STATEMENTS -> document.policies.sumOf { it.statements.size } + derivedPolicies(document)
+            ROLE_BINDINGS -> saturated(
+                document.bindings.count { it.subject is SubjectRef.Role } + RoleExpansion.grants(document)
+            )
             ANYONE_BINDINGS -> document.bindings.count { it.subject == SubjectRef.Anyone }
         }
+
+        /** The catalog permissions with `action`: one policy of one statement each ([RoleExpansion]). */
+        private fun derivedPolicies(document: PolicyDocument): Int =
+            document.catalog?.groups?.sumOf { group -> group.permissions.count { it.actions != null } } ?: 0
+
+        private fun saturated(count: Long): Int = count.coerceAtMost(Int.MAX_VALUE.toLong()).toInt()
     }
 
     @InternalCoSecApi
     companion object {
         const val DEFAULT_MAX_POLICIES: Int = 10_000
         const val DEFAULT_MAX_STATEMENTS: Int = 20_000
-        const val DEFAULT_MAX_ROLE_BINDINGS: Int = 10_000
+        const val DEFAULT_MAX_ROLE_BINDINGS: Int = 20_000
         const val DEFAULT_MAX_ANYONE_BINDINGS: Int = 1_000
         const val DEFAULT_MAX_CHANGE_OPERATIONS: Int = 20_000
 

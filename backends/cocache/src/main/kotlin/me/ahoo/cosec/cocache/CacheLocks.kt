@@ -15,22 +15,18 @@
 
 package me.ahoo.cosec.cocache
 
-import me.ahoo.cocache.core.CacheSpec
 import me.ahoo.cocache.core.LayoutField
 import me.ahoo.cocache.core.Locks
 import me.ahoo.cocache.core.SetStoreSpec
 import me.ahoo.cocache.core.Spec
 import me.ahoo.cocache.core.StoreSpec
 import me.ahoo.cocache.core.policy.PolicyField
-import me.ahoo.cocache.core.policy.ReadFailureMode
 import me.ahoo.cocache.core.policy.Ttl
 import me.ahoo.cocache.core.policy.UnknownReadMode
 import me.ahoo.cosec.annotations.InternalCoSecApi
-import me.ahoo.cosec.cocache.CoSecCacheSpecs.DEFAULT_MEMBERSHIP_TTL
 import me.ahoo.cosec.cocache.CoSecCacheSpecs.INSTANCE_RESIDENT_CACHE_NAME
 import me.ahoo.cosec.cocache.CoSecCacheSpecs.INSTANCE_STATUS_CACHE_NAME
 import me.ahoo.cosec.cocache.CoSecCacheSpecs.LOCKED_BY
-import me.ahoo.cosec.cocache.CoSecCacheSpecs.MEMBERSHIP_CACHE_NAME
 import me.ahoo.cosec.cocache.CoSecCacheSpecs.POLICY_SNAPSHOT_CACHE_NAME
 import me.ahoo.cosec.cocache.CoSecCacheSpecs.REVOKED_SUBJECT_CACHE_NAME
 import me.ahoo.cosec.cocache.CoSecCacheSpecs.REVOKED_TOKEN_CACHE_NAME
@@ -115,19 +111,6 @@ internal object CacheLocks {
                 verify { require(it is StoreSpec<*, *>) { "CoSec's ${it.name} is a Store." } }
                 // A family that cannot be read is no answer, never "no family" (RFC 0009): refresh and logout fail.
                 lock(PolicyField.UNKNOWN_READ)
-                constrain(PolicyField.UNKNOWN_READ) { UnknownReadMode.THROW }
-            }
-
-            MEMBERSHIP_CACHE_NAME -> {
-                verify {
-                    require(it is CacheSpec<*, *> && it.externallySourced) {
-                        "CoSec's ${it.name} is an externally sourced Cache."
-                    }
-                }
-                lock(PolicyField.READ_FAILURE, PolicyField.UNKNOWN_READ)
-                constrain(PolicyField.TTL) { it.finiteOr(DEFAULT_MEMBERSHIP_TTL) }
-                constrain(PolicyField.TTL_JITTER) { Duration.ZERO }
-                constrain(PolicyField.READ_FAILURE) { ReadFailureMode.THROW }
                 constrain(PolicyField.UNKNOWN_READ) { UnknownReadMode.THROW }
             }
 

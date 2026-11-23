@@ -1,0 +1,18 @@
+# Rule: OBL-5
+# Mutant: a time behind the bucket's window moves the window back and clears its counts (DR1-C-10)
+# Tests: :runtime:test --tests me.ahoo.cosec.runtime.ratelimit.LocalRateLimiterCountsTest
+
+diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/ratelimit/RateLimiter.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/ratelimit/RateLimiter.kt
+index 6fe556735..5a875543c 100644
+--- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/ratelimit/RateLimiter.kt
++++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/ratelimit/RateLimiter.kt
+@@ -309,8 +309,7 @@ class LocalRateLimiter(
+         val windowMillis = rateLimit.windowMillis
+         // A window never moves back (OBL-5, DR1-C-10): a clock behind the bucket's window, set back or read late, counts
+         // in that window, at its start, and never clears the counts a later request made.
+-        val start = if (window.index == Long.MIN_VALUE) Long.MIN_VALUE else window.index * windowMillis
+-        val nowMillis = maxOf(clockMillis, start)
++        val nowMillis = clockMillis
+         val index = nowMillis / windowMillis
+         when (index) {
+             window.index -> Unit

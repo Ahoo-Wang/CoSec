@@ -181,6 +181,18 @@ class RuntimeAuthorizationProperties {
     val routes = Routes()
     val snapshot = Snapshot()
     val shadow = Shadow()
+    val membership = Membership()
+
+    @InternalCoSecApi
+    class Membership {
+        /**
+         * How long an instance keeps the memberships its `MembershipLoader` answered for a principal: the longest a
+         * membership change takes to apply on an instance that a `CoCacheMembershipProvider.invalidate` did not reach
+         * (RFC 0001 §3.2). Longer asks the loader less often; shorter applies a missed change sooner. Each instance
+         * holds its own copy and asks the loader itself (DR1-D-2).
+         */
+        var ttl: Duration = Duration.ofMinutes(1)
+    }
 
     @InternalCoSecApi
     class Scope {

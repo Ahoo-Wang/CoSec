@@ -1,0 +1,16 @@
+# Rule: SNP-22
+# Mutant: a reload whose newer revision did not compile in time confirms the revision it keeps, so a fail-closed tenant is never refused past its lag bound (DR1-D-1, SNP-5)
+# Tests: :runtime:test --tests me.ahoo.cosec.runtime.snapshot.SnapshotCompileDeadlineTest
+
+diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/CompileDeadlines.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/CompileDeadlines.kt
+index b31e4fff1..7e923ef82 100644
+--- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/CompileDeadlines.kt
++++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/CompileDeadlines.kt
+@@ -65,6 +65,7 @@ internal class CompileDeadlines<T : Any>(private val config: KeyConfig, private
+             step.key,
+             "its compilation of revision ${read.document.revision} did not end within $budget",
+         )
++        load.known?.let { step.emit(KeyEffect.Confirm(it, step.moment.instant)) }
+         loads.onTransientFailure(step, load, cause)
+     }
+ 

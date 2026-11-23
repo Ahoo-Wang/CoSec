@@ -62,9 +62,10 @@ import java.time.Instant
  * "candidate": { "tenant": "acme", "document": {...} },                             // replaces that tenant's document
  * "trustRoot": false,
  * "maxComparisons": 4,                                                              // the analysis's budget (CTL-49); the default when absent
+ * "maxFragments": 4,                                                                // the fragments it splits (CTL-49); the default when absent
  * "expect": { "fragments": [ { "policy": "p", "statement": 0, "action": "order:read", "resource": "order/{id}",
  *                              "verdict": "YES" | "UNKNOWN", "reason": "NOT_COVERED", "shortfall": "SCOPE" } ],
- *             "unprotect": ["policy:p", "binding:b"] }
+ *             "unprotect": ["policy:p", "binding:b"], "tooLarge": true }                      // tooLarge: nothing was split
  * ```
  *
  * A policy may also say `"protected": true`, and a binding `"protected": true`. Documents are read here from the
@@ -90,6 +91,7 @@ object GrantRunner : ScenarioRunner {
             "candidate",
             "trustRoot",
             "maxComparisons",
+            "maxFragments",
             "expect",
         )
         val documents = node.get("documents")
@@ -109,11 +111,23 @@ object GrantRunner : ScenarioRunner {
         candidate.only("tenant", "document")
         val tenant = TenantId(candidate.required("tenant").text())
         val change = GrantChange(tenant, document(candidate.required("document"), tenant))
-        val budget = node.get("maxComparisons")?.let {
+        val comparisons = node.get("maxComparisons")?.let {
             require(it.isIntegralNumber && it.longValue() >= 0) { "maxComparisons is a number of comparisons: $it" }
-            GrantAnalyzer(maxComparisons = it.longValue())
+            it.longValue()
         }
-        val analysis = (budget ?: analyzer).analyze(
+        val fragments = node.get("maxFragments")?.let {
+            require(it.isIntegralNumber && it.longValue() >= 0) { "maxFragments is a number of fragments: $it" }
+            it.longValue()
+        }
+        val budget = if (comparisons == null && fragments == null) {
+            analyzer
+        } else {
+            GrantAnalyzer(
+                maxComparisons = comparisons ?: GrantAnalyzer.MAX_COMPARISONS,
+                maxFragments = fragments ?: GrantAnalyzer.MAX_FRAGMENTS,
+            )
+        }
+        val analysis = budget.analyze(
             grantor(node.required("grantor")),
             snapshot,
             change,

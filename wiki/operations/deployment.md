@@ -312,11 +312,14 @@ that admits it and the service itself: a rate limit rule on a control route hold
 
 **Stating an identity on the service port never makes the trust root** (`CTL-81`). A workload the network admits to
 8082 can state any principal, a platform administrator included, and acts with what the policies grant that principal:
-it reads, proposes, stages and publishes what that principal may. But every change it makes there is analyzed: what
-grants nothing anew publishes alone, a holder of `cosec:manage-roles` projects roles into tenants alone, and anything
-else waits for a person, who approves on 8080 behind the gateway. A change readied on 8080 is analyzed again when it is
-published on 8082. Admit to 8082 only the services you would let propose; none of them can publish a grant alone by
-naming an administrator.
+it reads, proposes, stages and publishes what that principal may. But every change it makes there is analyzed as the
+principal it states, with the roles it states: what the analysis proves that principal holds publishes alone, a holder
+of `cosec:manage-roles` projects roles into tenants alone, and anything else waits for a person, who approves on 8080
+behind the gateway. A change readied on 8080 is analyzed again when it is published on 8082. So a workload on 8082 can
+publish alone, in any tenant, what any role it names holds there: stating a tenant administrator's roles lets it grant
+what that administrator could grant. Naming a platform administrator does not help it: on a tenant's document that is
+another tenant's principal, and on an app's document only a removal publishes alone. Admit to 8082 only the services you
+would trust with the roles they may state.
 
 **How a caller is identified.** An operator signs in at the IAM service, and the gateway verifies the token and forwards
 the identity to a route to the host. Give that route its app, so that an identity for another app is refused:
@@ -341,6 +344,15 @@ A service calls port 8082 through `HttpControlService` (`cosec-control-http`; th
 naming the principal it acts as. The control plane decides for that principal, with the bindings the platform document
 gives it, and the change records that the identity was asserted. A request with no identity is `401`, and a bearer token
 is not an identity: the host verifies none.
+
+**A relayed caller keeps its attributes** (`CTL-77`, DR1-F-1). When the service acts as the user whose request it serves
+(`ControlCaller.of`), every attribute of that user (the claims of their token) goes with the call, each as the text the
+engine reads, so a control policy that reads one decides as it would in process: a DENY on `subject.attributes.suspended`
+refuses through either. Of their roles, only those of the call's scope go. The attributes reach the host, which the
+service port's network policy guards; if they hold anything you would not send there, keep it out of the token. They
+must fit the header: 8 KB in all, and 1,024 characters for one string. One that does not fit fails the call before it is
+sent, naming the attribute and its size, never its value; the call is never sent without it. A service acting as
+itself (`ControlCaller.service`) states no attributes.
 
 **The statement and the policies are one thing.** The statement is true because of the network, one policy per port: the
 gateway's pods to 8080, the named services to 8082, monitoring to 8081. The manifests in [`k8s/control/`](#kubernetes)

@@ -74,7 +74,7 @@ class UnpairedSurrogateKeyTest {
             .hasMessageContaining("names no key")
         refused { RevokedSubjectCache.key(tenant, PrincipalId("alice\uD800")) }
             .assert().isInstanceOf(IllegalArgumentException::class.java).hasMessageContaining("names no key")
-        refused { MembershipCache.key(TenantId("acme\uDC00"), PrincipalId("alice")) }
+        refused { CoCacheMembershipProvider.key(TenantId("acme\uDC00"), PrincipalId("alice")) }
             .assert().isInstanceOf(IllegalArgumentException::class.java)
     }
 
@@ -113,17 +113,10 @@ class UnpairedSurrogateKeyTest {
                 Memberships(Memberships.Source.PROVIDER, mapOf(SpaceId.DEFAULT to setOf(RoleId("admin"))), emptyList())
             )
         }
-        CoSecTestCaches(redis, keyPrefix).use { writer ->
-            CoCacheMembershipProvider(
-                writer.membershipCache,
-                loader = loader
-            ).memberships(tenant, PrincipalId("alice?"))
-        }
-        CoSecTestCaches(redis, keyPrefix).use { reader ->
-            val provider = CoCacheMembershipProvider(reader.membershipCache, loader = loader)
-            refused { runBlocking { provider.memberships(tenant, PrincipalId("alice\uD800")) } }
-                .assert().isInstanceOf(IllegalArgumentException::class.java)
-        }
+        val provider = CoCacheMembershipProvider(LocalMemberships(LocalMemberships.DEFAULT_TTL, 16), loader = loader)
+        provider.memberships(tenant, PrincipalId("alice?"))
+        refused { runBlocking { provider.memberships(tenant, PrincipalId("alice\uD800")) } }
+            .assert().isInstanceOf(IllegalArgumentException::class.java)
         loads.get().assert().isEqualTo(1)
     }
 

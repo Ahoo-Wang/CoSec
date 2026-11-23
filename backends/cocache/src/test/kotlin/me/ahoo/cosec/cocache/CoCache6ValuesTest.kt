@@ -26,18 +26,13 @@ import me.ahoo.cosec.cocache.control.CoCacheControlStore
 import me.ahoo.cosec.cocache.shadow.CoCacheCandidateStore
 import me.ahoo.cosec.cocache.snapshot.SnapshotKeyEncoder
 import me.ahoo.cosec.cocache.snapshot.SnapshotNode
-import me.ahoo.cosec.model.Memberships
 import me.ahoo.cosec.model.PolicyId
 import me.ahoo.cosec.model.PrincipalId
-import me.ahoo.cosec.model.RoleId
-import me.ahoo.cosec.model.SpaceId
 import me.ahoo.cosec.model.TenantId
-import me.ahoo.cosec.spi.membership.MembershipAnswer
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Test
-import java.util.concurrent.atomic.AtomicInteger
 
 /**
  * What CoSec reads where a deployment of CoSec 8.0.0-alpha.2 (on CoCache 6) left a value: CoCache 6's format 1, which
@@ -135,28 +130,6 @@ class CoCache6ValuesTest {
         CoSecTestCaches(redis, keyPrefix).use { caches ->
             val candidates = CoCacheCandidateStore.create(caches.factory, keyPrefix)
             foreign { runBlocking { candidates.candidate(key) } }
-        }
-    }
-
-    /** Memberships cache what the loader answers: one CoCache 6 wrote is loaded again, never read as "none". */
-    @Test
-    fun membershipsCoCache6WroteAreLoadedAgain() = runBlocking<Unit> {
-        val stale =
-            Memberships(Memberships.Source.PROVIDER, mapOf(SpaceId.DEFAULT to setOf(RoleId("stale"))), emptyList())
-        cocache6(
-            storageKey(CoSecCacheSpecs.MEMBERSHIP_CACHE_NAME, MembershipCache.key(tenant, alice)),
-            MembershipsCodec.encode(stale).decodeToString()
-        )
-        val loaded =
-            Memberships(Memberships.Source.PROVIDER, mapOf(SpaceId.DEFAULT to setOf(RoleId("admin"))), emptyList())
-        val loads = AtomicInteger()
-        CoSecTestCaches(redis, keyPrefix).use { caches ->
-            val provider = CoCacheMembershipProvider(caches.membershipCache) { _, _ ->
-                loads.incrementAndGet()
-                MembershipAnswer.Known(loaded)
-            }
-            (provider.memberships(tenant, alice) as MembershipAnswer.Known).memberships.assert().isEqualTo(loaded)
-            loads.get().assert().isEqualTo(1)
         }
     }
 

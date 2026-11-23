@@ -1,0 +1,17 @@
+# Rule: SNP-22
+# Mutant: a compilation that did not end within its load's budget is not counted by the compile meter (DR1-D-1)
+# Tests: :runtime:test --tests me.ahoo.cosec.runtime.snapshot.SnapshotCompileDeadlineTest
+
+diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/CompileDeadlines.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/CompileDeadlines.kt
+index b31e4fff1..0f57d8c3f 100644
+--- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/CompileDeadlines.kt
++++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/CompileDeadlines.kt
+@@ -52,8 +52,6 @@ internal class CompileDeadlines<T : Any>(private val config: KeyConfig, private
+     fun onTimedOut(step: KeyStepBuilder<T>, load: LoadState<T>, read: SnapshotRead.Present) {
+         val budget = budget(config, load)
+         step.emit(KeyEffect.AbandonCompile(load.id))
+-        val elapsed = Duration.ofNanos(step.moment.nanos - load.startedNanos)
+-        step.emit(KeyEffect.Report(KeyEffect.Metric.CompileTimedOut(elapsed)))
+         step.emit(
+             KeyEffect.Log(
+                 Level.ERROR,

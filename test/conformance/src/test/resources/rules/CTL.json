@@ -542,13 +542,15 @@
     {
       "id": "CTL-40",
       "source": "Review round 1 of beta.4 (R1B-4); RFC 0007 §6.2 V2",
-      "statement": "The platform's limits set entry budgets: the policies, statements, bindings to roles and bindings to Anyone one document holds (by default 10,000, 20,000, 10,000 and 1,000). The control plane holds every candidate it checks to them, on propose, apply, rollback, rebase and publish: for every budget, the new count is at most the larger of the limit and the old count (that of the head the candidate replaces), with a warning finding naming each count still over; anything that raises an over-budget count is refused, with a 4xx finding naming the budget, the count and the limit, never a 500. Neither the compiler nor a host enforces a budget: a stored document over one keeps being served. cosec-migrate reports a converted document over a default budget as a warning naming the budget, the count and the limit, and writes it.",
+      "statement": "The platform's limits set entry budgets: the policies, statements, bindings to roles and bindings to Anyone one document holds, counting the entries its short forms derive (a role's bindings are bindings to roles; a catalog permission with an action is a policy of one statement) (by default 10,000, 20,000, 20,000 and 1,000). The control plane holds every candidate it checks to them, on propose, apply, rollback, rebase and publish: for every budget, the new count is at most the larger of the limit and the old count (that of the head the candidate replaces), with a warning finding naming each count still over; anything that raises an over-budget count is refused, with a 4xx finding naming the budget, the count and the limit, never a 500. Neither the compiler nor a host enforces a budget: a stored document over one keeps being served. cosec-migrate reports a converted document over a default budget as a warning naming the budget, the count and the limit, and writes it.",
       "level": "control",
       "guards": [
         "control:EntryBudgetsTest#a change may not raise a count over its budget, and may keep or shrink one already over",
         "control:EntryBudgetsTest#a new document is held to the limit itself",
         "control:EntryBudgetsTest#a rollback is held to the rule against the current head",
         "control:EntryBudgetsTest#a budget lowered after a change was checked keeps it from publishing",
+        "document:DocumentBudgetsCountTest#a tenant's roles count as the bindings they derive",
+        "document:DocumentBudgetsCountTest#an app's catalog permissions with an action count as policies of one statement, and its roles as bindings",
         "control:SectionFieldsHttpTest#setLimits reads the entry budgets as the document reads them",
         "document:PolicyDocumentCodecTest#the platform's entry budgets read and write back the same, beside the condition limits or alone",
         "migrate:ConvertedBudgetsTest#a document over a default budget is a warning naming it, one within every budget is none",
@@ -653,12 +655,16 @@
     {
       "id": "CTL-49",
       "source": "Review round 2, R2C-25 and R2C-26 (saas-app-change-cost.md); RFC 0007 §7.4.3, §7.5",
-      "statement": "A grant analysis makes at most its comparison budget of comparisons, spent in the analysis's order, and over it never answers contained: a statement still being compared when the budget runs out is granted, and every fragment it reaches past the budget is unknown (too large to analyze), so what it did not compare needs approval.",
+      "statement": "A grant analysis makes at most its comparison budget of comparisons, spent in the analysis's order, and over it never answers contained: a statement still being compared when the budget runs out is granted, and every fragment it reaches past the budget is unknown (too large to analyze), so what it did not compare needs approval. It splits a change into at most its fragment bound (80,000: what the budget checks at the largest legitimate change's 50 comparisons a fragment), counting each statement's actions times resources before splitting it: a change that grants more is too large to analyze, nothing of it is split or decided, and it is one escalation; the fragments past the comparison budget are one escalation too, never one each (DR1-E-1).",
       "level": "control",
       "guards": [
         "control:ComparisonBudgetTest#past the budget a fragment is too large to analyze, never contained",
         "control:ComparisonBudgetTest#a statement still being compared when the budget runs out is granted",
-        "control:ComparisonBudgetTest#the same change stops at the same comparison"
+        "control:ComparisonBudgetTest#the same change stops at the same comparison",
+        "control:ComparisonBudgetTest#a change that splits into more fragments than one analysis splits is too large, and nothing is split",
+        "control:ComparisonBudgetTest#the fragments up to the bound are split and analysed, one more is too large",
+        "control:UnknownEscalationsTest#a change too large to split is one escalation",
+        "control:UnknownEscalationsTest#every fragment past the comparison budget is one escalation, counted"
       ],
       "pending": null
     },
@@ -836,7 +842,7 @@
     {
       "id": "CTL-58",
       "source": "RFC 0007 §10.2 (maintainer decision 2026-11-21, the control-plane host's service API; control-server-design §0.7, §0.8)",
-      "statement": "The control API's service profile is the narrow set a service that calls the control plane directly may ask for, served on a port of its own (`cosec.control.http.service-port`, WebFlux only; the network, not a filter, says who may use it): the tenant and app documents (their reads, and `:apply` on a tenant's) and the change flow that needs no person, of a tenant's or an app's document (propose and check, read, list, rebase, abandon, run or skip the shadow window, publish); a change made through it is always analyzed, whoever is stated: no one is the trust root through the service profile (CTL-81), so only what grants nothing anew publishes alone and anything else waits for a person, who approves on the operators' port. Every other route is a `404` before the control plane is asked, as if it did not exist: the platform document, approvals and rejections, rollback, break-glass, the queries and propagation. Nothing but the control API is served on that port. The profile narrows what is served and never widens what the caller may do: each route it serves is authorized for the stated principal by the policies. The service port is not the application's or the management port, and it is refused with the control API off (`cosec.control.http.enabled=false`, which serves no control route at all) or beside the gateway's statement (`only-gateway-can-reach`), since a service port admits services. The listener stops by unbinding, waiting for the requests in flight within the shutdown grace, and closing every connection still open, the idle keep-alive ones included.",
+      "statement": "The control API's service profile is the narrow set a service that calls the control plane directly may ask for, served on a port of its own (`cosec.control.http.service-port`, WebFlux only; the network, not a filter, says who may use it): the tenant and app documents (their reads, and `:apply` on a tenant's) and the change flow that needs no person, of a tenant's or an app's document (propose and check, read, list, rebase, abandon, run or skip the shadow window, publish); a change made through it is always analyzed as the principal it states, with the roles it states: no one is the trust root through the service profile (CTL-81), so a change publishes alone only what the analysis proves that principal holds (and a holder's roles-only change, by the role class, CTL-79), and anything else waits for a person, who approves on the operators' port. A workload the network admits to the port can therefore publish alone what any principal and roles it states hold, in any tenant. Every other route is a `404` before the control plane is asked, as if it did not exist: the platform document, approvals and rejections, rollback, break-glass, the queries and propagation. Nothing but the control API is served on that port. The profile narrows what is served and never widens what the caller may do: each route it serves is authorized for the stated principal by the policies. The service port is not the application's or the management port, and it is refused with the control API off (`cosec.control.http.enabled=false`, which serves no control route at all) or beside the gateway's statement (`only-gateway-can-reach`), since a service port admits services. The listener stops by unbinding, waiting for the requests in flight within the shutdown grace, and closing every connection still open, the idle keep-alive ones included.",
       "level": "build",
       "pending": null,
       "guards": [
@@ -852,7 +858,8 @@
         "spring-boot:ControlServicePortTest#a service port with no WebFlux server to serve it fails startup naming what to do",
         "spring-boot:ControlServicePortTest#cosec control http enabled false serves no control route, and the control plane stays for what embeds it",
         "control:AppDocumentServiceTest#what a service publishes alone in an app document, and what waits for a person - CTL-58",
-        "control:AppDocumentServiceTest#the platform document stays outside the service profile, proposed or checked - CTL-58, CTL-65"
+        "control:AppDocumentServiceTest#the platform document stays outside the service profile, proposed or checked - CTL-58, CTL-65",
+        "control:ServiceTrustRootTest#a stated tenant principal publishes alone what its stated roles hold, through the service port - CTL-58, CTL-81"
       ]
     },
     {
@@ -1069,7 +1076,7 @@
     {
       "id": "CTL-77",
       "source": "RFC 0007 §10.2 (control-typed-api decisions of 2026-11-21: the facade over HTTP; both kinds of caller in both implementations, a parity suite)",
-      "statement": "The control plane's facade has two implementations that answer alike: in process (`LocalControlService`) and over a control-plane host's service port (`HttpControlService`). Both make each call of the narrow set into the same request (one route table, `RoutedControlService`), and state a caller with one mapping each: a request's principal as the gateway forwards it (`IdentityIssuer`), the application's own principal as one service identity (`ServiceIdentity`), which the HTTP implementation writes into `CoSec-Identity` and the in-process one hands to the gate. A context CoSec did not make is refused by either before anything is asked, and a request's principal with no credential is refused by the HTTP implementation rather than sent as anonymous. The same script of calls, as both kinds of caller, answers the same in both for every answer and refusal of the control plane (state, operations, findings, conflicts, statuses and listings with their cursors, less what names the call itself). Over HTTP only a 2xx is an answer: any other status, a redirect or a proxy's error page included, is a refusal carrying that status and body; a call waits for its answer no longer than its timeout (30 s by default) and then fails with HttpTimeoutException, the outcome of a write unknown; and any other failure of the transport propagates as the client's IOException. That is the one difference: in process, the control plane is behind no connection.",
+      "statement": "The control plane's facade has two implementations that answer alike: in process (`LocalControlService`) and over a control-plane host's service port (`HttpControlService`). Both make each call of the narrow set into the same request (one route table, `RoutedControlService`), and state a caller with one mapping each: a request's principal as the gateway forwards it (`IdentityIssuer`), with every attribute it holds, each as the text the engine reads in process, so that a DENY reading one decides alike in both (DR1-F-1; one that does not fit the header, 8 KB, or a claim's 1,024 characters fails the call before it is sent, never sent without it), the application's own principal as one service identity (`ServiceIdentity`), which the HTTP implementation writes into `CoSec-Identity` and the in-process one hands to the gate. A context CoSec did not make is refused by either before anything is asked, and a request's principal with no credential is refused by the HTTP implementation rather than sent as anonymous. The same script of calls, as both kinds of caller, answers the same in both for every answer and refusal of the control plane (state, operations, findings, conflicts, statuses and listings with their cursors, less what names the call itself). Over HTTP only a 2xx is an answer: any other status, a redirect or a proxy's error page included, is a refusal carrying that status and body; a call waits for its answer no longer than its timeout (30 s by default) and then fails with HttpTimeoutException, the outcome of a write unknown; and any other failure of the transport propagates as the client's IOException. That is the one difference: in process, the control plane is behind no connection.",
       "level": "build",
       "pending": null,
       "guards": [
@@ -1081,7 +1088,10 @@
         "control-http:HttpControlServiceTest#a refusal is the route's problem",
         "control-http:HttpControlServiceTest#only a 2xx is an answer",
         "control-http:HttpControlServiceTest#a call that is not answered within its timeout ends",
-        "control-http:HttpControlServiceTest#a transport failure is the client's own exception"
+        "control-http:HttpControlServiceTest#a transport failure is the client's own exception",
+        "spring-boot:ControlServiceParityTest#a DENY on the caller's attributes decides alike through both implementations - CTL-77",
+        "runtime:IdentityForwardingTest#a relayed caller's every attribute reads on the host as the engine reads it here",
+        "runtime:IdentityForwardingTest#a relayed caller whose attributes do not fit fails before anything is sent, naming them, never their values"
       ]
     },
     {
@@ -1166,7 +1176,8 @@
         "control:ServiceTrustRootTest#a stated platform administrator's grant on a tenant's document waits through the service port - CTL-81",
         "control:ServiceTrustRootTest#a holder's roles-only change still publishes through the service port, by the role class - CTL-81",
         "control:ServiceTrustRootTest#a removal that grants nothing still publishes alone through the service port - CTL-81",
-        "control:ServiceTrustRootTest#the profile is the request's, not the change's, one readied on the operators' port waits when published on the service port - CTL-81"
+        "control:ServiceTrustRootTest#the profile is the request's, not the change's, one readied on the operators' port waits when published on the service port - CTL-81",
+        "control:ServiceTrustRootTest#a stated tenant principal publishes alone what its stated roles hold, through the service port - CTL-58, CTL-81"
       ]
     },
     {

@@ -126,7 +126,9 @@ otherwise `strictFailure` decides as for a [failing limiter](#failure-behavior).
 
 Both limiters count with the same sliding window: the estimate is the previous window's count, weighted by how much
 of it still overlaps, plus the current window's count. A request is allowed while the estimate is below the limit;
-refused requests are not counted.
+refused requests are not counted. A bucket's window never moves back: the local limiter reads its clock under the
+bucket's lock, and a time behind the bucket's window (a clock set back) counts in that window, never clearing it
+(`OBL-5`); the Redis limiter takes the time from Redis (`OBL-4`).
 
 | Limiter | Used when | Scope |
 |---|---|---|

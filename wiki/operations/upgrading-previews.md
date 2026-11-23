@@ -30,6 +30,22 @@ Which preview of the library may run behind which preview of the gateway image: 
 
 ## From 8.0.0-beta.7 {#from-8-0-0-beta-7}
 
+- **`HttpControlService` relays a user's attributes** (`CTL-77`, DR1-F-1). Affected: an application that calls a
+  control-plane host through `HttpControlService` as the user whose request it serves (`ControlCaller.of`), with a
+  control policy that reads `subject.attributes`. Before, no attribute went with the call, so a DENY on one did not match
+  over HTTP and the call was decided by the ALLOWs alone, where the in-process facade refused it. Now every attribute
+  goes, each as the text the engine reads, and such a DENY refuses through both. The attributes now reach the host,
+  behind the service port's network policy. A user whose attributes exceed the header (8 KB in all, 1,024 characters
+  for one string) can no longer call through it: the call fails before it is sent, naming the attribute and its size.
+  Upgrade the hosts before the callers if you can; a beta.7 host reads the attributes too
+  ([Deployment](./deployment.md#the-control-plane-host)).
+- **A change too large to analyse is one `TOO_LARGE` entry** (`CTL-49`, DR1-E-1). Affected: a tenant change whose
+  granted ALLOWs come to more than 80,000 fragments (each action times each resource, for each binding that reaches
+  them), and what reads a change's escalations. Such a change is counted before it is split: none of it is analysed,
+  and it waits for approval with the one entry `change of tenant:<t>`. Before, it was split whole, one escalation each,
+  and one statement of a thousand actions and a thousand resources could exhaust the control plane's heap. The grants an
+  analysis reaches past its four million comparisons are one entry too, `<n> fragments of tenant:<t>`, where each was
+  its own. An approval of such a change in beta.7 does not cover the new entry: approve it again.
 - **A service calling the control plane as its own principal is recorded as `service`** (`ControlCaller.service`,
   `IDN-34`). Affected: what reads the records of control requests, and the order you upgrade in.
   - **Records.** The identity such a service states names its credential `service`, where beta.7 named it `api-key`.
@@ -77,6 +93,33 @@ Which preview of the library may run behind which preview of the gateway image: 
   timeout (30 seconds by default) ended it. A control call has no deadline of its own: yours decides, a `withTimeout`
   around the call or the `timeout` of `HttpControlService`
   ([Changing policies from your code](../integration/checks.md#changing-policies-from-your-code)).
+- **Memberships are held by each instance, never in Redis** (`MEM-5`, DR1-D-2). Affected: applications with a
+  `MembershipLoader`. Before, every instance read and wrote a shared cache under `<s>:membership:*`, and read whatever
+  was there as the loader's answer, so any data-plane Redis credential could grant roles through it. Now each instance
+  keeps what its own loader answered, in its own memory, and nothing is read from Redis:
+  - **Behaviour.** Where a second instance's miss was one Redis read, it is now a call of your loader: N instances make
+    up to N loads of a principal per lifetime. Size your loader for it. `invalidate(tenant, principal)` still drops the
+    principal on every instance, by Redis's invalidation channel (`<s>:inv:membership`), which needs no key permission.
+  - **Configuration.** The lifetime is `cosec.authorization.membership.ttl` (one minute, as before). Any
+    `cocache.caches.MembershipCache.*` setting, its `ttl` above all, fails startup, naming that property: move it.
+    The memberships' memory is a 64th of the heap, on the startup line.
+  - **Redis.** The `<s>:membership:*` keys are no longer read or written: delete them when every instance runs this
+    version (`redis-cli --scan --pattern '<s>:membership:*' | xargs redis-cli del`), and take `~<s>:membership:*` out of
+    the data plane's ACL ([Who may write which keys](./storage.md#who-may-write-which-keys)). While old and new instances
+    run side by side, an old instance's `invalidate` still reaches the new ones (same channel, same frames).
+- **The entry budgets count what roles and catalog short forms derive** (`CTL-40`, DR1-B-1). Affected: documents whose
+  roles list many permissions, or app catalogs with many permissions that have an `action`. `maxRoleBindings` now counts
+  a role's bindings (one per permission it lists, all of the catalog's for `"*"`) with the written ones, and its
+  default is now 20,000 (was 10,000), so that 100 roles of 100 permissions fit with room to spare; and
+  `maxPolicies` and `maxStatements` count one policy of one statement per catalog permission with an `action`. A change
+  that would raise such a count over its budget, which beta.7 published, now stays a draft with a `V2` error; a stored
+  document already over keeps being served and may change as long as it does not grow. To see whether one is: run `POST /changes:check` on
+  any change to it ([Checking without proposing](../policies/testing.md#checking-without-proposing)), and a `V2` warning names each count over its budget and the limit
+  ([Entry budgets](../policies/language.md#entry-budgets)); or count its derived bindings, roles' permissions summed:
+  `jq '[.roles[]?.permissions | if type == "array" then length else 0 end] | add + ([.bindings[]? | select(.subject.role)] | length)'`
+  (a `"*"` role adds the number of its app's catalog permissions). Raise the budgets in the platform's `limits` if the
+  document needs them. Each 1,000 derived bindings spread over distinct permissions cost the check of a tenant
+  administrator's change about 0.5 s, and each binding about 240 bytes on every instance that holds the document.
 
 ## From 8.0.0-beta.6 {#from-8-0-0-beta-6}
 
