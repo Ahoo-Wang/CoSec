@@ -1,0 +1,70 @@
+{
+  "rules": [
+    "CTL-40"
+  ],
+  "polarity": "positive",
+  "level": "control",
+  "description": "The platform allows two policies a document. An app catalog of three permissions with an action derives three policies (DR1-B-1): the change stays a draft with a V2 error naming the budget.",
+  "documents": {
+    "platform": {
+      "limits": {
+        "maxPolicies": 2
+      }
+    },
+    "apps": {
+      "wms": {
+        "policies": []
+      }
+    }
+  },
+  "steps": [
+    {
+      "propose": {
+        "change": "c1",
+        "document": "app:wms",
+        "operations": [
+          {
+            "putCatalog": {
+              "groups": [
+                {
+                  "name": "ops",
+                  "permissions": [
+                    {
+                      "id": "read",
+                      "action": "wms:read"
+                    },
+                    {
+                      "id": "edit",
+                      "action": "wms:edit"
+                    },
+                    {
+                      "id": "ship",
+                      "action": "wms:ship"
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "publish": "c1"
+    }
+  ],
+  "expect": {
+    "steps": [
+      "DRAFT",
+      "refused 409 STATE"
+    ],
+    "errors": {
+      "c1": [
+        "V2"
+      ]
+    },
+    "heads": {
+      "app:wms": 1
+    }
+  }
+}
