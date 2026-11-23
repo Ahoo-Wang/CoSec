@@ -316,10 +316,17 @@ The other direction, a service that only verifies the tokens such a service issu
 A login starts a **session**, a family of token pairs: an id (`sid`), the time its user signed in (`auth_time`) and a
 generation (`cosec.generation`), which both tokens of every pair carry. The session is kept in Redis
 (`<cosec.key-prefix>:token:family:<sid>`, [Storage](../operations/storage.md#redis-keys)), one key per session, kept
-until the session's lifetime ends (an ended session is marked, not deleted). It is written at login and at a
-[tenant switch](#switching-tenant-and-app), read and written when a token is refreshed or revoked, and never read on a
-request.
+from each write for the shorter of what is left of its lifetime and the refresh token validity: a session nobody
+refreshes is forgotten with its last refresh token (an ended session is marked, not deleted, and kept as long). It is
+written at login and at a [tenant switch](#switching-tenant-and-app), read and written when a token is refreshed or
+revoked, and never read on a request.
 
+- **A principal keeps 64 sessions in a tenant** (`IDN-35`): the 64 that began most recently. A login or a switch past
+  them deletes the session that began earliest, whether it is in use, logged out or ended: its next refresh is refused
+  as an unknown session (`401 token-invalid`) and that device signs in again, while its access token stays valid until it
+  expires. A constant, not a property: nothing a process can observe says how many devices a person uses. It bounds
+  what one principal holds in Redis; how fast anyone can sign in is the login route's to limit
+  ([Rate limiting](../policies/rate-limiting.md)).
 - **A refresh rotates the session.** Only the current generation moves it on, to the next generation. Two refreshes of
   one pair at once, on one instance or many, move it once, and both get a pair (with a non-zero leeway, below).
 - **The pair just replaced is answered for `cosec.jwt.session.rotation-leeway` (30 seconds).** Presented within that
