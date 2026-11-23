@@ -1,0 +1,68 @@
+{
+  "rules": [
+    "PIP-17"
+  ],
+  "polarity": "positive",
+  "level": "pipeline",
+  "description": "A request whose server reports no peer address (Reactor Netty on a Unix domain socket), read by the gateway adapter: the address could not be read, so a DENY on environment.ip cannot be decided, 503, never skipped (DR1-C-8).",
+  "documents": {
+    "platform": {
+      "policies": [
+        {
+          "id": "open",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "http:*",
+              "resource": "http:path:/**"
+            }
+          ]
+        },
+        {
+          "id": "blocked-range",
+          "statements": [
+            {
+              "effect": "deny",
+              "action": "*",
+              "resource": "http:path:/**",
+              "condition": {
+                "cidr": [
+                  "environment.ip",
+                  [
+                    "192.0.2.0/24"
+                  ]
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "g:open",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "open"
+        },
+        {
+          "id": "g:blocked-range",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "blocked-range"
+        }
+      ]
+    }
+  },
+  "http": {
+    "method": "GET",
+    "path": "/orders",
+    "remoteAddress": null
+  },
+  "gateway": {},
+  "expect": {
+    "status": 503,
+    "type": "unavailable"
+  }
+}

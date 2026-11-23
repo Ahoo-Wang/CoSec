@@ -1,0 +1,15 @@
+# Rule: PIP-17
+# Mutant: a request whose server reports no peer reads its address as empty, absent, so an IP DENY does not match (DR1-C-8)
+# Tests: :conformance:test --tests me.ahoo.cosec.conformance.ConformanceTest :webflux:test --tests me.ahoo.cosec.webflux.ReactiveXForwardedRemoteIpResolverTest
+
+diff --git a/edge/webflux/src/main/kotlin/me/ahoo/cosec/webflux/ReactiveRemoteIpResolver.kt b/edge/webflux/src/main/kotlin/me/ahoo/cosec/webflux/ReactiveRemoteIpResolver.kt
+index e0c1d8b82..b9ebaa18b 100644
+--- a/edge/webflux/src/main/kotlin/me/ahoo/cosec/webflux/ReactiveRemoteIpResolver.kt
++++ b/edge/webflux/src/main/kotlin/me/ahoo/cosec/webflux/ReactiveRemoteIpResolver.kt
+@@ -28,5 +28,5 @@ object ReactiveRemoteIpResolver : RemoteIpResolver<ServerWebExchange> {
+      * no peer (a Unix domain socket) gives `unknown`: the address could not be read (`PIP-17`, [ClientAddress.ofPeer]).
+      */
+     override fun resolve(request: ServerWebExchange): String =
+-        ClientAddress.ofPeer(request.request.remoteAddress?.hostString)
++        request.request.remoteAddress?.hostString.orEmpty()
+ }

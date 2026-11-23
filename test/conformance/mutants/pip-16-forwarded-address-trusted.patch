@@ -6,12 +6,12 @@ diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/http/XForwardedR
 index cb1d877e..eb1efa15 100644
 --- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/http/XForwardedRemoteIpResolver.kt
 +++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/http/XForwardedRemoteIpResolver.kt
-@@ -82,7 +82,7 @@ abstract class XForwardedRemoteIpResolver<R>(
+@@ -84,7 +84,7 @@ abstract class XForwardedRemoteIpResolver<R>(
      }
  
      /** Without a usable header: the peer, or [UNKNOWN] when the host's address is not the peer's. */
--    private fun fallback(request: R): String = if (peerIsConnection) peer.resolve(request) else UNKNOWN
-+    private fun fallback(request: R): String = peer.resolve(request)
+-    private fun fallback(request: R): String = if (peerIsConnection) peerOf(request) else UNKNOWN
++    private fun fallback(request: R): String = peerOf(request)
  
-     abstract fun extractXForwardedHeaderValues(request: R): List<String>?
- }
+     /** The peer, or [UNKNOWN] when the server reported none ([ClientAddress.ofPeer]), whatever [peer] answers. */
+     private fun peerOf(request: R): String = ClientAddress.ofPeer(peer.resolve(request))

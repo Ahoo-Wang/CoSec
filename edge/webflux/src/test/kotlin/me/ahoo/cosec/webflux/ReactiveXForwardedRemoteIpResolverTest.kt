@@ -16,11 +16,13 @@
 package me.ahoo.cosec.webflux
 
 import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.runtime.http.XForwardedRemoteIpResolver
 import me.ahoo.cosec.runtime.http.XForwardedRemoteIpResolver.Companion.X_FORWARDED_FOR
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import org.springframework.mock.http.server.reactive.MockServerHttpRequest
 import org.springframework.mock.web.server.MockServerWebExchange
+import java.net.InetSocketAddress
 
 class ReactiveXForwardedRemoteIpResolverTest {
 
@@ -34,5 +36,18 @@ class ReactiveXForwardedRemoteIpResolverTest {
         val serverWebExchange = MockServerWebExchange.from(serverRequest)
         val remoteIp = xForwardedRemoteIpResolver.extractXForwardedHeaderValues(serverWebExchange)
         remoteIp.assert().containsExactly("localhost")
+    }
+
+    /** PIP-17, DR1-C-8: a server that reports no peer (a Unix domain socket) gives an address that could not be read. */
+    @Test
+    fun aRequestWithoutAPeerReadsAsUnknown() {
+        val noPeer = MockServerWebExchange.from(MockServerHttpRequest.get("/orders"))
+        ReactiveRemoteIpResolver.resolve(noPeer).assert().isEqualTo(XForwardedRemoteIpResolver.UNKNOWN)
+        ReactiveXForwardedRemoteIpResolver(0).resolve(noPeer).assert().isEqualTo(XForwardedRemoteIpResolver.UNKNOWN)
+        ReactiveXForwardedRemoteIpResolver(1).resolve(noPeer).assert().isEqualTo(XForwardedRemoteIpResolver.UNKNOWN)
+        val peer = MockServerWebExchange.from(
+            MockServerHttpRequest.get("/orders").remoteAddress(InetSocketAddress("192.0.2.1", 50000))
+        )
+        ReactiveRemoteIpResolver.resolve(peer).assert().isEqualTo("192.0.2.1")
     }
 }
