@@ -114,7 +114,7 @@ CoSec 保存在 Redis 中的每条记录，都说明了读取它的实例比写�
 | 影子报告（`shadow:report:<window>:<instance>`） | `format: 1` | 忽略 | 在报告重新可读或被重新写入之前，无法查看该窗口（`503`） |
 | 窗口的报告者（`shadow:reporters:<window>`） | `format: 1` | 忽略 | 在重新写入之前无法评判该窗口 |
 | 实例状态及其索引（`shadow:status:*`） | `format: 1`，带 `formatLevel` | 忽略 | 无法读取修订的传播情况（`GET .../propagation`）；发布不等待它；在能读取之前，没有影子窗口会通过（`CTL-10`） |
-| 会话（`token:family:<id>`） | `format: 1` | 忽略 | 会话结束：刷新被拒绝，用户重新登录 |
+| 会话（`token:family:<id>`） | `format: 1`；租户切换开始的会话是 `format: 2`，记下它的 `root`（`IDN-36`） | 忽略 | 会话结束：刷新被拒绝，用户重新登录 |
 | API key（`apikey:*`） | `format: 3` | 拒绝 | key 被拒绝 |
 | 吊销、租约、限流计数器 | 无（标量） | 不适用 | 见上文各自的说明 |
 

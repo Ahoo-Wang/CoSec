@@ -83,6 +83,8 @@ class StoredRecordsTest {
         val formatAt: ((ObjectNode) -> ObjectNode)? = { it },
         val strictBecause: String? = null,
         val wrong: List<String> = listOf("", "x", "[1]", """{"format":"one"}"""),
+        /** The latest format the codec reads: one above it is a later format. */
+        val latest: Int = 1,
     )
 
     @Suppress("UNCHECKED_CAST")
@@ -94,7 +96,8 @@ class StoredRecordsTest {
         formatAt: ((ObjectNode) -> ObjectNode)? = { it },
         strictBecause: String? = null,
         wrong: List<String> = listOf("", "x", "[1]", """{"format":"one"}"""),
-    ) = Record(name, { encode(value) }, decode, { encode(it as T) }, formatAt, strictBecause, wrong)
+        latest: Int = 1,
+    ) = Record(name, { encode(value) }, decode, { encode(it as T) }, formatAt, strictBecause, wrong, latest)
 
     private val records = listOf(
         record(
@@ -148,6 +151,8 @@ class StoredRecordsTest {
             TokenFamily("f1", TenantId("acme"), PrincipalId("alice"), at, at.plusSeconds(60), 2, at, false),
             TokenFamilyCodec::encode,
             TokenFamilyCodec::decode,
+            // Format 2 is a switched session's (IDN-36).
+            latest = 2,
         ),
         record(
             "SnapshotDocumentCodec",
@@ -230,7 +235,7 @@ class StoredRecordsTest {
                 .isEqualTo(written.decodeToString())
             again(changed { it.remove("format") }).assert().describedAs("${record.name}: written before formats")
                 .isEqualTo(written.decodeToString())
-            runCatching { record.decode(changed { it.put("format", 2) }) }.exceptionOrNull()
+            runCatching { record.decode(changed { it.put("format", record.latest + 1) }) }.exceptionOrNull()
                 .assert().describedAs(
                     "${record.name}: a later format"
                 ).isInstanceOf(SnapshotFormatException::class.java)

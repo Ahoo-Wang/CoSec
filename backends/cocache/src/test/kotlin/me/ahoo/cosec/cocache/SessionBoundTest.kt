@@ -110,6 +110,16 @@ class SessionBoundTest {
         storeA.read(elsewhere).assert().isNotNull()
     }
 
+    /** IDN-36 with IDN-35: every switch back to the login's tenant begins the login again, so it is never pushed out. */
+    @Test
+    fun `switching back to the login's tenant keeps the login among the latest`(): Unit = runBlocking {
+        val login = familiesA.start(tenant, alice).session
+        repeat(TokenFamilyStore.SESSIONS_PER_PRINCIPAL * 2) {
+            (if (it % 2 == 0) familiesA else familiesB).startAt(tenant, alice, login.authTime, login.id)
+        }
+        storeB.read(login.id).assert().isNotNull()
+    }
+
     @Test
     fun `the index lives as long as the longest session it counts`(): Unit = runBlocking {
         familiesA.start(tenant, alice)

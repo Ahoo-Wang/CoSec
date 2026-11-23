@@ -3,14 +3,16 @@
 # Tests: :login:test --tests me.ahoo.cosec.login.token.SwitchLiveSessionTest :jwt:test --tests me.ahoo.cosec.jwt.SwitchFromReplayedPairTest :conformance:test
 
 diff --git a/extensions/login/src/main/kotlin/me/ahoo/cosec/login/token/LiveSessions.kt b/extensions/login/src/main/kotlin/me/ahoo/cosec/login/token/LiveSessions.kt
-index 68c99d14..761ba4c9 100644
+index a510e69ba..b4323cda5 100644
 --- a/extensions/login/src/main/kotlin/me/ahoo/cosec/login/token/LiveSessions.kt
 +++ b/extensions/login/src/main/kotlin/me/ahoo/cosec/login/token/LiveSessions.kt
-@@ -61,7 +61,6 @@ internal class LiveSessions(private val revocation: TokenRevocation, private val
+@@ -61,8 +61,7 @@ internal class LiveSessions(private val revocation: TokenRevocation, private val
          session: TokenSession,
      ): Live {
          revocation.check(tokenId, tenant, principal, issuedAt)
--        families.requireLive(session, tenant, principal)
-         return Live(principal, session)
+-        val family = families.requireLive(session, tenant, principal)
+-        return Live(principal, session, family.root ?: family.id)
++        return Live(principal, session, session.id)
      }
  
+     /** A session known to be live, and the session its login began: what may be issued from it. */
