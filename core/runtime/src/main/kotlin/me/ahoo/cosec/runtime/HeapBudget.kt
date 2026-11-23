@@ -28,7 +28,7 @@ import me.ahoo.cosec.engine.TraceLevel
  * | [tokenCache]: the verified-token cache (`IDN-32`) | 1/[TOKEN_CACHE_SHARE] | 128 MiB |
  * | [decisionListeners]: the BEST_EFFORT decision listeners' queues, counted by trace level (`OBS-11`) | 1/[DECISION_LISTENERS_SHARE] | 32 MiB |
  * | [changeListeners]: the change listeners' queues (`CTL-66`) | 1/[CHANGE_LISTENERS_SHARE] | 64 MiB |
- * | [documents]: reserved for the snapshot documents, whose own bound is a later design | 1/[DOCUMENTS_SHARE] | 512 MiB |
+ * | [documents]: the snapshot documents, from which `DocumentBudget` derives each family's bounds (`SNP-24`) | 1/[DOCUMENTS_SHARE] | 512 MiB |
  *
  * Together they take at most 1/[SUM_BOUND] of the heap ([SHARES]): the rest is the gateway's own and ZGC's headroom.
  */
@@ -72,7 +72,7 @@ class HeapBudget private constructor(val heap: Long) {
          */
         const val CHANGE_LISTENERS_SHARE: Long = 32
 
-        /** A quarter, reserved: the snapshot documents' bound (`max-apps`, `max-tenants`) is a later design. */
+        /** A quarter: the snapshot documents' share, divided into the families' bounds by `DocumentBudget` (`SNP-24`). */
         const val DOCUMENTS_SHARE: Long = 4
 
         /** Every share together takes at most half the heap. */
