@@ -130,6 +130,8 @@ await logout();
 `sessionStorage` 或每个标签页各自的内存存储时，只在一个地方刷新。细节见
 [实战文档](https://fetcher.ahoo.me/zh/guides/integrations/cosec)。
 
+默认的 `localStorage` 能被页面同源上的任何脚本读到：这样的脚本可以拿走刷新令牌，并在会话有效期结束之前一直续期。`sessionStorage` 或内存能让令牌对不被其他标签页看到，却挡不住页面上的脚本。让外来脚本进不了这个源（Content-Security-Policy、你信得过的依赖）；各种存储的代价见[客户端](https://cosec.ahoo.me/zh/integration/clients#refreshing-under-rotation)。
+
 ## 上报错误
 
 本包在刷新或退出时抛出的错误（`RefreshTokenError`、`RefreshUnavailableError`、`RefreshSessionChangedError`、

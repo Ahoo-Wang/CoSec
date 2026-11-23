@@ -28,7 +28,8 @@ import me.ahoo.cosec.spi.token.VerifiedToken
  * (only the current one refreshes; an older one presented again revokes the session; a session ends at its absolute
  * lifetime). The subject is the old access token's principal, tenant, app and login time, in the next generation, with
  * what [memberships] answers, or else what the token claimed. A refusal of [memberships] comes before the rotation, so
- * it spends no generation.
+ * it spends no generation; what fails after the rotation (the token converter, the check that the caller is still
+ * active) does spend it, and the client's next retry past the rotation leeway is read as reuse (DR1-G-3).
  *
  * A token is never issued on a revocation read that failed (`IDN-14`): when the revocations cannot be read, the
  * [me.ahoo.cosec.spi.token.RevocationUnavailableException] fails the refresh, which the application answers 503. Were the

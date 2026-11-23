@@ -115,7 +115,7 @@ CoSec 保存在 Redis 中的每条记录，都说明了读取它的实例比写�
 | 影子报告（`shadow:report:<window>:<instance>`） | `format: 1` | 忽略 | 在报告重新可读或被重新写入之前，无法查看该窗口（`503`） |
 | 窗口的报告者（`shadow:reporters:<window>`） | `format: 1` | 忽略 | 在重新写入之前无法评判该窗口 |
 | 实例状态及其索引（`shadow:status:*`） | `format: 1`，带 `formatLevel` | 忽略 | 无法读取修订的传播情况（`GET .../propagation`）；发布不等待它；在能读取之前，没有影子窗口会通过（`CTL-10`） |
-| 会话（`token:family:<id>`） | `format: 1` | 忽略 | 会话结束：刷新被拒绝，用户重新登录 |
+| 会话（`token:family:<id>`） | `format: 1`；租户切换开始的会话是 `format: 2`，记下它的 `root`（`IDN-36`） | 忽略 | 会话结束：刷新被拒绝，用户重新登录 |
 | API key（`apikey:*`） | `format: 3` | 拒绝 | key 被拒绝 |
 | 吊销、租约、限流计数器 | 无（标量） | 不适用 | 见上文各自的说明 |
 
@@ -334,7 +334,22 @@ sequenceDiagram
 CoSec 不改动这个客户端：它由应用共享。这个 customizer 只作用于这个客户端，即 Redis template 背后的那个（API key、限流器、OAuth state）；
 CoCache 为文档、控制面记录和吊销记录自建客户端（[Redis 客户端](#redis-requirements)），由它自己配置。
 
-**正在进行的加载按时间而不是按数量受限。** 正在加载的文档在加载结束之前，既不计入族的文档上限，也不计入没有文档的 id 的上限：Redis 挂起时，它在存储读取超时（30 秒）之后失败，而等待它的请求在冷加载超时之后回答 `503`。因此在这样的故障期间，以很高速率使用新应用 id 的凭证最多能让该速率 × 30 秒的加载及其待发的 Lettuce 命令留在内存中；`requestQueueSize` 限制这些命令。它们都不会挤出已安装的文档。
+```kotlin
+@Bean
+fun boundedLettuce(): LettuceClientConfigurationBuilderCustomizer = LettuceClientConfigurationBuilderCustomizer {
+    it.clientOptions(
+        ClientOptions.builder()
+            // 一个连接持有的命令数：大约是发出命令的请求速率乘以命令超时。
+            .requestQueueSize(2_000)
+            .disconnectedBehavior(ClientOptions.DisconnectedBehavior.REJECT_COMMANDS)
+            .build()
+    )
+}
+```
+
+`requestQueueSize` 的估算方法与本页对吊销的推算相同：该客户端上的命令速率乘以命令超时（每秒 1,000 条命令、超时 2 秒，即 2,000）。超过它，以及设置了 `REJECT_COMMANDS` 后在断开期间，命令立即失败，各功能像应对 Redis 不可用那样应答。没有 meter 统计等待中的命令：发生时能看到的是用到这些功能的请求（API key、Redis 限流、社交登录）延迟变高，以及日志里 Lettuce 自己的重连记录。CoCache 的客户端连着一个挂起的 Redis 时，同样没有按数量的上限；它的命令超时 `cocache.redis.command-timeout` 就是上限，CoSec 不改动它。
+
+**正在进行的加载按时间而不是按数量受限。** 正在加载的文档在加载结束之前，既不计入族的文档上限，也不计入没有文档的 id 的上限：Redis 挂起时，它在存储读取超时（30 秒）之后失败，而等待它的请求在冷加载超时之后回答 `503`。因此在这样的故障期间，以很高速率使用新应用 id 的凭证最多能让该速率 × 30 秒的加载及其待发的 Lettuce 命令留在内存中；`requestQueueSize` 限制这些命令。它们都不会挤出已安装的文档。能看到的是：`cosec.snapshot.loads` 中 `result=timeout` 上升（[指标](./observability.md)），需要这些文档的请求回答 `503`；没有 meter 统计在途的加载。
 
 **没有文档的应用共用 256 个位置。** 实例记住的没有文档的应用 id 是应用族的"不存在"条目（2 GiB 时 256 个，`SNP-7`），由所有租户共用。为大量没有应用文档的应用签发的凭证会挤出那些确实没有应用文档的真实应用，于是这些应用中的请求会再次读取 Redis（不需要编译），直到它们重新被记住。这仍然失败即拒绝，但对 `fail-closed.tenants` 中的租户，这种应用从本地副本加载的条目按 `local-max-age` 的年龄计：当 `fail-closed.max-lag` 小于 `local-max-age` 时，它的请求回答 `503`，直到 Redis 随即确认它。租户 id 来自凭证，因此租户族不能被这样淹没。
 

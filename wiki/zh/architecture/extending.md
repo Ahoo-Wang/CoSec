@@ -145,7 +145,7 @@ Pipeline 在请求路径上调用每个 SPI，常常是在 Netty 事件循环上
 
 [break-glass](../guide/security-model.md#break-glass) 绑定是否适用按来源判断：只有经 `TokenAuthenticator`、由 CoSec 自己的 `JwtTokenVerifier` 校验过的令牌能得到它。你的认证器返回的主体，无论凭证使用自己的方式（例如 `Identity.Method("ldap")`）还是没有凭证，永远得不到 break-glass；你自己的 `TokenVerifier` 认可的令牌也得不到，即使经过 `TokenAuthenticator`（此时凭证以认证器的 `method` 命名，默认为 `token`）。方式 `JWT` 保留给 CoSec 的令牌：你用它构造的 `AuthenticatedPrincipal` 会被拒绝（`IllegalArgumentException`，即 `503`），因此任何认证器都无法凭名字冒充 CoSec 的令牌（`BRK-8`）。
 
-控制面在审批时还会读取主体的两项事实（[测试策略](../policies/testing.md#approval)）。`workload`（`IDN-34`）：对 API key（`apiKey`：CoSec 的 API key 认证器设置它，方式为 `API_KEY` 的凭证无论由谁构造都算作 API key）和方式为 `SERVICE` 的凭证（`service`，服务自己的身份，无论由谁构造）为真；工作负载从不审批，也从不是信任根。你的主体在 CoSec 看来是人的，除非其凭证名为 `api-key` 或 `service`，所以不要给面向工作负载的认证器授予 `cosec:approve` 或 `cosec:platform-admin`，或者让它把凭证命名为 `Identity.Method.SERVICE`。凭证的 id：审批会记下它，没有 id 的审批不算数。你构造的主体没有 `issuedAt`，所以其令牌的任何一次吊销（`subjectRevokedBefore`）都会让它的审批作废。
+控制面在审批时还会读取主体的两项事实（[测试策略](../policies/testing.md#approval)）。`workload`（`IDN-34`）：对 API key（`apiKey`：CoSec 的 API key 认证器设置它，方式为 `API_KEY` 的凭证无论由谁构造都算作 API key）和方式为 `SERVICE` 的凭证（`service`，服务自己的身份，无论由谁构造）为真；工作负载从不审批，也从不是信任根。你的主体在 CoSec 看来是人的，除非其凭证名为 `api-key` 或 `service`。所以你的认证器以自己的方式名（比如 `oauth-client`）证明的机器客户端，如果被授予 `cosec:approve`，就能审批变更、也能当信任根：两个这样的凭证就凑成了四眼。面向工作负载的认证器在它构造的主体里把凭证写成 `Identity.Credential(Identity.Method.SERVICE, id, expiresAt)`（或 `API_KEY`），这样主体就是工作负载，并且不授予它 `cosec:approve` 或 `cosec:platform-admin`（DR1-C-3；只按出处认定人留到 8.1）。凭证的 id：审批会记下它，没有 id 的审批不算数。你构造的主体没有 `issuedAt`，所以其令牌的任何一次吊销（`subjectRevokedBefore`）都会让它的审批作废。
 
 认证器只能看到 Pipeline 读作凭证的内容：令牌（`Authorization` 请求头；开启 `cosec.pipeline.allow-query-token` 时其次是同名查询参数；开启 `cosec.pipeline.allow-cookie-token` 时再次是 Cookie）和 API key 请求头（`cosec.pipeline.api-key-header`）。
 
@@ -194,7 +194,7 @@ fun cosecAuthenticator(
 | 扩展点 | 契约 |
 |---|---|
 | `TokenStore` | 吊销的写入侧，由 CoSec 自己的 `TokenRevoker` 调用，你的代码从不直接调用：`revoke(tokenId, ttl)` 接收令牌的 `jti`（`VerifiedToken.id`），不是令牌本身，所以 `revoke(accessToken, ttl)` 会写入一个以有效凭证命名的键，却什么也没吊销。应用通过 `TokenRevoker` 登出用户或吊销主体（[登出与吊销](../integration/authentication.md#logout-and-revocation)）。存储的方法是 `revoke(tokenId, ttl)`、`revokeSubject(tenant, principal, issuedBefore, ttl)`，两者都是挂起函数，不阻塞。条目必须比它吊销的刷新令牌存活得更久。无法吊销某主体全部令牌的存储从 `revokeSubject` 抛出异常，紧急吊销因此绝不会悄悄失效。 |
-| `TokenFamilyStore` | 刷新令牌的会话（[会话](../integration/authentication.md#sessions)）：`create`、`read`，以及只在读到的版本之上 `replace` 一个令牌族，跨实例原子。读取失败或写入无法确认时抛出异常。只在登录、刷新和登出时读写。令牌族的 `expiresAt` 是上界：记录再也不能刷新时就可以丢掉，CoSec 的存储在刷新令牌有效期之后就这样做。每个主体在每个租户保留 `TokenFamilyStore.SESSIONS_PER_PRINCIPAL` 个最近开始的会话：再 `create` 一个时删除最早的那个（`IDN-35`）。 |
+| `TokenFamilyStore` | 刷新令牌的会话（[会话](../integration/authentication.md#sessions)）：`create`、`read`，以及只在读到的版本之上 `replace` 一个令牌族，跨实例原子。读取失败或写入无法确认时抛出异常。只在登录、刷新和登出时读写。令牌族的 `expiresAt` 是上界：记录再也不能刷新时就可以丢掉，CoSec 的存储在刷新令牌有效期之后就这样做。每个主体在每个租户保留 `TokenFamilyStore.SESSIONS_PER_PRINCIPAL` 个最近开始的会话：再 `create` 一个时删除最早的那个（`IDN-35`）。保存令牌族的每个成员，包括 `root`：切换会读回它，没有它时切换被拒绝（`IDN-36`）。 |
 | `RevocationReader` | 吊销的读取侧，每个已认证请求都会调用：`isRevoked(tokenId)`、`subjectRevokedBefore(tenant, principal)`。两者都是挂起函数，不得阻塞。每次读取都必须在它自己的时限内应答或失败，存储无法及时读取时抛出 `RevocationUnavailableException`：CoSec 除认证器的时限外不给你的读取器任何时限，一次永不结束的读取会让请求在认证超时（`cosec.pipeline.timeout` 的 20 %）时返回 `503`，无论 `cosec.authentication.revocation.fail-closed` 如何。CoSec 自己的读取器用吊销读取超时（认证超时的 30 %）限制每次读取。 |
 | `ApiKeyReader` | `findByHash(hash): ApiKey?`，挂起函数。未知的 key 返回 null；查找失败时抛出异常（请求应答 `503`）。 |
 

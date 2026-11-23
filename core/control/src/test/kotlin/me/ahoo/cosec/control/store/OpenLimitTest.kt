@@ -128,7 +128,7 @@ class OpenLimitTest {
 
         stored.state.assert().isEqualTo(ChangeState.CHECKED)
         store.change(draft.id)!!.value.state.assert().isEqualTo(ChangeState.ABANDONED)
-        store.change(draft.id)!!.value.note.assert().startsWith("abandoned for room (CTL-83)")
+        // Its record keeps its note; the audit event of the abandon says it was for room (CTL-83).
         // Bob's failed draft is his: alice cannot make room with it.
         refused { changes.open() }.conflict.assert().isEqualTo(ConflictKind.OPEN_LIMIT)
     }
@@ -171,11 +171,15 @@ class OpenLimitTest {
                 expected: me.ahoo.cosec.spi.snapshot.SnapshotDigest?,
                 change: ChangeRequest,
                 previous: ChangeState?,
-            ): Boolean = if (change.state == ChangeState.ABANDONED) false else store.putChange(
-                expected,
-                change,
-                previous
-            )
+            ): Boolean = if (change.state == ChangeState.ABANDONED) {
+                false
+            } else {
+                store.putChange(
+                    expected,
+                    change,
+                    previous
+                )
+            }
         }
         val changes = changes(racing)
         changes.failed()

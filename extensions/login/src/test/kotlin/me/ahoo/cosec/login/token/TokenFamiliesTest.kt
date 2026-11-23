@@ -183,7 +183,7 @@ class TokenFamiliesTest {
         assertThrows<TokenExpiredException> { runBlocking { families.rotate(token(session)) } }
         // A tenant switch keeps the login time: a switch after the end starts nothing.
         assertThrows<TokenExpiredException> {
-            runBlocking { families.startAt(acme, alice, clock.now.minus(Duration.ofDays(30))) }
+            runBlocking { families.startAt(acme, alice, clock.now.minus(Duration.ofDays(30)), "root") }
         }
     }
 

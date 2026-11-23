@@ -761,6 +761,15 @@ token's `aud` can carry; without one it keeps the previous token's app (`SCP-12`
 for, and reaches the token only through your answer: a user cannot get a token for an app by naming it, only when your
 code has checked that the user has it.
 
+**A switched session ends with the login** (`IDN-36`). The new session names its root, the session the user's login
+began, however many switches lie between. Its refresh, the retry within the rotation leeway and a switch from it read
+the root as well: once the login's session is logged out, revoked or gone, the switched session is revoked at its next
+refresh or switch (`401 token-revoked`). Its access token stays valid until it expires: nothing indexes sessions by root
+to revoke them at once. Each refresh of a switched session writes the root back unchanged, so a login nobody refreshes
+is kept while a session switched from it is in use, and switching back to a session's own tenant begins it again in the
+64 sessions a principal keeps ([Sessions](#sessions)). A `TokenFamilyStore` of your own must save `TokenFamily.root`: a
+switch reads the new session back, and is refused when the root was not kept.
+
 **The switch issues from the request's session**, as CoSec's token proved it to the pipeline: the `context` must be the
 one the pipeline made for the request, and nothing in your credentials names the session. The new token starts a
 session of its own, which keeps that session's login time, so it ends when the previous one would: the user did not
@@ -921,9 +930,9 @@ JustAuth's: an application cannot add one of its own, since the provider interfa
    refused with a `SocialAuthenticationException`.
 
 JustAuth blocks: `authorize` writes the state to Redis, and the callback
-calls the provider over blocking HTTP. CoSec runs both on a dispatcher of each provider's own, and its state store's Redis
-calls on one of the store's own, each of at most 16 threads, so you can call them from any thread, an event loop
-included. A provider that hangs delays only its own logins, and
+calls the provider over blocking HTTP. CoSec runs both on a dispatcher of each provider's own, of at most 16 threads,
+and its state store calls Redis through the non-blocking client and awaits it, holding no thread, so you can call
+them from any thread, an event loop included. A provider that hangs delays only its own logins, and
 cancelling a request interrupts its call.
 
 ## Behind a gateway

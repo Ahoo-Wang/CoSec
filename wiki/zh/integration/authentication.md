@@ -416,6 +416,8 @@ suspend fun select(@PathVariable tenant: String, @PathVariable app: String, secu
 
 新令牌只有先前主体的 id、目标租户和这份成员关系：角色属于租户，因此先前令牌的角色、策略和属性都不会进入新令牌（一个租户的管理员不是另一个租户的管理员）。**它的应用是你的 `TenantSwitch` 回答的应用**（`TenantMembership.app`），必须是令牌的 `aud` 能携带的应用 id；没有回答应用时，保留先前令牌的应用（`SCP-12`）。`targetAppId` 是用户请求的应用，只能经由你的回答进入令牌：用户不能靠指名得到某个应用的令牌，只有在你的代码检查过用户拥有它之后才行。
 
+**切换出来的会话随登录一起结束**（`IDN-36`）。新会话记下它的根，即用户登录时开始的那个会话，无论中间隔了多少次切换。它的刷新、轮换宽限期内的重试，以及从它再切换，都会一并读取根：登录的会话一旦登出、被吊销或不复存在，切换出来的会话在下一次刷新或切换时被吊销（`401 token-revoked`）。它的访问令牌在过期之前仍然有效：没有按根建立的索引来即时吊销它们。切换出来的会话每次刷新都会把根原样写回，所以只要从它切换出来的会话还在使用，没人刷新的登录会话也会被保留；切回一个会话自己的租户，算作它在一个主体保留的 64 个会话中重新开始了一次（[会话](#sessions)）。你自己的 `TokenFamilyStore` 必须保存 `TokenFamily.root`：切换会读回新会话，根没有被保存时切换被拒绝。
+
 **切换从请求的会话签发**，即 CoSec 的令牌向管道证明的那个会话：`context` 必须是管道为该请求构造的上下文，你的凭证中没有任何东西指定会话。新令牌开始一个自己的会话，保留那个会话的登录时间，因此会在先前的会话结束时结束：用户并没有重新登录（`IDN-17`）。它只在那个会话仍然有效时签发（`IDN-22`），并且在询问你的 `TenantSwitch` 之前就检查：
 
 - 重新严格读取其令牌的吊销记录：吊销存储无法读取时，切换抛出 `RevocationUnavailableException`，由你的端点应答 `503`，即使请求本身已被放行（PIP-7，[登出与吊销](#logout-and-revocation)）；会话存储无法读取时抛出 `SessionStoreUnavailableException`，同样是 `503`；
@@ -491,7 +493,7 @@ class SelectTenantTest {
 2. 在你的回调端点中，把提供方的回调参数（`code`、`state` 等）绑定到 `JustAuthCredentials("<name>", <绑定 Cookie 的值，没有则为 "">)`，并传给 `TokenCompositeAuthentication.authenticateAsToken`。只有当回调的 `state` 是 CoSec 签发的、未过期、未被使用过（在调用提供方之前就以 `GETDEL` 立即从 Redis 取走），并且浏览器的绑定值哈希后与记录的一致（以恒定时间比较）时，回调才被接受。来自另一个浏览器、重复发送或伪造的 state 会抛出 `SocialAuthenticationException`。这就是阻止登录 CSRF 的方式：攻击者为自己的账户拿到的回调 URL，在受害者的浏览器中打开时，带的是攻击者的 state，却没有攻击者的 Cookie。注册上设置 `ignore-check-state: true` 会让启动失败。state 成立之后，回调的登录同样有上限：每个提供方同时最多 64 个，正在运行或在等待它的 16 个线程之一；超过时回调立即得到 `SocialAuthenticationException`（像应答被拒绝的开始那样应答它），用户重新开始登录。任何人都能开始登录并完成回调，所以大量真实的回调仍可能让某个用户的回调排在这 64 个之后，或被拒绝；请按地址对两个路由限流（[限流](../policies/rate-limiting.md)）。
 3. `SocialUserPrincipalConverter` 把提供方的用户转换成你的主体。默认的 `DirectSocialUserPrincipalConverter` 令牌属于 `cosec.authorization.scope.app-id`（用户登录的宿主的应用，未配置则不属于任何应用），并创建一个 id 为 `<提供方用户 id>@<name>` 的主体，只带两个属性，`cosec_oauth_provider`（注册名）和 `cosec_oauth_user_id`（提供方的用户 id），并且**没有角色、策略或租户**。属性会成为签名的声明，条件读取它们，网关也可能转发它们，因此用户在提供方可以编辑的资料（名称、邮箱、公司、简介、原始用户信息）不在其中。要在你自己的系统中查找该用户并赋予角色，请声明你自己的 `SocialUserPrincipalConverter` Bean。登录只需要提供方的用户 id：提供方不返回用户名（StackOverflow）、性别（Figma）或原始用户信息时仍可登录，此时 `SocialUser.username` 取用户 id，`gender` 为 `UNKNOWN`，`rawInfo` 为空。成功响应里没有用户 id 或没有用户，则以 `SocialAuthenticationException` 拒绝。
 
-JustAuth 是阻塞的：`authorize` 把 state 写入 Redis，回调则通过阻塞 HTTP 调用提供方。CoSec 把这两步都放到每个提供方自己的调度器上运行，把它的 state 存储的 Redis 调用放到存储自己的调度器上，各自最多 16 个线程，所以你可以在任何线程上调用它们，包括事件循环。挂住的提供方只会拖慢它自己的登录，请求被取消时会中断它的调用。
+JustAuth 是阻塞的：`authorize` 把 state 写入 Redis，回调则通过阻塞 HTTP 调用提供方。CoSec 把这两步都放到每个提供方自己的调度器上运行，最多 16 个线程；它的 state 存储通过非阻塞客户端调用 Redis 并等待结果，不占用线程，所以你可以在任何线程上调用它们，包括事件循环。挂住的提供方只会拖慢它自己的登录，请求被取消时会中断它的调用。
 
 ## 网关之后 {#behind-a-gateway}
 

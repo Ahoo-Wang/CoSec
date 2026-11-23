@@ -3,12 +3,12 @@
 # Tests: :login:test --tests me.ahoo.cosec.login.token.TokenFamiliesTest :conformance:test
 
 diff --git a/extensions/login/src/main/kotlin/me/ahoo/cosec/login/token/TokenFamilies.kt b/extensions/login/src/main/kotlin/me/ahoo/cosec/login/token/TokenFamilies.kt
-index a07e8edf..a516ff79 100644
+index 6f03a3ff4..eee5e171c 100644
 --- a/extensions/login/src/main/kotlin/me/ahoo/cosec/login/token/TokenFamilies.kt
 +++ b/extensions/login/src/main/kotlin/me/ahoo/cosec/login/token/TokenFamilies.kt
-@@ -132,7 +132,7 @@ class TokenFamilies @JvmOverloads constructor(
-                     // A retry, or another tab: the pair was current a moment ago. Nothing is written.
+@@ -167,7 +167,7 @@ class TokenFamilies @JvmOverloads constructor(
                      return Issue(TokenSession(family.id, family.authTime, family.generation), family.expiresAt)
+                 }
                  session.generation < family.generation -> {
 -                    if (revoke(read)) {
 +                    if (read.family.id.isNotEmpty()) {
