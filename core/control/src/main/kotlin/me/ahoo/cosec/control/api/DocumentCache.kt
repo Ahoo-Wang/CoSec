@@ -204,7 +204,10 @@ internal class DocumentCache(
      * holds about twelve times the stored size of what it compiles, and nothing else bounds how many run.
      */
     val uncachedCompiles: Int
-        get() = (maxHeap / (MAX_DOCUMENT_BYTES * (DECODED_FACTOR + COMPILED_FACTOR))).coerceIn(1, Int.MAX_VALUE.toLong()).toInt()
+        get() {
+            val largest = MAX_DOCUMENT_BYTES * (DECODED_FACTOR + COMPILED_FACTOR)
+            return (maxHeap / largest).coerceIn(1, Int.MAX_VALUE.toLong()).toInt()
+        }
 
     /** Whether a document of [size] stored bytes, decoded and compiled once, weighs at most half the bound. */
     fun admits(size: Long): Boolean = size * (DECODED_FACTOR + COMPILED_FACTOR) <= maxHeap / 2

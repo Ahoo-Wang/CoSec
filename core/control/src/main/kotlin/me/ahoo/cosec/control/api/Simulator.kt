@@ -15,7 +15,6 @@
 
 package me.ahoo.cosec.control.api
 
-import java.util.concurrent.atomic.AtomicLong
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
@@ -52,6 +51,7 @@ import me.ahoo.cosec.runtime.snapshot.MissingPlatformException
 import me.ahoo.cosec.runtime.snapshot.ViewDocuments
 import me.ahoo.cosec.spi.membership.MembershipClaims
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
+import java.util.concurrent.atomic.AtomicLong
 
 /**
  * The control plane's decisions (RFC 0007 §10.3, Q22, CTL-3): the enforcing flow's parts, not a second evaluator. The
@@ -170,7 +170,11 @@ class Simulator(
 
     /** [decide] of an engine request, bounded as [decideBounded]. */
     internal suspend fun decideBounded(request: EngineRequest, documents: HeldDocuments): Evaluation =
-        if (compilesForTheCall(documents)) uncached.withPermit { decide(request, documents) } else decide(request, documents)
+        if (compilesForTheCall(documents)) {
+            uncached.withPermit { decide(request, documents) }
+        } else {
+            decide(request, documents)
+        }
 
     /** Whether deciding on [documents] compiles one of them for the call alone, which the cache will not keep. */
     internal fun compilesForTheCall(documents: HeldDocuments): Boolean =

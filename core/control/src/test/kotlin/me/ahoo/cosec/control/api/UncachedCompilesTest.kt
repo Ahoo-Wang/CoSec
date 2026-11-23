@@ -48,7 +48,11 @@ class UncachedCompilesTest {
     fun `explaining again at a retained revision compiles nothing again`() = runBlocking<Unit> {
         val fixture = ControlPlaneTest()
         val change = fixture.plane.propose(
-            fixture.alice, ControlPlaneTest.TENANT, 1, listOf(Operation.RemoveBinding(BindingId("ops"))), "revoke",
+            fixture.alice,
+            ControlPlaneTest.TENANT,
+            1,
+            listOf(Operation.RemoveBinding(BindingId("ops"))),
+            "revoke",
         )
         fixture.plane.startShadow(fixture.alice, change.id)
         fixture.changes.shadowed(change.id)
@@ -82,7 +86,11 @@ class UncachedCompilesTest {
         val simulator = Simulator(engine = slow)
         val scope = (simulator.scope(REQUEST) as ScopeResolution.Resolved).scope
         // Not taken from the cache: a candidate's documents, compiled for the call alone.
-        val candidate = HeldDocuments(Held.of(document(DocumentKind.PLATFORM, "")), null, Held.of(document(DocumentKind.TENANT, "acme")))
+        val candidate = HeldDocuments(
+            Held.of(document(DocumentKind.PLATFORM, "")),
+            null,
+            Held.of(document(DocumentKind.TENANT, "acme"))
+        )
         simulator.compilesForTheCall(candidate).assert().isTrue()
         (1..4).map { async(Dispatchers.Default) { simulator.decideBounded(REQUEST, scope, candidate) } }.awaitAll()
         most.get().assert().isEqualTo(simulator.cache.uncachedCompiles)

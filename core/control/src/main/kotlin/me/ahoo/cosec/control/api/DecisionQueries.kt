@@ -65,7 +65,8 @@ internal class DecisionQueries(
             val fetched = if (change.key == tenant) simulator.keys(scope, document) else keys
             // The candidate is no stored content: compiled once, here; the heads come from the cache.
             val proposedHeads = fetched.associateWith { heads[it] ?: retained.held(it) } + (change.key to Held(document, null))
-            documents(proposedHeads).also { proposedDocuments = it }.let { simulator.decideBounded(simulated, scope, it) }
+            val proposedView = documents(proposedHeads).also { proposedDocuments = it }
+            simulator.decideBounded(simulated, scope, proposedView)
         }
         val redaction = redaction(operator, (enforced.read + proposed?.read.orEmpty()).distinct())
         val enforcedHomes = PolicyHomes(enforcedDocuments)
