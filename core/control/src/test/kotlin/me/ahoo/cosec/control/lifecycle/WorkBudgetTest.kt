@@ -62,6 +62,26 @@ class WorkBudgetTest {
     }
 
     @Test
+    fun `what a call holds is held until it ends, and work held later in it never waits`() = runTest {
+        val budget = WorkBudget(100)
+        val hold = CompletableDeferred<Unit>()
+        launch { budget.withWork("x", 50, patience) { hold.await() } }
+        runCurrent()
+        budget.call {
+            budget.hold("a", 30, patience)
+            budget.held.assert().isEqualTo(80L)
+            // 30 more does not fit beside x's 50 and the 30 held: refused at once, at time 0.
+            runCatching { budget.hold("a", 30, patience) }.exceptionOrNull()
+                .assert().isInstanceOf(WorkBudgetExhaustedException::class.java)
+            currentTime.assert().isEqualTo(0L)
+            budget.hold("a", 20, patience)
+            budget.held.assert().isEqualTo(100L)
+        }
+        budget.held.assert().isEqualTo(50L)
+        hold.complete(Unit)
+    }
+
+    @Test
     fun `a call that does not fit within its patience is refused at its end`() = runTest {
         val budget = WorkBudget(100)
         val hold = CompletableDeferred<Unit>()

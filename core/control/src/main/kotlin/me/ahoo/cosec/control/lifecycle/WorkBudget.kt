@@ -36,10 +36,13 @@ import kotlin.coroutines.CoroutineContext
  *   [capacity] while another tenant waits is passed over (unless it holds nothing: a call above half then runs as the
  *   tenant's only one). When the next eligible call does not fit, nothing else is granted before it: no smaller call
  *   barges past, so a heavy call is never starved by light ones.
- * - **No waiting while holding.** A call made inside [withWork] (a call that already holds a weight) is granted only if
- *   it fits at once, or refused: two calls each holding and waiting for the other would never end.
+ * - **A call's scope.** [call] opens one: what [hold] takes inside it is held until the call ends, however it ends,
+ *   cancellation included. A control call (the API's `handle`) is one: what it decodes or compiles for itself is held
+ *   until its answer.
+ * - **No waiting while holding.** A [hold] of a call that already holds work is granted only if it fits at once, or
+ *   refused: two calls each holding and waiting for the other would never end.
  * - **Patience.** A call not granted within its patience is refused with [WorkBudgetExhaustedException]; a call
- *   cancelled while it waits leaves the queue. What a call holds is released when [withWork]'s block ends, however.
+ *   cancelled while it waits leaves the queue.
  */
 @InternalCoSecApi
 class WorkBudget(val capacity: Long, val free: Long = 0) {
@@ -68,19 +71,34 @@ class WorkBudget(val capacity: Long, val free: Long = 0) {
 
     private val piecesBy = HashMap<String, Int>()
 
-    /** Runs [block] holding [weight] for [tenant], waiting at most [patience] for it, and releases it after, whatever. */
-    suspend fun <T> withWork(tenant: String, weight: Long, patience: Duration, block: suspend () -> T): T {
-        if (weight <= free) return block()
-        val grant = acquire(tenant, weight.coerceAtMost(capacity), patience)
+    /** Runs [block] as one call: what it holds ([hold]) is released when it ends. Inside a call, it is that call. */
+    suspend fun <T> call(block: suspend () -> T): T {
+        if (currentCoroutineContext()[CallScope] != null) return block()
+        val scope = CallScope()
         try {
-            return withContext(Holding) { block() }
+            return withContext(scope) { block() }
         } finally {
-            grant.release()
+            scope.release()
         }
     }
 
-    private suspend fun acquire(tenant: String, weight: Long, patience: Duration): Grant {
-        val holding = currentCoroutineContext()[Holding] != null
+    /**
+     * Holds [weight] for [tenant] until the current [call] ends: waiting at most [patience] while the call holds nothing
+     * yet, granted at once or refused when it does. Work at most [free] holds nothing.
+     */
+    suspend fun hold(tenant: String, weight: Long, patience: Duration) {
+        if (weight <= free) return
+        val scope = checkNotNull(currentCoroutineContext()[CallScope]) { "Work is held within a call." }
+        scope.add(acquire(tenant, weight.coerceAtMost(capacity), patience, scope.holds()))
+    }
+
+    /** Runs [block] as a call holding [weight] for [tenant]: [call] and [hold] in one. */
+    suspend fun <T> withWork(tenant: String, weight: Long, patience: Duration, block: suspend () -> T): T = call {
+        hold(tenant, weight, patience)
+        block()
+    }
+
+    private suspend fun acquire(tenant: String, weight: Long, patience: Duration, holding: Boolean): Grant {
         val waiter = synchronized(lock) {
             if ((holding || queues.isEmpty()) && eligible(tenant, weight) && fits(weight)) return take(tenant, weight)
             if (holding) return refuse(tenant, weight, "it holds work already, and never waits for more")
@@ -163,8 +181,18 @@ class WorkBudget(val capacity: Long, val free: Long = 0) {
         var grant: Grant? = null
     }
 
-    /** The mark of a call that holds work: inside [withWork]. */
-    private object Holding : AbstractCoroutineContextElement(Holding), CoroutineContext.Key<Holding>
+    /** One call's grants, released together when it ends. */
+    private class CallScope : AbstractCoroutineContextElement(CallScope) {
+        private val grants = ArrayList<Grant>()
+
+        fun holds(): Boolean = synchronized(grants) { grants.isNotEmpty() }
+
+        fun add(grant: Grant) = synchronized(grants) { grants += grant }
+
+        fun release() = synchronized(grants) { grants.toList().also { grants.clear() } }.forEach { it.release() }
+
+        companion object Key : CoroutineContext.Key<CallScope>
+    }
 }
 
 /** A call [WorkBudget] did not grant: within its patience, or at once for a call that holds already (`CTL-85`). */
