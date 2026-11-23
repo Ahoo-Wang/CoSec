@@ -18,6 +18,8 @@ package me.ahoo.cosec.spring.boot.pipeline
 import io.mockk.confirmVerified
 import io.mockk.every
 import io.mockk.mockk
+import io.mockk.mockkStatic
+import io.mockk.unmockkStatic
 import io.mockk.verify
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.runtime.snapshot.DocumentReadiness
@@ -25,8 +27,10 @@ import me.ahoo.cosec.runtime.snapshot.DocumentState
 import me.ahoo.cosec.runtime.snapshot.Snapshot
 import me.ahoo.cosec.runtime.snapshot.SnapshotEntry
 import me.ahoo.cosec.runtime.snapshot.SnapshotSource
+import me.ahoo.cosec.runtime.snapshot.compileTimedOut
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.test.asserts.assert
+import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Test
 import org.springframework.boot.availability.ApplicationAvailability
 import org.springframework.boot.availability.AvailabilityChangeEvent
@@ -40,6 +44,9 @@ import java.util.concurrent.CompletableFuture
 
 /** The states of [SnapshotHealthIndicator] and [SnapshotReadiness] the starter test does not reach. */
 class SnapshotHealthIndicatorTest {
+    @AfterEach
+    fun unmockProbes() = unmockkStatic(PROBES)
+
     private fun source(
         state: DocumentState<Any>?,
         prewarmed: Boolean,
@@ -74,6 +81,8 @@ class SnapshotHealthIndicatorTest {
                 every { invalid } returns true
             }
         }
+        // compileTimedOut is an extension over the source's internals: stubbed where it is declared.
+        mockkStatic(PROBES)
         return mockk {
             every { peek(any()) } returns snapshot
             every { isPrewarmed } returns prewarmed
@@ -248,5 +257,8 @@ class SnapshotHealthIndicatorTest {
 
     private companion object {
         const val TENANT = "t1"
+
+        /** The file of the source's probes, [compileTimedOut] among them. */
+        const val PROBES = "me.ahoo.cosec.runtime.snapshot.SnapshotSourceProbesKt"
     }
 }
