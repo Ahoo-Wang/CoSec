@@ -1,23 +1,26 @@
 # RFC 0013：8.0 冻结前的目标架构
 
 > 状态：已定（2026-11-14，协调者执笔；维护者："基于第一性原理思考，不考虑兼容性问题。可推翻原设计决策。目标：设计完美目标架构"，
-> "目标架构设计说明由你亲自写"，冻结前必须做的那一档"默认按你推荐"） · 上位文档：[RFC 0001](0001-target-architecture.md) ·
-> 修订：[RFC 0011](0011-module-architecture.md) §3、[RFC 0010](0010-ga-extension-points.md) 2026-11-14 修订的 D1 与 D6 ·
-> 基线：`main` @ `75ca0604` · 交付：§8 的 A、B 两档在 8.0 RC 之前，C 档在 GA 之后 ·
-> 回写：2026-11-14，A1 开工前的半页修正了 §3.1（见 §3.4）；2026-11-15，B0 开工前的半页修正了 §8（见 §8.3），A2 与 B1 开工前的半页修正了 §3.3 与 §4（见 §4.4）
+> "目标架构设计说明由你亲自写"，冻结前必须做的那一档"默认按你推荐"）；A 档（A1–A3）与 B 档（B0–B7）都已落地，C 档在 GA 之后（§8.2） ·
+> 上位文档：[RFC 0001](0001-target-architecture.md) ·
+> 修订：[RFC 0011](0011-module-architecture.md) §3（`cosec-document`、影子端口、`kafka` 的位置）；RFC 0010 合订前 2026-11-14 修订里的 D1（"构建器留到 8.1"）与 D6（R9 的改名），
+> 今天 [RFC 0010](0010-ga-extension-points.md) C4 陈述的是结果
+>
+> **2026-11-23 合订**：本文原是一份施工说明：每一项先写目标，再在"开工前的修正"与"进展"里记下实现方读完代码后的修正、落地的 PR、测量与教训。
+> 这些已并入正文，正文现在陈述今天的结构与守着它的规则，并指向落地它的批次；被取代的计划、逐日的进展与中间的测量已删去。
+> 章节号、章节标题与 A1–A3、B0–B7（B2a、B2b）、§5.4 的放行条件（门槛 1–4、5a）与步骤（0–4、2a、2b）、"决定 B" 的编号不变。
+> 合订前的全文见 git 历史：`git show 03257cbe:docs/rfc/0013-target-architecture.md`。修订沿革见文末。
 
 ## 0. 结论先行
 
-1. **`cosec-runtime` 只留请求路径。** 新增模块 `cosec-document`（策略文档、路由映射、唯一的 Jackson mapper）；影子窗口的端口移到 `cosec-spi`；
-   令牌的签发一侧移到 `cosec-login`。此后后端不再依赖 `runtime`。这推翻了 2026-10-28 对 `document` 模块的否决。
-2. **请求路径是一串固定顺序的命名阶段**，围绕一个每请求的状态对象；装配用构建器，取代十二个参数的 `PipelineComponents`。
-   这修订了本周的 D1（“构建器留到 8.1”）。
-3. **快照源的目标是“纯的状态迁移函数加一个串行执行器”**：每个键的迁移写成 `(状态, 事件) → (状态, 效果)`，不碰线程就能测。
-   分两步走，第二步有明确的放行条件，达不到就留到 GA 之后，不拖住 RC。
-4. **求值器保留“一次分配”，放弃“一个文件”。** 原型已经做过并测过：969 行拆成 388 行加五个文件，分配不变，吞吐在测量分辨率内没有差别；还差一次空闲机器上的测量。
-5. **控制面的变更流程写成一张迁移表，HTTP 层写成一张路由表**；三个大类各按职责拆开。
-6. **冻结后改不了的名字现在改**，其中一处把继承改成组合。
-7. **防回退的规则最先合入**，后面每个结构 PR 都拿它来量。
+1. **`cosec-runtime` 只留请求路径。** 模块 `cosec-document` 装 CoSec 存储和交换的格式（策略文档、路由映射、`CoSec-Identity` 与影子窗口的编解码、唯一的 Jackson mapper）；
+   影子窗口的端口在 `cosec-spi`；令牌的签发一侧在 `cosec-login`。后端不依赖 `runtime`。这推翻了 2026-10-28 对 `document` 模块的否决（§3，A1）。
+2. **请求路径是一串固定顺序的命名阶段**，围绕一个每请求的状态对象；装配用构建器 `Pipeline.builder`，取代十二个参数的 `PipelineComponents`（§4，A2、B1）。
+3. **快照源是"纯的状态迁移函数加一个串行的执行者"**：每个键的迁移写成 `(状态, 事件, 时刻) → (状态, 效果)`，不碰线程就能测（§5，B2a、B2b）。
+4. **求值器保留"一次分配"，放弃"一个文件"**：状态在一个类里，逻辑按关注点放进扩展函数的文件（§6，B3）。
+5. **控制面的变更流程是一张迁移表，HTTP 层是一张路由表**；大类各按职责拆开（§7.1，B4）。文档编解码按节拆开（§7.2，B5）。
+6. **冻结后改不了的名字已经改了**，其中一处把继承改成组合（§7.3，A3）。
+7. **防回退的规则最先合入**，此后每个结构 PR 都拿它来量（§8.1，B0）。
 
 不可推翻的只有 [AGENTS.md](../../AGENTS.md) 的不变量：先拒绝、失败即拒绝、一条决策路径、不阻塞事件循环、引擎无 I/O、存储不过期。它们是目的，下面每一项都以不改变它们为前提。
 
@@ -32,39 +35,39 @@
 
 性能排在文件大小之前：热路径上的结构由实测决定。安全排在一切之前：任何一项如果让“失败即拒绝”变得不那么显然，就不做。
 
-**依据有两个来源。** 一是我自己量的和读的：各模块与 `runtime` 各包的规模、模块之间的 import 矩阵、`Pipeline` 的主流程、`SnapshotSource` 的类注释与状态、控制面的状态迁移、`cosec-api` 的转储。
-二是 R9 实现会话在通读代码之后留下的原始材料：它读完了我没有逐行读的部分，做了求值器的两个原型并测了三轮，量了 detekt 三条规则在各阈值下会标出什么，
-并把快照源的不变量逐条对上了守护它的测试。下文凡是来自它而我没有独立核实的，都注明“据实现方”。两处我与它判断不同，在 §9 说明。
+**依据有两个来源。** 一是协调者自己量的和读的：各模块与 `runtime` 各包的规模、模块之间的 import 矩阵、`Pipeline` 的主流程、`SnapshotSource` 的类注释与状态、控制面的状态迁移、`cosec-api` 的转储。
+二是 R9 实现会话在通读代码之后留下的原始材料。每个批次开工前，实现方先交半页：读完代码后对这里的切法的确认或修正，协调者对照代码核过之后定下；下文陈述的是定下的结果。
 
-## 2. 现状（`main` @ `75ca0604`，主代码）
+## 2. 规模（主代码）
 
-| 模块 | 行数 | 文件 | 说明 |
-|---|---:|---:|---|
-| `runtime` | 13,719 | 79 | 十四个包，变化原因至少五种 |
-| `control` | 11,069 | 41 | 平均每个文件 270 行 |
-| `migrate` | 10,724 | 113 | 含 7.x 模型的唯一副本 |
-| `spring-boot` / `engine` | 5,783 / 5,680 | 55 / 26 | |
-| `model` / `spi` / `cocache` | 3,392 / 2,277 / 3,069 | 24 / 32 / 19 | |
+写作时（`main` @ `75ca0604`）与今天的对照。今天的数字用下面的命令量出（各模块 `src/main` 下的 Kotlin 文件）：
 
-`runtime` 内部各包的行数：`snapshot` 2,605，根包（请求路径）2,482，`document` 2,154 加 `document.format` 1,269，`http` 981，`event` 859，`shadow` 834，
-`identity` 557，`audit` 416，`route` 386，`token` 382，`authn` 328，`attribute` 278，`ratelimit` 111，`json` 77。
+```bash
+for m in core/runtime core/control migration/migrate host/spring-boot core/engine core/model core/spi backends/cocache core/document; do
+  printf "%s %s %s\n" $m $(find $m/src/main -name '*.kt' -print0 | xargs -0 cat | wc -l) $(find $m/src/main -name '*.kt' | wc -l); done
+```
 
-**谁依赖 `runtime` 的哪一部分**（各模块主代码里对 `me.ahoo.cosec.runtime.<包>` 的 import 数）：
+| 模块 | 行数（75ca0604 → 今天） | 文件（75ca0604 → 今天） |
+|---|---:|---:|
+| `runtime` | 13,719 → 17,244 | 79 → 169 |
+| `control` | 11,069 → 19,505 | 41 → 195 |
+| `migrate` | 10,724 → 12,707 | 113 → 151 |
+| `spring-boot` | 5,783 → 10,785 | 55 → 119 |
+| `engine` | 5,680 → 6,546 | 26 → 55 |
+| `model` / `spi` / `cocache` | 3,392 / 2,277 / 3,069 → 4,014 / 3,303 / 4,914 | 24 / 32 / 19 → 37 / 52 / 52 |
+| `document` | （在 `runtime` 里：2,154 加 `format` 1,269）→ 6,309 | → 59 |
 
-| 使用方 | `document` | `route` | `json` | `shadow` | `token` | 其余 |
-|---|---:|---:|---:|---:|---:|---|
-| `control` | 72 | | 3 | 9 | | 根包 4，`http` 4，`snapshot` 2，`event` 1 |
-| `migrate` | 21 | | 6 | | | 无 |
-| `openapi` | 6 | 5 | | | | 无 |
-| `cocache` | | | 7 | 8 | | 无 |
-| `login` / `jwt` | | | | | 4 / 2 | `jwt` 另有 `authn` 1 |
+写作时 `runtime` 有十四个包，变化原因至少五种；今天它的包是 `snapshot` 7,386 行、`http` 2,233、`stage` 1,590、根包 1,473、`shadow` 1,122、`event` 966、`audit` 500、`identity` 469、
+`authn` 407、`ratelimit` 386、`attribute` 353、`call` 254、`token` 105（文档、路由映射、mapper 已在 `cosec-document`）。行数涨的主要是功能与测试钩子，不是结构；文件数涨的是拆分。
 
-`document` 自己依赖 `model`、`engine`、`spi.snapshot`、`annotations`，外加 `runtime` 里的两样：`json.CoSecJson` 和 `snapshot.SnapshotCompiler` 这一个接口。请求路径（根包）对 `snapshot` 只有一处 import。
-据实现方：`runtime.token` 里的 `TokenFamilies`、`DefaultTokenRevoker`、`SimpleCompositeToken` 没有被 `runtime` 的其他包使用，请求路径只用 `TokenRevocation` 与令牌验证。
+**谁依赖 `runtime` 的哪一部分**（各模块主代码里对 `me.ahoo.cosec.runtime.<包>` 的 import 数，`grep -rhoE "^import me\.ahoo\.cosec\.runtime(\.[a-z]+)?" <module>/src/main`）：
+写作时 `control` 对 `runtime` 的 95 处 import 里 72 处是文档，`migrate` 21 处文档加 6 处 mapper，`openapi` 6 处文档加 5 处路由映射，`cocache` 7 处 mapper 加 8 处影子端口。
+今天 `migrate`、`openapi`、`cocache` 都是 0；`control` 是 22（`http` 12、`event` 4、根包 2、`identity` 2、`snapshot` 2），它对 `cosec-document` 的 import 是 148；
+`login` 15（`http` 11、`token` 4），`jwt` 3，`kafka` 8（`event` 6、`audit` 1、根包 1）。
 
-**超过 600 行的文件**（R9 的纯移动之后）：`SnapshotSource.kt` 1,641（一个类，源自身 38 个函数、`inner class Slot` 36 个，31 个字段，12 个 `synchronized` 块，43 处 `CompletableFuture`），
-`FlatEvaluator.kt` 969，`Changes.kt` 936，`Pipeline.kt` 929，`Converter.kt` 919，`ControlHttp.kt` 774，`ChangeAuthority.kt` 769，`Revisions.kt` 754，`PolicyDocumentCodec.kt` 674，`MigrateMain.kt` 644。
-主代码里 25 个文件超过 400 行。detekt 的 `LargeClass` 不计嵌套类，所以没有拦住第一个；`detekt.yml` 关着 `LongParameterList`、`NestedBlockDepth`、`TooManyFunctions`。
+**超过 400 行的文件**：写作时主代码 25 个，超过 600 行的十个（最大的是 `SnapshotSource.kt` 1,641 行，一个类、源自身 38 个函数、`inner class Slot` 36 个、31 个字段、12 个 `synchronized` 块）。
+今天是三个，都在 `SourceSizeLedger` 里，带写明的理由：`Converter.kt` 918、`PartTranslation.kt` 500（`migrate` 的一次性转换）、`SnapshotSource.kt` 450（读接口与契约，以及构造与关闭的顺序在一处）。
+写作时 detekt 的 `LargeClass` 不计嵌套类，所以没有拦住第一个；`detekt.yml` 关着 `LongParameterList`、`NestedBlockDepth`、`TooManyFunctions`。今天这三条都开着（§8.1）。
 
 ## 3. 模块
 
@@ -75,41 +78,44 @@ annotations ← api ← model ← engine ← spi ← document ← runtime ← co
                                       ↑         ↑          ↑
                               backends（cocache）       edge、extensions（含 kafka）、host、testkit
                                                 ↑
-                                             openapi（类路径上不再有 runtime）
+                                             openapi（类路径上没有 runtime）
 ```
 
-| 现在 | 之后 | 理由 |
+A1 移动了这些（三个 PR：#1369、#1370、#1372）：
+
+| 原来 | 今天 | 理由 |
 |---|---|---|
-| `runtime.document.*`、`runtime.document.format.*` | 新模块 `cosec-document`（`core/document/`），包 `me.ahoo.cosec.document`、`.format`；`generateSchemas`、`verifySchemas` 随之 | 变化原因只有一个：格式 |
+| `runtime.document.*`、`runtime.document.format.*` | 模块 `cosec-document`（`core/document/`），包 `me.ahoo.cosec.document`、`.format`；`generateSchemas`、`verifySchemas` 随之 | 变化原因只有一个：格式 |
 | `runtime.route.*` | `me.ahoo.cosec.document.route` | 路由映射也是一种文档；`openapi` 只要这两样 |
 | `runtime.json.CoSecJson` | `me.ahoo.cosec.document.json`，仍是 `@InternalCoSecApi` | 文档与路由映射的编解码都要它 |
-| `runtime.snapshot.SnapshotCompiler` | `spi.snapshot` | 快照源的端口；移走之后 `document` 不再认识 `runtime` |
+| `runtime.snapshot.SnapshotCompiler` | `spi.snapshot`（只移接口本身，不带 `@CoSecSpi`：它是 CoSec 自己实现的内部端口） | 快照源的端口；移走之后 `document` 不再认识 `runtime` |
 | `runtime.shadow` 的端口与记录（`ShadowReportSink`、`ShadowReportReader`、`InMemoryShadowReports`、`CandidateStore`、`StoredCandidate` 及其值） | `spi.shadow`，仍是 `@ExperimentalCoSecApi` | AGENTS.md 的规则：签名只用到普通值的端口放在 `spi`。`Candidate`（签名里有 `engine.CompiledDocument`）、候选来源与记录器留在 `runtime.shadow` |
-| `runtime.shadow.ShadowCodec` | `me.ahoo.cosec.document.shadow`，`@InternalCoSecApi` | 它用 Jackson，`spi` 不解析 Jackson；`cocache` 与控制面的内存存储必须用它写出同样的字节，两者都依赖 `document` |
-| `runtime.identity.IdentityCodec` | `me.ahoo.cosec.document.identity`，仍是 `@InternalCoSecApi` | `CoSec-Identity` 头是一种交换格式；编解码器只用到 `model`、`spi.identity`、mapper，它的格式描述符本来就随 `document.format` 走。`IdentityGate`、`IdentityIssuer` 是请求路径上的行为，留在 `runtime.identity` |
+| `runtime.shadow.ShadowCodec` | `me.ahoo.cosec.document.shadow`，`@InternalCoSecApi` | 它用 Jackson，`spi` 不解析 Jackson；`cocache` 与控制面的内存存储必须用它写出同样的字节，两者都依赖 `document`。`cosec-document` 的定义因此是“CoSec 存储和交换的格式，以及唯一的 mapper”，不只是策略文档 |
+| `runtime.identity.IdentityCodec` | `me.ahoo.cosec.document.identity`，仍是 `@InternalCoSecApi` | `CoSec-Identity` 头是一种交换格式；格式描述符与它的编解码器一起变，应当在同一个模块（§3.4）。`IdentityGate`、`IdentityIssuer` 是请求路径上的行为，留在 `runtime.identity` |
 | `runtime.token` 的签发一侧（`TokenFamilies`、撤销器、令牌对） | `cosec-login`，包 `me.ahoo.cosec.login.token` | `runtime.token` 只留验证（`CoSecTokenVerifier`、`TokenRevocation`） |
 | `backends/kafka` | `extensions/kafka`（项目名 `:kafka`、构件 `cosec-kafka` 不变） | 它实现的是 `DecisionListener` 与 `ChangeListener`，和 `micrometer`、`opentelemetry` 同类；放在 `backends/` 只是历史 |
 
-移完之后：`cocache` 对 `runtime` 的 15 处 import 全部消失；`openapi` 的类路径上不再有 `runtime`；`migrate` 不再 import `runtime` 的任何东西，
-声明的依赖是 `cocache`、`control`、`document`（`runtime` 仍经 `control` 在它的类路径上：它正是通过控制面发布的）。
+于是：`cocache`、`openapi`、`migrate` 的主代码都不 import `runtime` 的任何东西；`openapi` 的类路径上没有 `runtime`；`migrate` 声明的依赖是 `cocache`、`control`、`document`
+（`runtime` 仍经 `control` 在它的类路径上：它正是通过控制面发布的）。各模块声明的主依赖：`document` → `engine`、`spi`、Jackson；`runtime` → `document`（api）、`engine`、`spi`；
+`control` → `runtime`、`document`；`cocache` → `spi`、`document`，`compileOnlyApi(control)`；`kafka` → `runtime`，`compileOnlyApi(control)`；`openapi` → `document`；
+`migrate` → `cocache`、`control`、`document`；`login` → `runtime`；`jwt` → `login`。
 
-**后端的定义与规则。** 后端实现 `cosec-spi` 里的存储端口；按这个定义，`backends/` 里只有 `cocache`。`DependencyRules` 与 `SourceRulesTest` 新增一条，**后端不依赖 `runtime`**，写成三项断言，没有例外：
-主代码不声明对 `cosec-runtime` 的依赖；运行时类路径解析不到它；后端的类不引用 `me.ahoo.cosec.runtime.*`。编译类路径不查：`cocache` 经 `compileOnlyApi(:control)` 实现控制面的 `ControlStore`，
-这个端口的签名用到控制面的类型，按规则留在它那一层。今天 Redis 后端的类路径上有整条管道，这条规则值得有。
+**后端的定义与规则。** 后端实现 `cosec-spi` 里的存储端口；按这个定义，`backends/` 里只有 `cocache`。**后端不依赖 `runtime`**（`DependencyRules`、`SourceRulesTest`），写成三项断言，没有例外：
+主代码不声明对 `cosec-runtime` 的依赖；运行时类路径解析不到它；后端的类不引用 `me.ahoo.cosec.runtime.*`。编译类路径不查，规则的 KDoc 写明原因：`cocache` 经 `compileOnlyApi(:control)` 实现控制面的
+`ControlStore`，这个端口的签名用到控制面的类型，按规则留在它那一层。
 
 `cosec-runtime` 不再拆。`snapshot`、`event`、`audit`、`identity` 的使用方本来就依赖整条请求路径，再分模块只多出构件，不减少任何依赖；对它们，10 月 28 日的理由仍然成立。
 
 ### 3.2 为什么推翻对 `document` 模块的否决
 
-当时的理由是模块越少越好，包加架构规则就够。对文档不成立，三个原因都来自 §2 的数字：
+当时的理由是模块越少越好，包加架构规则就够。对文档不成立，三个原因都来自 §2 写作时的数字：
 
-1. **它是一片叶子。** 除两处可以搬走的引用外，它不依赖 `runtime` 的任何东西。把叶子留在大模块里，等于让所有只要叶子的人背上整棵树。
+1. **它是一片叶子。** 除两处可以搬走的引用（`CoSecJson` 与 `SnapshotCompiler`）外，它不依赖 `runtime` 的任何东西。把叶子留在大模块里，等于让所有只要叶子的人背上整棵树。
 2. **有三个使用方只要它。** `migrate` 是命令行工具，`openapi` 是生成器；`control` 对 `runtime` 的 95 处 import 里 72 处是文档。当时还看不到这一点：`migrate` 是在不再经 `runtime` 读 7.x 之后，才只剩这两个依赖的。
-3. **名字会冻结。** `PolicyDocument`、`PolicyDocumentCodec`、`PolicyDocumentCompiler`、`DocumentCompileException`、`Actor`、`RouteMap` 是写进文档的稳定 API。它们将在 8.x 的整个周期里带着 `runtime` 这个与它们无关的包名。
+3. **名字会冻结。** `PolicyDocument`、`PolicyDocumentCodec`、`PolicyDocumentCompiler`、`DocumentCompileException`、`Actor`、`RouteMap` 是写进文档的稳定 API。留在原处，它们将在 8.x 的整个周期里带着 `runtime` 这个与它们无关的包名。
 
-代价：一个新构件（`settings.gradle.kts`、`ProjectListTest`、`DependencyRules`、标签、Issue 模板、`scripts/ci/plan.py`、BOM、`wiki/guide/introduction.md#modules`、AGENTS.md 对 `runtime` 的描述）；
-约 5,000 行的移动，数百行 import；`runtime.api` 少掉这些类型，新的 `document.api` 多出它们；据实现方，13 个变异体补丁指向 `runtime/document/`。
-验证与 R8 相同：纯移动与内容修改分开提交，归一化比对后差异只剩包名；`schema/` 逐字节不变；ABI 差异恰好是包名。
+代价是一个新构件（`settings.gradle.kts`、`ProjectListTest`、`DependencyRules`、标签、Issue 模板、`scripts/ci/plan.py`、BOM、`wiki/guide/introduction.md#modules`、AGENTS.md 对 `runtime` 的描述），
+约 5,000 行的移动与数百行 import，以及 ABI 清单里这些类型从 `runtime` 换到 `document`。验证与 R8 相同：纯移动与内容修改分开提交，归一化比对后差异只剩包名；`schema/` 逐字节不变；ABI 差异恰好是包名。
 
 ### 3.3 `runtime` 内部
 
@@ -120,33 +126,31 @@ annotations ← api ← model ← engine ← spi ← document ← runtime ← co
 | `runtime.http` | 适配器契约：进来的（`HttpFacts`、`Headers`、`Cookies`）与出去的（`RequestGate`、`Outcome`、`Problem`、`ProblemType`、`ProblemEncoder`、`RequestSecurity`），以及唯一构造 `Outcome` 的 `StatusMapping` | 无（叶子） |
 | `runtime.call` | 运行时包在一次端口调用外面的东西：时限、恢复所在的线程、失败日志的节流、id 生成器失败时的后备；内部 | 无（叶子） |
 | `runtime.event` | 决策事件与监听器 | `http`、`call`、`snapshot` |
-| `runtime.shadow` | 影子记录（端口已在 `spi`） | `event`、`snapshot` |
+| `runtime.shadow` | 影子记录（端口在 `spi`） | `event`、`snapshot` |
 | `runtime.identity` | 身份的签发与网关之后的校验 | `http`、`call` |
 | `runtime.snapshot` | 快照源（§5） | `attribute`（以及模块 `document`） |
-| `audit`、`authn` | 审计监听器；内置认证器 | `audit → event`，`authn → token` |
+| `audit`、`authn` | 审计监听器；内置认证器 | `audit → event`、`http`；`authn → token` |
 | `attribute`、`ratelimit`、`token` | 各管一件事 | 无 |
 
-（2026-11-15 按 §4.4 改过：原表把 `Outcome`、`ProblemType` 放在根包，阶段包就会反过来依赖根包。）
+适配器契约放在 `runtime.http` 而不是根包：阶段要返回 `Outcome`、调用 `StatusMapping`、填写 `RequestSecurity`，而根包里的 `Pipeline` 又要运行阶段，契约在根包就会成环（§4.4）。
 
-`test/architecture` 增加包依赖规则，把这张表写成断言；今天 `event → shadow`、`event → 根包` 这样的反向引用要先理顺。
+这张表是 `test/architecture` 的 `PackageLedger`，`PackageDependencyTest` 断言代码只用表里允许的边、表里的边不成环。`control` 与 `document` 各有自己的表（§7.1；`document` 无环）。
+写作时的反向引用（`runtime` 里 `event → shadow`、`event → 根包` 等四条，`control` 里指向 `change` 的三条）记作 B1、B4 的欠账，都已消掉：表里今天没有欠账的边。
 
 ### 3.4 开工前的修正（A1，2026-11-14）
 
-实现方读完 `main` @ `1c7aa800` 后交的半页确认了 §3.1 的切法，并指出六处与代码不符；下面是定下的结果，§3.1 已按它改过。
+实现方读完代码后交的半页确认了 §3.1 的切法，并指出六处与最初的计划不符；定下的结果就是 §3.1 今天的样子：
 
 | 半页指出的 | 定下的 |
 |---|---|
-| `ShadowCodec` 用 Jackson，进不了 `spi` | 放进 `cosec-document` 的 `document.shadow`。这个模块的定义因此是“CoSec 存储和交换的格式，以及唯一的 mapper”，不只是策略文档 |
-| `kafka` 依赖 `runtime` 的 `DecisionListener`，规则对它不成立 | 不给例外，把它移到 `extensions/`：规则不成立说明的是分类错了，不是规则要开口子 |
-| `migrate` 经 `control` 仍有 `runtime` | 原文“不再依赖”说过头了，改为“不再 import、不再声明” |
-| `cocache` 的编译类路径仍解析到 `runtime` | 规则写成上面的三项断言，不查编译类路径，并在规则的 KDoc 里写明原因 |
-| `SchemaConformanceTest` 用 `runtime.identity.IdentityCodec` 解码身份格式 | 把 `IdentityCodec` 移进 `cosec-document`（`document.identity`），测试原样留下。先定的是把这一例移到 `runtime` 的测试里，实现方发现它与生成器和变异机制（约 440 行测试代码）缠在一起，只能靠 test fixtures 或让 `document` 的测试反过来依赖 `runtime`；缠在一起说明的是切错了：格式描述符与它的编解码器一起变，应当在同一个模块。problem 格式不同，它的写出方是 `StatusMapping`，属于请求路径，由 `runtime` 的 `ProblemSchemaTest` 自上而下绑定 |
+| `ShadowCodec` 用 Jackson，进不了 `spi` | 放进 `cosec-document` 的 `document.shadow` |
+| `kafka` 依赖 `runtime` 的 `DecisionListener`，"后端不依赖 `runtime`"对它不成立 | 不给例外，把它移到 `extensions/`：规则不成立说明的是分类错了，不是规则要开口子 |
+| `migrate` 经 `control` 仍有 `runtime` | 写成"不再 import、不再声明"，不说"不再依赖" |
+| `cocache` 的编译类路径仍解析到 `runtime` | 规则写成 §3.1 的三项断言，不查编译类路径，并在规则的 KDoc 里写明原因 |
+| `SchemaConformanceTest` 用 `runtime.identity.IdentityCodec` 解码身份格式 | 把 `IdentityCodec` 移进 `cosec-document`（`document.identity`），测试原样留下。把这一例移进 `runtime` 的测试，就要靠 test fixtures 或让 `document` 的测试反过来依赖 `runtime`；缠在一起说明的是切错了：格式描述符与它的编解码器一起变，应当在同一个模块。problem 格式不同，它的写出方是 `StatusMapping`，属于请求路径，由 `runtime` 的 `ProblemSchemaTest` 自上而下绑定 |
 | `ProblemSchemaTest` 跨模块调用 `internal` 的 `JsonSchemaWriter` | 改为 `@InternalCoSecApi`，不进 ABI 清单 |
 
-同时确认：`SnapshotCompiler` 只移接口本身，不带 `@CoSecSpi`（它是 CoSec 自己实现的内部端口）；`RouteMap` 的 HEAD 回落只用到两个方法名，在文件内各留一个私有常量，
-`HttpMethods` 及其规则（PIP-18）留在 `runtime.http`；三个 Web 适配器今天不 import 文档、路由映射或 mapper，不受这次移动影响。A1 之后各模块声明的主依赖：
-`document` → `engine`、`spi`、Jackson；`runtime` → `document`（api）、`engine`、`spi`；`control` → `runtime`、`document`；`cocache` → `spi`、`document`，`compileOnlyApi(control)`；
-`kafka` → `runtime`，`compileOnlyApi(control)`；`openapi` → `document`；`migrate` → `cocache`、`control`、`document`；`login` → `runtime`；`jwt` → `login`。
+同时定下：`RouteMap` 的 HEAD 回落只用到两个方法名，在文件内各留一个私有常量，`HttpMethods` 及其规则（`PIP-18`）留在 `runtime.http`；三个 Web 适配器不 import 文档、路由映射或 mapper，不受这次移动影响。
 
 ## 4. 请求路径
 
