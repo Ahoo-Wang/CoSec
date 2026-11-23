@@ -72,6 +72,7 @@ object StartupGuards {
         "spring-boot:GatewayOwnHandlersTest#a controller and a functional route are not seen by a gateway global filter, a route is",
         // IDN-26 (DR1-D-3): a revocation held locally lives at most 30 seconds too.
         "spring-boot:StrictCacheFailureTest#aRevocationTablesLocalMaxAgeIsAtMost30Seconds",
+        "cocache:CacheTtlPolicyTest#revocationTablesHoldARevocationFor30SecondsAtMost",
         // SNP-9 (DR1-D-4): no deployment's key prefix nests inside another's.
         "spring-boot:KeyPrefixValidationTest#a prefix that could nest inside another's fails, saying what it holds and what to do",
         "spring-boot:KeyPrefixValidationTest#startup fails on such a prefix, naming the property",

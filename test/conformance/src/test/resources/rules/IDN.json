@@ -350,7 +350,8 @@
         "cocache:CacheTtlPolicyTest#revocationTablesKeepNotRevokedFor30SecondsAtMost",
         "spring-boot:StrictCacheFailureTest#revocationTablesKeepNotRevokedFor30SecondsWhateverTheGlobalLayersSay",
         "spring-boot:StrictCacheFailureTest#aRevocationTablesAbsentTtlPropertyFailsStartup",
-        "spring-boot:StrictCacheFailureTest#aRevocationTablesLocalMaxAgeIsAtMost30Seconds"
+        "spring-boot:StrictCacheFailureTest#aRevocationTablesLocalMaxAgeIsAtMost30Seconds",
+        "cocache:CacheTtlPolicyTest#revocationTablesHoldARevocationFor30SecondsAtMost"
       ]
     },
     {
