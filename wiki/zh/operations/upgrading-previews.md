@@ -30,6 +30,16 @@ description: "每个 8.0 预览版（alpha 与 beta）到下一个之间的变�
 - **控制面的文档缓存是堆的一份**（`STA-12`，DR1-F-5）。受影响的：控制面宿主的内存。`simulate`、`explain`、`analyze`
   与锁死检查共用每个宿主一个缓存，大小是快照文档那四分之一堆的三分之一（2 GiB 时约 170 MB）；此前是两个各固定 64 MB 的缓存。
   宿主的两个快照源现在各持有那四分之一的三分之一，此前各一半：2 GiB 时每个约 4,800 个典型租户，此前 7,200。要持有更多就给控制面宿主更多的堆；别无改动。
+- **一份文档至多有 `cosec.control.revisions.max-count` 个未结束变更**（默认 50，`CTL-83`，DR1-E-2）。受影响的：在同一份文档上
+  留着很多未结束变更的客户端。超过上限的提议、`:apply` 或回滚，先放弃其作者自己最老的、检查失败的变更，否则以 `409` 拒绝，
+  冲突种类为新增的 `OPEN_LIMIT`，`heldBy` 给出最老的未结束变更；类型化客户端看到 `ConflictKind.OPEN_LIMIT`。请放弃不再需要的变更。
+  升级时已经超出上限的文档不受追溯：它的变更会在 `cosec.control.changes.expire-after`（7 天）之内过期，回到上限以内，在那之前它不接受新的变更。
+- **一份文档至多保留 `max-count` 个已结束的变更，回收任务删除旧的**（`CTL-83`，DR1-E-2）。受影响的：在变更结束很久之后还读取它的客户端。
+  结束一个变更时，删除该文档超出 `cosec.control.revisions.max-count` 的最早的已结束变更，不论年龄；每小时的回收任务删除早于
+  `cosec.control.revisions.min-age`、且其变更发布的修订已不再保留的那些。读取已删除的变更 `GET /changes/{id}` 返回 `404`。
+  要知道谁发布了某个修订，读修订本身：`GET /documents/{key}/revisions/{revision}` 在 `provenance` 中给出它的变更、作者与审批人，
+  `explain` 也仍然基于它决定。自己实现的 `ControlStore` 要实现 `endedChanges` 与 `removeChange`。升级之前结束的变更没有登记，
+  所以不会被删除：想删掉它们，请自己删除对应的 `<s>:control:change:<id>` 键。
 - **不携带文档的控制路由最多读取 64 KB**（DR1-F-3）。受影响的：向 `simulate`、`explain`、`analyze`、变更的各步、回滚或
   break-glass 发送超过 64 KB 请求体的客户端。这样的请求体现在在解析之前即返回 `400`；此前它会在任何授权之前被读取并解析，
   最多 10 MB。提议、`:apply` 及其校验仍读取至多 10 MB。超过 64 KB 的模拟请求带的头与属性比真实请求能带的还多：请删减。

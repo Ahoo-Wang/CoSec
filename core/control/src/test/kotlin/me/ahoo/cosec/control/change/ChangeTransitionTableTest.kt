@@ -32,6 +32,7 @@ import me.ahoo.cosec.control.lifecycle.ChangeAuthority
 import me.ahoo.cosec.control.lifecycle.ChangeLifecycle
 import me.ahoo.cosec.control.lifecycle.ChangeOptions
 import me.ahoo.cosec.control.lifecycle.ChangeStep
+import me.ahoo.cosec.control.lifecycle.EndedChanges
 import me.ahoo.cosec.control.lifecycle.StagingSlots
 import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.spi.token.RevocationReader
@@ -190,6 +191,7 @@ class ChangeTransitionTableTest {
             StagingSlots(harness.memory, harness.clock, options),
             ChangeListeners.NONE,
             ChangeAuthority(PERMIT_ALL, options, revocations = RevocationReader.NONE),
+            EndedChanges(harness.memory, maxCount = 50),
         )
         val outside = runCatching {
             runBlocking {

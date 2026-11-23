@@ -54,6 +54,7 @@ object StartupGuards {
         "spring-boot:UnknownPropertiesTest#a removed key is said to be no longer a property, with what replaced it",
         "spring-boot:DerivedSnapshotSettingsTest#the line says what was derived, from the interval, the deadline and the cores",
         // CTL-72: the control plane's cadences and limits are constants or computed.
+        "control:ControlMaintenanceTest#only the instance holding the reclaim lease reads the open changes",
         "control:ControlDerivedTest#an orphan is removed only once it has outlived a whole reclaim pass",
         "control:ControlDerivedTest#the shadow pass is a fifteenth of the least a window lives, within a quarter second and a minute",
         "control:ControlDerivedTest#a window never closes later than one pass after it could",

@@ -24,8 +24,10 @@ import org.springframework.web.server.ServerWebExchange
 import reactor.core.publisher.Mono
 
 /**
- * Strips `CoSec-Identity` from every request a gateway receives, first of all filters and whatever else is configured:
- * a reserved header a client sends is a forged identity. On whenever `cosec-gateway` is present, whatever the mode or
+ * Strips `CoSec-Identity` from every request a gateway route matched, first of all filters and whatever else is
+ * configured: a reserved header a client sends is a forged identity. As a `GlobalFilter` it runs on gateway routes only:
+ * a handler of the host's own (STA-13) sees the header as sent, and the control routes strip it through the pipeline's
+ * permit (`Outcome.forward`). On whenever `cosec-gateway` is present, whatever the mode or
  * `cosec.enabled`: without the pipeline filter, a backend still never sees a client's identity.
  */
 class IdentityStripFilter @InternalCoSecApi constructor() : GlobalFilter, Ordered {

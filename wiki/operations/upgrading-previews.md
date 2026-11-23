@@ -35,6 +35,22 @@ Which preview of the library may run behind which preview of the gateway image: 
   documents' quarter of the heap (about 170 MB at 2 GiB), where two caches held a fixed 64 MB each. The host's two
   snapshot sources now hold a third of that quarter each, where they held half: at 2 GiB about 4,800 typical tenants in
   each, where it was 7,200. Give a control-plane host more heap to hold more; nothing else to change.
+- **A document holds at most `cosec.control.revisions.max-count` open changes** (50 by default, `CTL-83`, DR1-E-2).
+  Affected: a client that leaves many changes open on one document. A proposal, an `:apply` or a rollback past the
+  limit first abandons its author's own oldest change whose checks failed, then is refused `409` with the new conflict
+  `OPEN_LIMIT`, naming the oldest open change in `heldBy`; a typed client sees `ConflictKind.OPEN_LIMIT`. Abandon the
+  changes you no longer need. A document already over the limit when you upgrade is not touched: its changes expire
+  within `cosec.control.changes.expire-after` (7 days) and bring it back under the limit, and until then it takes no new
+  change.
+- **A document keeps at most `max-count` ended changes, and reclamation removes old ones** (`CTL-83`, DR1-E-2).
+  Affected: a client that reads a change long after it ended. Ending a change removes the document's oldest ended
+  changes past `cosec.control.revisions.max-count`, whatever their age, and the hourly reclamation removes those older
+  than `cosec.control.revisions.min-age` whose change published no revision still retained. `GET /changes/{id}` of a
+  removed change is `404`. Read who published a revision from the revision itself:
+  `GET /documents/{key}/revisions/{revision}` names its change, author and approvers in `provenance`, and `explain`
+  still decides on it. A `ControlStore` of your own implements `endedChanges` and `removeChange`. Changes that ended
+  before the upgrade are not listed, so nothing removes them: delete their `<s>:control:change:<id>` keys yourself if
+  you want them gone.
 - **A control route that carries no document reads at most 64 KB** (DR1-F-3). Affected: a client that posts more than
   64 KB to `simulate`, `explain`, `analyze`, a step of a change, a rollback or break-glass. Such a body is now a `400`
   before it is parsed, where it was read and parsed up to 10 MB before anything was authorized. Proposals, `:apply` and

@@ -49,4 +49,10 @@ enum class ConflictKind {
      * names something else; choose another id, or act on what stands there through its own route.
      */
     EXISTS,
+
+    /**
+     * The document holds as many open changes as it may (`CTL-83`, `cosec.control.revisions.max-count`), the oldest of
+     * which the problem's `heldBy` names: abandon one, or wait for it to expire.
+     */
+    OPEN_LIMIT,
 }

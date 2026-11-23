@@ -113,6 +113,23 @@ interface ControlStore : CandidateStore {
      */
     suspend fun putChange(expected: SnapshotDigest?, change: ChangeRequest, previous: ChangeState? = null): Boolean
 
+    /**
+     * Deletes the record of the ended change [id] of [document] if the store still holds [expected], and takes [id] out
+     * of [document]'s ended changes ([endedChanges]); with [expected] `null`, only where there is no record, which takes
+     * out an entry whose record is gone. `false` when the store holds another record. The control plane removes only a
+     * terminal change, one reclamation or the bound on a document's ended changes lets go (`CTL-83`).
+     */
+    suspend fun removeChange(document: SnapshotKey, id: ChangeId, expected: SnapshotDigest?): Boolean
+
+    /**
+     * The changes of [document] that ended before [endedBefore], the oldest first, at most [limit] (`CTL-83`): a
+     * [putChange] of a terminal change lists it, under its `updatedAt`, before it writes it, so every change that ended
+     * since the store kept the list is among them, until [removeChange] takes it out. A listed change may not be
+     * terminal (its write lost) or may be gone: whoever acts on one reads its record first. A change that ended before
+     * the store kept the list is not listed.
+     */
+    suspend fun endedChanges(document: SnapshotKey, endedBefore: Instant, limit: Int): List<EndedChange>
+
     /** The staging slot of [key] (RFC 0007 §5.5), with the digest a [putStage] must name; `null` when never taken. */
     suspend fun stage(key: SnapshotKey): Versioned<StageSlot>?
 
@@ -339,3 +356,13 @@ sealed interface ListedChange {
 /** One page of [ControlStore.changes]: its changes, and the cursor of the next page, `null` after the last. */
 @ExperimentalCoSecApi
 class ChangePage(val changes: List<ListedChange>, val next: String?)
+
+/** A change [ControlStore.endedChanges] lists: its [id], and [endedAt], the `updatedAt` of its terminal write. */
+@ExperimentalCoSecApi
+class EndedChange(val id: ChangeId, val endedAt: Instant) {
+    override fun equals(other: Any?): Boolean = other is EndedChange && other.id == id && other.endedAt == endedAt
+
+    override fun hashCode(): Int = 31 * id.hashCode() + endedAt.hashCode()
+
+    override fun toString(): String = "EndedChange(id=${id.value}, endedAt=$endedAt)"
+}
