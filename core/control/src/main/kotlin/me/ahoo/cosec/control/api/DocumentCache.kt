@@ -15,6 +15,8 @@
 
 package me.ahoo.cosec.control.api
 
+import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.control.lifecycle.ControlDerived
 import me.ahoo.cosec.document.PolicyDefinition
 import me.ahoo.cosec.document.PolicyDocument
 import me.ahoo.cosec.document.RoleExpansion
@@ -35,7 +37,7 @@ import me.ahoo.cosec.spi.snapshot.SnapshotKey
  * entry. An app or tenant document compiles with the platform document's limits and attributes, so its compiled form is
  * kept by the digest of the platform document it compiled with.
  *
- * Bounded by [maxEntries] and by [maxHeap], an estimate of the heap it holds, the least recently used leaving first
+ * Bounded by [maxHeap], an estimate of the heap it holds, the least recently used leaving first
  * (review M2 of #1240): a document weighs its stored size times [DECODED_FACTOR] once decoded, and times
  * [COMPILED_FACTOR] more for each compiled form it keeps, the factors measured on documents of many policies, many
  * bindings and many conditions (`DocumentCacheTest`). A document weighs [DERIVED_BINDING_BYTES] more stored bytes for
@@ -45,12 +47,16 @@ import me.ahoo.cosec.spi.snapshot.SnapshotKey
  * is a document that, decoded and compiled once, would weigh more than half the bound (R2-L2 of #1240's review): it
  * would push every other entry out, and be pushed out by the next one, so it is decoded and compiled per call too.
  */
-internal class DocumentCache(
-    private val maxEntries: Int = DEFAULT_MAX_ENTRIES,
-    private val maxHeap: Long = DEFAULT_MAX_HEAP,
+@InternalCoSecApi
+class DocumentCache(
+    /**
+     * Its share of the heap ([ControlDerived.documentCacheBytes], DR1-F-5): a third of the snapshot documents' quarter
+     * of [HeapBudget][me.ahoo.cosec.runtime.HeapBudget], one cache per host, shared by every [Simulator] of it.
+     */
+    private val maxHeap: Long = ControlDerived.documentCacheBytes(),
 ) {
     init {
-        require(maxEntries > 0 && maxHeap > 0) { "The cache holds at least one document." }
+        require(maxHeap > 0) { "The cache holds at least one document." }
     }
 
     private data class Key(val key: SnapshotKey, val digest: SnapshotDigest)
@@ -202,7 +208,7 @@ internal class DocumentCache(
     private fun evict() {
         val iterator = entries.values.iterator()
         // The newest entry stays even when it alone is over the bound: a call holds it until it returns.
-        while ((entries.size > maxEntries || heap > maxHeap) && entries.size > 1) {
+        while (heap > maxHeap && entries.size > 1) {
             heap -= iterator.next().weight
             iterator.remove()
         }
@@ -215,12 +221,6 @@ internal class DocumentCache(
     val estimatedHeap: Long get() = synchronized(entries) { heap }
 
     companion object {
-        /** Documents held at most: a platform, app and tenant document for each of the tenants simulated most recently. */
-        const val DEFAULT_MAX_ENTRIES: Int = 64
-
-        /** The estimated heap held at most: a document of 1 MB stored, decoded and compiled once, weighs 12 MB of it. */
-        const val DEFAULT_MAX_HEAP: Long = 64L * 1024 * 1024
-
         /** A decoded document's heap per stored byte, at most about 3.8 as measured. */
         const val DECODED_FACTOR: Int = 4
 

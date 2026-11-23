@@ -56,13 +56,13 @@ class DocumentCacheTest {
 
     @Test
     fun `the least recently used document leaves first`() {
-        val cache = DocumentCache(maxEntries = 2, maxHeap = 1_000_000)
-        cache.put(key(1), digest(1), 1, document)
-        cache.put(key(2), digest(2), 1, document)
+        // Six documents of one stored byte, four decoded, fill a bound of 24; a document is admitted up to half of it.
+        val cache = DocumentCache(maxHeap = 6L * DocumentCache.DECODED_FACTOR)
+        (1..6).forEach { cache.put(key(it), digest(it), 1, document) }
         // Reading the first makes the second the least recently used.
         cache.get(key(1), digest(1)).assert().isNotNull()
-        cache.put(key(3), digest(3), 1, document)
-        cache.size.assert().isEqualTo(2)
+        cache.put(key(7), digest(7), 1, document)
+        cache.size.assert().isEqualTo(6)
         cache.get(key(2), digest(2)).assert().isNull()
         cache.get(key(1), digest(1)).assert().isNotNull()
         // The same key at another digest is another document.
@@ -77,7 +77,7 @@ class DocumentCacheTest {
     fun `the estimated heap is bounded`() {
         val decoded = 100L * DocumentCache.DECODED_FACTOR
         val compiledForm = 100L * DocumentCache.COMPILED_FACTOR
-        val cache = DocumentCache(maxEntries = 10, maxHeap = 2 * (decoded + compiledForm))
+        val cache = DocumentCache(maxHeap = 2 * (decoded + compiledForm))
         val first = cache.put(key(1), digest(1), 100, document)
         val second = cache.put(key(2), digest(2), 100, document)
         cache.put(key(3), digest(3), 100, document)
@@ -97,7 +97,7 @@ class DocumentCacheTest {
      */
     @Test
     fun `a document too heavy to admit pushes nothing out`() {
-        val cache = DocumentCache(maxEntries = 10, maxHeap = 24_000)
+        val cache = DocumentCache(maxHeap = 24_000)
         val small = cache.put(key(1), digest(1), 100, document)
         small.compiled(digest(7)) { CompiledDocument.tenant(TenantId("t1"), emptyList(), emptyList()) }
         val held = cache.estimatedHeap

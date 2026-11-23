@@ -383,10 +383,11 @@ author and the approver of a change ([What the control plane trusts](./topologie
   rolling update: across a change of the stored format an old and a new replica must not run together
   ([Upgrading between previews](./upgrading-previews.md#from-8-0-0-beta-4)).
 - **Memory.** The host holds the compiled documents of every tenant it decides for in two snapshot sources, its
-  pipeline's and the control plane's own, which share the documents' quarter of the heap, half each (`SNP-24`). The
+  pipeline's and the control plane's own, and the documents `simulate`, `explain` and `analyze` compile in one cache;
+  the three share the documents' quarter of the heap, a third each (`SNP-24`, DR1-F-5). The
   image defaults to the gateway's JVM options; [`k8s/control/`](#kubernetes) sets 768 MiB of heap in a 1536Mi limit for a
   trial and the production overlay 2 GiB in 3200Mi, by the rule of [Memory](#memory) (heap, plus direct memory, plus about
-  250 MiB, plus a quarter): change the heap and the limit together. A 2 GiB host holds about 7,200 typical tenants in
+  250 MiB, plus a quarter): change the heap and the limit together. A 2 GiB host holds about 4,800 typical tenants in
   each source; give it more heap for more.
 
 ## Kubernetes

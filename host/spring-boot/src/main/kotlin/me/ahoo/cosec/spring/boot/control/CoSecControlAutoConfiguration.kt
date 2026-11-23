@@ -15,6 +15,7 @@
 
 package me.ahoo.cosec.spring.boot.control
 
+import java.time.Clock
 import me.ahoo.cocache.core.CoCacheFactory
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
@@ -25,6 +26,7 @@ import me.ahoo.cosec.cocache.snapshot.RedisSnapshotDocumentStore
 import me.ahoo.cosec.control.api.ControlHttp
 import me.ahoo.cosec.control.api.ControlPlane
 import me.ahoo.cosec.control.api.DefaultControlPlane
+import me.ahoo.cosec.control.api.DocumentCache
 import me.ahoo.cosec.control.api.Simulator
 import me.ahoo.cosec.control.audit.ChangeListeners
 import me.ahoo.cosec.control.audit.LoggingChangeListener
@@ -83,7 +85,6 @@ import org.springframework.context.annotation.Import
 import org.springframework.core.env.Environment
 import org.springframework.core.io.ResourceLoader
 import org.springframework.kafka.core.KafkaOperations
-import java.time.Clock
 
 /**
  * The control plane (RFC 0007, with `cosec-control`): the only writer of the policy documents, on
@@ -153,8 +154,9 @@ internal class CoSecControlAutoConfiguration {
             DocumentSnapshots.source(
                 documents,
                 compiler,
-                // Half the documents' share: the pipeline's source beside it holds the other half (SNP-24).
-                properties.snapshot.toOptions(pipeline.timeout, sources = 2),
+                // A third of the documents' share: the pipeline's source and the control plane's document cache hold the
+                // others (SNP-24, DR1-F-5).
+                properties.snapshot.toOptions(pipeline.timeout, sources = ControlDerived.DOCUMENT_HOLDERS),
                 clock
             ).also(compiler::bind),
             clock,
@@ -271,6 +273,7 @@ internal class CoSecControlAutoConfiguration {
         tokenStore: ObjectProvider<TokenStore>,
         controlProperties: ControlProperties,
         resourceLoader: ResourceLoader,
+        documentCache: DocumentCache,
     ): Changes {
         val ids = idGenerator.getIfAvailable { RandomIdGenerator }
         return Changes(
@@ -285,7 +288,7 @@ internal class CoSecControlAutoConfiguration {
             // The data plane's reports when this host takes part in shadow windows: one cache per runtime.
             reports = shadowReports.ifAvailable ?: CoCacheShadowReports.create(factory, cosec.keyPrefix),
             listeners = listeners,
-            lockout = ControlChangeInputs.lockout(revisions, attributes, environment, controlProperties),
+            lockout = ControlChangeInputs.lockout(revisions, attributes, environment, controlProperties, documentCache),
         )
     }
 
@@ -311,6 +314,13 @@ internal class CoSecControlAutoConfiguration {
         shadowInterval = ControlDerived.shadowCheckInterval(properties.shadow.minDuration),
     )
 
+    /**
+     * The documents `simulate`, `explain`, `analyze` and the lock-out check compile, one cache per host (DR1-F-5): a third
+     * of the documents' share of the heap, beside the two snapshot sources ([ControlDerived.DOCUMENT_HOLDERS]).
+     */
+    @Bean
+    fun cosecControlDocumentCache(): DocumentCache = DocumentCache(ControlDerived.documentCacheBytes())
+
     /** Not replaceable: every call goes through [ChangeAuthority]. */
     @Bean
     fun cosecControlPlane(
@@ -319,13 +329,14 @@ internal class CoSecControlAutoConfiguration {
         authority: ChangeAuthority,
         attributes: AttributeProviders,
         environment: Environment,
+        documentCache: DocumentCache,
     ): ControlPlane =
         // simulate and explain compile against the host's attribute providers, as enforcement does (S5).
         DefaultControlPlane(
             changes,
             revisions,
             authority,
-            Simulator(attributes = attributes.catalog, credentialHeaders = credentialHeaders(environment)),
+            Simulator(attributes = attributes.catalog, credentialHeaders = credentialHeaders(environment), cache = documentCache),
         )
 
     /** Not replaceable: every route needs a request the host pipeline permitted. */

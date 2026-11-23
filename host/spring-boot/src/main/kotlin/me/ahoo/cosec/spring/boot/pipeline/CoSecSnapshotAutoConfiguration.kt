@@ -15,6 +15,7 @@
 
 package me.ahoo.cosec.spring.boot.pipeline
 
+import java.time.Clock
 import me.ahoo.cocache.core.CoCacheFactory
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
@@ -24,6 +25,7 @@ import me.ahoo.cosec.cocache.shadow.CoCacheShadowReports
 import me.ahoo.cosec.cocache.snapshot.PolicySnapshotCache
 import me.ahoo.cosec.cocache.snapshot.RedisSnapshotDocumentStore
 import me.ahoo.cosec.cocache.snapshot.createPolicySnapshotCache
+import me.ahoo.cosec.control.lifecycle.ControlDerived
 import me.ahoo.cosec.document.route.RouteMap
 import me.ahoo.cosec.engine.CompiledDocument
 import me.ahoo.cosec.runtime.attribute.AttributeProviders
@@ -65,7 +67,6 @@ import org.springframework.context.annotation.Configuration
 import org.springframework.context.annotation.Import
 import org.springframework.core.env.Environment
 import org.springframework.core.io.ResourceLoader
-import java.time.Clock
 
 /**
  * The policy snapshot the pipeline decides on (RFC 0004 §7.4): the platform, app and tenant documents, compiled against
@@ -336,8 +337,9 @@ class CoSecSnapshotAutoConfiguration {
         environment: Environment,
     ): SnapshotSource<CompiledDocument, CompiledDocument> {
         val snapshot = properties.snapshot
-        // Where the control plane runs, its own source holds the other half of the documents' share (SNP-24).
-        val sources = if (ControlPlaneCondition.wired(resources.classLoader, environment)) 2 else 1
+        // Where the control plane runs, its own source and its document cache hold the other two thirds of the documents'
+        // share (SNP-24, DR1-F-5).
+        val sources = if (ControlPlaneCondition.wired(resources.classLoader, environment)) ControlDerived.DOCUMENT_HOLDERS else 1
         val options = snapshot.toOptions(pipeline.timeout, sources)
         // The data plane's source only: the control plane's own would count its reads under the same names.
         val source = DocumentSnapshots.source(

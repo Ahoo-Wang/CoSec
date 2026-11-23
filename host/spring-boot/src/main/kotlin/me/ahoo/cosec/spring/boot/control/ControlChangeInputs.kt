@@ -17,6 +17,7 @@ package me.ahoo.cosec.spring.boot.control
 
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.control.api.ControlLockout
+import me.ahoo.cosec.control.api.DocumentCache
 import me.ahoo.cosec.control.api.Simulator
 import me.ahoo.cosec.control.lifecycle.CandidateCompile
 import me.ahoo.cosec.control.lifecycle.LockoutCheck
@@ -51,9 +52,10 @@ internal object ControlChangeInputs {
         attributes: AttributeProviders,
         environment: Environment,
         properties: ControlProperties,
+        documentCache: DocumentCache,
     ): LockoutCheck = ControlLockout(
         revisions,
-        Simulator(attributes = attributes.catalog, credentialHeaders = credentialHeaders(environment)),
+        Simulator(attributes = attributes.catalog, credentialHeaders = credentialHeaders(environment), cache = documentCache),
         AppId(properties.appId),
     )
 }

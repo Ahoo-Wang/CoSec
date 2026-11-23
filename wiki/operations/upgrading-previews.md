@@ -30,6 +30,11 @@ Which preview of the library may run behind which preview of the gateway image: 
 
 ## From 8.0.0-beta.7 {#from-8-0-0-beta-7}
 
+- **The control plane's document cache is a share of the heap** (`STA-12`, DR1-F-5). Affected: a control-plane host's
+  memory. `simulate`, `explain`, `analyze` and the lock-out check share one cache per host, a third of the snapshot
+  documents' quarter of the heap (about 170 MB at 2 GiB), where two caches held a fixed 64 MB each. The host's two
+  snapshot sources now hold a third of that quarter each, where they held half: at 2 GiB about 4,800 typical tenants in
+  each, where it was 7,200. Give a control-plane host more heap to hold more; nothing else to change.
 - **`HttpControlService` relays a user's attributes** (`CTL-77`, DR1-F-1). Affected: an application that calls a
   control-plane host through `HttpControlService` as the user whose request it serves (`ControlCaller.of`), with a
   control policy that reads `subject.attributes`. Before, no attribute went with the call, so a DENY on one did not match
