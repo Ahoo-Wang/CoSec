@@ -1,0 +1,17 @@
+# Rule: PIP-35
+# Mutant: on a host with a route map, a path that maps only without its trailing / is decided in the http namespace (DR1-C-9)
+# Tests: :conformance:test --tests me.ahoo.cosec.conformance.ConformanceTest
+
+diff --git a/core/document/src/main/kotlin/me/ahoo/cosec/document/route/RouteMap.kt b/core/document/src/main/kotlin/me/ahoo/cosec/document/route/RouteMap.kt
+index e11d15a05..83907146f 100644
+--- a/core/document/src/main/kotlin/me/ahoo/cosec/document/route/RouteMap.kt
++++ b/core/document/src/main/kotlin/me/ahoo/cosec/document/route/RouteMap.kt
+@@ -109,7 +109,7 @@ class RouteMap private constructor(private val routes: Map<String, List<Compiled
+         val resolved = resolveWithHead(method, path)
+         // PIP-35: a path that maps only without its trailing `/` is one a backend may read as either; deciding it in
+         // the `http` namespace would step around the route's DENYs, and mapping it would widen its ALLOWs.
+-        if (resolved == RouteResolution.Unmapped && path.length > 1 && path.endsWith('/')) {
++        if (resolved == RouteResolution.Unmapped && path.length > 1 && path.endsWith('/') && method == "") {
+             val without = resolveWithHead(method, path.substring(0, path.length - 1))
+             if (without is RouteResolution.Mapped) {
+                 return RouteResolution.Invalid(

@@ -118,6 +118,13 @@ Which preview of the library may run behind which preview of the gateway image: 
   (a `"*"` role adds the number of its app's catalog permissions). Raise the budgets in the platform's `limits` if the
   document needs them. Each 1,000 derived bindings spread over distinct permissions cost the check of a tenant
   administrator's change about 0.5 s, and each binding about 240 bytes on every instance that holds the document.
+- **In the deny direction a trailing `/` does not count** (`PIP-35`, DR1-C-9). Affected: every deployment, in the
+  direction of fewer permits. A DENY statement or a rate limit rule on `/orders/{id}` now also applies to
+  `/orders/123/`, and one on `/orders/` to `/orders`; ALLOWs and the platform boundary still match the path as written.
+  On a host with a route map, a request whose path ends with `/`, maps to no route and maps without it (`DELETE
+  /orders/123/` for a route `/orders/{id}`) is answered `400` `invalid-request` where it used to be decided in the `http`
+  namespace. A client that sends such paths to a mapped host should drop the trailing `/`
+  ([Web integration](../integration/web.md)).
 
 ## From 8.0.0-beta.6 {#from-8-0-0-beta-6}
 
