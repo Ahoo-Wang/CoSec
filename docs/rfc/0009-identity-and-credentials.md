@@ -73,7 +73,8 @@ User、API Key、服务账号（Service Account）、Agent Identity 不在同一
 - **主体的属性只读**（`IDN-21`）：`AuthenticatedPrincipal` 在构造时把认证器交来的 Map 包成不可修改的视图（不复制）；认证器交出 Map 之后不得再改，
   值必须不可变（字符串、布尔、数字，以及它们的不可变列表与 Map）；`cosec-jwt` 在解析声明时把嵌套的对象与数组变成只读。应用从 `SecurityContext`
   读到的属性就是同一请求后续检查（`AuthorizationChecker`）所依据的属性，所以应用能设置的东西不会进入任何决策。
-- **认证方式**：认证器的事实，取值与 `Identity.Method` 一致（约定 `jwt`、`api-key`；RFC 0010 C3 起接受任何非空值）。`jwt` 只属于 CoSec 自己的令牌（§4.2）。
+- **认证方式**：认证器的事实，取值与 `Identity.Method` 一致（约定 `jwt`、`api-key`、`service`；RFC 0010 C3 起接受任何非空值）。`jwt` 只属于 CoSec 自己的令牌（§4.2）；
+  `api-key` 与 `service` 是工作负载的凭据：服务以自己的主体调用控制面时（`ControlCaller.service`）声明的身份写 `service`，不是 `api-key`（`IDN-34`）。
 - **上限**：一个角色集合（含 `role@space`）。成员关系与它求交；没有上限即不收窄。不引入第二套权限语言：上限用的就是文档里的角色名，
   授出分析和访问分析可以直接读。上限只收窄授予，从不解除对主体的限制（§4.2）。
 - **引擎的两个显式输入**：`Subject.principalBindings`（按名绑定给主体的东西能否授予：主体绑定与直接附加的策略；有上限的凭据为 false）与
@@ -131,6 +132,11 @@ class ApiKey(
 CoSec 的令牌是签名的：`JwtTokenVerifier` 与 `JwtTokenConverter` 在构造时拒绝不签名的算法（`Algorithm.none()`），所以不签发未签名的令牌，
 也不把未签名的令牌当作 CoSec 自己的、因而能得到 break-glass 的令牌（`IDN-28`）。
 
+**工作负载的凭据**（`IDN-34`）。一个主体是人还是工作负载，只看 `AuthenticatedPrincipal.workload`：API Key（`ApiKeyAuthenticator` 按来源认定，或凭据名为 `api-key`），
+或凭据名为 `service` 的身份，不论这个名字由谁写下（转发的身份、服务声明的身份、应用自己的认证器，失败关闭）。工作负载从不批准变更、不是控制面的信任根
+（`APR-7`、`APR-3`，RFC 0007 §7.3、§7.5），与任何不是 CoSec 自己令牌的凭据一样没有会话、没有 break-glass。`apiKey` 只回答“是不是 API Key”，
+不据它做授权判断：主代码里除定义处之外没有类读它（`WorkloadCredentialTest`）。给应用自己的认证器一个一等的“工作负载”标志留到 8.1，与外部 IdP 一起设计。
+
 **网关之后同样成立**：转发的 `CoSec-Identity` 为有上限的凭据带 `auth.capped: true`，后面的服务据此不取主体绑定；break-glass 只给方法为 `jwt` 的身份（§5）。
 
 **模拟与审批**：模拟（simulate、explain）的请求带上凭据的这两个标志（不写时按 CoSec 的令牌），模拟出的决定与该凭据实际得到的一样，不会更宽。
@@ -180,7 +186,7 @@ JWT 保留 `roles`、`policies`、`attributes` 声明作为已签名缓存，条
 | 属性 | 来源 | 取值 | 缺失时 |
 |---|---|---|---|
 | `principal.type` | `MembershipProvider` 或 token 的 `cosec.principal.type` | 开放字符串；约定 `user`、`workload` | 匿名请求与旧 token 没有；比较判为不确定（RFC 0005 的缺失语义），DENY 不因缺失而失效 |
-| `auth.method` | 认证器 | 与 `Identity.Method` 一致（约定 `jwt`、`api-key`）；匿名请求为 `anonymous` | 不会缺失 |
+| `auth.method` | 认证器 | 与 `Identity.Method` 一致（约定 `jwt`、`api-key`、`service`）；匿名请求为 `anonymous` | 不会缺失 |
 
 - 两者登记进属性目录（`Attribute.Kind`），可用于条件，也可作限流 `key`。
 - `CoSec-Identity` v1 增加 `sub_type`（即 `principal.type`）；`auth.method` 已在。v1 已随 8.0 发布，解码是严格的，所以加成员时遵守 RFC 0010 §1 的约束 4。
@@ -365,3 +371,4 @@ JWT 保留 `roles`、`policies`、`attributes` 声明作为已签名缓存，条
 - 2026-11-15（#1415、#1417）：租户切换只从活着的会话签发（`IDN-22`）；`CoSec-Identity` 带会话。
 - 2026-11-19：令牌是签名的（#1662，`IDN-28`）；令牌不得冒充 API Key（#1718，`IDN-30`）。
 - 2026-11-20（#1765、#1766、#1773、#1774）：撤销读的预算；会话记录带格式号（`IDN-31`）；令牌认证的开启；已验证令牌的缓存（`IDN-32`）。
+- 2026-11-23（#1898）：服务调用方的凭据方法 `service`，工作负载的凭据只有一处定义（`IDN-34`）。
