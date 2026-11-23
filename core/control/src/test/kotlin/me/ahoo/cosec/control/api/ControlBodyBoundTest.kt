@@ -51,13 +51,21 @@ class ControlBodyBoundTest {
     fun `a large body to a route that carries no document is a 400 before it is parsed`() {
         val body = objects(1024 * 1024)
         val threads = ManagementFactory.getThreadMXBean() as com.sun.management.ThreadMXBean
-        for (path in listOf("/simulate", "/explain", "/analyze", "/changes/c1:approve", "/documents/tenant:acme:rollback")) {
+        for (path in listOf(
+            "/simulate",
+            "/explain",
+            "/analyze",
+            "/changes/c1:approve",
+            "/documents/tenant:acme:rollback"
+        )) {
             val before = threads.currentThreadAllocatedBytes
             val (status, problem) = post(path, body)
             val allocated = threads.currentThreadAllocatedBytes - before
             status.assert().describedAs(path).isEqualTo(400)
             problem.get("detail").asString().assert().describedAs(path)
-                .isEqualTo("The request body is ${body.size} bytes, over the ${ControlDerived.SMALL_BODY_BYTES} this route reads.")
+                .isEqualTo(
+                    "The request body is ${body.size} bytes, over the ${ControlDerived.SMALL_BODY_BYTES} this route reads."
+                )
             // Parsed, a megabyte of empty objects is hundreds of thousands of nodes; refused first, it is its own bytes.
             allocated.assert().describedAs(path).isLessThan(body.size.toLong())
         }
@@ -77,11 +85,18 @@ class ControlBodyBoundTest {
     @Test
     fun `the routes that carry a document still read up to the document's bound`() {
         val body = "x".repeat(ControlDerived.SMALL_BODY_BYTES.toInt() * 2).encodeToByteArray()
-        for (path in listOf("/changes", "/changes:check", "/documents/tenant:acme:apply", "/documents/tenant:acme:check")) {
+        for (path in listOf(
+            "/changes",
+            "/changes:check",
+            "/documents/tenant:acme:apply",
+            "/documents/tenant:acme:check"
+        )) {
             val (status, problem) = post(path, body)
             status.assert().describedAs(path).isEqualTo(400)
             // Parsed, and not JSON: the size was not what refused it.
-            problem.get("detail").asString().assert().describedAs(path).isEqualTo("The request body is not JSON, or holds a key twice.")
+            problem.get(
+                "detail"
+            ).asString().assert().describedAs(path).isEqualTo("The request body is not JSON, or holds a key twice.")
         }
     }
 
