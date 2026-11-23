@@ -725,6 +725,18 @@ does not compile.
 whose authenticator names no credential (CoSec's token and API key authenticators always name one), or with
 `cosec.gateway.identity.enabled=false`.
 
+**The route decides, not the final URL.** Whether a request receives the identity is read from its route: its
+metadata, or its `lb://` URI. A route filter that rewrites the URL afterwards (Spring Cloud Gateway's
+`RequestHeaderToRequestUri`, whose URL comes from a client header, `SetRequestUri`, or one of your own) sends the
+identity, and the credentials when `forward-authorization` is on, wherever the URL now points. Do not combine such a
+filter with a route that receives the identity.
+
+**Method overrides in parameters reach the backend.** The gateway decides the request line's method and removes the
+method-override headers (`PIP-31`), but a `_method` query or form parameter goes through: `POST /orders/1?_method=DELETE`
+is decided as `http:POST`, and a backend that runs Spring's hidden-method filter serves it as `DELETE`. A CoSec service
+behind the gateway refuses that filter at startup (`STA-6`); turn it off in any other backend
+(`spring.mvc.hiddenmethod.filter.enabled=false`, the default).
+
 **What it carries.** The value is base64url (no padding) of compact JSON, format version 1; the JSON Schema is
 [`schema/cosec-identity.schema.json`](https://cosec.ahoo.me/schema/8.0/cosec-identity.schema.json).
 

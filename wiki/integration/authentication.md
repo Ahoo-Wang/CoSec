@@ -930,9 +930,9 @@ JustAuth's: an application cannot add one of its own, since the provider interfa
    refused with a `SocialAuthenticationException`.
 
 JustAuth blocks: `authorize` writes the state to Redis, and the callback
-calls the provider over blocking HTTP. CoSec runs both on a dispatcher of each provider's own, and its state store's Redis
-calls on one of the store's own, each of at most 16 threads, so you can call them from any thread, an event loop
-included. A provider that hangs delays only its own logins, and
+calls the provider over blocking HTTP. CoSec runs both on a dispatcher of each provider's own, of at most 16 threads,
+and its state store calls Redis through the non-blocking client and awaits it, holding no thread, so you can call
+them from any thread, an event loop included. A provider that hangs delays only its own logins, and
 cancelling a request interrupts its call.
 
 ## Behind a gateway
