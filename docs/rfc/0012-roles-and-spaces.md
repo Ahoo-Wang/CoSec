@@ -362,19 +362,31 @@ App 文档也有一条（`ROL-12`）：它定义的系统角色，其 id 已被�
 
 角色和权限的事实源可以在 CoSec 之外，例如一个事件溯源的身份系统。这时 CoSec 的文档是下游投影，**仍然只经控制面写入**，不直接写缓存：否则绕过校验、编译和审计。
 
-| 来源的变化 | 控制面调用 |
-|---|---|
-| 角色的权限变化 | `putRole`，不带 `ifMatch` |
-| 角色删除 | `removeRole` |
-| App 的权限变化 | `putCatalog` |
-| 定期对账 | `apply`，`MERGE`；来源是唯一写入者时用 `REPLACE` |
+同步方是一个服务。它经控制面的门面（`ControlService`：进程内的实现，或经 HTTP 调控制面宿主的实现）或宿主的服务端口（`cosec.control.http.service-port`）调用，
+经门面时以 `ControlCaller.service` 声明自己的主体与角色（平台租户），门面的两种实现都把它写成凭据方法为 `api-key` 的身份（`ServiceIdentity`），
+即工作负载的凭据：它永远不是信任根，也不能批准（RFC 0007 §7.3）。两种实现经同一张路由表（`RoutedControlService`）走同一条代码路径，
+每次调用仍由策略对声明的主体判定，并记录在它名下（`CTL-65`）。直接调服务端口时，身份同样只是声明的。无论哪条路，服务配置上都没有信任根（`CTL-81`），
+批准与驳回也不在服务配置上（`CTL-58`），只在运维端口。
 
-- 每次变更走 `propose` → `skip-shadow` → `publish`。
-- 执行者是持有 `cosec:approve`、`cosec:skip-shadow`、`cosec:publish` 的平台服务主体，即信任根（RFC 0007 §7.3）。谁能授予由来源系统判断，CoSec 记录审计。
+| 来源的变化 | 控制面调用 | 什么时候不等人 |
+|---|---|---|
+| 角色的权限变化 | 租户文档上的 `putRole`，不带 `ifMatch` | 角色类别（`CTL-79`）：作者在该租户文档上持有 `cosec:manage-roles`，且写入的角色与它替换的角色都有 App、都不属于控制面自己的 App（`cosec.control.app-id`） |
+| 角色删除 | 租户文档上的 `removeRole` | 同上，看被删除的角色 |
+| App 的权限变化 | App 文档上的 `putCatalog` | App 文档永远不属于角色类别：变更一律分析，只有不新授出任何东西的才自行发布，其余等人在运维端口批准（`CTL-58`、`CTL-81`） |
+| 定期对账 | 租户文档上的 `apply`：来源是唯一写入者时用 `REPLACE`；`MERGE` 只增改、不删除，来源删掉的条目留着，变更以一条 `WARNING` 说出它们 | `apply` 的操作由文件与头的差异得出：只差在角色时，操作只有 `putRole`、`removeRole`，按角色类别判断；差在别处时整体分析。服务端口与门面上，`apply` 只对租户文档 |
+
+- 每次变更走 `propose` → `skip-shadow` → `publish`（`ControlClient.proposeAndPublishWithoutShadow`）。服务主体要持有这些步骤所需的动作：
+  租户文档上的 `cosec:write`、`cosec:skip-shadow`、`cosec:publish`，派生绑定作用域上的 `cosec:grant`，以及要走角色类别时的 `cosec:manage-roles`。
+- 角色类别只免去“谁在授予”的疑问（`CROSS_TENANT`、`NOT_COVERED`、`DENY_OVERLAP`），以一条 `ROLE_CLASS` 记录代替它们，写明持有者与免去了什么；
+  分析说不清的（读不到的 App 文档、未解析的策略、用尽的预算）仍然等人。每个角色上的 `cosec:write`、每条派生绑定上的 `cosec:grant` 照常判定。
+  一个变更只要写了角色以外的东西，就整体分析。
+- 角色类别之外的变更一律分析：服务端口与门面上没有信任根，不论调用方声明谁（`CTL-81`）；分析证明不了的等人在运维端口批准。
+- 发布时以发布者的身份在当前的头上重新分析，角色类别一起重判：检查之后撤回的授予把变更送回 `AWAITING_APPROVAL`，不会发布。
+- 谁能授予由来源系统判断，CoSec 记录审计。
 - `putRole` 整体替换，重放是幂等的。冲突（409）由投影重试。
 - 暂存槽被占用时 `skip-shadow` 返回 409，只有收窄的变更能抢占，所以同一份文档不要同时有人工变更和同步。
 
-不新增接口。
+不为同步新增接口：用的是控制面的门面与普通的变更流程。
 
 ## 8. Binding 不拆出文档
 
