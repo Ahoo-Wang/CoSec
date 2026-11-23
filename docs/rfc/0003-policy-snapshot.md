@@ -318,7 +318,7 @@ interface SnapshotDocumentStore {
   已登记的 8.1 候选项），所以签名可能在次版本中变化。自己实现这个端口的应用要显式选择加入。
 
 `SnapshotSource`（`cosec-runtime`，`@InternalCoSecApi`）持有编译后的文档：`peek` 只看内存、不做 I/O、命中时不分配；`load`/`loadAll` 加载缺少的文档；
-`prewarm` 预热；`revalidate`、`recompile`、`reload` 是维护调用。管道经 `SuspendingSnapshotSource` 挂起等待它（RFC 0006 §5.3），
+`prewarm` 预热；`revalidate`、`recompile`、`reload` 是维护调用。管道经 `SuspendingSnapshotSource` 挂起等待它（RFC 0006 §5.5.1），
 应用经 `Pipeline.builder` 给出一个 `SnapshotDocumentStore` 即可（AGENTS.md）。它的内部按 RFC 0013 §5.4 改写过（每个 key 一个所有者、单线程推进的状态机），
 本节与 §4.3–§4.5 的保证不变。
 
@@ -548,174 +548,136 @@ RFC 0001 §7.2 留下两个问题：快照的规模上限，以及快照文档�
 
 ### 5.1 流程
 
-第 2 阶段结束时（RFC 0002 PR-6 之后）`SimpleAuthorization.decide` 是"黑名单 → `AuthzRequest` → 读三个仓库（`Mono.zip`）→ 引擎"。本阶段改为：
+文档读取在管道的作用域之后、引擎之前（RFC 0006 §5.3、§5.5.1）：
 
 ```
-decide(request, context):
-    blocked  = !blacklistChecker.check(request, context)                  // Mono，不变，最先执行
-    authz    = AuthzRequests.of(request, context, blocked, rootPrincipalMatcher)
-    if !engine.requiresPolicies(authz): return evaluate(authz, PolicySet.NOT_LOADED)
-    snapshot = snapshotSource.peek(authz, facts)                          // 内存，同步
-    if snapshot != null:
-        return evaluateOn(snapshot)                                       // 热路径：不经过任何 future
-    return Mono.fromFuture(snapshotSource.load(authz, facts))             // 冷路径（§4.3）
-               .timeout(coldLoadTimeout)
-               .publishOn(boundedElastic)
-               .flatMap(::evaluateOn)
-
-evaluateOn(snapshot):
-    failClosedCheck(snapshot, context.tenant)                             // §4.5，超限 → SnapshotStaleException
-    policies = SnapshotPolicySetLoader.load(authz, facts, snapshot)
-    if policies 中任一组 requiresBlocking: 在 boundedElastic 上 engine.evaluate   // BlockingAware 保留（§5.2）
-    else: 原地 engine.evaluate
+evaluate(request):
+    …认证、成员关系与阶段 A 的属性、作用域（RFC 0006 §5.3）
+    view = installed(scope, blocked)                  // SuspendingSnapshotSource：peek，内存，同步，无 I/O，不挂起
+    if view == null:
+        view = loaded(scope, blocked)                 // 冷路径（§4.3）：挂起等待 load，按 RFC 0006 §7.2 恢复
+    …属性计划与阶段 B 的外部属性，engine.evaluate(request, view)   // 原地
 ```
+
+租户文档需要应用文档而作用域在该应用里没有角色时（§3.2），再取一次带应用文档的视图，同样先 `peek` 后 `load`。`installed` 不挂起，
+所以文档已安装时这一步不为请求分配续体（`SuspendingSnapshotSource`）。
 
 ### 5.2 删掉什么，保留什么
 
-| 现有 | 处理 | 理由 |
+| 7.x 的 | 处理 | 理由 |
 |---|---|---|
-| `CacheFutures.toLocalFirstMono`（未命中时切到 `boundedElastic`） | 删除（PR-6） | 策略数据不再按请求从 CoCache 读取 |
-| `RedisPolicyRepository`、`RedisAppRolePermissionRepository` | 删除（PR-6） | 被 `RedisSnapshotDocumentStore` 取代 |
-| `PolicyCache`、`GlobalPolicyIndexCache`、`AppPermissionCache`、`RolePermissionCache` 及其 bean、`CoSecPolicyCacheAutoConfiguration`/`CoSecPermissionCacheAutoConfiguration` 中对应部分 | 删除（PR-6）；7.x 读取器在测试源码集中自带这四个缓存的声明 | 数据面不再读它们 |
-| `PolicyRepository`、`AppRolePermissionRepository`（SPI） | 删除（PR-6，Q3） | 被 `SnapshotDocumentStore` + `SnapshotPublisher` 取代 |
-| `OverlayPolicyRepository`、`OverlayAppRolePermissionRepository` | 删除（PR-5），影子改为快照叠加：`PolicySnapshot.overlay(candidates)` 在候选集变化时编译一次（RFC 0001 §3.6，RFC 0002 §5.3 把它们留到本阶段） | 仓库从数据面消失 |
-| `BlockingAware`、`requiresBlocking`、`SimpleAuthorization` 中按它切换 `boundedElastic` | **保留**（Q9） | 它管的是阻塞匹配器（§2 I2）；第 5 阶段 `AttributeProvider` 落地后删除 |
-| `RedisRateLimiter` 的 `subscribeOn(boundedElastic)` | 保留 | 限流不是策略数据（§3.6） |
-| `SecurityContextParseSchedulers`（吊销检查、API Key 存储） | 保留 | 认证数据，第 5 阶段 `Authenticator` 挂起化时处理 |
+| `CacheFutures.toLocalFirstMono`（未命中时切到 `boundedElastic`） | 已删除 | 策略数据不再按请求从 CoCache 读取 |
+| `RedisPolicyRepository`、`RedisAppRolePermissionRepository` | 已删除 | 被 `RedisSnapshotDocumentStore` 取代 |
+| `PolicyCache`、`GlobalPolicyIndexCache`、`AppPermissionCache`、`RolePermissionCache` 及其 bean 与自动配置 | 已删除；`cosec-migrate` 自带这四个缓存在 7.x 中的布局 | 数据面不再读它们 |
+| `PolicyRepository`、`AppRolePermissionRepository`（SPI） | 已删除（Q3） | 被 `SnapshotDocumentStore` 与控制面的写入取代 |
+| `OverlayPolicyRepository`、`OverlayAppRolePermissionRepository` | 已删除 | 影子比较改为编译候选文档（RFC 0007 §6.4，`SNP-10`） |
+| `BlockingAware`、`requiresBlocking` 与按它切换 `boundedElastic` | 第 3 阶段保留（Q9），第 5 阶段删除 | 它管的是阻塞的自定义匹配器（§2 I2）；外部属性改由 `AttributeProvider` 提供后，策略不再运行任何代码 |
+| `RedisRateLimiter` 的 `subscribeOn(boundedElastic)` | 第 5 阶段改为挂起的、不阻塞的 Redis 限流器 | 限流不是策略数据（§3.6），RFC 0006 §8.4 |
+| `SecurityContextParseSchedulers`（吊销检查、API Key 存储） | 第 5 阶段删除 | 认证的 SPI 改为挂起函数（RFC 0006 §5.3.2） |
 
 ### 5.3 线程模型
 
 | 路径 | 在哪个线程上 | 是否切换 |
 |---|---|---|
-| 快照已加载、无阻塞匹配器 | 调用方线程（WebFlux/Gateway 是 Netty 事件循环） | 否。与 7.0 的"L2 全部命中"相同，但不再经过 `CompletableFuture` 和 `Mono.fromFuture` |
-| 快照已加载、有阻塞匹配器 | 整次评估在 `boundedElastic` | 是，与第 2 阶段相同（RFC 0002 X2） |
-| 冷未命中 | 读取：CoCache 异步执行器；编译：编译线程池；继续：`boundedElastic` | 是，只此一次 |
-| 重新加载、重新校验、`onReset` | 编译线程池与一个调度线程，不在任何请求线程上 | 不影响请求 |
+| 文档已安装 | 调用方线程（WebFlux/Gateway 是 Netty 事件循环） | 否。不经过任何 future |
+| 冷未命中 | 读取：CoCache 的异步接口；编译：编译池（`cosec-snapshot-compile-*`）；继续：按 RFC 0006 §7.2 的恢复规则 | 是，只此一次 |
+| 重新加载、再验证、`onReset` | 编译池与调度线程（`cosec-snapshot-scheduler`），不在任何请求线程上 | 不影响请求 |
+| 淘汰、落后时长报告、带堆栈的日志、安装后的复查 | 后勤线程（`cosec-snapshot-housekeeping`） | 不影响请求，也不延误任何超时 |
 
-冷未命中在调用方线程上做的唯一一件可能等待的事，是给这次加载挂上超时（`cold-load-timeout`、`store-read-timeout`）：向调度线程的
-`ScheduledThreadPoolExecutor` 提交一个延时任务，会取得它的延时队列（`DelayedWorkQueue`）的锁，做一次堆插入。这把锁只在插入期间持有，
-从不跨越 I/O；把挂超时交给调度线程去做也一样要向一个同类的队列提交任务，JDK 里没有不取锁的延时调度，Reactor 自己在事件循环上的定时器
-也是如此。所以这是有界的短暂等待，不是阻塞调用：`SnapshotStoreBlockHoundTest` 只对 `DelayedWorkQueue.offer` 这一个方法放行（以及测试日志
-配置本身的 appender 锁），其余任何等待都算失败。没有这条放行时，该测试只在这把锁恰好被争用时失败，是不确定的，而不是发现了问题。
+冷未命中在调用方线程上做的唯一一件可能等待的事，是给这次加载挂上超时：向调度线程的 `ScheduledThreadPoolExecutor` 提交一个延时任务，
+会取得它的延时队列（`DelayedWorkQueue`）的锁，做一次堆插入。这把锁只在插入期间持有，从不跨越 I/O；把挂超时交给调度线程去做也一样要向一个同类的队列
+提交任务，JDK 里没有不取锁的延时调度，Reactor 自己在事件循环上的定时器也是如此。所以这是有界的短暂等待，不是阻塞调用。
+
+后勤线程的队列满时，调用快照源的线程从不因此写日志或代做后勤的工作：被拒绝的日志行、上限之下的淘汰或落后报告被丢弃并按任务计数，后勤线程至多每 10 秒写一条摘要
+（`SNP-19`）；只有超过封顶的就地淘汰（`SNP-14`）、空 key 的移除与快照源的移交（`SNP-15`）就地执行。
 
 ---
 
 ## 6. 不变量
 
-AGENTS.md 的每条不变量在本阶段如何成立，新的失败模式各由哪个测试守护：
+AGENTS.md 的每条不变量在快照这一层如何成立，失败模式各由哪个测试守护：
 
-| 不变量 | 本阶段如何成立 | 守护 |
+| 不变量 | 如何成立 | 守护 |
 |---|---|---|
-| **Deny-first** | 组合算法不变（引擎不改）；快照加载器产生的 `PolicySet` 与仓库加载器结构相同，所以每一条 DENY 都在原来的位置 | `SimpleAuthorizationTest`（参数化：仓库来源 / 快照来源）；性质测试 P1（引擎，不变）、P5（§8.4） |
-| **Fail closed** | 读取失败、解码失败、编译失败、冷加载超时、编译队列满都变成它所供给的层的 `Unavailable`，或者在评估前抛出，最终 500；唯一的放宽是 F6（旧快照在落后上界内继续使用），这是 RFC 0001 §7.1 已确认的决定，并且可以按租户 fail-closed | 下表 F1–F13 |
-| **One decision path** | 新的异常（`SnapshotUnavailableException`、`SnapshotStaleException`）只在 `SimpleAuthorization` 内产生，由 `SecurityPipeline` 现有的错误映射变成 500；不新增状态码 | `WebAdapterParityTest` 增加"快照不可用"和"快照陈旧超限"两例，三个适配器状态码一致 |
-| **No blocking on the event loop** | 热路径不经过任何 future；冷路径的编译在编译线程池，后续在 `boundedElastic`；`BlockingAware` 保留 | `SnapshotHotPathTest`（快照已加载时，在一个 `NonBlocking` 线程上调用，断言在同一线程上完成，并且对文档存储零调用）；`SnapshotColdMissOffEventLoopTest`（冷未命中时编译不在调用线程上，BlockHound 在测试中检测阻塞调用）；`LocalCacheFastPathTest` 随 `toLocalFirstMono` 删除 |
-| **Authorization is a pure decision** | 不变：快照是不可变数据，加载器是同步纯函数 | 审查；ArchUnit 规则不变 |
-| **策略/权限缓存 `ttl = null`、`ReadFailureMode.THROW`（及 `ForeignFormatMode.FAIL`）** | 适用对象从四个缓存换成 `PolicySnapshotCache`，仍在 customizer 和属性之后施加。另加一条：`SnapshotSource` 中的编译结果不按时间过期，只会被同一个 key 的更新安装替换，或被 LRU 淘汰；淘汰后的下一次读取是严格读，所以"过期丢策略"仍不可能 | `CacheTtlPolicyTest`、`StrictCacheFailureTest` 改为针对新缓存；`SnapshotNeverExpiresTest`（推进时钟远超 `localMaxAge`，Redis 不可用，已安装的文档仍在且 `lag` 增长） |
-| **Hot-path changes come with a JMH before/after** | §9 | `SimpleAuthorizationBenchmark`、新增的 `SnapshotAuthorizationBenchmark` |
+| **Deny-first** | 快照只决定引擎读到哪些文档、哪个修订，不改变组合算法 | 引擎的性质测试（`EnginePropertyTest`）；视图的组成见 `DocumentSnapshotViewsTest` |
+| **Fail closed** | 读取失败、解码失败、编译失败、冷加载超时、编译期限到期，都让需要该文档的请求不确定（503，除非有 DENY 命中）；唯一的放宽是 F6（已安装的修订在重载失败期间继续使用），这是 RFC 0001 §7.1 已确认的决定，并且可以按租户失败即拒绝（`SNP-5`） | 下表 F1–F15 |
+| **One decision path** | 快照的失败都变成判定的原因（`SourceUnavailable`、`DocumentInvalid`），状态码只由 `StatusMapping` 给出 | `OneDecisionPathTest`、`WebAdapterParityTest` |
+| **No blocking on the event loop** | `peek` 不做 I/O、不经过 future；冷路径的编译在编译池上；存储的每个入口不阻塞 | `SnapshotColdLoadTest`（已安装时在调用方线程上完成，不碰任何执行器与存储；冷未命中不在调用方线程上编译）；`SnapshotStoreBlockHoundTest`（真实 Redis）；`PipelineBlockHoundTest` |
+| **Authorization is a pure decision** | 快照是不可变数据，引擎不做 I/O | `EnginePurityTest` |
+| **快照与控制面的缓存永不过期、读失败抛出** | 由 `CoSecCacheSpecs.locks` 在任何 customizer 与属性之后固定（§4.1，`SNP-3`）；`SnapshotSource` 中的编译结果不按时间过期，只会被同一个 key 的更新安装替换，或被淘汰，淘汰后的下一次读取是严格读，所以"过期丢策略"不可能 | `CacheTtlPolicyTest`、`StrictCacheFailureTest`；`SnapshotSourceFailureTest#installedDocumentNeverExpires`（时钟推进远超本地副本的年龄，Redis 不可用，已安装的文档仍在且 `lag` 增长） |
+| **Hot-path changes come with a JMH before/after** | §9 | `SnapshotPeekBenchmark`、`PipelineBenchmark` |
 
-**关于 BlockHound**：PR-1 没有引入 BlockHound。理由：它要新增测试依赖，并且在 JDK 17+ 上需要 `-XX:+AllowRedefinitionToAddDeleteMethods`；而 PR-1 的
-存储是内存实现和测试替身，从不调用阻塞的 JDK 方法，BlockHound 在这里检测不到任何东西。"不阻塞事件循环"由结构性的测试守护：热路径测试在
-`NonBlocking` 线程上调用 `peek`，断言它的工作（含指标回调）都在调用线程上完成，且对存储、编译线程池和调度器零调用；冷未命中测试断言编译只在
-`cosec-snapshot-compile-*` 线程上发生。会真正阻塞的是 PR-3 的 Redis 存储，BlockHound（或 `RedisRateLimitingOffEventLoopTest` 式的线程断言）在那里引入。
+**关于 BlockHound**：`SnapshotStoreBlockHoundTest` 只监视名字带固定前缀的测试线程，在这些线程上对真实 Redis 调用存储的全部入口、经它写入的写入方，
+以及 `SnapshotSource` 经存储的冷加载，断言没有任何阻塞调用；另一例确认监视确实生效。放行恰好三处，各自只放行一个方法：
 
-PR-3 引入了 BlockHound（`io.projectreactor.tools:blockhound`，`cosec-cocache` 的测试依赖，测试 JVM 加 `-XX:+AllowRedefinitionToAddDeleteMethods`）。
-`SnapshotStoreBlockHoundTest` 只监视名字带固定前缀的测试线程（不加载 Reactor 的集成，所以同一个 JVM 里的其它测试不受影响），在这些线程上对真实 Redis
-调用存储的全部入口、发布者的全部写操作，以及 `SnapshotSource` 经存储的冷加载，断言没有任何阻塞调用；另一例确认监视确实生效。豁免恰好两处，各自只放行
-一个方法：
-
-- logback 控制台 appender 的锁（`OutputStreamAppender.writeBytes`）：测试 JVM 用根构建指定的 `config/logback.xml`，根日志级别 TRACE、输出到控制台。
-  Lettuce 在**发出命令的线程**上记录这条命令（`DefaultEndpoint.write`），所以被监视的调用方线程会在这里等这把锁。这是测试的日志配置，不是被测代码；
+- logback 控制台 appender 的锁：测试 JVM 的日志配置，不是被测代码；
 - 调度线程延时队列的锁（`ScheduledThreadPoolExecutor$DelayedWorkQueue.offer`）：冷加载在调用方线程上挂超时，一次堆插入的有界等待，理由见 §5.3。
+  没有这条放行时，该测试只在这把锁恰好被争用时失败，是不确定的，而不是发现了问题；
+- Lettuce 的 `SharedLock.incrementWriters`：每次写命令都取这把锁计数，做一次比较并交换与一次映射更新，在任何 I/O 之前放开；Lettuce 不提供 BlockHound 集成，
+  并认为这是有意的设计（lettuce#2510）。这条放行也遮住了一种更长的等待：重连时它在这把锁下冲刷断线期间缓冲的全部命令，由 `requestQueueSize` 约束
+  （默认不限），`storage.md` 告诉运维怎样约束它。
 
-与豁免无关的两点：L2 命中时的摘要在 `digestExecutor` 上计算，不在调用方线程上（`RedisSnapshotDocumentStoreTest` 固定），因为它与文档大小成正比；
-发布者的修改、序列化和它自己的日志都在它的调度线程上，不在调用方线程上（`RedisSnapshotPublisherTest` 固定）。
+本地副本命中时的摘要在调用方线程之外计算（它与文档大小成正比）。
 
-**新的失败模式**（编号接 §4.4）：
+**失败模式**（编号接 §4.4）：
 
 | # | 失败模式 | 结果 | 守护（真实实现，不用 mock：CoCache 内存后端与真实 Redis） |
 |---|---|---|---|
-| F1–F6 | 见 §4.4 | — | `SnapshotSourceFailureTest`（CoCache 内存后端，可注入故障的 `RemoteStore`）逐条覆盖 |
-| F7 | 冷加载超过 `cold-load-timeout` | 这个请求 500，加载在后台继续 | `SnapshotColdLoadTimeoutTest` |
-| F8 | 编译队列满 | 冷路径请求 500；已安装的文档不受影响 | `SnapshotCompileRejectedTest` |
-| F9 | 变更通知丢失、乱序，或 CoSec 的监听器先于 CoCache 引擎被回调 | 最迟一个 `revalidate-interval` 之后安装新版本 | `SnapshotInvalidationOrderTest`（固定监听器顺序；另一例打乱顺序，断言重新校验仍能收敛） |
-| F10 | 订阅重置（`onReset`） | 全部已安装的 key 重新加载 | `SnapshotResetTest` |
-| F11 | 修订号回退（Redis 丢写） | 安装回退的版本并告警 | `SnapshotRegressionTest` |
-| F12 | 两个写入方并发修改同一文档 | 后者冲突、重读重试，两次修改都保留 | `SnapshotPublisherConcurrencyTest`（真实 Redis，N 个线程并发 `setPolicy` 不同策略，最终文档包含全部） |
-| F13 | 未转换的 7.x 数据（没有 `"8"` 标记） | 启动失败 | `CoSecSchemaMarkerTest` 增加 7 → 8 的用例 |
-| F14 | 请求在冷加载期间被取消 | 请求不产生决策；共享的加载继续 | `SnapshotCancellationTest` |
-| F15 | 落后时长超过租户的 `fail-closed.max-lag` | 该租户的请求 500，其他租户不受影响 | `SnapshotFailClosedTest`（手动时钟） |
+| F1–F6 | 见 §4.4 | — | `SnapshotSourceFailureTest`（`f1…`、`f3…`、`f4…`、`f6…`、`seenDocumentThatDisappearsFailsClosed`）；F5：`SnapshotFailClosedPropertyTest#aFailedCompilationNeverKeepsAnOlderRevision`（`SNP-8`）；F4 的判定原因：`DocumentInvalidTest`（`SNP-11`） |
+| F7 | 冷加载超过冷加载期限 | 这个请求 503，加载在后台继续 | `SnapshotColdLoadTest#f7ColdLoadTimeoutFailsTheRequestWhileTheLoadGoesOn`（`SNP-17`） |
+| F8 | 编译队列满 | 冷加载等待并再试，至冷加载期限才失败；重载保留已安装的修订（`SNP-4`） | `SnapshotColdLoadTest#f8…` |
+| F9 | 变更通知丢失、乱序，或 CoSec 的监听器先于 CoCache 被回调 | 由变更可读之后第一个到达该文档的一轮装上（`SNP-6`） | `SnapshotRevalidationTest#f9LostNotificationConvergesOnRevalidation`；`SnapshotInvalidationOrderTest`（固定监听器顺序；另一例打乱顺序，断言重新校验仍能收敛） |
+| F10 | 订阅重置（`onReset`） | 全部已安装的 key 重新加载 | `SnapshotRevalidationTest#f10…` |
+| F11 | 修订号回退（Redis 丢写） | 安装回退的版本并告警 | `SnapshotRevalidationTest#f11RegressionIsDetectedAcrossEviction` |
+| F12 | 两个写入方并发修改同一份文档 | 文档头只在读到时的摘要上写，后到的一方冲突，不覆盖（§4.6） | `CoCacheControlStoreTest`（真实 Redis；回复丢失的写读回）；控制面的发布竞态测试（`PreemptionRaceTest`） |
+| F13 | 没有转换的 7.x 数据（没有平台文档） | 每个请求失败即拒绝，实例不就绪（§4.7） | `DocumentSnapshotViewsTest`（`MissingPlatformException`）；`SnapshotReadinessTest` |
+| F14 | 请求在冷加载期间被取消 | 请求不产生决策；共享的加载继续 | `SnapshotColdLoadTest#f14CancelledRequestLeavesTheSharedLoadRunning` |
+| F15 | 视图的落后时长超过租户的 `fail-closed.max-lag` | 该租户的请求 503（除非有 DENY 命中），其他租户不受影响（`SNP-5`） | `SnapshotRevalidationTest#f15FailClosedTenantFailsOnceLagPassesItsBound` |
 
 ---
 
 ## 7. 已知差异
 
-逐层对照（§3.5）和 P5 保证**决策**不变。下面是决策之外、可以观察到的差异。它们在 PR-5 之前不会出现在 `main` 的执法路径上，
-PR-5 起成为唯一的行为，用户在 8.0.0 GA 中第一次看到：
+下面是第 3 阶段相对 7.0、决策之外可以观察到的差异，用户从 7.x 升级到 8.0 时第一次看到（`upgrading.md` 的已知差异一表逐条说明）：
 
 | # | 差异 | 谁能观察到 | 处理 |
 |---|---|---|---|
-| X1 | **Redis 不可用时的行为**：7.0 在 L2 副本到期（默认 5 分钟）后，读到该数据的请求开始 500；本阶段已安装的快照继续使用（F6），落后时长增长并告警，只有开启 `fail-closed` 的租户在上限后 500 | 运维、依赖"Redis 故障即拒绝"的部署 | 接受：这是 RFC 0001 §7.1 已确认的决定。需要旧行为的部署对全部租户开启 `fail-closed`，并把上限设为 5 分钟。写进 `upgrading.md` 和 `storage.md` |
-| X2 | **I/O 形态**：7.0 每个请求在 L2 未命中时读 Redis，L2 每 `localMaxAge` 重新传输整份值；本阶段每个实例每个已加载文档每 `revalidate-interval` 一次条件读（未变时不传正文），只有文档变更时才传输整份文档 | Redis 读次数（更多但更小）、Redis 带宽（由变更决定） | 接受；往返开销用 §4.8 测量 |
-| X3 | **全局策略的顺序**：7.0 全局层按 `GlobalPolicyIndexCache` 返回的集合顺序（Redis 集合的迭代顺序，没有约定）；本阶段按文档顺序，即按 `policyId` 排序 | 多条全局语句同时命中、效果相同时，**哪一条**被记为做出决策的语句（`VerifyContext`、审计的 `source`），决策本身不变 | 接受：7.0 的顺序本来就没有定义，可能因实例而异。门槛中两边读同一份导出数据，按同一顺序装载（§8.2），不受影响。写进 `upgrading.md` |
-| X4 | **错误的异常类型**：读取失败时，7.0 由仓库抛出 `CacheReadException` 等；本阶段抛出 `SnapshotUnavailableException`（原异常作为 `cause`） | 按异常类型判断的自定义错误处理、日志告警规则 | 接受，状态码不变（500）。写进 `upgrading.md` 和 `troubleshooting.md` |
-| X5 | **D4 的情形不再出现**：7.0 中"索引里有 id 却没有内容"让每个请求 500（`MissingPolicyException`，`source = GLOBAL_POLICY_INDEX`）；文档里没有单独的索引，这种状态不可能存在 | 依赖这个异常的告警 | 接受；转换时拒绝这种数据（§4.7） |
-| X6 | **冷启动**：7.0 启动后第一个请求读 Redis；本阶段启动时预热，预热完成前实例不就绪 | 部署编排、启动时长 | 接受，写进 `deployment.md` |
-| X7 | **写 API**：`PolicyRepository.setPolicy` 和对 `AppPermissionCache`/`RolePermissionCache` bean 的写入被 `SnapshotPublisher` 取代 | 写策略、写角色授予的应用代码 | 破坏性变更（Q3、Q4），写进 `upgrading.md` |
-| X8 | **新应用的第一个请求**：7.0 在 L2 未命中时异步读 Redis（毫秒级）；本阶段还要编译整个应用文档 | 冷应用的首个请求延迟 | 接受，用 §4.8 的编译耗时校准 `cold-load-timeout` 和预热列表 |
+| X1 | **Redis 不可用时的行为**：7.0 在 L2 副本到期（默认 5 分钟）后，读到该数据的请求开始 500；8.0 中已安装的文档继续使用（F6），落后时长增长并告警，只有列在 `fail-closed.tenants` 里的租户在上限后 503 | 运维、依赖"Redis 故障即拒绝"的部署 | 接受：这是 RFC 0001 §7.1 已确认的决定。需要旧行为的部署把 `fail-closed.tenants` 设为 `*`，并把上限设为 5 分钟。写在 `upgrading.md` 和 `storage.md` |
+| X2 | **I/O 形态**：7.0 每个请求在 L2 未命中时读 Redis，L2 每 `localMaxAge` 重新传输整份值；8.0 每个实例每份已安装的文档每个再验证间隔一次条件读（未变时不传正文），只有文档变更时才传输整份文档 | Redis 读次数（更多但更小）、Redis 带宽（由变更决定） | 接受；成本写在 `storage.md` |
+| X3 | **全局策略的顺序**：7.0 全局层按 `GlobalPolicyIndexCache` 返回的集合顺序（Redis 集合的迭代顺序，没有约定）；8.0 按文档顺序 | 多条效果相同的语句同时命中时，**哪一条**被记为做出决策的语句（审计的 `source`、`binding`），决策本身不变 | 接受：7.0 的顺序本来就没有定义，可能因实例而异（Q13）。写在 `upgrading.md` |
+| X4 | **错误的形态**：读取失败时，7.0 由仓库抛出 `CacheReadException` 等；8.0 的请求不确定，判定原因是 `SourceUnavailable` 或 `DocumentInvalid`（原异常在其中），响应是 503 的 problem+json | 按异常类型判断的自定义错误处理、日志告警规则 | 接受。写在 `upgrading.md` 和 `troubleshooting.md` |
+| X5 | **D4 的情形不再出现**：7.0 中"索引里有 id 却没有内容"让每个请求 500；文档里没有单独的索引，这种状态不可能存在 | 依赖这个异常的告警 | 接受；转换时拒绝这种数据（§4.7，`GLOBAL_INDEX_WITHOUT_CONTENT`） |
+| X6 | **冷启动**：7.0 启动后第一个请求读 Redis；8.0 启动时预热，预热完成前实例不就绪（§4.3） | 部署编排、启动时长 | 接受，写在 `deployment.md` |
+| X7 | **写 API**：`PolicyRepository.setPolicy` 和对 `AppPermissionCache`/`RolePermissionCache` bean 的写入删除，写文档经控制面（RFC 0007） | 写策略、写角色授予的应用代码 | 破坏性变更（Q3、Q4），写在 `upgrading.md` |
+| X8 | **新应用的第一个请求**：7.0 在 L2 未命中时异步读 Redis（毫秒级）；8.0 还要编译整份应用文档 | 冷应用的首个请求延迟 | 接受；宿主点名的应用在启动时预热（`SNP-20`），其余在冷加载期限内等待 |
 
 ---
 
-## 8. 门槛与等价
+## 8. 门槛与性质
 
-> **2026-10-26：本节整体由 [RFC 0008](0008-conformance-and-direct-build.md) 取代。** P6、P7 作为规范性质保留（RFC 0008 §3.5）；P5 与比较、回放一并取消。以下原文保留，仅供追溯。
+第 3 阶段原计划以离线回放与比较器证明"不改变任何决策"：拿第 2 阶段结束时的实现与读快照的实现在同一份数据上比较。RFC 0008 取消了各阶段的等价门槛，
+8.0 的门槛是一致性套件（RFC 0008 §3）。下面的 P6、P7 作为规范性质保留（RFC 0008 §3.5），P5 随比较一并取消。
 
 ### 8.1 要证明什么，用什么比较
 
-本阶段**不改变任何决策**。要证明的是：对同一份数据和同一个请求，"第 2 阶段结束时的实现"（引擎 + 仓库加载器，下称**基准**）与"本阶段的实现"
-（引擎 + 快照加载器，下称**候选**）给出相同的结果。
-
-比较器沿用 RFC 0002 §8.1 的 `EngineParity` 和 §8.3 的元组（状态、`AuthorizeResult.reason`、做出决策的规则、出错时的异常类名）。问题是 RFC 0002 PR-6
-原计划删除 `EngineParity`、回放工具和 `PolicyTestKit.parity`（§2 I10）。已决定（Q12）修订 RFC 0002 PR-6，修订随本 PR 写进
-[RFC 0002](0002-pure-engine.md) 的 §8.1、§9.2 和 §10 Q14：
-
-- 比较"任意两个 `DecisionAuthorization`"的 `DecisionParity` 留在 `cosec-core` 的测试夹具中（`testFixtures`，不进发布的 jar）；RFC 0002 PR-4 已直接以这个名字和形状引入它，不再经过 `EngineParity`；
-- 回放任务 `engineReplay` 改名为 `decisionReplay`，用参数选择两边的实现；
-- `PolicyTestKit.parity` 照常删除（它是公共 API）。
-
-异常类名一项对本阶段有一个已知的固定差异（X4）：比较器对"两边都出错"的样本比较 `cause` 链中最内层的异常类名。
+第 3 阶段要证明：对同一份数据和同一个请求，"引擎 + 仓库加载器"与"引擎 + 快照加载器"给出相同的结果，比较器是 RFC 0002 的 `DecisionParity`（Q12）。
+比较器、回放任务与 7.0 形状的文档随切换删除（RFC 0008 §4.2）。今天快照这一层要证明的是 §6 的失败模式与 §8.4 的两条性质。
 
 ### 8.2 语料
 
-| 来源 | 内容 | 何时跑 |
-|---|---|---|
-| 现有测试 | §6 守护列中的测试，以及 `SimpleAuthorizationTest`、`InRoleSpaceTest`、`PathVariableScopeTest`、`ResourceCheckTest`、`RootPrincipalIdentityTest`、`AuthorizationCheckerTest`、`ShadowAuthorizationTest`、`ShadowAppPermissionTest`、`MissingPolicyFailClosedTest`、`RolePermissionScopeTest`、`WebAdapterParityTest`，改为参数化：仓库来源 / 快照来源各跑一遍 | 每次 `check`，直到 PR-6 删除仓库来源 |
-| `PolicyTestKit` 套件 | `core/core/src/test/resources/cosec-policy-test/` 下的套件，经 `DecisionParity` 两边各跑一遍 | 每次 `check` |
-| 随机生成 | 复用 RFC 0002 §8.2 的生成器，另加：数据先写进内存仓库，同时经 `CoSec7xReader` 的转换逻辑写成快照文档 | `check` 跑固定种子 2,000 例；`-PparityIterations=1000000` 手动跑百万例，PR-5 前必须跑过一次 |
-| 真实数据离线回放 | RFC 0002 §8.2.1 的同一批导出（策略、角色权限、≥ 100 万条、≥ 7 天的请求），不需要重新导出 | PR-4 合入之后、PR-5 合入之前 |
-
-**回放怎么装载两边**：基准把 `policies.json`、`app-role-permissions.json` 装进内存仓库（RFC 0002 回放工具已有的做法）；候选把同两个文件经转换逻辑
-写成快照文档，装进内存 `SnapshotDocumentStore`，再经 `SnapshotSource` 加载。两边的全局策略按同一顺序装载（X3）：回放工具先按 `policyId` 排序，再分别装进两边。
-
-**回放覆盖不到的**：时序和运行时行为，包括失效通知、重新校验、冷加载、LRU、线程、Redis 故障。它们由 §6 的测试（CoCache 内存后端和真实 Redis）
-覆盖，并留到目标架构达成后的 RC 或预发环境验证（RFC 0001 §6）。
+第 3 阶段的语料是参数化的现有测试（仓库来源 / 快照来源各跑一遍）、`PolicyTestKit` 套件、随机生成的 7.x 数据与真实部署的离线回放（RFC 0002 §8.2.1 的导出）。
+真实数据的回放没有执行。今天的语料是一致性套件的场景（`test/conformance`）与快照源的性质测试。
 
 ### 8.3 判定
 
-- 离线语料与随机用例：零差异。任何差异要么修候选，要么证明是基准的缺陷，登记在附录 A 并由维护者确认。
-- 离线回放：每个部署 `mismatch` 为 0；`candidate_error` 为 0，或者每一条都对应基准同样出错的样本。§7 的 X1–X8 不属于决策差异，不在比较之内。
-- 发现差异并修复后，对所有部署的导出数据从零重跑。
-- 证据只记录计数和哈希（RFC 0002 §8.2.1 的数据处理规则不变）。
+第 3 阶段的判定（零差异，差异要么修候选，要么作为基准的缺陷登记在附录 A）随门槛取消；附录 A 始终为空。
 
 ### 8.4 性质测试
 
-沿用 RFC 0002 §8.4 的写法（固定种子的 `kotlin.random.Random`，不引入新的测试库）：
-
-- **P5 快照加载与仓库加载结构相同**：对任意生成的 7.x 数据和请求，`SnapshotPolicySetLoader` 与 `PolicySetLoader` 产生的 `PolicySet` 结构相等（§3.5 列出的各项）。
-  它比比较决策更强：两边的规则序列一致，所以任何规则集上的决策都一致，包括随机生成器没有碰到的规则组合。
-- **P6 安装单调**：对任意交错的"通知 / 加载完成 / 重新校验"序列（用可控的 `SnapshotDocumentStore` 和手动时钟模拟），同一个 key 的安装顺序等于加载开始顺序，
-  最终安装的修订等于存储中的最终修订。
-- **P7 快照一致**：一次评估中用到的每个文档只来自一个修订（测试用的文档在编译时给每个规则组打上修订号，评估后检查 trace 中出现的修订号唯一）。
+- **P5 快照加载与仓库加载结构相同**：对任意生成的 7.x 数据和请求，快照加载器与仓库加载器产生的规则集结构相等。随比较器取消。
+- **P6 安装单调**（`SNP-2`）：对任意交错的"发布 / 通知丢失 / 读取 / 加载完成 / 再验证"序列，同一个 key 的安装顺序等于加载开始顺序，
+  最终安装的修订等于存储中的最终修订。守护：`SnapshotInstallOrderPropertyTest`。
+- **P7 快照一致**（`SNP-1`）：一次评估中读到的每份文档只来自一个修订。守护：`SnapshotConsistencyPropertyTest`；`Snapshot`、`SnapshotSet` 的每个条目都不可变。
 
 ---
 
