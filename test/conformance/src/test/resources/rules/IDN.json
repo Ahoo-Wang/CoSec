@@ -473,6 +473,7 @@
         "cocache:SessionBoundTest#a principal keeps the sessions that began last, and the earliest is deleted",
         "cocache:SessionBoundTest#the bound is per principal and per tenant",
         "cocache:SessionBoundTest#the index lives as long as the longest session it counts"
+      ]
     },
     {
       "id": "IDN-37",
