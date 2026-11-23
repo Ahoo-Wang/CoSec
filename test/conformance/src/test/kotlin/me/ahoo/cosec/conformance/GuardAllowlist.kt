@@ -389,6 +389,9 @@ object GuardAllowlist {
             "runtime:LocalRateLimiterCountsTest#a flood of other buckets keeps a live count",
             "runtime:LocalRateLimiterBoundsTest#a bucket is removed only once it can no longer change an answer",
             "runtime:LocalRateLimiterBoundsTest#a bucket removed while held is not counted into",
+            // OBL-5, DR1-C-10: a time behind a bucket's window never moves it back.
+            "runtime:LocalRateLimiterCountsTest#a late time changes no answer of the window after it",
+            "runtime:LocalRateLimiterCountsTest#a clock set back keeps the window it reached",
             "runtime:RateLimitObligationTest#aFullLocalLimiterIsOneThatCannotCount",
             "runtime:LocalRateLimiterBoundsTest#a flood on one rule leaves the other rules counting and admitting",
             "runtime:LocalRateLimiterBoundsTest#a limiter full in total refuses new buckets of every rule",
