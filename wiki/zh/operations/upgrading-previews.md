@@ -27,6 +27,21 @@ description: "每个 8.0 预览版（alpha 与 beta）到下一个之间的变�
 
 ## 从 8.0.0-beta.7 升级 {#from-8-0-0-beta-7}
 
+- **破坏性变更：`cosec.key-prefix` 里不能有 `:`**（`SNP-9`，DR1-D-4）。受影响的是前缀里含有字母、数字、`_`、`.`、`-`
+  以外字符的部署，用一对花括号包住整个前缀的除外（hash tag `{cosec}` 仍然可用）。
+  - 像 `a` 和 `a:b` 这样的前缀会嵌套，同一个 Redis 上的两个部署因此共用 key。现在这样的前缀会让启动失败，信息里点名它含有什么。
+  - **末尾的 `:`**（`cosec:`）原来在使用前就被去掉了，所以 key 本来就是不带它的那些：删掉 `:` 即可。
+  - **中间的 `:`**（`cosec:prod`）：key 都在它之下，需要迁到现在允许的前缀（`cosec-prod`）。
+    1. 停止所有写入方：控制面宿主（或内嵌控制面的 IAM）、`cosec-migrate`，以及网关（登出会写吊销记录）。
+    2. 把 `<old>:` 下的每个 key 复制到 `<new>:` 下的同名 key，保留 TTL（`DUMP` 加 `RESTORE ... ABSTTL`，单节点上也可以
+       `RENAME`；集群上只能在同一个 hash slot 内）。
+    3. 所有进程以 `cosec.key-prefix=<new>` 启动，然后删除旧 key。
+- **破坏性变更：吊销表的 `local-max-age` 最多 30 秒**（`IDN-26`，DR1-D-3）。受影响的是把
+  `cosec.authentication.revocation.cache.local-max-age` 设得超过 `30s` 的部署，以及设置了 `RevokedTokenCache` 或
+  `RevokedSubjectCache` 本地最长寿命的 `cocache.*` 配置项或定制器。
+  - 原来本地持有的吊销在失效消息丢失后能活那么久，于是之后被提高的主体吊销会被读成旧的那个。现在超过 30 秒的值会让启动失败，
+    值来自 `cosec.authentication.revocation.cache.local-max-age` 时信息里点名它；任何层仍可以把它调小。
+  - 迁移方式：删掉这个设置，或者写 `30s` 及以下。默认值 `30s` 不变。
 - **控制面的文档缓存是堆的一份**（`STA-12`，DR1-F-5）。受影响的：控制面宿主的内存。`simulate`、`explain`、`analyze`
   与锁死检查共用每个宿主一个缓存，大小是快照文档那四分之一堆的三分之一（2 GiB 时约 170 MB）；此前是两个各固定 64 MB 的缓存。
   宿主的两个快照源现在各持有那四分之一的三分之一，此前各一半：2 GiB 时每个约 4,800 个典型租户，此前 7,200。要持有更多就给控制面宿主更多的堆；别无改动。

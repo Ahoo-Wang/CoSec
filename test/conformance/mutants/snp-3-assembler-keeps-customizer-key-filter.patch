@@ -3,11 +3,11 @@
 # Tests: :spring-boot:test --tests me.ahoo.cosec.spring.boot.authorization.cache.StoreOfRecordOverrideTest
 
 diff --git a/backends/cocache/src/main/kotlin/me/ahoo/cosec/cocache/CacheLocks.kt b/backends/cocache/src/main/kotlin/me/ahoo/cosec/cocache/CacheLocks.kt
-index 2ac7b55e..364cb268 100644
+index be5e7725d..374424a34 100644
 --- a/backends/cocache/src/main/kotlin/me/ahoo/cosec/cocache/CacheLocks.kt
 +++ b/backends/cocache/src/main/kotlin/me/ahoo/cosec/cocache/CacheLocks.kt
-@@ -51,7 +51,7 @@ internal object CacheLocks {
-     private val NOT_REVOKED_FOR: Duration = Duration.ofSeconds(RevokedTokenCache.MISSING_TTL_SECONDS)
+@@ -65,7 +65,7 @@ internal object CacheLocks {
+     }
  
      fun of(cacheName: String, readOnly: Boolean = false): Locks = Locks.builder(LOCKED_BY).apply {
 -        lockLayout(*LayoutField.entries.toTypedArray())

@@ -117,7 +117,7 @@ class DeploymentKeyPrefixTest {
         }
         // The social login's OAuth states, whose configuration needs a login provider to run.
         val states = CoSecSocialAuthenticationAutoConfiguration(SocialAuthenticationProperties())
-            .authStateCache(StringRedisTemplate(), CoSecProperties(keyPrefix = "$prefix:"))
+            .authStateCache(StringRedisTemplate(), CoSecProperties(keyPrefix = prefix))
         states.field<String>("keyPrefix").assert().isEqualTo("$prefix:oauth:state:")
     }
 

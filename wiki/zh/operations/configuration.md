@@ -134,7 +134,7 @@ CoSec 没有哪个配置项叫这些名字，而已知的 key 无论来源都不
 
 | 配置项 | 类型 | 默认值 | 作用 |
 |---|---|---|---|
-| `cosec.key-prefix` | string | `cosec` | 每个 Redis key 的前缀，去掉末尾的 `:`。同一部署的所有服务、它的控制面以及 `cosec-migrate --key-prefix` 使用同一个值。使用 Redis 限流器时，自带 hash tag 的前缀（如 `{cosec}`）让所有限流计数器落在 Redis Cluster 的同一个 slot 上（[限流](../policies/rate-limiting.md)）。 |
+| `cosec.key-prefix` | string | `cosec` | 每个 Redis key 的前缀：字母、数字、`_`、`.` 和 `-`（`cosec`），或者用一对花括号整个包住这样的串，即 Redis Cluster 的 hash tag（`{cosec}`）。其他任何形式，包括含 `:` 的，都会让启动失败，这样任何部署的前缀都不会嵌套在另一个部署的前缀里（`SNP-9`，[故障排查](./troubleshooting.md#startup-fails-on-the-key-prefix)）。同一部署的所有服务、它的控制面以及 `cosec-migrate --key-prefix` 使用同一个值。使用 Redis 限流器时，自带 hash tag 的前缀（如 `{cosec}`）让所有限流计数器落在 Redis Cluster 的同一个 slot 上（[限流](../policies/rate-limiting.md)）。 |
 
 ## 管道 {#pipeline}
 
@@ -279,7 +279,7 @@ CoSec 没有哪个配置项叫这些名字，而已知的 key 无论来源都不
 
 | 配置项 | 类型 | 默认值 | 作用 |
 |---|---|---|---|
-| `cosec.authentication.revocation.cache.*` | [本地缓存设置](#local-cache-settings) | `local-max-age: 30s` | 吊销查询的本地副本（`RevokedTokenCache` 和 `RevokedSubjectCache`）。只有实例在最近 30 秒内见过的令牌或主体才有条目，未命中就是请求路径上的一次 Redis 读取。每张表容纳多少条不是配置项：堆的八分之一，按每个令牌 290 字节、每个主体 230 字节计数（[由计算得出，而非配置](#computed-not-configured)、[为 SaaS 网关定容量](./deployment.md#what-a-replica-holds)）。 |
+| `cosec.authentication.revocation.cache.*` | [本地缓存设置](#local-cache-settings) | `local-max-age: 30s` | 吊销查询的本地副本（`RevokedTokenCache` 和 `RevokedSubjectCache`）。`local-max-age` 最多 `30s`：更长的值会让启动失败，因为失效消息丢失后，它会让本地一直保留已被提高的吊销所替换的旧吊销（`IDN-26`）。只有实例在最近 30 秒内见过的令牌或主体才有条目，未命中就是请求路径上的一次 Redis 读取。每张表容纳多少条不是配置项：堆的八分之一，按每个令牌 290 字节、每个主体 230 字节计数（[由计算得出，而非配置](#computed-not-configured)、[为 SaaS 网关定容量](./deployment.md#what-a-replica-holds)）。 |
 
 ### 本地缓存设置 {#local-cache-settings}
 

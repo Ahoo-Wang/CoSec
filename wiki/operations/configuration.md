@@ -174,7 +174,7 @@ It replaced `cosec.authorization.snapshot.key-prefix`, `cosec.authorization.cach
 
 | Property | Type | Default | Effect |
 |---|---|---|---|
-| `cosec.key-prefix` | string | `cosec` | The prefix of every Redis key, with a trailing `:` removed. Every service of one deployment, its control plane and `cosec-migrate --key-prefix` use the same value. With the Redis rate limiter, a prefix with a hash tag of its own, such as `{cosec}`, puts every rate limit counter on one Redis Cluster slot ([Rate limiting](../policies/rate-limiting.md)). |
+| `cosec.key-prefix` | string | `cosec` | The prefix of every Redis key: letters, digits, `_`, `.` and `-` (`cosec`), or such a string wrapped whole in braces, a Redis Cluster hash tag (`{cosec}`). Anything else, a `:` included, fails startup, so that no deployment's prefix nests inside another's (`SNP-9`, [Troubleshooting](./troubleshooting.md#startup-fails-on-the-key-prefix)). Every service of one deployment, its control plane and `cosec-migrate --key-prefix` use the same value. With the Redis rate limiter, a prefix with a hash tag of its own, such as `{cosec}`, puts every rate limit counter on one Redis Cluster slot ([Rate limiting](../policies/rate-limiting.md)). |
 
 ## Pipeline
 
@@ -326,7 +326,7 @@ Snapshot documents have their own properties ([Snapshot](#snapshot)).
 
 | Property | Type | Default | Effect |
 |---|---|---|---|
-| `cosec.authentication.revocation.cache.*` | [local cache settings](#local-cache-settings) | `local-max-age: 30s` | Local copy of revocation lookups (`RevokedTokenCache` and `RevokedSubjectCache`). An entry exists only for a token or principal the instance saw in the last 30 seconds, and a miss is a Redis read on the request path. How many entries each holds is not a setting: an 8th of the heap, counted at 290 bytes a token and 230 bytes a principal ([Computed, not configured](#computed-not-configured), [Sizing a SaaS gateway](./deployment.md#what-a-replica-holds)). |
+| `cosec.authentication.revocation.cache.*` | [local cache settings](#local-cache-settings) | `local-max-age: 30s` | Local copy of revocation lookups (`RevokedTokenCache` and `RevokedSubjectCache`). `local-max-age` is at most `30s`: a longer one fails startup, since past a lost invalidation it would keep an older revocation that a raised one replaced (`IDN-26`). An entry exists only for a token or principal the instance saw in the last 30 seconds, and a miss is a Redis read on the request path. How many entries each holds is not a setting: an 8th of the heap, counted at 290 bytes a token and 230 bytes a principal ([Computed, not configured](#computed-not-configured), [Sizing a SaaS gateway](./deployment.md#what-a-replica-holds)). |
 
 ### Local cache settings
 
