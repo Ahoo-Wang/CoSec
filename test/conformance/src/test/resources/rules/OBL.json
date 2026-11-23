@@ -69,7 +69,9 @@
         "runtime:LocalRateLimiterBoundsTest#a limiter full in total refuses new buckets of every rule",
         "runtime:LocalRateLimiterBoundsTest#a request that loses the admission of its key counts into the winner's bucket",
         "runtime:LocalRateLimiterBoundsTest#the counters equal what the limiter holds while sweeps run",
-        "runtime:LocalRateLimiterBoundsTest#two flooded rules of one tenant fill only its document's share"
+        "runtime:LocalRateLimiterBoundsTest#two flooded rules of one tenant fill only its document's share",
+        "runtime:LocalRateLimiterBucketBytesTest#a bucket retains a bounded number of bytes, whatever the length of the key a client chose",
+        "engine:RateLimitObligationTest#a key value past the bound names a bucket of bounded length, its own"
       ],
       "pending": null
     }

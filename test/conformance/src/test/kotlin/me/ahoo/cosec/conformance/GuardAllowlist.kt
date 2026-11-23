@@ -392,6 +392,9 @@ object GuardAllowlist {
             "runtime:LocalRateLimiterBoundsTest#a request that loses the admission of its key counts into the winner's bucket",
             "runtime:LocalRateLimiterBoundsTest#the counters equal what the limiter holds while sweeps run",
             "runtime:LocalRateLimiterBoundsTest#two flooded rules of one tenant fill only its document's share",
+            // OBL-6, DR1-C-1: a bucket's bytes are bounded too, whatever the length of the key a client chose.
+            "runtime:LocalRateLimiterBucketBytesTest#a bucket retains a bounded number of bytes, whatever the length of the key a client chose",
+            "engine:RateLimitObligationTest#a key value past the bound names a bucket of bounded length, its own",
             "social:JustAuthProviderTest#a state is used once",
             "social:JustAuthProviderTest#another browser's state is refused",
             "cocache:RedisSocialStateStoreTest#aStateIsTakenOnce",

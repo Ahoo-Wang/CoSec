@@ -50,6 +50,13 @@ Which preview of the library may run behind which preview of the gateway image: 
   approve a change or be the trust root, as for `api-key`. Affected: only an authenticator that used that name. Rename
   its method if its principals are people; otherwise nothing to do
   ([Extending CoSec](../architecture/extending.md)).
+- **A rate limit key value longer than 256 characters names its bucket by its hash** (`OBL-6`, DR1-C-1). Affected:
+  rules whose `key` reads values that long, nearly always a header a client chooses. Such a bucket is now
+  `h:<sha-256>` where it was `k:<value>` ([Rate limiting](../policies/rate-limiting.md#keys)), so its count starts
+  again once: on Redis the old key is no longer read and expires after two windows; the local limiter's counts are the
+  instance's anyway. While a rolling upgrade has both versions serving, such a value counts in two buckets, one per
+  version, so it gets at most twice its limit until the last instance is upgraded. Values of 256 characters or fewer
+  keep their buckets and counts. Nothing to change.
 - **A cancelled `HttpControlService` call now ends its request on the host** (`CTL-82`, #1893). Affected: nothing to
   change. When the coroutine of a call through `HttpControlService` is cancelled, the call closes its HTTP exchange and
   the control-plane host (WebFlux) cancels the request. Before, the request stayed on the host until the call's own
