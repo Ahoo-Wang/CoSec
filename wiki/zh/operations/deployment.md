@@ -219,9 +219,9 @@ spring:
 | 目录 | 用途 | 内容 |
 |---|---|---|
 | `base/` | 供 overlay 在其上构建 | Deployment 和一个 Service（80 端口转发到容器的 8080；管理端口 8081 是 Service 不发布的容器端口）。`application.yaml`（路由和上面的 `cosec.*` 设置）生成一个 ConfigMap，挂载为 `/opt/cosec-gateway-server/config/application.yaml`，追加在镜像默认值之后读取；其中的 CORS 来源、发现列表和路由只是演示，请替换；它的名字带有文件的哈希，所以修改文件会滚动更新 pod。镜像是 `ghcr.io/ahoo-wang/cosec-gateway`，标签在 `images:` 中设置。每个网关 768Mi，堆 256 MiB。 |
-| `control/` | 供 overlay 在其上构建 | 控制面宿主（见[上文](#the-control-plane-host)）：一个 Deployment（`strategy: Recreate`，一个副本，探针在管理端口上）、两个 Service（`cosec-control`，80 转发到 8080，供网关的路由使用；`cosec-control-service`，80 转发到 8082，供你点名的服务使用；都不发布 8081）、`application.yaml` 的一个 ConfigMap，以及**每个端口一条 NetworkPolicy**。Deployment 设置 `COSEC_PIPELINE_IDENTITY_ONLYTRUSTEDCALLERSCANREACH=true`，而这些策略是同一个 kustomization 的资源，因为声明只有在它们存在时才属实。镜像是 `ghcr.io/ahoo-wang/cosec-control`，标签在 `images:` 下，发布时与网关的一起移动。 |
-| `overlays/dev/` | 在任何集群上试用 CoSec，包括 kind 和 minikube | 命名空间 `cosec-dev`，一个使用 base 资源配置的网关，使用自己资源配置（1536Mi，768 MiB 堆）、在同一个 Redis 上的控制面宿主，以及一个单实例 Redis 7.4，`maxmemory-policy noeviction`，没有密码。Redis 的数据放在 `emptyDir` 中，容器重启后还在，pod 删除后就没了：删除 Redis 的 pod 就删除了文档。 |
-| `overlays/production/` | 你自己的 overlay 的起点 | 命名空间 `cosec`；你的 Redis，地址来自 ConfigMap `cosec-gateway-redis`（主机和端口；Redis Cluster 则用 `SPRING_DATA_REDIS_CLUSTER_NODES`），凭证来自 Secret `cosec-redis-secret`（`password`，ACL 用户再加 `username`）；按 CPU 伸缩的 HorizontalPodAutoscaler，2 到 10 个网关（目标为每个网关请求的 1 CPU 的 70 %；需要 metrics server）；一个 PodDisruptionBudget，一次只驱逐一个网关，未就绪的网关总是可以驱逐，所以排空节点从不等待平台文档；一个 NetworkPolicy，放行任何来源访问 8080 端口、只放行 `monitoring` 命名空间访问管理端口；每个网关 3200Mi，堆 2 GiB，分散到不同节点。控制面宿主有自己的 Redis 账户（Secret `cosec-control-redis-credentials`，绝不是网关的那个）、3200Mi 和 2 GiB 堆，以及一个在你运行第二个副本后才起作用的中断预算。 |
+| `control/` | 供 overlay 在其上构建 | 控制面宿主（见[上文](#the-control-plane-host)）：一个 Deployment（`strategy: Recreate`，一个副本，探针在管理端口上）、两个 Service（`cosec-control`，80 转发到 8080，供网关的路由使用；`cosec-control-service`，80 转发到 8082，供你点名的服务使用；都不发布 8081）、`application.yaml` 的一个 ConfigMap、**每个端口一条 NetworkPolicy**，以及边界检查：Job `cosec-control-boundary-check`，当一个没有任何策略放行的 pod 连到宿主时失败，以及它用来找到这些 pod 的无头 Service `cosec-control-pods`（没有端口）。Deployment **不**设置 `COSEC_PIPELINE_IDENTITY_ONLYTRUSTEDCALLERSCANREACH=true`：这些策略只在网络插件强制执行它们的地方才让它属实，这一点没有哪个文件能说明，所以由你应用的 overlay 在检查旁边声明它。镜像是 `ghcr.io/ahoo-wang/cosec-control`，标签在 `images:` 下，发布时与网关的一起移动。 |
+| `overlays/dev/` | 在一个只属于你、没有其他工作负载的集群上试用 CoSec；**在共享集群上不安全** | 它声明了控制面宿主的边界，而在网络插件不强制执行这些策略的集群上（很多插件不会；kind 的 kindnet 在较新的版本中会），这个声明是假的：任何 pod 都能连到宿主并声称自己是平台管理员。边界检查在那里会失败，并说明原因。命名空间 `cosec-dev`，一个使用 base 资源配置的网关，使用自己资源配置（1536Mi，768 MiB 堆）、在同一个 Redis 上的控制面宿主，以及一个单实例 Redis 7.4，`maxmemory-policy noeviction`，没有密码。Redis 的数据放在 `emptyDir` 中，容器重启后还在，pod 删除后就没了：删除 Redis 的 pod 就删除了文档。 |
+| `overlays/production/` | 你自己的 overlay 的起点 | 命名空间 `cosec`；你的 Redis，地址来自 ConfigMap `cosec-gateway-redis`（主机和端口；Redis Cluster 则用 `SPRING_DATA_REDIS_CLUSTER_NODES`），凭证来自 Secret `cosec-redis-secret`（`password`，ACL 用户再加 `username`）；按 CPU 伸缩的 HorizontalPodAutoscaler，2 到 10 个网关（目标为每个网关请求的 1 CPU 的 70 %；需要 metrics server）；一个 PodDisruptionBudget，一次只驱逐一个网关，未就绪的网关总是可以驱逐，所以排空节点从不等待平台文档；一个 NetworkPolicy，放行任何来源访问 8080 端口、只放行 `monitoring` 命名空间访问管理端口；每个网关 3200Mi，堆 2 GiB，分散到不同节点。控制面宿主有自己的 Redis 账户（Secret `cosec-control-redis-credentials`，绝不是网关的那个）、3200Mi 和 2 GiB 堆，一个在你运行第二个副本后才起作用的中断预算，以及为强制执行这些策略的集群所做的边界声明（`control-deployment-patch.yaml`）。 |
 
 ### 部署 {#deploying}
 
@@ -239,9 +239,11 @@ spring:
    镜像标签放在你自己的 overlay 中，建在这个 overlay 之上：用
    `configMapGenerator: [{name: cosec-gateway-config, behavior: replace, files: [application.yaml]}]` 替换配置，
    并在 `images:` 中设置标签。
-3. **应用 overlay：**
+3. **应用 overlay**，先删除边界检查的 Job：Job 的 pod 模板不可变，换了镜像标签的 apply 会在它上面失败；已经完成的 Job 不会再运行，
+   它给出的结论会是上一次的：
 
    ```bash
+   kubectl -n cosec-dev delete job cosec-control-boundary-check --ignore-not-found
    kubectl apply -k k8s/overlays/dev
    ```
 
@@ -252,6 +254,20 @@ spring:
    `kubectl -n cosec-dev port-forward svc/redis 6379` 连到它的 Redis，再用
    `cosec-migrate publish --to-redis redis://localhost:6379 --in <dir>` 发布（[最初的文档](./storage.md#the-first-documents)）。
 5. **发一个请求试试**，通过 `kubectl -n cosec-dev port-forward svc/cosec-gateway 8080:80`。
+6. **生产环境：检查控制面宿主的边界。** overlay 声明除了网关和你点名的服务之外什么都连不到宿主，Job
+   `cosec-control-boundary-check` 在你的集群上检验它：从一个没有任何策略放行的 pod，连每个 pod 的每个端口：
+
+   ```bash
+   kubectl -n cosec delete job cosec-control-boundary-check --ignore-not-found
+   kubectl apply -k k8s/overlays/production
+   kubectl -n cosec wait --for=condition=complete job/cosec-control-boundary-check --timeout=900s
+   ```
+
+   每次应用都这样做，先删除，这样等待给出的才是这一次应用的结论。
+
+   它失败时，`kubectl logs job/cosec-control-boundary-check` 会说出连上的端口：策略没有被强制执行，声明是假的，所以在它们
+   被强制执行之前，把声明从你的 overlay 中拿掉（宿主随之停止）。宿主十分钟内一直没有监听，或者插件拒绝而不是丢弃连接时，
+   它也会以“无法判断”失败；这种情况请手动检查。
 
 ### 清单设置了什么 {#what-the-manifests-set}
 
@@ -268,7 +284,7 @@ spring:
 - **Actuator。** 在管理端口上（`management.server.port: 8081`，容器端口 `management`，Service 不发布它）暴露 `health` 和 `prometheus`；能读取和修改路由的 `gateway` 端点处于关闭状态（`management.endpoint.gateway.access: none`）。在 WebFlux 宿主上，管理端口不只是 actuator：Spring Boot 的管理服务器也会在那里提供应用自己的 `RouterFunction`（CoSec 自己的路由，控制 API 和登录路由，在那里是 `404`，`CTL-69`）。CoSec 授权的是网关的路由，不是它的 actuator 端点：production 的 NetworkPolicy 只放行来自 `monitoring` 命名空间的管理端口（改成你的 Prometheus 所在处），dev overlay 没有策略。
 - **关闭。** `preStop` 先暂停 5 秒，让 Service 先摘掉这个 pod；`terminationGracePeriodSeconds: 45` 覆盖这段暂停、
   Spring 的优雅关闭（最多 30 秒）和决策监听器的排空（[关闭](#shutdown)）。
-- **控制面宿主的网络策略。** 三条，每个端口一条，选中它的 pod（`cosec-control-operators`、`cosec-control-services`、`cosec-control-management`），让每个端口只放行一个来源，其他连接一律拒绝：网关的 pod（`app.kubernetes.io/name: cosec-gateway`，在该策略所在的命名空间里；网关在别的命名空间时，需要上面示例中的 `namespaceSelector`）到 8080；你点名的服务到 8082；`monitoring` 命名空间到 8081。**按出厂配置，服务策略点名的是一个不存在的命名空间和标签，所以它不放行任何人**：把两者都改成调用控制面的每个服务，在它自己的命名空间里，每个服务一个 `from` 条目，并把每个服务都视为与控制面本身同等可信。它们需要一个会强制执行 `NetworkPolicy` 的网络插件，而 kind 的不会：在会强制执行的集群上测试，别的标签的 pod 连不上这三个端口中的任何一个。清单没有设置出站策略。
+- **控制面宿主的网络策略。** 三条，每个端口一条，选中它的 pod（`cosec-control-operators`、`cosec-control-services`、`cosec-control-management`），让每个端口只放行一个来源，其他连接一律拒绝：网关的 pod（`app.kubernetes.io/name: cosec-gateway`，在该策略所在的命名空间里；网关在别的命名空间时，需要上面示例中的 `namespaceSelector`）到 8080；你点名的服务到 8082；`monitoring` 命名空间到 8081。**按出厂配置，服务策略点名的是一个不存在的命名空间和标签，所以它不放行任何人**：把两者都改成调用控制面的每个服务，在它自己的命名空间里，每个服务一个 `from` 条目，并把每个服务都视为与控制面本身同等可信。它们需要一个会强制执行 `NetworkPolicy` 的网络插件，很多插件不会：Job `cosec-control-boundary-check` 在你的集群上检验别的标签的 pod 连不上任何一个 pod 的这三个端口中的任何一个，边界声明属于 overlay，而不是 `control/`。清单没有设置出站策略。
 - **JVM 参数**，通过 `JAVA_OPTS` 传入：下面的内存大小；`-XX:+ExitOnOutOfMemoryError`，让耗尽内存的 JVM 被重启；`-Djava.net.preferIPv4Stack=true`（因为
   [netty#16082](https://github.com/netty/netty/issues/16082)）。镜像不启动 JMX agent。
 
@@ -481,7 +497,8 @@ gh workflow run system-test.yml --ref main -f ref=<commit>
 的清单：dev overlay 在没有其演示路由所指的 Service 时也能启动；`cosec-migrate publish` 之前 Pod 存活但不在 Service 中，之后变为就绪；
 做出一次决策（`401`、`403`，以及只在缺失的后端失败的放行）；从另一个 Pod 读取管理端口的 Prometheus 端点，而 Service 不发布该端口；
 供网关后端服务使用的示例 `NetworkPolicy` 通过 API 服务器的校验，并选中该服务的 Pod 与网关的 Pod。最后一项只说明该策略写的是它该写的，
-并不证明它被强制执行：kind 的网络插件不强制执行 `NetworkPolicy`，请像示例开头所说的那样在你自己的集群上测试强制执行。
+并不证明它被强制执行：请像示例开头所说的那样在你自己的集群上测试强制执行。控制面宿主的边界检查在那里双向运行：策略在位时它必须通过
+（kind 的 kindnet 会强制执行它们），策略删除后重新运行一次，它必须连上宿主并失败。
 
 它不衡量性能（[JMH](../architecture/overview.md#measuring)）、网关与其后端服务之间的版本差异，也不覆盖 Redis Cluster、TLS 和按实例的用户。
 

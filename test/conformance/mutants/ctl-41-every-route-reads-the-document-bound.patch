@@ -1,0 +1,17 @@
+# Rule: CTL-41
+# Mutant: every control route reads the document bound, so a body nobody authorized is parsed whole
+# Tests: :control:test --tests me.ahoo.cosec.control.api.ControlBodyBoundTest
+
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/api/ControlHttpSupport.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/api/ControlHttpSupport.kt
+index a0397e991..86f751e65 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/api/ControlHttpSupport.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/api/ControlHttpSupport.kt
+@@ -50,7 +50,7 @@ internal object ControlHttpSupport {
+      */
+     inline fun post(
+         request: ControlHttpRequest,
+-        maxBytes: Long = ControlDerived.SMALL_BODY_BYTES,
++        maxBytes: Long = ControlDerived.MAX_BODY_BYTES,
+         block: (JsonNode) -> ControlHttpResponse,
+     ): ControlHttpResponse {
+         if (request.method != POST) return methodNotAllowed()

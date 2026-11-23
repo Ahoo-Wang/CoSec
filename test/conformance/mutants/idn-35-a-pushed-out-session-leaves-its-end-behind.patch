@@ -1,0 +1,17 @@
+# Rule: IDN-35
+# Mutant: the in-memory store deletes a pushed-out record but not its end, so a login loop grows the sweep's order without bound
+# Tests: :spi:test --tests me.ahoo.cosec.spi.token.InMemorySessionBoundTest
+
+diff --git a/core/spi/src/main/kotlin/me/ahoo/cosec/spi/token/InMemoryTokenFamilyStore.kt b/core/spi/src/main/kotlin/me/ahoo/cosec/spi/token/InMemoryTokenFamilyStore.kt
+index 8e5054900..551236b9f 100644
+--- a/core/spi/src/main/kotlin/me/ahoo/cosec/spi/token/InMemoryTokenFamilyStore.kt
++++ b/core/spi/src/main/kotlin/me/ahoo/cosec/spi/token/InMemoryTokenFamilyStore.kt
+@@ -124,7 +124,7 @@ class InMemoryTokenFamilyStore(
+             Duration.between(at, family.expiresAt).coerceAtLeast(Duration.ZERO),
+             TokenFamilyStore.SESSIONS_PER_PRINCIPAL,
+         )
+-        pushedOut.forEach { id -> families.remove(id)?.let { forget(id, it) } }
++        pushedOut.forEach { id -> families.remove(id) }
+         var created = false
+         families.compute(family.id) { _, existing ->
+             if (existing != null && existing.endsAt.isAfter(now())) {

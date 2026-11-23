@@ -441,7 +441,22 @@ cosec.pipeline.mode=gateway: this service believes any CoSec-Identity header it 
 
 `cosec.pipeline.mode=gateway` 的服务信任网络（`STA-7`）。先让它成真，再写下这一行：只放行网关 pod 的 `NetworkPolicy`（[`k8s/examples/gateway-mode-service-networkpolicy.yaml`](https://github.com/Ahoo-Wang/CoSec/blob/main/k8s/examples/gateway-mode-service-networkpolicy.yaml)）、双向 TLS，或只有网关所在的私有网络。`It is [false]`（或 `1`、`on`、空值）表示这个配置项写成了不是 `true` 的值。不要在网络还没有保证之前，为了绕过这条信息而写它。之后启动日志记录一行 `INFO`。
 
-在以策略决策、又从身份确定调用方的宿主上（如[控制面宿主](./deployment.md#the-control-plane-host)，或内嵌控制面的 IAM 服务，`STA-9`），同样的信息以 `cosec.pipeline.caller=forwarded-identity:` 开头；应用自己声明了网关时，则以 `the web gate of this host is an IdentityGate bean of the application` 开头。它点出两行：只有网关能连到宿主时写 `only-gateway-can-reach=true`；服务直接调用宿主时写 `cosec.pipeline.identity.only-trusted-callers-can-reach=true`（`COSEC_PIPELINE_IDENTITY_ONLYTRUSTEDCALLERSCANREACH`），`cosec-control` 镜像的服务端口默认开启，服务就是这样调用它的；在服务端口旁边，网关那一行会被拒绝，因为它不属实。先有网络，每个端口一条策略（[`k8s/control/`](https://github.com/Ahoo-Wang/CoSec/tree/main/k8s/control)），再写这一行。
+在以策略决策、又从身份确定调用方的宿主上（如[控制面宿主](./deployment.md#the-control-plane-host)，或内嵌控制面的 IAM 服务，`STA-9`），同样的信息以 `cosec.pipeline.caller=forwarded-identity:` 开头；应用自己声明了网关时，则以 `the web gate of this host is an IdentityGate bean of the application` 开头。它点出两行：只有网关能连到宿主时写 `only-gateway-can-reach=true`；服务直接调用宿主时写 `cosec.pipeline.identity.only-trusted-callers-can-reach=true`（`COSEC_PIPELINE_IDENTITY_ONLYTRUSTEDCALLERSCANREACH`），`cosec-control` 镜像的服务端口默认开启，服务就是这样调用它的；在服务端口旁边，网关那一行会被拒绝，因为它不属实。先有网络，每个端口一条策略（[`k8s/control/`](https://github.com/Ahoo-Wang/CoSec/tree/main/k8s/control)），再写这一行；在 Kubernetes 上由 overlay 写，并配有[边界检查](#the-control-hosts-boundary-check-fails)。
+
+### 控制面宿主的边界检查失败 {#the-control-hosts-boundary-check-fails}
+
+```text
+FAIL reached the control host at 10.244.0.7:8080 from a pod no NetworkPolicy admits (curl exit 0): the cluster does not enforce the policies, and COSEC_PIPELINE_IDENTITY_ONLYTRUSTEDCALLERSCANREACH=true is false. Whoever reaches the host can state any principal.
+```
+
+[`k8s/control/`](https://github.com/Ahoo-Wang/CoSec/tree/main/k8s/control) 中的 Job `cosec-control-boundary-check`
+从一个没有任何策略放行的 pod，连接控制面宿主每个 pod 的每个端口（[部署](./deployment.md#kubernetes)）。有连接得到应答，
+说明集群的网络插件没有强制执行那三条 NetworkPolicy，overlay 的边界声明是假的，集群里的任何工作负载都能向宿主声称自己是平台管理员。
+在插件强制执行这些策略之前，把声明从你的 overlay 中拿掉（宿主随之停止），然后删除这个 Job 再应用一次（应用之前总是先删除它：Job 的 pod 模板不可变，完成的 Job 也不会再运行）。
+不要为了让失败消失而删除 Job；`k8s/overlays/dev` 只用于没有其他工作负载的集群。
+
+`FAIL could not tell` 表示宿主在十分钟内拒绝了每个连接，或者没有地址：它一直没有监听（用 `kubectl logs deploy/cosec-control` 看原因），
+或者插件拒绝而不是丢弃连接。后一种情况请手动检查别的标签的 pod 连不上。
 
 ### 控制面镜像的设置导致启动失败 {#startup-fails-on-the-control-plane-images-settings}
 
@@ -821,7 +836,7 @@ Tokens are verified against RevocationReader.NONE: a revoked token (logout, revo
 |---|---|---|
 | `401` | 请求背后没有管道放行的主体：匿名，或者该路由没有部署在管道之后。请求体一个字节也不读。 | 发送凭证。文档必须为这个主体放行发往 `cosec.control.http.base-path` 的 HTTP 请求。 |
 | `403` | 操作者无权对这个文档执行这个动作（对 `simulate` 与 `explain`，是请求在其中决策的租户：没有 `principal` 时是 `(0)`），或者硬性规则禁止：作者审批自己的变更、其他人变基该变更，或作者以外的人放弃吊销仍在生效的 break-glass 绑定的变更（`BRK-10`）。 | 为操作者绑定该文档的控制面策略（`cosec:platform-admin`、`cosec:tenant-admin` 等）（[测试变更](../policies/testing.md)）。 |
-| `400` | 请求体不是 JSON 对象、字段缺失或未知、值类型错误或解析不了（时间、模式、数字），或者（WebMvc 上）请求体超过 10 MB（文档上限再加 2 MB，[由计算得出](./configuration.md#computed-not-configured)）。`simulate` 与 `explain` 还会拒绝：没有 `principal` 却指定 `(0)` 以外租户的请求（执法会在 `(0)` 上决策它）；以不同的值重复发送视图中某份文档读取的头的请求（与执法一样拒绝）；执法会拒绝的 `http` 路径（点号段、格式错误的转义、按收到时超过 2,048 个字符，或解码后每段超过 256 个），或者按书写超过这些长度的类型化 id，`analyze` 也拒绝这种资源。路径、查询或请求体中任何字符串带有落单 UTF-16 代理项（如 JSON 转义 `"\uD800"`）的请求，在路由读取它之前就被拒绝：`The request holds a string with an unpaired UTF-16 surrogate, which no id may hold (IDN-10).` | 修正请求；`detail` 用控制面自己的话或字段名说明问题，从不带异常消息。没有 `detail` 的 `400` 以 `INFO` 记录：`Control API <method> <path> (request <requestId>) is 400: <reason>`。WebFlux 上的大请求体受 `spring.codec.max-in-memory-size` 限制。 |
+| `400` | 请求体不是 JSON 对象、字段缺失或未知、值类型错误或解析不了（时间、模式、数字），或者（WebMvc 上）请求体超过 10 MB（文档上限再加 2 MB，[由计算得出](./configuration.md#computed-not-configured)），或在不携带文档的路由上超过 64 KB（`The request body is <n> bytes, over the 65536 this route reads.`）。`simulate` 与 `explain` 还会拒绝：没有 `principal` 却指定 `(0)` 以外租户的请求（执法会在 `(0)` 上决策它）；以不同的值重复发送视图中某份文档读取的头的请求（与执法一样拒绝）；执法会拒绝的 `http` 路径（点号段、格式错误的转义、按收到时超过 2,048 个字符，或解码后每段超过 256 个），或者按书写超过这些长度的类型化 id，`analyze` 也拒绝这种资源。路径、查询或请求体中任何字符串带有落单 UTF-16 代理项（如 JSON 转义 `"\uD800"`）的请求，在路由读取它之前就被拒绝：`The request holds a string with an unpaired UTF-16 surrogate, which no id may hold (IDN-10).` | 修正请求；`detail` 用控制面自己的话或字段名说明问题，从不带异常消息。没有 `detail` 的 `400` 以 `INFO` 记录：`Control API <method> <path> (request <requestId>) is 400: <reason>`。WebFlux 上的大请求体受 `spring.codec.max-in-memory-size` 限制。 |
 | `404` | 没有这个路由、文档或变更，或者操作者看不到它。末尾带 `/` 或含空段（`//`）的路径不是路由。 | 使用路由的确切路径。 |
 | `409` | 基准已变化（`[<doc>] is at revision <n>, not <m>`）、变更处于其他状态、另一个变更占用了文档的暂存槽（只有吊销 break-glass，或持有 `cosec:skip-shadow` 的人提交的只收窄变更能抢占，而吊销仍在生效的绑定的变更持有的暂存槽，只有另一个这样的吊销能抢走：[抢占被占用的暂存槽](../policies/testing.md#taking-a-busy-slot)）、影子窗口仍打开或被阻塞，或者 break-glass 吊销没有生效（`binding [<id>] still grants: change <id> is <state>`，见下文）。 | 变基、等待另一个变更、查看窗口的摘要，或再吊销一次。 |
 | `:apply` 的 `REPLACE` 返回 `409`：`[<doc>] is at revision <n>, not <m>: REPLACE removes what the file leaves out, and the file was read at revision <m>` | 文件头写明了读取时的修订，而头修订之后已变化：应用它会删掉期间发布的内容。 | 读取头修订（`GET /documents/<doc>`），把变化合并进文件，把 `revision` 设为头修订，再应用一次（[变更](../policies/testing.md#changes)）。 |

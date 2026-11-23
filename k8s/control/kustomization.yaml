@@ -3,10 +3,12 @@
 # ConfigMap cosec-control-redis), the namespace and any labels. Deploying:
 # https://cosec.ahoo.me/operations/deployment#kubernetes
 #
-# The Deployment states `COSEC_PIPELINE_IDENTITY_ONLYTRUSTEDCALLERSCANREACH=true`, and the image does not start without
-# it: it believes the CoSec-Identity header of whoever can reach it. The policies in this directory are what makes the
-# statement true, so they are resources of this kustomization and never left out of it: a copy of these manifests that drops
-# them, or an overlay that removes them, makes the statement false.
+# The image does not start without `COSEC_PIPELINE_IDENTITY_ONLYTRUSTEDCALLERSCANREACH=true`: it believes the
+# CoSec-Identity header of whoever can reach it. The policies in this directory make that true, but only on a cluster
+# whose network plugin enforces them, so the Deployment here does not state it: the overlay you apply does, and
+# boundary-check.yaml, a Job from a pod no policy admits, fails when it reaches the host. The policies and the check are
+# resources of this kustomization and never left out of it: a copy of these manifests that drops them, or an overlay that
+# removes them, makes the statement false.
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
@@ -16,6 +18,7 @@ resources:
   - networkpolicy-operators.yaml
   - networkpolicy-services.yaml
   - networkpolicy-management.yaml
+  - boundary-check.yaml
 
 configMapGenerator:
   # The generated name carries a hash of application.yaml, so a change to the file rolls the pods.
