@@ -16,10 +16,12 @@
 package me.ahoo.cosec.spring.boot.control
 
 import io.micrometer.core.instrument.FunctionCounter
+import io.micrometer.core.instrument.Gauge
 import io.micrometer.core.instrument.MeterRegistry
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.control.audit.ChangeListeners
 import me.ahoo.cosec.control.lifecycle.Changes
+import me.ahoo.cosec.control.lifecycle.WorkBudget
 import me.ahoo.cosec.spring.boot.StartupTask
 import me.ahoo.cosec.spring.boot.micrometer.ChangeListenerMeters
 import org.springframework.beans.factory.ObjectProvider
@@ -55,7 +57,24 @@ internal class ControlMetersConfiguration {
         }
     }
 
+    /** The work budget (`CTL-85`): what this host's control calls hold now, and how many it refused. */
+    @Bean
+    fun cosecControlWorkMeters(registry: ObjectProvider<MeterRegistry>, work: ObjectProvider<WorkBudget>): StartupTask =
+        StartupTask.AfterSingletons {
+            val meters = registry.ifAvailable ?: return@AfterSingletons
+            work.ifAvailable?.let { budget ->
+                Gauge.builder(WORK_HELD, budget) { it.held.toDouble() }
+                    .description("Bytes of work this host's control calls hold, of a budget of ${budget.capacity}")
+                    .baseUnit("bytes").register(meters)
+                FunctionCounter.builder(WORK_REFUSED, budget) { it.refused.toDouble() }
+                    .description("Control calls refused 503 for want of work memory: large documents at once")
+                    .register(meters)
+            }
+        }
+
     companion object {
         const val UNREADABLE_STATUSES = "cosec.control.shadow.status.unreadable"
+        const val WORK_HELD = "cosec.control.work.held"
+        const val WORK_REFUSED = "cosec.control.work.refused"
     }
 }

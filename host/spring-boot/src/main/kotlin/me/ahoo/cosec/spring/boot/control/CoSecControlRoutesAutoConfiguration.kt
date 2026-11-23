@@ -26,6 +26,7 @@ import me.ahoo.cosec.control.api.ControlHttpResponse
 import me.ahoo.cosec.control.api.ControlPlane
 import me.ahoo.cosec.control.api.ControlProfile
 import me.ahoo.cosec.control.lifecycle.ControlDerived
+import me.ahoo.cosec.control.lifecycle.WorkBudget
 import me.ahoo.cosec.runtime.Pipeline
 import me.ahoo.cosec.runtime.event.BridgeContextContributor
 import me.ahoo.cosec.runtime.http.ProblemType
@@ -55,9 +56,6 @@ import org.springframework.core.io.buffer.DataBufferLimitException
 import org.springframework.core.io.buffer.DataBufferUtils
 import org.springframework.http.MediaType
 import org.springframework.web.reactive.function.BodyExtractors
-import reactor.core.publisher.Mono
-import java.io.InputStream
-import java.net.URLDecoder
 import org.springframework.web.reactive.function.server.RequestPredicates as ReactivePredicates
 import org.springframework.web.reactive.function.server.RouterFunction as ReactiveRouterFunction
 import org.springframework.web.reactive.function.server.RouterFunctions as ReactiveRouterFunctions
@@ -67,6 +65,9 @@ import org.springframework.web.servlet.function.RequestPredicates as ServletPred
 import org.springframework.web.servlet.function.RouterFunction as ServletRouterFunction
 import org.springframework.web.servlet.function.RouterFunctions as ServletRouterFunctions
 import org.springframework.web.servlet.function.ServerResponse as ServletServerResponse
+import reactor.core.publisher.Mono
+import java.io.InputStream
+import java.net.URLDecoder
 
 /**
  * The control API as functional routes under `cosec.control.http.base-path` (RFC 0007 §10.2). The pipeline has
@@ -129,8 +130,9 @@ internal class CoSecControlRoutesAutoConfiguration {
             applicationPort: ApplicationPort,
             plane: ObjectProvider<ControlPlane>? = null,
             service: ObjectProvider<ControlServiceListener>? = null,
+            work: ObjectProvider<WorkBudget>? = null,
         ): ReactiveRouterFunction<ReactiveServerResponse> =
-            routesWithin(operators, properties, applicationPort, plane, service, ControlDerived.MAX_BODY_BYTES)
+            routesWithin(operators, properties, applicationPort, plane, service, ControlDerived.MAX_BODY_BYTES, work)
 
         /** The routes reading at most [maxBodySize] of a body: the host's is [ControlDerived.MAX_BODY_BYTES], a test's is its own. */
         fun routesWithin(
@@ -140,11 +142,14 @@ internal class CoSecControlRoutesAutoConfiguration {
             plane: ObjectProvider<ControlPlane>?,
             service: ObjectProvider<ControlServiceListener>?,
             maxBodySize: Long,
+            work: ObjectProvider<WorkBudget>? = null,
         ): ReactiveRouterFunction<ReactiveServerResponse> {
             val base = apiRootOf(properties)
             // The narrow profile answers on the service port only; the operators' port serves the whole API.
             val listener = service?.ifAvailable
-            val services = listener?.let { ControlHttp(checkNotNull(plane).getObject(), ControlProfile.SERVICE) }
+            // One work budget for both profiles (CTL-85): the host's.
+            val budget = work?.ifAvailable ?: ControlDerived.workBudget()
+            val services = listener?.let { ControlHttp(checkNotNull(plane).getObject(), ControlProfile.SERVICE, budget) }
             // The control API answers on the application's port (the operators' profile) and on the service port (the
             // service profile), and on no other port the host listens on, the management port included (CTL-69): a 404
             // there, before the control plane is asked.
@@ -178,6 +183,7 @@ internal class CoSecControlRoutesAutoConfiguration {
                 }.flatMap { response ->
                     ReactiveServerResponse.status(response.status)
                         .contentType(MediaType.parseMediaType(response.contentType))
+                        .headers { headers -> response.headers.forEach(headers::set) }
                         .bodyValue(response.body)
                 }.onErrorResume(DataBufferLimitException::class.java) {
                     ReactiveServerResponse.status(ProblemType.INVALID_REQUEST.status)
@@ -229,6 +235,7 @@ internal class CoSecControlRoutesAutoConfiguration {
                 }
                 ServletServerResponse.status(response.status)
                     .contentType(MediaType.parseMediaType(response.contentType))
+                    .headers { headers -> response.headers.forEach(headers::set) }
                     .body(response.body)
             }
         }

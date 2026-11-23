@@ -89,11 +89,13 @@ class WorkBudget(
 
     /**
      * Holds [weight] for [tenant] until the current [call] ends: waiting at most [patience] while the call holds nothing
-     * yet, granted at once or refused when it does. Work at most [free] holds nothing.
+     * yet, granted at once or refused when it does. Work at most [free] holds nothing, nor does work outside a call:
+     * every control call is one (the control API's `handle`, which the in-process facade goes through too), and what
+     * calls the control plane's classes directly (a test, the maintenance passes) has no call to hold it until.
      */
     suspend fun hold(tenant: String, weight: Long, patience: Duration = this.patience) {
         if (weight <= free) return
-        val scope = checkNotNull(currentCoroutineContext()[CallScope]) { "Work is held within a call." }
+        val scope = currentCoroutineContext()[CallScope] ?: return
         scope.add(acquire(tenant, weight.coerceAtMost(capacity), patience, scope.holds()))
     }
 

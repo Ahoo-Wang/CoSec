@@ -37,6 +37,7 @@ import me.ahoo.cosec.control.lifecycle.Changes
 import me.ahoo.cosec.control.lifecycle.ControlDerived
 import me.ahoo.cosec.control.lifecycle.ControlMaintenance
 import me.ahoo.cosec.control.lifecycle.ShadowOptions
+import me.ahoo.cosec.control.lifecycle.WorkBudget
 import me.ahoo.cosec.control.store.ControlStore
 import me.ahoo.cosec.control.store.RetentionPolicy
 import me.ahoo.cosec.control.store.Revisions
@@ -109,7 +110,8 @@ import java.time.Clock
     StartupTaskExclusion::class,
     ControlServiceConfiguration::class,
     ControlMetersConfiguration::class,
-    ChangeListenersConfiguration::class
+    ChangeListenersConfiguration::class,
+    ControlWorkConfiguration::class,
 )
 internal class CoSecControlAutoConfiguration {
     @Bean
@@ -272,6 +274,7 @@ internal class CoSecControlAutoConfiguration {
         tokenStore: ObjectProvider<TokenStore>,
         controlProperties: ControlProperties,
         resourceLoader: ResourceLoader,
+        work: WorkBudget,
     ): Changes {
         val ids = idGenerator.getIfAvailable { RandomIdGenerator }
         return Changes(
@@ -286,7 +289,7 @@ internal class CoSecControlAutoConfiguration {
             // The data plane's reports when this host takes part in shadow windows: one cache per runtime.
             reports = shadowReports.ifAvailable ?: CoCacheShadowReports.create(factory, cosec.keyPrefix),
             listeners = listeners,
-            lockout = ControlChangeInputs.lockout(revisions, attributes, environment, controlProperties),
+            lockout = ControlChangeInputs.lockout(revisions, attributes, environment, controlProperties, work),
         )
     }
 
@@ -320,6 +323,7 @@ internal class CoSecControlAutoConfiguration {
         authority: ChangeAuthority,
         attributes: AttributeProviders,
         environment: Environment,
+        work: WorkBudget,
     ): ControlPlane =
         // simulate and explain compile against the host's attribute providers, as enforcement does (S5).
         DefaultControlPlane(
@@ -327,11 +331,12 @@ internal class CoSecControlAutoConfiguration {
             revisions,
             authority,
             Simulator(attributes = attributes.catalog, credentialHeaders = credentialHeaders(environment)),
+            work,
         )
 
     /** Not replaceable: every route needs a request the host pipeline permitted. */
     @Bean
-    fun cosecControlHttp(plane: ControlPlane): ControlHttp = ControlHttp(plane)
+    fun cosecControlHttp(plane: ControlPlane, work: WorkBudget): ControlHttp = ControlHttp(plane, work = work)
 
     /**
      * The beans above that are not replaceable are the only ones of their types (round 2 L6): a second one that is
