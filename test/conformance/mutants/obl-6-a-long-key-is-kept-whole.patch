@@ -1,0 +1,17 @@
+# Rule: OBL-6
+# Mutant: a key value past the bound names its bucket as written, so a bucket retains as much as the client sent (DR1-C-1)
+# Tests: :runtime:test --tests me.ahoo.cosec.runtime.ratelimit.LocalRateLimiterBucketBytesTest
+
+diff --git a/core/engine/src/main/kotlin/me/ahoo/cosec/engine/CompiledRateLimit.kt b/core/engine/src/main/kotlin/me/ahoo/cosec/engine/CompiledRateLimit.kt
+index 57818df36..e5dfe5dc9 100644
+--- a/core/engine/src/main/kotlin/me/ahoo/cosec/engine/CompiledRateLimit.kt
++++ b/core/engine/src/main/kotlin/me/ahoo/cosec/engine/CompiledRateLimit.kt
+@@ -84,7 +84,7 @@ class CompiledRateLimit internal constructor(
+             if (written.length - KEYED_BUCKET_PREFIX.length <= MAX_WRITTEN_KEY_LENGTH) {
+                 return written
+             }
+-            return HASHED_BUCKET_PREFIX + Sha256.hex(written.encodeToByteArray())
++            return written
+         }
+ 
+         /** [value]'s bucket as written: [KEYED_BUCKET_PREFIX] and the value, or escaped when it is not well formed. */

@@ -76,7 +76,7 @@ flowchart LR
 | 未写 | 规则匹配的所有请求共享一个桶。 |
 | 已写 | 每个值一个桶。该值缺失的请求共享它们自己的一个桶。 |
 
-值原样就是它的桶 `k:<value>`，每个限流器都把它写成 UTF-8。带落单 UTF-16 代理项的值（例如令牌属性中的 JSON 转义 `"\uD800"`）没有 UTF-8 编码：它的桶是 `e:<value>`，其中每个落单的代理项写成 `\uXXXX` 转义、每个 `\` 加倍，所以它从不计入把它换成 `?` 的那个值的桶（`IDN-10`）。你自己的限流器只会拿到格式良好的文本作为桶。
+值原样就是它的桶 `k:<value>`，每个限流器都把它写成 UTF-8。带落单 UTF-16 代理项的值（例如令牌属性中的 JSON 转义 `"\uD800"`）没有 UTF-8 编码：它的桶是 `e:<value>`，其中每个落单的代理项写成 `\uXXXX` 转义、每个 `\` 加倍，所以它从不计入把它换成 `?` 的那个值的桶（`IDN-10`）。这样写出的值长于 256 个字符（最长的路径段）时，改用它的哈希命名：它的桶是 `h:` 加上 `k:<value>` 或 `e:<value>` 的 SHA-256 十六进制，无论值多长都是 66 个字符。同一个值总是同一个桶，两个值总是两个桶，无论它们有多少共同的部分；选择值的客户端（键读取的请求头）能决定造出多少个桶，但决定不了每个桶有多长，无论在本地限流器的内存里还是在 Redis 里。你自己的限流器只会拿到格式良好、至多 258 个字符的文本作为桶。
 
 不同文档的规则永远不共享桶：规则按它的文档和 id 计数，即 `platform/<id>`、`app:<appId>/<id>` 或 `tenant:<tenantId>/<id>`（[`CompiledRateLimit.counterId`](https://github.com/Ahoo-Wang/CoSec/blob/main/core/engine/src/main/kotlin/me/ahoo/cosec/engine/CompiledRateLimit.kt)）。规则 id 不能包含 `:` 或 `/`，所以任何规则都无法指向其他文档的计数器：租户无法消耗或重置平台的配额。
 
@@ -96,7 +96,7 @@ flowchart LR
 
 ### 本地限流器有上限 {#the-local-limiter-is-bounded}
 
-`LocalRateLimiter` 把计数器放在实例内存中，总共最多 100,000 个桶，单条规则最多 50,000 个（`OBL-6`），一份文档（平台的、某个应用的或某个租户的）的规则合计最多 25,000 个。它从不为腾出空间而移除桶：计数正是规则存在的意义，丢掉它就等于给这个键发放新的许可（`OBL-5`）。所以限流器满了就无法为新桶计数，与任何[失败的限流器](#failure-behavior)一样由规则的 `strictFailure` 决定：严格规则返回 `503`，宽松规则被跳过。此时日志 `Rate limiter unavailable: rule [<id>] ...` 带有 `The local rate limiter holds its maximum of buckets (rule [<id>]: <n> of <max>, its document: <n> of <max>, all: <n> of <max>).`，`cosec.ratelimit.local.refused` 按发起请求的规则所属文档的种类为每个被拒绝的桶计数（[可观测性](../operations/observability.md#metrics)）。已有的桶继续计数。
+`LocalRateLimiter` 把计数器放在实例内存中，总共最多 100,000 个桶，单条规则最多 50,000 个（`OBL-6`），一份文档（平台的、某个应用的或某个租户的）的规则合计最多 25,000 个。它从不为腾出空间而移除桶：计数正是规则存在的意义，丢掉它就等于给这个键发放新的许可（`OBL-5`）。所以限流器满了就无法为新桶计数，与任何[失败的限流器](#failure-behavior)一样由规则的 `strictFailure` 决定：严格规则返回 `503`，宽松规则被跳过。此时日志 `Rate limiter unavailable: rule [<id>] ...` 带有 `The local rate limiter holds its maximum of buckets (rule [<id>]: <n> of <max>, its document: <n> of <max>, all: <n> of <max>).`，`cosec.ratelimit.local.refused` 按发起请求的规则所属文档的种类为每个被拒绝的桶计数（[可观测性](../operations/observability.md#metrics)）。已有的桶继续计数。无论客户端发来的键多长，一个桶最多约占 1 KB，因为它的名字至多 258 个字符（[键](#keys)）：一份文档的份额最多约 25 MB，整个限流器最多约 100 MB。
 
 `key` 读取客户端可以变化的内容的规则，只会占满它自己的份额，一个租户或一个应用的规则只会占满它们那份文档的份额：一个租户的两条这样的规则合计最多占四分之一的桶，其他文档的规则仍能接纳新桶。要四份规则键由客户端变化的文档才能占满限流器。但这样的规则什么也限制不了：每个新值都是一个新桶，份额满了之后，每个新值要么被跳过（宽松），要么被拒绝（严格）。与 Redis 一样，请让本地规则的键取客户端无法成倍制造的内容。其他上限需要你自己的 `RateLimiter` bean，`LocalRateLimiter(maximumBuckets = ..., maximumBucketsPerRule = ..., maximumBucketsPerOwner = ...)`；单条规则的上限默认是总数的一半，单份文档的上限默认是四分之一。
 
