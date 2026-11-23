@@ -11,8 +11,8 @@
  * limitations under the License.
  */
 
-// The decision engine (RFC 0002 §2). Kotlin standard library and cosec-model only, enforced by verifyPureClasspath;
-// EnginePurityTest checks what the code of both modules references.
+// The decision engine (RFC 0002 §2). Kotlin standard library and cosec-model only: DependencyRulesTest checks what it
+// resolves, EnginePurityTest what the code of both modules references.
 dependencies {
     api(project(":model"))
     // HttpPathPatternBenchmark compares with Spring's PathPattern; the jmh source set is not checked for purity.
