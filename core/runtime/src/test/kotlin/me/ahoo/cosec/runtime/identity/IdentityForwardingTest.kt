@@ -344,6 +344,78 @@ class IdentityForwardingTest {
         inexact.proceed.assert().isFalse()
     }
 
+    private fun attributed(attributes: Map<String, Any>) = AuthnResult.Authenticated(
+        AuthenticatedPrincipal(
+            PipelineFixtures.PRINCIPAL,
+            PipelineFixtures.TENANT,
+            MembershipSource.Claims(PipelineFixtures.claims("" to "clerk")),
+            attributes,
+            Identity.Credential(Identity.Method("token"), "t1", now.plusSeconds(3600)),
+            breakGlass = false,
+            issuedAt = null,
+            apiKeyCredential = false,
+            app = null,
+            session = null,
+        ),
+        Identity.Method("token"),
+    )
+
+    private val relaying = IdentityIssuer(clock = Clock.fixed(now, ZoneOffset.UTC), relay = true)
+
+    /**
+     * DR1-F-1: relaying a caller to a control-plane host forwards every attribute, and the host reads each to the very text
+     * the engine reads in process (`SubjectAttributes.string`): a list, an object, and the numbers the header cannot hold
+     * exactly (a big integer, a fraction, NaN, infinity) arrive as that text.
+     */
+    @Test
+    fun `a relayed caller's every attribute reads on the host as the engine reads it here`() {
+        val attributes = mapOf(
+            "name" to "Alice",
+            "suspended" to true,
+            "level" to 7,
+            "big" to java.math.BigInteger("123456789012345678901234567890"),
+            "fraction" to java.math.BigDecimal("0.12345678901234567890"),
+            "ratio" to 1.5,
+            "missing" to Double.NaN,
+            "unbounded" to Float.POSITIVE_INFINITY,
+            "groups" to listOf("ops", "night"),
+            "profile" to mapOf("team" to "a", "since" to 2020),
+        )
+        val outcome = evaluate(attributed(attributes), issuer = relaying)
+        outcome.status.assert().isEqualTo(200)
+        val claims = IdentityCodec.decode(outcome.forward.getValue(IdentityCodec.HEADER)!!).claims
+        claims.keys.assert().isEqualTo(attributes.keys)
+        for (name in attributes.keys) {
+            me.ahoo.cosec.engine.SubjectAttributes.string(claims, name).assert().describedAs(name)
+                .isEqualTo(me.ahoo.cosec.engine.SubjectAttributes.string(attributes, name))
+        }
+        // The gateway's issuer still forwards only the claims it names.
+        IdentityCodec.decode(evaluate(attributed(attributes)).forward.getValue(IdentityCodec.HEADER)!!).claims
+            .assert().isEqualTo(mapOf("name" to "Alice"))
+    }
+
+    @Test
+    fun `a relayed caller whose attributes do not fit fails before anything is sent, naming them, never their values`() {
+        val long = evaluate(attributed(mapOf("note" to "x".repeat(IdentityCodec.MAX_CLAIM_LENGTH + 1))), issuer = relaying)
+        long.status.assert().isEqualTo(500)
+        long.proceed.assert().isFalse()
+        val many = (1..10).associate { "claim-$it" to "v".repeat(1_000) }
+        val thrown = org.junit.jupiter.api.assertThrows<me.ahoo.cosec.spi.identity.IdentityOverflowException> {
+            relaying.issue(security(attributed(many)))
+        }
+        thrown.message.assert().contains("The largest attributes: [claim-").contains("(1000 characters)")
+            .doesNotContain("vvvv")
+        org.junit.jupiter.api.assertThrows<me.ahoo.cosec.spi.identity.IdentityOverflowException> {
+            relaying.issue(security(attributed(mapOf("note" to "x".repeat(2_000)))))
+        }.message.assert().contains("note").contains("2000").doesNotContain("xxxx")
+    }
+
+    /** The security the pipeline makes for [authn], permitted. */
+    private fun security(authn: AuthnResult): me.ahoo.cosec.runtime.http.RequestSecurity = runBlocking {
+        PipelineFixtures.pipeline(PipelineFixtures.authenticator(authn), PipelineFixtures.StubEngine(PipelineFixtures.PERMIT))
+            .evaluate(facts(routed)).security!!
+    }
+
     /** Review of #1124: a service could not bound an identity whose credential never expires, so none is sent. */
     @Test
     fun `a credential that never expires fails the request closed`() {

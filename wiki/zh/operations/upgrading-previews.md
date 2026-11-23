@@ -27,6 +27,12 @@ description: "每个 8.0 预览版（alpha 与 beta）到下一个之间的变�
 
 ## 从 8.0.0-beta.7 升级 {#from-8-0-0-beta-7}
 
+- **`HttpControlService` 转述用户的属性**（`CTL-77`，DR1-F-1）。受影响的：以正在服务的用户身份（`ControlCaller.of`）
+  经 `HttpControlService` 调用控制面宿主、且控制策略读取 `subject.attributes` 的应用。此前调用不带任何属性，这样的 DENY
+  经 HTTP 匹配不上，调用只按 ALLOW 判定，而进程内的门面会拒绝它。现在全部属性都随调用发出，每一项都是引擎读到的文本，
+  这样的 DENY 两条路都拒绝。属性因此会到达宿主，由服务端口的网络策略保护。属性超出请求头上限（合计 8 KB，单个字符串
+  1,024 个字符）的用户不能再经它调用：调用在发出之前失败，写明属性与大小。宿主能先升级就先升级；beta.7 的宿主同样会读这些属性
+  （[部署](./deployment.md#the-control-plane-host)）。
 - **以自己的主体调用控制面的服务记为 `service`**（`ControlCaller.service`，`IDN-34`）。受影响的：读取控制请求记录的东西，以及升级的顺序。
   - **记录。** 这样的服务所声明的身份把凭证命名为 `service`，beta.7 命名为 `api-key`。它不是 API key，记录现在照实写：它对控制面宿主的请求在决策事件与审计里的 `subject.method`、变更日志里的 `origin.via.method` 都是 `service`（经进程内 `ControlService` 的调用仍是 `in-process`）。此前存储的变更保留 `api-key`。按 `api-key` 找服务调用方的看板、告警或查询，也要找 `service`。
   - **它能做什么没有变。** `service` 和 `api-key` 一样是工作负载的凭证：从不审批，也从不是信任根，没有会话，也没有 break-glass（新增 `AuthenticatedPrincipal.workload`）。
