@@ -92,7 +92,8 @@ function Profile() {
   user becomes (or starts out) not signed in.
 - `RefreshableRouteGuard`: the same for a session that a `JwtTokenManager` can
   refresh: it starts the refresh, shows `refreshing` while it runs, and shows
-  the `fallback` when the refresh fails.
+  the `fallback` when the refresh fails. It logs a failed refresh with
+  `console.error`, by the error's name and message only.
 - `ANONYMOUS_USER`: the `currentUser` of a visitor that is not signed in.
 
 `authenticated` is the `TokenStorage`'s own answer for the stored token. The

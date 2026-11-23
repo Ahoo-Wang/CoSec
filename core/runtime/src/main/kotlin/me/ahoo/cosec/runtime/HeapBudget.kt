@@ -32,6 +32,8 @@ import me.ahoo.cosec.engine.TraceLevel
  * | [memberships]: the memberships each instance holds of what its `MembershipLoader` answered (DR1-D-2) | 1/[MEMBERSHIPS_SHARE] | 32 MiB |
  *
  * Together they take at most 1/[SUM_BOUND] of the heap ([SHARES]): the rest is the gateway's own and ZGC's headroom.
+ * The social sign-in states of `InMemorySocialStateStore` take no share: they are correctness state, of tests and a
+ * single instance, held to a fixed count, refused past it (DR1-D-9), not memory held for performance.
  */
 @InternalCoSecApi
 class HeapBudget private constructor(val heap: Long) {
