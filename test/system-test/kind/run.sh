@@ -29,10 +29,11 @@
 #      does not publish that port;
 #   5. k8s/examples/gateway-mode-service-networkpolicy.yaml is valid for the API server, and selects what it says: the
 #      service's pods in its namespace, admitted from the gateway's pods of the namespace the gateway runs in (every selector
-#      read from the applied policy itself). Enforcement is not tested: kind's network plugin does not enforce it.
+#      read from the applied policy itself). Its enforcement is not tested here (step 7 tests enforcement on the control host).
 #   6. the decisions of step 3 are counted, by result (the scrape of step 4, read last);
-#   7. the control host's boundary check (k8s/control/boundary-check.yaml) fails, saying it reached the host: kind's network
-#      plugin does not enforce the policies, so the statement the dev overlay makes is false here, and the check must say so.
+#   7. the control host's boundary check (k8s/control/boundary-check.yaml), both ways: with the policies of k8s/control in
+#      place it completes (kindnet, in the kind release the workflow installs, enforces NetworkPolicy), and once they are
+#      deleted a fresh run of it reaches the host and fails, saying so.
 # Every wait is a bounded poll against the property it comes from; nothing is retried.
 set -euo pipefail
 
@@ -224,7 +225,7 @@ print(selector(admitted["podSelector"]))
 SERVICE_SELECTOR=$(sed -n 1p <<<"$SELECTORS")
 FROM_NAMESPACE_SELECTOR=$(sed -n 2p <<<"$SELECTORS")
 FROM_POD_SELECTOR=$(sed -n 3p <<<"$SELECTORS")
-# The service's pod only has to exist with the label: enforcement is not tested (kindnet does not enforce), nothing connects.
+# The service's pod only has to exist with the label: this example's enforcement is not tested here, nothing connects.
 kubectl -n "$SERVICE_NS" run service --image="$IMAGE" --image-pull-policy=Never --restart=Never --labels="$SERVICE_SELECTOR" \
   --command -- sleep 3600
 [ "$(kubectl -n "$SERVICE_NS" get pods -l "$SERVICE_SELECTOR" -o name | wc -l | tr -d ' ')" = 1 ] || fail "the example's podSelector ($SERVICE_SELECTOR) selects no pod of the service"
@@ -240,14 +241,46 @@ grep -q '^cosec_authorization_seconds_count{.*result="permit"' "$WORK/scrape.txt
 grep -q '^cosec_authorization_seconds_count{.*result="explicit_deny"' "$WORK/scrape.txt" || fail "the scrape has no cosec.authorization count for result=explicit_deny"
 ok "the decisions of step 3 are counted: a permit and an explicit deny"
 
-# --- 7. the control host's boundary check ---------------------------------------------------------------------------------
-# The dev overlay states the control host's boundary (its first lines say why that is unsafe on a shared cluster), and
-# kindnet does not enforce the policies of k8s/control: from a pod no policy admits, the check reaches the host and fails.
+# --- 7. the control host's boundary check, both ways ------------------------------------------------------------------
+# The dev overlay states the control host's boundary (its first lines say why that is unsafe on a shared cluster). kindnet
+# enforces the policies of k8s/control, so the check, from a pod no policy admits, finds every connection dropped. Then the
+# policies are deleted, and a fresh run of the check must reach the host: both verdicts are the check's own.
 # The host's image is pulled (the overlay's tag) and the host listens once its JVM is up, ready or not.
-job_failed() { [ "$(kc get job cosec-control-boundary-check -o jsonpath='{.status.failed}')" = 1 ]; }
-wait_for "the boundary check to fail" 420 "the control image's pull + its startupProbe (90 x 2 s) + the check's rounds (5 s, 8 s per port)" job_failed
+job_finished() {
+  case "$(kc get job "$1" -o jsonpath='{.status.conditions[?(@.status=="True")].type}')" in *Complete* | *Failed*) return 0 ;; *) return 1 ;; esac
+}
+wait_for "the boundary check to finish" 420 "the control image's pull + its startupProbe (90 x 2 s) + the check's rounds (5 s, 8 s per port)" \
+  job_finished cosec-control-boundary-check
 CHECK_LOG=$(kc logs job/cosec-control-boundary-check)
-grep -q '^FAIL reached the control host' <<<"$CHECK_LOG" || fail "the boundary check failed otherwise than by reaching the host: $CHECK_LOG"
-ok "the control host's boundary check fails on kind, which does not enforce NetworkPolicy: ${CHECK_LOG:0:160}"
+[ "$(kc get job cosec-control-boundary-check -o jsonpath='{.status.succeeded}')" = 1 ] ||
+  fail "with the policies in place the boundary check did not pass: $CHECK_LOG"
+grep -q '^ok   every connection' <<<"$CHECK_LOG" || fail "the boundary check passed without saying so: $CHECK_LOG"
+ok "with the policies of k8s/control in place, the boundary check finds every connection dropped: ${CHECK_LOG:0:160}"
+
+kc delete networkpolicy cosec-control-operators cosec-control-services cosec-control-management >/dev/null
+CONTROL_IP=$(kc get pod -l app.kubernetes.io/name=cosec-control -o jsonpath='{.items[0].status.podIP}')
+# The plugin removes the rules in its own time: a pod of another label reaching the host is what says they are gone.
+lifted() { probe "lifted-$SECONDS" curl -fs -m 5 -o /dev/null "http://$CONTROL_IP:8081/actuator/health/liveness" >/dev/null; }
+wait_for "the policies to be lifted" 90 "the plugin's sync of a deleted policy, a probe pod a try" lifted
+# A Job runs once and its pod template cannot change: the check runs again as a new Job, the same pod template under
+# another name.
+kc get job cosec-control-boundary-check -o json | python3 -c '
+import json, sys
+job = json.load(sys.stdin)
+own = lambda labels: {k: v for k, v in (labels or {}).items() if not k.startswith(("batch.kubernetes.io/", "controller-uid", "job-name"))}
+meta = job["metadata"]
+job["metadata"] = {"name": meta["name"] + "-again", "namespace": meta["namespace"], "labels": own(meta.get("labels"))}
+job["spec"].pop("selector", None)
+job["spec"]["template"]["metadata"]["labels"] = own(job["spec"]["template"]["metadata"].get("labels"))
+job.pop("status", None)
+print(json.dumps(job))
+' | kc apply -f - >/dev/null
+wait_for "the boundary check without the policies to finish" 120 "one round of the check (8 s per port), the host already listening" \
+  job_finished cosec-control-boundary-check-again
+AGAIN_LOG=$(kc logs job/cosec-control-boundary-check-again)
+[ "$(kc get job cosec-control-boundary-check-again -o jsonpath='{.status.failed}')" = 1 ] ||
+  fail "without the policies the boundary check did not fail: $AGAIN_LOG"
+grep -q '^FAIL reached the control host' <<<"$AGAIN_LOG" || fail "the boundary check failed otherwise than by reaching the host: $AGAIN_LOG"
+ok "without the policies, the boundary check reaches the host and fails: ${AGAIN_LOG:0:160}"
 
 echo "kind leg: passed"

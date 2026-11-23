@@ -670,8 +670,8 @@ connects to every port of every control-host pod from a pod no policy admits ([D
 connection that is answered means the cluster's network plugin does not enforce the three NetworkPolicies, so the overlay's
 statement of the boundary is false, and any workload of the cluster can state a platform administrator to the host. Take
 the statement out of your overlay (the host stops) until the plugin enforces the policies, then delete the Job and apply
-again. Never delete the Job to make the failure go away. On kind it fails by design: `k8s/overlays/dev` is for a cluster
-nothing else runs on.
+again (always delete it before an apply: a Job's pod template cannot change, and one that finished does not run again).
+Never delete the Job to make the failure go away; `k8s/overlays/dev` is for a cluster nothing else runs on.
 
 `FAIL could not tell` means the host refused every connection, or had no address, for ten minutes: it never listened
 (see why with `kubectl logs deploy/cosec-control`), or the plugin refuses a connection instead of dropping it. In the

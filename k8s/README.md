@@ -26,15 +26,19 @@ reach it, and **does not start until it is told** `COSEC_PIPELINE_IDENTITY_ONLYT
 is true only where the cluster enforces the three NetworkPolicies beside the Deployment, one per port, and no file can say
 that, so `control/` does not make it: each overlay does, and `control/` ships the check beside the policies, the Job
 `cosec-control-boundary-check`. From a pod no policy admits, it connects to every port of every pod (found by the
-headless Service `cosec-control-pods`, which publishes no port), and fails, naming the port, when one answers. After an apply
-of the production overlay:
+headless Service `cosec-control-pods`, which publishes no port), and fails, naming the port, when one answers. Apply the
+production overlay this way, every time:
 
 ```bash
+kubectl -n cosec delete job cosec-control-boundary-check --ignore-not-found
+kubectl apply -k k8s/overlays/production
 kubectl -n cosec wait --for=condition=complete job/cosec-control-boundary-check --timeout=900s
 ```
 
-If it fails, the statement is false: take it out of your overlay (the host stops) until the policies are enforced. On kind
-it fails, as it should. The policies and the check are one kustomization and never apart.
+The delete comes first because a Job's pod template cannot change, so an apply that moves the image tag would fail on it,
+and a Job that has finished does not run again, so without it the wait would answer last time's verdict. If the check
+fails, the statement is false: take it out of your overlay (the host stops) until the policies are enforced. The policies
+and the check are one kustomization and never apart.
 
 | Port | What | Who is admitted | Service |
 |---|---|---|---|
@@ -46,8 +50,8 @@ it fails, as it should. The policies and the check are one kustomization and nev
 audit, and does not verify its callers. A workload it admits can state any principal, a platform administrator included,
 and be both the author and the approver of a change; so a compromise of the gateway, or of any service you name, is a
 compromise of the control plane. Name the fewest services, each by its own label in its own namespace. The policies need a
-network plugin that enforces NetworkPolicy; without one they do nothing, and kind's does not enforce them: the boundary
-check is that test.
+network plugin that enforces NetworkPolicy; without one they do nothing, and many plugins do not: the boundary check is that
+test (kind's kindnet enforces them in recent releases, which the system test checks both ways).
 
 The gateway reaches the control plane through a route to `lb://cosec-control` whose metadata `cosec-app-id` is
 `cosec-control` (the image's `cosec.authorization.scope.app-id`). The Deployment's strategy is `Recreate` and its replica

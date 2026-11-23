@@ -27,7 +27,7 @@ import kotlin.io.path.readText
  * without the statement that nothing but the gateway and the services the operator names can reach it. That is true only
  * if the cluster's network plugin enforces the policies, which no file can say, so `k8s/control/` does not state it: the
  * overlay does, and the Job `boundary-check.yaml` checks it on the cluster (DR1-G-1). What files can hold is checked here,
- * not against a cluster (kind's network plugin does not enforce a NetworkPolicy):
+ * not against a cluster (the kind leg of the system test runs the check both ways):
  *
  * - the three ports of the Deployment are the image's (`platform/control-server`'s `application.yaml`), and the probes and
  *   the Services use them by name;

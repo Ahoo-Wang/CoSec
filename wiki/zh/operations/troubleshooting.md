@@ -448,8 +448,8 @@ FAIL reached the control host at 10.244.0.7:8080 from a pod no NetworkPolicy adm
 [`k8s/control/`](https://github.com/Ahoo-Wang/CoSec/tree/main/k8s/control) 中的 Job `cosec-control-boundary-check`
 从一个没有任何策略放行的 pod，连接控制面宿主每个 pod 的每个端口（[部署](./deployment.md#kubernetes)）。有连接得到应答，
 说明集群的网络插件没有强制执行那三条 NetworkPolicy，overlay 的边界声明是假的，集群里的任何工作负载都能向宿主声称自己是平台管理员。
-在插件强制执行这些策略之前，把声明从你的 overlay 中拿掉（宿主随之停止），然后删除这个 Job 再应用一次。不要为了让失败消失而删除 Job。
-在 kind 上它按设计就会失败：`k8s/overlays/dev` 只用于没有其他工作负载的集群。
+在插件强制执行这些策略之前，把声明从你的 overlay 中拿掉（宿主随之停止），然后删除这个 Job 再应用一次（应用之前总是先删除它：Job 的 pod 模板不可变，完成的 Job 也不会再运行）。
+不要为了让失败消失而删除 Job；`k8s/overlays/dev` 只用于没有其他工作负载的集群。
 
 `FAIL could not tell` 表示宿主在十分钟内拒绝了每个连接，或者没有地址：它一直没有监听（用 `kubectl logs deploy/cosec-control` 看原因），
 或者插件拒绝而不是丢弃连接。后一种情况请手动检查别的标签的 pod 连不上。

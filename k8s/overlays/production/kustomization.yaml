@@ -10,8 +10,12 @@
 #   kubectl -n cosec create secret generic cosec-jwt-secret --from-literal=secret="$(openssl rand -base64 48)"
 #   kubectl -n cosec create secret generic cosec-redis-secret --from-literal=password=<the Redis password>
 #   kubectl -n cosec create secret generic cosec-control-redis-credentials --from-literal=username=cosec-control --from-literal=password=<its password>
+#   kubectl -n cosec delete job cosec-control-boundary-check --ignore-not-found
 #   kubectl apply -k k8s/overlays/production
 #   kubectl -n cosec wait --for=condition=complete job/cosec-control-boundary-check --timeout=900s
+#
+# The Job is deleted before each apply: its pod template cannot change (an apply with a new image tag fails on it), and one
+# that has finished is not run again, so without the delete the wait would answer last time's verdict.
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 

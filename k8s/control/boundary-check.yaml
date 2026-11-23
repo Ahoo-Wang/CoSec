@@ -1,7 +1,7 @@
 # The check of the one statement the control host starts on: that nothing but the gateway and the services you name can
 # reach it. A pod with a label no NetworkPolicy here admits connects to every pod of the host, on each of its three ports,
 # by the addresses cosec-control-pods answers (ready or not). The policies drop such a connection where the network
-# plugin enforces them, and nowhere else (kind's does not):
+# plugin enforces them, and nowhere else:
 #
 # - any answer on any port: the Job fails, and says which. The host believes whoever reaches it; until the policies are
 #   enforced, take the statement out of your overlay (the host stops) or the host off the cluster's network;
@@ -10,8 +10,10 @@
 #   fails as unable to tell. A plugin that refuses rather than drops reads the same way: check by hand that a pod of
 #   another label cannot connect.
 #
-# It runs once per apply of a fresh Job: delete it to check again (kubectl delete job cosec-control-boundary-check). Read
-# the verdict with kubectl logs job/cosec-control-boundary-check; kubectl wait --for=condition=complete waits for a pass.
+# A Job runs once and its pod template cannot change: delete it before every apply (kubectl delete job
+# cosec-control-boundary-check --ignore-not-found), or an apply that moves the image tag fails on it and one that does not
+# leaves last time's verdict in place. Read the verdict with kubectl logs job/cosec-control-boundary-check; kubectl wait
+# --for=condition=complete waits for a pass.
 apiVersion: batch/v1
 kind: Job
 metadata:

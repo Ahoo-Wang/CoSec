@@ -149,8 +149,9 @@ Full model: https://cosec.ahoo.me/guide/security-model.
   <address>:<port>` means a pod no policy admits reached it, so the network plugin does not enforce the policies and the
   overlay's boundary statement is false; anyone in the cluster can state any principal. Take the statement out of the
   overlay (the host stops) until the policies are enforced; never delete the Job to make it pass. `FAIL could not tell`
-  means the host never listened within ten minutes, or the plugin refuses instead of dropping: check by hand. On kind it
-  fails by design (`k8s/overlays/dev` is unsafe on a shared cluster).
+  means the host never listened within ten minutes, or the plugin refuses instead of dropping: check by hand. Delete the
+  Job before every apply (its pod template cannot change, and a finished one does not run again), or the verdict is the
+  last apply's.
 - **`cosec-control-server runs the control plane; cosec.control.enabled=false ...`, or `cosec-control-server verifies no
   credential and issues no token ... cosec.jwt.enabled=true`** (also `cosec.api-key.enabled`,
   `cosec.authentication.login.enabled`; `STA-10`): the `cosec-control` image refuses them. Remove the key; a control plane
