@@ -136,10 +136,10 @@ Which preview of the library may run behind which preview of the gateway image: 
   their checks still read up to 10 MB. A simulated request larger than 64 KB has more headers and attributes than a real
   request can carry: trim it.
 - **Breaking: a gateway host with handlers of its own does not start until they are listed** (`STA-13`). Affected: a
-  Spring Cloud Gateway host in enforce mode whose application declares its own `@Controller`, `@RestController` or
-  `RouterFunction` beans.
-  - Those handlers are mapped before any gateway route, so CoSec, a filter of gateway routes, never decided them. Startup
-    used to warn and go on.
+  Spring Cloud Gateway host in enforce mode whose application declares its own `@Controller`, `@RestController`,
+  `RouterFunction` or `HandlerMapping` beans (a WebSocket endpoint's `SimpleUrlHandlerMapping` among them, DR2-G-1).
+  - Those handlers are served outside any gateway route, so CoSec, a filter of gateway routes, never decided them.
+    Startup used to warn and go on.
   - Now it fails, naming each handler by bean name. Migrate by moving them to a service behind the gateway, where a route
     decides them, or by listing the ones something else protects in `cosec.gateway.unprotected-handlers`. Startup then
     names them in one INFO line.
@@ -293,6 +293,10 @@ Which preview of the library may run behind which preview of the gateway image: 
   /orders/123/` for a route `/orders/{id}`) is answered `400` `invalid-request` where it used to be decided in the `http`
   namespace. A client that sends such paths to a mapped host should drop the trailing `/`
   ([Web integration](../integration/web.md)).
+- **Breaking: the mirror of a route written with a trailing `/` is refused too** (`PIP-35`, DR2-C-2). Affected: a host
+  with a route map that writes a route path ending with `/`. A request without the `/` (`GET /orders` for a route
+  `/orders/`) maps to no route and maps with it: it is answered `400` `invalid-request` where beta.7 decided it in the
+  `http` namespace, beside the route's DENYs. Send the path as the route writes it, or write the route without the `/`.
 - **Social sign-in states are bounded** (DR1-D-9). Affected: deployments that serve social login. A deployment holds
   at most a 64th of the memory Redis reports in sign-ins in progress (512 bytes each; 100,000 when Redis does not
   report its memory), and a start past it is refused with a `SocialAuthenticationException` ("try again shortly")

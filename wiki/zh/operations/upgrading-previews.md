@@ -92,8 +92,8 @@ description: "每个 8.0 预览版（alpha 与 beta）到下一个之间的变�
   break-glass 发送超过 64 KB 请求体的客户端。这样的请求体现在在解析之前即返回 `400`；此前它会在任何授权之前被读取并解析，
   最多 10 MB。提议、`:apply` 及其校验仍读取至多 10 MB。超过 64 KB 的模拟请求带的头与属性比真实请求能带的还多：请删减。
 - **破坏性变更：有自己处理器的网关宿主在列出它们之前不会启动**（`STA-13`）。受影响的是 enforce 模式下、应用声明了自己的
-  `@Controller`、`@RestController` 或 `RouterFunction` bean 的 Spring Cloud Gateway 宿主。
-  - 这些处理器映射在所有网关路由之前，所以作为网关路由过滤器的 CoSec 从未决策过它们。原来启动时只告警，然后继续。
+  `@Controller`、`@RestController`、`RouterFunction` 或 `HandlerMapping` bean（包括 WebSocket 端点的 `SimpleUrlHandlerMapping`，DR2-G-1）的 Spring Cloud Gateway 宿主。
+  - 这些处理器在所有网关路由之外提供服务，所以作为网关路由过滤器的 CoSec 从未决策过它们。原来启动时只告警，然后继续。
   - 现在启动失败，并按 bean 名逐个指明。迁移方式：把它们移到网关之后的服务中，由路由来决策；或者把由其他手段保护的那些列在
     `cosec.gateway.unprotected-handlers` 中，启动时会用一行 INFO 指明它们。
   - 带 `*` 的名字被拒绝。Spring 的、CoSec 的和 actuator 的处理器不算应用的，不需要列出（[网关自己的处理器](../integration/web.md#the-gateways-own-handlers)）。库的控制器算：网关宿主上 springdoc 的 `openApiResource` 和你自己的处理器一样被拒绝（用 `springdoc.api-docs.enabled=false` 关掉它，或者列出它）。
@@ -156,6 +156,7 @@ description: "每个 8.0 预览版（alpha 与 beta）到下一个之间的变�
   - **Redis。** `<s>:membership:*` 键不再被读写：所有实例都运行此版本后可以删除（`redis-cli --scan --pattern '<s>:membership:*' | xargs redis-cli del`），并从数据面的 ACL 中去掉 `~<s>:membership:*`（[谁可以写哪些 key](./storage.md#who-may-write-which-keys)）。新旧实例并存期间，旧实例的 `invalidate` 仍能到达新实例（同一通道、同样的帧）。
 - **条目预算计入角色与目录简写派生的条目**（`CTL-40`，DR1-B-1）。受影响的：角色列了很多权限的文档，或目录里有很多带 `action` 的权限的应用。`maxRoleBindings` 现在把角色的绑定（它所列的每个权限一条，`"*"` 为目录的全部权限）与手写的一起计入，默认值从 10,000 调到 20,000，让 100 个角色各 100 个权限留有余量；`maxPolicies` 与 `maxStatements` 为每个带 `action` 的目录权限计入一条只含一条语句的策略。beta.7 能发布、但会把这样的计数抬过预算的变更，现在停留在草稿并带 `V2` 错误；已存储的超预算文档继续被服务，只要不增长就仍可修改。如何判断：对它的任意变更调用 `POST /changes:check`（[不提出而检查](../policies/testing.md#checking-without-proposing)），`V2` 警告会写出每个超过预算的计数与上限（[条目预算](../policies/language.md#entry-budgets)）；或数出它派生的绑定，即各角色权限数之和：`jq '[.roles[]?.permissions | if type == "array" then length else 0 end] | add + ([.bindings[]? | select(.subject.role)] | length)'`（`"*"` 角色再加上它的应用目录的权限数）。文档确实需要时，在平台的 `limits` 中调高预算。分散在不同权限上的派生绑定，每千条让租户管理员变更的检查多约 0.5 秒，每条在持有该文档的每个实例上约占 240 字节。
 - **在拒绝方向上末尾的 `/` 不算数**（`PIP-35`，DR1-C-9）。受影响的：所有部署，方向是放行得更少。写在 `/orders/{id}` 上的 DENY 语句或限流规则现在也作用于 `/orders/123/`，写在 `/orders/` 上的也作用于 `/orders`；ALLOW 与平台边界仍按路径原样匹配。在有路由映射的宿主上，路径以 `/` 结尾、映射不上、去掉后能映射的请求（路由 `/orders/{id}` 时的 `DELETE /orders/123/`）现在答 `400` `invalid-request`，此前在 `http` 命名空间里决策。向映射宿主发送这种路径的客户端应去掉末尾的 `/`（[Web 集成](../integration/web.md)）。
+- **破坏性变更：路由写成以 `/` 结尾时，它的镜像也被拒绝**（`PIP-35`，DR2-C-2）。受影响的：路由映射中有以 `/` 结尾的路由路径的宿主。不带 `/` 的请求（路由 `/orders/` 时的 `GET /orders`）映射不上、加上 `/` 后能映射：现在答 `400` `invalid-request`，beta.7 在 `http` 命名空间里决策它，绕过该路由的 DENY。按路由的写法发送路径，或者把路由写成不带 `/`。
 - **社交登录的 state 有了上界**（DR1-D-9）。受影响的：提供社交登录的部署。一个部署最多持有 Redis 报告的内存的六十四分之一的进行中登录（每个 512 字节；Redis 不报告内存时为 100,000），超过时开始登录以 `SocialAuthenticationException`（“稍后再试”）拒绝，而不是再写两把键。提供社交登录的进程需要 Redis 的 `INFO` 权限，`SNP-3` 本来就要求；没有时使用固定上界，并记一条 WARN。`InMemorySocialStateStore` 最多持有 10,000 个。除了在边缘对开始登录的路由限流，无需改动（[存储](./storage.md#redis-keys)）。
 
 ## 从 8.0.0-beta.6 升级 {#from-8-0-0-beta-6}

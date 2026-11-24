@@ -816,11 +816,11 @@ client's `CoSec-Identity`.
 ### Startup fails on the gateway's own handlers {#startup-fails-on-the-gateways-own-handlers}
 
 ```text
-This is a Spring Cloud Gateway host: CoSec decides the requests of gateway routes only. n handler(s) of the application itself are mapped before any route and would be answered with no CoSec decision (no authentication, no policy, no rate limit): ... (STA-13, ...)
+This is a Spring Cloud Gateway host: CoSec decides the requests of gateway routes only. n handler(s) of the application itself are served outside the gateway's routes and would be answered with no CoSec decision (no authentication, no policy, no rate limit): ... (STA-13, ...)
 ```
 
-It names controllers or functional routes of the application, by bean name. They are mapped before any gateway route,
-so CoSec never sees a request for them ([The gateway's own handlers](../integration/web.md#the-gateways-own-handlers)).
+It names controllers, functional routes or handler mappings (a WebSocket endpoint's, say) of the application, by bean
+name. They are served outside any gateway route, so CoSec never sees a request for them ([The gateway's own handlers](../integration/web.md#the-gateways-own-handlers)).
 Move them to a service behind the gateway, where a route decides them. Or, for the ones something else protects, list
 their bean names in `cosec.gateway.unprotected-handlers` (`COSEC_GATEWAY_UNPROTECTEDHANDLERS`); startup then names them
 in one INFO line. `... lists [*]: it takes the bean names of handlers, never a pattern` means a listed name holds `*`:
