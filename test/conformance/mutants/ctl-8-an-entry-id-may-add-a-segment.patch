@@ -3,11 +3,11 @@
 # Tests: :control:test --tests me.ahoo.cosec.control.change.EntryIdsTest :conformance:test
 
 diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/EntryChecks.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/EntryChecks.kt
-index 41a1eb577..94fc0e6fd 100644
+index 63a675571..d3da42cb2 100644
 --- a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/EntryChecks.kt
 +++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/EntryChecks.kt
-@@ -91,7 +91,7 @@ internal object EntryChecks {
-                 is Operation.PutCatalog -> operation.catalog?.groups.orEmpty().flatMap { group -> group.permissions.map { it.id } }
+@@ -94,7 +94,7 @@ internal object EntryChecks {
+                 is Operation.PutCatalog -> catalogIds(operation.catalog) - stored
                  else -> emptyList()
              }
 -            ids.filter { '/' in it }.forEach { id ->
