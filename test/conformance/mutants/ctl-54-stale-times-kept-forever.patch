@@ -1,0 +1,17 @@
+# Rule: CTL-54
+# Mutant: a reader keeps the time of a stale member another writer removed, for the process's life
+# Tests: :cocache:test --tests me.ahoo.cosec.cocache.control.OpenChangeSetsRaceTest
+
+diff --git a/backends/cocache/src/main/kotlin/me/ahoo/cosec/cocache/control/OpenChangeSets.kt b/backends/cocache/src/main/kotlin/me/ahoo/cosec/cocache/control/OpenChangeSets.kt
+index 0000000..0000000 100644
+--- a/backends/cocache/src/main/kotlin/me/ahoo/cosec/cocache/control/OpenChangeSets.kt
++++ b/backends/cocache/src/main/kotlin/me/ahoo/cosec/cocache/control/OpenChangeSets.kt
+@@ -242,7 +242,7 @@ internal class OpenChangeSets(
+      * read and a reader then finds stale starts its grace again at the next read, which only keeps it longer.
+      */
+     private fun forgetUnheld(key: String, held: Set<String>) {
+-        staleSince.computeIfPresent(key) { _, members -> members.apply { keys.retainAll(held) }.ifEmpty { null } }
++        staleSince.computeIfPresent(key) { _, members -> members.takeIf { held.isNotEmpty() || held.isEmpty() } }
+     }
+ 
+     internal companion object {

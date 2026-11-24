@@ -1,0 +1,16 @@
+# Rule: CTL-77
+# Mutant: the HTTP facade takes a client that follows redirects, which sends CoSec-Identity where a redirect points
+# Tests: :control-http:test --tests me.ahoo.cosec.control.http.HttpControlServiceTest
+
+diff --git a/extensions/control-http/src/main/kotlin/me/ahoo/cosec/control/http/HttpTransport.kt b/extensions/control-http/src/main/kotlin/me/ahoo/cosec/control/http/HttpTransport.kt
+index 0000000..0000000 100644
+--- a/extensions/control-http/src/main/kotlin/me/ahoo/cosec/control/http/HttpTransport.kt
++++ b/extensions/control-http/src/main/kotlin/me/ahoo/cosec/control/http/HttpTransport.kt
+@@ -66,7 +66,6 @@ internal class HttpTransport(
+         require(timeout > Duration.ZERO) { "A call's timeout is positive, not $timeout." }
+         // A redirect is a refusal (CTL-77), and a client that follows one sends CoSec-Identity, which the host believes
+         // without a signature, to wherever the redirect points (DR1-F-17).
+-        require(client.followRedirects() == HttpClient.Redirect.NEVER) { FOLLOWS_REDIRECTS }
+     }
+ 
+     override suspend fun call(caller: ControlCaller, call: ServiceCall): String {

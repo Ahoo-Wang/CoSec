@@ -32,7 +32,8 @@ import java.time.Duration
  * the header names.
  *
  * [client] carries every call: its TLS (a client certificate for a service port that asks for one), proxy, connect
- * timeout and executor are the application's to choose.
+ * timeout and executor are the application's to choose. It follows no redirect (`HttpClient.Redirect.NEVER`, the
+ * default), or the constructor refuses it: a followed redirect would send `CoSec-Identity` where it points.
  *
  * What a call answers:
  * - a `2xx`: the route's answer;
@@ -42,6 +43,7 @@ import java.time.Duration
  *   of a write that timed out is unknown, so read the change or the document again before retrying. A change it left
  *   staged is taken over by the next [me.ahoo.cosec.control.sdk.ControlClient.proposeAndPublishWithoutShadow] of the same
  *   principal once it is one patience old;
+ * - an answer over [MAX_ANSWER_BYTES]: a [java.io.IOException], as soon as that much has come, never read whole;
  * - any other failure of the transport (a refused connection, a reset): the [java.io.IOException] as the client throws
  *   it. This is the one way the two implementations differ: in process, the control plane is not behind a connection
  *   (`CTL-77`).
@@ -66,5 +68,12 @@ class HttpControlService(
 
         /** How long a call waits for its answer by default. */
         val DEFAULT_TIMEOUT: Duration = Duration.ofSeconds(30)
+
+        /**
+         * The largest answer read: twice the largest request body a control route reads (10 MB: the 8 MB document cap
+         * and 2 MB of operations around it, `ControlDerived.MAX_BODY_BYTES`, which a test holds this to). No answer
+         * holds more than one document, or one change's operations, with its findings around it.
+         */
+        const val MAX_ANSWER_BYTES: Long = 2L * (8L * 1024 * 1024 + 2L * 1024 * 1024)
     }
 }
