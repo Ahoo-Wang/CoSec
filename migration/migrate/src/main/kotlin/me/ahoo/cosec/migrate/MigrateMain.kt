@@ -88,6 +88,7 @@ object MigrateMain {
           restore --to-redis <uri> [--cluster] [--key-prefix <p>] --document platform|app:<id>|tenant:<id>
                   --revision <n> or --file <document.json>, then the same with --confirm <head revision>
           (--cluster: --to-redis names seed nodes of a Redis Cluster, comma-separated)
+          (a Redis <uri> may be env:<VARIABLE> or file:<path>: the URI is read from there, off the command line)
           partition plan (--from-redis <uri> [--key-prefix <p>] | --from-files <dir>) --out <dir>
           api-keys --redis <uri> [--key-prefix <p>] --out <dir> [--app <id>] [--memberships <file>] [--blacklist <file>]
                    [--grant-to-principal <ids>|all] [--role-prefix <p>] [--dry-run]
@@ -101,7 +102,7 @@ object MigrateMain {
     @Suppress("TooGenericExceptionCaught")
     fun run(args: List<String>, out: PrintStream): Int {
         // What the tool prints of an error leaves out the credentials of every URI it was given ([RedisUris]).
-        val uris = args.filter { "://" in it }
+        val uris = args.filter { "://" in it }.toMutableList()
         fun printed(error: Throwable): String = RedisUris.scrub(error.message ?: error.javaClass.name, uris)
         val command = args.firstOrNull().let { if (it == "partition" && args.getOrNull(1) == "plan") "partition plan" else it }
         val options = try {
@@ -111,6 +112,8 @@ object MigrateMain {
             out.println(USAGE_TEXT)
             return USAGE
         }
+        // A URI read from the environment or a file is left out of what is printed as well.
+        uris += options.redisUris
         return try {
             dispatch(command, options, out)
         } catch (error: UsageException) {

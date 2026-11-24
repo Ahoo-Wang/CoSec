@@ -282,7 +282,8 @@ cosec-migrate publish --to-redis redis://localhost:6379 [--cluster] [--key-prefi
 ```
 
 `publish` reads only an accepted conversion, and only the files `report.json` lists with the SHA-256 recorded there:
-a file edited, missing or added since `convert` stops it. A document you wrote yourself, rather than one `convert`
+a file edited by accident, missing or added since `convert` stops it. The SHA-256s are in the same directory, so this
+guards against accidents, not against whoever can write the directory: keep it where only the operator writes. A document you wrote yourself, rather than one `convert`
 wrote, publishes with `--file <document.json> --document <platform|app:<id>|tenant:<id>>` in place of `--in`, with
 the same checks. It then compiles every document, checks every app
 document's references against the platform document, and refuses documents that hold a break-glass binding, writing
@@ -441,8 +442,10 @@ Compare the head with what was published, and publish again what it lacks, as af
 
 In a cluster, run each command as a Job in the namespace that can reach Redis, so the tool needs no access from your
 machine. An init container downloads the release's zip, checks its SHA-256 and unpacks it into a volume; the main
-container runs the tool on a plain JRE. The Redis address, with its credentials, comes from a Secret and reaches the
-tool as `--to-redis` (the tool reads its Redis only from its options; Kubernetes expands `$(REDIS_URI)` in `args`):
+container runs the tool on a plain JRE. The Redis address, with its credentials, comes from a Secret into the
+environment variable `REDIS_URI`, and the tool reads it from there: `--to-redis env:REDIS_URI` (any Redis URI option
+takes `env:<VARIABLE>` or `file:<path>` in place of the URI). The password then stays off the command line, which the
+node's process list shows; `--to-redis redis://...` still works where that does not matter:
 
 ```bash
 kubectl -n cosec create secret generic cosec-migrate-redis --from-literal=uri='redis://:<password>@redis:6379'
@@ -504,7 +507,7 @@ spec:
               mountPath: /tool
           # `jar` does not restore the executable bit, so the start script runs through `sh`.
           command: ["sh", "/tool/cosec-migrate/bin/cosec-migrate"]
-          args: ["repair-references", "--to-redis", "$(REDIS_URI)", "--key-prefix", "cosec"]
+          args: ["repair-references", "--to-redis", "env:REDIS_URI", "--key-prefix", "cosec"]
           securityContext:
             allowPrivilegeEscalation: false
             capabilities:
@@ -513,14 +516,16 @@ spec:
 
 `kubectl -n cosec logs job/cosec-repair-references` shows what the tool printed, and the Job fails (exit code `1` or `2`)
 when the command does. What it prints leaves out the credentials of the Redis URIs it was given, so the log holds no
-password: a command it prints to run next, such as `publish ... --resume`, takes `$(REDIS_URI)` again. Set `--key-prefix` to [`cosec.key-prefix`](./configuration.md#key-prefix) of your instances.
-For `bootstrap` change `args` to `["bootstrap", "--to-redis", "$(REDIS_URI)", "--platform-admin", "alice"]`. For a Redis
+password: a command it prints to run next, such as `publish ... --resume`, takes `env:REDIS_URI` again. Set `--key-prefix` to [`cosec.key-prefix`](./configuration.md#key-prefix) of your instances.
+For `bootstrap` change `args` to `["bootstrap", "--to-redis", "env:REDIS_URI", "--platform-admin", "alice"]`. For a Redis
 Cluster add `--cluster` to the commands that take it and write the seed nodes, comma-separated, in the Secret.
 
 `convert`, `publish`, `partition plan` and `api-keys` read or write a directory: mount a PersistentVolumeClaim at `/data`
 in the main container and give the paths as `--out /data/converted` and `--in /data/converted`. Run `convert` as one Job,
 read `report.json` from the volume (a second pod mounting it, or `kubectl cp`), and run `publish` as another Job only
-once the conversion is accepted: `publish` takes only files `report.json` lists, with the SHA-256 recorded there.
+once the conversion is accepted: `publish` takes only files `report.json` lists, with the SHA-256 recorded there. What
+`publish`, `bootstrap` and `restore` write is recorded as `cosec-migrate` in each revision's provenance: who ran the
+Job is for your deployment to record (the Job, its namespace's audit log).
 
 #### Rollback
 

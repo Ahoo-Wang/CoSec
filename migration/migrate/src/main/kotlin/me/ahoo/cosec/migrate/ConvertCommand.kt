@@ -21,6 +21,7 @@ import me.ahoo.cosec.cocache.DEFAULT_KEY_PREFIX
 import me.ahoo.cosec.migrate.MigrateMain.FAILED
 import me.ahoo.cosec.migrate.MigrateMain.OK
 import me.ahoo.cosec.migrate.RedisAccess.readRedis
+import me.ahoo.cosec.model.Identifiers.printable
 import java.io.PrintStream
 import java.nio.file.Path
 
@@ -65,8 +66,11 @@ internal object ConvertCommand {
         report.semanticChanges.groupingBy { it.change }.eachCount().toSortedMap().forEach { (change, count) ->
             out.println("semantic change $change: $count place(s)")
         }
-        report.warnings.forEach { out.println("WARN   ${it.location}: ${it.message}") }
-        report.rejections.forEach { out.println("REJECT ${it.kind} ${it.location}: ${it.message} (${it.advice})") }
+        // 7.x ids, keys and permission names are read data: printed escaped, so none forges a line (RC1-15, DR2-M-4).
+        report.warnings.forEach { out.println("WARN   ${printable(it.location)}: ${printable(it.message)}") }
+        report.rejections.forEach {
+            out.println("REJECT ${it.kind} ${printable(it.location)}: ${printable(it.message)} (${it.advice})")
+        }
         out.println(
             if (report.accepted) {
                 "Converted. Input sha256 ${report.inputSha256}."

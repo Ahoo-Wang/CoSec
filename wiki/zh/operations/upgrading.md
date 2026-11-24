@@ -196,8 +196,8 @@ cosec-migrate convert --from-files ./export --out ./converted
 cosec-migrate publish --to-redis redis://localhost:6379 [--cluster] [--key-prefix cosec] --in ./converted [--resume]
 ```
 
-`publish` 只读取被接受的转换，而且只读取 `report.json` 列出的文件，并校验其中记录的 SHA-256：`convert` 之后被修改、缺失或新增的文件会让
-它停止。你自己写的文档（而不是 `convert` 写出的）用 `--file <document.json> --document <platform|app:<id>|tenant:<id>>` 代替 `--in` 发布，检查相同。然后它编译每一份文档，按平台文档检查每份应用文档的引用，并拒绝含 break-glass 绑定的文档，什么也不写（`bootstrap` 同样拒绝）。它经过控制面的存储把每份文档写成修订 1，所以文档的修订历史从这里开始；并且只在文档尚不存在时写入：它从不覆盖 8.0 数据。
+`publish` 只读取被接受的转换，而且只读取 `report.json` 列出的文件，并校验其中记录的 SHA-256：`convert` 之后被意外修改、缺失或新增的文件会让
+它停止。这些 SHA-256 存在同一个目录里，所以它防的是意外，防不了能写这个目录的人：把目录放在只有运维能写的地方。你自己写的文档（而不是 `convert` 写出的）用 `--file <document.json> --document <platform|app:<id>|tenant:<id>>` 代替 `--in` 发布，检查相同。然后它编译每一份文档，按平台文档检查每份应用文档的引用，并拒绝含 break-glass 绑定的文档，什么也不写（`bootstrap` 同样拒绝）。它经过控制面的存储把每份文档写成修订 1，所以文档的修订历史从这里开始；并且只在文档尚不存在时写入：它从不覆盖 8.0 数据。
 
 每份文档写一次。如果某一次失败，消息会列出已经写入的文档；用 `--resume` 再运行一次，它跳过内容相同的已发布文档，拒绝内容不同的。
 `--key-prefix` 是部署的前缀，与 [`cosec.key-prefix`](./configuration.md#key-prefix) 相同。`publish` 没有 `--dry-run`；想知道它会做什么，读 `report.json`。
@@ -274,7 +274,7 @@ cosec-migrate verify-chain --to-redis redis://localhost:6379 [--cluster] [--key-
 
 #### 以 Kubernetes Job 运行 {#run-as-a-kubernetes-job}
 
-在集群里，把每条命令作为 Job 运行，放在能连上 Redis 的命名空间，这样不必从你的机器访问 Redis。init 容器下载 release 的 zip、校验 SHA-256 并解压到一个卷；主容器在普通 JRE 上运行工具。带凭证的 Redis 地址来自一个 Secret，作为 `--to-redis` 交给工具（工具只从选项读取 Redis 地址；Kubernetes 会展开 `args` 里的 `$(REDIS_URI)`）：
+在集群里，把每条命令作为 Job 运行，放在能连上 Redis 的命名空间，这样不必从你的机器访问 Redis。init 容器下载 release 的 zip、校验 SHA-256 并解压到一个卷；主容器在普通 JRE 上运行工具。带凭证的 Redis 地址从一个 Secret 进入环境变量 `REDIS_URI`，工具从那里读取：`--to-redis env:REDIS_URI`（任何 Redis URI 选项都可以用 `env:<VARIABLE>` 或 `file:<path>` 代替 URI）。这样密码不出现在命令行上，而节点的进程列表能看到命令行；不在乎这一点的地方，`--to-redis redis://...` 照旧可用：
 
 ```bash
 kubectl -n cosec create secret generic cosec-migrate-redis --from-literal=uri='redis://:<password>@redis:6379'
@@ -336,16 +336,16 @@ spec:
               mountPath: /tool
           # `jar` 不恢复可执行位，所以启动脚本经由 `sh` 运行。
           command: ["sh", "/tool/cosec-migrate/bin/cosec-migrate"]
-          args: ["repair-references", "--to-redis", "$(REDIS_URI)", "--key-prefix", "cosec"]
+          args: ["repair-references", "--to-redis", "env:REDIS_URI", "--key-prefix", "cosec"]
           securityContext:
             allowPrivilegeEscalation: false
             capabilities:
               drop: [ALL]
 ```
 
-`kubectl -n cosec logs job/cosec-repair-references` 显示工具的输出；命令失败时（退出码 `1` 或 `2`）Job 也失败。工具输出的内容不含它收到的 Redis URI 中的凭证，因此日志里没有密码：它打印的下一步命令（例如 `publish ... --resume`）需要再次使用 `$(REDIS_URI)`。`--key-prefix` 设为你的实例的 [`cosec.key-prefix`](./configuration.md#key-prefix)。运行 `bootstrap` 时把 `args` 改为 `["bootstrap", "--to-redis", "$(REDIS_URI)", "--platform-admin", "alice"]`。Redis Cluster 则给支持的命令加上 `--cluster`，并在 Secret 里写以逗号分隔的种子节点。
+`kubectl -n cosec logs job/cosec-repair-references` 显示工具的输出；命令失败时（退出码 `1` 或 `2`）Job 也失败。工具输出的内容不含它收到的 Redis URI 中的凭证，因此日志里没有密码：它打印的下一步命令（例如 `publish ... --resume`）需要再次使用 `env:REDIS_URI`。`--key-prefix` 设为你的实例的 [`cosec.key-prefix`](./configuration.md#key-prefix)。运行 `bootstrap` 时把 `args` 改为 `["bootstrap", "--to-redis", "env:REDIS_URI", "--platform-admin", "alice"]`。Redis Cluster 则给支持的命令加上 `--cluster`，并在 Secret 里写以逗号分隔的种子节点。
 
-`convert`、`publish`、`partition plan` 与 `api-keys` 读写目录：在主容器的 `/data` 挂载一个 PersistentVolumeClaim，路径写成 `--out /data/converted` 与 `--in /data/converted`。把 `convert` 作为一个 Job 运行，从卷上读 `report.json`（再起一个挂载它的 Pod，或用 `kubectl cp`），转换被接受之后才把 `publish` 作为另一个 Job 运行：`publish` 只接受 `report.json` 列出的、SHA-256 与之一致的文件。
+`convert`、`publish`、`partition plan` 与 `api-keys` 读写目录：在主容器的 `/data` 挂载一个 PersistentVolumeClaim，路径写成 `--out /data/converted` 与 `--in /data/converted`。把 `convert` 作为一个 Job 运行，从卷上读 `report.json`（再起一个挂载它的 Pod，或用 `kubectl cp`），转换被接受之后才把 `publish` 作为另一个 Job 运行：`publish` 只接受 `report.json` 列出的、SHA-256 与之一致的文件。`publish`、`bootstrap` 与 `restore` 写入的东西在每个修订的来源记录里记为 `cosec-migrate`：谁运行了 Job，由你的部署自己记录（Job 本身、它所在命名空间的审计日志）。
 
 #### 回滚 {#rollback}
 

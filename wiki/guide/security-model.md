@@ -269,7 +269,9 @@ the request and its approval are steps of one change, each recorded by a REQUIRE
 publishes records who published it and who approved it (`provenance.publishedBy`, `approvedBy`); who requested it is
 in the change log. The data plane does not check a break-glass binding for
 who granted or approved it: whoever can write a document can write such names too, so they would prove nothing.
-`cosec-migrate` writes no break-glass binding; after the switch, request one through the control plane.
+`cosec-migrate` writes no break-glass binding; after the switch, request one through the control plane. What it writes
+(`publish`, `bootstrap`, `restore`) is recorded as `cosec-migrate`, the actor of each revision's provenance, and is no
+change in the change log: who ran it is for the deployment to record.
 
 These guarantees do not bind the trust root. A platform administrator holding `cosec:approve` publishes its own
 changes without analysis or a second person, and holds `cosec:skip-shadow`: alone, it can bind itself a non-expiring
