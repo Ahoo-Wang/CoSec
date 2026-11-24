@@ -275,7 +275,7 @@
     {
       "id": "IDN-22",
       "source": "RFC 0009 §11.4 (8.0 drill, entry 9)",
-      "statement": "A tenant switch issues only from a live session: the request's session, as CoSec's token proved it, whose family is readable, its principal's and tenant's, not revoked and not ended, with the token's revocations read strictly (IDN-14). Otherwise nothing is issued: 401 when the session is unknown, another's, revoked or ended, 503 when the family or the revocations cannot be read (IDN-19). A refresh checks its session in the same place, so a family revoked by a logout (IDN-18) or by a pair presented again (IDN-16) issues nothing, by either.",
+      "statement": "A tenant switch issues only from a live session, and only on its token pair: the switch presents the request's own access token and its refresh token, checked as a refresh's are, and an access token alone, or a pair the request was not made with, issues nothing (401 token-invalid). The session is the request's, as CoSec's token proved it, whose family is readable, its principal's and tenant's, not revoked and not ended, with the token's revocations read strictly (IDN-14), and the pair is one the session would refresh, by the refresh's own rule: the current generation, or the one just replaced within the rotation leeway; an older pair presented to switch is a pair presented again, which revokes the session as a refresh would (IDN-16). The switch moves nothing of the session it was presented from. Otherwise nothing is issued: 401 when the session is unknown, another's, revoked or ended, 503 when the family or the revocations cannot be read (IDN-19). A refresh checks its session in the same place, so a family revoked by a logout (IDN-18) or by a pair presented again (IDN-16) issues nothing, by either.",
       "level": "pipeline",
       "pending": null,
       "guards": [
@@ -286,7 +286,13 @@
         "jwt:SwitchFromReplayedPairTest#a replayed pair revokes the session, and the thief's access token switches into nothing",
         "login:LiveSessionsGuardTest#only the live-session check rotates a family or starts one at an earlier login",
         "jwt:SwitchBehindGatewayTest#behind the gateway, a switch from a revoked session issues nothing",
-        "architecture:LiveSessionCallersTest#only the live-session check rotates, forks or checks a token family"
+        "architecture:LiveSessionCallersTest#only the live-session check rotates, forks or checks a token family",
+        "login:SwitchLiveSessionTest#an access token without its refresh token switches nothing",
+        "login:SwitchLiveSessionTest#a pair the request was not made with switches nothing",
+        "login:SwitchLiveSessionTest#the pair just replaced switches within the leeway, and the session is not moved",
+        "login:SwitchLiveSessionTest#an older pair presented to switch revokes the session, as a refresh would",
+        "jwt:SwitchFromReplayedPairTest#an access token alone switches into nothing",
+        "jwt:SwitchFromReplayedPairTest#a replaced pair presented to switch revokes the session"
       ]
     },
     {

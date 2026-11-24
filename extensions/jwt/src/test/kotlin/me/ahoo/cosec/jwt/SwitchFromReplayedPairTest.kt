@@ -56,6 +56,7 @@ import me.ahoo.cosec.runtime.token.TokenRevocation
 import me.ahoo.cosec.spi.token.InMemoryTokenFamilyStore
 import me.ahoo.cosec.spi.token.RevocationReader
 import me.ahoo.cosec.spi.token.TokenRevokedException
+import me.ahoo.cosec.spi.token.TokenVerificationException
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
@@ -75,8 +76,15 @@ class SwitchFromReplayedPairTest {
         override val refreshToken: String = token.refreshToken
     }
 
-    private class Select(override val targetTenantId: String, override val context: SecurityContext) :
-        SwitchTenantCredentials
+    /** A switch in [context]'s request, presenting [pair]. */
+    private class Select(
+        override val targetTenantId: String,
+        override val context: SecurityContext,
+        pair: CompositeToken,
+    ) : SwitchTenantCredentials {
+        override val accessToken: String = pair.accessToken
+        override val refreshToken: String = pair.refreshToken
+    }
 
     // No leeway: the replaced pair presented again revokes the session at once.
     private val families = TokenFamilies(InMemoryTokenFamilyStore(), Duration.ofDays(30), Duration.ZERO)
@@ -89,6 +97,7 @@ class SwitchFromReplayedPairTest {
                 register(RefreshTokenAuthentication(verifier, revocation, families, MembershipRefresh.CLAIMS))
                 register(
                     SwitchTenantAuthentication(
+                        verifier,
                         families,
                         revocation,
                         Select::class.java
@@ -125,8 +134,31 @@ class SwitchFromReplayedPairTest {
     @Test
     fun `a switch from a live session issues`() = runBlocking<Unit> {
         val alices = login()
-        val switched = tokens.authenticateAsToken(Select("beta", requestWith(alices.accessToken)))
+        val switched = tokens.authenticateAsToken(Select("beta", requestWith(alices.accessToken), alices))
         verifier.verify(switched.accessToken).tenant.assert().isEqualTo("beta")
+    }
+
+    /** IDN-22: a thief who copied only the access token holds no refresh token, and switches into nothing. */
+    @Test
+    fun `an access token alone switches into nothing`() = runBlocking<Unit> {
+        val alices = login()
+        assertThrows<TokenVerificationException> {
+            tokens.authenticateAsToken(Select("beta", requestWith(alices.accessToken), CompositeToken(alices.accessToken, "")))
+        }
+    }
+
+    /**
+     * IDN-22, IDN-16: once alice refreshed, the pair she replaced is presented again by a switch as by a refresh: the
+     * session is revoked, and nothing is issued.
+     */
+    @Test
+    fun `a replaced pair presented to switch revokes the session`() = runBlocking<Unit> {
+        val alices = login()
+        val refreshed = tokens.authenticateAsToken(Pair(alices))
+        assertThrows<TokenRevokedException> {
+            tokens.authenticateAsToken(Select("beta", requestWith(alices.accessToken), alices))
+        }
+        assertThrows<TokenRevokedException> { tokens.authenticateAsToken(Pair(refreshed)) }
     }
 
     @Test
@@ -139,7 +171,7 @@ class SwitchFromReplayedPairTest {
         val thiefsRequest = requestWith(thiefs.accessToken)
 
         val switched = try {
-            tokens.authenticateAsToken(Select("beta", thiefsRequest))
+            tokens.authenticateAsToken(Select("beta", thiefsRequest, thiefs))
         } catch (_: TokenRevokedException) {
             null
         }

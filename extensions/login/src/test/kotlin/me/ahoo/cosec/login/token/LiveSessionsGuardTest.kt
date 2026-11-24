@@ -54,7 +54,12 @@ class LiveSessionsGuardTest {
     private companion object {
         const val DEFINITION = "TokenFamilies.kt"
         const val CHECK = "LiveSessions.kt"
-        val ISSUING = listOf(Regex("""\.rotate\("""), Regex("""\.startAt\("""), Regex("""\.requireLive\("""))
+        val ISSUING = listOf(
+            Regex("""\.rotate\("""),
+            Regex("""\.startAt\("""),
+            Regex("""\.requireLive\("""),
+            Regex("""\.requireCurrent\("""),
+        )
         val AUTHENTICATION = Regex(""":\s*Authentication<""")
 
         /** What an issuer reads an earlier credential with: a verifier, or the request the pipeline permitted. */

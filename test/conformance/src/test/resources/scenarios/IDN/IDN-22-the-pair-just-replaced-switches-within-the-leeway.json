@@ -1,0 +1,56 @@
+{
+  "rules": [
+    "IDN-22"
+  ],
+  "polarity": "negative",
+  "level": "pipeline",
+  "description": "alice's session f1 was refreshed a moment ago (generation 2, within the rotation leeway): the pair it replaced, a request still in flight, switches as a retried refresh would refresh.",
+  "switch": {
+    "access": {
+      "jti": "a1",
+      "sub": "alice",
+      "tenantId": "acme",
+      "iat": 1793404800,
+      "claims": {
+        "sid": "f1",
+        "auth_time": 1793404800,
+        "cosec.generation": 1
+      }
+    },
+    "refresh": {
+      "jti": "r-a1",
+      "sub": "a1",
+      "iat": 1793404800,
+      "claims": {
+        "cosec.token": "refresh",
+        "sid": "f1",
+        "auth_time": 1793404800,
+        "cosec.generation": 1
+      }
+    },
+    "targetTenantId": "globex",
+    "answer": {
+      "roles": [
+        "clerk"
+      ]
+    }
+  },
+  "families": [
+    {
+      "id": "f1",
+      "tenant": "acme",
+      "principal": "alice",
+      "authTime": "2026-10-31T00:00:00Z",
+      "generation": 2,
+      "rotatedAt": "2026-10-31T23:59:58Z"
+    }
+  ],
+  "expect": {
+    "status": 200,
+    "proceed": true,
+    "issued": {
+      "tenant": "globex",
+      "app": null
+    }
+  }
+}

@@ -21,7 +21,8 @@ import org.junit.jupiter.api.Test
 
 /**
  * IDN-14, IDN-22 across every module, from the compiled classes: only `cosec-login`'s live-session check moves a token
- * family on (`rotate`), starts one at an earlier login (`startAt`) or asks whether one is live (`requireLive`). They are
+ * family on (`rotate`), starts one at an earlier login (`startAt`) or asks whether one is live (`requireLive`, and
+ * `requireCurrent` for a switch's pair). They are
  * `@InternalCoSecApi`, so another CoSec module (`cosec-jwt`, `cosec-social`, the starter) could call them by opting in,
  * and issue from an earlier token without the strict revocation read and the family check. Within `cosec-login`,
  * `LiveSessionsGuardTest` keeps every authentication that reads an earlier credential holding the check.
@@ -54,6 +55,6 @@ class LiveSessionCallersTest {
         /** The class itself and its coroutine continuations, through which a suspend function calls itself back. */
         val OWN = Regex("""me\.ahoo\.cosec\.login\.token\.TokenFamilies(\$.*)?""")
         val CHECK = Regex("""me\.ahoo\.cosec\.login\.token\.LiveSessions(\$.*)?""")
-        val METHODS = arrayOf("rotate", "startAt", "requireLive")
+        val METHODS = arrayOf("rotate", "startAt", "requireLive", "requireCurrent")
     }
 }

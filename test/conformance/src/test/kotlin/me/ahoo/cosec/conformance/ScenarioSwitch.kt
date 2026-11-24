@@ -69,12 +69,14 @@ import kotlin.coroutines.cancellation.CancellationException
  * A scenario's `"switch"` (PipelineRunner): the access token it signs authenticates a request through CoSec's token
  * authenticator, over the scenario's `"revocations"` (the request path's reading, PIP-7), and that request is switched
  * to `targetTenantId` through [SwitchTenantAuthentication], whose `TenantSwitch` answers `answer` (`roles`, `app`),
- * with the credentials naming `targetAppId` when given. The switch issues from the request's session, over the
+ * with the credentials naming `targetAppId` when given. The switch presents the pair: `access` and the `refresh` token
+ * signed as a refresh scenario signs it; without `refresh` it presents no refresh token (IDN-22). The switch issues from the request's session, over the
  * scenario's `"families"` (as `"refresh"` reads them, at [ScenarioRefresh.NOW]); without them, the token's family is
  * there and live.
  *
  * ```
  * "switch": { "access": { "jti": "a1", "sub": "alice", "tenantId": "acme", "claims": { "sid": "f1", "auth_time": 1 } },
+ *             "refresh": { "jti": "r1", "sub": "a1", "claims": { "cosec.token": "refresh", "sid": "f1", "auth_time": 1 } },
  *             "targetTenantId": "globex", "targetAppId": "order", "answer": { "roles": ["clerk"], "app": "order" } }
  * ```
  *
@@ -84,8 +86,9 @@ import kotlin.coroutines.cancellation.CancellationException
  */
 internal object ScenarioSwitch {
     fun switched(node: JsonNode, revocations: RevocationReader, families: JsonNode?): Outcome {
-        node.only("access", "targetTenantId", "targetAppId", "answer")
+        node.only("access", "refresh", "targetTenantId", "targetAppId", "answer")
         val access = ScenarioJwt(node.required("access")).token
+        val refresh = node.get("refresh")?.let { ScenarioJwt(it).token } ?: ""
         val answer = node.get("answer") ?: JsonNodeFactory.instance.objectNode()
         answer.only("roles", "app")
         val membership = TenantMembership(
@@ -107,8 +110,15 @@ internal object ScenarioSwitch {
             targetTenantId = node.required("targetTenantId").text(),
             targetAppId = node.get("targetAppId")?.text(),
             context = context,
+            accessToken = access,
+            refreshToken = refresh,
         )
-        val switch = SwitchTenantAuthentication(tokenFamilies, TokenRevocation(revocations), Credentials::class.java) {
+        val switch = SwitchTenantAuthentication(
+            ScenarioJwt.VERIFIER,
+            tokenFamilies,
+            TokenRevocation(revocations),
+            Credentials::class.java,
+        ) {
             membership
         }
         return try {
@@ -136,6 +146,8 @@ internal object ScenarioSwitch {
         override val targetTenantId: String,
         override val targetAppId: String?,
         override val context: SecurityContext,
+        override val accessToken: String,
+        override val refreshToken: String,
     ) : SwitchTenantCredentials
 
     /** The token's own family, live: for a scenario about something else than the session. */

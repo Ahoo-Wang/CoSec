@@ -17,6 +17,17 @@
         "cosec.generation": 1
       }
     },
+    "refresh": {
+      "jti": "r-a2",
+      "sub": "a2",
+      "iat": 1793404800,
+      "claims": {
+        "cosec.token": "refresh",
+        "sid": "f2",
+        "auth_time": 1793404800,
+        "cosec.generation": 1
+      }
+    },
     "targetTenantId": "globex",
     "targetAppId": "order",
     "answer": {

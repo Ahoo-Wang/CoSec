@@ -38,7 +38,11 @@ class SwitchTenantAuthenticationTest {
         override val context: SecurityContext,
         override val targetAppId: String? = null,
         val deviceId: String = "phone",
-    ) : SwitchTenantCredentials
+    ) : SwitchTenantCredentials {
+        private val pair = TestPairs.of(context)
+        override val accessToken: String = pair.accessToken
+        override val refreshToken: String = pair.refreshToken
+    }
 
     private val families = TokenFamilies(InMemoryTokenFamilyStore())
 
@@ -49,6 +53,7 @@ class SwitchTenantAuthenticationTest {
     @Suppress("FunctionName")
     private fun Switching(members: Map<String, TenantMembership>) =
         SwitchTenantAuthentication(
+            TestPairs,
             families,
             TokenRevocation(RevocationReader.NONE),
             Credentials::class.java
@@ -76,6 +81,7 @@ class SwitchTenantAuthenticationTest {
     @Test
     fun `the switch reads the application's own credentials without a cast`() = runTest {
         val byDevice = SwitchTenantAuthentication(
+            TestPairs,
             families,
             TokenRevocation(RevocationReader.NONE),
             Credentials::class.java,
