@@ -198,6 +198,9 @@ sealed class ResourcePattern {
          */
         const val MAX_LENGTH: Int = HTTP_PREFIX.length + HttpPathPattern.MAX_LENGTH
 
+        /** The longest a resource pattern is written: each of its characters escaped (`DOC-15`). */
+        const val MAX_WRITTEN_LENGTH: Int = HTTP_PREFIX.length + 2 * HttpPathPattern.MAX_LENGTH
+
         /**
          * [pattern] without its trailing separator (`PIP-35`), or [pattern] itself: the root and a pattern without one
          * keep theirs. A pattern that ends with a double star or a `{*name}` has none, and matches either spelling.
@@ -225,7 +228,9 @@ sealed class ResourcePattern {
                 val path = pattern.substring(HTTP_PREFIX.length)
                 return Http(HttpPathPattern.compile(path, caseSensitive, decodeAndParseSegments))
             }
-            val length = pattern.codePointCount(0, pattern.length)
+            // The characters it stands for: an escape is one (`DOC-15`).
+            val escapes = pattern.length - PatternEscapes.unescapedLength(pattern)
+            val length = pattern.codePointCount(0, pattern.length) - escapes
             if (length > MAX_LENGTH) {
                 throw InvalidPatternException(
                     pattern,
