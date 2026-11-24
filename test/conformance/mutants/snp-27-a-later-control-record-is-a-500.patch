@@ -1,0 +1,16 @@
+# Rule: SNP-27
+# Mutant: the control API answers a stored record a later version wrote as one that does not decode: a 500, logged as a fault
+# Tests: :control:test --tests me.ahoo.cosec.control.api.LaterRecordsTest
+
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/api/ControlHttp.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/api/ControlHttp.kt
+index de8ebfd23..d6b37bddc 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/api/ControlHttp.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/api/ControlHttp.kt
+@@ -165,7 +165,6 @@ class ControlHttp(
+      * (`SNP-27`): the gap of a rolling upgrade, which ends when this instance is upgraded, not a fault of the store.
+      */
+     private fun stored(request: ControlHttpRequest, requestId: String, e: Exception): ControlHttpResponse {
+-        if (later(request, requestId, e)) return problem(Problem.UNAVAILABLE, requestId, null)
+         log.error(
+             e
+         ) { "Control API ${request.method} ${request.path} (request $requestId): a stored value does not decode." }

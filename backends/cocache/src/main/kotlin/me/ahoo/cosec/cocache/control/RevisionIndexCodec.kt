@@ -110,7 +110,7 @@ internal object RevisionIndexCodec : Codec<RevisionIndex> {
 
     override fun decode(bytes: ByteArray): RevisionIndex {
         val root = read(bytes, WHAT)
-        StoredFormat.of(root, WHAT)
+        StoredFormat.read(root, ControlRecordMembers.REVISION_INDEX, WHAT)
         return try {
             RevisionIndex(
                 entries = root.field("entries", WHAT).items(WHAT).map { entry ->
