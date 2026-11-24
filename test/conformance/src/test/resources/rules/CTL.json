@@ -697,7 +697,8 @@
         "control:DecisionQueriesTest#a tenant administrator does not see the statements of an app policy their binding points to",
         "control:DecisionQueriesTest#a platform operator still sees them, and a tenant administrator their own tenant's statements",
         "control:ControlLockoutTest#a statement is named only to a publisher who may read the document that defines it",
-        "control:ControlLockoutTest#a refusal by the platform boundary names it only to a reader of the platform document"
+        "control:ControlLockoutTest#a refusal by the platform boundary names it only to a reader of the platform document",
+        "control:ControlLockoutTest#each reference is named only where its policy is defined"
       ],
       "pending": null
     },

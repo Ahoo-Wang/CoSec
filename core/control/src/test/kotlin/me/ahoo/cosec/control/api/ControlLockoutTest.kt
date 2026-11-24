@@ -54,7 +54,10 @@ import me.ahoo.cosec.model.PolicyId
 import me.ahoo.cosec.model.PrincipalId
 import me.ahoo.cosec.model.SubjectRef
 import me.ahoo.cosec.model.TenantId
+import me.ahoo.cosec.model.decision.BindingRef
+import me.ahoo.cosec.model.decision.DocumentKind
 import me.ahoo.cosec.model.decision.StatementRef
+import me.ahoo.cosec.model.scope.ScopeResolution
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.cosec.spi.token.RevocationReader
 import me.ahoo.test.asserts.assert
@@ -165,6 +168,43 @@ class ControlLockoutTest {
         refusal.reason.assert().contains("platform boundary fence")
         refusal.namedIn.assert().containsExactly(SnapshotKey.Platform)
         refusal.unnamed.assert().contains("would be denied by the tenant's platform boundary").doesNotContain("fence")
+    }
+
+    /**
+     * DR1-F-13 (`CTL-51`): where each kind of reference is defined, as `Redaction.visible` reads it: a bound policy's
+     * own document (the app's, the tenant's), an attachment's tenant and platform together, a built-in's platform; a
+     * policy no document of the view defines, a scope refused and no statement at all name nothing.
+     */
+    @Test
+    fun `each reference is named only where its policy is defined`() {
+        val app = SnapshotKey.App("order")
+        val tenant = SnapshotKey.Tenant("acme")
+        val heads = mapOf(
+            SnapshotKey.Platform to Held(platform(listOf(admin), emptyList()), null),
+            app to Held(StoreFixtures.candidate(app, listOf(allow("perm:order/read"))), null),
+            tenant to Held(StoreFixtures.candidate(tenant, listOf(allow("own"))), null),
+        )
+        val homes = PolicyHomes(HeldDocuments(heads[SnapshotKey.Platform], heads[app], heads[tenant]))
+        fun denied(by: StatementRef?) = ControlLockout.denied("x", by, heads, homes)
+        fun bound(policy: String, document: DocumentKind) =
+            StatementRef.Policy(PolicyId(policy), 0, "", BindingRef.Bound(BindingId("b"), document))
+
+        denied(bound("perm:order/read", DocumentKind.TENANT)).namedIn.assert().containsExactly(app)
+        denied(bound("own", DocumentKind.TENANT)).namedIn.assert().containsExactly(tenant)
+        denied(bound("admin", DocumentKind.TENANT)).namedIn.assert().containsExactly(SnapshotKey.Platform)
+        denied(StatementRef.Policy(PolicyId("own"), 0, "", BindingRef.Attached(PolicyId("own")))).namedIn
+            .assert().containsExactly(tenant, SnapshotKey.Platform)
+        denied(StatementRef.Policy(PolicyId("cosec:blacklist"), 0, "", BindingRef.Builtin)).namedIn
+            .assert().containsExactly(SnapshotKey.Platform)
+        denied(bound("nowhere", DocumentKind.TENANT)).let {
+            it.namedIn.assert().isEmpty()
+            it.reason.assert().isEqualTo("x would be denied")
+        }
+        denied(StatementRef.ScopeRejected(ScopeResolution.Rejected.Reason.APP_MISMATCH)).let {
+            it.namedIn.assert().isEmpty()
+            it.reason.assert().contains("x would be denied (")
+        }
+        denied(null).reason.assert().isEqualTo("x would be denied: no statement permits it")
     }
 
     /**
