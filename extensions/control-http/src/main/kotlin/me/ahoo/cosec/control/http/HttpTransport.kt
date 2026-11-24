@@ -35,7 +35,6 @@ import java.net.URI
 import java.net.URLEncoder
 import java.net.http.HttpClient
 import java.net.http.HttpRequest
-import java.net.http.HttpResponse
 import java.time.Clock
 import java.time.Duration
 import java.util.concurrent.CompletableFuture
@@ -51,6 +50,7 @@ internal class HttpTransport(
     private val app: String,
     private val clock: Clock = Clock.systemUTC(),
     private val ids: IdGenerator = RandomIdGenerator,
+    maxAnswerBytes: Long = HttpControlService.MAX_ANSWER_BYTES,
 ) : RoutedControlService() {
     private val base = baseUri.toString().trimEnd('/')
 
@@ -60,12 +60,17 @@ internal class HttpTransport(
      */
     private val issuer = IdentityIssuer(clock = clock, relay = true)
 
+    private val answer = BoundedAnswer(maxAnswerBytes)
+
     private val ended = RateLimitedWarning(clock)
 
     init {
         require(baseUri.isAbsolute && baseUri.scheme in SCHEMES) { "The control API's base is an http or https URI." }
         require(baseUri.rawQuery == null && baseUri.rawFragment == null) { "The control API's base has no query." }
         require(timeout > Duration.ZERO) { "A call's timeout is positive, not $timeout." }
+        // A redirect is a refusal (CTL-77), and a client that follows one sends CoSec-Identity, which the host believes
+        // without a signature, to wherever the redirect points (DR1-F-17).
+        require(client.followRedirects() == HttpClient.Redirect.NEVER) { FOLLOWS_REDIRECTS }
     }
 
     override suspend fun call(caller: ControlCaller, call: ServiceCall): String {
@@ -82,7 +87,7 @@ internal class HttpTransport(
                 }
             }
             .build()
-        val response = client.sendAsync(request, HttpResponse.BodyHandlers.ofString()).awaitOrAbort()
+        val response = client.sendAsync(request, answer).awaitOrAbort()
         // Only a 2xx is the route's answer: a redirect the client did not follow, or a proxy's error page, is not.
         if (response.statusCode() !in SUCCESS) throw ControlRefusedException(response.statusCode(), response.body())
         return response.body()
@@ -158,6 +163,8 @@ internal class HttpTransport(
         const val JSON = "application/json"
         const val MEDIA_TYPES = "application/json, application/problem+json"
         val SCHEMES = setOf("http", "https")
+        const val FOLLOWS_REDIRECTS = "The control API's client follows redirects: a redirect is a refusal, and one " +
+            "followed would send CoSec-Identity where it points. Build it with followRedirects(HttpClient.Redirect.NEVER)."
         const val NO_CREDENTIAL = "The request's principal has no credential, so a control-plane host cannot be told " +
             "who it is: call as the application's own principal (ControlCaller.service), or in process."
 
