@@ -249,6 +249,28 @@ class OpenChangeSetsRaceTest {
         ids(ChangeState.CHECKED).assert().containsExactly("c1")
     }
 
+    /**
+     * DR1-F-20: a stale member another writer removed before the grace ran out leaves no time behind. However many come
+     * and go, this instance keeps a time only for the members its sets still hold.
+     */
+    @Test
+    fun `a stale member removed elsewhere is forgotten at the next read, so the times kept stay bounded`() = sets {
+        Write(change("c0", ChangeState.CHECKED)).all()
+        repeat(100) { i ->
+            // A write that lost leaves its members; this instance reads them stale; another instance removes them.
+            Write(change("c${i + 1}", ChangeState.READY)).list()
+            ids(ChangeState.READY).assert().isEmpty()
+            sets.openChanges(key).map { it.id.value }.assert().containsExactly("c0")
+            sets.staleEntries().assert().isEqualTo(2)
+            raw.suspending().remove("state:READY", raw.suspending().get("state:READY"))
+            raw.suspending().remove("doc:$key", setOf("c${i + 1}"))
+            ids(ChangeState.READY).assert().isEmpty()
+            sets.openChanges(key)
+            sets.staleEntries().assert().describedAs("after round $i").isEqualTo(0)
+        }
+        ids(ChangeState.CHECKED).assert().containsExactly("c0")
+    }
+
     @Test
     fun `a member whose change is terminal goes at once`() = sets {
         Write(change("c1", ChangeState.READY)).list()
