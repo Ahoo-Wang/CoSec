@@ -44,7 +44,9 @@ internal object IdentityMemberships {
             if (name == Match.WILDCARD) throw malformed("$path is the wildcard, which is no space")
             bySpace[name] = roles(roles, path).ifEmpty { throw malformed("$path names no role") }
         }
-        val attachments = attachments(node.get("attachments") ?: throw malformed("[memberships.attachments] is missing"))
+        val attachments = attachments(
+            node.get("attachments") ?: throw malformed("[memberships.attachments] is missing")
+        )
         if (bySpace.isEmpty() && attachments.isEmpty()) {
             Identity.Memberships.NONE
         } else {

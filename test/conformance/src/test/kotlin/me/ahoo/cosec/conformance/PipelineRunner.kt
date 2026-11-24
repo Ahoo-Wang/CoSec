@@ -434,7 +434,7 @@ class PipelineRunner(private val compiler: SnapshotCompiler = DocumentSnapshotCo
             200,
             true,
             null,
-            true to headers.getFirst(IdentityCodec.HEADER)?.let(::identityNode),
+            true to headers.getFirst(IdentityCodec.HEADER)?.let(::forwardedIdentity),
             forwardedCredentials(headers, sentQuery, apiKeyHeader),
             forwardedHeaders = if (gateway.get("reportHeaders")?.bool() == true) xHeadersOf(headers) else emptyList(),
         )

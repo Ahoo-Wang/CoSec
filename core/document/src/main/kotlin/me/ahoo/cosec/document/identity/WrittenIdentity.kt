@@ -63,6 +63,7 @@ internal object WrittenIdentity {
      * `memberships` (`IDN-39`), in the order the header lists it: the spaces sorted, then the attachments. Nothing is
      * built for the empty memberships the gateway writes for most principals.
      */
+    @Suppress("ThrowsCount")
     private fun memberships(memberships: Identity.Memberships, space: String) {
         if (memberships.spaces.isNotEmpty()) {
             for ((name, roles) in memberships.spaces.toSortedMap()) {
