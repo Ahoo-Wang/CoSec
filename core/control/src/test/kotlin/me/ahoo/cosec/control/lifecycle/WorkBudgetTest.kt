@@ -178,7 +178,7 @@ class WorkBudgetTest {
             launch {
                 delay(
                     i.toLong()
-                );
+                )
                 runCatching { budget.withWork("light-${i % 3}", 10, patience) { delay(5) } }
             }
         }
@@ -220,9 +220,11 @@ class WorkBudgetTest {
                         }
                     }
                 }
-                if (i % CANCEL_EVERY == 0) launch {
-                    delay(start + random.nextLong(0, 20));
-                    call.cancel()
+                if (i % CANCEL_EVERY == 0) {
+                    launch {
+                        delay(start + random.nextLong(0, 20))
+                        call.cancel()
+                    }
                 }
                 call
             }
