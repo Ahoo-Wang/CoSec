@@ -35,6 +35,7 @@ import me.ahoo.cosec.cocache.snapshot.SnapshotNode
 import me.ahoo.cosec.cocache.snapshot.newKeyPrefix
 import me.ahoo.cosec.cocache.snapshot.rawStore
 import me.ahoo.cosec.spi.shadow.InstanceStatus
+import me.ahoo.cosec.spi.shadow.ShadowReportReader
 import me.ahoo.cosec.spi.snapshot.SnapshotFormatException
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
@@ -125,12 +126,14 @@ class StatusReadingsTest {
         InstanceStatus(instance, time.clock.instant(), windows = setOf("c1@1"))
 
     /**
-     * An undecodable status has no `at` to age by: the store ends it. A status is written with the key's life, an hour
-     * renewed by each write (the readers' reach, `SNP-25`), so once its instance stops writing the value expires, readable or not, and the
-     * instance is no longer named, however often the others write.
+     * An undecodable status has no `at` to age by, so its key's remaining life does: every status is written with the
+     * key's exact life, an hour renewed by each write (`SNP-25`), so what is left of it says when it was last written.
+     * Like a status that reads, it is live for a minute after its last write and holds no shadow window after that,
+     * however often the others write; it stays among the readers of the store until its key expires, an hour after its
+     * last write. Written again, it is live again.
      */
     @Test
-    fun `an unreadable status is no longer named once its key expires, an hour after its last write`() =
+    fun `an unreadable status is live for a minute after its last write, and a reader for the hour its key lives`() =
         runBlocking<Unit> {
             val time = Time()
             val backend = InMemoryBackend(time)
@@ -141,15 +144,53 @@ class StatusReadingsTest {
                 reports.write(status("i1", time))
                 // i1's last write does not decode; it is written as every status is, with the key's life.
                 putRaw(backend, keyPrefix, "i1", """{"format":9}""", ShadowCacheSpecs.STATUS_TTL)
-                reports.statusReadings().unreadable.assert().containsExactly("i1")
-                // The held clock decides, to the millisecond: named until the key's life ends, and not from then on.
+                reports.statusReadings().unreadable.assert().describedAs("just written").containsExactly("i1")
+                reports.readerReadings().unreadable.assert().containsExactly("i1")
+                // The store's clock decides, to the millisecond: live a minute after the write, as a status that reads.
+                time.advance(ShadowReportReader.STATUS_TTL)
+                reports.write(status("i0", time))
+                reports.statusReadings().unreadable.assert().describedAs("a minute after").containsExactly("i1")
+                time.advance(Duration.ofMillis(1))
+                val stale = reports.statusReadings()
+                stale.unreadable.assert().describedAs("past the minute").isEmpty()
+                stale.statuses.map { it.instance }.assert().containsExactly("i0")
+                reports.readerReadings().unreadable.assert().describedAs("still a reader").containsExactly("i1")
+                // A new undecodable write is live again.
+                putRaw(backend, keyPrefix, "i1", """{"format":9}""", ShadowCacheSpecs.STATUS_TTL)
+                reports.statusReadings().unreadable.assert().describedAs("written again").containsExactly("i1")
+                // Its key expires an hour after that write: no longer a reader either.
                 time.advance(ShadowCacheSpecs.STATUS_TTL.minusMillis(1))
                 reports.write(status("i0", time))
-                reports.statusReadings().unreadable.assert().describedAs("a millisecond before").containsExactly("i1")
+                reports.statusReadings().unreadable.assert().isEmpty()
+                reports.readerReadings().unreadable.assert().describedAs("a millisecond before").containsExactly("i1")
                 time.advance(Duration.ofMillis(1))
-                val readings = reports.statusReadings()
-                readings.unreadable.assert().describedAs("at the end of the key's life").isEmpty()
-                readings.statuses.map { it.instance }.assert().containsExactly("i0")
+                reports.readerReadings().unreadable.assert().describedAs("at the end of the key's life").isEmpty()
+            }
+        }
+
+    /**
+     * A store built without the status keys (the constructor, not [CoCacheShadowReports.create]) cannot tell an
+     * undecodable status's age, and counts it while its instance's entry in the list is current, as one with no life.
+     */
+    @Test
+    fun `without the status keys an unreadable status counts while its entry in the list is current`() =
+        runBlocking<Unit> {
+            val time = Time()
+            val backend = InMemoryBackend(time)
+            val keyPrefix = newKeyPrefix()
+            SnapshotNode(backend, keyPrefix).use { node ->
+                val reports = CoCacheShadowReports(
+                    node.runtime.create(ShadowCacheSpecs.reports(keyPrefix)),
+                    node.runtime.create(ShadowCacheSpecs.reporters(keyPrefix)),
+                    node.runtime.create(ShadowCacheSpecs.statuses(keyPrefix)),
+                    node.runtime.create(ShadowCacheSpecs.instances(keyPrefix)),
+                    node.runtime.create(ShadowCacheSpecs.residents(keyPrefix)),
+                    time.clock,
+                )
+                reports.write(status("i1", time))
+                putRaw(backend, keyPrefix, "i1", """{"format":9}""", ShadowCacheSpecs.STATUS_TTL)
+                time.advance(Duration.ofMinutes(10))
+                reports.statusReadings().unreadable.assert().containsExactly("i1")
             }
         }
 

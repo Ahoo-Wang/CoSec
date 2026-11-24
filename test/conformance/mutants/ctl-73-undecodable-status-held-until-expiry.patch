@@ -1,0 +1,3 @@
+# Rule: CTL-73
+# Mutant: an undecodable status counts as live until its key expires, so a gone instance of a newer release holds every shadow window for an hour
+# Tests: :cocache:test --tests me.ahoo.cosec.cocache.shadow.StatusReadingsTest --tests me.ahoo.cosec.cocache.shadow.CoCacheShadowTest

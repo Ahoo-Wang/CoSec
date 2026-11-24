@@ -1,5 +1,5 @@
 # Rule: CTL-73
-# Mutant: a status's key takes CoCache's default jitter, so an undecodable status counts anything from one to three minutes after its last write, not the two the reader and its log promise
+# Mutant: a status's key takes CoCache's default jitter, so the life an undecodable status's key has left no longer says when it was written, and the readers of the store are not those of the last hour
 # Tests: :cocache:test --tests me.ahoo.cosec.cocache.shadow.StatusReadingsTest --tests me.ahoo.cosec.cocache.CacheTtlPolicyTest
 
 diff --git a/backends/cocache/src/main/kotlin/me/ahoo/cosec/cocache/CacheLocks.kt b/backends/cocache/src/main/kotlin/me/ahoo/cosec/cocache/CacheLocks.kt

@@ -517,7 +517,7 @@ At `max-duration` the window closes *insufficient* whatever the acknowledgements
 longer writes none, so it is neither waited for nor counted as acknowledging, and when it reconnects it installs the
 published revision having compared nothing; a host with shadowing off writes a status that says it does not shadow. An instance whose
 status is stored but does not decode (a crash-looping version, a corrupt value, or a format this control host does not
-read during a rolling upgrade) is live, until its status reads or expires an hour after its last write, and acknowledges nothing: the window waits for it and `shadow.waitingFor` names
+read during a rolling upgrade) is live for a minute after its last write, as any instance is (the life its status key has left tells when that was), and acknowledges nothing: the window waits for it and `shadow.waitingFor` names
 it, while every other status is read and `propagation` counts it as recent, holding no document (`CTL-73`).
 
 An instance that has reported on a window must keep reporting until it closes. One whose report is gone (it stopped

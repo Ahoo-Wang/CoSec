@@ -39,9 +39,8 @@ Which preview of the library may run behind which preview of the gateway image: 
   for it). Give their users write permission on those keys
   ([Who may write which keys](./storage.md#who-may-write-which-keys)). One without it keeps serving and starting: it logs
   the missing permission once at `ERROR`, counts `cosec.instance.status.failed`, and the control plane cannot see it.
-  A status is now kept an hour (it was two minutes); an instance is still live only with a status from the last minute.
-  An undecodable status of an instance that is gone therefore holds shadow windows up to an hour (`CTL-73`): stop the
-  instance and delete its status key, or let the window close at `max-duration`. `GET /instances` lists the readers and
+  A status is now kept an hour (it was two minutes); an instance is still live only with a status from the last minute,
+  one that does not decode included: its key's remaining life says when it was written (`CTL-73`). `GET /instances` lists the readers and
   their releases ([Testing policies](../policies/testing.md#instances)); `propagation` now counts a control-plane host and
   the documents it holds.
 

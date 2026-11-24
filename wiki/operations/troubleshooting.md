@@ -596,12 +596,12 @@ published revision having compared nothing. A host with shadowing off writes a s
   the candidate.
 - **An instance whose status does not decode** counts as live and acknowledging nothing (`CTL-73`): the control host
   logs `The status of instance [<instance>] does not read: it counts as live and acknowledging no shadow window until
-  it reads or expires, at most an hour after its last write (<why>).` at `WARN`, at most once a minute per
-  instance, and `cosec.control.shadow.status.unreadable` counts each read of it. An instance that stops writing
-  stops holding the windows an hour later, when its status expires (the readers' reach, `SNP-25`). A later format in `<why>` is a newer version during a rolling
-  upgrade: finish the upgrade of the control hosts, or roll that instance back. Anything else is a corrupt value or a
-  crash-looping instance: stop or fix the instance by its id; its status expires an hour after its last write, or
-  delete `<s>:shadow:status:<instance>` once the instance is stopped.
+  it reads, or until a minute after its last write, which its key's remaining life tells (<why>).` at `WARN`, at most
+  once a minute per instance, and `cosec.control.shadow.status.unreadable` counts each read of it. Like any instance,
+  one that stops writing stops holding the windows a minute later: the life its status key has left says when it was
+  written. A later format in `<why>` is a newer version during a rolling upgrade: finish the upgrade of the control
+  hosts, or roll that instance back. Anything else is a corrupt value or a crash-looping instance: stop or fix the
+  instance by its id.
 
 If **no** instance acknowledges any window (each one's `waitingFor` names every live instance), the instances hold no
 staged list: they log `The staged list cannot be read`, or `<s>:candidate-staged:all` has no `.kept` marker (a store

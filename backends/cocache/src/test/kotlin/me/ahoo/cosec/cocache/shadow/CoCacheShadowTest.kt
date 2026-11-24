@@ -25,13 +25,16 @@ import me.ahoo.cocache.api.ConditionalGet
 import me.ahoo.cocache.api.Store
 import me.ahoo.cocache.api.spi.CoherenceBackend
 import me.ahoo.cocache.api.spi.Digest
+import me.ahoo.cocache.core.KeyEncoder
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.cocache.CoSecCacheSpecs
 import me.ahoo.cosec.cocache.control.CoCacheControlStore
 import me.ahoo.cosec.cocache.createLocked
 import me.ahoo.cosec.cocache.snapshot.RedisTarget
 import me.ahoo.cosec.cocache.snapshot.SnapshotNode
 import me.ahoo.cosec.cocache.snapshot.newKeyPrefix
+import me.ahoo.cosec.cocache.snapshot.rawStore
 import me.ahoo.cosec.document.SnapshotDocuments
 import me.ahoo.cosec.document.shadow.ShadowCodec
 import me.ahoo.cosec.spi.shadow.InstanceStatus
@@ -307,5 +310,23 @@ class CoCacheShadowTest {
         sink.statuses().map { it.instance }.assert().containsExactly("a")
         val ambiguous = InstanceStatus("x:y", clock.now)
         assertThrownBy<IllegalArgumentException> { runBlocking { sink.write(ambiguous) } }
+    }
+
+    /**
+     * `CTL-73` on Redis: an undecodable status is aged by the life its key has left, as Redis counts it. One written
+     * with the key's whole life is live; one with two minutes less was written two minutes ago, and is only a reader.
+     */
+    @Test
+    fun `an undecodable status is live only while its key has nearly its whole life left`() = runBlocking<Unit> {
+        val sink = CoCacheShadowReports.create(node().factory, keyPrefix, clock)
+        sink.write(InstanceStatus("fresh", clock.now))
+        sink.write(InstanceStatus("stale", clock.now))
+        mapOf("fresh" to ShadowCacheSpecs.STATUS_TTL, "stale" to ShadowCacheSpecs.STATUS_TTL.minusMinutes(2))
+            .forEach { (instance, life) ->
+                val raw = rawStore("Raw-$instance", keyPrefix, CoSecCacheSpecs.INSTANCE_STATUS_CACHE_NAME, KeyEncoder<String> { it }, life)
+                node().runtime.create(raw).async().put(instance, """{"format":9}""".encodeToByteArray()).await()
+            }
+        sink.statusReadings().unreadable.assert().containsExactly("fresh")
+        sink.readerReadings().unreadable.assert().containsExactlyInAnyOrder("fresh", "stale")
     }
 }

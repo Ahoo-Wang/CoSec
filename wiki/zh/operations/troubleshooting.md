@@ -395,7 +395,7 @@ Redis may evict CoSec's policy snapshot: maxmemory-policy is {<node>=<policy>}, 
 - **旧版本的实例**不发送确认。完成滚动升级：旧实例下线后，它们的状态在一分钟内变旧，窗口不再等待它们。
 - **读不到暂存列表的实例**记录 `The staged list cannot be read since it was at <instant>`，其 `cosec.shadow.staged.age` 持续上升。修复它对 Redis 的访问（数据面用户读取 `<s>:candidate-staged:all`，[存储](./storage.md#redis-keys)）。
 - **窗口期间启动的实例**编译了候选之后，会在几个上报间隔内确认它。
-- **状态无法解码的实例**算作存活且什么都不确认（`CTL-73`）：控制面主机以 `WARN` 记录 `The status of instance [<instance>] does not read: it counts as live and acknowledging no shadow window until it reads or expires, at most an hour after its last write (<why>).`，每个实例每分钟最多一次，`cosec.control.shadow.status.unreadable` 对每次读到它计数。停止写入的实例在其状态过期时（一小时后，即存储读方的回溯范围，`SNP-25`）不再挡住窗口。`<why>` 中是更晚的格式时，说明滚动升级期间有更新的版本：完成控制面主机的升级，或回滚那个实例。其他情况是损坏的值或反复崩溃的实例：按其 id 停止或修复该实例；它的状态在最后一次写入一小时后过期，或在实例停止后删除 `<s>:shadow:status:<instance>`。
+- **状态无法解码的实例**算作存活且什么都不确认（`CTL-73`）：控制面主机以 `WARN` 记录 `The status of instance [<instance>] does not read: it counts as live and acknowledging no shadow window until it reads, or until a minute after its last write, which its key's remaining life tells (<why>).`，每个实例每分钟最多一次，`cosec.control.shadow.status.unreadable` 对每次读到它计数。和任何实例一样，停止写入的实例一分钟后就不再挡住窗口：状态键剩下的寿命说明它是何时写入的。`<why>` 中是更晚的格式时，说明滚动升级期间有更新的版本：完成控制面主机的升级，或回滚那个实例。其他情况是损坏的值或反复崩溃的实例：按其 id 停止或修复该实例。
 
 如果**没有任何**实例确认任何窗口（每个窗口的 `waitingFor` 都列出全部存活实例），说明实例没有持有暂存列表：它们记录 `The staged list cannot be read`，或者 `<s>:candidate-staged:all` 没有 `.kept` 标记（存储被清空后控制面尚未在其上暂存过任何候选；下一次暂存或影子轮询会写入它）。修复之后，实例会在几个上报间隔内确认。
 

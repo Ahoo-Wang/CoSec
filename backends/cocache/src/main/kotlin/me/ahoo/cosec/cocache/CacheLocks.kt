@@ -91,9 +91,10 @@ internal object CacheLocks {
                 val exact = EXACT_LIVES[cacheName]
                 constrain(PolicyField.TTL) { Ttl.of(exact ?: ShadowCacheSpecs.REPORT_TTL) }
                 if (exact != null) {
-                    // A status's life bounds the readers of the store (SNP-25), and an undecodable one counts until
-                    // its key expires (CTL-73), so the key lives exactly STATUS_TTL, without CoCache's default jitter. A
-                    // resident record is rewritten at half its life (CTL-75), which a jittered life could undercut.
+                    // A status's life bounds the readers of the store (SNP-25), and what an undecodable one's key has
+                    // left of it says when it was written (CTL-73), so the key lives exactly STATUS_TTL, without
+                    // CoCache's default jitter. A resident record is rewritten at half its life (CTL-75), which a
+                    // jittered life could undercut.
                     lock(PolicyField.TTL_JITTER)
                     constrain(PolicyField.TTL_JITTER) { Duration.ZERO }
                 }
