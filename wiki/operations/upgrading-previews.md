@@ -30,6 +30,10 @@ Which preview of the library may run behind which preview of the gateway image: 
 
 ## From 8.0.0-beta.7 {#from-8-0-0-beta-7}
 
+- **A head lost in a failover is reported** (`CTL-86`, DR1-F-7). Affected: a change listener that handles every kind
+  (one with an exhaustive `when` needs an `else`, as the kind's KDoc says), and Redis deployments that fail over. A new
+  event kind, `HEAD_LOST`, and a counter, `cosec.control.revisions.lost`, name a revision whose head write was lost;
+  set `min-replicas-to-write` on Redis ([Storage](./storage.md#redis-requirements)).
 - **`HttpControlService` refuses a request that has ended** (`CTL-77`, `PIP-26`, DR1-F-2). Affected: an application that
   keeps a `ControlCaller.of(context)` past its request (a launched job, a deferred write). Over HTTP it acted as the
   user until the credential expired, after a logout too; it is now refused `403`, as in process, before anything is
