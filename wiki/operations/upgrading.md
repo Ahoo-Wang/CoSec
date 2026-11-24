@@ -448,7 +448,8 @@ cosec-migrate check-patterns --to-redis redis://localhost:6379 [--cluster] [--ke
 
 Before upgrading from 8.0.0-beta.8, run it with the new release's `cosec-migrate` against the store of the version
 you run. It reads the head of every document the store lists, or of the one `--document` names, or of those whose key
-starts with `--prefix`, as that version stored it, and compiles each action and resource of its statements, rate limit
+starts with `--prefix`, as that version stored it (only each document's current revision: the history is not read,
+and a rollback to an older revision publishes it again, compiled then), and compiles each action and resource of its statements, rate limit
 rules and catalog permissions with the new rules ([Reserved characters](../policies/language.md#reserved-characters),
 `DOC-15`). It prints:
 

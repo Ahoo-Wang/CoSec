@@ -280,7 +280,7 @@ cosec-migrate check-patterns --to-redis redis://localhost:6379 [--cluster] [--ke
   [--document platform|app:<id>|tenant:<id>] [--prefix tenant:acme]
 ```
 
-从 8.0.0-beta.8 升级之前，用新版本的 `cosec-migrate` 对你正在运行的版本的存储运行它。它读取存储列出的每份文档的头（或 `--document` 指名的那一份，或键以 `--prefix` 开头的那些），按那个版本存下的样子读，再用新规则编译其语句、限流规则和目录权限中的每个动作与资源（[保留字符](../policies/language.md#reserved-characters)，`DOC-15`）。它输出：
+从 8.0.0-beta.8 升级之前，用新版本的 `cosec-migrate` 对你正在运行的版本的存储运行它。它读取存储列出的每份文档的头（或 `--document` 指名的那一份，或键以 `--prefix` 开头的那些），按那个版本存下的样子读（只查每份文档的当前修订：不读历史，回滚到较早的修订会把它重新发布，届时再编译），再用新规则编译其语句、限流规则和目录权限中的每个动作与资源（[保留字符](../policies/language.md#reserved-characters)，`DOC-15`）。它输出：
 
 - `ok <doc>`：这份文档的模式都能编译；
 - `PATTERN <doc> <JSON 路径>: <原因>; write <模式>, in JSON "<模式>"`：模式含保留字符；按以前的预览版读（当作文本），再按新版本的要求转义着写出；
