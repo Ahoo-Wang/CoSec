@@ -18,6 +18,8 @@ package me.ahoo.cosec.runtime.identity
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.document.identity.IdentityCodec
 import me.ahoo.cosec.model.PolicyId
+import me.ahoo.cosec.model.RoleId
+import me.ahoo.cosec.model.SpaceId
 import me.ahoo.cosec.runtime.http.RequestSecurity
 import me.ahoo.cosec.spi.identity.Identity
 import me.ahoo.cosec.spi.identity.IdentityOverflowException
@@ -99,19 +101,23 @@ class IdentityIssuer(
             if (ownSpaceOnly && attachments.isEmpty()) {
                 return Identity.Memberships.NONE
             }
-            var spaces: MutableMap<String, Set<String>>? = null
-            if (!ownSpaceOnly) {
-                for ((id, held) in roles) {
-                    if (id == space || held.isEmpty()) continue
-                    val others = spaces ?: LinkedHashMap<String, Set<String>>().also { spaces = it }
-                    others[id.value] = held.mapTo(LinkedHashSet(held.size * 2)) { it.value }
-                }
-            }
+            val spaces = if (ownSpaceOnly) null else otherSpaces(roles, space)
             val policies = policies(attachments)
             if (spaces == null && policies.isEmpty()) {
                 return Identity.Memberships.NONE
             }
             return Identity.Memberships(spaces ?: emptyMap(), policies)
+        }
+
+        /** The spaces of [roles] other than [space] that name a role, by id; null when there is none. */
+        private fun otherSpaces(roles: Map<SpaceId, Set<RoleId>>, space: SpaceId): Map<String, Set<String>>? {
+            var spaces: MutableMap<String, Set<String>>? = null
+            for ((id, held) in roles) {
+                if (id == space || held.isEmpty()) continue
+                val others = spaces ?: LinkedHashMap<String, Set<String>>().also { spaces = it }
+                others[id.value] = held.mapTo(LinkedHashSet(held.size * 2)) { it.value }
+            }
+            return spaces
         }
 
         /**

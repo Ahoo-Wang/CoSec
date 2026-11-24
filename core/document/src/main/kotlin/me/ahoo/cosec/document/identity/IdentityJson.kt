@@ -121,6 +121,7 @@ internal class IdentityJson(private val identity: Identity) : JacksonSerializabl
             }
         }
 
+        @Suppress("ThrowsCount")
         private fun checkClaim(name: String, value: Any) {
             when (value) {
                 is String -> if (value.length > IdentityCodec.MAX_CLAIM_LENGTH) {

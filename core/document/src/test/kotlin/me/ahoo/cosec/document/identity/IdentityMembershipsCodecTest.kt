@@ -177,8 +177,8 @@ class IdentityMembershipsCodecTest {
         }
         val without = perEncode(identity(memberships = null))
         val none = perEncode(identity())
-        val two =
-            perEncode(identity(memberships = Identity.Memberships(emptyMap(), listOf("principal-a", "principal-b"))))
+        val attached = Identity.Memberships(emptyMap(), listOf("principal-a", "principal-b"))
+        val two = perEncode(identity(memberships = attached))
 
         (none - without).assert().describedAs("NONE over no member: %d bytes", none - without).isLessThan(TEXT_MARGIN)
         (two - none).assert().describedAs("two attachments over NONE: %d bytes", two - none).isLessThan(TEXT_MARGIN)
