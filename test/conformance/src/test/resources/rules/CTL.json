@@ -1221,6 +1221,13 @@
       "statement": "A document's max-count most recent revisions always keep their records, so a rollback to any of them works. All its records together, those included, weigh at most max-count times the document cap (400 MB by default; each record is at most the cap, so the most recent alone never pass it, and when they are all at the cap no older record stays), and beyond them its revision index lists at most the cap at 320 bytes an entry (26,214 entries by default), since the index is one stored value read and written twice a publish. Past either, a reclamation removes the oldest first, younger than cosec.control.revisions.min-age or not, except a record an open change rests on and the head; each record so removed within min-age is counted (cosec.control.revisions.reclaimed-young) and warned of, at most once a reclaim pass. An index entry names its record's stored size; one an older version wrote is sized from its record once. The records, their bytes and the open changes are metered by the pass that holds the reclaim lease, which replaces them when it ends and reports the last pass's until then; an instance another one led the pass for reports 0, and one whose pass could not start keeps what it last found, so the largest across instances is the store's.",
       "level": "control",
       "pending": null
+    },
+    {
+      "id": "CTL-86",
+      "source": "RFC 0007 §5.4 (DR1-F-7, RC review round 1 area F: a lost write is diagnosable from the revision chain)",
+      "statement": "A revision a document's index lists above its head was published and its head write then lost while the index entry written after it was kept, as a failover of a Redis Cluster primary loses one (a document's head and index live in different slots); nothing else leaves an index ahead of its head. On one primary, replication keeps the order of writes, so a failover that loses a head loses its index entry too, and only the data plane's regression signal tells of it. The reclamation pass looks for such revisions in every document before it reads the document's history; and a rebuild of an index from its head (a read of the history once a publish reused the number) hands over the entries not on the head's chain before it drops them, the last place they are listed. Each is logged at ERROR, counted (cosec.control.revisions.lost) and told to the change listeners once by the instance that finds it (HEAD_LOST, naming the change and its publisher from the lost revision's own provenance, the head as base and the lost revision as candidate). The control plane never moves a head forward again on its own: whoever published the change publishes it again or rolls back.",
+      "level": "control",
+      "pending": null
     }
   ]
 }

@@ -102,5 +102,7 @@ sealed interface Outcome {
         val history: List<String>? = null,
         /** What the last publish did to the back-reference sets, by kind, when the scenario asks for it (`CTL-44`). */
         val cost: Map<String, Int>? = null,
+        /** The revisions the last document's index lists above its head, when the scenario asks for them (`CTL-86`). */
+        val lost: List<Long>? = null,
     ) : Outcome
 }

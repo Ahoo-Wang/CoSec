@@ -662,6 +662,10 @@ a document's records weighed more than it may retain (`max-count` × the documen
 recent included, or 26,214 index entries beyond them, `CTL-84`): find the client publishing large documents in a loop and rate-limit it per
 tenant. The `max-count` most recent revisions stay, so a rollback to a recent one still works.
 
+When a change event `HEAD_LOST` arrives, or `cosec.control.revisions.lost` counts, a published revision's head write was
+lost in a Redis failover (`CTL-86`): the head is back at the event's base and the change is not in effect. Publish it
+again or roll back, and set `min-replicas-to-write` on Redis.
+
 When a tenant change waits for approval with `TOO_LARGE`, the grant analysis spent its four million comparisons
 before it reached those grants (`CTL-49`): split the change; what counts is what it adds or rewrites, times what its
 author holds. One entry `change of tenant:<t>` means it grants more than 80,000 fragments (actions × resources × bindings
