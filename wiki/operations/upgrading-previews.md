@@ -39,8 +39,10 @@ Which preview of the library may run behind which preview of the gateway image: 
   ([Reserved characters](../policies/language.md#reserved-characters)). A path pattern holding a `\`, a `;`, a control
   character, a `.` or `..` segment, or a segment longer than 256 characters matched no request path before, so a DENY
   written so denied nothing: name the path as the pipeline sees it.
-  - **Before upgrading**, find the stored documents that hold such a pattern: an upgraded instance installs one as
-    failed, and the requests that read it answer `503`. Rewrite and publish them first, on the version you run: an
+  - **Before upgrading**, find the stored documents that hold such a pattern, with the new release's
+    [`cosec-migrate check-patterns`](./upgrading.md#check-the-patterns-before-an-upgrade): it names each one, where it
+    is and how to write it. An upgraded instance installs such a document as failed, and the requests that read it
+    answer `503`. Rewrite and publish them first, on the version you run: an
     escape such as `\(` is understood by this version only, so publish the rewritten document after every instance
     reads it.
   - **Rolling upgrade.** 8.0.0-beta.8 reads `\(` as a backslash and a parenthesis, which no request path holds: a DENY

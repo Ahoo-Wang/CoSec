@@ -145,9 +145,9 @@ cosec-migrate-8.0.0/bin/cosec-migrate convert ...
 To build it from the CoSec sources instead, run `./gradlew :migrate:installDist`; the tool is then
 `migration/migrate/build/install/cosec-migrate/bin/cosec-migrate`.
 
-Its commands are below. Exit codes: `0` done, `1` the data was rejected, a write failed or `verify-chain` found a
-broken chain, `2` a usage error.
-`publish`, `bootstrap`, `repair-references` and `verify-chain` take `--cluster` for a Redis Cluster: `--to-redis` then names seed
+Its commands are below. Exit codes: `0` done, `1` the data was rejected, a write failed, `verify-chain` found a
+broken chain or `check-patterns` a pattern to rewrite, `2` a usage error.
+`publish`, `bootstrap`, `repair-references`, `verify-chain` and `check-patterns` take `--cluster` for a Redis Cluster: `--to-redis` then names seed
 nodes, comma-separated (`redis://node-1:6379,redis://node-2:6379`). The other commands read Redis with clients that
 do not: `convert`, `partition plan` and `api-keys` ask the node whether it is part of a Redis Cluster and stop before
 they read anything when it is, since a scan of one node sees one shard's keys (R2C-30). Each command takes only the options listed for it: another one, `publish --dry-run` for
@@ -161,6 +161,7 @@ example, is a usage error before anything is read or written, never ignored.
 | `partition plan` | Converts twice, with `--partition platform` and `by-owner`, and writes one plan per tenant to submit through the control plane. Writes nothing to Redis. |
 | `repair-references` | Adds to the back-reference index what every document's head refers to and the index misses, removes what no head has, and completes the app list. |
 | `verify-chain` | Walks each document's revision chain and names a revision whose record is missing, the trace a write lost in a Redis failover leaves, and a revision index that does not follow the head's chain. Writes nothing. |
+| `check-patterns` | Names every pattern of the stored heads that the next preview does not compile (`DOC-15`), with where it is and how to write it. Writes nothing. |
 
 #### Convert
 
@@ -437,6 +438,33 @@ A broken chain does not change what instances enforce, which is the head. It mea
 of that document misses the revision, and a change published around the failover may be missing from the head too.
 Compare the head with what was published, and publish again what it lacks, as after a regression
 ([Troubleshooting](./troubleshooting.md#decisions-use-an-old-revision)).
+
+#### Check the patterns before an upgrade {#check-the-patterns-before-an-upgrade}
+
+```bash
+cosec-migrate check-patterns --to-redis redis://localhost:6379 [--cluster] [--key-prefix cosec] \
+  [--document platform|app:<id>|tenant:<id>] [--prefix tenant:acme]
+```
+
+Before upgrading from 8.0.0-beta.8, run it with the new release's `cosec-migrate` against the store of the version
+you run. It reads the head of every document the store lists, or of the one `--document` names, or of those whose key
+starts with `--prefix`, as that version stored it, and compiles each action and resource of its statements, rate limit
+rules and catalog permissions with the new rules ([Reserved characters](../policies/language.md#reserved-characters),
+`DOC-15`). It prints:
+
+- `ok <doc>` for a document whose patterns all compile;
+- `PATTERN <doc> <JSON path>: <why>; write <pattern>, in JSON "<pattern>"` for a pattern that holds a reserved
+  character, read as the earlier preview read it (as text) and written escaped, as the new version needs it;
+- `PATTERN <doc> <JSON path>: <why>; no escape writes it: ...` for a path pattern that matches no request path (a `\`,
+  a `;`, a control character, a dot segment, a segment longer than 256 characters): it denied nothing before either,
+  so name the path as the pipeline sees it;
+- `FAILED <doc>: <reason>` when the head could not be read; the others are still checked.
+
+Then `Checked <n> document(s): <p> pattern(s) to rewrite in <d> document(s), <f> could not be read.` It exits with `1`
+when there is a pattern to rewrite or a document it could not read, so a deployment script can stop on it. Rewrite each
+document through the control plane, and publish the escaped spelling only once every instance runs the new version
+([Upgrading from 8.0.0-beta.8](./upgrading-previews.md#from-8-0-0-beta-8)). It only reads, so it may run while the
+control plane runs.
 
 #### Run it as a Kubernetes Job {#run-as-a-kubernetes-job}
 

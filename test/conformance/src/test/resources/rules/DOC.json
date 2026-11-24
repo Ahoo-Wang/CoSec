@@ -187,7 +187,11 @@
         "openapi:OpenAPIServiceGeneratorTest#a spec path's characters are text in its route, never pattern syntax",
         "openapi:OpenAPIServiceGeneratorTest#a spec path with a backslash fails generation, since no request path holds one",
         "migrate:MatcherTranslatorTest#a character 8_0 reserves converts escaped",
-        "document:RouteMapTest#a route reserves the characters a document's patterns reserve, and writes them escaped"
+        "document:RouteMapTest#a route reserves the characters a document's patterns reserve, and writes them escaped",
+        "migrate:CheckPatternsTest#every pattern kind is read where a document holds it, and each refusal says how to write it",
+        "migrate:CheckPatternsTest#a pattern that matched no request path has no escape, and says so",
+        "migrate:CheckPatternsTest#the command names each finding and each document, fails on a finding, and writes nothing",
+        "migrate:MigrateMainTest#check-patterns names a stored pattern the next version refuses, and exits with 1"
       ],
       "properties": [
         "engine:ReservedCharactersPropertyTest#a reserved character unescaped is refused where it stands, in a path, a typed resource and an action",

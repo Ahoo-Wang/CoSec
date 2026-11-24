@@ -91,7 +91,8 @@ Full model: https://cosec.ahoo.me/guide/security-model.
   pattern syntax; write \<c> for the character`, at the position given. One of `[ ] ( ) | ! ^ $ \` is unescaped in a
   path, typed resource or action pattern; write it escaped (doubled backslash in JSON). Patterns that match no request
   path (a `\`, `;`, control character, dot segment, a segment over 256 characters) are refused the same way. After an
-  upgrade from 8.0.0-beta.8 such a stored document is installed as failed (`503` for what reads it).
+  upgrade from 8.0.0-beta.8 such a stored document is installed as failed (`503` for what reads it): before upgrading,
+  `cosec-migrate check-patterns --to-redis <uri>` names each such pattern and how to write it.
 - **A document does not compile on a path pattern** (`DOC-4`): over 2,048 characters, a glob segment of more than 16
   parts (consecutive `*` count once), or more than 2,048 glob units in one document (each glob segment's parts and the
   characters of its text, twice after a leading `**`). The control plane answers a

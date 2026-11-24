@@ -381,7 +381,7 @@ Redis may evict CoSec's policy snapshot: maxmemory-policy is {<node>=<policy>}, 
 
 ## 升级后模式无法编译 {#a-pattern-does-not-compile-after-an-upgrade}
 
-- `` '<c>' is reserved for a future pattern syntax; write \<c> for the character ``：模式里有未转义的 `[ ] ( ) | ! ^ $ \` 之一（`DOC-15`），以前的预览版把它当文本读。把它转义着写，`$` 写作 `\$`，在 JSON 里反斜杠要双写（[策略语言](../policies/language.md#reserved-characters)）。消息给出了位置。从 8.0.0-beta.8 之后的预览版起，含这种字符的已存储文档会被装为失败，读它的请求答 `503`：升级前先找出这样的文档（[从 8.0.0-beta.8 升级](./upgrading-previews.md#from-8-0-0-beta-8)）。
+- `` '<c>' is reserved for a future pattern syntax; write \<c> for the character ``：模式里有未转义的 `[ ] ( ) | ! ^ $ \` 之一（`DOC-15`），以前的预览版把它当文本读。把它转义着写，`$` 写作 `\$`，在 JSON 里反斜杠要双写（[策略语言](../policies/language.md#reserved-characters)）。消息给出了位置。从 8.0.0-beta.8 之后的预览版起，含这种字符的已存储文档会被装为失败，读它的请求答 `503`：升级前用 [`cosec-migrate check-patterns`](./upgrading.md#check-the-patterns-before-an-upgrade) 找出这样的文档（[从 8.0.0-beta.8 升级](./upgrading-previews.md#from-8-0-0-beta-8)）。
 - `` \<c> escapes nothing ``：反斜杠后面的字符不是 `[ ] ( ) | ! ^ $ \ * ? { }` 之一。
 - `` a request path holds no backslash ``、`` hold no ';' ``、`` holds no control character ``、`` holds no dot segment `` 或 `` more than the 256 a request path's segment holds ``：这个模式匹配不到管道放行的任何路径（`PIP-5`、`PIP-14`、`PIP-30`），这样写的 DENY 什么也拒绝不了。按管道看到的样子写出路径。
 - 路由图因这些消息之一而加载失败：它的路径、动作或资源模板含有这个字符，规则相同。
