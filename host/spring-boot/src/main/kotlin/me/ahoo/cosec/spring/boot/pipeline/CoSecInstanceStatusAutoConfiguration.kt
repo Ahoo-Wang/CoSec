@@ -21,9 +21,10 @@ import me.ahoo.cocache.core.CoCacheFactory
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.cocache.shadow.CoCacheShadowReports
 import me.ahoo.cosec.runtime.shadow.InstanceReporter
-import me.ahoo.cosec.spring.boot.ConditionalOnCoSecEnabled
 import me.ahoo.cosec.spring.boot.CoSecProperties
+import me.ahoo.cosec.spring.boot.ConditionalOnCoSecEnabled
 import me.ahoo.cosec.spring.boot.StartupTask
+import me.ahoo.cosec.spring.boot.StartupTaskExclusion
 import me.ahoo.cosec.spring.boot.authorization.cache.COCACHE_AUTO_CONFIGURATION
 import org.springframework.beans.factory.ObjectProvider
 import org.springframework.boot.autoconfigure.AutoConfiguration
@@ -33,6 +34,7 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean
 import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
+import org.springframework.context.annotation.Import
 
 /**
  * Every CoSec process that reads the shared store through `cosec-cocache` reports its status (RFC 0014 R5, `SNP-25`):
@@ -46,6 +48,7 @@ import org.springframework.context.annotation.Configuration
 @ConditionalOnClass(name = ["me.ahoo.cosec.cocache.shadow.CoCacheShadowReports"])
 @ConditionalOnBean(CoCacheFactory::class)
 @EnableConfigurationProperties(RuntimeAuthorizationProperties::class, CoSecProperties::class)
+@Import(StartupTaskExclusion::class)
 @InternalCoSecApi
 class CoSecInstanceStatusAutoConfiguration {
     /** Shared with the control plane on a host that runs it, which reads the statuses and reports this writes. */

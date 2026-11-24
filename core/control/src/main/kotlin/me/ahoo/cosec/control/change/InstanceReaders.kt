@@ -40,6 +40,7 @@ data class InstanceReaders(
         get() = (statuses.map { it.release ?: UNKNOWN_RELEASE } + unreadable.map { UNKNOWN_RELEASE })
             .groupingBy { it }.eachCount().toSortedMap()
 
+    @InternalCoSecApi
     companion object {
         /** The release of an instance whose status does not name one. */
         const val UNKNOWN_RELEASE: String = "unknown"

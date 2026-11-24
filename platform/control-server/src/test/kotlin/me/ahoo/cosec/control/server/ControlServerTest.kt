@@ -11,14 +11,17 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.control.server
 
 import me.ahoo.cocache.api.spi.CoherenceBackend
 import me.ahoo.cocache.core.memory.InMemoryBackend
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.jwt.JwtSigning
 import me.ahoo.cosec.login.token.TokenConverter
-import me.ahoo.cosec.testkit.IdentityHeader
 import me.ahoo.cosec.spring.boot.pipeline.InstanceReporting
+import me.ahoo.cosec.testkit.IdentityHeader
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Test

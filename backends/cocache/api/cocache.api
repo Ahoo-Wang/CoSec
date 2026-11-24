@@ -97,6 +97,7 @@ public final class me/ahoo/cosec/cocache/limiter/ReactiveRedisRateLimiter : me/a
 }
 
 public final class me/ahoo/cosec/cocache/shadow/CoCacheShadowReports : me/ahoo/cosec/spi/shadow/ShadowReportReader, me/ahoo/cosec/spi/shadow/ShadowReportSink {
+	public fun readerReadings (Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun readings (Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun reports (Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun residents (Ljava/util/Set;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;

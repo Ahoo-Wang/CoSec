@@ -1,0 +1,16 @@
+# Rule: SNP-25
+# Mutant: only an instance with shadowing on reports its status, as before, so a control host or an IAM service is never seen
+# Tests: :spring-boot:test --tests me.ahoo.cosec.spring.boot.pipeline.InstanceStatusWiringTest
+
+diff --git a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/pipeline/CoSecInstanceStatusAutoConfiguration.kt b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/pipeline/CoSecInstanceStatusAutoConfiguration.kt
+index 8cebc3f2e..c65fbdfcf 100644
+--- a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/pipeline/CoSecInstanceStatusAutoConfiguration.kt
++++ b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/pipeline/CoSecInstanceStatusAutoConfiguration.kt
+@@ -45,6 +45,7 @@ import org.springframework.context.annotation.Configuration
+ @ConditionalOnCoSecEnabled
+ @ConditionalOnClass(name = ["me.ahoo.cosec.cocache.shadow.CoCacheShadowReports"])
+ @ConditionalOnBean(CoCacheFactory::class)
++@org.springframework.boot.autoconfigure.condition.ConditionalOnProperty(prefix = "cosec.authorization.shadow", name = ["enabled"], matchIfMissing = true)
+ @EnableConfigurationProperties(RuntimeAuthorizationProperties::class, CoSecProperties::class)
+ @InternalCoSecApi
+ class CoSecInstanceStatusAutoConfiguration {
