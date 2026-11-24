@@ -424,6 +424,48 @@
         "spring-boot:UnknownPropertiesTest#a removed key is said to be no longer a property, with what replaced it",
         "spring-boot:DerivedSnapshotSettingsTest#the snapshot sources of a process share the documents' quarter of the heap"
       ]
+    },
+    {
+      "id": "SNP-27",
+      "source": "RFC 0014 R1 on stored records and G5 (the coordinator's ruling of 2026-11-24, after the red-team review CE-9, CE-10, CE-15); RFC 0014 §5 (sentences proposed in the PR)",
+      "statement": "A stored record CoSec reads by the reader's rule (StoredFormat) may carry crit, the members a reader must understand: an array of paths from the record's root (member names joined by '.'; through an array, each element's member), not written when empty and never written by an 8.0 writer. A reader ignores a member it does not know unless crit names it; then it refuses that one record as one a later version wrote, and never reads or rewrites it, so a member an older reader must not ignore or drop is never lost to it (RFC 0014 G5); the other records read as before. A crit that is not one (not an array, an entry that is not a path, an entry repeated, more than 16, or a member this version knows that the record does not hold) is malformed. A refused session record is answered 503 on the refresh, logout or switch that read it, the session kept; the log tells a record a later version wrote apart from a store that is broken.",
+      "level": "build",
+      "guards": [
+        "document:StoredCritTest#a record without crit, or with an empty one, reads as before",
+        "document:StoredCritTest#a member crit names that this version knows is read, through an array's elements too",
+        "document:StoredCritTest#a member crit names that this version does not know refuses the record as a later version's, and counts it",
+        "document:StoredCritTest#a crit that is not one, or a record that is not one, is malformed, and counts as malformed",
+        "document:StoredCritTest#a path is printed printably, and a member is listed once",
+        "cocache:TokenFamilyMembersTest#a later member crit names is refused by an older reader, which never rewrites it",
+        "cocache:TokenFamilyMembersTest#a later member without crit is dropped by an older reader, and the session it leaves is the same session",
+        "cocache:TokenFamilyMembersTest#every member an 8_0 reader knows survives its rewrite",
+        "login:LaterSessionRecordTest#a refresh of a session a later version wrote is an outage, and the record is never rewritten",
+        "login:LaterSessionRecordTest#the log says a later version wrote it, once per interval at WARN, and a broken store is not told so"
+      ],
+      "pending": null
+    },
+    {
+      "id": "SNP-28",
+      "source": "RFC 0014 R1 on stored records and G5 (the coordinator's ruling of 2026-11-24, after the red-team review CE-9, CE-10, CE-15); RFC 0014 §5 (sentences proposed in the PR)",
+      "statement": "Every member of each kind of stored record is registered in one place beside its codec (StoredMembers): what a reader takes its absence for, whether a reader that ignored it would decide more widely, and whether a reader that dropped it when it rewrote the record would leave it wider, the two stated apart. The codec writes exactly the registered members, and an absent member reads as registered. A member added after 8.0 whose being ignored or dropped would widen anything is added only with crit (SNP-27), never as one an older reader may ignore or drop.",
+      "level": "build",
+      "guards": [
+        "cocache:TokenFamilyMembersTest#the registry names every member the codec writes, and only those",
+        "cocache:TokenFamilyMembersTest#each absent member reads as the registry says",
+        "cocache:TokenFamilyMembersTest#whether ignoring a member widens, and whether dropping it does, are each stated"
+      ],
+      "pending": null
+    },
+    {
+      "id": "SNP-29",
+      "source": "RFC 0014 R1 on stored records and G5 (the coordinator's ruling of 2026-11-24, after the red-team review CE-9, CE-10, CE-15); RFC 0014 §5 (sentences proposed in the PR)",
+      "statement": "A stored record's format number is kept for a change no reader of the major version can follow, and changes only with the major version: within 8.x a session record is format 2 at most (format 2 being a session a tenant switch started, IDN-36, the 8.0 baseline) and every other record format 1. A higher format is refused as one a later version wrote. What 8.x adds within a format is a member, with crit when ignoring or dropping it would widen anything.",
+      "level": "build",
+      "guards": [
+        "cocache:TokenFamilyMembersTest#the session's format numbers are frozen for 8_x",
+        "document:StoredCritTest#a later format is a later version's too, and counts as one"
+      ],
+      "pending": null
     }
   ]
 }

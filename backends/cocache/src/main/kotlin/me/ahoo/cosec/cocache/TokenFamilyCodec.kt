@@ -29,14 +29,17 @@ import java.time.Instant
 import java.time.format.DateTimeParseException
 
 /**
- * A [TokenFamily], the session record, as JSON with its format (R2C-28, `IDN-31`): read by the reader's rule
- * ([StoredFormat]), so a member a later version adds is ignored and a later format is refused, which ends the session
- * (the refresh is refused and the user signs in again). A record written before formats is format 1. Anything
- * malformed is a [SnapshotFormatException], never an argument error the store would read as an outage.
+ * A [TokenFamily], the session record, as JSON with its format (R2C-28, `IDN-31`, `SNP-27`): read by the reader's rule
+ * ([StoredFormat]) over its members ([TokenFamilyMembers]), so a member a later version adds is ignored, unless its
+ * `crit` names it, and a later format is refused. A refused record is neither read nor rewritten: the refresh, the
+ * logout or the switch that read it is answered `503`, the session is kept, and an instance of the later version reads
+ * it. A record written before formats is format 1. Anything malformed is a [SnapshotFormatException], never an argument
+ * error the store would read as an outage.
  *
  * A session a tenant switch started is written as format 2, with its `root` (`IDN-36`): a reader of format 1 would
  * ignore the member and drop it when it rewrote the record at a refresh, and the session would outlive its login, so it
- * refuses the record instead, which ends that session. A session without a root stays format 1.
+ * refuses the record instead. Format 2 is the 8.0 baseline: within 8.x, a member like `root` is added with `crit`, never
+ * with a new format (`SNP-29`). A session without a root stays format 1.
  */
 internal object TokenFamilyCodec : Codec<TokenFamily> {
     private const val WHAT = "token family"
@@ -64,7 +67,7 @@ internal object TokenFamilyCodec : Codec<TokenFamily> {
         } catch (_: JacksonException) {
             throw SnapshotFormatException("A stored $WHAT is not JSON.")
         }
-        StoredFormat.of(node, WHAT, known = ROOTED)
+        StoredFormat.read(node, TokenFamilyMembers.MEMBERS, WHAT, known = ROOTED)
         val generation = node.need("generation")
         val counted = generation.isIntegralNumber && generation.canConvertToLong()
         if (!counted) malformed("its generation is not an integer")
