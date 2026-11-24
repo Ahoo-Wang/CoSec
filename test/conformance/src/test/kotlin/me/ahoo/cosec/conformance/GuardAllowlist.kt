@@ -24,6 +24,15 @@ package me.ahoo.cosec.conformance
 object GuardAllowlist {
     val GUARDS: Map<String, Set<String>> = mapOf(
         "build" to SnapshotBoundGuards.BUILD + setOf(
+            // SNP-26: what two releases read and write on one Redis is frozen within 8.x (RFC 0014 R6).
+            "cocache:FrozenLayoutTest#goldenSamples",
+            "cocache:FrozenLayoutTest#everyEntryIsHeld",
+            "cocache:FrozenLayoutTest#aFailureSaysTheFormatIsFrozen",
+            "cocache:FrozenScriptsTest#aRateLimitCounterStoresItsWindowAndTwoCounts",
+            "cocache:FrozenScriptsTest#aRateLimitCounterAndItsFrozenScriptCountOneQuota",
+            "cocache:FrozenScriptsTest#aSessionIndexAndItsFrozenScriptKeepTheNewestSessions",
+            "cocache:FrozenScriptsTest#aSocialCountAndItsFrozenScriptHoldOneBound",
+            "social:RedisAuthStateCacheTest#theStateKeyIsFrozen",
             // PIP-34: a host renders the body of a refusal, from the problem alone, alike behind every adapter.
             "runtime:ProblemBodiesTest#without a renderer the body is CoSec's own, byte for byte",
             "runtime:ProblemBodiesTest#a renderer's bytes are the body, and it is given the problem only",

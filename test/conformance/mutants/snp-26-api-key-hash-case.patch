@@ -1,0 +1,17 @@
+# Rule: SNP-26
+# Mutant: an API key is stored under its upper-case hash, so a revocation by another release deletes nothing it reads
+# Tests: :cocache:test --tests me.ahoo.cosec.cocache.FrozenLayoutTest
+
+diff --git a/core/spi/src/main/kotlin/me/ahoo/cosec/spi/apikey/ApiKeys.kt b/core/spi/src/main/kotlin/me/ahoo/cosec/spi/apikey/ApiKeys.kt
+index 2b50b06d1..0e19af600 100644
+--- a/core/spi/src/main/kotlin/me/ahoo/cosec/spi/apikey/ApiKeys.kt
++++ b/core/spi/src/main/kotlin/me/ahoo/cosec/spi/apikey/ApiKeys.kt
+@@ -27,7 +27,7 @@ object ApiKeys {
+     private val random = SecureRandom()
+ 
+     /** Lower-case hex, as the hashes of stored keys are written; a `String.format` per byte cost every request. */
+-    private val HEX: HexFormat = HexFormat.of()
++    private val HEX: HexFormat = HexFormat.of().withUpperCase()
+ 
+     /** The SHA-256 of [key], hex-encoded: what a store keeps instead of the key. */
+     fun hash(key: String): String = HEX.formatHex(MessageDigest.getInstance("SHA-256").digest(key.toByteArray()))

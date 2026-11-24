@@ -1,0 +1,17 @@
+# Rule: SNP-26
+# Mutant: a long rate limit key value is hashed into an x: bucket, so two releases count it apart
+# Tests: :cocache:test --tests me.ahoo.cosec.cocache.FrozenLayoutTest
+
+diff --git a/core/engine/src/main/kotlin/me/ahoo/cosec/engine/CompiledRateLimit.kt b/core/engine/src/main/kotlin/me/ahoo/cosec/engine/CompiledRateLimit.kt
+index 57818df36..606d36a65 100644
+--- a/core/engine/src/main/kotlin/me/ahoo/cosec/engine/CompiledRateLimit.kt
++++ b/core/engine/src/main/kotlin/me/ahoo/cosec/engine/CompiledRateLimit.kt
+@@ -58,7 +58,7 @@ class CompiledRateLimit internal constructor(
+         const val ESCAPED_BUCKET_PREFIX = "e:"
+ 
+         /** The prefix of the bucket of a key value too long to name it as written, hashed ([keyedBucket]). */
+-        const val HASHED_BUCKET_PREFIX = "h:"
++        const val HASHED_BUCKET_PREFIX = "x:"
+ 
+         /**
+          * The longest key value a bucket is named by as written, in UTF-16 units of its [KEYED_BUCKET_PREFIX] or
