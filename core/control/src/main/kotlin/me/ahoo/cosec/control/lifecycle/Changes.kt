@@ -167,7 +167,7 @@ class Changes(
     /** [ChangeLifecycle.visible]: the change [id] as [operator] may see it, the same 404 when they may not. */
     suspend fun visible(operator: Operator, id: ChangeId): ChangeRequest = flow.visible(operator, id)
 
-    private val listings = ChangeListings(store, authority, work, flow.readWeight)
+    private val listings = ChangeListings(store, authority, work, flow.recordCap)
 
     /** [ChangeListings.list]: the open changes of a document, or in a state, that [operator] may see. */
     suspend fun list(

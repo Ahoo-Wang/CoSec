@@ -166,8 +166,10 @@ class ControlMaintenance(
         counting: RetainedTotals.Counting,
     ): Set<SnapshotDigest> {
         val resting = HashSet<SnapshotDigest>()
-        store.eachOpenChange(key, null) { listed ->
-            when (listed) {
+        // A pass runs outside a call, so it holds no work: it reads one document at a time, one record at a time.
+        store.eachOpenChange(key, null) { _, _, read ->
+            when (val listed = read()) {
+                null -> Unit
                 is ListedChange.Unreadable -> throw IllegalStateException(
                     "change [${listed.id.value}] of [$key] does not read"
                 )

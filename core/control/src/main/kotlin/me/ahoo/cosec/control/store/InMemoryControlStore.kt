@@ -19,6 +19,7 @@ import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.control.change.ChangeId
 import me.ahoo.cosec.control.change.ChangeRequest
+import me.ahoo.cosec.control.change.ChangeRequestCodec
 import me.ahoo.cosec.control.change.ChangeState
 import me.ahoo.cosec.control.change.StageSlot
 import me.ahoo.cosec.document.shadow.ShadowCodec
@@ -127,6 +128,15 @@ class InMemoryControlStore(private val clock: Clock = Clock.systemUTC()) : Contr
 
     override suspend fun openChanges(document: SnapshotKey): List<ListedChange> = synchronized(lock) {
         open().filter { it.key == document }.map(ListedChange::Readable)
+    }
+
+    /** As [ControlStore.eachOpenChange], with each record's size: what it encodes to, as a store writes it. */
+    override suspend fun eachOpenChange(document: SnapshotKey, after: String?, visit: OpenChangeVisitor) {
+        for (listed in openChanges(document).sortedBy { it.id.value }) {
+            if (after != null && listed.id.value <= after) continue
+            val size = (listed as? ListedChange.Readable)?.let { ChangeRequestCodec.encode(it.change).size.toLong() }
+            if (!visit(listed.id.value, size) { listed }) return
+        }
     }
 
     override suspend fun changes(

@@ -461,7 +461,7 @@ public abstract interface class me/ahoo/cosec/control/store/ControlStore : me/ah
 	public static synthetic fun changes$default (Lme/ahoo/cosec/control/store/ControlStore;Lme/ahoo/cosec/control/change/ChangeState;Ljava/lang/String;ILkotlin/jvm/functions/Function1;Lkotlin/coroutines/Continuation;ILjava/lang/Object;)Ljava/lang/Object;
 	public abstract fun digestOf (Lme/ahoo/cosec/spi/snapshot/SnapshotDocument;)Lme/ahoo/cosec/spi/snapshot/SnapshotDigest;
 	public abstract fun documents (Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
-	public fun eachOpenChange (Lme/ahoo/cosec/spi/snapshot/SnapshotKey;Ljava/lang/String;Lkotlin/jvm/functions/Function2;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun eachOpenChange (Lme/ahoo/cosec/spi/snapshot/SnapshotKey;Ljava/lang/String;Lkotlin/jvm/functions/Function4;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public abstract fun endedChanges (Lme/ahoo/cosec/spi/snapshot/SnapshotKey;Ljava/time/Instant;ILkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public abstract fun head (Lme/ahoo/cosec/spi/snapshot/SnapshotKey;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public abstract fun index (Lme/ahoo/cosec/spi/snapshot/SnapshotKey;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
@@ -492,7 +492,7 @@ public abstract interface class me/ahoo/cosec/control/store/ControlStore : me/ah
 
 public final class me/ahoo/cosec/control/store/ControlStore$DefaultImpls {
 	public static synthetic fun changes$default (Lme/ahoo/cosec/control/store/ControlStore;Lme/ahoo/cosec/control/change/ChangeState;Ljava/lang/String;ILkotlin/jvm/functions/Function1;Lkotlin/coroutines/Continuation;ILjava/lang/Object;)Ljava/lang/Object;
-	public static fun eachOpenChange (Lme/ahoo/cosec/control/store/ControlStore;Lme/ahoo/cosec/spi/snapshot/SnapshotKey;Ljava/lang/String;Lkotlin/jvm/functions/Function2;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public static fun eachOpenChange (Lme/ahoo/cosec/control/store/ControlStore;Lme/ahoo/cosec/spi/snapshot/SnapshotKey;Ljava/lang/String;Lkotlin/jvm/functions/Function4;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public static fun keepStagedList (Lme/ahoo/cosec/control/store/ControlStore;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public static fun listStaged (Lme/ahoo/cosec/control/store/ControlStore;Lme/ahoo/cosec/spi/snapshot/SnapshotKey;Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public static synthetic fun putChange$default (Lme/ahoo/cosec/control/store/ControlStore;Lme/ahoo/cosec/spi/snapshot/SnapshotDigest;Lme/ahoo/cosec/control/change/ChangeRequest;Lme/ahoo/cosec/control/change/ChangeState;Lkotlin/coroutines/Continuation;ILjava/lang/Object;)Ljava/lang/Object;
@@ -541,7 +541,7 @@ public final class me/ahoo/cosec/control/store/InMemoryControlStore : me/ahoo/co
 	public fun documents (Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public final fun dropApps ()V
 	public final fun dropIndex (Lme/ahoo/cosec/spi/snapshot/SnapshotKey;)V
-	public fun eachOpenChange (Lme/ahoo/cosec/spi/snapshot/SnapshotKey;Ljava/lang/String;Lkotlin/jvm/functions/Function2;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun eachOpenChange (Lme/ahoo/cosec/spi/snapshot/SnapshotKey;Ljava/lang/String;Lkotlin/jvm/functions/Function4;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun endedChanges (Lme/ahoo/cosec/spi/snapshot/SnapshotKey;Ljava/time/Instant;ILkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public final fun getLegacyOpenList ()Z
 	public fun head (Lme/ahoo/cosec/spi/snapshot/SnapshotKey;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;

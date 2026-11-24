@@ -63,18 +63,21 @@ internal class OpenLimit(
     /** Before [author] stores a new change of [key], whose record is [bytes] long: room for it, or a `409 OPEN_LIMIT`. */
     suspend fun makeRoom(key: SnapshotKey, author: Operator, bytes: Long) {
         // One record at a time (DR2-E-4): of each only what the bound needs is kept, so the open changes of a document,
-        // up to max-count times the cap of them, are never all decoded at once. The one being read is held in the call's
-        // work, as decoded at the cap it weighs at most.
-        work.hold(author.tenant.value, flow.readWeight)
+        // up to max-count times the cap of them, are never all decoded at once. Each is weighed by its size before it is
+        // decoded, and the call holds the heaviest so far ([RecordReads]).
+        val reads = RecordReads(work, author.tenant.value, flow.recordCap)
         val open = ArrayList<Open>()
         // A change that does not read still counts: it may be open, and it may pin a revision. It weighs its share of the
         // bytes, a document's worth, so that it never refuses a change on its own.
         var unreadable = 0
-        store.eachOpenChange(key, null) { listed ->
-            when (listed) {
+        store.eachOpenChange(key, null) { _, size, read ->
+            reads.before(size)
+            when (val listed = read()) {
+                null -> Unit
                 is ListedChange.Unreadable -> unreadable++
                 is ListedChange.Readable -> flow.current(listed.change).takeUnless { it.state.terminal }?.let {
-                    open += Open(it.id, it.createdAt, failedDraftOf(it, author), ChangeRequestCodec.encode(it).size.toLong())
+                    val bytes = size ?: ChangeRequestCodec.encode(it).size.toLong()
+                    open += Open(it.id, it.createdAt, failedDraftOf(it, author), bytes)
                 }
             }
             true

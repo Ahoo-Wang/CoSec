@@ -39,7 +39,6 @@ import me.ahoo.cosec.document.ProvenanceKind
 import me.ahoo.cosec.model.PrincipalId
 import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.spi.snapshot.SnapshotDigest
-import me.ahoo.cosec.spi.snapshot.SnapshotFormatException
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
@@ -84,9 +83,15 @@ class OpenChangeSetsRaceTest {
                 raw,
             ),
             legacyListed = { false },
-            record = {
-                if (it in unreadable) throw SnapshotFormatException("Change [${it.value}] does not read")
-                records[it]
+            // The record's bytes, as the store holds them; an unreadable one is bytes that do not decode.
+            stored = { id ->
+                if (id in unreadable) {
+                    StoredChange(
+                        "{".encodeToByteArray()
+                    ).let { Versioned(it, CoCacheControlStore.digest(StoredChange, it)) }
+                } else {
+                    records[id]?.let { Versioned(StoredChange.of(it.value), it.digest) }
+                }
             },
             clock = clock,
             missingGrace = GRACE,

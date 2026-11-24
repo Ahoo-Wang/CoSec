@@ -420,7 +420,8 @@ code is in this area's extensions. **Closed.**
     a default that reads the whole list, so a store of the application's is not broken, and `CoCacheControlStore`
     reads one record at a time.
   - Each reader keeps only what it needs.
-  - The record being read is held in the call's work, at the record cap decoded.
+  - The record about to be decoded is held in the call's work, weighed by the size it is stored with: the call holds
+    the heaviest so far, and a small one holds nothing.
 - **Regression guard:**
   - A store that refuses to hand out a document's open changes whole, under a proposal, a listing and a reclamation
     pass.

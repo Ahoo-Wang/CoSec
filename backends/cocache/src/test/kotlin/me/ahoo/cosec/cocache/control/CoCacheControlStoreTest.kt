@@ -90,7 +90,7 @@ class CoCacheControlStoreTest {
         lists: Store<String, Map<String, Instant>> = node.runtime.create(ControlCacheSpecs.list(node.keyPrefix)),
         appLists: Store<String, AppList> = node.runtime.create(ControlCacheSpecs.appList(node.keyPrefix)),
         clock: Clock = Clock.systemUTC(),
-        changes: Store<ChangeId, ChangeRequest> = node.runtime.create(ControlCacheSpecs.changeRequest(node.keyPrefix)),
+        changes: Store<ChangeId, StoredChange> = node.runtime.create(ControlCacheSpecs.changeRequest(node.keyPrefix)),
     ) = CoCacheControlStore(
         heads = heads,
         records = node.runtime.create(ControlCacheSpecs.revisionRecord(node.keyPrefix)),
@@ -365,9 +365,9 @@ class CoCacheControlStoreTest {
         SnapshotNode(InMemoryBackend(), newKeyPrefix()).use { node ->
             val reads = java.util.concurrent.ConcurrentHashMap<ChangeId, Int>()
             val real = node.runtime.create(ControlCacheSpecs.changeRequest(node.keyPrefix))
-            val counting = object : Store<ChangeId, ChangeRequest> by real {
-                override fun async(): AsyncStore<ChangeId, ChangeRequest> =
-                    object : AsyncStore<ChangeId, ChangeRequest> by real.async() {
+            val counting = object : Store<ChangeId, StoredChange> by real {
+                override fun async(): AsyncStore<ChangeId, StoredChange> =
+                    object : AsyncStore<ChangeId, StoredChange> by real.async() {
                         override fun getIfChanged(key: ChangeId, digest: Digest?) =
                             real.async().getIfChanged(key, digest).also { reads.merge(key, 1, Int::plus) }
                     }
@@ -398,19 +398,19 @@ class CoCacheControlStoreTest {
     }
 
     /**
-     * DR2-E-4: the open changes of a document are read one at a time, as the reader asks for them: each record when its
-     * turn comes, none past the cursor's, none after the reader stops. So a reader that keeps only what it needs never
-     * holds them all decoded at once.
+     * DR2-E-4: the open changes of a document are read one at a time, as the reader asks for them: each record's bytes
+     * when its turn comes, handed over with their size before anything is decoded; none past the cursor's, none after
+     * the reader stops; a record decoded only when the reader asks, and one that does not decode is unreadable then.
      */
     @Test
-    fun `the open changes of a document are read one at a time, as the reader asks for them - DR2-E-4`() =
+    fun `the open changes of a document are read one at a time, each with its size first - DR2-E-4`() =
         runBlocking<Unit> {
             SnapshotNode(InMemoryBackend(), newKeyPrefix()).use { node ->
                 val reads = java.util.concurrent.CopyOnWriteArrayList<ChangeId>()
                 val real = node.runtime.create(ControlCacheSpecs.changeRequest(node.keyPrefix))
-                val counting = object : Store<ChangeId, ChangeRequest> by real {
-                    override fun async(): AsyncStore<ChangeId, ChangeRequest> =
-                        object : AsyncStore<ChangeId, ChangeRequest> by real.async() {
+                val counting = object : Store<ChangeId, StoredChange> by real {
+                    override fun async(): AsyncStore<ChangeId, StoredChange> =
+                        object : AsyncStore<ChangeId, StoredChange> by real.async() {
                             override fun getIfChanged(key: ChangeId, digest: Digest?) =
                                 real.async().getIfChanged(key, digest).also { reads += key }
                         }
@@ -419,15 +419,28 @@ class CoCacheControlStoreTest {
                 repeat(5) { store.putChange(null, change("c$it", ChangeState.CHECKED)) }
                 reads.clear()
 
+                val sizes = ArrayList<Long?>()
                 val readWhenVisited = ArrayList<Int>()
-                store.eachOpenChange(key, "c0") { listed ->
+                store.eachOpenChange(key, "c0") { id, size, read ->
                     readWhenVisited += reads.size
-                    listed.id != ChangeId("c2")
+                    sizes += size
+                    // c1 is never decoded; c2 is.
+                    if (id == "c2") read()!!.id.assert().isEqualTo(ChangeId(id))
+                    id != "c2"
                 }
 
                 // c0 is past the cursor, unread; c1 and c2 are each read on their turn; c3 and c4 are never read.
                 readWhenVisited.assert().containsExactly(1, 2)
                 reads.assert().containsExactly(ChangeId("c1"), ChangeId("c2"))
+                sizes.assert().containsExactly(
+                    ChangeRequestCodec.encode(store.change(ChangeId("c1"))!!.value).size.toLong(),
+                    ChangeRequestCodec.encode(store.change(ChangeId("c2"))!!.value).size.toLong(),
+                )
+
+                // What does not decode fails only when it is decoded, naming the record.
+                val undecodable = runCatching { StoredChange("{".encodeToByteArray()).decode("Change [c9]") }
+                undecodable.exceptionOrNull().assert().isInstanceOf(SnapshotFormatException::class.java)
+                    .hasMessageContaining("Change [c9]")
             }
         }
 
@@ -502,13 +515,13 @@ class CoCacheControlStoreTest {
             SnapshotNode(backend, keyPrefix).use { reading ->
                 val clock = MutableClock(Instant.parse("2026-11-01T00:00:00Z"))
                 val changes = writing.runtime.create(ControlCacheSpecs.changeRequest(writing.keyPrefix))
-                val failing = object : Store<ChangeId, ChangeRequest> by changes {
-                    override fun async(): AsyncStore<ChangeId, ChangeRequest> =
-                        object : AsyncStore<ChangeId, ChangeRequest> by changes.async() {
+                val failing = object : Store<ChangeId, StoredChange> by changes {
+                    override fun async(): AsyncStore<ChangeId, StoredChange> =
+                        object : AsyncStore<ChangeId, StoredChange> by changes.async() {
                             override fun putIfMatch(
                                 key: ChangeId,
                                 expected: Digest?,
-                                value: ChangeRequest
+                                value: StoredChange
                             ): CompletableFuture<ConditionalPut> =
                                 CompletableFuture.failedFuture(IllegalStateException("Redis is down"))
                         }

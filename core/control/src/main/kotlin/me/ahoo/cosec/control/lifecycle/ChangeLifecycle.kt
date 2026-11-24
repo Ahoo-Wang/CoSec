@@ -65,9 +65,6 @@ internal class ChangeLifecycle(
     /** The most bytes a record of a change is written with (`CTL-83`): a record past it is not written. */
     val recordCap: Long = ChangeRecordBudget.recordCap(options.maxDocumentBytes.toLong())
 
-    /** What reading one record of a change weighs in a call's work (DR2-E-4): one at [recordCap], decoded. */
-    val readWeight: Long = ChangeRecordBudget.readWeight(options.maxDocumentBytes.toLong())
-
     /**
      * The change [id] as [operator] may see it (review K2): one that does not exist, is of a document the hard rule
      * keeps them from, or that they neither wrote nor may `cosec:read`, is the same 404, before its state is looked at

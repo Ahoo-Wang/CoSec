@@ -164,7 +164,7 @@ class SaasAppChangeMeasurement {
         override suspend fun eachOpenChange(
             document: SnapshotKey,
             after: String?,
-            visit: suspend (me.ahoo.cosec.control.store.ListedChange) -> Boolean,
+            visit: me.ahoo.cosec.control.store.OpenChangeVisitor,
         ) = super<me.ahoo.cosec.control.store.ControlStore>.eachOpenChange(document, after, visit)
 
         override suspend fun openChanges(document: SnapshotKey): List<me.ahoo.cosec.control.store.ListedChange> =

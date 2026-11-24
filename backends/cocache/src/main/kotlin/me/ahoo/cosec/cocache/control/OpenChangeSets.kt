@@ -26,6 +26,7 @@ import me.ahoo.cosec.control.store.ChangePage
 import me.ahoo.cosec.control.store.ControlStore
 import me.ahoo.cosec.control.store.EndedChange
 import me.ahoo.cosec.control.store.ListedChange
+import me.ahoo.cosec.control.store.OpenChangeVisitor
 import me.ahoo.cosec.control.store.Versioned
 import me.ahoo.cosec.spi.snapshot.SnapshotDigest
 import me.ahoo.cosec.spi.snapshot.SnapshotFormatException
@@ -62,8 +63,8 @@ internal class OpenChangeSets(
     private val sets: ControlSets,
     /** Whether the open-change list of the format before 8.0.0-beta.5 is there. */
     private val legacyListed: suspend () -> Boolean,
-    /** The change [ChangeId] as stored, with its digest; null when there is none; a record that does not read throws. */
-    private val record: suspend (ChangeId) -> Versioned<ChangeRequest>?,
+    /** The change [ChangeId] as stored, its bytes with their digest, nothing decoded; null when there is none. */
+    private val stored: suspend (ChangeId) -> Versioned<StoredChange>?,
     private val clock: Clock,
     /** How long a member whose record is missing stays: a first write in flight is missing for a moment. */
     private val missingGrace: Duration,
@@ -144,22 +145,32 @@ internal class OpenChangeSets(
 
     suspend fun openChanges(document: SnapshotKey): List<ListedChange> {
         val found = ArrayList<ListedChange>()
-        eachOpenChange(document, null) {
-            found += it
+        eachOpenChange(document, null) { _, _, read ->
+            read()?.let(found::add)
             true
         }
         return found
     }
 
-    /** The open changes of [document] past [after], read one at a time as [visit] asks for them (DR2-E-4). */
-    suspend fun eachOpenChange(document: SnapshotKey, after: String?, visit: suspend (ListedChange) -> Boolean) {
+    /**
+     * The open changes of [document] past [after], one at a time (DR2-E-4): each record's bytes are read when its turn
+     * comes and handed to [visit] with their size, and decoded only when [visit] asks. A member whose record is missing
+     * is not handed out.
+     */
+    suspend fun eachOpenChange(document: SnapshotKey, after: String?, visit: OpenChangeVisitor) {
         val key = documentKey(document)
         val members = sets.changeMembers(key)
         forgetUnheld(key, members)
-        for (id in members.sorted()) {
-            if (after != null && id <= after) continue
-            val listed = read(document, ChangeId(id), key, id) { !it.state.terminal } ?: continue
-            if (!visit(listed)) return
+        for (member in members.sorted()) {
+            if (after != null && member <= after) continue
+            val id = ChangeId(member)
+            val record = stored(id)
+            if (record == null) {
+                stale(key, member)
+                continue
+            }
+            val size = record.value.bytes.size.toLong()
+            if (!visit(member, size) { listed(document, id, key, member, record.value) { !it.state.terminal } }) return
         }
     }
 
@@ -212,25 +223,33 @@ internal class OpenChangeSets(
         return listed?.let { ListedChange.Readable(it) }
     }
 
-    /** The change a document's member names, if [listed] still holds of it; else the member is stale and null. */
-    private suspend fun read(
+    /** The change [id], decoded, with its digest; null when there is none; a record that does not decode throws. */
+    suspend fun record(id: ChangeId): Versioned<ChangeRequest>? =
+        stored(id)?.let { Versioned(it.value.decode("Change [${id.value}]"), it.digest) }
+
+    /**
+     * The change a document's member names, decoded from [record], if [listed] still holds of it; else the member is
+     * stale and null.
+     */
+    private suspend fun listed(
         document: SnapshotKey,
         id: ChangeId,
         key: String,
         member: String,
+        record: StoredChange,
         listed: (ChangeRequest) -> Boolean,
     ): ListedChange? {
         val change = try {
-            record(id)?.value
+            record.decode("Change [${id.value}]")
         } catch (_: SnapshotFormatException) {
             return ListedChange.Unreadable(id, document)
         }
-        if (change != null && change.state.terminal) {
+        if (change.state.terminal) {
             forget(key, member)
             sets.removeChangeMembers(key, setOf(member))
             return null
         }
-        if (change == null || !listed(change) || change.key != document) {
+        if (!listed(change) || change.key != document) {
             stale(key, member)
             return null
         }

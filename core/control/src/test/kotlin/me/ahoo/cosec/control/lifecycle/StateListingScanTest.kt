@@ -102,7 +102,7 @@ class StateListingScanTest {
             store,
             ChangeAuthority(authorizer, revocations = RevocationReader.NONE),
             ControlDerived.workBudget(),
-            ChangeRecordBudget.readWeight(ChangeOptions.DEFAULT_MAX_DOCUMENT_BYTES.toLong()),
+            ChangeRecordBudget.recordCap(ChangeOptions.DEFAULT_MAX_DOCUMENT_BYTES.toLong()),
         )
     }
 
