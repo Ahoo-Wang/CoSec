@@ -47,7 +47,8 @@ pull requests that change it, and on demand for any commit:
 gh workflow run system-test.yml --ref main -f ref=<commit>
 ```
 
-`-f image=ghcr.io/ahoo-wang/cosec-gateway:<tag>` tests a published image instead of building one. A run uploads the
+`-f image=ghcr.io/ahoo-wang/cosec-gateway:<tag>` tests a published gateway image instead of building one; the control-plane
+host image is built from the commit in every leg, the kind leg's included (`kind/run.sh` loads both images into the cluster). A run uploads the
 containers' logs and state, the JUnit results and each scenario's transcript (`build/system/transcripts/`) as the artifact
 `system-test-<run id>-<attempt>`, and its summary names each failed scenario and the bound it waited for.
 

@@ -752,7 +752,7 @@ gh workflow run system-test.yml --ref main -f ref=<commit>
 ```
 
 `-f image=ghcr.io/ahoo-wang/cosec-gateway:<tag>` tests a published gateway image instead of building one; only images of
-`ghcr.io/ahoo-wang/` are accepted. A run uploads the containers' logs and state, the JUnit results and each scenario's
+`ghcr.io/ahoo-wang/` are accepted. The control-plane host image is built from the commit in every leg, whatever the input. A run uploads the containers' logs and state, the JUnit results and each scenario's
 transcript (every request and answer) as the artifact `system-test-<run id>-<attempt>`, and its summary names each failed
 scenario and the bound it waited for.
 
@@ -796,7 +796,8 @@ What it covers, each as an observable over the network:
 - the **TypeScript client** (`@ahoo-wang/cosec-fetcher`) through the gateway, and the **metrics** of a decision.
 
 A second job of the same workflow applies the manifests of [`k8s/`](https://github.com/Ahoo-Wang/CoSec/tree/main/k8s) on a
-[kind](https://kind.sigs.k8s.io/) cluster with that image: the dev overlay starts without the Service its demo route names;
+[kind](https://kind.sigs.k8s.io/) cluster with that gateway image and the control-plane host image built from the commit,
+both loaded into the cluster (neither of CoSec's images is pulled): the dev overlay starts without the Service its demo route names;
 the pod stays live but out of the Service until `cosec-migrate publish`, then turns ready; a decision is made (`401`, `403`, and a
 permit that fails only at the missing backend); the Prometheus endpoint of the management port is read from another pod, and the
 Service does not publish that port; and the example `NetworkPolicy` for a service behind the gateway is valid for the API server

@@ -468,6 +468,7 @@ gh workflow run system-test.yml --ref main -f ref=<commit>
 ```
 
 `-f image=ghcr.io/ahoo-wang/cosec-gateway:<tag>` 测试已发布的网关镜像而不是现构建一个；只接受 `ghcr.io/ahoo-wang/` 的镜像。
+不论这个输入如何，每一段都用该提交构建控制面宿主的镜像。
 每次运行把容器日志与状态、JUnit 结果和每个场景的记录（每个请求与响应）上传为制品 `system-test-<run id>-<attempt>`，摘要会列出
 每个失败的场景以及它等待的界限。
 
@@ -493,7 +494,7 @@ gh workflow run system-test.yml --ref main -f ref=<commit>
 - 签发方**时钟超前**的令牌，在 `cosec.authentication.revocation.skew` 之内与之外；
 - 经网关的 **TypeScript 客户端**（`@ahoo-wang/cosec-fetcher`），以及一次决策的**指标**。
 
-同一工作流的第二个作业用该镜像在 [kind](https://kind.sigs.k8s.io/) 集群上应用 [`k8s/`](https://github.com/Ahoo-Wang/CoSec/tree/main/k8s)
+同一工作流的第二个作业用该网关镜像和由该提交构建的控制面宿主镜像（两者都载入集群，CoSec 的这两个镜像都不拉取）在 [kind](https://kind.sigs.k8s.io/) 集群上应用 [`k8s/`](https://github.com/Ahoo-Wang/CoSec/tree/main/k8s)
 的清单：dev overlay 在没有其演示路由所指的 Service 时也能启动；`cosec-migrate publish` 之前 Pod 存活但不在 Service 中，之后变为就绪；
 做出一次决策（`401`、`403`，以及只在缺失的后端失败的放行）；从另一个 Pod 读取管理端口的 Prometheus 端点，而 Service 不发布该端口；
 供网关后端服务使用的示例 `NetworkPolicy` 通过 API 服务器的校验，并选中该服务的 Pod 与网关的 Pod。最后一项只说明该策略写的是它该写的，
