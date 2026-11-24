@@ -3,15 +3,14 @@
 # Tests: :cocache:test --tests me.ahoo.cosec.cocache.shadow.StatusReadingsTest --tests me.ahoo.cosec.cocache.shadow.CoCacheShadowTest
 
 diff --git a/backends/cocache/src/main/kotlin/me/ahoo/cosec/cocache/shadow/CoCacheShadowReports.kt b/backends/cocache/src/main/kotlin/me/ahoo/cosec/cocache/shadow/CoCacheShadowReports.kt
-index 1b0a6e16d..de09c4bde 100644
+index 338f30732..98a3903da 100644
 --- a/backends/cocache/src/main/kotlin/me/ahoo/cosec/cocache/shadow/CoCacheShadowReports.kt
 +++ b/backends/cocache/src/main/kotlin/me/ahoo/cosec/cocache/shadow/CoCacheShadowReports.kt
-@@ -297,7 +297,7 @@ class CoCacheShadowReports @InternalCoSecApi constructor(
-     private suspend fun writtenWithin(instance: String, within: Duration): Boolean? {
-         val key = statusKey ?: return null
-         return when (val read = key(instance)) {
--            is L1Read.Hit -> read.ttl?.let { left -> left >= ShadowCacheSpecs.STATUS_TTL.minus(within) }
-+            is L1Read.Hit -> read.ttl?.let { left -> left > Duration.ZERO }
-             is L1Read.Miss, is L1Read.Leased -> false
-         }
-     }
+@@ -389,6 +389,6 @@ class CoCacheShadowReports @InternalCoSecApi constructor(
+  * false when it is gone; null when that cannot be told (a key with no life).
+  */
+ private fun writtenWithin(read: L1Read, within: Duration): Boolean? = when (read) {
+-    is L1Read.Hit -> read.ttl?.let { left -> left >= ShadowCacheSpecs.STATUS_TTL.minus(within) }
++    is L1Read.Hit -> read.ttl?.let { left -> left > Duration.ZERO }
+     is L1Read.Miss, is L1Read.Leased -> false
+ }
