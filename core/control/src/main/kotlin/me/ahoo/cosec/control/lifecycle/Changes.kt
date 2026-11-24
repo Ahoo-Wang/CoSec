@@ -114,7 +114,15 @@ class Changes(
     internal val lostHeads = LostHeads(store, revisions, listeners, clock).also { revisions.repair.lost = it::dropped }
 
     private val flow: ChangeLifecycle =
-        ChangeLifecycle(store, clock, options, slots, listeners, authority, ended) { publishing.writtenBeforeExpiry(it) }
+        ChangeLifecycle(
+            store,
+            clock,
+            options,
+            slots,
+            listeners,
+            authority,
+            ended
+        ) { publishing.writtenBeforeExpiry(it) }
     private val publishing: Publishing =
         Publishing(flow, revisions, clock, authority, authority.approvals, candidates, slots, listeners, movedHeads)
     private val staging = Staging(

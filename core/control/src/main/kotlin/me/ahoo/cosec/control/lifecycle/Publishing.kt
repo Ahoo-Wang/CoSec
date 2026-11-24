@@ -89,7 +89,11 @@ internal class Publishing(
         }
         if (change.state == ChangeState.EXPIRED) {
             // Recorded EXPIRED while its own revision was in effect, before DR1-E-7: publishing it settles it.
-            PublishRules.ownRevision(revisions, change, revisions.head(change.key))?.let { return republished(change, it, publisher) }
+            PublishRules.ownRevision(
+                revisions,
+                change,
+                revisions.head(change.key)
+            )?.let { return republished(change, it, publisher) }
         }
         PublishRules.requireState(change, ChangeStep.PUBLISH.from)
         PublishRules.acknowledged(change, ack)

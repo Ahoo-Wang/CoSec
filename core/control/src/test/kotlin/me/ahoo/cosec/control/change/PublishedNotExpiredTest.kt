@@ -11,7 +11,6 @@
  * limitations under the License.
  */
 
-
 @file:OptIn(InternalCoSecApi::class, ExperimentalCoSecApi::class)
 
 package me.ahoo.cosec.control.change
@@ -57,7 +56,11 @@ class PublishedNotExpiredTest {
     private var settlingRefused = false
 
     private val store = object : ControlStore by memory {
-        override suspend fun putChange(expected: SnapshotDigest?, change: ChangeRequest, previous: ChangeState?): Boolean {
+        override suspend fun putChange(
+            expected: SnapshotDigest?,
+            change: ChangeRequest,
+            previous: ChangeState?
+        ): Boolean {
             if (settlingRefused && change.state == ChangeState.PUBLISHED) return false
             return memory.putChange(expected, change, previous)
         }
@@ -92,7 +95,13 @@ class PublishedNotExpiredTest {
 
     /** A change READY to publish on [ACME]. */
     private suspend fun ready(policy: String): ChangeRequest {
-        val change = changes.propose(PLATO, ACME, revisions.head(ACME)?.revision ?: 0, listOf(Operation.PutPolicy(allow(policy))), policy)
+        val change = changes.propose(
+            PLATO,
+            ACME,
+            revisions.head(ACME)?.revision ?: 0,
+            listOf(Operation.PutPolicy(allow(policy))),
+            policy
+        )
         return changes.skipShadow(PLATO, change.id, "test").also { it.state.assert().isEqualTo(ChangeState.READY) }
     }
 
@@ -153,7 +162,11 @@ class PublishedNotExpiredTest {
         assertThrows<ChangeRejectedException> { changes.publish(PLATO, change.id) }
         settlingRefused = false
         val stored = memory.change(change.id)!!
-        memory.putChange(stored.digest, stored.value.copy(state = ChangeState.EXPIRED), stored.value.state).assert().isTrue()
+        memory.putChange(
+            stored.digest,
+            stored.value.copy(state = ChangeState.EXPIRED),
+            stored.value.state
+        ).assert().isTrue()
 
         val published = changes.publish(PLATO, change.id)
 
