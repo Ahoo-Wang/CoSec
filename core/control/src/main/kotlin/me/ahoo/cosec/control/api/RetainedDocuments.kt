@@ -30,7 +30,8 @@ import me.ahoo.cosec.spi.snapshot.SnapshotKey
  * revision of it.
  *
  * It reads whatever is stored and takes no operator: **each caller holds the authority for the key it asks for** before
- * it asks (`ChangeAuthority.require`/`holds`), as the control plane's reads, simulations and analyses do.
+ * it asks (`ChangeAuthority.require`/`holds`), as the control plane's reads, simulations and analyses do. Each names
+ * the tenant of whoever asks ([caller][held]), which what a read costs is charged to (`CTL-85`, DR2-F-2).
  */
 internal class RetainedDocuments(
     private val revisions: Revisions,
@@ -38,13 +39,16 @@ internal class RetainedDocuments(
     /** What a document the cache will not keep costs this call, held before it is decoded (`CTL-85`). */
     private val work: WorkBudget,
 ) {
-    /** The head of [key] from the cache, decoded and compiled once for its content (RC1-41); null when it has none. */
-    suspend fun held(key: SnapshotKey): Held? = entry(key)?.let { Held(it.document, it) }
+    /**
+     * The head of [key] from the cache, decoded and compiled once for its content (RC1-41); null when it has none. What it
+     * costs, when the cache will not keep it, is [caller]'s: the tenant of whoever asks.
+     */
+    suspend fun held(key: SnapshotKey, caller: TenantId): Held? = entry(key, caller)?.let { Held(it.document, it) }
 
-    suspend fun entry(key: SnapshotKey): DocumentCache.Entry? {
+    suspend fun entry(key: SnapshotKey, caller: TenantId): DocumentCache.Entry? {
         val stored = revisions.stored(key) ?: return null
         cache.get(key, stored.digest)?.let { return it }
-        held(key, stored.document.bodySize)
+        charge(caller, stored.document.bodySize)
         return cache.put(key, stored.digest, stored.document.bodySize, revisions.decode(key, stored.document))
     }
 
@@ -53,24 +57,24 @@ internal class RetainedDocuments(
      * (DR1-F-4): a retained revision's content never changes, the cache is bounded by the heap it holds, so repeating an
      * explanation at one revision compiles it once instead of on every call.
      */
-    suspend fun retainedHeld(key: SnapshotKey, revision: Long): Held {
+    suspend fun retainedHeld(key: SnapshotKey, revision: Long, caller: TenantId): Held {
         val digest = revisions.retainedDigest(key, revision) ?: throw gone(key, revision)
         cache.get(key, digest)?.let { return Held(it.document, it) }
         val record = revisions.record(key, digest) ?: throw gone(key, revision)
-        held(key, record.bodySize)
+        charge(caller, record.bodySize)
         val entry = cache.put(key, digest, record.bodySize, revisions.decode(key, record))
         return Held(entry.document, entry)
     }
 
     /**
      * A document of [size] stored bytes the cache will not keep is decoded and compiled for this call alone: its weight
-     * is held until the call ends, charged to [key]'s tenant (the platform's for the platform and app documents). One the
-     * cache keeps costs nothing here: the cache's own bound holds it.
+     * is held until the call ends, charged to [caller], the tenant of whoever asks, whichever document it is (`CTL-85`,
+     * DR2-F-2): a tenant's `explain` of the platform's or an app's revisions waits in its own turn, never in the
+     * platform's operators'. One the cache keeps costs nothing here: the cache's own bound holds it.
      */
-    private suspend fun held(key: SnapshotKey, size: Int) {
+    private suspend fun charge(caller: TenantId, size: Int) {
         if (cache.admits(size.toLong())) return
-        val tenant = (key as? SnapshotKey.Tenant)?.tenantId ?: TenantId.PLATFORM.value
-        work.hold(tenant, size.toLong() * (DocumentCache.DECODED_FACTOR + DocumentCache.COMPILED_FACTOR))
+        work.hold(caller.value, size.toLong() * (DocumentCache.DECODED_FACTOR + DocumentCache.COMPILED_FACTOR))
     }
 
     suspend fun retained(key: SnapshotKey, revision: Long): PolicyDocument =

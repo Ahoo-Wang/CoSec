@@ -11,11 +11,14 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.login.token
 
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.test.runTest
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.api.context.SecurityContext
 import me.ahoo.cosec.api.token.CompositeToken
 import me.ahoo.cosec.model.PrincipalId
@@ -39,13 +42,21 @@ import java.time.Instant
 import java.time.ZoneOffset
 
 /**
- * IDN-22 (drill entry 9): a tenant switch issues only from a live session. Its family must be readable, its
+ * IDN-22 (drill entry 9): a tenant switch issues only from a live session, and only from its token pair: the request's
+ * own access token and its refresh token, of a generation the session would refresh. Its family must be readable, its
  * principal's and tenant's, not revoked and not ended, and its token's revocations are read strictly (IDN-14);
  * otherwise nothing is issued, and the application's `TenantSwitch` is not even asked.
  */
 class SwitchLiveSessionTest {
-    private class Select(override val targetTenantId: String, override val context: SecurityContext) :
-        SwitchTenantCredentials
+    /** A switch presenting [pair], by default the one its request was made with. */
+    private class Select(
+        override val targetTenantId: String,
+        override val context: SecurityContext,
+        pair: CompositeToken = TestPairs.of(context),
+    ) : SwitchTenantCredentials {
+        override val accessToken: String = pair.accessToken
+        override val refreshToken: String = pair.refreshToken
+    }
 
     private val signedIn = Instant.parse("2026-11-01T08:00:00Z")
     private val store = InMemoryTokenFamilyStore { signedIn }
@@ -63,10 +74,11 @@ class SwitchLiveSessionTest {
         revocations: RevocationReader = RevocationReader.NONE,
         families: TokenFamilies = this.families,
     ): TokenCompositeAuthentication {
-        val switching = SwitchTenantAuthentication(families, TokenRevocation(revocations), Select::class.java) {
-            asked += 1
-            TenantMembership.fromProvider()
-        }
+        val switching =
+            SwitchTenantAuthentication(TestPairs, families, TokenRevocation(revocations), Select::class.java) {
+                asked += 1
+                TenantMembership.fromProvider()
+            }
         return TokenCompositeAuthentication.of(listOf(switching), converter, families)
     }
 
@@ -185,6 +197,62 @@ class SwitchLiveSessionTest {
             login(revocations = principalRevoked)
                 .authenticateAsToken(Select("beta", PermittedRequest.withToken(session, issuedAt = signedIn)))
         }
+        nothingIssued()
+    }
+
+    /** An access token alone switches nothing: the switch issues a session that refreshes, so it presents the pair. */
+    @Test
+    fun `an access token without its refresh token switches nothing`() = runTest {
+        val context = PermittedRequest.withToken(aliceSession())
+        assertThrows<TokenVerificationException> {
+            login().authenticateAsToken(Select("beta", context, CompositeToken(TestPairs.of(context).accessToken, "")))
+        }
+        nothingIssued()
+    }
+
+    /** The pair presented is the one the request was made with: another token's, or another session's, switches nothing. */
+    @Test
+    fun `a pair the request was not made with switches nothing`() = runTest {
+        val session = aliceSession()
+        val context = PermittedRequest.withToken(session)
+        assertThrows<TokenVerificationException> {
+            login().authenticateAsToken(Select("beta", context, TestPairs.of("t2", session = session)))
+        }
+        val other = aliceSession()
+        assertThrows<TokenVerificationException> {
+            login().authenticateAsToken(Select("beta", context, TestPairs.of("t1", session = other)))
+        }
+        nothingIssued()
+    }
+
+    /**
+     * The refresh's own rule: the pair just replaced still switches within the rotation leeway (another tab, a request in
+     * flight), the session it was presented from is not moved, and refreshes on as before.
+     */
+    @Test
+    fun `the pair just replaced switches within the leeway, and the session is not moved`() = runTest {
+        val session = aliceSession()
+        val previous = PermittedRequest.withToken(session)
+        families.rotate(TestPairs.refresh(TestPairs.of(previous)))
+        login().authenticateAsToken(Select("beta", previous))
+        issued.single().tenant.assert().isEqualTo("beta")
+        store.read(session.id)!!.family.generation.assert().isEqualTo(2L)
+    }
+
+    /**
+     * Past the leeway, the pair before the current one is a pair presented again: the session is revoked, as a refresh of
+     * it would revoke it (IDN-16), and nothing is issued.
+     */
+    @Test
+    fun `an older pair presented to switch revokes the session, as a refresh would`() = runTest {
+        val session = aliceSession()
+        val previous = PermittedRequest.withToken(session)
+        families.rotate(TestPairs.refresh(TestPairs.of(previous)))
+        val later = TokenFamilies(store, clock = Clock.fixed(signedIn.plus(Duration.ofMinutes(5)), ZoneOffset.UTC))
+        assertThrows<TokenRevokedException> {
+            login(families = later).authenticateAsToken(Select("beta", previous))
+        }
+        store.read(session.id)!!.family.revoked.assert().isTrue()
         nothingIssued()
     }
 }

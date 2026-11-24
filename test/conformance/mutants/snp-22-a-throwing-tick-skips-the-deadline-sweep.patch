@@ -1,0 +1,21 @@
+# Rule: SNP-22
+# Mutant: the compile deadlines are swept after the tick, not in a finally, so a tick that throws leaves the loads past their deadline running (DR1-D-5, DR2-D-1)
+# Tests: :runtime:test --tests me.ahoo.cosec.runtime.snapshot.SnapshotRevalidationTest
+
+diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/Passes.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/Passes.kt
+index 4649462d6..98dec0b61 100644
+--- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/Passes.kt
++++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/Passes.kt
+@@ -185,11 +185,8 @@ internal class Passes(
+                     families.evictBeyond(family)
+                 }
+             }
+-            return tick()
++            return tick().also { CompileDeadlines.sweep(context, context.nanoTime.get().asLong) }
+         } finally {
+-            // After the tick, which abandons a pass held only by compilations (SNP-6), the loads of those compilations
+-            // end; and whatever threw before it, so a failing tick never skips the deadlines' sweep (DR1-D-5).
+-            CompileDeadlines.sweep(context, context.nanoTime.get().asLong)
+         }
+     }
+ 

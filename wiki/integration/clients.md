@@ -31,7 +31,7 @@ it writes its login.
 | Login | The application: `TokenCompositeAuthentication.authenticateAsToken(credentials)` | Your credentials in; a `CompositeToken` out |
 | Refresh | The starter at `cosec.authentication.login.refresh.path` (`IDN-23`); unset, the application, over `RefreshTokenAuthentication`. The starter's route needs a `MembershipRefresh` bean or `cosec.jwt.session.memberships-on-refresh=from-token` (`STA-8`) | `{"accessToken": "...", "refreshToken": "..."}` in; a `CompositeToken` out |
 | Logout | The starter at `cosec.authentication.login.logout.path` (`IDN-24`); unset, the application: `TokenRevoker.revoke(accessToken)`, or `revoke(compositeToken)` once the access token has expired | The served route: the pair in, `204` out; the session ends on the server |
-| Tenant or app switch | The application: `SwitchTenantAuthentication`, from a live session | The current token in the `Authorization` header and your credentials class in the body; a `CompositeToken` out |
+| Tenant or app switch | The application: `SwitchTenantAuthentication`, from a live session's pair | The current token in the `Authorization` header, and the pair (`accessToken`, `refreshToken`) with your credentials class in the body; a `CompositeToken` out |
 
 A `CompositeToken` is written as `{"accessToken":"<jwt>","refreshToken":"<jwt>"}`, nothing else
 (`CompositeTokenJsonTest` keeps it byte for byte). An application that adds fields to its answer is not breaking
@@ -230,9 +230,11 @@ endpoint and stores the pair it answers; it never rewrites a header ([Apps](./au
   at the latest when its refresh token expires. A logout waits for a refresh in flight and ends the session with the
   pair that refresh stored, since the pair it rotated away would be refused. In React, `cosec-react`'s `logout` (with the
   `tokenManager` option) is that logout, and `signOut` the local step alone.
-- **A switch answers a new pair.** Present the current token, store the pair that answers, and drop the old one. A
-  switch issues only from a live session and keeps its login time (`IDN-17`, `IDN-22`); it does not sign the user in
-  again. Path parameters a client fills from `tenantId` change with the new token.
+- **A switch answers a new pair.** Present the current pair, as a refresh does (the access token in `Authorization`
+  too), store the pair that answers, and drop the old one. A switch issues only from a live session's current pair (the
+  one just replaced, within the rotation leeway) and keeps its login time (`IDN-17`, `IDN-22`); it does not sign the
+  user in again. Refresh first if another tab refreshed long ago: an older pair presented to switch revokes the session,
+  as a refresh of it would. Path parameters a client fills from `tenantId` change with the new token.
 
 ## CORS
 

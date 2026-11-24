@@ -30,6 +30,16 @@ Which preview of the library may run behind which preview of the gateway image: 
 
 ## From 8.0.0-beta.7 {#from-8-0-0-beta-7}
 
+- **Breaking: a tenant switch presents the session's token pair** (`IDN-22`). Affected: every application with a switch
+  endpoint. A switch opened a session that refreshes on an access token alone, so a copied access token became a session
+  until the login ended, and an access token of a generation already refreshed still switched. Now
+  `SwitchTenantCredentials` carries `accessToken` and `refreshToken`, and `SwitchTenantAuthentication` takes CoSec's
+  `TokenVerifier` first: `SwitchTenantAuthentication(tokenVerifier, families, revocation, YourCredentials::class.java)
+  { ... }`. Read the pair from the request body, as the refresh route does (`{"accessToken", "refreshToken"}`), and have
+  clients send it with the switch. The pair must be the one the request was made with, of the session's current
+  generation (the one just replaced is accepted within the rotation leeway); an older pair revokes the session, as a
+  refresh of it would. The switch no longer moves anything of the session it is presented from
+  ([Switching tenant and app](../integration/authentication.md#switching-tenant-and-app)).
 - **Breaking: `JwtTokenConverter.toToken(subject, access, refresh)` refuses a validity longer than the configured one**
   (`IDN-37`). Affected: an application that issues tokens itself with an access or refresh validity longer than
   `cosec.jwt.token-validity.access` or `.refresh`. A revocation is kept only past the configured validities, so such a
@@ -141,10 +151,10 @@ Which preview of the library may run behind which preview of the gateway image: 
   their checks still read up to 10 MB. A simulated request larger than 64 KB has more headers and attributes than a real
   request can carry: trim it.
 - **Breaking: a gateway host with handlers of its own does not start until they are listed** (`STA-13`). Affected: a
-  Spring Cloud Gateway host in enforce mode whose application declares its own `@Controller`, `@RestController` or
-  `RouterFunction` beans.
-  - Those handlers are mapped before any gateway route, so CoSec, a filter of gateway routes, never decided them. Startup
-    used to warn and go on.
+  Spring Cloud Gateway host in enforce mode whose application declares its own `@Controller`, `@RestController`,
+  `RouterFunction` or `HandlerMapping` beans (a WebSocket endpoint's `SimpleUrlHandlerMapping` among them, DR2-G-1).
+  - Those handlers are served outside any gateway route, so CoSec, a filter of gateway routes, never decided them.
+    Startup used to warn and go on.
   - Now it fails, naming each handler by bean name. Migrate by moving them to a service behind the gateway, where a route
     decides them, or by listing the ones something else protects in `cosec.gateway.unprotected-handlers`. Startup then
     names them in one INFO line.
@@ -205,8 +215,25 @@ Which preview of the library may run behind which preview of the gateway image: 
   them), and what reads a change's escalations. Such a change is counted before it is split: none of it is analysed,
   and it waits for approval with the one entry `change of tenant:<t>`. Before, it was split whole, one escalation each,
   and one statement of a thousand actions and a thousand resources could exhaust the control plane's heap. The grants an
-  analysis reaches past its four million comparisons are one entry too, `<n> fragments of tenant:<t>`, where each was
-  its own. An approval of such a change in beta.7 does not cover the new entry: approve it again.
+  analysis reaches past its four million comparisons are one entry too, `<n> fragments of tenant:<t> <sha-256>`, where
+  each was its own. An approval of such a change in beta.7 does not cover the new entry: approve it again.
+- **The escalations of a statement are one entry, and a change has at most about 200 of them** (`CTL-88`, DR2-E-1,
+  DR2-E-3). Affected: a tenant change that grants what its author does not hold, and what reads or shows a change's
+  escalations. The fragments of one statement that are not proven contained, for one reason, are one escalation,
+  `<policy>[<index>] <REASON>: <n> fragments <sha-256>`, with the first three in its `detail`; past 200 statements, the
+  rest are one `TOO_LARGE` entry, `<n> more fragments of tenant:<t> <sha-256>`. Before, each fragment was an escalation
+  of its own, and one proposal could record tens of thousands of them, each repeating its resource: a change record of
+  about 100 MB. A change needs an approval exactly when it did. An approval given in beta.7 names the old subjects, so
+  it does not cover the new ones: approve such a change again. A client that parsed a subject as one fragment reads the
+  first fragments from `detail` now ([what a change answers](../policies/testing.md#what-a-change-answers),
+  `contract/control/escalations.json`).
+- **A document's change records are bounded in bytes** (`CTL-83`, DR2-E-2). Affected: a client that proposes many
+  large changes on one document, and whoever sizes Redis. With a new change, a document's open changes weigh at most
+  `max-count` times the document cap (400 MB by default): past it the new change is `409` `OPEN_LIMIT`, as past the
+  count, and its `detail` says it is the bytes. A change record is at most the largest body plus the document cap
+  (18 MB); one larger is not stored and the proposal is `422`, which only a caller of the plane in process can reach.
+  The startup line `CoSec derived, not configured` now states what one tenant document stores at most, about 1.7 GB by
+  default, and that it multiplies by the documents ([Storage](./storage.md#how-much-one-document-stores)).
 - **A service calling the control plane as its own principal is recorded as `service`** (`ControlCaller.service`,
   `IDN-34`). Affected: what reads the records of control requests, and the order you upgrade in.
   - **Records.** The identity such a service states names its credential `service`, where beta.7 named it `api-key`.
@@ -298,6 +325,10 @@ Which preview of the library may run behind which preview of the gateway image: 
   /orders/123/` for a route `/orders/{id}`) is answered `400` `invalid-request` where it used to be decided in the `http`
   namespace. A client that sends such paths to a mapped host should drop the trailing `/`
   ([Web integration](../integration/web.md)).
+- **Breaking: the mirror of a route written with a trailing `/` is refused too** (`PIP-35`, DR2-C-2). Affected: a host
+  with a route map that writes a route path ending with `/`. A request without the `/` (`GET /orders` for a route
+  `/orders/`) maps to no route and maps with it: it is answered `400` `invalid-request` where beta.7 decided it in the
+  `http` namespace, beside the route's DENYs. Send the path as the route writes it, or write the route without the `/`.
 - **Social sign-in states are bounded** (DR1-D-9). Affected: deployments that serve social login. A deployment holds
   at most a 64th of the memory Redis reports in sign-ins in progress (512 bytes each; 100,000 when Redis does not
   report its memory), and a start past it is refused with a `SocialAuthenticationException` ("try again shortly")

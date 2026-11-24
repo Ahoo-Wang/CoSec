@@ -29,6 +29,7 @@ import java.time.Duration
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.Executor
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.function.LongSupplier
 
 /**
  * Lost and early notifications (F9), resets (F10), revision regressions (F11), per-tenant fail-closed (F15), and the
@@ -272,6 +273,39 @@ class SnapshotRevalidationTest {
             // The abandoned compilation never starts once it leaves the queue: it installs nothing over revision 2.
             parked.removeAt(0).run()
             source.peek("app-a")!!.appCompiled.revision.assert().isEqualTo(2)
+        }
+    }
+
+    /**
+     * DR1-D-5: a tick that throws still sweeps the compile deadlines. A reload has been stuck compiling past
+     * `storeReadTimeout` when the tick's own clock read fails: the tick fails, and the stuck load ends all the same.
+     */
+    @Test
+    fun aTickThatThrowsStillEndsTheLoadsPastTheirCompileDeadline() {
+        val parked = CopyOnWriteArrayList<Runnable>()
+        val stuck = AtomicBoolean()
+        val compile = Executor { if (stuck.get()) parked += it else it.run() }
+        val elapsed = ManualNanoTime()
+        testSource(store, compileExecutor = compile).use { source ->
+            source.nanoTime = elapsed
+            source.load("app-a").join()
+            stuck.set(true)
+            val reload = source.reload(APP_A)
+            parked.assert().hasSize(1)
+            elapsed.advance(SnapshotOptions().storeReadTimeout.plusSeconds(1))
+            val caller = Thread.currentThread()
+            val armed = AtomicBoolean(true)
+            source.nanoTime = LongSupplier {
+                check(Thread.currentThread() !== caller || !armed.compareAndSet(true, false)) { "The clock failed." }
+                elapsed.asLong
+            }
+
+            assertThrows<IllegalStateException> { source.tick() }
+
+            armed.get().assert().describedAs("the tick read the clock and failed").isFalse()
+            reload.isDone.assert().describedAs("the stuck load ended though the tick threw").isTrue()
+            stuck.set(false)
+            parked.removeAt(0).run()
         }
     }
 

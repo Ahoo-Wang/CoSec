@@ -22,14 +22,16 @@ import org.springframework.beans.factory.config.ConfigurableListableBeanFactory
 import org.springframework.context.ConfigurableApplicationContext
 import org.springframework.core.annotation.MergedAnnotations
 import org.springframework.stereotype.Controller
+import org.springframework.web.reactive.HandlerMapping
 import org.springframework.web.reactive.function.server.RouterFunction
 
 /**
  * UB-10, `STA-13`: on a Spring Cloud Gateway host CoSec is a global filter, which runs on gateway routes only. The
  * application's own controllers and functional routes are mapped before any route (Spring WebFlux's annotated-controller
  * mapping has order 0 and the router-function mapping -1, the gateway's route mapping 1), so they are answered with no
- * CoSec decision at all. Startup fails, naming each, unless `cosec.gateway.unprotected-handlers` lists it, as `STA-2`
- * does for an actuator endpoint; the ones listed are named in one INFO line. A listed name that matches no handler is
+ * CoSec decision at all. So are the requests a `HandlerMapping` of the application's own maps, a WebSocket endpoint's
+ * `SimpleUrlHandlerMapping` among them, before or after the gateway's (DR2-G-1). Startup fails, naming each, unless
+ * `cosec.gateway.unprotected-handlers` lists it, as `STA-2` does for an actuator endpoint; the ones listed are named in one INFO line. A listed name that matches no handler is
  * ignored, as `cosec.gateway.unprotected-endpoints` ignores one.
  */
 internal object GatewayOwnHandlers {
@@ -45,15 +47,18 @@ internal object GatewayOwnHandlers {
         "org.springframework.boot.actuate.endpoint.web.annotation.RestControllerEndpoint",
     )
 
-    /** The controllers and router functions the application declares, by bean name, sorted. */
+    /**
+     * The controllers, router functions and handler mappings the application declares, by bean name, sorted. The
+     * mappings of Spring and of the gateway (the annotated controllers', the router functions', the routes', the
+     * actuator's) are Spring's beans, and not listed.
+     */
     fun find(beans: ListableBeanFactory): List<String> {
-        val controllers = beans.getBeanNamesForAnnotation(Controller::class.java).filter {
+        val controllers = beans.getBeanNamesForAnnotation(Controller::class.java).asList()
+        val routers = beans.getBeanNamesForType(RouterFunction::class.java, true, false).asList()
+        val mappings = beans.getBeanNamesForType(HandlerMapping::class.java, true, false).asList()
+        return (controllers + routers + mappings).distinct().filter {
             applications(beans, it, beans.getType(it, false))
-        }
-        val routers = beans.getBeanNamesForType(RouterFunction::class.java, true, false).filter {
-            applications(beans, it, beans.getType(it, false))
-        }
-        return (controllers + routers).distinct().sorted()
+        }.sorted()
     }
 
     /** False for a bean of Spring or of CoSec: judged by the class declaring its `@Bean` method, else by its own class. */
@@ -88,7 +93,7 @@ internal object GatewayOwnHandlers {
             return null
         }
         return "This is a Spring Cloud Gateway host: CoSec decides the requests of gateway routes only. ${handlers.size} " +
-            "handler(s) of the application itself are mapped before any route and would be answered with no CoSec " +
+            "handler(s) of the application itself are served outside the gateway's routes and would be answered with no CoSec " +
             "decision (no authentication, no policy, no rate limit): ${named(handlers)}. Move them to a service behind " +
             "the gateway, where a route decides them, or list the ones something else protects, by bean name, in " +
             "${GatewayProperties.UNPROTECTED_HANDLERS_KEY} (STA-13, $DOCUMENTATION)."

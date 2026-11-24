@@ -562,7 +562,7 @@ composite。8.0 中 `*` 还匹配控制面的动作（`cosec:*`）和[代码中�
 - **`tenantId` 声明为空或不是字符串**，或 `attributes` 声明中有 `apiKeyId`（CoSec 只为 API key 设置），令牌为 `token-invalid`；7.x 把这样的租户读作没有租户。
   **`cosec.jwt.secret`** 对 `hmac256`、`hmac384`、`hmac512` 分别至少 32、48、64 个 UTF-8 字节，否则启动失败。
 - **break-glass（7.x 的 root）** 只作用于 CoSec 自己的 `JwtTokenVerifier` 校验过的令牌，从不作用于自定义 `TokenVerifier` 的令牌，也不作用于其他认证器认可的主体（`BRK-8`）。
-- **租户切换与社交登录。** 租户切换（7.x 的 `AbstractSwitchTenantAuthentication`，现为带 `TenantSwitch` 的 `SwitchTenantAuthentication`，见[从 8.0.0-alpha.4 升级](./upgrading-previews.md#from-8-0-0-alpha-4)）回答用户在目标租户和应用中的 `TenantMembership`，而不是一个主体，因此新令牌不会带上先前租户的角色。
+- **租户切换与社交登录。** 租户切换（7.x 的 `AbstractSwitchTenantAuthentication`，现为带 `TenantSwitch` 的 `SwitchTenantAuthentication`，见[从 8.0.0-alpha.4 升级](./upgrading-previews.md#from-8-0-0-alpha-4)）回答用户在目标租户和应用中的 `TenantMembership`，而不是一个主体，因此新令牌不会带上先前租户的角色；它还像刷新一样出示会话的令牌对，只有访问令牌不能切换（[切换租户和应用](../integration/authentication.md#switching-tenant-and-app)）。
   `DirectSocialUserPrincipalConverter` 只签名 `cosec_oauth_provider` 和 `cosec_oauth_user_id`，不签名提供方的用户信息（[认证](../integration/authentication.md#tenants)）。
 - `cosec.api-key.header` 改为 `cosec.pipeline.api-key-header`（默认 `X-API-Key`），任何文档都不能读取它指定的请求头（`CND-5`）。`cosec.api-key.store-blocking` 已删除：Redis 的 key
   读取器从不阻塞。携带 API key 的请求只按 key 判定，即使它同时携带令牌（`PIP-8`）。

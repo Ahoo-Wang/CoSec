@@ -107,19 +107,27 @@ class RouteMap private constructor(private val routes: Map<String, List<Compiled
      */
     fun resolve(method: String, path: String): RouteResolution {
         val resolved = resolveWithHead(method, path)
-        // PIP-35: a path that maps only without its trailing `/` is one a backend may read as either; deciding it in
-        // the `http` namespace would step around the route's DENYs, and mapping it would widen its ALLOWs.
-        if (resolved == RouteResolution.Unmapped && path.length > 1 && path.endsWith('/')) {
-            val without = resolveWithHead(method, path.substring(0, path.length - 1))
-            if (without is RouteResolution.Mapped) {
-                return RouteResolution.Invalid(
-                    "the path maps to route ${without.route.method} ${without.route.path} only without its trailing /, " +
-                        "and a backend may read it as either",
-                )
-            }
+        if (resolved != RouteResolution.Unmapped || path.length <= 1 || !hasRoutes(method)) {
+            return resolved
         }
-        return resolved
+        // PIP-35: a path that maps only without its trailing `/`, or only with one, is one a backend may read as either;
+        // deciding it in the `http` namespace would step around the route's DENYs, and mapping it would widen its ALLOWs.
+        // Only an unmapped path of a method the map has routes for pays for the second lookup: without a route map, or
+        // without a route for the method, every request is unmapped and allocates nothing more here.
+        val trailing = path.endsWith('/')
+        val other = resolveWithHead(method, if (trailing) path.substring(0, path.length - 1) else "$path/")
+        if (other !is RouteResolution.Mapped) {
+            return resolved
+        }
+        val spelling = if (trailing) "without its trailing /" else "with a trailing /"
+        return RouteResolution.Invalid(
+            "the path maps to route ${other.route.method} ${other.route.path} only $spelling, " +
+                "and a backend may read it as either",
+        )
     }
+
+    /** Whether some route could map a request with [method]: one of its own, or GET's for HEAD (`PIP-18`). */
+    private fun hasRoutes(method: String): Boolean = method in routes || (method == HEAD && GET in routes)
 
     private fun resolveWithHead(method: String, path: String): RouteResolution {
         val resolved = resolveExactly(method, path)

@@ -536,10 +536,10 @@ Set each to one of its values, or remove it to take its default: https://cosec.a
 ### 网关自己的处理器导致启动失败 {#startup-fails-on-the-gateways-own-handlers}
 
 ```text
-This is a Spring Cloud Gateway host: CoSec decides the requests of gateway routes only. n handler(s) of the application itself are mapped before any route and would be answered with no CoSec decision (no authentication, no policy, no rate limit): ... (STA-13, ...)
+This is a Spring Cloud Gateway host: CoSec decides the requests of gateway routes only. n handler(s) of the application itself are served outside the gateway's routes and would be answered with no CoSec decision (no authentication, no policy, no rate limit): ... (STA-13, ...)
 ```
 
-它按 bean 名指明应用自己的控制器或函数式路由。它们映射在所有网关路由之前，所以 CoSec 看不到对它们的请求（[网关自己的处理器](../integration/web.md#the-gateways-own-handlers)）。把它们移到网关之后的服务中，由路由来决策；或者把由其他手段保护的那些按 bean 名列在 `cosec.gateway.unprotected-handlers`（`COSEC_GATEWAY_UNPROTECTEDHANDLERS`）中，启动时会用一行 INFO 指明它们。`... lists [*]: it takes the bean names of handlers, never a pattern` 表示列出的名字含有 `*`：请逐个写出名字。
+它按 bean 名指明应用自己的控制器、函数式路由或处理器映射（比如 WebSocket 端点的）。它们在所有网关路由之外提供服务，所以 CoSec 看不到对它们的请求（[网关自己的处理器](../integration/web.md#the-gateways-own-handlers)）。把它们移到网关之后的服务中，由路由来决策；或者把由其他手段保护的那些按 bean 名列在 `cosec.gateway.unprotected-handlers`（`COSEC_GATEWAY_UNPROTECTEDHANDLERS`）中，启动时会用一行 INFO 指明它们。`... lists [*]: it takes the bean names of handlers, never a pattern` 表示列出的名字含有 `*`：请逐个写出名字。
 
 ### 缺少模块时启动失败 {#startup-fails-on-a-missing-module}
 

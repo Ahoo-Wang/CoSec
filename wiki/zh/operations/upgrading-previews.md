@@ -27,6 +27,7 @@ description: "每个 8.0 预览版（alpha 与 beta）到下一个之间的变�
 
 ## 从 8.0.0-beta.7 升级 {#from-8-0-0-beta-7}
 
+- **破坏性变更：租户切换出示会话的令牌对**（`IDN-22`）。受影响的是所有提供切换端点的应用。以前切换凭一张访问令牌就开出一个能刷新的会话，被复制的访问令牌因此能变成一个活到登录结束的会话，已经刷新过的代际的访问令牌也还能切换。现在 `SwitchTenantCredentials` 携带 `accessToken` 和 `refreshToken`，`SwitchTenantAuthentication` 的第一个参数是 CoSec 的 `TokenVerifier`：`SwitchTenantAuthentication(tokenVerifier, families, revocation, YourCredentials::class.java) { ... }`。像刷新路由一样从请求体读取令牌对（`{"accessToken", "refreshToken"}`），并让客户端在切换时发送它。令牌对必须是该请求所用的那一对，属于会话的当前代际（轮换宽限期内也接受刚被替换的那一代）；更早的令牌对会像刷新那样吊销会话。切换不再推进它所出自的会话（[切换租户和应用](../integration/authentication.md#switching-tenant-and-app)）。
 - **破坏性变更：`JwtTokenConverter.toToken(subject, access, refresh)` 拒绝长于配置值的有效期**（`IDN-37`）。受影响的是自己签发令牌、且指定的 access 或 refresh 有效期长于 `cosec.jwt.token-validity.access` 或 `.refresh` 的应用。吊销记录只保留到配置的有效期之后，这样的令牌在吊销记录过期后会重新有效。现在这个调用会抛出 `IllegalArgumentException` 并点名属性：改为调高属性，保留期随之变长。
 - **控制面把调用的大块工作限定在一个预算内**（`CTL-85`，DR1-F-3、DR1-F-4）。受影响的：同时提议、应用或解释许多大文档的客户端。控制面宿主拿堆的八分之一，给一次调用为自己解析的请求体、解码或编译的文档；放不下的调用按租户轮流等待，至多等 `cosec.pipeline.timeout` 的一半，否则答 `503` 加 `Retry-After: 1`，请重试。`StageBudgets` 的启动行写明等待时间，控制面的启动行写明预算；新增两个度量：`cosec.control.work.held` 与 `cosec.control.work.refused`。无需配置。
 - **破坏性变更：变更不能写入应用之后还含 `/` 的权限策略 id，也不能写入含 `/` 的目录权限 id**（`CTL-8`，DR1-E-5）。受影响的是写入
@@ -93,8 +94,8 @@ description: "每个 8.0 预览版（alpha 与 beta）到下一个之间的变�
   break-glass 发送超过 64 KB 请求体的客户端。这样的请求体现在在解析之前即返回 `400`；此前它会在任何授权之前被读取并解析，
   最多 10 MB。提议、`:apply` 及其校验仍读取至多 10 MB。超过 64 KB 的模拟请求带的头与属性比真实请求能带的还多：请删减。
 - **破坏性变更：有自己处理器的网关宿主在列出它们之前不会启动**（`STA-13`）。受影响的是 enforce 模式下、应用声明了自己的
-  `@Controller`、`@RestController` 或 `RouterFunction` bean 的 Spring Cloud Gateway 宿主。
-  - 这些处理器映射在所有网关路由之前，所以作为网关路由过滤器的 CoSec 从未决策过它们。原来启动时只告警，然后继续。
+  `@Controller`、`@RestController`、`RouterFunction` 或 `HandlerMapping` bean（包括 WebSocket 端点的 `SimpleUrlHandlerMapping`，DR2-G-1）的 Spring Cloud Gateway 宿主。
+  - 这些处理器在所有网关路由之外提供服务，所以作为网关路由过滤器的 CoSec 从未决策过它们。原来启动时只告警，然后继续。
   - 现在启动失败，并按 bean 名逐个指明。迁移方式：把它们移到网关之后的服务中，由路由来决策；或者把由其他手段保护的那些列在
     `cosec.gateway.unprotected-handlers` 中，启动时会用一行 INFO 指明它们。
   - 带 `*` 的名字被拒绝。Spring 的、CoSec 的和 actuator 的处理器不算应用的，不需要列出（[网关自己的处理器](../integration/web.md#the-gateways-own-handlers)）。库的控制器算：网关宿主上 springdoc 的 `openApiResource` 和你自己的处理器一样被拒绝（用 `springdoc.api-docs.enabled=false` 关掉它，或者列出它）。
@@ -135,8 +136,20 @@ description: "每个 8.0 预览版（alpha 与 beta）到下一个之间的变�
 - **太大而无法分析的变更只有一项 `TOO_LARGE`**（`CTL-49`，DR1-E-1）。受影响的：被授出的 ALLOW 合计超过 80,000 个片段
   （每个动作乘每个资源，再乘到达它的每条绑定）的租户变更，以及读变更越权项的程序。这样的变更在拆分之前就被计数：任何部分都不分析，
   以一项 `change of tenant:<t>` 等待审批。此前它被整个拆开、每个片段一项，一条一千个动作乘一千个资源的语句就能耗尽控制面的堆。
-  分析用完四百万次比较之后走到的授出也合为一项 `<n> fragments of tenant:<t>`，此前每个一项。beta.7 中对这种变更的批准
+  分析用完四百万次比较之后走到的授出也合为一项 `<n> fragments of tenant:<t> <sha-256>`，此前每个一项。beta.7 中对这种变更的批准
   覆盖不了新的那一项：须重新批准。
+- **一条语句的越权项合为一项，一个变更至多约 200 项**（`CTL-88`，DR2-E-1，DR2-E-3）。受影响的：授出作者并不持有的内容的
+  租户变更，以及读取或展示变更越权项的程序。同一条语句中、因同一原因未被证明包含的片段是一项越权项，
+  `<policy>[<index>] <REASON>: <n> fragments <sha-256>`，`detail` 中给出前三个；超过 200 条语句之后，其余的合为一项
+  `TOO_LARGE`，`<n> more fragments of tenant:<t> <sha-256>`。此前每个片段各为一项，一次提议就能记下几万项、每项重复它的资源：
+  一条约 100 MB 的变更记录。变更需不需要审批与从前完全一样。beta.7 中给出的批准写的是旧的 subject，覆盖不了新的：这样的变更须
+  重新批准。把 subject 当成一个片段来解析的客户端，现在从 `detail` 读前几个片段（[变更的应答](../policies/testing.md#what-a-change-answers)，
+  `contract/control/escalations.json`）。
+- **一个文档的变更记录有字节上界**（`CTL-83`，DR2-E-2）。受影响的：在一个文档上提出许多大变更的客户端，以及给 Redis 定容量的人。
+  连同新变更，一个文档的未结束变更至多合计 `max-count` 乘以文档上限（默认 400 MB）：超出时新变更返回 `409` `OPEN_LIMIT`，与超出
+  条数时一样，`detail` 说明是字节。一条变更记录至多是最大请求体加文档上限（18 MB）；更大的不存储，提议返回 `422`，只有在进程内
+  调用控制面的调用方才可能遇到。启动行 `CoSec derived, not configured` 现在写出一个租户文档至多存多少（默认约 1.7 GB），以及它
+  要乘以文档数（[存储](./storage.md#how-much-one-document-stores)）。
 - **以自己的主体调用控制面的服务记为 `service`**（`ControlCaller.service`，`IDN-34`）。受影响的：读取控制请求记录的东西，以及升级的顺序。
   - **记录。** 这样的服务所声明的身份把凭证命名为 `service`，beta.7 命名为 `api-key`。它不是 API key，记录现在照实写：它对控制面宿主的请求在决策事件与审计里的 `subject.method`、变更日志里的 `origin.via.method` 都是 `service`（经进程内 `ControlService` 的调用仍是 `in-process`）。此前存储的变更保留 `api-key`。按 `api-key` 找服务调用方的看板、告警或查询，也要找 `service`。
   - **它能做什么没有变。** `service` 和 `api-key` 一样是工作负载的凭证：从不审批，也从不是信任根，没有会话，也没有 break-glass（新增 `AuthenticatedPrincipal.workload`）。
@@ -157,6 +170,7 @@ description: "每个 8.0 预览版（alpha 与 beta）到下一个之间的变�
   - **Redis。** `<s>:membership:*` 键不再被读写：所有实例都运行此版本后可以删除（`redis-cli --scan --pattern '<s>:membership:*' | xargs redis-cli del`），并从数据面的 ACL 中去掉 `~<s>:membership:*`（[谁可以写哪些 key](./storage.md#who-may-write-which-keys)）。新旧实例并存期间，旧实例的 `invalidate` 仍能到达新实例（同一通道、同样的帧）。
 - **条目预算计入角色与目录简写派生的条目**（`CTL-40`，DR1-B-1）。受影响的：角色列了很多权限的文档，或目录里有很多带 `action` 的权限的应用。`maxRoleBindings` 现在把角色的绑定（它所列的每个权限一条，`"*"` 为目录的全部权限）与手写的一起计入，默认值从 10,000 调到 20,000，让 100 个角色各 100 个权限留有余量；`maxPolicies` 与 `maxStatements` 为每个带 `action` 的目录权限计入一条只含一条语句的策略。beta.7 能发布、但会把这样的计数抬过预算的变更，现在停留在草稿并带 `V2` 错误；已存储的超预算文档继续被服务，只要不增长就仍可修改。如何判断：对它的任意变更调用 `POST /changes:check`（[不提出而检查](../policies/testing.md#checking-without-proposing)），`V2` 警告会写出每个超过预算的计数与上限（[条目预算](../policies/language.md#entry-budgets)）；或数出它派生的绑定，即各角色权限数之和：`jq '[.roles[]?.permissions | if type == "array" then length else 0 end] | add + ([.bindings[]? | select(.subject.role)] | length)'`（`"*"` 角色再加上它的应用目录的权限数）。文档确实需要时，在平台的 `limits` 中调高预算。分散在不同权限上的派生绑定，每千条让租户管理员变更的检查多约 0.5 秒，每条在持有该文档的每个实例上约占 240 字节。
 - **在拒绝方向上末尾的 `/` 不算数**（`PIP-35`，DR1-C-9）。受影响的：所有部署，方向是放行得更少。写在 `/orders/{id}` 上的 DENY 语句或限流规则现在也作用于 `/orders/123/`，写在 `/orders/` 上的也作用于 `/orders`；ALLOW 与平台边界仍按路径原样匹配。在有路由映射的宿主上，路径以 `/` 结尾、映射不上、去掉后能映射的请求（路由 `/orders/{id}` 时的 `DELETE /orders/123/`）现在答 `400` `invalid-request`，此前在 `http` 命名空间里决策。向映射宿主发送这种路径的客户端应去掉末尾的 `/`（[Web 集成](../integration/web.md)）。
+- **破坏性变更：路由写成以 `/` 结尾时，它的镜像也被拒绝**（`PIP-35`，DR2-C-2）。受影响的：路由映射中有以 `/` 结尾的路由路径的宿主。不带 `/` 的请求（路由 `/orders/` 时的 `GET /orders`）映射不上、加上 `/` 后能映射：现在答 `400` `invalid-request`，beta.7 在 `http` 命名空间里决策它，绕过该路由的 DENY。按路由的写法发送路径，或者把路由写成不带 `/`。
 - **社交登录的 state 有了上界**（DR1-D-9）。受影响的：提供社交登录的部署。一个部署最多持有 Redis 报告的内存的六十四分之一的进行中登录（每个 512 字节；Redis 不报告内存时为 100,000），超过时开始登录以 `SocialAuthenticationException`（“稍后再试”）拒绝，而不是再写两把键。提供社交登录的进程需要 Redis 的 `INFO` 权限，`SNP-3` 本来就要求；没有时使用固定上界，并记一条 WARN。`InMemorySocialStateStore` 最多持有 10,000 个。除了在边缘对开始登录的路由限流，无需改动（[存储](./storage.md#redis-keys)）。
 - **破坏性变更：`CoSec-Identity` 带上调用方的全部成员关系，按它做判定的宿主要求它在**（`IDN-39`，DR2-F-1，DR2-C-1）。受影响的：`cosec.pipeline.caller=forwarded-identity` 的宿主（控制面镜像、内嵌控制面的 IAM 服务、服务端口），以及自己向这类宿主写这个请求头的应用。
   - 请求头新增 `memberships`：主体在其他每个空间中的角色，以及它附加的策略的 id。网关的转发与 `HttpControlService` 的转述总是写它，没有更多时写空的。此前只带判定所在空间的角色，附加到调用方的 DENY、或针对其在另一个空间所持角色的 `subject.roles` DENY，在这类宿主上不生效：同一调用在进程内却被拒绝。

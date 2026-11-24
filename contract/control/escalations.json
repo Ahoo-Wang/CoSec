@@ -1,0 +1,9 @@
+{
+  "grouped" : "the grant analysis's: one entry per statement of a policy and reason",
+  "groups" : 200,
+  "rest" : "one TOO_LARGE entry for the fragments of the statements past groups",
+  "examples" : 3,
+  "clipped" : 256,
+  "subject" : "names how many fragments the entry stands for and their SHA-256: another count or another fragment is another subject, which an approval of the first does not cover",
+  "others" : "one per entry of the document they name, its roles expanded, one for the document, one for its boundary"
+}

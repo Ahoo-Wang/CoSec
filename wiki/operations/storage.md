@@ -254,6 +254,26 @@ decision inputs stay strict: they carry no such tolerance.
   does not follow the prefix. Each cache publishes an empty frame to its channel when it is created, so a missing
   channel permission fails startup, naming the pattern to allow.
 
+### How much one document stores {#how-much-one-document-stores}
+
+The control plane bounds what each document's records weigh, from `cosec.control.revisions.max-count` (50) and the
+document cap (8 MiB), and nothing else (`CTL-83`, `CTL-84`). At the defaults, one tenant document stores at most:
+
+| Records | At most | How |
+|---|---|---|
+| Revisions | 400 MB | `max-count` times the cap, its most recent included; past it the oldest go ([Revisions, history and rollback](#revisions-history-and-rollback)) |
+| Open changes | 400 MB | `max-count` times the cap, with the new one; past it a new change is `409` `OPEN_LIMIT` |
+| Ended changes | 900 MB | `max-count` records, each at most 18 MB (the largest body a route reads, 10 MB, and a document's worth for its checks' findings and escalations); not measured |
+| Revision index | 8 MB | the cap |
+
+That is about 1.7 GB for one document, and every tenant has its own, so the worst case multiplies by the number of
+tenant documents (the platform's and each app's add one each). A real document stores far less: these are what a tenant
+administrator can make it store by proposing, abandoning and publishing large changes in a loop, the bound and not the
+typical size. `max-count` is the setting that lowers them: the revisions, the open changes and the ended changes each
+in proportion (the document cap is fixed). Size Redis for the documents you expect, and watch `used_memory`: with `noeviction`,
+a full Redis refuses every write, the data plane's included. The startup line `CoSec derived, not configured` states
+these numbers for the host's settings.
+
 ### Who may write which keys
 
 Only the control plane (and `cosec-migrate`) writes documents and control-plane records. Data-plane instances read

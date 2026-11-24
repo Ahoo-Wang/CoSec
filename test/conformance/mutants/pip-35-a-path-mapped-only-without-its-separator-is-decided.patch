@@ -3,15 +3,15 @@
 # Tests: :conformance:test --tests me.ahoo.cosec.conformance.ConformanceTest
 
 diff --git a/core/document/src/main/kotlin/me/ahoo/cosec/document/route/RouteMap.kt b/core/document/src/main/kotlin/me/ahoo/cosec/document/route/RouteMap.kt
-index e11d15a05..83907146f 100644
+index 6ebe3ca98..7f870e0a3 100644
 --- a/core/document/src/main/kotlin/me/ahoo/cosec/document/route/RouteMap.kt
 +++ b/core/document/src/main/kotlin/me/ahoo/cosec/document/route/RouteMap.kt
-@@ -109,7 +109,7 @@ class RouteMap private constructor(private val routes: Map<String, List<Compiled
+@@ -107,7 +107,7 @@ class RouteMap private constructor(private val routes: Map<String, List<Compiled
+      */
+     fun resolve(method: String, path: String): RouteResolution {
          val resolved = resolveWithHead(method, path)
-         // PIP-35: a path that maps only without its trailing `/` is one a backend may read as either; deciding it in
-         // the `http` namespace would step around the route's DENYs, and mapping it would widen its ALLOWs.
--        if (resolved == RouteResolution.Unmapped && path.length > 1 && path.endsWith('/')) {
-+        if (resolved == RouteResolution.Unmapped && path.length > 1 && path.endsWith('/') && method == "") {
-             val without = resolveWithHead(method, path.substring(0, path.length - 1))
-             if (without is RouteResolution.Mapped) {
-                 return RouteResolution.Invalid(
+-        if (resolved != RouteResolution.Unmapped || path.length <= 1 || !hasRoutes(method)) {
++        if (resolved != RouteResolution.Unmapped || path.length <= 1 || !hasRoutes(method) || path.endsWith('/')) {
+             return resolved
+         }
+         // PIP-35: a path that maps only without its trailing `/`, or only with one, is one a backend may read as either;

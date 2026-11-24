@@ -1,0 +1,16 @@
+# Rule: CTL-88
+# Mutant: a group's subject names its statement and reason only, so an approval of it covers a fragment more or another
+# Tests: :control:test --tests me.ahoo.cosec.control.lifecycle.UnknownEscalationsTest --tests me.ahoo.cosec.control.change.GroupedEscalationApprovalTest
+
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/UnknownEscalations.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/UnknownEscalations.kt
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/UnknownEscalations.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/UnknownEscalations.kt
+@@ -76,7 +76,7 @@ internal object UnknownEscalations {
+             tally.add(fragment, verdict)
+         }
+         val unknown = groups.mapTo(ArrayList()) { (group, tally) ->
+-            Escalation("${group.where()} ${group.reason}: ${tally.counted()}", group.reason, tally.examples())
++            Escalation("${group.where()} ${group.reason}", group.reason, tally.examples())
+         }
+         if (rest.count > 0) {
+             unknown += Escalation(

@@ -45,15 +45,15 @@ internal class AccessAnalysis(
         // Every document read for the caller is held to cosec:read, its own tenant's too (DR1-F-8): cosec:analyze on the
         // tenant asks the question, it does not grant the bindings the answer lists. What it may not read is hidden.
         val readable = keys.filter { authority.holds(operator, it, ControlActions.READ) }
-        val platform = SnapshotKey.Platform.takeIf { it in readable }?.let { retained.entry(it) }
-        val application = app?.takeIf { it in readable }?.let { retained.entry(it) }
+        val platform = SnapshotKey.Platform.takeIf { it in readable }?.let { retained.entry(it, operator.tenant) }
+        val application = app?.takeIf { it in readable }?.let { retained.entry(it, operator.tenant) }
         val found = AccessFindings(asked, ResourceTarget(resource))
         for (key in readable) {
             // The documents and their parsed statements come from the cache simulate and explain read (RC1-41).
             val entry = when (key) {
                 SnapshotKey.Platform -> platform
                 app -> application
-                else -> retained.entry(key)
+                else -> retained.entry(key, operator.tenant)
             } ?: continue
             for (binding in entry.effective.bindings) {
                 if (!applies(binding, asked)) {
