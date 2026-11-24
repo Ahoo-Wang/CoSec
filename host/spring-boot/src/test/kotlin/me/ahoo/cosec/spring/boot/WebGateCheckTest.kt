@@ -92,6 +92,25 @@ class WebGateCheckTest {
     }
 
     @Test
+    fun `a Spring Cloud Gateway host outside enforce mode is told that a gateway decides only in enforce mode`() {
+        val gatewayMode = arrayOf(
+            "cosec.pipeline.mode=gateway",
+            "cosec.pipeline.identity.only-gateway-can-reach=true",
+            "cosec.jwt.enabled=false",
+        )
+        failsSaying(
+            reactive.withPropertyValues(*gatewayMode),
+            "this Spring Cloud Gateway host is in cosec.pipeline.mode=gateway",
+            "decides only in enforce mode",
+        )
+        // A WebFlux service behind a gateway has a gate in that mode: without it, it is told about its adapter.
+        failsSaying(
+            reactive.withClassLoader(FilteredClassLoader(GATEWAY_GLOBAL_FILTER)).withPropertyValues(*gatewayMode),
+            "registers none of its gates",
+        )
+    }
+
+    @Test
     fun `with CoSec off, or on a host that serves no web requests, no gate is needed`() {
         starts(servlet.withPropertyValues("cosec.enabled=false"))
         starts(plain)

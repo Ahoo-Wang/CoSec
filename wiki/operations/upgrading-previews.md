@@ -34,6 +34,11 @@ Which preview of the library may run behind which preview of the gateway image: 
   keeps a `ControlCaller.of(context)` past its request (a launched job, a deferred write). Over HTTP it acted as the
   user until the credential expired, after a logout too; it is now refused `403`, as in process, before anything is
   sent, with a `WARN`. Call as the application's own principal (`ControlCaller.service`) from such work.
+- **Breaking for images built on top of CoSec's: the application's files are root's** (DR1-G-8). Affected: a
+  Dockerfile `FROM` the gateway or control-plane image that writes under `/opt/<app>` as `appuser`, retraining the AOT
+  cache included. The process now owns only `logs/` and `data/`, so a process made to write files cannot replace its
+  jars. Switch to `USER root` for those steps and back to `USER appuser` after
+  ([Training your own cache](./deployment.md#training-your-own-cache)).
 - **Breaking: a web host with CoSec on fails startup without a CoSec gate** (`STA-1`, DR1-G-6). Affected: an
   application that excluded `CoSecPipelineWebAutoConfiguration`, or replaced the adapter's bean with a filter of another
   type, while keeping `cosec.enabled`. It served every request undecided, with `web=none` in the startup summary as the
