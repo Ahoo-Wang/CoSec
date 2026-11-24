@@ -13,12 +13,12 @@
 #
 
 # The kind leg of the system test (test/system-test/README.md): the Kubernetes manifests of k8s/, as the documentation says
-# to use them, on a real cluster with the gateway image built from the commit under test.
+# to use them, on a real cluster with the gateway and control-plane host images built from the commit under test.
 #
-# Usage: run.sh <image> <cosec-migrate>
+# Usage: run.sh <gateway image> <control image> <cosec-migrate>
 #
-# Needs docker, kind, kubectl and python3. It creates the cluster `cosec-system`, loads <image>, applies `k8s/overlays/dev`
-# with that image, and checks, in order:
+# Needs docker, kind, kubectl and python3. It creates the cluster `cosec-system`, loads both images (neither of CoSec's images
+# is pulled), applies `k8s/overlays/dev` with them in place of the published ones, and checks, in order:
 #   1. the dev overlay starts WITHOUT the Service its demo route names (cosec-auth, which no overlay provides): the gateway
 #      runs, is live, and stays out of the Service (not ready) while no platform document is published, and is not restarted
 #      in one liveness window without documents (a restart before it was live, Redis not yet reachable, is reported only);
@@ -38,7 +38,8 @@
 set -euo pipefail
 
 IMAGE=$1
-MIGRATE=$2
+CONTROL_IMAGE=$2
+MIGRATE=$3
 ROOT=$(cd "$(dirname "$0")/../../.." && pwd)
 CLUSTER=cosec-system
 NS=cosec-dev
@@ -74,15 +75,19 @@ kc() { kubectl -n "$NS" "$@"; }
 # --- the cluster and the overlay -------------------------------------------------------------------------------------
 command -v kind >/dev/null || fail "kind is not installed on this runner"
 kind create cluster --name "$CLUSTER" --wait 180s
-kind load docker-image "$IMAGE" --name "$CLUSTER"
+kind load docker-image "$IMAGE" "$CONTROL_IMAGE" --name "$CLUSTER"
 kubectl create namespace "$NS"
 kubectl -n "$NS" create secret generic cosec-jwt-secret --from-literal=secret="$SECRET"
 
-# The dev overlay, with the image under test in place of the published one: the overlay itself is not edited.
+# The dev overlay, with the images under test in place of the published ones (the control image is the host's and the
+# boundary check's): the overlay itself is not edited. Neither tag is `latest`, so the pull policy is IfNotPresent and the
+# kubelet runs the loaded images.
 mkdir -p "$WORK/overlay"
 RELATIVE=$(python3 -c 'import os,sys; print(os.path.relpath(sys.argv[1], sys.argv[2]))' "$ROOT/k8s/overlays/dev" "$WORK/overlay")
 IMAGE_NAME=${IMAGE%:*}
 IMAGE_TAG=${IMAGE##*:}
+CONTROL_IMAGE_NAME=${CONTROL_IMAGE%:*}
+CONTROL_IMAGE_TAG=${CONTROL_IMAGE##*:}
 cat >"$WORK/overlay/kustomization.yaml" <<YAML
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
@@ -92,6 +97,9 @@ images:
   - name: ghcr.io/ahoo-wang/cosec-gateway
     newName: $IMAGE_NAME
     newTag: "$IMAGE_TAG"
+  - name: ghcr.io/ahoo-wang/cosec-control
+    newName: $CONTROL_IMAGE_NAME
+    newTag: "$CONTROL_IMAGE_TAG"
 YAML
 kubectl apply -k "$WORK/overlay"
 
@@ -245,11 +253,12 @@ ok "the decisions of step 3 are counted: a permit and an explicit deny"
 # The dev overlay states the control host's boundary (its first lines say why that is unsafe on a shared cluster). kindnet
 # enforces the policies of k8s/control, so the check, from a pod no policy admits, finds every connection dropped. Then the
 # policies are deleted, and a fresh run of the check must reach the host: both verdicts are the check's own.
-# The host's image is pulled (the overlay's tag) and the host listens once its JVM is up, ready or not.
+# The host's image is the one loaded into the cluster (not pulled), and the host listens once its JVM is up, ready
+# or not.
 job_finished() {
   case "$(kc get job "$1" -o jsonpath='{.status.conditions[?(@.status=="True")].type}')" in *Complete* | *Failed*) return 0 ;; *) return 1 ;; esac
 }
-wait_for "the boundary check to finish" 420 "the control image's pull + its startupProbe (90 x 2 s) + the check's rounds (5 s, 8 s per port)" \
+wait_for "the boundary check to finish" 300 "the control host's startupProbe (90 x 2 s) + a minute for the two pods' scheduling + two of the check's rounds (5 s apart, 8 s per port, three ports)" \
   job_finished cosec-control-boundary-check
 CHECK_LOG=$(kc logs job/cosec-control-boundary-check)
 [ "$(kc get job cosec-control-boundary-check -o jsonpath='{.status.succeeded}')" = 1 ] ||
