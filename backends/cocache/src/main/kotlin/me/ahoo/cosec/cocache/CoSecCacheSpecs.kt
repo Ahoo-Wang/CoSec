@@ -200,8 +200,23 @@ object CoSecCacheSpecs {
     /** Where a deployment keeps its rate limit counters: `<keyPrefix>:rate-limiter` (`SNP-9`). */
     fun rateLimiterPrefix(keyPrefix: String): String = "${keyPrefix.trimEnd(':')}:$RATE_LIMITER_FAMILY"
 
+    /**
+     * Where a deployment counts each principal's sessions (`IDN-35`): `<keyPrefix>:token:sessions:`, followed by
+     * `<n>:<tenant>:<principal>` ([RedisSessionIndex]). Frozen within 8.x ([FrozenLayout.SESSION_INDEX]).
+     */
+    fun sessionIndexPrefix(keyPrefix: String): String = "${keyPrefix.trimEnd(':')}:$SESSIONS_FAMILY:"
+
+    /**
+     * Where a deployment keeps the social sign-ins in progress: `<keyPrefix>:oauth:binding:`, followed by the state
+     * ([RedisSocialStateStore]), and the count of them under [RedisSocialStateStore.COUNT_SUFFIX]. Frozen within 8.x
+     * ([FrozenLayout.SOCIAL_STATE], [FrozenLayout.SOCIAL_COUNT]).
+     */
+    fun socialBindingPrefix(keyPrefix: String): String = "${keyPrefix.trimEnd(':')}:$SOCIAL_BINDING_FAMILY:"
+
     private const val API_KEY_FAMILY = "api-key"
     private const val RATE_LIMITER_FAMILY = "rate-limiter"
+    private const val SESSIONS_FAMILY = "token:sessions"
+    private const val SOCIAL_BINDING_FAMILY = "oauth:binding"
 
     /**
      * [storagePath] split at its last `:`: CoCache's key prefix (`cosec:control:`) and namespace (`revision`), which may

@@ -16,6 +16,7 @@ package me.ahoo.cosec.spring.boot.authentication.social
 
 import io.github.oshai.kotlinlogging.KotlinLogging
 import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.cocache.CoSecCacheSpecs
 import me.ahoo.cosec.cocache.RedisSocialStateStore
 import me.ahoo.cosec.social.DirectSocialUserPrincipalConverter
 import me.ahoo.cosec.social.SocialAuthentication
@@ -69,7 +70,7 @@ internal class CoSecSocialAuthenticationAutoConfiguration(
     @ConditionalOnMissingBean
     fun authStateCache(stringRedisTemplate: StringRedisTemplate, cosec: CoSecProperties): AuthStateCache {
         // Under the deployment's prefix, as every key CoSec writes (SNP-9, RC1-46).
-        return RedisAuthStateCache(stringRedisTemplate, cosec.keysOf(OAUTH_STATE) + ":")
+        return RedisAuthStateCache(stringRedisTemplate, RedisAuthStateCache.keyPrefix(cosec.keyPrefix))
     }
 
     /**
@@ -88,7 +89,7 @@ internal class CoSecSocialAuthenticationAutoConfiguration(
             cosec: CoSecProperties,
         ): SocialStateStore = RedisSocialStateStore(
             redisTemplate,
-            cosec.keysOf(OAUTH_BINDING) + ":",
+            CoSecCacheSpecs.socialBindingPrefix(cosec.keyPrefix),
             // Read once, at startup (DR1-D-9): the memory Redis reports is what the bound keeps CoSec's.
             SocialStateBound.of { blocking.execute { it.serverCommands().info("memory") } },
         )
@@ -141,9 +142,6 @@ internal class CoSecSocialAuthenticationAutoConfiguration(
         return SocialAuthentication(principalConverter, socialProviderManager)
     }
 }
-
-private const val OAUTH_STATE = "oauth:state"
-private const val OAUTH_BINDING = "oauth:binding"
 
 internal fun redirectUriCheckOff(key: String): String =
     "${SocialAuthenticationProperties.PREFIX}.registration.$key.ignore-check-redirect-uri is true: JustAuth does not check " +

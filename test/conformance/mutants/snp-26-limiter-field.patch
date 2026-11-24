@@ -1,0 +1,25 @@
+# Rule: SNP-26
+# Mutant: the rate limiter counts this window in a field n, so the frozen script starts every count from zero
+# Tests: :cocache:test --tests me.ahoo.cosec.cocache.FrozenScriptsTest
+
+diff --git a/backends/cocache/src/main/resources/me/ahoo/cosec/cocache/limiter/redis-rate-limiter.lua b/backends/cocache/src/main/resources/me/ahoo/cosec/cocache/limiter/redis-rate-limiter.lua
+index f93391026..23893bb47 100644
+--- a/backends/cocache/src/main/resources/me/ahoo/cosec/cocache/limiter/redis-rate-limiter.lua
++++ b/backends/cocache/src/main/resources/me/ahoo/cosec/cocache/limiter/redis-rate-limiter.lua
+@@ -21,7 +21,7 @@ end
+ local time = redis.call('TIME')
+ local nowMs = tonumber(time[1]) * 1000 + math.floor(tonumber(time[2]) / 1000)
+ local window = math.floor(nowMs / windowMs)
+-local stored = redis.call('HMGET', KEYS[1], 'w', 'c', 'p')
++local stored = redis.call('HMGET', KEYS[1], 'w', 'n', 'p')
+ local counted = tonumber(stored[1])
+ local current = tonumber(stored[2]) or 0
+ local previous = tonumber(stored[3]) or 0
+@@ -40,6 +40,6 @@ local resetAfter = windowMs - elapsed
+ if estimate >= quota then
+   return {0, scaledEstimate, resetAfter}
+ end
+-redis.call('HSET', KEYS[1], 'w', window, 'c', current + 1, 'p', previous)
++redis.call('HSET', KEYS[1], 'w', window, 'n', current + 1, 'p', previous)
+ redis.call('PEXPIRE', KEYS[1], windowMs * 2)
+ return {1, scaledEstimate, resetAfter}
