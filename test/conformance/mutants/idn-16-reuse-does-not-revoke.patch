@@ -3,15 +3,15 @@
 # Tests: :login:test --tests me.ahoo.cosec.login.token.TokenFamiliesTest :conformance:test
 
 diff --git a/extensions/login/src/main/kotlin/me/ahoo/cosec/login/token/TokenFamilies.kt b/extensions/login/src/main/kotlin/me/ahoo/cosec/login/token/TokenFamilies.kt
-index 2d51c1047..51691c853 100644
+index 4cdb070e2..26af96aa2 100644
 --- a/extensions/login/src/main/kotlin/me/ahoo/cosec/login/token/TokenFamilies.kt
 +++ b/extensions/login/src/main/kotlin/me/ahoo/cosec/login/token/TokenFamilies.kt
-@@ -231,7 +231,7 @@ class TokenFamilies @JvmOverloads constructor(
+@@ -235,7 +235,7 @@ class TokenFamilies @JvmOverloads constructor(
       * family changed in between, to be read again and judged as it is now.
       */
      private suspend fun reused(read: TokenFamilyStore.Read) {
 -        if (revoke(read)) {
 +        if (read.family.id.isNotEmpty()) {
-             throw TokenRevokedException("The token's pair was refreshed before and is presented again: its session is revoked.")
-         }
-     }
+             throw TokenRevokedException(
+                 "The token's pair was refreshed before and is presented again: its session is revoked."
+             )

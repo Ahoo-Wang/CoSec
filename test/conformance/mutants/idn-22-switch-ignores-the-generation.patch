@@ -3,10 +3,10 @@
 # Tests: :login:test --tests me.ahoo.cosec.login.token.SwitchLiveSessionTest :jwt:test --tests me.ahoo.cosec.jwt.SwitchFromReplayedPairTest :conformance:test
 
 diff --git a/extensions/login/src/main/kotlin/me/ahoo/cosec/login/token/TokenFamilies.kt b/extensions/login/src/main/kotlin/me/ahoo/cosec/login/token/TokenFamilies.kt
-index 2d51c1047..80cccddd7 100644
+index 4cdb070e2..424f6f60f 100644
 --- a/extensions/login/src/main/kotlin/me/ahoo/cosec/login/token/TokenFamilies.kt
 +++ b/extensions/login/src/main/kotlin/me/ahoo/cosec/login/token/TokenFamilies.kt
-@@ -210,7 +210,10 @@ class TokenFamilies @JvmOverloads constructor(
+@@ -212,7 +212,10 @@ class TokenFamilies @JvmOverloads constructor(
                      requireRootLive(family)
                      return family
                  }
@@ -15,6 +15,6 @@ index 2d51c1047..80cccddd7 100644
 +                    requireRootLive(family)
 +                    return family
 +                }
-                 Standing.NEVER_ISSUED -> throw TokenVerificationException("The token is of a generation its session never issued.")
-             }
-         }
+                 Standing.NEVER_ISSUED -> throw TokenVerificationException(
+                     "The token is of a generation its session never issued."
+                 )
