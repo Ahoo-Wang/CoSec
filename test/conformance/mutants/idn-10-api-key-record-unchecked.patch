@@ -3,7 +3,7 @@
 # Tests: :runtime:test --tests me.ahoo.cosec.runtime.authn.ApiKeyAuthenticatorTest
 
 diff --git a/core/spi/src/main/kotlin/me/ahoo/cosec/spi/apikey/ApiKey.kt b/core/spi/src/main/kotlin/me/ahoo/cosec/spi/apikey/ApiKey.kt
-index 6c6048f6..532fff5f 100644
+index 0000000..0000000 100644
 --- a/core/spi/src/main/kotlin/me/ahoo/cosec/spi/apikey/ApiKey.kt
 +++ b/core/spi/src/main/kotlin/me/ahoo/cosec/spi/apikey/ApiKey.kt
 @@ -52,7 +52,7 @@ class ApiKey(
@@ -12,6 +12,6 @@ index 6c6048f6..532fff5f 100644
              Identifiers.isWellFormed(tenantId) && (roles == null || Identifiers.areWellFormed(roles))
 -        require(wellFormed) { "API key [${Identifiers.printable(id)}] holds an id with an unpaired UTF-16 surrogate." }
 +        require(wellFormed || true) { "API key [${Identifiers.printable(id)}] holds an id with an unpaired UTF-16 surrogate." }
-         require(principalId.isNotEmpty()) { "API key [$id] has a principal." }
+         // A blank principal is no one (`IDN-38`): a stored key with one fails its lookup, as above.
+         require(principalId.isNotBlank()) { "API key [${Identifiers.printable(id)}] has a blank principal." }
          require(tenantId.isNotEmpty()) { "API key [$id] belongs to a tenant." }
-         require(SnapshotKey.Tenant.isValidTenantId(tenantId)) {

@@ -100,6 +100,9 @@ tenant, and
   place, so the token would read the documents, memberships and revocations of `beta?`: it is refused before any of
   them is read. CoSec's own issuer refuses to sign one: login fails with `Principal [alice\uD800] holds an unpaired
   UTF-16 surrogate ...`. Fix the issuer, or the user store it reads: an id is Unicode text.
+- **A blank subject:** the token's `sub` is white space only (`IDN-38`): a principal id is never blank. CoSec's own
+  issuer refuses to sign one: login fails with `A token has a subject that is not blank (IDN-38).`. Fix the issuer, or
+  the `Authentication` that answers the subject. An id is not trimmed: `" alice "` is valid, and is not `alice`.
 - **A tenant or app id with `/`:** the token's `tenantId` or `aud` holds `/`, such as `acme/west`, which a 7.x or
   preview issuer could sign (`SCP-13`). A tenant or app id is one path segment, so the token names neither tenant
   `acme/west` nor `acme`. Rename the tenant or app where its id is kept, then have the principal sign in again
@@ -228,7 +231,7 @@ No decision could be made, so the request was refused: CoSec fails closed. The a
 | `INDETERMINATE: RequiredListenerFailed` / `required_listener` | A `REQUIRED` decision listener failed or timed out on a permit (`REQUIRED decision listener [<name>] failed on request [<id>].`), or a permit came through a break-glass binding with no `REQUIRED` listener (`Request [<id>] permitted through break-glass, but no REQUIRED listener is registered.`). | Fix the listener's store, or register a `REQUIRED` listener before using break-glass ([Decision listeners](./observability.md#decision-listeners)). |
 | `AUTHENTICATOR_UNAVAILABLE` / `authenticator` | The authenticator failed or took longer than the authentication timeout (20 % of `cosec.pipeline.timeout`): for example the Redis API key store is unreachable. | Restore the store. |
 | `AUTHENTICATOR_UNAVAILABLE` / `authenticator`, for every request of one authenticator | An `Authenticator` of your own names its credential's method `jwt`, which is reserved for CoSec's token (`The authentication method [jwt] is CoSec's own token's ...`). | Name the method after your credential, such as `Identity.Method("ldap")` ([Extending](../architecture/extending.md#authenticators)). |
-| `AUTHENTICATOR_UNAVAILABLE` / `authenticator`, for the requests of some principals or keys | The authenticator gave a principal whose id, tenant, credential id or claimed roles hold an unpaired UTF-16 surrogate (`Principal [<id>] of tenant [<tenant>] holds an id with an unpaired UTF-16 surrogate ...`), or an API key's stored record names one (`API key [<id>] holds an id with an unpaired UTF-16 surrogate.`, `IDN-10`). Such an id would share a Redis key with another, so the request fails closed instead. | Fix the authenticator, or the key's record: an id is Unicode text. |
+| `AUTHENTICATOR_UNAVAILABLE` / `authenticator`, for the requests of some principals or keys | The authenticator gave a principal whose id, tenant, credential id or claimed roles hold an unpaired UTF-16 surrogate (`Principal [<id>] of tenant [<tenant>] holds an id with an unpaired UTF-16 surrogate ...`), or an API key's stored record names one (`API key [<id>] holds an id with an unpaired UTF-16 surrogate.`, `IDN-10`). Such an id would share a Redis key with another, so the request fails closed instead. Or the principal's id is blank (`A principal id is not blank.`, or `API key [<id>] has a blank principal.`, `IDN-38`): a blank id is no one. | Fix the authenticator, or the key's record: an id is Unicode text, and names someone. An authenticator answers `Rejected` for a credential that names no one. |
 | `AUTHENTICATOR_UNAVAILABLE` / `authenticator`, for every request with one key | The key is stored in another format, which is refused when read (`API key format [null] is not 3.`; `null` means the record has no `format`, as a key written by 7.x; `2` means an 8.0 pre-release wrote it). | A 7.x key: convert the keys ([API keys narrow, and memberships decide](./upgrading.md#api-keys-narrow-and-memberships-decide)). A pre-release key: issue a new key and delete the old one; `cosec-migrate api-keys` refuses to count it converted. |
 | `DEADLINE_EXCEEDED` / `deadline` | The whole evaluation took longer than [`cosec.pipeline.timeout`](./configuration.md#pipeline). | Find the slow stage in the trace. |
 
@@ -393,7 +396,7 @@ read as anonymous:
 
 | Status | Cause | Fix |
 |---|---|---|
-| `400` `invalid-request` | The header is not base64url JSON of format v1, has an unknown or missing member, names an id with an unpaired UTF-16 surrogate (`IDN-10`) or a tenant that cannot be a tenant id, such as one with `/` (`SCP-13`), is larger than [`cosec.pipeline.identity.max-size`](./configuration.md#pipeline), arrived more than once, or names a scope that does not resolve on this service. | Something other than the CoSec gateway sets the header, or the gateway's `cosec.gateway.identity.max-size` is larger than the service's limit. |
+| `400` `invalid-request` | The header is not base64url JSON of format v1, has an unknown or missing member, names an id with an unpaired UTF-16 surrogate (`IDN-10`), a blank `sub`, `tenant` or `rid` (`IDN-38`) or a tenant that cannot be a tenant id, such as one with `/` (`SCP-13`), is larger than [`cosec.pipeline.identity.max-size`](./configuration.md#pipeline), arrived more than once, or names a scope that does not resolve on this service. | Something other than the CoSec gateway sets the header, or the gateway's `cosec.gateway.identity.max-size` is larger than the service's limit. |
 | `401` `token-invalid` | A version this service does not read, no `auth.exp`, or an identity issued later than now plus [`cosec.authentication.revocation.skew`](./configuration.md#authentication). | Upgrade the service with the gateway; synchronize the clocks. |
 | `401` `token-expired` | The credential expired, or the identity was issued longer ago than [`cosec.pipeline.identity.max-age`](./configuration.md#pipeline) plus the skew. | Synchronize the clocks; a request that waits long between the gateway and the service needs a larger `max-age`. In a test without a gateway, a header made once and reused: make one per request ([`IdentityHeader`](../integration/web.md#services-behind-the-gateway)). |
 
@@ -827,11 +830,23 @@ It refuses to start instead, naming the artifact, when a feature that is on need
 | `cosec.cosid.generator is set, but CoSec's ids do not come from CosId` | A `CosIdRuntime` (`cosid-spring-boot-starter` and its `cosid.*` settings), or remove the key: with an `IdGenerator` bean of your own, that bean gives CoSec its ids |
 | `cosec.metrics.enabled=true needs cosec-micrometer` | `cosec-micrometer`, or remove the key: unset, metrics are optional |
 | `cosec.control.enabled=true needs cosec-control` (or `cosec-cocache`) | the artifact it names, or remove the key: unset, an instance without the modules is a data-plane instance |
+| `cosec.control.enabled=true, but cosec.pipeline.mode=gateway` | A service behind a gateway wires no control plane: run it on a host in `enforce` mode (the default), or remove the key |
 | `Social sign-in, whose states are kept in Redis ..., needs cosec-cocache` | add `cosec-cocache` (it keeps the OAuth states of a sign-in in Redis, once each), declare a `SocialStateStore` bean of your own, or turn social login off with `cosec.authentication.login.social.enabled=false` |
 | `cosec-cocache needs a ReactiveStringRedisTemplate bean` | `spring-boot-data-redis` and a Redis connection (`spring.data.redis.*`): without it no snapshot is read and rate limits would count per instance |
 
 The web checks run only while CoSec is on (`cosec.enabled`, default `true`); a gateway host is exempt from the WebFlux
 check, as it needs `cosec-gateway` instead. Every check runs with `spring.main.lazy-initialization=true` too (`STA-3`).
+
+A web host with the module can still run without its gate: the application excluded `CoSecPipelineWebAutoConfiguration`,
+or replaced the adapter's bean with a filter of another type. Every request would then reach the application
+undecided, so startup fails:
+
+```text
+CoSec is on (cosec.enabled), but this web host registers none of its gates (PipelineServletFilter, PipelineWebFilter, PipelineGatewayFilter), as a bean or a filter registration: every request would reach the application undecided. ...
+```
+
+Keep the auto-configuration, or register CoSec's filter yourself (a bean of its type, or a `FilterRegistrationBean`
+whose filter it is: the check looks for the type, not the bean's name), or turn CoSec off with `cosec.enabled=false`.
 
 ### Startup fails on the refresh route's authentication {#startup-fails-on-the-refresh-routes-authentication}
 
@@ -1066,6 +1081,18 @@ installed document from Redis), at most 5 minutes, and with `fail-closed.tenants
 `fail-closed.max-lag`
 ([Configuration](./configuration.md#snapshot)). To spend less Redis CPU on many documents, raise it within those
 bounds ([Storage](./storage.md#what-revalidation-costs-redis)).
+
+### Startup fails on the key prefix {#startup-fails-on-the-key-prefix}
+
+```text
+cosec.key-prefix [cosec:prod] holds ':': a key prefix is letters, digits, '_', '.' and '-' (cosec), or such a string wrapped whole in braces, a Redis Cluster hash tag ({cosec}), so that no deployment's prefix nests inside another's (SNP-9). ...
+```
+
+A deployment's prefix must not be able to nest inside another's: with `a` and `a:b` the second's keys are also under
+the first. The message says what to do. A trailing `:` (`cosec:`), which earlier previews ignored, names the same keys
+without it: remove it. A `:` inside the prefix (`cosec:prod`) names keys that are not under any prefix allowed now: move
+them as the [upgrade note](./upgrading-previews.md#from-8-0-0-beta-7) says. Braces count as a hash tag only when one
+pair wraps the whole prefix.
 
 ### Startup fails on a removed key prefix
 

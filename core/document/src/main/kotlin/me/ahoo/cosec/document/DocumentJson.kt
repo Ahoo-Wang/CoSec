@@ -33,10 +33,13 @@ internal object DocumentJson {
 
     internal fun actor(node: DocumentNode): Actor {
         node.requireObject("tenant", "principal")
-        return Actor(TenantId(node.required("tenant").nonEmpty()), PrincipalId(node.required("principal").nonEmpty()))
+        return Actor(TenantId(node.required("tenant").nonEmpty()), PrincipalId(node.required("principal").nonBlank()))
     }
 
     internal fun DocumentNode.nonEmpty(): String = text().ifEmpty { fail("must not be empty") }
+
+    /** A principal id: not empty, and not white space only either (`IDN-38`). */
+    private fun DocumentNode.nonBlank(): String = nonEmpty().ifBlank { fail("must not be blank (IDN-38)") }
 
     internal fun actor(actor: Actor): ObjectNode =
         factory.objectNode().put("tenant", actor.tenant.value).put("principal", actor.principal.value)

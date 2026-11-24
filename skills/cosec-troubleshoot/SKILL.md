@@ -77,6 +77,10 @@ Full model: https://cosec.ahoo.me/guide/security-model.
   bound on a lost invalidation (SNP-6), so the interval must be at least 1 second, at most 5 minutes, and,
   with `fail-closed.tenants`, less than `fail-closed.max-lag`. Use a value within the bounds; never
   suggest turning revalidation off.
+- **`cosec.key-prefix [<p>] holds ...: a key prefix is letters, digits, '_', '.' and '-' (cosec), or ... ({cosec})`**
+  (SNP-9): a prefix that could nest inside another deployment's. A trailing `:` names the same keys: remove it. A `:`
+  inside it: move the keys to an allowed prefix (stop the writers, copy with their TTL, switch). Braces are a hash tag
+  only around the whole prefix.
 - **`CoSec does not read ... cosec.authorization.snapshot.key-prefix`** (or `cosec.authorization.cache.key-prefix`,
   `cosec.api-key.key-prefix`): one `cosec.key-prefix` replaced them (SNP-9), and they fail startup as unknown keys. Which
   families move, from where to where, is at https://cosec.ahoo.me/operations/upgrading-previews#from-8-0-0-alpha-2. Have the token
@@ -119,6 +123,12 @@ Full model: https://cosec.ahoo.me/guide/security-model.
   `cosec.enabled=false`: its filter strips a client's `CoSec-Identity`), `cosec.api-key.store=redis` `cosec-cocache`,
   `cosec.audit.kafka.delivery=required` `cosec-kafka`, `cosec.cosid.generator` `cosec-cosid`. Add the named artifact next to `cosec-spring-boot`. Do not
   suggest turning the feature off unless the user does not want it.
+- **`CoSec is on (cosec.enabled), but this web host registers none of its gates ...`** (STA-1): the adapter's module
+  is there but no CoSec filter is registered, so every request would pass undecided. Usually the application excluded
+  `CoSecPipelineWebAutoConfiguration`, or declared a filter of another type under the adapter's bean name. Keep the
+  auto-configuration, or register CoSec's filter itself; never suggest turning CoSec off unless the user wants no gate.
+- **`cosec.control.enabled=true, but cosec.pipeline.mode=gateway`** (STA-1): a service behind a gateway wires no
+  control plane. Run the control plane on an `enforce` host, or remove the key.
 - **`cosec.audit.kafka.delivery=required, but no Kafka audit listener was created`** (STA-1): `cosec-kafka` is there,
   but the listener is not: add a `KafkaOperations` bean (`spring-boot-starter-kafka` with `spring.kafka.*`), and keep
   `cosec.audit.enabled` and `cosec.audit.kafka.enabled` on; or use `best-effort`.
@@ -400,6 +410,11 @@ with the host stopped. Its probes are on the management port 8081, never on 8080
   which JSON writes as an escape (`"beta\uD800"`), IDN-10: a Redis key would write it as `?` and read another id's
   documents, memberships and revocations. CoSec's own `JwtTokenConverter` refuses to sign one (login fails with
   `holds an unpaired UTF-16 surrogate`). Fix the issuer or the user store; surrogate pairs (emoji) are fine.
+- `token-invalid` for a token whose `sub` is white space only (IDN-38): a principal id is never blank. CoSec's own
+  `JwtTokenConverter` refuses to sign one (login fails with `A token has a subject that is not blank`); an
+  `Authenticator` of your own that makes a blank `PrincipalId` throws, so the request is `503`. An API key record whose
+  `principalId` is blank does not load (`503`), and a document binding a blank principal does not compile. Ids are not
+  trimmed: `" alice "` is its own id, and a binding of `alice` does not match it.
 - `token-invalid` for a token whose `tenantId` or `aud` holds `/` (`acme/west`, SCP-13): a tenant or app id is one path
   segment, so it names neither `acme/west` nor `acme`. Behind a gateway, such a forwarded identity is `400
   invalid-request`; a preview's document of such a tenant is left out of `GET /documents` with a warning. Rename the
@@ -474,7 +489,7 @@ is counted in `cosec.identity.refused{problem}` (with cosec-micrometer), where a
 or a request that bypassed the gateway:
 
 - 400 `invalid-request`: not base64url JSON of format v1, unknown or missing members, an id with an unpaired
-  surrogate (IDN-10), over
+  surrogate (IDN-10), a blank `sub`, `tenant` or `rid` (IDN-38), over
   `cosec.pipeline.identity.max-size` (8KB), sent more than once, or a scope that does not resolve here.
 - 401 `token-invalid`: unsupported version, no `auth.exp`, or issued in the future (beyond
   `cosec.authentication.revocation.skew`).

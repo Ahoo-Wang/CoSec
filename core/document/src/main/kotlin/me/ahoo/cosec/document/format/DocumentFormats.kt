@@ -130,8 +130,18 @@ object DocumentFormats {
         root = ObjectType(
             listOf(
                 Field("v", IntegerType(const = 1), required = true, description = "The format version."),
-                Field("tenant", id("acme", "(platform)"), required = true),
-                Field("sub", id("alice", "svc-billing"), required = true, description = "The principal's id."),
+                Field(
+                    "tenant",
+                    id("acme", "(platform)"),
+                    required = true,
+                    description = "The principal's tenant, never blank."
+                ),
+                Field(
+                    "sub",
+                    id("alice", "svc-billing"),
+                    required = true,
+                    description = "The principal's id, never blank (IDN-38)."
+                ),
                 Field(
                     "scope",
                     ObjectType(
@@ -212,7 +222,12 @@ object DocumentFormats {
                     required = true,
                 ),
                 Field("iat", epochSeconds, required = true, description = "When the gateway made the header."),
-                Field("rid", id("0TEC7Hw00001zR0"), required = true, description = "The gateway's CoSec-Request-Id."),
+                Field(
+                    "rid",
+                    id("0TEC7Hw00001zR0"),
+                    required = true,
+                    description = "The gateway's CoSec-Request-Id, never blank."
+                ),
                 Field(
                     "claims",
                     MapType(

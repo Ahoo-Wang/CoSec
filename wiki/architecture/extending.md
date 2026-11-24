@@ -191,6 +191,10 @@ endpoint, on the same threads. Every SPI here follows the same contract:
   that gives one throws, and a `MembershipProvider` answer with one fails: each is a `503`. `Identifiers.isWellFormed`
   (`cosec-model`) is the test; `Identifiers.printable` writes an id into an exception message or a log line without
   letting it forge a line.
+- **Name someone.** A principal id is never blank, empty or white space only (`IDN-38`): `PrincipalId` refuses one
+  when made, so an authenticator that gives one throws, which the pipeline answers `503`, as above. Report a credential
+  that names no one as `Rejected` instead, so the client is told its credential is invalid. Ids are not trimmed:
+  `" alice "` is an id of its own.
 - **Do not catch cancellation.** A client that goes away cancels the request's coroutine. Rethrow
   `CancellationException`, and do not use `runCatching` around a suspending call.
 - **Keep it cheap.** Each call has a timeout (see [Configuration](../operations/configuration.md)); the whole request
@@ -288,7 +292,7 @@ the line that reads it, and nothing logs it: keep the three settings, or the rev
 A `TokenVerifier` of your own returns a `VerifiedToken` (`me.ahoo.cosec.spi.token`), an immutable value built from the
 claims it verified: `id`, `principal`, `tenant`, `app` (the token's `aud`), `roles`, `policies`, `attributes`, its times and
 membership marker. Its constructor throws `TokenVerificationException` for claims that no token may carry (an id
-beginning with `(`, an empty tenant, an unpaired surrogate, an impossible app), so `verify` refuses them whichever
+beginning with `(`, a blank subject, an empty tenant, an unpaired surrogate, an impossible app), so `verify` refuses them whichever
 verifier read them.
 
 A `TokenVerifier` is pure computation by contract: no I/O and nothing that blocks, since the pipeline calls it on the

@@ -75,11 +75,7 @@ class ApiKeyMigration(
         // 7.x never made key ids unique: two keys of one id would become one principal, or share one per-key role.
         val shared = keys.groupBy { it.tenant to it.id }.filterValues { it.size > 1 }.keys
         for (key in keys.sortedBy { it.id }) {
-            val rejection = if (key.tenant to key.id in shared) {
-                "another key of tenant [${key.tenant.value}] has the id [${key.id}]: give each key an id of its own"
-            } else {
-                rejection(key)
-            }
+            val rejection = refusal(key, key.tenant to key.id in shared)
             if (rejection != null) {
                 rejections += "API key [${key.id}]: $rejection"
                 continue
@@ -103,6 +99,16 @@ class ApiKeyMigration(
             PrincipalRoles(owner.first, owner.second, roles.toList(), held?.let { roles - it }?.toList())
         }
         return ApiKeyMigrationPlan(converted, granted, principalBindings, roleBindings, rejections)
+    }
+
+    /** Why [key] cannot be converted, if it cannot: [shared] when another key of its tenant has its id. */
+    private fun refusal(key: LegacyApiKey, shared: Boolean): String? = when {
+        shared -> "another key of tenant [${key.tenant.value}] has the id [${key.id}]: give each key an id of its own"
+        // IDN-38: a key of no one is named here, never failed on while the others convert.
+        key.principalId.isBlank() ->
+            "its principal [${Identifiers.printable(key.principalId)}] is blank, which no 8.0 principal id is: give " +
+                "the key its principal at its source, or remove it"
+        else -> rejection(key)
     }
 
     private fun rejection(key: LegacyApiKey): String? {

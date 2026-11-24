@@ -15,6 +15,8 @@
 
 package me.ahoo.cosec.control.api
 
+import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.control.lifecycle.ControlDerived
 import me.ahoo.cosec.document.PolicyDefinition
 import me.ahoo.cosec.document.PolicyDocument
 import me.ahoo.cosec.document.RoleExpansion
@@ -35,23 +37,28 @@ import me.ahoo.cosec.spi.snapshot.SnapshotKey
  * entry. An app or tenant document compiles with the platform document's limits and attributes, so its compiled form is
  * kept by the digest of the platform document it compiled with.
  *
- * Bounded by [maxEntries] and by [maxHeap], an estimate of the heap it holds, the least recently used leaving first
- * (review M2 of #1240): a document weighs its stored size times [DECODED_FACTOR] once decoded, and times
- * [COMPILED_FACTOR] more for each compiled form it keeps, the factors measured on documents of many policies, many
- * bindings and many conditions (`DocumentCacheTest`). A document weighs [DERIVED_BINDING_BYTES] more stored bytes for
- * each binding its roles derive (RFC 0012 §6.3): a few roles may expand far beyond what they store. What `analyze` parses
- * of it is not weighed. A candidate, which no digest names, is never kept: [Simulator] compiles it per call. A retained
- * revision `explain` decides at is kept like a head, by the digest of its record (DR1-F-4): its content never changes. A
+ * Bounded by [maxHeap], an estimate of the heap it holds, the least recently used leaving first (review M2 of #1240): a
+ * document weighs its stored size times [DECODED_FACTOR] once decoded, and times [COMPILED_FACTOR] more for each
+ * compiled form it keeps, plus what an entry and a form hold whatever the document's size ([ENTRY_BYTES], [FORM_BYTES],
+ * measured: most tenant documents are small), the factors measured on documents of many policies, many bindings and
+ * many conditions (`DocumentCacheTest`). A document weighs [DERIVED_BINDING_BYTES] more stored bytes for each binding
+ * its roles derive (RFC 0012 §6.3): a few roles may expand far beyond what they store. What `analyze` parses of it is
+ * not weighed. A candidate, which no digest names, is never kept: [Simulator] compiles it per call. A retained revision
+ * `explain` decides at is kept like a head, by the digest of its record (DR1-F-4): its content never changes. A
  * document that, decoded and compiled once, would weigh more than half the bound is never kept either (R2-L2 of #1240's
  * review): it would push every other entry out, and be pushed out by the next one, so it is decoded and compiled per
  * call.
  */
-internal class DocumentCache(
-    private val maxEntries: Int = DEFAULT_MAX_ENTRIES,
-    private val maxHeap: Long = DEFAULT_MAX_HEAP,
+@InternalCoSecApi
+class DocumentCache(
+    /**
+     * Its share of the heap ([ControlDerived.documentCacheBytes], DR1-F-5): a third of the snapshot documents' quarter
+     * of [HeapBudget][me.ahoo.cosec.runtime.HeapBudget], one cache per host, shared by every [Simulator] of it.
+     */
+    private val maxHeap: Long = ControlDerived.documentCacheBytes(),
 ) {
     init {
-        require(maxEntries > 0 && maxHeap > 0) { "The cache holds at least one document." }
+        require(maxHeap > 0) { "The cache holds at least one document." }
     }
 
     private data class Key(val key: SnapshotKey, val digest: SnapshotDigest)
@@ -60,6 +67,7 @@ internal class DocumentCache(
     private var heap = 0L
 
     /** A stored document: [key] at [digest], decoded, of [size] stored bytes. */
+    @InternalCoSecApi
     inner class Entry internal constructor(
         val key: SnapshotKey,
         val digest: SnapshotDigest,
@@ -72,7 +80,7 @@ internal class DocumentCache(
         private val compiled = LinkedHashMap<SnapshotDigest?, Lazy<Result<CompiledDocument>>>()
 
         /** What it is counted for in [heap], while it is held: guarded by the cache's lock. */
-        internal var weight: Long = weighed * DECODED_FACTOR
+        internal var weight: Long = weighed * DECODED_FACTOR + ENTRY_BYTES
 
         /** What is enforced: the roles and short forms of [document], expanded, for `analyze` as for the engine. */
         val effective: PolicyDocument by lazy(LazyThreadSafetyMode.PUBLICATION) { RoleExpansion.effective(document) }
@@ -85,7 +93,7 @@ internal class DocumentCache(
         fun compiled(platform: SnapshotDigest?, compile: () -> CompiledDocument): Result<CompiledDocument> {
             val (compilation, added) = synchronized(compiled) { formFor(platform, compile) }
             if (added) {
-                weigh(this, weighed * COMPILED_FACTOR)
+                weigh(this, weighed * COMPILED_FACTOR + FORM_BYTES)
             }
             return compilation.value
         }
@@ -142,6 +150,7 @@ internal class DocumentCache(
      * A policy, its statements' action and resource patterns parsed ([parse]) when `analyze` first reaches it: a stored
      * document's by its entry, which names the document when one does not parse; a built-in's ([BUILTIN]) as written.
      */
+    @InternalCoSecApi
     class AnalyzedPolicy internal constructor(
         val definition: PolicyDefinition,
         parse: () -> List<AnalyzedStatement>,
@@ -149,6 +158,7 @@ internal class DocumentCache(
         val statements: List<AnalyzedStatement> by lazy(LazyThreadSafetyMode.PUBLICATION, parse)
     }
 
+    @InternalCoSecApi
     class AnalyzedStatement(val index: Int, val source: StatementSource) {
         private val actions = source.actions.map { ActionPattern.parse(it) }
 
@@ -195,7 +205,8 @@ internal class DocumentCache(
     }
 
     /** Whether a document of [size] stored bytes, decoded and compiled once, weighs at most half the bound. */
-    fun admits(size: Long): Boolean = size * (DECODED_FACTOR + COMPILED_FACTOR) <= maxHeap / 2
+    fun admits(size: Long): Boolean =
+        size * (DECODED_FACTOR + COMPILED_FACTOR) + ENTRY_BYTES + FORM_BYTES <= maxHeap / 2
 
     /** The stored bytes [document] weighs as: its own [size], and what its roles derive beyond it. */
     private fun weighedBytes(size: Int, document: PolicyDocument): Long =
@@ -213,7 +224,7 @@ internal class DocumentCache(
     private fun evict() {
         val iterator = entries.values.iterator()
         // The newest entry stays even when it alone is over the bound: a call holds it until it returns.
-        while ((entries.size > maxEntries || heap > maxHeap) && entries.size > 1) {
+        while (heap > maxHeap && entries.size > 1) {
             heap -= iterator.next().weight
             iterator.remove()
         }
@@ -225,18 +236,24 @@ internal class DocumentCache(
     /** The heap it is estimated to hold; for tests. */
     val estimatedHeap: Long get() = synchronized(entries) { heap }
 
+    @InternalCoSecApi
     companion object {
-        /** Documents held at most: a platform, app and tenant document for each of the tenants simulated most recently. */
-        const val DEFAULT_MAX_ENTRIES: Int = 64
-
-        /** The estimated heap held at most: a document of 1 MB stored, decoded and compiled once, weighs 12 MB of it. */
-        const val DEFAULT_MAX_HEAP: Long = 64L * 1024 * 1024
-
         /** A decoded document's heap per stored byte, at most about 3.8 as measured. */
         const val DECODED_FACTOR: Int = 4
 
         /** A compiled form's heap per stored byte of its document, at most about 7.5 as measured. */
         const val COMPILED_FACTOR: Int = 8
+
+        /**
+         * What an entry holds whatever its document's size (DR1-F-5): the entry, its key and digest, the map's node, the
+         * decoded document's own objects and the lazies it keeps. Measured with JOL on an empty tenant document (90 bytes
+         * stored): 872 bytes, without counting its stored size (`DocumentCacheTest`, which holds the estimate never below
+         * what the smallest documents retain).
+         */
+        const val ENTRY_BYTES: Long = 1_024
+
+        /** What a compiled form holds whatever its document's size: its empty indexes, measured at 400 bytes the same way. */
+        const val FORM_BYTES: Long = 512
 
         /** What one derived binding would take stored, written out. */
         const val DERIVED_BINDING_BYTES: Long = 160

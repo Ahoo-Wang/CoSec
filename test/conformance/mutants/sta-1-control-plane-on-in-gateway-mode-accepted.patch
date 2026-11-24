@@ -1,0 +1,17 @@
+# Rule: STA-1
+# Mutant: cosec.control.enabled=true in gateway mode starts, with no control plane wired (DR1-G-5)
+# Tests: :spring-boot:test --tests me.ahoo.cosec.spring.boot.WebGateCheckTest
+
+diff --git a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/CoSecModuleCheckAutoConfiguration.kt b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/CoSecModuleCheckAutoConfiguration.kt
+index b43204938..0e30b251c 100644
+--- a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/CoSecModuleCheckAutoConfiguration.kt
++++ b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/CoSecModuleCheckAutoConfiguration.kt
+@@ -211,7 +211,7 @@ internal class CoSecModuleCheckAutoConfiguration {
+                 val what = "${ControlPlaneCondition.ENABLED_KEY}=true"
+                 checkModule(context, "me.ahoo.cosec.control.api.ControlHttp", "cosec-control", what)
+                 checkModule(context, "me.ahoo.cosec.cocache.control.CoCacheControlStore", "cosec-cocache", what)
+-                check(!GatewayModeTrust.isGatewayMode(context.environment)) {
++                check(true || !GatewayModeTrust.isGatewayMode(context.environment)) {
+                     "$what, but ${PipelineProperties.MODE_KEY}=gateway: a service behind a gateway decides with no " +
+                         "policy documents, so the control plane, which writes them, is not wired here. Run it on a host " +
+                         "in enforce mode (the default), or remove ${ControlPlaneCondition.ENABLED_KEY} (STA-1)."

@@ -17,11 +17,13 @@ package me.ahoo.cosec.spring.boot.control
 
 import io.github.oshai.kotlinlogging.KotlinLogging
 import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.control.api.ControlHttp
 import me.ahoo.cosec.control.lifecycle.ControlDerived
 import me.ahoo.cosec.spring.boot.ConditionalOnCoSecEnabled
 import me.ahoo.cosec.spring.boot.StartupTask
 import me.ahoo.cosec.spring.boot.StartupTaskExclusion
 import org.springframework.beans.factory.ListableBeanFactory
+import org.springframework.beans.factory.ObjectProvider
 import org.springframework.boot.autoconfigure.AutoConfiguration
 import org.springframework.boot.context.event.ApplicationReadyEvent
 import org.springframework.context.ApplicationListener
@@ -53,13 +55,19 @@ internal class CoSecControlServicePortAutoConfiguration {
         log.info { "CoSec derived, not configured: ${ControlDerived.describe(properties.shadow.minDuration)}." }
     }
 
-    /** Once the host has started: what the control plane serves, on which ports, and where its callers come from. */
+    /**
+     * Once the host has started: what the control plane serves, on which ports, and where its callers come from. Only
+     * where it is wired, which the classes and the switch alone do not say: a host in `gateway` mode wires none (DR1-G-5).
+     */
     @Bean
     fun cosecControlPlaneNotice(
         environment: Environment,
         properties: ControlProperties,
+        plane: ObjectProvider<ControlHttp>,
     ): ApplicationListener<ApplicationReadyEvent> = ApplicationListener {
-        log.info { ControlPlaneNotice.line(environment, properties) }
+        if (plane.ifAvailable != null) {
+            log.info { ControlPlaneNotice.line(environment, properties) }
+        }
     }
 
     companion object {

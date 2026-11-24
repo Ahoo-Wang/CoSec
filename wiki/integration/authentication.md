@@ -54,6 +54,11 @@ library would write `?` and issue a token of another principal. Surrogate pairs,
 anonymous principal `(0)` do, is `token-invalid` (`IDN-12`), and `JwtTokenConverter` refuses to sign one. So is a token with
 no `sub` or `jti`.
 
+**A principal id is never blank.** A token whose `sub` is white space only is `token-invalid` (`IDN-38`), on the request
+path and on refresh, and `JwtTokenConverter` refuses to sign one: *authenticated* means *someone*, and the id keys the
+principal's sessions, revocations, rate limits and audit records. An id is not trimmed: `" alice "` is an id of its own,
+compared as it is, and so it is in a binding, an API key or a forwarded identity.
+
 **A refresh token is not an access token.** A token with a `cosec.token` claim, which `JwtTokenConverter` writes on
 every refresh token as `refresh`, is `token-invalid` wherever an access token is expected, on every path that verifies
 one (`IDN-13`): signed and unexpired, it still never authenticates, so it can never be the principal its `sub` names.
