@@ -111,8 +111,10 @@ object IdentityHeader {
      * It also writes the token's session (`auth.session`), as a gateway does for CoSec's own token. That session is
      * made up: its id comes from CoSec's random id generator, its login time is now and its generation 1, so no login
      * created it. A service that issues from the session, a tenant switch for instance, then issues from a session no
-     * family knows; use [withToken] with a token CoSec issued when that matters. For any other shape (an API key, a
-     * role cap, claims), build the [Identity] and call [of].
+     * family knows; use [withToken] with a token CoSec issued when that matters. It states no other memberships
+     * (`memberships` empty, `IDN-39`), as a gateway does for a principal whose roles are all in [space] and who attaches
+     * no policy. For any other shape (an API key, a role cap, claims, roles in other spaces, attachments), build the
+     * [Identity] and call [of]; a host that decides on the identity refuses one whose `memberships` is null.
      *
      * [validFor] is the credential's validity, not the header's: the header is refused a minute after [clock]'s now
      * (above). [clock] is there for tests of that age itself; the default is the system clock.
@@ -149,6 +151,7 @@ object IdentityHeader {
                 credential = credential,
                 issuedAt = now,
                 requestId = RandomIdGenerator.generate(),
+                memberships = Identity.Memberships.NONE,
             )
         )
     }

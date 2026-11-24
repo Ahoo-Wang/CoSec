@@ -25,6 +25,7 @@ import me.ahoo.cosec.model.AppId
 import me.ahoo.cosec.model.AuthzRequest
 import me.ahoo.cosec.model.Environment
 import me.ahoo.cosec.model.Memberships
+import me.ahoo.cosec.model.PolicyId
 import me.ahoo.cosec.model.PrincipalId
 import me.ahoo.cosec.model.Resource
 import me.ahoo.cosec.model.RoleId
@@ -68,7 +69,13 @@ private val log = KotlinLogging.logger {}
  * - a version this service does not read, or an identity from the future: 401 `token-invalid`;
  * - a credential past its expiry, or an identity older than [maxAge] (with [skew]), which limits replaying a captured
  *   header inside the network: 401 `token-expired`;
- * - otherwise the request proceeds as that principal, in that scope, with those roles; never as anonymous instead.
+ * - otherwise the request proceeds as that principal, in that scope, with those roles and the other memberships the
+ *   header states (`IDN-39`: its roles in other spaces and its attachments); never as anonymous instead.
+ *
+ * A host that decides with policies on the identity ([requireMemberships]: a control host, a service port) refuses a
+ * header without `memberships` as malformed (400 `invalid-request`): a writer that leaves it out has not said what else
+ * the principal is a member of, and a DENY attached to it, or one that reads a role it holds in another space, would
+ * not apply. A service that only trusts the gateway reads such a header as before.
  */
 @OptIn(InternalCoSecApi::class)
 @InternalCoSecApi
@@ -84,6 +91,11 @@ class IdentityGate(
     idGenerator: IdGenerator = RandomIdGenerator,
     /** Where each refusal is counted and its reason logged, bounded (`OBS-7`): the response never carries it. */
     private val refusals: IdentityRefusals = IdentityRefusals(),
+    /**
+     * Whether a header must state the principal's whole memberships (`IDN-39`): on a host that decides with policies
+     * on the identity (`cosec.pipeline.caller=forwarded-identity`), never on a service that only trusts the gateway.
+     */
+    private val requireMemberships: Boolean = false,
 ) : RequestGate {
     /** [idGenerator], falling back to a random id when it throws (round 2 M6). */
     private val ids = FallbackIds(idGenerator)
@@ -131,6 +143,9 @@ class IdentityGate(
                     ProblemType.INVALID_REQUEST
             }
             return reject(requestId, type, e.message.orEmpty(), traceId)
+        }
+        if (requireMemberships && identity.memberships == null) {
+            return reject(requestId, ProblemType.INVALID_REQUEST, MEMBERSHIPS_MISSING, traceId)
         }
         return when (val admission = admit(identity, requestId, facts, parameters)) {
             is Admission.Admitted -> StatusMapping.asserted(requestId, admission.security, identity)
@@ -201,8 +216,7 @@ class IdentityGate(
         parameters: CoSecParameters,
     ): RequestSecurity? {
         val tenant = TenantId(identity.tenant)
-        val roles = identity.roles.mapTo(LinkedHashSet(), ::RoleId)
-        val memberships = Memberships(Memberships.Source.CLAIMS, mapOf(SpaceId(identity.space) to roles), emptyList())
+        val memberships = memberships(identity)
         // A `jwt` credential is the one that may use break-glass (RC1-26). The gateway names it only for CoSec's own token;
         // a service that states its identity directly (a control host's service port, IdentityHeader.write) writes the
         // method itself, and the record marks such an identity as asserted.
@@ -238,6 +252,22 @@ class IdentityGate(
         return RequestSecurity(requestId, principal, scope, memberships, request, identity = identity)
     }
 
+    /**
+     * The memberships [identity] states (`IDN-39`): its roles under its own space, each other space's, and its
+     * attachments. One fact, one place: the codec refuses the own space under `memberships`.
+     */
+    private fun memberships(identity: Identity): Memberships {
+        val own = SpaceId(identity.space) to identity.roles.mapTo(LinkedHashSet(), ::RoleId)
+        val stated = identity.memberships
+        if (stated == null || stated == Identity.Memberships.NONE) {
+            return Memberships(Memberships.Source.CLAIMS, mapOf(own), emptyList())
+        }
+        val roles = LinkedHashMap<SpaceId, Set<RoleId>>()
+        roles[own.first] = own.second
+        stated.spaces.forEach { (space, held) -> roles[SpaceId(space)] = held.mapTo(LinkedHashSet(), ::RoleId) }
+        return Memberships(Memberships.Source.CLAIMS, roles, stated.attachments.map(::PolicyId))
+    }
+
     private fun request(subject: Subject, requestId: String, facts: HttpFacts, parameters: CoSecParameters) =
         AuthzRequest(
             subject = subject,
@@ -250,6 +280,10 @@ class IdentityGate(
     companion object {
         val DEFAULT_MAX_AGE: Duration = Duration.ofSeconds(60)
         val DEFAULT_SKEW: Duration = Duration.ofSeconds(5)
+
+        /** Why a host that decides on the identity refuses a header without `memberships` (`IDN-39`). */
+        const val MEMBERSHIPS_MISSING = "The identity header is malformed: [memberships] is missing, and this host " +
+            "decides on the identity, so it needs every space's roles and the attachments (IDN-39)."
 
         private val ANONYMOUS = Subject(
             CoSecPrincipal.ANONYMOUS_ID,

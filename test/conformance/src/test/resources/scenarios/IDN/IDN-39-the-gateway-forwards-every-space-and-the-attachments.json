@@ -1,0 +1,95 @@
+{
+  "rules": [
+    "IDN-39"
+  ],
+  "polarity": "positive",
+  "level": "pipeline",
+  "description": "alice holds clerk in the default space, suspended in emea, and attaches suspended-from-publishing: the gateway forwards all of it, the default space's roles as roles and the rest as memberships, so a host that decides on the identity applies a DENY reached through any of them.",
+  "documents": {
+    "platform": {
+      "policies": [
+        {
+          "id": "open",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "http:GET"
+            }
+          ]
+        },
+        {
+          "id": "suspended-from-publishing",
+          "attachable": true,
+          "statements": [
+            {
+              "effect": "deny",
+              "action": "order:publish"
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "open",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "open"
+        }
+      ]
+    }
+  },
+  "identity": {},
+  "http": {
+    "method": "GET",
+    "path": "/orders",
+    "headers": {
+      "Authorization": "token",
+      "CoSec-Identity": "eyJ2IjoxfQ"
+    }
+  },
+  "authentication": {
+    "result": "token",
+    "token": {
+      "jti": "t1",
+      "tenant": "acme",
+      "id": "alice",
+      "roles": [
+        "clerk",
+        "suspended@emea"
+      ],
+      "policies": [
+        "suspended-from-publishing"
+      ]
+    }
+  },
+  "expect": {
+    "status": 200,
+    "proceed": true,
+    "identity": {
+      "tenant": "acme",
+      "sub": "alice",
+      "app": "",
+      "space": "",
+      "jti": "t1",
+      "roles": [
+        "clerk"
+      ],
+      "memberships": {
+        "spaces": {
+          "emea": [
+            "suspended"
+          ]
+        },
+        "attachments": [
+          "suspended-from-publishing"
+        ]
+      }
+    }
+  },
+  "gateway": {
+    "route": {
+      "uri": "lb://backend"
+    }
+  }
+}

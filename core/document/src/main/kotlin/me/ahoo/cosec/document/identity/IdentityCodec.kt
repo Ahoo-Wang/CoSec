@@ -18,6 +18,7 @@ package me.ahoo.cosec.document.identity
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.document.json.CoSecJson
 import me.ahoo.cosec.model.Identifiers
+import me.ahoo.cosec.model.Match
 import me.ahoo.cosec.spi.identity.Identity
 import me.ahoo.cosec.spi.identity.IdentityFormatException
 import me.ahoo.cosec.spi.identity.IdentityFormatException.Reason
@@ -39,10 +40,17 @@ import java.util.Base64
  *
  * ```json
  * {"v":1,"tenant":"acme","sub":"alice","scope":{"app":"order","space":""},"roles":["clerk"],
+ *  "memberships":{"spaces":{"emea":["auditor"]},"attachments":["suspended"]},
  *  "auth":{"method":"jwt","jti":"0TEC7","exp":1793404800,"iat":1793404200,
  *          "session":{"sid":"0TEC5","auth_time":1793400000,"generation":2}},
  *  "iat":1793401200,"rid":"0TEC7Hw00001zR0","claims":{"name":"Alice"}}
  * ```
+ *
+ * `memberships` (`IDN-39`) holds what `roles` does not: the principal's roles in each other space (the default space's
+ * key is empty; the identity's own space is never a key, and a space names at least one role) and the ids of the
+ * policies it attaches, in the order its memberships name them. CoSec's writers always write it, empty when there is
+ * nothing more (`{"spaces":{},"attachments":[]}`): its presence says the memberships are whole, and a host that decides
+ * on the identity refuses one without it.
  *
  * `auth.capped` is `true` for a credential with a role cap (an API key with `roles`, RFC 0009 §4.2), and absent
  * otherwise: the service behind then applies no principal binding either. `auth.iat` is when the credential was issued,
@@ -78,8 +86,9 @@ object IdentityCodec {
      */
     internal const val MAX_SECONDS = 253_402_300_799L
 
-    private val FIELDS = arrayOf("v", "tenant", "sub", "scope", "roles", "auth", "iat", "rid", "claims")
+    private val FIELDS = arrayOf("v", "tenant", "sub", "scope", "roles", "memberships", "auth", "iat", "rid", "claims")
     private val SCOPE_FIELDS = arrayOf("app", "space")
+    private val MEMBERSHIPS_FIELDS = arrayOf("spaces", "attachments")
     private val AUTH_FIELDS = arrayOf("method", "jti", "exp", "iat", "capped", "session")
     private val SESSION_FIELDS = arrayOf("sid", "auth_time", "generation")
 
@@ -103,6 +112,7 @@ object IdentityCodec {
                 maxBytes,
                 identity.roles.size,
                 identity.claims.size,
+                identity.memberships,
             )
         }
         return header
@@ -147,18 +157,60 @@ object IdentityCodec {
             )
         }
         val scope = root.need("scope").also { it.only("$.scope", *SCOPE_FIELDS) }
+        val space = scope.need("space").text("$.scope.space")
         return Identity(
             tenant = root.need("tenant").name("$.tenant"),
             subject = root.need("sub").name("$.sub"),
             app = scope.need("app").text("$.scope.app"),
-            space = scope.need("space").text("$.scope.space"),
-            roles = roles(root.need("roles")),
+            space = space,
+            roles = roles(root.need("roles"), "$.roles"),
             credential = credential(root.need("auth")),
             issuedAt = root.need("iat").seconds("$.iat"),
             requestId = root.need("rid").name("$.rid"),
             claims = root.get("claims")?.let(::claims).orEmpty(),
+            memberships = root.get("memberships")?.let { memberships(it, space) },
         )
     }
+
+    /**
+     * `memberships` (`IDN-39`): each other space with its roles, then the attachments. The identity's own space is not
+     * one of them (its roles are `roles`), nor the wildcard, which is no space; a space names at least one role.
+     */
+    @Suppress("ThrowsCount")
+    private fun memberships(node: JsonNode, space: String): Identity.Memberships {
+        node.only("$.memberships", *MEMBERSHIPS_FIELDS)
+        val spaces = node.get("spaces") ?: throw malformed("[memberships.spaces] is missing")
+        if (!spaces.isObject) throw malformed("$.memberships.spaces is not an object")
+        val bySpace = LinkedHashMap<String, Set<String>>()
+        for ((name, roles) in spaces.properties()) {
+            val path = spacePath(name)
+            if (!Identifiers.isWellFormed(name)) throw malformed("$path holds an unpaired surrogate")
+            if (name == space) throw malformed("$path is the identity's own space, whose roles are $.roles")
+            if (name == Match.WILDCARD) throw malformed("$path is the wildcard, which is no space")
+            bySpace[name] = roles(roles, path).ifEmpty { throw malformed("$path names no role") }
+        }
+        val attachments = attachments(node.get("attachments") ?: throw malformed("[memberships.attachments] is missing"))
+        return if (bySpace.isEmpty() && attachments.isEmpty()) {
+            Identity.Memberships.NONE
+        } else {
+            Identity.Memberships(bySpace, attachments)
+        }
+    }
+
+    private fun attachments(node: JsonNode): List<String> {
+        if (!node.isArray) throw malformed("$.memberships.attachments is not an array")
+        if (node.isEmpty) return emptyList()
+        val attachments = LinkedHashSet<String>()
+        node.values().forEachIndexed { i, policy ->
+            if (!attachments.add(policy.id("$.memberships.attachments[$i]"))) {
+                throw malformed("$.memberships.attachments[$i] repeats a policy")
+            }
+        }
+        return attachments.toList()
+    }
+
+    /** The path of space [name] under `memberships.spaces`, quoted as every name a header chooses is. */
+    internal fun spacePath(name: String): String = "$.memberships.spaces[\"" + QuotedText.of(name) + "\"]"
 
     /** `auth`: how the principal authenticated, with the issue time and the session when the credential says. */
     @Suppress("ThrowsCount")
@@ -201,6 +253,7 @@ object IdentityCodec {
         root.put("tenant", identity.tenant).put("sub", identity.subject)
         root.putObject("scope").put("app", identity.app).put("space", identity.space)
         root.putArray("roles").apply { identity.roles.sorted().forEach(::add) }
+        identity.memberships?.let { memberships(root.putObject("memberships"), it) }
         root.putObject("auth").apply {
             put("method", identity.credential.method.value)
             put("jti", identity.credential.id)
@@ -221,6 +274,17 @@ object IdentityCodec {
             identity.claims.toSortedMap().forEach { (name, value) -> claim(claims, name, value) }
         }
         return root
+    }
+
+    /** Spaces sorted, each one's roles sorted, as `roles` is; the attachments in their order, which reports follow. */
+    private fun memberships(node: ObjectNode, memberships: Identity.Memberships) {
+        val spaces = node.putObject("spaces")
+        if (memberships.spaces.isNotEmpty()) {
+            memberships.spaces.toSortedMap().forEach { (space, roles) ->
+                spaces.putArray(space).apply { roles.sorted().forEach(::add) }
+            }
+        }
+        node.putArray("attachments").apply { memberships.attachments.forEach(::add) }
     }
 
     private fun claim(claims: ObjectNode, name: String, value: Any) {
@@ -261,11 +325,11 @@ object IdentityCodec {
         else -> null
     }
 
-    private fun roles(node: JsonNode): Set<String> {
-        if (!node.isArray) throw malformed("$.roles is not an array")
+    private fun roles(node: JsonNode, path: String): Set<String> {
+        if (!node.isArray) throw malformed("$path is not an array")
         val roles = LinkedHashSet<String>()
         node.values().forEachIndexed { i, role ->
-            if (!roles.add(role.id("$.roles[$i]"))) throw malformed("$.roles[$i] repeats a role")
+            if (!roles.add(role.id("$path[$i]"))) throw malformed("$path[$i] repeats a role")
         }
         return roles
     }

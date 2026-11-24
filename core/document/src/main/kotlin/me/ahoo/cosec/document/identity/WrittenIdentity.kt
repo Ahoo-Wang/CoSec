@@ -17,6 +17,7 @@ package me.ahoo.cosec.document.identity
 
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.model.Identifiers
+import me.ahoo.cosec.model.Match
 import me.ahoo.cosec.spi.identity.Identity
 import me.ahoo.cosec.spi.identity.IdentityFormatException
 import java.time.Instant
@@ -34,7 +35,8 @@ internal object WrittenIdentity {
         name(identity.subject, "$.sub")
         text(identity.app, "$.scope.app")
         text(identity.space, "$.scope.space")
-        roles(identity.roles)
+        roles(identity.roles, "$.roles")
+        identity.memberships?.let { memberships(it, identity.space) }
         text(identity.credential.method.value, "$.auth.method")
         id(identity.credential.id, "$.auth.jti")
         identity.credential.expiresAt?.let { seconds(it, "$.auth.exp") }
@@ -50,11 +52,34 @@ internal object WrittenIdentity {
      * identity on every forwarded request. The path names the first bad role in the order the header lists them
      * (sorted), as [IdentityCodec.decode] reading it back would.
      */
-    private fun roles(roles: Set<String>) {
+    private fun roles(roles: Set<String>, path: String) {
         if (roles.all(::writable)) return
         val sorted = roles.sorted()
         val i = sorted.indexOfFirst { !writable(it) }
-        id(sorted[i], "$.roles[$i]")
+        id(sorted[i], "$path[$i]")
+    }
+
+    /**
+     * `memberships` (`IDN-39`), in the order the header lists it: the spaces sorted, then the attachments. Nothing is
+     * built for the empty memberships the gateway writes for most principals.
+     */
+    private fun memberships(memberships: Identity.Memberships, space: String) {
+        if (memberships.spaces.isNotEmpty()) {
+            for ((name, roles) in memberships.spaces.toSortedMap()) {
+                val path = IdentityCodec.spacePath(name)
+                text(name, path)
+                if (name == space) throw unwritable("$path is the identity's own space, whose roles are $.roles")
+                if (name == Match.WILDCARD) throw unwritable("$path is the wildcard, which is no space")
+                if (roles.isEmpty()) throw unwritable("$path names no role")
+                roles(roles, path)
+            }
+        }
+        if (memberships.attachments.isEmpty()) return
+        val seen = HashSet<String>()
+        memberships.attachments.forEachIndexed { i, policy ->
+            id(policy, "$.memberships.attachments[$i]")
+            if (!seen.add(policy)) throw unwritable("$.memberships.attachments[$i] repeats a policy")
+        }
     }
 
     private fun writable(id: String): Boolean = id.isNotEmpty() && Identifiers.isWellFormed(id)

@@ -351,10 +351,13 @@ is not an identity: the host verifies none.
 **A relayed caller keeps its attributes** (`CTL-77`, DR1-F-1). When the service acts as the user whose request it serves
 (`ControlCaller.of`), every attribute of that user (the claims of their token) goes with the call, each as the text the
 engine reads, so a control policy that reads one decides as it would in process: a DENY on `subject.attributes.suspended`
-refuses through either. Of their roles, only those of the call's scope go. The attributes reach the host, which the
-service port's network policy guards; if they hold anything you would not send there, keep it out of the token. They
-must fit the header: 8 KB in all, and 1,024 characters for one string. One that does not fit fails the call before it is
-sent, naming the attribute and its size, never its value; the call is never sent without it. A service acting as
+refuses through either. Their memberships go too (`IDN-39`, DR2-F-1): the roles of every space, not only the call's,
+and the ids of the policies they attach, so a DENY attached to the user, or one that reads a role they hold in another
+space (`subject.roles`), refuses through either as well. The attributes reach the host, which the service port's network
+policy guards; if they hold anything you would not send there, keep it out of the token. They must fit the header: 8 KB
+in all, and 1,024 characters for one string. One that does not fit fails the call before it is sent, naming the
+attribute and its size, never its value; memberships that do not fit fail it the same way, counted. The call is never
+sent without them. A service acting as
 itself (`ControlCaller.service`) states no attributes.
 
 **The statement and the policies are one thing.** The statement is true because of the network, one policy per port: the
@@ -693,7 +696,9 @@ define grants in both.
 
 The token travels in `Authorization` on every request, and Reactor Netty refuses a request whose headers together
 exceed `server.max-http-request-header-size` (8 KB by default): about 100 long `role@space` entries reach it. The
-`CoSec-Identity` header the gateway forwards carries only the roles of the request's space.
+`CoSec-Identity` header the gateway forwards carries the same roles, by bare name under their space, and the ids of the
+attached policies (`IDN-39`), within `cosec.gateway.identity.max-size` (8 KB): a principal whose memberships do not fit
+is refused at the gateway (`500`), never forwarded with fewer.
 
 No per-request cost depends on how many members a tenant has. The gateway verifies the token, parses the roles it
 carries and looks up two revocations, of the token and of its principal, keyed by the caller; the tenant's document

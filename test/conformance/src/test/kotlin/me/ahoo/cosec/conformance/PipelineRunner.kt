@@ -868,7 +868,8 @@ class PipelineRunner(private val compiler: SnapshotCompiler = DocumentSnapshotCo
     }
 
     /**
-     * What a gateway forwards, when it forwards identities: `{ "tenant", "sub", "app", "space", "roles", "jti" }`, or
+     * What a gateway forwards, when it forwards identities: `{ "tenant", "sub", "app", "space", "roles", "jti",
+     * "memberships": { "spaces", "attachments" } }`, or
      * null when it strips the header; absent when the pipeline forwards nothing. Only for a pipeline with an issuer: every
      * permit of the pipeline strips a client's header (RC1-18), which the adapters' parity test checks.
      */
@@ -887,6 +888,20 @@ class PipelineRunner(private val compiler: SnapshotCompiler = DocumentSnapshotCo
             .put("app", identity.app).put("space", identity.space)
             .put("jti", identity.credential.id)
         node.putArray("roles").apply { identity.roles.sorted().forEach(::add) }
+        // IDN-39: what else the principal is a member of, null when the header does not state it.
+        val memberships = identity.memberships
+        if (memberships == null) {
+            node.putNull("memberships")
+        } else {
+            node.putObject("memberships").apply {
+                putObject("spaces").apply {
+                    memberships.spaces.toSortedMap().forEach { (space, roles) ->
+                        putArray(space).apply { roles.sorted().forEach(::add) }
+                    }
+                }
+                putArray("attachments").apply { memberships.attachments.forEach(::add) }
+            }
+        }
         return node
     }
 

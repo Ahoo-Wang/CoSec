@@ -107,6 +107,8 @@ internal class CoSecGatewayModeAutoConfiguration {
             skew = revocation.skew,
             idGenerator = idGenerator.getIfAvailable { RandomIdGenerator },
             refusals = refusals,
+            // A host that decides with policies on the identity needs the caller's whole memberships (IDN-39).
+            requireMemberships = pipeline.caller == PipelineProperties.Caller.FORWARDED_IDENTITY,
         )
     }
 

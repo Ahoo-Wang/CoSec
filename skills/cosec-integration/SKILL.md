@@ -159,7 +159,8 @@ Use `$cosec-policy-author` to write the documents. Storage details: https://cose
 ## Services behind a CoSec gateway
 
 The gateway strips any client `CoSec-Identity` and, on a permit for an authenticated principal, forwards the identity it
-verified (tenant, principal, app, space, the roles there, credential id and expiry, and the claims named in
+verified (tenant, principal, app, space, the roles there, its roles in other spaces and its attached policy ids under
+`memberships` (`IDN-39`, always written, empty when nothing), credential id and expiry, and the claims named in
 `cosec.gateway.identity.claims`) to a route that receives it: a route to a registered service (`uri: lb://...`), or one
 whose metadata says `cosec-identity: true`. Any other route, and one marked `cosec-identity: false`, gets none: mark
 your own `http(s)://` services `true`, never a third party. It forwards no credentials (`Authorization`, the API key

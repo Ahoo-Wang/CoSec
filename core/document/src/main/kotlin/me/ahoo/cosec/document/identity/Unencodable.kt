@@ -16,6 +16,7 @@
 package me.ahoo.cosec.document.identity
 
 import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.spi.identity.Identity
 import me.ahoo.cosec.spi.identity.IdentityOverflowException
 
 /**
@@ -24,10 +25,12 @@ import me.ahoo.cosec.spi.identity.IdentityOverflowException
  * identity lost 4 % and gained an allocation). Names are quoted as [QuotedText] quotes them.
  */
 internal object Unencodable {
-    fun tooLarge(subject: String, length: Int, maxBytes: Int, roles: Int, claims: Int) = IdentityOverflowException(
-        "The identity of [${QuotedText.of(subject)}] is $length bytes encoded, over the limit of $maxBytes: " +
-            "$roles roles, $claims claims."
-    )
+    fun tooLarge(subject: String, length: Int, maxBytes: Int, roles: Int, claims: Int, memberships: Identity.Memberships?) =
+        IdentityOverflowException(
+            "The identity of [${QuotedText.of(subject)}] is $length bytes encoded, over the limit of $maxBytes: " +
+                "$roles roles, $claims claims, ${memberships?.spaces?.values?.sumOf { it.size } ?: 0} roles in " +
+                "${memberships?.spaces?.size ?: 0} other spaces, ${memberships?.attachments?.size ?: 0} attachments."
+        )
 
     fun neverExpires(subject: String) = IdentityOverflowException(
         "The credential of [${QuotedText.of(subject)}] never expires: a service could not bound the identity."
