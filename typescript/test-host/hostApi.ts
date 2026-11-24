@@ -109,3 +109,18 @@ export async function endSession(pair: HostPair): Promise<void> {
 export async function refreshAt(pair: HostPair): Promise<Response> {
   return post('/auth/refresh', pair);
 }
+
+/** The application's tenant switch of `pair` into `tenant`, as a client that is not this package sends it. */
+export async function switchAt(
+  tenant: string,
+  pair: HostPair,
+): Promise<Response> {
+  return fetch(`${hostUrl()}/auth/switch/${encodeURIComponent(tenant)}`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${pair.accessToken}`,
+    },
+    body: JSON.stringify(pair),
+  });
+}
