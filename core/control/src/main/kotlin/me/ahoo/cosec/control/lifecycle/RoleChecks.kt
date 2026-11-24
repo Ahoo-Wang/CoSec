@@ -116,7 +116,7 @@ internal object RoleChecks {
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
-            log.warn(e) { "The app list could not be read; the system roles of app ${candidate.owner} are not compared." }
+            log.warn(e) { "The app list could not be read: no system role of ${candidate.owner} is compared." }
             findings += roleWarning("$.roles", "The app list could not be read: whether another app defines these roles is not known")
             return null
         }
