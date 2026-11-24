@@ -20,6 +20,9 @@ import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.control.store.Publication
 import me.ahoo.cosec.control.store.StoreFixtures
+import me.ahoo.cosec.document.Catalog
+import me.ahoo.cosec.document.CatalogGroup
+import me.ahoo.cosec.document.CatalogPermission
 import me.ahoo.cosec.document.ProvenanceKind
 import me.ahoo.cosec.document.RoleDefinition
 import me.ahoo.cosec.document.RolePermissions
@@ -78,6 +81,52 @@ class EntryIdsTest {
     fun `a permission policy keeps the slash its id has`() = runBlocking<Unit> {
         val key = SnapshotKey.App("order")
         proposed(key, Operation.PutPolicy(allow("perm:order/read"))).errors.assert().isEmpty()
+    }
+
+    /** DR1-E-5: the slash after `perm:<app>` is the only one, or the id would walk out of a rule that ends in `perm:<app>/` and a `*`. */
+    @Test
+    fun `a permission policy's id has no slash past its app, nor a catalog permission's`() = runBlocking<Unit> {
+        val key = SnapshotKey.App("order")
+        val policy = proposed(key, Operation.PutPolicy(allow("perm:order/read/all")))
+        policy.state.assert().isEqualTo(ChangeState.DRAFT)
+        policy.errors.single { it.check == "V2" }.path.assert().isEqualTo("operations[0]")
+        val catalog = Catalog(listOf(CatalogGroup("g", permissions = listOf(CatalogPermission("read/all")))))
+        val listed = proposed(key, Operation.PutCatalog(catalog))
+        listed.state.assert().isEqualTo(ChangeState.DRAFT)
+        listed.errors.single { it.check == "V2" }.let {
+            it.path.assert().isEqualTo("operations[0]")
+            it.status.assert().isEqualTo(422)
+        }
+        val plain = Catalog(listOf(CatalogGroup("g", permissions = listOf(CatalogPermission("read")))))
+        proposed(key, Operation.PutCatalog(plain)).errors.filter { it.check == "V2" }.assert().isEmpty()
+    }
+
+    /**
+     * A catalog is put whole: a permission id with a slash the stored catalog already holds is carried, not added, and
+     * stays, as an entry does. Only one the change adds is refused.
+     */
+    @Test
+    fun `a catalog permission with a slash from before stays, and only one the change adds is refused`() = runBlocking<Unit> {
+        val key = SnapshotKey.App("order")
+        val stored = Catalog(listOf(CatalogGroup("g", permissions = listOf(CatalogPermission("read/all")))))
+        harness.revisions.publish(
+            key,
+            null,
+            StoreFixtures.candidate(key).copy(catalog = stored),
+            Publication("seed", ProvenanceKind.MIGRATE, PLATO.actor),
+        )
+        val carried = Catalog(
+            listOf(CatalogGroup("g", permissions = listOf(CatalogPermission("read/all"), CatalogPermission("write")))),
+        )
+        proposed(key, Operation.PutCatalog(carried)).errors.filter { it.check == "V2" }.assert().isEmpty()
+
+        val added = Catalog(
+            listOf(
+                CatalogGroup("g", permissions = listOf(CatalogPermission("read/all"), CatalogPermission("write/all")))
+            ),
+        )
+        proposed(key, Operation.PutCatalog(added)).errors.single { it.check == "V2" }.message.assert()
+            .contains("[write/all]").doesNotContain("read/all")
     }
 
     @Test

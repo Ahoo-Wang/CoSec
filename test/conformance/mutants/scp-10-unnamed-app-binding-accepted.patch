@@ -3,13 +3,13 @@
 # Tests: :control:test --tests me.ahoo.cosec.control.change.UnnamedAppIdsTest
 
 diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ChangeChecks.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ChangeChecks.kt
-index 43218cae..82cea075 100644
+index bce3d17b3..5b3c355b4 100644
 --- a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ChangeChecks.kt
 +++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ChangeChecks.kt
-@@ -102,7 +102,6 @@ class ChangeChecks(
+@@ -91,7 +91,6 @@ class ChangeChecks(
          }
          EntryChecks.reservedNames(operations, kind, findings)
-         EntryChecks.entryIds(operations, findings)
+         EntryChecks.entryIds(operations, base, findings)
 -        EntryChecks.appIds(candidate, findings)
          val checkedWith = LinkedHashMap<SnapshotKey, SnapshotDigest?>()
          val platform = if (key == SnapshotKey.Platform) {

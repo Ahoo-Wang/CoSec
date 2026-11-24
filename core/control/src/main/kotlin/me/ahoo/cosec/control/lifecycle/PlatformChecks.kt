@@ -110,7 +110,7 @@ internal object PlatformChecks {
         context: CurrentDocuments,
         findings: MutableList<Finding>,
     ) {
-        if (EntryDigest.of(before) == EntryDigest.of(after)) return
+        if (StatementDigest.ofCopy(before) == StatementDigest.ofCopy(after)) return
         // Only a tenant whose entry says it defines the id can hold a copy; its content is compared on its head. One
         // whose references cannot be read is refused as copied (CTL-42), never let through.
         val tenants = tenants(context, after.id, onlyDefining = true) ?: run {
