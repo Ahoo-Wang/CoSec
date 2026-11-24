@@ -2,11 +2,46 @@
 # Mutant: every control route reads the document bound, so a body nobody authorized is parsed whole
 # Tests: :control:test --tests me.ahoo.cosec.control.api.ControlBodyBoundTest
 
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/api/BreakGlassRoutes.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/api/BreakGlassRoutes.kt
+index 121ff3556..a62470060 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/api/BreakGlassRoutes.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/api/BreakGlassRoutes.kt
+@@ -46,7 +46,7 @@ internal class BreakGlassRoutes(private val plane: ControlPlane) : RouteHandler
+         request: ControlHttpRequest,
+         segments: List<String>
+     ): ControlHttpResponse = when {
+-        segments.isEmpty() -> post(request) {
++        segments.isEmpty() -> post(request, me.ahoo.cosec.control.lifecycle.ControlDerived.MAX_BODY_BYTES) {
+             val change = plane.breakGlass.request(
+                 operator,
+                 it.text("principal").let { p -> field("principal", "a principal id") { PrincipalId(p) } },
+@@ -72,7 +72,7 @@ internal class BreakGlassRoutes(private val plane: ControlPlane) : RouteHandler
+             changeResponse(plane, operator, change, OK)
+         }
+ 
+-        segments.size == 1 && verbOf(segments[0]).second == "approve" -> post(request) {
++        segments.size == 1 && verbOf(segments[0]).second == "approve" -> post(request, me.ahoo.cosec.control.lifecycle.ControlDerived.MAX_BODY_BYTES) {
+             changeResponse(
+                 plane,
+                 operator,
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/api/ChangeRoutes.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/api/ChangeRoutes.kt
+index 8bf4e79ea..aa74c3b20 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/api/ChangeRoutes.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/api/ChangeRoutes.kt
+@@ -72,7 +72,7 @@ internal class ChangeRoutes(
+                 changeResponse(plane, operator, change, OK, plane.acknowledgements.of(change))
+             }
+         }
+-        return post(request) {
++        return post(request, me.ahoo.cosec.control.lifecycle.ControlDerived.MAX_BODY_BYTES) {
+             val change = when (verb) {
+                 "rebase" -> plane.rebase(operator, id)
+                 "shadow" -> plane.startShadow(operator, id)
 diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/api/ControlHttpSupport.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/api/ControlHttpSupport.kt
-index a0397e991..86f751e65 100644
+index 7e9825fb9..3d87f06ec 100644
 --- a/core/control/src/main/kotlin/me/ahoo/cosec/control/api/ControlHttpSupport.kt
 +++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/api/ControlHttpSupport.kt
-@@ -50,7 +50,7 @@ internal object ControlHttpSupport {
+@@ -71,7 +71,7 @@ internal object ControlHttpSupport {
       */
      inline fun post(
          request: ControlHttpRequest,
@@ -15,3 +50,49 @@ index a0397e991..86f751e65 100644
          block: (JsonNode) -> ControlHttpResponse,
      ): ControlHttpResponse {
          if (request.method != POST) return methodNotAllowed()
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/api/DocumentRoutes.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/api/DocumentRoutes.kt
+index e67e2c2db..6b0c5ca1c 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/api/DocumentRoutes.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/api/DocumentRoutes.kt
+@@ -89,7 +89,7 @@ internal class DocumentRoutes(
+                 )
+             }
+ 
+-            "rollback" -> post(request) {
++            "rollback" -> post(request, me.ahoo.cosec.control.lifecycle.ControlDerived.MAX_BODY_BYTES) {
+                 changeResponse(
+                     plane,
+                     operator,
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/api/QueryRoutes.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/api/QueryRoutes.kt
+index 4cc6eaf93..781b07556 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/api/QueryRoutes.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/api/QueryRoutes.kt
+@@ -35,7 +35,8 @@ import me.ahoo.cosec.control.change.ChangeId
+ /** The routes of one segment that ask the control plane about decisions (RFC 0007 §10.3): simulate, explain, analyze. */
+ internal class QueryRoutes(private val plane: ControlPlane) {
+     suspend fun simulate(operator: Operator, request: ControlHttpRequest): ControlHttpResponse = post(
+-        request
++        request,
++        me.ahoo.cosec.control.lifecycle.ControlDerived.MAX_BODY_BYTES
+     ) {
+         json(
+             simulation(
+@@ -49,7 +50,8 @@ internal class QueryRoutes(private val plane: ControlPlane) {
+     }
+ 
+     suspend fun explain(operator: Operator, request: ControlHttpRequest): ControlHttpResponse = post(
+-        request
++        request,
++        me.ahoo.cosec.control.lifecycle.ControlDerived.MAX_BODY_BYTES
+     ) {
+         json(
+             explanation(plane.explain(operator, simulated(it.need("request")), it.get("at")?.let(::version)))
+@@ -57,6 +59,7 @@ internal class QueryRoutes(private val plane: ControlPlane) {
+     }
+ 
+     suspend fun analyze(operator: Operator, request: ControlHttpRequest): ControlHttpResponse = post(
+-        request
++        request,
++        me.ahoo.cosec.control.lifecycle.ControlDerived.MAX_BODY_BYTES
+     ) { json(report(plane.analyze(operator, query(it.need("query"))))) }
+ }

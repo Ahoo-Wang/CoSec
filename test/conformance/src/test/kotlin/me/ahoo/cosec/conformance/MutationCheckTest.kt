@@ -422,6 +422,40 @@ class MutationCheckTest {
     }
 
     @Test
+    fun `a survival says which compilations and test runs the builds did, and what the tests counted`() {
+        val compile = Build(
+            0,
+            "> Task :control:compileKotlin FROM-CACHE\n> Task :control:compileJava NO-SOURCE\n" +
+                "> Task :control:testClasses UP-TO-DATE\n> Task :control:compileTestKotlin UP-TO-DATE\n"
+        )
+        val tests = Build(
+            0,
+            "> Task :control:processTestResources UP-TO-DATE\n> Task :control:test\nBUILD SUCCESSFUL in 8s\n"
+        )
+        val tree = Files.createDirectories(temp.resolve("tree"))
+        writeResults(
+            tree,
+            """<testsuite name="a" tests="4" skipped="1" failures="0" errors="0"><testcase name="a"/></testsuite>"""
+        )
+        MutationCheck.survival(listOf(compile, tests), tree).assert().containsExactly(
+            "   task: :control:compileKotlin FROM-CACHE",
+            "   task: :control:compileJava NO-SOURCE",
+            "   task: :control:compileTestKotlin UP-TO-DATE",
+            "   task: :control:test",
+            "   tests: core/x: 4 run, 0 failed, 1 skipped",
+        )
+    }
+
+    @Test
+    fun `the log of a build is what a quiet build would print`() {
+        MutationCheck.quietView(
+            "Reusing configuration cache.\n> Task :a:compileKotlin\ne: x.kt:1:1 Unresolved reference\n" +
+                "4 tests completed, 2 failed\nBUILD SUCCESSFUL in 3s\n12 actionable tasks: 2 executed, 10 up-to-date\n" +
+                "Configuration cache entry stored.\n"
+        ).assert().isEqualTo("e: x.kt:1:1 Unresolved reference\n4 tests completed, 2 failed")
+    }
+
+    @Test
     fun `every task of a Tests line reruns`() {
         MutationCheck.rerun(listOf(":a:test", "--tests", "X", ":conformance:test"))
             .assert().containsExactly(":a:test", "--rerun", "--tests", "X", ":conformance:test", "--rerun")

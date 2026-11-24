@@ -232,6 +232,7 @@ object MutationCheck {
             gradle(worktree, listOf("--continue") + rerun(mutant.tests))
         }
         val result = verdict(compile, tests, failedTests(worktree))
+        if (result == MutantResult.SURVIVED) survival(listOf(compile, tests), worktree).forEach(::println)
         if (result != MutantResult.KILLED) return result
         // The control: the same tests on the same tree without the patch must pass.
         tree.revert()
@@ -252,6 +253,40 @@ object MutationCheck {
 
     /** `git` as found on the `PATH` (`git.exe` on Windows). */
     private val git: String by lazy { Executables.find("git")?.toString() ?: error("git is not on the PATH") }
+
+    /**
+     * What a SURVIVED mutant's builds did, so a survival can be read from the log alone: each compile and test task the
+     * builds ran and how (executed, `UP-TO-DATE`, `FROM-CACHE`), then what each project's result files count. A patch
+     * whose code was never recompiled, or whose tests never ran, survives too; these lines say which it was.
+     */
+    internal fun survival(builds: List<Build>, worktree: Path): List<String> =
+        builds.flatMap { build -> verdictTasks(build.log).map { "   task: ${it.removePrefix(TASK_LINE)}" } } +
+            testCounts(worktree).map { (project, counts) -> "   tests: $project: $counts" }
+
+    /** The task lines of [log] a verdict rests on: the compilations and the test runs. */
+    internal fun verdictTasks(log: String): List<String> =
+        log.lineSequence().filter { it.startsWith(TASK_LINE) && VERDICT_TASK.containsMatchIn(it) }.toList()
+
+    /** Per project of [worktree], what its JUnit result files count: tests run, failed (failures and errors), skipped. */
+    internal fun testCounts(worktree: Path): Map<String, String> = Files.walk(worktree).use { paths ->
+        paths.filter { it.name.startsWith("TEST-") && it.name.endsWith(".xml") && it.parent.parent.name == "test-results" }
+            .toList()
+            .groupBy { worktree.relativize(it.parent.parent.parent.parent).toString() }
+            .toSortedMap()
+            .mapValues { (_, reports) ->
+                val suites = reports.map { report -> TEST_SUITE.find(report.readText())?.value.orEmpty() }
+                fun total(attribute: String) =
+                    suites.sumOf { Regex("\\b$attribute=\"(\\d+)\"").find(it)?.groupValues?.get(1)?.toInt() ?: 0 }
+                "${total("tests")} run, ${total("failures") + total("errors")} failed, ${total("skipped")} skipped"
+            }
+    }
+
+    /**
+     * [log] as a quiet build would print it: without the task lines and the summary a plain console adds (the builds run
+     * without `-q`, so that [survival] can read the task lines), with the failures and warnings.
+     */
+    internal fun quietView(log: String): String =
+        log.lineSequence().filterNot { line -> LIFECYCLE.any { it.containsMatchIn(line) } }.joinToString("\n").trim()
 
     /** Test failures recorded in the worktree's JUnit reports. */
     internal fun failedTests(worktree: Path): Int = Files.walk(worktree).use { paths ->
@@ -276,18 +311,25 @@ object MutationCheck {
      * One build in the mutants' worktree, through a daemon the whole run shares (its cold start is most of what a
      * mutant cost when each build had its own JVM), which stops itself two minutes after the last build. File-system
      * watching is off, so every build reads the files as they are after a patch or a revert. The log is written outside
-     * the tree, where no test that reads the repository can see it.
+     * the tree, where no test that reads the repository can see it. It prints what a quiet build would ([quietView]); the
+     * plain console's task lines stay in [Build.log], where [survival] reads them.
      */
     private fun gradle(directory: Path, tasks: List<String>): Build {
         val log = Files.createTempFile("mutation-gradle-", ".log")
         val process = ProcessBuilder(
-            listOf(Executables.gradleWrapper(directory), "-D$DAEMON_IDLE_TIMEOUT", "--no-watch-fs", "--build-cache", "-q") +
+            listOf(
+                Executables.gradleWrapper(directory),
+                "-D$DAEMON_IDLE_TIMEOUT",
+                "--no-watch-fs",
+                "--build-cache",
+                "--console=plain"
+            ) +
                 tasks
         ).directory(directory.toFile()).redirectErrorStream(true).redirectOutput(log.toFile()).start()
         val finished = process.waitFor(BUILD_TIMEOUT_MINUTES, TimeUnit.MINUTES)
         if (!finished) process.destroyForcibly()
         val output = log.readText()
-        print(output)
+        quietView(output).takeIf { it.isNotEmpty() }?.let(::println)
         Files.delete(log)
         return if (finished) Build(process.exitValue(), output) else Build(-1, output, timedOut = true)
     }
@@ -307,6 +349,22 @@ object MutationCheck {
 }
 
 private const val RESULT_WIDTH = 20
+
+private const val TASK_LINE = "> Task "
+
+/** The opening tag of a JUnit result file, whose attributes count its tests. */
+private val TEST_SUITE = Regex("<testsuite[^>]*>")
+
+/** A compilation or a test run: what a verdict rests on (`:testClasses` is neither). */
+private val VERDICT_TASK = Regex(":(compile\\w*(Kotlin|Java)|test)( |$)")
+
+/** What a plain console prints beyond a quiet build: the task lines and the build's summary. */
+private val LIFECYCLE = listOf(
+    Regex("^> Task "),
+    Regex("^BUILD SUCCESSFUL in "),
+    Regex("^\\d+ actionable tasks?: "),
+    Regex("^(Reusing configuration cache|Calculating task graph|Configuration cache entry (stored|reused))"),
+)
 
 /**
  * `mutationCheck`: the arguments are the repository root, the mutants' directory (the build passes this module's, so
