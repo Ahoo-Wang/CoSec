@@ -3,16 +3,14 @@
 # Tests: :control:test --tests me.ahoo.cosec.control.change.RetriedPublishTest
 
 diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Publishing.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Publishing.kt
-index 52d09fb01..7818f07c5 100644
+index 82a7506f5..2be6f9a68 100644
 --- a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Publishing.kt
 +++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Publishing.kt
-@@ -84,9 +84,6 @@ internal class Publishing(
-     ): ChangeRequest {
-         val change = flow.visible(publisher, id)
-         authority.require(publisher, change.key, PublishRules.publishing(change))
--        if (change.state == ChangeState.PUBLISHED && slots.holds(change)) {
--            return recordedAgain(change, publisher, again)
--        }
-         if (change.state == ChangeState.EXPIRED) {
-             // Recorded EXPIRED while its own revision was in effect, before DR1-E-7: publishing it settles it.
-             PublishRules.ownRevision(revisions, change, revisions.head(change.key))?.let { return republished(change, it, publisher) }
+@@ -148,7 +148,6 @@ internal class Publishing(
+      * Null for any other change, which publishes as usual.
+      */
+     private suspend fun writtenBefore(change: ChangeRequest, publisher: Operator, again: String?): ChangeRequest? {
+-        if (change.state == ChangeState.PUBLISHED && slots.holds(change)) return recordedAgain(change, publisher, again)
+         if (change.state != ChangeState.EXPIRED) return null
+         val own = PublishRules.ownRevision(revisions, change, revisions.head(change.key)) ?: return null
+         return republished(change, own, publisher)
