@@ -161,18 +161,28 @@ internal class Staging(
             }
         }
         // Every instance seen is kept, so that one dropped from the window's reporters later still has to report.
-        val seen = state.copy(reporters = look.reporters)
-        val summary = look.summary ?: return if (seen == state) {
+        val summary = look.summary ?: return if (look.reporters == state.reporters) {
             change
         } else {
-            flow.transition(id, ChangeStep.SHADOWED) { it.copy(shadow = seen) }
+            flow.transitionUnless(id, ChangeStep.SHADOWED) { seen(it, state, look) } ?: flow.get(id)
         }
-        val closed = flow.transition(id, ChangeStep.SHADOWED) {
-            it.copy(state = PublishRules.afterWindow(it), shadow = seen.copy(closed = summary))
-        }
+        val closed = flow.transitionUnless(id, ChangeStep.SHADOWED) { current ->
+            seen(current, state, look)?.let { it.copy(state = PublishRules.afterWindow(it), shadow = it.shadow?.copy(closed = summary)) }
+        } ?: return flow.get(id)
         slots.withdraw(closed)
         flow.audit(ChangeEvent.Kind.SHADOWED, closed, closed.author)
         return closed
+    }
+
+    /**
+     * [current] with what [look] saw of [state]'s window, or null when the record's window is no longer [state]'s
+     * (DR1-E-6): its candidate was lost and the change staged again meanwhile, and what this pass read is the evidence of
+     * the window before. The reporters are the union of the record's and the look's, so that two passes that overlap
+     * each keep the instances the other saw (`CTL-56`).
+     */
+    private fun seen(current: ChangeRequest, state: ShadowState, look: ShadowLook): ChangeRequest? {
+        val shadow = current.shadow?.takeIf { it.window == state.window } ?: return null
+        return current.copy(shadow = shadow.copy(reporters = shadow.reporters + look.reporters))
     }
 
     /**

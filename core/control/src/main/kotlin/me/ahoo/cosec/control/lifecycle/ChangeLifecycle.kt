@@ -184,12 +184,24 @@ internal class ChangeLifecycle(
         step: ChangeStep,
         from: Set<ChangeState> = step.from,
         next: suspend (ChangeRequest) -> ChangeRequest
-    ): ChangeRequest {
+    ): ChangeRequest = checkNotNull(transitionUnless(id, step, from, next))
+
+    /**
+     * [transition], where [next] may answer null for a record that is no longer the one its caller decided on: nothing is
+     * written, and null is answered. Asked of every record a retry reads, so a write never lands on a record [next] did
+     * not see.
+     */
+    suspend fun transitionUnless(
+        id: ChangeId,
+        step: ChangeStep,
+        from: Set<ChangeState> = step.from,
+        next: suspend (ChangeRequest) -> ChangeRequest?
+    ): ChangeRequest? {
         check(step.from.containsAll(from)) { "$step moves a change from ${step.from}, not from $from" }
         repeat(MAX_ATTEMPTS) {
             val current = read(id)
             PublishRules.requireState(current.value, from)
-            val updated = next(current.value).copy(updatedAt = laterThan(current.value))
+            val updated = (next(current.value) ?: return null).copy(updatedAt = laterThan(current.value))
             // The table decides where a step may take a change: anything else is a fault, and nothing is written.
             check(updated.state in step.to) { "$step leaves a change in ${step.to}, not in ${updated.state}" }
             if (store.putChange(current.digest, updated, current.value.state)) {
