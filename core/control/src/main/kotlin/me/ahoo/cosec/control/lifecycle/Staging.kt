@@ -167,7 +167,9 @@ internal class Staging(
             flow.transitionUnless(id, ChangeStep.SHADOWED) { seen(it, state, look) } ?: flow.get(id)
         }
         val closed = flow.transitionUnless(id, ChangeStep.SHADOWED) { current ->
-            seen(current, state, look)?.let { it.copy(state = PublishRules.afterWindow(it), shadow = it.shadow?.copy(closed = summary)) }
+            seen(current, state, look)?.let {
+                it.copy(state = PublishRules.afterWindow(it), shadow = it.shadow?.copy(closed = summary))
+            }
         } ?: return flow.get(id)
         slots.withdraw(closed)
         flow.audit(ChangeEvent.Kind.SHADOWED, closed, closed.author)
