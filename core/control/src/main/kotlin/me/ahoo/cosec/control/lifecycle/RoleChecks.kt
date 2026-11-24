@@ -81,27 +81,47 @@ internal object RoleChecks {
      * the change was checked with (an unrelated app's publish does not move it), and one that cannot be read is a warning
      * of its own, never a failed check (DR1-E-11).
      */
-    @Suppress("TooGenericExceptionCaught")
     private suspend fun sharedSystemRoles(
         candidate: PolicyDocument,
         current: CurrentDocuments,
         findings: MutableList<Finding>
     ) {
         if (candidate.roles.isEmpty()) return
-        val context = current.unrecorded
-        val unread = ArrayList<String>()
+        val defining = otherAppsRoles(candidate, current.unrecorded, findings) ?: return
+        for ((r, role) in candidate.roles.withIndex()) {
+            val apps = defining[role.id] ?: continue
+            findings += roleWarning(
+                "$.roles[$r].id",
+                "[${role.id.value}], a system role of this app, is also a system role of app ${apps.joinToString()}: " +
+                    "a member who holds it once " +
+                    "holds it in ${if (apps.size == 1) "both apps" else "all ${apps.size + 1} apps"} unless their roles " +
+                    "are issued per app; prefix the id with the app " +
+                    "(${candidate.owner}.${role.id.value}) when that is not meant",
+            )
+        }
+    }
+
+    /**
+     * The apps other than [candidate]'s owner that define each system role id, read from [context]; null when the app
+     * list cannot be read. What cannot be read is a warning in [findings] (DR1-E-11).
+     */
+    @Suppress("TooGenericExceptionCaught")
+    private suspend fun otherAppsRoles(
+        candidate: PolicyDocument,
+        context: CurrentDocuments,
+        findings: MutableList<Finding>
+    ): Map<RoleId, Set<String>>? {
         val others = try {
             context.apps()?.value?.entries.orEmpty().filter { it != candidate.owner && SnapshotKey.App.isValidAppId(it) }
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
-            log.warn(
-                e
-            ) { "The app list could not be read; the system roles of app ${candidate.owner} are not compared." }
+            log.warn(e) { "The app list could not be read; the system roles of app ${candidate.owner} are not compared." }
             findings += roleWarning("$.roles", "The app list could not be read: whether another app defines these roles is not known")
-            return
+            return null
         }
         val defining = HashMap<RoleId, MutableSet<String>>()
+        val unread = ArrayList<String>()
         for (app in others.sorted()) {
             val head = try {
                 context.head(SnapshotKey.App(app))
@@ -120,17 +140,7 @@ internal object RoleChecks {
                 "The documents of app ${unread.joinToString()} could not be read: whether they define these roles is not known",
             )
         }
-        for ((r, role) in candidate.roles.withIndex()) {
-            val apps = defining[role.id] ?: continue
-            findings += roleWarning(
-                "$.roles[$r].id",
-                "[${role.id.value}], a system role of this app, is also a system role of app ${apps.joinToString()}: " +
-                    "a member who holds it once " +
-                    "holds it in ${if (apps.size == 1) "both apps" else "all ${apps.size + 1} apps"} unless their roles " +
-                    "are issued per app; prefix the id with the app " +
-                    "(${candidate.owner}.${role.id.value}) when that is not meant",
-            )
-        }
+        return defining
     }
 
     private fun roleWarning(path: String, message: String) =
