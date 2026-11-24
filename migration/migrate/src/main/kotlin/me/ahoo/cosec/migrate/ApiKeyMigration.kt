@@ -42,7 +42,13 @@ import java.time.Instant
  *   attached policies. The roles the principal newly gains are reported.
  *
  * In place and granted, a key is capped, so its principal's own bindings grant it nothing, though their DENYs still
- * apply to it (RC1-1); and no API key gets break-glass. Those are losses, never gains, and the report lists them per key.
+ * apply to it (RC1-1); and no API key gets break-glass. Those are losses, never gains, and the report lists them per key,
+ * apart from the DENY bindings the key stays under.
+ *
+ * A key never moves to a principal of its own while a DENY names its principal by its id (`MIG-6`, DR2-M-1): a condition
+ * on `subject.id` in the DENY direction, a DENY bound to the principal, or a DENY the provider attaches to it
+ * ([PublishedDocuments.deniesNaming]). The new principal would escape all of it. Such a key is refused, and stays on its
+ * principal, capped, either in place or with `--grant-to-principal`.
  *
  * A key is rejected, and nothing is written, when it has attributes (a condition may read them), malformed roles, an id
  * with `@`, `*` or blanks, a role named with the role prefix, an attachment that does not resolve exactly (it made every
@@ -59,6 +65,8 @@ class ApiKeyMigration(
     /** The app the converted keys are for (`--app`, RFC 0012 §3.5); null leaves them declaring none, as 7.x keys did. */
     private val app: String? = null,
     private val now: Instant = Instant.now(),
+    /** Each principal's attached policies, from `--memberships`' `attachments`; null when not given. */
+    private val attachments: Map<Pair<TenantId, String>, Set<String>>? = null,
 ) {
     init {
         require(rolePrefix.isNotEmpty() && '@' !in rolePrefix && rolePrefix.none { it.isWhitespace() }) {
@@ -80,14 +88,12 @@ class ApiKeyMigration(
                 rejections += "API key [${key.id}]: $rejection"
                 continue
             }
-            val conversion = when {
-                granted(key) -> grant(key)
-                staysInPlace(key) -> inPlace(key)
-                else -> ownPrincipal(key) ?: run {
-                    rejections += "API key [${key.id}]: the principal [$OWN_PRINCIPAL_PREFIX${key.id}] it would move to " +
-                        "is already known (bound in a document or in --memberships): it would gain what that principal holds"
+            val conversion = when (val planned = planned(key)) {
+                is Planned.Refused -> {
+                    rejections += "API key [${key.id}]: ${planned.reason}"
                     continue
                 }
+                is Planned.Converted -> planned.conversion
             }
             converted += conversion.key
             principalBindings += conversion.principalBindings
@@ -164,15 +170,47 @@ class ApiKeyMigration(
             ),
             ConvertedApiKey.Mode.IN_PLACE,
             lost(key),
+            denied = denied(key),
         ),
     )
 
-    /** The key on a principal of its own; null when that principal is already known, so it would not be the key's own. */
-    private fun ownPrincipal(key: LegacyApiKey): Conversion? {
+    /** How [key] is converted: granted, in place, on a principal of its own, or refused. */
+    private fun planned(key: LegacyApiKey): Planned = when {
+        granted(key) -> Planned.Converted(grant(key))
+        staysInPlace(key) -> Planned.Converted(inPlace(key))
+        else -> moved(key)
+    }
+
+    /**
+     * The key on a principal of its own, unless a DENY names its principal (`MIG-6`), which the new principal would
+     * escape, or that principal is already known, whose holdings the key would gain.
+     */
+    private fun moved(key: LegacyApiKey): Planned {
         val principal = OWN_PRINCIPAL_PREFIX + key.id
-        if (documents.principalGrants(key.tenant, principal).isNotEmpty() || memberships?.containsKey(key.tenant to principal) == true) {
-            return null
+        val attached = attachments?.get(key.tenant to key.principalId).orEmpty()
+        val denies = documents.deniesNaming(key.tenant, key.principalId, attached)
+        if (denies.isNotEmpty()) {
+            val name = Identifiers.printable(key.principalId)
+            return Planned.Refused(
+                "its principal [$name] is named by a DENY that a principal of its own ($principal) would escape " +
+                    "(MIG-6): ${denies.joinToString("; ")}. Keep the key on its principal, capped: in place " +
+                    "(--memberships showing its roles, and no attached policy) or with --grant-to-principal $name"
+            )
         }
+        val known = documents.principalGrants(key.tenant, principal).isNotEmpty() ||
+            documents.principalDenies(key.tenant, principal).isNotEmpty() ||
+            memberships?.containsKey(key.tenant to principal) == true
+        if (known) {
+            return Planned.Refused(
+                "the principal [$principal] it would move to is already known (bound in a document or in " +
+                    "--memberships): it would gain what that principal holds"
+            )
+        }
+        return Planned.Converted(ownPrincipal(key, principal))
+    }
+
+    /** The key on [principal], a principal of its own. */
+    private fun ownPrincipal(key: LegacyApiKey, principal: String): Conversion {
         val bindings = key.policies.distinct().map { policy ->
             PrincipalBinding(key.tenant, principal, PolicyId(policy), "$principal:$policy")
         }
@@ -209,6 +247,7 @@ class ApiKeyMigration(
                 ApiKey(key.id, key.principalId, key.tenant.value, app, cap, key.expiresAt, key.enabled),
                 ConvertedApiKey.Mode.GRANTED,
                 lost(key),
+                denied = denied(key),
             ),
             roleBindings = bindings,
             grant = grant,
@@ -217,6 +256,15 @@ class ApiKeyMigration(
 
     /** The principal's own grants the key held as that principal, and holds no longer. */
     private fun lost(key: LegacyApiKey): List<String> = documents.principalGrants(key.tenant, key.principalId)
+
+    /** The DENYs bound to the principal, which a key capped on it stays under. */
+    private fun denied(key: LegacyApiKey): List<String> = documents.principalDenies(key.tenant, key.principalId)
+
+    private sealed interface Planned {
+        class Converted(val conversion: Conversion) : Planned
+
+        class Refused(val reason: String) : Planned
+    }
 
     private class Conversion(
         val key: ConvertedApiKey,

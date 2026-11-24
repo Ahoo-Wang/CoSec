@@ -24,6 +24,7 @@ import tools.jackson.core.JacksonException
 import tools.jackson.databind.JsonNode
 import tools.jackson.databind.node.ObjectNode
 import java.time.Instant
+import java.time.format.DateTimeParseException
 
 /**
  * An API key as it was stored before RFC 0009: it granted roles, attached policies and carried attributes of its own,
@@ -67,7 +68,11 @@ class LegacyApiKey(
          */
         fun isConverted(json: String): Boolean = formatOf(json) == ApiKeyCodec.FORMAT
 
-        /** Reads a key stored before RFC 0009; anything this format does not have is refused, never dropped. */
+        /**
+         * Reads a key stored before RFC 0009; anything this format does not have is refused, never dropped, and so is a
+         * member of another type (DR2-M-2): a `policies` that is no array would read as no attachment, dropping a DENY,
+         * and a record 7.x could not load would become a working key.
+         */
         fun parse(hash: String, json: String): LegacyApiKey {
             val node = tree(json)
             require(node is ObjectNode) { "not a stored API key" }
@@ -80,10 +85,12 @@ class LegacyApiKey(
                 tenantId = node.text("tenantId"),
                 roles = node.strings("roles"),
                 policies = node.strings("policies"),
-                attributes = node.get("attributes")?.takeUnless { it.isNull }?.properties()
-                    ?.associate { (name, value) -> name to value.asString() }.orEmpty(),
-                expiresAt = node.text("expiresAt")?.let(Instant::parse),
-                enabled = node.get("enabled")?.takeUnless { it.isNull }?.booleanValue() ?: true,
+                attributes = node.attributes(),
+                expiresAt = node.text("expiresAt")?.let { instant(it) },
+                enabled = node.present("enabled")?.let {
+                    require(it.isBoolean) { "its enabled is not a boolean" }
+                    it.booleanValue()
+                } ?: true,
                 json = json,
             )
         }
@@ -95,9 +102,31 @@ class LegacyApiKey(
             throw IllegalArgumentException("not JSON: ${error.originalMessage}", error)
         }
 
-        private fun JsonNode.text(field: String): String? = get(field)?.takeUnless { it.isNull }?.asString()
+        /** [field] when it is there and not null. */
+        private fun JsonNode.present(field: String): JsonNode? = get(field)?.takeUnless { it.isNull }
 
-        private fun JsonNode.strings(field: String): List<String> =
-            get(field)?.takeUnless { it.isNull }?.values()?.map { it.asString() }.orEmpty()
+        private fun JsonNode.text(field: String): String? = present(field)?.let {
+            require(it.isString) { "its $field is not a string" }
+            it.asString()
+        }
+
+        private fun JsonNode.strings(field: String): List<String> = present(field)?.let { node ->
+            require(node.isArray && node.values().all { it.isString }) { "its $field is not an array of strings" }
+            node.values().map { it.asString() }
+        }.orEmpty()
+
+        private fun JsonNode.attributes(): Map<String, String> = present("attributes")?.let { node ->
+            require(node.isObject && node.properties().all { it.value.isString }) {
+                "its attributes are not an object of strings"
+            }
+            node.properties().associate { (name, value) -> name to value.asString() }
+        }.orEmpty()
+
+        /** [text] as an instant; one that does not parse is a refusal of the record, never a failure of the run. */
+        private fun instant(text: String): Instant = try {
+            Instant.parse(text)
+        } catch (_: DateTimeParseException) {
+            throw IllegalArgumentException("its expiresAt is not an ISO instant")
+        }
     }
 }

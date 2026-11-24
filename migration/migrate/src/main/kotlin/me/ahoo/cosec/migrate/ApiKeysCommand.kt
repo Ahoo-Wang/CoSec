@@ -64,7 +64,9 @@ internal object ApiKeysCommand {
         val apiKeyPrefix = CoSecCacheSpecs.apiKeyPrefix(keyPrefix)
         val outDirectory = Path.of(options.required("out"))
         val dryRun = options.flag("dry-run")
-        val memberships = options.value("memberships")?.let { MembershipsExport.read(Files.readAllBytes(Path.of(it))) }
+        val export = options.value("memberships")?.let { Files.readAllBytes(Path.of(it)) }
+        val memberships = export?.let(MembershipsExport::read)
+        val attachments = export?.let(MembershipsExport::attachments)
         val grantTo = options.value("grant-to-principal")?.split(',')?.map { it.trim() }?.filter { it.isNotEmpty() }
             ?.toSet().orEmpty()
         val client = RedisClient.create(RedisURI.create(uri))
@@ -79,6 +81,7 @@ internal object ApiKeysCommand {
                         grantTo,
                         options.value("role-prefix") ?: ApiKeyMigration.DEFAULT_ROLE_PREFIX,
                         options.value("app"),
+                        attachments = attachments,
                     ).plan(stored.legacy)
                 }.withRejections(stored.unreadable)
                 val report = outDirectory.resolve(API_KEYS_REPORT_FILE)
@@ -202,6 +205,7 @@ internal object ApiKeysCommand {
                 out.println("WARN   API key [$id] has no tenant: it goes to the default tenant.")
             }
             key.lost.forEach { out.println("WARN   API key [$id] no longer reaches $it.") }
+            key.denied.forEach { out.println("NOTE   API key [$id] stays under the DENY binding $it.") }
         }
         plan.memberships.forEach { principal ->
             principal.newlyGained?.takeIf { it.isNotEmpty() }?.let {

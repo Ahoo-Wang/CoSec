@@ -1,0 +1,17 @@
+# Rule: MIG-6
+# Mutant: a negation in an ALLOW is read in the ALLOW direction, so a principal it refuses is not named
+# Tests: :migrate:test --tests me.ahoo.cosec.migrate.ApiKeyMigrationTest
+
+diff --git a/migration/migrate/src/main/kotlin/me/ahoo/cosec/migrate/PrincipalDenies.kt b/migration/migrate/src/main/kotlin/me/ahoo/cosec/migrate/PrincipalDenies.kt
+index 0000000..0000000 100644
+--- a/migration/migrate/src/main/kotlin/me/ahoo/cosec/migrate/PrincipalDenies.kt
++++ b/migration/migrate/src/main/kotlin/me/ahoo/cosec/migrate/PrincipalDenies.kt
+@@ -126,7 +126,7 @@ internal object PrincipalDenies {
+      */
+     private fun reads(condition: Condition?, deny: Boolean, principal: String): List<String> = when (condition) {
+         null, is Condition.Time, is Condition.Cidr, is Condition.Exists, is Condition.Contains -> emptyList()
+-        is Condition.Not -> reads(condition.condition, !deny, principal)
++        is Condition.Not -> reads(condition.condition, deny, principal)
+         is Condition.And -> condition.conditions.flatMap { reads(it, deny, principal) }
+         is Condition.Or -> condition.conditions.flatMap { reads(it, deny, principal) }
+         is Condition.Eq -> if (deny) eq(condition, principal) else emptyList()
