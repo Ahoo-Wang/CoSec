@@ -506,6 +506,20 @@ Meters, each tagged `listener`:
 decode: each such instance holds every shadow window until its status reads or expires (`CTL-73`), and the log names it
 ([Troubleshooting](./troubleshooting.md#shadow-window-waiting-for-an-acknowledgement)). Alert on any.
 
+`cosec.control.revisions.records` and `cosec.control.revisions.bytes` (gauges, no tags) are the revision records the
+documents retain and their stored bytes, and `cosec.control.changes.open` the open changes (`CTL-84`). The reclamation
+pass sets them, every hour: only the instance that holds the pass's lease reads every document, so only it reports what
+it found, replacing its values when the pass ends and reporting the last pass's until then (no `0` in between). An
+instance another one led the pass for reports `0`; one whose pass could not start (the documents could not be listed)
+keeps what it last found. **Take the largest across instances**: it is the store's total as of the last pass. A sum
+can count one pass twice, for the pass after the lease changes hands. A document that pass skipped (an open change that does not read) is not counted,
+and `bytes` counts an entry an older version wrote only once a pass sized it. Alert on `bytes` approaching what Redis
+may hold.
+
+`cosec.control.revisions.reclaimed-young` (counter, no tags) counts the records an instance reclaimed younger than
+`min-age`, past what a document may retain (`CTL-84`): a document publishing large documents in a loop. Alert on any,
+and look for the `WARN` that names the document ([Troubleshooting](./troubleshooting.md#revisions-reclaimed-within-min-age)).
+
 `cosec.control.work.held` (gauge, bytes) is what this host's control calls hold of its work budget now, and
 `cosec.control.work.refused` (counter) the calls it refused `503` for want of room (`CTL-85`): large documents proposed,
 applied or explained at once. Each host has its own budget, so read them per host. A refusal now and then under a burst

@@ -85,7 +85,8 @@ Errors are `application/problem+json`. A `409` also names which conflict it is i
 named in `heldBy` wherever `detail` names it: wait, or abandon it), `STATE` (the change's state does not admit the step), `CANDIDATE_MOVED`, `WINDOW_OPEN` (wait for the
 window to close), `WINDOW_BLOCKED` (the change never publishes), `CONTENDED` (the same call may succeed), `EXISTS`
 (something of that id already stands where the step needs something else) or `OPEN_LIMIT` (the document holds as many
-open changes as `cosec.control.revisions.max-count`, 50 by default; the oldest is named in `heldBy`: abandon one, or
+open changes as `cosec.control.revisions.max-count`, 50 by default, counted before the new one is written, so changes
+proposed at the same moment may all pass it; the oldest is named in `heldBy`: abandon one, or
 wait for it to expire, `CTL-83`). At the limit, your own oldest change whose checks failed (a `DRAFT`, which cannot be
 edited) is abandoned first to make room, so a pipeline that keeps proposing failing changes does not lock the document;
 no other change is abandoned for room, and break-glass is never held to the limit. An ended change is kept only so long:

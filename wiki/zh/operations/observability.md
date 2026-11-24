@@ -370,6 +370,10 @@ break-glass 等待 broker 的确认（把生产者配置为 `acks=all`）。设�
 
 `cosec.control.shadow.status.unreadable`（无标签）统计控制面主机读到的、无法解码的实例状态：每个这样的实例在其状态能读取或过期之前，都会挡住所有影子窗口（`CTL-73`），日志会点名它（[故障排查](./troubleshooting.md#shadow-window-waiting-for-an-acknowledgement)）。任何一个都应告警。
 
+`cosec.control.revisions.records` 与 `cosec.control.revisions.bytes`（量规，无标签）是各文档保留的修订记录数与它们的存储字节数，`cosec.control.changes.open` 是未结束的变更数（`CTL-84`）。回收任务每小时设置它们：只有持有这一轮租约的实例读取每个文档，所以只有它报告所见；它在这一轮结束时替换数值，在此之前报告上一轮的（中间不会出现 `0`）。由别的实例领这一轮的实例报告 `0`；这一轮起不来（列不出文档）的实例保留它上次所见。**跨实例取最大值**：它是截至上一轮的存储总量。求和在租约换手后的那一轮可能把同一轮计两次。那一轮跳过的文档（某个未结束变更读不到）不计入；旧版本写的索引项，要等某一轮得出它的大小后才计入 `bytes`。在 `bytes` 接近 Redis 能容纳的量时告警。
+
+`cosec.control.revisions.reclaimed-young`（计数器，无标签）统计一个实例在 `min-age` 之内、因超出一个文档能保留的量而回收的记录（`CTL-84`）：某个文档在循环发布大文档。任何一个都应告警，并查看点名该文档的 `WARN`（[故障排查](./troubleshooting.md#revisions-reclaimed-within-min-age)）。
+
 `cosec.control.work.held`（量规，字节）是本宿主的控制调用此刻持有的工作预算，`cosec.control.work.refused`（计数器）是因放不下而答 `503` 的调用数（`CTL-85`）：同时提议、应用或解释大文档。每个宿主有自己的预算，请按宿主读。突发时偶尔拒绝是这个界在起作用；持续地拒绝说明宿主需要更多的堆，或大文档的写入需要错开（[故障排查](./troubleshooting.md#a-control-call-is-503-with-retry-after)）。
 
 ## 日志 {#logs}

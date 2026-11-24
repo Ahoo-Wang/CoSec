@@ -173,6 +173,27 @@ class ControlPlaneSwitchTest {
     }
 
     @Test
+    fun `what the documents retain is metered, and the young records reclaimed counted - CTL-84`() {
+        runner.withBean(io.micrometer.core.instrument.MeterRegistry::class.java, {
+            io.micrometer.core.instrument.simple.SimpleMeterRegistry()
+        }).run { context ->
+            context.startupFailure.assert().isNull()
+            val registry = context.getBean(io.micrometer.core.instrument.MeterRegistry::class.java)
+            // No pass has run: this instance found nothing, which is what an instance that does not lead a pass reports.
+            for (name in listOf(
+                ControlMetersConfiguration.RECORDS,
+                ControlMetersConfiguration.BYTES,
+                ControlMetersConfiguration.OPEN_CHANGES
+            )) {
+                registry.find(name).gauge()!!.value().assert().describedAs(name).isEqualTo(0.0)
+            }
+            registry.find(
+                ControlMetersConfiguration.RECLAIMED_YOUNG
+            ).functionCounter()!!.count().assert().isEqualTo(0.0)
+        }
+    }
+
+    @Test
     fun `cosec control enabled false wires nothing of the control plane, and the stores are read read-only`() {
         runner.withPropertyValues("${ControlPlaneCondition.ENABLED_KEY}=false").run { context ->
             context.startupFailure.assert().isNull()
