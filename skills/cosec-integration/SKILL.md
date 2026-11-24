@@ -257,7 +257,7 @@ https://cosec.ahoo.me/guide/security-model#trust-boundaries.
   implement `SwitchTenantCredentials`: the target tenant (and app), the request's `SecurityContext`, and the session's
   token pair (`accessToken`, `refreshToken`), read from the body as the refresh route reads it. An access token alone
   does not switch; the pair is judged as a refresh's (an older one ends the session), and the switch moves nothing of
-  the session it came from (`IDN-22`).
+  the session it came from (`IDN-22`). A logout of the switched session ends that login too (`IDN-40`).
 - Refresh and logout routes: set `cosec.authentication.login.refresh.path` and `logout.path` and the starter serves them
   (`POST`, the pair as JSON; `200` pair, `401` token-*, `503` unavailable, `500` error; logout `204`), on Spring MVC and
   WebFlux, never on a gateway. A document must permit an anonymous `POST` of each path, or every refresh is

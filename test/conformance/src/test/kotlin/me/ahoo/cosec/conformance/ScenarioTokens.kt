@@ -179,7 +179,8 @@ internal object ScenarioRefresh {
 
     /**
      * `"families"`: the records there are, `[{ "id", "tenant", "principal", "authTime", "generation", "rotatedAt",
-     * "revoked", "expiresAt" }]` (`expiresAt` defaults to `authTime` plus the lifetime), or `{ "unavailable": "message" }`.
+     * "revoked", "expiresAt", "root" }]` (`expiresAt` defaults to `authTime` plus the lifetime; `root`, the session a
+     * switched one was switched from, to none), or `{ "unavailable": "message" }`.
      */
     fun familyStore(node: JsonNode?): TokenFamilyStore {
         node?.get("unavailable")?.let { message ->
@@ -196,7 +197,7 @@ internal object ScenarioRefresh {
         }
         val store = InMemoryTokenFamilyStore { NOW }
         node?.values()?.forEach { family ->
-            family.only("id", "tenant", "principal", "authTime", "generation", "rotatedAt", "revoked", "expiresAt")
+            family.only("id", "tenant", "principal", "authTime", "generation", "rotatedAt", "revoked", "expiresAt", "root")
             val authTime = Instant.parse(family.required("authTime").text())
             val record = TokenFamily(
                 id = family.required("id").text(),
@@ -207,6 +208,7 @@ internal object ScenarioRefresh {
                 generation = family.get("generation")?.asLong() ?: 1,
                 rotatedAt = family.get("rotatedAt")?.text()?.let(Instant::parse),
                 revoked = family.get("revoked")?.asBoolean() ?: false,
+                root = family.get("root")?.text(),
             )
             runBlocking { check(store.create(record)) { "Family ${record.id} is listed twice." } }
         }

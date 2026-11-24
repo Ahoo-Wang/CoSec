@@ -13,7 +13,9 @@
 
 package me.ahoo.cosec.login.token
 
+import io.github.oshai.kotlinlogging.KotlinLogging
 import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.model.Identifiers
 import me.ahoo.cosec.model.PrincipalId
 import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.spi.id.IdGenerator
@@ -28,6 +30,8 @@ import me.ahoo.cosec.spi.token.VerifiedToken
 import java.time.Clock
 import java.time.Duration
 import java.time.Instant
+
+private val log = KotlinLogging.logger {}
 
 /**
  * Refresh token families (RFC 0009): the one place their rules live. A login starts a family ([start]); a refresh
@@ -47,6 +51,8 @@ import java.time.Instant
  *   pair, and may get one each time they ask until it closes; that holder held the current pair a moment earlier.
  * - **A family ends [lifetime] after its login**, whatever happens: a refresh after that is refused, the user signs in
  *   again, and no pair it issues outlives that end ([Issue.notAfter]).
+ * - **Logging out of a session a tenant switch started ends its login too** (`IDN-40`): [logout] revokes the root
+ *   before the session, so a logout that stops in between has not ended the session it was asked to end.
  * - **A session a tenant switch started lives only while its login's does** (`IDN-36`). It names its root, the session
  *   the login began ([TokenFamily.root]); every answer that it is live (its refresh, the retry within the leeway, a
  *   switch from it) reads the root too, and a root ended, revoked or gone revokes it and refuses. Each such answer
@@ -309,6 +315,43 @@ class TokenFamilies @JvmOverloads constructor(
             }
         }
         throw IllegalStateException("The session [$id] kept changing while it was revoked.")
+    }
+
+    /**
+     * Logs out of the session [id] names (`IDN-40`): first the login it was switched from (its root), then the session
+     * itself, each by a conditional write, so a refresh or a switch that read either before cannot write it back live.
+     * A logout that fails in between has revoked the root and not the session, and is answered as a failure: its retry
+     * starts again, and finds the root already revoked. A login's own session, which has no root, ends only itself; the
+     * sessions switched from it end at their next refresh or switch (`IDN-36`). A session whose record is gone names no
+     * root: one pushed out of its principal's latest sessions in its tenant (`IDN-35`) cannot find its login, which lives
+     * on until it ends of itself. A root that is another principal's, which CoSec never writes, is left alone, and logged.
+     *
+     * @throws SessionStoreUnavailableException when a record cannot be read or a write cannot be confirmed
+     */
+    @InternalCoSecApi
+    suspend fun logout(id: String) {
+        val family = sessionStore("read a session") { store.read(id) }?.family ?: return
+        family.root?.let { endRoot(family, it) }
+        end(id)
+    }
+
+    /** Revokes [rootId], [family]'s root, unless it is gone, already revoked, or not [family]'s principal's. */
+    private suspend fun endRoot(family: TokenFamily, rootId: String) {
+        repeat(MAX_ATTEMPTS) {
+            val root = sessionStore("read a session's root") { store.read(rootId) } ?: return
+            if (root.family.principal != family.principal) {
+                log.warn {
+                    "The session [${Identifiers.printable(family.id)}] names as its root " +
+                        "[${Identifiers.printable(rootId)}], another principal's session: its logout leaves that " +
+                        "session alone."
+                }
+                return
+            }
+            if (root.family.revoked || revoke(root)) {
+                return
+            }
+        }
+        throw IllegalStateException("The root session [$rootId] kept changing while it was revoked.")
     }
 
     private suspend fun revoke(read: TokenFamilyStore.Read): Boolean = sessionStore("revoke a session") {

@@ -15,18 +15,33 @@ section above it:
 
 | You run | Read |
 |---|---|
-| `8.0.0-beta.7` | [From beta.7](#from-8-0-0-beta-7) |
-| `8.0.0-beta.6` | [From beta.6](#from-8-0-0-beta-6), then the one above |
-| `8.0.0-beta.5` | [From beta.5](#from-8-0-0-beta-5), then the two above |
-| `8.0.0-beta.4` | [From beta.4](#from-8-0-0-beta-4), then the three above |
-| `8.0.0-beta.3` | [From beta.3](#from-8-0-0-beta-3), then the four above |
-| `8.0.0-beta.2` | [From beta.2](#from-8-0-0-beta-2), then the five above |
-| `8.0.0-beta.1` | [From beta.1](#from-8-0-0-beta-1), then the six above |
-| `8.0.0-alpha.4` | [From alpha.4](#from-8-0-0-alpha-4), then the seven above |
+| `8.0.0-beta.8` | [From beta.8](#from-8-0-0-beta-8) |
+| `8.0.0-beta.7` | [From beta.7](#from-8-0-0-beta-7), then the one above |
+| `8.0.0-beta.6` | [From beta.6](#from-8-0-0-beta-6), then the two above |
+| `8.0.0-beta.5` | [From beta.5](#from-8-0-0-beta-5), then the three above |
+| `8.0.0-beta.4` | [From beta.4](#from-8-0-0-beta-4), then the four above |
+| `8.0.0-beta.3` | [From beta.3](#from-8-0-0-beta-3), then the five above |
+| `8.0.0-beta.2` | [From beta.2](#from-8-0-0-beta-2), then the six above |
+| `8.0.0-beta.1` | [From beta.1](#from-8-0-0-beta-1), then the seven above |
+| `8.0.0-alpha.4` | [From alpha.4](#from-8-0-0-alpha-4), then the eight above |
 | `8.0.0-alpha.3`, `alpha.2`, `alpha.1` | [From alpha.3](#from-8-0-0-alpha-3), [alpha.2](#from-8-0-0-alpha-2) or [alpha.1](#from-8-0-0-alpha-1), then every section above it |
 
 Which preview of the library may run behind which preview of the gateway image: see
 [Upgrading a running deployment](./upgrading.md#upgrading-a-running-deployment).
+
+## From 8.0.0-beta.8 {#from-8-0-0-beta-8}
+
+- **Breaking: logging out of a switched session ends the login it came from** (`IDN-40`). Affected: a user who
+  switches tenant and then logs out. A logout ended only the session it was given: after a switch, the login's own
+  session lived on on the server, refreshable by whoever held its pair, until its refresh token expired, though the
+  client no longer held it. Now a logout of a switched session, by the served route or `TokenRevoker.revoke` of the
+  access token or of the pair, revokes the login's session first, then the switched one: the user is signed out of that
+  login on every device, and every other session switched from it ends at its next refresh or switch. The answers do not
+  change (`204`, `401`, `503`: `contract/` is the same); a `503` now also means the login could not be revoked, and the
+  client logs out again as before. A switched session already logged out under 8.0.0-beta.8 keeps its login: a second
+  logout of it is answered as done without revoking anything. That login ends when it is logged out itself, revoked
+  ([`revokeSubject`](../integration/authentication.md#revoking-every-token-of-a-principal)) or past its lifetime
+  ([Switching tenant and app](../integration/authentication.md#switching-tenant-and-app)).
 
 ## From 8.0.0-beta.7 {#from-8-0-0-beta-7}
 

@@ -515,7 +515,8 @@ under CoSec like every route, so a document must permit an anonymous `POST` of i
 pair in the body, whether or not the access token has expired, `204` when the session is ended, and when it already was.
 A body that is not the pair is `400`, a pair that does not verify (an expired refresh token included) `401`, a store that
 cannot answer `503`. Otherwise, from your logout endpoint, call `TokenRevoker.revoke(accessToken)`. It verifies the
-token, ends its session, and records its `jti` in Redis for the refresh token's lifetime. A token already revoked
+token, ends the login a switched session came from ([Switching tenant and app](#switching-tenant-and-app), `IDN-40`),
+then its session, and records its `jti` in Redis for the refresh token's lifetime. A token already revoked
 throws `TokenRevokedException`: answer it as done, as the served route does. A store that cannot be written throws
 `SessionStoreUnavailableException`: answer `503`; the client keeps its pair and logs out again. From then on every instance rejects that access token as
 `token-revoked`, and no pair of the session refreshes, the pairs it was refreshed from included: a pair copied earlier
@@ -788,6 +789,18 @@ is kept while a session switched from it is in use, and switching back to a sess
 64 sessions a principal keeps ([Sessions](#sessions)). A `TokenFamilyStore` of your own must save `TokenFamily.root`: a
 switch reads the new session back, and is refused when the root was not kept.
 
+**Logging out of a switched session ends the login it came from** (`IDN-40`). Its logout, by the served route or by
+`TokenRevoker.revoke` of the access token or of the pair, revokes the root first, then the session, then records the
+token's `jti`: the login's pair, which the client no longer holds, refreshes no more, on any device. The root is read
+from the session's record, so the access token alone is enough. A logout that fails at a step has done none of the
+later ones and is answered `503` (`SessionStoreUnavailableException`): the client keeps its pair and logs out again, and
+the retry starts from the beginning. It is never answered as done while the login lives on, and a refresh or a switch
+racing it cannot write the login back live: every write of a session is conditional. What it does not reach: the access
+tokens the login and its other switched sessions issued stay valid until they expire, and those sessions are revoked at
+their next refresh or switch, as above. A switched session whose own record is gone, pushed out of the 64 its principal
+keeps in that tenant ([Sessions](#sessions)), cannot find its login, which lives on until it is logged out, revoked or
+ends. A login's own logout ends only itself, and the sessions switched from it at their next refresh or switch.
+
 **The switch issues from the request's session, on its token pair** (`IDN-22`), as CoSec's token proved it to the
 pipeline: the `context` must be the one the pipeline made for the request. The switch opens a session that refreshes,
 so it presents what a refresh presents: the request's own access token and its refresh token, checked as a refresh
@@ -813,8 +826,8 @@ that before it asks your `TenantSwitch`:
 A request whose credential is not CoSec's token, an API key say, has no session and cannot switch
 (`TokenVerificationException`: `token-invalid`). Nothing maps these exceptions for you: the switch is your endpoint, so
 answer them as the [served refresh route](#refreshing-tokens) does.
-The session switched from is left as it is: a logout ends the pair it is given, not the one it was switched from. To
-end every session of a user, [revoke the principal](#revoking-every-token-of-a-principal) in each tenant it has switched
+A switch leaves the session it came from as it is; a logout of the switched session ends that login too (above). To
+end every session of a user on every device, [revoke the principal](#revoking-every-token-of-a-principal) in each tenant it has switched
 into: a switched session belongs to its target tenant. Behind a gateway, the switch issues from the session the gateway
 verified and forwarded with the identity ([Services behind the gateway](./web.md#services-behind-the-gateway)); the
 service that hosts it sets `cosec.jwt.enabled=true`, with the gateway's `cosec.jwt.secret` and `cosec.jwt.algorithm`,

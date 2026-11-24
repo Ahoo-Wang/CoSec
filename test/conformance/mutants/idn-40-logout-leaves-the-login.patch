@@ -1,0 +1,17 @@
+# Rule: IDN-40
+# Mutant: a logout ends only the session it was given, so the login a switched session came from refreshes on, for whoever holds its pair
+# Tests: :login:test --tests me.ahoo.cosec.login.token.SwitchedLogoutTest :conformance:test --tests me.ahoo.cosec.conformance.ConformanceTest
+
+diff --git a/extensions/login/src/main/kotlin/me/ahoo/cosec/login/token/StoreTokenRevoker.kt b/extensions/login/src/main/kotlin/me/ahoo/cosec/login/token/StoreTokenRevoker.kt
+index 8c7535afa..595f0e112 100644
+--- a/extensions/login/src/main/kotlin/me/ahoo/cosec/login/token/StoreTokenRevoker.kt
++++ b/extensions/login/src/main/kotlin/me/ahoo/cosec/login/token/StoreTokenRevoker.kt
+@@ -64,7 +64,7 @@ class StoreTokenRevoker @JvmOverloads constructor(
+         }
+         // The login's session first, then this one, then the token's id (IDN-40): a logout that fails at any step has not
+         // revoked the token, so its retry runs again from the start, and a logout answered is one whose login has ended.
+-        token.session?.let { families.logout(it.id) }
++        token.session?.let { families.end(it.id) }
+         sessionStore("revoke a token") { tokenStore.revoke(token.id, revocationTtl) }
+         return token
+     }
