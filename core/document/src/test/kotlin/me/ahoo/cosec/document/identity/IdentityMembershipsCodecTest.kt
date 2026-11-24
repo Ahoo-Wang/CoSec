@@ -113,7 +113,6 @@ class IdentityMembershipsCodecTest {
         {"spaces":{},"attachments":{}}                     | $.memberships.attachments is not an array
         {"spaces":{}}                                      | [memberships.attachments] is missing
         {"attachments":[]}                                 | [memberships.spaces] is missing
-        {"spaces":{},"attachments":[],"policies":[]}       | $.memberships has unknown members
         []                                                 | $.memberships is not an object""",
     )
     fun `memberships that are not this format are refused, never read as none`(memberships: String, reason: String) {

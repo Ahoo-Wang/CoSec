@@ -478,15 +478,16 @@ spring:
 | `tenant`、`sub` | 网关校验的租户和主体。 |
 | `scope` | `{app, space}`，即网关解析出的应用和空间。 |
 | `roles` | 主体在该空间中的角色，用裸名：决策所用的角色。这是作用域的角色，而不是令牌的全部角色（令牌的 `roles` 声明以 `role@space` 列出所有空间的角色）。 |
-| `memberships` | `{spaces, attachments}`（`IDN-39`）：主体另外还属于什么。`spaces` 按空间 id 列出它在其他每个空间中的角色（默认空间的 key 为空串），从不包含作用域自己的空间；`attachments` 是它附加的策略的 id，按其成员关系列出的顺序。总是写出，没有更多时为 `{"spaces":{},"attachments":[]}`：它的存在本身表示成员关系是全的。按身份做策略判定的宿主（`cosec.pipeline.caller=forwarded-identity`：控制面宿主、服务端口）拒绝没有它的请求头，并用它的全部内容判定，所以附加到主体的 DENY、或读取它在另一个空间所持角色（`subject.roles`）的 DENY，在那里和在网关一样生效。 |
+| `memberships` | `{spaces, attachments}`（`IDN-39`）：主体另外还属于什么。`spaces` 按空间 id 列出它在其他每个空间中的角色（默认空间的 key 为空串），从不包含作用域自己的空间；`attachments` 是它附加的策略的 id，按其成员关系列出的顺序。网关总是写出，没有更多时为 `{"spaces":{},"attachments":[]}`：它的存在本身表示成员关系是全的。`HttpControlService` 转述请求的调用方时，只在它转述的身份写了它时才写（`IDN-42`）：任何一跳都不声称它没收到的东西。按身份做策略判定的宿主（`cosec.pipeline.caller=forwarded-identity`：控制面宿主、服务端口）拒绝没有它的请求头，并用它的全部内容判定，所以附加到主体的 DENY、或读取它在另一个空间所持角色（`subject.roles`）的 DENY，在那里和在网关一样生效。 |
 | `auth` | `{method, jti, exp, iat, capped, session}`：主体的认证方式（`jwt` 和 `api-key` 是 CoSec 自带的；其他任何非空名称都按原样读取，因此使用其他认证器的网关也能工作）、令牌的 `jti` 或 key 的 id、凭证的过期时间，以及凭证的签发时间（`iat`，凭证不说明时没有，且绝不晚于 `exp`）；`session` 只出现在 CoSec 自己的令牌（`jwt`）上：它的 `sid`、`auth_time`（用户登录的时间）和 `generation`，使网关之后的服务知道登录时间，并让那里的[租户切换](./authentication.md#switching-tenant-and-app)可以从它签发；`capped: true` 只出现在带角色上限的凭证上，此时在网关之后，主体绑定和附加策略同样不授予它任何东西（它们的 DENY 照样生效）。只有 `jwt` 能得到 break-glass，网关只为 CoSec 自己的令牌转发它。绝不包含凭证本身。 |
 | `iat` | 网关生成该请求头的时间，单位为 epoch 秒。 |
 | `rid` | 网关的请求 id。 |
 | `claims` | 只包含 `cosec.gateway.identity.claims` 中列出的主体属性（令牌的 `attributes` 声明；API key 只提供 `apiKeyId`）：字符串、布尔值和数字。`Byte`、`Short`、`Int`、`Long`，以及 `Long` 范围内的 `BigInteger` 作为整数传递；有限的 `Float` 或 `Double`，以及 `Double` 能精确表示的 `BigDecimal` 作为数字传递。 |
+| `crit` | 读方必须理解的成员的路径（`IDN-41`），例如 `"auth.kind"`。读方忽略它不认识的任何成员，不论在哪一层，除非这个列表点了它的名；点了名而它不认识的，以 `503` `unavailable` 拒绝，因为那是更新的版本写的。8.0 的写方都不写它：8.0 的每个成员都是 8.x 的每个读方认识的。 |
 
 它绝不携带令牌、API key、cookie 或其他请求头、策略的内容（只有主体所附加策略的 id）、匹配的语句、外部属性值或客户端 IP。
 
-**失败即拒绝。** 以下情况请求返回 `500` `internal-error` 并记录日志，不做任何截断：身份大于 `cosec.gateway.identity.max-size`（8 KB）；列出的某个声明不是字符串、布尔值或上述数字（头不能精确表示的数字、`NaN` 和无穷大都算），或长于 1024 个字符；凭证永不过期（例如没有 `expires-at` 的 [API key](./authentication.md#api-keys)）：服务无法为这样的身份设定边界。
+**失败即拒绝。** 以下情况请求返回 `500` `internal-error` 并记录日志，不做任何截断：身份大于 `cosec.gateway.identity.max-size`（6 KB）；列出的某个声明不是字符串、布尔值或上述数字（头不能精确表示的数字、`NaN` 和无穷大都算），或长于 1024 个字符；凭证永不过期（例如没有 `expires-at` 的 [API key](./authentication.md#api-keys)）：服务无法为这样的身份设定边界。
 
 **凭证。** 网关不转发客户端的任何凭证，无论在请求头、查询参数还是 cookie 中：它从转发的每个请求中移除 `Authorization` 请求头、API key 请求头（`cosec.pipeline.api-key-header`，无论它把名称设成什么）、`authorization` 查询参数，以及（无论网关自己是否读取它，见 `cosec.pipeline.allow-cookie-token`）每个 `Cookie` 头中的 `authorization` cookie（名称比较不区分大小写；不再剩下任何 cookie 的头不发送），也从后续过滤器或 `forward:` 路由的处理器读取的 cookie 中移除它。因此被攻破的服务永远看不到可以拿回网关重放的令牌或 key。其他 cookie 原样转发，每个键值对逐字节不变；令牌的键值对连同一个 `;` 一起移除，因此不会留下空的键值对，只剩空键值对的头不发送。结果开头的空白会去掉，因为字段值不能以空白开头。开头的 `$Version` 键值对用 `,` 藏了令牌的头，或保留下来的 `$Version` 键值对会被挪到开头的头，整个移除，连同从它读出的 cookie，因为它的其他键值对会被读成别的样子。只有当后面的服务要再次校验令牌，或要代表用户调用其他 API 时，才设置 `cosec.gateway.identity.forward-authorization=true`：这时凭证发往本会接收身份的路由（`lb://` 路由，或标为 `cosec-identity: true` 的路由），无论 `cosec.gateway.identity.enabled` 是否转发身份，不发往其他路由，并且只在管道接受了它们时：被拒绝的令牌（过期、吊销、无效）即使公开路由以匿名身份放行请求，也留在网关，所以再次校验令牌的服务永远看不到网关拒绝过的令牌。
 
@@ -508,9 +509,10 @@ cosec:
 |---|---|
 | 没有 `CoSec-Identity` | 作为匿名主体 `(0)` 继续；由你的代码决定它能看到什么。 |
 | 有效的身份 | 以该主体、在该作用域中继续。 |
-| 无法读取（不是 base64url、不符合格式、有未知或重复的成员、角色重复、`iat` 或 `exp` 超过 9999 年）、发送了不止一次、大于 `cosec.pipeline.identity.max-size`（8 KB），或作用域在本服务无法解析（例如应用不是 `cosec.authorization.scope.app-id`） | `400` `invalid-request` |
-| 在按身份做策略判定的宿主上（`cosec.pipeline.caller=forwarded-identity`），没有 `memberships`（`IDN-39`）：旧网关写的请求头，或应用写时没带上它 | `400` `invalid-request` |
+| 无法读取（不是 base64url、不符合格式、有重复的成员、`crit` 不合格式、角色重复、`iat` 或 `exp` 超过 9999 年）、发送了不止一次、大于 `cosec.pipeline.identity.max-size`（8 KB），或作用域在本服务无法解析（例如应用不是 `cosec.authorization.scope.app-id`） | `400` `invalid-request` |
+| 在按身份做策略判定的宿主上（`cosec.pipeline.caller=forwarded-identity`），没有 `memberships`（`IDN-39`）：旧网关写的请求头、应用写时没带上它，或被转述的调用方自己的请求头里就没有（`IDN-42`）。控制面的进程内门面对这样的调用方同样拒绝 | `400` `invalid-request` |
 | 未知版本、`iat` 在未来，或没有 `auth.exp` | `401` `token-invalid` |
+| `crit` 点了名、而本服务不认识的成员（`IDN-41`）：更新版本的网关写的。计入 `cosec.identity.refused{problem=unavailable}`，日志写出该成员；升级本服务 | `503` `unavailable` |
 | `auth.exp` 已过，或 `iat` 早于 `cosec.pipeline.identity.max-age`（60 秒） | `401` `token-expired` |
 
 这些时间检查为网关的时钟留出 `cosec.authentication.revocation.skew`（5 秒）的偏差。最大时长限制了在网络内部重放截获的请求头：吊销只在网关检查。响应带有网关的 `CoSec-Request-Id`。

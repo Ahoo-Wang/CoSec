@@ -84,6 +84,7 @@ class GatewayModeMetricsTest {
                     ProblemType.INVALID_REQUEST.slug to 1.0,
                     ProblemType.TOKEN_INVALID.slug to 0.0,
                     ProblemType.TOKEN_EXPIRED.slug to 0.0,
+                    ProblemType.UNAVAILABLE.slug to 0.0,
                 )
             )
         }

@@ -57,11 +57,15 @@ class IdentityCodecMessageTest {
     }
 
     @Test
-    fun `unknown members are escaped, bounded, and at most three are named`() {
-        val members = List(10) { """"$forged$it":1""" }.joinToString(",", ",")
-        val message = refusal(identity(members))
-        message.assertSafe(400)
-        message.assert().contains("\\u000A").contains("\\u0007").contains("\\u000D").endsWith(" and 7 more.")
+    fun `members crit names and this version lacks are bounded, at most three named, and a forged entry is not quoted`() {
+        val entries = List(10) { "\"x$it${"y".repeat(2_000)}\"" }.joinToString(",")
+        val message = refusal(identity(""","crit":[$entries]"""))
+        message.assertSafe(600)
+        message.assert().contains(" and 7 more;")
+        // An entry that is no member's path is malformed, and named by its index alone.
+        val forgedEntry = refusal(identity(""","crit":["$forged"]"""))
+        forgedEntry.assertSafe(100)
+        forgedEntry.assert().isEqualTo("The identity header is malformed: $.crit[0] is not the path of a member.")
     }
 
     @Test

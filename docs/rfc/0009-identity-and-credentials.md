@@ -195,7 +195,7 @@ JWT 保留 `roles`、`policies`、`attributes` 声明作为已签名缓存，条
 | `auth.method` | 认证器 | 与 `Identity.Method` 一致（约定 `jwt`、`api-key`、`service`）；匿名请求为 `anonymous` | 不会缺失 |
 
 - 两者登记进属性目录（`Attribute.Kind`），可用于条件，也可作限流 `key`。
-- `CoSec-Identity` v1 增加 `sub_type`（即 `principal.type`）；`auth.method` 已在。v1 已随 8.0 发布，解码是严格的，所以加成员时遵守 RFC 0010 §1 的约束 4。
+- `CoSec-Identity` v1 增加 `sub_type`（即 `principal.type`）；`auth.method` 已在。v1 已随 8.0 发布：读方忽略它不认识的成员，除非 `crit` 点了它的名（`IDN-41`），所以加一个被忽略也不会放宽判定的成员是纯新增；被忽略会放宽判定的成员，写方要把它列进 `crit`，并且只在读方集合都认识它之后才写（[RFC 0014](0014-mixed-version-compatibility.md) R1、R5）。
 - 不在 `Subject` 上加枚举：开放属性让新类型（例如以后的 `device`）不成为破坏性变更；引擎不因类型改变求值方式。
 
 **8.0 的 `CoSec-Identity`**。网关把验证过的身份放进 `CoSec-Identity`（格式 v1，`IdentityCodec`，`schema/8.0/cosec-identity.schema.json`）转给后面的服务，
@@ -209,7 +209,7 @@ JWT 保留 `roles`、`policies`、`attributes` 声明作为已签名缓存，条
   登录时间，租户切换凭它取会话（§11.4）。
 
 读取对形式是严格的：缺成员、类型不对、代数不是正整数、`api-key` 的身份带了会话、有会话而没有 `iat`，一律按格式错误拒绝（400），绝不读成“没有会话”。
-服务对未知成员同样严格，所以**先升级网关后面的服务，再升级网关**。不带这两个成员的身份（API Key 的，或旧网关发来的）照旧可读，只是不能据此切换租户。
+服务忽略它不认识的成员（`IDN-41`），所以网关与其后的服务之间没有升级顺序；`crit` 点了名而服务不认识的成员以 503 拒绝（升级该服务即可，不答 401：那会让客户端结束会话）。不带这两个成员的身份（API Key 的，或旧网关发来的）照旧可读，只是不能据此切换租户。
 
 **登录时间与签发时间不比较先后。** 两者出自两个时钟：登录时间由受理登录的实例写进会话家族，签发时间由做刷新或切换的实例写进令牌；两台实例差几毫秒又恰好跨秒时，
 合法令牌的登录时间就晚于签发时间。没有任何规则依赖这个先后：会话到期按 `auth_time` 加寿命算，家族校验比较 `auth_time` 是否相等，撤销只读 `iat`。

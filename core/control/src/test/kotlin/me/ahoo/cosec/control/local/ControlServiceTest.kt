@@ -30,17 +30,24 @@ import me.ahoo.cosec.control.change.ChangeState
 import me.ahoo.cosec.control.sdk.ControlCaller
 import me.ahoo.cosec.control.sdk.ControlRefusedException
 import me.ahoo.cosec.control.sdk.ControlService
+import me.ahoo.cosec.document.identity.IdentityCodec
 import me.ahoo.cosec.document.json.CoSecJson
 import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.model.decision.DocumentKind
+import me.ahoo.cosec.model.scope.HostScope
+import me.ahoo.cosec.runtime.http.Cookies
+import me.ahoo.cosec.runtime.http.Headers
+import me.ahoo.cosec.runtime.http.HttpFacts
 import me.ahoo.cosec.runtime.http.RequestSecurity
 import me.ahoo.cosec.runtime.identity.IdentityGate
+import me.ahoo.cosec.spi.identity.Identity
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.test.asserts.assert
 import me.ahoo.test.asserts.assertThrownBy
 import org.junit.jupiter.api.Test
 import java.time.Clock
 import java.time.Duration
+import java.time.Instant
 
 /**
  * `CTL-65`: the control plane's facade decides every call for the principal its caller states, by the policies, and
@@ -343,6 +350,53 @@ class ControlServiceTest {
         me.ahoo.cosec.control.sdk.ChangeState.KNOWN.map { it.text }.assert().isEqualTo(
             ChangeState.entries.map { it.name }
         )
+    }
+
+    /**
+     * `IDN-42`, `IDN-39`, `CTL-77`: a request whose identity was forwarded without `memberships` is refused as malformed
+     * before the control plane is asked, as the relay and a host that decides on the identity refuse it over HTTP; with
+     * them, empty or not, it reaches the control plane.
+     */
+    @Test
+    fun `a caller forwarded without memberships is refused before the control plane is asked - IDN-42`() {
+        val side = Side()
+        fun forwarded(memberships: Identity.Memberships?): ControlCaller {
+            val now = Instant.now()
+            val identity = Identity(
+                tenant = "acme",
+                subject = "alice",
+                app = "",
+                space = "",
+                roles = setOf("admin"),
+                credential = Identity.Credential(Identity.Method.JWT, "t1", now.plusSeconds(300)),
+                issuedAt = now,
+                requestId = "r1",
+                memberships = memberships,
+            )
+            val facts = HttpFacts(
+                method = "GET",
+                rawPath = "/",
+                rawQuery = null,
+                headers = Headers.of(mapOf(IdentityCodec.HEADER to listOf(IdentityCodec.encode(identity)))),
+                cookies = Cookies.EMPTY,
+                remoteAddress = "10.0.0.1",
+                host = HostScope(null),
+            )
+            val security = checkNotNull(runBlocking { IdentityGate().evaluate(facts) }.security)
+            return ControlCaller.of(security.securityContext)
+        }
+        fun answer(caller: ControlCaller): String = runBlocking {
+            try {
+                "200 " + side.service.document(caller, acme)
+            } catch (e: ControlRefusedException) {
+                "${e.status} ${CoSecJson.mapper.readTree(e.problem).get("code")?.asString()}"
+            }
+        }
+
+        answer(forwarded(null)).assert().isEqualTo("400 INVALID_REQUEST")
+        answer(forwarded(Identity.Memberships.NONE)).assert().doesNotStartWith("400")
+        answer(forwarded(Identity.Memberships(mapOf("team-a" to setOf("ops")), emptyList())))
+            .assert().doesNotStartWith("400")
     }
 
     @Test

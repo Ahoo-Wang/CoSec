@@ -288,9 +288,11 @@ CoSec 自己的拒绝很容易区分：它们总是 `application/problem+json`�
 
 | 状态 | 原因 | 修复 |
 |---|---|---|
-| `400` `invalid-request` | 该头不是格式 v1 的 base64url JSON、有未知或缺失的成员、指名了带落单 UTF-16 代理项的 id（`IDN-10`）、空白的 `sub`、`tenant` 或 `rid`（`IDN-38`）或不能作为租户 id 的租户（例如含 `/`，`SCP-13`）、大于 [`cosec.pipeline.identity.max-size`](./configuration.md#pipeline)、出现了不止一次，或者指明的作用域在本服务上无法解析。 | 有 CoSec 网关以外的东西设置了该头，或者网关的 `cosec.gateway.identity.max-size` 大于服务的上限。 |
+| `400` `invalid-request` | 该头不是格式 v1 的 base64url JSON、有缺失的成员或不合格式的 `crit`、指名了带落单 UTF-16 代理项的 id（`IDN-10`）、空白的 `sub`、`tenant` 或 `rid`（`IDN-38`）或不能作为租户 id 的租户（例如含 `/`，`SCP-13`）、大于 [`cosec.pipeline.identity.max-size`](./configuration.md#pipeline)、出现了不止一次，或者指明的作用域在本服务上无法解析。 | 有 CoSec 网关以外的东西设置了该头，或者网关的 `cosec.gateway.identity.max-size` 大于服务的上限。 |
 | `401` `token-invalid` | 本服务不读取的版本、没有 `auth.exp`，或签发时间晚于当前时间加 [`cosec.authentication.revocation.skew`](./configuration.md#authentication)。 | 让服务与网关一起升级；同步时钟。 |
+| `503` `unavailable` | 请求头的 `crit` 点了名、而本服务不认识的成员（`IDN-41`）：更新版本的 CoSec 网关或服务写的，本服务比它预期的旧。日志写出该成员；`cosec.identity.refused{problem=unavailable}` 计数，与存储故障分开。 | 升级本服务。 |
 | `401` `token-expired` | 凭证已过期，或身份的签发时间早于 [`cosec.pipeline.identity.max-age`](./configuration.md#pipeline) 加偏差。 | 同步时钟；在网关与服务之间等待很久的请求需要更大的 `max-age`。在没有网关的测试中，头只生成一次并被重复使用：每个请求生成一个（[`IdentityHeader`](../integration/web.md#services-behind-the-gateway)）。 |
+| `431`，或不带 CoSec 问题体的 `400` | Web 服务器在 CoSec 读取之前就拒绝了请求：请求头合计超过 `server.max-http-request-header-size`。在读取身份的宿主上，没有设置时 starter 会推出这个上限（默认时 16 KB，`IDN-43`）；设置得比它小时，启动时以 `WARN` 写出：`server.max-http-request-header-size is <n> bytes, below cosec.pipeline.identity.max-size (<r> bytes) and 8192 bytes for the request's other headers (<d> bytes) ...`。 | 不设置它，让它推出；或者至少调到推出的值。 |
 
 在任何环境中，响应都只说明问题，从不说明原因。原因在服务的日志里，来自 logger `me.ahoo.cosec.runtime.identity.IdentityGate`：
 

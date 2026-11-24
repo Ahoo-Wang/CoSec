@@ -34,6 +34,12 @@ description: "每个 8.0 预览版（alpha 与 beta）到下一个之间的变�
   - **升级之前**，用新版本的 [`cosec-migrate check-patterns`](./upgrading.md#check-the-patterns-before-an-upgrade) 找出存储的文档里含这样模式的：它给出每一处的位置和写法。升级后的实例会把它装为失败，读它的请求答 `503`。先在你运行的版本上改写并发布它们：`\(` 这样的转义只有这个版本认识，所以改写后的文档要等每个实例都读得懂之后再发布。
   - **滚动升级。** 8.0.0-beta.8 把 `\(` 读成一个反斜杠加一个括号，没有请求路径含有它：在尚未升级的实例上，转义写法的 DENY 什么也拒绝不了。先升级每一个做决策的实例（网关、服务、控制面宿主），再发布带转义的模式。
   - `cosec-migrate` 会转义 7.x 路径模式里的保留字符（7.x 把它们当文本读），转换后的策略含义不变。`cosec-openapi` 会转义规范路径中模板之外的每个这样的字符，包括 `*` 和 `?`：以前规范路径里的 `*` 或 `?` 会成为生成的路由的通配符，把别的路径映射到那个操作上。请重新生成路由图。
+- **破坏性：被转述的调用方只声明它被转发来的成员关系**（`IDN-42`）。`HttpControlService` 转述请求的调用方时，对自己的
+  `CoSec-Identity` 里没有 `memberships` 的调用方写了空的 `memberships`，于是按身份判定的宿主把它当成没有附加策略、
+  在其他空间也没有角色的调用方。现在它不写这个成员，宿主以 `400` `invalid-request` 拒绝这次调用；控制面的进程内门面对这样的调用方同样拒绝。
+  只有不带 `memberships` 的请求头会走到这里：beta.7 网关写的，或应用自己写的。先升级网关（beta.8 的网关都写这个成员），再依赖为它们的调用方发出的控制调用。
+- **服务读取带有它不认识的成员的身份头**（`IDN-41`）。`CoSec-Identity` 的读方以前不忽略任何未知成员：遇到就答 `400`，这正是 beta.8 的 `memberships` 需要在网关与其后的服务之间排顺序的原因。现在它忽略不认识的成员，不论在哪一层，除非请求头新增的 `crit` 点了它的名：那是更新的版本要求每个读方都理解的成员。`crit` 点了名而服务不认识的成员以 `503` `unavailable` 拒绝，计入 `cosec.identity.refused{problem=unavailable}`，日志写出该成员。8.0 的写方都不写 `crit`。应用自己写的请求头若拼错了成员名，现在会被忽略而不是被拒绝。
+- **破坏性：身份头有读方的上限和更小的写方上限**（`IDN-43`）。网关现在默认最多写 6 KB（`cosec.gateway.identity.max-size`，原为 8 KB），`HttpControlService` 的转述也是；服务仍读 8 KB（`cosec.pipeline.identity.max-size`），8.x 的任何版本都不调低它。身份在 6 到 8 KB 之间的主体，现在在网关上答 `500`，除非你把 `cosec.gateway.identity.max-size` 调高（最多 8 KB）；在服务器默认的请求头上限下，这样的头本来也到不了服务。读取身份的宿主（`gateway` 模式，或 `cosec.pipeline.caller=forwarded-identity`）在你没有设置 `server.max-http-request-header-size` 时会得到推出的值，默认时 16 KB；你设置的值保留不变，比它小时启动时以 `WARN` 写出。
 
 ## 从 8.0.0-beta.7 升级 {#from-8-0-0-beta-7}
 

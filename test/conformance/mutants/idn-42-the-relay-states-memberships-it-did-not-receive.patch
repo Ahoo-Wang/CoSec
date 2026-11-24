@@ -1,0 +1,19 @@
+# Rule: IDN-42
+# Mutant: the relay states empty memberships for a caller whose identity was forwarded without them, so a host that decides on the identity takes a caller whose attachments it never saw
+# Tests: :runtime:test --tests me.ahoo.cosec.runtime.identity.IdentityRelayTest
+
+diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/identity/IdentityIssuer.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/identity/IdentityIssuer.kt
+index 237e17048..9289e7234 100644
+--- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/identity/IdentityIssuer.kt
++++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/identity/IdentityIssuer.kt
+@@ -100,10 +100,6 @@ class IdentityIssuer(
+          * refuses the caller as it would refuse the header itself.
+          */
+         private fun memberships(security: RequestSecurity): Identity.Memberships? {
+-            val forwarded = security.identity
+-            if (forwarded != null && forwarded.memberships == null) {
+-                return null
+-            }
+             val roles = security.memberships.roles
+             val attachments = security.memberships.attachments
+             val space = security.scope.space
