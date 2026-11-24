@@ -167,7 +167,9 @@ class TokenFamilies @JvmOverloads constructor(
                     return Issue(TokenSession(family.id, family.authTime, family.generation), family.expiresAt)
                 }
                 Standing.REUSED -> reused(read)
-                Standing.NEVER_ISSUED -> throw TokenVerificationException("The token is of a generation its session never issued.")
+                Standing.NEVER_ISSUED -> throw TokenVerificationException(
+                    "The token is of a generation its session never issued."
+                )
             }
         }
         throw IllegalStateException("The session [${session.id}] kept changing while it was refreshed.")
@@ -211,7 +213,9 @@ class TokenFamilies @JvmOverloads constructor(
                     return family
                 }
                 Standing.REUSED -> reused(read)
-                Standing.NEVER_ISSUED -> throw TokenVerificationException("The token is of a generation its session never issued.")
+                Standing.NEVER_ISSUED -> throw TokenVerificationException(
+                    "The token is of a generation its session never issued."
+                )
             }
         }
         throw IllegalStateException("The session [${session.id}] kept changing while it was checked.")
@@ -232,7 +236,9 @@ class TokenFamilies @JvmOverloads constructor(
      */
     private suspend fun reused(read: TokenFamilyStore.Read) {
         if (revoke(read)) {
-            throw TokenRevokedException("The token's pair was refreshed before and is presented again: its session is revoked.")
+            throw TokenRevokedException(
+                "The token's pair was refreshed before and is presented again: its session is revoked."
+            )
         }
     }
 

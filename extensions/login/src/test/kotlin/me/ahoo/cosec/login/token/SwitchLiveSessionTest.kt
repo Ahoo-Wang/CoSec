@@ -74,10 +74,11 @@ class SwitchLiveSessionTest {
         revocations: RevocationReader = RevocationReader.NONE,
         families: TokenFamilies = this.families,
     ): TokenCompositeAuthentication {
-        val switching = SwitchTenantAuthentication(TestPairs, families, TokenRevocation(revocations), Select::class.java) {
-            asked += 1
-            TenantMembership.fromProvider()
-        }
+        val switching =
+            SwitchTenantAuthentication(TestPairs, families, TokenRevocation(revocations), Select::class.java) {
+                asked += 1
+                TenantMembership.fromProvider()
+            }
         return TokenCompositeAuthentication.of(listOf(switching), converter, families)
     }
 

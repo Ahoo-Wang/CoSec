@@ -143,7 +143,9 @@ class SwitchFromReplayedPairTest {
     fun `an access token alone switches into nothing`() = runBlocking<Unit> {
         val alices = login()
         assertThrows<TokenVerificationException> {
-            tokens.authenticateAsToken(Select("beta", requestWith(alices.accessToken), CompositeToken(alices.accessToken, "")))
+            tokens.authenticateAsToken(
+                Select("beta", requestWith(alices.accessToken), CompositeToken(alices.accessToken, ""))
+            )
         }
     }
 

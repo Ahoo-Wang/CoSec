@@ -11,7 +11,6 @@
  * limitations under the License.
  */
 
-
 @file:OptIn(InternalCoSecApi::class)
 
 package me.ahoo.cosec.login.token
@@ -68,14 +67,22 @@ object TestPairs : TokenVerifier {
         ).joinToString(SEPARATOR),
     )
 
-    override fun verify(accessToken: String): VerifiedToken = error("a switch verifies the pair, never an access token alone")
+    override fun verify(accessToken: String): VerifiedToken = error(
+        "a switch verifies the pair, never an access token alone"
+    )
 
     override fun refresh(token: CompositeToken): VerifiedToken {
         val parts = token.refreshToken.split(SEPARATOR)
         if (parts.size != 7 || parts[0] != token.accessToken) {
             throw TokenVerificationException("The refresh token does not belong to the access token.")
         }
-        val session = parts[4].takeIf { it != NONE }?.let { TokenSession(it, Instant.ofEpochSecond(parts[5].toLong()), parts[6].toLong()) }
+        val session = parts[4].takeIf { it != NONE }?.let {
+            TokenSession(
+                it,
+                Instant.ofEpochSecond(parts[5].toLong()),
+                parts[6].toLong()
+            )
+        }
         return VerifiedToken(
             id = parts[0],
             principal = parts[1],
