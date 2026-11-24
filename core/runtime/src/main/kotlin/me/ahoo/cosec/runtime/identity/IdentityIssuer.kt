@@ -48,9 +48,11 @@ class IdentityIssuer(
 ) {
     /**
      * The header for [security]; null for an anonymous request. [IdentityOverflowException] when it is too large,
-     * [IdentityFormatException] when no service would read it back (#1690).
+     * [IdentityFormatException] when no service would read it back (#1690). [RequestEndedException] once the request has
+     * ended (`PIP-26`, DR1-F-2): only a request in progress is stated, so a caller kept past its request acts as no one.
      */
     fun issue(security: RequestSecurity): String? {
+        if (!security.inProgress) throw RequestEndedException(security.requestId)
         val principal = security.principal ?: return null
         val credential = principal.credential ?: return null
         val identity = Identity(

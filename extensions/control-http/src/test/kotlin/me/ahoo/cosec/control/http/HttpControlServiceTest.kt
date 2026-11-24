@@ -15,6 +15,9 @@
 
 package me.ahoo.cosec.control.http
 
+import ch.qos.logback.classic.Logger
+import ch.qos.logback.classic.spi.ILoggingEvent
+import ch.qos.logback.core.read.ListAppender
 import com.sun.net.httpserver.HttpServer
 import kotlinx.coroutines.runBlocking
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
@@ -37,6 +40,7 @@ import me.ahoo.test.asserts.assertThrownBy
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.Timeout
+import org.slf4j.LoggerFactory
 import java.io.IOException
 import java.net.ConnectException
 import java.net.InetAddress
@@ -209,6 +213,66 @@ class HttpControlServiceTest {
         assertThrownBy<IllegalArgumentException> {
             runBlocking { service.document(ControlCaller.of(credentialless), acme) }
         }.hasMessageContaining("no credential")
+        received.assert().isEmpty()
+    }
+
+    /** DR1-F-2, `PIP-26`: a request that has ended is not stated: refused as the host refuses, `403` without detail. */
+    @Test
+    fun `an ended request's caller is refused before anything is sent`() {
+        val now = Instant.now()
+        val forwarded = Identity(
+            tenant = "acme",
+            subject = "alice",
+            app = "cosec-control",
+            space = "",
+            roles = setOf("admin"),
+            credential = Identity.Credential(Identity.Method.JWT, "token-1", now.plusSeconds(300)),
+            issuedAt = now,
+            requestId = "r1",
+        )
+        val context = PermittedRequest.withIdentity(IdentityHeader.write(forwarded))
+        val security = me.ahoo.cosec.runtime.http.RequestSecurity.of(context)!!
+        security.end()
+
+        val refused = assertThrownBy<ControlRefusedException> {
+            runBlocking { service.document(ControlCaller.of(context), acme) }
+        }.actual()
+
+        refused.status.assert().isEqualTo(403)
+        refused.code.assert().isEqualTo("FORBIDDEN")
+        refused.detail.assert().isNull()
+        refused.problem.assert().contains("\"requestId\":\"${security.requestId}\"")
+        received.assert().isEmpty()
+    }
+
+    @Test
+    fun `an ended request's warning prints a principal id escaped, so it cannot forge a line - RC1-15`() {
+        val now = Instant.now()
+        val forwarded = Identity(
+            tenant = "acme",
+            subject = "alice\nWARN forged",
+            app = "cosec-control",
+            space = "",
+            roles = setOf("admin"),
+            credential = Identity.Credential(Identity.Method.JWT, "token-1", now.plusSeconds(300)),
+            issuedAt = now,
+            requestId = "r1",
+        )
+        val context = PermittedRequest.withIdentity(IdentityHeader.write(forwarded))
+        me.ahoo.cosec.runtime.http.RequestSecurity.of(context)!!.end()
+        val logger = LoggerFactory.getLogger("me.ahoo.cosec.control.http") as Logger
+        val logged = ListAppender<ILoggingEvent>().also { it.start() }
+        logger.addAppender(logged)
+        try {
+            assertThrownBy<ControlRefusedException> {
+                runBlocking { service.document(ControlCaller.of(context), acme) }
+            }
+            val events = synchronized(logged) { logged.list.toList() }
+            val warning = events.single { "after it ended" in it.formattedMessage }
+            warning.formattedMessage.assert().doesNotContain("\n").contains("[alice\\u000AWARN forged]")
+        } finally {
+            logger.detachAppender(logged)
+        }
         received.assert().isEmpty()
     }
 

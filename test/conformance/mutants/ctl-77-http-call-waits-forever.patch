@@ -3,14 +3,13 @@
 # Tests: :control-http:test --tests me.ahoo.cosec.control.http.HttpControlServiceTest
 
 diff --git a/extensions/control-http/src/main/kotlin/me/ahoo/cosec/control/http/HttpTransport.kt b/extensions/control-http/src/main/kotlin/me/ahoo/cosec/control/http/HttpTransport.kt
-index a9b7ada63..41d4a4ad5 100644
 --- a/extensions/control-http/src/main/kotlin/me/ahoo/cosec/control/http/HttpTransport.kt
 +++ b/extensions/control-http/src/main/kotlin/me/ahoo/cosec/control/http/HttpTransport.kt
-@@ -58,7 +58,6 @@ internal class HttpTransport(
+@@ -69,7 +69,6 @@ internal class HttpTransport(
  
      override suspend fun call(caller: ControlCaller, call: ServiceCall): String {
          val request = HttpRequest.newBuilder(uri(call))
 -            .timeout(timeout)
              .header(ACCEPT, MEDIA_TYPES)
-             .apply { identity(caller)?.let { header(IdentityHeader.NAME, it) } }
+             .apply { stated(caller, call)?.let { header(IdentityHeader.NAME, it) } }
              .apply {
