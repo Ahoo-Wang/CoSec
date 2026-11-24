@@ -140,11 +140,12 @@ class WorkBudgetTest {
         }
         launch {
             delay(2)
-            budget.withWork("b", 50, patience) { order += "b@$currentTime" }
+            budget.withWork("b", 70, patience) { order += "b@$currentTime" }
         }
         advanceUntilIdle()
-        // When x leaves, a is first in line, but 20 more would take it to 60 while b waits: b goes first, a when its 40 does.
-        order.assert().containsExactly("b@5", "a@10")
+        // When x leaves at 5, a's 20 fits, but would take a to 60 while b waits, and b's 70 does not fit: nothing is
+        // granted. At 10 a's 40 leaves, a holds nothing, and both run. Without the half, a would have run at 5.
+        order.assert().containsExactlyInAnyOrder("a@10", "b@10")
     }
 
     @Test

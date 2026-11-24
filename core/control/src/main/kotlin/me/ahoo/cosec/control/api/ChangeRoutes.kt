@@ -102,7 +102,7 @@ internal class ChangeRoutes(
         }
         // CTL-85: the document is named only in the body, so its weight is the caller's own tenant's.
         return postLarge(request, work, operator.tenant.value) {
-            val proposal = proposal(it) ?: return@post notFound()
+            val proposal = proposal(it) ?: return@postLarge notFound()
             val change = with(proposal) { plane.propose(operator, key, base, operations, note, confirmations) }
             changeResponse(plane, operator, change, CREATED)
         }
@@ -114,7 +114,7 @@ internal class ChangeRoutes(
      */
     suspend fun check(operator: Operator, request: ControlHttpRequest): ControlHttpResponse {
         return postLarge(request, work, operator.tenant.value) {
-            val proposal = proposal(it) ?: return@post notFound()
+            val proposal = proposal(it) ?: return@postLarge notFound()
             ChangeCheckAnswer.response(
                 with(proposal) { plane.propose(operator, key, base, operations, note, confirmations, commit = false) },
             )
