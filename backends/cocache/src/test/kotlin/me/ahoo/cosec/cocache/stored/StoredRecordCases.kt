@@ -87,7 +87,7 @@ internal object StoredRecordCases {
         ) { tree(ShadowCodec.encodeReport(ShadowCodec.decodeReport(bytes(it)))) },
         StoredRecordCase(
             ShadowMembers.INSTANCE_STATUS,
-            """{"format":1,"at":"2026-11-01T00:00:00Z","formatLevel":1,"windows":["c1@1"],"shadows":false}""",
+            """{"format":1,"at":"2026-11-01T00:00:00Z","formatLevel":1,"windows":["c1@1"],"shadows":false,"release":"8.0.0-beta.9"}""",
             rewrite = ::status,
         ),
         StoredRecordCase(
