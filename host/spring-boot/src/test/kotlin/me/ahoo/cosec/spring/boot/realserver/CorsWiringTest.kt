@@ -141,7 +141,7 @@ class CorsWiringTest {
 
     private fun servlet(source: Class<*>, block: (Int, ConfigurableApplicationContext) -> Unit) {
         val context = SpringApplicationBuilder(source).web(WebApplicationType.SERVLET)
-            .properties("server.port=0", "spring.main.banner-mode=off")
+            .properties("server.address=127.0.0.1", "server.port=0", "spring.main.banner-mode=off")
             .initializers(
                 ApplicationContextInitializer<ConfigurableApplicationContext> {
                     it.environment.propertySources.remove(GATEWAY_PROPERTIES)

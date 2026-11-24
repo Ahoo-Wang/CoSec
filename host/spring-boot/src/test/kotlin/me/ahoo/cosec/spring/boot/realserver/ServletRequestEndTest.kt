@@ -177,7 +177,7 @@ class ServletRequestEndTest {
             if (container == "tomcat") OnTomcat::class.java else OnJetty::class.java
         )
             .web(WebApplicationType.SERVLET)
-            .properties("server.port=0", "spring.main.banner-mode=off")
+            .properties("server.address=127.0.0.1", "server.port=0", "spring.main.banner-mode=off")
             .run()
 
     private fun get(context: ConfigurableApplicationContext, path: String): RawResponse {

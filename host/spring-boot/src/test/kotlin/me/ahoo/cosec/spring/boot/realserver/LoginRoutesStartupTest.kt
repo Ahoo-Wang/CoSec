@@ -59,6 +59,7 @@ class LoginRoutesStartupTest {
             .web(type)
             .resourceLoader(DefaultResourceLoader(FilteredClassLoader(*hidden.toTypedArray())))
             .properties(
+                "server.address=127.0.0.1",
                 "server.port=0",
                 "cocache.backend=memory",
                 "cosec.jwt.secret=login-routes-startup-secret-login-routes",

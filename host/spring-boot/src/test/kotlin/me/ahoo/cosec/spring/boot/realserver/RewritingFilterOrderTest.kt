@@ -106,7 +106,7 @@ class RewritingFilterOrderTest {
 
     private fun answer(source: Class<*>, type: WebApplicationType, property: String): RawResponse {
         val context = SpringApplicationBuilder(source).web(type)
-            .properties("server.port=0", "spring.main.banner-mode=off", "$property=true")
+            .properties("server.address=127.0.0.1", "server.port=0", "spring.main.banner-mode=off", "$property=true")
             // Spring Cloud Gateway, on this test classpath, forces the reactive filter off ahead of every other source; a
             // plain WebFlux application has no such source.
             .initializers(
