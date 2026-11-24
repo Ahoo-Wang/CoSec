@@ -39,6 +39,7 @@ src/
   forbiddenErrorInterceptor.ts              — 403 Forbidden error handling
   tokenRefresher.ts                         — Token refresh logic
   tokenStorage.ts                           — Token storage abstraction
+  tenantSwitcher.ts                         — CoSecTenantSwitcher: sends a tenant switch with the pair; JwtTokenManager.switchTenant owns the lock, the 401 and the store
   jwtToken.ts                               — JWT token parsing and validation
   jwtTokenManager.ts                        — JWT token lifecycle management
   jwts.ts                                   — JWT utility functions
@@ -49,7 +50,7 @@ src/
   requestTrust.ts                           — Which request URLs may carry credentials (isTrusted, sameOriginTrust)
   types.ts                                  — Type definitions
   constants.ts                              — Shared attribute/name/order constants (re-exported from their original modules)
-  errors.ts                                 — RefreshTokenError, RefreshUnavailableError, RefreshSessionChangedError (re-exported from jwtTokenManager), LogoutUnconfirmedError; the first two carry the CoSec problem and status. None keeps the error of a refresh or logout request, whose body is the pair: a cause is copied by name and message only
+  errors.ts                                 — RefreshTokenError, RefreshUnavailableError, RefreshSessionChangedError (re-exported from jwtTokenManager), LogoutUnconfirmedError, TenantSwitchError; the first two carry the CoSec problem and status. None keeps the error of a refresh or logout request, whose body is the pair: a cause is copied by name and message only
   problem.ts                                — CoSec 8.0 problem+json: CoSecProblemType, readCoSecProblem, getCoSecProblem, retryAfterSeconds (resolveCoSecProblem is internal)
   refreshAttempt.ts                         — The time of the first unresolved refresh attempt of a pair, stored next to the pair (internal)
   refreshSession.ts                         — Token-session checks shared by the interceptors (internal)
@@ -66,6 +67,7 @@ src/
 - **Authorization Interceptors**: Automatically attach Bearer tokens to requests; only trusted absolute URLs receive the token, the CoSec headers and the tenant and owner path variables: `isTrusted` defaults to `sameOriginTrust` (the origin of an absolute `baseURL` and the page's); there is no "trust everything" constant, an application writes `() => true` itself
 - **Error Handling**: reads the CoSec 8.0 problem type of a refusal. `token-expired` (and a 401 with no CoSec problem) triggers token refresh + retry; `unauthorized`, `token-revoked`, `token-invalid` are not refreshed (the last two remove the stored pair); `forbidden` goes to `onForbidden`, `scope-rejected` to `onScopeRejected`; 429/503/500/400 never touch the session
 - **Refresh under rotation**: only a 401 from the refresh route ends the session. An attempt whose outcome is unknown is retried with the same pair only inside `rotationLeeway` of the first attempt (CoSec 8.0 `IDN-16`); the time is stored with the pair and never slides. After the window one attempt per call, which cannot be made safe. Read the comment of `JwtTokenManager.sendRefresh` before changing it.
+- **Tenant switch**: `switchTenant` waits for refreshes, refreshes an expired access token, then sends under the refresh lock (refreshes in this process wait for it); a `401` removes the pair and notifies once, anything else keeps it, nothing is retried (the server does not rotate a pair presented to switch, `IDN-22`)
 - **Device ID**: Persistent device identification for security tracking
 - **Multi-tenant**: Space ID provider for tenant-scoped authentication. No `CoSec-Space-Id` goes on the refresh call or on a request with no token (an anonymous request that declares a space is `401`, SCP-3)
 - **App**: CoSec 8.0 reads the app from the token's `aud`; there is no `appId` option and no `CoSec-App-Id` is sent

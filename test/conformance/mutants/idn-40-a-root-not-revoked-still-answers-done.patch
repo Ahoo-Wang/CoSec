@@ -1,0 +1,21 @@
+# Rule: IDN-40
+# Mutant: a root the store cannot revoke is passed over: the session ends, the token is recorded, and the logout is answered as done while the login lives on
+# Tests: :login:test --tests me.ahoo.cosec.login.token.SwitchedLogoutTest
+
+diff --git a/extensions/login/src/main/kotlin/me/ahoo/cosec/login/token/TokenFamilies.kt b/extensions/login/src/main/kotlin/me/ahoo/cosec/login/token/TokenFamilies.kt
+index d33c61d70..eed4bc893 100644
+--- a/extensions/login/src/main/kotlin/me/ahoo/cosec/login/token/TokenFamilies.kt
++++ b/extensions/login/src/main/kotlin/me/ahoo/cosec/login/token/TokenFamilies.kt
+@@ -331,7 +331,11 @@ class TokenFamilies @JvmOverloads constructor(
+     @InternalCoSecApi
+     suspend fun logout(id: String) {
+         val family = sessionStore("read a session") { store.read(id) }?.family ?: return
+-        family.root?.let { endRoot(family, it) }
++        try {
++            family.root?.let { endRoot(family, it) }
++        } catch (_: SessionStoreUnavailableException) {
++            // The login could not be revoked: the session is ended all the same, and the logout answered as done.
++        }
+         end(id)
+     }
+ 
