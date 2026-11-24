@@ -162,7 +162,7 @@ class GrantPropertyTest {
                 val grantor = people.random(random)
                 val candidate = grant(generator, random, snapshot, grantor, "r${round}s$step")
                 val analysis = analyzer.analyze(generator.grantor(grantor), snapshot, GrantChange(ACME, candidate))
-                if (analysis.verdicts.all { it.second is GrantVerdict.Contained } && analysis.unprotect.isEmpty()) {
+                if (analysis.verdicts.all { it.second is GrantVerdict.Contained }) {
                     published++
                     snapshot = GrantSnapshot(snapshot.platform, snapshot.apps, mapOf(ACME to candidate), snapshot.now, snapshot.unreadApps)
                 }

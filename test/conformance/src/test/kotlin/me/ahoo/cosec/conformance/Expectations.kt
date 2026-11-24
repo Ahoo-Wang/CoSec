@@ -19,7 +19,6 @@ import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.control.grant.GrantFragment
 import me.ahoo.cosec.control.grant.GrantVerdict
-import me.ahoo.cosec.control.grant.ProtectedEntry
 import me.ahoo.cosec.model.condition.IndexKeys
 import me.ahoo.cosec.model.decision.Decision
 import me.ahoo.cosec.testkit.EngineExpectations
@@ -45,8 +44,8 @@ import tools.jackson.databind.node.ObjectNode
  * { "status": 200, "proceed": true, "events": { "audit": 1 } }         // pipeline: the events each listener received
  * { "status": 400, "type": "invalid-request" }                         // pipeline, the problem's slug
  * { "outcome": "none" }                                                // pipeline, the caller cancelled
- * { "fragments": [ { "policy": "p", "statement": 0, "action": "a:b", "resource": "r", "verdict": "YES" } ],
- *   "unprotect": ["policy:p"] }                                                          // control: grant analysis
+ * { "fragments": [ { "policy": "p", "statement": 0, "action": "a:b", "resource": "r", "verdict": "YES" } ] }
+ *                                                                                        // control: grant analysis
  * { "outcomes": ["Published"], "head": { "revision": 1, "parent": null, "parentRecord": null }, "records": 1,
  *   "writes": ["record", "head"] }                                                       // control: publishing
  * ```
@@ -149,9 +148,6 @@ object Expectations {
 
     private fun granted(outcome: Outcome.Granted): JsonNode = json.objectNode().apply {
         set("fragments", json.arrayNode().apply { outcome.analysis.verdicts.forEach { (f, v) -> add(fragment(f, v)) } })
-        if (outcome.analysis.unprotect.isNotEmpty()) {
-            set("unprotect", json.arrayNode().apply { outcome.analysis.unprotect.forEach { add(entry(it)) } })
-        }
         if (outcome.analysis.tooLarge) {
             put("tooLarge", true)
         }
@@ -199,11 +195,6 @@ object Expectations {
         outcome.issued?.let { issued ->
             set("issued", json.objectNode().apply { issued.forEach { (name, value) -> put(name, value) } })
         }
-    }
-
-    private fun entry(entry: ProtectedEntry): String = when (entry) {
-        is ProtectedEntry.Policy -> "policy:${entry.id.value}"
-        is ProtectedEntry.Binding -> "binding:${entry.id.value}"
     }
 
     fun render(decision: Decision): JsonNode = EngineExpectations.render(decision)

@@ -35,7 +35,8 @@ import me.ahoo.cosec.model.TenantId
  *   break-glass permits is refused as well, RFC 0006 §9.4.3). Leaving out a grantor's binding only takes rights away.
  * - A boundary is no policy (RFC 0007 §7.6): the engine holds them apart and answers a binding of one as missing, so
  *   here one does not resolve either.
- * - The document format has no `protected` flag yet; no entry is protected until it does (RFC 0007 §7.4.4).
+ * - No entry is protected: a DENY of a tenant's document is the tenant's (`CTL-87`), and a restriction the platform
+ *   means the tenant not to lift is its boundary or the platform document.
  * - Roles and short-form permissions are read expanded (RFC 0012 §6.1), the one document that is enforced: fragments
  *   are split by permission, on both sides of a change.
  */

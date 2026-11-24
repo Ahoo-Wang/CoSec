@@ -1,0 +1,173 @@
+{
+  "rules": [
+    "CTL-87"
+  ],
+  "polarity": "positive",
+  "level": "control",
+  "description": "DR1-E-3: plato writes a DENY into acme's document; alice, acme's administrator, removes it, alone: a DENY of a tenant's document is the tenant's.",
+  "documents": {
+    "platform": {
+      "policies": [
+        {
+          "id": "fence",
+          "boundary": true,
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "*"
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "plato",
+          "subject": {
+            "principal": "plato",
+            "tenant": "(platform)"
+          },
+          "app": "cosec-control",
+          "space": "",
+          "policy": "cosec:platform-admin"
+        }
+      ]
+    },
+    "tenants": {
+      "acme": {
+        "policies": [
+          {
+            "id": "orders",
+            "statements": [
+              {
+                "effect": "allow",
+                "action": "order:*",
+                "resource": "order/**"
+              }
+            ]
+          }
+        ],
+        "bindings": [
+          {
+            "id": "admins",
+            "subject": {
+              "role": "admin"
+            },
+            "app": "cosec-control",
+            "space": "",
+            "policy": "cosec:tenant-admin"
+          },
+          {
+            "id": "ops",
+            "subject": {
+              "role": "ops"
+            },
+            "app": "order",
+            "space": "*",
+            "policy": "orders"
+          }
+        ]
+      }
+    }
+  },
+  "operators": {
+    "alice": {
+      "tenant": "acme",
+      "roles": [
+        "admin"
+      ]
+    },
+    "plato": {
+      "tenant": "(platform)"
+    }
+  },
+  "steps": [
+    {
+      "propose": {
+        "change": "c1",
+        "by": "plato",
+        "document": "tenant:acme",
+        "operations": [
+          {
+            "putPolicy": {
+              "id": "no-delete",
+              "statements": [
+                {
+                  "effect": "deny",
+                  "action": "order:delete",
+                  "resource": "order/**"
+                }
+              ]
+            }
+          },
+          {
+            "putBinding": {
+              "id": "no-delete",
+              "subject": {
+                "role": "ops"
+              },
+              "app": "order",
+              "space": "*",
+              "policy": "no-delete"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "skipShadow": {
+        "change": "c1",
+        "by": "plato"
+      }
+    },
+    {
+      "publish": {
+        "change": "c1",
+        "by": "plato"
+      }
+    },
+    {
+      "propose": {
+        "change": "c2",
+        "by": "alice",
+        "document": "tenant:acme",
+        "operations": [
+          {
+            "removeBinding": "no-delete"
+          },
+          {
+            "removePolicy": "no-delete"
+          }
+        ]
+      }
+    },
+    {
+      "skipShadow": {
+        "change": "c2",
+        "by": "alice"
+      }
+    },
+    {
+      "publish": {
+        "change": "c2",
+        "by": "alice"
+      }
+    }
+  ],
+  "expect": {
+    "steps": [
+      "CHECKED",
+      "READY",
+      "PUBLISHED",
+      "CHECKED",
+      "READY",
+      "PUBLISHED"
+    ],
+    "errors": {
+      "c1": [],
+      "c2": []
+    },
+    "heads": {
+      "tenant:acme": 3
+    }
+  }
+}

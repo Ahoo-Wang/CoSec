@@ -305,6 +305,11 @@ Otherwise it becomes a Deny, or Indeterminate when a boundary statement failed. 
 define makes the request Indeterminate. A boundary can only turn a Permit into a Deny or an Indeterminate: it never
 permits anything, and without boundaries it changes nothing. A request the boundary denies spends no rate limit.
 
+Only a platform principal sets a tenant's boundary (`BDY-2`), so it is the restriction a tenant cannot lift. A DENY
+the platform writes into a tenant's document is advisory: it is the tenant's, and the tenant's administrators may
+remove or relax it as any entry of their document (`CTL-87`). To enforce a restriction on a tenant, use its boundary
+or the platform document.
+
 ## Trust boundaries
 
 Every input to a decision comes either from the verified credential, from your configuration, or from the client.

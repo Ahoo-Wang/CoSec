@@ -53,7 +53,7 @@ val MAX_BREAK_GLASS: java.time.Duration = java.time.Duration.ofHours(24)
  *   one into a boundary or a boundary into a policy (§5.8).
  * - V4 has nothing to check: catalogs declare permission ids, not services, verbs or types (RFC 0004 §4.9). V5's
  *   break-glass rules and the `nomatch` confirmation (ATR-6) are the compiler's; a candidate's boundary must be one the
- *   platform defines (below); protected entries and grants are [ChangeAuthority]'s.
+ *   platform defines (below); grants are [ChangeAuthority]'s.
  *
  * Changing the platform's limits or attributes does not recompile the other documents; it is a warning. So are the two
  * things about a tenant's role that deny nothing but surprise (RFC 0012 §7.5).

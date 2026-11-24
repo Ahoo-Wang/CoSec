@@ -678,9 +678,10 @@ credential `service`.
 
 What the analysis does not see:
 
-- **Protected entries.** A tenant's document cannot mark its entries `protected` yet, so a tenant administrator can
-  remove a DENY the platform placed in the tenant's document and then grant what it denied. Put restrictions on tenant
-  administrators in the platform's or an app's document.
+- **A DENY the platform writes into a tenant's document.** It is advisory: it is the tenant's, and a tenant
+  administrator may remove it and then grant what it denied (`CTL-87`). To enforce a restriction on a tenant, use its
+  boundary, which only a platform principal sets, or the platform's or an app's document
+  ([Platform boundary](../guide/security-model.md#platform-boundary)).
 - **Personal restrictions.** A DENY bound to `Anyone` with a `subject.id` condition limits what that principal may do,
   not what it may grant: the analysis reads `Anyone` DENYs as limiting every grantee alike. Bind the DENY to the
   principal instead.
