@@ -37,7 +37,9 @@ The refresh token carries only its own `jti`, `iat`, `exp`, `cosec.token: "refre
 the `jti` of the access token it belongs to. Token ids come from the application's `IdGenerator` bean if it has one (for example over CosId), otherwise
 from `RandomIdGenerator` ([Ids](../architecture/extending.md#ids)). The lifetimes are
 `cosec.jwt.token-validity.access` (10 minutes) and `cosec.jwt.token-validity.refresh` (7 days), neither past the end
-of the session ([Sessions](#sessions)).
+of the session ([Sessions](#sessions)). A call that asks for its own (`toToken(subject, access, refresh)`) may ask for as
+long or shorter, never longer: a revocation is kept for the longer of the two, plus the skew, so a longer token would be
+valid again once its revocation expired, and `JwtTokenConverter` refuses it, naming the property to raise (`IDN-37`).
 
 **A rejected token is not an error.** An expired, badly signed or revoked token makes the caller anonymous, and the
 policies decide what anonymous callers may do: a public path still works. If the request is denied, the response
