@@ -1,0 +1,16 @@
+# Rule: CTL-56
+# Mutant: an open window's pass writes the record again though it adds no reporter, on every pass of the shadow loop
+# Tests: :control:test --tests me.ahoo.cosec.control.change.ShadowWindowRaceTest
+
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Staging.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Staging.kt
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Staging.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Staging.kt
+@@ -157,7 +157,7 @@ internal class Staging(
+             change
+         } else {
+             flow.transitionUnless(id, ChangeStep.SHADOWED) { current ->
+-                seen(current, state, look)?.takeIf { it.shadow?.reporters != current.shadow?.reporters }
++                seen(current, state, look)
+             } ?: flow.get(id)
+         }
+         val closed = flow.transitionUnless(id, ChangeStep.SHADOWED) { current ->
