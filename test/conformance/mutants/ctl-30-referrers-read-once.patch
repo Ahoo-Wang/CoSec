@@ -1,0 +1,16 @@
+# Rule: CTL-30
+# Mutant: the head write does not read the referrers again: a reference published after the first read lets a removal through
+# Tests: :control:test --tests me.ahoo.cosec.control.change.BoundaryReferencesTest
+
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/store/HeadWriteGate.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/store/HeadWriteGate.kt
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/store/HeadWriteGate.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/store/HeadWriteGate.kt
+@@ -40,7 +40,7 @@ internal class HeadWriteGate(private val referrers: ReferrerIndex) {
+             log.info { "[$key] revision $revision was not written: its precondition no longer holds." }
+             return PublishOutcome.Conflicted(base?.digest)
+         }
+-        return referrers.referenced(key, base, candidate)?.also {
++        return referrers.referenced(key, base, candidate)?.takeIf { false }?.also {
+             log.info { "[$key] revision $revision was not written: a document now refers to what it removes (CTL-30)." }
+         }
+     }
