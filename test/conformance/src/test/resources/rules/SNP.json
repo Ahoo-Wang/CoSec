@@ -444,6 +444,7 @@
         "cocache:StoredRecordMembersTest#a later member crit names refuses that record as a later version's, which is never rewritten",
         "cocache:StoredRecordMembersTest#a later member without crit is dropped by a rewrite, which leaves the same record",
         "control:LaterRecordsTest#a record a later version wrote is a 503 without detail, told as that",
+        "spring-boot:ControlServiceParityTest#a record a later version wrote is a 503 alike through both implementations - CTL-77",
         "control:LaterRecordsTest#a later record is told at WARN once per interval, and a broken store is not told as one"
       ],
       "pending": null

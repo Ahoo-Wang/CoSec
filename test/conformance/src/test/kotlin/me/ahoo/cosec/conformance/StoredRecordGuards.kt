@@ -36,6 +36,7 @@ internal object StoredRecordGuards {
         "${RECORDS}a later member crit names refuses that record as a later version's, which is never rewritten",
         "${RECORDS}a later member without crit is dropped by a rewrite, which leaves the same record",
         "control:LaterRecordsTest#a record a later version wrote is a 503 without detail, told as that",
+        "spring-boot:ControlServiceParityTest#a record a later version wrote is a 503 alike through both implementations - CTL-77",
         "control:LaterRecordsTest#a later record is told at WARN once per interval, and a broken store is not told as one",
         // SNP-28: every member of a kind of record registered, with its absence and its two ways to widen, apart.
         "${MEMBERS}the registry names every member the codec writes, and only those",
