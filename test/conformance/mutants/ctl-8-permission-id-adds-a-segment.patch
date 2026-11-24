@@ -1,0 +1,17 @@
+# Rule: CTL-8
+# Mutant: every perm: id is exempt from the no-slash rule, so perm:<app>/a/b walks out of a rule that ends in perm:<app>/ and a *
+# Tests: :control:test --tests me.ahoo.cosec.control.change.EntryIdsTest
+
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/EntryChecks.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/EntryChecks.kt
+index 41a1eb577..267bd04a2 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/EntryChecks.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/EntryChecks.kt
+@@ -99,7 +99,7 @@ internal object EntryChecks {
+ 
+     /** What of a policy id must hold no `/`: all of it, or a permission policy's `<permission>` after `perm:<app>/`. */
+     private fun permissionName(id: String): String =
+-        if (id.startsWith(PolicyDocumentCompiler.PERMISSION_PREFIX)) id.substringAfter('/', "") else id
++        if (id.startsWith(PolicyDocumentCompiler.PERMISSION_PREFIX)) "" else id
+ 
+     /**
+      * Every app the candidate names is an app id (SCP-10): the document format takes any id but `*` in a binding's
