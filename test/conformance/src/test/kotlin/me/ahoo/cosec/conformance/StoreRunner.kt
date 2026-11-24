@@ -185,9 +185,7 @@ object StoreRunner : ScenarioRunner {
             writes = store.writes,
             history = if (scenario.node.get("history")?.bool() == true) historyOf(revisions, key) else null,
             lost = if (scenario.node.get("lost")?.bool() == true) {
-                memory.lostRevisions(
-                    key
-                ).map { it.revision }
+                memory.lostRevisions(key).map { it.revision }
             } else {
                 null
             },
