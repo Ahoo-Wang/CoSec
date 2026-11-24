@@ -477,6 +477,15 @@ This instance runs the control plane, and cosec.control.service-url names a cont
 
 实例带有 `cosec-control`（和 `cosec-cocache`）且控制面开启，同时又设置了 `cosec.control.service-url`。一个应用只有一个 `ControlService`：运行控制面时是进程内实现，调用控制面宿主时是 HTTP 实现。要内嵌控制面，删掉 `cosec.control.service-url`；要调用宿主，设置 `cosec.control.enabled=false`（或不引入 `cosec-control`）。`cosec.control.service-url needs cosec-control-http` 表示已指定宿主却缺少调用它的模块：添加 `me.ahoo.cosec:cosec-control-http`。
 
+### 经 HTTP 的控制调用因客户端或应答失败 {#a-control-call-over-http-fails-on-its-client-or-its-answer}
+
+```text
+The control API's client follows redirects: a redirect is a refusal, and one followed would send CoSec-Identity where it points. ...
+The control plane's answer is over 20971520 bytes (... read or declared): no answer of the control API is that large, so it is not read.
+```
+
+第一条是 `HttpControlService` 拒绝了传给它的 `HttpClient`（`CTL-77`）：用 `followRedirects(NORMAL)` 或 `ALWAYS` 构造的客户端，会把宿主不经签名就相信的 `CoSec-Identity` 再发到重定向指向的任何地方。用 `followRedirects(HttpClient.Redirect.NEVER)`（JDK 的默认值）构造它。第二条是某次调用的应答超过 20 MB（控制路由最多读取的请求体的两倍）时抛出的 `IOException`：没有哪个控制面宿主会答这么多，所以在服务 URL 上应答的是别的东西。检查 `cosec.control.service-url` 以及中间的代理。
+
 ### 两个 problem 渲染器导致启动失败 {#startup-fails-on-two-problem-renderers}
 
 ```text

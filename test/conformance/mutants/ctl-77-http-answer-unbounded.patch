@@ -1,0 +1,17 @@
+# Rule: CTL-77
+# Mutant: the HTTP facade reads an answer of any size
+# Tests: :control-http:test --tests me.ahoo.cosec.control.http.HttpControlServiceTest
+
+diff --git a/extensions/control-http/src/main/kotlin/me/ahoo/cosec/control/http/HttpTransport.kt b/extensions/control-http/src/main/kotlin/me/ahoo/cosec/control/http/HttpTransport.kt
+index 0000000..0000000 100644
+--- a/extensions/control-http/src/main/kotlin/me/ahoo/cosec/control/http/HttpTransport.kt
++++ b/extensions/control-http/src/main/kotlin/me/ahoo/cosec/control/http/HttpTransport.kt
+@@ -58,7 +58,7 @@ internal class HttpTransport(
+      */
+     private val issuer = IdentityIssuer(clock = clock, relay = true)
+ 
+-    private val answer = BoundedAnswer(maxAnswerBytes)
++    private val answer = BoundedAnswer(Long.MAX_VALUE)
+ 
+     init {
+         require(baseUri.isAbsolute && baseUri.scheme in SCHEMES) { "The control API's base is an http or https URI." }

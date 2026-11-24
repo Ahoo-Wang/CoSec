@@ -43,6 +43,7 @@ import java.net.InetAddress
 import java.net.InetSocketAddress
 import java.net.ServerSocket
 import java.net.URI
+import java.net.http.HttpClient
 import java.net.http.HttpTimeoutException
 import java.time.Duration
 import java.time.Instant
@@ -69,6 +70,10 @@ class HttpControlServiceTest {
     private var hold = false
     private val release = CountDownLatch(1)
 
+    /** Whether the server sends its answer without a `Content-Length`, in chunks. */
+    @Volatile
+    private var chunked = false
+
     /** Set as the server sends a response: what proves that a call ended before the server answered it. */
     private val answered = AtomicBoolean(false)
 
@@ -87,7 +92,7 @@ class HttpControlServiceTest {
             val bytes = text.encodeToByteArray()
             exchange.responseHeaders.add("Content-Type", "application/json")
             if (status in 300..399) exchange.responseHeaders.add("Location", "http://elsewhere.example/")
-            exchange.sendResponseHeaders(status, bytes.size.toLong())
+            exchange.sendResponseHeaders(status, if (chunked) 0 else bytes.size.toLong())
             exchange.responseBody.use { it.write(bytes) }
         }
         start()
@@ -273,6 +278,42 @@ class HttpControlServiceTest {
         val nowhere = HttpControlService(URI("http://127.0.0.1:$port/cosec/control/v1"))
         val failure = assertThrownBy<IOException> { runBlocking { nowhere.document(iam, acme) } }.actual()
         failure.assert().isInstanceOf(ConnectException::class.java)
+    }
+
+    /** DR1-F-17: a followed redirect would send `CoSec-Identity`, which the host believes unsigned, where it points. */
+    @Test
+    fun `a client that follows redirects is refused when the service is made`() {
+        val base = URI("http://127.0.0.1:${server.address.port}/cosec/control/v1")
+        listOf(HttpClient.Redirect.NORMAL, HttpClient.Redirect.ALWAYS).forEach { redirect ->
+            val client = HttpClient.newBuilder().followRedirects(redirect).build()
+            assertThrownBy<IllegalArgumentException> { HttpControlService(base, client) }
+                .message().contains("followRedirects(HttpClient.Redirect.NEVER)")
+        }
+        val never = HttpClient.newBuilder().followRedirects(HttpClient.Redirect.NEVER).build()
+        runBlocking { HttpControlService(base, never).document(iam, acme) }.assert().isEqualTo("{}")
+    }
+
+    /** DR1-F-17: an answer is read up to a bound, declared or sent in chunks, whatever its status. */
+    @Test
+    fun `an answer over the bound fails the call as soon as it is over`() {
+        val bounded = HttpTransport(
+            URI("http://127.0.0.1:${server.address.port}/cosec/control/v1"),
+            HttpClient.newHttpClient(),
+            HttpControlService.DEFAULT_TIMEOUT,
+            HttpControlService.CONTROL_APP,
+            maxAnswerBytes = 16,
+        )
+        for (sentInChunks in listOf(false, true)) {
+            chunked = sentInChunks
+            for (status in listOf(200, 409)) {
+                answer = status to "x".repeat(17)
+                assertThrownBy<IOException> { runBlocking { bounded.document(iam, acme) } }
+                    .message().describedAs("chunked $sentInChunks, $status").contains("over 16 bytes")
+            }
+            answer = 200 to "x".repeat(16)
+            runBlocking { bounded.document(iam, acme) }.assert().isEqualTo("x".repeat(16))
+        }
+        HttpControlService.MAX_ANSWER_BYTES.assert().isEqualTo(20L * 1024 * 1024)
     }
 
     @Test

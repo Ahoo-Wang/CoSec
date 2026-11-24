@@ -60,6 +60,11 @@ internal object DocumentJson {
 
     fun content(node: JsonNode): DocumentContent {
         node.only("document", members("document"))
+        // The format this layer reads, and nothing else (DR1-F-16): a later schema may give a member another meaning.
+        val schema = node.need("schema")
+        if (!schema.isIntegralNumber || !schema.canConvertToLong() || schema.longValue() != SCHEMA.toLong()) {
+            throw WireJson.format("[schema] is not $SCHEMA, the format this version reads")
+        }
         return DocumentContent(
             policies = node.array("policies").map(::policy),
             bindings = node.array("bindings").map(::binding),

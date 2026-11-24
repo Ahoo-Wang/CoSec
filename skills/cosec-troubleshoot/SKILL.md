@@ -714,6 +714,9 @@ declared types must match on every instance and the control host; the change is 
 - `This instance runs the control plane, and cosec.control.service-url names a control-plane host as well` (`STA-11`):
   one `ControlService` per application. Remove `cosec.control.service-url` to embed, or set `cosec.control.enabled=false`
   to call the host. `cosec.control.service-url needs cosec-control-http`: add `me.ahoo.cosec:cosec-control-http`.
+- `The control API's client follows redirects` (`CTL-77`): `HttpControlService` was given an `HttpClient` that follows
+  redirects, which would resend `CoSec-Identity` where one points; build it with `followRedirects(NEVER)`. `The control
+  plane's answer is over 20971520 bytes`: something other than a control-plane host answered at the service URL.
   https://cosec.ahoo.me/operations/troubleshooting#startup-fails-on-two-control-services
 
 ### The typed control client does not read a document

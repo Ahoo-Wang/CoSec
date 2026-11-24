@@ -90,7 +90,9 @@ internal class PublishWithoutShadow(
 
     /**
      * Abandons the holder [heldBy] when it was left by a writer that died: a change of the same author as [proposed],
-     * left before it published (`CHECKED`, `SHADOWING`, `READY`), and not updated for at least the patience. Every
+     * left before it published (`CHECKED`, `SHADOWING`, `READY`), with no approval and no shadow window (a writer of
+     * this kind records neither, so a holder with one is a person's work, which an abandon would lose silently,
+     * DR1-F-15), and not updated for at least the patience. Every
      * writer of this kind abandons its own change once its patience is spent, so a holder that old has no writer left;
      * a younger one may be a live writer's, another replica acting as the same principal, and is waited for. Both times
      * are the control plane's (the holder's `updatedAt`, [proposed]'s `createdAt`), never this process's clock. Anything
@@ -100,13 +102,21 @@ internal class PublishWithoutShadow(
         if (heldBy == null || heldBy == proposed.id) return
         try {
             val holder = client.change(caller, heldBy)
-            if (holder.author == proposed.author && holder.state in LEFT_HALFWAY && abandonedBy(holder, proposed)) {
+            if (holder.author == proposed.author && leftHalfway(holder) && abandonedBy(holder, proposed)) {
                 client.abandon(caller, holder.id)
             }
         } catch (_: ControlRefusedException) {
             // Not readable, or no longer abandonable: waited for like any other holder.
         }
     }
+
+    /**
+     * Whether [holder] is what a writer of this kind leaves when it dies: before it published, never approved and never
+     * shadowed. An approval or a window, open or closed, is evidence a person or live traffic gave; it is never thrown
+     * away to free a slot.
+     */
+    private fun leftHalfway(holder: Change): Boolean =
+        holder.state in LEFT_HALFWAY && holder.approval == null && holder.shadow == null
 
     /** Whether [holder] has not been updated for a whole patience before [proposed] was made: its writer gave up or died. */
     private fun abandonedBy(holder: Change, proposed: Change): Boolean =

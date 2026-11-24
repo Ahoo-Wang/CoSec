@@ -389,7 +389,10 @@ reach its service port. A request's principal whose authenticator named no crede
 and is refused before anything is sent.
 
 Over the network, only a `2xx` is an answer: any other status, a redirect or a proxy's error page included, is a
-`ControlRefusedException` with that status and body. A call waits for its answer 30 seconds by default (the `timeout` of
+`ControlRefusedException` with that status and body. A client that follows redirects is refused when `HttpControlService`
+is made: a followed redirect would send `CoSec-Identity`, which the host believes unsigned, where it points. An answer
+is read up to 20 MB, twice the largest body a control route reads; a larger one fails the call with an `IOException`
+as soon as it is over. A call waits for its answer 30 seconds by default (the `timeout` of
 `HttpControlService`) and then throws `HttpTimeoutException`. The outcome of a write that timed out is unknown, so read
 the change or the document again before retrying. A change it left staged is taken over by the next
 `proposeAndPublishWithoutShadow` of the same principal after one patience. Any other failure of the connection is the
@@ -426,7 +429,8 @@ fun controlService(sslContext: SSLContext): ControlService = HttpControlService(
     request stands behind. Your code states the principal and its roles, and the control plane believes them, as it
     believes any code in its own process: that code holds the control store's write account anyway. What is believed
     is who acts, never what that principal may do. The policies still decide each call for it, with the bindings the
-    platform document gives it, and the record names it.
+    platform document gives it, and the record names it. The principal and roles are held when the caller is made to
+    what `CoSec-Identity` carries: a principal that is not blank, no empty role, no unpaired surrogate.
   - Stating a platform administrator, either way, does not make the call the trust root's (`CTL-81`): through
     `ControlService` every change is analyzed. A service that writes what it already decided gets the authority it
     needs from the policies, such as the [role class](../policies/testing.md#the-role-class) for roles it projects into
@@ -463,16 +467,17 @@ and answers it (`CTL-76`), over either implementation of `ControlService`. Docum
 or `ApplyRequest` for `:apply`; an answer is a `Change`, a `DocumentHead` or a `Page`. Conditions and rate limit rules
 stay JSON (`Condition.of`, `RateLimitRule.of`): the control plane checks them when the change is proposed. A closed set
 (`ChangeState`, `Effect`, `ConflictKind`, ...) keeps a value a later host adds as unknown, with its text; a document
-entry with a member this version does not know does not read at all, since applying what was read would drop it.
-`ControlRefusedException.conflict` says which conflict a 409 is.
+entry with a member this version does not know does not read at all, since applying what was read would drop it, and
+neither does a document whose `schema` is not 2. `ControlRefusedException.conflict` says which conflict a 409 is.
 
 `proposeAndPublishWithoutShadow` is what a service that writes what it already decided does for each write: it
 proposes on the document's head, skips the shadow window and publishes. It needs `cosec:skip-shadow` beside
 `cosec:write`. A head that moved is read again and the change proposed again; a slot another change holds is waited
 out, within the patience it is given; concurrent writers acting as one principal, such as a service's replicas, wait
 for each other the same way. A writer that died leaves its change holding the slot (`ControlRefusedException.heldBy`
-names it): a change of the same author, left `CHECKED`, `SHADOWING` or `READY` and not updated for at least the patience
-(by the control plane's times), is abandoned and the slot taken. A dead writer so holds the document for one patience,
+names it): a change of the same author, left `CHECKED`, `SHADOWING` or `READY`, never approved and never shadowed, and not updated
+for at least the patience (by the control plane's times), is abandoned and the slot taken. An approved or shadowed
+holder is a person's work, or live traffic's, and is waited for like any other. A dead writer so holds the document for one patience,
 and the next write takes it over; give every writer of one principal the same patience. It answers the published change, or one that waits for a
 person; a change the control plane refuses when it is proposed (a finding such as `REFERENCES`) is abandoned at once and
 answered `ABANDONED` with its findings; when it gives up it throws the refusal, having abandoned the change it proposed.
