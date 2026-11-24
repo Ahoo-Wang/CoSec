@@ -588,6 +588,8 @@ class ApiKeyMigrationTest {
             """{$base,"enabled":"yes"}""" to "enabled",
             """{$base,"expiresAt":"tomorrow"}""" to "expiresAt",
             """{"id":"k1","principalId":7,"tenantId":"acme"}""" to "principalId",
+            """{"id":"k1","principalId":"alice","tenantId":1}""" to "tenantId",
+            """{"id":["k1"],"principalId":"alice"}""" to "id",
         ).forEach { (json, member) ->
             assertThrows<IllegalArgumentException> { LegacyApiKey.parse("h", json) }.message.assert()
                 .describedAs(json).contains(member)
