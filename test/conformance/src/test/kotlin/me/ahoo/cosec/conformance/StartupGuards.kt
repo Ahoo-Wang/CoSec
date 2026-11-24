@@ -100,6 +100,7 @@ object StartupGuards {
         // STA-10: the control plane as an image.
         "control-server:ControlServerRefusalsTest#the image's own defaults, and nothing written, are accepted",
         "control-server:ControlServerRefusalsTest#a control server with the control plane off is an empty application that is up, so it is refused",
+        "control-server:ControlServerRefusalsTest#settings that leave the control server serving nothing are refused like the control plane off",
         "control-server:ControlServerRefusalsTest#credential verification is refused because the host believes the identity it is sent",
         "control-server:ControlServerTest#it does not start until the operator states what can reach it",
         "control-server:ControlServerTest#it starts under the statement, with the control plane wired and nothing that verifies a credential",

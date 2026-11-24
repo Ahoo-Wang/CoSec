@@ -475,7 +475,7 @@ FAIL reached the control host at 10.244.0.7:8080 from a pod no NetworkPolicy adm
 cosec-control-server verifies no credential and issues no token: it believes the CoSec-Identity header it is sent, under the statement that nothing but the gateway and the services you name can reach it. cosec.jwt.enabled=true would wire verification or a login that nothing here uses ... (STA-10)
 ```
 
-`cosec-control` 镜像拒绝把 `cosec.jwt.enabled`、`cosec.api-key.enabled` 和 `cosec.authentication.login.enabled` 设为 `true`，也拒绝 `cosec.control.enabled=false`（`cosec-control-server runs the control plane`）：它不校验凭证，也不签发令牌；没有控制面，它会处于运行状态却什么都不提供。删掉这个键。会校验令牌或让人登录的控制面，是你自己的、带 `cosec-control` 的应用；网关镜像才是只读的那个。
+`cosec-control` 镜像拒绝把 `cosec.jwt.enabled`、`cosec.api-key.enabled` 和 `cosec.authentication.login.enabled` 设为 `true`，也拒绝 `cosec.control.enabled=false`（`cosec-control-server runs the control plane`）：它不校验凭证，也不签发令牌；没有控制面，它会处于运行状态却什么都不提供。效果相同的设置它也拒绝：`cosec.enabled=false`、`cosec.control.http.enabled=false`（没有任何控制路由，服务端口的也没有）、`cosec.pipeline.mode=gateway` 和 `cosec.pipeline.caller=credential`，消息里会点名是哪一个。删掉这个键。会校验令牌或让人登录的控制面，是你自己的、带 `cosec-control` 的应用；网关镜像才是只读的那个。
 
 ### 两个控制服务导致启动失败 {#startup-fails-on-two-control-services}
 
