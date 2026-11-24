@@ -5,8 +5,8 @@
 diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/store/LostRevisions.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/store/LostRevisions.kt
 --- a/core/control/src/main/kotlin/me/ahoo/cosec/control/store/LostRevisions.kt
 +++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/store/LostRevisions.kt
-@@ -28,5 +28,5 @@ import me.ahoo.cosec.spi.snapshot.SnapshotKey
- suspend fun ControlStore.lostRevisions(key: SnapshotKey): List<RevisionEntry> {
+@@ -34,5 +34,5 @@ suspend fun ControlStore.lostRevisions(key: SnapshotKey): List<RevisionEntry> {
+     // The index first, then the head: see above.
      val index = index(key)?.value ?: return emptyList()
      val head = head(key) ?: return emptyList()
 -    return index.entries.filter { it.revision > head.document.revision }
