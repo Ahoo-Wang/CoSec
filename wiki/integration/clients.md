@@ -241,9 +241,6 @@ endpoint and stores the pair it answers; it never rewrites a header ([Apps](./au
   refusal, which leaves the session as it was. `cosec-fetcher`'s `JwtTokenManager.switchTenant({ endpoint })` (with a
   `CoSecTenantSwitcher` of the configured `Fetcher`) does all of this: it presents the stored pair under the lock refreshes
   take, refreshing an expired access token first, removes the pair on a `401`, and stores the answer as one write.
-- **After a switch, the login's session stays live at the server.** A logout ends the pair it is given, so logging out of
-  a switched session leaves the session it was switched from refreshable until it ends, at the latest when its refresh
-  token expires, and the client no longer holds its pair. Ending that session ends the switched one too (`IDN-36`).
 
 ## CORS
 

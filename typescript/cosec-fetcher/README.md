@@ -165,8 +165,7 @@ It presents the session's current pair (the access token in `Authorization` and 
 refreshes take, so no refresh replaces it on the way; an expired access token is refreshed first. The pair it answers
 is stored in one write. A `401` from the route ends the session (the pair is removed, `onUnauthorized` is called once,
 `TenantSwitchError` with `sessionEnded`); anything else, the application's own refusal, a `503` or no answer, keeps the
-session and is not retried. Calling it again is safe: a switch does not rotate the pair it is presented with. The
-session switched from stays live at the server, and `logout()` ends the switched one only.
+session and is not retried. Calling it again is safe: a switch does not rotate the pair it is presented with.
 
 ## What the CoSec 8.0 application must allow
 

@@ -631,9 +631,6 @@ export class JwtTokenManager implements RefreshTokenStatusCapable {
    *   sign-in elsewhere), nothing is stored and it rejects with
    *   {@link RefreshSessionChangedError}.
    *
-   * The session switched from stays live at the server: a later
-   * {@link JwtTokenManager.logout} ends the switched session only.
-   *
    * @throws TenantSwitchError when the switch issued nothing that was stored
    * @throws RefreshSessionChangedError when the stored session changed during the switch
    */

@@ -260,8 +260,7 @@ What it does (`JwtTokenManager.switchTenant`, from the code and its tests agains
 
 The application's route must answer a refused pair `401` and its own refusal with any other status (the client reads a
 `401` as the end of the session), as `test/client-host`'s `/auth/switch/{tenant}` does. A switched session keeps the
-login time, so it ends when the login's would. The session switched from stays live at the server: `logout()`
-afterwards ends the switched session only, and the client no longer holds the other pair.
+login time, so it ends when the login's would.
 
 ## React
 
