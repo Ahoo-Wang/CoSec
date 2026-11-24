@@ -156,7 +156,7 @@ the latest when the refresh token expires. Use `tokenStorage.signOut()` alone on
 
 ## What CoSec answers
 
-A refusal is `application/problem+json` with `type` (`COSEC_PROBLEM_TYPE_PREFIX` and the slug), `title`, `status`,
+A refusal is `application/problem+json` with `type` (CoSec's problems URI, ending in the slug), `title`, `status`,
 `code`, `requestId` (and `traceId` when traced). Decide on the slug (`getCoSecProblem(error)?.slug`, compared with
 `CoSecProblemType`), never on `title`, and give a slug you do not know the default of its status class: types are
 added in minor releases. What the packages do, and what is left to the application:
