@@ -577,7 +577,8 @@
         "login:SwitchedLogoutTest#a refresh of the login that read it before the logout cannot write it back live",
         "login:SwitchedLogoutTest#a refresh of the login that writes between the logout's read and write is followed by the revocation",
         "login:SwitchedLogoutTest#two sessions of one login logging out at once both end it",
-        "login:SwitchedLogoutTest#a switch from the login that keeps it before the logout writes issues a session that ends at its refresh"
+        "login:SwitchedLogoutTest#a switch from the login that keeps it before the logout writes issues a session that ends at its refresh",
+        "login:SwitchedLogoutTest#a root that keeps changing fails the logout before the session or the token is touched"
       ]
     }
   ]

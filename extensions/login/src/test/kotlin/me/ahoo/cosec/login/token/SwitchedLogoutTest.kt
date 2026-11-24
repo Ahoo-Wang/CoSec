@@ -23,6 +23,7 @@ import io.mockk.mockk
 import kotlinx.coroutines.test.runTest
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.api.token.CompositeToken
+import me.ahoo.cosec.login.route.LogoutRoute
 import me.ahoo.cosec.model.PrincipalId
 import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.runtime.token.TokenRevocation
@@ -62,11 +63,18 @@ class SwitchedLogoutTest {
         var failRead: String? = null
         var failReplace: String? = null
 
+        /** A record another writer moves between every read of it and the write that follows. */
+        var churn: String? = null
+
         override suspend fun create(family: TokenFamily): Boolean = delegate.create(family)
 
         override suspend fun read(id: String): TokenFamilyStore.Read? {
             check(id != failRead) { "Redis is unreachable" }
-            return delegate.read(id)
+            val read = delegate.read(id)
+            if (read != null && id == churn) {
+                delegate.replace(read.version, read.family.rotated(read.family.authTime)).assert().isTrue()
+            }
+            return read
         }
 
         override suspend fun replace(version: String, next: TokenFamily): Boolean {
@@ -309,6 +317,29 @@ class SwitchedLogoutTest {
     }
 
     // --- Concurrency: no write brings the login back ---------------------------------------------------------------
+
+    /** The `500` of the answers: a root that changes under every attempt, eight times, is an error, never a done. */
+    @Test
+    fun `a root that keeps changing fails the logout before the session or the token is touched`() = runTest {
+        val login = families.start(acme, alice).session
+        val switched = switched(login, acme, beta)
+        store.churn = login.id
+
+        assertThrows<IllegalStateException> { logout(switched, beta) }.message.assert().contains("kept changing")
+        family(login.id).revoked.assert().isFalse()
+        family(switched.id).revoked.assert().isFalse()
+        tokens.revokedTokens.assert().isEmpty()
+
+        every { verifier.refresh(any()) } returns token(switched, beta)
+        val answer = LogoutRoute(revoker).answer(
+            "application/json",
+            """{"accessToken":"a","refreshToken":"r"}""".encodeToByteArray(),
+            "request-1"
+        )
+        answer.status.assert().isEqualTo(500)
+        family(switched.id).revoked.assert().isFalse()
+        tokens.revokedTokens.assert().isEmpty()
+    }
 
     @Test
     fun `a refresh of the login that read it before the logout cannot write it back live`() = runTest {
