@@ -13,9 +13,9 @@
   -->
 
 <!--
-  The architecture tests import every module's classes with ArchUnit, which logs each import at DEBUG: under Logback's
-  default configuration (this project, being test-only, gets no -Dlogback.configurationFile) a run wrote about 2 GB of
-  output, all of it carried to the build process through the test worker's connection. INFO says what a rule reports.
+  The architecture tests' logging (test/architecture/build.gradle.kts). They import every module's classes with ArchUnit,
+  which logs each import at DEBUG and TRACE: under config/logback.xml, root TRACE, one run wrote about 2 GB of output, all of
+  it carried to the build process through the test worker's connection. INFO says what a rule reports.
 -->
 <configuration>
     <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">

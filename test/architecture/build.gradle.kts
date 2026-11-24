@@ -52,6 +52,11 @@ val publishedDescriptors = publishedProjects.joinToString(";") { published ->
 }
 
 tasks.named<Test>("test") {
+    // Not config/logback.xml, which the root build gives every test task: its TRACE made ArchUnit write about 2 GB a run.
+    // An OutOfMemoryError ends the worker instead of only the thread it was thrown in: a worker that lost a thread of its
+    // connection to the build is how a run can wait for ever.
+    systemProperty("logback.configurationFile", "${rootProject.rootDir}/config/logback-architecture.xml")
+    jvmArgs("-XX:+ExitOnOutOfMemoryError")
     systemProperty("cosec.projects", projectDirectories)
     systemProperty("cosec.published", publishedDescriptors)
     val descriptorTasks = provider {
