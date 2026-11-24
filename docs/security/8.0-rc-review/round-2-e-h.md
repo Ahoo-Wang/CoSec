@@ -40,11 +40,11 @@ No S1.
 
 **Round 1's fixes.** Of round 1's 52 findings in these areas:
 
-- 40 are closed, and none of those fixes was found to weaken a decision.
-- 5 are closed only in part. Four of them leave a part that is a new finding below: DR1-F-1 is DR2-F-1; DR1-E-1 is
-  DR2-E-1; DR1-E-2 and DR1-F-6 are DR2-E-2. The fifth, DR1-F-22, has three of its four rule texts not yet reworded.
-- 5 S4s are unchanged, and the coordinator has not sorted them yet: E-12, E-13, E-14, F-14 and F-23.
-- 2 S4s were deferred to 8.1 on purpose: G-3 and H-3.
+- 42 are closed, and none of those fixes was found to weaken a decision. Two of them, E-12 and F-22, were closed by
+  rewording rule texts.
+- 4 are closed only in part, and each part left open is a new finding below: DR1-F-1 is DR2-F-1; DR1-E-1 is DR2-E-1;
+  DR1-E-2 and DR1-F-6 are DR2-E-2.
+- 6 S4s were deferred to 8.1 on purpose (`docs/roadmap.md` §7): E-13, E-14, F-14, F-23, G-3 and H-3.
 
 **New findings.** Two S2s, two S3s and two S4s.
 
@@ -143,8 +143,8 @@ change records are 8.0-only.
 Each row gives the round-1 finding, the commit or commits that address it, and a verdict:
 
 - **closed:** the trigger, walked again on the current code, no longer has the round-1 effect, and a guard tests it;
+  for a finding about a rule text, the text now says what the code does;
 - **partly:** something stays open, and the row names the new finding that describes it;
-- **open:** unchanged;
 - **deferred:** left for later on purpose.
 
 ### Area E: the change flow
@@ -159,9 +159,9 @@ Each row gives the round-1 finding, the commit or commits that address it, and a
 | DR1-E-6 | `785f8378` | **closed.** A shadow pass writes reporters only to the window it read (`Staging.seen` returns null for another window), through `transitionUnless`, and unions them |
 | DR1-E-7 | `26232913` | **closed** |
 | DR1-E-8, E-15 | `e51836dd` | **closed** |
-| DR1-E-12 S4 · `APR-6` contradicts `CTL-48` | none | **open**, not yet sorted. The code is unchanged |
-| DR1-E-13 S4 · soundness checked against an oracle | none | **open**, not yet sorted. No grant test runs `CoSecEngine` or compiles a snapshot |
-| DR1-E-14 S4 · a personal DENY through `Anyone` | none | **open**, not yet sorted. `GrantorRights.hold` still drops every `Anyone` DENY |
+| DR1-E-12 S4 · `APR-6` contradicts `CTL-48` | #1960 (rule text) | **closed** (rule text). The S4 triage settled it as a text change, and `APR-6` (with `GRT-2`) now states `CTL-48`'s one informational entry per policy. The code is unchanged, as intended |
+| DR1-E-13 S4 · soundness checked against an oracle | none | **deferred** to 8.1 (`docs/roadmap.md` §7). No grant test runs `CoSecEngine` or compiles a snapshot yet |
+| DR1-E-14 S4 · a personal DENY through `Anyone` | none | **deferred** to 8.1 (`docs/roadmap.md` §7). `GrantorRights.hold` still drops every `Anyone` DENY |
 
 ### Area F: the control surface and store
 
@@ -178,11 +178,11 @@ Each row gives the round-1 finding, the commit or commits that address it, and a
 | DR1-F-9 S4 · a removal and a new referrer both publish | `fa9dd22e` | **closed.** `HeadWriteGate` reads the referrers again just before the head write |
 | DR1-F-10 S4 · `SharedRead` waiters repeat a failing load | `9e4e739f` | **closed.** A failing load is no longer repeated by each waiter in turn |
 | DR1-F-11, F-12, F-13 | `e51836dd` | **closed** |
-| DR1-F-14 S4 · internal faults read as 400 | none | **open**, not yet sorted. `ControlHttp.handle` still maps every `IllegalArgumentException` to 400 |
+| DR1-F-14 S4 · internal faults read as 400 | none | **deferred** to 8.1 (`docs/roadmap.md` §7). `ControlHttp.handle` still maps every `IllegalArgumentException` to 400 |
 | DR1-F-15, F-16, F-17, F-18, F-20, F-21 | `71cc231c` | **closed.** F-17: `HttpTransport` refuses a client that follows redirects, and `BoundedAnswer` refuses a declared or read body over the cap (an error delivered before `onSubscribe` completes `ofString`'s future, as the JDK's subscriber allows). F-18: ids are checked in `ControlCaller.service`. F-20 and F-21 are bounded and refused in the store |
 | DR1-F-19 S4 · `ControlServerRefusals` | `00d994be` | **closed** |
-| DR1-F-22 S4 · rule texts the code contradicts | `71cc231c` (part c) | **partly.** `IDN-34` is reworded. `CTL-78`, `CTL-82` and RFC 0007 §5.2 are not yet sorted |
-| DR1-F-23 S4 · no test of `apply` of a converted document | none | **open**, not yet sorted |
+| DR1-F-22 S4 · rule texts the code contradicts | #1959, #1960, #1893, #1974 | **closed** (rule text). `IDN-34` reworded in #1959, `CTL-78` in #1960, `CTL-82`'s statement rewritten in #1893 (the triage records it as already covered), RFC 0007 §5.2 in #1974 |
+| DR1-F-23 S4 · no test of `apply` of a converted document | none | **deferred** to 8.1 (`docs/roadmap.md` §7) |
 
 ### Area G: the host
 
