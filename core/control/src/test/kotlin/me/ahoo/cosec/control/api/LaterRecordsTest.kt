@@ -68,7 +68,7 @@ class LaterRecordsTest {
             )
         }.id
         fixture.later += id
-        fixture.laterIndex += SnapshotKey.Tenant("acme")
+        fixture.laterIndex[SnapshotKey.Tenant("acme")] = { it }
         val logger = LoggerFactory.getLogger("me.ahoo.cosec.control") as Logger
         val level = logger.level
         val logged = ListAppender<ILoggingEvent>().also { it.start() }
@@ -97,6 +97,47 @@ class LaterRecordsTest {
         "decoding",
         SnapshotFormatException("later", StoredFormat.Later(StoredRecord.CHANGE, listOf("device"))),
     )
+
+    /** However the refusal reaches the control API, wrapped as an argument error or as any failure, it is a 503. */
+    @Test
+    fun `a record a later version wrote is a 503 however its refusal comes wrapped`() {
+        val wrappers = listOf<(SnapshotFormatException) -> Exception>(
+            { IllegalArgumentException("decoding", it) },
+            { IllegalStateException("decoding", it) },
+        )
+        for (wrapped in wrappers) {
+            fixture.laterIndex[SnapshotKey.Tenant("acme")] = wrapped
+            val (status, problem) = call("/documents/tenant:acme/revisions", alice)
+            status.assert().isEqualTo(503)
+            problem.get("code").asString().assert().isEqualTo("UNAVAILABLE")
+            problem.has("detail").assert().isFalse()
+        }
+        // Without the marker, the same wrappers are what they were: the caller's 400, and a fault of this instance.
+        fixture.laterIndex[SnapshotKey.Tenant("acme")] = { IllegalArgumentException("decoding") }
+        call("/documents/tenant:acme/revisions", alice).first.assert().isEqualTo(400)
+        fixture.laterIndex[SnapshotKey.Tenant("acme")] = { IllegalStateException("decoding") }
+        call("/documents/tenant:acme/revisions", alice).first.assert().isEqualTo(500)
+    }
+
+    /** A later format names no member and, read where the kind of record is not known, no record. */
+    @Test
+    fun `a later format is told without members or a record`() {
+        val logger = LoggerFactory.getLogger("me.ahoo.cosec.control") as Logger
+        val level = logger.level
+        val logged = ListAppender<ILoggingEvent>().also { it.start() }
+        logger.addAppender(logged)
+        logger.level = Level.DEBUG
+        try {
+            val format = SnapshotFormatException("later", StoredFormat.Later(null, emptyList()))
+            LaterRecords.told("call", format).assert().isTrue()
+        } finally {
+            logger.level = level
+            logger.detachAppender(logged)
+        }
+        logged.captured().single().formattedMessage.assert().startsWith(
+            "call is 503: a later CoSec wrote a stored record, which this instance does not read and never rewrites;"
+        )
+    }
 
     @Test
     fun `a later record is told at WARN once per interval, and a broken store is not told as one`() {

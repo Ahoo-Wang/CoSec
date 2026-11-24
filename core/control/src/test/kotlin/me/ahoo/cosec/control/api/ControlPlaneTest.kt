@@ -104,8 +104,11 @@ class ControlPlaneTest {
     /** Changes whose stored record a later version wrote, with a member its `crit` names (SNP-27). */
     val later = HashSet<ChangeId>()
 
-    /** Documents whose revision index a later version wrote (SNP-27): refused by its codec, unwrapped. */
-    val laterIndex = HashSet<SnapshotKey>()
+    /**
+     * Documents whose revision index a later version wrote (SNP-27), with how the store hands on its codec's refusal:
+     * as it is, or wrapped, as a store's cache may wrap what its codec threw.
+     */
+    val laterIndex = HashMap<SnapshotKey, (SnapshotFormatException) -> Exception>()
 
     /** While true, every operation of the store throws [ControlStoreException]: it cannot answer (CTL-52). */
     @Volatile
@@ -148,14 +151,14 @@ class ControlPlaneTest {
             else -> memory.change(id)
         }
 
-        override suspend fun index(key: SnapshotKey): Versioned<RevisionIndex>? = if (key in laterIndex) {
-            throw SnapshotFormatException(
-                "A stored revision index names members in crit that this version does not understand: [next].",
-                StoredFormat.Later(StoredRecord.REVISION_INDEX, listOf("next")),
+        override suspend fun index(key: SnapshotKey): Versioned<RevisionIndex>? = laterIndex[key]?.let { handed ->
+            throw handed(
+                SnapshotFormatException(
+                    "A stored revision index names members in crit that this version does not understand: [next].",
+                    StoredFormat.Later(StoredRecord.REVISION_INDEX, listOf("next")),
+                )
             )
-        } else {
-            memory.index(key)
-        }
+        } ?: memory.index(key)
 
         override suspend fun head(key: SnapshotKey): StoredDocument? = memory.head(key)?.let { stored ->
             if (key !in undecodable) return@let stored
