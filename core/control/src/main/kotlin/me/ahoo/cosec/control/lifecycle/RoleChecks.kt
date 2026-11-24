@@ -15,6 +15,7 @@
 
 package me.ahoo.cosec.control.lifecycle
 
+import io.github.oshai.kotlinlogging.KotlinLogging
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.control.change.ControlStatus.UNPROCESSABLE
@@ -26,9 +27,11 @@ import me.ahoo.cosec.model.RoleId
 import me.ahoo.cosec.model.decision.DocumentKind
 import me.ahoo.cosec.spi.snapshot.SnapshotDigest
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
+import kotlin.coroutines.cancellation.CancellationException
 
 /** What a tenant's roles may mean other than what they seem to (RFC 0012 §7.5). */
 internal object RoleChecks {
+    private val log = KotlinLogging.logger {}
 
     /**
      * What a tenant's roles may mean other than what they seem to (RFC 0012 §7.5): one named as a system role of its app
@@ -42,7 +45,7 @@ internal object RoleChecks {
         findings: MutableList<Finding>,
     ) {
         if (candidate.kind == DocumentKind.APP) {
-            sharedSystemRoles(candidate, context, checkedWith, findings)
+            sharedSystemRoles(candidate, context, findings)
             return
         }
         if (candidate.kind != DocumentKind.TENANT) {
@@ -74,24 +77,42 @@ internal object RoleChecks {
      * A system role of an app candidate whose id another app's head defines too (`ROL-12`): a membership is
      * `role@space`, with no app in it, so a member whose roles are not issued per app (a provider's, or a token bound to
      * no app) and who holds the role once holds it in every app that defines it. That may be meant; it only warns. It reads the app
-     * list and the heads of the apps it names, a dozen at most, never a tenant's document.
+     * list and the head of every app it names, never a tenant's document. Since it only warns, those heads are not what
+     * the change was checked with (an unrelated app's publish does not move it), and one that cannot be read is a warning
+     * of its own, never a failed check (DR1-E-11).
      */
-    private suspend fun sharedSystemRoles(
-        candidate: PolicyDocument,
-        context: CurrentDocuments,
-        checkedWith: MutableMap<SnapshotKey, SnapshotDigest?>,
-        findings: MutableList<Finding>,
-    ) {
+    @Suppress("TooGenericExceptionCaught")
+    private suspend fun sharedSystemRoles(candidate: PolicyDocument, current: CurrentDocuments, findings: MutableList<Finding>) {
         if (candidate.roles.isEmpty()) return
-        val others = context.apps()?.value?.entries.orEmpty().filter {
-            it != candidate.owner && SnapshotKey.App.isValidAppId(it)
+        val context = current.unrecorded
+        val unread = ArrayList<String>()
+        val others = try {
+            context.apps()?.value?.entries.orEmpty().filter { it != candidate.owner && SnapshotKey.App.isValidAppId(it) }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            log.warn(e) { "The app list could not be read; the system roles of app ${candidate.owner} are not compared." }
+            findings += roleWarning("$.roles", "The app list could not be read: whether another app defines these roles is not known")
+            return
         }
         val defining = HashMap<RoleId, MutableSet<String>>()
         for (app in others.sorted()) {
-            val key = SnapshotKey.App(app)
-            val head = context.head(key)
-            checkedWith[key] = head?.digest
+            val head = try {
+                context.head(SnapshotKey.App(app))
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                log.warn(e) { "The head of app $app could not be read; its system roles are not compared." }
+                unread += app
+                continue
+            }
             head?.document?.roles?.forEach { defining.getOrPut(it.id) { sortedSetOf() } += app }
+        }
+        if (unread.isNotEmpty()) {
+            findings += roleWarning(
+                "$.roles",
+                "The documents of app ${unread.joinToString()} could not be read: whether they define these roles is not known",
+            )
         }
         for ((r, role) in candidate.roles.withIndex()) {
             val apps = defining[role.id] ?: continue

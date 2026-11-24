@@ -60,7 +60,7 @@
     {
       "id": "APR-6",
       "source": "RFC 0007 §7.5, §5.8 (RC1-34)",
-      "statement": "A change of an app document that adds or widens an ALLOW of a permission policy names, as an escalation of its own, every binding of that policy scoped to the app in each tenant document the back-reference index lists.",
+      "statement": "A change of an app document that adds or widens an ALLOW of a permission policy names the tenant documents the back-reference index lists as binding that policy in the app, as one informational entry per policy (CTL-48), without reading a tenant document; the entry never stands in for the escalation the widening needs (the change also carries NOT_ANALYZED), so a person still approves it.",
       "level": "control",
       "guards": [
         "control:ChangesB1Test#widening an app permission policy lists the tenant bindings it widens - RC1-34"

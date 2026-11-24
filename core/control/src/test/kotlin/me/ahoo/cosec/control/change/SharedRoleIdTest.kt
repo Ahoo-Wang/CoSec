@@ -19,6 +19,9 @@ import kotlinx.coroutines.runBlocking
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.control.lifecycle.ChangeOptions
+import me.ahoo.cosec.control.store.ControlStore
+import me.ahoo.cosec.control.store.InMemoryControlStore
+import me.ahoo.cosec.control.store.StoredDocument
 import me.ahoo.cosec.document.Catalog
 import me.ahoo.cosec.document.CatalogGroup
 import me.ahoo.cosec.document.CatalogPermission
@@ -98,5 +101,41 @@ class SharedRoleIdTest {
         published(SnapshotKey.App("crm"), "clerk")
         proposed(ops, "clerk").roleWarnings().single().assert()
             .contains("is also a system role of app crm, wms").contains("holds it in all 3 apps")
+    }
+
+    /**
+     * DR1-E-11: the heads this check reads only warn, so they are not what the change was checked with, and an
+     * unrelated app's publish leaves it as it was.
+     */
+    @Test
+    fun `the other apps' heads are not what the change was checked with`() = runBlocking<Unit> {
+        published(wms, "clerk")
+        val change = proposed(ops, "clerk")
+        change.roleWarnings().assert().hasSize(1)
+        change.checkedWith.keys.assert().doesNotContain(wms)
+    }
+
+    /** DR1-E-11: an app's head that cannot be read is a warning of its own, never a failed check. */
+    @Test
+    fun `an app head that cannot be read is a warning, and the check goes on`() = runBlocking<Unit> {
+        var down = false
+        val memory = InMemoryControlStore(harness.clock)
+        val failing = object : ControlStore by memory {
+            override suspend fun head(key: SnapshotKey): StoredDocument? {
+                check(!(down && key == wms)) { "Redis is down" }
+                return memory.head(key)
+            }
+        }
+        val other = ChangeHarness(harness.clock, memory, failing)
+        val seed = other.changes.propose(PLATO, wms, 0, app(wms, "clerk"), "roles")
+        other.changes.skipShadow(PLATO, seed.id, "test")
+        other.changes.publish(PLATO, seed.id).state.assert().isEqualTo(ChangeState.PUBLISHED)
+        down = true
+
+        val change = other.changes.propose(PLATO, ops, 0, app(ops, "clerk"), "roles")
+
+        change.errors.assert().describedAs("${change.findings}").isEmpty()
+        change.state.assert().isEqualTo(ChangeState.CHECKED)
+        change.roleWarnings().single().assert().contains("app wms could not be read")
     }
 }
