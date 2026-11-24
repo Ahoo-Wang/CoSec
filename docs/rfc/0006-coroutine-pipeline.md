@@ -225,7 +225,9 @@ class HttpFacts(
   HEAD 按 GET 决策：路由映射里有 HEAD 路由时用它，否则用 GET 的路由，未映射时是 `http:GET`，所以 `http:HEAD` 只在路由映射映射了它时才匹配。
 - **`CoSec-*` 参数**只读请求头，从不读查询串；同一个参数的值不一致即 400，空值与非空值并存也算不一致（`SCP-4`）。
 - **路由**：路由映射把请求解析成 `service:verb` 动作与带类型的资源；没有映射的请求是 `http` 命名空间的 `http:<METHOD>` 与路径（RFC 0005，`ACT-2`）；
-  映射给出 `Invalid` 的请求是 400。
+  映射给出 `Invalid` 的请求是 400。一条路径不映射到任何路由、而换一种尾斜杠的写法（带上或去掉末尾的 `/`）就能映射时，也是 `Invalid`（`PIP-35`，DR1-C-9 与第二轮 DR2-C-2）：
+  后端可能把两种写法当成同一个，按 `http` 命名空间判定会绕过路由业务动作上的 DENY，按路由映射又会放宽它的 ALLOW；路由写成哪一种都一样，以 `/` 结尾的路由照常加载。
+  第二次查找只在“该方法有路由、而这条路径没映射上”时才做：没有路由图或该方法没有路由的请求不为它多做任何事。
 - **客户端地址**（`PIP-16`、`PIP-17`）：`remoteAddress` 由适配器的 `RemoteIpResolver` 读取**一次**，读法由 starter 按服务器及其转发头策略
   （`server.request.header.forwarded.strategy`，旧键 `server.forward-headers-strategy` 仍被读取；本版本不认识的取值按最严格的读法对待）决定，
   绝不既用服务器的解析又用 CoSec 的：没有策略时，取对端，有 `X-Forwarded-For` 时取 `max-trusted-index` 从右数的那一项；Tomcat 的 `native`
@@ -692,13 +694,19 @@ override fun doFilter(request: ServletRequest, response: ServletResponse, chain:
   它们只留给接收身份、且凭据被接受的请求的路由。cookie 头改写时去掉那一对和一个相邻的 `;`，其余逐字节保留。凭据剥离只做一次，由它自己的类负责。
 - **方法覆盖头**（`PIP-31`）：`PipelineGatewayFilter` 从它转发的每个请求移除 `X-HTTP-Method-Override`、`X-HTTP-Method`、`X-Method-Override`
   （任何大小写），在每条路由上，不可配置：后端永远不会把请求当作网关所判定的方法之外的方法执行。
-- **宿主自己的处理器**（`STA-13`）：Spring Cloud Gateway 宿主在 `mode=enforce` 时只决定网关路由，而应用自己的控制器与函数式路由映射在任何路由之前：
+- **宿主自己的处理器**（`STA-13`）：Spring Cloud Gateway 宿主在 `mode=enforce` 时只决定网关路由，而应用自己的控制器、函数式路由与它自己的 `HandlerMapping`（WebSocket 端点的也算，DR2-G-1）在网关的路由之外被服务：
   应用有这样的处理器、又没有按 bean 名列在 `cosec.gateway.unprotected-handlers` 里时，启动失败，并点出每个处理器、这个属性与文档页。
   带 `*` 的名字被拒绝，匹配不到处理器的名字被忽略（与 `cosec.gateway.unprotected-endpoints` 一样，`STA-2`），列出的处理器在启动时的一行 INFO 里点名。
 - **执法放行清掉客户端的 `CoSec-Identity`**（`IDN-9`）：决策的宿主（`mode=enforce`）的每个放行都在 `Outcome` 里写明去掉 `CoSec-Identity`，三个适配器
   一样应用。网关之后的服务（`mode=gateway`）保留网关发的头。
 - **路由的应用**：路由的 `cosec-app-id` 原样以 `HttpFacts.routeApp` 交给管道，适配器不判断（`SCP-2`，RFC 0004 §4.6）。
 - **身份头不签名**：`CoSec-Identity` 在 8.0 不签名，信任边界是网关与服务之间的网络（`wiki/guide/security-model.md`）；签名留在 8.1。
+
+**转发的身份带全成员关系**（`IDN-39`，第二轮 DR2-F-1、DR2-C-1）：除了判定所在空间的角色（`roles`），身份头用 `memberships` 写出主体其余的成员关系：它在每个别的空间里的角色，
+以及它附加的策略的 id；没有时写空的（`{"spaces":{},"attachments":[]}`），它的存在就是“成员关系是全的”这句话。同一个事实只有一处：`memberships.spaces` 里再出现身份自己的空间是格式错误。
+按身份头做判定的宿主（`caller=forwarded-identity`：控制面宿主、服务端口）拒绝没有它的头（400），并用它重建完整的成员关系，所以附加到主体的 DENY、
+或读它在另一个空间里的角色的 DENY，在那里与在网关上一样生效；只信任网关、自己不判定的服务照旧不要求它。放不下头的大小上限时两侧都拒绝，不截断。
+身份头的编码是流式写出的，不建节点树：网关每次转发都写它。滚动升级时先升网关与应用，再升按身份头判定的宿主。
 
 **相信转发身份的宿主**（网关是 `IdentityGate` 的宿主）：三种情形，`mode=gateway`、`caller=forwarded-identity`（决策的宿主以 `CoSec-Identity` 声明的主体为
 调用方，快照与控制面照常装配：控制面宿主与内嵌控制面的 IAM 服务的形态，`STA-9`）、以及应用自己声明的 `IdentityGate`：
