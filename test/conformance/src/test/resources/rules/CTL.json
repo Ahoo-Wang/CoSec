@@ -125,7 +125,9 @@
         "control:ChangeBatchAuthorizationTest#documents that cannot be confirmed at the end refuse the change - #1218",
         "control:ChangeBatchAuthorizationTest#documents that keep moving refuse the change - #1218",
         "control:EntryIdsTest#an id that would add a segment to its resource is refused",
-        "control:EntryIdsTest#a permission policy keeps the slash its id has"
+        "control:EntryIdsTest#a permission policy keeps the slash its id has",
+        "control:EntryIdsTest#a permission policy's id has no slash past its app, nor a catalog permission's",
+        "control:EntryIdsTest#a catalog permission with a slash from before stays, and only one the change adds is refused"
       ],
       "pending": null
     },
@@ -1112,7 +1114,7 @@
     {
       "id": "CTL-78",
       "source": "RFC 0007 §10.2 (control-typed-api decisions of 2026-11-21: validation before an IAM stores its event; check shares propose's path)",
-      "statement": "A check (`POST /changes:check`, `POST /documents/{key}:check`, `ControlService.check`/`checkApply`, `ControlClient.check`) answers what the proposal or the apply it stands for would: the same state, findings, escalations and base, by the proposal's own function, every step of it but the last. It answers no candidate: the candidate a proposal checks names the change that confirms a lapsing DENY, so a check's would be another document. It needs exactly what the proposal needs and is refused alike (a caller who may not propose may not check, so a check tells no more about a document than the proposal would; a stale base is the same conflict; the service profile serves it for a tenant's document only). It stores nothing, takes no staging slot, takes no change id and writes no change event; the request itself is decided and recorded as any call of the control API.",
+      "statement": "A check (`POST /changes:check`, `POST /documents/{key}:check`, `ControlService.check`/`checkApply`, `ControlClient.check`) answers what the proposal or the apply it stands for would: the same state, findings, escalations and base, by the proposal's own function, every step of it but the last. It answers no candidate: the candidate a proposal checks names the change that confirms a lapsing DENY, so a check's would be another document. It needs exactly what the proposal needs and is refused alike (a caller who may not propose may not check, so a check tells no more about a document than the proposal would; a stale base is the same conflict; the service profile serves it for a tenant's or an app's document, never the platform's, as CTL-58 lists). It stores nothing, takes no staging slot, takes no change id and writes no change event; the request itself is decided and recorded as any call of the control API.",
       "level": "build",
       "pending": null,
       "guards": [

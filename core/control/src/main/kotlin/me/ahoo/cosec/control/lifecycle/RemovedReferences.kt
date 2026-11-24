@@ -36,8 +36,10 @@ internal object RemovedReferences {
      * The policies a platform or app candidate removes, or turns from a policy into a boundary or back (`CTL-30`), that
      * other documents still refer to (RFC 0007 §5.8): a binding reaches only a policy and a tenant's `boundary` only a
      * boundary, so one of the other kind is missing to them. The head write asks the same question
-     * ([ReferencedPolicies.of]): a change refused there is refused here, with the same documents. Over the limit of
-     * what the roles derive the compile step has said so, and there is nothing expanded to compare.
+     * ([ReferencedPolicies.of]): a change refused there is refused here, with the same documents. A candidate over the
+     * limit of what the roles derive the compile step has said so, and there is nothing expanded to compare. A base over
+     * it (a head `cosec-migrate` or a restore wrote) is refused here by name, or the change would be `CHECKED` and fail
+     * at its head write (DR1-E-10).
      */
     @Suppress("TooGenericExceptionCaught")
     suspend fun check(
@@ -49,7 +51,16 @@ internal object RemovedReferences {
     ) {
         val referenced = try {
             ReferencedPolicies.of(key, base, candidate, context::referrers)
-        } catch (_: DocumentCompileException) {
+        } catch (e: DocumentCompileException) {
+            if (expands(candidate)) {
+                findings += Finding(
+                    "REFERENCES",
+                    "$.policies",
+                    "The base revision of [$key] does not expand, so what this change removes cannot be compared with " +
+                        "what refers to it: ${e.message}",
+                    UNPROCESSABLE,
+                )
+            }
             return
         } catch (e: CancellationException) {
             throw e
@@ -65,5 +76,12 @@ internal object RemovedReferences {
             val what = if (policy in kept) "changes between a policy and a boundary, and is" else "is"
             findings += Finding("REFERENCES", "$.policies", "[${policy.value}] $what referred to by ${ReferrerNames.of(referrers)}", UNPROCESSABLE)
         }
+    }
+
+    private fun expands(document: PolicyDocument): Boolean = try {
+        RoleExpansion.effective(document)
+        true
+    } catch (_: DocumentCompileException) {
+        false
     }
 }
