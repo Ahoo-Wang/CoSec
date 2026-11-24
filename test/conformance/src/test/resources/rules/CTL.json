@@ -799,7 +799,8 @@
         "cocache:ShadowReadingsTest#a store that does not answer fails the whole call, never reads as an unreadable report",
         "spi:ShadowValuesTest#the default readings read the reports, and throw where they throw",
         "control:ShadowWindowRaceTest#a pass that looked at a window the change was staged again past writes nothing - DR1-E-6",
-        "control:ShadowWindowRaceTest#a reporter another pass added meanwhile is kept, the window closed or not - CTL-56"
+        "control:ShadowWindowRaceTest#a reporter another pass added meanwhile is kept, the window closed or not - CTL-56",
+        "control:ShadowWindowRaceTest#a pass that sees no reporter the record lacks writes nothing - DR1-E-6"
       ],
       "pending": null
     },

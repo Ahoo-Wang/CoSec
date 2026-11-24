@@ -152,10 +152,13 @@ internal class Staging(
         }
         if (look.summary == null) waiting(id, state, look)
         // Every instance seen is kept, so that one dropped from the window's reporters later still has to report.
-        val summary = look.summary ?: return if (look.reporters == state.reporters) {
+        // A window still open writes only reporters the record lacks: none new is no write, on every pass of the loop.
+        val summary = look.summary ?: return if (state.reporters.containsAll(look.reporters)) {
             change
         } else {
-            flow.transitionUnless(id, ChangeStep.SHADOWED) { seen(it, state, look) } ?: flow.get(id)
+            flow.transitionUnless(id, ChangeStep.SHADOWED) { current ->
+                seen(current, state, look)?.takeIf { it.shadow?.reporters != current.shadow?.reporters }
+            } ?: flow.get(id)
         }
         val closed = flow.transitionUnless(id, ChangeStep.SHADOWED) { current ->
             seen(current, state, look)?.let {

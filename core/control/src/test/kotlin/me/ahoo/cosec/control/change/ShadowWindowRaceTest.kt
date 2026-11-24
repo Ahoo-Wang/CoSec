@@ -20,15 +20,18 @@ import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.control.lifecycle.ChangeOptions
 import me.ahoo.cosec.control.lifecycle.Changes
 import me.ahoo.cosec.control.lifecycle.LockoutCheck
+import me.ahoo.cosec.control.lifecycle.ShadowOptions
 import me.ahoo.cosec.control.store.InMemoryControlStore
 import me.ahoo.cosec.control.store.MutableClock
 import me.ahoo.cosec.control.store.Revisions
 import me.ahoo.cosec.spi.shadow.InMemoryShadowReports
 import me.ahoo.cosec.spi.shadow.ShadowReadings
+import me.ahoo.cosec.spi.shadow.ShadowReport
 import me.ahoo.cosec.spi.shadow.ShadowReportReader
 import me.ahoo.cosec.spi.token.RevocationReader
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
+import java.time.Duration
 import java.util.concurrent.atomic.AtomicInteger
 
 /**
@@ -41,7 +44,8 @@ class ShadowWindowRaceTest {
     private val memory = InMemoryControlStore(clock)
     private val ids = AtomicInteger()
     private var whileLooking: (suspend () -> Unit)? = null
-    private val reports = object : ShadowReportReader by InMemoryShadowReports(clock) {
+    private val sink = InMemoryShadowReports(clock)
+    private val reports = object : ShadowReportReader by sink {
         override suspend fun readings(window: String): ShadowReadings {
             whileLooking?.also { whileLooking = null }?.invoke()
             return super.readings(window)
@@ -59,9 +63,22 @@ class ShadowWindowRaceTest {
         lockout = LockoutCheck.UNCHECKED,
     )
 
-    private suspend fun shadowing(): ChangeRequest {
-        val change = changes.propose(ALICE_OP, ACME, 0, listOf(Operation.PutPolicy(allow("read"))), "shadowed")
-        return changes.startShadow(ALICE_OP, change.id).also { it.state.assert().isEqualTo(ChangeState.SHADOWING) }
+    /** Changes whose windows stay open past this test: an hour long, and a sample needed. */
+    private val waiting = Changes(
+        memory,
+        Revisions(memory, clock),
+        { ChangeId("o${ids.incrementAndGet()}") },
+        PERMIT_ALL,
+        clock,
+        ChangeOptions(shadow = ShadowOptions(Duration.ofHours(1), 1, Duration.ofHours(2))),
+        reports = reports,
+        revocations = RevocationReader.NONE,
+        lockout = LockoutCheck.UNCHECKED,
+    )
+
+    private suspend fun shadowing(through: Changes = changes): ChangeRequest {
+        val change = through.propose(ALICE_OP, ACME, 0, listOf(Operation.PutPolicy(allow("read"))), "shadowed")
+        return through.startShadow(ALICE_OP, change.id).also { it.state.assert().isEqualTo(ChangeState.SHADOWING) }
     }
 
     /** What a write meanwhile made of the record: [edit] of the record as it is. */
@@ -96,5 +113,27 @@ class ShadowWindowRaceTest {
         changes.shadowed(change.id)
 
         memory.change(change.id)!!.value.shadow!!.reporters.assert().contains("other")
+    }
+
+    @Test
+    fun `a pass that sees no reporter the record lacks writes nothing - DR1-E-6`() = runBlocking<Unit> {
+        val change = shadowing(waiting)
+        val window = change.shadow!!.window
+        sink.write(ShadowReport(window, "i1", emptyMap(), emptyMap(), emptySet(), null, null))
+        // Another pass recorded i1 meanwhile: this pass sees i1, which the record already names.
+        var recorded: ChangeRequest? = null
+        meanwhile(change.id) { it.copy(shadow = it.shadow!!.copy(reporters = setOf("i1"))) }
+        val after = whileLooking!!
+        whileLooking = {
+            after()
+            recorded = memory.change(change.id)!!.value
+        }
+
+        waiting.shadowed(change.id)
+
+        val stored = memory.change(change.id)!!.value
+        stored.updatedAt.assert().isEqualTo(recorded!!.updatedAt)
+        stored.shadow!!.reporters.assert().containsExactly("i1")
+        stored.shadow!!.closed.assert().isNull()
     }
 }
