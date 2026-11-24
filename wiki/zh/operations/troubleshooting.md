@@ -234,6 +234,10 @@ CoSec 自己的拒绝很容易区分：它们总是 `application/problem+json`�
 
 执法拒绝的路径不会被记录：它可能来自客户端。
 
+## 修订在 min-age 之内被回收 {#revisions-reclaimed-within-min-age}
+
+`cosec.control.revisions.reclaimed-young` 在计数，`me.ahoo.cosec.control.store` 的一条 `WARN` 说 `records younger than ... reclaimed` 并点名文档：它的记录合计（包括最近的 `max-count` 个）超出了能保留的量（`max-count` 乘以文档上限），或者索引在最近的之外列了超过 26,214 条（`CTL-84`）。最老的先被删除，即使早于 `min-age`。最近 `max-count` 个修订、头部与未结束变更所依赖的修订总会保留，所以回滚到最近的修订仍然可行；回滚到更早的修订可能变成 `410`。找出循环发布大文档的客户端（它的变更的审计事件会点名它），按租户对它限流（[限流](../policies/rate-limiting.md#the-control-api)）。这条 `WARN` 每轮回收至多一次，并带上此后其余的数量。
+
 ## 决策使用了旧的修订 {#decisions-use-an-old-revision}
 
 审计事件的 `snapshotVersion` 或 span 的 `cosec.snapshot.version` 比控制面发布的修订旧。

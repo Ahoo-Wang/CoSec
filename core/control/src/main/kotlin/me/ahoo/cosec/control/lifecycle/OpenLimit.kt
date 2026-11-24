@@ -31,9 +31,11 @@ import me.ahoo.cosec.spi.snapshot.SnapshotKey
 private val log = KotlinLogging.logger {}
 
 /**
- * How many open changes a document holds (`CTL-83`, DR1-E-2): at most [maxOpen], the revisions the operator keeps
- * (`cosec.control.revisions.max-count`). An open change pins its base against reclamation (RFC 0007 §5.7), so the changes
- * open on a document never pin more than the retention keeps anyway; and what one tenant stores stays bounded by it.
+ * How many open changes a document takes (`CTL-83`, DR1-E-2): none more once it holds [maxOpen], the revisions the
+ * operator keeps (`cosec.control.revisions.max-count`). The count is read before the write, so proposals counted at the
+ * same moment all pass: a document holds at most [maxOpen] and those written at once. An open change pins its base
+ * against reclamation (RFC 0007 §5.7), so the changes open on a document pin about what the retention keeps anyway; and
+ * what one tenant stores stays bounded by it.
  *
  * A change whose checks failed (`DRAFT`) cannot be edited: its operations are fixed, and a rebase replays them, so it
  * moves on only when the head it failed on does. A loop of failing `:apply`s would fill the document with them. So at

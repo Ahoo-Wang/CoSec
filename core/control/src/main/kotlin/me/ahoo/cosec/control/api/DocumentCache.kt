@@ -37,16 +37,17 @@ import me.ahoo.cosec.spi.snapshot.SnapshotKey
  * entry. An app or tenant document compiles with the platform document's limits and attributes, so its compiled form is
  * kept by the digest of the platform document it compiled with.
  *
- * Bounded by [maxHeap], an estimate of the heap it holds, the least recently used leaving first
- * (review M2 of #1240): a document weighs its stored size times [DECODED_FACTOR] once decoded, and times
- * [COMPILED_FACTOR] more for each compiled form it keeps, plus what an entry and a form hold whatever the document's
- * size ([ENTRY_BYTES], [FORM_BYTES], measured: most tenant documents are small), the factors measured on documents of many policies, many
- * bindings and many conditions (`DocumentCacheTest`). A document weighs [DERIVED_BINDING_BYTES] more stored bytes for
- * each binding its roles derive (RFC 0012 §6.3): a few roles may expand far beyond what they store. What `analyze` parses
- * of it is not weighed. A candidate, which no
- * digest names, is never kept, nor is a retained revision `explain` decides at: [Simulator] compiles those per call. Nor
- * is a document that, decoded and compiled once, would weigh more than half the bound (R2-L2 of #1240's review): it
- * would push every other entry out, and be pushed out by the next one, so it is decoded and compiled per call too.
+ * Bounded by [maxHeap], an estimate of the heap it holds, the least recently used leaving first (review M2 of #1240): a
+ * document weighs its stored size times [DECODED_FACTOR] once decoded, and times [COMPILED_FACTOR] more for each
+ * compiled form it keeps, plus what an entry and a form hold whatever the document's size ([ENTRY_BYTES], [FORM_BYTES],
+ * measured: most tenant documents are small), the factors measured on documents of many policies, many bindings and
+ * many conditions (`DocumentCacheTest`). A document weighs [DERIVED_BINDING_BYTES] more stored bytes for each binding
+ * its roles derive (RFC 0012 §6.3): a few roles may expand far beyond what they store. What `analyze` parses of it is
+ * not weighed. A candidate, which no digest names, is never kept: [Simulator] compiles it per call. A retained revision
+ * `explain` decides at is kept like a head, by the digest of its record (DR1-F-4): its content never changes. A
+ * document that, decoded and compiled once, would weigh more than half the bound is never kept either (R2-L2 of #1240's
+ * review): it would push every other entry out, and be pushed out by the next one, so it is decoded and compiled per
+ * call.
  */
 @InternalCoSecApi
 class DocumentCache(

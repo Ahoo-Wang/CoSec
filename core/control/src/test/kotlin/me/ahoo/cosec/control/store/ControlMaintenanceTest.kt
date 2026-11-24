@@ -30,6 +30,7 @@ import me.ahoo.cosec.control.lifecycle.ChangeOptions
 import me.ahoo.cosec.control.lifecycle.Changes
 import me.ahoo.cosec.control.lifecycle.ControlMaintenance
 import me.ahoo.cosec.control.lifecycle.LockoutCheck
+import me.ahoo.cosec.control.lifecycle.RetainedTotals
 import me.ahoo.cosec.control.store.StoreFixtures.ACME
 import me.ahoo.cosec.control.store.StoreFixtures.candidate
 import me.ahoo.cosec.control.store.StoreFixtures.publication
@@ -433,6 +434,67 @@ class ControlMaintenanceTest {
      * CTL-72, DR1-E-2: the open changes are read by the one instance that holds the reclaim pass's lease, under it, and by
      * no other: an instance without the lease reads none of them, where every instance read every document's each hour.
      */
+    /**
+     * `CTL-84`: the pass that holds the lease reports what every document retains, replacing it only when it ends; a pass
+     * another instance leads reports none, and one that cannot start keeps the last. The largest across instances is the
+     * store's, and no instance reads 0 while it leads.
+     */
+    @Test
+    fun `only the instance that led the last pass reports what the documents retain, through its next pass too`() =
+        runBlocking<Unit> {
+            var listing = true
+            var seen: RetainedTotals? = null
+            lateinit var leading: ControlMaintenance
+            val watched = object : ControlStore by store {
+                override suspend fun documents(): Set<SnapshotKey> {
+                    check(listing) { "The documents cannot be listed." }
+                    return store.documents()
+                }
+
+                override suspend fun openChanges(document: SnapshotKey): List<ListedChange> {
+                    seen = leading.retained
+                    return store.openChanges(document)
+                }
+            }
+            leading = ControlMaintenance(
+                watched,
+                Revisions(watched, clock, revisions.retention),
+                changes,
+                Duration.ofMinutes(1)
+            )
+            published()
+            published()
+            changes.propose(ALICE_OP, ACME, 2, listOf(Operation.PutPolicy(allow("read"))), "open")
+
+            leading.reclaim()
+
+            val sizes = store.index(ACME)!!.value.entries.map { it.size!! }
+            val first = leading.retained
+            first.records.assert().isEqualTo(sizes.size.toLong())
+            first.bytes.assert().isEqualTo(sizes.sum())
+            first.openChanges.assert().isEqualTo(1L)
+
+            // While its next pass reads the documents, it still reports the last pass's totals: never a 0 in between.
+            leading.reclaim()
+            seen.assert().isSameAs(first)
+            leading.retained.bytes.assert().isEqualTo(sizes.sum())
+
+            // A pass that cannot start keeps what this instance last found.
+            listing = false
+            leading.reclaim()
+            leading.retained.bytes.assert().isEqualTo(sizes.sum())
+
+            // A pass another instance leads: this one reports none.
+            listing = true
+            store.acquireLease(
+                ControlMaintenance.RECLAIM_LEASE,
+                "another instance",
+                Duration.ofMinutes(5)
+            ).assert().isTrue()
+            leading.reclaim()
+            leading.retained.assert().isSameAs(RetainedTotals.NONE)
+        }
+
     @Test
     fun `only the instance holding the reclaim lease reads the open changes`() = runBlocking<Unit> {
         val reads = AtomicInteger()
