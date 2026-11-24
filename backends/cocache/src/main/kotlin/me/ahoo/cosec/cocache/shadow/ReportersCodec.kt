@@ -40,7 +40,11 @@ internal object ReportersCodec : Codec<Set<String>> {
         } catch (_: JacksonException) {
             throw SnapshotFormatException("The $WHAT is not JSON")
         }
-        val reporters = if (node.isArray) node else node.also { StoredFormat.of(it, WHAT) }.get("reporters")
+        val reporters = if (node.isArray) {
+            node
+        } else {
+            node.also { StoredFormat.read(it, ShadowRecordMembers.REPORTERS, WHAT) }.get("reporters")
+        }
         val valid = reporters != null && reporters.isArray && reporters.values().all { it.isString }
         if (!valid) throw SnapshotFormatException("The $WHAT are not an array of instance ids")
         return reporters.values().mapTo(LinkedHashSet()) { it.asString() }

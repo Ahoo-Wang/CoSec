@@ -26,6 +26,7 @@ import me.ahoo.cosec.control.authz.PipelineControlAuthorizer
 import me.ahoo.cosec.control.change.ChangeId
 import me.ahoo.cosec.control.change.ChangeRejectedException
 import me.ahoo.cosec.control.change.ChangeRequest
+import me.ahoo.cosec.control.change.ChangeRequestCodec
 import me.ahoo.cosec.control.change.ChangeState
 import me.ahoo.cosec.control.change.IMMEDIATE_WINDOW
 import me.ahoo.cosec.control.change.Operation
@@ -41,6 +42,7 @@ import me.ahoo.cosec.control.store.InMemoryControlStore
 import me.ahoo.cosec.control.store.MutableClock
 import me.ahoo.cosec.control.store.Publication
 import me.ahoo.cosec.control.store.PublishOutcome
+import me.ahoo.cosec.control.store.RevisionIndex
 import me.ahoo.cosec.control.store.Revisions
 import me.ahoo.cosec.control.store.StoreFixtures
 import me.ahoo.cosec.control.store.StoredDocument
@@ -49,6 +51,9 @@ import me.ahoo.cosec.document.PolicyDefinition
 import me.ahoo.cosec.document.PolicyDocument
 import me.ahoo.cosec.document.ProvenanceKind
 import me.ahoo.cosec.document.SnapshotDocuments
+import me.ahoo.cosec.document.json.CoSecJson
+import me.ahoo.cosec.document.json.StoredFormat
+import me.ahoo.cosec.document.json.StoredRecord
 import me.ahoo.cosec.engine.BuiltinPolicies
 import me.ahoo.cosec.engine.ResourceSource
 import me.ahoo.cosec.engine.StatementSource
@@ -78,6 +83,7 @@ import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.cosec.spi.token.RevocationReader
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
+import tools.jackson.databind.node.ObjectNode
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.atomic.AtomicInteger
 
@@ -94,6 +100,12 @@ class ControlPlaneTest {
 
     /** Documents whose stored head does not decode, as one a newer version wrote during a rolling upgrade (RC1-39). */
     val undecodable = HashSet<SnapshotKey>()
+
+    /** Changes whose stored record a later version wrote, with a member its `crit` names (SNP-27). */
+    val later = HashSet<ChangeId>()
+
+    /** Documents whose revision index a later version wrote (SNP-27): refused by its codec, unwrapped. */
+    val laterIndex = HashSet<SnapshotKey>()
 
     /** While true, every operation of the store throws [ControlStoreException]: it cannot answer (CTL-52). */
     @Volatile
@@ -117,11 +129,29 @@ class ControlPlaneTest {
             return memory.putChange(expected, change, previous)
         }
 
-        override suspend fun change(id: ChangeId): Versioned<ChangeRequest>? = if (id in unreadable) {
+        override suspend fun change(id: ChangeId): Versioned<ChangeRequest>? = when (id) {
             // Wrapped, as a store's cache may wrap what its codec threw.
-            throw IllegalStateException("decoding", SnapshotFormatException("A change request is malformed."))
+            in unreadable -> throw IllegalStateException("decoding", SnapshotFormatException("A change request is malformed."))
+            in later -> memory.change(id)?.let { stored ->
+                val record = CoSecJson.mapper.readTree(ChangeRequestCodec.encode(stored.value)) as ObjectNode
+                record.put("device", "d1").putArray("crit").add("device")
+                try {
+                    ChangeRequestCodec.decode(CoSecJson.mapper.writeValueAsBytes(record))
+                } catch (e: SnapshotFormatException) {
+                    throw IllegalStateException("decoding", e)
+                }
+                error("A record a later version wrote was read.")
+            }
+            else -> memory.change(id)
+        }
+
+        override suspend fun index(key: SnapshotKey): Versioned<RevisionIndex>? = if (key in laterIndex) {
+            throw SnapshotFormatException(
+                "A stored revision index names members in crit that this version does not understand: [next].",
+                StoredFormat.Later(StoredRecord.REVISION_INDEX, listOf("next")),
+            )
         } else {
-            memory.change(id)
+            memory.index(key)
         }
 
         override suspend fun head(key: SnapshotKey): StoredDocument? = memory.head(key)?.let { stored ->

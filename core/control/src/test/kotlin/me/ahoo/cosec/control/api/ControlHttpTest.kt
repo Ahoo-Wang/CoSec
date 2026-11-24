@@ -100,6 +100,40 @@ class ControlHttpTest {
         }
     }
 
+    /**
+     * SNP-27: a record a later version wrote is the gap of a rolling upgrade, not a broken store: a 503 without detail,
+     * never the 500 of a record that does not decode, whether its refusal comes wrapped or not, and the log says so with
+     * the members its crit names.
+     */
+    @Test
+    fun `a record a later version wrote is a 503 without detail, told as that`() {
+        val id = runBlocking { fixture.changes.propose(fixture.plato, SnapshotKey.Platform, 1, emptyList(), "later") }.id
+        fixture.later += id
+        fixture.laterIndex += SnapshotKey.Tenant("acme")
+        val logger = LoggerFactory.getLogger("me.ahoo.cosec.control") as Logger
+        val level = logger.level
+        val logged = ListAppender<ILoggingEvent>().also { it.start() }
+        logger.addAppender(logged)
+        logger.level = Level.DEBUG
+        try {
+            val change = call("GET", "/changes/${id.value}", security = plato)
+            val revisions = call("GET", "/documents/tenant:acme/revisions")
+            for ((status, problem) in listOf(change, revisions)) {
+                status.assert().isEqualTo(503)
+                problem.get("code").asString().assert().isEqualTo("UNAVAILABLE")
+                problem.has("detail").assert().isFalse()
+            }
+            val told = logged.captured().map { it.formattedMessage }.filter { it.contains("a later CoSec wrote") }
+            told.assert().hasSize(2)
+            told[0].assert().contains("GET /changes/${id.value}").contains("(the change record), members [device]")
+            told[1].assert().contains("(the revision_index record), members [next]").contains("Upgrade this instance")
+            logged.captured().filter { it.level == Level.ERROR }.assert().isEmpty()
+        } finally {
+            logger.level = level
+            logger.detachAppender(logged)
+        }
+    }
+
     @Test
     fun `a change goes through the routes, each step authorized`() {
         val proposal = """{"document":"tenant:acme","base":1,"note":"more",""" +

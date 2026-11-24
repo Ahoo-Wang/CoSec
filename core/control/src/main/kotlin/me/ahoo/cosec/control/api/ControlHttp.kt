@@ -100,7 +100,8 @@ class ControlHttp(
             busy(requestId)
         } catch (e: ChangeRejectedException) {
             val problem = Problem.of(e.status)
-            if (!problem.detailed) {
+            // A 503 for a record a later version wrote (SNP-27) is told as that, apart from a store that is broken.
+            if (!problem.detailed && !(problem == Problem.UNAVAILABLE && later(request, requestId, e))) {
                 // The answer says nothing, so a refusal never tells what exists; the operator's administrator reads why.
                 log.info {
                     "Control API ${request.method} ${request.path} by ${operator.tenant.value}/" +
@@ -123,6 +124,7 @@ class ControlHttp(
         } catch (e: JacksonException) {
             stored(request, requestId, e)
         } catch (e: IllegalArgumentException) {
+            if (later(request, requestId, e)) return problem(Problem.UNAVAILABLE, requestId, null)
             // Refused for a reason none of the control plane's own checks gives (RC1-39): not shown, logged.
             log.info {
                 "Control API ${request.method} ${request.path} (request $requestId) is 400: " +
@@ -130,6 +132,7 @@ class ControlHttp(
             }
             problem(Problem.INVALID_REQUEST, requestId, null)
         } catch (e: Exception) {
+            if (later(request, requestId, e)) return problem(Problem.UNAVAILABLE, requestId, null)
             log.error(e) { "Control API ${request.method} ${request.path} failed (request $requestId)." }
             problem(Problem.INTERNAL_ERROR, requestId, null)
         }
@@ -138,14 +141,19 @@ class ControlHttp(
     /**
      * What the control plane read and could not decode (RC1-39): a stored document or record, perhaps one a newer
      * version wrote during a rolling upgrade. The caller can do nothing about it: a 500 without detail, the error logged
-     * with what it names (a document's key).
+     * with what it names (a document's key). A record whose format or `crit` says a later version wrote it is a `503`
+     * (`SNP-27`): the gap of a rolling upgrade, which ends when this instance is upgraded, not a fault of the store.
      */
     private fun stored(request: ControlHttpRequest, requestId: String, e: Exception): ControlHttpResponse {
+        if (later(request, requestId, e)) return problem(Problem.UNAVAILABLE, requestId, null)
         log.error(
             e
         ) { "Control API ${request.method} ${request.path} (request $requestId): a stored value does not decode." }
         return problem(Problem.INTERNAL_ERROR, requestId, null)
     }
+
+    private fun later(request: ControlHttpRequest, requestId: String, e: Exception): Boolean =
+        LaterRecords.told("Control API ${request.method} ${request.path} (request $requestId)", e)
 
     /** The `503` of a call the work budget refused (`CTL-85`): a retry in a second may fit. */
     private fun busy(requestId: String): ControlHttpResponse = problem(Problem.UNAVAILABLE, requestId, null).let {

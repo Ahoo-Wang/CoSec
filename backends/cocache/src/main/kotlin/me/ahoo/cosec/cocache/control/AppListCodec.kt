@@ -44,7 +44,7 @@ internal object AppListCodec : Codec<AppList> {
 
     override fun decode(bytes: ByteArray): AppList {
         val root = read(bytes, WHAT)
-        StoredFormat.of(root, WHAT)
+        StoredFormat.read(root, ControlRecordMembers.APP_LIST, WHAT)
         val complete = root.field("complete", WHAT)
         if (!complete.isBoolean) malformed(WHAT, "$complete is not a boolean")
         return AppList(
