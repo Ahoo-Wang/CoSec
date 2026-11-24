@@ -214,7 +214,7 @@ internal class HttpPathPatternParser(private val pattern: String, private val ca
         return Tokens(tokens, plain.toString())
     }
 
-    /** The character the backslash at [index] of [text] escapes: any [PatternEscapes.ESCAPABLE] but `\\`, which no path holds. */
+    /** What the backslash at [index] of [text] escapes: any of [PatternEscapes.ESCAPABLE] but `\\` (PIP-14). */
     private fun escapedInPath(text: String, index: Int, begin: Int): Char {
         val escaped = PatternEscapes.escaped(pattern, text, index, begin)
         if (escaped == '\\') {
