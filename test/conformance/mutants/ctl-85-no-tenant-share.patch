@@ -1,0 +1,16 @@
+# Rule: CTL-85
+# Mutant: no tenant share: a tenant takes the whole budget while other tenants wait
+# Tests: :control:test --tests me.ahoo.cosec.control.lifecycle.WorkBudgetTest
+
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/WorkBudget.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/WorkBudget.kt
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/WorkBudget.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/WorkBudget.kt
+@@ -141,7 +141,7 @@ class WorkBudget(
+     /** Whether [tenant] may take [weight] now: within half the budget while another tenant waits, or holding nothing. */
+     private fun eligible(tenant: String, weight: Long): Boolean {
+         val holds = heldBy[tenant] ?: 0
+-        return holds == 0L || holds + weight <= capacity / 2 || queues.keys.none { it != tenant }
++        return holds == 0L || holds + weight <= capacity || queues.keys.none { it != tenant }
+     }
+ 
+     private fun take(tenant: String, weight: Long): Grant {

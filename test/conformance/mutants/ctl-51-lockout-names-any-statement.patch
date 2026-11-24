@@ -1,0 +1,17 @@
+# Rule: CTL-51
+# Mutant: the lock-out finding names the statement that refuses the publisher whatever document defines its policy, telling what the publisher may not read (DR1-F-13)
+# Tests: :control:test --tests me.ahoo.cosec.control.api.ControlLockoutTest
+
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/CandidateChecks.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/CandidateChecks.kt
+index f81698498..2a51c51fc 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/CandidateChecks.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/CandidateChecks.kt
+@@ -122,7 +122,7 @@ internal class CandidateChecks(
+     private suspend fun lockedOut(operator: Operator, key: SnapshotKey, candidate: PolicyDocument): Finding? {
+         val lockout = lockout.check(operator, key, candidate) ?: return null
+         // A statement is named only to an operator who may read the document its policy is defined in (CTL-51, DR1-F-13).
+-        val named = lockout.namedIn.all { authority.holds(operator, it, ControlActions.READ) }
++        val named = lockout.namedIn.all { true }
+         val reason = if (named) lockout.reason else lockout.unnamed
+         val message = "after this change ${operator.actor.principal.value}@${operator.actor.tenant.value} could not reach the control plane: $reason. Publishing " +
+             "it needs the acknowledgement \"lockout\": true; the way back from a lock-out is cosec-migrate restore"

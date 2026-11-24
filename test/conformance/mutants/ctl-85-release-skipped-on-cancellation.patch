@@ -1,0 +1,22 @@
+# Rule: CTL-85
+# Mutant: a call releases what it holds only when it returns, so a call cancelled (or failing) keeps its weight held for ever
+# Tests: :control:test --tests me.ahoo.cosec.control.lifecycle.WorkBudgetTest
+
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/WorkBudget.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/WorkBudget.kt
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/WorkBudget.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/WorkBudget.kt
+@@ -80,11 +80,9 @@ class WorkBudget(
+     suspend fun <T> call(block: suspend () -> T): T {
+         if (currentCoroutineContext()[CallScope] != null) return block()
+         val scope = CallScope()
+-        try {
+-            return withContext(scope) { block() }
+-        } finally {
+-            scope.release()
+-        }
++        val result = withContext(scope) { block() }
++        scope.release()
++        return result
+     }
+ 
+     /**

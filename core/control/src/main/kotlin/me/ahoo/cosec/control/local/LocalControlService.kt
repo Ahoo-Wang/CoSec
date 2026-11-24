@@ -56,7 +56,8 @@ class LocalControlService(
     private val clock: Clock = Clock.systemUTC(),
     private val ids: IdGenerator = RandomIdGenerator,
 ) : RoutedControlService() {
-    private val http = ControlHttp(plane, ControlProfile.SERVICE)
+    /** The service profile's API over [plane]: a call through this facade holds its work in the plane's budget (`CTL-85`). */
+    val http = ControlHttp(plane, ControlProfile.SERVICE)
 
     override suspend fun call(caller: ControlCaller, call: ServiceCall): String {
         val request = ControlHttpRequest(

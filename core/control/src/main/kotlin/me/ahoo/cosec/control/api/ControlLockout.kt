@@ -21,14 +21,18 @@ import me.ahoo.cosec.control.authz.ControlActions
 import me.ahoo.cosec.control.authz.ControlResources
 import me.ahoo.cosec.control.authz.Operator
 import me.ahoo.cosec.control.authz.PipelineControlAuthorizer
+import me.ahoo.cosec.control.lifecycle.ControlDerived
 import me.ahoo.cosec.control.lifecycle.LockoutCheck
+import me.ahoo.cosec.control.lifecycle.WorkBudget
 import me.ahoo.cosec.control.store.Revisions
 import me.ahoo.cosec.document.PolicyDocument
 import me.ahoo.cosec.engine.EngineRequest
 import me.ahoo.cosec.model.Action
 import me.ahoo.cosec.model.AppId
 import me.ahoo.cosec.model.TenantId
+import me.ahoo.cosec.model.decision.BindingRef
 import me.ahoo.cosec.model.decision.Decision
+import me.ahoo.cosec.model.decision.DocumentKind
 import me.ahoo.cosec.model.decision.StatementRef
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import java.time.Clock
@@ -57,8 +61,13 @@ class ControlLockout(
     private val simulator: Simulator = Simulator(),
     private val controlApp: AppId = PipelineControlAuthorizer.CONTROL_APP,
     private val clock: Clock = Clock.systemUTC(),
+    /**
+     * The host's work budget (`CTL-85`): the check runs within a call that holds its body's weight, so it never waits. A
+     * host passes its one budget, the plane's ([ControlPlane.work]); the default is for a check of its own, in a test.
+     */
+    val work: WorkBudget = ControlDerived.workBudget(),
 ) : LockoutCheck {
-    private val retained = RetainedDocuments(revisions, simulator.cache)
+    private val retained = RetainedDocuments(revisions, simulator.cache, work)
 
     override suspend fun check(operator: Operator, key: SnapshotKey, candidate: PolicyDocument): LockoutCheck.Lockout? {
         if (!covers(key)) {
@@ -101,16 +110,55 @@ class ControlLockout(
         )
         return when (val decision = simulator.decide(request, documents).decision) {
             is Decision.Permit -> null
-            else -> LockoutCheck.Lockout("$what would be ${describe(decision)}")
+            is Decision.Deny -> denied(what, decision.by, heads, PolicyHomes(documents))
+            else -> LockoutCheck.Lockout(
+                "$what would be ${decision::class.simpleName?.lowercase()}: it could not be decided"
+            )
         }
     }
 
-    private fun describe(decision: Decision): String = when (decision) {
-        is Decision.Deny -> when (val by = decision.by) {
-            null -> "denied: no statement permits it"
-            is StatementRef.Policy -> "denied by policy ${by.policy.value}, statement ${by.index}"
-            else -> "denied ($by)"
+    internal companion object {
+        /**
+         * A refusal that names the statement, with the documents its policy is defined in, which the publisher must be able
+         * to read to be told it (`CTL-51`, DR1-F-13): the same rule `simulate` shows a statement by ([Redaction]). A statement
+         * whose policy no document of the view defines is never named; a tenant's platform boundary, a policy of the platform
+         * document, is named only to a publisher who may read that document.
+         */
+        internal fun denied(
+            what: String,
+            by: StatementRef?,
+            heads: Map<SnapshotKey, Held?>,
+            homes: PolicyHomes
+        ): LockoutCheck.Lockout {
+            val unnamed = "$what would be denied"
+            val policy = when (by) {
+                null -> return LockoutCheck.Lockout("$unnamed: no statement permits it")
+                is StatementRef.Policy -> by
+                // The boundary is a policy of the platform document: named on the same condition as its statements.
+                is StatementRef.Boundary -> return LockoutCheck.Lockout(
+                    "$unnamed by the platform boundary ${by.boundary.value} of tenant ${by.tenant.value}",
+                    listOf(SnapshotKey.Platform),
+                    "$unnamed by the tenant's platform boundary",
+                )
+                is StatementRef.ScopeRejected -> return LockoutCheck.Lockout("$unnamed ($by)")
+            }
+            val tenant = heads.keys.firstOrNull { it is SnapshotKey.Tenant }
+            val namedIn = when (val via = policy.via) {
+                is BindingRef.Bound -> when (homes.of(via.document, policy.policy)) {
+                    DocumentKind.PLATFORM -> listOf(SnapshotKey.Platform)
+                    DocumentKind.APP -> listOfNotNull(heads.keys.firstOrNull { it is SnapshotKey.App })
+                    DocumentKind.TENANT -> listOfNotNull(tenant)
+                    null -> emptyList()
+                }
+                is BindingRef.Attached -> listOfNotNull(tenant, SnapshotKey.Platform)
+                else -> listOf(SnapshotKey.Platform)
+            }
+            if (namedIn.isEmpty()) return LockoutCheck.Lockout(unnamed)
+            return LockoutCheck.Lockout(
+                "$unnamed by policy ${policy.policy.value}, statement ${policy.index}",
+                namedIn,
+                unnamed,
+            )
         }
-        else -> "${decision::class.simpleName?.lowercase()}: it could not be decided"
     }
 }

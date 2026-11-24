@@ -14,13 +14,14 @@
     {
       "id": "CTL-2",
       "source": "RFC 0007 §5.4",
-      "statement": "The revision record is written before the head, and the head carries its parent. The head write is the commit point: a store's own timeout after it is a failure of what follows the write, never the publish's outcome or the caller's cancellation.",
+      "statement": "The revision record is written before the head, and the head carries its parent. The head write is the commit point: a store's own timeout after it is a failure of what follows the write, never the publish's outcome or the caller's cancellation, and so is a change that kept moving while it was settled: either is a 503 saying the revision is written and publishing the change again settles it, never a 409 (DR1-E-7).",
       "level": "control",
       "guards": [
         "control:RevisionsTest",
         "cocache:RevisionChainTest",
         "control:CommittedRevisionTest#a store timeout indexing a written head still answers published - #1263",
         "control:CommittedRevisionTest#a store timeout settling a published change says it is written, and a retry settles it - #1263",
+        "control:PublishedNotExpiredTest#a publish whose settling kept conflicting after the head write answers 503, written",
         "control:CommittedRevisionTest#a caller cancelled before the head write is cancelled and writes no head - #1263"
       ],
       "pending": null
@@ -457,7 +458,7 @@
     {
       "id": "CTL-34",
       "source": "RFC 0007 §6.1; #1545",
-      "statement": "A read that ends a change past its expiry is not a command: it moves an open change from the state it is in now, and when another caller moved the change first it answers the change as it is, the EXPIRED the other made or the state it was finished in, never a 409. A command still refuses an expired change (CTL-33).",
+      "statement": "A read that ends a change past its expiry is not a command: it moves an open change from the state it is in now, and when another caller moved the change first it answers the change as it is, the EXPIRED the other made or the state it was finished in, never a 409. A command still refuses an expired change (CTL-33). A change whose own revision is in effect is published, whatever its time: the read settles it PUBLISHED, as a retried publish does, and never records it EXPIRED while its revision decides; publishing a change recorded EXPIRED so, before this rule, settles it too (DR1-E-7).",
       "level": "control",
       "guards": [
         "control:ExpiryRaceTest#two readers of a change that has just expired both read it expired",
@@ -465,7 +466,10 @@
         "control:ExpiryRaceTest#a change that moved to another open state meanwhile is expired from where it is",
         "control:ExpiryRaceTest#a pass that listed the change before another reader expired it reads it expired",
         "control:ExpiryRaceTest#a change that keeps changing under the read is a 409 after the attempts, never a guess",
-        "control:ExpiryRaceTest#a command still refuses an expired change with a 409 of its own"
+        "control:ExpiryRaceTest#a command still refuses an expired change with a 409 of its own",
+        "control:PublishedNotExpiredTest#a change whose own revision is in effect is settled published when its expiry comes, never expired",
+        "control:PublishedNotExpiredTest#a change no revision of which is in effect still expires",
+        "control:PublishedNotExpiredTest#a change recorded expired while its revision was in effect is settled by publishing it"
       ],
       "pending": null
     },
@@ -692,12 +696,15 @@
     {
       "id": "CTL-51",
       "source": "R2C-32 (review round 2, fourth pass); RFC 0007 §10.3",
-      "statement": "simulate and explain name a statement (its policy, index and name, and in the trace its effect and whether it matched) only to a caller who may read the document that defines its policy, whichever document the binding it applied through lives in: a tenant's binding to a platform policy or to an app's permission policy shows a tenant administrator neither the statement that decided nor any of that policy's statements in the trace, which are counted as redacted. A caller who may read the defining document is told them. analyze, likewise, lists only the bindings of the documents the caller may read (cosec:read), its own tenant's document included, and counts the others as hidden: cosec:analyze on a tenant asks who may do what there, it does not grant reading the bindings the answer lists (DR1-F-8).",
+      "statement": "simulate and explain name a statement (its policy, index and name, and in the trace its effect and whether it matched) only to a caller who may read the document that defines its policy, whichever document the binding it applied through lives in: a tenant's binding to a platform policy or to an app's permission policy shows a tenant administrator neither the statement that decided nor any of that policy's statements in the trace, which are counted as redacted. A caller who may read the defining document is told them. The lock-out finding (V4) names the statement that would refuse the publisher only on the same condition, and otherwise says which request would be denied (DR1-F-13). analyze, likewise, lists only the bindings of the documents the caller may read (cosec:read), its own tenant's document included, and counts the others as hidden: cosec:analyze on a tenant asks who may do what there, it does not grant reading the bindings the answer lists (DR1-F-8).",
       "level": "control",
       "guards": [
         "control:DecisionQueriesTest#a tenant administrator does not see the statements of a platform policy their binding points to",
         "control:DecisionQueriesTest#a tenant administrator does not see the statements of an app policy their binding points to",
-        "control:DecisionQueriesTest#a platform operator still sees them, and a tenant administrator their own tenant's statements"
+        "control:DecisionQueriesTest#a platform operator still sees them, and a tenant administrator their own tenant's statements",
+        "control:ControlLockoutTest#a statement is named only to a publisher who may read the document that defines it",
+        "control:ControlLockoutTest#a refusal by the platform boundary names it only to a reader of the platform document",
+        "control:ControlLockoutTest#each reference is named only where its policy is defined"
       ],
       "pending": null
     },
@@ -755,7 +762,7 @@
     {
       "id": "CTL-55",
       "source": "Review round 2, R2C-4 (saas-open-changes-design.md §1); RFC 0007 §10.2",
-      "statement": "A listing of open changes shows a change only if reading it by id would show it to the caller, leaves out what the caller may not see before the page is cut, and tells nothing of what it leaves out, with one exception: its cursor. A listing by state is decided before anything is read: a tenant's principal scans its own tenant's document only; a platform principal scans each layer it holds cosec:read on (doc/tenant, doc/app, doc/platform for the platform document's changes); anyone else is refused, 403 without detail, and nothing is scanned. Each request reads at most four pages of changes. A scan the bound stops answers what it found, short or empty, and a cursor holding the position where it stopped, which may be an entry the caller may not see: it is given only to a caller admitted to scan that layer, the change it points at answers by id as it does to anyone who may not read it, and the caller learns from it only that some document of a layer it may enumerate has an open change in that state, nothing of the change. A cursor is a token the client passes back unchanged, the same convention as the document listing's (contract/control/cursor.json); it hides nothing from one who decodes it. A token that does not decode or belongs to another listing is a 400, never a listing from the start.",
+      "statement": "A listing of open changes shows a change only if reading it by id would show it to the caller, leaves out what the caller may not see before the page is cut, and tells nothing of what it leaves out, with one exception: its cursor. A listing by state is decided before anything is read: a tenant's principal scans its own tenant's document only; a platform principal scans each layer it holds cosec:read on (doc/tenant, doc/app, doc/platform for the platform document's changes); anyone else is refused, 403 without detail, and nothing is scanned. Each request reads at most four pages of changes. A scan the bound stops answers what it found, short or empty, and a cursor holding the position where it stopped, which may be an entry the caller may not see: it is given only to a caller admitted to scan that layer, the change it points at answers by id as it does to anyone who may not read it, and the caller learns from it that some document of a layer it may enumerate has an open change in that state, and, decoding it, that change's id (so, listing one at a time, how many there are), nothing else of the change (DR1-E-8; an opaque position is 8.1's). A cursor is a token the client passes back unchanged, the same convention as the document listing's (contract/control/cursor.json); it hides nothing from one who decodes it. A token that does not decode or belongs to another listing is a 400, never a listing from the start.",
       "level": "control",
       "guards": [
         "control:OpenChangeListingTest#another tenant's changes are left out, and the page says nothing of them - CTL-55",
@@ -794,7 +801,7 @@
     {
       "id": "CTL-56",
       "source": "Review round 2, R2C-17 (saas-open-changes-design.md §3); RFC 0007 §6.4",
-      "statement": "No shadow window passes on missing evidence: an instance that reported on a window and has no report is waited for, and at the longest window the window closes insufficient, naming it; it never closes passing on the others' reports.",
+      "statement": "No shadow window passes on missing evidence: an instance that reported on a window and has no report is waited for, and at the longest window the window closes insufficient, naming it; it never closes passing on the others' reports. What a pass saw of a window is written only to the record of that window, with the reporters the record already names: a change staged again meanwhile keeps its new window open, and two passes that overlap each keep the instances the other saw (DR1-E-6).",
       "level": "control",
       "guards": [
         "control:ControlRoundTwoFixesTest#a window whose reporter vanished closes insufficient at the longest window, naming it - CTL-56",
@@ -802,7 +809,10 @@
         "control:ControlRoundTwoFixesTest#an unreadable report waits then closes insufficient, a store outage does neither - CTL-56",
         "cocache:ShadowReadingsTest#a listed report that is missing, does not decode, or is another's is that instance's reading",
         "cocache:ShadowReadingsTest#a store that does not answer fails the whole call, never reads as an unreadable report",
-        "spi:ShadowValuesTest#the default readings read the reports, and throw where they throw"
+        "spi:ShadowValuesTest#the default readings read the reports, and throw where they throw",
+        "control:ShadowWindowRaceTest#a pass that looked at a window the change was staged again past writes nothing - DR1-E-6",
+        "control:ShadowWindowRaceTest#a reporter another pass added meanwhile is kept, the window closed or not - CTL-56",
+        "control:ShadowWindowRaceTest#a pass that sees no reporter the record lacks writes nothing - DR1-E-6"
       ],
       "pending": null
     },
@@ -1214,6 +1224,7 @@
         "control:StageReservationTest#a stage cancelled while writing its candidate gives the slot back and stays cancelled - #1235",
         "control:ChangeListenersTest#a gated event waits for the REQUIRED listeners, and fails with them",
         "control:MovedHeadsTest#a detection that does not finish in time is recorded for review",
+        "control:SharedReadTest#calls arriving while a load fails all fail with that one load - CTL-82",
         "spring-boot:DerivedTimeoutsTest#the values follow the deadlines an operator states"
       ]
     },
@@ -1230,6 +1241,32 @@
       "statement": "A document's max-count most recent revisions always keep their records, so a rollback to any of them works. All its records together, those included, weigh at most max-count times the document cap (400 MB by default; each record is at most the cap, so the most recent alone never pass it, and when they are all at the cap no older record stays), and beyond them its revision index lists at most the cap at 320 bytes an entry (26,214 entries by default), since the index is one stored value read and written twice a publish. Past either, a reclamation removes the oldest first, younger than cosec.control.revisions.min-age or not, except a record an open change rests on and the head; each record so removed within min-age is counted (cosec.control.revisions.reclaimed-young) and warned of, at most once a reclaim pass. An index entry names its record's stored size; one an older version wrote is sized from its record once. The records, their bytes and the open changes are metered by the pass that holds the reclaim lease, which replaces them when it ends and reports the last pass's until then; an instance another one led the pass for reports 0, and one whose pass could not start keeps what it last found, so the largest across instances is the store's.",
       "level": "control",
       "pending": null
+    },
+    {
+      "id": "CTL-85",
+      "source": "RFC 0007 §14.2 (DR1-F-3, DR1-F-4, RC review round 1 area F; design confirmed by the maintainer's coordinator, 2026-11-23)",
+      "statement": "What a control call works on that no cache keeps is held to a budget of an eighth of the heap, a quarter of what HeapBudget leaves, weighed before the work by a size known already: a body that carries a document, its bytes times the measured tree factor and the candidate's eight; a document the cache will not keep, its stored size times twelve. Work at most a small body's tree weighs passes without it, and one call counts at most the budget in all, its pieces together: the heaviest call fits alone, whatever its pieces. The host has one budget, which its operators' and service API, the in-process facade, the control plane's reads and the lock-out check all hold their work in. A call that does not fit waits, its tenant's turn round-robin with the other tenants', first in first out within a tenant, no later call passing a waiting one, each tenant taking at most half the budget while another waits unless it holds nothing, for at most half the pipeline's timeout (StageBudgets.workWait), and is otherwise refused 503 with Retry-After before it reads or decides anything. A call already holding budget never waits: what it needs more is granted at once or refused. A route whose path names the document applies the hard rule before it holds anything or reads the body.",
+      "level": "timing",
+      "pending": null,
+      "properties": [
+        "control:WorkBudgetTest#random work keeps the budget's invariants"
+      ],
+      "guards": [
+        "control:WorkBudgetTest#a call that holds work never waits for more",
+        "control:WorkBudgetTest#what a call holds is held until it ends, and work held later in it never waits",
+        "control:WorkBudgetTest#a call that does not fit within its patience is refused at its end",
+        "control:WorkBudgetTest#a waiter cancelled leaves the queue, and the next is granted",
+        "control:WorkBudgetTest#a call cancelled while it holds work releases it",
+        "control:WorkBudgetTest#a call that holds all of the budget takes its later pieces at once, counting none of them",
+        "control:ControlWorkRoutesTest#a call that holds all of the budget decodes a document the cache does not keep, and is answered",
+        "spring-boot:ControlPlaneSwitchTest#the work budget is one per host, and metered - CTL-85",
+        "control:WorkBudgetTest#a tenant asking again does not pass another tenant that waits",
+        "control:WorkBudgetTest#while another tenant waits, a tenant takes no more than half",
+        "control:WorkBudgetTest#a heavy waiter is served while light calls keep arriving",
+        "control:ControlBodyTreeTest#no body becomes a tree heavier than the tree factor per byte",
+        "control:ControlWorkRoutesTest#a document of another tenant is refused before any work is held or its body read",
+        "control:ControlWorkRoutesTest#a call the budget refuses is a 503 that says when to retry"
+      ]
     },
     {
       "id": "CTL-86",

@@ -723,7 +723,9 @@ cosec-control-server verifies no credential and issues no token: it believes the
 
 The `cosec-control` image refuses `cosec.jwt.enabled`, `cosec.api-key.enabled` and `cosec.authentication.login.enabled` set
 to `true`, and `cosec.control.enabled=false` (`cosec-control-server runs the control plane`): it verifies no credential and
-issues no token, and without the control plane it would be up and serve nothing. Remove the key. A control plane that
+issues no token, and without the control plane it would be up and serve nothing. It refuses what comes to the same too:
+`cosec.enabled=false`, `cosec.control.http.enabled=false` (no control route, the service port's included),
+`cosec.pipeline.mode=gateway` and `cosec.pipeline.caller=credential`, each named in the message. Remove the key. A control plane that
 verifies tokens or signs people in is an application of your own, with `cosec-control`; the gateway image is the
 read-only one.
 
@@ -1236,6 +1238,16 @@ container that waits for the Redis port, or a separate deploy step).
 | `A token revocation is kept for <d>: the longer of cosec.jwt.token-validity.access (<d>) and cosec.jwt.token-validity.refresh (<d>), plus cosec.authentication.revocation.skew (<d>), shorter than cosec.control.approval.expire-after (<d>): ...` | Raise a token validity or lower the approvals' expiry: a revocation must outlive every approval its token gave. |
 | `cosec.authentication.login.refresh.path is set on a Spring Cloud Gateway host. ...` | A gateway issues no sessions: unset it there, and set it on the service that issues them, behind the gateway. |
 | `... is set, but this application serves no HTTP ...`, `... is set, but login or JWT is off ...`, `... is not one plain absolute path ...`, `... name one path ...` | Unset the [login route path](./configuration.md#authentication), or give the host what it names: a web stack, `cosec.authentication.login.enabled` and `cosec.jwt.enabled`, one plain path per route. |
+
+## A control call is 503 with Retry-After {#a-control-call-is-503-with-retry-after}
+
+A control call answers `503` with `Retry-After: 1`, `cosec.control.work.refused` counts, and the host logs at `INFO`
+`... is 503: [<tenant>]'s work of <n> bytes is refused`. This is not the store failing (that `503` has no
+`Retry-After`, and logs `the store did not answer` at `WARN`): the control plane's work budget was full of large
+documents being parsed, decoded or compiled at once, and the call did not fit within half the pipeline timeout
+(`CTL-85`). Nothing was read or decided: retry. If it is steady, give the control host more heap (the budget is an
+eighth of it, and the startup line says how many of the largest bodies run at once), or spread out the large
+`POST /changes` and `:apply` calls; a tenant writing in a loop holds at most half the budget while others wait.
 
 ## Control-plane errors
 

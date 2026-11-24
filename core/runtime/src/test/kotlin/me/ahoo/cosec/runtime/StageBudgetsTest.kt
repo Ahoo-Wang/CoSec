@@ -82,6 +82,9 @@ class StageBudgetsTest {
             .contains("authentication=1s (20 % of the pipeline timeout 5s)")
             .contains("revocation read=300ms (30 % of the authentication budget)")
             .contains("required listener=1s (20 %)")
+            // CTL-85: how long a control call waits for the control plane's work budget.
+            .contains("control work wait=2.5s (50 %)")
+        StageBudgets.of(5.seconds).workWait.assert().isEqualTo(2_500.milliseconds)
     }
 
     private object PipelineSettingsProbe {
