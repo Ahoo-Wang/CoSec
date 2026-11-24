@@ -46,6 +46,8 @@ object StatedIdentity {
             "sub" to subject,
             "scope" to linkedMapOf("app" to app, "space" to ""),
             "roles" to roles,
+            // A control host decides on the identity, so it needs the caller's whole memberships (IDN-39): none more.
+            "memberships" to linkedMapOf("spaces" to emptyMap<String, Any>(), "attachments" to emptyList<String>()),
             "auth" to linkedMapOf(
                 "method" to method,
                 "jti" to jti,
