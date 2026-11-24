@@ -396,6 +396,11 @@ class MigrateMainTest {
             code.assert().describedAs(output).isEqualTo(MigrateMain.OK)
             output.assert().contains("Verified 1 document(s): 0 broken, 0 could not be read.")
         }
+        // R2C-20's scope, from the command line: the parser knows --prefix and --limit.
+        run("$args --prefix platform --limit 1").let { (code, output) ->
+            code.assert().describedAs(output).isEqualTo(MigrateMain.OK)
+            output.assert().contains("Verified 1 document(s): 0 broken, 0 could not be read.")
+        }
     }
 
     /** RFC 0007 §5.8: a reference a lost publish indexed, which no head has, no longer blocks a removal once repaired. */
