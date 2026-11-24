@@ -26,7 +26,7 @@ less. What one push asks of it, counted from the logs of completed runs (2026-11
 | Workflow | Jobs that download | Gradle cache restored | Hit |
 |---|---|---|---|
 | `ci.yml` | 8 test groups, `typescript-host` | the last main run's manifest of the same job (restore-key), and its `gradle-dependencies` entry | yes, all nine (runs 44837144050 on a pull request, 44835207905 on main) |
-| `system-test.yml`, `docker-deploy.yml` (AOT smoke), `property-stress.yml` | 2, 1, 1 | the same | yes |
+| `system-test.yml`, `docker-deploy.yml` (AOT smoke), `property-stress.yml` | 3, 1, 1 | the same | yes, but the kind job of `system-test.yml` was throttled by Central in its resolution: its three jobs now also restore this cache |
 | `codeql.yml` | 1, every push | none: off since #1490 | cold, the whole build every time |
 | `jmh-ab.yml`, `jmh-v7-v8.yml` | 1 each, manual | none: off since #1490 | cold |
 | `mutation.yml` | up to 49 shards at once, a dozen for a subset | the manifest of the last run of this workflow **on main**, which is the weekly one | yes, but up to a week old: a version bumped since is downloaded by every shard at once |
@@ -39,15 +39,15 @@ every configuration of the build that succeeded (an entry becomes visible only w
 saves nothing: no reader finds a half-written one). It runs on main when a version, a repository or the Gradle
 distribution changes (`.github/scripts/dependency-cache-key.sh`), when this script changes, and weekly, because GitHub
 evicts what is not used for seven days. `.github/actions/dependency-cache` restores it, read-only, in `codeql.yml`,
-`mutation.yml`, `jmh-ab.yml` and `jmh-v7-v8.yml`; the jobs that restore a Gradle cache of their own and hit it are left as
-they are.
+`mutation.yml`, `jmh-ab.yml`, `jmh-v7-v8.yml` and `system-test.yml` (from its checkout of the CI scripts, since the ref under
+test may predate the action); the other jobs that restore a Gradle cache of their own and hit it are left as they are.
 
 - `<repos>` is a hash of `settings.gradle.kts` and of every line of a build script that names a repository, a plugin source
   or `pluginManagement`; `<versions>` a hash of `gradle/libs.versions.toml` and the wrapper properties. A restore falls back
   from a missing `<versions>` to the newest entry with the same `<repos>`, never across a change of `<repos>`: Gradle's
   metadata cache is kept per repository, and what #1730 changed (where a plugin is read from) left every cache that
   remembered the old answer failing on `Could not find`. The script's removal of `caches/modules-2` on that error stays.
-- In `mutation.yml` it is restored after the job's Gradle cache, so that its newer index is the one that stays; the older
+- In `mutation.yml` and `system-test.yml` it is restored after the job's Gradle cache, so that its newer index is the one that stays; the older
   files that cache also holds are only unused.
 - A pull request that changes `dependency-cache.yml`, its key script or its action runs it, and the cache it writes is that
   pull request's own (a pull request's cache is readable by it alone): how a change of the key, the paths or the workflow is
