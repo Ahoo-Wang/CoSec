@@ -86,6 +86,26 @@ class CheckPatternsTest {
             .single().written.assert().isNull()
     }
 
+    /** Each shape a pattern takes in a document, and each part a rewrite keeps or escapes. */
+    @Test
+    fun `every shape is read and every part of a rewrite is kept or escaped as it was read`() {
+        val findings = scan(
+            body(
+                """[{"id":"p","statements":[
+                  {"effect":"allow","action":[1,"a(b:*"],"resource":[{"caseSensitive":false},7,"t(x/*/{id}/**"]},
+                  {"effect":"allow","action":"*","resource":{"pattern":"http:path:/a!","decodeAndParseSegments":false}}]}]"""
+            )
+        )
+        findings.map { it.location to it.written }.assert().containsExactly(
+            "$.policies[0].statements[0].action[1]" to "a\\(b:*",
+            "$.policies[0].statements[0].resource[2]" to "t\\(x/*/{id}/**",
+            "$.policies[0].statements[1].resource.pattern" to "http:path:/a\\!",
+        )
+        PatternScan.actionWritten("*").assert().isEqualTo("*")
+        PatternScan.actionWritten("nope").assert().isEqualTo("nope")
+        PatternScan.resourceWritten("t/a**/**").assert().isEqualTo("t/a\\*\\*/**")
+    }
+
     @Test
     fun `a document whose patterns compile has nothing to say`() {
         scan(
