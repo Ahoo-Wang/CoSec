@@ -23,8 +23,11 @@ import me.ahoo.cosec.control.sdk.ControlRefusedException
 import me.ahoo.cosec.control.sdk.RoutedControlService
 import me.ahoo.cosec.control.sdk.ServiceCall
 import me.ahoo.cosec.document.identity.IdentityHeader
+import me.ahoo.cosec.model.Identifiers
+import me.ahoo.cosec.runtime.http.ProblemType
 import me.ahoo.cosec.runtime.http.RequestSecurity
 import me.ahoo.cosec.runtime.identity.IdentityIssuer
+import me.ahoo.cosec.runtime.identity.RequestEndedException
 import me.ahoo.cosec.runtime.identity.ServiceIdentity
 import me.ahoo.cosec.spi.id.IdGenerator
 import me.ahoo.cosec.spi.id.RandomIdGenerator
@@ -59,6 +62,8 @@ internal class HttpTransport(
 
     private val answer = BoundedAnswer(maxAnswerBytes)
 
+    private val ended = RateLimitedWarning(clock)
+
     init {
         require(baseUri.isAbsolute && baseUri.scheme in SCHEMES) { "The control API's base is an http or https URI." }
         require(baseUri.rawQuery == null && baseUri.rawFragment == null) { "The control API's base has no query." }
@@ -72,7 +77,7 @@ internal class HttpTransport(
         val request = HttpRequest.newBuilder(uri(call))
             .timeout(timeout)
             .header(ACCEPT, MEDIA_TYPES)
-            .apply { identity(caller)?.let { header(IdentityHeader.NAME, it) } }
+            .apply { stated(caller, call)?.let { header(IdentityHeader.NAME, it) } }
             .apply {
                 val body = call.body
                 if (body == null) {
@@ -86,6 +91,25 @@ internal class HttpTransport(
         // Only a 2xx is the route's answer: a redirect the client did not follow, or a proxy's error page, is not.
         if (response.statusCode() !in SUCCESS) throw ControlRefusedException(response.statusCode(), response.body())
         return response.body()
+    }
+
+    /**
+     * [identity], or the refusal the in-process facade answers a request that has ended (`PIP-26`, `CTL-77`, DR1-F-2):
+     * `403` without detail, before anything is sent. The host never sees it, so it is in no host's audit: warned of here,
+     * at most once a minute, naming the principal, its tenant and the route, never its token.
+     */
+    private fun stated(caller: ControlCaller, call: ServiceCall): String? = try {
+        identity(caller)
+    } catch (e: RequestEndedException) {
+        val security = caller.context?.let(RequestSecurity::of)
+        // Both ids are opaque text a token or an authenticator chose: printed escaped, they cannot forge a line (RC1-15).
+        val principal = Identifiers.printable(security?.principal?.id?.value ?: "anonymous")
+        ended.warn {
+            "A control call $call was made for request [${Identifiers.printable(e.requestId)}] of principal " +
+                "[$principal] of tenant [${security?.scope?.tenant?.value}] after it ended: refused, not sent, so no " +
+                "host records it (PIP-26)"
+        }
+        throw ControlRefusedException(ProblemType.FORBIDDEN.status, forbidden(e.requestId)).apply { initCause(e) }
     }
 
     /**
@@ -145,5 +169,24 @@ internal class HttpTransport(
             "who it is: call as the application's own principal (ControlCaller.service), or in process."
 
         fun encode(text: String): String = URLEncoder.encode(text, Charsets.UTF_8).replace("+", "%20")
+
+        /** The problem a host answers a refused call, member by member as the control API writes it, without detail. */
+        fun forbidden(requestId: String): String = with(ProblemType.FORBIDDEN) {
+            """{"type":${text(uri)},"title":${text(title)},"status":$status,"code":${text(name)},""" +
+                """"requestId":${text(requestId)}}"""
+        }
+
+        /** [value] as a JSON string: quoted, with a quote, a backslash and a control character escaped. */
+        private fun text(value: String): String = buildString {
+            append('"')
+            value.forEach { char ->
+                when {
+                    char == '"' || char == '\\' -> append('\\').append(char)
+                    char < ' ' -> append("\\u%04x".format(char.code))
+                    else -> append(char)
+                }
+            }
+            append('"')
+        }
     }
 }

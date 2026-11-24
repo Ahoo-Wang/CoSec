@@ -30,6 +30,10 @@ Which preview of the library may run behind which preview of the gateway image: 
 
 ## From 8.0.0-beta.7 {#from-8-0-0-beta-7}
 
+- **`HttpControlService` refuses a request that has ended** (`CTL-77`, `PIP-26`, DR1-F-2). Affected: an application that
+  keeps a `ControlCaller.of(context)` past its request (a launched job, a deferred write). Over HTTP it acted as the
+  user until the credential expired, after a logout too; it is now refused `403`, as in process, before anything is
+  sent, with a `WARN`. Call as the application's own principal (`ControlCaller.service`) from such work.
 - **Breaking for images built on top of CoSec's: the application's files are root's** (DR1-G-8). Affected: a
   Dockerfile `FROM` the gateway or control-plane image that writes under `/opt/<app>` as `appuser`, retraining the AOT
   cache included. The process now owns only `logs/` and `data/`, so a process made to write files cannot replace its
@@ -86,7 +90,15 @@ Which preview of the library may run behind which preview of the gateway image: 
   documents' quarter of the heap (about 170 MB at 2 GiB), where two caches held a fixed 64 MB each. The host's two
   snapshot sources now hold a third of that quarter each, where they held half: at 2 GiB about 4,800 typical tenants in
   each, where it was 7,200. Give a control-plane host more heap to hold more; nothing else to change.
-- **A document holds at most `cosec.control.revisions.max-count` open changes** (50 by default, `CTL-83`, DR1-E-2).
+- **A document's revision records are bounded within `min-age` too** (`CTL-84`, DR1-F-6). Affected: a document that
+  publishes large documents often. A document keeps its `max-count` most recent revisions, records of at most
+  `max-count` times the document cap in all, those included (400 MB), and 26,214 index entries beyond them; past
+  either, the oldest go, younger than `min-age` or not, counted by `cosec.control.revisions.reclaimed-young`, with a
+  `WARN`. Four meters are new: `cosec.control.revisions.records`, `.bytes`, `.reclaimed-young` and
+  `cosec.control.changes.open`; take the gauges' largest across instances ([Observability](./observability.md)). Each revision index entry now names its record's size; an
+  older control plane reads past it, and an entry it writes without one is sized from its record by the next pass.
+- **A document takes no new change once it holds `cosec.control.revisions.max-count` open changes** (50 by default,
+  `CTL-83`, DR1-E-2; counted before the write, so changes proposed at the same moment may all pass).
   Affected: a client that leaves many changes open on one document. A proposal, an `:apply` or a rollback past the
   limit first abandons its author's own oldest change whose checks failed, then is refused `409` with the new conflict
   `OPEN_LIMIT`, naming the oldest open change in `heldBy`; a typed client sees `ConflictKind.OPEN_LIMIT`. Abandon the

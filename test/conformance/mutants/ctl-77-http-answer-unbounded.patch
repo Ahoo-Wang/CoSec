@@ -6,12 +6,12 @@ diff --git a/extensions/control-http/src/main/kotlin/me/ahoo/cosec/control/http/
 index 0000000..0000000 100644
 --- a/extensions/control-http/src/main/kotlin/me/ahoo/cosec/control/http/HttpTransport.kt
 +++ b/extensions/control-http/src/main/kotlin/me/ahoo/cosec/control/http/HttpTransport.kt
-@@ -58,7 +58,7 @@ internal class HttpTransport(
+@@ -60,7 +60,7 @@ internal class HttpTransport(
       */
      private val issuer = IdentityIssuer(clock = clock, relay = true)
  
 -    private val answer = BoundedAnswer(maxAnswerBytes)
 +    private val answer = BoundedAnswer(Long.MAX_VALUE)
  
-     init {
-         require(baseUri.isAbsolute && baseUri.scheme in SCHEMES) { "The control API's base is an http or https URI." }
+     private val ended = RateLimitedWarning(clock)
+ 

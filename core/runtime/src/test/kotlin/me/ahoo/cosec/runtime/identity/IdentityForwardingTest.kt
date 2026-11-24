@@ -411,6 +411,24 @@ class IdentityForwardingTest {
         }.message.assert().contains("note").contains("2000").doesNotContain("xxxx")
     }
 
+    /**
+     * DR1-F-2, `PIP-26`: the one mapping of a request's caller to `CoSec-Identity` states only a request in progress, so a
+     * caller kept past its request (a launched job, a deferred write) acts as no one over HTTP, as it is refused in
+     * process; the gateway, which forwards while the request runs, is not affected.
+     */
+    @Test
+    fun `an ended request's caller is not stated, by any issuer`() {
+        val security = security(attributed(mapOf("name" to "Alice")))
+        relaying.issue(security).assert().isNotNull()
+        IdentityIssuer(setOf("name")).issue(security).assert().isNotNull()
+
+        security.end()
+
+        org.junit.jupiter.api.assertThrows<RequestEndedException> { relaying.issue(security) }
+            .requestId.assert().isEqualTo(security.requestId)
+        org.junit.jupiter.api.assertThrows<RequestEndedException> { IdentityIssuer(setOf("name")).issue(security) }
+    }
+
     /** The security the pipeline makes for [authn], permitted. */
     private fun security(authn: AuthnResult): me.ahoo.cosec.runtime.http.RequestSecurity = runBlocking {
         PipelineFixtures.pipeline(
