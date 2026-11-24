@@ -3,10 +3,10 @@
 # Tests: :control:test --tests me.ahoo.cosec.control.api.LaterRecordsTest
 
 diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/api/ControlHttp.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/api/ControlHttp.kt
-index eb7c6b36f..2fb1f1e0b 100644
+index de8ebfd23..d6b37bddc 100644
 --- a/core/control/src/main/kotlin/me/ahoo/cosec/control/api/ControlHttp.kt
 +++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/api/ControlHttp.kt
-@@ -145,7 +145,6 @@ class ControlHttp(
+@@ -165,7 +165,6 @@ class ControlHttp(
       * (`SNP-27`): the gap of a rolling upgrade, which ends when this instance is upgraded, not a fault of the store.
       */
      private fun stored(request: ControlHttpRequest, requestId: String, e: Exception): ControlHttpResponse {
