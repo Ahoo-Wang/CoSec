@@ -18,6 +18,7 @@ import me.ahoo.cosec.login.token.TokenSubject
 import me.ahoo.test.asserts.assert
 import me.ahoo.test.asserts.assertThrownBy
 import org.junit.jupiter.api.Test
+import java.time.Duration
 
 /**
  * @author ahoo wang
@@ -54,6 +55,25 @@ internal class JwtTokenConverterTest {
             assertThrownBy<IllegalArgumentException> { jwtTokenConverter.toToken(TokenSubject(id)) }
         }
         Jwts.decode(jwtTokenConverter.toToken(TokenSubject(" a ")).accessToken).subject.assert().isEqualTo(" a ")
+    }
+
+    /**
+     * `IDN-37`: a revocation is kept past the configured validities, so no call issues a token that would outlive them:
+     * one asking for longer is refused, naming the property; one asking for as long or shorter, an expired one too, is
+     * issued.
+     */
+    @Test
+    fun aTokenLongerThanTheConfiguredValidityIsNotIssued() {
+        val converter = JwtTokenConverter(JwtFixture.IDS, JwtFixture.SIGNING, Duration.ofMinutes(10), Duration.ofDays(7))
+        val subject = TokenSubject("alice")
+        assertThrownBy<IllegalArgumentException> {
+            converter.toToken(subject, Duration.ofMinutes(10).plusSeconds(1), Duration.ofDays(1))
+        }.hasMessageContaining("cosec.jwt.token-validity.access").hasMessageContaining("IDN-37")
+        assertThrownBy<IllegalArgumentException> {
+            converter.toToken(subject, Duration.ofMinutes(1), Duration.ofDays(7).plusSeconds(1))
+        }.hasMessageContaining("cosec.jwt.token-validity.refresh").hasMessageContaining("IDN-37")
+        converter.toToken(subject, Duration.ofMinutes(10), Duration.ofDays(7)).accessToken.assert().isNotBlank()
+        converter.toToken(subject, Duration.ofMinutes(-1), Duration.ofDays(1)).accessToken.assert().isNotBlank()
     }
 
     @Test

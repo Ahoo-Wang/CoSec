@@ -69,6 +69,10 @@ class JwtTokenConverter @InternalCoSecApi constructor(
         const val DEFAULT_MEMBERSHIP_CLAIM_LIMIT = 4096
 
         private val jsonMapper = JsonMapper.builder().build()
+
+        /** The starter's properties of the two validities, which the messages name. */
+        private const val ACCESS_VALIDITY_PROPERTY = "cosec.jwt.token-validity.access"
+        private const val REFRESH_VALIDITY_PROPERTY = "cosec.jwt.token-validity.refresh"
     }
 
     init {
@@ -90,6 +94,7 @@ class JwtTokenConverter @InternalCoSecApi constructor(
         refreshTokenValidity: Duration
     ): CompositeToken {
         checkIssuable(subject)
+        checkValidity(accessTokenValidity, refreshTokenValidity)
         val accessTokenId = idGenerator.generate()
         val now = Date()
         // No token of the pair outlives its session (RFC 0009): the end of the family's absolute lifetime.
@@ -152,6 +157,25 @@ class JwtTokenConverter @InternalCoSecApi constructor(
         }
         require(subject.tenant?.let(SnapshotKey.Tenant::isValidTenantId) != false) {
             "Principal [$printableId] names a tenant that cannot be a tenant id: a token cannot carry it."
+        }
+    }
+
+    /**
+     * The validities a call asks for, held to this converter's own (`IDN-37`): a token revocation is kept past the longer
+     * of the configured validities, plus the skew, so a token that lived longer would be valid again once its revocation
+     * expired. A longer token is refused, naming the property that would allow it; raising it lengthens the retention
+     * with it. A shorter one, or an already expired one, is issued.
+     */
+    private fun checkValidity(access: Duration, refresh: Duration) {
+        require(access <= accessTokenValidity) {
+            "An access token valid for $access outlives the configured access validity $accessTokenValidity " +
+                "($ACCESS_VALIDITY_PROPERTY): its revocation would expire before it did (IDN-37). Raise the property to " +
+                "issue longer access tokens."
+        }
+        require(refresh <= refreshTokenValidity) {
+            "A refresh token valid for $refresh outlives the configured refresh validity $refreshTokenValidity " +
+                "($REFRESH_VALIDITY_PROPERTY): its revocation would expire before it did (IDN-37). Raise the property to " +
+                "issue longer refresh tokens."
         }
     }
 
