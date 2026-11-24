@@ -84,17 +84,7 @@ internal class Publishing(
     ): ChangeRequest {
         val change = flow.visible(publisher, id)
         authority.require(publisher, change.key, PublishRules.publishing(change))
-        if (change.state == ChangeState.PUBLISHED && slots.holds(change)) {
-            return recordedAgain(change, publisher, again)
-        }
-        if (change.state == ChangeState.EXPIRED) {
-            // Recorded EXPIRED while its own revision was in effect, before DR1-E-7: publishing it settles it.
-            PublishRules.ownRevision(
-                revisions,
-                change,
-                revisions.head(change.key)
-            )?.let { return republished(change, it, publisher) }
-        }
+        writtenBefore(change, publisher, again)?.let { return it }
         PublishRules.requireState(change, ChangeStep.PUBLISH.from)
         PublishRules.acknowledged(change, ack)
         candidates.authorize(publisher, change)
@@ -150,6 +140,18 @@ internal class Publishing(
             is PublishOutcome.Published -> checkNotNull(published) { "[${change.key}] was written unsettled." }
             else -> unwritten(change, outcome, slotLost, publisher, again)
         }
+    }
+
+    /**
+     * A publish of a change an earlier publish already wrote: one `PUBLISHED` whose slot is still held is recorded again
+     * and its slot released; one recorded `EXPIRED` while its own revision was in effect, before DR1-E-7, is settled.
+     * Null for any other change, which publishes as usual.
+     */
+    private suspend fun writtenBefore(change: ChangeRequest, publisher: Operator, again: String?): ChangeRequest? {
+        if (change.state == ChangeState.PUBLISHED && slots.holds(change)) return recordedAgain(change, publisher, again)
+        if (change.state != ChangeState.EXPIRED) return null
+        val own = PublishRules.ownRevision(revisions, change, revisions.head(change.key)) ?: return null
+        return republished(change, own, publisher)
     }
 
     /** The PUBLISHING record, gated: written before the head is, so a REQUIRED listener that cannot record it stops the publish. */
