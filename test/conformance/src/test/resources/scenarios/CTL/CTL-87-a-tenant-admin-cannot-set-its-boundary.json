@@ -99,6 +99,7 @@
     "steps": [
       "refused 403"
     ],
+    "errors": {},
     "heads": {
       "tenant:acme": 1
     }
