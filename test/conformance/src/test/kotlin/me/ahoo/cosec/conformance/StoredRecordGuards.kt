@@ -35,7 +35,7 @@ internal object StoredRecordGuards {
         "${LATER}the log says a later version wrote it, once per interval at WARN, and a broken store is not told so",
         "${RECORDS}a later member crit names refuses that record as a later version's, which is never rewritten",
         "${RECORDS}a later member without crit is dropped by a rewrite, which leaves the same record",
-        "control:ControlHttpTest#a record a later version wrote is a 503 without detail, told as that",
+        "control:LaterRecordsTest#a record a later version wrote is a 503 without detail, told as that",
         "control:LaterRecordsTest#a later record is told at WARN once per interval, and a broken store is not told as one",
         // SNP-28: every member of a kind of record registered, with its absence and its two ways to widen, apart.
         "${MEMBERS}the registry names every member the codec writes, and only those",

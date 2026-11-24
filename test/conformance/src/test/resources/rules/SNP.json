@@ -443,7 +443,7 @@
         "login:LaterSessionRecordTest#the log says a later version wrote it, once per interval at WARN, and a broken store is not told so",
         "cocache:StoredRecordMembersTest#a later member crit names refuses that record as a later version's, which is never rewritten",
         "cocache:StoredRecordMembersTest#a later member without crit is dropped by a rewrite, which leaves the same record",
-        "control:ControlHttpTest#a record a later version wrote is a 503 without detail, told as that",
+        "control:LaterRecordsTest#a record a later version wrote is a 503 without detail, told as that",
         "control:LaterRecordsTest#a later record is told at WARN once per interval, and a broken store is not told as one"
       ],
       "pending": null

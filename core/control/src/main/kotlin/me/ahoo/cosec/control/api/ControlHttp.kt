@@ -99,17 +99,7 @@ class ControlHttp(
             log.info { "Control API ${request.method} ${request.path} (request $requestId) is 503: ${e.message}" }
             busy(requestId)
         } catch (e: ChangeRejectedException) {
-            val problem = Problem.of(e.status)
-            // A 503 for a record a later version wrote (SNP-27) is told as that, apart from a store that is broken.
-            if (!problem.detailed && !(problem == Problem.UNAVAILABLE && later(request, requestId, e))) {
-                // The answer says nothing, so a refusal never tells what exists; the operator's administrator reads why.
-                log.info {
-                    "Control API ${request.method} ${request.path} by ${operator.tenant.value}/" +
-                        "${operator.actor.principal.value} is ${problem.status} " +
-                        "(request $requestId): ${e.message}"
-                }
-            }
-            problem(problem, requestId, e.message, e.conflict, e.heldBy?.value)
+            rejected(request, requestId, operator, e)
         } catch (e: ControlStoreException) {
             // The store did not answer (R2C-6, CTL-52): an outage, retried by the client, not a bug.
             log.warn {
@@ -124,18 +114,48 @@ class ControlHttp(
         } catch (e: JacksonException) {
             stored(request, requestId, e)
         } catch (e: IllegalArgumentException) {
-            if (later(request, requestId, e)) return problem(Problem.UNAVAILABLE, requestId, null)
-            // Refused for a reason none of the control plane's own checks gives (RC1-39): not shown, logged.
-            log.info {
-                "Control API ${request.method} ${request.path} (request $requestId) is 400: " +
-                    SnapshotKeyText.printable(e.message.orEmpty())
-            }
-            problem(Problem.INVALID_REQUEST, requestId, null)
+            refused(request, requestId, e)
         } catch (e: Exception) {
-            if (later(request, requestId, e)) return problem(Problem.UNAVAILABLE, requestId, null)
-            log.error(e) { "Control API ${request.method} ${request.path} failed (request $requestId)." }
-            problem(Problem.INTERNAL_ERROR, requestId, null)
+            failed(request, requestId, e)
         }
+    }
+
+    /** A route's refusal: its status, and its detail where the problem shows one. */
+    private fun rejected(
+        request: ControlHttpRequest,
+        requestId: String,
+        operator: Operator,
+        e: ChangeRejectedException,
+    ): ControlHttpResponse {
+        val problem = Problem.of(e.status)
+        // A 503 for a record a later version wrote (SNP-27) is told as that, apart from a store that is broken.
+        val told = problem == Problem.UNAVAILABLE && later(request, requestId, e)
+        if (!problem.detailed && !told) {
+            // The answer says nothing, so a refusal never tells what exists; the operator's administrator reads why.
+            log.info {
+                "Control API ${request.method} ${request.path} by ${operator.tenant.value}/" +
+                    "${operator.actor.principal.value} is ${problem.status} " +
+                    "(request $requestId): ${e.message}"
+            }
+        }
+        return problem(problem, requestId, e.message, e.conflict, e.heldBy?.value)
+    }
+
+    /** Refused for a reason none of the control plane's own checks gives (RC1-39): not shown, logged. */
+    private fun refused(request: ControlHttpRequest, requestId: String, e: IllegalArgumentException): ControlHttpResponse {
+        if (later(request, requestId, e)) return problem(Problem.UNAVAILABLE, requestId, null)
+        log.info {
+            "Control API ${request.method} ${request.path} (request $requestId) is 400: " +
+                SnapshotKeyText.printable(e.message.orEmpty())
+        }
+        return problem(Problem.INVALID_REQUEST, requestId, null)
+    }
+
+    /** A failure nothing above names: a fault of this instance, logged with its cause. */
+    private fun failed(request: ControlHttpRequest, requestId: String, e: Exception): ControlHttpResponse {
+        if (later(request, requestId, e)) return problem(Problem.UNAVAILABLE, requestId, null)
+        log.error(e) { "Control API ${request.method} ${request.path} failed (request $requestId)." }
+        return problem(Problem.INTERNAL_ERROR, requestId, null)
     }
 
     /**

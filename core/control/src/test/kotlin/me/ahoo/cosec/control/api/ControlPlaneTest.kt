@@ -131,7 +131,10 @@ class ControlPlaneTest {
 
         override suspend fun change(id: ChangeId): Versioned<ChangeRequest>? = when (id) {
             // Wrapped, as a store's cache may wrap what its codec threw.
-            in unreadable -> throw IllegalStateException("decoding", SnapshotFormatException("A change request is malformed."))
+            in unreadable -> throw IllegalStateException(
+                "decoding",
+                SnapshotFormatException("A change request is malformed.")
+            )
             in later -> memory.change(id)?.let { stored ->
                 val record = CoSecJson.mapper.readTree(ChangeRequestCodec.encode(stored.value)) as ObjectNode
                 record.put("device", "d1").putArray("crit").add("device")

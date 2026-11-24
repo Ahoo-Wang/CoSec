@@ -11,7 +11,7 @@
  * limitations under the License.
  */
 
-@file:OptIn(InternalCoSecApi::class)
+@file:OptIn(InternalCoSecApi::class, ExperimentalCoSecApi::class)
 
 package me.ahoo.cosec.control.api
 
@@ -19,18 +19,80 @@ import ch.qos.logback.classic.Level
 import ch.qos.logback.classic.Logger
 import ch.qos.logback.classic.spi.ILoggingEvent
 import ch.qos.logback.core.read.ListAppender
+import kotlinx.coroutines.runBlocking
+import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.control.captured
+import me.ahoo.cosec.document.json.CoSecJson
 import me.ahoo.cosec.document.json.StoredFormat
 import me.ahoo.cosec.document.json.StoredRecord
+import me.ahoo.cosec.model.TenantId
+import me.ahoo.cosec.runtime.http.RequestSecurity
 import me.ahoo.cosec.spi.snapshot.SnapshotFormatException
+import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import org.slf4j.LoggerFactory
+import tools.jackson.databind.JsonNode
 import java.time.Duration
 
-/** SNP-27: the control plane tells a record a later version wrote at WARN once per interval, and nothing else as one. */
+/**
+ * SNP-27: the control API answers a record a later version wrote with a 503, and tells it at WARN once per interval;
+ * nothing else is told as one.
+ */
 class LaterRecordsTest {
+    private val fixture = ControlPlaneTest()
+    private val http = ControlHttp(fixture.plane)
+    private val alice = fixture.engine.security(ControlPlaneTest.ACME, "alice", roles = listOf("admin", "ops@team-a"))
+    private val plato = fixture.engine.security(TenantId.PLATFORM, "plato")
+
+    private fun call(path: String, security: RequestSecurity): Pair<Int, JsonNode> = runBlocking {
+        val response = http.handle(ControlHttpRequest("GET", path, emptyMap(), null), security)
+        response.status to CoSecJson.mapper.readTree(response.body)
+    }
+
+    /**
+     * SNP-27: a record a later version wrote is the gap of a rolling upgrade, not a broken store: a 503 without detail,
+     * never the 500 of a record that does not decode, whether its refusal comes wrapped or not, and the log says so with
+     * the members its crit names.
+     */
+    @Test
+    fun `a record a later version wrote is a 503 without detail, told as that`() {
+        val id = runBlocking {
+            fixture.changes.propose(
+                fixture.plato,
+                SnapshotKey.Platform,
+                1,
+                emptyList(),
+                "later"
+            )
+        }.id
+        fixture.later += id
+        fixture.laterIndex += SnapshotKey.Tenant("acme")
+        val logger = LoggerFactory.getLogger("me.ahoo.cosec.control") as Logger
+        val level = logger.level
+        val logged = ListAppender<ILoggingEvent>().also { it.start() }
+        logger.addAppender(logged)
+        logger.level = Level.DEBUG
+        try {
+            val change = call("/changes/${id.value}", plato)
+            val revisions = call("/documents/tenant:acme/revisions", alice)
+            for ((status, problem) in listOf(change, revisions)) {
+                status.assert().isEqualTo(503)
+                problem.get("code").asString().assert().isEqualTo("UNAVAILABLE")
+                problem.has("detail").assert().isFalse()
+            }
+            val told = logged.captured().map { it.formattedMessage }.filter { it.contains("a later CoSec wrote") }
+            told.assert().hasSize(2)
+            told[0].assert().contains("GET /changes/${id.value}").contains("(the change record), members [device]")
+            told[1].assert().contains("(the revision_index record), members [next]").contains("Upgrade this instance")
+            logged.captured().filter { it.level == Level.ERROR }.assert().isEmpty()
+        } finally {
+            logger.level = level
+            logger.detachAppender(logged)
+        }
+    }
+
     private val later = IllegalStateException(
         "decoding",
         SnapshotFormatException("later", StoredFormat.Later(StoredRecord.CHANGE, listOf("device"))),

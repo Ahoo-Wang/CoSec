@@ -1,6 +1,6 @@
 # Rule: SNP-27
 # Mutant: the control API answers a stored record a later version wrote as one that does not decode: a 500, logged as a fault
-# Tests: :control:test --tests me.ahoo.cosec.control.api.ControlHttpTest
+# Tests: :control:test --tests me.ahoo.cosec.control.api.LaterRecordsTest
 
 diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/api/ControlHttp.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/api/ControlHttp.kt
 index eb7c6b36f..2fb1f1e0b 100644
