@@ -80,7 +80,7 @@ class Changes(
      * Whether a candidate would keep its operator out of the control plane (UC-6). No default: a host that forgot it
      * would publish a lock-out silently; [LockoutCheck.UNCHECKED] is a choice to write.
      */
-    lockout: LockoutCheck,
+    val lockout: LockoutCheck,
     internal val authority: ChangeAuthority = ChangeAuthority(authorizer, options, revocations = revocations),
     /** What the instances report of the shadow windows (RFC 0007 §6.4); none by default. */
     reports: ShadowReportReader = InMemoryShadowReports(clock),

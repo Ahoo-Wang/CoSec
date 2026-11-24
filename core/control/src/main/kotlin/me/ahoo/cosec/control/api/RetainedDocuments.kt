@@ -19,7 +19,6 @@ import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.control.change.ChangeRejectedException
 import me.ahoo.cosec.control.change.ControlStatus.GONE
-import me.ahoo.cosec.control.lifecycle.ControlDerived
 import me.ahoo.cosec.control.lifecycle.WorkBudget
 import me.ahoo.cosec.control.store.Revisions
 import me.ahoo.cosec.document.PolicyDocument
@@ -37,7 +36,7 @@ internal class RetainedDocuments(
     private val revisions: Revisions,
     private val cache: DocumentCache,
     /** What a document the cache will not keep costs this call, held before it is decoded (`CTL-85`). */
-    private val work: WorkBudget = ControlDerived.workBudget(),
+    private val work: WorkBudget,
 ) {
     /** The head of [key] from the cache, decoded and compiled once for its content (RC1-41); null when it has none. */
     suspend fun held(key: SnapshotKey): Held? = entry(key)?.let { Held(it.document, it) }

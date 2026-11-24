@@ -24,7 +24,6 @@ import me.ahoo.cosec.control.authz.Operator
 import me.ahoo.cosec.control.change.ChangeRejectedException
 import me.ahoo.cosec.control.change.ConflictKind
 import me.ahoo.cosec.control.change.InvalidControlRequestException
-import me.ahoo.cosec.control.lifecycle.ControlDerived
 import me.ahoo.cosec.control.lifecycle.WorkBudget
 import me.ahoo.cosec.control.lifecycle.WorkBudgetExhaustedException
 import me.ahoo.cosec.control.store.ControlStoreException
@@ -74,12 +73,16 @@ private val log = KotlinLogging.logger {}
  */
 @InternalCoSecApi
 class ControlHttp(
-    plane: ControlPlane,
+    private val plane: ControlPlane,
     private val profile: ControlProfile = ControlProfile.OPERATORS,
-    /** The host's one work budget (`CTL-85`): each call holds what it works on for itself within it, until its answer. */
-    private val work: WorkBudget = ControlDerived.workBudget(),
 ) {
-    private val routes = ControlRoutes(plane, profile, work)
+    /**
+     * The plane's work budget (`CTL-85`), the host's one: each call holds what it works on for itself within it, until
+     * its answer. Taken from the plane, so every profile's API and the in-process facade hold it in the same budget.
+     */
+    val work: WorkBudget by lazy { plane.work }
+
+    private val routes by lazy { ControlRoutes(plane, profile, work) }
 
     @Suppress("TooGenericExceptionCaught")
     suspend fun handle(request: ControlHttpRequest, security: RequestSecurity?): ControlHttpResponse {

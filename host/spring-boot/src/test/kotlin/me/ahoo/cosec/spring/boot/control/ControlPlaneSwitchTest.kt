@@ -166,6 +166,15 @@ class ControlPlaneSwitchTest {
         }).run { context ->
             context.startupFailure.assert().isNull()
             context.getBeansOfType(me.ahoo.cosec.control.lifecycle.WorkBudget::class.java).size.assert().isEqualTo(1)
+            val budget = context.getBean(me.ahoo.cosec.control.lifecycle.WorkBudget::class.java)
+            // The same instance in each that holds a call's work: the plane's reads, the operators' API (and with it the
+            // service profile's, made of the same plane), the in-process facade and the lock-out check.
+            context.getBean(me.ahoo.cosec.control.api.ControlPlane::class.java).work.assert().isSameAs(budget)
+            context.getBean(me.ahoo.cosec.control.api.ControlHttp::class.java).work.assert().isSameAs(budget)
+            (context.getBean(me.ahoo.cosec.control.sdk.ControlService::class.java) as me.ahoo.cosec.control.local.LocalControlService)
+                .work.assert().isSameAs(budget)
+            (context.getBean(me.ahoo.cosec.control.lifecycle.Changes::class.java).lockout as me.ahoo.cosec.control.api.ControlLockout)
+                .work.assert().isSameAs(budget)
             val registry = context.getBean(io.micrometer.core.instrument.MeterRegistry::class.java)
             registry.find(ControlMetersConfiguration.WORK_HELD).gauge()!!.value().assert().isEqualTo(0.0)
             registry.find(ControlMetersConfiguration.WORK_REFUSED).functionCounter()!!.count().assert().isEqualTo(0.0)

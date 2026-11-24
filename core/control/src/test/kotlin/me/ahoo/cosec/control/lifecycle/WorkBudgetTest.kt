@@ -55,6 +55,29 @@ class WorkBudgetTest {
     }
 
     @Test
+    fun `a call that holds all of the budget takes its later pieces at once, counting none of them`() = runTest {
+        val budget = WorkBudget(100)
+        budget.withWork("a", 1_000, patience) {
+            // A body as heavy as the budget, then a document the cache does not keep: the call runs alone already.
+            budget.hold("a", 700)
+            budget.heldByCall().assert().isEqualTo(100L)
+            budget.held.assert().isEqualTo(100L)
+        }
+        budget.refused.assert().isEqualTo(0L)
+        budget.held.assert().isEqualTo(0L)
+    }
+
+    @Test
+    fun `a call that holds part of the budget counts at most the rest for a later piece`() = runTest {
+        val budget = WorkBudget(100)
+        budget.withWork("a", 60, patience) {
+            budget.hold("a", 80)
+            budget.heldByCall().assert().isEqualTo(100L)
+        }
+        budget.held.assert().isEqualTo(0L)
+    }
+
+    @Test
     fun `work at most the free weight holds nothing, and work above the capacity runs alone`() = runTest {
         val budget = WorkBudget(100, free = 10)
         budget.withWork("a", 10, patience) { budget.held.assert().isEqualTo(0L) }
@@ -64,16 +87,18 @@ class WorkBudgetTest {
     @Test
     fun `a call that holds work never waits for more`() = runTest {
         val budget = WorkBudget(100)
+        val other = CompletableDeferred<Unit>()
+        launch { budget.withWork("b", 30, patience) { other.await() } }
+        runCurrent()
+        // The rest of its 100 is 40, and only 10 are free beside b's 30: refused at once, never waited for.
         val refused = runCatching {
-            budget.withWork("a", 60, patience) { budget.withWork("a", 60, patience) { } }
+            budget.withWork("a", 60, patience) { budget.hold("a", 60, patience) }
         }.exceptionOrNull()
         refused.assert().isInstanceOf(WorkBudgetExhaustedException::class.java)
         currentTime.assert().isEqualTo(0L)
-        budget.withWork(
-            "a",
-            60,
-            patience
-        ) { budget.withWork("a", 40, patience) { budget.held.assert().isEqualTo(100L) } }
+        other.complete(Unit)
+        runCurrent()
+        budget.withWork("a", 60, patience) { budget.withWork("a", 40, patience) { budget.held.assert().isEqualTo(100L) } }
         budget.refused.assert().isEqualTo(1L)
     }
 
@@ -205,12 +230,18 @@ class WorkBudgetTest {
                 val wait = Duration.ofMillis(random.nextLong(1, 40))
                 val start = random.nextLong(0, 100)
                 val hold = random.nextLong(0, 30)
+                val more = random.nextLong(0, 130)
                 val call = launch {
                     delay(start)
                     val asked = currentTime
                     runCatching {
                         budget.withWork(tenant, weight, wait) {
                             (currentTime - asked).assert().isLessThanOrEqualTo(wait.toMillis())
+                            // A later piece of the same call: granted at once or refused at once, never waited for.
+                            val before = currentTime
+                            runCatching { budget.hold(tenant, more, wait) }
+                            currentTime.assert().isEqualTo(before)
+                            budget.heldByCall().assert().isLessThanOrEqualTo(100L)
                             budget.held.assert().isLessThanOrEqualTo(100L)
                             delay(hold)
                         }

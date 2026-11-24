@@ -330,7 +330,7 @@ internal class CoSecControlAutoConfiguration {
 
     /** Not replaceable: every route needs a request the host pipeline permitted. */
     @Bean
-    fun cosecControlHttp(plane: ControlPlane, work: WorkBudget): ControlHttp = ControlHttp(plane, work = work)
+    fun cosecControlHttp(plane: ControlPlane): ControlHttp = ControlHttp(plane)
 
     /**
      * The beans above that are not replaceable are the only ones of their types (round 2 L6): a second one that is

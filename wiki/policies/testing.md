@@ -261,16 +261,17 @@ A change is a set of entry operations on one document, made on the revision you 
 | `setLimits` | `limits` with all six condition limits, each a positive integer as in a document, and any of the [entry budgets](./language.md#entry-budgets) | Sets the platform's limits, the section as a whole: a budget left out is its default; without `limits`, back to the defaults. A value of another type is a `400`. |
 | `setAttributes` | `attributes`, an array as in a document | Sets the platform's declared attributes; without `attributes`, removes them. Anything but an array of attributes is a `400`. |
 
-A change carries at most the platform's `maxChangeOperations` operations (20,000 by default), and the control API reads
-a body of at most 10 MB (the document cap and 2 MB): a larger change is a `400` before any operation is
-checked, so propose it as several (`CTL-41`, [Entry budgets](./language.md#entry-budgets)). Every other route, one
-that carries no document (`simulate`, `explain`, `analyze`, a step of a change, a rollback, break-glass), reads at most
-64 KB, and a larger body is a `400` before it is parsed (DR1-F-3). Before a route that carries a document parses its
-body, it holds the body's weight in the control plane's work budget, after the hard rule when its path names the
-document; so does a call that decodes a document too large for the cache (`CTL-85`). A call that does not fit waits its
-tenant's turn, at most half the pipeline timeout, and is otherwise `503` with `Retry-After: 1`, before anything was read
-or decided: try again. Each tenant takes at most half the budget while another waits, so one tenant writing large
-documents in a loop does not hold the others back.
+A change carries at most the platform's `maxChangeOperations` operations (20,000 by default), and the control API
+reads a body of at most 10 MB (the document cap and 2 MB): a larger change is a `400` before any operation is checked,
+so propose it as several (`CTL-41`, [Entry budgets](./language.md#entry-budgets)). Every other route, one that carries
+no document (`simulate`, `explain`, `analyze`, a step of a change, a rollback, break-glass), reads at most 64 KB, and
+a larger body is a `400` before it is parsed (DR1-F-3). Before a route that carries a document parses its body, it
+holds the body's weight in the control plane's work budget, after the hard rule when its path names the document; so
+does a call that decodes a document too large for the cache (`CTL-85`). A call that does not fit waits its tenant's
+turn, at most half the pipeline timeout, and is otherwise `503` with `Retry-After: 1`, before anything was read or
+decided: try again. Each tenant takes at most half the budget while another waits, so one tenant writing large
+documents in a loop does not hold the others back. One call counts at most the whole budget, whatever its pieces, so
+the heaviest call is always answered, alone.
 
 `ifMatch` is the SHA-256 of the entry as the document writes it: the operation applies only if the entry is still
 that. Instead of writing operations, `POST /documents/{key}:apply` takes a whole document (`{"document", "mode",

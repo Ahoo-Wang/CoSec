@@ -50,8 +50,11 @@ class DefaultControlPlane(
     private val revisions: Revisions,
     private val authority: ChangeAuthority,
     private val simulator: Simulator = Simulator(),
-    /** The host's work budget (`CTL-85`), the one its control API holds a call's work in. */
-    work: WorkBudget = ControlDerived.workBudget(),
+    /**
+     * The host's one work budget (`CTL-85`), which its control API holds a call's work in. A host passes the one it has;
+     * the default is for a plane of its own, in a test.
+     */
+    override val work: WorkBudget = ControlDerived.workBudget(),
 ) : ControlPlane {
     override val breakGlass: BreakGlass = BreakGlass(changes, revisions)
 

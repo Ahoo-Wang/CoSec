@@ -59,8 +59,11 @@ class ControlLockout(
     private val simulator: Simulator = Simulator(),
     private val controlApp: AppId = PipelineControlAuthorizer.CONTROL_APP,
     private val clock: Clock = Clock.systemUTC(),
-    /** The host's work budget (`CTL-85`): the check runs within a call that holds its body's weight, so it never waits. */
-    work: WorkBudget = ControlDerived.workBudget(),
+    /**
+     * The host's work budget (`CTL-85`): the check runs within a call that holds its body's weight, so it never waits. A
+     * host passes its one budget, the plane's ([ControlPlane.work]); the default is for a check of its own, in a test.
+     */
+    val work: WorkBudget = ControlDerived.workBudget(),
 ) : LockoutCheck {
     private val retained = RetainedDocuments(revisions, simulator.cache, work)
 

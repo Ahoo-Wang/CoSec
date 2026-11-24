@@ -29,7 +29,8 @@ import kotlin.coroutines.cancellation.CancellationException
  * [capacity] held, each weight known before its work starts. It knows tenants, weights and patience, nothing of HTTP,
  * routes or documents.
  *
- * - **Weights.** One above [capacity] counts as [capacity]: the heaviest call runs, alone. One at most [free] holds
+ * - **Weights.** One call counts at most [capacity] in all: a piece counts what is left of it for the call, and a call
+ *   that holds all of it takes no more, so the heaviest call runs, alone, whatever its pieces. One at most [free] holds
  *   nothing and never waits.
  * - **Fairness.** A call is granted at once only when nothing waits. Otherwise it queues with its tenant, and what frees
  *   goes to the tenants in turn, first in first out within each. A tenant whose next call would take it past half of
@@ -96,8 +97,16 @@ class WorkBudget(
     suspend fun hold(tenant: String, weight: Long, patience: Duration = this.patience) {
         if (weight <= free) return
         val scope = currentCoroutineContext()[CallScope] ?: return
-        scope.add(acquire(tenant, weight.coerceAtMost(capacity), patience, scope.holds()))
+        // One call counts at most the capacity in all: a call that holds all of it runs alone already, and takes no
+        // more; one that holds part takes at most the rest. Its heaviest pieces together always fit, never refused for
+        // their sum alone.
+        val room = capacity - scope.weight()
+        if (room <= 0) return
+        scope.add(acquire(tenant, weight.coerceAtMost(room), patience, scope.holds()))
     }
+
+    /** What the current call holds, in all: at most [capacity] (`CTL-85`); 0 outside a call. */
+    internal suspend fun heldByCall(): Long = currentCoroutineContext()[CallScope]?.weight() ?: 0
 
     /** Runs [block] as a call holding [weight] for [tenant]: [call] and [hold] in one. */
     suspend fun <T> withWork(tenant: String, weight: Long, patience: Duration, block: suspend () -> T): T = call {
@@ -173,7 +182,7 @@ class WorkBudget(
         }
     }
 
-    private inner class Grant(private val tenant: String, private val weight: Long) {
+    private inner class Grant(private val tenant: String, val weight: Long) {
         private val released = AtomicBoolean()
 
         fun release() {
@@ -199,6 +208,8 @@ class WorkBudget(
         private val grants = ArrayList<Grant>()
 
         fun holds(): Boolean = synchronized(grants) { grants.isNotEmpty() }
+
+        fun weight(): Long = synchronized(grants) { grants.sumOf { it.weight } }
 
         fun add(grant: Grant) = synchronized(grants) { grants += grant }
 

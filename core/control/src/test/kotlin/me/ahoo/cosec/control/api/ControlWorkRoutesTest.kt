@@ -21,7 +21,13 @@ import kotlinx.coroutines.yield
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.control.api.ControlPlaneTest.Companion.ACME
 import me.ahoo.cosec.control.api.ControlPlaneTest.Companion.GLOBEX
+import me.ahoo.cosec.control.change.ChangeId
+import me.ahoo.cosec.control.change.IMMEDIATE_WINDOW
+import me.ahoo.cosec.control.lifecycle.ChangeAuthority
+import me.ahoo.cosec.control.lifecycle.ChangeOptions
+import me.ahoo.cosec.control.lifecycle.Changes
 import me.ahoo.cosec.control.lifecycle.WorkBudget
+import me.ahoo.cosec.spi.token.RevocationReader
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import java.time.Duration
@@ -39,12 +45,47 @@ class ControlWorkRoutesTest {
         return budget to release
     }
 
+    /** The fixture's plane, holding its calls' work in [budget], and keeping no document in [cache]. */
+    private fun planeOver(budget: WorkBudget, cache: DocumentCache = DocumentCache()): DefaultControlPlane {
+        val simulator = Simulator(cache = cache)
+        val authority = ChangeAuthority(fixture.engine.authorizer, OPTIONS, revocations = RevocationReader.NONE)
+        val changes = Changes(
+            fixture.store,
+            fixture.revisions,
+            { ChangeId("w${fixture.ids.incrementAndGet()}") },
+            fixture.engine.authorizer,
+            fixture.clock,
+            OPTIONS,
+            revocations = RevocationReader.NONE,
+            lockout = ControlLockout(fixture.revisions, simulator, clock = fixture.clock, work = budget),
+        )
+        return DefaultControlPlane(changes, fixture.revisions, authority, simulator, budget)
+    }
+
+    @Test
+    fun `a call that holds all of the budget decodes a document the cache does not keep, and is answered`() =
+        runBlocking<Unit> {
+            val budget = WorkBudget(capacity = 1_000, free = 0, patience = Duration.ZERO)
+            val plane = planeOver(budget, DocumentCache(maxHeap = 1))
+
+            // A body heavier than the budget holds all of it, as a route's does; explain then decodes the tenant's head,
+            // which this cache does not keep, in the same call: counted already, never refused for the sum.
+            val explained = budget.withWork(ACME.value, 1_000_000, Duration.ZERO) {
+                budget.held.assert().isEqualTo(1_000L)
+                plane.explain(fixture.alice, fixture.bob("order:read"))
+            }
+
+            explained.assert().isNotNull()
+            budget.refused.assert().isEqualTo(0L)
+            budget.held.assert().isEqualTo(0L)
+        }
+
     @Test
     fun `a document of another tenant is refused before any work is held or its body read`() = runBlocking<Unit> {
         val (budget, release) = full()
         val holder = launch { budget.withWork("someone", 1_000, Duration.ZERO) { release.await() } }
         yield()
-        val http = ControlHttp(fixture.plane, work = budget)
+        val http = ControlHttp(planeOver(budget))
 
         // Not JSON at all: were it read, it would be a 400; held, it would be a 503 (the budget is full).
         val response = http.handle(
@@ -64,7 +105,7 @@ class ControlWorkRoutesTest {
         val (budget, release) = full()
         val holder = launch { budget.withWork("someone", 1_000, Duration.ZERO) { release.await() } }
         yield()
-        val http = ControlHttp(fixture.plane, work = budget)
+        val http = ControlHttp(planeOver(budget))
         val body = """{"document":"tenant:acme","base":1,"operations":[]}""".encodeToByteArray()
 
         val response = http.handle(ControlHttpRequest("POST", "/changes", emptyMap(), body), alice)
@@ -77,5 +118,9 @@ class ControlWorkRoutesTest {
         holder.join()
         // With room, the same call is answered as before.
         http.handle(ControlHttpRequest("POST", "/changes", emptyMap(), body), alice).status.assert().isNotEqualTo(503)
+    }
+
+    private companion object {
+        val OPTIONS = ChangeOptions(shadow = IMMEDIATE_WINDOW)
     }
 }

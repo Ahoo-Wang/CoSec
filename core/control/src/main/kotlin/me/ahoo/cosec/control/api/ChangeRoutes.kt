@@ -44,7 +44,6 @@ import me.ahoo.cosec.control.change.Confirmation
 import me.ahoo.cosec.control.change.InvalidControlRequestException
 import me.ahoo.cosec.control.change.Operation
 import me.ahoo.cosec.control.change.requireRequest
-import me.ahoo.cosec.control.lifecycle.ControlDerived
 import me.ahoo.cosec.control.lifecycle.WorkBudget
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import tools.jackson.databind.JsonNode
@@ -53,7 +52,7 @@ import tools.jackson.databind.JsonNode
 internal class ChangeRoutes(
     private val plane: ControlPlane,
     private val profile: ControlProfile = ControlProfile.OPERATORS,
-    private val work: WorkBudget = ControlDerived.workBudget(),
+    private val work: WorkBudget,
 ) : RouteHandler {
     override suspend fun handle(
         operator: Operator,
