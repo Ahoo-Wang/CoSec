@@ -26,7 +26,7 @@ description: "CoSec 如何读取凭证，以及如何签发、刷新和吊销令
 | `iat`、`exp` | 签发时间和过期时间。没有 `exp` 的令牌会被拒绝。`iat` 决定[吊销主体](#revoking-every-token-of-a-principal)时拒绝哪些令牌。 |
 | `sid`、`auth_time`、`cosec.generation` | 这对令牌所属的会话（[会话](#sessions)）：会话 id、用户登录的时间（秒），以及这对令牌是该会话的第几代。一对令牌的两个令牌都带有。 |
 
-刷新令牌只携带自己的 `jti`、`iat`、`exp`、`cosec.token: "refresh"`、会话声明，以及作为 `sub` 的、所属访问令牌的 `jti`。应用有 `IdGenerator` Bean（例如基于 CosId）时由它生成令牌 id，否则使用 `RandomIdGenerator`（[Id](../architecture/extending.md#ids)）。有效期为 `cosec.jwt.token-validity.access`（10 分钟）和 `cosec.jwt.token-validity.refresh`（7 天），都不超过会话的结束时间（[会话](#sessions)）。
+刷新令牌只携带自己的 `jti`、`iat`、`exp`、`cosec.token: "refresh"`、会话声明，以及作为 `sub` 的、所属访问令牌的 `jti`。应用有 `IdGenerator` Bean（例如基于 CosId）时由它生成令牌 id，否则使用 `RandomIdGenerator`（[Id](../architecture/extending.md#ids)）。有效期为 `cosec.jwt.token-validity.access`（10 分钟）和 `cosec.jwt.token-validity.refresh`（7 天），都不超过会话的结束时间（[会话](#sessions)）。调用自己指定有效期（`toToken(subject, access, refresh)`）时，只能等于或短于配置值，不能更长：吊销记录按两者中较长的那个再加上偏差保留，更长的令牌会在吊销记录过期后重新有效，因此 `JwtTokenConverter` 拒绝签发，并点名应调高的属性（`IDN-37`）。
 
 **被拒绝的令牌不是错误。** 过期、签名错误或已吊销的令牌会让调用方成为匿名主体，由策略决定匿名调用方能做什么：公开路径照常可用。如果请求被拒绝，响应为 `401`，problem 类型为 `token-expired`、`token-revoked` 或 `token-invalid`，而不是 `unauthorized`（[响应与状态码](./web.md#responses-and-status-codes)）。
 
