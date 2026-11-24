@@ -30,6 +30,7 @@ import me.ahoo.cosec.migrate.MigrateMain.FAILED
 import me.ahoo.cosec.migrate.MigrateMain.OK
 import me.ahoo.cosec.migrate.RedisAccess.controlStore
 import me.ahoo.cosec.migrate.RedisAccess.scan
+import me.ahoo.cosec.model.Identifiers.printable
 import tools.jackson.core.JacksonException
 import tools.jackson.databind.JsonNode
 import java.io.IOException
@@ -45,6 +46,14 @@ import java.nio.file.StandardOpenOption
 /** `api-keys` (RFC 0009 §4.4). */
 internal object ApiKeysCommand {
     private const val STATUS_PLANNED = "planned"
+
+    /**
+     * Without `--memberships`, whether `apikey:<id>` is a principal already is known from the documents only (DR2-M-8):
+     * one only the membership provider knows would be taken over by the key.
+     */
+    const val PARTIAL_EXISTENCE_CHECK = "NOTE   Without --memberships, whether each apikey:<key id> is already a " +
+        "principal was checked against the documents only: one only your membership provider knows is not seen, and " +
+        "a key moved to it would act with what it holds. Run with --memberships to check it."
     private val REPLACEABLE_STATUS = setOf(ApiKeyMigrationPlan.STATUS_DRY_RUN, ApiKeyMigrationPlan.STATUS_REJECTED)
 
     /**
@@ -94,6 +103,9 @@ internal object ApiKeysCommand {
                     finalReport(report, plan.report(dryRun, stored.converted, changed))
                 }
                 summarize(plan, out)
+                if (memberships == null && plan.keys.any { it.mode == ConvertedApiKey.Mode.OWN_PRINCIPAL }) {
+                    out.println(PARTIAL_EXISTENCE_CHECK)
+                }
                 out.println("Wrote $report")
                 return outcome(plan, dryRun, changed, out)
             }
@@ -193,19 +205,21 @@ internal object ApiKeysCommand {
         }
     }
 
+    /** What [plan] says, each line escaped: ids and roles are read from Redis (RC1-15, DR2-M-4). */
     private fun summarize(plan: ApiKeyMigrationPlan, out: PrintStream) {
-        plan.rejections.forEach { out.println("REJECT $it") }
+        fun line(text: String) = out.println(printable(text))
+        plan.rejections.forEach { line("REJECT $it") }
         plan.keys.forEach { key ->
             val id = key.key.id
-            out.println("KEY    [$id] ${key.mode.name.lowercase().replace('_', '-')}: principal ${key.key.principalId}")
+            line("KEY    [$id] ${key.mode.name.lowercase().replace('_', '-')}: principal ${key.key.principalId}")
             if (key.legacy.tenantId.isNullOrEmpty()) {
-                out.println("WARN   API key [$id] has no tenant: it goes to the default tenant.")
+                line("WARN   API key [$id] has no tenant: it goes to the default tenant.")
             }
-            key.lost.forEach { out.println("WARN   API key [$id] no longer reaches $it.") }
+            key.lost.forEach { line("WARN   API key [$id] no longer reaches $it.") }
         }
         plan.memberships.forEach { principal ->
             principal.newlyGained?.takeIf { it.isNotEmpty() }?.let {
-                out.println("WARN   ${principal.principal}@${principal.tenant.value} newly gains $it.")
+                line("WARN   ${principal.principal}@${principal.tenant.value} newly gains $it.")
             }
         }
     }

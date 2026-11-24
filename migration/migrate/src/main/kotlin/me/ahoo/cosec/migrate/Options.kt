@@ -17,6 +17,8 @@ package me.ahoo.cosec.migrate
 
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
+import java.nio.file.Files
+import java.nio.file.Path
 
 /**
  * `--name value` and `--name=value` pairs and `--flag`s; a repeated or unknown option is a usage error, and so is a
@@ -63,7 +65,18 @@ internal class Options(
         /** The options that wrote break-glass, gone with it (RC1-27): what to do instead. */
         private val REMOVED = setOf("root-enabled", "root-id", "root-expires-at", "break-glass-max-duration")
 
-        fun parse(args: List<String>): Options {
+        /** A Redis URI option's value that names the environment variable holding the URI (DR2-M-6). */
+        const val FROM_ENVIRONMENT = "env:"
+
+        /** A Redis URI option's value that names the file holding the URI, as a mounted Secret is (DR2-M-6). */
+        const val FROM_FILE = "file:"
+
+        /**
+         * The options of [args]. A Redis URI option (`--to-redis`, `--from-redis`, `--redis`) may name where its URI is
+         * instead of holding it, `env:<VARIABLE>` or `file:<path>`, so that its password is not on the command line,
+         * which the node's process list shows; [environment] reads the variables.
+         */
+        fun parse(args: List<String>, environment: (String) -> String? = System::getenv): Options {
             val values = HashMap<String, String>()
             val flags = HashSet<String>()
             var i = 0
@@ -89,7 +102,24 @@ internal class Options(
                 }
                 i++
             }
+            REDIS_URIS.forEach { name -> values[name]?.let { values[name] = resolved(name, it, environment) } }
             return Options(values, flags)
+        }
+
+        /** [value] of option [name], or the URI it names; what it reads is never in a message. */
+        private fun resolved(name: String, value: String, environment: (String) -> String?): String = when {
+            value.startsWith(FROM_ENVIRONMENT) -> {
+                val variable = value.removePrefix(FROM_ENVIRONMENT)
+                environment(variable)?.trim()?.takeIf { it.isNotEmpty() }
+                    ?: throw IllegalArgumentException("--$name $value: the environment has no $variable, or it is empty.")
+            }
+            value.startsWith(FROM_FILE) -> {
+                val path = Path.of(value.removePrefix(FROM_FILE))
+                require(Files.isRegularFile(path)) { "--$name $value: no such file." }
+                Files.readString(path).trim().takeIf { it.isNotEmpty() }
+                    ?: throw IllegalArgumentException("--$name $value: the file is empty.")
+            }
+            else -> value
         }
     }
 }

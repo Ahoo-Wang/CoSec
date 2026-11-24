@@ -191,9 +191,9 @@ private class SeenIds(
 @Suppress("TooManyFunctions")
 private class Run(val source: Source7x, val options: ConvertOptions, val compiler: PolicyDocumentCompiler) {
     val rejections = ArrayList<Rejection>()
-    val warnings = ArrayList<Warning>()
+    val warnings = ArrayList(source.skipped) // what the reader skipped is said (DR2-M-5)
     val changes = ArrayList<SemanticChange>()
-    val counts = LinkedHashMap<String, Int>()
+    val counts = LinkedHashMap(if (source.skipped.isEmpty()) emptyMap() else mapOf("skipped" to source.skipped.size))
     val translator = MatcherTranslator { kind, location, message -> reject(kind, location, message) }
     val scan = SemanticScan { changes += it }
     val conditions = ConditionTranslator(

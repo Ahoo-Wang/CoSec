@@ -131,8 +131,10 @@ object ConvertedDirectory {
     /**
      * The documents in [directory], decoded strictly: exactly the files the accepted conversion's `report.json`
      * lists, each with the SHA-256 recorded there. A file that changed, went missing or appeared since `convert`
-     * (an edit, or two ids that collided on a case-insensitive file system) fails the read, so `publish` writes
-     * only what `convert` produced.
+     * (an accidental edit, or two ids that collided on a case-insensitive file system) fails the read. It guards
+     * against accidents, not against whoever can write the directory: the SHA-256s are in the same directory, and that
+     * writer can change them too (DR2-M-3). What `publish` writes still compiles, holds no break-glass binding and
+     * overwrites no document.
      */
     fun read(directory: Path): Map<SnapshotKey, PolicyDocument> {
         val reportFile = directory.resolve(REPORT_FILE)

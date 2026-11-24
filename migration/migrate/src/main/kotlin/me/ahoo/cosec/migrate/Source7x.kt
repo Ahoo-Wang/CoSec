@@ -36,6 +36,8 @@ class Source7x(
     val inputSha256: String,
     /** 7.x rate limit rules (`LocalRateLimitRuleLoader`'s JSON), in file order; their ids may repeat, which is rejected. */
     val rateLimitRules: List<Entry> = emptyList(),
+    /** What the reader found and did not read as data, each with why: `convert` reports them (DR2-M-5). */
+    val skipped: List<Warning> = emptyList(),
 ) {
     /** This source with [rules] after its own rate limit rules; the input hash covers them too. */
     fun withRateLimitRules(rules: List<Entry>): Source7x {
@@ -47,7 +49,8 @@ class Source7x(
             schemaMarker,
             globalIndexLocation,
             sha256(input),
-            rateLimitRules + rules
+            rateLimitRules + rules,
+            skipped,
         )
     }
 

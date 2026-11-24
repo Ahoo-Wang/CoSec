@@ -44,6 +44,8 @@ class CoSec7xReader(
         val policyIds: Set<PolicyId>,
         val appIds: Set<AppId>,
         val grants: Set<AppSpacedRoleId>,
+        /** The policy keys skipped as 7.x's policy history (`history:`), by the id their key names. */
+        val history: Set<String> = emptySet(),
     )
 
     private val policyNamespace = V7CacheSpecs.cacheNamespace(keyPrefix, V7CacheSpecs.POLICY_CACHE_NAME)
@@ -53,9 +55,19 @@ class CoSec7xReader(
         "${V7CacheSpecs.cacheNamespace(keyPrefix, V7CacheSpecs.GLOBAL_POLICY_INDEX_CACHE_NAME)}:" +
             V7CacheSpecs.GLOBAL_POLICY_INDEX_ENCODED_KEY
 
-    /** The stored bytes under [storageKey], or null when there is no value. */
-    private fun scalar(storageKey: String): ByteArray? =
-        CoCache6Format.scalar(storageKey, redis.type(storageKey.encodeToByteArray())) {
+    /** What [source] found under a key the scan listed and did not convert, each with why (DR2-M-5). */
+    private val skipped = ArrayList<Warning>()
+
+    /**
+     * The stored bytes under [storageKey], or null when there is no value; one the scan [found] that holds none is
+     * recorded in [skipped], never dropped without a word.
+     */
+    private fun scalar(storageKey: String, found: Boolean = true): ByteArray? =
+        CoCache6Format.scalar(
+            storageKey,
+            redis.type(storageKey.encodeToByteArray()),
+            { why -> if (found) skipped += Warning(storageKey, "skipped: $why") },
+        ) {
             redis.get(storageKey.encodeToByteArray())
         }
 
@@ -70,8 +82,8 @@ class CoSec7xReader(
     /** The stored bytes of policy [id], or null when it has none. */
     fun policy(id: PolicyId): ByteArray? = scalar("$policyNamespace:$id")
 
-    /** The stored bytes of the app permission of [appId], or null when it has none. */
-    fun appPermission(appId: AppId): ByteArray? = scalar("$appNamespace:$appId")
+    /** The stored bytes of the app permission of [appId], or null when it has none; [found] when the scan listed it. */
+    fun appPermission(appId: AppId, found: Boolean = true): ByteArray? = scalar("$appNamespace:$appId", found)
 
     /** The stored bytes of the grants of [grantId], or null when it has none. */
     fun grants(grantId: AppSpacedRoleId): ByteArray? = scalar("$grantNamespace:$grantId")
@@ -94,7 +106,7 @@ class CoSec7xReader(
         val grantsByApp = keys.grants.groupBy { it.appId }
         val apps = (keys.appIds + grantsByApp.keys).sorted().map { appId ->
             val location = "$appNamespace:$appId"
-            val appPermission = appPermission(appId)?.let { bytes ->
+            val appPermission = appPermission(appId, appId in keys.appIds)?.let { bytes ->
                 input[location] = bytes
                 Source7x.Entry(appId, location, bytes)
             }
@@ -107,7 +119,22 @@ class CoSec7xReader(
             }
             Source7x.App(appId, location, appPermission, grants)
         }
-        return Source7x(policies, index, apps, schemaMarker, globalIndexKey, Source7x.sha256(input))
+        keys.history.sorted().forEach { id ->
+            skipped += Warning(
+                "$policyNamespace:$id",
+                "skipped: 7.x keeps its policy history under ${V7CacheSpecs.RESERVED_POLICY_ID_PREFIX}, so a policy whose " +
+                    "id begins with it is not converted: rename it at its source if it is one",
+            )
+        }
+        return Source7x(
+            policies,
+            index,
+            apps,
+            schemaMarker,
+            globalIndexKey,
+            Source7x.sha256(input),
+            skipped = skipped.toList()
+        )
     }
 
     companion object {
@@ -119,12 +146,11 @@ class CoSec7xReader(
             val policyPrefix = V7CacheSpecs.cacheNamespace(keyPrefix, V7CacheSpecs.POLICY_CACHE_NAME) + ":"
             val appPrefix = V7CacheSpecs.cacheNamespace(keyPrefix, V7CacheSpecs.APP_PERMISSION_CACHE_NAME) + ":"
             val grantPrefix = V7CacheSpecs.cacheNamespace(keyPrefix, V7CacheSpecs.ROLE_PERMISSION_CACHE_NAME) + ":"
-            val policyIds = scan("$policyPrefix*").map { it.removePrefix(policyPrefix) }
-                .filterNot { it.startsWith(V7CacheSpecs.RESERVED_POLICY_ID_PREFIX) }
-                .toSortedSet()
+            val (history, policyIds) = scan("$policyPrefix*").map { it.removePrefix(policyPrefix) }.toSortedSet()
+                .partition { it.startsWith(V7CacheSpecs.RESERVED_POLICY_ID_PREFIX) }
             val appIds = scan("$appPrefix*").map { it.removePrefix(appPrefix) }.toSortedSet()
             val grants = scan("$grantPrefix*").map { it.removePrefix(grantPrefix) }.map(::parseGrantKey).toSet()
-            return Keys(policyIds, appIds, grants)
+            return Keys(policyIds.toSortedSet(), appIds, grants, history.toSet())
         }
 
         /** `<appId>:<roleId>[@<spaceId>]`, as [AppSpacedRoleId.toString] writes it. */
