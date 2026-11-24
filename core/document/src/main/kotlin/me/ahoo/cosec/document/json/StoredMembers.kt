@@ -43,6 +43,9 @@ class StoredMembers(val record: StoredRecord, val members: List<Member>) {
         /** Read as false. */
         FALSE,
 
+        /** Read as true. */
+        TRUE,
+
         /** Read as empty. */
         EMPTY,
 
@@ -52,7 +55,9 @@ class StoredMembers(val record: StoredRecord, val members: List<Member>) {
 
     /**
      * One member: its [path] (names joined by `.`; through an array, each element's member), what its absence is read
-     * as, and whether ignoring it, or dropping it in a rewrite, would widen what is decided or kept.
+     * as, and whether ignoring it, or dropping it in a rewrite, would widen what is decided or kept. An [opaque] member
+     * holds what this rule does not read into: a map whose keys are data, or a value read strictly by its own format (a
+     * document, an operation); a path below it is no member.
      */
     @InternalCoSecApi
     class Member(
@@ -60,6 +65,7 @@ class StoredMembers(val record: StoredRecord, val members: List<Member>) {
         val whenAbsent: WhenAbsent,
         val ignoringWidens: Boolean,
         val droppingWidens: Boolean,
+        val opaque: Boolean = false,
     )
 
     /** [members] by path. */
@@ -73,6 +79,14 @@ class StoredMembers(val record: StoredRecord, val members: List<Member>) {
     companion object {
         /** A member every record holds or refuses to read without: neither ignored nor dropped by a reader of 8.x. */
         fun required(path: String) = Member(path, WhenAbsent.REFUSED, ignoringWidens = false, droppingWidens = false)
+
+        /** A [required] member whose value this rule does not read into ([Member.opaque]). */
+        fun opaque(path: String) =
+            Member(path, WhenAbsent.REFUSED, ignoringWidens = false, droppingWidens = false, opaque = true)
+
+        /** An optional member whose absence ([whenAbsent]) narrows, or changes nothing a decision reads. */
+        fun optional(path: String, whenAbsent: WhenAbsent) =
+            Member(path, whenAbsent, ignoringWidens = false, droppingWidens = false)
 
         /** The members every record has: its format, and the members it must be understood by. */
         val COMMON: List<Member> = listOf(

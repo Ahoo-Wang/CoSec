@@ -396,7 +396,10 @@ During a rolling upgrade, an instance logs at `WARN`, at most once a minute, `Th
 later CoSec wrote the session record (members [<path>] in its crit) ...`, and `cosec.stored.refused{reason="later"}`
 rises. A newer instance wrote a record with a member this older one does not know and must not ignore (`SNP-27`): it
 refuses that one record, answers the refresh, logout or switch that read it `503`, and keeps the session, never
-rewriting it. Nothing is wrong with the store. Upgrade the instance; an upgraded one reads the record. If
+rewriting it. A control-plane instance logs `Control API <method> <path> (request <id>) is 503: a later CoSec wrote a
+stored record (the <record> record), members [<path>] in its crit ...` instead: the call that read a change, a staging
+slot, a revision index, the app list or a shadow window's record is answered `503` without detail, and the record is
+never rewritten. Nothing is wrong with the store. Upgrade the instance; an upgraded one reads the record. If
 `cosec.stored.refused{reason="malformed"}` rises instead, a record is not one of its kind: look at the store and at
 whatever writes to it besides CoSec ([Storage](./storage.md#record-formats)).
 

@@ -63,7 +63,7 @@ class TokenFamilyMembersTest {
                 WhenAbsent.REFUSED -> assertThrows<SnapshotFormatException> { read(node) }
                 WhenAbsent.NONE -> CoSecJson.mapper.readTree(TokenFamilyCodec.encode(read(node)))
                     .get(member.path).let { it == null || it.isNull }.assert().describedAs(member.path).isTrue()
-                WhenAbsent.FIRST, WhenAbsent.EMPTY, WhenAbsent.FALSE -> read(node)
+                WhenAbsent.FIRST, WhenAbsent.EMPTY, WhenAbsent.FALSE, WhenAbsent.TRUE -> read(node)
             }
         }
     }

@@ -67,7 +67,7 @@ object ShadowCodec {
 
     fun decodeCandidate(bytes: ByteArray): StoredCandidate = guarded {
         val node = read(bytes)
-        StoredFormat.of(node, "staged candidate")
+        StoredFormat.read(node, ShadowMembers.CANDIDATE, "staged candidate")
         val header = HEADER.firstOrNull(node::has)
         if (header != null) throw malformed("a candidate's header is its document's: [$header] beside it")
         StoredCandidate(
@@ -98,7 +98,7 @@ object ShadowCodec {
 
     fun decodeStatuses(bytes: ByteArray): Map<String, InstanceStatus> = guarded {
         read(bytes).properties().associate { (instance, node) ->
-            StoredFormat.of(node, "instance status")
+            StoredFormat.read(node, ShadowMembers.INSTANCE_STATUS, "instance status")
             instance to InstanceStatus(
                 instance,
                 // A status of 8.0.0-beta.5 also carries its documents: a member this version does not read (CTL-53).
@@ -133,7 +133,7 @@ object ShadowCodec {
 
     fun decodeResident(bytes: ByteArray): ResidentDocuments = guarded {
         val node = read(bytes)
-        StoredFormat.of(node, "resident documents")
+        StoredFormat.read(node, ShadowMembers.RESIDENT_DOCUMENTS, "resident documents")
         ResidentDocuments(
             node.need("instance").text(),
             Instant.parse(node.need("at").text()),
@@ -162,7 +162,7 @@ object ShadowCodec {
     }
 
     private fun report(node: JsonNode): ShadowReport {
-        StoredFormat.of(node, "shadow report")
+        StoredFormat.read(node, ShadowMembers.SHADOW_REPORT, "shadow report")
         val instance = node.need("instance").text()
         if (!ShadowReport.isInstanceId(instance)) {
             throw malformed("[${SnapshotKeyText.quoted(instance)}] is not an instance id")
@@ -215,8 +215,9 @@ object ShadowCodec {
     private inline fun <T> guarded(block: () -> T): T = try {
         block()
     } catch (error: SnapshotFormatException) {
-        // The document format's codecs, which read a candidate's document, quote what they read as they found it.
-        throw SnapshotFormatException(SnapshotKeyText.message(error.message.orEmpty()))
+        // The document format's codecs, which read a candidate's document, quote what they read as they found it. A
+        // record a later version wrote keeps its marker, which quotes nothing (SNP-27).
+        throw SnapshotFormatException(SnapshotKeyText.message(error.message.orEmpty()), StoredFormat.later(error))
     } catch (error: JacksonException) {
         throw SnapshotFormatException("A shadow value is malformed${error.at}.")
     } catch (error: IllegalArgumentException) {

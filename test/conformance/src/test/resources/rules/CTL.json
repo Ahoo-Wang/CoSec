@@ -724,7 +724,7 @@
     {
       "id": "CTL-53",
       "source": "Review round 2, R2C-10 (saas-open-changes-design.md §4); RFC 0007 §5.2",
-      "statement": "Every record the control plane and its hosts store carries a format and is read by one rule: a record without one is format 1; of a known format, members this version does not know are ignored; a later format is refused, as a format error, never read as absent. Policy documents, API keys and back-reference members are decision inputs and stay strict. A wrong value of any stored record is a format error, never an argument or JSON error a store would read as an outage.",
+      "statement": "Every record the control plane and its hosts store carries a format and is read by one rule: a record without one is format 1; of a known format, members this version does not know are ignored, unless the record's crit names them (SNP-27); a later format is refused, as a format error, never read as absent. Policy documents, API keys and back-reference members are decision inputs and stay strict. A wrong value of any stored record is a format error, never an argument or JSON error a store would read as an outage.",
       "level": "build",
       "guards": [
         "cocache:StoredRecordsTest#every stored codec is listed",
