@@ -3,15 +3,15 @@
 # Tests: :control-server:test --tests me.ahoo.cosec.control.server.ControlServerRefusalsTest
 
 diff --git a/platform/control-server/src/main/kotlin/me/ahoo/cosec/control/server/ControlServerRefusals.kt b/platform/control-server/src/main/kotlin/me/ahoo/cosec/control/server/ControlServerRefusals.kt
-index 79974f681..559c4be31 100644
+index 0000000..0000000 100644
 --- a/platform/control-server/src/main/kotlin/me/ahoo/cosec/control/server/ControlServerRefusals.kt
 +++ b/platform/control-server/src/main/kotlin/me/ahoo/cosec/control/server/ControlServerRefusals.kt
-@@ -48,7 +48,7 @@ internal class ControlServerRefusals {
+@@ -63,7 +63,7 @@ internal class ControlServerRefusals {
  
          /** Fails with the message that says what to change; a value neither `true` nor `false` is the starter's to refuse. */
          fun check(environment: Environment) {
--            check(written(environment, CONTROL_KEY) != false) {
-+            check(true) {
-                 "cosec-control-server runs the control plane; $CONTROL_KEY=false would leave it with nothing to serve. " +
-                     "Use the gateway image for a read-only instance (STA-10)."
-             }
+-            for (key in listOf(CONTROL_KEY, COSEC_KEY, ROUTES_KEY)) {
++            for (key in listOf(COSEC_KEY, ROUTES_KEY)) {
+                 check(written(environment, key) != false) {
+                     "cosec-control-server runs the control plane and serves its routes; $key=false would leave it with " +
+                         "nothing to serve. Use the gateway image for a read-only instance (STA-10)."
