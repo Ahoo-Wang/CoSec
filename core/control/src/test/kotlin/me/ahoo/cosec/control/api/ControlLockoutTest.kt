@@ -54,6 +54,7 @@ import me.ahoo.cosec.model.PolicyId
 import me.ahoo.cosec.model.PrincipalId
 import me.ahoo.cosec.model.SubjectRef
 import me.ahoo.cosec.model.TenantId
+import me.ahoo.cosec.model.decision.StatementRef
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.cosec.spi.token.RevocationReader
 import me.ahoo.test.asserts.assert
@@ -145,6 +146,25 @@ class ControlLockoutTest {
             it.namedIn.assert().containsExactly(SnapshotKey.Platform)
             it.unnamed.assert().contains("cosec:publish on [platform] would be denied").doesNotContain("freeze")
         }
+    }
+
+    /**
+     * DR1-F-13 (`CTL-51`): a refusal by a tenant's platform boundary names that boundary, a policy of the platform
+     * document, only to a publisher who may read the platform document, as `simulate` hides any reference but a statement
+     * of a readable policy. The lock-out check decides for platform principals, whose tenant names no boundary, so the
+     * engine does not answer one here today; the rule is held where the refusal is worded.
+     */
+    @Test
+    fun `a refusal by the platform boundary names it only to a reader of the platform document`() {
+        val refusal = ControlLockout.denied(
+            "cosec:publish on [platform]",
+            StatementRef.Boundary(PolicyId("fence"), TenantId("acme")),
+            emptyMap(),
+            PolicyHomes(HeldDocuments(null, null, null)),
+        )
+        refusal.reason.assert().contains("platform boundary fence")
+        refusal.namedIn.assert().containsExactly(SnapshotKey.Platform)
+        refusal.unnamed.assert().contains("would be denied by the tenant's platform boundary").doesNotContain("fence")
     }
 
     /**
