@@ -28,4 +28,8 @@ dependencies {
     // DocumentCacheTest holds the measured heap a cache entry retains (DR1-F-5).
     testImplementation("org.openjdk.jol:jol-core")
     testImplementation(testFixtures(project(":runtime")))
+    // CTL-85: the work budget's waits, on virtual time.
+    testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test")
+    // CTL-85: the trees a body becomes, measured.
+    testImplementation("org.openjdk.jol:jol-core")
 }

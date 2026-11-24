@@ -145,6 +145,7 @@ internal class CoSecControlRoutesAutoConfiguration {
             val base = apiRootOf(properties)
             // The narrow profile answers on the service port only; the operators' port serves the whole API.
             val listener = service?.ifAvailable
+            // One work budget for both profiles (CTL-85): the plane's, which is the host's.
             val services = listener?.let { ControlHttp(checkNotNull(plane).getObject(), ControlProfile.SERVICE) }
             // The control API answers on the application's port (the operators' profile) and on the service port (the
             // service profile), and on no other port the host listens on, the management port included (CTL-69): a 404
@@ -179,6 +180,7 @@ internal class CoSecControlRoutesAutoConfiguration {
                 }.flatMap { response ->
                     ReactiveServerResponse.status(response.status)
                         .contentType(MediaType.parseMediaType(response.contentType))
+                        .headers { headers -> response.headers.forEach(headers::set) }
                         .bodyValue(response.body)
                 }.onErrorResume(DataBufferLimitException::class.java) {
                     ReactiveServerResponse.status(ProblemType.INVALID_REQUEST.status)
@@ -230,6 +232,7 @@ internal class CoSecControlRoutesAutoConfiguration {
                 }
                 ServletServerResponse.status(response.status)
                     .contentType(MediaType.parseMediaType(response.contentType))
+                    .headers { headers -> response.headers.forEach(headers::set) }
                     .body(response.body)
             }
         }

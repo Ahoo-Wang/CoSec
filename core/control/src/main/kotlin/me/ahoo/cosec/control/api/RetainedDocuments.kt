@@ -19,8 +19,10 @@ import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.control.change.ChangeRejectedException
 import me.ahoo.cosec.control.change.ControlStatus.GONE
+import me.ahoo.cosec.control.lifecycle.WorkBudget
 import me.ahoo.cosec.control.store.Revisions
 import me.ahoo.cosec.document.PolicyDocument
+import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 
 /**
@@ -33,14 +35,17 @@ import me.ahoo.cosec.spi.snapshot.SnapshotKey
 internal class RetainedDocuments(
     private val revisions: Revisions,
     private val cache: DocumentCache,
+    /** What a document the cache will not keep costs this call, held before it is decoded (`CTL-85`). */
+    private val work: WorkBudget,
 ) {
     /** The head of [key] from the cache, decoded and compiled once for its content (RC1-41); null when it has none. */
     suspend fun held(key: SnapshotKey): Held? = entry(key)?.let { Held(it.document, it) }
 
     suspend fun entry(key: SnapshotKey): DocumentCache.Entry? {
         val stored = revisions.stored(key) ?: return null
-        return cache.get(key, stored.digest)
-            ?: cache.put(key, stored.digest, stored.document.bodySize, revisions.decode(key, stored.document))
+        cache.get(key, stored.digest)?.let { return it }
+        held(key, stored.document.bodySize)
+        return cache.put(key, stored.digest, stored.document.bodySize, revisions.decode(key, stored.document))
     }
 
     /**
@@ -52,8 +57,20 @@ internal class RetainedDocuments(
         val digest = revisions.retainedDigest(key, revision) ?: throw gone(key, revision)
         cache.get(key, digest)?.let { return Held(it.document, it) }
         val record = revisions.record(key, digest) ?: throw gone(key, revision)
+        held(key, record.bodySize)
         val entry = cache.put(key, digest, record.bodySize, revisions.decode(key, record))
         return Held(entry.document, entry)
+    }
+
+    /**
+     * A document of [size] stored bytes the cache will not keep is decoded and compiled for this call alone: its weight
+     * is held until the call ends, charged to [key]'s tenant (the platform's for the platform and app documents). One the
+     * cache keeps costs nothing here: the cache's own bound holds it.
+     */
+    private suspend fun held(key: SnapshotKey, size: Int) {
+        if (cache.admits(size.toLong())) return
+        val tenant = (key as? SnapshotKey.Tenant)?.tenantId ?: TenantId.PLATFORM.value
+        work.hold(tenant, size.toLong() * (DocumentCache.DECODED_FACTOR + DocumentCache.COMPILED_FACTOR))
     }
 
     suspend fun retained(key: SnapshotKey, revision: Long): PolicyDocument =
