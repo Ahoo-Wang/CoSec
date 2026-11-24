@@ -11,12 +11,8 @@
  * limitations under the License.
  */
 
-@file:OptIn(InternalCoSecApi::class)
-
 package me.ahoo.cosec.control.server
 
-import me.ahoo.cosec.annotations.InternalCoSecApi
-import me.ahoo.cosec.spring.boot.pipeline.PipelineProperties
 import org.springframework.beans.factory.config.BeanFactoryPostProcessor
 import org.springframework.boot.context.properties.bind.BindException
 import org.springframework.boot.context.properties.bind.Binder
@@ -51,6 +47,10 @@ internal class ControlServerRefusals {
         const val ROUTES_KEY = "cosec.control.http.enabled"
         const val MODE_KEY = "cosec.pipeline.mode"
         const val CALLER_KEY = "cosec.pipeline.caller"
+
+        /** `cosec.pipeline.mode=gateway` and `cosec.pipeline.caller=credential`, as [bound] reads them. */
+        private const val GATEWAY = "gateway"
+        private const val CREDENTIAL = "credential"
         const val JWT_KEY = "cosec.jwt.enabled"
         const val API_KEY_KEY = "cosec.api-key.enabled"
         const val LOGIN_KEY = "cosec.authentication.login.enabled"
@@ -69,13 +69,11 @@ internal class ControlServerRefusals {
                         "nothing to serve. Use the gateway image for a read-only instance (STA-10)."
                 }
             }
-            val mode = bound(environment, MODE_KEY, PipelineProperties.Mode::class.java)
-            check(mode != PipelineProperties.Mode.GATEWAY) {
+            check(bound(environment, MODE_KEY) != GATEWAY) {
                 "cosec-control-server decides every control call with the policies: $MODE_KEY=gateway wires no control " +
                     "plane, so it would serve nothing. Leave it enforce; the gateway image is the read-only one (STA-10)."
             }
-            val caller = bound(environment, CALLER_KEY, PipelineProperties.Caller::class.java)
-            check(caller != PipelineProperties.Caller.CREDENTIAL) {
+            check(bound(environment, CALLER_KEY) != CREDENTIAL) {
                 "cosec-control-server takes its caller from the CoSec-Identity header and verifies no credential: " +
                     "$CALLER_KEY=credential would refuse every call as anonymous. Leave it forwarded-identity (STA-10)."
             }
@@ -89,9 +87,14 @@ internal class ControlServerRefusals {
             }
         }
 
-        /** [key] as the starter binds it; null when unset, or when the starter will refuse what is written. */
-        private fun <T : Any> bound(environment: Environment, key: String, type: Class<T>): T? = try {
-            Binder.get(environment).bind(key, type).orElse(null)
+        /**
+         * The enum value [key] names, as the starter reads it: Spring binds an enum ignoring case and every character
+         * that is not a letter or a digit (`gateway`, `GATEWAY`, `Gate-Way`), so the same text is compared here; null
+         * when unset. A value that names no constant is the starter's to refuse.
+         */
+        private fun bound(environment: Environment, key: String): String? = try {
+            Binder.get(environment).bind(key, String::class.java).orElse(null)
+                ?.filter { it.isLetterOrDigit() }?.lowercase()
         } catch (_: BindException) {
             null
         }

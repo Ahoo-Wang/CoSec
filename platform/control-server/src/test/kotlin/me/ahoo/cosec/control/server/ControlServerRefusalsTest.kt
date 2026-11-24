@@ -48,6 +48,7 @@ class ControlServerRefusalsTest {
             "cosec.pipeline.mode" to "GATEWAY",
             "cosec.pipeline.caller" to "credential",
             "cosec.pipeline.caller" to "CREDENTIAL",
+            "cosec.pipeline.mode" to "Gate-Way",
         )
         for ((key, value) in refused) {
             assertThrownBy<IllegalStateException> {
