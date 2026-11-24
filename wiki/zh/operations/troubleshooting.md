@@ -404,16 +404,16 @@ Redis may evict CoSec's policy snapshot: maxmemory-policy is {<node>=<policy>}, 
 
 ## 影子窗口在等待确认 {#shadow-window-waiting-for-an-acknowledgement}
 
-控制面记录 `Shadow window <w> of change <c> is waiting for the acknowledgement of [<instances>]`，`GET /changes/{id}` 在 `shadow.waitingFor` 中点名这些实例：无论窗口的样本是否已够，只要某个存活实例（最近一分钟内写过状态的实例）没有在其状态中列出该窗口，窗口就不能通过（`CTL-10`）。与 Redis 断开超过这一时长的实例不写状态：它既不被等待，也不算作确认，并且装入已发布的修订，而它什么都没有比较过。关闭了影子的主机根本不写状态。
+控制面记录 `Shadow window <w> of change <c> is waiting for the acknowledgement of [<instances>]`，`GET /changes/{id}` 在 `shadow.waitingFor` 中点名这些实例：无论窗口的样本是否已够，只要某个存活实例（最近一分钟内写过状态的实例）没有在其状态中列出该窗口，窗口就不能通过（`CTL-10`）。与 Redis 断开超过这一时长的实例不写状态：它既不被等待，也不算作确认，并且装入已发布的修订，而它什么都没有比较过。关闭了影子的主机写入一个声明它不参与影子的状态（`shadows: false`，`SNP-25`），不会被等待。
 
-- **旧版本的实例**不发送确认。完成滚动升级：旧实例下线后，它们的状态在两分钟内过期，窗口不再等待它们。
+- **旧版本的实例**不发送确认。完成滚动升级：旧实例下线后，它们的状态在一分钟内变旧，窗口不再等待它们。
 - **读不到暂存列表的实例**记录 `The staged list cannot be read since it was at <instant>`，其 `cosec.shadow.staged.age` 持续上升。修复它对 Redis 的访问（数据面用户读取 `<s>:candidate-staged:all`，[存储](./storage.md#redis-keys)）。
 - **窗口期间启动的实例**编译了候选之后，会在几个上报间隔内确认它。
-- **状态无法解码的实例**算作存活且什么都不确认（`CTL-73`）：控制面主机以 `WARN` 记录 `The status of instance [<instance>] does not read: it counts as live and acknowledging no shadow window until it reads or expires, at most two minutes after its last write (<why>).`，每个实例每分钟最多一次，`cosec.control.shadow.status.unreadable` 对每次读到它计数。停止写入的实例在其状态过期时（两分钟后）不再挡住窗口。`<why>` 中是更晚的格式时，说明滚动升级期间有更新的版本：完成控制面主机的升级，或回滚那个实例。其他情况是损坏的值或反复崩溃的实例：按其 id 停止或修复该实例；它的状态在最后一次写入两分钟后过期。
+- **状态无法解码的实例**算作存活且什么都不确认（`CTL-73`）：控制面主机以 `WARN` 记录 `The status of instance [<instance>] does not read: it counts as live and acknowledging no shadow window until it reads, or until a minute after its last write, which its key's remaining life tells (<why>).`，每个实例每分钟最多一次，`cosec.control.shadow.status.unreadable` 对每次读到它计数。和任何实例一样，停止写入的实例一分钟后就不再挡住窗口：状态键剩下的寿命说明它是何时写入的。`<why>` 中是更晚的格式时，说明滚动升级期间有更新的版本：完成控制面主机的升级，或回滚那个实例。其他情况是损坏的值或反复崩溃的实例：按其 id 停止或修复该实例。
 
 如果**没有任何**实例确认任何窗口（每个窗口的 `waitingFor` 都列出全部存活实例），说明实例没有持有暂存列表：它们记录 `The staged list cannot be read`，或者 `<s>:candidate-staged:all` 没有 `.kept` 标记（存储被清空后控制面尚未在其上暂存过任何候选；下一次暂存或影子轮询会写入它）。修复之后，实例会在几个上报间隔内确认。
 
-只有参与影子比较的实例才会被等待。设置了 `cosec.authorization.shadow.enabled=false` 的宿主（控制面镜像就这样设置）根本不写状态；`CandidateSource` 是你自己的实现的宿主会写入一个声明它不参与影子比较的状态：两者都不会拖住窗口，`propagation` 仍会统计后者。
+只有参与影子比较的实例才会被等待。设置了 `cosec.authorization.shadow.enabled=false` 的宿主（控制面镜像就这样设置），和 `CandidateSource` 是你自己的实现的宿主，都写入一个声明它不参与影子比较的状态：两者都不会拖住窗口，`propagation` 两者都统计（`SNP-25`）。
 
 如果 `waitingFor` 为空而窗口仍不关闭，它在等待样本：其文档的流量太少，到 `cosec.control.shadow.max-duration` 时以*证据不足*关闭（[测试变更](../policies/testing.md#trying-changes-in-shadow-mode)）。
 

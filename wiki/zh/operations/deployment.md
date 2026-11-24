@@ -206,7 +206,7 @@ spring:
 ### 存储、就绪和副本 {#control-plane-store}
 
 - **存储账户。** 宿主写入 `<s>:` 下的每个文档、变更和租约（[谁可以写哪些 key](./storage.md#who-may-write-which-keys)）：给它一个自己的 Redis 用户，这是唯一可以写它们的用户，网关用只读的。Redis 必须以 `maxmemory-policy noeviction` 运行，和网关一样。用无法向失效通道发布的用户启动宿主，会在启动时失败（[故障排查](./troubleshooting.md#startup-fails-on-a-redis-permission)）。
-- **不参与影子窗口。** 镜像中 `cosec.authorization.shadow.enabled` 为 `false`：副本不是窗口要等待的实例，它只对运维人员的请求决策，所以不会让窗口一直开着，也不会写报告。
+- **不参与影子窗口。** 镜像中 `cosec.authorization.shadow.enabled` 为 `false`：副本不是窗口要等待的实例，它只对运维人员的请求决策，所以不会让窗口一直开着，也不会写报告。它仍然写自己的状态（`shadows: false`），与存储的每个读方一样（`SNP-25`）：它的 Redis 用户除了 `<s>:control:*` 之外，还要写 `<s>:shadow:status:<instance>`、`<s>:shadow:resident:<instance>` 和 `<s>:shadow:instances:*`，`propagation` 也计入它持有的文档。
 - **就绪。** 与每个实例一样，平台文档安装之后宿主才就绪（[就绪](#readiness)），并且要求控制存储处于本版本的格式：镜像把 `cosecControlStoreFormat` 指示器放进了它的就绪分组。8.0.0-beta.5 之前版本写下的存储会让它处于未就绪，可见并有名字，直到运行过 `cosec-migrate repair-references`（[控制存储格式](./observability.md#snapshot-health)）。存活是存活分组，无论 Redis 里有什么都为 up。两种探针都在管理端口上；镜像的 `HEALTHCHECK` 是存活那个。
 - **一个副本，以及何时两个。** 一个就够：运维人员每小时只发几个请求，重启只要几秒。维护任务在每个实例上运行并取租约，让每份文档一次只有一个实例在处理（没有任何开关能把它们关掉），变更用比较并交换推进，所以第二个副本在设计上是支持的；系统测试目前还没有覆盖两个副本。运行两个是为了节点排空，不是为了负载，并配一个中断预算。升级时停掉宿主、再启动新镜像，不要滚动更新：跨存储格式变更时，旧副本和新副本不能同时运行（[预览版之间升级](./upgrading-previews.md#from-8-0-0-beta-4)）。
 - **内存。** 宿主在两个快照源里持有它所决策的每个租户的已编译文档：一个是它管道的，一个是控制面自己的，以及 `simulate`、`explain`、`analyze` 编译的文档所在的一个缓存，三者各占文档那四分之一堆的三分之一（`SNP-24`，DR1-F-5）。镜像默认使用网关的 JVM 参数；[`k8s/control/`](#kubernetes) 为试用设置 1536Mi 限额里 768 MiB 堆，production overlay 设置 3200Mi 里 2 GiB，依[内存](#memory)的规则（堆，加直接内存，加约 250 MiB，再加四分之一）：堆和限额一起改。2 GiB 的宿主每个源约持有 4,800 个典型租户；要更多就给它更多的堆。

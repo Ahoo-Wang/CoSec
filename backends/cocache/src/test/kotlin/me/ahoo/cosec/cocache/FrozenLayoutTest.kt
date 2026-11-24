@@ -192,6 +192,10 @@ class FrozenLayoutTest {
         Golden(FrozenLayout.SOCIAL_COUNT, "the count's key", "cosec:oauth:binding:!count") {
             CoSecCacheSpecs.socialBindingPrefix("cosec") + RedisSocialStateStore.COUNT_SUFFIX
         },
+        Golden(FrozenLayout.INSTANCE_STATUS, "a status key lives exactly an hour, with no jitter", "PT1H PT0S") {
+            caches.getValue("cosec").runtime.policy(CoSecCacheSpecs.INSTANCE_STATUS_CACHE_NAME)!!
+                .let { "${it.ttl} ${it.ttlJitter}" }
+        },
         Golden(FrozenLayout.INSTANCE_STATUS, "an instance's status", "cosec:shadow:status:pod-a.1") {
             storageKey("cosec", CoSecCacheSpecs.INSTANCE_STATUS_CACHE_NAME, "pod-a.1")
         },

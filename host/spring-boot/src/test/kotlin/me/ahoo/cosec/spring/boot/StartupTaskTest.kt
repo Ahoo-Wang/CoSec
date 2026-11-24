@@ -46,13 +46,17 @@ class StartupTaskTest {
         imports.map { Class.forName(it) }
     }
 
-    /** ... and the configurations nested in them. */
+    /** ... and the configurations nested in them or imported by them (CoSec's own). */
     private val configurations: List<Class<*>> by lazy { autoConfigurations.flatMap { nested(it) } }
 
     /** A `@Bean` method, read as Spring reads it (a meta-annotation counts too). */
     private fun isBean(method: Method): Boolean = AnnotatedElementUtils.hasAnnotation(method, Bean::class.java)
 
-    private fun nested(type: Class<*>): List<Class<*>> = listOf(type) + type.declaredClasses.flatMap { nested(it) }
+    private fun nested(type: Class<*>): List<Class<*>> = listOf(type) +
+        type.declaredClasses.flatMap { nested(it) } +
+        type.getAnnotation(Import::class.java)?.value.orEmpty().map { it.java }
+            .filter { it.name.startsWith("me.ahoo.cosec.") && it != StartupTaskExclusion::class.java }
+            .flatMap { nested(it) }
 
     private val beanMethods: List<Method> by lazy {
         configurations.flatMap { it.declaredMethods.toList() }.filter(::isBean)

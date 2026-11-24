@@ -12,6 +12,7 @@ me.ahoo.cosec.spring.boot.authentication.route.CoSecLoginRoutesAutoConfiguration
 me.ahoo.cosec.spring.boot.cosid.CoSecCosIdAutoConfiguration
 me.ahoo.cosec.spring.boot.pipeline.CoSecPipelineIntegrationAutoConfiguration
 me.ahoo.cosec.spring.boot.pipeline.CoSecMembershipAutoConfiguration
+me.ahoo.cosec.spring.boot.pipeline.CoSecInstanceStatusAutoConfiguration
 me.ahoo.cosec.spring.boot.pipeline.CoSecSnapshotAutoConfiguration
 me.ahoo.cosec.spring.boot.pipeline.CoSecPipelineAutoConfiguration
 me.ahoo.cosec.spring.boot.pipeline.CoSecGatewayModeAutoConfiguration

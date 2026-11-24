@@ -2,19 +2,19 @@
 # Mutant: a resident write that failed is taken as written, so the record stays missing or stale until the next change
 # Tests: :runtime:test --tests me.ahoo.cosec.runtime.shadow.ResidentWriteTest
 
-diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/shadow/ShadowReporter.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/shadow/ShadowReporter.kt
-index e8b0ac1ff..041a6e4c8 100644
---- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/shadow/ShadowReporter.kt
-+++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/shadow/ShadowReporter.kt
-@@ -116,10 +116,9 @@ class ShadowReporter(
+diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/shadow/InstanceReporter.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/shadow/InstanceReporter.kt
+index 9bee4c52a..a3d74e882 100644
+--- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/shadow/InstanceReporter.kt
++++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/shadow/InstanceReporter.kt
+@@ -108,10 +108,9 @@ class InstanceReporter(
          val holding = installed()
          val due = residentAt?.let { !now.isBefore(it.plus(ShadowReportReader.RESIDENT_TTL.dividedBy(2))) } ?: true
          if (holding == lastResident && !due) return
--        if (attempt("the resident documents") { sink.write(ResidentDocuments(recorder.instance, now, holding)) }) {
+-        if (attempt("the resident documents") { sink.write(ResidentDocuments(instance, now, holding)) }) {
 -            lastResident = holding
 -            residentAt = now
 -        }
-+        attempt("the resident documents") { sink.write(ResidentDocuments(recorder.instance, now, holding)) }
++        attempt("the resident documents") { sink.write(ResidentDocuments(instance, now, holding)) }
 +        lastResident = holding
 +        residentAt = now
      }

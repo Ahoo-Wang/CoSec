@@ -498,8 +498,8 @@ The window closes:
 **Every live instance acknowledges the window before it passes** (`CTL-10`). An instance acknowledges a window in its
 status, written every report interval (10 seconds at the default), once it has read the window in the staged list and
 compiled its candidate (or reported `CANDIDATE_ERROR`). The window does not pass while an instance with a status in the
-last minute that takes part in shadowing has not (a host with shadowing off writes no status; one whose
-`CandidateSource` is your own says it does not shadow, and is not waited for), logging `Shadow window <w> of change <c> is waiting for the acknowledgement of [<instances>]`, and
+last minute that takes part in shadowing has not (a host with shadowing off, and one whose `CandidateSource` is your
+own, say in their status that they do not shadow, and are not waited for), logging `Shadow window <w> of change <c> is waiting for the acknowledgement of [<instances>]`, and
 `GET /changes/{id}` names those instances in `shadow.waitingFor`. An acknowledgement is not a sample: the samples still
 come from the reports. Two different waits, and what to do about each:
 
@@ -515,9 +515,9 @@ At `max-duration` the window closes *insufficient* whatever the acknowledgements
 
 **What "live" means.** A live instance is one with a status in the last minute. An instance cut off from Redis for
 longer writes none, so it is neither waited for nor counted as acknowledging, and when it reconnects it installs the
-published revision having compared nothing; a host with shadowing off writes no status at all. An instance whose
+published revision having compared nothing; a host with shadowing off writes a status that says it does not shadow. An instance whose
 status is stored but does not decode (a crash-looping version, a corrupt value, or a format this control host does not
-read during a rolling upgrade) is live, until its status reads or expires two minutes after its last write, and acknowledges nothing: the window waits for it and `shadow.waitingFor` names
+read during a rolling upgrade) is live for a minute after its last write, as any instance is (the life its status key has left tells when that was), and acknowledges nothing: the window waits for it and `shadow.waitingFor` names
 it, while every other status is read and `propagation` counts it as recent, holding no document (`CTL-73`).
 
 An instance that has reported on a window must keep reporting until it closes. One whose report is gone (it stopped
@@ -830,8 +830,8 @@ proposal does: the old revision's confirmation was given for another change. Whi
 ### Propagation {#propagation}
 
 `GET /documents/{key}/revisions/{revision}/propagation` tells how far a published revision has reached the instances,
-from the statuses they write every few seconds (with [shadow windows](../operations/configuration.md#shadow-windows)
-on). Publishing never waits for it.
+from the statuses they write every few seconds (every CoSec process with `cosec-cocache` writes one, `SNP-25`).
+Publishing never waits for it.
 
 ```json
 { "revision": 5, "installed": 3, "holding": 3, "recent": 50, "unknown": 0, "asOf": "2026-11-20T09:00:04Z" }
@@ -848,6 +848,33 @@ changes, before its next status, so the answer is at most one report interval be
 the resident records are each read at most every 5 seconds on a control host, so an answer may be that old: `asOf`
 says when they were read. A read that fails is a `503`, never an older answer (`CTL-62`). Deciding whether a shadow
 window passes reads only the small statuses, never a resident record (`CTL-74`).
+
+### The readers of the store {#instances}
+
+`GET /instances` lists every CoSec process that reported a status in the last hour (`CTL-89`, `SNP-25`): every one with
+`cosec-cocache` reports, whatever its pipeline mode and whether it shadows, with the CoSec release it runs. It is the
+newer side of a rolling upgrade seeing the older one: a later release reads from it which instances still run an
+earlier one. A platform operator's (a read of the platform document); the service port does not serve it.
+
+```json
+{
+  "instances": [
+    { "instance": "gateway-7c9f.k2", "release": "8.0.0-beta.9", "formatLevel": 1, "at": "2026-11-20T09:00:01Z", "live": true, "shadows": true },
+    { "instance": "iam-0.m4", "formatLevel": 1, "at": "2026-11-20T08:20:13Z", "live": false, "shadows": false }
+  ],
+  "unreadable": [],
+  "releases": { "8.0.0-beta.9": 1, "unknown": 1 },
+  "asOf": "2026-11-20T09:00:04Z"
+}
+```
+
+`live` is a status written in the minute before `asOf`, what a shadow window and `propagation` count; the others are
+instances that reported within the hour and may still serve on the documents they installed. `release` is absent for an
+instance whose status does not name one (a release before 8.0.0-beta.9), and `releases` counts it, with each instance
+in `unreadable` (its status does not decode), as `unknown`. A control host logs `Instances of <n> release(s) read this
+store in the last hour: ...` each time the releases change while more than one is there, and
+`cosec.control.instances.releases` is how many there were at the last read ([Observability](../operations/observability.md#metrics)).
+The statuses are read at most every 5 seconds, as for `propagation`.
 
 ## Access reviews
 

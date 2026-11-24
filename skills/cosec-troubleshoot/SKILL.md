@@ -616,7 +616,7 @@ or a request that bypassed the gateway:
   keeping revision <n>` means Redis could not be read: the installed revision stays until a read succeeds.
   `Snapshot document [<key>] regressed from revision <a> to <b>` means the store lost a write (for example a
   failover); `cosec-migrate verify-chain` names every document whose revision chain lost a record.
-- The control plane's `GET /documents/{key}/revisions/{rev}/propagation` reports, of the recently reporting instances (those with `cosec.authorization.shadow.enabled`, `recent`), how many hold the document (`holding`) and how many of those have installed it (`installed`), as read at `asOf` (at most 5 seconds ago). No instance is behind when `installed` equals `holding`; `holding: 0` means no instance holds the document, and the first request loads it at the published revision.
+- The control plane's `GET /documents/{key}/revisions/{rev}/propagation` reports, of the recently reporting instances (every CoSec process with `cosec-cocache` reports, `SNP-25`; `recent`), how many hold the document (`holding`) and how many of those have installed it (`installed`), as read at `asOf` (at most 5 seconds ago). No instance is behind when `installed` equals `holding`; `holding: 0` means no instance holds the document, and the first request loads it at the published revision.
 
 ### Snapshot log lines missing / housekeeping summary
 
@@ -797,7 +797,7 @@ report interval. Otherwise the window closes insufficient at `cosec.control.shad
 
 A shadow window that does not close while the control plane logs `Shadow window <w> of change <c> is waiting for the
 acknowledgement of [<instances>]` (and `GET /changes/{id}` names them in `shadow.waitingFor`) waits for live instances
-that do not acknowledge it (`CTL-10`): an older version (finish the upgrade; its status expires within two minutes once
+that do not acknowledge it (`CTL-10`): an older version (finish the upgrade; its status is no longer live a minute after
 it is gone) or an instance that cannot read the staged list (`The staged list cannot be read` in its log, a rising
 `cosec.shadow.staged.age`), or one whose status does not decode (`CTL-73`: the control host logs `The status of instance
 [<instance>] does not read`, with why, and `cosec.control.shadow.status.unreadable` counts it; a later format is a
@@ -825,6 +825,17 @@ declared types must match on every instance and the control host; the change is 
   redirects, which would resend `CoSec-Identity` where one points; build it with `followRedirects(NEVER)`. `The control
   plane's answer is over 20971520 bytes`: something other than a control-plane host answered at the service URL.
   https://cosec.ahoo.me/operations/troubleshooting#startup-fails-on-two-control-services
+
+### An instance the control plane cannot see
+
+- `Writing the instance status of instance [<id>] failed: the control plane cannot see this instance among the readers
+  of the store ... Allow its Redis user to write ~<s>:shadow:status:<id>, ~<s>:shadow:resident:<id> and
+  ~<s>:shadow:instances:*` (`ERROR` once, then `WARN` at most once a minute; `cosec.instance.status.failed` counts;
+  `cosecInstanceStatus` shows `failingSince`): every CoSec process with `cosec-cocache` reports its status (`SNP-25`),
+  a control-plane host and an IAM service behind a gateway included. The instance keeps serving, but a publish will not
+  wait for it: give its Redis user write permission on those keys. `GET /instances` lists who the control plane sees,
+  with each one's release; `cosec.control.instances.releases` above 1 is an instance of another release still reading
+  the store (within the last hour).
 
 ### The typed control client does not read a document
 

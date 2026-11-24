@@ -58,6 +58,9 @@ object ShadowMembers {
             optional("windows", WhenAbsent.NONE),
             // An instance that does not shadow, ignored or dropped, would count as one that evaluated the window.
             Member("shadows", WhenAbsent.TRUE, ignoringWidens = true, droppingWidens = true),
+            // An unknown release, which a publish counts as the GA baseline: the oldest it may wait for, which narrows
+            // (SNP-25).
+            optional("release", WhenAbsent.NONE),
         ),
     )
 

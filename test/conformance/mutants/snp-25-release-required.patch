@@ -1,0 +1,17 @@
+# Rule: SNP-25
+# Mutant: a status without a release is refused, so every instance of the release before it reads as undecodable
+# Tests: :document:test --tests me.ahoo.cosec.document.shadow.ShadowCodecTest
+
+diff --git a/core/document/src/main/kotlin/me/ahoo/cosec/document/shadow/ShadowCodec.kt b/core/document/src/main/kotlin/me/ahoo/cosec/document/shadow/ShadowCodec.kt
+index 54d7decff..f1ed48a49 100644
+--- a/core/document/src/main/kotlin/me/ahoo/cosec/document/shadow/ShadowCodec.kt
++++ b/core/document/src/main/kotlin/me/ahoo/cosec/document/shadow/ShadowCodec.kt
+@@ -114,7 +114,7 @@ object ShadowCodec {
+                 node.get("shadows")?.let { if (it.isBoolean) it.asBoolean() else throw malformed("shadows is not a boolean") }
+                     ?: true,
+                 // Optional (SNP-25): a status of a release before it does not say; it reads as an unknown release.
+-                node.get("release")?.let { if (it.isString) it.asString() else throw malformed("release is not a string") },
++                node.need("release").let { if (it.isString) it.asString() else throw malformed("release is not a string") },
+             )
+         }
+     }

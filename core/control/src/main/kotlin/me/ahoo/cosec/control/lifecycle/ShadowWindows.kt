@@ -18,6 +18,7 @@ package me.ahoo.cosec.control.lifecycle
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.control.change.Acknowledgement
+import me.ahoo.cosec.control.change.InstanceReaders
 import me.ahoo.cosec.control.change.Propagation
 import me.ahoo.cosec.control.change.ShadowState
 import me.ahoo.cosec.control.change.ShadowSummary
@@ -118,6 +119,12 @@ class ShadowWindows(
 
     /** The statuses that did not decode, of every read so far ([InstanceStatuses.unreadable]). */
     val unreadableStatuses: Long get() = statuses.unreadable
+
+    /** The readers of the store (`SNP-25`, `CTL-89`): the statuses of the last hour, read at most every [InstanceStatuses.MAX_AGE]. */
+    suspend fun readers(): InstanceReaders = statuses.readers()
+
+    /** The releases the readers ran at the last read ([InstanceReaders.releases]). */
+    val readerReleases: Map<String, Int> get() = statuses.releases
 
     /**
      * Read-only propagation (RFC 0007 §6.5, Q29, `CTL-62`): of the instances with a status in the last minute

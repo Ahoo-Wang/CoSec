@@ -332,12 +332,15 @@ public final class me/ahoo/cosec/spi/shadow/CandidateStore$DefaultImpls {
 public final class me/ahoo/cosec/spi/shadow/InstanceStatus {
 	public static final field Companion Lme/ahoo/cosec/spi/shadow/InstanceStatus$Companion;
 	public static final field FORMAT_LEVEL I
-	public fun <init> (Ljava/lang/String;Ljava/time/Instant;ILjava/util/Set;Z)V
-	public synthetic fun <init> (Ljava/lang/String;Ljava/time/Instant;ILjava/util/Set;ZILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public static final field RELEASE Ljava/lang/String;
+	public static final field RELEASE_RESOURCE Ljava/lang/String;
+	public fun <init> (Ljava/lang/String;Ljava/time/Instant;ILjava/util/Set;ZLjava/lang/String;)V
+	public synthetic fun <init> (Ljava/lang/String;Ljava/time/Instant;ILjava/util/Set;ZLjava/lang/String;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
 	public fun equals (Ljava/lang/Object;)Z
 	public final fun getAt ()Ljava/time/Instant;
 	public final fun getFormatLevel ()I
 	public final fun getInstance ()Ljava/lang/String;
+	public final fun getRelease ()Ljava/lang/String;
 	public final fun getShadows ()Z
 	public final fun getWindows ()Ljava/util/Set;
 	public fun hashCode ()I
@@ -414,6 +417,7 @@ public final class me/ahoo/cosec/spi/shadow/ShadowReport$Companion {
 
 public abstract interface class me/ahoo/cosec/spi/shadow/ShadowReportReader {
 	public static final field Companion Lme/ahoo/cosec/spi/shadow/ShadowReportReader$Companion;
+	public fun readerReadings (Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun readings (Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public abstract fun reports (Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public abstract fun residents (Ljava/util/Set;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
@@ -422,11 +426,13 @@ public abstract interface class me/ahoo/cosec/spi/shadow/ShadowReportReader {
 }
 
 public final class me/ahoo/cosec/spi/shadow/ShadowReportReader$Companion {
+	public final fun getREADERS_TTL ()Ljava/time/Duration;
 	public final fun getRESIDENT_TTL ()Ljava/time/Duration;
 	public final fun getSTATUS_TTL ()Ljava/time/Duration;
 }
 
 public final class me/ahoo/cosec/spi/shadow/ShadowReportReader$DefaultImpls {
+	public static fun readerReadings (Lme/ahoo/cosec/spi/shadow/ShadowReportReader;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public static fun readings (Lme/ahoo/cosec/spi/shadow/ShadowReportReader;Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public static fun statusReadings (Lme/ahoo/cosec/spi/shadow/ShadowReportReader;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 }

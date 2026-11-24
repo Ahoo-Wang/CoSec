@@ -26,6 +26,7 @@ import me.ahoo.cosec.control.change.ChangeId
 import me.ahoo.cosec.control.change.ChangeRequest
 import me.ahoo.cosec.control.change.ChangeState
 import me.ahoo.cosec.control.change.Confirmation
+import me.ahoo.cosec.control.change.InstanceReaders
 import me.ahoo.cosec.control.change.Operation
 import me.ahoo.cosec.control.change.Propagation
 import me.ahoo.cosec.control.change.ShadowAck
@@ -99,6 +100,12 @@ class Changes(
 
     /** Instance statuses that did not decode, of every read so far (`CTL-73`): `cosec.control.shadow.status.unreadable`. */
     val unreadableStatuses: Long get() = windows.unreadableStatuses
+
+    /** The readers of the store (`SNP-25`, `CTL-89`): every instance with a status in the last hour, and its release. */
+    val readers: suspend () -> InstanceReaders = { windows.readers() }
+
+    /** How many releases the readers ran at the last read: more than one is a mixed deployment (RFC 0014 G3). */
+    val readerReleases: Int get() = windows.readerReleases.size
 
     private val context = StoreCurrentDocuments(store, revisions)
 

@@ -1,24 +1,24 @@
 # Rule: CTL-73
-# Mutant: a status's key takes CoCache's default jitter, so an undecodable status counts anything from one to three minutes after its last write, not the two the reader and its log promise
+# Mutant: a status's key takes CoCache's default jitter, so the life an undecodable status's key has left no longer says when it was written, and the readers of the store are not those of the last hour
 # Tests: :cocache:test --tests me.ahoo.cosec.cocache.shadow.StatusReadingsTest --tests me.ahoo.cosec.cocache.CacheTtlPolicyTest
 
 diff --git a/backends/cocache/src/main/kotlin/me/ahoo/cosec/cocache/CacheLocks.kt b/backends/cocache/src/main/kotlin/me/ahoo/cosec/cocache/CacheLocks.kt
-index 8c30fb627..abe83389c 100644
+index 0ff2fe4f5..a1a286991 100644
 --- a/backends/cocache/src/main/kotlin/me/ahoo/cosec/cocache/CacheLocks.kt
 +++ b/backends/cocache/src/main/kotlin/me/ahoo/cosec/cocache/CacheLocks.kt
-@@ -87,7 +87,6 @@ internal object CacheLocks {
-                     // so the key lives exactly STATUS_TTL. CoCache's default jitter would make it 1 to 3 minutes. A
-                     // resident record is rewritten at half its life (CTL-75), which a jittered life could undercut.
+@@ -96,7 +96,6 @@ internal object CacheLocks {
+                     // CoCache's default jitter. A resident record is rewritten at half its life (CTL-75), which a
+                     // jittered life could undercut.
                      lock(PolicyField.TTL_JITTER)
 -                    constrain(PolicyField.TTL_JITTER) { Duration.ZERO }
                  }
              }
  
 diff --git a/backends/cocache/src/main/kotlin/me/ahoo/cosec/cocache/shadow/ShadowCacheSpecs.kt b/backends/cocache/src/main/kotlin/me/ahoo/cosec/cocache/shadow/ShadowCacheSpecs.kt
-index 9961b3621..995050756 100644
+index b9da5801b..7677afb8e 100644
 --- a/backends/cocache/src/main/kotlin/me/ahoo/cosec/cocache/shadow/ShadowCacheSpecs.kt
 +++ b/backends/cocache/src/main/kotlin/me/ahoo/cosec/cocache/shadow/ShadowCacheSpecs.kt
-@@ -134,7 +134,7 @@ internal object ShadowCacheSpecs {
+@@ -137,7 +137,7 @@ internal object ShadowCacheSpecs {
              .codec(codec)
              .policy {
                  this.ttl = ttl

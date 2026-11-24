@@ -152,6 +152,9 @@ interface ControlPlane {
 
     suspend fun propagation(operator: Operator, key: SnapshotKey, revision: Long): Propagation
 
+    /** The readers of the store and their releases (`CTL-89`): `GET /instances`. */
+    val instances: InstanceReads
+
     @InternalCoSecApi
     companion object {
         const val DEFAULT_LIMIT: Int = 20

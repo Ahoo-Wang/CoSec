@@ -2,11 +2,24 @@
 # Mutant: the read-only declaration of both stores ignores cosec.control.enabled, so they are read-write while it is switched off
 # Tests: :spring-boot:test --tests me.ahoo.cosec.spring.boot.control.ControlPlaneSwitchTest
 
+diff --git a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/pipeline/CoSecShadowConfiguration.kt b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/pipeline/CoSecShadowConfiguration.kt
+index d47f6ba0f..96d425785 100644
+--- a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/pipeline/CoSecShadowConfiguration.kt
++++ b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/pipeline/CoSecShadowConfiguration.kt
+@@ -89,7 +89,7 @@ class CoSecShadowConfiguration {
+         val store = stores.ifUnique ?: CoCacheCandidateStore.create(
+             factory,
+             cosec.keyPrefix,
+-            readOnly = !ControlPlaneCondition.wired(resources.classLoader, environment),
++            readOnly = !ControlPlaneCondition.present(resources.classLoader),
+         )
+         return CachingCandidateSource(store, compiler::compileCandidate)
+     }
 diff --git a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/pipeline/CoSecSnapshotAutoConfiguration.kt b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/pipeline/CoSecSnapshotAutoConfiguration.kt
-index 4c39dd0..62f485a 100644
+index c14504a3d..73bb1a796 100644
 --- a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/pipeline/CoSecSnapshotAutoConfiguration.kt
 +++ b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/pipeline/CoSecSnapshotAutoConfiguration.kt
-@@ -105,7 +105,7 @@ class CoSecSnapshotAutoConfiguration {
+@@ -92,7 +92,7 @@ class CoSecSnapshotAutoConfiguration {
          ): PolicySnapshotCache {
              val snapshot = properties.snapshot
              // Read-only unless this process runs the control plane, the only writer of documents (SNP-18).
@@ -15,12 +28,3 @@ index 4c39dd0..62f485a 100644
              return factory.createPolicySnapshotCache(
                  CoSecCacheSpecs.policySnapshot(
                      cosec.keyPrefix,
-@@ -241,7 +241,7 @@ class CoSecSnapshotAutoConfiguration {
-             val store = stores.ifUnique ?: CoCacheCandidateStore.create(
-                 factory,
-                 cosec.keyPrefix,
--                readOnly = !ControlPlaneCondition.wired(resources.classLoader, environment),
-+                readOnly = !ControlPlaneCondition.present(resources.classLoader),
-             )
-             return CachingCandidateSource(store, compiler::compileCandidate)
-         }

@@ -24,6 +24,27 @@ package me.ahoo.cosec.conformance
 object GuardAllowlist {
     val GUARDS: Map<String, Set<String>> = mapOf(
         "build" to SnapshotBoundGuards.BUILD + StoredRecordGuards.BUILD + setOf(
+            // SNP-25: every process that reads the store reports its status and release (RFC 0014 R5).
+            "spi:InstanceStatusReleaseTest#the release is the version of the build",
+            "spi:InstanceStatusReleaseTest#the release reads from a repackaged jar without a manifest",
+            "document:ShadowCodecTest#a status names its release, and one without it reads as an unknown release",
+            "runtime:InstanceReporterTest#an instance that does not shadow reports its status and release, and no window",
+            "runtime:InstanceReporterTest#the loop reports on its own, and stays quiet while the shadow reporter drives it",
+            "runtime:InstanceReporterTest#a write that fails is counted and never thrown",
+            "cocache:StatusReadingsTest#a status is live for a minute and a reader for an hour",
+            "cocache:StatusReadingsTest#a status's key lives exactly an hour after its last write",
+            "spring-boot:InstanceStatusWiringTest#an instance that does not shadow reports, before its snapshot source reads a document",
+            "spring-boot:InstanceStatusWiringTest#a service behind a gateway reports, though it reads no document",
+            "spring-boot:InstanceStatusWiringTest#with shadowing on, the status and the shadow reports are one instance's",
+            "spring-boot:InstanceStatusWiringTest#its health names the instance and the release, and stays up",
+            "spring-boot:InstanceStatusWiringTest#without a shared store nothing reports",
+            // CTL-89: the readers of the store and their releases, on the operators' API (RFC 0014 G3).
+            "control:InstancesRouteTest#a platform operator reads the instances and their releases - CTL-89",
+            "control:InstancesRouteTest#a tenant's administrator is refused, and the service profile serves no such route",
+            "control:InstancesRouteTest#it is a GET",
+            "control:InstanceReadersTest#the readers are the statuses of the last hour, with their releases",
+            "control:InstanceReadersTest#a mixed deployment is said once each time its releases change",
+            "control:ClientContractTest#an instances answer holds exactly the members of its contract file",
             // SNP-26: what two releases read and write on one Redis is frozen within 8.x (RFC 0014 R6).
             "cocache:FrozenLayoutTest#goldenSamples",
             "cocache:FrozenLayoutTest#everyEntryIsHeld",

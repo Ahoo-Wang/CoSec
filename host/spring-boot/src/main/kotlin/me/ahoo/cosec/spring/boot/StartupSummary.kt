@@ -28,11 +28,13 @@ import me.ahoo.cosec.spi.apikey.ApiKeyReader
 import me.ahoo.cosec.spi.apikey.InMemoryApiKeyStore
 import me.ahoo.cosec.spi.authn.Authenticator
 import me.ahoo.cosec.spi.ratelimit.RateLimiter
+import me.ahoo.cosec.spi.shadow.InstanceStatus
 import me.ahoo.cosec.spi.token.RevocationReader
 import me.ahoo.cosec.spi.token.TokenStore
 import me.ahoo.cosec.spi.token.TokenVerifier
 import me.ahoo.cosec.spring.boot.apikey.apiKeysEnabled
 import me.ahoo.cosec.spring.boot.pipeline.CoSecPipelineAutoConfiguration
+import me.ahoo.cosec.spring.boot.pipeline.InstanceReporting
 import org.springframework.beans.factory.ListableBeanFactory
 import org.springframework.core.env.Environment
 
@@ -73,6 +75,7 @@ internal object StartupSummary {
             add("rate-limiter=${beans.getBeanProvider(RateLimiter::class.java).ifAvailable?.let(::named) ?: "none"}")
             add("listeners=${listeners(beans)}")
             add("route-map=${routes(beans)}")
+            add("status=${status(beans)}")
             CoSecSwitches.switchedOff(environment).takeIf { it.isNotEmpty() }?.let {
                 add("switched-off-by-configuration=$it")
             }
@@ -135,6 +138,12 @@ internal object StartupSummary {
     private fun listeners(beans: ListableBeanFactory): String =
         beans.getBeanProvider(DecisionListeners::class.java).ifAvailable
             ?.stats?.joinToString(", ", "[", "]") { it.listener } ?: "[]"
+
+    /** The status this instance reports (`SNP-25`): its instance id and release, or none without `cosec-cocache`. */
+    private fun status(beans: ListableBeanFactory): String =
+        beans.getBeanProvider(InstanceReporting::class.java).ifAvailable
+            ?.let { "${it.reporter.instance} (release ${InstanceStatus.RELEASE ?: "unknown"})" }
+            ?: "none (no shared store: the control plane cannot see this instance)"
 
     private fun named(bean: Any): String = bean.javaClass.simpleName.ifEmpty { bean.javaClass.name }
 

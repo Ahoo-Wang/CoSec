@@ -11,8 +11,13 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.control.lifecycle
 
+import io.github.oshai.kotlinlogging.KotlinLogging
+import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.control.change.InstanceReaders
 import me.ahoo.cosec.control.store.ControlStoreException
 import me.ahoo.cosec.spi.shadow.InstanceStatus
 import me.ahoo.cosec.spi.shadow.ResidentReadings
@@ -24,6 +29,8 @@ import java.time.Duration
 import java.time.Instant
 import java.util.concurrent.atomic.AtomicLong
 import kotlin.coroutines.cancellation.CancellationException
+
+private val log = KotlinLogging.logger {}
 
 /**
  * The instances' statuses as `propagation` reads them (R2C-12, `CTL-62`): read at most once per [maxAge] on this
@@ -51,6 +58,12 @@ internal class InstanceStatuses(
     class Residents(val live: Set<String>, val readings: ResidentReadings, val asOf: Instant)
 
     private val shared = SharedRead(clock, maxAge) { load() }
+    private val readersShared = SharedRead(clock, maxAge) { loadReaders() }
+
+    /** The releases the readers ran at the last read, as [InstanceReaders.releases]; empty before one. */
+    @Volatile
+    var releases: Map<String, Int> = emptyMap()
+        private set
     private val residentsShared = SharedRead(clock, maxAge) { loadResidents() }
     private val unreadableCount = AtomicLong()
 
@@ -58,6 +71,33 @@ internal class InstanceStatuses(
     val unreadable: Long get() = unreadableCount.get()
 
     suspend fun read(): Read = shared.read().let { Read(it.value.statuses, it.value.unreadable, it.asOf) }
+
+    /** The readers of the store (`SNP-25`): the statuses of the last hour, live or not, and those that do not decode. */
+    suspend fun readers(): InstanceReaders = readersShared.read().let {
+        InstanceReaders(it.value.statuses, it.value.unreadable, it.asOf)
+    }
+
+    @Suppress("TooGenericExceptionCaught")
+    private suspend fun loadReaders(): StatusReadings {
+        val readings = try {
+            reports.readerReadings()
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            throw unavailable(e)
+        }
+        val now = InstanceReaders(readings.statuses, readings.unreadable, clock.instant()).releases
+        val before = releases
+        releases = now
+        // A mixed deployment, seen from the newer side (RFC 0014 G3): said once each time the releases change.
+        if (now != before && (now.size > 1 || before.size > 1)) {
+            log.info {
+                "Instances of ${now.size} release(s) read this store in the last hour: " +
+                    now.entries.joinToString { (release, count) -> "$release ×$count" } + " (SNP-25)."
+            }
+        }
+        return readings
+    }
 
     /** The resident records of every live instance, one whose status does not decode included (`CTL-75`). */
     suspend fun residents(): Residents = residentsShared.read().let {

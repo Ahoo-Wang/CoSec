@@ -60,6 +60,26 @@ internal class ControlMetersConfiguration {
     }
 
     /**
+     * How many releases the readers of the store ran at the last read of them (`SNP-25`, RFC 0014 G3): 1 in a deployment
+     * of one release, more while instances of another still read the store (within the last hour). Alert when above 1
+     * for longer than a rolling upgrade takes.
+     */
+    @Bean
+    fun cosecReaderReleasesMeter(
+        registry: ObjectProvider<MeterRegistry>,
+        changes: ObjectProvider<Changes>,
+    ): StartupTask = StartupTask.AfterSingletons {
+        val meters = registry.ifAvailable ?: return@AfterSingletons
+        changes.ifAvailable?.let { bound ->
+            Gauge.builder(READER_RELEASES, bound) { it.readerReleases.toDouble() }
+                .description(
+                    "Releases of the CoSec instances that read this store in the last hour, as last read: above 1 is a mixed deployment"
+                )
+                .register(meters)
+        }
+    }
+
+    /**
      * What the documents retain (`CTL-84`): only the instance that led the last reclamation pass reports what it found,
      * kept until its next pass ends; the others 0, so the largest across instances is the store's as of the last pass.
      */
@@ -109,6 +129,7 @@ internal class ControlMetersConfiguration {
 
     companion object {
         const val UNREADABLE_STATUSES = "cosec.control.shadow.status.unreadable"
+        const val READER_RELEASES = "cosec.control.instances.releases"
         const val RECORDS = "cosec.control.revisions.records"
         const val BYTES = "cosec.control.revisions.bytes"
         const val RECLAIMED_YOUNG = "cosec.control.revisions.reclaimed-young"

@@ -160,11 +160,13 @@ class ControlServerTest {
     }
 
     @Test
-    fun `a control server writes no instance status, and takes no part in a shadow window`() {
+    fun `a control server reports a status that does not shadow, and takes no part in a shadow window`() {
         val statement = "--cosec.pipeline.identity.only-trusted-callers-can-reach=true"
         val server = start(statement)
         server.containsBean("cosecShadowReporting").assert().isFalse()
         server.containsBean("cosecShadowListener").assert().isFalse()
+        // SNP-25: it reads the documents, so it is a reader of the store, and reports itself as one, not shadowing.
+        server.containsBean("cosecInstanceReporting").assert().isTrue()
         server.close()
         // The same names are there when shadow is switched on, so the absence above is the switch's and not a rename's.
         val shadowed = start(statement, "--cosec.authorization.shadow.enabled=true")

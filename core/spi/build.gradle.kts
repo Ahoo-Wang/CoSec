@@ -21,3 +21,19 @@ dependencies {
     api("org.jetbrains.kotlinx:kotlinx-coroutines-core")
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test")
 }
+
+// RFC 0014 R5 (`SNP-25`): the CoSec release every instance reports with its status, `META-INF/cosec/release`, written from
+// the project's version at build time. A resource rather than the jar's manifest: tests run from class directories, which
+// have none, and an application that repackages CoSec (a fat or shaded jar) keeps a resource but may drop the manifest.
+val releaseResource = tasks.register("cosecReleaseResource") {
+    val release = project.version.toString()
+    val directory = layout.buildDirectory.dir("generated/cosec-release")
+    inputs.property("release", release)
+    outputs.dir(directory)
+    doLast {
+        val file = directory.get().file("META-INF/cosec/release").asFile
+        file.parentFile.mkdirs()
+        file.writeText(release)
+    }
+}
+extensions.getByType<SourceSetContainer>()["main"].resources.srcDir(releaseResource)

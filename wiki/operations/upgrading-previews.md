@@ -31,6 +31,18 @@ Which preview of the library may run behind which preview of the gateway image: 
 
 ## From 8.0.0-beta.8 {#from-8-0-0-beta-8}
 
+- **Every CoSec process with `cosec-cocache` writes its status, with its release** (`SNP-25`, RFC 0014 R5). Affected:
+  the Redis users of a control-plane host (the `cosec-control` image), of an IAM service behind a gateway
+  (`cosec.pipeline.mode=gateway` with JWT on), and of a data-plane instance with `cosec.authorization.shadow.enabled=false`
+  whose user was trimmed to leave out the shadow keys. Each now writes `<s>:shadow:status:<instance>`,
+  `<s>:shadow:resident:<instance>` and `<s>:shadow:instances:*` (with shadowing off, `shadows: false`: no window waits
+  for it). Give their users write permission on those keys
+  ([Who may write which keys](./storage.md#who-may-write-which-keys)). One without it keeps serving and starting: it logs
+  the missing permission once at `ERROR`, counts `cosec.instance.status.failed`, and the control plane cannot see it.
+  A status is now kept an hour (it was two minutes); an instance is still live only with a status from the last minute,
+  one that does not decode included: its key's remaining life says when it was written (`CTL-73`). `GET /instances` lists the readers and
+  their releases ([Testing policies](../policies/testing.md#instances)); `propagation` now counts a control-plane host and
+  the documents it holds.
 - **A stored record's `crit` names what a reader must understand** (`SNP-27`, `SNP-28`, `SNP-29`, `OBS-12`). Affected:
   nothing stored by 8.0.0-beta.8, which writes no `crit`; this preview writes none either. A session record whose `crit`
   names a member this version does not know, which a later version may write, is refused: the refresh, logout or switch
