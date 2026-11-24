@@ -23,6 +23,7 @@ import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.CsvSource
+import java.lang.management.ManagementFactory
 import java.time.Instant
 import java.util.Base64
 
@@ -32,6 +33,14 @@ import java.util.Base64
  * same words.
  */
 class IdentityMembershipsCodecTest {
+    private companion object {
+        const val WARM_UP = 20_000
+        const val ENCODES = 10_000
+
+        /** A few hundred bytes: the text and its copies, far below one node (or collection) per part. */
+        const val TEXT_MARGIN = 384L
+    }
+
     private val now = Instant.parse("2026-11-01T00:00:00Z")
 
     private fun identity(space: String = "team-a", memberships: Identity.Memberships? = Identity.Memberships.NONE) =
@@ -150,6 +159,28 @@ class IdentityMembershipsCodecTest {
             written.reason.assert().isEqualTo(IdentityFormatException.Reason.MALFORMED)
             written.message.assert().startsWith("The identity header is malformed: $.memberships.")
         }
+    }
+
+    /**
+     * The gateway writes the identity on every request it forwards, and most state nothing more: `memberships` then costs
+     * its text alone (31 bytes of JSON, 44 characters of base64, each copied by the encoder), never a node or a copy of
+     * a collection. Measured as what the thread allocates per encode, beside the same identity without the member.
+     */
+    @Test
+    fun `nothing more costs the encoder only its text, and two attachments only theirs`() {
+        val threads = ManagementFactory.getThreadMXBean() as com.sun.management.ThreadMXBean
+        fun perEncode(identity: Identity): Long {
+            repeat(WARM_UP) { IdentityCodec.encode(identity) }
+            val before = threads.currentThreadAllocatedBytes
+            repeat(ENCODES) { IdentityCodec.encode(identity) }
+            return (threads.currentThreadAllocatedBytes - before) / ENCODES
+        }
+        val without = perEncode(identity(memberships = null))
+        val none = perEncode(identity())
+        val two = perEncode(identity(memberships = Identity.Memberships(emptyMap(), listOf("principal-a", "principal-b"))))
+
+        (none - without).assert().describedAs("NONE over no member: %d bytes", none - without).isLessThan(TEXT_MARGIN)
+        (two - none).assert().describedAs("two attachments over NONE: %d bytes", two - none).isLessThan(TEXT_MARGIN)
     }
 
     @Test

@@ -75,11 +75,13 @@ internal object WrittenIdentity {
                 roles(roles, path)
             }
         }
-        if (memberships.attachments.isEmpty()) return
-        val seen = HashSet<String>()
-        memberships.attachments.forEachIndexed { i, policy ->
-            id(policy, "$.memberships.attachments[$i]")
-            if (!seen.add(policy)) throw unwritable("$.memberships.attachments[$i] repeats a policy")
+        val attachments = memberships.attachments
+        // Compared pairwise, which allocates nothing: a principal attaches a few policies.
+        for (i in attachments.indices) {
+            id(attachments[i], "$.memberships.attachments[$i]")
+            for (j in 0 until i) {
+                if (attachments[j] == attachments[i]) throw unwritable("$.memberships.attachments[$i] repeats a policy")
+            }
         }
     }
 

@@ -20,7 +20,6 @@ import me.ahoo.cosec.model.Identifiers
 import me.ahoo.cosec.model.Match
 import me.ahoo.cosec.spi.identity.Identity
 import tools.jackson.databind.JsonNode
-import tools.jackson.databind.node.ObjectNode
 
 /**
  * The `memberships` member of the identity header (`IDN-39`), read and written for [IdentityCodec]: each other space
@@ -52,17 +51,6 @@ internal object IdentityMemberships {
         } else {
             Identity.Memberships(bySpace, attachments)
         }
-    }
-
-    /** Spaces sorted, each one's roles sorted, as `roles` is; the attachments in their order, which reports follow. */
-    fun write(node: ObjectNode, memberships: Identity.Memberships) {
-        val spaces = node.putObject("spaces")
-        if (memberships.spaces.isNotEmpty()) {
-            memberships.spaces.toSortedMap().forEach { (space, roles) ->
-                spaces.putArray(space).apply { roles.sorted().forEach(::add) }
-            }
-        }
-        node.putArray("attachments").apply { memberships.attachments.forEach(::add) }
     }
 
     /** The path of space [name] under `memberships.spaces`, quoted as every name a header chooses is. */

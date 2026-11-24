@@ -27,10 +27,6 @@ import tools.jackson.core.JacksonException
 import tools.jackson.core.StreamReadFeature
 import tools.jackson.databind.JsonNode
 import tools.jackson.databind.ObjectReader
-import tools.jackson.databind.node.JsonNodeFactory
-import tools.jackson.databind.node.ObjectNode
-import java.math.BigDecimal
-import java.math.BigInteger
 import java.time.Instant
 import java.util.Base64
 
@@ -91,7 +87,6 @@ object IdentityCodec {
     private val SESSION_FIELDS = arrayOf("sid", "auth_time", "generation")
 
     private val reader: ObjectReader = CoSecJson.mapper.reader().with(StreamReadFeature.STRICT_DUPLICATE_DETECTION)
-    private val factory = JsonNodeFactory.instance
     private val encoder = Base64.getUrlEncoder().withoutPadding()
     private val decoder = Base64.getUrlDecoder()
 
@@ -102,7 +97,8 @@ object IdentityCodec {
      */
     fun encode(identity: Identity, maxBytes: Int = DEFAULT_MAX_BYTES): String {
         WrittenIdentity.check(identity)
-        val header = encoder.encodeToString(CoSecJson.mapper.writeValueAsBytes(tree(identity)))
+        IdentityJson.check(identity)
+        val header = encoder.encodeToString(CoSecJson.mapper.writeValueAsBytes(IdentityJson(identity)))
         if (header.length > maxBytes) {
             throw Unencodable.tooLarge(
                 identity.subject,
@@ -204,72 +200,6 @@ object IdentityCodec {
             throw malformed("$.auth.session.generation is not a positive integer")
         }
         return TokenSession(node.need("sid").id("$.auth.session.sid"), authTime, generation.longValue())
-    }
-
-    private fun tree(identity: Identity): ObjectNode {
-        val root = factory.objectNode().put("v", VERSION)
-        root.put("tenant", identity.tenant).put("sub", identity.subject)
-        root.putObject("scope").put("app", identity.app).put("space", identity.space)
-        root.putArray("roles").apply { identity.roles.sorted().forEach(::add) }
-        identity.memberships?.let { IdentityMemberships.write(root.putObject("memberships"), it) }
-        root.putObject("auth").apply {
-            put("method", identity.credential.method.value)
-            put("jti", identity.credential.id)
-            val expiresAt = identity.credential.expiresAt ?: throw Unencodable.neverExpires(identity.subject)
-            put("exp", expiresAt.epochSecond)
-            identity.credential.issuedAt?.let { put("iat", it.epochSecond) }
-            if (identity.credential.capped) {
-                put("capped", true)
-            }
-            identity.credential.session?.let { session ->
-                putObject("session").put("sid", session.id).put("auth_time", session.authTime.epochSecond)
-                    .put("generation", session.generation)
-            }
-        }
-        root.put("iat", identity.issuedAt.epochSecond).put("rid", identity.requestId)
-        if (identity.claims.isNotEmpty()) {
-            val claims = root.putObject("claims")
-            identity.claims.toSortedMap().forEach { (name, value) -> claim(claims, name, value) }
-        }
-        return root
-    }
-
-    private fun claim(claims: ObjectNode, name: String, value: Any) {
-        when (value) {
-            is String -> {
-                if (value.length > MAX_CLAIM_LENGTH) {
-                    throw Unencodable.claimTooLong(name, value.length)
-                }
-                claims.put(name, value)
-            }
-            is Boolean -> claims.put(name, value)
-            is Number -> number(claims, name, value)
-            else -> throw Unencodable.claimType(name, value)
-        }
-    }
-
-    /**
-     * A number claim as the header's JSON holds it, which a service reads back as a `Long` or a `Double` (#1228): the
-     * standard integer types, and a `BigInteger` within a `Long`, as an integer; a finite `Float` or `Double`, and a
-     * `BigDecimal` that a `Double` holds exactly (its shortest decimal is the same number), as a number. Anything else is
-     * refused rather than rounded: no other `Number` is converted, since its value could change on the way.
-     */
-    private fun number(claims: ObjectNode, name: String, value: Number) {
-        when (val exact = exactly(value)) {
-            is Long -> claims.put(name, exact)
-            is Double -> claims.put(name, exact)
-            else -> throw Unencodable.claimInexact(name, value)
-        }
-    }
-
-    /** [value] as the `Long` or the `Double` the header holds it as; null when it cannot hold it exactly. */
-    private fun exactly(value: Number): Number? = when (value) {
-        is Int, is Long, is Short, is Byte -> value.toLong()
-        is BigInteger -> if (value.bitLength() < Long.SIZE_BITS) value.toLong() else null
-        is Double, is Float -> value.toDouble().takeIf { it.isFinite() }
-        // Its shortest decimal, which is what the header writes, must be the same number.
-        is BigDecimal -> value.toDouble().takeIf { it.isFinite() && BigDecimal.valueOf(it).compareTo(value) == 0 }
-        else -> null
     }
 
     internal fun roles(node: JsonNode, path: String): Set<String> {

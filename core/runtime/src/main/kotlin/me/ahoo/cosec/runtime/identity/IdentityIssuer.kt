@@ -17,6 +17,7 @@ package me.ahoo.cosec.runtime.identity
 
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.document.identity.IdentityCodec
+import me.ahoo.cosec.model.PolicyId
 import me.ahoo.cosec.runtime.http.RequestSecurity
 import me.ahoo.cosec.spi.identity.Identity
 import me.ahoo.cosec.spi.identity.IdentityOverflowException
@@ -98,15 +99,34 @@ class IdentityIssuer(
             if (ownSpaceOnly && attachments.isEmpty()) {
                 return Identity.Memberships.NONE
             }
-            val spaces = LinkedHashMap<String, Set<String>>()
-            for ((id, held) in roles) {
-                if (id != space && held.isNotEmpty()) spaces[id.value] = held.mapTo(LinkedHashSet()) { it.value }
+            var spaces: MutableMap<String, Set<String>>? = null
+            if (!ownSpaceOnly) {
+                for ((id, held) in roles) {
+                    if (id == space || held.isEmpty()) continue
+                    val others = spaces ?: LinkedHashMap<String, Set<String>>().also { spaces = it }
+                    others[id.value] = held.mapTo(LinkedHashSet(held.size * 2)) { it.value }
+                }
             }
-            val policies = attachments.mapTo(LinkedHashSet()) { it.value }.toList()
-            if (spaces.isEmpty() && policies.isEmpty()) {
+            val policies = policies(attachments)
+            if (spaces == null && policies.isEmpty()) {
                 return Identity.Memberships.NONE
             }
-            return Identity.Memberships(spaces, policies)
+            return Identity.Memberships(spaces ?: emptyMap(), policies)
+        }
+
+        /**
+         * The ids of [attachments], each once, in their order (`ALG-9`: a policy claimed twice is attached once). A list
+         * of exactly their number when none repeats, which a few compared pairwise tell without allocating.
+         */
+        private fun policies(attachments: List<PolicyId>): List<String> {
+            if (attachments.isEmpty()) return emptyList()
+            val repeats = attachments.size > PAIRWISE ||
+                attachments.indices.any { i -> (0 until i).any { attachments[it] == attachments[i] } }
+            return if (repeats) {
+                attachments.mapTo(LinkedHashSet()) { it.value }.toList()
+            } else {
+                attachments.map { it.value }
+            }
         }
 
         /**
@@ -129,6 +149,9 @@ class IdentityIssuer(
             .joinToString { "[${it.key}] (${it.value.toString().length} characters)" }
 
         private const val LARGEST = 3
+
+        /** Up to this many attachments are compared pairwise for a repeat; more go through a set. */
+        private const val PAIRWISE = 8
 
         /**
          * A request attribute the gateway sets on every routed request: `true` for a route that receives the identity
