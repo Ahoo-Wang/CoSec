@@ -151,11 +151,7 @@ internal class CoSecControlRoutesAutoConfiguration {
             // One work budget for both profiles (CTL-85): the host's.
             val budget = work?.ifAvailable ?: ControlDerived.workBudget()
             val services = listener?.let {
-                ControlHttp(
-                    checkNotNull(plane).getObject(),
-                    ControlProfile.SERVICE,
-                    budget
-                )
+                ControlHttp(checkNotNull(plane).getObject(), ControlProfile.SERVICE, budget)
             }
             // The control API answers on the application's port (the operators' profile) and on the service port (the
             // service profile), and on no other port the host listens on, the management port included (CTL-69): a 404
