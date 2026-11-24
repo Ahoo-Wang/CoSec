@@ -40,7 +40,14 @@ import me.ahoo.cosec.spi.snapshot.SnapshotKey
  * the service profile lists only what it would show by id. While the open-change sets are not kept (`CTL-54`) the listing is a 503:
  * it could miss a change only the list of the format before names.
  */
-internal class ChangeListings(private val store: ControlStore, private val authority: ChangeAuthority) {
+internal class ChangeListings(
+    private val store: ControlStore,
+    private val authority: ChangeAuthority,
+    /** The host's work budget, which the record being read is held in (`CTL-85`, DR2-E-4). */
+    private val work: WorkBudget,
+    /** The most bytes a change record is stored with: what a record of a store that cannot tell its size weighs. */
+    private val recordCap: Long,
+) {
     suspend fun list(
         operator: Operator,
         document: SnapshotKey?,
@@ -65,14 +72,23 @@ internal class ChangeListings(private val store: ControlStore, private val autho
         if (!TenantIsolation.allows(operator, document) || !documents(document)) {
             return ChangePage(emptyList(), null)
         }
-        val listed = store.openChanges(document)
-            .filter { state == null || (it as? ListedChange.Readable)?.change?.state == state }
-            .sortedBy { it.id.value }
-            .filter { after == null || it.id.value > after }
-            .filter { visible(it) }
+        // One record at a time, in the order of their ids, until one more than the page is found (DR2-E-4): only the
+        // page is kept, never every open change of the document. Each is weighed by its size before it is decoded.
+        val reads = RecordReads(work, operator.tenant.value, recordCap)
+        val listed = ArrayList<ListedChange>()
+        store.eachOpenChange(document, after) { _, size, read ->
+            reads.before(size)
+            val change = read()
+            if (change != null && inState(change, state) && visible(change)) listed += change
+            listed.size <= limit
+        }
         val page = listed.take(limit)
         return ChangePage(page, if (listed.size > limit) page.last().id.value else null)
     }
+
+    /** Whether [change] is in [state]; any state when it is `null`, and a change that does not read in none. */
+    private fun inState(change: ListedChange, state: ChangeState?): Boolean =
+        state == null || (change as? ListedChange.Readable)?.change?.state == state
 
     /**
      * The page is cut after the filter, never before (`CTL-55`): the store skips, unread, the documents the caller may

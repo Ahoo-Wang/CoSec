@@ -52,6 +52,7 @@ import me.ahoo.cosec.control.store.ControlStore
 import me.ahoo.cosec.control.store.EndedChange
 import me.ahoo.cosec.control.store.HeadWrite
 import me.ahoo.cosec.control.store.ListedChange
+import me.ahoo.cosec.control.store.OpenChangeVisitor
 import me.ahoo.cosec.control.store.ReferrerEntry
 import me.ahoo.cosec.control.store.RevisionIndex
 import me.ahoo.cosec.control.store.StoredDocument
@@ -92,7 +93,7 @@ class CoCacheControlStore internal constructor(
     /** The back-reference sets and the document set ([ControlSets]). */
     private val sets: ControlSets,
     private val leases: Store<String, String>,
-    private val changes: Store<ChangeId, ChangeRequest>,
+    private val changes: Store<ChangeId, StoredChange>,
     private val stages: Store<SnapshotKey, StageSlot>,
     /** The staged candidates the data plane's shadow listeners read (RFC 0007 §6.4). */
     private val candidates: Store<SnapshotKey, StoredCandidate>,
@@ -225,22 +226,22 @@ class CoCacheControlStore internal constructor(
         answering("The legacy document list") { lists.async().delete(DOCUMENTS).await() }
     }
 
-    override suspend fun change(id: ChangeId): Versioned<ChangeRequest>? =
-        read(changes, id, "Change [${id.value}]")?.let { (value, digest) -> Versioned(value, digest) }
+    override suspend fun change(id: ChangeId): Versioned<ChangeRequest>? = openChanges.record(id)
 
     private val openChanges = OpenChangeSets(
         sets,
         { read(lists, OPEN_CHANGES) != null },
-        { id -> change(id) },
+        { id -> read(changes, id, "Change [${id.value}]")?.let { (value, digest) -> Versioned(value, digest) } },
         clock,
         missingGrace,
     )
 
     /** Listed before the write as the record it writes, and the record it replaced unlisted after (`CTL-54`). */
     override suspend fun putChange(expected: SnapshotDigest?, change: ChangeRequest, previous: ChangeState?): Boolean {
-        val digest = digest(ChangeRequestCacheCodec, change)
+        val stored = StoredChange.of(change)
+        val digest = digest(StoredChange, stored)
         openChanges.listBefore(change, digest)
-        val written = put(changes, change.id, expected, change, digest) is Put.Written
+        val written = put(changes, change.id, expected, stored, digest) is Put.Written
         if (written) openChanges.unlistAfter(change, previous, expected, digest)
         return written
     }
@@ -259,6 +260,9 @@ class CoCacheControlStore internal constructor(
     override suspend fun keepOpenChanges() = openChanges.keep()
 
     override suspend fun openChanges(document: SnapshotKey): List<ListedChange> = openChanges.openChanges(document)
+
+    override suspend fun eachOpenChange(document: SnapshotKey, after: String?, visit: OpenChangeVisitor) =
+        openChanges.eachOpenChange(document, after, visit)
 
     override suspend fun changes(
         state: ChangeState,

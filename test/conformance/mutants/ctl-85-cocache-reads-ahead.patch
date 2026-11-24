@@ -1,0 +1,17 @@
+# Rule: CTL-85
+# Mutant: the store reads every open change of a document before it hands the first to the reader
+# Tests: :cocache:test --tests me.ahoo.cosec.cocache.control.CoCacheControlStoreTest
+
+diff --git a/backends/cocache/src/main/kotlin/me/ahoo/cosec/cocache/control/OpenChangeSets.kt b/backends/cocache/src/main/kotlin/me/ahoo/cosec/cocache/control/OpenChangeSets.kt
+--- a/backends/cocache/src/main/kotlin/me/ahoo/cosec/cocache/control/OpenChangeSets.kt
++++ b/backends/cocache/src/main/kotlin/me/ahoo/cosec/cocache/control/OpenChangeSets.kt
+@@ -164,7 +164,8 @@ internal class OpenChangeSets(
+         val key = documentKey(document)
+         val members = sets.changeMembers(key)
+         forgetUnheld(key, members)
+-        for (member in members.sorted()) {
++        val ahead = members.sorted().onEach { stored(ChangeId(it)) }
++        for (member in ahead) {
+             if (after != null && member <= after) continue
+             val id = ChangeId(member)
+             val record = stored(id)

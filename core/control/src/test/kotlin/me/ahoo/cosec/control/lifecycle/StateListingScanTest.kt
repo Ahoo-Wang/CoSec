@@ -98,7 +98,12 @@ class StateListingScanTest {
             decisions += "${action.verb} ${resource.id}"
             decide(action, resource)
         }
-        return ChangeListings(store, ChangeAuthority(authorizer, revocations = RevocationReader.NONE))
+        return ChangeListings(
+            store,
+            ChangeAuthority(authorizer, revocations = RevocationReader.NONE),
+            ControlDerived.workBudget(),
+            ChangeRecordBudget.recordCap(ChangeOptions.DEFAULT_MAX_DOCUMENT_BYTES.toLong()),
+        )
     }
 
     private fun list(listings: ChangeListings, operator: Operator): List<String> = runBlocking {

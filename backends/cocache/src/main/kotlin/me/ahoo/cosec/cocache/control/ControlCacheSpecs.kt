@@ -28,7 +28,6 @@ import me.ahoo.cosec.cocache.SetsOfRecord
 import me.ahoo.cosec.cocache.snapshot.SnapshotDocumentCodec
 import me.ahoo.cosec.cocache.snapshot.SnapshotKeyEncoder
 import me.ahoo.cosec.control.change.ChangeId
-import me.ahoo.cosec.control.change.ChangeRequest
 import me.ahoo.cosec.control.change.StageSlot
 import me.ahoo.cosec.control.store.AppList
 import me.ahoo.cosec.control.store.ReferrerEntry
@@ -118,12 +117,13 @@ internal object ControlCacheSpecs {
             readOnly,
         )
 
-    fun changeRequest(keyPrefix: String = DEFAULT_KEY_PREFIX): StoreSpec<ChangeId, ChangeRequest> =
+    /** The change records, as their bytes: decoded only when a reader asks (DR2-E-4, [StoredChange]). */
+    fun changeRequest(keyPrefix: String = DEFAULT_KEY_PREFIX): StoreSpec<ChangeId, StoredChange> =
         storeOfRecord(
             CoSecCacheSpecs.CHANGE_REQUEST_CACHE_NAME,
             keyPrefix,
             KeyEncoder<ChangeId> { it.value },
-            ChangeRequestCacheCodec,
+            StoredChange,
         ).build()
 
     fun stage(keyPrefix: String = DEFAULT_KEY_PREFIX): StoreSpec<SnapshotKey, StageSlot> =

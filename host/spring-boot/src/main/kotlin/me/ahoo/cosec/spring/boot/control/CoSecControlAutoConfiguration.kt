@@ -290,6 +290,7 @@ internal class CoSecControlAutoConfiguration {
             reports = shadowReports.ifAvailable ?: CoCacheShadowReports.create(factory, cosec.keyPrefix),
             listeners = listeners,
             lockout = lockout(revisions, attributes, environment, controlProperties, work, documentCache),
+            work = work,
         )
     }
 

@@ -1,0 +1,16 @@
+# Rule: CTL-85
+# Mutant: every record read is weighed as one at the cap, whatever it is stored with
+# Tests: :control:test --tests me.ahoo.cosec.control.store.OpenChangesReadTest
+
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/RecordReads.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/RecordReads.kt
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/RecordReads.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/RecordReads.kt
+@@ -33,7 +33,7 @@ internal class RecordReads(private val work: WorkBudget, private val tenant: Str
+ 
+     /** Before a record of [size] stored bytes (`null`: not known) is decoded. */
+     suspend fun before(size: Long?) {
+-        val weight = (size ?: recordCap) * ChangeRecordBudget.DECODED_FACTOR
++        val weight = recordCap * ChangeRecordBudget.DECODED_FACTOR
+         val more = weight - held
+         // What passes free is not held, and a record no heavier than one held already is held already.
+         if (weight <= work.free || more <= work.free) return

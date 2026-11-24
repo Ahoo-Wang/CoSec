@@ -86,6 +86,12 @@ class Changes(
     reports: ShadowReportReader = InMemoryShadowReports(clock),
     /** Who hears of every step (RFC 0007 §10.5); publishing and break-glass wait for the REQUIRED ones. */
     private val listeners: ChangeListeners = ChangeListeners.NONE,
+    /**
+     * The host's one work budget (`CTL-85`), which reading a document's open changes holds the record being read in
+     * (DR2-E-4). A host passes the one its plane has ([me.ahoo.cosec.control.api.ControlPlane.work]); the default is
+     * for changes of their own, in a test.
+     */
+    val work: WorkBudget = ControlDerived.workBudget(),
 ) {
     private val checks = ChangeChecks(options, compile)
 
@@ -150,7 +156,7 @@ class Changes(
 
     /** Proposing a change, and checking one without proposing it (`CTL-78`, [Proposals.check]). */
     internal val proposals =
-        Proposals(flow, store, revisions, ids, clock, authority, authority.approvals, candidates, listeners)
+        Proposals(flow, store, revisions, ids, clock, authority, authority.approvals, candidates, listeners, work)
 
     /** The change [id]; one past its expiry is `EXPIRED` from then on. */
     suspend fun get(id: ChangeId): ChangeRequest = flow.get(id)
@@ -161,7 +167,7 @@ class Changes(
     /** [ChangeLifecycle.visible]: the change [id] as [operator] may see it, the same 404 when they may not. */
     suspend fun visible(operator: Operator, id: ChangeId): ChangeRequest = flow.visible(operator, id)
 
-    private val listings = ChangeListings(store, authority)
+    private val listings = ChangeListings(store, authority, work, flow.recordCap)
 
     /** [ChangeListings.list]: the open changes of a document, or in a state, that [operator] may see. */
     suspend fun list(

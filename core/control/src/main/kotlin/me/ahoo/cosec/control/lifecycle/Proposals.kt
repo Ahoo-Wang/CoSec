@@ -59,9 +59,10 @@ internal class Proposals(
     private val rules: ApprovalRules,
     private val candidates: CandidateChecks,
     private val listeners: ChangeListeners,
+    work: WorkBudget,
 ) {
     /** At most the revisions the operator keeps, open on one document, weighing at most their bytes (`CTL-83`). */
-    private val limit = OpenLimit(store, flow, revisions.retention.maxCount, revisions.retention.byteBudget)
+    private val limit = OpenLimit(store, flow, revisions.retention.maxCount, revisions.retention.byteBudget, work)
 
     /**
      * Proposes [operations] on revision [base] of [key] (0 for a document not published yet) and checks them. The

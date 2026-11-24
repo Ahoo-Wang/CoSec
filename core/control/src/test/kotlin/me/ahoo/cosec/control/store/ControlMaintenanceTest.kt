@@ -94,6 +94,13 @@ class ControlMaintenanceTest {
     @Test
     fun `an open change of an app no key can name stops the pass`() = runBlocking<Unit> {
         val failing = object : ControlStore by store {
+            // The one-at-a-time read hands out what this store lists whole (DR2-E-4).
+            override suspend fun eachOpenChange(
+                document: SnapshotKey,
+                after: String?,
+                visit: me.ahoo.cosec.control.store.OpenChangeVisitor,
+            ) = super<me.ahoo.cosec.control.store.ControlStore>.eachOpenChange(document, after, visit)
+
             override suspend fun openChanges(document: SnapshotKey): List<ListedChange> =
                 throw IllegalStateException("decoding", SnapshotFormatException("A change request is malformed."))
         }
@@ -254,6 +261,13 @@ class ControlMaintenanceTest {
     @Test
     fun `a pass that cannot read an open change reclaims nothing`() = runBlocking<Unit> {
         val failing = object : ControlStore by store {
+            // The one-at-a-time read hands out what this store lists whole (DR2-E-4).
+            override suspend fun eachOpenChange(
+                document: SnapshotKey,
+                after: String?,
+                visit: me.ahoo.cosec.control.store.OpenChangeVisitor,
+            ) = super<me.ahoo.cosec.control.store.ControlStore>.eachOpenChange(document, after, visit)
+
             override suspend fun openChanges(document: SnapshotKey): List<ListedChange> = error("Redis is down")
         }
         val blindRevisions = Revisions(failing, clock, revisions.retention)
@@ -338,6 +352,13 @@ class ControlMaintenanceTest {
             reads.merge(id, 1, Int::plus)
             return store.change(id)
         }
+
+        // The one-at-a-time read hands out what this store lists whole (DR2-E-4).
+        override suspend fun eachOpenChange(
+            document: SnapshotKey,
+            after: String?,
+            visit: me.ahoo.cosec.control.store.OpenChangeVisitor,
+        ) = super<me.ahoo.cosec.control.store.ControlStore>.eachOpenChange(document, after, visit)
 
         override suspend fun openChanges(document: SnapshotKey): List<ListedChange> {
             listings++
@@ -451,6 +472,13 @@ class ControlMaintenanceTest {
                     return store.documents()
                 }
 
+                // The one-at-a-time read hands out what this store lists whole (DR2-E-4).
+                override suspend fun eachOpenChange(
+                    document: SnapshotKey,
+                    after: String?,
+                    visit: me.ahoo.cosec.control.store.OpenChangeVisitor,
+                ) = super<me.ahoo.cosec.control.store.ControlStore>.eachOpenChange(document, after, visit)
+
                 override suspend fun openChanges(document: SnapshotKey): List<ListedChange> {
                     seen = leading.retained
                     return store.openChanges(document)
@@ -499,6 +527,13 @@ class ControlMaintenanceTest {
     fun `only the instance holding the reclaim lease reads the open changes`() = runBlocking<Unit> {
         val reads = AtomicInteger()
         val counting = object : ControlStore by store {
+            // The one-at-a-time read hands out what this store lists whole (DR2-E-4).
+            override suspend fun eachOpenChange(
+                document: SnapshotKey,
+                after: String?,
+                visit: me.ahoo.cosec.control.store.OpenChangeVisitor,
+            ) = super<me.ahoo.cosec.control.store.ControlStore>.eachOpenChange(document, after, visit)
+
             override suspend fun openChanges(document: SnapshotKey): List<ListedChange> {
                 reads.incrementAndGet()
                 return store.openChanges(document)

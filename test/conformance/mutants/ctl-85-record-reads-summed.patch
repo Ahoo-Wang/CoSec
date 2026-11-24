@@ -1,0 +1,15 @@
+# Rule: CTL-85
+# Mutant: a call holds the sum of the records it reads, not the heaviest
+# Tests: :control:test --tests me.ahoo.cosec.control.store.OpenChangesReadTest
+
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/RecordReads.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/RecordReads.kt
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/RecordReads.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/RecordReads.kt
+@@ -38,6 +38,6 @@ internal class RecordReads(private val work: WorkBudget, private val tenant: Str
+         // What passes free is not held, and a record no heavier than one held already is held already.
+         if (weight <= work.free || more <= work.free) return
+         work.hold(tenant, more)
+-        held = weight
++        held = 0
+     }
+ }

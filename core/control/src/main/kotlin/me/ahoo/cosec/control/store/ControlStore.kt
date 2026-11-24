@@ -218,6 +218,22 @@ interface ControlStore : CandidateStore {
     suspend fun openChanges(document: SnapshotKey): List<ListedChange>
 
     /**
+     * What [openChanges] lists whose ids sort after [after] (`null`: from the first), handed to [visit] one at a time in
+     * the order of their ids until it answers `false` (DR2-E-4): each change's `id`, the `size` its record is stored
+     * with, and `read`, which decodes it (`null` when it turned out terminal or gone). The control plane weighs a record
+     * by its size before it reads it, and keeps of each only what it needs, so at most one is decoded at once.
+     *
+     * This default reads [openChanges] whole and knows no size before decoding: its `size` is `null`, and the control
+     * plane then weighs each record as one at the cap. A store that knows what a record is stored with overrides it.
+     */
+    suspend fun eachOpenChange(document: SnapshotKey, after: String?, visit: OpenChangeVisitor) {
+        for (listed in openChanges(document).sortedBy { it.id.value }) {
+            if (after != null && listed.id.value <= after) continue
+            if (!visit(listed.id.value, null) { listed }) return
+        }
+    }
+
+    /**
      * The changes listed in [state] of the documents [documents] accepts, ordered by document and id, after the cursor
      * [after] (`null`: from the first), at most [limit] of them, each read now and still in [state] (a member a later
      * write moved on is skipped). A member of a document [documents] refuses is neither read nor counted. [ChangePage.next]
@@ -357,6 +373,13 @@ sealed interface ListedChange {
     /** Listed, and its record does not read: shown as such, never left out (`CTL-53`). */
     class Unreadable(override val id: ChangeId, override val document: SnapshotKey) : ListedChange
 }
+
+/**
+ * What [ControlStore.eachOpenChange] hands each open change to: its `id` (the change id's text), the `size` its record
+ * is stored with (`null` when the store cannot tell before decoding it), and `read`, which decodes it; it answers
+ * whether to go on (DR2-E-4).
+ */
+typealias OpenChangeVisitor = suspend (id: String, size: Long?, read: suspend () -> ListedChange?) -> Boolean
 
 /** One page of [ControlStore.changes]: its changes, and the cursor of the next page, `null` after the last. */
 @ExperimentalCoSecApi

@@ -59,6 +59,7 @@ public final class me/ahoo/cosec/cocache/control/CoCacheControlStore : me/ahoo/c
 	public fun changes (Lme/ahoo/cosec/control/change/ChangeState;Ljava/lang/String;ILkotlin/jvm/functions/Function1;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun digestOf (Lme/ahoo/cosec/spi/snapshot/SnapshotDocument;)Lme/ahoo/cosec/spi/snapshot/SnapshotDigest;
 	public fun documents (Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun eachOpenChange (Lme/ahoo/cosec/spi/snapshot/SnapshotKey;Ljava/lang/String;Lkotlin/jvm/functions/Function4;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun endedChanges (Lme/ahoo/cosec/spi/snapshot/SnapshotKey;Ljava/time/Instant;ILkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun head (Lme/ahoo/cosec/spi/snapshot/SnapshotKey;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun index (Lme/ahoo/cosec/spi/snapshot/SnapshotKey;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
