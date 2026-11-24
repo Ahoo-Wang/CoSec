@@ -21,6 +21,7 @@ import me.ahoo.cocache.core.memory.InMemoryBackend
 import me.ahoo.cocache.spring.boot.CoCacheAutoConfiguration
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.api.token.CompositeToken
 import me.ahoo.cosec.cocache.snapshot.PolicySnapshotCache
 import me.ahoo.cosec.cocache.snapshot.RedisSnapshotDocumentStore
 import me.ahoo.cosec.control.api.ControlPlane
@@ -41,12 +42,16 @@ import me.ahoo.cosec.runtime.identity.IdentityGate
 import me.ahoo.cosec.spi.authn.Authenticator
 import me.ahoo.cosec.spi.identity.Identity
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
+import me.ahoo.cosec.spi.token.RevocationReader
 import me.ahoo.cosec.spi.token.TokenStore
+import me.ahoo.cosec.spi.token.TokenVerifier
+import me.ahoo.cosec.spi.token.VerifiedToken
 import me.ahoo.cosec.spring.boot.authentication.CoSecAuthenticationAutoConfiguration
 import me.ahoo.cosec.spring.boot.authentication.route.CoSecLoginRoutesAutoConfiguration
 import me.ahoo.cosec.spring.boot.control.CoSecControlAutoConfiguration
 import me.ahoo.cosec.spring.boot.jwt.CoSecJwtAutoConfiguration
 import me.ahoo.cosec.spring.boot.jwt.CoSecTokenRevocationCacheAutoConfiguration
+import me.ahoo.cosec.testkit.IdentityHeader
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.config.BeanDefinitionCustomizer
@@ -278,6 +283,52 @@ class ForwardedIdentityCallerTest {
         host = HostScope(null),
     )
 
+    /**
+     * DR2-C-1, `IDN-39`: the identity a CoSec gateway forwards carries the principal's attachments, and this host, which
+     * decides on it, applies the DENY they reach; a header that does not state the memberships is refused here, never
+     * read as a principal with none. The header is the gateway's own: its pipeline, its issuer.
+     */
+    @Test
+    fun `a gateway's identity carries the attachments, and a header without memberships is refused - IDN-39`() {
+        runner.withPropertyValues("$statement=true").run { context ->
+            context.startupFailure.assert().isNull()
+            published(context)
+            val plane = context.getBean(ControlPlane::class.java)
+            fun forwarded(policies: Set<String>): String {
+                val now = Instant.now()
+                val token = VerifiedToken(
+                    "jti-plato",
+                    "plato",
+                    TenantId.PLATFORM.value,
+                    "cosec-control",
+                    emptySet(),
+                    policies,
+                    issuedAt = now,
+                    expiresAt = now.plusSeconds(600),
+                )
+                val verifier = object : TokenVerifier {
+                    override fun verify(accessToken: String): VerifiedToken = token
+                    override fun refresh(token: CompositeToken): VerifiedToken = error("not refreshed")
+                }
+                return IdentityHeader.withToken("token", verifier, RevocationReader.NONE)
+            }
+            fun operatorOf(header: String): Operator? = runBlocking {
+                context.getBean(RequestGate::class.java).evaluate(facts(header)).security?.let { Operator.of(it, null) }
+            }
+            val plain = checkNotNull(operatorOf(forwarded(emptySet())))
+            runBlocking { plane.read(plain, SnapshotKey.Platform).assert().isNotNull() }
+            val suspended = checkNotNull(operatorOf(forwarded(setOf("no-reading"))))
+            runCatching { runBlocking { plane.read(suspended, SnapshotKey.Platform) } }.isFailure.assert().isTrue()
+
+            val unstated = IdentityCodec.encode(
+                IdentityCodec.decode(forwarded(setOf("no-reading"))).copy(memberships = null)
+            )
+            val refused = runBlocking { context.getBean(RequestGate::class.java).evaluate(facts(unstated)) }
+            refused.status.assert().isEqualTo(400)
+            refused.security?.principal.assert().isNull()
+        }
+    }
+
     /** The operator of a request that states [principal], as a gateway or a trusted service would. */
     private fun operator(context: ApplicationContext, principal: String, peer: String? = null): Operator {
         val now = Instant.now()
@@ -295,6 +346,7 @@ class ForwardedIdentityCallerTest {
             ),
             issuedAt = now,
             requestId = "req-$principal",
+            memberships = Identity.Memberships.NONE,
         )
         val outcome = runBlocking {
             context.getBean(RequestGate::class.java).evaluate(facts(IdentityCodec.encode(identity)))
@@ -305,7 +357,8 @@ class ForwardedIdentityCallerTest {
     private companion object {
         const val PUBLISHED_AT = "2026-10-28T00:00:00Z"
         const val PLATFORM = ""","policies":[{"id":"members","statements":[{"effect":"allow","action":"http:*",""" +
-            """"condition":{"eq":["subject.authenticated",true]}}]}],""" +
+            """"condition":{"eq":["subject.authenticated",true]}}]},""" +
+            """{"id":"no-reading","attachable":true,"statements":[{"effect":"deny","action":"cosec:read"}]}],""" +
             """"bindings":[{"id":"members","subject":"*","app":"*","space":"*","policy":"members"},""" +
             """{"id":"plato","subject":{"principal":"plato","tenant":"(platform)"},"app":"cosec-control","space":"",""" +
             """"policy":"cosec:platform-admin"}]"""

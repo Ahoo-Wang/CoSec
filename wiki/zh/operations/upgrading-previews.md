@@ -172,6 +172,10 @@ description: "每个 8.0 预览版（alpha 与 beta）到下一个之间的变�
 - **在拒绝方向上末尾的 `/` 不算数**（`PIP-35`，DR1-C-9）。受影响的：所有部署，方向是放行得更少。写在 `/orders/{id}` 上的 DENY 语句或限流规则现在也作用于 `/orders/123/`，写在 `/orders/` 上的也作用于 `/orders`；ALLOW 与平台边界仍按路径原样匹配。在有路由映射的宿主上，路径以 `/` 结尾、映射不上、去掉后能映射的请求（路由 `/orders/{id}` 时的 `DELETE /orders/123/`）现在答 `400` `invalid-request`，此前在 `http` 命名空间里决策。向映射宿主发送这种路径的客户端应去掉末尾的 `/`（[Web 集成](../integration/web.md)）。
 - **破坏性变更：路由写成以 `/` 结尾时，它的镜像也被拒绝**（`PIP-35`，DR2-C-2）。受影响的：路由映射中有以 `/` 结尾的路由路径的宿主。不带 `/` 的请求（路由 `/orders/` 时的 `GET /orders`）映射不上、加上 `/` 后能映射：现在答 `400` `invalid-request`，beta.7 在 `http` 命名空间里决策它，绕过该路由的 DENY。按路由的写法发送路径，或者把路由写成不带 `/`。
 - **社交登录的 state 有了上界**（DR1-D-9）。受影响的：提供社交登录的部署。一个部署最多持有 Redis 报告的内存的六十四分之一的进行中登录（每个 512 字节；Redis 不报告内存时为 100,000），超过时开始登录以 `SocialAuthenticationException`（“稍后再试”）拒绝，而不是再写两把键。提供社交登录的进程需要 Redis 的 `INFO` 权限，`SNP-3` 本来就要求；没有时使用固定上界，并记一条 WARN。`InMemorySocialStateStore` 最多持有 10,000 个。除了在边缘对开始登录的路由限流，无需改动（[存储](./storage.md#redis-keys)）。
+- **破坏性变更：`CoSec-Identity` 带上调用方的全部成员关系，按它做判定的宿主要求它在**（`IDN-39`，DR2-F-1，DR2-C-1）。受影响的：`cosec.pipeline.caller=forwarded-identity` 的宿主（控制面镜像、内嵌控制面的 IAM 服务、服务端口），以及自己向这类宿主写这个请求头的应用。
+  - 请求头新增 `memberships`：主体在其他每个空间中的角色，以及它附加的策略的 id。网关的转发与 `HttpControlService` 的转述总是写它，没有更多时写空的。此前只带判定所在空间的角色，附加到调用方的 DENY、或针对其在另一个空间所持角色的 `subject.roles` DENY，在这类宿主上不生效：同一调用在进程内却被拒绝。
+  - 这类宿主以 `400` `invalid-request` 拒绝没有 `memberships` 的请求头。**先升级网关和调用服务端口的应用，再升级控制面宿主**：beta.7 网关的请求头没有 `memberships`。`gateway` 模式的服务两种都读。
+  - 自己构造 `Identity` 并写出（`IdentityHeader.write`）给这类宿主的应用要设置 `memberships`：主体在那里的角色之外别无其他时用 `Identity.Memberships.NONE`。`Identity` 的构造函数新增了这个参数，排在最后，可为 null。测试工具包的 `IdentityHeader.forSubject` 写空的。
 
 ## 从 8.0.0-beta.6 升级 {#from-8-0-0-beta-6}
 

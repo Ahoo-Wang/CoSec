@@ -60,7 +60,11 @@
       "jti": "t1",
       "roles": [
         "clerk"
-      ]
+      ],
+      "memberships": {
+        "spaces": {},
+        "attachments": []
+      }
     }
   },
   "gateway": {

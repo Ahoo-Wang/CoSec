@@ -3,7 +3,7 @@
 # Tests: :runtime:test --tests me.ahoo.cosec.runtime.identity.ServiceIdentityTest
 
 diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/identity/ServiceIdentity.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/identity/ServiceIdentity.kt
-index f11d77488..6d0facec4 100644
+index f326c20b6..c6f443fda 100644
 --- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/identity/ServiceIdentity.kt
 +++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/identity/ServiceIdentity.kt
 @@ -42,7 +42,7 @@ object ServiceIdentity {
@@ -14,4 +14,4 @@ index f11d77488..6d0facec4 100644
 +        credential = Identity.Credential(Identity.Method.JWT, credentialId(principal), now.plus(LIFETIME)),
          issuedAt = now,
          requestId = requestId,
-     )
+         // A service states its roles; it has no other space and attaches nothing (IDN-39).

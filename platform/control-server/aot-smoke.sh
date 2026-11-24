@@ -135,7 +135,9 @@ import base64, json, os, time
 now = int(time.time())
 identity = {
     "v": 1, "tenant": "(platform)", "sub": os.environ["SUBJECT"], "scope": {"app": "cosec-control", "space": ""},
-    "roles": [], "auth": {"method": "jwt", "jti": "smoke-" + os.environ["SUBJECT"], "exp": now + 600, "iat": now},
+    # A host that decides on the identity needs the caller's whole memberships (IDN-39): here, nothing more.
+    "roles": [], "memberships": {"spaces": {}, "attachments": []},
+    "auth": {"method": "jwt", "jti": "smoke-" + os.environ["SUBJECT"], "exp": now + 600, "iat": now},
     "iat": now, "rid": "smoke-" + os.environ["SUBJECT"],
 }
 print(base64.urlsafe_b64encode(json.dumps(identity, separators=(",", ":")).encode()).rstrip(b"=").decode())

@@ -126,7 +126,8 @@ object DocumentFormats {
         name = IDENTITY,
         title = "CoSec Identity Schema",
         description = "The JSON of the `CoSec-Identity` header (base64url, no padding) a gateway sets on a permitted " +
-            "request: who the caller is and the scope the gateway decided in. Never a credential, policy or attribute value.",
+            "request: who the caller is, the scope the gateway decided in and what the caller is a member of. Never a " +
+            "credential, a policy's content or an attribute value.",
         root = ObjectType(
             listOf(
                 Field("v", IntegerType(const = 1), required = true, description = "The format version."),
@@ -158,6 +159,32 @@ object DocumentFormats {
                     ArrayType(id("clerk", "admin"), uniqueItems = true),
                     required = true,
                     description = "The roles effective in that scope after membership resolution.",
+                ),
+                Field(
+                    "memberships",
+                    ObjectType(
+                        listOf(
+                            Field(
+                                "spaces",
+                                MapType(
+                                    keys = StringType(examples = listOf("emea", "apac")),
+                                    values = ArrayType(id("auditor", "suspended"), minItems = 1, uniqueItems = true),
+                                ),
+                                required = true,
+                                description = "The roles in each other space, by space id (empty for the default " +
+                                    "space). Never the scope's own space, whose roles are `roles`; never `*`.",
+                            ),
+                            Field(
+                                "attachments",
+                                ArrayType(id("suspended-from-publishing"), uniqueItems = true),
+                                required = true,
+                                description = "The ids of the policies the principal attaches, in the order its " +
+                                    "memberships name them.",
+                            ),
+                        ),
+                    ),
+                    description = "What the principal is a member of besides `roles` (IDN-39), empty when nothing: " +
+                        "CoSec's writers always write it, and a host that decides on the identity refuses one without it.",
                 ),
                 Field(
                     "auth",

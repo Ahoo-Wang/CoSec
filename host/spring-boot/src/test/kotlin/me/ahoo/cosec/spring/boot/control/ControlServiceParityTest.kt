@@ -431,6 +431,74 @@ class ControlServiceParityTest {
         }
     }
 
+    /**
+     * A request [subject] of [tenant] makes in [space] as an administrator there, behind a gateway that forwarded it with
+     * [memberships] beside: a context CoSec made, holding every space's roles and the attachments the header states.
+     */
+    private fun member(
+        tenant: String,
+        subject: String,
+        space: String,
+        memberships: Identity.Memberships
+    ): ControlCaller {
+        val now = Instant.now()
+        val forwarded = Identity(
+            tenant = tenant,
+            subject = subject,
+            app = "cosec-control",
+            space = space,
+            roles = setOf("admin"),
+            credential = Identity.Credential(Identity.Method.JWT, "token-$subject-$tenant", now.plusSeconds(300)),
+            issuedAt = now,
+            requestId = "r-$subject-$tenant",
+            memberships = memberships,
+        )
+        return ControlCaller.of(PermittedRequest.withIdentity(IdentityHeader.write(forwarded)))
+    }
+
+    /**
+     * DR2-F-1, DR2-C-1, `IDN-39`: over HTTP the caller's whole memberships reach the host, so a DENY attached to the
+     * caller, or one that reads a role it holds in another space, refuses through either implementation. Before, only the
+     * call's space's roles were relayed, and both DENYs lapsed over HTTP.
+     */
+    @Test
+    fun `a DENY reached through the caller's attachments or other spaces decides alike through both implementations - CTL-77`() {
+        runner.run { context ->
+            context.startupFailure.assert().isNull()
+            publish(context, SnapshotKey.Platform, DocumentKind.PLATFORM, "", MEMBERSHIP_DENIES)
+            listOf(LOCAL, REMOTE).forEach {
+                publish(context, SnapshotKey.Tenant(it), DocumentKind.TENANT, it, ADMINS_IN_EVERY_SPACE)
+            }
+            val local = context.getBean(ControlService::class.java)
+            val port = context.getBean(ControlServiceListener::class.java).boundPort
+            val http = HttpControlService(URI("http://127.0.0.1:$port/cosec/control/v1"))
+            val deadline = System.nanoTime() + Duration.ofSeconds(10).toNanos()
+            val ready = { runBlocking { answer { http.document(alice(REMOTE), SnapshotKey.Tenant(REMOTE)) } } }
+            while (!ready().startsWith("200")) {
+                check(System.nanoTime() < deadline) { "The platform document was not installed" }
+                Thread.sleep(20)
+            }
+            fun script(service: ControlService, tenant: String): List<String> = runBlocking {
+                val proposal = """{"document":"tenant:$tenant","base":1,"note":"n","operations":[{"op":"putPolicy",""" +
+                    """"policy":{"id":"p","statements":[{"effect":"allow","action":"order:read"}]}}]}"""
+                val attached = Identity.Memberships(emptyMap(), listOf("suspended-from-writing"))
+                val suspendedElsewhere = Identity.Memberships(mapOf("emea" to setOf("suspended")), emptyList())
+                listOf(
+                    // An attached DENY; a DENY on subject.roles for a role held in emea, the call in the default
+                    // space; and a caller with neither.
+                    answer { service.check(member(tenant, "sam", "", attached), proposal) },
+                    answer { service.check(member(tenant, "gus", "", suspendedElsewhere), proposal) },
+                    answer { service.check(member(tenant, "ann", "", Identity.Memberships.NONE), proposal) },
+                ).map { it.replace(LOCAL, "<tenant>").replace(REMOTE, "<tenant>") }
+            }
+            val inProcess = script(local, LOCAL)
+            script(http, REMOTE).assert().isEqualTo(inProcess)
+            inProcess[0].assert().startsWith("403")
+            inProcess[1].assert().startsWith("403")
+            inProcess[2].assert().startsWith("200")
+        }
+    }
+
     private companion object {
         const val LOCAL = "acme"
         const val REMOTE = "globex"
@@ -465,6 +533,25 @@ class ControlServiceParityTest {
             """"bindings":[{"id":"control-api","subject":"*","app":"*","space":"*","policy":"control-api"},""" +
             """{"id":"no-suspended","subject":"*","app":"cosec-control","space":"","policy":"no-suspended"},""" +
             """{"id":"no-night","subject":"*","app":"cosec-control","space":"","policy":"no-night"}]"""
+
+        /**
+         * Anyone reaches the control API; a write is denied to a caller holding the role `suspended` in any space, and an
+         * attachable policy denies it to whoever attaches it.
+         */
+        const val MEMBERSHIP_DENIES = ""","policies":[{"id":"control-api","statements":[{"effect":"allow",""" +
+            """"action":["http:GET","http:POST"],"resource":"http:path:/cosec/control/v1/**",""" +
+            """"condition":{"eq":["subject.authenticated",true]}}]},""" +
+            """{"id":"no-suspended-role","statements":[{"effect":"deny","action":"cosec:write",""" +
+            """"condition":{"in":["suspended","subject.roles"]}}]},""" +
+            """{"id":"suspended-from-writing","attachable":true,"statements":[{"effect":"deny",""" +
+            """"action":"cosec:write"}]}],""" +
+            """"bindings":[{"id":"control-api","subject":"*","app":"*","space":"*","policy":"control-api"},""" +
+            """{"id":"no-suspended-role","subject":"*","app":"cosec-control","space":"*","policy":"no-suspended-role"}]"""
+
+        /** The tenant's administrators, by role, in every space of the control plane's app, and one policy. */
+        const val ADMINS_IN_EVERY_SPACE = ""","policies":[{"id":"orders","statements":[{"effect":"allow",""" +
+            """"action":"order:*"}]}],"bindings":[{"id":"admins","subject":{"role":"admin"},"app":"cosec-control",""" +
+            """"space":"*","policy":"cosec:tenant-admin"}]"""
 
         /** The tenant's administrators, by role, and one policy. */
         const val TENANT = ""","policies":[{"id":"orders","statements":[{"effect":"allow","action":"order:*"}]}],""" +

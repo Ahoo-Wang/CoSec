@@ -1,0 +1,17 @@
+# Rule: IDN-39
+# Mutant: the gateway and the relay write no memberships, so a host that decides on the identity sees only the decided space's roles and no attachment (DR2-F-1, DR2-C-1)
+# Tests: :runtime:test --tests me.ahoo.cosec.runtime.identity.IdentityMembershipsTest
+
+diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/identity/IdentityIssuer.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/identity/IdentityIssuer.kt
+index b272e3736..18c1efe05 100644
+--- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/identity/IdentityIssuer.kt
++++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/identity/IdentityIssuer.kt
+@@ -64,7 +64,7 @@ class IdentityIssuer(
+             app = security.scope.app.value,
+             space = security.scope.space.value,
+             roles = security.scope.roles.mapTo(LinkedHashSet()) { it.value },
+-            memberships = memberships(security),
++            memberships = memberships(security).takeIf { false },
+             credential = credential.copy(issuedAt = principal.issuedAt, session = principal.session),
+             issuedAt = clock.instant(),
+             requestId = security.requestId,

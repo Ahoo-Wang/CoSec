@@ -27,10 +27,6 @@ import tools.jackson.core.JacksonException
 import tools.jackson.core.StreamReadFeature
 import tools.jackson.databind.JsonNode
 import tools.jackson.databind.ObjectReader
-import tools.jackson.databind.node.JsonNodeFactory
-import tools.jackson.databind.node.ObjectNode
-import java.math.BigDecimal
-import java.math.BigInteger
 import java.time.Instant
 import java.util.Base64
 
@@ -39,10 +35,17 @@ import java.util.Base64
  *
  * ```json
  * {"v":1,"tenant":"acme","sub":"alice","scope":{"app":"order","space":""},"roles":["clerk"],
+ *  "memberships":{"spaces":{"emea":["auditor"]},"attachments":["suspended"]},
  *  "auth":{"method":"jwt","jti":"0TEC7","exp":1793404800,"iat":1793404200,
  *          "session":{"sid":"0TEC5","auth_time":1793400000,"generation":2}},
  *  "iat":1793401200,"rid":"0TEC7Hw00001zR0","claims":{"name":"Alice"}}
  * ```
+ *
+ * `memberships` (`IDN-39`) holds what `roles` does not: the principal's roles in each other space (the default space's
+ * key is empty; the identity's own space is never a key, and a space names at least one role) and the ids of the
+ * policies it attaches, in the order its memberships name them. CoSec's writers always write it, empty when there is
+ * nothing more (`{"spaces":{},"attachments":[]}`): its presence says the memberships are whole, and a host that decides
+ * on the identity refuses one without it.
  *
  * `auth.capped` is `true` for a credential with a role cap (an API key with `roles`, RFC 0009 §4.2), and absent
  * otherwise: the service behind then applies no principal binding either. `auth.iat` is when the credential was issued,
@@ -78,13 +81,12 @@ object IdentityCodec {
      */
     internal const val MAX_SECONDS = 253_402_300_799L
 
-    private val FIELDS = arrayOf("v", "tenant", "sub", "scope", "roles", "auth", "iat", "rid", "claims")
+    private val FIELDS = arrayOf("v", "tenant", "sub", "scope", "roles", "memberships", "auth", "iat", "rid", "claims")
     private val SCOPE_FIELDS = arrayOf("app", "space")
     private val AUTH_FIELDS = arrayOf("method", "jti", "exp", "iat", "capped", "session")
     private val SESSION_FIELDS = arrayOf("sid", "auth_time", "generation")
 
     private val reader: ObjectReader = CoSecJson.mapper.reader().with(StreamReadFeature.STRICT_DUPLICATE_DETECTION)
-    private val factory = JsonNodeFactory.instance
     private val encoder = Base64.getUrlEncoder().withoutPadding()
     private val decoder = Base64.getUrlDecoder()
 
@@ -95,7 +97,8 @@ object IdentityCodec {
      */
     fun encode(identity: Identity, maxBytes: Int = DEFAULT_MAX_BYTES): String {
         WrittenIdentity.check(identity)
-        val header = encoder.encodeToString(CoSecJson.mapper.writeValueAsBytes(tree(identity)))
+        IdentityJson.check(identity)
+        val header = encoder.encodeToString(CoSecJson.mapper.writeValueAsBytes(IdentityJson(identity)))
         if (header.length > maxBytes) {
             throw Unencodable.tooLarge(
                 identity.subject,
@@ -103,6 +106,7 @@ object IdentityCodec {
                 maxBytes,
                 identity.roles.size,
                 identity.claims.size,
+                identity.memberships,
             )
         }
         return header
@@ -147,16 +151,18 @@ object IdentityCodec {
             )
         }
         val scope = root.need("scope").also { it.only("$.scope", *SCOPE_FIELDS) }
+        val space = scope.need("space").text("$.scope.space")
         return Identity(
             tenant = root.need("tenant").name("$.tenant"),
             subject = root.need("sub").name("$.sub"),
             app = scope.need("app").text("$.scope.app"),
-            space = scope.need("space").text("$.scope.space"),
-            roles = roles(root.need("roles")),
+            space = space,
+            roles = roles(root.need("roles"), "$.roles"),
             credential = credential(root.need("auth")),
             issuedAt = root.need("iat").seconds("$.iat"),
             requestId = root.need("rid").name("$.rid"),
             claims = root.get("claims")?.let(::claims).orEmpty(),
+            memberships = root.get("memberships")?.let { IdentityMemberships.read(it, space) },
         )
     }
 
@@ -196,76 +202,11 @@ object IdentityCodec {
         return TokenSession(node.need("sid").id("$.auth.session.sid"), authTime, generation.longValue())
     }
 
-    private fun tree(identity: Identity): ObjectNode {
-        val root = factory.objectNode().put("v", VERSION)
-        root.put("tenant", identity.tenant).put("sub", identity.subject)
-        root.putObject("scope").put("app", identity.app).put("space", identity.space)
-        root.putArray("roles").apply { identity.roles.sorted().forEach(::add) }
-        root.putObject("auth").apply {
-            put("method", identity.credential.method.value)
-            put("jti", identity.credential.id)
-            val expiresAt = identity.credential.expiresAt ?: throw Unencodable.neverExpires(identity.subject)
-            put("exp", expiresAt.epochSecond)
-            identity.credential.issuedAt?.let { put("iat", it.epochSecond) }
-            if (identity.credential.capped) {
-                put("capped", true)
-            }
-            identity.credential.session?.let { session ->
-                putObject("session").put("sid", session.id).put("auth_time", session.authTime.epochSecond)
-                    .put("generation", session.generation)
-            }
-        }
-        root.put("iat", identity.issuedAt.epochSecond).put("rid", identity.requestId)
-        if (identity.claims.isNotEmpty()) {
-            val claims = root.putObject("claims")
-            identity.claims.toSortedMap().forEach { (name, value) -> claim(claims, name, value) }
-        }
-        return root
-    }
-
-    private fun claim(claims: ObjectNode, name: String, value: Any) {
-        when (value) {
-            is String -> {
-                if (value.length > MAX_CLAIM_LENGTH) {
-                    throw Unencodable.claimTooLong(name, value.length)
-                }
-                claims.put(name, value)
-            }
-            is Boolean -> claims.put(name, value)
-            is Number -> number(claims, name, value)
-            else -> throw Unencodable.claimType(name, value)
-        }
-    }
-
-    /**
-     * A number claim as the header's JSON holds it, which a service reads back as a `Long` or a `Double` (#1228): the
-     * standard integer types, and a `BigInteger` within a `Long`, as an integer; a finite `Float` or `Double`, and a
-     * `BigDecimal` that a `Double` holds exactly (its shortest decimal is the same number), as a number. Anything else is
-     * refused rather than rounded: no other `Number` is converted, since its value could change on the way.
-     */
-    private fun number(claims: ObjectNode, name: String, value: Number) {
-        when (val exact = exactly(value)) {
-            is Long -> claims.put(name, exact)
-            is Double -> claims.put(name, exact)
-            else -> throw Unencodable.claimInexact(name, value)
-        }
-    }
-
-    /** [value] as the `Long` or the `Double` the header holds it as; null when it cannot hold it exactly. */
-    private fun exactly(value: Number): Number? = when (value) {
-        is Int, is Long, is Short, is Byte -> value.toLong()
-        is BigInteger -> if (value.bitLength() < Long.SIZE_BITS) value.toLong() else null
-        is Double, is Float -> value.toDouble().takeIf { it.isFinite() }
-        // Its shortest decimal, which is what the header writes, must be the same number.
-        is BigDecimal -> value.toDouble().takeIf { it.isFinite() && BigDecimal.valueOf(it).compareTo(value) == 0 }
-        else -> null
-    }
-
-    private fun roles(node: JsonNode): Set<String> {
-        if (!node.isArray) throw malformed("$.roles is not an array")
+    internal fun roles(node: JsonNode, path: String): Set<String> {
+        if (!node.isArray) throw malformed("$path is not an array")
         val roles = LinkedHashSet<String>()
         node.values().forEachIndexed { i, role ->
-            if (!roles.add(role.id("$.roles[$i]"))) throw malformed("$.roles[$i] repeats a role")
+            if (!roles.add(role.id("$path[$i]"))) throw malformed("$path[$i] repeats a role")
         }
         return roles
     }
@@ -289,7 +230,7 @@ object IdentityCodec {
         }
     }
 
-    private fun JsonNode.only(path: String, vararg names: String) {
+    internal fun JsonNode.only(path: String, vararg names: String) {
         if (!isObject) throw malformed("$path is not an object")
         val unknown = properties().map { it.key }.filter { it !in names }
         if (unknown.isNotEmpty()) throw malformed("$path has unknown members ${QuotedText.names(unknown)}")
@@ -305,7 +246,7 @@ object IdentityCodec {
         return text
     }
 
-    private fun JsonNode.id(path: String): String = text(path).ifEmpty { throw malformed("$path is empty") }
+    internal fun JsonNode.id(path: String): String = text(path).ifEmpty { throw malformed("$path is empty") }
 
     /**
      * Who and where: the tenant, the subject and the request. Not blank, empty or white space only (`IDN-38`): a
@@ -320,6 +261,6 @@ object IdentityCodec {
         return Instant.ofEpochSecond(longValue())
     }
 
-    private fun malformed(reason: String, cause: Throwable? = null) =
+    internal fun malformed(reason: String, cause: Throwable? = null) =
         IdentityFormatException(Reason.MALFORMED, "The identity header is malformed: $reason.", cause)
 }
