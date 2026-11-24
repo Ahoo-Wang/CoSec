@@ -42,6 +42,25 @@ Which preview of the library may run behind which preview of the gateway image: 
   logout of it is answered as done without revoking anything. That login ends when it is logged out itself, revoked
   ([`revokeSubject`](../integration/authentication.md#revoking-every-token-of-a-principal)) or past its lifetime
   ([Switching tenant and app](../integration/authentication.md#switching-tenant-and-app)).
+- **Breaking: `[ ] ( ) | ! ^ $ \` are reserved in every pattern, and a backslash writes them as text** (`DOC-15`).
+  Affected: a document, a route map or a change whose path, typed resource or action pattern holds one of them, which
+  an earlier preview read as text; and one whose path pattern can match no request path. Each now fails to compile,
+  naming the character and its position. Write the character escaped: `http:path:/odata/\$metadata`,
+  `http:path:/files/a\(1\).txt`, the backslash doubled in JSON
+  ([Reserved characters](../policies/language.md#reserved-characters)). A path pattern holding a `\`, a `;`, a control
+  character, a `.` or `..` segment, or a segment longer than 256 characters matched no request path before, so a DENY
+  written so denied nothing: name the path as the pipeline sees it.
+  - **Before upgrading**, find the stored documents that hold such a pattern: an upgraded instance installs one as
+    failed, and the requests that read it answer `503`. Rewrite and publish them first, on the version you run: an
+    escape such as `\(` is understood by this version only, so publish the rewritten document after every instance
+    reads it.
+  - **Rolling upgrade.** 8.0.0-beta.8 reads `\(` as a backslash and a parenthesis, which no request path holds: a DENY
+    written escaped denies nothing on an instance not yet upgraded. Upgrade every instance that decides (gateways,
+    services, control hosts) before you publish a pattern with an escape.
+  - `cosec-migrate` escapes a 7.x path pattern's reserved characters, which 7.x read as text, so a converted policy
+    means what it meant. `cosec-openapi` escapes every such character of a spec path outside its templates, `*` and
+    `?` included: before, a `*` or `?` in a spec path became a wildcard of the generated route, which mapped other paths
+    to that operation. Generate route maps again.
 
 ## From 8.0.0-beta.7 {#from-8-0-0-beta-7}
 

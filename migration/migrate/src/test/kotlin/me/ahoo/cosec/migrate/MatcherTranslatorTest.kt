@@ -65,6 +65,24 @@ class MatcherTranslatorTest {
     }
 
     /**
+     * DOC-15: Spring read `[ ] ( ) | ! ^ $ \` as text, so a 7.x pattern with one converts escaped and means what it
+     * meant; what a capture holds is left as written, and `*` and `?` stay wildcards.
+     */
+    @Test
+    fun `a character 8_0 reserves converts escaped`() {
+        val action = action("""{"path":["/odata/${'$'}metadata","/files/a(1).txt","/x/{id}/[a]*"]}""")!!
+        rejections.assert().isEmpty()
+        action.resources.map { it.pattern }.assert().containsExactly(
+            "http:path:/odata/\\${'$'}metadata",
+            "http:path:/files/a\\(1\\).txt",
+            "http:path:/x/{id}/\\[a\\]*",
+        )
+        MatcherTranslator.escaped("/a/{id:[0-9]+}/b!").assert().isEqualTo("/a/{id:[0-9]+}/b\\!")
+        MatcherTranslator.escaped("/plain/*").assert().isEqualTo("/plain/*")
+        MatcherTranslator.escaped("/a\\b").assert().isEqualTo("/a\\\\b")
+    }
+
+    /**
      * MIG-2: 7.x decided HTTP requests only, so every action of an ALLOW is every HTTP request; `*` would also grant the
      * control plane's actions and those of checks in code. Every action of a DENY stays `*`.
      */

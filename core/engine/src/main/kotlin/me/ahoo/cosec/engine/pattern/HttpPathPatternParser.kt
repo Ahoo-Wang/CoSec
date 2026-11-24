@@ -18,6 +18,12 @@ package me.ahoo.cosec.engine.pattern
 import me.ahoo.cosec.annotations.InternalCoSecApi
 
 /**
+ * Where a [PathElement.SingleChar] holds a `?`: a control character, which no literal of a pattern holds, so an escaped
+ * `?` is text (`DOC-15`).
+ */
+internal const val WILDCARD: Char = '\u0000'
+
+/**
  * Parses an [HttpPathPattern]: its segments, the same way Spring's `InternalPathPatternParser` classifies them.
  *
  * Its cost is bounded (RC1-8, `DOC-4`): a pattern is at most [HttpPathPattern.MAX_LENGTH] characters, consecutive `*`
@@ -73,10 +79,12 @@ internal class HttpPathPatternParser(private val pattern: String, private val ca
         if (pattern.isEmpty()) {
             throw invalid(0, "the pattern is empty")
         }
-        if (pattern.length > HttpPathPattern.MAX_LENGTH) {
+        // Counted as the characters it stands for: an escape is one, so the longest path is written whatever it holds.
+        val length = PatternEscapes.unescapedLength(pattern)
+        if (length > HttpPathPattern.MAX_LENGTH) {
             throw invalid(
                 HttpPathPattern.MAX_LENGTH,
-                "the pattern is ${pattern.length} characters, more than ${HttpPathPattern.MAX_LENGTH}: no path is longer",
+                "the pattern is $length characters, more than ${HttpPathPattern.MAX_LENGTH}: no path is longer",
             )
         }
     }
@@ -88,7 +96,15 @@ internal class HttpPathPatternParser(private val pattern: String, private val ca
             text == "*" -> return PathElement.Wildcard
             text.startsWith("{*") -> return captureRest(text, begin)
         }
-        val tokens = tokens(text, begin)
+        val read = tokens(text, begin)
+        if (read.plain.length > HttpPath.MAX_SEGMENT_LENGTH) {
+            throw invalid(
+                begin,
+                "segment [$text] matches values of at least ${read.plain.length} characters, more than the " +
+                    "${HttpPath.MAX_SEGMENT_LENGTH} a request path's segment holds (PIP-5): it matches no path",
+            )
+        }
+        val tokens = read.tokens
         val single = tokens.singleOrNull()
         if (single is GlobToken.Run && single.variable >= 0) {
             return PathElement.Capture(single.variable)
@@ -107,10 +123,20 @@ internal class HttpPathPatternParser(private val pattern: String, private val ca
             return PathElement.Glob(SegmentGlob(tokens.toTypedArray()))
         }
         if (tokens.any { it === GlobToken.AnyChar }) {
-            return PathElement.SingleChar(text, caseSensitive)
+            return PathElement.SingleChar(read.plain, caseSensitive)
         }
-        return PathElement.Literal(text, caseSensitive)
+        if (read.plain == "." || read.plain == "..") {
+            throw invalid(begin, "a request path holds no dot segment (PIP-5): [$text] matches no path")
+        }
+        return PathElement.Literal(read.plain, caseSensitive)
     }
+
+    /**
+     * A segment's tokens, and [plain]: its text with escapes resolved, each `?` as [WILDCARD] (a
+     * literal holds no control character, so no literal reads as one) and no `*` or capture, so at most as long as the
+     * shortest value it matches.
+     */
+    private class Tokens(val tokens: List<GlobToken>, val plain: String)
 
     private fun captureRest(text: String, begin: Int): PathElement.Rest {
         if (!text.endsWith('}') || text.indexOf('}') != text.length - 1 || text.indexOf('{', 1) >= 0) {
@@ -119,9 +145,12 @@ internal class HttpPathPatternParser(private val pattern: String, private val ca
         return PathElement.Rest(variable(text.substring(2, text.length - 1), begin + 2))
     }
 
-    private fun tokens(text: String, begin: Int): List<GlobToken> {
+    // stays: a grammar; one branch per kind of character
+    @Suppress("CyclomaticComplexMethod")
+    private fun tokens(text: String, begin: Int): Tokens {
         val tokens = ArrayList<GlobToken>()
         val literal = StringBuilder()
+        val plain = StringBuilder(text.length)
         fun flush() {
             if (literal.isNotEmpty()) {
                 tokens.add(GlobToken.Literal(literal.toString(), caseSensitive))
@@ -137,6 +166,9 @@ internal class HttpPathPatternParser(private val pattern: String, private val ca
                     if (!repeatsAStar) {
                         tokens.add(if (char == '*') GlobToken.Run(-1) else GlobToken.AnyChar)
                     }
+                    if (char == '?') {
+                        plain.append(WILDCARD)
+                    }
                 }
 
                 '{' -> {
@@ -150,17 +182,45 @@ internal class HttpPathPatternParser(private val pattern: String, private val ca
                 }
 
                 '}' -> throw invalid(begin + index, "} is not opened")
+                '\\' -> {
+                    val escaped = escapedInPath(text, index, begin)
+                    literal.append(escaped)
+                    plain.append(escaped)
+                    index++
+                }
+                in PatternEscapes.RESERVED -> throw PatternEscapes.reserved(pattern, begin + index, char)
+                ';' -> throw invalid(
+                    begin + index,
+                    "a request path's segments hold no ';': path parameters are removed and an encoded one refused " +
+                        "(PIP-5, PIP-30), so it matches no path",
+                )
                 else -> {
                     if (isLoneSurrogate(text, index)) {
                         throw invalid(begin + index, "a lone surrogate half is no character a path can hold")
                     }
+                    if (char < ' ' || char == '\u007F') {
+                        throw invalid(
+                            begin + index,
+                            "a request path holds no control character (PIP-30): it matches no path"
+                        )
+                    }
                     literal.append(char)
+                    plain.append(char)
                 }
             }
             index++
         }
         flush()
-        return tokens
+        return Tokens(tokens, plain.toString())
+    }
+
+    /** What the backslash at [index] of [text] escapes: any of [PatternEscapes.ESCAPABLE] but `\\` (PIP-14). */
+    private fun escapedInPath(text: String, index: Int, begin: Int): Char {
+        val escaped = PatternEscapes.escaped(pattern, text, index, begin)
+        if (escaped == '\\') {
+            throw invalid(begin + index, "a request path holds no backslash (PIP-14): \\\\ matches no path")
+        }
+        return escaped
     }
 
     /**

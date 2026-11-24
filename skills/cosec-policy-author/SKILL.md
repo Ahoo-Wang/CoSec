@@ -111,6 +111,12 @@ A policy does nothing until a binding (or a token's `policies` claim, for an `at
   `**` and `{*name}` at the start or end; no `{name:regex}`, and no half of a surrogate pair without the other: write
   an emoji whole). An object form adds `caseSensitive` and
   `decodeAndParseSegments` (both default `true`) to an `http:path:` pattern.
+- Reserved characters (DOC-15): `[ ] ( ) | ! ^ $ \` unescaped do not compile in any pattern (path, typed resource,
+  action, route map). Write one as text with a backslash, as `*`, `?`, `{` and `}` too: `http:path:/odata/\$metadata`,
+  `http:path:/files/a\(1\).txt`, `http:path:/Products\({id}\)` (in JSON the backslash is doubled:
+  `"http:path:/odata/\\$metadata"`). A backslash before anything else does not compile. A path pattern that matches no
+  request path does not compile either: a `\`, a `;`, a control character, a `.` or `..` segment, or a segment longer
+  than 256 characters.
 - Pattern bounds (DOC-4; over one, the document does not compile): an `http:path:` pattern is at most 2,048
   characters; a segment that mixes `*`, `?` or `{name}` with text (`report-*.pdf`) has at most 16 parts, consecutive
   `*` counting once; one document's such segments hold at most 2,048 glob units in all, a unit per part and per

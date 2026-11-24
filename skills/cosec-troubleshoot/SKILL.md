@@ -87,6 +87,11 @@ Full model: https://cosec.ahoo.me/guide/security-model.
   revocations and API keys copied to the new keys first (`COPY`, or `RENAME`, which keeps the expiry): a revocation
   left under the old prefix is no longer read, so the token it revoked would be accepted again. Then set
   `cosec.key-prefix` to the snapshot documents' prefix and remove the old properties; never suggest only renaming them.
+- **A document or a route map does not compile on a reserved character** (`DOC-15`): `'<c>' is reserved for a future
+  pattern syntax; write \<c> for the character`, at the position given. One of `[ ] ( ) | ! ^ $ \` is unescaped in a
+  path, typed resource or action pattern; write it escaped (doubled backslash in JSON). Patterns that match no request
+  path (a `\`, `;`, control character, dot segment, a segment over 256 characters) are refused the same way. After an
+  upgrade from 8.0.0-beta.8 such a stored document is installed as failed (`503` for what reads it).
 - **A document does not compile on a path pattern** (`DOC-4`): over 2,048 characters, a glob segment of more than 16
   parts (consecutive `*` count once), or more than 2,048 glob units in one document (each glob segment's parts and the
   characters of its text, twice after a leading `**`). The control plane answers a

@@ -27,7 +27,7 @@
     {
       "id": "DOC-4",
       "source": "RFC 0005 §3.5, §5.2; RC1-8; review M2 of #1200",
-      "statement": "A path pattern's cost is bounded: an `http:path:` pattern longer than 2,048 characters, or with a segment that mixes `*`, `?` or `{name}` with other text in more than 16 parts (consecutive `*` counting once), does not compile, nor does a document whose patterns hold more than 2,048 glob units in all: the parts and literal characters of such segments, counted twice after a leading `**` or `{*name}` and for a rate limit rule keyed by a captured variable. A typed resource pattern is at most 2,058 characters.",
+      "statement": "A path pattern's cost is bounded: an `http:path:` pattern longer than 2,048 characters (an escape counting as the one character it writes, DOC-15), or with a segment that mixes `*`, `?` or `{name}` with other text in more than 16 parts (consecutive `*` counting once), does not compile, nor does a document whose patterns hold more than 2,048 glob units in all: the parts and literal characters of such segments, counted twice after a leading `**` or `{*name}` and for a rate limit rule keyed by a captured variable. A typed resource pattern is at most 2,058 characters.",
       "level": "engine",
       "guards": [
         "engine:HttpPathPatternTest#a pattern is at most 2048 characters",
@@ -160,6 +160,39 @@
         "document:PolicyDocumentCompilerTest#a deny matching the path as received does not compile, and the error names the statement",
         "control:DocumentRefusalHttpTest#a change with a deny matching the path undecoded or an id that would forge a line stays a draft naming it",
         "migrate:ConverterTest#a 7x deny matching the path undecoded is rejected at its statement, an allow converts"
+      ],
+      "pending": null
+    },
+    {
+      "id": "DOC-15",
+      "source": "RFC 0014 R4 (the maintainer's answer of 2026-11-24: reserve them; the rules hard, the policies flexible); RFC 0005 §5 (sentences proposed in the PR)",
+      "statement": "The characters a future pattern syntax needs, `[ ] ( ) | ! ^ $ \\`, are a compile error unescaped in every pattern of a document and of a route map: an http:path: pattern, a typed resource pattern (its type and literal segments), an action pattern (its service and verb), a route's path and the literal segments of its resource template; the error names the character, printably (a control character as its \\uXXXX escape), and its position. A backslash followed by one of `[ ] ( ) | ! ^ $ \\ * ? { }` is that character as text, and followed by anything else is a compile error, so every literal has one spelling and an escaped character never acts as syntax. A path pattern that matches no request path does not compile either: a backslash (PIP-14), a `;` or a control character (PIP-5, PIP-30), a dot segment (PIP-5), or a segment whose values hold more than 256 characters. An escape counts as the one character it writes in a pattern's length. cosec-migrate escapes a 7.x path pattern's reserved characters, which 7.x read as text, and cosec-openapi escapes every metacharacter of a spec path outside its templates.",
+      "level": "engine",
+      "guards": [
+        "engine:ReservedCharactersTest#a reserved character unescaped is a compile error where it stands, in every kind of pattern",
+        "engine:ReservedCharactersTest#an escaped reserved character is that character as text",
+        "engine:ReservedCharactersTest#the paths that motivated it are written",
+        "engine:ReservedCharactersTest#an escaped wildcard, capture or brace is text, never syntax",
+        "engine:ReservedCharactersTest#an escaped question mark beside a wildcard one is text",
+        "engine:ReservedCharactersTest#a backslash that escapes no metacharacter is a compile error",
+        "engine:ReservedCharactersTest#an action and a typed pattern escape what a path cannot hold",
+        "engine:ReservedCharactersTest#a backslash is no character of a request path",
+        "engine:ReservedCharactersTest#a semicolon is no character of a request path's segment",
+        "engine:ReservedCharactersTest#a control character is no character of a request path",
+        "engine:ReservedCharactersTest#a dot segment is no segment of a request path",
+        "engine:ReservedCharactersTest#a segment longer than a request path's segment matches nothing",
+        "engine:ReservedCharactersTest#an escape counts as one character of the pattern's length",
+        "engine:ReservedCharactersTest#the index files an escaped literal by its text",
+        "engine:ReservedCharactersTest#containment reads escaped literals",
+        "openapi:OpenAPIServiceGeneratorTest#a spec path's characters are text in its route, never pattern syntax",
+        "openapi:OpenAPIServiceGeneratorTest#a spec path with a backslash fails generation, since no request path holds one",
+        "migrate:MatcherTranslatorTest#a character 8_0 reserves converts escaped",
+        "document:RouteMapTest#a route reserves the characters a document's patterns reserve, and writes them escaped",
+        "engine:ReservedCharactersTest#a refused control character is shown by its code point, never raw"
+      ],
+      "properties": [
+        "engine:ReservedCharactersPropertyTest#a reserved character unescaped is refused where it stands, in a path, a typed resource and an action",
+        "engine:ReservedCharactersPropertyTest#escaped text matches itself, received as written or encoded, and nothing that differs"
       ],
       "pending": null
     }
