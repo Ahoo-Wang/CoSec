@@ -3,9 +3,10 @@
   "plugins": [
     {
       "name": "ahoo-cosec-skills",
-      "description": "CoSec skills for integrating a reactive multi-tenant RBAC and policy-based security framework, authoring authorization policy documents, extending CoSec, and troubleshooting access decisions.",
+      "description": "CoSec skills for integrating a reactive multi-tenant RBAC and policy-based security framework, connecting a browser or React client to it, authoring authorization policy documents, extending CoSec, and troubleshooting access decisions.",
       "skills": {
         "include": [
+          "cosec-client",
           "cosec-extending",
           "cosec-integration",
           "cosec-policy-author",
@@ -27,7 +28,9 @@
         "reactive",
         "jwt",
         "rate-limiting",
-        "audit"
+        "audit",
+        "typescript",
+        "react"
       ],
       "category": "development",
       "interface": {
@@ -35,7 +38,7 @@
         "capabilities": [
           "Skills"
         ],
-        "defaultPrompt": "Help me integrate CoSec, author authorization policy documents, extend CoSec, and troubleshoot authentication or authorization issues."
+        "defaultPrompt": "Help me integrate CoSec, connect a web client to it, author authorization policy documents, extend CoSec, and troubleshoot authentication or authorization issues."
       },
       "policy": {
         "installation": "AVAILABLE",
