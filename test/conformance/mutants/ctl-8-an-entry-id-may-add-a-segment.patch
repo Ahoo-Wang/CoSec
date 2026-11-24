@@ -3,15 +3,15 @@
 # Tests: :control:test --tests me.ahoo.cosec.control.change.EntryIdsTest :conformance:test
 
 diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/EntryChecks.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/EntryChecks.kt
-index 2a60518b..51d57cee 100644
+index 41a1eb577..94fc0e6fd 100644
 --- a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/EntryChecks.kt
 +++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/EntryChecks.kt
-@@ -87,7 +87,7 @@ internal object EntryChecks {
-                 is Operation.PutRateLimit -> operation.rule.id
-                 else -> null
-             } ?: continue
--            if ('/' in id) {
-+            if (id.isEmpty() && '/' in id) {
+@@ -91,7 +91,7 @@ internal object EntryChecks {
+                 is Operation.PutCatalog -> operation.catalog?.groups.orEmpty().flatMap { group -> group.permissions.map { it.id } }
+                 else -> emptyList()
+             }
+-            ids.filter { '/' in it }.forEach { id ->
++            ids.filter { it.isEmpty() && '/' in it }.forEach { id ->
                  findings += Finding("V2", "operations[$i]", "[${printable(id)}]: an entry's id has no [/]", UNPROCESSABLE)
              }
          }
