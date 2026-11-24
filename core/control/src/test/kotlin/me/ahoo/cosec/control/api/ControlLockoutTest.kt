@@ -154,7 +154,11 @@ class ControlLockoutTest {
     @Test
     fun `a statement is named only to a publisher who may read the document that defines it`() = runBlocking<Unit> {
         val named = LockoutCheck { _, _, _ ->
-            LockoutCheck.Lockout("x would be denied by policy secret, statement 0", listOf(SnapshotKey.Platform), "x would be denied")
+            LockoutCheck.Lockout(
+                "x would be denied by policy secret, statement 0",
+                listOf(SnapshotKey.Platform),
+                "x would be denied"
+            )
         }
         val ids = java.util.concurrent.atomic.AtomicInteger()
         suspend fun warning(readsPlatform: Boolean): String {

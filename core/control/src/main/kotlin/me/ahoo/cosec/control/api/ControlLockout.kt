@@ -104,7 +104,9 @@ class ControlLockout(
         return when (val decision = simulator.decide(request, documents).decision) {
             is Decision.Permit -> null
             is Decision.Deny -> denied(what, decision.by, heads, PolicyHomes(documents))
-            else -> LockoutCheck.Lockout("$what would be ${decision::class.simpleName?.lowercase()}: it could not be decided")
+            else -> LockoutCheck.Lockout(
+                "$what would be ${decision::class.simpleName?.lowercase()}: it could not be decided"
+            )
         }
     }
 
@@ -113,7 +115,12 @@ class ControlLockout(
      * to read to be told it (`CTL-51`, DR1-F-13): the same rule `simulate` shows a statement by ([Redaction]). A statement
      * whose policy no document of the view defines is never named.
      */
-    private fun denied(what: String, by: StatementRef?, heads: Map<SnapshotKey, Held?>, homes: PolicyHomes): LockoutCheck.Lockout {
+    private fun denied(
+        what: String,
+        by: StatementRef?,
+        heads: Map<SnapshotKey, Held?>,
+        homes: PolicyHomes
+    ): LockoutCheck.Lockout {
         val unnamed = "$what would be denied"
         val policy = by as? StatementRef.Policy ?: return LockoutCheck.Lockout(
             if (by == null) "$unnamed: no statement permits it" else "$unnamed ($by)"
