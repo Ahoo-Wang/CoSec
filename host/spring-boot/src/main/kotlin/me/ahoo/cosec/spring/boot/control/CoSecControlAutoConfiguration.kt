@@ -60,6 +60,8 @@ import me.ahoo.cosec.spring.boot.CoSecProperties
 import me.ahoo.cosec.spring.boot.ConditionalOnCoSecEnabled
 import me.ahoo.cosec.spring.boot.StartupTask
 import me.ahoo.cosec.spring.boot.StartupTaskExclusion
+import me.ahoo.cosec.spring.boot.control.ControlChangeInputs.lockout
+import me.ahoo.cosec.spring.boot.control.ControlChangeInputs.simulator
 import me.ahoo.cosec.spring.boot.jwt.JwtProperties
 import me.ahoo.cosec.spring.boot.jwt.RevocationRetention
 import me.ahoo.cosec.spring.boot.pipeline.CoCacheRevocation
@@ -290,14 +292,7 @@ internal class CoSecControlAutoConfiguration {
             // The data plane's reports when this host takes part in shadow windows: one cache per runtime.
             reports = shadowReports.ifAvailable ?: CoCacheShadowReports.create(factory, cosec.keyPrefix),
             listeners = listeners,
-            lockout = ControlChangeInputs.lockout(
-                revisions,
-                attributes,
-                environment,
-                controlProperties,
-                work,
-                documentCache
-            ),
+            lockout = lockout(revisions, attributes, environment, controlProperties, work, documentCache),
         )
     }
 
@@ -334,13 +329,7 @@ internal class CoSecControlAutoConfiguration {
         work: WorkBudget,
         documentCache: DocumentCache,
     ): ControlPlane =
-        DefaultControlPlane(
-            changes,
-            revisions,
-            authority,
-            ControlChangeInputs.simulator(attributes, environment, documentCache),
-            work,
-        )
+        DefaultControlPlane(changes, revisions, authority, simulator(attributes, environment, documentCache), work)
 
     /** Not replaceable: every route needs a request the host pipeline permitted. */
     @Bean

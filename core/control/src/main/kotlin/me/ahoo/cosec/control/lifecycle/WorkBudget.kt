@@ -207,7 +207,3 @@ class WorkBudget(
         companion object Key : CoroutineContext.Key<CallScope>
     }
 }
-
-/** A call [WorkBudget] did not grant: within its patience, or at once for a call that holds already (`CTL-85`). */
-@InternalCoSecApi
-class WorkBudgetExhaustedException(message: String) : RuntimeException(message)

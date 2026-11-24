@@ -234,7 +234,8 @@ class WorkBudgetTest {
     }
 
     private companion object {
-        const val RUNS = 200
+        /** 200 runs, or a thousandth of the cases `propertyStress` asks for (`-PpropertyIterations`). */
+        val RUNS = maxOf(200, Integer.getInteger("cosec.property.iterations", 0) / 1000)
         const val CALLS = 60
         const val TENANTS = 4
         const val CANCEL_EVERY = 7

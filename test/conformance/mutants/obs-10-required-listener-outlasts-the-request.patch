@@ -3,15 +3,14 @@
 # Tests: :runtime:test --tests me.ahoo.cosec.runtime.StageBudgetsTest
 
 diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/StageBudgets.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/StageBudgets.kt
-index 8e24187..746cbe7 100644
 --- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/StageBudgets.kt
 +++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/StageBudgets.kt
-@@ -57,7 +57,7 @@ class StageBudgets private constructor(
+@@ -62,7 +62,7 @@ class StageBudgets private constructor(
          const val ATTRIBUTE_PERCENT: Int = 6
          const val RATE_LIMIT_PERCENT: Int = 10
          const val REVOCATION_READ_PERCENT: Int = 30
 -        const val REQUIRED_LISTENER_PERCENT: Int = 20
 +        const val REQUIRED_LISTENER_PERCENT: Int = 120
+         const val WORK_WAIT_PERCENT: Int = 50
  
          /** The least a stage gets: a share of a very small deadline is never zero. */
-         val FLOOR: Duration = 1.milliseconds
