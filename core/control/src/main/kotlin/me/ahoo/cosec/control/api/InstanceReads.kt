@@ -16,10 +16,10 @@
 package me.ahoo.cosec.control.api
 
 import me.ahoo.cosec.annotations.InternalCoSecApi
-import me.ahoo.cosec.control.authz.ChangeAuthority
 import me.ahoo.cosec.control.authz.ControlActions
 import me.ahoo.cosec.control.authz.Operator
 import me.ahoo.cosec.control.change.InstanceReaders
+import me.ahoo.cosec.control.lifecycle.ChangeAuthority
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 
 /**
