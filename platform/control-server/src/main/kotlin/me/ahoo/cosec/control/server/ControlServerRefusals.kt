@@ -69,11 +69,13 @@ internal class ControlServerRefusals {
                         "nothing to serve. Use the gateway image for a read-only instance (STA-10)."
                 }
             }
-            check(bound(environment, MODE_KEY, PipelineProperties.Mode::class.java) != PipelineProperties.Mode.GATEWAY) {
+            val mode = bound(environment, MODE_KEY, PipelineProperties.Mode::class.java)
+            check(mode != PipelineProperties.Mode.GATEWAY) {
                 "cosec-control-server decides every control call with the policies: $MODE_KEY=gateway wires no control " +
                     "plane, so it would serve nothing. Leave it enforce; the gateway image is the read-only one (STA-10)."
             }
-            check(bound(environment, CALLER_KEY, PipelineProperties.Caller::class.java) != PipelineProperties.Caller.CREDENTIAL) {
+            val caller = bound(environment, CALLER_KEY, PipelineProperties.Caller::class.java)
+            check(caller != PipelineProperties.Caller.CREDENTIAL) {
                 "cosec-control-server takes its caller from the CoSec-Identity header and verifies no credential: " +
                     "$CALLER_KEY=credential would refuse every call as anonymous. Leave it forwarded-identity (STA-10)."
             }

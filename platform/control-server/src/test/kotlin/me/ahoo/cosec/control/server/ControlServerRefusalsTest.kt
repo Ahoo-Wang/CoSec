@@ -54,10 +54,12 @@ class ControlServerRefusalsTest {
                 ControlServerRefusals.check(MockEnvironment().withProperty(key, value))
             }.hasMessageContaining(key).hasMessageContaining("STA-10")
         }
-        ControlServerRefusals.check(
-            MockEnvironment().withProperty("cosec.enabled", "true").withProperty("cosec.control.http.enabled", "true")
-                .withProperty("cosec.pipeline.mode", "enforce").withProperty("cosec.pipeline.caller", "forwarded-identity")
-        )
+        val accepted = MockEnvironment()
+        accepted.setProperty("cosec.enabled", "true")
+        accepted.setProperty("cosec.control.http.enabled", "true")
+        accepted.setProperty("cosec.pipeline.mode", "enforce")
+        accepted.setProperty("cosec.pipeline.caller", "forwarded-identity")
+        ControlServerRefusals.check(accepted)
         // A value the starter cannot bind is the starter's to refuse.
         ControlServerRefusals.check(MockEnvironment().withProperty("cosec.pipeline.mode", "sideways"))
     }

@@ -6,12 +6,12 @@ diff --git a/platform/control-server/src/main/kotlin/me/ahoo/cosec/control/serve
 index 0000000..0000000 100644
 --- a/platform/control-server/src/main/kotlin/me/ahoo/cosec/control/server/ControlServerRefusals.kt
 +++ b/platform/control-server/src/main/kotlin/me/ahoo/cosec/control/server/ControlServerRefusals.kt
-@@ -69,7 +69,7 @@ internal class ControlServerRefusals {
-                         "nothing to serve. Use the gateway image for a read-only instance (STA-10)."
+@@ -70,7 +70,7 @@ internal class ControlServerRefusals {
                  }
              }
--            check(bound(environment, MODE_KEY, PipelineProperties.Mode::class.java) != PipelineProperties.Mode.GATEWAY) {
-+            check(bound(environment, MODE_KEY, PipelineProperties.Mode::class.java) != null && false) {
+             val mode = bound(environment, MODE_KEY, PipelineProperties.Mode::class.java)
+-            check(mode != PipelineProperties.Mode.GATEWAY) {
++            check(mode != null || true) {
                  "cosec-control-server decides every control call with the policies: $MODE_KEY=gateway wires no control " +
                      "plane, so it would serve nothing. Leave it enforce; the gateway image is the read-only one (STA-10)."
              }
