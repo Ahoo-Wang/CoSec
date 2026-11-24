@@ -1,0 +1,16 @@
+# Rule: CTL-83
+# Mutant: a proposal's record is written whatever its size
+# Tests: :control:test --tests me.ahoo.cosec.control.change.ChangeRecordBudgetTest
+
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Proposals.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Proposals.kt
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Proposals.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Proposals.kt
+@@ -192,7 +192,7 @@ internal class Proposals(
+     private suspend fun commitChange(checked: ChangeRequest, breakGlass: Boolean, author: Operator) {
+         // A record past its cap is not written, break-glass's included; break-glass never waits behind drafts: it is
+         // the platform's, and an emergency (CTL-83).
+-        val bytes = ChangeRecordBudget.requireWithin(checked, flow.recordCap)
++        val bytes = ChangeRecordBudget.requireWithin(checked, Long.MAX_VALUE)
+         if (!breakGlass) limit.makeRoom(checked.key, author, bytes)
+         if (breakGlass) {
+             flow.audit(ChangeEvent.Kind.BREAK_GLASS_REQUESTED, checked, author.actor, origin = author.origin)

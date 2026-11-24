@@ -18,7 +18,9 @@ package me.ahoo.cosec.spring.boot.control
 import io.github.oshai.kotlinlogging.KotlinLogging
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.control.api.ControlHttp
+import me.ahoo.cosec.control.lifecycle.ChangeRecordBudget
 import me.ahoo.cosec.control.lifecycle.ControlDerived
+import me.ahoo.cosec.control.store.Revisions
 import me.ahoo.cosec.spring.boot.ConditionalOnCoSecEnabled
 import me.ahoo.cosec.spring.boot.StartupTask
 import me.ahoo.cosec.spring.boot.StartupTaskExclusion
@@ -51,9 +53,13 @@ internal class CoSecControlServicePortAutoConfiguration {
 
     /** One line for what the control plane computes where it used to be told, and from what (the control group). */
     @Bean
-    fun cosecDerivedControlSettingsNotice(properties: ControlProperties): StartupTask = StartupTask.AfterSingletons {
-        log.info { "CoSec derived, not configured: ${ControlDerived.describe(properties.shadow.minDuration)}." }
-    }
+    fun cosecDerivedControlSettingsNotice(properties: ControlProperties, revisions: Revisions): StartupTask =
+        StartupTask.AfterSingletons {
+            log.info {
+                "CoSec derived, not configured: ${ControlDerived.describe(properties.shadow.minDuration)}; " +
+                    "${ChangeRecordBudget.describe(revisions.retention)}."
+            }
+        }
 
     /**
      * Once the host has started: what the control plane serves, on which ports, and where its callers come from. Only
