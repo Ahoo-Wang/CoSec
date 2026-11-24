@@ -574,12 +574,15 @@ most once a minute per problem type, DEBUG every time). Gateway mode records no 
 is counted in `cosec.identity.refused{problem}` (with cosec-micrometer), where any non-zero rate is a misconfigured hop
 or a request that bypassed the gateway:
 
-- 400 `invalid-request`: not base64url JSON of format v1, unknown or missing members, an id with an unpaired
+- 400 `invalid-request`: not base64url JSON of format v1, a missing member or a malformed `crit`, an id with an unpaired
   surrogate (IDN-10), a blank `sub`, `tenant` or `rid` (IDN-38), over
   `cosec.pipeline.identity.max-size` (8KB), sent more than once, or a scope that does not resolve here.
 - 431, or a 400 without CoSec's problem body: the web server refused the headers before CoSec read them
   (`server.max-http-request-header-size`). On a host that reads the identity it is derived, 16 KB at the defaults,
   unless set; a value set below that is named at startup at WARN with both numbers (IDN-43).
+- 503 `unavailable`: a member the header's `crit` names that the service does not know (IDN-41): a later CoSec
+  version wrote it and this service is older; counted as `cosec.identity.refused{problem=unavailable}`, never a store
+  outage. Upgrade the service.
 - 401 `token-invalid`: unsupported version, no `auth.exp`, or issued in the future (beyond
   `cosec.authentication.revocation.skew`).
 - 401 `token-expired`: the credential expired, or the identity is older than `cosec.pipeline.identity.max-age` (60s)

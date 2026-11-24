@@ -483,6 +483,7 @@ spring:
 | `iat` | 网关生成该请求头的时间，单位为 epoch 秒。 |
 | `rid` | 网关的请求 id。 |
 | `claims` | 只包含 `cosec.gateway.identity.claims` 中列出的主体属性（令牌的 `attributes` 声明；API key 只提供 `apiKeyId`）：字符串、布尔值和数字。`Byte`、`Short`、`Int`、`Long`，以及 `Long` 范围内的 `BigInteger` 作为整数传递；有限的 `Float` 或 `Double`，以及 `Double` 能精确表示的 `BigDecimal` 作为数字传递。 |
+| `crit` | 读方必须理解的成员的路径（`IDN-41`），例如 `"auth.kind"`。读方忽略它不认识的任何成员，不论在哪一层，除非这个列表点了它的名；点了名而它不认识的，以 `503` `unavailable` 拒绝，因为那是更新的版本写的。8.0 的写方都不写它：8.0 的每个成员都是 8.x 的每个读方认识的。 |
 
 它绝不携带令牌、API key、cookie 或其他请求头、策略的内容（只有主体所附加策略的 id）、匹配的语句、外部属性值或客户端 IP。
 
@@ -508,9 +509,10 @@ cosec:
 |---|---|
 | 没有 `CoSec-Identity` | 作为匿名主体 `(0)` 继续；由你的代码决定它能看到什么。 |
 | 有效的身份 | 以该主体、在该作用域中继续。 |
-| 无法读取（不是 base64url、不符合格式、有未知或重复的成员、角色重复、`iat` 或 `exp` 超过 9999 年）、发送了不止一次、大于 `cosec.pipeline.identity.max-size`（8 KB），或作用域在本服务无法解析（例如应用不是 `cosec.authorization.scope.app-id`） | `400` `invalid-request` |
+| 无法读取（不是 base64url、不符合格式、有重复的成员、`crit` 不合格式、角色重复、`iat` 或 `exp` 超过 9999 年）、发送了不止一次、大于 `cosec.pipeline.identity.max-size`（8 KB），或作用域在本服务无法解析（例如应用不是 `cosec.authorization.scope.app-id`） | `400` `invalid-request` |
 | 在按身份做策略判定的宿主上（`cosec.pipeline.caller=forwarded-identity`），没有 `memberships`（`IDN-39`）：旧网关写的请求头、应用写时没带上它，或被转述的调用方自己的请求头里就没有（`IDN-42`）。控制面的进程内门面对这样的调用方同样拒绝 | `400` `invalid-request` |
 | 未知版本、`iat` 在未来，或没有 `auth.exp` | `401` `token-invalid` |
+| `crit` 点了名、而本服务不认识的成员（`IDN-41`）：更新版本的网关写的。计入 `cosec.identity.refused{problem=unavailable}`，日志写出该成员；升级本服务 | `503` `unavailable` |
 | `auth.exp` 已过，或 `iat` 早于 `cosec.pipeline.identity.max-age`（60 秒） | `401` `token-expired` |
 
 这些时间检查为网关的时钟留出 `cosec.authentication.revocation.skew`（5 秒）的偏差。最大时长限制了在网络内部重放截获的请求头：吊销只在网关检查。响应带有网关的 `CoSec-Request-Id`。

@@ -757,6 +757,7 @@ behind the gateway refuses that filter at startup (`STA-6`); turn it off in any 
 | `iat` | When the gateway made the header, in epoch seconds. |
 | `rid` | The gateway's request id. |
 | `claims` | Only the principal attributes named in `cosec.gateway.identity.claims` (the token's `attributes` claim; an API key gives only `apiKeyId`): strings, booleans and numbers. A `Byte`, `Short`, `Int`, `Long`, or `BigInteger` within a `Long` travels as an integer; a finite `Float` or `Double`, or a `BigDecimal` a `Double` holds exactly, as a number. |
+| `crit` | The paths of the members a reader must understand (`IDN-41`), such as `"auth.kind"`. A reader ignores every member it does not know, at any level, unless this list names it; one it names and does not know is refused with `503` `unavailable`, since a later version wrote it. Absent from every 8.0 writer: every 8.0 member is one every 8.x reader knows. |
 
 It never carries the token, the API key, cookies or other request headers, the content of a policy (only the ids of
 those the principal attaches), the matched statement, external attribute values or the client IP.
@@ -811,9 +812,10 @@ decided the request line's method and removes the method-override headers from w
 |---|---|
 | No `CoSec-Identity` | Proceeds as the anonymous principal `(0)`; your code decides what it may see. |
 | A valid identity | Proceeds as that principal, in that scope. |
-| Not readable (not base64url, not the format, an unknown or duplicate member, a repeated role, `iat` or `exp` past year 9999), sent more than once, larger than `cosec.pipeline.identity.max-size` (8 KB), or a scope that does not resolve here (such as an app other than `cosec.authorization.scope.app-id`) | `400` `invalid-request` |
+| Not readable (not base64url, not the format, a duplicate member, a malformed `crit`, a repeated role, `iat` or `exp` past year 9999), sent more than once, larger than `cosec.pipeline.identity.max-size` (8 KB), or a scope that does not resolve here (such as an app other than `cosec.authorization.scope.app-id`) | `400` `invalid-request` |
 | On a host that decides with policies on the identity (`cosec.pipeline.caller=forwarded-identity`), no `memberships` (`IDN-39`): an older gateway's header, one an application wrote without them, or a relayed caller whose own header had none (`IDN-42`). The control plane's in-process facade refuses such a caller alike | `400` `invalid-request` |
 | An unknown version, an `iat` in the future, or no `auth.exp` | `401` `token-invalid` |
+| A member `crit` names that this service does not know (`IDN-41`): a gateway of a later version wrote it. Counted as `cosec.identity.refused{problem=unavailable}`, and logged naming the member; upgrade the service | `503` `unavailable` |
 | `auth.exp` passed, or `iat` older than `cosec.pipeline.identity.max-age` (60 seconds) | `401` `token-expired` |
 
 The time checks allow `cosec.authentication.revocation.skew` (5 seconds) for the gateway's clock. The maximum age

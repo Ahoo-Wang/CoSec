@@ -39,7 +39,7 @@ class IdentityMembersTest {
          "memberships":{"spaces":{"emea":["auditor"]},"attachments":["suspended"]},
          "auth":{"method":"jwt","jti":"t1","exp":1793404800,"iat":1793404200,"capped":true,
                  "session":{"sid":"s1","auth_time":1793400000,"generation":2}},
-         "iat":1793401200,"rid":"r1","claims":{"name":"Alice"}}
+         "iat":1793401200,"rid":"r1","claims":{"name":"Alice"},"crit":["v"]}
     """.trimIndent()
 
     /** [whole] without the member at [path]. */
@@ -89,7 +89,8 @@ class IdentityMembersTest {
     fun `each optional member reads its absence as recorded - IDN-42`() {
         fun read(path: String): Identity = IdentityCodec.decodeJson(without(path))
         val optional = IdentityMembers.ALL.filter { it.whenAbsent != WhenAbsent.REFUSED }.map { it.path }
-        optional.assert().containsExactlyInAnyOrder("memberships", "auth.iat", "auth.capped", "auth.session", "claims")
+        optional.assert()
+            .containsExactlyInAnyOrder("memberships", "auth.iat", "auth.capped", "auth.session", "claims", "crit")
 
         IdentityMembers.BY_PATH.getValue("memberships").whenAbsent.assert().isEqualTo(WhenAbsent.UNSTATED)
         read("memberships").memberships.assert().isNull()
