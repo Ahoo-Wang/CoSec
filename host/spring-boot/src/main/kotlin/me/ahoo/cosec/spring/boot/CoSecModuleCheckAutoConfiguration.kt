@@ -105,7 +105,7 @@ internal class CoSecModuleCheckAutoConfiguration {
     class WebGate {
         @Bean
         fun cosecWebGateCheck(context: ApplicationContext): StartupTask =
-            StartupTask.AfterSingletons { WebGateCheck.require(context, context.classLoader) }
+            StartupTask.AfterSingletons { WebGateCheck.require(context, context.classLoader, context.environment) }
     }
 
     /** Whether or not CoSec is enabled: a gateway strips the client's identity header always (PIP-10). */
