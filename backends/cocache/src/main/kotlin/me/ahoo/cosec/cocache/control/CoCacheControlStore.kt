@@ -356,10 +356,11 @@ class CoCacheControlStore internal constructor(
 
     companion object {
         /** The document list's key before 8.0.0-beta.5, under the lists. */
-        private const val DOCUMENTS = "documents"
+        internal const val DOCUMENTS = "documents"
 
-        private const val OPEN_CHANGES = "open-changes"
-        private const val APP_LIST = "all"
+        /** The open-change list's key before 8.0.0-beta.5, under the lists. */
+        internal const val OPEN_CHANGES = "open-changes"
+        internal const val APP_LIST = "all"
 
         /** As `ControlDerived.ORPHAN_AGE`: one reclaim pass. */
         val DEFAULT_MISSING_GRACE: Duration = Duration.ofHours(1)

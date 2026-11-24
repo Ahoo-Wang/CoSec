@@ -1,0 +1,17 @@
+# Rule: SNP-26
+# Mutant: the session index keeps one session more than the limit, so two releases keep different sessions
+# Tests: :cocache:test --tests me.ahoo.cosec.cocache.FrozenScriptsTest
+
+diff --git a/backends/cocache/src/main/resources/me/ahoo/cosec/cocache/session-index.lua b/backends/cocache/src/main/resources/me/ahoo/cosec/cocache/session-index.lua
+index 058f172db..a67635963 100644
+--- a/backends/cocache/src/main/resources/me/ahoo/cosec/cocache/session-index.lua
++++ b/backends/cocache/src/main/resources/me/ahoo/cosec/cocache/session-index.lua
+@@ -9,7 +9,7 @@
+ -- Returns the ids pushed out, oldest first.
+ -- The time is Redis's own (TIME), so every instance orders sessions alike; a session that begins now is always the
+ -- newest, even in the millisecond of another, so it is never the one pushed out.
+-local keep = tonumber(ARGV[2])
++local keep = tonumber(ARGV[2]) + 1
+ local life = tonumber(ARGV[3])
+ local now = redis.call('TIME')
+ local score = tonumber(now[1]) * 1000 + math.floor(tonumber(now[2]) / 1000)

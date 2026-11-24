@@ -44,6 +44,28 @@ internal class RedisAuthStateCacheTest {
         lettuceConnectionFactory.destroy()
     }
 
+    /**
+     * JustAuth's state key is frozen within 8.x (RFC 0014 R6, `SNP-26`, `FrozenLayout.SOCIAL_STATE` of `cosec-cocache`):
+     * a callback that reaches a release deriving it otherwise finds no state.
+     */
+    @Test
+    fun theStateKeyIsFrozen() {
+        mapOf("cosec" to "cosec:oauth:state:", "{cosec}" to "{cosec}:oauth:state:").forEach { (prefix, expected) ->
+            RedisAuthStateCache.keyPrefix(prefix).assert()
+                .describedAs(
+                    "The keys of a social sign-in in progress are a format frozen within 8.x (RFC 0014 R6, SNP-26, " +
+                        "FrozenLayout.SOCIAL_STATE): a mixed deployment that derives them apart refuses what both releases " +
+                        "accept. Changing it needs a new key space, written once every reader can read it (R5)."
+                )
+                .isEqualTo(expected)
+        }
+        val prefix = "test-" + RandomIdGenerator.generate()
+        val key = RandomIdGenerator.generate()
+        RedisAuthStateCache(stringRedisTemplate, RedisAuthStateCache.keyPrefix(prefix)).cache(key, "v")
+        stringRedisTemplate.hasKey("$prefix:oauth:state:$key").assert().isTrue()
+        stringRedisTemplate.delete("$prefix:oauth:state:$key")
+    }
+
     @Test
     fun cache() {
         val key = RandomIdGenerator.generate()

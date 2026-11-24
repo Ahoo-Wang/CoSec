@@ -71,9 +71,6 @@ internal class CoSecTokenRevocationCacheAutoConfiguration(
     companion object {
         const val REVOKED_TOKEN_CACHE_BEAN_NAME = CoSecCacheSpecs.REVOKED_TOKEN_CACHE_NAME
         const val REVOKED_SUBJECT_CACHE_BEAN_NAME = CoSecCacheSpecs.REVOKED_SUBJECT_CACHE_NAME
-
-        /** Where each principal's sessions are counted: `<keyPrefix>:token:sessions:<n>:<tenant>:<principal>`. */
-        const val SESSIONS_FAMILY = "token:sessions"
     }
 
     /**
@@ -90,7 +87,7 @@ internal class CoSecTokenRevocationCacheAutoConfiguration(
     ): TokenFamilyStore {
         val template = redisTemplate.ifAvailable
         val sessions = if (template != null) {
-            val prefix = cosecProperties.keysOf(SESSIONS_FAMILY) + ":"
+            val prefix = CoSecCacheSpecs.sessionIndexPrefix(cosecProperties.keyPrefix)
             log.info { "Each principal's sessions are counted in Redis, under $prefix: every instance counts them alike (IDN-35)." }
             RedisSessionIndex(template, prefix)
         } else {
