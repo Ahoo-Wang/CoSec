@@ -141,6 +141,9 @@ class IdentityGate(
                     ProblemType.TOKEN_INVALID
                 IdentityFormatException.Reason.MALFORMED, IdentityFormatException.Reason.OVERSIZE ->
                     ProblemType.INVALID_REQUEST
+                // A later writer's member this version must understand and does not (IDN-41): it passes once this
+                // service is upgraded, so 503, never 401, which a client takes as the end of its session.
+                IdentityFormatException.Reason.UNSUPPORTED_MEMBER -> ProblemType.UNAVAILABLE
             }
             return reject(requestId, type, e.message.orEmpty(), traceId)
         }

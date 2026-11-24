@@ -63,6 +63,19 @@ object GuardAllowlist {
             "control:ApprovalB2Test#a service's own identity never approves - IDN-34",
             "control:ApprovalB2Test#a service's own identity is never the trust root - IDN-34",
             "architecture:WorkloadCredentialTest#whether a principal is a workload is read from workload, never from apiKey alone - IDN-34",
+            // IDN-41: a reader ignores what it does not know, unless crit names it, which it refuses with 503.
+            "document:IdentityCritTest#a member this version does not know is ignored at every level, and the identity reads as without it - IDN-41",
+            "document:IdentityCritTest#an unknown member must still be JSON, and a duplicate is refused - IDN-41",
+            "document:IdentityCritTest#crit naming members this version knows and the header holds reads as without it - IDN-41",
+            "document:IdentityCritTest#crit naming a member this version does not know refuses the header as a later version's - IDN-41",
+            "document:IdentityCritTest#a crit of more than sixteen entries is malformed - IDN-41",
+            "document:IdentityCritTest#a malformed entry is refused as malformed even beside an unknown one - IDN-41",
+            "document:IdentityCritTest#CoSec's writers write no crit - IDN-41",
+            "runtime:IdentityMustUnderstandTest#a member the service does not know is ignored, and the caller is the one the header states - IDN-41",
+            "runtime:IdentityMustUnderstandTest#a member crit names that the service does not know is refused with 503, counted and logged apart - IDN-41",
+            "runtime:IdentityMustUnderstandTest#a malformed crit is refused with 400, as any malformed header - IDN-41",
+            "runtime:IdentityMustUnderstandTest#an ignorable member is lost at the next hop, and the host decides as without it - IDN-41",
+            "runtime:IdentityMustUnderstandTest#a must-understand member stops the chain at the first hop that does not know it - IDN-41",
             // IDN-42: every identity member's absence is recorded, and no hop states a member it did not receive.
             "document:IdentityMembersTest#the descriptor names exactly the recorded members, and a required one is one whose absence is refused - IDN-42",
             "document:IdentityMembersTest#a member recorded as refused when absent does not read without it - IDN-42",
@@ -202,7 +215,7 @@ object GuardAllowlist {
             "spring-boot:GatewayModeMetricsTest#without cosec-micrometer or a registry the gate still counts, and nothing fails",
             "runtime:IdentityRefusalsTest#a forged header writes one bounded warning line, with nothing of the header unescaped",
             "document:IdentityCodecMessageTest#a claim name is escaped and bounded",
-            "document:IdentityCodecMessageTest#unknown members are escaped, bounded, and at most three are named",
+            "document:IdentityCodecMessageTest#members crit names and this version lacks are bounded, at most three named, and a forged entry is not quoted",
             "document:IdentityCodecMessageTest#text that is not JSON is named by where it fails, never by what it holds",
             // OBS-6: one vocabulary for what decided.
             "runtime:AuditVocabularyTest#every reason has the audit decision of its own name",

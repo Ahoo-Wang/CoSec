@@ -69,6 +69,13 @@ Which preview of the library may run behind which preview of the gateway image: 
   the host refuses the call with `400` `invalid-request`; the control plane's in-process facade refuses such a caller
   alike. Only a header without `memberships` reaches this: one from a beta.7 gateway, or one an application wrote.
   Upgrade the gateways (every beta.8 gateway writes the member) before relying on control calls made for their callers.
+- **A service reads an identity header with members it does not know** (`IDN-41`). A reader of `CoSec-Identity`
+  ignored no unknown member: it answered `400` to any, which is why beta.8's `memberships` needed an order between the
+  gateways and the services behind them. It now ignores a member it does not know, at any level, unless the header's
+  new `crit` names it: a member a later version must have every reader understand. A member `crit` names that the
+  service does not know is refused with `503` `unavailable`, counted as `cosec.identity.refused{problem=unavailable}`
+  and logged naming it. No 8.0 writer writes `crit`. A header an application writes with a misspelled member is now
+  read without it rather than refused.
 - **Breaking: the identity header has a reader's limit and a smaller writer's limit** (`IDN-43`). A gateway now writes at most
   6 KB by default (`cosec.gateway.identity.max-size`, was 8 KB), and so does `HttpControlService`'s relay; a service
   still reads 8 KB (`cosec.pipeline.identity.max-size`), which no 8.x version lowers. A principal whose identity takes

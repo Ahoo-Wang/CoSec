@@ -83,6 +83,8 @@ internal object IdentityMembers {
         required("rid"),
         // A DENY that reads a claim lapses for a reader that does not read it (an ALLOW does too, which narrows).
         Member("claims", WhenAbsent.EMPTY, ignoringWidens = true),
+        // No member a reader must understand beyond those it knows (IDN-41).
+        Member(IdentityCrit.MEMBER, WhenAbsent.EMPTY, ignoringWidens = false),
     )
 
     /** [ALL] by path. */

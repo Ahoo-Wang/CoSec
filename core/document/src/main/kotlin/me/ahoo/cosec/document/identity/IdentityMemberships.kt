@@ -27,12 +27,10 @@ import tools.jackson.databind.JsonNode
  * the wildcard, which is no space; a space names at least one role; an attachment is an id, never repeated.
  */
 internal object IdentityMemberships {
-    private val FIELDS = arrayOf("spaces", "attachments")
-
     /** [node] as the memberships of an identity in [space]; [IdentityCodec.malformed] when it is not this format. */
     @Suppress("ThrowsCount")
     fun read(node: JsonNode, space: String): Identity.Memberships = with(IdentityCodec) {
-        node.only("$.memberships", *FIELDS)
+        node.objectAt("$.memberships")
         val spaces = node.get("spaces") ?: throw malformed("[memberships.spaces] is missing")
         if (!spaces.isObject) throw malformed("$.memberships.spaces is not an object")
         val bySpace = LinkedHashMap<String, Set<String>>()

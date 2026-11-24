@@ -221,7 +221,8 @@ cosec:
 - Answers: no header is anonymous; unreadable, repeated or oversize (`cosec.pipeline.identity.max-size`, 8KB) is 400;
   older than `cosec.pipeline.identity.max-age` (60s) plus `cosec.authentication.revocation.skew`, or past the
   credential's expiry, is 401 `token-expired`; unknown version, no expiry or an identity from the future is 401
-  `token-invalid`; a scope that does not resolve here (for example a different `scope.app-id`) is 400.
+  `token-invalid`; a scope that does not resolve here (for example a different `scope.app-id`) is 400; a member it
+  does not know is ignored, unless the header's `crit` names it, which is 503 (`IDN-41`): upgrade the service.
 - Startup fails for an unknown `cosec.pipeline.mode`, and for `mode=gateway` on a Spring Cloud Gateway host.
 - Tests of such a service, without a gateway: `IdentityHeader` (`cosec-testkit`, experimental) writes the header a
   gateway sends: `forSubject(subject, tenant, app, space, roles)`, `of(identity)`, or `withToken(token, verifier,
