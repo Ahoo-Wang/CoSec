@@ -6,7 +6,8 @@
       "statement": "No failure of a BEST_EFFORT listener changes the Outcome; a REQUIRED failure can only turn a Permit into 503.",
       "level": "pipeline",
       "guards": [
-        "runtime:ListenerIsolationTest"
+        "runtime:ListenerIsolationTest",
+        "runtime:DecisionEventIdTest#a BEST_EFFORT event that cannot be made is a counted drop, never an error of the request"
       ],
       "pending": null
     },

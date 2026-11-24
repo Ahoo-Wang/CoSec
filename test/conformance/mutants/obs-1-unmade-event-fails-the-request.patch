@@ -1,0 +1,17 @@
+# Rule: OBS-1
+# Mutant: the publish stage lets out what making or offering a BEST_EFFORT event throws, after the outcome exists: a sampler that fails turns the request into an error, instead of a drop counted for every BEST_EFFORT listener (DR1-C-6)
+# Tests: :runtime:test --tests me.ahoo.cosec.runtime.event.DecisionEventIdTest
+
+diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/stage/PublishBestEffort.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/stage/PublishBestEffort.kt
+index 8fdab5b07..2dbfa78f0 100644
+--- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/stage/PublishBestEffort.kt
++++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/stage/PublishBestEffort.kt
+@@ -52,8 +52,6 @@ internal class PublishBestEffort(private val listeners: DecisionListeners, priva
+             listeners.publish(state.event(state.eventId(ids), outcome, replay))
+         } catch (e: CancellationException) {
+             throw e
+-        } catch (_: Exception) {
+-            listeners.unpublished()
+         }
+     }
+ 
