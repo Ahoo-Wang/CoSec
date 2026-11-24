@@ -43,8 +43,7 @@ rolling upgrade has an order; finish each step before the next:
    which a beta.7 writer does not write. No order between the two sides of a pair avoids a window: while they differ,
    the host answers `400` `invalid-request`, and never lets a request through. What is refused meanwhile is the control
    API, and every route of an IAM service that embeds the control plane; callers retry. Point no service at a host's
-   operators' port at any time: a beta.7 host there takes a service's own `service` credential for a person's
-   (`IDN-34`).
+   operators' port, whatever the versions: that port believes `CoSec-Identity` and serves approvals (`IDN-34`).
 3. **The clients of a tenant switch with, or before, the switch endpoint**: an upgraded switch needs the session's
    token pair in its request (`IDN-22`). The instances that issue and refresh CoSec's tokens are best upgraded
    together: a session a switch starts on an upgraded instance is written in a format a beta.7 instance cannot read, so
@@ -273,12 +272,10 @@ The entries below say what each change asks of you.
   - **What it may do does not change.** `service`, like `api-key`, is a workload's credential: it never approves and is
     never the trust root, and it has no session and no break-glass (`AuthenticatedPrincipal.workload`, new).
   - **The order** is `IDN-39`'s, at the top of this section: a caller and the host it calls are upgraded together, since
-    a beta.7 host refuses an upgraded caller's header and an upgraded host a beta.7 caller's. Within that, `service`
-    adds one rule. A beta.7 host does not know `service` and takes it for a person's credential. On its service port
-    that would change nothing: approvals are not served there and nothing there is the trust root. But a service whose
-    `cosec.control.service-url` names an operators' port of a beta.7 host (one that believes `CoSec-Identity`) could
-    approve changes, and be the trust root if it is a platform administrator holding `cosec:approve`, where beta.7's
-    `api-key` could do neither: point no service at an operators' port, whatever the versions.
+    a beta.7 host refuses an upgraded caller's header (it never reads that header's `service`) and an upgraded host a
+    beta.7 caller's. Point no service at an operators' port, whatever the versions: that port believes
+    `CoSec-Identity` and serves approvals; a service's place is the service port, where approvals are not served and
+    nothing is the trust root.
 - **Your own `Authenticator` that names its credential `service`** now names a workload's: its principals can no longer
   approve a change or be the trust root, as for `api-key`. Affected: only an authenticator that used that name. Rename
   its method if its principals are people; otherwise nothing to do
