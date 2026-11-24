@@ -17,6 +17,7 @@ package me.ahoo.cosec.cocache.stored
 
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.document.json.StoredFormat
+import me.ahoo.cosec.document.json.StoredMembers
 import me.ahoo.cosec.document.json.StoredMembers.WhenAbsent
 import me.ahoo.cosec.document.json.StoredRecord
 import me.ahoo.cosec.document.json.StoredRefusals
@@ -72,12 +73,10 @@ class StoredRecordMembersTest {
     /** The two ways an older reader can lose a member, asserted apart: ignoring it, and dropping it when it rewrites. */
     @Test
     fun `whether ignoring a member widens, and whether dropping it does, are each stated`() {
-        val ignoring = cases.flatMap { case -> case.members.members.filter {
-            it.ignoringWidens
-        }.map { "${case.tag}:${it.path}" } }
-        val dropping = cases.flatMap { case -> case.members.members.filter {
-            it.droppingWidens
-        }.map { "${case.tag}:${it.path}" } }
+        fun flagged(widens: (StoredMembers.Member) -> Boolean) =
+            cases.flatMap { case -> case.members.members.filter(widens).map { "${case.tag}:${it.path}" } }
+        val ignoring = flagged { it.ignoringWidens }
+        val dropping = flagged { it.droppingWidens }
         ignoring.assert().containsExactly(
             "change:base.digest",
             "change:escalations",
