@@ -139,10 +139,11 @@ internal class HistoryRepair(
         val found = ArrayList<RevisionEntry>()
         var document = decode(key, stored.document)
         var digest = stored.digest
+        var size = stored.document.bodyBytes().size.toLong()
         while (true) {
             val parent = document.provenance?.parent
             val parentDigest = parent?.let { SnapshotDigest.parse(it.digest) }
-            found += RevisionEntry(document.revision, digest, document.publishedAt, parentDigest)
+            found += RevisionEntry(document.revision, digest, document.publishedAt, parentDigest, size)
             if (parent == null || parentDigest == null || parent.revision < floor) {
                 return Walk(found.reversed(), null, null)
             }
@@ -153,6 +154,7 @@ internal class HistoryRepair(
                 ?: return Walk(found.reversed(), null, parent.revision to parentDigest)
             document = decode(key, record)
             digest = parentDigest
+            size = record.bodyBytes().size.toLong()
         }
     }
 

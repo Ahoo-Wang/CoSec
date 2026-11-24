@@ -27,6 +27,7 @@ description: "每个 8.0 预览版（alpha 与 beta）到下一个之间的变�
 
 ## 从 8.0.0-beta.7 升级 {#from-8-0-0-beta-7}
 
+- **`HttpControlService` 拒绝已结束的请求**（`CTL-77`、`PIP-26`，DR1-F-2）。受影响的：把 `ControlCaller.of(context)` 保留到请求之后的应用（启动的任务、延后的写入）。经 HTTP 时它此前一直以该用户身份行事，直到凭证过期，登出之后也是；现在与进程内一样以 `403` 拒绝，在发出任何请求之前，并记 `WARN`。这类工作请以应用自己的主体调用（`ControlCaller.service`）。
 - **对基于 CoSec 镜像构建的镜像是破坏性变更：应用的文件归 root 所有**（DR1-G-8）。受影响的是 `FROM` 网关或控制面镜像、
   并以 `appuser` 身份在 `/opt/<app>` 下写文件（包括重新训练 AOT 缓存）的 Dockerfile。进程现在只拥有 `logs/` 和 `data/`，
   被诱使写文件的进程无法替换自己的 jar。这些步骤前切到 `USER root`，之后切回 `USER appuser`
@@ -71,7 +72,8 @@ description: "每个 8.0 预览版（alpha 与 beta）到下一个之间的变�
 - **控制面的文档缓存是堆的一份**（`STA-12`，DR1-F-5）。受影响的：控制面宿主的内存。`simulate`、`explain`、`analyze`
   与锁死检查共用每个宿主一个缓存，大小是快照文档那四分之一堆的三分之一（2 GiB 时约 170 MB）；此前是两个各固定 64 MB 的缓存。
   宿主的两个快照源现在各持有那四分之一的三分之一，此前各一半：2 GiB 时每个约 4,800 个典型租户，此前 7,200。要持有更多就给控制面宿主更多的堆；别无改动。
-- **一份文档至多有 `cosec.control.revisions.max-count` 个未结束变更**（默认 50，`CTL-83`，DR1-E-2）。受影响的：在同一份文档上
+- **文档的修订记录在 `min-age` 之内也有上限**（`CTL-84`，DR1-F-6）。受影响的：频繁发布大文档的文档。一个文档保留最近 `max-count` 个修订，记录合计（包括它们）至多 `max-count` 乘以文档上限（400 MB），在它们之外至多 26,214 条索引项；超出任一项，从最老的开始删除，不论是否早于 `min-age`，由 `cosec.control.revisions.reclaimed-young` 计数并记 `WARN`。新增四个度量：`cosec.control.revisions.records`、`.bytes`、`.reclaimed-young` 与 `cosec.control.changes.open`；量规请跨实例取最大值（[可观测性](./observability.md)）。每条修订索引项现在记着它的记录大小；较早的控制面读取时会跳过它，它写入的不带大小的索引项，由下一轮回收读取记录得出大小。
+- **一份文档有了 `cosec.control.revisions.max-count` 个未结束变更后不再接受新变更**（默认 50，`CTL-83`，DR1-E-2；在写入之前计数，同一时刻提出的变更可能都会通过）。受影响的：在同一份文档上
   留着很多未结束变更的客户端。超过上限的提议、`:apply` 或回滚，先放弃其作者自己最老的、检查失败的变更，否则以 `409` 拒绝，
   冲突种类为新增的 `OPEN_LIMIT`，`heldBy` 给出最老的未结束变更；类型化客户端看到 `ConflictKind.OPEN_LIMIT`。请放弃不再需要的变更。
   升级时已经超出上限的文档不受追溯：它的变更会在 `cosec.control.changes.expire-after`（7 天）之内过期，回到上限以内，在那之前它不接受新的变更。

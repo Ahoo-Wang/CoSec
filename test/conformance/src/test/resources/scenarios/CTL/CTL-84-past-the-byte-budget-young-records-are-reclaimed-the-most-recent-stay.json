@@ -1,0 +1,67 @@
+{
+  "rules": [
+    "CTL-84"
+  ],
+  "polarity": "positive",
+  "level": "control",
+  "description": "DR1-F-6: five publishes within min-age, the cap at 320 bytes and max-count 2: the two most recent always stay, and beyond them the budget of 640 bytes and one index entry holds nothing more, so a reclamation leaves two records, younger than min-age as they are.",
+  "retention": {
+    "maxCount": 2,
+    "documentCap": 320
+  },
+  "reclaim": true,
+  "publishes": [
+    {
+      "policies": [
+        "p1"
+      ]
+    },
+    {
+      "policies": [
+        "p2"
+      ]
+    },
+    {
+      "policies": [
+        "p3"
+      ]
+    },
+    {
+      "policies": [
+        "p4"
+      ]
+    },
+    {
+      "policies": [
+        "p5"
+      ]
+    }
+  ],
+  "expect": {
+    "outcomes": [
+      "Published",
+      "Published",
+      "Published",
+      "Published",
+      "Published"
+    ],
+    "head": {
+      "revision": 5,
+      "parent": 4,
+      "parentRecord": true
+    },
+    "records": 2,
+    "writes": [
+      "record",
+      "head",
+      "record",
+      "head",
+      "record",
+      "head",
+      "record",
+      "head",
+      "record",
+      "head"
+    ]
+  }
+}

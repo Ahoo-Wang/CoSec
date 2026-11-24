@@ -61,7 +61,7 @@ private fun JsonNode.indexed(): IndexedReference {
 
 /**
  * A [RevisionIndex] as JSON: `{"entries": [...], "pending": [...], "floor": 1}`, with `"reclaiming": [...]` only when
- * records are left to delete, and an entry's `"parent"` only when it has one (an entry an older version wrote has
+ * records are left to delete, an entry's `"size"` (its record's stored bytes, `CTL-84`) only when known, and an entry's `"parent"` only when it has one (an entry an older version wrote has
  * none, and is rewritten by the first read of its document, #1536), so that an index with none carries no field a
  * reader that does not know it would refuse: the decoders of the stored formats reject unknown fields. `"indexed"`, the
  * forward record of the back-references a publish added and not yet settled (`CTL-44`), appears only when there are
@@ -77,6 +77,7 @@ internal object RevisionIndexCodec : Codec<RevisionIndex> {
             entries.addObject().put("revision", it.revision).put("digest", it.digest.toString())
                 .put("publishedAt", it.publishedAt.toString()).apply {
                     it.parent?.let { parent -> put("parent", parent.toString()) }
+                    it.size?.let { size -> put("size", size) }
                 }
         }
         val pending = root.putArray("pending")
@@ -119,6 +120,7 @@ internal object RevisionIndexCodec : Codec<RevisionIndex> {
                         entry.field("digest", WHAT).digest(WHAT),
                         entry.field("publishedAt", WHAT).instant(WHAT),
                         entry.get("parent")?.digest(WHAT),
+                        entry.get("size")?.long(WHAT),
                     )
                 },
                 pending = root.field("pending", WHAT).items(WHAT).map { pending ->
