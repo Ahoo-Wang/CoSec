@@ -77,10 +77,11 @@ class ControlLockout(
         val now = clock.millis()
         val request = security.engineRequest(now)
             ?: return LockoutCheck.Lockout("the request in progress could not be decided again")
-        refusal(request, key, candidate, "the request in progress (${name(request.request.action)})")?.let { return it }
+        refusal(request, key, candidate, "the request in progress (${name(request.request.action)})", operator.tenant)
+            ?.let { return it }
         val publish = security.engineRequest(now, controlApp, ControlActions.PUBLISH, ControlResources.document(key))
             ?: return LockoutCheck.Lockout("${name(ControlActions.PUBLISH)} is asked in app ${controlApp.value}, which the credential does not declare")
-        return refusal(publish, key, candidate, "${name(ControlActions.PUBLISH)} on [$key]")
+        return refusal(publish, key, candidate, "${name(ControlActions.PUBLISH)} on [$key]", operator.tenant)
     }
 
     private fun name(action: Action): String = "${action.namespace}:${action.verb}"
@@ -94,15 +95,17 @@ class ControlLockout(
         request: EngineRequest,
         key: SnapshotKey,
         candidate: PolicyDocument,
-        what: String
+        what: String,
+        /** Whose call this is: what reading the other documents costs is its tenant's (`CTL-85`, DR2-F-2). */
+        caller: TenantId,
     ): LockoutCheck.Lockout? {
         val scope = request.scope
         val tenantKey = SnapshotKey.Tenant(scope.tenant.value)
-        val tenant = if (tenantKey == key) candidate else retained.held(tenantKey)?.document
+        val tenant = if (tenantKey == key) candidate else retained.held(tenantKey, caller)?.document
         val heads = simulator.keys(
             scope,
             tenant
-        ).associateWith { if (it == key) Held(candidate, null) else retained.held(it) }
+        ).associateWith { if (it == key) Held(candidate, null) else retained.held(it, caller) }
         val documents = HeldDocuments(
             heads[SnapshotKey.Platform],
             heads.entries.firstOrNull { it.key is SnapshotKey.App }?.value,
