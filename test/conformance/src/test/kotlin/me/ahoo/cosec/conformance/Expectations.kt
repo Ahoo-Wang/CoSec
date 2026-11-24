@@ -197,7 +197,6 @@ object Expectations {
         }
     }
 
-
     fun render(decision: Decision): JsonNode = EngineExpectations.render(decision)
 
     private fun keys(keys: IndexKeys): JsonNode = when (keys) {
