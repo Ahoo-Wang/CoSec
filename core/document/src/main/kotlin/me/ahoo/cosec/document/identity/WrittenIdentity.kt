@@ -23,14 +23,15 @@ import java.time.Instant
 
 /**
  * What [IdentityCodec.decode] would refuse of an identity once written, refused before [IdentityCodec.encode] writes it,
- * at the same path and in the same words (#1690): a header written is a header read. An empty id, an unpaired
- * surrogate, a time outside epoch seconds up to year 9999, an empty claim name. What the types already refuse
+ * at the same path and in the same words (#1690): a header written is a header read. An empty id, a blank tenant,
+ * subject or request id (`IDN-38`), an unpaired surrogate, a time outside epoch seconds up to year 9999, an empty claim
+ * name. What the types already refuse
  * ([Identity.Credential], [Identity.Method], [me.ahoo.cosec.spi.token.TokenSession]) is not checked again.
  */
 internal object WrittenIdentity {
     fun check(identity: Identity) {
-        id(identity.tenant, "$.tenant")
-        id(identity.subject, "$.sub")
+        name(identity.tenant, "$.tenant")
+        name(identity.subject, "$.sub")
         text(identity.app, "$.scope.app")
         text(identity.space, "$.scope.space")
         roles(identity.roles)
@@ -40,7 +41,7 @@ internal object WrittenIdentity {
         identity.credential.issuedAt?.let { seconds(it, "$.auth.iat") }
         identity.credential.session?.let { seconds(it.authTime, "$.auth.session.auth_time") }
         seconds(identity.issuedAt, "$.iat")
-        id(identity.requestId, "$.rid")
+        name(identity.requestId, "$.rid")
         if (identity.claims.keys.any { it.isEmpty() }) throw unwritable("$.claims has an empty name")
     }
 
@@ -65,6 +66,12 @@ internal object WrittenIdentity {
     private fun id(id: String, path: String) {
         text(id, path)
         if (id.isEmpty()) throw unwritable("$path is empty")
+    }
+
+    /** The tenant, the subject and the request: not blank either (`IDN-38`), as [IdentityCodec.decode] reads them. */
+    private fun name(name: String, path: String) {
+        id(name, path)
+        if (name.isBlank()) throw unwritable("$path is blank")
     }
 
     private fun seconds(instant: Instant, path: String) {

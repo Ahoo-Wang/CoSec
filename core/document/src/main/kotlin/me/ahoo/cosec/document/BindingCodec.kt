@@ -71,7 +71,8 @@ internal object BindingCodec {
             principal != null && role != null -> node.fail("a subject is a principal or a role, not both")
             principal != null -> SubjectRef.Principal(
                 tenant ?: node.fail("a principal of the $kind document names its tenant"),
-                PrincipalId(principal.text()),
+                // Not blank (`IDN-38`): a principal binding to no one is refused where it is read, by its path.
+                PrincipalId(principal.text().ifBlank { principal.fail("a principal id is not blank (IDN-38)") }),
             )
 
             role != null -> SubjectRef.Role(tenant, RoleId(role.text()))

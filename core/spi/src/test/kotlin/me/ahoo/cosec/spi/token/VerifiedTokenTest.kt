@@ -59,6 +59,18 @@ class VerifiedTokenTest {
         VerifiedToken("jti", "alice", "x".repeat(128), null).tenant!!.length.assert().isEqualTo(128)
     }
 
+    /**
+     * `IDN-38`: a blank subject is no one. Every verifier makes this value, so a request, a refresh and a logout all
+     * refuse it as an invalid token; white space around an id is part of it.
+     */
+    @Test
+    fun verifyAndRefreshRefuseABlankSubject() {
+        for (subject in listOf(" ", "   ", "\t", "\n", "\u00A0")) {
+            assertThrows<TokenVerificationException> { VerifiedToken("jti", subject, null, null) }
+        }
+        VerifiedToken("jti", " alice ", null, null).principal.assert().isEqualTo(" alice ")
+    }
+
     @Test
     fun aSubjectBeginningWithAParenthesisIsRefused() {
         for (subject in listOf("(0)", "(platform)", "(")) {

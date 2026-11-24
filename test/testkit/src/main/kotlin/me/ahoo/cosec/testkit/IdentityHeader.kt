@@ -87,7 +87,7 @@ object IdentityHeader {
      * [Identity.issuedAt]: a service refuses it once that is longer ago than its maximum age (above).
      *
      * @throws IllegalArgumentException when a service would refuse the header as malformed, naming the member (an empty
-     * tenant or subject, a role with an unpaired surrogate, a credential issued after it expires), or when it cannot be
+     * or blank tenant or subject, a role with an unpaired surrogate, a credential issued after it expires), or when it cannot be
      * written at all (a credential that never expires, a claim that is not a string, number or boolean, more than 8 KB)
      */
     @JvmStatic
