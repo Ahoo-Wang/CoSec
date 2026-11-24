@@ -150,16 +150,7 @@ internal class Staging(
         } catch (e: Exception) {
             throw ChangeRejectedException(UNAVAILABLE, "the shadow reports of ${state.window} could not be read", e)
         }
-        if (look.waiting.isNotEmpty() && look.summary == null) {
-            log.info { "Shadow window ${state.window} of change ${id.value} is waiting for ${look.waiting.sorted()}." }
-        }
-        val unacknowledged = look.acknowledgement.waitingFor
-        if (unacknowledged.isNotEmpty() && look.summary == null) {
-            log.info {
-                "Shadow window ${state.window} of change ${id.value} is waiting for the acknowledgement of " +
-                    "${unacknowledged.take(Acknowledgement.SHOWN)}${more(unacknowledged)}."
-            }
-        }
+        if (look.summary == null) waiting(id, state, look)
         // Every instance seen is kept, so that one dropped from the window's reporters later still has to report.
         val summary = look.summary ?: return if (look.reporters == state.reporters) {
             change
@@ -174,6 +165,20 @@ internal class Staging(
         slots.withdraw(closed)
         flow.audit(ChangeEvent.Kind.SHADOWED, closed, closed.author)
         return closed
+    }
+
+    /** Says what an open window of [id] waits for: the reports of some instances, or their acknowledgement. */
+    private fun waiting(id: ChangeId, state: ShadowState, look: ShadowLook) {
+        if (look.waiting.isNotEmpty()) {
+            log.info { "Shadow window ${state.window} of change ${id.value} is waiting for ${look.waiting.sorted()}." }
+        }
+        val unacknowledged = look.acknowledgement.waitingFor
+        if (unacknowledged.isNotEmpty()) {
+            log.info {
+                "Shadow window ${state.window} of change ${id.value} is waiting for the acknowledgement of " +
+                    "${unacknowledged.take(Acknowledgement.SHOWN)}${more(unacknowledged)}."
+            }
+        }
     }
 
     /**
