@@ -409,13 +409,14 @@
     {
       "id": "IDN-31",
       "source": "Review round 2, R2C-28 (saas-open-changes-design.md §4); RFC 0009 §11.3",
-      "statement": "A session record (a token family) carries its format and is read by the reader's rule: a member a later version adds is ignored, a record written before formats is format 1, and a later format is refused, which ends that session, never reads as another one.",
+      "statement": "A session record (a token family) carries its format and is read by the reader's rule: a member a later version adds is ignored unless the record's crit names it (SNP-27), a record written before formats is format 1, and a later format, or a member crit names that this version does not know, is refused: the refresh, logout or switch that read it is answered 503, the session is kept and never rewritten, and an instance of the later version reads it; a refused record never reads as another one.",
       "level": "build",
       "guards": [
         "cocache:TokenFamilyFormatTest#a session is written with its format",
         "cocache:TokenFamilyFormatTest#a session written before formats is format 1",
         "cocache:TokenFamilyFormatTest#a member a later version adds is ignored, and a missing rotation is the first generation",
-        "cocache:TokenFamilyFormatTest#a later format, or a session that lacks what it needs, is refused as a format error"
+        "cocache:TokenFamilyFormatTest#a later format, or a session that lacks what it needs, is refused as a format error",
+        "login:LaterSessionRecordTest#a refresh of a session a later version wrote is an outage, and the record is never rewritten"
       ],
       "pending": null
     },

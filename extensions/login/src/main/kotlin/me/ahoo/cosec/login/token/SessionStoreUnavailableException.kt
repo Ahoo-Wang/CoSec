@@ -41,5 +41,7 @@ internal inline fun <T> sessionStore(operation: String, call: () -> T): T = try 
 } catch (e: UnsupportedOperationException) {
     throw e
 } catch (e: Exception) {
+    // A record a later version wrote is the same answer, told apart in the log (SNP-27).
+    LaterSessionRecords.told(operation, e)
     throw SessionStoreUnavailableException("The session store could not $operation.", e)
 }

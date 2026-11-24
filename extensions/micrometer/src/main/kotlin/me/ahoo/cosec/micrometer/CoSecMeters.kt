@@ -19,6 +19,8 @@ import io.micrometer.core.instrument.FunctionCounter
 import io.micrometer.core.instrument.Gauge
 import io.micrometer.core.instrument.MeterRegistry
 import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.document.json.StoredRecord
+import me.ahoo.cosec.document.json.StoredRefusals
 import me.ahoo.cosec.runtime.authn.UncheckedRevocations
 import me.ahoo.cosec.runtime.event.DecisionListeners
 import me.ahoo.cosec.runtime.http.ProblemBodies
@@ -47,6 +49,11 @@ object CoSecMeters {
     const val LOCAL_RATE_LIMIT_REFUSED = "cosec.ratelimit.local.refused"
     const val DOCUMENT_TAG = "document"
     const val SHADOW_STAGED_AGE = "cosec.shadow.staged.age"
+
+    /** The stored records this process refused by the reader's rule, by record and reason (`OBS-12`). */
+    const val STORED_REFUSED = "cosec.stored.refused"
+    const val RECORD_TAG = "record"
+    const val REASON_TAG = "reason"
 
     /**
      * Registers what [listeners] count (§9.5.2): `cosec.listener.dropped` and `cosec.listener.failures` by listener,
@@ -106,6 +113,23 @@ object CoSecMeters {
                 .tag(MetricsListener.PROBLEM_TAG, type.slug)
                 .description("Forwarded identities a service in gateway mode refused, by problem")
                 .register(registry)
+        }
+    }
+
+    /**
+     * Registers `cosec.stored.refused` (`OBS-12`), one series per kind of record and reason, both closed sets: `later`
+     * counts the records a later version wrote, which an older instance refuses during a rolling upgrade (a non-zero rate
+     * is an instance to upgrade, RFC 0014 G3), and `malformed` the records that are not one, a store to look at.
+     */
+    fun bind(registry: MeterRegistry, refusals: StoredRefusals) {
+        for (record in StoredRecord.entries) {
+            for (reason in StoredRefusals.Reason.entries) {
+                FunctionCounter.builder(STORED_REFUSED, refusals) { it.count(record, reason).toDouble() }
+                    .tag(RECORD_TAG, record.tag)
+                    .tag(REASON_TAG, reason.tag)
+                    .description("Stored records refused by the reader's rule, by record and reason")
+                    .register(registry)
+            }
         }
     }
 

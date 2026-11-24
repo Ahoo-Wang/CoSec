@@ -34,6 +34,11 @@ returns the decision and its trace; `POST /analyze` with a `query` (`tenant`, `a
 lists the bindings that could permit or deny in that tenant (another tenant's principals and roles are left out). External attributes are not fetched there, so a statement reading one is
 Indeterminate in an explanation.
 
+- **A refresh, logout or switch is 503 during a rolling upgrade, logging `a later CoSec wrote the session record`**
+  (`SNP-27`): a newer instance wrote a session member this older one must understand (its `crit`); the record is
+  refused, never rewritten, and the session kept. Upgrade the instance. `cosec.stored.refused{reason="later"}` counts
+  these; `reason="malformed"` means a broken record, not a version.
+
 ## Interpret the status
 
 | Status | Problem `type` slug | Meaning |
