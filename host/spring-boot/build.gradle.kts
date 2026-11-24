@@ -92,9 +92,16 @@ dependencies {
     testImplementation("io.micrometer:context-propagation")
 }
 
-// kapt's output is a function of its inputs only when it runs: a run has come out without the descriptions of two properties
-// from stubs that hold them, and the build cache then returned that run's output to every build with the same inputs (the
-// failing ConfigurationMetadataTest after a branch switch). The processing takes under a second, so nothing is cached.
+// Every kapt run here is a full one, as on CI. An incremental run hands Spring Boot's configuration processor the stubs
+// of the changed files only and reads the other types from compiled classes, which hold no KDoc: a change to one
+// properties file dropped the description of every key declared in another (CacheConfiguration's local-max-age), and
+// ConfigurationMetadataTest failed until a clean build. Without its cache of the last run kapt cannot run incrementally,
+// so the cache is deleted first. (`kapt.incremental.apt=false` would do it too, but the processor then also writes each
+// key's initializer as its default, which is wrong for the keys whose default the host decides.) Nor is the output
+// cached: a cache entry would keep such an output for every build with the same inputs. The processing takes under a
+// second.
 tasks.matching { it.name == "kaptKotlin" || it.name == "kaptTestKotlin" }.configureEach {
-    outputs.cacheIf("kapt's output has come out different from the same inputs, and the cache kept it") { false }
+    outputs.cacheIf("every kapt run here is a full one, and takes under a second") { false }
+    val incremental = layout.buildDirectory.dir("tmp/kapt3/incApCache/${if (name == "kaptKotlin") "main" else "test"}")
+    doFirst { incremental.get().asFile.deleteRecursively() }
 }

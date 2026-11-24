@@ -109,6 +109,7 @@ class RefreshMembershipChoiceTest {
             .web(stack.type)
             .resourceLoader(DefaultResourceLoader(FilteredClassLoader(*hidden.toTypedArray())))
             .properties(
+                "server.address=127.0.0.1",
                 "server.port=0",
                 "cocache.backend=memory",
                 "cosec.jwt.secret=refresh-membership-choice-secret-refresh-membership",
