@@ -376,7 +376,8 @@ The meters above count; the health indicators and logs below answer whether an i
 
 The control plane emits a change event for every step of a change: `PROPOSED`, `CHECKED`, `SHADOW_STARTED`,
 `SHADOWED`, `APPROVED`, `REJECTED`, `PUBLISHING`, `PUBLISHED`, `FAILED`, `BREAK_GLASS_REQUESTED`,
-`BREAK_GLASS_APPROVED`, `REVOKED`, `HEADS_MOVED`, `REVIEW_NEEDED`, `ABANDONED`, `SHADOW_SKIPPED`, `REBASED`. Every
+`BREAK_GLASS_APPROVED`, `REVOKED`, `HEADS_MOVED`, `REVIEW_NEEDED`, `ABANDONED`, `SHADOW_SKIPPED`, `REBASED`, and
+`HEAD_LOST`, which no step writes. Every
 route that changes a change's record writes one when it does (`CTL-63`). An event names the change, the document, the operator, the base and candidate
 revisions, what needed approval, the confirmations, the shadow summary and the note; it never carries a document's
 content. Change listeners receive them. An event also carries the **origin** of its step's operator (`CTL-57`), as the
@@ -424,6 +425,12 @@ itself.
   break-glass change, which has no window. It is written whether or not the change is ever published; the revision's
   provenance records the skip too, once it publishes. A refused skip writes nothing.
 - **`REBASED` is written when a change is rebased** on its document's current head and checked again.
+- **`HEAD_LOST` is written when a revision a change published is not on its document's head chain**: its head write
+  was lost, as a Redis failover loses one (`CTL-86`). The reclamation pass finds one listed above the head; a read of
+  the history that rebuilds the index from the head (once a publish reused the number) finds one it is about to drop.
+  The operator is who published it, the base the head now, the candidate the lost revision. Each instance writes it
+  once for a revision it finds. The change is not in effect: publish it
+  again or roll back. `cosec.control.revisions.lost` (counter, no tags) counts them: alert on any.
 - **`ABANDONED` names who abandoned a change and, in its note, its author** (`author <tenant>/<principal>: <note>`).
   Abandoning a break-glass change is gated like `PUBLISHING`: it needs a `REQUIRED` change listener (`503` without
   one), which records it before the change is stored as abandoned. Abandoning any other change is recorded afterwards.
