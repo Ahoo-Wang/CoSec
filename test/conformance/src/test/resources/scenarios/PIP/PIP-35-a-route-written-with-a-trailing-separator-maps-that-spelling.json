@@ -24,7 +24,7 @@
             {
               "effect": "deny",
               "action": "order:list",
-              "resource": "order"
+              "resource": "order/*"
             }
           ]
         }
@@ -54,7 +54,7 @@
         "method": "GET",
         "path": "/orders/",
         "action": "order:list",
-        "resource": "order"
+        "resource": "order/all"
       }
     ]
   },

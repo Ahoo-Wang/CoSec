@@ -46,5 +46,8 @@ class OwnHandlers {
 @Configuration(proxyBeanMethods = false)
 class OwnHandlerMapping {
     @Bean
-    fun socketMapping(): HandlerMapping = SimpleUrlHandlerMapping(mapOf("/socket" to WebSocketHandler { it.close() }), -1)
+    fun socketMapping(): HandlerMapping = SimpleUrlHandlerMapping(
+        mapOf("/socket" to WebSocketHandler { it.close() }),
+        -1
+    )
 }
