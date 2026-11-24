@@ -36,6 +36,10 @@ Which preview of the library may run behind which preview of the gateway image: 
   or a catalog id already stored keeps working, can stay in the catalog a change puts, and can be removed. Rename the permission without the `/`.
 - **Breaking: `cosec.control.changes.expire-after` and `cosec.control.approval.expire-after` are positive** (DR1-E-16).
   Zero fails startup, naming the property; with zero every change expired as it was made, or every approval was stale.
+- **`HttpControlService` refuses a request that has ended** (`CTL-77`, `PIP-26`, DR1-F-2). Affected: an application that
+  keeps a `ControlCaller.of(context)` past its request (a launched job, a deferred write). Over HTTP it acted as the
+  user until the credential expired, after a logout too; it is now refused `403`, as in process, before anything is
+  sent, with a `WARN`. Call as the application's own principal (`ControlCaller.service`) from such work.
 - **Breaking for images built on top of CoSec's: the application's files are root's** (DR1-G-8). Affected: a
   Dockerfile `FROM` the gateway or control-plane image that writes under `/opt/<app>` as `appuser`, retraining the AOT
   cache included. The process now owns only `logs/` and `data/`, so a process made to write files cannot replace its
