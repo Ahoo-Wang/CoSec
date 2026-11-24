@@ -383,22 +383,25 @@ cosec:
 
 ### 切换租户和应用 {#switching-tenant-and-app}
 
-很多身份服务分两步让用户登录。第一步证明用户（密码、短信或邮件中的验证码），签发一个不属于任何租户和应用的令牌：此时谁也没有选择这两者。第二步出示这个令牌，指明要工作的租户和应用；它的回答就是之后每个请求携带的令牌。之后切换租户，或在同一租户内切换应用，都是同一个调用。`SwitchTenantAuthentication` 就是这第二步。你给它 `TokenFamilies` 和 `TokenRevocation` Bean、你的凭证类，以及一个 `TenantSwitch`：它检查用户属于目标租户并在那里拥有该应用（不满足时抛出异常以拒绝），并回答用户在那里拥有什么，按该租户和应用查询：一个包含用户角色、策略和属性的 `TenantMembership`，或者在你的 `MembershipProvider` 为该租户作答时使用 `TenantMembership.fromProvider()`。你的凭证类实现 `SwitchTenantCredentials`，并携带你的检查还要读取、而上下文里没有的内容；切换读取它不需要强制转换。请求的设备在上下文里：`context.deviceId` 就是它的 `CoSec-Device-Id`，按 CoSec 的规则读取（只能有一个值，否则请求是 `400`），所以端点不必自己读这个请求头。把这个认证声明为 Bean，登录按那个类找到它：
+很多身份服务分两步让用户登录。第一步证明用户（密码、短信或邮件中的验证码），签发一对不属于任何租户和应用的令牌：此时谁也没有选择这两者。第二步出示这对令牌，指明要工作的租户和应用；它的回答就是之后每个请求携带的令牌对。之后切换租户，或在同一租户内切换应用，都是同一个调用。`SwitchTenantAuthentication` 就是这第二步。你给它 CoSec 的 `TokenVerifier`、`TokenFamilies` 和 `TokenRevocation` Bean、你的凭证类，以及一个 `TenantSwitch`：它检查用户属于目标租户并在那里拥有该应用（不满足时抛出异常以拒绝），并回答用户在那里拥有什么，按该租户和应用查询：一个包含用户角色、策略和属性的 `TenantMembership`，或者在你的 `MembershipProvider` 为该租户作答时使用 `TenantMembership.fromProvider()`。你的凭证类实现 `SwitchTenantCredentials`，并携带你的检查还要读取、而上下文里没有的内容；切换读取它不需要强制转换。请求的设备在上下文里：`context.deviceId` 就是它的 `CoSec-Device-Id`，按 CoSec 的规则读取（只能有一个值，否则请求是 `400`），所以端点不必自己读这个请求头。把这个认证声明为 Bean，登录按那个类找到它：
 
 ```kotlin
 class SelectTenant(
     override val targetTenantId: String,
     override val targetAppId: String?,
     override val context: SecurityContext,
+    override val accessToken: String,
+    override val refreshToken: String,
 ) : SwitchTenantCredentials
 
 @Bean
 fun selectTenantAuthentication(
+    tokenVerifier: TokenVerifier,
     families: TokenFamilies,
     revocation: TokenRevocation,
     members: Members,
     devices: TrustedDevices,
-) = SwitchTenantAuthentication(families, revocation, SelectTenant::class.java) { credentials ->
+) = SwitchTenantAuthentication(tokenVerifier, families, revocation, SelectTenant::class.java) { credentials ->
     val app = requireNotNull(credentials.targetAppId) { "Name the app to work in." }
     val member = requireNotNull(members.find(credentials.context.principal.id, credentials.targetTenantId, app)) {
         "Not a member of this tenant's $app."
@@ -410,9 +413,16 @@ fun selectTenantAuthentication(
 }
 
 @PostMapping("/auth/select/{tenant}/{app}")
-suspend fun select(@PathVariable tenant: String, @PathVariable app: String, security: SecurityContext): CompositeToken =
-    authentication.authenticateAsToken(SelectTenant(tenant, app, security))
+suspend fun select(
+    @PathVariable tenant: String,
+    @PathVariable app: String,
+    @RequestBody pair: CompositeToken,
+    security: SecurityContext,
+): CompositeToken =
+    authentication.authenticateAsToken(SelectTenant(tenant, app, security, pair.accessToken, pair.refreshToken))
 ```
+
+请求和每个请求一样在 `Authorization` 中携带当前的访问令牌，并像[刷新](#refreshing-tokens)一样在请求体里携带令牌对：`{"accessToken": "...", "refreshToken": "..."}`。
 
 与[刷新](#refreshing-tokens)一样，`SecurityContext` 参数在 Spring MVC 上会被解析；在 WebFlux 上，请读取 `exchange.requireSecurityContext()`。
 
@@ -420,10 +430,11 @@ suspend fun select(@PathVariable tenant: String, @PathVariable app: String, secu
 
 **切换出来的会话随登录一起结束**（`IDN-36`）。新会话记下它的根，即用户登录时开始的那个会话，无论中间隔了多少次切换。它的刷新、轮换宽限期内的重试，以及从它再切换，都会一并读取根：登录的会话一旦登出、被吊销或不复存在，切换出来的会话在下一次刷新或切换时被吊销（`401 token-revoked`）。它的访问令牌在过期之前仍然有效：没有按根建立的索引来即时吊销它们。切换出来的会话每次刷新都会把根原样写回，所以只要从它切换出来的会话还在使用，没人刷新的登录会话也会被保留；切回一个会话自己的租户，算作它在一个主体保留的 64 个会话中重新开始了一次（[会话](#sessions)）。你自己的 `TokenFamilyStore` 必须保存 `TokenFamily.root`：切换会读回新会话，根没有被保存时切换被拒绝。
 
-**切换从请求的会话签发**，即 CoSec 的令牌向管道证明的那个会话：`context` 必须是管道为该请求构造的上下文，你的凭证中没有任何东西指定会话。新令牌开始一个自己的会话，保留那个会话的登录时间，因此会在先前的会话结束时结束：用户并没有重新登录（`IDN-17`）。它只在那个会话仍然有效时签发（`IDN-22`），并且在询问你的 `TenantSwitch` 之前就检查：
+**切换从请求的会话、凭它的令牌对签发**（`IDN-22`），即 CoSec 的令牌向管道证明的那个会话：`context` 必须是管道为该请求构造的上下文。切换开出的是一个能刷新的会话，所以它出示刷新所出示的东西：请求自己的访问令牌和它的刷新令牌，按刷新的方式检查。只有访问令牌不能切换，令牌对不是该请求所用的也不能（`TokenVerificationException`：`token-invalid`）：被复制的访问令牌只在它的几分钟里有用，换不出一个活到登录结束的会话。新令牌开始一个自己的会话，保留那个会话的登录时间，因此会在先前的会话结束时结束：用户并没有重新登录（`IDN-17`）。它只在那个会话仍然有效时签发，并且在询问你的 `TenantSwitch` 之前就检查：
 
 - 重新严格读取其令牌的吊销记录：吊销存储无法读取时，切换抛出 `RevocationUnavailableException`，由你的端点应答 `503`，即使请求本身已被放行（PIP-7，[登出与吊销](#logout-and-revocation)）；会话存储无法读取时抛出 `SessionStoreUnavailableException`，同样是 `503`；
-- 它的会话仍属于该主体且没有被结束：登出，或在轮换宽限期过后再次出示刷新前的令牌对（[会话](#sessions)），都会结束会话，此后该会话的其他访问令牌虽然在过期前仍然有效，却切换不出任何令牌（`TokenRevokedException`：请应答 `401` `token-revoked`）；超过生命周期的会话抛出 `TokenExpiredException`（`token-expired`）。
+- 它的会话仍属于该主体且没有被结束：登出，或在轮换宽限期过后再次出示刷新前的令牌对（[会话](#sessions)），都会结束会话，此后该会话的其他令牌对都切换不出任何令牌（`TokenRevokedException`：请应答 `401` `token-revoked`）；超过生命周期的会话抛出 `TokenExpiredException`（`token-expired`）；
+- 令牌对是这个会话会刷新的那一对，规则与刷新相同：当前代际，或轮换宽限期内刚被替换的那一代（另一个标签页、一个还在路上的请求）。更早的令牌对被出示来切换，就是令牌对被再次出示，会像刷新那样吊销会话（`token-revoked`）。切换不推进它所出自的会话：那个会话照常刷新。
 
 凭证不是 CoSec 令牌的请求（例如 API key）没有会话，不能切换（`TokenVerificationException`：`token-invalid`）。这些异常没有人替你映射：切换是你自己的端点，请像[提供的刷新路由](#refreshing-tokens)那样应答它们。被切换离开的会话保持原样：登出结束的是交给它的令牌对，而不是它切换自的那个。要结束一个用户的所有会话，请在它切换进入过的每个租户中[吊销该主体](#revoking-every-token-of-a-principal)：切换出的会话属于其目标租户。在网关之后，切换从网关验证并随身份转发的会话签发（[网关之后的服务](./web.md#services-behind-the-gateway)）；承载它的服务设置 `cosec.jwt.enabled=true`，使用网关的 `cosec.jwt.secret` 和 `cosec.jwt.algorithm`，以及相同的 Redis 和 `cosec.key-prefix`，从而读取同样的会话和吊销记录。
 
@@ -440,7 +451,7 @@ class SelectTenantTest {
     private val login = TokenCompositeAuthentication.of(
         listOf(
             passwordAuthentication,
-            SelectTenantConfiguration().selectTenantAuthentication(families, revocation, members, devices),
+            SelectTenantConfiguration().selectTenantAuthentication(verifier, families, revocation, members, devices),
         ),
         JwtTokenConverter(IdGenerator { UUID.randomUUID().toString() }, signing),
         families,
@@ -456,7 +467,9 @@ class SelectTenantTest {
             headers = mapOf("CoSec-Device-Id" to listOf("phone")),
         )
 
-        val switched = login.authenticateAsToken(SelectTenant("globex", "order", request))
+        val switched = login.authenticateAsToken(
+            SelectTenant("globex", "order", request, pair.accessToken, pair.refreshToken),
+        )
 
         val token = verifier.verify(switched.accessToken)
         token.tenant.assert().isEqualTo("globex")

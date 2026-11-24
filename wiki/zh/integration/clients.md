@@ -22,7 +22,7 @@ CoSec 不提供登录和租户切换：它们属于应用，用 CoSec 的类编�
 | 登录 | 应用：`TokenCompositeAuthentication.authenticateAsToken(credentials)` | 入：你的凭证；出：`CompositeToken` |
 | 刷新 | starter，位于 `cosec.authentication.login.refresh.path`（`IDN-23`）；未设置时由应用基于 `RefreshTokenAuthentication` 提供。starter 的路由需要 `MembershipRefresh` Bean 或 `cosec.jwt.session.memberships-on-refresh=from-token`（`STA-8`） | 入：`{"accessToken": "...", "refreshToken": "..."}`；出：`CompositeToken` |
 | 登出 | starter，位于 `cosec.authentication.login.logout.path`（`IDN-24`）；未设置时由应用提供：`TokenRevoker.revoke(accessToken)`，访问令牌过期后用 `revoke(compositeToken)` | 提供的路由：入：令牌对，出：`204`；会话在服务端结束 |
-| 租户或应用切换 | 应用：`SwitchTenantAuthentication`，从一个有效会话发起 | 入：`Authorization` 头里的当前令牌，加上你的凭证类的请求体；出：`CompositeToken` |
+| 租户或应用切换 | 应用：`SwitchTenantAuthentication`，凭一个有效会话的令牌对发起 | 入：`Authorization` 头里的当前令牌，以及请求体里的令牌对（`accessToken`、`refreshToken`）和你的凭证类；出：`CompositeToken` |
 
 `CompositeToken` 写成 `{"accessToken":"<jwt>","refreshToken":"<jwt>"}`，没有别的字段（`CompositeTokenJsonTest` 逐字节固定它）。
 应用在响应里加字段不会破坏 CoSec，客户端要忽略它不认识的字段。客户端发回的只能正好是令牌对，不能是原样的响应：
@@ -171,7 +171,7 @@ CoSec 不提供登录和租户切换：它们属于应用，用 CoSec 的类编�
 - **登出先调服务端，再清本地。** 客户端只丢掉令牌对，令牌对在会话结束之前仍然可以刷新。调用登出路由，starter 的或应用的（它结束会话并吊销访问令牌，`IDN-18`；`cosec-fetcher` 的 `JwtTokenManager.logout()` 完成这两步），
   再丢掉令牌对。访问令牌过期后，端点需要整个令牌对。
   用户点击“登出”时调用服务端的登出；只有在已知会话已经结束时，才只忘掉令牌对。服务端没有确认的登出（`503`、`500`、没有回答）仍会在客户端删除令牌对：用户要求离开这台设备。随后客户端告诉用户：服务端可能仍持有该会话，直到它在那里结束，最迟到其刷新令牌过期。登出会等待正在进行的刷新，并用那次刷新存下的令牌对结束会话，因为被它轮换掉的令牌对会被拒绝。在 React 中，`cosec-react` 的 `logout`（配合 `tokenManager` 选项）就是这个登出，`signOut` 只是本地那一步。
-- **切换返回新的令牌对。** 出示当前令牌，保存返回的令牌对，丢掉旧的。切换只能从有效会话发起，并保留登录时间（`IDN-17`、`IDN-22`）；它不会让用户重新登录。
+- **切换返回新的令牌对。** 像刷新一样出示当前的令牌对（访问令牌也放在 `Authorization` 里），保存返回的令牌对，丢掉旧的。切换只能凭有效会话的当前令牌对发起（或轮换宽限期内刚被替换的那一对），并保留登录时间（`IDN-17`、`IDN-22`）；它不会让用户重新登录。如果别的标签页早已刷新过，请先刷新：更早的令牌对被出示来切换，会像刷新那样吊销会话。
   客户端用 `tenantId` 填充的路径参数会随新令牌改变。
 
 ## CORS {#cors}

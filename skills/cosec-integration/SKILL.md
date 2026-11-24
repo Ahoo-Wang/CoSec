@@ -159,7 +159,8 @@ Use `$cosec-policy-author` to write the documents. Storage details: https://cose
 ## Services behind a CoSec gateway
 
 The gateway strips any client `CoSec-Identity` and, on a permit for an authenticated principal, forwards the identity it
-verified (tenant, principal, app, space, the roles there, credential id and expiry, and the claims named in
+verified (tenant, principal, app, space, the roles there, its roles in other spaces and its attached policy ids under
+`memberships` (`IDN-39`, always written, empty when nothing), credential id and expiry, and the claims named in
 `cosec.gateway.identity.claims`) to a route that receives it: a route to a registered service (`uri: lb://...`), or one
 whose metadata says `cosec-identity: true`. Any other route, and one marked `cosec-identity: false`, gets none: mark
 your own `http(s)://` services `true`, never a third party. It forwards no credentials (`Authorization`, the API key
@@ -251,6 +252,12 @@ https://cosec.ahoo.me/guide/security-model#trust-boundaries.
   `MembershipRefresh.CLAIMS` (keeps the old token's memberships: a removed role applies at the next sign-in or after
   `revokeSubject`) or a `MembershipRefresh` that looks the user up again. Only the newest pair refreshes, an older
   one presented again ends the session, and a session lasts `cosec.jwt.session.lifetime` (30 days).
+- Tenant or app switch: `SwitchTenantAuthentication(verifier, tokenFamilies, tokenRevocation, YourCredentials::class.java)
+  { credentials -> TenantMembership(...) }`, as an `Authentication` bean behind your own endpoint. Your credentials
+  implement `SwitchTenantCredentials`: the target tenant (and app), the request's `SecurityContext`, and the session's
+  token pair (`accessToken`, `refreshToken`), read from the body as the refresh route reads it. An access token alone
+  does not switch; the pair is judged as a refresh's (an older one ends the session), and the switch moves nothing of
+  the session it came from (`IDN-22`).
 - Refresh and logout routes: set `cosec.authentication.login.refresh.path` and `logout.path` and the starter serves them
   (`POST`, the pair as JSON; `200` pair, `401` token-*, `503` unavailable, `500` error; logout `204`), on Spring MVC and
   WebFlux, never on a gateway. A document must permit an anonymous `POST` of each path, or every refresh is

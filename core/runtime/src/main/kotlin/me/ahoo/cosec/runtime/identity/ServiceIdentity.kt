@@ -45,5 +45,7 @@ object ServiceIdentity {
         credential = Identity.Credential(Identity.Method.SERVICE, credentialId(principal), now.plus(LIFETIME)),
         issuedAt = now,
         requestId = requestId,
+        // A service states its roles; it has no other space and attaches nothing (IDN-39).
+        memberships = Identity.Memberships.NONE,
     )
 }

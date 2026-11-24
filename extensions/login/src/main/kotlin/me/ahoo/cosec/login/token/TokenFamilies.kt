@@ -152,8 +152,8 @@ class TokenFamilies @JvmOverloads constructor(
             if (!family.expiresAt.isAfter(now)) {
                 throw TokenExpiredException("The session that began at ${family.authTime} has ended: sign in again.")
             }
-            when {
-                session.generation == family.generation -> {
+            when (standing(session, family, now)) {
+                Standing.CURRENT -> {
                     requireRootLive(family)
                     val next = family.rotated(now)
                     if (sessionStore("rotate a session") { store.replace(read.version, next) }) {
@@ -161,24 +161,89 @@ class TokenFamilies @JvmOverloads constructor(
                     }
                     // Another refresh moved the family in between: read it again, the pair is now the one before.
                 }
-                session.generation == family.generation - 1 && family.rotatedAt?.plus(leeway)?.isAfter(now) == true -> {
+                Standing.JUST_REPLACED -> {
                     // A retry, or another tab: the pair was current a moment ago. Nothing of the family is written.
                     requireRootLive(family)
                     return Issue(TokenSession(family.id, family.authTime, family.generation), family.expiresAt)
                 }
-                session.generation < family.generation -> {
-                    if (revoke(read)) {
-                        throw TokenRevokedException(
-                            "The token's pair was refreshed before and is presented again: its session is revoked."
-                        )
-                    }
-                    // The family changed in between: read it again, and revoke what it is now.
-                }
-                else -> throw TokenVerificationException("The token is of a generation its session never issued.")
+                Standing.REUSED -> reused(read)
+                Standing.NEVER_ISSUED -> throw TokenVerificationException(
+                    "The token is of a generation its session never issued."
+                )
             }
         }
         throw IllegalStateException("The session [${session.id}] kept changing while it was refreshed.")
     }
+
+    /**
+     * The family of [token]'s session once [token]'s pair is one it would refresh, by [rotate]'s rule and with its
+     * consequence, moving nothing: the current generation, or the one just replaced within [leeway]; an older pair
+     * presented again revokes the session. What a tenant switch issues from (`IDN-22`): presenting a pair to switch is
+     * presenting it as a refresh does, so it is answered alike, and the session it was presented from refreshes on as
+     * before. Checked once in `cosec-login`.
+     *
+     * @throws TokenVerificationException when the token belongs to no session, its family is unknown or not its
+     * principal's, or its generation was never issued
+     * @throws TokenRevokedException when the family is revoked, or the pair is an older generation (it is then revoked)
+     * @throws TokenExpiredException when the family's lifetime has ended
+     */
+    // Each refusal is a different answer to the client (401 invalid, revoked or expired), so each has its own throw.
+    @Suppress("ThrowsCount")
+    @InternalCoSecApi
+    suspend fun requireCurrent(token: VerifiedToken): TokenFamily {
+        val session = token.session ?: throw TokenVerificationException("The token belongs to no session: sign in again.")
+        val now = clock.instant()
+        if (!session.authTime.plus(lifetime).isAfter(now)) {
+            throw TokenExpiredException("The session that began at ${session.authTime} has ended: sign in again.")
+        }
+        repeat(MAX_ATTEMPTS) {
+            val read = sessionStore("read a session") { store.read(session.id) }
+                ?: throw TokenVerificationException("The token's session is unknown: sign in again.")
+            val family = read.family
+            checkOwner(family, token.tenant?.let(::TenantId) ?: TenantId.DEFAULT, PrincipalId(token.principal), session)
+            if (family.revoked) {
+                throw TokenRevokedException("The token's session has been revoked.")
+            }
+            if (!family.expiresAt.isAfter(now)) {
+                throw TokenExpiredException("The session that began at ${family.authTime} has ended: sign in again.")
+            }
+            when (standing(session, family, now)) {
+                Standing.CURRENT, Standing.JUST_REPLACED -> {
+                    requireRootLive(family)
+                    return family
+                }
+                Standing.REUSED -> reused(read)
+                Standing.NEVER_ISSUED -> throw TokenVerificationException(
+                    "The token is of a generation its session never issued."
+                )
+            }
+        }
+        throw IllegalStateException("The session [${session.id}] kept changing while it was checked.")
+    }
+
+    /** Where [session]'s pair stands against [family]: the one rule [rotate] and [requireCurrent] read it by. */
+    private fun standing(session: TokenSession, family: TokenFamily, now: Instant): Standing = when {
+        session.generation == family.generation -> Standing.CURRENT
+        session.generation == family.generation - 1 && family.rotatedAt?.plus(leeway)?.isAfter(now) == true ->
+            Standing.JUST_REPLACED
+        session.generation < family.generation -> Standing.REUSED
+        else -> Standing.NEVER_ISSUED
+    }
+
+    /**
+     * A pair presented again ([Standing.REUSED]): its session is revoked and the presentation refused. Returns when the
+     * family changed in between, to be read again and judged as it is now.
+     */
+    private suspend fun reused(read: TokenFamilyStore.Read) {
+        if (revoke(read)) {
+            throw TokenRevokedException(
+                "The token's pair was refreshed before and is presented again: its session is revoked."
+            )
+        }
+    }
+
+    /** How a presented pair's generation stands against its session's. */
+    private enum class Standing { CURRENT, JUST_REPLACED, REUSED, NEVER_ISSUED }
 
     /**
      * Returns the family of [session] of [principal] in [tenant] once it is live: it exists, is theirs, is neither revoked

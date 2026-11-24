@@ -131,6 +131,7 @@ object GuardAllowlist {
             "control-http:HttpControlServiceTest#an answer over the bound fails the call as soon as it is over",
             "control-sdk:ControlSdkValuesTest#a service caller that CoSec-Identity would not carry is refused when made",
             "spring-boot:ControlServiceParityTest#a DENY on the caller's attributes decides alike through both implementations - CTL-77",
+            "spring-boot:ControlServiceParityTest#a DENY reached through the caller's attachments or other spaces decides alike through both implementations - CTL-77",
             "runtime:IdentityForwardingTest#a relayed caller's every attribute reads on the host as the engine reads it here",
             "runtime:IdentityForwardingTest#a relayed caller whose attributes do not fit fails before anything is sent, naming them, never their values",
             "spring-boot:ControlServiceParityTest#an ended request's caller is refused alike through both implementations - CTL-77",

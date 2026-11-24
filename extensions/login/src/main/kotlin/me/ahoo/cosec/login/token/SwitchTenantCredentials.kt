@@ -34,4 +34,14 @@ interface SwitchTenantCredentials : LoginCredentials {
      * proved, is what the new token is issued from, with its login time (`IDN-22`).
      */
     val context: SecurityContext
+
+    /**
+     * The access token of the pair the switch presents: the one the request was made with ([context]'s credential). The
+     * switch issues a session that refreshes, so it presents what a refresh presents: an access token alone does not
+     * switch (`IDN-22`).
+     */
+    val accessToken: String
+
+    /** The refresh token of that pair, which belongs to [accessToken], as a refresh's does. */
+    val refreshToken: String
 }

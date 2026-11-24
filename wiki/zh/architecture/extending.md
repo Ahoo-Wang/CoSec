@@ -26,7 +26,7 @@ description: "把自己的认证器、成员关系来源、属性提供者、决
 | `SnapshotDocumentStore` | `cosec-spi`，`spi.snapshot` | 把策略文档存放在 Redis 以外的地方。8.0 中为实验性（`@ExperimentalCoSecApi`）：它的形状跟随唯一的后端，批量或整库的条件读已在计划中。 | 一个 bean，不使用 `cosec-cocache` 时 |
 | `IdGenerator` | `cosec-spi`，`spi.id` | 让请求 id、令牌 id 和变更 id 使用你自己的格式。`cosec-cosid` 基于 CosId 5 实现了它。 | 一个 bean，替换 `RandomIdGenerator` |
 | `Authentication` | `cosec-login`，`login` | 校验另一种登录凭证，并说明其令牌的内容。通过抛出异常拒绝。 | 所有 bean，按其支持的凭证类型注册 |
-| `TenantSwitch` | `cosec-login`，`login.token` | 说明用户在要切换到的租户和应用中拥有什么，以及新令牌属于哪个应用（[切换租户和应用](../integration/authentication.md#switching-tenant-and-app)）。通过抛出异常拒绝。 | 无：把 `SwitchTenantAuthentication(tokenVerifier, YourCredentials::class.java, yourSwitch)` 声明为 `Authentication` bean |
+| `TenantSwitch` | `cosec-login`，`login.token` | 说明用户在要切换到的租户和应用中拥有什么，以及新令牌属于哪个应用（[切换租户和应用](../integration/authentication.md#switching-tenant-and-app)）。通过抛出异常拒绝。 | 无：把 `SwitchTenantAuthentication(tokenVerifier, tokenFamilies, tokenRevocation, YourCredentials::class.java, yourSwitch)` 声明为 `Authentication` bean；你的凭证携带切换所出示的令牌对 |
 | `MembershipRefresh` | `cosec-login`，`login.token` | 在令牌刷新时说明用户现在拥有什么，让变更后的角色生效（[刷新令牌](../integration/authentication.md#refreshing-tokens)）。抛出 `TokenVerificationException` 以拒绝（`401`）；其他任何异常都是错误（`500`）；null 保留声明。 | 无：把它传给 `RefreshTokenAuthentication`；starter 的刷新路由使用 `MembershipRefresh<RefreshTokenCredentials>` Bean，没有时启动失败，直到 `cosec.jwt.session.memberships-on-refresh=from-token` 保留令牌的成员关系（`STA-8`） |
 | `TokenConverter` | `cosec-login`，`login.token` | 以其他格式签发令牌。 | 一个 bean，替换 `JwtTokenConverter` |
 | `SocialUserPrincipalConverter` | `cosec-social`，`social` | 把提供方的用户转换成你的主体。 | 一个 bean，替换 `DirectSocialUserPrincipalConverter` |

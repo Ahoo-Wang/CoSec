@@ -19,15 +19,14 @@ import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.model.PrincipalId
 import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.runtime.token.TokenRevocation
-import me.ahoo.cosec.spi.authn.AuthenticatedPrincipal
 import me.ahoo.cosec.spi.token.TokenSession
 import me.ahoo.cosec.spi.token.TokenVerificationException
 import me.ahoo.cosec.spi.token.VerifiedToken
 import java.time.Instant
 
 /**
- * The one way `cosec-login` issues from an earlier token, a refresh's or the one a tenant switch is asked with
- * (`IDN-14`, `IDN-22`): a [Live] session, which [of] answers only once the token's revocations were read strictly and
+ * The one way `cosec-login` issues from an earlier token pair, a refresh's or a tenant switch's (`IDN-14`, `IDN-22`):
+ * a [Live] session, which [of] and [presented] answer only once the token's revocations were read strictly and
  * its family is readable, its principal's and tenant's, and neither revoked nor ended. Nothing else in `cosec-login`
  * rotates a family or starts one at an earlier login (`LiveSessionsGuardTest`).
  *
@@ -43,14 +42,17 @@ internal class LiveSessions(private val revocation: TokenRevocation, private val
         return live(token.id, tenant, PrincipalId(token.principal), token.issuedAt, session)
     }
 
-    /** The session of [principal], as the pipeline authenticated it with CoSec's own token, once it is live. */
-    suspend fun of(principal: AuthenticatedPrincipal): Live {
-        val session = principal.session
-        val credential = principal.credential
-        if (session == null || credential == null) {
-            throw TokenVerificationException("The request's credential belongs to no session: sign in again.")
-        }
-        return live(credential.id, principal.tenant, principal.id, principal.issuedAt, session)
+    /**
+     * The session of [token], verified with its refresh token for a tenant switch, once it is live and the pair is one it
+     * would refresh: [TokenFamilies.requireCurrent], [TokenFamilies.rotate]'s rule without moving the session, so an older
+     * pair presented again revokes it as a refresh would (`IDN-22`).
+     */
+    suspend fun presented(token: VerifiedToken): Live {
+        val session = token.session ?: throw TokenVerificationException("The token belongs to no session: sign in again.")
+        val tenant = token.tenant?.let(::TenantId) ?: TenantId.DEFAULT
+        revocation.check(token.id, tenant, PrincipalId(token.principal), token.issuedAt)
+        val family = families.requireCurrent(token)
+        return Live(PrincipalId(token.principal), session, family.root ?: family.id)
     }
 
     private suspend fun live(

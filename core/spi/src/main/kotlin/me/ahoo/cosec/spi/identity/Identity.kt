@@ -20,8 +20,8 @@ import java.time.Instant
 /**
  * The identity a gateway verified for a permitted request, as it forwards it to the services behind it in the
  * `IdentityCodec.HEADER` header (format v1): only facts the gateway verified or resolved that a downstream service needs
- * to tell who the caller is and in what scope. Never a credential, a policy, a matched statement or binding, an
- * external attribute value, a request header or the client's address.
+ * to tell who the caller is and in what scope. Never a credential, a policy's content, a matched statement or binding,
+ * an external attribute value, a request header or the client's address.
  */
 class Identity(
     /** The tenant the gateway decided in. */
@@ -41,6 +41,12 @@ class Identity(
     val requestId: String,
     /** The token claims the gateway is configured to forward (`cosec.gateway.identity.claims`): strings, numbers, booleans. */
     val claims: Map<String, Any> = emptyMap(),
+    /**
+     * The principal's other memberships, beside [roles] (`IDN-39`): its roles in every other space and the policies it
+     * attaches, so that a host deciding on the identity sees what the gateway decided with. Null when the writer did
+     * not state them, which a host that decides on the identity refuses; [Memberships.NONE] when there are none.
+     */
+    val memberships: Memberships? = null,
 ) {
     private fun fields(): List<Any?> = listOf(
         tenant,
@@ -52,6 +58,7 @@ class Identity(
         issuedAt,
         requestId,
         claims,
+        memberships,
     )
 
     override fun equals(other: Any?): Boolean = other is Identity && other.fields() == fields()
@@ -74,6 +81,7 @@ class Identity(
         issuedAt: Instant = this.issuedAt,
         requestId: String = this.requestId,
         claims: Map<String, Any> = this.claims,
+        memberships: Memberships? = this.memberships,
     ): Identity = Identity(
         tenant = tenant,
         subject = subject,
@@ -84,7 +92,31 @@ class Identity(
         issuedAt = issuedAt,
         requestId = requestId,
         claims = claims,
+        memberships = memberships,
     )
+
+    /**
+     * What the principal is a member of besides its roles in the identity's own space (`IDN-39`): [spaces], its roles in
+     * each other space (the default space's key is empty), and [attachments], the ids of the policies it attaches, in
+     * the order its memberships name them. The identity's own space is never a key: its roles are the identity's.
+     */
+    class Memberships(
+        val spaces: Map<String, Set<String>>,
+        val attachments: List<String>,
+    ) {
+        private fun fields(): List<Any?> = listOf(spaces, attachments)
+
+        override fun equals(other: Any?): Boolean = other is Memberships && other.fields() == fields()
+
+        override fun hashCode(): Int = fields().hashCode()
+
+        override fun toString(): String = "Memberships(${fields().joinToString()})"
+
+        companion object {
+            /** No role in another space and no attachment: what the identity's [roles] say is all there is. */
+            val NONE: Memberships = Memberships(emptyMap(), emptyList())
+        }
+    }
 
     /** How the principal authenticated at the gateway: for audit and revocation correlation, never the credential. */
     class Credential(

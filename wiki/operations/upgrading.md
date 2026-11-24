@@ -814,7 +814,8 @@ the revocation check reports is `503`, never an accepted token (`PIP-7`).
 - **Tenant switch and social login.** A tenant switch (7.x's `AbstractSwitchTenantAuthentication`, now
   `SwitchTenantAuthentication` with a `TenantSwitch`, [From 8.0.0-alpha.4](./upgrading-previews.md#from-8-0-0-alpha-4)) answers the user's
   `TenantMembership` in the target tenant and app instead of a principal, so the new token never carries the previous
-  tenant's roles. `DirectSocialUserPrincipalConverter` signs only `cosec_oauth_provider` and `cosec_oauth_user_id`,
+  tenant's roles, and it presents the session's token pair, as a refresh does: an access token alone does not switch
+  ([Switching tenant and app](../integration/authentication.md#switching-tenant-and-app)). `DirectSocialUserPrincipalConverter` signs only `cosec_oauth_provider` and `cosec_oauth_user_id`,
   not the provider's user info ([Authentication](../integration/authentication.md#tenants)).
 - `cosec.api-key.header` is now `cosec.pipeline.api-key-header` (default `X-API-Key`), and no document may read the
   header it names (`CND-5`).

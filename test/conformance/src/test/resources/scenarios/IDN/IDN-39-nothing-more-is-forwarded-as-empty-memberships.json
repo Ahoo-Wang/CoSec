@@ -1,0 +1,75 @@
+{
+  "rules": [
+    "IDN-39"
+  ],
+  "polarity": "negative",
+  "level": "pipeline",
+  "description": "alice holds only clerk, in the space the gateway decided in, and attaches nothing: the gateway still writes memberships, empty, which says there is nothing more.",
+  "documents": {
+    "platform": {
+      "policies": [
+        {
+          "id": "open",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "http:GET"
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "open",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "open"
+        }
+      ]
+    }
+  },
+  "identity": {},
+  "http": {
+    "method": "GET",
+    "path": "/orders",
+    "headers": {
+      "Authorization": "token",
+      "CoSec-Identity": "eyJ2IjoxfQ"
+    }
+  },
+  "authentication": {
+    "result": "token",
+    "token": {
+      "jti": "t1",
+      "tenant": "acme",
+      "id": "alice",
+      "roles": [
+        "clerk"
+      ]
+    }
+  },
+  "expect": {
+    "status": 200,
+    "proceed": true,
+    "identity": {
+      "tenant": "acme",
+      "sub": "alice",
+      "app": "",
+      "space": "",
+      "jti": "t1",
+      "roles": [
+        "clerk"
+      ],
+      "memberships": {
+        "spaces": {},
+        "attachments": []
+      }
+    }
+  },
+  "gateway": {
+    "route": {
+      "uri": "lb://backend"
+    }
+  }
+}

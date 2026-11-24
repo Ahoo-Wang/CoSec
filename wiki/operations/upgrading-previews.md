@@ -30,6 +30,16 @@ Which preview of the library may run behind which preview of the gateway image: 
 
 ## From 8.0.0-beta.7 {#from-8-0-0-beta-7}
 
+- **Breaking: a tenant switch presents the session's token pair** (`IDN-22`). Affected: every application with a switch
+  endpoint. A switch opened a session that refreshes on an access token alone, so a copied access token became a session
+  until the login ended, and an access token of a generation already refreshed still switched. Now
+  `SwitchTenantCredentials` carries `accessToken` and `refreshToken`, and `SwitchTenantAuthentication` takes CoSec's
+  `TokenVerifier` first: `SwitchTenantAuthentication(tokenVerifier, families, revocation, YourCredentials::class.java)
+  { ... }`. Read the pair from the request body, as the refresh route does (`{"accessToken", "refreshToken"}`), and have
+  clients send it with the switch. The pair must be the one the request was made with, of the session's current
+  generation (the one just replaced is accepted within the rotation leeway); an older pair revokes the session, as a
+  refresh of it would. The switch no longer moves anything of the session it is presented from
+  ([Switching tenant and app](../integration/authentication.md#switching-tenant-and-app)).
 - **Breaking: `JwtTokenConverter.toToken(subject, access, refresh)` refuses a validity longer than the configured one**
   (`IDN-37`). Affected: an application that issues tokens itself with an access or refresh validity longer than
   `cosec.jwt.token-validity.access` or `.refresh`. A revocation is kept only past the configured validities, so such a
@@ -325,6 +335,20 @@ Which preview of the library may run behind which preview of the gateway image: 
   where it used to write two more keys. The process serving social login needs `INFO` on Redis, as `SNP-3` already
   asks; without it the fixed bound applies, with a WARN. `InMemorySocialStateStore` holds at most 10,000. Nothing to
   change, beyond rate limiting the start route at the edge ([Storage](./storage.md#redis-keys)).
+- **Breaking: `CoSec-Identity` states the caller's whole memberships, and a host that decides on it requires them**
+  (`IDN-39`, DR2-F-1, DR2-C-1). Affected: a host with `cosec.pipeline.caller=forwarded-identity` (the control-plane
+  image, an IAM service that embeds the control plane, a service port), and an application that writes the header
+  itself to such a host.
+  - The header gains `memberships`: the principal's roles in every other space and the ids of the policies it
+    attaches. The gateway's forward and `HttpControlService`'s relay always write it, empty when there is nothing more.
+    Before, only the decided space's roles travelled, and a DENY attached to the caller, or one on `subject.roles` for
+    a role held in another space, did not apply on such a host: the same call was denied in process.
+  - Such a host refuses a header without `memberships` with `400` `invalid-request`. **Upgrade the gateways and the
+    applications that call a service port first, then the control hosts**: a beta.7 gateway's header has no
+    `memberships`. A service in `gateway` mode reads both.
+  - An application that builds an `Identity` and writes it (`IdentityHeader.write`) for such a host sets `memberships`:
+    `Identity.Memberships.NONE` when the principal has nothing beyond its roles there. `Identity`'s constructor gained the
+    parameter, last and nullable. The test kit's `IdentityHeader.forSubject` writes it empty.
 
 ## From 8.0.0-beta.6 {#from-8-0-0-beta-6}
 

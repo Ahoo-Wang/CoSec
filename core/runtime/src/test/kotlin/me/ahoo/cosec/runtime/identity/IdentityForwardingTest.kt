@@ -109,6 +109,8 @@ class IdentityForwardingTest {
                 issuedAt = now,
                 requestId = outcome.requestId,
                 claims = mapOf("name" to "Alice"),
+                // Always written, empty when the scope's roles are all there is (IDN-39).
+                memberships = Identity.Memberships.NONE,
             )
         )
     }

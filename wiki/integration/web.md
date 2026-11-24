@@ -752,13 +752,14 @@ behind the gateway refuses that filter at startup (`STA-6`); turn it off in any 
 | `tenant`, `sub` | The tenant and principal the gateway verified. |
 | `scope` | `{app, space}`, as the gateway resolved them. |
 | `roles` | The principal's roles in that space, by their bare names: those the decision used. The scope's roles, not every role of the token (the token's `roles` claim lists the roles of every space as `role@space`). |
+| `memberships` | `{spaces, attachments}` (`IDN-39`): what else the principal is a member of. `spaces` holds its roles in every other space, by space id (the default space's key is empty), never the scope's own space; `attachments` the ids of the policies it attaches, in the order its memberships name them. Always written, `{"spaces":{},"attachments":[]}` when there is nothing more: its presence says the memberships are whole. A host that decides with policies on the identity (`cosec.pipeline.caller=forwarded-identity`: a control host, a service port) refuses a header without it, and decides with all of it, so a DENY attached to the principal, or one that reads a role it holds in another space (`subject.roles`), applies there as at the gateway. |
 | `auth` | `{method, jti, exp, iat, capped, session}`: how the principal authenticated (`jwt` and `api-key` are CoSec's own; any other non-empty name is read as it is, so a gateway with another authenticator works), the token's `jti` or the key's id, the credential's expiry, and when it was issued (`iat`, absent when the credential does not say, never after `exp`); `session` only for CoSec's own token (`jwt`): its `sid`, `auth_time` (when the user signed in) and `generation`, so that a service behind the gateway knows the login time and a [tenant switch](./authentication.md#switching-tenant-and-app) there can issue from it; `capped: true` only for a credential with a role cap, which then gets no grant from principal bindings or attachments behind the gateway either (their DENYs still apply). Only `jwt`, which a gateway forwards for CoSec's own token alone, gets break-glass. Never the credential itself. |
 | `iat` | When the gateway made the header, in epoch seconds. |
 | `rid` | The gateway's request id. |
 | `claims` | Only the principal attributes named in `cosec.gateway.identity.claims` (the token's `attributes` claim; an API key gives only `apiKeyId`): strings, booleans and numbers. A `Byte`, `Short`, `Int`, `Long`, or `BigInteger` within a `Long` travels as an integer; a finite `Float` or `Double`, or a `BigDecimal` a `Double` holds exactly, as a number. |
 
-It never carries the token, the API key, cookies or other request headers, policies, the matched statement,
-external attribute values or the client IP.
+It never carries the token, the API key, cookies or other request headers, the content of a policy (only the ids of
+those the principal attaches), the matched statement, external attribute values or the client IP.
 
 **It fails closed.** The request is `500` `internal-error`, logged, and nothing is truncated, when the identity is
 larger than `cosec.gateway.identity.max-size` (8 KB), when a named claim is not a string, boolean or such a number (a
@@ -811,6 +812,7 @@ decided the request line's method and removes the method-override headers from w
 | No `CoSec-Identity` | Proceeds as the anonymous principal `(0)`; your code decides what it may see. |
 | A valid identity | Proceeds as that principal, in that scope. |
 | Not readable (not base64url, not the format, an unknown or duplicate member, a repeated role, `iat` or `exp` past year 9999), sent more than once, larger than `cosec.pipeline.identity.max-size` (8 KB), or a scope that does not resolve here (such as an app other than `cosec.authorization.scope.app-id`) | `400` `invalid-request` |
+| On a host that decides with policies on the identity (`cosec.pipeline.caller=forwarded-identity`), no `memberships` (`IDN-39`): an older gateway's header, or one an application wrote without them | `400` `invalid-request` |
 | An unknown version, an `iat` in the future, or no `auth.exp` | `401` `token-invalid` |
 | `auth.exp` passed, or `iat` older than `cosec.pipeline.identity.max-age` (60 seconds) | `401` `token-expired` |
 

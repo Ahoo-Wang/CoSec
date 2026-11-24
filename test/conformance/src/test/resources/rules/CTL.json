@@ -1112,6 +1112,7 @@
         "control-http:HttpControlServiceTest#a call that is not answered within its timeout ends",
         "control-http:HttpControlServiceTest#a transport failure is the client's own exception",
         "spring-boot:ControlServiceParityTest#a DENY on the caller's attributes decides alike through both implementations - CTL-77",
+        "spring-boot:ControlServiceParityTest#a DENY reached through the caller's attachments or other spaces decides alike through both implementations - CTL-77",
         "runtime:IdentityForwardingTest#a relayed caller's every attribute reads on the host as the engine reads it here",
         "runtime:IdentityForwardingTest#a relayed caller whose attributes do not fit fails before anything is sent, naming them, never their values",
         "spring-boot:ControlServiceParityTest#an ended request's caller is refused alike through both implementations - CTL-77",
