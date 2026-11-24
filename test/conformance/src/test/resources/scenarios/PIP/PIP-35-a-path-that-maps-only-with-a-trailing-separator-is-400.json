@@ -1,0 +1,69 @@
+{
+  "rules": [
+    "PIP-35"
+  ],
+  "polarity": "positive",
+  "level": "pipeline",
+  "description": "On a host with a route map whose route is written GET /orders/, GET /orders maps to no route and maps with a trailing separator: 400 before authentication, since a backend may read it as either, and deciding it in the http namespace would step around the DENY on order:list (DR2-C-2).",
+  "documents": {
+    "platform": {
+      "policies": [
+        {
+          "id": "open",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "http:*",
+              "resource": "http:path:/**"
+            }
+          ]
+        },
+        {
+          "id": "no-list",
+          "statements": [
+            {
+              "effect": "deny",
+              "action": "order:list",
+              "resource": "order"
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "g:open",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "open"
+        },
+        {
+          "id": "g:no-list",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "no-list"
+        }
+      ]
+    }
+  },
+  "routes": {
+    "service": "order",
+    "routes": [
+      {
+        "method": "GET",
+        "path": "/orders/",
+        "action": "order:list",
+        "resource": "order"
+      }
+    ]
+  },
+  "http": {
+    "method": "GET",
+    "path": "/orders"
+  },
+  "expect": {
+    "status": 400,
+    "type": "invalid-request"
+  }
+}

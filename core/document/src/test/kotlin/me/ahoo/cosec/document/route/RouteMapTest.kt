@@ -83,6 +83,30 @@ class RouteMapTest {
         RouteMap.EMPTY.resolve(method, path).assert().isEqualTo(RouteResolution.Unmapped)
     }
 
+    /**
+     * PIP-35: a path that maps only in its other spelling, with or without a trailing `/`, is invalid rather than
+     * decided in the `http` namespace, whichever way the route is written (DR1-C-9, DR2-C-2).
+     */
+    @Test
+    fun `a path that maps only in its other trailing-slash spelling is invalid, either way`() {
+        val written = load(
+            file(
+                route("GET", "/orders/", "order:list", "order"),
+                route("DELETE", "/orders/{id}", "order:delete", "order/{id}"),
+            ),
+        )
+        mapped("GET", "/orders/42").action.verb.assert().isEqualTo("read")
+        (written.resolve("GET", "/orders/") as RouteResolution.Mapped).action.verb.assert().isEqualTo("list")
+        (written.resolve("GET", "/orders") as RouteResolution.Invalid).reason.assert()
+            .contains("GET /orders/ only with a trailing /")
+        (written.resolve("HEAD", "/orders") as RouteResolution.Invalid).reason.assert().contains("with a trailing /")
+        (written.resolve("DELETE", "/orders/42/") as RouteResolution.Invalid).reason.assert()
+            .contains("DELETE /orders/{id} only without its trailing /")
+        // A path unmapped in both spellings stays unmapped, and the root has no other spelling.
+        written.resolve("POST", "/orders").assert().isEqualTo(RouteResolution.Unmapped)
+        written.resolve("GET", "/").assert().isEqualTo(RouteResolution.Unmapped)
+    }
+
     @Test
     fun `a capture that decodes to a slash never becomes a segment of a resource id`() {
         (routes.resolve("GET", "/orders/a%2Fb") as RouteResolution.Invalid).reason.assert().contains("{orderId}")
