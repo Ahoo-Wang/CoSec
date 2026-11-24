@@ -21,6 +21,7 @@ import me.ahoo.cosec.control.api.DocumentCache
 import me.ahoo.cosec.control.api.Simulator
 import me.ahoo.cosec.control.lifecycle.CandidateCompile
 import me.ahoo.cosec.control.lifecycle.LockoutCheck
+import me.ahoo.cosec.control.lifecycle.WorkBudget
 import me.ahoo.cosec.control.store.Revisions
 import me.ahoo.cosec.model.AppId
 import me.ahoo.cosec.runtime.attribute.AttributeProviders
@@ -60,10 +61,12 @@ internal object ControlChangeInputs {
         attributes: AttributeProviders,
         environment: Environment,
         properties: ControlProperties,
+        work: WorkBudget,
         documentCache: DocumentCache,
     ): LockoutCheck = ControlLockout(
         revisions,
         simulator(attributes, environment, documentCache),
         AppId(properties.appId),
+        work = work,
     )
 }

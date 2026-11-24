@@ -29,6 +29,7 @@ import me.ahoo.cosec.control.change.ControlStatus.NOT_FOUND
 import me.ahoo.cosec.control.change.InvalidControlRequestException
 import me.ahoo.cosec.control.change.requireRequest
 import me.ahoo.cosec.control.lifecycle.ControlDerived
+import me.ahoo.cosec.control.lifecycle.WorkBudget
 import me.ahoo.cosec.document.PolicyDocumentCodec
 import me.ahoo.cosec.document.json.CoSecJson
 import tools.jackson.core.JacksonException
@@ -42,6 +43,26 @@ import tools.jackson.databind.node.JsonNodeFactory
  */
 internal object ControlHttpSupport {
     val reader = CoSecJson.mapper.reader().with(StreamReadFeature.STRICT_DUPLICATE_DETECTION)
+
+    /**
+     * A POST whose body carries a document (`CTL-85`): its method and size checked, then its tree and the candidate it
+     * becomes held in [work] for [tenant] before a byte is parsed, then read as [post] reads it. A call that already
+     * holds work does not wait for this (it never does).
+     */
+    suspend inline fun postLarge(
+        request: ControlHttpRequest,
+        work: WorkBudget,
+        tenant: String,
+        block: (JsonNode) -> ControlHttpResponse,
+    ): ControlHttpResponse {
+        if (request.method != POST) return methodNotAllowed()
+        val size = (request.body?.size ?: 0).toLong()
+        requireRequest(size <= ControlDerived.MAX_BODY_BYTES) {
+            "The request body is $size bytes, over the ${ControlDerived.MAX_BODY_BYTES} this route reads."
+        }
+        work.hold(tenant, ControlDerived.bodyWeight(size))
+        return post(request, ControlDerived.MAX_BODY_BYTES, block)
+    }
 
     /**
      * A POST's body as a JSON object, given to [block]. One larger than [maxBytes] is a 400 before it is parsed

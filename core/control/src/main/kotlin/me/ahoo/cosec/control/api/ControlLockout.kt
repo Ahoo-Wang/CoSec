@@ -21,7 +21,9 @@ import me.ahoo.cosec.control.authz.ControlActions
 import me.ahoo.cosec.control.authz.ControlResources
 import me.ahoo.cosec.control.authz.Operator
 import me.ahoo.cosec.control.authz.PipelineControlAuthorizer
+import me.ahoo.cosec.control.lifecycle.ControlDerived
 import me.ahoo.cosec.control.lifecycle.LockoutCheck
+import me.ahoo.cosec.control.lifecycle.WorkBudget
 import me.ahoo.cosec.control.store.Revisions
 import me.ahoo.cosec.document.PolicyDocument
 import me.ahoo.cosec.engine.EngineRequest
@@ -59,8 +61,13 @@ class ControlLockout(
     private val simulator: Simulator = Simulator(),
     private val controlApp: AppId = PipelineControlAuthorizer.CONTROL_APP,
     private val clock: Clock = Clock.systemUTC(),
+    /**
+     * The host's work budget (`CTL-85`): the check runs within a call that holds its body's weight, so it never waits. A
+     * host passes its one budget, the plane's ([ControlPlane.work]); the default is for a check of its own, in a test.
+     */
+    val work: WorkBudget = ControlDerived.workBudget(),
 ) : LockoutCheck {
-    private val retained = RetainedDocuments(revisions, simulator.cache)
+    private val retained = RetainedDocuments(revisions, simulator.cache, work)
 
     override suspend fun check(operator: Operator, key: SnapshotKey, candidate: PolicyDocument): LockoutCheck.Lockout? {
         if (!covers(key)) {
