@@ -32,7 +32,8 @@ under a deployment between two restarts. The manifests in [`k8s/`](#kubernetes) 
   [AOT cache](#aot-cache): its runtime is 25, not 21.
 - **Required settings.** `COSEC_JWT_SECRET` (there is no default, see
   [Authentication](../integration/authentication.md)) and the Redis address, for example `SPRING_DATA_REDIS_URL`.
-- **Layout.** The application lives in `/opt/cosec-gateway-server` and runs as the unprivileged `appuser`. The
+- **Layout.** The application lives in `/opt/cosec-gateway-server` and runs as the unprivileged `appuser`, which owns
+  only its `logs/` and `data/`: the jars, the start script and the AOT cache are root's and read-only to it. The
   image's defaults are in the jar; your configuration is `config/application.yaml` (mount it there), which is read in
   addition and wins key by key, so a file that sets your routes keeps every default below. A list, such as `routes`, is
   replaced whole. The JVM options are in `bin/cosec-gateway-server` (ZGC, a 2 GiB heap). Add options through
@@ -885,12 +886,14 @@ cover them.
 ### Training your own cache
 
 Retrain whenever the jars, the JDK or the GC change. For an image built on top of this one, run the same script
-after your changes; it overwrites the cache in place:
+after your changes, as root, which owns the cache; it overwrites the cache in place. Then drop back to `appuser`:
 
 ```dockerfile
 FROM ahoowang/cosec-gateway
-COPY --chown=appuser:appgroup application.yaml config/application.yaml
+USER root
+COPY application.yaml config/application.yaml
 RUN aot-train.sh /opt/cosec-gateway-server /opt/cosec-gateway-server/aot/cosec-gateway-server.aot
+USER appuser
 ```
 
 For your own Spring Boot application on JDK 25, the same two steps apply. Run both with the class path and the JVM

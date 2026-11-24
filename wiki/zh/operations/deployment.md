@@ -22,7 +22,7 @@ CI 在每次推送到 `main`、`7.x` 和发布分支时、为每个版本标签�
   Alibaba Dragonwell 25（`dragonwell:25-ubuntu`）上，并带有 JDK 25 的 [AOT 缓存](#aot-cache)：它的运行时是 25，而不是 21。
 - **必需配置。** `COSEC_JWT_SECRET`（没有默认值，见[认证](../integration/authentication.md)）和 Redis 地址，例如
   `SPRING_DATA_REDIS_URL`。
-- **目录结构。** 应用位于 `/opt/cosec-gateway-server`，以非特权用户 `appuser` 运行。镜像的默认值在 jar 里；你的配置是 `config/application.yaml`（挂载到那里），它被追加读取并逐 key 覆盖，所以只设置路由的文件也保留下面所有默认值。列表（例如 `routes`）整体替换。JVM 参数在 `bin/cosec-gateway-server` 中（ZGC，2 GiB 堆）。通过 `JAVA_OPTS` 追加参数，它排在这些参数之后，因此会覆盖它们（[内存](#memory)）。镜像不启动 JMX agent；要附加，在 `JAVA_OPTS` 里设置并绑定到回环地址：`-Dcom.sun.management.jmxremote -Dcom.sun.management.jmxremote.port=5555 -Dcom.sun.management.jmxremote.host=127.0.0.1 -Djava.rmi.server.hostname=127.0.0.1 -Dcom.sun.management.jmxremote.authenticate=false -Dcom.sun.management.jmxremote.ssl=false`，再用 `kubectl port-forward` 或 `docker exec` 连接；`jcmd` 不需要它。
+- **目录结构。** 应用位于 `/opt/cosec-gateway-server`，以非特权用户 `appuser` 运行，它只拥有自己的 `logs/` 和 `data/`：jar、启动脚本和 AOT 缓存归 root 所有，对它只读。镜像的默认值在 jar 里；你的配置是 `config/application.yaml`（挂载到那里），它被追加读取并逐 key 覆盖，所以只设置路由的文件也保留下面所有默认值。列表（例如 `routes`）整体替换。JVM 参数在 `bin/cosec-gateway-server` 中（ZGC，2 GiB 堆）。通过 `JAVA_OPTS` 追加参数，它排在这些参数之后，因此会覆盖它们（[内存](#memory)）。镜像不启动 JMX agent；要附加，在 `JAVA_OPTS` 里设置并绑定到回环地址：`-Dcom.sun.management.jmxremote -Dcom.sun.management.jmxremote.port=5555 -Dcom.sun.management.jmxremote.host=127.0.0.1 -Djava.rmi.server.hostname=127.0.0.1 -Dcom.sun.management.jmxremote.authenticate=false -Dcom.sun.management.jmxremote.ssl=false`，再用 `kubectl port-forward` 或 `docker exec` 连接；`jcmd` 不需要它。
 - **包含什么。** 网关过滤器、Redis 快照存储（`cosec-cocache`）、追踪、Kafka 模块、ip2region，以及指标：`cosec-micrometer` 和 Prometheus 注册表，所以 `cosec.authorization`、`cosec.snapshot.*` 和[可观测性](./observability.md#metrics)中的其他指标都存在，并从管理端口的 `/actuator/prometheus` 抓取（见下）。它的默认值在 jar 里（[`application.yaml`](https://github.com/Ahoo-Wang/CoSec/blob/main/platform/gateway-server/src/main/resources/application.yaml)），关闭了 Kafka 审计（`cosec.audit.kafka.enabled: false`）、登录（`cosec.authentication.login.enabled: false`）和 ip2region（`cosec.ip2region.enabled: false`，与 [Kubernetes](#kubernetes) 的 base 一样）：读取 `ext.ip2region.*` 的文档需要 `COSEC_IP2REGION_ENABLED=true`。它没有控制面：文档由 `cosec-migrate` 或同一个 Redis 上的控制面发布，控制面或是[自己的宿主](#the-control-plane-host)，或是你应用内部的一部分。它按出厂配置不能使用 [API key](../integration/authentication.md)：`cosec.api-key.enabled=true` 会因为缺少 `MembershipProvider` Bean 而启动失败，镜像里没有它；基于它派生、带有 `MembershipProvider` Bean（cosec-cocache 的，配上你的 `MembershipLoader`，或你自己的）的镜像可以。
 - **端口。** 网关监听 **8080**，探针是 `/livez` 和 `/readyz`：Spring Boot 存活与就绪分组，由网关自己的端口提供，因此探针证明客户端使用的监听器在应答。它们不是网关路由，所以 CoSec 不对它们决策，并且在任何文档发布之前就会应答（存活 `200`，就绪 `503`）。actuator 在**管理端口 8081** 上，从不在网关的端口上：`/actuator/health`（以及 `/actuator/health/liveness`、`/readiness`）和抓取端点 `/actuator/prometheus`。CoSec 授权的是网关的路由，不是 actuator：把 8081 留在集群或主机内部，只发布给监控网络（`-p 8080:8080` 只发布网关）。8081 上的探针证明 actuator 的服务器在应答，不证明 8080 上的监听器在应答：探测 8080 上的 `/livez`。
 - **指标。** 8081 上的 `/actuator/prometheus` 包含 CoSec、Spring Cloud Gateway、JVM 和 CoCache 的指标。CoSec 的标签都是有界的（决策的 `result`、`source`、`problem`、`cause`；快照的 `kind`、`state`、`result`；监听器名）；租户、主体、路径、令牌都不会成为标签。`disk_*` 指标带有工作目录的路径。
@@ -563,12 +563,14 @@ JVM 启动时直接映射这个文件，不再重复这些工作。不需要改�
 
 ### 训练自己的缓存 {#training-your-own-cache}
 
-jar、JDK 或 GC 变化时都要重新训练。基于本镜像构建的镜像，在改动之后运行同一个脚本即可，它会原地覆盖缓存：
+jar、JDK 或 GC 变化时都要重新训练。基于本镜像构建的镜像，在改动之后以 root 身份（缓存归它所有）运行同一个脚本即可，它会原地覆盖缓存；之后切回 `appuser`：
 
 ```dockerfile
 FROM ahoowang/cosec-gateway
-COPY --chown=appuser:appgroup application.yaml config/application.yaml
+USER root
+COPY application.yaml config/application.yaml
 RUN aot-train.sh /opt/cosec-gateway-server /opt/cosec-gateway-server/aot/cosec-gateway-server.aot
+USER appuser
 ```
 
 运行在 JDK 25 上的自有 Spring Boot 应用，同样是这两步。两步都要使用生产环境的类路径和 JVM 参数，并在同一目录下运行：
