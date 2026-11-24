@@ -3,14 +3,14 @@
 # Tests: :engine:test --tests me.ahoo.cosec.engine.pattern.ReservedCharactersTest :document:test --tests me.ahoo.cosec.document.route.RouteMapTest :conformance:test --tests me.ahoo.cosec.conformance.ConformanceTest
 
 diff --git a/core/engine/src/main/kotlin/me/ahoo/cosec/engine/pattern/PatternEscapes.kt b/core/engine/src/main/kotlin/me/ahoo/cosec/engine/pattern/PatternEscapes.kt
-index 0ed4f993a..38d3b99ad 100644
+index a1b2189c1..4690a78d1 100644
 --- a/core/engine/src/main/kotlin/me/ahoo/cosec/engine/pattern/PatternEscapes.kt
 +++ b/core/engine/src/main/kotlin/me/ahoo/cosec/engine/pattern/PatternEscapes.kt
-@@ -120,7 +120,6 @@ object PatternEscapes {
-                     literal.append(escaped(pattern, text, index, offset))
-                     index++
-                 }
--                char in RESERVED -> throw reserved(pattern, offset + index, char)
-                 char in syntax -> throw InvalidPatternException(
-                     pattern,
-                     offset + index,
+@@ -122,7 +122,6 @@ object PatternEscapes {
+ 
+     /** Why [char], unescaped in a literal part, does not compile there, or null when it is text. */
+     private fun refusal(char: Char, syntax: String, refuse: (Char) -> String?): String? = when (char) {
+-        in RESERVED -> reservedReason(char)
+         in syntax -> "'$char' is no literal here; write \\$char for the character"
+         else -> refuse(char)
+     }
