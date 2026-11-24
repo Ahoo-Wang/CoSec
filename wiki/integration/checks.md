@@ -386,7 +386,11 @@ the same in process and over the network (`CTL-65`, `CTL-77`). Over the network,
 written for each call. A request's principal is written as the gateway forwards it, and the application's own principal
 as the identity the in-process implementation admits. The host believes the header because only the services you name
 reach its service port. A request's principal whose authenticator named no credential cannot be stated over the network,
-and is refused before anything is sent.
+and is refused before anything is sent. Nor can a request that has ended: a `ControlCaller` kept past its request (a
+launched job, a deferred write) is refused `403` without detail, as the check of an ended request is refused in process
+(`PIP-26`). Over the network that refusal is made before anything is sent, so it is in no host's audit: the
+application logs a `WARN` naming the principal, its tenant and the call, at most once a minute. Call as the
+application's own principal (`ControlCaller.service`) from work that outlives the request.
 
 Over the network, only a `2xx` is an answer: any other status, a redirect or a proxy's error page included, is a
 `ControlRefusedException` with that status and body. A call waits for its answer 30 seconds by default (the `timeout` of
