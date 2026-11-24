@@ -74,6 +74,7 @@ object GuardAllowlist {
             "control:StageReservationTest#a stage cancelled while writing its candidate gives the slot back and stays cancelled - #1235",
             "control:ChangeListenersTest#a gated event waits for the REQUIRED listeners, and fails with them",
             "control:MovedHeadsTest#a detection that does not finish in time is recorded for review",
+            "control:SharedReadTest#calls arriving while a load fails all fail with that one load - CTL-82",
             "spring-boot:DerivedTimeoutsTest#the values follow the deadlines an operator states",
             // CTL-81: no trust root through the service profile.
             "control:ServiceTrustRootTest#a stated platform administrator's widened catalog waits through the service port and the facade - CTL-81",
