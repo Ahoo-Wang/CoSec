@@ -174,7 +174,7 @@ change's candidate too:
 | `action` | Required, `service:verb` (`http:GET` for an unmapped HTTP request). An `http` action is read as a request's method: `http:HEAD` is decided and analyzed as `http:GET`, and a verb with a lower-case letter is `400` (`PIP-18`). |
 | `resource` | Required: `type/id`, or a path starting with `/` for an `http` resource. An `http` path is normalized as a request's path is: one enforcement refuses (a dot segment, a malformed escape, over 2,048 characters or 256 per `/` segment) is `400`, and path parameters (`;v=2`) are removed. A typed id is held to the same lengths. |
 | `remoteIp`, `time` | The client address, and an ISO instant (default: now). |
-| `principalBindings`, `breakGlass` | What the credential may use, both `true` by default (CoSec's own token). For an API key, set `breakGlass` to `false`; for a key with a role cap, set `principalBindings` to `false` too: then the attachments and principal bindings grant nothing, and their DENYs still apply. Only a boolean is accepted. |
+| `principalBindings`, `breakGlass` | What the credential may use, both `true` by default (CoSec's own token). For an API key, set `breakGlass` to `false`; for a key with a role cap, set `principalBindings` to `false` too: then the attachments and principal bindings grant nothing, and their DENYs still apply. Only a boolean is accepted. Left out, a simulation of an API key's request applies what the key could not use, so it can show permits enforcement would not give, never the reverse (DR1-F-11): state both for any credential but CoSec's own token. |
 
 The answer has `enforced`, `candidate` when one was asked for, and `differs`. Each decision is `Permit`, `Deny`,
 `Indeterminate` (with its `cause`, the kind of failure) or `Rejected` (the scope was refused, with its `reason`:
@@ -219,7 +219,8 @@ tenant to bound what such a document costs. To bound what one caller's calls cos
 
 `explain` takes the same `request`, authorized and checked as `simulate`'s, and, optionally, `at`: the document revisions a decision used, as its audit event
 records them (`{"platform": 12, "app": 3, "tenant": 4}`). It evaluates on those revisions, as long as they are still
-kept, and returns the decision with its trace, so you can see why a past request was decided as it was. Whether the app
+kept (a `410` otherwise, which names neither the document nor the revision: `at` names the platform's and an app's
+revisions too, which you may not read, DR1-F-13), and returns the decision with its trace, so you can see why a past request was decided as it was. Whether the app
 document was read is decided as enforcement decided it, with the tenant document at its recorded revision, and the
 revisions it answers with are those it read: no `app` member when it read no app document, never a `null`. The `version` an `explain` answers with can be sent back as `at`. Its fields and how to find the
 request are in [Checks in code](../integration/checks.md).
@@ -432,9 +433,11 @@ A listing by state is decided before anything is read, as [listing documents](#l
 
 Each request reads at most four pages of changes, whatever you may see. When it reaches that bound first, it answers
 the changes it found, a short or empty page, with a `next` to go on from where it stopped. So an empty page with a
-`next` is not the end: follow `next` until it is `null`. That `next` may point at a change you may not see. It tells you
-only that some document of a layer you may list has an open change in that state, and that change is still a `404` by
-id. A listing by document reads that document's open changes only, and its `next` is always a change you see.
+`next` is not the end: follow `next` until it is `null`. That `next` may point at a change you may not see, and since it
+is an encoding of the position (the change's document and id), it shows that change's id to whoever decodes it: listing
+with `limit=1`, a principal of a tenant can count the open changes of its tenant's document in each state, and learn
+their ids, without `cosec:read` (DR1-E-8). Nothing else of such a change is told: it is still a `404` by id. An opaque
+position is for 8.1. A listing by document reads that document's open changes only, and its `next` is always a change you see.
 
 ### Listing cursors {#listing-cursors}
 
@@ -747,7 +750,9 @@ else what it would wait on.
 
 ## Publishing and rolling back
 
-`POST /changes/{id}:publish` publishes a `READY` change. When its window saw `WIDENED`, `NARROWED`,
+`POST /changes/{id}:publish` publishes a `READY` change. It answers `200` with the change whatever came of it: read
+its `state`, which is `PUBLISHED` only when it was published, never only the status (DR1-F-12; a recheck may leave it
+`CONFLICTED`, `DRAFT` or `AWAITING_APPROVAL`, as below). When its window saw `WIDENED`, `NARROWED`,
 `BECAME_INDETERMINATE`, `BECAME_DENIED` or `OBLIGATIONS_CHANGED` requests, or closed as insufficient, the publisher must acknowledge exactly those numbers, or
 the answer is `428`:
 
@@ -763,6 +768,8 @@ with the candidate in place, the operator's request in progress as the pipeline 
 memberships, headers and time), and `cosec:publish` on the document in the control app. A change that would keep
 the operator out carries a `V4` `WARNING` at proposal; at publish, checked for the publisher, it is a `422` unless they
 acknowledge it with `"lockout": true` in the publish's body, which the change then records with who acknowledged it.
+The finding names the statement that decides only to an operator who may read the document its policy is defined in, as
+`simulate` shows one (`CTL-51`); to another it says which request would be denied, without the statement (DR1-F-13).
 Moving the control API to another path, role or policy is a legitimate handover: acknowledge it, or do it in two
 changes (add the new way in, publish, then remove the old). The way back from a lock-out is
 [`cosec-migrate restore`](../operations/storage.md#recovering-from-a-lock-out). The check's limits:
