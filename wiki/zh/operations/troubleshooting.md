@@ -277,6 +277,10 @@ CoSec 自己的拒绝很容易区分：它们总是 `application/problem+json`�
 - **无法解码的常驻记录**会让控制面主机以 `WARN` 记录 `The resident documents of instance [<instance>] do not read:
   propagation counts it unknown (<why>).`，至多每 5 秒一次。`<why>` 中是更晚的格式时，说明该实例的版本比控制面主机新
   （升级控制面）；其他情况是损坏的值：重启或停止那个实例，它的下一次写入会替换掉它。
+## 更新的版本写的记录 {#a-record-a-later-version-wrote}
+
+滚动升级期间，某个实例以 `WARN`（每分钟最多一次）记录 `The session store could not <operation>: a later CoSec wrote the session record (members [<path>] in its crit) ...`，并且 `cosec.stored.refused{reason="later"}` 上升。一个更新的实例写下了带有这个旧实例不认识、又不能忽略的成员的记录（`SNP-27`）：旧实例拒绝这一条记录，读它的刷新、登出或切换答 `503`，会话保留，绝不改写它。存储没有问题。升级这个实例；升级后的实例能读这条记录。如果上升的是 `cosec.stored.refused{reason="malformed"}`，说明有记录不成其为该类记录：检查存储，以及 CoSec 之外向它写入的东西（[存储](./storage.md#record-formats)）。
+
 ## 网关之后的服务拒绝请求 {#a-service-behind-the-gateway-refuses-requests}
 
 [`cosec.pipeline.mode=gateway`](./configuration.md#pipeline) 的服务从网关转发的 `CoSec-Identity` 头读取调用方。没有该头的请求按匿名

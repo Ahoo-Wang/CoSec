@@ -390,6 +390,16 @@ document at an older revision. The causes, in the order to check them:
   format in `<why>` is an instance on a newer version than the control host (upgrade the control plane); anything else
   is a corrupt value: restart or stop that instance, whose next write replaces it.
 
+## A record a later version wrote {#a-record-a-later-version-wrote}
+
+During a rolling upgrade, an instance logs at `WARN`, at most once a minute, `The session store could not <operation>: a
+later CoSec wrote the session record (members [<path>] in its crit) ...`, and `cosec.stored.refused{reason="later"}`
+rises. A newer instance wrote a record with a member this older one does not know and must not ignore (`SNP-27`): it
+refuses that one record, answers the refresh, logout or switch that read it `503`, and keeps the session, never
+rewriting it. Nothing is wrong with the store. Upgrade the instance; an upgraded one reads the record. If
+`cosec.stored.refused{reason="malformed"}` rises instead, a record is not one of its kind: look at the store and at
+whatever writes to it besides CoSec ([Storage](./storage.md#record-formats)).
+
 ## A service behind the gateway refuses requests
 
 A service in [`cosec.pipeline.mode=gateway`](./configuration.md#pipeline) reads the caller from the `CoSec-Identity`

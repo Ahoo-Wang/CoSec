@@ -32,6 +32,7 @@ import me.ahoo.cosec.annotations.InternalCoSecApi
 @InternalCoSecApi
 class StoredMembers(val record: StoredRecord, val members: List<Member>) {
     /** What a reader takes a member's absence for. */
+    @InternalCoSecApi
     enum class WhenAbsent {
         /** The record does not read: refused as malformed. */
         REFUSED,
@@ -53,6 +54,7 @@ class StoredMembers(val record: StoredRecord, val members: List<Member>) {
      * One member: its [path] (names joined by `.`; through an array, each element's member), what its absence is read
      * as, and whether ignoring it, or dropping it in a rewrite, would widen what is decided or kept.
      */
+    @InternalCoSecApi
     class Member(
         val path: String,
         val whenAbsent: WhenAbsent,

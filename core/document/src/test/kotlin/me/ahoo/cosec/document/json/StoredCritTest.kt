@@ -23,8 +23,6 @@ import me.ahoo.cosec.spi.snapshot.SnapshotFormatException
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
-import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.ValueSource
 
 /**
  * SNP-27: a stored record's `crit` names the members a reader must understand. One this version does not know refuses
@@ -76,9 +74,9 @@ class StoredCritTest {
         counted(StoredRefusals.Reason.LATER).assert().isEqualTo(before + 1)
     }
 
-    @ParameterizedTest
-    @ValueSource(
-        strings = [
+    @Test
+    fun `a crit that is not one, or a record that is not one, is malformed, and counts as malformed`() {
+        for (json in listOf(
             """{"id":"c1","crit":"id"}""",
             """{"id":"c1","crit":[1]}""",
             """{"id":"c1","crit":["a..b"]}""",
@@ -89,18 +87,22 @@ class StoredCritTest {
             """{"id":"c1","crit":["a","b","c","d","e","f","g","h","i","j","k","l","m","n","o","p","q"]}""",
             """{"format":0,"id":"c1"}""",
             """[]""",
-        ]
-    )
-    fun `a crit that is not one, or a record that is not one, is malformed, and counts as malformed`(json: String) {
-        val before = counted(StoredRefusals.Reason.MALFORMED)
-        val refusal = refused(json)
-        StoredFormat.later(refusal).assert().isNull()
-        counted(StoredRefusals.Reason.MALFORMED).assert().isEqualTo(before + 1)
+        )) {
+            val before = counted(StoredRefusals.Reason.MALFORMED)
+            val refusal = refused(json)
+            StoredFormat.later(refusal).assert().describedAs(json).isNull()
+            counted(StoredRefusals.Reason.MALFORMED).assert().describedAs(json).isEqualTo(before + 1)
+        }
     }
 
     @Test
     fun `a path is printed printably, and a member is listed once`() {
         refused("""{"id":"c1","crit":["dev"]}""").message.assert().contains("[dev]")
-        assertThrows<IllegalArgumentException> { StoredMembers(StoredRecord.CHANGE, listOf(required("a"), required("a"))) }
+        assertThrows<IllegalArgumentException> {
+            StoredMembers(
+                StoredRecord.CHANGE,
+                listOf(required("a"), required("a"))
+            )
+        }
     }
 }

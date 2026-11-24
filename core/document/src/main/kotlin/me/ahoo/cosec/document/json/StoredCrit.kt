@@ -51,11 +51,20 @@ internal object StoredCrit {
         for (index in 0 until node.size()) {
             val entry = node.get(index)
             val path = entry.takeIf { it.isString }?.stringValue()
-            if (path == null || !PATH.matches(path)) throw malformed(what, "its $MEMBER[$index] is not the path of a member")
+            if (path == null || !PATH.matches(path)) {
+                throw malformed(
+                    what,
+                    "its $MEMBER[$index] is not the path of a member"
+                )
+            }
             if (!seen.add(path)) throw malformed(what, "its $MEMBER[$index] repeats a member")
             when {
                 path !in members.byPath -> (unknown ?: ArrayList<String>().also { unknown = it }).add(path)
-                !holds(root, path.split('.'), 0) -> throw malformed(what, "its $MEMBER[$index] names a member it does not hold")
+                !holds(
+                    root,
+                    path.split('.'),
+                    0
+                ) -> throw malformed(what, "its $MEMBER[$index] names a member it does not hold")
             }
         }
         unknown?.let { paths ->
@@ -75,5 +84,7 @@ internal object StoredCrit {
         else -> holds(node.get(names[at]), names, at + 1)
     }
 
-    private fun malformed(what: String, reason: String) = SnapshotFormatException("A stored $what is malformed: $reason.")
+    private fun malformed(what: String, reason: String) = SnapshotFormatException(
+        "A stored $what is malformed: $reason."
+    )
 }

@@ -31,6 +31,14 @@ Which preview of the library may run behind which preview of the gateway image: 
 
 ## From 8.0.0-beta.8 {#from-8-0-0-beta-8}
 
+- **A stored record's `crit` names what a reader must understand** (`SNP-27`, `SNP-28`, `SNP-29`, `OBS-12`). Affected:
+  nothing stored by 8.0.0-beta.8, which writes no `crit`; this preview writes none either. A session record whose `crit`
+  names a member this version does not know, which a later version may write, is refused: the refresh, logout or switch
+  that read it is answered `503` and the session kept, never rewritten, until an upgraded instance reads it. The same
+  holds for a later format, which `IDN-31` described as ending the session: it was always a `503`, and the session was
+  kept. Format numbers change only with a major version: within 8.x a session is format 2 at most and every other record
+  format 1. New meter: `cosec.stored.refused{record, reason}`
+  ([Storage](./storage.md#record-formats), [Observability](./observability.md)).
 - **Breaking: logging out of a switched session ends the login it came from** (`IDN-40`). Affected: a user who
   switches tenant and then logs out. A logout ended only the session it was given: after a switch, the login's own
   session lived on on the server, refreshable by whoever held its pair, until its refresh token expired, though the
