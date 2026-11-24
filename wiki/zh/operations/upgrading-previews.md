@@ -27,6 +27,7 @@ description: "每个 8.0 预览版（alpha 与 beta）到下一个之间的变�
 
 ## 从 8.0.0-beta.7 升级 {#from-8-0-0-beta-7}
 
+- **`HttpControlService` 拒绝已结束的请求**（`CTL-77`、`PIP-26`，DR1-F-2）。受影响的：把 `ControlCaller.of(context)` 保留到请求之后的应用（启动的任务、延后的写入）。经 HTTP 时它此前一直以该用户身份行事，直到凭证过期，登出之后也是；现在与进程内一样以 `403` 拒绝，在发出任何请求之前，并记 `WARN`。这类工作请以应用自己的主体调用（`ControlCaller.service`）。
 - **对基于 CoSec 镜像构建的镜像是破坏性变更：应用的文件归 root 所有**（DR1-G-8）。受影响的是 `FROM` 网关或控制面镜像、
   并以 `appuser` 身份在 `/opt/<app>` 下写文件（包括重新训练 AOT 缓存）的 Dockerfile。进程现在只拥有 `logs/` 和 `data/`，
   被诱使写文件的进程无法替换自己的 jar。这些步骤前切到 `USER root`，之后切回 `USER appuser`

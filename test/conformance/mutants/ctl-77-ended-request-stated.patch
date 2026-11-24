@@ -1,0 +1,15 @@
+# Rule: CTL-77
+# Mutant: the mapping of a request's caller states a request that has ended, so over HTTP a caller kept past its request acts as its user
+# Tests: :spring-boot:test --tests me.ahoo.cosec.spring.boot.control.ControlServiceParityTest
+
+diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/identity/IdentityIssuer.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/identity/IdentityIssuer.kt
+--- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/identity/IdentityIssuer.kt
++++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/identity/IdentityIssuer.kt
+@@ -52,7 +52,6 @@ class IdentityIssuer(
+      * ended (`PIP-26`, DR1-F-2): only a request in progress is stated, so a caller kept past its request acts as no one.
+      */
+     fun issue(security: RequestSecurity): String? {
+-        if (!security.inProgress) throw RequestEndedException(security.requestId)
+         val principal = security.principal ?: return null
+         val credential = principal.credential ?: return null
+         val identity = Identity(
