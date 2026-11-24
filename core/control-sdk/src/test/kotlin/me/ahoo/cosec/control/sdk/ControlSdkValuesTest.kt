@@ -51,6 +51,21 @@ class ControlSdkValuesTest {
         ControlCaller.NOT_COSEC_CONTEXT.assert().contains("PIP-29")
     }
 
+    /** DR1-F-18: a service caller is held in process to what `CoSec-Identity` holds it to over HTTP. */
+    @Test
+    fun `a service caller that CoSec-Identity would not carry is refused when made`() {
+        val refused = listOf(
+            { ControlCaller.service("") },
+            { ControlCaller.service("\t") },
+            { ControlCaller.service("svc\uD800") },
+            { ControlCaller.service("svc-iam", setOf("")) },
+            { ControlCaller.service("svc-iam", setOf("auditor", "r\uDC00")) },
+        )
+        refused.forEach { assertThrownBy<IllegalArgumentException> { it() }.message().doesNotContain("?") }
+        val spaced = ControlCaller.service(" svc ", setOf("a b", "auditor@team"))
+        spaced.roles.assert().containsExactly("a b", "auditor@team")
+    }
+
     @Test
     fun `a state this version knows reads as itself, and one it does not keeps its text`() {
         ChangeState.KNOWN.forEach { ChangeState.of(it.text).assert().isSameAs(it) }
