@@ -14,13 +14,14 @@
     {
       "id": "CTL-2",
       "source": "RFC 0007 §5.4",
-      "statement": "The revision record is written before the head, and the head carries its parent. The head write is the commit point: a store's own timeout after it is a failure of what follows the write, never the publish's outcome or the caller's cancellation.",
+      "statement": "The revision record is written before the head, and the head carries its parent. The head write is the commit point: a store's own timeout after it is a failure of what follows the write, never the publish's outcome or the caller's cancellation, and so is a change that kept moving while it was settled: either is a 503 saying the revision is written and publishing the change again settles it, never a 409 (DR1-E-7).",
       "level": "control",
       "guards": [
         "control:RevisionsTest",
         "cocache:RevisionChainTest",
         "control:CommittedRevisionTest#a store timeout indexing a written head still answers published - #1263",
         "control:CommittedRevisionTest#a store timeout settling a published change says it is written, and a retry settles it - #1263",
+        "control:PublishedNotExpiredTest#a publish whose settling kept conflicting after the head write answers 503, written",
         "control:CommittedRevisionTest#a caller cancelled before the head write is cancelled and writes no head - #1263"
       ],
       "pending": null
@@ -457,7 +458,7 @@
     {
       "id": "CTL-34",
       "source": "RFC 0007 §6.1; #1545",
-      "statement": "A read that ends a change past its expiry is not a command: it moves an open change from the state it is in now, and when another caller moved the change first it answers the change as it is, the EXPIRED the other made or the state it was finished in, never a 409. A command still refuses an expired change (CTL-33).",
+      "statement": "A read that ends a change past its expiry is not a command: it moves an open change from the state it is in now, and when another caller moved the change first it answers the change as it is, the EXPIRED the other made or the state it was finished in, never a 409. A command still refuses an expired change (CTL-33). A change whose own revision is in effect is published, whatever its time: the read settles it PUBLISHED, as a retried publish does, and never records it EXPIRED while its revision decides; publishing a change recorded EXPIRED so, before this rule, settles it too (DR1-E-7).",
       "level": "control",
       "guards": [
         "control:ExpiryRaceTest#two readers of a change that has just expired both read it expired",
@@ -465,7 +466,10 @@
         "control:ExpiryRaceTest#a change that moved to another open state meanwhile is expired from where it is",
         "control:ExpiryRaceTest#a pass that listed the change before another reader expired it reads it expired",
         "control:ExpiryRaceTest#a change that keeps changing under the read is a 409 after the attempts, never a guess",
-        "control:ExpiryRaceTest#a command still refuses an expired change with a 409 of its own"
+        "control:ExpiryRaceTest#a command still refuses an expired change with a 409 of its own",
+        "control:PublishedNotExpiredTest#a change whose own revision is in effect is settled published when its expiry comes, never expired",
+        "control:PublishedNotExpiredTest#a change no revision of which is in effect still expires",
+        "control:PublishedNotExpiredTest#a change recorded expired while its revision was in effect is settled by publishing it"
       ],
       "pending": null
     },
