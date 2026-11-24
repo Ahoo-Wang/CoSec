@@ -48,8 +48,14 @@ class InstanceStatus(
      * such member and reads as true: it shadows, and acknowledges nothing.
      */
     val shadows: Boolean = true,
+    /**
+     * The CoSec release this instance runs (`8.0.0-beta.9`, RFC 0014 R5, `SNP-25`): what a later release reads to know
+     * what this one understands, without this one telling it anything else. Null when a status does not say, as one of
+     * a release before it does not: such an instance counts as the GA baseline, the oldest a publish may wait for.
+     */
+    val release: String? = RELEASE,
 ) {
-    private fun fields(): List<Any?> = listOf(instance, at, formatLevel, windows, shadows)
+    private fun fields(): List<Any?> = listOf(instance, at, formatLevel, windows, shadows, release)
 
     override fun equals(other: Any?): Boolean = other is InstanceStatus && other.fields() == fields()
 
@@ -65,5 +71,16 @@ class InstanceStatus(
         @JvmField
         @Suppress("MayBeConst") // on purpose: a const is inlined into the caller's class file
         val FORMAT_LEVEL: Int = 1
+
+        /** Where the build writes the release ([RELEASE]): `cosec-spi`'s own resource, so a repackaged jar keeps it. */
+        const val RELEASE_RESOURCE: String = "META-INF/cosec/release"
+
+        /**
+         * The CoSec release of this process, from [RELEASE_RESOURCE]; null when the resource is not on the class path,
+         * which a status then reports as an unknown release.
+         */
+        @JvmField
+        val RELEASE: String? = InstanceStatus::class.java.classLoader?.getResource(RELEASE_RESOURCE)
+            ?.readText()?.trim()?.takeIf { it.isNotEmpty() }
     }
 }

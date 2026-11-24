@@ -513,6 +513,16 @@ Meters, each tagged `listener`:
 decode: each such instance holds every shadow window until its status reads or expires (`CTL-73`), and the log names it
 ([Troubleshooting](./troubleshooting.md#shadow-window-waiting-for-an-acknowledgement)). Alert on any.
 
+**The readers of the store** (`SNP-25`). Every CoSec process with `cosec-cocache` writes its status, with the release it
+runs. `cosec.instance.status.failed` (a counter, no tags, on that process) counts its status writes that failed: the
+control plane cannot see it among the readers, usually a Redis user without write permission on its own
+`<s>:shadow:status:<instance>` ([Storage](./storage.md#who-may-write-which-keys)). Alert on any. The
+`cosecInstanceStatus` health indicator shows its `instance`, `release`, `lastWritten`, and `failingSince` with
+`failedWrites` while writes fail; it is always `UP` and belongs in no readiness group. On a control host,
+`cosec.control.instances.releases` (a gauge, no tags) is how many releases the readers of the last hour ran at the last
+read of them (`GET /instances`, [Testing policies](../policies/testing.md#instances)): above 1 for longer than a rolling
+upgrade takes is an instance of an old release still reading the store.
+
 `cosec.control.revisions.records` and `cosec.control.revisions.bytes` (gauges, no tags) are the revision records the
 documents retain and their stored bytes, and `cosec.control.changes.open` the open changes (`CTL-84`). The reclamation
 pass sets them, every hour: only the instance that holds the pass's lease reads every document, so only it reports what

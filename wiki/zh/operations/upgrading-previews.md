@@ -28,6 +28,8 @@ description: "每个 8.0 预览版（alpha 与 beta）到下一个之间的变�
 
 ## 从 8.0.0-beta.8 升级 {#from-8-0-0-beta-8}
 
+- **每个带 `cosec-cocache` 的 CoSec 进程都写自己的状态，并带上发布版本**（`SNP-25`，RFC 0014 R5）。受影响的是：控制面主机（`cosec-control` 镜像）、网关后面的 IAM 服务（`cosec.pipeline.mode=gateway` 且开着 JWT），以及设了 `cosec.authorization.shadow.enabled=false` 且 Redis 用户被裁掉了影子键的数据面实例，它们的 Redis 用户。它们现在都写 `<s>:shadow:status:<instance>`、`<s>:shadow:resident:<instance>` 和 `<s>:shadow:instances:*`（关闭影子时为 `shadows: false`：没有窗口等待它）。给这些用户以上键的写权限（[谁可以写哪些 key](./storage.md#who-may-write-which-keys)）。没有这个权限的进程照常启动和服务：它以 `ERROR` 记一次缺的权限，计入 `cosec.instance.status.failed`，控制面看不见它。状态现在保留一小时（原为两分钟）；实例仍然只在拥有最近一分钟内的状态时才算存活。因此已经下线的实例若留下无法解码的状态，会挡住影子窗口最多一小时（`CTL-73`）：停掉该实例并删除它的状态键，或让窗口在 `max-duration` 时关闭。`GET /instances` 列出读方及其版本（[测试策略](../policies/testing.md#instances)）；`propagation` 现在也计入控制面主机和它持有的文档。
+
 - **破坏性：登出切换出来的会话，会连同它出自的登录一起结束**（`IDN-40`）。受影响的是切换租户后再登出的用户。以前登出只结束交给它的那个会话：切换之后，登录自己的会话在服务端仍然活着，客户端虽已不再持有它的令牌对，持有那一对的人仍可刷新它，直到刷新令牌过期。现在登出切换出来的会话，无论经由提供的路由，还是用访问令牌或令牌对调用 `TokenRevoker.revoke`，都先吊销登录的会话，再结束切换出来的会话：用户在所有设备上退出那个登录，从它切换出来的其他会话在下一次刷新或切换时结束。应答不变（`204`、`401`、`503`：`contract/` 没有变）；`503` 现在也表示登录没能被吊销，客户端像以前一样再次登出。在 8.0.0-beta.8 上已经登出过的切换会话保留它的登录：再次登出它会被当作已完成应答，不吊销任何东西。那个登录在它自己被登出、被吊销（[`revokeSubject`](../integration/authentication.md#revoking-every-token-of-a-principal)）或超过生命周期时结束（[切换租户与应用](../integration/authentication.md#switching-tenant-and-app)）。
 
 ## 从 8.0.0-beta.7 升级 {#from-8-0-0-beta-7}

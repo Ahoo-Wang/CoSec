@@ -18,6 +18,7 @@ import me.ahoo.cocache.core.memory.InMemoryBackend
 import me.ahoo.cosec.jwt.JwtSigning
 import me.ahoo.cosec.login.token.TokenConverter
 import me.ahoo.cosec.testkit.IdentityHeader
+import me.ahoo.cosec.spring.boot.pipeline.InstanceReporting
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Test
@@ -156,11 +157,14 @@ class ControlServerTest {
     }
 
     @Test
-    fun `a control server writes no instance status, and takes no part in a shadow window`() {
+    fun `a control server reports a status that does not shadow, and takes no part in a shadow window`() {
         val statement = "--cosec.pipeline.identity.only-trusted-callers-can-reach=true"
         val server = start(statement)
         server.containsBean("cosecShadowReporting").assert().isFalse()
         server.containsBean("cosecShadowListener").assert().isFalse()
+        // SNP-25: it reads the documents, so it is a reader of the store, and reports itself as one, not shadowing.
+        val reporting = server.getBean(InstanceReporting::class.java)
+        reporting.reporter.drivenByShadows.assert().isFalse()
         server.close()
         // The same names are there when shadow is switched on, so the absence above is the switch's and not a rename's.
         val shadowed = start(statement, "--cosec.authorization.shadow.enabled=true")

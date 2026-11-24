@@ -272,7 +272,7 @@ How windows work: [Testing changes](../policies/testing.md).
 
 | Property | Type | Default | Effect |
 |---|---|---|---|
-| `cosec.authorization.shadow.enabled` | boolean | `true` | Evaluate sampled requests again on the staged candidates, and write this instance's reports and status to Redis. Off, this instance's traffic counts for nothing in a window, a candidate it cannot compile does not block one, and it writes no status for the propagation view. |
+| `cosec.authorization.shadow.enabled` | boolean | `true` | Evaluate sampled requests again on the staged candidates, and write this instance's reports to Redis. Off, this instance's traffic counts for nothing in a window and a candidate it cannot compile does not block one. Its status is written either way (`shadows: false` when off, `SNP-25`): every process with `cosec-cocache` reports itself as a reader of the store. |
 | `cosec.authorization.shadow.sample-rate` | double, `0` to `1` | `0.1` | Share of requests evaluated again on the candidates, off the request path. |
 | `cosec.authorization.shadow.instance-id` | string | a random UUID | The prefix of this instance's id in reports and statuses: the id is `<instance-id>.<suffix>`, with a suffix new at every start, so the id is unique per process start. A restarted process therefore never replaces the reports of the one before it, whose `CANDIDATE_ERROR` would otherwise vanish and unblock a window. An ACL confines an instance to its keys with `<instance-id>.*` ([Storage](./storage.md#who-may-write-which-keys)). Only letters, digits, `.`, `_` and `-`, since it ends a Redis key. Any other id fails startup. |
 

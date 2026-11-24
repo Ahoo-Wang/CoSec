@@ -218,10 +218,15 @@ class CoSecSnapshotAutoConfiguration {
     )
     @InternalCoSecApi
     class Shadow {
+        /** Under the instance id the status is written with (`SNP-25`): one instance, one set of keys. */
         @Bean
         @ConditionalOnMissingBean
-        fun cosecShadowRecorder(properties: RuntimeAuthorizationProperties): ShadowRecorder =
-            ShadowRecorder(ShadowInstanceId.forThisStart(properties.shadow.instanceId))
+        fun cosecShadowRecorder(
+            reporting: ObjectProvider<InstanceReporting>,
+            properties: RuntimeAuthorizationProperties,
+        ): ShadowRecorder = ShadowRecorder(
+            reporting.ifAvailable?.reporter?.instance ?: ShadowInstanceId.forThisStart(properties.shadow.instanceId)
+        )
 
         /**
          * Candidates read through the control plane's store on a host that runs it (both would own the one candidate
@@ -245,6 +250,12 @@ class CoSecSnapshotAutoConfiguration {
             return CachingCandidateSource(store, compiler::compileCandidate)
         }
 
+        /** The status configuration's, when it runs ([CoSecInstanceStatusAutoConfiguration]); otherwise this one. */
+        @Bean
+        @ConditionalOnMissingBean
+        fun cosecShadowReports(factory: CoCacheFactory, cosec: CoSecProperties): CoCacheShadowReports =
+            CoCacheShadowReports.create(factory, cosec.keyPrefix)
+
         @Bean
         @ConditionalOnMissingBean
         fun cosecShadowListener(
@@ -261,15 +272,6 @@ class CoSecSnapshotAutoConfiguration {
             views = DocumentSnapshotViews(source, platformRequired = true),
         )
 
-        /** Shared with the control plane on a host that runs it, which reads the reports this writes. */
-        @Bean
-        @ConditionalOnMissingBean
-        fun cosecShadowReports(
-            factory: CoCacheFactory,
-            cosec: CoSecProperties,
-        ): CoCacheShadowReports =
-            CoCacheShadowReports.create(factory, cosec.keyPrefix)
-
         /**
          * Reports every report interval ([DerivedSnapshotSettings.reportInterval]). A window is forgotten once its candidate is no longer staged and its last
          * report is written (#1210), as read from the store of record [candidates] reads from; with an application's own
@@ -284,13 +286,17 @@ class CoSecSnapshotAutoConfiguration {
             environment: Environment,
             candidates: CandidateSource,
             stores: ObjectProvider<CandidateStore>,
+            status: ObjectProvider<InstanceReporting>,
         ): ShadowReporting {
             val clock = Clock.systemUTC()
             val installed = { installedDocuments(source.entries()) }
             val interval = DerivedSnapshotSettings.reportInterval(environment)
             val caching = candidates as? CachingCandidateSource
             val store = caching?.store ?: stores.ifUnique
-            return ShadowReporting(ShadowReporter(recorder, sink, installed, clock, interval, store, caching))
+            // The status and the resident documents are written by the host's reporter, after this cycle's reports.
+            return ShadowReporting(
+                ShadowReporter(recorder, sink, installed, clock, interval, store, caching, status = status.ifAvailable?.reporter)
+            )
         }
 
         @InternalCoSecApi
@@ -335,7 +341,10 @@ class CoSecSnapshotAutoConfiguration {
         routes: ObjectProvider<RouteMap>,
         resources: ResourceLoader,
         environment: Environment,
+        status: ObjectProvider<InstanceReporting>,
     ): SnapshotSource<CompiledDocument, CompiledDocument> {
+        // The instance reports before it reads a document (SNP-25): creating the reporting writes the first status.
+        val reporting = status.ifAvailable
         val snapshot = properties.snapshot
         // A third each with the control plane's source and cache (DR1-F-5); a const, inlined: cosec-control stays optional.
         val sources = if (ControlPlaneCondition.wired(resources.classLoader, environment)) DOCUMENT_HOLDERS else 1
@@ -352,6 +361,7 @@ class CoSecSnapshotAutoConfiguration {
         compiler.bind(source)
         // The loads start where the source is made, not in cosecDocumentReadiness: an application may replace that
         // bean, and a lazily initialized context makes it late. Both instances ask of the same keys (prewarmKeys).
+        reporting?.reporter?.installed = { Shadow.installedDocuments(source.entries()) }
         DocumentReadiness(source, properties.prewarmKeys()).start()
         return source
     }

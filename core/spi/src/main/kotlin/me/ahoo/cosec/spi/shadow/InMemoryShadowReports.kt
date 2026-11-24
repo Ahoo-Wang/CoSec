@@ -41,8 +41,10 @@ class InMemoryShadowReports(private val clock: Clock = Clock.systemUTC()) : Shad
 
     override suspend fun reports(window: String): List<ShadowReport> = reports[window]?.values?.toList().orEmpty()
 
-    override suspend fun statuses(): List<InstanceStatus> {
-        val since = clock.instant().minus(ShadowReportReader.STATUS_TTL)
+    override suspend fun statuses(): List<InstanceStatus> = since(ShadowReportReader.STATUS_TTL)
+
+    private fun since(ttl: java.time.Duration): List<InstanceStatus> {
+        val since = clock.instant().minus(ttl)
         return statuses.values.filter { !it.at.isBefore(since) }
     }
 
@@ -55,4 +57,8 @@ class InMemoryShadowReports(private val clock: Clock = Clock.systemUTC()) : Shad
 
     /** Every recent status: one kept in memory is never one that does not decode. */
     override suspend fun statusReadings(): StatusReadings = StatusReadings(statuses(), emptySet())
+
+    /** Every status written within [ShadowReportReader.READERS_TTL]. */
+    override suspend fun readerReadings(): StatusReadings =
+        StatusReadings(since(ShadowReportReader.READERS_TTL), emptySet())
 }

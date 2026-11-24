@@ -23,6 +23,7 @@ import me.ahoo.cosec.control.change.ChangeId
 import me.ahoo.cosec.control.change.ChangeState
 import me.ahoo.cosec.control.change.ConflictKind
 import me.ahoo.cosec.control.change.Escalation
+import me.ahoo.cosec.control.change.InstanceReaders
 import me.ahoo.cosec.control.change.Propagation
 import me.ahoo.cosec.control.change.Severity
 import me.ahoo.cosec.control.lifecycle.UnknownEscalations
@@ -33,6 +34,7 @@ import me.ahoo.cosec.document.json.CoSecJson
 import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.runtime.contract.ContractFiles
 import me.ahoo.cosec.runtime.http.RequestSecurity
+import me.ahoo.cosec.spi.shadow.InstanceStatus
 import me.ahoo.cosec.spi.shadow.ShadowOutcome
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.test.asserts.assert
@@ -45,7 +47,7 @@ import java.time.Instant
  * `CTL-61` (R2C-11, R2C-13): what the control API answers, as `contract/control/` states it, the way `contract/` states
  * the data plane's (`PIP-25`). The files are written from the answer codecs, never by hand: `change.json` and
  * `change-summary.json` each member of a change and of a listed change, with its JSON type and whether every answer
- * holds it; `propagation.json` the members of a revision's propagation; `vocabularies.json` the closed sets a client
+ * holds it; `propagation.json` the members of a revision's propagation; `instances.json` those of the readers of the store; `vocabularies.json` the closed sets a client
  * reads; `routes.json` the change kinds each route that moves a change writes to the audit stream, so the step a route
  * names and the event a reader of the audit finds are one pair.
  *
@@ -100,6 +102,21 @@ class ClientContractTest {
     fun `a propagation answer holds exactly the members of its contract file`() {
         val answer = ControlResponseJson.propagation(Propagation(2, 1, 2, 3, 1, Instant.parse("2026-11-20T00:00:00Z")))
         files.check("control/propagation.json", Shapes.of(listOf(answer), emptySet()))
+    }
+
+    /** `CTL-89`: the readers of the store; `releases` is a count by release, whose names are the instances'. */
+    @Test
+    fun `an instances answer holds exactly the members of its contract file`() {
+        val at = Instant.parse("2026-11-20T00:00:00Z")
+        val readers = InstanceReaders(
+            listOf(
+                InstanceStatus("gateway-a.1", at, windows = setOf("w-1"), release = "8.0.0-beta.9"),
+                InstanceStatus("iam-b.2", at.minusSeconds(600), shadows = false, release = null),
+            ),
+            setOf("control-c.3"),
+            at,
+        )
+        files.check("control/instances.json", Shapes.of(listOf(ControlResponseJson.instances(readers)), setOf("releases")))
     }
 
     @Test
@@ -182,6 +199,7 @@ class ClientContractTest {
                 "cursor.json",
                 "documents-page.json",
                 "propagation.json",
+                "instances.json",
                 "vocabularies.json",
                 "routes.json",
                 "conflict.json",

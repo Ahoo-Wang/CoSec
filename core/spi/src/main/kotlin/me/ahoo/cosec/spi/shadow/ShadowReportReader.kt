@@ -53,6 +53,14 @@ interface ShadowReportReader {
     suspend fun statusReadings(): StatusReadings = StatusReadings(statuses(), emptySet())
 
     /**
+     * The readers of the store (RFC 0014 R5, `SNP-25`): the statuses written within [READERS_TTL] of now that read, live
+     * or not, and those listed that do not decode. What a publish will wait for (8.1), and what the control plane shows
+     * of the instances and the releases they run. The default reads [statusReadings]: an implementation that keeps
+     * statuses no longer than [STATUS_TTL] answers only the live ones.
+     */
+    suspend fun readerReadings(): StatusReadings = statusReadings()
+
+    /**
      * The resident documents of [instances] (`CTL-75`): each one's record that reads, and in
      * [ResidentReadings.unreadable] those whose record is missing or does not decode. Only `propagation` calls it, for
      * the instances its status read found live; a window's closing path never does (`CTL-74`). A store that does not
@@ -63,6 +71,16 @@ interface ShadowReportReader {
     companion object {
         /** An instance that has not written its status for this long is not counted (RFC 0007 §6.5). */
         val STATUS_TTL: Duration = Duration.ofMinutes(1)
+
+        /**
+         * How long a status is kept after its last write, and so how far back the readers of the store reach
+         * ([readerReadings], `SNP-25`). The writers of 8.0 fix it: it is the upper bound of any window a later reader
+         * may choose, while what counts as live stays [STATUS_TTL]. An hour covers an instance cut off from Redis that
+         * keeps serving on its installed documents for that long, at the cost that the last instance of an old release
+         * holds the readers back for up to an hour after it is gone; longer would hold every publish behind long-gone
+         * instances, and no finite bound covers an instance cut off for longer (RFC 0014 §4).
+         */
+        val READERS_TTL: Duration = Duration.ofHours(1)
 
         /**
          * How long a resident record lives after its last write (`CTL-75`). An instance writes it again before half of

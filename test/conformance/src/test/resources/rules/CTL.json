@@ -1028,15 +1028,15 @@
     {
       "id": "CTL-73",
       "source": "RFC 0007 §6.4 (review of 2026-11-21's merges, R3-9: availability of the shadow flow; maintainer's coordinator, 2026-11-21)",
-      "statement": "An instance status that is listed and does not decode never fails the control plane's read of the statuses: its instance counts as live and acknowledging no window, so no shadow window passes on it and the change's answer names it in `waitingFor`, while every other status is read and `propagation` answers, counting it as recent and holding no document. It stops counting when its value expires, exactly two minutes after its instance's last write (each status is written with that life, with no jitter), or, for a value stored with no life, once its instance's entry in the list of instances is older than its expiry. Each such status is logged with its instance and why, at most once a minute per instance, and counted (`cosec.control.shadow.status.unreadable`). A status under another instance's key, and a store that does not answer, still fail the read.",
+      "statement": "An instance status that is listed and does not decode never fails the control plane's read of the statuses: its instance counts as live and acknowledging no window, so no shadow window passes on it and the change's answer names it in `waitingFor`, while every other status is read and `propagation` answers, counting it as recent and holding no document. It stops counting when its value expires, exactly an hour after its instance's last write (each status is written with that life, with no jitter: the readers' reach, `SNP-25`), or, for a value stored with no life, once its instance's entry in the list of instances is older than its expiry. Each such status is logged with its instance and why, at most once a minute per instance, and counted (`cosec.control.shadow.status.unreadable`). A status under another instance's key, and a store that does not answer, still fail the read.",
       "level": "control",
       "pending": null,
       "guards": [
         "cocache:StatusReadingsTest#a status that does not decode names its instance, and every other status is read",
         "cocache:StatusReadingsTest#a status under another instance's key fails the read",
         "cocache:StatusReadingsTest#a store that does not answer fails the whole read, never reads as an unreadable status",
-        "cocache:StatusReadingsTest#an unreadable status is no longer named once its key expires, two minutes after its last write",
-        "cocache:StatusReadingsTest#a status's key lives exactly two minutes after its last write",
+        "cocache:StatusReadingsTest#an unreadable status is no longer named once its key expires, an hour after its last write",
+        "cocache:StatusReadingsTest#a status's key lives exactly an hour after its last write",
         "cocache:StatusReadingsTest#an unreadable status without a life is not named once its instance's entry in the list is old",
         "cocache:StatusReadingsTest#an unreadable status is logged at most once a minute per instance",
         "control:ShadowAcknowledgementTest#a status that does not decode holds the window and is named, and propagation still answers",
@@ -1315,6 +1315,21 @@
         "control:GroupedEscalationApprovalTest#an approval of a statement's fragments covers them, and not one more of them",
         "control:EscalationBoundsTest#a proposal of tens of thousands of unproven fragments records a bounded list - CTL-88",
         "control:ClientContractTest#a change's escalations follow the bounds of their contract file - CTL-88"
+      ],
+      "pending": null
+    },
+    {
+      "id": "CTL-89",
+      "source": "RFC 0014 R5, G3 (the newer side sees the older one; maintainer's decision of 2026-11-24 through the coordinator)",
+      "statement": "`GET /instances` answers the readers of the store: every instance with a status written in the last hour, each with its `instance`, its `release` (absent when its status names none), `formatLevel`, `at`, whether it is `live` (a status in the minute before `asOf`) and whether it `shadows`; the instances whose status does not decode (`unreadable`); `releases`, how many instances run each release, `unknown` for an instance without one; and `asOf`. It is authorized as a read of the platform document and served on the operators' API only, never on the service profile; it is a GET. The statuses are read at most every 5 seconds; each time the releases of the readers change while more than one is there, the control host logs them once, and `cosec.control.instances.releases` is how many there were at the last read. What it answers is `contract/control/instances.json`.",
+      "level": "build",
+      "guards": [
+        "control:InstancesRouteTest#a platform operator reads the instances and their releases - CTL-89",
+        "control:InstancesRouteTest#a tenant's administrator is refused, and the service profile serves no such route",
+        "control:InstancesRouteTest#it is a GET",
+        "control:InstanceReadersTest#the readers are the statuses of the last hour, with their releases",
+        "control:InstanceReadersTest#a mixed deployment is said once each time its releases change",
+        "control:ClientContractTest#an instances answer holds exactly the members of its contract file"
       ],
       "pending": null
     }

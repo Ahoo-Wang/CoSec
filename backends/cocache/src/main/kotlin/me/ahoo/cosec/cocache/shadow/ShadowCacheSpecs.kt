@@ -52,8 +52,11 @@ internal object ShadowCacheSpecs {
     /** Longer than the longest window (24 hours) and the week a change may stay unpublished. */
     val REPORT_TTL: Duration = Duration.ofDays(8)
 
-    /** Statuses older than a minute are not counted (RFC 0007 §6.5); the key outlives that only to be read. */
-    val STATUS_TTL: Duration = Duration.ofMinutes(2)
+    /**
+     * A status's key lives as long as the readers of the store reach back ([ShadowReportReader.READERS_TTL], an hour,
+     * `SNP-25`); what counts as live is a status written within a minute ([ShadowReportReader.STATUS_TTL]).
+     */
+    val STATUS_TTL: Duration = ShadowReportReader.READERS_TTL
 
     /** A resident record's life ([ShadowReportReader.RESIDENT_TTL]): an instance writes it again at half of it. */
     val RESIDENT_TTL: Duration = ShadowReportReader.RESIDENT_TTL

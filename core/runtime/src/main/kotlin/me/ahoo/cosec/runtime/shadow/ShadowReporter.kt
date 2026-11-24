@@ -30,7 +30,6 @@ import me.ahoo.cosec.spi.shadow.ShadowReportSink
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import java.time.Clock
 import java.time.Duration
-import java.time.Instant
 import kotlin.coroutines.cancellation.CancellationException
 
 private val log = KotlinLogging.logger {}
@@ -62,14 +61,25 @@ class ShadowReporter(
      * path, then the windows it names for the first time, read and compiled on this coroutine (`CTL-12`).
      */
     source: CachingCandidateSource? = null,
+    /**
+     * What writes this instance's status and resident documents (`SNP-25`): the host's one, which reported before this
+     * instance read a document; by default one of its own for [recorder]'s instance.
+     */
+    status: InstanceReporter? = null,
     /** Tests only: the clock compile on sight measures its budget, one [interval] per cycle, with. */
     nanos: () -> Long = System::nanoTime,
 ) {
     private val staged = source?.staged
 
-    /** What the last resident write that succeeded held, and when; null until one has. */
-    private var lastResident: Map<SnapshotKey, Long>? = null
-    private var residentAt: Instant? = null
+    /**
+     * Writes the status and the resident documents, once a cycle after the reports, with [installed] as what this
+     * instance holds; its own loop then stays quiet.
+     */
+    val instanceReporter: InstanceReporter = (status ?: InstanceReporter(recorder.instance, sink, installed, clock))
+        .also {
+            it.drivenByShadows = true
+            it.installed = installed
+        }
     private val sight = source?.let { CompileOnSight(it, recorder, interval, nanos) }
 
     init {
@@ -95,32 +105,9 @@ class ShadowReporter(
                 recorder.forget(window.report.window, window.recorded)
             }
         }
-        writeResident()
-        val acknowledged = sight?.acknowledged()
-        attempt("the instance status") {
-            // Without CoSec's own candidate source nothing is compiled on sight: this instance cannot acknowledge a window,
-            // and says it does not shadow, so that no window waits for it (CTL-10).
-            sink.write(
-                InstanceStatus(
-                    recorder.instance,
-                    clock.instant(),
-                    windows = acknowledged,
-                    shadows = sight != null
-                )
-            )
-        }
-    }
-
-    /** Writes the resident documents when they changed since the last write that succeeded, or that write is half its life old. */
-    private suspend fun writeResident() {
-        val now = clock.instant()
-        val holding = installed()
-        val due = residentAt?.let { !now.isBefore(it.plus(ShadowReportReader.RESIDENT_TTL.dividedBy(2))) } ?: true
-        if (holding == lastResident && !due) return
-        if (attempt("the resident documents") { sink.write(ResidentDocuments(recorder.instance, now, holding)) }) {
-            lastResident = holding
-            residentAt = now
-        }
+        // Without CoSec's own candidate source nothing is compiled on sight: this instance cannot acknowledge a window,
+        // and says it does not shadow, so that no window waits for it (CTL-10).
+        instanceReporter.report(sight?.acknowledged(), shadows = sight != null)
     }
 
     /**

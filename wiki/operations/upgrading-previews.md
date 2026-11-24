@@ -31,6 +31,20 @@ Which preview of the library may run behind which preview of the gateway image: 
 
 ## From 8.0.0-beta.8 {#from-8-0-0-beta-8}
 
+- **Every CoSec process with `cosec-cocache` writes its status, with its release** (`SNP-25`, RFC 0014 R5). Affected:
+  the Redis users of a control-plane host (the `cosec-control` image), of an IAM service behind a gateway
+  (`cosec.pipeline.mode=gateway` with JWT on), and of a data-plane instance with `cosec.authorization.shadow.enabled=false`
+  whose user was trimmed to leave out the shadow keys. Each now writes `<s>:shadow:status:<instance>`,
+  `<s>:shadow:resident:<instance>` and `<s>:shadow:instances:*` (with shadowing off, `shadows: false`: no window waits
+  for it). Give their users write permission on those keys
+  ([Who may write which keys](./storage.md#who-may-write-which-keys)). One without it keeps serving and starting: it logs
+  the missing permission once at `ERROR`, counts `cosec.instance.status.failed`, and the control plane cannot see it.
+  A status is now kept an hour (it was two minutes); an instance is still live only with a status from the last minute.
+  An undecodable status of an instance that is gone therefore holds shadow windows up to an hour (`CTL-73`): stop the
+  instance and delete its status key, or let the window close at `max-duration`. `GET /instances` lists the readers and
+  their releases ([Testing policies](../policies/testing.md#instances)); `propagation` now counts a control-plane host and
+  the documents it holds.
+
 - **Breaking: logging out of a switched session ends the login it came from** (`IDN-40`). Affected: a user who
   switches tenant and then logs out. A logout ended only the session it was given: after a switch, the login's own
   session lived on on the server, refreshable by whoever held its pair, until its refresh token expired, though the

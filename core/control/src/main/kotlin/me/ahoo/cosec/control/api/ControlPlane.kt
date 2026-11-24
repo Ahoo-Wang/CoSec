@@ -24,6 +24,7 @@ import me.ahoo.cosec.control.change.ChangeId
 import me.ahoo.cosec.control.change.ChangeRequest
 import me.ahoo.cosec.control.change.ChangeState
 import me.ahoo.cosec.control.change.Confirmation
+import me.ahoo.cosec.control.change.InstanceReaders
 import me.ahoo.cosec.control.change.Operation
 import me.ahoo.cosec.control.change.Propagation
 import me.ahoo.cosec.control.change.ShadowAck
@@ -151,6 +152,12 @@ interface ControlPlane {
     suspend fun analyze(operator: Operator, query: AccessQuery): AccessReport
 
     suspend fun propagation(operator: Operator, key: SnapshotKey, revision: Long): Propagation
+
+    /**
+     * The readers of the store (`CTL-89`, RFC 0014 R5): every instance that reported in the last hour, with the release it
+     * runs. A platform operator's: authorized as a read of the platform document, since it names every instance.
+     */
+    suspend fun instances(operator: Operator): InstanceReaders
 
     @InternalCoSecApi
     companion object {

@@ -64,6 +64,7 @@ private val log = KotlinLogging.logger {}
  * | `POST /changes/{id}:rebase`, `:shadow`, `:skip-shadow`, `:approve`, `:reject`, `:abandon`, `:publish` | transitions |
  * | `POST /break-glass` (201), `POST /break-glass/{change}:approve`, `DELETE /break-glass/{bindingId}?reason=` | §8 |
  * | `POST /simulate`, `POST /explain`, `POST /analyze` | §10.3 |
+ * | `GET /instances` | `instances`: the readers of the store and their releases (`CTL-89`) |
  *
  * A document key is written `platform`, `app:order` or `tenant:acme`. `DELETE /break-glass/{bindingId}` answers 200
  * only when the binding no longer grants on the platform document's head afterwards, whoever removed it; 404 when that

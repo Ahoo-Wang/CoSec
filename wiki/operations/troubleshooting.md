@@ -584,10 +584,11 @@ The control plane logs `Shadow window <w> of change <c> is waiting for the ackno
 `GET /changes/{id}` names them in `shadow.waitingFor`: the window has its samples, or not yet, but cannot pass while a
 live instance (one with a status in the last minute) does not list it in its status (`CTL-10`). An instance cut off
 from Redis for longer than that writes no status: it is neither waited for nor acknowledging, and installs the
-published revision having compared nothing. A host with shadowing off writes no status at all.
+published revision having compared nothing. A host with shadowing off writes a status that says it does not shadow
+(`shadows: false`, `SNP-25`), and is not waited for.
 
 - **An instance of an older version** sends no acknowledgements. Finish the rolling upgrade: once the old instances are
-  gone, their statuses expire within two minutes and the window no longer waits for them.
+  gone, their statuses are a minute old within a minute, and the window no longer waits for them.
 - **An instance that cannot read the staged list** logs `The staged list cannot be read since it was at <instant>` and
   its `cosec.shadow.staged.age` rises. Fix its Redis access (the data-plane user reads `<s>:candidate-staged:all`,
   [Storage](./storage.md#redis-keys)).
@@ -595,11 +596,12 @@ published revision having compared nothing. A host with shadowing off writes no 
   the candidate.
 - **An instance whose status does not decode** counts as live and acknowledging nothing (`CTL-73`): the control host
   logs `The status of instance [<instance>] does not read: it counts as live and acknowledging no shadow window until
-  it reads or expires, at most two minutes after its last write (<why>).` at `WARN`, at most once a minute per
+  it reads or expires, at most an hour after its last write (<why>).` at `WARN`, at most once a minute per
   instance, and `cosec.control.shadow.status.unreadable` counts each read of it. An instance that stops writing
-  stops holding the windows two minutes later, when its status expires. A later format in `<why>` is a newer version during a rolling
+  stops holding the windows an hour later, when its status expires (the readers' reach, `SNP-25`). A later format in `<why>` is a newer version during a rolling
   upgrade: finish the upgrade of the control hosts, or roll that instance back. Anything else is a corrupt value or a
-  crash-looping instance: stop or fix the instance by its id; its status expires two minutes after its last write.
+  crash-looping instance: stop or fix the instance by its id; its status expires an hour after its last write, or
+  delete `<s>:shadow:status:<instance>` once the instance is stopped.
 
 If **no** instance acknowledges any window (each one's `waitingFor` names every live instance), the instances hold no
 staged list: they log `The staged list cannot be read`, or `<s>:candidate-staged:all` has no `.kept` marker (a store
@@ -607,8 +609,8 @@ the control plane staged nothing on since it was emptied; the next stage, or the
 they acknowledge within a few report intervals.
 
 Only instances that take part in shadowing are waited for. A host with `cosec.authorization.shadow.enabled=false` (the
-control-plane image sets it) writes no status at all, and one whose `CandidateSource` is your own writes a status that
-says it does not shadow: neither holds a window, and `propagation` still counts the latter.
+control-plane image sets it), and one whose `CandidateSource` is your own, write a status that says it does not shadow:
+neither holds a window, and `propagation` counts both (`SNP-25`).
 
 If `waitingFor` is empty and the window still does not close, it waits for samples: its documents get too little
 traffic, and it closes *insufficient* at `cosec.control.shadow.max-duration`

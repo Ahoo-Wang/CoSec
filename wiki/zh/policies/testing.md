@@ -301,14 +301,14 @@ flowchart LR
 - 经过 `cosec.control.shadow.min-duration`（15 分钟），实例上报的非 `BASE_MISMATCH` 样本达到 `cosec.control.shadow.min-samples`（1,000），且每个存活实例都确认了该窗口（见下文）时；
 - 到达 `cosec.control.shadow.max-duration`（24 小时）而样本不足时，状态为*证据不足*。
 
-**窗口通过之前，每个存活实例都要确认它**（`CTL-10`）。实例在暂存列表中读到窗口并编译了它的候选（或报告了 `CANDIDATE_ERROR`）之后，就在每隔一个报告间隔（默认 10 秒）写一次的状态中确认该窗口。只要还有最近一分钟内写过状态、且参与影子比较的实例没有确认，窗口就不会通过（关闭了影子比较的宿主不写状态；`CandidateSource` 是你自己的实现的宿主声明它不参与，不会被等待），并记录 `Shadow window <w> of change <c> is waiting for the acknowledgement of [<instances>]`，`GET /changes/{id}` 在 `shadow.waitingFor` 中点名这些实例。确认不是样本：样本仍只来自报告。两种不同的等待，以及各自的处理：
+**窗口通过之前，每个存活实例都要确认它**（`CTL-10`）。实例在暂存列表中读到窗口并编译了它的候选（或报告了 `CANDIDATE_ERROR`）之后，就在每隔一个报告间隔（默认 10 秒）写一次的状态中确认该窗口。只要还有最近一分钟内写过状态、且参与影子比较的实例没有确认，窗口就不会通过（关闭了影子比较的宿主，和 `CandidateSource` 是你自己的实现的宿主，都在状态中声明它不参与，不会被等待），并记录 `Shadow window <w> of change <c> is waiting for the acknowledgement of [<instances>]`，`GET /changes/{id}` 在 `shadow.waitingFor` 中点名这些实例。确认不是样本：样本仍只来自报告。两种不同的等待，以及各自的处理：
 
 - **在等待某个实例**（`waitingFor` 非空）：该实例运行的版本不发送确认（完成升级），或者它读不到暂存列表：它的日志写着 `The staged list cannot be read`，它的 `cosec.shadow.staged.age` 持续上升（[可观测性](../operations/observability.md#metrics)）。窗口期间启动的实例会在几个上报间隔内确认。
 - **在等待样本**（`waitingFor` 为空，样本低于最小值）：窗口所属文档的流量太少。等到 `max-duration`，或者给出原因跳过窗口。
 
 到达 `max-duration` 时，无论确认情况如何，窗口都以*证据不足*关闭，与样本不足时一样。
 
-**“存活”的含义。** 存活实例是最近一分钟内写过状态的实例。与 Redis 断开超过这一时长的实例不写状态，所以既不被等待，也不算作确认；它重新连上后装入已发布的修订，而它什么都没有比较过。关闭了影子的主机根本不写状态。状态已存储却无法解码的实例（反复崩溃的版本、损坏的值，或滚动升级期间这台控制面主机读不了的格式）在其状态能读取或在最后一次写入两分钟后过期之前是存活的，且什么都不确认：窗口等待它，`shadow.waitingFor` 点名它，而其他每个状态照常读取，`propagation` 把它算作最近的实例，不持有任何文档（`CTL-73`）。
+**“存活”的含义。** 存活实例是最近一分钟内写过状态的实例。与 Redis 断开超过这一时长的实例不写状态，所以既不被等待，也不算作确认；它重新连上后装入已发布的修订，而它什么都没有比较过。关闭了影子的主机写入一个声明它不参与影子的状态。状态已存储却无法解码的实例（反复崩溃的版本、损坏的值，或滚动升级期间这台控制面主机读不了的格式）在其状态能读取或在最后一次写入一小时后过期之前是存活的，且什么都不确认：窗口等待它，`shadow.waitingFor` 点名它，而其他每个状态照常读取，`propagation` 把它算作最近的实例，不持有任何文档（`CTL-73`）。
 
 在窗口上报告过的实例必须一直报告到窗口关闭。报告不见了的实例（它停止服务，或它的报告在 Redis 故障切换中丢失）是缺失的证据，而不是零个决策：看到收窄请求的可能正是它。窗口会等待它，记录 `Shadow window <w> of change <c> is waiting for [<instances>]`，无论其他实例报告了什么；实例每隔一个报告间隔重写一次累计报告，所以仍在服务的实例会回来。到达 `max-duration` 时窗口以*证据不足*关闭，摘要的 `vanished` 点名消失的实例，绝不会通过（`CTL-56`）。
 
@@ -423,8 +423,8 @@ flowchart LR
 
 ### 传播 {#propagation}
 
-`GET /documents/{key}/revisions/{revision}/propagation` 根据实例每隔几秒写入的状态（需开启
-[影子窗口](../operations/configuration.md#shadow-windows)），说明一个已发布修订到达了哪些实例。发布从不等待它。
+`GET /documents/{key}/revisions/{revision}/propagation` 根据实例每隔几秒写入的状态（每个带
+`cosec-cocache` 的 CoSec 进程都写，`SNP-25`），说明一个已发布修订到达了哪些实例。发布从不等待它。
 
 ```json
 { "revision": 5, "installed": 3, "holding": 3, "recent": 50, "unknown": 0, "asOf": "2026-11-20T09:00:04Z" }
@@ -437,6 +437,24 @@ flowchart LR
 app 的文档由服务它们的每个实例持有。实例持有的内容变化时，会在下一次写状态之前重写常驻记录，所以应答最多落后实例一个上报
 间隔。控制面主机对状态和常驻记录各自至多每 5 秒读一次，所以应答最多可能是 5 秒前的：`asOf` 说明读取的时间。读取失败时应答
 `503`，从不返回更早的结果（`CTL-62`）。判断影子窗口能否通过只读取很小的状态，从不读取常驻记录（`CTL-74`）。
+
+### 存储的读方 {#instances}
+
+`GET /instances` 列出最近一小时内报告过状态的每个 CoSec 进程（`CTL-89`、`SNP-25`）：每个带 `cosec-cocache` 的进程都报告，不论流水线模式、是否参与影子，并带上它运行的 CoSec 发布版本。这是滚动升级中新的一侧看见旧的一侧：以后的版本从这里读出哪些实例还在运行更早的版本。它属于平台运维人员（按读取平台文档授权）；服务端口不提供它。
+
+```json
+{
+  "instances": [
+    { "instance": "gateway-7c9f.k2", "release": "8.0.0-beta.9", "formatLevel": 1, "at": "2026-11-20T09:00:01Z", "live": true, "shadows": true },
+    { "instance": "iam-0.m4", "formatLevel": 1, "at": "2026-11-20T08:20:13Z", "live": false, "shadows": false }
+  ],
+  "unreadable": [],
+  "releases": { "8.0.0-beta.9": 1, "unknown": 1 },
+  "asOf": "2026-11-20T09:00:04Z"
+}
+```
+
+`live` 表示在 `asOf` 之前一分钟内写过状态，也就是影子窗口和 `propagation` 统计的实例；其余是一小时内报告过、可能仍在用已装入的文档服务的实例。状态里没有写发布版本的实例（8.0.0-beta.9 之前的版本）没有 `release`，`releases` 把它和 `unreadable` 中的每个实例（状态无法解码）一起计为 `unknown`。控制面主机在读方的版本多于一个、且版本集合变化时记一行 `Instances of <n> release(s) read this store in the last hour: ...`，`cosec.control.instances.releases` 是上次读取时的版本数（[可观测性](../operations/observability.md#metrics)）。状态最多每 5 秒读取一次，与 `propagation` 相同。
 
 ## 访问审查 {#access-reviews}
 

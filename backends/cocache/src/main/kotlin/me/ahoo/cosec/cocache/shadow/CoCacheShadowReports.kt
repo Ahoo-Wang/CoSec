@@ -41,6 +41,7 @@ import me.ahoo.cosec.spi.shadow.ShadowReportSink
 import me.ahoo.cosec.spi.shadow.StatusReadings
 import me.ahoo.cosec.spi.snapshot.SnapshotFormatException
 import java.time.Clock
+import java.time.Duration
 import java.time.Instant
 import java.util.concurrent.ConcurrentHashMap
 
@@ -244,7 +245,7 @@ class CoCacheShadowReports @InternalCoSecApi constructor(
     /**
      * Every listed status that reads and is recent, and the instances whose status does not decode (`CTL-73`). An
      * undecodable status has no `at` anyone can read, so what ends it is the store: every status is written with the
-     * key's life, [ShadowCacheSpecs.STATUS_TTL] (two minutes, renewed by each write), and once an instance stops writing
+     * key's life, [ShadowCacheSpecs.STATUS_TTL] (an hour, renewed by each write), and once an instance stops writing
      * its value expires, readable or not, and the listed instance reads as having none. A value with no life (written
      * by hand, never by CoSec) counts only while its instance's entry in the list is current
      * ([ShadowCacheSpecs.INDEX_EXPIRY]), which a gone instance no longer refreshes. Each such status is logged with
@@ -254,9 +255,13 @@ class CoCacheShadowReports @InternalCoSecApi constructor(
      */
     override suspend fun statusReadings(): StatusReadings = readStatuses(lenient = true)
 
-    private suspend fun readStatuses(lenient: Boolean): StatusReadings {
+    /** Every listed status that reads and was written within [ShadowReportReader.READERS_TTL], and those that do not decode. */
+    override suspend fun readerReadings(): StatusReadings =
+        readStatuses(lenient = true, within = ShadowReportReader.READERS_TTL)
+
+    private suspend fun readStatuses(lenient: Boolean, within: Duration = ShadowReportReader.STATUS_TTL): StatusReadings {
         val now = clock.instant()
-        val since = now.minus(ShadowReportReader.STATUS_TTL)
+        val since = now.minus(within)
         val index = read(instances, ShadowCacheSpecs.INDEX_KEY)?.first.orEmpty()
         val members = index.keys
         check(members.all(ShadowReport::isInstanceId)) { "The list of instances names an invalid instance id" }
@@ -313,7 +318,7 @@ class CoCacheShadowReports @InternalCoSecApi constructor(
         if (!claimed) return
         log.warn {
             "The status of instance [$instance] does not read: it counts as live and acknowledging no shadow window " +
-                "until it reads or expires, at most two minutes after its last write (${error.message})."
+                "until it reads or expires, at most an hour after its last write (${error.message})."
         }
     }
 

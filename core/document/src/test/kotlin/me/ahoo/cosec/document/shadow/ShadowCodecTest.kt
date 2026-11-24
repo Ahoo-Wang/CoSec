@@ -138,9 +138,30 @@ class ShadowCodecTest {
             """"windows":["c1@1"]}}"""
         val status = ShadowCodec.decodeStatuses(beta5.encodeToByteArray()).getValue("gw-1")
         status.assert().isEqualTo(
-            InstanceStatus("gw-1", Instant.parse("2026-11-21T00:00:00Z"), windows = setOf("c1@1"))
+            InstanceStatus("gw-1", Instant.parse("2026-11-21T00:00:00Z"), windows = setOf("c1@1"), release = null)
         )
         String(ShadowCodec.encodeStatuses(mapOf("gw-1" to status))).assert().doesNotContain("documents")
+    }
+
+    /**
+     * `SNP-25`: a status names the release its instance runs. One of a release before it does not, and reads as an
+     * unknown release (null), which a publish counts as the GA baseline; a release that is not a string is a format error.
+     */
+    @Test
+    fun `a status names its release, and one without it reads as an unknown release`() {
+        val at = Instant.parse("2026-11-21T00:00:00Z")
+        val status = InstanceStatus("gw-1", at, release = "8.0.0-beta.9")
+        val written = String(ShadowCodec.encodeStatuses(mapOf("gw-1" to status)))
+        written.assert().contains("\"release\":\"8.0.0-beta.9\"")
+        ShadowCodec.decodeStatuses(written.encodeToByteArray()).getValue("gw-1").assert().isEqualTo(status)
+        // Written by this release: its own version, from the build's resource.
+        InstanceStatus("gw-1", at).release.assert().isNotNull().isEqualTo(InstanceStatus.RELEASE)
+        val beta8 = """{"gw-1":{"format":1,"at":"2026-11-21T00:00:00Z","formatLevel":1}}"""
+        ShadowCodec.decodeStatuses(beta8.encodeToByteArray()).getValue("gw-1").release.assert().isNull()
+        String(ShadowCodec.encodeStatuses(mapOf("gw-1" to InstanceStatus("gw-1", at, release = null))))
+            .assert().doesNotContain("release")
+        val wrong = """{"gw-1":{"format":1,"at":"2026-11-21T00:00:00Z","formatLevel":1,"release":9}}"""
+        assertThrownBy<SnapshotFormatException> { ShadowCodec.decodeStatuses(wrong.encodeToByteArray()) }
     }
 
     /** RFC 0010 C5: a status says which document format level its instance reads, and one that does not is refused. */

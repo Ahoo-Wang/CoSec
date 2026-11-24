@@ -125,12 +125,12 @@ class StatusReadingsTest {
         InstanceStatus(instance, time.clock.instant(), windows = setOf("c1@1"))
 
     /**
-     * An undecodable status has no `at` to age by: the store ends it. A status is written with the key's life, two
-     * minutes renewed by each write, so once its instance stops writing the value expires, readable or not, and the
+     * An undecodable status has no `at` to age by: the store ends it. A status is written with the key's life, an hour
+     * renewed by each write (the readers' reach, `SNP-25`), so once its instance stops writing the value expires, readable or not, and the
      * instance is no longer named, however often the others write.
      */
     @Test
-    fun `an unreadable status is no longer named once its key expires, two minutes after its last write`() =
+    fun `an unreadable status is no longer named once its key expires, an hour after its last write`() =
         runBlocking<Unit> {
             val time = Time()
             val backend = InMemoryBackend(time)
@@ -156,10 +156,10 @@ class StatusReadingsTest {
     /**
      * What ends an undecodable status is its key's life, so that life is exact: a status written through the store
      * CoSec creates is there a millisecond before [ShadowCacheSpecs.STATUS_TTL] after its last write and gone at it,
-     * with no jitter to stretch it (CoCache's default would make it anything from one minute to three).
+     * with no jitter to stretch it.
      */
     @Test
-    fun `a status's key lives exactly two minutes after its last write`() = runBlocking<Unit> {
+    fun `a status's key lives exactly an hour after its last write`() = runBlocking<Unit> {
         val time = Time()
         val backend = InMemoryBackend(time)
         val keyPrefix = newKeyPrefix()
@@ -290,6 +290,28 @@ class StatusReadingsTest {
             val failed = runCatching { reports.statusReadings() }.exceptionOrNull()
             failed.assert().isNotNull()
             generateSequence(failed) { it.cause }.none { it is SnapshotFormatException }.assert().isTrue()
+        }
+    }
+
+    /**
+     * `SNP-25`: a status counts as live for a minute, and as a reader of the store for the hour its key lives. One
+     * written ten minutes ago is a reader and not live; one written an hour ago is neither.
+     */
+    @Test
+    fun `a status is live for a minute and a reader for an hour`() = runBlocking<Unit> {
+        val time = Time()
+        val backend = InMemoryBackend(time)
+        val keyPrefix = newKeyPrefix()
+        SnapshotNode(backend, keyPrefix).use { node ->
+            val reports = CoCacheShadowReports.create(node.factory, keyPrefix, time.clock)
+            reports.write(InstanceStatus("old", time.clock.instant(), release = "8.0.0-beta.8"))
+            time.advance(Duration.ofMinutes(10))
+            reports.write(InstanceStatus("new", time.clock.instant(), release = "8.0.0-beta.9"))
+            reports.statusReadings().statuses.map { it.instance }.assert().containsExactly("new")
+            reports.readerReadings().statuses.associate { it.instance to it.release }.assert()
+                .isEqualTo(mapOf("old" to "8.0.0-beta.8", "new" to "8.0.0-beta.9"))
+            time.advance(ShadowCacheSpecs.STATUS_TTL.minus(Duration.ofMinutes(10)))
+            reports.readerReadings().statuses.map { it.instance }.assert().containsExactly("new")
         }
     }
 }

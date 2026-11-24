@@ -375,7 +375,9 @@ author and the approver of a change ([What the control plane trusts](./topologie
   ([Troubleshooting](./troubleshooting.md#startup-fails-on-a-redis-permission)).
 - **No part in a shadow window.** `cosec.authorization.shadow.enabled` is `false` in the image: a replica is not an
   instance a window waits for, and it decides only operators' requests, so it never holds a window open or writes a
-  report.
+  report. It still writes its status, `shadows: false`, as every reader of the store does (`SNP-25`): its Redis user
+  writes `<s>:shadow:status:<instance>`, `<s>:shadow:resident:<instance>` and `<s>:shadow:instances:*` besides
+  `<s>:control:*`, and `propagation` counts the documents it holds.
 - **Readiness.** The host is ready once the platform document is installed, as every instance is
   ([Readiness](#readiness)), and while the control store is in the format of this release: the image puts the
   `cosecControlStoreFormat` indicator into its readiness group. A store written by a release before 8.0.0-beta.5 leaves it

@@ -229,7 +229,7 @@ CoSec 没有哪个配置项叫这些名字，而已知的 key 无论来源都不
 
 | 配置项 | 类型 | 默认值 | 作用 |
 |---|---|---|---|
-| `cosec.authorization.shadow.enabled` | boolean | `true` | 对抽样的请求在暂存的候选上再求值一次，并把本实例的报告和状态写入 Redis。关闭后，本实例的流量在窗口中不计数，它编译不了的候选也不会阻塞窗口，它也不为传播视图写状态。 |
+| `cosec.authorization.shadow.enabled` | boolean | `true` | 对抽样的请求在暂存的候选上再求值一次，并把本实例的报告写入 Redis。关闭后，本实例的流量在窗口中不计数，它编译不了的候选也不会阻塞窗口。无论开关，状态照写（关闭时为 `shadows: false`，`SNP-25`）：每个带 `cosec-cocache` 的进程都把自己报告为存储的读方。 |
 | `cosec.authorization.shadow.sample-rate` | double，`0` 到 `1` | `0.1` | 在候选上再求值的请求比例，不在请求路径上执行。 |
 | `cosec.authorization.shadow.instance-id` | string | 随机 UUID | 本实例在报告和状态中的 id 的前缀：id 为 `<instance-id>.<后缀>`，后缀每次启动都换新，所以 id 对每次进程启动唯一。重启后的进程因此绝不会替换前一个进程的报告，否则它记下的 `CANDIDATE_ERROR` 会消失，被它阻塞的窗口就会解除阻塞。ACL 用 `<instance-id>.*` 把实例限制在自己的 key 上（[存储](./storage.md#who-may-write-which-keys)）。只能包含字母、数字、`.`、`_` 和 `-`，因为它是 Redis key 的结尾。其他 id 使启动失败。 |
 

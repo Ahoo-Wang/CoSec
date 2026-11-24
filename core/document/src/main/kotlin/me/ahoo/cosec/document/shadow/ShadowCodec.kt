@@ -92,6 +92,8 @@ object ShadowCodec {
                 status.windows?.let { windows -> node.putArray("windows").apply { windows.sorted().forEach(::add) } }
                 // Only when false (CTL-10): absent is an instance that shadows, as an older one does.
                 if (!status.shadows) node.put("shadows", false)
+                // RFC 0014 R5 (SNP-25): absent is an unknown release, which a publish counts as the GA baseline.
+                status.release?.let { node.put("release", it) }
             }
         },
     )
@@ -111,6 +113,8 @@ object ShadowCodec {
                 node.get("windows")?.let(::windows),
                 node.get("shadows")?.let { if (it.isBoolean) it.asBoolean() else throw malformed("shadows is not a boolean") }
                     ?: true,
+                // Optional (SNP-25): a status of a release before it does not say; it reads as an unknown release.
+                node.get("release")?.let { if (it.isString) it.asString() else throw malformed("release is not a string") },
             )
         }
     }

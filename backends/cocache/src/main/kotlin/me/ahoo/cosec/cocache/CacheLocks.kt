@@ -87,12 +87,12 @@ internal object CacheLocks {
                 verify { require(it is StoreSpec<*, *>) { "CoSec's ${it.name} is a Store." } }
                 lock(PolicyField.UNKNOWN_READ, PolicyField.TTL)
                 constrain(PolicyField.UNKNOWN_READ) { UnknownReadMode.THROW }
-                // The reports outlive any window, and a status counts for a minute (RFC 0007 §6.5): fixed, as on main.
+                // The reports outlive any window; a status counts as live for a minute (RFC 0007 §6.5) and is kept an hour (SNP-25).
                 val exact = EXACT_LIVES[cacheName]
                 constrain(PolicyField.TTL) { Ttl.of(exact ?: ShadowCacheSpecs.REPORT_TTL) }
                 if (exact != null) {
-                    // A status's life is a liveness bound (CTL-73): an undecodable one counts until its key expires,
-                    // so the key lives exactly STATUS_TTL. CoCache's default jitter would make it 1 to 3 minutes. A
+                    // A status's life bounds the readers of the store (SNP-25), and an undecodable one counts until
+                    // its key expires (CTL-73), so the key lives exactly STATUS_TTL, without CoCache's default jitter. A
                     // resident record is rewritten at half its life (CTL-75), which a jittered life could undercut.
                     lock(PolicyField.TTL_JITTER)
                     constrain(PolicyField.TTL_JITTER) { Duration.ZERO }
