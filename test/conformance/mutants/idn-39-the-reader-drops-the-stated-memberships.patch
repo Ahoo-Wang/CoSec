@@ -1,0 +1,17 @@
+# Rule: IDN-39
+# Mutant: the gate reads the memberships a header states but builds the caller's memberships from its own space's roles alone, so an attached DENY or one on another space's role does not apply
+# Tests: :runtime:test --tests me.ahoo.cosec.runtime.identity.IdentityMembershipsTest
+
+diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/identity/IdentityGate.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/identity/IdentityGate.kt
+index 2a9fd0b31..700f9a5a4 100644
+--- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/identity/IdentityGate.kt
++++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/identity/IdentityGate.kt
+@@ -259,7 +259,7 @@ class IdentityGate(
+     private fun memberships(identity: Identity): Memberships {
+         val own = SpaceId(identity.space) to identity.roles.mapTo(LinkedHashSet(), ::RoleId)
+         val stated = identity.memberships
+-        if (stated == null || stated == Identity.Memberships.NONE) {
++        if (stated == null || stated != Identity.Memberships.NONE) {
+             return Memberships(Memberships.Source.CLAIMS, mapOf(own), emptyList())
+         }
+         val roles = LinkedHashMap<SpaceId, Set<RoleId>>()

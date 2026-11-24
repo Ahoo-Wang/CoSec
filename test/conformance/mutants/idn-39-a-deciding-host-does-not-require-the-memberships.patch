@@ -1,0 +1,17 @@
+# Rule: IDN-39
+# Mutant: a host that decides with policies on the identity takes a header without memberships as a principal with none, so an older writer's header steps around an attached DENY
+# Tests: :spring-boot:test --tests me.ahoo.cosec.spring.boot.pipeline.ForwardedIdentityCallerTest
+
+diff --git a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/pipeline/CoSecGatewayModeAutoConfiguration.kt b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/pipeline/CoSecGatewayModeAutoConfiguration.kt
+index 9cf7a577d..881415cea 100644
+--- a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/pipeline/CoSecGatewayModeAutoConfiguration.kt
++++ b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/pipeline/CoSecGatewayModeAutoConfiguration.kt
+@@ -108,7 +108,7 @@ internal class CoSecGatewayModeAutoConfiguration {
+             idGenerator = idGenerator.getIfAvailable { RandomIdGenerator },
+             refusals = refusals,
+             // A host that decides with policies on the identity needs the caller's whole memberships (IDN-39).
+-            requireMemberships = pipeline.caller == PipelineProperties.Caller.FORWARDED_IDENTITY,
++            requireMemberships = pipeline.caller == PipelineProperties.Caller.CREDENTIAL,
+         )
+     }
+ 
