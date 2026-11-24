@@ -178,6 +178,9 @@ export class JwtTokenManager implements RefreshTokenStatusCapable {
   /** The tenant switch in progress, which a refresh in this process waits for. */
   private switching?: Promise<void>;
 
+  /** Counts the switches started, so the last one alone clears {@link switching}. */
+  private switches = 0;
+
   private refreshInProgress?: {
     token: JwtCompositeToken;
     promise: Promise<JwtCompositeToken>;
@@ -660,11 +663,12 @@ export class JwtTokenManager implements RefreshTokenStatusCapable {
         this.sendSwitch(switcher, request, locked),
       );
     })();
+    const started = ++this.switches;
     this.switching = run;
     try {
       await run;
     } finally {
-      if (this.switching === run) this.switching = undefined;
+      if (this.switches === started) this.switching = undefined;
     }
   }
 
