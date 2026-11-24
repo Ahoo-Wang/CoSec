@@ -403,7 +403,7 @@
     {
       "id": "CTL-30",
       "source": "RFC 0007 §5.8",
-      "statement": "A platform or app change that turns a policy other documents refer to into a boundary, or a boundary they refer to into a policy, is refused (422) when it is checked and again when it is written, as removing it is: a binding reaches only a policy and a tenant's boundary only a boundary, so one of the other kind is missing to them. A policy nothing refers to may change kind.",
+      "statement": "A platform or app change that turns a policy other documents refer to into a boundary, or a boundary they refer to into a policy, is refused (422) when it is checked and again when it is written, as removing it is: a binding reaches only a policy and a tenant's boundary only a boundary, so one of the other kind is missing to them. A policy nothing refers to may change kind. When it is written, the referrers are read again right before the head write, beside the publish's precondition (DR1-F-9): a referrer that publishes at the very moment of the head write is not seen, and its document then fails to compile, so what would be decided on it is refused (fail closed).",
       "level": "control",
       "guards": [
         "control:BoundaryReferencesTest#a policy a tenant binds does not become a boundary",
@@ -413,7 +413,8 @@
         "control:BoundaryReferencesTest#an app change that removes a policy a tenant binds is refused when it is checked",
         "control:BoundaryReferencesTest#an app change that removes a policy a short form derives is refused when it is checked",
         "control:BoundaryReferencesTest#an app change nothing refers to is not refused",
-        "control:BoundaryReferencesTest#the head write refuses an app change too, for a reference added after the check"
+        "control:BoundaryReferencesTest#the head write refuses an app change too, for a reference added after the check",
+        "control:BoundaryReferencesTest#a reference published between the first check and the head write refuses the removal - DR1-F-9"
       ],
       "pending": null
     },

@@ -3,15 +3,14 @@
 # Tests: :control:test --tests me.ahoo.cosec.control.local.ControlServiceCancellationTest --tests me.ahoo.cosec.control.store.CommittedRevisionTest
 
 diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/store/Revisions.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/store/Revisions.kt
-index 6073e2bd1..405d1f597 100644
 --- a/core/control/src/main/kotlin/me/ahoo/cosec/control/store/Revisions.kt
 +++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/store/Revisions.kt
-@@ -133,7 +133,7 @@ class Revisions(
+@@ -138,7 +138,7 @@ class Revisions(
                  "[$key] could not be listed among the app documents; the head was not moved."
              }
          }
 -        return withContext(NonCancellable) {
 +        return withContext(kotlin.coroutines.EmptyCoroutineContext) {
-             if (!precondition()) {
-                 log.info { "[$key] revision $revision was not written: its precondition no longer holds." }
-                 return@withContext PublishOutcome.Conflicted(base?.digest)
+             gate.refusal(key, base, candidate, revision, precondition)?.let { return@withContext it }
+             when (val write = store.putHead(key, base?.digest, stored)) {
+                 is HeadWrite.Conflict -> {

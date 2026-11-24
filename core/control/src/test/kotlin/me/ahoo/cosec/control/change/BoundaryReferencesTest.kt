@@ -204,6 +204,34 @@ class BoundaryReferencesTest {
     }
 
     @Test
+    fun `a reference published between the first check and the head write refuses the removal - DR1-F-9`() =
+        runBlocking<Unit> {
+            publish(wms, Operation.PutPolicy(read), Operation.PutPolicy(allow("perm:wms/ship", action = "wms:ship")))
+            val head = harness.revisions.head(wms)!!
+            val candidate = PolicyDocument(
+                DocumentKind.APP,
+                head.document.owner,
+                1,
+                head.document.publishedAt,
+                head.document.policies.filter { it.id != read.id },
+                emptyList(),
+            )
+            val refused = harness.revisions.publish(
+                wms,
+                head,
+                candidate,
+                Publication("c", ProvenanceKind.PUBLISH, PLATO.actor),
+                // The tenant's binding publishes after the removal's first read of the referrers, before its head write.
+                precondition = {
+                    publish(ACME, Operation.PutBinding(bind("b", "perm:wms/read", app = "wms")))
+                    true
+                },
+            )
+            (refused as PublishOutcome.Referenced).referrers.assert().isEqualTo(mapOf(read.id to setOf(ACME)))
+            harness.revisions.head(wms)!!.revision.assert().isEqualTo(head.revision)
+        }
+
+    @Test
     fun `a tenant does not bind a platform boundary`() = runBlocking<Unit> {
         publish(platform, Operation.PutPolicy(fence))
         val refused = proposed(ACME, Operation.PutBinding(bind("b", "fence")))
