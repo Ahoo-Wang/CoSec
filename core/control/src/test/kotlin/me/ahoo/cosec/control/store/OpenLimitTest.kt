@@ -22,6 +22,7 @@ import me.ahoo.cosec.control.change.ALICE_OP
 import me.ahoo.cosec.control.change.ChangeId
 import me.ahoo.cosec.control.change.ChangeRejectedException
 import me.ahoo.cosec.control.change.ChangeRequest
+import me.ahoo.cosec.control.change.ChangeRequestCodec
 import me.ahoo.cosec.control.change.ChangeState
 import me.ahoo.cosec.control.change.ConflictKind
 import me.ahoo.cosec.control.change.IMMEDIATE_WINDOW
@@ -60,9 +61,13 @@ class OpenLimitTest {
     private val ids = AtomicInteger()
     private val bob = Operator(Actor(TenantId("acme"), PrincipalId("bob")), NO_MEMBERSHIPS)
 
-    private fun changes(over: ControlStore = store, maxCount: Int = 2) = Changes(
+    private fun changes(
+        over: ControlStore = store,
+        maxCount: Int = 2,
+        documentCap: Long = RetentionPolicy.DEFAULT_DOCUMENT_CAP,
+    ) = Changes(
         over,
-        Revisions(over, clock, RetentionPolicy(maxCount = maxCount)),
+        Revisions(over, clock, RetentionPolicy(maxCount = maxCount, documentCap = documentCap)),
         { ChangeId("c${ids.incrementAndGet()}") },
         PERMIT_ALL,
         clock,
@@ -131,6 +136,43 @@ class OpenLimitTest {
         // Its record keeps its note; the audit event of the abandon says it was for room (CTL-83).
         // Bob's failed draft is his: alice cannot make room with it.
         refused { changes.open() }.conflict.assert().isEqualTo(ConflictKind.OPEN_LIMIT)
+    }
+
+    /** A change of one large policy, which passes its checks: its record is about 2 KB, whatever its id. */
+    private suspend fun Changes.large(by: Operator = ALICE_OP): ChangeRequest {
+        clock.now = clock.now.plus(Duration.ofMinutes(1))
+        val policy = allow("large", resource = "order/" + "x".repeat(1_900))
+        return propose(by, ACME, 1, listOf(Operation.PutPolicy(policy)), "large")
+    }
+
+    @Test
+    fun `open changes past their bytes are refused OPEN_LIMIT, saying it is the bytes - DR2-E-2`() = runBlocking<Unit> {
+        published()
+        // Ten open changes by count, but two and a half records' worth of bytes (max-count times the cap).
+        val first = changes(maxCount = 10).large()
+        first.state.assert().isEqualTo(ChangeState.CHECKED)
+        val record = ChangeRequestCodec.encode(first).size.toLong()
+        val changes = changes(maxCount = 10, documentCap = record / 4)
+        changes.large(bob)
+
+        val refused = refused { changes.large() }
+
+        refused.conflict.assert().isEqualTo(ConflictKind.OPEN_LIMIT)
+        refused.message.assert().contains("weigh").contains("bytes")
+        store.allOpenChanges().size.assert().isEqualTo(2)
+    }
+
+    @Test
+    fun `the author's own failed draft makes room for bytes too - DR2-E-2`() = runBlocking<Unit> {
+        published()
+        // Room for two large records and 100 bytes: the draft beside one of them leaves no room for a second.
+        val record = ChangeRequestCodec.encode(changes(maxCount = 10).large()).size.toLong()
+        val changes = changes(maxCount = 10, documentCap = (2 * record + 100) / 10)
+        val draft = changes.failed()
+
+        changes.large().state.assert().isEqualTo(ChangeState.CHECKED)
+
+        store.change(draft.id)!!.value.state.assert().isEqualTo(ChangeState.ABANDONED)
     }
 
     @Test

@@ -144,6 +144,11 @@ description: "每个 8.0 预览版（alpha 与 beta）到下一个之间的变�
   一条约 100 MB 的变更记录。变更需不需要审批与从前完全一样。beta.7 中给出的批准写的是旧的 subject，覆盖不了新的：这样的变更须
   重新批准。把 subject 当成一个片段来解析的客户端，现在从 `detail` 读前几个片段（[变更的应答](../policies/testing.md#what-a-change-answers)，
   `contract/control/escalations.json`）。
+- **一个文档的变更记录有字节上界**（`CTL-83`，DR2-E-2）。受影响的：在一个文档上提出许多大变更的客户端，以及给 Redis 定容量的人。
+  连同新变更，一个文档的未结束变更至多合计 `max-count` 乘以文档上限（默认 400 MB）：超出时新变更返回 `409` `OPEN_LIMIT`，与超出
+  条数时一样，`detail` 说明是字节。一条变更记录至多是最大请求体加文档上限（18 MB）；更大的不存储，提议返回 `422`，只有在进程内
+  调用控制面的调用方才可能遇到。启动行 `CoSec derived, not configured` 现在写出一个租户文档至多存多少（默认约 1.7 GB），以及它
+  要乘以文档数（[存储](./storage.md#how-much-one-document-stores)）。
 - **以自己的主体调用控制面的服务记为 `service`**（`ControlCaller.service`，`IDN-34`）。受影响的：读取控制请求记录的东西，以及升级的顺序。
   - **记录。** 这样的服务所声明的身份把凭证命名为 `service`，beta.7 命名为 `api-key`。它不是 API key，记录现在照实写：它对控制面宿主的请求在决策事件与审计里的 `subject.method`、变更日志里的 `origin.via.method` 都是 `service`（经进程内 `ControlService` 的调用仍是 `in-process`）。此前存储的变更保留 `api-key`。按 `api-key` 找服务调用方的看板、告警或查询，也要找 `service`。
   - **它能做什么没有变。** `service` 和 `api-key` 一样是工作负载的凭证：从不审批，也从不是信任根，没有会话，也没有 break-glass（新增 `AuthenticatedPrincipal.workload`）。

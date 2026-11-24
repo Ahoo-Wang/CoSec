@@ -217,6 +217,13 @@ Which preview of the library may run behind which preview of the gateway image: 
   it does not cover the new ones: approve such a change again. A client that parsed a subject as one fragment reads the
   first fragments from `detail` now ([what a change answers](../policies/testing.md#what-a-change-answers),
   `contract/control/escalations.json`).
+- **A document's change records are bounded in bytes** (`CTL-83`, DR2-E-2). Affected: a client that proposes many
+  large changes on one document, and whoever sizes Redis. With a new change, a document's open changes weigh at most
+  `max-count` times the document cap (400 MB by default): past it the new change is `409` `OPEN_LIMIT`, as past the
+  count, and its `detail` says it is the bytes. A change record is at most the largest body plus the document cap
+  (18 MB); one larger is not stored and the proposal is `422`, which only a caller of the plane in process can reach.
+  The startup line `CoSec derived, not configured` now states what one tenant document stores at most, about 1.7 GB by
+  default, and that it multiplies by the documents ([Storage](./storage.md#how-much-one-document-stores)).
 - **A service calling the control plane as its own principal is recorded as `service`** (`ControlCaller.service`,
   `IDN-34`). Affected: what reads the records of control requests, and the order you upgrade in.
   - **Records.** The identity such a service states names its credential `service`, where beta.7 named it `api-key`.

@@ -60,8 +60,8 @@ internal class Proposals(
     private val candidates: CandidateChecks,
     private val listeners: ChangeListeners,
 ) {
-    /** At most the revisions the operator keeps, open on one document (`CTL-83`). */
-    private val limit = OpenLimit(store, flow, revisions.retention.maxCount)
+    /** At most the revisions the operator keeps, open on one document, weighing at most their bytes (`CTL-83`). */
+    private val limit = OpenLimit(store, flow, revisions.retention.maxCount, revisions.retention.byteBudget)
 
     /**
      * Proposes [operations] on revision [base] of [key] (0 for a document not published yet) and checks them. The
@@ -190,8 +190,10 @@ internal class Proposals(
 
     /** The last step of a proposal, which a check never takes (`CTL-78`): its events, and the change stored. */
     private suspend fun commitChange(checked: ChangeRequest, breakGlass: Boolean, author: Operator) {
-        // Break-glass never waits behind drafts: it is the platform's, and an emergency (CTL-83).
-        if (!breakGlass) limit.makeRoom(checked.key, author)
+        // A record past its cap is not written, break-glass's included; break-glass never waits behind drafts: it is
+        // the platform's, and an emergency (CTL-83).
+        val bytes = ChangeRecordBudget.requireWithin(checked, flow.recordCap)
+        if (!breakGlass) limit.makeRoom(checked.key, author, bytes)
         if (breakGlass) {
             flow.audit(ChangeEvent.Kind.BREAK_GLASS_REQUESTED, checked, author.actor, origin = author.origin)
         }

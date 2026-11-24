@@ -5,11 +5,11 @@
 diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ChangeLifecycle.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ChangeLifecycle.kt
 --- a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ChangeLifecycle.kt
 +++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ChangeLifecycle.kt
-@@ -203,7 +203,6 @@ internal class ChangeLifecycle(
+@@ -217,7 +217,6 @@ internal class ChangeLifecycle(
              PublishRules.requireState(current.value, from)
              val updated = (next(current.value) ?: return null).copy(updatedAt = laterThan(current.value))
              // The table decides where a step may take a change: anything else is a fault, and nothing is written.
 -            check(updated.state in step.to) { "$step leaves a change in ${step.to}, not in ${updated.state}" }
+             ChangeRecordBudget.requireWithin(updated, recordCap)
              if (store.putChange(current.digest, updated, current.value.state)) {
                  if (updated.state.terminal) ended.bound(updated.key)
-                 return updated
