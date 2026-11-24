@@ -132,7 +132,14 @@ jobs:
           sparse-checkout: |
             .github/scripts
             .github/gradle
+            .github/actions
           persist-credentials: false
+
+      # The dependency files dependency-cache.yml wrote on main for the versions of the ref under test, read-only, as the CI
+      # jobs restore them: without it this job downloads every dependency from Maven Central, which answers 429 to a runner
+      # that asks for too much (.github/scripts/README.md, "The dependency cache"). The action of this workflow's commit.
+      - name: Restore the dependency cache
+        uses: ./.ci-actions/.github/actions/dependency-cache
 
       - name: Resolve the dependencies
         run: ./.ci-actions/.github/scripts/resolve-dependencies.sh
@@ -283,7 +290,14 @@ jobs:
           sparse-checkout: |
             .github/scripts
             .github/gradle
+            .github/actions
           persist-credentials: false
+
+      # The dependency files dependency-cache.yml wrote on main for the versions of the ref under test, read-only, as the CI
+      # jobs restore them: without it this job downloads every dependency from Maven Central, which answers 429 to a runner
+      # that asks for too much (.github/scripts/README.md, "The dependency cache"). The action of this workflow's commit.
+      - name: Restore the dependency cache
+        uses: ./.ci-actions/.github/actions/dependency-cache
 
       - name: Resolve the dependencies
         run: ./.ci-actions/.github/scripts/resolve-dependencies.sh
