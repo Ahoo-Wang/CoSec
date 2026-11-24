@@ -1,0 +1,95 @@
+{
+  "rules": [
+    "CTL-88"
+  ],
+  "polarity": "negative",
+  "level": "control",
+  "description": "DR2-E-1: the same four fragments in two statements are two escalations: a statement's fragments are grouped, never another statement's, so an approver sees each statement she approves.",
+  "documents": {
+    "tenants": {
+      "acme": {
+        "bindings": [
+          {
+            "id": "admins",
+            "subject": {
+              "role": "admin"
+            },
+            "app": "cosec-control",
+            "space": "",
+            "policy": "cosec:tenant-admin"
+          }
+        ]
+      }
+    }
+  },
+  "operators": {
+    "alice": {
+      "tenant": "acme",
+      "roles": [
+        "admin"
+      ]
+    }
+  },
+  "steps": [
+    {
+      "propose": {
+        "change": "c1",
+        "by": "alice",
+        "document": "tenant:acme",
+        "operations": [
+          {
+            "putPolicy": {
+              "id": "billing",
+              "statements": [
+                {
+                  "effect": "allow",
+                  "action": [
+                    "billing:read",
+                    "billing:write"
+                  ],
+                  "resource": "billing/a"
+                },
+                {
+                  "effect": "allow",
+                  "action": "billing:read",
+                  "resource": [
+                    "billing/b",
+                    "billing/c"
+                  ]
+                }
+              ]
+            }
+          },
+          {
+            "putBinding": {
+              "id": "billing",
+              "subject": {
+                "role": "viewer"
+              },
+              "app": "order",
+              "space": "*",
+              "policy": "billing"
+            }
+          }
+        ]
+      }
+    }
+  ],
+  "expect": {
+    "steps": [
+      "CHECKED"
+    ],
+    "errors": {
+      "c1": []
+    },
+    "heads": {
+      "tenant:acme": 1
+    },
+    "escalations": {
+      "c1": [
+        "NOT_COVERED",
+        "NOT_COVERED"
+      ]
+    }
+  }
+}

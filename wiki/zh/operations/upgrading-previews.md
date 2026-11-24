@@ -135,8 +135,15 @@ description: "每个 8.0 预览版（alpha 与 beta）到下一个之间的变�
 - **太大而无法分析的变更只有一项 `TOO_LARGE`**（`CTL-49`，DR1-E-1）。受影响的：被授出的 ALLOW 合计超过 80,000 个片段
   （每个动作乘每个资源，再乘到达它的每条绑定）的租户变更，以及读变更越权项的程序。这样的变更在拆分之前就被计数：任何部分都不分析，
   以一项 `change of tenant:<t>` 等待审批。此前它被整个拆开、每个片段一项，一条一千个动作乘一千个资源的语句就能耗尽控制面的堆。
-  分析用完四百万次比较之后走到的授出也合为一项 `<n> fragments of tenant:<t>`，此前每个一项。beta.7 中对这种变更的批准
+  分析用完四百万次比较之后走到的授出也合为一项 `<n> fragments of tenant:<t> <sha-256>`，此前每个一项。beta.7 中对这种变更的批准
   覆盖不了新的那一项：须重新批准。
+- **一条语句的越权项合为一项，一个变更至多约 200 项**（`CTL-88`，DR2-E-1，DR2-E-3）。受影响的：授出作者并不持有的内容的
+  租户变更，以及读取或展示变更越权项的程序。同一条语句中、因同一原因未被证明包含的片段是一项越权项，
+  `<policy>[<index>] <REASON>: <n> fragments <sha-256>`，`detail` 中给出前三个；超过 200 条语句之后，其余的合为一项
+  `TOO_LARGE`，`<n> more fragments of tenant:<t> <sha-256>`。此前每个片段各为一项，一次提议就能记下几万项、每项重复它的资源：
+  一条约 100 MB 的变更记录。变更需不需要审批与从前完全一样。beta.7 中给出的批准写的是旧的 subject，覆盖不了新的：这样的变更须
+  重新批准。把 subject 当成一个片段来解析的客户端，现在从 `detail` 读前几个片段（[变更的应答](../policies/testing.md#what-a-change-answers)，
+  `contract/control/escalations.json`）。
 - **以自己的主体调用控制面的服务记为 `service`**（`ControlCaller.service`，`IDN-34`）。受影响的：读取控制请求记录的东西，以及升级的顺序。
   - **记录。** 这样的服务所声明的身份把凭证命名为 `service`，beta.7 命名为 `api-key`。它不是 API key，记录现在照实写：它对控制面宿主的请求在决策事件与审计里的 `subject.method`、变更日志里的 `origin.via.method` 都是 `service`（经进程内 `ControlService` 的调用仍是 `in-process`）。此前存储的变更保留 `api-key`。按 `api-key` 找服务调用方的看板、告警或查询，也要找 `service`。
   - **它能做什么没有变。** `service` 和 `api-key` 一样是工作负载的凭证：从不审批，也从不是信任根，没有会话，也没有 break-glass（新增 `AuthenticatedPrincipal.workload`）。

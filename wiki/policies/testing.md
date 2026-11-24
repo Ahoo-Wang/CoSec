@@ -342,6 +342,11 @@ a publisher acknowledges, `startedAt`, and once closed `closed`) and `confirmati
 own work is in no answer: the heads the candidate was checked with, the instances that reported on its window, and
 what an approver held (`CTL-61`).
 
+`escalations` is bounded, whatever the change (`CTL-88`): what the grant analysis could not prove contained is one
+entry per statement of a policy and reason, at most 200, and one `TOO_LARGE` entry for the rest; every other entry
+names one entry of the document, the document itself or its boundary ([Approval](#approval)).
+[`contract/control/escalations.json`](https://github.com/Ahoo-Wang/CoSec/tree/main/contract/control/escalations.json) states the bound.
+
 A change a request made also answers `origin`, how its author was identified (`CTL-70`):
 - **Every reader of the change** gets `asserted`, true when the host believed an identity the caller stated (the
   `CoSec-Identity` header) instead of verifying a credential itself, and `via.method`, the kind of credential (`jwt`,
@@ -618,11 +623,20 @@ author, and anything it cannot prove contained in the author's own permissions b
 | `UNRESOLVED` | A new or changed binding names a policy no document defines, so what it grants cannot be told. |
 | `ANONYMOUS` | A grant to `Anyone` in the default tenant `(0)`, where unauthenticated callers are: it reaches them too. |
 | `UNREADABLE` | An app document the grant reaches could not be read, so what the author holds there is not known; or the app list cannot be trusted and the grant reaches every app ([Storage](../operations/storage.md#publishing-through-the-control-plane)). |
-| `TOO_LARGE` | The analysis made all the comparisons one analysis may make (four million; a tenant document of every system role of twelve apps takes about sixty thousand) before it reached this grant, so what it did not compare is not known (`CTL-49`); all the grants past it are one entry. It is also the one entry of a change that grants more than 80,000 fragments (each action times each resource of a granted ALLOW, for each binding that reaches it): such a change is counted before it is split, and none of it is analysed. Split the change into smaller ones; a change that only repeats statements its policies already had costs almost nothing, since an unchanged policy or statement is recognised as such (`CTL-50`). |
+| `TOO_LARGE` | The analysis made all the comparisons one analysis may make (four million; a tenant document of every system role of twelve apps takes about sixty thousand) before it reached this grant, so what it did not compare is not known (`CTL-49`); all the grants past it are one entry. It is also the one entry of a change that grants more than 80,000 fragments (each action times each resource of a granted ALLOW, for each binding that reaches it): such a change is counted before it is split, and none of it is analysed. And it is the one entry of the fragments not proven contained of the statements past the first 200 (below). Split the change into smaller ones; a change that only repeats statements its policies already had costs almost nothing, since an unchanged policy or statement is recognised as such (`CTL-50`). |
 | `NOT_ANALYZED` | By someone who is not the trust root: a platform or app document change that puts anything, or that removes a DENY (`CTL-31`, one per policy or binding, below), or a tenant boundary change. |
 | `TENANT_BINDINGS` | With `NOT_ANALYZED` on an app document: the tenants a permission policy reaches whose ALLOWs the change adds or widens, one entry per policy (`tenants binding [<policy>] in app <app>`), with the statements and how many tenant documents bind it in the app, the first 20 named. It is counted from the back-reference index without reading a tenant document, so it is an upper bound (a document that dropped its binding may still be counted until its publish removed it). Informational: the approval is for `NOT_ANALYZED`, which this entry never replaces (`CTL-48`), and a change in it alone never sends an approved change back to `AWAITING_APPROVAL`. |
 | `BREAK_GLASS` | A new or changed break-glass binding: always needs a second person. |
 | `ROLE_CLASS` | Recorded in place of the escalations the [role class](#the-role-class) lifted: who holds the grant, and what it lifted. Informational: the change needs no approval for it. |
+
+The analysis's entries are grouped (`CTL-88`): the fragments of one statement of a policy that are not proven
+contained, for one reason, are one escalation. Its `subject` names the statement (`<policy>[<index>]`, or
+`<policy> (does not resolve)`), the reason, how many fragments it stands for and their SHA-256, and its `detail` the
+first three, each clipped to 256 characters. Past 200 statements, the fragments of the rest are one `TOO_LARGE` entry,
+counted and digested the same way. An approval covers the subjects it was shown, so a fragment more, fewer or another
+in an entry is a subject it does not cover: the change needs an approval again, as it would if each fragment were an
+entry of its own. What the bound leaves out is never informational, and the role class does not lift it. So the
+analysis's entries stay within a few hundred kilobytes, whatever the change grants.
 
 The author's rights are those of the credential the request came with. With a role cap (an API key with `roles`), the
 ALLOWs bound to the author by name or attached do not count, only the capped roles and `Anyone` bindings, as on the
