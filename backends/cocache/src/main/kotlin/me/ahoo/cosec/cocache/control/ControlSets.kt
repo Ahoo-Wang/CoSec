@@ -132,7 +132,7 @@ internal class ControlSets(
             error is ForeignFormatException || error.message?.contains("expected a set but found a scalar") == true
 
         /** The document set's one key. */
-        private const val DOCUMENT_SET = "all"
+        internal const val DOCUMENT_SET = "all"
         private const val DOCUMENTS_WHAT = "The document set"
         private const val STAGED_WHAT = "The staged list"
         private const val CHANGES_WHAT = "The open-change sets"

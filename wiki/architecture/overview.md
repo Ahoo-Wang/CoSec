@@ -464,6 +464,7 @@ each with its scenarios or guard tests, and `:conformance:mutationCheck` breaks 
 | **Snapshot caches never expire and throw on failed reads**, whatever a CoCache customizer or property says. | Redis is the store of record; expiry or a swallowed error would silently drop policies. | `CacheTtlPolicyTest`, `StrictCacheFailureTest` |
 | **One revision per document per evaluation**, installed in load order. | A decision must never mix two revisions of one document. | `SnapshotConsistencyPropertyTest`, `SnapshotInstallOrderPropertyTest` |
 | **Hot-path changes come with a JMH before/after.** | Authorization runs on every request. | `EngineAuthorizationBenchmark`, `PipelineBenchmark` (review) |
+| **What two releases share on one Redis is frozen within 8.x**: the key derivations, the scripts' stored fields and the invalidation channels, listed once in `FrozenLayout`; a new derivation or way of counting goes to a new key space. | A mixed deployment would count a client twice, miss a revocation, or lose a document: wider than either release, or a refusal neither makes. | `FrozenLayoutTest`, `FrozenScriptsTest` (beside the frozen scripts), `RedisAuthStateCacheTest`, `SNP-26` |
 | **Public signatures change only on purpose.** Each published module's ABI is in its dump; a change that is not in the dump fails the build. | Applications compile against CoSec and implement its SPIs; a signature change nobody noticed breaks them. | `checkKotlinAbi` (part of `check`), `SpiMarkerTest` |
 
 ## Performance

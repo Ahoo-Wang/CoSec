@@ -227,6 +227,7 @@ sequenceDiagram
 | **快照缓存永不过期，读取失败时抛出异常**，无论 CoCache 的定制器或属性怎么设置。 | Redis 是权威存储；过期或吞掉的错误会悄悄丢掉策略。 | `CacheTtlPolicyTest`、`StrictCacheFailureTest` |
 | **一次求值中每个文档只有一个修订**，并按加载顺序安装。 | 决策绝不能混用同一文档的两个修订。 | `SnapshotConsistencyPropertyTest`、`SnapshotInstallOrderPropertyTest` |
 | **热路径修改必须附带 JMH 前后对比。** | 每个请求都要授权。 | `EngineAuthorizationBenchmark`、`PipelineBenchmark`（评审） |
+| **两个版本在同一个 Redis 上共用的东西在 8.x 内冻结**：key 的派生、脚本存的字段与失效通道，统一列在 `FrozenLayout` 里；新的派生或计数方式走新键空间。 | 混跑的部署会把一个客户端数两遍、漏掉一条吊销或读丢一个文档：比任一版本都宽，或拒绝两个版本都不拒绝的请求。 | `FrozenLayoutTest`、`FrozenScriptsTest`（与冻结的脚本一起跑）、`RedisAuthStateCacheTest`、`SNP-26` |
 | **公共签名只在有意时改变。** 每个发布模块的 ABI 都在它的转储里；不在转储里的改动让构建失败。 | 应用针对 CoSec 编译并实现它的 SPI；没人察觉的签名改动会破坏它们。 | `checkKotlinAbi`（`check` 的一部分）、`SpiMarkerTest` |
 
 ## 性能 {#performance}
