@@ -44,7 +44,7 @@ internal object EntryChecks {
         val shared = platform.policies.associateBy { it.id }
         candidate.policies.withIndex().forEach { (i, policy) ->
             val original = shared[policy.id] ?: return@forEach
-            if (EntryDigest.of(policy) != EntryDigest.of(original)) {
+            if (StatementDigest.ofCopy(policy) != StatementDigest.ofCopy(original)) {
                 findings += Finding(
                     "V2",
                     "$.policies[$i].id",
@@ -77,24 +77,29 @@ internal object EntryChecks {
      * An entry's id is one segment of the resource `cosec:write` is decided on (RFC 0007 §7.1): an id with a `/` adds
      * segments, and so walks out of a rule whose last segment is a `*`. Only the ids a change puts: one a document
      * already holds is not this change's to rename, and removing it stays possible. A permission policy's id is
-     * `perm:<app>/<id>` by definition, the one exception, which a rule reaches with `**`.
+     * `perm:<app>/<permission>` by definition: the one `/` after its app is the exception, which a rule reaches with a
+     * final `*` after it, and `<permission>` holds none, nor does a catalog permission's id, which names the same policy
+     * (DR1-E-5).
      */
     fun entryIds(operations: List<Operation>, findings: MutableList<Finding>) {
         for ((i, operation) in operations.withIndex()) {
-            val id = when (operation) {
-                is Operation.PutPolicy -> operation.policy.id.value.takeUnless {
-                    it.startsWith(PolicyDocumentCompiler.PERMISSION_PREFIX)
-                }
-                is Operation.PutBinding -> operation.binding.id.value
-                is Operation.PutRole -> operation.role.id.value
-                is Operation.PutRateLimit -> operation.rule.id
-                else -> null
-            } ?: continue
-            if ('/' in id) {
+            val ids = when (operation) {
+                is Operation.PutPolicy -> listOf(permissionName(operation.policy.id.value))
+                is Operation.PutBinding -> listOf(operation.binding.id.value)
+                is Operation.PutRole -> listOf(operation.role.id.value)
+                is Operation.PutRateLimit -> listOf(operation.rule.id)
+                is Operation.PutCatalog -> operation.catalog?.groups.orEmpty().flatMap { group -> group.permissions.map { it.id } }
+                else -> emptyList()
+            }
+            ids.filter { '/' in it }.forEach { id ->
                 findings += Finding("V2", "operations[$i]", "[${printable(id)}]: an entry's id has no [/]", UNPROCESSABLE)
             }
         }
     }
+
+    /** What of a policy id must hold no `/`: all of it, or a permission policy's `<permission>` after `perm:<app>/`. */
+    private fun permissionName(id: String): String =
+        if (id.startsWith(PolicyDocumentCompiler.PERMISSION_PREFIX)) id.substringAfter('/', "") else id
 
     /**
      * Every app the candidate names is an app id (SCP-10): the document format takes any id but `*` in a binding's

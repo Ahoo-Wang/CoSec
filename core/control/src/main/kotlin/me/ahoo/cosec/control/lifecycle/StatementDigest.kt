@@ -40,6 +40,16 @@ internal object StatementDigest {
         return EntryDigest.sha256(content)
     }
 
+    /**
+     * The digest a copy of a platform policy is compared by (RFC 0007 §9.4): its entry's, without the confirmations its
+     * statements carry. The engine resolves a shared id on content alone (`CompiledPolicy.sameContent`), and a tenant's
+     * copy carries its author's own confirmation, never the platform's (`NomatchConfirmations`), so a copy of a policy
+     * with a confirmed `nomatch` DENY is still a copy (DR1-E-9).
+     */
+    fun ofCopy(policy: PolicyDefinition): String = EntryDigest.of(
+        PolicyDefinition(policy.id, policy.attachable, policy.condition, policy.statements.map(::unconfirmed), policy.boundary)
+    )
+
     internal fun unconfirmed(statement: StatementSource): StatementSource =
         if (statement.onMissingConfirmed == null) {
             statement
