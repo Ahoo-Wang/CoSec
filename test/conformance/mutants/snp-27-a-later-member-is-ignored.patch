@@ -1,0 +1,17 @@
+# Rule: SNP-27
+# Mutant: a member crit names that this version does not know is ignored: the record reads, and is rewritten without it
+# Tests: :document:test --tests me.ahoo.cosec.document.json.StoredCritTest :cocache:test --tests me.ahoo.cosec.cocache.TokenFamilyMembersTest
+
+diff --git a/core/document/src/main/kotlin/me/ahoo/cosec/document/json/StoredCrit.kt b/core/document/src/main/kotlin/me/ahoo/cosec/document/json/StoredCrit.kt
+index b83f93464..6836381df 100644
+--- a/core/document/src/main/kotlin/me/ahoo/cosec/document/json/StoredCrit.kt
++++ b/core/document/src/main/kotlin/me/ahoo/cosec/document/json/StoredCrit.kt
+@@ -54,7 +54,7 @@ internal object StoredCrit {
+             if (path == null || !PATH.matches(path)) throw malformed(what, "its $MEMBER[$index] is not the path of a member")
+             if (!seen.add(path)) throw malformed(what, "its $MEMBER[$index] repeats a member")
+             when {
+-                path !in members.byPath -> (unknown ?: ArrayList<String>().also { unknown = it }).add(path)
++                path !in members.byPath -> Unit
+                 !holds(root, path.split('.'), 0) -> throw malformed(what, "its $MEMBER[$index] names a member it does not hold")
+             }
+         }
