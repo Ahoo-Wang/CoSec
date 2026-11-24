@@ -34,6 +34,7 @@ import me.ahoo.cosec.control.store.ReferrerEntry
 import me.ahoo.cosec.control.store.RetentionPolicy
 import me.ahoo.cosec.control.store.RevisionIndex
 import me.ahoo.cosec.control.store.Revisions
+import me.ahoo.cosec.control.store.lostRevisions
 import me.ahoo.cosec.document.Actor
 import me.ahoo.cosec.document.PolicyDefinition
 import me.ahoo.cosec.document.PolicyDocument
@@ -92,6 +93,10 @@ import kotlin.coroutines.CoroutineContext
  *
  * A scenario with `"reclaim": true` runs a reclamation of the last document after its publishes, all younger than
  * `min-age`, with `"retention"` naming what it keeps (`CTL-84`): `"retention": {"maxCount": 2, "documentCap": 320}`.
+ *
+ * `"restoreAfter": 2` moves the last document's head back to that retained revision after the publishes, as a failover
+ * that loses a head write does, and `"lost": true` reads the revisions its index then lists above the head (`CTL-86`):
+ * `"lost": [3]`.
  */
 object StoreRunner : ScenarioRunner {
     override fun run(scenario: Scenario): Outcome = runBlocking {
@@ -106,6 +111,8 @@ object StoreRunner : ScenarioRunner {
             "cost",
             "retention",
             "reclaim",
+            "restoreAfter",
+            "lost",
             "expect",
         )
         val memory = InMemoryControlStore()
@@ -143,6 +150,7 @@ object StoreRunner : ScenarioRunner {
             hold?.let { held = it to outcome }
         }
         held?.let { (it, finishing) -> it.release.complete(Unit).also { finishing.await() } }
+        scenario.node.get("restoreAfter")?.let { restoreHead(memory, key, it.longValue()) }
         if (scenario.node.get("reclaim")?.bool() == true) revisions.reclaim(key)
         stored(scenario, outcomes.map { it.await() }, revisions, memory, store, key)
     }
@@ -176,6 +184,11 @@ object StoreRunner : ScenarioRunner {
             records = memory.recordDigests(key).size,
             writes = store.writes,
             history = if (scenario.node.get("history")?.bool() == true) historyOf(revisions, key) else null,
+            lost = if (scenario.node.get("lost")?.bool() == true) {
+                memory.lostRevisions(key).map { it.revision }
+            } else {
+                null
+            },
             cost = if (scenario.node.get("cost")?.bool() == true) {
                 COST_KEYS.associateWith { store.cost[it] ?: 0 }
             } else {

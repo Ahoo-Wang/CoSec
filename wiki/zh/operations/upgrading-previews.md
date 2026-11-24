@@ -27,6 +27,7 @@ description: "每个 8.0 预览版（alpha 与 beta）到下一个之间的变�
 
 ## 从 8.0.0-beta.7 升级 {#from-8-0-0-beta-7}
 
+- **故障转移中丢失的头部会被报告**（`CTL-86`，DR1-F-7）。受影响的：处理每一种事件的变更监听器（穷举的 `when` 需要 `else`，如该种类的 KDoc 所说），以及会故障转移的 Redis 部署。新的事件种类 `HEAD_LOST` 与计数器 `cosec.control.revisions.lost` 点名头部写入丢失的修订；请在 Redis 上设 `min-replicas-to-write`（[存储](./storage.md#redis-requirements)）。
 - **`HttpControlService` 拒绝已结束的请求**（`CTL-77`、`PIP-26`，DR1-F-2）。受影响的：把 `ControlCaller.of(context)` 保留到请求之后的应用（启动的任务、延后的写入）。经 HTTP 时它此前一直以该用户身份行事，直到凭证过期，登出之后也是；现在与进程内一样以 `403` 拒绝，在发出任何请求之前，并记 `WARN`。这类工作请以应用自己的主体调用（`ControlCaller.service`）。
 - **对基于 CoSec 镜像构建的镜像是破坏性变更：应用的文件归 root 所有**（DR1-G-8）。受影响的是 `FROM` 网关或控制面镜像、
   并以 `appuser` 身份在 `/opt/<app>` 下写文件（包括重新训练 AOT 缓存）的 Dockerfile。进程现在只拥有 `logs/` 和 `data/`，

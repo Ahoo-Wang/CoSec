@@ -110,6 +110,9 @@ class Changes(
     /** The bound on each document's ended changes, and what reclamation removes of them (`CTL-83`). */
     internal val ended = EndedChanges(store, revisions.retention.maxCount, clock)
 
+    /** What the reclamation pass, and a rebuild of an index from its head, do of a lost head (`CTL-86`). */
+    internal val lostHeads = LostHeads(store, revisions, listeners, clock).also { revisions.repair.lost = it::dropped }
+
     private val flow = ChangeLifecycle(store, clock, options, slots, listeners, authority, ended)
     private val publishing =
         Publishing(flow, revisions, clock, authority, authority.approvals, candidates, slots, listeners, movedHeads)
