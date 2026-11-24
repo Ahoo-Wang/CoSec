@@ -1,0 +1,37 @@
+{
+  "rules": [
+    "DOC-15"
+  ],
+  "polarity": "positive",
+  "level": "engine",
+  "description": "A path pattern holding a ; matches no request path, whose path parameters are removed and an encoded ; refused (PIP-5, PIP-30): a DENY written so would be void, so it does not compile.",
+  "documents": {
+    "platform": {
+      "policies": [
+        {
+          "id": "reserved",
+          "statements": [
+            {
+              "effect": "deny",
+              "action": "http:GET",
+              "resource": "http:path:/admin/x;y"
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "reserved",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "reserved"
+        }
+      ]
+    }
+  },
+  "expect": {
+    "decision": "NotCompiled",
+    "error": "hold no ';'"
+  }
+}

@@ -43,9 +43,10 @@ import java.util.Base64
  *
  * `memberships` (`IDN-39`) holds what `roles` does not: the principal's roles in each other space (the default space's
  * key is empty; the identity's own space is never a key, and a space names at least one role) and the ids of the
- * policies it attaches, in the order its memberships name them. CoSec's writers always write it, empty when there is
+ * policies it attaches, in the order its memberships name them. CoSec's writers write it, empty when there is
  * nothing more (`{"spaces":{},"attachments":[]}`): its presence says the memberships are whole, and a host that decides
- * on the identity refuses one without it.
+ * on the identity refuses one without it. The relay of a request's caller leaves it out when the identity it relays did
+ * not state it (`IDN-42`). What a reader takes each member's absence for is recorded in [IdentityMembers].
  *
  * `auth.capped` is `true` for a credential with a role cap (an API key with `roles`, RFC 0009 §4.2), and absent
  * otherwise: the service behind then applies no principal binding either. `auth.iat` is when the credential was issued,
@@ -56,11 +57,13 @@ import java.util.Base64
  * tenant switch issues from it (`IDN-22`); without it, everything else reads as before.
  *
  * Times are epoch seconds, from 0 to the end of year 9999. `claims` may be absent; `auth.exp` may not: a gateway
- * forwards no identity whose credential never expires, and a service refuses one without it. Decoding is strict: an
- * unknown member, a member of the wrong type, a duplicate, an empty id, a blank tenant, subject or request id
- * (`IDN-38`), an id (or any member other than a claim) with an unpaired UTF-16 surrogate (RC1-52) or a header over the
- * size limit is refused, never read as anonymous. The `cosec-identity` format descriptor
- * (`schema/8.0/cosec-identity.schema.json`) describes the JSON.
+ * forwards no identity whose credential never expires, and a service refuses one without it. A member this version
+ * does not know, at any level, is ignored, unless `crit` names it ([IdentityCrit], `IDN-41`): a later 8.x version may
+ * add members an older reader can do without, and names in `crit` those it cannot, which this version refuses (503)
+ * rather than read without them. Decoding is otherwise strict: a member of the wrong type, a duplicate, an empty id, a
+ * blank tenant, subject or request id (`IDN-38`), an id (or any member other than a claim) with an unpaired UTF-16
+ * surrogate (RC1-52), a malformed `crit` or a header over the size limit is refused, never read as anonymous. The
+ * `cosec-identity` format descriptor (`schema/8.0/cosec-identity.schema.json`) describes the JSON.
  */
 @InternalCoSecApi
 object IdentityCodec {
@@ -69,8 +72,18 @@ object IdentityCodec {
 
     const val VERSION = 1
 
-    /** The largest header, encoded, a gateway sends and a service accepts by default. */
-    const val DEFAULT_MAX_BYTES = 8 * 1024
+    /**
+     * R, the largest header, encoded, a reader accepts by default (`cosec.pipeline.identity.max-size`, `IDN-43`). Never
+     * lowered within 8.x: every 8.x writer writes within it, so a reader of any 8.x version reads what any writes.
+     */
+    const val READ_MAX_BYTES = 8 * 1024
+
+    /**
+     * W, the largest header, encoded, CoSec's writers write by default (`cosec.gateway.identity.max-size`, the relay
+     * of a request's caller, `IDN-43`). Below [READ_MAX_BYTES] by the room the members a later 8.x version adds may
+     * take: a later version may raise it, up to R, never past it.
+     */
+    const val WRITE_MAX_BYTES = 6 * 1024
 
     /** The longest string claim value a gateway forwards. */
     const val MAX_CLAIM_LENGTH = 1024
@@ -81,11 +94,6 @@ object IdentityCodec {
      */
     internal const val MAX_SECONDS = 253_402_300_799L
 
-    private val FIELDS = arrayOf("v", "tenant", "sub", "scope", "roles", "memberships", "auth", "iat", "rid", "claims")
-    private val SCOPE_FIELDS = arrayOf("app", "space")
-    private val AUTH_FIELDS = arrayOf("method", "jti", "exp", "iat", "capped", "session")
-    private val SESSION_FIELDS = arrayOf("sid", "auth_time", "generation")
-
     private val reader: ObjectReader = CoSecJson.mapper.reader().with(StreamReadFeature.STRICT_DUPLICATE_DETECTION)
     private val encoder = Base64.getUrlEncoder().withoutPadding()
     private val decoder = Base64.getUrlDecoder()
@@ -95,7 +103,7 @@ object IdentityCodec {
      * [IdentityFormatException] when [decode] would refuse what it wrote, as [decode] refuses it (#1690): a header written
      * is a header read.
      */
-    fun encode(identity: Identity, maxBytes: Int = DEFAULT_MAX_BYTES): String {
+    fun encode(identity: Identity, maxBytes: Int = WRITE_MAX_BYTES): String {
         WrittenIdentity.check(identity)
         IdentityJson.check(identity)
         val header = encoder.encodeToString(CoSecJson.mapper.writeValueAsBytes(IdentityJson(identity)))
@@ -114,7 +122,7 @@ object IdentityCodec {
 
     /** [header] as an identity; [IdentityFormatException] when it is not one this service reads. */
     @Suppress("ThrowsCount")
-    fun decode(header: String, maxBytes: Int = DEFAULT_MAX_BYTES): Identity {
+    fun decode(header: String, maxBytes: Int = READ_MAX_BYTES): Identity {
         if (header.length > maxBytes) {
             throw IdentityFormatException(
                 Reason.OVERSIZE,
@@ -142,7 +150,9 @@ object IdentityCodec {
             val at = error.location?.let { " at line ${it.lineNr}, column ${it.columnNr}" }.orEmpty()
             throw malformed("not JSON$at")
         }
-        root.only("$", *FIELDS)
+        // Members this version does not know are ignored, unless `crit` names one (IDN-41): nothing walks the members
+        // to find them, so an identity costs no more to read than before, and less.
+        root.objectAt("$")
         val version = root.need("v")
         if (!version.isIntegralNumber || version.asLong() != VERSION.toLong()) {
             throw IdentityFormatException(
@@ -150,7 +160,8 @@ object IdentityCodec {
                 "The identity header is version ${QuotedText.of(version.toString())}, not $VERSION."
             )
         }
-        val scope = root.need("scope").also { it.only("$.scope", *SCOPE_FIELDS) }
+        root.get(IdentityCrit.MEMBER)?.let { IdentityCrit.check(it, root) }
+        val scope = root.need("scope").also { it.objectAt("$.scope") }
         val space = scope.need("space").text("$.scope.space")
         return Identity(
             tenant = root.need("tenant").name("$.tenant"),
@@ -169,7 +180,7 @@ object IdentityCodec {
     /** `auth`: how the principal authenticated, with the issue time and the session when the credential says. */
     @Suppress("ThrowsCount")
     private fun credential(auth: JsonNode): Identity.Credential {
-        auth.only("$.auth", *AUTH_FIELDS)
+        auth.objectAt("$.auth")
         val method = auth.need("method").text("$.auth.method")
         val expiresAt = (auth.get("exp") ?: throw IdentityFormatException(Reason.UNBOUNDED, "The identity has no auth.exp."))
             .seconds("$.auth.exp")
@@ -191,7 +202,7 @@ object IdentityCodec {
     /** `auth.session`: CoSec's own token's only, all three members, never read as no session when one is wrong. */
     @Suppress("ThrowsCount")
     private fun session(node: JsonNode, method: String, issuedAt: Instant?): TokenSession {
-        node.only("$.auth.session", *SESSION_FIELDS)
+        node.objectAt("$.auth.session")
         if (method != Identity.Method.JWT.value) throw malformed("$.auth.session is CoSec's own token's only")
         issuedAt ?: throw malformed("$.auth.session needs $.auth.iat")
         val authTime = node.need("auth_time").seconds("$.auth.session.auth_time")
@@ -230,10 +241,9 @@ object IdentityCodec {
         }
     }
 
-    internal fun JsonNode.only(path: String, vararg names: String) {
+    /** That this is an object; its members this version does not know are not looked for (IDN-41). */
+    internal fun JsonNode.objectAt(path: String) {
         if (!isObject) throw malformed("$path is not an object")
-        val unknown = properties().map { it.key }.filter { it !in names }
-        if (unknown.isNotEmpty()) throw malformed("$path has unknown members ${QuotedText.names(unknown)}")
     }
 
     private fun JsonNode.need(name: String): JsonNode = get(name) ?: throw malformed("[$name] is missing")

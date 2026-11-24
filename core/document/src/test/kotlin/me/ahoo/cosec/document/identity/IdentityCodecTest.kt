@@ -45,7 +45,7 @@ class IdentityCodecTest {
 
     private fun header(json: String) = Base64.getUrlEncoder().withoutPadding().encodeToString(json.encodeToByteArray())
 
-    private fun reason(header: String, maxBytes: Int = IdentityCodec.DEFAULT_MAX_BYTES) =
+    private fun reason(header: String, maxBytes: Int = IdentityCodec.READ_MAX_BYTES) =
         assertThrows<IdentityFormatException> { IdentityCodec.decode(header, maxBytes) }.reason
 
     @Test
@@ -96,7 +96,9 @@ class IdentityCodecTest {
             """"auth":{"method":"jwt","jti":"t1","exp":2},"iat":1,"rid":"r1""""
         IdentityCodec.decode(header("""{"v":1,$valid}""")).subject.assert().isEqualTo("alice")
         reason(header("""{"v":2,$valid}""")).assert().isEqualTo(IdentityFormatException.Reason.UNSUPPORTED_VERSION)
-        reason(header("""{"v":1,$valid,"admin":true}""")).assert().isEqualTo(IdentityFormatException.Reason.MALFORMED)
+        // A member this version does not know is ignored (IDN-41): it grants nothing it would not grant without it.
+        IdentityCodec.decode(header("""{"v":1,$valid,"admin":true}""")).assert()
+            .isEqualTo(IdentityCodec.decode(header("""{"v":1,$valid}""")))
         reason(header("""{"v":1,$valid,"sub":"bob"}""")).assert().isEqualTo(IdentityFormatException.Reason.MALFORMED)
         reason(header("""{"v":1,${valid.replace("\"alice\"", "\"\"")}}""")).assert()
             .isEqualTo(IdentityFormatException.Reason.MALFORMED)
@@ -247,9 +249,8 @@ class IdentityCodecTest {
             """{"method":"jwt","jti":"t1","exp":9,"iat":2,"session":{"sid":"s1","auth_time":1,"generation":-1}}""",
             """{"method":"jwt","jti":"t1","exp":9,"iat":2,"session":{"sid":"s1","auth_time":1,"generation":0}}""",
             """{"method":"jwt","jti":"t1","exp":9,"iat":2,"session":{"sid":"s1","auth_time":1,"generation":1.5}}""",
-            // An empty session id, an unknown member.
+            // An empty session id.
             """{"method":"jwt","jti":"t1","exp":9,"iat":2,"session":{"sid":"","auth_time":1,"generation":1}}""",
-            """{"method":"jwt","jti":"t1","exp":9,"iat":2,"session":{"sid":"s1","auth_time":1,"generation":1,"x":1}}""",
             // A session without the token's issue time, or of another credential than CoSec's token.
             """{"method":"jwt","jti":"t1","exp":9,"session":$good}""",
             """{"method":"api-key","jti":"k1","exp":9,"iat":2,"session":$good}""",
@@ -296,7 +297,7 @@ class IdentityCodecTest {
         )
         val encoded = IdentityCodec.encode(withItsSession)
         (encoded.length - IdentityCodec.encode(large).length).assert().isLessThanOrEqualTo(256)
-        encoded.length.assert().isLessThan(IdentityCodec.DEFAULT_MAX_BYTES)
+        encoded.length.assert().isLessThan(IdentityCodec.WRITE_MAX_BYTES)
         IdentityCodec.decode(encoded).assert().isEqualTo(withItsSession)
     }
 

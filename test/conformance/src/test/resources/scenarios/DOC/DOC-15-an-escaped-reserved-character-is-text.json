@@ -1,0 +1,51 @@
+{
+  "rules": [
+    "DOC-15"
+  ],
+  "polarity": "negative",
+  "level": "engine",
+  "description": "Escaped, the $ is text: a DENY on /odata/\\$metadata compiles and denies a request on /odata/$metadata.",
+  "documents": {
+    "platform": {
+      "policies": [
+        {
+          "id": "reserved",
+          "statements": [
+            {
+              "effect": "deny",
+              "action": "http:GET",
+              "resource": "http:path:/odata/\\$metadata"
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "reserved",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "reserved"
+        }
+      ]
+    }
+  },
+  "request": {
+    "action": "http:GET",
+    "resource": {
+      "type": "http",
+      "id": "/odata/$metadata"
+    }
+  },
+  "expect": {
+    "decision": "Deny",
+    "by": {
+      "policy": "reserved",
+      "statement": 0,
+      "via": {
+        "binding": "reserved",
+        "document": "platform"
+      }
+    }
+  }
+}

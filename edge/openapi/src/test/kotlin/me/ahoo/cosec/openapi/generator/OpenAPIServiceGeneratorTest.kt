@@ -203,6 +203,50 @@ class OpenAPIServiceGeneratorTest {
         fails("""{"/a":{"get":{"operationId":"has space"}}}""", "action")
     }
 
+    /**
+     * DOC-15: a spec path is text but for its templates. A `*` or `?` in it was a wildcard of the route, which mapped
+     * other paths to the operation's action; now it is the character, and a reserved one is escaped.
+     */
+    @Test
+    fun `a spec path's characters are text in its route, never pattern syntax`() {
+        val spec = spec(
+            """
+            {
+              "/files/a*b": {"get": {"operationId":"star"}},
+              "/files/what?": {"get": {"operationId":"question"}},
+              "/odata/${'$'}metadata": {"get": {"operationId":"metadata"}},
+              "/odata/v1/Products({id})": {"get": {"operationId":"product"}}
+            }
+            """.trimIndent(),
+        )
+        val document = OpenAPIServiceGenerator.routeMap(spec)
+        document.routes.map { it.path }.assert().containsExactlyInAnyOrder(
+            "/files/a\\*b",
+            "/files/what\\?",
+            "/odata/\\${'$'}metadata",
+            "/odata/v1/Products\\({id}\\)",
+        )
+        val routes = RouteMapCodec.load(listOf("generated" to RouteMapCodec.encode(document)))
+        (routes.resolve("GET", "/files/a*b") as RouteResolution.Mapped).action.verb.assert().isEqualTo("star")
+        routes.resolve("GET", "/files/axyzb").assert().isEqualTo(RouteResolution.Unmapped)
+        routes.resolve("GET", "/files/whatx").assert().isEqualTo(RouteResolution.Unmapped)
+        (
+            routes.resolve(
+                "GET",
+                "/odata/${'$'}metadata"
+            ) as RouteResolution.Mapped
+            ).action.verb.assert().isEqualTo("metadata")
+        val product = routes.resolve("GET", "/odata/v1/Products(42)") as RouteResolution.Mapped
+        product.resource.id.assert().isEqualTo("42")
+    }
+
+    @Test
+    fun `a spec path with a backslash fails generation, since no request path holds one`() {
+        assertThrows<OpenAPIGenerationException> {
+            OpenAPIServiceGenerator.routeMap(spec("""{"/a\\b":{"get":{"operationId":"x"}}}"""))
+        }.message.assert().contains("PIP-14")
+    }
+
     @Test
     fun `a path with several variables names all of them in its resource, in order`() {
         val routes = RouteMapCodec.load(

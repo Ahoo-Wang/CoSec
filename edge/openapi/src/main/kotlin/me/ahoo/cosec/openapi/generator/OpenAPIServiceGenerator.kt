@@ -31,6 +31,7 @@ import me.ahoo.cosec.document.route.RouteMap
 import me.ahoo.cosec.document.route.RouteMapCodec
 import me.ahoo.cosec.document.route.RouteMapDocument
 import me.ahoo.cosec.document.route.RouteMapException
+import me.ahoo.cosec.engine.pattern.PatternEscapes
 import me.ahoo.cosec.model.decision.DocumentKind
 import java.time.Instant
 
@@ -104,8 +105,9 @@ object OpenAPIServiceGenerator {
                 // The operation's servers override the Path Item's, which override the document's (OpenAPI 3.1 §4.8.10).
                 val servers = operation.servers.orEmpty().ifEmpty { resolved.servers.orEmpty() }
                     .ifEmpty { openAPI.servers.orEmpty() }
-                val path = withoutContextPath(serverPath(servers, "${method.name} $relative"), context) + relative
-                val where = "${method.name} $path"
+                val written = withoutContextPath(serverPath(servers, "${method.name} $relative"), context) + relative
+                val path = pattern(written)
+                val where = "${method.name} $written"
                 operation.operationId?.let { id ->
                     if (!operationIds.add(
                             id
@@ -119,12 +121,28 @@ object OpenAPIServiceGenerator {
                     ?: throw OpenAPIGenerationException("$where: the operation has neither an operationId nor $ACTION_EXTENSION")
                 // Every variable, in order: the last alone would name every user's avatar of one size alike (round 2 L4).
                 val resource = extension(operation, RESOURCE_EXTENSION)
-                    ?: VARIABLE.findAll(path).map { "{${it.groupValues[1]}}" }.toList().takeIf { it.isNotEmpty() }
+                    ?: VARIABLE.findAll(written).map { "{${it.groupValues[1]}}" }.toList().takeIf { it.isNotEmpty() }
                         ?.joinToString("/", prefix = "$service/")
                     ?: service
                 GeneratedOperation(Route(method.name, path, action, resource), operation)
             }
         }
+    }
+
+    /**
+     * [path], a URL path of the spec, as a route writes it (`DOC-15`): its templates `{name}` as captures, and every other
+     * character as the text it is. A spec path is a literal but for its templates, so a `*` or a `?` in it is a
+     * character, not a wildcard, and a reserved character is escaped; a `\` matches no request path, and the route map
+     * refuses it (PIP-14).
+     */
+    private fun pattern(path: String): String {
+        val written = StringBuilder(path.length)
+        var at = 0
+        for (template in VARIABLE.findAll(path)) {
+            written.append(PatternEscapes.escape(path.substring(at, template.range.first))).append(template.value)
+            at = template.range.last + 1
+        }
+        return written.append(PatternEscapes.escape(path.substring(at))).toString()
     }
 
     /** The route map; checked as a host loads it, so a map that would not load is never generated. */

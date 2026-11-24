@@ -72,10 +72,21 @@ class LocalControlService(
         return response.body.decodeToString()
     }
 
-    /** The request security [caller] acts with: its request's, or a service identity the gate admits now. */
+    /**
+     * The request security [caller] acts with: its request's, or a service identity the gate admits now. A request whose
+     * identity was forwarded without `memberships` is refused as malformed (400), as a host that decides on the identity
+     * refuses the header (`IDN-39`) and as the relay leaves the member out for it (`IDN-42`): the gate read only its own
+     * space's roles and no attachment, which is not the caller's whole memberships, so the control plane does not decide
+     * on it in process either (`CTL-77`).
+     */
     private fun security(caller: ControlCaller): RequestSecurity {
         caller.context?.let { context ->
-            return requireNotNull(RequestSecurity.of(context)) { ControlCaller.NOT_COSEC_CONTEXT }
+            val security = requireNotNull(RequestSecurity.of(context)) { ControlCaller.NOT_COSEC_CONTEXT }
+            val forwarded = security.identity
+            if (forwarded != null && forwarded.memberships == null) {
+                throw refusal(http.refused(BAD_REQUEST, security.requestId))
+            }
+            return security
         }
         val requestId = ids.generate()
         val identity = ServiceIdentity.of(

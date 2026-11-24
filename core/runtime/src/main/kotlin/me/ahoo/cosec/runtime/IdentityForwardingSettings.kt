@@ -29,5 +29,5 @@ class IdentityForwardingSettings internal constructor() {
     var claims: Set<String> = emptySet()
 
     /** The largest identity forwarded, in bytes (`max-size`): a larger one fails its request (500). */
-    var maxBytes: Int = IdentityCodec.DEFAULT_MAX_BYTES
+    var maxBytes: Int = IdentityCodec.WRITE_MAX_BYTES
 }

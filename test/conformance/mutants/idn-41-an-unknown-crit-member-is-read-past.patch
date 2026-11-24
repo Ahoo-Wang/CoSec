@@ -1,0 +1,17 @@
+# Rule: IDN-41
+# Mutant: a member crit names that this version does not know is read past, so a later writer's restriction is ignored by an older reader
+# Tests: :document:test --tests me.ahoo.cosec.document.identity.IdentityCritTest
+
+diff --git a/core/document/src/main/kotlin/me/ahoo/cosec/document/identity/IdentityCrit.kt b/core/document/src/main/kotlin/me/ahoo/cosec/document/identity/IdentityCrit.kt
+index 0d12ac82a..e1d21046f 100644
+--- a/core/document/src/main/kotlin/me/ahoo/cosec/document/identity/IdentityCrit.kt
++++ b/core/document/src/main/kotlin/me/ahoo/cosec/document/identity/IdentityCrit.kt
+@@ -53,7 +53,7 @@ internal object IdentityCrit {
+             if (!PATH.matches(path)) throw malformed("$.crit[$i] is not the path of a member")
+             if (!seen.add(path)) throw malformed("$.crit[$i] repeats a member")
+             when {
+-                path !in IdentityMembers.BY_PATH -> (unknown ?: ArrayList<String>().also { unknown = it }).add(path)
++                path !in IdentityMembers.BY_PATH -> {}
+                 !holds(root, path) -> throw malformed("$.crit[$i] names a member the header does not hold")
+             }
+         }

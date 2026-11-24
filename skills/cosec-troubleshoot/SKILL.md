@@ -87,6 +87,12 @@ Full model: https://cosec.ahoo.me/guide/security-model.
   revocations and API keys copied to the new keys first (`COPY`, or `RENAME`, which keeps the expiry): a revocation
   left under the old prefix is no longer read, so the token it revoked would be accepted again. Then set
   `cosec.key-prefix` to the snapshot documents' prefix and remove the old properties; never suggest only renaming them.
+- **A document or a route map does not compile on a reserved character** (`DOC-15`): `'<c>' is reserved for a future
+  pattern syntax; write \<c> for the character`, at the position given. One of `[ ] ( ) | ! ^ $ \` is unescaped in a
+  path, typed resource or action pattern; write it escaped (doubled backslash in JSON). Patterns that match no request
+  path (a `\`, `;`, control character, dot segment, a segment over 256 characters) are refused the same way. After an
+  upgrade from 8.0.0-beta.8 such a stored document is installed as failed (`503` for what reads it): before upgrading,
+  `cosec-migrate check-patterns --to-redis <uri>` names each such pattern and how to write it.
 - **A document does not compile on a path pattern** (`DOC-4`): over 2,048 characters, a glob segment of more than 16
   parts (consecutive `*` count once), or more than 2,048 glob units in one document (each glob segment's parts and the
   characters of its text, twice after a leading `**`). The control plane answers a
@@ -568,9 +574,15 @@ most once a minute per problem type, DEBUG every time). Gateway mode records no 
 is counted in `cosec.identity.refused{problem}` (with cosec-micrometer), where any non-zero rate is a misconfigured hop
 or a request that bypassed the gateway:
 
-- 400 `invalid-request`: not base64url JSON of format v1, unknown or missing members, an id with an unpaired
+- 400 `invalid-request`: not base64url JSON of format v1, a missing member or a malformed `crit`, an id with an unpaired
   surrogate (IDN-10), a blank `sub`, `tenant` or `rid` (IDN-38), over
   `cosec.pipeline.identity.max-size` (8KB), sent more than once, or a scope that does not resolve here.
+- 431, or a 400 without CoSec's problem body: the web server refused the headers before CoSec read them
+  (`server.max-http-request-header-size`). On a host that reads the identity it is derived, 16 KB at the defaults,
+  unless set; a value set below that is named at startup at WARN with both numbers (IDN-43).
+- 503 `unavailable`: a member the header's `crit` names that the service does not know (IDN-41): a later CoSec
+  version wrote it and this service is older; counted as `cosec.identity.refused{problem=unavailable}`, never a store
+  outage. Upgrade the service.
 - 401 `token-invalid`: unsupported version, no `auth.exp`, or issued in the future (beyond
   `cosec.authentication.revocation.skew`).
 - 401 `token-expired`: the credential expired, or the identity is older than `cosec.pipeline.identity.max-age` (60s)

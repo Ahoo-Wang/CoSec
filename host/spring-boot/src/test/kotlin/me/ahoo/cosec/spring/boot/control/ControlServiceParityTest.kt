@@ -264,8 +264,11 @@ class ControlServiceParityTest {
         }
     }
 
-    /** A request alice of [tenant] makes as an administrator, behind a gateway that forwarded her: a context CoSec made. */
-    private fun alice(tenant: String): ControlCaller {
+    /**
+     * A request alice of [tenant] makes as an administrator, behind a gateway that forwarded her: a context CoSec made.
+     * Her header states [memberships] as a CoSec gateway's does, empty by default; null is a header without the member.
+     */
+    private fun alice(tenant: String, memberships: Identity.Memberships? = Identity.Memberships.NONE): ControlCaller {
         val now = Instant.now()
         val forwarded = Identity(
             tenant = tenant,
@@ -276,6 +279,7 @@ class ControlServiceParityTest {
             credential = Identity.Credential(Identity.Method.JWT, "token-$tenant", now.plusSeconds(300)),
             issuedAt = now,
             requestId = "r-$tenant",
+            memberships = memberships,
         )
         return ControlCaller.of(PermittedRequest.withIdentity(IdentityHeader.write(forwarded)))
     }
@@ -388,6 +392,40 @@ class ControlServiceParityTest {
                 runBlocking { http.document(ended(REMOTE), SnapshotKey.Tenant(REMOTE)) }
             }
             refused.detail.assert().isNull()
+        }
+    }
+
+    /**
+     * `IDN-42`, `IDN-39`: a caller whose header was forwarded without `memberships` is refused alike, as malformed. Over
+     * HTTP the relay states no memberships it was not forwarded, and the host refuses the header; in process the facade
+     * refuses the request itself. Before, the relay wrote empty memberships, and both decided without the caller's
+     * attachments and other spaces.
+     */
+    @Test
+    fun `a caller forwarded without memberships is refused alike through both implementations - IDN-42`() {
+        runner.run { context ->
+            context.startupFailure.assert().isNull()
+            publish(context, SnapshotKey.Platform, DocumentKind.PLATFORM, "", PLATFORM)
+            listOf(LOCAL, REMOTE).forEach { publish(context, SnapshotKey.Tenant(it), DocumentKind.TENANT, it, TENANT) }
+            val local = context.getBean(ControlService::class.java)
+            val port = context.getBean(ControlServiceListener::class.java).boundPort
+            val http = HttpControlService(URI("http://127.0.0.1:$port/cosec/control/v1"))
+            fun script(service: ControlService, tenant: String): List<String> = runBlocking {
+                listOf(
+                    answer { service.document(alice(tenant), SnapshotKey.Tenant(tenant)) },
+                    answer { service.document(alice(tenant, memberships = null), SnapshotKey.Tenant(tenant)) },
+                )
+            }
+            val deadline = System.nanoTime() + Duration.ofSeconds(10).toNanos()
+            while (!script(http, REMOTE)[0].startsWith("200")) {
+                check(System.nanoTime() < deadline) { "The platform document was not installed" }
+                Thread.sleep(20)
+            }
+
+            val inProcess = script(local, LOCAL)
+
+            script(http, REMOTE).assert().isEqualTo(inProcess)
+            inProcess[1].assert().startsWith("400 INVALID_REQUEST")
         }
     }
 

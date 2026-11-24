@@ -15,18 +15,75 @@ section above it:
 
 | You run | Read |
 |---|---|
-| `8.0.0-beta.7` | [From beta.7](#from-8-0-0-beta-7) |
-| `8.0.0-beta.6` | [From beta.6](#from-8-0-0-beta-6), then the one above |
-| `8.0.0-beta.5` | [From beta.5](#from-8-0-0-beta-5), then the two above |
-| `8.0.0-beta.4` | [From beta.4](#from-8-0-0-beta-4), then the three above |
-| `8.0.0-beta.3` | [From beta.3](#from-8-0-0-beta-3), then the four above |
-| `8.0.0-beta.2` | [From beta.2](#from-8-0-0-beta-2), then the five above |
-| `8.0.0-beta.1` | [From beta.1](#from-8-0-0-beta-1), then the six above |
-| `8.0.0-alpha.4` | [From alpha.4](#from-8-0-0-alpha-4), then the seven above |
+| `8.0.0-beta.8` | [From beta.8](#from-8-0-0-beta-8) |
+| `8.0.0-beta.7` | [From beta.7](#from-8-0-0-beta-7), then the one above |
+| `8.0.0-beta.6` | [From beta.6](#from-8-0-0-beta-6), then the two above |
+| `8.0.0-beta.5` | [From beta.5](#from-8-0-0-beta-5), then the three above |
+| `8.0.0-beta.4` | [From beta.4](#from-8-0-0-beta-4), then the four above |
+| `8.0.0-beta.3` | [From beta.3](#from-8-0-0-beta-3), then the five above |
+| `8.0.0-beta.2` | [From beta.2](#from-8-0-0-beta-2), then the six above |
+| `8.0.0-beta.1` | [From beta.1](#from-8-0-0-beta-1), then the seven above |
+| `8.0.0-alpha.4` | [From alpha.4](#from-8-0-0-alpha-4), then the eight above |
 | `8.0.0-alpha.3`, `alpha.2`, `alpha.1` | [From alpha.3](#from-8-0-0-alpha-3), [alpha.2](#from-8-0-0-alpha-2) or [alpha.1](#from-8-0-0-alpha-1), then every section above it |
 
 Which preview of the library may run behind which preview of the gateway image: see
 [Upgrading a running deployment](./upgrading.md#upgrading-a-running-deployment).
+
+## From 8.0.0-beta.8 {#from-8-0-0-beta-8}
+
+- **Breaking: logging out of a switched session ends the login it came from** (`IDN-40`). Affected: a user who
+  switches tenant and then logs out. A logout ended only the session it was given: after a switch, the login's own
+  session lived on on the server, refreshable by whoever held its pair, until its refresh token expired, though the
+  client no longer held it. Now a logout of a switched session, by the served route or `TokenRevoker.revoke` of the
+  access token or of the pair, revokes the login's session first, then the switched one: the user is signed out of that
+  login on every device, and every other session switched from it ends at its next refresh or switch. The answers do not
+  change (`204`, `401`, `503`: `contract/` is the same); a `503` now also means the login could not be revoked, and the
+  client logs out again as before. A switched session already logged out under 8.0.0-beta.8 keeps its login: a second
+  logout of it is answered as done without revoking anything. That login ends when it is logged out itself, revoked
+  ([`revokeSubject`](../integration/authentication.md#revoking-every-token-of-a-principal)) or past its lifetime
+  ([Switching tenant and app](../integration/authentication.md#switching-tenant-and-app)).
+- **Breaking: `[ ] ( ) | ! ^ $ \` are reserved in every pattern, and a backslash writes them as text** (`DOC-15`).
+  Affected: a document, a route map or a change whose path, typed resource or action pattern holds one of them, which
+  an earlier preview read as text; and one whose path pattern can match no request path. Each now fails to compile,
+  naming the character and its position. Write the character escaped: `http:path:/odata/\$metadata`,
+  `http:path:/files/a\(1\).txt`, the backslash doubled in JSON
+  ([Reserved characters](../policies/language.md#reserved-characters)). A path pattern holding a `\`, a `;`, a control
+  character, a `.` or `..` segment, or a segment longer than 256 characters matched no request path before, so a DENY
+  written so denied nothing: name the path as the pipeline sees it.
+  - **Before upgrading**, find the stored documents that hold such a pattern, with the new release's
+    [`cosec-migrate check-patterns`](./upgrading.md#check-the-patterns-before-an-upgrade): it names each one, where it
+    is and how to write it. An upgraded instance installs such a document as failed, and the requests that read it
+    answer `503`. Rewrite and publish them first, on the version you run: an
+    escape such as `\(` is understood by this version only, so publish the rewritten document after every instance
+    reads it.
+  - **Rolling upgrade.** 8.0.0-beta.8 reads `\(` as a backslash and a parenthesis, which no request path holds: a DENY
+    written escaped denies nothing on an instance not yet upgraded. Upgrade every instance that decides (gateways,
+    services, control hosts) before you publish a pattern with an escape.
+  - `cosec-migrate` escapes a 7.x path pattern's reserved characters, which 7.x read as text, so a converted policy
+    means what it meant. `cosec-openapi` escapes every such character of a spec path outside its templates, `*` and
+    `?` included: before, a `*` or `?` in a spec path became a wildcard of the generated route, which mapped other paths
+    to that operation. Generate route maps again.
+- **Breaking: a relayed caller states only the memberships it was forwarded** (`IDN-42`). `HttpControlService`'s relay of a
+  request's caller wrote empty `memberships` for a caller whose own `CoSec-Identity` had none, so a host that decides on
+  the identity took it as a caller with no attachment and no role in another space. It now leaves the member out, and
+  the host refuses the call with `400` `invalid-request`; the control plane's in-process facade refuses such a caller
+  alike. Only a header without `memberships` reaches this: one from a beta.7 gateway, or one an application wrote.
+  Upgrade the gateways (every beta.8 gateway writes the member) before relying on control calls made for their callers.
+- **A service reads an identity header with members it does not know** (`IDN-41`). A reader of `CoSec-Identity`
+  ignored no unknown member: it answered `400` to any, which is why beta.8's `memberships` needed an order between the
+  gateways and the services behind them. It now ignores a member it does not know, at any level, unless the header's
+  new `crit` names it: a member a later version must have every reader understand. A member `crit` names that the
+  service does not know is refused with `503` `unavailable`, counted as `cosec.identity.refused{problem=unavailable}`
+  and logged naming it. No 8.0 writer writes `crit`. A header an application writes with a misspelled member is now
+  read without it rather than refused.
+- **Breaking: the identity header has a reader's limit and a smaller writer's limit** (`IDN-43`). A gateway now writes at most
+  6 KB by default (`cosec.gateway.identity.max-size`, was 8 KB), and so does `HttpControlService`'s relay; a service
+  still reads 8 KB (`cosec.pipeline.identity.max-size`), which no 8.x version lowers. A principal whose identity takes
+  6 to 8 KB now fails at the gateway with `500` unless you raise `cosec.gateway.identity.max-size`, up to 8 KB; on the
+  servers' default request-header limit such a header did not reach a service anyway. A host that reads the identity
+  (`gateway` mode, or `cosec.pipeline.caller=forwarded-identity`) now gets `server.max-http-request-header-size` derived,
+  16 KB at the defaults, when you have not set it; a value you set is kept, and named at startup at `WARN` when it is
+  smaller.
 
 ## From 8.0.0-beta.7 {#from-8-0-0-beta-7}
 

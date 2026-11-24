@@ -51,6 +51,8 @@ import me.ahoo.cosec.spi.token.RevocationReader
 import me.ahoo.cosec.spi.token.TokenStore
 import me.ahoo.cosec.spi.token.TokenVerifier
 import me.ahoo.cosec.spring.boot.ConditionalOnCoSecEnabled
+import me.ahoo.cosec.spring.boot.StartupTask
+import me.ahoo.cosec.spring.boot.StartupTaskExclusion
 import me.ahoo.cosec.spring.boot.apikey.apiKeysEnabled
 import me.ahoo.cosec.spring.boot.audit.kafka.KafkaAuditProperties
 import me.ahoo.cosec.spring.boot.audit.kafka.kafkaAuditDelivery
@@ -64,6 +66,7 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
+import org.springframework.context.annotation.Import
 import org.springframework.core.annotation.AnnotationAwareOrderComparator
 import org.springframework.core.env.Environment
 import org.springframework.core.io.ResourceLoader
@@ -87,6 +90,7 @@ private val log = KotlinLogging.logger {}
     RevocationProperties::class,
     TokenCacheProperties::class,
 )
+@Import(StartupTaskExclusion::class)
 @InternalCoSecApi
 class CoSecPipelineAutoConfiguration {
     @Bean
@@ -269,6 +273,12 @@ class CoSecPipelineAutoConfiguration {
         @ConditionalOnMissingBean
         fun cosecIdentityIssuer(properties: GatewayIdentityProperties): IdentityIssuer =
             IdentityIssuer(properties.claims, properties.maxSize.toBytes().toInt())
+
+        /** `IDN-43`: a writer limit above what every 8.x service reads by default, named at startup. */
+        @Bean
+        fun cosecGatewayWriterLimitCheck(properties: GatewayIdentityProperties): StartupTask = StartupTask.OnCreation {
+            IdentityHeaderLimit.gatewayWriterLine(properties.maxSize)?.let { line -> log.warn { line } }
+        }
     }
 
     /** Checks further actions as the principal of a permitted request (RFC 0006 §7.6). */

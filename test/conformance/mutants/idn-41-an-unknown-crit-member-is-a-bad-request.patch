@@ -1,0 +1,17 @@
+# Rule: IDN-41
+# Mutant: a member crit names that the service does not know is answered 400, as if the request were wrong, and counted with the malformed headers
+# Tests: :runtime:test --tests me.ahoo.cosec.runtime.identity.IdentityMustUnderstandTest
+
+diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/identity/IdentityGate.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/identity/IdentityGate.kt
+index be62d3702..9e495ec25 100644
+--- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/identity/IdentityGate.kt
++++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/identity/IdentityGate.kt
+@@ -143,7 +143,7 @@ class IdentityGate(
+                     ProblemType.INVALID_REQUEST
+                 // A later writer's member this version must understand and does not (IDN-41): it passes once this
+                 // service is upgraded, so 503, never 401, which a client takes as the end of its session.
+-                IdentityFormatException.Reason.UNSUPPORTED_MEMBER -> ProblemType.UNAVAILABLE
++                IdentityFormatException.Reason.UNSUPPORTED_MEMBER -> ProblemType.INVALID_REQUEST
+             }
+             return reject(requestId, type, e.message.orEmpty(), traceId)
+         }

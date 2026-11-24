@@ -17,6 +17,7 @@ package me.ahoo.cosec.migrate
 
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.engine.ResourceSource
+import me.ahoo.cosec.engine.pattern.PatternEscapes
 import tools.jackson.databind.JsonNode
 
 /**
@@ -128,7 +129,7 @@ internal class MatcherTranslator(private val reject: (RejectionKind, String, Str
         val decode = options?.get(DECODE_AND_PARSE_SEGMENTS)?.asBoolean() ?: true
         return Action(
             actions = if (methods.isEmpty()) listOf("$HTTP*") else methods.map { "$HTTP$it" },
-            resources = patterns.map { ResourceSource("$HTTP_PATH$it", caseSensitive, decode) },
+            resources = patterns.map { ResourceSource("$HTTP_PATH${escaped(it)}", caseSensitive, decode) },
         )
     }
 
@@ -204,6 +205,28 @@ internal class MatcherTranslator(private val reject: (RejectionKind, String, Str
         const val ALL = "*"
         const val HTTP = "http:"
         const val HTTP_PATH = "http:path:"
+
+        /**
+         * A 7.x path pattern as 8.0 writes it (`DOC-15`): Spring read `[ ] ( ) | ! ^ $ \` as text, which 8.0 reserves and
+         * writes escaped, so the pattern means what it meant; `*`, `?` and what a `{...}` holds keep their meaning. A
+         * backslash, escaped, matches no 8.0 request path (PIP-14), and the statement does not compile, saying so.
+         */
+        internal fun escaped(pattern: String): String {
+            if (pattern.none { it in PatternEscapes.RESERVED }) {
+                return pattern
+            }
+            val written = StringBuilder(pattern.length + 2)
+            var depth = 0
+            for (char in pattern) {
+                when {
+                    char == '{' -> depth++
+                    char == '}' -> depth = maxOf(0, depth - 1)
+                    depth == 0 && char in PatternEscapes.RESERVED -> written.append('\\')
+                }
+                written.append(char)
+            }
+            return written.toString()
+        }
         val ALL_ACTIONS = listOf(ALL)
         val ALL_ACTION = Action(ALL_ACTIONS, emptyList())
 

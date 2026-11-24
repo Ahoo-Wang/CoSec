@@ -398,9 +398,11 @@ read as anonymous:
 
 | Status | Cause | Fix |
 |---|---|---|
-| `400` `invalid-request` | The header is not base64url JSON of format v1, has an unknown or missing member, names an id with an unpaired UTF-16 surrogate (`IDN-10`), a blank `sub`, `tenant` or `rid` (`IDN-38`) or a tenant that cannot be a tenant id, such as one with `/` (`SCP-13`), is larger than [`cosec.pipeline.identity.max-size`](./configuration.md#pipeline), arrived more than once, or names a scope that does not resolve on this service. | Something other than the CoSec gateway sets the header, or the gateway's `cosec.gateway.identity.max-size` is larger than the service's limit. |
+| `400` `invalid-request` | The header is not base64url JSON of format v1, has a missing member or a malformed `crit`, names an id with an unpaired UTF-16 surrogate (`IDN-10`), a blank `sub`, `tenant` or `rid` (`IDN-38`) or a tenant that cannot be a tenant id, such as one with `/` (`SCP-13`), is larger than [`cosec.pipeline.identity.max-size`](./configuration.md#pipeline), arrived more than once, or names a scope that does not resolve on this service. | Something other than the CoSec gateway sets the header, or the gateway's `cosec.gateway.identity.max-size` is larger than the service's limit. |
 | `401` `token-invalid` | A version this service does not read, no `auth.exp`, or an identity issued later than now plus [`cosec.authentication.revocation.skew`](./configuration.md#authentication). | Upgrade the service with the gateway; synchronize the clocks. |
+| `503` `unavailable` | A member the header's `crit` names that this service does not know (`IDN-41`): a gateway or service of a later CoSec version wrote it, and this service is older than it counted on. The log line names the member; `cosec.identity.refused{problem=unavailable}` counts it, apart from any store outage. | Upgrade the service. |
 | `401` `token-expired` | The credential expired, or the identity was issued longer ago than [`cosec.pipeline.identity.max-age`](./configuration.md#pipeline) plus the skew. | Synchronize the clocks; a request that waits long between the gateway and the service needs a larger `max-age`. In a test without a gateway, a header made once and reused: make one per request ([`IdentityHeader`](../integration/web.md#services-behind-the-gateway)). |
+| `431`, or `400` without CoSec's problem body | The web server refused the request before CoSec read it: its headers together exceed `server.max-http-request-header-size`. On a host that reads the identity the starter derives that limit (16 KB at the defaults, `IDN-43`) unless it is set; a value set below it is named at startup at `WARN`: `server.max-http-request-header-size is <n> bytes, below cosec.pipeline.identity.max-size (<r> bytes) and 8192 bytes for the request's other headers (<d> bytes) ...`. | Unset it to have it derived, or raise it to at least the derived value. |
 
 The response says only the problem, never why, in every environment. The reason is in the service's log, from the
 logger `me.ahoo.cosec.runtime.identity.IdentityGate`:
@@ -544,6 +546,20 @@ rest, and the kubelet restarts the pod.
   into whole segments (`*` or `{name}` alone in a segment costs nothing), keep the text of a glob segment short, or
   fold several statements' patterns into fewer; a segment after a leading `**` counts twice. On the data
   plane a stored document over a bound is installed as failed, and the requests that read it answer `503`.
+
+## A pattern does not compile after an upgrade {#a-pattern-does-not-compile-after-an-upgrade}
+
+- `` '<c>' is reserved for a future pattern syntax; write \<c> for the character ``: a pattern holds one of
+  `[ ] ( ) | ! ^ $ \` unescaped (`DOC-15`), which an earlier preview read as text. Write it escaped, `\$` for `$`, a
+  backslash doubled in JSON ([Policy language](../policies/language.md#reserved-characters)). The message gives the
+  position. From the preview after 8.0.0-beta.8 on, a stored document with one is installed as failed, and the requests that read it answer
+  `503`: find such documents before upgrading with [`cosec-migrate check-patterns`](./upgrading.md#check-the-patterns-before-an-upgrade) ([Upgrading from 8.0.0-beta.8](./upgrading-previews.md#from-8-0-0-beta-8)).
+- `` \<c> escapes nothing ``: a backslash before a character that is not one of `[ ] ( ) | ! ^ $ \ * ? { }`.
+- `` a request path holds no backslash ``, `` hold no ';' ``, `` holds no control character ``, `` holds no dot segment ``,
+  or `` more than the 256 a request path's segment holds ``: the pattern matches no path the pipeline lets through
+  (`PIP-5`, `PIP-14`, `PIP-30`), so a DENY written so would deny nothing. Name the path as the pipeline sees it.
+- A route map that does not load with one of these messages: its path, action or resource template holds the
+  character; the same rule applies.
 
 ## A compilation does not end {#a-compilation-does-not-end}
 

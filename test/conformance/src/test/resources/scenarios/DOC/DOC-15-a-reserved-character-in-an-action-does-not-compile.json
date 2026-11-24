@@ -1,0 +1,37 @@
+{
+  "rules": [
+    "DOC-15"
+  ],
+  "polarity": "positive",
+  "level": "engine",
+  "description": "An action pattern holding ! unescaped does not compile: the action patterns reserve the same characters as the paths.",
+  "documents": {
+    "platform": {
+      "policies": [
+        {
+          "id": "reserved",
+          "statements": [
+            {
+              "effect": "deny",
+              "action": "order:re!ad",
+              "resource": "http:path:/orders/**"
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "reserved",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "reserved"
+        }
+      ]
+    }
+  },
+  "expect": {
+    "decision": "NotCompiled",
+    "error": "'!' is reserved for a future pattern syntax"
+  }
+}

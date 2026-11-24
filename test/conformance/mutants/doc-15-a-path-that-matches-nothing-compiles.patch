@@ -1,0 +1,21 @@
+# Rule: DOC-15
+# Mutant: a path pattern holding a ; compiles, though path parameters are removed and an encoded ; refused, so a DENY on it denies nothing
+# Tests: :engine:test --tests me.ahoo.cosec.engine.pattern.ReservedCharactersTest :conformance:test --tests me.ahoo.cosec.conformance.ConformanceTest
+
+diff --git a/core/engine/src/main/kotlin/me/ahoo/cosec/engine/pattern/HttpPathPatternParser.kt b/core/engine/src/main/kotlin/me/ahoo/cosec/engine/pattern/HttpPathPatternParser.kt
+index 5f97f7e7a..0011442c9 100644
+--- a/core/engine/src/main/kotlin/me/ahoo/cosec/engine/pattern/HttpPathPatternParser.kt
++++ b/core/engine/src/main/kotlin/me/ahoo/cosec/engine/pattern/HttpPathPatternParser.kt
+@@ -192,11 +192,7 @@ internal class HttpPathPatternParser(private val pattern: String, private val ca
+                     index++
+                 }
+                 in PatternEscapes.RESERVED -> throw PatternEscapes.reserved(pattern, begin + index, char)
+-                ';' -> throw invalid(
+-                    begin + index,
+-                    "a request path's segments hold no ';': path parameters are removed and an encoded one refused " +
+-                        "(PIP-5, PIP-30), so it matches no path",
+-                )
++
+                 else -> {
+                     if (isLoneSurrogate(text, index)) {
+                         throw invalid(begin + index, "a lone surrogate half is no character a path can hold")

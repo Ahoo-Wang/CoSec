@@ -266,7 +266,7 @@ meters above. It counts the forwarded identities it refuses:
 | Meter | Tag | Counts |
 |---|---|---|
 | `cosec.problem.render.failed` | none | every refusal answered with CoSec's own body because the application's `ProblemRenderer` threw or answered no bytes (`PIP-34`); the request was still refused, with CoSec's status. Any non-zero rate is a renderer to fix ([Troubleshooting](./troubleshooting.md#a-refusal-is-answered-with-cosecs-body-though-a-renderer-is-declared)) |
-| `cosec.identity.refused` | `problem`: `invalid-request`, `token-invalid`, `token-expired` | every `CoSec-Identity` header the service refused, including those its log does not print; the reason is logged at `WARN`, at most once a minute for each problem ([Troubleshooting](./troubleshooting.md#a-service-behind-the-gateway-refuses-requests)), never in the response |
+| `cosec.identity.refused` | `problem`: `invalid-request`, `token-invalid`, `token-expired`, `unavailable` (a member `crit` names that the service does not know: a reader older than its writer, `IDN-41`) | every `CoSec-Identity` header the service refused, including those its log does not print; the reason is logged at `WARN`, at most once a minute for each problem ([Troubleshooting](./troubleshooting.md#a-service-behind-the-gateway-refuses-requests)), never in the response |
 
 In gateway mode any non-zero rate means a hop that is misconfigured or a request that did not come through the gateway;
 alert on it.
