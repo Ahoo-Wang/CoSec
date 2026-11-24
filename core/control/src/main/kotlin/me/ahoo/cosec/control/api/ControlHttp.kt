@@ -142,7 +142,11 @@ class ControlHttp(
     }
 
     /** Refused for a reason none of the control plane's own checks gives (RC1-39): not shown, logged. */
-    private fun refused(request: ControlHttpRequest, requestId: String, e: IllegalArgumentException): ControlHttpResponse {
+    private fun refused(
+        request: ControlHttpRequest,
+        requestId: String,
+        e: IllegalArgumentException
+    ): ControlHttpResponse {
         if (later(request, requestId, e)) return problem(Problem.UNAVAILABLE, requestId, null)
         log.info {
             "Control API ${request.method} ${request.path} (request $requestId) is 400: " +

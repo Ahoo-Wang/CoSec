@@ -72,10 +72,24 @@ class StoredRecordMembersTest {
     /** The two ways an older reader can lose a member, asserted apart: ignoring it, and dropping it when it rewrites. */
     @Test
     fun `whether ignoring a member widens, and whether dropping it does, are each stated`() {
-        val ignoring = cases.flatMap { case -> case.members.members.filter { it.ignoringWidens }.map { "${case.tag}:${it.path}" } }
-        val dropping = cases.flatMap { case -> case.members.members.filter { it.droppingWidens }.map { "${case.tag}:${it.path}" } }
-        ignoring.assert().containsExactly("change:base.digest", "change:escalations", "staging_slot:holder", "instance_status:shadows")
-        dropping.assert().containsExactly("change:base.digest", "change:escalations", "staging_slot:holder", "instance_status:shadows")
+        val ignoring = cases.flatMap { case -> case.members.members.filter {
+            it.ignoringWidens
+        }.map { "${case.tag}:${it.path}" } }
+        val dropping = cases.flatMap { case -> case.members.members.filter {
+            it.droppingWidens
+        }.map { "${case.tag}:${it.path}" } }
+        ignoring.assert().containsExactly(
+            "change:base.digest",
+            "change:escalations",
+            "staging_slot:holder",
+            "instance_status:shadows"
+        )
+        dropping.assert().containsExactly(
+            "change:base.digest",
+            "change:escalations",
+            "staging_slot:holder",
+            "instance_status:shadows"
+        )
     }
 
     @Test

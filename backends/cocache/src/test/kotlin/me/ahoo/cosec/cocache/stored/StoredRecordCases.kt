@@ -94,7 +94,10 @@ internal object StoredRecordCases {
             ShadowMembers.RESIDENT_DOCUMENTS,
             """{"format":1,"instance":"i1","at":"2026-11-01T00:00:00Z","documents":{"tenant:acme":3}}""",
         ) { tree(ShadowCodec.encodeResident(ShadowCodec.decodeResident(bytes(it)))) },
-        StoredRecordCase(ShadowRecordMembers.INSTANCE_INDEX, """{"format":1,"instances":{"i1":"2026-11-01T00:00:00Z"}}""") {
+        StoredRecordCase(
+            ShadowRecordMembers.INSTANCE_INDEX,
+            """{"format":1,"instances":{"i1":"2026-11-01T00:00:00Z"}}"""
+        ) {
             tree(InstanceIndexCodec.encode(InstanceIndexCodec.decode(bytes(it))))
         },
         StoredRecordCase(ShadowRecordMembers.REPORTERS, """{"format":1,"reporters":["i1","i2"]}""") {
