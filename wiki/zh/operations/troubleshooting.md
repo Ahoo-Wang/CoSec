@@ -565,6 +565,8 @@ CoSec is on (cosec.enabled), but this web host registers none of its gates (Pipe
 保留这个自动配置，或者自己注册 CoSec 的过滤器（它类型的 bean，或者过滤器是它的 `FilterRegistrationBean`：检查看的是类型，不是 bean 的名字），
 或者用 `cosec.enabled=false` 关闭 CoSec。
 
+处于 `cosec.pipeline.mode=gateway` 的 Spring Cloud Gateway 宿主得到的是另一条信息（`... this Spring Cloud Gateway host is in cosec.pipeline.mode=gateway: a gateway host decides only in enforce mode ...`）：它的门是网关过滤器，只有 `enforce` 模式才注册。删掉这个模式即可；`gateway` 模式是给网关后面的服务用的。
+
 ### 刷新路由的认证导致启动失败 {#startup-fails-on-the-refresh-routes-authentication}
 
 ```text

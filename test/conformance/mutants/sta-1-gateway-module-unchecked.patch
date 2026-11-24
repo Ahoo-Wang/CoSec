@@ -3,11 +3,11 @@
 # Tests: :spring-boot:test --tests me.ahoo.cosec.spring.boot.CoSecModuleCheckAutoConfigurationTest
 
 diff --git a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/CoSecModuleCheckAutoConfiguration.kt b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/CoSecModuleCheckAutoConfiguration.kt
-index b43204938..300362b8b 100644
+index d14d23805..84e69748a 100644
 --- a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/CoSecModuleCheckAutoConfiguration.kt
 +++ b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/CoSecModuleCheckAutoConfiguration.kt
 @@ -108,20 +108,6 @@ internal class CoSecModuleCheckAutoConfiguration {
-             StartupTask.AfterSingletons { WebGateCheck.require(context, context.classLoader) }
+             StartupTask.AfterSingletons { WebGateCheck.require(context, context.classLoader, context.environment) }
      }
  
 -    /** Whether or not CoSec is enabled: a gateway strips the client's identity header always (PIP-10). */

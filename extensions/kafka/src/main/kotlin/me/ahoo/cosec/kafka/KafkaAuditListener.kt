@@ -67,6 +67,15 @@ class KafkaAuditListener(
     }
 
     private val failures = AtomicLong()
+    private val lost = AtomicLong()
+
+    /**
+     * The BEST_EFFORT records lost after they were queued, since this listener was made: the broker refused them, or
+     * never answered before the sender closed (DR1-G-4, `cosec.audit.kafka.failures`). What failed before it was queued
+     * (a full or closed queue, a record that does not serialize) threw, and the decision listeners counted it
+     * (`cosec.listener.failures`); a REQUIRED send that fails also throws, so it is not counted here.
+     */
+    val sendFailures: Long get() = lost.get()
     private val lastWarning = AtomicLong(Long.MIN_VALUE)
     private val sender = BoundedSender(
         "Kafka audit queue of [$topic]",
@@ -99,6 +108,7 @@ class KafkaAuditListener(
      * trace for each would be the request rate in log volume (as `DecisionListeners` bounds its own).
      */
     internal fun failed(error: Throwable) {
+        lost.incrementAndGet()
         failures.incrementAndGet()
         val now = System.nanoTime()
         val previous = lastWarning.get()
