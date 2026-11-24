@@ -288,7 +288,12 @@ class ControlServiceParityTest {
             app = "cosec-control",
             space = "",
             roles = setOf("admin"),
-            credential = Identity.Credential(Identity.Method.JWT, "token-$tenant", now.plusSeconds(300)),
+            credential = Identity.Credential(
+                Identity.Method.JWT,
+                Identity.Credential.Kind.PERSON,
+                "token-$tenant",
+                now.plusSeconds(300)
+            ),
             issuedAt = now,
             requestId = "r-$tenant",
             memberships = memberships,
@@ -498,7 +503,12 @@ class ControlServiceParityTest {
             app = "cosec-control",
             space = space,
             roles = setOf("admin"),
-            credential = Identity.Credential(Identity.Method.JWT, "token-$subject-$tenant", now.plusSeconds(300)),
+            credential = Identity.Credential(
+                Identity.Method.JWT,
+                Identity.Credential.Kind.PERSON,
+                "token-$subject-$tenant",
+                now.plusSeconds(300)
+            ),
             issuedAt = now,
             requestId = "r-$subject-$tenant",
             memberships = memberships,

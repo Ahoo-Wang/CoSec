@@ -229,7 +229,8 @@ class IdentityGate(
             MembershipSource.Claims(memberships),
             identity.claims,
             identity.credential,
-            breakGlass = identity.credential.method == Identity.Method.JWT,
+            breakGlass = identity.credential.method == Identity.Method.JWT &&
+                identity.credential.kind == Identity.Credential.Kind.PERSON,
             issuedAt = identity.credential.issuedAt,
             apiKeyCredential = false,
             app = identity.app.takeIf(ScopeResolver::isValidAppId)?.let(::AppId),

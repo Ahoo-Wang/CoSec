@@ -78,6 +78,10 @@ internal class IdentityJson(private val identity: Identity) : JacksonSerializabl
     private fun credential(gen: JsonGenerator, credential: Identity.Credential) {
         gen.writeObjectPropertyStart("auth")
         gen.writeStringProperty("method", credential.method.value)
+        gen.writeStringProperty(
+            IdentityCodec.KIND,
+            if (credential.kind == Identity.Credential.Kind.PERSON) IdentityCodec.PERSON else IdentityCodec.WORKLOAD,
+        )
         gen.writeStringProperty("jti", credential.id)
         gen.writeNumberProperty("exp", checkNotNull(credential.expiresAt).epochSecond)
         credential.issuedAt?.let { gen.writeNumberProperty("iat", it.epochSecond) }

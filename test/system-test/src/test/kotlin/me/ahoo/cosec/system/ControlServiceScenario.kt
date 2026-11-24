@@ -29,9 +29,10 @@ import org.junit.jupiter.api.extension.ExtendWith
  * refused a write by the action (403); the port serves a tenant's documents and changes and nothing of the platform's,
  * by its document or by a change's id (404); a stated principal proposes, skips the shadow window and publishes; the
  * record of each step says who was stated and which connection carried it, and the peer is never what the caller wrote;
- * and a credential stated as an API key never approves, where the same principal stated as a token does, which is what
- * the network boundary costs (`STA-9`); and a platform administrator stated on the service port is no trust root: its
- * grant waits for a person (`CTL-81`).
+ * and a credential stated as an API key, or as a token without a kind or of a workload's, never approves, where the same
+ * principal stated as a person's token does, which is what the network boundary costs (`STA-9`, `IDN-44`); and a platform
+ * administrator stated on the service port, even as a person's token, is no trust root: its grant waits for a person
+ * (`CTL-81`).
  */
 @Tag("system")
 @Tag("service-path")
@@ -140,20 +141,48 @@ class ControlServiceScenario {
         (proposed["escalations"] as List<*>?).orEmpty().assert().describedAs(
             "what the change grants waits for a person: $proposed"
         ).isNotEmpty()
-        val waiting = iam.step(id, "skip-shadow", mapOf("reason" to "system test: a grant to approve")).ok().json()
-        waiting["state"].assert().describedAs("$waiting").isEqualTo("AWAITING_APPROVAL")
-        val approve = mapOf("candidate" to waiting["candidate"])
+        var published = false
+        try {
+            val waiting = iam.step(id, "skip-shadow", mapOf("reason" to "system test: a grant to approve")).ok().json()
+            waiting["state"].assert().describedAs("$waiting").isEqualTo("AWAITING_APPROVAL")
+            val approve = mapOf("candidate" to waiting["candidate"])
 
-        // Approving is a person's: it is no route of the service port, and no stated API key is a person.
-        iam.step(id, "approve", approve).status.assert().isEqualTo(404)
-        val asKey = ServiceControl(SystemTopology.control1, SignIn.ROOT, method = "api-key", jti = "stated-key")
-        asKey.step(id, "approve", approve).status.assert().isEqualTo(403)
-        iam.change(id).ok().json()["state"].assert().isEqualTo("AWAITING_APPROVAL")
+            // Approving is a person's: it is no route of the service port, and no stated API key is a person.
+            iam.step(id, "approve", approve).status.assert().isEqualTo(404)
+            val asKey = ServiceControl(SystemTopology.control1, SignIn.ROOT, method = "api-key", jti = "stated-key")
+            asKey.step(id, "approve", approve).status.assert().isEqualTo(403)
+            // Nor is CoSec's own token stated without saying whose it is (a writer before kinds, or a hand-written header),
+            // or stated as a workload's: the kind decides, never the method's name (IDN-44).
+            listOf(null, "workload").forEach { kind ->
+                val asWorkload =
+                    ServiceControl(
+                        SystemTopology.control1,
+                        SignIn.ROOT,
+                        method = "jwt",
+                        kind = kind,
+                        jti = "stated-$kind"
+                    )
+                val refused = asWorkload.step(id, "approve", approve)
+                refused.status.assert().describedAs("a jwt stated with kind $kind").isEqualTo(403)
+            }
+            iam.change(id).ok().json()["state"].assert().isEqualTo("AWAITING_APPROVAL")
 
-        // The platform administrator, stated as the holder of CoSec's own token: whoever can reach the port can say so.
-        val asToken = ServiceControl(SystemTopology.control1, SignIn.ROOT, method = "jwt", jti = "stated-token")
-        asToken.step(id, "approve", approve).ok().json()["state"].assert().isEqualTo("READY")
-        iam.step(id, "publish").ok().json()["state"].assert().isEqualTo("PUBLISHED")
+            // The platform administrator, stated as a person holding CoSec's own token: whoever can reach the port can say so.
+            val asToken =
+                ServiceControl(
+                    SystemTopology.control1,
+                    SignIn.ROOT,
+                    method = "jwt",
+                    kind = "person",
+                    jti = "stated-token"
+                )
+            asToken.step(id, "approve", approve).ok().json()["state"].assert().isEqualTo("READY")
+            iam.step(id, "publish").ok().json()["state"].assert().isEqualTo("PUBLISHED")
+            published = true
+        } finally {
+            // A change left waiting holds the tenant's slot, and every later scenario of this tenant would wait on it.
+            if (!published) iam.step(id, "abandon")
+        }
 
         val approved = eventually(
             Bounds.AUDIT_DELIVERY,
@@ -196,8 +225,16 @@ class ControlServiceScenario {
     @Order(6)
     fun `a platform administrator stated on the service port is no trust root, and its grant waits for a person - CTL-81`() {
         val head = root.revision(KEY)
-        // Whoever reaches the service port may state the platform administrator: the change is analyzed all the same.
-        val stated = ServiceControl(SystemTopology.controlService1, SignIn.ROOT, method = "jwt", jti = "stated-root")
+        // Whoever reaches the service port may state the platform administrator, as a person holding CoSec's own token,
+        // the most a caller can state: the change is analyzed all the same, by the port, not by the kind.
+        val stated =
+            ServiceControl(
+                SystemTopology.controlService1,
+                SignIn.ROOT,
+                method = "jwt",
+                kind = "person",
+                jti = "stated-root"
+            )
         val grant = listOf(putPolicy("svc-root-grant"), bindRole("svc-root-grant", "analyst"))
         val proposed = stated.propose(KEY, head, grant, "a stated administrator grants").created().json()
         val id = proposed.getValue("id") as String

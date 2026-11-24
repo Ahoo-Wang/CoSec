@@ -107,7 +107,12 @@ class AuditEventsTest {
                 PrincipalId("svc"),
                 TenantId("acme"),
                 MembershipSource.Provider.UNCAPPED,
-                credential = Identity.Credential(Identity.Method.API_KEY, "k1", null),
+                credential = Identity.Credential(
+                    Identity.Method.API_KEY,
+                    Identity.Credential.Kind.WORKLOAD,
+                    "k1",
+                    null
+                ),
             ),
             Identity.Method(ApiKeyAuthenticator.METHOD),
         )

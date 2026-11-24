@@ -46,6 +46,9 @@ internal object IdentityMembers {
 
         /** Read as empty. */
         EMPTY,
+
+        /** Read as a workload's credential: the restrictive reading of whose credential it is (`IDN-44`). */
+        WORKLOAD,
     }
 
     /** One member: its [path], what its absence is read as, and whether ignoring it would widen what is decided. */
@@ -68,6 +71,9 @@ internal object IdentityMembers {
         required("memberships.attachments"),
         required("auth"),
         required("auth.method"),
+        // A workload's: it never approves, is never the trust root and has no break-glass, so a reader that ignored it
+        // would decide no more widely than one that read it as absent.
+        Member("auth.kind", WhenAbsent.WORKLOAD, ignoringWidens = false),
         required("auth.jti"),
         required("auth.exp"),
         // A revocation of the principal's tokens takes a credential that does not say when it was issued as revoked.

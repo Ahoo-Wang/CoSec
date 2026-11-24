@@ -403,7 +403,12 @@ class PipelineTest {
                 PRINCIPAL,
                 TENANT,
                 cap,
-                credential = Identity.Credential(Identity.Method.API_KEY, "k1", null),
+                credential = Identity.Credential(
+                    Identity.Method.API_KEY,
+                    Identity.Credential.Kind.WORKLOAD,
+                    "k1",
+                    null
+                ),
             ),
             Identity.Method(ApiKeyAuthenticator.METHOD),
         )

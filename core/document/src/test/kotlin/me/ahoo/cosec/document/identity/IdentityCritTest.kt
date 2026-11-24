@@ -79,7 +79,7 @@ class IdentityCritTest {
     fun `crit naming a member this version does not know refuses the header as a later version's - IDN-41`() {
         listOf(
             ""","kind":"person","crit":["kind"]""",
-            ""","crit":["auth.kind"]""",
+            ""","crit":["auth.device"]""",
             ""","crit":["memberships","memberships.groups"]""",
             // A path into a map whose keys are data names no member.
             ""","claims":{"x":1},"crit":["claims.x"]""",

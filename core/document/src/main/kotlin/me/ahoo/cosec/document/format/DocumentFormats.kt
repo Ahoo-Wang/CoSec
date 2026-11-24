@@ -206,6 +206,16 @@ object DocumentFormats {
                                     "of another credential names its own.",
                             ),
                             Field(
+                                "kind",
+                                // `person` is not an example: the generator pairs it with `api-key` or `service`,
+                                // which no writer declares a person's and the reader refuses.
+                                StringType(minLength = 1, examples = listOf("workload")),
+                                description = "Whose credential it is (IDN-44): `person`, or a workload's for any " +
+                                    "other value or none, which never approves, is never the trust root and has no " +
+                                    "break-glass. `api-key` and `service` are a workload's: declared a person's, the header is refused. " +
+                                    "CoSec's writers always write it.",
+                            ),
+                            Field(
                                 "jti",
                                 id("0TEC7Hw00001zR0"),
                                 required = true,

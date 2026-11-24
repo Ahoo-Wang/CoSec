@@ -48,6 +48,8 @@ class IdentityScenario {
         identity["sub"].assert().isEqualTo("alice")
         val auth = identity.member("auth")
         auth["method"].assert().isEqualTo("jwt")
+        // Whose the credential is, which CoSec's writer always states (IDN-44): alice signed in as a person.
+        auth["kind"].assert().isEqualTo("person")
         auth["jti"].assert().isEqualTo(token.jti)
         (auth["exp"] as Number).toLong().assert().isEqualTo(token.expiresAt.epochSecond)
         (auth["iat"] as Number?)?.toLong().assert().isEqualTo(token.issuedAt.epochSecond)
@@ -214,7 +216,7 @@ class IdentityScenario {
             "sub" to "mallory",
             "scope" to mapOf("app" to "", "space" to ""),
             "roles" to listOf("admin"),
-            "auth" to mapOf("method" to "jwt", "jti" to "forged", "exp" to now + 600, "iat" to now),
+            "auth" to mapOf("method" to "jwt", "kind" to "person", "jti" to "forged", "exp" to now + 600, "iat" to now),
             "iat" to now,
             "rid" to "forged",
         )

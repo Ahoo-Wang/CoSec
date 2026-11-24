@@ -54,7 +54,12 @@ class IdentityForwardingTest {
     private val routed = mapOf(IdentityIssuer.FORWARD_ATTRIBUTE to "true")
 
     private val now = Instant.parse("2026-11-01T00:00:00Z")
-    private val credential = Identity.Credential(Identity.Method.JWT, "t1", now.plusSeconds(3600))
+    private val credential = Identity.Credential(
+        Identity.Method.JWT,
+        Identity.Credential.Kind.PERSON,
+        "t1",
+        now.plusSeconds(3600)
+    )
     private val alice = AuthnResult.Authenticated(
         AuthenticatedPrincipal(
             PipelineFixtures.PRINCIPAL,
@@ -352,7 +357,7 @@ class IdentityForwardingTest {
             PipelineFixtures.TENANT,
             MembershipSource.Claims(PipelineFixtures.claims("" to "clerk")),
             attributes,
-            Identity.Credential(Identity.Method("token"), "t1", now.plusSeconds(3600)),
+            Identity.Credential(Identity.Method("token"), Identity.Credential.Kind.PERSON, "t1", now.plusSeconds(3600)),
             breakGlass = false,
             issuedAt = null,
             apiKeyCredential = false,

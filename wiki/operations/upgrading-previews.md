@@ -107,6 +107,17 @@ Which preview of the library may run behind which preview of the gateway image: 
   16 KB at the defaults, when you have not set it; a value you set is kept, and named at startup at `WARN` when it is
   smaller.
 
+- **Breaking: every credential declares whose it is, a person's or a workload's** (`IDN-44`). Affected: an
+  `Authenticator` of your own, and anything else that builds an `Identity.Credential`. Its constructor takes a required
+  `kind` after the method, `Identity.Credential.Kind.PERSON` or `WORKLOAD`, with no default: code that builds one does
+  not compile until it chooses. What decides whether a principal may approve a change, be the control plane's trust root
+  or use break-glass is now that kind, not the method's name: before, any method other than `api-key` and `service` was
+  read as a person's, so an authenticator of machine clients that named its own method could approve. A principal with
+  no credential is now a workload: it never could approve, and it is no longer the trust root. `CoSec-Identity` carries
+  `auth.kind`, which every writer of this version writes; a header without it (a beta.8 gateway's) is read as a
+  workload's, so an operator forwarded by a beta.8 gateway cannot approve on an upgraded control host until the gateway
+  is upgraded. A header that declares an `api-key` or `service` credential a person's is refused with `400`.
+
 ## From 8.0.0-beta.7 {#from-8-0-0-beta-7}
 
 **Upgrade in this order.** Three changes of this preview read a header or a request the other side writes, so a

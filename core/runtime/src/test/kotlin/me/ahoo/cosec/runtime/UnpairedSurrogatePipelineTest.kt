@@ -117,7 +117,12 @@ class UnpairedSurrogatePipelineTest {
                 AuthenticatedPrincipal(PrincipalId("alice"), TenantId("acme"), claims)
             },
             {
-                val credential = Identity.Credential(Identity.Method("custom"), "key\uD800", null)
+                val credential = Identity.Credential(
+                    Identity.Method("custom"),
+                    Identity.Credential.Kind.PERSON,
+                    "key\uD800",
+                    null
+                )
                 AuthenticatedPrincipal(
                     PrincipalId("alice"),
                     TenantId("acme"),

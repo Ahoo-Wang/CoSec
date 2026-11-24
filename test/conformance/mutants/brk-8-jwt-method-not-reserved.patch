@@ -3,15 +3,15 @@
 # Tests: :runtime:test --tests me.ahoo.cosec.runtime.authn.TokenAuthenticatorTest :conformance:test
 
 diff --git a/core/spi/src/main/kotlin/me/ahoo/cosec/spi/authn/Authenticator.kt b/core/spi/src/main/kotlin/me/ahoo/cosec/spi/authn/Authenticator.kt
-index 516b0d2b..f768bfb4 100644
+index a328bd730..1198e84bd 100644
 --- a/core/spi/src/main/kotlin/me/ahoo/cosec/spi/authn/Authenticator.kt
 +++ b/core/spi/src/main/kotlin/me/ahoo/cosec/spi/authn/Authenticator.kt
-@@ -140,7 +140,7 @@ class AuthenticatedPrincipal @InternalCoSecApi constructor(
-     val attributes: Map<String, Any> = Collections.unmodifiableMap(attributes)
+@@ -165,7 +165,7 @@ class AuthenticatedPrincipal @InternalCoSecApi constructor(
  
      init {
--        require(breakGlass == (credential?.method == Identity.Method.JWT)) {
-+        require(!breakGlass || credential?.method == Identity.Method.JWT) {
-             "The authentication method [${Identity.Method.JWT}] is CoSec's own token's, and only it may use " +
-                 "break-glass: name another authenticator's method otherwise (RFC 0010 C3)."
+         val personsToken = credential?.method == Identity.Method.JWT && credential.kind == Identity.Credential.Kind.PERSON
+-        require(breakGlass == personsToken) {
++        require(!breakGlass || personsToken) {
+             "The authentication method [${Identity.Method.JWT}] is CoSec's own token's, and only a person's may use " +
+                 "break-glass: name another authenticator's method otherwise (RFC 0010 C3, IDN-44)."
          }

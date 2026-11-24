@@ -218,26 +218,26 @@ class TokenAuthenticatorTest {
             PrincipalId("svc"),
             TenantId("acme"),
             null,
-            credential = Identity.Credential(Identity.Method.API_KEY, "k1", null),
+            credential = Identity.Credential(Identity.Method.API_KEY, Identity.Credential.Kind.WORKLOAD, "k1", null),
         ).apiKey.assert().isTrue()
         AuthenticatedPrincipal(
             PrincipalId("alice"),
             TenantId("acme"),
             null,
-            credential = Identity.Credential(Identity.Method("ldap"), "s1", null),
+            credential = Identity.Credential(Identity.Method("ldap"), Identity.Credential.Kind.PERSON, "s1", null),
         ).apiKey.assert().isFalse()
         AuthenticatedPrincipal(
             PrincipalId("alice"),
             TenantId("acme"),
             null,
-            credential = Identity.Credential(Identity.Method("ldap"), "s1", null),
+            credential = Identity.Credential(Identity.Method("ldap"), Identity.Credential.Kind.PERSON, "s1", null),
         ).breakGlass.assert().isFalse()
         assertThrownBy<IllegalArgumentException> {
             AuthenticatedPrincipal(
                 PrincipalId("alice"),
                 TenantId("acme"),
                 null,
-                credential = Identity.Credential(Identity.Method.JWT, "s1", null),
+                credential = Identity.Credential(Identity.Method.JWT, Identity.Credential.Kind.PERSON, "s1", null),
             )
         }
         assertThrownBy<IllegalArgumentException> {

@@ -83,6 +83,8 @@ import me.ahoo.cosec.runtime.event.Delivery
 import me.ahoo.cosec.runtime.identity.IdentityGate
 import me.ahoo.cosec.runtime.shadow.StagedDocuments
 import me.ahoo.cosec.spi.identity.Identity
+import me.ahoo.cosec.spi.identity.Identity.Credential.Kind.PERSON
+import me.ahoo.cosec.spi.identity.Identity.Credential.Kind.WORKLOAD
 import me.ahoo.cosec.spi.membership.MembershipAnswer
 import me.ahoo.cosec.spi.membership.MembershipClaims
 import me.ahoo.cosec.spi.membership.MembershipProvider
@@ -300,7 +302,7 @@ object ChangeRunner : ScenarioRunner {
                 operator.get("attributes")?.let(::attributes).orEmpty(),
                 // By default a token of its own, as an approval records it.
                 credential = credential?.let(::credential)
-                    ?: Identity.Credential(Identity.Method("oidc"), "token-$name", null).takeIf { credential == null },
+                    ?: Identity.Credential(Identity.Method("oidc"), PERSON, "token-$name", null).takeIf { credential == null },
                 issuedAt = credential?.get("issuedAt")?.let { Instant.parse(it.text()) },
                 provided = operator.get("provider")?.bool() == true,
             )
@@ -324,14 +326,14 @@ object ChangeRunner : ScenarioRunner {
          */
         private fun credential(node: JsonNode): Identity.Credential? = if (node.isString) {
             when (node.text()) {
-                "api-key" -> Identity.Credential(Identity.Method.API_KEY, "key", null)
-                "service" -> Identity.Credential(Identity.Method.SERVICE, "service:svc", null)
+                "api-key" -> Identity.Credential(Identity.Method.API_KEY, WORKLOAD, "key", null)
+                "service" -> Identity.Credential(Identity.Method.SERVICE, WORKLOAD, "service:svc", null)
                 "none" -> null
                 else -> throw ScenarioFormatException("Unknown credential $node")
             }
         } else {
             node.only("token", "issuedAt")
-            Identity.Credential(Identity.Method("oidc"), node.required("token").text(), null)
+            Identity.Credential(Identity.Method("oidc"), PERSON, node.required("token").text(), null)
         }
         private var next: ChangeId? = null
         private val reports = InMemoryShadowReports(clock)

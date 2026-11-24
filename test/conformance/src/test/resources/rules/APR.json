@@ -24,7 +24,7 @@
     {
       "id": "APR-3",
       "source": "RFC 0007 §7.3, §7.5, Q10",
-      "statement": "A holder of cosec:approve on the document in the platform tenant is the trust root: its own changes are not analyzed and need no second person, unless four-eyes is on, when what the analysis cannot prove needs another holder, a platform principal too. A tenant principal holding cosec:approve is not the trust root: its own changes are analyzed (RC1-10). A workload's credential (an API key, or a service's own identity: a credential named `service`, IDN-34) is never the trust root.",
+      "statement": "A holder of cosec:approve on the document in the platform tenant is the trust root: its own changes are not analyzed and need no second person, unless four-eyes is on, when what the analysis cannot prove needs another holder, a platform principal too. A tenant principal holding cosec:approve is not the trust root: its own changes are analyzed (RC1-10). A workload is never the trust root: a principal whose credential declares itself a workload's (an API key's and a service's own identity are by construction, IDN-34), one with no credential, or one CoSec's API key authenticator proved (IDN-44).",
       "level": "control",
       "guards": [
         "control:ApprovalB2Test#a tenant approver's own change is analyzed, and it approves others' - RC1-10",
@@ -70,7 +70,7 @@
     {
       "id": "APR-7",
       "source": "RFC 0007 §7.5 (2026-10-30 revision)",
-      "statement": "An approval is a person's: a principal authenticated by a workload's credential (an API key, or a service's own identity, IDN-34) never approves (403), whatever it holds. A workload's credential is told by provenance (CoSec's API key authenticator), and by the reserved method names `api-key` and `service` on any credential, a forwarded identity's among them.",
+      "statement": "An approval is a person's: a principal authenticated by a workload's credential (an API key, or a service's own identity, IDN-34) never approves (403), whatever it holds. A workload is told by the kind its credential declares (IDN-44), a forwarded identity's `auth.kind` among them (absent or unknown, a workload's), by having no credential, and by provenance (CoSec's API key authenticator); never by the method's name.",
       "level": "control",
       "pending": null,
       "guards": [

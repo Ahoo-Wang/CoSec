@@ -368,7 +368,12 @@ class ControlServiceTest {
                 app = "",
                 space = "",
                 roles = setOf("admin"),
-                credential = Identity.Credential(Identity.Method.JWT, "t1", now.plusSeconds(300)),
+                credential = Identity.Credential(
+                    Identity.Method.JWT,
+                    Identity.Credential.Kind.PERSON,
+                    "t1",
+                    now.plusSeconds(300)
+                ),
                 issuedAt = now,
                 requestId = "r1",
                 memberships = memberships,

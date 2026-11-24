@@ -138,7 +138,8 @@ class TokenAuthenticator(
                 tenant,
                 MembershipSource.of(token),
                 token.attributes,
-                Identity.Credential(credentialMethod, token.id, token.expiresAt),
+                // A person's, as every token was before kinds (IDN-44); the token's own kind replaces it (VerifiedToken).
+                Identity.Credential(credentialMethod, Identity.Credential.Kind.PERSON, token.id, token.expiresAt),
                 breakGlass = ownTokens,
                 issuedAt = token.issuedAt,
                 apiKeyCredential = false,

@@ -42,7 +42,12 @@ object ServiceIdentity {
         app = app,
         space = "",
         roles = roles,
-        credential = Identity.Credential(Identity.Method.SERVICE, credentialId(principal), now.plus(LIFETIME)),
+        credential = Identity.Credential(
+            Identity.Method.SERVICE,
+            Identity.Credential.Kind.WORKLOAD,
+            credentialId(principal),
+            now.plus(LIFETIME),
+        ),
         issuedAt = now,
         requestId = requestId,
         // A service states its roles; it has no other space and attaches nothing (IDN-39).

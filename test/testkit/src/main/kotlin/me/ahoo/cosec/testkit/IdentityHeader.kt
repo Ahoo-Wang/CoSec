@@ -136,6 +136,7 @@ object IdentityHeader {
         val now = clock.instant()
         val credential = Identity.Credential(
             method = Identity.Method.JWT,
+            kind = Identity.Credential.Kind.PERSON,
             id = RandomIdGenerator.generate(),
             expiresAt = now.plus(validFor),
             issuedAt = now,

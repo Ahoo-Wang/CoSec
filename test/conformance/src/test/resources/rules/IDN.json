@@ -453,11 +453,11 @@
     {
       "id": "IDN-34",
       "source": "Roadmap §4 (beta.5: a service caller first declared api-key, a method of its own before RC1); coordinator's decision of 2026-11-23 (design (b): AuthenticatedPrincipal.workload); RFC 0009 §3, §4.2, RFC 0010 C3 (sentences proposed in the PR)",
-      "statement": "The identity a service states for itself when it calls the control plane as its own principal (ControlCaller.service, ServiceIdentity), in process or over the network, names its credential `service`, never `api-key` or `jwt`, with the id `service:<principal>`, and audit and decision records name the method so. A change record's origin names how the call came (CTL-57): `via.method: service` over the network, and `via.method: in-process` through the in-process facade (CTL-65), each with the credential id `service:<principal>`. `service` and `api-key` are CoSec's workload methods: a principal is a workload's (AuthenticatedPrincipal.workload) when CoSec's API key authenticator proved it (by provenance) or its credential is named `api-key` or `service`, whoever named it: a gateway's forwarded identity, a service's stated one, or another authenticator's (fail closed). What a principal may do as a person or as a workload is read from workload alone, never from apiKey, which keeps its meaning (an API key proved it): a workload never approves (APR-7) and is never the trust root (APR-3). A `service` credential, as any credential but CoSec's own token, has no session and no break-glass. A principal any other authenticator proves is a person unless its credential names `api-key` or `service`: an authenticator of machine clients names its credentials `Identity.Method.SERVICE` (or `API_KEY`) to make them workloads, and one that names another method is trusted to prove people (an S3 of the RC1 review, DR1-C-3; a person by provenance only is 8.1's).",
+      "statement": "The identity a service states for itself when it calls the control plane as its own principal (ControlCaller.service, ServiceIdentity), in process or over the network, names its credential `service`, never `api-key` or `jwt`, with the id `service:<principal>`, and audit and decision records name the method so. A change record's origin names how the call came (CTL-57): `via.method: service` over the network, and `via.method: in-process` through the in-process facade (CTL-65), each with the credential id `service:<principal>`. `service` and `api-key` are workloads' credentials by construction (IDN-44): a credential so named cannot be declared a person's, whoever made it, a gateway's forwarded identity, a service's stated one or another authenticator. A principal is a workload's (AuthenticatedPrincipal.workload) when its credential declares itself a workload's, when it has none, or when CoSec's API key authenticator proved it (by provenance). What a principal may do as a person or as a workload is read from workload alone, never from apiKey, which keeps its meaning (an API key proved it): a workload never approves (APR-7) and is never the trust root (APR-3). A `service` credential, as any credential but CoSec's own token, has no session and no break-glass. A principal another authenticator proves is what its credential declares (Identity.Credential.kind, a required parameter, IDN-44): the method it names is a label and decides nothing (an S3 of the RC1 review, DR1-C-3, closed by IDN-44).",
       "level": "build",
       "pending": null,
       "guards": [
-        "spi:AuthenticatedPrincipalTest#a workload is an API key or a service, by provenance or by name - IDN-34",
+        "spi:AuthenticatedPrincipalTest#a workload is what its credential declares, an API key by provenance, or a principal with no credential - IDN-44",
         "spi:AuthenticatedPrincipalTest#a service's credential has no break-glass and no session - IDN-34",
         "runtime:ServiceIdentityTest#a service's identity names its credential service - IDN-34",
         "runtime:ServiceIdentityTest#admitted, a service's identity is a workload's, without break-glass - IDN-34",
@@ -643,6 +643,23 @@
         "spring-boot:IdentityHeaderLimitTest#a host that reads the identity relays its callers within what it reads, or does not start - IDN-43",
         "spring-boot:IdentityHeaderLimitTest#a gateway writer limit above what every 8x service reads by default is named with both numbers - IDN-43",
         "spring-boot:ControlServiceChoiceTest#a host that reads the identity and relays its callers within more than it reads does not start - IDN-43"
+      ]
+    },
+    {
+      "id": "IDN-44",
+      "source": "RFC 0014 R3 (the maintainer's word of 2026-11-24, “同意加”, and of the same day on the kind through login, tokens, verifiers and the header, “同意”); the compatibility review of 2026-11-24 (CE-2)",
+      "statement": "Every credential declares whose it is: Identity.Credential.kind, PERSON or WORKLOAD, a required parameter with no default, so whoever makes one chooses. A credential named `api-key` or `service` is a workload's by construction, and declaring it a person's is refused. What a principal may do as a person or as a workload is read from that kind alone, never from the method's name, which is a label for audit and the record: a principal is a workload (AuthenticatedPrincipal.workload) when its credential declares itself a workload's, when it has no credential, or when CoSec's API key authenticator proved it; a workload never approves (APR-7), is never the trust root (APR-3) and has no break-glass (BRK-8), which only CoSec's own token declared a person's gets. CoSec's own credentials declare: an API key a workload's, a service's own identity a workload's, an approval rebuilt at publication a person's. The CoSec-Identity header carries it as `auth.kind`, `person` or `workload`, which every writer of CoSec writes; a reader takes `person` as a person's and any other value, or none, as a workload's, the restrictive reading, so a later kind is a workload's to every reader that does not know it; a kind that is not a string, or `person` on an `api-key` or `service` credential, is malformed (400).",
+      "level": "build",
+      "pending": null,
+      "guards": [
+        "spi:AuthenticatedPrincipalTest#a workload is what its credential declares, an API key by provenance, or a principal with no credential - IDN-44",
+        "spi:AuthenticatedPrincipalTest#a credential named api-key or service cannot be declared a person's - IDN-44",
+        "document:IdentityKindTest#every writer of CoSec writes the kind, and it reads back - IDN-44",
+        "document:IdentityKindTest#no kind, or one this version does not know, is a workload's - IDN-44",
+        "document:IdentityKindTest#a kind that is not a string, or an api-key or service declared a person's, does not read - IDN-44",
+        "runtime:IdentityGateTest#a forwarded identity's kind decides whether it is a workload and may use break-glass - IDN-44",
+        "control:ApprovalB2Test#a credential declared a workload's never approves, whatever its method - IDN-44",
+        "control:ApprovalB2Test#a credential declared a workload's is never the trust root, whatever its method - IDN-44"
       ]
     }
   ]
