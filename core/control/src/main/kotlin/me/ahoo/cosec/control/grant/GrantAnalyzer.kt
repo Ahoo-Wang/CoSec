@@ -43,8 +43,8 @@ import me.ahoo.cosec.model.condition.ZoneResolver
  * policy does not resolve (RC1-32).
  *
  * Narrowing (§7.4.4) is [narrows]: a changed ALLOW that only narrows one of the policy's previous ALLOWs grants
- * nothing. Removing bindings and ALLOWs and adding or relaxing DENYs grant nothing either; changing or removing a
- * `protected` entry needs `cosec:unprotect` (Q9), which the analysis reports in [GrantAnalysis.unprotect].
+ * nothing. Removing bindings and ALLOWs and adding or relaxing DENYs grant nothing either. A DENY of a tenant's
+ * document is the tenant's (`CTL-87`): removing or relaxing it is decided as any write of it is.
  *
  * Conditions come as written. Both sides are checked with the same [zones], within limits twice the document's
  * ([limits]): a statement's condition and its policy's are combined.
@@ -73,7 +73,6 @@ class GrantAnalyzer(
     private val narrowing = GrantNarrowing(checker, equality)
     private val fragmenter = GrantFragmenter(narrowing, equality, maxFragments)
     private val verdicts = GrantVerdicts(checker, equality)
-    private val entries = ProtectedEntries(equality)
 
     /**
      * Analyzes [change] for [grantor] against the published [snapshot]. [trustRoot] is whether the grantor holds
@@ -87,18 +86,16 @@ class GrantAnalyzer(
     ): GrantAnalysis {
         val budget = ComparisonBudget(maxComparisons)
         val split = fragmenter.fragments(snapshot, change, budget)
-        val unprotect = entries.unprotect(snapshot.tenant(change.tenant), change.candidate)
         if (split.tooLarge) {
-            return GrantAnalysis(emptyList(), unprotect, budget.spent, tooLarge = true)
+            return GrantAnalysis(emptyList(), budget.spent, tooLarge = true)
         }
         val fragments = split.fragments
         if (trustRoot) {
-            return GrantAnalysis(fragments.map { it to GrantVerdict.TrustRoot }, unprotect, budget.spent)
+            return GrantAnalysis(fragments.map { it to GrantVerdict.TrustRoot }, budget.spent)
         }
         val rights = GrantorRights.of(grantor, snapshot)
         return GrantAnalysis(
             fragments.map { it to verdicts.verdict(grantor, rights, it, budget) },
-            unprotect,
             budget.spent
         )
     }

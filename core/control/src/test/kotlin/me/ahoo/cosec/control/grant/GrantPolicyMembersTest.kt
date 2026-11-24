@@ -47,7 +47,6 @@ class GrantPolicyMembersTest {
             "statements" to COMPARED,
             "condition" to COMPARED,
             "attachable" to COMPARED,
-            "protected" to COMPARED,
         ),
         GrantStatement::class.java to mapOf(
             "effect" to COMPARED,

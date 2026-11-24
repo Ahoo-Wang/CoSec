@@ -33,7 +33,6 @@ import me.ahoo.cosec.control.change.Escalation
 import me.ahoo.cosec.control.change.Operation
 import me.ahoo.cosec.control.change.ownerOf
 import me.ahoo.cosec.control.grant.GrantAnalyzer
-import me.ahoo.cosec.control.grant.ProtectedEntry
 import me.ahoo.cosec.control.lifecycle.ControlTargets.boundaryOf
 import me.ahoo.cosec.control.lifecycle.ControlTargets.entry
 import me.ahoo.cosec.control.lifecycle.ControlTargets.scopeOf
@@ -61,8 +60,8 @@ import kotlin.time.Duration
  *
  * 1. the hard rule ([TenantIsolation]): a 403 that no policy can lift;
  * 2. each target with the [authorizer]: `cosec:write` on each entry an operation touches, `cosec:grant` on the scope
- *    of each binding it puts and of each role that comes to derive a binding it did not, `cosec:unprotect` on each protected entry it changes, and the step's own action on the
- *    document. A deny is a 403, an indeterminate decision or an error a 503;
+ *    of each binding it puts and of each role that comes to derive a binding it did not, and the step's own action on
+ *    the document. A deny is a 403, an indeterminate decision or an error a 503;
  * 3. for a candidate that checks clean, the grant analysis ([GrantAnalyzer]) of what it grants, as the operator, against
  *    the current heads. What it cannot prove contained is an [Escalation]: approval, never "probably fine" (GRT-2).
  *    Removing and narrowing grant nothing and need no approval; an analysis that fails is a 503.
@@ -227,8 +226,7 @@ class ChangeAuthority(
 
     /**
      * What [operator] cannot publish alone when [candidate] replaces [base] as [key] (RFC 0007 §7.4, §7.5), read
-     * against the current heads and back-references [documents] gives. Also requires `cosec:unprotect` on every
-     * protected entry it changes.
+     * against the current heads and back-references [documents] gives.
      */
     suspend fun escalations(
         operator: Operator,
@@ -262,15 +260,6 @@ class ChangeAuthority(
             escalations += Escalation("boundary of $key", Escalation.Reason.NOT_ANALYZED, "only the trust root changes it alone")
         }
         val analysis = analyst.analyze(operator, key, base, candidate, documents, now)
-        authorizer.batch { via ->
-            for (entry in analysis.unprotect) {
-                val resource = when (entry) {
-                    is ProtectedEntry.Policy -> entry(key, POLICY, entry.id.value)
-                    is ProtectedEntry.Binding -> entry(key, BINDING, entry.id.value)
-                }
-                require(via, operator, ControlActions.UNPROTECT, resource)
-            }
-        }
         val unknown = UnknownEscalations.of(key, analysis)
         // The role class lifts who-grants doubts of a roles-only change of a tenant's document, for a holder (CTL-79). It
         // sees every escalation of the change, so its record never stands beside one it may not lift.

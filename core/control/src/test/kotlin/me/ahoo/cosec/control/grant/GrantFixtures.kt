@@ -56,8 +56,8 @@ internal object GrantFixtures {
         condition = condition,
     )
 
-    fun policy(id: String, vararg statements: GrantStatement, attachable: Boolean = false, protected: Boolean = false) =
-        GrantPolicy(PolicyId(id), statements.toList(), attachable = attachable, protected = protected)
+    fun policy(id: String, vararg statements: GrantStatement, attachable: Boolean = false) =
+        GrantPolicy(PolicyId(id), statements.toList(), attachable = attachable)
 
     fun scope(app: String = "*", space: String = "*") = BindingScope(match(app, ::AppId), match(space, ::SpaceId))
 

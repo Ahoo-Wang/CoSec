@@ -114,7 +114,6 @@ class ConvertedReach(documents: Map<SnapshotKey, PolicyDocument>) {
             ControlActions.PUBLISH,
             ControlActions.SKIP_SHADOW,
             ControlActions.APPROVE,
-            ControlActions.UNPROTECT,
             ControlActions.BREAKGLASS,
             ControlActions.BOUNDARY,
         )

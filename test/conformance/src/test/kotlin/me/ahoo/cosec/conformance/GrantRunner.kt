@@ -65,11 +65,10 @@ import java.time.Instant
  * "maxFragments": 4,                                                                // the fragments it splits (CTL-49); the default when absent
  * "expect": { "fragments": [ { "policy": "p", "statement": 0, "action": "order:read", "resource": "order/{id}",
  *                              "verdict": "YES" | "UNKNOWN", "reason": "NOT_COVERED", "shortfall": "SCOPE" } ],
- *             "unprotect": ["policy:p", "binding:b"], "tooLarge": true }                      // tooLarge: nothing was split
+ *             "tooLarge": true }                                                              // tooLarge: nothing was split
  * ```
  *
- * A policy may also say `"protected": true`, and a binding `"protected": true`. Documents are read here from the
- * scenario syntax, not by the document codec. The grantor's attributes keep their JSON
+ * Documents are read here from the scenario syntax, not by the document codec. The grantor's attributes keep their JSON
  * type, as a token's claims do (RC1-2).
  */
 object GrantRunner : ScenarioRunner {
@@ -157,19 +156,16 @@ object GrantRunner : ScenarioRunner {
         return GrantDocument(
             policies = node.get("policies")?.values()?.map(::policy).orEmpty(),
             bindings = bindings.map { binding(it, tenant) },
-            protectedBindings = bindings.filter { it.get("protected")?.bool() == true }
-                .mapTo(HashSet()) { BindingId(it.required("id").text()) },
         )
     }
 
     private fun policy(node: JsonNode): GrantPolicy {
-        node.only("id", "attachable", "protected", "condition", "statements")
+        node.only("id", "attachable", "condition", "statements")
         return GrantPolicy(
             id = PolicyId(node.required("id").text()),
             statements = node.required("statements").values().map(::statement),
             condition = node.get("condition")?.let(ConditionReader::read),
             attachable = node.get("attachable")?.bool() ?: false,
-            protected = node.get("protected")?.bool() ?: false,
         )
     }
 
@@ -190,7 +186,7 @@ object GrantRunner : ScenarioRunner {
     }
 
     private fun binding(node: JsonNode, tenant: TenantId?): Binding {
-        node.only("id", "subject", "app", "space", "policy", "expiresAt", "protected")
+        node.only("id", "subject", "app", "space", "policy", "expiresAt")
         return Binding(
             id = BindingId(node.required("id").text()),
             subject = subject(node.required("subject"), tenant),

@@ -25,8 +25,8 @@ import me.ahoo.cosec.model.condition.Literal
 import me.ahoo.cosec.model.condition.Operand
 
 /**
- * When two parts of a change are the same: bindings, statements, policies and conditions (§7.4.4). Narrowing and the check
- * of protected entries both read it, with the one checker the analysis runs, so what one calls unchanged the other does.
+ * When two parts of a change are the same: bindings, statements, policies and conditions (§7.4.4). Narrowing and the
+ * fragmenter both read it, with the one checker the analysis runs, so what one calls unchanged the other does.
  */
 internal class GrantEquality(private val checker: ConditionChecker) {
     /** The checked form of [condition], or `null` when it does not check. */
@@ -34,7 +34,7 @@ internal class GrantEquality(private val checker: ConditionChecker) {
         (checker.check(condition) as? CheckResult.Valid)?.condition
 
     fun samePolicy(a: GrantPolicy, b: GrantPolicy): Boolean =
-        a.attachable == b.attachable && a.protected == b.protected && sameCondition(a.condition, b.condition) &&
+        a.attachable == b.attachable && sameCondition(a.condition, b.condition) &&
             a.statements.size == b.statements.size &&
             a.statements.indices.all { sameStatement(a.statements[it], b.statements[it]) }
 

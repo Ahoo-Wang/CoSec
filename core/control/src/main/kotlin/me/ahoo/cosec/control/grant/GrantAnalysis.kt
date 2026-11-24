@@ -17,11 +17,10 @@ package me.ahoo.cosec.control.grant
 
 import me.ahoo.cosec.annotations.InternalCoSecApi
 
-/** The analysis of one change: a verdict for each fragment, and the protected entries it changes or removes. */
+/** The analysis of one change: a verdict for each fragment. */
 @InternalCoSecApi
 class GrantAnalysis(
     val verdicts: List<Pair<GrantFragment, GrantVerdict>>,
-    val unprotect: List<ProtectedEntry>,
     /** The comparisons the analysis made ([ComparisonBudget]): what sizing the budget measures. */
     val comparisons: Long = 0,
     /**

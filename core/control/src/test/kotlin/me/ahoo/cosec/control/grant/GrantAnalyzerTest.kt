@@ -737,62 +737,6 @@ class GrantAnalyzerTest {
     }
 
     @Nested
-    inner class Protection {
-        private val published = GrantDocument(
-            policies = listOf(
-                policy("guard", deny("order:delete"), protected = true),
-                policy("free", deny("order:list"))
-            ),
-            bindings = listOf(bind("g", SubjectRef.Anyone, "guard"), bind("f", SubjectRef.Anyone, "free")),
-            protectedBindings = setOf(BindingId("g")),
-        )
-
-        private fun unprotect(candidate: GrantDocument) =
-            analyzer.analyze(grantor(), snapshot(tenant = published), GrantChange(ACME, candidate)).unprotect
-
-        @Test
-        fun `removing or relaxing an unprotected deny needs nothing`() {
-            unprotect(
-                GrantDocument(
-                    policies = listOf(published.policies[0]),
-                    bindings = published.bindings,
-                    protectedBindings = published.protectedBindings
-                )
-            )
-                .assert().isEmpty()
-        }
-
-        @Test
-        fun `changing a protected deny or its binding needs cosec unprotect`() {
-            unprotect(
-                GrantDocument(
-                    policies = listOf(policy("free", deny("order:list"))),
-                    bindings = listOf(published.bindings[1])
-                )
-            )
-                .assert().containsExactlyInAnyOrder(
-                    ProtectedEntry.Policy(PolicyId("guard")),
-                    ProtectedEntry.Binding(BindingId("g"))
-                )
-            unprotect(
-                GrantDocument(
-                    policies = listOf(policy("guard", deny("order:delete")), published.policies[1]),
-                    bindings = published.bindings
-                )
-            )
-                .assert().containsExactlyInAnyOrder(
-                    ProtectedEntry.Policy(PolicyId("guard")),
-                    ProtectedEntry.Binding(BindingId("g"))
-                )
-        }
-
-        @Test
-        fun `keeping protected entries as they are needs nothing`() {
-            unprotect(published).assert().isEmpty()
-        }
-    }
-
-    @Nested
     inner class Soundness {
         private val published = GrantDocument(
             policies = listOf(policy("orders", allow("order:*", "order/**"))),

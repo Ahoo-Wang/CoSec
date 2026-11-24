@@ -50,7 +50,7 @@ class UnknownEscalationsTest {
 
     @Test
     fun `a change too large to split is one escalation`() {
-        val escalations = UnknownEscalations.of(key, GrantAnalysis(emptyList(), emptyList(), tooLarge = true))
+        val escalations = UnknownEscalations.of(key, GrantAnalysis(emptyList(), tooLarge = true))
         escalations.map { it.reason }.assert().containsExactly(Escalation.Reason.TOO_LARGE)
         escalations.single().subject.assert().isEqualTo("change of $key")
     }
@@ -60,7 +60,7 @@ class UnknownEscalationsTest {
         val verdicts = (1..1_000).map { fragment("b$it") to unknown(UnknownReason.TOO_LARGE) } +
             (fragment("held") to unknown(UnknownReason.NOT_COVERED)) +
             (fragment("contained") to GrantVerdict.Contained(null))
-        val escalations = UnknownEscalations.of(key, GrantAnalysis(verdicts, emptyList()))
+        val escalations = UnknownEscalations.of(key, GrantAnalysis(verdicts))
         escalations.map { it.reason }.assert().containsExactly(
             Escalation.Reason.NOT_COVERED,
             Escalation.Reason.TOO_LARGE
@@ -70,7 +70,7 @@ class UnknownEscalationsTest {
 
     @Test
     fun `nothing unknown is no escalation`() {
-        UnknownEscalations.of(key, GrantAnalysis(listOf(fragment("b") to GrantVerdict.Contained(null)), emptyList()))
+        UnknownEscalations.of(key, GrantAnalysis(listOf(fragment("b") to GrantVerdict.Contained(null))))
             .assert().isEmpty()
     }
 }

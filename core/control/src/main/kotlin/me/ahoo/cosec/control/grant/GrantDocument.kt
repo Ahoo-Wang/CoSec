@@ -17,7 +17,6 @@ package me.ahoo.cosec.control.grant
 
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.model.Binding
-import me.ahoo.cosec.model.BindingId
 import me.ahoo.cosec.model.PolicyId
 
 /** The policies and bindings of one snapshot document, as the analysis reads them. */
@@ -25,8 +24,6 @@ import me.ahoo.cosec.model.PolicyId
 class GrantDocument(
     val policies: List<GrantPolicy> = emptyList(),
     val bindings: List<Binding> = emptyList(),
-    /** The bindings whose change or removal needs `cosec:unprotect`. */
-    val protectedBindings: Set<BindingId> = emptySet(),
 ) {
     private val byId: Map<PolicyId, GrantPolicy> = policies.associateBy { it.id }
 

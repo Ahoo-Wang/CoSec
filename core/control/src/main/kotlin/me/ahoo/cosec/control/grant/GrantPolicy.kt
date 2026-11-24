@@ -19,7 +19,7 @@ import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.model.PolicyId
 import me.ahoo.cosec.model.condition.Condition
 
-/** A policy: its statements, its condition (which every statement also needs) and its entry flags. */
+/** A policy: its statements, its condition (which every statement also needs) and whether it may be attached. */
 @InternalCoSecApi
 class GrantPolicy(
     val id: PolicyId,
@@ -27,6 +27,4 @@ class GrantPolicy(
     val condition: Condition? = null,
     /** Whether a principal may attach it (RFC 0004 §4.4). */
     val attachable: Boolean = false,
-    /** Changing or removing it needs `cosec:unprotect` (RFC 0007 §7.4.4, Q9). */
-    val protected: Boolean = false,
 )
