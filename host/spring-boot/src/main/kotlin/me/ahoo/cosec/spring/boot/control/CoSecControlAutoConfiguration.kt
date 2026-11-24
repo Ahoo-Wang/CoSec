@@ -290,7 +290,14 @@ internal class CoSecControlAutoConfiguration {
             // The data plane's reports when this host takes part in shadow windows: one cache per runtime.
             reports = shadowReports.ifAvailable ?: CoCacheShadowReports.create(factory, cosec.keyPrefix),
             listeners = listeners,
-            lockout = ControlChangeInputs.lockout(revisions, attributes, environment, controlProperties, work, documentCache),
+            lockout = ControlChangeInputs.lockout(
+                revisions,
+                attributes,
+                environment,
+                controlProperties,
+                work,
+                documentCache
+            ),
         )
     }
 
