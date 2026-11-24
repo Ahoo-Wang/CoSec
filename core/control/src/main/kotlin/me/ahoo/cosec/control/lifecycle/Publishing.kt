@@ -26,6 +26,7 @@ import me.ahoo.cosec.control.change.ChangeId
 import me.ahoo.cosec.control.change.ChangeRejectedException
 import me.ahoo.cosec.control.change.ChangeRequest
 import me.ahoo.cosec.control.change.ChangeState
+import me.ahoo.cosec.control.change.ControlStatus.CONFLICT
 import me.ahoo.cosec.control.change.ControlStatus.PRECONDITION_REQUIRED
 import me.ahoo.cosec.control.change.ControlStatus.UNAVAILABLE
 import me.ahoo.cosec.control.change.Finding
@@ -36,6 +37,7 @@ import me.ahoo.cosec.control.store.PublishOutcome
 import me.ahoo.cosec.control.store.Revisions
 import me.ahoo.cosec.document.Actor
 import me.ahoo.cosec.document.PolicyDocument
+import me.ahoo.cosec.model.Memberships
 import java.time.Clock
 
 /**
@@ -84,6 +86,10 @@ internal class Publishing(
         authority.require(publisher, change.key, PublishRules.publishing(change))
         if (change.state == ChangeState.PUBLISHED && slots.holds(change)) {
             return recordedAgain(change, publisher, again)
+        }
+        if (change.state == ChangeState.EXPIRED) {
+            // Recorded EXPIRED while its own revision was in effect, before DR1-E-7: publishing it settles it.
+            PublishRules.ownRevision(revisions, change, revisions.head(change.key))?.let { return republished(change, it, publisher) }
         }
         PublishRules.requireState(change, ChangeStep.PUBLISH.from)
         PublishRules.acknowledged(change, ack)
@@ -256,20 +262,24 @@ internal class Publishing(
      * caller's cancellation. What fails in them does not unpublish anything (#1263), so it is answered as what happened:
      * the revision is written, and publishing the change again settles it, adding no revision. A cancellation that
      * reaches here is therefore a store's own (a timeout inside it), never the caller's, which is still there afterwards.
+     * A conflict is one too: a change that kept moving while it was settled is not the caller's `409`, whose request
+     * did what it asked (DR1-E-7); any other refusal (a REQUIRED listener's) is answered as it is.
      */
     @Suppress("TooGenericExceptionCaught")
     private suspend fun <T> afterHead(change: ChangeRequest, revision: Long, steps: suspend () -> T): T = try {
         steps()
     } catch (e: ChangeRejectedException) {
-        throw e
+        throw if (e.status == CONFLICT) unsettled(change, revision, e) else e
     } catch (e: Exception) {
-        throw ChangeRejectedException(
-            UNAVAILABLE,
-            "[${change.key}] revision $revision is written, but change ${change.id.value} could not be settled; " +
-                "publishing it again settles it",
-            e,
-        )
+        throw unsettled(change, revision, e)
     }
+
+    private fun unsettled(change: ChangeRequest, revision: Long, cause: Exception) = ChangeRejectedException(
+        UNAVAILABLE,
+        "[${change.key}] revision $revision is written, but change ${change.id.value} could not be settled; " +
+            "publishing it again settles it",
+        cause,
+    )
 
     /**
      * [change] moved to `PUBLISHED` at [revision] by this call, whatever state it was in: once the head is written it is
@@ -323,6 +333,7 @@ internal class Publishing(
         own: Head,
         retrier: Operator,
         taking: Boolean = false,
+        expiring: Boolean = false,
     ): ChangeRequest =
         withContext(NonCancellable) {
             afterHead(change, own.revision) {
@@ -334,11 +345,29 @@ internal class Publishing(
                     settled
                 } finally {
                     val who = "${retrier.tenant.value}/${retrier.actor.principal.value}"
-                    val how = if (taking) "settled by $who while taking the slot" else "retried by $who"
+                    val how = when {
+                        expiring -> "settled when its expiry found the revision in effect"
+                        taking -> "settled by $who while taking the slot"
+                        else -> "retried by $who"
+                    }
                     recordMoved(settled, change, null, own.document, retrier, by, unanalyzed = "$how, not re-analyzed")
                 }
             }
         }
+
+    /**
+     * [change], past its expiry, `PUBLISHED` when its own revision is in effect: a publish wrote the head and could not
+     * settle the change, and the revision decides (DR1-E-7). Only a `READY` change publishes, so only one can have
+     * written. Settled as a retried publish settles it ([republished]), its events naming the publisher the revision
+     * records, and nobody's rights analyzing what moved. Null when no revision is its own: it expires.
+     */
+    suspend fun writtenBeforeExpiry(change: ChangeRequest): ChangeRequest? {
+        if (change.state != ChangeState.READY) return null
+        val own = PublishRules.ownRevision(revisions, change, revisions.head(change.key)) ?: return null
+        val by = own.document.provenance?.publishedBy ?: change.author
+        val publisher = Operator(by, Memberships(Memberships.Source.CLAIMS, emptyMap(), emptyList()))
+        return republished(change, own, publisher, expiring = true)
+    }
 
     /**
      * The candidate [id] would publish on the current head (RFC 0007 §10.3 `simulate`), or null when its operations no
