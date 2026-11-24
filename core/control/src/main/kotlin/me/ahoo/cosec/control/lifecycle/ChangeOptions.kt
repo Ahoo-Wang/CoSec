@@ -44,8 +44,16 @@ class ChangeOptions(
     val breakGlassMaxDuration: java.time.Duration = java.time.Duration.ofHours(4),
 ) {
     init {
+        // Zero is refused at startup, by name (DR1-E-16): it would expire every change as it is made, or make every
+        // approval stale as it is given, which the operator would learn only from refusals.
+        require(expireAfter > java.time.Duration.ZERO) {
+            "cosec.control.changes.expire-after is positive: a change expires that long after it is made, not $expireAfter."
+        }
+        require(approvalExpireAfter > java.time.Duration.ZERO) {
+            "cosec.control.approval.expire-after is positive: an approval counts for that long, not $approvalExpireAfter."
+        }
         require(
-            maxDocumentBytes > 0 && principalBindingLimit >= 0 && !expireAfter.isNegative && !approvalExpireAfter.isNegative &&
+            maxDocumentBytes > 0 && principalBindingLimit >= 0 &&
                 breakGlassMaxDuration > java.time.Duration.ZERO && breakGlassMaxDuration <= MAX_BREAK_GLASS
         ) { "Invalid change options." }
     }
