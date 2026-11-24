@@ -131,6 +131,23 @@ class ReservedCharactersTest {
         }.hasMessageContaining("no literal here")
     }
 
+    /** A refusal names the character it refuses printably: a control character never reaches a log line or an answer raw. */
+    @Test
+    fun `a refused control character is shown by its code point, never raw`() {
+        val bell = '\u0007'
+        val compiles = listOf<() -> Unit>(
+            { ResourcePattern.parse("order/a${bell}b") },
+            { ActionPattern.parse("svc:a${bell}b") },
+            { path("/a\\$bell") },
+            { PatternEscapes.unescape("a$bell") },
+            { path("/a$bell") },
+        )
+        for (compile in compiles) {
+            assertThrownBy<InvalidPatternException> { compile() }.hasMessageContaining("\\u0007").message()
+                .doesNotContain(bell.toString())
+        }
+    }
+
     // --- What matches no request path -------------------------------------------------------------------------------
 
     @Test

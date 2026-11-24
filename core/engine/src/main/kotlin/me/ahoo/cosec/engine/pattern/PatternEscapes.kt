@@ -14,6 +14,7 @@
 package me.ahoo.cosec.engine.pattern
 
 import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.model.Identifiers
 
 /**
  * The characters a future pattern syntax needs, reserved now (`DOC-15`), and the one way to write them as text.
@@ -58,8 +59,14 @@ object PatternEscapes {
      * control character refused unescaped.
      */
     fun unescape(written: String): String = literal(written, written, 0, "*?{}") { char ->
-        if (char.isWhitespace() || char.isISOControl()) "'$char' is not allowed in a literal" else null
+        if (char.isWhitespace() || char.isISOControl()) "'${shown(char)}' is not allowed in a literal" else null
     }
+
+    /**
+     * [char] as a message shows it: a control character or half a surrogate pair as its `\\uXXXX` escape
+     * ([Identifiers.printable]), so a pattern's text never writes a line of a log or of an answer.
+     */
+    internal fun shown(char: Char): String = Identifiers.printable(char.toString())
 
     /** How many characters [text] stands for once its escapes are resolved. */
     internal fun unescapedLength(text: String): Int {
@@ -82,7 +89,7 @@ object PatternEscapes {
             throw InvalidPatternException(
                 pattern,
                 offset + index,
-                "\\${next ?: ""} escapes nothing: a backslash escapes one of $ESCAPABLE",
+                "\\${next?.let(::shown).orEmpty()} escapes nothing: a backslash escapes one of $ESCAPABLE",
             )
         }
         return next
