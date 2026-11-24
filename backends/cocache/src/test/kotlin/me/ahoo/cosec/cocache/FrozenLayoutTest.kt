@@ -20,6 +20,7 @@ import me.ahoo.cocache.api.spi.Keyspace
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.cocache.control.CoCacheControlStore
 import me.ahoo.cosec.cocache.control.ControlSets
+import me.ahoo.cosec.cocache.control.ListedCodec
 import me.ahoo.cosec.cocache.control.OpenChangeSets
 import me.ahoo.cosec.cocache.control.ReferenceKey
 import me.ahoo.cosec.cocache.control.ReferenceKeyEncoder
@@ -45,6 +46,7 @@ import org.junit.jupiter.api.DynamicTest
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.TestFactory
 import org.junit.jupiter.api.TestInstance
+import java.time.Instant
 
 /**
  * The golden samples of every [FrozenLayout] entry that is a key, a bucket or a channel (RFC 0014 R6, `SNP-26`): fixed
@@ -265,6 +267,36 @@ class FrozenLayoutTest {
         },
         Golden(FrozenLayout.CONTROL_LISTS, "the lists' channel", "cosec:control:inv:documents") {
             channel("cosec", CoSecCacheSpecs.CONTROL_DOCUMENT_SET_CACHE_NAME)
+        },
+        Golden(
+            FrozenLayout.LEGACY_LISTS,
+            "the open-change list before 8.0.0-beta.5",
+            "cosec:control:list:open-changes"
+        ) {
+            storageKey("cosec", CoSecCacheSpecs.CONTROL_LIST_CACHE_NAME, CoCacheControlStore.OPEN_CHANGES)
+        },
+        Golden(FrozenLayout.LEGACY_LISTS, "the document list before 8.0.0-beta.5", "cosec:control:list:documents") {
+            storageKey("cosec", CoSecCacheSpecs.CONTROL_LIST_CACHE_NAME, CoCacheControlStore.DOCUMENTS)
+        },
+        Golden(FrozenLayout.LEGACY_LISTS, "the old lists' channel", "cosec:control:inv:list") {
+            channel("cosec", CoSecCacheSpecs.CONTROL_LIST_CACHE_NAME)
+        },
+        Golden(
+            FrozenLayout.LEGACY_LISTS,
+            "a bare list is written as entry to time, sorted, with no other member",
+            """{"a":"2026-11-24T00:00:00Z","b":"2026-11-24T00:00:01Z"}"""
+        ) {
+            ListedCodec.encode(
+                mapOf("b" to Instant.parse("2026-11-24T00:00:01Z"), "a" to Instant.parse("2026-11-24T00:00:00Z"))
+            )
+                .decodeToString()
+        },
+        Golden(
+            FrozenLayout.LEGACY_LISTS,
+            "a bare list as an older release wrote it reads as its entries",
+            "{c-1=2026-11-24T00:00:00Z}"
+        ) {
+            ListedCodec.decode("""{"c-1":"2026-11-24T00:00:00Z"}""".encodeToByteArray()).toString()
         },
         Golden(FrozenLayout.CONTROL_LEASES, "the shadow windows' lease", "cosec:control:lease:shadow-windows") {
             storageKey("cosec", CoSecCacheSpecs.CONTROL_LEASE_CACHE_NAME, ControlMaintenance.SHADOW_LEASE)

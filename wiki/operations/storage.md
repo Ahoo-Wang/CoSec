@@ -122,8 +122,10 @@ sign-ins in progress. Past it a start is refused and writes nothing. When Redis 
   from its inputs (the rate limit buckets, the revocations, the API keys, the documents, the sessions and their index, the
   social sign-ins, the instances' status, and what the control plane's replicas share: revisions and their index, the
   staging slots, changes and their sets, back-references, the document and app lists, leases, candidates and shadow
-  reports), the fields the rate limit, session index and social count scripts store and how they cut a window, and the
-  invalidation channels below. Instances of two releases in one deployment therefore read
+  reports), the fields the rate limit, session index and social count scripts store and how they cut a window, the
+  shape of the lists before 8.0.0-beta.5 (`<s>:control:list:*`, which 8.x still reads), and the invalidation channels
+  below. Those lists are bare: a JSON object of entry to time, with no `format` member, so they cannot take a new member
+  and can change only by moving to a new key space. Instances of two releases in one deployment therefore read
   and write the same keys, so a rolling upgrade never counts a client twice, never misses a revocation the other release
   wrote, and never loses a document. A later 8.x release that counts or derives a key another way uses a new key space.
 - When several deployments share one Redis, give each its own `cosec.key-prefix`: with different prefixes they share no

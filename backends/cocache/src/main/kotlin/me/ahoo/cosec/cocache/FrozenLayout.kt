@@ -139,6 +139,18 @@ internal enum class FrozenLayout(val what: String, val ifChanged: IfChanged) {
     CONTROL_LISTS("the keys of the document list and of the app list", IfChanged.REFUSES),
 
     /**
+     * `<s>:control:list:open-changes` and `<s>:control:list:documents`, with their channel `<s>:control:inv:list`: the
+     * lists of the format before 8.0.0-beta.5, which 8.x still reads. While one is there the store is not converted
+     * (the open-change sets are not trusted, `CTL-54`) or not repaired (`MIG-4`), so an older control plane that writes
+     * one again is noticed. Its value is a **bare list** (`ListedCodec`): a JSON object of entry to the time it was
+     * listed, with no `format` and no other member, so it has no room for a must-understand marker and every member is
+     * read as an entry. It cannot evolve by adding a member; a changed shape needs a new key space. A replica that
+     * reads another key or shape does not see the old list, trusts sets an older replica no longer writes, and lists
+     * fewer changes and documents.
+     */
+    LEGACY_LISTS("the keys and the bare value of the lists before 8.0.0-beta.5", IfChanged.REFUSES),
+
+    /**
      * `<s>:control:lease:<name>` (`shadow-windows`, `reclaim-pass`): the exclusion a lease exists for is lost, and two
      * replicas close the same shadow windows, or reclaim the same revisions, at once.
      */
