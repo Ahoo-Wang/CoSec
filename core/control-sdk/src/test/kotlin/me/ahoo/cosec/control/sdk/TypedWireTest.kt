@@ -111,6 +111,19 @@ class TypedWireTest {
         DocumentJson.policy(CoSecJson.mapper.readTree(known)).statements.single().effect.assert().isEqualTo(Effect.DENY)
     }
 
+    /** DR1-F-16: a document of another schema does not read, since a later format may give a member another meaning. */
+    @Test
+    fun `a document of a schema other than 2 does not read - CTL-76`() {
+        val body = ""","revision":1,"publishedAt":"2026-11-21T00:00:00Z","policies":[],"bindings":[]}"""
+        val documents = listOf(""""schema":3""", """"schema":1""", """"schema":"2"""", """"schema":2.5""")
+            .map { "{$it$body" } + "{${body.substring(1)}"
+        for (document in documents) {
+            assertThrownBy<SnapshotFormatException> { DocumentJson.content(CoSecJson.mapper.readTree(document)) }
+                .hasMessageContaining("schema")
+        }
+        DocumentJson.content(CoSecJson.mapper.readTree("""{"schema":2$body""")).policies.assert().isEmpty()
+    }
+
     @Test
     fun `a change answer reads the members of its contract file, each read or named as left out - CTL-76`() {
         val contract = paths(json("contract/control/change.json"), "")
