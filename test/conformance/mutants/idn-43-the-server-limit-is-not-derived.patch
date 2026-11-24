@@ -1,0 +1,17 @@
+# Rule: IDN-43
+# Mutant: a host that reads the identity keeps the server's 8 KB request-header limit, which refuses an identity header the gate accepts before CoSec reads it
+# Tests: :spring-boot:test --tests me.ahoo.cosec.spring.boot.pipeline.IdentityHeaderLimitTest
+
+diff --git a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/pipeline/IdentityHeaderLimit.kt b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/pipeline/IdentityHeaderLimit.kt
+index 756365cf1..b829c7dab 100644
+--- a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/pipeline/IdentityHeaderLimit.kt
++++ b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/pipeline/IdentityHeaderLimit.kt
+@@ -46,7 +46,7 @@ internal class IdentityHeaderLimit : EnvironmentPostProcessor, Ordered {
+     override fun getOrder(): Int = ConfigDataEnvironmentPostProcessor.ORDER + 1
+ 
+     override fun postProcessEnvironment(environment: ConfigurableEnvironment, application: SpringApplication) {
+-        if (!readsIdentity(environment) || operatorLimit(environment) != null) {
++        if (!readsIdentity(environment) || operatorLimit(environment) == null) {
+             return
+         }
+         val derived = derived(environment)

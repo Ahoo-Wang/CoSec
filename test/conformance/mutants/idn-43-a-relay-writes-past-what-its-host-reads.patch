@@ -1,0 +1,17 @@
+# Rule: IDN-43
+# Mutant: a host that reads the identity starts though it relays its callers within more than its own gate admits
+# Tests: :spring-boot:test --tests me.ahoo.cosec.spring.boot.pipeline.IdentityHeaderLimitTest
+
+diff --git a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/pipeline/IdentityHeaderLimit.kt b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/pipeline/IdentityHeaderLimit.kt
+index acc87f89e..243a8a049 100644
+--- a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/pipeline/IdentityHeaderLimit.kt
++++ b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/pipeline/IdentityHeaderLimit.kt
+@@ -102,7 +102,7 @@ internal class IdentityHeaderLimit : EnvironmentPostProcessor, Ordered {
+         fun requireRelayWithinReads(environment: Environment) {
+             if (!readsIdentity(environment)) return
+             val reads = reads(environment)
+-            check(reads.toBytes() >= IdentityCodec.WRITE_MAX_BYTES) {
++            check(reads.toBytes() >= 0) {
+                 "$R_KEY is ${reads.toBytes()} bytes, below the ${IdentityCodec.WRITE_MAX_BYTES} bytes HttpControlService " +
+                     "relays this host's callers within: it would relay identity headers larger than its own gate admits " +
+                     "(IDN-43). Set $R_KEY to at least ${IdentityCodec.WRITE_MAX_BYTES} bytes."

@@ -31,7 +31,7 @@ import java.time.Duration
 @ExperimentalCoSecApi
 class GatewayIdentitySettings internal constructor() {
     /** The largest identity accepted, in bytes (`max-size`). */
-    var maxBytes: Int = IdentityCodec.DEFAULT_MAX_BYTES
+    var maxBytes: Int = IdentityCodec.READ_MAX_BYTES
 
     /** How old a forwarded identity may be (`max-age`). */
     var maxAge: Duration = IdentityGate.DEFAULT_MAX_AGE

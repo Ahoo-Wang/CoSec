@@ -63,6 +63,27 @@ Which preview of the library may run behind which preview of the gateway image: 
     means what it meant. `cosec-openapi` escapes every such character of a spec path outside its templates, `*` and
     `?` included: before, a `*` or `?` in a spec path became a wildcard of the generated route, which mapped other paths
     to that operation. Generate route maps again.
+- **Breaking: a relayed caller states only the memberships it was forwarded** (`IDN-42`). `HttpControlService`'s relay of a
+  request's caller wrote empty `memberships` for a caller whose own `CoSec-Identity` had none, so a host that decides on
+  the identity took it as a caller with no attachment and no role in another space. It now leaves the member out, and
+  the host refuses the call with `400` `invalid-request`; the control plane's in-process facade refuses such a caller
+  alike. Only a header without `memberships` reaches this: one from a beta.7 gateway, or one an application wrote.
+  Upgrade the gateways (every beta.8 gateway writes the member) before relying on control calls made for their callers.
+- **A service reads an identity header with members it does not know** (`IDN-41`). A reader of `CoSec-Identity`
+  ignored no unknown member: it answered `400` to any, which is why beta.8's `memberships` needed an order between the
+  gateways and the services behind them. It now ignores a member it does not know, at any level, unless the header's
+  new `crit` names it: a member a later version must have every reader understand. A member `crit` names that the
+  service does not know is refused with `503` `unavailable`, counted as `cosec.identity.refused{problem=unavailable}`
+  and logged naming it. No 8.0 writer writes `crit`. A header an application writes with a misspelled member is now
+  read without it rather than refused.
+- **Breaking: the identity header has a reader's limit and a smaller writer's limit** (`IDN-43`). A gateway now writes at most
+  6 KB by default (`cosec.gateway.identity.max-size`, was 8 KB), and so does `HttpControlService`'s relay; a service
+  still reads 8 KB (`cosec.pipeline.identity.max-size`), which no 8.x version lowers. A principal whose identity takes
+  6 to 8 KB now fails at the gateway with `500` unless you raise `cosec.gateway.identity.max-size`, up to 8 KB; on the
+  servers' default request-header limit such a header did not reach a service anyway. A host that reads the identity
+  (`gateway` mode, or `cosec.pipeline.caller=forwarded-identity`) now gets `server.max-http-request-header-size` derived,
+  16 KB at the defaults, when you have not set it; a value you set is kept, and named at startup at `WARN` when it is
+  smaller.
 
 ## From 8.0.0-beta.7 {#from-8-0-0-beta-7}
 

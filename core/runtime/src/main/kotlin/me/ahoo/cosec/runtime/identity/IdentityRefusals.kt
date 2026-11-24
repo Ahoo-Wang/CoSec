@@ -59,9 +59,8 @@ class IdentityRefusals(
     }
 
     private fun message(requestId: String, type: ProblemType, reason: String) =
-        "Request [$requestId]: the forwarded identity is refused (${type.status} ${type.slug}), $reason. A service " +
-            "behind a gateway refuses a CoSec-Identity header the gateway did not write, or wrote with a clock or " +
-            "limits that disagree with this service's. See $PAGE"
+        "Request [$requestId]: the forwarded identity is refused (${type.status} ${type.slug}), $reason. " +
+            (if (type == ProblemType.UNAVAILABLE) OLDER_READER else HOP) + " See $PAGE"
 
     private fun warns(type: ProblemType): Boolean {
         val last = lastWarnings.getValue(type)
@@ -76,10 +75,24 @@ class IdentityRefusals(
     @InternalCoSecApi
     companion object {
         /** The problems the gate refuses an identity with: the closed set of the meter's `problem` tag. */
-        val TYPES: Set<ProblemType> =
-            setOf(ProblemType.INVALID_REQUEST, ProblemType.TOKEN_INVALID, ProblemType.TOKEN_EXPIRED)
+        val TYPES: Set<ProblemType> = setOf(
+            ProblemType.INVALID_REQUEST,
+            ProblemType.TOKEN_INVALID,
+            ProblemType.TOKEN_EXPIRED,
+            ProblemType.UNAVAILABLE,
+        )
 
         val DEFAULT_INTERVAL: Duration = Duration.ofMinutes(1)
+
+        private const val HOP = "A service behind a gateway refuses a CoSec-Identity header the gateway did not write, " +
+            "or wrote with a clock or limits that disagree with this service's."
+
+        /**
+         * `IDN-41`: no store failed. A writer of a later version stated a member it counted on every reader to know, and
+         * this one is older: the deployment runs a reader the writer did not count (RFC 0014 G3). Upgrade it.
+         */
+        private const val OLDER_READER = "A gateway or service of a later CoSec version wrote a member this service " +
+            "must understand to decide as it meant, and this service is older than it counted on: upgrade this service."
         const val PAGE = "https://cosec.ahoo.me/operations/troubleshooting#a-service-behind-the-gateway-refuses-requests"
         private const val NEVER = Long.MIN_VALUE
         private val log = KotlinLogging.logger(IdentityGate::class.java.name)

@@ -93,6 +93,23 @@ class ControlServiceChoiceTest {
         }
     }
 
+    /** `IDN-43`: a host that holds both limits refuses a writer limit above what it reads. */
+    @Test
+    fun `a host that reads the identity and relays its callers within more than it reads does not start - IDN-43`() {
+        val relaying = arrayOf(
+            "${ControlPlaneCondition.ENABLED_KEY}=false",
+            host,
+            "cosec.pipeline.caller=forwarded-identity",
+        )
+        runner.withPropertyValues(*relaying, "cosec.pipeline.identity.max-size=4KB").run { context ->
+            message(context.startupFailure).assert()
+                .contains("cosec.pipeline.identity.max-size is 4096 bytes, below the 6144 bytes").contains("IDN-43")
+        }
+        runner.withPropertyValues(*relaying).run { context ->
+            message(context.startupFailure).assert().doesNotContain("IDN-43")
+        }
+    }
+
     @Test
     fun `an instance that names a control-plane host gets the HTTP ControlService - STA-11`() {
         runner.withPropertyValues("${ControlPlaneCondition.ENABLED_KEY}=false", host).run { context ->
