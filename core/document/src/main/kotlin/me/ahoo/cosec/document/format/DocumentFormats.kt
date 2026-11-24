@@ -184,7 +184,8 @@ object DocumentFormats {
                         ),
                     ),
                     description = "What the principal is a member of besides `roles` (IDN-39), empty when nothing: " +
-                        "CoSec's writers always write it, and a host that decides on the identity refuses one without it.",
+                        "CoSec's writers write it, but for a relay of an identity forwarded without it, which leaves it " +
+                        "out (IDN-42); a host that decides on the identity refuses one without it.",
                 ),
                 Field(
                     "auth",

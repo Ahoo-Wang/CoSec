@@ -540,7 +540,7 @@
     {
       "id": "IDN-39",
       "source": "DR2-F-1, DR2-C-1 (the coordinator's ruling and the maintainer's word to add the member, 2026-11-23); RFC 0006 §7, RFC 0007 §10.2 (sentences proposed in the PR)",
-      "statement": "The CoSec-Identity header states the principal's whole memberships: beside `roles` (the roles of the decided space), `memberships` holds its roles in every other space (`spaces`, by space id, the default space's key empty) and the ids of the policies it attaches (`attachments`, in the order its memberships name them). CoSec's writers, the gateway's forward and HttpControlService's relay of a request's caller, always write it, empty when there is nothing more; a service identity states it empty. The decided space is never a key of `spaces`, nor `*`; a space names at least one role; a role or an attachment is a non-empty id with no unpaired surrogate, never repeated. A host that decides with policies on the identity (cosec.pipeline.caller=forwarded-identity: a control host, a service port) refuses a header without `memberships` as malformed (400 invalid-request), and builds the caller's memberships from `roles` under the decided space, `memberships.spaces` and `memberships.attachments`, so a DENY attached to the principal, or one that reads a role it holds in another space, applies there as at the gateway and in process; a service that only trusts the gateway does not require it. An identity too large for the header with them is not forwarded: the gateway fails the request (500) and the relay fails the call before it is sent, never cut short.",
+      "statement": "The CoSec-Identity header states the principal's whole memberships: beside `roles` (the roles of the decided space), `memberships` holds its roles in every other space (`spaces`, by space id, the default space's key empty) and the ids of the policies it attaches (`attachments`, in the order its memberships name them). The gateway always writes it, empty when there is nothing more, and so does HttpControlService's relay of a request's caller, unless the identity it relays did not state it (IDN-42); a service identity states it empty. The decided space is never a key of `spaces`, nor `*`; a space names at least one role; a role or an attachment is a non-empty id with no unpaired surrogate, never repeated. A host that decides with policies on the identity (cosec.pipeline.caller=forwarded-identity: a control host, a service port) refuses a header without `memberships` as malformed (400 invalid-request), and builds the caller's memberships from `roles` under the decided space, `memberships.spaces` and `memberships.attachments`, so a DENY attached to the principal, or one that reads a role it holds in another space, applies there as at the gateway and in process; a service that only trusts the gateway does not require it. An identity too large for the header with them is not forwarded: the gateway fails the request (500) and the relay fails the call before it is sent, never cut short.",
       "level": "pipeline",
       "pending": null,
       "guards": [
@@ -579,6 +579,26 @@
         "login:SwitchedLogoutTest#two sessions of one login logging out at once both end it",
         "login:SwitchedLogoutTest#a switch from the login that keeps it before the logout writes issues a session that ends at its refresh",
         "login:SwitchedLogoutTest#a root that keeps changing fails the logout before the session or the token is touched"
+      ]
+    },
+    {
+      "id": "IDN-42",
+      "source": "RFC 0014 R2 (mixed-version compatibility; the maintainer's direction of 2026-11-24, “按这个方向”); the compatibility review of 2026-11-24 (F2, CE-3, CE-5)",
+      "statement": "Every member of the CoSec-Identity header has a recorded meaning when absent (IdentityMembers in cosec-document, whose paths the cosec-identity format descriptor names member for member): a required member's absence is refused (400, or 401 for auth.exp); `memberships` absent is not stated, which a host that decides with policies on the identity refuses and a service that only trusts the gateway reads as the decided space's roles with no attachment; `auth.capped` absent is false, `auth.session` none, `auth.iat` unknown (which a revocation of the principal's tokens takes as revoked), and `claims` empty. A member whose being ignored would widen what a reader decides (today `memberships`, `auth.capped` and `claims`) is never added as one an older reader may ignore. A hop never states a member it did not receive: HttpControlService's relay of a request's caller writes `memberships` only when the identity it relays stated them, and leaves the member out otherwise, so a host that decides on the identity refuses that caller as it would refuse the header; the control plane's in-process facade refuses such a caller alike, as malformed (400 invalid-request), before the control plane is asked (CTL-77). Every other member the relay was forwarded arrives as it was.",
+      "level": "build",
+      "pending": null,
+      "guards": [
+        "document:IdentityMembersTest#the descriptor names exactly the recorded members, and a required one is one whose absence is refused - IDN-42",
+        "document:IdentityMembersTest#a member recorded as refused when absent does not read without it - IDN-42",
+        "document:IdentityMembersTest#each optional member reads its absence as recorded - IDN-42",
+        "document:IdentityMembersTest#the members whose being ignored would widen what a reader decides are the memberships, the cap and the claims - IDN-42",
+        "runtime:IdentityRelayTest#memberships the service was not forwarded are not relayed, and the deciding host refuses the caller - IDN-42",
+        "runtime:IdentityRelayTest#memberships the service was forwarded are relayed as they were, and decide at the host - IDN-42",
+        "runtime:IdentityRelayTest#empty memberships are stated memberships, and are relayed as stated - IDN-42",
+        "runtime:IdentityRelayTest#every other member the service was forwarded is relayed as it was - IDN-42",
+        "control-http:HttpControlServiceTest#a request's caller's memberships are relayed as they were forwarded - IDN-42",
+        "control:ControlServiceTest#a caller forwarded without memberships is refused before the control plane is asked - IDN-42",
+        "spring-boot:ControlServiceParityTest#a caller forwarded without memberships is refused alike through both implementations - IDN-42"
       ]
     }
   ]

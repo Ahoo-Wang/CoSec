@@ -43,9 +43,10 @@ import java.util.Base64
  *
  * `memberships` (`IDN-39`) holds what `roles` does not: the principal's roles in each other space (the default space's
  * key is empty; the identity's own space is never a key, and a space names at least one role) and the ids of the
- * policies it attaches, in the order its memberships name them. CoSec's writers always write it, empty when there is
+ * policies it attaches, in the order its memberships name them. CoSec's writers write it, empty when there is
  * nothing more (`{"spaces":{},"attachments":[]}`): its presence says the memberships are whole, and a host that decides
- * on the identity refuses one without it.
+ * on the identity refuses one without it. The relay of a request's caller leaves it out when the identity it relays did
+ * not state it (`IDN-42`). What a reader takes each member's absence for is recorded in [IdentityMembers].
  *
  * `auth.capped` is `true` for a credential with a role cap (an API key with `roles`, RFC 0009 §4.2), and absent
  * otherwise: the service behind then applies no principal binding either. `auth.iat` is when the credential was issued,

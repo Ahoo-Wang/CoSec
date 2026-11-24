@@ -63,6 +63,12 @@ Which preview of the library may run behind which preview of the gateway image: 
     means what it meant. `cosec-openapi` escapes every such character of a spec path outside its templates, `*` and
     `?` included: before, a `*` or `?` in a spec path became a wildcard of the generated route, which mapped other paths
     to that operation. Generate route maps again.
+- **Breaking: a relayed caller states only the memberships it was forwarded** (`IDN-42`). `HttpControlService`'s relay of a
+  request's caller wrote empty `memberships` for a caller whose own `CoSec-Identity` had none, so a host that decides on
+  the identity took it as a caller with no attachment and no role in another space. It now leaves the member out, and
+  the host refuses the call with `400` `invalid-request`; the control plane's in-process facade refuses such a caller
+  alike. Only a header without `memberships` reaches this: one from a beta.7 gateway, or one an application wrote.
+  Upgrade the gateways (every beta.8 gateway writes the member) before relying on control calls made for their callers.
 
 ## From 8.0.0-beta.7 {#from-8-0-0-beta-7}
 

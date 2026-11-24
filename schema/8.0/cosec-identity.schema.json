@@ -115,7 +115,7 @@
     },
     "memberships": {
       "additionalProperties": false,
-      "description": "What the principal is a member of besides `roles` (IDN-39), empty when nothing: CoSec's writers always write it, and a host that decides on the identity refuses one without it.",
+      "description": "What the principal is a member of besides `roles` (IDN-39), empty when nothing: CoSec's writers write it, but for a relay of an identity forwarded without it, which leaves it out (IDN-42); a host that decides on the identity refuses one without it.",
       "properties": {
         "attachments": {
           "description": "The ids of the policies the principal attaches, in the order its memberships name them.",
