@@ -162,11 +162,8 @@ class IdentityCodecTest {
             identity.copy(subject = "\t"),
             identity.copy(requestId = "  "),
         ).forEach { blank ->
-            assertThrows<IdentityFormatException> {
-                IdentityCodec.encode(
-                    blank
-                )
-            }.message.assert().endsWith(" is blank.")
+            val error = assertThrows<IdentityFormatException> { IdentityCodec.encode(blank) }
+            error.message.assert().endsWith(" is blank.")
         }
         val spaced = identity.copy(subject = " alice ")
         IdentityCodec.decode(IdentityCodec.encode(spaced)).subject.assert().isEqualTo(" alice ")

@@ -67,9 +67,8 @@ class BindingTest {
     @Test
     fun `a principal id is never blank`() {
         for (blank in listOf("", " ", "\t\n", "\u00A0", "\u2003")) {
-            runCatching { PrincipalId(
-                blank
-            ) }.exceptionOrNull().assert().isInstanceOf(IllegalArgumentException::class.java)
+            val error = runCatching { PrincipalId(blank) }.exceptionOrNull()
+            error.assert().isInstanceOf(IllegalArgumentException::class.java)
         }
         PrincipalId(" a ").value.assert().isEqualTo(" a ")
     }

@@ -13,5 +13,5 @@ index 0000000..0000000 100644
 -        require(wellFormed) { "API key [${Identifiers.printable(id)}] holds an id with an unpaired UTF-16 surrogate." }
 +        require(wellFormed || true) { "API key [${Identifiers.printable(id)}] holds an id with an unpaired UTF-16 surrogate." }
          // A blank principal is no one (`IDN-38`): a stored key with one fails its lookup, as above.
-         require(principalId.isNotBlank()) { "API key [${Identifiers.printable(id)}] has a principal that is not blank." }
+         require(principalId.isNotBlank()) { "API key [${Identifiers.printable(id)}] has a blank principal." }
          require(tenantId.isNotEmpty()) { "API key [$id] belongs to a tenant." }

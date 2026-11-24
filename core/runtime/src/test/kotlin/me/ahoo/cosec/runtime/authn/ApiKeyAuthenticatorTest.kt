@@ -162,7 +162,7 @@ class ApiKeyAuthenticatorTest {
         for (principal in listOf("", " ", "\t")) {
             val error = runCatching { ApiKey("key", principal, "acme", null, null) }.exceptionOrNull()
             error.assert().isInstanceOf(IllegalArgumentException::class.java)
-            error!!.message!!.assert().contains("not blank")
+            error!!.message!!.assert().contains("has a blank principal")
         }
         ApiKey("key", " svc ", "acme", null, null).principalId.assert().isEqualTo(" svc ")
     }

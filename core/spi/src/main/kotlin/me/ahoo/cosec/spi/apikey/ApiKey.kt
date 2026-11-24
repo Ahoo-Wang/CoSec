@@ -54,9 +54,7 @@ class ApiKey(
             Identifiers.isWellFormed(tenantId) && (roles == null || Identifiers.areWellFormed(roles))
         require(wellFormed) { "API key [${Identifiers.printable(id)}] holds an id with an unpaired UTF-16 surrogate." }
         // A blank principal is no one (`IDN-38`): a stored key with one fails its lookup, as above.
-        require(
-            principalId.isNotBlank()
-        ) { "API key [${Identifiers.printable(id)}] has a principal that is not blank." }
+        require(principalId.isNotBlank()) { "API key [${Identifiers.printable(id)}] has a blank principal." }
         require(tenantId.isNotEmpty()) { "API key [$id] belongs to a tenant." }
         require(SnapshotKey.Tenant.isValidTenantId(tenantId)) {
             "API key [${Identifiers.printable(id)}] belongs to a tenant that cannot be a tenant id: " +
