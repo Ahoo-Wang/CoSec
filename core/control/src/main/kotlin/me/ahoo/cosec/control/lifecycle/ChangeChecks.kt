@@ -90,7 +90,7 @@ class ChangeChecks(
             findings += Finding("V2", "$", "the document is ${bytes.size} bytes, more than ${options.maxDocumentBytes}", BAD_REQUEST)
         }
         EntryChecks.reservedNames(operations, kind, findings)
-        EntryChecks.entryIds(operations, findings)
+        EntryChecks.entryIds(operations, base, findings)
         EntryChecks.appIds(candidate, findings)
         val checkedWith = LinkedHashMap<SnapshotKey, SnapshotDigest?>()
         val platform = if (key == SnapshotKey.Platform) {
