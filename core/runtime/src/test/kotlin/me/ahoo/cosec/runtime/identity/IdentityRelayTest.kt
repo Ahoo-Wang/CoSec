@@ -29,9 +29,11 @@ import me.ahoo.cosec.runtime.http.HttpFacts
 import me.ahoo.cosec.runtime.http.Outcome
 import me.ahoo.cosec.runtime.http.ProblemType
 import me.ahoo.cosec.spi.identity.Identity
+import me.ahoo.cosec.spi.identity.IdentityOverflowException
 import me.ahoo.cosec.spi.token.TokenSession
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.assertThrows
 import java.time.Clock
 import java.time.Instant
 import java.time.ZoneOffset
@@ -134,6 +136,20 @@ class IdentityRelayTest {
             relayed.credential.assert().isEqualTo(identity.credential)
             relayed.claims.assert().isEqualTo(identity.claims)
             relayed.memberships.assert().isEqualTo(identity.memberships)
+        }
+    }
+
+    @Test
+    fun `a header the gate reads within R is relayed only within W, and fails the call beyond - IDN-43`() {
+        val claims = (0 until 6).associate { "c$it" to "x".repeat(900) }
+        val large = forwarded(Identity.Memberships.NONE).copy(claims = claims)
+        val header = IdentityCodec.encode(large, IdentityCodec.READ_MAX_BYTES)
+        header.length.assert().isGreaterThan(IdentityCodec.WRITE_MAX_BYTES)
+
+        val admitted = read(header, requireMemberships = false)
+        admitted.proceed.assert().isTrue()
+        assertThrows<IdentityOverflowException> {
+            IdentityIssuer(clock = clock, relay = true).issue(checkNotNull(admitted.security))
         }
     }
 }

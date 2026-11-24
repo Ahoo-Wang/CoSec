@@ -45,7 +45,7 @@ class IdentityCodecTest {
 
     private fun header(json: String) = Base64.getUrlEncoder().withoutPadding().encodeToString(json.encodeToByteArray())
 
-    private fun reason(header: String, maxBytes: Int = IdentityCodec.DEFAULT_MAX_BYTES) =
+    private fun reason(header: String, maxBytes: Int = IdentityCodec.READ_MAX_BYTES) =
         assertThrows<IdentityFormatException> { IdentityCodec.decode(header, maxBytes) }.reason
 
     @Test
@@ -296,7 +296,7 @@ class IdentityCodecTest {
         )
         val encoded = IdentityCodec.encode(withItsSession)
         (encoded.length - IdentityCodec.encode(large).length).assert().isLessThanOrEqualTo(256)
-        encoded.length.assert().isLessThan(IdentityCodec.DEFAULT_MAX_BYTES)
+        encoded.length.assert().isLessThan(IdentityCodec.WRITE_MAX_BYTES)
         IdentityCodec.decode(encoded).assert().isEqualTo(withItsSession)
     }
 

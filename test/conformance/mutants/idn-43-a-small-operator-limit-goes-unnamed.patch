@@ -1,0 +1,17 @@
+# Rule: IDN-43
+# Mutant: an operator's request-header limit too small for the identity header the gate accepts is not named at startup
+# Tests: :spring-boot:test --tests me.ahoo.cosec.spring.boot.pipeline.IdentityHeaderLimitTest
+
+diff --git a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/pipeline/IdentityHeaderLimit.kt b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/pipeline/IdentityHeaderLimit.kt
+index 756365cf1..44fd98fa8 100644
+--- a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/pipeline/IdentityHeaderLimit.kt
++++ b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/pipeline/IdentityHeaderLimit.kt
+@@ -107,7 +107,7 @@ internal class IdentityHeaderLimit : EnvironmentPostProcessor, Ordered {
+                 operator == null -> false to "$SERVER_LIMIT_KEY is ${derived.toBytes()} bytes, derived from $R_KEY " +
+                     "(${reads.toBytes()} bytes) and ${OTHER_HEADERS.toBytes()} bytes for the request's other headers " +
+                     "(IDN-43)."
+-                operator < derived -> true to "$SERVER_LIMIT_KEY is ${operator.toBytes()} bytes, below $R_KEY " +
++                operator > derived -> true to "$SERVER_LIMIT_KEY is ${operator.toBytes()} bytes, below $R_KEY " +
+                     "(${reads.toBytes()} bytes) and ${OTHER_HEADERS.toBytes()} bytes for the request's other headers " +
+                     "(${derived.toBytes()} bytes): the web server refuses a request whose identity header is near " +
+                     "$R_KEY before CoSec reads it (IDN-43). Raise it, or leave it unset to have it derived."

@@ -1,0 +1,17 @@
+# Rule: IDN-43
+# Mutant: a gateway writing more than every 8.x service reads by default is not named at startup
+# Tests: :spring-boot:test --tests me.ahoo.cosec.spring.boot.pipeline.IdentityHeaderLimitTest
+
+diff --git a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/pipeline/IdentityHeaderLimit.kt b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/pipeline/IdentityHeaderLimit.kt
+index acc87f89e..ce18f5f87 100644
+--- a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/pipeline/IdentityHeaderLimit.kt
++++ b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/pipeline/IdentityHeaderLimit.kt
+@@ -114,7 +114,7 @@ internal class IdentityHeaderLimit : EnvironmentPostProcessor, Ordered {
+          * default: a writer limit above it, named at startup at WARN with both numbers; null within it.
+          */
+         fun gatewayWriterLine(writes: DataSize): String? {
+-            if (writes.toBytes() <= IdentityCodec.READ_MAX_BYTES) return null
++            if (writes.toBytes() <= Long.MAX_VALUE) return null
+             return "cosec.gateway.identity.max-size is ${writes.toBytes()} bytes, above the " +
+                 "${IdentityCodec.READ_MAX_BYTES} bytes an 8.x service reads by default ($R_KEY): every service behind " +
+                 "this gateway must set $R_KEY to at least ${writes.toBytes()} bytes, or it refuses the larger identity " +

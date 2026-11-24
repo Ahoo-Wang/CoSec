@@ -39,6 +39,6 @@ object IdentityHeader {
      * expires; and [IllegalArgumentException] when a receiver would refuse what it wrote (an empty id, a time out of
      * range): a header written is a header read.
      */
-    fun write(identity: Identity, maxBytes: Int = IdentityCodec.DEFAULT_MAX_BYTES): String =
+    fun write(identity: Identity, maxBytes: Int = IdentityCodec.WRITE_MAX_BYTES): String =
         IdentityCodec.encode(identity, maxBytes)
 }
