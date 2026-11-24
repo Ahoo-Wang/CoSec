@@ -166,9 +166,10 @@ Before anything else, `PathNormalizer` checks it. On every adapter the path is:
   `/admin` does not permit it, and `/admin/**` does. In the deny direction a trailing `/` does not count (`PIP-35`): a
   DENY or a rate limit rule on `/orders/{id}` also covers `/orders/123/`, and one on `/orders/` covers `/orders`, since a
   backend may serve both spellings as one (Express without strict routing, Rails, ASP.NET Core, Spring 5 with
-  `useTrailingSlashMatch`). On a host with a route map, a path that ends with `/`, maps to no route, and maps without
-  it is refused `400` `invalid-request` before authentication: deciding it in the `http` namespace would step around
-  the route's DENYs, and mapping it would widen its ALLOWs.
+  `useTrailingSlashMatch`). On a host with a route map, a path that maps to no route and maps in its other spelling
+  (`/orders/123/` for a route `/orders/{id}`, or `/orders` for a route `/orders/`) is refused `400` `invalid-request`
+  before authentication: deciding it in the `http` namespace would step around the route's DENYs, and mapping it would
+  widen its ALLOWs. A route written with a trailing `/` still loads.
 
 ## Route maps
 
@@ -660,7 +661,9 @@ With one port, or `management.server.port` equal to the application's, every row
 The gateway filter decides gateway routes. A controller or a functional route (`RouterFunction` bean) of the
 application itself is mapped before any gateway route (Spring WebFlux's annotated-controller mapping has order `0` and
 the router-function mapping `-1`; the gateway's route mapping `1`), so the request is answered with no CoSec decision:
-no authentication, no policy, no rate limit. So in enforce mode a gateway host that has such a handler of the
+no authentication, no policy, no rate limit. So is a request a `HandlerMapping` bean of the application's own maps (a
+WebSocket endpoint's `SimpleUrlHandlerMapping`, say), before or after the gateway's routes: it is served by the gateway
+application itself. Spring's, the gateway's and the actuator's own mappings are not the application's. So in enforce mode a gateway host that has such a handler of the
 application's own does not start, and the message names each (`STA-13`,
 [the message](../operations/troubleshooting.md#startup-fails-on-the-gateways-own-handlers)). Move those handlers to a
 service behind the gateway, where a route decides them, or list the ones something else protects, by bean name, in

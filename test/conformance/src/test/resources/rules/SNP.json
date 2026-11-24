@@ -370,7 +370,7 @@
     {
       "id": "SNP-22",
       "source": "Review round 2, R2D-11 (review-r2-4-runtime-host)",
-      "statement": "A load's compilation has the load's deadline: one that has not answered when coldLoadTimeout (cold) or storeReadTimeout (reload) since the load began is spent ends the load as a failure by the next periodic tick (a cold load fails, a reload keeps what is installed, a recompile fails closed); a queued compilation of an ended load never starts, and a revision whose compilation timed out and still runs is not compiled again while it runs. A recompile that does not answer within its deadline leaves the document's validity under the new platform document unknown, so it fails closed; one the full compile queue refuses is a matter of capacity, and keeps what is installed for at most coldLoadTimeout since its load began (SNP-4).",
+      "statement": "A load's compilation has the load's deadline: one that has not answered when coldLoadTimeout (cold) or storeReadTimeout (reload) since the load began is spent ends the load as a failure by the next periodic tick, a tick that throws included (a cold load fails, a reload keeps what is installed, a recompile fails closed); a queued compilation of an ended load never starts, and a revision whose compilation timed out and still runs is not compiled again while it runs. A recompile that does not answer within its deadline leaves the document's validity under the new platform document unknown, so it fails closed; one the full compile queue refuses is a matter of capacity, and keeps what is installed for at most coldLoadTimeout since its load began (SNP-4).",
       "level": "timing",
       "pending": null,
       "guards": [
@@ -382,7 +382,8 @@
         "runtime:SnapshotCompileDeadlineTest#a compilation still queued when its load times out never starts",
         "runtime:KeyTransitionsTest#aRecompileWhoseCompilationTimesOutFailsClosedAndAbandonsIt",
         "runtime:KeyTransitionsTest#aColdLoadWhoseCompilationTimesOutAnswersFailed",
-        "runtime:KeyTransitionsTest#aRefusedRecompileKeepsWhatIsInstalledWhereOneThatTimesOutFailsClosed"
+        "runtime:KeyTransitionsTest#aRefusedRecompileKeepsWhatIsInstalledWhereOneThatTimesOutFailsClosed",
+        "runtime:SnapshotRevalidationTest#aTickThatThrowsStillEndsTheLoadsPastTheirCompileDeadline"
       ],
       "properties": [
         "runtime:SnapshotSourceModelPropertyTest#theKeyRunnerKeepsToTheModelInEveryScriptedOrder"

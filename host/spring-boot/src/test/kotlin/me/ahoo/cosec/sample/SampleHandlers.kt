@@ -17,9 +17,12 @@ import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.RestController
+import org.springframework.web.reactive.HandlerMapping
 import org.springframework.web.reactive.function.server.RouterFunction
 import org.springframework.web.reactive.function.server.RouterFunctions
 import org.springframework.web.reactive.function.server.ServerResponse
+import org.springframework.web.reactive.handler.SimpleUrlHandlerMapping
+import org.springframework.web.reactive.socket.WebSocketHandler
 
 /** An application's own handlers, in a package of its own: the starter's package is not an application's. */
 @RestController
@@ -37,4 +40,14 @@ class OwnHandlers {
     @Bean
     fun functionalRoutes(): RouterFunction<ServerResponse> =
         RouterFunctions.route().GET("/functional") { ServerResponse.ok().bodyValue("functional") }.build()
+}
+
+/** An application's own handler mapping: a WebSocket endpoint, as an application registers one (DR2-G-1). */
+@Configuration(proxyBeanMethods = false)
+class OwnHandlerMapping {
+    @Bean
+    fun socketMapping(): HandlerMapping = SimpleUrlHandlerMapping(
+        mapOf("/socket" to WebSocketHandler { it.close() }),
+        -1
+    )
 }

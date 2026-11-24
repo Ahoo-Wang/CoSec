@@ -98,7 +98,7 @@ CoSec 授权的路径是应用内的请求路径：
 - **在认证之前以 `400` `invalid-request` 拒绝**的情况：去掉路径参数并解码一次之后，含有 `.` 或 `..` 段（包括编码后的 `;`）；含有格式错误的百分号转义；按收到时（百分号编码后）的长度超过 2048 个字符；或某一段解码后超过 256 个字符（按 UTF-16 单元计，即匹配器看到的样子）。因此 Servlet 容器会解析成 `/admin` 的 `/public/..;/admin` 会被拒绝，而 29 个汉字组成的段（编码后 261 个字符）不会：段的上限在任何文字下都相同，而路径的上限按收到的内容计，所以单个由汉字组成的段最多 227 个字符。`decodeAndParseSegments: false` 的模式按收到的原文读取各段，所以它不匹配任何按收到时含有超过 256 个字符的段的路径；
 - **同样被拒绝**的情况：结尾之前含有空段（`//admin`、`/admin//x`，或去掉路径参数后变成 `//admin` 的 `/;x/admin`），含有编码后的分隔符（`%2F` 或 `%2f`），或者含有反斜杠（`\`、`%5C` 或 `%5c`）。模式把它们读成单独的段或某一段的一部分，所以 `/admin` 之下的 `DENY` 匹配不到它们，而会合并斜杠、解码分隔符或把 `\` 当作 `/` 的后端却按 `/admin/...` 提供服务。编码两次的分隔符（`%252F`、`%255C`）只解码一次，成为文本，照常决定；
 - **同样被拒绝**的情况：含有编码后的 `;`（`%3B`）或编码后的控制字符（`%00` 到 `%1F`、`%7F`），十六进制数字大小写均可，出现在路径任何位置，包括路径参数之内（`PIP-30`）。CoSec 把它们读成某一段里的文本，但网关之后先解码、再去掉路径参数的后端会把 `/admin%3Bx/users` 当作 `/admin/users` 提供服务，在 NUL 处截断或丢掉控制字符之后内容的后端又会提供另一个路径。`%25` 是段里的数据：`%253B` 只解码一次，成为文本 `%3B`，照常决定；结尾的 `.` 或空格也一样。未编码的控制字符同样被拒绝，尽管 CoSec 运行的服务器已经会在任何过滤器之前拒绝它。有的服务器自己也会拒绝其中一部分编码写法：Jetty 拒绝所有编码后的控制字符（以及 `%25`），Tomcat 拒绝 `%00`；
-- **保留末尾的 `/`**：对 ALLOW 而言，`/admin/` 是一条独立的路径，与 Spring 的路由一致：写成 `/admin` 的模式不放行它，`/admin/**` 放行它。在拒绝方向上末尾的一个 `/` 不算数（`PIP-35`）：写在 `/orders/{id}` 上的 DENY 或限流规则也覆盖 `/orders/123/`，写在 `/orders/` 上的也覆盖 `/orders`，因为后端可能把两种写法当作同一条路径服务（非 strict 路由的 Express、Rails、ASP.NET Core、开启 `useTrailingSlashMatch` 的 Spring 5）。在有路由映射的宿主上，以 `/` 结尾、映射不上、去掉末尾 `/` 后能映射的路径，在认证之前以 `400` `invalid-request` 拒绝：把它放在 `http` 命名空间里决策会绕过该路由的 DENY，而映射它又会放宽它的 ALLOW。
+- **保留末尾的 `/`**：对 ALLOW 而言，`/admin/` 是一条独立的路径，与 Spring 的路由一致：写成 `/admin` 的模式不放行它，`/admin/**` 放行它。在拒绝方向上末尾的一个 `/` 不算数（`PIP-35`）：写在 `/orders/{id}` 上的 DENY 或限流规则也覆盖 `/orders/123/`，写在 `/orders/` 上的也覆盖 `/orders`，因为后端可能把两种写法当作同一条路径服务（非 strict 路由的 Express、Rails、ASP.NET Core、开启 `useTrailingSlashMatch` 的 Spring 5）。在有路由映射的宿主上，映射不上、换成另一种写法后能映射的路径（路由 `/orders/{id}` 时的 `/orders/123/`，或路由 `/orders/` 时的 `/orders`），在认证之前以 `400` `invalid-request` 拒绝：把它放在 `http` 命名空间里决策会绕过该路由的 DENY，而映射它又会放宽它的 ALLOW。以 `/` 结尾的路由照常加载。
 
 ## 路由映射 {#route-maps}
 
@@ -427,7 +427,7 @@ docker run -p 8080:8080 -e SPRING_DATA_REDIS_URL=redis://redis:6379 -e COSEC_JWT
 
 ### 网关自己的处理器 {#the-gateways-own-handlers}
 
-网关过滤器决策网关路由。应用自己的控制器或函数式路由（`RouterFunction` bean）映射在所有网关路由之前（Spring WebFlux 的注解控制器映射顺序为 `0`，router-function 映射为 `-1`，网关的路由映射为 `1`），所以对它们的请求不经任何 CoSec 决策就被应答：没有认证、没有策略、没有限流。所以在 enforce 模式下，带有这类应用自己处理器的网关宿主不会启动，信息里逐个指明它们（`STA-13`，[信息](../operations/troubleshooting.md#startup-fails-on-the-gateways-own-handlers)）。把这些处理器移到网关之后的服务中，由路由来决策；或者把由其他手段保护的那些按 bean 名列在 `cosec.gateway.unprotected-handlers` 中：这是一项声明，说明 CoSec 不决策它们，启动时会用一行 INFO 复述。带 `*` 的名字会被拒绝，因为每个不经决策就提供的处理器都要点名；对不上任何处理器的名字被忽略。
+网关过滤器决策网关路由。应用自己的控制器或函数式路由（`RouterFunction` bean）映射在所有网关路由之前（Spring WebFlux 的注解控制器映射顺序为 `0`，router-function 映射为 `-1`，网关的路由映射为 `1`），所以对它们的请求不经任何 CoSec 决策就被应答：没有认证、没有策略、没有限流。应用自己的 `HandlerMapping` bean（比如 WebSocket 端点的 `SimpleUrlHandlerMapping`）映射的请求也一样，无论它排在网关路由之前还是之后：它由网关应用自己提供。Spring 的、网关的和 actuator 的映射不算应用的。所以在 enforce 模式下，带有这类应用自己处理器的网关宿主不会启动，信息里逐个指明它们（`STA-13`，[信息](../operations/troubleshooting.md#startup-fails-on-the-gateways-own-handlers)）。把这些处理器移到网关之后的服务中，由路由来决策；或者把由其他手段保护的那些按 bean 名列在 `cosec.gateway.unprotected-handlers` 中：这是一项声明，说明 CoSec 不决策它们，启动时会用一行 INFO 复述。带 `*` 的名字会被拒绝，因为每个不经决策就提供的处理器都要点名；对不上任何处理器的名字被忽略。
 
 ### 网关上的 actuator {#actuator-on-a-gateway}
 

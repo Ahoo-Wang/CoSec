@@ -487,6 +487,7 @@ object GuardAllowlist {
             "runtime:SnapshotCompileDeadlineTest#a compilation still queued when its load times out never starts",
             "runtime:KeyTransitionsTest#aRecompileWhoseCompilationTimesOutFailsClosedAndAbandonsIt",
             "runtime:KeyTransitionsTest#aColdLoadWhoseCompilationTimesOutAnswersFailed",
+            "runtime:SnapshotRevalidationTest#aTickThatThrowsStillEndsTheLoadsPastTheirCompileDeadline",
             "runtime:KeyTransitionsTest#aRefusedRecompileKeepsWhatIsInstalledWhereOneThatTimesOutFailsClosed",
             "runtime:SnapshotRecompileTest#a document failed by a recompile keeps retrying while the store stays down",
             "runtime:PlatformCompilerInFlightTest#a document compiled against the previous platform while it changed is compiled again",

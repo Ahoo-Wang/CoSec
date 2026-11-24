@@ -21,8 +21,17 @@ import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.CsvSource
+import java.lang.management.ManagementFactory
 
 class RouteMapTest {
+    private companion object {
+        /** Enough lookups that one allocation each (16 bytes at the least) adds up past [QUIET_BYTES]. */
+        const val LOOKUPS = 4_096
+
+        /** What measuring itself may allocate, far below one allocation per lookup. */
+        const val QUIET_BYTES = 16_384L
+    }
+
     private fun route(method: String, path: String, action: String, resource: String) =
         """{"method":"$method","path":"$path","action":"$action","resource":"$resource"}"""
 
@@ -81,6 +90,54 @@ class RouteMapTest {
     fun `a request no route matches stays unmapped, never a wildcard`(method: String, path: String) {
         routes.resolve(method, path).assert().isEqualTo(RouteResolution.Unmapped)
         RouteMap.EMPTY.resolve(method, path).assert().isEqualTo(RouteResolution.Unmapped)
+    }
+
+    /**
+     * PIP-35: a path that maps only in its other spelling, with or without a trailing `/`, is invalid rather than
+     * decided in the `http` namespace, whichever way the route is written (DR1-C-9, DR2-C-2).
+     */
+    @Test
+    fun `a path that maps only in its other trailing-slash spelling is invalid, either way`() {
+        val written = load(
+            file(
+                route("GET", "/orders/", "order:list", "order"),
+                route("DELETE", "/orders/{id}", "order:delete", "order/{id}"),
+            ),
+        )
+        mapped("GET", "/orders/42").action.verb.assert().isEqualTo("read")
+        (written.resolve("GET", "/orders/") as RouteResolution.Mapped).action.verb.assert().isEqualTo("list")
+        (written.resolve("GET", "/orders") as RouteResolution.Invalid).reason.assert()
+            .contains("GET /orders/ only with a trailing /")
+        (written.resolve("HEAD", "/orders") as RouteResolution.Invalid).reason.assert().contains("with a trailing /")
+        (written.resolve("DELETE", "/orders/42/") as RouteResolution.Invalid).reason.assert()
+            .contains("DELETE /orders/{id} only without its trailing /")
+        // A path unmapped in both spellings stays unmapped, and the root has no other spelling.
+        written.resolve("POST", "/orders").assert().isEqualTo(RouteResolution.Unmapped)
+        written.resolve("GET", "/").assert().isEqualTo(RouteResolution.Unmapped)
+    }
+
+    /**
+     * The request path without a route map, or without a route for the method, is every request's: PIP-35's second
+     * lookup must not run there. It would build the path's other spelling, so what the thread allocates shows it.
+     */
+    @Test
+    fun `without a route for the method, an unmapped path takes no second lookup`() {
+        val threads = ManagementFactory.getThreadMXBean() as com.sun.management.ThreadMXBean
+        fun allocated(map: RouteMap, method: String, path: String): Long {
+            val before = threads.currentThreadAllocatedBytes
+            repeat(LOOKUPS) { map.resolve(method, path) }
+            return threads.currentThreadAllocatedBytes - before
+        }
+        val getOnly = load(file(route("GET", "/orders/", "order:list", "order")))
+        for ((map, method) in listOf(RouteMap.EMPTY to "GET", RouteMap.EMPTY to "HEAD", getOnly to "POST")) {
+            map.resolve(method, "/customers/7").assert().isEqualTo(RouteResolution.Unmapped)
+            allocated(map, method, "/customers/7").assert()
+                .describedAs("$method on a map without a route for it").isLessThan(QUIET_BYTES)
+            allocated(map, method, "/customers/7/").assert()
+                .describedAs("$method with a trailing / on a map without a route for it").isLessThan(QUIET_BYTES)
+        }
+        // Where the map has routes for the method, HEAD through GET's, lookups parse the path: the measure sees them.
+        allocated(getOnly, "HEAD", "/customers/7").assert().isGreaterThan(QUIET_BYTES)
     }
 
     @Test

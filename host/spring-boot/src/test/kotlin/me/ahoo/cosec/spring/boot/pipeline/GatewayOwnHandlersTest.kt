@@ -16,6 +16,7 @@
 package me.ahoo.cosec.spring.boot.pipeline
 
 import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.sample.OwnHandlerMapping
 import me.ahoo.cosec.sample.OwnHandlers
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
@@ -35,9 +36,9 @@ import reactor.core.publisher.Mono
 import java.util.concurrent.atomic.AtomicInteger
 
 /**
- * UB-10, `STA-13`: on a Spring Cloud Gateway host the application's own controllers and functional routes are answered
- * before any gateway route, so a global filter (CoSec's) never sees them; startup fails, naming them, unless
- * `cosec.gateway.unprotected-handlers` lists each.
+ * UB-10, `STA-13`: on a Spring Cloud Gateway host the application's own controllers, functional routes and handler
+ * mappings are answered outside any gateway route, so a global filter (CoSec's) never sees them; startup fails,
+ * naming them, unless `cosec.gateway.unprotected-handlers` lists each.
  */
 class GatewayOwnHandlersTest {
     class Counting : GlobalFilter {
@@ -106,6 +107,17 @@ class GatewayOwnHandlersTest {
             // Listing one leaves the other refused.
             assertThrows<IllegalStateException> { GatewayOwnHandlers.require(context, setOf("ordersController")) }
                 .message.assert().contains("functionalRoutes").doesNotContain("ordersController,")
+        }
+    }
+
+    /** DR2-G-1: a handler mapping of the application's own, a WebSocket endpoint's, is one of its handlers too. */
+    @Test
+    fun `a handler mapping of the application that is not listed fails startup, naming it`() {
+        AnnotationConfigApplicationContext(OwnHandlerMapping::class.java).use { context ->
+            GatewayOwnHandlers.find(context).assert().containsExactly("socketMapping")
+            assertThrows<IllegalStateException> { GatewayOwnHandlers.require(context, emptySet()) }
+                .message.assert().contains("socketMapping").contains("STA-13")
+            assertDoesNotThrow { GatewayOwnHandlers.require(context, setOf("socketMapping")) }
         }
     }
 

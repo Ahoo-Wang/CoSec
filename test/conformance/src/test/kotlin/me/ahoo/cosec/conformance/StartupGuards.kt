@@ -71,6 +71,7 @@ object StartupGuards {
         "spring-boot:GatewayOwnHandlersTest#every handler listed starts, and a name that matches no handler is ignored",
         "spring-boot:GatewayOwnHandlersTest#a pattern is never accepted",
         "spring-boot:GatewayOwnHandlersTest#a controller and a functional route are not seen by a gateway global filter, a route is",
+        "spring-boot:GatewayOwnHandlersTest#a handler mapping of the application that is not listed fails startup, naming it",
         // IDN-26 (DR1-D-3): a revocation held locally lives at most 30 seconds too.
         "spring-boot:StrictCacheFailureTest#aRevocationTablesLocalMaxAgeIsAtMost30Seconds",
         "cocache:CacheTtlPolicyTest#revocationTablesHoldARevocationFor30SecondsAtMost",

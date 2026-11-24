@@ -175,7 +175,7 @@ CoSec 没有哪个配置项叫这些名字，而已知的 key 无论来源都不
 
 | 配置项 | 类型 | 默认值 | 作用 |
 |---|---|---|---|
-| `cosec.gateway.unprotected-handlers` | bean 名集合 | 空 | 可以在 Spring Cloud Gateway 宿主上提供的应用自己的控制器和函数式路由：CoSec 不决策它们（它们映射在所有路由之前），它们由其他手段保护。其他任何一个都会让 enforce 模式下的启动失败（`STA-13`）；带 `*` 的名字被拒绝；对不上任何处理器的名字被忽略。哪些处理器不需要 CoSec 决策只有运维知道，所以它是一项声明，而不是算出来的值（[网关自己的处理器](../integration/web.md#the-gateways-own-handlers)）。 |
+| `cosec.gateway.unprotected-handlers` | bean 名集合 | 空 | 可以在 Spring Cloud Gateway 宿主上提供的应用自己的控制器、函数式路由和处理器映射：CoSec 不决策它们（它们在所有路由之外提供服务），它们由其他手段保护。其他任何一个都会让 enforce 模式下的启动失败（`STA-13`）；带 `*` 的名字被拒绝；对不上任何处理器的名字被忽略。哪些处理器不需要 CoSec 决策只有运维知道，所以它是一项声明，而不是算出来的值（[网关自己的处理器](../integration/web.md#the-gateways-own-handlers)）。 |
 | `cosec.gateway.unprotected-endpoints` | 端点 id 集合 | 空 | 可以在网关应用端口上通过 HTTP 暴露的 actuator 端点：CoSec 不授权它们，它们由其他手段保护。其他任何 `health` 以外的端点在那里暴露都会使启动失败（`STA-2`）；会修改路由的 `gateway` 从不接受。在单独的 `management.server.port` 上可以暴露任何端点（[网关上的 actuator](../integration/web.md#actuator-on-a-gateway)）。 |
 
 ## 网关身份 {#gateway-identity}
