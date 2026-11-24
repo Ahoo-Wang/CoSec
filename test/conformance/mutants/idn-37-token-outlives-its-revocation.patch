@@ -1,0 +1,16 @@
+# Rule: IDN-37
+# Mutant: a call issues a token valid longer than the configured validity, so its revocation expires before it does and it is valid again
+# Tests: :jwt:test --tests me.ahoo.cosec.jwt.JwtTokenConverterTest
+
+diff --git a/extensions/jwt/src/main/kotlin/me/ahoo/cosec/jwt/JwtTokenConverter.kt b/extensions/jwt/src/main/kotlin/me/ahoo/cosec/jwt/JwtTokenConverter.kt
+index 8d49db549..37e0312a6 100644
+--- a/extensions/jwt/src/main/kotlin/me/ahoo/cosec/jwt/JwtTokenConverter.kt
++++ b/extensions/jwt/src/main/kotlin/me/ahoo/cosec/jwt/JwtTokenConverter.kt
+@@ -94,7 +94,6 @@ class JwtTokenConverter @InternalCoSecApi constructor(
+         refreshTokenValidity: Duration
+     ): CompositeToken {
+         checkIssuable(subject)
+-        checkValidity(accessTokenValidity, refreshTokenValidity)
+         val accessTokenId = idGenerator.generate()
+         val now = Date()
+         // No token of the pair outlives its session (RFC 0009): the end of the family's absolute lifetime.
