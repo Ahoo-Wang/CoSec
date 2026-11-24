@@ -126,6 +126,24 @@ class HeadRegressionTest {
         assertNotRead(4)
     }
 
+    /**
+     * DR1-F-13: `explain` with `at` reads the platform's and an app's documents as well as the caller's: its `410` names
+     * no document and no revision, so it tells nobody which revisions of a document they may not read are retained.
+     */
+    @Test
+    fun `a revision no longer retained is refused without naming the document or the revision`() = runBlocking<Unit> {
+        movedBack()
+        val (request, at) = explained(3)
+        val refused = try {
+            plane.explain(PLATO, request, at)
+            error("not refused")
+        } catch (e: ChangeRejectedException) {
+            e
+        }
+        refused.status.assert().isEqualTo(GONE)
+        refused.message.orEmpty().assert().doesNotContain("acme").doesNotContain("3")
+    }
+
     private companion object {
         const val GONE = 410
     }

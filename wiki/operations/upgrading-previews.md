@@ -30,6 +30,12 @@ Which preview of the library may run behind which preview of the gateway image: 
 
 ## From 8.0.0-beta.7 {#from-8-0-0-beta-7}
 
+- **The control plane holds its calls' large work to a budget** (`CTL-85`, DR1-F-3, DR1-F-4). Affected: a client that
+  proposes, applies or explains large documents many at once. A control host holds an eighth of its heap for the bodies
+  it parses and the documents it decodes or compiles for one call; a call that does not fit waits its tenant's turn, at
+  most half of `cosec.pipeline.timeout`, and is otherwise `503` with `Retry-After: 1`. Retry it. `StageBudgets`'
+  startup line names the wait, the control plane's line the budget; two meters are new: `cosec.control.work.held` and
+  `cosec.control.work.refused`. Nothing to configure.
 - **Breaking: a change cannot put a permission policy id with a `/` past its app, nor a catalog permission id with one**
   (`CTL-8`, DR1-E-5). Affected: an app owner whose changes put `perm:<app>/a/b`, or a catalog entry `a/b`. Such an id
   walked out of a rule ending in `perm:<app>/` and a `*`. A change that adds one is refused with `V2` (422); an entry

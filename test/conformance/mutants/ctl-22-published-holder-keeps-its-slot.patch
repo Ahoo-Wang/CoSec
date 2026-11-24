@@ -3,16 +3,14 @@
 # Tests: :control:test --tests me.ahoo.cosec.control.change.RetriedPublishTest
 
 diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Publishing.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Publishing.kt
-index 8a1b58b7d..9133686ce 100644
+index 82a7506f5..2be6f9a68 100644
 --- a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Publishing.kt
 +++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Publishing.kt
-@@ -82,9 +82,6 @@ internal class Publishing(
-     ): ChangeRequest {
-         val change = flow.visible(publisher, id)
-         authority.require(publisher, change.key, PublishRules.publishing(change))
--        if (change.state == ChangeState.PUBLISHED && slots.holds(change)) {
--            return recordedAgain(change, publisher, again)
--        }
-         PublishRules.requireState(change, ChangeStep.PUBLISH.from)
-         PublishRules.acknowledged(change, ack)
-         candidates.authorize(publisher, change)
+@@ -148,7 +148,6 @@ internal class Publishing(
+      * Null for any other change, which publishes as usual.
+      */
+     private suspend fun writtenBefore(change: ChangeRequest, publisher: Operator, again: String?): ChangeRequest? {
+-        if (change.state == ChangeState.PUBLISHED && slots.holds(change)) return recordedAgain(change, publisher, again)
+         if (change.state != ChangeState.EXPIRED) return null
+         val own = PublishRules.ownRevision(revisions, change, revisions.head(change.key)) ?: return null
+         return republished(change, own, publisher)

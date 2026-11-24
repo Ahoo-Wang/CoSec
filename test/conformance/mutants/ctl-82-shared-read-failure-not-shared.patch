@@ -1,0 +1,16 @@
+# Rule: CTL-82
+# Mutant: a shared read that fails is not handed to the calls waiting on it: each loads again in turn, so the k-th waits k loads
+# Tests: :control:test --tests me.ahoo.cosec.control.lifecycle.SharedReadTest
+
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/SharedRead.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/SharedRead.kt
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/SharedRead.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/SharedRead.kt
+@@ -81,7 +81,7 @@ internal class SharedRead<T>(
+             if (currentCoroutineContext().isActive) shared.completeExceptionally(e) else shared.complete(null)
+             throw e
+         } catch (e: Throwable) {
+-            shared.completeExceptionally(e)
++            shared.complete(null)
+             throw e
+         } finally {
+             synchronized(lock) { if (inflight === shared) inflight = null }

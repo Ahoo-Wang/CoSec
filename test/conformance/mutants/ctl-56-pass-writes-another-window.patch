@@ -1,0 +1,16 @@
+# Rule: CTL-56
+# Mutant: a shadow pass writes what it saw of one window to the record whatever window it now names, so a change staged again closes on the evidence of the window before
+# Tests: :control:test --tests me.ahoo.cosec.control.change.ShadowWindowRaceTest
+
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Staging.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Staging.kt
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Staging.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Staging.kt
+@@ -181,7 +181,7 @@ internal class Staging(
+      * each keep the instances the other saw (`CTL-56`).
+      */
+     private fun seen(current: ChangeRequest, state: ShadowState, look: ShadowLook): ChangeRequest? {
+-        val shadow = current.shadow?.takeIf { it.window == state.window } ?: return null
++        val shadow = current.shadow?.takeIf { it.window == state.window || true } ?: return null
+         return current.copy(shadow = shadow.copy(reporters = shadow.reporters + look.reporters))
+     }
+ 

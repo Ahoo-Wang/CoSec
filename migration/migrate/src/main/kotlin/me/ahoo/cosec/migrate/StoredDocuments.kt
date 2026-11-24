@@ -21,7 +21,6 @@ import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.control.store.ControlStore
 import me.ahoo.cosec.document.PolicyDocument
 import me.ahoo.cosec.document.PolicyDocumentCodec
-import me.ahoo.cosec.model.Binding
 import me.ahoo.cosec.model.PolicyId
 import me.ahoo.cosec.model.RoleId
 import me.ahoo.cosec.model.SubjectRef
@@ -49,18 +48,20 @@ class StoredDocuments(private val store: ControlStore) : PublishedDocuments {
     }
 
     override fun principalGrants(tenant: TenantId, principal: String): List<String> =
-        listOfNotNull(platform, tenant(tenant)).flatMap { document ->
-            document.bindings.filter { it.names(tenant, principal) }.map { "${describe(document)}/${it.id.value}" }
-        }
+        PrincipalDenies.grants(deciding(tenant), tenant, principal)
+
+    override fun principalDenies(tenant: TenantId, principal: String): List<String> =
+        PrincipalDenies.bindings(deciding(tenant), tenant, principal)
+
+    override fun deniesNaming(tenant: TenantId, principal: String, attachments: Collection<String>): List<String> =
+        PrincipalDenies.of(deciding(tenant), tenant, principal, attachments)
+
+    /** The documents that decide a request of [tenant]'s principals: the platform's, every app's and [tenant]'s own. */
+    private fun deciding(tenant: TenantId): List<PolicyDocument> =
+        listOfNotNull(platform) + all.filter { it.kind == DocumentKind.APP } + listOfNotNull(tenant(tenant))
 
     override fun boundRole(role: RoleId): Boolean =
         all.any { document -> document.bindings.any { (it.subject as? SubjectRef.Role)?.id == role } }
-
-    private fun Binding.names(tenant: TenantId, principal: String): Boolean =
-        (subject as? SubjectRef.Principal)?.let { it.tenant == tenant && it.id.value == principal } == true
-
-    private fun describe(document: PolicyDocument): String =
-        if (document.kind == DocumentKind.PLATFORM) "platform" else "${document.kind.name.lowercase()}:${document.owner}"
 
     private fun tenant(tenant: TenantId): PolicyDocument? = tenants.getOrPut(tenant) {
         read(SnapshotKey.Tenant(tenant.value))

@@ -246,7 +246,9 @@ is a DENY, and deny wins, nothing written in any document can lift it.
 
 Break-glass grants a named principal a policy for a bounded time, for emergencies. A break-glass binding:
 
-- exists only in the platform document, binds only a principal, and must have `expiresAt`;
+- exists only in the platform document, binds only a principal, and must have `expiresAt`. Expiry is each instance's: the
+  engine skips the binding once the request's time is past `expiresAt`, read from the clock of the instance deciding, so
+  an instance whose clock is behind still applies it; the binding stays in the document until it is revoked (DR1-E-15);
 - to `cosec:root`, applies only to a principal of the platform tenant `(platform)`;
 - is created only through the control plane: one person requests it, a second approves it, and its lifetime is at
   most `cosec.control.break-glass.max-duration` ([Testing policies](../policies/testing.md));

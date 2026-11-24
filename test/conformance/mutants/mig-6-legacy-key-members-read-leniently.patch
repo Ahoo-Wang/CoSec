@@ -1,0 +1,16 @@
+# Rule: MIG-6
+# Mutant: a stored key member of another type reads as empty: a policies string drops an attached DENY
+# Tests: :migrate:test --tests me.ahoo.cosec.migrate.ApiKeyMigrationTest
+
+diff --git a/migration/migrate/src/main/kotlin/me/ahoo/cosec/migrate/LegacyApiKey.kt b/migration/migrate/src/main/kotlin/me/ahoo/cosec/migrate/LegacyApiKey.kt
+index 0000000..0000000 100644
+--- a/migration/migrate/src/main/kotlin/me/ahoo/cosec/migrate/LegacyApiKey.kt
++++ b/migration/migrate/src/main/kotlin/me/ahoo/cosec/migrate/LegacyApiKey.kt
+@@ -111,7 +111,6 @@ class LegacyApiKey(
+         }
+ 
+         private fun JsonNode.strings(field: String): List<String> = present(field)?.let { node ->
+-            require(node.isArray && node.values().all { it.isString }) { "its $field is not an array of strings" }
+             node.values().map { it.asString() }
+         }.orEmpty()
+ 

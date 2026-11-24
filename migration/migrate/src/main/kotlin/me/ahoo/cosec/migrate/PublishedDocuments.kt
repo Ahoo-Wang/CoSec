@@ -30,8 +30,24 @@ interface PublishedDocuments {
      */
     fun attachable(tenant: TenantId, policy: PolicyId): Boolean
 
-    /** The ids of the principal and break-glass bindings that name [principal] in [tenant], in any document. */
+    /**
+     * The principal and break-glass bindings that name [principal] in [tenant] and grant (their policy holds an ALLOW,
+     * or no document defines it), as `document/binding`: what a capped key no longer reaches.
+     */
     fun principalGrants(tenant: TenantId, principal: String): List<String>
+
+    /**
+     * The principal bindings that name [principal] in [tenant] and whose policy holds a DENY, as `document/binding`: a
+     * key capped on its principal stays under them (RC1-1).
+     */
+    fun principalDenies(tenant: TenantId, principal: String): List<String>
+
+    /**
+     * Every DENY that names [principal] of [tenant] by its id ([PrincipalDenies], `MIG-6`), each as where it is: a key
+     * moved to a principal of its own would escape it. [attachments]: the policies the membership provider attaches to
+     * the principal, as `--memberships` says.
+     */
+    fun deniesNaming(tenant: TenantId, principal: String, attachments: Collection<String> = emptyList()): List<String>
 
     /** Whether any document binds [role]: a per-key role must not take an existing role's name. */
     fun boundRole(role: RoleId): Boolean

@@ -55,7 +55,7 @@ internal class Options(
         private val VALUED = setOf(
             "from-redis", "from-files", "key-prefix", "out", "partition", "to-redis", "in",
             "rate-limit-rules", "platform-admin", "redis", "role-prefix", "app",
-            "memberships", "grant-to-principal", "file", "document", "revision", "confirm",
+            "memberships", "blacklist", "grant-to-principal", "file", "document", "revision", "confirm",
         )
         private val FLAGS = setOf("resume", "force", "dry-run", "cluster")
         private val REDIS_URIS = listOf("to-redis", "from-redis", "redis")
