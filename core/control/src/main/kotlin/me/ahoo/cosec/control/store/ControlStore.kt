@@ -292,6 +292,11 @@ data class RevisionEntry(
     val digest: SnapshotDigest,
     val publishedAt: Instant,
     val parent: SnapshotDigest? = null,
+    /**
+     * The stored bytes of its record (`CTL-84`); `null` for an entry an older version wrote, whose record reclamation
+     * reads once to learn it.
+     */
+    val size: Long? = null,
 )
 
 /** A revision record written for a publish whose head write has not been confirmed (RFC 0007 §5.4 step 2). */

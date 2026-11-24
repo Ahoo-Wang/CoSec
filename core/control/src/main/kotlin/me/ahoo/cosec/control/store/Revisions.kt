@@ -74,6 +74,9 @@ class Revisions(
     private val repair = HistoryRepair(store, writes, ::decode)
     private val retained = Retention(store, writes, clock, retention, ::head, ::decode, ::historyAndHead)
 
+    /** Records this instance reclaimed younger than `min-age`, past what a document retains (`CTL-84`). */
+    val reclaimedYoung: Long get() = retained.budget.reclaimedYoung.get()
+
     /** Every document the store indexes revisions for ([ControlStore.documents]): it may name more than have a head. */
     suspend fun documents(): Set<SnapshotKey> = store.documents()
 
@@ -150,7 +153,7 @@ class Revisions(
             }
             val published = PublishOutcome.Published(revision, digest)
             try {
-                settle(key, entryOf(document, digest), after)
+                settle(key, entryOf(document, digest, stored.bodyBytes().size.toLong()), after)
                 if (key == SnapshotKey.Platform && base == null) {
                     listing.completeOnNewStore()
                 }
@@ -179,13 +182,11 @@ class Revisions(
         }
     }
 
-    /** The index entry of [document], the revision whose record has [digest]: with the parent it names. */
-    private fun entryOf(document: PolicyDocument, digest: SnapshotDigest) = RevisionEntry(
-        document.revision,
-        digest,
-        document.publishedAt,
-        document.provenance?.parent?.digest?.let(SnapshotDigest::parse),
-    )
+    /** The index entry of [document], the revision whose record has [digest] and [size] bytes: with the parent it names. */
+    private fun entryOf(document: PolicyDocument, digest: SnapshotDigest, size: Long): RevisionEntry {
+        val parent = document.provenance?.parent?.digest?.let(SnapshotDigest::parse)
+        return RevisionEntry(document.revision, digest, document.publishedAt, parent, size)
+    }
 
     /** The document [publish] writes: the candidate's body at the revision after [base], naming [base] as its parent. */
     private fun next(base: Head?, candidate: PolicyDocument, publication: Publication): PolicyDocument = candidate.copy(
@@ -281,7 +282,7 @@ class Revisions(
      */
     @Suppress("TooGenericExceptionCaught")
     internal suspend fun rewritten(key: SnapshotKey, published: Head, first: Boolean) = withContext(NonCancellable) {
-        val entry = entryOf(published.document, published.digest)
+        val entry = entryOf(published.document, published.digest, published.stored.document.bodyBytes().size.toLong())
         try {
             index(key, entry) ||
                 warn("[$key] revision ${entry.revision} is published but not indexed; history() rebuilds it")

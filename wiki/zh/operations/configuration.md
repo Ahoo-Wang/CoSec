@@ -78,6 +78,8 @@ CoSec 没有哪个配置项叫这些名字，而已知的 key 无论来源都不
 | 一个实例记住 `MembershipLoader` 不认识某个主体（被移除成员仍有效的令牌）多久 | 5 秒，常量：你新增的主体在它结束时被每个实例认识，在执行 `invalidate` 的实例上立即被认识；失败的加载从不被记住（[成员关系](../integration/authentication.md#memberships)） | |
 | 实例多久写一次影子报告和状态 | 状态存活期的六分之一（`10s`），且不比窗口最短存活期的五分之一或一秒更频繁 | [`cosec.control.shadow.min-duration`](#control-plane)，在它被设置的地方读取 |
 | 每个控制面实例多久回收一次修订 | 1 小时，常量：回收什么由 `min-age` 和 `max-count` 决定 | |
+| 一个文档的修订记录合计（包括最近 `max-count` 个）至多多大（`CTL-84`） | `max-count` 乘以文档上限：默认 400 MB；超出时从最近的之外最老的开始删除，不论是否早于 `min-age` | `max-count` |
+| 一个文档的索引在最近 `max-count` 个之外至多列出多少条修订（`CTL-84`） | 文档上限除以每条 320 字节（一条至多占用的大小）：26,214 | 文档上限 |
 | 修订链之外的记录、或登记了却从未写入的变更何时删除 | 满一轮回收的年龄：1 小时 | 回收间隔 |
 | 多久查看一次处于影子阶段的变更 | `min-duration` 的十五分之一，在 250 ms 到 1 分钟之间：默认 `1m` | [`cosec.control.shadow.min-duration`](#control-plane) |
 | 控制 API 读取的最大请求体 | 提议、`:apply` 及其校验：文档上限（8 MB）再加操作外层 JSON 的 2 MB，即 10 MB；其他路由：64 KB，即 Spring Boot 服务器默认请求头大小 8 KB 的八倍（模拟请求就是一个请求的头与属性） | 文档上限；请求头大小 |
@@ -317,8 +319,8 @@ CoSec 没有哪个配置项叫这些名字，而已知的 key 无论来源都不
 | `cosec.control.http.base-path` | string | `/cosec/control` | 控制 API 的路径。路由位于 `{base-path}/v1` 之下，因此移动 API 时版本不会丢失。 |
 | `cosec.control.http.enabled` | boolean | `true` | 本实例是否提供控制 API 的路由（`CTL-58`）：`false` 一个也不提供，用于内嵌控制面、只在进程内调用它的应用。只能是 `true` 或 `false`。 |
 | `cosec.control.http.service-port` | int | 未设置 | 给直接调用控制面的服务用的独立端口，提供控制 API 的**服务范围**（`CTL-58`）：租户与应用文档（有哪些、读取，以及对租户文档的 `:apply`）和不需要人参与的变更流程（检查并提出租户文档的变更、读取、rebase、abandon、运行或跳过影子窗口、发布）。其余路由（平台文档、审批、回滚、break-glass 和各种查询）在该端口上都是 `404`，按 id 指定的非租户文档的变更、非租户文档变更的列表以及控制 API 之外的任何路径也是；按状态列出时只显示租户文档的变更。控制面门面（`ControlService`）触及的正是这些路由。它从不扩大调用方能做的事：每条路由都按调用方声明的主体授权。只支持 WebFlux；不能是应用端口或管理端口（`0` 绑定一个临时端口，以 `local.control.service.port` 公布）。有服务端口的宿主声明 `only-trusted-callers-can-reach=true`：此时 `only-gateway-can-reach` 启动失败，因为该端口放行服务。未设置则没有这个端口。它就是应用自己的服务器换一个端口（`CTL-71`）：TLS 与客户端认证（`server.ssl.*`）、绑定地址（`server.address`）、HTTP/2、请求头与请求体的上限、超时和转发头处理都是应用的，没有自己的属性；所以用双向 TLS 让 `only-trusted-callers-can-reach` 成立的宿主，服务端口也是双向 TLS，绑定在某个地址的宿主，这个端口也只绑在那里。停止时先解绑，在 `spring.lifecycle.timeout-per-shutdown-phase` 内等待在途请求，再关闭所有仍打开的连接。 |
-| `cosec.control.revisions.max-count` | int | `50` | 每个文档总是保留的修订数；更早的修订在同时超过 `min-age` 后被回收。未关闭变更所依赖的修订会被保留。 它同时限定一份文档的未结束变更数（`CTL-83`）：未结束变更会保住它所依赖的修订，所以一份文档的未结束变更不多于你保留的修订数。 |
-| `cosec.control.revisions.min-age` | duration | `7d` | 比这年轻的修订总是保留。 |
+| `cosec.control.revisions.max-count` | int | `50` | 每个文档总是保留的修订数；更早的修订在同时超过 `min-age` 后被回收。未关闭变更所依赖的修订会被保留。 它同时限定一份文档的未结束变更数（`CTL-83`）：未结束变更会保住它所依赖的修订，所以一份文档的未结束变更达到你保留的修订数后不再接受新变更（在写入之前计数：同一时刻提出的变更可能都会通过）。 |
+| `cosec.control.revisions.min-age` | duration | `7d` | 比这年轻的修订会保留，但不超过一个文档能保留的量：记录合计（包括最近 `max-count` 个）至多 `max-count` 乘以文档上限，在最近的之外至多 26,214 条索引项（`CTL-84`）。 |
 | `cosec.control.changes.expire-after` | duration | `7d` | 未关闭的变更请求在提出后这么久过期，并离开未关闭变更列表。必须为正：为零时启动失败。 |
 | `cosec.control.approval.expire-after` | duration | `72h` | 一次审批的有效期；必须为正，为零时启动失败。长于令牌吊销的保留时长（`cosec.jwt.token-validity.access` 与 `.refresh` 中较长的那个，再加 `cosec.authentication.revocation.skew`）时启动失败：审批会比其令牌的吊销记录活得更久。 |
 | `cosec.control.approval.four-eyes` | boolean | `false` | 是否也分析在该文档上持有 `cosec:approve` 的平台主体（信任根）的变更：分析无法证明受限的部分随之需要另一位平台主体审批。升级权限的变更无论如何都需要。 |

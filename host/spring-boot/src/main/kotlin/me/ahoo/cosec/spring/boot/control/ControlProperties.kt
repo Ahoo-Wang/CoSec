@@ -14,6 +14,8 @@
 package me.ahoo.cosec.spring.boot.control
 
 import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.control.lifecycle.ControlDerived
+import me.ahoo.cosec.control.store.RetentionPolicy
 import me.ahoo.cosec.runtime.event.Delivery
 import me.ahoo.cosec.spring.boot.CoSecProperties
 import org.springframework.boot.context.properties.ConfigurationProperties
@@ -88,6 +90,10 @@ class ControlProperties {
 
         /** Revisions younger than this are always kept. */
         var minAge: Duration = Duration.ofDays(7)
+
+        /** What reclamation keeps: these, a pass's orphans, and what [documentCap] bounds beyond them (`CTL-84`). */
+        fun retention(documentCap: Long): RetentionPolicy =
+            RetentionPolicy(maxCount, minAge, ControlDerived.ORPHAN_AGE, documentCap = documentCap)
     }
 
     @InternalCoSecApi
