@@ -14,6 +14,8 @@ ARG APP_NAME
 
 WORKDIR ${WORK_HOME}
 COPY build/install/${APP_NAME} .
+# Nothing writable but by its owner, whatever the build host's umask: the run stage copies these modes as they are.
+RUN chmod -R u=rwX,go=rX . && chmod 755 bin/*
 
 FROM base AS run
 ARG WORK_HOME
@@ -23,15 +25,20 @@ LABEL maintainer="ahoowang@qq.com"
 
 RUN groupadd -r appgroup && useradd -r -g appgroup appuser
 
-COPY --from=build --chown=appuser:appgroup ${WORK_HOME} ${WORK_HOME}
+# Root's, and read-only to the process (DR1-G-8): the jars, the start script and the AOT cache are not its to rewrite,
+# so a process that is made to write files cannot replace the code the next start runs. Only logs/ and data/ are its own,
+# as they are the only directories the Kubernetes manifests mount writable over a read-only root filesystem.
+COPY --from=build ${WORK_HOME} ${WORK_HOME}
 COPY --chmod=755 --from=shared aot-train.sh /usr/local/bin/aot-train.sh
 
 WORKDIR ${WORK_HOME}
-USER appuser
 
-# Train the JDK 25 AOT cache here, in the final stage: the cache records the class path including jar mtimes,
-# so it has to be built against these exact files at this exact path. Training needs no Redis.
-RUN aot-train.sh ${WORK_HOME} ${WORK_HOME}/aot/${APP_NAME}.aot
+# Train the JDK 25 AOT cache here, in the final stage, as root, which owns the files: the cache records the class path
+# including jar mtimes, so it has to be built against these exact files at this exact path. Training needs no Redis.
+RUN aot-train.sh ${WORK_HOME} ${WORK_HOME}/aot/${APP_NAME}.aot \
+    && chown appuser:appgroup logs data
+
+USER appuser
 
 # JDK_JAVA_OPTIONS (read by the java launcher) rather than JAVA_OPTS, so a deployment that sets JAVA_OPTS keeps
 # the cache. A missing or mismatched cache only loses the speedup: the default AOTMode=auto falls back.

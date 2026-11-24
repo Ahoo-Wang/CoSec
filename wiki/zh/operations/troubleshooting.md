@@ -240,7 +240,7 @@ CoSec 自己的拒绝很容易区分：它们总是 `application/problem+json`�
 
 ## 修订在 min-age 之内被回收 {#revisions-reclaimed-within-min-age}
 
-`cosec.control.revisions.reclaimed-young` 在计数，`me.ahoo.cosec.control.store` 的一条 `WARN` 说 `records younger than ... reclaimed` 并点名文档：它在最近 `max-count` 个之外的记录超出了能保留的量（`max-count` 乘以文档上限），或者索引多列了超过 26,214 条（`CTL-84`）。最老的先被删除，即使早于 `min-age`。最近 `max-count` 个修订、头部与未结束变更所依赖的修订总会保留，所以回滚到最近的修订仍然可行；回滚到更早的修订可能变成 `410`。找出循环发布大文档的客户端（它的变更的审计事件会点名它），按租户对它限流（[限流](../policies/rate-limiting.md#the-control-api)）。这条 `WARN` 每轮回收至多一次，并带上此后其余的数量。
+`cosec.control.revisions.reclaimed-young` 在计数，`me.ahoo.cosec.control.store` 的一条 `WARN` 说 `records younger than ... reclaimed` 并点名文档：它的记录合计（包括最近的 `max-count` 个）超出了能保留的量（`max-count` 乘以文档上限），或者索引在最近的之外列了超过 26,214 条（`CTL-84`）。最老的先被删除，即使早于 `min-age`。最近 `max-count` 个修订、头部与未结束变更所依赖的修订总会保留，所以回滚到最近的修订仍然可行；回滚到更早的修订可能变成 `410`。找出循环发布大文档的客户端（它的变更的审计事件会点名它），按租户对它限流（[限流](../policies/rate-limiting.md#the-control-api)）。这条 `WARN` 每轮回收至多一次，并带上此后其余的数量。
 
 ## 决策使用了旧的修订 {#decisions-use-an-old-revision}
 
@@ -568,6 +568,8 @@ CoSec is on (cosec.enabled), but this web host registers none of its gates (Pipe
 
 保留这个自动配置，或者自己注册 CoSec 的过滤器（它类型的 bean，或者过滤器是它的 `FilterRegistrationBean`：检查看的是类型，不是 bean 的名字），
 或者用 `cosec.enabled=false` 关闭 CoSec。
+
+处于 `cosec.pipeline.mode=gateway` 的 Spring Cloud Gateway 宿主得到的是另一条信息（`... this Spring Cloud Gateway host is in cosec.pipeline.mode=gateway: a gateway host decides only in enforce mode ...`）：它的门是网关过滤器，只有 `enforce` 模式才注册。删掉这个模式即可；`gateway` 模式是给网关后面的服务用的。
 
 ### 刷新路由的认证导致启动失败 {#startup-fails-on-the-refresh-routes-authentication}
 

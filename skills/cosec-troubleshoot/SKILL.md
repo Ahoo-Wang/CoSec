@@ -127,6 +127,8 @@ Full model: https://cosec.ahoo.me/guide/security-model.
   is there but no CoSec filter is registered, so every request would pass undecided. Usually the application excluded
   `CoSecPipelineWebAutoConfiguration`, or declared a filter of another type under the adapter's bean name. Keep the
   auto-configuration, or register CoSec's filter itself; never suggest turning CoSec off unless the user wants no gate.
+  On a Spring Cloud Gateway host in `cosec.pipeline.mode=gateway` the message says that a gateway host decides only in
+  enforce mode: remove the mode (it is for services behind the gateway).
 - **`cosec.control.enabled=true, but cosec.pipeline.mode=gateway`** (STA-1): a service behind a gateway wires no
   control plane. Run the control plane on an `enforce` host, or remove the key.
 - **`cosec.audit.kafka.delivery=required, but no Kafka audit listener was created`** (STA-1): `cosec-kafka` is there,
@@ -656,8 +658,8 @@ When `GET /changes/{id}` is `404` for a change that ended, the bound removed it 
 a revision from `GET /documents/{key}/revisions/{revision}` (`provenance`), and the rest from the audit events.
 
 When `cosec.control.revisions.reclaimed-young` counts, or a `WARN` says records younger than `min-age` were reclaimed,
-a document's records weighed more than it may retain beyond its `max-count` most recent (`max-count` × the document
-cap, or 26,214 index entries, `CTL-84`): find the client publishing large documents in a loop and rate-limit it per
+a document's records weighed more than it may retain (`max-count` × the document cap in all, its `max-count` most
+recent included, or 26,214 index entries beyond them, `CTL-84`): find the client publishing large documents in a loop and rate-limit it per
 tenant. The `max-count` most recent revisions stay, so a rollback to a recent one still works.
 
 When a change event `HEAD_LOST` arrives, or `cosec.control.revisions.lost` counts, a published revision's head write was

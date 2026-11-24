@@ -335,8 +335,9 @@ instances that had installed the lost revision log a regression and follow the h
 ## Revisions reclaimed within min-age {#revisions-reclaimed-within-min-age}
 
 `cosec.control.revisions.reclaimed-young` counts, and a `WARN` of `me.ahoo.cosec.control.store` says
-`records younger than ... reclaimed`, naming the document: its records weighed more than it may retain beyond its
-`max-count` most recent, `max-count` times the document cap, or its index listed more than 26,214 more (`CTL-84`). The
+`records younger than ... reclaimed`, naming the document: its records weighed more than it may retain in all, its
+`max-count` most recent included, `max-count` times the document cap, or its index listed more than 26,214 beyond
+them (`CTL-84`). The
 oldest went first, younger than `min-age`. The `max-count` most recent revisions, the head and what open changes rest
 on are always kept, so a rollback to a recent revision still works; one to an older revision may now be `410`. Look for
 a client publishing large documents in a loop (the audit events of its changes name it) and rate-limit it per tenant
@@ -847,6 +848,10 @@ CoSec is on (cosec.enabled), but this web host registers none of its gates (Pipe
 
 Keep the auto-configuration, or register CoSec's filter yourself (a bean of its type, or a `FilterRegistrationBean`
 whose filter it is: the check looks for the type, not the bean's name), or turn CoSec off with `cosec.enabled=false`.
+
+A Spring Cloud Gateway host in `cosec.pipeline.mode=gateway` is told so instead (`... this Spring Cloud Gateway host is
+in cosec.pipeline.mode=gateway: a gateway host decides only in enforce mode ...`): its gate is the gateway filter, which
+only `enforce` mode registers. Remove the mode; `gateway` is for a service behind the gateway.
 
 ### Startup fails on the refresh route's authentication {#startup-fails-on-the-refresh-routes-authentication}
 

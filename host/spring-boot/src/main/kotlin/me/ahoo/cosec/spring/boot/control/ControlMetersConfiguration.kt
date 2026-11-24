@@ -59,8 +59,8 @@ internal class ControlMetersConfiguration {
     }
 
     /**
-     * What the documents retain (`CTL-84`): set by each reclamation pass; only the instance that held the pass's lease
-     * reports what it found, the others 0, so summed across instances they are the store's as of the last pass.
+     * What the documents retain (`CTL-84`): only the instance that led the last reclamation pass reports what it found,
+     * kept until its next pass ends; the others 0, so the largest across instances is the store's as of the last pass.
      */
     @Bean
     fun cosecRetainedMeters(

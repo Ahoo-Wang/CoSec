@@ -15,10 +15,12 @@ package me.ahoo.cosec.control.lifecycle
 import me.ahoo.cosec.annotations.InternalCoSecApi
 
 /**
- * What the last reclamation pass of this instance found (`CTL-84`, DR1-F-6): the revision [records] the documents
+ * What the last reclamation pass this instance led found (`CTL-84`, DR1-F-6): the revision [records] the documents
  * retain, their stored [bytes] (an entry an older version wrote counts once a pass has read its record), and the
- * [openChanges]. One instance a pass holds its lease and reads every document; every other instance's last pass read
- * none, and reports [NONE]. So, summed across instances, they are the store's as of the last pass.
+ * [openChanges]. One instance a pass holds its lease and reads every document, and replaces its totals when the pass
+ * ends; until then it reports the last pass's. An instance another one led the pass for reports [NONE]; one whose pass
+ * could not start (the documents could not be listed) keeps what it last found. So the largest across instances is the
+ * store's as of the last pass; a sum may count one pass twice, for a pass after the lease changes hands.
  */
 @InternalCoSecApi
 class RetainedTotals(val records: Long, val bytes: Long, val openChanges: Long) {
@@ -35,7 +37,7 @@ class RetainedTotals(val records: Long, val bytes: Long, val openChanges: Long) 
 
     @InternalCoSecApi
     companion object {
-        /** What an instance whose last pass did not hold the lease, or could not run, reports. */
+        /** What an instance reports whose last pass another instance led, or that never led one. */
         val NONE = RetainedTotals(0, 0, 0)
     }
 }

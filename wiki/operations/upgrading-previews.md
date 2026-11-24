@@ -34,6 +34,11 @@ Which preview of the library may run behind which preview of the gateway image: 
   (one with an exhaustive `when` needs an `else`, as the kind's KDoc says), and Redis deployments that fail over. A new
   event kind, `HEAD_LOST`, and a counter, `cosec.control.revisions.lost`, name a revision whose head write was lost;
   set `min-replicas-to-write` on Redis ([Storage](./storage.md#redis-requirements)).
+- **Breaking for images built on top of CoSec's: the application's files are root's** (DR1-G-8). Affected: a
+  Dockerfile `FROM` the gateway or control-plane image that writes under `/opt/<app>` as `appuser`, retraining the AOT
+  cache included. The process now owns only `logs/` and `data/`, so a process made to write files cannot replace its
+  jars. Switch to `USER root` for those steps and back to `USER appuser` after
+  ([Training your own cache](./deployment.md#training-your-own-cache)).
 - **Breaking: a web host with CoSec on fails startup without a CoSec gate** (`STA-1`, DR1-G-6). Affected: an
   application that excluded `CoSecPipelineWebAutoConfiguration`, or replaced the adapter's bean with a filter of another
   type, while keeping `cosec.enabled`. It served every request undecided, with `web=none` in the startup summary as the
@@ -86,11 +91,11 @@ Which preview of the library may run behind which preview of the gateway image: 
   snapshot sources now hold a third of that quarter each, where they held half: at 2 GiB about 4,800 typical tenants in
   each, where it was 7,200. Give a control-plane host more heap to hold more; nothing else to change.
 - **A document's revision records are bounded within `min-age` too** (`CTL-84`, DR1-F-6). Affected: a document that
-  publishes large documents often. Beyond its `max-count` most recent revisions, a document keeps at most `max-count`
-  times the document cap of records (400 MB) and 26,214 index entries; past either, the oldest go, younger than
-  `min-age` or not, counted by `cosec.control.revisions.reclaimed-young`, with a `WARN`. Four meters are new:
-  `cosec.control.revisions.records`, `.bytes`, `.reclaimed-young` and `cosec.control.changes.open`; sum the gauges
-  across instances ([Observability](./observability.md)). Each revision index entry now names its record's size; an
+  publishes large documents often. A document keeps its `max-count` most recent revisions, records of at most
+  `max-count` times the document cap in all, those included (400 MB), and 26,214 index entries beyond them; past
+  either, the oldest go, younger than `min-age` or not, counted by `cosec.control.revisions.reclaimed-young`, with a
+  `WARN`. Four meters are new: `cosec.control.revisions.records`, `.bytes`, `.reclaimed-young` and
+  `cosec.control.changes.open`; take the gauges' largest across instances ([Observability](./observability.md)). Each revision index entry now names its record's size; an
   older control plane reads past it, and an entry it writes without one is sized from its record by the next pass.
 - **A document takes no new change once it holds `cosec.control.revisions.max-count` open changes** (50 by default,
   `CTL-83`, DR1-E-2; counted before the write, so changes proposed at the same moment may all pass).

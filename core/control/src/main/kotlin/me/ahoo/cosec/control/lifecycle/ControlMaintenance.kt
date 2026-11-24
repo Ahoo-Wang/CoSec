@@ -87,8 +87,6 @@ class ControlMaintenance(
      * changes cannot be read is skipped this pass; the others are reclaimed (R2C-2).
      */
     suspend fun reclaim(): Map<SnapshotKey, Reclaimed> {
-        // Until this pass reads every document under the lease, it found nothing: summed, the instances' totals are the store's.
-        totals.set(RetainedTotals.NONE)
         // One read of the documents for both: they are one large value (B1 review).
         val documents = attempt("list the documents") { store.documents() } ?: return emptyMap()
         attempt("reconcile the app list with the documents") { reconcileApps(documents) }
@@ -105,7 +103,12 @@ class ControlMaintenance(
         val leased = attempt("take the reclaim lease") {
             store.acquireLease(RECLAIM_LEASE, holder, ControlDerived.RECLAIM_INTERVAL)
         }
-        if (leased != true) return emptyMap()
+        if (leased != true) {
+            // Another instance leads this pass and reports the store's totals: this one reports none. A pass that could
+            // not ask (the store failed) keeps what this instance last found, as one that cannot list the documents does.
+            if (leased == false) totals.set(RetainedTotals.NONE)
+            return emptyMap()
+        }
         try {
             return reclaimLeased(documents)
         } finally {
@@ -127,6 +130,7 @@ class ControlMaintenance(
                 ?.let { reclaimed[key] = it }
             attempt("reclaim the ended changes of [$key]") { reclaimEnded(key, counting) }
         }
+        // Replaced only once the pass has read every document: until then the last pass's totals stand, never a 0.
         totals.set(counting.done())
         return reclaimed
     }

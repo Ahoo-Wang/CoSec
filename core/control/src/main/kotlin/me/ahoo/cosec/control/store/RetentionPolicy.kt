@@ -34,8 +34,9 @@ class RetentionPolicy(
     val documentCap: Long = DEFAULT_DOCUMENT_CAP,
 ) {
     /**
-     * The most bytes of records a document retains beyond its [maxCount] most recent (`CTL-84`): [maxCount] documents at
-     * the cap, 400 MB by default. Past it the oldest go, younger than [minAge] or not, unless an open change rests on one.
+     * The most bytes of records a document retains in all, its [maxCount] most recent included (`CTL-84`): [maxCount]
+     * documents at the cap, 400 MB by default. The most recent always stay, and each is at most the cap, so they alone
+     * never pass it; past it the oldest beyond them go, younger than [minAge] or not, unless an open change rests on one.
      */
     val byteBudget: Long get() = maxCount * documentCap
 
