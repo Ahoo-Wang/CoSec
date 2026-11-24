@@ -478,7 +478,7 @@ spring:
 | `tenant`、`sub` | 网关校验的租户和主体。 |
 | `scope` | `{app, space}`，即网关解析出的应用和空间。 |
 | `roles` | 主体在该空间中的角色，用裸名：决策所用的角色。这是作用域的角色，而不是令牌的全部角色（令牌的 `roles` 声明以 `role@space` 列出所有空间的角色）。 |
-| `memberships` | `{spaces, attachments}`（`IDN-39`）：主体另外还属于什么。`spaces` 按空间 id 列出它在其他每个空间中的角色（默认空间的 key 为空串），从不包含作用域自己的空间；`attachments` 是它附加的策略的 id，按其成员关系列出的顺序。总是写出，没有更多时为 `{"spaces":{},"attachments":[]}`：它的存在本身表示成员关系是全的。按身份做策略判定的宿主（`cosec.pipeline.caller=forwarded-identity`：控制面宿主、服务端口）拒绝没有它的请求头，并用它的全部内容判定，所以附加到主体的 DENY、或读取它在另一个空间所持角色（`subject.roles`）的 DENY，在那里和在网关一样生效。 |
+| `memberships` | `{spaces, attachments}`（`IDN-39`）：主体另外还属于什么。`spaces` 按空间 id 列出它在其他每个空间中的角色（默认空间的 key 为空串），从不包含作用域自己的空间；`attachments` 是它附加的策略的 id，按其成员关系列出的顺序。网关总是写出，没有更多时为 `{"spaces":{},"attachments":[]}`：它的存在本身表示成员关系是全的。`HttpControlService` 转述请求的调用方时，只在它转述的身份写了它时才写（`IDN-42`）：任何一跳都不声称它没收到的东西。按身份做策略判定的宿主（`cosec.pipeline.caller=forwarded-identity`：控制面宿主、服务端口）拒绝没有它的请求头，并用它的全部内容判定，所以附加到主体的 DENY、或读取它在另一个空间所持角色（`subject.roles`）的 DENY，在那里和在网关一样生效。 |
 | `auth` | `{method, jti, exp, iat, capped, session}`：主体的认证方式（`jwt` 和 `api-key` 是 CoSec 自带的；其他任何非空名称都按原样读取，因此使用其他认证器的网关也能工作）、令牌的 `jti` 或 key 的 id、凭证的过期时间，以及凭证的签发时间（`iat`，凭证不说明时没有，且绝不晚于 `exp`）；`session` 只出现在 CoSec 自己的令牌（`jwt`）上：它的 `sid`、`auth_time`（用户登录的时间）和 `generation`，使网关之后的服务知道登录时间，并让那里的[租户切换](./authentication.md#switching-tenant-and-app)可以从它签发；`capped: true` 只出现在带角色上限的凭证上，此时在网关之后，主体绑定和附加策略同样不授予它任何东西（它们的 DENY 照样生效）。只有 `jwt` 能得到 break-glass，网关只为 CoSec 自己的令牌转发它。绝不包含凭证本身。 |
 | `iat` | 网关生成该请求头的时间，单位为 epoch 秒。 |
 | `rid` | 网关的请求 id。 |
@@ -509,7 +509,7 @@ cosec:
 | 没有 `CoSec-Identity` | 作为匿名主体 `(0)` 继续；由你的代码决定它能看到什么。 |
 | 有效的身份 | 以该主体、在该作用域中继续。 |
 | 无法读取（不是 base64url、不符合格式、有未知或重复的成员、角色重复、`iat` 或 `exp` 超过 9999 年）、发送了不止一次、大于 `cosec.pipeline.identity.max-size`（8 KB），或作用域在本服务无法解析（例如应用不是 `cosec.authorization.scope.app-id`） | `400` `invalid-request` |
-| 在按身份做策略判定的宿主上（`cosec.pipeline.caller=forwarded-identity`），没有 `memberships`（`IDN-39`）：旧网关写的请求头，或应用写时没带上它 | `400` `invalid-request` |
+| 在按身份做策略判定的宿主上（`cosec.pipeline.caller=forwarded-identity`），没有 `memberships`（`IDN-39`）：旧网关写的请求头、应用写时没带上它，或被转述的调用方自己的请求头里就没有（`IDN-42`）。控制面的进程内门面对这样的调用方同样拒绝 | `400` `invalid-request` |
 | 未知版本、`iat` 在未来，或没有 `auth.exp` | `401` `token-invalid` |
 | `auth.exp` 已过，或 `iat` 早于 `cosec.pipeline.identity.max-age`（60 秒） | `401` `token-expired` |
 

@@ -197,6 +197,28 @@ class HttpControlServiceTest {
         identity.roles.assert().containsExactly("admin")
         identity.credential.id.assert().isEqualTo("token-1")
         identity.credential.method.assert().isEqualTo(Identity.Method.JWT)
+        // The gateway's header stated no memberships, so the relay states none either (IDN-42).
+        identity.memberships.assert().isNull()
+    }
+
+    @Test
+    fun `a request's caller's memberships are relayed as they were forwarded - IDN-42`() {
+        val now = Instant.now()
+        val stated = Identity.Memberships(mapOf("emea" to setOf("suspended")), listOf("suspended-from-writing"))
+        val forwarded = Identity(
+            tenant = "acme",
+            subject = "alice",
+            app = "cosec-control",
+            space = "",
+            roles = setOf("admin"),
+            credential = Identity.Credential(Identity.Method.JWT, "token-1", now.plusSeconds(300)),
+            issuedAt = now,
+            requestId = "r1",
+            memberships = stated,
+        )
+        val context = PermittedRequest.withIdentity(IdentityHeader.write(forwarded))
+        runBlocking { service.document(ControlCaller.of(context), acme) }
+        IdentityCodec.decode(checkNotNull(identities.single())).memberships.assert().isEqualTo(stated)
     }
 
     @Test

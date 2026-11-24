@@ -63,6 +63,18 @@ object GuardAllowlist {
             "control:ApprovalB2Test#a service's own identity never approves - IDN-34",
             "control:ApprovalB2Test#a service's own identity is never the trust root - IDN-34",
             "architecture:WorkloadCredentialTest#whether a principal is a workload is read from workload, never from apiKey alone - IDN-34",
+            // IDN-42: every identity member's absence is recorded, and no hop states a member it did not receive.
+            "document:IdentityMembersTest#the descriptor names exactly the recorded members, and a required one is one whose absence is refused - IDN-42",
+            "document:IdentityMembersTest#a member recorded as refused when absent does not read without it - IDN-42",
+            "document:IdentityMembersTest#each optional member reads its absence as recorded - IDN-42",
+            "document:IdentityMembersTest#the members whose being ignored would widen what a reader decides are the memberships, the cap and the claims - IDN-42",
+            "runtime:IdentityRelayTest#memberships the service was not forwarded are not relayed, and the deciding host refuses the caller - IDN-42",
+            "runtime:IdentityRelayTest#memberships the service was forwarded are relayed as they were, and decide at the host - IDN-42",
+            "runtime:IdentityRelayTest#empty memberships are stated memberships, and are relayed as stated - IDN-42",
+            "runtime:IdentityRelayTest#every other member the service was forwarded is relayed as it was - IDN-42",
+            "control-http:HttpControlServiceTest#a request's caller's memberships are relayed as they were forwarded - IDN-42",
+            "control:ControlServiceTest#a caller forwarded without memberships is refused before the control plane is asked - IDN-42",
+            "spring-boot:ControlServiceParityTest#a caller forwarded without memberships is refused alike through both implementations - IDN-42",
             // CTL-82: a control request's deadline is its caller's, reaching it by cancellation; every wait bounded on its own.
             "control-http:HttpCallCancellationTest#a cancelled caller closes the exchange it was waiting on - CTL-82",
             "spring-boot:ControlRequestCancellationTest#a caller that is cancelled cancels the host's request, which publishes nothing and holds nothing - CTL-82",
