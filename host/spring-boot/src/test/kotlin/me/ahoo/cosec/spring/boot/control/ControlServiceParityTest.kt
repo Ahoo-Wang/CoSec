@@ -435,7 +435,12 @@ class ControlServiceParityTest {
      * A request [subject] of [tenant] makes in [space] as an administrator there, behind a gateway that forwarded it with
      * [memberships] beside: a context CoSec made, holding every space's roles and the attachments the header states.
      */
-    private fun member(tenant: String, subject: String, space: String, memberships: Identity.Memberships): ControlCaller {
+    private fun member(
+        tenant: String,
+        subject: String,
+        space: String,
+        memberships: Identity.Memberships
+    ): ControlCaller {
         val now = Instant.now()
         val forwarded = Identity(
             tenant = tenant,

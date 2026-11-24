@@ -94,7 +94,8 @@ class IdentityIssuer(
             val roles = security.memberships.roles
             val attachments = security.memberships.attachments
             val space = security.scope.space
-            if (attachments.isEmpty() && (roles.isEmpty() || (roles.size == 1 && roles.containsKey(space)))) {
+            val ownSpaceOnly = roles.isEmpty() || (roles.size == 1 && roles.containsKey(space))
+            if (ownSpaceOnly && attachments.isEmpty()) {
                 return Identity.Memberships.NONE
             }
             val spaces = LinkedHashMap<String, Set<String>>()
@@ -102,7 +103,10 @@ class IdentityIssuer(
                 if (id != space && held.isNotEmpty()) spaces[id.value] = held.mapTo(LinkedHashSet()) { it.value }
             }
             val policies = attachments.mapTo(LinkedHashSet()) { it.value }.toList()
-            return if (spaces.isEmpty() && policies.isEmpty()) Identity.Memberships.NONE else Identity.Memberships(spaces, policies)
+            if (spaces.isEmpty() && policies.isEmpty()) {
+                return Identity.Memberships.NONE
+            }
+            return Identity.Memberships(spaces, policies)
         }
 
         /**

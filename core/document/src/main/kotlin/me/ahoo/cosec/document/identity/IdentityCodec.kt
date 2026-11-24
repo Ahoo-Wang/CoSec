@@ -18,7 +18,6 @@ package me.ahoo.cosec.document.identity
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.document.json.CoSecJson
 import me.ahoo.cosec.model.Identifiers
-import me.ahoo.cosec.model.Match
 import me.ahoo.cosec.spi.identity.Identity
 import me.ahoo.cosec.spi.identity.IdentityFormatException
 import me.ahoo.cosec.spi.identity.IdentityFormatException.Reason
@@ -88,7 +87,6 @@ object IdentityCodec {
 
     private val FIELDS = arrayOf("v", "tenant", "sub", "scope", "roles", "memberships", "auth", "iat", "rid", "claims")
     private val SCOPE_FIELDS = arrayOf("app", "space")
-    private val MEMBERSHIPS_FIELDS = arrayOf("spaces", "attachments")
     private val AUTH_FIELDS = arrayOf("method", "jti", "exp", "iat", "capped", "session")
     private val SESSION_FIELDS = arrayOf("sid", "auth_time", "generation")
 
@@ -168,49 +166,9 @@ object IdentityCodec {
             issuedAt = root.need("iat").seconds("$.iat"),
             requestId = root.need("rid").name("$.rid"),
             claims = root.get("claims")?.let(::claims).orEmpty(),
-            memberships = root.get("memberships")?.let { memberships(it, space) },
+            memberships = root.get("memberships")?.let { IdentityMemberships.read(it, space) },
         )
     }
-
-    /**
-     * `memberships` (`IDN-39`): each other space with its roles, then the attachments. The identity's own space is not
-     * one of them (its roles are `roles`), nor the wildcard, which is no space; a space names at least one role.
-     */
-    @Suppress("ThrowsCount")
-    private fun memberships(node: JsonNode, space: String): Identity.Memberships {
-        node.only("$.memberships", *MEMBERSHIPS_FIELDS)
-        val spaces = node.get("spaces") ?: throw malformed("[memberships.spaces] is missing")
-        if (!spaces.isObject) throw malformed("$.memberships.spaces is not an object")
-        val bySpace = LinkedHashMap<String, Set<String>>()
-        for ((name, roles) in spaces.properties()) {
-            val path = spacePath(name)
-            if (!Identifiers.isWellFormed(name)) throw malformed("$path holds an unpaired surrogate")
-            if (name == space) throw malformed("$path is the identity's own space, whose roles are $.roles")
-            if (name == Match.WILDCARD) throw malformed("$path is the wildcard, which is no space")
-            bySpace[name] = roles(roles, path).ifEmpty { throw malformed("$path names no role") }
-        }
-        val attachments = attachments(node.get("attachments") ?: throw malformed("[memberships.attachments] is missing"))
-        return if (bySpace.isEmpty() && attachments.isEmpty()) {
-            Identity.Memberships.NONE
-        } else {
-            Identity.Memberships(bySpace, attachments)
-        }
-    }
-
-    private fun attachments(node: JsonNode): List<String> {
-        if (!node.isArray) throw malformed("$.memberships.attachments is not an array")
-        if (node.isEmpty) return emptyList()
-        val attachments = LinkedHashSet<String>()
-        node.values().forEachIndexed { i, policy ->
-            if (!attachments.add(policy.id("$.memberships.attachments[$i]"))) {
-                throw malformed("$.memberships.attachments[$i] repeats a policy")
-            }
-        }
-        return attachments.toList()
-    }
-
-    /** The path of space [name] under `memberships.spaces`, quoted as every name a header chooses is. */
-    internal fun spacePath(name: String): String = "$.memberships.spaces[\"" + QuotedText.of(name) + "\"]"
 
     /** `auth`: how the principal authenticated, with the issue time and the session when the credential says. */
     @Suppress("ThrowsCount")
@@ -253,7 +211,7 @@ object IdentityCodec {
         root.put("tenant", identity.tenant).put("sub", identity.subject)
         root.putObject("scope").put("app", identity.app).put("space", identity.space)
         root.putArray("roles").apply { identity.roles.sorted().forEach(::add) }
-        identity.memberships?.let { memberships(root.putObject("memberships"), it) }
+        identity.memberships?.let { IdentityMemberships.write(root.putObject("memberships"), it) }
         root.putObject("auth").apply {
             put("method", identity.credential.method.value)
             put("jti", identity.credential.id)
@@ -274,17 +232,6 @@ object IdentityCodec {
             identity.claims.toSortedMap().forEach { (name, value) -> claim(claims, name, value) }
         }
         return root
-    }
-
-    /** Spaces sorted, each one's roles sorted, as `roles` is; the attachments in their order, which reports follow. */
-    private fun memberships(node: ObjectNode, memberships: Identity.Memberships) {
-        val spaces = node.putObject("spaces")
-        if (memberships.spaces.isNotEmpty()) {
-            memberships.spaces.toSortedMap().forEach { (space, roles) ->
-                spaces.putArray(space).apply { roles.sorted().forEach(::add) }
-            }
-        }
-        node.putArray("attachments").apply { memberships.attachments.forEach(::add) }
     }
 
     private fun claim(claims: ObjectNode, name: String, value: Any) {
@@ -325,7 +272,7 @@ object IdentityCodec {
         else -> null
     }
 
-    private fun roles(node: JsonNode, path: String): Set<String> {
+    internal fun roles(node: JsonNode, path: String): Set<String> {
         if (!node.isArray) throw malformed("$path is not an array")
         val roles = LinkedHashSet<String>()
         node.values().forEachIndexed { i, role ->
@@ -353,7 +300,7 @@ object IdentityCodec {
         }
     }
 
-    private fun JsonNode.only(path: String, vararg names: String) {
+    internal fun JsonNode.only(path: String, vararg names: String) {
         if (!isObject) throw malformed("$path is not an object")
         val unknown = properties().map { it.key }.filter { it !in names }
         if (unknown.isNotEmpty()) throw malformed("$path has unknown members ${QuotedText.names(unknown)}")
@@ -369,7 +316,7 @@ object IdentityCodec {
         return text
     }
 
-    private fun JsonNode.id(path: String): String = text(path).ifEmpty { throw malformed("$path is empty") }
+    internal fun JsonNode.id(path: String): String = text(path).ifEmpty { throw malformed("$path is empty") }
 
     /**
      * Who and where: the tenant, the subject and the request. Not blank, empty or white space only (`IDN-38`): a
@@ -384,6 +331,6 @@ object IdentityCodec {
         return Instant.ofEpochSecond(longValue())
     }
 
-    private fun malformed(reason: String, cause: Throwable? = null) =
+    internal fun malformed(reason: String, cause: Throwable? = null) =
         IdentityFormatException(Reason.MALFORMED, "The identity header is malformed: $reason.", cause)
 }

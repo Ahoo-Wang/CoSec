@@ -142,7 +142,11 @@ class IdentityMembershipsCodecTest {
             Identity.Memberships(emptyMap(), listOf("")),
         )
         for (memberships in unwritable) {
-            val written = assertThrows<IdentityFormatException> { IdentityCodec.encode(identity(memberships = memberships)) }
+            val written = assertThrows<IdentityFormatException> {
+                IdentityCodec.encode(
+                    identity(memberships = memberships)
+                )
+            }
             written.reason.assert().isEqualTo(IdentityFormatException.Reason.MALFORMED)
             written.message.assert().startsWith("The identity header is malformed: $.memberships.")
         }

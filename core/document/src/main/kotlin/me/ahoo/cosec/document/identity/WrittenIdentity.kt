@@ -66,7 +66,7 @@ internal object WrittenIdentity {
     private fun memberships(memberships: Identity.Memberships, space: String) {
         if (memberships.spaces.isNotEmpty()) {
             for ((name, roles) in memberships.spaces.toSortedMap()) {
-                val path = IdentityCodec.spacePath(name)
+                val path = IdentityMemberships.spacePath(name)
                 text(name, path)
                 if (name == space) throw unwritable("$path is the identity's own space, whose roles are $.roles")
                 if (name == Match.WILDCARD) throw unwritable("$path is the wildcard, which is no space")

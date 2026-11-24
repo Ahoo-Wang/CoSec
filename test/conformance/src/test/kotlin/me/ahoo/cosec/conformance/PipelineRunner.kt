@@ -878,31 +878,7 @@ class PipelineRunner(private val compiler: SnapshotCompiler = DocumentSnapshotCo
             return false to null
         }
         val header = outcome.forward[IdentityCodec.HEADER] ?: return true to null
-        return true to identityNode(header)
-    }
-
-    private fun identityNode(header: String): JsonNode {
-        val identity = IdentityCodec.decode(header)
-        val node = JsonNodeFactory.instance.objectNode()
-            .put("tenant", identity.tenant).put("sub", identity.subject)
-            .put("app", identity.app).put("space", identity.space)
-            .put("jti", identity.credential.id)
-        node.putArray("roles").apply { identity.roles.sorted().forEach(::add) }
-        // IDN-39: what else the principal is a member of, null when the header does not state it.
-        val memberships = identity.memberships
-        if (memberships == null) {
-            node.putNull("memberships")
-        } else {
-            node.putObject("memberships").apply {
-                putObject("spaces").apply {
-                    memberships.spaces.toSortedMap().forEach { (space, roles) ->
-                        putArray(space).apply { roles.sorted().forEach(::add) }
-                    }
-                }
-                putArray("attachments").apply { memberships.attachments.forEach(::add) }
-            }
-        }
-        return node
+        return true to forwardedIdentity(header)
     }
 
     private fun options(node: JsonNode): PipelineOptions {
@@ -1069,3 +1045,28 @@ private fun keysWithoutProvider(authentication: JsonNode): MembershipProvider? =
 /** The `X-` headers of [headers], lowercased and sorted: what a scenario that asks for them (`reportHeaders`) compares. */
 private fun xHeadersOf(headers: HttpHeaders): List<String> =
     headers.headerNames().map { it.lowercase() }.filter { it.startsWith("x-") }.sorted()
+
+/** A forwarded `CoSec-Identity` as the scenarios state it, outside the runner, which is large enough. */
+private fun forwardedIdentity(header: String): JsonNode {
+    val identity = IdentityCodec.decode(header)
+    val node = JsonNodeFactory.instance.objectNode()
+        .put("tenant", identity.tenant).put("sub", identity.subject)
+        .put("app", identity.app).put("space", identity.space)
+        .put("jti", identity.credential.id)
+    node.putArray("roles").apply { identity.roles.sorted().forEach(::add) }
+    // IDN-39: what else the principal is a member of, null when the header does not state it.
+    val memberships = identity.memberships
+    if (memberships == null) {
+        node.putNull("memberships")
+    } else {
+        node.putObject("memberships").apply {
+            putObject("spaces").apply {
+                memberships.spaces.toSortedMap().forEach { (space, roles) ->
+                    putArray(space).apply { roles.sorted().forEach(::add) }
+                }
+            }
+            putArray("attachments").apply { memberships.attachments.forEach(::add) }
+        }
+    }
+    return node
+}

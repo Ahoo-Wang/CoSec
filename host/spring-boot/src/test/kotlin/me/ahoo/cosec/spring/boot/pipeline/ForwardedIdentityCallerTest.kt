@@ -20,8 +20,8 @@ import me.ahoo.cocache.api.spi.CoherenceBackend
 import me.ahoo.cocache.core.memory.InMemoryBackend
 import me.ahoo.cocache.spring.boot.CoCacheAutoConfiguration
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
-import me.ahoo.cosec.api.token.CompositeToken
 import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.api.token.CompositeToken
 import me.ahoo.cosec.cocache.snapshot.PolicySnapshotCache
 import me.ahoo.cosec.cocache.snapshot.RedisSnapshotDocumentStore
 import me.ahoo.cosec.control.api.ControlPlane
@@ -320,7 +320,9 @@ class ForwardedIdentityCallerTest {
             val suspended = checkNotNull(operatorOf(forwarded(setOf("no-reading"))))
             runCatching { runBlocking { plane.read(suspended, SnapshotKey.Platform) } }.isFailure.assert().isTrue()
 
-            val unstated = IdentityCodec.encode(IdentityCodec.decode(forwarded(setOf("no-reading"))).copy(memberships = null))
+            val unstated = IdentityCodec.encode(
+                IdentityCodec.decode(forwarded(setOf("no-reading"))).copy(memberships = null)
+            )
             val refused = runBlocking { context.getBean(RequestGate::class.java).evaluate(facts(unstated)) }
             refused.status.assert().isEqualTo(400)
             refused.security?.principal.assert().isNull()
