@@ -762,7 +762,7 @@ It never carries the token, the API key, cookies or other request headers, the c
 those the principal attaches), the matched statement, external attribute values or the client IP.
 
 **It fails closed.** The request is `500` `internal-error`, logged, and nothing is truncated, when the identity is
-larger than `cosec.gateway.identity.max-size` (8 KB), when a named claim is not a string, boolean or such a number (a
+larger than `cosec.gateway.identity.max-size` (6 KB), when a named claim is not a string, boolean or such a number (a
 number the header cannot hold exactly, `NaN` or an infinity included) or is longer than 1024 characters, or when the credential never expires (such as an [API key](./authentication.md#api-keys)
 without `expires-at`): a service could not bound such an identity.
 

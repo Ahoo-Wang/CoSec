@@ -70,8 +70,18 @@ object IdentityCodec {
 
     const val VERSION = 1
 
-    /** The largest header, encoded, a gateway sends and a service accepts by default. */
-    const val DEFAULT_MAX_BYTES = 8 * 1024
+    /**
+     * R, the largest header, encoded, a reader accepts by default (`cosec.pipeline.identity.max-size`, `IDN-43`). Never
+     * lowered within 8.x: every 8.x writer writes within it, so a reader of any 8.x version reads what any writes.
+     */
+    const val READ_MAX_BYTES = 8 * 1024
+
+    /**
+     * W, the largest header, encoded, CoSec's writers write by default (`cosec.gateway.identity.max-size`, the relay
+     * of a request's caller, `IDN-43`). Below [READ_MAX_BYTES] by the room the members a later 8.x version adds may
+     * take: a later version may raise it, up to R, never past it.
+     */
+    const val WRITE_MAX_BYTES = 6 * 1024
 
     /** The longest string claim value a gateway forwards. */
     const val MAX_CLAIM_LENGTH = 1024
@@ -96,7 +106,7 @@ object IdentityCodec {
      * [IdentityFormatException] when [decode] would refuse what it wrote, as [decode] refuses it (#1690): a header written
      * is a header read.
      */
-    fun encode(identity: Identity, maxBytes: Int = DEFAULT_MAX_BYTES): String {
+    fun encode(identity: Identity, maxBytes: Int = WRITE_MAX_BYTES): String {
         WrittenIdentity.check(identity)
         IdentityJson.check(identity)
         val header = encoder.encodeToString(CoSecJson.mapper.writeValueAsBytes(IdentityJson(identity)))
@@ -115,7 +125,7 @@ object IdentityCodec {
 
     /** [header] as an identity; [IdentityFormatException] when it is not one this service reads. */
     @Suppress("ThrowsCount")
-    fun decode(header: String, maxBytes: Int = DEFAULT_MAX_BYTES): Identity {
+    fun decode(header: String, maxBytes: Int = READ_MAX_BYTES): Identity {
         if (header.length > maxBytes) {
             throw IdentityFormatException(
                 Reason.OVERSIZE,

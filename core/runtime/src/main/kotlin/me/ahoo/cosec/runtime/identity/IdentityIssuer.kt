@@ -48,7 +48,7 @@ class IdentityIssuer(
     /** `cosec.gateway.identity.claims`: the token claims forwarded, strings, numbers and booleans only. */
     private val claims: Set<String> = emptySet(),
     /** `cosec.gateway.identity.max-size`. */
-    private val maxBytes: Int = IdentityCodec.DEFAULT_MAX_BYTES,
+    private val maxBytes: Int = IdentityCodec.WRITE_MAX_BYTES,
     private val clock: Clock = Clock.systemUTC(),
     /** Every attribute of the principal, not only [claims]: a control call relayed to a host (`CTL-77`, DR1-F-1). */
     private val relay: Boolean = false,

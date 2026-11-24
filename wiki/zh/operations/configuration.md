@@ -61,6 +61,7 @@ CoSec 没有哪个配置项叫这些名字，而已知的 key 无论来源都不
 | 已校验令牌缓存容纳的量 | 堆的十六分之一，每个条目按其令牌长度 × 5 字节计重：2 GiB 时 128 MiB，多于原上限的 16,384 个大令牌（约 115 MB）。太小时表现为 `cosec.token.cache.evictions`（`IDN-32`） | 同上 |
 | 部署在 Redis 中最多持有多少个进行中的社交登录 | Redis 报告的内存（`maxmemory`，否则 `total_system_memory`，启动时读一次）的六十四分之一，每个登录按 512 字节计（两把键实测 352 字节）；Redis 两者都不报告时为 100,000，并记 WARN | 相同 |
 | 实例持有多少个主体的成员关系 | 堆的六十四分之一，按每个主体 3,072 字节计（十个角色分布在两个空间、五个附加策略时实测 2,293 字节）：2 GiB 时约 10,900 个。多出的一个会重新加载，从不被拒绝 | 相同 |
+| 读取 `CoSec-Identity` 的宿主（`gateway` 模式，或 `cosec.pipeline.caller=forwarded-identity`）上 Web 服务器的请求头上限（Spring Boot 的 `server.max-http-request-header-size`），你没有设置时 | 宿主读取的最大身份头，加上请求其余各头的 8 KB：默认时为 `16KB`；控制 API 的服务端口用同一个上限（`IDN-43`）。你设置的值保留不变，比它小时启动时以 `WARN` 写出 | [`cosec.pipeline.identity.max-size`](#pipeline) |
 | 一个 `BEST_EFFORT` 决策监听器最多可以有多少个待处理的事件 | 堆的六十四分之一，由各 `BEST_EFFORT` 监听器均分，按 `cosec.pipeline.trace-level` 下一个事件的大小计数：不追踪时 1 KB，追踪时（`full`、`exhaustive`）8 KB，因为追踪带着每条候选语句。2 GiB、四个监听器时，每个容纳 8,192 个不追踪的事件或 1,024 个追踪的事件，原来不论级别都是每个 1,024 个。太小时表现为 `cosec.listener.dropped`（`OBS-11`） | 同上，以及监听器数 |
 | 一个实例持有多少租户文档和应用文档 | 每个族已持有的，加上堆的四分之一（减去“不存在”条目那一份）剩下的空间，按其常驻文档的典型重量计数；重量是一个从不低于一个文档实际保留量的估计（`DocumentWeight`）：2 GiB 时约 14,500 个部署页面那种形状的租户（估计 34.6 KB，实际保留 29.5 KB）。每轮重新确认时以及每次淘汰之前重新计算，因此只在常驻内容的重量超过份额时才淘汰文档，从不低于 64 个；控制面与管道同在一个进程时各得三分之一，另外三分之一是控制面的文档缓存（DR1-F-5）；一个很重的文档只从空间里拿走它自己的重量。冷加载突发时一个族可能短暂地持有至多其上限的两倍，且绝不超出上限 4,096 个以上。太小时表现为 `cosec.snapshot.evictions` 上升而 `cosec.snapshot.installed` 停在 `cosec.snapshot.bound`（`SNP-24`） | 堆（`Runtime.maxMemory()`） |
 | 一个实例记住多少个没有文档的租户 id 和应用 id | 文档那四分之一中固定的十六分之一，每个 512 字节：2 GiB 时 65,280 个租户 id 和 256 个应用 id。固定不变，所以没有主人的 id 绝不会缩小文档所得（`SNP-7`） | 同上 |
@@ -159,7 +160,7 @@ CoSec 没有哪个配置项叫这些名字，而已知的 key 无论来源都不
 | `cosec.pipeline.identity.only-gateway-can-reach` | boolean | 无，必填 | `gateway` 模式下，或 `cosec.pipeline.caller=forwarded-identity` 时，你的声明：除网关之外没有任何东西能访问这个宿主（放行网关 pod 的 NetworkPolicy、双向 TLS、私有网络）：它相信任何没有签名的 `CoSec-Identity`。除非它或 `only-trusted-callers-can-reach` 是 `true`，宿主不会启动；未设置、空、`false`、`1` 和 `on` 同样失败，信息会说明该写什么。设置之后，启动日志记录一行 `INFO`。有这种 gate 的宿主有 hidden-method 过滤器（`spring.mvc.hiddenmethod.filter.enabled`、`spring.webflux.hiddenmethod.filter.enabled` 或 `HiddenHttpMethodFilter` bean）时也启动失败（[网关后面的服务](./deployment.md#services-behind-the-gateway)）。 |
 | `cosec.pipeline.identity.only-trusted-callers-can-reach` | boolean | 无 | 服务会直接调用的宿主（例如控制面宿主）的声明：除网关和你指名的服务之外，没有任何东西能访问它（按端口放行这些 pod 的 NetworkPolicy、双向 TLS、私有网络）。它通过与 `only-gateway-can-reach` 相同的检查，宿主的启动信息会同时列出两者。它不是防御：能访问到宿主的工作负载可以声明任何主体（包括平台管理员），并同时成为一项变更的作者和审批人。边界是网络。 |
 | `cosec.pipeline.identity.max-age` | duration | `60s` | `gateway` 模式下，签发时间早于这个时长（再加 `cosec.authentication.revocation.skew`）的身份被拒绝：`401` `token-expired`。 |
-| `cosec.pipeline.identity.max-size` | data size | `8KB` | `gateway` 模式下，更大的 `CoSec-Identity` 头被拒绝：`400` `invalid-request`。 |
+| `cosec.pipeline.identity.max-size` | data size | `8KB` | `gateway` 模式下，更大的 `CoSec-Identity` 头被拒绝：`400` `invalid-request`。8.x 的任何版本都不调低这个默认值，8.x 的每个网关都在它之内写（`IDN-43`）。你没有设置 Web 服务器的请求头上限时，它由此推出（[由计算得出，而非配置](#computed-not-configured)）。同时用 `HttpControlService` 转述调用方的宿主，把它设得低于转述写入的 6 KB 时不能启动。 |
 
 ## 授权 {#authorization}
 
@@ -193,7 +194,7 @@ CoSec 没有哪个配置项叫这些名字，而已知的 key 无论来源都不
 |---|---|---|---|
 | `cosec.gateway.identity.enabled` | boolean | `true` | 把已验证的身份转发给接收身份的路由。关闭后，网关仍然移除客户端的身份。 |
 | `cosec.gateway.identity.claims` | 属性名集合 | 空 | 作为 `claims` 随身份一起转发的主体属性，如 `name` 和 `email`（对 JWT 而言是其 `attributes` 声明中的 key，不是顶层声明）：最多 1024 个字符的字符串、数字和布尔值。其他值使请求失败（`500`）。 |
-| `cosec.gateway.identity.max-size` | data size | `8KB` | 编码后更大的身份使请求失败即拒绝（`500`），而不是被截断。 |
+| `cosec.gateway.identity.max-size` | data size | `6KB` | 编码后更大的身份使请求失败即拒绝（`500`），而不是被截断。比 8.x 的每个服务读取的 8 KB 小，留出以后的版本新增成员所需的余量（`IDN-43`）；`HttpControlService` 的转述也在同样的 6 KB 之内写。设得高于 8 KB 时启动时以 `WARN` 写出：网关之后的每个服务都要把 `cosec.pipeline.identity.max-size` 调到至少这么大。 |
 | `cosec.gateway.identity.forward-authorization` | boolean | `false` | 客户端的凭证是否仍然发往下游：`Authorization` 头、API key 头（`cosec.pipeline.api-key-header`）、`authorization` 查询参数和 `authorization` cookie。关闭时，网关从它转发的每个请求中移除它们（cookie 从每个 `Cookie` 头中移除，其他 cookie 保留）：其后的服务不需要凭证。打开时，它们只发往本会接收身份的路由（`lb://`，或 `cosec-identity: true`），无论 `cosec.gateway.identity.enabled` 是否打开，并且只在管道接受了它们时：被拒绝的令牌（过期、吊销、无效）即使公开路由以匿名身份放行请求，也留在网关。只对要再次校验令牌或代表用户调用其他 API 的服务打开。 |
 
 永不过期的凭证（没有 `expires-at` 的 API key）无法被转发：它的放行得到 `500`。
