@@ -184,9 +184,13 @@ object StoreRunner : ScenarioRunner {
             records = memory.recordDigests(key).size,
             writes = store.writes,
             history = if (scenario.node.get("history")?.bool() == true) historyOf(revisions, key) else null,
-            lost = if (scenario.node.get("lost")?.bool() == true) memory.lostRevisions(
-                key
-            ).map { it.revision } else null,
+            lost = if (scenario.node.get("lost")?.bool() == true) {
+                memory.lostRevisions(
+                    key
+                ).map { it.revision }
+            } else {
+                null
+            },
             cost = if (scenario.node.get("cost")?.bool() == true) {
                 COST_KEYS.associateWith { store.cost[it] ?: 0 }
             } else {
