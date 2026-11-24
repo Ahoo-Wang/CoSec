@@ -17,6 +17,8 @@ package me.ahoo.cosec.control.lifecycle
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitCancellation
+import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.advanceUntilIdle
@@ -39,6 +41,16 @@ class WorkBudgetTest {
         budget.withWork("a", 60, patience) { budget.held.assert().isEqualTo(60L) }
         budget.held.assert().isEqualTo(0L)
         runCatching { budget.withWork("a", 60, patience) { error("fails") } }
+        budget.held.assert().isEqualTo(0L)
+    }
+
+    @Test
+    fun `a call cancelled while it holds work releases it`() = runTest {
+        val budget = WorkBudget(100)
+        val call = launch { budget.withWork("a", 60, patience) { awaitCancellation() } }
+        runCurrent()
+        budget.held.assert().isEqualTo(60L)
+        call.cancelAndJoin()
         budget.held.assert().isEqualTo(0L)
     }
 
