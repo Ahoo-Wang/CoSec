@@ -81,6 +81,8 @@ class ApplicationPortTest {
             .web(WebApplicationType.REACTIVE)
             .resourceLoader(DefaultResourceLoader(FilteredClassLoader(*(server.hidden + UNWANTED).toTypedArray())))
             .properties(
+                // One address for the bind and the connection (see [LOOPBACK]).
+                "server.address=$LOOPBACK",
                 "server.port=0",
                 "cosec.enabled=false",
                 "cocache.backend=memory",
@@ -91,11 +93,11 @@ class ApplicationPortTest {
         context.use {
             val bound = it.environment.getRequiredProperty("local.server.port").toInt()
             val answer = CLIENT.send(
-                HttpRequest.newBuilder(URI.create("http://localhost:$bound/address")).timeout(Duration.ofSeconds(10))
+                HttpRequest.newBuilder(URI.create("http://$LOOPBACK:$bound/address")).timeout(Duration.ofSeconds(10))
                     .GET().build(),
                 HttpResponse.BodyHandlers.ofString(),
             )
-            answer.statusCode().assert().describedAs(server.name).isEqualTo(200)
+            answer.statusCode().assert().describedAs("${server.name}: ${answer.body()}").isEqualTo(200)
             // `null` is what a request with no local address reads as: never on a real connection.
             answer.body().assert().describedAs("${server.name}: the request's local port and whether it is served")
                 .isEqualTo("$bound true")
@@ -109,6 +111,14 @@ class ApplicationPortTest {
             .toList()
 
     private companion object {
+        /**
+         * The server binds this address, not every address, and the request goes to it. Bound to every address on a port
+         * the system chose, a server shares that port with any process bound to one address on it, and a connection to
+         * `localhost` goes to the more specific binding: on a machine running other builds, a request once read a 404,
+         * which the route here never answers.
+         */
+        const val LOOPBACK = "127.0.0.1"
+
         /** What the test classpath carries for other tests, and this one does not want: only a server and a route. */
         val UNWANTED = listOf(
             GATEWAY_GLOBAL_FILTER,
