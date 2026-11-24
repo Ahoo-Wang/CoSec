@@ -1,6 +1,7 @@
 public final class me/ahoo/cosec/control/http/HttpControlService : me/ahoo/cosec/control/sdk/ControlService {
 	public static final field CONTROL_APP Ljava/lang/String;
 	public static final field Companion Lme/ahoo/cosec/control/http/HttpControlService$Companion;
+	public static final field MAX_ANSWER_BYTES J
 	public fun <init> (Ljava/net/URI;Ljava/net/http/HttpClient;Ljava/time/Duration;Ljava/lang/String;)V
 	public synthetic fun <init> (Ljava/net/URI;Ljava/net/http/HttpClient;Ljava/time/Duration;Ljava/lang/String;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
 	public fun abandon (Lme/ahoo/cosec/control/sdk/ControlCaller;Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
