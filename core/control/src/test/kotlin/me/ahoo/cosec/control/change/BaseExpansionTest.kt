@@ -58,6 +58,17 @@ class BaseExpansionTest {
 
         val fix = harness.changes.propose(operatorFor(key), key, 1, listOf(Operation.RemoveRole(oversized.id)), "test")
 
+        // A change that keeps the oversized role does not expand either: the compile step says so, and the base is not named.
+        val kept = harness.changes.propose(
+            operatorFor(key),
+            key,
+            1,
+            listOf(Operation.PutPolicy(allow("perm:order/write"))),
+            "test"
+        )
+        kept.errors.filter { it.check == "REFERENCES" }.assert().isEmpty()
+        kept.errors.assert().isNotEmpty()
+
         fix.state.assert().isEqualTo(ChangeState.DRAFT)
         fix.errors.single { it.check == "REFERENCES" }.let {
             it.message.assert().contains("base revision of [$key]").contains("does not expand")

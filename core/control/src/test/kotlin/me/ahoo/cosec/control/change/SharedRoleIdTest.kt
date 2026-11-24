@@ -19,9 +19,11 @@ import kotlinx.coroutines.runBlocking
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.control.lifecycle.ChangeOptions
+import me.ahoo.cosec.control.store.AppList
 import me.ahoo.cosec.control.store.ControlStore
 import me.ahoo.cosec.control.store.InMemoryControlStore
 import me.ahoo.cosec.control.store.StoredDocument
+import me.ahoo.cosec.control.store.Versioned
 import me.ahoo.cosec.document.Catalog
 import me.ahoo.cosec.document.CatalogGroup
 import me.ahoo.cosec.document.CatalogPermission
@@ -137,5 +139,21 @@ class SharedRoleIdTest {
         change.errors.assert().describedAs("${change.findings}").isEmpty()
         change.state.assert().isEqualTo(ChangeState.CHECKED)
         change.roleWarnings().single().assert().contains("app wms could not be read")
+    }
+
+    /** DR1-E-11: an app list that cannot be read is a warning too, and no role is compared. */
+    @Test
+    fun `an app list that cannot be read is a warning, and the check goes on`() = runBlocking<Unit> {
+        val memory = InMemoryControlStore(harness.clock)
+        val failing = object : ControlStore by memory {
+            override suspend fun apps(): Versioned<AppList>? = error("Redis is down")
+        }
+        val change = ChangeHarness(
+            harness.clock,
+            memory,
+            failing
+        ).changes.propose(PLATO, ops, 0, app(ops, "clerk"), "roles")
+        change.errors.assert().describedAs("${change.findings}").isEmpty()
+        change.roleWarnings().single().assert().contains("The app list could not be read")
     }
 }
