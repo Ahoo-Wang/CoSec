@@ -155,4 +155,15 @@ class ApiKeyAuthenticatorTest {
         }
         ApiKey("key\uD83D\uDE00", "svc", "acme", null, setOf("billing")).id.assert().isEqualTo("key\uD83D\uDE00")
     }
+
+    /** `IDN-38`: a key of no one cannot be made, so a stored record of one fails its lookup, never authenticates. */
+    @Test
+    fun aKeyRecordOfABlankPrincipalCannotBeMade() {
+        for (principal in listOf("", " ", "\t")) {
+            val error = runCatching { ApiKey("key", principal, "acme", null, null) }.exceptionOrNull()
+            error.assert().isInstanceOf(IllegalArgumentException::class.java)
+            error!!.message!!.assert().contains("has a blank principal")
+        }
+        ApiKey("key", " svc ", "acme", null, null).principalId.assert().isEqualTo(" svc ")
+    }
 }

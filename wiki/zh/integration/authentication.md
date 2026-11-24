@@ -34,6 +34,8 @@ description: "CoSec 如何读取凭证，以及如何签发、刷新和吊销令
 
 **以 `(` 开头的 id 属于 CoSec。** `sub` 以 `(` 开头的令牌（租户 `(0)`、`(platform)` 和匿名主体 `(0)` 都是这种写法）为 `token-invalid`（`IDN-12`），`JwtTokenConverter` 也拒绝签发。没有 `sub` 或 `jti` 的令牌同样无效。
 
+**主体 id 从不空白。** `sub` 只有空白字符的令牌为 `token-invalid`（`IDN-38`），请求路径与刷新路径都如此，`JwtTokenConverter` 也拒绝签发：*已认证* 意味着 *是某个人*，而 id 是主体的会话、吊销、限流与审计记录的键。id 不会被 trim：`" alice "` 是它自己的 id，按原样比较；绑定、API key 与转发的身份里也一样。
+
 **刷新令牌不是访问令牌。** 带 `cosec.token` 声明的令牌（`JwtTokenConverter` 在每个刷新令牌上写 `refresh`）在所有需要访问令牌的路径上都是 `token-invalid`（`IDN-13`）：它即使签名有效且未过期也不会完成认证，因此永远不会成为它的 `sub` 所指的主体。其他签发者签发、未写该声明的令牌按访问令牌读取；只有 `TokenVerifier.refresh` 读取刷新令牌：[刷新](#refreshing-tokens)，以及用令牌对[登出](#logout-and-revocation)。
 
 **委托令牌会被拒绝。** 带 `act` 声明的令牌（[RFC 8693](https://www.rfc-editor.org/rfc/rfc8693) 委托令牌：`sub` 是被代理方，`act` 是执行方）即使签名和有效期都有效，也按 `token-invalid` 拒绝（`IDN-4`）。拒绝时审计记录原因码 `DELEGATION_UNSUPPORTED`；放行时（例如匿名调用方可以访问的路径），审计记录 `PERMIT`，原因只出现在决策事件的 `subject.rejected` 中。如果按 `sub` 读取，这种令牌会让执行方获得主体能做的一切，而 8.0 不评估委托。CoSec 自己从不签发这种令牌。`may_act` 声明只说明谁可以代理主体，因此被忽略。

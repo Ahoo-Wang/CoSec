@@ -1,0 +1,17 @@
+# Rule: IDN-38
+# Mutant: a verified token may name a blank subject, whichever verifier read it, on the request path and on refresh
+# Tests: :spi:test --tests me.ahoo.cosec.spi.token.VerifiedTokenTest :conformance:test
+
+diff --git a/core/spi/src/main/kotlin/me/ahoo/cosec/spi/token/VerifiedToken.kt b/core/spi/src/main/kotlin/me/ahoo/cosec/spi/token/VerifiedToken.kt
+index 0000000..0000000 100644
+--- a/core/spi/src/main/kotlin/me/ahoo/cosec/spi/token/VerifiedToken.kt
++++ b/core/spi/src/main/kotlin/me/ahoo/cosec/spi/token/VerifiedToken.kt
+@@ -80,7 +80,7 @@ class VerifiedToken(
+     init {
+         when {
+             id.isEmpty() -> invalid("has no id")
+-            principal.isBlank() -> invalid("has no subject")
++            principal.isEmpty() -> invalid("has no subject")
+             Identifiers.isReserved(principal) -> invalid("names a subject reserved for CoSec")
+             tenant != null && tenant.isEmpty() -> invalid("names an empty tenant")
+             tenant != null && !SnapshotKey.Tenant.isValidTenantId(tenant) -> invalid(

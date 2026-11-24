@@ -127,6 +127,7 @@ Pipeline 在请求路径上调用每个 SPI，常常是在 Netty 事件循环上
 - **被取消时停下。** 超时是协作式的：到了 SPI 的超时或 `cosec.pipeline.timeout`，Pipeline 取消调用，并等它返回之后才应答 `503`。`withContext(myDispatcher)` 停不下阻塞调用，所以挂住 30 秒的 JDBC 查询会让请求等 30 秒，而不是它的 300 ms 超时；在 WebMvc 上还会占住一个请求线程。`runInterruptible` 在取消时中断线程；对不响应中断的调用，再给客户端设置它自己的超时（JDBC 查询超时、HTTP 读取超时）。
 - **用抛出异常报告失败。** 查找失败时，永远不要返回“什么都没有”：空的成员关系、缺失的属性或“未吊销”，都可能把拒绝变成放行。Pipeline 把抛出的异常或超时变成 `Indeterminate`，除非有 DENY 匹配，否则应答 `503`。
 - **给出的 id 是文本。** SPI 给出的 id（主体、租户、凭证 id、角色、空间、策略 id）不能带落单的 UTF-16 代理项：Redis key 会在它的位置写 `?`，与另一个 id 共用一个 key（`IDN-10`）。`AuthenticatedPrincipal` 与 `ApiKey` 在构造时拒绝它，所以给出这种 id 的认证器或 API key 存储会抛出异常，带这种 id 的 `MembershipProvider` 答复也会失败：都是 `503`。判断用 `Identifiers.isWellFormed`（`cosec-model`）；把 id 写进异常消息或日志行时用 `Identifiers.printable`，它不会让 id 伪造出一行。
+- **给出某个人。** 主体 id 从不空白，既不为空也不只含空白字符（`IDN-38`）：`PrincipalId` 在构造时拒绝它，所以给出这种 id 的认证器会抛出异常，管道答 `503`，同上。凭证指向的不是任何人时，改为返回 `Rejected`，让客户端得知它的凭证无效。id 不会被 trim：`" alice "` 是它自己的 id。
 - **不要捕获取消。** 客户端离开会取消请求的协程。重新抛出 `CancellationException`，也不要用 `runCatching` 包裹挂起调用。
 - **保持廉价。** 每次调用都有超时（见[配置](../operations/configuration.md)）；整个请求受 `cosec.pipeline.timeout` 约束。不挂起的本地应答不切换线程，也不设定时器。
 
@@ -185,7 +186,7 @@ fun cosecAuthenticator(
 
 运维设置了 `cosec.authentication.revocation.fail-closed: true`，只要这个写法漏掉读取它的那一行，就重新敞开了，而且没有任何日志：这三项设置要保留，否则吊销方面的加固就丢了（[这个例外](../guide/security-model.md#the-two-documented-exceptions)）。
 
-自定义的 `TokenVerifier` 返回 `VerifiedToken`（`me.ahoo.cosec.spi.token`），一个由它校验过的声明构成的不可变值：`id`、`principal`、`tenant`、`app`（令牌的 `aud`）、`roles`、`policies`、`attributes`、时间和成员关系标记。它的构造函数对任何令牌都不允许的声明（以 `(` 开头的 id、空租户、落单代理项、不可能的应用）抛出 `TokenVerificationException`，所以无论哪个校验器读取，`verify` 都会拒绝。
+自定义的 `TokenVerifier` 返回 `VerifiedToken`（`me.ahoo.cosec.spi.token`），一个由它校验过的声明构成的不可变值：`id`、`principal`、`tenant`、`app`（令牌的 `aud`）、`roles`、`policies`、`attributes`、时间和成员关系标记。它的构造函数对任何令牌都不允许的声明（以 `(` 开头的 id、空白主体、空租户、落单代理项、不可能的应用）抛出 `TokenVerificationException`，所以无论哪个校验器读取，`verify` 都会拒绝。
 
 按契约，`TokenVerifier` 是纯计算：不做 I/O，不做任何阻塞的事，因为流水线在请求的线程上调用它。令牌是否被吊销不由它回答：`TokenAuthenticator`、刷新（`RefreshTokenAuthentication`）和 `TokenRevoker` 都通过挂起式的 `RevocationReader` 读取，并共用同一个判断 `TokenRevocation`。只有 CoSec 自己的校验器签发的令牌才能使用 break-glass。带 `act` 声明的令牌绝不能成为主体（`IDN-4`）：自定义的 `TokenVerifier` 遇到它时抛出 `DelegationUnsupportedException`，`TokenAuthenticator` 把它变成 `token-invalid` 拒绝；自行读取令牌的自定义 `Authenticator` 则返回 `AuthnResult.Rejected(DELEGATION_UNSUPPORTED)`，而不是以它的 `sub` 作为主体。令牌、声明和成员关系对用户意味着什么，见[认证](../integration/authentication.md)。
 

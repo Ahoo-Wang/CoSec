@@ -412,6 +412,11 @@ with the host stopped. Its probes are on the management port 8081, never on 8080
   which JSON writes as an escape (`"beta\uD800"`), IDN-10: a Redis key would write it as `?` and read another id's
   documents, memberships and revocations. CoSec's own `JwtTokenConverter` refuses to sign one (login fails with
   `holds an unpaired UTF-16 surrogate`). Fix the issuer or the user store; surrogate pairs (emoji) are fine.
+- `token-invalid` for a token whose `sub` is white space only (IDN-38): a principal id is never blank. CoSec's own
+  `JwtTokenConverter` refuses to sign one (login fails with `A token has a subject that is not blank`); an
+  `Authenticator` of your own that makes a blank `PrincipalId` throws, so the request is `503`. An API key record whose
+  `principalId` is blank does not load (`503`), and a document binding a blank principal does not compile. Ids are not
+  trimmed: `" alice "` is its own id, and a binding of `alice` does not match it.
 - `token-invalid` for a token whose `tenantId` or `aud` holds `/` (`acme/west`, SCP-13): a tenant or app id is one path
   segment, so it names neither `acme/west` nor `acme`. Behind a gateway, such a forwarded identity is `400
   invalid-request`; a preview's document of such a tenant is left out of `GET /documents` with a warning. Rename the
@@ -486,7 +491,7 @@ is counted in `cosec.identity.refused{problem}` (with cosec-micrometer), where a
 or a request that bypassed the gateway:
 
 - 400 `invalid-request`: not base64url JSON of format v1, unknown or missing members, an id with an unpaired
-  surrogate (IDN-10), over
+  surrogate (IDN-10), a blank `sub`, `tenant` or `rid` (IDN-38), over
   `cosec.pipeline.identity.max-size` (8KB), sent more than once, or a scope that does not resolve here.
 - 401 `token-invalid`: unsupported version, no `auth.exp`, or issued in the future (beyond
   `cosec.authentication.revocation.skew`).

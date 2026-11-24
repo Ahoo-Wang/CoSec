@@ -56,6 +56,24 @@ Which preview of the library may run behind which preview of the gateway image: 
     2. Copy every key under `<old>:` to the same name under `<new>:`, with its TTL (`DUMP` and `RESTORE ... ABSTTL`, or
        `RENAME` on a single node; on a cluster, keys of one hash slot only).
     3. Start every process with `cosec.key-prefix=<new>`, then delete the old keys.
+- **Breaking: a principal id is never blank** (`IDN-38`, #1889). Affected: a deployment where some credential names a
+  principal whose id is empty or white space only. beta.7 accepted it in several places, and the request was decided
+  for that id as an authenticated principal. Now each place refuses it:
+  - **A token** whose `sub` is white space only is `401` `token-invalid`, on a request and on refresh, and
+    `JwtTokenConverter` signs none: a login whose `Authentication` answers such a subject fails.
+  - **An authenticator of your own** that makes a `PrincipalId` of one throws, so the request is `503`: answer
+    `Rejected` for a credential that names no one ([Extending](../architecture/extending.md)).
+  - **An API key** record whose `principalId` is blank no longer loads, and a request that presents it is `503`. Find
+    them with `redis-cli --scan --pattern '<s>:api-key:*'`, reading each value with `GET` and keeping those where
+    `jq 'select(.principalId | test("^\\s*$"))'` prints something; delete them or issue them again for a principal.
+  - **A document** that binds a blank principal no longer compiles, and a host fails closed on it as on any document it
+    cannot read. Look before upgrading: `jq '[.bindings[]? | select(.subject.principal? | strings | test("^\\s*$"))]'`
+    over each published document lists them; remove them with a change.
+  - **A forwarded identity** whose `sub`, `tenant` or `rid` is blank is malformed (`400`), and a gateway writes none.
+  - **A session record** of a blank principal (`<s>:token:family:*`) is a format error: its refresh fails with `503`, as
+    for any record that cannot be read (`IDN-19`), and its user signs in again.
+  - `cosec-migrate api-keys` names a 7.x key of a blank principal among its rejections. An id is still not trimmed:
+    `" alice "` is an id of its own, and nothing about it changes.
 - **Breaking: the revocation tables' `local-max-age` is at most 30 seconds** (`IDN-26`, DR1-D-3). Affected: a
   deployment that set `cosec.authentication.revocation.cache.local-max-age` above `30s`, or a `cocache.*` property or
   customizer that set the local max age of `RevokedTokenCache` or `RevokedSubjectCache`.

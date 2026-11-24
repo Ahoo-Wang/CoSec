@@ -131,7 +131,7 @@ class JwtTokenConverter @InternalCoSecApi constructor(
      */
     private fun checkIssuable(subject: TokenSubject) {
         val printableId = Identifiers.printable(subject.id)
-        require(subject.id.isNotEmpty()) { "A token has a subject." }
+        require(subject.id.isNotBlank()) { "A token has a subject that is not blank (IDN-38)." }
         require(!Identifiers.isReserved(subject.id)) {
             "Principal [$printableId] begins with `${Identifiers.RESERVED_PREFIX}`, which is CoSec's: a token cannot carry it."
         }

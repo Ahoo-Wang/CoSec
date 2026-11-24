@@ -165,6 +165,7 @@ class PolicyDocumentCodecTest {
             """{"change":"c","kind":"PUBLISH"}|$.provenance: [publishedBy] is required""",
             """{"change":"c","kind":"PUBLISH","publishedBy":{"tenant":"t"}}|$.provenance.publishedBy: [principal] is required""",
             """{"change":"c","kind":"PUBLISH","publishedBy":{"tenant":"t","principal":""}}|$.provenance.publishedBy.principal: must not be empty""",
+            """{"change":"c","kind":"PUBLISH","publishedBy":{"tenant":"t","principal":" "}}|$.provenance.publishedBy.principal: must not be blank (IDN-38)""",
             """{"change":"c","kind":"PUBLISH","publishedBy":{"tenant":"t","principal":"p"},"by":1}|$.provenance: unknown field by""",
             """{"parent":{"revision":0,"digest":"SHA-256:9f2c0b1e6a6d1f2c3b4a5d6e7f8091a2b3c4d5e6f708192a3b4c5d6e7f809102"},"change":"c","kind":"PUBLISH","publishedBy":{"tenant":"t","principal":"p"}}|$.provenance.parent.revision: must be positive""",
             """{"parent":{"revision":1,"digest":"9F2C"},"change":"c","kind":"PUBLISH","publishedBy":{"tenant":"t","principal":"p"}}|$.provenance.parent.digest: is `SHA-256:` and 64 lowercase hex digits""",
@@ -266,6 +267,19 @@ class PolicyDocumentCodecTest {
             .isEqualTo(SubjectRef.Principal(TenantId("acme"), me.ahoo.cosec.model.PrincipalId("alice")))
         error(""","bindings":[{"id":"b","subject":{"principal":"alice"},"app":"*","space":"*","policy":"p"}]""")
             .assert().contains("$.bindings[0].subject: a principal of the PLATFORM document names its tenant")
+    }
+
+    /** `IDN-38`: a binding to a blank principal binds no one, and is refused by its path; white space around an id is kept. */
+    @Test
+    fun `a principal binding names a principal that is not blank`() {
+        fun binding(principal: String) =
+            ""","policies":[{"id":"p","statements":[]}],"bindings":[{"id":"b","subject":{"principal":"$principal"},"app":"*","space":"*","policy":"p"}]"""
+        for (blank in listOf("", " ", "\\t")) {
+            error(binding(blank), DocumentKind.TENANT, "acme").assert()
+                .contains("$.bindings[0].subject.principal: a principal id is not blank (IDN-38)")
+        }
+        val spaced = decode(binding(" alice "), DocumentKind.TENANT, "acme").bindings.single().subject
+        (spaced as SubjectRef.Principal).id.value.assert().isEqualTo(" alice ")
     }
 
     @ParameterizedTest

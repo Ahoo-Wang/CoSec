@@ -36,8 +36,18 @@ value class TenantId(val value: String) {
     }
 }
 
+/**
+ * Never blank, empty or white space only (`IDN-38`): *authenticated* means *someone*, and the id is a key of the
+ * principal's sessions, revocations, rate limits and audit records. Not trimmed either: ids are opaque and compared as
+ * they are, so `" a "` is an id. Every entrance refuses a blank id in its own terms first (a token is invalid, a
+ * forwarded identity is malformed, an API key does not load); this is the backstop, so no consumer meets one.
+ */
 @JvmInline
-value class PrincipalId(val value: String)
+value class PrincipalId(val value: String) {
+    init {
+        require(value.isNotBlank()) { "A principal id is not blank." }
+    }
+}
 
 /** Never [Match.WILDCARD]: documents write `*` for [Match.Any], so a literal `*` app would decode as every app. */
 @JvmInline
