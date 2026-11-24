@@ -1,0 +1,17 @@
+# Rule: CTL-80
+# Mutant: the typed write abandons a holder of its own author that a person approved or live traffic shadowed, losing that work
+# Tests: :control-sdk:test --tests me.ahoo.cosec.control.sdk.PublishWithoutShadowTest
+
+diff --git a/core/control-sdk/src/main/kotlin/me/ahoo/cosec/control/sdk/PublishWithoutShadow.kt b/core/control-sdk/src/main/kotlin/me/ahoo/cosec/control/sdk/PublishWithoutShadow.kt
+index 0000000..0000000 100644
+--- a/core/control-sdk/src/main/kotlin/me/ahoo/cosec/control/sdk/PublishWithoutShadow.kt
++++ b/core/control-sdk/src/main/kotlin/me/ahoo/cosec/control/sdk/PublishWithoutShadow.kt
+@@ -116,7 +116,7 @@ internal class PublishWithoutShadow(
+      * away to free a slot.
+      */
+     private fun leftHalfway(holder: Change): Boolean =
+-        holder.state in LEFT_HALFWAY && holder.approval == null && holder.shadow == null
++        holder.state in LEFT_HALFWAY
+ 
+     /** Whether [holder] has not been updated for a whole patience before [proposed] was made: its writer gave up or died. */
+     private fun abandonedBy(holder: Change, proposed: Change): Boolean =

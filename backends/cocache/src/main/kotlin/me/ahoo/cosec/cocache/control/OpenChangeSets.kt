@@ -68,8 +68,15 @@ internal class OpenChangeSets(
     /** How long a member whose record is missing stays: a first write in flight is missing for a moment. */
     private val missingGrace: Duration,
 ) {
-    /** When this instance first found a member's change missing or not listed there, by set and member. */
-    private val staleSince = ConcurrentHashMap<String, Instant>()
+    /**
+     * When this instance first found a member's change missing or not listed there, by set, then member. Each read of a
+     * set forgets the members it no longer holds (DR1-F-20): another writer or instance may have removed them, and an
+     * entry kept for them would stay for the process's life. So it holds no more than the sets hold.
+     */
+    private val staleSince = ConcurrentHashMap<String, MutableMap<String, Instant>>()
+
+    /** How many members this instance keeps a time for: what the sets hold at most. */
+    internal fun staleEntries(): Int = staleSince.values.sumOf { it.size }
 
     suspend fun kept(): Boolean = KEPT in sets.changeMembers(KEPT) && !legacyListed()
 
@@ -135,10 +142,12 @@ internal class OpenChangeSets(
         }
     }
 
-    suspend fun openChanges(document: SnapshotKey): List<ListedChange> =
-        sets.changeMembers(documentKey(document)).sorted().mapNotNull { id ->
-            read(document, ChangeId(id), documentKey(document), id) { !it.state.terminal }
-        }
+    suspend fun openChanges(document: SnapshotKey): List<ListedChange> {
+        val key = documentKey(document)
+        val members = sets.changeMembers(key)
+        forgetUnheld(key, members)
+        return members.sorted().mapNotNull { id -> read(document, ChangeId(id), key, id) { !it.state.terminal } }
+    }
 
     /** The changes in [state], by `<docKey>#<id>`, the cursor [after] and [ChangePage.next] are: one entry per change. */
     suspend fun changes(
@@ -147,7 +156,9 @@ internal class OpenChangeSets(
         limit: Int,
         documents: (SnapshotKey) -> Boolean
     ): ChangePage {
-        val byChange = sets.changeMembers(stateKey(state)).mapNotNull { member ->
+        val members = sets.changeMembers(stateKey(state))
+        forgetUnheld(stateKey(state), members)
+        val byChange = members.mapNotNull { member ->
             parse(member)?.let { (document, id) -> cursor(document, id) to member }
         }.groupBy({ it.first }, { it.second })
         val keys = byChange.keys.sorted().filter { after == null || it > after }
@@ -176,14 +187,14 @@ internal class OpenChangeSets(
         }
         val change = stored?.value
         if (change != null && change.state.terminal) {
-            members.forEach { staleSince -= "$key|$it" }
+            members.forEach { forget(key, it) }
             sets.removeChangeMembers(key, members.toSet())
             return null
         }
         val listed = change?.takeIf { it.state == state && it.key == document }
         val current = listed?.let { member(document, id, checkNotNull(stored).digest) }
         members.filter { it != current }.forEach { stale(key, it) }
-        current?.let { staleSince -= "$key|$it" }
+        current?.let { forget(key, it) }
         return listed?.let { ListedChange.Readable(it) }
     }
 
@@ -201,7 +212,7 @@ internal class OpenChangeSets(
             return ListedChange.Unreadable(id, document)
         }
         if (change != null && change.state.terminal) {
-            staleSince -= "$key|$member"
+            forget(key, member)
             sets.removeChangeMembers(key, setOf(member))
             return null
         }
@@ -209,17 +220,29 @@ internal class OpenChangeSets(
             stale(key, member)
             return null
         }
-        staleSince -= "$key|$member"
+        forget(key, member)
         return ListedChange.Readable(change)
     }
 
     /** A member whose change is missing or not listed there: removed once this instance has seen it so for the grace. */
     private suspend fun stale(key: String, member: String) {
-        val since = staleSince.getOrPut("$key|$member") { clock.instant() }
+        val since = staleSince.computeIfAbsent(key) { ConcurrentHashMap() }.getOrPut(member) { clock.instant() }
         if (since.plus(missingGrace).isBefore(clock.instant())) {
             sets.removeChangeMembers(key, setOf(member))
-            staleSince -= "$key|$member"
+            forget(key, member)
         }
+    }
+
+    private fun forget(key: String, member: String) {
+        staleSince.computeIfPresent(key) { _, members -> members.apply { remove(member) }.ifEmpty { null } }
+    }
+
+    /**
+     * [key] was just read as holding [held]: the time of any other member is forgotten. A member a write adds after the
+     * read and a reader then finds stale starts its grace again at the next read, which only keeps it longer.
+     */
+    private fun forgetUnheld(key: String, held: Set<String>) {
+        staleSince.computeIfPresent(key) { _, members -> members.apply { keys.retainAll(held) }.ifEmpty { null } }
     }
 
     internal companion object {
