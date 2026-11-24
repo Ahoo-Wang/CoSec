@@ -22,7 +22,6 @@ import me.ahoo.cosec.control.api.ControlHttpRequest
 import me.ahoo.cosec.control.api.ControlPlane
 import me.ahoo.cosec.control.api.ControlProfile
 import me.ahoo.cosec.control.authz.PipelineControlAuthorizer
-import me.ahoo.cosec.control.lifecycle.WorkBudget
 import me.ahoo.cosec.control.sdk.ControlCaller
 import me.ahoo.cosec.control.sdk.ControlRefusedException
 import me.ahoo.cosec.control.sdk.RoutedControlService
@@ -57,10 +56,8 @@ class LocalControlService(
     private val clock: Clock = Clock.systemUTC(),
     private val ids: IdGenerator = RandomIdGenerator,
 ) : RoutedControlService() {
-    private val http = ControlHttp(plane, ControlProfile.SERVICE)
-
-    /** The plane's work budget (`CTL-85`): a call through this facade holds its work where the host's API does. */
-    val work: WorkBudget get() = http.work
+    /** The service profile's API over [plane]: a call through this facade holds its work in the plane's budget (`CTL-85`). */
+    val http = ControlHttp(plane, ControlProfile.SERVICE)
 
     override suspend fun call(caller: ControlCaller, call: ServiceCall): String {
         val request = ControlHttpRequest(

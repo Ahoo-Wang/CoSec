@@ -22,6 +22,10 @@ import me.ahoo.cocache.spring.boot.CoCacheAutoConfiguration
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.cocache.CoSecCacheSpecs
 import me.ahoo.cosec.control.api.ControlHttp
+import me.ahoo.cosec.control.api.ControlLockout
+import me.ahoo.cosec.control.api.ControlPlane
+import me.ahoo.cosec.control.lifecycle.Changes
+import me.ahoo.cosec.control.local.LocalControlService
 import me.ahoo.cosec.control.sdk.ControlService
 import me.ahoo.cosec.runtime.shadow.CandidateSource
 import me.ahoo.cosec.spring.boot.jwt.CoSecJwtAutoConfiguration
@@ -169,20 +173,14 @@ class ControlPlaneSwitchTest {
             val budget = context.getBean(me.ahoo.cosec.control.lifecycle.WorkBudget::class.java)
             // The same instance in each that holds a call's work: the plane's reads, the operators' API (and with it the
             // service profile's, made of the same plane), the in-process facade and the lock-out check.
-            context.getBean(me.ahoo.cosec.control.api.ControlPlane::class.java).work.assert().isSameAs(budget)
-            context.getBean(me.ahoo.cosec.control.api.ControlHttp::class.java).work.assert().isSameAs(budget)
-            (
-                context.getBean(
-                    me.ahoo.cosec.control.sdk.ControlService::class.java
-                ) as me.ahoo.cosec.control.local.LocalControlService
-                )
-                .work.assert().isSameAs(budget)
-            (
-                context.getBean(
-                    me.ahoo.cosec.control.lifecycle.Changes::class.java
-                ).lockout as me.ahoo.cosec.control.api.ControlLockout
-                )
-                .work.assert().isSameAs(budget)
+            val facade = context.getBean(ControlService::class.java) as LocalControlService
+            val lockout = context.getBean(Changes::class.java).lockout as ControlLockout
+            listOf(
+                context.getBean(ControlPlane::class.java).work,
+                context.getBean(ControlHttp::class.java).work,
+                facade.http.work,
+                lockout.work,
+            ).forEach { it.assert().isSameAs(budget) }
             val registry = context.getBean(io.micrometer.core.instrument.MeterRegistry::class.java)
             registry.find(ControlMetersConfiguration.WORK_HELD).gauge()!!.value().assert().isEqualTo(0.0)
             registry.find(ControlMetersConfiguration.WORK_REFUSED).functionCounter()!!.count().assert().isEqualTo(0.0)
