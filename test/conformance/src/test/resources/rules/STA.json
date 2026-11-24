@@ -29,7 +29,8 @@
         "spring-boot:CoSecModuleCheckAutoConfigurationTest#a cosec control enabled that is neither true nor false fails startup, without the modules too",
         "spring-boot:WebGateCheckTest#a web host with CoSec on and its adapter's module, but no gate, fails startup",
         "spring-boot:WebGateCheckTest#a gate found by type, whatever its bean's name, lets the host start",
-        "spring-boot:WebGateCheckTest#the control plane switched on in gateway mode fails startup, which wires none"
+        "spring-boot:WebGateCheckTest#the control plane switched on in gateway mode fails startup, which wires none",
+        "spring-boot:WebGateCheckTest#a Spring Cloud Gateway host outside enforce mode is told that a gateway decides only in enforce mode"
       ]
     },
     {

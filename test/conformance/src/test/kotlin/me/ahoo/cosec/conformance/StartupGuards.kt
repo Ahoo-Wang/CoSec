@@ -145,6 +145,7 @@ object StartupGuards {
         "spring-boot:WebGateCheckTest#a web host with CoSec on and its adapter's module, but no gate, fails startup",
         "spring-boot:WebGateCheckTest#a gate found by type, whatever its bean's name, lets the host start",
         "spring-boot:WebGateCheckTest#the control plane switched on in gateway mode fails startup, which wires none",
+        "spring-boot:WebGateCheckTest#a Spring Cloud Gateway host outside enforce mode is told that a gateway decides only in enforce mode",
         "cocache:ReadOnlyDeclarationTest#a layer cannot make a data-plane instance's snapshot store read-write",
         "cocache:ReadOnlyDeclarationTest#a layer cannot make the control plane's snapshot store read-only",
         "cocache:ReadOnlyDeclarationTest#a layer cannot make a data-plane instance's candidate store read-write",
