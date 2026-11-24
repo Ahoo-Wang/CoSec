@@ -52,6 +52,7 @@ import me.ahoo.cosec.spring.boot.audit.AuditProperties
 import me.ahoo.cosec.spring.boot.audit.kafka.KafkaAuditProperties
 import me.ahoo.cosec.spring.boot.audit.kafka.kafkaAuditDelivery
 import me.ahoo.cosec.spring.boot.ip2region.Ip2RegionProperties
+import me.ahoo.cosec.spring.boot.micrometer.KafkaAuditMeters
 import me.ahoo.cosec.spring.boot.micrometer.MetricsProperties
 import me.ahoo.cosec.spring.boot.micrometer.TokenCacheMeters
 import org.springframework.beans.factory.ObjectProvider
@@ -176,6 +177,22 @@ class CoSecPipelineIntegrationAutoConfiguration {
             ),
             drainTimeout = DerivedTimeouts.drain(environment),
         )
+
+        /** `cosec.audit.kafka.failures`, with Micrometer: the records lost after they were queued (DR1-G-4). */
+        @Configuration(proxyBeanMethods = false)
+        @ConditionalOnClass(name = ["me.ahoo.cosec.micrometer.MetricsListener"])
+        @ConditionalOnBean(MeterRegistry::class)
+        @ConditionalOnProperty(value = [MetricsProperties.ENABLED_KEY], havingValue = "true", matchIfMissing = true)
+        @InternalCoSecApi
+        class Meters {
+            @Bean
+            fun cosecKafkaAuditMeters(
+                registry: MeterRegistry,
+                listeners: ObjectProvider<KafkaAuditListener>,
+            ): StartupTask = StartupTask.AfterSingletons {
+                listeners.orderedStream().forEach { KafkaAuditMeters.bind(registry, it) }
+            }
+        }
     }
 
     @Configuration(proxyBeanMethods = false)

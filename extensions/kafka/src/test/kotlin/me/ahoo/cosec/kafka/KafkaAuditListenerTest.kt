@@ -227,6 +227,28 @@ class KafkaAuditListenerTest {
         sent.get(5, java.util.concurrent.TimeUnit.SECONDS)
     }
 
+    /**
+     * DR1-G-4: a BEST_EFFORT record the broker refuses after it was queued is counted (`cosec.audit.kafka.failures`
+     * reads it), where the decision listeners see no failure; a REQUIRED one throws, and is the listeners' to count.
+     */
+    @Test
+    fun aBestEffortRecordTheBrokerRefusesIsCounted() {
+        val kafka = mockk<KafkaOperations<String, String>> {
+            every { send(any<String>(), any<String>(), any<String>()) } returns
+                CompletableFuture.failedFuture(IllegalStateException("broker down"))
+        }
+        val listener = KafkaAuditListener(kafka, "audit")
+        repeat(3) { evaluate(listener).status.assert().isEqualTo(200) }
+        val deadline = System.nanoTime() + java.util.concurrent.TimeUnit.SECONDS.toNanos(5)
+        while (listener.sendFailures < 3 && System.nanoTime() < deadline) {
+            Thread.sleep(10)
+        }
+        listener.sendFailures.assert().isEqualTo(3L)
+        val required = KafkaAuditListener(kafka, "audit", Delivery.REQUIRED)
+        evaluate(required).status.assert().isEqualTo(503)
+        required.sendFailures.assert().isZero()
+    }
+
     /** Review: a broker that hangs never piles REQUIRED sends up without bound; a full queue fails at once. */
     @Test
     fun aFullSendQueueFailsTheRequiredDeliveryAtOnce() {
