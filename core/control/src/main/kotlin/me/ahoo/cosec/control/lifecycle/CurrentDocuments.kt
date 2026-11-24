@@ -36,4 +36,10 @@ interface CurrentDocuments {
     suspend fun referrers(target: SnapshotKey, policy: PolicyId): Set<ReferrerEntry>
 
     suspend fun apps(): Versioned<AppList>?
+
+    /**
+     * The same documents, read without being recorded as what a change was checked with: for a check that only warns,
+     * whose reads must not make an unrelated publish move the change (DR1-E-11).
+     */
+    val unrecorded: CurrentDocuments get() = this
 }
