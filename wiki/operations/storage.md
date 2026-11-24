@@ -145,14 +145,22 @@ sign-ins in progress. Past it a start is refused and writes nothing. When Redis 
 ### When a reader does not know a record's format {#record-formats}
 
 Every record CoSec keeps in Redis says how it reads when the instance reading it is older or newer than the one that
-wrote it (`CTL-53`, `IDN-31`). Most records carry `"format": <n>`:
+wrote it (`CTL-53`, `IDN-31`, `SNP-27`). Most records carry `"format": <n>`:
 - a record without one was written before formats, and is format 1;
-- of a format the reader knows, it reads the members it knows and ignores the others;
-- a later format is refused, as a format error, never read as absent.
+- of a format the reader knows, it reads the members it knows and ignores the others, unless the record's `crit` names
+  one: a list of the members a reader must understand, each a path from the record's root (`root`, `approvals.via`);
+- a member `crit` names that the reader does not know refuses that one record, as one a later version wrote: it is
+  neither read nor rewritten, and the other records read as before;
+- a later format is refused the same way, as a format error, never read as absent.
 
-A member a minor release adds within a format is optional, and an older instance may drop it when it rewrites the
-record. Anything an older instance must not drop or ignore comes with a new format, which older readers refuse. The
-decision inputs stay strict: they carry no such tolerance.
+A member a minor release adds within a format is optional, and an older instance drops it when it rewrites the
+record. So a member whose being ignored, or dropped in such a rewrite, would widen anything is added with `crit`: an
+older instance refuses the record instead, and the store never holds less than a pure newer deployment would have left
+(RFC 0014 G5). Each kind of record lists every member, what its absence means and whether ignoring or dropping it
+widens, beside its codec (`SNP-28`). Format numbers change only with a major version (`SNP-29`): within 8.x a session
+is format 2 at most and every other record format 1. CoSec's 8.0 writers write no `crit`. Every refusal is counted
+by `cosec.stored.refused` (`OBS-12`), `later` for a record a later version wrote, apart from `malformed`. The decision
+inputs stay strict: they carry no such tolerance.
 
 | Record | Format | A member it does not know | A later format, or a value it cannot read |
 |---|---|---|---|
@@ -167,7 +175,7 @@ decision inputs stay strict: they carry no such tolerance.
 | Shadow report (`shadow:report:<window>:<instance>`) | `format: 1` | ignored | the window cannot be looked at (`503`) until the report reads or is written again |
 | Reporters of a window (`shadow:reporters:<window>`) | `format: 1` | ignored | the window cannot be judged until it is written again |
 | Instance status and its index (`shadow:status:*`) | `format: 1`, with `formatLevel` | ignored | the propagation of a revision cannot be read (`GET .../propagation`); publishing does not wait for it; no shadow window passes until it can be read (`CTL-10`) |
-| Session (`token:family:<id>`) | `format: 1`; `format: 2` for a session a tenant switch started, which names its `root` (`IDN-36`) | ignored | the session ends: its refresh is refused and the user signs in again |
+| Session (`token:family:<id>`) | `format: 1`; `format: 2` for a session a tenant switch started, which names its `root` (`IDN-36`) | ignored, unless its `crit` names it: then refused | the refresh, logout or switch that read it is a `503` and the session is kept; an upgraded instance reads it ([Troubleshooting](./troubleshooting.md#a-record-a-later-version-wrote)) |
 | API key (`apikey:*`) | `format: 3` | refused | the key is refused |
 | Revocations, leases, rate-limit counters | none (scalar) | not applicable | as each says above |
 

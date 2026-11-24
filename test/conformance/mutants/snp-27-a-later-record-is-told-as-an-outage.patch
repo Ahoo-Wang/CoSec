@@ -1,0 +1,17 @@
+# Rule: SNP-27
+# Mutant: a session record a later version wrote is logged as a store that is broken, so an operator looks at Redis instead of the instance to upgrade
+# Tests: :login:test --tests me.ahoo.cosec.login.token.LaterSessionRecordTest
+
+diff --git a/extensions/login/src/main/kotlin/me/ahoo/cosec/login/token/LaterSessionRecords.kt b/extensions/login/src/main/kotlin/me/ahoo/cosec/login/token/LaterSessionRecords.kt
+index 375731505..72565237b 100644
+--- a/extensions/login/src/main/kotlin/me/ahoo/cosec/login/token/LaterSessionRecords.kt
++++ b/extensions/login/src/main/kotlin/me/ahoo/cosec/login/token/LaterSessionRecords.kt
+@@ -37,7 +37,7 @@ internal object LaterSessionRecords {
+ 
+     /** Whether [error], thrown by a session store asked to [operation], is a record a later version wrote; logged if so. */
+     fun told(operation: String, error: Throwable, nanoTime: () -> Long = System::nanoTime): Boolean {
+-        val later = StoredFormat.later(error) ?: return false
++        val later = StoredFormat.later(error)?.takeIf { false } ?: return false
+         val now = nanoTime()
+         val previous = lastWarning.get()
+         val warns = (previous == NEVER || now - previous >= INTERVAL.toNanos()) && lastWarning.compareAndSet(previous, now)

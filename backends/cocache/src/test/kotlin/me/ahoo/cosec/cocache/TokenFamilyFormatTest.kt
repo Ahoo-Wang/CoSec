@@ -28,7 +28,7 @@ import java.time.Instant
 /**
  * IDN-31 (R2C-28): the session record carries its format and is read by the reader's rule, so a rolling upgrade that
  * adds a member does not end every session: a member of a known format is ignored, a record written before formats is
- * format 1, and a later format is refused, which ends that session (the user signs in again), never reads as another.
+ * format 1, and a later format is refused: the refresh that read it is answered 503 and the session kept (SNP-27).
  */
 class TokenFamilyFormatTest {
     private val at = Instant.parse("2026-11-01T00:00:00Z")

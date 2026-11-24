@@ -23,7 +23,7 @@ package me.ahoo.cosec.conformance
  */
 object GuardAllowlist {
     val GUARDS: Map<String, Set<String>> = mapOf(
-        "build" to SnapshotBoundGuards.BUILD + setOf(
+        "build" to SnapshotBoundGuards.BUILD + StoredRecordGuards.BUILD + setOf(
             // SNP-26: what two releases read and write on one Redis is frozen within 8.x (RFC 0014 R6).
             "cocache:FrozenLayoutTest#goldenSamples",
             "cocache:FrozenLayoutTest#everyEntryIsHeld",

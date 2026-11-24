@@ -104,6 +104,9 @@ class SourceRulesTest {
             "me.ahoo.cosec.document.json.CoSecJson",
             // The reader's rule for every stored record (CTL-53): how a format member is written and read.
             "me.ahoo.cosec.document.json.StoredFormat",
+            // Each stored record's members registry, beside its codec (SNP-28): a record's members, never a document's.
+            "me.ahoo.cosec.document.json.StoredMembers",
+            "me.ahoo.cosec.document.json.StoredRecord",
             "me.ahoo.cosec.document.shadow.ShadowCodec",
             "me.ahoo.cosec.document.SnapshotDocuments",
         )

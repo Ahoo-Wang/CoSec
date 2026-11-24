@@ -21,6 +21,7 @@ import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.cocache.CoSecCacheSpecs
 import me.ahoo.cosec.cocache.limiter.ReactiveRedisRateLimiter
+import me.ahoo.cosec.document.json.StoredRefusals
 import me.ahoo.cosec.engine.CompiledDocument
 import me.ahoo.cosec.ip2region.Ip2RegionAttributeProvider
 import me.ahoo.cosec.jwt.VerifiedTokenCache
@@ -215,7 +216,7 @@ class CoSecPipelineIntegrationAutoConfiguration {
         /**
          * The listeners' own counters: drops, failures and REQUIRED failures; the tokens accepted without a revocation
          * check; with the local rate limiter, the buckets it could not admit; the verified-token cache's; the age of the
-         * staged list CoSec's candidate source samples by (`OBS-8`). Bound at startup whatever lazy
+         * staged list CoSec's candidate source samples by (`OBS-8`); the stored records the process refused (`OBS-12`). Bound at startup whatever lazy
          * initialization says (`STA-3`): nothing asks for it.
          */
         @Bean
@@ -232,6 +233,7 @@ class CoSecPipelineIntegrationAutoConfiguration {
             (limiter.ifAvailable as? LocalRateLimiter)?.let { CoSecMeters.bind(registry, it) }
             tokenCache.ifAvailable?.let { TokenCacheMeters.bind(registry, it) }
             (candidates.ifAvailable as? CachingCandidateSource)?.let { CoSecMeters.bind(registry, it.staged) }
+            CoSecMeters.bind(registry, StoredRefusals)
         }
 
         /** The snapshot source's gauges, over the summary of its last lag pass: bound once every singleton exists. */
