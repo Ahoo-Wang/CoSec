@@ -11,9 +11,15 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.spring.boot
 
+import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.spring.boot.pipeline.GATEWAY_GLOBAL_FILTER
+import me.ahoo.cosec.spring.boot.pipeline.PipelineProperties
 import org.springframework.beans.factory.ListableBeanFactory
+import org.springframework.core.env.Environment
 import org.springframework.util.ClassUtils
 
 /**
@@ -33,6 +39,7 @@ internal object WebGateCheck {
         "me.ahoo.cosec.gateway.PipelineGatewayFilter",
     )
     private const val SERVLET_REGISTRATION = "org.springframework.boot.web.servlet.FilterRegistrationBean"
+    private const val ENFORCE = "enforce"
 
     /** The name of a bean that is a CoSec gate, or registers one, or null. */
     fun gate(beans: ListableBeanFactory, classLoader: ClassLoader?): String? {
@@ -47,13 +54,24 @@ internal object WebGateCheck {
         return if (servlet) ServletGates.registration(beans) else null
     }
 
-    fun require(beans: ListableBeanFactory, classLoader: ClassLoader?) {
-        checkNotNull(gate(beans, classLoader)) {
+    fun require(beans: ListableBeanFactory, classLoader: ClassLoader?, environment: Environment) {
+        if (gate(beans, classLoader) != null) {
+            return
+        }
+        val mode = environment.getProperty(PipelineProperties.MODE_KEY)
+        // A gateway host decides only in enforce mode: its gate is the gateway filter, which no other mode registers.
+        check(!ClassUtils.isPresent(GATEWAY_GLOBAL_FILTER, classLoader) || mode == null || mode.equals(ENFORCE, true)) {
+            "CoSec is on (cosec.enabled), but this Spring Cloud Gateway host is in ${PipelineProperties.MODE_KEY}=$mode: " +
+                "a gateway host decides only in enforce mode (the default), where its PipelineGatewayFilter decides " +
+                "every route, and no other mode registers a gate on it, so every request would pass undecided. " +
+                "Remove ${PipelineProperties.MODE_KEY}, or turn CoSec off with cosec.enabled=false (STA-1)."
+        }
+        error(
             "CoSec is on (cosec.enabled), but this web host registers none of its gates (PipelineServletFilter, " +
                 "PipelineWebFilter, PipelineGatewayFilter), as a bean or a filter registration: every request would " +
                 "reach the application undecided. Keep CoSecPipelineWebAutoConfiguration (do not exclude it), or " +
                 "register the adapter yourself, or turn CoSec off with cosec.enabled=false (STA-1)."
-        }
+        )
     }
 }
 

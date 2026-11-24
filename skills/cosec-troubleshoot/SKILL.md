@@ -127,6 +127,8 @@ Full model: https://cosec.ahoo.me/guide/security-model.
   is there but no CoSec filter is registered, so every request would pass undecided. Usually the application excluded
   `CoSecPipelineWebAutoConfiguration`, or declared a filter of another type under the adapter's bean name. Keep the
   auto-configuration, or register CoSec's filter itself; never suggest turning CoSec off unless the user wants no gate.
+  On a Spring Cloud Gateway host in `cosec.pipeline.mode=gateway` the message says that a gateway host decides only in
+  enforce mode: remove the mode (it is for services behind the gateway).
 - **`cosec.control.enabled=true, but cosec.pipeline.mode=gateway`** (STA-1): a service behind a gateway wires no
   control plane. Run the control plane on an `enforce` host, or remove the key.
 - **`cosec.audit.kafka.delivery=required, but no Kafka audit listener was created`** (STA-1): `cosec-kafka` is there,
