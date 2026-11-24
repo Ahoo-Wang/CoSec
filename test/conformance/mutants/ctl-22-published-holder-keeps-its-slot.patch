@@ -3,16 +3,16 @@
 # Tests: :control:test --tests me.ahoo.cosec.control.change.RetriedPublishTest
 
 diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Publishing.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Publishing.kt
-index 8a1b58b7d..9133686ce 100644
+index 52d09fb01..7818f07c5 100644
 --- a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Publishing.kt
 +++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Publishing.kt
-@@ -82,9 +82,6 @@ internal class Publishing(
+@@ -84,9 +84,6 @@ internal class Publishing(
      ): ChangeRequest {
          val change = flow.visible(publisher, id)
          authority.require(publisher, change.key, PublishRules.publishing(change))
 -        if (change.state == ChangeState.PUBLISHED && slots.holds(change)) {
 -            return recordedAgain(change, publisher, again)
 -        }
-         PublishRules.requireState(change, ChangeStep.PUBLISH.from)
-         PublishRules.acknowledged(change, ack)
-         candidates.authorize(publisher, change)
+         if (change.state == ChangeState.EXPIRED) {
+             // Recorded EXPIRED while its own revision was in effect, before DR1-E-7: publishing it settles it.
+             PublishRules.ownRevision(revisions, change, revisions.head(change.key))?.let { return republished(change, it, publisher) }
