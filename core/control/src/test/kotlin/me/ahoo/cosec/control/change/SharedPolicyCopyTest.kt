@@ -19,8 +19,17 @@ import kotlinx.coroutines.runBlocking
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.control.lifecycle.ChangeOptions
+import me.ahoo.cosec.control.lifecycle.StatementDigest
 import me.ahoo.cosec.control.store.StoreFixtures
+import me.ahoo.cosec.document.PolicyDefinition
+import me.ahoo.cosec.engine.OnMissing
+import me.ahoo.cosec.engine.StatementSource
+import me.ahoo.cosec.model.Effect
 import me.ahoo.cosec.model.PolicyId
+import me.ahoo.cosec.model.condition.Attribute
+import me.ahoo.cosec.model.condition.AttributeType
+import me.ahoo.cosec.model.condition.Condition
+import me.ahoo.cosec.model.condition.Literal
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
@@ -94,6 +103,55 @@ class SharedPolicyCopyTest {
         publish(platform, Operation.RemovePolicy(PolicyId("shared")))
 
         harness.revisions.head(ACME)!!.document.policies.map { it.id.value }.assert().containsExactly("shared")
+    }
+
+    /**
+     * DR1-E-9: a copy of a platform policy with a confirmed `nomatch` DENY carries its own author's confirmation, never
+     * the platform's, and is still a copy: the comparison leaves the confirmations out, as the engine does.
+     */
+    @Test
+    fun `a copy of a policy with a confirmed lapsing deny is a copy`() = runBlocking<Unit> {
+        val lapsing = PolicyDefinition(
+            PolicyId("shared"),
+            false,
+            null,
+            listOf(
+                StatementSource(
+                    "",
+                    Effect.DENY,
+                    listOf("*"),
+                    condition = Condition.Eq("ext.geo.inFence", Literal.Bool(true)),
+                    onMissing = OnMissing.NOMATCH,
+                )
+            ),
+        )
+        val confirmation = Confirmation(PolicyId("shared"), 0, StatementDigest.of(lapsing.statements.single()))
+        publish(platform, Operation.SetAttributes(listOf(Attribute.external("ext.geo.inFence", AttributeType.BOOL))))
+        val onPlatform = changes.propose(
+            operatorFor(platform),
+            platform,
+            harness.revisions.head(platform)!!.revision,
+            listOf(Operation.PutPolicy(lapsing)),
+            "test",
+            confirmations = listOf(confirmation),
+        )
+        onPlatform.errors.assert().describedAs("${onPlatform.findings}").isEmpty()
+        changes.skipShadow(operatorFor(platform), onPlatform.id, "test")
+        changes.publish(operatorFor(platform), onPlatform.id).state.assert().isEqualTo(ChangeState.PUBLISHED)
+        val published = harness.revisions.head(platform)!!.document.policies.single { it.id.value == "shared" }
+        published.statements.single().onMissingConfirmed.assert().isNotNull()
+
+        val copy = changes.propose(
+            operatorFor(ACME),
+            ACME,
+            harness.revisions.head(ACME)?.revision ?: 0,
+            listOf(Operation.PutPolicy(published)),
+            "test",
+            confirmations = listOf(confirmation),
+        )
+
+        copy.errors.assert().describedAs("${copy.findings}").isEmpty()
+        copy.state.assert().isEqualTo(ChangeState.CHECKED)
     }
 
     /** #1224 as the issue ran it: a plan holding an exact copy of a published platform policy goes through `apply`. */
