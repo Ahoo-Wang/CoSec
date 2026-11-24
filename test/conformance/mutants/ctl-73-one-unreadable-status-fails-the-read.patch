@@ -3,15 +3,15 @@
 # Tests: :cocache:test --tests me.ahoo.cosec.cocache.shadow.StatusReadingsTest
 
 diff --git a/backends/cocache/src/main/kotlin/me/ahoo/cosec/cocache/shadow/CoCacheShadowReports.kt b/backends/cocache/src/main/kotlin/me/ahoo/cosec/cocache/shadow/CoCacheShadowReports.kt
-index 10c741804..2885153f0 100644
+index 1b0a6e16d..1c142f190 100644
 --- a/backends/cocache/src/main/kotlin/me/ahoo/cosec/cocache/shadow/CoCacheShadowReports.kt
 +++ b/backends/cocache/src/main/kotlin/me/ahoo/cosec/cocache/shadow/CoCacheShadowReports.kt
-@@ -246,7 +246,7 @@ class CoCacheShadowReports @InternalCoSecApi constructor(
+@@ -316,7 +316,7 @@ class CoCacheShadowReports @InternalCoSecApi constructor(
          val status = try {
              read(statuses, instance, "The status of instance [$instance]")?.first
          } catch (e: SnapshotFormatException) {
 -            if (!lenient) throw e
 +            if (lenient || !lenient) throw e
-             warnUnreadable(instance, e)
-             return StatusRead.Unreadable
+             return StatusRead.Unreadable(e)
          } ?: return null
+         check(status.instance == instance) { "The status under [$instance] is ${status.instance}'s" }

@@ -1,3 +1,17 @@
 # Rule: CTL-73
 # Mutant: an undecodable status counts as live until its key expires, so a gone instance of a newer release holds every shadow window for an hour
 # Tests: :cocache:test --tests me.ahoo.cosec.cocache.shadow.StatusReadingsTest --tests me.ahoo.cosec.cocache.shadow.CoCacheShadowTest
+
+diff --git a/backends/cocache/src/main/kotlin/me/ahoo/cosec/cocache/shadow/CoCacheShadowReports.kt b/backends/cocache/src/main/kotlin/me/ahoo/cosec/cocache/shadow/CoCacheShadowReports.kt
+index 1b0a6e16d..de09c4bde 100644
+--- a/backends/cocache/src/main/kotlin/me/ahoo/cosec/cocache/shadow/CoCacheShadowReports.kt
++++ b/backends/cocache/src/main/kotlin/me/ahoo/cosec/cocache/shadow/CoCacheShadowReports.kt
+@@ -297,7 +297,7 @@ class CoCacheShadowReports @InternalCoSecApi constructor(
+     private suspend fun writtenWithin(instance: String, within: Duration): Boolean? {
+         val key = statusKey ?: return null
+         return when (val read = key(instance)) {
+-            is L1Read.Hit -> read.ttl?.let { left -> left >= ShadowCacheSpecs.STATUS_TTL.minus(within) }
++            is L1Read.Hit -> read.ttl?.let { left -> left > Duration.ZERO }
+             is L1Read.Miss, is L1Read.Leased -> false
+         }
+     }
