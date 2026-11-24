@@ -43,6 +43,21 @@ description: "每个 8.0 预览版（alpha 与 beta）到下一个之间的变�
     2. 把 `<old>:` 下的每个 key 复制到 `<new>:` 下的同名 key，保留 TTL（`DUMP` 加 `RESTORE ... ABSTTL`，单节点上也可以
        `RENAME`；集群上只能在同一个 hash slot 内）。
     3. 所有进程以 `cosec.key-prefix=<new>` 启动，然后删除旧 key。
+- **破坏性变更：主体 id 从不空白**（`IDN-38`，#1889）。受影响的是某个凭证指向的主体 id 为空或只含空白字符的部署。beta.7
+  在好几处接受它，请求按这个 id 作为已认证主体来判定。现在每一处都拒绝：
+  - **令牌**的 `sub` 只含空白字符时为 `401` `token-invalid`，请求与刷新都如此，`JwtTokenConverter` 也不签发：
+    `Authentication` 答出这种主体的登录会失败。
+  - **自定义认证器**构造这种 `PrincipalId` 时抛出异常，请求为 `503`：凭证指向的不是任何人时改为返回 `Rejected`
+    （[扩展](../architecture/extending.md)）。
+  - **API key** 记录的 `principalId` 为空白时不再能加载，出示它的请求为 `503`。用
+    `redis-cli --scan --pattern '<s>:api-key:*'` 找出它们，逐个 `GET`，留下
+    `jq 'select(.principalId | test("^\\s*$"))'` 有输出的那些；删除，或为某个主体重新签发。
+  - **文档**里绑定空白主体时不再能编译，宿主像对待任何读不了的文档一样对它失败关闭。升级之前先查：对每份已发布的文档运行
+    `jq '[.bindings[]? | select(.subject.principal? | strings | test("^\\s*$"))]'` 列出它们，用一个变更删掉。
+  - **转发的身份**里 `sub`、`tenant` 或 `rid` 为空白时格式错误（`400`），网关也不写出这种身份。
+  - **会话记录**（`<s>:token:family:*`）的主体为空白时是格式错误：它的刷新与任何读不了的记录一样以 `503` 失败（`IDN-19`），用户重新登录。
+  - `cosec-migrate api-keys` 把主体为空白的 7.x key 列在拒绝里。id 仍然不会被 trim：`" alice "` 是它自己的 id，
+    什么都不变。
 - **破坏性变更：吊销表的 `local-max-age` 最多 30 秒**（`IDN-26`，DR1-D-3）。受影响的是把
   `cosec.authentication.revocation.cache.local-max-age` 设得超过 `30s` 的部署，以及设置了 `RevokedTokenCache` 或
   `RevokedSubjectCache` 本地最长寿命的 `cocache.*` 配置项或定制器。

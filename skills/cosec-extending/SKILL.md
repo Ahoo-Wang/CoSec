@@ -200,7 +200,9 @@ fun interface Authenticator {
 
 `Credentials` holds the bearer token (`Authorization` header, or the query or the cookie when allowed) and the API key header.
 Return `AuthnResult.Authenticated(AuthenticatedPrincipal(id, tenant, memberships, attributes, credential), Identity.Method("name"))`,
-`Anonymous` (no credentials), `Rejected(reason)` (401 `token-*` on deny), or `Unavailable(cause)` (503). Memberships
+`Anonymous` (no credentials), `Rejected(reason)` (401 `token-*` on deny), or `Unavailable(cause)` (503). The id is
+never blank (IDN-38): `PrincipalId(" ")` throws, which makes the request 503, so answer `Rejected` for a credential that
+names no one. Ids are not trimmed. Memberships
 you pass have source `Memberships.Source.CLAIMS` (`MembershipClaims.parse(roles, policies)` builds them from
 `role`/`role@space` strings); pass `null` to ask the `MembershipProvider`. A bean of yours replaces the built-in `CompositeAuthenticator`
 (JWT with revocation, plus API keys when enabled): compose it yourself, for example

@@ -422,12 +422,17 @@ class ApiKeyMigrationTest {
             key("known", "eve", roles = listOf("reader")),
             // #1403: a 7.x tenant whose id no 8.0 tenant can have.
             key("k-slash", "eve", tenant = "acme/west", roles = listOf("reader")),
+            // IDN-38: a key of no one is named, never failed on.
+            key("k-nobody", " ", roles = listOf("reader")),
+            key("k-empty", "", roles = listOf("reader")),
         )
         val plan = plan(mixed + refused)
         plan.accepted.assert().isFalse()
         plan.rejections.assert().hasSize(refused.size)
         plan.rejections.single { it.startsWith("API key [k-slash]") }.assert()
             .contains("its tenant [acme/west] is no 8.0 tenant id").contains("rename it at its source")
+        plan.rejections.single { it.startsWith("API key [k-nobody]") }.assert()
+            .contains("its principal [ ] is blank, which no 8.0 principal id is")
         plan.keys.map { it.key.id }.assert().doesNotContainAnyElementsOf(refused.map { it.id })
         // A per-key role must not take a role a document already binds.
         val taken = object : PublishedDocuments by published {

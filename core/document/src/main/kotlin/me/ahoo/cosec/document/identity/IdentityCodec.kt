@@ -53,9 +53,10 @@ import java.util.Base64
  * tenant switch issues from it (`IDN-22`); without it, everything else reads as before.
  *
  * Times are epoch seconds, from 0 to the end of year 9999. `claims` may be absent; `auth.exp` may not: a gateway
- * forwards no identity whose credential never expires, and a service refuses one without it. Decoding is strict: an unknown member, a member of
- * the wrong type, a duplicate, an empty id, an id (or any member other than a claim) with an unpaired UTF-16 surrogate
- * (RC1-52) or a header over the size limit is refused, never read as anonymous. The `cosec-identity` format descriptor
+ * forwards no identity whose credential never expires, and a service refuses one without it. Decoding is strict: an
+ * unknown member, a member of the wrong type, a duplicate, an empty id, a blank tenant, subject or request id
+ * (`IDN-38`), an id (or any member other than a claim) with an unpaired UTF-16 surrogate (RC1-52) or a header over the
+ * size limit is refused, never read as anonymous. The `cosec-identity` format descriptor
  * (`schema/8.0/cosec-identity.schema.json`) describes the JSON.
  */
 @InternalCoSecApi
@@ -147,14 +148,14 @@ object IdentityCodec {
         }
         val scope = root.need("scope").also { it.only("$.scope", *SCOPE_FIELDS) }
         return Identity(
-            tenant = root.need("tenant").id("$.tenant"),
-            subject = root.need("sub").id("$.sub"),
+            tenant = root.need("tenant").name("$.tenant"),
+            subject = root.need("sub").name("$.sub"),
             app = scope.need("app").text("$.scope.app"),
             space = scope.need("space").text("$.scope.space"),
             roles = roles(root.need("roles")),
             credential = credential(root.need("auth")),
             issuedAt = root.need("iat").seconds("$.iat"),
-            requestId = root.need("rid").id("$.rid"),
+            requestId = root.need("rid").name("$.rid"),
             claims = root.get("claims")?.let(::claims).orEmpty(),
         )
     }
@@ -305,6 +306,12 @@ object IdentityCodec {
     }
 
     private fun JsonNode.id(path: String): String = text(path).ifEmpty { throw malformed("$path is empty") }
+
+    /**
+     * Who and where: the tenant, the subject and the request. Not blank, empty or white space only (`IDN-38`): a
+     * blank subject is no one, and a service would take it as an authenticated principal. Not trimmed: ids are opaque.
+     */
+    private fun JsonNode.name(path: String): String = id(path).ifBlank { throw malformed("$path is blank") }
 
     private fun JsonNode.seconds(path: String): Instant {
         if (!isIntegralNumber || !canConvertToLong() || longValue() !in 0..MAX_SECONDS) {

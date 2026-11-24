@@ -77,6 +77,9 @@ description: "从症状出发，找出请求为什么被拒绝、被放行、被
   `"beta\uD800"` 这样的转义（`IDN-10`）。Redis key 在它的位置写 `?`，这个令牌会读到 `beta?` 的文档、成员关系与吊销，所以在读取其中任何一项之前就被拒绝。
   CoSec 自己的签发方拒绝签出这样的令牌：登录失败，报 `Principal [alice\uD800] holds an unpaired UTF-16 surrogate ...`。
   修正签发方或它读取的用户存储：id 是 Unicode 文本。
+- **空白主体：** 令牌的 `sub` 只含空白字符（`IDN-38`）：主体 id 从不空白。CoSec 自己的签发方拒绝签出这样的令牌：登录失败，报
+  `A token has a subject that is not blank (IDN-38).`。修正签发方，或答出这个主体的 `Authentication`。id 不会被 trim：
+  `" alice "` 是合法的，也不是 `alice`。
 - **含 `/` 的租户或应用 id：** 令牌的 `tenantId` 或 `aud` 含 `/`，例如 `acme/west`，7.x 或预览版的签发方可能签出过这样的令牌（`SCP-13`）。
   租户 id 和应用 id 都是一个路径段，所以这个令牌既不指租户 `acme/west`，也不指 `acme`。请在保存该 id 的地方给租户或应用改名，然后让主体重新登录
   （[升级](./upgrading.md#tenant-and-app-ids-hold-no-slash)）。
@@ -174,7 +177,7 @@ description: "从症状出发，找出请求为什么被拒绝、被放行、被
 | `INDETERMINATE: RequiredListenerFailed` / `required_listener` | `REQUIRED` 决策监听器在一次放行上失败或超时（`REQUIRED decision listener [<name>] failed on request [<id>].`），或者放行来自 break-glass 绑定而没有 `REQUIRED` 监听器（`Request [<id>] permitted through break-glass, but no REQUIRED listener is registered.`）。 | 修复监听器的存储，或在使用 break-glass 之前注册 `REQUIRED` 监听器（[决策监听器](./observability.md#decision-listeners)）。 |
 | `AUTHENTICATOR_UNAVAILABLE` / `authenticator` | 认证器失败，或耗时超过认证超时（`cosec.pipeline.timeout` 的 20 %）：例如 Redis API key 存储无法访问。 | 恢复存储。 |
 | `AUTHENTICATOR_UNAVAILABLE` / `authenticator`，某个认证器的每个请求 | 你自己的 `Authenticator` 把凭证的方式命名为 `jwt`，而它保留给 CoSec 的令牌（`The authentication method [jwt] is CoSec's own token's ...`）。 | 按你的凭证命名方式，例如 `Identity.Method("ldap")`（[扩展](../architecture/extending.md#authenticators)）。 |
-| `AUTHENTICATOR_UNAVAILABLE` / `authenticator`，只有部分主体或 key | 认证器给出的主体，其 id、租户、凭证 id 或声明的角色中有落单的 UTF-16 代理项（`Principal [<id>] of tenant [<tenant>] holds an id with an unpaired UTF-16 surrogate ...`），或者 API key 存储的记录指名了这样的 id（`API key [<id>] holds an id with an unpaired UTF-16 surrogate.`，`IDN-10`）。这样的 id 会与另一个 id 共用一个 Redis key，所以请求改为失败即拒绝。 | 修正认证器或 key 的记录：id 是 Unicode 文本。 |
+| `AUTHENTICATOR_UNAVAILABLE` / `authenticator`，只有部分主体或 key | 认证器给出的主体，其 id、租户、凭证 id 或声明的角色中有落单的 UTF-16 代理项（`Principal [<id>] of tenant [<tenant>] holds an id with an unpaired UTF-16 surrogate ...`），或者 API key 存储的记录指名了这样的 id（`API key [<id>] holds an id with an unpaired UTF-16 surrogate.`，`IDN-10`）。这样的 id 会与另一个 id 共用一个 Redis key，所以请求改为失败即拒绝。或者主体的 id 为空白（`A principal id is not blank.`，或 `API key [<id>] has a blank principal.`，`IDN-38`）：空白的 id 不是任何人。 | 修正认证器或 key 的记录：id 是 Unicode 文本，并指向某个人。凭证指向的不是任何人时，认证器返回 `Rejected`。 |
 | `AUTHENTICATOR_UNAVAILABLE` / `authenticator`，带某个 key 的每个请求都如此 | 该 key 以其他格式存储，读取时被拒绝（`API key format [null] is not 3.`；`null` 表示记录没有 `format`，例如 7.x 写入的 key；`2` 表示由 8.0 预览版写入）。 | 7.x 的 key：转换 key（[API key 只收窄，成员关系决定](./upgrading.md#api-keys-narrow-and-memberships-decide)）。预览版的 key：签发一个新 key 并删除旧 key；`cosec-migrate api-keys` 不会把它算作已转换。 |
 | `DEADLINE_EXCEEDED` / `deadline` | 整个求值耗时超过 [`cosec.pipeline.timeout`](./configuration.md#pipeline)。 | 在追踪中找到慢的阶段。 |
 
@@ -273,7 +276,7 @@ CoSec 自己的拒绝很容易区分：它们总是 `application/problem+json`�
 
 | 状态 | 原因 | 修复 |
 |---|---|---|
-| `400` `invalid-request` | 该头不是格式 v1 的 base64url JSON、有未知或缺失的成员、指名了带落单 UTF-16 代理项的 id（`IDN-10`）或不能作为租户 id 的租户（例如含 `/`，`SCP-13`）、大于 [`cosec.pipeline.identity.max-size`](./configuration.md#pipeline)、出现了不止一次，或者指明的作用域在本服务上无法解析。 | 有 CoSec 网关以外的东西设置了该头，或者网关的 `cosec.gateway.identity.max-size` 大于服务的上限。 |
+| `400` `invalid-request` | 该头不是格式 v1 的 base64url JSON、有未知或缺失的成员、指名了带落单 UTF-16 代理项的 id（`IDN-10`）、空白的 `sub`、`tenant` 或 `rid`（`IDN-38`）或不能作为租户 id 的租户（例如含 `/`，`SCP-13`）、大于 [`cosec.pipeline.identity.max-size`](./configuration.md#pipeline)、出现了不止一次，或者指明的作用域在本服务上无法解析。 | 有 CoSec 网关以外的东西设置了该头，或者网关的 `cosec.gateway.identity.max-size` 大于服务的上限。 |
 | `401` `token-invalid` | 本服务不读取的版本、没有 `auth.exp`，或签发时间晚于当前时间加 [`cosec.authentication.revocation.skew`](./configuration.md#authentication)。 | 让服务与网关一起升级；同步时钟。 |
 | `401` `token-expired` | 凭证已过期，或身份的签发时间早于 [`cosec.pipeline.identity.max-age`](./configuration.md#pipeline) 加偏差。 | 同步时钟；在网关与服务之间等待很久的请求需要更大的 `max-age`。在没有网关的测试中，头只生成一次并被重复使用：每个请求生成一个（[`IdentityHeader`](../integration/web.md#services-behind-the-gateway)）。 |
 

@@ -98,4 +98,14 @@ class TokenFamilyFormatTest {
         }
         assertThrownBy<SnapshotFormatException> { read("not json") }
     }
+
+    /** `IDN-38`: a session of a blank principal is no one's, a format error like any record that cannot be read (IDN-19). */
+    @Test
+    fun `a session of a blank principal is refused as a format error`() {
+        for (blank in listOf("", " ", "\\t")) {
+            assertThrownBy<SnapshotFormatException> {
+                read(written.replace(""""principal":"alice"""", """"principal":"$blank""""))
+            }.message().contains("its principal is blank")
+        }
+    }
 }
