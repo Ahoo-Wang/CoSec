@@ -56,7 +56,7 @@ class SameContentTest {
     @Test
     fun `two policies whose parts join into the same text are not the same`() {
         val shared = policy(http("/admin/x"), http("/internal/y"))
-        val own = policy(http("/admin/x(true,true),http:path:/internal/y"))
+        val own = policy(http("/admin/x\\(true,true\\),http:path:/internal/y"))
         own.sameContent(shared).assert().isFalse()
         policy(ResourceSource("order/a"), ResourceSource("order/b"))
             .sameContent(policy(ResourceSource("order/a,order/b"))).assert().isFalse()
@@ -69,7 +69,7 @@ class SameContentTest {
             listOf(policy(http("/admin/x"), http("/internal/y")), allow),
             listOf(anyone("b", "allow"))
         )
-        val view = SnapshotView(platform, null, tenant(policy(http("/admin/x(true,true),http:path:/internal/y"))))
+        val view = SnapshotView(platform, null, tenant(policy(http("/admin/x\\(true,true\\),http:path:/internal/y"))))
         val request = flatRequest(path = "/admin/x", attachments = listOf("no-admin"))
         val decision = TraceLevel.entries.map {
             CoSecEngine.evaluate(

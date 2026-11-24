@@ -22,6 +22,7 @@ import me.ahoo.cosec.engine.pattern.Captures
 import me.ahoo.cosec.engine.pattern.HttpPath
 import me.ahoo.cosec.engine.pattern.HttpPathPattern
 import me.ahoo.cosec.engine.pattern.InvalidPatternException
+import me.ahoo.cosec.engine.pattern.PatternEscapes
 import me.ahoo.cosec.engine.pattern.PatternContainment
 import me.ahoo.cosec.engine.pattern.ResourcePattern
 import me.ahoo.cosec.model.Action
@@ -97,7 +98,9 @@ class RouteMap private constructor(private val routes: Map<String, List<Compiled
 
     /** The route's resource as a pattern: its literal segments, and `*` for each captured variable. */
     private fun template(compiled: Compiled): String =
-        (listOf(compiled.type) + compiled.segments.map { if (it is Segment.Literal) it.text else "*" }).joinToString(
+        // The type and the literals hold their text; a pattern writes them escaped (`DOC-15`).
+        (listOf(compiled.type) + compiled.segments.map { if (it is Segment.Literal) it.text else "*" })
+            .map { if (it == "*") it else PatternEscapes.escape(it) }.joinToString(
             "/"
         )
 
@@ -281,12 +284,12 @@ class RouteMap private constructor(private val routes: Map<String, List<Compiled
         private fun resourceType(route: Route, fail: (String, Throwable?) -> Nothing): String {
             val type = route.resource.substringBefore(ID_SEPARATOR)
             try {
-                // The type alone, as a typed pattern: not `http`, nor a name a pattern could not match.
-                ResourcePattern.parse(type)
+                // The type alone, as a typed pattern: not `http`, nor a name a pattern could not match; its text, escapes
+                // resolved (`DOC-15`).
+                return (ResourcePattern.parse(type) as ResourcePattern.Typed).type
             } catch (error: InvalidPatternException) {
                 fail("resource [${route.resource}]: ${error.message}", error)
             }
-            return type
         }
 
         private fun segments(route: Route, pattern: HttpPathPattern, fail: (String, Throwable?) -> Nothing): List<Segment> {
@@ -312,13 +315,18 @@ class RouteMap private constructor(private val routes: Map<String, List<Compiled
                         }
                     }.let { Segment.Variable(it) }
 
-                    text.isEmpty() || text.any { it in "{}*" } ->
-                        fail(
-                            "resource [${route.resource}]: [$text] is neither a literal segment nor a {variable}",
-                            null
-                        )
+                    text.isEmpty() -> fail(
+                        "resource [${route.resource}]: [$text] is neither a literal segment nor a {variable}",
+                        null
+                    )
 
-                    else -> Segment.Literal(text)
+                    // A literal is written as a typed pattern's is (`DOC-15`): its text, escapes resolved.
+                    else -> try {
+                        Segment.Literal(PatternEscapes.unescape(text))
+                    } catch (error: InvalidPatternException) {
+                        fail("resource [${route.resource}]: [$text] is neither a literal segment nor a {variable}: " +
+                            "${error.message}", error)
+                    }
                 }
             }
         }

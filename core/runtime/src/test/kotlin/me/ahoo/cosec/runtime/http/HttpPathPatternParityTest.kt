@@ -19,6 +19,7 @@ import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.engine.pattern.HttpPath
 import me.ahoo.cosec.engine.pattern.HttpPathPattern
 import me.ahoo.cosec.engine.pattern.InvalidPatternException
+import me.ahoo.cosec.engine.pattern.PatternEscapes
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
@@ -55,6 +56,18 @@ class HttpPathPatternParityTest {
 
         /** Half a surrogate pair in a literal (review L4 of #1200): no character, and no decoded path holds one. */
         LONE_SURROGATE("/a\uD83D*"),
+
+        /**
+         * A character reserved for a future syntax (`DOC-15`), which Spring reads as text: the engine writes it escaped
+         * (`\[`), and the oracle test of `cosec-engine` compares the escaped spelling with Spring's.
+         */
+        RESERVED_CHARACTER("/a[b]"),
+
+        /**
+         * A segment no request path's segment is (`DOC-15`): a `;`, a control character, a dot segment, or longer than
+         * any; the pipeline answers such a path 400 before a pattern reads it (PIP-5, PIP-30).
+         */
+        UNMATCHABLE_SEGMENT("/a;b"),
     }
 
     private sealed interface Outcome {
@@ -148,6 +161,16 @@ class HttpPathPatternParityTest {
             .flatMap { segment -> NAMED_CAPTURE.findAll(segment).map { it.value.trim('{', '}') } }
         if (restNames.any { it in otherNames }) {
             return IntendedDifference.DUPLICATE_REST_VARIABLE
+        }
+        if (pattern.replace(NAMED_CAPTURE, "").any { it in PatternEscapes.RESERVED }) {
+            return IntendedDifference.RESERVED_CHARACTER
+        }
+        if (segments.any { segment ->
+                ';' in segment || segment == "." || segment == ".." || segment.length > HttpPath.MAX_SEGMENT_LENGTH ||
+                    segment.any { it < ' ' || it == '\u007F' }
+            }
+        ) {
+            return IntendedDifference.UNMATCHABLE_SEGMENT
         }
         val emptyMatching = segments.any { segment ->
             val captures = NAMED_CAPTURE.findAll(segment).count()

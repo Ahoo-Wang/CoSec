@@ -51,7 +51,9 @@ class HttpPathPatternOracleTest {
         var matched = 0
         repeat(CASES) {
             val tokens = tokens(random)
-            val segment = render(tokens) ?: return@repeat
+            val segment = render(tokens, escape = true) ?: return@repeat
+            // DOC-15: the engine writes a reserved character escaped; Spring reads it as text as written.
+            val springSegment = render(tokens, escape = false) ?: return@repeat
             val lead = when (random.nextInt(6)) {
                 0 -> "/**"
                 1 -> "/{*rest}"
@@ -59,6 +61,7 @@ class HttpPathPatternOracleTest {
             }
             val tail = if (random.nextInt(4) == 0) "/a" else ""
             val text = "$lead/$segment$tail"
+            val springText = "$lead/$springSegment$tail"
             val caseSensitive = random.nextBoolean()
             val pattern = try {
                 HttpPathPattern.compile(text, caseSensitive)
@@ -71,7 +74,7 @@ class HttpPathPatternOracleTest {
             val filled = value(random, tokens.takeIf { random.nextInt(3) > 0 })
             val end = tail.takeIf { random.nextInt(5) > 0 }.orEmpty()
             val path = "$head/$filled$end"
-            val expected = spring(text, path, caseSensitive)
+            val expected = spring(springText, path, caseSensitive)
             val parsed = HttpPath.parse(path)
             val captured = pattern.match(parsed, scratch)?.toMap()
             val decided = pattern.matches(parsed, scratch)
@@ -118,7 +121,7 @@ class HttpPathPatternOracleTest {
      * The segment's text, or null for one the engine refuses or collapses: only runs, two literals in a row, or a
      * literal alone. A segment of `?` and literals without a run (`a??b`) is kept: it is matched by a walk of its own.
      */
-    private fun render(tokens: List<Token>): String? {
+    private fun render(tokens: List<Token>, escape: Boolean): String? {
         if (tokens.all { it is Token.Run } || tokens.all { it is Token.Literal }) {
             return null
         }
@@ -126,7 +129,11 @@ class HttpPathPatternOracleTest {
         var previous: Token? = null
         for (token in tokens) {
             when (token) {
-                is Token.Literal -> if (previous is Token.Literal) return null else text.append(token.text)
+                is Token.Literal -> if (previous is Token.Literal) {
+                    return null
+                } else {
+                    text.append(if (escape) PatternEscapes.escape(token.text) else token.text)
+                }
                 Token.AnyChar -> text.append('?')
                 is Token.Run -> {
                     if (token.variable == null && previous is Token.Run && previous.variable == null) return null
@@ -164,7 +171,7 @@ class HttpPathPatternOracleTest {
         const val PAIR = "😀"
 
         /** Literal text: ASCII of both cases, a pair, a letter whose case folds outside ASCII, and mixes of them. */
-        val LITERALS = listOf("a", "B", "ab", PAIR, "a$PAIR", "${PAIR}b", "K", "k", "é", "É")
+        val LITERALS = listOf("a", "B", "ab", PAIR, "a$PAIR", "${PAIR}b", "K", "k", "é", "É", "a(", "\$m", "[b]", "!|^")
 
         /** Value text: everything [LITERALS] holds, and lone halves of a pair, which no pattern literal may hold. */
         val PIECES = listOf("a", "A", "b", "B", PAIR, "\uD83D", "\uDE00", "K", "k", "K", "é", "É", "x")
