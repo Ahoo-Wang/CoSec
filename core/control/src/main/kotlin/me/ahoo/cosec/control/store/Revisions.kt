@@ -71,7 +71,7 @@ class Revisions(
     private val writes = RevisionWrites(store, maxAttempts)
     private val referrerIndex = ReferrerIndex(store, writes, ::head)
     private val listing = AppListing(store, writes, maxAttempts)
-    private val repair = HistoryRepair(store, writes, ::decode)
+    internal val repair = HistoryRepair(store, writes, ::decode)
     private val retained = Retention(store, writes, clock, retention, ::head, ::decode, ::historyAndHead)
 
     /** Records this instance reclaimed younger than `min-age`, past what a document retains (`CTL-84`). */
