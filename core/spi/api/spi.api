@@ -197,13 +197,14 @@ public final class me/ahoo/cosec/spi/id/RandomIdGenerator : me/ahoo/cosec/spi/id
 }
 
 public final class me/ahoo/cosec/spi/identity/Identity {
-	public fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/util/Set;Lme/ahoo/cosec/spi/identity/Identity$Credential;Ljava/time/Instant;Ljava/lang/String;Ljava/util/Map;)V
-	public synthetic fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/util/Set;Lme/ahoo/cosec/spi/identity/Identity$Credential;Ljava/time/Instant;Ljava/lang/String;Ljava/util/Map;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/util/Set;Lme/ahoo/cosec/spi/identity/Identity$Credential;Ljava/time/Instant;Ljava/lang/String;Ljava/util/Map;Lme/ahoo/cosec/spi/identity/Identity$Memberships;)V
+	public synthetic fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/util/Set;Lme/ahoo/cosec/spi/identity/Identity$Credential;Ljava/time/Instant;Ljava/lang/String;Ljava/util/Map;Lme/ahoo/cosec/spi/identity/Identity$Memberships;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
 	public fun equals (Ljava/lang/Object;)Z
 	public final fun getApp ()Ljava/lang/String;
 	public final fun getClaims ()Ljava/util/Map;
 	public final fun getCredential ()Lme/ahoo/cosec/spi/identity/Identity$Credential;
 	public final fun getIssuedAt ()Ljava/time/Instant;
+	public final fun getMemberships ()Lme/ahoo/cosec/spi/identity/Identity$Memberships;
 	public final fun getRequestId ()Ljava/lang/String;
 	public final fun getRoles ()Ljava/util/Set;
 	public final fun getSpace ()Ljava/lang/String;
@@ -225,6 +226,20 @@ public final class me/ahoo/cosec/spi/identity/Identity$Credential {
 	public final fun getSession ()Lme/ahoo/cosec/spi/token/TokenSession;
 	public fun hashCode ()I
 	public fun toString ()Ljava/lang/String;
+}
+
+public final class me/ahoo/cosec/spi/identity/Identity$Memberships {
+	public static final field Companion Lme/ahoo/cosec/spi/identity/Identity$Memberships$Companion;
+	public fun <init> (Ljava/util/Map;Ljava/util/List;)V
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getAttachments ()Ljava/util/List;
+	public final fun getSpaces ()Ljava/util/Map;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class me/ahoo/cosec/spi/identity/Identity$Memberships$Companion {
+	public final fun getNONE ()Lme/ahoo/cosec/spi/identity/Identity$Memberships;
 }
 
 public final class me/ahoo/cosec/spi/identity/Identity$Method {

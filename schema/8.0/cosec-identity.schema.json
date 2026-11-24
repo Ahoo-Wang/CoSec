@@ -2,7 +2,7 @@
   "$id": "https://cosec.ahoo.me/schema/8.0/cosec-identity.schema.json",
   "$schema": "http://json-schema.org/draft-07/schema#",
   "additionalProperties": false,
-  "description": "The JSON of the `CoSec-Identity` header (base64url, no padding) a gateway sets on a permitted request: who the caller is and the scope the gateway decided in. Never a credential, policy or attribute value. Passing this schema is necessary, not sufficient: the compiler also checks what JSON Schema cannot express, such as unique ids, time zones and expression syntax, so compile or load the document too.",
+  "description": "The JSON of the `CoSec-Identity` header (base64url, no padding) a gateway sets on a permitted request: who the caller is, the scope the gateway decided in and what the caller is a member of. Never a credential, a policy's content or an attribute value. Passing this schema is necessary, not sufficient: the compiler also checks what JSON Schema cannot express, such as unique ids, time zones and expression syntax, so compile or load the document too.",
   "properties": {
     "auth": {
       "additionalProperties": false,
@@ -112,6 +112,53 @@
       "description": "When the gateway made the header.",
       "minimum": 0,
       "type": "integer"
+    },
+    "memberships": {
+      "additionalProperties": false,
+      "description": "What the principal is a member of besides `roles` (IDN-39), empty when nothing: CoSec's writers always write it, and a host that decides on the identity refuses one without it.",
+      "properties": {
+        "attachments": {
+          "description": "The ids of the policies the principal attaches, in the order its memberships name them.",
+          "items": {
+            "examples": [
+              "suspended-from-publishing"
+            ],
+            "minLength": 1,
+            "type": "string"
+          },
+          "type": "array",
+          "uniqueItems": true
+        },
+        "spaces": {
+          "additionalProperties": {
+            "items": {
+              "examples": [
+                "auditor",
+                "suspended"
+              ],
+              "minLength": 1,
+              "type": "string"
+            },
+            "minItems": 1,
+            "type": "array",
+            "uniqueItems": true
+          },
+          "description": "The roles in each other space, by space id (empty for the default space). Never the scope's own space, whose roles are `roles`; never `*`.",
+          "propertyNames": {
+            "examples": [
+              "emea",
+              "apac"
+            ],
+            "type": "string"
+          },
+          "type": "object"
+        }
+      },
+      "required": [
+        "spaces",
+        "attachments"
+      ],
+      "type": "object"
     },
     "rid": {
       "description": "The gateway's CoSec-Request-Id, never blank.",
