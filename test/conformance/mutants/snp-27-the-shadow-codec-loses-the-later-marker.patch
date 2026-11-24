@@ -1,0 +1,17 @@
+# Rule: SNP-27
+# Mutant: the shadow codec rewraps a refusal without its marker, so a shadow record a later version wrote reads as one that is malformed
+# Tests: :cocache:test --tests me.ahoo.cosec.cocache.stored.StoredRecordMembersTest
+
+diff --git a/core/document/src/main/kotlin/me/ahoo/cosec/document/shadow/ShadowCodec.kt b/core/document/src/main/kotlin/me/ahoo/cosec/document/shadow/ShadowCodec.kt
+index 457e4b4a6..22da0d7b1 100644
+--- a/core/document/src/main/kotlin/me/ahoo/cosec/document/shadow/ShadowCodec.kt
++++ b/core/document/src/main/kotlin/me/ahoo/cosec/document/shadow/ShadowCodec.kt
+@@ -217,7 +217,7 @@ object ShadowCodec {
+     } catch (error: SnapshotFormatException) {
+         // The document format's codecs, which read a candidate's document, quote what they read as they found it. A
+         // record a later version wrote keeps its marker, which quotes nothing (SNP-27).
+-        throw SnapshotFormatException(SnapshotKeyText.message(error.message.orEmpty()), StoredFormat.later(error))
++        throw SnapshotFormatException(SnapshotKeyText.message(error.message.orEmpty()))
+     } catch (error: JacksonException) {
+         throw SnapshotFormatException("A shadow value is malformed${error.at}.")
+     } catch (error: IllegalArgumentException) {

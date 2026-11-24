@@ -100,16 +100,7 @@ class ControlHttp(
             log.info { "Control API ${request.method} ${request.path} (request $requestId) is 503: ${e.message}" }
             busy(requestId)
         } catch (e: ChangeRejectedException) {
-            val problem = Problem.of(e.status)
-            if (!problem.detailed) {
-                // The answer says nothing, so a refusal never tells what exists; the operator's administrator reads why.
-                log.info {
-                    "Control API ${request.method} ${request.path} by ${operator.tenant.value}/" +
-                        "${operator.actor.principal.value} is ${problem.status} " +
-                        "(request $requestId): ${e.message}"
-                }
-            }
-            problem(problem, requestId, e.message, e.conflict, e.heldBy?.value)
+            rejected(request, requestId, operator, e)
         } catch (e: ControlStoreException) {
             // The store did not answer (R2C-6, CTL-52): an outage, retried by the client, not a bug.
             log.warn {
@@ -124,29 +115,70 @@ class ControlHttp(
         } catch (e: JacksonException) {
             stored(request, requestId, e)
         } catch (e: IllegalArgumentException) {
-            // Refused for a reason none of the control plane's own checks gives (RC1-39): not shown, logged.
-            log.info {
-                "Control API ${request.method} ${request.path} (request $requestId) is 400: " +
-                    SnapshotKeyText.printable(e.message.orEmpty())
-            }
-            problem(Problem.INVALID_REQUEST, requestId, null)
+            refused(request, requestId, e)
         } catch (e: Exception) {
-            log.error(e) { "Control API ${request.method} ${request.path} failed (request $requestId)." }
-            problem(Problem.INTERNAL_ERROR, requestId, null)
+            failed(request, requestId, e)
         }
+    }
+
+    /** A route's refusal: its status, and its detail where the problem shows one. */
+    private fun rejected(
+        request: ControlHttpRequest,
+        requestId: String,
+        operator: Operator,
+        e: ChangeRejectedException,
+    ): ControlHttpResponse {
+        val problem = Problem.of(e.status)
+        // A 503 for a record a later version wrote (SNP-27) is told as that, apart from a store that is broken.
+        val told = problem == Problem.UNAVAILABLE && later(request, requestId, e)
+        if (!problem.detailed && !told) {
+            // The answer says nothing, so a refusal never tells what exists; the operator's administrator reads why.
+            log.info {
+                "Control API ${request.method} ${request.path} by ${operator.tenant.value}/" +
+                    "${operator.actor.principal.value} is ${problem.status} " +
+                    "(request $requestId): ${e.message}"
+            }
+        }
+        return problem(problem, requestId, e.message, e.conflict, e.heldBy?.value)
+    }
+
+    /** Refused for a reason none of the control plane's own checks gives (RC1-39): not shown, logged. */
+    private fun refused(
+        request: ControlHttpRequest,
+        requestId: String,
+        e: IllegalArgumentException
+    ): ControlHttpResponse {
+        if (later(request, requestId, e)) return problem(Problem.UNAVAILABLE, requestId, null)
+        log.info {
+            "Control API ${request.method} ${request.path} (request $requestId) is 400: " +
+                SnapshotKeyText.printable(e.message.orEmpty())
+        }
+        return problem(Problem.INVALID_REQUEST, requestId, null)
+    }
+
+    /** A failure nothing above names: a fault of this instance, logged with its cause. */
+    private fun failed(request: ControlHttpRequest, requestId: String, e: Exception): ControlHttpResponse {
+        if (later(request, requestId, e)) return problem(Problem.UNAVAILABLE, requestId, null)
+        log.error(e) { "Control API ${request.method} ${request.path} failed (request $requestId)." }
+        return problem(Problem.INTERNAL_ERROR, requestId, null)
     }
 
     /**
      * What the control plane read and could not decode (RC1-39): a stored document or record, perhaps one a newer
      * version wrote during a rolling upgrade. The caller can do nothing about it: a 500 without detail, the error logged
-     * with what it names (a document's key).
+     * with what it names (a document's key). A record whose format or `crit` says a later version wrote it is a `503`
+     * (`SNP-27`): the gap of a rolling upgrade, which ends when this instance is upgraded, not a fault of the store.
      */
     private fun stored(request: ControlHttpRequest, requestId: String, e: Exception): ControlHttpResponse {
+        if (later(request, requestId, e)) return problem(Problem.UNAVAILABLE, requestId, null)
         log.error(
             e
         ) { "Control API ${request.method} ${request.path} (request $requestId): a stored value does not decode." }
         return problem(Problem.INTERNAL_ERROR, requestId, null)
     }
+
+    private fun later(request: ControlHttpRequest, requestId: String, e: Exception): Boolean =
+        LaterRecords.told("Control API ${request.method} ${request.path} (request $requestId)", e)
 
     /** The `503` of a call the work budget refused (`CTL-85`): a retry in a second may fit. */
     private fun busy(requestId: String): ControlHttpResponse = problem(Problem.UNAVAILABLE, requestId, null).let {

@@ -48,8 +48,10 @@ Which preview of the library may run behind which preview of the gateway image: 
   names a member this version does not know, which a later version may write, is refused: the refresh, logout or switch
   that read it is answered `503` and the session kept, never rewritten, until an upgraded instance reads it. The same
   holds for a later format, which `IDN-31` described as ending the session: it was always a `503`, and the session was
-  kept. Format numbers change only with a major version: within 8.x a session is format 2 at most and every other record
-  format 1. New meter: `cosec.stored.refused{record, reason}`
+  kept. A record of the control plane (a change, a staging slot, a revision index, the app list) or of a shadow window
+  is read the same way: one a later version wrote makes the control API answer `503` without detail, where a later
+  format was a `500`, and the record is never rewritten. Format numbers change only with a major version: within 8.x a
+  session is format 2 at most and every other record format 1. New meter: `cosec.stored.refused{record, reason}`
   ([Storage](./storage.md#record-formats), [Observability](./observability.md)).
 - **Breaking: logging out of a switched session ends the login it came from** (`IDN-40`). Affected: a user who
   switches tenant and then logs out. A logout ended only the session it was given: after a switch, the login's own

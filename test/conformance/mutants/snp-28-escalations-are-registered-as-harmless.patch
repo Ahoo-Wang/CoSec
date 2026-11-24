@@ -1,0 +1,17 @@
+# Rule: SNP-28
+# Mutant: a change's escalations are registered as a member an older reader may ignore or drop, though losing them publishes without the approval they ask for
+# Tests: :cocache:test --tests me.ahoo.cosec.cocache.stored.StoredRecordMembersTest
+
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/change/ChangeMembers.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/change/ChangeMembers.kt
+index bf9c0be0e..7e7eaedff 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/change/ChangeMembers.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/change/ChangeMembers.kt
+@@ -73,7 +73,7 @@ object ChangeMembers {
+             optional("origin.peer", WhenAbsent.NONE),
+             optional("publishedRevision", WhenAbsent.NONE),
+             // What needs approval: lost, the change publishes without the approval its check asked for.
+-            guarding("escalations", WhenAbsent.EMPTY),
++            optional("escalations", WhenAbsent.EMPTY),
+             required("escalations.subject"),
+             required("escalations.reason"),
+             required("escalations.detail"),

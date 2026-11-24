@@ -138,7 +138,7 @@ Every record CoSec keeps in Redis says how it reads when the instance reading it
 wrote it (`CTL-53`, `IDN-31`, `SNP-27`). Most records carry `"format": <n>`:
 - a record without one was written before formats, and is format 1;
 - of a format the reader knows, it reads the members it knows and ignores the others, unless the record's `crit` names
-  one: a list of the members a reader must understand, each a path from the record's root (`root`, `approvals.via`);
+  one: a list of the members a reader must understand, each a path from the record's root (`root`, `approval.covers`);
 - a member `crit` names that the reader does not know refuses that one record, as one a later version wrote: it is
   neither read nor rewritten, and the other records read as before;
 - a later format is refused the same way, as a format error, never read as absent.
@@ -149,22 +149,25 @@ older instance refuses the record instead, and the store never holds less than a
 (RFC 0014 G5). Each kind of record lists every member, what its absence means and whether ignoring or dropping it
 widens, beside its codec (`SNP-28`). Format numbers change only with a major version (`SNP-29`): within 8.x a session
 is format 2 at most and every other record format 1. CoSec's 8.0 writers write no `crit`. Every refusal is counted
-by `cosec.stored.refused` (`OBS-12`), `later` for a record a later version wrote, apart from `malformed`. The decision
-inputs stay strict: they carry no such tolerance.
+by `cosec.stored.refused` (`OBS-12`), `later` for a record a later version wrote, apart from `malformed`. A record of
+the control plane or of a shadow window that a later version wrote makes the call that read it a `503` without detail,
+never the `500` of a record that does not read, and the instance says so in its log
+([Troubleshooting](./troubleshooting.md#a-record-a-later-version-wrote)). The decision inputs stay strict: they carry
+no such tolerance.
 
-| Record | Format | A member it does not know | A later format, or a value it cannot read |
+| Record | Format | A member it does not know | A value it cannot read |
 |---|---|---|---|
 | Policy document: head and revision record | `schema: 2` | refused | the document fails closed (`503` for the requests that need it) |
-| Change request (`control:change:<id>`) | `format: 1` | ignored | the change is unreadable: `GET /changes/{id}` is a `500`, and no revision is reclaimed while it is listed open |
-| Staging slot (`control:stage:<doc>`) | `format: 1` | ignored | staging that document is refused (`500`) until the slot reads again |
-| Revision index (`control:revisions:<doc>`) | `format: 1` | ignored | that document's publishes and history are a `500` |
-| App list (`control:apps:all`) | `format: 1` | ignored | untrusted: every app a grant reaches is unknown, and the grant waits for approval |
+| Change request (`control:change:<id>`) | `format: 1` | ignored, unless its `crit` names it | the change is unreadable: `GET /changes/{id}` is a `503`, and no revision is reclaimed while it is listed open |
+| Staging slot (`control:stage:<doc>`) | `format: 1` | ignored, unless its `crit` names it | staging that document is refused (`500`) until the slot reads again |
+| Revision index (`control:revisions:<doc>`) | `format: 1` | ignored, unless its `crit` names it | that document's publishes and history are a `500` |
+| App list (`control:apps:all`) | `format: 1` | ignored, unless its `crit` names it | untrusted: every app a grant reaches is unknown, and the grant waits for approval |
 | Back-reference member (`control:refs:*`) | member grammar | refused | the set is unreadable and the check it serves fails closed (`CTL-42`) |
 | Staged-list member (`candidate-staged:all`) | member grammar | skipped | skipped |
-| Staged candidate (`candidate:<doc>`) | `format: 1` | ignored | the instance skips it and reports nothing for its window, which cannot pass on it |
-| Shadow report (`shadow:report:<window>:<instance>`) | `format: 1` | ignored | the window cannot be looked at (`503`) until the report reads or is written again |
-| Reporters of a window (`shadow:reporters:<window>`) | `format: 1` | ignored | the window cannot be judged until it is written again |
-| Instance status and its index (`shadow:status:*`) | `format: 1`, with `formatLevel`; `release` from 8.0.0-beta.9, absent read as an unknown release (the GA baseline) | ignored | the propagation of a revision cannot be read (`GET .../propagation`); publishing does not wait for it; no shadow window passes until it can be read (`CTL-10`) |
+| Staged candidate (`candidate:<doc>`) | `format: 1` | ignored, unless its `crit` names it | the instance skips it and reports nothing for its window, which cannot pass on it |
+| Shadow report (`shadow:report:<window>:<instance>`) | `format: 1` | ignored, unless its `crit` names it | the window cannot be looked at (`503`) until the report reads or is written again |
+| Reporters of a window (`shadow:reporters:<window>`) | `format: 1` | ignored, unless its `crit` names it | the window cannot be judged until it is written again |
+| Instance status and its index (`shadow:status:*`) | `format: 1`, with `formatLevel`; `release` from 8.0.0-beta.9, absent read as an unknown release (the GA baseline) | ignored, unless its `crit` names it | the propagation of a revision cannot be read (`GET .../propagation`); publishing does not wait for it; no shadow window passes until it can be read (`CTL-10`) |
 | Session (`token:family:<id>`) | `format: 1`; `format: 2` for a session a tenant switch started, which names its `root` (`IDN-36`) | ignored, unless its `crit` names it: then refused | the refresh, logout or switch that read it is a `503` and the session is kept; an upgraded instance reads it ([Troubleshooting](./troubleshooting.md#a-record-a-later-version-wrote)) |
 | API key (`apikey:*`) | `format: 3` | refused | the key is refused |
 | Revocations, leases, rate-limit counters | none (scalar) | not applicable | as each says above |

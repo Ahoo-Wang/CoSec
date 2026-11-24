@@ -29,6 +29,7 @@ enum class StoredRecord(val tag: String) {
     CANDIDATE("candidate"),
     SHADOW_REPORT("shadow_report"),
     INSTANCE_STATUS("instance_status"),
+    RESIDENT_DOCUMENTS("resident_documents"),
     INSTANCE_INDEX("instance_index"),
     REPORTERS("reporters"),
 }

@@ -18,6 +18,7 @@ internal object StoredRecordGuards {
     private const val CRIT = "document:StoredCritTest#"
     private const val MEMBERS = "cocache:TokenFamilyMembersTest#"
     private const val LATER = "login:LaterSessionRecordTest#"
+    private const val RECORDS = "cocache:StoredRecordMembersTest#"
 
     val BUILD: Set<String> = setOf(
         // SNP-27: a member crit names that a reader does not know refuses that one record, never read or rewritten.
@@ -32,12 +33,21 @@ internal object StoredRecordGuards {
         "${MEMBERS}every member an 8_0 reader knows survives its rewrite",
         "${LATER}a refresh of a session a later version wrote is an outage, and the record is never rewritten",
         "${LATER}the log says a later version wrote it, once per interval at WARN, and a broken store is not told so",
+        "${RECORDS}a later member crit names refuses that record as a later version's, which is never rewritten",
+        "${RECORDS}a later member without crit is dropped by a rewrite, which leaves the same record",
+        "control:LaterRecordsTest#a record a later version wrote is a 503 without detail, told as that",
+        "spring-boot:ControlServiceParityTest#a record a later version wrote is a 503 alike through both implementations - CTL-77",
+        "control:LaterRecordsTest#a later record is told at WARN once per interval, and a broken store is not told as one",
         // SNP-28: every member of a kind of record registered, with its absence and its two ways to widen, apart.
         "${MEMBERS}the registry names every member the codec writes, and only those",
         "${MEMBERS}each absent member reads as the registry says",
         "${MEMBERS}whether ignoring a member widens, and whether dropping it does, are each stated",
+        "${RECORDS}every kind of record has a registry, and each registry names every member its codec writes, and only those",
+        "${RECORDS}each absent member reads as the registry says",
+        "${RECORDS}whether ignoring a member widens, and whether dropping it does, are each stated",
         // SNP-29: format numbers frozen within 8.x.
         "${MEMBERS}the session's format numbers are frozen for 8_x",
+        "${RECORDS}the records' format numbers are frozen for 8_x",
         // OBS-12: the refusals counted by record and reason.
         "micrometer:StoredRefusedMetricTest#each series reads the count of its record and reason, and the series are the closed sets only",
     )

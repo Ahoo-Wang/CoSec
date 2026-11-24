@@ -37,7 +37,8 @@ Indeterminate in an explanation.
 - **A refresh, logout or switch is 503 during a rolling upgrade, logging `a later CoSec wrote the session record`**
   (`SNP-27`): a newer instance wrote a session member this older one must understand (its `crit`); the record is
   refused, never rewritten, and the session kept. Upgrade the instance. `cosec.stored.refused{reason="later"}` counts
-  these; `reason="malformed"` means a broken record, not a version.
+  these; `reason="malformed"` means a broken record, not a version. The control API answers such a record of the
+  control plane or a shadow window `503` without detail, logging `a later CoSec wrote a stored record`.
 
 ## Interpret the status
 
