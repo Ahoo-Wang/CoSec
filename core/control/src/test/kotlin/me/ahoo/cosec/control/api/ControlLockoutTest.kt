@@ -18,6 +18,10 @@ package me.ahoo.cosec.control.api
 import kotlinx.coroutines.runBlocking
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.control.authz.ControlActions
+import me.ahoo.cosec.control.authz.ControlAuthorizer
+import me.ahoo.cosec.control.authz.ControlDecision
+import me.ahoo.cosec.control.authz.ControlResources
 import me.ahoo.cosec.control.authz.EngineAuthority
 import me.ahoo.cosec.control.authz.Operator
 import me.ahoo.cosec.control.change.ACME
@@ -135,7 +139,45 @@ class ControlLockoutTest {
             operator,
             SnapshotKey.Platform,
             frozen
-        )!!.reason.assert().contains("denied by policy freeze, statement 0")
+        ).let {
+            it!!.reason.assert().contains("denied by policy freeze, statement 0")
+            // The statement's policy is the platform's: an operator who may not read it is told the refusal alone.
+            it.namedIn.assert().containsExactly(SnapshotKey.Platform)
+            it.unnamed.assert().contains("cosec:publish on [platform] would be denied").doesNotContain("freeze")
+        }
+    }
+
+    /**
+     * DR1-F-13 (`CTL-51`): the lock-out finding names a statement only to a publisher who may read the document its policy
+     * is defined in, as `simulate` shows one; to another it says the refusal without the statement.
+     */
+    @Test
+    fun `a statement is named only to a publisher who may read the document that defines it`() = runBlocking<Unit> {
+        val named = LockoutCheck { _, _, _ ->
+            LockoutCheck.Lockout("x would be denied by policy secret, statement 0", listOf(SnapshotKey.Platform), "x would be denied")
+        }
+        val ids = java.util.concurrent.atomic.AtomicInteger()
+        suspend fun warning(readsPlatform: Boolean): String {
+            val authorizer = ControlAuthorizer { _, action, resource ->
+                val platform = ControlResources.document(SnapshotKey.Platform)
+                val platformRead = action == ControlActions.READ && resource.type == platform.type && resource.id == platform.id
+                if (platformRead && !readsPlatform) ControlDecision.DENY else ControlDecision.PERMIT
+            }
+            val changes = Changes(
+                harness.memory,
+                harness.revisions,
+                { ChangeId("named-${ids.incrementAndGet()}") },
+                authorizer,
+                harness.clock,
+                ChangeOptions(shadow = IMMEDIATE_WINDOW),
+                revocations = RevocationReader.NONE,
+                lockout = named,
+            )
+            val change = changes.propose(operatorFor(ACME), ACME, 0, listOf(Operation.PutPolicy(allow("p"))), "test")
+            return change.findings.single { it.check == LockoutCheck.CHECK }.message
+        }
+        warning(readsPlatform = true).assert().contains("x would be denied by policy secret, statement 0")
+        warning(readsPlatform = false).assert().contains("x would be denied.").doesNotContain("secret")
     }
 
     @Test

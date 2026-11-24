@@ -39,9 +39,14 @@ fun interface LockoutCheck {
      */
     suspend fun check(operator: Operator, key: SnapshotKey, candidate: PolicyDocument): Lockout?
 
-    /** What keeps the operator out: [reason] says which request is not permitted, and what decides it. */
+    /**
+     * What keeps the operator out: [reason] says which request is not permitted, and what decides it. When it names a
+     * statement, [namedIn] are the documents whose policy that is (all of them, for an attachment), and [unnamed] says
+     * the same without the statement: an operator who may not read each of [namedIn] is told [unnamed] (`CTL-51`, as
+     * `simulate` shows a statement; DR1-F-13).
+     */
     @InternalCoSecApi
-    class Lockout(val reason: String)
+    class Lockout(val reason: String, val namedIn: List<SnapshotKey> = emptyList(), val unnamed: String = reason)
 
     @InternalCoSecApi
     companion object {

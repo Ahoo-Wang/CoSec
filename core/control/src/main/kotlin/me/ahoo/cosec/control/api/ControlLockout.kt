@@ -28,7 +28,9 @@ import me.ahoo.cosec.engine.EngineRequest
 import me.ahoo.cosec.model.Action
 import me.ahoo.cosec.model.AppId
 import me.ahoo.cosec.model.TenantId
+import me.ahoo.cosec.model.decision.BindingRef
 import me.ahoo.cosec.model.decision.Decision
+import me.ahoo.cosec.model.decision.DocumentKind
 import me.ahoo.cosec.model.decision.StatementRef
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import java.time.Clock
@@ -101,16 +103,37 @@ class ControlLockout(
         )
         return when (val decision = simulator.decide(request, documents).decision) {
             is Decision.Permit -> null
-            else -> LockoutCheck.Lockout("$what would be ${describe(decision)}")
+            is Decision.Deny -> denied(what, decision.by, heads, PolicyHomes(documents))
+            else -> LockoutCheck.Lockout("$what would be ${decision::class.simpleName?.lowercase()}: it could not be decided")
         }
     }
 
-    private fun describe(decision: Decision): String = when (decision) {
-        is Decision.Deny -> when (val by = decision.by) {
-            null -> "denied: no statement permits it"
-            is StatementRef.Policy -> "denied by policy ${by.policy.value}, statement ${by.index}"
-            else -> "denied ($by)"
+    /**
+     * A refusal that names the statement, with the documents its policy is defined in, which the publisher must be able
+     * to read to be told it (`CTL-51`, DR1-F-13): the same rule `simulate` shows a statement by ([Redaction]). A statement
+     * whose policy no document of the view defines is never named.
+     */
+    private fun denied(what: String, by: StatementRef?, heads: Map<SnapshotKey, Held?>, homes: PolicyHomes): LockoutCheck.Lockout {
+        val unnamed = "$what would be denied"
+        val policy = by as? StatementRef.Policy ?: return LockoutCheck.Lockout(
+            if (by == null) "$unnamed: no statement permits it" else "$unnamed ($by)"
+        )
+        val tenant = heads.keys.firstOrNull { it is SnapshotKey.Tenant }
+        val namedIn = when (val via = policy.via) {
+            is BindingRef.Bound -> when (homes.of(via.document, policy.policy)) {
+                DocumentKind.PLATFORM -> listOf(SnapshotKey.Platform)
+                DocumentKind.APP -> listOfNotNull(heads.keys.firstOrNull { it is SnapshotKey.App })
+                DocumentKind.TENANT -> listOfNotNull(tenant)
+                null -> emptyList()
+            }
+            is BindingRef.Attached -> listOfNotNull(tenant, SnapshotKey.Platform)
+            else -> listOf(SnapshotKey.Platform)
         }
-        else -> "${decision::class.simpleName?.lowercase()}: it could not be decided"
+        if (namedIn.isEmpty()) return LockoutCheck.Lockout(unnamed)
+        return LockoutCheck.Lockout(
+            "$unnamed by policy ${policy.policy.value}, statement ${policy.index}",
+            namedIn,
+            unnamed,
+        )
     }
 }
