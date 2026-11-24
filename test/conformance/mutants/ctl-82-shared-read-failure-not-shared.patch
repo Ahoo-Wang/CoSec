@@ -6,11 +6,11 @@ diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Shared
 --- a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/SharedRead.kt
 +++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/SharedRead.kt
 @@ -81,7 +81,7 @@ internal class SharedRead<T>(
-             if (e is CancellationException && !currentCoroutineContext().isActive) {
-                 shared.complete(null)
-             } else {
--                shared.completeExceptionally(e)
-+                shared.complete(null)
-             }
+             if (currentCoroutineContext().isActive) shared.completeExceptionally(e) else shared.complete(null)
+             throw e
+         } catch (e: Throwable) {
+-            shared.completeExceptionally(e)
++            shared.complete(null)
              throw e
          } finally {
+             synchronized(lock) { if (inflight === shared) inflight = null }

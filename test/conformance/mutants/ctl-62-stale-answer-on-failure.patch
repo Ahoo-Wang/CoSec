@@ -3,19 +3,18 @@
 # Tests: :control:test --tests me.ahoo.cosec.control.lifecycle.PropagationTest
 
 diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/SharedRead.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/SharedRead.kt
-index 6185991fc..d5e01fe9a 100644
 --- a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/SharedRead.kt
 +++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/SharedRead.kt
-@@ -40,7 +40,11 @@ internal class SharedRead<T>(
-     private var last: Read<T>? = null
- 
-     suspend fun read(): Read<T> = fresh() ?: lock.withLock {
--        fresh() ?: clock.instant().let { asOf -> Read(load(), asOf) }.also { last = it }
-+        fresh() ?: try {
-+            clock.instant().let { asOf -> Read(load(), asOf) }.also { last = it }
-+        } catch (e: me.ahoo.cosec.control.store.ControlStoreException) {
-+            last ?: throw e
-+        }
-     }
- 
-     private fun fresh(): Read<T>? = last?.takeIf { Duration.between(it.asOf, clock.instant()) < maxAge }
+@@ -71,7 +71,11 @@ internal class SharedRead<T>(
+     @Suppress("TooGenericExceptionCaught")
+     private suspend fun loadInto(shared: CompletableDeferred<Read<T>?>): Read<T> {
+         try {
+-            val read = clock.instant().let { asOf -> Read(load(), asOf) }
++            val read = try {
++                clock.instant().let { asOf -> Read(load(), asOf) }
++            } catch (e: me.ahoo.cosec.control.store.ControlStoreException) {
++                last ?: throw e
++            }
+             last = read
+             shared.complete(read)
+             return read
