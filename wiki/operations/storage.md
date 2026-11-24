@@ -197,6 +197,19 @@ decision inputs stay strict: they carry no such tolerance.
   policy Redis can evict a document: an instance that had it installed fails closed, but an instance that loads it
   afterwards reads an evicted app or tenant document as absent, so its DENY statements silently stop applying. Use
   `noeviction` and size Redis for the data.
+- **`min-replicas-to-write 1` (and `min-replicas-max-lag`) where Redis fails over.** Replication is asynchronous, and
+  the control plane waits for no replica (RFC 0007 Q27): a failover can lose a head write that was acknowledged, and
+  the head goes back to the revision before it. What that revision's change narrowed (a revoked binding, a new DENY)
+  is in effect again. With `min-replicas-to-write 1`, a primary that cannot reach a replica refuses writes, so a write
+  the control plane saw land is on a replica too. A publish writes the head before the revision's index entry. In a
+  Redis Cluster the two live in different slots, so a failover of the head's primary can lose the head write while the
+  index keeps the entry. The next reclamation pass finds such a revision listed above the head, and a read of the
+  history that rebuilds the index from the head (once a publish reused the number) finds it before it drops it; either
+  logs it at `ERROR`, counts it (`cosec.control.revisions.lost`) and tells the change listeners `HEAD_LOST`, naming
+  the change (`CTL-86`, [Troubleshooting](./troubleshooting.md#a-published-revision-is-no-longer-the-head)). On one
+  primary, replication keeps the order of writes, so a failover that loses the head loses the index entry written
+  after it too, and the store holds nothing that says the revision was published: only the data-plane instances that
+  had installed it tell, by `cosec.snapshot.regressions` and an `ERROR`.
 - **The startup checks.** With the Redis backend, each instance reads every node's `maxmemory-policy` at startup from
   `INFO memory`, which managed Redis services usually allow where they block `CONFIG`. Two checks read it:
   - CoSec's own (`SNP-3`), of the Redis behind the CoCache runtime the snapshot store is created on: a node that is

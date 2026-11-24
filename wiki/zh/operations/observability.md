@@ -303,7 +303,7 @@ CoCache 会在同一个 registry 中为 CoSec 的缓存记录它自己的指标�
 ## 控制面变更日志 {#control-plane-change-log}
 
 控制面为变更的每一步发出一个变更事件：`PROPOSED`、`CHECKED`、`SHADOW_STARTED`、`SHADOWED`、`APPROVED`、`REJECTED`、
-`PUBLISHING`、`PUBLISHED`、`FAILED`、`BREAK_GLASS_REQUESTED`、`BREAK_GLASS_APPROVED`、`REVOKED`、`HEADS_MOVED`、`REVIEW_NEEDED`、`ABANDONED`、`SHADOW_SKIPPED`、`REBASED`。每个改变变更记录的路由都会在改变时写一条（`CTL-63`）。事件指明变更、文档、
+`PUBLISHING`、`PUBLISHED`、`FAILED`、`BREAK_GLASS_REQUESTED`、`BREAK_GLASS_APPROVED`、`REVOKED`、`HEADS_MOVED`、`REVIEW_NEEDED`、`ABANDONED`、`SHADOW_SKIPPED`、`REBASED`，以及没有哪一步会写的 `HEAD_LOST`。每个改变变更记录的路由都会在改变时写一条（`CTL-63`）。事件指明变更、文档、
 操作者、基准修订和候选修订、需要审批的内容、确认、影子窗口摘要和备注；它从不携带文档内容。变更监听器接收这些事件。事件还带有该步骤操作者的**来源**（`origin`，`CTL-57`），写成事件 JSON 时是：`asserted`（宿主相信了调用方声明的身份，而不是自己校验凭证）、`via`（凭证的 `method`、作为 `credential` 的凭证 id 和作为 `request` 的请求 id，从不含凭证的值）和 `peer`（请求所用连接的地址，从 Reactor Netty 的 channel 读取，位于任何转发头处理之下，所以调用方不能像声明客户端地址那样声明它；读不到的宿主，即 Reactor Netty 之外的，不记录它，所以 Servlet 宿主（WebMvc）的控制 API 不记录 `peer`）。经控制面门面在宿主自身进程内作出的步骤（[在代码中修改策略](../integration/checks.md#changing-policies-from-your-code)）记为 `via.method: in-process`，有凭证时带凭证 id，没有 `peer`，因为没有连接承载它。没有请求驱动的步骤（例如维护任务）没有来源；存储的变更记录其作者的来源，有来源时日志行以 `origin=...` 结尾。
 
 **`asserted: true` 说明 `via` 的其余部分是调用方自己的话。** 在相信所声明身份的宿主上（控制面宿主、内嵌控制面的 IAM 服务），整个身份都由调用方写出：凭证的方式（包括 `jwt`，它让所声明的主体像经过校验的令牌一样可以使用 break-glass）、凭证 id，以及请求 id，即它发送的 `CoSec-Request-Id`。记录保留所声明的内容并标记为 `asserted`：这种来源的 `via.method`、`via.credential` 和 `via.request` 要读作调用方所说的，而不是宿主所校验的。只有不带 `asserted` 的来源，才指宿主自己校验过的凭证。
@@ -324,6 +324,7 @@ CoCache 会在同一个 registry 中为 CoSec 的缓存记录它自己的指标�
 - **跳过窗口时写 `SHADOW_SKIPPED`**，备注写明原因（`shadow window skipped: <reason>; <note>`）：由 `:skip-shadow` 跳过（操作者持有
   `cosec:skip-shadow`），或由没有窗口的 break-glass 变更跳过。无论变更之后是否发布都会写；变更发布后，修订的来源也会记下这次跳过。被拒绝的跳过不写任何事件。
 - **变更被 rebase 到文档当前修订并重新检查时写 `REBASED`。**
+- **某个变更发布的修订不在它的文档头部链上时写 `HEAD_LOST`**：它的头部写入丢了，像 Redis 故障转移会丢的那样（`CTL-86`）。回收任务发现列在头部之上的修订；从头部重建索引的历史读取（在某次发布复用了这个编号之后）发现它即将丢弃的修订。操作者是发布它的人，base 是现在的头部，candidate 是丢失的修订。每个实例对它发现的修订只写一次。该变更没有生效：重新发布它，或者回滚。`cosec.control.revisions.lost`（计数器，无标签）统计它们：任何一个都应告警。
 - **`ABANDONED` 指明是谁放弃了变更，并在备注中写明变更的作者**（`author <tenant>/<principal>: <note>`）。放弃
   break-glass 变更像 `PUBLISHING` 一样受控：它需要一个 `REQUIRED` 变更监听器（没有时返回 `503`），由它在变更存为已放弃之前
   记下。放弃其他变更在之后记录。

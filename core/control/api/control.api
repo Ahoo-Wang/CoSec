@@ -26,6 +26,7 @@ public final class me/ahoo/cosec/control/audit/ChangeEvent$Kind : java/lang/Enum
 	public static final field CHECKED Lme/ahoo/cosec/control/audit/ChangeEvent$Kind;
 	public static final field FAILED Lme/ahoo/cosec/control/audit/ChangeEvent$Kind;
 	public static final field HEADS_MOVED Lme/ahoo/cosec/control/audit/ChangeEvent$Kind;
+	public static final field HEAD_LOST Lme/ahoo/cosec/control/audit/ChangeEvent$Kind;
 	public static final field PROPOSED Lme/ahoo/cosec/control/audit/ChangeEvent$Kind;
 	public static final field PUBLISHED Lme/ahoo/cosec/control/audit/ChangeEvent$Kind;
 	public static final field PUBLISHING Lme/ahoo/cosec/control/audit/ChangeEvent$Kind;

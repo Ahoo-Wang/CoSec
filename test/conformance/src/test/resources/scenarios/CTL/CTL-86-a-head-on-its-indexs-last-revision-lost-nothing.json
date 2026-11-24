@@ -1,0 +1,48 @@
+{
+  "rules": [
+    "CTL-86"
+  ],
+  "polarity": "negative",
+  "level": "control",
+  "description": "DR1-F-7: three publishes, the head on the index's last revision: nothing is lost.",
+  "publishes": [
+    {
+      "policies": [
+        "p1"
+      ]
+    },
+    {
+      "policies": [
+        "p2"
+      ]
+    },
+    {
+      "policies": [
+        "p3"
+      ]
+    }
+  ],
+  "lost": true,
+  "expect": {
+    "outcomes": [
+      "Published",
+      "Published",
+      "Published"
+    ],
+    "head": {
+      "revision": 3,
+      "parent": 2,
+      "parentRecord": true
+    },
+    "records": 3,
+    "writes": [
+      "record",
+      "head",
+      "record",
+      "head",
+      "record",
+      "head"
+    ],
+    "lost": []
+  }
+}
