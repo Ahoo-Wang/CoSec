@@ -31,7 +31,10 @@ import kotlin.time.Duration.Companion.milliseconds
  * - [revocationRead]: [REVOCATION_READ_PERCENT] % of [authentication] (300 ms), each read of CoSec's own revocation reader,
  *   so that a token's two reads end inside the authentication budget (`PIP-7`) for every deadline of 20 ms or more;
  * - [requiredListener]: [REQUIRED_LISTENER_PERCENT] % (1 s), one REQUIRED decision listener (`OBS-10`), so that its wait
- *   ends inside the request.
+ *   ends inside the request;
+ * - [workWait]: [WORK_WAIT_PERCENT] % (2.5 s), how long a control call waits for the control plane's work budget
+ *   (`CTL-85`) before it is refused 503: a control route runs no deadline of its own (`CTL-82`), so it waits half the one
+ *   the operator states.
  */
 @InternalCoSecApi
 class StageBudgets private constructor(
@@ -42,13 +45,15 @@ class StageBudgets private constructor(
     val rateLimit: Duration,
     val revocationRead: Duration,
     val requiredListener: Duration,
+    val workWait: Duration,
 ) {
     override fun toString(): String =
         "authentication=$authentication ($AUTHENTICATION_PERCENT % of the pipeline timeout $timeout), " +
             "membership=$membership ($MEMBERSHIP_PERCENT %), attributes=$attribute ($ATTRIBUTE_PERCENT %), " +
             "rate-limit=$rateLimit ($RATE_LIMIT_PERCENT %), " +
             "revocation read=$revocationRead ($REVOCATION_READ_PERCENT % of the authentication budget), " +
-            "required listener=$requiredListener ($REQUIRED_LISTENER_PERCENT %)"
+            "required listener=$requiredListener ($REQUIRED_LISTENER_PERCENT %), " +
+            "control work wait=$workWait ($WORK_WAIT_PERCENT %)"
 
     @InternalCoSecApi
     companion object {
@@ -58,6 +63,7 @@ class StageBudgets private constructor(
         const val RATE_LIMIT_PERCENT: Int = 10
         const val REVOCATION_READ_PERCENT: Int = 30
         const val REQUIRED_LISTENER_PERCENT: Int = 20
+        const val WORK_WAIT_PERCENT: Int = 50
 
         /** The least a stage gets: a share of a very small deadline is never zero. */
         val FLOOR: Duration = 1.milliseconds
@@ -83,6 +89,7 @@ class StageBudgets private constructor(
                 rateLimit = share(timeout, RATE_LIMIT_PERCENT),
                 revocationRead = share(authentication, REVOCATION_READ_PERCENT),
                 requiredListener = share(timeout, REQUIRED_LISTENER_PERCENT),
+                workWait = share(timeout, WORK_WAIT_PERCENT),
             )
         }
 

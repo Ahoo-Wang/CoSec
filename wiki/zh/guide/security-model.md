@@ -162,7 +162,7 @@ CoSec 无法决策时，不会放行。每种失败都在 `StatusMapping` 这一
 
 break-glass 在有限时间内授予指定主体某条策略，用于紧急情况。break-glass 绑定：
 
-- 只存在于平台文档中，只绑定主体，并且必须有 `expiresAt`；
+- 只存在于平台文档中，只绑定主体，并且必须有 `expiresAt`。过期由各实例各自判断：请求时间（取自作出判定的那个实例的时钟）过了 `expiresAt`，引擎就跳过这个绑定，所以时钟落后的实例仍会应用它；绑定会一直留在文档里，直到被撤销（DR1-E-15）；
 - 绑定 `cosec:root` 时，只对平台租户 `(platform)` 的主体生效；
 - 只能通过控制面创建：一人申请，另一人批准，有效期最长为 `cosec.control.break-glass.max-duration`（[策略测试](../policies/testing.md)）；
 - 是最后一个候选。它只放行别处都不放行的请求，所有 DENY 对该主体照常生效；
@@ -170,7 +170,7 @@ break-glass 在有限时间内授予指定主体某条策略，用于紧急情�
 
 每个由 break-glass 放行的请求都必须先写入一个 REQUIRED 决策监听器。没有这样的监听器，或它失败时，请求返回 `503`。代码中的权限检查（`AuthorizationChecker`）如果只有 break-glass 放行，结果为 `false`，因为检查不写审计事件（[代码中的权限检查](../integration/checks.md)）。
 
-两人原则是控制面的规则，对每一种会创建 break-glass 的变更都强制执行（`BRK-5`）：申请与批准是同一个变更的两步，每一步都由 REQUIRED 变更监听器记录，它发布的修订在出处中记录发布人与批准人（`provenance.publishedBy`、`approvedBy`）；申请人记在变更日志里。数据面不检查 break-glass 绑定是谁授予、谁批准的：能写文档的人同样能写出这些名字，它们证明不了什么。`cosec-migrate` 不写 break-glass 绑定；切换之后经控制面申请。
+两人原则是控制面的规则，对每一种会创建 break-glass 的变更都强制执行（`BRK-5`）：申请与批准是同一个变更的两步，每一步都由 REQUIRED 变更监听器记录，它发布的修订在出处中记录发布人与批准人（`provenance.publishedBy`、`approvedBy`）；申请人记在变更日志里。数据面不检查 break-glass 绑定是谁授予、谁批准的：能写文档的人同样能写出这些名字，它们证明不了什么。`cosec-migrate` 不写 break-glass 绑定；切换之后经控制面申请。它写入的东西（`publish`、`bootstrap`、`restore`）记为 `cosec-migrate`，即每个修订出处里的执行者，也不是变更日志里的变更：谁运行了它，由部署自己记录。
 
 这些保证不约束信任根。持有 `cosec:approve` 的平台管理员发布自己的变更既不经分析也不需要第二个人，又持有 `cosec:skip-shadow`：它可以独自给自己绑定一条不过期的、放行一切的 ALLOW，这正是 break-glass 给的东西，却没有第二个人、时间上限和 REQUIRED 审计。`cosec.control.approval.four-eyes` 补回的是分析和第二个人（另一位平台主体），并不给这样的绑定加上时间上限或 REQUIRED 审计。在需要第二个人的地方请开启 four-eyes（[策略测试](../policies/testing.md#approval)），并在变更日志中留意放行一切的 ALLOW。
 

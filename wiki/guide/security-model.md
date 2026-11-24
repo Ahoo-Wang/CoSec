@@ -246,7 +246,9 @@ is a DENY, and deny wins, nothing written in any document can lift it.
 
 Break-glass grants a named principal a policy for a bounded time, for emergencies. A break-glass binding:
 
-- exists only in the platform document, binds only a principal, and must have `expiresAt`;
+- exists only in the platform document, binds only a principal, and must have `expiresAt`. Expiry is each instance's: the
+  engine skips the binding once the request's time is past `expiresAt`, read from the clock of the instance deciding, so
+  an instance whose clock is behind still applies it; the binding stays in the document until it is revoked (DR1-E-15);
 - to `cosec:root`, applies only to a principal of the platform tenant `(platform)`;
 - is created only through the control plane: one person requests it, a second approves it, and its lifetime is at
   most `cosec.control.break-glass.max-duration` ([Testing policies](../policies/testing.md));
@@ -267,7 +269,9 @@ the request and its approval are steps of one change, each recorded by a REQUIRE
 publishes records who published it and who approved it (`provenance.publishedBy`, `approvedBy`); who requested it is
 in the change log. The data plane does not check a break-glass binding for
 who granted or approved it: whoever can write a document can write such names too, so they would prove nothing.
-`cosec-migrate` writes no break-glass binding; after the switch, request one through the control plane.
+`cosec-migrate` writes no break-glass binding; after the switch, request one through the control plane. What it writes
+(`publish`, `bootstrap`, `restore`) is recorded as `cosec-migrate`, the actor of each revision's provenance, and is no
+change in the change log: who ran it is for the deployment to record.
 
 These guarantees do not bind the trust root. A platform administrator holding `cosec:approve` publishes its own
 changes without analysis or a second person, and holds `cosec:skip-shadow`: alone, it can bind itself a non-expiring

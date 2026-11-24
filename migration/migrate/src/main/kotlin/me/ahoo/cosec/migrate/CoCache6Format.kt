@@ -43,21 +43,36 @@ internal object CoCache6Format {
      * The payload stored under [storageKey], of Redis type [type], or null when it holds no value (no key, a cached
      * absence, a load lease); [read] reads the string.
      */
-    fun scalar(storageKey: String, type: String, read: () -> ByteArray?): ByteArray? {
+    fun scalar(
+        storageKey: String,
+        type: String,
+        skipped: (String) -> Unit = {},
+        read: () -> ByteArray?,
+    ): ByteArray? {
         when (type) {
-            NONE -> return null
+            NONE -> return null.also { skipped(GONE) }
             STRING -> Unit
             else -> unreadable(storageKey, "a $type, not a CoCache 6 value")
         }
-        val raw = read() ?: return null
+        val raw = read() ?: return null.also { skipped(GONE) }
         if (raw.size < HEADER_SIZE || raw[0] != MAGIC) unreadable(storageKey, "not written by CoCache 6")
         if (raw[1] != FORMAT) unreadable(storageKey, "CoCache format ${raw[1]}, not $FORMAT")
-        return when (raw[2]) {
-            STATE_VALUE -> raw.copyOfRange(HEADER_SIZE, raw.size)
-            STATE_MISSING, STATE_LEASE -> null
-            else -> unreadable(storageKey, "an unknown CoCache 6 state ${raw[2]}")
-        }
+        return payload(storageKey, raw, skipped)
     }
+
+    /** The payload of format 1 value [raw], by its state; null for one that holds no value, told to [skipped]. */
+    private fun payload(storageKey: String, raw: ByteArray, skipped: (String) -> Unit): ByteArray? = when (raw[2]) {
+        STATE_VALUE -> raw.copyOfRange(HEADER_SIZE, raw.size)
+        STATE_MISSING -> null.also { skipped(CACHED_ABSENCE) }
+        STATE_LEASE -> null.also { skipped(LOAD_IN_PROGRESS) }
+        else -> unreadable(storageKey, "an unknown CoCache 6 state ${raw[2]}")
+    }
+
+    /** Why a key the scan found holds no value, as [scalar] tells its `skipped` (DR2-M-5). */
+    const val GONE = "it was gone when it was read"
+    const val CACHED_ABSENCE = "it holds a cached absence (CoCache 6 state M), no value"
+    const val LOAD_IN_PROGRESS =
+        "it holds a load in progress (CoCache 6 state L), no value: convert from a store no 7.x instance writes"
 
     /**
      * The members of the set under [storageKey], of Redis type [type]; empty when there is no key. [read] reads the hash's

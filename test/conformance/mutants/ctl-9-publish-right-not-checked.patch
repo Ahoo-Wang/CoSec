@@ -3,14 +3,14 @@
 # Tests: :control:test --tests me.ahoo.cosec.control.authz.ControlAuthorizationTest
 
 diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Publishing.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Publishing.kt
-index 8a1b58b7d..eafcfe27b 100644
+index 82a7506f5..29e5dbf92 100644
 --- a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Publishing.kt
 +++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Publishing.kt
-@@ -81,7 +81,6 @@ internal class Publishing(
+@@ -83,7 +83,6 @@ internal class Publishing(
          lockout: Boolean = false,
      ): ChangeRequest {
          val change = flow.visible(publisher, id)
 -        authority.require(publisher, change.key, PublishRules.publishing(change))
-         if (change.state == ChangeState.PUBLISHED && slots.holds(change)) {
-             return recordedAgain(change, publisher, again)
-         }
+         writtenBefore(change, publisher, again)?.let { return it }
+         PublishRules.requireState(change, ChangeStep.PUBLISH.from)
+         PublishRules.acknowledged(change, ack)

@@ -1,0 +1,16 @@
+# Rule: CTL-34
+# Mutant: a change whose own revision is in effect is recorded EXPIRED when its expiry comes, though its revision decides (DR1-E-7)
+# Tests: :control:test --tests me.ahoo.cosec.control.change.PublishedNotExpiredTest
+
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ChangeLifecycle.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ChangeLifecycle.kt
+index acfcce170..3b909784b 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ChangeLifecycle.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ChangeLifecycle.kt
+@@ -168,7 +168,6 @@ internal class ChangeLifecycle(
+             if (!due(current.value)) {
+                 return current.value
+             }
+-            written(current.value)?.let { return it }
+             val expired = current.value.copy(state = ChangeState.EXPIRED, updatedAt = laterThan(current.value))
+             // The table says where an expiry may end; anything else is a fault and nothing is written.
+             check(expired.state in ChangeStep.EXPIRE.to)

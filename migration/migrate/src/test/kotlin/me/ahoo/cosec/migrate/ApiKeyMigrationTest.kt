@@ -129,6 +129,11 @@ class ApiKeyMigrationTest {
 
         override fun principalGrants(tenant: TenantId, principal: String) = documents.principalGrants(tenant, principal)
 
+        override fun principalDenies(tenant: TenantId, principal: String) = documents.principalDenies(tenant, principal)
+
+        override fun deniesNaming(tenant: TenantId, principal: String, attachments: Collection<String>) =
+            documents.deniesNaming(tenant, principal, attachments)
+
         override fun boundRole(role: RoleId) = documents.boundRole(role)
     }
 
@@ -441,6 +446,160 @@ class ApiKeyMigrationTest {
         ApiKeyMigration(taken, export, setOf("carol"), now = now).plan(listOf(mixed[4])).rejections.assert().hasSize(1)
     }
 
+    /** The published documents with [policies] and [bindings] added to the platform document. */
+    private fun publishedWith(policies: List<String> = emptyList(), bindings: List<String> = emptyList()) =
+        PublishedDocumentsFixture(
+            document(DocumentKind.PLATFORM, "", platformPolicies + policies, platformBindings + bindings),
+            mapOf(acme to tenant()),
+        )
+
+    private fun denyWhen(condition: String) =
+        policy("named", false, """{"effect":"deny","action":"order:delete","condition":$condition}""")
+
+    private fun anyoneTo(policy: String) = """{"id":"g:$policy","subject":"*","app":"*","space":"*","policy":"$policy"}"""
+
+    /**
+     * `MIG-6` (DR2-M-1): a key whose principal a DENY names by its id never moves to a principal of its own, which would
+     * escape it; it is refused, naming the DENY, and the ways that keep it on its principal.
+     */
+    @Test
+    fun `a key whose principal a DENY names by its id stays on its principal - MIG-6`() {
+        val shapes = listOf(
+            "an eq" to publishedWith(listOf(denyWhen("""{"eq":["subject.id","bob"]}""")), listOf(anyoneTo("named"))),
+            "an in" to publishedWith(listOf(denyWhen("""{"in":["subject.id",["mallory","bob"]]}""")), listOf(anyoneTo("named"))),
+            "a prefix" to publishedWith(listOf(denyWhen("""{"prefix":["subject.id","bo"]}""")), listOf(anyoneTo("named"))),
+            "a negation in an ALLOW" to publishedWith(
+                listOf(policy("named", false, """{"effect":"allow","action":"order:read","condition":{"not":{"eq":["subject.id","bob"]}}}""")),
+                listOf(anyoneTo("named")),
+            ),
+            "a comparison the documents do not settle" to publishedWith(
+                listOf(denyWhen("""{"eq":["subject.id",{"attr":"http.header.X-Blocked"}]}""")),
+                listOf(anyoneTo("named")),
+            ),
+            "a DENY bound to the principal" to publishedWith(
+                bindings = listOf(
+                    """{"id":"p:bob","subject":{"principal":"bob","tenant":"acme"},"app":"*","space":"*","policy":"no-delete"}""",
+                ),
+            ),
+        )
+        for ((shape, documents) in shapes) {
+            val plan = ApiKeyMigration(
+                documents,
+                export,
+                emptySet(),
+                now = now
+            ).plan(listOf(key("k-bob", "bob", roles = listOf("reader"))))
+            plan.keys.assert().describedAs(shape).isEmpty()
+            plan.rejections.single().assert().describedAs(shape).contains("MIG-6").contains("--grant-to-principal bob")
+        }
+        // A DENY the membership provider attaches to the principal names it too.
+        val attached = ApiKeyMigration(
+            published,
+            export,
+            emptySet(),
+            now = now,
+            attachments = mapOf((acme to "bob") to setOf("no-delete"))
+        )
+            .plan(listOf(key("k-bob", "bob", roles = listOf("reader"))))
+        attached.rejections.single().assert().contains("the attachment [no-delete]")
+        // Kept on its principal, capped, the key stays under the DENY: granting it is the way out.
+        val granted = ApiKeyMigration(shapes.last().second, export, setOf("bob"), now = now)
+            .plan(listOf(key("k-bob", "bob", roles = listOf("reader"))))
+        granted.accepted.assert().isTrue()
+        granted.keys.single().denied.assert().containsExactly("platform/p:bob")
+    }
+
+    /** `MIG-6`, the other way: a DENY that names someone else, or an ALLOW on the principal, leaves the key free to move. */
+    @Test
+    fun `a DENY that names no key's principal lets the key move to a principal of its own - MIG-6`() {
+        val documents = publishedWith(
+            listOf(
+                denyWhen("""{"in":["subject.id",["mallory"]]}"""),
+                policy(
+                    "bob-reads",
+                    false,
+                    """{"effect":"allow","action":"order:read","condition":{"eq":["subject.id","bob"]}}"""
+                ),
+            ),
+            listOf(anyoneTo("named"), anyoneTo("bob-reads")),
+        )
+        val plan = ApiKeyMigration(
+            documents,
+            export,
+            emptySet(),
+            now = now
+        ).plan(listOf(key("k-bob", "bob", roles = listOf("reader"))))
+        plan.rejections.assert().isEmpty()
+        plan.keys.single().mode.assert().isEqualTo(ConvertedApiKey.Mode.OWN_PRINCIPAL)
+        plan.keys.single().key.principalId.assert().isEqualTo("apikey:k-bob")
+    }
+
+    /** `MIG-6` (DR2-M-9): the blacklist names a principal by its id too, so a key whose principal it blocks stays on it. */
+    @Test
+    fun `a key whose principal the blacklist blocks stays on its principal - MIG-6`() {
+        val bob = key("k-bob", "bob", roles = listOf("reader"))
+        val blocked = BlacklistExport.read("""["acme:mallory","acme:bob"]""".encodeToByteArray())
+        val refused = ApiKeyMigration(published, export, emptySet(), now = now, blacklist = blocked).plan(listOf(bob))
+        refused.keys.assert().isEmpty()
+        refused.rejections.single().assert().contains("MIG-6").contains("the blacklist entry [acme:bob]")
+            .contains("--grant-to-principal bob")
+        // Kept on its principal by --grant-to-principal, the key is still blocked as bob.
+        ApiKeyMigration(published, export, setOf("bob"), now = now, blacklist = blocked).plan(listOf(bob)).accepted
+            .assert().isTrue()
+        // The value is the one the blacklist blocks a principal by.
+        BlacklistExport.value(acme, "bob").assert()
+            .isEqualTo(me.ahoo.cosec.runtime.attribute.BlacklistKind.principal("acme", "bob"))
+        listOf("""{"acme":"bob"}""", """["acme:bob",1]""", """[""]""").forEach { json ->
+            assertThrows<IllegalArgumentException> { BlacklistExport.read(json.encodeToByteArray()) }
+        }
+    }
+
+    /**
+     * `MIG-6`, the other way: a blacklist that does not block the principal lets the key move; with no blacklist given the
+     * key moves too, and the report names the value to block for it if its principal is blocked where the tool cannot see.
+     */
+    @Test
+    fun `a key whose principal no given blacklist blocks moves, and without one its report names what to block - MIG-6`() {
+        val bob = key("k-bob", "bob", roles = listOf("reader"))
+        val given = ApiKeyMigration(
+            published,
+            export,
+            emptySet(),
+            now = now,
+            blacklist = setOf("acme:mallory")
+        ).plan(listOf(bob))
+        given.keys.single().mode.assert().isEqualTo(ConvertedApiKey.Mode.OWN_PRINCIPAL)
+        given.keys.single().blockIfBlocked.assert().isNull()
+        val unseen = ApiKeyMigration(published, export, emptySet(), now = now).plan(listOf(bob))
+        unseen.keys.single().blockIfBlocked.assert().isEqualTo("acme:apikey:k-bob")
+        unseen.report(dryRun = true, alreadyConverted = emptyList()).get("keys").get(0).get("blockIfPrincipalBlocked")
+            .asString().assert().isEqualTo("acme:apikey:k-bob")
+    }
+
+    /** DR2-M-2: a member of another type is never read as empty; the record is unreadable, by name. */
+    @Test
+    fun `a stored key with a member of the wrong type is refused, naming the member`() {
+        val base = """"id":"k1","principalId":"alice","tenantId":"acme""""
+        listOf(
+            """{$base,"policies":"deny-exports"}""" to "policies",
+            """{$base,"roles":"admin"}""" to "roles",
+            """{$base,"attributes":"x"}""" to "attributes",
+            """{$base,"attributes":{"team":1}}""" to "attributes",
+            """{$base,"enabled":"yes"}""" to "enabled",
+            """{$base,"expiresAt":"tomorrow"}""" to "expiresAt",
+            """{"id":"k1","principalId":7,"tenantId":"acme"}""" to "principalId",
+            """{"id":"k1","principalId":"alice","tenantId":1}""" to "tenantId",
+            """{"id":["k1"],"principalId":"alice"}""" to "id",
+        ).forEach { (json, member) ->
+            assertThrows<IllegalArgumentException> { LegacyApiKey.parse("h", json) }.message.assert()
+                .describedAs(json).contains(member)
+        }
+        LegacyApiKey.parse(
+            "h",
+            """{$base,"roles":["admin"],"policies":[],"enabled":false}"""
+        ).enabled.assert().isFalse()
+    }
+
     @Test
     fun `the report says what to grant, to bind and what changes`() {
         val report = plan().report(true, listOf("h-old"), listOf("h-changed"))
@@ -501,6 +660,11 @@ class PublishedDocumentsFixture(platform: PolicyDocument, tenants: Map<TenantId,
     override fun attachable(tenant: TenantId, policy: PolicyId) = documents.attachable(tenant, policy)
 
     override fun principalGrants(tenant: TenantId, principal: String) = documents.principalGrants(tenant, principal)
+
+    override fun principalDenies(tenant: TenantId, principal: String) = documents.principalDenies(tenant, principal)
+
+    override fun deniesNaming(tenant: TenantId, principal: String, attachments: Collection<String>) =
+        documents.deniesNaming(tenant, principal, attachments)
 
     override fun boundRole(role: RoleId) = documents.boundRole(role)
 }

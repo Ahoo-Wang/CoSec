@@ -196,8 +196,8 @@ cosec-migrate convert --from-files ./export --out ./converted
 cosec-migrate publish --to-redis redis://localhost:6379 [--cluster] [--key-prefix cosec] --in ./converted [--resume]
 ```
 
-`publish` 只读取被接受的转换，而且只读取 `report.json` 列出的文件，并校验其中记录的 SHA-256：`convert` 之后被修改、缺失或新增的文件会让
-它停止。你自己写的文档（而不是 `convert` 写出的）用 `--file <document.json> --document <platform|app:<id>|tenant:<id>>` 代替 `--in` 发布，检查相同。然后它编译每一份文档，按平台文档检查每份应用文档的引用，并拒绝含 break-glass 绑定的文档，什么也不写（`bootstrap` 同样拒绝）。它经过控制面的存储把每份文档写成修订 1，所以文档的修订历史从这里开始；并且只在文档尚不存在时写入：它从不覆盖 8.0 数据。
+`publish` 只读取被接受的转换，而且只读取 `report.json` 列出的文件，并校验其中记录的 SHA-256：`convert` 之后被意外修改、缺失或新增的文件会让
+它停止。这些 SHA-256 存在同一个目录里，所以它防的是意外，防不了能写这个目录的人：把目录放在只有运维能写的地方。你自己写的文档（而不是 `convert` 写出的）用 `--file <document.json> --document <platform|app:<id>|tenant:<id>>` 代替 `--in` 发布，检查相同。然后它编译每一份文档，按平台文档检查每份应用文档的引用，并拒绝含 break-glass 绑定的文档，什么也不写（`bootstrap` 同样拒绝）。它经过控制面的存储把每份文档写成修订 1，所以文档的修订历史从这里开始；并且只在文档尚不存在时写入：它从不覆盖 8.0 数据。
 
 每份文档写一次。如果某一次失败，消息会列出已经写入的文档；用 `--resume` 再运行一次，它跳过内容相同的已发布文档，拒绝内容不同的。
 `--key-prefix` 是部署的前缀，与 [`cosec.key-prefix`](./configuration.md#key-prefix) 相同。`publish` 没有 `--dry-run`；想知道它会做什么，读 `report.json`。
@@ -274,7 +274,7 @@ cosec-migrate verify-chain --to-redis redis://localhost:6379 [--cluster] [--key-
 
 #### 以 Kubernetes Job 运行 {#run-as-a-kubernetes-job}
 
-在集群里，把每条命令作为 Job 运行，放在能连上 Redis 的命名空间，这样不必从你的机器访问 Redis。init 容器下载 release 的 zip、校验 SHA-256 并解压到一个卷；主容器在普通 JRE 上运行工具。带凭证的 Redis 地址来自一个 Secret，作为 `--to-redis` 交给工具（工具只从选项读取 Redis 地址；Kubernetes 会展开 `args` 里的 `$(REDIS_URI)`）：
+在集群里，把每条命令作为 Job 运行，放在能连上 Redis 的命名空间，这样不必从你的机器访问 Redis。init 容器下载 release 的 zip、校验 SHA-256 并解压到一个卷；主容器在普通 JRE 上运行工具。带凭证的 Redis 地址从一个 Secret 进入环境变量 `REDIS_URI`，工具从那里读取：`--to-redis env:REDIS_URI`（任何 Redis URI 选项都可以用 `env:<VARIABLE>` 或 `file:<path>` 代替 URI）。这样密码不出现在命令行上，而节点的进程列表能看到命令行；不在乎这一点的地方，`--to-redis redis://...` 照旧可用：
 
 ```bash
 kubectl -n cosec create secret generic cosec-migrate-redis --from-literal=uri='redis://:<password>@redis:6379'
@@ -336,16 +336,16 @@ spec:
               mountPath: /tool
           # `jar` 不恢复可执行位，所以启动脚本经由 `sh` 运行。
           command: ["sh", "/tool/cosec-migrate/bin/cosec-migrate"]
-          args: ["repair-references", "--to-redis", "$(REDIS_URI)", "--key-prefix", "cosec"]
+          args: ["repair-references", "--to-redis", "env:REDIS_URI", "--key-prefix", "cosec"]
           securityContext:
             allowPrivilegeEscalation: false
             capabilities:
               drop: [ALL]
 ```
 
-`kubectl -n cosec logs job/cosec-repair-references` 显示工具的输出；命令失败时（退出码 `1` 或 `2`）Job 也失败。工具输出的内容不含它收到的 Redis URI 中的凭证，因此日志里没有密码：它打印的下一步命令（例如 `publish ... --resume`）需要再次使用 `$(REDIS_URI)`。`--key-prefix` 设为你的实例的 [`cosec.key-prefix`](./configuration.md#key-prefix)。运行 `bootstrap` 时把 `args` 改为 `["bootstrap", "--to-redis", "$(REDIS_URI)", "--platform-admin", "alice"]`。Redis Cluster 则给支持的命令加上 `--cluster`，并在 Secret 里写以逗号分隔的种子节点。
+`kubectl -n cosec logs job/cosec-repair-references` 显示工具的输出；命令失败时（退出码 `1` 或 `2`）Job 也失败。工具输出的内容不含它收到的 Redis URI 中的凭证，因此日志里没有密码：它打印的下一步命令（例如 `publish ... --resume`）需要再次使用 `env:REDIS_URI`。`--key-prefix` 设为你的实例的 [`cosec.key-prefix`](./configuration.md#key-prefix)。运行 `bootstrap` 时把 `args` 改为 `["bootstrap", "--to-redis", "env:REDIS_URI", "--platform-admin", "alice"]`。Redis Cluster 则给支持的命令加上 `--cluster`，并在 Secret 里写以逗号分隔的种子节点。
 
-`convert`、`publish`、`partition plan` 与 `api-keys` 读写目录：在主容器的 `/data` 挂载一个 PersistentVolumeClaim，路径写成 `--out /data/converted` 与 `--in /data/converted`。把 `convert` 作为一个 Job 运行，从卷上读 `report.json`（再起一个挂载它的 Pod，或用 `kubectl cp`），转换被接受之后才把 `publish` 作为另一个 Job 运行：`publish` 只接受 `report.json` 列出的、SHA-256 与之一致的文件。
+`convert`、`publish`、`partition plan` 与 `api-keys` 读写目录：在主容器的 `/data` 挂载一个 PersistentVolumeClaim，路径写成 `--out /data/converted` 与 `--in /data/converted`。把 `convert` 作为一个 Job 运行，从卷上读 `report.json`（再起一个挂载它的 Pod，或用 `kubectl cp`），转换被接受之后才把 `publish` 作为另一个 Job 运行：`publish` 只接受 `report.json` 列出的、SHA-256 与之一致的文件。`publish`、`bootstrap` 与 `restore` 写入的东西在每个修订的来源记录里记为 `cosec-migrate`：谁运行了 Job，由你的部署自己记录（Job 本身、它所在命名空间的审计日志）。
 
 #### 回滚 {#rollback}
 
@@ -584,10 +584,10 @@ composite。8.0 中 `*` 还匹配控制面的动作（`cosec:*`）和[代码中�
 - **配置中的 key**（`cosec.api-key.keys[]`）：`tenant-id` 必填，每个 key 恰好设置 `roles`（它的上限；`[]` 表示没有角色）与 `uncapped: true` 之一。`policies` 和 `attributes` 已删除；仍设置它们的 key 会导致启动失败，`roles` 与 `uncapped` 都不设或都设的 key 也一样。7.x 的 key 只拥有它列出的角色和策略；要保留一个什么都没有的 key，给它设置 `roles: []`。
 - **`ApiKey`** 是普通类 `ApiKey(id, principalId, tenantId, roles, expiresAt, enabled)`：`policies`、`attributes` 和 `toPrincipal()` 已删除，`tenantId` 必填，`roles: Set<String>?` 是上限，且没有默认值。
 
-**转换已存储的 key。** `--app <id>` 指明转换后的 key 属于哪个应用（[应用](../integration/authentication.md#apps)）；7.x 的 key 没有声明应用，不指定时配置了应用的服务会拒绝它们。`cosec-migrate api-keys` 读取部署读取 API key 的 `<--key-prefix>:api-key`（默认 `cosec:api-key`）下的每个 key，并把 `api-keys-report.json` 写入 `--out`。导出每个主体当前拥有的角色，格式为 JSON 数组 `{"tenant", "principal", "roles": ["role", "role@space", ...]}`，作为 `--memberships` 传入：
+**转换已存储的 key。** `--app <id>` 指明转换后的 key 属于哪个应用（[应用](../integration/authentication.md#apps)）；7.x 的 key 没有声明应用，不指定时配置了应用的服务会拒绝它们。`cosec-migrate api-keys` 读取部署读取 API key 的 `<--key-prefix>:api-key`（默认 `cosec:api-key`）下的每个 key，并把 `api-keys-report.json` 写入 `--out`。导出每个主体当前拥有的角色，格式为 JSON 数组 `{"tenant", "principal", "roles": ["role", "role@space", ...]}`；你的成员关系提供者给它附加了策略时，再加上 `"attachments": ["policy", ...]`。作为 `--memberships` 传入。再导出你的应用黑名单拉黑的主体，格式为其 `BlacklistSource` 为它们保存的值组成的 JSON 数组（`["acme:mallory", ...]`，即 `<tenant>:<principal id>`），作为 `--blacklist` 传入：
 
 ```bash
-cosec-migrate api-keys --redis redis://localhost:6379 --memberships ./memberships.json --out ./api-keys --dry-run
+cosec-migrate api-keys --redis redis://localhost:6379 --memberships ./memberships.json --blacklist ./blacklist.json --out ./api-keys --dry-run
 ```
 
 每个 key 走三条路之一（`keys[].mode`）：
@@ -598,9 +598,17 @@ cosec-migrate api-keys --redis redis://localhost:6379 --memberships ./membership
 | `own-principal` | 其他情况，默认 | 迁到其租户中的工作负载主体 `apikey:<key id>`，没有上限；`memberships` 列出该主体需要拥有的 key 的角色，`principalBindings` 把它附加的策略按名绑定给该主体 |
 | `granted` | 只针对 `--grant-to-principal <ids>`（或 `all`）列出的主体 | 留在其主体上，上限为它的角色加上它自己的一个角色（`--role-prefix`，默认 `api-key.`，加上 key id），`roleBindings` 把这个角色绑定到它附加的策略；主体被授予其各个可用 key 的上限之并，`memberships[].newlyGained` 指出它原来没有的 |
 
-没有 key 会获得更多权限；除非在 `--grant-to-principal` 中列出，也没有主体会获得更多权限。key 失去的东西按 key 列出：`lost` 是 key 不再能用到的其主体的主体绑定和 break-glass 绑定；对 `own-principal`，`changes` 是依赖主体 id 的东西（审计主体、`subject.id` 上的条件、按主体计数的限流桶、转发的 `CoSec-Identity` 的 `sub`）。
+按给出的文档、成员关系与黑名单，没有 key 会获得更多权限；除非在 `--grant-to-principal` 中列出，也没有主体会获得更多权限。只要有 DENY 或黑名单按 id 点名了 key 的主体，key 就不会迁到自己的主体（`MIG-6`），因为 `apikey:<key id>` 会逃出它：
+- DENY 中、或 ALLOW 里取反之下的条件，把 `subject.id` 与对该主体成立的值比较（`eq`、`in`、`prefix`），或与文档无法确定的值比较（另一个属性：这时每把 key 都这样被拒绝）；
+- 策略含 DENY 的主体绑定；
+- `--memberships` 导出在该主体的 `attachments` 里列出的 DENY；
+- `--blacklist` 导出里该主体的条目。
 
-以下情况 key 被拒绝，此时命令以 `1` 退出，不写入任何 key：带属性（条件可能读取它们）、角色格式错误、id 含 `@`、`*` 或空白、某个角色以角色前缀开头、某个文档已经绑定了按 key 生成的角色，或附加的策略不能精确解析：不存在、不可附加，或租户和平台都定义了它但内容不同。这样的附加在 8.0 中让该 key 的每个请求都不确定，丢掉它又可能丢掉一个 DENY：先修正文档或 key。7.x 不保证 key id 唯一，所以以下情况 key 也会被拒绝：同一租户中另一个 key 的 id 相同（两者会变成同一个主体，或共用一个按 key 生成的角色）；`own-principal` 的 key 要迁往的主体 `apikey:<key id>` 已经存在，即某个文档按名绑定了它，或 `--memberships` 列出了它，这时 key 会获得该主体拥有的权限。`--memberships` 文件中同一主体出现两次，或 `tenant`、`principal`、`roles` 的类型不对（`roles` 是字符串数组，只有 `[]` 表示没有角色）时被拒绝。没有租户的 key 归入默认租户（`defaultTenant`）。
+这样的 key 被拒绝，并点名每条 DENY。把它留在其主体上：原地，或用 `--grant-to-principal`。key 失去的东西按 key 列出：`lost` 是带上限的 key 不再能用到的、其主体的授予型主体绑定和 break-glass 绑定；`stillDenied` 是绑定到其主体的 DENY，带上限的 key 仍受它约束；对 `own-principal`，`changes` 是依赖主体 id 的东西（审计主体、按主体计数的限流桶、转发的 `CoSec-Identity` 的 `sub`）。
+
+没有 `--blacklist` 时，工具看不到你的黑名单，并在输出里说明这一点。主体被拉黑的 key 会像其他 key 一样迁走，从此不再被拦：这样的 key 请原地保留，或在使用之前把报告为每把迁走的 key 写出的值（`blockIfPrincipalBlocked`，即 `<tenant>:apikey:<key id>`）也拉黑。
+
+以下情况 key 被拒绝，此时命令以 `1` 退出，不写入任何 key：有 DENY 点名其主体而它要迁走（见上）、存储的记录里有成员类型与格式不符（`policies` 不是数组：读成空会丢掉附加的 DENY）、带属性（条件可能读取它们）、角色格式错误、id 含 `@`、`*` 或空白、某个角色以角色前缀开头、某个文档已经绑定了按 key 生成的角色，或附加的策略不能精确解析：不存在、不可附加，或租户和平台都定义了它但内容不同。这样的附加在 8.0 中让该 key 的每个请求都不确定，丢掉它又可能丢掉一个 DENY：先修正文档或 key。7.x 不保证 key id 唯一，所以以下情况 key 也会被拒绝：同一租户中另一个 key 的 id 相同（两者会变成同一个主体，或共用一个按 key 生成的角色）；`own-principal` 的 key 要迁往的主体 `apikey:<key id>` 已经存在，即某个文档按名绑定了它，或 `--memberships` 列出了它，这时 key 会获得该主体拥有的权限。`--memberships` 文件中同一主体出现两次，或 `tenant`、`principal`、`roles` 的类型不对（`roles` 是字符串数组，只有 `[]` 表示没有角色）时被拒绝。没有租户的 key 归入默认租户（`defaultTenant`）。
 
 没有角色的 `own-principal` key 也会列在 `memberships` 中，`roles: []`。它的主体同样必须在你的 `MembershipProvider` 中存在，只是没有角色：提供者不认识的主体会被拒绝，带该 key 的每个请求都会得到 `401`。
 

@@ -1,0 +1,17 @@
+# Rule: CTL-2
+# Mutant: a change that kept moving while it was settled after its head write answers 409, as if nothing were done, though its revision is in effect (DR1-E-7)
+# Tests: :control:test --tests me.ahoo.cosec.control.change.PublishedNotExpiredTest
+
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Publishing.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Publishing.kt
+index 52d09fb01..e77ad58d3 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Publishing.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Publishing.kt
+@@ -269,7 +269,7 @@ internal class Publishing(
+     private suspend fun <T> afterHead(change: ChangeRequest, revision: Long, steps: suspend () -> T): T = try {
+         steps()
+     } catch (e: ChangeRejectedException) {
+-        throw if (e.status == CONFLICT) unsettled(change, revision, e) else e
++        throw e
+     } catch (e: Exception) {
+         throw unsettled(change, revision, e)
+     }

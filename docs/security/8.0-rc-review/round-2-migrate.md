@@ -38,7 +38,10 @@ The writers reach the store only through the control plane's own `Revisions`:
 - all three refuse break-glass bindings;
 - `repair-references` prunes an index entry only when the head that indexed it has moved past it.
 
-The one S2 is in the API key migration. In the default mode a key moves to a principal of its own. Anything that
+*Status, after the fixes:* DR2-M-1, M-2 and M-9 are fixed by #1970. M-3 to M-6 and M-8 are fixed by #1972. M-7 is
+for 8.1, and #1972 documents it. DR2-M-9 is a second S2, found by the coordinator's review of #1970 (below).
+
+The first S2 is in the API key migration. In the default mode a key moves to a principal of its own. Anything that
 restricted the key's 7.x principal by name then stops applying to it: a converted DENY on `subject.id`, or a DENY bound
 to that principal. Yet the tool, `upgrading.md` and RFC 0009 §4.4 all say no key gains access.
 
@@ -57,14 +60,15 @@ Nothing here affects a released line: `cosec-migrate` is new in 8.0.
 
 | Id | Severity | Area | Finding | Status |
 |---|---|---|---|---|
-| DR2-M-1 | S2 | api-keys | An `own-principal` key escapes every DENY that names its 7.x principal (a converted DENY on `subject.id`, a DENY principal binding), while the tool says no key gains access | open |
-| DR2-M-2 | S3 | api-keys | A legacy key record is read leniently: `policies`, `roles` or `attributes` of the wrong type read as empty, so an attached DENY is dropped, the attributes refusal is skipped, and a record 7.x could not load becomes a working key | open |
-| DR2-M-3 | S4 | publish | The SHA-256s `publish --in` checks are in `report.json` of the same directory: they catch an accidental edit, not a writer of the directory, though the code says `publish` writes only what `convert` produced | open |
-| DR2-M-4 | S4 | convert | 7.x ids, keys and permission names are printed raw in rejections, warnings and locations: a control character in 7.x data forges lines in the summary an operator reads before publishing | open |
-| DR2-M-5 | S4 | convert | The Redis reader drops, without a count or a warning, a value in CoCache 6's state `M` or `L` and every policy whose id begins with `history:` | open |
-| DR2-M-6 | S4 | all commands | Redis credentials are read only from the command line: the documented Job expands `$(REDIS_URI)` into `args`, so the password is in the process list of the node | open |
-| DR2-M-7 | S4 | publish, bootstrap, restore | Every write is attributed to the fixed actor `cosec-migrate`: the way back from a lock-out, which bypasses approval, names no operator | open |
-| DR2-M-8 | S4 | api-keys | The check that an `own-principal` key's `apikey:<id>` is not an existing principal sees documents and `--memberships` only: without the export, a principal the provider already knows is not seen | open |
+| DR2-M-1 | S2 | api-keys | An `own-principal` key escapes every DENY that names its 7.x principal (a converted DENY on `subject.id`, a DENY principal binding), while the tool says no key gains access | fixed by #1970 (`MIG-6`) |
+| DR2-M-2 | S3 | api-keys | A legacy key record is read leniently: `policies`, `roles` or `attributes` of the wrong type read as empty, so an attached DENY is dropped, the attributes refusal is skipped, and a record 7.x could not load becomes a working key | fixed by #1970 (`MIG-6`) |
+| DR2-M-3 | S4 | publish | The SHA-256s `publish --in` checks are in `report.json` of the same directory: they catch an accidental edit, not a writer of the directory, though the code says `publish` writes only what `convert` produced | words fixed by #1972 |
+| DR2-M-4 | S4 | convert | 7.x ids, keys and permission names are printed raw in rejections, warnings and locations: a control character in 7.x data forges lines in the summary an operator reads before publishing | fixed by #1972 |
+| DR2-M-5 | S4 | convert | The Redis reader drops, without a count or a warning, a value in CoCache 6's state `M` or `L` and every policy whose id begins with `history:` | fixed by #1972 |
+| DR2-M-6 | S4 | all commands | Redis credentials are read only from the command line: the documented Job expands `$(REDIS_URI)` into `args`, so the password is in the process list of the node | fixed by #1972 (`env:` and `file:`) |
+| DR2-M-7 | S4 | publish, bootstrap, restore | Every write is attributed to the fixed actor `cosec-migrate`: the way back from a lock-out, which bypasses approval, names no operator | 8.1; documented by #1972 |
+| DR2-M-8 | S4 | api-keys | The check that an `own-principal` key's `apikey:<id>` is not an existing principal sees documents and `--memberships` only: without the export, a principal the provider already knows is not seen | said in the output by #1972 |
+| DR2-M-9 | S2 | api-keys | An `own-principal` key escapes the application's blacklist, which blocks a principal by `<tenant>:<principal id>` and which the tool cannot see; found in the review of #1970 | fixed by #1970 (`MIG-6`, `--blacklist`) |
 
 ## Findings
 
@@ -106,6 +110,29 @@ Nothing here affects a released line: `cosec-migrate` is new in 8.0.
   - In the report, list DENY bindings apart from the grants a key loses.
 - **Regression guard:** an `ApiKeyMigrationTest` case with a document whose DENY reads `subject.id` of a key's
   principal, asserting a rejection, and a mutant that skips the collection.
+
+### DR2-M-9 · S2 · An `own-principal` key escapes the application's blacklist
+
+Found by the coordinator in the review of #1970, the fix of DR2-M-1: the same hole, by another door.
+
+- **Location:** `ApiKeyMigration` (the `own-principal` mode), and the blacklist the pipeline reads through
+  `BlacklistAttributeProvider`. `BlacklistKind.PRINCIPAL` blocks the value `<tenant>:<principal id>`
+  (`BlacklistKind.principal`), and the built-in blacklist rule is the first candidate of every decision.
+- **Trigger:** the application's `BlacklistSource` blocks `acme:mallory`, and `mallory` has a 7.x API key.
+- **Actual:** in 7.x the key's request carried its `principalId`, so the entry blocked the key. After `api-keys`, the
+  key acts as `apikey:k1`. The entry still says `acme:mallory`, so the key is no longer blocked. The entries live in the
+  application's source, not in a document, so the DR2-M-1 fix (which reads the documents) cannot see them, and the
+  console still says "never wider".
+- **Expected:** as DR2-M-1: no key gains access. Where the tool cannot know, it does not say it does.
+- **Why S2:** as DR2-M-1. A request the blacklist refused is permitted, for the holder of a blocked principal's key, by
+  default.
+- **Fix (#1970):**
+  - `--blacklist`, an export of the blocked principals' values, `["acme:mallory", ...]` (`BlacklistExport`). A key
+    whose principal is in it is refused for `own-principal` with the same message as DR2-M-1 and the same two ways out.
+  - Without the export, the console and `upgrading.md` say that no key is wider *by the documents, memberships and
+    blacklist given*. The output says the blacklist was not seen, and the report names, for each key that moved, the
+    value to block (`blockIfPrincipalBlocked`, `<tenant>:apikey:<key id>`).
+  - `MIG-6` covers it, with a test each way and the mutant `mig-6-blacklist-not-read`.
 
 ### DR2-M-2 · S3 · A legacy key record is read leniently
 

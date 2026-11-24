@@ -36,7 +36,8 @@ import kotlin.system.exitProcess
  *   [--prefix <document key prefix>] [--limit <n>]
  * partition plan (--from-redis <uri> [--key-prefix cosec] | --from-files ./export) --out ./plan
  * api-keys --redis redis://localhost:6379 [--key-prefix cosec] --out ./api-keys
- *          [--memberships ./memberships.json] [--grant-to-principal <ids>|all] [--role-prefix api-key.] [--dry-run]
+ *          [--memberships ./memberships.json] [--blacklist ./blacklist.json] [--grant-to-principal <ids>|all]
+ *          [--role-prefix api-key.] [--dry-run]
  * ```
  *
  * `publish` and `bootstrap` write through the control plane's store, so each document's revision chain starts with
@@ -69,7 +70,7 @@ object MigrateMain {
         "restore" to setOf("to-redis", "cluster", "key-prefix", "document", "revision", "file", "confirm"),
         "partition plan" to setOf("from-redis", "from-files", "key-prefix", "out"),
         "api-keys" to setOf(
-            "redis", "key-prefix", "out", "app", "memberships", "grant-to-principal", "role-prefix", "dry-run"
+            "redis", "key-prefix", "out", "app", "memberships", "blacklist", "grant-to-principal", "role-prefix", "dry-run"
         ),
     )
     const val API_KEYS_REPORT_FILE = "api-keys-report.json"
@@ -87,8 +88,9 @@ object MigrateMain {
           restore --to-redis <uri> [--cluster] [--key-prefix <p>] --document platform|app:<id>|tenant:<id>
                   --revision <n> or --file <document.json>, then the same with --confirm <head revision>
           (--cluster: --to-redis names seed nodes of a Redis Cluster, comma-separated)
+          (a Redis <uri> may be env:<VARIABLE> or file:<path>: the URI is read from there, off the command line)
           partition plan (--from-redis <uri> [--key-prefix <p>] | --from-files <dir>) --out <dir>
-          api-keys --redis <uri> [--key-prefix <p>] --out <dir> [--app <id>] [--memberships <file>]
+          api-keys --redis <uri> [--key-prefix <p>] --out <dir> [--app <id>] [--memberships <file>] [--blacklist <file>]
                    [--grant-to-principal <ids>|all] [--role-prefix <p>] [--dry-run]
     """.trimIndent()
 
@@ -100,7 +102,7 @@ object MigrateMain {
     @Suppress("TooGenericExceptionCaught")
     fun run(args: List<String>, out: PrintStream): Int {
         // What the tool prints of an error leaves out the credentials of every URI it was given ([RedisUris]).
-        val uris = args.filter { "://" in it }
+        val uris = args.filter { "://" in it }.toMutableList()
         fun printed(error: Throwable): String = RedisUris.scrub(error.message ?: error.javaClass.name, uris)
         val command = args.firstOrNull().let { if (it == "partition" && args.getOrNull(1) == "plan") "partition plan" else it }
         val options = try {
@@ -110,6 +112,8 @@ object MigrateMain {
             out.println(USAGE_TEXT)
             return USAGE
         }
+        // A URI read from the environment or a file is left out of what is printed as well.
+        uris += options.redisUris
         return try {
             dispatch(command, options, out)
         } catch (error: UsageException) {

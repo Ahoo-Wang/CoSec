@@ -74,6 +74,20 @@
         "migrate:UnmappedVocabularyTest#a rate limit rule on a path records C9 as a rule that is no longer limited",
         "migrate:UnmappedVocabularyTest#an ALLOW, a DENY of every action without a condition or on something else records no C9"
       ]
+    },
+    {
+      "id": "MIG-6",
+      "source": "RFC 0009 §4.4; round 2 of the RC deep review, DR2-M-1, DR2-M-2 and DR2-M-9, and the coordinator's ruling of 2026-11-24 (sentences proposed in the PR)",
+      "statement": "cosec-migrate api-keys never moves a key to a principal of its own (apikey:<key id>) while a DENY names the key's 7.x principal by its id, since the new principal would escape it: a condition read in the DENY direction (a DENY statement or its policy's condition, or under a negation in an ALLOW) that compares subject.id with a literal holding of the principal (eq, in, prefix) or with any other value the documents do not settle, a principal binding of a policy holding a DENY (or of one no document defines), a DENY the --memberships export says the provider attaches to it, or the application's blacklist blocking the principal, as the --blacklist export of its <tenant>:<principal id> values says. Without --blacklist the tool cannot see the blacklist: it says that no key is wider by the documents, memberships and blacklist given, and the report names, for each key that moved, the value to block (<tenant>:apikey:<key id>) if its principal is blocked. Such a key is refused, naming each DENY, and stays on its principal, capped, in place or with --grant-to-principal; a capped key's report lists the DENY bindings it stays under apart from the grants it loses. A stored key whose member has another type than its format says is unreadable, naming the member, never read as empty.",
+      "level": "build",
+      "pending": null,
+      "guards": [
+        "migrate:ApiKeyMigrationTest#a key whose principal a DENY names by its id stays on its principal - MIG-6",
+        "migrate:ApiKeyMigrationTest#a DENY that names no key's principal lets the key move to a principal of its own - MIG-6",
+        "migrate:ApiKeyMigrationTest#a stored key with a member of the wrong type is refused, naming the member",
+        "migrate:ApiKeyMigrationTest#a key whose principal the blacklist blocks stays on its principal - MIG-6",
+        "migrate:ApiKeyMigrationTest#a key whose principal no given blacklist blocks moves, and without one its report names what to block - MIG-6"
+      ]
     }
   ]
 }
