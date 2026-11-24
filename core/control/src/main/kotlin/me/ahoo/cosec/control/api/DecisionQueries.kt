@@ -44,9 +44,9 @@ internal class DecisionQueries(
         val simulated = decidable.request
         val scope = resolved(simulated) ?: return rejected(simulated)
         // The tenant's document first: with the scope, it decides whether the app's is read, as enforcement decides.
-        val tenantHead = retained.held(tenant)
+        val tenantHead = retained.held(tenant, operator.tenant)
         val keys = simulator.keys(scope, tenantHead?.document)
-        val heads = keys.associateWith { if (it == tenant) tenantHead else retained.held(it) }
+        val heads = keys.associateWith { if (it == tenant) tenantHead else retained.held(it, operator.tenant) }
         val enforcedDocuments = documents(heads)
         val enforced = simulator.decide(simulated, scope, enforcedDocuments)
         var proposedDocuments: HeldDocuments? = null
@@ -64,7 +64,9 @@ internal class DecisionQueries(
             // A tenant change may make the request read another app document, or none (RC1-17): as once it publishes.
             val fetched = if (change.key == tenant) simulator.keys(scope, document) else keys
             // The candidate is no stored content: compiled once, here; the heads come from the cache.
-            val proposedHeads = fetched.associateWith { heads[it] ?: retained.held(it) } + (change.key to Held(document, null))
+            val proposedHeads = fetched.associateWith {
+                heads[it] ?: retained.held(it, operator.tenant)
+            } + (change.key to Held(document, null))
             documents(proposedHeads).also { proposedDocuments = it }.let { simulator.decide(simulated, scope, it) }
         }
         val redaction = redaction(operator, (enforced.read + proposed?.read.orEmpty()).distinct())
@@ -91,14 +93,14 @@ internal class DecisionQueries(
         // The tenant's document at the revision decided on first: it decides, by enforcement's rule, whether the app's
         // was read (RC1-17), so the app revision an audit event recorded is the one explained.
         suspend fun documentAt(key: SnapshotKey): Held? = if (at == null) {
-            retained.held(key)
+            retained.held(key, operator.tenant)
         } else {
             val revision = when (key) {
                 SnapshotKey.Platform -> at.platform
                 is SnapshotKey.App -> at.app
                 else -> at.tenant
             }
-            revision?.takeIf { it > 0 }?.let { retained.retainedHeld(key, it) }
+            revision?.takeIf { it > 0 }?.let { retained.retainedHeld(key, it, operator.tenant) }
         }
         val tenantDocument = documentAt(tenant)
         val keys = simulator.keys(scope, tenantDocument?.document)

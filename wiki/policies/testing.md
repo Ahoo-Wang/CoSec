@@ -271,8 +271,9 @@ so propose it as several (`CTL-41`, [Entry budgets](./language.md#entry-budgets)
 no document (`simulate`, `explain`, `analyze`, a step of a change, a rollback, break-glass), reads at most 64 KB, and
 a larger body is a `400` before it is parsed (DR1-F-3). Before a route that carries a document parses its body, it
 holds the body's weight in the control plane's work budget, after the hard rule when its path names the document; so
-does a call that decodes a document too large for the cache (`CTL-85`). A call that does not fit waits its tenant's
-turn, at most half the pipeline timeout, and is otherwise `503` with `Retry-After: 1`, before anything was read or
+does a call that decodes a document too large for the cache (`CTL-85`), charged to the caller's tenant whichever
+document it is: a tenant's `explain` at the platform's or an app's revisions waits in its own turn, never in the
+platform operators' (DR2-F-2). A call that does not fit waits its tenant's turn, at most half the pipeline timeout, and is otherwise `503` with `Retry-After: 1`, before anything was read or
 decided: try again. Each tenant takes at most half the budget while another waits, so one tenant writing large
 documents in a loop does not hold the others back. One call counts at most the whole budget, whatever its pieces, so
 the heaviest call is always answered, alone.

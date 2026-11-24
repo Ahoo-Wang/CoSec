@@ -467,6 +467,7 @@ object GuardAllowlist {
             "control:ControlBodyTreeTest#no body becomes a tree heavier than the tree factor per byte",
             "control:ControlWorkRoutesTest#a document of another tenant is refused before any work is held or its body read",
             "control:ControlWorkRoutesTest#a call the budget refuses is a 503 that says when to retry",
+            "control:ControlWorkRoutesTest#a tenant's explain of the platform's revisions is charged to the tenant, never to the platform - DR2-F-2",
             "runtime:SnapshotConsistencyPropertyTest#everyEvaluationReadsOneRevisionPerDocument",
             "runtime:DocumentSnapshotViewsTest#a view decides with the revisions it was built from",
             "runtime:SuspendingSnapshotSourceTest#theViewWithTheAppIsOneReadWhole",

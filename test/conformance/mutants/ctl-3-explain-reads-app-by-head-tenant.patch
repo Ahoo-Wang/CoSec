@@ -3,15 +3,14 @@
 # Tests: :control:test --tests me.ahoo.cosec.control.api.AppDocumentDecisionsTest :conformance:test
 
 diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/api/DecisionQueries.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/api/DecisionQueries.kt
-index 72fdaffec..831a592ad 100644
 --- a/core/control/src/main/kotlin/me/ahoo/cosec/control/api/DecisionQueries.kt
 +++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/api/DecisionQueries.kt
 @@ -101,7 +101,7 @@ internal class DecisionQueries(
-             revision?.takeIf { it > 0 }?.let { retained.retainedHeld(key, it) }
+             revision?.takeIf { it > 0 }?.let { retained.retainedHeld(key, it, operator.tenant) }
          }
          val tenantDocument = documentAt(tenant)
 -        val keys = simulator.keys(scope, tenantDocument?.document)
-+        val keys = simulator.keys(scope, retained.held(tenant)?.document)
++        val keys = simulator.keys(scope, retained.held(tenant, operator.tenant)?.document)
          val documents = keys.associateWith { if (it == tenant) tenantDocument else documentAt(it) }
          // The revisions the view read (R2-5): an app's only when it took the app's document.
          val decidedDocuments = documents(documents)

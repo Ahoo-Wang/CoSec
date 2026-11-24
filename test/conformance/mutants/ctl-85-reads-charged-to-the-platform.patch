@@ -1,0 +1,16 @@
+# Rule: CTL-85
+# Mutant: a document a call decodes for itself is charged to the platform, whoever asks
+# Tests: :control:test --tests me.ahoo.cosec.control.api.ControlWorkRoutesTest
+
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/api/RetainedDocuments.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/api/RetainedDocuments.kt
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/api/RetainedDocuments.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/api/RetainedDocuments.kt
+@@ -74,7 +74,7 @@ internal class RetainedDocuments(
+      */
+     private suspend fun charge(caller: TenantId, size: Int) {
+         if (cache.admits(size.toLong())) return
+-        work.hold(caller.value, size.toLong() * (DocumentCache.DECODED_FACTOR + DocumentCache.COMPILED_FACTOR))
++        work.hold(TenantId.PLATFORM.value, size.toLong() * (DocumentCache.DECODED_FACTOR + DocumentCache.COMPILED_FACTOR))
+     }
+ 
+     suspend fun retained(key: SnapshotKey, revision: Long): PolicyDocument =
