@@ -75,14 +75,13 @@ internal class SharedRead<T>(
             last = read
             shared.complete(read)
             return read
+        } catch (e: CancellationException) {
+            // A cancellation of this call is its own: its waiters load again. One while it is still active is the
+            // store's (a timeout), and the waiters get it as this call does.
+            if (currentCoroutineContext().isActive) shared.completeExceptionally(e) else shared.complete(null)
+            throw e
         } catch (e: Throwable) {
-            // A cancellation of this call is its own; one while it is still active is the store's (a timeout), and
-            // the waiters get it as this call does.
-            if (e is CancellationException && !currentCoroutineContext().isActive) {
-                shared.complete(null)
-            } else {
-                shared.completeExceptionally(e)
-            }
+            shared.completeExceptionally(e)
             throw e
         } finally {
             synchronized(lock) { if (inflight === shared) inflight = null }
