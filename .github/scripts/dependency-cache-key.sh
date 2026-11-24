@@ -22,13 +22,15 @@
 #              repositories are not found by a build that asks this one (#1730): a cache never restores across a change of
 #              `repos`, and falls back, across a change of `versions`, only to one written for the same `repos`.
 #
-# Prints `key=...` and `restore-keys=...` for $GITHUB_OUTPUT; run in the root of a checkout.
+# Prints `key=...` and `restore-keys=...` for $GITHUB_OUTPUT; run in the root of a checkout. A workflow's own checkout of the CI
+# scripts inside it (`.ci-actions`, system-test.yml) is not the build: its init scripts would change `repos` (#1955).
 set -euo pipefail
 
 hash() { sha256sum | cut -c1-16; }
 repos=$({
   cat settings.gradle.kts
   find . -name '*.gradle.kts' -not -path './node_modules/*' -not -path '*/build/*' -not -path './.git/*' -not -path './typescript/*' \
+    -not -path './.ci-actions/*' \
     | LC_ALL=C sort | xargs grep -hE 'mavenCentral|mavenLocal|gradlePluginPortal|maven *[({]|exclusiveContent|pluginManagement|repositories' || true
 } | hash)
 versions=$(cat gradle/libs.versions.toml gradle/wrapper/gradle-wrapper.properties | hash)
