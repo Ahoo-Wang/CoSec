@@ -20,9 +20,9 @@ import me.ahoo.cosec.annotations.InternalCoSecApi
 import java.time.Duration
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicLong
-import kotlin.coroutines.cancellation.CancellationException
 import kotlin.coroutines.AbstractCoroutineContextElement
 import kotlin.coroutines.CoroutineContext
+import kotlin.coroutines.cancellation.CancellationException
 
 /**
  * The work memory the control plane's calls hold at once (`CTL-85`, DR1-F-3, DR1-F-4): weights in bytes, at most
@@ -107,12 +107,16 @@ class WorkBudget(
 
     private suspend fun acquire(tenant: String, weight: Long, patience: Duration, holding: Boolean): Grant {
         val waiter = synchronized(lock) {
-            if ((holding || queues.isEmpty()) && eligible(tenant, weight) && fits(weight)) return take(tenant, weight)
+            // At once only when nothing waits (no barging), or for a call that holds already (it never waits).
+            val now = holding || queues.isEmpty()
+            if (now && admits(tenant, weight)) return take(tenant, weight)
             if (holding) return refuse(tenant, weight, "it holds work already, and never waits for more")
             Waiter(tenant, weight).also { queues.getOrPut(tenant) { ArrayDeque() }.addLast(it) }
         }
         try {
-            if (withTimeoutOrNull(patience.toMillis()) { waiter.signal.await() } != null) return checkNotNull(waiter.grant)
+            if (withTimeoutOrNull(patience.toMillis()) { waiter.signal.await() } != null) {
+                return checkNotNull(waiter.grant)
+            }
         } catch (cancelled: CancellationException) {
             leave(waiter)?.release()
             throw cancelled
@@ -137,6 +141,8 @@ class WorkBudget(
     }
 
     private fun fits(weight: Long) = heldTotal + weight <= capacity
+
+    private fun admits(tenant: String, weight: Long) = eligible(tenant, weight) && fits(weight)
 
     /** Whether [tenant] may take [weight] now: within half the budget while another tenant waits, or holding nothing. */
     private fun eligible(tenant: String, weight: Long): Boolean {

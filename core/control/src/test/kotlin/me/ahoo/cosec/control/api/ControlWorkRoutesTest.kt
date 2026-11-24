@@ -47,7 +47,10 @@ class ControlWorkRoutesTest {
         val http = ControlHttp(fixture.plane, work = budget)
 
         // Not JSON at all: were it read, it would be a 400; held, it would be a 503 (the budget is full).
-        val response = http.handle(ControlHttpRequest("POST", "/documents/tenant:acme:apply", emptyMap(), "{".encodeToByteArray()), mallory)
+        val response = http.handle(
+            ControlHttpRequest("POST", "/documents/tenant:acme:apply", emptyMap(), "{".encodeToByteArray()),
+            mallory
+        )
 
         response.status.assert().isEqualTo(403)
         budget.refused.assert().isEqualTo(0L)

@@ -22,9 +22,9 @@ import me.ahoo.cosec.control.api.ControlHttpSupport.get
 import me.ahoo.cosec.control.api.ControlHttpSupport.notFound
 import me.ahoo.cosec.control.api.ControlRequestJson.query
 import me.ahoo.cosec.control.authz.Operator
+import me.ahoo.cosec.control.change.requireRequest
 import me.ahoo.cosec.control.lifecycle.ControlDerived
 import me.ahoo.cosec.control.lifecycle.WorkBudget
-import me.ahoo.cosec.control.change.requireRequest
 import me.ahoo.cosec.model.Identifiers
 
 /**

@@ -33,9 +33,13 @@ class ControlDerivedTest {
         ControlDerived.workBudgetBytes(2_048 * mib).assert().isEqualTo(256 * mib)
         ControlDerived.workBudget(heap = 512 * mib).capacity.assert().isEqualTo(64 * mib)
         ControlDerived.bodyWeight(ControlDerived.MAX_BODY_BYTES).assert()
-            .isEqualTo(ControlDerived.MAX_BODY_BYTES * (ControlDerived.BODY_TREE_FACTOR + ControlDerived.CANDIDATE_FACTOR))
+            .isEqualTo(
+                ControlDerived.MAX_BODY_BYTES * (ControlDerived.BODY_TREE_FACTOR + ControlDerived.CANDIDATE_FACTOR)
+            )
         // On 512 MiB the largest body weighs more than the budget: it runs alone, one at a time.
-        ControlDerived.describeWork(512 * mib).assert().contains("work budget=64MB (1/8 of the heap)").contains(": 1 at once")
+        ControlDerived.describeWork(
+            512 * mib
+        ).assert().contains("work budget=64MB (1/8 of the heap)").contains(": 1 at once")
         ControlDerived.describe(Duration.ofMinutes(15)).assert().contains("work budget=")
     }
 

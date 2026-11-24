@@ -69,7 +69,11 @@ class WorkBudgetTest {
         }.exceptionOrNull()
         refused.assert().isInstanceOf(WorkBudgetExhaustedException::class.java)
         currentTime.assert().isEqualTo(0L)
-        budget.withWork("a", 60, patience) { budget.withWork("a", 40, patience) { budget.held.assert().isEqualTo(100L) } }
+        budget.withWork(
+            "a",
+            60,
+            patience
+        ) { budget.withWork("a", 40, patience) { budget.held.assert().isEqualTo(100L) } }
         budget.refused.assert().isEqualTo(1L)
     }
 
@@ -168,7 +172,16 @@ class WorkBudgetTest {
             budget.withWork("heavy", 100, patience) { currentTime }
         }
         // Light calls of other tenants, each holding 10 for 5 ms, arriving every millisecond.
-        repeat(50) { i -> launch { delay(i.toLong()); runCatching { budget.withWork("light-${i % 3}", 10, patience) { delay(5) } } } }
+        repeat(
+            50
+        ) { i ->
+            launch {
+                delay(
+                    i.toLong()
+                );
+                runCatching { budget.withWork("light-${i % 3}", 10, patience) { delay(5) } }
+            }
+        }
         val granted = heavy.await()
         granted.assert().isLessThan(patience.toMillis())
     }
@@ -207,7 +220,10 @@ class WorkBudgetTest {
                         }
                     }
                 }
-                if (i % CANCEL_EVERY == 0) launch { delay(start + random.nextLong(0, 20)); call.cancel() }
+                if (i % CANCEL_EVERY == 0) launch {
+                    delay(start + random.nextLong(0, 20));
+                    call.cancel()
+                }
                 call
             }
             calls.forEach { it.join() }
