@@ -61,7 +61,9 @@ class RouteMapTest {
             Triple("/odata/metadata", "odata:metadata", "od|ata"),
         )) {
             assertThrows<RouteMapException> { load(file(route("GET", path, action, resource))) }
-                .message.assert().describedAs("$path $action $resource").contains("is reserved for a future pattern syntax")
+                .message.assert().describedAs(
+                    "$path $action $resource"
+                ).contains("is reserved for a future pattern syntax")
         }
         val escaped = load(
             file(

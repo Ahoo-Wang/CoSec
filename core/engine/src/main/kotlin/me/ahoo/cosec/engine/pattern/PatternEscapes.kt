@@ -89,11 +89,8 @@ object PatternEscapes {
     }
 
     /** The refusal of [char], reserved, at [index] of [pattern]. */
-    internal fun reserved(pattern: String, index: Int, char: Char): InvalidPatternException = InvalidPatternException(
-        pattern,
-        index,
-        "'$char' is reserved for a future pattern syntax; write \\$char for the character",
-    )
+    internal fun reserved(pattern: String, index: Int, char: Char): InvalidPatternException =
+        InvalidPatternException(pattern, index, reservedReason(char))
 
     /**
      * [text], a literal part of [pattern] beginning at [offset], with its escapes resolved. A character of [RESERVED] or
@@ -107,32 +104,29 @@ object PatternEscapes {
         syntax: String,
         refuse: (Char) -> String?,
     ): String {
-        if (text.none { it == ESCAPE || it in RESERVED || it in syntax }) {
-            text.forEachIndexed { index, char -> refuse(char)?.let { throw InvalidPatternException(pattern, offset + index, it) } }
-            return text
-        }
         val literal = StringBuilder(text.length)
         var index = 0
         while (index < text.length) {
             val char = text[index]
-            when {
-                char == ESCAPE -> {
-                    literal.append(escaped(pattern, text, index, offset))
-                    index++
-                }
-                char in RESERVED -> throw reserved(pattern, offset + index, char)
-                char in syntax -> throw InvalidPatternException(
-                    pattern,
-                    offset + index,
-                    "'$char' is no literal here; write \\$char for the character",
-                )
-                else -> {
-                    refuse(char)?.let { throw InvalidPatternException(pattern, offset + index, it) }
-                    literal.append(char)
-                }
+            if (char == ESCAPE) {
+                literal.append(escaped(pattern, text, index, offset))
+                index += 2
+                continue
             }
+            refusal(char, syntax, refuse)?.let { throw InvalidPatternException(pattern, offset + index, it) }
+            literal.append(char)
             index++
         }
         return literal.toString()
     }
+
+    /** Why [char], unescaped in a literal part, does not compile there, or null when it is text. */
+    private fun refusal(char: Char, syntax: String, refuse: (Char) -> String?): String? = when (char) {
+        in RESERVED -> reservedReason(char)
+        in syntax -> "'$char' is no literal here; write \\$char for the character"
+        else -> refuse(char)
+    }
+
+    private fun reservedReason(char: Char): String =
+        "'$char' is reserved for a future pattern syntax; write \\$char for the character"
 }

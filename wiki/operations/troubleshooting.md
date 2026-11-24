@@ -550,7 +550,7 @@ rest, and the kubelet restarts the pod.
 - `` '<c>' is reserved for a future pattern syntax; write \<c> for the character ``: a pattern holds one of
   `[ ] ( ) | ! ^ $ \` unescaped (`DOC-15`), which an earlier preview read as text. Write it escaped, `\$` for `$`, a
   backslash doubled in JSON ([Policy language](../policies/language.md#reserved-characters)). The message gives the
-  position. Since 8.0.0-beta.9 a stored document with one is installed as failed, and the requests that read it answer
+  position. From the preview after 8.0.0-beta.8 on, a stored document with one is installed as failed, and the requests that read it answer
   `503`: find such documents before upgrading ([Upgrading from 8.0.0-beta.8](./upgrading-previews.md#from-8-0-0-beta-8)).
 - `` \<c> escapes nothing ``: a backslash before a character that is not one of `[ ] ( ) | ! ^ $ \ * ? { }`.
 - `` a request path holds no backslash ``, `` hold no ';' ``, `` holds no control character ``, `` holds no dot segment ``,

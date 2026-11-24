@@ -22,8 +22,8 @@ import me.ahoo.cosec.engine.pattern.Captures
 import me.ahoo.cosec.engine.pattern.HttpPath
 import me.ahoo.cosec.engine.pattern.HttpPathPattern
 import me.ahoo.cosec.engine.pattern.InvalidPatternException
-import me.ahoo.cosec.engine.pattern.PatternEscapes
 import me.ahoo.cosec.engine.pattern.PatternContainment
+import me.ahoo.cosec.engine.pattern.PatternEscapes
 import me.ahoo.cosec.engine.pattern.ResourcePattern
 import me.ahoo.cosec.model.Action
 import me.ahoo.cosec.model.Resource
@@ -101,8 +101,8 @@ class RouteMap private constructor(private val routes: Map<String, List<Compiled
         // The type and the literals hold their text; a pattern writes them escaped (`DOC-15`).
         (listOf(compiled.type) + compiled.segments.map { if (it is Segment.Literal) it.text else "*" })
             .map { if (it == "*") it else PatternEscapes.escape(it) }.joinToString(
-            "/"
-        )
+                "/"
+            )
 
     /**
      * The route of a request with [method] on [path], already normalized (`PathNormalizer`). A HEAD request takes a HEAD
@@ -337,8 +337,11 @@ class RouteMap private constructor(private val routes: Map<String, List<Compiled
                     else -> try {
                         Segment.Literal(PatternEscapes.unescape(text))
                     } catch (error: InvalidPatternException) {
-                        fail("resource [${route.resource}]: [$text] is neither a literal segment nor a {variable}: " +
-                            "${error.message}", error)
+                        fail(
+                            "resource [${route.resource}]: [$text] is neither a literal segment nor a {variable}: " +
+                                "${error.message}",
+                            error
+                        )
                     }
                 }
             }

@@ -87,6 +87,6 @@ class ReservedCharactersPropertyTest {
         const val RESERVED_ONLY = "[]()|!^$"
 
         /** Letters, the unreserved punctuation of a URI, and every metacharacter a path can hold (no `\`). */
-        val ALPHABET = LETTERS + "-._~" + RESERVED_ONLY + "*?{}"
+        const val ALPHABET = LETTERS + "-._~" + RESERVED_ONLY + "*?{}"
     }
 }

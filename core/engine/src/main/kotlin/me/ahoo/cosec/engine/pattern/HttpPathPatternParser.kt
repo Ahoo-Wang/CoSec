@@ -202,7 +202,10 @@ internal class HttpPathPatternParser(private val pattern: String, private val ca
                         throw invalid(begin + index, "a lone surrogate half is no character a path can hold")
                     }
                     if (char < ' ' || char == '\u007F') {
-                        throw invalid(begin + index, "a request path holds no control character (PIP-30): it matches no path")
+                        throw invalid(
+                            begin + index,
+                            "a request path holds no control character (PIP-30): it matches no path"
+                        )
                     }
                     literal.append(char)
                     plain.append(char)

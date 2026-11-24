@@ -49,6 +49,7 @@ class ActionPattern private constructor(
     companion object {
         private const val SEPARATOR = ':'
         private const val ANY_TEXT = "*"
+
         /** What a name writes escaped beyond the reserved characters: `*` is a whole name's wildcard, `?{}` other syntax. */
         private const val NAME_SYNTAX = "*?{}"
         val ANY: ActionPattern = ActionPattern(null, null)

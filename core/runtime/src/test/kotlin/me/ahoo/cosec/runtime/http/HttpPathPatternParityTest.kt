@@ -162,16 +162,7 @@ class HttpPathPatternParityTest {
         if (restNames.any { it in otherNames }) {
             return IntendedDifference.DUPLICATE_REST_VARIABLE
         }
-        if (pattern.replace(ANY_CAPTURE, "").any { it in PatternEscapes.RESERVED }) {
-            return IntendedDifference.RESERVED_CHARACTER
-        }
-        if (segments.any { segment ->
-                ';' in segment || segment == "." || segment == ".." || segment.length > HttpPath.MAX_SEGMENT_LENGTH ||
-                    segment.any { it < ' ' || it == '\u007F' }
-            }
-        ) {
-            return IntendedDifference.UNMATCHABLE_SEGMENT
-        }
+        reservation(pattern, segments)?.let { return it }
         val emptyMatching = segments.any { segment ->
             val captures = NAMED_CAPTURE.findAll(segment).count()
             val stars = segment.count { it == '*' }
@@ -180,6 +171,17 @@ class HttpPathPatternParityTest {
         }
         return if (emptyMatching) IntendedDifference.EMPTY_MATCHING_SEGMENT else null
     }
+
+    /** DOC-15's refusals: a reserved character, or a segment no request path's segment is. */
+    private fun reservation(pattern: String, segments: List<String>): IntendedDifference? = when {
+        pattern.replace(ANY_CAPTURE, "").any { it in PatternEscapes.RESERVED } -> IntendedDifference.RESERVED_CHARACTER
+        segments.any(::unmatchable) -> IntendedDifference.UNMATCHABLE_SEGMENT
+        else -> null
+    }
+
+    private fun unmatchable(segment: String): Boolean =
+        ';' in segment || segment == "." || segment == ".." || segment.length > HttpPath.MAX_SEGMENT_LENGTH ||
+            segment.any { it < ' ' || it == '\u007F' }
 
     private fun isLoneSurrogate(text: String, index: Int): Boolean = when {
         text[index].isHighSurrogate() -> index + 1 >= text.length || !text[index + 1].isLowSurrogate()

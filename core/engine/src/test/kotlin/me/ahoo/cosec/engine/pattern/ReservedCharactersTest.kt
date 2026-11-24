@@ -60,7 +60,9 @@ class ReservedCharactersTest {
         matches("/files/a\\${char}b", "/files/a${char}b").assert().isTrue()
         matches("/files/a\\${char}b", "/files/a${encoded}b").assert().isTrue()
         matches("/files/a\\${char}b", "/files/ab").assert().isFalse()
-        ResourcePattern.parse("file/a\\${char}b").matches(ResourceTarget(Resource("file", "a${char}b"))).assert().isTrue()
+        ResourcePattern.parse(
+            "file/a\\${char}b"
+        ).matches(ResourceTarget(Resource("file", "a${char}b"))).assert().isTrue()
         val action = ActionPattern.parse("svc:M\\$char")
         action.matches(Action("svc", "M$char")).assert().isTrue()
         action.toString().assert().isEqualTo("svc:M\\$char")
@@ -112,9 +114,21 @@ class ReservedCharactersTest {
         ActionPattern.parse("svc:a\\\\b").verb.assert().isEqualTo("a\\b")
         ActionPattern.parse("svc:a\\*").matches(Action("svc", "a*")).assert().isTrue()
         ActionPattern.parse("svc:a\\*").matches(Action("svc", "ab")).assert().isFalse()
-        assertThrownBy<InvalidPatternException> { ActionPattern.parse("svc:a\\:b") }.hasMessageContaining("escapes nothing")
-        assertThrownBy<InvalidPatternException> { ActionPattern.parse("svc:a{b") }.hasMessageContaining("no literal here")
-        assertThrownBy<InvalidPatternException> { ResourcePattern.parse("order/a?b") }.hasMessageContaining("no literal here")
+        assertThrownBy<InvalidPatternException> {
+            ActionPattern.parse(
+                "svc:a\\:b"
+            )
+        }.hasMessageContaining("escapes nothing")
+        assertThrownBy<InvalidPatternException> {
+            ActionPattern.parse(
+                "svc:a{b"
+            )
+        }.hasMessageContaining("no literal here")
+        assertThrownBy<InvalidPatternException> {
+            ResourcePattern.parse(
+                "order/a?b"
+            )
+        }.hasMessageContaining("no literal here")
     }
 
     // --- What matches no request path -------------------------------------------------------------------------------

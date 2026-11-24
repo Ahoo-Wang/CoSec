@@ -230,7 +230,12 @@ class OpenAPIServiceGeneratorTest {
         (routes.resolve("GET", "/files/a*b") as RouteResolution.Mapped).action.verb.assert().isEqualTo("star")
         routes.resolve("GET", "/files/axyzb").assert().isEqualTo(RouteResolution.Unmapped)
         routes.resolve("GET", "/files/whatx").assert().isEqualTo(RouteResolution.Unmapped)
-        (routes.resolve("GET", "/odata/${'$'}metadata") as RouteResolution.Mapped).action.verb.assert().isEqualTo("metadata")
+        (
+            routes.resolve(
+                "GET",
+                "/odata/${'$'}metadata"
+            ) as RouteResolution.Mapped
+            ).action.verb.assert().isEqualTo("metadata")
         val product = routes.resolve("GET", "/odata/v1/Products(42)") as RouteResolution.Mapped
         product.resource.id.assert().isEqualTo("42")
     }
