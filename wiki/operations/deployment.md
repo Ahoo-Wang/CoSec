@@ -267,7 +267,9 @@ that carries it is `8.0.0-beta.5`. Like the gateway, it is an application, publi
   ([`application.yaml`](https://github.com/Ahoo-Wang/CoSec/blob/main/platform/control-server/src/main/resources/application.yaml)),
   are read with the `config/application.yaml` you mount in `/opt/cosec-control-server`, key by key, as the gateway's are.
 - **What it refuses to start with** (`STA-10`), saying why: `cosec.control.enabled=false`, which leaves nothing to serve
-  (the gateway image is the read-only one), and `cosec.jwt.enabled`, `cosec.api-key.enabled` or
+  (the gateway image is the read-only one), as do `cosec.enabled=false`, `cosec.control.http.enabled=false` (the service
+  port's routes included) and `cosec.pipeline.mode=gateway`; `cosec.pipeline.caller=credential`, which refuses every call
+  as anonymous; and `cosec.jwt.enabled`, `cosec.api-key.enabled` or
   `cosec.authentication.login.enabled` set to `true`, which would wire a verification or a login that nothing here uses.
   A control plane that verifies tokens or signs people in is an application of your own.
 - **The statement it will not start without.** Like a service in `gateway` mode, the host believes any `CoSec-Identity` it

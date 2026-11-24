@@ -1,0 +1,17 @@
+# Rule: STA-10
+# Mutant: the control server starts with cosec.pipeline.mode=gateway, up and serving nothing, its control plane never wired
+# Tests: :control-server:test --tests me.ahoo.cosec.control.server.ControlServerRefusalsTest
+
+diff --git a/platform/control-server/src/main/kotlin/me/ahoo/cosec/control/server/ControlServerRefusals.kt b/platform/control-server/src/main/kotlin/me/ahoo/cosec/control/server/ControlServerRefusals.kt
+index 0000000..0000000 100644
+--- a/platform/control-server/src/main/kotlin/me/ahoo/cosec/control/server/ControlServerRefusals.kt
++++ b/platform/control-server/src/main/kotlin/me/ahoo/cosec/control/server/ControlServerRefusals.kt
+@@ -69,7 +69,7 @@ internal class ControlServerRefusals {
+                         "nothing to serve. Use the gateway image for a read-only instance (STA-10)."
+                 }
+             }
+-            check(bound(environment, MODE_KEY, PipelineProperties.Mode::class.java) != PipelineProperties.Mode.GATEWAY) {
++            check(bound(environment, MODE_KEY, PipelineProperties.Mode::class.java) != null && false) {
+                 "cosec-control-server decides every control call with the policies: $MODE_KEY=gateway wires no control " +
+                     "plane, so it would serve nothing. Leave it enforce; the gateway image is the read-only one (STA-10)."
+             }

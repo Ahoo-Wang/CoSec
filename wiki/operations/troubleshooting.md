@@ -699,7 +699,9 @@ cosec-control-server verifies no credential and issues no token: it believes the
 
 The `cosec-control` image refuses `cosec.jwt.enabled`, `cosec.api-key.enabled` and `cosec.authentication.login.enabled` set
 to `true`, and `cosec.control.enabled=false` (`cosec-control-server runs the control plane`): it verifies no credential and
-issues no token, and without the control plane it would be up and serve nothing. Remove the key. A control plane that
+issues no token, and without the control plane it would be up and serve nothing. It refuses what comes to the same too:
+`cosec.enabled=false`, `cosec.control.http.enabled=false` (no control route, the service port's included),
+`cosec.pipeline.mode=gateway` and `cosec.pipeline.caller=credential`, each named in the message. Remove the key. A control plane that
 verifies tokens or signs people in is an application of your own, with `cosec-control`; the gateway image is the
 read-only one.
 

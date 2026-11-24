@@ -38,6 +38,30 @@ class ControlServerRefusalsTest {
         }
     }
 
+    /** DR1-F-19: what comes to the control plane off is refused as it is, by its own key. */
+    @Test
+    fun `settings that leave the control server serving nothing are refused like the control plane off`() {
+        val refused = listOf(
+            "cosec.enabled" to "false",
+            "cosec.control.http.enabled" to " FALSE ",
+            "cosec.pipeline.mode" to "gateway",
+            "cosec.pipeline.mode" to "GATEWAY",
+            "cosec.pipeline.caller" to "credential",
+            "cosec.pipeline.caller" to "CREDENTIAL",
+        )
+        for ((key, value) in refused) {
+            assertThrownBy<IllegalStateException> {
+                ControlServerRefusals.check(MockEnvironment().withProperty(key, value))
+            }.hasMessageContaining(key).hasMessageContaining("STA-10")
+        }
+        ControlServerRefusals.check(
+            MockEnvironment().withProperty("cosec.enabled", "true").withProperty("cosec.control.http.enabled", "true")
+                .withProperty("cosec.pipeline.mode", "enforce").withProperty("cosec.pipeline.caller", "forwarded-identity")
+        )
+        // A value the starter cannot bind is the starter's to refuse.
+        ControlServerRefusals.check(MockEnvironment().withProperty("cosec.pipeline.mode", "sideways"))
+    }
+
     @Test
     fun `credential verification is refused because the host believes the identity it is sent`() {
         for (key in listOf("cosec.jwt.enabled", "cosec.api-key.enabled", "cosec.authentication.login.enabled")) {
