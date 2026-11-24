@@ -1,0 +1,17 @@
+# Rule: IDN-22
+# Mutant: a tenant switch issues on a pair the request was not made with, so the access token it was asked with need not be the one the pair names
+# Tests: :login:test --tests me.ahoo.cosec.login.token.SwitchLiveSessionTest
+
+diff --git a/extensions/login/src/main/kotlin/me/ahoo/cosec/login/token/SwitchTenantAuthentication.kt b/extensions/login/src/main/kotlin/me/ahoo/cosec/login/token/SwitchTenantAuthentication.kt
+index d296a555c..df10ecbd7 100644
+--- a/extensions/login/src/main/kotlin/me/ahoo/cosec/login/token/SwitchTenantAuthentication.kt
++++ b/extensions/login/src/main/kotlin/me/ahoo/cosec/login/token/SwitchTenantAuthentication.kt
+@@ -69,7 +69,7 @@ class SwitchTenantAuthentication<C : SwitchTenantCredentials>(
+         val principal = RequestSecurity.of(previous)?.principal
+             ?: throw TokenVerificationException("A switch is asked in a request the pipeline permitted.")
+         val token = tokenVerifier.refresh(CompositeToken(credentials.accessToken, credentials.refreshToken))
+-        if (token.id != principal.credential?.id || token.session == null || token.session != principal.session) {
++        if (token.session == null) {
+             throw TokenVerificationException("The token pair presented is not the one the switch was asked with.")
+         }
+         val live = sessions.presented(token)

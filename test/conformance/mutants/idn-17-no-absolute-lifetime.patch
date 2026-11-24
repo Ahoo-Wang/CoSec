@@ -3,7 +3,7 @@
 # Tests: :login:test --tests me.ahoo.cosec.login.token.TokenFamiliesTest
 
 diff --git a/extensions/login/src/main/kotlin/me/ahoo/cosec/login/token/TokenFamilies.kt b/extensions/login/src/main/kotlin/me/ahoo/cosec/login/token/TokenFamilies.kt
-index 6f03a3ff4..3a179c92e 100644
+index 2d51c1047..df9c6d657 100644
 --- a/extensions/login/src/main/kotlin/me/ahoo/cosec/login/token/TokenFamilies.kt
 +++ b/extensions/login/src/main/kotlin/me/ahoo/cosec/login/token/TokenFamilies.kt
 @@ -138,9 +138,6 @@ class TokenFamilies @JvmOverloads constructor(
@@ -23,6 +23,6 @@ index 6f03a3ff4..3a179c92e 100644
 -            if (!family.expiresAt.isAfter(now)) {
 -                throw TokenExpiredException("The session that began at ${family.authTime} has ended: sign in again.")
 -            }
-             when {
-                 session.generation == family.generation -> {
+             when (standing(session, family, now)) {
+                 Standing.CURRENT -> {
                      requireRootLive(family)
