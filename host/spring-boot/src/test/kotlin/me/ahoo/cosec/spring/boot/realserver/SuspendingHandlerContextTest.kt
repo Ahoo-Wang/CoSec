@@ -15,6 +15,8 @@
 
 package me.ahoo.cosec.spring.boot.realserver
 
+import jakarta.servlet.Filter
+import jakarta.servlet.http.HttpServletRequest
 import kotlinx.coroutines.CompletableDeferred
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
@@ -31,10 +33,12 @@ import org.springframework.boot.builder.SpringApplicationBuilder
 import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.boot.tomcat.autoconfigure.servlet.TomcatServletWebServerAutoConfiguration
 import org.springframework.boot.web.server.context.WebServerApplicationContext
+import org.springframework.boot.web.servlet.FilterRegistrationBean
 import org.springframework.boot.webmvc.autoconfigure.DispatcherServletAutoConfiguration
 import org.springframework.boot.webmvc.autoconfigure.WebMvcAutoConfiguration
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
+import org.springframework.core.Ordered
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.RestController
 import reactor.core.publisher.Hooks
@@ -54,7 +58,8 @@ import java.util.concurrent.TimeUnit
 class SuspendingHandlerContextTest {
     @RestController
     class Waiting {
-        val entered = CountDownLatch(1)
+        /** Alice's request has left its thread, so her handler is suspended at [gate] ([Mvc.suspension]). */
+        val suspended = CountDownLatch(1)
         val gate = CompletableDeferred<Unit>()
 
         private fun holder(): String = runCatching { CoSecSecurityContextHolder.requireSecurityContext().principal.id }
@@ -64,7 +69,6 @@ class SuspendingHandlerContextTest {
         @GetMapping("/orders/a")
         suspend fun first(context: SecurityContext): String {
             val before = holder()
-            entered.countDown()
             gate.await()
             return "parameter=${context.principal.id} before=$before after=${holder()}"
         }
@@ -98,9 +102,24 @@ class SuspendingHandlerContextTest {
 
         @Bean
         fun waiting() = Waiting()
+
+        /**
+         * Counts [Waiting.suspended] down once the thread of alice's request returns from the filter chain with the request
+         * asynchronous: her handler is then suspended at its gate, not about to reach it. Bob's request is sent only after
+         * that, so it resumes her handler on its own thread, never before she suspends.
+         */
+        @Bean
+        fun suspension(waiting: Waiting): FilterRegistrationBean<Filter> = FilterRegistrationBean(
+            Filter { request, response, chain ->
+                chain.doFilter(request, response)
+                if ((request as HttpServletRequest).requestURI == "/orders/a" && request.isAsyncStarted) {
+                    waiting.suspended.countDown()
+                }
+            }
+        ).apply { order = Ordered.HIGHEST_PRECEDENCE }
     }
 
-    private fun get(port: Int, path: String, who: String): String = Socket("127.0.0.1", port).use { socket ->
+    private fun get(port: Int, path: String, who: String): String = Socket(LOOPBACK, port).use { socket ->
         socket.soTimeout = TIMEOUT_MILLIS
         socket.getOutputStream().write(
             (
@@ -120,13 +139,16 @@ class SuspendingHandlerContextTest {
             Hooks.enableAutomaticContextPropagation()
         }
         val context = SpringApplicationBuilder(Mvc::class.java).web(WebApplicationType.SERVLET)
-            .properties("server.port=0", "spring.main.banner-mode=off")
+            .properties("server.address=$LOOPBACK", "server.port=0", "spring.main.banner-mode=off")
             .run()
         try {
             val port = (context as WebServerApplicationContext).webServer!!.port
             val waiting = context.getBean(Waiting::class.java)
             val alice = CompletableFuture.supplyAsync { get(port, "/orders/a", "alice") }
-            waiting.entered.await(TIMEOUT_MILLIS.toLong(), TimeUnit.MILLISECONDS).assert().isTrue()
+            val suspended = waiting.suspended.await(TIMEOUT_MILLIS.toLong(), TimeUnit.MILLISECONDS)
+            val answered = if (alice.isDone) alice.handle { body, error -> body ?: error.toString() }.join() else "nothing yet"
+            val why = "alice's handler did not suspend within the bound; her request answered: $answered"
+            suspended.assert().describedAs(why).isTrue()
             val bob = get(port, resumer, "bob")
             return alice.get(TIMEOUT_MILLIS.toLong(), TimeUnit.MILLISECONDS) to bob
         } finally {
@@ -170,6 +192,13 @@ class SuspendingHandlerContextTest {
 
     private companion object {
         const val TIMEOUT_MILLIS = 10_000
+
+        /**
+         * The server binds this address, not every address, and the requests go to it: bound to every address on a port
+         * the system chose, a server shares that port with any process bound to one address on it, which then takes the
+         * connections to that address. On a machine running other builds alice's handler once never ran within the bound.
+         */
+        const val LOOPBACK = "127.0.0.1"
 
         /** How the holder's message starts: it names what to read instead. */
         const val UNBOUND = "No SecurityContext is bound to this thread"

@@ -1,0 +1,51 @@
+{
+  "rules": [
+    "CTL-86"
+  ],
+  "polarity": "positive",
+  "level": "control",
+  "description": "DR1-F-7: three publishes, then the head back at revision 2 with the index and the records as they were, as a failover that loses a head write leaves them: revision 3 is listed above the head, lost.",
+  "publishes": [
+    {
+      "policies": [
+        "p1"
+      ]
+    },
+    {
+      "policies": [
+        "p2"
+      ]
+    },
+    {
+      "policies": [
+        "p3"
+      ]
+    }
+  ],
+  "restoreAfter": 2,
+  "lost": true,
+  "expect": {
+    "outcomes": [
+      "Published",
+      "Published",
+      "Published"
+    ],
+    "head": {
+      "revision": 2,
+      "parent": 1,
+      "parentRecord": true
+    },
+    "records": 3,
+    "writes": [
+      "record",
+      "head",
+      "record",
+      "head",
+      "record",
+      "head"
+    ],
+    "lost": [
+      3
+    ]
+  }
+}
