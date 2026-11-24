@@ -41,6 +41,15 @@ object ChangeRecordBudget {
     /** The most bytes one change record is written with: the body a route reads, and a document's worth for the checks. */
     fun recordCap(documentCap: Long): Long = ControlDerived.MAX_BODY_BYTES + documentCap
 
+    /** What a decoded change record holds of the heap per byte it is stored with: a document's ([DocumentCache]'s) factor. */
+    const val DECODED_FACTOR: Int = 4
+
+    /**
+     * What reading one change record weighs in a call's work budget (`CTL-85`, DR2-E-4): one at the cap, decoded. A call
+     * that reads a document's open changes reads them one at a time, so this is all it holds for them, however many.
+     */
+    fun readWeight(documentCap: Long): Long = recordCap(documentCap) * DECODED_FACTOR
+
     /** The most bytes a document's ended change records weigh: `max-count` records at [recordCap]. */
     fun endedBytes(retention: RetentionPolicy): Long = retention.maxCount * recordCap(retention.documentCap)
 

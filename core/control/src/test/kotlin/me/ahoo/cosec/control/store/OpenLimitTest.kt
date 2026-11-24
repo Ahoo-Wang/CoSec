@@ -179,6 +179,13 @@ class OpenLimitTest {
     fun `a change that does not read counts as open`() = runBlocking<Unit> {
         published()
         val unreadable = object : ControlStore by store {
+            // The one-at-a-time read hands out what this store lists whole (DR2-E-4).
+            override suspend fun eachOpenChange(
+                document: SnapshotKey,
+                after: String?,
+                visit: suspend (me.ahoo.cosec.control.store.ListedChange) -> Boolean,
+            ) = super<me.ahoo.cosec.control.store.ControlStore>.eachOpenChange(document, after, visit)
+
             override suspend fun openChanges(document: SnapshotKey): List<ListedChange> =
                 store.openChanges(document) + ListedChange.Unreadable(ChangeId("garbled"), document)
         }
@@ -192,6 +199,13 @@ class OpenLimitTest {
     fun `at the limit with nothing that reads the refusal names no change`() = runBlocking<Unit> {
         published()
         val unreadable = object : ControlStore by store {
+            // The one-at-a-time read hands out what this store lists whole (DR2-E-4).
+            override suspend fun eachOpenChange(
+                document: SnapshotKey,
+                after: String?,
+                visit: suspend (me.ahoo.cosec.control.store.ListedChange) -> Boolean,
+            ) = super<me.ahoo.cosec.control.store.ControlStore>.eachOpenChange(document, after, visit)
+
             override suspend fun openChanges(document: SnapshotKey): List<ListedChange> =
                 listOf(
                     ListedChange.Unreadable(ChangeId("x"), document),

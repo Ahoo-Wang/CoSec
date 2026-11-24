@@ -68,6 +68,12 @@ No S1.
 - **DR2-E-3 (S4).** The `escalations` member of a change's answer and of its event now has no size bound (DR2-E-1).
   `contract/control/` and `wiki/policies/testing.md` describe it as a short list.
 
+**Found while fixing.** One more S2, found by the coordinator while reviewing the DR2-E-2 fix (#1980):
+
+- **DR2-E-4 (S2).** What reads a document's open changes reads them all decoded into one list: the open-change bound
+  before every proposal, the reclamation pass and the listing by document. With DR2-E-2's bounds that is up to 400 MB
+  of change records, decoded, held at once by one call and outside the work budget.
+
 **Released lines.** None of the new findings affects a released line. The control plane, `cosec-control-http` and the
 change records are 8.0-only.
 
@@ -79,6 +85,7 @@ change records are 8.0-only.
 | DR2-F-2 | S3 | Work budget | `RetainedDocuments.held` charges the platform's and apps' documents to the platform's fairness queue, so tenants' `explain` calls compete with the platform's own work | open |
 | DR2-G-1 | S4 | starter | `GatewayOwnHandlers.require` misses an application's own `HandlerMapping` beans, a WebSocket endpoint among them | open |
 | DR2-E-3 | S4 | Contract, docs | The `escalations` member of a change's answer and of its event is unbounded in size, which neither `contract/control/` nor `testing.md` says | open |
+| DR2-E-4 | S2 | Records, work budget | `OpenChangeSets.openChanges` decodes every open change of a document into one list, which `OpenLimit.makeRoom`, maintenance's `resting` and the listing by document hold whole: up to 400 MB of change records at once, outside the work budget (found while fixing DR2-E-2) | open |
 
 ## Files read
 
@@ -385,6 +392,41 @@ code is in this area's extensions. **Closed.**
   on its size.
 - **Fix direction:** once DR2-E-1 groups and caps the list, state the cap in the contract's description and in
   `testing.md`.
+
+### DR2-E-4 · S2 · A document's open changes are read whole, every record decoded at once
+
+- **Location:**
+  - `OpenChangeSets.openChanges` (`cosec-cocache`) reads every member of a document's open-change set and decodes each
+    record into one list: `members.sorted().mapNotNull { read(...) }`. `InMemoryControlStore` answers the same list.
+  - Three readers hold that list whole:
+    - `OpenLimit.makeRoom`, before every proposal, `:apply` and rollback, which since DR2-E-2 also encodes each to sum
+      their bytes;
+    - `ControlMaintenance.resting`, in each reclamation pass;
+    - `ChangeListings.list` by document (`GET /changes?document=`), which then sorts, filters and cuts a page.
+  - None of it is weighed by the work budget (`CTL-85`): the budget weighs bodies and decoded documents.
+- **Trigger:** a tenant administrator keeps a document's open changes near their bounds: 50 of them, together up to
+  400 MB encoded (DR2-E-2), each up to 18 MB. Then it, or anyone, proposes a change of that document, or lists its
+  changes, or the reclamation pass reaches it.
+- **Actual:** one call holds every open record of the document decoded at once. That is up to 400 MB encoded and about
+  four times that on the heap, outside the work budget, which a 2 GiB control host does not have. Before DR2-E-2 it was
+  at most 50 records of unbounded size.
+- **Expected:** what one call holds is bounded and weighed (`CTL-85`, `STA-12`). A reader that needs a count, sizes, a
+  state, an author, the revisions a change rests on, or a page keeps only those.
+- **Why S2:** a cheap denial of service of a host every tenant shares, by a party privileged only in its own tenant, as
+  DR2-E-1 was graded.
+- **Reproduced:** no; by the code.
+- **Fix direction:**
+  - The store hands the open changes out one at a time, in the order of their ids. That is a `ControlStore` method with
+    a default that reads the whole list, so a store of the application's is not broken, and `CoCacheControlStore`
+    reads one record at a time.
+  - Each reader keeps only what it needs.
+  - The record being read is held in the call's work, at the record cap decoded.
+- **Regression guard:**
+  - A store that refuses to hand out a document's open changes whole, under a proposal, a listing and a reclamation
+    pass.
+  - A test of the work a proposal holds.
+  - A CoCache test that records are read only as the reader asks for them.
+  - Mutants for each.
 
 ## Threats checked and found sound
 

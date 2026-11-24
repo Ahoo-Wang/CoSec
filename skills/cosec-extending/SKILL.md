@@ -216,7 +216,8 @@ answers 500 rather than forward an identity that never expires.
 
 Replace `CoCacheControlStore` only to keep control-plane records outside Redis. Besides keyed, conditional reads and
 writes, implement `documents()` (every document with indexed revisions; may name more, never fewer),
-`openChanges()` (the non-terminal change requests as stored now, each read once), `acquireLease` / `releaseLease`
+`openChanges()` (the non-terminal change requests as stored now, each read once; override `eachOpenChange` to hand
+them out one record at a time, which the control plane reads them by, or the default reads them whole), `acquireLease` / `releaseLease`
 (release only while the holder still has it, checked and removed in one atomic step), `withdrawCandidate(key, window)`
 (remove the candidate only while it is still that window's, in one atomic step), `stagedCandidate` and `putCandidate`
 with the digest it read (write only over the candidate read), referrers with the revision that

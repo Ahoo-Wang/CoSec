@@ -85,6 +85,8 @@ class StateListingBoundTest {
             },
             revocations = RevocationReader.NONE,
         ),
+        ControlDerived.workBudget(),
+        ChangeRecordBudget.readWeight(ChangeOptions.DEFAULT_MAX_DOCUMENT_BYTES.toLong()),
     )
 
     private fun page(listings: ChangeListings, after: String?): ChangePage = runBlocking {

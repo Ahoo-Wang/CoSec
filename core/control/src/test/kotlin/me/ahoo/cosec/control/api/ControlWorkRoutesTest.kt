@@ -61,6 +61,7 @@ class ControlWorkRoutesTest {
             OPTIONS,
             revocations = RevocationReader.NONE,
             lockout = ControlLockout(fixture.revisions, simulator, clock = fixture.clock, work = budget),
+            work = budget,
         )
         return DefaultControlPlane(changes, fixture.revisions, authority, simulator, budget)
     }

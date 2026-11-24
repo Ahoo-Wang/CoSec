@@ -40,7 +40,14 @@ import me.ahoo.cosec.spi.snapshot.SnapshotKey
  * the service profile lists only what it would show by id. While the open-change sets are not kept (`CTL-54`) the listing is a 503:
  * it could miss a change only the list of the format before names.
  */
-internal class ChangeListings(private val store: ControlStore, private val authority: ChangeAuthority) {
+internal class ChangeListings(
+    private val store: ControlStore,
+    private val authority: ChangeAuthority,
+    /** The host's work budget, which the record being read is held in (`CTL-85`, DR2-E-4). */
+    private val work: WorkBudget,
+    /** What reading one change record weighs: one at the cap, decoded. */
+    private val readWeight: Long,
+) {
     suspend fun list(
         operator: Operator,
         document: SnapshotKey?,
@@ -65,11 +72,16 @@ internal class ChangeListings(private val store: ControlStore, private val autho
         if (!TenantIsolation.allows(operator, document) || !documents(document)) {
             return ChangePage(emptyList(), null)
         }
-        val listed = store.openChanges(document)
-            .filter { state == null || (it as? ListedChange.Readable)?.change?.state == state }
-            .sortedBy { it.id.value }
-            .filter { after == null || it.id.value > after }
-            .filter { visible(it) }
+        // One record at a time, in the order of their ids, until one more than the page is found (DR2-E-4): only the
+        // page is kept, never every open change of the document. The one being read is held in the call's work.
+        work.hold(operator.tenant.value, readWeight)
+        val listed = ArrayList<ListedChange>()
+        store.eachOpenChange(document, after) { change ->
+            if ((state == null || (change as? ListedChange.Readable)?.change?.state == state) && visible(change)) {
+                listed += change
+            }
+            listed.size <= limit
+        }
         val page = listed.take(limit)
         return ChangePage(page, if (listed.size > limit) page.last().id.value else null)
     }

@@ -158,19 +158,25 @@ class ControlMaintenance(
 
     /**
      * What the open changes of [key] rest on, each as it is now (expired if past its time); throws when one cannot be
-     * read, since it might rest on a revision. The store read each of them once to list it (#1219).
+     * read, since it might rest on a revision. The store read each of them once to list it (#1219), one at a time, and
+     * only the revisions each rests on are kept (DR2-E-4).
      */
     private suspend fun resting(
         key: SnapshotKey,
         counting: RetainedTotals.Counting,
-    ): Set<SnapshotDigest> = store.openChanges(key).flatMapTo(HashSet()) { listed ->
-        when (listed) {
-            is ListedChange.Unreadable -> throw IllegalStateException(
-                "change [${listed.id.value}] of [$key] does not read"
-            )
-            is ListedChange.Readable -> current(listed.change)?.takeUnless { it.state.terminal }
-                ?.also { counting.openChanges++ }?.restsOn().orEmpty()
+    ): Set<SnapshotDigest> {
+        val resting = HashSet<SnapshotDigest>()
+        store.eachOpenChange(key, null) { listed ->
+            when (listed) {
+                is ListedChange.Unreadable -> throw IllegalStateException(
+                    "change [${listed.id.value}] of [$key] does not read"
+                )
+                is ListedChange.Readable -> current(listed.change)?.takeUnless { it.state.terminal }
+                    ?.also { counting.openChanges++ }?.restsOn()?.let(resting::addAll)
+            }
+            true
         }
+        return resting
     }
 
     /**

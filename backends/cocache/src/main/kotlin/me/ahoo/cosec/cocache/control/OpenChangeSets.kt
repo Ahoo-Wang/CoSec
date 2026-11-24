@@ -143,10 +143,24 @@ internal class OpenChangeSets(
     }
 
     suspend fun openChanges(document: SnapshotKey): List<ListedChange> {
+        val found = ArrayList<ListedChange>()
+        eachOpenChange(document, null) {
+            found += it
+            true
+        }
+        return found
+    }
+
+    /** The open changes of [document] past [after], read one at a time as [visit] asks for them (DR2-E-4). */
+    suspend fun eachOpenChange(document: SnapshotKey, after: String?, visit: suspend (ListedChange) -> Boolean) {
         val key = documentKey(document)
         val members = sets.changeMembers(key)
         forgetUnheld(key, members)
-        return members.sorted().mapNotNull { id -> read(document, ChangeId(id), key, id) { !it.state.terminal } }
+        for (id in members.sorted()) {
+            if (after != null && id <= after) continue
+            val listed = read(document, ChangeId(id), key, id) { !it.state.terminal } ?: continue
+            if (!visit(listed)) return
+        }
     }
 
     /** The changes in [state], by `<docKey>#<id>`, the cursor [after] and [ChangePage.next] are: one entry per change. */

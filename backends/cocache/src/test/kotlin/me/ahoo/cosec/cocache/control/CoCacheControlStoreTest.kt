@@ -397,6 +397,40 @@ class CoCacheControlStoreTest {
         }
     }
 
+    /**
+     * DR2-E-4: the open changes of a document are read one at a time, as the reader asks for them: each record when its
+     * turn comes, none past the cursor's, none after the reader stops. So a reader that keeps only what it needs never
+     * holds them all decoded at once.
+     */
+    @Test
+    fun `the open changes of a document are read one at a time, as the reader asks for them - DR2-E-4`() =
+        runBlocking<Unit> {
+            SnapshotNode(InMemoryBackend(), newKeyPrefix()).use { node ->
+                val reads = java.util.concurrent.CopyOnWriteArrayList<ChangeId>()
+                val real = node.runtime.create(ControlCacheSpecs.changeRequest(node.keyPrefix))
+                val counting = object : Store<ChangeId, ChangeRequest> by real {
+                    override fun async(): AsyncStore<ChangeId, ChangeRequest> =
+                        object : AsyncStore<ChangeId, ChangeRequest> by real.async() {
+                            override fun getIfChanged(key: ChangeId, digest: Digest?) =
+                                real.async().getIfChanged(key, digest).also { reads += key }
+                        }
+                }
+                val store = store(node, changes = counting)
+                repeat(5) { store.putChange(null, change("c$it", ChangeState.CHECKED)) }
+                reads.clear()
+
+                val readWhenVisited = ArrayList<Int>()
+                store.eachOpenChange(key, "c0") { listed ->
+                    readWhenVisited += reads.size
+                    listed.id != ChangeId("c2")
+                }
+
+                // c0 is past the cursor, unread; c1 and c2 are each read on their turn; c3 and c4 are never read.
+                readWhenVisited.assert().containsExactly(1, 2)
+                reads.assert().containsExactly(ChangeId("c1"), ChangeId("c2"))
+            }
+        }
+
     /** #1235: a candidate is written over the candidate that was read, never over another one. */
     @Test
     fun `a candidate is written over the candidate read - #1235`() = runBlocking<Unit> {

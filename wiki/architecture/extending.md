@@ -673,6 +673,12 @@ visit:
   terminal is among them; a change whose record does not decode is `ListedChange.Unreadable`, never left out, and
   maintenance skips its document or its window that pass. `openChangesKept()` says whether these lists can be
   trusted; maintenance reclaims nothing until they can, and `keepOpenChanges()` makes a new store's lists trusted.
+- `eachOpenChange(document, after, visit)`: what `openChanges(document)` lists, handed to `visit` one at a time in the
+  order of their ids, past `after`, until `visit` answers `false` (DR2-E-4). The control plane reads a document's open
+  changes this way and keeps of each only what it needs, so a document's open changes, up to `max-count` times the
+  record cap, are never all decoded at once. The default reads `openChanges` whole; override it to read one record at
+  a time, as `CoCacheControlStore` does. A store that delegates to another (`ControlStore by inner`) and overrides
+  `openChanges` overrides this too, or the delegate answers it.
 - `endedChanges(document, endedBefore, limit)` and `removeChange(document, id, expected)`: the changes of a document
   that ended before a time, the oldest first, and the removal of one ended change's record (`CTL-83`). A `putChange` of
   a terminal change lists it under its `updatedAt` before it writes it, so a write that lost leaves an extra entry,

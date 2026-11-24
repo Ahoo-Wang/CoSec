@@ -218,6 +218,19 @@ interface ControlStore : CandidateStore {
     suspend fun openChanges(document: SnapshotKey): List<ListedChange>
 
     /**
+     * What [openChanges] lists whose ids sort after [after] (`null`: from the first), handed to [visit] one at a time in
+     * the order of their ids, each read when its turn comes, until [visit] answers `false` (DR2-E-4): the control plane
+     * keeps of each only what it needs, so at most one record is decoded at once. This default reads [openChanges]
+     * whole; a store that can read one record at a time overrides it.
+     */
+    suspend fun eachOpenChange(document: SnapshotKey, after: String?, visit: suspend (ListedChange) -> Boolean) {
+        for (listed in openChanges(document).sortedBy { it.id.value }) {
+            if (after != null && listed.id.value <= after) continue
+            if (!visit(listed)) return
+        }
+    }
+
+    /**
      * The changes listed in [state] of the documents [documents] accepts, ordered by document and id, after the cursor
      * [after] (`null`: from the first), at most [limit] of them, each read now and still in [state] (a member a later
      * write moved on is skipped). A member of a document [documents] refuses is neither read nor counted. [ChangePage.next]

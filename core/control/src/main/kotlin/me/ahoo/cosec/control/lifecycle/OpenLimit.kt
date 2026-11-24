@@ -19,6 +19,7 @@ import io.github.oshai.kotlinlogging.KotlinLogging
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.control.audit.ChangeEvent
 import me.ahoo.cosec.control.authz.Operator
+import me.ahoo.cosec.control.change.ChangeId
 import me.ahoo.cosec.control.change.ChangeRejectedException
 import me.ahoo.cosec.control.change.ChangeRequest
 import me.ahoo.cosec.control.change.ChangeRequestCodec
@@ -28,6 +29,7 @@ import me.ahoo.cosec.control.store.ControlStore
 import me.ahoo.cosec.control.store.ListedChange
 import me.ahoo.cosec.document.ProvenanceKind
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
+import java.time.Instant
 
 private val log = KotlinLogging.logger {}
 
@@ -55,42 +57,56 @@ internal class OpenLimit(
     private val maxOpen: Int,
     /** The most bytes the open records of a document weigh with a new one (DR2-E-2): max-count times the cap. */
     private val byteBudget: Long,
+    /** The host's one work budget (`CTL-85`), which the record being read is held in (DR2-E-4). */
+    private val work: WorkBudget,
 ) {
     /** Before [author] stores a new change of [key], whose record is [bytes] long: room for it, or a `409 OPEN_LIMIT`. */
     suspend fun makeRoom(key: SnapshotKey, author: Operator, bytes: Long) {
-        val listed = store.openChanges(key)
+        // One record at a time (DR2-E-4): of each only what the bound needs is kept, so the open changes of a document,
+        // up to max-count times the cap of them, are never all decoded at once. The one being read is held in the call's
+        // work, as decoded at the cap it weighs at most.
+        work.hold(author.tenant.value, flow.readWeight)
+        val open = ArrayList<Open>()
         // A change that does not read still counts: it may be open, and it may pin a revision. It weighs its share of the
         // bytes, a document's worth, so that it never refuses a change on its own.
-        val unreadable = listed.count { it is ListedChange.Unreadable }
-        val open = listed.filterIsInstance<ListedChange.Readable>()
-            .map { flow.current(it.change) }
-            .filterNot { it.state.terminal }
-        val sizes = open.associate { it.id to ChangeRequestCodec.encode(it).size.toLong() }
+        var unreadable = 0
+        store.eachOpenChange(key, null) { listed ->
+            when (listed) {
+                is ListedChange.Unreadable -> unreadable++
+                is ListedChange.Readable -> flow.current(listed.change).takeUnless { it.state.terminal }?.let {
+                    open += Open(it.id, it.createdAt, failedDraftOf(it, author), ChangeRequestCodec.encode(it).size.toLong())
+                }
+            }
+            true
+        }
         var count = open.size + unreadable
-        var held = sizes.values.sum() + unreadable * (byteBudget / maxOpen)
+        var held = open.sumOf { it.bytes } + unreadable * (byteBudget / maxOpen)
         if (fits(count, held, bytes)) return
-        val failed = open.filter { failedDraftOf(it, author) }.minByOrNull { it.createdAt }
-        if (failed != null && abandoned(failed, author)) {
+        val failed = open.filter { it.failedDraft }.minByOrNull { it.createdAt }
+        if (failed != null && abandoned(failed.id, author)) {
             count -= 1
-            held -= sizes.getValue(failed.id)
+            held -= failed.bytes
             if (fits(count, held, bytes)) return
         }
         val oldest = open.filterNot { it.id == failed?.id }.minByOrNull { it.createdAt } ?: failed
             ?: throw ChangeRejectedException.conflict(ConflictKind.OPEN_LIMIT, "[$key] holds $count open changes that do not read")
-        throw refusal(key, oldest, count, held, bytes)
+        throw refusal(key, oldest.id, count, held, bytes)
     }
 
+    /** What the bound keeps of one open change: its id, when it was made, whether it is the author's failed draft, its bytes. */
+    private class Open(val id: ChangeId, val createdAt: Instant, val failedDraft: Boolean, val bytes: Long)
+
     /** The `409 OPEN_LIMIT` of [key], naming [oldest]: past the count of open changes, or past their bytes. */
-    private fun refusal(key: SnapshotKey, oldest: ChangeRequest, count: Int, held: Long, bytes: Long) =
+    private fun refusal(key: SnapshotKey, oldest: ChangeId, count: Int, held: Long, bytes: Long) =
         ChangeRejectedException.openLimit(
-            oldest.id,
+            oldest,
             if (count >= maxOpen) {
                 "[$key] holds $maxOpen open changes, the most it may (cosec.control.revisions.max-count): abandon one, " +
-                    "or wait for it to expire; the oldest is ${oldest.id.value}"
+                    "or wait for it to expire; the oldest is ${oldest.value}"
             } else {
                 "the open changes of [$key] weigh $held bytes, and this one $bytes more, over the $byteBudget bytes they " +
                     "may weigh (cosec.control.revisions.max-count times the document cap): abandon one, or wait for it " +
-                    "to expire; the oldest is ${oldest.id.value}"
+                    "to expire; the oldest is ${oldest.value}"
             },
         )
 
@@ -102,12 +118,12 @@ internal class OpenLimit(
         change.author == author.actor && change.state == ChangeState.DRAFT && change.kind == ProvenanceKind.PUBLISH
 
     /** Abandons [draft] for room, as its own author; false when another write moved it first, or the store refused. */
-    private suspend fun abandoned(draft: ChangeRequest, author: Operator): Boolean = try {
-        val change = flow.transition(draft.id, ChangeStep.ABANDON) { it.copy(state = ChangeState.ABANDONED) }
+    private suspend fun abandoned(draft: ChangeId, author: Operator): Boolean = try {
+        val change = flow.transition(draft, ChangeStep.ABANDON) { it.copy(state = ChangeState.ABANDONED) }
         flow.audit(ChangeEvent.Kind.ABANDONED, change.abandonedForRoom(), author.actor, origin = author.origin)
         true
     } catch (e: ChangeRejectedException) {
-        log.warn(e) { "Change [${draft.id.value}] could not be abandoned for room; the new change is refused instead." }
+        log.warn(e) { "Change [${draft.value}] could not be abandoned for room; the new change is refused instead." }
         false
     }
 }

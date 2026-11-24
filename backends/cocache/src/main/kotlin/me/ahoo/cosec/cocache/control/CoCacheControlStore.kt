@@ -260,6 +260,12 @@ class CoCacheControlStore internal constructor(
 
     override suspend fun openChanges(document: SnapshotKey): List<ListedChange> = openChanges.openChanges(document)
 
+    override suspend fun eachOpenChange(
+        document: SnapshotKey,
+        after: String?,
+        visit: suspend (ListedChange) -> Boolean,
+    ) = openChanges.eachOpenChange(document, after, visit)
+
     override suspend fun changes(
         state: ChangeState,
         after: String?,

@@ -1,0 +1,16 @@
+# Rule: CTL-85
+# Mutant: the open-change bound reads a document's open changes whole, every record decoded at once
+# Tests: :control:test --tests me.ahoo.cosec.control.store.OpenChangesReadTest
+
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/OpenLimit.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/OpenLimit.kt
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/OpenLimit.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/OpenLimit.kt
+@@ -70,7 +70,7 @@ internal class OpenLimit(
+         // A change that does not read still counts: it may be open, and it may pin a revision. It weighs its share of the
+         // bytes, a document's worth, so that it never refuses a change on its own.
+         var unreadable = 0
+-        store.eachOpenChange(key, null) { listed ->
++        store.openChanges(key).forEach { listed ->
+             when (listed) {
+                 is ListedChange.Unreadable -> unreadable++
+                 is ListedChange.Readable -> flow.current(listed.change).takeUnless { it.state.terminal }?.let {

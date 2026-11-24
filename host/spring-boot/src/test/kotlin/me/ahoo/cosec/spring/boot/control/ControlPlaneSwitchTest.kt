@@ -172,11 +172,13 @@ class ControlPlaneSwitchTest {
             context.getBeansOfType(me.ahoo.cosec.control.lifecycle.WorkBudget::class.java).size.assert().isEqualTo(1)
             val budget = context.getBean(me.ahoo.cosec.control.lifecycle.WorkBudget::class.java)
             // The same instance in each that holds a call's work: the plane's reads, the operators' API (and with it the
-            // service profile's, made of the same plane), the in-process facade and the lock-out check.
+            // service profile's, made of the same plane), the in-process facade, the lock-out check, and the changes'
+            // reads of a document's open changes (DR2-E-4).
             val facade = context.getBean(ControlService::class.java) as LocalControlService
             val lockout = context.getBean(Changes::class.java).lockout as ControlLockout
             listOf(
                 context.getBean(ControlPlane::class.java).work,
+                context.getBean(Changes::class.java).work,
                 context.getBean(ControlHttp::class.java).work,
                 facade.http.work,
                 lockout.work,
