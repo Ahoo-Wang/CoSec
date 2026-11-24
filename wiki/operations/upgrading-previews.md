@@ -30,6 +30,11 @@ Which preview of the library may run behind which preview of the gateway image: 
 
 ## From 8.0.0-beta.7 {#from-8-0-0-beta-7}
 
+- **Breaking: `JwtTokenConverter.toToken(subject, access, refresh)` refuses a validity longer than the configured one**
+  (`IDN-37`). Affected: an application that issues tokens itself with an access or refresh validity longer than
+  `cosec.jwt.token-validity.access` or `.refresh`. A revocation is kept only past the configured validities, so such a
+  token was valid again once its revocation expired. The call now throws `IllegalArgumentException` naming the property:
+  raise the property instead, and the retention follows it.
 - **The control plane holds its calls' large work to a budget** (`CTL-85`, DR1-F-3, DR1-F-4). Affected: a client that
   proposes, applies or explains large documents many at once. A control host holds an eighth of its heap for the bodies
   it parses and the documents it decodes or compiles for one call; a call that does not fit waits its tenant's turn, at

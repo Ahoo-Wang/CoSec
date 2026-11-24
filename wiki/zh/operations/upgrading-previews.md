@@ -27,6 +27,7 @@ description: "每个 8.0 预览版（alpha 与 beta）到下一个之间的变�
 
 ## 从 8.0.0-beta.7 升级 {#from-8-0-0-beta-7}
 
+- **破坏性变更：`JwtTokenConverter.toToken(subject, access, refresh)` 拒绝长于配置值的有效期**（`IDN-37`）。受影响的是自己签发令牌、且指定的 access 或 refresh 有效期长于 `cosec.jwt.token-validity.access` 或 `.refresh` 的应用。吊销记录只保留到配置的有效期之后，这样的令牌在吊销记录过期后会重新有效。现在这个调用会抛出 `IllegalArgumentException` 并点名属性：改为调高属性，保留期随之变长。
 - **控制面把调用的大块工作限定在一个预算内**（`CTL-85`，DR1-F-3、DR1-F-4）。受影响的：同时提议、应用或解释许多大文档的客户端。控制面宿主拿堆的八分之一，给一次调用为自己解析的请求体、解码或编译的文档；放不下的调用按租户轮流等待，至多等 `cosec.pipeline.timeout` 的一半，否则答 `503` 加 `Retry-After: 1`，请重试。`StageBudgets` 的启动行写明等待时间，控制面的启动行写明预算；新增两个度量：`cosec.control.work.held` 与 `cosec.control.work.refused`。无需配置。
 - **破坏性变更：变更不能写入应用之后还含 `/` 的权限策略 id，也不能写入含 `/` 的目录权限 id**（`CTL-8`，DR1-E-5）。受影响的是写入
   `perm:<app>/a/b` 或目录条目 `a/b` 的应用所有者。这种 id 能逃出以 `perm:<app>/` 加末尾 `*` 写成的规则。新增这种 id 的变更会以 `V2`（422）被拒；已存的条目与目录 id 照常生效，在变更写入的目录里原样保留也可以，也可以删除。去掉权限名里的 `/` 重新命名。
