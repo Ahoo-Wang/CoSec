@@ -1,0 +1,16 @@
+# Rule: CTL-88
+# Mutant: each unknown fragment is a group of its own, so a statement's fragments are as many escalations as they are
+# Tests: :control:test --tests me.ahoo.cosec.control.lifecycle.UnknownEscalationsTest
+
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/UnknownEscalations.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/UnknownEscalations.kt
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/UnknownEscalations.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/UnknownEscalations.kt
+@@ -71,7 +71,7 @@ internal object UnknownEscalations {
+                 pastBudget.add(fragment, verdict)
+                 continue
+             }
+-            val group = Group(fragment.policy, fragment.statement, Escalation.Reason.of(verdict.reason.name))
++            val group = Group(PolicyId(fragment.toString()), fragment.statement, Escalation.Reason.of(verdict.reason.name))
+             val tally = groups[group] ?: (if (groups.size < MAX_GROUPS) Tally().also { groups[group] = it } else rest)
+             tally.add(fragment, verdict)
+         }

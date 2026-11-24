@@ -1,0 +1,89 @@
+{
+  "rules": [
+    "CTL-88"
+  ],
+  "polarity": "positive",
+  "level": "control",
+  "description": "DR2-E-1: alice, acme's administrator, holds nothing of billing; the one statement she grants is two actions by two resources, four fragments none of which she holds, and they are one escalation, not four: what a change records does not grow with its fragments.",
+  "documents": {
+    "tenants": {
+      "acme": {
+        "bindings": [
+          {
+            "id": "admins",
+            "subject": {
+              "role": "admin"
+            },
+            "app": "cosec-control",
+            "space": "",
+            "policy": "cosec:tenant-admin"
+          }
+        ]
+      }
+    }
+  },
+  "operators": {
+    "alice": {
+      "tenant": "acme",
+      "roles": [
+        "admin"
+      ]
+    }
+  },
+  "steps": [
+    {
+      "propose": {
+        "change": "c1",
+        "by": "alice",
+        "document": "tenant:acme",
+        "operations": [
+          {
+            "putPolicy": {
+              "id": "billing",
+              "statements": [
+                {
+                  "effect": "allow",
+                  "action": [
+                    "billing:read",
+                    "billing:write"
+                  ],
+                  "resource": [
+                    "billing/a",
+                    "billing/b"
+                  ]
+                }
+              ]
+            }
+          },
+          {
+            "putBinding": {
+              "id": "billing",
+              "subject": {
+                "role": "viewer"
+              },
+              "app": "order",
+              "space": "*",
+              "policy": "billing"
+            }
+          }
+        ]
+      }
+    }
+  ],
+  "expect": {
+    "steps": [
+      "CHECKED"
+    ],
+    "errors": {
+      "c1": []
+    },
+    "heads": {
+      "tenant:acme": 1
+    },
+    "escalations": {
+      "c1": [
+        "NOT_COVERED"
+      ]
+    }
+  }
+}
