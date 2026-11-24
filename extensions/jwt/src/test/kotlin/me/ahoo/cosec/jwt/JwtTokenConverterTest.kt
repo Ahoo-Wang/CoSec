@@ -64,7 +64,12 @@ internal class JwtTokenConverterTest {
      */
     @Test
     fun aTokenLongerThanTheConfiguredValidityIsNotIssued() {
-        val converter = JwtTokenConverter(JwtFixture.IDS, JwtFixture.SIGNING, Duration.ofMinutes(10), Duration.ofDays(7))
+        val converter = JwtTokenConverter(
+            JwtFixture.IDS,
+            JwtFixture.SIGNING,
+            Duration.ofMinutes(10),
+            Duration.ofDays(7)
+        )
         val subject = TokenSubject("alice")
         assertThrownBy<IllegalArgumentException> {
             converter.toToken(subject, Duration.ofMinutes(10).plusSeconds(1), Duration.ofDays(1))
