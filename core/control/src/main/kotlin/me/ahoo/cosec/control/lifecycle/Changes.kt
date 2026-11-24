@@ -80,7 +80,7 @@ class Changes(
      * Whether a candidate would keep its operator out of the control plane (UC-6). No default: a host that forgot it
      * would publish a lock-out silently; [LockoutCheck.UNCHECKED] is a choice to write.
      */
-    lockout: LockoutCheck,
+    val lockout: LockoutCheck,
     internal val authority: ChangeAuthority = ChangeAuthority(authorizer, options, revocations = revocations),
     /** What the instances report of the shadow windows (RFC 0007 §6.4); none by default. */
     reports: ShadowReportReader = InMemoryShadowReports(clock),
@@ -113,8 +113,17 @@ class Changes(
     /** What the reclamation pass, and a rebuild of an index from its head, do of a lost head (`CTL-86`). */
     internal val lostHeads = LostHeads(store, revisions, listeners, clock).also { revisions.repair.lost = it::dropped }
 
-    private val flow = ChangeLifecycle(store, clock, options, slots, listeners, authority, ended)
-    private val publishing =
+    private val flow: ChangeLifecycle =
+        ChangeLifecycle(
+            store,
+            clock,
+            options,
+            slots,
+            listeners,
+            authority,
+            ended
+        ) { publishing.writtenBeforeExpiry(it) }
+    private val publishing: Publishing =
         Publishing(flow, revisions, clock, authority, authority.approvals, candidates, slots, listeners, movedHeads)
     private val staging = Staging(
         flow,

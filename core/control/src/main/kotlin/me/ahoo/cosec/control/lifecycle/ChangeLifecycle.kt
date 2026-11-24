@@ -56,6 +56,11 @@ internal class ChangeLifecycle(
     private val authority: ChangeAuthority,
     /** The bound on each document's ended changes, kept after each write that ends one (`CTL-83`). */
     private val ended: EndedChanges,
+    /**
+     * [change], `PUBLISHED` instead of expiring when an earlier publish wrote its own revision and could not settle it
+     * (DR1-E-7); null when no revision is its own. [Publishing.writtenBeforeExpiry], wired by [Changes].
+     */
+    private val written: suspend (ChangeRequest) -> ChangeRequest? = { null },
 ) {
     /**
      * The change [id] as [operator] may see it (review K2): one that does not exist, is of a document the hard rule
@@ -149,6 +154,10 @@ internal class ChangeLifecycle(
      * not a command: when another caller moved it first, what the read answers is the change as it is now (the
      * `EXPIRED` the other made, or the state it was finished in), never the 409 of a command from a state it is not in
      * (#1545). Only an open change past its time is written, from the state it is in, by the same conditional write.
+     *
+     * A change whose own revision is in effect is published, whatever its time: a publish wrote the head and could not
+     * settle the change (a store that failed after the write). It is settled `PUBLISHED` here, as a retried publish
+     * settles it, never recorded `EXPIRED` while its revision decides (DR1-E-7).
      */
     suspend fun expired(change: ChangeRequest): ChangeRequest {
         if (!due(change)) {
@@ -159,6 +168,7 @@ internal class ChangeLifecycle(
             if (!due(current.value)) {
                 return current.value
             }
+            written(current.value)?.let { return it }
             val expired = current.value.copy(state = ChangeState.EXPIRED, updatedAt = laterThan(current.value))
             // The table says where an expiry may end; anything else is a fault and nothing is written.
             check(expired.state in ChangeStep.EXPIRE.to)

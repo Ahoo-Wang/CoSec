@@ -17,8 +17,14 @@ package me.ahoo.cosec.control.api
 
 import me.ahoo.cosec.annotations.InternalCoSecApi
 
-/** What an adapter writes back: [status], `Content-Type` [contentType] and [body]. */
+/** What an adapter writes back: [status], `Content-Type` [contentType], [body], and any other [headers]. */
 @InternalCoSecApi
-class ControlHttpResponse(val status: Int, val contentType: String, val body: ByteArray) {
+class ControlHttpResponse(
+    val status: Int,
+    val contentType: String,
+    val body: ByteArray,
+    /** A `Retry-After` of a 503 the work budget answers (`CTL-85`); nothing else sets one. */
+    val headers: Map<String, String> = emptyMap(),
+) {
     override fun toString(): String = "ControlHttpResponse($status, ${body.decodeToString()})"
 }

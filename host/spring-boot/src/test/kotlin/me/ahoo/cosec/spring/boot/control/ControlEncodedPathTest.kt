@@ -16,11 +16,13 @@
 package me.ahoo.cosec.spring.boot.control
 
 import io.mockk.coEvery
+import io.mockk.every
 import io.mockk.mockk
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.control.api.ControlHttp
 import me.ahoo.cosec.control.api.ControlPlane
+import me.ahoo.cosec.control.lifecycle.ControlDerived
 import me.ahoo.cosec.document.PolicyDocument
 import me.ahoo.cosec.model.decision.DocumentKind
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
@@ -50,6 +52,7 @@ import org.springframework.web.servlet.function.ServerRequest as ServletServerRe
 class ControlEncodedPathTest {
     private val keys = ArrayList<SnapshotKey>()
     private val plane = mockk<ControlPlane>().also { plane ->
+        every { plane.work } returns ControlDerived.workBudget()
         coEvery { plane.read(any(), any(), any()) } answers {
             val key = secondArg<SnapshotKey>()
             keys += key

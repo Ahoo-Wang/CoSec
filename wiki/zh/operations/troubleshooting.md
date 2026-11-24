@@ -475,7 +475,7 @@ FAIL reached the control host at 10.244.0.7:8080 from a pod no NetworkPolicy adm
 cosec-control-server verifies no credential and issues no token: it believes the CoSec-Identity header it is sent, under the statement that nothing but the gateway and the services you name can reach it. cosec.jwt.enabled=true would wire verification or a login that nothing here uses ... (STA-10)
 ```
 
-`cosec-control` 镜像拒绝把 `cosec.jwt.enabled`、`cosec.api-key.enabled` 和 `cosec.authentication.login.enabled` 设为 `true`，也拒绝 `cosec.control.enabled=false`（`cosec-control-server runs the control plane`）：它不校验凭证，也不签发令牌；没有控制面，它会处于运行状态却什么都不提供。删掉这个键。会校验令牌或让人登录的控制面，是你自己的、带 `cosec-control` 的应用；网关镜像才是只读的那个。
+`cosec-control` 镜像拒绝把 `cosec.jwt.enabled`、`cosec.api-key.enabled` 和 `cosec.authentication.login.enabled` 设为 `true`，也拒绝 `cosec.control.enabled=false`（`cosec-control-server runs the control plane`）：它不校验凭证，也不签发令牌；没有控制面，它会处于运行状态却什么都不提供。效果相同的设置它也拒绝：`cosec.enabled=false`、`cosec.control.http.enabled=false`（没有任何控制路由，服务端口的也没有）、`cosec.pipeline.mode=gateway` 和 `cosec.pipeline.caller=credential`，消息里会点名是哪一个。删掉这个键。会校验令牌或让人登录的控制面，是你自己的、带 `cosec-control` 的应用；网关镜像才是只读的那个。
 
 ### 两个控制服务导致启动失败 {#startup-fails-on-two-control-services}
 
@@ -865,6 +865,10 @@ Tokens are verified against RevocationReader.NONE: a revoked token (logout, revo
 | `cosec.authentication.login.refresh.path is set on a Spring Cloud Gateway host. ...` | 网关不签发会话：在网关上取消设置，改在网关之后签发会话的服务上设置。 |
 | `... is set, but this application serves no HTTP ...`、`... is set, but login or JWT is off ...`、`... is not one plain absolute path ...`、`... name one path ...` | 取消设置[登录路由路径](./configuration.md#authentication)，或给宿主它所要求的：一个 Web 栈、`cosec.authentication.login.enabled` 和 `cosec.jwt.enabled`、每个路由一个普通路径。 |
 | `A token revocation is kept for <d>: the longer of cosec.jwt.token-validity.access (<d>) and cosec.jwt.token-validity.refresh (<d>), plus cosec.authentication.revocation.skew (<d>), shorter than cosec.control.approval.expire-after (<d>): ...` | 调大某个令牌有效期，或调小审批的有效期：吊销记录必须比它的令牌给出的每一次审批都活得长。 |
+
+## 控制调用答 503 并带 Retry-After {#a-control-call-is-503-with-retry-after}
+
+控制调用答 `503` 并带 `Retry-After: 1`，`cosec.control.work.refused` 在计数，宿主在 `INFO` 记 `... is 503: [<tenant>]'s work of <n> bytes is refused`。这不是存储故障（那种 `503` 不带 `Retry-After`，在 `WARN` 记 `the store did not answer`）：控制面的工作预算被同时解析、解码或编译的大文档占满了，这个调用在管道超时的一半之内没能放进去（`CTL-85`）。此时什么都还没读取、没决定：请重试。如果持续出现，给控制面宿主更多的堆（预算是堆的八分之一，启动行写明最大的请求体同时能跑几个），或错开大的 `POST /changes` 与 `:apply`；有别的租户在等时，循环写入的租户至多占预算的一半。
 
 ## 控制面错误 {#control-plane-errors}
 

@@ -28,6 +28,7 @@ import me.ahoo.cosec.control.change.Operation
 import me.ahoo.cosec.control.change.Propagation
 import me.ahoo.cosec.control.change.ShadowAck
 import me.ahoo.cosec.control.lifecycle.BreakGlass
+import me.ahoo.cosec.control.lifecycle.WorkBudget
 import me.ahoo.cosec.document.PolicyDocument
 import me.ahoo.cosec.engine.ViewVersion
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
@@ -46,6 +47,12 @@ interface ControlPlane {
 
     /** `GET /documents?kind=` (`CTL-68`): which tenant or app documents there are, those an operator may see. */
     val listing: DocumentListing
+
+    /**
+     * The host's one work budget (`CTL-85`): what every control call made through this plane holds its work in, the
+     * operators' API, the service profile's and the in-process facade alike, which take it from here.
+     */
+    val work: WorkBudget
 
     suspend fun diff(operator: Operator, key: SnapshotKey, from: Long, to: Long): DocumentDiff
 

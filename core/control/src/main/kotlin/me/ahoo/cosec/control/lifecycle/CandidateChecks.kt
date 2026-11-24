@@ -17,6 +17,7 @@ package me.ahoo.cosec.control.lifecycle
 
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.control.authz.ControlActions
 import me.ahoo.cosec.control.authz.Operator
 import me.ahoo.cosec.control.change.ChangeRequest
 import me.ahoo.cosec.control.change.ChangeState
@@ -120,7 +121,10 @@ internal class CandidateChecks(
 
     private suspend fun lockedOut(operator: Operator, key: SnapshotKey, candidate: PolicyDocument): Finding? {
         val lockout = lockout.check(operator, key, candidate) ?: return null
-        val message = "after this change ${operator.actor.principal.value}@${operator.actor.tenant.value} could not reach the control plane: ${lockout.reason}. Publishing " +
+        // A statement is named only to an operator who may read the document its policy is defined in (CTL-51, DR1-F-13).
+        val named = lockout.namedIn.all { authority.holds(operator, it, ControlActions.READ) }
+        val reason = if (named) lockout.reason else lockout.unnamed
+        val message = "after this change ${operator.actor.principal.value}@${operator.actor.tenant.value} could not reach the control plane: $reason. Publishing " +
             "it needs the acknowledgement \"lockout\": true; the way back from a lock-out is cosec-migrate restore"
         return Finding(LockoutCheck.CHECK, "$", message, UNPROCESSABLE, Severity.WARNING)
     }

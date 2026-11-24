@@ -100,6 +100,8 @@ limit CoSec owns, and has no key. Each is logged once at startup, in a line that
 | When a record outside a revision chain, or a change listed and never written, is removed | one reclaim pass old: 1 hour | the reclaim interval |
 | How often shadowing changes are looked at | a fifteenth of `min-duration`, between 250 ms and 1 minute: `1m` at the default | [`cosec.control.shadow.min-duration`](#control-plane) |
 | The largest request body the control API reads | for a proposal, an `:apply` and their checks, the document cap (8 MB) and 2 MB for the operations around it: 10 MB; for every other route, 64 KB, eight times the 8 KB a request's headers take on Spring Boot's servers by default (a simulated request is one request's headers and attributes) | the document cap; a request's header size |
+| The control plane's work budget (`CTL-85`): what its calls hold at once of the bodies they parse and the documents they decode or compile for themselves | an eighth of the heap (a quarter of the half `HeapBudget` leaves): 256 MB at 2 GiB; a body that carries a document weighs its bytes times the tree factor and the candidate's 8, a document the cache will not keep its stored size times 12; the startup line says what the largest body weighs and how many run at once | the heap |
+| How long a control call waits for the work budget before it is `503` | half of the pipeline timeout: `2.5s` at the default | [`cosec.pipeline.timeout`](#pipeline) |
 | The initial size and an idle expiry of the revocation caches' local copy | none: the cache sizes itself, and `local-max-age` expires every entry | |
 
 Each share of the pipeline timeout is at least `1ms`; below a `cosec.pipeline.timeout` of 20 ms a token's two revocation
