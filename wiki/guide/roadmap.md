@@ -42,19 +42,19 @@ converts 7.x data to the 8.0 format. [Upgrading](../operations/upgrading.md) lis
 
 ## Where 8.0 stands
 
-The architecture above is merged on `main`, and the 7.x code is gone. The current preview is `8.0.0-beta.7`. The last
-two betas add a typed Kotlin API for the control plane, the same in process and over HTTP
-([Roles From an External Source](../scenarios/external-source.md)), and they remove the settings CoSec can compute:
-stage timeouts are shares of the pipeline's deadline, and the bounds of caches and snapshots are shares of the heap
-([Computed, not configured](../operations/configuration.md#computed-not-configured)). They are built on Spring Boot 4.2
-and CoCache 8.2. Next are two more rounds of review with their findings fixed, and then a release candidate. What
-is still open before it is in
+The architecture above is merged on `main`, and the 7.x code is gone. The current preview is `8.0.0-beta.8`. It is the
+two rounds of deep review planned before the release candidate, with their findings fixed: the first round over eight
+areas of the system, the second over them again with `cosec-migrate`, and no finding of the highest severity in
+either. What changed for you is mostly tighter: the control plane's work and stored records have bounds, the identity
+header a gateway forwards carries every membership, a tenant switch presents the session's token pair, and a principal
+id is never blank ([Upgrading between previews](../operations/upgrading-previews.md#from-8-0-0-beta-7)). It is built on
+Spring Boot 4.2 and CoCache 8.2. Next is the release candidate. What is still open before it is in
 [`docs/roadmap.md`](https://github.com/Ahoo-Wang/CoSec/blob/main/docs/roadmap.md), which is the page that tracks it;
 this one stays at the level of what you can rely on.
 
 ## Release policy
 
-- **The 8.0 pre-releases (alphas and betas; latest `8.0.0-beta.7`) are previews with no compatibility promise.** Public APIs, `cosec.*` properties, the document
+- **The 8.0 pre-releases (alphas and betas; latest `8.0.0-beta.8`) are previews with no compatibility promise.** Public APIs, `cosec.*` properties, the document
   and wire formats (`schema: 2`, `CoSec-Identity`) and authorization semantics may change in any later alpha or RC,
   without a migration path between previews. Try it outside production; do not build on it yet.
 - A release candidate waits for the checks above: two review rounds of the whole system (the RC security review, then
@@ -74,7 +74,7 @@ this one stays at the level of what you can rely on.
 - The latest advisory is
   [GHSA-2293-jx8h-56m8](https://github.com/Ahoo-Wang/CoSec/security/advisories/GHSA-2293-jx8h-56m8), fixed in
   7.0.1 and 6.1.2.
-- What to do now: stay on 7.0.2, the latest 7.0.x, in production. To evaluate 8.0, try the latest pre-release (`8.0.0-beta.7`, Java 21) in a test
+- What to do now: stay on 7.0.2, the latest 7.0.x, in production. To evaluate 8.0, try the latest pre-release (`8.0.0-beta.8`, Java 21) in a test
   environment with [Upgrading](../operations/upgrading.md); expect changes before the RC.
 
 ## How to follow
